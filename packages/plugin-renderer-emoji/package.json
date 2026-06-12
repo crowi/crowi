@@ -1,6 +1,6 @@
 {
   "name": "@crowi/plugin-renderer-emoji",
-  "version": "0.1.0-dev",
+  "version": "0.1.0-alpha.0",
   "description": "Emoji shortcode renderer for Crowi 2.x. Replaces `:smile:` and friends with Unicode emoji via remark-emoji. Skips code blocks and inline code.",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
@@ -25,10 +25,8 @@
     "type-check": "tsc --noEmit",
     "test": "jest --passWithNoTests"
   },
-  "peerDependencies": {
-    "@crowi/plugin-api": "^0.1.0"
-  },
   "dependencies": {
+    "@crowi/plugin-api": "workspace:^",
     "jiti": "^2.7.0",
     "remark-emoji": "^5.0.1"
   },

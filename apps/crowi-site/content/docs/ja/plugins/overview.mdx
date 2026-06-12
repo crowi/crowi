@@ -22,9 +22,11 @@ Crowi のプラグインモデルは、次のいくつかの原則の上に成�
 - **npm パッケージとして配布**: プラグインは特別な形式ではなく、通常の
   npm パッケージです。グローバルなプラグインレジストリや curl パイプ式の
   インストーラはありません。
-- **再ビルド不要**: api 本体はプラグインに依存しません。プラグインの
-  追加・削除は、運用者が自分の runner プロジェクトの依存関係を変えるだけで
-  完結し、api のイメージを焼き直す必要はありません。
+- **plugin-free な api**: `@crowi/api` は SDK (`@crowi/plugin-api`) と
+  コアのみを同梱し、ドライバは一切含みません。プラグインは別の
+  **runner プロジェクト** (後述) が所有するため、プラグインの追加・削除
+  はそのプロジェクトの依存と設定を変えるだけで完結し、api のイメージを
+  焼き直す必要はありません。
 - **v2.x の間は API 安定**: `@crowi/plugin-api@2.x` に対して書かれた
   プラグインは、v2 系のすべてのマイナーバージョンで動作し続けます。
 
@@ -40,16 +42,46 @@ Crowi のプラグインは、貢献する拡張ポイントによっておお�
 | 種類 | 拡張ポイント | 例 |
 | ---- | ------------ | -- |
 | ストレージ | `registerStorage` | `@crowi/plugin-storage-local`、`@crowi/plugin-storage-aws-s3` |
-| 検索 | `registerSearch` | `@crowi/plugin-search-elasticsearch` |
+| 検索 | `registerSearch` | `@crowi/plugin-search-mongo`、`@crowi/plugin-search-elasticsearch`、`@crowi/plugin-search-opensearch` |
+| メール | `registerMailer` | `@crowi/plugin-mail-smtp`、`@crowi/plugin-mail-aws-ses`、`@crowi/plugin-mail-resend` |
 | レンダラ | `registerRenderer` | `@crowi/plugin-renderer-emoji` / `-katex` / `-plantuml` / `-crowi-legacy` |
 | 認証 | `registerAuth` | (外部 OAuth プロバイダ向け、今後拡充予定) |
 | 通知 | `registerNotifier` | (Slack などの通知シンク向け、今後拡充予定) |
 | ベース (設定のみ) | (register なし) | `@crowi/plugin-aws` — 後続の AWS 系プラグインに資格情報を共有 |
 | ルート | `registerRoutes` | プラグインの HTTP ルート — **現在は no-op スタブ**、Hono ベースの再設計待ち (「プラグイン開発」を参照) |
 
-ストレージと検索は、それぞれ「ドライバ」を `crowi.config.json` の
-`storage.driver` / `search.driver` で選択する形になっています。複数の
-ドライバプラグインを導入しておき、設定でどれを使うか切り替えられます。
+ストレージ・検索・メールは、それぞれ「ドライバ」を `crowi.config.json`
+の `storage.driver` / `search.driver` / `mail.driver` で選択する形に
+なっています。複数のドライバプラグインを導入しておき、設定でどれを使うか
+切り替えられます。
+
+### ファーストパーティプラグイン
+
+Crowi モノレポでメンテナンスされているプラグインは次のとおりです。
+
+| レジストリ | ドライバ |
+| ---------- | -------- |
+| ストレージ | `local` (`@crowi/plugin-storage-local`)、`aws-s3` (`@crowi/plugin-storage-aws-s3`) |
+| 検索 | `mongo` (`@crowi/plugin-search-mongo`)、`elasticsearch` (`@crowi/plugin-search-elasticsearch`)、`opensearch` (`@crowi/plugin-search-opensearch`) |
+| メール | `smtp` (`@crowi/plugin-mail-smtp`)、`ses` (`@crowi/plugin-mail-aws-ses`)、`resend` (`@crowi/plugin-mail-resend`) |
+| レンダラ | `@crowi/plugin-renderer-plantuml` / `-emoji` / `-katex` / `-crowi-legacy` |
+| 共有ベース | `@crowi/plugin-aws` (AWS 系プラグインが要求する設定のみの依存) |
+
+すべてのプラグインが対象とするプラグイン SDK は `@crowi/plugin-api`
+です。
+
+### 暗黙のデフォルトプラグイン
+
+3 つのドライバは `crowi.config.json` に列挙しなくても **毎回** 読み込ま
+れるため、素のインストールではプラグイン設定が一切不要です。
+
+- `@crowi/plugin-storage-local` — ローカルファイルストレージ
+- `@crowi/plugin-search-mongo` — MongoDB の `$regex` 検索 (**デフォルト
+  の検索ドライバ**。Elasticsearch / OpenSearch はオプトイン)
+- `@crowi/plugin-mail-smtp` — SMTP メール
+
+追加のプラグインを列挙して `*.driver` を切り替えると、これらのデフォルト
+の上に選択肢が積み増されます。
 
 ## `CrowiPlugin` インターフェース
 
@@ -95,15 +127,32 @@ Crowi のプラグインは、貢献する拡張ポイントによっておお�
 `secretAccessKey` を持ち、`@crowi/plugin-storage-aws-s3` などの依存先が
 自前のスキーマで重複定義せずにそれを読み取れます。
 
-## runner によるプラグイン解決
+## runner プロジェクトと `@crowi/runner` ライブラリ
+
+「runner」という語が指す 2 つのものを混同しないでください。
+
+- **runner プロジェクト** は、プラグインを *所有* する小さな api ランタイム
+  プロジェクトです。`@crowi/api` と選んだ `@crowi/plugin-*` を依存に持つ
+  `package.json`、`crowi.config.json`、`.env` からなる通常の npm
+  プロジェクトです。モノレポにはリファレンス実装 **`apps/crowi-runner`**
+  (パッケージ名 `@crowi/runner-app`、private) が同梱されており、
+  セルフホストする運用者はこれと等価なものを自前で用意します。
+- **`@crowi/runner`** (`-app` なし) は `packages/runner` にある内部
+  ライブラリです。これは *解決エンジン* で、`crowi.config.json` を読み、
+  `createRequire` で列挙されたプラグインを runner プロジェクトの
+  `node_modules/` から読み込みます。
+
+## プラグイン解決
 
 api パッケージ自身はプラグインを依存に持ちません。プラグインの npm 名を
-解決するのは `@crowi/runner` の役割です。
+解決するのは `@crowi/runner` ライブラリの役割で、api を起動する runner
+プロジェクトに対して解決を行います。
 
-1. runner は `crowi.config.json` を読み、`plugins` 配列に列挙された名前を
-   取得します。
-2. `createRequire(<projectDir>/package.json)` を使って、その npm 名を
-   **runner プロジェクトの `node_modules/`** から解決します。
+1. `crowi.config.json` を読み、`plugins` 配列に列挙された名前を取得します
+   (暗黙のデフォルトプラグインを先頭に追加します)。
+2. `createRequire(<projectDir>/package.json)` (ここで `projectDir` は
+   runner プロジェクト) を使って、その npm 名を **runner プロジェクトの
+   `node_modules/`** から解決します。
 3. 各プラグインの `requires` を BFS で辿り、推移的な依存も読み込みます。
 4. 結果として、解決済みの `CrowiPlugin` インスタンス一覧が api の起動
    シーケンスに渡されます。
@@ -111,9 +160,11 @@ api パッケージ自身はプラグインを依存に持ちません。プラ�
 つまり、運用者がプラグインを 1 つ追加するには次の 2 つを行うだけです。
 
 - runner プロジェクトの `package.json` の依存にプラグインを加える
-- `crowi.config.json` の `plugins` にそのパッケージ名を列挙する
+- `crowi.config.json` の `plugins` にそのパッケージ名を列挙する (必要なら
+  対応する `*.driver` も切り替える)
 
-具体的な手順は [プラグインの導入と設定](./managing) を参照してください。
+api の再ビルドは伴いません。具体的な手順は
+[プラグインの導入と設定](./managing) を参照してください。
 
 ## 起動シーケンスでの位置づけ
 

@@ -12,6 +12,7 @@ import { FormErrorList } from '@/components/ui/form-error-list';
 import { apiClientV2 } from '@/lib/api-client';
 import { errorMessage } from '@/lib/error-message';
 import { storeTokens } from '@/lib/auth-token';
+import { defaultLandingPath } from '@/lib/login-redirect';
 import { m } from '@paraglide/messages.js';
 
 export function AcceptInviteForm() {
@@ -68,7 +69,7 @@ export function AcceptInviteForm() {
       if (response.status === 200) {
         const body = await response.json();
         storeTokens(body, body.expiresIn);
-        router.push('/');
+        router.push(defaultLandingPath(body.user.username));
       } else {
         const body = await response.json();
         const error = 'error' in body ? body.error : undefined;

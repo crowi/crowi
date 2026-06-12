@@ -4,33 +4,39 @@ description: Crowi の全文検索バックエンド (Elasticsearch) のセッ�
 ---
 
 Crowi の全文検索は **検索ドライバ** という差し替え可能な仕組みで提供
-されます。標準で出荷される検索ドライバは Elasticsearch で、
-`@crowi/plugin-search-elasticsearch` プラグインとして実装されています。
+されます。**デフォルトのドライバは `mongo`** で、MongoDB の `$regex` を
+使った検索です。暗黙のデフォルトプラグイン `@crowi/plugin-search-mongo`
+として実装されており、追加のインフラを必要としないため、新規インストール
+でも MongoDB だけですぐに検索できます。
 
-利用者向けの検索の使い方は [検索](../guide/search) を参照してください。
-このページは運用者向けに、Elasticsearch のセットアップとインデックス
-構築の手順を説明します。
+より大規模な構成向けには、**Elasticsearch を opt-in で選択** できます。
+`@crowi/plugin-search-elasticsearch` プラグインとして実装されており、
+大量の文書でもスケールしやすく、日本語解析 (`analysis-kuromoji`) にも
+対応します。このページは運用者向けに、Elasticsearch ドライバの
+セットアップとインデックス構築の手順を説明します。利用者向けの検索の
+使い方は [検索](../guide/search) を参照してください。
 
 > **Note**: Crowi 2.0 (Reignite) は alpha 開発中で、Elasticsearch バック
-> エンドは更新作業 (ES のバージョン更新と検索ドライバのプラグイン化) の
-> 途中にあります。本ページの手順は現行の dev 環境に基づいていますが、
-> 詳細は今後変わる可能性があります。最新状況は `TODO.md` を参照して
-> ください。
+> エンドはまだ調整中です (ES のバージョン更新と、検索ドライバのプラグイン
+> 化)。本ページの手順は現行の dev 環境に基づいていますが、詳細は今後
+> 変わる可能性があります。最新状況は `TODO.md` を参照してください。
 
 ## アーキテクチャ概要
 
 - 検索ドライバはプラグイン経由で `SearchRegistry` に登録されます。
 - どのドライバを使うかは `crowi.config.json` の `search.driver` で指定
-  します。
+  します (デフォルトは `mongo`)。
 - Elasticsearch ドライバの接続情報は、Mongo の Config 名前空間
   `plugin:@crowi/plugin-search-elasticsearch:*` に保存されます。
   設定は管理画面のプラグイン設定画面からのみ行います (環境変数からの
   自動移行は行いません)。
 
-## プラグインの有効化
+## Elasticsearch プラグインの有効化
 
-`crowi.config.json` の `plugins` 配列にプラグイン名を加え、`search.driver`
-を `elasticsearch` に設定します。
+デフォルトの `mongo` ドライバから Elasticsearch に切り替えるには、
+ランナープロジェクトの依存に `@crowi/plugin-search-elasticsearch` を
+宣言し、`crowi.config.json` の `plugins` 配列にプラグイン名を加え、
+`search.driver` を `elasticsearch` に設定します。
 
 ```json
 {

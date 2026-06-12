@@ -1,29 +1,12 @@
-import { describe, it, expect, afterEach, vi } from 'vitest';
-import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
-import type { Attachment } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { formatAbsoluteDateTime } from '@/lib/date-utils';
+import { makeAttachment } from '@/lib/test-utils/factories';
 import { AttachmentDetailModal } from './attachment-detail-modal';
 
 const removeLabel = m['page.attachments_remove']();
 const downloadLabel = m['page.attachment_detail_download']();
-
-function makeAttachment(overrides: Partial<Attachment> = {}): Attachment {
-  return {
-    _id: 'att-1',
-    page: 'page-1',
-    creator: { _id: 'u1', username: 'alice', name: 'Alice', email: 'a@example.com', createdAt: '2026-01-01T00:00:00.000Z' },
-    filePath: 'attachment/page-1/att-1.png',
-    fileName: 'att-1.png',
-    originalName: 'diagram.png',
-    fileFormat: 'image/png',
-    fileSize: 2048,
-    createdAt: '2026-05-01T09:30:00.000Z',
-    url: '/api/v2/attachments/att-1',
-    inUse: true,
-    ...overrides,
-  };
-}
 
 const noopDelete = () => Promise.resolve();
 
@@ -51,8 +34,11 @@ describe('AttachmentDetailModal', () => {
     const pdf = makeAttachment({ fileName: 'spec.pdf', originalName: 'spec.pdf', fileFormat: 'application/pdf', url: '/api/v2/attachments/att-2' });
     // The Dialog mounts into a portal on document.body, so query there.
     render(<AttachmentDetailModal attachment={pdf} open onOpenChange={() => {}} canDelete onDelete={noopDelete} isDeleting={false} />);
-    // No enlarged <img> preview for a PDF.
+    // No enlarged <img> preview for a PDF. querySelector('img') is intentional: we are
+    // checking for the HTML <img> preview element specifically — BoringAvatar SVGs also carry
+    // role="img", so queryByRole('img') would produce false positives in the negative check.
     expect(document.body.querySelector('img')).toBeNull();
+    // `iframe` has no ARIA role — querySelector is the only portable way to reach it.
     const iframe = document.body.querySelector('iframe');
     expect(iframe).not.toBeNull();
     expect(iframe?.getAttribute('src')).toBe('/api/v2/attachments/att-2');
@@ -62,11 +48,14 @@ describe('AttachmentDetailModal', () => {
   it('shows a file-type icon and no preview for other file types', () => {
     const zip = makeAttachment({ fileName: 'data.zip', originalName: 'data.zip', fileFormat: 'application/zip' });
     render(<AttachmentDetailModal attachment={zip} open onOpenChange={() => {}} canDelete onDelete={noopDelete} isDeleting={false} />);
-    // No image / iframe preview for a generic file type.
+    // No image / iframe preview for a generic file type. querySelector('img') is intentional:
+    // we are checking for the HTML <img> preview element — BoringAvatar SVGs also carry
+    // role="img", so queryByRole('img') would produce false positives here.
     expect(document.body.querySelector('img')).toBeNull();
+    // `iframe` has no ARIA role — querySelector is the only portable way to reach it.
     expect(document.body.querySelector('iframe')).toBeNull();
     expect(screen.getByText(m['page.attachment_detail_preview_unavailable']())).toBeTruthy();
-    // The file-type icon renders as an <svg>.
+    // The file-type icon renders as an aria-hidden <svg> with no accessible role — querySelector is the only portable way.
     expect(document.body.querySelector('svg')).not.toBeNull();
   });
 

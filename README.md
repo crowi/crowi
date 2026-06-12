@@ -33,8 +33,10 @@ This repository is a Turborepo + pnpm workspace.
 ```
 crowi/
 ├── apps/
+│   ├── crowi-runner/      # Reference runner project (@crowi/runner-app): dev launch
+│   │                      #   point + build source for the full Docker image. Owns
+│   │                      #   @crowi/api + the full plugin set + crowi.config.json.
 │   └── crowi-site/        # crowi.wiki LP + docs (Next.js + Fumadocs, port 4303)
-├── crowi.config.json      # Dev runner config: plugins + active driver names
 ├── .env.example           # Dev runtime env template (copy to .env)
 └── packages/
     ├── api/                          # Hono 4 API library (port 4301)
@@ -86,7 +88,10 @@ pnpm install
 # 2. Start dependency services (MongoDB / Redis / Elasticsearch / PlantUML)
 docker compose up -d
 
-# 3. Set up env file at the repo root (loaded by the api at boot via dotenv)
+# 3. Set up env file at the repo root. `pnpm dev` boots the api with cwd =
+#    apps/crowi-runner (the runner projectDir), so its dev script loads this
+#    repo-root .env via `--env-file-if-exists=../../.env`. (In production / an
+#    external runner project, the api reads the .env in its own cwd via dotenv.)
 cp .env.example .env
 # Edit MONGO_URI / REDIS_URL / PASSWORD_SEED / CROWI_ENCRYPTION_KEY etc.
 

@@ -29,6 +29,17 @@ export const STATUS_DRAFT = 'draft';
 export const STATUSES = [STATUS_WIP, STATUS_PUBLISHED, STATUS_DELETED, STATUS_DEPRECATED, STATUS_DRAFT] as const;
 
 /**
+ * A user's home page (`/user/<username>`). Its path is bound to the
+ * username, so it can be neither renamed nor deleted (it is also not a
+ * valid rename *destination*). Tolerates an optional trailing slash for
+ * defence-in-depth. Deeper pages under the home (`/user/<name>/memo`)
+ * are normal pages and are NOT matched. Shared by `isDeletableName` /
+ * `isRenamableName` so the two guards never drift; mirrors the web
+ * `isUserHomePath`.
+ */
+export const USER_HOME_PAGE_PATH = /^\/user\/[^/]+\/?$/;
+
+/**
  * `$or` status clause for "pages visible to a given viewer" (RFC-0004):
  * published and legacy-null pages are always visible; a `draft` page is
  * visible only to its creator.
@@ -622,34 +633,14 @@ export default (crowi: Crowi) => {
     return path.replace('/trash', '');
   };
 
+  // The user home page is the only non-deletable / non-renamable name;
+  // both guards share `USER_HOME_PAGE_PATH` so they can never drift.
   pageSchema.statics.isDeletableName = function (path) {
-    const notDeletable = [
-      /^\/user\/[^/]+$/, // user page
-    ];
-
-    for (let i = 0; i < notDeletable.length; i++) {
-      const pattern = notDeletable[i];
-      if (path.match(pattern)) {
-        return false;
-      }
-    }
-
-    return true;
+    return !USER_HOME_PAGE_PATH.test(path);
   };
 
   pageSchema.statics.isRenamableName = function (path) {
-    const notRenamable = [
-      /^\/user\/[^/]+$/, // user home page — its path is bound to the username
-    ];
-
-    for (let i = 0; i < notRenamable.length; i++) {
-      const pattern = notRenamable[i];
-      if (path.match(pattern)) {
-        return false;
-      }
-    }
-
-    return true;
+    return !USER_HOME_PAGE_PATH.test(path);
   };
 
   pageSchema.statics.isCreatableName = function (name) {

@@ -1,22 +1,8 @@
 import { Types } from 'mongoose';
-import { app, crowi, Fixture } from 'src/test/setup';
+import { app, crowi } from 'src/test/setup';
 import { waitForModel } from 'src/test/wait-for-model';
-import { createJwtUtil } from 'src/util/jwt';
+import { authHeaders, createTestUser, createPageViaApi } from 'src/test/test-helpers';
 import request from 'supertest';
-
-const authHeaders = (token: string) => ({
-  Authorization: `Bearer ${token}`,
-  'Content-Type': 'application/json',
-});
-
-const createTestUser = async (info: { name: string; username: string; email: string }) => {
-  const User = crowi.model('User');
-  const [user] = await Fixture.generate('User', [info]);
-  user.status = User.STATUS_ACTIVE;
-  await user.save();
-  const accessToken = createJwtUtil(crowi).generateTokens(user).accessToken;
-  return { user, accessToken };
-};
 
 const cleanupPathPrefix = (prefix: string) => {
   const Page = crowi.model('Page');
@@ -372,6 +358,24 @@ describe('Routes /api/v2/pages/rename (Hono renamePage)', () => {
       // The page must stay at its home path.
       const pageDoc = await Page.findById(pageId);
       expect(pageDoc.path).toBe(homePath);
+    });
+
+    it('refuses to rename a page onto a user home path (/user/<name>) with 400 PAGE_INVALID_NAME', async () => {
+      const headers = authHeaders(accessToken);
+      const fromPath = `${PATH_PREFIX}rename-onto-home`;
+
+      const createRes = await request(app).post('/api/v2/pages').set(headers).send({ path: fromPath, body: '# x' });
+      expect(createRes.status).toBe(200);
+      const pageId = createRes.body.page._id;
+
+      const res = await request(app).post('/api/v2/pages/rename').set(headers).send({ page_id: pageId, new_path: '/user/renamePageTester' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('PAGE_INVALID_NAME');
+
+      // The source page must stay where it is.
+      const pageDoc = await Page.findById(pageId);
+      expect(pageDoc.path).toBe(fromPath);
     });
 
     it('creates a redirect page at the old path when create_redirect=true', async () => {
@@ -833,6 +837,29 @@ describe('Routes /api/v2/pages/rename-subtree (Hono renameSubtree — portal-les
     expect(await Page.findOne({ path: `${PATH_PREFIX}moved/child-b` })).not.toBeNull();
     // Old descendant paths no longer exist as real pages.
     expect(await Page.findOne({ path: `${oldFolder}child-a`, redirectTo: null })).toBeNull();
+  });
+
+  it('refuses to rename a subtree that sweeps in a user home page (/user/<name>)', async () => {
+    const headers = authHeaders(accessToken);
+    // The user's home page + a child under the `/user/` namespace.
+    await request(app).post('/api/v2/pages').set(headers).send({ path: '/user/renameSubtreeTester', body: '# home' });
+    await request(app).post('/api/v2/pages').set(headers).send({ path: '/user/renameSubtreeTester/note', body: '# note' });
+
+    // Renaming the whole `/user/` subtree would move every user's home
+    // page — bypassing the single-page rename guard. It must be refused.
+    const res = await request(app)
+      .post('/api/v2/pages/rename-subtree')
+      .set(headers)
+      .send({ old_path: '/user/', new_path: `${PATH_PREFIX}stolen/` });
+
+    expect(res.status).toBe(400);
+    // Nothing moved: the home page + child stay put, destination empty.
+    expect(await Page.findOne({ path: '/user/renameSubtreeTester' })).not.toBeNull();
+    expect(await Page.findOne({ path: '/user/renameSubtreeTester/note' })).not.toBeNull();
+    expect(await Page.findOne({ path: `${PATH_PREFIX}stolen/note` })).toBeNull();
+
+    // afterEach only cleans PATH_PREFIX — drop the `/user/` pages we made.
+    await Page.deleteMany({ path: { $in: ['/user/renameSubtreeTester', '/user/renameSubtreeTester/note'] } });
   });
 
   it('does not move descendants the caller cannot see (grant-filtered)', async () => {
@@ -1333,16 +1360,6 @@ describe('Routes /api/v2/pages/like and /api/v2/pages/unlike (Hono)', () => {
 
   afterEach(() => cleanupPathPrefix(PATH_PREFIX));
 
-  const createPageViaApi = async (token: string, path: string, body: string, grant?: number) => {
-    const payload: { path: string; body: string; grant?: number } = { path, body };
-    if (grant !== undefined) payload.grant = grant;
-    const res = await request(app).post('/api/v2/pages').set(authHeaders(token)).send(payload);
-    if (res.status !== 200) {
-      throw new Error(`Failed to seed page (${path}): ${res.status} ${JSON.stringify(res.body)}`);
-    }
-    return res.body.page as { _id: string; path: string };
-  };
-
   describe('POST /api/v2/pages/like', () => {
     it('returns 401 without auth', async () => {
       const res = await request(app).post('/api/v2/pages/like').send({ page_id: '000000000000000000000000' });
@@ -1498,16 +1515,6 @@ describe('Routes /api/v2/pages/watch (Hono)', () => {
     // Watchers are independent of page paths, so clean by user too.
     await Watcher.deleteMany({ user: { $in: [userId, otherUserId] } });
   });
-
-  const createPageViaApi = async (token: string, path: string, body: string, grant?: number) => {
-    const payload: { path: string; body: string; grant?: number } = { path, body };
-    if (grant !== undefined) payload.grant = grant;
-    const res = await request(app).post('/api/v2/pages').set(authHeaders(token)).send(payload);
-    if (res.status !== 200) {
-      throw new Error(`Failed to seed page (${path}): ${res.status} ${JSON.stringify(res.body)}`);
-    }
-    return res.body.page as { _id: string; path: string };
-  };
 
   // Auto-watch fires from the (fire-and-forget) pageEvent listener, so the
   // Watcher row may not exist yet when the create response returns. Poll on

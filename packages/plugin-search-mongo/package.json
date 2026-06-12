@@ -1,0 +1,47 @@
+{
+  "name": "@crowi/plugin-search-mongo",
+  "version": "0.1.0-alpha.0",
+  "description": "Infra-free MongoDB $regex search driver for Crowi 2.0.",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch --no-clean",
+    "type-check": "tsc --noEmit",
+    "test": "jest"
+  },
+  "peerDependencies": {
+    "zod": "catalog:"
+  },
+  "dependencies": {
+    "@crowi/plugin-api": "workspace:^"
+  },
+  "devDependencies": {
+    "@crowi/plugin-api": "workspace:*",
+    "@crowi/tsconfig": "workspace:*",
+    "@types/jest": "catalog:",
+    "@types/node": "catalog:",
+    "jest": "catalog:",
+    "mongodb-memory-server": "^10.1.4",
+    "mongoose": "^8.24.0",
+    "ts-jest": "catalog:",
+    "tsup": "catalog:",
+    "typescript": "catalog:",
+    "zod": "catalog:"
+  }
+}

@@ -16,7 +16,7 @@ import { m } from '@paraglide/messages.js';
  * truth for the wire format + token persistence). The caller owns
  * navigation / UI state; this only returns a discriminated result.
  */
-export type LoginResult = { ok: true } | { ok: false; message: string };
+export type LoginResult = { ok: true; username: string } | { ok: false; message: string };
 
 export async function loginWithPassword(email: string, password: string): Promise<LoginResult> {
   try {
@@ -27,7 +27,10 @@ export async function loginWithPassword(email: string, password: string): Promis
     if (response.status === 200) {
       const body = await response.json();
       storeTokens(body, body.expiresIn);
-      return { ok: true };
+      // The login response already carries the signed-in user, so the
+      // caller can compute its default landing path (`/user/<username>`)
+      // without a follow-up `/me` round-trip.
+      return { ok: true, username: body.user.username };
     }
 
     if (response.status === 401 || response.status === 403 || response.status === 503) {

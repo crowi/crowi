@@ -15,20 +15,20 @@ The repository is a Turborepo + pnpm workspaces monorepo.
 ```
 crowi/
 ├── apps/
+│   ├── crowi-runner/        # reference runner project — full image source (@crowi/runner-app)
+│   ├── crowi-runner-slim/   # minimal runner project — slim image source (@crowi/runner-app-slim)
 │   └── crowi-site/          # crowi.wiki LP + docs (Next.js + Fumadocs, :4303)
-├── crowi.config.json        # dev runner config (plugins + active drivers)
-├── .env.example             # dev runtime env template
 └── packages/
-    ├── api/                 # Hono 4 API (:4301)
+    ├── api/                 # Hono 4 API (:4301) — plugin-free (SDK + core only)
     ├── api-contract/        # Hono (@hono/zod-openapi) contracts + Zod schemas
     ├── web/                 # Next.js 16 App Router frontend (:4302)
     ├── collab/              # Real-time collaboration (Hocuspocus) library
-    ├── runner/              # Config loader + plugin resolver
+    ├── runner/              # @crowi/runner: config loader + plugin resolver (createRequire)
     ├── plugin-api/          # Plugin SDK (CrowiPlugin / registries / context)
     ├── plugin-aws/          # Shared AWS credentials base for AWS plugins
-    ├── plugin-storage-local/         # Local FS storage driver (default)
-    ├── plugin-storage-aws-s3/        # S3 storage driver
-    ├── plugin-search-elasticsearch/  # Elasticsearch search driver
+    ├── plugin-storage-{local,aws-s3}/
+    ├── plugin-search-{mongo,elasticsearch,opensearch}/
+    ├── plugin-mail-{smtp,aws-ses,resend}/
     ├── plugin-renderer-{emoji,katex,plantuml,crowi-legacy}/
     ├── admin-cli/           # `crowi-admin` CLI
     └── tsconfig/            # Shared tsconfig presets
@@ -36,8 +36,20 @@ crowi/
 
 Three big building blocks — the **API** (`packages/api`), the **Web**
 frontend (`packages/web`), and the **API contracts**
-(`packages/api-contract`) — sit at the center, with plugins and the
-runner around them.
+(`packages/api-contract`) — sit at the center, with the plugins and the
+runner projects (`apps/crowi-runner*`) around them.
+
+The api is **plugin-free**: `@crowi/api` ships only the SDK
+(`@crowi/plugin-api`) and core, bundling no drivers. The plugins are
+owned by a **runner project** — a small npm project that depends on
+`@crowi/api` plus the chosen `@crowi/plugin-*` packages, and carries a
+`crowi.config.json` (which plugins to load + which driver each registry
+uses) and an `.env`. At boot the `@crowi/runner` library resolves the
+listed plugins from the runner project's `node_modules/` via
+`createRequire(projectDir)`, so adding or removing a plugin needs no api
+rebuild. `apps/crowi-runner` is the reference runner project (its
+`crowi.config.json` is `apps/crowi-runner/crowi.config.json`); a
+self-hosting operator writes their own.
 
 ## Tech stack
 
@@ -106,10 +118,28 @@ in `ws noServer` mode to handle `/collab/*` upgrades (collab) and
 [Operating real-time collaboration](../operations/realtime-collab) for
 details.
 
+### Official Docker images
+
+Both official images are built from `packages/api/Dockerfile`, each from
+a runner project rather than from `@crowi/api` directly:
+
+- **full** (from `apps/crowi-runner`) — bundles all twelve first-party
+  drivers. Switch storage / search / mail driver by editing
+  `crowi.config.json`; no rebuild.
+- **slim** (from `apps/crowi-runner-slim`) — only the three
+  implicit-default drivers (`storage-local` + `search-mongo` +
+  `mail-smtp`), so it runs against MongoDB alone. A minimal base for
+  operators who want to assemble their own plugin set.
+
+The api requires a Node runtime (it cannot run on Workers; Containers
+are fine).
+
 ## Web frontend (`packages/web`)
 
-It uses the Next.js 16 App Router, dividing `src/app/` into three Route
-Groups.
+The web app is a **separate deployable** with zero plugin dependencies:
+it talks to the api over HTTP and knows nothing about which drivers the
+runner project loaded. It uses the Next.js 16 App Router, dividing
+`src/app/` into three Route Groups.
 
 | Route Group | Contents | Gate |
 | ----------- | -------- | ---- |

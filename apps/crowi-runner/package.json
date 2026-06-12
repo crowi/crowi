@@ -1,0 +1,26 @@
+{
+  "name": "@crowi/runner-app",
+  "version": "2.0.0-alpha.0",
+  "private": true,
+  "description": "Crowi reference runner project: the monorepo's own api runtime project (dev launch point + the build source for the official full Docker image). Owns @crowi/api + the full first-party plugin set + crowi.config.json, and is the projectDir the api boots against (createRequire resolves plugins from here).",
+  "scripts": {
+    "start": "crowi-api"
+  },
+  "dependencies": {
+    "@crowi/api": "workspace:^",
+    "@crowi/plugin-api": "workspace:^",
+    "@crowi/runner": "workspace:^",
+    "@crowi/plugin-mail-aws-ses": "workspace:^",
+    "@crowi/plugin-mail-resend": "workspace:^",
+    "@crowi/plugin-mail-smtp": "workspace:^",
+    "@crowi/plugin-renderer-crowi-legacy": "workspace:^",
+    "@crowi/plugin-renderer-emoji": "workspace:^",
+    "@crowi/plugin-renderer-katex": "workspace:^",
+    "@crowi/plugin-renderer-plantuml": "workspace:^",
+    "@crowi/plugin-search-elasticsearch": "workspace:^",
+    "@crowi/plugin-search-mongo": "workspace:^",
+    "@crowi/plugin-search-opensearch": "workspace:^",
+    "@crowi/plugin-storage-aws-s3": "workspace:^",
+    "@crowi/plugin-storage-local": "workspace:^"
+  }
+}

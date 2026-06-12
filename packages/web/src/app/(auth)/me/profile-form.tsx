@@ -169,20 +169,6 @@ export function ProfileForm({ profile }: ProfileFormProps) {
           <Input value={profile.username} disabled className="bg-muted" />
           <p className="text-xs text-muted-foreground">{m['me.profile.field_username_note']()}</p>
         </div>
-
-        {profile.googleId && (
-          <div className="space-y-2">
-            <Label>{m['me.profile.field_google']()}</Label>
-            <Input value={m['me.profile.connected']()} disabled className="bg-muted text-muted-foreground" />
-          </div>
-        )}
-
-        {profile.githubId && (
-          <div className="space-y-2">
-            <Label>{m['me.profile.field_github']()}</Label>
-            <Input value={m['me.profile.connected']()} disabled className="bg-muted text-muted-foreground" />
-          </div>
-        )}
       </div>
 
       <div className="flex justify-end">

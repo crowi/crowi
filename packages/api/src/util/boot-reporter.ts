@@ -10,10 +10,13 @@
  *   - non-TTY: a structured, grep-able one-line log per layer
  *              (`[boot] core ok (412ms)`), no cursor control / re-draw.
  *
- * In both modes a machine-readable readiness marker
- * (`@@crowi:ready api <url>`) is emitted on exactly one line when boot
- * finishes — this is the only contract `scripts/dev.mjs` depends on, kept
- * separate from the human-facing banner so wording can change freely.
+ * In both modes a machine-readable marker is emitted on exactly one line at
+ * the end of boot: `@@crowi:ready api <url>` on success, or
+ * `@@crowi:fail api <reason>` when boot aborts (e.g. the database is
+ * unreachable). These two markers are the only contract `scripts/dev.mjs`
+ * depends on — kept separate from the human-facing banner so wording can
+ * change freely. On the fail marker the dev launcher tears the whole tree
+ * (api · web · deps) down instead of leaving web up against a dead api.
  *
  * The reporter is intentionally `debug`-independent: it writes to stdout
  * directly so operators see boot progress without `DEBUG=crowi:*`. When
@@ -86,6 +89,35 @@ export function parseReadyMarker(line: string): { service: string; url: string }
   return { service, url };
 }
 
+/** Stable, machine-readable boot-failure marker prefix. Shared contract with `scripts/dev.mjs`. */
+export const FAIL_MARKER_PREFIX = '@@crowi:fail';
+
+/**
+ * Build the `@@crowi:fail <service> <reason>` marker line (no trailing newline).
+ * The reason is collapsed to a single line so the marker is always parseable
+ * off one output line.
+ */
+export function formatFailMarker(service: string, reason: string): string {
+  return `${FAIL_MARKER_PREFIX} ${service} ${reason.replace(/\s+/g, ' ').trim()}`;
+}
+
+/**
+ * Parse a `@@crowi:fail <service> <reason…>` marker out of an arbitrary output
+ * line (it may be prefixed by turbo's `api:dev: `). `service` is the first
+ * token; `reason` is the remainder (may be empty). Returns null when the line
+ * carries no marker. Mirrored in `scripts/dev.mjs` so the dev launcher can tear
+ * the whole tree down instead of leaving web up against a dead api.
+ */
+export function parseFailMarker(line: string): { service: string; reason: string } | null {
+  const idx = line.indexOf(FAIL_MARKER_PREFIX);
+  if (idx === -1) return null;
+  const rest = line.slice(idx + FAIL_MARKER_PREFIX.length).trim();
+  if (!rest) return null;
+  const sp = rest.indexOf(' ');
+  if (sp === -1) return { service: rest, reason: '' };
+  return { service: rest.slice(0, sp), reason: rest.slice(sp + 1).trim() };
+}
+
 /** Non-TTY structured layer line: `[boot] core ok (412ms)`. */
 export function formatPlainLayerLine(layer: BootLayer, ms: number): string {
   return `[boot] ${layer} ok (${formatDuration(ms)})`;
@@ -133,6 +165,13 @@ export interface CreateBootReporterOptions {
    * interleave with debug output. Defaults to reading `process.env.DEBUG`.
    */
   debugEnabled?: boolean;
+  /**
+   * Suppress ALL output (progress lines, banner, readiness marker). Used by
+   * the test harness, where each of the 100+ test files boots Crowi and the
+   * per-layer `[boot] … ok` lines would otherwise flood the jest output.
+   * Defaults to `false`.
+   */
+  quiet?: boolean;
 }
 
 /**
@@ -141,10 +180,12 @@ export interface CreateBootReporterOptions {
  */
 export function createBootReporter(options: CreateBootReporterOptions = {}): BootReporter {
   const stream = options.stream ?? process.stdout;
+  const quiet = options.quiet ?? false;
   const debugEnabled = options.debugEnabled ?? Boolean(process.env.DEBUG);
   // Graceful degrade: spinner only when we own a real TTY *and* DEBUG isn't
-  // flooding the same stream.
-  const tty = (options.isTTY ?? Boolean(stream.isTTY)) && !debugEnabled;
+  // flooding the same stream. In quiet mode force plain (no spinner timer) —
+  // `write` is a no-op anyway, this just avoids arming a useless interval.
+  const tty = !quiet && (options.isTTY ?? Boolean(stream.isTTY)) && !debugEnabled;
 
   const bootStart = Date.now();
   let layerStart = 0;
@@ -153,6 +194,7 @@ export function createBootReporter(options: CreateBootReporterOptions = {}): Boo
   let timer: ReturnType<typeof setInterval> | null = null;
 
   const write = (s: string): void => {
+    if (quiet) return;
     stream.write(s);
   };
 

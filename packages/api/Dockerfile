@@ -1,22 +1,52 @@
 # syntax=docker/dockerfile:1.7
 #
-# Multi-stage build for @crowi/api in a pnpm monorepo.
+# Multi-stage build for the official Crowi image in a pnpm monorepo.
+#
+# The image is built from a reference *runner project*, NOT from `@crowi/api`
+# directly. `@crowi/api` is plugin-free (SDK + core only); the runner project
+# owns `@crowi/api` plus a set of first-party plugins + `crowi.config.json`.
+# Deploying the runner project therefore yields a tree where every bundled
+# driver is present and selectable via `crowi.config.json` with no rebuild.
+#
+# Two images are built from this one Dockerfile, parameterized by build args:
+#   - full (default): RUNNER_APP=@crowi/runner-app  / apps/crowi-runner
+#       — all twelve first-party drivers; switch via config, no rebuild.
+#   - slim:           RUNNER_APP=@crowi/runner-app-slim / apps/crowi-runner-slim
+#       — only the three implicit-default drivers (storage-local + search-mongo
+#         + mail-smtp); MongoDB-only; a base for full customization.
+#
+#   # full (default)
+#   docker build -f packages/api/Dockerfile -t crowi:full .
+#   # slim
+#   docker build -f packages/api/Dockerfile -t crowi:slim \
+#     --build-arg RUNNER_APP=@crowi/runner-app-slim \
+#     --build-arg RUNNER_APP_DIR=apps/crowi-runner-slim .
 #
 # Stages:
-#   1. base     — Node 22 + pnpm 9.15.9 (matches root packageManager).
-#   2. builder  — install all workspace deps, build @crowi/api and its
-#                 transitive workspace deps with tsup/tsc.
-#   3. deployer — `pnpm deploy --filter @crowi/api --prod` to extract a
-#                 self-contained runtime tree (dist + production node_modules
-#                 with workspace deps resolved to concrete paths).
+#   1. base     — Node + pnpm 9.15.9 (matches root packageManager).
+#   2. builder  — install the runner-app subgraph, build @crowi/api and all
+#                 transitive workspace deps (api-contract, plugin-*, runner)
+#                 with tsup/tsc.
+#   3. deployer — `pnpm deploy --filter ${RUNNER_APP} --prod` to extract a
+#                 self-contained runtime tree (the runner project's package.json
+#                 + crowi.config.json + production node_modules with @crowi/api
+#                 and every bundled plugin resolved to concrete paths).
 #   4. runtime  — minimal Node image with only the deployed tree + non-root
 #                 user.
 #
 # Build context: repository root (`docker build -f packages/api/Dockerfile .`).
-# Operator MUST mount their own `crowi.config.json` at /app/crowi.config.json
-# (image intentionally does NOT bake this in — see spec §c).
+# The runner project's bundled `crowi.config.json` IS baked in (it only selects
+# active drivers — no secrets). Operators override driver selection by mounting
+# their own `crowi.config.json` at /app/crowi.config.json; per-driver
+# credentials live in the Mongo Config collection, edited from the admin UI.
 #
 ARG NODE_VERSION=24-bookworm-slim
+
+# Which runner project to build/deploy from. RUNNER_APP is the pnpm package
+# name (used by `--filter`); RUNNER_APP_DIR is its path under the repo (used by
+# COPY). Defaults select the full image; override both for slim.
+ARG RUNNER_APP=@crowi/runner-app
+ARG RUNNER_APP_DIR=apps/crowi-runner
 
 # -----------------------------------------------------------------------------
 # Stage 1: base
@@ -29,31 +59,49 @@ WORKDIR /workspace
 # Stage 2: builder
 # -----------------------------------------------------------------------------
 FROM base AS builder
+ARG RUNNER_APP
+ARG RUNNER_APP_DIR
 
-# Repo-root metadata + the workspace packages api needs. apps/ is NOT
-# copied — it only contains crowi-site (LP/docs site, unrelated to api +
-# has a fumadocs postinstall we don't want to run on every api build).
+# Repo-root metadata + the workspace packages the runner project needs.
+# ${RUNNER_APP_DIR} is the reference runner project we build from. apps/crowi-site
+# (LP/docs site, unrelated + has a fumadocs postinstall) is intentionally NOT
+# copied, keeping the build context lean. We copy all of apps/ so either runner
+# project (full or slim) is present; the unused sibling is harmless (pnpm only
+# installs the --filter subgraph below).
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json .npmrc ./
 COPY packages/ ./packages/
+COPY apps/crowi-runner/ ./apps/crowi-runner/
+COPY apps/crowi-runner-slim/ ./apps/crowi-runner-slim/
 
-# Install only the api's workspace subgraph. `--filter @crowi/api...` keeps
-# the install limited to api + transitive workspace deps + their external
-# deps — no plugin-renderer-katex etc. unless api actually depends on them.
-RUN pnpm install --frozen-lockfile --filter @crowi/api...
+# Install only the runner project's workspace subgraph. `--filter
+# ${RUNNER_APP}...` keeps the install limited to the runner-app + its
+# transitive workspace deps (@crowi/api + the bundled plugins + api-contract +
+# runner) + their external deps.
+RUN pnpm install --frozen-lockfile --filter ${RUNNER_APP}...
 
 # Build @crowi/api and all transitive workspace deps (api-contract, plugin-*,
 # runner). The `...` syntax expands to "this package + everything it depends on".
-RUN pnpm --filter @crowi/api... build
+# The runner-app itself has no build step (it only declares dependencies).
+RUN pnpm --filter ${RUNNER_APP}... build
 
 # -----------------------------------------------------------------------------
 # Stage 3: deployer
 # -----------------------------------------------------------------------------
-# `pnpm deploy` collects @crowi/api and its production-only workspace deps into
-# /deploy with workspace: protocol resolved and node_modules hoisted. The
-# resulting tree is self-contained and free of dev deps / symlinks pointing
-# outside the directory.
+# `pnpm deploy` collects the runner-app and its production-only workspace
+# deps (@crowi/api + every bundled @crowi/plugin-* + plugin-api + runner) into
+# /deploy with the workspace: protocol resolved and node_modules injected. The
+# resulting tree is self-contained (no symlinks pointing outside the dir) and
+# carries the runner project's package.json + crowi.config.json at its root, so
+# `node node_modules/@crowi/api/dist/app.js` boots with /deploy as the
+# projectDir and resolves every bundled plugin from there.
+#
+# NB: @crowi/plugin-api and @crowi/runner are declared as direct deps of the
+# runner-app (not only transitively via @crowi/api) precisely so pnpm deploy
+# injects them into this tree — a package's transitive workspace deps are
+# otherwise left as symlinks to the source checkout, which don't exist here.
 FROM builder AS deployer
-RUN pnpm deploy --filter=@crowi/api --prod /deploy
+ARG RUNNER_APP
+RUN pnpm deploy --filter=${RUNNER_APP} --prod /deploy
 
 # -----------------------------------------------------------------------------
 # Stage 4: runtime
@@ -66,9 +114,10 @@ ENV HOSTNAME=0.0.0.0
 
 WORKDIR /app
 
-# Copy the deployed tree (dist/, node_modules/, package.json). The built-in
-# `node` user (uid 1000) ships with node:bookworm-slim — chown to it so the
-# process runs unprivileged.
+# Copy the deployed runner-project tree (package.json, crowi.config.json,
+# node_modules/ with @crowi/api + bundled plugins). /app is the runner
+# project root = the api's projectDir. The built-in `node` user (uid 1000)
+# ships with node:bookworm-slim — chown to it so the process runs unprivileged.
 COPY --from=deployer --chown=node:node /deploy /app
 
 USER node
@@ -76,6 +125,9 @@ USER node
 EXPOSE 3000
 
 # Direct `node` invocation avoids PID 1 / signal-handling issues that arise
-# when going through `npm start` -> shell -> node. dist/app.js is produced
-# from packages/api/src/app.ts (shebang preserved by tsc; see Phase 7).
-CMD ["node", "dist/app.js"]
+# when going through `npm start` -> shell -> node. The api dist lives under the
+# runner project's node_modules; running it with WORKDIR=/app means
+# PluginManager.bootstrap() resolves projectDir=process.cwd()=/app and finds
+# crowi.config.json + the bundled plugins there. (Equivalent to the runner
+# project's `npm start` = `crowi-api` bin, minus the shell hop.)
+CMD ["node", "node_modules/@crowi/api/dist/app.js"]

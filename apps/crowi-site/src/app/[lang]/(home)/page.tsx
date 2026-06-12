@@ -1,4 +1,4 @@
-import { ArrowUpRightIcon, CheckIcon, CircleDashedIcon, GithubIcon } from 'lucide-react';
+import { ArrowUpRightIcon, CheckIcon, CircleDashedIcon, GithubIcon, SparklesIcon } from 'lucide-react';
 import Image from 'next/image';
 import { notFound } from 'next/navigation';
 import { getDictionary } from '@/lib/dictionaries';
@@ -220,7 +220,25 @@ export default async function MarketingHome({ params }: { params: Promise<{ lang
             </div>
           </header>
 
-          <div className="mt-14 grid grid-cols-1 gap-10 sm:grid-cols-2 lg:max-w-3xl">
+          {/* New in v2 — genuinely new capabilities, not just migrated */}
+          <div className="mt-14 border border-[var(--cw-ember-line)] p-6 lg:max-w-3xl">
+            <div className="font-mono-label flex items-center gap-2 text-[var(--cw-ember)]">
+              <SparklesIcon className="size-3.5" />
+              <span>{dict.status.newLabel}</span>
+            </div>
+            <ul className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {dict.status.newFeatures.map((n) => (
+                <li key={n} className="flex items-baseline gap-3 text-sm text-[var(--cw-fg)]">
+                  <span aria-hidden className="text-[var(--cw-ember)]">
+                    ◆
+                  </span>
+                  <span>{n}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="mt-10 grid grid-cols-1 gap-10 sm:grid-cols-2 lg:max-w-3xl">
             {/* Done */}
             <div>
               <div className="font-mono-label flex items-center gap-2 text-[var(--cw-ember)]">

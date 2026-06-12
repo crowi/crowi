@@ -1,0 +1,292 @@
+---
+title: Self-hosting (custom runner project)
+description: Build an api image from your own runner project and wire up the web frontend for a production deployment
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Steps, Step } from 'fumadocs-ui/components/steps';
+
+This page is for operators who need to **self-host with their own runner project**
+because the official full / slim images don't cover their requirements. Typical
+cases:
+
+- You want to load **custom plugins** that aren't bundled in the official images
+  (e.g. packages from a private npm registry).
+- You want to pin a **specific combination** of storage / search / mail / renderer
+  drivers.
+- You want to keep the image's dependencies minimal and own the build pipeline
+  in-house.
+
+If the official images (built from the monorepo's bundled `apps/crowi-runner` /
+`apps/crowi-runner-slim`) are enough, the "Building the official Docker images"
+section of [Installation](./installation) covers that. This page goes one step
+further: **building a runner project from scratch**.
+
+<Callout type="info">
+  A Crowi production deployment is "**api (Hono) + web (Next.js) + MongoDB
+  (optionally Redis / Elasticsearch / S3)**". `@crowi/api` **bundles no plugins**,
+  so the runner project owns which drivers are used. This premise is detailed in
+  "How plugins are resolved" in [Configuration](./configuration).
+</Callout>
+
+## The big picture
+
+With the recommended single-domain + reverse-proxy setup, requests are routed
+like this:
+
+```
+                         ┌──────────────────────────────┐
+  browser ──HTTPS──▶ reverse proxy (nginx / Caddy / ...)
+                         │  /            → web  :3000     │
+                         │  /api/*       → api  :3000     │
+                         │  /collab/*    → api  :3000 (WS) │
+                         └──────────────────────────────┘
+                                   │            │
+                              ┌────▼───┐   ┌────▼───┐
+                              │  web   │   │  api   │──▶ MongoDB / Redis / ...
+                              └────────┘   └────────┘
+```
+
+`web` and `api` are separate containers, both listening on container port `3000`.
+`/collab/*` is a WebSocket endpoint, so enable **Upgrade-header passthrough** on
+the proxy.
+
+## Build the runner project
+
+<Steps>
+
+<Step>
+
+### Project directory and `package.json`
+
+Create a directory anywhere and declare `@crowi/api` plus the **plugins you want**
+as dependencies. The example below uses S3 storage + Elasticsearch search +
+PlantUML/KaTeX/emoji renderers.
+
+```json title="package.json"
+{
+  "name": "my-crowi-runner",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "crowi-api"
+  },
+  "dependencies": {
+    "@crowi/api": "2.0.0-alpha.0",
+    "@crowi/plugin-storage-aws-s3": "2.0.0-alpha.0",
+    "@crowi/plugin-search-elasticsearch": "2.0.0-alpha.0",
+    "@crowi/plugin-renderer-plantuml": "2.0.0-alpha.0",
+    "@crowi/plugin-renderer-katex": "2.0.0-alpha.0",
+    "@crowi/plugin-renderer-emoji": "2.0.0-alpha.0"
+  }
+}
+```
+
+<Callout type="warn">
+  Pin the versions to **the Crowi release you actually run**. Keeping `@crowi/api`
+  and every `@crowi/plugin-*` on the same version is the safe choice (releases bump
+  together as a linked group).
+</Callout>
+
+The implicit default plugins (`@crowi/plugin-storage-local` /
+`@crowi/plugin-search-mongo` / `@crowi/plugin-mail-smtp`) load without being
+declared. If local storage + MongoDB search + SMTP is fine, depending on just
+`@crowi/api` works (i.e. you assemble a slim-equivalent yourself).
+
+</Step>
+
+<Step>
+
+### `crowi.config.json`
+
+Declare which plugins to load and which drivers are active. Per-plugin settings
+(bucket names, credentials, etc.) are **not** written here — configure them from
+the admin UI (`/admin/plugins`) after boot.
+
+```json title="crowi.config.json"
+{
+  "plugins": [
+    "@crowi/plugin-storage-aws-s3",
+    "@crowi/plugin-search-elasticsearch",
+    "@crowi/plugin-renderer-plantuml",
+    "@crowi/plugin-renderer-katex",
+    "@crowi/plugin-renderer-emoji"
+  ],
+  "storage": { "driver": "s3" },
+  "search": { "driver": "elasticsearch" }
+}
+```
+
+See [Configuration](./configuration) for the field meanings and driver-name
+mapping.
+
+</Step>
+
+<Step>
+
+### `.env`
+
+Provide the environment variables the api reads at boot. At minimum set
+`MONGO_URI`; in production always set `CROWI_ENCRYPTION_KEY` and
+`WS_TOKEN_SECRET`.
+
+```bash title=".env"
+MONGO_URI=mongodb://mongodb:27017/crowi
+REDIS_URL=redis://redis:6379          # required for multi-replica deployments
+CROWI_ENCRYPTION_KEY=...               # openssl rand -base64 32
+WS_TOKEN_SECRET=...                    # identical across all api replicas
+```
+
+See "Environment variables" in [Configuration](./configuration) for what each
+one does.
+
+<Callout type="warn">
+  Leaving `WS_TOKEN_SECRET` unset generates a random secret per process. That is
+  acceptable for single-instance testing, but with **multiple replicas it must be
+  the same value on every replica** — otherwise realtime-collab WebSocket auth
+  fails on one side.
+</Callout>
+
+</Step>
+
+<Step>
+
+### Verify locally
+
+Install dependencies and start with the **project directory as cwd** (`process.cwd()`
+must be the `projectDir`).
+
+```bash
+pnpm install   # or npm install
+pnpm start     # = crowi-api; the api listens on container port 3000
+```
+
+At boot the api resolves plugins from this project's `node_modules/`. Adding or
+removing plugins **does not require rebuilding the api**.
+
+</Step>
+
+</Steps>
+
+## Build the api Docker image
+
+Containerize the runner project as-is. Like the official image, set `WORKDIR` to
+the runner project root (= `projectDir`) and run `node_modules/@crowi/api/dist/app.js`.
+
+```dockerfile title="Dockerfile"
+FROM node:24-bookworm-slim
+WORKDIR /app
+
+# Copy manifests first so dependency resolution caches well
+COPY package.json pnpm-lock.yaml* package-lock.json* ./
+RUN corepack enable && pnpm install --prod || npm install --omit=dev
+
+# Place config and sources
+COPY crowi.config.json ./
+# Do NOT bake .env into the image — pass it via container env / env_file
+
+ENV NODE_ENV=production
+ENV PORT=3000
+EXPOSE 3000
+CMD ["node", "node_modules/@crowi/api/dist/app.js"]
+```
+
+<Callout type="info">
+  For plugins from a private registry, COPY an `.npmrc` to configure the registry
+  / auth before `pnpm install`. Mounting `crowi.config.json` from outside the
+  container lets you swap driver choices without rebuilding (the official compose
+  setup does this too).
+</Callout>
+
+Keep secrets (`CROWI_ENCRYPTION_KEY` / `WS_TOKEN_SECRET`, etc.) **out of the
+image** — pass them via container env or `env_file` at deploy time.
+
+## Wire up the web frontend
+
+The web app builds from `packages/web/Dockerfile`. The **most important** thing
+here is `NEXT_PUBLIC_API_URL`.
+
+<Callout type="warn">
+  `NEXT_PUBLIC_API_URL` is **baked in statically at build time** (that's how
+  Next.js `NEXT_PUBLIC_*` works). A runtime env var cannot change it. Pass the
+  **browser-reachable API URL** via `--build-arg`. A container hostname like
+  `http://api:3000` is not resolvable from the browser, so it won't work.
+</Callout>
+
+### Single domain + reverse proxy (recommended)
+
+Serve web and api from the same origin and let the proxy route. Here
+`NEXT_PUBLIC_API_URL` is the **public origin itself**.
+
+```bash
+docker build -f packages/web/Dockerfile \
+  --build-arg NEXT_PUBLIC_API_URL=https://wiki.example.com \
+  -t my-crowi-web .
+```
+
+Route on the proxy (nginx example):
+
+```nginx
+location /api/ {
+  proxy_pass http://api:3000;
+}
+location /collab/ {
+  proxy_pass http://api:3000;
+  proxy_http_version 1.1;
+  proxy_set_header Upgrade    $http_upgrade;   # WebSocket
+  proxy_set_header Connection "upgrade";
+}
+location / {
+  proxy_pass http://web:3000;
+}
+```
+
+Leave `NEXT_PUBLIC_COLLAB_URL` **unset** (recommended). When it's blank the web
+app derives the WebSocket URL from `window.location.host` and
+`NEXT_PUBLIC_API_URL`, so as long as `/collab/*` is proxied to the same host it
+just works.
+
+### Serving api / web on separate origins
+
+To serve them on different domains (e.g. web=`https://wiki.example.com`,
+api=`https://api.example.com`), build with
+`NEXT_PUBLIC_API_URL=https://api.example.com` and set `CLIENT_URL=https://wiki.example.com`
+on the api so CORS allows the web origin. If `/collab/*` lives on the api domain,
+set `NEXT_PUBLIC_COLLAB_URL` explicitly.
+
+## Boot order and health checks
+
+<Steps>
+
+<Step>
+### Start middleware first
+Bring up MongoDB (and Redis / Elasticsearch if used) and make them reachable.
+</Step>
+
+<Step>
+### Apply migrations
+If you have a v1 upgrade or preflight migrations, apply them before starting the
+api. See [Upgrading from v1](./upgrading-from-v1).
+</Step>
+
+<Step>
+### Start api, then web
+Start the api and confirm `/api/v2/app/info` returns 200, then start the web app.
+</Step>
+
+</Steps>
+
+<Callout type="info">
+  For multi-replica deployments, `REDIS_URL` (session / collab pub/sub) is
+  **required**, and `WS_TOKEN_SECRET` must be identical across all api replicas.
+  See [Realtime collaboration](./realtime-collab).
+</Callout>
+
+## Next steps
+
+- [Configuration](./configuration) — the full picture of env vars and `crowi.config.json`
+- [Encryption](./encryption) — setting up `CROWI_ENCRYPTION_KEY`
+- [Storage drivers](./storage) — switching `storage.driver`
+- [Search setup](./search-setup) — configuring Elasticsearch
+- [Managing plugins](../plugins/managing) — adding and enabling plugins
+- [Upgrading from v1](./upgrading-from-v1) — migrating from an existing Crowi

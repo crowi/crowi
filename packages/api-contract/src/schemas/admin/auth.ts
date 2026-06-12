@@ -21,9 +21,9 @@ export type AuthSettings = z.infer<typeof AuthSettingsSchema>;
  * Request body for PUT /admin/auth.
  *
  * Strict booleans only — UIs that drive the toggles from a checkbox should
- * send `e.target.checked` directly. The server applies an extra guard for
- * `disablePasswordAuth: true` (see UpdateAuthSettings422Schema) but the wire
- * shape itself is identical to the GET response.
+ * send `e.target.checked` directly. The server hard-rejects enabling either
+ * toggle (see ThirdPartyAuthUnavailableErrorSchema) but the wire shape itself
+ * is identical to the GET response.
  */
 export const UpdateAuthSettingsRequestSchema = AuthSettingsSchema;
 export type UpdateAuthSettingsRequest = z.infer<typeof UpdateAuthSettingsRequestSchema>;
@@ -42,21 +42,21 @@ export const UpdateAuthSettingsResponseSchema = AuthSettingsSchema;
 export type UpdateAuthSettingsResponse = z.infer<typeof UpdateAuthSettingsResponseSchema>;
 
 /**
- * Surfaced when `disablePasswordAuth: true` is sent but the requesting admin
- * is not connected to a valid third-party identity (Google / GitHub). Mirrors
- * the legacy guard in `controllers/admin.ts:postSettings`:
+ * Returned (400) when the request tries to enable `requireThirdPartyAuth` or
+ * `disablePasswordAuth`.
  *
- *   if (form['auth:disablePasswordAuth'] && !user.hasValidThirdPartyId())
- *     return error('パスワードによるログインを禁止するには管理者が有効な
- *                   外部サービスと連携している必要があります。');
- *
- * The new API returns 422 with a discriminator code so the UI can surface the
- * exact failure mode independently of the (localised) message string.
+ * Both settings depend on third-party (Google / GitHub) sign-in, which was
+ * removed from core in the 2.0.0-alpha line — `User.hasValidThirdPartyId()` is
+ * now permanently false, so enabling either would lock every account out of
+ * password login with no third-party path to recover. The config keys and
+ * schema are retained (inert) for a future auth plugin, but the endpoint hard-
+ * rejects turning them on. The admin UI hides the toggles, so this guards the
+ * API against direct callers.
  */
-export const AuthSettingsValidationErrorSchema = z.object({
+export const ThirdPartyAuthUnavailableErrorSchema = z.object({
   error: z.object({
-    code: z.literal('PASSWORD_AUTH_REQUIRES_THIRDPARTY'),
+    code: z.literal('THIRD_PARTY_AUTH_UNAVAILABLE'),
     message: z.string(),
   }),
 });
-export type AuthSettingsValidationError = z.infer<typeof AuthSettingsValidationErrorSchema>;
+export type ThirdPartyAuthUnavailableError = z.infer<typeof ThirdPartyAuthUnavailableErrorSchema>;

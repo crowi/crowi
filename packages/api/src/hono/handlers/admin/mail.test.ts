@@ -1,12 +1,8 @@
 import request from 'supertest';
 import type { MailSender } from '@crowi/plugin-api';
 import { app, crowi, Fixture } from 'src/test/setup';
+import { authHeaders } from 'src/test/test-helpers';
 import { createJwtUtil } from 'src/util/jwt';
-
-const authHeaders = (token: string) => ({
-  Authorization: `Bearer ${token}`,
-  'Content-Type': 'application/json',
-});
 
 const createUser = async (info: { name: string; username: string; email: string }, admin = false) => {
   const User = crowi.model('User');

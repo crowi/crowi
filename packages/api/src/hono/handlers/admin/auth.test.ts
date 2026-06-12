@@ -1,23 +1,6 @@
 import request from 'supertest';
-import { app, crowi, Fixture } from 'src/test/setup';
-import { createJwtUtil } from 'src/util/jwt';
-
-const authHeaders = (token: string) => ({
-  Authorization: `Bearer ${token}`,
-  'Content-Type': 'application/json',
-});
-
-const createTestUser = async (info: { name: string; username: string; email: string; admin?: boolean; googleId?: string | null; githubId?: string | null }) => {
-  const User = crowi.model('User');
-  const [user] = await Fixture.generate('User', [info]);
-  user.status = User.STATUS_ACTIVE;
-  user.admin = !!info.admin;
-  if (info.googleId !== undefined) user.googleId = info.googleId;
-  if (info.githubId !== undefined) user.githubId = info.githubId;
-  await user.save();
-  const accessToken = createJwtUtil(crowi).generateTokens(user).accessToken;
-  return { user, accessToken };
-};
+import { app, crowi } from 'src/test/setup';
+import { authHeaders, createTestUser } from 'src/test/test-helpers';
 
 /**
  * Reset the two auth:* keys back to defaults between tests so each case
@@ -33,8 +16,9 @@ const resetAuthConfig = async () => {
 
 /**
  * Make sure googleLoginEnabled() returns true so that the user's googleId
- * counts toward `hasValidThirdPartyId()`. Only matters for the 422 self-
- * lockout test path; other tests don't depend on these values being set.
+ * counts toward `hasValidThirdPartyId()`. Only matters for the 400
+ * THIRD_PARTY_AUTH_UNAVAILABLE path (a third-party-linked admin is still
+ * rejected); other tests don't depend on these values being set.
  */
 const enableGoogleOAuth = async () => {
   await crowi.getConfigService().saveConfig('crowi', {
@@ -129,8 +113,11 @@ describe('Routes /api/v2/admin/auth (Hono)', () => {
   });
 
   describe('PUT /api/v2/admin/auth', () => {
+    // The only body the endpoint now accepts: both third-party-dependent
+    // settings off. Enabling either is rejected (400) because third-party
+    // sign-in was removed from core.
     const validBody = {
-      requireThirdPartyAuth: true,
+      requireThirdPartyAuth: false,
       disablePasswordAuth: false,
     };
 
@@ -164,15 +151,15 @@ describe('Routes /api/v2/admin/auth (Hono)', () => {
       expect(res.status).toBe(400);
     });
 
-    it('persists the two auth:* keys and returns the updated settings', async () => {
+    it('persists the two auth:* keys (both off) and returns the updated settings', async () => {
       const res = await request(app).put('/api/v2/admin/auth').set(authHeaders(adminToken)).send({
-        requireThirdPartyAuth: true,
+        requireThirdPartyAuth: false,
         disablePasswordAuth: false,
       });
 
       expect(res.status).toBe(200);
       expect(res.body).toEqual({
-        requireThirdPartyAuth: true,
+        requireThirdPartyAuth: false,
         disablePasswordAuth: false,
       });
 
@@ -180,20 +167,21 @@ describe('Routes /api/v2/admin/auth (Hono)', () => {
       // values are in sync.
       const getRes = await request(app).get('/api/v2/admin/auth').set(authHeaders(adminToken));
       expect(getRes.status).toBe(200);
-      expect(getRes.body.requireThirdPartyAuth).toBe(true);
+      expect(getRes.body.requireThirdPartyAuth).toBe(false);
       expect(getRes.body.disablePasswordAuth).toBe(false);
     });
 
-    it('returns 422 when an admin without a third-party identity tries to disable password auth', async () => {
-      // adminToken's user has neither googleId nor githubId, so this should
-      // fail the hasValidThirdPartyId() guard.
+    it('returns 400 when disablePasswordAuth is enabled (third-party sign-in removed from core)', async () => {
+      // Third-party (Google / GitHub) sign-in was removed from core, so
+      // hasValidThirdPartyId() is permanently false. The endpoint hard-rejects
+      // turning on either third-party-dependent setting to prevent a lockout.
       const res = await request(app).put('/api/v2/admin/auth').set(authHeaders(adminToken)).send({
         requireThirdPartyAuth: false,
         disablePasswordAuth: true,
       });
 
-      expect(res.status).toBe(422);
-      expect(res.body.error.code).toBe('PASSWORD_AUTH_REQUIRES_THIRDPARTY');
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('THIRD_PARTY_AUTH_UNAVAILABLE');
       expect(typeof res.body.error.message).toBe('string');
       expect(res.body.error.message.length).toBeGreaterThan(0);
 
@@ -202,7 +190,22 @@ describe('Routes /api/v2/admin/auth (Hono)', () => {
       expect(cfg.crowi['auth:disablePasswordAuth']).toBe(false);
     });
 
-    it('allows disabling password auth when the requesting admin has a connected third-party identity', async () => {
+    it('returns 400 when requireThirdPartyAuth is enabled (third-party sign-in removed from core)', async () => {
+      const res = await request(app).put('/api/v2/admin/auth').set(authHeaders(adminToken)).send({
+        requireThirdPartyAuth: true,
+        disablePasswordAuth: false,
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('THIRD_PARTY_AUTH_UNAVAILABLE');
+
+      const cfg = crowi.getConfig();
+      expect(cfg.crowi['auth:requireThirdPartyAuth']).toBe(false);
+    });
+
+    it('rejects enabling these settings even for an admin with a connected third-party identity', async () => {
+      // The guard is now unconditional: it no longer depends on the acting
+      // admin's third-party connection, because third-party sign-in is gone.
       await enableGoogleOAuth();
 
       const res = await request(app).put('/api/v2/admin/auth').set(authHeaders(adminWithGoogleToken)).send({
@@ -210,11 +213,8 @@ describe('Routes /api/v2/admin/auth (Hono)', () => {
         disablePasswordAuth: true,
       });
 
-      expect(res.status).toBe(200);
-      expect(res.body).toEqual({
-        requireThirdPartyAuth: true,
-        disablePasswordAuth: true,
-      });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('THIRD_PARTY_AUTH_UNAVAILABLE');
     });
 
     it('does not touch unrelated keys in the crowi namespace', async () => {
@@ -228,7 +228,7 @@ describe('Routes /api/v2/admin/auth (Hono)', () => {
 
       const cfg = crowi.getConfig();
       expect(cfg.crowi['app:title']).toBe('Custom Crowi Title');
-      expect(cfg.crowi['auth:requireThirdPartyAuth']).toBe(true);
+      expect(cfg.crowi['auth:requireThirdPartyAuth']).toBe(false);
     });
   });
 });

@@ -84,7 +84,6 @@ export const ERROR_MESSAGE_KEYS = {
   INVALID_CREDENTIALS: m['errors.invalid_credentials'],
   REFRESH_TOKEN_REQUIRED: m['errors.refresh_token_required'],
   REGISTRATION_CLOSED: m['errors.registration_closed'],
-  PASSWORD_AUTH_REQUIRES_THIRDPARTY: m['errors.password_auth_requires_thirdparty'],
   // admin subsystems
   ENCRYPTION_NOT_CONFIGURED: m['errors.encryption_key_not_set'],
   MAIL_TEST_FAILED: m['errors.mail_test_failed'],

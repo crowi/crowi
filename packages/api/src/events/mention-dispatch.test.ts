@@ -33,20 +33,44 @@ describe('events/mention-dispatch (RFC-0002 Phase 8)', () => {
     Activity = crowi.model('Activity');
   });
 
+  // Usernames this block resolves mentions against (re-used across tests with
+  // fresh _ids each time). Pages/revisions all live under PATH_PREFIX. Cleanup
+  // is scoped to these markers so the wipe never touches another block's seed
+  // users — a broad `User.deleteMany({})` here was a cross-block 401-flake
+  // source (it wiped JWT-backed seed users created by other suites sharing the
+  // test database under parallel jest workers).
+  const OWNED_USERNAMES = ['author', 'alice', 'bob', 'carol', 'selfie', 'gone', 'nobody'];
+  const PATH_PREFIX = '/mention-dispatch-test/';
+
   beforeEach(async () => {
-    await Promise.all([Page, User, Revision, Notification, Activity].map((m) => m.deleteMany({})));
+    // Resolve this block's owned users (by the known username set) so the
+    // Notification/Activity cleanup can be keyed on their ids — those rows are
+    // always `{ user: <one of these> }` / `{ target: <an owned page> }`.
+    const ownedUsers = await User.find({ username: { $in: OWNED_USERNAMES } }, { _id: 1 });
+    const ownedUserIds = ownedUsers.map((u) => u._id);
+    const ownedPages = await Page.find({ path: { $regex: `^${PATH_PREFIX}` } }, { _id: 1 });
+    const ownedPageIds = ownedPages.map((p) => p._id);
+
+    await Promise.all([
+      User.deleteMany({ username: { $in: OWNED_USERNAMES } }),
+      Page.deleteMany({ path: { $regex: `^${PATH_PREFIX}` } }),
+      Revision.deleteMany({ path: { $regex: `^${PATH_PREFIX}` } }),
+      Notification.deleteMany({ $or: [{ user: { $in: ownedUserIds } }, { target: { $in: ownedPageIds } }] }),
+      Activity.deleteMany({ $or: [{ user: { $in: ownedUserIds } }, { target: { $in: ownedPageIds } }] }),
+    ]);
   });
 
   // Build a Page + latest Revision pair with the given mention usernames.
   // Optionally seeds a prior revision with `previousMentions` so the diff
-  // path can be exercised.
+  // path can be exercised. All paths live under PATH_PREFIX so cleanup can
+  // scope to this block's owned pages/revisions.
   async function seedPage(args: {
     authorId: mongoose.Types.ObjectId;
     path?: string;
     mentions: string[];
     previousMentions?: string[];
   }): Promise<{ page: any; revisionId: mongoose.Types.ObjectId }> {
-    const path = args.path ?? `/${faker.lorem.word()}-${Date.now()}`;
+    const path = args.path ?? `${PATH_PREFIX}${faker.lorem.word()}-${Date.now()}`;
     const [page] = await Fixture.generate('Page', [{ _id: new ObjectId(), path, grant: 1 /* PUBLIC */, creator: args.authorId }]);
     if (args.previousMentions) {
       await Fixture.generate('Revision', [
@@ -214,7 +238,9 @@ describe('events/mention-dispatch (RFC-0002 Phase 8)', () => {
     await Fixture.generate('User', [{ _id: authorId, username: 'author', email: faker.internet.email(), status: User.STATUS_ACTIVE }]);
 
     // Page with revision pointer that doesn't exist → dispatchMentions returns early.
-    const [page] = await Fixture.generate('Page', [{ _id: new ObjectId(), path: '/missing-rev', grant: 1, creator: authorId, revision: new ObjectId() }]);
+    const [page] = await Fixture.generate('Page', [
+      { _id: new ObjectId(), path: `${PATH_PREFIX}missing-rev`, grant: 1, creator: authorId, revision: new ObjectId() },
+    ]);
 
     await expect(dispatchMentions(crowi, page, { _id: authorId })).resolves.toBeUndefined();
   });

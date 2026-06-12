@@ -94,8 +94,7 @@ export default (crowi: Crowi) => {
       // 'app:installed'     : "0.0.0",
       'app:title': 'Crowi',
       'app:confidential': '',
-
-      'app:externalShare': false,
+      'app:setupChecklistDismissed': false,
 
       'security:registrationMode': 'Open',
       'security:registrationWhiteList': [],
@@ -114,12 +113,11 @@ export default (crowi: Crowi) => {
       // namespace (`plugin:@crowi/plugin-mail-*:*`).
       'mail:from': '',
 
-      'google:clientId': '',
-      'google:clientSecret': '',
-
-      'github:clientId': '',
-      'github:clientSecret': '',
-      'github:organization': '',
+      // Google / GitHub social-login credentials are no longer seeded:
+      // third-party sign-in was removed from core in the 2.0.0-alpha line and
+      // will return as an auth provider plugin. The `googleLoginEnabled` /
+      // `githubLoginEnabled` readers below are kept (they now always return
+      // false) because dormant `User` methods still reference them.
     };
   }
 

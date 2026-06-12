@@ -15,12 +15,6 @@ export const GetAppSettingsResponseSchema = z.object({
   app: z.object({
     title: z.string(),
     confidential: z.string(),
-    /**
-     * Read-only in this endpoint — managed via the Share settings screen.
-     * Surfaced here because the App screen displays it, not because it is
-     * editable from here.
-     */
-    externalShare: z.boolean(),
   }),
   /**
    * Whether a storage driver is registered (i.e. uploads are wired up).
@@ -33,6 +27,12 @@ export const GetAppSettingsResponseSchema = z.object({
    * registration mode label without knowing the internal capitalisation.
    */
   registrationMode: z.record(z.string(), z.string()),
+  /**
+   * Whether the admin has dismissed the initial-setup checklist on the
+   * dashboard. Persisted server-side (`app:setupChecklistDismissed`) so the
+   * dismissal holds across browsers and devices, not just one localStorage.
+   */
+  setupChecklistDismissed: z.boolean(),
 });
 export type GetAppSettingsResponse = z.infer<typeof GetAppSettingsResponseSchema>;
 
@@ -54,6 +54,11 @@ export const UpdateAppSettingsRequestSchema = z
         confidential: z.string().max(500).optional(),
       })
       .optional(),
+    /**
+     * Toggle the dashboard initial-setup checklist's dismissed state. Sent on
+     * its own (without the `app` block) when the admin clicks "mark as done".
+     */
+    setupChecklistDismissed: z.boolean().optional(),
   })
   .strict();
 export type UpdateAppSettingsRequest = z.infer<typeof UpdateAppSettingsRequestSchema>;

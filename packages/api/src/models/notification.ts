@@ -9,6 +9,13 @@ import { NOTIFICATIONS_CHANNEL_PREFIX } from 'src/notifications/channel';
 import { ActivityDocument } from './activity';
 import { UserDocument } from './user';
 
+// Module-level logger for the module-scope helpers below
+// (`publishNotificationsChange` / `forwardToNotifierPlugins`). The model
+// factory has its own `debug` in closure scope; these helpers run outside
+// it. Redis publish / notifier driver failures during teardown are
+// expected noise, so they log at debug rather than warn.
+const moduleDebug = Debug('crowi:models:notification');
+
 const STATUS_UNREAD = 'UNREAD';
 const STATUS_UNOPENED = 'UNOPENED';
 const STATUS_OPENED = 'OPENED';
@@ -284,12 +291,14 @@ function publishNotificationsChange(crowi: Crowi, userId: string): void {
   // subscriber. The attach handler validates the inbound side with the
   // same schema (`NotificationsServerMessageSchema`).
   const message = JSON.stringify(NotificationsChangedMessageSchema.parse({ type: 'changed' }));
-  Promise.resolve()
-    .then(() => redis.publish!(channel, message))
-    .catch((err: unknown) => {
-      const m = err instanceof Error ? err.message : String(err);
-      console.warn(`[crowi:notifications] publish failed for user ${userId}: ${m}`);
-    });
+  crowi.trackSideEffect(
+    Promise.resolve()
+      .then(() => redis.publish!(channel, message))
+      .catch((err: unknown) => {
+        const m = err instanceof Error ? err.message : String(err);
+        moduleDebug('publish failed for user %s: %s', userId, m);
+      }),
+  );
 }
 
 /**
@@ -315,11 +324,13 @@ function forwardToNotifierPlugins(crowi: Crowi, notification: NotificationDocume
   };
 
   for (const driver of notifiers) {
-    Promise.resolve()
-      .then(() => driver.send(payload))
-      .catch((err: unknown) => {
-        const message = err instanceof Error ? err.message : String(err);
-        console.warn(`[crowi:notification] notifier driver send failed: ${message}`);
-      });
+    crowi.trackSideEffect(
+      Promise.resolve()
+        .then(() => driver.send(payload))
+        .catch((err: unknown) => {
+          const message = err instanceof Error ? err.message : String(err);
+          moduleDebug('notifier driver send failed: %s', message);
+        }),
+    );
   }
 }

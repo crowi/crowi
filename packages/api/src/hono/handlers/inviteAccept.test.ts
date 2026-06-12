@@ -10,7 +10,11 @@ const jsonHeaders = { 'Content-Type': 'application/json' };
 /** Create a STATUS_INVITED user (email only) + a valid invite token. */
 const createInvitedUser = async (email: string): Promise<{ user: UserDocument; token: string }> => {
   const User = crowi.model('User');
-  const [user] = (await Fixture.generate('User', [{ name: '', username: '', email }])) as UserDocument[];
+  // Omit `username` (not `''`) to mirror production `createUsersByInvitation`,
+  // which leaves it unset so the sparse unique username index excludes invited
+  // rows. An empty string is a real value and would collide across tests now
+  // that the suite no longer wipes users between cases.
+  const [user] = (await Fixture.generate('User', [{ name: '', email }])) as UserDocument[];
   user.status = User.STATUS_INVITED;
   await user.save();
   const { token } = createMailTokenUtil().signMailToken({ purpose: 'invite', userId: user._id.toString(), email });

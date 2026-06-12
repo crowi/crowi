@@ -50,6 +50,7 @@ import type Crowi from 'src/crowi';
 import type { PageDocument } from 'src/models/page';
 import type { UserDocument } from 'src/models/user';
 import FileUploader from 'src/util/fileUploader';
+import { mapDuplicateKeyError } from 'src/util/map-duplicate-key-error';
 import { createMailTokenUtil } from 'src/util/mail-token';
 import { pageToResponse } from 'src/util/page-response';
 
@@ -78,8 +79,6 @@ const userToProfileResponse = (user: UserDocument, hasPassword: boolean, emailCh
   theme: user.theme ?? 'system',
   image: user.image,
   introduction: user.introduction || undefined,
-  googleId: user.googleId,
-  githubId: user.githubId,
   hasPassword,
   createdAt: user.createdAt.toISOString(),
   ...(emailChangePending ? { emailChangePending: true } : {}),
@@ -219,6 +218,20 @@ export const registerMeRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app: 
         const hasPassword = userWithSecrets.isPasswordSet();
         return c.json(userToProfileResponse(user, hasPassword, emailChangeRequested), 200);
       } catch (err) {
+        // The email findOne pre-check can be raced; the unique index is the
+        // final defence. Map its E11000 to EMAIL_TAKEN (the same code the
+        // pre-check returns) instead of a generic validation error.
+        if (mapDuplicateKeyError(err) === 'EMAIL_TAKEN') {
+          return c.json(
+            {
+              status: 'error' as const,
+              code: 'EMAIL_TAKEN' as const,
+              message: 'It can not be changed to that mail address',
+              errors: ['It can not be changed to that mail address'],
+            },
+            400,
+          );
+        }
         const errors = extractMongooseErrors(err, 'Failed to update profile');
         return c.json({ status: 'error' as const, message: errors[0], errors }, 400);
       }

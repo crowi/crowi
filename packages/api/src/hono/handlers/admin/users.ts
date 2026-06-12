@@ -20,6 +20,7 @@ import Debug from 'debug';
 import type Crowi from 'src/crowi';
 import type { UserDocument, UserModel } from 'src/models/user';
 import { MAX_PAGE_LIST, createPager } from 'src/util/admin-pager';
+import { isDuplicateKeyError } from 'src/util/map-duplicate-key-error';
 import { isValidObjectId, toUserPublic } from 'src/util/ts-rest-helpers';
 
 import type { CrowiHonoBindings } from '../../app';
@@ -174,6 +175,10 @@ export const registerAdminUsersRoutes = <E extends OpenAPIHono<CrowiHonoBindings
         const updated = (await user.updateNameAndEmail(body.name, body.email)) as UserDocument;
         return c.json({ user: toUserPublic(updated) }, 200);
       } catch (err) {
+        // The email findUserByEmail pre-check can be raced; the unique index is
+        // the final defence. Surface its E11000 as the same 409 conflict
+        // instead of a 500 (this route's contract codes the conflict CONFLICT).
+        if (isDuplicateKeyError(err)) return c.json(emailConflictBody, 409);
         debug('editUser error: %s', (err as Error).message);
         return c.json(INTERNAL_ERROR_BODY, 500);
       }
@@ -257,6 +262,9 @@ export const registerAdminUsersRoutes = <E extends OpenAPIHono<CrowiHonoBindings
         const updated = (await user.updateEmail(body.email)) as UserDocument;
         return c.json({ user: toUserPublic(updated) }, 200);
       } catch (err) {
+        // The findUserByEmail pre-check can be raced; the unique index is the
+        // final defence. Surface its E11000 as the same 409 conflict.
+        if (isDuplicateKeyError(err)) return c.json(emailConflictBody, 409);
         debug('updateUserEmail error: %s', (err as Error).message);
         return c.json(INTERNAL_ERROR_BODY, 500);
       }

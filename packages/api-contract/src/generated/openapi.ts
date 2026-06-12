@@ -32,6 +32,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             title: string | null;
+                            confidential: string | null;
                         };
                     };
                 };
@@ -759,8 +760,6 @@ export interface paths {
                             theme: "system" | "light" | "dark";
                             image: string | null;
                             introduction?: string;
-                            googleId?: string | null;
-                            githubId?: string | null;
                             hasPassword: boolean;
                             createdAt: string;
                             emailChangePending?: boolean;
@@ -826,8 +825,6 @@ export interface paths {
                             theme: "system" | "light" | "dark";
                             image: string | null;
                             introduction?: string;
-                            googleId?: string | null;
-                            githubId?: string | null;
                             hasPassword: boolean;
                             createdAt: string;
                             emailChangePending?: boolean;
@@ -9162,12 +9159,12 @@ export interface paths {
                             app: {
                                 title: string;
                                 confidential: string;
-                                externalShare: boolean;
                             };
                             isUploadable: boolean;
                             registrationMode: {
                                 [key: string]: string;
                             };
+                            setupChecklistDismissed: boolean;
                         };
                     };
                 };
@@ -9222,6 +9219,7 @@ export interface paths {
                             title?: string;
                             confidential?: string;
                         };
+                        setupChecklistDismissed?: boolean;
                     };
                 };
             };
@@ -9408,6 +9406,21 @@ export interface paths {
                         };
                     };
                 };
+                /** @description Enabling a third-party-dependent setting (requireThirdPartyAuth / disablePasswordAuth) is rejected because third-party sign-in was removed from core */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "THIRD_PARTY_AUTH_UNAVAILABLE";
+                                message: string;
+                            };
+                        };
+                    };
+                };
                 /** @description Authentication required */
                 401: {
                     headers: {
@@ -9438,21 +9451,6 @@ export interface paths {
                                 /** @enum {string} */
                                 message: "Admin permission required";
                                 redirectTo?: string;
-                            };
-                        };
-                    };
-                };
-                /** @description Self-lockout guard rejected the request */
-                422: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            error: {
-                                /** @enum {string} */
-                                code: "PASSWORD_AUTH_REQUIRES_THIRDPARTY";
-                                message: string;
                             };
                         };
                     };
@@ -9912,172 +9910,6 @@ export interface paths {
                 };
             };
         };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/admin/share": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get the current share settings (externalShare toggle) */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Current share settings */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            externalShare: boolean;
-                        };
-                    };
-                };
-                /** @description Authentication required */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            error: {
-                                /** @enum {string} */
-                                code: "AUTHENTICATION_REQUIRED";
-                                /** @enum {string} */
-                                message: "Authentication is required";
-                                redirectTo?: string;
-                            };
-                        };
-                    };
-                };
-                /** @description Admin permission required */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            error: {
-                                /** @enum {string} */
-                                code: "ADMIN_REQUIRED";
-                                /** @enum {string} */
-                                message: "Admin permission required";
-                                redirectTo?: string;
-                            };
-                        };
-                    };
-                };
-                /** @description Internal server error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            error: {
-                                /** @enum {string} */
-                                code: "INTERNAL_ERROR";
-                                /** @enum {string} */
-                                message: "Internal server error";
-                            };
-                        };
-                    };
-                };
-            };
-        };
-        /** Toggle external sharing on/off (persists `app:externalShare`) */
-        put: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: {
-                content: {
-                    "application/json": {
-                        externalShare: boolean;
-                    };
-                };
-            };
-            responses: {
-                /** @description Updated settings (re-read from in-memory cache) */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            externalShare: boolean;
-                        };
-                    };
-                };
-                /** @description Authentication required */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            error: {
-                                /** @enum {string} */
-                                code: "AUTHENTICATION_REQUIRED";
-                                /** @enum {string} */
-                                message: "Authentication is required";
-                                redirectTo?: string;
-                            };
-                        };
-                    };
-                };
-                /** @description Admin permission required */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            error: {
-                                /** @enum {string} */
-                                code: "ADMIN_REQUIRED";
-                                /** @enum {string} */
-                                message: "Admin permission required";
-                                redirectTo?: string;
-                            };
-                        };
-                    };
-                };
-                /** @description Internal server error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            error: {
-                                /** @enum {string} */
-                                code: "INTERNAL_ERROR";
-                                /** @enum {string} */
-                                message: "Internal server error";
-                            };
-                        };
-                    };
-                };
-            };
-        };
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -12865,7 +12697,7 @@ export interface components {
             };
         };
         /** @enum {string} */
-        ErrorCode: "AUTHENTICATION_REQUIRED" | "ADMIN_REQUIRED" | "THIRD_PARTY_AUTH_REQUIRED" | "USER_REGISTERED" | "USER_SUSPENDED" | "USER_INVITED" | "USER_NOT_ACTIVE" | "EMAIL_NOT_CONFIRMED" | "INTERNAL_ERROR" | "VALIDATION_ERROR" | "INVALID_REQUEST" | "NOT_FOUND" | "CONFLICT" | "SERVICE_UNAVAILABLE" | "APPLICATION_NOT_INSTALLED" | "INVALID_PAGE_ID" | "PAGE_NOT_FOUND" | "PAGE_NOT_GRANTED" | "PAGE_REVISION_ERROR" | "INVALID_GRANT" | "COMMENT_NOT_FOUND" | "NOTIFICATION_NOT_FOUND" | "USER_NOT_FOUND" | "USER_EXISTS" | "USERNAME_TAKEN" | "EMAIL_TAKEN" | "EMAIL_NOT_ALLOWED" | "INVALID_ACTIVATION_TOKEN" | "INVALID_INVITE_TOKEN" | "INVITE_ALREADY_ACCEPTED" | "INVALID_RESET_TOKEN" | "INVALID_EMAIL_CHANGE_TOKEN" | "INVALID_CREDENTIALS" | "REFRESH_TOKEN_REQUIRED" | "REGISTRATION_CLOSED" | "PASSWORD_AUTH_REQUIRES_THIRDPARTY" | "ENCRYPTION_NOT_CONFIGURED" | "MAIL_TEST_FAILED" | "PLUGIN_NOT_FOUND" | "PLUGIN_CONFIG_VALIDATION_FAILED";
+        ErrorCode: "AUTHENTICATION_REQUIRED" | "ADMIN_REQUIRED" | "THIRD_PARTY_AUTH_REQUIRED" | "USER_REGISTERED" | "USER_SUSPENDED" | "USER_INVITED" | "USER_NOT_ACTIVE" | "EMAIL_NOT_CONFIRMED" | "INTERNAL_ERROR" | "VALIDATION_ERROR" | "INVALID_REQUEST" | "NOT_FOUND" | "CONFLICT" | "SERVICE_UNAVAILABLE" | "APPLICATION_NOT_INSTALLED" | "INVALID_PAGE_ID" | "PAGE_NOT_FOUND" | "PAGE_NOT_GRANTED" | "PAGE_REVISION_ERROR" | "INVALID_GRANT" | "COMMENT_NOT_FOUND" | "NOTIFICATION_NOT_FOUND" | "USER_NOT_FOUND" | "USER_EXISTS" | "USERNAME_TAKEN" | "EMAIL_TAKEN" | "EMAIL_NOT_ALLOWED" | "INVALID_ACTIVATION_TOKEN" | "INVALID_INVITE_TOKEN" | "INVITE_ALREADY_ACCEPTED" | "INVALID_RESET_TOKEN" | "INVALID_EMAIL_CHANGE_TOKEN" | "INVALID_CREDENTIALS" | "REFRESH_TOKEN_REQUIRED" | "REGISTRATION_CLOSED" | "ENCRYPTION_NOT_CONFIGURED" | "MAIL_TEST_FAILED" | "PLUGIN_NOT_FOUND" | "PLUGIN_CONFIG_VALIDATION_FAILED";
         ApplicationNotInstalledError: {
             error: {
                 /** @enum {string} */
@@ -14299,18 +14131,19 @@ export interface components {
             app: {
                 title: string;
                 confidential: string;
-                externalShare: boolean;
             };
             isUploadable: boolean;
             registrationMode: {
                 [key: string]: string;
             };
+            setupChecklistDismissed: boolean;
         };
         UpdateAppSettingsRequest: {
             app?: {
                 title?: string;
                 confidential?: string;
             };
+            setupChecklistDismissed?: boolean;
         };
         UpdateAppSettingsResponse: {
             /** @enum {boolean} */

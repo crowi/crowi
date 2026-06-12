@@ -84,7 +84,7 @@ describe('core/embed-tags @[tag](url) parser', () => {
 
     // Code block is preserved as-is.
     const codeNode = tree.children.find((c) => c.type === 'code');
-    expect(codeNode).toBeDefined();
+    expect(codeNode).toMatchObject({ type: 'code', value: '@[echo](inside)' });
   });
 
   it('skips matches inside inline code', async () => {

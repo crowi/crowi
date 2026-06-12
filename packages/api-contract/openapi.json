@@ -87,7 +87,6 @@
           "INVALID_CREDENTIALS",
           "REFRESH_TOKEN_REQUIRED",
           "REGISTRATION_CLOSED",
-          "PASSWORD_AUTH_REQUIRES_THIRDPARTY",
           "ENCRYPTION_NOT_CONFIGURED",
           "MAIL_TEST_FAILED",
           "PLUGIN_NOT_FOUND",
@@ -5947,15 +5946,11 @@
               },
               "confidential": {
                 "type": "string"
-              },
-              "externalShare": {
-                "type": "boolean"
               }
             },
             "required": [
               "title",
-              "confidential",
-              "externalShare"
+              "confidential"
             ]
           },
           "isUploadable": {
@@ -5966,12 +5961,16 @@
             "additionalProperties": {
               "type": "string"
             }
+          },
+          "setupChecklistDismissed": {
+            "type": "boolean"
           }
         },
         "required": [
           "app",
           "isUploadable",
-          "registrationMode"
+          "registrationMode",
+          "setupChecklistDismissed"
         ]
       },
       "UpdateAppSettingsRequest": {
@@ -5990,6 +5989,9 @@
                 "maxLength": 500
               }
             }
+          },
+          "setupChecklistDismissed": {
+            "type": "boolean"
           }
         },
         "additionalProperties": false
@@ -6658,10 +6660,17 @@
                         "string",
                         "null"
                       ]
+                    },
+                    "confidential": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     }
                   },
                   "required": [
-                    "title"
+                    "title",
+                    "confidential"
                   ]
                 }
               }
@@ -7933,18 +7942,6 @@
                     "introduction": {
                       "type": "string"
                     },
-                    "googleId": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "githubId": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
                     "hasPassword": {
                       "type": "boolean"
                     },
@@ -8104,18 +8101,6 @@
                     },
                     "introduction": {
                       "type": "string"
-                    },
-                    "googleId": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "githubId": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
                     },
                     "hasPassword": {
                       "type": "boolean"
@@ -30210,15 +30195,11 @@
                         },
                         "confidential": {
                           "type": "string"
-                        },
-                        "externalShare": {
-                          "type": "boolean"
                         }
                       },
                       "required": [
                         "title",
-                        "confidential",
-                        "externalShare"
+                        "confidential"
                       ]
                     },
                     "isUploadable": {
@@ -30229,12 +30210,16 @@
                       "additionalProperties": {
                         "type": "string"
                       }
+                    },
+                    "setupChecklistDismissed": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
                     "app",
                     "isUploadable",
-                    "registrationMode"
+                    "registrationMode",
+                    "setupChecklistDismissed"
                   ]
                 }
               }
@@ -30349,6 +30334,9 @@
                         "maxLength": 500
                       }
                     }
+                  },
+                  "setupChecklistDismissed": {
+                    "type": "boolean"
                   }
                 },
                 "additionalProperties": false
@@ -30717,6 +30705,39 @@
               }
             }
           },
+          "400": {
+            "description": "Enabling a third-party-dependent setting (requireThirdPartyAuth / disablePasswordAuth) is rejected because third-party sign-in was removed from core",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "THIRD_PARTY_AUTH_UNAVAILABLE"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
           "401": {
             "description": "Authentication required",
             "content": {
@@ -30779,39 +30800,6 @@
                           ]
                         },
                         "redirectTo": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Self-lockout guard rejected the request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string",
-                          "enum": [
-                            "PASSWORD_AUTH_REQUIRES_THIRDPARTY"
-                          ]
-                        },
-                        "message": {
                           "type": "string"
                         }
                       },
@@ -31709,315 +31697,6 @@
                         },
                         "message": {
                           "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/admin/share": {
-      "get": {
-        "tags": [
-          "admin.share"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "summary": "Get the current share settings (externalShare toggle)",
-        "responses": {
-          "200": {
-            "description": "Current share settings",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "externalShare": {
-                      "type": "boolean"
-                    }
-                  },
-                  "required": [
-                    "externalShare"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Authentication required",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string",
-                          "enum": [
-                            "AUTHENTICATION_REQUIRED"
-                          ]
-                        },
-                        "message": {
-                          "type": "string",
-                          "enum": [
-                            "Authentication is required"
-                          ]
-                        },
-                        "redirectTo": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Admin permission required",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string",
-                          "enum": [
-                            "ADMIN_REQUIRED"
-                          ]
-                        },
-                        "message": {
-                          "type": "string",
-                          "enum": [
-                            "Admin permission required"
-                          ]
-                        },
-                        "redirectTo": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string",
-                          "enum": [
-                            "INTERNAL_ERROR"
-                          ]
-                        },
-                        "message": {
-                          "type": "string",
-                          "enum": [
-                            "Internal server error"
-                          ]
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            }
-          }
-        }
-      },
-      "put": {
-        "tags": [
-          "admin.share"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "summary": "Toggle external sharing on/off (persists `app:externalShare`)",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "externalShare": {
-                    "type": "boolean"
-                  }
-                },
-                "required": [
-                  "externalShare"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Updated settings (re-read from in-memory cache)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "externalShare": {
-                      "type": "boolean"
-                    }
-                  },
-                  "required": [
-                    "externalShare"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Authentication required",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string",
-                          "enum": [
-                            "AUTHENTICATION_REQUIRED"
-                          ]
-                        },
-                        "message": {
-                          "type": "string",
-                          "enum": [
-                            "Authentication is required"
-                          ]
-                        },
-                        "redirectTo": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Admin permission required",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string",
-                          "enum": [
-                            "ADMIN_REQUIRED"
-                          ]
-                        },
-                        "message": {
-                          "type": "string",
-                          "enum": [
-                            "Admin permission required"
-                          ]
-                        },
-                        "redirectTo": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string",
-                          "enum": [
-                            "INTERNAL_ERROR"
-                          ]
-                        },
-                        "message": {
-                          "type": "string",
-                          "enum": [
-                            "Internal server error"
-                          ]
                         }
                       },
                       "required": [

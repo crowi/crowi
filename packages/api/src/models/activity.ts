@@ -280,14 +280,21 @@ export default (crowi: Crowi) => {
 
     const Notification = crowi.model('Notification');
 
-    savedActivity
-      .getNotificationTargetUsers()
-      .then((notificationUsers) => {
-        return Promise.all(notificationUsers.map((user) => Notification.upsertByActivity(user, savedActivity)));
-      })
-      .catch((err) => {
-        debug(err);
-      });
+    crowi.trackSideEffect(
+      Promise.resolve()
+        .then(() => {
+          // Skip the deferred fan-out once the connection is no longer
+          // `connected` — it would only throw teardown-noise. Normal
+          // operation (readyState === 1) is unaffected.
+          if (!crowi.isMongoConnected()) return;
+          return savedActivity
+            .getNotificationTargetUsers()
+            .then((notificationUsers) => Promise.all(notificationUsers.map((user) => Notification.upsertByActivity(user, savedActivity))));
+        })
+        .catch((err) => {
+          debug(err);
+        }),
+    );
   });
 
   // because mongoose's 'remove' hook fired only when remove by a method of Document (not by a Model method)

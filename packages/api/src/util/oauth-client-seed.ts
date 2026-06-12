@@ -11,7 +11,9 @@ const debug = Debug('crowi:util:oauth-client-seed');
  * Idempotent boot step (PHASE3-Q2): `$setOnInsert` only writes on the very
  * first run, so re-running boot — or upgrading an instance that already
  * has the row — never clobbers an operator's later edits to the client.
- * Modelled on the other boot-time migrations (`runPageStatusMigration`).
+ * Modelled on the other boot-time init steps (it runs alongside the
+ * migration framework's `runBootMigrations`, but stays framework-external
+ * per RFC-0008 §12.6 — OAuth client seeding is a seed, not a migration).
  *
  * `crowi-cli` is a **public** client (no secret, PKCE-only). Its
  * `redirectUris` list the loopback hosts; the per-login ephemeral port is

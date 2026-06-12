@@ -30,7 +30,12 @@ describe('Revision (RFC-0003 collab fields)', () => {
       });
       const fetched = await Revision.findById(doc._id).lean();
       expect(fetched.parentRevisionId).toBeUndefined();
-      expect(fetched.type).toBeUndefined();
+      // RFC-0008 Phase 6: `type` now carries `default: 'snapshot'`, so a
+      // newly written revision that omits `type` lands as 'snapshot' (the
+      // write source is intentionally closed). The other RFC-0003 fields
+      // keep their `default: undefined` so the read path can still
+      // distinguish "predates RFC-0003" from "explicit empty".
+      expect(fetched.type).toBe('snapshot');
       expect(fetched.yjsUpdate).toBeUndefined();
       expect(fetched.savedBy).toBeUndefined();
       expect(fetched.contributors).toBeUndefined();
@@ -94,7 +99,7 @@ describe('Revision (RFC-0003 collab fields)', () => {
           author: user._id,
           type: 'rogue',
         }),
-      ).rejects.toThrow();
+      ).rejects.toThrow(/`rogue` is not a valid enum value for path `type`/);
     });
   });
 
@@ -117,13 +122,17 @@ describe('Revision (RFC-0003 collab fields)', () => {
       });
     }
 
-    test('omitting options leaves all collab fields undefined (v1.x callsite compat)', async () => {
+    test('omitting options leaves the collab fields undefined but stamps type via the schema default (v1.x callsite compat)', async () => {
       const page = await seedPage('compat');
       const rev = await Revision.prepareRevision(page, 'body', user);
       expect(rev.savedBy).toBeUndefined();
       expect(rev.contributors).toBeUndefined();
       expect(rev.message).toBeUndefined();
-      expect(rev.type).toBeUndefined();
+      // RFC-0008 Phase 6: HTTP API saves (prepareRevision with no explicit
+      // `type`) now get `type='snapshot'` from the schema default — Mongoose
+      // applies it on `new Revision()` construction. This closes the write
+      // source so the `revisions-schema-unify` boot migration never re-pends.
+      expect(rev.type).toBe('snapshot');
       expect(rev.parentRevisionId).toBeUndefined();
       // Existing format default still kicks in.
       expect(rev.format).toBe('markdown');

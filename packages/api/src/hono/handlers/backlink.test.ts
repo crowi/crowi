@@ -1,8 +1,8 @@
 import { Types } from 'mongoose';
 import request from 'supertest';
 
-import { Fixture, app, crowi } from 'src/test/setup';
-import { createJwtUtil } from 'src/util/jwt';
+import { app, crowi } from 'src/test/setup';
+import { authHeaders, createTestUser, createPageViaApi } from 'src/test/test-helpers';
 
 /**
  * RFC-0006 Phase 4 Batch 3 — integration tests for the migrated
@@ -11,20 +11,6 @@ import { createJwtUtil } from 'src/util/jwt';
  * until the expected backlink count lands before asserting on the
  * response shape.
  */
-
-const authHeaders = (token: string) => ({
-  Authorization: `Bearer ${token}`,
-  'Content-Type': 'application/json',
-});
-
-const createTestUser = async (info: { name: string; username: string; email: string }) => {
-  const User = crowi.model('User');
-  const [user] = await Fixture.generate('User', [info]);
-  user.status = User.STATUS_ACTIVE;
-  await user.save();
-  const accessToken = createJwtUtil(crowi).generateTokens(user).accessToken;
-  return { user, accessToken };
-};
 
 const cleanupPathPrefix = async (prefix: string) => {
   const Page = crowi.model('Page');
@@ -38,14 +24,6 @@ const cleanupPathPrefix = async (prefix: string) => {
     Revision.deleteMany(filter),
     Backlink.deleteMany({ $or: [{ page: { $in: pageIds } }, { fromPage: { $in: pageIds } }] }),
   ]);
-};
-
-const createPageViaApi = async (accessToken: string, path: string, body: string) => {
-  const res = await request(app).post('/api/v2/pages').set(authHeaders(accessToken)).send({ path, body });
-  if (res.status !== 200) {
-    throw new Error(`Failed to seed page (${path}): ${res.status} ${JSON.stringify(res.body)}`);
-  }
-  return res.body.page as { _id: string; path: string; revision: { _id: string } };
 };
 
 const waitForBacklinkCount = async (pageId: string, expected: number, accessToken: string, maxTicks = 50) => {
@@ -111,7 +89,7 @@ describe('Routes /api/v2/backlinks (Hono)', () => {
       expect(b.page).toBe(target._id);
       expect(b.fromPage._id).toBe(source._id);
       expect(b.fromPage.path).toBe(source.path);
-      expect(b.fromRevision._id).toBe(source.revision._id);
+      expect(b.fromRevision._id).toBe((source as { _id: string; path: string; revision: { _id: string } }).revision._id);
       expect(b.fromRevision.author).not.toBeNull();
       expect(b.fromRevision.author.username).toBe('honoBacklinkTester');
       expect(b.fromRevision.author._id).toBe(userId);

@@ -1,21 +1,7 @@
 import request from 'supertest';
-import { app, crowi, Fixture } from 'src/test/setup';
-import { createJwtUtil } from 'src/util/jwt';
-
-const authHeaders = (token: string) => ({
-  Authorization: `Bearer ${token}`,
-  'Content-Type': 'application/json',
-});
-
-const createTestUser = async (info: { name: string; username: string; email: string; admin?: boolean }) => {
-  const User = crowi.model('User');
-  const [user] = await Fixture.generate('User', [info]);
-  user.status = User.STATUS_ACTIVE;
-  user.admin = !!info.admin;
-  await user.save();
-  const accessToken = createJwtUtil(crowi).generateTokens(user).accessToken;
-  return { user, accessToken };
-};
+import { app, crowi } from 'src/test/setup';
+import { type ConfigRow, restoreCrowiConfig, snapshotCrowiConfig } from 'src/test/config-snapshot';
+import { authHeaders, createTestUser } from 'src/test/test-helpers';
 
 /**
  * Reset the registration-related security:* keys back to defaults between
@@ -34,8 +20,16 @@ const resetSecurityConfig = async () => {
 describe('Routes /api/v2/admin/security (Hono)', () => {
   let adminToken: string;
   let userToken: string;
+  let configSnapshot: ConfigRow[];
 
   beforeAll(async () => {
+    // These tests mutate the shared `security:*` registration config via
+    // saveConfig. Snapshot the namespace up front so afterAll restores the
+    // exact as-discovered (installed) state — a concurrent worker reading
+    // registration/security config while this file has it mutated must not see
+    // a transient value leak across files.
+    configSnapshot = await snapshotCrowiConfig(crowi);
+
     const admin = await createTestUser({
       name: 'Security Admin',
       username: 'securityAdmin',
@@ -51,6 +45,10 @@ describe('Routes /api/v2/admin/security (Hono)', () => {
       admin: false,
     });
     userToken = normal.accessToken;
+  });
+
+  afterAll(async () => {
+    await restoreCrowiConfig(crowi, configSnapshot);
   });
 
   beforeEach(async () => {

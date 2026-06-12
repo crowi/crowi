@@ -52,26 +52,17 @@ describe('Comment', () => {
       const commentPosition = undefined;
 
       createdComment = await Comment.create({ page, creator, revision, comment, commentPosition });
-      try {
-        const createdCommentBody = createdComment.comment;
-        expect(createdCommentBody).toBe('これがテスト用のコメント');
-      } catch (err) {
-        throw new Error(err as string);
-      }
+      expect(createdComment.comment).toBe('これがテスト用のコメント');
     });
   });
 
   describe('Comment.removeCommentById', () => {
     test('should be deleted', async () => {
-      try {
-        let comments = await Comment.countCommentByPageId(createdComment.page.id);
-        expect(comments).toStrictEqual(1);
-        await Comment.removeCommentById(createdComment._id);
-        comments = await Comment.countCommentByPageId(createdComment.page.id);
-        expect(comments).toStrictEqual(0);
-      } catch (err) {
-        throw new Error(err as string);
-      }
+      let comments = await Comment.countCommentByPageId(createdComment.page.id);
+      expect(comments).toStrictEqual(1);
+      await Comment.removeCommentById(createdComment._id);
+      comments = await Comment.countCommentByPageId(createdComment.page.id);
+      expect(comments).toStrictEqual(0);
     });
   });
 });

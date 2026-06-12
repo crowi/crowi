@@ -71,7 +71,6 @@ import { adminMailRoutes } from './contracts/admin/mail';
 import { adminPluginsRoutes } from './contracts/admin/plugins';
 import { adminSearchRoutes } from './contracts/admin/search';
 import { adminSecurityRoutes } from './contracts/admin/security';
-import { adminShareRoutes } from './contracts/admin/share';
 import { adminStorageRoutes } from './contracts/admin/storage';
 import { adminUsersRoutes } from './contracts/admin/users';
 import { appRoutes } from './contracts/app';
@@ -165,7 +164,6 @@ import type {
 } from './schemas/admin/plugins';
 import type { GetSearchStatusResponseSchema } from './schemas/admin/search';
 import type { GetSecuritySettingsResponseSchema, UpdateSecuritySettingsResponseSchema } from './schemas/admin/security';
-import type { GetShareSettingsResponseSchema, UpdateShareSettingsResponseSchema } from './schemas/admin/share';
 import type { GetStorageStatusResponseSchema } from './schemas/admin/storage';
 import type {
   AdminUserMutationResponseSchema,
@@ -247,8 +245,6 @@ type UpdateSecuritySettingsResponse = z.infer<typeof UpdateSecuritySettingsRespo
 type GetMailSettingsResponse = z.infer<typeof GetMailSettingsResponseSchema>;
 type UpdateMailSettingsResponse = z.infer<typeof UpdateMailSettingsResponseSchema>;
 type SendTestMailResponse = z.infer<typeof SendTestMailResponseSchema>;
-type GetShareSettingsResponse = z.infer<typeof GetShareSettingsResponseSchema>;
-type UpdateShareSettingsResponse = z.infer<typeof UpdateShareSettingsResponseSchema>;
 type GetStorageStatusResponse = z.infer<typeof GetStorageStatusResponseSchema>;
 type GetSearchStatusResponse = z.infer<typeof GetSearchStatusResponseSchema>;
 type ListAdminUsersResponse = z.infer<typeof ListAdminUsersResponseSchema>;
@@ -514,9 +510,10 @@ const stubReencrypt: ReencryptResponse = { rewritten: 0, alreadyEncrypted: 0, mi
 
 // Batch 9 — admin sub-contract stubs.
 const stubGetAppSettings: GetAppSettingsResponse = {
-  app: { title: '', confidential: '', externalShare: false },
+  app: { title: '', confidential: '' },
   isUploadable: false,
   registrationMode: {},
+  setupChecklistDismissed: false,
 };
 const stubUpdateAppSettings: UpdateAppSettingsResponse = { ok: true };
 const stubAuthSettings: GetAuthSettingsResponse = { requireThirdPartyAuth: false, disablePasswordAuth: false };
@@ -531,7 +528,6 @@ const stubMailSettings: GetMailSettingsResponse = {
 };
 const stubUpdateMailSettings: UpdateMailSettingsResponse = { ok: true };
 const stubSendTestMail: SendTestMailResponse = { ok: true, to: '' };
-const stubShareSettings: GetShareSettingsResponse = { externalShare: false };
 const stubStorageStatus: GetStorageStatusResponse = { active: null, drivers: [] };
 const stubSearchStatus: GetSearchStatusResponse = { active: null, drivers: [] };
 const stubAdminPager = {
@@ -561,7 +557,7 @@ const stubClearRenderCache: ClearRenderCacheResponse = { ok: true, clearedAt: ''
 // by `/auth/me` (legacy JWT verify endpoint) embeds `status` and is
 // nominally different from `stubUser` (no `status` field).
 const appAuthMeUserChain = new OpenAPIHono()
-  .openapi(appRoutes.getAppInfoRoute, (c) => c.json({ title: null } satisfies AppInfoResponse, 200))
+  .openapi(appRoutes.getAppInfoRoute, (c) => c.json({ title: null, confidential: null } satisfies AppInfoResponse, 200))
   .openapi(installerRoutes.getInstallerStatusRoute, (c) => c.json({ status: 'installer_required' } satisfies InstallerStatusResponse, 200))
   .openapi(installerRoutes.createAdminRoute, (c) => c.json({ status: 'ok' } satisfies CreateAdminResponse, 200))
   .openapi(tokenAuthRoutes.tokenLoginRoute, (c) => c.json(stubTokens, 200))
@@ -706,10 +702,10 @@ const lateContractApp = new OpenAPIHono()
   .openapi(notificationRoutes.openNotificationRoute, (c) => c.json(stubOpenNotification, 200));
 
 /**
- * Batch 9 — admin sub-contracts (28 endpoints across two chains):
+ * Batch 9 — admin sub-contracts (26 endpoints across two chains):
  *
- * - `adminSettingsContractApp`: the 7 read+write settings sub-contracts
- *   (app / auth / security / mail / share / storage / search) = 13 routes.
+ * - `adminSettingsContractApp`: the 6 read+write settings sub-contracts
+ *   (app / auth / security / mail / storage / search) = 11 routes.
  * - `adminUsersPluginsContractApp`: the larger users (10) + plugins (5)
  *   sub-contracts = 15 routes.
  *
@@ -729,8 +725,6 @@ const adminSettingsContractApp = new OpenAPIHono()
   .openapi(adminMailRoutes.getMailSettingsRoute, (c) => c.json(stubMailSettings, 200))
   .openapi(adminMailRoutes.updateMailSettingsRoute, (c) => c.json(stubUpdateMailSettings, 200))
   .openapi(adminMailRoutes.sendTestMailRoute, (c) => c.json(stubSendTestMail, 200))
-  .openapi(adminShareRoutes.getShareSettingsRoute, (c) => c.json(stubShareSettings, 200))
-  .openapi(adminShareRoutes.updateShareSettingsRoute, (c) => c.json(stubShareSettings, 200))
   .openapi(adminStorageRoutes.getStorageStatusRoute, (c) => c.json(stubStorageStatus, 200))
   .openapi(adminSearchRoutes.getSearchStatusRoute, (c) => c.json(stubSearchStatus, 200));
 

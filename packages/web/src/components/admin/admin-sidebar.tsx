@@ -15,13 +15,7 @@ interface AdminNavItem {
   href: string;
   label: () => string;
   icon: LucideIcon;
-  /**
-   * 'available' for sections that have a working implementation; missing /
-   * 'coming-soon' shows the placeholder copy on the admin dashboard. Sidebar
-   * links are always clickable — the section page itself owns the empty UX.
-   */
-  status?: 'available' | 'coming-soon';
-  /** One-line summary shown on the admin index card when status='available'. */
+  /** One-line summary shown on the admin index card. */
   description?: () => string;
   /**
    * Stable id used to deduplicate items when plugin-injected entries
@@ -41,7 +35,7 @@ interface AdminNavItem {
  * the plugin-api contract — plugins inject sidebar entries by
  * matching this key.
  */
-type SectionKey = 'settings' | 'users' | 'storage' | 'mail' | 'notification' | 'search' | 'renderer' | 'shared';
+type SectionKey = 'settings' | 'users' | 'storage' | 'mail' | 'search' | 'renderer' | 'shared';
 
 interface AdminNavGroup {
   key: SectionKey;
@@ -60,35 +54,24 @@ const STATIC_GROUPS: AdminNavGroup[] = [
         href: '/admin/app',
         label: () => m['admin.nav_app'](),
         icon: Settings,
-        status: 'available',
         description: () => m['admin.nav_app_summary'](),
       },
       {
         href: '/admin/security',
         label: () => m['admin.nav_security'](),
         icon: ShieldCheck,
-        status: 'available',
         description: () => m['admin.nav_security_summary'](),
       },
       {
         href: '/admin/auth',
         label: () => m['admin.nav_auth'](),
         icon: KeyRound,
-        status: 'available',
         description: () => m['admin.nav_auth_summary'](),
-      },
-      {
-        href: '/admin/share',
-        label: () => m['admin.nav_share'](),
-        icon: Share2,
-        status: 'available',
-        description: () => m['admin.nav_share_summary'](),
       },
       {
         href: '/admin/plugins',
         label: () => m['admin.nav_plugins'](),
         icon: Plug,
-        status: 'available',
         description: () => m['admin.nav_plugins_summary'](),
       },
     ],
@@ -101,7 +84,6 @@ const STATIC_GROUPS: AdminNavGroup[] = [
         href: '/admin/users',
         label: () => m['admin.nav_users'](),
         icon: Users,
-        status: 'available',
         description: () => m['admin.users.lead'](),
       },
     ],
@@ -124,7 +106,6 @@ const STATIC_GROUPS: AdminNavGroup[] = [
         href: '/admin/storage',
         label: () => m['admin.nav_storage'](),
         icon: HardDrive,
-        status: 'available',
         description: () => m['admin.nav_storage_summary'](),
       },
     ],
@@ -133,11 +114,6 @@ const STATIC_GROUPS: AdminNavGroup[] = [
     key: 'mail',
     heading: () => m['admin.section_mail'](),
     items: [{ href: '/admin/mail', label: () => m['admin.nav_mail'](), icon: Mail }],
-  },
-  {
-    key: 'notification',
-    heading: () => m['admin.section_notification'](),
-    items: [{ href: '/admin/notification', label: () => m['admin.nav_notification'](), icon: Bell }],
   },
   {
     key: 'search',

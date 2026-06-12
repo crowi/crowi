@@ -68,6 +68,75 @@ importers:
         specifier: ^2.9.16
         version: 2.9.16
 
+  apps/crowi-runner:
+    dependencies:
+      '@crowi/api':
+        specifier: workspace:^
+        version: link:../../packages/api
+      '@crowi/plugin-api':
+        specifier: workspace:^
+        version: link:../../packages/plugin-api
+      '@crowi/plugin-mail-aws-ses':
+        specifier: workspace:^
+        version: link:../../packages/plugin-mail-aws-ses
+      '@crowi/plugin-mail-resend':
+        specifier: workspace:^
+        version: link:../../packages/plugin-mail-resend
+      '@crowi/plugin-mail-smtp':
+        specifier: workspace:^
+        version: link:../../packages/plugin-mail-smtp
+      '@crowi/plugin-renderer-crowi-legacy':
+        specifier: workspace:^
+        version: link:../../packages/plugin-renderer-crowi-legacy
+      '@crowi/plugin-renderer-emoji':
+        specifier: workspace:^
+        version: link:../../packages/plugin-renderer-emoji
+      '@crowi/plugin-renderer-katex':
+        specifier: workspace:^
+        version: link:../../packages/plugin-renderer-katex
+      '@crowi/plugin-renderer-plantuml':
+        specifier: workspace:^
+        version: link:../../packages/plugin-renderer-plantuml
+      '@crowi/plugin-search-elasticsearch':
+        specifier: workspace:^
+        version: link:../../packages/plugin-search-elasticsearch
+      '@crowi/plugin-search-mongo':
+        specifier: workspace:^
+        version: link:../../packages/plugin-search-mongo
+      '@crowi/plugin-search-opensearch':
+        specifier: workspace:^
+        version: link:../../packages/plugin-search-opensearch
+      '@crowi/plugin-storage-aws-s3':
+        specifier: workspace:^
+        version: link:../../packages/plugin-storage-aws-s3
+      '@crowi/plugin-storage-local':
+        specifier: workspace:^
+        version: link:../../packages/plugin-storage-local
+      '@crowi/runner':
+        specifier: workspace:^
+        version: link:../../packages/runner
+
+  apps/crowi-runner-slim:
+    dependencies:
+      '@crowi/api':
+        specifier: workspace:^
+        version: link:../../packages/api
+      '@crowi/plugin-api':
+        specifier: workspace:^
+        version: link:../../packages/plugin-api
+      '@crowi/plugin-mail-smtp':
+        specifier: workspace:^
+        version: link:../../packages/plugin-mail-smtp
+      '@crowi/plugin-search-mongo':
+        specifier: workspace:^
+        version: link:../../packages/plugin-search-mongo
+      '@crowi/plugin-storage-local':
+        specifier: workspace:^
+        version: link:../../packages/plugin-storage-local
+      '@crowi/runner':
+        specifier: workspace:^
+        version: link:../../packages/runner
+
   apps/crowi-site:
     dependencies:
       clsx:
@@ -75,19 +144,19 @@ importers:
         version: 2.1.1
       fumadocs-core:
         specifier: ^16.8.9
-        version: 16.8.10(@mdx-js/mdx@3.1.1)(@types/estree-jsx@1.0.5)(@types/hast@3.0.4)(@types/mdast@4.0.4)(@types/react@19.2.8)(lucide-react@0.562.0(react@19.2.3))(next@16.2.6(@opentelemetry/api@1.9.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(zod@4.4.3)
+        version: 16.8.10(@mdx-js/mdx@3.1.1)(@types/estree-jsx@1.0.5)(@types/hast@3.0.4)(@types/mdast@4.0.4)(@types/react@19.2.8)(lucide-react@0.562.0(react@19.2.3))(next@16.2.6(@babel/core@7.27.4)(@opentelemetry/api@1.9.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(zod@4.4.3)
       fumadocs-mdx:
         specifier: ^15.0.2
-        version: 15.0.3(@types/mdast@4.0.4)(@types/mdx@2.0.13)(@types/react@19.2.8)(fumadocs-core@16.8.10(@mdx-js/mdx@3.1.1)(@types/estree-jsx@1.0.5)(@types/hast@3.0.4)(@types/mdast@4.0.4)(@types/react@19.2.8)(lucide-react@0.562.0(react@19.2.3))(next@16.2.6(@opentelemetry/api@1.9.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(zod@4.4.3))(next@16.2.6(@opentelemetry/api@1.9.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react@19.2.3)(vite@8.0.12(@types/node@24.12.4)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.3)(yaml@2.9.0))
+        version: 15.0.3(@types/mdast@4.0.4)(@types/mdx@2.0.13)(@types/react@19.2.8)(fumadocs-core@16.8.10(@mdx-js/mdx@3.1.1)(@types/estree-jsx@1.0.5)(@types/hast@3.0.4)(@types/mdast@4.0.4)(@types/react@19.2.8)(lucide-react@0.562.0(react@19.2.3))(next@16.2.6(@babel/core@7.27.4)(@opentelemetry/api@1.9.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(zod@4.4.3))(next@16.2.6(@babel/core@7.27.4)(@opentelemetry/api@1.9.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react@19.2.3)(vite@8.0.12(@types/node@24.12.4)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.3)(yaml@2.9.0))
       fumadocs-ui:
         specifier: ^16.8.9
-        version: 16.8.10(@tailwindcss/oxide@4.1.18)(@types/mdx@2.0.13)(@types/react-dom@19.2.3(@types/react@19.2.8))(@types/react@19.2.8)(fumadocs-core@16.8.10(@mdx-js/mdx@3.1.1)(@types/estree-jsx@1.0.5)(@types/hast@3.0.4)(@types/mdast@4.0.4)(@types/react@19.2.8)(lucide-react@0.562.0(react@19.2.3))(next@16.2.6(@opentelemetry/api@1.9.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(zod@4.4.3))(next@16.2.6(@opentelemetry/api@1.9.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(tailwindcss@4.1.18)
+        version: 16.8.10(@tailwindcss/oxide@4.1.18)(@types/mdx@2.0.13)(@types/react-dom@19.2.3(@types/react@19.2.8))(@types/react@19.2.8)(fumadocs-core@16.8.10(@mdx-js/mdx@3.1.1)(@types/estree-jsx@1.0.5)(@types/hast@3.0.4)(@types/mdast@4.0.4)(@types/react@19.2.8)(lucide-react@0.562.0(react@19.2.3))(next@16.2.6(@babel/core@7.27.4)(@opentelemetry/api@1.9.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(zod@4.4.3))(next@16.2.6(@babel/core@7.27.4)(@opentelemetry/api@1.9.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(tailwindcss@4.1.18)
       lucide-react:
         specifier: ^0.562.0
         version: 0.562.0(react@19.2.3)
       next:
         specifier: 16.2.6
-        version: 16.2.6(@babel/core@7.27.4)(@opentelemetry/api@1.9.1)(babel-plugin-macros@3.1.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+        version: 16.2.6(@babel/core@7.27.4)(@opentelemetry/api@1.9.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       react:
         specifier: 19.2.3
         version: 19.2.3
@@ -121,7 +190,7 @@ importers:
         version: 9.39.2(jiti@2.7.0)
       eslint-config-next:
         specifier: 16.1.1
-        version: 16.1.1(eslint@9.39.2(jiti@2.7.0))(typescript@5.8.3)
+        version: 16.1.1(@typescript-eslint/parser@8.53.0(eslint@9.39.2(jiti@2.7.0))(typescript@5.8.3))(eslint@9.39.2(jiti@2.7.0))(typescript@5.8.3)
       tailwindcss:
         specifier: ^4
         version: 4.1.18
@@ -158,7 +227,7 @@ importers:
         version: 29.7.0(@types/node@24.12.4)(babel-plugin-macros@3.1.0)(ts-node@10.9.2(@types/node@24.12.4)(typescript@5.8.3))
       ts-jest:
         specifier: 'catalog:'
-        version: 29.3.4(@babel/core@7.27.4)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.27.4))(jest@29.7.0(@types/node@24.12.4)(babel-plugin-macros@3.1.0)(ts-node@10.9.2(@types/node@24.12.4)(typescript@5.8.3)))(typescript@5.8.3)
+        version: 29.3.4(@babel/core@7.27.4)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.27.4))(esbuild@0.25.5)(jest@29.7.0(@types/node@24.12.4)(babel-plugin-macros@3.1.0)(ts-node@10.9.2(@types/node@24.12.4)(typescript@5.8.3)))(typescript@5.8.3)
       tsup:
         specifier: 'catalog:'
         version: 8.5.0(jiti@2.7.0)(postcss@8.5.15)(tsx@4.22.3)(typescript@5.8.3)(yaml@2.9.0)
@@ -274,39 +343,6 @@ importers:
         specifier: 'catalog:'
         version: 4.4.3
     devDependencies:
-      '@crowi/plugin-mail-aws-ses':
-        specifier: workspace:*
-        version: link:../plugin-mail-aws-ses
-      '@crowi/plugin-mail-resend':
-        specifier: workspace:*
-        version: link:../plugin-mail-resend
-      '@crowi/plugin-mail-smtp':
-        specifier: workspace:*
-        version: link:../plugin-mail-smtp
-      '@crowi/plugin-renderer-crowi-legacy':
-        specifier: workspace:*
-        version: link:../plugin-renderer-crowi-legacy
-      '@crowi/plugin-renderer-emoji':
-        specifier: workspace:*
-        version: link:../plugin-renderer-emoji
-      '@crowi/plugin-renderer-katex':
-        specifier: workspace:*
-        version: link:../plugin-renderer-katex
-      '@crowi/plugin-renderer-plantuml':
-        specifier: workspace:*
-        version: link:../plugin-renderer-plantuml
-      '@crowi/plugin-search-elasticsearch':
-        specifier: workspace:*
-        version: link:../plugin-search-elasticsearch
-      '@crowi/plugin-search-opensearch':
-        specifier: workspace:*
-        version: link:../plugin-search-opensearch
-      '@crowi/plugin-storage-aws-s3':
-        specifier: workspace:*
-        version: link:../plugin-storage-aws-s3
-      '@crowi/plugin-storage-local':
-        specifier: workspace:*
-        version: link:../plugin-storage-local
       '@crowi/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
@@ -366,7 +402,7 @@ importers:
         version: 7.2.2
       ts-jest:
         specifier: 'catalog:'
-        version: 29.3.4(@babel/core@7.27.4)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.27.4))(jest@29.7.0(@types/node@24.12.4)(babel-plugin-macros@3.1.0)(ts-node@10.9.2(@types/node@24.12.4)(typescript@5.8.3)))(typescript@5.8.3)
+        version: 29.3.4(@babel/core@7.27.4)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.27.4))(esbuild@0.25.5)(jest@29.7.0(@types/node@24.12.4)(babel-plugin-macros@3.1.0)(ts-node@10.9.2(@types/node@24.12.4)(typescript@5.8.3)))(typescript@5.8.3)
       tsc-alias:
         specifier: ^1.8.10
         version: 1.8.17
@@ -467,7 +503,7 @@ importers:
         version: 10.1.4(@aws-sdk/credential-providers@3.826.0)(socks@2.8.4)
       ts-jest:
         specifier: 'catalog:'
-        version: 29.3.4(@babel/core@7.27.4)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.27.4))(jest@29.7.0(@types/node@24.12.4)(babel-plugin-macros@3.1.0)(ts-node@10.9.2(@types/node@24.12.4)(typescript@5.8.3)))(typescript@5.8.3)
+        version: 29.3.4(@babel/core@7.27.4)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.27.4))(esbuild@0.25.5)(jest@29.7.0(@types/node@24.12.4)(babel-plugin-macros@3.1.0)(ts-node@10.9.2(@types/node@24.12.4)(typescript@5.8.3)))(typescript@5.8.3)
       tsup:
         specifier: 'catalog:'
         version: 8.5.0(jiti@2.7.0)(postcss@8.5.15)(tsx@4.22.3)(typescript@5.8.3)(yaml@2.9.0)
@@ -494,10 +530,11 @@ importers:
         version: 4.4.3
 
   packages/plugin-aws:
-    devDependencies:
+    dependencies:
       '@crowi/plugin-api':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../plugin-api
+    devDependencies:
       '@crowi/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
@@ -516,13 +553,13 @@ importers:
       '@aws-sdk/client-sesv2':
         specifier: ^3.1060.0
         version: 3.1060.0
-    devDependencies:
       '@crowi/plugin-api':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../plugin-api
       '@crowi/plugin-aws':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../plugin-aws
+    devDependencies:
       '@crowi/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
@@ -541,13 +578,13 @@ importers:
 
   packages/plugin-mail-resend:
     dependencies:
+      '@crowi/plugin-api':
+        specifier: workspace:^
+        version: link:../plugin-api
       resend:
         specifier: ^6.12.4
         version: 6.12.4
     devDependencies:
-      '@crowi/plugin-api':
-        specifier: workspace:*
-        version: link:../plugin-api
       '@crowi/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
@@ -566,13 +603,13 @@ importers:
 
   packages/plugin-mail-smtp:
     dependencies:
+      '@crowi/plugin-api':
+        specifier: workspace:^
+        version: link:../plugin-api
       nodemailer:
         specifier: ^8.0.9
         version: 8.0.9
     devDependencies:
-      '@crowi/plugin-api':
-        specifier: workspace:*
-        version: link:../plugin-api
       '@crowi/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
@@ -593,10 +630,11 @@ importers:
         version: 4.4.3
 
   packages/plugin-renderer-crowi-legacy:
-    devDependencies:
+    dependencies:
       '@crowi/plugin-api':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../plugin-api
+    devDependencies:
       '@crowi/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
@@ -614,7 +652,7 @@ importers:
         version: 29.7.0(@types/node@24.12.4)(babel-plugin-macros@3.1.0)(ts-node@10.9.2(@types/node@24.12.4)(typescript@5.8.3))
       ts-jest:
         specifier: 'catalog:'
-        version: 29.3.4(@babel/core@7.27.4)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.27.4))(jest@29.7.0(@types/node@24.12.4)(babel-plugin-macros@3.1.0)(ts-node@10.9.2(@types/node@24.12.4)(typescript@5.8.3)))(typescript@5.8.3)
+        version: 29.3.4(@babel/core@7.27.4)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.27.4))(esbuild@0.25.5)(jest@29.7.0(@types/node@24.12.4)(babel-plugin-macros@3.1.0)(ts-node@10.9.2(@types/node@24.12.4)(typescript@5.8.3)))(typescript@5.8.3)
       tsup:
         specifier: 'catalog:'
         version: 8.5.0(jiti@2.7.0)(postcss@8.5.15)(tsx@4.22.3)(typescript@5.8.3)(yaml@2.9.0)
@@ -624,6 +662,9 @@ importers:
 
   packages/plugin-renderer-emoji:
     dependencies:
+      '@crowi/plugin-api':
+        specifier: workspace:^
+        version: link:../plugin-api
       jiti:
         specifier: ^2.7.0
         version: 2.7.0
@@ -631,9 +672,6 @@ importers:
         specifier: ^5.0.1
         version: 5.0.2
     devDependencies:
-      '@crowi/plugin-api':
-        specifier: workspace:*
-        version: link:../plugin-api
       '@crowi/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
@@ -654,7 +692,7 @@ importers:
         version: 11.0.0
       ts-jest:
         specifier: 'catalog:'
-        version: 29.3.4(@babel/core@7.27.4)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.27.4))(jest@29.7.0(@types/node@24.12.4)(babel-plugin-macros@3.1.0)(ts-node@10.9.2(@types/node@24.12.4)(typescript@5.8.3)))(typescript@5.8.3)
+        version: 29.3.4(@babel/core@7.27.4)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.27.4))(esbuild@0.25.5)(jest@29.7.0(@types/node@24.12.4)(babel-plugin-macros@3.1.0)(ts-node@10.9.2(@types/node@24.12.4)(typescript@5.8.3)))(typescript@5.8.3)
       tsup:
         specifier: 'catalog:'
         version: 8.5.0(jiti@2.7.0)(postcss@8.5.15)(tsx@4.22.3)(typescript@5.8.3)(yaml@2.9.0)
@@ -667,6 +705,9 @@ importers:
 
   packages/plugin-renderer-katex:
     dependencies:
+      '@crowi/plugin-api':
+        specifier: workspace:^
+        version: link:../plugin-api
       jiti:
         specifier: ^2.7.0
         version: 2.7.0
@@ -677,9 +718,6 @@ importers:
         specifier: ^6.0.0
         version: 6.0.0
     devDependencies:
-      '@crowi/plugin-api':
-        specifier: workspace:*
-        version: link:../plugin-api
       '@crowi/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
@@ -703,7 +741,7 @@ importers:
         version: 11.0.0
       ts-jest:
         specifier: 'catalog:'
-        version: 29.3.4(@babel/core@7.27.4)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.27.4))(jest@29.7.0(@types/node@24.12.4)(babel-plugin-macros@3.1.0)(ts-node@10.9.2(@types/node@24.12.4)(typescript@5.8.3)))(typescript@5.8.3)
+        version: 29.3.4(@babel/core@7.27.4)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.27.4))(esbuild@0.25.5)(jest@29.7.0(@types/node@24.12.4)(babel-plugin-macros@3.1.0)(ts-node@10.9.2(@types/node@24.12.4)(typescript@5.8.3)))(typescript@5.8.3)
       tsup:
         specifier: 'catalog:'
         version: 8.5.0(jiti@2.7.0)(postcss@8.5.15)(tsx@4.22.3)(typescript@5.8.3)(yaml@2.9.0)
@@ -716,13 +754,13 @@ importers:
 
   packages/plugin-renderer-plantuml:
     dependencies:
+      '@crowi/plugin-api':
+        specifier: workspace:^
+        version: link:../plugin-api
       plantuml-encoder:
         specifier: ^1.4.0
         version: 1.4.0
     devDependencies:
-      '@crowi/plugin-api':
-        specifier: workspace:*
-        version: link:../plugin-api
       '@crowi/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
@@ -737,7 +775,7 @@ importers:
         version: 29.7.0(@types/node@24.12.4)(babel-plugin-macros@3.1.0)(ts-node@10.9.2(@types/node@24.12.4)(typescript@5.8.3))
       ts-jest:
         specifier: 'catalog:'
-        version: 29.3.4(@babel/core@7.27.4)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.27.4))(jest@29.7.0(@types/node@24.12.4)(babel-plugin-macros@3.1.0)(ts-node@10.9.2(@types/node@24.12.4)(typescript@5.8.3)))(typescript@5.8.3)
+        version: 29.3.4(@babel/core@7.27.4)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.27.4))(esbuild@0.25.5)(jest@29.7.0(@types/node@24.12.4)(babel-plugin-macros@3.1.0)(ts-node@10.9.2(@types/node@24.12.4)(typescript@5.8.3)))(typescript@5.8.3)
       tsup:
         specifier: 'catalog:'
         version: 8.5.0(jiti@2.7.0)(postcss@8.5.15)(tsx@4.22.3)(typescript@5.8.3)(yaml@2.9.0)
@@ -750,13 +788,13 @@ importers:
 
   packages/plugin-search-elasticsearch:
     dependencies:
+      '@crowi/plugin-api':
+        specifier: workspace:^
+        version: link:../plugin-api
       '@elastic/elasticsearch':
         specifier: ^9.4.0
         version: 9.4.0
     devDependencies:
-      '@crowi/plugin-api':
-        specifier: workspace:*
-        version: link:../plugin-api
       '@crowi/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
@@ -771,7 +809,44 @@ importers:
         version: 29.7.0(@types/node@24.12.4)(babel-plugin-macros@3.1.0)(ts-node@10.9.2(@types/node@24.12.4)(typescript@5.8.3))
       ts-jest:
         specifier: 'catalog:'
-        version: 29.3.4(@babel/core@7.27.4)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.27.4))(jest@29.7.0(@types/node@24.12.4)(babel-plugin-macros@3.1.0)(ts-node@10.9.2(@types/node@24.12.4)(typescript@5.8.3)))(typescript@5.8.3)
+        version: 29.3.4(@babel/core@7.27.4)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.27.4))(esbuild@0.25.5)(jest@29.7.0(@types/node@24.12.4)(babel-plugin-macros@3.1.0)(ts-node@10.9.2(@types/node@24.12.4)(typescript@5.8.3)))(typescript@5.8.3)
+      tsup:
+        specifier: 'catalog:'
+        version: 8.5.0(jiti@2.7.0)(postcss@8.5.15)(tsx@4.22.3)(typescript@5.8.3)(yaml@2.9.0)
+      typescript:
+        specifier: 'catalog:'
+        version: 5.8.3
+      zod:
+        specifier: 'catalog:'
+        version: 4.4.3
+
+  packages/plugin-search-mongo:
+    dependencies:
+      '@crowi/plugin-api':
+        specifier: workspace:^
+        version: link:../plugin-api
+    devDependencies:
+      '@crowi/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
+      '@types/jest':
+        specifier: 'catalog:'
+        version: 29.5.14
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.12.4
+      jest:
+        specifier: 'catalog:'
+        version: 29.7.0(@types/node@24.12.4)(babel-plugin-macros@3.1.0)(ts-node@10.9.2(@types/node@24.12.4)(typescript@5.8.3))
+      mongodb-memory-server:
+        specifier: ^10.1.4
+        version: 10.1.4(@aws-sdk/credential-providers@3.826.0)(socks@2.8.4)
+      mongoose:
+        specifier: ^8.24.0
+        version: 8.24.0(@aws-sdk/credential-providers@3.826.0)(socks@2.8.4)
+      ts-jest:
+        specifier: 'catalog:'
+        version: 29.3.4(@babel/core@7.27.4)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.27.4))(esbuild@0.25.5)(jest@29.7.0(@types/node@24.12.4)(babel-plugin-macros@3.1.0)(ts-node@10.9.2(@types/node@24.12.4)(typescript@5.8.3)))(typescript@5.8.3)
       tsup:
         specifier: 'catalog:'
         version: 8.5.0(jiti@2.7.0)(postcss@8.5.15)(tsx@4.22.3)(typescript@5.8.3)(yaml@2.9.0)
@@ -784,13 +859,13 @@ importers:
 
   packages/plugin-search-opensearch:
     dependencies:
+      '@crowi/plugin-api':
+        specifier: workspace:^
+        version: link:../plugin-api
       '@opensearch-project/opensearch':
         specifier: ^3.6.0
         version: 3.6.0
     devDependencies:
-      '@crowi/plugin-api':
-        specifier: workspace:*
-        version: link:../plugin-api
       '@crowi/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
@@ -805,7 +880,7 @@ importers:
         version: 29.7.0(@types/node@24.12.4)(babel-plugin-macros@3.1.0)(ts-node@10.9.2(@types/node@24.12.4)(typescript@5.8.3))
       ts-jest:
         specifier: 'catalog:'
-        version: 29.3.4(@babel/core@7.27.4)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.27.4))(jest@29.7.0(@types/node@24.12.4)(babel-plugin-macros@3.1.0)(ts-node@10.9.2(@types/node@24.12.4)(typescript@5.8.3)))(typescript@5.8.3)
+        version: 29.3.4(@babel/core@7.27.4)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.27.4))(esbuild@0.25.5)(jest@29.7.0(@types/node@24.12.4)(babel-plugin-macros@3.1.0)(ts-node@10.9.2(@types/node@24.12.4)(typescript@5.8.3)))(typescript@5.8.3)
       tsup:
         specifier: 'catalog:'
         version: 8.5.0(jiti@2.7.0)(postcss@8.5.15)(tsx@4.22.3)(typescript@5.8.3)(yaml@2.9.0)
@@ -824,13 +899,13 @@ importers:
       '@aws-sdk/s3-request-presigner':
         specifier: ^3.1060.0
         version: 3.1060.0
-    devDependencies:
       '@crowi/plugin-api':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../plugin-api
       '@crowi/plugin-aws':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../plugin-aws
+    devDependencies:
       '@crowi/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
@@ -848,10 +923,11 @@ importers:
         version: 4.4.3
 
   packages/plugin-storage-local:
-    devDependencies:
+    dependencies:
       '@crowi/plugin-api':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../plugin-api
+    devDependencies:
       '@crowi/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
@@ -870,13 +946,13 @@ importers:
 
   packages/runner:
     dependencies:
+      '@crowi/plugin-api':
+        specifier: workspace:^
+        version: link:../plugin-api
       zod:
         specifier: 'catalog:'
         version: 4.4.3
     devDependencies:
-      '@crowi/plugin-api':
-        specifier: workspace:*
-        version: link:../plugin-api
       '@crowi/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
@@ -891,7 +967,7 @@ importers:
         version: 29.7.0(@types/node@24.12.4)(babel-plugin-macros@3.1.0)(ts-node@10.9.2(@types/node@24.12.4)(typescript@5.8.3))
       ts-jest:
         specifier: 'catalog:'
-        version: 29.3.4(@babel/core@7.27.4)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.27.4))(jest@29.7.0(@types/node@24.12.4)(babel-plugin-macros@3.1.0)(ts-node@10.9.2(@types/node@24.12.4)(typescript@5.8.3)))(typescript@5.8.3)
+        version: 29.3.4(@babel/core@7.27.4)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.27.4))(esbuild@0.25.5)(jest@29.7.0(@types/node@24.12.4)(babel-plugin-macros@3.1.0)(ts-node@10.9.2(@types/node@24.12.4)(typescript@5.8.3)))(typescript@5.8.3)
       tsup:
         specifier: 'catalog:'
         version: 8.5.0(jiti@2.7.0)(postcss@8.5.15)(tsx@4.22.3)(typescript@5.8.3)(yaml@2.9.0)
@@ -980,7 +1056,7 @@ importers:
         version: 13.2.1
       next:
         specifier: 16.2.6
-        version: 16.2.6(@babel/core@7.27.4)(@opentelemetry/api@1.9.1)(babel-plugin-macros@3.1.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+        version: 16.2.6(@opentelemetry/api@1.9.1)(babel-plugin-macros@3.1.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       next-themes:
         specifier: ^0.4.6
         version: 0.4.6(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
@@ -1053,7 +1129,7 @@ importers:
         version: 9.39.2(jiti@2.7.0)
       eslint-config-next:
         specifier: 16.1.1
-        version: 16.1.1(@typescript-eslint/parser@8.53.0(eslint@9.39.2(jiti@2.7.0))(typescript@5.8.3))(eslint@9.39.2(jiti@2.7.0))(typescript@5.8.3)
+        version: 16.1.1(eslint@9.39.2(jiti@2.7.0))(typescript@5.8.3)
       jsdom:
         specifier: ^29.1.1
         version: 29.1.1(@noble/hashes@1.8.0)
@@ -13731,8 +13807,7 @@ snapshots:
 
   acorn@8.15.0: {}
 
-  acorn@8.16.0:
-    optional: true
+  acorn@8.16.0: {}
 
   add-stream@1.0.0: {}
 
@@ -15571,7 +15646,7 @@ snapshots:
   fsevents@2.3.3:
     optional: true
 
-  fumadocs-core@16.8.10(@mdx-js/mdx@3.1.1)(@types/estree-jsx@1.0.5)(@types/hast@3.0.4)(@types/mdast@4.0.4)(@types/react@19.2.8)(lucide-react@0.562.0(react@19.2.3))(next@16.2.6(@opentelemetry/api@1.9.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(zod@4.4.3):
+  fumadocs-core@16.8.10(@mdx-js/mdx@3.1.1)(@types/estree-jsx@1.0.5)(@types/hast@3.0.4)(@types/mdast@4.0.4)(@types/react@19.2.8)(lucide-react@0.562.0(react@19.2.3))(next@16.2.6(@babel/core@7.27.4)(@opentelemetry/api@1.9.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(zod@4.4.3):
     dependencies:
       '@orama/orama': 3.1.18
       estree-util-value-to-estree: 3.5.0
@@ -15597,21 +15672,21 @@ snapshots:
       '@types/mdast': 4.0.4
       '@types/react': 19.2.8
       lucide-react: 0.562.0(react@19.2.3)
-      next: 16.2.6(@babel/core@7.27.4)(@opentelemetry/api@1.9.1)(babel-plugin-macros@3.1.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+      next: 16.2.6(@babel/core@7.27.4)(@opentelemetry/api@1.9.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       react: 19.2.3
       react-dom: 19.2.3(react@19.2.3)
       zod: 4.4.3
     transitivePeerDependencies:
       - supports-color
 
-  fumadocs-mdx@15.0.3(@types/mdast@4.0.4)(@types/mdx@2.0.13)(@types/react@19.2.8)(fumadocs-core@16.8.10(@mdx-js/mdx@3.1.1)(@types/estree-jsx@1.0.5)(@types/hast@3.0.4)(@types/mdast@4.0.4)(@types/react@19.2.8)(lucide-react@0.562.0(react@19.2.3))(next@16.2.6(@opentelemetry/api@1.9.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(zod@4.4.3))(next@16.2.6(@opentelemetry/api@1.9.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react@19.2.3)(vite@8.0.12(@types/node@24.12.4)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.3)(yaml@2.9.0)):
+  fumadocs-mdx@15.0.3(@types/mdast@4.0.4)(@types/mdx@2.0.13)(@types/react@19.2.8)(fumadocs-core@16.8.10(@mdx-js/mdx@3.1.1)(@types/estree-jsx@1.0.5)(@types/hast@3.0.4)(@types/mdast@4.0.4)(@types/react@19.2.8)(lucide-react@0.562.0(react@19.2.3))(next@16.2.6(@babel/core@7.27.4)(@opentelemetry/api@1.9.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(zod@4.4.3))(next@16.2.6(@babel/core@7.27.4)(@opentelemetry/api@1.9.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react@19.2.3)(vite@8.0.12(@types/node@24.12.4)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.3)(yaml@2.9.0)):
     dependencies:
       '@mdx-js/mdx': 3.1.1
       '@standard-schema/spec': 1.1.0
       chokidar: 5.0.0
       esbuild: 0.28.0
       estree-util-value-to-estree: 3.5.0
-      fumadocs-core: 16.8.10(@mdx-js/mdx@3.1.1)(@types/estree-jsx@1.0.5)(@types/hast@3.0.4)(@types/mdast@4.0.4)(@types/react@19.2.8)(lucide-react@0.562.0(react@19.2.3))(next@16.2.6(@opentelemetry/api@1.9.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(zod@4.4.3)
+      fumadocs-core: 16.8.10(@mdx-js/mdx@3.1.1)(@types/estree-jsx@1.0.5)(@types/hast@3.0.4)(@types/mdast@4.0.4)(@types/react@19.2.8)(lucide-react@0.562.0(react@19.2.3))(next@16.2.6(@babel/core@7.27.4)(@opentelemetry/api@1.9.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(zod@4.4.3)
       js-yaml: 4.1.1
       mdast-util-mdx: 3.0.0
       picocolors: 1.1.1
@@ -15627,13 +15702,13 @@ snapshots:
       '@types/mdast': 4.0.4
       '@types/mdx': 2.0.13
       '@types/react': 19.2.8
-      next: 16.2.6(@babel/core@7.27.4)(@opentelemetry/api@1.9.1)(babel-plugin-macros@3.1.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+      next: 16.2.6(@babel/core@7.27.4)(@opentelemetry/api@1.9.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       react: 19.2.3
       vite: 8.0.12(@types/node@24.12.4)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.3)(yaml@2.9.0)
     transitivePeerDependencies:
       - supports-color
 
-  fumadocs-ui@16.8.10(@tailwindcss/oxide@4.1.18)(@types/mdx@2.0.13)(@types/react-dom@19.2.3(@types/react@19.2.8))(@types/react@19.2.8)(fumadocs-core@16.8.10(@mdx-js/mdx@3.1.1)(@types/estree-jsx@1.0.5)(@types/hast@3.0.4)(@types/mdast@4.0.4)(@types/react@19.2.8)(lucide-react@0.562.0(react@19.2.3))(next@16.2.6(@opentelemetry/api@1.9.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(zod@4.4.3))(next@16.2.6(@opentelemetry/api@1.9.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(tailwindcss@4.1.18):
+  fumadocs-ui@16.8.10(@tailwindcss/oxide@4.1.18)(@types/mdx@2.0.13)(@types/react-dom@19.2.3(@types/react@19.2.8))(@types/react@19.2.8)(fumadocs-core@16.8.10(@mdx-js/mdx@3.1.1)(@types/estree-jsx@1.0.5)(@types/hast@3.0.4)(@types/mdast@4.0.4)(@types/react@19.2.8)(lucide-react@0.562.0(react@19.2.3))(next@16.2.6(@babel/core@7.27.4)(@opentelemetry/api@1.9.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(zod@4.4.3))(next@16.2.6(@babel/core@7.27.4)(@opentelemetry/api@1.9.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(tailwindcss@4.1.18):
     dependencies:
       '@fumadocs/tailwind': 0.0.5(@tailwindcss/oxide@4.1.18)(tailwindcss@4.1.18)
       '@radix-ui/react-accordion': 1.2.12(@types/react-dom@19.2.3(@types/react@19.2.8))(@types/react@19.2.8)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
@@ -15647,7 +15722,7 @@ snapshots:
       '@radix-ui/react-slot': 1.2.4(@types/react@19.2.8)(react@19.2.3)
       '@radix-ui/react-tabs': 1.1.13(@types/react-dom@19.2.3(@types/react@19.2.8))(@types/react@19.2.8)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       class-variance-authority: 0.7.1
-      fumadocs-core: 16.8.10(@mdx-js/mdx@3.1.1)(@types/estree-jsx@1.0.5)(@types/hast@3.0.4)(@types/mdast@4.0.4)(@types/react@19.2.8)(lucide-react@0.562.0(react@19.2.3))(next@16.2.6(@opentelemetry/api@1.9.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(zod@4.4.3)
+      fumadocs-core: 16.8.10(@mdx-js/mdx@3.1.1)(@types/estree-jsx@1.0.5)(@types/hast@3.0.4)(@types/mdast@4.0.4)(@types/react@19.2.8)(lucide-react@0.562.0(react@19.2.3))(next@16.2.6(@babel/core@7.27.4)(@opentelemetry/api@1.9.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(zod@4.4.3)
       lucide-react: 1.14.0(react@19.2.3)
       motion: 12.38.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       next-themes: 0.4.6(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
@@ -15662,7 +15737,7 @@ snapshots:
     optionalDependencies:
       '@types/mdx': 2.0.13
       '@types/react': 19.2.8
-      next: 16.2.6(@babel/core@7.27.4)(@opentelemetry/api@1.9.1)(babel-plugin-macros@3.1.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+      next: 16.2.6(@babel/core@7.27.4)(@opentelemetry/api@1.9.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
     transitivePeerDependencies:
       - '@emotion/is-prop-valid'
       - '@tailwindcss/oxide'
@@ -18002,7 +18077,7 @@ snapshots:
 
   mlly@1.7.4:
     dependencies:
-      acorn: 8.15.0
+      acorn: 8.16.0
       pathe: 2.0.3
       pkg-types: 1.3.1
       ufo: 1.6.1
@@ -18159,7 +18234,7 @@ snapshots:
       react: 19.2.3
       react-dom: 19.2.3(react@19.2.3)
 
-  next@16.2.6(@babel/core@7.27.4)(@opentelemetry/api@1.9.1)(babel-plugin-macros@3.1.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3):
+  next@16.2.6(@babel/core@7.27.4)(@opentelemetry/api@1.9.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3):
     dependencies:
       '@next/env': 16.2.6
       '@swc/helpers': 0.5.15
@@ -18168,7 +18243,32 @@ snapshots:
       postcss: 8.5.15
       react: 19.2.3
       react-dom: 19.2.3(react@19.2.3)
-      styled-jsx: 5.1.6(@babel/core@7.27.4)(babel-plugin-macros@3.1.0)(react@19.2.3)
+      styled-jsx: 5.1.6(@babel/core@7.27.4)(react@19.2.3)
+    optionalDependencies:
+      '@next/swc-darwin-arm64': 16.2.6
+      '@next/swc-darwin-x64': 16.2.6
+      '@next/swc-linux-arm64-gnu': 16.2.6
+      '@next/swc-linux-arm64-musl': 16.2.6
+      '@next/swc-linux-x64-gnu': 16.2.6
+      '@next/swc-linux-x64-musl': 16.2.6
+      '@next/swc-win32-arm64-msvc': 16.2.6
+      '@next/swc-win32-x64-msvc': 16.2.6
+      '@opentelemetry/api': 1.9.1
+      sharp: 0.34.5
+    transitivePeerDependencies:
+      - '@babel/core'
+      - babel-plugin-macros
+
+  next@16.2.6(@opentelemetry/api@1.9.1)(babel-plugin-macros@3.1.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3):
+    dependencies:
+      '@next/env': 16.2.6
+      '@swc/helpers': 0.5.15
+      baseline-browser-mapping: 2.10.29
+      caniuse-lite: 1.0.30001721
+      postcss: 8.5.15
+      react: 19.2.3
+      react-dom: 19.2.3(react@19.2.3)
+      styled-jsx: 5.1.6(babel-plugin-macros@3.1.0)(react@19.2.3)
     optionalDependencies:
       '@next/swc-darwin-arm64': 16.2.6
       '@next/swc-darwin-x64': 16.2.6
@@ -19526,12 +19626,18 @@ snapshots:
     dependencies:
       inline-style-parser: 0.2.7
 
-  styled-jsx@5.1.6(@babel/core@7.27.4)(babel-plugin-macros@3.1.0)(react@19.2.3):
+  styled-jsx@5.1.6(@babel/core@7.27.4)(react@19.2.3):
     dependencies:
       client-only: 0.0.1
       react: 19.2.3
     optionalDependencies:
       '@babel/core': 7.27.4
+
+  styled-jsx@5.1.6(babel-plugin-macros@3.1.0)(react@19.2.3):
+    dependencies:
+      client-only: 0.0.1
+      react: 19.2.3
+    optionalDependencies:
       babel-plugin-macros: 3.1.0
 
   stylehacks@7.0.11(postcss@8.5.15):
@@ -19708,7 +19814,7 @@ snapshots:
 
   ts-interface-checker@0.1.13: {}
 
-  ts-jest@29.3.4(@babel/core@7.27.4)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.27.4))(jest@29.7.0(@types/node@24.12.4)(babel-plugin-macros@3.1.0)(ts-node@10.9.2(@types/node@24.12.4)(typescript@5.8.3)))(typescript@5.8.3):
+  ts-jest@29.3.4(@babel/core@7.27.4)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.27.4))(esbuild@0.25.5)(jest@29.7.0(@types/node@24.12.4)(babel-plugin-macros@3.1.0)(ts-node@10.9.2(@types/node@24.12.4)(typescript@5.8.3)))(typescript@5.8.3):
     dependencies:
       bs-logger: 0.2.6
       ejs: 3.1.10
@@ -19727,6 +19833,7 @@ snapshots:
       '@jest/transform': 29.7.0
       '@jest/types': 29.6.3
       babel-jest: 29.7.0(@babel/core@7.27.4)
+      esbuild: 0.25.5
 
   ts-node@10.9.2(@types/node@24.12.4)(typescript@5.8.3):
     dependencies:
@@ -19785,7 +19892,7 @@ snapshots:
       source-map: 0.8.0-beta.0
       sucrase: 3.35.0
       tinyexec: 0.3.2
-      tinyglobby: 0.2.16
+      tinyglobby: 0.2.17
       tree-kill: 1.2.2
     optionalDependencies:
       postcss: 8.5.15

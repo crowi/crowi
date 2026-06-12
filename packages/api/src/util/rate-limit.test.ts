@@ -39,20 +39,19 @@ describe('createRateLimiter', () => {
     });
 
     it('resets the counter when the fixed window rolls over', async () => {
-      const realNow = Date.now;
+      jest.useFakeTimers();
       try {
-        let clock = 1_000_000;
-        Date.now = () => clock;
+        jest.setSystemTime(1_000_000);
         const limiter = createRateLimiter({ name: 'test', limit: 1, windowMs: 1_000 });
 
         expect((await limiter.hit('alice')).allowed).toBe(true);
         expect((await limiter.hit('alice')).allowed).toBe(false);
 
         // Advance past the window boundary — counter resets.
-        clock += 1_000;
+        jest.advanceTimersByTime(1_000);
         expect((await limiter.hit('alice')).allowed).toBe(true);
       } finally {
-        Date.now = realNow;
+        jest.useRealTimers();
       }
     });
   });

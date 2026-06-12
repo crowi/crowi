@@ -12,12 +12,8 @@ export const ADMIN_SECTIONS = {
   auth: () => m['admin.nav_auth'](),
   mail: () => m['admin.nav_mail'](),
   aws: () => m['admin.nav_aws'](),
-  google: () => m['admin.nav_google'](),
-  github: () => m['admin.nav_github'](),
-  share: () => m['admin.nav_share'](),
   storage: () => m['admin.nav_storage'](),
   users: () => m['admin.nav_users'](),
-  notification: () => m['admin.nav_notification'](),
   search: () => m['admin.nav_search'](),
   plugins: () => m['admin.nav_plugins'](),
 } as const;

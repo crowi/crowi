@@ -1,5 +1,6 @@
 import request from 'supertest';
 import { app, crowi } from 'src/test/setup';
+import { type ConfigRow, restoreCrowiConfig, snapshotCrowiConfig } from 'src/test/config-snapshot';
 import { createJwtUtil } from 'src/util/jwt';
 
 /**
@@ -38,8 +39,13 @@ const seedActiveUser = async (info: { name: string; username: string; email: str
 describe('Routes /api/v2/auth (Hono)', () => {
   const Config = () => crowi.model('Config');
   const User = () => crowi.model('User');
+  let configSnapshot: ConfigRow[];
 
   beforeAll(async () => {
+    // Snapshot the shared crowi config BEFORE wiping it, so afterAll restores
+    // the namespace to its as-discovered (installed) state rather than leaving
+    // it empty for the next file (the cross-file seed-401 flake).
+    configSnapshot = await snapshotCrowiConfig(crowi);
     // /auth/login and /auth/register short-circuit with 503
     // APPLICATION_NOT_INSTALLED until a crowi Config doc exists, so
     // seed the install marker before any auth-flow test runs.
@@ -49,8 +55,7 @@ describe('Routes /api/v2/auth (Hono)', () => {
   });
 
   afterAll(async () => {
-    await Config().deleteMany({ ns: 'crowi' });
-    await crowi.getConfigService().load();
+    await restoreCrowiConfig(crowi, configSnapshot);
   });
 
   describe('POST /auth/login', () => {
@@ -220,10 +225,14 @@ describe('Routes /api/v2/auth (Hono)', () => {
         expect(overmatch.status).toBe(403);
         expect(overmatch.body.error.code).toBe('EMAIL_NOT_ALLOWED');
 
-        // Case-insensitive: uppercased address still matches the whitelist.
+        // Case-insensitive whitelist match: an uppercased *domain* still
+        // matches the whitelist. Use a distinct local part — email uniqueness
+        // is case-insensitive (USER_UNIQUE_COLLATION), so a mere case variant
+        // of `ok@allowed.example.com` would be rejected as USER_EXISTS (409)
+        // rather than exercising the whitelist path.
         const mixedCase = await request(app)
           .post('/api/v2/auth/register')
-          .send({ username: 'wl-case', name: 'WL Case', email: 'OK@Allowed.Example.com', password: 'Password!1' });
+          .send({ username: 'wl-case', name: 'WL Case', email: 'Mixed@Allowed.Example.com', password: 'Password!1' });
         expect(mixedCase.status).toBe(200);
       } finally {
         await User().deleteMany({ username: { $in: ['wl-blocked', 'wl-allowed', 'wl-overmatch', 'wl-case'] } });

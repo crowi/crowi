@@ -5,16 +5,21 @@
  * admin-only endpoints:
  *
  *   GET /admin/auth   — read the two `auth:*` settings
- *   PUT /admin/auth   — persist them (with self-lockout 422 guard)
+ *   PUT /admin/auth   — persist them (with inert-setting 400 guard)
  *
  * Auth:
  *   - Admin-only via broad `createJwtAdminRequired(crowi)` apply on
  *     `/admin/auth/*` + the bare `/admin/auth` path.
  *
- * Self-lockout guard:
- *   - When the requester sets `disablePasswordAuth: true` without a
- *     valid third-party identity, return 422
- *     `PASSWORD_AUTH_REQUIRES_THIRDPARTY` (legacy parity, byte-identical).
+ * Inert-setting guard (2.0.0-alpha):
+ *   - `requireThirdPartyAuth` / `disablePasswordAuth` both depend on
+ *     third-party (Google / GitHub) sign-in, which was removed from core.
+ *     `User.hasValidThirdPartyId()` is now permanently false, so enabling
+ *     either would lock every account out of password login with no
+ *     recovery path. The config keys + schema are kept (inert) for a future
+ *     auth provider plugin, but the endpoint hard-rejects enabling them with
+ *     400 `THIRD_PARTY_AUTH_UNAVAILABLE`. The admin UI hides the toggles, so
+ *     only direct API callers hit this guard.
  */
 import { type AuthSettings, adminAuthRoutes } from '@crowi/api-contract';
 import type { OpenAPIHono } from '@hono/zod-openapi';
@@ -55,20 +60,29 @@ export const registerAdminAuthRoutes = <E extends OpenAPIHono<CrowiHonoBindings>
     })
     .openapi(adminAuthRoutes.updateAuthSettingsRoute, async (c) => {
       const body = c.req.valid('json');
-      const user = c.get('user');
 
-      if (body.disablePasswordAuth && !user.hasValidThirdPartyId()) {
+      // Third-party (Google / GitHub) sign-in was removed from core in the
+      // 2.0.0-alpha line, so `hasValidThirdPartyId()` is now permanently
+      // false. Enabling either of these settings would lock every account out
+      // of password login with no third-party recovery path. The config keys
+      // and schema are kept (inert) for a future auth plugin, but the endpoint
+      // hard-rejects turning them on so a direct API caller can't self-lock.
+      // The admin UI hides both toggles, so the UI never reaches this branch.
+      if (body.requireThirdPartyAuth || body.disablePasswordAuth) {
         return c.json(
           {
             error: {
-              code: 'PASSWORD_AUTH_REQUIRES_THIRDPARTY' as const,
-              message: 'Disabling password auth requires the acting admin to be connected to a valid third-party identity.',
+              code: 'THIRD_PARTY_AUTH_UNAVAILABLE' as const,
+              message:
+                'Third-party sign-in was removed from core, so requireThirdPartyAuth and disablePasswordAuth cannot be enabled. They will return when an auth provider plugin is installed.',
             },
           },
-          422,
+          400,
         );
       }
 
+      // Past the guard both toggles are guaranteed false, so this only ever
+      // persists the (inert) disabled state.
       try {
         await crowi.getConfigService().saveConfig('crowi', {
           [KEY_REQUIRE_THIRD_PARTY_AUTH]: body.requireThirdPartyAuth,

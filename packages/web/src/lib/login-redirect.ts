@@ -31,3 +31,14 @@ export function safeContinueUrl(value: string | null | undefined): string {
   if (value.startsWith('//') || value.startsWith('/\\')) return '/';
   return value;
 }
+
+/**
+ * The default post-login / post-confirmation landing path when no
+ * explicit `continue` was supplied — the signed-in user's own user page
+ * (`/user/<username>`), which is a friendlier first screen than the
+ * portal root. Falls back to `/` if the username is somehow empty.
+ */
+export function defaultLandingPath(username: string | null | undefined): string {
+  if (!username) return '/';
+  return `/user/${username}`;
+}

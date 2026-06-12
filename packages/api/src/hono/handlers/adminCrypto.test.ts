@@ -1,13 +1,9 @@
 import crypto from 'crypto';
 import request from 'supertest';
 import { app, crowi, Fixture } from 'src/test/setup';
+import { authHeaders } from 'src/test/test-helpers';
 import { createJwtUtil } from 'src/util/jwt';
 import { isEncrypted, resetKeyProvider } from 'src/util/crypto';
-
-const authHeaders = (token: string) => ({
-  Authorization: `Bearer ${token}`,
-  'Content-Type': 'application/json',
-});
 
 const createUser = async (info: { name: string; username: string; email: string }, admin = false) => {
   const User = crowi.model('User');
@@ -40,8 +36,7 @@ describe('Routes /api/v2/admin/crypto (Hono)', () => {
     // Drop the rows the tests inserted so each test starts from a clean slate.
     await Config.deleteMany({
       $or: [
-        { ns: 'crowi', key: 'google:clientSecret' },
-        { ns: 'crowi', key: 'github:clientSecret' },
+        { ns: 'notification', key: 'slack:clientSecret' },
         { ns: 'notification', key: 'slack:token' },
       ],
     });
@@ -71,8 +66,8 @@ describe('Routes /api/v2/admin/crypto (Hono)', () => {
     it('reports plaintext + encrypted counts and the per-entry status', async () => {
       // Seed: one plaintext (legacy) sensitive value and one already-encrypted via updateConfig.
       await Config.findOneAndUpdate(
-        { ns: 'crowi', key: 'github:clientSecret' },
-        { ns: 'crowi', key: 'github:clientSecret', value: JSON.stringify('legacy-plain') },
+        { ns: 'notification', key: 'slack:clientSecret' },
+        { ns: 'notification', key: 'slack:clientSecret', value: JSON.stringify('legacy-plain') },
         { upsert: true },
       ).exec();
       await Config.updateConfig('notification', 'slack:token', 'live-token-value');
@@ -87,9 +82,8 @@ describe('Routes /api/v2/admin/crypto (Hono)', () => {
       const byKey = new Map<string, { present: boolean; encrypted: boolean }>(
         (res.body.entries as Array<{ ns: string; key: string; present: boolean; encrypted: boolean }>).map((e) => [`${e.ns}:${e.key}`, e]),
       );
-      expect(byKey.get('crowi:github:clientSecret')).toEqual(expect.objectContaining({ present: true, encrypted: false }));
+      expect(byKey.get('notification:slack:clientSecret')).toEqual(expect.objectContaining({ present: true, encrypted: false }));
       expect(byKey.get('notification:slack:token')).toEqual(expect.objectContaining({ present: true, encrypted: true }));
-      expect(byKey.get('crowi:google:clientSecret')).toEqual(expect.objectContaining({ present: false, encrypted: false }));
     });
   });
 
@@ -108,8 +102,8 @@ describe('Routes /api/v2/admin/crypto (Hono)', () => {
     it('rewrites plaintext sensitive rows in place and skips already-encrypted ones', async () => {
       // Plaintext (legacy) row
       await Config.findOneAndUpdate(
-        { ns: 'crowi', key: 'github:clientSecret' },
-        { ns: 'crowi', key: 'github:clientSecret', value: JSON.stringify('legacy-plain') },
+        { ns: 'notification', key: 'slack:clientSecret' },
+        { ns: 'notification', key: 'slack:clientSecret', value: JSON.stringify('legacy-plain') },
         { upsert: true },
       ).exec();
       // Already encrypted row
@@ -120,15 +114,15 @@ describe('Routes /api/v2/admin/crypto (Hono)', () => {
       expect(res.status).toBe(200);
       expect(res.body.rewritten).toBe(1);
       expect(res.body.alreadyEncrypted).toBe(1);
-      // Other registry entries (e.g. google:clientSecret, slack:clientSecret) absent → counted as missing
+      // Other registry entries (plugin runtime-registered sensitive keys) absent → counted as missing
       expect(res.body.missing).toBeGreaterThan(0);
 
       // Storage check: the secret now starts with the prefix and decrypts back.
-      const stored = await Config.findOne({ ns: 'crowi', key: 'github:clientSecret' }).exec();
+      const stored = await Config.findOne({ ns: 'notification', key: 'slack:clientSecret' }).exec();
       expect(isEncrypted(stored.value)).toBe(true);
 
       const config = await Config.loadAllConfig();
-      expect(config.crowi['github:clientSecret']).toBe('legacy-plain');
+      expect(config.notification['slack:clientSecret']).toBe('legacy-plain');
       expect(config.notification['slack:token']).toBe('live-token');
     });
 

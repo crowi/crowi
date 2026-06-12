@@ -4,34 +4,40 @@ description: Setting up the Crowi full-text search backend (Elasticsearch) and b
 ---
 
 Crowi's full-text search is provided through a swappable mechanism called
-the **search driver**. The search driver shipped by default is
-Elasticsearch, implemented as the `@crowi/plugin-search-elasticsearch`
-plugin.
+the **search driver**. The **default driver is `mongo`** — MongoDB-backed
+search using `$regex`, implemented by the implicit-default
+`@crowi/plugin-search-mongo` plugin. It needs no extra infrastructure, so
+a fresh install can search right away on MongoDB alone.
 
-For the user-facing search feature, see [Search](../guide/search). This
-page is for operators and describes how to set up Elasticsearch and build
-the index.
+For larger deployments, **Elasticsearch is an opt-in alternative**,
+implemented as the `@crowi/plugin-search-elasticsearch` plugin. It scales
+better for large corpora and supports Japanese analysis
+(`analysis-kuromoji`). This page is for operators and describes how to set
+up the Elasticsearch driver and build its index. For the user-facing
+search feature, see [Search](../guide/search).
 
 > **Note**: Crowi 2.0 (Reignite) is under active alpha development, and
-> the Elasticsearch backend is in the middle of update work (an ES version
-> bump and turning the search driver into a plugin). The steps on this
-> page are based on the current dev environment, but details may change.
-> See `TODO.md` for the latest status.
+> the Elasticsearch backend is still being refined (an ES version bump and
+> the search driver having become a plugin). The steps on this page are
+> based on the current dev environment, but details may change. See
+> `TODO.md` for the latest status.
 
 ## Architecture overview
 
 - A search driver is registered with the `SearchRegistry` via a plugin.
 - Which driver is used is specified by `search.driver` in
-  `crowi.config.json`.
+  `crowi.config.json` (default `mongo`).
 - The Elasticsearch driver's connection settings are stored in the Mongo
   Config namespace `plugin:@crowi/plugin-search-elasticsearch:*`.
   Configure them exclusively from the admin UI plugin settings page —
   there is no environment-variable fallback.
 
-## Enabling the plugin
+## Enabling the Elasticsearch plugin
 
-Add the plugin name to the `plugins` array in `crowi.config.json` and set
-`search.driver` to `elasticsearch`.
+To switch from the default `mongo` driver to Elasticsearch, declare
+`@crowi/plugin-search-elasticsearch` as a dependency of your runner
+project, add its name to the `plugins` array in `crowi.config.json`, and
+set `search.driver` to `elasticsearch`.
 
 ```json
 {

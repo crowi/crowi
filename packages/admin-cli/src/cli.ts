@@ -1,7 +1,6 @@
 import { Command } from 'commander';
-import { registerMigrateWikilink } from './commands/migrate-wikilink';
-import { registerSearchRebuild } from './commands/search-rebuild';
-import { registerStorageCopy } from './commands/storage-copy';
+import { registerMigrate } from './commands/migrate';
+import { registerRebuild } from './commands/rebuild';
 import { registerWatcherBackfill } from './commands/watcher-backfill';
 
 /**
@@ -20,9 +19,16 @@ export function createProgram(): Command {
     .description('Operator-side admin CLI for Crowi 2.0. Talks directly to MongoDB; intended for use inside the server (ssh / kubectl exec).')
     .version('0.1.0-dev');
 
-  registerStorageCopy(program);
-  registerSearchRebuild(program);
-  registerMigrateWikilink(program);
+  // RFC-0008: the unified migration framework namespaces. The wikilink
+  // migration lives under `migrate apply --id wikilink-format` (phase 3); the
+  // legacy top-level `storage copy` / `search rebuild` forms are gone (phase
+  // 4) — their tasks now ride the shared runner under `rebuild storage copy` /
+  // `rebuild search`. No compatibility aliases (CHANGELOG / upgrade guide).
+  registerMigrate(program);
+  registerRebuild(program);
+  // `watcher backfill` (idempotent WATCH-row backfill) landed on main as a
+  // standalone command; kept as-is here. Could fold into the framework as a
+  // `rebuild` / `migrate` task later (see TODO backlog).
   registerWatcherBackfill(program);
 
   return program;

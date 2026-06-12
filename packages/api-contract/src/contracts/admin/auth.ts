@@ -2,23 +2,24 @@
  * RFC-0006 Phase 4 Batch 9 — `admin.auth` sub-contract ported to
  * `@hono/zod-openapi` route definitions.
  *
- *   GET /admin/auth   — read the two `auth:*` settings
- *   PUT /admin/auth   — persist them (with self-lockout 422 guard)
+ *   GET /admin/auth   — read the two inert `auth:*` settings
+ *   PUT /admin/auth   — persist them (both toggles are always rejected)
  *
  * Auth + install:
  *   - The handler installs `createJwtAdminRequired(crowi)` broadly on
  *     `/admin/auth/*` plus the bare `/admin/auth` path.
  *
- * 422 wire shape:
- *   - The legacy self-lockout guard (`disablePasswordAuth: true` without a
- *     valid third-party identity) maps to a 422 envelope carrying the
- *     `PASSWORD_AUTH_REQUIRES_THIRDPARTY` discriminator — preserved verbatim.
+ * 400 wire shape:
+ *   - Third-party sign-in was removed from core in the 2.0.0-alpha line, so
+ *     enabling either `requireThirdPartyAuth` or `disablePasswordAuth` is hard-
+ *     rejected with a 400 `THIRD_PARTY_AUTH_UNAVAILABLE` envelope. The toggles
+ *     and config keys are kept (inert) for a future auth provider plugin.
  */
 import { createRoute } from '@hono/zod-openapi';
 
 import {
-  AuthSettingsValidationErrorSchema,
   GetAuthSettingsResponseSchema,
+  ThirdPartyAuthUnavailableErrorSchema,
   UpdateAuthSettingsRequestSchema,
   UpdateAuthSettingsResponseSchema,
 } from '../../schemas/admin/auth';
@@ -66,6 +67,11 @@ export const updateAuthSettingsRoute = createRoute({
       description: 'Updated settings (re-read from in-memory cache)',
       content: { 'application/json': { schema: UpdateAuthSettingsResponseSchema } },
     },
+    400: {
+      description:
+        'Enabling a third-party-dependent setting (requireThirdPartyAuth / disablePasswordAuth) is rejected because third-party sign-in was removed from core',
+      content: { 'application/json': { schema: ThirdPartyAuthUnavailableErrorSchema } },
+    },
     401: {
       description: 'Authentication required',
       content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
@@ -73,10 +79,6 @@ export const updateAuthSettingsRoute = createRoute({
     403: {
       description: 'Admin permission required',
       content: { 'application/json': { schema: AdminRequiredErrorSchema } },
-    },
-    422: {
-      description: 'Self-lockout guard rejected the request',
-      content: { 'application/json': { schema: AuthSettingsValidationErrorSchema } },
     },
     500: {
       description: 'Internal server error',
@@ -92,8 +94,8 @@ export const adminAuthRoutes = {
 
 export type {
   AuthSettings,
-  AuthSettingsValidationError,
   GetAuthSettingsResponse,
+  ThirdPartyAuthUnavailableError,
   UpdateAuthSettingsRequest,
   UpdateAuthSettingsResponse,
 } from '../../schemas/admin/auth';

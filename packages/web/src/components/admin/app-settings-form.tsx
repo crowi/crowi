@@ -14,8 +14,8 @@ import { m } from '@paraglide/messages.js';
 
 /**
  * Editable subset of the App settings — the GET response also surfaces
- * read-only fields (`externalShare`, `isUploadable`, `registrationMode`) which
- * we keep out of this state and read directly from `data` when rendering.
+ * read-only fields (`isUploadable`, `registrationMode`) which we keep out of
+ * this state and read directly from `data` when rendering.
  *
  * Storage credentials (AWS S3 region / bucket / accessKeyId / secretAccessKey)
  * used to live here too. They moved to the per-plugin settings page
@@ -227,12 +227,6 @@ export function AppSettingsForm() {
           <div className="flex justify-between gap-4">
             <span className="text-muted-foreground">{m['admin.app.status_uploadable_label']()}</span>
             <span className="font-medium">{isUploadable ? m['admin.app.status_uploadable_yes']() : m['admin.app.status_uploadable_no']()}</span>
-          </div>
-          <div className="flex justify-between gap-4">
-            <span className="text-muted-foreground">{m['admin.app.status_external_share_label']()}</span>
-            <span className="font-medium">
-              {data.app.externalShare ? m['admin.app.status_external_share_enabled']() : m['admin.app.status_external_share_disabled']()}
-            </span>
           </div>
         </CardContent>
       </Card>

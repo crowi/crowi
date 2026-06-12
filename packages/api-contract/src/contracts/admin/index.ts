@@ -3,7 +3,7 @@
  * `@hono/zod-openapi` route definitions.
  *
  * The legacy ts-rest `adminContract` aggregator (a `c.router({ app, auth,
- * security, mail, share, storage, search, users, plugins })`) is gone.
+ * security, mail, storage, search, users, plugins })`) is gone.
  * Each sub-contract now exports a `createRoute(...)` set under
  * `adminXxxRoutes`, mirrored on the runtime side by an
  * `hono/handlers/admin/<sub>.ts` register function.
@@ -17,6 +17,5 @@ export * from './mail';
 export * from './plugins';
 export * from './search';
 export * from './security';
-export * from './share';
 export * from './storage';
 export * from './users';

@@ -51,10 +51,10 @@ export const registerAdminAppRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>
           app: {
             title: coerceString(crowiNs['app:title']),
             confidential: coerceString(crowiNs['app:confidential']),
-            externalShare: coerceBoolean(crowiNs['app:externalShare']),
           },
           isUploadable,
           registrationMode,
+          setupChecklistDismissed: coerceBoolean(crowiNs['app:setupChecklistDismissed']),
         },
         200,
       );
@@ -66,6 +66,10 @@ export const registerAdminAppRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>
       if (body.app) {
         if (body.app.title !== undefined) updates['app:title'] = body.app.title;
         if (body.app.confidential !== undefined) updates['app:confidential'] = body.app.confidential;
+      }
+
+      if (body.setupChecklistDismissed !== undefined) {
+        updates['app:setupChecklistDismissed'] = body.setupChecklistDismissed;
       }
 
       if (Object.keys(updates).length > 0) {

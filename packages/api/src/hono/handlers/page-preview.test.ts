@@ -1,32 +1,12 @@
 import request from 'supertest';
-import { app, crowi, Fixture } from 'src/test/setup';
-import { createJwtUtil } from 'src/util/jwt';
-
-const authHeaders = (token: string) => ({
-  Authorization: `Bearer ${token}`,
-  'Content-Type': 'application/json',
-});
-
-const createTestUser = async () => {
-  const User = crowi.model('User');
-  const [user] = await Fixture.generate('User', [
-    {
-      name: 'Preview Tester',
-      username: 'previewTester',
-      email: 'preview-tester@example.com',
-    },
-  ]);
-  user.status = User.STATUS_ACTIVE;
-  await user.save();
-  const accessToken = createJwtUtil(crowi).generateTokens(user).accessToken;
-  return { user, accessToken };
-};
+import { app, crowi } from 'src/test/setup';
+import { authHeaders, createTestUser } from 'src/test/test-helpers';
 
 describe('Routes /api/v2/pages/preview (Hono previewPage)', () => {
   let accessToken: string;
 
   beforeAll(async () => {
-    ({ accessToken } = await createTestUser());
+    ({ accessToken } = await createTestUser({ name: 'Preview Tester', username: 'previewTester', email: 'preview-tester@example.com' }));
   });
 
   it('returns 401 when no Authorization header is provided', async () => {

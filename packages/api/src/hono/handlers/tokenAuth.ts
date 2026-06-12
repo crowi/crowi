@@ -33,6 +33,7 @@ import type Crowi from 'src/crowi';
 import type { UserDocument } from 'src/models/user';
 import { createJwtUtil } from 'src/util/jwt';
 import { createMailTokenUtil } from 'src/util/mail-token';
+import { mapDuplicateKeyError } from 'src/util/map-duplicate-key-error';
 
 import type { CrowiHonoBindings } from '../app';
 import { createJwtAuth } from '../middleware/auth';
@@ -207,6 +208,14 @@ export const registerTokenAuthRoutes = <E extends OpenAPIHono<CrowiHonoBindings>
 
         return c.json({ status: 'confirmation_required' as const }, 200);
       } catch (error) {
+        // The findOne pre-check above can be raced by a concurrent register;
+        // the unique index is the final defence. Map its E11000 to the same
+        // 409 the pre-check would have returned instead of a 500.
+        const duplicateCode = mapDuplicateKeyError(error);
+        if (duplicateCode) {
+          const message = duplicateCode === 'EMAIL_TAKEN' ? 'Email already registered' : 'Username already taken';
+          return c.json({ error: { code: duplicateCode, message } }, 409);
+        }
         debug('Registration error:', error);
         return c.json(INTERNAL_ERROR_BODY, 500);
       }

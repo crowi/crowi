@@ -42,7 +42,6 @@ import {
   adminPluginsRoutes,
   adminSearchRoutes,
   adminSecurityRoutes,
-  adminShareRoutes,
   adminStorageRoutes,
   adminUsersRoutes,
   appRoutes,
@@ -345,14 +344,13 @@ const routeGroups = [
   // Batch 8 — adminCrypto. Two literal paths under `/admin/crypto/*`,
   // admin-only (first time `createJwtAdminRequired` lands on Hono).
   adminCryptoRoutes,
-  // Batch 9 — the 9 admin sub-contracts (app / auth / security / mail
-  // / share / storage / search / users / plugins). Spec ordering
+  // Batch 9 — the 8 admin sub-contracts (app / auth / security / mail
+  // / storage / search / users / plugins). Spec ordering
   // mirrors the buildHonoApp chain.
   adminAppRoutes,
   adminAuthRoutes,
   adminSecurityRoutes,
   adminMailRoutes,
-  adminShareRoutes,
   adminStorageRoutes,
   adminSearchRoutes,
   adminUsersRoutes,

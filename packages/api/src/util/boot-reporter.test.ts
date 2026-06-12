@@ -6,7 +6,10 @@ import {
   formatDuration,
   formatPlainLayerLine,
   formatPlainReadyLine,
+  FAIL_MARKER_PREFIX,
+  formatFailMarker,
   formatReadyMarker,
+  parseFailMarker,
   parseReadyMarker,
   READY_MARKER_PREFIX,
   spinnerFrame,
@@ -65,6 +68,33 @@ describe('boot-reporter pure helpers', () => {
       expect(parseReadyMarker('some unrelated log line')).toBeNull();
       expect(parseReadyMarker('@@crowi:ready')).toBeNull();
       expect(parseReadyMarker('@@crowi:ready api')).toBeNull();
+    });
+  });
+
+  describe('failure marker round-trip', () => {
+    it('formats with the stable prefix and collapses the reason to one line', () => {
+      expect(formatFailMarker('api', 'Cannot connect to Database Server')).toBe(`${FAIL_MARKER_PREFIX} api Cannot connect to Database Server`);
+      // Multi-line / whitespace-heavy reasons collapse so the marker stays on one line.
+      expect(formatFailMarker('api', 'boom\n  at foo\n  at bar')).toBe(`${FAIL_MARKER_PREFIX} api boom at foo at bar`);
+    });
+    it('parses a bare marker line, keeping the full reason', () => {
+      expect(parseFailMarker('@@crowi:fail api Cannot connect to Database Server: ECONNREFUSED')).toEqual({
+        service: 'api',
+        reason: 'Cannot connect to Database Server: ECONNREFUSED',
+      });
+    });
+    it('parses a marker line prefixed by turbo output', () => {
+      expect(parseFailMarker('@crowi/api:dev: @@crowi:fail api db down')).toEqual({
+        service: 'api',
+        reason: 'db down',
+      });
+    });
+    it('parses a marker with no reason', () => {
+      expect(parseFailMarker('@@crowi:fail api')).toEqual({ service: 'api', reason: '' });
+    });
+    it('returns null for non-marker / empty-body lines', () => {
+      expect(parseFailMarker('some unrelated log line')).toBeNull();
+      expect(parseFailMarker('@@crowi:fail')).toBeNull();
     });
   });
 

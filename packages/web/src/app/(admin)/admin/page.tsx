@@ -1,18 +1,28 @@
 'use client';
 
+import { Suspense } from 'react';
 import Link from 'next/link';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ADMIN_NAV_GROUPS } from '@/components/admin/admin-sidebar';
 import { CryptoStatusCard } from '@/components/admin/crypto-status-card';
+import { SetupChecklist } from '@/components/admin/setup-checklist';
+import { WelcomeDialog } from '@/components/admin/welcome-dialog';
 import { m } from '@paraglide/messages.js';
 
 export default function AdminIndexPage() {
   return (
     <div className="space-y-6">
+      {/* `WelcomeDialog` reads `?welcome=installed` via useSearchParams,
+          which needs a Suspense boundary in the App Router. */}
+      <Suspense fallback={null}>
+        <WelcomeDialog />
+      </Suspense>
+
       <div>
         <h1 className="text-2xl font-semibold">{m['admin.dashboard_title']()}</h1>
-        <p className="text-muted-foreground mt-1 text-sm">{m['admin.dashboard_subtitle']()}</p>
       </div>
+
+      <SetupChecklist />
 
       <CryptoStatusCard />
 
@@ -23,7 +33,6 @@ export default function AdminIndexPage() {
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {group.items.map((item) => {
                 const Icon = item.icon;
-                const isAvailable = item.status === 'available';
                 return (
                   <Link
                     key={item.href}
@@ -36,17 +45,8 @@ export default function AdminIndexPage() {
                           <Icon className="h-5 w-5 text-primary" />
                           <CardTitle className="text-base">{item.label()}</CardTitle>
                         </div>
-                        {isAvailable ? (
-                          item.description && <CardDescription>{item.description()}</CardDescription>
-                        ) : (
-                          <CardDescription>{m['admin.coming_soon']()}</CardDescription>
-                        )}
+                        {item.description && <CardDescription>{item.description()}</CardDescription>}
                       </CardHeader>
-                      {!isAvailable && (
-                        <CardContent>
-                          <p className="text-muted-foreground text-sm">{m['admin.coming_soon_body']()}</p>
-                        </CardContent>
-                      )}
                     </Card>
                   </Link>
                 );

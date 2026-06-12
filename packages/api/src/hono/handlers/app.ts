@@ -27,5 +27,10 @@ export const registerAppRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app:
     // empty/missing values as "not customized" so the client can render
     // the full lockup instead of an icon-plus-text composition.
     const title = raw && raw !== 'Crowi' ? raw : null;
-    return c.json({ title }, 200);
+    // Confidentiality notice (app:confidential) rides the same public
+    // channel so the (auth) shell can render an always-on header banner.
+    // Empty/missing collapses to null (banner hidden).
+    const confidentialRaw = config?.crowi?.['app:confidential'] as string | undefined;
+    const confidential = confidentialRaw ? confidentialRaw : null;
+    return c.json({ title, confidential }, 200);
   });
