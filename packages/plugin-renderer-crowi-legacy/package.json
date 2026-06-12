@@ -1,6 +1,6 @@
 {
   "name": "@crowi/plugin-renderer-crowi-legacy",
-  "version": "0.1.0-dev",
+  "version": "0.1.0-alpha.0",
   "description": "Crowi v1 compatibility quirks aggregator for Crowi 2.x. Fixes actual v1 idiosyncrasies (e.g. `##hoge` heading-without-space) that are NOT standard markdown. The single-newline → <br> behaviour shipped here in earlier dev iterations is now a Crowi-wide default and lives in the core pipeline.",
   "main": "dist/index.js",
   "module": "dist/index.mjs",

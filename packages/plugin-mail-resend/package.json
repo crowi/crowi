@@ -1,6 +1,6 @@
 {
   "name": "@crowi/plugin-mail-resend",
-  "version": "0.1.0-dev",
+  "version": "0.1.0-alpha.0",
   "description": "Resend mail sender for Crowi 2.0. Delivers core-assembled email via the Resend HTTP API.",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
