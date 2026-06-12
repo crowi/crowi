@@ -1,0 +1,286 @@
+---
+title: セルフホスティング（カスタムランナープロジェクト）
+description: 自前のランナープロジェクトで api イメージを作り、web フロントエンドまで結線して本番デプロイする手順
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Steps, Step } from 'fumadocs-ui/components/steps';
+
+このページは、**公式の full / slim イメージでは要件を満たせない場合に、自前の
+ランナープロジェクトを作って本番デプロイする** 運用者向けの手順です。具体的には
+次のようなケースを想定しています。
+
+- 公式イメージに同梱されない **独自プラグイン**（社内 npm レジストリのものなど）を
+  読み込みたい
+- ストレージ / 検索 / メール / レンダラのドライバを **任意の組み合わせ** で固定したい
+- イメージの依存を必要最小限に絞り、ビルドパイプラインを自社で管理したい
+
+公式イメージ（モノレポ同梱の `apps/crowi-runner` / `apps/crowi-runner-slim` から
+ビルドするもの）で足りる場合は、[インストール](./installation) の「公式 Docker
+イメージのビルド」で十分です。ここではその一歩先、**ランナープロジェクトを一から
+作る** 場合を扱います。
+
+<Callout type="info">
+  Crowi の本番構成は「**api（Hono）+ web（Next.js）+ MongoDB（+ 任意で Redis /
+  Elasticsearch / S3）**」です。`@crowi/api` は **プラグインを同梱しない** ため、
+  どのドライバを使うかはランナープロジェクトが所有します。この前提は
+  [設定](./configuration) の「プラグインの解決方法」で詳説しています。
+</Callout>
+
+## 全体像
+
+単一ドメイン + リバースプロキシ構成（推奨）の場合、リクエストは次のように
+振り分けます。
+
+```
+                         ┌──────────────────────────────┐
+  ブラウザ ──HTTPS──▶ リバースプロキシ (nginx / Caddy 等)
+                         │  /            → web  :3000     │
+                         │  /api/*       → api  :3000     │
+                         │  /collab/*    → api  :3000 (WS) │
+                         └──────────────────────────────┘
+                                   │            │
+                              ┌────▼───┐   ┌────▼───┐
+                              │  web   │   │  api   │──▶ MongoDB / Redis / ...
+                              └────────┘   └────────┘
+```
+
+`web` と `api` は別コンテナで、いずれもコンテナ内ポート `3000` で待ち受けます。
+`/collab/*` は WebSocket なので、プロキシ側で **Upgrade ヘッダの引き渡し** を
+有効にしてください。
+
+## ランナープロジェクトを作る
+
+<Steps>
+
+<Step>
+
+### プロジェクトディレクトリと `package.json`
+
+任意の場所にディレクトリを作り、`@crowi/api` と **使いたいプラグイン** を依存に
+宣言します。下記は S3 ストレージ + Elasticsearch 検索 + PlantUML/KaTeX/emoji
+レンダラを使う例です。
+
+```json title="package.json"
+{
+  "name": "my-crowi-runner",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "crowi-api"
+  },
+  "dependencies": {
+    "@crowi/api": "2.0.0-alpha.0",
+    "@crowi/plugin-storage-aws-s3": "2.0.0-alpha.0",
+    "@crowi/plugin-search-elasticsearch": "2.0.0-alpha.0",
+    "@crowi/plugin-renderer-plantuml": "2.0.0-alpha.0",
+    "@crowi/plugin-renderer-katex": "2.0.0-alpha.0",
+    "@crowi/plugin-renderer-emoji": "2.0.0-alpha.0"
+  }
+}
+```
+
+<Callout type="warn">
+  バージョンは **実際に使う Crowi のリリースに揃えてください**。`@crowi/api` と
+  `@crowi/plugin-*` は同一バージョンで足並みを揃えるのが安全です（リリースは
+  linked group として同時にバージョンが上がります）。
+</Callout>
+
+暗黙のデフォルトプラグイン（`@crowi/plugin-storage-local` /
+`@crowi/plugin-search-mongo` / `@crowi/plugin-mail-smtp`）は宣言しなくても
+読み込まれます。ローカルストレージ + MongoDB 検索 + SMTP のままでよければ、
+`@crowi/api` だけを依存にすれば動きます（= slim 相当を自前で組む形）。
+
+</Step>
+
+<Step>
+
+### `crowi.config.json`
+
+読み込むプラグインと有効ドライバを宣言します。プラグインごとの設定値（バケット名
+や認証情報など）は **ここには書かず**、起動後に管理画面（`/admin/plugins`）から
+設定します。
+
+```json title="crowi.config.json"
+{
+  "plugins": [
+    "@crowi/plugin-storage-aws-s3",
+    "@crowi/plugin-search-elasticsearch",
+    "@crowi/plugin-renderer-plantuml",
+    "@crowi/plugin-renderer-katex",
+    "@crowi/plugin-renderer-emoji"
+  ],
+  "storage": { "driver": "s3" },
+  "search": { "driver": "elasticsearch" }
+}
+```
+
+フィールドの意味とドライバ名の対応は [設定](./configuration) を参照してください。
+
+</Step>
+
+<Step>
+
+### `.env`
+
+api が起動時に読む環境変数を用意します。最低限 `MONGO_URI`、本番では
+`CROWI_ENCRYPTION_KEY` と `WS_TOKEN_SECRET` を必ず設定してください。
+
+```bash title=".env"
+MONGO_URI=mongodb://mongodb:27017/crowi
+REDIS_URL=redis://redis:6379          # 複数レプリカ運用では必須
+CROWI_ENCRYPTION_KEY=...               # openssl rand -base64 32
+WS_TOKEN_SECRET=...                    # 全 api レプリカで同一値にする
+```
+
+各変数の意味は [設定](./configuration) の「環境変数」を参照してください。
+
+<Callout type="warn">
+  `WS_TOKEN_SECRET` を未設定にするとプロセスごとにランダム生成されます。
+  単一インスタンスの検証用途なら許容されますが、**複数レプリカでは全レプリカで
+  同一値** にしないと、リアルタイム共同編集の WebSocket 認証が片側で失敗します。
+</Callout>
+
+</Step>
+
+<Step>
+
+### ローカルで起動確認
+
+依存をインストールし、**プロジェクトディレクトリを cwd にして** 起動します
+（`process.cwd()` が `projectDir` になる必要があります）。
+
+```bash
+pnpm install   # または npm install
+pnpm start     # = crowi-api。api がコンテナ内ポート 3000 で待ち受ける
+```
+
+api は起動時にこのプロジェクトの `node_modules/` からプラグインを解決します。
+プラグインの追加・削除に **api の再ビルドは不要** です。
+
+</Step>
+
+</Steps>
+
+## api の Docker イメージを作る
+
+ランナープロジェクトをそのままイメージ化します。公式イメージと同じく、
+`WORKDIR` をランナープロジェクトのルート（= `projectDir`）にし、
+`node_modules/@crowi/api/dist/app.js` を実行します。
+
+```dockerfile title="Dockerfile"
+FROM node:24-bookworm-slim
+WORKDIR /app
+
+# ランナープロジェクトのマニフェストを先に入れて依存だけ先に解決（キャッシュ効率）
+COPY package.json pnpm-lock.yaml* package-lock.json* ./
+RUN corepack enable && pnpm install --prod || npm install --omit=dev
+
+# 設定とソースを配置
+COPY crowi.config.json ./
+# .env はイメージに焼き込まず、コンテナ env / env_file で渡すことを推奨
+
+ENV NODE_ENV=production
+ENV PORT=3000
+EXPOSE 3000
+CMD ["node", "node_modules/@crowi/api/dist/app.js"]
+```
+
+<Callout type="info">
+  社内レジストリのプラグインを使う場合は、`pnpm install` の前に `.npmrc` を
+  COPY してレジストリ / 認証を設定してください。`crowi.config.json` を
+  コンテナ外からマウントすれば、再ビルドなしでドライバ選択を差し替えられます
+  （公式 compose もこの方式です）。
+</Callout>
+
+機密値（`CROWI_ENCRYPTION_KEY` / `WS_TOKEN_SECRET` など）は **イメージに
+焼き込まず**、デプロイ時のコンテナ環境変数か `env_file` で渡します。
+
+## web フロントエンドを結線する
+
+web は `packages/web/Dockerfile` からビルドします。ここで **最重要** なのが
+`NEXT_PUBLIC_API_URL` です。
+
+<Callout type="warn">
+  `NEXT_PUBLIC_API_URL` は **ビルド時に静的に焼き込まれます**（Next.js の
+  `NEXT_PUBLIC_*` の仕様）。実行時の環境変数では変えられません。**ブラウザから
+  到達できる API の URL** を、必ず `--build-arg` で渡してビルドしてください。
+  コンテナ間のホスト名（`http://api:3000` など）はブラウザからは解決できないため
+  不可です。
+</Callout>
+
+### 単一ドメイン + リバースプロキシ（推奨）
+
+web と api を同一オリジンで配信し、プロキシで振り分ける構成です。この場合
+`NEXT_PUBLIC_API_URL` は **公開オリジンそのもの** を指定します。
+
+```bash
+docker build -f packages/web/Dockerfile \
+  --build-arg NEXT_PUBLIC_API_URL=https://wiki.example.com \
+  -t my-crowi-web .
+```
+
+プロキシ側で次のように振り分けます（nginx 例）。
+
+```nginx
+location /api/ {
+  proxy_pass http://api:3000;
+}
+location /collab/ {
+  proxy_pass http://api:3000;
+  proxy_http_version 1.1;
+  proxy_set_header Upgrade    $http_upgrade;   # WebSocket
+  proxy_set_header Connection "upgrade";
+}
+location / {
+  proxy_pass http://web:3000;
+}
+```
+
+`NEXT_PUBLIC_COLLAB_URL` は **省略推奨** です。未設定なら web は
+`window.location.host` と `NEXT_PUBLIC_API_URL` から WebSocket URL を導出するため、
+`/collab/*` を同一ホストにプロキシしていればそのまま動きます。
+
+### api / web を別オリジンで配信する場合
+
+別ドメイン（例: web=`https://wiki.example.com`、api=`https://api.example.com`）で
+配信する場合は、`NEXT_PUBLIC_API_URL=https://api.example.com` でビルドし、api 側で
+`CLIENT_URL=https://wiki.example.com` を設定して CORS を許可します。`/collab/*` を
+api ドメイン側に逃がす場合は `NEXT_PUBLIC_COLLAB_URL` を明示します。
+
+## 起動順とヘルスチェック
+
+<Steps>
+
+<Step>
+### ミドルウェアを先に起動
+MongoDB（必要に応じて Redis / Elasticsearch）を起動し、到達可能にします。
+</Step>
+
+<Step>
+### マイグレーションを適用
+v1 からのアップグレードや preflight マイグレーションがある場合は、api 起動前に
+適用します。詳細は [v1 からのアップグレード](./upgrading-from-v1) を参照してください。
+</Step>
+
+<Step>
+### api → web の順で起動
+api を起動して `/api/v2/app/info` が 200 を返すことを確認してから、web を起動します。
+</Step>
+
+</Steps>
+
+<Callout type="info">
+  複数レプリカで運用する場合は、`REDIS_URL`（セッション / 共同編集の pub/sub）が
+  **必須** で、`WS_TOKEN_SECRET` を全 api レプリカで同一値にします。詳細は
+  [リアルタイム共同編集](./realtime-collab) を参照してください。
+</Callout>
+
+## 次のステップ
+
+- [設定](./configuration) — 環境変数と `crowi.config.json` の全体像
+- [機密設定の暗号化](./encryption) — `CROWI_ENCRYPTION_KEY` のセットアップ
+- [ストレージドライバ](./storage) — `storage.driver` の切り替え
+- [検索のセットアップ](./search-setup) — Elasticsearch の設定
+- [プラグインの管理](../plugins/managing) — プラグインの追加・有効化
+- [v1 からのアップグレード](./upgrading-from-v1) — 既存 Crowi からの移行
