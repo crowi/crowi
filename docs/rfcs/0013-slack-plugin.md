@@ -415,11 +415,55 @@ card" renderer extension** in Crowi.
     card. ("Works with no bot in the channel" is only achievable for public via
     auto-join.)
 
-### Remaining smaller opens
-- Exact dev tunnel override knob (#5).
-- The generic embed-affordance SDK surface shape (#8) — how plugins declare the
-  pattern + action and how the editor invokes it (API to list rules + apply a
-  conversion). Worth its own short design when Phase E starts.
+### Remaining open points — decide when the phase starts
+
+(Merged from the former `0013-slack-plugin.open-points.md`; everything else
+is decided above.)
+
+**At Phase E start (Slack→Crowi embed):**
+
+- **Generic embed-affordance SDK surface** (#8) — the largest undesigned
+  piece. How a plugin *declares* "URL pattern + floating-action label +
+  conversion (→ `@[slack](url)`)" (a new plugin-api surface); the web-editor
+  API to *list* registered rules and the hook to *apply* a conversion. The
+  editor only detects + shows the button — the action is delegated to the
+  plugin's declaration (no Slack-specific code in the editor). Write a short
+  design memo when Phase E starts.
+- **AuthContext wiring details** (#9 / §7.5) — "implement it here" is decided;
+  what remains is the concrete plumbing: materialise `createAuthContextStub`
+  (`renderer/registry.ts`) so a render can read *that plugin's* encrypted
+  config namespace via `ctx.auth.config(schema)`. Shared owner-token model
+  (one token for all renders). Edge cases: unconfigured plugin, decrypt
+  failure, cache-key ↔ token relationship.
+- **Private-channel invite UX** (#10) — public channels are solved by
+  `conversations.join` auto-join; private channels need the "invite the Crowi
+  bot" locked-card copy and flow.
+
+**At Phase 2 start (slash writes) — structurally the heaviest:**
+
+- **Account linking (Sign in with Slack / link) mechanism** (§7.4 / #2).
+  Slash *writes* and *mention mapping* require a real Slack↔Crowi identity
+  (no email-guessing); read-only `/crowi search` runs as the bot. **RFC-0014
+  now defines the runtime this rides on**: Sign in with Slack becomes an
+  `oauth2` driver through the core flow skeleton, linking uses RFC-0014's
+  explicit `linkToUserId` path, and the link is stored as a `UserIdentity`
+  document (`provider: 'slack'`) — not a `User.slackUserId` column (which was
+  the open question here; RFC-0014 §7 answers it).
+- **"Thread → wiki page" details** — target page path, mrkdwn→markdown body
+  conversion, author = the linked Crowi user.
+
+**Phase 1 / common:**
+
+- **Dev tunnel override knob** (#5) — `CLIENT_URL` is the SSOT, but dev needs
+  a Slack-reachable public URL (ngrok / cloudflared); decide the env that
+  overrides the manifest `request_url` in dev.
+
+**Phase 3 (notifications):**
+
+- **Notification UX** (#7 / §7.3) — deferred wholesale. Triggers (which
+  events) / batching / per-channel rules are a separate design. The infra
+  (`registerNotifier` + `forwardToNotifierPlugins`, per-page channel via
+  `pageMetadataSchema`) can be prepared ahead; the UX comes later.
 
 ## §13 References
 
