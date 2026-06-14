@@ -3,6 +3,7 @@ import { DiscoveryResponseSchema } from '@crowi/api-contract';
 import type { ProfileEndpoints } from './config';
 import { stripTrailingSlash } from './config';
 import { CliError, EXIT } from './http';
+import { warn } from './output';
 
 /**
  * RFC 8414 authorization-server metadata discovery.
@@ -25,6 +26,57 @@ import { CliError, EXIT } from './http';
 
 /** Path of the RFC 8414 discovery document, relative to the server root. */
 const DISCOVERY_PATH = '/.well-known/oauth-authorization-server';
+
+/** Loopback hosts where plaintext `http:` discovery is acceptable (dev). */
+const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]', '::1']);
+
+/**
+ * Parse a URL or throw a {@link CliError} pinning which discovery field was
+ * malformed (the discovery doc is the trust root for every subsequent dial).
+ */
+function parseUrl(field: string, value: string): URL {
+  try {
+    return new URL(value);
+  } catch {
+    throw new CliError(`OAuth discovery document is malformed: "${field}" is not a valid URL (${value})`, {
+      exitCode: EXIT.GENERAL,
+    });
+  }
+}
+
+/**
+ * Defend against the OAuth metadata mix-up vector: the discovery document is
+ * fetched from `endpoint` but then hands back token / device / revocation URLs
+ * the CLI dials verbatim. A malicious or misconfigured server could point
+ * those at a foreign origin to exfiltrate the code/token. We therefore pin the
+ * security-sensitive endpoints to the `issuer` origin.
+ *
+ * `authorization_endpoint` MAY legitimately live on a different (web) origin —
+ * `CLIENT_URL` can be a separate host from the API — so it is NOT constrained
+ * here; it only ever receives the browser, never a token. When the issuer
+ * scheme is plaintext `http:` on a non-loopback host we warn (warn-only,
+ * never block) that the discovery channel is insecure.
+ */
+function validateOrigins(issuer: URL, endpoints: { token: URL; device?: URL; revoke?: URL }): void {
+  const expected = issuer.origin;
+  const pin = (field: string, url: URL): void => {
+    if (url.origin !== expected) {
+      throw new CliError(
+        `OAuth discovery rejected: "${field}" (${url.origin}) is not on the issuer origin (${expected}) — ` +
+          `the metadata issuer must match the endpoints you are logging into (possible metadata mix-up).`,
+        { exitCode: EXIT.GENERAL },
+      );
+    }
+  };
+
+  pin('token_endpoint', endpoints.token);
+  if (endpoints.device) pin('device_authorization_endpoint', endpoints.device);
+  if (endpoints.revoke) pin('revocation_endpoint', endpoints.revoke);
+
+  if (issuer.protocol === 'http:' && !LOOPBACK_HOSTS.has(issuer.hostname) && !LOOPBACK_HOSTS.has(issuer.host)) {
+    warn(`OAuth discovery for ${issuer.origin} uses plaintext http — credentials may be exposed in transit (continuing anyway).`);
+  }
+}
 
 /**
  * Fetch + parse the discovery document for `endpoint`. Parsed leniently
@@ -62,6 +114,15 @@ export async function discover(
   }
 
   const d = parsed.data;
+
+  // Pin the security-sensitive endpoints to the issuer origin before the CLI
+  // ever dials them (OAuth metadata mix-up defense).
+  const issuer = parseUrl('issuer', d.issuer);
+  const token = parseUrl('token_endpoint', d.token_endpoint);
+  const revoke = parseUrl('revocation_endpoint', d.revocation_endpoint);
+  const device = d.device_authorization_endpoint ? parseUrl('device_authorization_endpoint', d.device_authorization_endpoint) : undefined;
+  validateOrigins(issuer, { token, revoke, device });
+
   return {
     issuer: d.issuer,
     tokenEndpoint: d.token_endpoint,
