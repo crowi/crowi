@@ -2,7 +2,8 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { effectiveCapabilities, hasCapability, maybeWarnVersionSkew, STATIC_CAPABILITIES, warnVersionSkew } from './capability';
+import { upsertProfile } from './config';
+import { effectiveCapabilities, fetchAppInfo, hasCapability, maybeWarnVersionSkew, STATIC_CAPABILITIES, warnVersionSkew } from './capability';
 
 describe('capability detection', () => {
   it('treats the static baseline as always present, even with no advertised list', () => {
@@ -133,5 +134,39 @@ describe('maybeWarnVersionSkew (Phase 1 preSubcommand probe)', () => {
     fetchMock.mockRejectedValueOnce(new Error('ECONNREFUSED'));
     await expect(maybeWarnVersionSkew({ url: 'https://down.example.com', token: 'pat-1' })).resolves.toBeUndefined();
     expect(stderr).not.toHaveBeenCalled();
+  });
+
+  it('persists apiVersion and still warns on a TTL-fresh cache HIT (no second fetch)', async () => {
+    // Seed a stored profile and let the FIRST fetchAppInfo populate the cache.
+    upsertProfile({ alias: 'work', endpoint: 'https://wiki.example.com', tokens: { accessToken: 'pat-1' } });
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { title: 'Wiki', apiVersion: 'v3' }));
+    await maybeWarnVersionSkew({ profile: 'work' });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(stderr).toHaveBeenCalledTimes(1);
+
+    // Second invocation: the cache is fresh, so NO new fetch — but the cached
+    // apiVersion must still drive the skew warning (the bug being fixed: the
+    // cache-hit branch previously returned apiVersion: undefined).
+    stderr.mockClear();
+    await maybeWarnVersionSkew({ profile: 'work' });
+    expect(fetchMock).toHaveBeenCalledTimes(1); // unchanged — served from cache
+    expect(stderr).toHaveBeenCalledTimes(1);
+    expect(String(stderr.mock.calls[0][0])).toContain('v3');
+  });
+
+  it('returns the cached apiVersion from fetchAppInfo on a fresh cache hit', async () => {
+    upsertProfile({
+      alias: 'cached',
+      endpoint: 'https://wiki.example.com',
+      tokens: { accessToken: 'pat-1' },
+      apiVersion: 'v3',
+      version: '2.1.0',
+      capabilitiesFetchedAt: Date.now(),
+    });
+    const { loadConfig } = await import('./config');
+    const profile = loadConfig().profiles.cached;
+    const info = await fetchAppInfo(profile);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(info.apiVersion).toBe('v3');
   });
 });

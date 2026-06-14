@@ -23,6 +23,28 @@ export function rethrowScopeHint(err: unknown, neededScope: string): never {
 }
 
 /**
+ * Re-throw an error, but when it is a 404 on an endpoint this (newer) CLI
+ * knows yet an older Crowi instance may lack, replace the generic not-found
+ * with an actionable "this instance may not support <command>" hint
+ * (RFC-0012 §3.4 degrade-on-404). Mirrors {@link rethrowScopeHint}.
+ *
+ * Use this only on routes ABOVE the v2 floor (e.g. `POST /pages/rename-subtree`):
+ * a 404 there is ambiguous between "missing route" and "nothing matched", and
+ * for an older server the former is the likely cause, so the hint is the more
+ * useful message. `commandName` names the command in the hint.
+ */
+export function rethrowNewerEndpointHint(err: unknown, commandName: string): never {
+  if (err instanceof CliError && err.status === 404) {
+    throw new CliError(`this Crowi instance may not support \`${commandName}\` (requires a newer Crowi version).`, {
+      exitCode: EXIT.NOT_FOUND,
+      apiCode: err.apiCode,
+      status: err.status,
+    });
+  }
+  throw err;
+}
+
+/**
  * Resolve the profile + global options a command should act on, requiring a
  * usable access token. Throws a {@link CliError} (exit 2) when no profile
  * resolves or it has no token — every authenticated command funnels through

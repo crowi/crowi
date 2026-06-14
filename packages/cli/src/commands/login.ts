@@ -3,9 +3,28 @@ import type { Command } from 'commander';
 import { getGlobalOptions } from '../cli';
 import { loadConfig, type Profile, stripTrailingSlash, upsertProfile } from '../lib/config';
 import { discover } from '../lib/discovery';
-import { CliError, EXIT } from '../lib/http';
+import { authedFetch, CliError, EXIT } from '../lib/http';
 import { DEFAULT_SCOPE, loginAuthCode, loginDevice, validateScope } from '../lib/oauth';
 import { info } from '../lib/output';
+
+/** Lenient `GET /api/v2/auth/me` view — only the username is consumed here. */
+interface AuthMeResponse {
+  user?: { username?: string };
+}
+
+/**
+ * Best-effort one-shot `GET /api/v2/auth/me` to resolve the signed-in
+ * username, so `crowi profiles` can show endpoint × user. Returns `undefined`
+ * (never throws) when the call fails — a flaky /auth/me must NOT fail login.
+ */
+export async function fetchAccount(profile: Profile): Promise<string | undefined> {
+  try {
+    const body = await authedFetch<AuthMeResponse>(profile, 'GET', '/auth/me');
+    return body.user?.username;
+  } catch {
+    return undefined;
+  }
+}
 
 interface LoginOptions {
   device?: boolean;
@@ -85,6 +104,8 @@ export function registerLogin(program: Command): void {
           endpoint,
           tokens: { accessToken: options.token },
         };
+        // Best-effort: resolve the account so `crowi profiles` shows the user.
+        profile.account = await fetchAccount(profile);
         upsertProfile(profile);
         info(`Stored personal access token for profile "${alias}" (${endpoint}).`, globals);
         return;
@@ -104,6 +125,8 @@ export function registerLogin(program: Command): void {
         oauth: endpoints,
         tokens,
       };
+      // Best-effort: resolve the account so `crowi profiles` shows the user.
+      profile.account = await fetchAccount(profile);
       upsertProfile(profile);
 
       info(`Logged in to "${alias}" (${endpoint}) with scope: ${tokens.scope ?? scope}.`, globals);

@@ -36,8 +36,9 @@ export function registerProfiles(program: Command): void {
           return entries
             .map((p) => {
               const marker = p.alias === config.currentProfile ? '*' : ' ';
+              const account = p.account ? ` (${p.account})` : '';
               const scope = p.tokens?.scope ? `  [${p.tokens.scope}]` : '';
-              return `${marker} ${p.alias}\t${p.endpoint}${scope}`;
+              return `${marker} ${p.alias}\t${p.endpoint}${account}${scope}`;
             })
             .join('\n');
         },

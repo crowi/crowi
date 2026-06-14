@@ -50,6 +50,8 @@ export interface Profile {
   capabilities?: string[];
   /** Server api package version from `GET /api/v2/app/info`. */
   version?: string;
+  /** Server API-surface version (e.g. `v2`) from `GET /api/v2/app/info`. */
+  apiVersion?: string;
   /** Epoch milliseconds when capabilities/version were last fetched. */
   capabilitiesFetchedAt?: number;
 }

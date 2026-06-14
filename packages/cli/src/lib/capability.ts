@@ -69,7 +69,9 @@ function isCacheFresh(profile: Profile): boolean {
  */
 export async function fetchAppInfo(profile: Profile, opts: { force?: boolean } = {}): Promise<AppInfo> {
   if (!opts.force && isCacheFresh(profile)) {
-    return { version: profile.version, apiVersion: undefined, capabilities: profile.capabilities };
+    // Return the cached apiVersion too, so warnVersionSkew still fires on a
+    // TTL-fresh cache hit (not just on the first uncached fetch).
+    return { version: profile.version, apiVersion: profile.apiVersion, capabilities: profile.capabilities };
   }
 
   let info: AppInfo;
@@ -88,15 +90,16 @@ export async function fetchAppInfo(profile: Profile, opts: { force?: boolean } =
     }
   } catch {
     // Unreachable server / non-JSON / old route: degrade silently to baseline.
-    return { version: profile.version, capabilities: profile.capabilities };
+    return { version: profile.version, apiVersion: profile.apiVersion, capabilities: profile.capabilities };
   }
 
   // Persist the snapshot for the TTL window. Only write when we actually got
   // something back, to avoid clobbering a previous good cache with blanks.
-  if (info.version !== undefined || info.capabilities !== undefined) {
+  if (info.version !== undefined || info.apiVersion !== undefined || info.capabilities !== undefined) {
     upsertProfile({
       ...profile,
       version: info.version ?? profile.version,
+      apiVersion: info.apiVersion ?? profile.apiVersion,
       capabilities: info.capabilities ?? profile.capabilities,
       capabilitiesFetchedAt: Date.now(),
     });

@@ -5,7 +5,7 @@ import { authedFetch, CliError, EXIT } from '../lib/http';
 import { info, render } from '../lib/output';
 import { isObjectId, normalisePath } from '../lib/page-ref';
 import { fetchCurrentPage } from '../lib/page-write';
-import { requireProfile } from './_shared';
+import { requireProfile, rethrowNewerEndpointHint } from './_shared';
 
 /** Lenient `POST /api/v2/pages/rename` response (RenamePageResponseSchema). */
 interface RenamePageResponse {
@@ -88,7 +88,12 @@ export function registerMv(program: Command): void {
         throw new CliError(`invalid rename: ${parsed.error.issues.map((i) => i.message).join('; ')}`, { exitCode: EXIT.INVALID });
       }
 
-      const result = await authedFetch<RenameSubtreeResponse>(profile, 'POST', '/pages/rename-subtree', { json: parsed.data });
+      // `POST /pages/rename-subtree` is above the v2 floor: an older instance
+      // may lack the route entirely. A 404 there is ambiguous, so degrade it
+      // to a clear "needs a newer Crowi" hint rather than a bare not-found.
+      const result = await authedFetch<RenameSubtreeResponse>(profile, 'POST', '/pages/rename-subtree', { json: parsed.data }).catch((err: unknown) =>
+        rethrowNewerEndpointHint(err, 'mv (folder/subtree)'),
+      );
       if ((result.renamed_count ?? 0) === 0) {
         throw new CliError(`nothing found at ${normalisePath(oldRef)} to move`, { exitCode: EXIT.NOT_FOUND });
       }
