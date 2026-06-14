@@ -28,6 +28,25 @@ export const okResult = (text: string, structuredContent?: Structured): McpToolR
 });
 
 /**
+ * Build a success result for a single page/revision read whose primary
+ * payload IS the body. Carries `body` in BOTH places (belt-and-suspenders,
+ * RFC-0011 §9):
+ *
+ *  - `content[0].text` = the body — for clients that read the text block.
+ *  - `structuredContent` = `{ body, ...meta }` — for clients that prefer
+ *    `structuredContent` and hide the text block. Without this, those
+ *    clients lose the body entirely (the original bug).
+ *
+ * The small duplication is acceptable: read tools are single, non-streamed
+ * calls. List/search mappers keep using `okResult` — their useful payload
+ * already lives in `structuredContent`, so there is nothing to duplicate.
+ */
+export const okResultWithBody = (body: string, meta: Structured): McpToolResult => ({
+  content: [{ type: 'text', text: body }],
+  structuredContent: { body, ...meta },
+});
+
+/**
  * Build an error result from an `ApiToolError`. The text is the API
  * error envelope's `code` + `message` (RFC-0011 §9) so the model gets a
  * human-readable, recoverable signal. The full body is echoed in
