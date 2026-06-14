@@ -57,6 +57,18 @@ const nextConfig: NextConfig = {
   async rewrites() {
     return [
       { source: '/api/v2/:path*', destination: `${API_URL}/api/v2/:path*` },
+      // OAuth Authorization-Server Metadata (RFC 8414). The discovery
+      // document is served by the api at the server root (NOT under
+      // `/api/v2`), but its `issuer` is `CLIENT_URL` (this web origin).
+      // External clients (e.g. `@crowi/cli`) fetch discovery from the
+      // issuer origin and require `issuer === <the URL they dialed>`
+      // (metadata mix-up defense), so the issuer origin must serve the
+      // document. In prod a single reverse proxy already routes it; in
+      // dev the web app proxies it here so `:4302` is a complete origin.
+      {
+        source: '/.well-known/oauth-authorization-server',
+        destination: `${API_URL}/.well-known/oauth-authorization-server`,
+      },
       // Legacy attachment redirects (Crowi 1.x URLs embedded in old
       // page bodies) — Express side responds with a 302 to /api/v2/...,
       // which the browser will resolve through the rewrite above.
