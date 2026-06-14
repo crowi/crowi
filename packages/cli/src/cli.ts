@@ -1,8 +1,11 @@
 import { Command, type OptionValues } from 'commander';
 
+import { registerCat, registerGet } from './commands/get';
 import { registerLogin } from './commands/login';
 import { registerLogout } from './commands/logout';
+import { registerLs } from './commands/ls';
 import { registerProfiles } from './commands/profiles';
+import { registerSearch } from './commands/search';
 import { registerWhoami } from './commands/whoami';
 import { installRefreshHook } from './lib/refresh';
 
@@ -74,6 +77,12 @@ export function createProgram(): Command {
   registerLogout(program);
   registerWhoami(program);
   registerProfiles(program);
+
+  // Read commands (Stage 4): search / get / cat / ls.
+  registerSearch(program);
+  registerGet(program);
+  registerCat(program);
+  registerLs(program);
 
   return program;
 }
