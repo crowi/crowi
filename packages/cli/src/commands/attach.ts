@@ -3,7 +3,6 @@ import { basename } from 'node:path';
 
 import type { Command } from 'commander';
 
-import { ensureCapability } from '../lib/capability';
 import { authedFetch, CliError, EXIT } from '../lib/http';
 import { render } from '../lib/output';
 import { fetchCurrentPage } from '../lib/page-write';
@@ -34,11 +33,8 @@ interface AddAttachmentResponse {
  */
 async function runList(pathOrId: string, command: Command): Promise<void> {
   const { profile, globals } = requireProfile(command);
-  if (!(await ensureCapability(profile, 'attachments', 'attachments'))) {
-    process.exitCode = EXIT.UNAVAILABLE;
-    return;
-  }
-
+  // No capability pre-flight: `attachments` is in the static baseline; the
+  // real gate is the `attachments:read` scope (rethrowScopeHint below).
   const current = await fetchCurrentPage(profile, pathOrId);
   if (!current?.pageId) {
     throw new CliError(`page not found: ${pathOrId}`, { exitCode: EXIT.NOT_FOUND });
@@ -70,11 +66,8 @@ async function runList(pathOrId: string, command: Command): Promise<void> {
  */
 async function runAdd(pathOrId: string, file: string, command: Command): Promise<void> {
   const { profile, globals } = requireProfile(command);
-  if (!(await ensureCapability(profile, 'attachments', 'attachments'))) {
-    process.exitCode = EXIT.UNAVAILABLE;
-    return;
-  }
-
+  // No capability pre-flight (see runList) — the genuine gate is the
+  // `attachments:write` scope, surfaced via rethrowScopeHint below.
   const current = await fetchCurrentPage(profile, pathOrId);
   if (!current?.pageId) {
     throw new CliError(`page not found: ${pathOrId}`, { exitCode: EXIT.NOT_FOUND });

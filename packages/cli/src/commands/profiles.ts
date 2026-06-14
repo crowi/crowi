@@ -3,6 +3,7 @@ import type { Command } from 'commander';
 import { getGlobalOptions } from '../cli';
 import { loadConfig } from '../lib/config';
 import { render } from '../lib/output';
+import { markNoSkewProbe } from '../lib/skew';
 
 /**
  * `crowi profiles` — list the locally-configured profiles (no network).
@@ -10,7 +11,7 @@ import { render } from '../lib/output';
  * so a user can see which servers they are signed in to.
  */
 export function registerProfiles(program: Command): void {
-  program
+  const cmd = program
     .command('profiles')
     .description('List configured profiles (local; no network)')
     .action((_options: unknown, command: Command) => {
@@ -45,4 +46,6 @@ export function registerProfiles(program: Command): void {
         globals,
       );
     });
+  // Local-only: no network, so nothing to skew-probe.
+  markNoSkewProbe(cmd);
 }

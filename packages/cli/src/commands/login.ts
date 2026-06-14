@@ -6,6 +6,7 @@ import { discover } from '../lib/discovery';
 import { authedFetch, CliError, EXIT } from '../lib/http';
 import { DEFAULT_SCOPE, loginAuthCode, loginDevice, validateScope } from '../lib/oauth';
 import { info } from '../lib/output';
+import { markNoSkewProbe } from '../lib/skew';
 
 /** Lenient `GET /api/v2/auth/me` view — only the username is consumed here. */
 interface AuthMeResponse {
@@ -15,7 +16,8 @@ interface AuthMeResponse {
 /**
  * Best-effort one-shot `GET /api/v2/auth/me` to resolve the signed-in
  * username, so `crowi profiles` can show endpoint × user. Returns `undefined`
- * (never throws) when the call fails — a flaky /auth/me must NOT fail login.
+ * (never throws) when the call fails — a flaky /auth/me must NOT fail an
+ * OAuth login (the tokens were just minted, so they are known-good).
  */
 export async function fetchAccount(profile: Profile): Promise<string | undefined> {
   try {
@@ -24,6 +26,28 @@ export async function fetchAccount(profile: Profile): Promise<string | undefined
   } catch {
     return undefined;
   }
+}
+
+/**
+ * Validating `GET /api/v2/auth/me` for the `--token` PAT path: a typo'd /
+ * invalid PAT must NOT be silently stored as "logged in". Unlike the
+ * best-effort {@link fetchAccount}, this THROWS:
+ *   - a 401/403 → the token was rejected by the server;
+ *   - any transport/network failure → the token couldn't be verified.
+ * On success it returns the username so the profile's `account` is populated
+ * from the same round-trip.
+ */
+async function verifyTokenAndFetchAccount(profile: Profile, endpoint: string): Promise<string | undefined> {
+  let body: AuthMeResponse;
+  try {
+    body = await authedFetch<AuthMeResponse>(profile, 'GET', '/auth/me');
+  } catch (err) {
+    if (err instanceof CliError && (err.status === 401 || err.status === 403)) {
+      throw new CliError(`the personal access token was rejected by ${endpoint}`, { exitCode: EXIT.UNAUTHENTICATED });
+    }
+    throw new CliError(`could not verify the token against ${endpoint}`, { exitCode: EXIT.GENERAL });
+  }
+  return body.user?.username;
 }
 
 interface LoginOptions {
@@ -72,7 +96,7 @@ function isHeadless(): boolean {
  * (mode 0600).
  */
 export function registerLogin(program: Command): void {
-  program
+  const cmd = program
     .command('login')
     .description('Sign in to a Crowi server (OAuth) and store the credentials in a profile')
     .argument('[url]', 'base URL of the Crowi server (e.g. https://wiki.example.com)')
@@ -104,8 +128,10 @@ export function registerLogin(program: Command): void {
           endpoint,
           tokens: { accessToken: options.token },
         };
-        // Best-effort: resolve the account so `crowi profiles` shows the user.
-        profile.account = await fetchAccount(profile);
+        // Validate the PAT against /auth/me BEFORE persisting: a typo'd /
+        // invalid token must not be silently stored as "logged in". The same
+        // round-trip populates the account.
+        profile.account = await verifyTokenAndFetchAccount(profile, endpoint);
         upsertProfile(profile);
         info(`Stored personal access token for profile "${alias}" (${endpoint}).`, globals);
         return;
@@ -131,4 +157,6 @@ export function registerLogin(program: Command): void {
 
       info(`Logged in to "${alias}" (${endpoint}) with scope: ${tokens.scope ?? scope}.`, globals);
     });
+  // Pre-auth: login itself mints the token, so there is nothing to probe with.
+  markNoSkewProbe(cmd);
 }

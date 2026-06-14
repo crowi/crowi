@@ -4,6 +4,7 @@ import { openBrowser } from '../lib/browser';
 import { stripTrailingSlash } from '../lib/config';
 import { render } from '../lib/output';
 import { isObjectId, normalisePath } from '../lib/page-ref';
+import { markNoSkewProbe } from '../lib/skew';
 import { requireProfile } from './_shared';
 
 /**
@@ -27,7 +28,7 @@ function pageUrl(endpoint: string, pathOrId: string): string {
  * it. `--json` (or `--print`) emits the URL without launching.
  */
 export function registerOpen(program: Command): void {
-  program
+  const cmd = program
     .command('open <path-or-id>')
     .description('Open a page in the system browser')
     .option('--print', 'print the page URL instead of launching the browser')
@@ -49,4 +50,6 @@ export function registerOpen(program: Command): void {
         render({ url }, () => url, globals);
       }
     });
+  // Local-only: the URL is derived without an API call.
+  markNoSkewProbe(cmd);
 }

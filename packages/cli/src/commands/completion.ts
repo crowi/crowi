@@ -2,6 +2,7 @@ import type { Command } from 'commander';
 
 import { type CompletionShell, renderCompletion, SUPPORTED_SHELLS } from '../lib/completion';
 import { CliError, EXIT } from '../lib/http';
+import { markNoSkewProbe } from '../lib/skew';
 
 /**
  * `crowi completion <bash|zsh|fish>` — print a shell-completion script to
@@ -14,7 +15,7 @@ import { CliError, EXIT } from '../lib/http';
  *   fish: crowi completion fish > ~/.config/fish/completions/crowi.fish
  */
 export function registerCompletion(program: Command): void {
-  program
+  const cmd = program
     .command('completion <shell>')
     .description(`Print a shell-completion script (${SUPPORTED_SHELLS.join(' | ')})`)
     .addHelpText(
@@ -38,4 +39,6 @@ export function registerCompletion(program: Command): void {
       const root = program;
       process.stdout.write(renderCompletion(root, shell as CompletionShell));
     });
+  // Local-only: introspects the command tree, no network.
+  markNoSkewProbe(cmd);
 }

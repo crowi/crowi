@@ -1,7 +1,6 @@
 import { AddBookmarkRequestSchema, RemoveBookmarkRequestSchema } from '@crowi/api-contract';
 import type { Command } from 'commander';
 
-import { ensureCapability } from '../lib/capability';
 import { authedFetch, CliError, EXIT } from '../lib/http';
 import { render } from '../lib/output';
 import { fetchCurrentPage } from '../lib/page-write';
@@ -39,10 +38,8 @@ async function resolvePageId(profile: Parameters<typeof fetchCurrentPage>[0], pa
  */
 async function runAdd(pathOrId: string, command: Command): Promise<void> {
   const { profile, globals } = requireProfile(command);
-  if (!(await ensureCapability(profile, 'bookmarks', 'bookmarks'))) {
-    process.exitCode = EXIT.UNAVAILABLE;
-    return;
-  }
+  // No capability pre-flight: `bookmarks` is in the static baseline; the real
+  // gate is the `bookmarks:write` scope (rethrowScopeHint below).
   const pageId = await resolvePageId(profile, pathOrId);
   const parsed = AddBookmarkRequestSchema.safeParse({ page_id: pageId });
   if (!parsed.success) {
@@ -69,10 +66,7 @@ async function runAdd(pathOrId: string, command: Command): Promise<void> {
  */
 async function runRemove(pathOrId: string, command: Command): Promise<void> {
   const { profile, globals } = requireProfile(command);
-  if (!(await ensureCapability(profile, 'bookmarks', 'bookmarks'))) {
-    process.exitCode = EXIT.UNAVAILABLE;
-    return;
-  }
+  // No capability pre-flight (see runAdd) — gate is the `bookmarks:write` scope.
   const pageId = await resolvePageId(profile, pathOrId);
   const parsed = RemoveBookmarkRequestSchema.safeParse({ page_id: pageId });
   if (!parsed.success) {
@@ -94,11 +88,7 @@ async function runRemove(pathOrId: string, command: Command): Promise<void> {
  */
 async function runList(options: { limit?: string; offset?: string }, command: Command): Promise<void> {
   const { profile, globals } = requireProfile(command);
-  if (!(await ensureCapability(profile, 'bookmarks', 'bookmarks'))) {
-    process.exitCode = EXIT.UNAVAILABLE;
-    return;
-  }
-
+  // No capability pre-flight (see runAdd) — gate is the `bookmarks:read` scope.
   let body: ListMyBookmarksResponse;
   try {
     body = await authedFetch<ListMyBookmarksResponse>(profile, 'GET', '/bookmarks/me', {

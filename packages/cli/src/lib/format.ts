@@ -65,15 +65,21 @@ function readField(record: unknown, path: string): unknown {
   return cursor;
 }
 
-/** Stringify a field value for template/table cells (objects → JSON). */
+/**
+ * Stringify a field VALUE for template/table cells (objects → JSON), then
+ * collapse any embedded `\r\n` / `\n` / `\t` to a single space so a record
+ * whose field contains a newline/tab can't break table column alignment or
+ * the one-line-per-record contract of `--template`/TSV output. This flattens
+ * the substituted VALUE only — `applyTemplate` still honours the user's
+ * intentional `\t`/`\n` separators in the TEMPLATE literal (applied before
+ * substitution).
+ */
 function cell(value: unknown): string {
   if (value === undefined || value === null) {
     return '';
   }
-  if (typeof value === 'object') {
-    return JSON.stringify(value);
-  }
-  return String(value);
+  const str = typeof value === 'object' ? JSON.stringify(value) : String(value);
+  return str.replace(/[\r\n\t]+/g, ' ').trim();
 }
 
 /**

@@ -20,6 +20,7 @@ import { registerWatch } from './commands/watch';
 import { registerWhoami } from './commands/whoami';
 import { maybeWarnVersionSkew } from './lib/capability';
 import { installRefreshHook } from './lib/refresh';
+import { isNoSkewProbe } from './lib/skew';
 
 /**
  * Global options shared by every subcommand, parsed from the root program's
@@ -85,18 +86,21 @@ export function createProgram(): Command {
 
   // Per-invocation version-skew probe for the authenticated command surface.
   // Runs once, before the chosen subcommand's action, so the skew warning is
-  // live for the whole Phase 1 surface (search / get / cat / ls / create /
-  // edit / update / mv / rm / watch / whoami) — not just the Phase 2 commands
-  // that call ensureCapability(). It is TTL-cached + best-effort (never
-  // throws), so it adds no round-trip on a cache hit and never blocks a
-  // command. Local-only / pre-auth commands are skipped: they have no wiki API
-  // call (open, completion) or no usable token yet (login/logout/profiles).
-  // The Phase 2 commands (comment / attach / bookmark) already run
-  // warnVersionSkew via ensureCapability(), so they are skipped here to avoid
-  // a duplicate skew note.
-  const SKIP_SKEW_PROBE = new Set(['login', 'logout', 'profiles', 'open', 'completion', 'help', 'comment', 'attach', 'bookmark']);
+  // live for the whole authenticated surface (search / get / cat / ls /
+  // create / edit / update / mv / rm / watch / whoami / comment / attach /
+  // bookmark). It is TTL-cached + best-effort (never throws), so it adds no
+  // round-trip on a cache hit and never blocks a command.
+  //
+  // The opt-out is tied to the COMMAND OBJECT via a typed WeakSet
+  // (`markNoSkewProbe`) rather than a hand-maintained name set, so a newly
+  // added command can't silently inherit the wrong behavior: local-only /
+  // pre-auth commands (login / logout / profiles / open / completion) opt out
+  // at registration. The Phase 2 commands (comment / attach / bookmark) no
+  // longer suppress the probe — their ensureCapability() pre-flight (which
+  // also emitted the skew note) was removed, so the hook is now their single
+  // source of the skew warning.
   program.hook('preSubcommand', async (thisCommand, subcommand) => {
-    if (SKIP_SKEW_PROBE.has(subcommand.name())) {
+    if (isNoSkewProbe(subcommand)) {
       return;
     }
     const globals = getGlobalOptions(thisCommand);

@@ -60,6 +60,13 @@ describe('format', () => {
     it('JSON-stringifies object cells', () => {
       expect(applyTemplate('{{meta}}', { meta: { a: 1 } })).toBe('{"a":1}');
     });
+
+    it('flattens newlines/tabs inside a field VALUE to a single line (FIX 5)', () => {
+      // A field value with an embedded newline + tab must not break the
+      // one-line-per-record contract; the template literal's own \t separator
+      // (applied before substitution) is preserved.
+      expect(applyTemplate('{{path}}\\t{{snippet}}', { path: '/a', snippet: 'line one\nline\ttwo' })).toBe('/a\tline one line two');
+    });
   });
 
   describe('renderTable', () => {
@@ -75,6 +82,15 @@ describe('format', () => {
       expect(lines[0]).toBe('path     count');
       expect(lines[1]).toBe('/a       2');
       expect(lines[2]).toBe('/longer  10');
+    });
+
+    it('flattens an embedded newline/tab in a cell so column alignment survives (FIX 5)', () => {
+      const out = renderTable([{ path: '/a', snippet: 'multi\nline\tcell' }], ['path', 'snippet']);
+      const lines = out.split('\n');
+      // One header + exactly one data row — the embedded newline did NOT
+      // spill the cell into extra rows.
+      expect(lines).toHaveLength(2);
+      expect(lines[1]).toBe('/a    multi line cell');
     });
   });
 });

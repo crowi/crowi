@@ -78,7 +78,12 @@ export function registerSearch(program: Command): void {
             query: { q, tree, type, page, limit },
           });
         } catch (err) {
-          // The search endpoint returns 503 when no search plugin is active.
+          // `search` is the genuinely-dynamic capability (a search driver may
+          // not be active). Rather than a pre-flight capability probe + extra
+          // round-trip, we let the request run and gracefully degrade the 503
+          // the endpoint returns when no search plugin is active. (ensureCapability
+          // remains available for dynamic caps, but here the 503 path is simpler
+          // and avoids widening behavior.)
           if (err instanceof CliError && err.status === 503) {
             throw new CliError('search is disabled on this server (no search backend configured)', {
               exitCode: EXIT.UNAVAILABLE,

@@ -1,7 +1,6 @@
 import { AddCommentRequestSchema, ListCommentsRequestSchema } from '@crowi/api-contract';
 import type { Command } from 'commander';
 import { resolveBody } from '../lib/body-input';
-import { ensureCapability } from '../lib/capability';
 import { authedFetch, CliError, EXIT } from '../lib/http';
 import { render } from '../lib/output';
 import { fetchCurrentPage } from '../lib/page-write';
@@ -39,11 +38,9 @@ function creatorName(creator: CommentView['creator']): string {
  */
 async function runList(pathOrId: string, command: Command): Promise<void> {
   const { profile, globals } = requireProfile(command);
-  if (!(await ensureCapability(profile, 'comments', 'comments'))) {
-    process.exitCode = EXIT.UNAVAILABLE;
-    return;
-  }
-
+  // No capability pre-flight: `comments` is in the static baseline (always
+  // present), so the real gate is the OAuth scope. Let the API call proceed
+  // and map an INSUFFICIENT_SCOPE/403 to the re-login hint below.
   const current = await fetchCurrentPage(profile, pathOrId);
   if (!current?.pageId) {
     throw new CliError(`page not found: ${pathOrId}`, { exitCode: EXIT.NOT_FOUND });
@@ -80,11 +77,8 @@ async function runList(pathOrId: string, command: Command): Promise<void> {
  */
 async function runAdd(pathOrId: string, options: { message?: string; file?: string }, command: Command): Promise<void> {
   const { profile, globals } = requireProfile(command);
-  if (!(await ensureCapability(profile, 'comments', 'comments'))) {
-    process.exitCode = EXIT.UNAVAILABLE;
-    return;
-  }
-
+  // No capability pre-flight (see runList) — the genuine gate is the
+  // `comments:write` scope, surfaced via rethrowScopeHint below.
   // Fall back to stdin only when neither --message nor --file is given, so we
   // never block on stdin when text was supplied on the command line.
   const useStdin = options.message === undefined && options.file === undefined;

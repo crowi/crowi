@@ -5,6 +5,7 @@ import { loadConfig, removeProfile } from '../lib/config';
 import { CliError, EXIT } from '../lib/http';
 import { revokeToken } from '../lib/oauth';
 import { info } from '../lib/output';
+import { markNoSkewProbe } from '../lib/skew';
 
 /**
  * `crowi logout [--profile <alias>]` — revoke the stored refresh token
@@ -13,7 +14,7 @@ import { info } from '../lib/output';
  * on a real named profile.
  */
 export function registerLogout(program: Command): void {
-  program
+  const cmd = program
     .command('logout')
     .description('Revoke the stored credentials and remove the profile')
     .action(async (_options: unknown, command: Command) => {
@@ -37,4 +38,6 @@ export function registerLogout(program: Command): void {
       removeProfile(alias);
       info(`Logged out of "${alias}".`, globals);
     });
+  // Pre-auth / local: no usable token to probe a server with.
+  markNoSkewProbe(cmd);
 }
