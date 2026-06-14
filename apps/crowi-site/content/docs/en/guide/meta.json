@@ -1,4 +1,4 @@
 {
   "title": "User Guide",
-  "pages": ["pages", "markdown", "realtime-editing", "revisions", "comments", "reactions", "notifications", "attachments", "search", "trash", "profile", "sharing"]
+  "pages": ["pages", "markdown", "realtime-editing", "revisions", "comments", "reactions", "notifications", "attachments", "search", "trash", "profile", "sharing", "cli"]
 }

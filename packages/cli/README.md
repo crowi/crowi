@@ -50,6 +50,26 @@ renaming, deleting, and watching pages plus `whoami`. Pass `--scope
 `--scope` is validated against the server's issuable catalog before any request
 leaves your machine, so a typo or a reserved `admin:*` scope fails fast.
 
+If you run a command whose scope your token does not carry, the request still
+reaches the server and comes back `403 INSUFFICIENT_SCOPE`; the CLI turns that
+into an actionable hint and exits non-zero (code `3`):
+
+```console
+$ crowi comment add /onboarding -m "looks good"
+crowi: your token lacks the required scope — re-login granting it: `crowi login --scope "comments:write"`
+```
+
+`--scope` **replaces** the default set, so include `pages:read pages:write` if
+you still want the page commands — or request the umbrella `read write`, which
+the server expands to every issuable `*:read` / `*:write`:
+
+```bash
+crowi login https://wiki.example.com --scope "pages:read pages:write comments:read comments:write"
+crowi login https://wiki.example.com --scope "read write"   # everything issuable
+```
+
+See [Errors & exit codes](#errors--exit-codes) for the full exit-code table.
+
 ## Global flags
 
 | Flag | Description |
@@ -138,6 +158,29 @@ capability mismatch**:
   suppressed, so it keeps working silently.
 
 All of these notes go to stderr, so `--json` stdout stays clean for scripts.
+
+## Errors & exit codes
+
+Errors print as `crowi: <message>` on stderr and set a non-zero exit code, so
+scripts can branch on the failure class. The message is mapped from the API
+error envelope (`error.code` / `error.message`); a few cases get a friendlier,
+actionable hint (e.g. an insufficient scope tells you exactly which `--scope`
+to re-login with, and a `409` edit conflict tells you to re-run with `--force`).
+
+| Code | Name | When |
+| --- | --- | --- |
+| `0` | success | command completed |
+| `1` | general | uncategorised failure / network error |
+| `2` | not signed in | no profile or no usable token — run `crowi login` |
+| `3` | forbidden | token lacks the required scope (`403 INSUFFICIENT_SCOPE`) — re-login with `--scope` |
+| `4` | not found | page / resource does not exist (`404`) |
+| `5` | conflict | optimistic-lock edit conflict (`409`) — re-run `edit`/`update` with `--force` to overwrite |
+| `6` | invalid | bad arguments / client-side validation (`400` / `422`) |
+| `7` | unavailable | server unavailable, or the feature is not enabled on this instance (`503`) |
+
+`edit` and `update` send the page's `revision_id` for optimistic locking; if the
+page changed while you were editing, the write returns `5` (conflict) and aborts
+rather than clobbering — re-run with `--force` to overwrite the newer revision.
 
 ## Single-file binary
 

@@ -1,0 +1,216 @@
+---
+title: CLI (コマンドライン)
+description: エンドユーザー向け CLI `@crowi/cli` (`crowi`) で、ターミナルから wiki を検索 / 読み取り / 作成 / 編集する (RFC-0012)
+---
+
+`@crowi/cli` は、ターミナルから Crowi を操作するための **エンドユーザー向け
+コマンドラインツール** です。`npm i -g @crowi/cli` で配布され、`crowi` という
+名前で使えます。HTTP のみで wiki を叩き (DB には触れません)、OAuth で
+**あなた自身として** ページの検索 / 読み取り / 作成 / 編集を行います。
+
+設計の背景は
+[RFC-0012](https://github.com/crowi/crowi/blob/main/docs/rfcs/0012-crowi-cli.md)
+を参照してください。
+
+<Callout title="運用者向けの admin-cli とは別物です">
+  `@crowi/cli` (`crowi`) はエンドユーザーが自分の権限で HTTP 経由に使う
+  ツールです。MongoDB に直結して運用作業を行う `@crowi/admin-cli`
+  (`crowi-admin`) とは役割が異なります。
+</Callout>
+
+## インストール
+
+```bash
+# グローバルインストール
+npm i -g @crowi/cli
+crowi --version
+
+# 単発実行 (インストール不要)
+npx @crowi/cli --help
+```
+
+Node.js 18 以上が必要です。
+
+## 認証
+
+`crowi` は **public OAuth クライアント** で PKCE を使います (クライアント
+シークレットはありません)。トークンは `~/.config/crowi/contexts.json`
+(`$XDG_CONFIG_HOME` を尊重) に **ファイルモード `0600`** の JSON として保存
+されます。
+
+ログインの宛先 URL は、接続先 Crowi の **公開オリジン** (OAuth issuer。
+通常は web を配信しているホスト) を指定します。3 つのフローがあります。
+
+```bash
+# 1. ブラウザ認可コード + PKCE (ローカルループバックにリダイレクト)
+#    既定。システムブラウザが開きます
+crowi login https://wiki.example.com
+
+# 2. デバイス認可グラント (headless / SSH 用。ブラウザ非検出時は自動選択)
+crowi login --device https://wiki.example.com
+
+# 3. 事前発行した Personal Access Token (PAT) を直接保存 (OAuth 往復なし)
+crowi login --token <pat> https://wiki.example.com
+```
+
+PAT は web UI の **設定 → アクセストークン** から、スコープと有効期限を指定して
+発行します。
+
+ログイン状態は `crowi whoami` で確認できます (サインイン中のユーザーと
+有効なスコープを表示)。`crowi logout` でトークンを失効・削除します。
+
+## スコープ
+
+既定のスコープは `pages:read pages:write` です。これでページの
+読み取り / 書き込み / リネーム / 削除 / ウォッチ、および `whoami` をカバー
+します。それ以外の機能を使うコマンドは、ログイン時に追加スコープが必要です。
+
+| コマンド | ログイン時に追加するスコープ |
+| --- | --- |
+| `comment` (list / add / delete) | `comments:read comments:write` |
+| `attach` (list / add / remove) | `attachments:read attachments:write` |
+| `bookmark` (get / list / add / remove) | `bookmarks:read bookmarks:write` |
+| `watch` (get / set) | 不要 — 既定の `pages:*` に相乗り |
+
+`--scope` は **既定を上書き** します。ページ系も使い続けるなら
+`pages:read pages:write` も含めて列挙するか、アンブレラ `read write` を要求
+してください (サーバ側が発行可能な全 `*:read` / `*:write` に展開します)。
+
+```bash
+crowi login https://wiki.example.com --scope "pages:read pages:write comments:read comments:write"
+crowi login https://wiki.example.com --scope "read write"   # 発行可能な全権限
+```
+
+`--scope` はリクエスト送信前に **サーバの発行可能カタログと照合** されるため、
+タイプミスや予約済みの `admin:*` (PAT・OAuth トークンには発行不可) は即座に
+弾かれます。`admin:*` を要求する CLI コマンドはありません (管理 API は v1 では
+web セッション専用)。
+
+### スコープが足りないコマンドを実行したとき
+
+事前チェックは行わず、コマンドは実際に API を叩きます。スコープが不足して
+いると、サーバが `403 INSUFFICIENT_SCOPE` を返し、CLI はそれを **実行可能な
+ヒント** に変換して非ゼロ終了 (コード `3`) します。
+
+```console
+$ crowi comment add /onboarding -m "looks good"
+crowi: your token lacks the required scope — re-login granting it: `crowi login --scope "comments:write"`
+```
+
+クラッシュも黙殺もせず、「どのスコープが要るか」と「どう再ログインするか」を
+提示して落ちます。
+
+## プロファイル (マルチエンドポイント / マルチアカウント)
+
+複数の Crowi サーバ・アカウントを名前付きプロファイルで併用できます
+(`gh` / `kubectl` の context と同型)。トークンは **エンドポイント単位** で
+保存されます。
+
+```bash
+crowi login https://wiki.almoha.net --profile almoha
+crowi login https://strk-wiki.example.com --profile p2b
+
+crowi --profile almoha search "release notes"
+crowi profiles            # 設定済みプロファイル一覧 (ローカル。通信なし)
+```
+
+有効なプロファイルは `--url` / `--token` → `--profile` / `$CROWI_PROFILE` →
+保存された current プロファイルの順で解決されます。
+
+## コマンド一覧
+
+| コマンド | 用途 |
+| --- | --- |
+| `login` / `logout` / `whoami` / `profiles` | 認証・プロファイル管理 |
+| `search <query>` | 全文検索 (`path — snippet` 行を表示) |
+| `get <path-or-id>` (別名 `cat`) | ページ本文 (markdown) を stdout へ。`--json` でメタ情報 |
+| `ls [path]` | path 配下の子ページ一覧 |
+| `create <path>` | ページ作成 (本文は `--message` / `--file` / `--stdin` / `$EDITOR`) |
+| `edit <path>` | `$EDITOR` で対話編集 (無ければ新規作成。楽観ロック保存) |
+| `update <path>` | 本文を非対話で置換 (リビジョンロック) |
+| `mv <old> <new>` | ページ (またはフォルダ) を移動 / リネーム |
+| `rm <path>` | ページ削除 (既定はゴミ箱。`--completely` で完全削除) |
+| `comment` / `attach` / `bookmark` / `watch` | コメント / 添付 / ブックマーク / ウォッチ (上表のスコープが必要) |
+| `open <path-or-id>` | ブラウザでページを開く (ローカルのみ) |
+| `completion <shell>` | シェル補完スクリプトを出力 |
+
+引数は送信前に対応する API リクエストスキーマで検証されるため、不正な path
+などは往復せずローカルで明確なエラーになります。
+
+### `edit` の競合 (409)
+
+`edit` / `update` はページの `revision_id` を送って楽観ロックします。編集中に
+ページが他で更新されると、書き込みは **既定で中断** され、終了コード `5`
+(conflict) を返します。黙って上書きはしません。新しいリビジョンを上書き
+したい場合は `--force` を付けて再実行してください。
+
+## 出力フォーマットとスクリプティング
+
+`search` と `ls` は `--format` / `--template` で出力を整形でき、パイプ処理に
+向きます。
+
+| フラグ | 効果 |
+| --- | --- |
+| `--json` (グローバル) | 生のレスポンスを JSON で出力 |
+| `--format human` | 既定の人間向け表示 |
+| `--format table` | ヘッダ付きの整列カラム |
+| `--format template` | レコードごとに 1 行のテンプレート出力 |
+| `--template '<tpl>'` | テンプレートモード。`{{field}}` を各レコードで置換 |
+
+テンプレートは小さな言語です。`{{path}}` はレコードの `path` に、ドット区切り
+(`{{page.path}}`) はネストを辿り、欠落フィールドは空文字、テンプレート中の
+`\t` / `\n` はタブ / 改行に展開されます。
+
+```bash
+# タブ区切りの path + score を 1 ヒット 1 行で
+crowi search "release notes" --template '{{path}}\t{{score}}'
+
+# 検索結果をそのまま取得へパイプ (get は - で stdin から path を読む)
+crowi search onboarding --template '{{path}}' | head -1 | crowi get - > onboarding.md
+```
+
+進捗・警告はすべて stderr に出るため、`--json` の stdout はスクリプト用に
+クリーンなままです。終了コードの一覧は次のとおりです。
+
+| コード | 意味 |
+| --- | --- |
+| `0` | 成功 |
+| `1` | 一般エラー / 通信失敗 |
+| `2` | 未サインイン (`crowi login` が必要) |
+| `3` | スコープ不足 (`403 INSUFFICIENT_SCOPE` → `--scope` を足して再ログイン) |
+| `4` | 対象が存在しない (`404`) |
+| `5` | 編集競合 (`409` → `--force` で上書き) |
+| `6` | 引数不正 (`400` / `422`) |
+| `7` | サーバ利用不可 / 機能無効 (`503`) |
+
+## シェル補完
+
+```bash
+# bash
+eval "$(crowi completion bash)"
+# zsh
+crowi completion zsh > "${fpath[1]}/_crowi"
+# fish
+crowi completion fish > ~/.config/fish/completions/crowi.fish
+```
+
+## サーバ互換性 (バージョンスキュー / 能力検出)
+
+Crowi は self-hosted のため、`crowi` バイナリと接続先サーバのバージョンが
+異なり得ます。CLI は公開シグナル `GET /api/v2/app/info`
+(`version` / `apiVersion` / `capabilities`) を読み、プロファイルに数分間
+キャッシュします。
+
+ポリシーは **warn-only** で、バージョン / 能力の不一致を理由に CLI が
+コマンドを拒否することはありません。
+
+- リクエストはバンドルされたリクエスト契約 (v2 floor) で送信前に検証されますが、
+  レスポンスは寛容にパースされるため、新旧サーバの余分な / 欠けたフィールドで
+  コマンドが壊れません。
+- サーバの API サーフェスが CLI の対象と異なる場合、1 行のスキュー注意を
+  stderr に出してコマンドは続行します。
+- サーバが広告していない機能 (例: 検索バックエンド未設定時の `search`) は、
+  生エラーではなく「このサーバでは利用できません」という明確なメッセージを
+  出します。
+- 能力レポート以前の古いサーバ (`version` / `capabilities` 無し) は常時 ON の
+  baseline として扱われ、スキュー警告は抑制されて静かに動き続けます。
