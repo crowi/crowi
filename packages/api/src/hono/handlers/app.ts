@@ -12,32 +12,12 @@
  * smoke-test guarantee — see `docs/migrations/0006-hono-context.md`
  * §11).
  */
-import { getAppInfoRoute } from '@crowi/api-contract';
+import { API_SURFACE_VERSION, getAppInfoRoute, STATIC_CAPABILITIES } from '@crowi/api-contract';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 
 import type Crowi from 'src/crowi';
 
 import type { CrowiHonoBindings } from '../app';
-
-/**
- * Subsystems unconditionally compiled into `@crowi/api`. An old CLI
- * talking to a new server, and a new CLI talking to a server that omits
- * `capabilities`, both degrade to this baseline. OAuth (RFC-0010) is
- * fully landed and the page / comment / bookmark / attachment /
- * notification handlers are always mounted, so these are always-on.
- */
-const STATIC_CAPABILITIES = [
-  'oauth',
-  'oauth:auth-code',
-  'oauth:device',
-  'oauth:pkce',
-  'pat',
-  'pages',
-  'comments',
-  'bookmarks',
-  'attachments',
-  'notifications',
-] as const;
 
 /**
  * Build the coarse capability list advertised at `GET /app/info`. Static
@@ -82,7 +62,7 @@ export const registerAppRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app:
         title,
         confidential,
         version: crowi.version,
-        apiVersion: 'v2',
+        apiVersion: API_SURFACE_VERSION,
         capabilities: buildCapabilities(crowi),
       },
       200,
