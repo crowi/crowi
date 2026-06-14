@@ -6666,11 +6666,26 @@
                         "string",
                         "null"
                       ]
+                    },
+                    "version": {
+                      "type": "string"
+                    },
+                    "apiVersion": {
+                      "type": "string"
+                    },
+                    "capabilities": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   },
                   "required": [
                     "title",
-                    "confidential"
+                    "confidential",
+                    "version",
+                    "apiVersion",
+                    "capabilities"
                   ]
                 }
               }
