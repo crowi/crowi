@@ -1,7 +1,7 @@
 /**
- * Single source of truth for the static capability baseline + API surface
- * version advertised at `GET /api/v2/app/info` and consumed by the
- * `@crowi/cli` end-user CLI for feature detection / version-skew warnings.
+ * The static capability baseline + API surface version advertised at
+ * `GET /api/v2/app/info` and consumed by the `@crowi/cli` end-user CLI for
+ * feature detection / version-skew warnings.
  *
  * These two values are deliberately shared between the API handler
  * (`packages/api/src/hono/handlers/app.ts`) and the CLI
@@ -9,6 +9,13 @@
  * floor version can never drift apart silently. Dynamically-detected
  * capabilities (e.g. `search`, `collab`) are NOT listed here — the handler
  * appends those at runtime based on live server state.
+ *
+ * NOTE: this is the source of truth for the coarse *capability vocabulary*,
+ * not for OAuth grant support itself — the canonical OAuth registry is
+ * `GRANT_TYPES_SUPPORTED` (`schemas/oauth-endpoints.ts`) + the `S256` PKCE
+ * method, surfaced by the RFC 8414 discovery document. The `oauth:*` tags
+ * below mirror those from the CLI's angle and MUST be kept in sync with them
+ * (e.g. if a grant is ever gated/removed, update both).
  */
 
 /**
@@ -20,6 +27,8 @@
  */
 export const STATIC_CAPABILITIES = [
   'oauth',
+  // The oauth:* tags mirror GRANT_TYPES_SUPPORTED + the S256 PKCE method
+  // (schemas/oauth-endpoints.ts / the RFC 8414 discovery doc). Keep in sync.
   'oauth:auth-code',
   'oauth:device',
   'oauth:pkce',
