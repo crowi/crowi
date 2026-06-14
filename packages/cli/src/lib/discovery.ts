@@ -115,9 +115,22 @@ export async function discover(
 
   const d = parsed.data;
 
+  // Anchor the trust root to the URL the USER typed, not the (untrusted)
+  // issuer the doc claims. `issuer` comes straight from the discovery
+  // document; if we only pinned token/device/revoke to `issuer.origin` a
+  // self-consistent malicious doc (issuer + every endpoint on a foreign
+  // origin) would pass. Requiring `endpoint.origin === issuer.origin` makes
+  // the issuer-origin pinning below transitively == the endpoint origin.
+  const issuer = parseUrl('issuer', d.issuer);
+  const endpointOrigin = new URL(stripTrailingSlash(endpoint)).origin;
+  if (endpointOrigin !== issuer.origin) {
+    throw new CliError(`discovery issuer ${issuer.origin} does not match the server you are logging into ${endpointOrigin} — possible metadata mix-up`, {
+      exitCode: EXIT.GENERAL,
+    });
+  }
+
   // Pin the security-sensitive endpoints to the issuer origin before the CLI
   // ever dials them (OAuth metadata mix-up defense).
-  const issuer = parseUrl('issuer', d.issuer);
   const token = parseUrl('token_endpoint', d.token_endpoint);
   const revoke = parseUrl('revocation_endpoint', d.revocation_endpoint);
   const device = d.device_authorization_endpoint ? parseUrl('device_authorization_endpoint', d.device_authorization_endpoint) : undefined;

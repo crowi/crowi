@@ -211,6 +211,9 @@ function startLoopbackServer(expectedState: string): Promise<{ redirectUri: stri
   });
 }
 
+/** Default deadline (ms) to wait for the browser redirect before giving up. */
+const AUTH_CODE_TIMEOUT_MS = 300_000;
+
 /**
  * Run the Authorization Code + PKCE loopback flow: start a loopback server,
  * open the authorize URL in the browser, wait for the redirect carrying the
@@ -218,11 +221,13 @@ function startLoopbackServer(expectedState: string): Promise<{ redirectUri: stri
  *
  * @param endpoints - resolved discovery endpoints (authorize + token URLs).
  * @param scope     - validated space-delimited scope string.
+ * @param opts      - `quiet` suppresses progress chatter; `timeoutMs` overrides
+ *                    the wait-for-browser deadline (testing seam).
  */
 export async function loginAuthCode(
   endpoints: Pick<ProfileEndpoints, 'authorizeEndpoint' | 'tokenEndpoint'>,
   scope: string,
-  opts: { quiet?: boolean },
+  opts: { quiet?: boolean; timeoutMs?: number },
 ): Promise<ProfileTokens> {
   const authorizeEndpoint = endpoints.authorizeEndpoint;
   const tokenEndpoint = endpoints.tokenEndpoint;
@@ -235,6 +240,17 @@ export async function loginAuthCode(
   const state = generateState();
 
   const { redirectUri, waitForCode, close } = await startLoopbackServer(state);
+
+  // Guard against the user never completing (or never opening) the browser:
+  // without a deadline `await waitForCode` hangs forever. The timer is cleared
+  // in `finally` and the server is always closed.
+  const timeoutMs = opts.timeoutMs ?? AUTH_CODE_TIMEOUT_MS;
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timeoutHandle = setTimeout(() => {
+      reject(new CliError('timed out waiting for browser authorization; re-run `crowi login`', { exitCode: EXIT.UNAUTHENTICATED }));
+    }, timeoutMs);
+  });
 
   try {
     const authorizeUrl = new URL(authorizeEndpoint);
@@ -252,7 +268,7 @@ export async function loginAuthCode(
     }
     info(`If the browser did not open, visit:\n  ${authorizeUrl.toString()}`, opts);
 
-    const code = await waitForCode;
+    const code = await Promise.race([waitForCode, timeout]);
 
     const result = await postToken(tokenEndpoint, {
       grant_type: 'authorization_code',
@@ -266,6 +282,7 @@ export async function loginAuthCode(
     }
     return result.tokens;
   } finally {
+    if (timeoutHandle) clearTimeout(timeoutHandle);
     close();
   }
 }
@@ -278,6 +295,20 @@ export async function loginAuthCode(
 const DEFAULT_DEVICE_INTERVAL = 5;
 /** `slow_down` bumps the interval by this many seconds (RFC 8628 §3.5). */
 const SLOW_DOWN_INCREMENT = 5;
+/**
+ * Sane bounds on the server-supplied poll cadence. `interval`/`expires_in`
+ * are bare numbers on the wire, so a malicious / buggy server could send a
+ * multi-year `interval` (sleep forever) or `expires_in`. Clamp the poll
+ * interval to [1, 60]s and the overall deadline to at most 30 minutes.
+ */
+const MIN_DEVICE_INTERVAL = 1;
+const MAX_DEVICE_INTERVAL = 60;
+const MAX_DEVICE_EXPIRES_IN = 30 * 60;
+
+/** Clamp `n` into `[min, max]`. */
+function clamp(n: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, n));
+}
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -338,8 +369,11 @@ export async function loginDevice(
     info('Opened your browser to the verification page…', opts);
   }
 
-  const deadline = Date.now() + device.expires_in * 1000;
-  let interval = (device.interval > 0 ? device.interval : DEFAULT_DEVICE_INTERVAL) * 1000;
+  // Clamp the server-supplied cadence so a bogus interval/expires_in can't
+  // wedge the poll loop into a multi-year sleep.
+  const expiresIn = clamp(device.expires_in > 0 ? device.expires_in : MAX_DEVICE_EXPIRES_IN, MIN_DEVICE_INTERVAL, MAX_DEVICE_EXPIRES_IN);
+  const deadline = Date.now() + expiresIn * 1000;
+  let interval = clamp(device.interval > 0 ? device.interval : DEFAULT_DEVICE_INTERVAL, MIN_DEVICE_INTERVAL, MAX_DEVICE_INTERVAL) * 1000;
 
   // Poll until tokens, expiry, or a terminal error.
   for (;;) {
@@ -361,7 +395,8 @@ export async function loginDevice(
         // Keep polling at the current interval.
         break;
       case 'slow_down':
-        interval += SLOW_DOWN_INCREMENT * 1000;
+        // Honour slow_down but stay within the clamp ceiling.
+        interval = clamp(interval / 1000 + SLOW_DOWN_INCREMENT, MIN_DEVICE_INTERVAL, MAX_DEVICE_INTERVAL) * 1000;
         break;
       default:
         // expired_token / access_denied / anything else → abort.

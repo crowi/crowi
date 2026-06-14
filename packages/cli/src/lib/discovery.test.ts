@@ -78,11 +78,42 @@ describe('discover — origin validation (OAuth metadata mix-up defense)', () =>
     await expect(discover('https://wiki.example.com')).rejects.toThrow(/issuer origin/);
   });
 
-  it('rejects when the metadata issuer origin differs from its own endpoints', async () => {
-    // issuer points at one origin but all the API endpoints live on another:
-    // the endpoints are NOT on the issuer origin → rejected.
+  it('rejects when the metadata issuer origin differs from the user-typed endpoint', async () => {
+    // issuer points at one origin but the endpoints live on the (user-typed)
+    // server: the endpoint anchor catches the issuer mismatch first.
     fetchMock.mockResolvedValue(jsonResponse(200, discoveryDoc({ issuer: 'https://attacker.example.net' })));
-    await expect(discover('https://wiki.example.com')).rejects.toThrow(/issuer origin/);
+    await expect(discover('https://wiki.example.com')).rejects.toThrow(/does not match the server you are logging into/);
+  });
+
+  it('rejects a self-consistent malicious doc on a foreign origin (issuer.origin !== endpoint.origin)', async () => {
+    // Every URL — issuer + token/device/revoke — lives on the attacker origin,
+    // so issuer-origin pinning ALONE would pass. The endpoint-origin anchor
+    // catches it: the user typed wiki.example.com but the doc is foreign.
+    const malicious = discoveryDoc({
+      issuer: 'https://evil.example.net',
+      authorization_endpoint: 'https://evil.example.net/oauth/authorize',
+      token_endpoint: 'https://evil.example.net/api/v2/oauth/token',
+      revocation_endpoint: 'https://evil.example.net/api/v2/oauth/revoke',
+      device_authorization_endpoint: 'https://evil.example.net/api/v2/oauth/device',
+    });
+    fetchMock.mockResolvedValue(jsonResponse(200, malicious));
+    await expect(discover('https://wiki.example.com')).rejects.toThrow(CliError);
+    await expect(discover('https://wiki.example.com')).rejects.toThrow(/does not match the server you are logging into/);
+  });
+
+  it('passes a legit same-origin doc, still allowing a split-origin authorization_endpoint', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, discoveryDoc()));
+    const endpoints = await discover('https://wiki.example.com');
+    // issuer.origin === endpoint.origin → token/device/revoke all pinned.
+    expect(endpoints.tokenEndpoint).toBe('https://wiki.example.com/api/v2/oauth/token');
+    // authorization_endpoint may still live on a separate web origin.
+    expect(endpoints.authorizeEndpoint).toBe('https://web.example.com/oauth/authorize');
+  });
+
+  it('tolerates a trailing slash on the user-typed endpoint when anchoring', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, discoveryDoc()));
+    const endpoints = await discover('https://wiki.example.com/');
+    expect(endpoints.tokenEndpoint).toBe('https://wiki.example.com/api/v2/oauth/token');
   });
 
   it('allows plaintext http on a loopback host without warning', async () => {
