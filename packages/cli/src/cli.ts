@@ -1,5 +1,11 @@
 import { Command, type OptionValues } from 'commander';
 
+import { registerLogin } from './commands/login';
+import { registerLogout } from './commands/logout';
+import { registerProfiles } from './commands/profiles';
+import { registerWhoami } from './commands/whoami';
+import { installRefreshHook } from './lib/refresh';
+
 /**
  * Global options shared by every subcommand, parsed from the root program's
  * flags. Resolved once and handed to commands via
@@ -45,6 +51,10 @@ export function getGlobalOptions(command: Command): GlobalOptions {
  * scaffold wires only the program shell + global flags.
  */
 export function createProgram(): Command {
+  // Wire the 401→refresh→retry hook once before any command runs, so
+  // authedFetch can transparently refresh an expired access token.
+  installRefreshHook();
+
   const program = new Command();
   program
     .name('crowi')
@@ -58,10 +68,12 @@ export function createProgram(): Command {
     .option('--json', 'emit machine-readable JSON instead of human output')
     .option('-q, --quiet', 'suppress progress output on stderr');
 
-  // Subcommands are registered in later stages, e.g.:
-  //   registerLogin(program); registerWhoami(program); registerSearch(program);
-  // Keeping the shell free of command imports for now avoids dragging
-  // unfinished modules into the build.
+  // Authentication & token-lifecycle commands (Stage 3). Page / search /
+  // comment / etc. commands register in later stages.
+  registerLogin(program);
+  registerLogout(program);
+  registerWhoami(program);
+  registerProfiles(program);
 
   return program;
 }
