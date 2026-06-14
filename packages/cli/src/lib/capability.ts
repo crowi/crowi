@@ -1,6 +1,6 @@
 import { AppInfoResponseSchema } from '@crowi/api-contract';
 
-import { type Profile, upsertProfile } from './config';
+import { loadConfig, type Profile, type ResolveProfileOptions, resolveProfile, upsertProfile } from './config';
 import { authedFetch } from './http';
 import { warn } from './output';
 
@@ -160,4 +160,34 @@ export async function ensureCapability(profile: Profile, capability: string, hum
     return false;
   }
   return true;
+}
+
+/**
+ * Best-effort, fire-once version-skew check for the authenticated Phase 1
+ * command path (search / get / cat / ls / create / edit / update / mv / rm /
+ * watch / whoami). Wired as a commander `preSubcommand` hook so the skew
+ * signal is NOT dormant for the core surface — RFC §3.4/§10 and Spec §10
+ * scope "per-profile instance version read + skew warning" to Phase 1.
+ *
+ * Resolves the profile the same way {@link requireProfile} does but NEVER
+ * throws: a command run without a usable profile/token (`login`, or a
+ * not-signed-in invocation) is silently skipped so the command's own
+ * "run `crowi login` first" error stays the visible one. The underlying
+ * `fetchAppInfo` is TTL-cached and swallows network failures, so this is
+ * cheap enough to run on every authenticated invocation.
+ */
+export async function maybeWarnVersionSkew(opts: ResolveProfileOptions): Promise<void> {
+  try {
+    const config = loadConfig();
+    const profile = resolveProfile(config, opts);
+    // No resolvable profile, or one without a token (e.g. mid-`login`): the
+    // command itself will surface the right error — stay silent here.
+    if (!profile?.tokens?.accessToken) {
+      return;
+    }
+    const info = await fetchAppInfo(profile);
+    warnVersionSkew(info);
+  } catch {
+    // Best-effort: never let the skew probe break or noise up a command.
+  }
 }

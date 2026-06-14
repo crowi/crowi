@@ -18,6 +18,7 @@ import { registerSearch } from './commands/search';
 import { registerUpdate } from './commands/update';
 import { registerWatch } from './commands/watch';
 import { registerWhoami } from './commands/whoami';
+import { maybeWarnVersionSkew } from './lib/capability';
 import { installRefreshHook } from './lib/refresh';
 
 /**
@@ -81,6 +82,26 @@ export function createProgram(): Command {
     .option('--token <accessToken>', 'use a bearer token directly (e.g. a PAT)')
     .option('--json', 'emit machine-readable JSON instead of human output')
     .option('-q, --quiet', 'suppress progress output on stderr');
+
+  // Per-invocation version-skew probe for the authenticated command surface.
+  // Runs once, before the chosen subcommand's action, so the skew warning is
+  // live for the whole Phase 1 surface (search / get / cat / ls / create /
+  // edit / update / mv / rm / watch / whoami) — not just the Phase 2 commands
+  // that call ensureCapability(). It is TTL-cached + best-effort (never
+  // throws), so it adds no round-trip on a cache hit and never blocks a
+  // command. Local-only / pre-auth commands are skipped: they have no wiki API
+  // call (open, completion) or no usable token yet (login/logout/profiles).
+  // The Phase 2 commands (comment / attach / bookmark) already run
+  // warnVersionSkew via ensureCapability(), so they are skipped here to avoid
+  // a duplicate skew note.
+  const SKIP_SKEW_PROBE = new Set(['login', 'logout', 'profiles', 'open', 'completion', 'help', 'comment', 'attach', 'bookmark']);
+  program.hook('preSubcommand', async (thisCommand, subcommand) => {
+    if (SKIP_SKEW_PROBE.has(subcommand.name())) {
+      return;
+    }
+    const globals = getGlobalOptions(thisCommand);
+    await maybeWarnVersionSkew({ profile: globals.profile, url: globals.url, token: globals.token });
+  });
 
   // Authentication & token-lifecycle commands (Stage 3). Page / search /
   // comment / etc. commands register in later stages.
