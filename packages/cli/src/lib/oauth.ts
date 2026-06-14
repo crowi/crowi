@@ -4,6 +4,7 @@ import type { AddressInfo } from 'node:net';
 
 import { DEVICE_CODE_GRANT_TYPE, DeviceAuthorizeResponseSchema, isIssuableScope, TokenResponseSchema } from '@crowi/api-contract';
 
+import { openBrowser } from './browser';
 import type { ProfileEndpoints, ProfileTokens } from './config';
 import { CliError, EXIT } from './http';
 import { info } from './output';
@@ -61,19 +62,6 @@ function challengeS256(verifier: string): string {
 /** RFC 4648 §5 base64url encoding without padding. */
 function base64url(buf: Buffer): string {
   return buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-
-/** Open a URL in the system browser; resolves false if `open` is unavailable. */
-async function openBrowser(url: string): Promise<boolean> {
-  try {
-    // `open` is ESM-only and externalised under the CJS build — load it
-    // lazily via dynamic import() rather than a top-level require().
-    const mod = (await import('open')) as { default: (target: string) => Promise<unknown> };
-    await mod.default(url);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 /** Build a `Bearer` token-endpoint POST body as form-encoded (RFC 6749). */

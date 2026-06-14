@@ -1,5 +1,8 @@
 import { Command, type OptionValues } from 'commander';
 
+import { registerAttach } from './commands/attach';
+import { registerBookmark } from './commands/bookmark';
+import { registerComment } from './commands/comment';
 import { registerCreate } from './commands/create';
 import { registerEdit } from './commands/edit';
 import { registerCat, registerGet } from './commands/get';
@@ -7,10 +10,12 @@ import { registerLogin } from './commands/login';
 import { registerLogout } from './commands/logout';
 import { registerLs } from './commands/ls';
 import { registerMv } from './commands/mv';
+import { registerOpen } from './commands/open';
 import { registerProfiles } from './commands/profiles';
 import { registerRm } from './commands/rm';
 import { registerSearch } from './commands/search';
 import { registerUpdate } from './commands/update';
+import { registerWatch } from './commands/watch';
 import { registerWhoami } from './commands/whoami';
 import { installRefreshHook } from './lib/refresh';
 
@@ -95,6 +100,15 @@ export function createProgram(): Command {
   registerUpdate(program);
   registerMv(program);
   registerRm(program);
+
+  // Phase 2 commands (Stage 6): gated behind their OAuth scopes / server
+  // capabilities. comment / attach / bookmark need scopes outside the default
+  // login set; watch rides pages:*; open is local-only (no API call).
+  registerComment(program);
+  registerAttach(program);
+  registerBookmark(program);
+  registerWatch(program);
+  registerOpen(program);
 
   return program;
 }
