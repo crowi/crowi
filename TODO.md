@@ -34,6 +34,7 @@ spec: `.feature-state/specs/feature-v2-alpha1-release-prep.md`（実本番=v1 DB
 ### 配布 / リリース (2.0.0 stable 時)
 - [ ] **無印 `crowi` パッケージの整理** — v1.7.9 を残しつつ `crowi@2.0.0` を**デプロイ・クイックスタート / scaffolder**（`npx crowi init` で docker-compose + .env.sample 生成）へ格上げ。最低ラインで v1 を「移転」文言で `npm deprecate` + README 刷新。`@crowi/cli`(RFC-0012)/`@crowi/admin-cli` と役割を分離。前提: Docker image の CI publish。spec: `.feature-state/specs/feature-crowi-quickstart-package.md`
 - [ ] **web image の API URL 実行時注入（汎用配布化）** — `crowi/crowi-web` を「ビルド時焼き込み」から「実行時注入」へ。同一オリジン既定（相対 `/api/v2` + Next rewrites proxy 宛先を `CROWI_API_URL` サーバ env 化 + WS は `window.location` 導出）、クロスオリジンは runtime-env escape hatch。**api(full/slim) は先行 publish 済み、web image はこの対応後に publish（案Y）**。spec: `.feature-state/specs/feature-web-image-runtime-config.md`
+- [ ] **CI リリース自動化** — alpha.1 から GO 判断だけ人間・他は CI。npm は changesets/action(Version PR) + **Trusted Publishing(OIDC・secret 無し)**、ただし **pnpm 9 は OIDC 非対応 → pnpm10 or npm 経由 publish を選択**。`docker.yml` 新規で full/slim を multi-arch 自動 build+push（DOCKERHUB secret）。傘タグ `v*` でリリース結合、**plugin-only patch でも Docker 再ビルド**のポリシー。per-plugin 独立 patch は changeset で対応可（linked は api/web/contract のみ）。spec: `.feature-state/specs/feature-ci-release-automation.md`
 
 ### 管理画面 残 (フェーズ4)
 - [ ] Slack channel 通知（一覧/編集 + page-path→channel mapping + Slack 統合設定）
