@@ -31,6 +31,9 @@ spec: `.feature-state/specs/feature-v2-alpha1-release-prep.md`（実本番=v1 DB
 ### OAuth 2.0 (RFC-0010)
 - [ ] Phase 5: admin による任意 OAuth クライアント登録 UI（Phase 1-4 は完了）
 
+### 配布 / リリース (2.0.0 stable 時)
+- [ ] **無印 `crowi` パッケージの整理** — v1.7.9 を残しつつ `crowi@2.0.0` を**デプロイ・クイックスタート / scaffolder**（`npx crowi init` で docker-compose + .env.sample 生成）へ格上げ。最低ラインで v1 を「移転」文言で `npm deprecate` + README 刷新。`@crowi/cli`(RFC-0012)/`@crowi/admin-cli` と役割を分離。前提: Docker image の CI publish。spec: `.feature-state/specs/feature-crowi-quickstart-package.md`
+
 ### 管理画面 残 (フェーズ4)
 - [ ] Slack channel 通知（一覧/編集 + page-path→channel mapping + Slack 統合設定）
 
