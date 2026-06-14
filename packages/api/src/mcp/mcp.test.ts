@@ -128,7 +128,7 @@ describe('MCP server (/mcp)', () => {
     expect(result.instructions).toContain('/parent/YYYY/MM/DD/title');
   });
 
-  it('crowi_get_page returns the real page body as text content', async () => {
+  it('crowi_get_page returns the body in both content text and structuredContent', async () => {
     const res = await callMcp(webToken, {
       jsonrpc: '2.0',
       id: 2,
@@ -139,8 +139,41 @@ describe('MCP server (/mcp)', () => {
     const rpc = parseRpc(res);
     const result = rpc.result as { content: Array<{ type: string; text: string }>; isError?: boolean; structuredContent?: Record<string, unknown> };
     expect(result.isError).toBeFalsy();
-    expect(result.content[0].text).toContain('MCP smoke page');
+    // text-preferring clients still see the body.
+    expect(result.content[0].text).toBe(pageBody);
+    // structuredContent-preferring clients (the original bug) now get the body too.
+    expect(result.structuredContent?.body).toBe(pageBody);
+    // metadata (incl. the optimistic-lock revision_id) is still present.
     expect(result.structuredContent?.page_id).toBe(pageId);
+    expect(typeof result.structuredContent?.revision_id).toBe('string');
+  });
+
+  it('crowi_get_revision returns the body in both content text and structuredContent', async () => {
+    // Discover the current revision id via crowi_get_page.
+    const pageRes = await callMcp(webToken, {
+      jsonrpc: '2.0',
+      id: 5,
+      method: 'tools/call',
+      params: { name: 'crowi_get_page', arguments: { page_id: pageId } },
+    });
+    const pageRpc = parseRpc(pageRes);
+    const pageResult = pageRpc.result as { structuredContent?: { revision_id?: string } };
+    const revisionId = pageResult.structuredContent?.revision_id;
+    expect(typeof revisionId).toBe('string');
+
+    const res = await callMcp(webToken, {
+      jsonrpc: '2.0',
+      id: 6,
+      method: 'tools/call',
+      params: { name: 'crowi_get_revision', arguments: { id: revisionId } },
+    });
+    expect(res.status).toBe(200);
+    const rpc = parseRpc(res);
+    const result = rpc.result as { content: Array<{ type: string; text: string }>; isError?: boolean; structuredContent?: Record<string, unknown> };
+    expect(result.isError).toBeFalsy();
+    expect(result.content[0].text).toBe(pageBody);
+    expect(result.structuredContent?.body).toBe(pageBody);
+    expect(result.structuredContent?.revision_id).toBe(revisionId);
   });
 
   it('maps a read-only token writing a page to an isError result (403 INSUFFICIENT_SCOPE)', async () => {

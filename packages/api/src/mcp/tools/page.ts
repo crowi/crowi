@@ -42,7 +42,7 @@ import {
 import { z } from 'zod';
 
 import type { ToolDescriptor } from '../server';
-import { okResult } from '../result';
+import { okResult, okResultWithBody } from '../result';
 
 // --- local shapes for routes without an exported named request schema ---
 
@@ -76,12 +76,17 @@ const RevertPageShape = {
 
 type Json = Record<string, unknown>;
 
-/** Pull the revision body + structured meta from a `{ page }` envelope. */
+/**
+ * Pull the revision body + structured meta from a `{ page }` envelope. The
+ * body is the primary payload, so it is carried in both `content[0].text`
+ * and `structuredContent.body` (RFC-0011 §9, `okResultWithBody`) — clients
+ * that prefer `structuredContent` would otherwise lose it.
+ */
 const mapPageResult = (body: unknown) => {
   const page = (body as { page?: Json }).page ?? {};
   const revision = (page.revision as Json | undefined) ?? {};
   const text = typeof revision.body === 'string' ? revision.body : JSON.stringify(page, null, 2);
-  return okResult(text, {
+  return okResultWithBody(text, {
     path: page.path,
     page_id: page._id,
     revision_id: revision._id,
@@ -90,11 +95,11 @@ const mapPageResult = (body: unknown) => {
   });
 };
 
-/** `{ revision }` single revision body. */
+/** `{ revision }` single revision body (carried in both places, see above). */
 const mapRevisionResult = (body: unknown) => {
   const revision = (body as { revision?: Json }).revision ?? {};
   const text = typeof revision.body === 'string' ? revision.body : JSON.stringify(revision, null, 2);
-  return okResult(text, { revision_id: revision._id, path: revision.path, createdAt: revision.createdAt });
+  return okResultWithBody(text, { revision_id: revision._id, path: revision.path, createdAt: revision.createdAt });
 };
 
 /**
