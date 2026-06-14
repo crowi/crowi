@@ -6,10 +6,13 @@ import { app, crowi } from 'src/test/setup';
  *
  * `GET /api/v2/app/info` is now served by Hono (see
  * `packages/api/src/hono/handlers/app.ts`). The wire format is
- * `{ title: string | null, confidential: string | null }` where `title`
- * is `null` when the operator has not customised it (the `'Crowi'` seed
- * value counts as "not customised") and `confidential` is `null` when the
- * confidentiality notice (`app:confidential`) is unset/empty.
+ * `{ title: string | null, confidential: string | null, version: string,
+ * apiVersion: string, capabilities: string[] }` where `title` is `null`
+ * when the operator has not customised it (the `'Crowi'` seed value counts
+ * as "not customised") and `confidential` is `null` when the
+ * confidentiality notice (`app:confidential`) is unset/empty. `version` /
+ * `apiVersion` / `capabilities` are the version-skew / feature-detection
+ * signal read by the `@crowi/cli` end-user CLI.
  */
 describe('GET /api/v2/app/info (Hono)', () => {
   let Config: ReturnType<typeof crowi.model<'Config'>>;
@@ -40,13 +43,13 @@ describe('GET /api/v2/app/info (Hono)', () => {
 
     const res = await request(app).get('/api/v2/app/info');
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ title: null, confidential: null });
+    expect(res.body).toMatchObject({ title: null, confidential: null });
   });
 
   it('returns title=null when no app:title row exists', async () => {
     const res = await request(app).get('/api/v2/app/info');
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ title: null, confidential: null });
+    expect(res.body).toMatchObject({ title: null, confidential: null });
   });
 
   it('returns the configured title when the operator has customised it', async () => {
@@ -55,7 +58,7 @@ describe('GET /api/v2/app/info (Hono)', () => {
 
     const res = await request(app).get('/api/v2/app/info');
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ title: 'My Wiki', confidential: null });
+    expect(res.body).toMatchObject({ title: 'My Wiki', confidential: null });
   });
 
   it('returns confidential=null when the notice is empty', async () => {
@@ -64,7 +67,7 @@ describe('GET /api/v2/app/info (Hono)', () => {
 
     const res = await request(app).get('/api/v2/app/info');
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ title: null, confidential: null });
+    expect(res.body).toMatchObject({ title: null, confidential: null });
   });
 
   it('returns the confidentiality notice when the operator has set it', async () => {
@@ -73,6 +76,23 @@ describe('GET /api/v2/app/info (Hono)', () => {
 
     const res = await request(app).get('/api/v2/app/info');
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ title: null, confidential: 'For employees only' });
+    expect(res.body).toMatchObject({ title: null, confidential: 'For employees only' });
+  });
+
+  it('reports the server version-skew / feature-detection signal', async () => {
+    const res = await request(app).get('/api/v2/app/info');
+    expect(res.status).toBe(200);
+
+    // `version` is the running @crowi/api package version (a non-empty
+    // string); `apiVersion` is the API surface version.
+    expect(typeof res.body.version).toBe('string');
+    expect(res.body.version.length).toBeGreaterThan(0);
+    expect(res.body.version).toBe(crowi.version);
+    expect(res.body.apiVersion).toBe('v2');
+
+    // `capabilities` is a non-empty list that always advertises the
+    // statically-compiled subsystems the CLI relies on.
+    expect(Array.isArray(res.body.capabilities)).toBe(true);
+    expect(res.body.capabilities).toEqual(expect.arrayContaining(['oauth', 'pages', 'comments', 'bookmarks', 'attachments', 'notifications']));
   });
 });

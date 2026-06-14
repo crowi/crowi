@@ -4536,9 +4536,20 @@ paths:
                     type:
                       - string
                       - 'null'
+                  version:
+                    type: string
+                  apiVersion:
+                    type: string
+                  capabilities:
+                    type: array
+                    items:
+                      type: string
                 required:
                   - title
                   - confidential
+                  - version
+                  - apiVersion
+                  - capabilities
         '500':
           description: Internal server error
           content:

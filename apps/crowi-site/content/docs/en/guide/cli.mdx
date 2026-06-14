@@ -1,0 +1,213 @@
+---
+title: CLI (command line)
+description: Use the end-user CLI `@crowi/cli` (`crowi`) to search, read, create, and edit your wiki from the terminal (RFC-0012)
+---
+
+`@crowi/cli` is the **end-user command-line tool** for Crowi. It ships via
+`npm i -g @crowi/cli` and is invoked as `crowi`. It talks to your wiki over HTTP
+only (it never touches the database) and uses OAuth to act **as you** — search,
+read, create, and edit pages from the terminal.
+
+See [RFC-0012](https://github.com/crowi/crowi/blob/main/docs/rfcs/0012-crowi-cli.md)
+for the design background.
+
+<Callout title="Not the same as the operator admin-cli">
+  `@crowi/cli` (`crowi`) is for end users acting with their own permissions over
+  HTTP. It is a different tool from `@crowi/admin-cli` (`crowi-admin`), which
+  connects directly to MongoDB for operator tasks.
+</Callout>
+
+## Install
+
+```bash
+# global install
+npm i -g @crowi/cli
+crowi --version
+
+# one-off (no install)
+npx @crowi/cli --help
+```
+
+Node.js 18+ is required.
+
+## Authentication
+
+`crowi` is a **public OAuth client** and uses PKCE (no client secret). Tokens
+are stored as JSON at `~/.config/crowi/contexts.json` (honouring
+`$XDG_CONFIG_HOME`), written with file mode `0600`.
+
+The login URL is the **public origin** of the target Crowi (the OAuth issuer —
+usually the host that serves the web app). There are three flows:
+
+```bash
+# 1. browser authorization-code + PKCE over an ephemeral loopback redirect
+#    (the default — opens your system browser)
+crowi login https://wiki.example.com
+
+# 2. device authorization grant for headless / SSH sessions (also chosen
+#    automatically when no browser is detectable)
+crowi login --device https://wiki.example.com
+
+# 3. store a pre-issued personal access token (PAT) directly (no OAuth round-trip)
+crowi login --token <pat> https://wiki.example.com
+```
+
+Issue a PAT from the web UI under **Settings → Access tokens**, choosing its
+scopes and expiry.
+
+Check your session with `crowi whoami` (shows the signed-in user and active
+scopes). `crowi logout` revokes and removes the tokens.
+
+## Scopes
+
+The default scope is `pages:read pages:write`, which covers reading, writing,
+renaming, deleting, and watching pages plus `whoami`. Commands that use other
+features need extra scopes granted at login:
+
+| Command | Scope to add at login |
+| --- | --- |
+| `comment` (list / add / delete) | `comments:read comments:write` |
+| `attach` (list / add / remove) | `attachments:read attachments:write` |
+| `bookmark` (get / list / add / remove) | `bookmarks:read bookmarks:write` |
+| `watch` (get / set) | none — rides the default `pages:*` |
+
+`--scope` **replaces** the default set, so include `pages:read pages:write` if
+you still want the page commands — or request the umbrella `read write`, which
+the server expands to every issuable `*:read` / `*:write`:
+
+```bash
+crowi login https://wiki.example.com --scope "pages:read pages:write comments:read comments:write"
+crowi login https://wiki.example.com --scope "read write"   # everything issuable
+```
+
+`--scope` is validated against the server's issuable catalog before any request
+leaves your machine, so a typo or a reserved `admin:*` scope (never issuable to
+PAT / OAuth tokens) fails fast. No CLI command requires `admin:*` (the admin API
+is web-session-only in v1).
+
+### Running a command without the scope it needs
+
+There is no pre-flight check — the command makes the real API call. If the scope
+is missing, the server returns `403 INSUFFICIENT_SCOPE` and the CLI turns it into
+an **actionable hint** and exits non-zero (code `3`):
+
+```console
+$ crowi comment add /onboarding -m "looks good"
+crowi: your token lacks the required scope — re-login granting it: `crowi login --scope "comments:write"`
+```
+
+No crash, no silent failure — it tells you which scope is required and how to
+re-login.
+
+## Profiles (multi-endpoint / multi-account)
+
+Use named profiles to work across several Crowi servers / accounts (the same
+model as `gh` / `kubectl` contexts). Tokens are stored **per endpoint**.
+
+```bash
+crowi login https://wiki.almoha.net --profile almoha
+crowi login https://strk-wiki.example.com --profile p2b
+
+crowi --profile almoha search "release notes"
+crowi profiles            # list configured profiles (local; no network)
+```
+
+The active profile resolves from `--url` / `--token`, then `--profile` /
+`$CROWI_PROFILE`, then the stored current profile.
+
+## Commands
+
+| Command | Purpose |
+| --- | --- |
+| `login` / `logout` / `whoami` / `profiles` | auth & profile management |
+| `search <query>` | full-text search (prints `path — snippet` rows) |
+| `get <path-or-id>` (alias `cat`) | print a page's markdown body to stdout; `--json` for metadata |
+| `ls [path]` | list child pages under a path |
+| `create <path>` | create a page (body from `--message` / `--file` / `--stdin` / `$EDITOR`) |
+| `edit <path>` | edit interactively in `$EDITOR` (creates if missing; optimistic-lock save) |
+| `update <path>` | replace the body non-interactively (revision-locked) |
+| `mv <old> <new>` | move / rename a page (or folder) |
+| `rm <path>` | delete a page (trash by default; `--completely` to purge) |
+| `comment` / `attach` / `bookmark` / `watch` | comments / attachments / bookmarks / watch (need the scopes above) |
+| `open <path-or-id>` | open a page in the browser (local only) |
+| `completion <shell>` | print a shell-completion script |
+
+Arguments are validated against the matching API request schema before sending,
+so a bad path fails locally with a clear error rather than a round-trip.
+
+### `edit` conflicts (409)
+
+`edit` / `update` send the page's `revision_id` for optimistic locking. If the
+page changed while you were editing, the write **aborts by default** with exit
+code `5` (conflict) — it never silently clobbers. Re-run with `--force` to
+overwrite the newer revision.
+
+## Output formats & scripting
+
+`search` and `ls` accept `--format` and `--template` to shape output for piping:
+
+| Flag | Effect |
+| --- | --- |
+| `--json` (global) | dump the full raw response as JSON |
+| `--format human` | default human rendering |
+| `--format table` | aligned columns with a header row |
+| `--format template` | one templated line per record |
+| `--template '<tpl>'` | template mode; `{{field}}` placeholders per record |
+
+The template language is tiny: `{{path}}` is the record's `path`, dotted paths
+walk nested objects (`{{page.path}}`), missing fields render empty, and `\t` /
+`\n` in the template expand to a tab / newline.
+
+```bash
+# tab-separated path + score, one hit per line
+crowi search "release notes" --template '{{path}}\t{{score}}'
+
+# feed search results straight into a fetch (get reads a path from stdin with -)
+crowi search onboarding --template '{{path}}' | head -1 | crowi get - > onboarding.md
+```
+
+Progress and warnings all go to stderr, so `--json` stdout stays clean for
+scripts. Exit codes:
+
+| Code | Meaning |
+| --- | --- |
+| `0` | success |
+| `1` | general error / network failure |
+| `2` | not signed in (`crowi login` required) |
+| `3` | insufficient scope (`403 INSUFFICIENT_SCOPE` → re-login with `--scope`) |
+| `4` | not found (`404`) |
+| `5` | edit conflict (`409` → `--force` to overwrite) |
+| `6` | invalid arguments (`400` / `422`) |
+| `7` | server unavailable / feature disabled (`503`) |
+
+## Shell completion
+
+```bash
+# bash
+eval "$(crowi completion bash)"
+# zsh
+crowi completion zsh > "${fpath[1]}/_crowi"
+# fish
+crowi completion fish > ~/.config/fish/completions/crowi.fish
+```
+
+## Server compatibility (version skew & capabilities)
+
+Crowi is self-hosted, so the `crowi` binary and the server can be on different
+versions. The CLI reads the public `GET /api/v2/app/info` signal
+(`version` / `apiVersion` / `capabilities`) and caches it on the profile for a
+few minutes.
+
+The policy is **warn-only — the CLI never refuses a command over a version or
+capability mismatch**:
+
+- Requests are validated against the bundled request contracts (the "v2 floor")
+  before sending, but responses are parsed leniently, so extra or missing fields
+  from a newer / older server do not break a command.
+- If the server's API surface differs from the one this CLI targets, a one-line
+  skew note is printed to stderr and the command continues.
+- A command whose feature the server does not advertise (e.g. `search` with no
+  search backend configured) prints a clear "not available on this server"
+  message instead of a raw error.
+- An older server that predates capability reporting is treated as the always-on
+  baseline with skew warnings suppressed, so it keeps working silently.

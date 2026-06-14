@@ -1,0 +1,48 @@
+{
+  "name": "@crowi/cli",
+  "version": "0.1.0-dev",
+  "description": "End-user CLI (`crowi`) for Crowi 2.0. Talks to a Crowi server over HTTP using OAuth (RFC-0010 / RFC-0012); read + write + search + edit your wiki from the terminal.",
+  "main": "dist/cli.js",
+  "types": "dist/cli.d.ts",
+  "bin": {
+    "crowi": "dist/bin.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/cli.d.ts",
+      "require": "./dist/cli.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsup",
+    "build:binary": "pnpm build && tsup --config tsup.sea.config.ts && node scripts/build-sea.mjs",
+    "dev": "tsup --watch --no-clean",
+    "type-check": "tsc --noEmit",
+    "test": "jest --passWithNoTests",
+    "prepublishOnly": "chmod +x dist/bin.js"
+  },
+  "dependencies": {
+    "@crowi/api-contract": "workspace:^",
+    "commander": "^12.1.0",
+    "open": "^10.1.0"
+  },
+  "devDependencies": {
+    "@crowi/tsconfig": "workspace:*",
+    "@types/jest": "catalog:",
+    "@types/node": "catalog:",
+    "jest": "catalog:",
+    "ts-jest": "catalog:",
+    "tsup": "catalog:",
+    "typescript": "catalog:"
+  }
+}

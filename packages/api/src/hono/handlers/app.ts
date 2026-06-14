@@ -12,12 +12,34 @@
  * smoke-test guarantee — see `docs/migrations/0006-hono-context.md`
  * §11).
  */
-import { getAppInfoRoute } from '@crowi/api-contract';
+import { API_SURFACE_VERSION, getAppInfoRoute, STATIC_CAPABILITIES } from '@crowi/api-contract';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 
 import type Crowi from 'src/crowi';
 
 import type { CrowiHonoBindings } from '../app';
+
+/**
+ * Build the coarse capability list advertised at `GET /app/info`. Static
+ * always-on subsystems plus cheap, in-memory dynamic probes:
+ *   - `search` when a search driver is active (`getSearcher() !== null`);
+ *     otherwise `GET /search` returns 503 and the CLI can pre-empt it.
+ *   - `collab` always (Hocuspocus is library-attached unconditionally);
+ *     `collab:redis` additionally when `REDIS_URL` is set so multi-instance
+ *     pub/sub is wired up.
+ * No I/O — both probes read state already held on the Crowi instance.
+ */
+const buildCapabilities = (crowi: Crowi): string[] => {
+  const capabilities: string[] = [...STATIC_CAPABILITIES];
+  if (crowi.getSearcher() != null) {
+    capabilities.push('search');
+  }
+  capabilities.push('collab');
+  if (crowi.redis != null) {
+    capabilities.push('collab:redis');
+  }
+  return capabilities;
+};
 
 export const registerAppRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app: E, crowi: Crowi) =>
   app.openapi(getAppInfoRoute, (c) => {
@@ -32,5 +54,17 @@ export const registerAppRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app:
     // Empty/missing collapses to null (banner hidden).
     const confidentialRaw = config?.crowi?.['app:confidential'] as string | undefined;
     const confidential = confidentialRaw ? confidentialRaw : null;
-    return c.json({ title, confidential }, 200);
+    // Version-skew / feature-detection signal for the @crowi/cli end-user
+    // CLI (and any other client). `crowi.version` is the @crowi/api
+    // package.json version read at boot.
+    return c.json(
+      {
+        title,
+        confidential,
+        version: crowi.version,
+        apiVersion: API_SURFACE_VERSION,
+        capabilities: buildCapabilities(crowi),
+      },
+      200,
+    );
   });

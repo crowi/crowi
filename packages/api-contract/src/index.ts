@@ -2,6 +2,7 @@ export * from './errors/codes';
 export * from './contracts';
 export * from './client';
 export * from './schemas/app';
+export * from './schemas/app-capabilities';
 export * from './schemas/auth';
 export * from './schemas/mail-token';
 export * from './schemas/inviteAccept';

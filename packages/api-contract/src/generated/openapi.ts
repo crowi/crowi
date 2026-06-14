@@ -33,6 +33,9 @@ export interface paths {
                         "application/json": {
                             title: string | null;
                             confidential: string | null;
+                            version: string;
+                            apiVersion: string;
+                            capabilities: string[];
                         };
                     };
                 };
