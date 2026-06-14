@@ -21,14 +21,34 @@ npm install -g @crowi/cli
 stored as plain JSON at `~/.config/crowi/contexts.json` (honouring
 `$XDG_CONFIG_HOME`), written with file mode `0600`.
 
+There are three login flows:
+
 ```bash
-crowi login https://wiki.example.com          # browser auth-code + PKCE
-crowi login --device https://wiki.example.com # headless / SSH
+# 1. browser authorization-code + PKCE over an ephemeral loopback redirect
+#    (the default — opens your system browser)
+crowi login https://wiki.example.com
+
+# 2. device authorization grant for headless / SSH sessions (also chosen
+#    automatically when no browser is detectable)
+crowi login --device https://wiki.example.com
+
+# 3. store a pre-issued personal access token directly (no OAuth round-trip)
+crowi login --token <pat> https://wiki.example.com
 ```
 
-The default scope is `pages:read pages:write`. Pass `--scope '<space list>'`
-to request more (e.g. `comments:read comments:write` for the comment
-commands).
+The default scope is `pages:read pages:write`, which covers reading, writing,
+renaming, deleting, and watching pages plus `whoami`. Pass `--scope
+'<space list>'` to request more — the Phase 2 commands need their own scopes:
+
+| Commands | Scope to add at login |
+| --- | --- |
+| `comment` (list/add/delete) | `comments:read comments:write` |
+| `attach` (list/add/remove) | `attachments:read attachments:write` |
+| `bookmark` (get/list/add/remove) | `bookmarks:read bookmarks:write` |
+| `watch` (get/set) | none — rides the default `pages:*` |
+
+`--scope` is validated against the server's issuable catalog before any request
+leaves your machine, so a typo or a reserved `admin:*` scope fails fast.
 
 ## Global flags
 
@@ -94,6 +114,30 @@ crowi completion zsh > "${fpath[1]}/_crowi"
 # fish
 crowi completion fish > ~/.config/fish/completions/crowi.fish
 ```
+
+## Server compatibility (version skew & capabilities)
+
+Crowi is self-hosted, so the `crowi` binary and the server it talks to can be
+on different versions. The CLI reads the public `GET /api/v2/app/info` signal
+(`version` / `apiVersion` / `capabilities`) and caches it on the profile for a
+few minutes.
+
+The policy is **warn-only — the CLI never refuses a command over a version or
+capability mismatch**:
+
+- Requests are validated against the bundled request contracts (the "v2 floor")
+  before they are sent, but responses are parsed leniently, so extra or missing
+  fields from a newer / older server do not break a command.
+- If the server's API surface differs from the one this CLI targets, a one-line
+  skew note is printed to stderr and the command continues.
+- A command whose feature the server does not advertise (e.g. `search` when no
+  search backend is configured) prints a clear "not available on this server"
+  message instead of surfacing a raw error.
+- An older server that predates capability reporting (no `version` /
+  `capabilities` fields) is treated as the always-on baseline with skew warnings
+  suppressed, so it keeps working silently.
+
+All of these notes go to stderr, so `--json` stdout stays clean for scripts.
 
 ## Single-file binary
 

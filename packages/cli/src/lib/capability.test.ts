@@ -1,4 +1,4 @@
-import { effectiveCapabilities, hasCapability, STATIC_CAPABILITIES } from './capability';
+import { effectiveCapabilities, hasCapability, STATIC_CAPABILITIES, warnVersionSkew } from './capability';
 
 describe('capability detection', () => {
   it('treats the static baseline as always present, even with no advertised list', () => {
@@ -24,5 +24,34 @@ describe('capability detection', () => {
 
   it('does not invent capabilities the server omits', () => {
     expect(hasCapability({ capabilities: ['pages'] }, 'search')).toBe(false);
+  });
+});
+
+describe('warnVersionSkew (WARN-ONLY policy)', () => {
+  let stderr: jest.SpyInstance;
+
+  beforeEach(() => {
+    stderr = jest.spyOn(process.stderr, 'write').mockImplementation(() => true);
+  });
+
+  afterEach(() => {
+    stderr.mockRestore();
+  });
+
+  it('warns when the server apiVersion differs from the CLI target', () => {
+    warnVersionSkew({ apiVersion: 'v3' });
+    expect(stderr).toHaveBeenCalledTimes(1);
+    expect(String(stderr.mock.calls[0][0])).toContain('v3');
+  });
+
+  it('stays silent when the apiVersion matches', () => {
+    warnVersionSkew({ apiVersion: 'v2' });
+    expect(stderr).not.toHaveBeenCalled();
+  });
+
+  it('stays silent for an old server that omits apiVersion', () => {
+    warnVersionSkew({});
+    warnVersionSkew({ version: '2.0.0' });
+    expect(stderr).not.toHaveBeenCalled();
   });
 });
