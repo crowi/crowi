@@ -25,6 +25,7 @@
   },
   "scripts": {
     "build": "tsup",
+    "build:binary": "pnpm build && tsup --config tsup.sea.config.ts && node scripts/build-sea.mjs",
     "dev": "tsup --watch --no-clean",
     "type-check": "tsc --noEmit",
     "test": "jest --passWithNoTests",

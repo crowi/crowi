@@ -1,22 +1,38 @@
 import { ListPageChildrenRequestSchema } from '@crowi/api-contract';
 import type { Command } from 'commander';
 
+import { renderRecords, resolveFormat } from '../lib/format';
 import { authedFetch, CliError, EXIT } from '../lib/http';
-import { render } from '../lib/output';
 import { requireProfile } from './_shared';
+
+/** One child segment in the `GET /api/v2/pages/children` response. */
+interface ChildSegment {
+  segment?: string;
+  path?: string;
+  isPage?: boolean;
+  hasPortal?: boolean;
+  count?: number;
+}
 
 /**
  * The `GET /api/v2/pages/children` response (ListPageChildrenResponseSchema).
  * Parsed leniently — only the fields the CLI renders are declared.
  */
 interface ListChildrenResponse {
-  children?: Array<{
-    segment?: string;
-    path?: string;
-    isPage?: boolean;
-    hasPortal?: boolean;
-    count?: number;
-  }>;
+  children?: ChildSegment[];
+}
+
+/** Format one child segment as a human row (dir → trailing slash). */
+function childHumanLine(child: ChildSegment): string {
+  const isDir = child.hasPortal || (child.count ?? 0) > 0;
+  const display = child.path ?? child.segment ?? '(unknown)';
+  if (isDir && !display.endsWith('/')) {
+    return `${display}/`;
+  }
+  if (!isDir && child.isPage) {
+    return display.replace(/\/$/, '');
+  }
+  return display;
 }
 
 /**
@@ -30,8 +46,11 @@ export function registerLs(program: Command): void {
   program
     .command('ls [path]')
     .description('List child pages under a path (defaults to the top level)')
-    .action(async (path: string | undefined, _options: unknown, command: Command) => {
+    .option('--format <mode>', 'output format: human | table | template | json')
+    .option('--template <tpl>', "row template with {{field}} placeholders, e.g. '{{path}}\\t{{count}}'")
+    .action(async (path: string | undefined, options: { format?: string; template?: string }, command: Command) => {
       const { profile, globals } = requireProfile(command);
+      const mode = resolveFormat({ format: options.format, template: options.template, json: globals.json });
 
       // Default to the top level; add a leading slash to bare paths.
       const raw = path ?? '/';
@@ -49,29 +68,11 @@ export function registerLs(program: Command): void {
       });
 
       const children = body.children ?? [];
-      render(
-        body,
-        () => {
-          if (children.length === 0) {
-            return '(no child pages)';
-          }
-          return children
-            .map((child) => {
-              // Directories / portals keep their trailing slash; a leaf
-              // page is shown at its non-slashed path.
-              const isDir = child.hasPortal || (child.count ?? 0) > 0;
-              const display = child.path ?? child.segment ?? '(unknown)';
-              if (isDir && !display.endsWith('/')) {
-                return `${display}/`;
-              }
-              if (!isDir && child.isPage) {
-                return display.replace(/\/$/, '');
-              }
-              return display;
-            })
-            .join('\n');
-        },
-        globals,
-      );
+      renderRecords(body, children, mode, {
+        template: options.template,
+        columns: ['path', 'isPage', 'hasPortal', 'count'],
+        emptyHuman: '(no child pages)',
+        humanLine: (record) => childHumanLine(record as ChildSegment),
+      });
     });
 }

@@ -3,6 +3,7 @@ import { Command, type OptionValues } from 'commander';
 import { registerAttach } from './commands/attach';
 import { registerBookmark } from './commands/bookmark';
 import { registerComment } from './commands/comment';
+import { registerCompletion } from './commands/completion';
 import { registerCreate } from './commands/create';
 import { registerEdit } from './commands/edit';
 import { registerCat, registerGet } from './commands/get';
@@ -109,6 +110,10 @@ export function createProgram(): Command {
   registerBookmark(program);
   registerWatch(program);
   registerOpen(program);
+
+  // Phase 3 polish: shell-completion script generator (introspects the tree
+  // above, so it must register after every other command).
+  registerCompletion(program);
 
   return program;
 }

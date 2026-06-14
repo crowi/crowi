@@ -38,7 +38,11 @@ interface GetPageResponse {
 async function runGet(pathOrId: string, options: { revision?: string }, command: Command): Promise<void> {
   const { profile, globals } = requireProfile(command);
 
-  const query = toPageQuery(pathOrId, options.revision);
+  // `crowi get -` reads the page reference from stdin (first non-empty line),
+  // so `crowi search foo --template '{{path}}' | head -1 | crowi get -` pipes.
+  const reference = pathOrId === '-' ? await readReferenceFromStdin() : pathOrId;
+
+  const query = toPageQuery(reference, options.revision);
   const parsed = GetPageRequestSchema.safeParse(query);
   if (!parsed.success) {
     throw new CliError(`invalid page reference: ${parsed.error.issues.map((i) => i.message).join('; ')}`, {
@@ -48,6 +52,27 @@ async function runGet(pathOrId: string, options: { revision?: string }, command:
 
   const body = await authedFetch<GetPageResponse>(profile, 'GET', '/pages', { query: parsed.data });
   printPage(body, profile, globals);
+}
+
+/**
+ * Read a page reference (path or id) from stdin for `crowi get -`. Takes the
+ * first non-empty, trimmed line so a piped multi-line list still resolves a
+ * single page; errors if stdin is empty.
+ */
+async function readReferenceFromStdin(): Promise<string> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of process.stdin) {
+    chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
+  }
+  const text = Buffer.concat(chunks).toString('utf8');
+  const first = text
+    .split('\n')
+    .map((line) => line.trim())
+    .find((line) => line.length > 0);
+  if (!first) {
+    throw new CliError('no page reference on stdin (expected a path or id)', { exitCode: EXIT.INVALID });
+  }
+  return first;
 }
 
 /** Render a fetched page: markdown body to stdout (human) or full JSON. */
