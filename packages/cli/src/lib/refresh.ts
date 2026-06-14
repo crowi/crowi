@@ -1,4 +1,4 @@
-import { loadConfig, type Profile, upsertProfile } from './config';
+import { ADHOC_ALIAS, loadConfig, type Profile, upsertProfile } from './config';
 import { setRefreshHook } from './http';
 import { refreshTokens } from './oauth';
 
@@ -25,7 +25,7 @@ async function performRefresh(profile: Profile): Promise<string | undefined> {
   // Persist the rotated tokens against the *stored* profile (re-read so we
   // don't clobber concurrent edits), but only for a real (named) profile —
   // ad-hoc `--url`/`--token` profiles are never persisted.
-  if (profile.alias && profile.alias !== '(ad-hoc)') {
+  if (profile.alias && profile.alias !== ADHOC_ALIAS) {
     const config = loadConfig();
     const stored = config.profiles[profile.alias] ?? profile;
     upsertProfile({ ...stored, tokens: rotated });

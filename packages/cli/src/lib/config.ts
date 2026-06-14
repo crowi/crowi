@@ -67,6 +67,14 @@ const FILE_MODE = 0o600;
 const DIR_MODE = 0o700;
 
 /**
+ * Alias used for the ephemeral in-memory profile created from `--url` /
+ * `--token` (or `$CROWI_URL` / `$CROWI_TOKEN`). An ad-hoc profile is NEVER
+ * persisted to `contexts.json`: a one-shot PAT must not leak onto disk. Every
+ * write path checks `profile.alias === ADHOC_ALIAS` and no-ops.
+ */
+export const ADHOC_ALIAS = '(ad-hoc)';
+
+/**
  * Resolve the config directory, honouring `$XDG_CONFIG_HOME` and falling
  * back to `~/.config`. The CLI's files live under `<configHome>/crowi`.
  */
@@ -171,6 +179,24 @@ export function upsertProfile(profile: Profile): void {
   saveConfig(config);
 }
 
+/**
+ * Merge `partial` onto the STORED profile and persist, re-reading config
+ * first so a concurrent edit (e.g. a token rotation persisted by the refresh
+ * hook between command start and this write) is not clobbered. Fields not in
+ * `partial` keep their stored value; this is the safe path for writing back
+ * cache-only fields (capabilities / version) without carrying possibly-stale
+ * in-memory tokens. No-ops when the profile no longer exists on disk.
+ */
+export function updateProfileFields(alias: string, partial: Partial<Profile>): void {
+  const config = loadConfig();
+  const stored = config.profiles[alias];
+  if (!stored) {
+    return;
+  }
+  config.profiles[alias] = { ...stored, ...partial };
+  saveConfig(config);
+}
+
 /** Remove a profile (and clear the current pointer if it referenced it). */
 export function removeProfile(alias: string): boolean {
   const config = loadConfig();
@@ -223,7 +249,7 @@ export function resolveProfile(config: ConfigFile, opts: ResolveProfileOptions =
   // Ad-hoc target: --url / --token bypass the stored profiles entirely.
   if (url || token) {
     return {
-      alias: '(ad-hoc)',
+      alias: ADHOC_ALIAS,
       endpoint: stripTrailingSlash(url ?? ''),
       tokens: token ? { accessToken: token } : undefined,
     };

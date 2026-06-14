@@ -1,8 +1,10 @@
-import { AppInfoResponseSchema } from '@crowi/api-contract';
+import { API_SURFACE_VERSION, AppInfoResponseSchema, STATIC_CAPABILITIES } from '@crowi/api-contract';
 
-import { loadConfig, type Profile, type ResolveProfileOptions, resolveProfile, upsertProfile } from './config';
+import { ADHOC_ALIAS, loadConfig, type Profile, type ResolveProfileOptions, resolveProfile, updateProfileFields } from './config';
 import { authedFetch } from './http';
 import { warn } from './output';
+
+export { STATIC_CAPABILITIES };
 
 /**
  * Capability detection + version-skew warning for the CLI, sourced from the
@@ -16,33 +18,8 @@ import { warn } from './output';
  * the static baseline with skew warnings suppressed.
  */
 
-/**
- * Capabilities the CLI assumes are present on ANY Crowi 2.0 server, even one
- * that predates capability reporting (so an old server → no false "missing
- * feature" message). Mirrors the server's `staticAlwaysOn` set: these
- * subsystems are unconditionally compiled into `@crowi/api`.
- */
-export const STATIC_CAPABILITIES = [
-  'oauth',
-  'oauth:auth-code',
-  'oauth:device',
-  'oauth:pkce',
-  'pat',
-  'pages',
-  'comments',
-  'bookmarks',
-  'attachments',
-  'notifications',
-] as const;
-
 /** How long a cached `app/info` snapshot is considered fresh (10 minutes). */
 const CAPABILITY_TTL_MS = 10 * 60 * 1000;
-
-/**
- * The API surface version this build of the CLI is written against (the
- * "v2 floor"). Used only for a soft skew note — never to refuse a command.
- */
-const CLI_API_VERSION = 'v2';
 
 /** Lenient view of the `GET /api/v2/app/info` response. */
 interface AppInfo {
@@ -95,9 +72,14 @@ export async function fetchAppInfo(profile: Profile, opts: { force?: boolean } =
 
   // Persist the snapshot for the TTL window. Only write when we actually got
   // something back, to avoid clobbering a previous good cache with blanks.
-  if (info.version !== undefined || info.apiVersion !== undefined || info.capabilities !== undefined) {
-    upsertProfile({
-      ...profile,
+  // Ad-hoc (`--url`/`--token`) profiles are never persisted: a one-shot PAT
+  // must not reach contexts.json. The in-memory return value is unaffected.
+  if (profile.alias !== ADHOC_ALIAS && (info.version !== undefined || info.apiVersion !== undefined || info.capabilities !== undefined)) {
+    // Write ONLY the cache-only fields via the re-read merge helper, so a
+    // concurrent token rotation persisted between command start and this
+    // write is preserved (we must not spread the possibly-stale in-memory
+    // tokens back over the freshly-rotated stored ones).
+    updateProfileFields(profile.alias, {
       version: info.version ?? profile.version,
       apiVersion: info.apiVersion ?? profile.apiVersion,
       capabilities: info.capabilities ?? profile.capabilities,
@@ -138,9 +120,10 @@ export function hasCapability(info: AppInfo, capability: string): boolean {
  * differs). `version`/`apiVersion` absent entirely → no warning.
  */
 export function warnVersionSkew(info: AppInfo): void {
-  if (info.apiVersion && info.apiVersion !== CLI_API_VERSION) {
+  if (info.apiVersion && info.apiVersion !== API_SURFACE_VERSION) {
     warn(
-      `server API surface is "${info.apiVersion}" but this CLI targets "${CLI_API_VERSION}" — ` + `some commands may behave unexpectedly (continuing anyway).`,
+      `server API surface is "${info.apiVersion}" but this CLI targets "${API_SURFACE_VERSION}" — ` +
+        `some commands may behave unexpectedly (continuing anyway).`,
     );
   }
 }

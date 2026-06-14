@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { upsertProfile } from './config';
+import { ADHOC_ALIAS, loadConfig, type Profile, upsertProfile } from './config';
 import { effectiveCapabilities, fetchAppInfo, hasCapability, maybeWarnVersionSkew, STATIC_CAPABILITIES, warnVersionSkew } from './capability';
 
 describe('capability detection', () => {
@@ -168,5 +168,100 @@ describe('maybeWarnVersionSkew (Phase 1 preSubcommand probe)', () => {
     const info = await fetchAppInfo(profile);
     expect(fetchMock).not.toHaveBeenCalled();
     expect(info.apiVersion).toBe('v3');
+  });
+});
+
+/**
+ * fetchAppInfo's capability-cache WRITE must:
+ *  - NEVER persist for an ad-hoc (`--url`/`--token`) profile (a one-shot PAT
+ *    must not reach contexts.json), and
+ *  - for a NAMED profile, write ONLY the cache-only fields onto the STORED
+ *    profile (re-read), so a token rotation persisted between command start
+ *    and the cache write is not clobbered by the stale in-memory tokens.
+ */
+describe('fetchAppInfo cache-write safety (FIX 2 / FIX 4)', () => {
+  let tmpRoot: string;
+  let fetchMock: jest.Mock<Promise<Response>, [string, RequestInit]>;
+  const originalFetch = global.fetch;
+  const ORIGINAL_XDG = process.env.XDG_CONFIG_HOME;
+
+  function jsonResponse(status: number, body: unknown): Response {
+    return {
+      ok: status >= 200 && status < 300,
+      status,
+      text: async () => (body === undefined ? '' : JSON.stringify(body)),
+    } as Response;
+  }
+
+  beforeEach(() => {
+    tmpRoot = mkdtempSync(join(tmpdir(), 'crowi-cli-cap-'));
+    process.env.XDG_CONFIG_HOME = tmpRoot;
+    delete process.env.CROWI_PROFILE;
+    delete process.env.CROWI_URL;
+    delete process.env.CROWI_TOKEN;
+    fetchMock = jest.fn();
+    global.fetch = fetchMock as unknown as typeof fetch;
+  });
+
+  afterEach(() => {
+    rmSync(tmpRoot, { recursive: true, force: true });
+    if (ORIGINAL_XDG === undefined) {
+      delete process.env.XDG_CONFIG_HOME;
+    } else {
+      process.env.XDG_CONFIG_HOME = ORIGINAL_XDG;
+    }
+    global.fetch = originalFetch;
+  });
+
+  it('does NOT persist an ad-hoc profile (one-shot PAT never reaches disk)', async () => {
+    const adhoc: Profile = {
+      alias: ADHOC_ALIAS,
+      endpoint: 'https://wiki.example.com',
+      tokens: { accessToken: 'one-shot-pat' },
+    };
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { title: 'Wiki', apiVersion: 'v2', capabilities: ['pages', 'search'] }));
+
+    const info = await fetchAppInfo(adhoc);
+    // In-memory return value is unaffected.
+    expect(info.capabilities).toEqual(['pages', 'search']);
+    // Nothing written: the ad-hoc alias must not appear on disk.
+    expect(loadConfig().profiles[ADHOC_ALIAS]).toBeUndefined();
+  });
+
+  it('does not clobber a token rotated between command start and the capability write', async () => {
+    // The command captured this (now-stale) in-memory profile at start.
+    const started: Profile = {
+      alias: 'work',
+      endpoint: 'https://wiki.example.com',
+      tokens: { accessToken: 'OLD-access', refreshToken: 'OLD-refresh' },
+    };
+    // Meanwhile the refresh hook rotated + persisted fresh tokens on disk.
+    upsertProfile({
+      alias: 'work',
+      endpoint: 'https://wiki.example.com',
+      tokens: { accessToken: 'NEW-access', refreshToken: 'NEW-refresh' },
+    });
+
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { title: 'Wiki', apiVersion: 'v2', capabilities: ['pages', 'search'] }));
+    await fetchAppInfo(started);
+
+    const stored = loadConfig().profiles.work;
+    // The capability fields landed…
+    expect(stored.capabilities).toEqual(['pages', 'search']);
+    expect(stored.apiVersion).toBe('v2');
+    // …but the freshly-rotated tokens survived (NOT overwritten by OLD-*).
+    expect(stored.tokens?.accessToken).toBe('NEW-access');
+    expect(stored.tokens?.refreshToken).toBe('NEW-refresh');
+  });
+
+  it('no-ops when the stored named profile no longer exists', async () => {
+    const ghost: Profile = {
+      alias: 'ghost',
+      endpoint: 'https://wiki.example.com',
+      tokens: { accessToken: 'pat-1' },
+    };
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { title: 'Wiki', apiVersion: 'v2' }));
+    await fetchAppInfo(ghost);
+    expect(loadConfig().profiles.ghost).toBeUndefined();
   });
 });
