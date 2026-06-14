@@ -5,6 +5,7 @@ import { authedFetch, CliError, EXIT } from '../lib/http';
 import type { Profile } from '../lib/config';
 import type { GlobalOptions } from '../cli';
 import { render } from '../lib/output';
+import { toPageQuery } from '../lib/page-ref';
 import { requireProfile } from './_shared';
 
 /**
@@ -26,25 +27,6 @@ interface GetPageResponse {
       createdAt?: string;
     };
   };
-}
-
-/**
- * A bare 24-hex Mongo ObjectId. A `<path-or-id>` argument that matches is
- * treated as a `page_id`; anything else is treated as a `path`.
- */
-const OBJECT_ID_RE = /^[0-9a-f]{24}$/i;
-
-/**
- * Resolve the `<path-or-id>` positional into the `GetPageRequest` query
- * shape: a 24-hex string is sent as `page_id`, everything else as `path`.
- * A leading slash is added to bare paths so `crowi get foo/bar` works.
- */
-function toPageQuery(pathOrId: string, revisionId?: string): { path?: string; page_id?: string; revision_id?: string } {
-  if (OBJECT_ID_RE.test(pathOrId)) {
-    return { page_id: pathOrId, revision_id: revisionId };
-  }
-  const path = pathOrId.startsWith('/') ? pathOrId : `/${pathOrId}`;
-  return { path, revision_id: revisionId };
 }
 
 /**

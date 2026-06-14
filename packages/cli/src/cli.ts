@@ -1,11 +1,16 @@
 import { Command, type OptionValues } from 'commander';
 
+import { registerCreate } from './commands/create';
+import { registerEdit } from './commands/edit';
 import { registerCat, registerGet } from './commands/get';
 import { registerLogin } from './commands/login';
 import { registerLogout } from './commands/logout';
 import { registerLs } from './commands/ls';
+import { registerMv } from './commands/mv';
 import { registerProfiles } from './commands/profiles';
+import { registerRm } from './commands/rm';
 import { registerSearch } from './commands/search';
+import { registerUpdate } from './commands/update';
 import { registerWhoami } from './commands/whoami';
 import { installRefreshHook } from './lib/refresh';
 
@@ -83,6 +88,13 @@ export function createProgram(): Command {
   registerGet(program);
   registerCat(program);
   registerLs(program);
+
+  // Write commands (Stage 5): create / edit / update / mv / rm.
+  registerCreate(program);
+  registerEdit(program);
+  registerUpdate(program);
+  registerMv(program);
+  registerRm(program);
 
   return program;
 }
