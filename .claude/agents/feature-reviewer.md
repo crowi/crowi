@@ -50,7 +50,12 @@ implementer + simplify を経た実装を、本番品質に乗せられるか判
 8. テスト追加候補 (AC 越えのエッジケース)
 9. 命名・配置の一貫性 (隣接コードとの揃え)
 10. 後続タスクで対応すべき改善 (advisory として記録)
-11. ドキュメント (CLAUDE.md / TODO.md / RFC) 更新の有無
+11. ドキュメント更新の有無:
+    - `context.docsTargets` が `user-visible` / `operator-visible` なのに crowi-site
+      (`apps/crowi-site/content/docs/`) の更新が diff に無い → 指摘する
+    - 更新がある場合: **ja / en 両方** が揃っているか、新規ページなら frontmatter
+      (title/description) と `meta.json` の `pages` 追記があるか
+    - CLAUDE.md / TODO.md / RFC 更新の有無
 
 ## 自動チェック (再確認)
 

@@ -60,14 +60,33 @@ context 完備の task 定義を作成する。
    spec で言及があれば現行 `package.json` を確認し、bundle / セキュリティ観点で
    問題ないかをコメント。問題があれば openQuestions に投げる。
 
-5. **commitPlan の概形**
+5. **ドキュメント影響の特定 (crowi-site)**
+   この機能が **利用者 / 運用者に見える変化** かを判定し、`context.docsTargets` を充填する。
+   - `assessment` を `user-visible` / `operator-visible` / `internal-only` で判定。
+     `internal-only` (内部 refactor / 内部 API / テストのみ等、観測できない変化) なら
+     `entries: []` にして docs 更新も commitPlan の `docs(site)` も作らない。
+   - 対象探索: spec の機能領域に対応する既存 `.mdx` を探す。
+     ```bash
+     ls apps/crowi-site/content/docs/ja/{guide,operations,plugins}
+     grep -rl "<関連語>" apps/crowi-site/content/docs/ja
+     ```
+     - 既存ページがあれば `action: "edit"`、その ja / en パスを書く。
+     - 該当が無く新規トピックなら `action: "create"`、適切なカテゴリに新ファイル名を決め
+       `metaUpdate: true` を立てる (implementer が meta.json に追記する目印)。
+   - env / admin 設定が増えるなら `operations/configuration.mdx` 等の運用ページも entries に含める。
+   - **ja / en は必ずペアで** entries に書く (二言語ミラー構成)。
+   - カテゴリの目安: `guide/`=利用者向け機能 / `operations/`=運用・管理者・env / `plugins/`=プラグイン。
+
+6. **commitPlan の概形**
    想定される commit を `feat` / `test` / `docs` (場合により `refactor`) に分けて配置。
+   docsTargets が空でなければ `{"type":"docs","scope":"site"}` エントリ (crowi-site 更新) を
+   `docs(todo)` (TODO.md) とは **別に** 置く。
    実装時に implementer が files リストを埋めるので、ここでは type / scope / title だけで OK。
 
-6. **task ファイルの作成**
+7. **task ファイルの作成**
    `.feature-state/tasks/{id}.json` に以下を書く。
 
-7. **queue 更新**
+8. **queue 更新**
    `.feature-state/queue.json` の `currentTask` を新タスクに、`lastUpdated` を ISO 8601 で更新。
 
 ## 重要な前提
@@ -92,6 +111,10 @@ packages/api-contract/src/{contracts,schemas}/
 packages/api/src/hono/handlers/{feature}.ts
 packages/web/src/app/(auth|admin)/...
 packages/api-contract/src/contracts/{feature}.ts
+
+# ユーザー向けドキュメント (docsTargets の探索対象・二言語ミラー)
+apps/crowi-site/content/docs/ja/{guide,operations,plugins}/
+apps/crowi-site/content/docs/en/{guide,operations,plugins}/
 ```
 
 ## task ファイルスキーマ
@@ -119,7 +142,19 @@ packages/api-contract/src/contracts/{feature}.ts
     ],
     "models": ["packages/api/src/models/{model}.ts (新フィールド追加 or 新規モデル)"],
     "newDeps": ["sharp (画像処理)"],
-    "architecturalNotes": "認可は jwtAdminRequired。バリデーションは Zod、エラーは ApiError 使う。"
+    "architecturalNotes": "認可は jwtAdminRequired。バリデーションは Zod、エラーは ApiError 使う。",
+    "docsTargets": {
+      "assessment": "user-visible | operator-visible | internal-only",
+      "entries": [
+        {
+          "ja": "apps/crowi-site/content/docs/ja/guide/{topic}.mdx",
+          "en": "apps/crowi-site/content/docs/en/guide/{topic}.mdx",
+          "action": "edit | create",
+          "metaUpdate": false,
+          "summary": "追記 / 新規する内容の1行メモ"
+        }
+      ]
+    }
   },
   "acceptanceCriteria": [
     "spec の `## 受け入れ基準` をそのまま箇条書きで取り込む"
@@ -135,6 +170,7 @@ packages/api-contract/src/contracts/{feature}.ts
     {"type": "feat", "scope": "api", "title": "implement {feature} Hono handler"},
     {"type": "feat", "scope": "web", "title": "add {feature} UI"},
     {"type": "test", "scope": "api", "title": "cover {feature} edge cases"},
+    {"type": "docs", "scope": "site", "title": "document {feature} (ja/en)"},
     {"type": "docs", "scope": "todo", "title": "mark {feature} done"}
   ],
   "history": [
@@ -143,7 +179,8 @@ packages/api-contract/src/contracts/{feature}.ts
 }
 ```
 
-不要な commitPlan エントリは省く (UI なしなら web / docs だけ削除など)。
+不要な commitPlan エントリは省く (UI なしなら web を削除、`docsTargets.assessment` が
+`internal-only` なら `docs(site)` を削除など)。
 
 ## 出力 (報告フォーマット)
 

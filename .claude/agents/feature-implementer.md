@@ -35,9 +35,10 @@ planner が用意した task ファイルを読んで、Hono API / Next.js UI / 
 5. API 実装 (packages/api/src/hono/handlers/)
 6. UI 実装 (packages/web/src/app/) ※ task の stack に応じて
 7. テスト追加 (jest + supertest + MongoDB Memory Server)
-8. 必須チェック (下記) を全部走らせる
-9. commitPlan の各エントリに `files: [...]` を埋める
-10. status を REVIEW に更新、history に entry 追加
+8. crowi-site ドキュメント更新 (下記「ドキュメント更新」※ context.docsTargets がある場合)
+9. 必須チェック (下記) を全部走らせる
+10. commitPlan の各エントリに `files: [...]` を埋める (docs(site) の files も含める)
+11. status を REVIEW に更新、history に entry 追加
 ```
 
 ## 必須チェック (省略不可)
@@ -106,6 +107,25 @@ errors を残したまま REVIEW に出すのは禁止。直すか、解決不�
 ### 文言 (i18n)
 - 新規文言は `messages/{ja,en}.json` の該当 namespace に追加
 - byte-identical で複数 namespace に出るものは `admin.common.*` に集約
+
+## ドキュメント更新 (crowi-site)
+
+`context.docsTargets` がある場合 (= planner が利用者/運用者に見える変化と判定) は、
+実装と同じこの phase でユーザー向けドキュメント (`apps/crowi-site/`) を更新する。
+`docsTargets.assessment` が `internal-only` (= entries 空) なら **スキップ**。
+
+- **ja / en 両方を更新**する (二言語ミラー構成。片方だけだと乖離する)。ja を正本として
+  書き、en はその英訳を当てる。`docsTargets.entries[]` の各 `ja` / `en` パスが対象。
+- **`action: "edit"`**: 既存 `.mdx` の該当セクションを追記 / 修正する。
+- **`action: "create"`**: ja / en の `.mdx` を新規作成する。先頭に frontmatter
+  (`--- title: ... / description: ... ---`) を必ず付ける。`metaUpdate: true` のものは、
+  そのカテゴリの `meta.json` (ja / en 両方) の `pages` 配列に **ファイル名 (拡張子なし)** を
+  順序を考えて追記する。
+- 既存ページのスタイル (見出し階層 / 用語 / トーン) に合わせる。RFC があれば
+  `[RFC-00NN](https://github.com/crowi/crowi/blob/main/docs/rfcs/...)` 形式でリンク。
+- frontmatter の有無・meta.json の整合・リンク切れが無いかを目視確認する
+  (crowi-site は別ビルドだが、壊れたページを残さない)。
+- 更新したファイルは commitPlan の `docs(site)` エントリの `files` に入れる。
 
 ## 受け入れ基準への対応
 

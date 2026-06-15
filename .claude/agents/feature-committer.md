@@ -61,11 +61,15 @@ APPROVED の実装を、task.commitPlan で計画された **複数 commit** に
 ```json
 {
   "type": "feat",            // feat / fix / refactor / test / docs / chore
-  "scope": "api",            // api / web / api-contract / todo / *
+  "scope": "api",            // api / web / api-contract / site / todo / *
   "title": "implement attachment thumbnail generation",
   "files": ["packages/api/src/util/thumbnail.ts", "..."]
 }
 ```
+
+crowi-site (`apps/crowi-site/`) のユーザー向けドキュメント更新は **`docs(site)`** scope の
+独立した commit にする (`TODO.md` 更新の `docs(todo)` とは別)。ja / en 両方のファイルを
+同じ `docs(site)` commit にまとめてよい。
 
 メッセージは Conventional Commits:
 
@@ -79,6 +83,18 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 
 本文は spec.md の `## 背景 / why` と `## 設計の主な判断` から 3-6 行に要約。
 test / docs commit は本文 1-2 行で十分。
+
+## TODO.md の記載ルール (docs(todo) commit)
+
+`docs(todo)` エントリで `TODO.md` を更新するときは **簡潔に** 保つ。TODO.md は
+spec ではなく**全体感の把握用**で、肥大化させない (過去に一度 slim 化した経緯あり)。
+
+- 完了項目は `[ ]`→`[x]` に切り替え、**1 行に圧縮する** (実装詳細・経緯・ファイル名・
+  挙動の説明は書かない。それらは git log / RFC / spec が持つ)。spec があれば
+  `spec: feature-xxx.md` のポインタだけ残す。
+- 新規項目を足すときも 1 行。spec/RFC があるなら要約せずポインタを書く。
+- 既存の冗長な行を見つけたら、その commit のついでに 1 行へ削る (TODO は育てない)。
+- 目安: 1 項目 = 1 行。複数行に渡る prose を TODO に書かない。
 
 ## Pre-commit チェック (省略不可)
 
@@ -174,7 +190,8 @@ Commits:
 2. def5678 — feat(api): implement thumbnail generation
 3. ghi9012 — feat(web): show thumbnails in attachment list
 4. jkl3456 — test(api): cover thumbnail edge cases
-5. mno7890 — docs(todo): mark attachment thumbnail done
+5. mno7890 — docs(site): document attachment thumbnails (ja/en)
+6. pqr1234 — docs(todo): mark attachment thumbnail done
 
 Files (Σ): N 件
 Pre-commit checks: PASS
@@ -192,7 +209,7 @@ Push / PR: 未実施 (ユーザー指示待ち)
 
 ## 注意事項
 
-- commitPlan の順序を尊重する (api-contract → api → web → test → docs が典型)
+- commitPlan の順序を尊重する (api-contract → api → web → test → docs(site) → docs(todo) が典型)
 - 1 commit が大きすぎる場合は reviewer に差し戻して分割提案を求める
 - spec.md は **編集しない** (ただし task 全体完了時の削除は「spec の後始末」に従う)
 - `.feature-state/` (root) を使うこと

@@ -49,11 +49,11 @@ planner ──→ implementer ──→ simplify ──→ reviewer ─┬→ co
 
 各 phase の責務:
 
-- **planner**: spec を読み、コードベースを grep して再利用候補 (hooks / components / utils / 既存契約) を context に充填、AC を spec から起こす
-- **implementer**: 実装 + テスト、必須チェック (type-check / test / lint / format) を全部走らせる、commitPlan を埋める
+- **planner**: spec を読み、コードベースを grep して再利用候補 (hooks / components / utils / 既存契約) を context に充填、AC を spec から起こす。**利用者/運用者に見える変化なら、影響する `apps/crowi-site/` ドキュメントを特定して `context.docsTargets` に充填する** (→「crowi-site ドキュメント更新」節)
+- **implementer**: 実装 + テスト + **crowi-site ドキュメント更新 (ja/en)**、必須チェック (type-check / test / lint / format) を全部走らせる、commitPlan を埋める
 - **simplify**: `simplify` skill を呼び、reuse / quality / efficiency を整える
-- **reviewer**: AC 達成 / 契約整合 / セキュリティ / トランザクション境界を確認
-- **committer**: task.commitPlan に従って **複数 commit** を作る (feat 本体 / test / docs を分割)
+- **reviewer**: AC 達成 / 契約整合 / セキュリティ / トランザクション境界を確認。**docsTargets がある場合はドキュメント反映の有無も確認**
+- **committer**: task.commitPlan に従って **複数 commit** を作る (feat 本体 / test / docs 分割。crowi-site の更新は `docs(site)` commit に分ける)
 
 ## state 管理
 
@@ -191,7 +191,19 @@ phase ごとに分けて書いてある場合、reviewer は **その phase の 
     ],
     "models": ["packages/api/src/models/attachment.ts (thumbnail フィールド追加)"],
     "newDeps": ["sharp (画像処理)"],
-    "architecturalNotes": "Storage driver 経由で生成・保存。同期処理 (アップロード時にブロック)。"
+    "architecturalNotes": "Storage driver 経由で生成・保存。同期処理 (アップロード時にブロック)。",
+    "docsTargets": {
+      "assessment": "user-visible",
+      "entries": [
+        {
+          "ja": "apps/crowi-site/content/docs/ja/guide/attachments.mdx",
+          "en": "apps/crowi-site/content/docs/en/guide/attachments.mdx",
+          "action": "edit",
+          "metaUpdate": false,
+          "summary": "サムネイル生成と表示の節を追記"
+        }
+      ]
+    }
   },
   "acceptanceCriteria": [
     "画像添付時に 320x320 サムネが生成され S3/local 両方で取得できる",
@@ -211,6 +223,15 @@ phase ごとに分けて書いてある場合、reviewer は **その phase の 
       "scope": "api",
       "title": "cover thumbnail generation edge cases",
       "files": ["packages/api/src/util/thumbnail.test.ts"]
+    },
+    {
+      "type": "docs",
+      "scope": "site",
+      "title": "document attachment thumbnails",
+      "files": [
+        "apps/crowi-site/content/docs/ja/guide/attachments.mdx",
+        "apps/crowi-site/content/docs/en/guide/attachments.mdx"
+      ]
     },
     {
       "type": "docs",
@@ -433,6 +454,101 @@ migration skill と同じパターン。
 - 新契約は `packages/api-contract/src/contracts/{feature}.ts` に追加、build 必須
   (`pnpm --filter @crowi/api-contract build`)
 - 新 UI は `packages/web/src/app/(auth or admin)/...` 配下、shadcn/ui + tanstack/react-query
+
+## crowi-site ドキュメント更新
+
+実装が終わったら、**利用者 / 運用者に見える変化** はユーザー向けドキュメント
+(`apps/crowi-site/`) に反映する。これは実装と同じ流れの中で行い (planner が対象を
+特定 → implementer が更新 → reviewer が確認 → committer が `docs(site)` commit に分割)、
+コードと一緒に simplify / reviewer のレビュー対象に乗せる。
+
+### ドキュメントの構成
+
+```
+apps/crowi-site/content/docs/
+├── ja/                       # 日本語 (正本)
+│   ├── getting-started.mdx
+│   ├── guide/                # 利用者向け機能ガイド (pages / markdown / search / ...)
+│   ├── operations/           # 運用・管理者向け (installation / configuration / env / admin / mcp / ...)
+│   ├── plugins/              # プラグイン (overview / managing / developing / renderers)
+│   ├── reference/            # 設計資料 (architecture / rfcs / contributing)
+│   └── {category}/meta.json  # カテゴリ内のページ順 + タイトル
+└── en/                       # 英語 (ja とミラー構成・同じファイル名)
+```
+
+- **二言語ミラー構成**: `ja/` と `en/` は同じファイル名・同じ構成。**必ず両方を更新**する
+  (片方だけだと乖離する)。ja を正本として書き、en はその英訳を当てる。
+- **frontmatter 必須**: 各 `.mdx` は先頭に `title` と `description` を持つ
+  (`--- title: ... / description: ... ---`)。新規ページにも必ず付ける。
+- **meta.json**: 新規 `.mdx` を **追加** したときは、そのカテゴリの `meta.json` の
+  `pages` 配列に **ja / en 両方とも** ファイル名 (拡張子なし) を追記して順序に組み込む。
+  既存ページの編集だけなら meta.json は触らなくてよい。
+
+### 要否の判定 (planner が行う)
+
+更新するのは **利用者 / 運用者に見える変化** のときだけ。`context.docsTargets.assessment`
+に判定を記録する:
+
+| assessment | 例 | docs 更新 |
+|---|---|---|
+| `user-visible` | 新しいページ機能 / 編集挙動 / 検索 / 通知 / 添付 等、エンドユーザーが触る変化 | `guide/` を更新 |
+| `operator-visible` | 新 env / 新 admin 設定 / インストール手順 / プラグイン運用の変化 | `operations/` or `plugins/` を更新 |
+| `internal-only` | 内部 refactor / 内部 API / テスト / 観測できない最適化 | **skip** (`entries: []`) |
+
+`internal-only` のときは docs 更新も `docs(site)` commit も作らない。
+
+### 対象ファイルの探し方 (planner)
+
+1. spec の機能領域に対応する既存 `.mdx` を探す
+   (`ls apps/crowi-site/content/docs/ja/{guide,operations,plugins}` + grep で関連語を検索)。
+   - 既存ページがあれば `action: "edit"`、その ja / en パスを `docsTargets.entries[]` に書く。
+   - 該当が無く新規トピックなら `action: "create"`、適切なカテゴリに新ファイル名を決め、
+     `metaUpdate: true` を立てる (implementer が meta.json に追記する目印)。
+2. env / admin 設定が増えるなら `operations/configuration.mdx` や該当運用ページも対象に含める。
+
+`docsTargets` スキーマ:
+
+```json
+"docsTargets": {
+  "assessment": "user-visible | operator-visible | internal-only",
+  "entries": [
+    {
+      "ja": "apps/crowi-site/content/docs/ja/guide/foo.mdx",
+      "en": "apps/crowi-site/content/docs/en/guide/foo.mdx",
+      "action": "edit | create",
+      "metaUpdate": false,
+      "summary": "追記 / 新規する内容の1行メモ"
+    }
+  ]
+}
+```
+
+### 更新 (implementer)
+
+- `docsTargets.entries[]` の各エントリについて ja / en 両方を更新する。
+- `action: "create"` なら ja / en の `.mdx` を新規作成し、`metaUpdate: true` のものは
+  該当カテゴリの `meta.json` (ja / en 両方) の `pages` にファイル名を追記する。
+- 既存ページのスタイル (見出し階層 / 用語 / トーン) に合わせる。RFC があれば
+  `[RFC-00NN](https://github.com/crowi/crowi/blob/main/docs/rfcs/...)` 形式でリンクする
+  (既存ページの慣習)。
+- crowi-site は別ビルドだが、**最低限 frontmatter の有無と meta.json の整合は目視確認**する
+  (壊れたリンク / 抜け落ちページを残さない)。
+
+### commit (committer)
+
+crowi-site の更新は **`docs(site)` scope の独立した commit** にする
+(`TODO.md` 更新の `docs(todo)` とは別)。順序は `feat → test → docs(site) → docs(todo)` が典型。
+
+## TODO.md は簡潔に保つ
+
+`TODO.md` は **spec ではなく全体感の把握用**。肥大化させない (過去に一度 slim 化済み)。
+`docs(todo)` で TODO を更新するときは:
+
+- 完了項目は `[x]` に切り替えて **1 行に圧縮** (実装詳細・経緯は git log / RFC / spec が持つ)。
+- 新規項目も 1 行。spec/RFC があれば prose を書かず `spec: feature-xxx.md` のポインタだけ。
+- 1 項目 = 1 行。複数行の prose を TODO に書かない。
+- crowi-site ドキュメント (`apps/crowi-site/`) が利用者向けの詳細を持つので、TODO に運用詳細を
+  二重に書かない (`Operator runbooks` 節も 1 行ポインタに留める)。
 
 ## Crowi テーマ
 
