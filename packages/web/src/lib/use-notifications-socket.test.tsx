@@ -4,6 +4,14 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { PropsWithChildren } from 'react';
 import { createElement } from 'react';
 
+// feature-web-cross-origin-runtime-env: `resolve-ws-url` now reads
+// NEXT_PUBLIC_* via next-runtime-env's runtime `env()` (`./runtime-env`). Mock
+// it to read live from `process.env` so the `resolveNotificationsUrl`
+// precedence tests below keep driving it through `process.env`.
+vi.mock('./runtime-env', () => ({
+  env: (key: string) => process.env[key],
+}));
+
 // Mock `apiClientV2` so the token query reads our fake
 // `notifications.token.$get`. The hook calls `apiClientV2.notifications.token.$get()`
 // directly; we replace that single method.
@@ -508,13 +516,18 @@ describe('resolveNotificationsUrl', () => {
     else process.env.NEXT_PUBLIC_API_URL = originalApi;
   });
 
-  it('falls back to localhost when neither env var is set', () => {
+  it('derives from window.location when neither env var is set (same-origin image default)', () => {
+    // feature-web-image-runtime-config: no baked URL → the distributed image
+    // dials its own origin. jsdom serves the suite from http://localhost:3000.
     delete process.env.NEXT_PUBLIC_COLLAB_URL;
     delete process.env.NEXT_PUBLIC_API_URL;
-    expect(resolveNotificationsUrl()).toBe('ws://localhost:4301/notifications');
+    expect(resolveNotificationsUrl()).toBe('ws://localhost:3000/notifications');
   });
 
-  it('uses NEXT_PUBLIC_API_URL as-is when no collab override is set', () => {
+  it('uses NEXT_PUBLIC_API_URL as-is when set (dev / Vercel) — NOT window.location', () => {
+    // Dev (api :4301) and Vercel builds bake NEXT_PUBLIC_API_URL; the WS must
+    // target it, not the Next dev server origin whose HTTP rewrites drop the
+    // WS upgrade.
     delete process.env.NEXT_PUBLIC_COLLAB_URL;
     process.env.NEXT_PUBLIC_API_URL = 'https://api.example.com';
     expect(resolveNotificationsUrl()).toBe('wss://api.example.com/notifications');

@@ -59,9 +59,9 @@ vi.mock('@/lib/api-client', () => ({
       },
     },
   },
-  // RFC-0004: the paste handler's upload-placeholder reads API_BASE_URL
-  // at module load — the editor now imports it transitively.
-  API_BASE_URL: 'http://localhost:4301',
+  // RFC-0004: the paste handler's upload-placeholder builds its URL from
+  // `apiV2BaseUrl()` (read at call time) — the editor imports it transitively.
+  apiV2BaseUrl: () => 'http://localhost:4301/api/v2',
 }));
 
 // Phase 8: useCollabSession now reads `useAuth()` to publish the
