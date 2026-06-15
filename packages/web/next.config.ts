@@ -1,7 +1,19 @@
 import path from 'node:path';
 import type { NextConfig } from 'next';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4301';
+// Proxy target for the `rewrites()` below — the URL the Next server uses to
+// reach the api (not the browser; a server-runtime env, NOT `NEXT_PUBLIC_*`).
+//
+// IMPORTANT: with `output: 'standalone'`, `rewrites()` is evaluated at BUILD
+// time and the destination is frozen into `routes-manifest.json`; the runtime
+// `node server.js` does NOT re-evaluate it. So `CROWI_API_URL` set on a built
+// image does NOT change where the standalone server proxies — it only takes
+// effect where the config is evaluated at request time: `pnpm dev` (next dev)
+// and Vercel's edge (which proxies `rewrites()` per request; set CROWI_API_URL
+// as a Vercel build env). For SELF-HOST production the recommended topology is a
+// front reverse proxy that routes `/api`,`/files`,WS to the api — there Next
+// never proxies `/api` and this rewrite is unused. See operations/deployment.
+const API_URL = process.env.CROWI_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4301';
 
 // Hosts allowed to reach Next.js dev resources (`/_next/*`, HMR) from a
 // different origin — e.g. testing from another LAN device or over Tailscale.
@@ -40,20 +52,23 @@ const nextConfig: NextConfig = {
   // - Without trailing slash: page itself
   skipTrailingSlashRedirect: true,
 
-  // Proxy `/api/v2/*` to the Crowi API server. In dev the API runs on
-  // a different port (4301) than the web app (4302), so relative URLs
-  // in markdown / `<img src>` would otherwise fail with cross-origin
-  // 404. In production the operator typically runs both behind a
-  // single domain — `NEXT_PUBLIC_API_URL` then points at the same
-  // origin and the rewrite is a no-op pass-through.
+  // Proxy `/api/v2/*` to the Crowi API server (`CROWI_API_URL`). In dev the
+  // API runs on a different port (4301) than the web app (4302), so relative
+  // URLs in markdown / `<img src>` would otherwise fail with cross-origin
+  // 404. In the recommended same-origin self-host setup the browser hits
+  // `/api/v2/...` on its own origin and this rewrite forwards to the api
+  // container (`CROWI_API_URL=http://api:3000`).
   //
   // Collab WebSocket (`/collab/:pageId`) is intentionally NOT
   // proxied here: Next.js `rewrites()` is HTTP-only and does not
   // forward `upgrade` events. The client instead derives the WS URL
-  // from `NEXT_PUBLIC_API_URL` in `use-collab-document.ts`, hitting
-  // the api process directly (= same origin in prod, port 4301 in
-  // dev). Cross-origin WS in dev is fine — browsers don't enforce
-  // same-origin for WebSocket and Hocuspocus doesn't gate on Origin.
+  // from `window.location` (or `NEXT_PUBLIC_COLLAB_URL` when set) in
+  // `use-collab-document.ts`; the outer reverse proxy must route
+  // `/collab/*` (and `/presence/*`, `/notifications/*`) WS upgrades to
+  // the api. In dev the client derives from `NEXT_PUBLIC_API_URL`
+  // (:4301) instead — cross-origin WS in dev is fine, browsers don't
+  // enforce same-origin for WebSocket and Hocuspocus doesn't gate on
+  // Origin.
   async rewrites() {
     return [
       { source: '/api/v2/:path*', destination: `${API_URL}/api/v2/:path*` },

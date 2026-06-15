@@ -14,10 +14,18 @@
 #
 # Build context: repository root (`docker build -f packages/web/Dockerfile .`).
 #
-# NOTE: `NEXT_PUBLIC_*` env vars are inlined at build time. To deploy this
-# image against a different API URL, rebuild with a new
-# `--build-arg NEXT_PUBLIC_API_URL=...`. docker-compose passes the
-# service-name URL (`http://api:3000`) by default.
+# RUNTIME-CONFIGURED API URL: this image bakes NO absolute API URL. The browser
+# hits `/api/v2/...`,`/files/...` on its own origin (relative paths — see
+# `src/lib/api-client.ts`) and derives WS URLs from `window.location`.
+# RECOMMENDED TOPOLOGY: put a front reverse proxy (Caddy / nginx) in front that
+# routes `/api`,`/files`,`/collab`,`/presence`,`/notifications` to the api and
+# everything else to this web server — one built image then works against any
+# api host with no rebuild. NOTE: `next.config.ts`'s `rewrites()` proxy is baked
+# at build for `output: 'standalone'`, so `CROWI_API_URL` does NOT runtime-config
+# the standalone server's proxy (it only applies in `pnpm dev` / on Vercel's
+# edge) — do not rely on Next to proxy `/api` in self-host prod; use the front
+# proxy. Cross-origin overrides (`NEXT_PUBLIC_API_URL` / `NEXT_PUBLIC_COLLAB_URL`)
+# are read at runtime via window.__ENV. See operations/deployment in the docs.
 #
 ARG NODE_VERSION=24-bookworm-slim
 
@@ -42,10 +50,10 @@ COPY packages/ ./packages/
 # Install only @crowi/web's workspace subgraph.
 RUN pnpm install --frozen-lockfile --filter @crowi/web...
 
-# NEXT_PUBLIC_* values are baked into the build at compile time. Provide a
-# sensible compose default; override with `--build-arg` for other deployments.
-ARG NEXT_PUBLIC_API_URL=http://api:3000
-ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+# No NEXT_PUBLIC_API_URL is baked here on purpose: the browser uses relative
+# `/api/v2` paths and WS URLs derived from `window.location`, so the API URL is
+# supplied at runtime via `CROWI_API_URL` (see the runtime stage below). This
+# keeps the image generic across deployments.
 
 # Runs paraglide:compile via the prebuild hook in packages/web/package.json,
 # then `next build` produces `.next/standalone/` + `.next/static/`.
@@ -59,6 +67,13 @@ FROM base AS runtime
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
+
+# NOTE: `CROWI_API_URL` (the `next.config.ts` `rewrites()` proxy target) is
+# BAKED AT BUILD for `output: 'standalone'` — the runtime `node server.js` does
+# NOT re-read it. It only applies in `pnpm dev` / on Vercel's edge. For
+# self-host production, front this image with a reverse proxy that routes
+# /api,/files,WS to the api (see the comment at the top of this file and
+# operations/deployment); do not rely on the web server to proxy /api itself.
 
 WORKDIR /app
 

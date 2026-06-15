@@ -5,6 +5,7 @@ import { headers } from 'next/headers';
 import { InstallerGate } from '@/components/installer-gate';
 import { LocaleBridge } from '@/components/locale-bridge';
 import { Providers } from '@/lib/providers';
+import { publicRuntimeEnvScript } from '@/lib/public-runtime-env';
 import { PARAGLIDE_LOCALE_HEADER } from '@/proxy';
 import './globals.css';
 
@@ -57,6 +58,18 @@ export default async function RootLayout({
   // mismatches in descendants are still reported.
   return (
     <html lang={locale} className="scroll-smooth" data-scroll-behavior="smooth" suppressHydrationWarning>
+      <head>
+        {/* Runtime public-env injection (feature-web-cross-origin-runtime-env):
+            a SYNCHRONOUS inline script sets `window.__ENV` from the container's
+            request-time NEXT_PUBLIC_* values, so one image targets any (incl.
+            cross-origin) api host with no rebuild. It must run before the app's
+            async chunks evaluate — a plain inline <script> does (during HTML
+            parse), unlike a `beforeInteractive` script which is queued and can
+            land after early module reads. This RootLayout otherwise has no
+            explicit <head> (metadata + font className handle it). */}
+        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: trusted operator env; `<` is escaped in publicRuntimeEnvScript */}
+        <script dangerouslySetInnerHTML={{ __html: publicRuntimeEnvScript() }} />
+      </head>
       {/* suppressHydrationWarning: browser extensions (ColorZilla, Grammarly, …)
           inject attributes like `cz-shortcut-listen` onto <body> before React
           hydrates. Suppressing here only silences the one <body> node — real

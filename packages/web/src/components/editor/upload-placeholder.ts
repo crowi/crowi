@@ -1,5 +1,5 @@
 import type { EditorView } from '@codemirror/view';
-import { API_BASE_URL } from '@/lib/api-client';
+import { apiV2BaseUrl } from '@/lib/api-client';
 import { getAccessToken } from '@/lib/auth-token';
 import { notify } from '@/lib/notify';
 
@@ -235,7 +235,7 @@ export function uploadAttachment(
   onProgress: (percent: number) => void,
 ): Promise<UploadOutcome> {
   return new Promise<UploadOutcome>((resolve, reject) => {
-    const url = `${UPLOAD_BASE_URL}/attachments/upload`;
+    const url = `${apiV2BaseUrl()}/attachments/upload`;
 
     const form = new FormData();
     form.append('file', file, filename);
@@ -274,9 +274,6 @@ export function uploadAttachment(
     xhr.send(form);
   });
 }
-
-/** Base URL for the upload XHR — the `/api/v2` mount under the shared api host. */
-const UPLOAD_BASE_URL = `${API_BASE_URL}/api/v2`;
 
 /**
  * Drive one file upload end-to-end against an `EditorView`: insert the

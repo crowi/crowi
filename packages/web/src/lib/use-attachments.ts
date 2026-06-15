@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiClientV2, API_BASE_URL } from './api-client';
+import { apiClientV2, apiV2BaseUrl } from './api-client';
 import { getAccessToken } from './auth-token';
 import type { Attachment, AttachmentMeta, ListAttachmentsResponse } from '@crowi/api-contract';
 
@@ -89,7 +89,7 @@ export function useAddAttachment(pageId: string | undefined) {
       formData.append('file', file);
 
       const accessToken = getAccessToken();
-      const response = await fetch(`${API_BASE_URL}/api/v2/pages/${encodeURIComponent(pageId)}/attachments`, {
+      const response = await fetch(`${apiV2BaseUrl()}/pages/${encodeURIComponent(pageId)}/attachments`, {
         method: 'POST',
         headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
         body: formData,

@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { PresenceViewersMessageSchema, type PresenceTokenResponse, type PresenceViewer } from '@crowi/api-contract';
 import { apiClientV2 } from './api-client';
 import { createAntiFlickerState, ingestBroadcast, refreshAdmissions, visibleViewers } from './presence-anti-flicker';
+import { resolveWsUrl } from './resolve-ws-url';
 
 /**
  * RFC-0005 Phase 2 — live presence WebSocket client.
@@ -64,18 +65,13 @@ export interface UsePresenceResult {
 }
 
 /**
- * Resolve the `/presence` WebSocket base URL. Mirrors
- * `use-collab-document`'s `resolveCollabUrl` exactly — same env
- * precedence (`NEXT_PUBLIC_COLLAB_URL` wins, else derive from
- * `NEXT_PUBLIC_API_URL`) because `/presence` and `/collab` attach to
- * the same api `http.Server`. We deliberately do NOT use
- * `window.location` — Next.js `rewrites()` is HTTP-only and silently
- * drops WebSocket `upgrade` events in the dev split.
+ * Resolve the `/presence` WebSocket base URL. Delegates to the shared
+ * `resolveWsUrl` so `/presence`, `/collab` and `/notifications` share one
+ * resolution order (explicit override → `NEXT_PUBLIC_API_URL` → window.location
+ * → localhost). See `resolve-ws-url.ts` for the full rationale.
  */
 function resolvePresenceUrl(): string {
-  const fromEnv = process.env.NEXT_PUBLIC_COLLAB_URL;
-  const base = fromEnv && fromEnv.length > 0 ? fromEnv.replace(/\/collab$/, '') : process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4301';
-  return `${base.replace(/^http/, 'ws')}/presence`;
+  return resolveWsUrl('presence');
 }
 
 /**
