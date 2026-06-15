@@ -1,0 +1,21 @@
+# Minimal same-origin front proxy for the docker-compose `app` profile.
+#
+# The browser talks only to this one origin (Caddy); Caddy routes by path so
+# the web app stays same-origin — relative `/api/v2`, `/files`, inline
+# attachment images, the first-party auth cookie and the realtime WebSockets
+# all work without baking any api URL into the web image. This mirrors the
+# recommended self-host topology (A) in operations/deployment.
+#
+# Caddy forwards the WebSocket `Upgrade` automatically — no extra config needed.
+:80 {
+	# HTTP API + attachments → api
+	@api path /api/* /files/*
+	reverse_proxy @api api:3000
+
+	# Realtime WebSocket namespaces → api
+	@ws path /collab/* /presence/* /notifications/*
+	reverse_proxy @ws api:3000
+
+	# Everything else → web (Next.js)
+	reverse_proxy web:3000
+}

@@ -52,8 +52,9 @@ details.
 | -------- | -------- | ------- |
 | `WS_TOKEN_SECRET` | Required for multi-instance | HMAC signing key for the short-lived JWT (wsToken) used to authenticate WebSocket connections. Must be the **same value** on every replica in a multi-instance deployment. When unset, a random secret is generated per process and a warning is logged |
 | `COLLAB_MAX_EDITORS_PER_PAGE` | No (default `20`) | Per-page simultaneous-editor cap. Clients above the cap connect read-only |
-| `NEXT_PUBLIC_COLLAB_URL` | No | The WebSocket URL the browser dials. When unset, it is derived from `NEXT_PUBLIC_API_URL` + `window.location`. Set it only when the api and web run on **distinct hosts** (i.e. `/collab/*` is not reverse-proxied to the same host as the web) |
-| `NEXT_PUBLIC_API_URL` | Required for the web | The api origin as seen by the browser. This is a **web-side** variable, baked in at build time in the Docker image (the compose default is `http://api:3000`) |
+| `NEXT_PUBLIC_COLLAB_URL` | No | The WebSocket URL the browser dials, read at **runtime** (`window.__ENV`). When unset: `NEXT_PUBLIC_API_URL` → dev api port → `window.location`. Set it when the api/web run on **distinct hosts** or on Vercel (whose edge cannot proxy WS) |
+| `NEXT_PUBLIC_API_URL` | No (cross-origin only) | The absolute api origin as seen by the **browser**, read at **runtime** (`window.__ENV`, no rebuild). Leave **unset** for the recommended same-origin + reverse-proxy setup (the browser uses relative `/api/v2`). Set it only for the cross-origin topology — see [Deployment topologies](./deployment) |
+| `CROWI_API_URL` | No | The api URL the Next **server** uses for its `rewrites()` proxy. Baked at build for `output: 'standalone'`, so it applies only in `pnpm dev` / on Vercel's edge — self-host production uses a front reverse proxy instead |
 
 > **Tip**: Both `WS_TOKEN_SECRET` and `CROWI_ENCRYPTION_KEY` can be
 > generated with `openssl rand -base64 32`. `CROWI_ENCRYPTION_KEY` can

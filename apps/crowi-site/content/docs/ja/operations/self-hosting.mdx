@@ -198,55 +198,24 @@ CMD ["node", "node_modules/@crowi/api/dist/app.js"]
 
 ## web フロントエンドを結線する
 
-web は `packages/web/Dockerfile` からビルドします。ここで **最重要** なのが
-`NEXT_PUBLIC_API_URL` です。
+web は `packages/web/Dockerfile` からビルドします。ビルド済みの
+`crowi/crowi-web` イメージは **描画専任** の Next サーバで、**絶対 API URL を一切
+焼き込みません**。ブラウザは自分のオリジンの相対パス `/api/v2`・`/files` を叩き、
+WebSocket URL は `window.location` から導出します。よって 1 つのイメージが任意の
+api 先で動きますが、それらのパスを api へ振る **前段リバースプロキシが必要** です。
 
 <Callout type="warn">
-  `NEXT_PUBLIC_API_URL` は **ビルド時に静的に焼き込まれます**（Next.js の
-  `NEXT_PUBLIC_*` の仕様）。実行時の環境変数では変えられません。**ブラウザから
-  到達できる API の URL** を、必ず `--build-arg` で渡してビルドしてください。
-  コンテナ間のホスト名（`http://api:3000` など）はブラウザからは解決できないため
-  不可です。
+  web サーバを直接公開して `/api` の proxy を任せ **ない** でください。`output:
+  'standalone'` では Next の `rewrites()` proxy 宛先が **ビルド時に焼かれ**
+  (`CROWI_API_URL` を実行時に読まない)、直接公開した web サーバは build 時の既定先に
+  proxy してしまい api に届きません。前段にリバースプロキシを置いてください。
 </Callout>
 
-### 単一ドメイン + リバースプロキシ（推奨）
-
-web と api を同一オリジンで配信し、プロキシで振り分ける構成です。この場合
-`NEXT_PUBLIC_API_URL` は **公開オリジンそのもの** を指定します。
-
-```bash
-docker build -f packages/web/Dockerfile \
-  --build-arg NEXT_PUBLIC_API_URL=https://wiki.example.com \
-  -t my-crowi-web .
-```
-
-プロキシ側で次のように振り分けます（nginx 例）。
-
-```nginx
-location /api/ {
-  proxy_pass http://api:3000;
-}
-location /collab/ {
-  proxy_pass http://api:3000;
-  proxy_http_version 1.1;
-  proxy_set_header Upgrade    $http_upgrade;   # WebSocket
-  proxy_set_header Connection "upgrade";
-}
-location / {
-  proxy_pass http://web:3000;
-}
-```
-
-`NEXT_PUBLIC_COLLAB_URL` は **省略推奨** です。未設定なら web は
-`window.location.host` と `NEXT_PUBLIC_API_URL` から WebSocket URL を導出するため、
-`/collab/*` を同一ホストにプロキシしていればそのまま動きます。
-
-### api / web を別オリジンで配信する場合
-
-別ドメイン（例: web=`https://wiki.example.com`、api=`https://api.example.com`）で
-配信する場合は、`NEXT_PUBLIC_API_URL=https://api.example.com` でビルドし、api 側で
-`CLIENT_URL=https://wiki.example.com` を設定して CORS を許可します。`/collab/*` を
-api ドメイン側に逃がす場合は `NEXT_PUBLIC_COLLAB_URL` を明示します。
+推奨構成は web と api の前段に **同一オリジン + リバースプロキシ** を置く形です。
+プロキシの振り分け(`/api`・`/files`、およびリアルタイムの `/collab`・`/presence`・
+`/notifications` の WebSocket アップグレード)の Caddy / nginx 最小例と、
+クロスオリジン・Vercel / PaaS の各バリエーションは
+[デプロイ構成](./deployment) にまとめてあります。本番投入前に必ず読んでください。
 
 ## 起動順とヘルスチェック
 
