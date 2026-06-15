@@ -14,13 +14,21 @@ export default async function Page({ params }: { params: Promise<{ lang: string;
 
   const MDX = page.data.body;
 
-  // Resolve file-relative MDX links (e.g. ./getting-started) against the
-  // page's own URL — which already carries the locale prefix — instead of
-  // letting the browser resolve them against the rendered path. With
-  // `trailingSlash: false` the docs index renders at /{lang}/docs (no
-  // trailing slash), so a raw ./getting-started would resolve against
-  // /{lang}/ and 404. Anchored on page.url so it is correct on every page.
-  const base = page.url.endsWith('/') ? page.url : `${page.url}/`;
+  // Resolve file-relative MDX links (e.g. ./encryption) against the page's
+  // own URL — which already carries the locale prefix — instead of letting
+  // the browser resolve them against the rendered path (which 404s under
+  // `trailingSlash: false`, where /{lang}/docs has no trailing slash).
+  //
+  // The base must match the page's *source directory* so authoring uses the
+  // standard markdown convention: `./sibling` = same folder, `../other/x` =
+  // sibling folder. A folder-index page (the docs root, or any page that has
+  // descendant pages) owns its URL as a directory, so its base is `url + /`.
+  // A leaf page lives *inside* its parent folder, so its base strips the last
+  // URL segment — otherwise `./sibling` would wrongly resolve to a child path
+  // (e.g. /docs/operations/configuration/encryption instead of
+  // /docs/operations/encryption).
+  const isFolderIndex = source.getPages(lang).some((p) => p.url.startsWith(`${page.url}/`));
+  const base = isFolderIndex ? `${page.url}/` : page.url.slice(0, page.url.lastIndexOf('/') + 1);
   const DefaultAnchor = defaultMdxComponents.a ?? 'a';
   const components = {
     ...defaultMdxComponents,
