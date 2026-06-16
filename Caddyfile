@@ -12,8 +12,12 @@
 	@api path /api/* /files/*
 	reverse_proxy @api api:3000
 
-	# Realtime WebSocket namespaces → api
-	@ws path /collab/* /presence/* /notifications/*
+	# Realtime WebSocket namespaces → api. The browser dials the bare namespace
+	# (`/collab`, `/presence`, `/notifications`) — Hocuspocus / presence /
+	# notifications carry the document / page id in the protocol, not the path —
+	# so each matcher must list the exact path AND the `/*` sub-path form: in
+	# Caddy `path /collab/*` does NOT match a bare `/collab`.
+	@ws path /collab /collab/* /presence /presence/* /notifications /notifications/*
 	reverse_proxy @ws api:3000
 
 	# Everything else → web (Next.js)
