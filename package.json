@@ -50,8 +50,7 @@
     "format:check": "biome format .",
     "check:workspace": "node scripts/check-workspace-protocol.mjs",
     "check:openapi": "node scripts/check-openapi-fresh.mjs",
-    "clean": "turbo run clean",
-    "changelog": "conventional-changelog -p conventionalcommits -i CHANGES.md -s"
+    "clean": "turbo run clean"
   },
   "bugs": {
     "url": "https://github.com/crowi/crowi/issues"
@@ -59,7 +58,6 @@
   "devDependencies": {
     "@biomejs/biome": "^2.4.14",
     "@changesets/cli": "^2.31.0",
-    "conventional-changelog-cli": "^5.0.0",
     "lefthook": "^2.1.6",
     "turbo": "^2.9.16"
   }
