@@ -63,6 +63,19 @@ namespace. Because `crowi-admin` connects directly to MongoDB, run it from
 the runner project directory (where `@crowi/api` is installed). In the
 monorepo, the `pnpm migrate` wrapper runs the same CLI.
 
+In the **official Docker image**, `crowi-admin` is bundled into the runner
+project tree (rooted at `/app`), so you run it inside the container:
+
+```bash
+# Apply pending preflight migrations inside the running container
+docker compose run --rm --entrypoint node api \
+  node_modules/@crowi/admin-cli/dist/bin.js migrate apply
+```
+
+This matters most for the preflight `block` policy below: when a deploy
+introduces an unapplied preflight migration the api refuses to boot, and the
+command above is how you unblock it from inside the image.
+
 Migrations are split into two layers:
 
 - **boot** migrations apply automatically when the api starts.

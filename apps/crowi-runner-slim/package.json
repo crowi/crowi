@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@crowi/api": "workspace:^",
+    "@crowi/admin-cli": "workspace:^",
     "@crowi/plugin-api": "workspace:^",
     "@crowi/runner": "workspace:^",
     "@crowi/plugin-mail-smtp": "workspace:^",

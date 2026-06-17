@@ -67,6 +67,9 @@ importers:
 
   apps/crowi-runner:
     dependencies:
+      '@crowi/admin-cli':
+        specifier: workspace:^
+        version: link:../../packages/admin-cli
       '@crowi/api':
         specifier: workspace:^
         version: link:../../packages/api
@@ -115,6 +118,9 @@ importers:
 
   apps/crowi-runner-slim:
     dependencies:
+      '@crowi/admin-cli':
+        specifier: workspace:^
+        version: link:../../packages/admin-cli
       '@crowi/api':
         specifier: workspace:^
         version: link:../../packages/api
