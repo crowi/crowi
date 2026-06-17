@@ -148,7 +148,7 @@ const plugin: CrowiPlugin = {
 
   adminPlacement: {
     section: 'renderer',
-    label: 'Crowi v1 互換レンダラー',
+    label: 'Crowi v1 compatibility',
     icon: 'wand-2',
   },
 

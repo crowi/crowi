@@ -20,7 +20,7 @@ const plugin: CrowiPlugin = {
   version: '0.1.0-dev',
   configSchema: LocalStorageConfigSchema,
   adminPlacement: {
-    label: 'ローカルストレージ',
+    label: 'Local storage',
     icon: 'hard-drive',
     // section omitted: derived from registerStorage → 'storage'
   },
