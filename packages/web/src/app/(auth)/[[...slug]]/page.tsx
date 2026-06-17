@@ -1,13 +1,13 @@
 'use client';
 
-import { usePathname, useSearchParams } from 'next/navigation';
+import { notFound, usePathname, useSearchParams } from 'next/navigation';
 import { IdRedirector } from '@/components/id-redirector';
 import { PageList } from '@/components/page-list/page-list';
 import { PageView } from '@/components/page-view';
 import { UserDirectoryPreview } from '@/components/user-directory/user-directory-preview';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { isObjectId } from '@/lib/object-id';
-import { decodePagePathFromUrl, pageDisplayName } from '@/lib/page-path';
+import { decodePagePathFromUrl, isReservedApiPath, pageDisplayName } from '@/lib/page-path';
 import { usePageTitle } from '@/lib/use-page-title';
 
 export default function CatchAllPage() {
@@ -32,6 +32,15 @@ export default function CatchAllPage() {
   // /crowi/rfc/0001-plugin-architecture → "0001-plugin-architecture");
   // the top page has no segment.
   usePageTitle(pageDisplayName(path) || null);
+
+  // `/api/*` (incl. bare `/api`) is the reverse-proxied backend namespace,
+  // not a wiki page. Only `/api/v2/*` is proxied to the api; the bare `/api`
+  // segment and other non-proxied `/api/*` leak to this catch-all, where
+  // they must NOT render the "create this page" affordance — 404 instead.
+  // The server mirrors this in `Page.isCreatableName`.
+  if (isReservedApiPath(path)) {
+    notFound();
+  }
 
   // Single-segment 24-char hex ObjectId → resolve to the page's actual path.
   if (segments.length === 1 && isObjectId(segments[0])) {

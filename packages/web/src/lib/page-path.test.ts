@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   decodePagePathFromUrl,
   defaultDraftBody,
+  isReservedApiPath,
   isUserHomePath,
   pageBasename,
   pageDefaultTitle,
@@ -122,6 +123,21 @@ describe('isUserHomePath', () => {
     expect(isUserHomePath('/user')).toBe(false);
     expect(isUserHomePath('/crowi/rfc')).toBe(false);
     expect(isUserHomePath('/')).toBe(false);
+  });
+});
+
+describe('isReservedApiPath', () => {
+  it('matches the backend namespace, bare or nested', () => {
+    expect(isReservedApiPath('/api')).toBe(true);
+    expect(isReservedApiPath('/api/')).toBe(true);
+    expect(isReservedApiPath('/api/v2/mcp')).toBe(true);
+    expect(isReservedApiPath('/api/anything')).toBe(true);
+  });
+
+  it('is segment-bounded — a word that merely starts with "api" is a normal page', () => {
+    expect(isReservedApiPath('/apiary')).toBe(false);
+    expect(isReservedApiPath('/crowi/api')).toBe(false);
+    expect(isReservedApiPath('/')).toBe(false);
   });
 });
 

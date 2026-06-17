@@ -23,6 +23,26 @@ export function isUserHomePath(path: string): boolean {
 }
 
 /**
+ * Whether `path` belongs to the reverse-proxied backend namespace
+ * (`/api`, `/api/...`) rather than the wiki. In the recommended
+ * deployment the front proxy forwards `/api/v2/*` to the api, but the
+ * bare `/api` segment (and any other non-proxied `/api/*`) falls through
+ * to the Next.js catch-all — where it must NOT be rendered as a missing
+ * wiki page offering a "create this page" affordance.
+ *
+ * The match is segment-bounded, mirroring the server's
+ * `Page.isCreatableName` (`packages/api/src/models/page.ts`), which also
+ * refuses to create / rename a page under `/api`.
+ *
+ *   /api      → true
+ *   /api/v2/x → true
+ *   /apiary   → false  (a real word, not the namespace)
+ */
+export function isReservedApiPath(path: string): boolean {
+  return /^\/api(\/.*|$)/.test(path);
+}
+
+/**
  * The directory portion of a wiki path — everything up to and including the
  * final slash before the basename. The natural pair of `pageBasename`, used
  * by the list view to render a muted path prefix beneath the page title.
