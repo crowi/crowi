@@ -4,41 +4,29 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { HocuspocusProvider, WebSocketStatus } from '@hocuspocus/provider';
 import type { Awareness } from 'y-protocols/awareness';
 import * as Y from 'yjs';
+import { resolveWsUrl } from './resolve-ws-url';
 
 /**
- * Resolve the WebSocket endpoint the HocuspocusProvider should
- * connect to. RFC-0003 Phase 8.5 (same-process attach):
+ * Resolve the WebSocket endpoint the HocuspocusProvider should connect to.
+ * RFC-0003 Phase 8.5 (same-process attach). Delegates to the shared
+ * `resolveWsUrl` so `/collab`, `/presence` and `/notifications` share one
+ * resolution order:
  *
- *   1. `NEXT_PUBLIC_COLLAB_URL` env wins when set — operators that
- *      front collab on a distinct host (e.g. `wss://collab.example.com`)
- *      configure it explicitly.
- *   2. Otherwise derive from `NEXT_PUBLIC_API_URL` — same host the
- *      HTTP client (`api-client.ts`) uses. The api process is the
- *      one that runs the embedded Hocuspocus engine, so collab WS
- *      and HTTP requests target the same origin. `http(s)://` →
- *      `ws(s)://` rewrite picks the right protocol automatically.
+ *   1. `NEXT_PUBLIC_COLLAB_URL` override wins — operators fronting collab on a
+ *      distinct host (e.g. `wss://collab.example.com`).
+ *   2. `NEXT_PUBLIC_API_URL` when set — dev (api :4301) and Vercel / PaaS
+ *      builds. Deliberately NOT `window.location`: in the dev split a
+ *      location-derived URL hits the Next dev server (web :4302), whose
+ *      HTTP-only `rewrites()` silently drops the WS `upgrade`.
+ *   3. `window.location` — the same-origin `crowi/crowi-web` image default;
+ *      the outer reverse proxy routes `/collab/*` WS upgrades to the api.
  *
- * **Why not `window.location.host`?** Next.js's `rewrites()` config
- * is HTTP-only — it does NOT proxy WebSocket `upgrade` events. So in
- * the dev split (web :4302 / api :4301) a location-derived URL would
- * hit the Next.js dev server, which has no handler for the upgrade
- * and silently drops the connection. Routing through the same env
- * the HTTP client uses keeps dev and prod consistent.
- *
- * Fallback `'http://localhost:4301'` mirrors `api-client.ts` /
- * `next.config.ts`, so an unset `NEXT_PUBLIC_API_URL` resolves to
- * the dev api port out of the box.
+ * The `${url}/${name}` join in HocuspocusProvider then produces
+ * `ws[s]://<host>/collab/<pageId>` — matching the path filter in
+ * `packages/api/src/collab/attach.ts`. See `resolve-ws-url.ts` for details.
  */
 function resolveCollabUrl(): string {
-  const fromEnv = process.env.NEXT_PUBLIC_COLLAB_URL;
-  if (fromEnv && fromEnv.length > 0) return fromEnv;
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4301';
-  // `^http` matches both `http` and `https`; the prepend yields
-  // `ws://` / `wss://` accordingly. The `/collab` suffix lines the
-  // base URL up so HocuspocusProvider's `${url}/${name}` join
-  // produces `ws[s]://<host>/collab/<pageId>` — matching the path
-  // filter in `packages/api/src/collab/attach.ts`.
-  return `${apiUrl.replace(/^http/, 'ws')}/collab`;
+  return resolveWsUrl('collab');
 }
 
 /**

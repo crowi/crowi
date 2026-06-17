@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { NotificationsServerMessageSchema, type NotificationsTokenResponse } from '@crowi/api-contract';
 import { apiClientV2 } from './api-client';
+import { resolveWsUrl } from './resolve-ws-url';
 import { useAuth } from './use-auth';
 import { notificationKeys } from './use-notifications';
 
@@ -78,30 +79,17 @@ const NOTIFICATIONS_CLOSE_INVALID_TOKEN = 4401;
 const NOTIFICATIONS_CLOSE_FORBIDDEN = 4403;
 
 /**
- * Resolve the `/notifications` WebSocket base URL. Mirrors
- * `use-presence`'s `resolvePresenceUrl` exactly — same env precedence
- * (`NEXT_PUBLIC_COLLAB_URL` wins, else derive from
- * `NEXT_PUBLIC_API_URL`) because all three WebSocket namespaces
- * (`/collab`, `/presence`, `/notifications`) attach to the same api
- * `http.Server`. We deliberately do NOT use `window.location` — the
- * Next.js dev split's HTTP rewrites silently drop WebSocket upgrade
- * events.
- *
- * The base value is normalised so the resulting URL never has a
- * double slash (`/notifications` is always appended fresh):
- *   - any trailing slash is stripped (`http://api/` → `http://api`)
- *   - a `/collab` or `/notifications` suffix (with or without trailing
- *     slash) is stripped so operators can point all three namespaces
- *     at the same env var without producing
- *     `/notifications/notifications` or `/collab/notifications`.
+ * Resolve the `/notifications` WebSocket base URL. Delegates to the shared
+ * `resolveWsUrl` so all three WebSocket namespaces (`/collab`, `/presence`,
+ * `/notifications`) share one resolution order: explicit
+ * `NEXT_PUBLIC_COLLAB_URL` override → `NEXT_PUBLIC_API_URL` (dev / Vercel) →
+ * `window.location` (same-origin image) → localhost fallback. See
+ * `resolve-ws-url.ts` for the full rationale.
  *
  * Exported for unit testing — internal otherwise.
  */
 export function resolveNotificationsUrl(): string {
-  const fromEnv = process.env.NEXT_PUBLIC_COLLAB_URL;
-  const raw = fromEnv && fromEnv.length > 0 ? fromEnv : process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4301';
-  const base = raw.replace(/\/(collab|notifications)\/?$/, '').replace(/\/$/, '');
-  return `${base.replace(/^http/, 'ws')}/notifications`;
+  return resolveWsUrl('notifications');
 }
 
 /**

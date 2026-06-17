@@ -1,0 +1,219 @@
+---
+title: デプロイ構成
+description: crowi/crowi-web イメージを api に向ける方法 — 同一オリジン + リバースプロキシ(推奨)、クロスオリジンの制約、Vercel / PaaS、ローカル開発
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Crowi のデプロイは **2 つのサービス** で構成されます: `api`(Hono)と
+`web`(Next.js)。web 側の要点は **ブラウザがどうやって api に到達するか** です。
+
+結論かつ推奨構成: **ブラウザには単一オリジンを見せ、前段にリバースプロキシを置いて**
+パスごとに `api` / `web` へ振り分けます。以下はその理由と、代替案のコストの説明です。
+
+## モデル: 1 つの公開オリジン、2 つの認証モード
+
+「api が公開到達可能であること」と「ブラウザが api をクロスオリジンで叩くこと」は
+**別の問題** です。前段リバースプロキシは、これを 1 オリジンで両立させます。
+
+| 認証モード | 利用者 | URL | クロスオリジン? |
+| --- | --- | --- | --- |
+| **Bearer トークン** | CLI / MCP / OAuth クライアント | `https://wiki.example.com/api/...` に `Authorization: Bearer …` | **可**(トークンはオリジンを越える) |
+| **Cookie / 相対** | ブラウザ: ページ API・インライン `<img>` 添付・ファイル DL・WebSocket | ページと同一オリジン | **不可**(first-party cookie 前提) |
+
+つまり **公開 api サーフェスは 1 枚**(`<origin>/api`、proxy が晒す)で、**認証は 2 通り**:
+Bearer はどこからでも、Cookie/相対はブラウザ同一オリジンから。proxy があるおかげで、
+CLI は `wiki.example.com/api` を Bearer で叩け、ブラウザは同じオリジンを first-party
+cookie で使えます。本当に private なのは api の内部直アドレス(`http://api:3000`)だけで、
+外部クライアントはそこを使いません。
+
+## web イメージが api URL を解決する仕組み
+
+配布される `crowi/crowi-web` イメージは絶対 API URL を **一切焼き込みません**。
+3 つの URL を分けて考えます:
+
+- **ブラウザ → api(HTTP)**: 既定でブラウザは **相対** パス(`/api/v2/...`・`/files/...`)を
+  **自身のオリジン** に投げ、前段 proxy が api へ振ります。(前段 proxy を置かず Next
+  サーバを直接公開する場合、その `rewrites()` でも `/api`・`/files` を proxy できますが、
+  これは dev か宛先が焼かれている場合のみ有効。下記 (D) と Vercel の注記参照。)
+- **ブラウザ → api(WebSocket)**: realtime(`/collab`・`/presence`・`/notifications`)は
+  Next の `rewrites()` を **通せません**(HTTP 専用で `upgrade` を落とす)。ブラウザは既定で
+  **`window.location`** から WS URL を導出し、前段 proxy がそのパスを api へ振ります。
+- **クロスオリジン用の上書き**: `NEXT_PUBLIC_API_URL`(ブラウザ HTTP)と
+  `NEXT_PUBLIC_COLLAB_URL`(ブラウザ WS)は **実行時** に読まれます。root layout が
+  リクエストごとにコンテナ env から **同期 inline で `window.__ENV`** を注入するため、
+  同一イメージのまま別オリジンの api を向けられます(再ビルド不要)。
+
+<Callout type="info">
+  これにより **1 度ビルドしたイメージが任意の api 先で動く**(再ビルド不要、起動時 env
+  だけ)。同一オリジン (A) では `NEXT_PUBLIC_*` の上書きを未設定のまま proxy を前段に置きます。
+</Callout>
+
+## (A) 同一オリジン + リバースプロキシ — 推奨
+
+両サービスの前段にリバースプロキシ(Caddy / nginx / Traefik)を 1 つの公開オリジンで置きます。
+ブラウザはそのオリジンだけと話し、proxy がパスで振り分けます。
+
+```
+                          ┌───────────────────────────────────────────┐
+  browser ──HTTPS──▶ reverse proxy (one origin, e.g. wiki.example.com) │
+                          │  /api/*           → api  :3000              │
+                          │  /files/*         → api  :3000              │
+                          │  /collab/*        → api  :3000 (WS upgrade) │
+                          │  /presence/*      → api  :3000 (WS upgrade) │
+                          │  /notifications/* → api  :3000 (WS upgrade) │
+                          │  /                → web  :3000              │
+                          └───────────────────────────────────────────┘
+                                     │              │
+                                ┌────▼───┐    ┌─────▼──┐
+                                │  web   │    │  api   │──▶ MongoDB / Redis / …
+                                └────────┘    └────────┘
+```
+
+web コンテナでは `NEXT_PUBLIC_API_URL` / `NEXT_PUBLIC_COLLAB_URL` を **未設定** のままに
+します。ブラウザは相対 HTTP パスを使い、WS URL は `window.location` から導出するので、
+イメージに api 固有の情報は焼き込まれません。
+
+### Caddy(最小・自動 HTTPS + WS)
+
+Caddy は WebSocket の `Upgrade` を自動で通し、TLS も自動取得します:
+
+```
+wiki.example.com {
+	# HTTP API + 添付 → api
+	@api path /api/* /files/*
+	reverse_proxy @api api:3000
+
+	# realtime WebSocket → api(Upgrade は自動で透過)
+	@ws path /collab/* /presence/* /notifications/*
+	reverse_proxy @ws api:3000
+
+	# それ以外 → web
+	reverse_proxy web:3000
+}
+```
+
+### nginx(Upgrade ヘッダは手動)
+
+```nginx
+location /api/   { proxy_pass http://api:3000; }
+location /files/ { proxy_pass http://api:3000; }
+
+# realtime WebSocket — Upgrade ヘッダの透過が必須
+location ~ ^/(collab|presence|notifications)/ {
+  proxy_pass http://api:3000;
+  proxy_http_version 1.1;
+  proxy_set_header Upgrade    $http_upgrade;
+  proxy_set_header Connection "upgrade";
+  proxy_read_timeout 3600s;   # 長時間 WS 接続を維持
+}
+
+location / { proxy_pass http://web:3000; }
+```
+
+<Callout type="warn">
+  3 つの realtime namespace(`/collab`・`/presence`・`/notifications`)は
+  `Upgrade` / `Connection` の透過が **必須** です。無いと WebSocket upgrade が落ち、
+  リアルタイム共同編集 / プレゼンス / 通知ベルが静かに非リアルタイム動作にフォールバック
+  します(他の機能は動きます)。[リアルタイム共同編集](./realtime-collab) 参照。
+</Callout>
+
+<Callout type="info">
+  これらを一括で配線した compose + 前段 proxy 同梱バンドル(quickstart パッケージ)は
+  別途整備中です。それまでは上記ルーティングで自前 proxy を用意してください。
+</Callout>
+
+## (B) web と api を別ホストに(クロスオリジン)— 限定対応
+
+web と api が **別オリジン**(例: web = `https://wiki.example.com`、api =
+`https://api.example.com`)で、前段に単一 proxy を **置かない** 場合、対応は **部分的** です。
+Crowi wiki では (A) を推奨します。
+
+動くもの: ブラウザの **HTTP API 呼び出し**。web コンテナにブラウザ向け api URL を起動時に
+設定します(実行時・再ビルド不要):
+
+```bash
+# WEB コンテナ(実行時 env・再ビルド不要):
+NEXT_PUBLIC_API_URL=https://api.example.com     # ブラウザ → api HTTP(絶対)
+NEXT_PUBLIC_COLLAB_URL=wss://api.example.com     # ブラウザ → api WebSocket
+```
+
+```bash
+# API コンテナ:
+CLIENT_URL=https://wiki.example.com              # CORS allow-origin(完全一致)
+```
+
+<Callout type="warn">
+  **インライン画像・アバター・ファイル DL はクロスオリジンで動きません。** これらは
+  **相対** URL(`/api/v2/attachments/by-key/…`・`/files/…`)で出力され、ブラウザは *web*
+  オリジンから読もうとします(api ではない)。さらに by-key 画像配信は first-party の
+  `crowi.accessToken` cookie で認証されますが、別オリジンの `<img>` はその cookie を
+  送れません。よって別オリジン構成ではアプリと HTTP データは表示されても **添付画像 /
+  ファイルリンクが壊れます**。完全なクロスオリジン対応(全 asset URL の絶対化 + cross-site
+  cookie)は将来対応(defer)。代わりに (A) か Vercel edge-proxy variant (C) を使ってください
+  (どちらもブラウザを同一オリジンに保ちます)。
+</Callout>
+
+<Callout type="warn">
+  動く HTTP 側の **CORS**: api はブラウザ要求の origin が `CLIENT_URL` と **完全一致**
+  (scheme + host + port、ワイルドカード不可)するもののみ許可します。**web** のオリジンを
+  設定してください。dev では localhost オリジンが自動許可されます。
+</Callout>
+
+## (C) Vercel / マネージド PaaS
+
+api は別所(VM / コンテナ基盤)の公開オリジンに置き、web を Vercel にデプロイします。
+クリーンな手は、Vercel の edge を proxy にして **ブラウザを同一オリジン** に保つことです:
+
+- **`CROWI_API_URL=https://api.example.com`** を Vercel の **build/runtime env** に設定。
+  Vercel は `rewrites()` を build 時に評価し、edge が `/api/*`・`/files/*` を **per-request
+  で proxy** するため、ブラウザは Vercel オリジン(相対 URL)のまま — インライン画像・
+  ファイル DL・first-party cookie がすべて動きます。
+- **WebSocket は例外**: Vercel の edge は WS を proxy しません。realtime namespace は api を
+  直接指してください: **`NEXT_PUBLIC_COLLAB_URL=wss://api.example.com`**。(WS には cookie /
+  画像の問題はありません — api は短命の `wsToken` で upgrade を認証します。)
+- api には `CLIENT_URL` を Vercel の web オリジンに設定(CORS・完全一致)。WS の origin
+  チェックにも効きます。
+
+<Callout type="info">
+  **host-only cookie 不変条件。** `crowi.accessToken` cookie はクライアント側で **`Domain`
+  無し**(host-only)・`SameSite=Lax` で発行されるため、ページを配信するオリジン(edge が
+  転送する Vercel/proxy オリジンを含む)に first-party で乗ります。api 側で `Domain` 固定の
+  session cookie を設定しないでください(proxy 越しに乗らなくなります)。これは self-host
+  proxy (A) でも同じ前提です。
+</Callout>
+
+<Callout type="info">
+  self-host の standalone サーバと違い、Vercel は deploy ごとに build し直し、edge が
+  `rewrites()` を per-request で proxy するため、build 時固定の `rewrites()` 宛先は
+  ここでは制約になりません。build 時に `NEXT_PUBLIC_API_URL=https://api.example.com`
+  (クロスオリジン・焼き込み)を渡す手もありますが、(B) の画像 / cookie 制約を引き継ぎます。
+</Callout>
+
+## (D) ローカル開発
+
+`pnpm dev` は api を `:4301`、web を `:4302` で **別オリジン** として起動します:
+
+- **HTTP**: ブラウザは相対 `/api/v2/...` を叩き、Next dev サーバの `rewrites()` が `:4301`
+  へ proxy します(dev は `rewrites()` を実行時評価するので、`NEXT_PUBLIC_API_URL` の有無に
+  関わらず動きます)。
+- **WebSocket**: dev(`NODE_ENV==='development'`)では resolver が **`http://localhost:4301`**
+  を直接指します。Next dev サーバは WS upgrade を proxy できず、`window.location`(`:4302`)に
+  は WS サーバが無いためです。この分岐は本番バンドルからは inline で除去されます。
+
+dev では `CROWI_API_URL` は不要です。
+
+## まとめ
+
+| 構成 | ブラウザ → api HTTP | ブラウザ → api WS | インライン画像 / ファイル | api 先変更に再ビルド? |
+| --- | --- | --- | --- | --- |
+| **(A) 同一オリジン proxy**(推奨) | 相対・proxy 経由 | `window.location`・proxy 経由 | ✅ 動く(同一オリジン) | **不要** |
+| (B) クロスオリジン self-host | `NEXT_PUBLIC_API_URL`(実行時) | `NEXT_PUBLIC_COLLAB_URL`(実行時) | ❌ 壊れる(相対 + cookie) | 不要(実行時 env) |
+| (C) Vercel + edge proxy | 相対・Vercel edge 経由(`CROWI_API_URL` build env) | `NEXT_PUBLIC_COLLAB_URL`(直接) | ✅ 動く(同一オリジン) | n/a(deploy ごと build) |
+| (D) dev | 相対・Next rewrites → `:4301` | `localhost:4301`(dev 分岐) | ✅ 動く | n/a |
+
+## 次のステップ
+
+- [セルフホスティング](./self-hosting) — 自前 runner プロジェクトから api + web イメージをビルド
+- [リアルタイム共同編集](./realtime-collab) — WS 要件とマルチレプリカの注意点
+- [設定](./configuration) — env 変数の全リファレンス

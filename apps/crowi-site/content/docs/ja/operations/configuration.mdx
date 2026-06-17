@@ -52,8 +52,9 @@ cp .env.example .env
 | ------ | ---- | ---- |
 | `WS_TOKEN_SECRET` | マルチで必須 | WebSocket 接続認証に使う短命 JWT (wsToken) の HMAC 署名鍵。マルチインスタンスでは全レプリカで**同じ値**にする。未設定時はプロセスごとにランダム生成され、警告ログが出る |
 | `COLLAB_MAX_EDITORS_PER_PAGE` | いいえ (デフォルト `20`) | 1 ページあたりの同時編集者上限。超過したクライアントは read-only で接続する |
-| `NEXT_PUBLIC_COLLAB_URL` | いいえ | ブラウザが接続する WebSocket URL。未指定時は `NEXT_PUBLIC_API_URL` + `window.location` から導出する。api と web が **別ホスト** のとき (= `/collab/*` を web と同じホストにリバースプロキシしていないとき) のみ設定 |
-| `NEXT_PUBLIC_API_URL` | Web で必要 | ブラウザから見た api のオリジン。これは **web 側** の変数で、Docker イメージではビルド時に焼き込まれる (compose のデフォルトは `http://api:3000`) |
+| `NEXT_PUBLIC_COLLAB_URL` | いいえ | ブラウザが接続する WebSocket URL。**実行時**(`window.__ENV`)に読まれる。未指定時の解決順: `NEXT_PUBLIC_API_URL` → dev の api ポート → `window.location`。api/web が **別ホスト** のとき、または Vercel(edge が WS を proxy できない)で設定 |
+| `NEXT_PUBLIC_API_URL` | いいえ(クロスオリジン時のみ) | ブラウザから見た api の絶対オリジン。**実行時**(`window.__ENV`、再ビルド不要)に読まれる。推奨の同一オリジン + リバースプロキシ構成では **未設定**(ブラウザは相対 `/api/v2` を使う)。クロスオリジン構成でのみ設定 — [デプロイ構成](./deployment) 参照 |
+| `CROWI_API_URL` | いいえ | Next **サーバ** が `rewrites()` proxy に使う api URL。`output: 'standalone'` では build 時に焼かれるため、`pnpm dev` / Vercel edge でのみ有効。self-host 本番は前段リバースプロキシを使う |
 
 > **Tip**: `WS_TOKEN_SECRET` と `CROWI_ENCRYPTION_KEY` はどちらも
 > `openssl rand -base64 32` で生成できます。`CROWI_ENCRYPTION_KEY` は

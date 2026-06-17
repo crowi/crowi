@@ -1,0 +1,236 @@
+---
+title: Deployment topologies
+description: How to point the crowi/crowi-web image at your api — same-origin reverse proxy (recommended), cross-origin limits, Vercel / PaaS, and local dev
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+A Crowi deployment is **two services**: `api` (Hono) and `web` (Next.js). The
+key question for the web side is **how the browser reaches the api**.
+
+The short answer, and the recommended setup: **serve the browser a single
+origin and put a reverse proxy in front** that routes paths to `api` or `web`.
+Everything below explains why that is the default and what the alternatives cost.
+
+## The model: one public origin, two auth modes
+
+"The api must be publicly reachable" and "the browser calls the api
+cross-origin" are **different** questions. A front reverse proxy satisfies both
+on one origin:
+
+| Auth mode | Who | URL | Cross-origin? |
+| --- | --- | --- | --- |
+| **Bearer token** | CLI / MCP / OAuth clients | `https://wiki.example.com/api/...` with `Authorization: Bearer …` | **Yes** — tokens travel across origins |
+| **Cookie / relative** | the browser: page API, inline `<img>` attachments, file downloads, WebSocket | same origin as the page | **No** — relies on a first-party cookie |
+
+So there is **one public api surface** (`<origin>/api`, exposed by the proxy)
+and **two ways to authenticate**: Bearer from anywhere, cookie/relative from the
+browser same-origin. The proxy is what lets a CLI hit `wiki.example.com/api`
+with a Bearer token while the browser uses the very same origin with a
+first-party cookie. The only thing that stays private is the api's direct
+internal address (`http://api:3000`); external clients never use it.
+
+## How the web image resolves the api URL
+
+The distributed `crowi/crowi-web` image bakes **no** absolute API URL. Three
+URLs are at play — keep them separate:
+
+- **Browser → api (HTTP)**: the browser calls **relative** paths (`/api/v2/...`,
+  `/files/...`) on its **own origin** by default. The front proxy routes them to
+  the api. (If you expose the Next server directly without a front proxy, its
+  `rewrites()` can also proxy `/api` + `/files` — but only in dev or when the
+  target is baked; see (D) and the Vercel note.)
+- **Browser → api (WebSocket)**: realtime (`/collab`, `/presence`,
+  `/notifications`) **cannot** go through Next `rewrites()` — they are HTTP-only
+  and drop the `upgrade`. The browser derives the WS URL from
+  **`window.location`** by default; the front proxy routes those paths to the
+  api.
+- **Overrides for cross-origin**: `NEXT_PUBLIC_API_URL` (browser HTTP) and
+  `NEXT_PUBLIC_COLLAB_URL` (browser WS) are read at **runtime** — the root layout
+  injects a synchronous inline `window.__ENV` from the container's env on each
+  request, so the same image can target a separate api origin with no rebuild.
+
+<Callout type="info">
+  This is why **one built image works against any api host** with no rebuild:
+  set runtime env on the web container at start. For same-origin (A) leave the
+  `NEXT_PUBLIC_*` overrides unset and front the image with a proxy.
+</Callout>
+
+## (A) Same-origin + reverse proxy — recommended
+
+Put a reverse proxy (Caddy / nginx / Traefik) in front of both services on one
+public origin. The browser talks only to that origin; the proxy routes by path.
+
+```
+                          ┌───────────────────────────────────────────┐
+  browser ──HTTPS──▶ reverse proxy (one origin, e.g. wiki.example.com) │
+                          │  /api/*           → api  :3000              │
+                          │  /files/*         → api  :3000              │
+                          │  /collab/*        → api  :3000 (WS upgrade) │
+                          │  /presence/*      → api  :3000 (WS upgrade) │
+                          │  /notifications/* → api  :3000 (WS upgrade) │
+                          │  /                → web  :3000              │
+                          └───────────────────────────────────────────┘
+                                     │              │
+                                ┌────▼───┐    ┌─────▼──┐
+                                │  web   │    │  api   │──▶ MongoDB / Redis / …
+                                └────────┘    └────────┘
+```
+
+Leave `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_COLLAB_URL` **unset** on the web
+container: the browser uses relative HTTP paths and derives WS URLs from
+`window.location`, so nothing api-specific is baked into the image.
+
+### Caddy (minimal, automatic HTTPS + WS)
+
+Caddy forwards the WebSocket `Upgrade` automatically and provisions TLS for you:
+
+```
+wiki.example.com {
+	# HTTP API + attachments → api
+	@api path /api/* /files/*
+	reverse_proxy @api api:3000
+
+	# Realtime WebSocket namespaces → api (Upgrade passed through automatically)
+	@ws path /collab/* /presence/* /notifications/*
+	reverse_proxy @ws api:3000
+
+	# Everything else → web
+	reverse_proxy web:3000
+}
+```
+
+### nginx (Upgrade headers are manual)
+
+```nginx
+location /api/   { proxy_pass http://api:3000; }
+location /files/ { proxy_pass http://api:3000; }
+
+# Realtime WebSocket namespaces — Upgrade-header passthrough is required
+location ~ ^/(collab|presence|notifications)/ {
+  proxy_pass http://api:3000;
+  proxy_http_version 1.1;
+  proxy_set_header Upgrade    $http_upgrade;
+  proxy_set_header Connection "upgrade";
+  proxy_read_timeout 3600s;   # keep long-lived WS connections open
+}
+
+location / { proxy_pass http://web:3000; }
+```
+
+<Callout type="warn">
+  The three realtime namespaces (`/collab`, `/presence`, `/notifications`)
+  **must** have `Upgrade` / `Connection` passthrough. Without it the WebSocket
+  upgrade is dropped and realtime collaboration / live presence / the
+  notification bell silently fall back to non-realtime behaviour (the rest of
+  the app still works). See [Realtime collaboration](./realtime-collab).
+</Callout>
+
+<Callout type="info">
+  A ready-made compose + front proxy bundle that wires all of this up is tracked
+  separately (the quickstart package). Until then, supply your own proxy with
+  the routing above.
+</Callout>
+
+## (B) web and api on separate hosts (cross-origin) — limited
+
+If web and api live on **different origins** (e.g. web =
+`https://wiki.example.com`, api = `https://api.example.com`) with **no** single
+proxy in front, support is **partial** — prefer (A) for a Crowi wiki.
+
+What works: the browser's **HTTP API calls**. Set the browser-facing api URL on
+the web container at start (runtime, no rebuild):
+
+```bash
+# on the WEB container (runtime env, no rebuild):
+NEXT_PUBLIC_API_URL=https://api.example.com     # browser → api HTTP (absolute)
+NEXT_PUBLIC_COLLAB_URL=wss://api.example.com     # browser → api WebSocket
+```
+
+```bash
+# on the API container:
+CLIENT_URL=https://wiki.example.com              # CORS allow-origin (exact match)
+```
+
+<Callout type="warn">
+  **Inline images, avatars and file downloads do not work cross-origin.** They
+  are emitted as **relative** URLs (`/api/v2/attachments/by-key/…`, `/files/…`)
+  that the browser loads from the *web* origin, not the api — and the by-key
+  image route is authenticated by the first-party `crowi.accessToken` cookie,
+  which an `<img>` on a different origin cannot send. So a separate-origin
+  deployment renders the app and its HTTP data, but **attachment images / file
+  links break**. Full cross-origin support (absolute asset URLs + cross-site
+  cookies) is deferred — use topology (A) or the Vercel edge-proxy variant (C)
+  instead, both of which keep the browser same-origin.
+</Callout>
+
+<Callout type="warn">
+  **CORS** for the HTTP that does work: the api only accepts browser requests
+  from an origin that **exactly matches** `CLIENT_URL` (scheme + host + port; no
+  wildcard). Set it to the **web** origin. In dev, localhost origins are allowed
+  automatically.
+</Callout>
+
+## (C) Vercel / managed PaaS
+
+Host the api elsewhere (a VM / container platform) at a public origin and deploy
+the web app to Vercel. The clean pattern keeps the browser **same-origin** by
+letting Vercel's edge be the proxy:
+
+- Set **`CROWI_API_URL=https://api.example.com`** as a Vercel **build/runtime
+  env**. Vercel evaluates `rewrites()` at build and its edge proxies
+  `/api/*` + `/files/*` to that target **per request**, so the browser stays on
+  the Vercel origin (relative URLs) — inline images, file downloads and the
+  first-party cookie all keep working.
+- **WebSocket is the exception**: Vercel's edge does **not** proxy WS. Point the
+  realtime namespaces straight at the api with
+  **`NEXT_PUBLIC_COLLAB_URL=wss://api.example.com`**. (WS has no cookie/image
+  problem — the api authenticates the upgrade with a short-lived `wsToken`.)
+- Set `CLIENT_URL` on the api to the Vercel web origin (CORS, exact match) — it
+  applies to the WS origin check.
+
+<Callout type="info">
+  **Host-only cookie invariant.** The `crowi.accessToken` cookie is set
+  client-side with **no `Domain`** (host-only) and `SameSite=Lax`, so it is
+  first-party to whatever origin serves the page — including the Vercel/proxy
+  origin the edge forwards from. Do not configure the api to set a `Domain`-scoped
+  session cookie; that would not ride along through the proxy. This holds for
+  self-host proxies (A) too.
+</Callout>
+
+<Callout type="info">
+  Unlike a self-hosted standalone server, Vercel re-runs the build per deploy and
+  its edge proxies `rewrites()` at request time, so the build-time `rewrites()`
+  target is not a limitation here. A plain build-time
+  `NEXT_PUBLIC_API_URL=https://api.example.com` (cross-origin, baked) also works,
+  but inherits the inline-image / cookie limits of (B).
+</Callout>
+
+## (D) Local development
+
+`pnpm dev` runs api on `:4301` and web on `:4302` as **separate origins**:
+
+- **HTTP**: the browser calls relative `/api/v2/...`; the Next dev server's
+  `rewrites()` proxies them to `:4301` (dev evaluates `rewrites()` at runtime, so
+  this works whether or not `NEXT_PUBLIC_API_URL` is set).
+- **WebSocket**: the resolver dials **`http://localhost:4301`** directly in dev
+  (`NODE_ENV==='development'`), because the Next dev server cannot proxy the WS
+  upgrade and `window.location` (`:4302`) has no WS server. This branch is
+  compiled out of production bundles.
+
+No `CROWI_API_URL` is needed in dev.
+
+## Summary
+
+| Topology | Browser → api HTTP | Browser → api WS | Inline images / files | Rebuild to change api host? |
+| --- | --- | --- | --- | --- |
+| **(A) same-origin proxy** *(recommended)* | relative, via proxy | `window.location`, via proxy | ✅ work (same-origin) | **No** |
+| (B) cross-origin self-host | `NEXT_PUBLIC_API_URL` (runtime) | `NEXT_PUBLIC_COLLAB_URL` (runtime) | ❌ break (relative + cookie) | No (runtime env) |
+| (C) Vercel + edge proxy | relative, via Vercel edge (`CROWI_API_URL` build env) | `NEXT_PUBLIC_COLLAB_URL` (direct) | ✅ work (same-origin) | n/a (per-deploy build) |
+| (D) dev | relative, via Next rewrites → `:4301` | `localhost:4301` (dev branch) | ✅ work | n/a |
+
+## Next steps
+
+- [Self-hosting](./self-hosting) — build api + web images from your own runner project
+- [Realtime collaboration](./realtime-collab) — WS requirements and multi-replica notes
+- [Configuration](./configuration) — full env var reference

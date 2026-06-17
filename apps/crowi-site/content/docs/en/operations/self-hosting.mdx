@@ -203,56 +203,27 @@ image** — pass them via container env or `env_file` at deploy time.
 
 ## Wire up the web frontend
 
-The web app builds from `packages/web/Dockerfile`. The **most important** thing
-here is `NEXT_PUBLIC_API_URL`.
+The web app builds from `packages/web/Dockerfile`. The built `crowi/crowi-web`
+image is a **render-only** Next.js server that bakes **no** absolute API URL:
+the browser hits relative `/api/v2` / `/files` paths on its own origin and
+derives WebSocket URLs from `window.location`. So one image works against any
+api host — but it needs a **front reverse proxy** to route those paths to the
+api.
 
 <Callout type="warn">
-  `NEXT_PUBLIC_API_URL` is **baked in statically at build time** (that's how
-  Next.js `NEXT_PUBLIC_*` works). A runtime env var cannot change it. Pass the
-  **browser-reachable API URL** via `--build-arg`. A container hostname like
-  `http://api:3000` is not resolvable from the browser, so it won't work.
+  Do **not** expose the web server directly and rely on it to proxy `/api`. With
+  `output: 'standalone'` the Next `rewrites()` proxy target is **baked at build**
+  (not read from `CROWI_API_URL` at runtime), so a directly-exposed web server
+  proxies to its build-time default and cannot reach your api. Put a reverse
+  proxy in front instead.
 </Callout>
 
-### Single domain + reverse proxy (recommended)
-
-Serve web and api from the same origin and let the proxy route. Here
-`NEXT_PUBLIC_API_URL` is the **public origin itself**.
-
-```bash
-docker build -f packages/web/Dockerfile \
-  --build-arg NEXT_PUBLIC_API_URL=https://wiki.example.com \
-  -t my-crowi-web .
-```
-
-Route on the proxy (nginx example):
-
-```nginx
-location /api/ {
-  proxy_pass http://api:3000;
-}
-location /collab/ {
-  proxy_pass http://api:3000;
-  proxy_http_version 1.1;
-  proxy_set_header Upgrade    $http_upgrade;   # WebSocket
-  proxy_set_header Connection "upgrade";
-}
-location / {
-  proxy_pass http://web:3000;
-}
-```
-
-Leave `NEXT_PUBLIC_COLLAB_URL` **unset** (recommended). When it's blank the web
-app derives the WebSocket URL from `window.location.host` and
-`NEXT_PUBLIC_API_URL`, so as long as `/collab/*` is proxied to the same host it
-just works.
-
-### Serving api / web on separate origins
-
-To serve them on different domains (e.g. web=`https://wiki.example.com`,
-api=`https://api.example.com`), build with
-`NEXT_PUBLIC_API_URL=https://api.example.com` and set `CLIENT_URL=https://wiki.example.com`
-on the api so CORS allows the web origin. If `/collab/*` lives on the api domain,
-set `NEXT_PUBLIC_COLLAB_URL` explicitly.
+The recommended topology is **single-origin + a reverse proxy** in front of both
+web and api. The full wiring (a minimal Caddy / nginx config routing `/api`,
+`/files`, and the realtime `/collab`, `/presence`, `/notifications` WebSocket
+upgrades), plus the cross-origin and Vercel / PaaS variants, are in
+[Deployment topologies](./deployment). Read that page before going to
+production.
 
 ## Boot order and health checks
 
