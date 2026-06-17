@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   decodePagePathFromUrl,
   defaultDraftBody,
-  isReservedApiPath,
+  isReservedPagePath,
   isUserHomePath,
   pageBasename,
   pageDefaultTitle,
@@ -126,18 +126,33 @@ describe('isUserHomePath', () => {
   });
 });
 
-describe('isReservedApiPath', () => {
+describe('isReservedPagePath', () => {
   it('matches the backend namespace, bare or nested', () => {
-    expect(isReservedApiPath('/api')).toBe(true);
-    expect(isReservedApiPath('/api/')).toBe(true);
-    expect(isReservedApiPath('/api/v2/mcp')).toBe(true);
-    expect(isReservedApiPath('/api/anything')).toBe(true);
+    expect(isReservedPagePath('/api')).toBe(true);
+    expect(isReservedPagePath('/api/')).toBe(true);
+    expect(isReservedPagePath('/api/v2/mcp')).toBe(true);
+    expect(isReservedPagePath('/api/anything')).toBe(true);
   });
 
-  it('is segment-bounded — a word that merely starts with "api" is a normal page', () => {
-    expect(isReservedApiPath('/apiary')).toBe(false);
-    expect(isReservedApiPath('/crowi/api')).toBe(false);
-    expect(isReservedApiPath('/')).toBe(false);
+  it('matches the other server-reserved top-level prefixes', () => {
+    for (const seg of ['installer', 'register', 'login', 'logout', 'admin', 'me', 'files', 'trash', 'paste', 'comments']) {
+      expect(isReservedPagePath(`/${seg}`)).toBe(true);
+      expect(isReservedPagePath(`/${seg}/x`)).toBe(true);
+    }
+  });
+
+  it('is segment-bounded — a word that merely starts with a reserved prefix is a normal page', () => {
+    expect(isReservedPagePath('/apiary')).toBe(false);
+    expect(isReservedPagePath('/meeting')).toBe(false);
+    expect(isReservedPagePath('/comments-policy')).toBe(false);
+    expect(isReservedPagePath('/crowi/api')).toBe(false);
+    expect(isReservedPagePath('/')).toBe(false);
+  });
+
+  it('does not reserve `/user` — the catch-all renders the member directory there', () => {
+    expect(isReservedPagePath('/user')).toBe(false);
+    expect(isReservedPagePath('/user/')).toBe(false);
+    expect(isReservedPagePath('/user/sotarok')).toBe(false);
   });
 });
 

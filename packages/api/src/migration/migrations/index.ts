@@ -1,5 +1,6 @@
 import type { MigrationDefinition } from '../types';
 import { pageStatusDefault } from './page-status-default';
+import { relocateReservedApiPaths } from './relocate-reserved-api-paths';
 import { revisionsSchemaUnify } from './revisions-schema-unify';
 import { userUniquePrepare } from './user-unique-prepare';
 import { wikilinkFormat } from './wikilink-format';
@@ -19,4 +20,5 @@ export const allMigrations: MigrationDefinition[] = [
   wikilinkFormat, // phase 3 (preflight)
   userUniquePrepare, // phase 5 (preflight)
   revisionsSchemaUnify, // phase 6 (boot — RFC-classified preflight, see migration JSDoc)
+  relocateReservedApiPaths, // fix/mcp-endpoint (preflight) — v2 /api namespace reservation
 ];
