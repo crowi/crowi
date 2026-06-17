@@ -57,10 +57,10 @@ function resolveWsBase(): string {
   // `window.__ENV` drives the value — a single built image can target a
   // cross-origin api by setting these on the container at start, no rebuild.
   const override = env('NEXT_PUBLIC_COLLAB_URL');
-  if (override && override.length > 0) return override;
+  if (override) return override;
 
   const apiUrl = env('NEXT_PUBLIC_API_URL');
-  if (apiUrl && apiUrl.length > 0) return apiUrl;
+  if (apiUrl) return apiUrl;
 
   // Dev (`pnpm dev`): web is on :4302, api (with the WS endpoints) on :4301 —
   // different origins, and the Next dev server cannot proxy the WS upgrade. So

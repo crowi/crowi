@@ -101,9 +101,10 @@ const REFRESH_PATH = '/auth/refresh';
 
 const apiV2Fetch: typeof fetch = async (input, init) => {
   // `apiClientV2` is created with a RELATIVE base (`/api/v2`). Prepend the
-  // runtime origin here — at call time, after `<PublicEnvScript>` has set
-  // `window.__ENV` — so a cross-origin `NEXT_PUBLIC_API_URL` takes effect with
-  // no rebuild. An empty origin leaves URLs relative (same-origin image).
+  // runtime origin here — at call time, after the root layout's inline env
+  // script has set `window.__ENV` — so a cross-origin `NEXT_PUBLIC_API_URL`
+  // takes effect with no rebuild. An empty origin leaves URLs relative
+  // (same-origin image).
   const origin = apiOrigin();
   const target = origin && typeof input === 'string' && input.startsWith('/') ? `${origin}${input}` : input;
 
