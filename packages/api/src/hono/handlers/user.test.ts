@@ -11,9 +11,10 @@ import { createJwtUtil } from 'src/util/jwt';
  *
  * The legacy ts-rest handler returned 401 manually; the Hono port lets
  * the middleware do it uniformly, so we verify both shapes here. The
- * 404 envelope (`USER_NOT_FOUND`) covers both "no document" and
- * "inactive user" by design — we test both branches so the legacy
- * existence-leak guard stays in place.
+ * 404 envelope (`USER_NOT_FOUND`) covers "no document" and non-viewable
+ * accounts (deleted / invited / registered). Active and suspended users
+ * are shown, since a suspended author's pages stay browseable — we test
+ * both branches.
  */
 
 const seedActiveUser = async (info: { name: string; username: string; email: string; password: string }) => {
@@ -90,11 +91,27 @@ describe('Routes /api/v2/user (Hono)', () => {
       expect(res.body.error.code).toBe('USER_NOT_FOUND');
     });
 
-    it('returns 404 USER_NOT_FOUND for a suspended user (existence leak guard)', async () => {
+    it('shows the profile of a suspended user (their pages stay browseable)', async () => {
       // Suspend the target user, hit the endpoint, then restore — keeps
       // the rest of the suite's state intact.
       const original = targetUser.status;
       targetUser.status = User().STATUS_SUSPENDED;
+      await targetUser.save();
+      try {
+        const res = await request(app).get(`/api/v2/user/${TARGET_USERNAME}`).set('Authorization', `Bearer ${viewerToken}`);
+        expect(res.status).toBe(200);
+        expect(res.body.user).toMatchObject({ username: TARGET_USERNAME, name: 'Target' });
+      } finally {
+        targetUser.status = original;
+        await targetUser.save();
+      }
+    });
+
+    it('returns 404 USER_NOT_FOUND for a non-viewable (registered) user', async () => {
+      // Registered/invited placeholders never had a real profile — they
+      // stay hidden behind the same 404 envelope as an unknown username.
+      const original = targetUser.status;
+      targetUser.status = User().STATUS_REGISTERED;
       await targetUser.save();
       try {
         const res = await request(app).get(`/api/v2/user/${TARGET_USERNAME}`).set('Authorization', `Bearer ${viewerToken}`);

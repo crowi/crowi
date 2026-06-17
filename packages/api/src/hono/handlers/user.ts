@@ -11,8 +11,11 @@
  * Wire-format parity is preserved. The legacy handlers checked `req.user`
  * manually and returned `AUTHENTICATION_REQUIRED`; the middleware does
  * that uniformly now so the per-handler guard goes away. The 404 envelope
- * (`USER_NOT_FOUND`) covers both "no document" and "user is not active"
- * cases — same as before, to avoid leaking user-existence signal.
+ * (`USER_NOT_FOUND`) covers "no document" and non-viewable accounts
+ * (deleted / invited / registered). Active *and* suspended users are shown:
+ * a suspended author is gone, but the pages they wrote stay browseable under
+ * /user/<username>/..., so hiding only the profile is a broken link, not
+ * privacy.
  *
  * Both pagination endpoints respect the same `visiblePageStatusOr` +
  * `GRANT_PUBLIC` policy as the ts-rest version when viewing another
@@ -70,6 +73,14 @@ export const registerUserRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
   const Page = crowi.model('Page');
   const Bookmark = crowi.model('Bookmark');
 
+  // A user page stays reachable for ACTIVE and SUSPENDED accounts. A suspended
+  // user is gone, but the pages they authored remain visible (they show up in
+  // the page tree under /user/<username>/...), so 404-ing only their profile is
+  // a broken link rather than real privacy. DELETED accounts are tombstoned
+  // (renamed `deleted-<id>`, so the original username 404s anyway) and
+  // INVITED / REGISTERED placeholders never had a real profile — all stay hidden.
+  const isViewableUserStatus = (status: number): boolean => status === User.STATUS_ACTIVE || status === User.STATUS_SUSPENDED;
+
   // Every `/user/*` endpoint requires auth. Apply the middleware
   // broadly so each route below sees `c.get('user')` populated. The
   // member directory lives at the sibling path `/users` (plural), which
@@ -92,7 +103,7 @@ export const registerUserRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
 
       try {
         const targetUser = await User.findUserByUsername(username);
-        if (!targetUser || targetUser.status !== User.STATUS_ACTIVE) {
+        if (!targetUser || !isViewableUserStatus(targetUser.status)) {
           return c.json(USER_NOT_FOUND_BODY, 404);
         }
 
@@ -140,7 +151,7 @@ export const registerUserRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
 
       try {
         const targetUser = await User.findUserByUsername(username);
-        if (!targetUser || targetUser.status !== User.STATUS_ACTIVE) {
+        if (!targetUser || !isViewableUserStatus(targetUser.status)) {
           return c.json(USER_NOT_FOUND_BODY, 404);
         }
 
@@ -174,7 +185,7 @@ export const registerUserRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
 
       try {
         const targetUser = await User.findUserByUsername(username);
-        if (!targetUser || targetUser.status !== User.STATUS_ACTIVE) {
+        if (!targetUser || !isViewableUserStatus(targetUser.status)) {
           return c.json(USER_NOT_FOUND_BODY, 404);
         }
 
