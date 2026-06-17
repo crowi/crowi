@@ -212,8 +212,6 @@ go to `TODO.md`.
   `feat(api-contract): ...`, `fix(...)`, `refactor(...)`, `chore(...)`,
   `docs(todo): ...`.
 - Multi-paragraph body explaining WHY when the change isn't obvious.
-- End with `Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>`
-  on Claude-driven commits.
 
 ### Changesets (release notes accumulation)
 
