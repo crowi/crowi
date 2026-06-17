@@ -59,6 +59,19 @@ v1 → v2 のデータ移行は RFC-0008 の移行フレームワークで実行
 インストールされたランナープロジェクトのディレクトリから実行します。
 モノレポでは `pnpm migrate` ラッパーが同じ CLI を実行します。
 
+**公式 Docker イメージ**では `crowi-admin` がランナープロジェクトのツリー
+(`/app` がルート) に同梱されているため、コンテナ内で実行します。
+
+```bash
+# 起動中のコンテナ内で未適用の preflight 移行を適用
+docker compose run --rm --entrypoint node api \
+  node_modules/@crowi/admin-cli/dist/bin.js migrate apply
+```
+
+これは下記の preflight `block` ポリシーで特に重要です。デプロイで未適用の
+preflight 移行が入ると api は起動を拒否するため、イメージ内からこの方法で
+解除します。
+
 移行は 2 つのレイヤーに分かれています。
 
 - **boot** 移行は、api 起動時に自動で適用されます。
