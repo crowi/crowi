@@ -1,0 +1,71 @@
+crowi/docker-elasticsearch
+==========================
+
+This image is a community-built, self-host-oriented redistribution of
+Elasticsearch with Japanese text-analysis plugins (and, for the `-sudachi`
+variant, a Sudachi dictionary) baked in, published by the Crowi project for use
+with @crowi/plugin-search-elasticsearch.
+
+It is NOT an official Elastic product and is NOT endorsed by, affiliated with,
+or certified by Elasticsearch B.V. "Elasticsearch" is used here descriptively
+(nominative use) to identify the bundled upstream software.
+
+This NOTICE file aggregates the attribution / license notices of the bundled
+components. The upstream LICENSE.txt / NOTICE.txt of Elasticsearch are retained
+in the image (under /usr/share/elasticsearch/) and MUST NOT be removed.
+
+This is not legal advice. Operators redistributing or operating this image are
+responsible for confirming compliance with each component's license.
+
+
+1. Elasticsearch (base image)
+-----------------------------
+Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V.
+
+Elasticsearch 9.x is offered under a choice of AGPLv3, the Elastic License 2.0
+(ELv2), or SSPL. This image is built on the official
+docker.elastic.co/elasticsearch/elasticsearch base image and redistributes it
+unmodified except for the plugins/dictionary added below, for self-hosting.
+Under ELv2 the permitted use excludes: (a) providing the software to third
+parties as a managed/hosted service, (b) circumventing the license-key
+functionality, and (c) removing or obscuring Elastic licensing/branding.
+
+The upstream license and notice texts are kept in the image at:
+  /usr/share/elasticsearch/LICENSE.txt
+  /usr/share/elasticsearch/NOTICE.txt
+
+
+2. analysis-kuromoji (Elastic plugin — both variants)
+-----------------------------------------------------
+The Japanese (kuromoji) Analysis plugin is distributed by Elastic alongside
+Elasticsearch and is covered by the same Elasticsearch license terms as the
+base image (section 1). It is installed via
+`bin/elasticsearch-plugin install analysis-kuromoji`.
+
+
+3. analysis-sudachi (WorksApplications — `-sudachi` variant only)
+-----------------------------------------------------------------
+elasticsearch-sudachi
+Copyright (c) Works Applications Co., Ltd.
+Licensed under the Apache License, Version 2.0.
+  https://github.com/WorksApplications/elasticsearch-sudachi
+  https://www.apache.org/licenses/LICENSE-2.0
+
+Bundles the Sudachi morphological-analysis engine (Works Applications),
+Apache License 2.0.
+
+
+4. SudachiDict (`-sudachi` variant only)
+----------------------------------------
+SudachiDict (core dictionary)
+Copyright (c) Works Applications Co., Ltd.
+Licensed under the Apache License, Version 2.0.
+  https://github.com/WorksApplications/SudachiDict
+  https://www.apache.org/licenses/LICENSE-2.0
+
+SudachiDict is derived in part from the UniDic dictionary and other language
+resources. Their respective notices apply; see the SudachiDict repository
+("Dictionaries" / "LICENSE-2.0.txt" and the legal information therein) for the
+full list of source corpora and their terms, including UniDic
+  (https://clrd.ninjal.ac.jp/unidic/) — National Institute for Japanese
+  Language and Linguistics (NINJAL).

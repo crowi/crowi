@@ -38,7 +38,7 @@ spec: `feature-v2-alpha1-release-prep.md`（実本番 = v1 DB への in-place �
 - [ ] **無印 `crowi` パッケージの整理**（spec: `feature-crowi-quickstart-package.md`）
 - [x] **web image の API URL 実行時注入**（同一オリジン既定。spec: `feature-web-image-runtime-config.md`）
 - [x] **web image クロスオリジン runtime-env 注入**（§e フォローオン。spec: `feature-web-cross-origin-runtime-env.md`）
-- [ ] **CI リリース自動化**（spec: `feature-ci-release-automation.md`）
+- [x] **CI リリース自動化** — changesets + npm OIDC + Docker(full/slim) + ES image。手順は operations/release-runbook（spec: `feature-ci-release-automation.md`）
 
 ### 管理画面 残（フェーズ4）
 - [ ] Slack channel 通知（page-path→channel mapping + Slack 統合設定）

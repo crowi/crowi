@@ -1,0 +1,245 @@
+---
+title: リリース runbook
+description: Crowi 2.0 のリリース手順 — changesets + npm Trusted Publishing(OIDC) + Docker(full/slim) + Elasticsearch カスタム image を CI で公開する
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+このページは Crowi 2.0 のメンテナ向けリリース runbook です。リリースの仕組みは
+**実装済み**ですが、実際の publish には **一度きりの外部設定（人手）** が前提です。
+このページはその外部設定と、通常リリースの流れ、channel 切替（alpha→beta→stable）、
+Docker / Elasticsearch image の出し方をまとめます。
+
+<Callout type="info">
+  リリースは [changesets](https://github.com/changesets/changesets) +
+  npm Trusted Publishing(OIDC) + Docker buildx で自動化されています。
+  **人間の判断は「GO ゲート」= main の Version PR をマージする 1 点だけ** です。
+  push:main で changesets/action が Version PR を自動生成 / 更新し、それを
+  マージすると `release.yml` が npm へ publish、続いて Docker image が build+push
+  されます。
+</Callout>
+
+## 全体像
+
+| フェーズ | トリガ | 担当 |
+| --- | --- | --- |
+| changeset を貯める | feature を main にマージするたび | 開発者 |
+| Version PR 生成 / 更新 | `push: main`（`changesets/action`） | CI（自動） |
+| **GO ゲート** | **Version PR をマージ** | **人間** |
+| npm publish（OIDC・provenance 付き） | Version PR のマージ後 | CI（`release.yml`） |
+| 製品版タグ `v<dist-version>` 作成・push | publish 成功時のみ | CI（`release.yml`） |
+| Docker full/slim を multi-arch build+push | publish を伴う Release run の完了 | CI（`docker.yml`、`workflow_run`） |
+| Elasticsearch カスタム image | 手動（`workflow_dispatch`） | 人間（Crowi 本体と独立） |
+
+## 一度きりの手動セットアップ（外部・人手）
+
+以下は CI からは実行できません。**初回リリース前に 1 回だけ** 手作業で設定します。
+
+### 1. npm Trusted Publisher（公開 19 パッケージ）
+
+npmjs.com で **公開 19 パッケージそれぞれ** に Trusted Publisher を登録します
+（repo `crowi/crowi` + workflow `release.yml`、必要なら environment）。これにより
+長期 `NPM_TOKEN` 不要・provenance 付きの OIDC publish が成立します。対象:
+
+```
+@crowi/admin-cli
+@crowi/api-contract
+@crowi/api
+@crowi/cli
+@crowi/plugin-api
+@crowi/plugin-aws
+@crowi/plugin-mail-aws-ses
+@crowi/plugin-mail-resend
+@crowi/plugin-mail-smtp
+@crowi/plugin-renderer-crowi-legacy
+@crowi/plugin-renderer-emoji
+@crowi/plugin-renderer-katex
+@crowi/plugin-renderer-plantuml
+@crowi/plugin-search-elasticsearch
+@crowi/plugin-search-mongo
+@crowi/plugin-search-opensearch
+@crowi/plugin-storage-aws-s3
+@crowi/plugin-storage-local
+@crowi/runner
+```
+
+### 2. GitHub: Actions に PR 作成を許可
+
+repo Settings → Actions → General → Workflow permissions で
+**「Allow GitHub Actions to create and approve pull requests」を ON** にします。
+これが OFF だと `changesets/action` が Version PR を自動生成できません。
+
+### 3. GitHub secret（Docker Hub）
+
+Docker Hub は OIDC 非対応なので、Docker push 用に secret を 2 つ登録します。
+
+| secret | 用途 |
+| --- | --- |
+| `DOCKERHUB_USERNAME` | Docker Hub アカウント |
+| `DOCKERHUB_TOKEN` | Docker Hub アクセストークン |
+
+### 4. toolchain（リポジトリ側・設定済み）
+
+OIDC publish の前提は次の組合せです（CI 設定済み・参考情報）。
+
+- **pnpm 10.x**（OIDC trusted publishing 対応。`pnpm publish` が内部で npm CLI に委譲）
+- **pnpm/action-setup@v6**（pnpm v11.0.x の OIDC 回帰を避けるため v6.0.6 以上）
+- **Node 24**（同梱 npm CLI ≥ 11.5.1 が OIDC publish の前提）
+
+## 通常リリース（alpha.N）の流れ
+
+1. **changeset を貯める。** feature を main にマージするたびに、ユーザー価値 1 単位
+   ごとに `.changeset/*.md` を追加します（`pnpm changeset add`）。内部リファクタや
+   docs / chore は changeset 不要です。
+2. **Version PR が自動生成される。** `push: main` で `changesets/action` が
+   貯まった changeset を消費し、版を bump した **Version PR** を作成 / 更新します
+   （alpha pre mode 中は `-alpha.N` が出ます）。
+3. **GO = Version PR をマージ。** PR の差分（版・CHANGELOG）をレビューして
+   マージするのがリリースの GO 判断です。
+4. **npm publish（自動）。** マージで `release.yml` が走り、`pnpm changeset publish`
+   が **OIDC trusted publishing**（`NPM_TOKEN` 不要・provenance 付き）で各パッケージを
+   publish します。
+5. **製品版タグ（自動）。** publish 成功時のみ、独立した製品版タグ
+   `v2.0.0-alpha.N`（= 既存 `v2.0.0-alpha.*` の最大 + 1）を作成・push し、
+   `dist-version` artifact を upload します。
+6. **Docker image（自動）。** Release run の完了で `docker.yml` が `workflow_run`
+   で発火し、full / slim を multi-arch（amd64 + arm64）で build+push します。
+
+<Callout type="warn">
+  `GITHUB_TOKEN` が push したタグは **他の workflow の `on: push: tags` を起動しません**
+  （無限ループ防止のための GitHub の仕様）。このため `docker.yml` は製品版タグ push では
+  なく **`workflow_run`（Release の完了）** で発火し、Release run が upload した
+  `dist-version` artifact の有無で「publish があった run か」を判定します。
+  publish が無かった（Version PR を作っただけの）run では image を build しません。
+</Callout>
+
+## 製品版（distribution version）モデル
+
+Docker image は npm 各パッケージの版とは **独立した「Crowi ディストリビューション版」**
+を持ちます。
+
+- **毎リリース必ず +1。** plugin だけの patch リリースでも新しい製品版・新しい image を
+  出します。「同じタグで中身だけ変わる」immutable tag 原則違反を避けるためです。
+- **採番は `v2.0.0-alpha.*` git タグの最大 + 1。** npm 側の bump 有無と独立に必ず進みます。
+- **タグ規則**:
+  - 不変: `crowi/crowi:2.0.0-alpha.N`（full）/ `:2.0.0-alpha.N-slim`（slim）
+  - 移動: `:alpha` / `:alpha-slim`（その channel の最新を指す）
+  - **prerelease は `latest` を奪いません**。`latest` / `latest-slim` が v2 を指すのは
+    stable 以降です（下記 channel 切替を参照）。
+- **自己記述。** image には OCI ラベル `org.crowi.bundle` でバンドルした各 `@crowi/*` の版が
+  埋め込まれます（「この alpha.N に入っている `@crowi/api` は?」を
+  `docker buildx imagetools inspect` で即答できます）。
+
+## per-plugin の patch リリース
+
+特定 plugin だけを直したい（例: 依存のセキュリティ更新）場合:
+
+1. **その plugin にだけ changeset を書く**（`pnpm changeset add` で該当パッケージを選ぶ）。
+2. 内部依存は `updateInternalDependencies: patch` で消費者へ伝播 bump されます
+   （例: `@crowi/plugin-aws` の更新 → `@crowi/plugin-storage-aws-s3` /
+   `@crowi/plugin-mail-aws-ses` も patch）。
+3. **製品版が +1 され、full / slim image も再ビルド** されます。full image は全 plugin を
+   バンドルするため、plugin-only の修正でも image を再ビルドしないと利用者に届きません。
+   製品版が必ず +1 する設計でこれが保証されます。
+
+<Callout type="info">
+  運用方針: per-plugin の changeset は **貯めて GO 時にまとめて出す**。都度リリースせず、
+  次の Version PR マージで一括して publish + 新 image を出すのが基本です。
+</Callout>
+
+## channel の切替（pre-mode の出入り・手動）
+
+alpha → beta → stable の切替だけは手動で、それぞれ **PR 1 回** で行います。
+
+### alpha → beta
+
+```bash
+pnpm changeset pre exit
+pnpm changeset pre enter beta
+```
+
+この変更（`.changeset/pre.json`）を PR にしてマージすると、以降の Version PR が
+`2.0.0-beta.0` から始まります。
+
+### beta → stable
+
+```bash
+pnpm changeset pre exit
+```
+
+を PR にしてマージすると pre mode を抜け、stable の版が出ます。
+
+<Callout type="warn">
+  **`latest` が v2 を指すのは stable で初めて** です（prerelease は `latest` を奪わない方針）。
+  npm の無印 `crowi` と Docker `latest` / `latest-slim` の v2 切替は
+  `feature-crowi-quickstart-package` と同期して行います。
+</Callout>
+
+<Callout type="info">
+  **製品版タグの形**: prerelease では `v2.0.0-alpha.N`、stable では 4 セグメントの
+  `v2.0.0.0`（末尾が dist counter）になります。channel に pre 表記が無くなると
+  製品版は `v<major.minor.patch>.<counter>` の形になるためで、想定どおりの挙動です。
+</Callout>
+
+## Docker 再ビルドの方針
+
+- **どのパッケージが上がっても、製品版が +1 され full / slim image が再ビルド+新タグ** されます。
+  「Crowi リリース 1 回 = monorepo のあるスナップショット = image 1 セット」が原則です。
+- **手動再ビルド** が必要な場合は `docker.yml` の `workflow_dispatch`（`version` input に
+  製品版タグ名を指定）で、既存の製品版を再ビルドできます。
+
+## Elasticsearch カスタム image の出し方
+
+検索プラグイン用の日本語アナライザ入り ES image（`crowi/docker-elasticsearch`）は
+**Crowi 本体のリリースと完全に独立** しています。`docker-elasticsearch.yml` を
+**`workflow_dispatch`**（本命）または `es-v*` タグ push（補助）で回します。
+
+- **inputs**: `es_version` / `sudachi_plugin_version` / `dict_version` / `variant`
+  （`both` / `kuromoji` / `sudachi`）。
+- **variant とタグ**:
+  - `:<es>`（kuromoji・既定。軽量）
+  - `:<es>-sudachi`（kuromoji + `analysis-sudachi` + SudachiDict core）
+  - 移動タグ `:9`（kuromoji）/ `:9-sudachi`
+- multi-arch（amd64 + arm64）で build+push します。
+
+<Callout type="warn">
+  **version pinning が必須。** `analysis-sudachi` は ES の **patch version と完全一致** が
+  要ります。`analysis-sudachi` v3.6.0 が対応する ES 9.x は
+  `9.0.8` / `9.1.10` / `9.2.8` / `9.3.4` / **`9.4.1`** です。SudachiDict は **core**
+  を既定（リリース日 `20260428`）にしています。
+</Callout>
+
+<Callout type="warn">
+  ES を bump するときは **`docker-elasticsearch.yml` の env 既定** と
+  **`elasticsearch/Dockerfile.sudachi` の ARG 既定** の **両方** を更新してください
+  （実行時は CI が `--build-arg` で明示渡しするため CI が正ですが、Dockerfile 既定は
+  ローカルビルド用の便宜値で、片方だけ直すと drift します）。
+</Callout>
+
+- **SudachiDict の取得** は HTTP（S3 website endpoint。HTTPS 非対応）です。再配布 image を
+  堅くするには、既定の辞書版の既知の sha256 を `DICT_SHA256` build-arg に渡すと
+  ダウンロードの integrity を検証できます（既定は空 = 検証なし）。
+- **ライセンス / 商標**: ES は ELv2 で self-host 用カスタム image の再配布が可能です
+  （マネージドサービスとして第三者提供しない・ライセンスキーを回避しない・Elastic の表記を
+  削除しない）。商標は nominative use（Elastic 公認に見せない）。upstream の LICENSE / NOTICE と
+  集約 NOTICE を image に同梱します。詳細は repo の `elasticsearch/README.md` /
+  `elasticsearch/NOTICE` を参照してください。
+
+## トラブルシュート
+
+- **OIDC publish が通らない（E404 等）**: まず toolchain（pnpm 10.x +
+  `pnpm/action-setup@v6.0.6+` + Node 24）と、npmjs.com 側の Trusted Publisher 設定
+  （repo / workflow ファイル名が一致しているか）を確認します。それでも通らない場合の
+  フォールバックは、`release.yml` の publish ステップを `pnpm changeset publish` から
+  **`npm publish` 経由のスクリプト** に差し替える案です。
+- **Version PR が生成されない**: 「Allow GitHub Actions to create and approve pull
+  requests」が ON か、貯まった changeset が存在するかを確認します。
+- **Docker image が出ない**: `docker.yml` が `workflow_run` で発火したか、対象 Release run が
+  `dist-version` artifact を upload しているか（= 実際に publish があった run か）を確認します。
+  publish を伴わない Version PR だけの run では image は build されません。
+
+## 関連
+
+- [デプロイ構成](./deployment) — image を api に向ける配線
+- [セルフホスティング](./self-hosting) — 自前 runner からの image ビルド
+- [検索バックエンドのセットアップ](./search-setup) — ES image を使う検索の設定

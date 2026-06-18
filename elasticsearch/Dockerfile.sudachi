@@ -1,10 +1,73 @@
-FROM alpine:3.10.3 as builder
+# crowi/docker-elasticsearch:<es>-sudachi
+#
+# Elasticsearch 9.x + analysis-kuromoji (Elastic, bundled) + analysis-sudachi
+# (WorksApplications) + the SudachiDict *core* dictionary, baked in so the
+# `sudachi` analyzer selectable in the search-plugin admin UI works out of the
+# box on a self-hosted ES.
+#
+# Version pinning (REQUIRED): analysis-sudachi must match the Elasticsearch
+# PATCH version EXACTLY. analysis-sudachi v3.6.0 ships per-patch assets for ES
+# 9.0.8 / 9.1.10 / 9.2.8 / 9.3.4 / 9.4.1 (and the 8.x line). The 9.4 asset is
+# built for 9.4.1 (NOT 9.4.0) — hence the default ES_VERSION below is 9.4.1.
+# When bumping ES_VERSION, pick an es patch that has a matching analysis-sudachi
+# asset and set SUDACHI_PLUGIN_VERSION accordingly.
+#
+# Build args (override via docker build --build-arg / the docker-elasticsearch.yml
+# workflow):
+#   ES_VERSION              base Elasticsearch (patch-exact)            default 9.4.1
+#   SUDACHI_PLUGIN_VERSION  WorksApplications/elasticsearch-sudachi tag default 3.6.0
+#   SUDACHIDICT_VERSION     SudachiDict core release date               default 20260428
+#
+# License/trademark: see elasticsearch/NOTICE (copied into the image). This is a
+# community redistribution for self-hosting, NOT an official Elastic product.
 
-RUN apk --update add curl unzip
-RUN curl -L https://object-storage.tyo2.conoha.io/v1/nc_2520839e1f9641b08211a5c85243124a/sudachi/sudachi-dictionary-20191030-core.zip -o system_core.dic.zip && unzip system_core.dic.zip
+ARG ES_VERSION=9.4.1
+ARG SUDACHI_PLUGIN_VERSION=3.6.0
+ARG SUDACHIDICT_VERSION=20260428
 
+# ---------------------------------------------------------------------------
+# Stage 1: fetch + unpack the SudachiDict core dictionary.
+# The ES base image runs as a non-root user without curl/unzip, so we prepare
+# the dictionary in a small builder and COPY only the resulting .dic in.
+# ---------------------------------------------------------------------------
+FROM alpine:3.21 AS dict
+ARG SUDACHIDICT_VERSION
+# Optional integrity check: set DICT_SHA256 to the published SudachiDict core
+# checksum at build time to fail closed on a corrupted/tampered download. Left
+# empty by default because SudachiDict is served over HTTP from an S3 website
+# endpoint (no https) and the project does not publish a stable per-release
+# sha alongside the zip; the docker-elasticsearch.yml workflow can pass one in.
+ARG DICT_SHA256=
+RUN apk add --no-cache curl unzip
+WORKDIR /work
+# NB: SudachiDict core is served over HTTP (S3 website endpoint), not HTTPS.
+RUN curl -fsSL \
+      "http://sudachi.s3-website-ap-northeast-1.amazonaws.com/sudachidict/sudachi-dictionary-${SUDACHIDICT_VERSION}-core.zip" \
+      -o sudachi-dict.zip \
+  && if [ -n "$DICT_SHA256" ]; then echo "${DICT_SHA256}  sudachi-dict.zip" | sha256sum -c -; fi \
+  && unzip -q sudachi-dict.zip \
+  # The zip expands into a versioned directory (e.g. sudachi-dictionary-<ver>/);
+  # locate system_core.dic by name rather than hardcoding the inner directory.
+  && mkdir -p /out \
+  && cp "$(find . -name 'system_core.dic' -print -quit)" /out/system_core.dic
 
-FROM docker.elastic.co/elasticsearch/elasticsearch:7.4.0
+# ---------------------------------------------------------------------------
+# Stage 2: the published image.
+# ---------------------------------------------------------------------------
+FROM docker.elastic.co/elasticsearch/elasticsearch:${ES_VERSION}
+ARG ES_VERSION
+ARG SUDACHI_PLUGIN_VERSION
 
-RUN elasticsearch-plugin install https://github.com/WorksApplications/elasticsearch-sudachi/releases/download/v7.4.0-1.3.1/analysis-sudachi-elasticsearch7.4-1.3.1.zip
-COPY --from=builder /sudachi-dictionary-20191030 /usr/share/elasticsearch/config/sudachi/
+# analysis-kuromoji: Elastic-distributed Japanese analyzer (same license as the
+# base image). analysis-sudachi: WorksApplications, version-matched to ES.
+RUN bin/elasticsearch-plugin install --batch analysis-kuromoji \
+  && bin/elasticsearch-plugin install --batch \
+       "https://github.com/WorksApplications/elasticsearch-sudachi/releases/download/v${SUDACHI_PLUGIN_VERSION}/elasticsearch-${ES_VERSION}-analysis-sudachi-${SUDACHI_PLUGIN_VERSION}.zip"
+
+# Place the SudachiDict core dictionary where analysis-sudachi looks for it.
+COPY --from=dict /out/system_core.dic config/sudachi/system_core.dic
+
+# Aggregated attribution / license notices for the bundled components. The
+# upstream Elasticsearch LICENSE.txt / NOTICE.txt under
+# /usr/share/elasticsearch/ are retained (NOT removed).
+COPY NOTICE /usr/share/elasticsearch/CROWI-NOTICE.txt

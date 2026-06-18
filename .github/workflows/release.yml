@@ -1,17 +1,27 @@
 name: Release
 
-# Manual-trigger-only while v2 is in active 0.x-dev development.
-# Switch to `push: branches: [main]` when the first real publish
-# (2.0.0-alpha1 or similar) is ready — at that point also:
-#   1. Set NPM_TOKEN secret (Automation Token or OIDC trusted publisher)
-#   2. Enable "Allow GitHub Actions to create and approve PRs" in repo settings
-#   3. Bump versions out of -dev via a `pnpm changeset version` Version PR
-#   4. Configure npm org @crowi provenance if desired
+# Trigger: push to main runs changesets/action. When unreleased changesets are
+# present it (re)opens a "Version PR"; merging that PR (the human GO gate) lands
+# the version bumps on main, which re-runs this workflow and publishes to npm.
+# workflow_dispatch is kept for manual re-runs / recovery.
+#
+# Auth: npm publish uses OIDC Trusted Publishing — NO long-lived NPM_TOKEN.
+#   - `id-token: write` (below) lets the runner mint the OIDC token.
+#   - `pnpm changeset publish` runs `pnpm publish` per package, which delegates
+#     to the bundled npm CLI; npm CLI >=11.5.1 on Node >=22.14.0 performs the
+#     OIDC trusted-publishing exchange. Node 24.x here ships a new-enough npm,
+#     and pnpm/action-setup@v6 (>=6.0.6) avoids the pnpm-side OIDC regression.
+#   - One-time external setup (see operations/release-runbook.mdx): each public
+#     @crowi/* package must have a Trusted Publisher configured on npmjs.com
+#     (repo crowi/crowi + workflow file release.yml), and the repo setting
+#     "Allow GitHub Actions to create and approve pull requests" must be ON for
+#     the Version PR.
+#   - NPM_CONFIG_PROVENANCE: 'true' attaches build provenance attestations.
 on:
   workflow_dispatch:
-  # push:
-  #   branches:
-  #     - main
+  push:
+    branches:
+      - main
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
@@ -29,7 +39,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -45,6 +55,7 @@ jobs:
         run: pnpm build
 
       - name: Create Release PR or Publish
+        id: changesets
         uses: changesets/action@v1
         with:
           publish: pnpm changeset publish
@@ -53,5 +64,49 @@ jobs:
           title: 'chore: version packages'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_CONFIG_PROVENANCE: 'true'
+
+      # --- Distribution (umbrella) version tag --------------------------------
+      # Only after a real publish (changesets/action sets published=true when it
+      # actually published packages; it is false for Version-PR-only runs).
+      #
+      # The Crowi DISTRIBUTION version is independent of any single npm package
+      # (D3): the Docker full/slim image bundles every @crowi/*, so it must get a
+      # fresh version on EVERY release — even a plugin-only patch where api/web do
+      # not bump. compute-dist-version.mjs derives the base (major.minor + pre
+      # channel) from the just-published linked product version and bumps the
+      # counter past the max existing `v<base>.*` git tag (candidate (i)).
+      - name: Compute distribution version
+        if: steps.changesets.outputs.published == 'true'
+        id: dist
+        run: node scripts/compute-dist-version.mjs --out dist-version.txt
+
+      # Seam to the Docker workflow (docker.yml, phase-3). NOTE: a tag pushed
+      # with the default GITHUB_TOKEN does NOT trigger another workflow's
+      # `on: push: tags` (GitHub anti-recursion). So docker.yml is triggered by
+      # `workflow_run` (this Release workflow completing), NOT by this tag push.
+      # We deliberately do NOT add a PAT — that would reintroduce the long-lived
+      # secret OIDC was adopted to remove. The tag below is the durable release
+      # record; docker.yml picks the version up from the uploaded artifact (and
+      # can fall back to the latest `v*` tag).
+      - name: Create and push distribution tag
+        if: steps.changesets.outputs.published == 'true'
+        env:
+          DIST_VERSION: ${{ steps.dist.outputs.dist-version }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git tag "$DIST_VERSION"
+          git push origin "$DIST_VERSION"
+
+      # Hand the distribution version to docker.yml (phase-3) two ways:
+      #   (a) as a step output (steps.dist.outputs.dist-version), and
+      #   (b) as an artifact, which a workflow_run-triggered docker.yml can
+      #       download from this (the triggering) run.
+      - name: Upload distribution version artifact
+        if: steps.changesets.outputs.published == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-version
+          path: dist-version.txt
+          if-no-files-found: error

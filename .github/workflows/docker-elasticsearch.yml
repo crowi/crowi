@@ -1,0 +1,230 @@
+name: Docker (Elasticsearch)
+
+# Build + push the Crowi custom Elasticsearch images (crowi/docker-elasticsearch)
+# as multi-arch (amd64 + arm64) manifests, in two variants:
+#   - kuromoji (default): ES + analysis-kuromoji        -> :<es>, :9, :9-kuromoji
+#   - sudachi:            + analysis-sudachi + SudachiDict core -> :<es>-sudachi, :9-sudachi
+#
+# This workflow is COMPLETELY INDEPENDENT of the Crowi release.yml / docker.yml.
+# ES images follow ES's own cadence (ES upgrades, plugin/dictionary updates, ES
+# security patches), so there is no link to Crowi's changeset/version/GO gate.
+#
+# Triggers:
+#   - workflow_dispatch (primary): pick es_version / sudachi_plugin_version /
+#     dict_version / variant by hand. analysis-sudachi must match the ES PATCH
+#     version EXACTLY (v3.6.0 assets: 9.0.8 / 9.1.10 / 9.2.8 / 9.3.4 / 9.4.1).
+#   - push of an `es-v*` tag (auxiliary): es_version is derived from the tag
+#     (e.g. es-v9.4.1 -> 9.4.1); other inputs fall back to defaults; variant=both.
+on:
+  workflow_dispatch:
+    inputs:
+      es_version:
+        description: 'Elasticsearch version (patch-exact for sudachi), e.g. 9.4.1'
+        required: true
+        default: '9.4.1'
+      sudachi_plugin_version:
+        description: 'WorksApplications/elasticsearch-sudachi release tag'
+        required: true
+        default: '3.6.0'
+      dict_version:
+        description: 'SudachiDict core release date'
+        required: true
+        default: '20260428'
+      variant:
+        description: 'Which variant(s) to build'
+        required: true
+        type: choice
+        options: [both, kuromoji, sudachi]
+        default: both
+  push:
+    tags:
+      - 'es-v*'
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+
+env:
+  IMAGE: crowi/docker-elasticsearch
+  # Defaults used by the es-v* tag path (which only carries the ES version).
+  DEFAULT_SUDACHI_PLUGIN_VERSION: '3.6.0'
+  DEFAULT_DICT_VERSION: '20260428'
+
+jobs:
+  # Resolve the effective build parameters (es version / plugin / dict / which
+  # variants) from whichever trigger fired.
+  resolve:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      es-version: ${{ steps.resolve.outputs.es-version }}
+      sudachi-plugin-version: ${{ steps.resolve.outputs.sudachi-plugin-version }}
+      dict-version: ${{ steps.resolve.outputs.dict-version }}
+      variant: ${{ steps.resolve.outputs.variant }}
+    steps:
+      - name: Resolve build parameters
+        id: resolve
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_ES_VERSION: ${{ github.event.inputs.es_version }}
+          INPUT_SUDACHI_PLUGIN_VERSION: ${{ github.event.inputs.sudachi_plugin_version }}
+          INPUT_DICT_VERSION: ${{ github.event.inputs.dict_version }}
+          INPUT_VARIANT: ${{ github.event.inputs.variant }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            ES_VERSION="$INPUT_ES_VERSION"
+            SUDACHI_PLUGIN_VERSION="$INPUT_SUDACHI_PLUGIN_VERSION"
+            DICT_VERSION="$INPUT_DICT_VERSION"
+            VARIANT="$INPUT_VARIANT"
+          else
+            # es-v* tag push: strip the `es-v` prefix to get the ES version.
+            ES_VERSION="${REF_NAME#es-v}"
+            SUDACHI_PLUGIN_VERSION="$DEFAULT_SUDACHI_PLUGIN_VERSION"
+            DICT_VERSION="$DEFAULT_DICT_VERSION"
+            VARIANT="both"
+          fi
+          if [ -z "$ES_VERSION" ]; then
+            echo "::error::could not resolve an Elasticsearch version"
+            exit 1
+          fi
+          {
+            echo "es-version=$ES_VERSION"
+            echo "sudachi-plugin-version=$SUDACHI_PLUGIN_VERSION"
+            echo "dict-version=$DICT_VERSION"
+            echo "variant=$VARIANT"
+          } >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: resolve
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [kuromoji, sudachi]
+    steps:
+      # Build a matrix variant only when it was requested (both/kuromoji/sudachi).
+      # `matrix` cannot be used in a job-level `if`, so the per-variant gate is a
+      # step output that the remaining steps key off.
+      - name: Decide whether to build this variant
+        id: gate
+        env:
+          REQUESTED: ${{ needs.resolve.outputs.variant }}
+          VARIANT: ${{ matrix.variant }}
+        run: |
+          if [ "$REQUESTED" = "both" ] || [ "$REQUESTED" = "$VARIANT" ]; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            echo "variant '$VARIANT' not requested (variant input='$REQUESTED'); skipping."
+          fi
+
+      - name: Checkout
+        if: steps.gate.outputs.build == 'true'
+        uses: actions/checkout@v4
+
+      # Tags per variant (immutable <es>(+-sudachi) + moving 9 / 9-kuromoji /
+      # 9-sudachi). The moving major tag is derived from ES_VERSION's major.
+      - name: Compute image tags
+        if: steps.gate.outputs.build == 'true'
+        id: tags
+        env:
+          IMAGE: ${{ env.IMAGE }}
+          ES_VERSION: ${{ needs.resolve.outputs.es-version }}
+          VARIANT: ${{ matrix.variant }}
+        run: |
+          ES_MAJOR="${ES_VERSION%%.*}"
+          {
+            echo 'tags<<EOF'
+            if [ "$VARIANT" = "sudachi" ]; then
+              echo "${IMAGE}:${ES_VERSION}-sudachi"
+              echo "${IMAGE}:${ES_MAJOR}-sudachi"
+            else
+              # kuromoji is the default variant: no suffix on the immutable/major
+              # tags, plus an explicit :<major>-kuromoji alias.
+              echo "${IMAGE}:${ES_VERSION}"
+              echo "${IMAGE}:${ES_MAJOR}"
+              echo "${IMAGE}:${ES_MAJOR}-kuromoji"
+            fi
+            echo EOF
+          } >> "$GITHUB_OUTPUT"
+
+      # Per-variant Dockerfile + build context + build-args.
+      #   kuromoji -> elasticsearch.Dockerfile, context = repo root
+      #               (it COPYs elasticsearch/NOTICE).
+      #   sudachi  -> elasticsearch/Dockerfile.sudachi, context = ./elasticsearch
+      #               (it COPYs NOTICE relative to that dir).
+      - name: Resolve build inputs
+        if: steps.gate.outputs.build == 'true'
+        id: build
+        env:
+          VARIANT: ${{ matrix.variant }}
+          ES_VERSION: ${{ needs.resolve.outputs.es-version }}
+          SUDACHI_PLUGIN_VERSION: ${{ needs.resolve.outputs.sudachi-plugin-version }}
+          DICT_VERSION: ${{ needs.resolve.outputs.dict-version }}
+        run: |
+          if [ "$VARIANT" = "sudachi" ]; then
+            {
+              echo "context=./elasticsearch"
+              echo "file=elasticsearch/Dockerfile.sudachi"
+              echo 'build-args<<EOF'
+              echo "ES_VERSION=$ES_VERSION"
+              echo "SUDACHI_PLUGIN_VERSION=$SUDACHI_PLUGIN_VERSION"
+              echo "SUDACHIDICT_VERSION=$DICT_VERSION"
+              echo EOF
+            } >> "$GITHUB_OUTPUT"
+          else
+            {
+              echo "context=."
+              echo "file=elasticsearch.Dockerfile"
+              echo 'build-args<<EOF'
+              echo "ES_VERSION=$ES_VERSION"
+              echo EOF
+            } >> "$GITHUB_OUTPUT"
+          fi
+
+      # Standard OCI labels (community redistribution; NOT an official Elastic
+      # product). Tags come from the step above, not metadata-action.
+      - name: Derive OCI labels
+        if: steps.gate.outputs.build == 'true'
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          tags: type=raw,value=${{ needs.resolve.outputs.es-version }}
+          labels: |
+            org.opencontainers.image.title=Crowi Elasticsearch (${{ matrix.variant }})
+            org.opencontainers.image.description=Elasticsearch ${{ needs.resolve.outputs.es-version }} + Japanese analyzers (${{ matrix.variant }}) for self-hosting Crowi search. Community redistribution, not an official Elastic product.
+            org.opencontainers.image.version=${{ needs.resolve.outputs.es-version }}
+            org.crowi.es.variant=${{ matrix.variant }}
+            org.crowi.es.version=${{ needs.resolve.outputs.es-version }}
+
+      - name: Set up QEMU
+        if: steps.gate.outputs.build == 'true'
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        if: steps.gate.outputs.build == 'true'
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver: docker-container
+
+      - name: Log in to Docker Hub
+        if: steps.gate.outputs.build == 'true'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push (${{ matrix.variant }}, multi-arch)
+        if: steps.gate.outputs.build == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ steps.build.outputs.context }}
+          file: ${{ steps.build.outputs.file }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          build-args: ${{ steps.build.outputs.build-args }}
+          tags: ${{ steps.tags.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}

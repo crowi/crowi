@@ -1,29 +1,45 @@
 #!/usr/bin/env node
-// Build the official Crowi Docker images (full + slim) with version-aware tags.
+// Build the official Crowi Docker images (full + slim) with distribution-aware
+// tags. RFC: feature-ci-release-automation D3.
 //
 // Tagging scheme (A) — like node / postgres official images:
 //   - The DEFAULT variant (full) carries NO suffix; the slim variant gets `-slim`.
-//   - The image version tracks `@crowi/api`'s package version.
-//   - Prerelease versions (e.g. 2.0.0-alpha.0) tag the exact version plus a
+//   - The image version is the INDEPENDENT Crowi DISTRIBUTION version (D3), NOT
+//     any single npm package version. The image bundles ALL @crowi/* packages,
+//     so it must get a fresh version on EVERY release — even a plugin-only patch
+//     where @crowi/api / web / api-contract do not bump. Reusing @crowi/api's
+//     version (the OLD model) would either reuse an immutable tag for changed
+//     content or force an empty api/web bump. The distribution version is
+//     computed by scripts/compute-dist-version.mjs (max existing
+//     `v<base>.*` git tag + 1).
+//   - Prerelease versions (e.g. 2.0.0-alpha.2) tag the exact version plus a
 //     moving CHANNEL tag (`alpha`); they do NOT move `latest` (a bare
 //     `docker pull crowi` must keep meaning "latest stable").
-//   - Stable versions (e.g. 2.0.0) tag the exact version plus `latest`.
+//   - Stable versions tag the exact version plus `latest`.
 //
-// So for 2.0.0-alpha.0:
-//   full → crowi:2.0.0-alpha.0       , crowi:alpha
-//   slim → crowi:2.0.0-alpha.0-slim  , crowi:alpha-slim
+// Tag rules live in scripts/release-tags.mjs (the single source of truth shared
+// with compute-dist-version.mjs + .github/workflows/docker.yml), so the rule
+// cannot drift across the manual build, the release workflow, and the CI build.
+//
+// So for distribution version v2.0.0-alpha.2:
+//   full → crowi:2.0.0-alpha.2       , crowi:alpha
+//   slim → crowi:2.0.0-alpha.2-slim  , crowi:alpha-slim
 //
 // Usage:
 //   node scripts/build-images.mjs                          # build full+slim locally
 //   node scripts/build-images.mjs --variant slim           # one variant only
 //   node scripts/build-images.mjs --image ghcr.io/crowi/crowi
+//   node scripts/build-images.mjs --dist-version v2.0.0-alpha.2  # pin the version
 //   node scripts/build-images.mjs --push                   # docker push every tag after build
 //   node scripts/build-images.mjs --dry-run                # print the docker commands only
+//
+// When --dist-version is omitted the version is computed the same way the
+// release workflow does, by invoking scripts/compute-dist-version.mjs.
 
-import { spawnSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { execFileSync, spawnSync } from 'node:child_process'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { parseVersion, stripV, tagsFor } from './release-tags.mjs'
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -32,34 +48,31 @@ const args = process.argv.slice(2)
 const hasFlag = (name) => args.includes(name)
 const getOpt = (name, fallback) => {
   const i = args.indexOf(name)
-  return i !== -1 && args[i + 1] ? args[i + 1] : fallback
+  return i !== -1 && args[i + 1] !== undefined ? args[i + 1] : fallback
 }
 const dryRun = hasFlag('--dry-run')
 const push = hasFlag('--push')
 const image = getOpt('--image', 'crowi')
 const variant = getOpt('--variant', 'both') // full | slim | both
 
-// --- version → tags ---
-const { version } = JSON.parse(readFileSync(path.join(repoRoot, 'packages', 'api', 'package.json'), 'utf8'))
-const dash = version.indexOf('-')
-const isPrerelease = dash !== -1
-// channel = the prerelease identifier without the numeric suffix: `alpha.0` → `alpha`.
-const channel = isPrerelease ? version.slice(dash + 1).split('.')[0] : null
-const movingFull = isPrerelease ? [channel] : ['latest']
-
-// full: no suffix; slim: `-slim` on every tag.
-const tagsFor = (suffix) => [
-  `${version}${suffix}`,
-  ...movingFull.map((t) => `${t}${suffix}`),
-]
-const fullTags = tagsFor('')
-const slimTags = tagsFor('-slim')
+// --- distribution version → tags ---
+// Either pinned via --dist-version, or computed exactly like release.yml does
+// (compute-dist-version.mjs: max existing `v<base>.*` git tag + 1).
+const computeDistVersion = () => {
+  const out = execFileSync('node', [path.join(repoRoot, 'scripts', 'compute-dist-version.mjs')], {
+    cwd: repoRoot,
+    encoding: 'utf8',
+  })
+  return out.trim()
+}
+const distVersion = stripV(getOpt('--dist-version', null) ?? computeDistVersion())
+const { isPrerelease, channel } = parseVersion(distVersion)
 
 const VARIANTS = {
-  full: { buildArgs: [], tags: fullTags },
+  full: { buildArgs: [], tags: tagsFor(distVersion, 'full') },
   slim: {
     buildArgs: ['--build-arg', 'RUNNER_APP=@crowi/runner-app-slim', '--build-arg', 'RUNNER_APP_DIR=apps/crowi-runner-slim'],
-    tags: slimTags,
+    tags: tagsFor(distVersion, 'slim'),
   },
 }
 const selected = variant === 'both' ? ['full', 'slim'] : [variant]
@@ -68,7 +81,7 @@ if (!selected.every((v) => VARIANTS[v])) {
   process.exit(1)
 }
 
-console.log(`build-images: version ${version}${isPrerelease ? ` (prerelease channel '${channel}', latest NOT moved)` : ' (stable)'}`)
+console.log(`build-images: distribution version ${distVersion}${isPrerelease ? ` (prerelease channel '${channel}', latest NOT moved)` : ' (stable)'}`)
 
 const run = (cmd, cmdArgs) => {
   const display = `${cmd} ${cmdArgs.join(' ')}`
