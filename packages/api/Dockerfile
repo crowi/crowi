@@ -23,7 +23,7 @@
 #     --build-arg RUNNER_APP_DIR=apps/crowi-runner-slim .
 #
 # Stages:
-#   1. base     — Node + pnpm 9.15.9 (matches root packageManager).
+#   1. base     — Node + pnpm 10.34.3 (matches root packageManager).
 #   2. builder  — install the runner-app subgraph, build @crowi/api and all
 #                 transitive workspace deps (api-contract, plugin-*, runner)
 #                 with tsup/tsc.
@@ -52,7 +52,7 @@ ARG RUNNER_APP_DIR=apps/crowi-runner
 # Stage 1: base
 # -----------------------------------------------------------------------------
 FROM node:${NODE_VERSION} AS base
-RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
+RUN corepack enable && corepack prepare pnpm@10.34.3 --activate
 WORKDIR /workspace
 
 # -----------------------------------------------------------------------------
