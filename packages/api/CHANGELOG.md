@@ -1,5 +1,88 @@
 # @crowi/api
 
+## 2.0.0-alpha.1
+
+### Minor Changes
+
+- bcfc175: Add `crowi-admin replace url --from <url> --to <url>` for swapping a literal
+  URL/host string in every page body — the fix for a v1→v2 migration that changed
+  the public domain and left absolute URLs (image embeds / links) pinned to the
+  old host. Page / file ids are carried over unchanged, so this is a literal host
+  swap, not an id remap.
+
+  Each match is rewritten as a new revision (auditable + revertable) while the
+  page's `updatedAt` / `lastUpdateUser` / `grant` are left untouched and no
+  `pageEvent` is emitted — so a bulk cleanup does not reorder "recently updated",
+  notify every watcher, or auto-watch the operator onto every page. The Yjs
+  snapshot is invalidated so collaborative editors rebuild from the new body.
+  Supports `--dry-run`, an interactive preview/confirmation (`--yes` to skip),
+  `--include-trash`, `--user <email>` (new-revision author; defaults to the oldest
+  admin), and a footgun guard that refuses an empty / too-short / scheme-less
+  `--from` (a bare host can corrupt longer hosts that start with it) unless
+  `--force` is given. After a run, rebuild the search index with
+  `crowi-admin rebuild search`; page rendering is already up to date.
+
+### Patch Changes
+
+- 54f7df3: Ship the `views/` mail templates and `public/` static assets in the published
+  `@crowi/api` package. The `files` field listed only `dist` + `README.md`, so
+  `pnpm deploy --prod` dropped `views/mail/*.{mjml,text}` and
+  `public/images/file-not-found.png` from the production Docker image's
+  `node_modules/@crowi/api/`. As a result every mail send (test / account
+  activation / admin-approval-pending / email change / user invitation /
+  password-change notification / password reset) failed at runtime with
+  `ENOENT` while resolving its template, and the attachment "file not found"
+  placeholder image likewise could not be streamed. Neither reproduced under
+  `pnpm dev`, where the full source tree is visible without going through
+  `node_modules`. Adding `views` and `public` to `files` fixes both.
+- c0ca5c2: Fix MCP read tools dropping the page body for `structuredContent`-preferring clients. `crowi_get_page` and `crowi_get_revision` (and the write tools that echo back a page) placed the body only in `content[0].text` and exposed just metadata in `structuredContent`. Per MCP convention, clients that prefer `structuredContent` and hide the text block lost the body entirely, falling back to search snippets. The body is now carried in both places (`content[0].text` and `structuredContent.body`, RFC-0011 §9), while the update-lock metadata (`revision_id`, `path`, etc.) is preserved. List/search tools are unchanged.
+- 9a22d3c: Fix `Page.updatePage` nulling a page's grant on a grant-less update. It computed
+  `const grant = options.grant || null`, so any call without an explicit grant
+  (e.g. `updatePage(page, body, user, {})` from `rewritePageBody` and the preflight
+  migrations that ride it) hit `null != pageData.grant` and re-granted the page to
+  `null` with `grantedUsers = [actingUser]` — silently dropping a public page out
+  of `grant: GRANT_PUBLIC` queries. It now defaults to the page's current grant
+  (`options.grant ?? pageData.grant`), so a body-only update leaves visibility
+  untouched while an explicit grant change still applies. The HTTP update handler
+  was already passing `grant ?? pageData.grant` defensively and is unaffected.
+- 82a1ed5: Reserve the `/api` namespace so it is never treated as a wiki page. Visiting
+  `/api` (or any non-proxied `/api/*`) in the web app previously fell through to
+  the page catch-all and offered the "create this page" UI, because only
+  `/api/v2/*` is reverse-proxied to the api. The bare `/api` segment now renders a
+  404 instead, and the server's `Page.isCreatableName` refuses to create or rename
+  a page under `/api` (mirroring the existing `admin` / `me` / `files` / … reserved
+  prefixes). The match is segment-bounded, so a real page like `/apiary` stays
+  creatable.
+
+  The web catch-all's reserved-path guard now mirrors the full set of server
+  top-level reserved prefixes (`installer` / `register` / `login` / `logout` /
+  `admin` / `me` / `files` / `trash` / `paste` / `comments` / `api`), so the
+  "create this page" affordance is no longer offered for any path the server
+  would reject. `/user` is intentionally excluded — it renders the member
+  directory.
+
+  For wikis upgrading from v1 (where the API lived at `/_api/*`, leaving `/api/*`
+  a valid page path), a new `relocate-reserved-api-paths` preflight migration
+  moves any surviving page out of `/api/*` into `/api-legacy/*` so the v2
+  reservation does not strand it. Run it with `crowi-admin migrate apply`; wikis
+  with no `/api/*` pages have nothing to apply.
+
+- fa5733c: Show suspended users' profile pages instead of 404ing them.
+
+  `/user/:username` (and its `/bookmarks` + `/pages` siblings) returned
+  `USER_NOT_FOUND` for any non-active account, which swept up suspended users. But
+  a suspended author's pages stay visible in the page tree under
+  `/user/<username>/...`, so hiding only their profile produced a broken "User not
+  found" landing page. Active and suspended accounts are now shown; deleted
+  (tombstoned) and invited / registered placeholder accounts remain hidden behind
+  the same 404. The member directory (`/users`) is unchanged and still excludes
+  suspended users.
+
+- Updated dependencies [0e9a07c]
+- Updated dependencies [27ef287]
+  - @crowi/api-contract@2.0.0-alpha.1
+  - @crowi/collab@0.1.0-alpha.1
+
 ## 2.0.0-alpha.0
 
 ### Major Changes
@@ -262,11 +345,10 @@
     shown once, and token management is web-session only. **Breaking:** the
     legacy `User.apiToken` and `GET/POST /me/apiToken` are removed with no
     compatibility shim — existing API-token users must re-issue a PAT.
-  - **Authorization Code + PKCE** — `POST /oauth/authorize` (web-session only)
-    - `POST /oauth/token` (authorization code with `S256`, or refresh-token
-      rotation with reuse detection that revokes the whole chain) + `POST
+  - **Authorization Code + PKCE** — `POST /oauth/authorize` (web-session only) - `POST /oauth/token` (authorization code with `S256`, or refresh-token
+    rotation with reuse detection that revokes the whole chain) + `POST
 /oauth/revoke` (RFC 7009) + a consent screen. A first-party `crowi-cli`
-      public client is seeded idempotently at boot.
+    public client is seeded idempotently at boot.
   - **Device Authorization Grant** (RFC 8628) — `POST /oauth/device/authorize`,
     the `urn:ietf:params:oauth:grant-type:device_code` token grant
     (`authorization_pending` / `slow_down` / `access_denied` / `expired_token`),
@@ -505,9 +587,9 @@
 - 8bfb1fd: Fix the portal document being stuck on "Rendering…" in the page list, even after publishing. `listPages` projected the portal with the lean `pageToResponse` (no `renderedAst`), but the web client renders the portal as a full page and needs the AST. The portal response now emits `renderedAst` and runs the same on-the-fly fallback as the page detail endpoint, so legacy / renderer-version-mismatched revisions render too.
 - f568734: Disallow renaming a user's home page (`/user/<username>`). Its path is bound
   to the username, so the rename action is hidden in the page menu and the
-  rename API rejects it with 400 PAGE_INVALID_NAME (mirroring the existing
+  rename API rejects it with 400 PAGE*INVALID_NAME (mirroring the existing
   delete guard). The guard covers every route into a rename: the single-page
-  rename (source and destination — a page can't be moved _onto_ a home path
+  rename (source and destination — a page can't be moved \_onto* a home path
   either) and the folder/subtree move (a `/user/` subtree that would sweep in
   every home page is refused). Pages under the home (e.g.
   `/user/<username>/memo`) are unaffected.

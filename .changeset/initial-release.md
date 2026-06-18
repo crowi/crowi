@@ -12,7 +12,6 @@
 "@crowi/plugin-renderer-crowi-legacy": minor
 "@crowi/admin-cli": minor
 "@crowi/runner": minor
-"@crowi/tsconfig": minor
 ---
 
 Initial publish preparation: monorepo restructure complete (RFC-0002 →

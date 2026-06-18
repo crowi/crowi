@@ -1,5 +1,76 @@
 # @crowi/web
 
+## 2.0.0-alpha.1
+
+### Minor Changes
+
+- 470269f: Make the web Docker image runtime-configurable so a single `crowi/crowi-web`
+  image can target any api without a rebuild — for both same-origin and
+  cross-origin topologies.
+
+  **Same-origin (reverse-proxy, default):** the browser always talks to relative
+  paths (`/api/v2`, `/files/...`) on its own origin, and the Next server's
+  `rewrites()` proxy forwards them to the api at the runtime-injected
+  `CROWI_API_URL` server env (read at boot, not baked into the client bundle).
+  WebSocket endpoints (collab / presence / notifications) derive their URL from
+  `window.location` by default, so realtime works same-origin with no build-time
+  URL bake. The Dockerfile no longer accepts a `NEXT_PUBLIC_API_URL` build-arg.
+
+  **Cross-origin (split web/api hosts):** `NEXT_PUBLIC_API_URL` /
+  `NEXT_PUBLIC_COLLAB_URL` are now read at runtime via `next-runtime-env`
+  (`<PublicEnvScript />` in the root layout injects the operator's start-time env;
+  the client reads it instead of a build-time-inlined value). A single image can
+  therefore be pointed at any api origin (HTTP + WS) just by setting those env
+  vars at container start — no rebuild required. The api side needs `CLIENT_URL`
+  set to the web origin for CORS (documented in the deployment topologies guide).
+
+  `NEXT_PUBLIC_API_URL` is still honored as a dev / Vercel build-time fallback, so
+  `pnpm dev` and Vercel deployments are unchanged. Env-unset deployments keep the
+  previous same-origin behavior (relative paths + `window.location` WS).
+
+### Patch Changes
+
+- 0e51181: Fix the page breadcrumb overflowing the viewport on mobile. A deep page path
+  previously ran off the right edge of narrow screens, leaving the trailing
+  ancestors clipped and unclickable. The breadcrumb now collapses the middle
+  ancestors behind a `…` dropdown below the `md` breakpoint — keeping Home, the
+  first level, and the immediate parent on a single line, with the hidden levels
+  still reachable from the dropdown. From `md` up the full trail keeps rendering
+  inline, so desktop is unchanged.
+- ea3f255: Always redirect to the installer when the instance is not yet installed. The
+  `InstallerGate` previously rendered the requested page (login / register /
+  wiki) while the install-status check was still loading and even while the
+  redirect to `/installer` was in flight, so a fresh, not-yet-installed instance
+  would briefly show a usable-looking login form. The gate now holds back the
+  page behind a loading state until the status is known and only reveals
+  `children` once the instance is confirmed installed (or the user is legitimately
+  on `/installer`). A per-origin "installed" flag is cached so already-installed
+  instances skip the gate on subsequent loads without an extra round-trip.
+- 82a1ed5: Reserve the `/api` namespace so it is never treated as a wiki page. Visiting
+  `/api` (or any non-proxied `/api/*`) in the web app previously fell through to
+  the page catch-all and offered the "create this page" UI, because only
+  `/api/v2/*` is reverse-proxied to the api. The bare `/api` segment now renders a
+  404 instead, and the server's `Page.isCreatableName` refuses to create or rename
+  a page under `/api` (mirroring the existing `admin` / `me` / `files` / … reserved
+  prefixes). The match is segment-bounded, so a real page like `/apiary` stays
+  creatable.
+
+  The web catch-all's reserved-path guard now mirrors the full set of server
+  top-level reserved prefixes (`installer` / `register` / `login` / `logout` /
+  `admin` / `me` / `files` / `trash` / `paste` / `comments` / `api`), so the
+  "create this page" affordance is no longer offered for any path the server
+  would reject. `/user` is intentionally excluded — it renders the member
+  directory.
+
+  For wikis upgrading from v1 (where the API lived at `/_api/*`, leaving `/api/*`
+  a valid page path), a new `relocate-reserved-api-paths` preflight migration
+  moves any surviving page out of `/api/*` into `/api-legacy/*` so the v2
+  reservation does not strand it. Run it with `crowi-admin migrate apply`; wikis
+  with no `/api/*` pages have nothing to apply.
+
+- Updated dependencies [0e9a07c]
+  - @crowi/api-contract@2.0.0-alpha.1
+
 ## 2.0.0-alpha.0
 
 ### Minor Changes
@@ -182,11 +253,10 @@
     shown once, and token management is web-session only. **Breaking:** the
     legacy `User.apiToken` and `GET/POST /me/apiToken` are removed with no
     compatibility shim — existing API-token users must re-issue a PAT.
-  - **Authorization Code + PKCE** — `POST /oauth/authorize` (web-session only)
-    - `POST /oauth/token` (authorization code with `S256`, or refresh-token
-      rotation with reuse detection that revokes the whole chain) + `POST
+  - **Authorization Code + PKCE** — `POST /oauth/authorize` (web-session only) - `POST /oauth/token` (authorization code with `S256`, or refresh-token
+    rotation with reuse detection that revokes the whole chain) + `POST
 /oauth/revoke` (RFC 7009) + a consent screen. A first-party `crowi-cli`
-      public client is seeded idempotently at boot.
+    public client is seeded idempotently at boot.
   - **Device Authorization Grant** (RFC 8628) — `POST /oauth/device/authorize`,
     the `urn:ietf:params:oauth:grant-type:device_code` token grant
     (`authorization_pending` / `slow_down` / `access_denied` / `expired_token`),
@@ -463,9 +533,9 @@
 - a20c600: Added an icon indicator to GRANT_RESTRICTED ("anyone with the link") pages. Previously only SPECIFIED / OWNER were distinguished with a Lock icon, leaving RESTRICTED indistinguishable from public. A Link2 icon is now shown at the start of the row in PageListItem and in PageHeader (both expanded and sticky), visually separating "anyone the link was shared with can view" from "only listed users".
 - f568734: Disallow renaming a user's home page (`/user/<username>`). Its path is bound
   to the username, so the rename action is hidden in the page menu and the
-  rename API rejects it with 400 PAGE_INVALID_NAME (mirroring the existing
+  rename API rejects it with 400 PAGE*INVALID_NAME (mirroring the existing
   delete guard). The guard covers every route into a rename: the single-page
-  rename (source and destination — a page can't be moved _onto_ a home path
+  rename (source and destination — a page can't be moved \_onto* a home path
   either) and the folder/subtree move (a `/user/` subtree that would sweep in
   every home page is refused). Pages under the home (e.g.
   `/user/<username>/memo`) are unaffected.

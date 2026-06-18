@@ -1,6 +1,6 @@
 {
   "name": "@crowi/plugin-storage-local",
-  "version": "0.1.0-alpha.0",
+  "version": "0.1.0-alpha.1",
   "description": "Local filesystem storage driver for Crowi 2.0. Default-on; preserves the v1.x data/uploads/ layout.",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
