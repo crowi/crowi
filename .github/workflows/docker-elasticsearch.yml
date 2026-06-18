@@ -228,3 +228,8 @@ jobs:
           build-args: ${{ steps.build.outputs.build-args }}
           tags: ${{ steps.tags.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          # arm64 is built via QEMU emulation, so re-using the amd64 layers
+          # saves ~2 minutes per variant. Scope per variant so kuromoji /
+          # sudachi don't poison each other.
+          cache-from: type=gha,scope=es-${{ matrix.variant }}
+          cache-to: type=gha,mode=max,scope=es-${{ matrix.variant }}

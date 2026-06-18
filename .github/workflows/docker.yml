@@ -205,3 +205,8 @@ jobs:
           build-args: ${{ matrix.build-args }}
           tags: ${{ steps.tags.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          # arm64 is built via QEMU emulation, so re-using the amd64 layers
+          # saves ~3 minutes per variant. Scope the cache per variant so
+          # full/slim don't poison each other.
+          cache-from: type=gha,scope=docker-${{ matrix.variant }}
+          cache-to: type=gha,mode=max,scope=docker-${{ matrix.variant }}
