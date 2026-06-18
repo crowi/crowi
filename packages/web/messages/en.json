@@ -217,6 +217,7 @@
   "page.markdown_copy_failed": "Failed to copy markdown",
   "page.code_copy": "Copy",
   "page.code_copied": "Copied",
+  "page.plantuml_zoom": "Enlarge diagram",
   "page.share.aria_open": "Share link",
   "page.share.title": "Share",
   "page.share.url_copied": "URL Copied!",

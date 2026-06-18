@@ -217,6 +217,7 @@
   "page.markdown_copy_failed": "Markdown のコピーに失敗しました",
   "page.code_copy": "コピー",
   "page.code_copied": "コピーしました",
+  "page.plantuml_zoom": "図を拡大",
   "page.share.aria_open": "リンクを共有",
   "page.share.title": "共有",
   "page.share.url_copied": "URL をコピーしました",

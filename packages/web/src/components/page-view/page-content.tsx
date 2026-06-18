@@ -10,6 +10,7 @@ import { LI_CLASSNAME, mergeListClassName, OL_CLASSNAME, UL_CLASSNAME } from '@/
 import { renderMdastToReactNode } from '@/components/editor/render-mdast';
 import { MentionLink } from '@/components/page-view/mention-link';
 import { extractAttachmentId, InlineAttachmentLink, InlineAttachmentProvider } from '@/components/page-view/inline-attachment-link';
+import { isPlantumlEmbed, PlantumlDiagram } from '@/components/page-view/plantuml-diagram';
 
 interface PageContentProps {
   page: PageWithRevision;
@@ -355,8 +356,20 @@ const components = {
   // non-interactive checkbox. Any other `<input>` passes through.
   input: ({ type, checked, ...props }: { type?: string; checked?: unknown; [key: string]: unknown }) =>
     type === 'checkbox' ? <input type="checkbox" checked={Boolean(checked)} readOnly {...props} /> : <input type={type} {...props} />,
-  img: ({ src, alt, ...props }: { src?: string | Blob; alt?: string }) => {
+  img: ({ src, alt, className, ...props }: { src?: string | Blob; alt?: string; className?: unknown }) => {
     const srcString = typeof src === 'string' ? src : undefined;
+    // Server-rendered PlantUML PNG fallback (`<img class="plantuml-embed">`).
+    // Route it through the same cap-to-width + click-to-enlarge wrapper the
+    // SVG path uses; the wrapper carries the `plantuml-embed` class so the
+    // inner <img> only needs the responsive sizing utilities.
+    if (isPlantumlEmbed(className)) {
+      return (
+        <PlantumlDiagram className="plantuml-embed">
+          {/* biome-ignore lint/performance/noImgElement: rich-text rendered as plain markdown */}
+          <img src={srcString} alt={alt || ''} className="max-w-full h-auto" loading="lazy" />
+        </PlantumlDiagram>
+      );
+    }
     const imgClassName = 'max-w-full h-auto rounded-lg my-6';
     // An embedded attachment image still renders the image, but a plain
     // left-click opens the detail modal instead of navigating to the raw
@@ -368,6 +381,19 @@ const components = {
     return (
       // biome-ignore lint/performance/noImgElement: rich-text rendered as plain markdown
       <img src={srcString} alt={alt || ''} className={imgClassName} loading="lazy" {...props} />
+    );
+  },
+  // Server-rendered PlantUML SVG arrives as `<div class="plantuml-embed">`
+  // (raw HTML parsed by `raw()`); route it through the zoom wrapper. Every
+  // other raw-HTML <div> in a body renders plainly.
+  div: ({ className, children, ...props }: ChildrenProps & { className?: unknown }) => {
+    if (isPlantumlEmbed(className)) {
+      return <PlantumlDiagram className="plantuml-embed">{children}</PlantumlDiagram>;
+    }
+    return (
+      <div className={typeof className === 'string' ? className : undefined} {...props}>
+        {children}
+      </div>
     );
   },
   hr: ({ ...props }) => <hr className="my-10 border-foreground/10" {...props} />,

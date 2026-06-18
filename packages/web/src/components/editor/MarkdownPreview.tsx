@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { usePreview } from '@/lib/use-preview';
 import { LI_CLASSNAME, mergeListClassName, OL_CLASSNAME, UL_CLASSNAME } from './list-classnames';
 import { renderMdastToReactNode } from './render-mdast';
+import { isPlantumlEmbed, PlantumlDiagram } from '@/components/page-view/plantuml-diagram';
 import { m } from '@paraglide/messages.js';
 
 const DEBOUNCE_MS = 250;
@@ -237,10 +238,35 @@ const previewComponents = {
   // `page-content.tsx` for the React warning this resolves.
   input: ({ type, checked, ...props }: { type?: string; checked?: unknown; [key: string]: unknown }) =>
     type === 'checkbox' ? <input type="checkbox" checked={Boolean(checked)} readOnly {...props} /> : <input type={type} {...props} />,
-  img: ({ src, alt, ...props }: { src?: string | Blob; alt?: string }) => (
-    // biome-ignore lint/performance/noImgElement: rich-text rendered as plain markdown
-    <img src={typeof src === 'string' ? src : undefined} alt={alt || ''} className="max-w-full h-auto rounded-lg my-6" loading="lazy" {...props} />
-  ),
+  img: ({ src, alt, className, ...props }: { src?: string | Blob; alt?: string; className?: unknown }) => {
+    const srcString = typeof src === 'string' ? src : undefined;
+    // PlantUML PNG fallback — wrap for cap-to-width + click-to-enlarge,
+    // matching the show page.
+    if (isPlantumlEmbed(className)) {
+      return (
+        <PlantumlDiagram className="plantuml-embed">
+          {/* biome-ignore lint/performance/noImgElement: rich-text rendered as plain markdown */}
+          <img src={srcString} alt={alt || ''} className="max-w-full h-auto" loading="lazy" />
+        </PlantumlDiagram>
+      );
+    }
+    return (
+      // biome-ignore lint/performance/noImgElement: rich-text rendered as plain markdown
+      <img src={srcString} alt={alt || ''} className="max-w-full h-auto rounded-lg my-6" loading="lazy" {...props} />
+    );
+  },
+  // PlantUML SVG embed (`<div class="plantuml-embed">`) — same zoom wrapper
+  // as the show page; other raw-HTML <div>s render plainly.
+  div: ({ className, children, ...props }: ChildrenProps & { className?: unknown }) => {
+    if (isPlantumlEmbed(className)) {
+      return <PlantumlDiagram className="plantuml-embed">{children}</PlantumlDiagram>;
+    }
+    return (
+      <div className={typeof className === 'string' ? className : undefined} {...props}>
+        {children}
+      </div>
+    );
+  },
   hr: ({ ...props }) => <hr className="my-10 border-foreground/10" {...props} />,
   p: ({ children, ...props }: ChildrenProps) => (
     <p className="my-4 leading-[1.7] text-foreground/90" {...props}>
