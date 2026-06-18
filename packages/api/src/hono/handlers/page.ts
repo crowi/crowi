@@ -33,6 +33,7 @@ import {
   renamePageRoute,
   renameSubtreeRoute,
   revertDeletedPageRoute,
+  revertToRevisionRoute,
   seenPageRoute,
   setPageGrantRoute,
   setWatchStatusRoute,
@@ -42,6 +43,7 @@ import {
 } from '@crowi/api-contract';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import Debug from 'debug';
+import { Types } from 'mongoose';
 
 import type Crowi from 'src/crowi';
 import { type PageDocument, visiblePageGrantOr, visiblePageStatusOr } from 'src/models/page';
@@ -94,6 +96,7 @@ const toConflicts = (errorsByPath: Record<string, string[]>): { path: string; re
 
 export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app: E, crowi: Crowi) => {
   const Page = crowi.model('Page');
+  const Revision = crowi.model('Revision');
   const User = crowi.model('User');
   const Watcher = crowi.model('Watcher');
 
@@ -119,6 +122,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
   applyScope(app, setWatchStatusRoute, 'pages:write');
   applyScope(app, deletePageRoute, 'pages:write');
   applyScope(app, revertDeletedPageRoute, 'pages:write');
+  applyScope(app, revertToRevisionRoute, 'pages:write');
   applyScope(app, renamePageRoute, 'pages:write');
   applyScope(app, renameSubtreeRoute, 'pages:write');
 
@@ -216,7 +220,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
       // --------------------------------------------------------------
       .openapi(listPagesRoute, async (c) => {
         const user = c.get('user');
-        const { path, user: userParam, limit, offset, include_deleted, sort, order } = c.req.valid('query');
+        const { path, user: userParam, limit, offset, include_deleted, sort, order, revision_id } = c.req.valid('query');
         // Mongoose sort direction: 1 ascending, -1 descending.
         const sortDir = order === 'asc' ? 1 : -1;
 
@@ -255,7 +259,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             // List pages by path. /trash subtrees skip findPortalPage to
             // mirror the legacy deletedPageListShow which always rendered
             // with page=null.
-            const portalPagePromise = isTrashPath ? Promise.resolve(null) : Page.findPortalPage(path, user);
+            const portalPagePromise = isTrashPath ? Promise.resolve(null) : Page.findPortalPage(path, user, revision_id || null);
             const listPromise = Page.findListByStartWith(path, user, { limit, offset, includeDeletedPage, sort, desc: sortDir });
             const [rawPortalPage, rawPages] = await Promise.all([portalPagePromise, listPromise]);
             [portalPage, pages] = (await Promise.all([
@@ -296,7 +300,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
 
             if (path === '/') {
               [portalPage, pages] = await Promise.all([
-                Page.findPortalPage(path, user),
+                Page.findPortalPage(path, user, revision_id || null),
                 Page.find(conditions)
                   .sort({ [sort]: sortDir })
                   .skip(offset)
@@ -708,6 +712,63 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             return c.json(PAGE_NOT_FOUND_BODY, 404);
           }
           return c.json(pageBadRequestBody('PAGE_REVERT_FAILED', error.message || 'Failed to revert deleted page'), 400);
+        }
+      })
+      // --------------------------------------------------------------
+      // POST /pages/revert-to-revision — revertToRevision
+      //
+      // Restore the page's body to one of its PAST revisions by stacking
+      // that body as a NEW revision on top of the current latest. This is
+      // non-destructive: the whole history is preserved, and the revert is
+      // always applied on top of the server-side latest (no optimistic-lock
+      // 409 — if someone else updated the page since the caller opened the
+      // old version, the revert lands on top of that newer revision rather
+      // than conflicting). Page.updatePage handles prepareRevision →
+      // pushRevision → pageEvent.emit('update', …, true), so notify / collab
+      // fan-out comes for free.
+      // --------------------------------------------------------------
+      .openapi(revertToRevisionRoute, async (c) => {
+        const user = c.get('user');
+        const { page_id, revision_id } = c.req.valid('json');
+
+        debug('revertToRevision called with:', { page_id, revision_id, userId: user._id });
+
+        if (!isValidObjectId(revision_id)) {
+          return c.json(pageBadRequestBody('PAGE_REVERT_TO_REVISION_FAILED', 'Invalid revision id'), 400);
+        }
+
+        try {
+          // Grant + draft visibility checks (collapse to 404 — same leak-
+          // guard as updatePage so a non-granted caller can't probe page
+          // existence).
+          const pageData = (await Page.findPageByIdAndGrantedUser(page_id, user)) as PageDocument | null;
+          if (!pageData) {
+            return c.json(PAGE_NOT_FOUND_BODY, 404);
+          }
+
+          // The revision to revert TO. Must belong to this page (same path)
+          // so a caller cannot graft another page's body onto this one.
+          const oldRevision = await Revision.findRevision(new Types.ObjectId(revision_id));
+          if (!oldRevision || oldRevision.path !== pageData.path) {
+            return c.json(pageBadRequestBody('PAGE_REVERT_TO_REVISION_FAILED', 'Revision does not belong to this page'), 400);
+          }
+
+          // Stack the old body as a new revision on top of the latest. The
+          // base is pageData.revision (the server-side latest), set inside
+          // prepareRevision — the client never supplies one. grant is left
+          // unchanged so the grant-update branch in updatePage is skipped.
+          const updateOptions = { grant: pageData.grant, editVia: c.get('authContext').kind };
+          const updated = (await Page.updatePage(pageData, oldRevision.body, user, updateOptions)) as PageDocument;
+          const populated = await Page.populatePageData(updated, null);
+          return c.json({ page: pageToResponse(populated) }, 200);
+        } catch (err) {
+          const error = err as Error;
+          debug('Error reverting page to revision:', error.message);
+
+          if (error.message === 'Page not found' || error.message === 'Page is not granted for the user') {
+            return c.json(PAGE_NOT_FOUND_BODY, 404);
+          }
+          return c.json(pageBadRequestBody('PAGE_REVERT_TO_REVISION_FAILED', error.message || 'Failed to revert page to revision'), 400);
         }
       })
       // --------------------------------------------------------------

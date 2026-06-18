@@ -87,7 +87,7 @@ describe('MCP server (/mcp)', () => {
     expect(res.status).toBe(401);
   });
 
-  it('lists all 13 tools via tools/list', async () => {
+  it('lists all 14 tools via tools/list', async () => {
     const res = await callMcp(webToken, { jsonrpc: '2.0', id: 1, method: 'tools/list' });
     expect(res.status).toBe(200);
     const rpc = parseRpc(res);
@@ -106,11 +106,12 @@ describe('MCP server (/mcp)', () => {
         'crowi_list_pages',
         'crowi_rename_page',
         'crowi_revert_page',
+        'crowi_revert_to_revision',
         'crowi_search_pages',
         'crowi_update_page',
       ].sort(),
     );
-    expect(names).toHaveLength(13);
+    expect(names).toHaveLength(14);
   });
 
   it('advertises Crowi path conventions via the initialize `instructions`', async () => {

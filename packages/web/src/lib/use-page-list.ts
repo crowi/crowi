@@ -34,6 +34,7 @@ export function usePageList(params: UsePageListParams, options: UsePageListOptio
           include_deleted: params.include_deleted !== undefined ? String(params.include_deleted) : undefined,
           sort: params.sort,
           order: params.order,
+          revision_id: params.revision_id,
         },
       });
       if (!response.ok) {

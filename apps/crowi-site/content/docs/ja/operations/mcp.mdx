@@ -90,6 +90,12 @@ write ツール (`pages:write` が必要):
 | `crowi_rename_page` | ページのリネーム / 移動 |
 | `crowi_delete_page` | ゴミ箱への削除 (または完全削除) |
 | `crowi_revert_page` | ゴミ箱のページを復元 |
+| `crowi_revert_to_revision` | ページを過去リビジョンに戻す (非破壊・新リビジョンとして積む) |
+
+> **Note**: `crowi_revert_page` (ゴミ箱からの復元) と
+> `crowi_revert_to_revision` (過去版へのロールバック) は別物です。前者は
+> soft-delete されたページを元のパスへ戻し、後者は生きているページの本文を
+> 過去リビジョンの内容で上書き(新リビジョンとして追加)します。
 
 `crowi_update_page` は楽観ロックを使います。ページの現在の `revision_id`
 (`crowi_get_page` で取得) を渡してください。古い id を渡すと競合エラーになり、

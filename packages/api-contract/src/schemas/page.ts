@@ -198,6 +198,11 @@ export const ListPagesRequestSchema = z.object({
   // `path` sorts alphabetically by full page path (≈ name order).
   sort: z.enum(['updatedAt', 'createdAt', 'path']).optional().default('updatedAt'),
   order: z.enum(['asc', 'desc']).optional().default('desc'),
+  // When listing a portal path (`/foo/`), open the portal document at this
+  // past revision so the catch-all can mirror `?revision_id=` on portals.
+  // Only the `portalPage` is rewound — the child rows always reflect the
+  // latest. Absent for normal listings.
+  revision_id: z.string().optional(),
 });
 export type ListPagesRequest = z.infer<typeof ListPagesRequestSchema>;
 export type ListPagesSort = ListPagesRequest['sort'];
@@ -276,6 +281,19 @@ export const UpdatePageRequestSchema = z.object({
   grant: z.number().optional(),
 });
 export type UpdatePageRequest = z.infer<typeof UpdatePageRequestSchema>;
+
+// Revert-to-revision request schema
+//
+// Restore a page's body to one of its past revisions by stacking that
+// body as a NEW revision on top of the current latest (non-destructive —
+// the whole history is preserved). `revision_id` is the past revision to
+// revert TO; there is no base/optimistic-lock field because the revert is
+// always applied on top of the server-side latest (see the handler).
+export const RevertToRevisionRequestSchema = z.object({
+  page_id: z.string(),
+  revision_id: z.string(),
+});
+export type RevertToRevisionRequest = z.infer<typeof RevertToRevisionRequestSchema>;
 
 // Set page grant request schema
 //

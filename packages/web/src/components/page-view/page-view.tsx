@@ -15,6 +15,7 @@ import { NotFoundCard } from '@/components/ui/not-found-card';
 import { usePage } from '@/lib/use-page';
 import { pagePathToHref } from '@/lib/page-path';
 import { usePageGrantAccent } from '@/lib/use-page-grant-accent';
+import { isStalePageRevision } from '@/lib/page-revision';
 import { useRevertDeletedPage } from '@/lib/use-page-mutations';
 import { useMarkSeenOnView } from '@/lib/use-seen';
 import { PageHeader } from './page-header';
@@ -167,7 +168,7 @@ export function PageView({ path, revisionId }: PageViewProps) {
 
   if (page) {
     const hasToc = toc.length >= 2;
-    const isStaleRevision = Boolean(page.latestRevision && page.revision?._id && page.latestRevision !== page.revision._id);
+    const isStaleRevision = isStalePageRevision(page);
     // Drafts are creator-only and unpublished — strip the "social" affordances
     // (presence, comments) and swap the comments slot for an info notice that
     // tells the author the page isn't published yet. PageHeader / PageActionsMenu
@@ -190,7 +191,7 @@ export function PageView({ path, revisionId }: PageViewProps) {
       <div className="mx-[calc(50%-50vw)] flex w-screen justify-center gap-6 px-4">
         <div aria-hidden className="hidden w-56 shrink-0 min-[1440px]:block" />
         <article className="w-full min-w-0 max-w-4xl space-y-12">
-          {isStaleRevision && <StaleRevisionBanner pagePath={page.path} />}
+          {isStaleRevision && page.revision?._id && <StaleRevisionBanner pagePath={page.path} pageId={page._id} revisionId={page.revision._id} />}
           <PageHeader
             page={page}
             onEdit={handleEdit}

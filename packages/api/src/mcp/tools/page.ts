@@ -1,5 +1,5 @@
 /**
- * RFC-0011 §8 — page tool catalog (read 7 + write 5).
+ * RFC-0011 §8 — page tool catalog (read 7 + write 6).
  *
  * Each tool is a data-driven `ToolDescriptor`: its `schema` reuses the
  * `@crowi/api-contract` Zod schema's `.shape` for boundary validation
@@ -70,6 +70,17 @@ const DeletePageShape = {
 /** `crowi_revert_page` — restore a soft-deleted page from trash. */
 const RevertPageShape = {
   page_id: z.string().describe('The id of the soft-deleted (trash) page to restore.'),
+};
+
+/**
+ * `crowi_revert_to_revision` — revert a page's body to a past revision.
+ * Same `{ page_id, revision_id }` shape as `contracts/page.ts`
+ * RevertToRevisionRequestSchema; defined locally to avoid widening the
+ * contract surface (matching RevertPageShape / DeletePageShape).
+ */
+const RevertToRevisionShape = {
+  page_id: z.string().describe('The id of the page to revert.'),
+  revision_id: z.string().describe('The id of the PAST revision whose body to revert TO (from `crowi_get_page_history`).'),
 };
 
 // --- result mappers (RFC-0011 §9) ----------------------------------------
@@ -287,6 +298,17 @@ export const pageTools: ToolDescriptor[] = [
     method: 'POST',
     path: '/pages/revert',
     schema: RevertPageShape,
+    kind: 'body',
+    scope: 'pages:write',
+    resultMapper: mapPageResult,
+  },
+  {
+    name: 'crowi_revert_to_revision',
+    description:
+      'Revert a page (`page_id`) to one of its PAST revisions (`revision_id`, from `crowi_get_page_history`). Non-destructive: the old body is stacked as a new revision on top of the current latest, so the full history is preserved. Distinct from `crowi_revert_page`, which restores a soft-deleted page from the trash. Returns the page with the reverted body as its new latest revision.',
+    method: 'POST',
+    path: '/pages/revert-to-revision',
+    schema: RevertToRevisionShape,
     kind: 'body',
     scope: 'pages:write',
     resultMapper: mapPageResult,

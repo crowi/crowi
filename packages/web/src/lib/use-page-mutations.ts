@@ -28,6 +28,11 @@ interface RevertDeletedPageRequest {
   page_id: string;
 }
 
+interface RevertToRevisionRequest {
+  page_id: string;
+  revision_id: string;
+}
+
 /**
  * Error thrown when a page update fails because the revision_id is stale
  * (someone else updated the page in the meantime).
@@ -117,6 +122,10 @@ export function useUpdatePage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['page'] });
+      // A new revision was pushed — refresh the page-history list so it does
+      // not keep serving the pre-edit revisions off the 60s default staleTime
+      // (the new revision otherwise only appears after a full browser reload).
+      queryClient.invalidateQueries({ queryKey: ['revisions'] });
     },
   });
 }
@@ -215,6 +224,44 @@ export function useRevertDeletedPage() {
       queryClient.invalidateQueries({
         predicate: (query) => query.queryKey[0] === 'user' && query.queryKey[2] === 'pages',
       });
+    },
+  });
+}
+
+/**
+ * Revert a page's body to one of its PAST revisions. Non-destructive: the
+ * old body is stacked as a NEW revision on top of the current latest, so the
+ * whole history is preserved. The revert always lands on top of the
+ * server-side latest (no optimistic lock / 409), so a stale `revision_id`
+ * the caller is *viewing* can still be reverted to. Returns the page with
+ * the new revision as its latest.
+ */
+export function useRevertToRevision() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (data: RevertToRevisionRequest): Promise<PageWithRevision> => {
+      const response = await apiClientV2.pages['revert-to-revision'].$post({ json: data });
+      if (response.ok) {
+        const body = await response.json();
+        return body.page as PageWithRevision;
+      }
+      if (response.status === 404) {
+        // 404 covers grant-denied as well (existence-leak guard).
+        throw new Error(m['errors.page_not_found']());
+      }
+      throw new Error(m['errors.revert_failed']());
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['page'] });
+      // The revert can be triggered from a portal listing, so refresh the
+      // page lists too: the portal document now sits at a new latest revision.
+      queryClient.invalidateQueries({ queryKey: ['pages'] });
+      // A new revision was stacked — refresh the page-history list so the
+      // reverted revision shows immediately. Without this the history view
+      // serves the pre-revert revisions off the 60s default staleTime and the
+      // new one only appears after a full browser reload.
+      queryClient.invalidateQueries({ queryKey: ['revisions'] });
     },
   });
 }

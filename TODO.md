@@ -72,6 +72,7 @@ merge 後の simplify レビューで挙がった非ブロッキング改善。�
 ## ✅ 完了済み（主なマイルストーン）
 
 - **フェーズ1 ページ機能** — CRUD / list / portal / revision / bookmark / like / seen-by / comment / watch / trash / backlink / notification / user page / history
+- **特定 revision への revert** — stale 帯の「この版に戻す」+ `POST /pages/revert-to-revision` + MCP `crowi_revert_to_revision`（非破壊・portal 対応。spec: `feature-revision-revert.md`）
 - **RFC-0001 Plugin Architecture** — plugin-api / PluginManager / storage(local,s3) / search(ES,OpenSearch) / schema-driven admin form
 - **検索** — 全文検索 UI + admin 検索ステータス + ES / OpenSearch driver
 - **認証 / アカウント** — login / register / installer / 招待受諾 / メール確認・変更 / パスワードリセット
