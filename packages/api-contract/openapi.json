@@ -2227,6 +2227,9 @@
               "desc"
             ],
             "default": "desc"
+          },
+          "revision_id": {
+            "type": "string"
           }
         }
       },
@@ -20332,6 +20335,14 @@
             "required": false,
             "name": "order",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "revision_id",
+            "in": "query"
           }
         ],
         "responses": {
@@ -24464,6 +24475,608 @@
           },
           "400": {
             "description": "PAGE_REVERT_FAILED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "AUTHENTICATION_REQUIRED"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "enum": [
+                            "Authentication is required"
+                          ]
+                        },
+                        "redirectTo": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Page not found (also covers grant-denied)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "PAGE_NOT_FOUND"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "enum": [
+                            "Page not found"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/pages/revert-to-revision": {
+      "post": {
+        "tags": [
+          "page"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Revert a page to one of its past revisions (non-destructive — stacks a new revision)",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "page_id": {
+                    "type": "string"
+                  },
+                  "revision_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "page_id",
+                  "revision_id"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The page with the reverted body as its new latest revision",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "page": {
+                      "type": "object",
+                      "properties": {
+                        "_id": {
+                          "type": "string"
+                        },
+                        "path": {
+                          "type": "string"
+                        },
+                        "revision": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "_id": {
+                                  "type": "string"
+                                },
+                                "path": {
+                                  "type": "string"
+                                },
+                                "body": {
+                                  "type": "string"
+                                },
+                                "format": {
+                                  "type": "string",
+                                  "default": "markdown"
+                                },
+                                "author": {
+                                  "type": [
+                                    "object",
+                                    "null"
+                                  ],
+                                  "properties": {
+                                    "_id": {
+                                      "type": "string"
+                                    },
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "username": {
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    },
+                                    "email": {
+                                      "type": "string",
+                                      "format": "email"
+                                    },
+                                    "image": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
+                                    "createdAt": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "_id",
+                                    "username",
+                                    "name",
+                                    "email",
+                                    "createdAt"
+                                  ]
+                                },
+                                "createdAt": {
+                                  "type": "string"
+                                },
+                                "meta": {
+                                  "type": "object",
+                                  "properties": {
+                                    "toc": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "object",
+                                        "properties": {
+                                          "level": {
+                                            "type": "integer",
+                                            "minimum": 1,
+                                            "maximum": 6
+                                          },
+                                          "text": {
+                                            "type": "string"
+                                          },
+                                          "anchorId": {
+                                            "type": "string"
+                                          }
+                                        },
+                                        "required": [
+                                          "level",
+                                          "text",
+                                          "anchorId"
+                                        ]
+                                      }
+                                    },
+                                    "wikiLinks": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "object",
+                                        "properties": {
+                                          "raw": {
+                                            "type": "string"
+                                          },
+                                          "target": {
+                                            "type": "string"
+                                          },
+                                          "displayText": {
+                                            "type": "string"
+                                          }
+                                        },
+                                        "required": [
+                                          "raw",
+                                          "target"
+                                        ]
+                                      }
+                                    },
+                                    "mentions": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "object",
+                                        "properties": {
+                                          "username": {
+                                            "type": "string"
+                                          }
+                                        },
+                                        "required": [
+                                          "username"
+                                        ]
+                                      }
+                                    },
+                                    "codeBlockLanguages": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
+                                    }
+                                  }
+                                },
+                                "renderedAst": {},
+                                "rendererVersion": {
+                                  "type": "string"
+                                },
+                                "parentRevisionId": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "type": {
+                                  "type": "string",
+                                  "enum": [
+                                    "snapshot",
+                                    "incremental"
+                                  ]
+                                },
+                                "savedBy": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "_id": {
+                                          "type": "string"
+                                        },
+                                        "id": {
+                                          "type": "string"
+                                        },
+                                        "username": {
+                                          "type": "string"
+                                        },
+                                        "name": {
+                                          "type": "string"
+                                        },
+                                        "email": {
+                                          "type": "string",
+                                          "format": "email"
+                                        },
+                                        "image": {
+                                          "type": [
+                                            "string",
+                                            "null"
+                                          ]
+                                        },
+                                        "createdAt": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "_id",
+                                        "username",
+                                        "name",
+                                        "email",
+                                        "createdAt"
+                                      ]
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "contributors": {
+                                  "type": "array",
+                                  "items": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "_id": {
+                                            "type": "string"
+                                          },
+                                          "id": {
+                                            "type": "string"
+                                          },
+                                          "username": {
+                                            "type": "string"
+                                          },
+                                          "name": {
+                                            "type": "string"
+                                          },
+                                          "email": {
+                                            "type": "string",
+                                            "format": "email"
+                                          },
+                                          "image": {
+                                            "type": [
+                                              "string",
+                                              "null"
+                                            ]
+                                          },
+                                          "createdAt": {
+                                            "type": "string"
+                                          }
+                                        },
+                                        "required": [
+                                          "_id",
+                                          "username",
+                                          "name",
+                                          "email",
+                                          "createdAt"
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                },
+                                "message": {
+                                  "type": "string"
+                                },
+                                "editVia": {
+                                  "type": "string",
+                                  "enum": [
+                                    "web",
+                                    "oauth",
+                                    "pat"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "_id",
+                                "path",
+                                "body",
+                                "createdAt"
+                              ]
+                            }
+                          ]
+                        },
+                        "redirectTo": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "status": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "enum": [
+                            "wip",
+                            "published",
+                            "deleted",
+                            "deprecated",
+                            "draft",
+                            null
+                          ]
+                        },
+                        "grant": {
+                          "type": "number"
+                        },
+                        "grantedUsers": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "creator": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "_id": {
+                                  "type": "string"
+                                },
+                                "id": {
+                                  "type": "string"
+                                },
+                                "username": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "email": {
+                                  "type": "string",
+                                  "format": "email"
+                                },
+                                "image": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "createdAt": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "_id",
+                                "username",
+                                "name",
+                                "email",
+                                "createdAt"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "lastUpdateUser": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "_id": {
+                                  "type": "string"
+                                },
+                                "id": {
+                                  "type": "string"
+                                },
+                                "username": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "email": {
+                                  "type": "string",
+                                  "format": "email"
+                                },
+                                "image": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "createdAt": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "_id",
+                                "username",
+                                "name",
+                                "email",
+                                "createdAt"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "liker": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "commentCount": {
+                          "type": "number",
+                          "default": 0
+                        },
+                        "extended": {
+                          "type": "object",
+                          "additionalProperties": {}
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        },
+                        "currentRevision": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "yjsCheckpointAt": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "latestRevision": {
+                          "type": "string"
+                        },
+                        "likerCount": {
+                          "type": "number"
+                        },
+                        "seenUsersCount": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "_id",
+                        "path",
+                        "createdAt"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "page"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "PAGE_REVERT_TO_REVISION_FAILED (e.g. the revision does not belong to the page)",
             "content": {
               "application/json": {
                 "schema": {

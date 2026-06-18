@@ -648,6 +648,7 @@ const pageChain = new OpenAPIHono()
   .openapi(pageRoutes.setWatchStatusRoute, (c) => c.json(stubWatchStatus, 200))
   .openapi(pageRoutes.deletePageRoute, (c) => c.json(stubPageResponse, 200))
   .openapi(pageRoutes.revertDeletedPageRoute, (c) => c.json(stubPageResponse, 200))
+  .openapi(pageRoutes.revertToRevisionRoute, (c) => c.json(stubPageResponse, 200))
   .openapi(pageRoutes.renamePageRoute, (c) => c.json({ ...stubPageResponse, renamed_count: 1 }, 200))
   .openapi(pageRoutes.renameSubtreeRoute, (c) => c.json({ renamed_count: 0 }, 200))
   // page-preview — single endpoint, `/pages/preview` (literal under

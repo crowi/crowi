@@ -5253,6 +5253,7 @@ export interface paths {
                     include_deleted?: boolean | null;
                     sort?: "updatedAt" | "createdAt" | "path";
                     order?: "asc" | "desc";
+                    revision_id?: string;
                 };
                 header?: never;
                 path?: never;
@@ -6672,6 +6673,201 @@ export interface paths {
                     };
                 };
                 /** @description PAGE_REVERT_FAILED */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                code: string;
+                                message: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "AUTHENTICATION_REQUIRED";
+                                /** @enum {string} */
+                                message: "Authentication is required";
+                                redirectTo?: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Page not found (also covers grant-denied) */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "PAGE_NOT_FOUND";
+                                /** @enum {string} */
+                                message: "Page not found";
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/pages/revert-to-revision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revert a page to one of its past revisions (non-destructive — stacks a new revision) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        page_id: string;
+                        revision_id: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description The page with the reverted body as its new latest revision */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            page: {
+                                _id: string;
+                                path: string;
+                                revision?: string | {
+                                    _id: string;
+                                    path: string;
+                                    body: string;
+                                    /** @default markdown */
+                                    format: string;
+                                    author?: {
+                                        _id: string;
+                                        id?: string;
+                                        username: string;
+                                        name: string;
+                                        /** Format: email */
+                                        email: string;
+                                        image?: string | null;
+                                        createdAt: string;
+                                    } | null;
+                                    createdAt: string;
+                                    meta?: {
+                                        toc?: {
+                                            level: number;
+                                            text: string;
+                                            anchorId: string;
+                                        }[];
+                                        wikiLinks?: {
+                                            raw: string;
+                                            target: string;
+                                            displayText?: string;
+                                        }[];
+                                        mentions?: {
+                                            username: string;
+                                        }[];
+                                        codeBlockLanguages?: string[];
+                                    };
+                                    renderedAst?: unknown;
+                                    rendererVersion?: string;
+                                    parentRevisionId?: string | null;
+                                    /** @enum {string} */
+                                    type?: "snapshot" | "incremental";
+                                    savedBy?: string | {
+                                        _id: string;
+                                        id?: string;
+                                        username: string;
+                                        name: string;
+                                        /** Format: email */
+                                        email: string;
+                                        image?: string | null;
+                                        createdAt: string;
+                                    } | null;
+                                    contributors?: (string | {
+                                        _id: string;
+                                        id?: string;
+                                        username: string;
+                                        name: string;
+                                        /** Format: email */
+                                        email: string;
+                                        image?: string | null;
+                                        createdAt: string;
+                                    })[];
+                                    message?: string;
+                                    /** @enum {string} */
+                                    editVia?: "web" | "oauth" | "pat";
+                                };
+                                redirectTo?: string | null;
+                                /** @enum {string|null} */
+                                status?: "wip" | "published" | "deleted" | "deprecated" | "draft" | null;
+                                grant?: number;
+                                grantedUsers?: string[];
+                                creator?: string | {
+                                    _id: string;
+                                    id?: string;
+                                    username: string;
+                                    name: string;
+                                    /** Format: email */
+                                    email: string;
+                                    image?: string | null;
+                                    createdAt: string;
+                                } | null;
+                                lastUpdateUser?: string | {
+                                    _id: string;
+                                    id?: string;
+                                    username: string;
+                                    name: string;
+                                    /** Format: email */
+                                    email: string;
+                                    image?: string | null;
+                                    createdAt: string;
+                                } | null;
+                                liker?: string[];
+                                /** @default 0 */
+                                commentCount: number;
+                                extended?: {
+                                    [key: string]: unknown;
+                                };
+                                createdAt: string;
+                                updatedAt?: string;
+                                currentRevision?: string | null;
+                                yjsCheckpointAt?: string | null;
+                                latestRevision?: string;
+                                likerCount?: number;
+                                seenUsersCount?: number;
+                            };
+                        };
+                    };
+                };
+                /** @description PAGE_REVERT_TO_REVISION_FAILED (e.g. the revision does not belong to the page) */
                 400: {
                     headers: {
                         [name: string]: unknown;
@@ -13228,6 +13424,7 @@ export interface components {
              * @enum {string}
              */
             order: "asc" | "desc";
+            revision_id?: string;
         };
         ListPagesResponse: {
             pages: {

@@ -55,6 +55,7 @@ import {
   RenameSubtreeRequestSchema,
   RenameSubtreeResponseSchema,
   RenameTreeErrorSchema,
+  RevertToRevisionRequestSchema,
   SeenPageRequestSchema,
   SeenUsersResponseSchema,
   SetPageGrantRequestSchema,
@@ -504,6 +505,37 @@ export const revertDeletedPageRoute = createRoute({
   },
 });
 
+export const revertToRevisionRoute = createRoute({
+  method: 'post',
+  path: '/pages/revert-to-revision',
+  tags: ['page'],
+  security: [{ bearerAuth: [] }],
+  summary: 'Revert a page to one of its past revisions (non-destructive — stacks a new revision)',
+  request: {
+    body: {
+      content: { 'application/json': { schema: RevertToRevisionRequestSchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: 'The page with the reverted body as its new latest revision',
+      content: { 'application/json': { schema: PageResponseSchema } },
+    },
+    400: {
+      description: 'PAGE_REVERT_TO_REVISION_FAILED (e.g. the revision does not belong to the page)',
+      content: { 'application/json': { schema: PageBadRequestErrorSchema } },
+    },
+    401: {
+      description: 'Authentication required',
+      content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
+    },
+    404: {
+      description: 'Page not found (also covers grant-denied)',
+      content: { 'application/json': { schema: PageNotFoundErrorSchema } },
+    },
+  },
+});
+
 export const renamePageRoute = createRoute({
   method: 'post',
   path: '/pages/rename',
@@ -613,6 +645,8 @@ export const pageRoutes = {
   deletePageRoute,
   // POST /pages/revert — revertDeletedPage
   revertDeletedPageRoute,
+  // POST /pages/revert-to-revision — revertToRevision
+  revertToRevisionRoute,
   // POST /pages/rename — renamePage
   renamePageRoute,
   // POST /pages/rename-subtree — renameSubtree (portal-less folder)
