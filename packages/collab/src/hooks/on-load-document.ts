@@ -208,8 +208,21 @@ export function createOnLoadDocument(deps: OnLoadDocumentDeps) {
       if (revisionId) {
         const revision = await Revision.findById(revisionId).select('body').lean().exec();
         if (revision && typeof revision.body === 'string' && revision.body.length > 0) {
-          document.getText(CONTENT_FIELD).insert(0, revision.body);
-          debug('seeded page %s from revision %s (%d chars)', documentName, revisionId, revision.body.length);
+          // Normalize CRLF / lone CR → LF before seeding the Y.Text.
+          // CodeMirror 6 builds its document by splitting on `/\r\n?|\n/`
+          // and re-joining with `\n`, so it silently drops every `\r`.
+          // Crowi v1-era revision bodies are CRLF, so seeding one verbatim
+          // would leave the Y.Text one char longer *per line* than the
+          // editor's view. y-codemirror.next maps positions 1:1 between
+          // the two, so that per-line drift lands every subsequent edit at
+          // the wrong offset and progressively corrupts the document
+          // (worse toward the end, where the accumulated `\r` count is
+          // highest). Seeding LF-only keeps the Y.Text and the editor in
+          // lockstep; markdown rendering is line-ending agnostic, so this
+          // is otherwise a no-op for already-LF (v2-authored) bodies.
+          const body = revision.body.replace(/\r\n?/g, '\n');
+          document.getText(CONTENT_FIELD).insert(0, body);
+          debug('seeded page %s from revision %s (%d chars)', documentName, revisionId, body.length);
         }
       }
     }

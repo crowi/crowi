@@ -213,4 +213,49 @@ describe('@crowi/collab Phase 6 onLoadDocument force-reload broadcast', () => {
     ).resolves.toBeUndefined();
     expect(newDoc.getText(CONTENT_FIELD).toString()).toBe('seed body');
   });
+
+  test('seeds a CRLF (v1-era) revision body as LF-only so the Y.Text stays length-aligned with the editor', async () => {
+    // CodeMirror 6 builds its document by splitting on `/\r\n?|\n/` and
+    // re-joining with `\n`, dropping every `\r`. Seeding a CRLF body
+    // verbatim would leave the Y.Text one char longer *per line* than the
+    // editor's view; y-codemirror.next maps positions 1:1, so the drift
+    // makes every subsequent edit land at the wrong offset and corrupts
+    // the document. The seed must normalize CRLF → LF.
+    const crlfBody = '# Title\r\n\r\n- one\r\n- two\r\n';
+    const { pageId } = await seedPageWithBody(crlfBody);
+    const instance = makeInstanceWith(null);
+
+    const onLoadDocument = createOnLoadDocument({
+      models: { Page: models.Page, Revision: models.Revision, PageYjsUpdate: models.PageYjsUpdate },
+    });
+    const newDoc = new Y.Doc();
+    await onLoadDocument({
+      documentName: pageId,
+      document: newDoc,
+      instance,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
+
+    const seeded = newDoc.getText(CONTENT_FIELD).toString();
+    expect(seeded).not.toContain('\r');
+    expect(seeded).toBe('# Title\n\n- one\n- two\n');
+  });
+
+  test('seeds a lone-CR (old-Mac) revision body as LF-only', async () => {
+    const { pageId } = await seedPageWithBody('a\rb\rc');
+    const instance = makeInstanceWith(null);
+
+    const onLoadDocument = createOnLoadDocument({
+      models: { Page: models.Page, Revision: models.Revision, PageYjsUpdate: models.PageYjsUpdate },
+    });
+    const newDoc = new Y.Doc();
+    await onLoadDocument({
+      documentName: pageId,
+      document: newDoc,
+      instance,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
+
+    expect(newDoc.getText(CONTENT_FIELD).toString()).toBe('a\nb\nc');
+  });
 });
