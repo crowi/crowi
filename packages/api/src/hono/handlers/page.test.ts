@@ -2007,3 +2007,176 @@ describe('Routes /api/v2/pages/list (Hono listPages — sort / order)', () => {
     expect(ours[0]).toBe(zebra.id);
   });
 });
+
+describe('Routes /api/v2/pages/revert-to-revision (Hono revertToRevision)', () => {
+  const PATH_PREFIX = '/hono-page-revert-to-revision-test/';
+  let Page;
+  let Revision;
+  let accessToken: string;
+  let otherAccessToken: string;
+
+  beforeAll(async () => {
+    Page = crowi.model('Page');
+    Revision = crowi.model('Revision');
+
+    [{ accessToken }, { accessToken: otherAccessToken }] = await Promise.all([
+      createTestUser({ name: 'RevertRev Test', username: 'revertRevTester', email: 'revert-rev-tester@example.com' }),
+      createTestUser({ name: 'RevertRev Other', username: 'revertRevOther', email: 'revert-rev-other@example.com' }),
+    ]);
+  });
+
+  afterEach(() => cleanupPathPrefix(PATH_PREFIX));
+
+  // Create a page then update it so there are two revisions: v1 (original)
+  // and v2 (latest). Returns the ids needed to revert back to v1.
+  const seedWithHistory = async (slug: string) => {
+    const path = `${PATH_PREFIX}${slug}`;
+    const headers = authHeaders(accessToken);
+
+    const createRes = await request(app).post('/api/v2/pages').set(headers).send({ path, body: '# v1 body' });
+    expect(createRes.status).toBe(200);
+    const pageId = createRes.body.page._id as string;
+    const v1RevisionId = createRes.body.page.revision._id as string;
+
+    const updateRes = await request(app).put('/api/v2/pages').set(headers).send({ page_id: pageId, body: '# v2 body', revision_id: v1RevisionId });
+    expect(updateRes.status).toBe(200);
+    const v2RevisionId = updateRes.body.page.revision._id as string;
+
+    return { path, pageId, v1RevisionId, v2RevisionId };
+  };
+
+  describe('POST /api/v2/pages/revert-to-revision', () => {
+    it('returns 401 when no Authorization header is provided', async () => {
+      const res = await request(app)
+        .post('/api/v2/pages/revert-to-revision')
+        .send({ page_id: '000000000000000000000000', revision_id: '000000000000000000000000' })
+        .set('Content-Type', 'application/json');
+
+      expect(res.status).toBe(401);
+      expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
+    });
+
+    it('reverts to a past revision by stacking a new revision with the old body', async () => {
+      const { path, pageId, v1RevisionId, v2RevisionId } = await seedWithHistory('basic');
+
+      const res = await request(app)
+        .post('/api/v2/pages/revert-to-revision')
+        .set(authHeaders(accessToken))
+        .send({ page_id: pageId, revision_id: v1RevisionId });
+
+      expect(res.status).toBe(200);
+      expect(res.body.page._id).toBe(pageId);
+      expect(res.body.page.path).toBe(path);
+      // A brand-new revision id (not v1, not v2) carrying the v1 body.
+      expect(res.body.page.revision._id).not.toBe(v1RevisionId);
+      expect(res.body.page.revision._id).not.toBe(v2RevisionId);
+      expect(res.body.page.revision.body).toBe('# v1 body');
+
+      // The page now points at the new revision.
+      const pageDoc = await Page.findById(pageId);
+      expect(pageDoc.revision.toString()).toBe(res.body.page.revision._id);
+    });
+
+    it('is non-destructive: history grows by one and all past revisions remain', async () => {
+      const { path, pageId, v1RevisionId } = await seedWithHistory('history');
+
+      const before = await Revision.countDocuments({ path });
+      expect(before).toBe(2); // v1 + v2
+
+      const res = await request(app)
+        .post('/api/v2/pages/revert-to-revision')
+        .set(authHeaders(accessToken))
+        .send({ page_id: pageId, revision_id: v1RevisionId });
+      expect(res.status).toBe(200);
+
+      const after = await Revision.countDocuments({ path });
+      expect(after).toBe(3); // v1 + v2 + reverted
+
+      // The original revisions are still present (nothing deleted/mutated).
+      const stillThere = await Revision.find({ path }).sort({ createdAt: 1 });
+      expect(stillThere.map((r) => r.body)).toEqual(['# v1 body', '# v2 body', '# v1 body']);
+    });
+
+    it('stacks on the server-side latest even when the page was updated after the old version was opened', async () => {
+      const { path, pageId, v1RevisionId } = await seedWithHistory('stale-base');
+      const headers = authHeaders(accessToken);
+
+      // Someone updates the page again → v3 is now the latest. The caller is
+      // still holding v1 as the version they are viewing.
+      const v3Update = await request(app).put('/api/v2/pages').set(headers).send({ page_id: pageId, body: '# v3 body' });
+      expect(v3Update.status).toBe(200);
+      const v3RevisionId = v3Update.body.page.revision._id as string;
+
+      // Revert to v1 — no 409, it simply lands on top of v3.
+      const res = await request(app).post('/api/v2/pages/revert-to-revision').set(headers).send({ page_id: pageId, revision_id: v1RevisionId });
+      expect(res.status).toBe(200);
+      expect(res.body.page.revision.body).toBe('# v1 body');
+      expect(res.body.page.revision._id).not.toBe(v3RevisionId);
+
+      // v1, v2, v3 + the reverted one = 4, nothing dropped.
+      const count = await Revision.countDocuments({ path });
+      expect(count).toBe(4);
+    });
+
+    it('returns 404 PAGE_NOT_FOUND for an unknown page_id', async () => {
+      const { v1RevisionId } = await seedWithHistory('unknown-page');
+
+      const res = await request(app)
+        .post('/api/v2/pages/revert-to-revision')
+        .set(authHeaders(accessToken))
+        .send({ page_id: '000000000000000000000000', revision_id: v1RevisionId });
+
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
+    });
+
+    it('returns 404 PAGE_NOT_FOUND (leak-guard) when the caller is not granted access', async () => {
+      const path = `${PATH_PREFIX}private`;
+      const ownerHeaders = authHeaders(accessToken);
+      const otherHeaders = authHeaders(otherAccessToken);
+
+      // OWNER-grant page seeded with two revisions by its owner.
+      const createRes = await request(app).post('/api/v2/pages').set(ownerHeaders).send({ path, body: '# private v1', grant: 4 });
+      expect(createRes.status).toBe(200);
+      const pageId = createRes.body.page._id as string;
+      const v1RevisionId = createRes.body.page.revision._id as string;
+      const updateRes = await request(app).put('/api/v2/pages').set(ownerHeaders).send({ page_id: pageId, body: '# private v2', revision_id: v1RevisionId });
+      expect(updateRes.status).toBe(200);
+
+      // A non-granted user is collapsed to 404, never reverts.
+      const res = await request(app).post('/api/v2/pages/revert-to-revision').set(otherHeaders).send({ page_id: pageId, revision_id: v1RevisionId });
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
+
+      // The page's latest is untouched (still v2).
+      const pageDoc = await Page.findById(pageId).populate<{ revision: { body: string } }>('revision');
+      expect(pageDoc.revision.body).toBe('# private v2');
+    });
+
+    it('returns 400 when the revision belongs to a different page', async () => {
+      const { pageId } = await seedWithHistory('target');
+      // A revision from an unrelated page.
+      const other = await seedWithHistory('source');
+
+      const res = await request(app)
+        .post('/api/v2/pages/revert-to-revision')
+        .set(authHeaders(accessToken))
+        .send({ page_id: pageId, revision_id: other.v1RevisionId });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('PAGE_REVERT_TO_REVISION_FAILED');
+    });
+
+    it('returns 400 for a malformed revision_id', async () => {
+      const { pageId } = await seedWithHistory('bad-rev');
+
+      const res = await request(app)
+        .post('/api/v2/pages/revert-to-revision')
+        .set(authHeaders(accessToken))
+        .send({ page_id: pageId, revision_id: 'not-an-object-id' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('PAGE_REVERT_TO_REVISION_FAILED');
+    });
+  });
+});
