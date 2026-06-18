@@ -2180,3 +2180,60 @@ describe('Routes /api/v2/pages/revert-to-revision (Hono revertToRevision)', () =
     });
   });
 });
+
+describe('Routes /api/v2/pages (Hono getPage — past revision / stale detection)', () => {
+  const PATH_PREFIX = '/hono-page-get-revision-test/';
+  let accessToken: string;
+
+  beforeAll(async () => {
+    ({ accessToken } = await createTestUser({ name: 'GetRev Test', username: 'getRevTester', email: 'get-rev-tester@example.com' }));
+  });
+
+  afterEach(() => cleanupPathPrefix(PATH_PREFIX));
+
+  // Create + update so v1 is a PAST revision and v2 is the current latest.
+  const seedWithHistory = async (slug: string) => {
+    const path = `${PATH_PREFIX}${slug}`;
+    const headers = authHeaders(accessToken);
+    const createRes = await request(app).post('/api/v2/pages').set(headers).send({ path, body: '# v1 body' });
+    expect(createRes.status).toBe(200);
+    const pageId = createRes.body.page._id as string;
+    const v1RevisionId = createRes.body.page.revision._id as string;
+    const updateRes = await request(app).put('/api/v2/pages').set(headers).send({ page_id: pageId, body: '# v2 body', revision_id: v1RevisionId });
+    expect(updateRes.status).toBe(200);
+    const v2RevisionId = updateRes.body.page.revision._id as string;
+    return { path, pageId, v1RevisionId, v2RevisionId };
+  };
+
+  describe('GET /api/v2/pages?revision_id=', () => {
+    it('serves the past revision body AND surfaces latestRevision so the client can flag it stale', async () => {
+      const { path, v1RevisionId, v2RevisionId } = await seedWithHistory('stale');
+
+      const res = await request(app).get('/api/v2/pages').query({ path, revision_id: v1RevisionId }).set(authHeaders(accessToken));
+
+      expect(res.status).toBe(200);
+      // The requested PAST revision's body is what gets served.
+      expect(res.body.page.revision._id).toBe(v1RevisionId);
+      expect(res.body.page.revision.body).toBe('# v1 body');
+      // latestRevision must point at the CURRENT latest (v2), differing from the
+      // viewed revision — this is exactly what drives the "this version" stale
+      // banner + revert button on the web. Regression guard: pageToResponse used
+      // to read latestRevision off toObject() (which drops the dynamic field set
+      // by populatePageData), so it came back undefined and the banner never showed.
+      expect(res.body.page.latestRevision).toBe(v2RevisionId);
+      expect(res.body.page.latestRevision).not.toBe(res.body.page.revision._id);
+    });
+
+    it('reports latestRevision === the viewed revision when opened at the latest (not stale)', async () => {
+      const { path, v2RevisionId } = await seedWithHistory('latest');
+
+      const res = await request(app).get('/api/v2/pages').query({ path, revision_id: v2RevisionId }).set(authHeaders(accessToken));
+
+      expect(res.status).toBe(200);
+      expect(res.body.page.revision._id).toBe(v2RevisionId);
+      // Viewing the latest: latestRevision equals the viewed revision, so the
+      // web treats it as NOT stale and shows no banner.
+      expect(res.body.page.latestRevision).toBe(v2RevisionId);
+    });
+  });
+});

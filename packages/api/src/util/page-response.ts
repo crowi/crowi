@@ -225,7 +225,13 @@ export const pageToResponse = (page: PageDocument | PageLike, options: PageToRes
     extended: pageObj.extended,
     createdAt: toISOStringOrNull(pageObj.createdAt) || EPOCH_ISO,
     updatedAt: toISOStringOrNull(pageObj.updatedAt) || undefined,
-    latestRevision: pageObj.latestRevision ? toStringId(pageObj.latestRevision) : undefined,
+    // latestRevision is a dynamic, non-schema property assigned by
+    // populatePageData (like likerCount / seenUsersCount below), so it must be
+    // read off `dynamic` — `toObject()` strips it. Reading it off `pageObj`
+    // (the toObject result) always yielded `undefined`, which made the web
+    // stale-revision banner (`latestRevision !== revision._id`) never fire when
+    // viewing a page at `?revision_id=` a past version.
+    latestRevision: dynamic.latestRevision ? toStringId(dynamic.latestRevision) : undefined,
     likerCount: dynamic.likerCount,
     seenUsersCount: dynamic.seenUsersCount,
   };
