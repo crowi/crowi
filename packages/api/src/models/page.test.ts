@@ -468,4 +468,39 @@ describe('Page', () => {
       });
     });
   });
+
+  describe('.updatePage — grant preservation (regression)', () => {
+    let Revision;
+    let actor;
+
+    beforeAll(() => {
+      Revision = crowi.model('Revision');
+      actor = createdUsers[0];
+    });
+
+    afterEach(async () => {
+      await Page.deleteMany({ path: { $regex: '^/regression/grant' } });
+      await Revision.deleteMany({ path: { $regex: '^/regression/grant' } });
+    });
+
+    test('a body-only update (no grant option) keeps the page grant untouched', async () => {
+      const created = await Page.createPage('/regression/grant-preserve', 'before', actor, {});
+      expect(created.grant).toBe(Page.GRANT_PUBLIC);
+
+      // The bug: `options.grant || null` made this null the grant. With the fix
+      // a grant-less update defaults to the current grant and leaves it as-is.
+      await Page.updatePage(created, 'after', actor, {});
+
+      const reloaded = await Page.findById(created._id).select('grant').lean();
+      expect(reloaded?.grant).toBe(Page.GRANT_PUBLIC);
+    });
+
+    test('an explicit grant change is still applied', async () => {
+      const created = await Page.createPage('/regression/grant-change', 'before', actor, {});
+      await Page.updatePage(created, 'after', actor, { grant: Page.GRANT_RESTRICTED });
+
+      const reloaded = await Page.findById(created._id).select('grant').lean();
+      expect(reloaded?.grant).toBe(Page.GRANT_RESTRICTED);
+    });
+  });
 });

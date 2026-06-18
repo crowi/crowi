@@ -1142,7 +1142,14 @@ export default (crowi: Crowi) => {
   pageSchema.statics.updatePage = async function (pageData, body, user, options = {}) {
     const Revision = crowi.model('Revision');
     const Bookmark = crowi.model('Bookmark');
-    const grant = options.grant || null;
+    // Default to the page's CURRENT grant when the caller doesn't pass one, so a
+    // body-only update leaves visibility untouched. A previous `options.grant ||
+    // null` turned every grant-less call (e.g. `updatePage(page, body, user, {})`
+    // from `rewritePageBody` / migrations) into `null != pageData.grant` → true,
+    // which re-granted the page to `null` + `grantedUsers=[user]` — silently
+    // dropping a public page out of `grant: GRANT_PUBLIC` listings. `??` keeps an
+    // explicit grant change working while making "no grant option" mean "keep".
+    const grant = options.grant ?? pageData.grant;
     // update existing page
     const newRevision = await Revision.prepareRevision(pageData, body, user, { editVia: options.editVia });
 
