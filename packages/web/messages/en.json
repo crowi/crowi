@@ -63,6 +63,8 @@
   "auth.register.submit": "Sign up",
   "auth.register.submitting": "Registering...",
   "auth.register.to_signin": "Sign in here",
+  "auth.register.closed_title": "Registration is invite-only",
+  "auth.register.closed_body": "This site is invite-only, so self-service sign-up is not available. If you need an account, please ask an administrator for an invitation.",
   "auth.login.title": "Sign in",
   "auth.login.email_label": "Email address",
   "auth.login.password_label": "Password",

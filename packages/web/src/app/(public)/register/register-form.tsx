@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { AtSign, User, Mail, KeyRound, LogIn, MailCheck } from 'lucide-react';
+import { AtSign, User, Mail, KeyRound, LogIn, MailCheck, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,9 +11,19 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { FormErrorList } from '@/components/ui/form-error-list';
 import { apiClientV2 } from '@/lib/api-client';
 import { errorMessage } from '@/lib/error-message';
+import { useAppInfo } from '@/lib/use-app-info';
 import { m } from '@paraglide/messages.js';
 
 export function RegisterForm() {
+  // Public UX hint: when self-service registration is closed (invite-only)
+  // we show an explanatory card instead of the form, so the user isn't led
+  // to fill it in only to hit a 403. While the flag is loading we render a
+  // skeleton; if the fetch fails we fail-open and show the form (the API
+  // still enforces the real guard on submit). Reuses the shared /app/info
+  // query the login / register pages already issue for the site title.
+  const { data: appInfo, isLoading: isAppInfoLoading } = useAppInfo();
+  const registrationClosed = appInfo?.canSelfRegister === false;
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   const [pending, setPending] = useState<'confirmation_required' | 'approval_required' | null>(null);
@@ -64,6 +74,49 @@ export function RegisterForm() {
       setIsSubmitting(false);
     }
   };
+
+  // Still resolving whether registration is open: render a lightweight
+  // skeleton so the form doesn't flash before we know to hide it. On a
+  // fetch error `isLoading` is already false (status is mutually exclusive),
+  // so we fall through and show the form (fail-open).
+  if (isAppInfoLoading) {
+    return (
+      <Card className="shadow-2xl">
+        <CardContent className="p-6 animate-pulse space-y-4">
+          <div className="h-6 bg-muted rounded w-1/3 mx-auto" />
+          <div className="h-10 bg-muted rounded" />
+          <div className="h-10 bg-muted rounded" />
+          <div className="h-10 bg-muted rounded" />
+          <div className="h-10 bg-muted rounded" />
+          <div className="h-12 bg-muted rounded" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Self-service registration is closed (invite-only): show an explanatory
+  // card with a way back to sign in instead of the form. Same Card pattern
+  // as the post-submit `pending` state. The /register route is not
+  // redirected so a direct visit still explains what happened.
+  if (registrationClosed) {
+    return (
+      <Card className="shadow-2xl">
+        <CardHeader className="space-y-1">
+          <CardTitle className="text-xl text-center">{m['auth.register.closed_title']()}</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Alert>
+            <Lock className="h-4 w-4" />
+            <AlertDescription>{m['auth.register.closed_body']()}</AlertDescription>
+          </Alert>
+          <Link href="/login" className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
+            <LogIn className="h-4 w-4" />
+            {m['auth.common.back_to_signin']()}
+          </Link>
+        </CardContent>
+      </Card>
+    );
+  }
 
   if (pending) {
     return (

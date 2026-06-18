@@ -63,6 +63,8 @@
   "auth.register.submit": "新規登録",
   "auth.register.submitting": "登録中...",
   "auth.register.to_signin": "サインインはこちら",
+  "auth.register.closed_title": "登録は招待制です",
+  "auth.register.closed_body": "このサイトは招待制のため、新規登録は受け付けていません。アカウントが必要な場合は、管理者に招待を依頼してください。",
   "auth.login.title": "サインイン",
   "auth.login.email_label": "メールアドレス",
   "auth.login.password_label": "パスワード",
