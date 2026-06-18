@@ -1,0 +1,207 @@
+name: Docker
+
+# Build + push the official Crowi images (crowi/crowi full + slim) as multi-arch
+# (amd64 + arm64) manifests, tagged with the INDEPENDENT distribution version
+# (D3) — not any single npm package version.
+#
+# Trigger (the "umbrella tag" seam, feature-ci-release-automation §4 / D3):
+#   A tag pushed by the Release workflow with the default GITHUB_TOKEN does NOT
+#   start another workflow's `on: push: tags` (GitHub anti-recursion), and we
+#   deliberately did not add a PAT (that would reintroduce the long-lived secret
+#   OIDC was adopted to remove). So this workflow is started by `workflow_run`
+#   when Release COMPLETES, and reads the distribution version from the artifact
+#   Release uploaded.
+#     - workflow_run: only when Release SUCCEEDED. If Release did not publish
+#       (a Version-PR-only run), it uploaded no `dist-version` artifact, so this
+#       workflow downloads nothing and exits cleanly without building — i.e.
+#       "build only when a publish happened" is the gate.
+#     - workflow_dispatch: manual rebuild for a given distribution version
+#       (e.g. to re-cut an image after a base-image security bump).
+on:
+  workflow_run:
+    workflows: ['Release']
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Distribution version to (re)build, e.g. v2.0.0-alpha.2 (must be an existing tag)'
+        required: false
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+
+env:
+  IMAGE: crowi/crowi
+
+jobs:
+  # Resolve the distribution version + the exact tree sha to build, and decide
+  # whether to build at all. A workflow_run from a Release that did not publish
+  # has no dist-version artifact → should-build=false → the build job is skipped.
+  resolve:
+    runs-on: ubuntu-latest
+    # Only proceed for a successful Release (workflow_run) or a manual dispatch.
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      should-build: ${{ steps.resolve.outputs.should-build }}
+      dist-version: ${{ steps.resolve.outputs.dist-version }}
+      checkout-ref: ${{ steps.resolve.outputs.checkout-ref }}
+    steps:
+      # workflow_run path: download the dist-version artifact from the
+      # triggering Release run. continue-on-error so a publish-less run (no
+      # artifact) does not fail the workflow — we treat "no artifact" as
+      # "nothing to build".
+      - name: Download distribution version artifact
+        if: github.event_name == 'workflow_run'
+        id: download
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: dist-version
+          path: dist-version
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve version and ref
+        id: resolve
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+          DOWNLOAD_OUTCOME: ${{ steps.download.outcome }}
+          RUN_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            if [ -z "$INPUT_VERSION" ]; then
+              echo "::error::workflow_dispatch requires the 'version' input (e.g. v2.0.0-alpha.2)"
+              exit 1
+            fi
+            echo "should-build=true" >> "$GITHUB_OUTPUT"
+            echo "dist-version=$INPUT_VERSION" >> "$GITHUB_OUTPUT"
+            # Build the released tree at that tag.
+            echo "checkout-ref=$INPUT_VERSION" >> "$GITHUB_OUTPUT"
+          else
+            # workflow_run: build only if the Release produced a dist-version artifact.
+            if [ "$DOWNLOAD_OUTCOME" != "success" ] || [ ! -f dist-version/dist-version.txt ]; then
+              echo "Release run published nothing (no dist-version artifact); skipping image build."
+              echo "should-build=false" >> "$GITHUB_OUTPUT"
+            else
+              DIST_VERSION="$(tr -d '[:space:]' < dist-version/dist-version.txt)"
+              echo "should-build=true" >> "$GITHUB_OUTPUT"
+              echo "dist-version=$DIST_VERSION" >> "$GITHUB_OUTPUT"
+              # Build the exact tree the Release ran against (the commit that holds
+              # the published versions), which is also where the dist tag points.
+              echo "checkout-ref=$RUN_HEAD_SHA" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
+  build:
+    needs: resolve
+    if: needs.resolve.outputs.should-build == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: full
+            build-args: ''
+          - variant: slim
+            build-args: |
+              RUNNER_APP=@crowi/runner-app-slim
+              RUNNER_APP_DIR=apps/crowi-runner-slim
+    steps:
+      - name: Checkout released tree
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.checkout-ref }}
+          # The dist version is carried as a git tag; fetch tags so a tag ref
+          # resolves and so scripts that read tags work.
+          fetch-depth: 0
+
+      # The actual sha of the released tree we checked out. metadata-action's
+      # default org.opencontainers.image.revision is github.sha, which for a
+      # workflow_run event is the default-branch head, NOT the released tree —
+      # so we set revision explicitly below from this.
+      - name: Capture revision
+        id: rev
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+
+      # Tags come from the SINGLE SOURCE OF TRUTH (scripts/release-tags.mjs),
+      # shared with build-images.mjs + compute-dist-version.mjs, so the rule
+      # (full=no suffix / slim=-slim / moving channel tag / latest only on
+      # stable) cannot drift. metadata-action is used for LABELS only, never to
+      # re-encode the tag rule.
+      - name: Compute image tags
+        id: tags
+        env:
+          IMAGE: ${{ env.IMAGE }}
+          DIST_VERSION: ${{ needs.resolve.outputs.dist-version }}
+          VARIANT: ${{ matrix.variant }}
+        run: |
+          {
+            echo 'tags<<EOF'
+            node scripts/release-tags.mjs --image "$IMAGE" --dist-version "$DIST_VERSION" --variant "$VARIANT"
+            echo EOF
+          } >> "$GITHUB_OUTPUT"
+
+      # Self-describing manifest (D3): the resolved version of every @crowi/*
+      # bundled in THIS variant (full = all plugins; slim = MongoDB-only subset).
+      - name: Compute bundle manifest
+        id: bundle
+        env:
+          VARIANT: ${{ matrix.variant }}
+        run: |
+          {
+            echo 'manifest<<EOF'
+            node scripts/bundle-manifest.mjs --variant "$VARIANT"
+            echo EOF
+          } >> "$GITHUB_OUTPUT"
+
+      # Standard OCI labels. metadata-action handles only labels here (the tag
+      # rule lives in scripts/release-tags.mjs). org.opencontainers.image.version
+      # is overridden to the distribution version (not the git sha-based default).
+      - name: Derive OCI labels
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          tags: type=raw,value=${{ needs.resolve.outputs.dist-version }}
+          labels: |
+            org.opencontainers.image.title=Crowi (${{ matrix.variant }})
+            org.opencontainers.image.description=Crowi Markdown wiki — ${{ matrix.variant }} distribution image
+            org.opencontainers.image.version=${{ needs.resolve.outputs.dist-version }}
+            org.opencontainers.image.revision=${{ steps.rev.outputs.sha }}
+            org.crowi.variant=${{ matrix.variant }}
+            org.crowi.bundle=${{ steps.bundle.outputs.manifest }}
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver: docker-container
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push (${{ matrix.variant }}, multi-arch)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: packages/api/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          build-args: ${{ matrix.build-args }}
+          tags: ${{ steps.tags.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
