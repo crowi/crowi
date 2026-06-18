@@ -1,4 +1,4 @@
 {
   "title": "運用",
-  "pages": ["installation", "self-hosting", "deployment", "configuration", "encryption", "storage", "admin", "mail", "realtime-collab", "mcp", "search-setup", "backup", "upgrading-from-v1", "release-runbook"]
+  "pages": ["installation", "self-hosting", "deployment", "configuration", "encryption", "storage", "admin", "mail", "slack", "realtime-collab", "mcp", "search-setup", "backup", "upgrading-from-v1", "release-runbook"]
 }

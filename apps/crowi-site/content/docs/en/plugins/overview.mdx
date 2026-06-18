@@ -48,9 +48,9 @@ points.
 | Mail | `registerMailer` | `@crowi/plugin-mail-smtp`, `@crowi/plugin-mail-aws-ses`, `@crowi/plugin-mail-resend` |
 | Renderer | `registerRenderer` | `@crowi/plugin-renderer-emoji` / `-katex` / `-plantuml` / `-crowi-legacy` |
 | Auth | `registerAuth` | (for external OAuth providers; expanding) |
-| Notifier | `registerNotifier` | (for notification sinks such as Slack; expanding) |
+| Notifier / Integration | `registerNotifier` / `registerRoutes` | `@crowi/plugin-slack` (Slack integration — page-link unfurling) |
 | Base (config-only) | (no register) | `@crowi/plugin-aws` — shares credentials with downstream AWS plugins |
-| Routes | `registerRoutes` | Plugin HTTP routes — **currently a no-op stub**, pending a Hono-based redesign (see Developing plugins) |
+| Routes | `registerRoutes` | Plugin HTTP routes (inbound webhooks / `@action` buttons / OAuth callbacks). Used e.g. by `@crowi/plugin-slack`'s Slack Events API endpoint |
 
 Storage, search, and mail each select a "driver" via `storage.driver` /
 `search.driver` / `mail.driver` in `crowi.config.json`. You can install
@@ -66,6 +66,7 @@ The plugins maintained in the Crowi monorepo are:
 | Search | `mongo` (`@crowi/plugin-search-mongo`), `elasticsearch` (`@crowi/plugin-search-elasticsearch`), `opensearch` (`@crowi/plugin-search-opensearch`) |
 | Mail | `smtp` (`@crowi/plugin-mail-smtp`), `ses` (`@crowi/plugin-mail-aws-ses`), `resend` (`@crowi/plugin-mail-resend`) |
 | Renderer | `@crowi/plugin-renderer-plantuml` / `-emoji` / `-katex` / `-crowi-legacy` |
+| Integration | `@crowi/plugin-slack` (page-link unfurling in Slack — set up in [Slack integration](../operations/slack)) |
 | Shared base | `@crowi/plugin-aws` (a config-only dependency the AWS-backed plugins require) |
 
 The plugin SDK every plugin is written against is `@crowi/plugin-api`.
