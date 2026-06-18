@@ -6,7 +6,7 @@ description: Operator guide for Crowi's built-in Model Context Protocol (MCP) se
 Crowi ships a built-in **MCP (Model Context Protocol) server** that exposes
 the wiki to MCP-capable AI clients (Claude Desktop, Claude Code, and others)
 as a set of **tools** (search / read / create / update / rename / delete
-pages). It is a Streamable-HTTP endpoint (`/mcp`) hosted **inside the
+pages). It is a Streamable-HTTP endpoint (`/api/v2/mcp`) hosted **inside the
 `@crowi/api` process** — there is no separate server or port to run.
 
 See [RFC-0011](https://github.com/crowi/crowi/blob/main/docs/rfcs/0011-crowi-mcp.md)
@@ -14,8 +14,12 @@ for the design rationale.
 
 ## Overview
 
-- The endpoint is `https://<crowi-host>/mcp`, served by the same host and
-  port as the api. Nothing to deploy beyond the existing api container.
+- The endpoint is `https://<crowi-host>/api/v2/mcp`, where `<crowi-host>` is
+  the origin you browse the wiki at (the web app / front reverse proxy) — **not**
+  the api's own host/port. The api is not exposed directly: the same front proxy
+  that serves the web app forwards `/api/v2/*` (including `/api/v2/mcp`) to the
+  api, so MCP clients dial the web origin. Nothing to deploy beyond the existing
+  containers.
 - It is protected by Crowi's existing auth: every request carries a
   **Personal Access Token (PAT)** or an **OAuth access token** as a
   `Bearer` credential. The MCP server adds no new auth.
@@ -27,7 +31,7 @@ for the design rationale.
 
 ## Enabling it
 
-The `/mcp` endpoint is always available — there is no feature flag. To make
+The `/api/v2/mcp` endpoint is always available — there is no feature flag. To make
 it usable and safe in production, configure:
 
 - **`REDIS_URL`** (multi-instance only) — the per-user rate limiter shares
@@ -54,7 +58,7 @@ PAT, so admin operations are unreachable through the MCP.
 For a client that supports static headers (e.g. Claude Code):
 
 ```sh
-claude mcp add --transport http crowi https://<crowi-host>/mcp \
+claude mcp add --transport http crowi https://<crowi-host>/api/v2/mcp \
   --header "Authorization: Bearer crowi_pat_<your-token>"
 ```
 
@@ -95,9 +99,9 @@ the model is expected to re-read and retry.
 - **Scope is enforced per tool.** A read-only token calling a write tool
   receives an in-tool error (`INSUFFICIENT_SCOPE`), not an out-of-band
   failure — the model can recover gracefully.
-- **Rate limiting.** `/mcp` is rate-limited per user (a single budget across
+- **Rate limiting.** `/api/v2/mcp` is rate-limited per user (a single budget across
   all tool calls) so a runaway agent cannot hammer the wiki.
-- **Auth is the gate.** `/mcp` requires a valid Bearer token (PAT / OAuth);
+- **Auth is the gate.** `/api/v2/mcp` requires a valid Bearer token (PAT / OAuth);
   DNS-rebinding protection (`Host`-header pinning) is intentionally disabled.
   Rebinding is a defence against browser ambient-authority attacks, which is
   redundant for a Bearer-gated endpoint hit by non-browser clients (Claude

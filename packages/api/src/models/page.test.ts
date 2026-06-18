@@ -144,13 +144,16 @@ describe('Page', () => {
       expect(Page.isCreatableName('/ the / path / with / space')).toBe(false);
 
       let forbidden: string[] = [];
-      forbidden = ['installer', 'register', 'login', 'logout', 'admin', 'files', 'trash', 'paste', 'comments'];
+      forbidden = ['installer', 'register', 'login', 'logout', 'admin', 'files', 'trash', 'paste', 'comments', 'api'];
       for (let i = 0; i < forbidden.length; i++) {
         const pn = forbidden[i];
         expect(Page.isCreatableName('/' + pn + '')).toBe(false);
         expect(Page.isCreatableName('/' + pn + '/')).toBe(false);
         expect(Page.isCreatableName('/' + pn + '/abc')).toBe(false);
       }
+      // the prefix match is segment-bounded — `/apiary` is a real word, not
+      // the `/api` namespace.
+      expect(Page.isCreatableName('/apiary')).toBe(true);
 
       forbidden = ['bookmarks', 'comments', 'activities', 'pages', 'recent-create', 'recent-edit'];
       for (let i = 0; i < forbidden.length; i++) {

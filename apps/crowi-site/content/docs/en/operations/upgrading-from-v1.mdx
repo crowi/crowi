@@ -127,6 +127,27 @@ if no admin user is resolvable.
 > not convert the data itself, enabling that plugin is an alternative.
 > For plugins, see [Plugin overview](../plugins/overview).
 
+### /api namespace relocation
+
+v1 served its API under `/_api/*`, so `/api/*` (no underscore) was an
+ordinary wiki page path. v2 reserves `/api` for the reverse-proxied backend
+(`/api/v2/*`), so any v1 page still living under `/api/*` would be stranded
+— the web app 404s the reserved namespace, and pages that happened to sit at
+`/api/v2/*` are shadowed by the proxy entirely.
+
+The `relocate-reserved-api-paths` preflight migration moves every such page
+to `/api-legacy/*` (preserving the rest of the path; a pre-existing target
+gets a `-N` suffix). No redirect is left at the old path — it sits inside the
+reserved namespace. Wikis with no `/api/*` pages see nothing to apply.
+
+```bash
+# Preview which pages would move
+crowi-admin migrate plan
+
+# Apply just this migration
+crowi-admin migrate apply --id relocate-reserved-api-paths
+```
+
 ### Rebuilding the search index
 
 If you want to use full-text search on data migrated from v1, you need to
