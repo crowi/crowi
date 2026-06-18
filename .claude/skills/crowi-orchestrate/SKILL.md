@@ -4,22 +4,25 @@ description: |
   main セッションで /loop から 1 tick ごとに呼ぶ前提のオーケストレーション skill。
   (A) ready for merge になった worktree を裏取りして integrate-worktree で取り込む、
   (B) specs/ を groom して着手 ready / 不足要素 / 削除候補を報告する、
-  (C) main に直接積まれた作業が意味のある塊になったら code-review をかける、の 3 系統を
-  実行する。push しない・spec を自動削除しない・dirty な main に勝手に commit しない・
-  詰まったら ping して待つ。
-  キーワード: orchestrate, loop, watcher, integrate, groom, spec 整理, code-review
+  (C) main に直接積まれた作業が意味のある塊になったら code-review をかける、
+  (D) GitHub Dependabot security alerts を確認して新規 advisory のみ報告する、
+  の 4 系統を実行する。push しない・spec を自動削除しない・dirty な main に勝手に
+  commit しない・dep を自動 bump しない・詰まったら ping して待つ。
+  キーワード: orchestrate, loop, watcher, integrate, groom, spec 整理, code-review, dependabot, security
 ---
 
-# Crowi Orchestrate (per-tick: ready worktree 取り込み + spec groom + main review)
+# Crowi Orchestrate (per-tick: ready worktree 取り込み + spec groom + main review + dependabot)
 
 main セッションで `/loop /crowi-orchestrate` として **1 tick ごとに呼ばれる** 前提の
-skill。単発 (`/crowi-orchestrate`) でも動く。3 系統を順に実行する。
+skill。単発 (`/crowi-orchestrate`) でも動く。4 系統を順に実行する。
 
 **鉄則 (毎 tick 守る):**
 - **push しない** (常にユーザー指示待ち)。
 - **spec を自動削除しない** (削除は提案のみ、user 承認を待つ)。
 - **main が dirty なら integrate しない / dirty な main に勝手に commit しない**
   (skip して報告)。
+- **依存の自動 bump をしない** (D 系統。影響範囲が広く、lint/test 通る保証もなく、
+  判断系。報告のみで user の判断を待つ)。
 - **不可逆 / 判断系で詰まったら強行せず ping して待つ**。
 
 ## A. integrate watcher (行動系)
@@ -115,10 +118,66 @@ git log --first-parent --no-merges <lastReviewedMainSha>..main
 レビューが終わったら `lastReviewedMainSha = 現在の main HEAD` に更新 (atomic)。
 発火しなかった tick では更新しない (閾値到達まで蓄積)。
 
+## D. Dependabot security alerts watcher (品質系)
+
+GitHub Dependabot の open security alerts を定期チェックし、**前回の tick 時点から
+新しく出てきた advisory のみ** を簡潔に報告する。**自動 bump はしない**(deps 更新は
+影響範囲が広く、lint/test の検証と判断を伴う行動なので、user の手で `/dependabot-fix`
+等を打ってもらう想定)。
+
+### 取得
+
+```bash
+gh api repos/crowi/crowi/dependabot/alerts --paginate -X GET -f state=open \
+  --jq '.[] | {number, ghsa: .security_advisory.ghsa_id,
+               severity: .security_advisory.severity,
+               package: .dependency.package.name,
+               scope: .dependency.scope,
+               first_patched: .security_vulnerability.first_patched_version.identifier}'
+```
+
+`gh` が無い / 認証されていない環境では D 系統を skip(エラーは出さず、報告に
+「D: gh 未認証で skip」とのみ記す)。
+
+### 状態
+
+`.feature-state/orchestrate-state.json` に `knownDependabotAlerts: [<number>, ...]`
+の配列で保存する (alert number は GH 内で安定)。
+- 無ければ初回は **現在 open な全 alert で初期化**し (= 既存はサイレント受理)、
+  この tick の D の報告は skip。
+- 書き込みは tmp+rename で atomic に。
+
+### 報告条件
+
+`open_now - known` の差集合 = 新規 alert のみを報告する。
+- **新規 0 件**: D は黙る。
+- **新規あり**: severity / package / first_patched をテーブルで列挙。
+  - **direct dep** か **transitive** かを `grep -E '"<pkg>"\s*:' packages/*/package.json
+    apps/*/package.json package.json` で簡易判定 (見つかれば direct)。
+  - direct なら「`package.json` を bump して `pnpm install`」、transitive なら
+    「親 dep を bump するか、`pnpm.overrides` で resolver hint」と一言添える。
+  - **high / critical** が混じってる、または **prod scope** だけで 3件以上溜まったら
+    `PushNotification` で ping。
+
+### 自動更新ルール
+
+- **対応した GHSA を含む commit が main に入った**(commit message に `GHSA-<id>` を
+  含む、もしくは `chore(deps)` 系で `pnpm-lock.yaml` が変更されている)場合、次 tick で
+  GH 側の alert が `state: fixed` に変わる → `open_now` から自然に消えるので、
+  `knownDependabotAlerts` のメンテは何もしなくて良い (差集合計算の自然な縮退)。
+- **手動で dismiss された alert** も `open_now` から消えるので同じ扱い。
+
+### 後始末
+
+`knownDependabotAlerts = open_now の number 配列` で常に上書き (atomic)。
+- これにより「次回までに新たに出た / 消えた」が正しく差分管理される。
+- 報告したかどうかは別管理せず、open ⇄ known の集合差で判定する。
+
 ## 出力
 
 - A で何かが起きた (integrate した / 詰まった / stale signal)、B で新規に ready / stale
-  が出た、または C で review を実行した (指摘あり) 場合のみ、簡潔に報告。
+  が出た、C で review を実行した (指摘あり)、または D で新規 advisory が出た場合のみ、
+  簡潔に報告。
 - どれも変化なしなら「変化なし」一言で終える (毎 tick の冗長な列挙はしない)。
 
 ## loop との組み合わせ
