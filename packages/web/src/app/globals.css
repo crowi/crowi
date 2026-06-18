@@ -256,6 +256,32 @@ html[data-page-grant="2"] {
 }
 
 /*
+ * iOS zoom-on-focus guard (global, theme-level).
+ *
+ * Mobile Safari/WebKit auto-zooms the viewport whenever a focused form
+ * control's font-size is below 16px. Rather than remembering to bump the
+ * font on every new mobile input (search box, editor, future fields), we
+ * enforce a 16px floor on every editable surface here — so any screen we
+ * add is zoom-safe by default.
+ *
+ * Scoped to iOS via `@supports (-webkit-touch-callout: none)`: that property
+ * is implemented only by iOS/iPadOS WebKit (desktop Safari and every other
+ * browser report it unsupported), so non-iOS keeps its denser `text-sm`
+ * form sizing untouched. `!important` because Tailwind's `text-sm` utility
+ * and CodeMirror's injected editor theme would otherwise win the cascade.
+ * Every control here is already ≤16px, so the floor never shrinks anything.
+ */
+@supports (-webkit-touch-callout: none) {
+  input,
+  textarea,
+  select,
+  [contenteditable]:not([contenteditable='false']),
+  .cm-content {
+    font-size: 16px !important;
+  }
+}
+
+/*
  * Animated multi-gradient background used by /installer, /login, /register.
  * Ports the legacy `.crowi.single.nologin` style from the SCSS theme:
  * three stacked linear-gradients shifted in hue / saturation / lightness
