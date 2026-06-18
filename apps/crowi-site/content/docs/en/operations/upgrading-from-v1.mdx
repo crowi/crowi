@@ -104,6 +104,20 @@ crowi-admin migrate status
 > refusal to a warning. Keep the default `block` policy in production so a
 > half-migrated database cannot serve traffic.
 
+The migrations registered as of the v2 alpha are:
+
+| ID | Layer | What it does |
+| ---- | ---- | ---- |
+| `page-status-default` | boot | Backfill `page.status` (RFC-0004) |
+| `revisions-schema-unify` | boot | Unify the revision schema (backfill `type:snapshot`) |
+| `wikilink-format` | preflight | Convert wikilink syntax |
+| `user-unique-prepare` | preflight | Deduplicate users (prepare for the unique index) |
+| `relocate-reserved-api-paths` | preflight | Move v1 pages out of the reserved `/api` namespace |
+
+The boot migrations (`page-status-default` / `revisions-schema-unify`) apply
+automatically when the api starts, so they need no operator action. The
+sections below focus on the preflight migrations, which you apply explicitly.
+
 ### wikilink migration
 
 The `wikilink-format` preflight migration converts v1-era wikilink syntax
@@ -148,13 +162,43 @@ crowi-admin migrate plan
 crowi-admin migrate apply --id relocate-reserved-api-paths
 ```
 
+### Preparing user uniqueness (user-unique-prepare)
+
+v1 did not strictly enforce uniqueness on `username` / `email` (it allowed
+case-insensitive duplicates, and deleted users could linger while keeping
+their original identity). v2 declares **case-insensitive unique indexes** on
+`username` / `email` (built by autoIndex on boot), so any colliding data left
+behind makes the index build fail with `E11000`.
+
+The `user-unique-prepare` preflight migration prepares the data so the index
+can build (it does not build the index itself).
+
+- **dedup-username** — merges living users that collide on a case-insensitive
+  username into one, reassigning ownership references to the survivor and
+  deleting the rest.
+- **dedup-email** — does the same for email.
+- **tombstone-deleted** — renames any deleted user that would collide with a
+  living user (or another deleted user) to the per-id `deleted-<id>` tombstone,
+  matching the runtime delete behaviour.
+
+```bash
+# Preview how many rows would be merged / deleted / renamed
+crowi-admin migrate plan
+
+# Apply just this migration
+crowi-admin migrate apply --id user-unique-prepare
+```
+
+> **Caution**: This migration **merges and deletes** users. Always review the
+> scope with `migrate plan` and take a MongoDB backup before applying.
+
 ### Rebuilding the search index
 
 If you want to use full-text search on data migrated from v1, you need to
 rebuild the search index on the v2 side.
 
 ```bash
-crowi-admin search rebuild
+crowi-admin rebuild search
 ```
 
 See [Setting up the search backend](./search-setup) for details.
@@ -165,14 +209,65 @@ To change where attachment files are stored (for example from local to
 S3), use the storage copy command.
 
 ```bash
-crowi-admin storage copy --from local --to s3 --dry-run
-crowi-admin storage copy --from local --to s3
+crowi-admin rebuild storage copy --from local --to s3 --dry-run
+crowi-admin rebuild storage copy --from local --to s3
 ```
 
 > **Note**: v1 AWS / S3 credentials (the old `upload:aws:*` core config) are
 > **not carried over**. Enable `@crowi/plugin-aws` (and
 > `@crowi/plugin-storage-aws-s3`) and re-enter the credentials in the admin
 > **Plugins** screen — they are stored in the plugin's namespace and encrypted.
+
+### Bulk URL replacement after a domain change (replace url)
+
+If you **changed the public domain (host)** during the v1 → v2 migration,
+page bodies keep their **absolute URLs** pinned to the old host (image embeds
+and links, e.g. `![shot.png](https://old.example/files/<id>)`). Page / file
+ids carry over unchanged, so the fix is a **literal host (URL prefix) swap**,
+not an id remap.
+
+`crowi-admin replace url` replaces a **literal string** in every page body,
+from `--from` to `--to` (a verbatim match, not a regex — safe for URLs full of
+`/` `.` `?`).
+
+```bash
+# Preview what would change first (writes nothing)
+crowi-admin replace url --from https://old.example --to https://new.example --dry-run
+
+# Run it (prompts to confirm the number of pages)
+crowi-admin replace url --from https://old.example --to https://new.example
+```
+
+The replacement is a **quiet rewrite that is invisible to end users**. It
+pushes a new revision per page, but leaves `updatedAt` / the last-update user /
+the grant (visibility) untouched, and notifies no watchers (and auto-watches
+no one). Listings and notifications do not move, which is what you want for a
+domain cleanup.
+
+Main options:
+
+| Option | Description |
+| ---- | ---- |
+| `--from <s>` / `--to <s>` | (required) The string to replace / its replacement. For safety, pass a **full origin with a scheme**, e.g. `https://old.example`. |
+| `--dry-run` | Report what would change without writing. |
+| `--include-trash` | Also rewrite trashed / deprecated pages (default: published only). |
+| `--user <email>` | User recorded as the author of the new revisions (default: the oldest admin). |
+| `--yes` | Skip the confirmation prompt (without it, the command refuses to write when there is no TTY). |
+| `--force` | Proceed even when `--from` has no scheme (a bare host). |
+
+> **Caution**: Passing a **bare host without a scheme** like `old.example` to
+> `--from` risks corrupting longer hosts that share the prefix, such as
+> `old.example.com`. The CLI refuses this by default and requires `--force`.
+> Prefer a full origin like `https://old.example` whenever possible.
+
+After a run, each page's rendered HTML is regenerated as the new revision, so
+it is fresh. The **search index, however, must be rebuilt separately**
+(`crowi-admin rebuild search`). Backlinks are unaffected (external URLs are not
+internal links).
+
+> **Note**: `replace url` is neither a versioned migration (it takes arbitrary
+> from/to and is re-runnable) nor a derived-data rebuild (it mutates page
+> bodies), so it lives in its own namespace — not under `migrate` or `rebuild`.
 
 ## What to do before migrating
 
@@ -197,8 +292,8 @@ Before actually trying a migration, complete the following.
   still in progress. **Production migration is not recommended at this
   time.**
 - The `crowi-admin migrate` framework (with `plan` / `apply` and the
-  preflight-block boot guard), plus `search rebuild` and `storage copy`,
-  are provided. Preview each one (`migrate plan` / `--dry-run`) before
-  applying.
+  preflight-block boot guard), plus `rebuild search` / `rebuild storage copy`
+  and `replace url` for bulk URL replacement after a domain change, are
+  provided. Preview each one (`migrate plan` / `--dry-run`) before applying.
 - Migration procedures will be documented toward the stable release. See
   `TODO.md` and Crowi's release announcements for the latest status.

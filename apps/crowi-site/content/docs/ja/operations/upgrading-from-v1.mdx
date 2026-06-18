@@ -99,6 +99,20 @@ crowi-admin migrate status
 > リクエストを処理しないよう、デフォルトの `block` ポリシーのままに
 > してください。
 
+v2 alpha 時点で登録されている移行は以下のとおりです。
+
+| ID | レイヤー | 内容 |
+| ---- | ---- | ---- |
+| `page-status-default` | boot | `page.status` のバックフィル (RFC-0004) |
+| `revisions-schema-unify` | boot | リビジョンスキーマの統一 (`type:snapshot` のバックフィル) |
+| `wikilink-format` | preflight | wikilink 記法の変換 |
+| `user-unique-prepare` | preflight | ユーザーの重複排除 (一意インデックスの準備) |
+| `relocate-reserved-api-paths` | preflight | `/api` 予約名前空間からの v1 ページ退避 |
+
+boot 移行 (`page-status-default` / `revisions-schema-unify`) は api 起動時に
+自動適用されるので、運用者の操作は不要です。以下では、明示的な適用が必要な
+preflight 移行を中心に説明します。
+
 ### wikilink の移行
 
 `wikilink-format` preflight 移行は、v1 時代の wikilink 記法を v2 の
@@ -144,13 +158,42 @@ crowi-admin migrate plan
 crowi-admin migrate apply --id relocate-reserved-api-paths
 ```
 
+### ユーザーの一意性の準備 (user-unique-prepare)
+
+v1 は `username` / `email` の一意性を厳密には強制していませんでした
+(大文字小文字違いの重複や、削除済みユーザーが元の identity を保持したまま
+残るなど)。v2 は `username` / `email` に **大文字小文字を区別しない一意
+インデックス** を張る (起動時に autoIndex が構築) ため、衝突するデータが
+残っているとインデックス構築が `E11000` で失敗します。
+
+`user-unique-prepare` preflight 移行は、インデックスが構築できるように
+データを整えます (インデックスの構築自体は行いません)。
+
+- **dedup-username** — 大文字小文字を無視して衝突する現役ユーザーを 1 人に
+  統合し、所有権の参照を統合先に付け替えて残りを削除します。
+- **dedup-email** — email についても同様に統合します。
+- **tombstone-deleted** — 現役ユーザー (または別の削除済みユーザー) と衝突
+  する削除済みユーザーを、ランタイムの削除挙動と同じ `deleted-<id>` 形式の
+  tombstone 名にリネームします。
+
+```bash
+# 統合 / 削除 / リネーム対象の件数をプレビュー
+crowi-admin migrate plan
+
+# この移行だけを適用
+crowi-admin migrate apply --id user-unique-prepare
+```
+
+> **Caution**: この移行はユーザーの **統合・削除** を伴います。`migrate plan`
+> で対象を必ず確認し、適用前に MongoDB のバックアップを取得してください。
+
 ### 検索インデックスの再構築
 
 v1 から移行したデータで全文検索を使う場合、v2 側で検索インデックスを
 作り直す必要があります。
 
 ```bash
-crowi-admin search rebuild
+crowi-admin rebuild search
 ```
 
 詳細は [検索バックエンドのセットアップ](./search-setup) を参照して
@@ -162,8 +205,8 @@ crowi-admin search rebuild
 ストレージコピーコマンドを使います。
 
 ```bash
-crowi-admin storage copy --from local --to s3 --dry-run
-crowi-admin storage copy --from local --to s3
+crowi-admin rebuild storage copy --from local --to s3 --dry-run
+crowi-admin rebuild storage copy --from local --to s3
 ```
 
 > **Note**: v1 の AWS / S3 認証情報 (旧 `upload:aws:*` のコア設定) は
@@ -171,6 +214,55 @@ crowi-admin storage copy --from local --to s3
 > `@crowi/plugin-storage-aws-s3`) を有効化し、管理画面の **Plugins** で
 > 認証情報を入力し直してください (プラグイン名前空間に保存され、暗号化
 > されます)。
+
+### ドメイン変更後の本文 URL 一括置換 (replace url)
+
+v1 → v2 で **公開ドメイン (ホスト) を変更した** 場合、ページ本文に埋め込まれた
+**絶対 URL** (画像埋め込みやリンク。例: `![shot.png](https://old.example/files/<id>)`)
+は旧ホストのまま残ります。ページ / ファイルの id は引き継がれるため、必要なのは
+**ホスト (URL 接頭辞) の単純な置換** であって id の振り直しではありません。
+
+`crowi-admin replace url` は、全ページ本文中の **リテラル文字列** を `--from`
+から `--to` へ置換します (正規表現ではなく完全一致なので、`/` `.` `?` を含む
+URL でも安全です)。
+
+```bash
+# まず置換対象をプレビュー (書き込まない)
+crowi-admin replace url --from https://old.example --to https://new.example --dry-run
+
+# 実行 (置換件数を確認するプロンプトが出る)
+crowi-admin replace url --from https://old.example --to https://new.example
+```
+
+この置換は **エンドユーザーから見えない静かな書き換え** として行われます。
+ページごとに新しいリビジョンを積みますが、`updatedAt` / 最終更新者 / 公開範囲
+(grant) は変更せず、ウォッチャーへの通知や自動ウォッチも行いません。一覧の
+並びや通知が動かないので、ドメイン移行のクリーンアップに適しています。
+
+主なオプション:
+
+| オプション | 説明 |
+| ---- | ---- |
+| `--from <s>` / `--to <s>` | (必須) 置換元 / 置換先の文字列。安全のため `https://old.example` のように **スキーム付きの完全なオリジン** を指定する |
+| `--dry-run` | 書き込まずに対象だけレポートする |
+| `--include-trash` | ゴミ箱 / 非推奨ページも対象に含める (既定: 公開ページのみ) |
+| `--user <email>` | 新リビジョンの作成者として記録するユーザー (既定: 最古の管理者) |
+| `--yes` | 確認プロンプトをスキップする (TTY が無い環境では、これが無いと書き込みを拒否) |
+| `--force` | `--from` にスキームが無い (裸のホスト) 場合でも実行する |
+
+> **Caution**: `--from` に `old.example` のような **スキームの無い裸のホスト**
+> を渡すと、`old.example.com` のような「接頭辞が一致するより長いホスト」まで
+> 壊す恐れがあります。CLI は既定でこれを拒否し、`--force` が必要です。可能な
+> 限り `https://old.example` のように完全なオリジンを指定してください。
+
+置換後、ページのレンダリング済み HTML は新リビジョンとして再生成されるため
+最新です。一方 **検索インデックスは別途再構築が必要** です
+(`crowi-admin rebuild search`)。バックリンクは外部 URL が対象なので影響を
+受けません。
+
+> **Note**: `replace url` はバージョン付きの移行ではなく (任意の from/to で
+> 何度でも実行可能)、派生データの再構築でもない (本文を書き換える) ため、
+> `migrate` でも `rebuild` でもない独立した名前空間です。
 
 ## 移行前に必ず行うこと
 
@@ -193,8 +285,8 @@ crowi-admin storage copy --from local --to s3
 - ただし v2 は alpha 開発中で、移行パスは整備途上です。**本番移行は
   現時点では非推奨**です。
 - `crowi-admin migrate` フレームワーク (`plan` / `apply` と preflight-block
-  の起動ガード)、および `search rebuild` / `storage copy` が提供されて
-  います。適用前にいずれもプレビュー (`migrate plan` / `--dry-run`) して
-  ください。
+  の起動ガード) と、`rebuild search` / `rebuild storage copy`、ドメイン変更後の
+  本文 URL 置換 `replace url` が提供されています。適用前にいずれもプレビュー
+  (`migrate plan` / `--dry-run`) してください。
 - 安定版リリースに向け、移行手順は今後ドキュメント化されます。最新
   状況は `TODO.md` と Crowi のリリース告知を参照してください。
