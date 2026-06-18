@@ -24,6 +24,17 @@ import { z } from '@hono/zod-openapi';
  * endpoint. The CLI parses them leniently: an older server that omits
  * them degrades to a static baseline with version-skew warnings
  * suppressed.
+ *
+ * `canSelfRegister` tells the unauthenticated login / register pages
+ * whether self-service registration is open, so the web can hide the
+ * `/register` form (and the login → register link) up front instead of
+ * letting users fill the form and only learn it is closed on a 403. It is
+ * `true` for the `Open` / `Restricted` registration modes and `false` for
+ * `Closed` (invite-only). Only the boolean is exposed — the internal mode
+ * string (whose stored value is the historical `Resricted` typo) is never
+ * surfaced. The API still enforces the real guard (403
+ * `REGISTRATION_CLOSED` on `POST /auth/register`); this flag is a UX hint
+ * the front-end may fail-open on.
  */
 export const AppInfoResponseSchema = z.object({
   title: z.string().nullable(),
@@ -31,5 +42,6 @@ export const AppInfoResponseSchema = z.object({
   version: z.string(),
   apiVersion: z.string(),
   capabilities: z.array(z.string()),
+  canSelfRegister: z.boolean(),
 });
 export type AppInfoResponse = z.infer<typeof AppInfoResponseSchema>;

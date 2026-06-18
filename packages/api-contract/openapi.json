@@ -6678,6 +6678,9 @@
                       "items": {
                         "type": "string"
                       }
+                    },
+                    "canSelfRegister": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
@@ -6685,7 +6688,8 @@
                     "confidential",
                     "version",
                     "apiVersion",
-                    "capabilities"
+                    "capabilities",
+                    "canSelfRegister"
                   ]
                 }
               }

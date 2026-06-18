@@ -16,7 +16,7 @@ import { app, crowi } from 'src/test/setup';
  */
 describe('GET /api/v2/app/info (Hono)', () => {
   let Config: ReturnType<typeof crowi.model<'Config'>>;
-  const APP_KEYS = ['app:title', 'app:confidential'];
+  const APP_KEYS = ['app:title', 'app:confidential', 'security:registrationMode'];
 
   const reloadConfigCache = async () => {
     await crowi.getConfigService().load();
@@ -94,5 +94,42 @@ describe('GET /api/v2/app/info (Hono)', () => {
     // statically-compiled subsystems the CLI relies on.
     expect(Array.isArray(res.body.capabilities)).toBe(true);
     expect(res.body.capabilities).toEqual(expect.arrayContaining(['oauth', 'pages', 'comments', 'bookmarks', 'attachments', 'notifications']));
+  });
+
+  // `canSelfRegister` is the public UX hint that lets the unauthenticated
+  // login / register pages hide the registration form up front when the
+  // operator has closed self-service registration. It is the single
+  // `security:registrationMode !== 'Closed'` decision, so it stays true
+  // for both Open and the (typo'd) `Resricted` value and only flips false
+  // for `Closed`.
+  describe('canSelfRegister', () => {
+    it('is true for the Open registration mode', async () => {
+      await Config.updateConfig('crowi', 'security:registrationMode', 'Open');
+      await reloadConfigCache();
+
+      const res = await request(app).get('/api/v2/app/info');
+      expect(res.status).toBe(200);
+      expect(res.body.canSelfRegister).toBe(true);
+    });
+
+    it('is true for the Restricted registration mode (self-register allowed, pending approval)', async () => {
+      // The stored value is the historical `Resricted` typo; the boolean
+      // must not depend on that spelling.
+      await Config.updateConfig('crowi', 'security:registrationMode', 'Resricted');
+      await reloadConfigCache();
+
+      const res = await request(app).get('/api/v2/app/info');
+      expect(res.status).toBe(200);
+      expect(res.body.canSelfRegister).toBe(true);
+    });
+
+    it('is false for the Closed registration mode (invite-only)', async () => {
+      await Config.updateConfig('crowi', 'security:registrationMode', 'Closed');
+      await reloadConfigCache();
+
+      const res = await request(app).get('/api/v2/app/info');
+      expect(res.status).toBe(200);
+      expect(res.body.canSelfRegister).toBe(false);
+    });
   });
 });

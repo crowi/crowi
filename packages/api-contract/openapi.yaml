@@ -4544,12 +4544,15 @@ paths:
                     type: array
                     items:
                       type: string
+                  canSelfRegister:
+                    type: boolean
                 required:
                   - title
                   - confidential
                   - version
                   - apiVersion
                   - capabilities
+                  - canSelfRegister
         '500':
           description: Internal server error
           content:
