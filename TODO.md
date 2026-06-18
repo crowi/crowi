@@ -27,7 +27,7 @@ spec: `feature-v2-alpha1-release-prep.md`（実本番 = v1 DB への in-place �
 ## High Priority — 進行中
 
 ### Plugin Architecture (RFC-0001)
-- [ ] Step 8: notifier (Slack) plugin 化
+- [x] Slack plugin Phase 0/1: registerRoutes SDK 配線 + `@crowi/plugin-slack` unfurl（spec: `feature-slack-plugin.md`。残: Phase 2 slash / Phase 3 notifier / Phase E embed）
 - [ ] Step 10: auth provider plugin 化（OAuth。alpha1 で削除、将来 plugin で復活）
 - [ ] 将来: encryption KeyProvider plugin (KMS)、S3 以外の attachment storage
 
@@ -45,7 +45,6 @@ spec: `feature-v2-alpha1-release-prep.md`（実本番 = v1 DB への in-place �
 
 ### その他 残作業
 - [ ] error code 細分化（comment/revision の `INVALID_REQUEST`）
-- [ ] Slack event endpoint（`/_api/slack/event`）
 - [ ] web テスト基盤整備 + API coverage 強化
 
 ---
