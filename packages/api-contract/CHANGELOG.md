@@ -1,5 +1,18 @@
 # @crowi/api-contract
 
+## 2.0.0-alpha.1
+
+### Minor Changes
+
+- 0e9a07c: Extend the public `GET /api/v2/app/info` response with a version-skew /
+  feature-detection signal: `version` (the running server version), `apiVersion`
+  (`"v2"`), and `capabilities` (a coarse list of exposed subsystems — the
+  always-on set plus dynamically-detected ones such as `search` when a search
+  driver is active and `collab` / `collab:redis`). The existing `title` /
+  `confidential` fields are unchanged, and clients that ignore the new fields keep
+  working. This is the signal the `crowi` end-user CLI reads to tolerate version
+  drift across self-hosted instances.
+
 ## 2.0.0-alpha.0
 
 ### Major Changes
@@ -150,11 +163,10 @@
     shown once, and token management is web-session only. **Breaking:** the
     legacy `User.apiToken` and `GET/POST /me/apiToken` are removed with no
     compatibility shim — existing API-token users must re-issue a PAT.
-  - **Authorization Code + PKCE** — `POST /oauth/authorize` (web-session only)
-    - `POST /oauth/token` (authorization code with `S256`, or refresh-token
-      rotation with reuse detection that revokes the whole chain) + `POST
+  - **Authorization Code + PKCE** — `POST /oauth/authorize` (web-session only) - `POST /oauth/token` (authorization code with `S256`, or refresh-token
+    rotation with reuse detection that revokes the whole chain) + `POST
 /oauth/revoke` (RFC 7009) + a consent screen. A first-party `crowi-cli`
-      public client is seeded idempotently at boot.
+    public client is seeded idempotently at boot.
   - **Device Authorization Grant** (RFC 8628) — `POST /oauth/device/authorize`,
     the `urn:ietf:params:oauth:grant-type:device_code` token grant
     (`authorization_pending` / `slow_down` / `access_denied` / `expired_token`),
