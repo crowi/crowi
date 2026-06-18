@@ -258,33 +258,29 @@ TASK=$(ls .feature-state/tasks/*.json 2>/dev/null | grep -E "(^|/)(feature-)?${I
 すべて OK なら削除に進む。1 つでも崩れたら **削除せず**、その理由を「skip:
 <理由>」として記録し、Step 9 へ。
 
-#### 実行 (一括 commit)
+#### 実行 (commit なし)
 
-該当ファイルを `git rm` でステージし、merge commit とは別の **chore コミット**
-として残す:
+`.feature-state/` は **gitignore 配下** (`/.feature-state/`) なので git には乗らない。
+普通の `rm` で消すだけで、commit は不要 / 不可。
 
 ```bash
-git rm <spec> <task>
-git commit -m "$(cat <<EOF
-chore(state): drop integrated <id> spec/task
-
-The <id> branch landed in <merge-sha>; its .feature-state/{specs,tasks}/
-entries have served their purpose. Removing so .feature-state/ stays a
-working set of in-flight + queued items, not an audit log.
-EOF
-)"
+rm -f <spec> <task>
 ```
 
-> なぜ merge commit に同梱しないか: merge commit は外向きの「機能取り込み」の
-> 履歴 (changelog / リリースノートに乗る)。spec / task の掃除は内向きの状態
-> 管理で、混ぜると merge の diff が読みにくくなる。別 commit にする。
+実行後にどのファイルを消したかを1行で報告する (例:
+「dropped `.feature-state/tasks/<id>.json`」)。spec が無いケースは task のみ、
+逆も同様。
+
+> なぜ merge commit に同梱しないか: そもそも gitignore 配下なので同梱できない。
+> 同期エージェント (orchestrate B) は次 tick で `ls .feature-state/specs/` の
+> 結果から自然に消えた事実を読み取れるので、状態は track 外で十分。
 
 #### 想定外時
 
 - 該当する spec / task が **そもそも存在しない** (worktree が spec を切らずに直接
   実装されたケース、あるいは crowi-complete-feature が synthesize した task のみ
   あった場合) → 黙ってスキップ。
-- `git rm` が失敗 → 削除せず警告のみ。
+- `rm` が失敗 (permission 等) → 削除せず警告のみ、Step 9 へ進む。
 
 ## 失敗ハンドリング
 
