@@ -34,7 +34,7 @@ description: |
 
 ```
 worktree 作業確認 → main へ merge → conflict 解消 → 自動チェック
-  → gw end → tmux window close → simplify
+  → gw end → tmux window close → simplify → stale spec/task 掃除
 ```
 
 ### Step 1: worktree の作業内容を確認
@@ -222,6 +222,70 @@ simplify <description of merged work>
 simplify が見つけた issue は直接修正し、別 commit (例: `refactor(merge): ...`) としてコミット。
 修正がなければ skip。
 
+### Step 8: stale な spec / task ファイルを掃除 (提案 → 削除)
+
+merge が完了したので、対応する `.feature-state/specs/<id>.md` と
+`.feature-state/tasks/<id>.json` は **役目を終えている**。放置すると `.feature-state/`
+にゴミが溜まり、orchestrate の groom / 着手 ready 判定が雑音まみれになる。
+**該当ファイルを `git rm` で削除する**。
+
+#### 削除候補の特定
+
+整合性 (`<id>` 一致) を担保するため、`<identifier>` から **両方の prefix 変種**を見る:
+
+- `<identifier>` 単体 (例: `revision-revert`, `ci-automation`)
+- `feature-<identifier>` (例: `feature-revision-revert`, `feature-ci-release-automation`)
+
+実際にどちらの prefix で spec / task が置かれているかは作業ごとに違う (どちらも
+歴史的に使われている)。`ls .feature-state/{specs,tasks}/ | grep -E '<identifier>'`
+で実在するものだけ拾う。
+
+```bash
+SPEC=$(ls .feature-state/specs/*.md 2>/dev/null | grep -E "(^|/)(feature-)?${IDENTIFIER}\\.md$" || true)
+TASK=$(ls .feature-state/tasks/*.json 2>/dev/null | grep -E "(^|/)(feature-)?${IDENTIFIER}\\.json$" || true)
+```
+
+#### 検証 (削除前のセーフガード)
+
+- task ファイルの `status` が `COMMITTED` または `INTEGRATED` 相当か確認
+  (まだ `IN_PROGRESS` / `REVIEW` / `NEEDS_WORK` のままなら誤判定の可能性 →
+  削除せず報告)。
+- 同名 worktree が **既に消滅**しているか (`git worktree list` に出ない)。
+- spec が **他の spec から `depends-on:` で参照**されていないか
+  (`grep -lR "<basename>" .feature-state/specs/` で確認)。参照あり → 削除せず
+  報告し、orchestrate B の stale 候補として温存。
+
+すべて OK なら削除に進む。1 つでも崩れたら **削除せず**、その理由を「skip:
+<理由>」として記録し、Step 9 へ。
+
+#### 実行 (一括 commit)
+
+該当ファイルを `git rm` でステージし、merge commit とは別の **chore コミット**
+として残す:
+
+```bash
+git rm <spec> <task>
+git commit -m "$(cat <<EOF
+chore(state): drop integrated <id> spec/task
+
+The <id> branch landed in <merge-sha>; its .feature-state/{specs,tasks}/
+entries have served their purpose. Removing so .feature-state/ stays a
+working set of in-flight + queued items, not an audit log.
+EOF
+)"
+```
+
+> なぜ merge commit に同梱しないか: merge commit は外向きの「機能取り込み」の
+> 履歴 (changelog / リリースノートに乗る)。spec / task の掃除は内向きの状態
+> 管理で、混ぜると merge の diff が読みにくくなる。別 commit にする。
+
+#### 想定外時
+
+- 該当する spec / task が **そもそも存在しない** (worktree が spec を切らずに直接
+  実装されたケース、あるいは crowi-complete-feature が synthesize した task のみ
+  あった場合) → 黙ってスキップ。
+- `git rm` が失敗 → 削除せず警告のみ。
+
 ## 失敗ハンドリング
 
 - **conflict 解消後に type-check / test が失敗**: merge を `git merge --abort` で巻き戻し、
@@ -248,6 +312,7 @@ simplify が見つけた issue は直接修正し、別 commit (例: `refactor(m
 - 統合後の品質チェック
 - worktree close + branch 削除
 - simplify による整理
+- `.feature-state/{specs,tasks}/` の stale ファイル掃除
 
 を毎回手作業で漏れなくこなす必要がある。skill としてまとめておけば、操作が再現可能で、
 判断の漏れも減らせる。
