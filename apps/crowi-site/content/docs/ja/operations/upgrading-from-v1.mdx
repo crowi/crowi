@@ -123,6 +123,27 @@ crowi-admin migrate apply --id wikilink-format
 > プラグインについては [プラグイン概要](../plugins/overview) を参照して
 > ください。
 
+### /api 名前空間の移設
+
+v1 は API を `/_api/*`(アンダースコア付き)で提供していたため、`/api/*`
+(アンダースコアなし)は通常の wiki ページパスでした。v2 は `/api` を
+リバースプロキシ先のバックエンド(`/api/v2/*`)用に予約するので、v1 で
+`/api/*` 配下に残っているページは行き場を失います — web アプリは予約名前
+空間を 404 にし、`/api/v2/*` にあったページはプロキシに完全に隠れます。
+
+`relocate-reserved-api-paths` preflight 移行は、該当する全ページを
+`/api-legacy/*` へ移します(残りのパスは保持。移設先が既に存在する場合は
+`-N` サフィックスを付与)。旧パスにリダイレクトは残しません(予約名前空間内
+のため)。`/api/*` ページが無い wiki では適用対象なしになります。
+
+```bash
+# 移動対象を事前確認
+crowi-admin migrate plan
+
+# この移行だけを適用
+crowi-admin migrate apply --id relocate-reserved-api-paths
+```
+
 ### 検索インデックスの再構築
 
 v1 から移行したデータで全文検索を使う場合、v2 側で検索インデックスを

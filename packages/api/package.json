@@ -8,6 +8,8 @@
   },
   "files": [
     "dist",
+    "views",
+    "public",
     "README.md"
   ],
   "publishConfig": {

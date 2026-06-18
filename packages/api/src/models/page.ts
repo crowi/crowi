@@ -656,7 +656,7 @@ export default (crowi: Crowi) => {
       /\s+\/\s+/, // avoid miss in renaming
       /.+\/edit$/,
       /.+\.md$/,
-      /^\/(installer|register|login|logout|admin|me|files|trash|paste|comments)(\/.*|$)/,
+      /^\/(installer|register|login|logout|admin|me|files|trash|paste|comments|api)(\/.*|$)/, // `api` is the reverse-proxied backend namespace
     ];
 
     let isCreatable = true;
