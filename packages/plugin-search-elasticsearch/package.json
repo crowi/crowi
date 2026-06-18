@@ -30,7 +30,7 @@
   },
   "dependencies": {
     "@crowi/plugin-api": "workspace:^",
-    "@elastic/elasticsearch": "^9.4.0"
+    "@elastic/elasticsearch": "^9.4.2"
   },
   "devDependencies": {
     "@crowi/plugin-api": "workspace:*",

@@ -66,6 +66,8 @@ merge 後の simplify レビューで挙がった非ブロッキング改善。�
 - [ ] **STATIC_CAPABILITIES drift guard**（boot 時に static capability ↔ route group の assert test）
 - [ ] **MCP result body advisory**（body を返す read tool 増加時に `okResult` で text/structured 一経路化）
 - [ ] **renameTree merge advisory**（subtree-rename 2 ルートの重複集約、`checkPagesRenamable` の N+1 ほか）
+- [ ] **eslint 8 → 9 major up**（`packages/api` / `packages/collab` の direct eslint 8.57.1。flat config 統一含む。GHSA `js-yaml` advisory が transitive 経由で残るのは eslint 8 chain が `@eslint/eslintrc → js-yaml@4.1.1` を要求するため）
+- [ ] **mongoose 8 → 9 major up**（`packages/api` / `packages/collab` / `packages/plugin-search-mongo`。GHSA `ip-address` advisory が transitive 経由で残るのは mongoose 8 → mongodb 6.20 → socks 2.8.4 → ip-address@9.0.5 chain で、socks 2.8.7+ の ip-address 10.x 切替が引けないため）
 
 ---
 
