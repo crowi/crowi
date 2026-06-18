@@ -122,6 +122,10 @@ export function useUpdatePage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['page'] });
+      // A new revision was pushed — refresh the page-history list so it does
+      // not keep serving the pre-edit revisions off the 60s default staleTime
+      // (the new revision otherwise only appears after a full browser reload).
+      queryClient.invalidateQueries({ queryKey: ['revisions'] });
     },
   });
 }
@@ -253,6 +257,11 @@ export function useRevertToRevision() {
       // The revert can be triggered from a portal listing, so refresh the
       // page lists too: the portal document now sits at a new latest revision.
       queryClient.invalidateQueries({ queryKey: ['pages'] });
+      // A new revision was stacked — refresh the page-history list so the
+      // reverted revision shows immediately. Without this the history view
+      // serves the pre-revert revisions off the 60s default staleTime and the
+      // new one only appears after a full browser reload.
+      queryClient.invalidateQueries({ queryKey: ['revisions'] });
     },
   });
 }
