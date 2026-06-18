@@ -45,6 +45,9 @@ import { execFileSync } from 'node:child_process'
 import { appendFileSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+// SINGLE SOURCE OF TRUTH for version/channel parsing (D3). baseFromVersion is
+// shared with build-images.mjs + docker.yml so the rule cannot drift.
+import { baseFromVersion } from './release-tags.mjs'
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -52,19 +55,6 @@ const args = process.argv.slice(2)
 const getOpt = (name, fallback) => {
   const i = args.indexOf(name)
   return i !== -1 && args[i + 1] !== undefined ? args[i + 1] : fallback
-}
-
-// --- base (major.minor.patch + prerelease channel) ---
-// Derive the distribution base from a full semver like `2.0.0-alpha.1`:
-//   major.minor.patch is kept verbatim; a prerelease keeps only its CHANNEL
-//   identifier (drops the trailing numeric counter). So `2.0.0-alpha.1` →
-//   `2.0.0-alpha`, `2.1.0-beta.3` → `2.1.0-beta`, `2.0.0` → `2.0.0`.
-const baseFromVersion = (version) => {
-  const dash = version.indexOf('-')
-  if (dash === -1) return version
-  const release = version.slice(0, dash)
-  const channel = version.slice(dash + 1).split('.')[0]
-  return `${release}-${channel}`
 }
 
 // --- counter: max existing distribution counter for this base, +1 ---
