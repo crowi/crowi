@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { registerMigrate } from './commands/migrate';
 import { registerRebuild } from './commands/rebuild';
+import { registerReplace } from './commands/replace';
 import { registerWatcherBackfill } from './commands/watcher-backfill';
 
 /**
@@ -26,6 +27,10 @@ export function createProgram(): Command {
   // `rebuild search`. No compatibility aliases (CHANGELOG / upgrade guide).
   registerMigrate(program);
   registerRebuild(program);
+  // `replace url` (literal in-body URL/host swap for v1→v2 domain changes).
+  // Not a versioned migration (arbitrary from/to, re-runnable) nor a derived-
+  // data rebuild (it mutates revision bodies) — its own namespace.
+  registerReplace(program);
   // `watcher backfill` (idempotent WATCH-row backfill) landed on main as a
   // standalone command; kept as-is here. Could fold into the framework as a
   // `rebuild` / `migrate` task later (see TODO backlog).
