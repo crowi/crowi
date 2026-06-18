@@ -755,9 +755,10 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
 
           // Stack the old body as a new revision on top of the latest. The
           // base is pageData.revision (the server-side latest), set inside
-          // prepareRevision — the client never supplies one. grant is left
-          // unchanged so the grant-update branch in updatePage is skipped.
-          const updateOptions = { grant: pageData.grant, editVia: c.get('authContext').kind };
+          // prepareRevision — the client never supplies one. No `grant` option
+          // is passed: updatePage defaults to `pageData.grant`, which keeps
+          // the grant-update branch skipped (visibility is preserved).
+          const updateOptions = { editVia: c.get('authContext').kind };
           const updated = (await Page.updatePage(pageData, oldRevision.body, user, updateOptions)) as PageDocument;
           const populated = await Page.populatePageData(updated, null);
           return c.json({ page: pageToResponse(populated) }, 200);
