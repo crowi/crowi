@@ -110,18 +110,18 @@ S3 のバケット名と AWS のクレデンシャルは、管理画面から設
 しかし、**既存のファイルは自動では移動しません**。古いドライバに残った
 ファイルは、`crowi-admin` CLI で新しいドライバへコピーします。
 
-### crowi-admin storage copy
+### crowi-admin rebuild storage copy
 
 `crowi-admin` はサーバ内 (ssh / kubectl exec) での実行を想定した運用者用
-CLI です。`storage copy` サブコマンドで、あるドライバから別のドライバへ
+CLI です。`rebuild storage copy` サブコマンドで、あるドライバから別のドライバへ
 全オブジェクトをコピーできます。
 
 ```bash
 # local から s3 へ全ファイルをコピー
-crowi-admin storage copy --from local --to s3
+crowi-admin rebuild storage copy --from local --to s3
 
 # まず対象キーだけを確認する (コピーは行わない)
-crowi-admin storage copy --from local --to s3 --dry-run
+crowi-admin rebuild storage copy --from local --to s3 --dry-run
 ```
 
 ポイント:
@@ -152,9 +152,9 @@ crowi-admin storage copy --from local --to s3 --dry-run
 1. `@crowi/plugin-storage-aws-s3` を `crowi.config.json:plugins` に追加し、
    管理画面で S3 バケット / クレデンシャルを設定する (`storage.driver` は
    まだ `local` のまま)。
-2. `crowi-admin storage copy --from local --to s3 --dry-run` で対象件数を
+2. `crowi-admin rebuild storage copy --from local --to s3 --dry-run` で対象件数を
    確認する。
-3. `crowi-admin storage copy --from local --to s3` で実際にコピーする。
+3. `crowi-admin rebuild storage copy --from local --to s3` で実際にコピーする。
    `failed` が出た場合は再実行する。
 4. `crowi.config.json` の `storage.driver` を `s3` に変更し、API を
    再起動する。

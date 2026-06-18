@@ -112,18 +112,18 @@ on the new driver** as soon as you rewrite `crowi.config.json`. However,
 **existing files are not moved automatically**. Files left on the old
 driver are copied to the new driver with the `crowi-admin` CLI.
 
-### crowi-admin storage copy
+### crowi-admin rebuild storage copy
 
 `crowi-admin` is an operator CLI intended to be run inside the server
-(ssh / kubectl exec). The `storage copy` subcommand copies every object
+(ssh / kubectl exec). The `rebuild storage copy` subcommand copies every object
 from one driver to another.
 
 ```bash
 # Copy all files from local to s3
-crowi-admin storage copy --from local --to s3
+crowi-admin rebuild storage copy --from local --to s3
 
 # First check the target keys only (no copying)
-crowi-admin storage copy --from local --to s3 --dry-run
+crowi-admin rebuild storage copy --from local --to s3 --dry-run
 ```
 
 Key points:
@@ -155,9 +155,9 @@ A safe procedure for migrating from `local` to `s3`:
 1. Add `@crowi/plugin-storage-aws-s3` to `crowi.config.json:plugins` and
    configure the S3 bucket / credentials in the admin UI (keep
    `storage.driver` as `local` for now).
-2. Run `crowi-admin storage copy --from local --to s3 --dry-run` to
+2. Run `crowi-admin rebuild storage copy --from local --to s3 --dry-run` to
    check the target count.
-3. Run `crowi-admin storage copy --from local --to s3` to copy for real.
+3. Run `crowi-admin rebuild storage copy --from local --to s3` to copy for real.
    If any `failed` appears, re-run it.
 4. Change `storage.driver` in `crowi.config.json` to `s3` and restart
    the API.

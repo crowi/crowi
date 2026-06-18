@@ -180,7 +180,7 @@ A read-only page that shows the status of the attachment storage
 - **Driver switching is not done from the admin panel.** Edit
   `storage.driver` in `crowi.config.json` and restart the api.
 - File migration between drivers is done with the
-  `crowi-admin storage copy --from <a> --to <b>` CLI.
+  `crowi-admin rebuild storage copy --from <a> --to <b>` CLI.
 
 For storage configuration and plugins in general, see
 [Storage settings](./storage).
@@ -208,7 +208,7 @@ A page to check the status of the search driver. Maps to `GET /admin/search`.
 
 - Shows the currently active search driver and the index status.
 - Index rebuilds are not done from the admin panel — use the
-  `crowi-admin search rebuild` CLI.
+  `crowi-admin rebuild search` CLI.
 - Search-backend plugins such as Elasticsearch are auto-injected into **this
   "Search" group** (derived from `registerSearch`) as a settings-page link.
 

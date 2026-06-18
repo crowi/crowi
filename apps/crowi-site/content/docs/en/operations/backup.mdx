@@ -85,9 +85,9 @@ Separate from backup purposes, file migration when switching storage
 drivers is done with the `crowi-admin` CLI.
 
 ```bash
-crowi-admin storage copy --from local --to s3
+crowi-admin rebuild storage copy --from local --to s3
 # To see the target keys before actually copying
-crowi-admin storage copy --from local --to s3 --dry-run
+crowi-admin rebuild storage copy --from local --to s3 --dry-run
 ```
 
 ## Elasticsearch — no backup needed
@@ -99,7 +99,7 @@ included in backups.
 After restoring MongoDB to another environment, rebuild the search index.
 
 ```bash
-crowi-admin search rebuild
+crowi-admin rebuild search
 ```
 
 For search backend configuration, see
@@ -128,7 +128,7 @@ The rough flow for restoring Crowi to a new environment is as follows.
 3. Set the **same `CROWI_ENCRYPTION_KEY`** as when the dump was taken in
    the restore target's `.env` (required to decrypt sensitive Config).
 4. Start the api.
-5. Rebuild the search index with `crowi-admin search rebuild`.
+5. Rebuild the search index with `crowi-admin rebuild search`.
 6. Redis can start empty (sessions are regenerated on re-login).
 
 > **Tip**: Before going into production, we strongly recommend running a

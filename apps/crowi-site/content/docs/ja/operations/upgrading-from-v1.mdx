@@ -276,7 +276,7 @@ crowi-admin replace url --from https://old.example --to https://new.example
 3. **`CROWI_ENCRYPTION_KEY` を準備する** — v2 で機密設定の暗号化を使う
    場合は鍵を生成し、安全に保管します。
 4. **移行をまずプレビューする** — `crowi-admin migrate plan` で未適用の
-   preflight 移行を、`storage copy ... --dry-run` で対象を確認してから、
+   preflight 移行を、`rebuild storage copy ... --dry-run` で対象を確認してから、
    実際の適用を行います。
 
 ## まとめ

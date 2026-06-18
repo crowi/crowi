@@ -109,7 +109,7 @@ not from the web admin panel. This is by design — long-running work
 should not be tied to an admin request.
 
 ```bash
-crowi-admin search rebuild
+crowi-admin rebuild search
 ```
 
 This command:
@@ -147,9 +147,9 @@ general, see [Admin panel](./admin).
   panel. When `url` is empty, `query()` throws an error and `index()`
   becomes a no-op.
 - **`rebuild` fails**: You may have picked `kuromoji` / `sudachi` without
-  the matching ES plugin installed on the cluster. `crowi-admin search
-  rebuild` prints the ES cluster's response body on failure, so check its
+  the matching ES plugin installed on the cluster. `crowi-admin rebuild
+  search` prints the ES cluster's response body on failure, so check its
   contents.
 - **Stale or missing search results**: Incremental indexing on page
   updates is reflected, but taking in older data or mapping changes
-  requires a full rebuild with `crowi-admin search rebuild`.
+  requires a full rebuild with `crowi-admin rebuild search`.

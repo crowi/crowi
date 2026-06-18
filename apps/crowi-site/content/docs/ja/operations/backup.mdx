@@ -84,9 +84,9 @@ mongorestore --uri "mongodb://localhost:27017/crowi" ./backup/crowi-20260516/cro
 ファイル移行は `crowi-admin` CLI で行えます。
 
 ```bash
-crowi-admin storage copy --from local --to s3
+crowi-admin rebuild storage copy --from local --to s3
 # 実コピー前に対象キーを確認したい場合
-crowi-admin storage copy --from local --to s3 --dry-run
+crowi-admin rebuild storage copy --from local --to s3 --dry-run
 ```
 
 ## Elasticsearch — バックアップ不要
@@ -98,7 +98,7 @@ Elasticsearch の全文検索インデックスは、MongoDB のページデー�
 MongoDB を別環境へ復元したあとは、検索インデックスを再構築します。
 
 ```bash
-crowi-admin search rebuild
+crowi-admin rebuild search
 ```
 
 検索バックエンドの構成については
@@ -127,7 +127,7 @@ pub/sub、ページ単位の編集者カウンタとして使われます。い�
 3. 復元先の `.env` に、ダンプ取得時と **同じ `CROWI_ENCRYPTION_KEY`** を
    設定する (機密 Config の復号に必要)。
 4. api を起動する。
-5. `crowi-admin search rebuild` で検索インデックスを再構築する。
+5. `crowi-admin rebuild search` で検索インデックスを再構築する。
 6. Redis は空のまま起動してよい (セッションは再ログインで再生成される)。
 
 > **Tip**: 本番運用に入る前に、ステージング環境で実際にバックアップ

@@ -108,7 +108,7 @@ Elasticsearch に `analysis-kuromoji` プラグインをプリインストール
 紐付けないための設計です。
 
 ```bash
-crowi-admin search rebuild
+crowi-admin rebuild search
 ```
 
 このコマンドは:
@@ -147,8 +147,8 @@ api 再起動で行います。管理画面全般については [管理画面](
   `query()` がエラーを投げ、`index()` は no-op になります。
 - **`rebuild` が失敗する**: `kuromoji` / `sudachi` を選んでいるのに対応
   する ES プラグインがクラスタに入っていない可能性があります。`crowi-admin
-  search rebuild` はエラー時に ES クラスタのレスポンス本文を出力するので、
+  rebuild search` はエラー時に ES クラスタのレスポンス本文を出力するので、
   その内容を確認してください。
 - **検索結果が古い / 出てこない**: ページ更新時の差分インデックスは
   反映されますが、過去データやマッピング変更を取り込むには
-  `crowi-admin search rebuild` での全件再構築が必要です。
+  `crowi-admin rebuild search` での全件再構築が必要です。

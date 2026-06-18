@@ -177,7 +177,7 @@ Web UI から行うための領域です。`/admin` を開くとダッシュボ�
 - 現在アクティブなドライバと、ロード済みの全ドライバ一覧が表示されます。
 - **ドライバの切り替えは管理画面からは行いません**。`crowi.config.json`
   の `storage.driver` を書き換えて api を再起動します。
-- ドライバ間のファイル移行は `crowi-admin storage copy --from <a> --to <b>`
+- ドライバ間のファイル移行は `crowi-admin rebuild storage copy --from <a> --to <b>`
   CLI で行います。
 
 ストレージ全般の設定とプラグインについては [ストレージ設定](./storage) を
@@ -206,7 +206,7 @@ Web UI から行うための領域です。`/admin` を開くとダッシュボ�
 検索ドライバの状態を確認する画面です。`GET /admin/search` に対応します。
 
 - 現在アクティブな検索ドライバと、インデックスの状態を表示します。
-- インデックスの再構築は管理画面ではなく `crowi-admin search rebuild`
+- インデックスの再構築は管理画面ではなく `crowi-admin rebuild search`
   CLI で行います。
 - Elasticsearch などの検索バックエンドプラグインは、`registerSearch` から
   自動で**この「検索」グループ**に設定画面リンクとして注入されます。
