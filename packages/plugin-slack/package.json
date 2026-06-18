@@ -1,0 +1,47 @@
+{
+  "name": "@crowi/plugin-slack",
+  "version": "0.1.0-dev",
+  "description": "Slack integration for Crowi 2.0: unfurls Crowi page links shared in Slack into rich previews. Generates the Slack App manifest and verifies inbound Events API requests.",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch --no-clean",
+    "type-check": "tsc --noEmit",
+    "test": "jest --passWithNoTests"
+  },
+  "peerDependencies": {
+    "zod": "catalog:"
+  },
+  "dependencies": {
+    "@crowi/plugin-api": "workspace:^",
+    "@slack/web-api": "^7.17.0"
+  },
+  "devDependencies": {
+    "@crowi/plugin-api": "workspace:*",
+    "@crowi/tsconfig": "workspace:*",
+    "@types/jest": "catalog:",
+    "@types/node": "catalog:",
+    "hono": "^4.12.25",
+    "jest": "catalog:",
+    "ts-jest": "catalog:",
+    "tsup": "catalog:",
+    "typescript": "catalog:",
+    "zod": "catalog:"
+  }
+}
