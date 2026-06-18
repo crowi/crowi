@@ -64,7 +64,7 @@ export default function CatchAllPage() {
           <PageList initialParams={{ path }} disableCreatePortal />
         </div>
       ) : isPortalPath ? (
-        <PageList initialParams={{ path }} />
+        <PageList initialParams={{ path, revision_id: revisionId }} />
       ) : (
         <PageView path={path} revisionId={revisionId} />
       )}

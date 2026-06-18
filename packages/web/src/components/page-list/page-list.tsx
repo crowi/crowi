@@ -8,12 +8,14 @@ import { useState } from 'react';
 import { CreatePageListButton } from '@/components/create-page/create-page-dialog';
 import { PageContent } from '@/components/page-view/page-content';
 import { RenameDialog } from '@/components/page-view/rename-dialog';
+import { StaleRevisionBanner } from '@/components/page-view/stale-revision-banner';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { ErrorAlert } from '@/components/ui/error-alert';
 import { pageDisplayName } from '@/lib/page-path';
+import { isStalePageRevision } from '@/lib/page-revision';
 import { useAuth } from '@/lib/use-auth';
 import { draftEditHref } from '@/lib/use-drafts';
 import { usePageList } from '@/lib/use-page-list';
@@ -147,6 +149,13 @@ export function PageList({ initialParams = {}, variant = 'default', disableCreat
   const portalCreatorId = typeof rawPortalPage?.creator === 'string' ? rawPortalPage.creator : rawPortalPage?.creator?._id;
   const ownDraftPortalId = isDraftPortal && user && portalCreatorId === user.id ? rawPortalPage?._id : undefined;
 
+  // When `?revision_id=` opened the portal document at a past revision, the
+  // server rewinds `portalPage.revision` to that version and keeps the latest
+  // in `latestRevision`. Mirror the normal-page stale judgement
+  // (page-view.tsx) so the portal gets the same "this version" warning banner
+  // + one-click "revert to this version" button.
+  const isStalePortalRevision = isStalePageRevision(portalPage);
+
   // Empty: nothing to render in the portal slot and no children. Show a
   // minimal header so the user still sees breadcrumb / title + "no pages".
   if (!data || (data.pages.length === 0 && !portalPage && !ownDraftPortalId)) {
@@ -165,6 +174,11 @@ export function PageList({ initialParams = {}, variant = 'default', disableCreat
           portal can be operated exactly like a normal page. */}
       {portalPage ? (
         <div>
+          {isStalePortalRevision && portalPage.revision?._id && (
+            <div className="mb-6">
+              <StaleRevisionBanner pagePath={portalPage.path} pageId={portalPage._id} revisionId={portalPage.revision._id} />
+            </div>
+          )}
           <PortalHeader page={portalPage} onEdit={() => router.push(`/_edit?page_id=${encodeURIComponent(portalPage._id)}`)} />
           <div className="mt-6">
             {/* The portal body's own leading heading is the page title.
