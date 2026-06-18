@@ -70,6 +70,11 @@ The stale-revision banner also suppresses social affordances such as
 the presence row and the page-action toolbar, since those operations
 only make sense against the latest revision.
 
+`?revision_id=` works the same way not only on normal pages but also on
+**portal pages** (directory pages whose path ends with `/`). When you
+open a portal at a past revision, the same stale-revision banner appears
+above the portal body.
+
 ## Rolling back to a past version
 
 When you want to return to the content of a past revision, perform a
@@ -79,10 +84,24 @@ A rollback re-saves the body of a past revision as a new revision. Rather than
 rewinding history, it saves the past body again, so the page's latest state
 is replaced with the past content.
 
-- A rollback does not erase the revision history up to that point. It simply
-  adds one new revision.
-- This means that even in a "I rolled back, but actually want to undo that"
-  situation, you can switch again as yet another new revision.
+The stale-revision banner shown when you open a past version with
+`?revision_id=` has a **"Revert to this version"** button.
+
+- Pressing the button performs the rollback in place, with no confirmation
+  dialog, and then navigates you to the rolled-back latest page (the URL
+  without `?revision_id=`). There is no confirmation step because a rollback
+  is non-destructive (it only adds one new revision without erasing history)
+  and can always be redone.
+- Even if another user updates the page while you have an older version open,
+  the rollback is always stacked **on top of the server-side latest
+  revision**. It never raises a conflict error, and the whole history is
+  preserved.
+- You can roll back from the same banner and the same button on both normal
+  pages and portal pages.
+
+A rollback does not erase the revision history up to that point — it simply
+adds one new revision. This means that even in a "I rolled back, but actually
+want to undo that" situation, you can switch again as yet another new revision.
 
 > **Tip**: Because history stacks up in a straight line, you can roll back
 > safely even when you notice a mistaken edit. "Only move forward, never

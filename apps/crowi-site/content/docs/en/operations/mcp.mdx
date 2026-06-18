@@ -89,6 +89,13 @@ Write tools (require `pages:write`):
 | `crowi_rename_page` | Rename / move a page |
 | `crowi_delete_page` | Soft-delete (trash) or hard-delete |
 | `crowi_revert_page` | Restore a trashed page |
+| `crowi_revert_to_revision` | Revert a page to a past revision (non-destructive — stacks a new revision) |
+
+> **Note**: `crowi_revert_page` (restore from trash) and
+> `crowi_revert_to_revision` (roll back to a past version) are different
+> tools. The former restores a soft-deleted page to its original path; the
+> latter overwrites a live page's body with the content of a past revision
+> (adding it as a new revision).
 
 `crowi_update_page` uses optimistic locking: pass the page's current
 `revision_id` (from `crowi_get_page`). A stale id returns a conflict, and
