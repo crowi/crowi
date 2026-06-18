@@ -114,6 +114,15 @@ ENV HOSTNAME=0.0.0.0
 
 WORKDIR /app
 
+# Put the deployed tree's bin dir on PATH so the bundled CLIs resolve by name.
+# The node base image's `docker-entrypoint.sh` only prepends `node` when the
+# first arg is NOT a known command; without .bin on PATH,
+# `docker compose run --rm api crowi-admin <cmd>` is mis-read as
+# `node crowi-admin` and fails — the operator would otherwise have to spell out
+# the full /app/node_modules/.bin/crowi-admin path. Makes `crowi-admin` (admin
+# CLI) and `crowi-api` (server bin) directly invocable.
+ENV PATH="/app/node_modules/.bin:${PATH}"
+
 # Copy the deployed runner-project tree (package.json, crowi.config.json,
 # node_modules/ with @crowi/api + bundled plugins). /app is the runner
 # project root = the api's projectDir. The built-in `node` user (uid 1000)
