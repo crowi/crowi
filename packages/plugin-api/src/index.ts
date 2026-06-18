@@ -59,6 +59,6 @@ export type {
 
 export type { EventBus, PluginEvents } from './events';
 
-export type { PluginRouterScope } from './routes';
+export type { PluginRouterScope, PluginRouteHandler, PluginRouteMethod, PluginRouteOptions } from './routes';
 
 export { SENSITIVE_FIELD_MARKER, ACTION_FIELD_MARKER, isSensitiveField, getActionAnnotation } from './schema-markers';

@@ -11,19 +11,6 @@
 import { z } from 'zod/v3';
 import type { CrowiPlugin } from '../plugin';
 
-// RFC-0006 Phase 6 — plugin HTTP contribution is parked until a
-// follow-up RFC redesigns it on top of Hono. The legacy framework
-// dependency is gone; the contract literal below is just an opaque
-// value that the no-op `scope.register(...)` accepts as `unknown`.
-const exampleContract = {
-  testConnection: {
-    method: 'POST' as const,
-    path: '/test',
-    body: z.object({}),
-    responses: { 200: z.object({ ok: z.boolean() }) },
-  },
-};
-
 const examplePlugin: CrowiPlugin = {
   name: '@crowi/example',
   version: '0.0.0',
@@ -78,9 +65,10 @@ const examplePlugin: CrowiPlugin = {
   },
 
   registerRoutes: (scope, _ctx) => {
-    scope.register(exampleContract, {
-      testConnection: async () => ({ status: 200, body: { ok: true } }),
-    });
+    // A self-authenticating inbound webhook (public — no Crowi session).
+    scope.route('POST', '/events', (c) => c.json({ ok: true }), { public: true });
+    // A Crowi-session-gated "Test connection" target (default = authed).
+    scope.route('GET', '/test', (c) => c.json({ ok: true }));
   },
 
   onInstall: async (ctx) => {

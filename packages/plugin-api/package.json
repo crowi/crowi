@@ -25,11 +25,13 @@
     "type-check": "tsc --noEmit"
   },
   "peerDependencies": {
+    "hono": "^4.12.25",
     "zod": "catalog:"
   },
   "devDependencies": {
     "@crowi/tsconfig": "workspace:*",
     "@types/node": "catalog:",
+    "hono": "^4.12.25",
     "tsup": "catalog:",
     "typescript": "catalog:",
     "zod": "catalog:"
