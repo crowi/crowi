@@ -46,20 +46,20 @@ export function PlantumlDiagram({ children, className }: PlantumlDiagramProps) {
   return (
     <>
       <span className={cn(className, 'group/diagram relative inline-block max-w-full')}>
+        {children}
+        {/* The `+` corner button is the only enlarge trigger — we deliberately
+            do NOT wrap the diagram in a <button>, so any `<a href>` PlantUML
+            emits inside the SVG stays a working link (and we avoid nesting
+            interactive controls). Revealed on hover and on keyboard focus
+            (`focus-visible:opacity-100`), mirroring the code-copy button. */}
         <button
           type="button"
           onClick={() => setOpen(true)}
           aria-label={m['page.plantuml_zoom']()}
-          className="block w-full cursor-zoom-in appearance-none border-0 bg-transparent p-0 text-left"
-        >
-          {children}
-        </button>
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-md border border-border/60 bg-background/80 text-muted-foreground opacity-0 backdrop-blur transition-opacity group-hover/diagram:opacity-100"
+          className="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-md border border-border/60 bg-background/80 text-muted-foreground opacity-0 backdrop-blur transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover/diagram:opacity-100"
         >
           <Plus className="h-4 w-4" aria-hidden="true" />
-        </span>
+        </button>
       </span>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="flex w-full max-w-[calc(100vw-2rem)] max-h-[calc(100vh-4rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[calc(100vw-4rem)]">

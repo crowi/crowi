@@ -488,8 +488,7 @@ html[data-page-grant="2"] {
   max-width: 100%;
 }
 .crowi-prose .plantuml-embed svg,
-.crowi-prose .plantuml-embed img,
-.crowi-prose img.plantuml-embed {
+.crowi-prose .plantuml-embed img {
   max-width: 100% !important;
   height: auto !important;
 }
