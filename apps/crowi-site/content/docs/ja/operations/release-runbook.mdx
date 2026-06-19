@@ -28,6 +28,7 @@ Docker / Elasticsearch image の出し方をまとめます。
 | **GO ゲート** | **Version PR をマージ** | **人間** |
 | npm publish（OIDC・provenance 付き） | Version PR のマージ後 | CI（`release.yml`） |
 | 製品版タグ `v<dist-version>` 作成・push | publish 成功時のみ | CI（`release.yml`） |
+| 製品版 GitHub Release（集約 release notes） | publish 成功時のみ | CI（`release.yml`） |
 | Docker full/slim を multi-arch build+push | publish を伴う Release run の完了 | CI（`docker.yml`、`workflow_run`） |
 | Elasticsearch カスタム image | 手動（`workflow_dispatch`） | 人間（Crowi 本体と独立） |
 
@@ -102,7 +103,15 @@ OIDC publish の前提は次の組合せです（CI 設定済み・参考情報�
 5. **製品版タグ（自動）。** publish 成功時のみ、独立した製品版タグ
    `v2.0.0-alpha.N`（= 既存 `v2.0.0-alpha.*` の最大 + 1）を作成・push し、
    `dist-version` artifact を upload します。
-6. **Docker image（自動）。** Release run の完了で `docker.yml` が `workflow_run`
+6. **製品版 GitHub Release（自動）。** `scripts/aggregate-release-notes.mjs` が
+   今回 publish された全 `@crowi/*` の `CHANGELOG.md` から該当バージョン section
+   を集約し、カテゴリ別（core / SDK / plugin / tooling）にまとめた集約 release notes
+   を生成。製品版タグに対して `gh release create` で **1 個の release ページ**
+   を作ります（prerelease かどうかは semver の `-` 有無で自動判定）。
+   `changesets/action` が同時に作る per-package release（`@crowi/api@<v>` 等）は
+   それぞれの細かい履歴用に残しつつ、製品版タグ側に「この alpha.N で何が変わったか」
+   の operator-facing なまとめが立ちます。
+7. **Docker image（自動）。** Release run の完了で `docker.yml` が `workflow_run`
    で発火し、full / slim を multi-arch（amd64 + arm64）で build+push します。
 
 <Callout type="warn">

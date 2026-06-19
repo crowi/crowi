@@ -28,6 +28,7 @@ images.
 | **GO gate** | **Merge the Version PR** | **Human** |
 | npm publish (OIDC, with provenance) | After the Version PR merges | CI (`release.yml`) |
 | Create + push distribution tag `v<dist-version>` | Only on a successful publish | CI (`release.yml`) |
+| Aggregate GitHub Release on the distribution tag | Only on a successful publish | CI (`release.yml`) |
 | Build+push Docker full/slim (multi-arch) | Completion of a publishing Release run | CI (`docker.yml`, `workflow_run`) |
 | Elasticsearch custom image | Manual (`workflow_dispatch`) | Human (independent of Crowi core) |
 
@@ -106,7 +107,16 @@ reference).
 5. **Distribution tag (automatic).** Only on a successful publish, CI creates and
    pushes the independent distribution tag `v2.0.0-alpha.N` (= max existing
    `v2.0.0-alpha.*` + 1) and uploads a `dist-version` artifact.
-6. **Docker images (automatic).** On completion of the Release run, `docker.yml`
+6. **Aggregate GitHub Release (automatic).** `scripts/aggregate-release-notes.mjs`
+   pulls the section that matches the just-published version out of every
+   `@crowi/*` `CHANGELOG.md` that moved this release and groups them by category
+   (core / SDK / plugins / tooling). The distribution tag gets a single
+   `gh release create` with that aggregate body (prerelease vs. latest is
+   decided by whether the version core contains a `-`). The per-package
+   releases that `changesets/action` opens (`@crowi/api@<v>` etc.) stay around
+   for bisecting individual packages; the umbrella distribution release is the
+   operator-facing "what is in this alpha.N?" view.
+7. **Docker images (automatic).** On completion of the Release run, `docker.yml`
    fires via `workflow_run` and builds+pushes full / slim multi-arch
    (amd64 + arm64).
 

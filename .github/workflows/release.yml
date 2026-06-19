@@ -99,6 +99,30 @@ jobs:
           git tag "$DIST_VERSION"
           git push origin "$DIST_VERSION"
 
+      # changesets/action publishes a per-package GitHub Release for every
+      # @crowi/* that bumped, useful for bisecting a single package — but it
+      # is NOT the operator-facing view ("what is in v2.0.0-alpha.X?"). The
+      # umbrella distribution tag (above) gets its own Release here, with a
+      # body that aggregates the just-published per-package CHANGELOG entries
+      # grouped by category. fetch-depth: 0 on checkout above ensures the
+      # script can see every previous v* tag for the diff range.
+      - name: Create aggregate distribution release
+        if: steps.changesets.outputs.published == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DIST_VERSION: ${{ steps.dist.outputs.dist-version }}
+        run: |
+          node scripts/aggregate-release-notes.mjs --dist-version "$DIST_VERSION" > release-notes.md
+          # semver: a dist tag whose version core has a `-` is a prerelease
+          # (v2.0.0-alpha.X / v2.0.0-beta.X / v2.0.0-rc.X). Stable tags
+          # (v2.0.0, v2.1.0, …) get `--latest` instead so the GitHub repo page
+          # promotes them.
+          if [[ "$DIST_VERSION" == *-* ]]; then PRE_FLAG=--prerelease; else PRE_FLAG=--latest; fi
+          gh release create "$DIST_VERSION" \
+            --title "Crowi $DIST_VERSION" \
+            --notes-file release-notes.md \
+            "$PRE_FLAG"
+
       # Hand the distribution version to docker.yml (phase-3) two ways:
       #   (a) as a step output (steps.dist.outputs.dist-version), and
       #   (b) as an artifact, which a workflow_run-triggered docker.yml can
