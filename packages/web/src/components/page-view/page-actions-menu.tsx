@@ -62,7 +62,14 @@ export function PageActionsMenu({ page, compact = false, isAuthenticated = false
 
   return (
     <>
-      <DropdownMenu>
+      {/* `modal={false}`: this menu opens the rename / delete dialogs. A modal
+          dropdown and a modal dialog each set `pointer-events: none` on <body>
+          while open, and when the dialog opens as the menu closes their
+          add/remove races leave the style stuck on <body> after the dialog is
+          closed — making the whole page unclickable (Radix #1241). A non-modal
+          menu doesn't touch body pointer-events, so only the dialog manages it
+          and it is cleaned up correctly on close. */}
+      <DropdownMenu modal={false}>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="icon-sm" aria-label={m['page.action_more']()} className="text-muted-foreground hover:text-foreground">
             <MoreHorizontal className="h-4 w-4" />
