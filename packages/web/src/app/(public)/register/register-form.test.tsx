@@ -1,6 +1,6 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { AppInfoResponse } from '@crowi/api-contract';
+import { type AppInfoQuery, makeAppInfo } from '@/lib/use-app-info.test-helpers';
 
 // RegisterForm reads /app/info to decide whether self-service registration
 // is open. Mock the hook (and the api client it would call on submit) so the
@@ -14,30 +14,15 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), replace: 
 
 import { RegisterForm } from './register-form';
 
-type AppInfoQuery = {
-  data?: AppInfoResponse;
-  isLoading: boolean;
-  isError: boolean;
-};
-
 const mockAppInfo = (state: AppInfoQuery) => {
   useAppInfo.mockReturnValue(state);
 };
-
-const makeAppInfo = (canSelfRegister: boolean): AppInfoResponse => ({
-  title: null,
-  confidential: null,
-  version: '0.0.0',
-  apiVersion: 'v2',
-  capabilities: [],
-  canSelfRegister,
-});
 
 afterEach(cleanup);
 
 describe('RegisterForm registration-closed guard', () => {
   it('shows the invite-only notice (no form) when canSelfRegister is false', () => {
-    mockAppInfo({ data: makeAppInfo(false), isLoading: false, isError: false });
+    mockAppInfo({ data: makeAppInfo({ canSelfRegister: false }), isLoading: false, isError: false });
     render(<RegisterForm />);
 
     // Invite-only card + a way back to sign in, instead of the form.
@@ -47,7 +32,7 @@ describe('RegisterForm registration-closed guard', () => {
   });
 
   it('shows the registration form when canSelfRegister is true (Open / Restricted)', () => {
-    mockAppInfo({ data: makeAppInfo(true), isLoading: false, isError: false });
+    mockAppInfo({ data: makeAppInfo({ canSelfRegister: true }), isLoading: false, isError: false });
     render(<RegisterForm />);
 
     expect(screen.getByLabelText('ユーザーID')).toBeInTheDocument();

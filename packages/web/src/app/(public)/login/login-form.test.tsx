@@ -1,6 +1,6 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { AppInfoResponse } from '@crowi/api-contract';
+import { type AppInfoQuery, makeAppInfo } from '@/lib/use-app-info.test-helpers';
 
 // LoginForm reads /app/info to decide whether to surface the "sign up" link.
 // Mock the hook + navigation + the login helper so the test is pure layout.
@@ -16,24 +16,9 @@ vi.mock('next/navigation', () => ({
 
 import { LoginForm } from './login-form';
 
-type AppInfoQuery = {
-  data?: AppInfoResponse;
-  isLoading: boolean;
-  isError: boolean;
-};
-
 const mockAppInfo = (state: AppInfoQuery) => {
   useAppInfo.mockReturnValue(state);
 };
-
-const makeAppInfo = (canSelfRegister: boolean): AppInfoResponse => ({
-  title: null,
-  confidential: null,
-  version: '0.0.0',
-  apiVersion: 'v2',
-  capabilities: [],
-  canSelfRegister,
-});
 
 const registerLink = () => screen.queryByRole('link', { name: /新規登録/ });
 
@@ -41,14 +26,14 @@ afterEach(cleanup);
 
 describe('LoginForm registration link', () => {
   it('hides the sign-up link when canSelfRegister is false (Closed)', () => {
-    mockAppInfo({ data: makeAppInfo(false), isLoading: false, isError: false });
+    mockAppInfo({ data: makeAppInfo({ canSelfRegister: false }), isLoading: false, isError: false });
     render(<LoginForm />);
 
     expect(registerLink()).not.toBeInTheDocument();
   });
 
   it('shows the sign-up link when canSelfRegister is true (Open / Restricted)', () => {
-    mockAppInfo({ data: makeAppInfo(true), isLoading: false, isError: false });
+    mockAppInfo({ data: makeAppInfo({ canSelfRegister: true }), isLoading: false, isError: false });
     render(<LoginForm />);
 
     expect(registerLink()).toHaveAttribute('href', '/register');
