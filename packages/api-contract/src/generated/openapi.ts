@@ -36,6 +36,7 @@ export interface paths {
                             version: string;
                             apiVersion: string;
                             capabilities: string[];
+                            canSelfRegister: boolean;
                         };
                     };
                 };

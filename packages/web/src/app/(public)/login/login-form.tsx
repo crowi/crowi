@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { FormErrorList } from '@/components/ui/form-error-list';
 import { loginWithPassword } from '@/lib/auth-login';
 import { defaultLandingPath, safeContinueUrl } from '@/lib/login-redirect';
+import { useAppInfo } from '@/lib/use-app-info';
 import { m } from '@paraglide/messages.js';
 
 export function LoginForm() {
@@ -20,6 +21,14 @@ export function LoginForm() {
   // on the user's page) from an explicit `?continue=...` (→ honour it after
   // open-redirect sanitisation).
   const rawContinue = searchParams.get('continue');
+
+  // Hide the "sign up" link when self-service registration is closed
+  // (invite-only) so we don't route users to a /register that only shows an
+  // invite-only notice. Fail-open: while the flag is loading or if the fetch
+  // failed (`canSelfRegister` undefined) the link stays visible — it is only
+  // hidden when registration is definitively closed.
+  const { data: appInfo } = useAppInfo();
+  const showRegisterLink = appInfo?.canSelfRegister !== false;
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
@@ -109,12 +118,14 @@ export function LoginForm() {
           </Link>
         </div>
 
-        <div className="mt-6 pt-6 border-t text-center">
-          <Link href="/register" className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
-            <PenLine className="h-4 w-4" />
-            {m['auth.login.register_link']()}
-          </Link>
-        </div>
+        {showRegisterLink && (
+          <div className="mt-6 pt-6 border-t text-center">
+            <Link href="/register" className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
+              <PenLine className="h-4 w-4" />
+              {m['auth.login.register_link']()}
+            </Link>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

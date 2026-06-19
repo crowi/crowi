@@ -558,7 +558,7 @@ const stubClearRenderCache: ClearRenderCacheResponse = { ok: true, clearedAt: ''
 // nominally different from `stubUser` (no `status` field).
 const appAuthMeUserChain = new OpenAPIHono()
   .openapi(appRoutes.getAppInfoRoute, (c) =>
-    c.json({ title: null, confidential: null, version: '', apiVersion: 'v2', capabilities: [] } satisfies AppInfoResponse, 200),
+    c.json({ title: null, confidential: null, version: '', apiVersion: 'v2', capabilities: [], canSelfRegister: true } satisfies AppInfoResponse, 200),
   )
   .openapi(installerRoutes.getInstallerStatusRoute, (c) => c.json({ status: 'installer_required' } satisfies InstallerStatusResponse, 200))
   .openapi(installerRoutes.createAdminRoute, (c) => c.json({ status: 'ok' } satisfies CreateAdminResponse, 200))

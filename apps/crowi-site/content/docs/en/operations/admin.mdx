@@ -86,7 +86,10 @@ New-user registration settings. Maps to `GET/PUT /admin/security`.
     account before it can be used (applicants are created in a pending state
     and appear in the "User approval" queue under [Users](#users)).
   - `Closed` — public sign-up is disabled; accounts are created **only by
-    admin invitation**.
+    admin invitation**. In this mode the `/register` page shows an
+    invite-only notice instead of the form, and the "Sign up" link on the
+    login page is hidden as well (the entry points are closed before
+    submission).
 - **Registration whitelist (registrationWhiteList)**: The list of email
   addresses / domains allowed to register. It is **evaluated in every mode
   except `Closed`**; an empty list means no restriction. One entry per line,
