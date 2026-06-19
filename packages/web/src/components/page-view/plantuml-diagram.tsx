@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { m } from '@paraglide/messages.js';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
@@ -40,7 +40,14 @@ interface PlantumlDiagramProps {
  * note in `globals.css`), so the lightbox sits on a white surface in both
  * themes to keep the diagram legible.
  */
-export function PlantumlDiagram({ children, className }: PlantumlDiagramProps) {
+/**
+ * Memoized so that a markdown re-render (e.g. typing in the editor preview, a
+ * route-level state change) does not unmount the dialog when it is open —
+ * `children` from hast-util-to-jsx-runtime is a stable subtree per node, and
+ * `className` only changes when the embed itself changes. Without memo, the
+ * dialog snaps shut every time the parent renders.
+ */
+export const PlantumlDiagram = memo(function PlantumlDiagram({ children, className }: PlantumlDiagramProps) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -73,4 +80,4 @@ export function PlantumlDiagram({ children, className }: PlantumlDiagramProps) {
       </Dialog>
     </>
   );
-}
+});
