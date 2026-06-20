@@ -29,6 +29,7 @@ import { defaultDraftBody, pageDisplayName, pagePathToHref } from '@/lib/page-pa
 import { useAuth } from '@/lib/use-auth';
 import type { CollabStatus } from '@/lib/use-collab-document';
 import { useCollabSave } from '@/lib/use-collab-save';
+import { useCollabRecoveryBuffer } from '@/lib/use-collab-recovery-buffer';
 import { DraftPathConflictError, draftEditHref, draftsKeys, useCreateDraft, useDrafts } from '@/lib/use-drafts';
 import { usePage } from '@/lib/use-page';
 import { PageRevisionConflictError, useSetPageGrant, useUpdatePage } from '@/lib/use-page-mutations';
@@ -45,6 +46,8 @@ type Feedback = { kind: 'conflict' | 'error'; message: string };
  * stacking new ones every time the connection cycles.
  */
 const COLLAB_STATUS_TOAST_ID = 'collab-status';
+/** Stable id for the §3 recovery-buffer restore prompt so it never stacks. */
+const COLLAB_RECOVERY_TOAST_ID = 'collab-recovery';
 
 type EditMode = { kind: 'update'; pageId: string } | { kind: 'create'; path: string } | { kind: 'invalid' };
 
@@ -218,17 +221,67 @@ function EditorShell({
   // editors) because the dialog needs the same lifetime as the
   // session — the moment the user reloads, both vanish together.
   const [forceReload, setForceReload] = useState<{ open: boolean; reason?: string }>({ open: false });
-  const handleForceReload = useCallback((reason?: string) => {
-    setForceReload({ open: true, reason });
-  }, []);
 
-  // Unsaved-changes tracking. Two flavours:
-  //   - realtime save (Y.Text local mutations since last `crowi:save` ok)
-  //   - HTTP save     (caller-side body string non-empty / divergent)
-  // The dirty signal drives both the browser `beforeunload` guard and
-  // the in-app cancel-button dialog. We reset realtime-dirty on every
-  // successful save; HTTP dirty is recomputed from props each render.
+  // Unsaved-changes tracking (realtime-save flavour). Declared here so
+  // the recovery buffer + save handlers below can read/reset it; the
+  // observer that sets it lives further down. HTTP dirty is recomputed
+  // from props each render.
   const [realtimeDirty, setRealtimeDirty] = useState(false);
+  const [unsavedDialogOpen, setUnsavedDialogOpen] = useState(false);
+
+  // §3 — local recovery buffer. Snapshots the current editor text to
+  // localStorage on a timer while an active realtime editing session is
+  // dirty, so a force-reload / readonly-flip / auth-failed can't lose
+  // the user's unsaved typing. Scoped to the realtime page (create flow
+  // passes null → disabled).
+  const recovery = useCollabRecoveryBuffer({
+    pageId: realtimePageId ?? null,
+    getText: () => session.yText?.toString() ?? null,
+    enabled: useRealtimeSave && session.synced && !session.readonly && realtimeDirty,
+  });
+
+  const handleForceReload = useCallback(
+    (reason?: string) => {
+      // Snapshot before the dialog → reload destroys the in-memory doc.
+      recovery.snapshotNow();
+      setForceReload({ open: true, reason });
+    },
+    [recovery],
+  );
+
+  // §1A — shared realtime-save handler. On success: clear dirty, toast,
+  // navigate. On a `CONFLICT` (optimistic-lock) rejection the edit base
+  // is stale, so reuse the force-reload dialog (it explains "the page
+  // changed elsewhere — reload to continue") instead of a transient
+  // error toast the user might retry into the same conflict. The
+  // recovery buffer (below) has already snapshotted the unsaved text, so
+  // reloading does not lose the user's work.
+  const runRealtimeSave = useCallback(
+    (closeUnsavedDialog: boolean) => {
+      collabSave
+        .save()
+        .then(() => {
+          setRealtimeDirty(false);
+          if (closeUnsavedDialog) setUnsavedDialogOpen(false);
+          toast.success(m['collab.save_success']());
+          (onAfterSave ?? onCancel)();
+        })
+        .catch((err: { reason?: string; message?: string }) => {
+          if (closeUnsavedDialog) setUnsavedDialogOpen(false);
+          if (err?.reason === 'CONFLICT') {
+            setForceReload({ open: true, reason: 'page-body-replaced' });
+            return;
+          }
+          toast.error(m['collab.save_failed']({ message: err?.message ?? '' }));
+        });
+    },
+    [collabSave, onAfterSave, onCancel],
+  );
+
+  // The realtime-dirty observer: a local Y.Text mutation since the last
+  // successful `crowi:save` marks the doc dirty. (The `realtimeDirty`
+  // state itself is declared near the top so the recovery buffer + save
+  // handlers can read it.)
   useEffect(() => {
     if (!useRealtimeSave) return;
     const yText = session.yText;
@@ -243,8 +296,6 @@ function EditorShell({
     };
   }, [useRealtimeSave, session.yText]);
   const isDirty = useRealtimeSave ? realtimeDirty : body.length > 0;
-
-  const [unsavedDialogOpen, setUnsavedDialogOpen] = useState(false);
 
   // Browser-level guard for tab close / refresh / external-link
   // navigation. Modern browsers ignore the custom message but still
@@ -278,21 +329,7 @@ function EditorShell({
 
   const handleDialogSave = useCallback(() => {
     if (useRealtimeSave) {
-      collabSave
-        .save()
-        .then(() => {
-          setRealtimeDirty(false);
-          setUnsavedDialogOpen(false);
-          toast.success(m['collab.save_success']());
-          // Leave the editor for the page view. `onAfterSave` also
-          // refreshes the page cache; fall back to the plain cancel
-          // navigation when the caller didn't wire it.
-          (onAfterSave ?? onCancel)();
-        })
-        .catch((err: { message?: string }) => {
-          toast.error(m['collab.save_failed']({ message: err?.message ?? '' }));
-          setUnsavedDialogOpen(false);
-        });
+      runRealtimeSave(true);
       return;
     }
     // HTTP mode: the parent's `onSave` performs the mutation + handles
@@ -302,7 +339,7 @@ function EditorShell({
     // dirty body intact and can retry.
     onSave();
     setUnsavedDialogOpen(false);
-  }, [useRealtimeSave, collabSave, onCancel, onSave, onAfterSave]);
+  }, [useRealtimeSave, runRealtimeSave, onSave]);
 
   const handleDialogDiscard = useCallback(() => {
     setUnsavedDialogOpen(false);
@@ -337,12 +374,65 @@ function EditorShell({
         duration: 3000,
       });
     } else if (next === 'auth-failed') {
+      // §3 — auth-failed means unsynced local edits never reached the
+      // server. Snapshot now so a subsequent reload / re-login can offer
+      // to restore them.
+      recovery.snapshotNow();
       toast.error(m['edit.connection_auth_failed'](), {
         id: COLLAB_STATUS_TOAST_ID,
         duration: Infinity,
       });
     }
-  }, [realtimePageId, session.status]);
+  }, [realtimePageId, session.status, recovery]);
+
+  // §3 — readonly-flip (20-editor cap reached): writes are silently
+  // rejected from here on, so snapshot the current text once so it can
+  // be recovered if the user reloads / navigates away.
+  const prevReadonlyRef = useRef(false);
+  useEffect(() => {
+    if (!realtimePageId) return;
+    if (session.readonly && !prevReadonlyRef.current) {
+      recovery.snapshotNow();
+    }
+    prevReadonlyRef.current = session.readonly;
+  }, [realtimePageId, session.readonly, recovery]);
+
+  // §3 — restore proposal. Once a prior session left a recovery
+  // snapshot AND the editor has synced to the server's current content,
+  // offer to append the unsaved text. We only prompt when the recovered
+  // text differs from what synced in (so an already-saved snapshot
+  // doesn't nag), and only once per page session (the ref guard).
+  const recoveryPromptedRef = useRef(false);
+  useEffect(() => {
+    if (!useRealtimeSave || !session.synced || recoveryPromptedRef.current) return;
+    const snapshot = recovery.recoverable;
+    if (!snapshot) return;
+    const yText = session.yText;
+    if (!yText) return;
+    if (yText.toString() === snapshot.text) {
+      // Snapshot matches the synced doc — nothing unsaved was lost.
+      recovery.clear();
+      recoveryPromptedRef.current = true;
+      return;
+    }
+    recoveryPromptedRef.current = true;
+    toast(m['collab.recovery_prompt'](), {
+      duration: Infinity,
+      id: COLLAB_RECOVERY_TOAST_ID,
+      action: {
+        label: m['collab.recovery_restore'](),
+        onClick: () => {
+          const live = session.yText;
+          if (live) live.insert(live.length, `\n\n${snapshot.text}`);
+          recovery.clear();
+        },
+      },
+      cancel: {
+        label: m['collab.recovery_dismiss'](),
+        onClick: () => recovery.clear(),
+      },
+    });
+  }, [useRealtimeSave, session.synced, session.yText, recovery]);
 
   // Two editor refs because wide (md+ grid) and narrow (Tabs) each mount
   // their own `MarkdownEditor` — both panels live in the DOM at all
@@ -551,22 +641,10 @@ function EditorShell({
           {useRealtimeSave ? (
             <Button
               variant="default"
-              onClick={() => {
-                collabSave
-                  .save()
-                  .then(() => {
-                    setRealtimeDirty(false);
-                    toast.success(m['collab.save_success']());
-                    // Editor-QoL: leave the editor and return to the
-                    // page view. `onAfterSave` invalidates the page
-                    // cache so the view loads the just-saved revision.
-                    onAfterSave?.();
-                  })
-                  .catch((err: { message?: string }) => {
-                    toast.error(m['collab.save_failed']({ message: err?.message ?? '' }));
-                  });
-              }}
-              disabled={collabSave.isSaving || readonly || session.status !== 'connected'}
+              onClick={() => runRealtimeSave(false)}
+              // §2 — also gate on `synced`: a connected-but-not-yet-synced
+              // session must not save (the doc may be empty / stale).
+              disabled={collabSave.isSaving || readonly || session.status !== 'connected' || !session.synced}
               type="button"
             >
               {collabSave.isSaving ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Save className="mr-1 h-4 w-4" />}

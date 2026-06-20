@@ -1,6 +1,6 @@
 'use client';
 
-import { forwardRef, useEffect, useMemo } from 'react';
+import { forwardRef, useEffect, useMemo, useRef } from 'react';
 import type { Extension } from '@codemirror/state';
 import { keymap } from '@codemirror/view';
 import { yCollab } from 'y-codemirror.next';
@@ -35,6 +35,19 @@ export interface CollabSession {
   yUndoManager: Y.UndoManager | null;
   awareness: CollabAwareness | null;
   status: CollabStatus;
+  /**
+   * editor-preview-reliability §2 — `true` once the initial Yjs sync has
+   * completed (`provider.synced`). The editor gates write-readiness on
+   * this, not `status`, so the user can't type into a pre-sync empty doc.
+   */
+  synced: boolean;
+  /**
+   * editor-preview-reliability §1A — the page's `currentRevision` at
+   * wsToken-issue time (from the wsToken response). `useCollabSave` sends
+   * it back as `crowi:save`'s `baseRevisionId` so the server can
+   * optimistic-lock the save. `null` when the page has no revision yet.
+   */
+  baseRevisionId: string | null;
   readonly: boolean;
   subscribeStateless: (listener: StatelessListener) => () => void;
   sendStateless: (payload: string) => boolean;
@@ -110,11 +123,37 @@ export function useCollabSession(pageId: string | null | undefined): CollabSessi
   const tokenQuery = useYjsToken(pageId);
   const wsToken = tokenQuery.data?.wsToken ?? null;
   const tokenReadonly = tokenQuery.data?.readonly ?? false;
-  const { yText, yUndoManager, awareness, status, readonly, setLocalAwareness, subscribeStateless, sendStateless } = useCollabDocument({
+  // §1A — the edit base revision the save flow optimistic-locks against.
+  const baseRevisionId = tokenQuery.data?.currentRevision ?? null;
+  const { yText, yUndoManager, awareness, status, synced, readonly, setLocalAwareness, subscribeStateless, sendStateless } = useCollabDocument({
     pageId,
     wsToken,
     initialReadonly: tokenReadonly,
   });
+
+  // §4 — bounded recovery from the terminal `auth-failed` state. The
+  // provider won't reconnect with the rejected token; a fresh wsToken
+  // rebuilds it. `useYjsToken` already refetches on a silent
+  // access-token refresh (the common case), but `auth-failed` can also
+  // happen with a still-valid access token (the wsToken simply expired),
+  // so nudge a bounded number of explicit refetches here. Capped so a
+  // genuinely revoked session settles into readonly instead of looping.
+  const authRetryRef = useRef(0);
+  useEffect(() => {
+    if (status !== 'auth-failed') {
+      // Reset the budget whenever we leave the failed state so a later,
+      // unrelated failure gets a fresh set of retries.
+      if (status === 'connected') authRetryRef.current = 0;
+      return;
+    }
+    if (authRetryRef.current >= 3) return;
+    authRetryRef.current += 1;
+    const delay = 1000 * 2 ** (authRetryRef.current - 1); // 1s, 2s, 4s
+    const timer = setTimeout(() => {
+      void tokenQuery.refetch();
+    }, delay);
+    return () => clearTimeout(timer);
+  }, [status, tokenQuery]);
 
   const { user, isLoading: isAuthLoading } = useAuth();
 
@@ -174,7 +213,7 @@ export function useCollabSession(pageId: string | null | undefined): CollabSessi
     };
   }, [yText, awareness]);
 
-  return { yText, yUndoManager, awareness, status, readonly, subscribeStateless, sendStateless };
+  return { yText, yUndoManager, awareness, status, synced, baseRevisionId, readonly, subscribeStateless, sendStateless };
 }
 
 /**
@@ -223,7 +262,19 @@ export const CollaborativeMarkdownEditor = forwardRef<MarkdownEditorHandle, Coll
   // its own `useQuery` via the `enabled` flag.
   const ownedSession = useCollabSession(session ? null : pageId);
   const active = session ?? ownedSession;
-  const { yText, yUndoManager, awareness, status, readonly, subscribeStateless } = active;
+  const { yText, yUndoManager, awareness, status, synced, readonly, subscribeStateless } = active;
+
+  // §2 — readiness is `synced`, not merely `yText != null`. `yText` is
+  // non-null the instant the provider is constructed (sync pending), so
+  // the old `!yText` gate let the user type into an empty pre-sync doc;
+  // those edits were silently dropped when SyncStep2 replaced the doc
+  // (lost update) and the preview showed blank. Gating on `synced &&
+  // yText` mounts yCollab only once the doc reflects the server's
+  // authoritative state. We deliberately keep this a MOUNT gate (via the
+  // `key` below) rather than a runtime `readonly` toggle: hot-swapping
+  // readonly after the fact reintroduces the blank-editor race the `key`
+  // remount contract was built to fix.
+  const ready = Boolean(synced && yText);
 
   // Build the CodeMirror extension list. `yCollab` is the bridge
   // that wires Y.Text ↔ EditorView (doc + selection); the explicit
@@ -233,7 +284,7 @@ export const CollaborativeMarkdownEditor = forwardRef<MarkdownEditorHandle, Coll
   // the editor can mount immediately with an empty doc and the user
   // sees the editor chrome rather than a spinner.
   const extraExtensions = useMemo<Extension[]>(() => {
-    if (!yText || !awareness || !yUndoManager) return [];
+    if (!ready || !yText || !awareness || !yUndoManager) return [];
     return [
       yCollab(yText, awareness, { undoManager: yUndoManager }),
       keymap.of([
@@ -255,7 +306,7 @@ export const CollaborativeMarkdownEditor = forwardRef<MarkdownEditorHandle, Coll
         },
       ]),
     ];
-  }, [yText, awareness, yUndoManager]);
+  }, [ready, yText, awareness, yUndoManager]);
 
   // Mirror Y.Text → caller's `body` string. Throttled to ≤ 7 emits
   // per second (leading-edge fire + trailing-edge guarantee) so the
@@ -333,11 +384,13 @@ export const CollaborativeMarkdownEditor = forwardRef<MarkdownEditorHandle, Coll
     return unsubscribe;
   }, [subscribeStateless, onForceReload]);
 
-  // While Y.Text hasn't arrived yet we force readonly to avoid the
-  // user typing into the empty mounted doc — those edits would
-  // silently be dropped when yCollab attaches and overwrites the
-  // EditorView's doc with Y.Text contents.
-  const editorReadonly = readonly || !yText;
+  // §2 — until the initial sync completes we force readonly so the user
+  // can't type into the empty pre-sync doc (those edits would be dropped
+  // when SyncStep2 replaces the doc with the server's authoritative
+  // content). `ready` = `synced && yText`; this replaces the old `!yText`
+  // gate, which lifted readonly the instant the provider existed (= sync
+  // pending, doc still empty).
+  const editorReadonly = readonly || !ready;
 
   // No `onChange`: yCollab owns dispatch, so the inner editor skips
   // the updateListener entirely (see `build-extensions.ts`).
@@ -352,15 +405,20 @@ export const CollaborativeMarkdownEditor = forwardRef<MarkdownEditorHandle, Coll
   // sync: if the doc was seeded before `yCollab` attached, the
   // already-present content produced no observe event and never
   // rendered.
+  //
+  // §2 — the `ready` key boundary is now `synced`, not `yText != null`.
+  // We remount once the INITIAL SYNC lands (so the seeded doc reflects
+  // the server's authoritative content), not merely when the provider is
+  // constructed. Same remount contract, later — and correct — trigger.
   const inner = uploadPageId ?? pageId ?? 'collab';
   return (
     <MarkdownEditor
-      key={`${inner}-${yText ? 'ready' : 'pending'}`}
+      key={`${inner}-${ready ? 'ready' : 'pending'}`}
       ref={ref}
       value=""
-      getInitialDoc={yText ? () => yText.toString() : undefined}
+      getInitialDoc={ready && yText ? () => yText.toString() : undefined}
       readonly={editorReadonly}
-      disableHistory={Boolean(yText)}
+      disableHistory={ready}
       extraExtensions={extraExtensions}
       paste={uploadConfig}
       dnd={uploadConfig}

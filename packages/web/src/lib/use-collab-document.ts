@@ -99,6 +99,17 @@ interface UseCollabDocumentResult {
   awareness: CollabAwareness | null;
   provider: HocuspocusProvider | null;
   status: CollabStatus;
+  /**
+   * editor-preview-reliability §2 — `true` once the HocuspocusProvider
+   * has completed the initial Yjs sync (SyncStep2 received, surfaced via
+   * `provider.synced` / the `onSynced` callback). `status==='connected'`
+   * only means the socket is open — it stands BEFORE the first sync, so
+   * the editor must gate readiness and the Save guard on `synced`, not
+   * `status`, to avoid editing/saving against an empty pre-sync doc
+   * (lost-update + the empty-preview footgun). Resets to `false` on
+   * provider rebuild (token refresh / page swap).
+   */
+  synced: boolean;
   readonly: boolean;
   /**
    * Publish the local user identity to remote peers via
@@ -173,6 +184,10 @@ export function useCollabDocument(options: UseCollabDocumentOptions): UseCollabD
   }
   const [session, setSession] = useState<SessionHandles | null>(null);
   const [status, setStatus] = useState<CollabStatus>('connecting');
+  // §2 — initial-sync gate. Distinct from `status`: the socket can be
+  // `connected` for a beat before SyncStep2 lands, during which the doc
+  // is still empty. Reset to `false` whenever the provider is rebuilt.
+  const [synced, setSynced] = useState(false);
 
   // Stateless listener fan-out. `Set` instead of `Array` so unsubscribe
   // is O(1) and identical listeners can't double-register. The ref
@@ -198,15 +213,29 @@ export function useCollabDocument(options: UseCollabDocumentOptions): UseCollabD
         } else if (wsStatus === WebSocketStatus.Connected) {
           setStatus('connected');
         } else if (wsStatus === WebSocketStatus.Disconnected) {
+          // A dropped socket invalidates the sync gate — the doc may
+          // diverge from the server while offline, so block edit/save
+          // until the reconnect re-syncs (onSynced fires again).
+          setSynced(false);
           setStatus('disconnected');
         }
       },
       onAuthenticationFailed: () => {
         // Token verify failed (expired / wrong secret / cross-page). We
-        // don't reconnect — the next use-yjs-token refetch will hand
-        // us a fresh token and the parent effect will rebuild the
-        // provider with it.
+        // don't reconnect — the next use-yjs-token refetch (or the
+        // token-refresh notifier nudged by a silent access-token
+        // refresh) will hand us a fresh token and the parent effect will
+        // rebuild the provider with it. The doc is no longer synced.
+        setSynced(false);
         setStatus('auth-failed');
+      },
+      onSynced: ({ state }) => {
+        // §2 — `state === true` once SyncStep2 has been applied and the
+        // local doc reflects the server's authoritative content. Only
+        // now is it safe to let the user edit / save. A disconnect that
+        // re-syncs fires this again with `true`; we never flip it back
+        // to `false` here (provider teardown / auth-failure resets it).
+        setSynced(state);
       },
       onStateless: ({ payload }) => {
         // Fan-out to subscribers. We iterate over a snapshot (`[...set]`)
@@ -244,6 +273,7 @@ export function useCollabDocument(options: UseCollabDocumentOptions): UseCollabD
       doc.destroy();
       setSession(null);
       setStatus('connecting');
+      setSynced(false);
     };
   }, [pageId, wsToken]);
 
@@ -287,6 +317,7 @@ export function useCollabDocument(options: UseCollabDocumentOptions): UseCollabD
     awareness: session?.awareness ?? null,
     provider: session?.provider ?? null,
     status,
+    synced,
     readonly,
     setLocalAwareness,
     subscribeStateless,

@@ -1,8 +1,10 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { WsTokenResponse } from '@crowi/api-contract';
 import { apiClientV2 } from './api-client';
+import { subscribeTokenRefreshed } from './token-refresh-notifier';
 
 /**
  * Fetch the short-lived wsToken JWT that the Hocuspocus client presents
@@ -21,6 +23,22 @@ import { apiClientV2 } from './api-client';
  * is the only refresh trigger.
  */
 export function useYjsToken(pageId: string | null | undefined) {
+  const queryClient = useQueryClient();
+
+  // §4 — when a silent access-token refresh succeeds, re-fetch the
+  // wsToken immediately. A wsToken that expired around the same time as
+  // the access token leaves the collab provider in `auth-failed`;
+  // invalidating here hands the provider a fresh token (the [pageId,
+  // wsToken] effect rebuilds it) without waiting for the dynamic
+  // refetch interval. `refetchType: 'active'` guarantees the mounted
+  // observer refetches even if react-query would otherwise dedupe.
+  useEffect(() => {
+    if (!pageId) return;
+    return subscribeTokenRefreshed(() => {
+      void queryClient.invalidateQueries({ queryKey: ['yjsToken', pageId], refetchType: 'active' });
+    });
+  }, [pageId, queryClient]);
+
   return useQuery({
     queryKey: ['yjsToken', pageId],
     queryFn: async (): Promise<WsTokenResponse> => {
