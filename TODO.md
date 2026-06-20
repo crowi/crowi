@@ -91,6 +91,7 @@ merge 後の simplify レビューで挙がった非ブロッキング改善。�
 - **インフラ / 品質** — mongoose 6→8 / Biome + lefthook / turbo `^build` / bcrypt / i18n(paraglide)
 - **legacy 除去（RFC-0006）** — Express routes/controllers/Swig views/ts-rest 層を全削除
 - **web エラー画面 / 接続レジリエンス** — `apiV2Fetch` タイムアウト / error boundary / `ConnectionProvider`（spec: `feature-web-error-screens.md`）
+- **エディタ collab 堅牢化** — save 楽観ロック + anti-shrink ガード + synced gate + 復旧バッファ + token-refresh seam + multi-instance WS_TOKEN_SECRET 厳格化（spec: `feature-editor-preview-reliability.md`）
 
 ---
 
