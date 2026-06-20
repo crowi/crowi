@@ -112,6 +112,24 @@ export function createOnLoadDocument(deps: OnLoadDocumentDeps) {
   }
 
   /**
+   * editor-preview-reliability H4 — drop every pending `PageYjsUpdate` for
+   * `pageId` WITHOUT applying them. Used only when we abandon the persisted
+   * yjsState lineage and seed from the revision body instead: those deltas
+   * descend from the discarded lineage and would duplicate / misplace
+   * content if replayed onto the body-seeded doc. Best-effort — a delete
+   * failure just leaves the rows for the 1-hour TTL to sweep (they are
+   * never replayed onto this body-seeded doc because we returned early).
+   */
+  async function clearResidualUpdates(pageId: string): Promise<void> {
+    try {
+      const result = await PageYjsUpdate.deleteMany({ pageId }).exec();
+      debug('cleared %d residual updates (abandoned yjsState lineage) for page %s', result?.deletedCount ?? 0, pageId);
+    } catch (err) {
+      console.warn(`[crowi:collab] onLoadDocument: failed to clear residual rows after body-seed fallback for page ${String(pageId)}:`, (err as Error).message);
+    }
+  }
+
+  /**
    * Broadcast `crowi:force-reload` to all currently-connected clients
    * on `documentName`. Phase 6 wire — Phase 8 client subscribes to the
    * stateless channel.
@@ -180,6 +198,14 @@ export function createOnLoadDocument(deps: OnLoadDocumentDeps) {
     const yjsState = page.yjsState as Buffer | null | undefined;
     let baseRestored = false;
     let forceReloadReason: ForceReloadReason | null = null;
+    // editor-preview-reliability H4 — set when we ABANDON the yjsState
+    // lineage and seed from the revision body instead (empty/corrupt
+    // yjsState). The residual `PageYjsUpdate` deltas were authored against
+    // that discarded lineage; replaying them onto a body-seeded doc (whose
+    // state vector differs) duplicates / misplaces content. So in this
+    // branch we DROP the residual deltas instead of replaying them — the
+    // body is the authoritative baseline.
+    let bodySeedFallback = false;
     if (yjsState && yjsState.length > 0) {
       try {
         Y.applyUpdate(document, new Uint8Array(yjsState));
@@ -198,25 +224,30 @@ export function createOnLoadDocument(deps: OnLoadDocumentDeps) {
         } else {
           debug('page %s yjsState decoded to an empty doc — falling back to revision body seed', documentName);
           forceReloadReason = 'page-body-replaced';
+          bodySeedFallback = true;
         }
       } catch (err) {
         // Phase 6 — broadcast reason 'yjs-state-corruption' below
         // after the fresh build seed runs.
         console.warn(`[crowi:collab] yjsState for page ${String(documentName)} failed Y.applyUpdate; falling back to body seed.`, (err as Error).message);
         forceReloadReason = 'yjs-state-corruption';
+        bodySeedFallback = true;
       }
-    } else {
-      // yjsState is null or empty — could be (a) brand-new page that
-      // never had a checkpoint (no broadcast needed; no editor was
-      // looking at the pre-state state), or (b) an external writer
-      // nuked it. We can't distinguish the two from inside the hook,
-      // so we broadcast unconditionally with `page-body-replaced`.
-      // The cost of a false positive is a single page reload at most;
-      // the cost of a false negative is a stale editor.
-      forceReloadReason = 'page-body-replaced';
     }
+    // else: yjsState is null or empty. This is the brand-new-page / never-
+    // checkpointed case the SAVE + COMPACTION reject policy deliberately
+    // produces (anti-shrink leaves yjsState alone and keeps the deltas).
+    // The base is built from the body + residual deltas below; we do NOT
+    // set `forceReloadReason` here (tail item): a null yjsState is the
+    // normal state for a fresh page and for every checkpoint-rejected page,
+    // so broadcasting `page-body-replaced` unconditionally would spam
+    // spurious force-reloads at connected editors. Only the *abandoned
+    // lineage* branches above (stale-empty / corrupt yjsState) signal it.
 
-    // Path B — fresh build from the latest revision's body.
+    // Path B — fresh build from the latest revision's body. Runs both when
+    // a yjsState lineage was abandoned (`bodySeedFallback`) AND when there
+    // was no yjsState at all — in the latter case the residual deltas below
+    // still replay over the body to recover not-yet-folded edits.
     if (!baseRestored) {
       const revisionId = page.currentRevision ?? page.revision;
       if (revisionId) {
@@ -250,11 +281,25 @@ export function createOnLoadDocument(deps: OnLoadDocumentDeps) {
       broadcastForceReload(instance, String(documentName), forceReloadReason);
     }
 
-    // Phase 4 — always replay residual append rows on top of whatever
-    // base state we restored, so a Hocuspocus crash between compactions
-    // (or between an append and the next checkpoint) doesn't lose edits.
-    // Yjs CRDT idempotency makes "already-folded" deltas safe to
-    // re-apply.
+    if (bodySeedFallback) {
+      // editor-preview-reliability H4 — we abandoned the persisted yjsState
+      // lineage and seeded from the revision body instead. The residual
+      // `PageYjsUpdate` deltas were authored against that discarded lineage;
+      // applying them onto the body-seeded doc (different state vector)
+      // would duplicate / misplace content rather than merge cleanly. The
+      // body is authoritative in this branch, so DROP the stale deltas
+      // instead of replaying them.
+      await clearResidualUpdates(String(documentName));
+      return;
+    }
+
+    // Phase 4 — replay residual append rows on top of the restored base
+    // (Path A success, or a no-yjsState body seed whose deltas DO descend
+    // from the same lineage — e.g. a checkpoint-rejected page whose deltas
+    // ARE the deletion we must preserve), so a Hocuspocus crash between
+    // compactions (or between an append and the next checkpoint) doesn't
+    // lose edits. Yjs CRDT idempotency makes "already-folded" deltas safe
+    // to re-apply. The abandoned-lineage cases already returned above.
     await replayResidualUpdates(String(documentName), document);
   };
 }

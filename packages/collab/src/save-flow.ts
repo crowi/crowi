@@ -6,6 +6,7 @@ import type { ContributorsTracker } from './contributors';
 import type { CollabPageEventPublisher } from './types';
 import { DRAFT_STATUS, PUBLISHED_STATUS } from './page-status';
 import { CONTENT_FIELD } from './yjs-doc';
+import { persistYjsState } from './persist-yjs-state';
 import { evaluateAntiShrink } from './yjs-anti-shrink';
 
 const debug = Debug('crowi:collab:save');
@@ -183,9 +184,8 @@ export function createSaveFlow(opts: CreateSaveFlowOptions): SaveFlow {
 
       // editor-preview-reliability §1B baseline: the body of the
       // revision this save REPLACES (the pre-save current revision), read
-      // before step 5 bumps the pointer. The anti-shrink guard compares
-      // the candidate yjsState against this so an empty / heavily-shrunk
-      // doc can't silently overwrite the previously-persisted content.
+      // before step 5 bumps the pointer. Used as the anti-shrink baseline
+      // for the empty-doc guard below and for the yjsState write at step 6.
       // Best-effort — a read failure degrades to "no baseline".
       let previousBody: string | null = null;
       if (liveRevision) {
@@ -195,6 +195,38 @@ export function createSaveFlow(opts: CreateSaveFlowOptions): SaveFlow {
         } catch (err) {
           debug('failed to read previous revision body for anti-shrink baseline on page %s: %s', pageId, (err as Error).message);
         }
+      }
+
+      // editor-preview-reliability C2 fix — evaluate the anti-shrink
+      // EMPTY guard BEFORE committing the revision (steps 4-5), not after.
+      //
+      // The pre-fix code ran the guard at step 6, AFTER `prepareRevision`
+      // + `pushRevision` had already committed the empty/shrunk body as a
+      // new Revision and repointed `currentRevision` at it. Suppressing
+      // only the yjsState mirror then was useless: the body was already
+      // overwritten, so "rebuild from body on next load" rebuilt from the
+      // EMPTY body — the §1B guarantee for `Revision.body` was false.
+      //
+      // Principle: a user save is explicit intent, already protected by
+      // the §1A optimistic lock + §2 synced gate, so the *ratio* arm must
+      // not block a legitimate large deletion (that is why step 6 passes
+      // `allowShrink: true`). But an empty doc over a non-empty baseline is
+      // the silent-clear / provably-desynced footgun — reject it as a
+      // CONFLICT BEFORE any revision is committed, so the client reloads
+      // (its recovery buffer has the unsaved text) instead of persisting
+      // an empty body. A baseline that is itself empty (new page) flows
+      // through — clearing an already-empty page is a no-op, not a loss.
+      // Reuse the shared verdict (same candidate-measuring + CRLF→LF
+      // baseline normalization the chokepoint uses) but act ONLY on the
+      // `empty` arm: the ratio arm must not block a legitimate large
+      // deletion here (step 6 deliberately passes `allowShrink: true`).
+      const emptyGuard = evaluateAntiShrink({ candidate: document, baselineBody: previousBody });
+      if (emptyGuard.reason === 'empty') {
+        throw new CollabSaveError(
+          'CONFLICT',
+          `save for page ${pageId} would persist an empty body over ${emptyGuard.baselineChars} chars of existing content ` +
+            '(likely a desynced session) — reload required; no revision was committed',
+        );
       }
 
       // Step 3: contributors (awareness set, minus the trigger user).
@@ -243,41 +275,41 @@ export function createSaveFlow(opts: CreateSaveFlowOptions): SaveFlow {
       // from the body. The compactor will re-write yjsState in the
       // next debounce window.
       try {
-        // editor-preview-reliability §1B: never persist an empty /
-        // catastrophically-shrunk yjsState over the previously-persisted
-        // content. The baseline is the PREVIOUS revision's body (read
-        // above, before the pointer moved): a desync that empties the
-        // live doc would otherwise write an empty `[0,0]` snapshot that
-        // a later load applies cleanly, masking the real body. The new
-        // revision is already durable (steps 4-5), so we just suppress
-        // the misleading yjsState and let the next load rebuild from the
-        // body via `currentRevision`.
-        const verdict = evaluateAntiShrink({ candidate: document, baselineBody: previousBody });
-        if (!verdict.ok) {
-          // Revision is already durable (steps 4-5). Skipping the
-          // yjsState write is safe: the next onLoadDocument rebuilds
-          // yjsState from the body via the `currentRevision` pointer we
-          // still set below. Bump `currentRevision` so the rebuild reads
-          // the body we just wrote, but leave the stale `yjsState`
-          // intact rather than clobbering it with an empty snapshot.
+        // M1 — make the `currentRevision` pointer bump a compare-and-set
+        // so two concurrent saves that both passed the step-2 optimistic
+        // read can't both win (TOCTOU). The filter requires
+        // `currentRevision` to still equal the pre-save value we read (the
+        // base we locked against). If a racing save moved it first,
+        // `matchedCount` is 0 and we leave the pointer alone: the winner's
+        // revision stays current, and this (loser's) revision is still
+        // durable in history — no data loss, just not promoted.
+        //
+        // Only arm the CAS when the DB actually has a `currentRevision` to
+        // compare against. A v1.x page (only `revision` set, `currentRevision`
+        // null) would never match `{ currentRevision: <id from page.revision> }`,
+        // so for those we fall back to the unconditional bump — the §1A
+        // optimistic lock above already rejected a stale base for them.
+        const expectedCurrent = (page.currentRevision ?? null) as Types.ObjectId | null;
+        const pointerFilter: Record<string, unknown> = { _id: pageId };
+        if (expectedCurrent) {
+          pointerFilter.currentRevision = expectedCurrent;
+        }
+        const pointerWrite = await Page.updateOne(pointerFilter, { $set: { currentRevision: newRevision._id } }).exec();
+        if (expectedCurrent && (pointerWrite?.matchedCount ?? 0) === 0) {
+          // A concurrent save promoted its revision first. Don't clobber
+          // it with our yjsState either — the winner owns the pointer +
+          // the live doc state. Our revision is preserved in history.
           console.warn(
-            `[crowi:collab] save: anti-shrink rejected yjsState write for page ${pageId} ` +
-              `(reason=${verdict.reason}, candidate=${verdict.candidateChars} chars, baseline=${verdict.baselineChars} chars); ` +
-              `repointing currentRevision and rebuilding yjsState from body on next load.`,
+            `[crowi:collab] save: currentRevision moved concurrently for page ${pageId}; ` + 'leaving the winner in place (this revision stays in history).',
           );
-          await Page.updateOne({ _id: pageId }, { $set: { currentRevision: newRevision._id, yjsState: null, yjsCheckpointAt: new Date() } }).exec();
         } else {
-          const yjsStateBuf = Buffer.from(Y.encodeStateAsUpdate(document));
-          await Page.updateOne(
-            { _id: pageId },
-            {
-              $set: {
-                currentRevision: newRevision._id,
-                yjsState: yjsStateBuf,
-                yjsCheckpointAt: new Date(),
-              },
-            },
-          ).exec();
+          // Route the yjsState mirror through the single `persistYjsState`
+          // chokepoint with `allowShrink: true` — a user save is explicit
+          // intent and must not be blocked by the ratio arm (a legitimate
+          // large deletion). The chokepoint writes `yjsState` +
+          // `yjsCheckpointAt` itself when it accepts; the empty-doc footgun
+          // was already rejected BEFORE the commit (C2 guard above).
+          await persistYjsState(Page, { pageId, document, baselineBody: previousBody, allowShrink: true, origin: 'save' });
         }
       } catch (err) {
         // Don't fail the save — the data is already consistent on

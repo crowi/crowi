@@ -3,7 +3,7 @@ import Debug from 'debug';
 import type { Types } from 'mongoose';
 import type { CollabModels } from './models';
 import { payloadToUint8Array } from './yjs-payload';
-import { evaluateAntiShrink } from './yjs-anti-shrink';
+import { persistYjsState } from './persist-yjs-state';
 
 const debug = Debug('crowi:collab:compact');
 
@@ -128,24 +128,23 @@ export function createCompactor(deps: CompactPageDeps): Compactor {
     // common Hocuspocus debounce path: edits already merged in
     // memory, no append rows to fold.
     if (pendingRows.length === 0 && fromDocument) {
-      // editor-preview-reliability §1B: guard the store-only fast path
-      // (fires on every Hocuspocus debounce). An empty / heavily-shrunk
-      // live doc must not overwrite the last good yjsState — the next
+      // editor-preview-reliability §1B: route the store-only fast path
+      // (fires on every Hocuspocus debounce) through the single
+      // `persistYjsState` chokepoint. An empty / heavily-shrunk live doc
+      // must not overwrite the last good yjsState — the next
       // onLoadDocument rebuilds from the revision body instead.
       const baselineBody = await latestRevisionBody(pageId);
-      const verdict = evaluateAntiShrink({ candidate: fromDocument, baselineBody });
-      if (!verdict.ok) {
-        console.warn(
-          `[crowi:collab] compaction: anti-shrink skipped store-only checkpoint for page ${pageId} ` +
-            `(reason=${verdict.reason}, candidate=${verdict.candidateChars} chars, baseline=${verdict.baselineChars} chars).`,
-        );
-        return { compactedCount: 0, newYjsStateBytes: 0 };
+      const result = await persistYjsState(Page, { pageId, document: fromDocument, baselineBody, origin: 'store-only' });
+      if (!result.ok) {
+        // Return `null` (not an ok-shaped 0-byte result) so `onStoreDocument`
+        // does NOT treat the reject as "persisted": a null lets the 10-min
+        // time-trigger fire and re-attempt the write once the content is
+        // legitimately re-established. There are no folded rows on this
+        // fast path, so the no-data-loss policy needs nothing further.
+        return null;
       }
-      const update = Y.encodeStateAsUpdate(fromDocument);
-      const stateBuf = Buffer.from(update);
-      await Page.updateOne({ _id: pageId }, { $set: { yjsState: stateBuf, yjsCheckpointAt: new Date() } }).exec();
-      debug('store-only checkpoint for page %s: %d bytes, no pending updates', pageId, stateBuf.length);
-      return { compactedCount: 0, newYjsStateBytes: stateBuf.length };
+      debug('store-only checkpoint for page %s: %d bytes, no pending updates', pageId, result.bytes);
+      return { compactedCount: 0, newYjsStateBytes: result.bytes };
     }
 
     // Nothing pending and no live doc → caller (count-trigger) raced
@@ -187,37 +186,38 @@ export function createCompactor(deps: CompactPageDeps): Compactor {
       }
     }
 
-    // editor-preview-reliability §1B: guard the full-merge write too.
-    // If the merged doc is empty / heavily shrunk relative to the
-    // latest revision body, skip the yjsState overwrite but STILL delete
-    // the folded PageYjsUpdate rows — they have already been merged into
-    // `ydoc`, and leaving them would let a future load re-apply the same
-    // shrinking deltas. The next onLoadDocument rebuilds yjsState from
-    // the revision body, which is the safe baseline.
+    // editor-preview-reliability §1B + C1 fix: route the full-merge write
+    // through the same `persistYjsState` chokepoint as every other path.
+    //
+    // The C1 data-loss bug lived HERE: the pre-fix code skipped the
+    // yjsState write on a shrink reject BUT still pruned the folded rows
+    // unconditionally. With the stale (large) yjsState surviving and the
+    // shrinking deltas deleted, the next load applied the stale state,
+    // saw a non-empty doc, took the fast path, and never replayed the
+    // deletion — permanently reverting a legitimate large deletion.
+    //
+    // No-data-loss policy (defined once in the chokepoint): on a reject we
+    // write NOTHING and — critically — we DO NOT prune the folded rows.
+    // The (possibly legitimate) shrinking deltas stay in `PageYjsUpdate`,
+    // so the next onLoadDocument replays them over the surviving base state
+    // and the deletion is preserved. The 1-hour TTL bounds the leftover
+    // rows. We only prune the folded ids when the write actually landed.
     const baselineBody = await latestRevisionBody(pageId);
-    const verdict = evaluateAntiShrink({ candidate: ydoc, baselineBody });
-    const now = new Date();
-    let newYjsStateBytes = 0;
-    if (!verdict.ok) {
-      console.warn(
-        `[crowi:collab] compaction: anti-shrink skipped full-merge yjsState write for page ${pageId} ` +
-          `(reason=${verdict.reason}, candidate=${verdict.candidateChars} chars, baseline=${verdict.baselineChars} chars); ` +
-          `folded rows still pruned, yjsState rebuilt from body on next load.`,
-      );
-    } else {
-      const merged = Y.encodeStateAsUpdate(ydoc);
-      const stateBuf = Buffer.from(merged);
-      newYjsStateBytes = stateBuf.length;
-      await Page.updateOne({ _id: pageId }, { $set: { yjsState: stateBuf, yjsCheckpointAt: now } }).exec();
+    const result = await persistYjsState(Page, { pageId, document: ydoc, baselineBody, origin: 'full-merge' });
+
+    if (!result.ok) {
+      // Reject: leave yjsState AND the folded rows untouched (C1 fix).
+      debug('compaction reject for page %s: kept %d folded rows for replay (no data loss)', pageId, pendingRows.length);
+      return { compactedCount: 0, newYjsStateBytes: 0 };
     }
 
     const collectedIds = pendingRows.map((row) => row._id);
     const deleteResult = await PageYjsUpdate.deleteMany({ _id: { $in: collectedIds } }).exec();
     const deletedCount = (deleteResult?.deletedCount ?? collectedIds.length) as number;
 
-    debug('compacted page %s: %d updates folded, %d deleted, new yjsState=%d bytes', pageId, collectedIds.length, deletedCount, newYjsStateBytes);
+    debug('compacted page %s: %d updates folded, %d deleted, new yjsState=%d bytes', pageId, collectedIds.length, deletedCount, result.bytes);
 
-    return { compactedCount: collectedIds.length, newYjsStateBytes };
+    return { compactedCount: collectedIds.length, newYjsStateBytes: result.bytes };
   }
 
   async function compactPage(pageId: string): Promise<CompactPageResult | null> {
