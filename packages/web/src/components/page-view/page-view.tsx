@@ -22,8 +22,8 @@ import { useMarkSeenOnView } from '@/lib/use-seen';
 import { PageHeader } from './page-header';
 import { PageContent } from './page-content';
 import { PortalizeBanner } from './portalize-dialog';
-import { PageToc, useTocScrollSpy } from './page-toc';
-import { cn } from '@/lib/utils';
+import { useTocScrollSpy } from './page-toc';
+import { PageTocColumns } from './page-toc-columns';
 import { StaleRevisionBanner } from './stale-revision-banner';
 import { BacklinkList } from './backlink-list';
 import { AttachmentList } from './attachment-list';
@@ -177,7 +177,6 @@ export function PageView({ path, revisionId }: PageViewProps) {
   }
 
   if (page) {
-    const hasToc = toc.length >= 2;
     const isStaleRevision = isStalePageRevision(page);
     // Drafts are creator-only and unpublished — strip the "social" affordances
     // (presence, comments) and swap the comments slot for an info notice that
@@ -193,19 +192,8 @@ export function PageView({ path, revisionId }: PageViewProps) {
       router.push(`/_edit?page_id=${encodeURIComponent(page._id)}`);
     };
     return (
-      // Escape the shared `max-w-4xl` main and center a
-      // `[left spacer | content | TOC]` group on the full viewport. The
-      // left spacer (≥1440) reserves the fixed nav rail's width so the
-      // content stays dead-centre and symmetric at the 3-column width;
-      // below 1440 it collapses and content + TOC re-centre as a pair;
-      // below 1280 the TOC column hides (the header `PageTocMenu` takes
-      // over). The right column stays reserved at ≥1440 even with no TOC
-      // so a heading-light page is still symmetric. Margins/flex (no
-      // transform) keep the `position: fixed` compact header viewport-
-      // relative.
-      <div className="mx-[calc(50%-50vw)] flex w-screen justify-center gap-6 px-4">
-        <div aria-hidden className="hidden w-56 shrink-0 min-[1440px]:block" />
-        <article className="w-full min-w-0 max-w-4xl space-y-12">
+      <PageTocColumns toc={toc} activeTocId={activeTocId}>
+        <article className="space-y-12">
           {isStaleRevision && page.revision?._id && <StaleRevisionBanner pagePath={page.path} pageId={page._id} revisionId={page.revision._id} />}
           <PageHeader
             page={page}
@@ -244,13 +232,7 @@ export function PageView({ path, revisionId }: PageViewProps) {
             </>
           )}
         </article>
-        {/* Right column. With a TOC it shows from the 1280px rail
-            breakpoint up; without one it still reserves width at ≥1440
-            so the article stays symmetric against the left nav spacer. */}
-        <div className={cn('w-56 shrink-0', hasToc ? 'hidden min-[1280px]:block' : 'hidden min-[1440px]:block')}>
-          {hasToc && <PageToc toc={toc} activeId={activeTocId} />}
-        </div>
-      </div>
+      </PageTocColumns>
     );
   }
 
