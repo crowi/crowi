@@ -71,6 +71,7 @@
           "PAGE_NOT_FOUND",
           "PAGE_NOT_GRANTED",
           "PAGE_REVISION_ERROR",
+          "PAGE_TWIN_EXISTS",
           "INVALID_GRANT",
           "COMMENT_NOT_FOUND",
           "NOTIFICATION_NOT_FOUND",
@@ -2711,6 +2712,455 @@
             ]
           },
           "portalPage": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "_id": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "revision": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "_id": {
+                        "type": "string"
+                      },
+                      "path": {
+                        "type": "string"
+                      },
+                      "body": {
+                        "type": "string"
+                      },
+                      "format": {
+                        "type": "string",
+                        "default": "markdown"
+                      },
+                      "author": {
+                        "type": [
+                          "object",
+                          "null"
+                        ],
+                        "properties": {
+                          "_id": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "username": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "email": {
+                            "type": "string",
+                            "format": "email"
+                          },
+                          "image": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "_id",
+                          "username",
+                          "name",
+                          "email",
+                          "createdAt"
+                        ]
+                      },
+                      "createdAt": {
+                        "type": "string"
+                      },
+                      "meta": {
+                        "type": "object",
+                        "properties": {
+                          "toc": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "level": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 6
+                                },
+                                "text": {
+                                  "type": "string"
+                                },
+                                "anchorId": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "level",
+                                "text",
+                                "anchorId"
+                              ]
+                            }
+                          },
+                          "wikiLinks": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "raw": {
+                                  "type": "string"
+                                },
+                                "target": {
+                                  "type": "string"
+                                },
+                                "displayText": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "raw",
+                                "target"
+                              ]
+                            }
+                          },
+                          "mentions": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "username": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "username"
+                              ]
+                            }
+                          },
+                          "codeBlockLanguages": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      },
+                      "renderedAst": {},
+                      "rendererVersion": {
+                        "type": "string"
+                      },
+                      "parentRevisionId": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "type": {
+                        "type": "string",
+                        "enum": [
+                          "snapshot",
+                          "incremental"
+                        ]
+                      },
+                      "savedBy": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "_id": {
+                                "type": "string"
+                              },
+                              "id": {
+                                "type": "string"
+                              },
+                              "username": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "email": {
+                                "type": "string",
+                                "format": "email"
+                              },
+                              "image": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "createdAt": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "_id",
+                              "username",
+                              "name",
+                              "email",
+                              "createdAt"
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "contributors": {
+                        "type": "array",
+                        "items": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "_id": {
+                                  "type": "string"
+                                },
+                                "id": {
+                                  "type": "string"
+                                },
+                                "username": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "email": {
+                                  "type": "string",
+                                  "format": "email"
+                                },
+                                "image": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "createdAt": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "_id",
+                                "username",
+                                "name",
+                                "email",
+                                "createdAt"
+                              ]
+                            }
+                          ]
+                        }
+                      },
+                      "message": {
+                        "type": "string"
+                      },
+                      "editVia": {
+                        "type": "string",
+                        "enum": [
+                          "web",
+                          "oauth",
+                          "pat"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "_id",
+                      "path",
+                      "body",
+                      "createdAt"
+                    ]
+                  }
+                ]
+              },
+              "redirectTo": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "status": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "enum": [
+                  "wip",
+                  "published",
+                  "deleted",
+                  "deprecated",
+                  "draft",
+                  null
+                ]
+              },
+              "grant": {
+                "type": "number"
+              },
+              "grantedUsers": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "creator": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "_id": {
+                        "type": "string"
+                      },
+                      "id": {
+                        "type": "string"
+                      },
+                      "username": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "email": {
+                        "type": "string",
+                        "format": "email"
+                      },
+                      "image": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "createdAt": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "_id",
+                      "username",
+                      "name",
+                      "email",
+                      "createdAt"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "lastUpdateUser": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "_id": {
+                        "type": "string"
+                      },
+                      "id": {
+                        "type": "string"
+                      },
+                      "username": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "email": {
+                        "type": "string",
+                        "format": "email"
+                      },
+                      "image": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "createdAt": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "_id",
+                      "username",
+                      "name",
+                      "email",
+                      "createdAt"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "liker": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "commentCount": {
+                "type": "number",
+                "default": 0
+              },
+              "extended": {
+                "type": "object",
+                "additionalProperties": {}
+              },
+              "createdAt": {
+                "type": "string"
+              },
+              "updatedAt": {
+                "type": "string"
+              },
+              "currentRevision": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "yjsCheckpointAt": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "latestRevision": {
+                "type": "string"
+              },
+              "likerCount": {
+                "type": "number"
+              },
+              "seenUsersCount": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "_id",
+              "path",
+              "createdAt"
+            ]
+          },
+          "contentPage": {
             "type": [
               "object",
               "null"
@@ -20832,6 +21282,455 @@
                       ]
                     },
                     "portalPage": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "_id": {
+                          "type": "string"
+                        },
+                        "path": {
+                          "type": "string"
+                        },
+                        "revision": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "_id": {
+                                  "type": "string"
+                                },
+                                "path": {
+                                  "type": "string"
+                                },
+                                "body": {
+                                  "type": "string"
+                                },
+                                "format": {
+                                  "type": "string",
+                                  "default": "markdown"
+                                },
+                                "author": {
+                                  "type": [
+                                    "object",
+                                    "null"
+                                  ],
+                                  "properties": {
+                                    "_id": {
+                                      "type": "string"
+                                    },
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "username": {
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    },
+                                    "email": {
+                                      "type": "string",
+                                      "format": "email"
+                                    },
+                                    "image": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
+                                    "createdAt": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "_id",
+                                    "username",
+                                    "name",
+                                    "email",
+                                    "createdAt"
+                                  ]
+                                },
+                                "createdAt": {
+                                  "type": "string"
+                                },
+                                "meta": {
+                                  "type": "object",
+                                  "properties": {
+                                    "toc": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "object",
+                                        "properties": {
+                                          "level": {
+                                            "type": "integer",
+                                            "minimum": 1,
+                                            "maximum": 6
+                                          },
+                                          "text": {
+                                            "type": "string"
+                                          },
+                                          "anchorId": {
+                                            "type": "string"
+                                          }
+                                        },
+                                        "required": [
+                                          "level",
+                                          "text",
+                                          "anchorId"
+                                        ]
+                                      }
+                                    },
+                                    "wikiLinks": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "object",
+                                        "properties": {
+                                          "raw": {
+                                            "type": "string"
+                                          },
+                                          "target": {
+                                            "type": "string"
+                                          },
+                                          "displayText": {
+                                            "type": "string"
+                                          }
+                                        },
+                                        "required": [
+                                          "raw",
+                                          "target"
+                                        ]
+                                      }
+                                    },
+                                    "mentions": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "object",
+                                        "properties": {
+                                          "username": {
+                                            "type": "string"
+                                          }
+                                        },
+                                        "required": [
+                                          "username"
+                                        ]
+                                      }
+                                    },
+                                    "codeBlockLanguages": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
+                                    }
+                                  }
+                                },
+                                "renderedAst": {},
+                                "rendererVersion": {
+                                  "type": "string"
+                                },
+                                "parentRevisionId": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "type": {
+                                  "type": "string",
+                                  "enum": [
+                                    "snapshot",
+                                    "incremental"
+                                  ]
+                                },
+                                "savedBy": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "_id": {
+                                          "type": "string"
+                                        },
+                                        "id": {
+                                          "type": "string"
+                                        },
+                                        "username": {
+                                          "type": "string"
+                                        },
+                                        "name": {
+                                          "type": "string"
+                                        },
+                                        "email": {
+                                          "type": "string",
+                                          "format": "email"
+                                        },
+                                        "image": {
+                                          "type": [
+                                            "string",
+                                            "null"
+                                          ]
+                                        },
+                                        "createdAt": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "_id",
+                                        "username",
+                                        "name",
+                                        "email",
+                                        "createdAt"
+                                      ]
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "contributors": {
+                                  "type": "array",
+                                  "items": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "_id": {
+                                            "type": "string"
+                                          },
+                                          "id": {
+                                            "type": "string"
+                                          },
+                                          "username": {
+                                            "type": "string"
+                                          },
+                                          "name": {
+                                            "type": "string"
+                                          },
+                                          "email": {
+                                            "type": "string",
+                                            "format": "email"
+                                          },
+                                          "image": {
+                                            "type": [
+                                              "string",
+                                              "null"
+                                            ]
+                                          },
+                                          "createdAt": {
+                                            "type": "string"
+                                          }
+                                        },
+                                        "required": [
+                                          "_id",
+                                          "username",
+                                          "name",
+                                          "email",
+                                          "createdAt"
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                },
+                                "message": {
+                                  "type": "string"
+                                },
+                                "editVia": {
+                                  "type": "string",
+                                  "enum": [
+                                    "web",
+                                    "oauth",
+                                    "pat"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "_id",
+                                "path",
+                                "body",
+                                "createdAt"
+                              ]
+                            }
+                          ]
+                        },
+                        "redirectTo": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "status": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "enum": [
+                            "wip",
+                            "published",
+                            "deleted",
+                            "deprecated",
+                            "draft",
+                            null
+                          ]
+                        },
+                        "grant": {
+                          "type": "number"
+                        },
+                        "grantedUsers": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "creator": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "_id": {
+                                  "type": "string"
+                                },
+                                "id": {
+                                  "type": "string"
+                                },
+                                "username": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "email": {
+                                  "type": "string",
+                                  "format": "email"
+                                },
+                                "image": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "createdAt": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "_id",
+                                "username",
+                                "name",
+                                "email",
+                                "createdAt"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "lastUpdateUser": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "_id": {
+                                  "type": "string"
+                                },
+                                "id": {
+                                  "type": "string"
+                                },
+                                "username": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "email": {
+                                  "type": "string",
+                                  "format": "email"
+                                },
+                                "image": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "createdAt": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "_id",
+                                "username",
+                                "name",
+                                "email",
+                                "createdAt"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "liker": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "commentCount": {
+                          "type": "number",
+                          "default": 0
+                        },
+                        "extended": {
+                          "type": "object",
+                          "additionalProperties": {}
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        },
+                        "currentRevision": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "yjsCheckpointAt": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "latestRevision": {
+                          "type": "string"
+                        },
+                        "likerCount": {
+                          "type": "number"
+                        },
+                        "seenUsersCount": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "_id",
+                        "path",
+                        "createdAt"
+                      ]
+                    },
+                    "contentPage": {
                       "type": [
                         "object",
                         "null"

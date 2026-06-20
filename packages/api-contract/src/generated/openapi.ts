@@ -5482,6 +5482,110 @@ export interface paths {
                                 likerCount?: number;
                                 seenUsersCount?: number;
                             } | null;
+                            contentPage?: {
+                                _id: string;
+                                path: string;
+                                revision?: string | {
+                                    _id: string;
+                                    path: string;
+                                    body: string;
+                                    /** @default markdown */
+                                    format: string;
+                                    author?: {
+                                        _id: string;
+                                        id?: string;
+                                        username: string;
+                                        name: string;
+                                        /** Format: email */
+                                        email: string;
+                                        image?: string | null;
+                                        createdAt: string;
+                                    } | null;
+                                    createdAt: string;
+                                    meta?: {
+                                        toc?: {
+                                            level: number;
+                                            text: string;
+                                            anchorId: string;
+                                        }[];
+                                        wikiLinks?: {
+                                            raw: string;
+                                            target: string;
+                                            displayText?: string;
+                                        }[];
+                                        mentions?: {
+                                            username: string;
+                                        }[];
+                                        codeBlockLanguages?: string[];
+                                    };
+                                    renderedAst?: unknown;
+                                    rendererVersion?: string;
+                                    parentRevisionId?: string | null;
+                                    /** @enum {string} */
+                                    type?: "snapshot" | "incremental";
+                                    savedBy?: string | {
+                                        _id: string;
+                                        id?: string;
+                                        username: string;
+                                        name: string;
+                                        /** Format: email */
+                                        email: string;
+                                        image?: string | null;
+                                        createdAt: string;
+                                    } | null;
+                                    contributors?: (string | {
+                                        _id: string;
+                                        id?: string;
+                                        username: string;
+                                        name: string;
+                                        /** Format: email */
+                                        email: string;
+                                        image?: string | null;
+                                        createdAt: string;
+                                    })[];
+                                    message?: string;
+                                    /** @enum {string} */
+                                    editVia?: "web" | "oauth" | "pat";
+                                };
+                                redirectTo?: string | null;
+                                /** @enum {string|null} */
+                                status?: "wip" | "published" | "deleted" | "deprecated" | "draft" | null;
+                                grant?: number;
+                                grantedUsers?: string[];
+                                creator?: string | {
+                                    _id: string;
+                                    id?: string;
+                                    username: string;
+                                    name: string;
+                                    /** Format: email */
+                                    email: string;
+                                    image?: string | null;
+                                    createdAt: string;
+                                } | null;
+                                lastUpdateUser?: string | {
+                                    _id: string;
+                                    id?: string;
+                                    username: string;
+                                    name: string;
+                                    /** Format: email */
+                                    email: string;
+                                    image?: string | null;
+                                    createdAt: string;
+                                } | null;
+                                liker?: string[];
+                                /** @default 0 */
+                                commentCount: number;
+                                extended?: {
+                                    [key: string]: unknown;
+                                };
+                                createdAt: string;
+                                updatedAt?: string;
+                                currentRevision?: string | null;
+                                yjsCheckpointAt?: string | null;
+                                latestRevision?: string;
+                                likerCount?: number;
+                                seenUsersCount?: number;
+                            } | null;
                         };
                     };
                 };
@@ -12897,7 +13001,7 @@ export interface components {
             };
         };
         /** @enum {string} */
-        ErrorCode: "AUTHENTICATION_REQUIRED" | "ADMIN_REQUIRED" | "THIRD_PARTY_AUTH_REQUIRED" | "USER_REGISTERED" | "USER_SUSPENDED" | "USER_INVITED" | "USER_NOT_ACTIVE" | "EMAIL_NOT_CONFIRMED" | "INTERNAL_ERROR" | "VALIDATION_ERROR" | "INVALID_REQUEST" | "NOT_FOUND" | "CONFLICT" | "SERVICE_UNAVAILABLE" | "APPLICATION_NOT_INSTALLED" | "INVALID_PAGE_ID" | "PAGE_NOT_FOUND" | "PAGE_NOT_GRANTED" | "PAGE_REVISION_ERROR" | "INVALID_GRANT" | "COMMENT_NOT_FOUND" | "NOTIFICATION_NOT_FOUND" | "USER_NOT_FOUND" | "USER_EXISTS" | "USERNAME_TAKEN" | "EMAIL_TAKEN" | "EMAIL_NOT_ALLOWED" | "INVALID_ACTIVATION_TOKEN" | "INVALID_INVITE_TOKEN" | "INVITE_ALREADY_ACCEPTED" | "INVALID_RESET_TOKEN" | "INVALID_EMAIL_CHANGE_TOKEN" | "INVALID_CREDENTIALS" | "REFRESH_TOKEN_REQUIRED" | "REGISTRATION_CLOSED" | "ENCRYPTION_NOT_CONFIGURED" | "MAIL_TEST_FAILED" | "PLUGIN_NOT_FOUND" | "PLUGIN_CONFIG_VALIDATION_FAILED";
+        ErrorCode: "AUTHENTICATION_REQUIRED" | "ADMIN_REQUIRED" | "THIRD_PARTY_AUTH_REQUIRED" | "USER_REGISTERED" | "USER_SUSPENDED" | "USER_INVITED" | "USER_NOT_ACTIVE" | "EMAIL_NOT_CONFIRMED" | "INTERNAL_ERROR" | "VALIDATION_ERROR" | "INVALID_REQUEST" | "NOT_FOUND" | "CONFLICT" | "SERVICE_UNAVAILABLE" | "APPLICATION_NOT_INSTALLED" | "INVALID_PAGE_ID" | "PAGE_NOT_FOUND" | "PAGE_NOT_GRANTED" | "PAGE_REVISION_ERROR" | "PAGE_TWIN_EXISTS" | "INVALID_GRANT" | "COMMENT_NOT_FOUND" | "NOTIFICATION_NOT_FOUND" | "USER_NOT_FOUND" | "USER_EXISTS" | "USERNAME_TAKEN" | "EMAIL_TAKEN" | "EMAIL_NOT_ALLOWED" | "INVALID_ACTIVATION_TOKEN" | "INVALID_INVITE_TOKEN" | "INVITE_ALREADY_ACCEPTED" | "INVALID_RESET_TOKEN" | "INVALID_EMAIL_CHANGE_TOKEN" | "INVALID_CREDENTIALS" | "REFRESH_TOKEN_REQUIRED" | "REGISTRATION_CLOSED" | "ENCRYPTION_NOT_CONFIGURED" | "MAIL_TEST_FAILED" | "PLUGIN_NOT_FOUND" | "PLUGIN_CONFIG_VALIDATION_FAILED";
         ApplicationNotInstalledError: {
             error: {
                 /** @enum {string} */
@@ -13538,6 +13642,110 @@ export interface components {
                 offset: number;
             };
             portalPage?: {
+                _id: string;
+                path: string;
+                revision?: string | {
+                    _id: string;
+                    path: string;
+                    body: string;
+                    /** @default markdown */
+                    format: string;
+                    author?: {
+                        _id: string;
+                        id?: string;
+                        username: string;
+                        name: string;
+                        /** Format: email */
+                        email: string;
+                        image?: string | null;
+                        createdAt: string;
+                    } | null;
+                    createdAt: string;
+                    meta?: {
+                        toc?: {
+                            level: number;
+                            text: string;
+                            anchorId: string;
+                        }[];
+                        wikiLinks?: {
+                            raw: string;
+                            target: string;
+                            displayText?: string;
+                        }[];
+                        mentions?: {
+                            username: string;
+                        }[];
+                        codeBlockLanguages?: string[];
+                    };
+                    renderedAst?: unknown;
+                    rendererVersion?: string;
+                    parentRevisionId?: string | null;
+                    /** @enum {string} */
+                    type?: "snapshot" | "incremental";
+                    savedBy?: string | {
+                        _id: string;
+                        id?: string;
+                        username: string;
+                        name: string;
+                        /** Format: email */
+                        email: string;
+                        image?: string | null;
+                        createdAt: string;
+                    } | null;
+                    contributors?: (string | {
+                        _id: string;
+                        id?: string;
+                        username: string;
+                        name: string;
+                        /** Format: email */
+                        email: string;
+                        image?: string | null;
+                        createdAt: string;
+                    })[];
+                    message?: string;
+                    /** @enum {string} */
+                    editVia?: "web" | "oauth" | "pat";
+                };
+                redirectTo?: string | null;
+                /** @enum {string|null} */
+                status?: "wip" | "published" | "deleted" | "deprecated" | "draft" | null;
+                grant?: number;
+                grantedUsers?: string[];
+                creator?: string | {
+                    _id: string;
+                    id?: string;
+                    username: string;
+                    name: string;
+                    /** Format: email */
+                    email: string;
+                    image?: string | null;
+                    createdAt: string;
+                } | null;
+                lastUpdateUser?: string | {
+                    _id: string;
+                    id?: string;
+                    username: string;
+                    name: string;
+                    /** Format: email */
+                    email: string;
+                    image?: string | null;
+                    createdAt: string;
+                } | null;
+                liker?: string[];
+                /** @default 0 */
+                commentCount: number;
+                extended?: {
+                    [key: string]: unknown;
+                };
+                createdAt: string;
+                updatedAt?: string;
+                currentRevision?: string | null;
+                yjsCheckpointAt?: string | null;
+                latestRevision?: string;
+                likerCount?: number;
+                seenUsersCount?: number;
+            } | null;
+            contentPage?: {
                 _id: string;
                 path: string;
                 revision?: string | {
