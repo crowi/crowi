@@ -109,7 +109,7 @@ v2 alpha 時点で登録されている移行は以下のとおりです。
 | `user-unique-prepare` | preflight | ユーザーの重複排除 (一意インデックスの準備) |
 | `relocate-reserved-api-paths` | preflight | `/api` 予約名前空間からの v1 ページ退避 |
 | `wikilink-html-recover` | preflight | 誤変換された HTML 終了タグ (`</font>` など) の復旧 |
-| `toc-html-strip` | preflight | 目次 (TOC) に混入した HTML タグの再生成 |
+| `toc-html-strip` | preflight | 目次 (TOC) ラベルに混入した HTML タグの除去 |
 
 boot 移行 (`page-status-default` / `revisions-schema-unify`) は api 起動時に
 自動適用されるので、運用者の操作は不要です。以下では、明示的な適用が必要な
@@ -149,10 +149,15 @@ crowi-admin migrate apply --id wikilink-format
 **新たな誤変換は発生しません**。一方、既に `[[/font]]` のように化けた本文は
 `wikilink-format` が再実行されないため自動では直りません。
 
-`wikilink-html-recover` preflight 移行は、化けた `[[/<x>]]` (単一セグメント・
-HTML 要素名・`|alias` 無し) を `</x>` に逆変換します。`[[/foo/bar]]`
-(複数セグメント)・`[[/font|alias]]` (alias 付き)・`[[/Section]]` (大文字を
-含むページ名) などの**本来の wikilink は温存**されます。
+`wikilink-html-recover` preflight 移行は、化けた `[[/<x>]]` を `</x>` へ
+逆変換しますが、対象は**この 5 つの非推奨タグ**
+(`font` / `center` / `marquee` / `blink` / `applet`) **だけ**です。これらは
+`KNOWN_HTML_ELEMENTS` に欠けていた唯一の名前であり、誤変換が生み出しえた
+終了タグはこれらに限られるためです。それ以外の単一セグメント wikilink は、
+たとえ名前が標準 HTML 要素であっても (`[[/section]]` `[[/div]]` `[[/br]]` など)
+**温存**されます — これらは常に既知だったため `wikilink-format` が書き換えて
+おらず、**本来の wikilink** だからです。複数セグメント (`[[/foo/bar]]`)・
+alias 付き (`[[/font|alias]]`)・大文字 (`[[/Font]]`) の形も温存されます。
 
 ```bash
 # 復旧対象を事前確認 (本文は書き換えない)
@@ -164,11 +169,14 @@ crowi-admin migrate apply --id wikilink-html-recover
 
 > **Caution**: `[[/font]]` が「化けた `</font>`」なのか「実在する `/font`
 > ページへの本来の wikilink」なのかは、本文だけからは区別できません。この
-> 移行は、HTML 要素名と**同名の実ページが存在する** `[[/<x>]]` は自動変換
-> せず、`migrate plan` の結果に一覧として報告します (運用者が個別に判断して
-> ください)。適用前に `/font` `/section` `/div` などの実ページの有無を
-> 確認し (data audit)、まず dev / stg で検証してから本番に適用することを
-> 強くおすすめします。
+> 移行は、`/<x>` と**同名の実ページ (生きている公開ページ) が存在する**
+> `[[/<x>]]` は自動変換せず、`migrate plan` の結果に一覧として報告します
+> (運用者が個別に判断してください)。一方、同名ページが存在しない `[[/font]]`
+> (5 つの非推奨タグ) は **逆変換されます** — 削除済み / 未作成のページへの
+> dangling リンクも含みます。実際には `/font` `/center` `/marquee` `/blink`
+> `/applet` という名前の実ページは非常に稀ですが、もし存在する場合は
+> `migrate plan` の collision 一覧を確認し、まず dev / stg で検証してから
+> 本番に適用してください。
 
 この移行は冪等です — 逆変換後の `</x>` は復旧対象の検出にも `wikilink-format`
 の変換にも当たらないため、再実行しても二重には作用しません。
@@ -183,9 +191,12 @@ TOC は `Revision.meta.toc` に永続化される (RFC-0002) ため、既存ペ�
 バージョンの更新も `meta.toc` には作用しないため、**専用の移行でしか直りません**。
 
 `toc-html-strip` preflight 移行は、`meta.toc` に HTML を含むリビジョンを走査し、
-本文の見出しから目次だけを再抽出して `meta.toc` のみを上書きします
-(`renderedAst` 全体は作り直しません)。生成側 (保存パス) は既に HTML を除去
-するよう修正済みなので、新規ページの目次にはタグが入りません。
+各ラベルのテキストからタグを**その場で除去**します。書き換えるのはラベルの
+テキストだけで、エントリの `anchorId` はあえて変更しません — これにより
+(保存済みのレンダリング結果の見出し id と一致する) ページ内アンカーリンクが
+そのまま機能します。本文の再レンダリングや `renderedAst` の作り直しは行いません。
+生成側 (保存パス) は既に HTML を除去するよう修正済みなので、新規ページの
+目次にはタグが入りません。
 
 ```bash
 # 再生成対象のリビジョン数を事前確認
@@ -195,11 +206,13 @@ crowi-admin migrate plan
 crowi-admin migrate apply --id toc-html-strip
 ```
 
-> **Note**: HTML だけで構成された見出し (例: `### <br>`) は、タグ除去後の
-> ラベルが空になります。そのような目次エントリはアンカーとしても機能しない
-> ため、再生成時に**除外**されます。
+> **Note**: 既知の HTML タグだけで構成された見出し (例: `### <br>`) は、タグ
+> 除去後のラベルが空になります。そのような目次エントリはアンカーとしても機能
+> しないため、**除外**されます。一方、リテラルの `<` を含むだけのラベル
+> (`## price < 100`) や、既知タグではないタグ風トークン (`## Using List<int> in C#`)
+> は既知 HTML タグではないため、そのまま温存されます。
 
-この移行も冪等です — 一度ラベルから HTML が除去されれば再生成対象には
+この移行も冪等です — 一度ラベルから HTML タグが除去されれば除去対象には
 なりません。
 
 ### /api 名前空間の移設

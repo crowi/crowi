@@ -114,7 +114,7 @@ The migrations registered as of the v2 alpha are:
 | `user-unique-prepare` | preflight | Deduplicate users (prepare for the unique index) |
 | `relocate-reserved-api-paths` | preflight | Move v1 pages out of the reserved `/api` namespace |
 | `wikilink-html-recover` | preflight | Recover HTML close tags (`</font>` etc.) corrupted into wikilinks |
-| `toc-html-strip` | preflight | Regenerate table-of-contents entries that captured inline HTML |
+| `toc-html-strip` | preflight | Strip inline HTML out of table-of-contents labels |
 
 The boot migrations (`page-status-default` / `revisions-schema-unify`) apply
 automatically when the api starts, so they need no operator action. The
@@ -155,10 +155,15 @@ mangled into `[[/font]]`, however, do not self-heal because `wikilink-format`
 never re-runs.
 
 The `wikilink-html-recover` preflight migration reverts the corrupted form
-`[[/<x>]]` (single segment, HTML element name, no `|alias`) back to `</x>`.
-**Genuine wikilinks are preserved**: `[[/foo/bar]]` (multi-segment),
-`[[/font|alias]]` (aliased) and `[[/Section]]` (uppercase page name) are all
-left untouched.
+`[[/<x>]]` back to `</x>` **only for those five deprecated tags**
+(`font` / `center` / `marquee` / `blink` / `applet`) — the only names that were
+missing from `KNOWN_HTML_ELEMENTS`, so the only close tags the misfire could
+ever have produced. Every other single-segment wikilink is left untouched,
+including ones whose name happens to be a standard HTML element
+(`[[/section]]`, `[[/div]]`, `[[/br]]`): those were always known, so
+`wikilink-format` never rewrote them and they are **genuine wikilinks**.
+Multi-segment (`[[/foo/bar]]`), aliased (`[[/font|alias]]`) and uppercase
+(`[[/Font]]`) forms are preserved too.
 
 ```bash
 # Preview what would be recovered (does not rewrite bodies)
@@ -171,10 +176,13 @@ crowi-admin migrate apply --id wikilink-html-recover
 > **Caution**: `[[/font]]` could be a corrupted `</font>` OR a genuine
 > wikilink to a real page literally at `/font` — the two are indistinguishable
 > from the text alone. This migration does **not** auto-convert a `[[/<x>]]`
-> whose `/<x>` matches an **existing page path**; instead it reports those in
-> the `migrate plan` output so an operator can decide by hand. Before applying,
-> audit your data for real pages such as `/font`, `/section`, `/div`, and
-> validate on dev / staging before production.
+> whose `/<x>` matches an **existing live page**; instead it reports those in
+> the `migrate plan` output so an operator can decide by hand. It **does** still
+> revert a `[[/font]]` (or the other four deprecated tags) when no such page
+> exists — including a dangling link to an absent / deleted page. In practice a
+> real wiki page literally named `/font`, `/center`, `/marquee`, `/blink` or
+> `/applet` is very rare, but if you have one, review the collisions in
+> `migrate plan` and validate on dev / staging before applying in production.
 
 The migration is idempotent — once reverted, `</x>` matches neither the
 recovery scan nor the `wikilink-format` rewrite, so re-running has no double
@@ -190,9 +198,12 @@ read-path merge favours the stored value, and a renderer-version bump does not
 touch `meta.toc` — so only a dedicated migration fixes it.
 
 The `toc-html-strip` preflight migration walks revisions whose `meta.toc` still
-carries HTML, re-extracts the TOC from the body headings, and overwrites
-**only** `meta.toc` (it does not rebuild the whole `renderedAst`). The save
-path now strips HTML too, so freshly created pages never get a tagged TOC.
+carries HTML and strips the tags out of each label's text **in place**. It
+rewrites **only** the label text — the entry's `anchorId` is deliberately left
+unchanged, so the in-page anchor link (which still matches the stored rendered
+heading id) keeps working. It does not re-render the body or rebuild
+`renderedAst`. The save path now strips HTML too, so freshly created pages never
+get a tagged TOC.
 
 ```bash
 # Preview how many revisions would be regenerated
@@ -202,12 +213,14 @@ crowi-admin migrate plan
 crowi-admin migrate apply --id toc-html-strip
 ```
 
-> **Note**: A heading that is only HTML (e.g. `### <br>`) strips to an empty
-> label. Such a TOC entry would not be addressable as an anchor, so it is
-> **dropped** during regeneration.
+> **Note**: A heading that is only a known HTML tag (e.g. `### <br>`) strips to
+> an empty label. Such a TOC entry would not be addressable as an anchor, so it
+> is **dropped**. A label that merely contains a literal `<` (`## price < 100`)
+> or an unknown tag-like token (`## Using List<int> in C#`) is **not** a known
+> HTML tag and is left exactly as-is.
 
-This migration is idempotent too — once a label has no HTML, it is no longer a
-regeneration target.
+This migration is idempotent too — once a label has no HTML tag, it is no longer
+a strip target.
 
 ### /api namespace relocation
 
