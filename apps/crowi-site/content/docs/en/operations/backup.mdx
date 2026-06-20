@@ -79,6 +79,16 @@ For storage driver configuration, see [Storage settings](./storage).
 > you can get inconsistencies — attachment metadata in MongoDB without the
 > actual file (or vice versa).
 
+> **Note**: When backing up to S3 from an AWS Lightsail VPS, the
+> `AmazonLightsailInstanceRole` attached to the instance by default belongs
+> to the **Lightsail service's account** and cannot touch your own AWS
+> account's S3. The EC2-style behavior where permissions are granted
+> automatically via an instance profile is unavailable, so place an
+> **explicit IAM user's access key created in your own account** in
+> `~/.aws/credentials` and run `aws s3 sync` etc. For the end-to-end
+> operations procedure on Lightsail, see
+> [Running on AWS Lightsail](./aws-lightsail).
+
 ### Migrating files between drivers
 
 Separate from backup purposes, file migration when switching storage

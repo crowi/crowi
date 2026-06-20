@@ -139,6 +139,16 @@ The runner project is started with its `package.json` `"start": "crowi-api"`
 script (the `crowi-api` bin provided by `@crowi/api`), run from the project
 directory so that `process.cwd()` is the `projectDir`.
 
+When a plugin declares other plugins via `requires`, those dependencies are
+also **resolved and loaded automatically (transitively)**, so you do not need
+to list the dependency in `plugins` as well. For example,
+`@crowi/plugin-storage-aws-s3` and `@crowi/plugin-mail-aws-ses` both declare
+the shared base `@crowi/plugin-aws` via `requires`, so listing **only the
+driver plugins** in `plugins` is enough — `@crowi/plugin-aws` is loaded
+automatically. You do not need to list the umbrella `@crowi/plugin-aws`
+explicitly (which avoids a double load). For the end-to-end procedure using
+the full AWS stack, see [Running on AWS Lightsail](./aws-lightsail).
+
 For detailed steps on adding and enabling plugins, see
 [Managing plugins](../plugins/managing); for the kinds of plugins, see
 [Plugins overview](../plugins/overview).

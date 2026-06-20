@@ -139,6 +139,15 @@ cp .env.example .env
 (`@crowi/api` が提供する `crowi-api` bin) で起動します。`process.cwd()` が
 `projectDir` になるよう、プロジェクトディレクトリから実行します。
 
+プラグインが他のプラグインを `requires` で宣言している場合、その依存先も
+**自動で (transitive に) 解決・ロード** されます。そのため、依存先を
+`plugins` に重ねて書く必要はありません。例えば `@crowi/plugin-storage-aws-s3`
+と `@crowi/plugin-mail-aws-ses` は共通基盤の `@crowi/plugin-aws` を `requires`
+で宣言しているので、`plugins` には **driver プラグインだけ** を列挙すれば
+`@crowi/plugin-aws` は自動でロードされます。umbrella の `@crowi/plugin-aws`
+を明示列挙する必要はありません (重複ロードを避ける)。AWS 一式を使う通し
+手順は [AWS Lightsail で動かす](./aws-lightsail) を参照してください。
+
 プラグインの追加・有効化の詳しい手順は [プラグインの管理](../plugins/managing)、
 プラグインの種類は [プラグインの概要](../plugins/overview) を参照して
 ください。
