@@ -1,5 +1,6 @@
 import { STATUS_PUBLISHED } from 'src/models/page';
 
+import { resolveActingUserId } from '../helpers';
 import { defineMigration } from '../types';
 import type { MigrationContext } from '../types';
 
@@ -268,21 +269,10 @@ export function rewriteWikilinks(body: string): string {
  *   2. otherwise the oldest admin user (`{ admin: true }` sorted by createdAt),
  *      deterministic across re-runs.
  *
- * Throws when neither yields a user so the operator gets a clear error instead
- * of a per-page `user should have _id` failure deep inside the rewrite.
+ * (Implementation moved to `../helpers.ts` and shared with other preflight
+ * body-rewrite migrations like `files-url-to-attachments`. The call site below
+ * passes the migration name so the error mentions which migration tripped.)
  */
-async function resolveActingUserId(ctx: MigrationContext): Promise<string> {
-  const User = ctx.crowi.model('User');
-  const explicit = process.env.CROWI_MIGRATE_USER;
-  if (explicit) {
-    const named = await User.findOne({ email: explicit }).select('_id').lean().exec();
-    if (named) return String((named as { _id: unknown })._id);
-    throw new Error(`CROWI_MIGRATE_USER='${explicit}' but no user with that email exists.`);
-  }
-  const admin = await User.findOne({ admin: true }).sort({ createdAt: 1 }).select('_id').lean().exec();
-  if (admin) return String((admin as { _id: unknown })._id);
-  throw new Error('wikilink-format: no admin user found; set CROWI_MIGRATE_USER=<email> or create an admin user first.');
-}
 
 /**
  * Walk every published page, keep those whose current revision body holds a
@@ -405,7 +395,7 @@ export const wikilinkFormat = defineMigration({
           return { name: 'rewrite-wikilink', transformed: 0, stats: { wouldRewrite: pages.length } };
         }
 
-        const actingUserId = await resolveActingUserId(ctx);
+        const actingUserId = await resolveActingUserId(ctx, 'wikilink-format');
         const pages = await collectRewritablePages(ctx);
         ctx.progress.setTotal(pages.length);
 

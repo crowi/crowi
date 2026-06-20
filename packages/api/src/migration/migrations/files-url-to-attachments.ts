@@ -1,6 +1,7 @@
 import linkDetectorFactory from 'src/util/linkDetector';
 import { STATUS_PUBLISHED } from 'src/models/page';
 
+import { resolveActingUserId } from '../helpers';
 import { defineMigration } from '../types';
 import type { MigrationContext } from '../types';
 
@@ -176,20 +177,9 @@ function resolveAppOrigins(ctx: MigrationContext): string[] {
  * `wikilink-format`:
  *   1. `process.env.CROWI_MIGRATE_USER` (an email; the user must exist).
  *   2. otherwise the oldest admin (`{ admin: true }` by `createdAt`).
- * Throws when neither yields a user.
+ * Throws when neither yields a user. Implementation in `../helpers.ts` is
+ * shared with the other preflight body-rewrite migrations (`wikilink-format`).
  */
-async function resolveActingUserId(ctx: MigrationContext): Promise<string> {
-  const User = ctx.crowi.model('User');
-  const explicit = process.env.CROWI_MIGRATE_USER;
-  if (explicit) {
-    const named = await User.findOne({ email: explicit }).select('_id').lean().exec();
-    if (named) return String((named as { _id: unknown })._id);
-    throw new Error(`CROWI_MIGRATE_USER='${explicit}' but no user with that email exists.`);
-  }
-  const admin = await User.findOne({ admin: true }).sort({ createdAt: 1 }).select('_id').lean().exec();
-  if (admin) return String((admin as { _id: unknown })._id);
-  throw new Error('files-url-to-attachments: no admin user found; set CROWI_MIGRATE_USER=<email> or create an admin user first.');
-}
 
 /** A page that actually changes under the rewrite, paired with its new body. */
 interface RewritablePage {
@@ -314,7 +304,7 @@ export const filesUrlToAttachments = defineMigration({
           return { name: 'rewrite-files-url', transformed: 0, stats: { wouldRewrite: rewritable.length } };
         }
 
-        const actingUserId = await resolveActingUserId(ctx);
+        const actingUserId = await resolveActingUserId(ctx, 'files-url-to-attachments');
         const { rewritable: pages } = await scanFilesUrls(ctx, origins);
         ctx.progress.setTotal(pages.length);
 
