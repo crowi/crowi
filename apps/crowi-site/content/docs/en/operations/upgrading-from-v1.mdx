@@ -113,6 +113,7 @@ The migrations registered as of the v2 alpha are:
 | `wikilink-format` | preflight | Convert wikilink syntax |
 | `user-unique-prepare` | preflight | Deduplicate users (prepare for the unique index) |
 | `relocate-reserved-api-paths` | preflight | Move v1 pages out of the reserved `/api` namespace |
+| `files-url-to-attachments` | preflight | Rewrite v1 file URLs (`/files/<id>`) in page bodies to the v2 form (`/api/v2/attachments/<id>`) |
 
 The boot migrations (`page-status-default` / `revisions-schema-unify`) apply
 automatically when the api starts, so they need no operator action. The
@@ -268,6 +269,57 @@ internal links).
 > **Note**: `replace url` is neither a versioned migration (it takes arbitrary
 > from/to and is re-runnable) nor a derived-data rebuild (it mutates page
 > bodies), so it lives in its own namespace — not under `migrate` or `rebuild`.
+
+### Modernising file URLs (files-url-to-attachments)
+
+v1 referenced attachments / images in page bodies with **v1 file URLs** (the
+relative form `![shot.png](/files/<id>)`, or the absolute form
+`![shot.png](https://wiki.example/files/<id>)` when the editor pasted a full
+URL). v2 serves attachments from a dedicated stream endpoint at
+`/api/v2/attachments/<id>` and the legacy `/files/<id>` compat route was
+removed, so **v1-form URLs now 404 in v2 — those images are broken**. The id is
+the same 24-hex `Attachment._id` in both v1 and v2, so the fix is **just a URL
+rewrite** (no id remap).
+
+The `files-url-to-attachments` preflight migration walks the current-revision
+body of every published page (plus legacy `null` status) and rewrites the URL of
+Markdown images `![alt](url)` / links `[text](url)` by these rules (raw HTML
+`<img>` / `<a>` is out of scope):
+
+- **relative `/files/<id>`** → `/api/v2/attachments/<id>` (unconditional — a
+  root-relative path is always this site).
+- **self-host absolute `https://<CLIENT_URL host>/files/<id>`** →
+  `/api/v2/attachments/<id>` (relativised by dropping the host, so the URL
+  becomes host-independent). Self-host is decided by matching the `CLIENT_URL` /
+  `BASE_URL` origins only.
+- **external-host absolute URLs** → **left untouched** (so an unrelated
+  third-party `/files/<id>` image is never rewritten by mistake).
+
+```bash
+# Preview what would be rewritten first (writes nothing)
+crowi-admin migrate plan
+
+# Apply just this migration
+crowi-admin migrate apply --id files-url-to-attachments
+```
+
+The migration is idempotent: the rewritten `/api/v2/attachments/<id>` is never
+double-converted on a re-apply. It needs an admin user to attribute the rewrites
+to — set `CROWI_MIGRATE_USER=<email>` if none is resolvable.
+
+> **Tip**: If you **changed the domain**, first align the old host → new host
+> with [replace url](#bulk-url-replacement-after-a-domain-change-replace-url),
+> then apply this migration. Once `replace url` lines up the self-host absolute
+> URLs with the `CLIENT_URL` host, this migration can relativise them; in the
+> opposite order the old-host absolute URLs are classified as "external" and
+> left alone.
+
+> **Note**: As a safety net for migration misses and un-rewritten bodies, the
+> api restores a `/files/<id>` → `302` `/api/v2/attachments/<id>` redirect. A
+> runtime request to a relative `/files/<id>` is forwarded to the v2 form, so an
+> image is not left broken even if the body rewrite has not run yet (absolute
+> URLs pointing at an external host cannot be saved by the redirect, which is why
+> the body rewrite is the primary fix).
 
 ## What to do before migrating
 
