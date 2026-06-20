@@ -70,12 +70,32 @@ api を複数レプリカで運用する場合の追加要件:
 2. **`WS_TOKEN_SECRET` を全レプリカで同一値に揃える** — wsToken は任意の
    レプリカで発行されて任意のレプリカで検証されるため、値がずれると
    接続が確立できません (詳細は [関連環境変数](#関連環境変数) 参照)。
+   `REDIS_URL` を設定したまま `WS_TOKEN_SECRET` を未設定にすると、api は
+   **起動時にエラーで停止**します (プロセスごとのランダム鍵では他レプリカが
+   wsToken を検証できないため)。Redis をセッション/Socket.IO 用途のみに使う
+   シングルレプリカ構成では、`CROWI_ALLOW_EPHEMERAL_WS_TOKEN_SECRET=1` を
+   設定すると起動を許可します (この場合プロセス再起動で全 wsToken が無効化
+   される旨の警告が出ます)。
 3. **スティッキーセッション不要** — クライアントは任意の api レプリカに
    接続できます。Yjs 更新は Redis pub/sub 経由で他レプリカへ即座に
    伝搬します。
 4. **`Page.yjsState` が真実の源** — レプリカ全体の再起動時も MongoDB に
    永続化された yjsState から復元されます。Redis はライブのルーティング
    専用です。
+
+> **重要 (データ消失リスク・推奨はシングルインスタンス)**: マルチインスタンス
+> 構成には、まれにですが**編集内容が失われる**既知のリスクがあります。
+> `extension-redis` はライブの pub/sub のみを担い、切断中レプリカの Y.Doc を
+> 再構築しません。あるレプリカが古い `Page.yjsState` から Y.Doc を materialise
+> し、その状態でチェックポイント (compaction) を書き戻すと、別レプリカが書いた
+> 新しい状態を上書きしうるためです。compaction には**クロスインスタンスの
+> ロックがありません** (cross-instance ロック + last-writer 調停は現時点で
+> スコープ外)。`@crowi/collab` には保存時の楽観ロック (編集基底 revision が
+> ずれた保存を `CONFLICT` で拒否) と anti-shrink ガード (空 / 大幅縮小した
+> yjsState を既存の非空状態へ書き込まない) が入っており、single/multi 両方で
+> 最悪ケースを緩和しますが、**完全には防げません**。このため Crowi は当面
+> **シングルインスタンス (例: Lightsail 1 台) を推奨**します。マルチインスタンスは
+> 同時編集の負荷分散が必要な場合のみ、このリスクを理解した上で採用してください。
 
 ```yaml
 # 2 instance 例
@@ -178,7 +198,8 @@ labels:
 
 | 変数名 | 必須 | 用途 |
 | ------ | ---- | ---- |
-| `WS_TOKEN_SECRET` | はい (マルチで揃える) | wsToken (短命 JWT) の HMAC 署名鍵。マルチインスタンス構成では全レプリカで**同じ値**を指定する必要があります。未設定時はプロセス起動ごとにランダム生成され、警告ログが出ます (シングル開発環境のみ許容)。 |
+| `WS_TOKEN_SECRET` | はい (マルチで揃える) | wsToken (短命 JWT) の HMAC 署名鍵。マルチインスタンス構成では全レプリカで**同じ値**を指定する必要があります。未設定かつ `REDIS_URL` 設定済み (= マルチインスタンス相当) の場合、api は**起動を中止**します (`CROWI_ALLOW_EPHEMERAL_WS_TOKEN_SECRET=1` で明示的に許可可能)。`REDIS_URL` も未設定 (シングル開発環境) の場合はプロセス起動ごとにランダム生成され、警告ログが出ます。 |
+| `CROWI_ALLOW_EPHEMERAL_WS_TOKEN_SECRET` | いいえ | `REDIS_URL` を設定しつつ `WS_TOKEN_SECRET` を未設定のまま起動したいシングルレプリカ向けのオプトアウト。truthy 値を指定すると上記の起動中止を警告に降格します。Redis をセッション/Socket.IO 用途のみに使う 1 レプリカ構成でのみ安全です。 |
 | `COLLAB_MAX_EDITORS_PER_PAGE` | いいえ (デフォルト `20`) | ページごとの同時編集者上限。21 人目以降は read-only でリアルタイム表示は受けられますが編集できません。 |
 | `NEXT_PUBLIC_COLLAB_URL` | いいえ | ブラウザが WebSocket 接続する URL。未指定時は `window.location.host` + `NEXT_PUBLIC_API_URL` から `/collab/` を derive します。リバースプロキシで `/collab/*` を api 同居ホストに向けているなら設定不要。 |
 | `REDIS_URL` | マルチでは必須 | セッション/Socket.IO アダプタ + 共同編集の pub/sub + 編集者上限 counter。未設定時の挙動は次節参照。 |
@@ -238,11 +259,22 @@ docker compose logs -f api
   Hocuspocus engine 内では伝搬しますが、他レプリカへの pub/sub は
   途切れます。編集者上限 counter は **fail-open** (上限チェックを
   通す) に倒れます。Redis 復旧後は自動で pub/sub が再開します。
-- **`WS_TOKEN_SECRET` 不一致**: あるレプリカが発行した wsToken を別の
+- **`WS_TOKEN_SECRET` 不一致 / 未設定**: あるレプリカが発行した wsToken を別の
   レプリカが検証できず、`onAuthenticate` で reject されます。クライアントは
   WebSocket connect 後すぐに切断され、エディタが "接続できませんでした"
   状態のままになります。対処: 全レプリカで同じ secret を再設定して
-  ローリング再起動。
+  ローリング再起動。なお `REDIS_URL` を設定しつつ `WS_TOKEN_SECRET` を
+  未設定にした場合、api は**起動時にエラーで停止**してこの問題を未然に防ぎます
+  (Redis をセッション用途のみに使うシングルレプリカでは
+  `CROWI_ALLOW_EPHEMERAL_WS_TOKEN_SECRET=1` で起動を許可)。これらの診断
+  (wsToken 検証失敗 / 編集者上限到達) は本番ログに**サンプリングされた警告**
+  として出力されるため、"接続できませんでした" の真因 (期限切れ / secret 不一致 /
+  クロック skew / 上限到達) を切り分けられます。
+- **マルチインスタンスでの編集消失 (既知のリスク)**: 上記「マルチインスタンス
+  デプロイ」の重要注記を参照。stale なレプリカが古い `Page.yjsState` から
+  materialise した Y.Doc で compaction を書き戻すと、新しい状態を上書きしうる
+  既知のリスクです。楽観ロックと anti-shrink で緩和されますが完全には防げず、
+  シングルインスタンス運用を推奨します。
 - **WebSocket Upgrade 失敗**: リバースプロキシで `Upgrade` ヘッダが
   落とされていると `/collab/` 接続が 400/426 で失敗します。`nginx` 設定で
   `proxy_set_header Upgrade $http_upgrade` を確認してください。
