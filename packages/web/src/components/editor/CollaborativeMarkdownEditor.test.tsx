@@ -18,6 +18,7 @@ const { getYjsToken, FakeProvider, providerInstances } = vi.hoisted(() => {
     config: Record<string, unknown> & {
       onStatus?: (e: { status: string }) => void;
       onAuthenticationFailed?: () => void;
+      onSynced?: (e: { state: boolean }) => void;
     };
   }
   const instances: Instance[] = [];
@@ -122,11 +123,12 @@ function makeWrapper() {
   };
 }
 
-const validTokenResponse = (overrides: { readonly?: boolean; pageId?: string } = {}) => ({
+const validTokenResponse = (overrides: { readonly?: boolean; pageId?: string; currentRevision?: string | null } = {}) => ({
   wsToken: 'jwt.test.token',
   pageId: overrides.pageId ?? 'page-1',
   expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
   readonly: overrides.readonly ?? false,
+  currentRevision: overrides.currentRevision ?? null,
 });
 
 /** Build a `Response`-shaped mock matching what hc<AppType>'s real fetch returns. */
@@ -207,6 +209,8 @@ describe('CollaborativeMarkdownEditor', () => {
       awareness: null,
       provider: null,
       status: 'connecting' as const,
+      synced: false,
+      baseRevisionId: null,
       readonly: false,
       subscribeStateless: () => () => undefined,
       sendStateless: () => false,

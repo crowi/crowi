@@ -15,6 +15,7 @@ const { FakeProvider, providerInstances } = vi.hoisted(() => {
     config: {
       onStatus?: (e: { status: string }) => void;
       onAuthenticationFailed?: () => void;
+      onSynced?: (e: { state: boolean }) => void;
     } & Record<string, unknown>;
   }
   const instances: Instance[] = [];
@@ -105,6 +106,44 @@ describe('useCollabDocument', () => {
     });
     expect(result.current.readonly).toBe(true);
     expect(result.current.status).toBe('auth-failed');
+  });
+
+  it('starts unsynced and flips synced on the onSynced callback (§2)', () => {
+    const { result } = renderHook(() => useCollabDocument({ pageId: 'page-1', wsToken: 'jwt.abc' }));
+    // `status: connected` can stand before the initial sync, so synced
+    // must start false even after the socket opens.
+    expect(result.current.synced).toBe(false);
+    act(() => {
+      providerInstances[0].config.onStatus?.({ status: 'connected' });
+    });
+    expect(result.current.synced).toBe(false);
+
+    act(() => {
+      providerInstances[0].config.onSynced?.({ state: true });
+    });
+    expect(result.current.synced).toBe(true);
+  });
+
+  it('resets synced to false on disconnect and on auth failure (§2)', () => {
+    const { result } = renderHook(() => useCollabDocument({ pageId: 'page-1', wsToken: 'jwt.abc' }));
+    act(() => {
+      providerInstances[0].config.onSynced?.({ state: true });
+    });
+    expect(result.current.synced).toBe(true);
+
+    act(() => {
+      providerInstances[0].config.onStatus?.({ status: 'disconnected' });
+    });
+    expect(result.current.synced).toBe(false);
+
+    act(() => {
+      providerInstances[0].config.onSynced?.({ state: true });
+    });
+    expect(result.current.synced).toBe(true);
+    act(() => {
+      providerInstances[0].config.onAuthenticationFailed?.();
+    });
+    expect(result.current.synced).toBe(false);
   });
 
   it('propagates the initialReadonly bit from the wsToken response', () => {

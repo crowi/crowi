@@ -11,11 +11,12 @@ import { type CollabSaveSession, useCollabSave } from './use-collab-save';
  * on the narrow `CollabSaveSession` shape — keeping the test surface
  * minimal makes it easier to cover the 5-second timeout reliably.
  */
-function makeSession() {
+function makeSession(overrides: Partial<CollabSaveSession> = {}) {
   const outbox: string[] = [];
   let listener: StatelessListener | null = null;
   const session: CollabSaveSession = {
     status: 'connected',
+    synced: true,
     readonly: false,
     sendStateless: vi.fn((payload: string) => {
       outbox.push(payload);
@@ -27,6 +28,7 @@ function makeSession() {
         listener = null;
       };
     }),
+    ...overrides,
   };
   return {
     session,
@@ -40,6 +42,9 @@ function makeSession() {
     },
     setReadonly(readonly: boolean) {
       (session as { readonly: boolean }).readonly = readonly;
+    },
+    setSynced(synced: boolean) {
+      (session as { synced: boolean }).synced = synced;
     },
   };
 }
@@ -79,6 +84,49 @@ describe('useCollabSave', () => {
     await act(async () => {
       await expect(result.current.save()).rejects.toMatchObject({ reason: 'NOT_READY' });
     });
+  });
+
+  it('rejects with NOT_READY when connected but not yet synced (§2)', async () => {
+    const { session, setSynced } = makeSession();
+    setSynced(false);
+    const { result } = renderHook(() => useCollabSave(session));
+    await act(async () => {
+      await expect(result.current.save()).rejects.toMatchObject({ reason: 'NOT_READY' });
+    });
+  });
+
+  it('echoes baseRevisionId in the crowi:save payload when known (§1A)', async () => {
+    const helper = makeSession({ baseRevisionId: 'rev-base-1' });
+    const { result } = renderHook(() => useCollabSave(helper.session));
+
+    act(() => {
+      void result.current.save();
+    });
+
+    expect(helper.outbox).toHaveLength(1);
+    expect(JSON.parse(helper.outbox[0])).toEqual({ kind: 'crowi:save', baseRevisionId: 'rev-base-1' });
+
+    // Resolve so the test cleans up without a floating rejection.
+    act(() => {
+      helper.simulate({ kind: 'crowi:save-ok', revisionId: 'rev-after' });
+    });
+  });
+
+  it('maps a CONFLICT save-error to reason CONFLICT (§1A)', async () => {
+    const helper = makeSession({ baseRevisionId: 'rev-stale' });
+    const { result } = renderHook(() => useCollabSave(helper.session));
+
+    let saveResult: Promise<unknown> | undefined;
+    act(() => {
+      saveResult = result.current.save();
+    });
+
+    act(() => {
+      helper.simulate({ kind: 'crowi:save-error', code: 'CONFLICT', message: 'stale base; reload required' });
+    });
+
+    await expect(saveResult).rejects.toMatchObject({ reason: 'CONFLICT', code: 'CONFLICT' });
+    expect(result.current.lastError?.reason).toBe('CONFLICT');
   });
 
   it('emits a crowi:save stateless payload and resolves on crowi:save-ok', async () => {
