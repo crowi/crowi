@@ -1,0 +1,478 @@
+---
+title: Running on AWS Lightsail (worked example)
+description: An end-to-end walkthrough of standing up Crowi 2.0 on a single Lightsail VPS with docker compose. Generic steps link out to existing pages; only the Lightsail / AWS-specific gotchas are added here.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+This page is **one concrete walkthrough (worked example)**: rent a
+**single AWS Lightsail VPS**, and on it run Crowi 2.0 with
+**api / web / MongoDB / Redis / Elasticsearch / Caddy all stacked in a
+single docker compose**.
+
+The generic steps ([Deployment topologies](./deployment) /
+[Configuration](./configuration) / [Mail](./mail) / [Backup](./backup) /
+[Upgrading from v1](./upgrading-from-v1)) link out to their own pages; here
+we focus on **the order of the walkthrough** and the
+**Lightsail / AWS-specific gotchas**. The same procedure applies to EC2 or
+other VPS providers, but here we keep everything inside AWS as a minimal
+example.
+
+<Callout type="info">
+  This page is "how to walk through a self-host on Lightsail." Each section
+  links heavily into the existing operations docs. If you have not yet
+  grasped Crowi's deployment model (the two services api / web, same-origin
+  + reverse proxy), read [Deployment topologies](./deployment) first — it
+  makes this page easier to follow.
+</Callout>
+
+## 1. The big picture
+
+What you stand up is a single Lightsail instance and six containers
+running inside it.
+
+```
+        ┌──────────────────────────────────────────────────────────────┐
+        │  AWS Lightsail instance (Ubuntu, static IP)                  │
+        │                                                              │
+ :443 ──┼─▶ caddy ──┬─ /api,/files,/collab,… → api  ─┬─ MongoDB        │
+ :80  ──┘           └─ /                      → web   ├─ Redis          │
+        │                                            └─ Elasticsearch  │
+        └──────────────────────────────────────────────────────────────┘
+                       ▲                         │
+                  Route53 A record           S3 (backup / attachments) · SES (mail)
+                  (→ static IP)              ※ explicit IAM credentials needed (§9)
+```
+
+- **Audience**: an operator who wants to stand up Crowi v2 themselves on a
+  single VPS. We assume basic container and shell skills.
+- **What's included**: choosing the Lightsail plan → DNS & TLS → docker
+  compose → env / `crowi.config.json` → host initial setup → (optional) v1
+  migration → SES mail → backup operations → updates.
+- **What's not included**: multi-instance / autoscaling topologies, the
+  Lightsail Container Service (this page is a **VPS instance + your own
+  compose**), and Lightsail console screenshots.
+
+## 2. Choosing the Lightsail plan
+
+| Item | Recommended | Notes |
+| ---- | ----------- | ----- |
+| Plan (memory) | **4GB RAM plan** + 4GB swap (§6) | Because **Elasticsearch is co-located** alongside api / web / MongoDB / Redis. The 2GB plan tends to OOM during the ES self-build |
+| Region | One close to your users (e.g. `ap-northeast-1`) | Keeping S3 / SES in the same region keeps things simple |
+| OS | Ubuntu LTS | Easy to install Docker on |
+| Static IP | **Attach one** | So the public IP does not change on reboot. It is the target of the DNS A record |
+| Firewall | Open only `22` (SSH) / `80` / `443` | Do **not** expose MongoDB (27017) / ES (9200) etc. — they are container-to-container only |
+
+<Callout type="info">
+  **Why these memory requirements**: when Elasticsearch (kuromoji) is
+  co-located, the ES JVM heap + MongoDB + api / web tend to exhaust real
+  memory. In particular, **building the ES image yourself** consumes memory
+  at build time and OOMs (see [Setting up the search backend](./search-setup)).
+  Use **a 4GB plan + 4GB swap** as the baseline. If you do not need
+  full-text search, leave the search driver at `mongo` and drop ES — then
+  the 2GB plan works too (and you can skip the ES-related steps in §6).
+</Callout>
+
+<Callout type="warn">
+  Lightsail plan names, prices, and allocated memory change over time and by
+  region. The "4GB plan" here refers to the memory amount as a rough guide.
+  Check the AWS official page for the current plan lineup and pricing.
+</Callout>
+
+In the firewall (Lightsail's Networking tab), the recommendation is to open
+`80` / `443` fully and `22` only from your own IP. Never expose `27017`
+(MongoDB) or `9200` (ES). Containers in the compose talk to each other over
+Docker's internal network by name resolution, so there is no need to expose
+those ports on the host.
+
+## 3. DNS & TLS
+
+For a minimal setup, keep DNS inside AWS-native **Route53** too.
+
+1. Create a **hosted zone** for your domain (e.g. `example.com`) in Route53
+   (it is created automatically if you registered the domain in Route53).
+2. Add a single **A record** to the hosted zone pointing
+   `wiki.example.com` at the Lightsail **static IP** (`<your-static-ip>`).
+3. From there, Caddy **automatically obtains a certificate** from Let's
+   Encrypt at boot (HTTP-01 / TLS-ALPN-01).
+
+<Callout type="info">
+  **A. As long as you use Route53, no additional IAM credentials are needed
+  for DNS.** Caddy's certificate acquisition uses HTTP-01 / TLS-ALPN-01
+  (satisfied with ports 80 / 443 alone) and does not call the Route53 API.
+  As long as the A record points to the static IP, Caddy provisions TLS
+  automatically. You do not need to brace for "but I need a Route53 IAM key
+  for the DNS challenge."
+</Callout>
+
+<Callout type="warn">
+  **If you use Cloudflare for DNS, always set it to DNS only (gray cloud).**
+  If you leave it on orange cloud (proxy enabled), Let's Encrypt's HTTP-01
+  challenge is intercepted by Cloudflare and Caddy cannot obtain a
+  certificate. To use orange, you need a separate pattern that feeds a
+  Cloudflare Origin Certificate to Caddy. The generic example on this page
+  uses **Route53 + Caddy automatic TLS**.
+</Callout>
+
+Caddy's routing (which paths go to api / web, and WebSocket passthrough) is
+generic, so see
+[Deployment topologies — same-origin + reverse proxy](./deployment). The
+contents of the `Caddyfile` are repeated in §4.
+
+## 4. docker-compose layout
+
+A Crowi deployment is built around the two services **api (Hono)** and
+**web (Next.js)**, with MongoDB / Redis / Elasticsearch / Caddy alongside.
+The service layout and routing model are explained in detail in
+[Deployment topologies](./deployment) and [Installation](./installation),
+so here we show only the **minimal compose and Caddyfile to run on
+Lightsail**.
+
+The repo's bundled `docker-compose.yml` is set up to bring up api / web /
+caddy with `--profile app`. When stacking everything on a single Lightsail
+instance, it is easier to also start the infra (mongodb / redis /
+elasticsearch) from the same compose and **manage all services in one
+file**. A minimal working example:
+
+```yaml
+# docker-compose.yml (minimal all-in-one example on a single Lightsail instance)
+services:
+  mongodb:
+    image: mongo:8
+    restart: unless-stopped
+    volumes:
+      - ./data/mongodb:/data/db        # persist via bind mount
+
+  redis:
+    image: redis:7
+    restart: unless-stopped
+
+  elasticsearch:
+    build:                              # self-build with kuromoji bundled
+      context: .
+      dockerfile: elasticsearch.Dockerfile
+    restart: unless-stopped
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    volumes:
+      - ./data/elasticsearch:/usr/share/elasticsearch/data
+    ulimits:
+      memlock: { soft: -1, hard: -1 }
+
+  api:
+    image: crowi-api:full               # full image (all drivers bundled)
+    restart: unless-stopped
+    depends_on: [mongodb, redis, elasticsearch]
+    env_file: [.env]
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      MONGO_URI: mongodb://mongodb:27017/crowi
+      REDIS_URL: redis://redis:6379
+      CLIENT_URL: https://wiki.example.com
+    volumes:
+      - ./crowi.config.json:/app/crowi.config.json:ro
+
+  web:
+    image: crowi-web:latest
+    restart: unless-stopped
+    depends_on: [api]
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on: [web, api]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./data/caddy:/data            # persist the obtained certificates
+    ports:
+      - "80:80"
+      - "443:443"
+```
+
+The `Caddyfile` changes by just one line to match your §3 domain (unlike the
+compose example, here we write the public domain so Caddy provisions TLS
+automatically):
+
+```
+wiki.example.com {
+	# HTTP API + attachments → api
+	@api path /api/* /files/*
+	reverse_proxy @api api:3000
+
+	# realtime WebSocket → api (Caddy forwards Upgrade automatically)
+	@ws path /collab /collab/* /presence /presence/* /notifications /notifications/*
+	reverse_proxy @ws api:3000
+
+	# everything else → web
+	reverse_proxy web:3000
+}
+```
+
+<Callout type="warn">
+  List **both the bare path and the `/*` form** in the matchers for the
+  three realtime namespaces (`/collab` / `/presence` / `/notifications`). In
+  Caddy, `path /collab/*` does NOT match a bare `/collab`, and missing it
+  makes collaborative editing / presence / the notification bell silently
+  fall back to non-realtime behavior. See the Caddy section in
+  [Deployment topologies](./deployment).
+</Callout>
+
+For the api / web images, use the official `crowi-api` (full) / `crowi-web`
+or build them yourself. Image builds (the full / slim build-arg) are covered
+in [Installation — Building the official Docker images](./installation).
+Elasticsearch needs a self-built image with kuromoji bundled, so use the
+repo's `elasticsearch.Dockerfile` ([Search setup](./search-setup)).
+
+## 5. env and crowi.config.json
+
+The meaning of `.env` (the compose `env_file`) and `crowi.config.json` is
+authoritatively covered in [Configuration](./configuration). Here we add
+only the **required-env checklist** for the all-in-one Lightsail setup and
+how to write `crowi.config.json` when using the AWS drivers.
+
+### Required-env checklist
+
+| Variable | Value in this setup | Notes |
+| -------- | ------------------- | ----- |
+| `MONGO_URI` | `mongodb://mongodb:27017/crowi` | Resolved by compose service name. The `environment` entry overrides `.env` |
+| `REDIS_URL` | `redis://redis:6379` | Same. Optional for a single instance, but safe to include |
+| `CLIENT_URL` | `https://wiki.example.com` | **Required in production**. Used for CORS and links in outgoing mail. Set the public domain |
+| `PASSWORD_SEED` | (same as v1) | When migrating from v1, use the **same value as v1** (for password verification) |
+| `CROWI_ENCRYPTION_KEY` | generate with `openssl rand -base64 32` | Encrypts sensitive Config. Put it in `.env` and it is passed through compose. [Encryption](./encryption) |
+| `WS_TOKEN_SECRET` | generate with `openssl rand -base64 32` | The WS auth key for realtime. Optional for a single instance but recommended |
+
+The secrets (`CROWI_ENCRYPTION_KEY` / `WS_TOKEN_SECRET`) are passed to the
+api container as-is via `env_file` when written in `.env`. Meanwhile, the
+convention is to override `MONGO_URI` / `REDIS_URL` / `CLIENT_URL` on the
+compose `environment` side ([Configuration — environment variables in
+Docker](./configuration)).
+
+### crowi.config.json (choosing the AWS drivers)
+
+To use S3 storage + SES mail + Elasticsearch search, list **only the driver
+plugins** in `plugins`.
+
+```json
+{
+  "plugins": [
+    "@crowi/plugin-storage-aws-s3",
+    "@crowi/plugin-mail-aws-ses",
+    "@crowi/plugin-search-elasticsearch",
+    "@crowi/plugin-renderer-plantuml",
+    "@crowi/plugin-renderer-emoji",
+    "@crowi/plugin-renderer-katex"
+  ],
+  "storage": { "driver": "s3" },
+  "search": { "driver": "elasticsearch" },
+  "mail": { "driver": "ses" }
+}
+```
+
+<Callout type="warn">
+  **C. Do not list the AWS umbrella plugin `@crowi/plugin-aws` explicitly in
+  `plugins`.** Both `@crowi/plugin-storage-aws-s3` and
+  `@crowi/plugin-mail-aws-ses` declare `requires: ['@crowi/plugin-aws']`, so
+  the shared-credentials base `@crowi/plugin-aws` is **loaded automatically
+  (transitively)** as a dependency. Adding it explicitly causes a double
+  load. Listing **only the drivers (`@crowi/plugin-storage-aws-s3` /
+  `@crowi/plugin-mail-aws-ses`)** in `plugins` is enough. See
+  [Configuration — How plugins are resolved](./configuration) for the
+  resolution mechanism.
+</Callout>
+
+The **credentials** — the S3 bucket name / region / access key, and the SES
+region / sender / access key — are **not written in `crowi.config.json`**;
+you enter them from the admin UI (`/admin/plugins`, `/admin/mail`) after the
+api boots ([Storage](./storage) / [Mail](./mail)). When
+`CROWI_ENCRYPTION_KEY` is set, these are stored encrypted in MongoDB.
+
+## 6. Host initial setup
+
+SSH into the Lightsail instance, install Docker and (optionally) the AWS
+CLI, and proactively defuse the **two Lightsail-specific gotchas**.
+
+```bash
+# Docker / Docker Compose plugin (Ubuntu)
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker "$USER"   # re-login for it to take effect
+
+# (optional) AWS CLI — used for backup S3 uploads, etc.
+sudo apt-get update && sudo apt-get install -y awscli
+```
+
+### B. Allocate 4GB of swap
+
+**Building the Elasticsearch image yourself** tends to consume memory at
+build time and get killed by the OOM killer. Having 4GB of swap ready
+stabilizes it.
+
+```bash
+sudo fallocate -l 4G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab   # keep it after reboot
+```
+
+<Callout type="info">
+  **B. Swap is primarily for avoiding OOM during the ES self-build.** It is
+  not strictly required if you only pull the official ES image, but the
+  kuromoji-bundled image needs a self-build ([Search setup](./search-setup)),
+  so on a 4GB plan we recommend having 4GB of swap.
+</Callout>
+
+### D. chown the Elasticsearch bind mount
+
+The ES container runs as uid `1000`, but a freshly created bind-mount
+directory on the host is owned by `root:root`, so ES cannot create
+`node.lock` etc. and fails to start. **chown it once first.**
+
+```bash
+mkdir -p data/elasticsearch
+sudo chown -R 1000:0 data/elasticsearch
+```
+
+<Callout type="warn">
+  **D. Run `sudo chown -R 1000:0 data/elasticsearch` once on the ES bind
+  mount.** Forgetting this makes ES fail to start with
+  `AccessDeniedException: .../node.lock`, and search will not work. The
+  MongoDB bind mount (`data/mongodb`) needs no such step because Docker
+  adjusts its permissions.
+</Callout>
+
+Once all of this is done, start the compose from §4 with
+`docker compose up -d` (use `--build` on the first run if you self-build
+ES). Open `https://wiki.example.com` in a browser, create the first admin in
+the installer screen, and Crowi is ready.
+
+## 7. Migrating data from v1 (optional)
+
+When migrating from an existing v1 wiki, [Upgrading from v1](./upgrading-from-v1)
+is the authoritative source. The key points:
+
+- Move the v1 MongoDB to this Lightsail MongoDB with `mongodump` /
+  `mongorestore` ([Backup](./backup)).
+- Set `PASSWORD_SEED` in `.env` to the **same value as v1** (password
+  verification).
+- If you changed the public domain, bulk-replace absolute URLs in page
+  bodies with
+  `crowi-admin replace url --from https://old.example --to https://wiki.example.com`.
+- After migration, rebuild the search index with `crowi-admin rebuild search`.
+
+Run these `crowi-admin` commands inside the api container (see §10 for how to
+invoke them). For the order in which to apply preflight migrations and the
+caveats, see [Upgrading from v1](./upgrading-from-v1).
+
+## 8. Sending mail via SES
+
+Mail delivery in general is authoritatively covered in
+[Mail / SMTP setup](./mail). The specific gotchas for SES on Lightsail + AWS
+are as follows.
+
+- Set `mail.driver` to `ses` in `crowi.config.json` and add
+  `@crowi/plugin-mail-aws-ses` to `plugins` (§5; do not write
+  `@crowi/plugin-aws` — it is loaded automatically).
+- Enter the SES **region / sender address / IAM access key** from the admin
+  UI (`/admin/mail`). The sender address (or domain) must be verified on the
+  SES side. This access key must belong to an explicit IAM user created in
+  your own AWS account (a Lightsail instance cannot use an instance
+  profile — **F**; see §9).
+
+<Callout type="info">
+  **G. Crowi's SES driver sends directly with the SESv2 SDK** (not via SMTP
+  relay). Therefore **the SES SMTP credentials (SMTP password) are not
+  needed** — you only enter a regular **IAM access key (with SES send
+  permission)** in the admin UI. You do not have to go through the step of
+  generating an SMTP password.
+</Callout>
+
+While SES is in the sandbox state, it can only send to verified addresses.
+For production, request sandbox removal from AWS ([Mail](./mail)).
+
+## 9. Operations (backup & snapshots)
+
+The overall backup design (which data is essential for recovery) is
+authoritatively covered in [Backup](./backup). On a Lightsail setup you run
+the following two tracks.
+
+### MongoDB → S3
+
+Dump MongoDB with `mongodump` and set up a cron that uploads to S3.
+
+```bash
+# Example: a daily cron (mongodump → sync to S3)
+mongodump --uri "mongodb://localhost:27017/crowi" --out "/tmp/crowi-$(date +%F)"
+aws s3 sync "/tmp/crowi-$(date +%F)" "s3://your-backup-bucket/crowi/$(date +%F)/"
+```
+
+If attachments are on the S3 storage driver, the attachment bodies are on
+the S3 side, so you can protect them with S3 versioning / cross-region
+replication ([Backup — Backing up attachments](./backup)).
+
+<Callout type="warn">
+  **F. The Lightsail default instance role belongs to a different AWS
+  account than yours.** The `AmazonLightsailInstanceRole` attached to a
+  Lightsail VPS by default belongs to the **Lightsail service's account** and
+  cannot touch your account's S3 / SES / KMS. The EC2-style behavior where
+  "permissions are granted automatically via an instance profile" is **not
+  available**. So to use S3 backup / SES / KMS, you must place an **explicit
+  IAM user's access key created in your own account** in the host's
+  `~/.aws/credentials` (for the AWS CLI) or the admin UI (for the SES / S3
+  drivers). This applies to both backup and SES.
+</Callout>
+
+When you encrypt sensitive Config, the dump contains the encrypted values.
+So the same key can decrypt them on the restore target, **store
+`CROWI_ENCRYPTION_KEY` separately and securely from the dump**
+([Backup](./backup) / [Encryption](./encryption)).
+
+### Lightsail Auto Snapshot
+
+As host-level insurance, enabling Lightsail's **Auto Snapshot** lets you
+snapshot the whole instance (including the bind-mount data) daily. The
+practical approach is to take application-consistent backups with the
+`mongodump` track above, while using snapshots as insurance for a
+"roll back the whole VPS" scenario.
+
+## 10. Updates (switching image tags)
+
+During alpha, update by bumping the tag to a newer alpha image.
+
+```bash
+# Change the compose image tag to a newer alpha, then
+docker compose pull api web
+docker compose up -d api web
+```
+
+If preflight migrations were added in the update, the api may refuse to
+start. In that case, run `crowi-admin migrate apply` inside the api
+container. For the migration-guard model, see
+[Upgrading from v1 — the migration framework](./upgrading-from-v1).
+
+<Callout type="info">
+  **E. In official images from alpha.2 onward, `crowi-admin` starts by name.**
+  The runtime image's `/app/node_modules/.bin` is on PATH, so
+  `docker compose run --rm api crowi-admin <cmd>` works as-is (e.g.
+  `docker compose run --rm api crowi-admin migrate apply`). Only the alpha.1
+  image lacked PATH and required the absolute path
+  `/app/node_modules/.bin/crowi-admin <cmd>`. That workaround is unnecessary
+  from alpha.2 onward.
+</Callout>
+
+For per-release caveats (migrations, breaking changes), check each release
+note and [Upgrading from v1](./upgrading-from-v1) each time.
+
+## Next steps
+
+- [Deployment topologies](./deployment) — details on api / web routing and the same-origin setup
+- [Configuration](./configuration) — the full reference for env and `crowi.config.json`
+- [Mail / SMTP setup](./mail) — configuring mail delivery including SES
+- [Backup](./backup) — backing up and restoring data
+- [Upgrading from v1](./upgrading-from-v1) — migrating data from v1 to v2
