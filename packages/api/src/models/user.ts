@@ -143,6 +143,7 @@ export interface UserModel extends PaginateModel<UserDocument> {
   removeCompletelyById(id, callback: (err: Error | null, userData: 1 | null) => void): any;
   resetPasswordByRandomString(id: Types.ObjectId): Promise<{ user: UserDocument; newPassword: string }>;
   createUsersByInvitation(emailList, toSendEmail, callback): any;
+  sendInvitationMail(user: UserDocument): Promise<void>;
   createUserByEmailAndPassword(name, username, email, password, lang, callback): any;
   createUserPictureFilePath(user: UserDocument, ext: string): string;
   getUsernameByPath(path): string | null;
@@ -762,6 +763,43 @@ export default (crowi: Crowi) => {
     return { user, newPassword };
   };
 
+  /**
+   * Issue a fresh invite token and send the invitation email for `user`.
+   *
+   * Shared by the initial invitation (`createUsersByInvitation`) and the
+   * admin "resend invite" action so the token issuance + invite-link
+   * assembly + `mailer.send('invite')` live in exactly one place. The
+   * token is a stateless JWT (`util/mail-token.ts`, TTL 7 days, not stored
+   * in the DB), so a resend simply signs a new token — no old-token
+   * invalidation is needed; the accept handler's status check rejects a
+   * second acceptance.
+   *
+   * Throws on a send failure. Callers that must not abort their wider
+   * operation (the batch invite, where one bad address must not stop the
+   * rest) wrap this in try/catch; the resend handler lets the throw
+   * surface so it can be mapped to a 5xx.
+   */
+  userSchema.statics.sendInvitationMail = async function (user: UserDocument): Promise<void> {
+    const mailer = crowi.getMailer();
+    const mailTokenUtil = createMailTokenUtil();
+    // Absolute base for the invite link (CLIENT_URL).
+    const baseUrl = crowi.getBaseUrl() || '';
+    // Token-based invite link — no plaintext password is ever emailed; the
+    // invitee sets their own credentials on accept.
+    const { token } = mailTokenUtil.signMailToken({
+      purpose: 'invite',
+      userId: user._id.toString(),
+      email: user.email,
+    });
+    const inviteUrl = `${baseUrl}/invite/accept?token=${token}`;
+
+    await mailer.send({
+      to: user.email,
+      htmlTemplate: 'invite',
+      vars: { ...mailer.brandVars(), inviteUrl, email: user.email },
+    });
+  };
+
   userSchema.statics.createUsersByInvitation = function (emailList, toSendEmail, callback) {
     const createdUserList: {
       email: string;
@@ -769,7 +807,6 @@ export default (crowi: Crowi) => {
       user: UserDocument | null;
     }[] = [];
     const config = crowi.getConfig();
-    const mailer = crowi.getMailer();
 
     if (!Array.isArray(emailList)) {
       debug('emailList is not array');
@@ -828,11 +865,6 @@ export default (crowi: Crowi) => {
         }
 
         if (toSendEmail) {
-          const mailTokenUtil = createMailTokenUtil();
-          const brand = mailer.brandVars();
-          // Absolute base for the invite link (CLIENT_URL).
-          const baseUrl = crowi.getBaseUrl() || '';
-
           async.each(
             createdUserList,
             function (item, next) {
@@ -841,23 +873,11 @@ export default (crowi: Crowi) => {
                 return next();
               }
 
-              // Token-based invite link — no plaintext password is ever
-              // emailed; the invitee sets their own credentials on accept.
-              const { token } = mailTokenUtil.signMailToken({
-                purpose: 'invite',
-                userId: item.user._id.toString(),
-                email: item.email,
-              });
-              const inviteUrl = `${baseUrl}/invite/accept?token=${token}`;
-
-              mailer
-                .send({
-                  to: item.email,
-                  htmlTemplate: 'invite',
-                  vars: { ...brand, inviteUrl, email: item.email },
-                })
-                // A send failure must not abort user creation — log and
-                // continue so the remaining invitations still go out.
+              // Token issuance + invite-link assembly + send is shared with
+              // the admin "resend invite" action via `sendInvitationMail`.
+              // A send failure must not abort the batch — log and continue
+              // so the remaining invitations still go out.
+              User.sendInvitationMail(item.user)
                 .then(() => debug('completed to send invitation to', item.email))
                 .catch((err) => debug('failed to send invitation email: ', err))
                 .finally(() => next());
