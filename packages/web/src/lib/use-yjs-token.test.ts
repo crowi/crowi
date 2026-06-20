@@ -10,7 +10,16 @@ import { createElement } from 'react';
 // without a TDZ violation. RFC-0006 Batch 5 switched the hook from
 // ts-rest's `apiClient.pageCollab.getYjsToken` to hc<AppType>'s
 // Response-shaped fetch call.
-const { getYjsToken } = vi.hoisted(() => ({ getYjsToken: vi.fn() }));
+const { getYjsToken, tokenRefreshListeners, emitTokenRefreshed } = vi.hoisted(() => {
+  const listeners = new Set<() => void>();
+  return {
+    getYjsToken: vi.fn(),
+    tokenRefreshListeners: listeners,
+    emitTokenRefreshed: () => {
+      for (const l of [...listeners]) l();
+    },
+  };
+});
 vi.mock('./api-client', () => ({
   apiClientV2: {
     pages: {
@@ -20,11 +29,23 @@ vi.mock('./api-client', () => ({
     },
   },
 }));
+// H7 — capture the silent-refresh subscriber so the test can fire it and
+// assert the hook only refetches the wsToken when the cached one is near
+// expiry (not on every healthy access-token refresh).
+vi.mock('./token-refresh-notifier', () => ({
+  subscribeTokenRefreshed: (listener: () => void) => {
+    tokenRefreshListeners.add(listener);
+    return () => tokenRefreshListeners.delete(listener);
+  },
+  notifyTokenRefreshed: () => undefined,
+}));
 
 import { useYjsToken } from './use-yjs-token';
+import { act } from '@testing-library/react';
 
 beforeEach(() => {
   getYjsToken.mockReset();
+  tokenRefreshListeners.clear();
 });
 
 /** Build a `Response`-shaped mock the hook can consume via `response.ok` + `response.json()`. */
@@ -88,6 +109,53 @@ describe('useYjsToken', () => {
     // The hook lifts `error.message` from the response body; on a 500
     // with a `{ error: { message } }` envelope it uses that verbatim.
     expect((result.current.error as Error).message).toBe('upstream blew up');
+  });
+
+  it('H7: a silent access-token refresh does NOT refetch the wsToken while the cached one is still valid', async () => {
+    const body = {
+      wsToken: 'jwt.valid',
+      pageId: 'page-h7',
+      // Comfortably valid: 5 min out, well past the 30s window.
+      expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+      readonly: false,
+    };
+    getYjsToken.mockResolvedValue(okResponse(body));
+
+    const { result } = renderHook(() => useYjsToken('page-h7'), { wrapper: makeWrapper() });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(getYjsToken).toHaveBeenCalledTimes(1);
+
+    // A silent access-token refresh fires. The wsToken is still valid, so
+    // the hook must NOT invalidate/refetch (which would rebuild the live
+    // provider mid-edit).
+    await act(async () => {
+      emitTokenRefreshed();
+      await Promise.resolve();
+    });
+    expect(getYjsToken).toHaveBeenCalledTimes(1);
+  });
+
+  it('H7: a silent access-token refresh DOES refetch the wsToken when the cached one is (near) expired', async () => {
+    const expired = {
+      wsToken: 'jwt.expired',
+      pageId: 'page-h7b',
+      // Already past expiry → recovery is warranted.
+      expiresAt: new Date(Date.now() - 1000).toISOString(),
+      readonly: false,
+    };
+    const fresh = { ...expired, wsToken: 'jwt.fresh', expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString() };
+    getYjsToken.mockResolvedValueOnce(okResponse(expired)).mockResolvedValue(okResponse(fresh));
+
+    const { result } = renderHook(() => useYjsToken('page-h7b'), { wrapper: makeWrapper() });
+    await waitFor(() => expect(result.current.data?.wsToken).toBe('jwt.expired'));
+    expect(getYjsToken).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      emitTokenRefreshed();
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(result.current.data?.wsToken).toBe('jwt.fresh'));
+    expect(getYjsToken).toHaveBeenCalledTimes(2);
   });
 
   it('propagates the readonly bit from the response', async () => {

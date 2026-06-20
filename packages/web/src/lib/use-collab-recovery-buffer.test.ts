@@ -105,6 +105,42 @@ describe('useCollabRecoveryBuffer', () => {
     expect(window.localStorage.getItem(KEY('p1'))).toBeNull();
   });
 
+  it('M2 regression: after clear() (save success / explicit discard) a fresh mount sees no recoverable snapshot', () => {
+    // M2 was: the recovery buffer was never cleared on a successful save or
+    // an explicit discard, so the 24h TTL left a stale snapshot that
+    // spuriously prompted "restore unsaved changes?" on the next mount (and
+    // could restore over newer content). `edit-page-client` now calls
+    // `recovery.clear()` in both branches; this asserts the hook contract
+    // those calls rely on — once cleared, a later mount surfaces nothing.
+    const { result, unmount } = renderHook(() =>
+      useCollabRecoveryBuffer({
+        pageId: 'p1',
+        getText: () => 'about to be saved',
+        enabled: false,
+      }),
+    );
+    act(() => {
+      result.current.snapshotNow();
+    });
+    expect(window.localStorage.getItem(KEY('p1'))).not.toBeNull();
+
+    // Simulate the save-success / discard path.
+    act(() => {
+      result.current.clear();
+    });
+    unmount();
+
+    // A fresh mount (re-open the page) must NOT surface the cleared buffer.
+    const { result: remounted } = renderHook(() =>
+      useCollabRecoveryBuffer({
+        pageId: 'p1',
+        getText: () => null,
+        enabled: false,
+      }),
+    );
+    expect(remounted.current.recoverable).toBeNull();
+  });
+
   it('is a no-op when pageId is null (create flow)', () => {
     const { result } = renderHook(() =>
       useCollabRecoveryBuffer({
