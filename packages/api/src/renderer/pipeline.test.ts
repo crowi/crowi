@@ -87,6 +87,33 @@ describe('pipeline + core renderers', () => {
       const { metadata } = await runCore('## Crowi の使い方');
       expect(metadata.toc[0].anchorId).toBe('crowi-の使い方');
     });
+
+    it('strips inline HTML from heading labels (TOC HTML-leak regression)', async () => {
+      // `mdast-util-to-string` defaults to `includeHtml: true`, which leaked
+      // raw `<font …>` / `</font>` markup into the TOC label. The headings
+      // transform now passes `{ includeHtml: false }`.
+      const { metadata } = await runCore('### <font color="1a73e8">Workspace の作成</font>');
+      expect(metadata.toc).toEqual([{ level: 3, text: 'Workspace の作成', anchorId: 'workspace-の作成' }]);
+    });
+
+    it('keeps the non-HTML text when a heading mixes HTML and plain text', async () => {
+      const { metadata } = await runCore('## Plain <b>bold</b> tail');
+      expect(metadata.toc[0].text).toBe('Plain bold tail');
+    });
+
+    it('drops an HTML-only heading from the TOC (no addressable label remains)', async () => {
+      // `### <br>` strips to an empty label; an entry with empty text /
+      // anchorId is unaddressable AND would fail the `meta.toc` schema's
+      // `required` text/anchorId, so it is dropped entirely.
+      const { metadata } = await runCore('### <br>');
+      expect(metadata.toc).toEqual([]);
+    });
+
+    it('keeps surrounding headings while dropping the HTML-only one', async () => {
+      const md = ['# Real', '', '### <br>', '', '## Tail'].join('\n');
+      const { metadata } = await runCore(md);
+      expect(metadata.toc.map((e) => e.text)).toEqual(['Real', 'Tail']);
+    });
   });
 
   describe('wikilinks', () => {

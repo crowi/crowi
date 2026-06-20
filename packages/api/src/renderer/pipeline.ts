@@ -48,7 +48,13 @@ export interface PipelineEsmDeps {
    */
   remarkBreaks: unknown;
   GithubSlugger: new () => { slug(text: string): string };
-  mdastToString: (node: unknown) => string;
+  /**
+   * `mdast-util-to-string`'s `toString`. The optional second argument is
+   * its `Options` bag — only `includeHtml` is used (the headings transform
+   * passes `{ includeHtml: false }` so inline HTML inside a heading
+   * doesn't leak its raw markup into the TOC label).
+   */
+  mdastToString: (node: unknown, options?: { includeHtml?: boolean; includeImageAlt?: boolean }) => string;
   /**
    * Pre-warmed shiki highlighter bound to a **dual theme** (`github-light`
    * + `github-dark`) and the bundled language set. Lazily initialised on
@@ -182,7 +188,9 @@ export function createPipelineEsmDepsLoader(): LoadPipelineEsmDeps {
     // its `interopDefault` unwrap.
     const remarkBreaksMod = jiti('remark-breaks') as { default: unknown };
     const sluggerMod = jiti('github-slugger') as { default: new () => { slug(text: string): string } };
-    const mdastToStringMod = jiti('mdast-util-to-string') as { toString: (node: unknown) => string };
+    const mdastToStringMod = jiti('mdast-util-to-string') as {
+      toString: (node: unknown, options?: { includeHtml?: boolean; includeImageAlt?: boolean }) => string;
+    };
     // shiki is ESM-only too; its bundled core entry exposes
     // `createHighlighter` (^1.x and ^2.x and ^4.x). We init once with
     // the dual (light + dark) theme + language set so per-block calls
