@@ -5,8 +5,9 @@ import { m } from '@paraglide/messages.js';
 import { Compass, Folder, HelpCircle, MoreHorizontal, MoveRight, Pencil, Plus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { CreatePageListButton } from '@/components/create-page/create-page-dialog';
+import { CreatePageCtaButton, CreatePageListButton } from '@/components/create-page/create-page-dialog';
 import { PageContent } from '@/components/page-view/page-content';
+import { PortalizeDialog } from '@/components/page-view/portalize-dialog';
 import { RenameDialog } from '@/components/page-view/rename-dialog';
 import { StaleRevisionBanner } from '@/components/page-view/stale-revision-banner';
 import { Button } from '@/components/ui/button';
@@ -149,6 +150,12 @@ export function PageList({ initialParams = {}, variant = 'default', disableCreat
   const portalCreatorId = typeof rawPortalPage?.creator === 'string' ? rawPortalPage.creator : rawPortalPage?.creator?._id;
   const ownDraftPortalId = isDraftPortal && user && portalCreatorId === user.id ? rawPortalPage?._id : undefined;
 
+  // §4 — a portal path (`/foo/`) with no portal document of its own, but a
+  // content page at the stripped path (`/foo`): the server surfaces it as
+  // `contentPage` so we can offer "portalize this page" instead of "Create
+  // Portal". Mutually exclusive with `portalPage` (the server only sets one).
+  const contentPage = !portalPage ? ((data?.contentPage as PageWithRevision | undefined) ?? undefined) : undefined;
+
   // When `?revision_id=` opened the portal document at a past revision, the
   // server rewinds `portalPage.revision` to that version and keeps the latest
   // in `latestRevision`. Mirror the normal-page stale judgement
@@ -156,23 +163,18 @@ export function PageList({ initialParams = {}, variant = 'default', disableCreat
   // + one-click "revert to this version" button.
   const isStalePortalRevision = isStalePageRevision(portalPage);
 
-  // Empty: nothing to render in the portal slot and no children. Show a
-  // minimal header so the user still sees breadcrumb / title + "no pages".
-  if (!data || (data.pages.length === 0 && !portalPage && !ownDraftPortalId)) {
-    return (
-      <div className="space-y-6">
-        {portalPath && <PortalFallbackHeader path={portalPath} showCreatePortal={!isTrash && !disableCreatePortal} />}
-        <PageListEmptyCard message={isTrash ? m['page_list.empty_trash']() : m['page_list.empty_default']()} />
-      </div>
-    );
-  }
+  // `hasChildren` implies `data` is present (the rows came from it), so the
+  // children section below can read `data.pager` without a guard.
+  const pages = data?.pages ?? [];
+  const hasChildren = !!data && pages.length > 0;
 
   return (
     <div className="space-y-6">
-      {/* Portal document — its own body + page-level actions (rename / delete /
-          like / bookmark / watch) come from the shared PageHeader, so the
-          portal can be operated exactly like a normal page. */}
+      {/* --- Header block --- */}
       {portalPage ? (
+        // Portal document — its own body + page-level actions (rename /
+        // delete / like / bookmark / watch) come from the shared PageHeader,
+        // so the portal can be operated exactly like a normal page.
         <div>
           {isStalePortalRevision && portalPage.revision?._id && (
             <div className="mb-6">
@@ -190,6 +192,18 @@ export function PageList({ initialParams = {}, variant = 'default', disableCreat
             <PageContent page={portalPage} />
           </div>
         </div>
+      ) : contentPage && portalPath ? (
+        // §4 — content lives at the stripped path: no "Create Portal"
+        // (that would create a second doc at `/foo/`), no folder rename
+        // (ambiguous while a content page sits here). Instead, a portalize
+        // banner sits in the portal-body slot offering to move `/foo` →
+        // `/foo/`.
+        <div>
+          <PortalFallbackHeader path={portalPath} showCreatePortal={false} />
+          <div className="mt-6">
+            <PortalizeBanner contentPage={contentPage} />
+          </div>
+        </div>
       ) : (
         portalPath && (
           <PortalFallbackHeader
@@ -204,19 +218,57 @@ export function PageList({ initialParams = {}, variant = 'default', disableCreat
         )
       )}
 
-      {/* Children list */}
-      {data.pages.length > 0 && (
+      {/* --- Children block (always rendered) --- */}
+      {hasChildren ? (
         <section className="space-y-2">
           <PageListSectionHeader
-            label={formatPageCount(data.pages.length, data.pager)}
+            label={formatPageCount(pages.length, data.pager)}
             labelAction={showCreateButton && portalPath && <CreatePageListButton path={portalPath} />}
             action={!isTrash && <PageSortMenu sort={params.sort} order={params.order} onChange={handleSortChange} />}
           />
-          <PageRowsCard pages={data.pages} variant={variant} />
+          <PageRowsCard pages={pages} variant={variant} />
           <Pagination pager={data.pager} limit={params.limit} onPageChange={handlePageChange} />
         </section>
+      ) : (
+        // No child pages. Surface "no pages" + a "create page" CTA so an
+        // empty list / portal still offers a way to add the first page
+        // under it. The CTA follows the same gating as the list-header
+        // button (trash / root / member dir / other-user namespace hide it),
+        // and a failed fetch (`!data`) shows the empty card without a CTA.
+        <PageListEmptyCard
+          message={isTrash ? m['page_list.empty_trash']() : m['page_list.empty_default']()}
+          action={data && showCreateButton && portalPath ? <CreatePageCtaButton path={portalPath} /> : undefined}
+        />
       )}
     </div>
+  );
+}
+
+/**
+ * §4 portalize banner: shown in the portal-body slot of a `/foo/` listing
+ * when no portal document exists but a content page lives at `/foo`. Offers
+ * a one-click "portalize" that moves `/foo` → `/foo/` via the shared
+ * PortalizeDialog (no redirect left behind — §5).
+ */
+function PortalizeBanner({ contentPage }: { contentPage: PageWithRevision }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Card className="gap-3 p-5">
+      <div className="flex items-start gap-3">
+        <Compass className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden />
+        <div className="min-w-0 space-y-1">
+          <p className="font-medium">{m['page_list.portalize_banner_title']()}</p>
+          <p className="text-sm text-muted-foreground">{m['page_list.portalize_banner_body']({ path: contentPage.path })}</p>
+        </div>
+      </div>
+      <div>
+        <Button size="sm" onClick={() => setOpen(true)}>
+          <Compass className="mr-1.5 h-4 w-4" />
+          {m['page_list.portalize_banner_action']()}
+        </Button>
+      </div>
+      <PortalizeDialog page={contentPage} open={open} onOpenChange={setOpen} />
+    </Card>
   );
 }
 
