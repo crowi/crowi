@@ -183,8 +183,22 @@ export function createOnLoadDocument(deps: OnLoadDocumentDeps) {
     if (yjsState && yjsState.length > 0) {
       try {
         Y.applyUpdate(document, new Uint8Array(yjsState));
-        debug('restored page %s from yjsState (%d bytes)', documentName, yjsState.length);
-        baseRestored = true;
+        // editor-preview-reliability §1C — a stale / empty yjsState
+        // (e.g. an `[0,0]` empty-doc snapshot that slipped past an
+        // older write path, or one that pre-dates the current revision)
+        // applies cleanly but leaves the Y.Text empty. Without this
+        // check `baseRestored=true` would skip the Path B body seed and
+        // hand clients an empty doc — the first save then pushes that
+        // empty body and the page content is lost. If the doc is empty
+        // but the current revision body is non-empty, fall through to
+        // Path B so the body seeds the doc instead of the stale state.
+        if (document.getText(CONTENT_FIELD).length > 0) {
+          debug('restored page %s from yjsState (%d bytes)', documentName, yjsState.length);
+          baseRestored = true;
+        } else {
+          debug('page %s yjsState decoded to an empty doc — falling back to revision body seed', documentName);
+          forceReloadReason = 'page-body-replaced';
+        }
       } catch (err) {
         // Phase 6 — broadcast reason 'yjs-state-corruption' below
         // after the fresh build seed runs.

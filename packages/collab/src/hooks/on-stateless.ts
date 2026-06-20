@@ -79,6 +79,10 @@ export function createOnStateless(deps: OnStatelessDeps) {
         userId: context.userId,
         document,
         message: message.data.message,
+        // editor-preview-reliability §1A — forward the client's pinned
+        // edit base so the save flow can optimistic-lock against the
+        // page's live `currentRevision` (CONFLICT on divergence).
+        baseRevisionId: message.data.baseRevisionId ?? null,
       });
       // Phase 8 will subscribe to this on the client (Save button toast).
       // The wire format `{ kind, revisionId }` is intentionally not

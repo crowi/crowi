@@ -6,6 +6,7 @@ import type { ContributorsTracker } from './contributors';
 import type { CollabPageEventPublisher } from './types';
 import { DRAFT_STATUS, PUBLISHED_STATUS } from './page-status';
 import { CONTENT_FIELD } from './yjs-doc';
+import { evaluateAntiShrink } from './yjs-anti-shrink';
 
 const debug = Debug('crowi:collab:save');
 
@@ -14,8 +15,14 @@ const debug = Debug('crowi:collab:save');
  * handler maps these to the `crowi:save-error` wire message so the
  * client can distinguish transient (DB_ERROR) from "don't retry"
  * (RENDERER_FAILED / PAGE_NOT_FOUND).
+ *
+ * `CONFLICT` is the editor-preview-reliability §1A optimistic-lock
+ * rejection: the save's `baseRevisionId` no longer matches the page's
+ * live `currentRevision`, so persisting it would clobber a newer
+ * revision (e.g. another save landed, or this doc was materialised from
+ * a stale replica's `yjsState`). The client must reload, not retry.
  */
-export type CollabSaveErrorCode = 'RENDERER_FAILED' | 'DB_ERROR' | 'PAGE_NOT_FOUND' | 'USER_NOT_FOUND' | 'READONLY';
+export type CollabSaveErrorCode = 'RENDERER_FAILED' | 'DB_ERROR' | 'PAGE_NOT_FOUND' | 'USER_NOT_FOUND' | 'READONLY' | 'CONFLICT';
 
 export class CollabSaveError extends Error {
   readonly code: CollabSaveErrorCode;
@@ -35,6 +42,14 @@ export interface ExecuteSaveInput {
   document: Y.Doc;
   /** Optional checkpoint message — RFC-0003 §Phase 8 will expose this in the UI later. */
   message?: string;
+  /**
+   * editor-preview-reliability §1A: the revision the editing session
+   * was seeded from (the page's `currentRevision` at wsToken-issue
+   * time). When present and the page's live `currentRevision` has moved
+   * on, the save is rejected with `CONFLICT`. Omitted / null disables
+   * the check (no base known, or page has no revision yet).
+   */
+  baseRevisionId?: string | null;
 }
 
 export interface ExecuteSaveResult {
@@ -118,7 +133,7 @@ export function createSaveFlow(opts: CreateSaveFlowOptions): SaveFlow {
   const PageYjsUpdate = opts.models.PageYjsUpdate as any;
 
   return {
-    async executeSave({ pageId, userId, document, message }) {
+    async executeSave({ pageId, userId, document, message, baseRevisionId }) {
       // Step 1: extract the markdown body from the live Y.Doc.
       const body = document.getText(CONTENT_FIELD).toString();
 
@@ -143,6 +158,43 @@ export function createSaveFlow(opts: CreateSaveFlowOptions): SaveFlow {
       }
       if (!user) {
         throw new CollabSaveError('USER_NOT_FOUND', `user ${userId} not found`);
+      }
+
+      // Step 2b: optimistic lock (editor-preview-reliability §1A). The
+      // client pinned `baseRevisionId` to the page's `currentRevision`
+      // at session start (wsToken response). If the page's live
+      // `currentRevision` has since moved on — another save landed, or
+      // this Y.Doc was materialised from a stale replica's `yjsState`
+      // that pre-dates the latest revision — persisting this body would
+      // clobber the newer revision. Reject with `CONFLICT` so the
+      // client reloads instead of overwriting (mirrors the HTTP save's
+      // `revision_id` lock + `PageRevisionConflictError`).
+      //
+      // The check is skipped when no base is known (legacy client) or
+      // when the page itself has no revision yet (`currentRevision` and
+      // `revision` both unset) — there is nothing newer to clobber.
+      const liveRevision = (page.currentRevision ?? page.revision ?? null) as { toString(): string } | null;
+      if (baseRevisionId && liveRevision && liveRevision.toString() !== baseRevisionId) {
+        throw new CollabSaveError(
+          'CONFLICT',
+          `save base revision ${baseRevisionId} is stale — page ${pageId} is now at revision ${liveRevision.toString()}; reload required`,
+        );
+      }
+
+      // editor-preview-reliability §1B baseline: the body of the
+      // revision this save REPLACES (the pre-save current revision), read
+      // before step 5 bumps the pointer. The anti-shrink guard compares
+      // the candidate yjsState against this so an empty / heavily-shrunk
+      // doc can't silently overwrite the previously-persisted content.
+      // Best-effort — a read failure degrades to "no baseline".
+      let previousBody: string | null = null;
+      if (liveRevision) {
+        try {
+          const prevRev = await Revision.findById(liveRevision).select('body').lean().exec();
+          previousBody = typeof prevRev?.body === 'string' ? prevRev.body : null;
+        } catch (err) {
+          debug('failed to read previous revision body for anti-shrink baseline on page %s: %s', pageId, (err as Error).message);
+        }
       }
 
       // Step 3: contributors (awareness set, minus the trigger user).
@@ -191,17 +243,42 @@ export function createSaveFlow(opts: CreateSaveFlowOptions): SaveFlow {
       // from the body. The compactor will re-write yjsState in the
       // next debounce window.
       try {
-        const yjsStateBuf = Buffer.from(Y.encodeStateAsUpdate(document));
-        await Page.updateOne(
-          { _id: pageId },
-          {
-            $set: {
-              currentRevision: newRevision._id,
-              yjsState: yjsStateBuf,
-              yjsCheckpointAt: new Date(),
+        // editor-preview-reliability §1B: never persist an empty /
+        // catastrophically-shrunk yjsState over the previously-persisted
+        // content. The baseline is the PREVIOUS revision's body (read
+        // above, before the pointer moved): a desync that empties the
+        // live doc would otherwise write an empty `[0,0]` snapshot that
+        // a later load applies cleanly, masking the real body. The new
+        // revision is already durable (steps 4-5), so we just suppress
+        // the misleading yjsState and let the next load rebuild from the
+        // body via `currentRevision`.
+        const verdict = evaluateAntiShrink({ candidate: document, baselineBody: previousBody });
+        if (!verdict.ok) {
+          // Revision is already durable (steps 4-5). Skipping the
+          // yjsState write is safe: the next onLoadDocument rebuilds
+          // yjsState from the body via the `currentRevision` pointer we
+          // still set below. Bump `currentRevision` so the rebuild reads
+          // the body we just wrote, but leave the stale `yjsState`
+          // intact rather than clobbering it with an empty snapshot.
+          console.warn(
+            `[crowi:collab] save: anti-shrink rejected yjsState write for page ${pageId} ` +
+              `(reason=${verdict.reason}, candidate=${verdict.candidateChars} chars, baseline=${verdict.baselineChars} chars); ` +
+              `repointing currentRevision and rebuilding yjsState from body on next load.`,
+          );
+          await Page.updateOne({ _id: pageId }, { $set: { currentRevision: newRevision._id, yjsState: null, yjsCheckpointAt: new Date() } }).exec();
+        } else {
+          const yjsStateBuf = Buffer.from(Y.encodeStateAsUpdate(document));
+          await Page.updateOne(
+            { _id: pageId },
+            {
+              $set: {
+                currentRevision: newRevision._id,
+                yjsState: yjsStateBuf,
+                yjsCheckpointAt: new Date(),
+              },
             },
-          },
-        ).exec();
+          ).exec();
+        }
       } catch (err) {
         // Don't fail the save — the data is already consistent on
         // disk via step 5. Warn so an operator sees this in logs but

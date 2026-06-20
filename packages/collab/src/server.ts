@@ -121,7 +121,7 @@ export function createCollabServer(opts: CreateCollabServerOptions): Hocuspocus<
     });
 
   const compactor = createCompactor({
-    models: { Page: models.Page, PageYjsUpdate: models.PageYjsUpdate },
+    models: { Page: models.Page, PageYjsUpdate: models.PageYjsUpdate, Revision: models.Revision },
   });
 
   const presence = opts.presence ?? noopPresenceHooks;
