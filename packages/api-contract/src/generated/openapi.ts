@@ -7344,6 +7344,7 @@ export interface paths {
                             pageId: string;
                             expiresAt: string;
                             readonly: boolean;
+                            currentRevision: string | null;
                         };
                     };
                 };

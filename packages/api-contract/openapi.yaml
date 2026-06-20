@@ -17265,11 +17265,16 @@ paths:
                     type: string
                   readonly:
                     type: boolean
+                  currentRevision:
+                    type:
+                      - string
+                      - 'null'
                 required:
                   - wsToken
                   - pageId
                   - expiresAt
                   - readonly
+                  - currentRevision
         '400':
           description: Invalid page id
           content:

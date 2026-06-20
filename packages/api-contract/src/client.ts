@@ -465,6 +465,7 @@ const stubWsToken: WsTokenResponse = {
   pageId: '',
   expiresAt: '',
   readonly: false,
+  currentRevision: null,
 };
 const stubPresenceToken: PresenceTokenResponse = {
   token: '',
