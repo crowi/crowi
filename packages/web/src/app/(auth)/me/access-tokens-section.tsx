@@ -38,6 +38,17 @@ function expiresAtFromPreset(value: string): string | null {
   return new Date(Date.now() + preset.days * 24 * 60 * 60 * 1000).toISOString();
 }
 
+/**
+ * A scope is read-only if it is the umbrella `read` or any `*:read` resource
+ * scope. We recommend (and pre-select) these for MCP / agent use so the
+ * default token cannot be turned into a destructive one by a prompt-injection
+ * attack; `*:write` stays an explicit opt-in (RFC-0011 §10.7).
+ */
+const isReadOnlyScope = (scope: string): boolean => scope === 'read' || scope.endsWith(':read');
+
+/** Read-only scopes from the issuable catalog, pre-selected by default. */
+const READ_ONLY_SCOPES: string[] = ISSUABLE_SCOPES.filter(isReadOnlyScope);
+
 export function AccessTokensSection() {
   const dateLocale = getLocale() === 'ja' ? 'ja-JP' : 'en-US';
   const { data, isLoading, error: fetchError } = useAccessTokens();
@@ -46,7 +57,7 @@ export function AccessTokensSection() {
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [name, setName] = useState('');
-  const [selectedScopes, setSelectedScopes] = useState<string[]>([]);
+  const [selectedScopes, setSelectedScopes] = useState<string[]>(READ_ONLY_SCOPES);
   const [expiryPreset, setExpiryPreset] = useState<string>('90');
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -56,7 +67,7 @@ export function AccessTokensSection() {
 
   const resetForm = () => {
     setName('');
-    setSelectedScopes([]);
+    setSelectedScopes(READ_ONLY_SCOPES);
     setExpiryPreset('90');
     setFormError(null);
   };
@@ -185,9 +196,11 @@ export function AccessTokensSection() {
                         onChange={() => toggleScope(scope)}
                       />
                       <span className="font-mono">{scope}</span>
+                      {isReadOnlyScope(scope) && <span className="text-xs text-muted-foreground">{m['me.access_tokens.scope_recommended']()}</span>}
                     </label>
                   ))}
                 </div>
+                <p className="text-xs text-muted-foreground">{m['me.access_tokens.scope_readonly_hint']()}</p>
               </div>
 
               <div className="space-y-2">
