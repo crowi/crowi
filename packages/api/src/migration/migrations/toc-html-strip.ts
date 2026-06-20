@@ -1,79 +1,93 @@
-import { STATUS_PUBLISHED } from 'src/models/page';
-import { metadataToRevisionMeta } from 'src/models/revision';
 import type { RevisionTocEntry } from 'src/models/revision';
+import { containsKnownHtmlTag, stripKnownHtmlTags } from 'src/util/html-elements';
 import type { MigrationContext } from '../types';
 import { defineMigration } from '../types';
+import { STOP, forEachPublishedCurrentRevision } from './published-current-revision';
 
 /**
- * `toc-html-strip` (preflight layer) — regenerate stale `meta.toc` entries
- * that captured inline HTML markup from heading text.
+ * `toc-html-strip` (preflight layer) — strip inline HTML markup out of stale
+ * `meta.toc[].text` labels in place.
  *
- * Before the headings transform passed `{ includeHtml: false }` to
- * `mdast-util-to-string` (§B1), a heading such as
- * `### <font color="1a73e8">Workspace</font>` produced a TOC label that
- * included the raw `<font …>` / `</font>` markup. That label is persisted in
- * `Revision.meta.toc[].text` (RFC-0002) and does NOT self-heal:
+ * Before the headings transform stripped known HTML tags from heading text
+ * (§B1), a heading such as `### <font color="1a73e8">Workspace</font>` produced
+ * a TOC label that included the raw `<font …>` / `</font>` markup. That label is
+ * persisted in `Revision.meta.toc[].text` (RFC-0002) and does NOT self-heal:
  *
  *   - the read path merges `{ ...computed, ...stored }` with stored winning
  *     (`util/page-response.ts`), so parse-on-read never overrides it; and
  *   - the renderer-version freshness check only rebuilds `renderedAst`, never
  *     `meta.toc` (the two are independent).
  *
- * So a dedicated migration is required. It re-extracts the TOC from each
- * affected page's current revision body (via the renderer's `runRender`, which
- * now strips HTML) and `$set`s **only** `meta.toc` — `renderedAst` and the
- * rest of `meta` are left as-is to keep the blast radius minimal.
+ * So a dedicated migration is required. It rewrites each stale entry's `.text`
+ * to its HTML-stripped form and `$set`s **only** `meta.toc`.
+ *
+ * Why `.text` only, and why `anchorId` is deliberately PRESERVED: the stored
+ * `renderedAst` heading id was slugged from the original (HTML-laden) text and
+ * the stored `meta.toc[].anchorId` matches it exactly today — only `.text` is
+ * ugly. Re-slugging `anchorId` from the cleaned text would point the TOC link
+ * at an anchor the stored `renderedAst` heading does NOT carry, breaking
+ * in-page navigation for precisely the pages this migration targets. The deep
+ * "regenerate everything" alternative (bump `RENDERER_PIPELINE_VERSION` to
+ * force a global re-render) is unaffordable: the read path does not write the
+ * re-rendered AST back, so every revision would re-render on every read
+ * forever. Stripping `.text` in place keeps the existing anchor link intact and
+ * needs no body re-render at all.
  *
  * Scope: current revision of published pages only. Historical revisions are
  * immutable and never read by the TOC UI, so rewriting them would be churn for
  * no user-visible gain (mirrors `wikilink-format`'s published-only scope).
  *
- * Idempotent: once a label has no `<`, it no longer matches `tocHasHtml`, so a
- * re-run skips it.
+ * Idempotent: once a label has no known HTML tag, `containsKnownHtmlTag` is
+ * false for it, so a re-run skips it. And because the save path now strips HTML
+ * too, no fresh revision re-introduces a tagged label.
  */
 
 /**
- * Cheap per-entry staleness test: a TOC label still carrying a `<` is a
- * leftover from the pre-strip pipeline. Plain page titles never contain a raw
- * `<` (markdown escapes / encodes it), so this has no false positives in
- * practice.
+ * Per-entry staleness test: a TOC label still carrying a *known HTML tag* is a
+ * leftover from the pre-strip pipeline. Built on `containsKnownHtmlTag` (NOT a
+ * bare `.includes('<')`) so a heading with a literal angle bracket in its text
+ * (`## price < 100`, `## if x < 10`) is NOT flagged — a clean v2 install never
+ * has a stale TOC and so never blocks boot under the preflight `block` policy.
  */
 function tocHasHtml(toc: RevisionTocEntry[] | undefined): boolean {
   if (!toc) return false;
-  return toc.some((entry) => entry.text.includes('<'));
+  return toc.some((entry) => containsKnownHtmlTag(entry.text));
 }
 
-interface RevisionWork {
+/**
+ * Strip known HTML tags from every label, dropping entries that collapse to an
+ * empty label (matches the headings transform's empty-label guard — an
+ * empty-text/anchorId entry is unaddressable and would fail the `meta.toc`
+ * schema's `required` fields). `anchorId` / `level` are preserved verbatim.
+ */
+function stripTocHtml(toc: RevisionTocEntry[]): RevisionTocEntry[] {
+  const out: RevisionTocEntry[] = [];
+  for (const entry of toc) {
+    const text = stripKnownHtmlTags(entry.text).trim();
+    if (text.length === 0) continue;
+    out.push({ ...entry, text });
+  }
+  return out;
+}
+
+interface StaleToc {
   revisionId: unknown;
-  body: string;
-  pageId: string | null;
+  /** The cleaned `meta.toc` to `$set`. */
+  freshToc: RevisionTocEntry[];
 }
 
 /**
  * Walk published pages' current revisions and collect those whose stored
- * `meta.toc` still carries HTML in a label. Stream-walk so memory stays flat
- * on large installs.
+ * `meta.toc` still carries a known HTML tag in a label, paired with the cleaned
+ * toc to write back. Projects `meta.toc` only — body is never read.
  */
-async function collectStaleRevisions(ctx: MigrationContext): Promise<RevisionWork[]> {
-  const Page = ctx.crowi.model('Page');
-  const Revision = ctx.crowi.model('Revision');
-
-  const out: RevisionWork[] = [];
-  const cursor = Page.find({ $or: [{ status: STATUS_PUBLISHED }, { status: null }] })
-    .select('_id revision')
-    .lean()
-    .cursor();
-
-  for await (const page of cursor) {
-    const pageDoc = page as { _id: unknown; revision?: unknown };
-    if (!pageDoc.revision) continue;
-    const revision = await Revision.findById(pageDoc.revision).select('body meta').lean().exec();
-    const rev = revision as { _id?: unknown; body?: unknown; meta?: { toc?: RevisionTocEntry[] } } | null;
-    if (!rev) continue;
-    if (typeof rev.body !== 'string') continue;
-    if (!tocHasHtml(rev.meta?.toc)) continue;
-    out.push({ revisionId: rev._id, body: rev.body, pageId: pageDoc._id ? String(pageDoc._id) : null });
-  }
+async function collectStaleRevisions(ctx: MigrationContext): Promise<StaleToc[]> {
+  const out: StaleToc[] = [];
+  await forEachPublishedCurrentRevision(ctx, { projection: 'meta.toc' }, ({ revisionId, revision }) => {
+    const toc = (revision as { meta?: { toc?: RevisionTocEntry[] } }).meta?.toc;
+    if (!tocHasHtml(toc)) return;
+    out.push({ revisionId, freshToc: stripTocHtml(toc ?? []) });
+  });
   return out;
 }
 
@@ -82,39 +96,35 @@ export const tocHtmlStrip = defineMigration({
   fromVersion: '2.1',
   toVersion: '2.1',
   layer: 'preflight',
-  // Independent of the wikilink work; keep a stable order after it.
+  // `fromVersion: '2.1'` already sequences both new migrations after
+  // `wikilink-format` (`fromVersion: '1.x'`). `order` here only tie-breaks
+  // against the sibling `wikilink-html-recover` (also `2.1`); the two are
+  // mutually independent, so the value is cosmetic.
   order: 110,
-  description: 'Regenerate stale meta.toc entries that captured inline HTML from heading text',
+  description: 'Strip inline HTML markup out of stale meta.toc labels (anchorId preserved)',
 
   /**
    * Pending iff any current revision of a published page still has a TOC label
-   * containing `<`. There is no index on `meta.toc.text`, so this short-
-   * circuits at the first stale revision (it stops early rather than reading
-   * every page). Once apply has stripped every label, this reports false and
-   * boot clears — and because the save path now strips HTML, no fresh revision
-   * re-introduces a `<` label.
+   * carrying a known HTML tag. There is no index on `meta.toc.text`, so this
+   * walks published pages (projecting `meta.toc` only) and short-circuits at
+   * the first stale revision. Once apply has stripped every label, this reports
+   * false and boot clears — and because the save path now strips HTML, no fresh
+   * revision re-introduces a tagged label. A literal `<` in heading text
+   * (`## price < 100`) is NOT a known tag, so a clean install never blocks.
    */
   isPending: async (ctx) => {
-    const Page = ctx.crowi.model('Page');
-    const Revision = ctx.crowi.model('Revision');
-    const cursor = Page.find({ $or: [{ status: STATUS_PUBLISHED }, { status: null }] })
-      .select('_id revision')
-      .lean()
-      .cursor();
-    for await (const page of cursor) {
-      const revisionId = (page as { revision?: unknown }).revision;
-      if (!revisionId) continue;
-      const revision = await Revision.findById(revisionId).select('meta.toc').lean().exec();
-      const toc = (revision as { meta?: { toc?: RevisionTocEntry[] } } | null)?.meta?.toc;
+    let pending = false;
+    await forEachPublishedCurrentRevision(ctx, { projection: 'meta.toc' }, ({ revision }) => {
+      const toc = (revision as { meta?: { toc?: RevisionTocEntry[] } }).meta?.toc;
       if (tocHasHtml(toc)) {
-        await cursor.close();
-        return true;
+        pending = true;
+        return STOP;
       }
-    }
-    return false;
+    });
+    return pending;
   },
 
-  /** Full scan for `plan`: count the revisions that would be regenerated. */
+  /** Full scan for `plan`: count the revisions that would be stripped. */
   detect: async (ctx) => {
     const stale = await collectStaleRevisions(ctx);
     return {
@@ -125,38 +135,30 @@ export const tocHtmlStrip = defineMigration({
 
   stages: [
     {
-      name: 'regenerate-toc',
+      name: 'strip-toc-html',
       fn: async (ctx) => {
         const stale = await collectStaleRevisions(ctx);
         if (ctx.dryRun) {
-          return { name: 'regenerate-toc', transformed: 0, stats: { wouldRegenerate: stale.length } };
+          return { name: 'strip-toc-html', transformed: 0, stats: { wouldStrip: stale.length } };
         }
 
         const Revision = ctx.crowi.model('Revision');
-        const renderer = ctx.crowi.getRenderer();
         ctx.progress.setTotal(stale.length);
 
-        let regenerated = 0;
+        let stripped = 0;
         for (const rev of stale) {
-          // Re-run the (now HTML-stripping) pipeline to get a fresh toc.
-          // `mode: 'save'` matches how the body was rendered originally so the
-          // extracted toc is byte-identical to what a re-save would produce.
-          // Only `meta.toc` is written back — `renderedAst` and the other
-          // `meta` sub-fields are untouched (minimal blast radius).
-          const { metadata } = await renderer.runRender(rev.body, {
-            mode: 'save',
-            pageId: rev.pageId ?? undefined,
-          });
-          const freshToc = metadataToRevisionMeta(metadata).toc;
-          await Revision.updateOne({ _id: rev.revisionId }, { $set: { 'meta.toc': freshToc } }).exec();
-          regenerated += 1;
+          // In-place text strip — `anchorId` / `level` / `renderedAst` are
+          // untouched, so the existing stored-AST anchor link keeps working
+          // (see the file-header rationale). No body load, no re-render.
+          await Revision.updateOne({ _id: rev.revisionId }, { $set: { 'meta.toc': rev.freshToc } }).exec();
+          stripped += 1;
           ctx.progress.increment();
         }
 
-        if (regenerated > 0) {
-          ctx.logger.info(`toc-html-strip: regenerated meta.toc on ${regenerated} revision(s)`);
+        if (stripped > 0) {
+          ctx.logger.info(`toc-html-strip: stripped inline HTML from meta.toc on ${stripped} revision(s)`);
         }
-        return { name: 'regenerate-toc', transformed: regenerated };
+        return { name: 'strip-toc-html', transformed: stripped };
       },
     },
   ],
