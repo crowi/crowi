@@ -115,6 +115,15 @@ region and credentials in the admin UI.
 > verified addresses. For production, request sandbox removal from AWS.
 > The sender address must also be verified on the SES side.
 
+> **Note**: `@crowi/plugin-mail-aws-ses` **sends directly with the SESv2
+> SDK** (not via SMTP relay). So the SES **SMTP credentials (SMTP password)
+> are not needed** — you only enter a regular **IAM access key** (with SES
+> send permission) in the screen above. When running on AWS Lightsail, the
+> instance role (`AmazonLightsailInstanceRole`) belongs to a different
+> account than yours, so you must set an **explicit IAM user's access key
+> created in your own account**. For the end-to-end procedure on Lightsail,
+> see [Running on AWS Lightsail](./aws-lightsail).
+
 ## Sending a test mail
 
 You can verify that mail settings are correct with the **test send**

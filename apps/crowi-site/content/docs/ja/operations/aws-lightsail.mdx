@@ -1,0 +1,461 @@
+---
+title: AWS Lightsail で動かす (実例)
+description: Lightsail VPS 1 台 + docker compose 全のせで Crowi 2.0 を立てる end-to-end の通し手順。汎用部分は既存ページへリンクし、Lightsail / AWS 固有の勘所だけを補う worked example
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+このページは、**AWS Lightsail の VPS を 1 台** 借り、その上で
+**docker compose に api / web / MongoDB / Redis / Elasticsearch / Caddy を
+全部のせ** にして Crowi 2.0 を立てる、**1 つの具体的な通し手順 (worked
+example)** です。
+
+汎用的なステップ ([デプロイ構成](./deployment) / [設定](./configuration) /
+[メール](./mail) / [バックアップ](./backup) / [v1 からの移行](./upgrading-from-v1))
+は各ページへリンクし、ここでは **通しの順序** と **Lightsail / AWS 固有の
+勘所** に絞ります。同じ手順を EC2 や他社 VPS でも応用できますが、ここでは
+最小構成例として AWS で完結させます。
+
+<Callout type="info">
+  このページは「Lightsail を例にした self-host の歩き方」です。各章は
+  既存の運用ドキュメントへのリンクを多く含みます。Crowi のデプロイ概念
+  (api / web の 2 サービス、同一オリジン + リバースプロキシ) をまだ把握して
+  いない場合は、先に [デプロイ構成](./deployment) を読むとこのページが
+  読みやすくなります。
+</Callout>
+
+## 1. 全体像
+
+立てるものは 1 台の Lightsail インスタンスと、その中で動く 6 つのコンテナ
+です。
+
+```
+        ┌──────────────────────────────────────────────────────────────┐
+        │  AWS Lightsail インスタンス (Ubuntu, static IP)               │
+        │                                                              │
+ :443 ──┼─▶ caddy ──┬─ /api,/files,/collab,… → api  ─┬─ MongoDB        │
+ :80  ──┘           └─ /                      → web   ├─ Redis          │
+        │                                            └─ Elasticsearch  │
+        └──────────────────────────────────────────────────────────────┘
+                       ▲                         │
+                  Route53 A レコード         S3 (backup / 添付) ・ SES (mail)
+                  (→ static IP)             ※別途 IAM credential が必要 (§9)
+```
+
+- **対象読者**: 1 台の VPS に自分で Crowi v2 を立てたい運用者。コンテナと
+  シェルの基本操作ができることを前提にします。
+- **含むもの**: Lightsail の選定 → DNS & TLS → docker compose → env /
+  `crowi.config.json` → ホスト初期セットアップ → (任意) v1 移行 → SES メール
+  → バックアップ運用 → 更新。
+- **含まないもの**: マルチインスタンス / オートスケール構成、Lightsail
+  コンテナサービス (本ページは **VPS インスタンス + 自前 compose**)、
+  Lightsail コンソールのスクリーンショット。
+
+## 2. Lightsail の選定
+
+| 項目 | 推奨 | 補足 |
+| ---- | ---- | ---- |
+| プラン (メモリ) | **4GB RAM プラン** + swap 4GB (§6) | api / web / MongoDB / Redis に加え、**Elasticsearch を同居** させるため。2GB プランは ES の自前ビルド時に OOM しやすい |
+| リージョン | 利用者に近い 1 つ (例: `ap-northeast-1`) | S3 / SES も同一リージョンに寄せると分かりやすい |
+| OS | Ubuntu LTS | Docker の導入が容易 |
+| static IP | **割り当てる** | 再起動で public IP が変わらないように。DNS の A レコード先になる |
+| ファイアウォール | `22` (SSH) / `80` / `443` のみ開放 | MongoDB (27017) / ES (9200) などは **公開しない**。コンテナ間通信のみ |
+
+<Callout type="info">
+  **メモリ要件の根拠**: Elasticsearch (kuromoji) を同居させる構成では、
+  ES の JVM ヒープ + MongoDB + api / web で実メモリを使い切りがちです。
+  特に **ES イメージを自前ビルドする** とビルド時にメモリを食って OOM
+  します ([検索バックエンドのセットアップ](./search-setup) 参照)。
+  **4GB プラン + swap 4GB** をベースラインにしてください。全文検索が不要
+  なら検索ドライバを `mongo` のままにし、ES を省けば 2GB プランでも
+  動きます (この場合 §6 の ES 関連手順はスキップ)。
+</Callout>
+
+<Callout type="warn">
+  Lightsail のプラン名・価格・割り当てメモリは時期やリージョンで変わります。
+  ここでの「4GB プラン」はメモリ量を指す目安です。最新のプラン構成と価格は
+  AWS の公式ページで確認してください。
+</Callout>
+
+ファイアウォール (Lightsail の Networking タブ) では `80` / `443` を全開、
+`22` は自分の IP からのみ、を推奨します。`27017` (MongoDB) や `9200` (ES)
+は **絶対に外部公開しない** でください。compose 内のコンテナは Docker の
+内部ネットワークで名前解決して通信するので、ホストにポートを晒す必要は
+ありません。
+
+## 3. DNS & TLS
+
+最小構成では、DNS も AWS ネイティブの **Route53** で完結させます。
+
+1. Route53 で対象ドメイン (例: `example.com`) の **ホストゾーン** を作る
+   (ドメインを Route53 で取得した場合は自動で作られます)。
+2. ホストゾーンに **A レコード** を 1 本足し、`wiki.example.com` を
+   Lightsail の **static IP** (`<your-static-ip>`) に向けます。
+3. あとは Caddy が起動時に Let's Encrypt から **自動で証明書を取得** します
+   (HTTP-01 / TLS-ALPN-01)。
+
+<Callout type="info">
+  **A. Route53 を使う限り、DNS 用の追加 IAM credential は不要です。**
+  Caddy の証明書取得は HTTP-01 / TLS-ALPN-01 (ポート 80 / 443 だけで成立)
+  を使い、Route53 の API を叩きません。A レコードを static IP に向けて
+  おけば、Caddy が自動で TLS を張ります。「DNS challenge 用に Route53 の
+  IAM キーが要るのでは」と身構える必要はありません。
+</Callout>
+
+<Callout type="warn">
+  **Cloudflare を DNS に使う場合は、必ず DNS only (gray cloud) にする。**
+  orange cloud (プロキシ有効) のままだと Let's Encrypt の HTTP-01 challenge
+  が Cloudflare 側で止まり、Caddy が証明書を取得できません。orange を使う
+  なら Cloudflare Origin Certificate を Caddy 側で読ませる別パターンが必要
+  です。本ページの generic 例では **Route53 + Caddy 自動 TLS** を採ります。
+</Callout>
+
+Caddy のルーティング (どのパスを api / web へ振るか、WebSocket の透過) は
+generic な内容なので [デプロイ構成 — 同一オリジン + リバースプロキシ](./deployment)
+を参照してください。`Caddyfile` の中身は §4 で再掲します。
+
+## 4. docker-compose 構成
+
+Crowi のデプロイは **api (Hono)** と **web (Next.js)** の 2 サービスが核で、
+そこに MongoDB / Redis / Elasticsearch / Caddy が付きます。サービス構成と
+ルーティングの考え方は [デプロイ構成](./deployment) と
+[インストール](./installation) で詳説しているので、ここでは **Lightsail で
+動かす最小の compose と Caddyfile** だけを示します。
+
+リポジトリ同梱の `docker-compose.yml` は `--profile app` で api / web / caddy
+を立てられるように作られています。Lightsail 1 台に全のせするなら、infra
+(mongodb / redis / elasticsearch) も同じ compose で起動し、**全サービスを
+1 ファイルで** 管理するのが楽です。最小の動く例:
+
+```yaml
+# docker-compose.yml (Lightsail 1 台・全のせの最小例)
+services:
+  mongodb:
+    image: mongo:8
+    restart: unless-stopped
+    volumes:
+      - ./data/mongodb:/data/db        # bind mount で永続化
+
+  redis:
+    image: redis:7
+    restart: unless-stopped
+
+  elasticsearch:
+    build:                              # kuromoji 同梱の自前ビルド
+      context: .
+      dockerfile: elasticsearch.Dockerfile
+    restart: unless-stopped
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    volumes:
+      - ./data/elasticsearch:/usr/share/elasticsearch/data
+    ulimits:
+      memlock: { soft: -1, hard: -1 }
+
+  api:
+    image: crowi-api:full               # full イメージ (全ドライバ同梱)
+    restart: unless-stopped
+    depends_on: [mongodb, redis, elasticsearch]
+    env_file: [.env]
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      MONGO_URI: mongodb://mongodb:27017/crowi
+      REDIS_URL: redis://redis:6379
+      CLIENT_URL: https://wiki.example.com
+    volumes:
+      - ./crowi.config.json:/app/crowi.config.json:ro
+
+  web:
+    image: crowi-web:latest
+    restart: unless-stopped
+    depends_on: [api]
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on: [web, api]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./data/caddy:/data            # 取得した証明書を永続化
+    ports:
+      - "80:80"
+      - "443:443"
+```
+
+`Caddyfile` は §3 のドメインに合わせて 1 行だけ変えます (compose の例と
+違い、ここでは公開ドメインを書くので Caddy が自動で TLS を張ります):
+
+```
+wiki.example.com {
+	# HTTP API + 添付 → api
+	@api path /api/* /files/*
+	reverse_proxy @api api:3000
+
+	# realtime WebSocket → api (Upgrade は Caddy が自動透過)
+	@ws path /collab /collab/* /presence /presence/* /notifications /notifications/*
+	reverse_proxy @ws api:3000
+
+	# それ以外 → web
+	reverse_proxy web:3000
+}
+```
+
+<Callout type="warn">
+  realtime の 3 namespace (`/collab` / `/presence` / `/notifications`) は、
+  **bare パスと `/*` の両方** をマッチャに列挙してください。Caddy では
+  `path /collab/*` は素の `/collab` にマッチせず、これが抜けると共同編集 /
+  プレゼンス / 通知ベルが静かに非リアルタイム動作にフォールバックします。
+  詳細は [デプロイ構成](./deployment) の Caddy 節を参照。
+</Callout>
+
+api / web のイメージは公式の `crowi-api` (full) / `crowi-web` を使うか、
+自前ビルドします。イメージのビルド (full / slim の build-arg) は
+[インストール — 公式 Docker イメージのビルド](./installation) を参照して
+ください。Elasticsearch は kuromoji 同梱の自前イメージが必要なので、リポジトリ
+の `elasticsearch.Dockerfile` を使います ([検索のセットアップ](./search-setup))。
+
+## 5. env と crowi.config.json
+
+`.env` (compose の `env_file`) と `crowi.config.json` の意味づけは
+[設定](./configuration) が一次情報です。ここでは Lightsail 全のせ構成での
+**必須 env チェックリスト** と、AWS ドライバを使うときの `crowi.config.json`
+の書き方だけ補足します。
+
+### 必須 env チェックリスト
+
+| 変数 | この構成での値 | 備考 |
+| ---- | -------------- | ---- |
+| `MONGO_URI` | `mongodb://mongodb:27017/crowi` | compose の service 名で解決。`environment` 側が `.env` を上書き |
+| `REDIS_URL` | `redis://redis:6379` | 同上。単一インスタンスなら任意だが入れておくと安全 |
+| `CLIENT_URL` | `https://wiki.example.com` | **本番必須**。CORS とメール内リンクに使う。公開ドメインを設定 |
+| `PASSWORD_SEED` | (v1 と同じ値) | v1 から移行する場合は **v1 と同一の値** にする (パスワード検証のため) |
+| `CROWI_ENCRYPTION_KEY` | `openssl rand -base64 32` で生成 | 機密 Config の暗号化。`.env` に書けば compose 経由で渡る。[暗号化](./encryption) |
+| `WS_TOKEN_SECRET` | `openssl rand -base64 32` で生成 | realtime の WS 認証鍵。単一インスタンスなら省略可だが設定推奨 |
+
+機密値 (`CROWI_ENCRYPTION_KEY` / `WS_TOKEN_SECRET`) は `.env` に書けば
+`env_file` 経由でそのまま api コンテナに渡ります。一方
+`MONGO_URI` / `REDIS_URL` / `CLIENT_URL` は compose の `environment` 側で
+上書きするのが定石です ([設定 — Docker での環境変数](./configuration))。
+
+### crowi.config.json (AWS ドライバの選択)
+
+S3 ストレージ + SES メール + Elasticsearch 検索を使うなら、`plugins` に
+**driver プラグインだけ** を列挙します。
+
+```json
+{
+  "plugins": [
+    "@crowi/plugin-storage-aws-s3",
+    "@crowi/plugin-mail-aws-ses",
+    "@crowi/plugin-search-elasticsearch",
+    "@crowi/plugin-renderer-plantuml",
+    "@crowi/plugin-renderer-emoji",
+    "@crowi/plugin-renderer-katex"
+  ],
+  "storage": { "driver": "s3" },
+  "search": { "driver": "elasticsearch" },
+  "mail": { "driver": "ses" }
+}
+```
+
+<Callout type="warn">
+  **C. AWS の umbrella プラグイン `@crowi/plugin-aws` を `plugins` に
+  明示列挙しないでください。** `@crowi/plugin-storage-aws-s3` と
+  `@crowi/plugin-mail-aws-ses` はどちらも `requires: ['@crowi/plugin-aws']`
+  を宣言しており、共通クレデンシャル基盤の `@crowi/plugin-aws` は
+  **依存として自動 (transitive) ロード** されます。`plugins` に明示で
+  書き足すと二重ロードになります。`plugins` には **driver
+  (`@crowi/plugin-storage-aws-s3` / `@crowi/plugin-mail-aws-ses`) だけ** を
+  列挙すれば十分です。プラグイン解決の仕組みは
+  [設定 — プラグインの解決方法](./configuration) を参照。
+</Callout>
+
+S3 のバケット名 / リージョン / アクセスキー、SES のリージョン / 送信元 /
+アクセスキーといった **認証情報は `crowi.config.json` には書かず**、
+api 起動後に管理画面 (`/admin/plugins`、`/admin/mail`) から入力します
+([ストレージ](./storage) / [メール](./mail))。`CROWI_ENCRYPTION_KEY` が
+設定されていれば、これらは暗号化されて MongoDB に保存されます。
+
+## 6. ホスト初期セットアップ
+
+Lightsail インスタンスに SSH で入り、Docker と (任意で) AWS CLI を入れ、
+**Lightsail 固有の 2 つの落とし穴** を先に潰しておきます。
+
+```bash
+# Docker / Docker Compose plugin (Ubuntu)
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker "$USER"   # 反映には再ログイン
+
+# (任意) AWS CLI — backup の S3 アップロードなどに使う
+sudo apt-get update && sudo apt-get install -y awscli
+```
+
+### B. swap を 4GB 確保する
+
+Elasticsearch イメージを **自前ビルド** すると、ビルド時にメモリを食って
+OOM killer に落とされがちです。swap を 4GB 用意しておくと安定します。
+
+```bash
+sudo fallocate -l 4G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab   # 再起動後も有効に
+```
+
+<Callout type="info">
+  **B. swap は ES の自前ビルド時の OOM 回避が主目的** です。公式の ES
+  イメージを pull するだけなら必須ではありませんが、kuromoji 同梱の
+  イメージは自前ビルドが必要 ([検索のセットアップ](./search-setup)) なので、
+  4GB プランでは swap 4GB を入れておくことを推奨します。
+</Callout>
+
+### D. Elasticsearch の bind mount を chown する
+
+ES コンテナは uid `1000` で動きますが、ホスト上に新規作成した bind mount
+先ディレクトリは `root:root` 所有のため、ES が `node.lock` 等を作れず起動
+に失敗します。**先に 1 度 chown** しておきます。
+
+```bash
+mkdir -p data/elasticsearch
+sudo chown -R 1000:0 data/elasticsearch
+```
+
+<Callout type="warn">
+  **D. ES の bind mount は `sudo chown -R 1000:0 data/elasticsearch` を 1 回
+  実行** してください。これを忘れると ES が
+  `AccessDeniedException: .../node.lock` で起動できず、検索が動きません。
+  MongoDB の bind mount (`data/mongodb`) は Docker が権限を合わせるので
+  この対応は不要です。
+</Callout>
+
+ここまで済んだら、§4 の compose を `docker compose up -d` (ES を自前ビルド
+する場合は初回 `--build`) で起動します。ブラウザで `https://wiki.example.com`
+を開き、インストーラ画面で最初の管理者を作成すれば Crowi が使えます。
+
+## 7. v1 からのデータ移行 (任意)
+
+v1 の既存 Wiki から移行する場合は、[v1 からの移行](./upgrading-from-v1) が
+一次情報です。要点だけ:
+
+- v1 の MongoDB を `mongodump` / `mongorestore` でこの Lightsail の MongoDB
+  へ移す ([バックアップ](./backup))。
+- `.env` の `PASSWORD_SEED` を **v1 と同じ値** にする (パスワード検証)。
+- 公開ドメインを変えた場合は、ページ本文中の絶対 URL を
+  `crowi-admin replace url --from https://old.example --to https://wiki.example.com`
+  で一括置換する。
+- 移行後に `crowi-admin rebuild search` で検索インデックスを再構築する。
+
+これらの `crowi-admin` コマンドは、api コンテナ内で実行します (§10 の起動
+方法を参照)。preflight 移行の適用順や注意点は
+[v1 からの移行](./upgrading-from-v1) を参照してください。
+
+## 8. SES でメールを送る
+
+メール送信全般は [メール / SMTP 設定](./mail) が一次情報です。Lightsail +
+AWS で SES を使う場合の固有の勘所は次の通りです。
+
+- `crowi.config.json` の `mail.driver` を `ses` にし、`plugins` に
+  `@crowi/plugin-mail-aws-ses` を入れる (§5。`@crowi/plugin-aws` は
+  自動ロードされるので書かない)。
+- SES の **リージョン / 送信元アドレス / IAM アクセスキー** は管理画面
+  (`/admin/mail`) から入力する。送信元アドレス (またはドメイン) は SES 側で
+  検証済みである必要がある。このアクセスキーは、あなたの AWS アカウントで
+  作った明示的な IAM ユーザーのもの (Lightsail はインスタンスプロファイルが
+  使えないため。**F**。§9 参照)。
+
+<Callout type="info">
+  **G. Crowi の SES ドライバは SESv2 SDK で直接送信** します (SMTP relay
+  ではありません)。そのため **SES の SMTP 認証情報 (SMTP password) は不要**
+  で、通常の **IAM アクセスキー (SES 送信権限つき)** を管理画面に入れるだけで
+  送れます。SMTP password を生成するステップは踏まなくて構いません。
+</Callout>
+
+SES がサンドボックス状態だと検証済みアドレスにしか送れません。本番では
+AWS にサンドボックス解除を申請します ([メール](./mail))。
+
+## 9. 運用 (バックアップ・スナップショット)
+
+バックアップ設計の全体像 (何が復旧に不可欠か) は [バックアップ](./backup) が
+一次情報です。Lightsail 構成では次の 2 系統を回します。
+
+### MongoDB → S3
+
+`mongodump` で MongoDB をダンプし、S3 にアップロードする cron を組みます。
+
+```bash
+# 例: 日次 cron (mongodump → S3 へ sync)
+mongodump --uri "mongodb://localhost:27017/crowi" --out "/tmp/crowi-$(date +%F)"
+aws s3 sync "/tmp/crowi-$(date +%F)" "s3://your-backup-bucket/crowi/$(date +%F)/"
+```
+
+添付ファイルを S3 ストレージドライバに置いていれば、添付の実体は S3 側に
+あるので、S3 のバージョニング / クロスリージョンレプリケーションで守れます
+([バックアップ — 添付ファイルのバックアップ](./backup))。
+
+<Callout type="warn">
+  **F. Lightsail の default インスタンスロールは、あなたの AWS アカウント
+  とは別のアカウントに属します。** Lightsail VPS に既定で付く
+  `AmazonLightsailInstanceRole` は **Lightsail サービス側のアカウント** 所属で、
+  あなたのアカウントの S3 / SES / KMS には触れません。EC2 のように
+  「インスタンスプロファイルで権限が自動で付く」挙動は **使えません**。
+  したがって S3 backup / SES / KMS を使うには、あなたのアカウントで作った
+  **明示的な IAM ユーザーのアクセスキー** を、ホストの `~/.aws/credentials`
+  (AWS CLI 用) や管理画面 (SES / S3 ドライバ用) に置く必要があります。
+  この点は backup と SES の両方に波及します。
+</Callout>
+
+機密 Config を暗号化している場合、ダンプには暗号化された値が含まれます。
+復元先で復号できるよう、**`CROWI_ENCRYPTION_KEY` をダンプとは別に安全に
+保管** してください ([バックアップ](./backup) / [暗号化](./encryption))。
+
+### Lightsail Auto Snapshot
+
+ホストごとの保険として、Lightsail の **自動スナップショット (Auto Snapshot)**
+を有効にしておくと、インスタンス全体 (bind mount のデータ含む) を日次で
+スナップショットできます。アプリ整合性のあるバックアップは上記の
+`mongodump` 系で取りつつ、スナップショットは「VPS まるごと巻き戻し」の
+保険として併用するのが実用的です。
+
+## 10. 更新 (image tag の切り替え)
+
+alpha のうちは、新しい alpha イメージへ tag を上げて更新します。
+
+```bash
+# compose の image tag を新しい alpha に変えて
+docker compose pull api web
+docker compose up -d api web
+```
+
+更新時に preflight 移行が増えていると api が起動を拒否することがあります。
+その場合は api コンテナ内で `crowi-admin migrate apply` を実行します。
+移行ガードの考え方は [v1 からの移行 — 移行フレームワーク](./upgrading-from-v1)
+を参照してください。
+
+<Callout type="info">
+  **E. alpha.2 以降の公式イメージでは、`crowi-admin` は名前のまま起動できます。**
+  ランタイムイメージの `/app/node_modules/.bin` が PATH に載っているため、
+  `docker compose run --rm api crowi-admin <cmd>` がそのまま通ります
+  (例: `docker compose run --rm api crowi-admin migrate apply`)。
+  alpha.1 イメージのみ PATH が通っておらず、絶対パス
+  `/app/node_modules/.bin/crowi-admin <cmd>` を打つ必要がありました。
+  この workaround は alpha.2 以降では不要です。
+</Callout>
+
+リリースごとの注意点 (移行・breaking change) は、各リリースノートと
+[v1 からの移行](./upgrading-from-v1) を都度確認してください。
+
+## 次のステップ
+
+- [デプロイ構成](./deployment) — api / web のルーティングと同一オリジン構成の詳細
+- [設定](./configuration) — env と `crowi.config.json` の全リファレンス
+- [メール / SMTP 設定](./mail) — SES を含むメール送信の設定
+- [バックアップ](./backup) — データのバックアップとリストア
+- [v1 からの移行](./upgrading-from-v1) — v1 → v2 のデータ移行

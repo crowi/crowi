@@ -78,6 +78,15 @@ mongorestore --uri "mongodb://localhost:27017/crowi" ./backup/crowi-20260516/cro
 > 添付メタデータはあるのに実体ファイルがない (またはその逆) という
 > 不整合が起きえます。
 
+> **Note**: AWS Lightsail の VPS から S3 へバックアップする場合、
+> インスタンスに既定で付く `AmazonLightsailInstanceRole` は **Lightsail
+> サービス側のアカウント所属** で、あなたの AWS アカウントの S3 には触れ
+> ません。EC2 のようにインスタンスプロファイルで権限が自動で付く挙動は
+> 使えないため、あなたのアカウントで作った **明示的な IAM ユーザーの
+> アクセスキー** を `~/.aws/credentials` に置いて `aws s3 sync` などを実行
+> してください。Lightsail での運用の通し手順は
+> [AWS Lightsail で動かす](./aws-lightsail) を参照してください。
+
 ### ドライバ間のファイル移行
 
 バックアップ目的とは別ですが、ストレージドライバを切り替える際の

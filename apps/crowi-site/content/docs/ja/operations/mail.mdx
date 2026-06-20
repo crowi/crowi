@@ -112,6 +112,15 @@ AWS SES を使う場合は、`@crowi/plugin-mail-aws-ses` をランナープロ�
 > できません。本番運用ではサンドボックス解除を AWS に申請してください。
 > また、送信元アドレスは SES 側で検証済みである必要があります。
 
+> **Note**: `@crowi/plugin-mail-aws-ses` は **SESv2 SDK で直接送信** します
+> (SMTP relay ではありません)。そのため SES の **SMTP 認証情報 (SMTP
+> password) は不要** で、通常の **IAM アクセスキー** (SES 送信権限つき) を
+> 上記の画面に入れるだけで送れます。AWS Lightsail 上で動かす場合は、
+> インスタンスロール (`AmazonLightsailInstanceRole`) があなたの AWS
+> アカウントとは別アカウントに属するため、自分のアカウントで作った **明示的な
+> IAM ユーザーのアクセスキー** を設定する必要があります。Lightsail での通し
+> 手順は [AWS Lightsail で動かす](./aws-lightsail) を参照してください。
+
 ## テストメールを送る
 
 メール設定が正しいかは、管理画面の **テスト送信** 機能で確認できます。
