@@ -182,6 +182,27 @@ export function useResetAdminUserPassword() {
   });
 }
 
+/**
+ * Re-issues an invite token and resends the invitation email for an INVITED
+ * user. The API rejects non-invited users with 409 and a missing user with
+ * 404; both surface as plain errors so the caller can show an inline message.
+ *
+ * No `invalidateQueries`: a resend re-issues the token + mail but changes no
+ * field the list view shows, so refetching is wasted bandwidth (mirrors
+ * `useResetAdminUserPassword`).
+ */
+export function useResendAdminInvite() {
+  return useMutation({
+    mutationFn: async (params: { id: string }): Promise<AdminUserMutationResponse> => {
+      const response = await apiClientV2.admin.users[':id']['resend-invite'].$post({
+        param: { id: params.id },
+      });
+      if (response.status === 200) return (await response.json()) as AdminUserMutationResponse;
+      return throwAdminUserError(response, m['admin.users.action.resend_invite_failed']());
+    },
+  });
+}
+
 export function useUpdateAdminUserEmail() {
   const queryClient = useQueryClient();
   return useMutation({

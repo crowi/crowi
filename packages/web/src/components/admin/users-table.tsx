@@ -2,7 +2,8 @@
 
 import type { AdminPager, UserPublic } from '@crowi/api-contract';
 import { UserStatusEnum } from '@crowi/api-contract';
-import { MoreHorizontal } from 'lucide-react';
+import { Loader2, MailCheck, MoreHorizontal, Send } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { UserIdentityCell } from '@/components/admin/user-identity-cell';
 import { Button } from '@/components/ui/button';
 import {
@@ -13,9 +14,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useResendAdminInvite } from '@/lib/use-admin-users';
 import { cn } from '@/lib/utils';
 import { formatDate } from '@/lib/date-utils';
 import { m } from '@paraglide/messages.js';
+
+/** Success feedback auto-dismisses after ~4s (mirrors plugin-clear-cache-button). */
+const RESEND_SUCCESS_DISMISS_MS = 4000;
 
 export type UserRowActionKind = 'edit' | 'make-admin' | 'remove-admin' | 'activate' | 'suspend' | 'reset-password' | 'update-email' | 'delete';
 
@@ -103,6 +109,70 @@ export function UsersPager({ pager, onPageChange }: { pager: AdminPager; onPageC
         {m['admin.users.pager_next']()}
       </Button>
     </nav>
+  );
+}
+
+type ResendStatus = null | { kind: 'success' } | { kind: 'error'; message: string };
+
+/**
+ * In-row "Resend invite" affordance for INVITED users — a primary action a
+ * deliberately minimal pre-acceptance row should expose directly (not buried
+ * in the menu). One click re-issues the invite token and resends the email
+ * (no confirm dialog, mirroring the reset-password row action); Crowi has no
+ * toast layer, so success/failure is shown inline (role=status / role=alert)
+ * and disabled while in flight to prevent a double-send.
+ */
+function ResendInviteButton({ user }: { user: UserPublic }) {
+  const resend = useResendAdminInvite();
+  const [status, setStatus] = useState<ResendStatus>(null);
+
+  useEffect(() => {
+    if (status?.kind !== 'success') return;
+    const id = window.setTimeout(() => setStatus(null), RESEND_SUCCESS_DISMISS_MS);
+    return () => window.clearTimeout(id);
+  }, [status]);
+
+  const onClick = () => {
+    setStatus(null);
+    resend.mutate(
+      { id: user._id },
+      {
+        onSuccess: () => setStatus({ kind: 'success' }),
+        onError: (err) => setStatus({ kind: 'error', message: err instanceof Error ? err.message : m['admin.users.action.resend_invite_failed']() }),
+      },
+    );
+  };
+
+  return (
+    <div className="inline-flex flex-col items-end gap-1">
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 p-0"
+            disabled={resend.isPending}
+            aria-label={m['admin.users.action.resend_invite']()}
+            onClick={onClick}
+          >
+            {resend.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>{resend.isPending ? m['admin.users.action.resending']() : m['admin.users.action.resend_invite']()}</TooltipContent>
+      </Tooltip>
+      {status?.kind === 'success' && (
+        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground" role="status">
+          <MailCheck className="h-3 w-3" />
+          {m['admin.users.action.resend_invite_success']()}
+        </span>
+      )}
+      {status?.kind === 'error' && (
+        <span className="text-xs text-destructive" role="alert">
+          {status.message}
+        </span>
+      )}
+    </div>
   );
 }
 
@@ -226,7 +296,11 @@ export function UsersTable({ users, pager, onPageChange, onAction, currentUserId
                 <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{formatDate(user.createdAt)}</td>
                 {showActions && onAction && (
                   <td className="px-2 py-3 text-right">
-                    <RowActionMenu user={user} isSelf={user._id === currentUserId} onAction={onAction} />
+                    <div className="inline-flex items-start justify-end gap-1">
+                      {/* INVITED rows surface "Resend invite" directly (outside the menu) as a primary action. */}
+                      {user.status === UserStatusEnum.INVITED && <ResendInviteButton user={user} />}
+                      <RowActionMenu user={user} isSelf={user._id === currentUserId} onAction={onAction} />
+                    </div>
                   </td>
                 )}
               </tr>
