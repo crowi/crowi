@@ -10,7 +10,7 @@ import type { CollabModels, CollabPageEventPublisher, EditorCapCounter, CollabWs
 import type { Extension } from '@hocuspocus/server';
 import type Crowi from 'src/crowi';
 import { getEditorCapCounter } from 'src/util/collab-cap';
-import { createWsTokenUtil } from 'src/util/ws-token';
+import { createWsTokenUtil, isWsTokenSecretFromEnv } from 'src/util/ws-token';
 import { createPresenceCollabDeps } from 'src/service/presence';
 import { buildCollabRedisExtension } from './extension-redis';
 
@@ -75,7 +75,73 @@ export interface AttachedCollab {
  * save flow). The api's `Crowi.start` invokes this right before
  * `server.listen`.
  */
+/**
+ * Opt-out env that downgrades the multi-instance `WS_TOKEN_SECRET`
+ * boot-fail (below) to a loud warning. Set it only when you knowingly
+ * run a single api replica despite `REDIS_URL` being configured (Redis
+ * used purely for sessions / Socket.IO), so the random per-process
+ * secret is harmless. Any truthy value relaxes the guard.
+ */
+const ALLOW_EPHEMERAL_WS_TOKEN_SECRET_ENV = 'CROWI_ALLOW_EPHEMERAL_WS_TOKEN_SECRET';
+
+/**
+ * editor-preview-reliability §4 — fail fast (or loudly warn) when a
+ * multi-instance-shaped deployment is missing a stable
+ * `WS_TOKEN_SECRET`.
+ *
+ * Signal: `crowi.redis !== null` means `REDIS_URL` is configured, which
+ * is the same condition under which `@hocuspocus/extension-redis`
+ * cross-instance fan-out is attached — i.e. the operator is (or may be)
+ * running more than one api replica. In that shape a per-process random
+ * `WS_TOKEN_SECRET` is fatal: replica B cannot verify a token minted by
+ * replica A, so half the connections silently fail `onAuthenticate` and
+ * users see "WebSocket closed before the connection was established".
+ *
+ * Behaviour:
+ *   - secret from env → fine, return.
+ *   - no env secret + no Redis → single-instance dev; `ws-token.ts`
+ *     already logged the random-fallback warning; nothing to add.
+ *   - no env secret + Redis set → throw to abort boot, UNLESS the
+ *     operator explicitly opted out via
+ *     `CROWI_ALLOW_EPHEMERAL_WS_TOKEN_SECRET` (single replica behind
+ *     Redis), in which case downgrade to a loud warning.
+ *
+ * REDIS_URL is also set in plenty of single-replica deployments, hence
+ * the explicit opt-out rather than an unconditional fail — the guard
+ * defaults to safe (fail) but stays escapable.
+ */
+export function assertWsTokenSecretForMultiInstance(crowi: Crowi): void {
+  if (isWsTokenSecretFromEnv()) return;
+  if (crowi.redis === null) return;
+
+  const optedOut = Boolean(process.env[ALLOW_EPHEMERAL_WS_TOKEN_SECRET_ENV]);
+  const base =
+    'WS_TOKEN_SECRET is not set while REDIS_URL is configured (multi-instance shape). ' +
+    'A per-process random secret cannot be cross-verified by other api replicas, so ' +
+    'wsToken authentication fails intermittently ("WebSocket closed before the connection ' +
+    'was established"). Set WS_TOKEN_SECRET to a stable base64-encoded 32-byte value ' +
+    '(`openssl rand -base64 32`) shared across all replicas.';
+
+  if (optedOut) {
+    console.warn(
+      `[crowi:collab] ${base} ${ALLOW_EPHEMERAL_WS_TOKEN_SECRET_ENV} is set, so boot continues with an ephemeral per-process secret — ` +
+        'only safe for a single api replica.',
+    );
+    return;
+  }
+  throw new Error(
+    `[crowi:collab] ${base} If you are intentionally running a single api replica with Redis used only for ` +
+      `sessions / Socket.IO, set ${ALLOW_EPHEMERAL_WS_TOKEN_SECRET_ENV}=1 to allow boot with an ephemeral secret.`,
+  );
+}
+
 export async function attachCollabServer(httpServer: HttpServer, crowi: Crowi): Promise<AttachedCollab> {
+  // editor-preview-reliability §4 — guard a multi-instance deployment
+  // against a non-shared (random) wsToken secret before we wire any
+  // sockets. Runs first so the failure is unambiguous at boot rather
+  // than as scattered onAuthenticate rejections later.
+  assertWsTokenSecretForMultiInstance(crowi);
+
   // Reach for the api-side models — they were already wired by
   // `setupModels` against the same Mongoose connection collab will
   // use, so save / load / compaction all operate on the same row

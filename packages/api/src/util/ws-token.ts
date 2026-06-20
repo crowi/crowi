@@ -57,10 +57,9 @@ export interface SignWsTokenResult {
  * material" envs.
  */
 const resolveWsTokenSecret = (): string => {
-  const fromEnv = process.env.WS_TOKEN_SECRET;
-  if (fromEnv && fromEnv.length > 0) {
+  if (isWsTokenSecretFromEnv()) {
     debug('WS_TOKEN_SECRET resolved from env');
-    return fromEnv;
+    return process.env.WS_TOKEN_SECRET as string;
   }
   const generated = crypto.randomBytes(32).toString('base64');
   console.warn(
@@ -154,4 +153,19 @@ export function createWsTokenUtil() {
     cachedUtil = buildWsTokenUtil();
   }
   return cachedUtil;
+}
+
+/**
+ * Whether `WS_TOKEN_SECRET` is provided via the environment (vs the
+ * per-process random fallback). editor-preview-reliability §4 uses this
+ * at boot to fail-fast on a multi-instance deployment: a random
+ * fallback secret can only be verified by the process that minted it,
+ * so a second replica rejects every wsToken it didn't issue, which
+ * surfaces to users as "WebSocket closed before the connection was
+ * established". A single source of truth here keeps the boot guard and
+ * `resolveWsTokenSecret` from drifting on what counts as "configured".
+ */
+export function isWsTokenSecretFromEnv(): boolean {
+  const fromEnv = process.env.WS_TOKEN_SECRET;
+  return Boolean(fromEnv && fromEnv.length > 0);
 }
