@@ -25,16 +25,28 @@ import { subscribeTokenRefreshed } from './token-refresh-notifier';
 export function useYjsToken(pageId: string | null | undefined) {
   const queryClient = useQueryClient();
 
-  // §4 — when a silent access-token refresh succeeds, re-fetch the
-  // wsToken immediately. A wsToken that expired around the same time as
-  // the access token leaves the collab provider in `auth-failed`;
-  // invalidating here hands the provider a fresh token (the [pageId,
-  // wsToken] effect rebuilds it) without waiting for the dynamic
-  // refetch interval. `refetchType: 'active'` guarantees the mounted
-  // observer refetches even if react-query would otherwise dedupe.
+  // §4 / H7 — when a silent access-token refresh succeeds, re-fetch the
+  // wsToken ONLY when the cached wsToken is actually expired (or about to
+  // be). The previous version invalidated unconditionally on every silent
+  // refresh, which tore down + rebuilt the Y.Doc + HocuspocusProvider even
+  // for a perfectly healthy, mid-edit session whose wsToken was still
+  // valid (the wsToken is independent of the access token). That churned
+  // healthy sessions; the seam is meant to ENABLE recovery, not cause it.
+  //
+  // A wsToken that expired around the same time as the access token leaves
+  // the provider in `auth-failed`; only THEN do we hand it a fresh token
+  // here (the dynamic `refetchInterval` already covers proactive,
+  // not-yet-expired refresh). When the cached token is still well within
+  // its TTL we leave it — the live provider keeps running untouched.
   useEffect(() => {
     if (!pageId) return;
     return subscribeTokenRefreshed(() => {
+      const cached = queryClient.getQueryData<WsTokenResponse>(['yjsToken', pageId]);
+      // No cached token yet, or it is within ~30s of expiry / already
+      // expired → refetch. A comfortably-valid token is left in place so
+      // the provider isn't rebuilt mid-edit.
+      const expiresInMs = cached ? Date.parse(cached.expiresAt) - Date.now() : -1;
+      if (expiresInMs > 30_000) return;
       void queryClient.invalidateQueries({ queryKey: ['yjsToken', pageId], refetchType: 'active' });
     });
   }, [pageId, queryClient]);

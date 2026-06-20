@@ -110,6 +110,17 @@ interface UseCollabDocumentResult {
    * provider rebuild (token refresh / page swap).
    */
   synced: boolean;
+  /**
+   * editor-preview-reliability H5 — sticky "has completed the initial sync
+   * at least once during this provider's life". Unlike `synced` (which
+   * tracks the live sync state and dips to `false` on a transient
+   * disconnect so the Save guard blocks saving while offline), this stays
+   * `true` across a brief reconnect. The editor uses it as its MOUNT gate
+   * so a network blip no longer remounts CodeMirror / flips it readonly
+   * mid-edit (losing cursor / scroll / IME / undo). Resets to `false` only
+   * on provider rebuild (token refresh / page swap) and on `auth-failed`.
+   */
+  hasEverSynced: boolean;
   readonly: boolean;
   /**
    * Publish the local user identity to remote peers via
@@ -188,6 +199,11 @@ export function useCollabDocument(options: UseCollabDocumentOptions): UseCollabD
   // `connected` for a beat before SyncStep2 lands, during which the doc
   // is still empty. Reset to `false` whenever the provider is rebuilt.
   const [synced, setSynced] = useState(false);
+  // H5 — sticky "has synced at least once" mount gate. Set on the first
+  // `onSynced(true)`; only reset on provider teardown / auth-failure, so a
+  // transient disconnect/reconnect (which dips `synced`) doesn't remount
+  // the editor.
+  const [hasEverSynced, setHasEverSynced] = useState(false);
 
   // Stateless listener fan-out. `Set` instead of `Array` so unsubscribe
   // is O(1) and identical listeners can't double-register. The ref
@@ -226,7 +242,11 @@ export function useCollabDocument(options: UseCollabDocumentOptions): UseCollabD
         // token-refresh notifier nudged by a silent access-token
         // refresh) will hand us a fresh token and the parent effect will
         // rebuild the provider with it. The doc is no longer synced.
+        // H5 — auth-failed is a TERMINAL state (the token is rejected, not
+        // a transient blip), so we DO clear the sticky mount gate: the
+        // editor must go readonly until a fresh token re-syncs.
         setSynced(false);
+        setHasEverSynced(false);
         setStatus('auth-failed');
       },
       onSynced: ({ state }) => {
@@ -236,6 +256,8 @@ export function useCollabDocument(options: UseCollabDocumentOptions): UseCollabD
         // re-syncs fires this again with `true`; we never flip it back
         // to `false` here (provider teardown / auth-failure resets it).
         setSynced(state);
+        // H5 — latch the sticky mount gate on the first successful sync.
+        if (state) setHasEverSynced(true);
       },
       onStateless: ({ payload }) => {
         // Fan-out to subscribers. We iterate over a snapshot (`[...set]`)
@@ -274,6 +296,7 @@ export function useCollabDocument(options: UseCollabDocumentOptions): UseCollabD
       setSession(null);
       setStatus('connecting');
       setSynced(false);
+      setHasEverSynced(false);
     };
   }, [pageId, wsToken]);
 
@@ -318,6 +341,7 @@ export function useCollabDocument(options: UseCollabDocumentOptions): UseCollabD
     provider: session?.provider ?? null,
     status,
     synced,
+    hasEverSynced,
     readonly,
     setLocalAwareness,
     subscribeStateless,

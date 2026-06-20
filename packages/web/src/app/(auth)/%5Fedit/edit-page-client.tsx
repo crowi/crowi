@@ -260,8 +260,19 @@ function EditorShell({
     (closeUnsavedDialog: boolean) => {
       collabSave
         .save()
-        .then(() => {
+        .then((ok) => {
           setRealtimeDirty(false);
+          // H1 — advance the pinned edit base to the revision this save
+          // just created so the NEXT save locks against it instead of the
+          // now-stale session-start base (otherwise a second save by the
+          // same user, or any save after another participant's, would
+          // false-CONFLICT and force a needless reload).
+          if (ok?.revisionId) session.advanceBaseRevision(ok.revisionId);
+          // M2 — the just-saved text is now durable on the server, so drop
+          // the local recovery buffer; otherwise the next mount would see a
+          // stale snapshot and spuriously prompt "restore unsaved changes?"
+          // (and could restore over newer content).
+          recovery.clear();
           if (closeUnsavedDialog) setUnsavedDialogOpen(false);
           toast.success(m['collab.save_success']());
           (onAfterSave ?? onCancel)();
@@ -269,13 +280,17 @@ function EditorShell({
         .catch((err: { reason?: string; message?: string }) => {
           if (closeUnsavedDialog) setUnsavedDialogOpen(false);
           if (err?.reason === 'CONFLICT') {
+            // M3 — snapshot the unsaved text before the reload dialog so the
+            // user's work survives the CONFLICT reload (the dialog → reload
+            // destroys the in-memory doc).
+            recovery.snapshotNow();
             setForceReload({ open: true, reason: 'page-body-replaced' });
             return;
           }
           toast.error(m['collab.save_failed']({ message: err?.message ?? '' }));
         });
     },
-    [collabSave, onAfterSave, onCancel],
+    [collabSave, onAfterSave, onCancel, recovery, session],
   );
 
   // The realtime-dirty observer: a local Y.Text mutation since the last
@@ -343,8 +358,12 @@ function EditorShell({
 
   const handleDialogDiscard = useCallback(() => {
     setUnsavedDialogOpen(false);
+    // M2 — the user explicitly discarded their unsaved changes, so drop
+    // the recovery buffer too; otherwise re-opening the page would prompt
+    // to restore the very edits they just chose to throw away.
+    recovery.clear();
     onCancel();
-  }, [onCancel]);
+  }, [onCancel, recovery]);
   // Collab status toasts: a 'disconnected' surfaces a persistent offline
   // error toast; the first 'connected' after that replaces it with a
   // 'reconnected' confirmation; 'auth-failed' is terminal.
@@ -403,6 +422,13 @@ function EditorShell({
   // text differs from what synced in (so an already-saved snapshot
   // doesn't nag), and only once per page session (the ref guard).
   const recoveryPromptedRef = useRef(false);
+  // M5 — reset the once-per-session prompt guard when the page changes.
+  // The ref is mount-lifetime but the recovery hook is page-scoped, so
+  // without this reset the restore prompt would be permanently suppressed
+  // for every subsequent page edited within the same EditorShell mount.
+  useEffect(() => {
+    recoveryPromptedRef.current = false;
+  }, [realtimePageId]);
   useEffect(() => {
     if (!useRealtimeSave || !session.synced || recoveryPromptedRef.current) return;
     const snapshot = recovery.recoverable;
@@ -422,8 +448,21 @@ function EditorShell({
       action: {
         label: m['collab.recovery_restore'](),
         onClick: () => {
+          // H3 — the recovery snapshot is the FULL document text the user
+          // was editing, so restoring REPLACES the synced content with it
+          // (in a single Y transaction) rather than appending it. The
+          // pre-fix code did `insert(length, '\n\n' + snapshot)`, which —
+          // guarded only by exact full-string equality — duplicated the
+          // entire page on any minor divergence (a trailing-whitespace
+          // difference, a 1-char remote edit). Replace-in-place keeps the
+          // doc a single coherent copy and never doubles it.
           const live = session.yText;
-          if (live) live.insert(live.length, `\n\n${snapshot.text}`);
+          if (live) {
+            live.doc?.transact(() => {
+              live.delete(0, live.length);
+              live.insert(0, snapshot.text);
+            });
+          }
           recovery.clear();
         },
       },

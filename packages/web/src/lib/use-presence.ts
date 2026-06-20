@@ -109,13 +109,20 @@ function sameViewers(a: PresenceViewer[], b: PresenceViewer[]): boolean {
 function usePresenceToken(pageId: string | null | undefined) {
   const queryClient = useQueryClient();
 
-  // §4 — re-fetch the presence token on a silent access-token refresh,
-  // mirroring `useYjsToken`. A presence WebSocket closed with 4401
-  // (stale token) recovers as soon as the refetch hands `usePresence`'s
-  // connection effect a fresh token.
+  // §4 / H7 — re-fetch the presence token on a silent access-token refresh
+  // ONLY when the cached presence token is actually expired (or about to
+  // be), mirroring `useYjsToken`. Invalidating unconditionally rebuilt the
+  // presence WebSocket on every healthy access-token refresh; a presence
+  // token still well within its TTL is left in place so the live socket
+  // isn't churned. A presence WebSocket closed with 4401 (stale token)
+  // recovers as soon as this refetch hands `usePresence`'s connection
+  // effect a fresh token.
   useEffect(() => {
     if (!pageId) return;
     return subscribeTokenRefreshed(() => {
+      const cached = queryClient.getQueryData<PresenceTokenResponse>(['presenceToken', pageId]);
+      const expiresInMs = cached ? Date.parse(cached.expiresAt) - Date.now() : -1;
+      if (expiresInMs > 30_000) return;
       void queryClient.invalidateQueries({ queryKey: ['presenceToken', pageId], refetchType: 'active' });
     });
   }, [pageId, queryClient]);

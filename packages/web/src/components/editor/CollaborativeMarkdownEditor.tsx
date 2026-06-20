@@ -1,6 +1,6 @@
 'use client';
 
-import { forwardRef, useEffect, useMemo, useRef } from 'react';
+import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Extension } from '@codemirror/state';
 import { keymap } from '@codemirror/view';
 import { yCollab } from 'y-codemirror.next';
@@ -37,17 +37,39 @@ export interface CollabSession {
   status: CollabStatus;
   /**
    * editor-preview-reliability §2 — `true` once the initial Yjs sync has
-   * completed (`provider.synced`). The editor gates write-readiness on
-   * this, not `status`, so the user can't type into a pre-sync empty doc.
+   * completed (`provider.synced`). The Save guard gates on this, not
+   * `status`, so the user can't save a pre-sync / offline doc. Dips to
+   * `false` on a transient disconnect (block saves while offline).
    */
   synced: boolean;
   /**
-   * editor-preview-reliability §1A — the page's `currentRevision` at
-   * wsToken-issue time (from the wsToken response). `useCollabSave` sends
-   * it back as `crowi:save`'s `baseRevisionId` so the server can
+   * editor-preview-reliability H5 — sticky "has synced at least once".
+   * The editor's MOUNT gate uses this instead of `synced` so a transient
+   * disconnect (which dips `synced`) doesn't remount CodeMirror / flip it
+   * readonly mid-edit. Resets only on provider rebuild / auth-failure.
+   */
+  hasEverSynced: boolean;
+  /**
+   * editor-preview-reliability §1A — the revision the Y.Doc was seeded
+   * from, sent back as `crowi:save`'s `baseRevisionId` so the server can
    * optimistic-lock the save. `null` when the page has no revision yet.
+   *
+   * H1 fix: this is anchored ONCE to the first wsToken response's
+   * `currentRevision` and is NOT re-read from a refetched token (the
+   * ~5-min token refetch would otherwise re-pin it to *latest* and make
+   * the lock never fire). It advances ONLY when this client's own save
+   * succeeds (`crowi:save-ok` → `advanceBaseRevision`), so in a multi-user
+   * session the lock fires exactly when *this doc* descends from a
+   * revision older than the page's current one — not on normal co-editing.
    */
   baseRevisionId: string | null;
+  /**
+   * Advance the pinned edit base after a successful save. The caller
+   * invokes this from the `crowi:save-ok` handler with the new revision id
+   * the server returns, so the next save locks against the revision this
+   * client just created instead of the now-stale session-start base.
+   */
+  advanceBaseRevision: (revisionId: string) => void;
   readonly: boolean;
   subscribeStateless: (listener: StatelessListener) => () => void;
   sendStateless: (payload: string) => boolean;
@@ -123,13 +145,45 @@ export function useCollabSession(pageId: string | null | undefined): CollabSessi
   const tokenQuery = useYjsToken(pageId);
   const wsToken = tokenQuery.data?.wsToken ?? null;
   const tokenReadonly = tokenQuery.data?.readonly ?? false;
-  // §1A — the edit base revision the save flow optimistic-locks against.
-  const baseRevisionId = tokenQuery.data?.currentRevision ?? null;
-  const { yText, yUndoManager, awareness, status, synced, readonly, setLocalAwareness, subscribeStateless, sendStateless } = useCollabDocument({
+  const { yText, yUndoManager, awareness, status, synced, hasEverSynced, readonly, setLocalAwareness, subscribeStateless, sendStateless } = useCollabDocument({
     pageId,
     wsToken,
     initialReadonly: tokenReadonly,
   });
+
+  // §1A / H1 — the edit base revision the save flow optimistic-locks
+  // against. Held in state and anchored ONCE to the first wsToken
+  // response's `currentRevision`; deliberately NOT re-read from a
+  // refetched token (the ~5-min refetch returns the *latest* revision,
+  // which would silently disable the lock). It advances only when this
+  // client's own save lands (`advanceBaseRevision`). Reset to null when
+  // the page changes so a new page re-anchors from its own token.
+  const [baseRevisionId, setBaseRevisionId] = useState<string | null>(null);
+  const tokenCurrentRevision = tokenQuery.data?.currentRevision ?? null;
+  const tokenResolved = Boolean(tokenQuery.data);
+  // The pageId+state this client last anchored a base for. Kept in STATE
+  // (not a ref) so the anchoring can run DURING RENDER — React's "adjust
+  // state when a prop changes" pattern (same shape as `UpdatePageEditor`'s
+  // `page.revision._id !== revisionId` guard), which avoids both the
+  // cascading-render `set-state-in-effect` path and the "no ref access in
+  // render" rule. The token's `currentRevision` is read exactly ONCE per
+  // page (the first render after it resolves) and never re-applied on a
+  // later refetch of the same page (H1). `advanceBaseRevision` is the only
+  // other writer.
+  const [anchoredForPageId, setAnchoredForPageId] = useState<string | null>(null);
+  if (!pageId) {
+    if (anchoredForPageId !== null) {
+      setAnchoredForPageId(null);
+      setBaseRevisionId(null);
+    }
+  } else if (anchoredForPageId !== pageId && tokenResolved) {
+    setAnchoredForPageId(pageId);
+    setBaseRevisionId(tokenCurrentRevision);
+  }
+
+  const advanceBaseRevision = useCallback((revisionId: string) => {
+    setBaseRevisionId(revisionId);
+  }, []);
 
   // §4 — bounded recovery from the terminal `auth-failed` state. The
   // provider won't reconnect with the rejected token; a fresh wsToken
@@ -139,6 +193,12 @@ export function useCollabSession(pageId: string | null | undefined): CollabSessi
   // so nudge a bounded number of explicit refetches here. Capped so a
   // genuinely revoked session settles into readonly instead of looping.
   const authRetryRef = useRef(0);
+  // H8 — depend on the STABLE `tokenQuery.refetch` (react-query keeps its
+  // identity stable across renders), not the whole `tokenQuery` object
+  // (new identity every render). Depending on the object re-ran this
+  // effect on every unrelated re-render, cancelling the backoff timer and
+  // burning the retry budget without ever calling `refetch()`.
+  const refetchToken = tokenQuery.refetch;
   useEffect(() => {
     if (status !== 'auth-failed') {
       // Reset the budget whenever we leave the failed state so a later,
@@ -150,10 +210,10 @@ export function useCollabSession(pageId: string | null | undefined): CollabSessi
     authRetryRef.current += 1;
     const delay = 1000 * 2 ** (authRetryRef.current - 1); // 1s, 2s, 4s
     const timer = setTimeout(() => {
-      void tokenQuery.refetch();
+      void refetchToken();
     }, delay);
     return () => clearTimeout(timer);
-  }, [status, tokenQuery]);
+  }, [status, refetchToken]);
 
   const { user, isLoading: isAuthLoading } = useAuth();
 
@@ -213,7 +273,7 @@ export function useCollabSession(pageId: string | null | undefined): CollabSessi
     };
   }, [yText, awareness]);
 
-  return { yText, yUndoManager, awareness, status, synced, baseRevisionId, readonly, subscribeStateless, sendStateless };
+  return { yText, yUndoManager, awareness, status, synced, hasEverSynced, baseRevisionId, advanceBaseRevision, readonly, subscribeStateless, sendStateless };
 }
 
 /**
@@ -262,19 +322,23 @@ export const CollaborativeMarkdownEditor = forwardRef<MarkdownEditorHandle, Coll
   // its own `useQuery` via the `enabled` flag.
   const ownedSession = useCollabSession(session ? null : pageId);
   const active = session ?? ownedSession;
-  const { yText, yUndoManager, awareness, status, synced, readonly, subscribeStateless } = active;
+  const { yText, yUndoManager, awareness, status, hasEverSynced, readonly, subscribeStateless } = active;
 
-  // §2 — readiness is `synced`, not merely `yText != null`. `yText` is
-  // non-null the instant the provider is constructed (sync pending), so
-  // the old `!yText` gate let the user type into an empty pre-sync doc;
-  // those edits were silently dropped when SyncStep2 replaced the doc
-  // (lost update) and the preview showed blank. Gating on `synced &&
-  // yText` mounts yCollab only once the doc reflects the server's
-  // authoritative state. We deliberately keep this a MOUNT gate (via the
-  // `key` below) rather than a runtime `readonly` toggle: hot-swapping
-  // readonly after the fact reintroduces the blank-editor race the `key`
-  // remount contract was built to fix.
-  const ready = Boolean(synced && yText);
+  // §2 — readiness is the initial-sync gate, not merely `yText != null`.
+  // `yText` is non-null the instant the provider is constructed (sync
+  // pending), so the old `!yText` gate let the user type into an empty
+  // pre-sync doc; those edits were silently dropped when SyncStep2
+  // replaced the doc (lost update) and the preview showed blank.
+  //
+  // H5 — gate on `hasEverSynced` (sticky), NOT the live `synced`. `synced`
+  // dips to `false` on a transient disconnect; if the MOUNT gate keyed off
+  // it, a network blip would remount CodeMirror and flip it readonly
+  // mid-edit (losing cursor/scroll/IME/undo). `hasEverSynced` stays true
+  // across a reconnect (it only resets on provider rebuild / auth-failure),
+  // so yCollab mounts once after the first sync and survives blips. The
+  // save guard still uses the live `synced` (see `useCollabSave`), so
+  // offline saving is still blocked while the editor stays mounted.
+  const ready = Boolean(hasEverSynced && yText);
 
   // Build the CodeMirror extension list. `yCollab` is the bridge
   // that wires Y.Text ↔ EditorView (doc + selection); the explicit
