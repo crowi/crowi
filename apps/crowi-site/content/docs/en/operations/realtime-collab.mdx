@@ -94,9 +94,14 @@ Additional requirements when running multiple api replicas:
 > cross-instance lock** (a cross-instance lock + last-writer arbitration
 > is currently out of scope). `@crowi/collab` ships a save-time optimistic
 > lock (a save whose edit-base revision has diverged is rejected with
-> `CONFLICT`) and an anti-shrink guard (an empty / heavily-shrunk yjsState
-> is never persisted over a non-empty one); both mitigate the worst case
-> on single and multi-instance alike, but **do not fully prevent it**. For
+> `CONFLICT`, and a save that would clear a non-empty page from a desynced
+> session is rejected before any revision is committed) plus an anti-shrink
+> guard on automatic checkpoints (an empty / heavily-shrunk checkpoint is
+> never persisted over a non-empty one, and a rejected checkpoint keeps the
+> surviving state **and** its pending deltas so no edit is lost on reject).
+> A deliberate large deletion from the editor is treated as explicit user
+> intent and saved normally. Together these mitigate the worst case on
+> single and multi-instance alike, but **do not fully prevent it**. For
 > this reason Crowi currently **recommends a single instance** (e.g. one
 > Lightsail box). Adopt multi-instance only when you need to load-balance
 > concurrent editing, with this risk understood.
