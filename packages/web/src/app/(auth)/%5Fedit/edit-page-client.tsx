@@ -29,9 +29,9 @@ import { defaultDraftBody, pageDisplayName, pagePathToHref } from '@/lib/page-pa
 import { useAuth } from '@/lib/use-auth';
 import type { CollabStatus } from '@/lib/use-collab-document';
 import { useCollabSave } from '@/lib/use-collab-save';
-import { DraftPathConflictError, draftEditHref, draftsKeys, useCreateDraft, useDrafts } from '@/lib/use-drafts';
+import { DraftPathConflictError, draftEditHref, useCreateDraft, useDrafts } from '@/lib/use-drafts';
 import { usePage } from '@/lib/use-page';
-import { PageRevisionConflictError, useSetPageGrant, useUpdatePage } from '@/lib/use-page-mutations';
+import { invalidatePageContentQueries, PageRevisionConflictError, useSetPageGrant, useUpdatePage } from '@/lib/use-page-mutations';
 import { usePageTitle } from '@/lib/use-page-title';
 import { usePresence } from '@/lib/use-presence';
 import { useScrollSync } from '@/lib/use-scroll-sync';
@@ -775,16 +775,14 @@ function UpdatePageEditor({ pageId, autoFocusOnReady = false }: UpdatePageEditor
 
   // Editor-QoL — after a successful realtime save, leave the editor for
   // the page view. The realtime save path (`crowi:save`) does not touch
-  // react-query, so the page query can still hold a stale entry: a prior
-  // 404 for a freshly-created page's path, or the pre-edit revision for
-  // an existing one. Invalidate `['page']` (covers both the `page_id`
-  // and `path` keyed queries) so the destination refetches the latest;
-  // `['drafts']` too because a first save publishes the draft, dropping
-  // it from the "creating pages" list.
+  // react-query, so the destination view can still hold a stale entry: a
+  // prior 404 for a freshly-created page's path, or the pre-edit revision.
+  // Invalidate the full page-content query set so BOTH the normal page
+  // view (`['page']`) and the portal/list view (`['pages']`) refetch —
+  // returning to a just-edited portal otherwise kept its stale body.
   const handleAfterSave = () => {
     if (!page) return;
-    queryClient.invalidateQueries({ queryKey: ['page'] });
-    queryClient.invalidateQueries({ queryKey: draftsKeys.all });
+    invalidatePageContentQueries(queryClient);
     router.push(pagePathToHref(page.path));
   };
 
