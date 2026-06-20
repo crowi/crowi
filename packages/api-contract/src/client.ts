@@ -732,7 +732,7 @@ const adminSettingsContractApp = new OpenAPIHono()
   .openapi(adminSearchRoutes.getSearchStatusRoute, (c) => c.json(stubSearchStatus, 200));
 
 const adminUsersPluginsContractApp = new OpenAPIHono()
-  // admin.users — 12 endpoints. Literal `/admin/users/search` and
+  // admin.users — 13 endpoints. Literal `/admin/users/search` and
   // `/admin/users/pending-count` register before `/admin/users/{id}`
   // paths so they do not collide with the id-template routes (Hono
   // matches first-defined).
@@ -746,6 +746,7 @@ const adminUsersPluginsContractApp = new OpenAPIHono()
   .openapi(adminUsersRoutes.activateUserRoute, (c) => c.json(stubAdminUserMutation, 200))
   .openapi(adminUsersRoutes.suspendUserRoute, (c) => c.json(stubAdminUserMutation, 200))
   .openapi(adminUsersRoutes.resetPasswordRoute, (c) => c.json(stubResetPassword, 200))
+  .openapi(adminUsersRoutes.resendInviteRoute, (c) => c.json(stubAdminUserMutation, 200))
   .openapi(adminUsersRoutes.updateUserEmailRoute, (c) => c.json(stubAdminUserMutation, 200))
   .openapi(adminUsersRoutes.deleteUserRoute, (c) => c.json(stubDeleteAdminUser, 200))
   // admin.plugins — 5 endpoints. `clear-all` and `clear-plugin` use

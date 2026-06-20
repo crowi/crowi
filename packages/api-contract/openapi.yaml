@@ -23394,6 +23394,223 @@ paths:
                       - message
                 required:
                   - error
+  /admin/users/{id}/resend-invite:
+    post:
+      tags:
+        - admin.users
+      security:
+        - bearerAuth: []
+      summary: >-
+        Re-issue an invite token and resend the invitation email (INVITED status
+        only)
+      parameters:
+        - schema:
+            type: string
+          required: true
+          name: id
+          in: path
+      responses:
+        '200':
+          description: Invitation email resent; returns the (unchanged) user
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    type: object
+                    properties:
+                      _id:
+                        type: string
+                      id:
+                        type: string
+                      username:
+                        type: string
+                      name:
+                        type: string
+                      email:
+                        type: string
+                        format: email
+                      image:
+                        type:
+                          - string
+                          - 'null'
+                      introduction:
+                        type: string
+                      createdAt:
+                        type: string
+                      admin:
+                        type: boolean
+                      status:
+                        type: integer
+                        enum:
+                          - 1
+                          - 2
+                          - 3
+                          - 4
+                          - 5
+                    required:
+                      - _id
+                      - username
+                      - name
+                      - email
+                      - createdAt
+                required:
+                  - user
+        '400':
+          description: Invalid id
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - VALIDATION_ERROR
+                      message:
+                        type: string
+                      details:
+                        type: object
+                        properties:
+                          fieldErrors:
+                            type: object
+                            additionalProperties:
+                              type: array
+                              items:
+                                type: string
+                          formErrors:
+                            type: array
+                            items:
+                              type: string
+                        required:
+                          - fieldErrors
+                          - formErrors
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - AUTHENTICATION_REQUIRED
+                      message:
+                        type: string
+                        enum:
+                          - Authentication is required
+                      redirectTo:
+                        type: string
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+        '403':
+          description: Admin permission required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - ADMIN_REQUIRED
+                      message:
+                        type: string
+                        enum:
+                          - Admin permission required
+                      redirectTo:
+                        type: string
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - NOT_FOUND
+                      message:
+                        type: string
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+        '409':
+          description: >-
+            User is not in the INVITED status, so there is no pending invite to
+            resend
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - CONFLICT
+                      message:
+                        type: string
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+        '500':
+          description: Internal server error (e.g. the invitation email failed to send)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - INTERNAL_ERROR
+                      message:
+                        type: string
+                        enum:
+                          - Internal server error
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
   /admin/users/{id}/email:
     put:
       tags:

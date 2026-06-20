@@ -155,11 +155,20 @@ endpoints.
 | Admin permission | Grant or revoke admin permission |
 | Status change | Activate (ACTIVE) or suspend (SUSPENDED) a user |
 | Reset password | Reissue a random password (the plaintext is returned once) |
+| Resend invite | Resend the invitation email to an **INVITED** user (a fresh invite token is issued) |
 | Delete | Physically remove an **INVITED** user (users who have ever activated cannot be deleted) |
 
-An invited user's row menu is intentionally limited to "Change email" and
-"Delete" (since the account has not activated yet, edit / permission / status
-actions are hidden).
+For an invited user's row, a **"Resend invite"** button is shown directly in
+the row, with a row menu next to it limited to "Change email" and "Delete"
+(since the account has not activated yet, edit / permission / status actions
+are hidden).
+
+Clicking "Resend invite" issues a new invite token and resends the invitation
+email. The invite token is valid for **7 days**. There is no need to explicitly
+invalidate the old token — the status check on acceptance prevents a double
+acceptance. Note that sending email requires mail (e.g. SMTP) to be configured,
+so **a resend is not possible when mail delivery is unconfigured** (a send
+failure surfaces an inline error).
 
 > **Tip**: The plaintext password returned by a password reset is shown
 > only at that moment. After a reset, deliver it to the user promptly over

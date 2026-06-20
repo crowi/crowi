@@ -55,6 +55,9 @@ const emailConflictBody = { error: { code: 'CONFLICT' as const, message: 'Email 
 const notInvitedConflictBody = {
   error: { code: 'CONFLICT' as const, message: 'Only invited (never-activated) users can be removed' as const },
 } as const;
+const notInvitedResendConflictBody = {
+  error: { code: 'CONFLICT' as const, message: 'Only invited (never-activated) users have a pending invite to resend' as const },
+} as const;
 
 type LegacyInvitedUserRow = {
   email: string;
@@ -245,6 +248,27 @@ export const registerAdminUsersRoutes = <E extends OpenAPIHono<CrowiHonoBindings
         return c.json({ user: toUserPublic(user), newPassword }, 200);
       } catch (err) {
         debug('resetPassword error: %s', (err as Error).message);
+        return c.json(INTERNAL_ERROR_BODY, 500);
+      }
+    })
+    .openapi(adminUsersRoutes.resendInviteRoute, async (c) => {
+      const { id } = c.req.valid('param');
+      if (!isValidObjectId(id)) return c.json(invalidIdBody(id), 400);
+      try {
+        const user = (await User.findById(id)) as UserDocument | null;
+        if (!user) return c.json(userNotFoundBody, 404);
+        // A resend only makes sense for a user who has a pending invite —
+        // i.e. one still in STATUS_INVITED (never accepted). Anyone who has
+        // accepted (or was never invited) has no invite to re-send.
+        if (user.status !== User.STATUS_INVITED) return c.json(notInvitedResendConflictBody, 409);
+        // sendInvitationMail issues a fresh stateless invite token and sends
+        // the invitation email; it throws on a send failure, which we surface
+        // as a 500 (the resend's whole purpose is delivery, so unlike the
+        // batch invite a failure must not be swallowed here).
+        await User.sendInvitationMail(user);
+        return c.json({ user: toUserPublic(user) }, 200);
+      } catch (err) {
+        debug('resendInvite error: %s', (err as Error).message);
         return c.json(INTERNAL_ERROR_BODY, 500);
       }
     })

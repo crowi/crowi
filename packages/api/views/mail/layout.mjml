@@ -17,11 +17,13 @@
       </mj-column>
     </mj-section>
 
-    <mj-section background-color="#ffffff" border-radius="12px" padding="8px 8px">
-      <mj-column>
-        <!--BODY-->
-      </mj-column>
-    </mj-section>
+    <mj-wrapper padding="0 16px">
+      <mj-section background-color="#ffffff" border-radius="12px" padding="8px 8px">
+        <mj-column>
+          <!--BODY-->
+        </mj-column>
+      </mj-section>
+    </mj-wrapper>
 
     <mj-section padding="16px 0 32px">
       <mj-column>

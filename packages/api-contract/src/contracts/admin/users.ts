@@ -366,6 +366,47 @@ export const resetPasswordRoute = createRoute({
   },
 });
 
+export const resendInviteRoute = createRoute({
+  method: 'post',
+  path: '/admin/users/{id}/resend-invite',
+  tags: ['admin.users'],
+  security: [{ bearerAuth: [] }],
+  summary: 'Re-issue an invite token and resend the invitation email (INVITED status only)',
+  request: {
+    params: AdminUserIdParamSchema,
+  },
+  responses: {
+    200: {
+      description: 'Invitation email resent; returns the (unchanged) user',
+      content: { 'application/json': { schema: AdminUserMutationResponseSchema } },
+    },
+    400: {
+      description: 'Invalid id',
+      content: { 'application/json': { schema: ValidationErrorSchema } },
+    },
+    401: {
+      description: 'Authentication required',
+      content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
+    },
+    403: {
+      description: 'Admin permission required',
+      content: { 'application/json': { schema: AdminRequiredErrorSchema } },
+    },
+    404: {
+      description: 'User not found',
+      content: { 'application/json': { schema: NotFoundErrorSchema } },
+    },
+    409: {
+      description: 'User is not in the INVITED status, so there is no pending invite to resend',
+      content: { 'application/json': { schema: ConflictErrorSchema } },
+    },
+    500: {
+      description: 'Internal server error (e.g. the invitation email failed to send)',
+      content: { 'application/json': { schema: InternalServerErrorSchema } },
+    },
+  },
+});
+
 export const updateUserEmailRoute = createRoute({
   method: 'put',
   path: '/admin/users/{id}/email',
@@ -487,6 +528,7 @@ export const adminUsersRoutes = {
   activateUserRoute,
   suspendUserRoute,
   resetPasswordRoute,
+  resendInviteRoute,
   updateUserEmailRoute,
   pendingUsersCountRoute,
   deleteUserRoute,
