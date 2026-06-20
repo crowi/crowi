@@ -81,10 +81,16 @@ describe('@crowi/collab Phase 6 onLoadDocument force-reload broadcast', () => {
     return { pageId: page._id.toString(), pagePath };
   };
 
-  test('yjsState=null path broadcasts crowi:force-reload (reason=page-body-replaced) when a document is active', async () => {
+  test('yjsState=null path seeds the body WITHOUT a spurious force-reload broadcast', async () => {
     // Page.yjsState defaults to null in the schema (no checkpoint yet),
     // so creating a fresh page+revision is sufficient to exercise the
     // null path.
+    //
+    // editor-preview-reliability tail fix: a null/empty yjsState is the
+    // NORMAL state for a brand-new page AND for every checkpoint that
+    // anti-shrink rejected (the reject policy leaves yjsState alone). The
+    // hook must NOT broadcast `page-body-replaced` on null yjsState — only
+    // an ABANDONED lineage (stale-empty / corrupt yjsState) signals it.
     const { pageId } = await seedPageWithBody('seed body');
     const spy = makeBroadcastSpy();
     const instance = makeInstanceWith(pageId, spy);
@@ -100,9 +106,9 @@ describe('@crowi/collab Phase 6 onLoadDocument force-reload broadcast', () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
 
-    // Fresh build still seeds the revision body.
+    // Fresh build still seeds the revision body — just no broadcast.
     expect(newDoc.getText(CONTENT_FIELD).toString()).toBe('seed body');
-    expect(spy.calls).toEqual([JSON.stringify({ kind: 'crowi:force-reload', reason: 'page-body-replaced' })]);
+    expect(spy.calls).toEqual([]);
   });
 
   test('corrupt yjsState path broadcasts crowi:force-reload (reason=yjs-state-corruption)', async () => {
@@ -159,9 +165,10 @@ describe('@crowi/collab Phase 6 onLoadDocument force-reload broadcast', () => {
     expect(spy.calls).toEqual([]);
   });
 
-  test('page with no revision + null yjsState still broadcasts page-body-replaced (no body to seed, empty Y.Doc)', async () => {
+  test('page with no revision + null yjsState yields an empty Y.Doc with NO broadcast', async () => {
     // Defensive: a page row with no `revision` pointer should not
-    // crash the hook AND should still notify any active editors.
+    // crash the hook. With the tail fix, a null yjsState (the fresh-page
+    // norm) does NOT broadcast — there is nothing replaced.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const Page = models.Page as any;
     const page = await Page.create({
@@ -187,7 +194,7 @@ describe('@crowi/collab Phase 6 onLoadDocument force-reload broadcast', () => {
     } as any);
 
     expect(newDoc.getText(CONTENT_FIELD).toString()).toBe('');
-    expect(spy.calls).toEqual([JSON.stringify({ kind: 'crowi:force-reload', reason: 'page-body-replaced' })]);
+    expect(spy.calls).toEqual([]);
   });
 
   test('documents.get undefined (no active editors) skips the broadcast without throwing', async () => {

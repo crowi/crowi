@@ -63,6 +63,48 @@ describe('onLoadDocument empty-yjsState body fallback (§1C)', () => {
     expect(doc.getText(CONTENT_FIELD).toString()).toBe('the canonical body that must survive a stale empty snapshot');
   });
 
+  test('H4 regression: a body-seed fallback DROPS residual deltas from the abandoned lineage (no duplication)', async () => {
+    // H4 was: after seeding from the revision body (empty-yjsState
+    // fallback), the hook unconditionally replayed leftover PageYjsUpdate
+    // deltas. Those deltas were authored against the DISCARDED yjsState
+    // lineage, so applying them onto the body-seeded doc (different state
+    // vector) duplicated / misplaced content. The fix drops them instead.
+    const body = 'the authoritative revision body that must stand alone';
+    const { pageId } = await seedPageWithBody(body);
+
+    // Stale empty yjsState → triggers the §1C body-seed fallback.
+    const emptyState = Buffer.from(Y.encodeStateAsUpdate(new Y.Doc()));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (models.Page as any).updateOne({ _id: pageId }, { $set: { yjsState: emptyState } }).exec();
+
+    // A residual delta from an UNRELATED lineage (a fresh doc with its own
+    // text). Replaying it onto the body-seeded doc would inject duplicate
+    // content; the fix must drop it.
+    const foreign = new Y.Doc();
+    foreign.getText(CONTENT_FIELD).insert(0, 'GHOST CONTENT FROM THE ABANDONED LINEAGE');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (models.PageYjsUpdate as any).create({ pageId, payload: Buffer.from(Y.encodeStateAsUpdate(foreign)), createdAt: new Date() });
+
+    const onLoadDocument = createOnLoadDocument({
+      models: { Page: models.Page, Revision: models.Revision, PageYjsUpdate: models.PageYjsUpdate },
+    });
+    const doc = new Y.Doc();
+    await onLoadDocument({
+      documentName: pageId,
+      document: doc,
+      instance: { documents: new Map() },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
+
+    // Exactly the body — no ghost content, no duplication.
+    expect(doc.getText(CONTENT_FIELD).toString()).toBe(body);
+    // The abandoned-lineage deltas were cleared so they can't haunt a
+    // later load either.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const remaining = await (models.PageYjsUpdate as any).countDocuments({ pageId }).exec();
+    expect(remaining).toBe(0);
+  });
+
   test('a non-empty yjsState with real content is restored as-is (no spurious fallback)', async () => {
     const { pageId } = await seedPageWithBody('original revision body');
     const source = new Y.Doc();

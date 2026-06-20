@@ -58,51 +58,70 @@ describe('compaction anti-shrink (editor-preview-reliability §1B)', () => {
     const compactor = createCompactor({ models: { Page: models.Page, PageYjsUpdate: models.PageYjsUpdate, Revision: models.Revision } });
 
     // Store checkpoint with an EMPTY live doc + no pending rows (fast path).
+    // The chokepoint now returns `null` on a reject (not an ok-shaped
+    // 0-byte result) so `onStoreDocument` does not treat the reject as
+    // "persisted" and the 10-min time-trigger can re-attempt.
     const empty = new Y.Doc();
     const result = await compactor.storeCheckpoint(pageId, empty);
-    expect(result).toEqual({ compactedCount: 0, newYjsStateBytes: 0 });
+    expect(result).toBeNull();
 
     // The good state survives untouched.
     const page = await Page().findById(pageId).exec();
     expect(Buffer.compare(page.yjsState as Buffer, goodState)).toBe(0);
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('anti-shrink skipped store-only checkpoint'));
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('anti-shrink rejected the store-only checkpoint'));
   });
 
-  test('full merge path: an empty merged doc skips the yjsState write but still prunes folded rows', async () => {
+  test('full merge path (C1 regression): a shrink reject keeps the folded rows AND the surviving yjsState (no data loss)', async () => {
+    // C1 was: on a full-merge anti-shrink reject the code kept the stale
+    // (large) yjsState BUT still pruned the folded deletion deltas — so
+    // the next load applied the stale state, saw a non-empty doc, took the
+    // fast path, never replayed the deletion, and permanently reverted a
+    // legitimate large deletion. The fix: on a reject write NOTHING and
+    // DO NOT prune the rows, so the deletion deltas survive to replay over
+    // the surviving base on the next load.
     const { pageId } = await fixtures.seedPage();
     await fixtures.seedRevision(pageId, BODY);
 
+    // A good, large yjsState (the full body) is the protected baseline.
     const goodState = encodeYjsDelta(BODY);
     await Page()
       .updateOne({ _id: pageId }, { $set: { yjsState: goodState } })
       .exec();
 
-    // Seed pending rows whose net effect is an EMPTY doc (a single
-    // delta from a fresh empty doc — applying it over `goodState` won't
-    // empty it, so instead drive the full path with no fromDocument and
-    // a pending delta that, merged over good state, stays non-empty.
-    // To exercise the *reject* branch we force an empty merge by using a
-    // delta encoded from an empty doc AND pre-clearing the baseline
-    // yjsState to empty so the merge result is empty.)
-    await Page()
-      .updateOne({ _id: pageId }, { $set: { yjsState: null } })
-      .exec();
-    const emptyDelta = Buffer.from(Y.encodeStateAsUpdate(new Y.Doc()));
-    await PageYjsUpdate().create({ pageId, payload: emptyDelta, createdAt: new Date() });
+    // A pending delta that, merged over the good state, DELETES most of
+    // the content (a legitimate large deletion → drops below the 50%
+    // anti-shrink ratio). We build it from a doc seeded with the same
+    // state then delete most of the text, encoding only the resulting
+    // delta so its lineage descends from `goodState`.
+    const editor = new Y.Doc();
+    Y.applyUpdate(editor, new Uint8Array(goodState));
+    const stateBefore = Y.encodeStateVector(editor);
+    editor.getText(CONTENT_FIELD).delete(2, BODY.length - 2); // keep ~2 chars
+    const deletionDelta = Buffer.from(Y.encodeStateAsUpdate(editor, stateBefore));
+    await PageYjsUpdate().create({ pageId, payload: deletionDelta, createdAt: new Date() });
     expect(await fixtures.countPending(pageId)).toBe(1);
 
     const compactor = createCompactor({ models: { Page: models.Page, PageYjsUpdate: models.PageYjsUpdate, Revision: models.Revision } });
     const result = await compactor.compactPage(pageId);
 
-    // The rows folded into the (empty) merge are still pruned...
-    expect(result?.compactedCount).toBe(1);
+    // Reject: nothing folded, no bytes written.
+    expect(result?.compactedCount).toBe(0);
     expect(result?.newYjsStateBytes).toBe(0);
-    expect(await fixtures.countPending(pageId)).toBe(0);
-    // ...but no empty yjsState was persisted (stays null → next load
-    // rebuilds from the revision body).
+    // C1 fix — the deletion deltas are PRESERVED (not pruned)...
+    expect(await fixtures.countPending(pageId)).toBe(1);
+    // ...and the surviving yjsState is left intact (not nulled, not the
+    // shrunk merge). Next load applies it + replays the deletion delta →
+    // the deletion is preserved instead of reverted.
     const page = await Page().findById(pageId).exec();
-    expect(page.yjsState).toBeNull();
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('anti-shrink skipped full-merge yjsState write'));
+    expect(Buffer.compare(page.yjsState as Buffer, goodState)).toBe(0);
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('anti-shrink rejected the full-merge checkpoint'));
+
+    // Prove no data loss end-to-end: a fresh doc that applies the kept
+    // yjsState + replays the kept deletion delta lands at the deleted size.
+    const replay = new Y.Doc();
+    Y.applyUpdate(replay, new Uint8Array(page.yjsState as Buffer));
+    Y.applyUpdate(replay, new Uint8Array(deletionDelta));
+    expect(replay.getText(CONTENT_FIELD).length).toBe(2);
   });
 
   test('non-shrinking checkpoint writes yjsState normally (guard is a no-op)', async () => {

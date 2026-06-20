@@ -126,28 +126,66 @@ describe('save-flow reliability (editor-preview-reliability §1A/§1B)', () => {
     expect(r2.revisionId).toMatch(/^[0-9a-f]{24}$/);
   });
 
-  test('§1B: a heavily-shrunk live doc does NOT persist its yjsState over a much larger previous body', async () => {
+  test('§1B/C2: a heavily-shrunk but non-empty user save IS persisted (explicit intent, ratio arm bypassed)', async () => {
+    // Principle (post fix-round): a user save is explicit intent, already
+    // protected by the §1A optimistic lock + §2 synced gate, so the
+    // anti-shrink *ratio* arm must NOT block a legitimate large deletion.
+    // Only an EMPTY save over non-empty content is rejected (the next
+    // test). A heavily-shrunk-but-non-empty save therefore succeeds and
+    // persists its yjsState.
     const flow = createSaveFlow({ models, contributorsTracker: createContributorsTracker(), pageEventPublisher: makeMockPublisher() });
     const { pageId } = await fixtures.seedPage();
     const user = await seedUser(models);
 
-    // First, a real save establishes a substantial baseline body + yjsState.
     const doc = new Y.Doc();
-    doc.getText(CONTENT_FIELD).insert(0, 'a substantial amount of real content that must be protected from loss by anti-shrink');
+    doc.getText(CONTENT_FIELD).insert(0, 'a substantial amount of real content that the user then deliberately trims');
     const r1 = await flow.executeSave({ pageId, userId: user._id.toString(), document: doc });
     expect((await Page().findById(pageId).exec()).yjsState).toBeTruthy();
 
-    // A new save whose doc has been catastrophically shrunk (~3 chars vs
-    // ~85) — a classic desync artifact. The new (short) revision is
-    // durable, but the yjsState write must be suppressed so the next
-    // load can rebuild from the body via the repointed currentRevision.
+    // The user intentionally trims the doc to a single char. This is a
+    // legitimate deletion — it must persist (revision committed + yjsState
+    // written), not be blocked.
     const shrunk = new Y.Doc();
     shrunk.getText(CONTENT_FIELD).insert(0, 'x');
-    await flow.executeSave({ pageId, userId: user._id.toString(), document: shrunk, baseRevisionId: r1.revisionId });
+    const r2 = await flow.executeSave({ pageId, userId: user._id.toString(), document: shrunk, baseRevisionId: r1.revisionId });
 
     const page = await Page().findById(pageId).exec();
-    expect(page.yjsState).toBeNull();
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('anti-shrink rejected yjsState write'));
+    expect(page.currentRevision.toString()).toBe(r2.revisionId);
+    expect(page.yjsState).toBeTruthy();
+    expect((page.yjsState as Buffer).length).toBeGreaterThan(0);
+  });
+
+  test('§1B/C2: an EMPTY save over non-empty content is rejected with CONFLICT BEFORE any revision is committed', async () => {
+    // C2 regression: the pre-fix code committed the empty body as a new
+    // Revision FIRST, then suppressed only the yjsState mirror — so
+    // "rebuild from body on next load" rebuilt from the EMPTY body and the
+    // content was lost. The fix evaluates the empty-doc guard BEFORE
+    // `prepareRevision` and throws CONFLICT, so NO empty revision is ever
+    // committed and the client reloads (recovery buffer restores the text).
+    const flow = createSaveFlow({ models, contributorsTracker: createContributorsTracker(), pageEventPublisher: makeMockPublisher() });
+    const { pageId } = await fixtures.seedPage();
+    const user = await seedUser(models);
+
+    const doc = new Y.Doc();
+    doc.getText(CONTENT_FIELD).insert(0, 'real content that must not be silently cleared');
+    const r1 = await flow.executeSave({ pageId, userId: user._id.toString(), document: doc });
+    const revisionCountBefore = await models.Revision.countDocuments({}).exec();
+
+    // A desynced/empty live doc save.
+    const empty = new Y.Doc();
+    await expect(flow.executeSave({ pageId, userId: user._id.toString(), document: empty, baseRevisionId: r1.revisionId })).rejects.toMatchObject({
+      code: 'CONFLICT',
+      name: 'CollabSaveError',
+    });
+
+    // No new (empty) revision was committed, and currentRevision + body
+    // still point at the real content.
+    const revisionCountAfter = await models.Revision.countDocuments({}).exec();
+    expect(revisionCountAfter).toBe(revisionCountBefore);
+    const page = await Page().findById(pageId).exec();
+    expect(page.currentRevision.toString()).toBe(r1.revisionId);
+    const rev = await models.Revision.findById(page.currentRevision).exec();
+    expect(rev?.body).toBe('real content that must not be silently cleared');
   });
 
   test('§1B: a normal-sized save persists its yjsState (guard is a no-op)', async () => {
