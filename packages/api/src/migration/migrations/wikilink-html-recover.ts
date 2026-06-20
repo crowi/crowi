@@ -1,8 +1,8 @@
 import { STATUS_PUBLISHED } from 'src/models/page';
 import type { MigrationContext } from '../types';
 import { defineMigration } from '../types';
+import { STOP, forEachPublishedCurrentRevision } from './published-current-revision';
 import { resolveActingUserId } from './resolve-acting-user';
-import { KNOWN_HTML_ELEMENTS } from './wikilink-format';
 
 /**
  * `wikilink-html-recover` (preflight layer) — undo the `wikilink-format`
@@ -18,20 +18,27 @@ import { KNOWN_HTML_ELEMENTS } from './wikilink-format';
  *
  *   - `x` is a single path segment (no `/` inside), AND
  *   - `x` has no `|alias` segment, AND
- *   - `x` is a known HTML element name (lowercased ASCII).
+ *   - `x` is one of the FIVE deprecated tags the misfire could have produced.
  *
- * Genuine wikilinks are deliberately preserved: `[[/foo/bar]]` (multi-segment),
- * `[[/font|alias]]` (aliased), `[[/Section]]` (uppercase → case-sensitive page
- * name), and `[[/wiki-page]]` (non-HTML name) are all left untouched.
+ * Scope is the 5 tags, NOT every known HTML element: those 5 were the ONLY
+ * names absent from `KNOWN_HTML_ELEMENTS` when `wikilink-format` ran, so they
+ * are the only `</x>` that could ever have been mis-rewritten to `[[/x]]`.
+ * `section` / `div` / `br` / `img` / etc. were always known and never rewritten,
+ * so a `[[/section]]` in real data is a GENUINE wikilink and must be preserved.
+ *
+ * Genuine wikilinks are otherwise preserved too: `[[/foo/bar]]` (multi-segment),
+ * `[[/font|alias]]` (aliased), `[[/Font]]` (uppercase → case-sensitive page
+ * name), and `[[/wiki-page]]` (non-recoverable name) are all left untouched.
  *
  * ── Inherent ambiguity ───────────────────────────────────────────────
  * `[[/font]]` could be a corrupted `</font>` OR a genuine wikilink to a real
  * page literally at `/font`. They are indistinguishable from the text alone.
- * We resolve this conservatively: a `[[/<x>]]` whose `/<x>` matches an
- * **existing page path** is NOT reverted — it is reported by `detect` so an
- * operator can decide manually (mirrors `relocate-reserved-api-paths`'s
- * collision-avoidance posture). The revert therefore only touches occurrences
- * that have no same-named page to be mistaken for.
+ * We resolve this conservatively: a `[[/<x>]]` whose `/<x>` matches a **live
+ * content page** (published, not a redirect stub) is NOT reverted — it is
+ * reported by `detect` so an operator can decide manually. The revert therefore
+ * only touches occurrences that have no same-named live page to be mistaken for.
+ * Pages literally named after a deprecated tag (`/font`, `/center`, …) are very
+ * rare, but an absent-page `[[/font]]` is still reverted — see the docs Caution.
  * ─────────────────────────────────────────────────────────────────────
  *
  * Like `wikilink-format`, every body rewrite routes through
@@ -46,38 +53,48 @@ import { KNOWN_HTML_ELEMENTS } from './wikilink-format';
  */
 
 /**
+ * The five deprecated/obsolete presentational tags absent from
+ * `KNOWN_HTML_ELEMENTS` when `wikilink-format` first ran — the ONLY close tags
+ * the misfire could have rewritten to `[[/x]]`. Recovery is scoped to exactly
+ * these so a genuine single-segment wikilink to any other element-named page
+ * (`[[/section]]`, `[[/div]]`, `[[/br]]`) is never destroyed.
+ */
+export const RECOVERABLE_DEPRECATED_TAGS: ReadonlySet<string> = new Set(['font', 'center', 'marquee', 'blink', 'applet']);
+
+/**
  * Matches a corrupted-wikilink candidate `[[/<segment>]]` with a single
  * path segment and no alias. The capture group grabs the bare segment
  * (`font` in `[[/font]]`). The `[^[\]|/]+` class excludes `[`, `]`, `|`, and
  * `/`, so multi-segment (`[[/foo/bar]]`) and aliased (`[[/font|x]]`) forms
- * never match here — only `shouldRecoverSegment` then filters by HTML name.
+ * never match here — only `shouldRecoverSegment` then filters by tag name.
  */
 export const WIKILINK_HTML_CANDIDATE_REGEX = /\[\[\/([^[\]|/]+)\]\]/g;
 
 /**
- * True iff `[[/<segment>]]` should be reverted to `</segment>`: the segment
- * is a lowercase-ASCII identifier that is a known HTML element. Uppercase
- * (`/Font`) or non-HTML (`/wiki`) segments are genuine wikilinks. This is the
- * exact inverse gate of `wikilink-format`'s `shouldRewriteWikilink` for the
- * single-segment case.
+ * True iff `[[/<segment>]]` should be reverted to `</segment>`: the segment is
+ * a lowercase-ASCII identifier that is one of the FIVE deprecated tags the
+ * misfire could have produced. Uppercase (`/Font`), non-deprecated element
+ * names (`/section`, `/div`), and non-HTML names (`/wiki`) are genuine
+ * wikilinks and are left alone.
  */
 export function shouldRecoverSegment(segment: string): boolean {
   if (!/^[a-z][a-z0-9]*$/.test(segment)) return false;
-  return KNOWN_HTML_ELEMENTS.has(segment);
+  return RECOVERABLE_DEPRECATED_TAGS.has(segment);
 }
 
 /** A single corrupted occurrence located in a body. */
 export interface RecoverableOccurrence {
   /** The full raw match, e.g. `[[/font]]`. */
   raw: string;
-  /** The HTML element name, e.g. `font`. */
+  /** The deprecated HTML tag name, e.g. `font`. */
   element: string;
 }
 
 /**
- * Single-pass scan: locate every `[[/<html-element>]]` occurrence in `body`.
- * Pure — no rewrite is applied here (the rewrite happens in `rewriteBody`
- * after same-name page collisions have been resolved per-occurrence).
+ * Single-pass scan: locate every recoverable `[[/<deprecated-tag>]]` occurrence
+ * in `body`. Pure — no rewrite is applied here (the rewrite happens in
+ * `rewriteBody` after same-name page collisions have been resolved
+ * per-occurrence).
  */
 export function detectRecoverable(body: string): RecoverableOccurrence[] {
   const occurrences: RecoverableOccurrence[] = [];
@@ -94,10 +111,10 @@ export function detectRecoverable(body: string): RecoverableOccurrence[] {
 }
 
 /**
- * Rewrite `body`, reverting `[[/<x>]]` → `</x>` for every element in
- * `recoverable`. Elements in `skip` (those that collide with a real page
- * path) are left untouched. Returns the input by reference when nothing
- * changed so callers can cheap-skip.
+ * Rewrite `body`, reverting `[[/<x>]]` → `</x>` for every recoverable element.
+ * Elements in `skip` (those that collide with a live same-named page) are left
+ * untouched. Returns the input by reference when nothing changed so callers can
+ * cheap-skip.
  */
 export function rewriteBody(body: string, skip: ReadonlySet<string>): string {
   let changed = false;
@@ -121,21 +138,24 @@ interface ScanResult {
   work: PageWork[];
   /** Total revertible occurrences across all `work` pages. */
   revertibleOccurrences: number;
-  /** Element names skipped because a same-named real page exists. */
+  /** Element names skipped because a live same-named page exists. */
   collidingElements: Set<string>;
 }
 
 /**
- * A memoised `/<element>` existence probe. `Page.exists` results are cached per
- * element so a widely-used corrupted tag costs one existence probe across the
- * whole walk, not one per page.
+ * A memoised live-content `/<element>` existence probe. The probe restricts to
+ * a **published, non-redirect** page so a leftover redirect stub (deleting
+ * `/font` leaves a published `redirect /trash/font` at `/font`) does NOT shadow
+ * a genuinely corrupted `[[/font]]`. `{ redirectTo: null }` matches both a
+ * missing field and an explicit null. `Page.exists` results are cached per
+ * element so a widely-used corrupted tag costs one probe across the whole walk.
  */
 function makePageExistsProbe(Page: ReturnType<MigrationContext['crowi']['model']>): (element: string) => Promise<boolean> {
   const cache = new Map<string, boolean>();
   return async (element) => {
     const cached = cache.get(element);
     if (cached !== undefined) return cached;
-    const exists = Boolean(await Page.exists({ path: `/${element}` }));
+    const exists = Boolean(await Page.exists({ path: `/${element}`, status: STATUS_PUBLISHED, redirectTo: null }));
     cache.set(element, exists);
     return exists;
   };
@@ -143,35 +163,24 @@ function makePageExistsProbe(Page: ReturnType<MigrationContext['crowi']['model']
 
 /**
  * Walk every published page's current revision body, detect corrupted
- * `[[/<html-element>]]` occurrences, and for each candidate element check
- * whether a same-named real page (`/<element>`) exists. Colliding elements
- * are reported (not reverted); the rest are staged for rewrite.
+ * `[[/<deprecated-tag>]]` occurrences, and for each candidate element check
+ * whether a live same-named page (`/<element>`) exists. Colliding elements are
+ * reported (not reverted); the rest are staged for rewrite.
  */
 async function scan(ctx: MigrationContext): Promise<ScanResult> {
   const Page = ctx.crowi.model('Page');
-  const Revision = ctx.crowi.model('Revision');
-
   const pageExists = makePageExistsProbe(Page);
 
   const work: PageWork[] = [];
   const collidingElements = new Set<string>();
   let revertibleOccurrences = 0;
 
-  const cursor = Page.find({ $or: [{ status: STATUS_PUBLISHED }, { status: null }] })
-    .select('_id revision')
-    .lean()
-    .cursor();
-
-  for await (const page of cursor) {
-    const pageDoc = page as { _id: unknown; revision?: unknown };
-    if (!pageDoc.revision) continue;
-    const revision = await Revision.findById(pageDoc.revision).select('body').lean().exec();
-    const body = (revision as { body?: unknown } | null)?.body;
-    if (typeof body !== 'string') continue;
-    if (!body.includes('[[/')) continue;
+  await forEachPublishedCurrentRevision(ctx, { projection: 'body' }, async ({ revision, pageId }) => {
+    const body = (revision as { body?: unknown }).body;
+    if (typeof body !== 'string' || !body.includes('[[/')) return;
 
     const occurrences = detectRecoverable(body);
-    if (occurrences.length === 0) continue;
+    if (occurrences.length === 0) return;
 
     // Partition this page's elements into collide-skip vs revertible.
     const skip = new Set<string>();
@@ -184,12 +193,12 @@ async function scan(ctx: MigrationContext): Promise<ScanResult> {
         pageReverted += 1;
       }
     }
-    if (pageReverted === 0) continue;
+    if (pageReverted === 0) return;
 
     const newBody = rewriteBody(body, skip);
-    work.push({ pageId: String(pageDoc._id), newBody, reverted: pageReverted });
+    work.push({ pageId, newBody, reverted: pageReverted });
     revertibleOccurrences += pageReverted;
-  }
+  });
 
   return { work, revertibleOccurrences, collidingElements };
 }
@@ -199,50 +208,47 @@ export const wikilinkHtmlRecover = defineMigration({
   fromVersion: '2.1',
   toVersion: '2.1',
   layer: 'preflight',
-  // Order after wikilink-format so the misfire is stopped (5 tags added)
-  // before its corrupted output is recovered.
+  // `fromVersion: '2.1'` already sequences this after `wikilink-format`
+  // (`fromVersion: '1.x'`) — the registry orders by `fromVersion` FIRST
+  // (registry.ts compareMigrations), so the misfire's source is registered
+  // before this recovery regardless of `order`. `order` here only tie-breaks
+  // against the sibling `toc-html-strip` (also `2.1`); the two are mutually
+  // independent, so the value is cosmetic.
   order: 100,
-  description: 'Recover HTML close tags corrupted to wikilinks by the earlier wikilink-format misfire',
+  description: 'Recover deprecated HTML close tags (</font> etc.) corrupted to wikilinks by the wikilink-format misfire',
 
   /**
    * Pending iff at least one published page's current revision body still
-   * carries a revertible `[[/<html-element>]]` whose element has no same-named
-   * page. There is no index on `revision.body`, so this walks published pages
-   * and short-circuits at the first revertible occurrence — never a full
-   * `revisions` scan, and it stops early rather than reading every page.
+   * carries a revertible `[[/<deprecated-tag>]]` whose element has no live
+   * same-named page. There is no index on `revision.body`, so this walks
+   * published pages (projecting `body`) and short-circuits at the first
+   * revertible occurrence.
    *
-   * Colliding occurrences (`[[/font]]` with a real `/font` page) do NOT count
+   * Colliding occurrences (`[[/font]]` with a live `/font` page) do NOT count
    * as pending: this migration will never revert them, so reporting pending
    * for them would block boot forever under preflight + `block`.
    */
   isPending: async (ctx) => {
     const Page = ctx.crowi.model('Page');
-    const Revision = ctx.crowi.model('Revision');
     const pageExists = makePageExistsProbe(Page);
-    const cursor = Page.find({ $or: [{ status: STATUS_PUBLISHED }, { status: null }] })
-      .select('_id revision')
-      .lean()
-      .cursor();
-    for await (const page of cursor) {
-      const revisionId = (page as { revision?: unknown }).revision;
-      if (!revisionId) continue;
-      const revision = await Revision.findById(revisionId).select('body').lean().exec();
-      const body = (revision as { body?: unknown } | null)?.body;
-      if (typeof body !== 'string' || !body.includes('[[/')) continue;
+    let pending = false;
+    await forEachPublishedCurrentRevision(ctx, { projection: 'body' }, async ({ revision }) => {
+      const body = (revision as { body?: unknown }).body;
+      if (typeof body !== 'string' || !body.includes('[[/')) return;
       for (const occ of detectRecoverable(body)) {
         if (!(await pageExists(occ.element))) {
-          await cursor.close();
-          return true;
+          pending = true;
+          return STOP;
         }
       }
-    }
-    return false;
+    });
+    return pending;
   },
 
   /**
    * Full scan for `plan`: report how many pages / occurrences would be
-   * reverted plus, separately, the HTML element names that were left alone
-   * because a same-named real page exists (the operator must resolve those
+   * reverted plus, separately, the deprecated-tag names that were left alone
+   * because a live same-named page exists (the operator must resolve those
    * by hand). Not called at boot.
    */
   detect: async (ctx) => {
