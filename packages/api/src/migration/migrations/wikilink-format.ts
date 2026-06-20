@@ -1,7 +1,7 @@
 import { STATUS_PUBLISHED } from 'src/models/page';
-
-import { defineMigration } from '../types';
 import type { MigrationContext } from '../types';
+import { defineMigration } from '../types';
+import { resolveActingUserId } from './resolve-acting-user';
 
 /**
  * RFC-0008 §10.2 step 4 / §4.3.1 — `wikilink-format` (preflight layer).
@@ -35,11 +35,18 @@ import type { MigrationContext } from '../types';
  * Kept as a top-level `Set<string>` so detection runs O(1) per match.
  * `h1`..`h6` are listed explicitly because the regex captures `foo` for
  * `</foo>` and we want both `</h1>` and `</h6>` to be rejected.
+ *
+ * Includes the deprecated/obsolete presentational elements `font` /
+ * `center` / `marquee` / `blink` / `applet`: they no longer appear in the
+ * MDN current element list but still occur in real legacy wiki content
+ * (e.g. `### <font color="1a73e8">…</font>` headings), so `</font>` etc.
+ * MUST be treated as close tags rather than rewritten to `[[/font]]`.
  */
 export const KNOWN_HTML_ELEMENTS: ReadonlySet<string> = new Set([
   'a',
   'abbr',
   'address',
+  'applet',
   'area',
   'article',
   'aside',
@@ -48,12 +55,14 @@ export const KNOWN_HTML_ELEMENTS: ReadonlySet<string> = new Set([
   'base',
   'bdi',
   'bdo',
+  'blink',
   'blockquote',
   'body',
   'br',
   'button',
   'canvas',
   'caption',
+  'center',
   'cite',
   'code',
   'col',
@@ -73,6 +82,7 @@ export const KNOWN_HTML_ELEMENTS: ReadonlySet<string> = new Set([
   'fieldset',
   'figcaption',
   'figure',
+  'font',
   'footer',
   'form',
   'h1',
@@ -99,6 +109,7 @@ export const KNOWN_HTML_ELEMENTS: ReadonlySet<string> = new Set([
   'main',
   'map',
   'mark',
+  'marquee',
   'menu',
   'meta',
   'meter',
@@ -256,35 +267,6 @@ export function rewriteWikilinks(body: string): string {
 }
 
 /**
- * Resolve which user is recorded as the author of every rewritten revision.
- * The `updatePage`-equivalent path (`rewritePageBody`) ultimately calls
- * `Revision.prepareRevision`, which **throws** when handed a falsy user, so a
- * preflight rewrite MUST resolve a real acting user up front rather than rely
- * on per-page `lastUpdateUser`/`creator` (those can dangle to a deleted user).
- *
- * Order, mirroring the legacy `migrate-wikilink` command:
- *   1. `process.env.CROWI_MIGRATE_USER` — interpreted as an email; the named
- *      user must exist.
- *   2. otherwise the oldest admin user (`{ admin: true }` sorted by createdAt),
- *      deterministic across re-runs.
- *
- * Throws when neither yields a user so the operator gets a clear error instead
- * of a per-page `user should have _id` failure deep inside the rewrite.
- */
-async function resolveActingUserId(ctx: MigrationContext): Promise<string> {
-  const User = ctx.crowi.model('User');
-  const explicit = process.env.CROWI_MIGRATE_USER;
-  if (explicit) {
-    const named = await User.findOne({ email: explicit }).select('_id').lean().exec();
-    if (named) return String((named as { _id: unknown })._id);
-    throw new Error(`CROWI_MIGRATE_USER='${explicit}' but no user with that email exists.`);
-  }
-  const admin = await User.findOne({ admin: true }).sort({ createdAt: 1 }).select('_id').lean().exec();
-  if (admin) return String((admin as { _id: unknown })._id);
-  throw new Error('wikilink-format: no admin user found; set CROWI_MIGRATE_USER=<email> or create an admin user first.');
-}
-
-/**
  * Walk every published page, keep those whose current revision body holds a
  * genuine legacy wikilink (`bodyHasRewritableWikilink` — the same full
  * `shouldRewriteWikilink` rule `isPending` uses, with `</` as a cheap
@@ -405,7 +387,7 @@ export const wikilinkFormat = defineMigration({
           return { name: 'rewrite-wikilink', transformed: 0, stats: { wouldRewrite: pages.length } };
         }
 
-        const actingUserId = await resolveActingUserId(ctx);
+        const actingUserId = await resolveActingUserId(ctx, 'wikilink-format');
         const pages = await collectRewritablePages(ctx);
         ctx.progress.setTotal(pages.length);
 

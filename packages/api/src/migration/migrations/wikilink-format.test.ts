@@ -96,6 +96,37 @@ describe('migration/wikilink-format — detection rules (pure)', () => {
         expect(KNOWN_HTML_ELEMENTS.has(word)).toBe(false);
       }
     });
+
+    it('covers the deprecated presentational elements still found in legacy content', () => {
+      // Regression for the close-tag misfire: `</font>` etc. were rewritten to
+      // `[[/font]]` because these obsolete tags were missing from the set.
+      for (const el of ['font', 'center', 'marquee', 'blink', 'applet']) {
+        expect(KNOWN_HTML_ELEMENTS.has(el)).toBe(true);
+      }
+    });
+  });
+
+  describe('deprecated close tags are NOT rewritten (close-tag misfire regression)', () => {
+    it.each([['font'], ['center'], ['marquee'], ['blink'], ['applet']])('rejects </%s> (HTML close tag)', (el) => {
+      expect(shouldRewriteWikilink(`/${el}`)).toBe(false);
+    });
+
+    it('leaves a `### <font ...>Title</font>` heading body untouched', () => {
+      const body = '### <font color="1a73e8">Workspace の作成</font>';
+      expect(rewriteWikilinks(body)).toBe(body);
+      expect(bodyHasRewritableWikilink(body)).toBe(false);
+    });
+
+    it('does not rewrite a body whose only `</` tokens are deprecated close tags', () => {
+      const body = '</font></center></marquee></blink></applet>';
+      expect(rewriteWikilinks(body)).toBe(body);
+      expect(bodyHasRewritableWikilink(body)).toBe(false);
+    });
+
+    it('open tags were always safe (regex requires a leading `/`)', () => {
+      const body = '<font color="red">x</font> <center>y</center>';
+      expect(rewriteWikilinks(body)).toBe(body);
+    });
   });
 });
 
@@ -223,6 +254,16 @@ describe('migration/wikilink-format — framework wiring', () => {
     await Page.createPage(`${PATH_PREFIX}/v2only`, 'only [[/already/v2]] here, no angle close', admin, {});
     const runner = new MigrationRunner(crowi);
     expect(await runner.isPending(wikilinkFormat)).toBe(false);
+  });
+
+  it('isPending is false for a page whose heading uses deprecated inline HTML (`</font>` is not a wikilink)', async () => {
+    // The close-tag misfire regression at the framework layer: a heading with
+    // `<font …></font>` must not pend (and `migrate apply` must not rewrite it).
+    await Page.createPage(`${PATH_PREFIX}/font`, '### <font color="1a73e8">Workspace</font>', admin, {});
+    const runner = new MigrationRunner(crowi);
+    expect(await runner.isPending(wikilinkFormat)).toBe(false);
+    const report = await runner.detect(wikilinkFormat);
+    expect(report?.counts?.pages).toBe(0);
   });
 
   it('isPending is false for a page containing only HTML close tags (`</div>` is not a wikilink)', async () => {
