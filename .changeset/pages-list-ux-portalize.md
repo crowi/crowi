@@ -31,3 +31,8 @@ Improve the page-list / portal / sidebar UX and add a "portalize" flow.
   at this path" banner is now a link to that page, and viewing the content
   page `/x` directly shows a "this page has descendants — make it a portal?"
   banner.
+- **Portals keep their page affordances**: a portal now shows the same
+  right-rail table of contents as a normal page (over its body's headings),
+  and a compact chip row above the child list toggles the portal's comments,
+  backlinks, and attachments — so portalizing a page no longer drops its TOC
+  or its comment/backlink/attachment sections.

@@ -1,6 +1,6 @@
 'use client';
 
-import { type ListPagesRequest, PageStatusEnum, type PageWithRevision } from '@crowi/api-contract';
+import { type ListPagesRequest, PageStatusEnum, type PageWithRevision, type TocEntryResponse } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 import { Compass, Folder, HelpCircle, MoreHorizontal, MoveRight, Pencil, Plus } from 'lucide-react';
 import Link from 'next/link';
@@ -8,7 +8,10 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { CreatePageCtaButton, CreatePageListButton } from '@/components/create-page/create-page-dialog';
 import { PageContent } from '@/components/page-view/page-content';
+import { useTocScrollSpy } from '@/components/page-view/page-toc';
+import { PageTocColumns } from '@/components/page-view/page-toc-columns';
 import { PortalizeBanner } from '@/components/page-view/portalize-dialog';
+import { PortalMetaBar } from './portal-meta-bar';
 import { RenameDialog } from '@/components/page-view/rename-dialog';
 import { StaleRevisionBanner } from '@/components/page-view/stale-revision-banner';
 import { Button } from '@/components/ui/button';
@@ -62,6 +65,10 @@ interface PageListProps {
 // default and let the API impose its own hard cap.
 const DEFAULT_PAGE_LIMIT = 100;
 
+// Stable empty TOC so the scroll-spy effect dep doesn't churn when a
+// portal has no headings (or there is no portal at all).
+const EMPTY_TOC: TocEntryResponse[] = [];
+
 function getPortalTitle(path: string): string {
   if (path === '/') return m['page_list.title_all']();
   return pageDisplayName(path) || m['page_list.title_default']();
@@ -102,6 +109,13 @@ export function PageList({ initialParams = {}, variant = 'default', disableCreat
   const showCreateButton = !isTrash && !disableCreatePortal && !!portalPath && portalPath !== '/' && !isOtherUserNamespace;
 
   const { data, isLoading, error } = usePageList(params);
+
+  // Scroll-spy for the portal body's TOC rail. Computed before the early
+  // returns so the hook order stays stable; the source is the raw portal
+  // document (independent of the draft/render gating below), and it no-ops
+  // when there is no portal / no headings.
+  const portalToc = (isTrash ? undefined : (data?.portalPage as PageWithRevision | undefined))?.revision?.meta?.toc ?? EMPTY_TOC;
+  const activeTocId = useTocScrollSpy(portalToc);
 
   const handlePageChange = (offset: number) => {
     setParams((prev) => ({ ...prev, offset }));
@@ -169,7 +183,7 @@ export function PageList({ initialParams = {}, variant = 'default', disableCreat
   const pages = data?.pages ?? [];
   const hasChildren = !!data && pages.length > 0;
 
-  return (
+  const body = (
     <div className="space-y-6">
       {/* --- Header block --- */}
       {portalPage ? (
@@ -219,6 +233,12 @@ export function PageList({ initialParams = {}, variant = 'default', disableCreat
         )
       )}
 
+      {/* --- Portal meta (comments / backlinks / attachments) --- */}
+      {/* A compact chip row ABOVE the list (the list can be long, so these
+          page-level affordances would be lost below it). Portal-only — the
+          comments/backlinks/attachments belong to the portal document. */}
+      {portalPage && <PortalMetaBar page={portalPage} />}
+
       {/* --- Children block (always rendered) --- */}
       {hasChildren ? (
         <section className="space-y-2">
@@ -243,6 +263,19 @@ export function PageList({ initialParams = {}, variant = 'default', disableCreat
       )}
     </div>
   );
+
+  // A portal renders a body with headings, so it gets the same full-width
+  // 3-column shell + right-rail TOC as a normal page. Every other listing
+  // (plain folder / trash / root / member dir) has no body, so it stays in
+  // the centered column.
+  if (portalPage) {
+    return (
+      <PageTocColumns toc={portalToc} activeTocId={activeTocId}>
+        {body}
+      </PageTocColumns>
+    );
+  }
+  return body;
 }
 
 /**
