@@ -100,6 +100,13 @@ export function useCreateDraft() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: draftsKeys.all });
+      // A draft is visible to its author in the parent's child listing
+      // (`findChildSegments` includes own drafts), so the sidebar tree
+      // (`['pages','children',…]`) and any page list (`['pages','list',…]`)
+      // must refresh too — both live under the `['pages']` family. Without
+      // this, returning to an already-cached parent omits the just-created
+      // page until its 60s staleTime lapses.
+      queryClient.invalidateQueries({ queryKey: ['pages'] });
     },
   });
 }
