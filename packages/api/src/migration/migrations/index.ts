@@ -4,6 +4,7 @@ import { relocateReservedApiPaths } from './relocate-reserved-api-paths';
 import { revisionsSchemaUnify } from './revisions-schema-unify';
 import { userUniquePrepare } from './user-unique-prepare';
 import { wikilinkFormat } from './wikilink-format';
+import { wikilinkHtmlRecover } from './wikilink-html-recover';
 
 /**
  * RFC-0008 §5.5 — the migration barrel.
@@ -21,4 +22,5 @@ export const allMigrations: MigrationDefinition[] = [
   userUniquePrepare, // phase 5 (preflight)
   revisionsSchemaUnify, // phase 6 (boot — RFC-classified preflight, see migration JSDoc)
   relocateReservedApiPaths, // fix/mcp-endpoint (preflight) — v2 /api namespace reservation
+  wikilinkHtmlRecover, // migration-html-tag-fixes (preflight) — recover </font> etc. corrupted by wikilink-format
 ];
