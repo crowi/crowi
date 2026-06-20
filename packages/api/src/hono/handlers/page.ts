@@ -235,6 +235,12 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
         try {
           let pages: PageDocument[] = [];
           let portalPage: PageDocument | null = null;
+          // §4 — when listing a portal path (`/foo/`) that has no portal
+          // document of its own, surface the content page sitting at the
+          // stripped path (`/foo`) so the list view can offer "portalize
+          // this page" instead of "Create Portal". Mutually exclusive with
+          // `portalPage`. Only ever set in the path branch below.
+          let contentPage: PageDocument | null = null;
 
           if (userParam) {
             // List pages by creator.
@@ -266,6 +272,21 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
               rawPortalPage ? Page.populate(rawPortalPage, [{ path: 'creator' }, { path: 'lastUpdateUser' }]) : null,
               Page.populate(rawPages, [{ path: 'creator' }, { path: 'lastUpdateUser' }]),
             ])) as [PageDocument | null, PageDocument[]];
+
+            // §4 — a portal path (`/foo/`) with no portal document but a
+            // content page at the stripped path (`/foo`): resolve that
+            // content page (grant/draft-respecting; not-found → null) so the
+            // client can offer to portalize it. Skipped for /trash and when
+            // a real portal already exists (the two are exclusive).
+            if (!isTrashPath && !portalPage && path.endsWith('/')) {
+              const strippedPath = path.replace(/\/+$/, '');
+              if (strippedPath !== '') {
+                const rawContentPage = await Page.findPortalPage(strippedPath, user, null);
+                contentPage = rawContentPage
+                  ? ((await Page.populate(rawContentPage, [{ path: 'creator' }, { path: 'lastUpdateUser' }])) as PageDocument)
+                  : null;
+              }
+            }
           } else {
             // List all pages the user can access (including path='/').
             //
@@ -333,6 +354,15 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             const portalId = String(portalPage._id);
             pages = pages.filter((page) => String(page._id) !== portalId);
           }
+          // §4 — the content page surfaced separately as `contentPage` is
+          // also matched by `findListByStartWith` (the un-slashed twin of
+          // the portal path), so drop it from the child rows for the same
+          // reason as `portalPage`: it is rendered as the portalize banner,
+          // not as a child.
+          if (contentPage) {
+            const contentId = String(contentPage._id);
+            pages = pages.filter((page) => String(page._id) !== contentId);
+          }
 
           const pageResponses = pages.map((page) => pageToResponse(page));
           // The portal document is rendered as a full page (PageContent)
@@ -356,6 +386,11 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             portalPageResponse.revision.renderedAst = renderedAst;
           }
 
+          // §4 — content page emitted lean (no renderedAst): the client uses
+          // it only to drive the portalize banner (id / path / revision id),
+          // never to render the page body.
+          const contentPageResponse = contentPage ? pageToResponse(contentPage) : null;
+
           const prev = offset > 0 ? Math.max(0, offset - limit) : null;
           const next = pages.length === limit ? offset + limit : null;
 
@@ -364,6 +399,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
               pages: pageResponses,
               pager: { prev, next, offset },
               portalPage: portalPageResponse,
+              contentPage: contentPageResponse,
             },
             200,
           );
@@ -376,6 +412,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
               pages: [],
               pager: { prev: null, next: null, offset: 0 },
               portalPage: null,
+              contentPage: null,
             },
             200,
           );
