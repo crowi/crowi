@@ -1,5 +1,6 @@
+import type { PageChildSegment } from '@crowi/api-contract';
 import { describe, expect, it } from 'vitest';
-import { pageSidebarLayout } from './sidebar-paths';
+import { pageSidebarLayout, resolveSidebarSelfLink } from './sidebar-paths';
 
 describe('pageSidebarLayout', () => {
   // The defining invariant of the unified tree (feature-update-pages-list-ux
@@ -136,5 +137,43 @@ describe('pageSidebarLayout', () => {
         userHome: null,
       });
     });
+  });
+});
+
+describe('resolveSidebarSelfLink', () => {
+  const seg = (over: Partial<PageChildSegment>): PageChildSegment => ({
+    segment: 'c',
+    path: '/a/b/c/',
+    isPage: false,
+    hasPortal: false,
+    count: 0,
+    ...over,
+  });
+
+  // /a/b/c → levels aligned with ['/a/', '/a/b/', '/a/b/c/']; the current
+  // node `c` is listed at level 1 (children of /a/b/).
+  const layout = pageSidebarLayout('/a/b/c');
+
+  it('surfaces the content page as a self-link when the node is a page WITH children', () => {
+    const levels: PageChildSegment[][] = [[], [seg({ isPage: true, count: 3 })], []];
+    // On the content page itself → the self-link is the current node.
+    expect(resolveSidebarSelfLink(layout, levels, '/a/b/c')).toEqual({ contentPath: '/a/b/c', isCurrent: true });
+    // On the portal listing → same link, but the folder node stays current.
+    expect(resolveSidebarSelfLink(layout, levels, '/a/b/c/')).toEqual({ contentPath: '/a/b/c', isCurrent: false });
+  });
+
+  it('returns null for a pure directory (no content page at the node)', () => {
+    const levels: PageChildSegment[][] = [[], [seg({ isPage: false, count: 3 })], []];
+    expect(resolveSidebarSelfLink(layout, levels, '/a/b/c')).toBeNull();
+  });
+
+  it('returns null for a childless leaf page (the node already links to /a/b/c)', () => {
+    const levels: PageChildSegment[][] = [[], [seg({ isPage: true, count: 0 })], []];
+    expect(resolveSidebarSelfLink(layout, levels, '/a/b/c')).toBeNull();
+  });
+
+  it('returns null at the (un-rendered) root where there is no current node', () => {
+    const rootLayout = pageSidebarLayout('/');
+    expect(resolveSidebarSelfLink(rootLayout, [[]], '/')).toBeNull();
   });
 });
