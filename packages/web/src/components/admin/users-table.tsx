@@ -2,8 +2,7 @@
 
 import type { AdminPager, UserPublic } from '@crowi/api-contract';
 import { UserStatusEnum } from '@crowi/api-contract';
-import { Loader2, MailCheck, MoreHorizontal, Send } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { Loader2, MoreHorizontal, Send } from 'lucide-react';
 import { UserIdentityCell } from '@/components/admin/user-identity-cell';
 import { Button } from '@/components/ui/button';
 import {
@@ -16,12 +15,10 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useResendAdminInvite } from '@/lib/use-admin-users';
+import { notify } from '@/lib/notify';
 import { cn } from '@/lib/utils';
 import { formatDate } from '@/lib/date-utils';
 import { m } from '@paraglide/messages.js';
-
-/** Success feedback auto-dismisses after ~4s (mirrors plugin-clear-cache-button). */
-const RESEND_SUCCESS_DISMISS_MS = 4000;
 
 export type UserRowActionKind = 'edit' | 'make-admin' | 'remove-admin' | 'activate' | 'suspend' | 'reset-password' | 'update-email' | 'delete';
 
@@ -112,67 +109,46 @@ export function UsersPager({ pager, onPageChange }: { pager: AdminPager; onPageC
   );
 }
 
-type ResendStatus = null | { kind: 'success' } | { kind: 'error'; message: string };
-
 /**
  * In-row "Resend invite" affordance for INVITED users — a primary action a
  * deliberately minimal pre-acceptance row should expose directly (not buried
  * in the menu). One click re-issues the invite token and resends the email
- * (no confirm dialog, mirroring the reset-password row action); Crowi has no
- * toast layer, so success/failure is shown inline (role=status / role=alert)
- * and disabled while in flight to prevent a double-send.
+ * (no confirm dialog, mirroring the reset-password row action). Success and
+ * failure surface as a toast via the shared `notify` helper (the Toaster is
+ * mounted by the admin layout) rather than inline, so the row height never
+ * shifts and the table layout stays stable. The button is disabled while in
+ * flight to prevent a double-send.
  */
 function ResendInviteButton({ user }: { user: UserPublic }) {
   const resend = useResendAdminInvite();
-  const [status, setStatus] = useState<ResendStatus>(null);
-
-  useEffect(() => {
-    if (status?.kind !== 'success') return;
-    const id = window.setTimeout(() => setStatus(null), RESEND_SUCCESS_DISMISS_MS);
-    return () => window.clearTimeout(id);
-  }, [status]);
 
   const onClick = () => {
-    setStatus(null);
     resend.mutate(
       { id: user._id },
       {
-        onSuccess: () => setStatus({ kind: 'success' }),
-        onError: (err) => setStatus({ kind: 'error', message: err instanceof Error ? err.message : m['admin.users.action.resend_invite_failed']() }),
+        onSuccess: () => notify.info(m['admin.users.action.resend_invite_success']()),
+        onError: (err) => notify.error(err instanceof Error ? err.message : m['admin.users.action.resend_invite_failed']()),
       },
     );
   };
 
   return (
-    <div className="inline-flex flex-col items-end gap-1">
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-8 w-8 p-0"
-            disabled={resend.isPending}
-            aria-label={m['admin.users.action.resend_invite']()}
-            onClick={onClick}
-          >
-            {resend.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>{resend.isPending ? m['admin.users.action.resending']() : m['admin.users.action.resend_invite']()}</TooltipContent>
-      </Tooltip>
-      {status?.kind === 'success' && (
-        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground" role="status">
-          <MailCheck className="h-3 w-3" />
-          {m['admin.users.action.resend_invite_success']()}
-        </span>
-      )}
-      {status?.kind === 'error' && (
-        <span className="text-xs text-destructive" role="alert">
-          {status.message}
-        </span>
-      )}
-    </div>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-8 w-8 p-0"
+          disabled={resend.isPending}
+          aria-label={m['admin.users.action.resend_invite']()}
+          onClick={onClick}
+        >
+          {resend.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{resend.isPending ? m['admin.users.action.resending']() : m['admin.users.action.resend_invite']()}</TooltipContent>
+    </Tooltip>
   );
 }
 
