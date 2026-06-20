@@ -13,13 +13,15 @@ import { ErrorAlert } from '@/components/ui/error-alert';
 import { AccessDeniedCard } from '@/components/ui/access-denied-card';
 import { NotFoundCard } from '@/components/ui/not-found-card';
 import { usePage } from '@/lib/use-page';
-import { pagePathToHref } from '@/lib/page-path';
+import { isUserHomePath, pagePathToHref } from '@/lib/page-path';
 import { usePageGrantAccent } from '@/lib/use-page-grant-accent';
+import { usePageChildren } from '@/lib/use-page-children';
 import { isStalePageRevision } from '@/lib/page-revision';
 import { useRevertDeletedPage } from '@/lib/use-page-mutations';
 import { useMarkSeenOnView } from '@/lib/use-seen';
 import { PageHeader } from './page-header';
 import { PageContent } from './page-content';
+import { PortalizeBanner } from './portalize-dialog';
 import { PageToc, useTocScrollSpy } from './page-toc';
 import { cn } from '@/lib/utils';
 import { StaleRevisionBanner } from './stale-revision-banner';
@@ -45,6 +47,14 @@ export function PageView({ path, revisionId }: PageViewProps) {
   const router = useRouter();
   const { page, isLoading, isError, error, notFound, notGranted, redirectTo, isDeleted, refetch } = usePage({ path, revision_id: revisionId });
   const revertMutation = useRevertDeletedPage();
+
+  // Does this content page have descendants (`/path/...`)? If so it can be
+  // turned into a portal that indexes them. Querying the portal-path children
+  // shares the sidebar's cache key (deduped — no extra request), so this is
+  // effectively free. Disabled until the page resolves and isn't deleted.
+  const childrenPath = path.endsWith('/') ? path : `${path}/`;
+  const { data: childrenData } = usePageChildren(childrenPath, { enabled: !!page && !isDeleted });
+  const hasDescendants = (childrenData?.children?.length ?? 0) > 0;
 
   const canMarkSeen = Boolean(page?._id) && !isLoading && !isError && !notFound && !notGranted && !isDeleted && !redirectTo;
   useMarkSeenOnView(page?._id, canMarkSeen);
@@ -174,6 +184,11 @@ export function PageView({ path, revisionId }: PageViewProps) {
     // tells the author the page isn't published yet. PageHeader / PageActionsMenu
     // independently hide like / watch / bookmark / link-share for the same reason.
     const isDraft = page.status === PageStatusEnum.DRAFT;
+    // Offer "make this a portal" when descendants already live under
+    // `/path/...` — the page is implicitly a folder, so portalizing lets it
+    // index them. Suppressed for drafts, the historical (stale) view, and the
+    // user-home page (which can't be renamed).
+    const showPortalizeBanner = !isStaleRevision && !isDraft && hasDescendants && !isUserHomePath(page.path);
     const handleEdit = () => {
       router.push(`/_edit?page_id=${encodeURIComponent(page._id)}`);
     };
@@ -201,6 +216,9 @@ export function PageView({ path, revisionId }: PageViewProps) {
             toc={toc}
             activeTocId={activeTocId}
           />
+          {showPortalizeBanner && (
+            <PortalizeBanner page={page} title={m['page.portalize_descendants_title']()} description={m['page.portalize_descendants_body']()} />
+          )}
           <PageContent page={page} />
           {!isStaleRevision && (
             <>

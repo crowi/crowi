@@ -1,7 +1,7 @@
 'use client';
 
 import type { ListPageChildrenResponse } from '@crowi/api-contract';
-import { useQueries } from '@tanstack/react-query';
+import { useQueries, useQuery } from '@tanstack/react-query';
 import { apiClientV2 } from './api-client';
 
 /**
@@ -40,5 +40,19 @@ export function usePageChildrenLevels(paths: string[], options: { enabled?: bool
       enabled: options.enabled ?? true,
       queryFn: () => fetchPageChildren(path),
     })),
+  });
+}
+
+/**
+ * Children of a single portal path. Shares its cache key with the sidebar's
+ * `usePageChildrenLevels`, so a content-page view asking "do I have
+ * descendants?" reuses the (already in-flight) sidebar fetch for the same
+ * path rather than issuing a second request.
+ */
+export function usePageChildren(path: string, options: { enabled?: boolean } = {}) {
+  return useQuery({
+    queryKey: pageChildrenKeys.detail(path),
+    enabled: options.enabled ?? true,
+    queryFn: () => fetchPageChildren(path),
   });
 }

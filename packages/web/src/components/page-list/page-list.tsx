@@ -3,11 +3,12 @@
 import { type ListPagesRequest, PageStatusEnum, type PageWithRevision } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 import { Compass, Folder, HelpCircle, MoreHorizontal, MoveRight, Pencil, Plus } from 'lucide-react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { CreatePageCtaButton, CreatePageListButton } from '@/components/create-page/create-page-dialog';
 import { PageContent } from '@/components/page-view/page-content';
-import { PortalizeDialog } from '@/components/page-view/portalize-dialog';
+import { PortalizeBanner } from '@/components/page-view/portalize-dialog';
 import { RenameDialog } from '@/components/page-view/rename-dialog';
 import { StaleRevisionBanner } from '@/components/page-view/stale-revision-banner';
 import { Button } from '@/components/ui/button';
@@ -15,7 +16,7 @@ import { Card } from '@/components/ui/card';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { ErrorAlert } from '@/components/ui/error-alert';
-import { pageDisplayName } from '@/lib/page-path';
+import { pageDisplayName, pagePathToHref } from '@/lib/page-path';
 import { isStalePageRevision } from '@/lib/page-revision';
 import { useAuth } from '@/lib/use-auth';
 import { draftEditHref } from '@/lib/use-drafts';
@@ -201,7 +202,7 @@ export function PageList({ initialParams = {}, variant = 'default', disableCreat
         <div>
           <PortalFallbackHeader path={portalPath} showCreatePortal={false} />
           <div className="mt-6">
-            <PortalizeBanner contentPage={contentPage} />
+            <PortalizeBanner page={contentPage} title={m['page_list.portalize_banner_title']()} description={<ContentPageSentence path={contentPage.path} />} />
           </div>
         </div>
       ) : (
@@ -245,30 +246,23 @@ export function PageList({ initialParams = {}, variant = 'default', disableCreat
 }
 
 /**
- * §4 portalize banner: shown in the portal-body slot of a `/foo/` listing
- * when no portal document exists but a content page lives at `/foo`. Offers
- * a one-click "portalize" that moves `/foo` → `/foo/` via the shared
- * PortalizeDialog (no redirect left behind — §5).
+ * §4 portalize-banner body: the localised "a page exists at {path}" sentence
+ * with the path rendered as a link to that content page, so the user can jump
+ * straight to it (it is otherwise unreachable from the `/foo/` listing). The
+ * sentence is split around `{path}` so the link sits inside the localised
+ * string regardless of word order.
  */
-function PortalizeBanner({ contentPage }: { contentPage: PageWithRevision }) {
-  const [open, setOpen] = useState(false);
+function ContentPageSentence({ path }: { path: string }) {
+  const sentence = m['page_list.portalize_banner_body']({ path });
+  const [before, after = ''] = sentence.split(path);
   return (
-    <Card className="gap-3 p-5">
-      <div className="flex items-start gap-3">
-        <Compass className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden />
-        <div className="min-w-0 space-y-1">
-          <p className="font-medium">{m['page_list.portalize_banner_title']()}</p>
-          <p className="text-sm text-muted-foreground">{m['page_list.portalize_banner_body']({ path: contentPage.path })}</p>
-        </div>
-      </div>
-      <div>
-        <Button size="sm" onClick={() => setOpen(true)}>
-          <Compass className="mr-1.5 h-4 w-4" />
-          {m['page_list.portalize_banner_action']()}
-        </Button>
-      </div>
-      <PortalizeDialog page={contentPage} open={open} onOpenChange={setOpen} />
-    </Card>
+    <>
+      {before}
+      <Link href={pagePathToHref(path)} className="font-medium text-foreground underline underline-offset-2 hover:opacity-80">
+        {path}
+      </Link>
+      {after}
+    </>
   );
 }
 

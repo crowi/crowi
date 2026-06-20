@@ -276,6 +276,8 @@
   "page.portalize.submit": "Make portal",
   "page.portalize.error_title": "Error",
   "page.portalize.failed": "Failed to make this page a portal.",
+  "page.portalize_descendants_title": "This page has descendant pages",
+  "page.portalize_descendants_body": "Make it the portal (index page) that gathers them?",
   "page.delete.title": "Delete this page?",
   "page.delete.description_soft": "Move \"{path}\" to the trash. You can restore it later.",
   "page.delete.description_hard": "Delete \"{path}\" permanently. This cannot be undone.",

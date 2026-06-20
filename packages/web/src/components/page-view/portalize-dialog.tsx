@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { pagePathToHref } from '@/lib/page-path';
 import { PageRevisionConflictError, useRenamePage } from '@/lib/use-page-mutations';
@@ -35,6 +36,38 @@ export function PortalizeDialog({ page, open, onOpenChange }: { page: PageWithRe
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>{open && <PortalizeDialogBody page={page} onOpenChange={onOpenChange} />}</DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * Portalize prompt card — a non-modal banner that opens the PortalizeDialog
+ * for `page`. Shared by two surfaces, each supplying its own `title` /
+ * `description`:
+ *   - the `/foo/` list view, when a content page lives at `/foo` (§4)
+ *   - the `/foo` content view, when descendant pages live under `/foo/…`
+ *
+ * `description` is a ReactNode so a caller can embed a link (e.g. the
+ * list-view banner links the content page's path).
+ */
+export function PortalizeBanner({ page, title, description }: { page: PageWithRevision; title: string; description: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Card className="gap-3 p-5">
+      <div className="flex items-start gap-3">
+        <Compass className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden />
+        <div className="min-w-0 space-y-1">
+          <p className="font-medium">{title}</p>
+          <p className="text-sm text-muted-foreground">{description}</p>
+        </div>
+      </div>
+      <div>
+        <Button size="sm" onClick={() => setOpen(true)}>
+          <Compass className="mr-1.5 h-4 w-4" />
+          {m['page_list.portalize_banner_action']()}
+        </Button>
+      </div>
+      <PortalizeDialog page={page} open={open} onOpenChange={setOpen} />
+    </Card>
   );
 }
 

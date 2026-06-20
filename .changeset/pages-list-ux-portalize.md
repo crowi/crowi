@@ -24,3 +24,10 @@ Improve the page-list / portal / sidebar UX and add a "portalize" flow.
   and rename all return 400 — `PAGE_TWIN_EXISTS` on the page endpoints). A
   self-portalize (`/x` → `/x/`) is still allowed. Existing double-state data is
   left untouched.
+- **Reach a content page that is also a folder**: when a content page at `/x`
+  also has descendants under `/x/…`, the sidebar now lists `/x` itself as the
+  first child under the `x/` folder (it was previously unreachable, since the
+  folder node links to the `/x/` listing). The path in the "there is content
+  at this path" banner is now a link to that page, and viewing the content
+  page `/x` directly shows a "this page has descendants — make it a portal?"
+  banner.

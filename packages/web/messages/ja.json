@@ -276,6 +276,8 @@
   "page.portalize.submit": "ポータルにする",
   "page.portalize.error_title": "エラー",
   "page.portalize.failed": "ポータル化に失敗しました。",
+  "page.portalize_descendants_title": "このページには配下のページがあります",
+  "page.portalize_descendants_body": "配下のページを束ねるポータル (索引ページ) にしますか?",
   "page.delete.title": "このページを削除しますか?",
   "page.delete.description_soft": "「{path}」をゴミ箱に移動します。あとで復元できます。",
   "page.delete.description_hard": "「{path}」を完全に削除します。この操作は取り消せません。",

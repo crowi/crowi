@@ -23,6 +23,8 @@
  * "up one level" affordance (`upPath`).
  */
 
+import type { PageChildSegment } from '@crowi/api-contract';
+
 // `/space/group/` — the directory depth at which the inline tree roots.
 export const ROOT_DEPTH = 2;
 
@@ -134,4 +136,43 @@ export function pageSidebarLayout(path: string): PageSidebarLayout {
   const userHome = isUserSpace ? segs[1] : null;
 
   return { levelPaths, activeSegments, currentSegment, currentLevelIndex, upPath, userHome };
+}
+
+/**
+ * The content-page self-link shown at the TOP of the current directory's
+ * expanded children.
+ *
+ * When the current node is BOTH a content page (`isPage`) AND a directory
+ * with descendants (`count > 0`), the tree renders it as the folder `x/`
+ * (which links to the portal-path listing `/…/x/`), so the actual content
+ * page at `/…/x` (no trailing slash) is otherwise unreachable from the
+ * sidebar. We surface it as the first child under `x/` — a leaf row linking
+ * to `/…/x`.
+ *
+ * Pure so it can be unit-tested without rendering. `levels` is the fetched
+ * child data positionally aligned with `layout.levelPaths`; `path` is the
+ * raw current path (its trailing slash decides whether this self-link is the
+ * "current" node — you are on `/…/x` vs the portal listing `/…/x/`).
+ *
+ * Returns `null` when the current node is not a page-with-children (a plain
+ * leaf page links to `/…/x` directly and needs no self-link; a pure
+ * directory has no content page to surface).
+ */
+export function resolveSidebarSelfLink(
+  layout: PageSidebarLayout,
+  levels: PageChildSegment[][],
+  path: string,
+): { contentPath: string; isCurrent: boolean } | null {
+  const ci = layout.currentLevelIndex;
+  if (ci < 0) return null;
+  const entry = (levels[ci] ?? []).find((c) => c.segment === layout.currentSegment);
+  if (!entry || !entry.isPage || entry.count <= 0) return null;
+  return {
+    // `entry.path` is the trailing-slashed portal path; the content page
+    // sits at the same path without the slash.
+    contentPath: entry.path.replace(/\/$/, ''),
+    // Highlighted as the current node only when the viewer opened the
+    // content page itself (no trailing slash), not its portal listing.
+    isCurrent: !path.endsWith('/'),
+  };
 }
