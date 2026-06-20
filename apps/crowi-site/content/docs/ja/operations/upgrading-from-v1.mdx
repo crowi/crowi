@@ -108,6 +108,8 @@ v2 alpha 時点で登録されている移行は以下のとおりです。
 | `wikilink-format` | preflight | wikilink 記法の変換 |
 | `user-unique-prepare` | preflight | ユーザーの重複排除 (一意インデックスの準備) |
 | `relocate-reserved-api-paths` | preflight | `/api` 予約名前空間からの v1 ページ退避 |
+| `wikilink-html-recover` | preflight | 誤変換された HTML 終了タグ (`</font>` など) の復旧 |
+| `toc-html-strip` | preflight | 目次 (TOC) に混入した HTML タグの再生成 |
 
 boot 移行 (`page-status-default` / `revisions-schema-unify`) は api 起動時に
 自動適用されるので、運用者の操作は不要です。以下では、明示的な適用が必要な
@@ -136,6 +138,69 @@ crowi-admin migrate apply --id wikilink-format
 > したくない場合はこのプラグインを有効化するという選択肢もあります。
 > プラグインについては [プラグイン概要](../plugins/overview) を参照して
 > ください。
+
+### 誤変換された HTML 終了タグの復旧 (wikilink-html-recover)
+
+旧バージョンの `wikilink-format` 移行には、見出しなどで使われる
+**非推奨の HTML 終了タグ** (`</font>` `</center>` `</marquee>` `</blink>`
+`</applet>`) を v1 の山括弧 wikilink と誤認し、`[[/font]]` のような wikilink
+記法へ書き換えてしまう不具合がありました。これらのタグが
+`KNOWN_HTML_ELEMENTS` に登録されていなかったためで、現在は登録済みなので
+**新たな誤変換は発生しません**。一方、既に `[[/font]]` のように化けた本文は
+`wikilink-format` が再実行されないため自動では直りません。
+
+`wikilink-html-recover` preflight 移行は、化けた `[[/<x>]]` (単一セグメント・
+HTML 要素名・`|alias` 無し) を `</x>` に逆変換します。`[[/foo/bar]]`
+(複数セグメント)・`[[/font|alias]]` (alias 付き)・`[[/Section]]` (大文字を
+含むページ名) などの**本来の wikilink は温存**されます。
+
+```bash
+# 復旧対象を事前確認 (本文は書き換えない)
+crowi-admin migrate plan
+
+# この移行だけを適用
+crowi-admin migrate apply --id wikilink-html-recover
+```
+
+> **Caution**: `[[/font]]` が「化けた `</font>`」なのか「実在する `/font`
+> ページへの本来の wikilink」なのかは、本文だけからは区別できません。この
+> 移行は、HTML 要素名と**同名の実ページが存在する** `[[/<x>]]` は自動変換
+> せず、`migrate plan` の結果に一覧として報告します (運用者が個別に判断して
+> ください)。適用前に `/font` `/section` `/div` などの実ページの有無を
+> 確認し (data audit)、まず dev / stg で検証してから本番に適用することを
+> 強くおすすめします。
+
+この移行は冪等です — 逆変換後の `</x>` は復旧対象の検出にも `wikilink-format`
+の変換にも当たらないため、再実行しても二重には作用しません。
+
+### 目次 (TOC) の HTML 再生成 (toc-html-strip)
+
+見出しにインライン HTML を使ったページ (例:
+`### <font color="1a73e8">Workspace の作成</font>`) では、目次 (TOC) のラベルに
+`<font ...>` などの **生の HTML タグがそのまま入り込む**問題がありました。
+TOC は `Revision.meta.toc` に永続化される (RFC-0002) ため、既存ページの目次は
+**stale なまま**です。読み込み時のマージは保存済みの値を優先し、レンダラー
+バージョンの更新も `meta.toc` には作用しないため、**専用の移行でしか直りません**。
+
+`toc-html-strip` preflight 移行は、`meta.toc` に HTML を含むリビジョンを走査し、
+本文の見出しから目次だけを再抽出して `meta.toc` のみを上書きします
+(`renderedAst` 全体は作り直しません)。生成側 (保存パス) は既に HTML を除去
+するよう修正済みなので、新規ページの目次にはタグが入りません。
+
+```bash
+# 再生成対象のリビジョン数を事前確認
+crowi-admin migrate plan
+
+# この移行だけを適用
+crowi-admin migrate apply --id toc-html-strip
+```
+
+> **Note**: HTML だけで構成された見出し (例: `### <br>`) は、タグ除去後の
+> ラベルが空になります。そのような目次エントリはアンカーとしても機能しない
+> ため、再生成時に**除外**されます。
+
+この移行も冪等です — 一度ラベルから HTML が除去されれば再生成対象には
+なりません。
 
 ### /api 名前空間の移設
 
