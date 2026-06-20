@@ -82,6 +82,11 @@ const pageRevisionConflictBody = () => ({
   error: { code: 'PAGE_REVISION_ERROR' as const, message: 'Revision error.' },
 });
 
+// §6 — shared 400 body for the `/x` ↔ `/x/` twin-creation guard, used by both
+// the create and rename paths so the message stays identical.
+const pageTwinExistsBody = (twinPath: string) =>
+  pageBadRequestBody('PAGE_TWIN_EXISTS', `A page with the opposite trailing slash already exists at ${twinPath}. Portalize it instead.`);
+
 // Structured 400 body shared by both subtree-rename paths (page_id-based and
 // path-based). `partial: true` marks a mid-execution best-effort failure.
 const renameTreeFailedBody = (message: string, conflicts: { path: string; reasons: string[] }[], partial?: boolean) => ({
@@ -452,6 +457,16 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
           const existing = await Page.findPage(path, user, null, /* ignoreNotFound */ true);
           if (existing !== null) {
             return c.json(pageBadRequestBody('PAGE_EXISTS', 'Page exists'), 400);
+          }
+
+          // §6 — block the `/x` ↔ `/x/` double-state: refuse to create a
+          // page whose trailing-slash twin already exists as a real page.
+          // Use `normalizePath` so the twin check sees the same path the
+          // creation will use.
+          const normalizedCreatePath = Page.normalizePath(path);
+          const twin = await Page.findExistingTwin(normalizedCreatePath);
+          if (twin) {
+            return c.json(pageTwinExistsBody(twin.path), 400);
           }
 
           // RFC-0010 — record the edit channel (web / oauth / pat) so the
@@ -913,6 +928,15 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
           // ------------------------------------------------------------
           // Single-page rename (default / back-compat).
           // ------------------------------------------------------------
+          // §6 — block the `/x` ↔ `/x/` double-state: refuse to move onto a
+          // path whose trailing-slash twin already exists as a real page.
+          // The source page itself is excluded, so portalizing `/x` → `/x/`
+          // (where the twin `/x` IS the page being moved) is allowed.
+          const twinAtNewPath = await Page.findExistingTwin(newPagePath, { excludeId: pageData._id });
+          if (twinAtNewPath) {
+            return c.json(pageTwinExistsBody(twinAtNewPath.path), 400);
+          }
+
           // Collision at the destination path — unlink an existing
           // redirect when the caller has permission, otherwise refuse.
           const existingAtNewPath = await Page.findOne({ path: newPagePath });

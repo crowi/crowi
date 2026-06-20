@@ -197,6 +197,7 @@ export interface PageModel extends Model<PageDocument> {
   updateCommentCount(page, num): any;
   hasPortalPage(path, user, revisionId?): Promise<boolean>;
   findPortalPage(path, user, revisionId?): Promise<PageDocument | null>;
+  findExistingTwin(path: string, options?: { excludeId?: unknown }): Promise<PageDocument | null>;
   getGrantLabels(): any;
   normalizePath(path): any;
   getUserPagePath(user): any;
@@ -596,6 +597,38 @@ export default (crowi: Crowi) => {
     } catch (err) {
       return null;
     }
+  };
+
+  /**
+   * Find the "twin" of `path` — the same path with the trailing slash
+   * toggled (`/x` ↔ `/x/`). Used by the create / draft / rename guards to
+   * block the `/x` ↔ `/x/` double-state (feature-update-pages-list-ux §6):
+   * if `/x` exists you can't create `/x/` and vice versa.
+   *
+   * Only a REAL page counts (`redirectTo: null`) — a redirect stub left by
+   * a previous move is not a real twin and must not block. `excludeId` lets
+   * a self-targeting move (portalizing `/x` → `/x/`, where the twin `/x` is
+   * the page being moved) skip its own document. Returns `null` when no
+   * twin exists, the root `/` (which has no meaningful twin), or the only
+   * match is the excluded id.
+   *
+   * Note: this is a raw existence check independent of grant — the guard is
+   * about path uniqueness, not visibility, so a twin the caller cannot see
+   * still blocks (and we never leak it; the guard returns a generic 400).
+   */
+  pageSchema.statics.findExistingTwin = async function (path, options = {}) {
+    // The root portal `/` strips to '' — there is no `/x` ↔ `/x/` pairing
+    // to enforce there, so never treat it as having a twin.
+    if (path === '/' || path === '') {
+      return null;
+    }
+    const twinPath = isPortalPath(path) ? removeTrailingSlash(path) : addTrailingSlash(path);
+    const query: Record<string, unknown> = { path: twinPath, redirectTo: null };
+    const excludeId = options.excludeId;
+    if (excludeId != null) {
+      query._id = { $ne: excludeId };
+    }
+    return Page.findOne(query) as Promise<PageDocument | null>;
   };
 
   pageSchema.statics.getGrantLabels = function () {
