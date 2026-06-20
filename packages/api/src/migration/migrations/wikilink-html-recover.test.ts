@@ -23,19 +23,16 @@ const MigrationApplication = () => crowi.model('MigrationApplication') as Migrat
 
 describe('migration/wikilink-html-recover — recovery rules (pure)', () => {
   describe('shouldRecoverSegment', () => {
-    it.each([
-      ['font'],
-      ['center'],
-      ['marquee'],
-      ['blink'],
-      ['applet'],
-      ['div'],
-      ['section'],
-      ['br'],
-      ['h1'],
-      ['span'],
-    ])('recovers HTML element %s', (segment) => {
+    it.each([['font'], ['center'], ['marquee'], ['blink'], ['applet']])('recovers the deprecated tag %s', (segment) => {
       expect(shouldRecoverSegment(segment)).toBe(true);
+    });
+
+    // `section` / `div` / `br` / `img` / `span` / `h1` were ALWAYS in
+    // KNOWN_HTML_ELEMENTS, so wikilink-format never rewrote `</section>` etc.
+    // A `[[/section]]` in real data is therefore a GENUINE wikilink and must
+    // be preserved — recovery is scoped to the 5 deprecated tags only.
+    it.each([['div'], ['section'], ['br'], ['img'], ['span'], ['h1']])('does NOT recover the always-known element %s', (segment) => {
+      expect(shouldRecoverSegment(segment)).toBe(false);
     });
 
     it.each([['foo'], ['wiki'], ['docs'], ['home'], ['page']])('does NOT recover non-HTML name %s', (segment) => {
@@ -49,7 +46,7 @@ describe('migration/wikilink-html-recover — recovery rules (pure)', () => {
   });
 
   describe('detectRecoverable', () => {
-    it('finds single-segment HTML-element occurrences', () => {
+    it('finds single-segment deprecated-tag occurrences', () => {
       expect(detectRecoverable('a [[/font]] b [[/center]] c')).toEqual([
         { raw: '[[/font]]', element: 'font' },
         { raw: '[[/center]]', element: 'center' },
@@ -64,8 +61,8 @@ describe('migration/wikilink-html-recover — recovery rules (pure)', () => {
       expect(detectRecoverable('[[/font|My Font Page]]')).toEqual([]);
     });
 
-    it('ignores non-HTML and uppercase names', () => {
-      expect(detectRecoverable('[[/wiki]] [[/Font]] [[/Section]]')).toEqual([]);
+    it('ignores non-deprecated element names and uppercase names', () => {
+      expect(detectRecoverable('[[/section]] [[/div]] [[/wiki]] [[/Font]] [[/Section]]')).toEqual([]);
     });
   });
 
@@ -80,6 +77,11 @@ describe('migration/wikilink-html-recover — recovery rules (pure)', () => {
 
     it('preserves genuine wikilinks', () => {
       const body = '[[/foo/bar]] and [[/font|alias]] and [[/Section]] and [[/wiki-page]]';
+      expect(rewriteBody(body, new Set())).toBe(body);
+    });
+
+    it('preserves a genuine [[/section]] / [[/div]] (always-known elements were never rewritten)', () => {
+      const body = 'see [[/section]] and [[/div]] and [[/br]]';
       expect(rewriteBody(body, new Set())).toBe(body);
     });
 
@@ -126,19 +128,21 @@ describe('migration/wikilink-html-recover — framework wiring', () => {
     admin = user;
   });
 
+  const SAMENAME_PATHS = ['/font', '/section'];
+
   beforeEach(async () => {
     await Page.deleteMany({ path: { $regex: `^${PATH_PREFIX}` } });
     await Revision.deleteMany({ path: { $regex: `^${PATH_PREFIX}` } });
-    await Page.deleteMany({ path: '/font' });
-    await Revision.deleteMany({ path: '/font' });
+    await Page.deleteMany({ path: { $in: SAMENAME_PATHS } });
+    await Revision.deleteMany({ path: { $in: SAMENAME_PATHS } });
     await MigrationApplication().deleteMany({ migrationId: 'wikilink-html-recover' });
   });
 
   afterAll(async () => {
     await Page.deleteMany({ path: { $regex: `^${PATH_PREFIX}` } });
     await Revision.deleteMany({ path: { $regex: `^${PATH_PREFIX}` } });
-    await Page.deleteMany({ path: '/font' });
-    await Revision.deleteMany({ path: '/font' });
+    await Page.deleteMany({ path: { $in: SAMENAME_PATHS } });
+    await Revision.deleteMany({ path: { $in: SAMENAME_PATHS } });
     await crowi.model('User').deleteOne({ _id: admin._id });
   });
 
@@ -162,6 +166,35 @@ describe('migration/wikilink-html-recover — framework wiring', () => {
     await Page.createPage(`${PATH_PREFIX}/b`, '[[/foo/bar]] and [[/font|alias]]', admin, {});
     const runner = new MigrationRunner(crowi);
     expect(await runner.isPending(wikilinkHtmlRecover)).toBe(false);
+  });
+
+  it('leaves a genuine [[/section]] to an absent page untouched (always-known element, never rewritten)', async () => {
+    // `section` was always in KNOWN_HTML_ELEMENTS, so wikilink-format never
+    // produced `[[/section]]`. A `[[/section]]` in real data is a genuine
+    // (possibly dangling) wikilink and must not be reverted, even with no page.
+    const created = await Page.createPage(`${PATH_PREFIX}/sec`, 'see [[/section]] here', admin, {});
+    const runner = new MigrationRunner(crowi);
+
+    expect(await runner.isPending(wikilinkHtmlRecover)).toBe(false);
+    await runner.apply(wikilinkHtmlRecover);
+
+    const page = await Page.findById(created._id).populate('revision');
+    expect(page.revision.body).toBe('see [[/section]] here');
+  });
+
+  it('recovers [[/font]] even when a redirect stub (not a live page) sits at /font', async () => {
+    // Deleting /font leaves a published `redirect ...` stub at /font with
+    // redirectTo set. The collision probe restricts to live pages
+    // (redirectTo: null), so the stub does NOT shadow a real corrupted [[/font]].
+    await Page.createPage('/font', 'redirect /trash/font', admin, { redirectTo: '/trash/font', allowNonExistentUserPage: true });
+    const created = await Page.createPage(`${PATH_PREFIX}/stub`, 'see [[/font]] here', admin, {});
+    const runner = new MigrationRunner(crowi);
+
+    expect(await runner.isPending(wikilinkHtmlRecover)).toBe(true);
+    await runner.apply(wikilinkHtmlRecover);
+
+    const page = await Page.findById(created._id).populate('revision');
+    expect(page.revision.body).toBe('see </font> here');
   });
 
   it('reverts the body via the updatePage path and records the application', async () => {
