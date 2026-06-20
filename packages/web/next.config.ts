@@ -84,9 +84,13 @@ const nextConfig: NextConfig = {
         source: '/.well-known/oauth-authorization-server',
         destination: `${API_URL}/.well-known/oauth-authorization-server`,
       },
-      // Legacy attachment redirects (Crowi 1.x URLs embedded in old
-      // page bodies) — Express side responds with a 302 to /api/v2/...,
-      // which the browser will resolve through the rewrite above.
+      // Legacy attachment redirects (Crowi 1.x `/files/<id>` URLs embedded
+      // in old page bodies) — forwarded to the api, which responds with a
+      // 302 to `/api/v2/attachments/<id>` (the `/files/:id` redirect in
+      // `attachment-stream.ts`, restored by feature-migration-files-url-
+      // rewrite §3 as a safety net for bodies the body migration hasn't
+      // rewritten). The browser then resolves the redirect target through
+      // the `/api/v2/:path*` rewrite above.
       { source: '/files/:id', destination: `${API_URL}/files/:id` },
     ];
   },
