@@ -1,4 +1,5 @@
 import { STATUS_PUBLISHED } from 'src/models/page';
+import { KNOWN_HTML_ELEMENTS } from 'src/util/html-elements';
 import type { MigrationContext } from '../types';
 import { defineMigration } from '../types';
 import { resolveActingUserId } from './resolve-acting-user';
@@ -27,139 +28,12 @@ import { resolveActingUserId } from './resolve-acting-user';
  */
 
 /**
- * HTML5 element name set used to reject `</foo>` matches whose first path
- * segment is actually a closing HTML tag. Source:
- * https://developer.mozilla.org/en-US/docs/Web/HTML/Element — the full
- * standard element list as of the HTML Living Standard.
- *
- * Kept as a top-level `Set<string>` so detection runs O(1) per match.
- * `h1`..`h6` are listed explicitly because the regex captures `foo` for
- * `</foo>` and we want both `</h1>` and `</h6>` to be rejected.
- *
- * Includes the deprecated/obsolete presentational elements `font` /
- * `center` / `marquee` / `blink` / `applet`: they no longer appear in the
- * MDN current element list but still occur in real legacy wiki content
- * (e.g. `### <font color="1a73e8">…</font>` headings), so `</font>` etc.
- * MUST be treated as close tags rather than rewritten to `[[/font]]`.
+ * Re-export of the canonical HTML element set, which lives in the neutral
+ * `util/html-elements` module so renderer code can share it without importing
+ * from `migration/`. Kept here so existing importers (and this module's own
+ * `shouldRewriteWikilink` gate) are unchanged. Detection runs O(1) per match.
  */
-export const KNOWN_HTML_ELEMENTS: ReadonlySet<string> = new Set([
-  'a',
-  'abbr',
-  'address',
-  'applet',
-  'area',
-  'article',
-  'aside',
-  'audio',
-  'b',
-  'base',
-  'bdi',
-  'bdo',
-  'blink',
-  'blockquote',
-  'body',
-  'br',
-  'button',
-  'canvas',
-  'caption',
-  'center',
-  'cite',
-  'code',
-  'col',
-  'colgroup',
-  'data',
-  'datalist',
-  'dd',
-  'del',
-  'details',
-  'dfn',
-  'dialog',
-  'div',
-  'dl',
-  'dt',
-  'em',
-  'embed',
-  'fieldset',
-  'figcaption',
-  'figure',
-  'font',
-  'footer',
-  'form',
-  'h1',
-  'h2',
-  'h3',
-  'h4',
-  'h5',
-  'h6',
-  'head',
-  'header',
-  'hgroup',
-  'hr',
-  'html',
-  'i',
-  'iframe',
-  'img',
-  'input',
-  'ins',
-  'kbd',
-  'label',
-  'legend',
-  'li',
-  'link',
-  'main',
-  'map',
-  'mark',
-  'marquee',
-  'menu',
-  'meta',
-  'meter',
-  'nav',
-  'noscript',
-  'object',
-  'ol',
-  'optgroup',
-  'option',
-  'output',
-  'p',
-  'picture',
-  'pre',
-  'progress',
-  'q',
-  'rp',
-  'rt',
-  'ruby',
-  's',
-  'samp',
-  'script',
-  'section',
-  'select',
-  'slot',
-  'small',
-  'source',
-  'span',
-  'strong',
-  'style',
-  'sub',
-  'summary',
-  'sup',
-  'table',
-  'tbody',
-  'td',
-  'template',
-  'textarea',
-  'tfoot',
-  'th',
-  'thead',
-  'time',
-  'title',
-  'tr',
-  'track',
-  'u',
-  'ul',
-  'var',
-  'video',
-  'wbr',
-]);
+export { KNOWN_HTML_ELEMENTS };
 
 /**
  * v1 angle-bracket internal link form. The capture group grabs the path-style
