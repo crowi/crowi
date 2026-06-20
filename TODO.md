@@ -83,6 +83,7 @@ merge 後の simplify レビューで挙がった非ブロッキング改善。�
 - **RFC-0004 Editor UX** — toast / draft status / autocomplete / attachment upload
 - **RFC-0005 Presence** — live presence row / メタチップ行 / likers
 - **RFC-0010 OAuth (Phase 1-4)** — scope 基盤 / PAT / Authorization Code + PKCE / Device grant
+- **RFC-0011 MCP server** — 組み込み `/mcp`（read+write 13 tool）+ prompt-injection 緩和（untrusted 本文を nonce 区切り wrap / read-only PAT 既定。spec: `feature-mcp-prompt-injection-mitigation.md`）
 - **管理画面（フェーズ4）** — app / security / auth / mail / share / storage / users + sensitive config 暗号化
 - **monorepo restructure** — workspace protocol / catalog / `@crowi/tsconfig` / `@crowi/runner` / Dockerfile / changesets
 - **エディタ / UI** — CodeMirror 6 + preview / 階層サイドバー / create-page モーダル / boot progress / 通知 WS invalidation
