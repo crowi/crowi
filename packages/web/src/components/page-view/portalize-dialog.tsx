@@ -2,7 +2,7 @@
 
 import type { PageWithRevision } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
-import { AlertCircle, ArrowRight, Compass, Loader2 } from 'lucide-react';
+import { AlertCircle, ArrowDown, Compass, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -123,10 +123,13 @@ function PortalizeDialogBody({ page, onOpenChange }: { page: PageWithRevision; o
         </Alert>
       )}
 
-      <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/30 p-3 font-mono text-sm">
-        <span className="min-w-0 truncate">{fromPath}</span>
-        <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-        <span className="min-w-0 truncate font-medium text-foreground">{toPath}</span>
+      {/* From → to, stacked vertically: a long path wraps within the box
+          (`break-all`, since a slash-separated path has no spaces to wrap on)
+          instead of overflowing the dialog. */}
+      <div className="space-y-1.5 rounded-lg border bg-muted/30 p-3 font-mono text-sm">
+        <div className="break-all text-muted-foreground">{fromPath}</div>
+        <ArrowDown className="h-4 w-4 text-muted-foreground" aria-hidden />
+        <div className="break-all font-medium text-foreground">{toPath}</div>
       </div>
 
       <p className="text-xs text-muted-foreground">{m['page.portalize.no_redirect_note']()}</p>
