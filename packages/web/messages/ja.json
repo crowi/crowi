@@ -545,6 +545,8 @@
   "me.access_tokens.name_label": "名前",
   "me.access_tokens.name_placeholder": "例: my-laptop CLI",
   "me.access_tokens.scopes_label": "スコープ",
+  "me.access_tokens.scope_recommended": "(推奨)",
+  "me.access_tokens.scope_readonly_hint": "MCP やエージェント用途には読み取り専用 (read) のスコープを推奨します。書き込み (write) は別のトークンで、必要なときだけ短命に運用してください。",
   "me.access_tokens.expiry_label": "有効期限",
   "me.access_tokens.expiry_30": "30 日",
   "me.access_tokens.expiry_90": "90 日",

@@ -545,6 +545,8 @@
   "me.access_tokens.name_label": "Name",
   "me.access_tokens.name_placeholder": "e.g. my-laptop CLI",
   "me.access_tokens.scopes_label": "Scopes",
+  "me.access_tokens.scope_recommended": "(recommended)",
+  "me.access_tokens.scope_readonly_hint": "For MCP and agent use, prefer read-only (read) scopes. Issue write scopes on a separate, short-lived token and only when you actually need to write.",
   "me.access_tokens.expiry_label": "Expiration",
   "me.access_tokens.expiry_30": "30 days",
   "me.access_tokens.expiry_90": "90 days",
