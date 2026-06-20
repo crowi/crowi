@@ -2,6 +2,7 @@ import type { MigrationDefinition } from '../types';
 import { pageStatusDefault } from './page-status-default';
 import { relocateReservedApiPaths } from './relocate-reserved-api-paths';
 import { revisionsSchemaUnify } from './revisions-schema-unify';
+import { tocHtmlStrip } from './toc-html-strip';
 import { userUniquePrepare } from './user-unique-prepare';
 import { wikilinkFormat } from './wikilink-format';
 import { wikilinkHtmlRecover } from './wikilink-html-recover';
@@ -23,4 +24,5 @@ export const allMigrations: MigrationDefinition[] = [
   revisionsSchemaUnify, // phase 6 (boot — RFC-classified preflight, see migration JSDoc)
   relocateReservedApiPaths, // fix/mcp-endpoint (preflight) — v2 /api namespace reservation
   wikilinkHtmlRecover, // migration-html-tag-fixes (preflight) — recover </font> etc. corrupted by wikilink-format
+  tocHtmlStrip, // migration-html-tag-fixes (preflight) — regenerate meta.toc that captured inline HTML
 ];
