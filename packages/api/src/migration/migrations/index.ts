@@ -1,4 +1,5 @@
 import type { MigrationDefinition } from '../types';
+import { filesUrlToAttachments } from './files-url-to-attachments';
 import { pageStatusDefault } from './page-status-default';
 import { relocateReservedApiPaths } from './relocate-reserved-api-paths';
 import { revisionsSchemaUnify } from './revisions-schema-unify';
@@ -21,4 +22,5 @@ export const allMigrations: MigrationDefinition[] = [
   userUniquePrepare, // phase 5 (preflight)
   revisionsSchemaUnify, // phase 6 (boot — RFC-classified preflight, see migration JSDoc)
   relocateReservedApiPaths, // fix/mcp-endpoint (preflight) — v2 /api namespace reservation
+  filesUrlToAttachments, // feature-migration-files-url-rewrite (preflight) — v1 /files/<id> body rewrite (independent regex from wikilink-format/html-tag-fixes)
 ];
