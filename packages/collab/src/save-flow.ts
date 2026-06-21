@@ -4,10 +4,10 @@ import { Types } from 'mongoose';
 import type { CollabModels } from './models';
 import type { ContributorsTracker } from './contributors';
 import type { CollabPageEventPublisher } from './types';
+import type { DocBaseRevisionStore } from './doc-base-revision';
 import { DRAFT_STATUS, PUBLISHED_STATUS } from './page-status';
 import { CONTENT_FIELD } from './yjs-doc';
 import { persistYjsState } from './persist-yjs-state';
-import { evaluateAntiShrink } from './yjs-anti-shrink';
 
 const debug = Debug('crowi:collab:save');
 
@@ -18,10 +18,13 @@ const debug = Debug('crowi:collab:save');
  * (RENDERER_FAILED / PAGE_NOT_FOUND).
  *
  * `CONFLICT` is the editor-preview-reliability §1A optimistic-lock
- * rejection: the save's `baseRevisionId` no longer matches the page's
- * live `currentRevision`, so persisting it would clobber a newer
- * revision (e.g. another save landed, or this doc was materialised from
- * a stale replica's `yjsState`). The client must reload, not retry.
+ * rejection (round 2, Decision 1 — server-doc-based lock): the page's
+ * live `currentRevision` diverged from the revision the SERVER's
+ * Hocuspocus document was materialised from (an HTTP save or another
+ * instance moved the pointer), so persisting this body would clobber a
+ * newer revision. The client must reload, not retry. Multi-user
+ * co-editing never trips this (all editors share the ONE server doc /
+ * base, which advances on each successful save).
  */
 export type CollabSaveErrorCode = 'RENDERER_FAILED' | 'DB_ERROR' | 'PAGE_NOT_FOUND' | 'USER_NOT_FOUND' | 'READONLY' | 'CONFLICT';
 
@@ -43,14 +46,6 @@ export interface ExecuteSaveInput {
   document: Y.Doc;
   /** Optional checkpoint message — RFC-0003 §Phase 8 will expose this in the UI later. */
   message?: string;
-  /**
-   * editor-preview-reliability §1A: the revision the editing session
-   * was seeded from (the page's `currentRevision` at wsToken-issue
-   * time). When present and the page's live `currentRevision` has moved
-   * on, the save is rejected with `CONFLICT`. Omitted / null disables
-   * the check (no base known, or page has no revision yet).
-   */
-  baseRevisionId?: string | null;
 }
 
 export interface ExecuteSaveResult {
@@ -65,6 +60,14 @@ export interface CreateSaveFlowOptions {
   models: CollabModels;
   contributorsTracker: ContributorsTracker;
   pageEventPublisher: CollabPageEventPublisher;
+  /**
+   * Round 2, Decision 1 — the server-doc save lock anchor. `onLoadDocument`
+   * records the revision each materialised server doc was seeded from here;
+   * `executeSave` reads it to detect divergence (an out-of-band save moved
+   * `currentRevision`) and advances it on every successful save. Shared with
+   * `createOnLoadDocument` so both sides agree on the doc's base.
+   */
+  docBaseRevisions: DocBaseRevisionStore;
 }
 
 /**
@@ -91,17 +94,27 @@ export interface CreateSaveFlowOptions {
  *      transforms not loaded in the collab process — see
  *      models.ts:registerRenderer). On renderer throw → 'RENDERER_FAILED'.
  *
- *   5. `Page.pushRevision` persists the Revision and updates
- *      `Page.{revision, lastUpdateUser, updatedAt}`. Existing helper —
- *      reused without modification.
+ *   5. Persist the Revision (`newRevision.save()`), then ATOMICALLY bump
+ *      BOTH page pointers in ONE conditional `updateOne`
+ *      (`{ _id, currentRevision: docBase }` → `$set: { revision,
+ *      currentRevision, lastUpdateUser, updatedAt }`). Round 2, Decision 1:
+ *      `revision` (non-collab readers) and `currentRevision` (collab) can
+ *      never diverge because a single conditional write sets both — there
+ *      is exactly ONE pointer writer for the collab path. The filter is
+ *      the server-doc lock: it matches only when `currentRevision` still
+ *      equals the revision THIS server doc was materialised from
+ *      (`docBaseRevisions.get(pageId)`); a non-match means an HTTP save /
+ *      another instance moved the pointer underneath us, so we reject
+ *      CONFLICT (the Revision we saved stays in history, unreferenced — no
+ *      data loss, the client reloads). On success we advance the doc base
+ *      to the revision we just created so the next save locks against it.
  *
- *   6. `Page.updateOne` then sets the collab-specific pointer triplet
- *      (`currentRevision` + `yjsState` + `yjsCheckpointAt`). This is
- *      the second step of the **C-2 idempotent 2-step**: if step 5
- *      committed but step 6 didn't (crash between writes), the next
- *      `onLoadDocument` reads `page.currentRevision ?? page.revision`
- *      so the latest revision still wins; `yjsState` is rebuilt from
- *      the body. No data loss, no manual recovery.
+ *   6. `Page.updateOne` then writes the collab-specific yjsState +
+ *      yjsCheckpointAt via the `persistYjsState` chokepoint. This is the
+ *      second step of the **C-2 idempotent 2-step**: if step 5 committed
+ *      but step 6 didn't (crash between writes), the next `onLoadDocument`
+ *      reads `page.currentRevision ?? page.revision` so the latest revision
+ *      still wins; `yjsState` is rebuilt from the body. No data loss.
  *
  *   6b. publish-on-save (RFC-0005 Phase 1): if the page was a `draft`,
  *      flip `status` to `published`. Runs only after the save is
@@ -132,9 +145,10 @@ export function createSaveFlow(opts: CreateSaveFlowOptions): SaveFlow {
   const User = opts.models.User as any;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const PageYjsUpdate = opts.models.PageYjsUpdate as any;
+  const docBaseRevisions = opts.docBaseRevisions;
 
   return {
-    async executeSave({ pageId, userId, document, message, baseRevisionId }) {
+    async executeSave({ pageId, userId, document, message }) {
       // Step 1: extract the markdown body from the live Y.Doc.
       const body = document.getText(CONTENT_FIELD).toString();
 
@@ -161,72 +175,65 @@ export function createSaveFlow(opts: CreateSaveFlowOptions): SaveFlow {
         throw new CollabSaveError('USER_NOT_FOUND', `user ${userId} not found`);
       }
 
-      // Step 2b: optimistic lock (editor-preview-reliability §1A). The
-      // client pinned `baseRevisionId` to the page's `currentRevision`
-      // at session start (wsToken response). If the page's live
-      // `currentRevision` has since moved on — another save landed, or
-      // this Y.Doc was materialised from a stale replica's `yjsState`
-      // that pre-dates the latest revision — persisting this body would
-      // clobber the newer revision. Reject with `CONFLICT` so the
-      // client reloads instead of overwriting (mirrors the HTTP save's
-      // `revision_id` lock + `PageRevisionConflictError`).
+      // Step 2b: server-doc save lock (round 2, Decision 1). The lock is
+      // anchored to the revision the SERVER's Hocuspocus document was
+      // materialised from (recorded in `onLoadDocument`, advanced on every
+      // successful save) — NOT to any individual client's pinned base. All
+      // connected editors share the ONE server doc / base, so multi-user
+      // co-editing never false-CONFLICTs (A saves → base advances → B saves
+      // against the same advanced base → succeeds).
       //
-      // The check is skipped when no base is known (legacy client) or
-      // when the page itself has no revision yet (`currentRevision` and
-      // `revision` both unset) — there is nothing newer to clobber.
+      // The DIVERGENCE we must catch: an HTTP save (`Page.updatePage`) or
+      // another instance moved `currentRevision` underneath this live doc.
+      // The doc then descends from a now-superseded revision, so persisting
+      // its body would clobber the newer one. The actual enforcement is the
+      // CONDITIONAL pointer write at step 5 (`updateOne({ currentRevision:
+      // docBase }, …)`): it can only land when the live pointer still equals
+      // the doc base, so the lock is a true compare-and-set, not a TOCTOU
+      // read-then-write. We surface the early read here only to fail fast
+      // (and skip the renderer pipeline) on an obvious divergence.
+      //
+      // `docBase === undefined` means the doc was never loaded in THIS
+      // process (e.g. a synthetic test driver, or a process that restarted
+      // since load) — fall back to "no early check", and let the
+      // conditional write at step 5 self-check against the live pointer it
+      // reads now.
+      const docBase = docBaseRevisions.get(pageId);
       const liveRevision = (page.currentRevision ?? page.revision ?? null) as { toString(): string } | null;
-      if (baseRevisionId && liveRevision && liveRevision.toString() !== baseRevisionId) {
+      const liveRevisionStr = liveRevision ? liveRevision.toString() : null;
+      if (docBase !== undefined && docBase !== liveRevisionStr) {
         throw new CollabSaveError(
           'CONFLICT',
-          `save base revision ${baseRevisionId} is stale — page ${pageId} is now at revision ${liveRevision.toString()}; reload required`,
+          `server doc for page ${pageId} was materialised from revision ${docBase ?? '(none)'} but the page is now at ` +
+            `${liveRevisionStr ?? '(none)'} (an out-of-band save moved it); reload required`,
         );
       }
 
-      // editor-preview-reliability §1B baseline: the body of the
-      // revision this save REPLACES (the pre-save current revision), read
-      // before step 5 bumps the pointer. Used as the anti-shrink baseline
-      // for the empty-doc guard below and for the yjsState write at step 6.
-      // Best-effort — a read failure degrades to "no baseline".
+      // Decision 2 — anti-shrink is REMOVED from the save path entirely. A
+      // user save is explicit intent (large deletions and full clears are
+      // legitimate), already protected structurally by the client synced
+      // gate (no unsynced save) + the server-doc lock above + the on-load
+      // body-seed fallback (a stale/empty doc never materialises empty over
+      // a non-empty body). So we ALLOW empty/shrunk bodies through.
+      //
+      // Decision 2 (C3) — the one safety requirement: the baseline /
+      // verification read for the yjsState write must REJECT the save on a
+      // read failure, never degrade to a no-op that lets an empty body
+      // through. We read the previous body here; a DB error throws DB_ERROR
+      // (the client retries) rather than committing blind. `null` is a
+      // legitimate value (page had no revision yet / body genuinely empty)
+      // and flows through — it is the THROW we guard against, not the null.
       let previousBody: string | null = null;
       if (liveRevision) {
         try {
           const prevRev = await Revision.findById(liveRevision).select('body').lean().exec();
           previousBody = typeof prevRev?.body === 'string' ? prevRev.body : null;
         } catch (err) {
-          debug('failed to read previous revision body for anti-shrink baseline on page %s: %s', pageId, (err as Error).message);
+          throw new CollabSaveError(
+            'DB_ERROR',
+            `failed to read previous revision body for page ${pageId} (cannot verify the save safely): ${(err as Error).message}`,
+          );
         }
-      }
-
-      // editor-preview-reliability C2 fix — evaluate the anti-shrink
-      // EMPTY guard BEFORE committing the revision (steps 4-5), not after.
-      //
-      // The pre-fix code ran the guard at step 6, AFTER `prepareRevision`
-      // + `pushRevision` had already committed the empty/shrunk body as a
-      // new Revision and repointed `currentRevision` at it. Suppressing
-      // only the yjsState mirror then was useless: the body was already
-      // overwritten, so "rebuild from body on next load" rebuilt from the
-      // EMPTY body — the §1B guarantee for `Revision.body` was false.
-      //
-      // Principle: a user save is explicit intent, already protected by
-      // the §1A optimistic lock + §2 synced gate, so the *ratio* arm must
-      // not block a legitimate large deletion (that is why step 6 passes
-      // `allowShrink: true`). But an empty doc over a non-empty baseline is
-      // the silent-clear / provably-desynced footgun — reject it as a
-      // CONFLICT BEFORE any revision is committed, so the client reloads
-      // (its recovery buffer has the unsaved text) instead of persisting
-      // an empty body. A baseline that is itself empty (new page) flows
-      // through — clearing an already-empty page is a no-op, not a loss.
-      // Reuse the shared verdict (same candidate-measuring + CRLF→LF
-      // baseline normalization the chokepoint uses) but act ONLY on the
-      // `empty` arm: the ratio arm must not block a legitimate large
-      // deletion here (step 6 deliberately passes `allowShrink: true`).
-      const emptyGuard = evaluateAntiShrink({ candidate: document, baselineBody: previousBody });
-      if (emptyGuard.reason === 'empty') {
-        throw new CollabSaveError(
-          'CONFLICT',
-          `save for page ${pageId} would persist an empty body over ${emptyGuard.baselineChars} chars of existing content ` +
-            '(likely a desynced session) — reload required; no revision was committed',
-        );
       }
 
       // Step 3: contributors (awareness set, minus the trigger user).
@@ -261,61 +268,76 @@ export function createSaveFlow(opts: CreateSaveFlowOptions): SaveFlow {
         throw new CollabSaveError('RENDERER_FAILED', `renderer pipeline failed: ${(err as Error).message}`);
       }
 
-      // Step 5: persist Revision + bump Page.revision pointer.
+      // Step 5a: persist the Revision document on its own.
       try {
-        await Page.pushRevision(page, newRevision, user);
+        await newRevision.save();
       } catch (err) {
-        throw new CollabSaveError('DB_ERROR', `Page.pushRevision failed: ${(err as Error).message}`);
+        throw new CollabSaveError('DB_ERROR', `Revision.save failed: ${(err as Error).message}`);
       }
 
-      // Step 6: collab-pointer write (currentRevision + yjsState + checkpoint).
-      // C-2 idempotent 2-step: if this $set fails after step 5, the
-      // next onLoadDocument still finds the latest revision via the
-      // `currentRevision ?? revision` fallback and rebuilds yjsState
-      // from the body. The compactor will re-write yjsState in the
-      // next debounce window.
+      // Step 5b: ATOMIC pointer write (round 2, Decision 1 — fixes A1
+      // split-brain). Bump BOTH `revision` (non-collab readers) AND
+      // `currentRevision` (collab) in ONE conditional `updateOne`, so the
+      // two pointers can never diverge — there is exactly one writer for the
+      // collab path. The filter `{ _id, currentRevision: docBaseFilter }` is
+      // the server-doc lock as a true compare-and-set: it lands only when
+      // the live pointer still equals the revision THIS doc was materialised
+      // from. A non-match means a concurrent / out-of-band save moved it
+      // first → reject CONFLICT (the Revision we just saved stays in history,
+      // unreferenced; the loser reloads, no data loss, A3: we never reach the
+      // deleteMany / ack below). `lastUpdateUser` + `updatedAt` mirror the
+      // fields `Page.pushRevision` used to set so non-collab readers see the
+      // same metadata.
+      //
+      // `docBaseFilter`: when the doc base (= live pointer) is a real
+      // revision id we match against it. When it is null (brand-new page, no
+      // revision yet) we match `currentRevision: null` so a racing first save
+      // still loses cleanly. A v1.x page with only `revision` set (no
+      // `currentRevision`) is handled by matching `currentRevision: null`
+      // too — its first collab save then sets both pointers, normalising it.
+      const docBaseFilterValue = liveRevision && page.currentRevision != null ? (page.currentRevision as Types.ObjectId) : null;
+      let pointerWrite: { matchedCount?: number } | null = null;
       try {
-        // M1 — make the `currentRevision` pointer bump a compare-and-set
-        // so two concurrent saves that both passed the step-2 optimistic
-        // read can't both win (TOCTOU). The filter requires
-        // `currentRevision` to still equal the pre-save value we read (the
-        // base we locked against). If a racing save moved it first,
-        // `matchedCount` is 0 and we leave the pointer alone: the winner's
-        // revision stays current, and this (loser's) revision is still
-        // durable in history — no data loss, just not promoted.
-        //
-        // Only arm the CAS when the DB actually has a `currentRevision` to
-        // compare against. A v1.x page (only `revision` set, `currentRevision`
-        // null) would never match `{ currentRevision: <id from page.revision> }`,
-        // so for those we fall back to the unconditional bump — the §1A
-        // optimistic lock above already rejected a stale base for them.
-        const expectedCurrent = (page.currentRevision ?? null) as Types.ObjectId | null;
-        const pointerFilter: Record<string, unknown> = { _id: pageId };
-        if (expectedCurrent) {
-          pointerFilter.currentRevision = expectedCurrent;
-        }
-        const pointerWrite = await Page.updateOne(pointerFilter, { $set: { currentRevision: newRevision._id } }).exec();
-        if (expectedCurrent && (pointerWrite?.matchedCount ?? 0) === 0) {
-          // A concurrent save promoted its revision first. Don't clobber
-          // it with our yjsState either — the winner owns the pointer +
-          // the live doc state. Our revision is preserved in history.
-          console.warn(
-            `[crowi:collab] save: currentRevision moved concurrently for page ${pageId}; ` + 'leaving the winner in place (this revision stays in history).',
-          );
-        } else {
-          // Route the yjsState mirror through the single `persistYjsState`
-          // chokepoint with `allowShrink: true` — a user save is explicit
-          // intent and must not be blocked by the ratio arm (a legitimate
-          // large deletion). The chokepoint writes `yjsState` +
-          // `yjsCheckpointAt` itself when it accepts; the empty-doc footgun
-          // was already rejected BEFORE the commit (C2 guard above).
-          await persistYjsState(Page, { pageId, document, baselineBody: previousBody, allowShrink: true, origin: 'save' });
-        }
+        pointerWrite = await Page.updateOne(
+          { _id: pageId, currentRevision: docBaseFilterValue },
+          {
+            $set: {
+              revision: newRevision._id,
+              currentRevision: newRevision._id,
+              lastUpdateUser: user._id,
+              updatedAt: new Date(),
+            },
+          },
+        ).exec();
       } catch (err) {
-        // Don't fail the save — the data is already consistent on
-        // disk via step 5. Warn so an operator sees this in logs but
-        // the client gets `crowi:save-ok`.
-        console.warn(`[crowi:collab] save: collab-pointer write failed for page ${pageId}; recoverable on next load.`, (err as Error).message);
+        throw new CollabSaveError('DB_ERROR', `Page pointer updateOne failed: ${(err as Error).message}`);
+      }
+      if ((pointerWrite?.matchedCount ?? 0) === 0) {
+        // The lock failed: `currentRevision` moved between our read and this
+        // write (a concurrent collab save, an HTTP save, or another
+        // instance). Our Revision stays in history unreferenced; reject so
+        // the client reloads. We do NOT prune PageYjsUpdate rows and do NOT
+        // ack a non-committed revision (A3).
+        throw new CollabSaveError('CONFLICT', `pointer compare-and-set for page ${pageId} did not match (currentRevision moved concurrently); reload required`);
+      }
+
+      // The save committed and is now the live pointer. Advance the doc base
+      // so the NEXT save on this same server doc locks against the revision
+      // we just created (otherwise the next save would see the live pointer
+      // diverge from the still-old base and false-CONFLICT).
+      docBaseRevisions.set(pageId, String(newRevision._id));
+
+      // Step 6: collab yjsState mirror via the single chokepoint. Best-
+      // effort — the data is already consistent on disk via step 5 (next
+      // onLoadDocument rebuilds yjsState from the body if this fails). A
+      // user save is explicit intent, so `allowShrink: true` bypasses the
+      // ratio arm (Decision 2: large deletions / clears are legitimate);
+      // `previousBody` is the read-verified baseline (C3 already rejected on
+      // a read failure).
+      try {
+        await persistYjsState(Page, { pageId, document, baselineBody: previousBody, allowShrink: true, origin: 'save' });
+      } catch (err) {
+        console.warn(`[crowi:collab] save: yjsState write failed for page ${pageId}; recoverable on next load.`, (err as Error).message);
       }
 
       // Step 6b: publish-on-save (RFC-0005 Phase 1). A `draft` page

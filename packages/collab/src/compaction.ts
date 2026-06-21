@@ -4,6 +4,7 @@ import type { Types } from 'mongoose';
 import type { CollabModels } from './models';
 import { payloadToUint8Array } from './yjs-payload';
 import { persistYjsState } from './persist-yjs-state';
+import { CONTENT_FIELD } from './yjs-doc';
 
 const debug = Debug('crowi:collab:compact');
 
@@ -130,10 +131,17 @@ export function createCompactor(deps: CompactPageDeps): Compactor {
     if (pendingRows.length === 0 && fromDocument) {
       // editor-preview-reliability §1B: route the store-only fast path
       // (fires on every Hocuspocus debounce) through the single
-      // `persistYjsState` chokepoint. An empty / heavily-shrunk live doc
-      // must not overwrite the last good yjsState — the next
-      // onLoadDocument rebuilds from the revision body instead.
-      const baselineBody = await latestRevisionBody(pageId);
+      // `persistYjsState` chokepoint. An empty live doc must not overwrite
+      // the last good yjsState — the next onLoadDocument rebuilds from the
+      // revision body instead.
+      //
+      // Hot-path optimization (round 2): the desync guard only ever rejects
+      // an EMPTY decoded doc (Decision 2). A non-empty live doc always
+      // passes, so we skip the baseline `Revision.body` read entirely in the
+      // common typing case — the body read (just to detect "baseline
+      // non-empty") only matters when the candidate is empty.
+      const liveIsEmpty = fromDocument.getText(CONTENT_FIELD).length === 0;
+      const baselineBody = liveIsEmpty ? await latestRevisionBody(pageId) : null;
       const result = await persistYjsState(Page, { pageId, document: fromDocument, baselineBody, origin: 'store-only' });
       if (!result.ok) {
         // Return `null` (not an ok-shaped 0-byte result) so `onStoreDocument`
@@ -190,25 +198,33 @@ export function createCompactor(deps: CompactPageDeps): Compactor {
     // through the same `persistYjsState` chokepoint as every other path.
     //
     // The C1 data-loss bug lived HERE: the pre-fix code skipped the
-    // yjsState write on a shrink reject BUT still pruned the folded rows
-    // unconditionally. With the stale (large) yjsState surviving and the
-    // shrinking deltas deleted, the next load applied the stale state,
-    // saw a non-empty doc, took the fast path, and never replayed the
-    // deletion — permanently reverting a legitimate large deletion.
+    // yjsState write on a reject BUT still pruned the folded rows
+    // unconditionally. With the stale yjsState surviving and the deltas
+    // deleted, the next load applied the stale state, saw a non-empty doc,
+    // took the fast path, and never replayed the deletion — reverting it.
     //
     // No-data-loss policy (defined once in the chokepoint): on a reject we
-    // write NOTHING and — critically — we DO NOT prune the folded rows.
-    // The (possibly legitimate) shrinking deltas stay in `PageYjsUpdate`,
-    // so the next onLoadDocument replays them over the surviving base state
-    // and the deletion is preserved. The 1-hour TTL bounds the leftover
-    // rows. We only prune the folded ids when the write actually landed.
+    // write NOTHING and — critically — we DO NOT prune the folded rows. The
+    // deltas stay in `PageYjsUpdate`, so the next onLoadDocument replays
+    // them over the surviving base state and the content is preserved. We
+    // only prune the folded ids when the write actually landed.
+    //
+    // Round 2 (Decision 2): the guard is now a desync check (empty over a
+    // non-empty body), NOT a shrink ratio — a legitimate large deletion is
+    // a non-empty doc, so it PERSISTS here (durably in yjsState, fixing the
+    // C1 TTL hole) instead of being rejected into 1h-TTL rows.
     const baselineBody = await latestRevisionBody(pageId);
     const result = await persistYjsState(Page, { pageId, document: ydoc, baselineBody, origin: 'full-merge' });
 
     if (!result.ok) {
       // Reject: leave yjsState AND the folded rows untouched (C1 fix).
+      // C4 — return `null` (not an ok-shaped 0-byte result) so
+      // `onStoreDocument` does NOT read the reject as "persisted" and skip
+      // the 10-min time-trigger; a null lets the trigger re-attempt once the
+      // content is legitimately re-established. The store-only fast path
+      // already returns null on a reject — this makes full-merge consistent.
       debug('compaction reject for page %s: kept %d folded rows for replay (no data loss)', pageId, pendingRows.length);
-      return { compactedCount: 0, newYjsStateBytes: 0 };
+      return null;
     }
 
     const collectedIds = pendingRows.map((row) => row._id);

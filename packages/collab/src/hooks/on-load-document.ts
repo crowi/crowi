@@ -3,6 +3,7 @@ import * as Y from 'yjs';
 import Debug from 'debug';
 import type { CollabModels } from '../models';
 import type { CollabContext } from '../types';
+import type { DocBaseRevisionStore } from '../doc-base-revision';
 import { CONTENT_FIELD } from '../yjs-doc';
 import { payloadToUint8Array } from '../yjs-payload';
 
@@ -10,6 +11,13 @@ const debug = Debug('crowi:collab:load');
 
 export interface OnLoadDocumentDeps {
   models: Pick<CollabModels, 'Page' | 'Revision' | 'PageYjsUpdate'>;
+  /**
+   * Round 2, Decision 1 — the server-doc save lock anchor. When the doc is
+   * materialised we record the revision it was seeded / restored from here
+   * so `executeSave` can compare-and-set the page pointer against it.
+   * Optional so synthetic test drivers / the Phase 3 smoke test can omit it.
+   */
+  docBaseRevisions?: DocBaseRevisionStore;
 }
 
 /**
@@ -75,6 +83,7 @@ export function createOnLoadDocument(deps: OnLoadDocumentDeps) {
   const Revision = deps.models.Revision as any;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const PageYjsUpdate = deps.models.PageYjsUpdate as any;
+  const docBaseRevisions = deps.docBaseRevisions;
 
   /**
    * Apply every pending `PageYjsUpdate` for `pageId` into `document`
@@ -194,17 +203,19 @@ export function createOnLoadDocument(deps: OnLoadDocumentDeps) {
       throw new Error('page not found');
     }
 
+    // Round 2, Decision 1 — record the revision THIS server doc is being
+    // materialised from (its "base") so `executeSave`'s compare-and-set
+    // locks against it. `currentRevision ?? revision` mirrors the pointer
+    // the save flow advances; `null` when the page has no revision yet.
+    const baseRevisionId = (page.currentRevision ?? page.revision ?? null) as { toString(): string } | null;
+    docBaseRevisions?.set(String(documentName), baseRevisionId ? baseRevisionId.toString() : null);
+
     // Path A — restore from the most recent checkpoint.
     const yjsState = page.yjsState as Buffer | null | undefined;
     let baseRestored = false;
     let forceReloadReason: ForceReloadReason | null = null;
-    // editor-preview-reliability H4 — set when we ABANDON the yjsState
-    // lineage and seed from the revision body instead (empty/corrupt
-    // yjsState). The residual `PageYjsUpdate` deltas were authored against
-    // that discarded lineage; replaying them onto a body-seeded doc (whose
-    // state vector differs) duplicates / misplaces content. So in this
-    // branch we DROP the residual deltas instead of replaying them — the
-    // body is the authoritative baseline.
+    // editor-preview-reliability — set when we ABANDON the yjsState lineage
+    // and seed from the revision body instead (empty/corrupt yjsState).
     let bodySeedFallback = false;
     if (yjsState && yjsState.length > 0) {
       try {
@@ -248,6 +259,7 @@ export function createOnLoadDocument(deps: OnLoadDocumentDeps) {
     // a yjsState lineage was abandoned (`bodySeedFallback`) AND when there
     // was no yjsState at all — in the latter case the residual deltas below
     // still replay over the body to recover not-yet-folded edits.
+    let bodySeedChars = 0;
     if (!baseRestored) {
       const revisionId = page.currentRevision ?? page.revision;
       if (revisionId) {
@@ -267,6 +279,7 @@ export function createOnLoadDocument(deps: OnLoadDocumentDeps) {
           // is otherwise a no-op for already-LF (v2-authored) bodies.
           const body = revision.body.replace(/\r\n?/g, '\n');
           document.getText(CONTENT_FIELD).insert(0, body);
+          bodySeedChars = body.length;
           debug('seeded page %s from revision %s (%d chars)', documentName, revisionId, body.length);
         }
       }
@@ -281,25 +294,36 @@ export function createOnLoadDocument(deps: OnLoadDocumentDeps) {
       broadcastForceReload(instance, String(documentName), forceReloadReason);
     }
 
-    if (bodySeedFallback) {
-      // editor-preview-reliability H4 — we abandoned the persisted yjsState
-      // lineage and seeded from the revision body instead. The residual
-      // `PageYjsUpdate` deltas were authored against that discarded lineage;
-      // applying them onto the body-seeded doc (different state vector)
-      // would duplicate / misplace content rather than merge cleanly. The
-      // body is authoritative in this branch, so DROP the stale deltas
-      // instead of replaying them.
+    // C2 (round 2) — decide how to treat the residual `PageYjsUpdate` deltas
+    // when we ABANDONED a yjsState lineage and body-seeded instead.
+    //
+    //   - body seed put CONTENT in (`bodySeedChars > 0`): the body is the
+    //     authoritative baseline and the deltas descend from the discarded
+    //     lineage (a different state vector), so replaying them would
+    //     duplicate / misplace content. DROP them — the original H4 fix.
+    //   - body seed put NOTHING in (`bodySeedChars === 0`: empty / missing
+    //     revision body): the residual deltas may carry the ONLY content the
+    //     user has (e.g. a brand-new page whose first edits never folded, or
+    //     a checkpoint-rejected deletion). Dropping them here would lose that
+    //     content. So we DON'T abandon them — fall through to the replay
+    //     below so they materialise the doc.
+    //
+    // This is the difference between the previous code (which dropped ALL
+    // deltas on any `bodySeedFallback`, losing the only-content case) and
+    // the C2-correct behaviour.
+    if (bodySeedFallback && bodySeedChars > 0) {
       await clearResidualUpdates(String(documentName));
       return;
     }
 
-    // Phase 4 — replay residual append rows on top of the restored base
-    // (Path A success, or a no-yjsState body seed whose deltas DO descend
-    // from the same lineage — e.g. a checkpoint-rejected page whose deltas
-    // ARE the deletion we must preserve), so a Hocuspocus crash between
-    // compactions (or between an append and the next checkpoint) doesn't
-    // lose edits. Yjs CRDT idempotency makes "already-folded" deltas safe
-    // to re-apply. The abandoned-lineage cases already returned above.
+    // Phase 4 — replay residual append rows on top of the restored / seeded
+    // base. Covers:
+    //   - Path A success (deltas not yet folded into yjsState),
+    //   - a no-yjsState body seed whose deltas descend from the same lineage
+    //     (a checkpoint-rejected deletion we must preserve), and
+    //   - C2: an abandoned-lineage fallback where the body seed was empty,
+    //     so the deltas carry the only content.
+    // Yjs CRDT idempotency makes already-folded deltas safe to re-apply.
     await replayResidualUpdates(String(documentName), document);
   };
 }

@@ -18,6 +18,7 @@ import { createOnAwarenessUpdate } from './hooks/on-awareness-update';
 import { createOnDisconnect } from './hooks/on-disconnect';
 import { createCompactor } from './compaction';
 import { createContributorsTracker, type ContributorsTracker } from './contributors';
+import { createDocBaseRevisionStore } from './doc-base-revision';
 import { createSaveFlow, type SaveFlow } from './save-flow';
 import { type PresenceHooks, noopPresenceHooks } from './presence';
 import { wrapOnAuthenticateWithPresence, wrapOnDisconnectWithPresence } from './presence-wiring';
@@ -112,12 +113,19 @@ export function createCollabServer(opts: CreateCollabServerOptions): Hocuspocus<
   const pageEventPublisher = opts.pageEventPublisher ?? noopPageEventPublisher;
   const contributorsTracker = opts.contributorsTracker ?? createContributorsTracker();
   const editorCapCounter = opts.editorCapCounter ?? noopEditorCapCounter;
+  // Round 2, Decision 1 — the server-doc save lock anchor, shared between
+  // `onLoadDocument` (records each materialised doc's base revision) and the
+  // save flow (compare-and-sets the page pointer against it, advances it on
+  // every successful save). One store per engine so all docs in this process
+  // agree on their bases.
+  const docBaseRevisions = createDocBaseRevisionStore();
   const saveFlow =
     opts.saveFlow ??
     createSaveFlow({
       models,
       contributorsTracker,
       pageEventPublisher,
+      docBaseRevisions,
     });
 
   const compactor = createCompactor({
@@ -143,6 +151,7 @@ export function createCollabServer(opts: CreateCollabServerOptions): Hocuspocus<
 
   const onLoadDocument = createOnLoadDocument({
     models: { Page: models.Page, Revision: models.Revision, PageYjsUpdate: models.PageYjsUpdate },
+    docBaseRevisions,
   });
   const onStoreDocument = createOnStoreDocument({
     models: { Page: models.Page },

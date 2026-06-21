@@ -79,10 +79,9 @@ export function createOnStateless(deps: OnStatelessDeps) {
         userId: context.userId,
         document,
         message: message.data.message,
-        // editor-preview-reliability §1A — forward the client's pinned
-        // edit base so the save flow can optimistic-lock against the
-        // page's live `currentRevision` (CONFLICT on divergence).
-        baseRevisionId: message.data.baseRevisionId ?? null,
+        // Round 2, Decision 1 — the save lock is anchored SERVER-SIDE to the
+        // revision this Hocuspocus doc was materialised from (recorded in
+        // `onLoadDocument`), so the client no longer sends a base revision.
       });
       // Phase 8 will subscribe to this on the client (Save button toast).
       // The wire format `{ kind, revisionId }` is intentionally not

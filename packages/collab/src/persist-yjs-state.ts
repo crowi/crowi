@@ -8,33 +8,32 @@ const debug = Debug('crowi:collab:persist');
 /**
  * editor-preview-reliability — the SINGLE chokepoint every `Page.yjsState`
  * write path routes through (save-flow, compaction store-only fast path,
- * compaction full-merge, on-store). Before the original fix-round each of
- * those sites bolted anti-shrink on with *divergent* reject behaviour:
- * save-flow nulled `yjsState` on reject, compaction full-merge KEPT the
- * stale state AND still pruned the folded rows (C1: permanent loss of a
- * legit large deletion), and store-only returned a non-null "ok-shaped"
- * result that made on-store think it had persisted (tail item: the 10-min
- * time-trigger invariant broke).
+ * compaction full-merge, on-store). Centralising the verdict + the reject
+ * policy here means there is exactly ONE definition of "what happens when
+ * the desync guard says no" and ONE guarantee: **a reject never loses
+ * data.**
  *
- * Centralising the verdict + the reject policy here means there is exactly
- * ONE definition of "what happens when anti-shrink says no" and ONE
- * guarantee: **a reject never loses data.**
+ * Round 2 (Decision 2): the guard is now a DESYNC check (empty decoded doc
+ * over a non-empty revision body — the tell-tale of a doc materialised
+ * empty from a failed load), NOT a shrink-ratio. A legitimate large
+ * deletion is a non-empty doc and persists durably into `yjsState` (so it
+ * survives past the 1-hour `PageYjsUpdate` TTL — fixes C1's durability
+ * hole). See `yjs-anti-shrink.ts`.
  *
  * Reject policy (no-data-loss, applied uniformly to every checkpoint path):
- *   - DO NOT write `yjsState` (the candidate is empty / heavily shrunk).
- *   - DO NOT prune the folded `PageYjsUpdate` rows. They carry the
- *     (possibly legitimate) shrinking deltas; leaving them means the next
- *     `onLoadDocument` replays them over the surviving base state and the
- *     deletion is preserved — instead of C1's "keep stale state + prune
- *     rows = deletion reverted". The 1-hour TTL still bounds growth.
+ *   - DO NOT write `yjsState` (the candidate is empty over real content =
+ *     a probable desync).
+ *   - DO NOT prune the folded `PageYjsUpdate` rows. Leaving them means the
+ *     next `onLoadDocument` replays them over the surviving base state —
+ *     instead of "keep stale state + prune rows = content reverted". The
+ *     1-hour TTL still bounds growth.
  *   - DO NOT bump `yjsCheckpointAt` (a reject is not a checkpoint; bumping
  *     it would suppress the 10-min time-trigger that re-attempts the write).
  *
  * The save path is different: a user save is explicit intent (protected by
- * the §1A optimistic lock + §2 synced gate), so it does NOT route its
- * checkpoint through the ratio arm — see `save-flow.ts`, which passes
- * `allowShrink: true` here so only the empty-doc guard (evaluated BEFORE
- * the revision is committed) can fire.
+ * the server-doc lock + the client synced gate), so it passes
+ * `allowShrink: true` here — a deliberate empty clear / large deletion
+ * always persists.
  */
 
 /** Minimal `Page` model surface this chokepoint touches. */
@@ -52,9 +51,8 @@ export interface PersistYjsStateInput {
    */
   baselineBody: string | null | undefined;
   /**
-   * Bypass the ratio arm (NOT the structural decode). Set by the save path
-   * (explicit user intent) so a legitimate large deletion isn't blocked;
-   * the empty-doc guard still applies unless this is set.
+   * Bypass the desync guard. Set by the save path (explicit user intent)
+   * so a deliberate empty clear / large deletion always persists.
    */
   allowShrink?: boolean;
   /**
@@ -83,10 +81,19 @@ export type PersistYjsStateResult =
     };
 
 /**
- * Evaluate anti-shrink for `document` and, only when it passes, write the
- * encoded state + `yjsCheckpointAt` to `Page.yjsState`. Returns a verdict
- * the caller uses to decide whether it may prune folded rows (only on
- * `ok: true`).
+ * Sampled reject-warning bookkeeping (tail item): a page whose live doc is
+ * stuck empty (a wedged client) would otherwise log a reject warning on
+ * EVERY ~2s debounce. We log the first reject per page, then 1-in-N after,
+ * so an operator still sees a persistent problem without a log flood.
+ */
+const REJECT_LOG_SAMPLE = 20;
+const rejectCounts = new Map<string, number>();
+
+/**
+ * Evaluate the desync guard for `document` and, only when it passes, write
+ * the encoded state + `yjsCheckpointAt` to `Page.yjsState`. Returns a
+ * verdict the caller uses to decide whether it may prune folded rows (only
+ * on `ok: true`).
  *
  * Pure-ish: the single side effect is the conditional `Page.updateOne`.
  * The caller owns its own try/catch (the existing write sites already wrap
@@ -100,13 +107,22 @@ export async function persistYjsState(page: PageModelLike, input: PersistYjsStat
   });
 
   if (!verdict.ok) {
-    console.warn(
-      `[crowi:collab] persistYjsState: anti-shrink rejected the ${input.origin} checkpoint for page ${input.pageId} ` +
-        `(reason=${verdict.reason}, candidate=${verdict.candidateChars} chars, baseline=${verdict.baselineChars} chars); ` +
-        'yjsState left intact and folded rows preserved — the next onLoadDocument rebuilds from the surviving base + deltas.',
-    );
+    // Sample the warn so a stuck-empty page doesn't flood the log.
+    const n = (rejectCounts.get(input.pageId) ?? 0) + 1;
+    rejectCounts.set(input.pageId, n);
+    if (n === 1 || n % REJECT_LOG_SAMPLE === 0) {
+      console.warn(
+        `[crowi:collab] persistYjsState: desync guard rejected the ${input.origin} checkpoint for page ${input.pageId} ` +
+          `(reason=${verdict.reason}, candidate=${verdict.candidateChars} chars, baseline=${verdict.baselineChars} chars, occurrence #${n}); ` +
+          'yjsState left intact and folded rows preserved — the next onLoadDocument rebuilds from the surviving base + deltas.',
+      );
+    }
     return { ok: false, verdict };
   }
+
+  // A successful write clears the reject streak so a page that recovers
+  // (content re-established) logs fresh if it ever wedges again.
+  rejectCounts.delete(input.pageId);
 
   const stateBuf = Buffer.from(Y.encodeStateAsUpdate(input.document));
   await page.updateOne({ _id: input.pageId }, { $set: { yjsState: stateBuf, yjsCheckpointAt: new Date() } }).exec();
