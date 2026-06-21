@@ -13,15 +13,17 @@ import { ErrorAlert } from '@/components/ui/error-alert';
 import { AccessDeniedCard } from '@/components/ui/access-denied-card';
 import { NotFoundCard } from '@/components/ui/not-found-card';
 import { usePage } from '@/lib/use-page';
-import { pagePathToHref } from '@/lib/page-path';
+import { isUserHomePath, pagePathToHref } from '@/lib/page-path';
 import { usePageGrantAccent } from '@/lib/use-page-grant-accent';
+import { usePageChildren } from '@/lib/use-page-children';
 import { isStalePageRevision } from '@/lib/page-revision';
 import { useRevertDeletedPage } from '@/lib/use-page-mutations';
 import { useMarkSeenOnView } from '@/lib/use-seen';
 import { PageHeader } from './page-header';
 import { PageContent } from './page-content';
-import { PageToc, useTocScrollSpy } from './page-toc';
-import { cn } from '@/lib/utils';
+import { PortalizeBanner } from './portalize-dialog';
+import { useTocScrollSpy } from './page-toc';
+import { PageTocColumns } from './page-toc-columns';
 import { StaleRevisionBanner } from './stale-revision-banner';
 import { BacklinkList } from './backlink-list';
 import { AttachmentList } from './attachment-list';
@@ -45,6 +47,14 @@ export function PageView({ path, revisionId }: PageViewProps) {
   const router = useRouter();
   const { page, isLoading, isError, error, notFound, notGranted, redirectTo, isDeleted, refetch } = usePage({ path, revision_id: revisionId });
   const revertMutation = useRevertDeletedPage();
+
+  // Does this content page have descendants (`/path/...`)? If so it can be
+  // turned into a portal that indexes them. Querying the portal-path children
+  // shares the sidebar's cache key (deduped — no extra request), so this is
+  // effectively free. Disabled until the page resolves and isn't deleted.
+  const childrenPath = path.endsWith('/') ? path : `${path}/`;
+  const { data: childrenData } = usePageChildren(childrenPath, { enabled: !!page && !isDeleted });
+  const hasDescendants = (childrenData?.children?.length ?? 0) > 0;
 
   const canMarkSeen = Boolean(page?._id) && !isLoading && !isError && !notFound && !notGranted && !isDeleted && !redirectTo;
   useMarkSeenOnView(page?._id, canMarkSeen);
@@ -167,30 +177,23 @@ export function PageView({ path, revisionId }: PageViewProps) {
   }
 
   if (page) {
-    const hasToc = toc.length >= 2;
     const isStaleRevision = isStalePageRevision(page);
     // Drafts are creator-only and unpublished — strip the "social" affordances
     // (presence, comments) and swap the comments slot for an info notice that
     // tells the author the page isn't published yet. PageHeader / PageActionsMenu
     // independently hide like / watch / bookmark / link-share for the same reason.
     const isDraft = page.status === PageStatusEnum.DRAFT;
+    // Offer "make this a portal" when descendants already live under
+    // `/path/...` — the page is implicitly a folder, so portalizing lets it
+    // index them. Suppressed for drafts, the historical (stale) view, and the
+    // user-home page (which can't be renamed).
+    const showPortalizeBanner = !isStaleRevision && !isDraft && hasDescendants && !isUserHomePath(page.path);
     const handleEdit = () => {
       router.push(`/_edit?page_id=${encodeURIComponent(page._id)}`);
     };
     return (
-      // Escape the shared `max-w-4xl` main and center a
-      // `[left spacer | content | TOC]` group on the full viewport. The
-      // left spacer (≥1440) reserves the fixed nav rail's width so the
-      // content stays dead-centre and symmetric at the 3-column width;
-      // below 1440 it collapses and content + TOC re-centre as a pair;
-      // below 1280 the TOC column hides (the header `PageTocMenu` takes
-      // over). The right column stays reserved at ≥1440 even with no TOC
-      // so a heading-light page is still symmetric. Margins/flex (no
-      // transform) keep the `position: fixed` compact header viewport-
-      // relative.
-      <div className="mx-[calc(50%-50vw)] flex w-screen justify-center gap-6 px-4">
-        <div aria-hidden className="hidden w-56 shrink-0 min-[1440px]:block" />
-        <article className="w-full min-w-0 max-w-4xl space-y-12">
+      <PageTocColumns toc={toc} activeTocId={activeTocId}>
+        <article className="space-y-12">
           {isStaleRevision && page.revision?._id && <StaleRevisionBanner pagePath={page.path} pageId={page._id} revisionId={page.revision._id} />}
           <PageHeader
             page={page}
@@ -201,6 +204,9 @@ export function PageView({ path, revisionId }: PageViewProps) {
             toc={toc}
             activeTocId={activeTocId}
           />
+          {showPortalizeBanner && (
+            <PortalizeBanner page={page} title={m['page.portalize_descendants_title']()} description={m['page.portalize_descendants_body']()} />
+          )}
           <PageContent page={page} />
           {!isStaleRevision && (
             <>
@@ -226,13 +232,7 @@ export function PageView({ path, revisionId }: PageViewProps) {
             </>
           )}
         </article>
-        {/* Right column. With a TOC it shows from the 1280px rail
-            breakpoint up; without one it still reserves width at ≥1440
-            so the article stays symmetric against the left nav spacer. */}
-        <div className={cn('w-56 shrink-0', hasToc ? 'hidden min-[1280px]:block' : 'hidden min-[1440px]:block')}>
-          {hasToc && <PageToc toc={toc} activeId={activeTocId} />}
-        </div>
-      </div>
+      </PageTocColumns>
     );
   }
 
