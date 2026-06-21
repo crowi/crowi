@@ -20,13 +20,6 @@ export interface CollabSaveSession {
    * so we never checkpoint a pre-sync (possibly empty / stale) doc.
    */
   synced: boolean;
-  /**
-   * editor-preview-reliability §1A — the edit base revision id, echoed
-   * back to the server in `crowi:save` so it can optimistic-lock the
-   * save against the page's live `currentRevision`. `null` / undefined
-   * when no base is known (page has no revision yet).
-   */
-  baseRevisionId?: string | null;
   readonly: boolean;
   sendStateless: (payload: string) => boolean;
   subscribeStateless: (listener: StatelessListener) => () => void;
@@ -37,10 +30,11 @@ export interface CollabSaveSession {
  * already-pending case (user double-clicked). `'NOT_READY'` covers
  * the un-connected / no-provider branch. `'READONLY'` is the
  * 20-cap defence. `'TIMEOUT'` is the 5-second ack window.
- * `'CONFLICT'` is the optimistic-lock rejection (editor-preview-
- * reliability §1A): the edit base revision is stale, so the caller must
- * prompt a reload rather than retry. Everything else is propagated
- * verbatim from the server.
+ * `'CONFLICT'` is the server-doc-lock rejection (editor-preview-
+ * reliability round 2, Decision 1): the page's live `currentRevision`
+ * diverged from the revision the server doc was materialised from (an
+ * out-of-band save), so the caller must prompt a reload rather than
+ * retry. Everything else is propagated verbatim from the server.
  */
 export type CollabSaveFailureReason = 'BUSY' | 'NOT_READY' | 'READONLY' | 'TIMEOUT' | 'CONFLICT' | 'WIRE_FORMAT' | 'SERVER';
 
@@ -109,7 +103,7 @@ export function useCollabSave(session: CollabSaveSession | null): UseCollabSaveR
       pending.resolve(ok);
     } else {
       const err = body as CollabSaveError;
-      // §1A — surface the optimistic-lock rejection as a first-class
+      // Decision 1 — surface the server-doc-lock rejection as a first-class
       // `CONFLICT` reason so the Save UI can branch to "reload required"
       // instead of treating it as a generic server error to retry.
       const reason: CollabSaveFailureReason = err.code === 'CONFLICT' ? 'CONFLICT' : 'SERVER';
@@ -187,13 +181,11 @@ export function useCollabSave(session: CollabSaveSession | null): UseCollabSaveR
       return Promise.reject(failure);
     }
 
-    // §1A — echo the pinned edit base revision so the server can
-    // optimistic-lock the save (CONFLICT on a stale base). Omitted from
-    // the wire when unknown so the field stays optional.
+    // Decision 1 (round 2): the save optimistic lock is anchored
+    // server-side to the revision the server's Hocuspocus doc was
+    // materialised from, so the client no longer sends an edit-base
+    // revision. A divergence surfaces as `crowi:save-error` `CONFLICT`.
     const message: CollabSaveMessage = { kind: 'crowi:save' };
-    if (session.baseRevisionId != null) {
-      message.baseRevisionId = session.baseRevisionId;
-    }
     const sent = session.sendStateless(JSON.stringify(message));
     if (!sent) {
       const failure: CollabSaveFailure = { reason: 'NOT_READY', message: 'Failed to send save message' };

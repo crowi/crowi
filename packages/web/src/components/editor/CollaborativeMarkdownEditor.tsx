@@ -1,6 +1,6 @@
 'use client';
 
-import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { forwardRef, useEffect, useMemo, useState } from 'react';
 import type { Extension } from '@codemirror/state';
 import { keymap } from '@codemirror/view';
 import { yCollab } from 'y-codemirror.next';
@@ -50,26 +50,13 @@ export interface CollabSession {
    */
   hasEverSynced: boolean;
   /**
-   * editor-preview-reliability §1A — the revision the Y.Doc was seeded
-   * from, sent back as `crowi:save`'s `baseRevisionId` so the server can
-   * optimistic-lock the save. `null` when the page has no revision yet.
-   *
-   * H1 fix: this is anchored ONCE to the first wsToken response's
-   * `currentRevision` and is NOT re-read from a refetched token (the
-   * ~5-min token refetch would otherwise re-pin it to *latest* and make
-   * the lock never fire). It advances ONLY when this client's own save
-   * succeeds (`crowi:save-ok` → `advanceBaseRevision`), so in a multi-user
-   * session the lock fires exactly when *this doc* descends from a
-   * revision older than the page's current one — not on normal co-editing.
+   * editor-preview-reliability D2 — `true` once the bounded auth-failed
+   * recovery budget is spent (the wsToken keeps getting rejected after the
+   * retries). The caller escalates this to a terminal "session expired —
+   * sign in again" message and dismisses the "reconnecting…" spinner. Reset
+   * to `false` whenever the session leaves `auth-failed` by ANY path.
    */
-  baseRevisionId: string | null;
-  /**
-   * Advance the pinned edit base after a successful save. The caller
-   * invokes this from the `crowi:save-ok` handler with the new revision id
-   * the server returns, so the next save locks against the revision this
-   * client just created instead of the now-stale session-start base.
-   */
-  advanceBaseRevision: (revisionId: string) => void;
+  authRecoveryExhausted: boolean;
   readonly: boolean;
   subscribeStateless: (listener: StatelessListener) => () => void;
   sendStateless: (payload: string) => boolean;
@@ -151,68 +138,73 @@ export function useCollabSession(pageId: string | null | undefined): CollabSessi
     initialReadonly: tokenReadonly,
   });
 
-  // §1A / H1 — the edit base revision the save flow optimistic-locks
-  // against. Held in state and anchored ONCE to the first wsToken
-  // response's `currentRevision`; deliberately NOT re-read from a
-  // refetched token (the ~5-min refetch returns the *latest* revision,
-  // which would silently disable the lock). It advances only when this
-  // client's own save lands (`advanceBaseRevision`). Reset to null when
-  // the page changes so a new page re-anchors from its own token.
-  const [baseRevisionId, setBaseRevisionId] = useState<string | null>(null);
-  const tokenCurrentRevision = tokenQuery.data?.currentRevision ?? null;
-  const tokenResolved = Boolean(tokenQuery.data);
-  // The pageId+state this client last anchored a base for. Kept in STATE
-  // (not a ref) so the anchoring can run DURING RENDER — React's "adjust
-  // state when a prop changes" pattern (same shape as `UpdatePageEditor`'s
-  // `page.revision._id !== revisionId` guard), which avoids both the
-  // cascading-render `set-state-in-effect` path and the "no ref access in
-  // render" rule. The token's `currentRevision` is read exactly ONCE per
-  // page (the first render after it resolves) and never re-applied on a
-  // later refetch of the same page (H1). `advanceBaseRevision` is the only
-  // other writer.
-  const [anchoredForPageId, setAnchoredForPageId] = useState<string | null>(null);
-  if (!pageId) {
-    if (anchoredForPageId !== null) {
-      setAnchoredForPageId(null);
-      setBaseRevisionId(null);
-    }
-  } else if (anchoredForPageId !== pageId && tokenResolved) {
-    setAnchoredForPageId(pageId);
-    setBaseRevisionId(tokenCurrentRevision);
-  }
+  // Decision 1 (round 2): the save optimistic lock moved SERVER-SIDE
+  // (anchored to the revision the server's Hocuspocus doc was materialised
+  // from), so the client no longer pins / advances any edit-base revision.
+  // The whole client-base subsystem (baseRevisionId state, the once-per-page
+  // anchoring, advanceBaseRevision) was removed.
 
-  const advanceBaseRevision = useCallback((revisionId: string) => {
-    setBaseRevisionId(revisionId);
-  }, []);
-
-  // §4 — bounded recovery from the terminal `auth-failed` state. The
-  // provider won't reconnect with the rejected token; a fresh wsToken
-  // rebuilds it. `useYjsToken` already refetches on a silent
-  // access-token refresh (the common case), but `auth-failed` can also
-  // happen with a still-valid access token (the wsToken simply expired),
-  // so nudge a bounded number of explicit refetches here. Capped so a
-  // genuinely revoked session settles into readonly instead of looping.
-  const authRetryRef = useRef(0);
+  // §4 / D2 — bounded recovery from the `auth-failed` state with a
+  // SELF-RESCHEDULING backoff + terminal escalation. The provider won't
+  // reconnect with the rejected token; a fresh wsToken rebuilds it.
+  // `useYjsToken` already refetches on a silent access-token refresh (the
+  // common case), but `auth-failed` can also happen with a still-valid
+  // access token (the wsToken simply expired), so nudge a bounded number of
+  // explicit refetches here.
+  //
+  // D2 — surface "budget spent" so the caller can escalate to a terminal
+  // message + dismiss the reconnecting spinner instead of spinning forever.
+  const [authRecoveryExhausted, setAuthRecoveryExhausted] = useState(false);
   // H8 — depend on the STABLE `tokenQuery.refetch` (react-query keeps its
   // identity stable across renders), not the whole `tokenQuery` object
-  // (new identity every render). Depending on the object re-ran this
-  // effect on every unrelated re-render, cancelling the backoff timer and
-  // burning the retry budget without ever calling `refetch()`.
+  // (new identity every render).
   const refetchToken = tokenQuery.refetch;
   useEffect(() => {
-    if (status !== 'auth-failed') {
-      // Reset the budget whenever we leave the failed state so a later,
-      // unrelated failure gets a fresh set of retries.
-      if (status === 'connected') authRetryRef.current = 0;
-      return;
-    }
-    if (authRetryRef.current >= 3) return;
-    authRetryRef.current += 1;
-    const delay = 1000 * 2 ** (authRetryRef.current - 1); // 1s, 2s, 4s
-    const timer = setTimeout(() => {
-      void refetchToken();
-    }, delay);
-    return () => clearTimeout(timer);
+    // Only the auth-failed branch arms the backoff. Leaving auth-failed by
+    // ANY path tears the chain down + clears the terminal flag via THIS
+    // effect's cleanup (a status change re-runs the effect → cleanup fires).
+    // We deliberately do NOT call setState synchronously in the effect body
+    // (that would trip cascading renders); the only setState is the async
+    // "budget spent" inside a setTimeout, and the reset is in cleanup.
+    if (status !== 'auth-failed') return;
+
+    // D2 — a single effect owns the whole backoff for THIS auth-failed
+    // episode: it arms timer #1, whose callback refetches then arms timer
+    // #2, etc. (1s, 2s, 4s). Re-running on a `status` change to / from
+    // `auth-failed` is what starts / cancels the chain, so we no longer
+    // burn the budget on unrelated re-renders. After the 3rd attempt we
+    // escalate to terminal instead of looping.
+    let cancelled = false;
+    let attempt = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const scheduleNext = (): void => {
+      if (cancelled) return;
+      if (attempt >= 3) {
+        setAuthRecoveryExhausted(true);
+        return;
+      }
+      const delay = 1000 * 2 ** attempt; // 1s, 2s, 4s
+      attempt += 1;
+      timer = setTimeout(() => {
+        void Promise.resolve(refetchToken()).finally(() => {
+          // If the refetch produced a token that re-syncs, `status` flips
+          // and this effect's cleanup cancels the chain. If it stays
+          // `auth-failed` (still-bad credentials), self-reschedule the next
+          // backoff step until the budget is spent.
+          scheduleNext();
+        });
+      }, delay);
+    };
+    scheduleNext();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+      // D2 — clear the terminal flag when we leave auth-failed (this cleanup
+      // runs on the status change away from auth-failed) so a later,
+      // unrelated failure recovers afresh. setState in cleanup is not a
+      // synchronous-effect-body render trigger.
+      setAuthRecoveryExhausted((prev) => (prev ? false : prev));
+    };
   }, [status, refetchToken]);
 
   const { user, isLoading: isAuthLoading } = useAuth();
@@ -273,7 +265,7 @@ export function useCollabSession(pageId: string | null | undefined): CollabSessi
     };
   }, [yText, awareness]);
 
-  return { yText, yUndoManager, awareness, status, synced, hasEverSynced, baseRevisionId, advanceBaseRevision, readonly, subscribeStateless, sendStateless };
+  return { yText, yUndoManager, awareness, status, synced, hasEverSynced, authRecoveryExhausted, readonly, subscribeStateless, sendStateless };
 }
 
 /**

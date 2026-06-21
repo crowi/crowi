@@ -10,17 +10,23 @@ import { subscribeTokenRefreshed } from './token-refresh-notifier';
  * Fetch the short-lived wsToken JWT that the Hocuspocus client presents
  * on connect.
  *
- * Lifecycle: server issues a 5-minute token. We refetch ~30s before
- * expiry so the client has time to recreate its `HocuspocusProvider`
- * (token swap requires destroy + recreate; the underlying
- * `HocuspocusProvider` 4.x has no runtime token-replace API). The
- * refetch interval is computed dynamically from `data.expiresAt` so
- * a server-side change in `WS_TOKEN_TTL` propagates automatically.
+ * Lifecycle (D1, round 2): the wsToken authenticates the (re)connect
+ * HANDSHAKE only — once the WebSocket is established it stays open across
+ * the whole edit session even after the token's `exp` passes. So we do NOT
+ * proactively refetch on a timer: a swap tears down + rebuilds the
+ * `HocuspocusProvider` (4.x has no runtime token-replace API), which resets
+ * `hasEverSynced` and remounts CodeMirror mid-edit (cursor / scroll / IME /
+ * undo lost). The pre-fix ~4.5-min `refetchInterval` did exactly that every
+ * token TTL window, defeating the H5 sticky mount gate.
  *
- * Focus-triggered refetch is disabled: each refetch tears down + rebuilds
- * the HocuspocusProvider, which would interrupt an in-progress edit
- * session for no reason (the token is still valid). The dynamic interval
- * is the only refresh trigger.
+ * A fresh token is fetched ONLY when (re)connecting:
+ *   - on mount (the initial connect), via the query itself;
+ *   - on `auth-failed` (a reconnect with an expired/rejected token),
+ *     nudged by the bounded backoff in `useCollabSession`;
+ *   - on a silent access-token refresh, but ONLY when the cached wsToken is
+ *     actually (near-)expired (the `subscribeTokenRefreshed` effect below).
+ *
+ * Focus-triggered refetch is disabled for the same provider-rebuild reason.
  */
 export function useYjsToken(pageId: string | null | undefined) {
   const queryClient = useQueryClient();
@@ -67,20 +73,19 @@ export function useYjsToken(pageId: string | null | undefined) {
       return response.json();
     },
     enabled: Boolean(pageId),
-    // Schedule the next round-trip 30s before `expiresAt`; floor at 30s
-    // to avoid tight loops if the server hands us an already-near-expired
-    // token (clock drift, etc).
-    refetchInterval: (query) => {
-      const data = query.state.data;
-      if (!data) return false;
-      const msUntilRefresh = Date.parse(data.expiresAt) - Date.now() - 30_000;
-      return Math.max(30_000, msUntilRefresh);
-    },
-    // Avoid focus-triggered rebuilds of the live HocuspocusProvider while
-    // the cached token is still valid (default `refetchOnWindowFocus: true`
-    // would otherwise refresh the token on any tab focus past 30s).
+    // D1 — NO proactive `refetchInterval`. An established connection
+    // persists past the token's TTL; refetching mid-edit would rebuild the
+    // provider and remount the editor. Re-tokenisation happens only on a
+    // (re)connect path (auth-failed backoff / silent-refresh-when-expired).
+    //
+    // Avoid focus-triggered rebuilds of the live HocuspocusProvider too
+    // (default `refetchOnWindowFocus: true` would otherwise refresh the
+    // token on any tab focus past `staleTime`).
     refetchOnWindowFocus: false,
-    staleTime: 30_000,
+    // The token is long-lived from the query's perspective (we never want a
+    // staleness-driven background refetch to rebuild the provider). Recovery
+    // refetches go through explicit `invalidateQueries` / `refetch`.
+    staleTime: Infinity,
     retry: 3,
   });
 }

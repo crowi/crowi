@@ -104,6 +104,12 @@ function readEntry(pageId: string, ttlMs: number): RecoveryEntry | null {
 
 function writeEntry(pageId: string, text: string): void {
   if (typeof window === 'undefined') return;
+  // B3 — never snapshot an EMPTY doc as recoverable. An empty buffer would
+  // later prompt "restore unsaved changes?" offering to replace the real
+  // synced content with nothing. An empty recovery snapshot carries no
+  // recoverable work, so a write of '' is a no-op (it also can't usefully
+  // overwrite a meaningful earlier snapshot — see `snapshotNow` / the timer).
+  if (text.length === 0) return;
   try {
     const entry: RecoveryEntry = { text, savedAt: Date.now() };
     window.localStorage.setItem(storageKey(pageId), JSON.stringify(entry));
