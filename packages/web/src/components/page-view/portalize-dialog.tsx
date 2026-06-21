@@ -17,11 +17,11 @@ import { PageRevisionConflictError, useRenamePage } from '@/lib/use-page-mutatio
  *
  * Turns a content page `/some-page` into the portal `/some-page/` by moving
  * it (a single-page rename, descendants untouched — they already sit under
- * `/some-page/...`). The move leaves NO redirect at the old path (portal
- * destinations never get a redirect — `create_redirect` is omitted, and the
- * server skips redirects for `/`-suffixed targets), which together with the
- * server-side twin guard (§6) prevents the `/x` ↔ `/x/` double-state from
- * coming back.
+ * `/some-page/...`). The move leaves a redirect at the old content path so
+ * existing links / bookmarks to `/some-page` keep resolving to the new
+ * portal (same as every other rename). That redirect stub has `redirectTo`
+ * set, so it is hidden from listings and the server-side twin guard (§6)
+ * ignores it — the `/x` ↔ `/x/` *content* double-state still can't come back.
  *
  * Shared by two entry points, both passing the content page as `page`:
  *   - the page dot-menu "Portalize" item (`PageActionsMenu`)
@@ -90,8 +90,11 @@ function PortalizeDialogBody({ page, onOpenChange }: { page: PageWithRevision; o
         page_id: page._id,
         new_path: toPath,
         revision_id: page.revision?._id,
-        // No redirect: portalizing must not leave a `/some-page` stub
-        // behind (§5). The server also skips redirects for portal targets.
+        // Leave a redirect at the old content path so existing links /
+        // bookmarks to `/some-page` keep resolving to the new portal — the
+        // same as every other rename. The redirect stub (`redirectTo` set)
+        // is hidden from listings and ignored by the `/x` ↔ `/x/` twin guard.
+        create_redirect: true,
         include_descendants: false,
       });
       onOpenChange(false);
@@ -132,7 +135,7 @@ function PortalizeDialogBody({ page, onOpenChange }: { page: PageWithRevision; o
         <div className="break-all font-medium text-foreground">{toPath}</div>
       </div>
 
-      <p className="text-xs text-muted-foreground">{m['page.portalize.no_redirect_note']()}</p>
+      <p className="text-xs text-muted-foreground">{m['page.portalize.redirect_note']()}</p>
 
       <DialogFooter>
         <DialogClose asChild>

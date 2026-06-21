@@ -271,7 +271,7 @@
   "page.rename.conflict_tree_partial": "一部のページはすでに移動された可能性があります。再試行する前にサブツリーを確認してください。",
   "page.portalize.title": "ポータルにする",
   "page.portalize.description": "このページを末尾「/」のパスに移動し、フォルダのポータル (索引ページ) にします。",
-  "page.portalize.no_redirect_note": "元のパスにリダイレクトは残しません。",
+  "page.portalize.redirect_note": "元のパスは新しいポータルへリダイレクトするので、既存のリンクはそのまま使えます。",
   "page.portalize.cancel": "キャンセル",
   "page.portalize.submit": "ポータルにする",
   "page.portalize.error_title": "エラー",

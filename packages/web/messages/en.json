@@ -271,7 +271,7 @@
   "page.rename.conflict_tree_partial": "Some pages may have already been moved. Check the subtree before retrying.",
   "page.portalize.title": "Make this a portal",
   "page.portalize.description": "Move this page to the trailing-slash path so it becomes the portal (index page) for its folder.",
-  "page.portalize.no_redirect_note": "No redirect is left behind at the old path.",
+  "page.portalize.redirect_note": "The old path will redirect to the new portal, so existing links keep working.",
   "page.portalize.cancel": "Cancel",
   "page.portalize.submit": "Make portal",
   "page.portalize.error_title": "Error",

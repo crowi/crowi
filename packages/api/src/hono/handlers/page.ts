@@ -953,10 +953,16 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             }
           }
 
-          // Legacy controller: portal paths (ending in '/') never get a
-          // redirect page even if requested.
+          // Honour `create_redirect` regardless of the destination's
+          // portal-ness. Portalizing `/x` → `/x/` leaves a redirect at the
+          // old content path so existing links / bookmarks to `/x` keep
+          // resolving (to the new portal) — the same behaviour every other
+          // rename already has (RenameDialog always requests a redirect). The
+          // redirect stub has `redirectTo` set, so `findExistingTwin` (which
+          // filters `redirectTo: null`) does not treat it as a `/x` ↔ `/x/`
+          // twin, and it is hidden from listings (also `redirectTo: null`).
           const options = {
-            createRedirectPage: !newPageIsPortal && Boolean(create_redirect),
+            createRedirectPage: Boolean(create_redirect),
           };
 
           await Page.rename(pageData, newPagePath, user, options);

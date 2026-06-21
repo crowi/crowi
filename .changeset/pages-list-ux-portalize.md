@@ -15,10 +15,11 @@ Improve the page-list / portal / sidebar UX and add a "portalize" flow.
   expands its own children, so navigating between a page and its portal no
   longer reshuffles the tree.
 - **Portalize a content page**: the page "⋮" menu gains "Make this a portal",
-  which moves `/some-page` → `/some-page/` (leaving no redirect behind). Opening
-  `/some-page/` while a content page lives at `/some-page` now offers the same
-  one-click portalize banner instead of "Create Portal". `GET /pages/list` gains
-  a `contentPage` field to drive this.
+  which moves `/some-page` → `/some-page/`, leaving a redirect at the old path
+  so existing links / bookmarks keep resolving to the new portal (the same as
+  any other rename). Opening `/some-page/` while a content page lives at
+  `/some-page` now offers the same one-click portalize banner instead of
+  "Create Portal". `GET /pages/list` gains a `contentPage` field to drive this.
 - **No more `/x` ↔ `/x/` double-state**: when one of the trailing-slash twins
   exists, creating the other is refused (editor draft creation, `POST /pages`,
   and rename all return 400 — `PAGE_TWIN_EXISTS` on the page endpoints). A
