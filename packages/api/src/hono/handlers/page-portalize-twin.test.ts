@@ -226,12 +226,35 @@ describe('Routes /api/v2/pages/rename (Hono renamePage — §6 twin guard)', () 
     expect(res.status).toBe(200);
     expect(res.body.page.path).toBe(portalPath);
 
-    // The move leaves NO redirect at the old content path (§5).
+    // Without `create_redirect`, no redirect stub is left.
     const redirect = await Page.findOne({ path: contentPath });
     expect(redirect).toBeNull();
 
     // And the page now lives at the portal path.
     const moved = await Page.findById(page._id);
     expect(moved.path).toBe(portalPath);
+  });
+
+  it('portalize with create_redirect leaves a redirect at the old content path (links keep working)', async () => {
+    const headers = authHeaders(accessToken);
+    const contentPath = `${PATH_PREFIX}portalize-redirect`;
+    const portalPath = `${contentPath}/`;
+
+    const page = await createPageViaApi(accessToken, contentPath, '# portalize me');
+
+    // This is what PortalizeDialog sends — a portal destination MUST still
+    // honour create_redirect (it used to be skipped for `/`-suffixed targets).
+    const res = await request(app).post('/api/v2/pages/rename').set(headers).send({ page_id: page._id, new_path: portalPath, create_redirect: true });
+    expect(res.status).toBe(200);
+    expect(res.body.page.path).toBe(portalPath);
+
+    // A redirect stub now sits at the old content path, pointing at the portal.
+    const redirect = await Page.findOne({ path: contentPath });
+    expect(redirect).not.toBeNull();
+    expect(redirect.redirectTo).toBe(portalPath);
+
+    // The stub has `redirectTo` set, so the twin guard ignores it: `/x/`
+    // still has no *content* twin at `/x`.
+    expect(await Page.findExistingTwin(portalPath)).toBeNull();
   });
 });
