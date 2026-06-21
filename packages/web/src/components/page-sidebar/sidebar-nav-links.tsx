@@ -37,7 +37,10 @@ export function SidebarNavLinks() {
     <nav className="space-y-0.5" aria-label="Primary">
       <NavLink href="/" icon={Home} label={m['sidebar.nav_top']()} active={pathname === '/'} />
       {username && <NavLink href={`/user/${username}`} icon={User} label={m['sidebar.nav_my_page']()} active={pathname === `/user/${username}`} />}
-      <NavLink href="/_user" icon={Users} label={m['sidebar.nav_users']()} active={pathname === '/_user'} />
+      {/* Link to the hierarchical member directory `/user/` (the preview +
+          "show all" into the full `/_user` roster), not the special `/_user`
+          route directly, so the path matches the rest of the wiki scheme. */}
+      <NavLink href="/user/" icon={Users} label={m['sidebar.nav_users']()} active={pathname === '/user/' || pathname === '/user'} />
       <NavLink href="/_notifications" icon={Bell} label={m['sidebar.nav_notifications']()} active={pathname === '/_notifications'} />
       {user?.admin === true && (
         <>
