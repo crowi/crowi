@@ -25,6 +25,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { ErrorAlert } from '@/components/ui/error-alert';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { observeYTextUntil } from '@/lib/observe-ytext-until';
 import { defaultDraftBody, pageDisplayName, pagePathToHref } from '@/lib/page-path';
 import { useAuth } from '@/lib/use-auth';
 import type { CollabStatus } from '@/lib/use-collab-document';
@@ -523,14 +524,14 @@ function EditorShell({
       (isWide ? wideEditorRef : narrowEditorRef).current?.focusEnd();
       return true;
     };
-    // Content may already be present (warm session) or arrive shortly via
-    // a sync delta — handle both.
-    if (focusVisibleEnd()) return;
-    const observer = (): void => {
-      if (focusVisibleEnd()) yText.unobserve(observer);
-    };
-    yText.observe(observer);
-    return () => yText.unobserve(observer);
+    // Content may already be present (warm session) or arrive shortly via a
+    // sync delta — `observeYTextUntil` handles both. It returns a cleanup that
+    // does NOT unobserve again after the observer self-stops on a successful
+    // focus, which previously double-removed the handler and made yjs log
+    // "Tried to remove event handler that doesn't exist." on ~every new-page
+    // draft (the seeded body arrives after mount, so the observer path runs and
+    // then this effect re-runs on the `isWide` settle / unmounts).
+    return observeYTextUntil(yText, focusVisibleEnd);
   }, [autoFocusOnReady, session.yText, isWide]);
 
   /**
