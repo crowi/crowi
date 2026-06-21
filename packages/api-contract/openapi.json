@@ -26234,20 +26234,13 @@
                     },
                     "readonly": {
                       "type": "boolean"
-                    },
-                    "currentRevision": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
                     }
                   },
                   "required": [
                     "wsToken",
                     "pageId",
                     "expiresAt",
-                    "readonly",
-                    "currentRevision"
+                    "readonly"
                   ]
                 }
               }

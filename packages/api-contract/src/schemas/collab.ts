@@ -57,24 +57,18 @@ export type RevisionType = z.infer<typeof RevisionTypeSchema>;
  *                     readonly clients still subscribe to live
  *                     updates but their writes are rejected by
  *                     Hocuspocus.
- *   - `currentRevision` — the page's latest revision id at token-issue
- *                     time, or `null` for a page that has no revision
- *                     yet. The client pins this as the **edit base
- *                     revision** and echoes it back in `crowi:save`
- *                     (`baseRevisionId`) so the server can run an
- *                     optimistic-lock check (editor-preview-reliability
- *                     §1A): a save whose base no longer matches the
- *                     page's `currentRevision` is rejected with
- *                     `CONFLICT` rather than silently overwriting a
- *                     newer revision (e.g. from a stale replica's
- *                     materialised Y.Doc).
+ *
+ * Round 2 (Decision 1): the save optimistic lock moved SERVER-SIDE — it is
+ * now anchored to the revision the server's Hocuspocus document was
+ * materialised from, not to a client-pinned base. The wsToken response no
+ * longer carries `currentRevision` (the client never pins / echoes a base
+ * any more).
  */
 export const WsTokenResponseSchema = z.object({
   wsToken: z.string(),
   pageId: z.string(),
   expiresAt: z.string(),
   readonly: z.boolean(),
-  currentRevision: z.string().nullable(),
 });
 export type WsTokenResponse = z.infer<typeof WsTokenResponseSchema>;
 
@@ -110,20 +104,16 @@ export type WsTokenPayload = z.infer<typeof WsTokenPayloadSchema>;
  * the v2.1 UI per spec open question 1, but reserved on the wire so
  * we can light it up without a wire-format break).
  *
- * `baseRevisionId` is the revision the editing session was seeded from
- * (the page's `currentRevision` at wsToken-issue time, surfaced in
- * `WsTokenResponseSchema.currentRevision`). The server compares it
- * against the page's live `currentRevision` and rejects the save with
- * `CONFLICT` when they diverge — the collab-side equivalent of the
- * HTTP save's `revision_id` optimistic lock (editor-preview-reliability
- * §1A). Optional so a client that never received a base (legacy / a
- * page with no revision yet) still saves; the guard is a no-op when the
- * page itself has no `currentRevision`.
+ * Round 2 (Decision 1): the save optimistic lock is anchored SERVER-SIDE
+ * to the revision the server's Hocuspocus document was materialised from,
+ * so the client no longer sends a `baseRevisionId` — the field was
+ * removed. A divergence (an out-of-band save moved `currentRevision`) is
+ * caught by the server's compare-and-set pointer write and surfaced as
+ * `crowi:save-error` `code: 'CONFLICT'`.
  */
 export const CollabSaveMessageSchema = z.object({
   kind: z.literal('crowi:save'),
   message: z.string().optional(),
-  baseRevisionId: z.string().nullable().optional(),
 });
 export type CollabSaveMessage = z.infer<typeof CollabSaveMessageSchema>;
 
@@ -145,9 +135,11 @@ export type CollabSaveOk = z.infer<typeof CollabSaveOkSchema>;
  * lets the client branch on retry vs surface-and-stop (e.g.
  * `'RENDERER_FAILED'` is a hard error from the RFC-0002 renderer; the
  * client should not retry). `code: 'CONFLICT'` is the
- * editor-preview-reliability §1A optimistic-lock rejection — the
- * client must prompt a reload (its base revision is stale) rather than
- * retry the same save, mirroring the HTTP `PageRevisionConflictError`.
+ * editor-preview-reliability server-doc-lock rejection (round 2, Decision
+ * 1) — the page's live `currentRevision` diverged from the revision the
+ * server doc was materialised from (an out-of-band save), so the client
+ * must prompt a reload rather than retry, mirroring the HTTP
+ * `PageRevisionConflictError`.
  */
 export const CollabSaveErrorSchema = z.object({
   kind: z.literal('crowi:save-error'),
