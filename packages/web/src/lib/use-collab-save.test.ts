@@ -95,8 +95,8 @@ describe('useCollabSave', () => {
     });
   });
 
-  it('echoes baseRevisionId in the crowi:save payload when known (§1A)', async () => {
-    const helper = makeSession({ baseRevisionId: 'rev-base-1' });
+  it('Decision 1: the crowi:save payload carries NO client base revision (the lock is server-side)', async () => {
+    const helper = makeSession();
     const { result } = renderHook(() => useCollabSave(helper.session));
 
     act(() => {
@@ -104,7 +104,8 @@ describe('useCollabSave', () => {
     });
 
     expect(helper.outbox).toHaveLength(1);
-    expect(JSON.parse(helper.outbox[0])).toEqual({ kind: 'crowi:save', baseRevisionId: 'rev-base-1' });
+    // No `baseRevisionId` — Decision 1 moved the optimistic lock server-side.
+    expect(JSON.parse(helper.outbox[0])).toEqual({ kind: 'crowi:save' });
 
     // Resolve so the test cleans up without a floating rejection.
     act(() => {
@@ -112,8 +113,8 @@ describe('useCollabSave', () => {
     });
   });
 
-  it('maps a CONFLICT save-error to reason CONFLICT (§1A)', async () => {
-    const helper = makeSession({ baseRevisionId: 'rev-stale' });
+  it('maps a CONFLICT save-error to reason CONFLICT (server-doc lock)', async () => {
+    const helper = makeSession();
     const { result } = renderHook(() => useCollabSave(helper.session));
 
     let saveResult: Promise<unknown> | undefined;

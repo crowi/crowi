@@ -141,6 +141,64 @@ describe('useCollabRecoveryBuffer', () => {
     expect(remounted.current.recoverable).toBeNull();
   });
 
+  it('B3: never snapshots an EMPTY doc (would offer to replace real content with nothing)', () => {
+    // An empty buffer must not be written — a later mount would otherwise
+    // prompt "restore unsaved changes?" offering to replace the synced
+    // content with an empty string. Both the interval and `snapshotNow`
+    // must skip an empty getText.
+    let text = '';
+    const { result } = renderHook(() =>
+      useCollabRecoveryBuffer({
+        pageId: 'p1',
+        getText: () => text,
+        enabled: true,
+        snapshotIntervalMs: 1000,
+      }),
+    );
+
+    act(() => {
+      vi.advanceTimersByTime(2000);
+      result.current.snapshotNow();
+    });
+    expect(window.localStorage.getItem(KEY('p1'))).toBeNull();
+
+    // Once it has real content, snapshotting resumes.
+    text = 'now there is content';
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(JSON.parse(window.localStorage.getItem(KEY('p1'))!).text).toBe('now there is content');
+  });
+
+  it('B2: keeps snapshotting while enabled even after a transient sync dip (the caller gates on hasEverSynced)', () => {
+    // The B2 contract the hook relies on: snapshotting is driven by the
+    // `enabled` flag the caller passes (`hasEverSynced && !readonly && dirty`,
+    // NOT the live `synced`), so offline edits during a transient disconnect
+    // are still captured. We simulate "still enabled while offline" and assert
+    // the timer keeps writing.
+    let text = 'edited while offline';
+    const { result, rerender } = renderHook(
+      ({ enabled }: { enabled: boolean }) => useCollabRecoveryBuffer({ pageId: 'p1', getText: () => text, enabled, snapshotIntervalMs: 1000 }),
+      {
+        initialProps: { enabled: true },
+      },
+    );
+
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(JSON.parse(window.localStorage.getItem(KEY('p1'))!).text).toBe('edited while offline');
+
+    // Further offline edits keep being snapshotted while enabled.
+    text = 'more offline edits';
+    rerender({ enabled: true });
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(JSON.parse(window.localStorage.getItem(KEY('p1'))!).text).toBe('more offline edits');
+    expect(result.current.recoverable).toBeNull(); // own-session snapshots aren't surfaced as recoverable
+  });
+
   it('is a no-op when pageId is null (create flow)', () => {
     const { result } = renderHook(() =>
       useCollabRecoveryBuffer({

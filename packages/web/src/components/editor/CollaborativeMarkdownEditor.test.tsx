@@ -123,12 +123,11 @@ function makeWrapper() {
   };
 }
 
-const validTokenResponse = (overrides: { readonly?: boolean; pageId?: string; currentRevision?: string | null } = {}) => ({
+const validTokenResponse = (overrides: { readonly?: boolean; pageId?: string } = {}) => ({
   wsToken: 'jwt.test.token',
   pageId: overrides.pageId ?? 'page-1',
   expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
   readonly: overrides.readonly ?? false,
-  currentRevision: overrides.currentRevision ?? null,
 });
 
 /** Build a `Response`-shaped mock matching what hc<AppType>'s real fetch returns. */
@@ -207,12 +206,10 @@ describe('CollaborativeMarkdownEditor', () => {
       yText: null,
       yUndoManager: null,
       awareness: null,
-      provider: null,
       status: 'connecting' as const,
       synced: false,
       hasEverSynced: false,
-      baseRevisionId: null,
-      advanceBaseRevision: () => undefined,
+      authRecoveryExhausted: false,
       readonly: false,
       subscribeStateless: () => () => undefined,
       sendStateless: () => false,
