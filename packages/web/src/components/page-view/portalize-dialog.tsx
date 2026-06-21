@@ -52,7 +52,9 @@ export function PortalizeDialog({ page, open, onOpenChange }: { page: PageWithRe
 export function PortalizeBanner({ page, title, description }: { page: PageWithRevision; title: string; description: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   return (
-    <Card className="gap-3 p-5">
+    // Text left, action right (wrapping to its own row on narrow viewports) —
+    // mirrors the draft-notice Alert so prompt cards read consistently.
+    <Card className="gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex items-start gap-3">
         <Compass className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden />
         <div className="min-w-0 space-y-1">
@@ -60,12 +62,10 @@ export function PortalizeBanner({ page, title, description }: { page: PageWithRe
           <p className="text-sm text-muted-foreground">{description}</p>
         </div>
       </div>
-      <div>
-        <Button size="sm" onClick={() => setOpen(true)}>
-          <Compass className="mr-1.5 h-4 w-4" />
-          {m['page_list.portalize_banner_action']()}
-        </Button>
-      </div>
+      <Button size="sm" onClick={() => setOpen(true)} className="shrink-0">
+        <Compass className="mr-1.5 h-4 w-4" />
+        {m['page_list.portalize_banner_action']()}
+      </Button>
       <PortalizeDialog page={page} open={open} onOpenChange={setOpen} />
     </Card>
   );
