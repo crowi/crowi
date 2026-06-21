@@ -2,6 +2,7 @@ import * as Y from 'yjs';
 import { Types } from 'mongoose';
 import type { CollabModels } from '../models';
 import { createContributorsTracker } from '../contributors';
+import { createDocBaseRevisionStore } from '../doc-base-revision';
 import { createSaveFlow, CollabSaveError } from '../save-flow';
 import { startInMemoryMongo, registerTestModels, type SmokeMongo } from './setup';
 import { makeFixtures, type CollabFixtures } from './fixtures';
@@ -72,7 +73,7 @@ describe('createSaveFlow.executeSave', () => {
   test('happy path: writes Revision, updates Page, resets yjsState, clears pending, publishes update', async () => {
     const tracker = createContributorsTracker();
     const publisher = makeMockPublisher();
-    const flow = createSaveFlow({ models, contributorsTracker: tracker, pageEventPublisher: publisher });
+    const flow = createSaveFlow({ models, contributorsTracker: tracker, pageEventPublisher: publisher, docBaseRevisions: createDocBaseRevisionStore() });
 
     const { pageId } = await fixtures.seedPage();
     const user = await seedUser(models);
@@ -142,7 +143,7 @@ describe('createSaveFlow.executeSave', () => {
   test('parentRevisionId inherits from page.currentRevision when set', async () => {
     const tracker = createContributorsTracker();
     const publisher = makeMockPublisher();
-    const flow = createSaveFlow({ models, contributorsTracker: tracker, pageEventPublisher: publisher });
+    const flow = createSaveFlow({ models, contributorsTracker: tracker, pageEventPublisher: publisher, docBaseRevisions: createDocBaseRevisionStore() });
 
     const { pageId } = await fixtures.seedPage();
     const user = await seedUser(models);
@@ -165,7 +166,7 @@ describe('createSaveFlow.executeSave', () => {
   test('renderer failure throws CollabSaveError code=RENDERER_FAILED and leaves Page untouched', async () => {
     const tracker = createContributorsTracker();
     const publisher = makeMockPublisher();
-    const flow = createSaveFlow({ models, contributorsTracker: tracker, pageEventPublisher: publisher });
+    const flow = createSaveFlow({ models, contributorsTracker: tracker, pageEventPublisher: publisher, docBaseRevisions: createDocBaseRevisionStore() });
 
     const { pageId } = await fixtures.seedPage();
     const user = await seedUser(models);
@@ -203,7 +204,7 @@ describe('createSaveFlow.executeSave', () => {
   test('user not found throws CollabSaveError code=USER_NOT_FOUND', async () => {
     const tracker = createContributorsTracker();
     const publisher = makeMockPublisher();
-    const flow = createSaveFlow({ models, contributorsTracker: tracker, pageEventPublisher: publisher });
+    const flow = createSaveFlow({ models, contributorsTracker: tracker, pageEventPublisher: publisher, docBaseRevisions: createDocBaseRevisionStore() });
 
     const { pageId } = await fixtures.seedPage();
     const doc = new Y.Doc();
@@ -216,7 +217,7 @@ describe('createSaveFlow.executeSave', () => {
   test('page not found throws CollabSaveError code=PAGE_NOT_FOUND', async () => {
     const tracker = createContributorsTracker();
     const publisher = makeMockPublisher();
-    const flow = createSaveFlow({ models, contributorsTracker: tracker, pageEventPublisher: publisher });
+    const flow = createSaveFlow({ models, contributorsTracker: tracker, pageEventPublisher: publisher, docBaseRevisions: createDocBaseRevisionStore() });
 
     const user = await seedUser(models);
     const doc = new Y.Doc();
@@ -229,7 +230,7 @@ describe('createSaveFlow.executeSave', () => {
   test('two saves in a row produce two distinct Revisions and Page.currentRevision tracks the latest', async () => {
     const tracker = createContributorsTracker();
     const publisher = makeMockPublisher();
-    const flow = createSaveFlow({ models, contributorsTracker: tracker, pageEventPublisher: publisher });
+    const flow = createSaveFlow({ models, contributorsTracker: tracker, pageEventPublisher: publisher, docBaseRevisions: createDocBaseRevisionStore() });
 
     const { pageId } = await fixtures.seedPage();
     const user = await seedUser(models);
@@ -253,7 +254,7 @@ describe('createSaveFlow.executeSave', () => {
   test('publish-on-save: a draft page transitions to published after a successful save', async () => {
     const tracker = createContributorsTracker();
     const publisher = makeMockPublisher();
-    const flow = createSaveFlow({ models, contributorsTracker: tracker, pageEventPublisher: publisher });
+    const flow = createSaveFlow({ models, contributorsTracker: tracker, pageEventPublisher: publisher, docBaseRevisions: createDocBaseRevisionStore() });
 
     // Seed a page in the RFC-0004 draft state (status: 'draft').
     const { pageId } = await fixtures.seedPage({ status: 'draft' });
@@ -273,7 +274,7 @@ describe('createSaveFlow.executeSave', () => {
   test('publish-on-save: an already-published page keeps its status untouched on save', async () => {
     const tracker = createContributorsTracker();
     const publisher = makeMockPublisher();
-    const flow = createSaveFlow({ models, contributorsTracker: tracker, pageEventPublisher: publisher });
+    const flow = createSaveFlow({ models, contributorsTracker: tracker, pageEventPublisher: publisher, docBaseRevisions: createDocBaseRevisionStore() });
 
     // `fixtures.seedPage` defaults to status: 'published'.
     const { pageId } = await fixtures.seedPage();
@@ -293,7 +294,7 @@ describe('createSaveFlow.executeSave', () => {
   test('publish-on-save: a second save of an already-published draft is a no-op on status', async () => {
     const tracker = createContributorsTracker();
     const publisher = makeMockPublisher();
-    const flow = createSaveFlow({ models, contributorsTracker: tracker, pageEventPublisher: publisher });
+    const flow = createSaveFlow({ models, contributorsTracker: tracker, pageEventPublisher: publisher, docBaseRevisions: createDocBaseRevisionStore() });
 
     const { pageId } = await fixtures.seedPage({ status: 'draft' });
     const user = await seedUser(models);

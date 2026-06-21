@@ -105,6 +105,54 @@ describe('onLoadDocument empty-yjsState body fallback (§1C)', () => {
     expect(remaining).toBe(0);
   });
 
+  test('C2 (round 2): when the body seed is EMPTY, residual deltas that carry the only content are NOT dropped', async () => {
+    // C2 regression: the previous code dropped ALL residual deltas whenever
+    // it body-seeded (any abandoned lineage). But when there is no revision
+    // body to seed from (a brand-new page whose first edits never folded),
+    // the body seed puts NOTHING in — the residual deltas carry the user's
+    // ONLY content. Dropping them then loses that content. The fix only
+    // drops deltas when the body seed actually produced content; an empty
+    // seed falls through to replaying the deltas.
+    const userId = new mongoose.Types.ObjectId();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const Page = models.Page as any;
+    const pagePath = `/__on-load-c2-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    // A fresh page with NO revision pointer yet — the body seed has nothing
+    // to insert (the `body: required` Revision model precludes an empty-body
+    // revision, so "no revision" is the realistic empty-seed case).
+    const page = await Page.create({ path: pagePath, creator: userId, grant: 1, status: 'published' });
+    const pageId = page._id.toString();
+
+    // A stale empty yjsState triggers the fallback; the body seed is empty.
+    const emptyState = Buffer.from(Y.encodeStateAsUpdate(new Y.Doc()));
+    await Page.updateOne({ _id: pageId }, { $set: { yjsState: emptyState } }).exec();
+
+    // A residual delta carrying the only content the user has.
+    const onlyContent = new Y.Doc();
+    onlyContent.getText(CONTENT_FIELD).insert(0, 'the only content the user typed before a crash');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (models.PageYjsUpdate as any).create({ pageId, payload: Buffer.from(Y.encodeStateAsUpdate(onlyContent)), createdAt: new Date() });
+
+    const onLoadDocument = createOnLoadDocument({
+      models: { Page: models.Page, Revision: models.Revision, PageYjsUpdate: models.PageYjsUpdate },
+    });
+    const doc = new Y.Doc();
+    await onLoadDocument({
+      documentName: pageId,
+      document: doc,
+      instance: { documents: new Map() },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
+
+    // The delta content survived — it was NOT dropped as an abandoned
+    // lineage, because the body seed put nothing in.
+    expect(doc.getText(CONTENT_FIELD).toString()).toBe('the only content the user typed before a crash');
+    // The rows are kept (replayed, not cleared) so a later load also works.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const remaining = await (models.PageYjsUpdate as any).countDocuments({ pageId }).exec();
+    expect(remaining).toBe(1);
+  });
+
   test('a non-empty yjsState with real content is restored as-is (no spurious fallback)', async () => {
     const { pageId } = await seedPageWithBody('original revision body');
     const source = new Y.Doc();

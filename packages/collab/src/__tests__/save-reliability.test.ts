@@ -3,17 +3,21 @@ import { Types } from 'mongoose';
 import type { CollabModels } from '../models';
 import { createContributorsTracker } from '../contributors';
 import { createSaveFlow } from '../save-flow';
+import { createDocBaseRevisionStore, type DocBaseRevisionStore } from '../doc-base-revision';
+import { createOnLoadDocument } from '../hooks/on-load-document';
 import { startInMemoryMongo, registerTestModels, type SmokeMongo } from './setup';
 import { makeFixtures, type CollabFixtures } from './fixtures';
 import { CONTENT_FIELD } from '../yjs-doc';
 import type { CollabPageEventPublisher } from '../types';
 
 /**
- * editor-preview-reliability tests for the save flow:
- *   - §1A optimistic lock: a stale `baseRevisionId` is rejected with
- *     CONFLICT and the page is left untouched (no stale overwrite).
- *   - §1B anti-shrink: an empty live doc never persists an empty
- *     `yjsState` over a non-empty revision body.
+ * editor-preview-reliability (round 2) save-flow tests:
+ *   - Decision 1 (server-doc lock): co-editing never false-CONFLICTs; an
+ *     out-of-band save that moves `currentRevision` is rejected; `revision`
+ *     and `currentRevision` are bumped atomically (never diverge).
+ *   - Decision 2 (anti-shrink → desync): a user save is explicit intent, so
+ *     a legitimate large deletion / empty clear persists; a baseline read
+ *     failure rejects the save (never commits blindly).
  */
 
 const makeMockPublisher = (): CollabPageEventPublisher & { calls: number } => {
@@ -39,7 +43,7 @@ const seedUser = async (models: CollabModels) => {
   });
 };
 
-describe('save-flow reliability (editor-preview-reliability §1A/§1B)', () => {
+describe('save-flow reliability (editor-preview-reliability round 2)', () => {
   let memMongo: SmokeMongo;
   let models: CollabModels;
   let fixtures: CollabFixtures;
@@ -67,139 +71,277 @@ describe('save-flow reliability (editor-preview-reliability §1A/§1B)', () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const Page = () => models.Page as any;
 
-  test('§1A: a save whose baseRevisionId matches the live currentRevision succeeds', async () => {
-    const flow = createSaveFlow({ models, contributorsTracker: createContributorsTracker(), pageEventPublisher: makeMockPublisher() });
+  /**
+   * Materialise the server doc the way `onLoadDocument` does so the doc
+   * base revision is recorded in `docBaseRevisions`, then return a live
+   * Y.Doc the save flow can operate on. Mirrors the real engine wiring (one
+   * shared store between onLoadDocument + saveFlow).
+   */
+  const materialise = async (docBaseRevisions: DocBaseRevisionStore, pageId: string): Promise<Y.Doc> => {
+    const onLoadDocument = createOnLoadDocument({
+      models: { Page: models.Page, Revision: models.Revision, PageYjsUpdate: models.PageYjsUpdate },
+      docBaseRevisions,
+    });
+    const doc = new Y.Doc();
+    await onLoadDocument({
+      documentName: pageId,
+      document: doc,
+      instance: { documents: new Map() },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
+    return doc;
+  };
+
+  test('Decision 1: a save on a current server doc succeeds; revision === currentRevision', async () => {
+    const docBaseRevisions = createDocBaseRevisionStore();
+    const flow = createSaveFlow({ models, contributorsTracker: createContributorsTracker(), pageEventPublisher: makeMockPublisher(), docBaseRevisions });
     const { pageId } = await fixtures.seedPage();
     const user = await seedUser(models);
 
-    const doc = new Y.Doc();
+    const doc = await materialise(docBaseRevisions, pageId);
     doc.getText(CONTENT_FIELD).insert(0, 'v1 body');
     const r1 = await flow.executeSave({ pageId, userId: user._id.toString(), document: doc });
 
-    // Second save pins base = r1 (the now-current revision) → accepted.
+    // The base advanced to r1; a second save on the SAME server doc lands.
     doc.getText(CONTENT_FIELD).insert(doc.getText(CONTENT_FIELD).length, ' + more');
-    const r2 = await flow.executeSave({ pageId, userId: user._id.toString(), document: doc, baseRevisionId: r1.revisionId });
+    const r2 = await flow.executeSave({ pageId, userId: user._id.toString(), document: doc });
     expect(r2.revisionId).not.toBe(r1.revisionId);
+
     const page = await Page().findById(pageId).exec();
     expect(page.currentRevision.toString()).toBe(r2.revisionId);
+    // A1 — the two pointers were bumped atomically and never diverge.
+    expect(page.revision.toString()).toBe(r2.revisionId);
   });
 
-  test('§1A: a save with a stale baseRevisionId is rejected with CONFLICT and leaves the page untouched', async () => {
-    const flow = createSaveFlow({ models, contributorsTracker: createContributorsTracker(), pageEventPublisher: makeMockPublisher() });
+  test('A2: two editors sharing ONE server doc both save without a false CONFLICT', async () => {
+    // The real multi-user shape: A and B connect to the SAME Hocuspocus
+    // document (one server doc → one base in the shared store). A saves,
+    // the base advances; B then saves the SAME live doc and must succeed —
+    // the pre-fix client-pinned base would have false-CONFLICTed here.
+    const docBaseRevisions = createDocBaseRevisionStore();
+    const flow = createSaveFlow({ models, contributorsTracker: createContributorsTracker(), pageEventPublisher: makeMockPublisher(), docBaseRevisions });
+    const { pageId } = await fixtures.seedPage();
+    const userA = await seedUser(models);
+    const userB = await seedUser(models);
+
+    const doc = await materialise(docBaseRevisions, pageId);
+    doc.getText(CONTENT_FIELD).insert(0, 'A typed this. ');
+    const rA = await flow.executeSave({ pageId, userId: userA._id.toString(), document: doc });
+
+    // B edits the same shared doc and saves — no CONFLICT.
+    doc.getText(CONTENT_FIELD).insert(doc.getText(CONTENT_FIELD).length, 'B added this.');
+    const rB = await flow.executeSave({ pageId, userId: userB._id.toString(), document: doc });
+    expect(rB.revisionId).not.toBe(rA.revisionId);
+
+    const page = await Page().findById(pageId).exec();
+    expect(page.currentRevision.toString()).toBe(rB.revisionId);
+    expect(page.revision.toString()).toBe(rB.revisionId);
+  });
+
+  test('Decision 1: an out-of-band save (HTTP / other instance) that moved currentRevision is rejected with CONFLICT', async () => {
+    const docBaseRevisions = createDocBaseRevisionStore();
+    const flow = createSaveFlow({ models, contributorsTracker: createContributorsTracker(), pageEventPublisher: makeMockPublisher(), docBaseRevisions });
     const { pageId } = await fixtures.seedPage();
     const user = await seedUser(models);
 
-    const doc = new Y.Doc();
+    const doc = await materialise(docBaseRevisions, pageId);
     doc.getText(CONTENT_FIELD).insert(0, 'real content');
     const r1 = await flow.executeSave({ pageId, userId: user._id.toString(), document: doc });
-
-    const staleBase = new Types.ObjectId().toString();
     const beforeRevision = (await Page().findById(pageId).exec()).currentRevision.toString();
+    expect(beforeRevision).toBe(r1.revisionId);
 
-    const stale = new Y.Doc();
-    stale.getText(CONTENT_FIELD).insert(0, 'OVERWRITE FROM STALE REPLICA');
-    await expect(flow.executeSave({ pageId, userId: user._id.toString(), document: stale, baseRevisionId: staleBase })).rejects.toMatchObject({
+    // Simulate an out-of-band save: another revision is created and the
+    // page pointer is moved to it WITHOUT advancing this doc's base. The
+    // server doc is now stale relative to the live page.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const Revision = models.Revision as any;
+    const httpRevision = await Revision.create({ path: '/x', body: 'HTTP edit', author: user._id, format: 'markdown' });
+    await Page()
+      .updateOne({ _id: pageId }, { $set: { revision: httpRevision._id, currentRevision: httpRevision._id } })
+      .exec();
+
+    // The server doc still believes its base is r1, so its next save would
+    // clobber the HTTP edit — reject CONFLICT, page untouched.
+    doc.getText(CONTENT_FIELD).insert(doc.getText(CONTENT_FIELD).length, ' (stale overwrite)');
+    await expect(flow.executeSave({ pageId, userId: user._id.toString(), document: doc })).rejects.toMatchObject({
       code: 'CONFLICT',
       name: 'CollabSaveError',
     });
 
-    // Page revision pointer + body are untouched — the stale save did
-    // not clobber the real content.
     const page = await Page().findById(pageId).exec();
-    expect(page.currentRevision.toString()).toBe(beforeRevision);
-    expect(beforeRevision).toBe(r1.revisionId);
+    expect(page.currentRevision.toString()).toBe(httpRevision._id.toString());
+    expect(page.revision.toString()).toBe(httpRevision._id.toString());
   });
 
-  test('§1A: an omitted baseRevisionId disables the lock (legacy client still saves)', async () => {
-    const flow = createSaveFlow({ models, contributorsTracker: createContributorsTracker(), pageEventPublisher: makeMockPublisher() });
+  test('A1: the compare-and-set pointer write keeps revision === currentRevision even when the CAS loses', async () => {
+    // Two saves race past the early read. The CAS pointer write lets exactly
+    // one win; the loser is rejected (its Revision stays in history,
+    // unreferenced). Either way the two pointers are bumped together and
+    // never diverge. We simulate the race by moving currentRevision out from
+    // under the second save BETWEEN its early read and its pointer write —
+    // here, by issuing a competing save in the middle.
+    const docBaseRevisions = createDocBaseRevisionStore();
+    const flow = createSaveFlow({ models, contributorsTracker: createContributorsTracker(), pageEventPublisher: makeMockPublisher(), docBaseRevisions });
     const { pageId } = await fixtures.seedPage();
     const user = await seedUser(models);
 
-    const doc = new Y.Doc();
-    doc.getText(CONTENT_FIELD).insert(0, 'first');
+    const doc = await materialise(docBaseRevisions, pageId);
+    doc.getText(CONTENT_FIELD).insert(0, 'base content for the CAS race');
     await flow.executeSave({ pageId, userId: user._id.toString(), document: doc });
 
-    // No baseRevisionId at all → the lock is skipped even though
-    // currentRevision is now set.
-    doc.getText(CONTENT_FIELD).insert(doc.getText(CONTENT_FIELD).length, ' second');
-    const r2 = await flow.executeSave({ pageId, userId: user._id.toString(), document: doc });
-    expect(r2.revisionId).toMatch(/^[0-9a-f]{24}$/);
+    // Tamper the in-store base so the next save's CAS filter no longer
+    // matches the live pointer (= a lost CAS). The save must reject CONFLICT
+    // and leave both pointers consistent.
+    docBaseRevisions.set(pageId, new Types.ObjectId().toString());
+    doc.getText(CONTENT_FIELD).insert(doc.getText(CONTENT_FIELD).length, ' more');
+    await expect(flow.executeSave({ pageId, userId: user._id.toString(), document: doc })).rejects.toMatchObject({ code: 'CONFLICT' });
+
+    const page = await Page().findById(pageId).exec();
+    expect(page.revision.toString()).toBe(page.currentRevision.toString());
   });
 
-  test('§1B/C2: a heavily-shrunk but non-empty user save IS persisted (explicit intent, ratio arm bypassed)', async () => {
-    // Principle (post fix-round): a user save is explicit intent, already
-    // protected by the §1A optimistic lock + §2 synced gate, so the
-    // anti-shrink *ratio* arm must NOT block a legitimate large deletion.
-    // Only an EMPTY save over non-empty content is rejected (the next
-    // test). A heavily-shrunk-but-non-empty save therefore succeeds and
-    // persists its yjsState.
-    const flow = createSaveFlow({ models, contributorsTracker: createContributorsTracker(), pageEventPublisher: makeMockPublisher() });
+  test('Decision 2 / C1: a legitimate large deletion persists durably in yjsState (not just 1h-TTL rows)', async () => {
+    // A user save is explicit intent — a large deletion to a few chars is
+    // legitimate and must persist (revision committed + yjsState written),
+    // so it survives a reload and >1h idle (no TTL-row dependency).
+    const docBaseRevisions = createDocBaseRevisionStore();
+    const flow = createSaveFlow({ models, contributorsTracker: createContributorsTracker(), pageEventPublisher: makeMockPublisher(), docBaseRevisions });
     const { pageId } = await fixtures.seedPage();
     const user = await seedUser(models);
 
-    const doc = new Y.Doc();
-    doc.getText(CONTENT_FIELD).insert(0, 'a substantial amount of real content that the user then deliberately trims');
-    const r1 = await flow.executeSave({ pageId, userId: user._id.toString(), document: doc });
+    const doc = await materialise(docBaseRevisions, pageId);
+    doc.getText(CONTENT_FIELD).insert(0, 'a substantial amount of real content that the user then deliberately trims down');
+    await flow.executeSave({ pageId, userId: user._id.toString(), document: doc });
     expect((await Page().findById(pageId).exec()).yjsState).toBeTruthy();
 
-    // The user intentionally trims the doc to a single char. This is a
-    // legitimate deletion — it must persist (revision committed + yjsState
-    // written), not be blocked.
-    const shrunk = new Y.Doc();
-    shrunk.getText(CONTENT_FIELD).insert(0, 'x');
-    const r2 = await flow.executeSave({ pageId, userId: user._id.toString(), document: shrunk, baseRevisionId: r1.revisionId });
+    // The user trims the doc to a single char — a legitimate deletion.
+    doc.getText(CONTENT_FIELD).delete(1, doc.getText(CONTENT_FIELD).length - 1);
+    const r2 = await flow.executeSave({ pageId, userId: user._id.toString(), document: doc });
 
     const page = await Page().findById(pageId).exec();
     expect(page.currentRevision.toString()).toBe(r2.revisionId);
-    expect(page.yjsState).toBeTruthy();
-    expect((page.yjsState as Buffer).length).toBeGreaterThan(0);
+    // The deletion is durable in yjsState (decodes to the trimmed text),
+    // NOT parked in TTL'd PageYjsUpdate rows.
+    const replay = new Y.Doc();
+    Y.applyUpdate(replay, new Uint8Array(page.yjsState as Buffer));
+    expect(replay.getText(CONTENT_FIELD).length).toBe(1);
+    // The revision body matches the deletion too.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const Revision = models.Revision as any;
+    const rev = await Revision.findById(r2.revisionId).lean().exec();
+    expect(rev.body.length).toBe(1);
   });
 
-  test('§1B/C2: an EMPTY save over non-empty content is rejected with CONFLICT BEFORE any revision is committed', async () => {
-    // C2 regression: the pre-fix code committed the empty body as a new
-    // Revision FIRST, then suppressed only the yjsState mirror — so
-    // "rebuild from body on next load" rebuilt from the EMPTY body and the
-    // content was lost. The fix evaluates the empty-doc guard BEFORE
-    // `prepareRevision` and throws CONFLICT, so NO empty revision is ever
-    // committed and the client reloads (recovery buffer restores the text).
-    const flow = createSaveFlow({ models, contributorsTracker: createContributorsTracker(), pageEventPublisher: makeMockPublisher() });
+  test('Decision 2: clearing down to minimal content is ALLOWED (no spurious CONFLICT, no empty-overwrite)', async () => {
+    // Round 2 removes the artificial empty-over-nonempty CONFLICT the
+    // anti-shrink guard used to throw on the SAVE path — a user trimming the
+    // page is explicit intent. (A LITERALLY-empty body is independently
+    // rejected by the Revision model's `body: required` constraint, which
+    // predates this feature and applies to every save path; that surfaces as
+    // a DB_ERROR, NOT a silent empty overwrite — see the next test.) Trimming
+    // to a single char must just work.
+    const docBaseRevisions = createDocBaseRevisionStore();
+    const flow = createSaveFlow({ models, contributorsTracker: createContributorsTracker(), pageEventPublisher: makeMockPublisher(), docBaseRevisions });
     const { pageId } = await fixtures.seedPage();
     const user = await seedUser(models);
 
-    const doc = new Y.Doc();
-    doc.getText(CONTENT_FIELD).insert(0, 'real content that must not be silently cleared');
+    const doc = await materialise(docBaseRevisions, pageId);
+    doc.getText(CONTENT_FIELD).insert(0, 'content that the user will now intentionally trim to almost nothing');
+    await flow.executeSave({ pageId, userId: user._id.toString(), document: doc });
+
+    // Trim to a single char — allowed, no CONFLICT.
+    doc.getText(CONTENT_FIELD).delete(1, doc.getText(CONTENT_FIELD).length - 1);
+    const cleared = await flow.executeSave({ pageId, userId: user._id.toString(), document: doc });
+
+    const page = await Page().findById(pageId).exec();
+    expect(page.currentRevision.toString()).toBe(cleared.revisionId);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const Revision = models.Revision as any;
+    const rev = await Revision.findById(cleared.revisionId).lean().exec();
+    expect(rev.body.length).toBe(1);
+  });
+
+  test('Decision 2: a fully-empty body is rejected by the model as DB_ERROR (no silent empty overwrite, page untouched)', async () => {
+    // A literally-empty Revision body fails the model's `body: required`
+    // validation. The save flow surfaces that as DB_ERROR (the client may
+    // retry / keep the text in its recovery buffer); critically the page
+    // pointer is NOT moved, so an empty body never overwrites real content.
+    const docBaseRevisions = createDocBaseRevisionStore();
+    const flow = createSaveFlow({ models, contributorsTracker: createContributorsTracker(), pageEventPublisher: makeMockPublisher(), docBaseRevisions });
+    const { pageId } = await fixtures.seedPage();
+    const user = await seedUser(models);
+
+    const doc = await materialise(docBaseRevisions, pageId);
+    doc.getText(CONTENT_FIELD).insert(0, 'real content that must survive a failed empty save');
+    const r1 = await flow.executeSave({ pageId, userId: user._id.toString(), document: doc });
+
+    doc.getText(CONTENT_FIELD).delete(0, doc.getText(CONTENT_FIELD).length);
+    await expect(flow.executeSave({ pageId, userId: user._id.toString(), document: doc })).rejects.toMatchObject({
+      code: 'DB_ERROR',
+      name: 'CollabSaveError',
+    });
+
+    const page = await Page().findById(pageId).exec();
+    expect(page.currentRevision.toString()).toBe(r1.revisionId);
+    expect(page.revision.toString()).toBe(r1.revisionId);
+  });
+
+  test('Decision 2 / C3: a baseline read failure REJECTS the save (never commits blindly)', async () => {
+    // The safety requirement: if we can't read the previous body to verify
+    // the save, we must reject (DB_ERROR → client retries), never degrade to
+    // a no-op that lets a possibly-empty body through. We make
+    // `Revision.findById(...).select('body')` throw for the baseline read.
+    const docBaseRevisions = createDocBaseRevisionStore();
+    const flow = createSaveFlow({ models, contributorsTracker: createContributorsTracker(), pageEventPublisher: makeMockPublisher(), docBaseRevisions });
+    const { pageId } = await fixtures.seedPage();
+    const user = await seedUser(models);
+
+    const doc = await materialise(docBaseRevisions, pageId);
+    doc.getText(CONTENT_FIELD).insert(0, 'real content that must not be lost on a flaky DB');
     const r1 = await flow.executeSave({ pageId, userId: user._id.toString(), document: doc });
     const revisionCountBefore = await models.Revision.countDocuments({}).exec();
 
-    // A desynced/empty live doc save.
-    const empty = new Y.Doc();
-    await expect(flow.executeSave({ pageId, userId: user._id.toString(), document: empty, baseRevisionId: r1.revisionId })).rejects.toMatchObject({
-      code: 'CONFLICT',
-      name: 'CollabSaveError',
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const Revision = models.Revision as any;
+    const originalFindById = Revision.findById.bind(Revision);
+    const spy = jest.spyOn(Revision, 'findById').mockImplementation((id: unknown) => {
+      // Only the baseline read (current revision = r1) should blow up; let
+      // any other findById pass through.
+      if (String(id) === r1.revisionId) {
+        return { select: () => ({ lean: () => ({ exec: () => Promise.reject(new Error('simulated DB outage')) }) }) };
+      }
+      return originalFindById(id);
     });
 
-    // No new (empty) revision was committed, and currentRevision + body
-    // still point at the real content.
+    try {
+      doc.getText(CONTENT_FIELD).insert(doc.getText(CONTENT_FIELD).length, ' appended');
+      await expect(flow.executeSave({ pageId, userId: user._id.toString(), document: doc })).rejects.toMatchObject({
+        code: 'DB_ERROR',
+        name: 'CollabSaveError',
+      });
+    } finally {
+      spy.mockRestore();
+    }
+
+    // No revision committed; the page still points at the real content.
     const revisionCountAfter = await models.Revision.countDocuments({}).exec();
     expect(revisionCountAfter).toBe(revisionCountBefore);
     const page = await Page().findById(pageId).exec();
     expect(page.currentRevision.toString()).toBe(r1.revisionId);
-    const rev = await models.Revision.findById(page.currentRevision).exec();
-    expect(rev?.body).toBe('real content that must not be silently cleared');
   });
 
-  test('§1B: a normal-sized save persists its yjsState (guard is a no-op)', async () => {
-    const flow = createSaveFlow({ models, contributorsTracker: createContributorsTracker(), pageEventPublisher: makeMockPublisher() });
+  test('a normal-sized save persists its yjsState', async () => {
+    const docBaseRevisions = createDocBaseRevisionStore();
+    const flow = createSaveFlow({ models, contributorsTracker: createContributorsTracker(), pageEventPublisher: makeMockPublisher(), docBaseRevisions });
     const { pageId } = await fixtures.seedPage();
     const user = await seedUser(models);
 
-    const doc = new Y.Doc();
+    const doc = await materialise(docBaseRevisions, pageId);
     doc.getText(CONTENT_FIELD).insert(0, 'first version of the content with enough length to matter');
-    const r1 = await flow.executeSave({ pageId, userId: user._id.toString(), document: doc });
+    await flow.executeSave({ pageId, userId: user._id.toString(), document: doc });
 
-    // Grow the doc — no shrink, guard is a no-op, yjsState persists.
     doc.getText(CONTENT_FIELD).insert(doc.getText(CONTENT_FIELD).length, ' plus an appended second sentence.');
-    await flow.executeSave({ pageId, userId: user._id.toString(), document: doc, baseRevisionId: r1.revisionId });
+    await flow.executeSave({ pageId, userId: user._id.toString(), document: doc });
 
     const page = await Page().findById(pageId).exec();
     expect(page.yjsState).toBeTruthy();
