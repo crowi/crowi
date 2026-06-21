@@ -131,11 +131,9 @@ describe('Routes /api/v2/pages/:id/yjs-token (Hono getYjsToken)', () => {
     const deltaSeconds = (expiresAt.getTime() - Date.now()) / 1000;
     expect(deltaSeconds).toBeGreaterThan(60);
     expect(deltaSeconds).toBeLessThanOrEqual(305);
-    // editor-preview-reliability §1A: the response carries the page's
-    // current revision id so the client can pin an edit base for the
-    // collab save optimistic lock. A page created via POST /pages has a
-    // revision, so this is a 24-hex id (never null here).
-    expect(res.body.currentRevision).toMatch(/^[0-9a-f]{24}$/);
+    // Decision 1 (round 2): the save optimistic lock moved server-side, so
+    // the wsToken response no longer carries `currentRevision`.
+    expect(res.body.currentRevision).toBeUndefined();
   });
 
   it('encodes the expected userId / pageId / readonly / issuer claims in the JWT payload', async () => {
