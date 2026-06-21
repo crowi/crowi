@@ -156,16 +156,40 @@ export function createWsTokenUtil() {
 }
 
 /**
- * Whether `WS_TOKEN_SECRET` is provided via the environment (vs the
- * per-process random fallback). editor-preview-reliability §4 uses this
- * at boot to fail-fast on a multi-instance deployment: a random
- * fallback secret can only be verified by the process that minted it,
- * so a second replica rejects every wsToken it didn't issue, which
- * surfaces to users as "WebSocket closed before the connection was
- * established". A single source of truth here keeps the boot guard and
- * `resolveWsTokenSecret` from drifting on what counts as "configured".
+ * Known non-functional placeholder values that must NOT be treated as a
+ * real, configured secret (E1). A `.env` copied from an older template
+ * shipped a fixed, world-known dev string; if a prod copy forgets to
+ * replace it, every Crowi install would share the same signing key. We
+ * reject these so they read as "not from env" — the per-process random
+ * fallback kicks in (single-instance), and the multi-instance boot guard
+ * still fails (forcing a real secret). Compared case-insensitively against
+ * the trimmed value.
+ */
+const WS_TOKEN_SECRET_PLACEHOLDERS = new Set<string>([
+  'dev-only-ws-token-secret-replace-in-production-0000=',
+  'changeme',
+  'change-me',
+  'replace-me',
+  'your-secret-here',
+]);
+
+/**
+ * Whether `WS_TOKEN_SECRET` is a REAL configured secret (vs unset / empty /
+ * a known placeholder, in which case we use the per-process random
+ * fallback). editor-preview-reliability §4 / E1 uses this at boot to
+ * fail-fast on a declared multi-instance deployment: a random fallback
+ * secret can only be verified by the process that minted it, so a second
+ * replica rejects every wsToken it didn't issue ("WebSocket closed before
+ * the connection was established"). Rejecting placeholders here means a
+ * forgotten template value can never satisfy the guard. A single source of
+ * truth keeps the boot guard and `resolveWsTokenSecret` aligned on what
+ * counts as "configured".
  */
 export function isWsTokenSecretFromEnv(): boolean {
   const fromEnv = process.env.WS_TOKEN_SECRET;
-  return Boolean(fromEnv && fromEnv.length > 0);
+  if (!fromEnv) return false;
+  const trimmed = fromEnv.trim();
+  if (trimmed.length === 0) return false;
+  if (WS_TOKEN_SECRET_PLACEHOLDERS.has(trimmed.toLowerCase())) return false;
+  return true;
 }

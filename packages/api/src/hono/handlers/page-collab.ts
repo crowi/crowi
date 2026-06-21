@@ -91,32 +91,16 @@ export const registerPageCollabRoutes = <E extends OpenAPIHono<CrowiHonoBindings
         readonly,
       });
 
-      // editor-preview-reliability §1A: hand the client the page's
-      // latest revision id so it can pin an edit base and echo it back
-      // in `crowi:save` (`baseRevisionId`). The collab save flow then
-      // optimistic-locks against `page.currentRevision`. Fall back to
-      // the legacy `revision` pointer (v1.x pages lack `currentRevision`)
-      // and serialize `null` when the page has no revision yet. Note
-      // `loadGrantedPage` POPULATES `revision` into a full document, so
-      // resolve `._id` when the value is a populated subdocument while
-      // `currentRevision` stays a bare ObjectId.
-      const resolveRevisionId = (ref: unknown): string | null => {
-        if (ref == null) return null;
-        if (typeof ref === 'object' && '_id' in ref) {
-          const id = (ref as { _id: unknown })._id;
-          return id == null ? null : String(id);
-        }
-        return String(ref);
-      };
-      const currentRevision = resolveRevisionId(loaded.page.currentRevision) ?? resolveRevisionId(loaded.page.revision);
-
+      // Round 2 (Decision 1): the save optimistic lock moved server-side
+      // (anchored to the revision the server's Hocuspocus doc was
+      // materialised from), so the wsToken response no longer carries
+      // `currentRevision` — the client never pins an edit base any more.
       return c.json(
         {
           wsToken: token,
           pageId,
           expiresAt: expiresAt.toISOString(),
           readonly,
-          currentRevision,
         },
         200,
       );

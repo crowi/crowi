@@ -76,62 +76,67 @@ export interface AttachedCollab {
  * `server.listen`.
  */
 /**
- * Opt-out env that downgrades the multi-instance `WS_TOKEN_SECRET`
- * boot-fail (below) to a loud warning. Set it only when you knowingly
- * run a single api replica despite `REDIS_URL` being configured (Redis
- * used purely for sessions / Socket.IO), so the random per-process
- * secret is harmless. Any truthy value relaxes the guard.
+ * Explicit "I run more than one api replica" declaration. This is the
+ * GENUINE multi-instance signal the WS_TOKEN_SECRET boot guard keys off —
+ * NOT the mere presence of `REDIS_URL` (E1): Redis is configured in plenty
+ * of single-replica deployments (sessions / Socket.IO), so failing on
+ * `REDIS_URL` alone over-triggers. Any truthy value (`1`, `true`, a replica
+ * count > 1) declares multi-instance.
  */
-const ALLOW_EPHEMERAL_WS_TOKEN_SECRET_ENV = 'CROWI_ALLOW_EPHEMERAL_WS_TOKEN_SECRET';
+const MULTI_INSTANCE_ENV = 'CROWI_MULTI_INSTANCE';
 
 /**
- * editor-preview-reliability §4 — fail fast (or loudly warn) when a
- * multi-instance-shaped deployment is missing a stable
- * `WS_TOKEN_SECRET`.
- *
- * Signal: `crowi.redis !== null` means `REDIS_URL` is configured, which
- * is the same condition under which `@hocuspocus/extension-redis`
- * cross-instance fan-out is attached — i.e. the operator is (or may be)
- * running more than one api replica. In that shape a per-process random
- * `WS_TOKEN_SECRET` is fatal: replica B cannot verify a token minted by
- * replica A, so half the connections silently fail `onAuthenticate` and
- * users see "WebSocket closed before the connection was established".
- *
- * Behaviour:
- *   - secret from env → fine, return.
- *   - no env secret + no Redis → single-instance dev; `ws-token.ts`
- *     already logged the random-fallback warning; nothing to add.
- *   - no env secret + Redis set → throw to abort boot, UNLESS the
- *     operator explicitly opted out via
- *     `CROWI_ALLOW_EPHEMERAL_WS_TOKEN_SECRET` (single replica behind
- *     Redis), in which case downgrade to a loud warning.
- *
- * REDIS_URL is also set in plenty of single-replica deployments, hence
- * the explicit opt-out rather than an unconditional fail — the guard
- * defaults to safe (fail) but stays escapable.
+ * Whether the operator has declared a multi-instance deployment. Truthy
+ * for `1` / `true` / any integer ≥ 2 (a replica count); `0` / `1`-as-count
+ * / `false` / unset mean single-instance. We accept both a boolean-ish flag
+ * and a replica count so it slots into common orchestration env (e.g.
+ * setting it from a `REPLICAS` value).
  */
-export function assertWsTokenSecretForMultiInstance(crowi: Crowi): void {
+function isMultiInstanceDeclared(): boolean {
+  const raw = process.env[MULTI_INSTANCE_ENV];
+  if (!raw) return false;
+  const trimmed = raw.trim().toLowerCase();
+  if (trimmed === 'true') return true;
+  if (trimmed === 'false') return false;
+  const asNumber = Number(trimmed);
+  if (Number.isFinite(asNumber)) return asNumber >= 2 || trimmed === '1';
+  // Any other non-empty string is treated as a truthy declaration.
+  return true;
+}
+
+/**
+ * editor-preview-reliability §4 / E1 — fail fast when a GENUINELY
+ * multi-instance deployment is missing a stable `WS_TOKEN_SECRET`.
+ *
+ * A per-process random `WS_TOKEN_SECRET` is fatal across replicas: replica
+ * B cannot verify a token minted by replica A, so half the connections
+ * silently fail `onAuthenticate` and users see "WebSocket closed before the
+ * connection was established".
+ *
+ * E1 fix — the multi-instance signal is the EXPLICIT `CROWI_MULTI_INSTANCE`
+ * declaration, not `REDIS_URL` presence. So:
+ *   - single-instance dev (no declaration) boots fine even with NO
+ *     `WS_TOKEN_SECRET` — `.env.example` ships no secret; the per-process
+ *     random fallback is harmless for one replica (`ws-token.ts` already
+ *     logged the fallback warning).
+ *   - a declared multi-instance deployment with no env secret → throw to
+ *     abort boot.
+ *
+ * `isWsTokenSecretFromEnv()` is the single source of truth for "configured"
+ * — `.env.example` ships no value, so a fresh copy that never set a real
+ * secret reads as "not from env" and the guard only bites once the operator
+ * declares multi-instance.
+ */
+export function assertWsTokenSecretForMultiInstance(_crowi: Crowi): void {
   if (isWsTokenSecretFromEnv()) return;
-  if (crowi.redis === null) return;
+  if (!isMultiInstanceDeclared()) return;
 
-  const optedOut = Boolean(process.env[ALLOW_EPHEMERAL_WS_TOKEN_SECRET_ENV]);
-  const base =
-    'WS_TOKEN_SECRET is not set while REDIS_URL is configured (multi-instance shape). ' +
-    'A per-process random secret cannot be cross-verified by other api replicas, so ' +
-    'wsToken authentication fails intermittently ("WebSocket closed before the connection ' +
-    'was established"). Set WS_TOKEN_SECRET to a stable base64-encoded 32-byte value ' +
-    '(`openssl rand -base64 32`) shared across all replicas.';
-
-  if (optedOut) {
-    console.warn(
-      `[crowi:collab] ${base} ${ALLOW_EPHEMERAL_WS_TOKEN_SECRET_ENV} is set, so boot continues with an ephemeral per-process secret — ` +
-        'only safe for a single api replica.',
-    );
-    return;
-  }
   throw new Error(
-    `[crowi:collab] ${base} If you are intentionally running a single api replica with Redis used only for ` +
-      `sessions / Socket.IO, set ${ALLOW_EPHEMERAL_WS_TOKEN_SECRET_ENV}=1 to allow boot with an ephemeral secret.`,
+    `[crowi:collab] ${MULTI_INSTANCE_ENV} declares a multi-instance deployment but WS_TOKEN_SECRET is not set. ` +
+      'A per-process random secret cannot be cross-verified by other api replicas, so wsToken authentication ' +
+      'fails intermittently ("WebSocket closed before the connection was established"). Set WS_TOKEN_SECRET to a ' +
+      'stable base64-encoded 32-byte value (`openssl rand -base64 32`) shared across all replicas, or unset ' +
+      `${MULTI_INSTANCE_ENV} if you actually run a single replica.`,
   );
 }
 
