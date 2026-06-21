@@ -400,6 +400,7 @@
   "edit.preview_failed": "プレビューの描画に失敗しました",
   "edit.connection_offline": "オフライン — 再接続時に変更が同期されます",
   "edit.connection_reconnected": "再接続しました",
+  "edit.connection_reconnecting": "接続が切れました — 再接続しています…",
   "edit.connection_auth_failed": "セッションの有効期限が切れました — ページを再読み込みしてください",
   "edit.readonly_banner": "読み取り専用モード — このページの編集者上限に達したか、セッションがオフラインです。",
   "edit.unsaved_title": "未保存の変更があります",

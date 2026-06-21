@@ -25,6 +25,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { ErrorAlert } from '@/components/ui/error-alert';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { type CollabToastState, reduceCollabStatusToast } from '@/lib/collab-status-toast';
 import { observeYTextUntil } from '@/lib/observe-ytext-until';
 import { defaultDraftBody, pageDisplayName, pagePathToHref } from '@/lib/page-path';
 import { useAuth } from '@/lib/use-auth';
@@ -365,43 +366,48 @@ function EditorShell({
     recovery.clear();
     onCancel();
   }, [onCancel, recovery]);
-  // Collab status toasts: a 'disconnected' surfaces a persistent offline
-  // error toast; the first 'connected' after that replaces it with a
-  // 'reconnected' confirmation; 'auth-failed' is terminal.
+  // Collab status toasts. A 'disconnected' (socket drop) or 'auth-failed'
+  // (wsToken rejected) is an INTERRUPTION; the first 'connected' after either
+  // clears the toast and confirms recovery. `auth-failed` is NOT terminal:
+  // silent recovery (access-token refresh → fresh wsToken → provider rebuild)
+  // reconnects automatically, so we show "reconnecting…" rather than a
+  // data-losing "reload" instruction. A genuinely dead session (refresh token
+  // also expired) is handled out-of-band by the SessionReauthModal via the
+  // shared `auth:session-expired` signal — an in-place re-login, not a reload.
+  //
+  // The decision is a pure reducer (`reduceCollabStatusToast`, unit-tested):
+  // the previous inline logic only marked the offline path as recoverable, so
+  // the `auth-failed → connecting → connected` reconnect (which never passes
+  // through 'disconnected') never cleared the persistent toast, leaving an
+  // editor that HAD silently reconnected showing "session expired — reload".
   const prevStatusRef = useRef<CollabStatus>('connecting');
-  // Whether the persistent offline toast is currently showing. A
-  // reconnect goes 'disconnected' → 'connecting' → 'connected', so the
-  // recovery toast must key off "was offline" rather than the
-  // immediately-previous status (which is 'connecting', not
-  // 'disconnected', by the time 'connected' arrives).
-  const wasOfflineRef = useRef(false);
+  const toastStateRef = useRef<CollabToastState>({ interrupted: false });
   useEffect(() => {
     if (!realtimePageId) return;
     const prev = prevStatusRef.current;
     const next = session.status;
     if (next === prev) return;
     prevStatusRef.current = next;
-    if (next === 'disconnected') {
-      wasOfflineRef.current = true;
-      toast.error(m['edit.connection_offline'](), {
-        id: COLLAB_STATUS_TOAST_ID,
-        duration: Infinity,
-      });
-    } else if (next === 'connected' && wasOfflineRef.current) {
-      wasOfflineRef.current = false;
-      toast.success(m['edit.connection_reconnected'](), {
-        id: COLLAB_STATUS_TOAST_ID,
-        duration: 3000,
-      });
-    } else if (next === 'auth-failed') {
-      // §3 — auth-failed means unsynced local edits never reached the
-      // server. Snapshot now so a subsequent reload / re-login can offer
-      // to restore them.
+    const { state, toast: action } = reduceCollabStatusToast(toastStateRef.current, prev, next);
+    toastStateRef.current = state;
+    if (next === 'auth-failed') {
+      // §3 — the wsToken was rejected, so any unsynced local edits never
+      // reached the server. Snapshot now so a re-login / reload can still
+      // restore them even if recovery ultimately fails.
       recovery.snapshotNow();
-      toast.error(m['edit.connection_auth_failed'](), {
-        id: COLLAB_STATUS_TOAST_ID,
-        duration: Infinity,
-      });
+    }
+    switch (action.type) {
+      case 'offline':
+        toast.error(m['edit.connection_offline'](), { id: COLLAB_STATUS_TOAST_ID, duration: Infinity });
+        break;
+      case 'reconnecting':
+        toast.loading(m['edit.connection_reconnecting'](), { id: COLLAB_STATUS_TOAST_ID, duration: Infinity });
+        break;
+      case 'reconnected':
+        toast.success(m['edit.connection_reconnected'](), { id: COLLAB_STATUS_TOAST_ID, duration: 3000 });
+        break;
+      case 'none':
+        break;
     }
   }, [realtimePageId, session.status, recovery]);
 

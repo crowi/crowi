@@ -400,6 +400,7 @@
   "edit.preview_failed": "Failed to render preview",
   "edit.connection_offline": "Offline — changes will sync when reconnected",
   "edit.connection_reconnected": "Reconnected",
+  "edit.connection_reconnecting": "Connection lost — reconnecting…",
   "edit.connection_auth_failed": "Session expired — please reload the page",
   "edit.readonly_banner": "Read-only mode — the editor limit for this page has been reached or your session is offline.",
   "edit.unsaved_title": "Discard unsaved changes?",
