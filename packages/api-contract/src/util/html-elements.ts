@@ -149,22 +149,45 @@ export const KNOWN_HTML_ELEMENTS: ReadonlySet<string> = new Set([
  * ANY name in `KNOWN_HTML_ELEMENTS`, case-insensitively. Built once from the
  * set so `stripKnownHtmlTags` never walks the set per call.
  *
- * The `\b` after the element name is load-bearing: it anchors the match to a
- * word boundary so `<font color=x>` / `<font>` / `</font>` match but `<fontain>`
- * (not an element) does NOT. `<int>` (not a known element) is left intact.
+ * The `(?![\w-])` after the element name is load-bearing: it asserts the name
+ * is NOT followed by another name char or a hyphen, so `<font>` / `<font color=x>`
+ * / `</font>` match but `<fontain>` (a longer word) and `<code-sample>` /
+ * `<data-foo>` (hyphenated CUSTOM elements whose prefix is a known tag) do NOT —
+ * matching the web body renderer, which keeps every hyphenated custom element
+ * (`known-tags.ts`: `tagName.includes('-')`). `<int>` (not a known element) is
+ * left intact.
  *
- * `[^>]*` consumes any attributes (and a trailing `/` for `<br/>`) up to the
- * closing `>`.
+ * The attribute run `(?:[^>"']|"[^"]*"|'[^']*')*` consumes attributes (and a
+ * trailing `/` for `<br/>`) up to the closing `>`, but tolerates a `>` inside a
+ * quoted attribute value: `<a title="a > b">` strips fully instead of stopping
+ * at the first `>`. The three alternatives are disjoint on their first char
+ * (a bare non-`>`/non-quote char vs. a `"`/`'`-opened run), so the quantifier
+ * cannot backtrack ambiguously — the match stays linear.
  */
-const KNOWN_HTML_TAG_REGEX = new RegExp(`</?(?:${[...KNOWN_HTML_ELEMENTS].join('|')})\\b[^>]*>`, 'gi');
+const KNOWN_HTML_TAG_REGEX = new RegExp(`</?(?:${[...KNOWN_HTML_ELEMENTS].join('|')})(?![\\w-])(?:[^>"']|"[^"]*"|'[^']*')*>`, 'gi');
+
+/**
+ * Upper bound on the input `stripKnownHtmlTags` will actually scan. A TOC label
+ * / heading text is never legitimately longer than this; anything above it is
+ * pathological input (e.g. a malformed `<i<i<i…` run designed to make the
+ * attribute scan backtrack). Returning such input unchanged keeps the helper
+ * O(1) on adversarial input and protects the synchronous SAVE path (run per
+ * heading, on the event loop) and the per-TOC-entry client render path.
+ */
+export const STRIP_KNOWN_HTML_TAGS_MAX_LENGTH = 4096;
 
 /**
  * Remove every `<elem …>` / `</elem>` / `<elem/>` substring whose name is a
  * known HTML element, case-insensitively. Text that merely contains a `<`
  * (`price < 100`) or an unknown tag-like token (`Using List<int> in C#`) is
  * returned unchanged.
+ *
+ * Inputs longer than `STRIP_KNOWN_HTML_TAGS_MAX_LENGTH` are returned unchanged
+ * WITHOUT running the regex — a heading / TOC label is never that long, and the
+ * cap is the cheap defence against a crafted long run blocking the event loop.
  */
 export function stripKnownHtmlTags(text: string): string {
+  if (text.length > STRIP_KNOWN_HTML_TAGS_MAX_LENGTH) return text;
   KNOWN_HTML_TAG_REGEX.lastIndex = 0;
   return text.replace(KNOWN_HTML_TAG_REGEX, '');
 }
