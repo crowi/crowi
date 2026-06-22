@@ -1,4 +1,4 @@
-import { STATUS_PUBLISHED } from 'src/models/page';
+import { STATUS_PUBLISHED, type PageModel } from 'src/models/page';
 import type { MigrationContext } from '../types';
 import { defineMigration } from '../types';
 import { STOP, forEachPublishedCurrentRevision } from './published-current-revision';
@@ -149,13 +149,20 @@ interface ScanResult {
  * a genuinely corrupted `[[/font]]`. `{ redirectTo: null }` matches both a
  * missing field and an explicit null. `Page.exists` results are cached per
  * element so a widely-used corrupted tag costs one probe across the whole walk.
+ *
+ * The status filter mirrors the walk itself (`forEachPublishedCurrentRevision`
+ * + `Page.isPublished`): `status: published` OR legacy `status: null`. As a
+ * PREFLIGHT run against a raw v1 DB (before any v2 boot writes `status`),
+ * a genuine `/font` page still carries `status: null`; matching only
+ * `STATUS_PUBLISHED` would miss it and let a real collision's `[[/font]]` be
+ * destroyed. The looser `$or` keeps the collision-skip firing in that window.
  */
-function makePageExistsProbe(Page: ReturnType<MigrationContext['crowi']['model']>): (element: string) => Promise<boolean> {
+function makePageExistsProbe(Page: PageModel): (element: string) => Promise<boolean> {
   const cache = new Map<string, boolean>();
   return async (element) => {
     const cached = cache.get(element);
     if (cached !== undefined) return cached;
-    const exists = Boolean(await Page.exists({ path: `/${element}`, status: STATUS_PUBLISHED, redirectTo: null }));
+    const exists = Boolean(await Page.exists({ path: `/${element}`, redirectTo: null, $or: [{ status: STATUS_PUBLISHED }, { status: null }] }));
     cache.set(element, exists);
     return exists;
   };

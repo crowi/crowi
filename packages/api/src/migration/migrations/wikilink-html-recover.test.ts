@@ -249,6 +249,30 @@ describe('migration/wikilink-html-recover — framework wiring', () => {
     expect(page.revision.body).toBe('link to [[/font]] page');
   });
 
+  it('detects a collision against a legacy same-named page with status: null (section A)', async () => {
+    // PREFLIGHT against a raw v1 DB: a genuine /font page still carries
+    // `status: null` (v2 boot has not normalised it yet). The collision probe
+    // mirrors the walk (`status: published` OR `null`), so the ambiguous
+    // [[/font]] must be detected as a collision and left untouched — NOT
+    // destroyed by a revert.
+    const live = await Page.createPage('/font', 'genuine legacy font page', admin, {});
+    await Page.updateOne({ _id: live._id }, { $set: { status: null } });
+    const corrupted = await Page.createPage(`${PATH_PREFIX}/legacy-coll`, 'see [[/font]] here', admin, {});
+
+    const runner = new MigrationRunner(crowi);
+
+    const report = await runner.detect(wikilinkHtmlRecover);
+    expect(report?.counts?.collisions).toBe(1);
+    expect(report?.counts?.pages).toBe(0);
+    // Not pending — the only occurrence collides.
+    expect(await runner.isPending(wikilinkHtmlRecover)).toBe(false);
+
+    await runner.apply(wikilinkHtmlRecover);
+    const page = await Page.findById(corrupted._id).populate('revision');
+    // Left untouched — the legacy /font page shadowed the revert.
+    expect(page.revision.body).toBe('see [[/font]] here');
+  });
+
   it('detect reports affected page + occurrence counts', async () => {
     await Page.createPage(`${PATH_PREFIX}/d1`, 'a [[/font]] b [[/center]]', admin, {});
     await Page.createPage(`${PATH_PREFIX}/d2`, 'just [[/foo/bar]]', admin, {});
