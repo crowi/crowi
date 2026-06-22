@@ -114,7 +114,6 @@ The migrations registered as of the v2 alpha are:
 | `user-unique-prepare` | preflight | Deduplicate users (prepare for the unique index) |
 | `relocate-reserved-api-paths` | preflight | Move v1 pages out of the reserved `/api` namespace |
 | `wikilink-html-recover` | preflight | Recover HTML close tags (`</font>` etc.) corrupted into wikilinks |
-| `toc-html-strip` | preflight | Strip inline HTML out of table-of-contents labels |
 
 The boot migrations (`page-status-default` / `revisions-schema-unify`) apply
 automatically when the api starts, so they need no operator action. The
@@ -187,40 +186,6 @@ crowi-admin migrate apply --id wikilink-html-recover
 The migration is idempotent — once reverted, `</x>` matches neither the
 recovery scan nor the `wikilink-format` rewrite, so re-running has no double
 effect.
-
-### Regenerating the table of contents (toc-html-strip)
-
-Pages whose headings use inline HTML (e.g.
-`### <font color="1a73e8">Workspace</font>`) ended up with the raw `<font …>`
-markup leaking into the table-of-contents (TOC) label. The TOC is persisted
-in `Revision.meta.toc` (RFC-0002), so existing pages keep a **stale** TOC: the
-read-path merge favours the stored value, and a renderer-version bump does not
-touch `meta.toc` — so only a dedicated migration fixes it.
-
-The `toc-html-strip` preflight migration walks revisions whose `meta.toc` still
-carries HTML and strips the tags out of each label's text **in place**. It
-rewrites **only** the label text — the entry's `anchorId` is deliberately left
-unchanged, so the in-page anchor link (which still matches the stored rendered
-heading id) keeps working. It does not re-render the body or rebuild
-`renderedAst`. The save path now strips HTML too, so freshly created pages never
-get a tagged TOC.
-
-```bash
-# Preview how many revisions would be regenerated
-crowi-admin migrate plan
-
-# Apply just this migration
-crowi-admin migrate apply --id toc-html-strip
-```
-
-> **Note**: A heading that is only a known HTML tag (e.g. `### <br>`) strips to
-> an empty label. Such a TOC entry would not be addressable as an anchor, so it
-> is **dropped**. A label that merely contains a literal `<` (`## price < 100`)
-> or an unknown tag-like token (`## Using List<int> in C#`) is **not** a known
-> HTML tag and is left exactly as-is.
-
-This migration is idempotent too — once a label has no HTML tag, it is no longer
-a strip target.
 
 ### /api namespace relocation
 
