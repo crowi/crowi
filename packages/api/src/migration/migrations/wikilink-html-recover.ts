@@ -211,9 +211,8 @@ export const wikilinkHtmlRecover = defineMigration({
   // `fromVersion: '2.1'` already sequences this after `wikilink-format`
   // (`fromVersion: '1.x'`) — the registry orders by `fromVersion` FIRST
   // (registry.ts compareMigrations), so the misfire's source is registered
-  // before this recovery regardless of `order`. `order` here only tie-breaks
-  // against the sibling `toc-html-strip` (also `2.1`); the two are mutually
-  // independent, so the value is cosmetic.
+  // before this recovery regardless of `order`. No other `2.1` migration
+  // exists today, so `order` is cosmetic here.
   order: 100,
   description: 'Recover deprecated HTML close tags (</font> etc.) corrupted to wikilinks by the wikilink-format misfire',
 
