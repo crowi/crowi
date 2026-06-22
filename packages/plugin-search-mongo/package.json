@@ -2,6 +2,11 @@
   "name": "@crowi/plugin-search-mongo",
   "version": "0.1.0-alpha.0",
   "description": "Infra-free MongoDB $regex search driver for Crowi 2.0.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/crowi/crowi.git",
+    "directory": "packages/plugin-search-mongo"
+  },
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",

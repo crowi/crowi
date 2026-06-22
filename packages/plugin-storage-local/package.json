@@ -2,6 +2,11 @@
   "name": "@crowi/plugin-storage-local",
   "version": "0.1.0-alpha.1",
   "description": "Local filesystem storage driver for Crowi 2.0. Default-on; preserves the v1.x data/uploads/ layout.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/crowi/crowi.git",
+    "directory": "packages/plugin-storage-local"
+  },
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",

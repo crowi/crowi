@@ -2,6 +2,11 @@
   "name": "@crowi/runner",
   "version": "0.1.0-alpha.0",
   "description": "Crowi 2.0 runner library: loads crowi.config.json and resolves plugin npm names to CrowiPlugin instances. Pure library — no process bootstrap responsibility.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/crowi/crowi.git",
+    "directory": "packages/runner"
+  },
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",

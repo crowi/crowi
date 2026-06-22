@@ -2,6 +2,11 @@
   "name": "@crowi/plugin-mail-aws-ses",
   "version": "0.1.0-alpha.0",
   "description": "AWS SES (v2) mail sender for Crowi 2.0. Depends on @crowi/plugin-aws for shared credentials.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/crowi/crowi.git",
+    "directory": "packages/plugin-mail-aws-ses"
+  },
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",

@@ -2,6 +2,11 @@
   "name": "@crowi/api-contract",
   "version": "2.0.0-alpha.2",
   "description": "API contract definitions for Crowi using Hono + zod-openapi",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/crowi/crowi.git",
+    "directory": "packages/api-contract"
+  },
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",

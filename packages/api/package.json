@@ -16,6 +16,11 @@
     "access": "public"
   },
   "description": "The simple & powerful Wiki - API Server",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/crowi/crowi.git",
+    "directory": "packages/api"
+  },
   "tags": [
     "wiki",
     "communication",
