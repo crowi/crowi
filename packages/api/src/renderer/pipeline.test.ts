@@ -117,6 +117,21 @@ describe('pipeline + core renderers', () => {
       const { metadata } = await runCore(md);
       expect(metadata.toc.map((e) => e.text)).toEqual(['Real', 'Tail']);
     });
+
+    it('gives a symbol/emoji-only heading a non-empty synthetic anchorId', async () => {
+      // `## 🎉` has no slug-able characters, so github-slugger returns ''. The
+      // TOC entry must still carry a NON-EMPTY anchorId (an empty one renders
+      // `href="#"` → broken jump); it falls back to a synthetic `section` slug.
+      const { metadata } = await runCore('## 🎉');
+      expect(metadata.toc).toHaveLength(1);
+      expect(metadata.toc[0].anchorId).toBe('section');
+      expect(metadata.toc[0].anchorId.length).toBeGreaterThan(0);
+    });
+
+    it('dedups multiple symbol-only headings via the synthetic slug', async () => {
+      const { metadata } = await runCore(['## 🎉', '', '## ✨'].join('\n'));
+      expect(metadata.toc.map((e) => e.anchorId)).toEqual(['section', 'section-1']);
+    });
   });
 
   describe('wikilinks', () => {
@@ -275,6 +290,15 @@ describe('pipeline + core renderers', () => {
       // Body heading id and the TOC anchorId are both the stripped slug.
       expect(heading?.data?.hProperties?.id).toBe('workspace');
       expect(metadata.toc[0].anchorId).toBe('workspace');
+    });
+
+    it('stamps the SAME non-empty id on a symbol-only heading and its TOC entry', async () => {
+      // `## 🎉` slugs to '' → synthetic `section`. The body heading id and the
+      // TOC anchorId must be identical and non-empty so the in-page jump works.
+      const { tree, metadata } = await runCore('## 🎉');
+      const heading = tree.children.find((c): c is { type: 'heading'; data?: { hProperties?: { id?: string } } } & typeof c => c.type === 'heading');
+      expect(heading?.data?.hProperties?.id).toBe('section');
+      expect(heading?.data?.hProperties?.id).toBe(metadata.toc[0].anchorId);
     });
 
     it('preserves wikilink-broken / mention className stamps after serialise', async () => {
