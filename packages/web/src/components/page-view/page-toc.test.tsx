@@ -41,4 +41,15 @@ describe('TocList', () => {
     expect(link.textContent).toBe('Using List<int> in C#');
     expect(link.getAttribute('href')).toBe('#using-listint-in-c');
   });
+
+  it('strips inline presentational tags the body renderer keeps (<strike>, <tt>)', () => {
+    // These tags are rendered as elements in the body, so the TOC label must
+    // strip them too (strip set ⊇ the body renderer inline allow-list).
+    const toc: TocEntryResponse[] = [{ level: 2, text: '<strike>Old</strike> and <tt>code</tt>', anchorId: 'old-and-code' }];
+    render(<TocList toc={toc} activeId={null} />);
+
+    const link = screen.getByRole('link', { name: 'Old and code' });
+    expect(link.textContent).toBe('Old and code');
+    expect(link.getAttribute('href')).toBe('#old-and-code');
+  });
 });

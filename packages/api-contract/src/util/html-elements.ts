@@ -24,10 +24,20 @@
  * occur in real legacy wiki content (e.g. `### <font color="1a73e8">…</font>`
  * headings), so `</font>` etc. MUST be treated as close tags rather than
  * rewritten to `[[/font]]` by `wikilink-format`.
+ *
+ * The set is kept a SUPERSET of the web body renderer's inline-kept HTML tag
+ * allow-list (`packages/web/src/components/editor/known-tags.ts`'s
+ * `HTML_TAGS`): a tag the body renders inline (e.g. `<strike>` / `<tt>` /
+ * `<big>` / `<acronym>` / `<nobr>` / `<search>` …) must also be stripped from a
+ * TOC label so the displayed label matches the rendered body text. The
+ * cross-guard test in `html-elements.test.ts` fails if the body adds an inline
+ * tag this set misses. (SVG tags are camelCase and never appear as inline
+ * heading markup, so they are intentionally NOT mirrored here.)
  */
 export const KNOWN_HTML_ELEMENTS: ReadonlySet<string> = new Set([
   'a',
   'abbr',
+  'acronym',
   'address',
   'applet',
   'area',
@@ -36,8 +46,10 @@ export const KNOWN_HTML_ELEMENTS: ReadonlySet<string> = new Set([
   'audio',
   'b',
   'base',
+  'basefont',
   'bdi',
   'bdo',
+  'big',
   'blink',
   'blockquote',
   'body',
@@ -57,6 +69,7 @@ export const KNOWN_HTML_ELEMENTS: ReadonlySet<string> = new Set([
   'details',
   'dfn',
   'dialog',
+  'dir',
   'div',
   'dl',
   'dt',
@@ -68,6 +81,8 @@ export const KNOWN_HTML_ELEMENTS: ReadonlySet<string> = new Set([
   'font',
   'footer',
   'form',
+  'frame',
+  'frameset',
   'h1',
   'h2',
   'h3',
@@ -89,14 +104,19 @@ export const KNOWN_HTML_ELEMENTS: ReadonlySet<string> = new Set([
   'legend',
   'li',
   'link',
+  'listing',
   'main',
   'map',
   'mark',
   'marquee',
   'menu',
+  'menuitem',
   'meta',
   'meter',
   'nav',
+  'nobr',
+  'noembed',
+  'noframes',
   'noscript',
   'object',
   'ol',
@@ -104,27 +124,33 @@ export const KNOWN_HTML_ELEMENTS: ReadonlySet<string> = new Set([
   'option',
   'output',
   'p',
+  'param',
   'picture',
   'pre',
   'progress',
   'q',
+  'rb',
   'rp',
   'rt',
+  'rtc',
   'ruby',
   's',
   'samp',
   'script',
+  'search',
   'section',
   'select',
   'slot',
   'small',
   'source',
   'span',
+  'strike',
   'strong',
   'style',
   'sub',
   'summary',
   'sup',
+  'svg',
   'table',
   'tbody',
   'td',
@@ -137,11 +163,13 @@ export const KNOWN_HTML_ELEMENTS: ReadonlySet<string> = new Set([
   'title',
   'tr',
   'track',
+  'tt',
   'u',
   'ul',
   'var',
   'video',
   'wbr',
+  'xmp',
 ]);
 
 /**

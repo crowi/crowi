@@ -8,6 +8,153 @@ import { describe, it } from 'node:test';
 
 import { KNOWN_HTML_ELEMENTS, STRIP_KNOWN_HTML_TAGS_MAX_LENGTH, stripKnownHtmlTags } from './html-elements';
 
+/**
+ * The web body renderer's INLINE HTML allow-list (the lower-case `HTML_TAGS`
+ * array in `packages/web/src/components/editor/known-tags.ts`, excluding the
+ * camelCase SVG tags). The body renders each of these as a real element, so a
+ * TOC label MUST strip them to match the body text. This is duplicated here on
+ * purpose: `@crowi/api-contract` is the lower layer and cannot import from
+ * `@crowi/web`, so the cross-guard below pins the strip set as a SUPERSET of
+ * this list. If `known-tags.ts` gains an inline HTML tag, update both lists in
+ * lockstep — this test fails until the strip set covers it.
+ */
+const WEB_BODY_INLINE_HTML_TAGS = [
+  'a',
+  'abbr',
+  'address',
+  'area',
+  'article',
+  'aside',
+  'audio',
+  'b',
+  'base',
+  'bdi',
+  'bdo',
+  'blockquote',
+  'body',
+  'br',
+  'button',
+  'canvas',
+  'caption',
+  'cite',
+  'code',
+  'col',
+  'colgroup',
+  'data',
+  'datalist',
+  'dd',
+  'del',
+  'details',
+  'dfn',
+  'dialog',
+  'div',
+  'dl',
+  'dt',
+  'em',
+  'embed',
+  'fieldset',
+  'figcaption',
+  'figure',
+  'footer',
+  'form',
+  'h1',
+  'h2',
+  'h3',
+  'h4',
+  'h5',
+  'h6',
+  'head',
+  'header',
+  'hgroup',
+  'hr',
+  'html',
+  'i',
+  'iframe',
+  'img',
+  'input',
+  'ins',
+  'kbd',
+  'label',
+  'legend',
+  'li',
+  'link',
+  'main',
+  'map',
+  'mark',
+  'menu',
+  'meta',
+  'meter',
+  'nav',
+  'noscript',
+  'object',
+  'ol',
+  'optgroup',
+  'option',
+  'output',
+  'p',
+  'param',
+  'picture',
+  'pre',
+  'progress',
+  'q',
+  'rp',
+  'rt',
+  'ruby',
+  's',
+  'samp',
+  'script',
+  'search',
+  'section',
+  'select',
+  'slot',
+  'small',
+  'source',
+  'span',
+  'strong',
+  'style',
+  'sub',
+  'summary',
+  'sup',
+  'svg',
+  'table',
+  'tbody',
+  'td',
+  'template',
+  'textarea',
+  'tfoot',
+  'th',
+  'thead',
+  'time',
+  'title',
+  'tr',
+  'track',
+  'u',
+  'ul',
+  'var',
+  'video',
+  'wbr',
+  // Obsolete but still browser-recognised (rendered, not stripped, by the body).
+  'acronym',
+  'big',
+  'center',
+  'dir',
+  'font',
+  'frame',
+  'frameset',
+  'marquee',
+  'menuitem',
+  'nobr',
+  'noembed',
+  'noframes',
+  'rb',
+  'rtc',
+  'strike',
+  'tt',
+  'xmp',
+  'listing',
+  'basefont',
+];
+
 describe('util/html-elements', () => {
   describe('KNOWN_HTML_ELEMENTS', () => {
     it('includes the 5 deprecated presentational elements', () => {
@@ -20,6 +167,21 @@ describe('util/html-elements', () => {
       for (const el of ['section', 'div', 'br', 'img', 'span', 'h1', 'h6']) {
         assert.equal(KNOWN_HTML_ELEMENTS.has(el), true, `expected ${el} to be a known element`);
       }
+    });
+
+    it('includes the inline presentational tags the body renderer keeps (strike/tt/big/acronym/nobr/search)', () => {
+      for (const el of ['strike', 'tt', 'big', 'acronym', 'nobr', 'search']) {
+        assert.equal(KNOWN_HTML_ELEMENTS.has(el), true, `expected ${el} to be a known element`);
+      }
+    });
+
+    // Cross-guard: the strip set must be a SUPERSET of the body renderer's
+    // inline HTML allow-list so a `### <strike>X</strike>` strips in the TOC
+    // exactly as the body renders it (TOC label == body text). Catches drift if
+    // the web list gains an inline tag this set misses.
+    it('covers the entire web body inline HTML allow-list (TOC label == body text)', () => {
+      const missing = WEB_BODY_INLINE_HTML_TAGS.filter((tag) => !KNOWN_HTML_ELEMENTS.has(tag));
+      assert.deepEqual(missing, [], `strip set is missing body-rendered inline tags: ${missing.join(', ')}`);
     });
   });
 
@@ -55,6 +217,13 @@ describe('util/html-elements', () => {
 
     it('strips multiple known tags in one string', () => {
       assert.equal(stripKnownHtmlTags('Plain <b>bold</b> <i>tail</i>'), 'Plain bold tail');
+    });
+
+    it('strips the newly-added inline presentational tags', () => {
+      assert.equal(stripKnownHtmlTags('<strike>X</strike>'), 'X');
+      assert.equal(stripKnownHtmlTags('<tt>code</tt>'), 'code');
+      assert.equal(stripKnownHtmlTags('<big>large</big>'), 'large');
+      assert.equal(stripKnownHtmlTags('<acronym title="x">A</acronym>'), 'A');
     });
 
     // D1 — hyphenated custom elements whose prefix is a known tag must be kept,
