@@ -88,23 +88,26 @@ describe('pipeline + core renderers', () => {
       expect(metadata.toc[0].anchorId).toBe('crowi-の使い方');
     });
 
-    it('strips inline HTML from heading labels (TOC HTML-leak regression)', async () => {
-      // `mdast-util-to-string` defaults to `includeHtml: true`, which leaked
-      // raw `<font …>` / `</font>` markup into the TOC label. The headings
-      // transform now passes `{ includeHtml: false }`.
+    it('keeps RAW inline HTML in the TOC label but slugs the anchor from the stripped text', async () => {
+      // `mdast-util-to-string` defaults to `includeHtml: true`, so the raw
+      // `<font …>` / `</font>` markup is present in the heading text. We keep
+      // it RAW in `meta.toc[].text` (stored data is never mutated; the web
+      // strips it at display) while the anchor id is slugged from the STRIPPED
+      // text so the hash is clean and `id == href`.
       const { metadata } = await runCore('### <font color="1a73e8">Workspace の作成</font>');
-      expect(metadata.toc).toEqual([{ level: 3, text: 'Workspace の作成', anchorId: 'workspace-の作成' }]);
+      expect(metadata.toc).toEqual([{ level: 3, text: '<font color="1a73e8">Workspace の作成</font>', anchorId: 'workspace-の作成' }]);
     });
 
-    it('keeps the non-HTML text when a heading mixes HTML and plain text', async () => {
+    it('keeps mixed HTML + plain text RAW in the label, anchor from stripped text', async () => {
       const { metadata } = await runCore('## Plain <b>bold</b> tail');
-      expect(metadata.toc[0].text).toBe('Plain bold tail');
+      expect(metadata.toc[0].text).toBe('Plain <b>bold</b> tail');
+      expect(metadata.toc[0].anchorId).toBe('plain-bold-tail');
     });
 
-    it('drops an HTML-only heading from the TOC (no addressable label remains)', async () => {
-      // `### <br>` strips to an empty label; an entry with empty text /
-      // anchorId is unaddressable AND would fail the `meta.toc` schema's
-      // `required` text/anchorId, so it is dropped entirely.
+    it('drops an HTML-only heading from the TOC (no visible label remains)', async () => {
+      // `### <br>` strips to an empty label; there is no visible text to put in
+      // the TOC, so the entry is dropped entirely (the body heading still gets
+      // a non-empty id slugged from the raw text — see the hProperties test).
       const { metadata } = await runCore('### <br>');
       expect(metadata.toc).toEqual([]);
     });
@@ -255,6 +258,23 @@ describe('pipeline + core renderers', () => {
         .filter((c): c is { type: 'heading'; data?: { hProperties?: { id?: string } } } & typeof c => c.type === 'heading')
         .map((h) => h.data?.hProperties?.id);
       expect(ids).toEqual(['section-a', 'section-b']);
+    });
+
+    it('stamps a non-empty id even on an HTML-only heading dropped from the TOC', async () => {
+      // `### <br>` is dropped from the TOC (no visible label) but the body
+      // heading must still carry a non-empty id (slugged from the raw text),
+      // so it is never given an empty anchor.
+      const { tree } = await runCore('### <br>');
+      const heading = tree.children.find((c): c is { type: 'heading'; data?: { hProperties?: { id?: string } } } & typeof c => c.type === 'heading');
+      expect(heading?.data?.hProperties?.id).toBeTruthy();
+    });
+
+    it('slugs the heading id from the stripped text (clean hash, id == href)', async () => {
+      const { tree, metadata } = await runCore('### <font color="1a73e8">Workspace</font>');
+      const heading = tree.children.find((c): c is { type: 'heading'; data?: { hProperties?: { id?: string } } } & typeof c => c.type === 'heading');
+      // Body heading id and the TOC anchorId are both the stripped slug.
+      expect(heading?.data?.hProperties?.id).toBe('workspace');
+      expect(metadata.toc[0].anchorId).toBe('workspace');
     });
 
     it('preserves wikilink-broken / mention className stamps after serialise', async () => {
