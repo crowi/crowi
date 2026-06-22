@@ -123,8 +123,10 @@ const lenses = isRfc
         key: 'quality',
         task:
           `Judge OSS-asset quality: internal consistency (no section contradicts another), scope / ` +
-          `phasing sanity, clarity for an external contributor, and over-scope (does it re-implement ` +
-          `something that already exists? find it with file:line).`,
+          `phasing sanity, clarity for an external contributor, over-scope (does it re-implement ` +
+          `something that already exists? find it with file:line), and any brainstorming-context leaks ` +
+          `("素案" / "the user" / "with the user" / placeholder "(you)" author) that make it read as a ` +
+          `transcript of the design chat rather than a standalone document.`,
       },
     ]
   : [
@@ -207,6 +209,16 @@ let draft = await agent(
     `design), STOP and return wrote=false (conflict) instead of overwriting it.\n` +
     `Read the approved design brief at ${BRIEF}. Apply the locked human decisions:\n${DECISIONS}\n\n` +
     `${writeInstructions}\n` +
+    `AUDIENCE — write the document to stand on its own when read cold from the repo by ` +
+    (isRfc ? `an external OSS contributor ` : `the implementer (and crowi-feature) `) +
+    `who was NOT in the design conversation; it must NOT read as a transcript of the brainstorming. ` +
+    `Forbidden chat-context artifacts: "素案" / "draft proposal" framing; "the user" / "with the user" / ` +
+    `"the user's framing" / "we agreed" / "while we're here" referring to the design chat; a placeholder ` +
+    `author like "(you)" (use the real author from the brief, or omit the field). Name rejected ` +
+    `alternatives by their objective public names (e.g. "a Hugo-style URL fragment"), not "the 素案". ` +
+    `(Referring to the END-USER — "ユーザー視点", "the user uploads an image" — is fine; the ban is only on ` +
+    `referencing the design conversation.) Every reference must resolve from the repo / other RFCs, never ` +
+    `from the chat.\n` +
     `Resolve the open questions the human answered; for any still-open question, write it explicitly into ` +
     `the document's open-questions section (do NOT silently drop it). Ground design claims in real code ` +
     `(file:line) where relevant. Once written, return wrote=true with the doc path (+ rfcNumber for an ` +
