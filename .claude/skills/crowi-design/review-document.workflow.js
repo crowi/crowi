@@ -19,15 +19,43 @@ export const meta = {
 //     maxReviewAttempts: 2,
 //     reviewOnly?: true, docPath?: '<existing doc>' } // review an existing RFC/spec only
 // ----------------------------------------------------------------------------
-const SLUG = args.slug
-const TITLE = args.title || SLUG
-const OUTPUT = args.outputType === 'rfc' ? 'rfc' : 'spec'
-const BRIEF = args.briefPath || `.feature-state/design/${SLUG}.brief.md`
-const SCOPE = args.scope || 'medium'
-const DECISIONS = JSON.stringify(args.decisions || {}, null, 2)
-const MAX = args.maxReviewAttempts ?? 2
-const REVIEW_ONLY = args.reviewOnly === true
+// NOTE: in this runtime the workflow `args` input arrives as a JSON STRING
+// (verified by probe: typeof args === 'string'), NOT a parsed object. Reading
+// args.* directly yields undefined; a dogfooding run did exactly that and the
+// writer wandered and overwrote an unrelated spec. Always go through parseArgs.
+function parseArgs(a) {
+  if (a && typeof a === 'object') return a
+  if (typeof a === 'string' && a.trim()) {
+    try {
+      return JSON.parse(a)
+    } catch {
+      return {}
+    }
+  }
+  return {}
+}
+const A = parseArgs(args)
+const SLUG = A.slug
+const TITLE = A.title || SLUG
+const OUTPUT = A.outputType === 'rfc' ? 'rfc' : 'spec'
+const BRIEF = A.briefPath || `.feature-state/design/${SLUG}.brief.md`
+const SCOPE = A.scope || 'medium'
+const DECISIONS = JSON.stringify(A.decisions || {}, null, 2)
+const MAX = A.maxReviewAttempts ?? 2
+const REVIEW_ONLY = A.reviewOnly === true
 const isRfc = OUTPUT === 'rfc'
+
+// Fail fast BEFORE any agent runs or any file is written. Guards the dogfooding
+// failure: string-encoded args -> undefined slug -> the writer overwrote an
+// unrelated spec. The write path requires a real slug AND an explicit briefPath.
+if (REVIEW_ONLY) {
+  if (!A.docPath) return { status: 'FAILED', reason: 'crowi-design review: reviewOnly requires docPath' }
+} else if (!SLUG || !A.briefPath) {
+  return {
+    status: 'FAILED',
+    reason: `crowi-design review-document: write path requires slug + briefPath (got: ${JSON.stringify(A)})`,
+  }
+}
 
 const REVIEW = {
   type: 'object',
@@ -45,12 +73,18 @@ const REVIEW = {
 }
 const WRITE_RESULT = {
   type: 'object',
-  required: ['docPath'],
+  required: ['wrote'],
   additionalProperties: true,
   properties: {
+    wrote: {
+      type: 'boolean',
+      description:
+        'true ONLY if you actually wrote the document to the exact target path. false if the brief was missing/empty, or the target path holds an unrelated file (explain in blockedReason). Never write elsewhere.',
+    },
     docPath: { type: 'string' },
     rfcNumber: { type: 'string' },
     summary: { type: 'string' },
+    blockedReason: { type: 'string' },
     residualOpenQuestions: { type: 'array', items: { type: 'string' } },
   },
 }
@@ -148,8 +182,8 @@ async function runReview(doc, attempt) {
 
 // ---- review-only path: skip writing, run one adversarial round, report ----
 if (REVIEW_ONLY) {
-  const doc = args.docPath
-  if (!doc) return { status: 'FAILED', reason: 'reviewOnly requires args.docPath', slug: SLUG }
+  const doc = A.docPath
+  if (!doc) return { status: 'FAILED', reason: 'reviewOnly requires docPath', slug: SLUG }
   const reviews = await runReview(doc, 1)
   if (reviews.length === 0) return { status: 'FAILED', reason: 'all reviewers failed', docPath: doc, slug: SLUG }
   const blocking = reviews.flatMap((r) => (r.verdict === 'ISSUES' ? r.blocking : []))
@@ -164,18 +198,25 @@ if (REVIEW_ONLY) {
 
 // ---- write -> review -> revise loop ----
 phase('Write')
+const TARGET = isRfc ? `docs/rfcs/00NN-${SLUG}.md (you choose NN = the next free number)` : `.feature-state/specs/feature-${SLUG}.md`
 let draft = await agent(
   `crowi-design WRITER for "${TITLE}" (${SLUG}).\n` +
+    `SAFETY: write ONLY to ${TARGET} — never any other file. First confirm the brief exists and is ` +
+    `non-empty at ${BRIEF}; if it is missing or empty, do NOT write anything and return wrote=false with a ` +
+    `blockedReason. If a file already exists at the target and it describes an UNRELATED feature (not this ` +
+    `design), STOP and return wrote=false (conflict) instead of overwriting it.\n` +
     `Read the approved design brief at ${BRIEF}. Apply the locked human decisions:\n${DECISIONS}\n\n` +
     `${writeInstructions}\n` +
     `Resolve the open questions the human answered; for any still-open question, write it explicitly into ` +
     `the document's open-questions section (do NOT silently drop it). Ground design claims in real code ` +
-    `(file:line) where relevant. Return the doc path (+ rfcNumber for an RFC) and any residual open ` +
-    `questions.`,
+    `(file:line) where relevant. Once written, return wrote=true with the doc path (+ rfcNumber for an ` +
+    `RFC) and any residual open questions.`,
   { agentType: 'general-purpose', model: isRfc ? 'opus' : 'sonnet', label: `write:${SLUG}`, phase: 'Write', schema: WRITE_RESULT },
 )
 if (draft === null) return { status: 'FAILED', reason: 'writer did not complete', slug: SLUG }
+if (draft.wrote === false) return { status: 'FAILED', reason: draft.blockedReason || 'writer declined to write (missing brief or target conflict)', slug: SLUG }
 const DOC = draft.docPath
+if (!DOC) return { status: 'FAILED', reason: 'writer set wrote=true but returned no docPath', slug: SLUG }
 
 let verdict = null
 let lastReviews = []

@@ -25,12 +25,32 @@ export const meta = {
 //                                            // single-phase => [{ id:'main', ... }]
 //   }
 // ----------------------------------------------------------------------------
-const ID = args.id
-const NEEDS_PLANNER = args.needsPlanner !== false
-const RUN_SIMPLIFY = args.runSimplify !== false
-const MAX_REVIEW = args.maxReviewAttempts ?? 3
+// NOTE: in this runtime the workflow `args` input arrives as a JSON STRING
+// (typeof args === 'string'), NOT a parsed object. Reading args.id directly
+// yields undefined and would run a planner on task "undefined". Always parse.
+function parseArgs(a) {
+  if (a && typeof a === 'object') return a
+  if (typeof a === 'string' && a.trim()) {
+    try {
+      return JSON.parse(a)
+    } catch {
+      return {}
+    }
+  }
+  return {}
+}
+const A = parseArgs(args)
+const ID = A.id
+const NEEDS_PLANNER = A.needsPlanner !== false
+const RUN_SIMPLIFY = A.runSimplify !== false
+const MAX_REVIEW = A.maxReviewAttempts ?? 3
 const PHASES =
-  Array.isArray(args.phases) && args.phases.length ? args.phases : [{ id: 'main', title: ID, autoContinue: true }]
+  Array.isArray(A.phases) && A.phases.length ? A.phases : [{ id: 'main', title: ID, autoContinue: true }]
+
+// Fail fast before any agent runs: a missing id must not fall through.
+if (!ID) {
+  return { status: 'FAILED', reason: `crowi-feature pipeline: missing required arg id (got: ${JSON.stringify(A)})` }
+}
 
 // Structured returns so the script branches on data, not on prose / magic strings.
 const IMPL_RESULT = {

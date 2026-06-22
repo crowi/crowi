@@ -17,10 +17,32 @@ export const meta = {
 // Workflow scripts have no filesystem access, so the AGENTS read/write files
 // (.feature-state/design/<slug>.brief.md is written by the architect).
 // ----------------------------------------------------------------------------
-const SLUG = args.slug
-const TOPIC = args.topic
-const OUTPUT_HINT = args.outputHint || 'auto'
+// NOTE: in this runtime the workflow `args` input arrives as a JSON STRING
+// (verified by probe: typeof args === 'string'), NOT a parsed object. Reading
+// args.slug directly yields undefined and silently corrupts the run. Always go
+// through parseArgs — never read args.* directly.
+function parseArgs(a) {
+  if (a && typeof a === 'object') return a
+  if (typeof a === 'string' && a.trim()) {
+    try {
+      return JSON.parse(a)
+    } catch {
+      return {}
+    }
+  }
+  return {}
+}
+const A = parseArgs(args)
+const SLUG = A.slug
+const TOPIC = A.topic
+const OUTPUT_HINT = A.outputHint || 'auto'
 const BRIEF_PATH = `.feature-state/design/${SLUG}.brief.md`
+
+// Fail fast BEFORE spawning any agent or writing anything: a missing slug/topic
+// must never fall through into a path derived from `undefined`.
+if (!SLUG || !TOPIC) {
+  return { status: 'FAILED', reason: `crowi-design explore-frame: missing required args slug/topic (got: ${JSON.stringify(A)})` }
+}
 
 // Decision-ready summary returned to main for the human gate. The full,
 // code-grounded detail lives in the brief file (not returned), keeping main lean.
