@@ -1,11 +1,9 @@
-import { crowi } from 'src/test/setup';
-import type { UserDocument } from 'src/models/user';
-import { Fixture } from 'src/test/setup';
-
+import { KNOWN_HTML_ELEMENTS } from '@crowi/api-contract';
 import type { MigrationApplicationModel } from 'src/models/migration-application';
-
+import type { UserDocument } from 'src/models/user';
+import { crowi, Fixture } from 'src/test/setup';
 import { MigrationRunner } from '../runner';
-import { KNOWN_HTML_ELEMENTS, bodyHasRewritableWikilink, rewriteAndDetect, rewriteWikilinks, shouldRewriteWikilink, wikilinkFormat } from './wikilink-format';
+import { bodyHasRewritableWikilink, rewriteAndDetect, rewriteWikilinks, shouldRewriteWikilink, wikilinkFormat } from './wikilink-format';
 
 /**
  * RFC-0008 §10.2 step 4 / §4.3.1 — `wikilink-format` preflight migration.

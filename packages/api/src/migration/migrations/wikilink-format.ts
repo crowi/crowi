@@ -1,5 +1,5 @@
+import { KNOWN_HTML_ELEMENTS } from '@crowi/api-contract';
 import { STATUS_PUBLISHED } from 'src/models/page';
-import { KNOWN_HTML_ELEMENTS } from 'src/util/html-elements';
 import type { MigrationContext } from '../types';
 import { defineMigration } from '../types';
 import { resolveActingUserId } from './resolve-acting-user';
@@ -26,14 +26,6 @@ import { resolveActingUserId } from './resolve-acting-user';
  * The textual conversion logic below is moved verbatim from the old command so
  * the rewrite output is byte-identical to the legacy migrator.
  */
-
-/**
- * Re-export of the canonical HTML element set, which lives in the neutral
- * `util/html-elements` module so renderer code can share it without importing
- * from `migration/`. Kept here so existing importers (and this module's own
- * `shouldRewriteWikilink` gate) are unchanged. Detection runs O(1) per match.
- */
-export { KNOWN_HTML_ELEMENTS };
 
 /**
  * v1 angle-bracket internal link form. The capture group grabs the path-style
