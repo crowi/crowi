@@ -35,8 +35,6 @@ interface PageRow {
 
 /** A current revision, with the `select(projection)` fields plus its page. */
 export interface RevisionVisit {
-  /** The revision `_id` (always selected). */
-  revisionId: unknown;
   /** The projected revision fields (`select`-ed by `projection`). */
   revision: Record<string, unknown>;
   /** The owning page's `_id`, as a string. */
@@ -96,7 +94,7 @@ export async function forEachPublishedCurrentRevision(
     for (const page of pages) {
       const revision = byId.get(String(page.revision));
       if (!revision) continue;
-      const result = await visit({ revisionId: revision._id, revision, pageId: String(page._id) });
+      const result = await visit({ revision, pageId: String(page._id) });
       if (result === STOP) return STOP;
     }
   };

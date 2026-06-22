@@ -130,7 +130,6 @@ export function rewriteBody(body: string, skip: ReadonlySet<string>): string {
 interface PageWork {
   pageId: string;
   newBody: string;
-  reverted: number;
 }
 
 /**
@@ -229,7 +228,7 @@ async function scan(ctx: MigrationContext): Promise<ScanResult> {
     if (pageReverted === 0) return;
 
     const newBody = rewriteBody(body, skip);
-    work.push({ pageId, newBody, reverted: pageReverted });
+    work.push({ pageId, newBody });
     revertibleOccurrences += pageReverted;
   });
 
