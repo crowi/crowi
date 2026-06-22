@@ -1,5 +1,86 @@
 # @crowi/api-contract
 
+## 2.0.0-alpha.2
+
+### Minor Changes
+
+- 4d66883: Fix the HTML-tag handling in headings / TOC and recover the close-tag corruption the earlier `wikilink-format` migration could introduce.
+
+  - **`wikilink-format` close-tag clobber fix**: the deprecated presentational tags `font` / `center` / `marquee` / `blink` / `applet` are now treated as known HTML elements, so `</font>` etc. are no longer mistaken for v1 angle-bracket wikilinks and rewritten to `[[/font]]`. No new corruption can occur.
+  - **`wikilink-html-recover` preflight migration**: reverts bodies already mangled into `[[/<x>]]` back to `</x>`, scoped to exactly those five deprecated tags (the only names the misfire could have produced). Genuine single-segment wikilinks — including ones named after standard HTML elements such as `[[/section]]` / `[[/div]]` — are preserved. A `[[/font]]` is left untouched when a live (published, non-redirect) page literally named `/font` exists, and reported for manual review instead.
+  - **Clean TOC anchors + labels, with no data rewrite**: heading anchor ids are slugged from the HTML-stripped heading text, so in-page anchors are clean and `id == href`; the TOC label strips inline HTML at display time using the same shared helper. Stored `meta.toc[].text` and page bodies are left raw (as authored) — nothing is migrated — and re-saving a page upgrades its anchor hash to the clean slug. A literal `<` in heading text (`## price < 100`) or an unknown tag-like token (`## Using List<int> in C#`) is preserved verbatim.
+
+- 20556ca: Improve the page-list / portal / sidebar UX and add a "portalize" flow.
+
+  - **Empty-list "Create page" CTA**: an empty folder listing — or a portal whose
+    child list is empty — now shows a "Create page" button (pre-filled with the
+    current path), instead of dropping the create affordance. Hidden in trash, at
+    the root, and in other users' spaces.
+  - **Unified sidebar tree for `/x` and `/x/`**: a content page and its portal
+    twin now render the identical sidebar tree, and the current node always
+    expands its own children, so navigating between a page and its portal no
+    longer reshuffles the tree.
+  - **Portalize a content page**: the page "⋮" menu gains "Make this a portal",
+    which moves `/some-page` → `/some-page/`, leaving a redirect at the old path
+    so existing links / bookmarks keep resolving to the new portal (the same as
+    any other rename). Opening `/some-page/` while a content page lives at
+    `/some-page` now offers the same one-click portalize banner instead of
+    "Create Portal". `GET /pages/list` gains a `contentPage` field to drive this.
+  - **No more `/x` ↔ `/x/` double-state**: when one of the trailing-slash twins
+    exists, creating the other is refused (editor draft creation, `POST /pages`,
+    and rename all return 400 — `PAGE_TWIN_EXISTS` on the page endpoints). A
+    self-portalize (`/x` → `/x/`) is still allowed. Existing double-state data is
+    left untouched.
+  - **Reach a content page that is also a folder**: when a content page at `/x`
+    also has descendants under `/x/…`, the sidebar now lists `/x` itself as the
+    first child under the `x/` folder (it was previously unreachable, since the
+    folder node links to the `/x/` listing). The path in the "there is content
+    at this path" banner is now a link to that page, and viewing the content
+    page `/x` directly shows a "this page has descendants — make it a portal?"
+    banner.
+  - **Portals keep their page affordances**: a portal now shows the same
+    right-rail table of contents as a normal page (over its body's headings),
+    and a compact chip row above the child list toggles the portal's comments,
+    backlinks, and attachments — so portalizing a page no longer drops its TOC
+    or its comment/backlink/attachment sections.
+
+- 065cda0: Add revert-to-revision: a one-click "revert to this version" button on the
+  stale-revision banner (normal + portal pages), a new POST
+  /pages/revert-to-revision endpoint, and a crowi_revert_to_revision MCP tool.
+  Non-destructive — the past body is stacked as a new revision, so all history
+  is preserved and the revert simply lands on top of the current latest.
+
+  Also fixes the stale-revision banner never appearing when opening a page at a
+  past `?revision_id=`: `latestRevision` is a dynamic field set by
+  `populatePageData`, but `pageToResponse` read it off the `toObject()` result
+  (which strips dynamic fields), so it was always serialized as `undefined` and
+  the client could never tell it was viewing an old version. This affected both
+  normal and portal pages.
+
+### Patch Changes
+
+- 3e58ee8: Bump dependencies to clear Dependabot security advisories. Direct deps lifted so
+  transitive chains resolve to the patched versions:
+
+  - `hono` 4.10.0 → 4.12.25 (GHSA-88fw-hqm2-52qc / GHSA-rv63-4mwf-qqc2 /
+    GHSA-wgpf-jwqj-8h8p / GHSA-wwfh-h76j-fc44 / GHSA-j6c9-x7qj-28xf)
+  - `ws` 8.20.1 → 8.21.0 (GHSA-96hv-2xvq-fx4p)
+  - `@elastic/elasticsearch` 9.4.0 → 9.4.2 — pulls `@elastic/transport` 9.3.7 and
+    `@opentelemetry/core` 2.8.0 (GHSA-8988-4f7v-96qf)
+  - `fumadocs-core` / `fumadocs-mdx` / `fumadocs-ui` to their 16.10.4 / 15.0.12
+    lines, `eslint-config-next` 16.1.1 → 16.2.9, `vitest` 4.1.6 → 4.1.9,
+    `@vitejs/plugin-react` 6.0.1 → 6.0.2 — pull `@babel/core` 7.29.7 and
+    `esbuild` 0.28.1 (GHSA-4x5r-pxfx-6jf8 / GHSA-g7r4-m6w7-qqqr)
+  - `form-data` ^4.0.6 and `vite` ^8.0.16 lifted into the dev dependencies of
+    `packages/api` / `packages/web` / `apps/crowi-site` so the lockfile resolver
+    picks the patched range that supertest / vitest / fumadocs-mdx /
+    `@vitejs/plugin-react` could not reach via peer constraints alone (form-data:
+    GHSA-hmw2-7cc7-3qxx; vite: GHSA-fx2h-pf6j-xcff / GHSA-v6wh-96g9-6wx3).
+
+  The remaining `js-yaml` (eslint 8 chain) and `ip-address` (mongoose 8 →
+  mongodb → socks chain) advisories require eslint 8 → 9 and mongoose 8 → 9
+  major upgrades respectively; tracked in TODO.md.
+
 ## 2.0.0-alpha.1
 
 ### Minor Changes
