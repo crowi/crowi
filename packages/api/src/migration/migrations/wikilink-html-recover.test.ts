@@ -6,7 +6,7 @@ import type { MigrationApplicationModel } from 'src/models/migration-application
 
 import { MigrationRunner } from '../runner';
 import { rewriteWikilinks } from './wikilink-format';
-import { detectRecoverable, rewriteBody, shouldRecoverSegment, wikilinkHtmlRecover } from './wikilink-html-recover';
+import { detectRecoverable, formatCollisions, rewriteBody, shouldRecoverSegment, wikilinkHtmlRecover } from './wikilink-html-recover';
 
 /**
  * `wikilink-html-recover` preflight migration.
@@ -98,6 +98,31 @@ describe('migration/wikilink-html-recover — recovery rules (pure)', () => {
       const once = rewriteBody('see [[/font]] here', new Set());
       expect(detectRecoverable(once)).toEqual([]);
       expect(rewriteBody(once, new Set())).toBe(once);
+    });
+  });
+
+  describe('formatCollisions', () => {
+    it('names the holding page path per element (section F)', () => {
+      expect(
+        formatCollisions([
+          { element: 'font', pageId: 'p1', pagePath: '/docs/setup' },
+          { element: 'center', pageId: 'p2', pagePath: '/notes' },
+        ]),
+      ).toBe('/center (in /notes); /font (in /docs/setup)');
+    });
+
+    it('groups multiple holding pages under one element and dedupes them', () => {
+      expect(
+        formatCollisions([
+          { element: 'font', pageId: 'p1', pagePath: '/a' },
+          { element: 'font', pageId: 'p2', pagePath: '/b' },
+          { element: 'font', pageId: 'p3', pagePath: '/a' },
+        ]),
+      ).toBe('/font (in /a, /b)');
+    });
+
+    it('falls back to the page id when no path is available', () => {
+      expect(formatCollisions([{ element: 'font', pageId: 'abc123' }])).toBe('/font (in abc123)');
     });
   });
 
@@ -247,6 +272,20 @@ describe('migration/wikilink-html-recover — framework wiring', () => {
     const page = await Page.findById(corrupted._id).populate('revision');
     // Left untouched.
     expect(page.revision.body).toBe('link to [[/font]] page');
+  });
+
+  it('detect names the holding page path of a collision (section F)', async () => {
+    // The report must be actionable: it has to tell the operator WHICH page
+    // holds the ambiguous `[[/font]]`, not just the element name.
+    await Page.createPage('/font', 'this is a genuine page about fonts', admin, {});
+    await Page.createPage(`${PATH_PREFIX}/holds-it`, 'link to [[/font]] page', admin, {});
+
+    const runner = new MigrationRunner(crowi);
+    const report = await runner.detect(wikilinkHtmlRecover);
+    expect(report?.counts?.collisions).toBe(1);
+    // Element AND the holding page path appear in the summary.
+    expect(report?.summary).toContain('/font');
+    expect(report?.summary).toContain(`${PATH_PREFIX}/holds-it`);
   });
 
   it('detects a collision against a legacy same-named page with status: null (section A)', async () => {

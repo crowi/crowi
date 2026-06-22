@@ -133,6 +133,20 @@ interface PageWork {
   reverted: number;
 }
 
+/**
+ * A skipped (collision) occurrence: the deprecated tag that was left as
+ * `[[/<element>]]` because a live same-named page exists, plus the page that
+ * holds the corrupted markup so an operator can open it from the report.
+ */
+export interface CollisionRecord {
+  /** The deprecated tag name left untouched, e.g. `font`. */
+  element: string;
+  /** `_id` of the page whose body still carries `[[/<element>]]`. */
+  pageId: string;
+  /** Path of that holding page (from the current revision), if available. */
+  pagePath?: string;
+}
+
 interface ScanResult {
   /** Pages with at least one revertible occurrence (after collision filtering). */
   work: PageWork[];
@@ -140,6 +154,12 @@ interface ScanResult {
   revertibleOccurrences: number;
   /** Element names skipped because a live same-named page exists. */
   collidingElements: Set<string>;
+  /**
+   * Per-(element, holding page) collision records. One entry per page that
+   * still carries a `[[/<element>]]` left untouched because `/<element>` is a
+   * live page — so the operator knows WHICH page to open, not just the tag.
+   */
+  collisions: CollisionRecord[];
 }
 
 /**
@@ -180,20 +200,26 @@ async function scan(ctx: MigrationContext): Promise<ScanResult> {
 
   const work: PageWork[] = [];
   const collidingElements = new Set<string>();
+  const collisions: CollisionRecord[] = [];
   let revertibleOccurrences = 0;
 
-  await forEachPublishedCurrentRevision(ctx, { projection: 'body' }, async ({ revision, pageId }) => {
+  await forEachPublishedCurrentRevision(ctx, { projection: 'body path' }, async ({ revision, pageId }) => {
     const body = (revision as { body?: unknown }).body;
     if (typeof body !== 'string' || !body.includes('[[/')) return;
+    const pagePath = typeof (revision as { path?: unknown }).path === 'string' ? (revision as { path: string }).path : undefined;
 
     const occurrences = detectRecoverable(body);
     if (occurrences.length === 0) return;
 
-    // Partition this page's elements into collide-skip vs revertible.
+    // Partition this page's elements into collide-skip vs revertible. Each
+    // colliding element is recorded once per holding page so the report can
+    // name the page(s) an operator has to resolve by hand (a page may hold
+    // several colliding tags — dedupe within this page).
     const skip = new Set<string>();
     let pageReverted = 0;
     for (const occ of occurrences) {
       if (await pageExists(occ.element)) {
+        if (!skip.has(occ.element)) collisions.push({ element: occ.element, pageId, pagePath });
         skip.add(occ.element);
         collidingElements.add(occ.element);
       } else {
@@ -207,7 +233,33 @@ async function scan(ctx: MigrationContext): Promise<ScanResult> {
     revertibleOccurrences += pageReverted;
   });
 
-  return { work, revertibleOccurrences, collidingElements };
+  return { work, revertibleOccurrences, collidingElements, collisions };
+}
+
+/**
+ * Render collision records into an operator-actionable string that names the
+ * holding page(s) per element, e.g.
+ * `/font (in /docs/setup, /guide); /center (in /notes)`. The element→pages
+ * mapping is preserved so the operator knows exactly which pages to open from
+ * the `migrate plan` output / boot warn log. Elements are sorted; per-element
+ * pages prefer the page path, falling back to the page id when the revision
+ * carried no path.
+ */
+export function formatCollisions(collisions: readonly CollisionRecord[]): string {
+  const byElement = new Map<string, string[]>();
+  for (const c of collisions) {
+    const label = c.pagePath ?? c.pageId;
+    const list = byElement.get(c.element);
+    if (list) {
+      if (!list.includes(label)) list.push(label);
+    } else {
+      byElement.set(c.element, [label]);
+    }
+  }
+  return [...byElement.entries()]
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([element, pages]) => `/${element} (in ${pages.join(', ')})`)
+    .join('; ');
 }
 
 export const wikilinkHtmlRecover = defineMigration({
@@ -258,10 +310,9 @@ export const wikilinkHtmlRecover = defineMigration({
    * by hand). Not called at boot.
    */
   detect: async (ctx) => {
-    const { work, revertibleOccurrences, collidingElements } = await scan(ctx);
+    const { work, revertibleOccurrences, collidingElements, collisions } = await scan(ctx);
     const colliding = [...collidingElements].sort();
-    const collisionNote =
-      colliding.length > 0 ? `; ${colliding.length} element(s) skipped due to same-named pages: ${colliding.map((e) => `/${e}`).join(', ')}` : '';
+    const collisionNote = colliding.length > 0 ? `; ${colliding.length} element(s) skipped due to same-named pages: ${formatCollisions(collisions)}` : '';
     return {
       summary: `${work.length} page(s) hold ${revertibleOccurrences} recoverable HTML close tag(s)${collisionNote}`,
       counts: {
@@ -286,7 +337,7 @@ export const wikilinkHtmlRecover = defineMigration({
         }
 
         const actingUserId = await resolveActingUserId(ctx, 'wikilink-html-recover');
-        const { work, collidingElements } = await scan(ctx);
+        const { work, collidingElements, collisions } = await scan(ctx);
         ctx.progress.setTotal(work.length);
 
         let reverted = 0;
@@ -301,10 +352,9 @@ export const wikilinkHtmlRecover = defineMigration({
         }
         if (collidingElements.size > 0) {
           ctx.logger.warn(
-            `wikilink-html-recover: left ${collidingElements.size} element(s) untouched because a same-named page exists: ${[...collidingElements]
-              .sort()
-              .map((e) => `/${e}`)
-              .join(', ')} — review these manually`,
+            `wikilink-html-recover: left ${collidingElements.size} element(s) untouched because a same-named page exists: ${formatCollisions(
+              collisions,
+            )} — open these pages and resolve them manually`,
           );
         }
         return { name: 'recover-html-close-tags', transformed: reverted, stats: { collisions: collidingElements.size } };
