@@ -3,7 +3,7 @@
 # Multi-stage build for @crowi/web using Next.js standalone output.
 #
 # Stages:
-#   1. base     — Node 22 + pnpm 9.15.9 (matches root packageManager).
+#   1. base     — Node 24 + pnpm 10.34.3 (matches root packageManager).
 #   2. builder  — install all workspace deps, run `next build` which emits
 #                 a self-contained `.next/standalone/` tree thanks to
 #                 `output: 'standalone'` + `outputFileTracingRoot` in
@@ -33,7 +33,7 @@ ARG NODE_VERSION=24-bookworm-slim
 # Stage 1: base
 # -----------------------------------------------------------------------------
 FROM node:${NODE_VERSION} AS base
-RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
+RUN corepack enable && corepack prepare pnpm@10.34.3 --activate
 WORKDIR /workspace
 
 # -----------------------------------------------------------------------------
