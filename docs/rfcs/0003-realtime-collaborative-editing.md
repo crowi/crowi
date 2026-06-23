@@ -952,3 +952,100 @@ Out of scope (deferred):
 
 Steps 1–11 are server-side and can be done in parallel with 12–14
 (client-side). Step 15 is the integration gate before release.
+
+## Supplement (editor-preview-reliability): external-edit invalidation + concurrent-save coalesce
+
+This supplement records two mechanisms added on top of the round-2/round-3
+collab redesign (server-doc save lock + desync anti-shrink + synced mount
+gate + recovery buffer). It supersedes the original step-9 sketch
+("`onLoadDocument` checks `yjsState === null` and signals connected clients
+to reload"), which the round-2 review found insufficient on its own.
+
+### G1 — in-process external-edit invalidation (single-instance)
+
+**Problem.** An external write — `Page.updatePage` via REST, the MCP
+`crowi_update_page` tool, or any in-process caller — nulls `Page.yjsState`
+and bumps `Page.currentRevision`. But under `unloadImmediately: true` the
+live Hocuspocus `Y.Doc` survives until its LAST connection drops. A
+`crowi:force-reload` broadcast ALONE does not converge: a client that
+reloads first re-attaches to the still-stale live doc (held by another
+still-connected client), so connected editors' saves CONFLICT-loop until
+everyone disconnects.
+
+**Design.** The broadcast is paired with invalidation/drain as ONE
+operation. `createCollabServer` now returns `{ hocuspocus, invalidator }`;
+the api keeps the invalidator on its `AttachedCollab` handle, and
+`Page.updatePage` calls `crowi.collabAttachment.invalidatePages([pageId],
+'page-body-replaced')` AFTER the write commits (fire-and-forget; an absent
+attachment or a thrown invalidation can never affect the HTTP write).
+
+`invalidatePages` does, for each page with a live doc in THIS process:
+
+1. **Tombstone the doc base** — write a sentinel (`INVALIDATED_DOC_BASE`)
+   into the shared `docBaseRevisions` store. The save flow's compare-and-set
+   early read (`docBase !== liveRevisionStr`) and its conditional pointer
+   write both reject any in-flight save on the stale doc → `CONFLICT`. The
+   sentinel can never equal a real revision id, so timing races can't make
+   it match.
+2. **Gate new connections** — mark the page in an `invalidatedPages`
+   tombstone store (a time-bounded `Map<documentName, expiry>`). While a
+   page is mid-drain, `onLoadDocument` skips re-recording a (now-advanced)
+   real doc base — otherwise a new connection that races the drain would
+   overwrite the sentinel and let a stale save match the live pointer. The
+   external write already nulled `yjsState`, so the new connection
+   re-materialises from the NEW `currentRevision` body regardless.
+3. **Broadcast `crowi:force-reload`** to the live connections. The client
+   already handles this (force-reload dialog + recovery-buffer snapshot +
+   `window.location.reload()`); no new client mechanism is needed.
+4. **Drain + force-close** — after a short grace
+   (`DEFAULT_INVALIDATE_GRACE_MS`, 1.5 s), `hocuspocus.closeConnections
+   (pageId)` kicks any client that ignored the broadcast. Under
+   `unloadImmediately: true` the last close also destroys the live `Y.Doc`,
+   so it can never be re-attached to; the tombstone is then cleared and the
+   page returns to normal collab behaviour.
+
+We deliberately do **not** in-place-replace the live `Y.Doc` with the
+external body — merge semantics against unsaved co-edits is intractable. The
+external edit is canonical; the user reloads (via the existing dialog) and
+manually merges any unsaved local text recovered from the buffer.
+
+### G2 — conditional coalesce of concurrent same-doc saves
+
+**Problem.** Two concurrent `executeSave` on the SAME shared server doc both
+read `docBase = R1`, both `prepareRevision`, then the compare-and-set loser
+gets `CONFLICT`. But the content is identical (both snapshotted the same live
+doc), so the reload is spurious and contradicts "co-editing never
+false-CONFLICTs".
+
+**Design.** On a CAS miss the save flow no longer immediately CONFLICTs. It
+coalesces — returns the **winner's** `revisionId` as `crowi:save-ok` — ONLY
+when BOTH conditions hold (otherwise it keeps the CONFLICT):
+
+1. the in-process `docBaseRevisions` entry has advanced to the page's NEW
+   live `currentRevision`. A same-process collab save advances the base on
+   success; an out-of-band move (HTTP / other instance / admin CLI) never
+   touches the in-process base, so this fails for an external edit → genuine
+   `CONFLICT` (this is what keeps coalesce from masking a real divergence);
+   AND
+2. the new `currentRevision`'s `body` is byte-identical to the loser's
+   extracted body.
+
+On coalesce the pointer is NOT moved and `yjsState` / `PageYjsUpdate` rows
+are untouched (the winner already owns them); the loser's just-created
+`Revision` is tolerated as an unreferenced orphan (the orphan already occurs
+today). Best-effort, the loser's trigger user is `$addToSet`-ed into the
+winner revision's `contributors` (a metadata-only failure must not fail the
+save-ok).
+
+### Out of scope — multi-instance / out-of-process (known limitation)
+
+The invalidator handle reaches only docs live in THIS api process. A live
+collab doc on a DIFFERENT replica, or an out-of-process writer (an admin CLI
+doing a DB-direct `Page.updatePage`), is NOT reachable. Converging those
+requires a cross-instance invalidation channel — Redis pub/sub
+(`collab:invalidate-page`) fanned to every replica's invalidator — which is
+deferred (RFC-0003 §5b multi-instance is out of scope for alpha). Until then,
+under a multi-instance deployment an external write during a live collab
+session on another replica may leave connected clients editing stale content
+until they manually reconnect. This is documented for operators in
+`operations/realtime-collab` ("External edits during a live editing session").
