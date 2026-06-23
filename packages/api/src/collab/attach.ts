@@ -86,11 +86,13 @@ export interface AttachedCollab {
 const MULTI_INSTANCE_ENV = 'CROWI_MULTI_INSTANCE';
 
 /**
- * Whether the operator has declared a multi-instance deployment. Truthy
- * for `1` / `true` / any integer ≥ 2 (a replica count); `0` / `1`-as-count
- * / `false` / unset mean single-instance. We accept both a boolean-ish flag
- * and a replica count so it slots into common orchestration env (e.g.
- * setting it from a `REPLICAS` value).
+ * Whether the operator has declared a multi-instance deployment.
+ *
+ * Convention (must match `.env.example` + the ja/en docs): a SET flag
+ * enables multi-instance. Truthy for `1` / `true` / any integer ≥ 2 (a
+ * replica count); unset / `0` / `false` mean single-instance (the default).
+ * We accept both a boolean-ish flag and a replica count so it slots into
+ * common orchestration env (e.g. setting it from a `REPLICAS` value).
  */
 function isMultiInstanceDeclared(): boolean {
   const raw = process.env[MULTI_INSTANCE_ENV];
