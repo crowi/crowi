@@ -294,11 +294,32 @@ docker compose logs -f api
 - **WebSocket Upgrade 失敗**: リバースプロキシで `Upgrade` ヘッダが
   落とされていると `/collab/` 接続が 400/426 で失敗します。`nginx` 設定で
   `proxy_set_header Upgrade $http_upgrade` を確認してください。
-- **`Page.yjsState` 破損 / 外部編集**: `onLoadDocument` で yjsState が
-  欠落または `Y.applyUpdate` が失敗した場合、Crowi は revision の
-  Markdown 本文から Y.Doc を再構築し、接続中の全クライアントへ
-  force-reload 通知を送ります。クライアント側は警告ダイアログを出して
-  ページを reload します。
+- **ライブ編集セッション中の外部編集**: 共同編集セッションが開いている
+  ページに対して、REST API・MCP の `crowi_update_page`・プロセス内の
+  `Page.updatePage` などの**外部経路**から本文が更新されると、Crowi は
+  `currentRevision` を新しい revision に張り替え `Page.yjsState` を null に
+  します。このとき**同一 api プロセス内**にライブな Y.Doc があれば、Crowi は
+  保存コミット後にその Y.Doc を無効化します — 接続中の全クライアントへ
+  `crowi:force-reload` を broadcast し、ドキュメントの基底 revision を
+  tombstone して進行中の古い保存を `CONFLICT` で拒否し、短い猶予の後に
+  ライブ接続を閉じます。これにより、先に reload したクライアントが古い
+  ライブ Y.Doc に再アタッチして `CONFLICT` ループに陥ることを防ぎます。
+  クライアント側は警告ダイアログを出してページを reload し、未保存の
+  ローカル編集は復旧バッファから復元できます。次回接続時は新しい
+  `currentRevision` の本文から再構築されます。
+  - **既知の制約 (マルチインスタンス / プロセス外)**: 無効化のハンドルは
+    **その api プロセス内**のライブ Y.Doc にしか届きません。**別レプリカ**で
+    開いているライブ Y.Doc や、**プロセス外の書き込み** (DB を直接叩く
+    admin CLI の `Page.updatePage` 等) には届かないため、マルチインスタンス
+    構成では外部編集後に接続中クライアントが**古い内容のまま編集を続ける**
+    可能性があり、**手動で再接続**するまで収束しません。クロスインスタンスの
+    無効化チャネル (Redis pub/sub による全レプリカへの伝搬) は将来対応であり
+    現時点ではスコープ外です (RFC-0003 §5b)。これも**シングルインスタンス
+    運用を推奨**する理由のひとつです。
+- **`Page.yjsState` 破損**: `onLoadDocument` で yjsState の
+  `Y.applyUpdate` が失敗した場合、Crowi は revision の Markdown 本文から
+  Y.Doc を再構築し、接続中の全クライアントへ force-reload 通知を送ります。
+  クライアント側は警告ダイアログを出してページを reload します。
 - **`renderedAst` 不整合 (RFC-0002 連動)**: 共同編集の保存は
   `Revision.prepareRevision` を呼び出して renderedAst を自動再生成
   します。何らかの理由で `Page.body` と最新 `Revision.body` がずれた

@@ -309,11 +309,32 @@ Verification:
   `Upgrade` header, `/collab/` returns 400 or 426. Verify
   `proxy_set_header Upgrade $http_upgrade` in nginx (or the
   equivalent in your proxy of choice).
-- **`Page.yjsState` corruption / external edit:** in `onLoadDocument`,
-  if the persisted yjsState is missing or `Y.applyUpdate` throws,
-  Crowi rebuilds the Y.Doc from the latest revision's Markdown body
-  and broadcasts a force-reload notice to connected clients. Each
-  client displays a warning dialog and reloads the page.
+- **External edit during a live editing session:** when a page with an
+  open collab session is updated through an **external path** — the REST
+  API, the MCP `crowi_update_page` tool, or an in-process `Page.updatePage`
+  — Crowi re-points `currentRevision` to the new revision and nulls
+  `Page.yjsState`. If a live Y.Doc exists **in the same api process**, Crowi
+  invalidates it after the write commits: it broadcasts `crowi:force-reload`
+  to every connected client, tombstones the document's base revision so any
+  in-flight stale save is rejected with `CONFLICT`, and force-closes the live
+  connections after a short grace. This stops a client that reloaded first
+  from re-attaching to the stale live Y.Doc and entering a `CONFLICT` loop.
+  Each client shows a warning dialog and reloads; any unsaved local text can
+  be restored from the recovery buffer, and the next connection re-materialises
+  from the new `currentRevision` body.
+  - **Known limitation (multi-instance / out-of-process):** the
+    invalidation handle only reaches live Y.Docs **in that api process**. A
+    live Y.Doc on a **different replica**, or an **out-of-process writer** (an
+    admin CLI doing a DB-direct `Page.updatePage`), is not reachable, so under
+    a multi-instance deployment an external edit may leave connected clients
+    **editing stale content** until they **manually reconnect**. A
+    cross-instance invalidation channel (Redis pub/sub fanned to every
+    replica) is future work and out of scope for now (RFC-0003 §5b) — another
+    reason a **single instance is recommended**.
+- **`Page.yjsState` corruption:** in `onLoadDocument`, if `Y.applyUpdate`
+  throws on the persisted yjsState, Crowi rebuilds the Y.Doc from the latest
+  revision's Markdown body and broadcasts a force-reload notice to connected
+  clients. Each client displays a warning dialog and reloads the page.
 - **`renderedAst` drift (RFC-0002 coupling):** collab saves go through
   `Revision.prepareRevision`, which regenerates `renderedAst`. If
   `Page.body` and the latest `Revision.body` ever drift, rebuild via
