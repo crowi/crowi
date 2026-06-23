@@ -31,7 +31,7 @@
     "test": "jest"
   },
   "peerDependencies": {
-    "zod": "catalog:"
+    "zod": "^4"
   },
   "dependencies": {
     "@crowi/plugin-api": "workspace:^"

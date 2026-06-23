@@ -30,7 +30,7 @@
     "type-check": "tsc --noEmit"
   },
   "peerDependencies": {
-    "zod": "catalog:"
+    "zod": "^4"
   },
   "dependencies": {
     "@aws-sdk/client-sesv2": "^3.1060.0",

@@ -30,7 +30,7 @@
     "type-check": "tsc --noEmit"
   },
   "peerDependencies": {
-    "zod": "catalog:"
+    "zod": "^4"
   },
   "devDependencies": {
     "@crowi/tsconfig": "workspace:*",
