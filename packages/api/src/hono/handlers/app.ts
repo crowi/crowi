@@ -54,6 +54,16 @@ export const registerAppRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app:
     // Empty/missing collapses to null (banner hidden).
     const confidentialRaw = config?.crowi?.['app:confidential'] as string | undefined;
     const confidential = confidentialRaw ? confidentialRaw : null;
+    // Public UX hint for the unauthenticated login / register pages: is
+    // self-service registration open? `Open` / `Restricted` → true,
+    // `Closed` (invite-only) → false. The decision is the single
+    // `!== 'Closed'` comparison, so it is unaffected by the historical
+    // `Resricted` typo of the stored mode value, and the mode string
+    // itself is never exposed (only this boolean). The real guard still
+    // lives in `POST /auth/register` (403 REGISTRATION_CLOSED); the web
+    // may fail-open on this flag.
+    const registrationMode = config?.crowi?.['security:registrationMode'] as string | undefined;
+    const canSelfRegister = registrationMode !== 'Closed';
     // Version-skew / feature-detection signal for the @crowi/cli end-user
     // CLI (and any other client). `crowi.version` is the @crowi/api
     // package.json version read at boot.
@@ -64,6 +74,7 @@ export const registerAppRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app:
         version: crowi.version,
         apiVersion: API_SURFACE_VERSION,
         capabilities: buildCapabilities(crowi),
+        canSelfRegister,
       },
       200,
     );

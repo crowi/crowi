@@ -108,6 +108,8 @@ v2 alpha 時点で登録されている移行は以下のとおりです。
 | `wikilink-format` | preflight | wikilink 記法の変換 |
 | `user-unique-prepare` | preflight | ユーザーの重複排除 (一意インデックスの準備) |
 | `relocate-reserved-api-paths` | preflight | `/api` 予約名前空間からの v1 ページ退避 |
+| `files-url-to-attachments` | preflight | 本文の v1 ファイル URL (`/files/<id>`) を v2 形式 (`/api/v2/attachments/<id>`) へ書き換え |
+| `wikilink-html-recover` | preflight | 誤変換された HTML 終了タグ (`</font>` など) の復旧 |
 
 boot 移行 (`page-status-default` / `revisions-schema-unify`) は api 起動時に
 自動適用されるので、運用者の操作は不要です。以下では、明示的な適用が必要な
@@ -136,6 +138,48 @@ crowi-admin migrate apply --id wikilink-format
 > したくない場合はこのプラグインを有効化するという選択肢もあります。
 > プラグインについては [プラグイン概要](../plugins/overview) を参照して
 > ください。
+
+### 誤変換された HTML 終了タグの復旧 (wikilink-html-recover)
+
+旧バージョンの `wikilink-format` 移行には、見出しなどで使われる
+**非推奨の HTML 終了タグ** (`</font>` `</center>` `</marquee>` `</blink>`
+`</applet>`) を v1 の山括弧 wikilink と誤認し、`[[/font]]` のような wikilink
+記法へ書き換えてしまう不具合がありました。これらのタグが
+`KNOWN_HTML_ELEMENTS` に登録されていなかったためで、現在は登録済みなので
+**新たな誤変換は発生しません**。一方、既に `[[/font]]` のように化けた本文は
+`wikilink-format` が再実行されないため自動では直りません。
+
+`wikilink-html-recover` preflight 移行は、化けた `[[/<x>]]` を `</x>` へ
+逆変換しますが、対象は**この 5 つの非推奨タグ**
+(`font` / `center` / `marquee` / `blink` / `applet`) **だけ**です。これらは
+`KNOWN_HTML_ELEMENTS` に欠けていた唯一の名前であり、誤変換が生み出しえた
+終了タグはこれらに限られるためです。それ以外の単一セグメント wikilink は、
+たとえ名前が標準 HTML 要素であっても (`[[/section]]` `[[/div]]` `[[/br]]` など)
+**温存**されます — これらは常に既知だったため `wikilink-format` が書き換えて
+おらず、**本来の wikilink** だからです。複数セグメント (`[[/foo/bar]]`)・
+alias 付き (`[[/font|alias]]`)・大文字 (`[[/Font]]`) の形も温存されます。
+
+```bash
+# 復旧対象を事前確認 (本文は書き換えない)
+crowi-admin migrate plan
+
+# この移行だけを適用
+crowi-admin migrate apply --id wikilink-html-recover
+```
+
+> **Caution**: `[[/font]]` が「化けた `</font>`」なのか「実在する `/font`
+> ページへの本来の wikilink」なのかは、本文だけからは区別できません。この
+> 移行は、`/<x>` と**同名の実ページ (生きている公開ページ) が存在する**
+> `[[/<x>]]` は自動変換せず、`migrate plan` の結果に一覧として報告します
+> (運用者が個別に判断してください)。一方、同名ページが存在しない `[[/font]]`
+> (5 つの非推奨タグ) は **逆変換されます** — 削除済み / 未作成のページへの
+> dangling リンクも含みます。実際には `/font` `/center` `/marquee` `/blink`
+> `/applet` という名前の実ページは非常に稀ですが、もし存在する場合は
+> `migrate plan` の collision 一覧を確認し、まず dev / stg で検証してから
+> 本番に適用してください。
+
+この移行は冪等です — 逆変換後の `</x>` は復旧対象の検出にも `wikilink-format`
+の変換にも当たらないため、再実行しても二重には作用しません。
 
 ### /api 名前空間の移設
 
@@ -263,6 +307,53 @@ crowi-admin replace url --from https://old.example --to https://new.example
 > **Note**: `replace url` はバージョン付きの移行ではなく (任意の from/to で
 > 何度でも実行可能)、派生データの再構築でもない (本文を書き換える) ため、
 > `migrate` でも `rebuild` でもない独立した名前空間です。
+
+### ファイル URL の v2 化 (files-url-to-attachments)
+
+v1 はページ本文の添付ファイル / 画像を **v1 のファイル URL** で参照していました
+(`![shot.png](/files/<id>)` の相対形、またはエディタがフル URL を貼り付けた
+`![shot.png](https://wiki.example/files/<id>)` の絶対形)。v2 は添付を専用の
+ストリームエンドポイント `/api/v2/attachments/<id>` で配信し、レガシーの
+`/files/<id>` 互換ルートは削除されたため、**v1 形式の URL は v2 では 404 =
+画像が壊れます**。id は v1 / v2 で同一の 24-hex `Attachment._id` なので、必要なのは
+**URL の書き換えだけ** (id の振り直しは不要) です。
+
+`files-url-to-attachments` preflight 移行は、公開ページ (+ レガシーの `null`
+ステータス) の現リビジョン本文を走査し、Markdown 画像 `![alt](url)` / リンク
+`[text](url)` の URL を次のルールで書き換えます (生 HTML の `<img>` / `<a>` は
+対象外)。
+
+- **相対 `/files/<id>`** → `/api/v2/attachments/<id>` (無条件。ルート相対パスは
+  常に自サイト)。
+- **自サイトの絶対 URL `https://<CLIENT_URL のホスト>/files/<id>`** →
+  `/api/v2/attachments/<id>` (ホストを落として相対化し、ホスト非依存にする)。
+  自サイト判定は `CLIENT_URL` / `BASE_URL` のオリジンとの一致のみです。
+- **外部ホストの絶対 URL** → **触りません** (無関係な第三者の `/files/<id>`
+  画像を誤って書き換えないため)。
+
+```bash
+# まず書き換え対象をプレビュー (書き込まない)
+crowi-admin migrate plan
+
+# この移行だけを適用
+crowi-admin migrate apply --id files-url-to-attachments
+```
+
+この移行は冪等で、書き換え後の `/api/v2/attachments/<id>` は再適用しても二重に
+変換されません。書き換えの帰属先となる管理者ユーザーを必要とするため、解決
+できない場合は `CROWI_MIGRATE_USER=<email>` を設定してください。
+
+> **Tip**: **ドメインを変更した** 場合は、先に [replace url](#ドメイン変更後の本文-url-一括置換-replace-url)
+> で旧ホスト → 新ホストを揃えてから本移行を適用してください。`replace url` で
+> 自サイトの絶対 URL が `CLIENT_URL` のホストに揃うと、本移行がそれらを相対化
+> できます。逆順だと旧ホストの絶対 URL が「外部」と判定され書き換えられません。
+
+> **Note**: 移行漏れや未変換の本文への保険として、API には
+> `/files/<id>` → `302` `/api/v2/attachments/<id>` のリダイレクトが復活して
+> います。実行時に相対 `/files/<id>` へアクセスがあっても v2 形式へ転送される
+> ため、本文の書き換えが間に合わなくても画像が壊れたままにはなりません
+> (ただし外部ホストを指す絶対 URL はリダイレクトでは救えないため、本文の
+> 書き換えが本筋です)。
 
 ## 移行前に必ず行うこと
 

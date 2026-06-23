@@ -45,11 +45,49 @@ above the child list.
 > **Tip**: Preparing one portal page such as `/team-a/` per team or project
 > gives new members a starting point from which to follow related pages.
 
+#### Turning a normal page into a portal (portalize)
+
+Sometimes you have already written a page at `/some-page` (no trailing
+slash) and want it to become the portal for that folder. Open the "⋮" menu
+at the top-right of the page and choose **"Make this a portal"**. After a
+confirmation, `/some-page` is moved to `/some-page/` and shown as the portal.
+
+- Child pages (`/some-page/...`) are already in the right place, so they are
+  not moved.
+- **Portalizing leaves no redirect behind** at the old URL. `/some-page`
+  becomes a free path (and the "no double-state" guard below prevents another
+  page from re-creating the double state there).
+
+In addition, when `/some-page` (content) exists and you open `/some-page/`,
+the list view shows **"There is content at this path. Make it a portal?"**
+instead of the "Create Portal" button, so you can run the same portalize in
+one click. Afterwards the same URL switches to the portal view.
+
+#### You cannot create both the slashed and unslashed twin
+
+`/x` (a normal page) and `/x/` (a portal) are different things, but having
+both at once is confusing. So **when one of them exists, you cannot create
+its trailing-slash twin**.
+
+- When `/x` exists you cannot create `/x/`, and when `/x/` exists you cannot
+  create `/x` — neither through the editor, the API, nor a rename (you get an
+  error).
+- Use **portalize** (`/x` → `/x/`) above instead. A self-portalizing move is
+  allowed.
+- Any existing double-state data is left as-is (this rule only blocks new
+  creation going forward; it does not migrate existing data).
+
 ## Creating a page
 
 You create a new page either by visiting a URL that does not exist, or by
 specifying a path from the editor. You may also save a page with an empty
 body.
+
+> **You can create from an empty list too**: when you open a folder with no
+> child pages, or a portal that has no body yet, the list still shows a
+> **"Create page"** button (hidden in trash, at the root, and in other
+> users' spaces). It opens the create dialog pre-filled with the current path.
+
 
 Page names (paths) have several reserved and forbidden rules. The following
 paths cannot be created:

@@ -1,7 +1,12 @@
 {
   "name": "@crowi/plugin-search-elasticsearch",
-  "version": "0.1.0-alpha.0",
+  "version": "0.1.0-alpha.1",
   "description": "Elasticsearch 9 search driver for Crowi 2.0.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/crowi/crowi.git",
+    "directory": "packages/plugin-search-elasticsearch"
+  },
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
@@ -26,7 +31,7 @@
     "test": "jest"
   },
   "peerDependencies": {
-    "zod": "catalog:"
+    "zod": "^4"
   },
   "dependencies": {
     "@crowi/plugin-api": "workspace:^",

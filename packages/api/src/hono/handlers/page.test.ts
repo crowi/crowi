@@ -397,7 +397,7 @@ describe('Routes /api/v2/pages/rename (Hono renamePage)', () => {
       expect(redirectPage.redirectTo).toBe(toPath);
     });
 
-    it('does not create a redirect page when the new path is a portal (trailing slash)', async () => {
+    it('creates a redirect page when renaming to a portal path with create_redirect (portalize keeps links working)', async () => {
       const fromPath = `${PATH_PREFIX}from-portal`;
       const toPath = `${PATH_PREFIX}to-portal/`;
       const headers = authHeaders(accessToken);
@@ -411,8 +411,11 @@ describe('Routes /api/v2/pages/rename (Hono renamePage)', () => {
       expect(res.status).toBe(200);
       expect(res.body.page.path).toBe(toPath);
 
+      // A portal destination now honours create_redirect (it used to be
+      // skipped for `/`-suffixed targets) so links to the old path resolve.
       const redirectPage = await Page.findOne({ path: fromPath });
-      expect(redirectPage).toBeNull();
+      expect(redirectPage).not.toBeNull();
+      expect(redirectPage.redirectTo).toBe(toPath);
     });
 
     it('returns 404 PAGE_NOT_FOUND for unknown page_id', async () => {

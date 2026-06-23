@@ -1,5 +1,143 @@
 # @crowi/web
 
+## 2.0.0-alpha.2
+
+### Minor Changes
+
+- 6e50682: Harden the built-in MCP server against prompt injection from untrusted wiki
+  content (RFC-0011 §10.7).
+
+  - **API** — MCP read and write-echo tools now return the page body in
+    `content[0].text` fenced between open/close delimiters that carry a fresh,
+    unguessable per-response nonce, prefixed by a "this is data, not
+    instructions" notice. The nonce defeats break-out attempts: a body that
+    forges the close tag cannot guess the random id, so injected "ignore your
+    task" instructions stay inside the data region. `structuredContent.body`
+    is kept raw (so programmatic clients parse it cleanly) and tagged
+    `trust: "untrusted"`; search snippets are fenced too, while self-authored
+    metadata (path / count / pager) is left plain.
+  - **Web** — the Personal Access Token issue form now defaults to the
+    read-only scopes and recommends them for MCP / AI clients, so the token
+    that gates the MCP server is least-privilege by default; write scopes
+    remain an explicit opt-in.
+
+  Clients that feed `structuredContent.body` straight to a model without honoring
+  `trust` remain a documented residual risk. See the MCP operations docs for the
+  defaults and a verification procedure.
+
+- 20556ca: Improve the page-list / portal / sidebar UX and add a "portalize" flow.
+
+  - **Empty-list "Create page" CTA**: an empty folder listing — or a portal whose
+    child list is empty — now shows a "Create page" button (pre-filled with the
+    current path), instead of dropping the create affordance. Hidden in trash, at
+    the root, and in other users' spaces.
+  - **Unified sidebar tree for `/x` and `/x/`**: a content page and its portal
+    twin now render the identical sidebar tree, and the current node always
+    expands its own children, so navigating between a page and its portal no
+    longer reshuffles the tree.
+  - **Portalize a content page**: the page "⋮" menu gains "Make this a portal",
+    which moves `/some-page` → `/some-page/`, leaving a redirect at the old path
+    so existing links / bookmarks keep resolving to the new portal (the same as
+    any other rename). Opening `/some-page/` while a content page lives at
+    `/some-page` now offers the same one-click portalize banner instead of
+    "Create Portal". `GET /pages/list` gains a `contentPage` field to drive this.
+  - **No more `/x` ↔ `/x/` double-state**: when one of the trailing-slash twins
+    exists, creating the other is refused (editor draft creation, `POST /pages`,
+    and rename all return 400 — `PAGE_TWIN_EXISTS` on the page endpoints). A
+    self-portalize (`/x` → `/x/`) is still allowed. Existing double-state data is
+    left untouched.
+  - **Reach a content page that is also a folder**: when a content page at `/x`
+    also has descendants under `/x/…`, the sidebar now lists `/x` itself as the
+    first child under the `x/` folder (it was previously unreachable, since the
+    folder node links to the `/x/` listing). The path in the "there is content
+    at this path" banner is now a link to that page, and viewing the content
+    page `/x` directly shows a "this page has descendants — make it a portal?"
+    banner.
+  - **Portals keep their page affordances**: a portal now shows the same
+    right-rail table of contents as a normal page (over its body's headings),
+    and a compact chip row above the child list toggles the portal's comments,
+    backlinks, and attachments — so portalizing a page no longer drops its TOC
+    or its comment/backlink/attachment sections.
+
+- 7315b1a: PlantUML diagrams now stay within the article width instead of overflowing the
+  column (and dragging the page wider than the viewport). Hovering a diagram
+  reveals a `+` affordance, and clicking it opens a near-full-screen lightbox that
+  shows the diagram at natural size with scroll/pan, so wide sequence diagrams
+  stay readable. Applies on both the page view and the editor preview, for the SVG
+  embed and the PNG fallback.
+- 065cda0: Add revert-to-revision: a one-click "revert to this version" button on the
+  stale-revision banner (normal + portal pages), a new POST
+  /pages/revert-to-revision endpoint, and a crowi_revert_to_revision MCP tool.
+  Non-destructive — the past body is stacked as a new revision, so all history
+  is preserved and the revert simply lands on top of the current latest.
+
+  Also fixes the stale-revision banner never appearing when opening a page at a
+  past `?revision_id=`: `latestRevision` is a dynamic field set by
+  `populatePageData`, but `pageToResponse` read it off the `toObject()` result
+  (which strips dynamic fields), so it was always serialized as `undefined` and
+  the client could never tell it was viewing an old version. This affected both
+  normal and portal pages.
+
+### Patch Changes
+
+- 4c45f41: Fix the page becoming unclickable after closing a rename or delete dialog
+  opened from an actions ("...") menu — on a page, and on items/folders in page
+  lists. A modal Radix dropdown and a modal Radix dialog each toggle
+  `pointer-events: none` on `<body>`; when the dialog opened as the menu closed,
+  their add/remove races left the style stuck on `<body>`, blocking all clicks.
+  Those menus are now non-modal, so only the dialog manages body pointer-events
+  and it is cleaned up correctly on close.
+- 7315b1a: Stop iOS Safari from zooming the viewport when focusing the page search box or
+  the editor. A theme-level rule now enforces a 16px minimum font-size on all
+  editable surfaces (inputs, textareas, selects, contenteditable, and the
+  CodeMirror editor) on iOS only, so every current and future mobile screen is
+  zoom-safe without per-component overrides. Non-iOS sizing is unchanged.
+- b51b611: Fix the page-history list not refreshing after an edit or a revert. Revision
+  creating mutations (page update, revert-to-revision) now invalidate the
+  `['revisions']` query, so a newly-pushed revision shows up in `/_history`
+  immediately instead of being hidden behind the 60s default React Query
+  `staleTime` until a full browser reload.
+- cd0d9f8: Fix portal edits not appearing after save. Saving a portal and returning to it
+  kept showing the pre-edit body: the post-save cache invalidation refreshed the
+  single-page detail query (`['page']`) but not the list/portal family
+  (`['pages']`) that the portal view is rendered from. Both save paths (the
+  realtime `crowi:save` flow and the HTTP `useUpdatePage` fallback) now share one
+  `invalidatePageContentQueries` helper that refreshes the page detail, the
+  list/portal + sidebar family, page history, and drafts together, so the
+  invalidation set can no longer drift between them.
+- 10faee9: Rename dialog: when it opens, pre-select just the page name (the last path
+  segment) instead of placing the cursor at the end. You can immediately retype
+  the leaf without disturbing the parent path — the same affordance as renaming a
+  file in an editor. Parent folders and the trailing slash of folder paths stay
+  unselected.
+- 3e58ee8: Bump dependencies to clear Dependabot security advisories. Direct deps lifted so
+  transitive chains resolve to the patched versions:
+
+  - `hono` 4.10.0 → 4.12.25 (GHSA-88fw-hqm2-52qc / GHSA-rv63-4mwf-qqc2 /
+    GHSA-wgpf-jwqj-8h8p / GHSA-wwfh-h76j-fc44 / GHSA-j6c9-x7qj-28xf)
+  - `ws` 8.20.1 → 8.21.0 (GHSA-96hv-2xvq-fx4p)
+  - `@elastic/elasticsearch` 9.4.0 → 9.4.2 — pulls `@elastic/transport` 9.3.7 and
+    `@opentelemetry/core` 2.8.0 (GHSA-8988-4f7v-96qf)
+  - `fumadocs-core` / `fumadocs-mdx` / `fumadocs-ui` to their 16.10.4 / 15.0.12
+    lines, `eslint-config-next` 16.1.1 → 16.2.9, `vitest` 4.1.6 → 4.1.9,
+    `@vitejs/plugin-react` 6.0.1 → 6.0.2 — pull `@babel/core` 7.29.7 and
+    `esbuild` 0.28.1 (GHSA-4x5r-pxfx-6jf8 / GHSA-g7r4-m6w7-qqqr)
+  - `form-data` ^4.0.6 and `vite` ^8.0.16 lifted into the dev dependencies of
+    `packages/api` / `packages/web` / `apps/crowi-site` so the lockfile resolver
+    picks the patched range that supertest / vitest / fumadocs-mdx /
+    `@vitejs/plugin-react` could not reach via peer constraints alone (form-data:
+    GHSA-hmw2-7cc7-3qxx; vite: GHSA-fx2h-pf6j-xcff / GHSA-v6wh-96g9-6wx3).
+
+  The remaining `js-yaml` (eslint 8 chain) and `ip-address` (mongoose 8 →
+  mongodb → socks chain) advisories require eslint 8 → 9 and mongoose 8 → 9
+  major upgrades respectively; tracked in TODO.md.
+
+- Updated dependencies [4d66883]
+- Updated dependencies [20556ca]
+- Updated dependencies [065cda0]
+- Updated dependencies [3e58ee8]
+  - @crowi/api-contract@2.0.0-alpha.2
+
 ## 2.0.0-alpha.1
 
 ### Minor Changes

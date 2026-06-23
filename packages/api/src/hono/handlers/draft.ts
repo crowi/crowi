@@ -92,6 +92,20 @@ export const registerDraftRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(ap
           return c.json({ error: 'invalid_path' as const, message: `Cannot create a page at this path (${path}).` }, 400);
         }
 
+        // §6 (feature-update-pages-list-ux) — block the `/x` ↔ `/x/`
+        // double-state at the editor's create entry point: if the
+        // trailing-slash twin already exists as a real page, refuse the
+        // draft. Surfaced via the existing `invalid_path` 400 (the message
+        // is shown verbatim by the web `useCreateDraft` hook) rather than a
+        // new draft error code, so the draft contract stays stable.
+        const twin = await Page.findExistingTwin(path);
+        if (twin) {
+          return c.json(
+            { error: 'invalid_path' as const, message: `A page with the opposite trailing slash already exists at ${twin.path}. Portalize it instead.` },
+            400,
+          );
+        }
+
         // Resolve a path already occupied by a page into the right
         // response — caller's own draft → 201 (idempotent), another
         // user's draft → 409 with owner info, anything published → 400.

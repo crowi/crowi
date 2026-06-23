@@ -51,10 +51,44 @@ function validateNewPath(path: string): PathValidation {
  */
 export function RenameDialog(props: RenameDialogProps) {
   const { open, onOpenChange } = props;
+  // Select only the last path segment (the page name) on open, so the user can
+  // retype the leaf without disturbing the parent path — like renaming a file in
+  // an editor. Two Radix FocusScope behaviours fight this and both must be
+  // handled:
+  //   1. On mount, FocusScope focuses the first field and SELECTS ALL of it.
+  //      `event.preventDefault()` on onOpenAutoFocus suppresses that pass; we then
+  //      focus the new-path input and select the leaf ourselves (in a rAF, after
+  //      the content has painted).
+  //   2. The focus TRAP re-selects ALL of the field whenever focus leaves the
+  //      dialog and returns. That fires ~150ms after open because the dropdown
+  //      menu that launched this dialog hands focus back to its trigger (outside
+  //      the scope), clobbering the leaf selection. We watch for that select-all
+  //      and re-narrow to the leaf, for a short window, then stop so a later user
+  //      Ctrl/Cmd+A still works.
+  const focusAndSelectLeaf = (event: Event) => {
+    event.preventDefault();
+    const base = props.page ? props.page.path : props.folderPath;
+    const stripped = base.replace(/\/+$/, ''); // folder paths carry a trailing slash
+    const start = stripped.lastIndexOf('/') + 1;
+    const end = stripped.length;
+    requestAnimationFrame(() => {
+      const el = document.getElementById('rename-new-path') as HTMLInputElement | null;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(start, end);
+      const reNarrow = () => {
+        if (el.selectionStart === 0 && el.selectionEnd === el.value.length) {
+          el.setSelectionRange(start, end);
+        }
+      };
+      el.addEventListener('select', reNarrow);
+      window.setTimeout(() => el.removeEventListener('select', reNarrow), 500);
+    });
+  };
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       {/* Wider than the default dialog so long subtree-move paths fit. */}
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="sm:max-w-2xl" onOpenAutoFocus={focusAndSelectLeaf}>
         {open &&
           (props.page ? (
             <RenameDialogForm basePath={props.page.path} pageId={props.page._id} revisionId={props.page.revision?._id} onOpenChange={onOpenChange} />
@@ -288,7 +322,6 @@ function RenameDialogForm({ basePath, pageId, revisionId, isFolder = false, onOp
           disabled={isSubmitting}
           placeholder={m['page.rename.placeholder']()}
           className="font-mono text-sm"
-          autoFocus
           aria-invalid={isInvalid && newPath.length > 0 ? true : undefined}
         />
         {isInvalid && invalidMessage && newPath.length > 0 && <p className="text-xs text-destructive">{invalidMessage}</p>}

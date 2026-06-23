@@ -2,6 +2,11 @@
   "name": "@crowi/plugin-search-opensearch",
   "version": "0.1.0-alpha.0",
   "description": "OpenSearch search driver for Crowi 2.0.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/crowi/crowi.git",
+    "directory": "packages/plugin-search-opensearch"
+  },
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
@@ -26,7 +31,7 @@
     "test": "jest"
   },
   "peerDependencies": {
-    "zod": "catalog:"
+    "zod": "^4"
   },
   "dependencies": {
     "@crowi/plugin-api": "workspace:^",

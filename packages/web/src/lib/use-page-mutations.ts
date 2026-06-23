@@ -2,8 +2,35 @@
 
 import type { PageWithRevision, RenamePageRequest, RenameSubtreeRequest, SetPageGrantRequest, UpdatePageRequest } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { type QueryClient, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClientV2 } from './api-client';
+import { draftsKeys } from './use-drafts';
+
+/**
+ * Invalidate every query family that reflects a page's content after a
+ * body-changing save:
+ *   - `['page']`     — the single-page detail (both `page_id`- and
+ *                      `path`-keyed `usePage` queries) → the normal page view
+ *   - `['pages']`    — the list / portal family (`usePageList` →
+ *                      `['pages','list',…]`) AND the sidebar tree
+ *                      (`usePageChildrenLevels` → `['pages','children',…]`)
+ *   - `['revisions']`— the page-history list (a save pushes a new revision)
+ *   - `['drafts']`   — the "creating pages" list (a first save publishes a draft)
+ *
+ * Both save paths route through here — the realtime `crowi:save` flow
+ * (which bypasses react-query entirely; see `handleAfterSave`) and the HTTP
+ * `useUpdatePage` fallback — so the invalidation set can never drift between
+ * them again. The portal-staleness bug came from exactly that drift: the
+ * page *detail* view (`['page']`) was invalidated but the *portal* view,
+ * driven by the list family (`['pages']`), was not — so a portal kept
+ * serving its pre-edit revision after a save.
+ */
+export function invalidatePageContentQueries(queryClient: QueryClient): void {
+  queryClient.invalidateQueries({ queryKey: ['page'] });
+  queryClient.invalidateQueries({ queryKey: ['pages'] });
+  queryClient.invalidateQueries({ queryKey: ['revisions'] });
+  queryClient.invalidateQueries({ queryKey: draftsKeys.all });
+}
 
 /**
  * RFC-0006 Phase 4 Batch 4 — switched from `apiClient.page.*` (ts-rest)
@@ -121,11 +148,11 @@ export function useUpdatePage() {
       throw new Error(m['errors.update_failed']());
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['page'] });
-      // A new revision was pushed — refresh the page-history list so it does
-      // not keep serving the pre-edit revisions off the 60s default staleTime
-      // (the new revision otherwise only appears after a full browser reload).
-      queryClient.invalidateQueries({ queryKey: ['revisions'] });
+      // Refresh the page detail AND the list/portal family — editing a
+      // portal returns to its `usePageList` view, which would otherwise
+      // keep serving the pre-edit revision. Also covers page history
+      // (new revision) + drafts (a first save publishes a draft).
+      invalidatePageContentQueries(queryClient);
     },
   });
 }

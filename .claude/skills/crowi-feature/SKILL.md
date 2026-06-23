@@ -2,8 +2,9 @@
 name: crowi-feature
 description: |
   Crowi 2.0 の新機能開発ワークフロー。設計合意 (会話で詰めた spec) を起点に、
-  spec → planner → implementer → simplify → reviewer → committer まで自動で進める。
-  キーワード: feature, 新機能, 開発, build, 設計, spec
+  spec 承認 → Workflow (plan → implement → simplify → review-loop → commit) を決定的に駆動。
+  制御フローは pipeline.workflow.js (コード)、各 phase は feature-* エージェント。
+  キーワード: feature, 新機能, 開発, build, 設計, spec, workflow
 globs:
   - "packages/api/src/hono/handlers/**"
   - "packages/web/src/app/**"
@@ -33,18 +34,18 @@ globs:
    ↓
 /feature {name}
    ↓
-[spec phase]
-   spec.md があれば: そのまま使う
-   なければ: 直近会話を要約して .feature-state/specs/{name}.md を生成 → ユーザー確認
+[spec phase] ← 唯一の人間ゲート (spec.md 承認)
    ↓
-[scope 判定]
-   spec.md の `scope:` (trivial|small|medium|large) で planner を skip するか決める
-   trivial / small ≤ minScopeSize: planner skip → implementer 直行
-   medium / large >  minScopeSize: planner 起動
+[skill] config 読込 + scope→needsPlanner 判定 + multi-phase 抽出 → args 組立
    ↓
-planner ──→ implementer ──→ simplify ──→ reviewer ─┬→ committer
-                ↑                          ↑       │
-                └─────── NEEDS_WORK ───────┴───────┘
+[Workflow: pipeline.workflow.js] ← 制御フローはコード (予告して止まる失敗が起きない)
+   for each phase:
+     planner? → implementer → simplify? → reviewer ─┬(APPROVED)→ committer
+                    ↑                                │
+                    └────── NEEDS_WORK (最大 N 回) ──┘
+   autoContinue=false の phase 手前で GATED 返却 → 人間に resume を促す
+   ↓
+[skill] Workflow の status (DONE / GATED / ESCALATE / FAILED) で報告
 ```
 
 各 phase の責務:
@@ -315,95 +316,58 @@ phase ごとの status:`PLANNED → IN_PROGRESS → REVIEW → (APPROVED → COM
 1.4. spec.md の scope を読み取る
 ```
 
-### 2. scope 判定 → planner skip 判定
+### 2. 実行 — Workflow で決定的に駆動
+
+spec 承認の後は **`Workflow` ツール (`pipeline.workflow.js`) が plan→implement→simplify→
+review-loop→commit を駆動する**。順次起動・NEEDS_WORK リトライ・multi-phase 反復・
+autoContinue gate はすべて JS コードなので、モデルが「次に進めます」と予告して turn を
+止める失敗モードは構造的に起きない。各 phase は既存の feature-{planner,implementer,
+reviewer,committer} エージェントを `agentType` でそのまま再利用する。
+
+skill がやること (= Workflow の外側、人間ゲートを持つ層):
 
 ```
-2.1. config.json の minScopeSize を読む (なければ "small" デフォルト)
-2.2. spec.md の scope と比較
-     scope ≤ minScopeSize: planner skip
-     scope >  minScopeSize: planner 起動
-2.3. planner skip の場合は、最小限の task.json を skill 内で生成
-     (specPath / acceptanceCriteria / scope を spec から引き写し、
-      status は PLANNED で書き出す。implementer はこの初期状態を期待する)
+2.1. config.json を読む: minScopeSize (既定 small) / maxReviewAttempts (既定 3) / runSimplify
+2.2. needsPlanner を決める: spec.scope > minScopeSize なら true
+     (順序 trivial<small<medium<large)
+2.3. multi-phase 判定: spec に `### Phase N:` が 2 本以上あれば phases[] を抽出。
+     各 phase の autoContinue を末尾マーカーから判定 ((即時/非衝突)→true、
+     (要調整)/(blocked)→false、無印→true)。task.json に phases[] を書く。
+     single-phase なら phases=[{id:'main', title:<name>, autoContinue:true}]。
+     `--phase=N` 指定時は phases を N 以降に絞る。
+2.4. Workflow を起動 (同じ turn 内で必ず発火):
+     Workflow({ scriptPath: '.claude/skills/crowi-feature/pipeline.workflow.js',
+                args: { id, needsPlanner, runSimplify, maxReviewAttempts, phases } })
+2.5. Workflow の返り値 status で分岐 (これだけが skill の判断材料):
+     - DONE      → 完了報告 (step 4)
+     - GATED     → 「Phase <gatedAt> は要調整。続けるなら `/feature {id} --phase=<gatedAt>`」
+     - ESCALATE  → reason を提示して指示を仰ぐ (設計判断 / 曖昧さ / max NEEDS_WORK 超過)
+     - FAILED    → reason を提示 (必須チェック失敗 / commitPlan⇄diff 不整合 等)
 ```
 
-### 3. agent チェーン
+> Workflow は背景実行で**末尾に返る**ため、途中で人間入力を待てない。だから人間ゲート
+> (spec 承認・gated phase・escalate) は **Workflow の外 (この skill / 会話)** で扱う —
+> これが「autoContinue 区間ごとに 1 Workflow、gate で人間に返す」設計の理由。
+> 中断後は `Workflow({scriptPath, resumeFromRunId})` で未変更 prefix をキャッシュ再利用して再開できる。
+> Workflow を呼ぶのは「skill の指示で呼ぶ」= 正当な opt-in 経路 (勝手な多エージェント化ではない)。
 
-#### Single-phase (= 通常の small/medium spec)
+#### 制御フローは Workflow が担保する (旧「連続実行ルール」は不要に)
 
-```
-3.1. planner (起動した場合) が context を充填して REVIEW pending 状態に
-3.2. implementer: task.json を読んで実装、commitPlan を埋め、必須チェック後に REVIEW
-3.3. simplify (config.runSimplify が true なら): 直近 diff を整理
-3.4. reviewer: APPROVED または NEEDS_WORK
-3.5. NEEDS_WORK なら implementer に戻す (最大 maxReviewAttempts 回)
-3.6. APPROVED → committer が commitPlan に従って複数 commit
-3.7. task.status = COMMITTED → step 4 (完了報告)
-```
+順次起動・NEEDS_WORK ループ・multi-phase 反復・autoContinue gate の制御は
+`pipeline.workflow.js` の **コード**が司る。旧版にあった「各 phase 出口で次を必ず起動」
+「予告で turn を締めるの禁止」「magic string ハンドシェイク禁止」「言い回しチェックリスト」
+といった**プロンプトでの制御フロー強制は不要になった** — コードは予告して止まらないため。
 
-#### Multi-phase (spec に `### Phase N:` が 2 本以上)
-
-```
-3.0. planner が spec から phases[] を抽出して task.json に書き込む (1 回だけ)
-3.1. task.json から最初の PLANNED な phase を pick → currentPhase に
-3.2. その phase に対して 3.1〜3.6 (single-phase と同じサイクル) を回す
-     commitPlan / acceptanceCriteria は phase ローカルのものを使う
-3.3. phase.status = COMMITTED に更新、currentPhase は次の PLANNED な phase に
-3.4. 次の phase の autoContinue を判定:
-     - true → 3.1 (loop)
-     - false → 停止 + 報告: 「Phase N (タイトル) は要調整。続けるなら
-       `/feature {name} --phase=N` を起動」
-     - 次 phase なし (全 phase COMMITTED) → task.status = COMMITTED、step 4
-```
-
-`--phase=N` で個別 phase を resume:
-- 既存 task.json を読み、phase-N を currentPhase にセット
-- 通常のサイクル (3.2) を回す
-- 完了したら 3.3〜3.4 (autoContinue 判定) を辿る
-
-#### 連続実行ルール (最重要)
-
-spec phase でユーザー承認を取った後 (= skill 起動時の **唯一** の承認ポイント) は、
-**`task.status = COMMITTED` になるまで一度も止まらない**。各 phase 完了 = 次 phase の即時起動。
-ユーザー確認を取らない。**phase 出力が「次に進める状態です」「ready to proceed」「次は ◯◯ です」**
-等の予告で終わったら **その同じ assistant turn 内で必ず次 phase を起動する** — 予告だけで turn を
-締めることは禁止。
-
-**各 phase の出口で必ずやるアクション** (条件分岐なし、phase 出力の文字列に依存しない):
-
-| 完了 phase | 次に必ず起動するもの |
-|---|---|
-| planner | implementer |
-| implementer (必須チェック pass、status=REVIEW) | simplify (`config.runSimplify`=true) → reviewer |
-| simplify | **reviewer を即起動** ("進める状態です" 等の予告で停止禁止) |
-| reviewer (APPROVED) | **committer を即起動** ("review APPROVED した、commit する" 等の予告で停止禁止) |
-| reviewer (NEEDS_WORK, attempts < max) | implementer に戻す |
-| reviewer (NEEDS_WORK, attempts == max) | 停止 + human escalation |
-| committer (SUCCESS) **— single-phase** | step 4 (完了報告) |
-| committer (SUCCESS) **— multi-phase、次 phase あり、autoContinue=true** | 次 phase の planner / implementer を即起動 (停止禁止) |
-| committer (SUCCESS) **— multi-phase、次 phase あり、autoContinue=false** | 停止 + 報告 (gated phase) |
-| committer (SUCCESS) **— multi-phase、次 phase なし** | task.status = COMMITTED → step 4 |
-
-「`simplify` が "now invoke reviewer" と書いたら起動する」のようなマジック文字列ハンドシェイクは
-**禁止**。phase の status / 戻り値 (成功・失敗・NEEDS_WORK) だけを判断材料にする。
-
-#### 停止が許される条件 (これ以外で turn を終えることは禁止)
-
-1. **NEEDS_WORK が `maxReviewAttempts` 回連続** → human escalation
-2. **必須チェックの失敗** (type-check / test / lint / format / pre-commit hook) → 停止して報告
-3. **commitPlan ⇄ diff の不整合** が committer 段階で解消できないとき → 停止して報告
-4. **agent からの明示的な escalate 要求** (例: spec 読解で曖昧、設計判断が必要、外部 secret 要求)
-5. **(multi-phase only)** 次 phase の `autoContinue: false` — gated phase 直前。
-   "Phase N は要調整、続けるなら `--phase=N` で起動" を報告して停止。
-
-#### 言い回しチェックリスト (turn を締める前に必ず確認)
-
-- ❌ 「task は REVIEW ステータス。reviewer phase に進める状態です」 → reviewer 未起動なので NG
-- ❌ 「simplify 完了。次は reviewer です」 → 予告だけ、起動してない
-- ❌ 「ready for review / ready to commit」 → 同上
-- ✅ reviewer の Agent / Skill 呼び出しが **同じ turn 内** に発火している
-- ✅ committer の commit コマンドが **同じ turn 内** に発火している
-- ✅ 上の停止条件 1-4 のいずれかが明示的に該当している
+- reviewer の APPROVED / NEEDS_WORK / ESCALATE は `schema` 構造化返却で、Workflow が
+  分岐・ループする (文字列の解釈に依存しない)。
+- 停止 (人間に返す) はすべて Workflow の return に集約され、status で表現される:
+  - **ESCALATE**: NEEDS_WORK が maxReviewAttempts 連続 / implementer が「必須チェックを通せない・
+    spec が曖昧」と判断 / reviewer が設計判断を要求。
+  - **GATED**: 次 phase が `autoContinue:false` (gated phase の手前)。
+  - **FAILED**: committer で commitPlan⇄diff が解消不能。
+- skill 側で守るのは 1 つだけ: **§2.4 の Workflow 起動を、spec 承認と同じ turn で実際に発火**
+  すること (「あとは自動で進みます」と予告して Workflow を呼ばずに turn を締めない)。
+  起動後は Workflow が完了 status を返すまで進み、skill はその status を受けて報告する。
 
 ### 4. 完了
 
@@ -415,26 +379,29 @@ push / PR 作成は **明示指示があるまで行わない**。
 
 ## ステータス遷移
 
-```
-PLANNED → IN_PROGRESS → REVIEW → (APPROVED → COMMITTED) | NEEDS_WORK → IN_PROGRESS → ...
-```
+task / phase の status (`PLANNED → IN_PROGRESS → REVIEW → APPROVED → COMMITTED | NEEDS_WORK`)
+は **agent がファイルに書く永続記録**。pipeline 進行中の制御 (今どの phase / 何回目の review か)
+は **Workflow スクリプトの変数**が持つので、旧版のように skill が status の ping-pong を turn
+跨ぎで追う必要はない。`tasks/{id}.json` の status は (a) 最終結果の記録、(b) orchestrate の
+`READY_TO_INTEGRATE` 等の**プロセス間 signal**、のために残す。
 
 ## サブコマンド (個別 phase 起動)
 
 ```
-/feature {name}                # 全自動 (会話前提)
+/feature {name}                # 全自動: spec 承認 → Workflow を最後まで (会話前提)
 /feature {name} --phase=N      # multi-phase spec の Phase N から resume (gated phase 通過用)
-/feature plan {name}           # planner だけ
-/feature implement {id}        # implementer だけ (NEEDS_WORK / IN_PROGRESS のとき)
-/feature review {id}           # reviewer だけ (REVIEW のとき)
-/feature commit {id}           # committer だけ (APPROVED のとき)
+/feature plan {name}           # planner エージェントだけ (Workflow を介さず単発)
+/feature implement {id}        # implementer エージェントだけ (NEEDS_WORK / IN_PROGRESS のとき)
+/feature review {id}           # reviewer エージェントだけ (REVIEW のとき)
+/feature commit {id}           # committer エージェントだけ (APPROVED のとき)
 ```
 
-`--phase=N` は task.json の `phases[]` から phase-N を pick して currentPhase にセットし、
-通常のサイクル (3.2) に入る。**autoContinue 判定は通常通り走る** ので、N から最後まで
-auto-continue が連続していれば一気に最後まで進む。
+`--phase=N` は task.json の `phases[]` を **N 以降に絞って** Workflow の `args.phases` に渡す。
+Workflow は N から走り、次の `autoContinue:false` phase の手前で GATED 返却するので、N から
+最後まで autoContinue が連続していれば一気に進む。個別サブコマンド (`plan`/`implement`/`review`/
+`commit`) は Workflow を介さずエージェントを単発起動する従来どおりの逃げ道。
 
-migration skill と同じパターン。
+migration skill と同じパターン (migration 側も将来同様に Workflow 化可能)。
 
 ## migration skill との違い (まとめ)
 
@@ -448,6 +415,8 @@ migration skill と同じパターン。
 
 ## 重要な前提
 
+- **パイプライン本体は `pipeline.workflow.js`** (この skill ディレクトリ)。制御フローはここに集約。
+  各 phase のエージェント定義は `.claude/agents/feature-{planner,implementer,reviewer,committer}.md`。
 - **state ディレクトリは `.feature-state/` (root)** ※ `.claude/feature-state/` ではない
 - **main 直コミット運用** がデフォルト (config.json `commitStrategy: main-direct`)
 - 認証が要るエンドポイントは Hono の認証ミドルウェア (`createJwtAuth(crowi)`) 配下に置く。CSRF 不要

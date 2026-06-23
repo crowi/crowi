@@ -36,6 +36,7 @@ export interface paths {
                             version: string;
                             apiVersion: string;
                             capabilities: string[];
+                            canSelfRegister: boolean;
                         };
                     };
                 };
@@ -5378,6 +5379,110 @@ export interface paths {
                                 offset: number;
                             };
                             portalPage?: {
+                                _id: string;
+                                path: string;
+                                revision?: string | {
+                                    _id: string;
+                                    path: string;
+                                    body: string;
+                                    /** @default markdown */
+                                    format: string;
+                                    author?: {
+                                        _id: string;
+                                        id?: string;
+                                        username: string;
+                                        name: string;
+                                        /** Format: email */
+                                        email: string;
+                                        image?: string | null;
+                                        createdAt: string;
+                                    } | null;
+                                    createdAt: string;
+                                    meta?: {
+                                        toc?: {
+                                            level: number;
+                                            text: string;
+                                            anchorId: string;
+                                        }[];
+                                        wikiLinks?: {
+                                            raw: string;
+                                            target: string;
+                                            displayText?: string;
+                                        }[];
+                                        mentions?: {
+                                            username: string;
+                                        }[];
+                                        codeBlockLanguages?: string[];
+                                    };
+                                    renderedAst?: unknown;
+                                    rendererVersion?: string;
+                                    parentRevisionId?: string | null;
+                                    /** @enum {string} */
+                                    type?: "snapshot" | "incremental";
+                                    savedBy?: string | {
+                                        _id: string;
+                                        id?: string;
+                                        username: string;
+                                        name: string;
+                                        /** Format: email */
+                                        email: string;
+                                        image?: string | null;
+                                        createdAt: string;
+                                    } | null;
+                                    contributors?: (string | {
+                                        _id: string;
+                                        id?: string;
+                                        username: string;
+                                        name: string;
+                                        /** Format: email */
+                                        email: string;
+                                        image?: string | null;
+                                        createdAt: string;
+                                    })[];
+                                    message?: string;
+                                    /** @enum {string} */
+                                    editVia?: "web" | "oauth" | "pat";
+                                };
+                                redirectTo?: string | null;
+                                /** @enum {string|null} */
+                                status?: "wip" | "published" | "deleted" | "deprecated" | "draft" | null;
+                                grant?: number;
+                                grantedUsers?: string[];
+                                creator?: string | {
+                                    _id: string;
+                                    id?: string;
+                                    username: string;
+                                    name: string;
+                                    /** Format: email */
+                                    email: string;
+                                    image?: string | null;
+                                    createdAt: string;
+                                } | null;
+                                lastUpdateUser?: string | {
+                                    _id: string;
+                                    id?: string;
+                                    username: string;
+                                    name: string;
+                                    /** Format: email */
+                                    email: string;
+                                    image?: string | null;
+                                    createdAt: string;
+                                } | null;
+                                liker?: string[];
+                                /** @default 0 */
+                                commentCount: number;
+                                extended?: {
+                                    [key: string]: unknown;
+                                };
+                                createdAt: string;
+                                updatedAt?: string;
+                                currentRevision?: string | null;
+                                yjsCheckpointAt?: string | null;
+                                latestRevision?: string;
+                                likerCount?: number;
+                                seenUsersCount?: number;
+                            } | null;
+                            contentPage?: {
                                 _id: string;
                                 path: string;
                                 revision?: string | {
@@ -11625,6 +11730,160 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/users/{id}/resend-invite": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Re-issue an invite token and resend the invitation email (INVITED status only) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Invitation email resent; returns the (unchanged) user */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            user: {
+                                _id: string;
+                                id?: string;
+                                username: string;
+                                name: string;
+                                /** Format: email */
+                                email: string;
+                                image?: string | null;
+                                introduction?: string;
+                                createdAt: string;
+                                admin?: boolean;
+                                /** @enum {integer} */
+                                status?: 1 | 2 | 3 | 4 | 5;
+                            };
+                        };
+                    };
+                };
+                /** @description Invalid id */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "VALIDATION_ERROR";
+                                message: string;
+                                details?: {
+                                    fieldErrors: {
+                                        [key: string]: string[];
+                                    };
+                                    formErrors: string[];
+                                };
+                            };
+                        };
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "AUTHENTICATION_REQUIRED";
+                                /** @enum {string} */
+                                message: "Authentication is required";
+                                redirectTo?: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Admin permission required */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "ADMIN_REQUIRED";
+                                /** @enum {string} */
+                                message: "Admin permission required";
+                                redirectTo?: string;
+                            };
+                        };
+                    };
+                };
+                /** @description User not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "NOT_FOUND";
+                                message: string;
+                            };
+                        };
+                    };
+                };
+                /** @description User is not in the INVITED status, so there is no pending invite to resend */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "CONFLICT";
+                                message: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Internal server error (e.g. the invitation email failed to send) */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "INTERNAL_ERROR";
+                                /** @enum {string} */
+                                message: "Internal server error";
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/users/{id}/email": {
         parameters: {
             query?: never;
@@ -12896,7 +13155,7 @@ export interface components {
             };
         };
         /** @enum {string} */
-        ErrorCode: "AUTHENTICATION_REQUIRED" | "ADMIN_REQUIRED" | "THIRD_PARTY_AUTH_REQUIRED" | "USER_REGISTERED" | "USER_SUSPENDED" | "USER_INVITED" | "USER_NOT_ACTIVE" | "EMAIL_NOT_CONFIRMED" | "INTERNAL_ERROR" | "VALIDATION_ERROR" | "INVALID_REQUEST" | "NOT_FOUND" | "CONFLICT" | "SERVICE_UNAVAILABLE" | "APPLICATION_NOT_INSTALLED" | "INVALID_PAGE_ID" | "PAGE_NOT_FOUND" | "PAGE_NOT_GRANTED" | "PAGE_REVISION_ERROR" | "INVALID_GRANT" | "COMMENT_NOT_FOUND" | "NOTIFICATION_NOT_FOUND" | "USER_NOT_FOUND" | "USER_EXISTS" | "USERNAME_TAKEN" | "EMAIL_TAKEN" | "EMAIL_NOT_ALLOWED" | "INVALID_ACTIVATION_TOKEN" | "INVALID_INVITE_TOKEN" | "INVITE_ALREADY_ACCEPTED" | "INVALID_RESET_TOKEN" | "INVALID_EMAIL_CHANGE_TOKEN" | "INVALID_CREDENTIALS" | "REFRESH_TOKEN_REQUIRED" | "REGISTRATION_CLOSED" | "ENCRYPTION_NOT_CONFIGURED" | "MAIL_TEST_FAILED" | "PLUGIN_NOT_FOUND" | "PLUGIN_CONFIG_VALIDATION_FAILED";
+        ErrorCode: "AUTHENTICATION_REQUIRED" | "ADMIN_REQUIRED" | "THIRD_PARTY_AUTH_REQUIRED" | "USER_REGISTERED" | "USER_SUSPENDED" | "USER_INVITED" | "USER_NOT_ACTIVE" | "EMAIL_NOT_CONFIRMED" | "INTERNAL_ERROR" | "VALIDATION_ERROR" | "INVALID_REQUEST" | "NOT_FOUND" | "CONFLICT" | "SERVICE_UNAVAILABLE" | "APPLICATION_NOT_INSTALLED" | "INVALID_PAGE_ID" | "PAGE_NOT_FOUND" | "PAGE_NOT_GRANTED" | "PAGE_REVISION_ERROR" | "PAGE_TWIN_EXISTS" | "INVALID_GRANT" | "COMMENT_NOT_FOUND" | "NOTIFICATION_NOT_FOUND" | "USER_NOT_FOUND" | "USER_EXISTS" | "USERNAME_TAKEN" | "EMAIL_TAKEN" | "EMAIL_NOT_ALLOWED" | "INVALID_ACTIVATION_TOKEN" | "INVALID_INVITE_TOKEN" | "INVITE_ALREADY_ACCEPTED" | "INVALID_RESET_TOKEN" | "INVALID_EMAIL_CHANGE_TOKEN" | "INVALID_CREDENTIALS" | "REFRESH_TOKEN_REQUIRED" | "REGISTRATION_CLOSED" | "ENCRYPTION_NOT_CONFIGURED" | "MAIL_TEST_FAILED" | "PLUGIN_NOT_FOUND" | "PLUGIN_CONFIG_VALIDATION_FAILED";
         ApplicationNotInstalledError: {
             error: {
                 /** @enum {string} */
@@ -13537,6 +13796,110 @@ export interface components {
                 offset: number;
             };
             portalPage?: {
+                _id: string;
+                path: string;
+                revision?: string | {
+                    _id: string;
+                    path: string;
+                    body: string;
+                    /** @default markdown */
+                    format: string;
+                    author?: {
+                        _id: string;
+                        id?: string;
+                        username: string;
+                        name: string;
+                        /** Format: email */
+                        email: string;
+                        image?: string | null;
+                        createdAt: string;
+                    } | null;
+                    createdAt: string;
+                    meta?: {
+                        toc?: {
+                            level: number;
+                            text: string;
+                            anchorId: string;
+                        }[];
+                        wikiLinks?: {
+                            raw: string;
+                            target: string;
+                            displayText?: string;
+                        }[];
+                        mentions?: {
+                            username: string;
+                        }[];
+                        codeBlockLanguages?: string[];
+                    };
+                    renderedAst?: unknown;
+                    rendererVersion?: string;
+                    parentRevisionId?: string | null;
+                    /** @enum {string} */
+                    type?: "snapshot" | "incremental";
+                    savedBy?: string | {
+                        _id: string;
+                        id?: string;
+                        username: string;
+                        name: string;
+                        /** Format: email */
+                        email: string;
+                        image?: string | null;
+                        createdAt: string;
+                    } | null;
+                    contributors?: (string | {
+                        _id: string;
+                        id?: string;
+                        username: string;
+                        name: string;
+                        /** Format: email */
+                        email: string;
+                        image?: string | null;
+                        createdAt: string;
+                    })[];
+                    message?: string;
+                    /** @enum {string} */
+                    editVia?: "web" | "oauth" | "pat";
+                };
+                redirectTo?: string | null;
+                /** @enum {string|null} */
+                status?: "wip" | "published" | "deleted" | "deprecated" | "draft" | null;
+                grant?: number;
+                grantedUsers?: string[];
+                creator?: string | {
+                    _id: string;
+                    id?: string;
+                    username: string;
+                    name: string;
+                    /** Format: email */
+                    email: string;
+                    image?: string | null;
+                    createdAt: string;
+                } | null;
+                lastUpdateUser?: string | {
+                    _id: string;
+                    id?: string;
+                    username: string;
+                    name: string;
+                    /** Format: email */
+                    email: string;
+                    image?: string | null;
+                    createdAt: string;
+                } | null;
+                liker?: string[];
+                /** @default 0 */
+                commentCount: number;
+                extended?: {
+                    [key: string]: unknown;
+                };
+                createdAt: string;
+                updatedAt?: string;
+                currentRevision?: string | null;
+                yjsCheckpointAt?: string | null;
+                latestRevision?: string;
+                likerCount?: number;
+                seenUsersCount?: number;
+            } | null;
+            contentPage?: {
                 _id: string;
                 path: string;
                 revision?: string | {

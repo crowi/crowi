@@ -85,7 +85,8 @@ wiki.example.com {
 	reverse_proxy @api api:3000
 
 	# realtime WebSocket → api(Upgrade は自動で透過)
-	@ws path /collab/* /presence/* /notifications/*
+	# 共同編集クライアントは素の `/collab` に接続するので bare パスも列挙する
+	@ws path /collab /collab/* /presence /presence/* /notifications /notifications/*
 	reverse_proxy @ws api:3000
 
 	# それ以外 → web
@@ -100,7 +101,8 @@ location /api/   { proxy_pass http://api:3000; }
 location /files/ { proxy_pass http://api:3000; }
 
 # realtime WebSocket — Upgrade ヘッダの透過が必須
-location ~ ^/(collab|presence|notifications)/ {
+# 末尾の (/|$) で素の `/collab`(セグメントなし)も拾う
+location ~ ^/(collab|presence|notifications)(/|$) {
   proxy_pass http://api:3000;
   proxy_http_version 1.1;
   proxy_set_header Upgrade    $http_upgrade;
@@ -115,7 +117,10 @@ location / { proxy_pass http://web:3000; }
   3 つの realtime namespace(`/collab`・`/presence`・`/notifications`)は
   `Upgrade` / `Connection` の透過が **必須** です。無いと WebSocket upgrade が落ち、
   リアルタイム共同編集 / プレゼンス / 通知ベルが静かに非リアルタイム動作にフォールバック
-  します(他の機能は動きます)。[リアルタイム共同編集](./realtime-collab) 参照。
+  します(他の機能は動きます)。さらに共同編集クライアントは **素の `/collab`**
+  (末尾セグメントなし)に接続するため、マッチャには `/collab/*` だけでなく
+  **bare `/collab` も** 含める必要があります(上記の Caddy / nginx 例は対応済み)。
+  [リアルタイム共同編集](./realtime-collab) 参照。
 </Callout>
 
 <Callout type="info">

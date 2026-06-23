@@ -403,3 +403,23 @@ export function CreatePageListButton({ path }: { path: string }) {
     />
   );
 }
+
+/**
+ * Empty-state entry point: a medium primary button shown inside the
+ * `PageListEmptyCard` when a folder / portal has no child pages yet, so
+ * there is always a way to create the first page under the current path.
+ * Like `CreatePageListButton` it pre-fills the listed namespace.
+ */
+export function CreatePageCtaButton({ path }: { path: string }) {
+  return (
+    <CreatePageDialog
+      defaultDir={path}
+      trigger={
+        <Button size="sm" className="gap-1.5">
+          <FilePlus className="h-4 w-4" />
+          {m['header.create_page']()}
+        </Button>
+      }
+    />
+  );
+}

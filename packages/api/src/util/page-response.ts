@@ -181,7 +181,18 @@ export const computeRevisionRenderArtifactsAsync = async (
   // can omit it — dispatch then degrades to no-op and the `code` /
   // `@[tag](url)` nodes survive as plain text.
   const { metadata, renderedAst } = await crowi.getRenderer().runRender(body, { mode: 'read', pageId });
-  const mergedMeta: RevisionMetaShape = { ...pickStoredMeta(metadataToRevisionMeta(metadata)), ...fromStored };
+  const fresh = pickStoredMeta(metadataToRevisionMeta(metadata));
+  // Tie the toc source to the AST source. When the stored AST is fresh
+  // (`astIsFresh`), we serve `storedAst` and keep the stored-wins merge
+  // byte-identical to today, so the toc's anchorIds stay aligned with the
+  // stored heading ids. When the AST is stale (version mismatch / absent), we
+  // serve the freshly RECOMPUTED `renderedAst`, whose heading ids are slugged
+  // from the STRIPPED heading text — so the served toc must ALSO be the
+  // recomputed one, or a pre-0.7.0 HTML-heading revision would ship a stale
+  // raw-derived `anchorId` that no longer matches any rendered heading `id`
+  // (broken TOC click / scroll-spy on exactly the `<font>` legacy content this
+  // feature targets). Other meta fields stay stored-wins either way.
+  const mergedMeta: RevisionMetaShape = astIsFresh ? { ...fresh, ...fromStored } : { ...fresh, ...fromStored, toc: fresh.toc };
   return {
     meta: Object.keys(mergedMeta).length > 0 ? mergedMeta : undefined,
     renderedAst: astIsFresh ? storedAst : renderedAst,

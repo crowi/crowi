@@ -113,6 +113,8 @@ The migrations registered as of the v2 alpha are:
 | `wikilink-format` | preflight | Convert wikilink syntax |
 | `user-unique-prepare` | preflight | Deduplicate users (prepare for the unique index) |
 | `relocate-reserved-api-paths` | preflight | Move v1 pages out of the reserved `/api` namespace |
+| `files-url-to-attachments` | preflight | Rewrite v1 file URLs (`/files/<id>`) in page bodies to the v2 form (`/api/v2/attachments/<id>`) |
+| `wikilink-html-recover` | preflight | Recover HTML close tags (`</font>` etc.) corrupted into wikilinks |
 
 The boot migrations (`page-status-default` / `revisions-schema-unify`) apply
 automatically when the api starts, so they need no operator action. The
@@ -140,6 +142,51 @@ if no admin user is resolvable.
 > by the `@crowi/plugin-renderer-crowi-legacy` plugin. If you would rather
 > not convert the data itself, enabling that plugin is an alternative.
 > For plugins, see [Plugin overview](../plugins/overview).
+
+### Recovering corrupted HTML close tags (wikilink-html-recover)
+
+An earlier version of the `wikilink-format` migration mistook the
+**deprecated HTML close tags** used in headings and inline markup
+(`</font>`, `</center>`, `</marquee>`, `</blink>`, `</applet>`) for v1
+angle-bracket wikilinks and rewrote them into the wikilink form
+(`[[/font]]`). These tags were missing from `KNOWN_HTML_ELEMENTS`; they are
+registered now, so **no new corruption occurs**. Bodies that were already
+mangled into `[[/font]]`, however, do not self-heal because `wikilink-format`
+never re-runs.
+
+The `wikilink-html-recover` preflight migration reverts the corrupted form
+`[[/<x>]]` back to `</x>` **only for those five deprecated tags**
+(`font` / `center` / `marquee` / `blink` / `applet`) — the only names that were
+missing from `KNOWN_HTML_ELEMENTS`, so the only close tags the misfire could
+ever have produced. Every other single-segment wikilink is left untouched,
+including ones whose name happens to be a standard HTML element
+(`[[/section]]`, `[[/div]]`, `[[/br]]`): those were always known, so
+`wikilink-format` never rewrote them and they are **genuine wikilinks**.
+Multi-segment (`[[/foo/bar]]`), aliased (`[[/font|alias]]`) and uppercase
+(`[[/Font]]`) forms are preserved too.
+
+```bash
+# Preview what would be recovered (does not rewrite bodies)
+crowi-admin migrate plan
+
+# Apply just this migration
+crowi-admin migrate apply --id wikilink-html-recover
+```
+
+> **Caution**: `[[/font]]` could be a corrupted `</font>` OR a genuine
+> wikilink to a real page literally at `/font` — the two are indistinguishable
+> from the text alone. This migration does **not** auto-convert a `[[/<x>]]`
+> whose `/<x>` matches an **existing live page**; instead it reports those in
+> the `migrate plan` output so an operator can decide by hand. It **does** still
+> revert a `[[/font]]` (or the other four deprecated tags) when no such page
+> exists — including a dangling link to an absent / deleted page. In practice a
+> real wiki page literally named `/font`, `/center`, `/marquee`, `/blink` or
+> `/applet` is very rare, but if you have one, review the collisions in
+> `migrate plan` and validate on dev / staging before applying in production.
+
+The migration is idempotent — once reverted, `</x>` matches neither the
+recovery scan nor the `wikilink-format` rewrite, so re-running has no double
+effect.
 
 ### /api namespace relocation
 
@@ -268,6 +315,57 @@ internal links).
 > **Note**: `replace url` is neither a versioned migration (it takes arbitrary
 > from/to and is re-runnable) nor a derived-data rebuild (it mutates page
 > bodies), so it lives in its own namespace — not under `migrate` or `rebuild`.
+
+### Modernising file URLs (files-url-to-attachments)
+
+v1 referenced attachments / images in page bodies with **v1 file URLs** (the
+relative form `![shot.png](/files/<id>)`, or the absolute form
+`![shot.png](https://wiki.example/files/<id>)` when the editor pasted a full
+URL). v2 serves attachments from a dedicated stream endpoint at
+`/api/v2/attachments/<id>` and the legacy `/files/<id>` compat route was
+removed, so **v1-form URLs now 404 in v2 — those images are broken**. The id is
+the same 24-hex `Attachment._id` in both v1 and v2, so the fix is **just a URL
+rewrite** (no id remap).
+
+The `files-url-to-attachments` preflight migration walks the current-revision
+body of every published page (plus legacy `null` status) and rewrites the URL of
+Markdown images `![alt](url)` / links `[text](url)` by these rules (raw HTML
+`<img>` / `<a>` is out of scope):
+
+- **relative `/files/<id>`** → `/api/v2/attachments/<id>` (unconditional — a
+  root-relative path is always this site).
+- **self-host absolute `https://<CLIENT_URL host>/files/<id>`** →
+  `/api/v2/attachments/<id>` (relativised by dropping the host, so the URL
+  becomes host-independent). Self-host is decided by matching the `CLIENT_URL` /
+  `BASE_URL` origins only.
+- **external-host absolute URLs** → **left untouched** (so an unrelated
+  third-party `/files/<id>` image is never rewritten by mistake).
+
+```bash
+# Preview what would be rewritten first (writes nothing)
+crowi-admin migrate plan
+
+# Apply just this migration
+crowi-admin migrate apply --id files-url-to-attachments
+```
+
+The migration is idempotent: the rewritten `/api/v2/attachments/<id>` is never
+double-converted on a re-apply. It needs an admin user to attribute the rewrites
+to — set `CROWI_MIGRATE_USER=<email>` if none is resolvable.
+
+> **Tip**: If you **changed the domain**, first align the old host → new host
+> with [replace url](#bulk-url-replacement-after-a-domain-change-replace-url),
+> then apply this migration. Once `replace url` lines up the self-host absolute
+> URLs with the `CLIENT_URL` host, this migration can relativise them; in the
+> opposite order the old-host absolute URLs are classified as "external" and
+> left alone.
+
+> **Note**: As a safety net for migration misses and un-rewritten bodies, the
+> api restores a `/files/<id>` → `302` `/api/v2/attachments/<id>` redirect. A
+> runtime request to a relative `/files/<id>` is forwarded to the v2 form, so an
+> image is not left broken even if the body rewrite has not run yet (absolute
+> URLs pointing at an external host cannot be saved by the redirect, which is why
+> the body rewrite is the primary fix).
 
 ## What to do before migrating
 

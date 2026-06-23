@@ -20,6 +20,7 @@ spec: `feature-v2-alpha1-release-prep.md`（実本番 = v1 DB への in-place �
   - [x] runner-project 方式 Phase 1（spec: `feature-prod-runner-project.md`）
   - [ ] slim image + 外部 operator 向け doc — blocked-on `feature-plugin-search-mongo`
 - [x] **v1→v2 データ移行（RFC-0008）** — migration framework
+- [x] **HTML タグ移行の不具合修正** — wikilink close-tag 誤爆 + TOC HTML 混入の修正と復旧 migration（spec: `feature-migration-html-tag-fixes.md`）
 - [ ] **version bump + tag** — linked group を `2.0.0-alpha.0` へ。npm publish はしない
 
 ---
@@ -65,6 +66,7 @@ merge 後の simplify レビューで挙がった非ブロッキング改善。�
 - [ ] **STATIC_CAPABILITIES drift guard**（boot 時に static capability ↔ route group の assert test）
 - [ ] **MCP result body advisory**（body を返す read tool 増加時に `okResult` で text/structured 一経路化）
 - [ ] **renameTree merge advisory**（subtree-rename 2 ルートの重複集約、`checkPagesRenamable` の N+1 ほか）
+- [ ] **migration-html-tag-fixes merge advisory** — `forEachPublishedCurrentRevision` の採用拡大（`wikilink-format` / `files-url-to-attachments` を寄せて walk 3 実装→1・per-page `findById` N+1 解消）+ web `known-tags.ts` の `HTML_TAGS` を `@crowi/api-contract` の `KNOWN_HTML_ELEMENTS` から生成（SVG/custom 要素差分は別管理）
 - [ ] **eslint 8 → 9 major up**（`packages/api` / `packages/collab` の direct eslint 8.57.1。flat config 統一含む。GHSA `js-yaml` advisory が transitive 経由で残るのは eslint 8 chain が `@eslint/eslintrc → js-yaml@4.1.1` を要求するため）
 - [ ] **mongoose 8 → 9 major up**（`packages/api` / `packages/collab` / `packages/plugin-search-mongo`。GHSA `ip-address` advisory が transitive 経由で残るのは mongoose 8 → mongodb 6.20 → socks 2.8.4 → ip-address@9.0.5 chain で、socks 2.8.7+ の ip-address 10.x 切替が引けないため）
 
@@ -82,6 +84,7 @@ merge 後の simplify レビューで挙がった非ブロッキング改善。�
 - **RFC-0004 Editor UX** — toast / draft status / autocomplete / attachment upload
 - **RFC-0005 Presence** — live presence row / メタチップ行 / likers
 - **RFC-0010 OAuth (Phase 1-4)** — scope 基盤 / PAT / Authorization Code + PKCE / Device grant
+- **RFC-0011 MCP server** — 組み込み `/mcp`（read+write 13 tool）+ prompt-injection 緩和（untrusted 本文を nonce 区切り wrap / read-only PAT 既定。spec: `feature-mcp-prompt-injection-mitigation.md`）
 - **管理画面（フェーズ4）** — app / security / auth / mail / share / storage / users + sensitive config 暗号化
 - **monorepo restructure** — workspace protocol / catalog / `@crowi/tsconfig` / `@crowi/runner` / Dockerfile / changesets
 - **エディタ / UI** — CodeMirror 6 + preview / 階層サイドバー / create-page モーダル / boot progress / 通知 WS invalidation

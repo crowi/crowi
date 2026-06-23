@@ -1,5 +1,142 @@
 # @crowi/api
 
+## 2.0.0-alpha.2
+
+### Minor Changes
+
+- 80e2c36: Rewrite v1 `/files/<id>` attachment URLs in page bodies to the v2
+  `/api/v2/attachments/<id>` form via a new `files-url-to-attachments` preflight
+  migration, and restore a `/files/:id` → 302 redirect as a runtime safety net.
+
+  In v1, attachments and images were embedded in page bodies as `/files/<24hex>`
+  (relative, or `https://<host>/files/<id>` when the editor pasted a full URL).
+  v2 serves attachments from `/api/v2/attachments/<id>` and the legacy
+  `/files/<id>` route was removed with the Express host, so every such embed now
+  404s — the image is broken. The attachment id is unchanged between v1 and v2, so
+  this is a pure URL rewrite (no id remap): the migration converts relative
+  `/files/<id>` unconditionally, relativizes self-host absolute URLs (matched
+  against `CLIENT_URL` / `BASE_URL`), and leaves external hosts untouched to avoid
+  clobbering third-party images. Markdown image and link syntax are covered; the
+  rewrite is idempotent and reports affected pages via `detect`. When neither
+  `CLIENT_URL` nor `BASE_URL` is set, only relative URLs are converted.
+
+  As a safety net for un-migrated bodies and relative `/files/<id>` runtime
+  accesses, a public `/files/:id{[0-9a-fA-F]{24}}` route now issues a 302 redirect
+  to `/api/v2/attachments/<id>`; authorization is delegated to the (JWT-guarded)
+  redirect target.
+
+- 6e50682: Harden the built-in MCP server against prompt injection from untrusted wiki
+  content (RFC-0011 §10.7).
+
+  - **API** — MCP read and write-echo tools now return the page body in
+    `content[0].text` fenced between open/close delimiters that carry a fresh,
+    unguessable per-response nonce, prefixed by a "this is data, not
+    instructions" notice. The nonce defeats break-out attempts: a body that
+    forges the close tag cannot guess the random id, so injected "ignore your
+    task" instructions stay inside the data region. `structuredContent.body`
+    is kept raw (so programmatic clients parse it cleanly) and tagged
+    `trust: "untrusted"`; search snippets are fenced too, while self-authored
+    metadata (path / count / pager) is left plain.
+  - **Web** — the Personal Access Token issue form now defaults to the
+    read-only scopes and recommends them for MCP / AI clients, so the token
+    that gates the MCP server is least-privilege by default; write scopes
+    remain an explicit opt-in.
+
+  Clients that feed `structuredContent.body` straight to a model without honoring
+  `trust` remain a documented residual risk. See the MCP operations docs for the
+  defaults and a verification procedure.
+
+- 20556ca: Improve the page-list / portal / sidebar UX and add a "portalize" flow.
+
+  - **Empty-list "Create page" CTA**: an empty folder listing — or a portal whose
+    child list is empty — now shows a "Create page" button (pre-filled with the
+    current path), instead of dropping the create affordance. Hidden in trash, at
+    the root, and in other users' spaces.
+  - **Unified sidebar tree for `/x` and `/x/`**: a content page and its portal
+    twin now render the identical sidebar tree, and the current node always
+    expands its own children, so navigating between a page and its portal no
+    longer reshuffles the tree.
+  - **Portalize a content page**: the page "⋮" menu gains "Make this a portal",
+    which moves `/some-page` → `/some-page/`, leaving a redirect at the old path
+    so existing links / bookmarks keep resolving to the new portal (the same as
+    any other rename). Opening `/some-page/` while a content page lives at
+    `/some-page` now offers the same one-click portalize banner instead of
+    "Create Portal". `GET /pages/list` gains a `contentPage` field to drive this.
+  - **No more `/x` ↔ `/x/` double-state**: when one of the trailing-slash twins
+    exists, creating the other is refused (editor draft creation, `POST /pages`,
+    and rename all return 400 — `PAGE_TWIN_EXISTS` on the page endpoints). A
+    self-portalize (`/x` → `/x/`) is still allowed. Existing double-state data is
+    left untouched.
+  - **Reach a content page that is also a folder**: when a content page at `/x`
+    also has descendants under `/x/…`, the sidebar now lists `/x` itself as the
+    first child under the `x/` folder (it was previously unreachable, since the
+    folder node links to the `/x/` listing). The path in the "there is content
+    at this path" banner is now a link to that page, and viewing the content
+    page `/x` directly shows a "this page has descendants — make it a portal?"
+    banner.
+  - **Portals keep their page affordances**: a portal now shows the same
+    right-rail table of contents as a normal page (over its body's headings),
+    and a compact chip row above the child list toggles the portal's comments,
+    backlinks, and attachments — so portalizing a page no longer drops its TOC
+    or its comment/backlink/attachment sections.
+
+- 065cda0: Add revert-to-revision: a one-click "revert to this version" button on the
+  stale-revision banner (normal + portal pages), a new POST
+  /pages/revert-to-revision endpoint, and a crowi_revert_to_revision MCP tool.
+  Non-destructive — the past body is stacked as a new revision, so all history
+  is preserved and the revert simply lands on top of the current latest.
+
+  Also fixes the stale-revision banner never appearing when opening a page at a
+  past `?revision_id=`: `latestRevision` is a dynamic field set by
+  `populatePageData`, but `pageToResponse` read it off the `toObject()` result
+  (which strips dynamic fields), so it was always serialized as `undefined` and
+  the client could never tell it was viewing an old version. This affected both
+  normal and portal pages.
+
+### Patch Changes
+
+- 014870a: Put the runtime image's `node_modules/.bin` on `PATH` so the bundled CLIs are
+  directly invocable. `docker compose run --rm api crowi-admin <cmd>` (and
+  `crowi-api`) now resolve by name; previously the base image's
+  `docker-entrypoint.sh` mis-read `crowi-admin` as `node crowi-admin` (because
+  `.bin` was not on `PATH`) and failed, forcing operators to spell out the full
+  `/app/node_modules/.bin/crowi-admin` path.
+- 632924b: Add a side gutter to the shared transactional email layout so the white content
+  card no longer runs edge-to-edge on mobile. On narrow screens the card
+  previously touched both screen edges, leaving the copy cramped against the
+  device frame. The card is now wrapped in a gutter that insets it 16px on each
+  side, giving the content breathing room. This applies to every HTML email
+  (invite, password reset, activation, admin-approval-pending, password-changed,
+  email-change, and the test message) since they all share `layout.mjml`; desktop
+  rendering is unchanged.
+- 3e58ee8: Bump dependencies to clear Dependabot security advisories. Direct deps lifted so
+  transitive chains resolve to the patched versions:
+
+  - `hono` 4.10.0 → 4.12.25 (GHSA-88fw-hqm2-52qc / GHSA-rv63-4mwf-qqc2 /
+    GHSA-wgpf-jwqj-8h8p / GHSA-wwfh-h76j-fc44 / GHSA-j6c9-x7qj-28xf)
+  - `ws` 8.20.1 → 8.21.0 (GHSA-96hv-2xvq-fx4p)
+  - `@elastic/elasticsearch` 9.4.0 → 9.4.2 — pulls `@elastic/transport` 9.3.7 and
+    `@opentelemetry/core` 2.8.0 (GHSA-8988-4f7v-96qf)
+  - `fumadocs-core` / `fumadocs-mdx` / `fumadocs-ui` to their 16.10.4 / 15.0.12
+    lines, `eslint-config-next` 16.1.1 → 16.2.9, `vitest` 4.1.6 → 4.1.9,
+    `@vitejs/plugin-react` 6.0.1 → 6.0.2 — pull `@babel/core` 7.29.7 and
+    `esbuild` 0.28.1 (GHSA-4x5r-pxfx-6jf8 / GHSA-g7r4-m6w7-qqqr)
+  - `form-data` ^4.0.6 and `vite` ^8.0.16 lifted into the dev dependencies of
+    `packages/api` / `packages/web` / `apps/crowi-site` so the lockfile resolver
+    picks the patched range that supertest / vitest / fumadocs-mdx /
+    `@vitejs/plugin-react` could not reach via peer constraints alone (form-data:
+    GHSA-hmw2-7cc7-3qxx; vite: GHSA-fx2h-pf6j-xcff / GHSA-v6wh-96g9-6wx3).
+
+  The remaining `js-yaml` (eslint 8 chain) and `ip-address` (mongoose 8 →
+  mongodb → socks chain) advisories require eslint 8 → 9 and mongoose 8 → 9
+  major upgrades respectively; tracked in TODO.md.
+
+- Updated dependencies [4d66883]
+- Updated dependencies [20556ca]
+- Updated dependencies [065cda0]
+- Updated dependencies [3e58ee8]
+  - @crowi/api-contract@2.0.0-alpha.2
+
 ## 2.0.0-alpha.1
 
 ### Minor Changes

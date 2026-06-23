@@ -256,6 +256,32 @@ html[data-page-grant="2"] {
 }
 
 /*
+ * iOS zoom-on-focus guard (global, theme-level).
+ *
+ * Mobile Safari/WebKit auto-zooms the viewport whenever a focused form
+ * control's font-size is below 16px. Rather than remembering to bump the
+ * font on every new mobile input (search box, editor, future fields), we
+ * enforce a 16px floor on every editable surface here — so any screen we
+ * add is zoom-safe by default.
+ *
+ * Scoped to iOS via `@supports (-webkit-touch-callout: none)`: that property
+ * is implemented only by iOS/iPadOS WebKit (desktop Safari and every other
+ * browser report it unsupported), so non-iOS keeps its denser `text-sm`
+ * form sizing untouched. `!important` because Tailwind's `text-sm` utility
+ * and CodeMirror's injected editor theme would otherwise win the cascade.
+ * Every control here is already ≤16px, so the floor never shrinks anything.
+ */
+@supports (-webkit-touch-callout: none) {
+  input,
+  textarea,
+  select,
+  [contenteditable]:not([contenteditable='false']),
+  .cm-content {
+    font-size: 16px !important;
+  }
+}
+
+/*
  * Animated multi-gradient background used by /installer, /login, /register.
  * Ports the legacy `.crowi.single.nologin` style from the SCSS theme:
  * three stacked linear-gradients shifted in hue / saturation / lightness
@@ -448,15 +474,31 @@ html[data-page-grant="2"] {
   color: var(--shiki-dark);
 }
 
-/* Server-generated diagrams (PlantUML `<div class="plantuml-embed">…</div>`
+/* Cap server-rendered diagrams (PlantUML `<div class="plantuml-embed">…</div>`
  * with an inline `<svg>`, or the PNG `<img class="plantuml-embed">` fallback;
- * future Mermaid output is expected to reuse the same class) ship with
- * baked-in fixed colours — black strokes / text on transparent, designed for
- * a light page. Re-colouring the SVG is out of scope (the markup is produced
- * server-side and cached), so under `.dark` we wrap each diagram in a neutral
- * white background with padding + rounded corners so it stays legible instead
- * of black-on-near-black. Light mode is unchanged (transparent on the page
- * background). */
+ * future Mermaid output is expected to reuse the same class) to the article
+ * width in both themes, so a wide diagram can't push the column (and the
+ * header strip) past the viewport. PlantUML bakes the size into the `<svg>`
+ * as width/height *attributes and inline style* with
+ * `preserveAspectRatio="none"`, so the inline `height` must be overridden
+ * (`!important`) to `auto` for the SVG to scale down proportionally instead
+ * of squishing. The click-to-enlarge lightbox (`PlantumlDiagram`) renders the
+ * diagram outside `.crowi-prose`, so it keeps its natural size there. */
+.crowi-prose .plantuml-embed {
+  max-width: 100%;
+}
+.crowi-prose .plantuml-embed svg,
+.crowi-prose .plantuml-embed img {
+  max-width: 100% !important;
+  height: auto !important;
+}
+
+/* These diagrams ship with baked-in fixed colours — black strokes / text on
+ * transparent, designed for a light page. Re-colouring the SVG is out of
+ * scope (the markup is produced server-side and cached), so under `.dark` we
+ * wrap each diagram in a neutral white background with padding + rounded
+ * corners so it stays legible instead of black-on-near-black. Light mode is
+ * unchanged (transparent on the page background). */
 .dark .crowi-prose .plantuml-embed {
   background-color: #fff;
   border-radius: var(--radius);

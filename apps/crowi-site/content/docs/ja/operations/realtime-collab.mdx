@@ -113,7 +113,7 @@ server {
     listen 443 ssl http2;
     server_name crowi.example.com;
 
-    # /api/v2/* と /collab/* を同じ upstream へ
+    # /api/v2/* と /collab を同じ upstream へ
     location /api/v2/ {
         proxy_pass http://crowi_api;
         proxy_http_version 1.1;
@@ -121,7 +121,12 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    location /collab/ {
+    # 末尾スラッシュ無しの `/collab` も含む prefix match。HocuspocusProvider は
+    # bare `ws[s]://<host>/collab` で接続し、page id は handshake 後の protocol
+    # で送るため、`location /collab/` (末尾スラッシュ付き) だと bare upgrade が
+    # マッチしません。`location /collab` (末尾なし) は `/collab` と `/collab/...`
+    # の両方をカバーします。
+    location /collab {
         proxy_pass http://crowi_api;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
@@ -150,8 +155,9 @@ labels:
 
 ポイント:
 
-- `/api/v2/pages/:id/yjs-token` (HTTP) と `/collab/:pageId` (WebSocket) を
-  同じ api アップストリームに向ける必要があります。
+- `/api/v2/pages/:id/yjs-token` (HTTP) と `/collab` (WebSocket。HocuspocusProvider
+  が bare `/collab` で接続し、page id は protocol 経由で送る) を同じ api アップ
+  ストリームに向ける必要があります。
 - WebSocket 接続のアイドルタイムアウトは長め (1 時間程度) に設定して
   ください。長時間の閲覧/編集セッションが prematurely 切断されると
   ユーザー体験が悪化します。
@@ -159,9 +165,9 @@ labels:
 
 > **Note (Crowi 2.2 / RFC-0005)**: ページプレゼンス機能の WebSocket は
 > `/presence/:pageId` に attach されており、`/collab/*` と**まったく同じ
-> 構成**です。リバースプロキシでは `/presence/` ロケーションを `/collab/`
+> 構成**です。リバースプロキシでは `/presence` ロケーションを `/collab`
 > と同じ要領で api アップストリームへ向け、`Upgrade` ヘッダを転送して
-> ください (nginx なら上記 `location /collab/` と同じブロックをパスだけ
+> ください (nginx なら上記 `location /collab` と同じブロックをパスだけ
 > 変えて複製、Traefik なら `rule` の `PathPrefix` に `/presence` を追加)。
 > プレゼンスのビューア状態とマルチインスタンス間の伝搬は `REDIS_URL` の
 > Redis を共用します (専用の追加インフラはありません)。プレゼンスの

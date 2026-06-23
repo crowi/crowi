@@ -2,7 +2,7 @@
 
 import type { AdminPager, UserPublic } from '@crowi/api-contract';
 import { UserStatusEnum } from '@crowi/api-contract';
-import { MoreHorizontal } from 'lucide-react';
+import { Loader2, MoreHorizontal, Send } from 'lucide-react';
 import { UserIdentityCell } from '@/components/admin/user-identity-cell';
 import { Button } from '@/components/ui/button';
 import {
@@ -13,6 +13,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useResendAdminInvite } from '@/lib/use-admin-users';
+import { notify } from '@/lib/notify';
 import { cn } from '@/lib/utils';
 import { formatDate } from '@/lib/date-utils';
 import { m } from '@paraglide/messages.js';
@@ -103,6 +106,49 @@ export function UsersPager({ pager, onPageChange }: { pager: AdminPager; onPageC
         {m['admin.users.pager_next']()}
       </Button>
     </nav>
+  );
+}
+
+/**
+ * In-row "Resend invite" affordance for INVITED users — a primary action a
+ * deliberately minimal pre-acceptance row should expose directly (not buried
+ * in the menu). One click re-issues the invite token and resends the email
+ * (no confirm dialog, mirroring the reset-password row action). Success and
+ * failure surface as a toast via the shared `notify` helper (the Toaster is
+ * mounted by the admin layout) rather than inline, so the row height never
+ * shifts and the table layout stays stable. The button is disabled while in
+ * flight to prevent a double-send.
+ */
+function ResendInviteButton({ user }: { user: UserPublic }) {
+  const resend = useResendAdminInvite();
+
+  const onClick = () => {
+    resend.mutate(
+      { id: user._id },
+      {
+        onSuccess: () => notify.info(m['admin.users.action.resend_invite_success']()),
+        onError: (err) => notify.error(err instanceof Error ? err.message : m['admin.users.action.resend_invite_failed']()),
+      },
+    );
+  };
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-8 w-8 p-0"
+          disabled={resend.isPending}
+          aria-label={m['admin.users.action.resend_invite']()}
+          onClick={onClick}
+        >
+          {resend.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{resend.isPending ? m['admin.users.action.resending']() : m['admin.users.action.resend_invite']()}</TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -226,7 +272,11 @@ export function UsersTable({ users, pager, onPageChange, onAction, currentUserId
                 <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{formatDate(user.createdAt)}</td>
                 {showActions && onAction && (
                   <td className="px-2 py-3 text-right">
-                    <RowActionMenu user={user} isSelf={user._id === currentUserId} onAction={onAction} />
+                    <div className="inline-flex items-start justify-end gap-1">
+                      {/* INVITED rows surface "Resend invite" directly (outside the menu) as a primary action. */}
+                      {user.status === UserStatusEnum.INVITED && <ResendInviteButton user={user} />}
+                      <RowActionMenu user={user} isSelf={user._id === currentUserId} onAction={onAction} />
+                    </div>
                   </td>
                 )}
               </tr>

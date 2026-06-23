@@ -528,6 +528,84 @@ describe('Routes /api/v2/admin/users (Hono)', () => {
     });
   });
 
+  describe('POST /api/v2/admin/users/:id/resend-invite', () => {
+    let adminToken: string;
+    let userToken: string;
+    let invited: UserDocument;
+    let sendSpy: jest.SpyInstance;
+
+    beforeEach(async () => {
+      await clearUsers();
+      const User = crowi.model('User');
+      adminToken = (await createTestUser({ name: 'RI Admin', username: 'riadmin', email: 'ri-admin@example.com', admin: true })).accessToken;
+      userToken = (await createTestUser({ name: 'RI User', username: 'riuser', email: 'ri-user@example.com' })).accessToken;
+
+      const [u] = await seedUsers([{ name: 'RI Invitee', username: 'riinvitee', email: 'ri-invitee@example.com' }]);
+      u.status = User.STATUS_INVITED;
+      await u.save();
+      invited = u;
+
+      // No mail sender is registered in tests, so getMailer().send() would
+      // throw "Mail sender not registered". Spy on it so each test controls
+      // whether the (single, memoized) mailer resolves or rejects.
+      sendSpy = jest.spyOn(crowi.getMailer(), 'send').mockResolvedValue(undefined);
+    });
+
+    afterEach(() => {
+      sendSpy.mockRestore();
+    });
+
+    it('returns 401 without auth', async () => {
+      const res = await request(app).post(`/api/v2/admin/users/${invited._id}/resend-invite`);
+      expect(res.status).toBe(401);
+    });
+
+    it('returns 403 for a non-admin user', async () => {
+      const res = await request(app).post(`/api/v2/admin/users/${invited._id}/resend-invite`).set(authHeaders(userToken));
+      expect(res.status).toBe(403);
+    });
+
+    it('re-issues an invite token and resends the invitation email', async () => {
+      const res = await request(app).post(`/api/v2/admin/users/${invited._id}/resend-invite`).set(authHeaders(adminToken));
+
+      expect(res.status).toBe(200);
+      expect(res.body.user._id).toBe(invited._id.toString());
+      expect(res.body.user).not.toHaveProperty('password');
+      // The invite email goes out via the shared mailer.send('invite') path
+      // with a fresh token-bearing accept link.
+      expect(sendSpy).toHaveBeenCalledTimes(1);
+      const arg = sendSpy.mock.calls[0][0] as { to: string; htmlTemplate: string; vars: { inviteUrl: string } };
+      expect(arg.htmlTemplate).toBe('invite');
+      expect(arg.to).toBe(invited.email);
+      expect(arg.vars.inviteUrl).toMatch(/\/invite\/accept\?token=/);
+    });
+
+    it('returns 409 when the user is not INVITED (already accepted / never invited)', async () => {
+      const active = await createPlainUser({ name: 'RI Active', username: 'riactive', email: 'ri-active@example.com' });
+      const res = await request(app).post(`/api/v2/admin/users/${active._id}/resend-invite`).set(authHeaders(adminToken));
+      expect(res.status).toBe(409);
+      expect(res.body.error.code).toBe('CONFLICT');
+      expect(sendSpy).not.toHaveBeenCalled();
+    });
+
+    it('returns 404 for a non-existent id', async () => {
+      const res = await request(app).post('/api/v2/admin/users/0123456789abcdef01234567/resend-invite').set(authHeaders(adminToken));
+      expect(res.status).toBe(404);
+      expect(sendSpy).not.toHaveBeenCalled();
+    });
+
+    it('returns 400 for an invalid id', async () => {
+      const res = await request(app).post('/api/v2/admin/users/not-a-valid-id/resend-invite').set(authHeaders(adminToken));
+      expect(res.status).toBe(400);
+    });
+
+    it('returns 500 when the invitation email fails to send', async () => {
+      sendSpy.mockRejectedValueOnce(new Error('smtp down'));
+      const res = await request(app).post(`/api/v2/admin/users/${invited._id}/resend-invite`).set(authHeaders(adminToken));
+      expect(res.status).toBe(500);
+    });
+  });
+
   describe('GET /api/v2/admin/users/pending-count', () => {
     let adminToken: string;
 

@@ -19,11 +19,15 @@ import { resolveWsUrl } from './resolve-ws-url';
  *      location-derived URL hits the Next dev server (web :4302), whose
  *      HTTP-only `rewrites()` silently drops the WS `upgrade`.
  *   3. `window.location` — the same-origin `crowi/crowi-web` image default;
- *      the outer reverse proxy routes `/collab/*` WS upgrades to the api.
+ *      the outer reverse proxy routes the `/collab` WS upgrade to the api.
  *
- * The `${url}/${name}` join in HocuspocusProvider then produces
- * `ws[s]://<host>/collab/<pageId>` — matching the path filter in
- * `packages/api/src/collab/attach.ts`. See `resolve-ws-url.ts` for details.
+ * HocuspocusProvider connects to `url` verbatim and sends the document name
+ * (= pageId) through the protocol after the handshake — it does NOT append the
+ * name to the URL — so the browser dials the bare `ws[s]://<host>/collab`,
+ * matching the path filter in `packages/api/src/collab/attach.ts` (which
+ * accepts both `/collab` and `/collab/...`). A reverse-proxy matcher must
+ * therefore include the bare `/collab`, not only `/collab/*`. See
+ * `resolve-ws-url.ts` for details.
  */
 function resolveCollabUrl(): string {
   return resolveWsUrl('collab');

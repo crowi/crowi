@@ -92,7 +92,8 @@ wiki.example.com {
 	reverse_proxy @api api:3000
 
 	# Realtime WebSocket namespaces → api (Upgrade passed through automatically)
-	@ws path /collab/* /presence/* /notifications/*
+	# The collab client connects to the bare `/collab`, so list bare paths too
+	@ws path /collab /collab/* /presence /presence/* /notifications /notifications/*
 	reverse_proxy @ws api:3000
 
 	# Everything else → web
@@ -107,7 +108,8 @@ location /api/   { proxy_pass http://api:3000; }
 location /files/ { proxy_pass http://api:3000; }
 
 # Realtime WebSocket namespaces — Upgrade-header passthrough is required
-location ~ ^/(collab|presence|notifications)/ {
+# The trailing (/|$) also catches the bare `/collab` (no segment)
+location ~ ^/(collab|presence|notifications)(/|$) {
   proxy_pass http://api:3000;
   proxy_http_version 1.1;
   proxy_set_header Upgrade    $http_upgrade;
@@ -123,7 +125,10 @@ location / { proxy_pass http://web:3000; }
   **must** have `Upgrade` / `Connection` passthrough. Without it the WebSocket
   upgrade is dropped and realtime collaboration / live presence / the
   notification bell silently fall back to non-realtime behaviour (the rest of
-  the app still works). See [Realtime collaboration](./realtime-collab).
+  the app still works). In addition, the collaboration client connects to the
+  **bare `/collab`** (no trailing segment), so the matcher must include
+  **bare `/collab`**, not only `/collab/*` (both examples above already do).
+  See [Realtime collaboration](./realtime-collab).
 </Callout>
 
 <Callout type="info">

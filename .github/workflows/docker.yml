@@ -1,8 +1,10 @@
 name: Docker
 
-# Build + push the official Crowi images (crowi/crowi full + slim) as multi-arch
-# (amd64 + arm64) manifests, tagged with the INDEPENDENT distribution version
-# (D3) — not any single npm package version.
+# Build + push the official Crowi images as multi-arch (amd64 + arm64) manifests,
+# tagged with the INDEPENDENT distribution version (D3) — not any single npm
+# package version:
+#   - crowi/crowi      (api / runner): full + slim variants
+#   - crowi/crowi-web  (Next.js renderer): single image, no variant split
 #
 # Trigger (the "umbrella tag" seam, feature-ci-release-automation §4 / D3):
 #   A tag pushed by the Release workflow with the default GITHUB_TOKEN does NOT
@@ -26,11 +28,19 @@ on:
       version:
         description: 'Distribution version to (re)build, e.g. v2.0.0-alpha.2 (must be an existing tag)'
         required: false
+      ref:
+        description: 'Git ref/sha to build FROM (default: the v<version> tag). Use to apply a build-only Dockerfile/CI fix without force-moving the release tag.'
+        required: false
+      announce:
+        description: 'Post a Discord release announcement (automatic on a real release; set true to also announce a manual re-cut).'
+        type: boolean
+        default: false
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
 env:
   IMAGE: crowi/crowi
+  WEB_IMAGE: crowi/crowi-web
 
 jobs:
   # Resolve the distribution version + the exact tree sha to build, and decide
@@ -68,6 +78,7 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           INPUT_VERSION: ${{ github.event.inputs.version }}
+          INPUT_REF: ${{ github.event.inputs.ref }}
           DOWNLOAD_OUTCOME: ${{ steps.download.outcome }}
           RUN_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
@@ -78,8 +89,14 @@ jobs:
             fi
             echo "should-build=true" >> "$GITHUB_OUTPUT"
             echo "dist-version=$INPUT_VERSION" >> "$GITHUB_OUTPUT"
-            # Build the released tree at that tag.
-            echo "checkout-ref=$INPUT_VERSION" >> "$GITHUB_OUTPUT"
+            # Build the released tree at that tag by default; an explicit `ref`
+            # override lets us apply a build-only Dockerfile/CI fix without
+            # force-moving the release tag (the image still tags as <version>).
+            if [ -n "$INPUT_REF" ]; then
+              echo "checkout-ref=$INPUT_REF" >> "$GITHUB_OUTPUT"
+            else
+              echo "checkout-ref=$INPUT_VERSION" >> "$GITHUB_OUTPUT"
+            fi
           else
             # workflow_run: build only if the Release produced a dist-version artifact.
             if [ "$DOWNLOAD_OUTCOME" != "success" ] || [ ! -f dist-version/dist-version.txt ]; then
@@ -113,7 +130,7 @@ jobs:
               RUNNER_APP_DIR=apps/crowi-runner-slim
     steps:
       - name: Checkout released tree
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ needs.resolve.outputs.checkout-ref }}
           # The dist version is carried as a git tag; fetch tags so a tag ref
@@ -129,7 +146,7 @@ jobs:
         run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 24.x
 
@@ -169,7 +186,7 @@ jobs:
       # is overridden to the distribution version (not the git sha-based default).
       - name: Derive OCI labels
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.IMAGE }}
           tags: type=raw,value=${{ needs.resolve.outputs.dist-version }}
@@ -182,21 +199,21 @@ jobs:
             org.crowi.bundle=${{ steps.bundle.outputs.manifest }}
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
         with:
           driver: docker-container
 
       - name: Log in to Docker Hub
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build and push (${{ matrix.variant }}, multi-arch)
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: packages/api/Dockerfile
@@ -210,3 +227,111 @@ jobs:
           # full/slim don't poison each other.
           cache-from: type=gha,scope=docker-${{ matrix.variant }}
           cache-to: type=gha,mode=max,scope=docker-${{ matrix.variant }}
+
+  # crowi/crowi-web is a SEPARATE distribution artifact: the Next.js standalone
+  # renderer (no plugins, no full/slim split). It shares the resolve job's
+  # dist-version + checkout-ref + should-build gate, and reuses the shared tag
+  # rule via release-tags.mjs with `--variant full` (no suffix + moving channel
+  # tag, latest only on stable) so it cannot drift from the api image scheme.
+  # Built from packages/web/Dockerfile, multi-arch, in parallel with `build`.
+  build-web:
+    needs: resolve
+    if: needs.resolve.outputs.should-build == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout released tree
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.resolve.outputs.checkout-ref }}
+          fetch-depth: 0
+
+      - name: Capture revision
+        id: rev
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24.x
+
+      - name: Compute image tags
+        id: tags
+        env:
+          WEB_IMAGE: ${{ env.WEB_IMAGE }}
+          DIST_VERSION: ${{ needs.resolve.outputs.dist-version }}
+        run: |
+          {
+            echo 'tags<<EOF'
+            node scripts/release-tags.mjs --image "$WEB_IMAGE" --dist-version "$DIST_VERSION" --variant full
+            echo EOF
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Derive OCI labels
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.WEB_IMAGE }}
+          tags: type=raw,value=${{ needs.resolve.outputs.dist-version }}
+          labels: |
+            org.opencontainers.image.title=Crowi (web)
+            org.opencontainers.image.description=Crowi Markdown wiki — web (Next.js) renderer image
+            org.opencontainers.image.version=${{ needs.resolve.outputs.dist-version }}
+            org.opencontainers.image.revision=${{ steps.rev.outputs.sha }}
+            org.crowi.variant=web
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+        with:
+          driver: docker-container
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push (web, multi-arch)
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: packages/web/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=docker-web
+          cache-to: type=gha,mode=max,scope=docker-web
+
+  # Announce a finished release (GitHub Release + npm + all Docker images live)
+  # to the Discord community in ONE message. Runs after every image job so the
+  # post only fires once everything is actually pullable. Fires automatically on
+  # the real release path (workflow_run); a manual re-cut can opt in via the
+  # `announce` dispatch input. No-ops (cleanly) when DISCORD_WEBHOOK_URL is unset
+  # so forks / unconfigured environments don't fail.
+  announce:
+    needs: [resolve, build, build-web]
+    if: needs.resolve.outputs.should-build == 'true' && (github.event_name == 'workflow_run' || github.event.inputs.announce == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Announce release to Discord
+        env:
+          WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          DIST: ${{ needs.resolve.outputs.dist-version }}
+        run: |
+          if [ -z "$WEBHOOK" ]; then
+            echo "DISCORD_WEBHOOK_URL not set; skipping announcement."
+            exit 0
+          fi
+          VER="${DIST#v}"
+          DESC=$(printf '**Release notes**: https://github.com/crowi/crowi/releases/tag/%s\n\n**Docker**\n```\ndocker pull crowi/crowi:%s\ndocker pull crowi/crowi:%s-slim\ndocker pull crowi/crowi-web:%s\n```' "$DIST" "$VER" "$VER" "$VER")
+          jq -n \
+            --arg t "Crowi $DIST released 🎉" \
+            --arg u "https://github.com/crowi/crowi/releases/tag/$DIST" \
+            --arg d "$DESC" \
+            '{username: "Crowi Releases", embeds: [{title: $t, url: $u, color: 3447003, description: $d}]}' \
+          | curl -fsS -H "Content-Type: application/json" -d @- "$WEBHOOK"

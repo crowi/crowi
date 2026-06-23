@@ -23,6 +23,8 @@ import { AdminBreadcrumb } from '@/components/admin/admin-breadcrumb';
 import { buildLoginRedirectUrl } from '@/lib/login-redirect';
 import { m } from '@paraglide/messages.js';
 import { UserMenuItems } from '@/components/user-menu-items';
+import { Toaster } from '@/components/ui/sonner';
+import { MAX_VISIBLE_TOASTS } from '@/lib/notify';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -96,6 +98,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <ThemeSync />
       <ConnectionBanner />
       <ServerErrorModal />
+      <Toaster visibleToasts={MAX_VISIBLE_TOASTS} />
 
       <header className="crowi-top-border bg-background text-foreground shadow-header dark:shadow-none dark:border-b dark:border-border relative z-40">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
