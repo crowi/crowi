@@ -216,25 +216,16 @@ export function createSaveFlow(opts: CreateSaveFlowOptions): SaveFlow {
       // body-seed fallback (a stale/empty doc never materialises empty over
       // a non-empty body). So we ALLOW empty/shrunk bodies through.
       //
-      // Decision 2 (C3) — the one safety requirement: the baseline /
-      // verification read for the yjsState write must REJECT the save on a
-      // read failure, never degrade to a no-op that lets an empty body
-      // through. We read the previous body here; a DB error throws DB_ERROR
-      // (the client retries) rather than committing blind. `null` is a
-      // legitimate value (page had no revision yet / body genuinely empty)
-      // and flows through — it is the THROW we guard against, not the null.
-      let previousBody: string | null = null;
-      if (liveRevision) {
-        try {
-          const prevRev = await Revision.findById(liveRevision).select('body').lean().exec();
-          previousBody = typeof prevRev?.body === 'string' ? prevRev.body : null;
-        } catch (err) {
-          throw new CollabSaveError(
-            'DB_ERROR',
-            `failed to read previous revision body for page ${pageId} (cannot verify the save safely): ${(err as Error).message}`,
-          );
-        }
-      }
+      // C3 (round 3) — the save path NO LONGER reads the previous revision
+      // body. That read existed only to feed `persistYjsState(..., baselineBody)`,
+      // but the save always passes `allowShrink: true`, and `evaluateAntiShrink`
+      // returns `ok: true` on `allowShrink` BEFORE it ever consults
+      // `baselineBody` — so the value was discarded. The only thing the read
+      // could still do was turn a transient `Revision.findById` failure into a
+      // spurious DB_ERROR that rejected an otherwise-valid save (an extra DB
+      // round-trip with no compensating safety). Empty-overwrite is already
+      // blocked structurally (the Revision `body` is required + the client
+      // synced gate), so we drop the read entirely.
 
       // Step 3: contributors (awareness set, minus the trigger user).
       const allContributors = opts.contributorsTracker.drain(pageId);
@@ -331,11 +322,11 @@ export function createSaveFlow(opts: CreateSaveFlowOptions): SaveFlow {
       // effort — the data is already consistent on disk via step 5 (next
       // onLoadDocument rebuilds yjsState from the body if this fails). A
       // user save is explicit intent, so `allowShrink: true` bypasses the
-      // ratio arm (Decision 2: large deletions / clears are legitimate);
-      // `previousBody` is the read-verified baseline (C3 already rejected on
-      // a read failure).
+      // desync guard entirely (Decision 2: large deletions / clears are
+      // legitimate) — `baselineBody` is never consulted on this path (C3), so
+      // we pass `null` rather than spend a DB round-trip reading it.
       try {
-        await persistYjsState(Page, { pageId, document, baselineBody: previousBody, allowShrink: true, origin: 'save' });
+        await persistYjsState(Page, { pageId, document, baselineBody: null, allowShrink: true, origin: 'save' });
       } catch (err) {
         console.warn(`[crowi:collab] save: yjsState write failed for page ${pageId}; recoverable on next load.`, (err as Error).message);
       }

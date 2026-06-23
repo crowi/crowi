@@ -83,24 +83,20 @@ export function createCompactor(deps: CompactPageDeps): Compactor {
   /**
    * Read the latest `Revision.body` for `pageId` — the anti-shrink
    * baseline (editor-preview-reliability §1B). Returns `null` when the
-   * page or its revision is missing so the guard treats it as "no
-   * baseline to protect". Best-effort: a read failure degrades to no
-   * baseline rather than blocking a checkpoint.
+   * page or its revision is genuinely missing (so the guard treats it as
+   * "no baseline to protect"). THROWS on a DB read failure rather than
+   * degrading to `null`: a degraded `null` would make `evaluateAntiShrink`
+   * treat an empty live doc as safe and overwrite a non-empty persisted
+   * `yjsState` with empty. Callers decide how to handle the throw —
+   * store-only SKIPS the checkpoint (round 3), full-merge degrades to a
+   * best-effort no-baseline (its candidate is the merged doc, not empty).
    */
   async function latestRevisionBody(pageId: string): Promise<string | null> {
-    try {
-      const page = await Page.findById(pageId).select('revision currentRevision').lean().exec();
-      const revisionId = page?.currentRevision ?? page?.revision;
-      if (!revisionId) return null;
-      const revision = await Revision.findById(revisionId).select('body').lean().exec();
-      return typeof revision?.body === 'string' ? revision.body : null;
-    } catch (err) {
-      console.warn(
-        `[crowi:collab] compaction: failed to read baseline body for page ${pageId}; proceeding without anti-shrink baseline.`,
-        (err as Error).message,
-      );
-      return null;
-    }
+    const page = await Page.findById(pageId).select('revision currentRevision').lean().exec();
+    const revisionId = page?.currentRevision ?? page?.revision;
+    if (!revisionId) return null;
+    const revision = await Revision.findById(revisionId).select('body').lean().exec();
+    return typeof revision?.body === 'string' ? revision.body : null;
   }
 
   /**
@@ -141,7 +137,24 @@ export function createCompactor(deps: CompactPageDeps): Compactor {
       // common typing case — the body read (just to detect "baseline
       // non-empty") only matters when the candidate is empty.
       const liveIsEmpty = fromDocument.getText(CONTENT_FIELD).length === 0;
-      const baselineBody = liveIsEmpty ? await latestRevisionBody(pageId) : null;
+      let baselineBody: string | null = null;
+      if (liveIsEmpty) {
+        // Round 3: the candidate is empty, so the desync guard's verdict hinges
+        // ENTIRELY on whether the baseline is non-empty. A read failure here
+        // must NOT degrade to `baselineBody=null` (which would let the empty
+        // doc overwrite a non-empty persisted yjsState). SKIP the checkpoint
+        // instead — `null` reads correctly on-store as "not persisted", so the
+        // 10-min time-trigger re-attempts once the content is re-established.
+        try {
+          baselineBody = await latestRevisionBody(pageId);
+        } catch (err) {
+          console.warn(
+            `[crowi:collab] compaction: skipping store-only checkpoint for page ${pageId} — the live doc is empty and the ` +
+              `baseline body read failed, so an empty overwrite cannot be ruled out: ${(err as Error).message}`,
+          );
+          return null;
+        }
+      }
       const result = await persistYjsState(Page, { pageId, document: fromDocument, baselineBody, origin: 'store-only' });
       if (!result.ok) {
         // Return `null` (not an ok-shaped 0-byte result) so `onStoreDocument`
@@ -213,7 +226,21 @@ export function createCompactor(deps: CompactPageDeps): Compactor {
     // non-empty body), NOT a shrink ratio — a legitimate large deletion is
     // a non-empty doc, so it PERSISTS here (durably in yjsState, fixing the
     // C1 TTL hole) instead of being rejected into 1h-TTL rows.
-    const baselineBody = await latestRevisionBody(pageId);
+    //
+    // Full-merge folds real pending deltas into the doc, so the candidate is
+    // virtually never empty; a baseline read failure here can degrade to a
+    // best-effort no-baseline (the empty-over-nonempty desync only bites when
+    // the candidate is itself empty, which the deltas rule out). The
+    // store-only fast path handles the empty-candidate case strictly above.
+    let baselineBody: string | null = null;
+    try {
+      baselineBody = await latestRevisionBody(pageId);
+    } catch (err) {
+      console.warn(
+        `[crowi:collab] compaction: failed to read baseline body for page ${pageId} during full-merge; proceeding without anti-shrink baseline.`,
+        (err as Error).message,
+      );
+    }
     const result = await persistYjsState(Page, { pageId, document: ydoc, baselineBody, origin: 'full-merge' });
 
     if (!result.ok) {
