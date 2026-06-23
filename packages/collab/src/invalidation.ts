@@ -112,11 +112,17 @@ export interface PageInvalidator {
 
 /**
  * The narrow slice of a Hocuspocus engine the invalidator touches: look up a
- * live document (to broadcast force-reload) and force-close its connections.
- * A real `Hocuspocus` satisfies this structurally; tests pass a minimal fake.
+ * live document (to broadcast force-reload), **detach it from the registry**
+ * (so a reconnect during the drain can't re-attach to the stale Y.Doc), and
+ * force-close its connections. A real `Hocuspocus` exposes `documents` as a
+ * `Map<string, Document>` (which has `.delete`), so it satisfies this
+ * structurally; tests pass a minimal fake.
  */
 export interface InvalidatorInstance {
-  documents: { get(documentName: string): { broadcastStateless(payload: string): void } | undefined };
+  documents: {
+    get(documentName: string): { broadcastStateless(payload: string): void } | undefined;
+    delete(documentName: string): void;
+  };
   closeConnections(documentName?: string): void;
 }
 
@@ -169,6 +175,30 @@ export function createPageInvalidator(opts: CreatePageInvalidatorOptions): PageI
               debug('broadcast crowi:force-reload (reason=%s) for page %s', reason, pageId);
             } catch (err) {
               console.warn(`[crowi:collab] invalidatePages: broadcastStateless failed for page ${pageId}:`, (err as Error).message);
+            }
+
+            // Blocker 1 — SYNCHRONOUSLY detach the stale doc from the engine
+            // registry, immediately after the broadcast and BEFORE the grace
+            // fires. Hocuspocus's existing-doc fast path returns
+            // `documents.get(documentName)` WITHOUT calling `onLoadDocument`,
+            // so a reconnect that races the drain would otherwise re-attach to
+            // the stale live Y.Doc (held alive by another still-connected
+            // client under `unloadImmediately`). Removing it from the registry
+            // forces the next connection through `onLoadDocument`, which
+            // re-materialises from the NEW `currentRevision` body (the external
+            // write already nulled `yjsState`). The `invalidatedPages`
+            // tombstone STAYS in place until the scheduled close/unload
+            // completes (cleared in the drain's `finally` below, NOT here) so
+            // a still-attached client's in-flight save keeps CONFLICTing
+            // against the sentinel doc base, and so the re-materialising
+            // connection skips re-recording a real base (see `onLoadDocument`).
+            // The captured `doc` reference above keeps the broadcast working;
+            // the detach only governs NEW connections.
+            try {
+              instance.documents.delete(pageId);
+              debug('invalidatePages: detached stale doc for page %s from the registry (reconnect re-materialises clean)', pageId);
+            } catch (err) {
+              console.warn(`[crowi:collab] invalidatePages: documents.delete failed for page ${pageId}:`, (err as Error).message);
             }
           } else {
             // No active doc — the external edit already nulled yjsState, so

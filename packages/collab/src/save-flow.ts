@@ -147,6 +147,22 @@ export interface CreateSaveFlowOptions {
  * the loser as a contributor must NEVER turn a coalesced save-ok back into a
  * failure (the winner's revision is already canonical), so we swallow it.
  */
+/**
+ * G2 (hardening) — number of micro-retries after a CAS miss before we settle
+ * on CONFLICT, and the delay between them. A same-process winner advances the
+ * doc base in a `docBaseRevisions.set(...)` that runs in its own continuation;
+ * a loser that lost the CAS a few microticks earlier can observe the page's
+ * NEW `currentRevision` while the base still holds the stale value, so a single
+ * coalesce probe would read condition 1 as failed and false-CONFLICT. Re-
+ * probing a handful of times across a few tens of ms lets the winner's
+ * continuation land. Cheap (read-only re-reads) and strictly bounded so a
+ * genuine external divergence still settles to CONFLICT promptly.
+ */
+const COALESCE_MICRO_RETRIES = 5;
+const COALESCE_MICRO_RETRY_MS = 8;
+
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
 async function tryCoalesce(args: {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   Page: any;
@@ -410,14 +426,31 @@ export function createSaveFlow(opts: CreateSaveFlowOptions): SaveFlow {
         // pointer, persist yjsState, or prune PageYjsUpdate rows: the winner
         // already owns all of that. Best-effort: fold the loser's trigger
         // user into the winner's `contributors` (metadata only).
-        const coalesced = await tryCoalesce({
-          Page,
-          Revision,
-          docBaseRevisions,
-          pageId,
-          loserBody: body,
-          loserUserId: user._id,
-        });
+        // G2 micro-retry — re-probe a bounded handful of times (re-reading
+        // `currentRevision` + `docBaseRevisions` each pass) before deciding
+        // coalesce-vs-CONFLICT, so a same-process winner whose
+        // `docBaseRevisions.set(newRevision)` continuation hasn't landed yet
+        // doesn't false-CONFLICT a byte-identical co-edit. The 3 coalesce
+        // conditions are unchanged (`tryCoalesce` still requires the base to
+        // have advanced to the live pointer AND the bodies to match), so an
+        // external/other-instance move (which never advances the in-process
+        // base) is still never coalesced — it just settles to CONFLICT after
+        // the (short) retry budget.
+        let coalesced: { winnerRevisionId: string } | null = null;
+        for (let attempt = 0; attempt <= COALESCE_MICRO_RETRIES; attempt += 1) {
+          coalesced = await tryCoalesce({
+            Page,
+            Revision,
+            docBaseRevisions,
+            pageId,
+            loserBody: body,
+            loserUserId: user._id,
+          });
+          if (coalesced) break;
+          if (attempt < COALESCE_MICRO_RETRIES) {
+            await sleep(COALESCE_MICRO_RETRY_MS);
+          }
+        }
         if (coalesced) {
           debug('save coalesced for page %s — winner revision=%s (loser body identical)', pageId, coalesced.winnerRevisionId);
           // The winner already pruned rows / wrote yjsState / advanced the

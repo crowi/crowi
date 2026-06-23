@@ -148,9 +148,14 @@ describe('external-edit invalidation (G1)', () => {
     await flow.executeSave({ pageId, userId: user._id.toString(), document: doc });
     expect((await Page().findById(pageId).exec()).yjsState).toBeTruthy();
 
-    // The live doc is registered with the engine.
+    // The live doc is registered with the engine. Capture the reference now:
+    // the invalidator detaches the doc from `instance.documents` synchronously
+    // (Blocker 1) so a reconnect during the drain can't re-attach to it, so we
+    // assert the broadcast on the captured reference rather than re-fetching
+    // via `documents.get` (which is undefined post-detach).
     const instance = makeFakeInstance();
-    instance.documents.set(pageId, makeFakeDoc(pageId));
+    const liveFake = makeFakeDoc(pageId);
+    instance.documents.set(pageId, liveFake);
 
     // An external edit lands (HTTP / MCP path): new body, pointer moved,
     // yjsState nulled.
@@ -167,10 +172,12 @@ describe('external-edit invalidation (G1)', () => {
     });
     await invalidator.invalidatePages([pageId], 'page-body-replaced');
 
-    // (a) force-reload was broadcast to the live connections.
-    const fake = instance.documents.get(pageId)!;
-    expect(fake.broadcasts).toHaveLength(1);
-    expect(JSON.parse(fake.broadcasts[0])).toMatchObject({ kind: 'crowi:force-reload', reason: 'page-body-replaced' });
+    // (a) force-reload was broadcast to the live connections (asserted on the
+    // captured reference — the invalidator detached it from the registry).
+    expect(liveFake.broadcasts).toHaveLength(1);
+    expect(JSON.parse(liveFake.broadcasts[0])).toMatchObject({ kind: 'crowi:force-reload', reason: 'page-body-replaced' });
+    // The stale doc was synchronously detached so a reconnect re-materialises.
+    expect(instance.documents.has(pageId)).toBe(false);
 
     // (b) the doc base is tombstoned (an in-flight stale save would CONFLICT).
     expect(docBaseRevisions.get(pageId)).toBe(INVALIDATED_DOC_BASE);

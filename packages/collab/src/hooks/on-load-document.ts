@@ -151,6 +151,39 @@ export function createOnLoadDocument(deps: OnLoadDocumentDeps) {
   }
 
   /**
+   * High (G1) — count, then DROP, residual `PageYjsUpdate` rows that were
+   * created strictly BEFORE `before` (the current revision's creation time)
+   * WITHOUT applying them. We seeded the doc from a revision that is newer
+   * than these rows, so they descend from a now-superseded lineage (an
+   * external write nulled `yjsState` + bumped `currentRevision` but left the
+   * append log behind). Replaying them onto the new body would auto-merge
+   * stale content back in. Rows created at/after `before` are genuine
+   * not-yet-folded collab edits and are LEFT for the caller to replay.
+   *
+   * Returns the number of rows that survive the purge (so the caller can skip
+   * the replay round-trip when nothing is left). Best-effort: a delete failure
+   * is logged and the surviving count is reported optimistically as
+   * `total - olderRows` so the caller still replays the newer rows.
+   */
+  async function purgeStaleResidualUpdates(pageId: string, before: Date): Promise<number> {
+    let total = 0;
+    let stale = 0;
+    try {
+      const rows: Array<{ _id: unknown; createdAt?: Date }> = await PageYjsUpdate.find({ pageId }).select('_id createdAt').lean().exec();
+      total = rows.length;
+      const staleIds = rows.filter((row) => row.createdAt instanceof Date && row.createdAt.getTime() < before.getTime()).map((row) => row._id);
+      stale = staleIds.length;
+      if (staleIds.length > 0) {
+        const result = await PageYjsUpdate.deleteMany({ _id: { $in: staleIds } }).exec();
+        debug('purged %d stale (pre-external-edit) residual updates for page %s', result?.deletedCount ?? staleIds.length, pageId);
+      }
+    } catch (err) {
+      console.warn(`[crowi:collab] onLoadDocument: failed to purge stale residual rows for page ${String(pageId)}:`, (err as Error).message);
+    }
+    return Math.max(0, total - stale);
+  }
+
+  /**
    * Broadcast `crowi:force-reload` to all currently-connected clients
    * on `documentName`. Phase 6 wire — Phase 8 client subscribes to the
    * stateless channel.
@@ -286,10 +319,17 @@ export function createOnLoadDocument(deps: OnLoadDocumentDeps) {
     // was no yjsState at all — in the latter case the residual deltas below
     // still replay over the body to recover not-yet-folded edits.
     let bodySeedChars = 0;
+    // High (G1) — the current revision's creation time, used below to detect
+    // residual `PageYjsUpdate` rows that predate the (externally written) body
+    // we just seeded from and therefore descend from a superseded lineage.
+    let bodySeedRevisionCreatedAt: Date | null = null;
     if (!baseRestored) {
       const revisionId = page.currentRevision ?? page.revision;
       if (revisionId) {
-        const revision = await Revision.findById(revisionId).select('body').lean().exec();
+        const revision = await Revision.findById(revisionId).select('body createdAt').lean().exec();
+        if (revision && revision.createdAt instanceof Date) {
+          bodySeedRevisionCreatedAt = revision.createdAt;
+        }
         if (revision && typeof revision.body === 'string' && revision.body.length > 0) {
           // Normalize CRLF / lone CR → LF before seeding the Y.Text.
           // CodeMirror 6 builds its document by splitting on `/\r\n?|\n/`
@@ -340,6 +380,35 @@ export function createOnLoadDocument(deps: OnLoadDocumentDeps) {
     if (bodySeedFallback && bodySeedChars > 0) {
       await clearResidualUpdates(String(documentName));
       return;
+    }
+
+    // High (G1) — the EXTERNAL-EDIT lineage break. When `yjsState` was
+    // genuinely null/empty (NOT an abandoned-on-decode lineage: `!baseRestored
+    // && !bodySeedFallback`) yet the current revision body seeded NON-empty
+    // content (`bodySeedChars > 0`), an external write may have nulled
+    // `yjsState` + bumped `currentRevision` to a new body (`Page.updatePage`
+    // via REST / MCP / in-process). `Page.updatePage` nulls `yjsState` but does
+    // not delete the append log, so any residual `PageYjsUpdate` rows from
+    // BEFORE that new revision descend from the OLD (pre-external-edit) lineage;
+    // replaying them onto the external body would auto-merge stale content back
+    // in, contradicting the "external edit canonical, manual merge" design.
+    //
+    // We can't blanket-drop here, because the SAME shape (null yjsState +
+    // non-empty body + residual rows) also occurs for a fresh page whose collab
+    // edits were appended AFTER its revision and simply haven't folded yet —
+    // those must replay. The discriminator is time: rows created strictly
+    // before the seeded revision are stale (an external write superseded them);
+    // rows created at/after it are genuine not-yet-folded edits. So we PURGE
+    // only the pre-revision rows and replay the rest.
+    //
+    // Not reached by the legitimate Path-A cases (a checkpoint-rejected
+    // deletion keeps the OLD non-null yjsState → `baseRestored`) nor by the C2
+    // only-content case (`bodySeedChars === 0`).
+    if (!baseRestored && !bodySeedFallback && bodySeedChars > 0 && bodySeedRevisionCreatedAt) {
+      const surviving = await purgeStaleResidualUpdates(String(documentName), bodySeedRevisionCreatedAt);
+      if (surviving === 0) {
+        return;
+      }
     }
 
     // Phase 4 — replay residual append rows on top of the restored / seeded

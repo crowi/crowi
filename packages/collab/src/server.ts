@@ -187,6 +187,11 @@ export function createCollabServer(opts: CreateCollabServerOptions): CollabEngin
   const onStoreDocument = createOnStoreDocument({
     models: { Page: models.Page },
     compactor,
+    // Blocker 2 — share the same stores the invalidator tombstones so a
+    // last-close store during an external-edit drain skips the checkpoint
+    // (never re-persists the stale live doc over the external edit).
+    docBaseRevisions,
+    invalidatedPages,
   });
   const onChange = createOnChange({
     models: { PageYjsUpdate: models.PageYjsUpdate },

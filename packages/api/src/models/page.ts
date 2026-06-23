@@ -1162,6 +1162,7 @@ export default (crowi: Crowi) => {
   pageSchema.statics.updatePage = async function (pageData, body, user, options = {}) {
     const Revision = crowi.model('Revision');
     const Bookmark = crowi.model('Bookmark');
+    const PageYjsUpdate = crowi.model('PageYjsUpdate');
     // Default to the page's CURRENT grant when the caller doesn't pass one, so a
     // body-only update leaves visibility untouched. A previous `options.grant ||
     // null` turned every grant-less call (e.g. `updatePage(page, body, user, {})`
@@ -1188,6 +1189,24 @@ export default (crowi: Crowi) => {
     pageData.yjsCheckpointAt = null;
 
     await Page.pushRevision(pageData, newRevision, user);
+
+    // feature-editor-preview-reliability (High, G1) — an external body write
+    // abandons the persisted collab lineage (yjsState nulled above). The
+    // pending `PageYjsUpdate` append rows descend from that OLD lineage, so a
+    // fresh `onLoadDocument` materialisation would replay them on top of the
+    // new revision body and auto-merge stale content back in (contradicting
+    // the "external edit canonical, manual merge" design). Drop them here so
+    // the next materialisation replays nothing. Best-effort + fire-and-forget:
+    // a delete failure must never fail / delay the HTTP write, and the collab
+    // load path has its own time-gated purge as a backstop. `onLoadDocument`
+    // only re-applies rows that POSTDATE this new revision (genuine
+    // not-yet-folded edits), so clearing the pre-edit rows is safe.
+    void PageYjsUpdate.deleteMany({ pageId: pageData._id })
+      .exec()
+      .catch((err: unknown) => {
+        debug('updatePage: PageYjsUpdate.deleteMany failed for page %s: %s', String(pageData._id), (err as Error)?.message ?? err);
+      });
+
     const bookmarkCount = await Bookmark.countByPageId(pageData._id);
 
     // The 4th arg flags "a new revision was created" so events/page.ts can
