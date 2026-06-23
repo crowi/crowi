@@ -6,7 +6,7 @@ import { WebSocketServer, type WebSocket as WsWebSocket } from 'ws';
 // transitive `crossws` ESM-only dependency of `@hocuspocus/server`
 // doesn't break Jest at test-collect time. Only TS types are imported
 // statically here (type imports are erased at runtime).
-import type { CollabModels, CollabPageEventPublisher, EditorCapCounter, CollabWsTokenUtil } from '@crowi/collab';
+import type { CollabModels, CollabPageEventPublisher, EditorCapCounter, CollabWsTokenUtil, InvalidateReason } from '@crowi/collab';
 import type { Extension } from '@hocuspocus/server';
 import type Crowi from 'src/crowi';
 import { getEditorCapCounter } from 'src/util/collab-cap';
@@ -59,6 +59,19 @@ export interface AttachedCollab {
    * to live Y.Docs.
    */
   shutdown(): Promise<void>;
+  /**
+   * feature-editor-preview-reliability G1 — invalidate the live collab
+   * doc(s) for the given pages after an external edit committed (an HTTP /
+   * MCP / in-process `Page.updatePage` that nulled `yjsState` + bumped
+   * `currentRevision`). Broadcasts `crowi:force-reload`, tombstones the doc
+   * base so an in-flight stale save CONFLICTs, gates new connections during
+   * the drain, and force-closes the stale connections after a short grace.
+   *
+   * In-process / single-instance ONLY: a live doc on a DIFFERENT replica is
+   * not reachable here (RFC-0003 §5b — documented limitation). Best-effort:
+   * never throws back into the triggering write.
+   */
+  invalidatePages(pageIds: string[], reason: InvalidateReason): Promise<void>;
 }
 
 /**
@@ -259,7 +272,7 @@ export async function attachCollabServer(httpServer: HttpServer, crowi: Crowi): 
   // also owns a periodic refresher whose timer must be stopped on
   // shutdown — hence the handle is kept (see `shutdown()` below).
   const presenceDeps = createPresenceCollabDeps(crowi);
-  const hocuspocus = collab.createCollabServer({
+  const { hocuspocus, invalidator } = collab.createCollabServer({
     models,
     wsTokenUtil,
     debounce: DEFAULT_DEBOUNCE_MS,
@@ -351,6 +364,9 @@ export async function attachCollabServer(httpServer: HttpServer, crowi: Crowi): 
 
   let didShutdown = false;
   return {
+    async invalidatePages(pageIds, reason) {
+      await invalidator.invalidatePages(pageIds, reason);
+    },
     async shutdown() {
       // Re-entry from a second SIGINT (operator impatient with Ctrl-C)
       // or from app.ts orchestration. The first call owns the teardown.

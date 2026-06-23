@@ -252,6 +252,26 @@ export default (crowi: Crowi) => {
   const debug = Debug('crowi:models:page');
   const pageEvent = crowi.event('Page');
 
+  /**
+   * feature-editor-preview-reliability G1 — drive the in-process collab
+   * external-edit invalidator after an external write (`updatePage`) commits.
+   * Fire-and-forget: the invalidator is itself best-effort and never throws,
+   * but we still guard the call so an absent attachment (CLI / tests / boot
+   * not yet finished) or a synchronous throw can never bubble into the write.
+   *
+   * Multi-instance / out-of-process is out of scope (RFC-0003 §5b): the
+   * handle only reaches docs live in THIS api process. A live doc on another
+   * replica needs future Redis pub/sub — documented in the realtime-collab
+   * operations doc.
+   */
+  function invalidateLiveCollabDoc(pageId: Types.ObjectId | string): void {
+    const attachment = crowi.collabAttachment;
+    if (!attachment) return;
+    void attachment.invalidatePages([String(pageId)], 'page-body-replaced').catch((err: unknown) => {
+      debug('collab invalidatePages failed for page %s: %s', String(pageId), (err as Error)?.message ?? err);
+    });
+  }
+
   function isPortalPath(path) {
     return path.endsWith('/');
   }
@@ -1177,9 +1197,20 @@ export default (crowi: Crowi) => {
     if (grant != pageData.grant) {
       const data = await Page.updateGrant(pageData, grant, user);
       pageEvent.emit('update', data, user, bookmarkCount, true);
+      invalidateLiveCollabDoc(pageData._id);
       return data;
     }
     pageEvent.emit('update', pageData, user, bookmarkCount, true);
+    // feature-editor-preview-reliability G1 — this external edit just nulled
+    // `yjsState` + bumped `currentRevision` (above). If a collab session is
+    // live on this page in THIS process, the live Y.Doc is now stale: a
+    // force-reload broadcast alone is a no-op under `unloadImmediately`
+    // (the doc survives while ≥1 client stays connected), so we drive the
+    // in-process invalidator (broadcast + tombstone + drain) AFTER the write
+    // committed. Best-effort + fire-and-forget: it must never fail / delay
+    // the HTTP write, and out-of-process / multi-instance live docs are out
+    // of scope (RFC-0003 §5b — documented limitation).
+    invalidateLiveCollabDoc(pageData._id);
     return pageData;
   };
 
