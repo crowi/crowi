@@ -335,6 +335,145 @@ describe('save-flow reliability (editor-preview-reliability round 2)', () => {
     expect(page.revision.toString()).toBe(r2.revisionId);
   });
 
+  // ---------------------------------------------------------------------
+  // G2 — conditional coalesce of two concurrent SAME-doc saves.
+  // ---------------------------------------------------------------------
+
+  test('G2: a CAS-loser whose body is byte-identical to the winner returns the WINNER revisionId as save-ok (no CONFLICT)', async () => {
+    // Two editors share ONE server doc (one base store). They both press
+    // save at the same instant with the SAME body (they edited the same live
+    // doc). The CAS lets the winner move the pointer; the loser's CAS misses.
+    // Because the winner's body is identical, the loser must coalesce — it
+    // returns the WINNER's revisionId and never CONFLICTs.
+    const docBaseRevisions = createDocBaseRevisionStore();
+    const tracker = createContributorsTracker();
+    const flow = createSaveFlow({ models, contributorsTracker: tracker, pageEventPublisher: makeMockPublisher(), docBaseRevisions });
+    const { pageId } = await fixtures.seedPage();
+    const winnerUser = await seedUser(models);
+    const loserUser = await seedUser(models);
+
+    const doc = await materialise(docBaseRevisions, pageId);
+    doc.getText(CONTENT_FIELD).insert(0, 'identical co-edited content');
+
+    // The WINNER saves normally: pointer -> R_win, base advances to R_win,
+    // body persisted = the doc's current text.
+    const winner = await flow.executeSave({ pageId, userId: winnerUser._id.toString(), document: doc });
+    const pageAfterWin = await Page().findById(pageId).exec();
+    expect(pageAfterWin.currentRevision.toString()).toBe(winner.revisionId);
+
+    // Now the loser's save races: it read the page when it still pointed at
+    // the pre-winner base, so its CAS pointer write misses. We reproduce the
+    // post-race state by forcing the loser's CAS pointer write (the updateOne
+    // whose filter carries `currentRevision`) to report matchedCount: 0 while
+    // the real DB already reflects the winner (identical body). The coalesce
+    // path must then return the winner's revisionId.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const Page2 = models.Page as any;
+    const realUpdateOne = Page2.updateOne.bind(Page2);
+    const spy = jest.spyOn(Page2, 'updateOne').mockImplementation((...args: unknown[]) => {
+      const filter = args[0] as Record<string, unknown>;
+      if (filter && Object.prototype.hasOwnProperty.call(filter, 'currentRevision')) {
+        // The lost CAS — pretend the pointer moved out from under us.
+        return { exec: async () => ({ matchedCount: 0 }) };
+      }
+      return realUpdateOne(...args);
+    });
+
+    let result: { revisionId: string };
+    try {
+      // The loser snapshots the SAME doc (identical body) and saves.
+      result = await flow.executeSave({ pageId, userId: loserUser._id.toString(), document: doc });
+    } finally {
+      spy.mockRestore();
+    }
+
+    // The loser coalesced into the winner — same revisionId, no CONFLICT.
+    expect(result.revisionId).toBe(winner.revisionId);
+    const page = await Page().findById(pageId).exec();
+    expect(page.currentRevision.toString()).toBe(winner.revisionId);
+    expect(page.revision.toString()).toBe(winner.revisionId);
+
+    // Best-effort: the loser's trigger user was folded into the winner
+    // revision's contributors.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const Revision = models.Revision as any;
+    const winnerRev = await Revision.findById(winner.revisionId).lean().exec();
+    expect((winnerRev.contributors ?? []).map((id: Types.ObjectId) => id.toString())).toContain(loserUser._id.toString());
+  });
+
+  test('G2: a CAS-loser whose body DIFFERS from the winner keeps CONFLICT (no coalesce)', async () => {
+    const docBaseRevisions = createDocBaseRevisionStore();
+    const flow = createSaveFlow({ models, contributorsTracker: createContributorsTracker(), pageEventPublisher: makeMockPublisher(), docBaseRevisions });
+    const { pageId } = await fixtures.seedPage();
+    const winnerUser = await seedUser(models);
+    const loserUser = await seedUser(models);
+
+    const doc = await materialise(docBaseRevisions, pageId);
+    doc.getText(CONTENT_FIELD).insert(0, 'the winner body');
+    const winner = await flow.executeSave({ pageId, userId: winnerUser._id.toString(), document: doc });
+
+    // The loser is about to save a DIFFERENT body. Force its CAS to miss; the
+    // winner's persisted body differs, so coalesce must be refused → CONFLICT.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const Page2 = models.Page as any;
+    const realUpdateOne = Page2.updateOne.bind(Page2);
+    const spy = jest.spyOn(Page2, 'updateOne').mockImplementation((...args: unknown[]) => {
+      const filter = args[0] as Record<string, unknown>;
+      if (filter && Object.prototype.hasOwnProperty.call(filter, 'currentRevision')) {
+        return { exec: async () => ({ matchedCount: 0 }) };
+      }
+      return realUpdateOne(...args);
+    });
+
+    try {
+      // A different body than the winner's.
+      doc.getText(CONTENT_FIELD).insert(doc.getText(CONTENT_FIELD).length, ' + the loser typed something else');
+      await expect(flow.executeSave({ pageId, userId: loserUser._id.toString(), document: doc })).rejects.toMatchObject({ code: 'CONFLICT' });
+    } finally {
+      spy.mockRestore();
+    }
+
+    // The page still points at the winner; nothing clobbered.
+    const page = await Page().findById(pageId).exec();
+    expect(page.currentRevision.toString()).toBe(winner.revisionId);
+  });
+
+  test('G2: an out-of-band Page.updatePage that moved currentRevision is NEVER coalesced (CONFLICT)', async () => {
+    // The danger case: an EXTERNAL edit (HTTP / other instance / CLI) moved
+    // the pointer. Even if its body happened to equal the loser's body, the
+    // in-process doc base did NOT advance to it (only a same-process collab
+    // save advances the base), so coalesce condition 1 fails → CONFLICT. This
+    // is what keeps coalesce from masking a genuine external divergence.
+    const docBaseRevisions = createDocBaseRevisionStore();
+    const flow = createSaveFlow({ models, contributorsTracker: createContributorsTracker(), pageEventPublisher: makeMockPublisher(), docBaseRevisions });
+    const { pageId } = await fixtures.seedPage();
+    const user = await seedUser(models);
+
+    const doc = await materialise(docBaseRevisions, pageId);
+    doc.getText(CONTENT_FIELD).insert(0, 'identical content body');
+    const r1 = await flow.executeSave({ pageId, userId: user._id.toString(), document: doc });
+
+    // An out-of-band save moves currentRevision to a NEW revision whose body
+    // is byte-identical to what the doc holds — but it does NOT advance the
+    // in-process base (the base still equals r1, the live pointer is now the
+    // external revision). The early divergence check fires CONFLICT before we
+    // even reach the CAS; coalesce never runs on an external move.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const Revision = models.Revision as any;
+    const externalRev = await Revision.create({ path: '/x2', body: 'identical content body', author: user._id, format: 'markdown' });
+    await Page()
+      .updateOne({ _id: pageId }, { $set: { revision: externalRev._id, currentRevision: externalRev._id } })
+      .exec();
+
+    await expect(flow.executeSave({ pageId, userId: user._id.toString(), document: doc })).rejects.toMatchObject({ code: 'CONFLICT' });
+
+    // The doc base still holds r1 (never advanced to the external revision),
+    // proving the coalesce guard would have rejected it too.
+    expect(docBaseRevisions.get(pageId)).toBe(r1.revisionId);
+    const page = await Page().findById(pageId).exec();
+    expect(page.currentRevision.toString()).toBe(externalRev._id.toString());
+  });
+
   test('a normal-sized save persists its yjsState', async () => {
     const docBaseRevisions = createDocBaseRevisionStore();
     const flow = createSaveFlow({ models, contributorsTracker: createContributorsTracker(), pageEventPublisher: makeMockPublisher(), docBaseRevisions });
