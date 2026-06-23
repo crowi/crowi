@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 /**
  * editor-preview-reliability §3 — local recovery buffer for the collab
@@ -140,6 +140,17 @@ export function useCollabRecoveryBuffer(options: UseCollabRecoveryBufferOptions)
     getTextRef.current = getText;
   }, [getText]);
 
+  // Tail (round 3) — `clear()` vs the still-armed 5s snapshot interval race:
+  // a `clear()` (after restore / discard / save) removes the entry, but the
+  // periodic interval (and the pagehide/visibility flush) can fire moments
+  // later and re-write the buffer we just cleared, resurrecting a stale
+  // "restore unsaved changes?" prompt on the next mount. We hold the active
+  // interval id in a ref so `clear()` can cancel it synchronously, and a
+  // `suppressed` flag so the flush handlers skip a write until the next
+  // enable cycle re-arms the interval (which clears the flag).
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const suppressedRef = useRef(false);
+
   // Read any prior snapshot ONCE on mount (per page). Reading after the
   // first snapshot write would echo back this session's own text.
   const [recoverable, setRecoverable] = useState<RecoverySnapshot | null>(null);
@@ -161,11 +172,22 @@ export function useCollabRecoveryBuffer(options: UseCollabRecoveryBufferOptions)
     if (!pageId) return;
     const text = getTextRef.current();
     if (text == null) return;
+    // An explicit snapshot is a deliberate write (a pre-destruction save on
+    // auth-failed / readonly-flip / force-reload). Lift any suppression a
+    // prior `clear()` set so a later interval tick can keep this buffer fresh.
+    suppressedRef.current = false;
     writeEntry(pageId, text);
   }, [pageId]);
 
   const clear = useCallback(() => {
     if (!pageId) return;
+    // Cancel any armed snapshot timer + suppress the flush handlers so a
+    // pending interval tick can't re-write the entry we're about to remove.
+    if (intervalRef.current !== null) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    suppressedRef.current = true;
     removeEntry(pageId);
     setRecoverable(null);
   }, [pageId]);
@@ -173,12 +195,20 @@ export function useCollabRecoveryBuffer(options: UseCollabRecoveryBufferOptions)
   // Periodic snapshot while an active editing session is enabled.
   useEffect(() => {
     if (!pageId || !enabled) return;
+    // A fresh enable cycle re-arms snapshotting, so lift any suppression a
+    // prior `clear()` set.
+    suppressedRef.current = false;
     const timer = setInterval(() => {
+      if (suppressedRef.current) return;
       const text = getTextRef.current();
       if (text == null) return;
       writeEntry(pageId, text);
     }, snapshotIntervalMs);
-    return () => clearInterval(timer);
+    intervalRef.current = timer;
+    return () => {
+      clearInterval(timer);
+      if (intervalRef.current === timer) intervalRef.current = null;
+    };
   }, [pageId, enabled, snapshotIntervalMs]);
 
   // Best-effort final snapshot on tab close / hide — `pagehide` covers
@@ -186,6 +216,7 @@ export function useCollabRecoveryBuffer(options: UseCollabRecoveryBufferOptions)
   useEffect(() => {
     if (!pageId || !enabled) return;
     const flush = () => {
+      if (suppressedRef.current) return;
       const text = getTextRef.current();
       if (text == null) return;
       writeEntry(pageId, text);
@@ -201,5 +232,10 @@ export function useCollabRecoveryBuffer(options: UseCollabRecoveryBufferOptions)
     };
   }, [pageId, enabled]);
 
-  return { recoverable, snapshotNow, clear };
+  // Tail (round 3) — memoise the returned object. `snapshotNow` / `clear`
+  // are already stable (`useCallback`); without this `useMemo` the literal
+  // `{ recoverable, snapshotNow, clear }` was a fresh reference every render,
+  // so any consumer effect listing `recovery` in its deps re-ran on every
+  // parent render (re-subscribing the restore-prompt / status effects).
+  return useMemo(() => ({ recoverable, snapshotNow, clear }), [recoverable, snapshotNow, clear]);
 }

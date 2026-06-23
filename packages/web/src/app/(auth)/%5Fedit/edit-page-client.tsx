@@ -222,6 +222,17 @@ function EditorShell({
   useEffect(() => {
     liveYTextRef.current = session.yText;
   }, [session.yText]);
+  // Restore gating (round 3) — keep the LIVE `synced` flag in a ref so the
+  // deferred restore-toast onClick (which can fire long after its effect ran)
+  // only inserts into a doc that is CURRENTLY synced. The prompt effect gates
+  // on `session.synced`, but between showing the prompt and the user clicking
+  // Restore the provider may have rebuilt (token refresh / reconnect) into a
+  // fresh, still-pre-sync (empty) Y.Text; inserting then would duplicate /
+  // strand content once SyncStep2 lands. The ref lets the click re-check.
+  const liveSyncedRef = useRef(false);
+  useEffect(() => {
+    liveSyncedRef.current = session.synced;
+  }, [session.synced]);
   // Phase 8 Save flow: when realtime save is enabled the spinner +
   // disabled state of the Save button is driven by `useCollabSave`'s
   // in-flight state instead of the HTTP mutation's `isPending`.
@@ -488,17 +499,25 @@ function EditorShell({
   // text differs from what synced in (so an already-saved snapshot
   // doesn't nag), and only once per page session (the ref guard).
   const recoveryPromptedRef = useRef(false);
-  // M5 + tail — reset the mount-lifetime status / prompt refs when the page
+  // M5 + tail — reset ALL mount-lifetime per-page editor state when the page
   // changes (an in-place `?page_id=` swap keeps this EditorShell mounted).
-  // Without this the restore prompt would be permanently suppressed, and the
+  // Without this the restore prompt would be permanently suppressed, the
   // status-toast reducer would carry the previous page's `interrupted` /
-  // last-status across into the new page's session, mis-firing toasts.
+  // last-status across into the new page's session (mis-firing toasts), and —
+  // the M5 gap (round 3) — `realtimeDirty` would stay `true` from the prior
+  // page, so the new page would open already "dirty" (false unsaved-changes
+  // guard + premature recovery snapshots of un-edited content).
   useEffect(() => {
     recoveryPromptedRef.current = false;
     prevStatusRef.current = 'connecting';
     toastStateRef.current = { interrupted: false };
     prevReadonlyRef.current = false;
     authTerminalShownRef.current = false;
+    // Adjusting `realtimeDirty` when the page id changes is the React
+    // "reset state when a key prop changes" pattern (the in-place `?page_id=`
+    // swap keeps this component mounted, so a remount-via-key isn't available).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setRealtimeDirty(false);
   }, [realtimePageId]);
   useEffect(() => {
     if (!useRealtimeSave || !session.synced || recoveryPromptedRef.current) return;
@@ -519,6 +538,18 @@ function EditorShell({
       action: {
         label: m['collab.recovery_restore'](),
         onClick: () => {
+          // Restore gating (round 3) — only restore into a CURRENTLY-synced
+          // doc. If the provider rebuilt (token refresh / reconnect) since the
+          // prompt appeared, the live Y.Text may be a fresh, still-pre-sync
+          // (empty) doc; inserting now would be clobbered / duplicated once
+          // SyncStep2 lands. Defer: keep the buffer + leave the prompt for the
+          // next sync (the prompt effect re-fires once `synced` is true again
+          // because we DON'T clear() here). Re-open the toast so the user
+          // sees we didn't lose their work.
+          if (!liveSyncedRef.current) {
+            recoveryPromptedRef.current = false;
+            return;
+          }
           // B1 — NEVER blind-replace the live shared doc. By the time the
           // user clicks Restore, the live doc may hold newer co-editor
           // content the snapshot pre-dates; a `delete(0,len)+insert` would

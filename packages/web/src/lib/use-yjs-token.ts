@@ -1,10 +1,20 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { WsTokenResponse } from '@crowi/api-contract';
 import { apiClientV2 } from './api-client';
+import type { CollabStatus } from './use-collab-document';
 import { subscribeTokenRefreshed } from './token-refresh-notifier';
+
+/**
+ * Options for `useYjsToken`. `getConnectionStatus` lets the caller
+ * (`useCollabSession`) tell the hook whether the live collab WebSocket is
+ * currently CONNECTED — see the D1a note on the notifier-driven refetch.
+ */
+export interface UseYjsTokenOptions {
+  getConnectionStatus?: () => CollabStatus;
+}
 
 /**
  * Fetch the short-lived wsToken JWT that the Hocuspocus client presents
@@ -23,30 +33,43 @@ import { subscribeTokenRefreshed } from './token-refresh-notifier';
  *   - on mount (the initial connect), via the query itself;
  *   - on `auth-failed` (a reconnect with an expired/rejected token),
  *     nudged by the bounded backoff in `useCollabSession`;
- *   - on a silent access-token refresh, but ONLY when the cached wsToken is
- *     actually (near-)expired (the `subscribeTokenRefreshed` effect below).
+ *   - on a silent access-token refresh, but ONLY when the connection is NOT
+ *     currently established AND the cached wsToken is actually (near-)expired
+ *     (the `subscribeTokenRefreshed` effect below).
  *
  * Focus-triggered refetch is disabled for the same provider-rebuild reason.
  */
-export function useYjsToken(pageId: string | null | undefined) {
+export function useYjsToken(pageId: string | null | undefined, options?: UseYjsTokenOptions) {
   const queryClient = useQueryClient();
 
-  // §4 / H7 — when a silent access-token refresh succeeds, re-fetch the
-  // wsToken ONLY when the cached wsToken is actually expired (or about to
-  // be). The previous version invalidated unconditionally on every silent
-  // refresh, which tore down + rebuilt the Y.Doc + HocuspocusProvider even
-  // for a perfectly healthy, mid-edit session whose wsToken was still
-  // valid (the wsToken is independent of the access token). That churned
-  // healthy sessions; the seam is meant to ENABLE recovery, not cause it.
+  // Keep the connection-status getter in a ref so the subscriber effect
+  // doesn't re-subscribe when the caller passes a fresh closure each render.
+  const getConnectionStatusRef = useRef(options?.getConnectionStatus);
+  useEffect(() => {
+    getConnectionStatusRef.current = options?.getConnectionStatus;
+  }, [options?.getConnectionStatus]);
+
+  // §4 / D1a — when a silent access-token refresh succeeds, re-fetch the
+  // wsToken ONLY when the live collab connection actually needs a fresh
+  // token to (re)connect.
   //
-  // A wsToken that expired around the same time as the access token leaves
-  // the provider in `auth-failed`; only THEN do we hand it a fresh token
-  // here (the dynamic `refetchInterval` already covers proactive,
-  // not-yet-expired refresh). When the cached token is still well within
-  // its TTL we leave it — the live provider keeps running untouched.
+  // The wsToken authenticates the HANDSHAKE only; once the WebSocket is
+  // ESTABLISHED it stays authenticated for its whole life regardless of the
+  // token's `exp`. So while we are `connected`, a lapsed wsToken TTL is
+  // irrelevant — refetching it would only tear down + rebuild the provider
+  // (new Y.Doc / yText → editor remount mid-edit), the exact churn D1 exists
+  // to prevent. We therefore gate the refetch on "not currently connected":
+  //   - `connected`  → never refetch (D1a), even past the token TTL;
+  //   - otherwise (`connecting` / `disconnected` / `auth-failed`, or no
+  //     status getter wired) → refetch, but only when the cached wsToken is
+  //     actually expired / within ~30s of expiry, so a still-valid token
+  //     isn't needlessly swapped.
   useEffect(() => {
     if (!pageId) return;
     return subscribeTokenRefreshed(() => {
+      // D1a — a healthy, established connection does not care that the
+      // wsToken's TTL lapsed; leave the live provider untouched.
+      if (getConnectionStatusRef.current?.() === 'connected') return;
       const cached = queryClient.getQueryData<WsTokenResponse>(['yjsToken', pageId]);
       // No cached token yet, or it is within ~30s of expiry / already
       // expired → refetch. A comfortably-valid token is left in place so

@@ -1,6 +1,6 @@
 'use client';
 
-import { forwardRef, useEffect, useMemo, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Extension } from '@codemirror/state';
 import { keymap } from '@codemirror/view';
 import { yCollab } from 'y-codemirror.next';
@@ -43,18 +43,29 @@ export interface CollabSession {
    */
   synced: boolean;
   /**
-   * editor-preview-reliability H5 — sticky "has synced at least once".
+   * editor-preview-reliability H5 / D1b — sticky "has synced at least once".
    * The editor's MOUNT gate uses this instead of `synced` so a transient
    * disconnect (which dips `synced`) doesn't remount CodeMirror / flip it
-   * readonly mid-edit. Resets only on provider rebuild / auth-failure.
+   * readonly mid-edit. Stays `true` through a routine `auth-failed` reconnect
+   * (D1b — recovery keeps the editor mounted, showing "reconnecting…");
+   * `useCollabSession` masks it to `false` only when recovery is GENUINELY
+   * TERMINAL (`authRecoveryExhausted`) or the provider is rebuilt / the page
+   * swaps.
    */
   hasEverSynced: boolean;
   /**
    * editor-preview-reliability D2 — `true` once the bounded auth-failed
    * recovery budget is spent (the wsToken keeps getting rejected after the
    * retries). The caller escalates this to a terminal "session expired —
-   * sign in again" message and dismisses the "reconnecting…" spinner. Reset
-   * to `false` whenever the session leaves `auth-failed` by ANY path.
+   * sign in again" message and dismisses the "reconnecting…" spinner.
+   *
+   * D2 (round 3): the budget + this flag reset ONLY on a CONFIRMED sync
+   * (`synced === true`), NOT on a transient `connecting`/`connected`. A
+   * fetchable-but-rejected wsToken rebuilds the provider each cycle (status
+   * oscillates auth-failed → connecting → auth-failed); counting attempts in
+   * a ref that survives the oscillation is what lets the budget genuinely
+   * drain to terminal instead of resetting every cycle (the infinite-spinner
+   * bug). A real recovery (the doc re-syncs) clears it and re-arms.
    */
   authRecoveryExhausted: boolean;
   readonly: boolean;
@@ -129,7 +140,15 @@ export type CollaborativeMarkdownEditorProps = CollaborativeMarkdownEditorCommon
  * change during a live session.
  */
 export function useCollabSession(pageId: string | null | undefined): CollabSession {
-  const tokenQuery = useYjsToken(pageId);
+  // D1a — expose the LIVE connection status to `useYjsToken` so its
+  // notifier-driven refetch can skip while we're `connected` (an established
+  // WebSocket doesn't care that the wsToken's TTL lapsed; refetching would
+  // only rebuild the provider + remount the editor). `useYjsToken` runs
+  // before `useCollabDocument` in this hook, so we feed the status through a
+  // ref updated by an effect once `status` is known.
+  const connectionStatusRef = useRef<CollabStatus>('connecting');
+  const getConnectionStatus = useCallback(() => connectionStatusRef.current, []);
+  const tokenQuery = useYjsToken(pageId, { getConnectionStatus });
   const wsToken = tokenQuery.data?.wsToken ?? null;
   const tokenReadonly = tokenQuery.data?.readonly ?? false;
   const { yText, yUndoManager, awareness, status, synced, hasEverSynced, readonly, setLocalAwareness, subscribeStateless, sendStateless } = useCollabDocument({
@@ -137,6 +156,9 @@ export function useCollabSession(pageId: string | null | undefined): CollabSessi
     wsToken,
     initialReadonly: tokenReadonly,
   });
+  useEffect(() => {
+    connectionStatusRef.current = status;
+  }, [status]);
 
   // Decision 1 (round 2): the save optimistic lock moved SERVER-SIDE
   // (anchored to the revision the server's Hocuspocus doc was materialised
@@ -155,57 +177,92 @@ export function useCollabSession(pageId: string | null | undefined): CollabSessi
   // D2 — surface "budget spent" so the caller can escalate to a terminal
   // message + dismiss the reconnecting spinner instead of spinning forever.
   const [authRecoveryExhausted, setAuthRecoveryExhausted] = useState(false);
+  // D2 (round 3) — the attempt counter MUST survive the provider oscillation.
+  // For a wsToken the server keeps rejecting (e.g. WS_TOKEN_SECRET mismatch /
+  // revoked), each refetch produces a fetchable-but-rejected token that
+  // rebuilds the provider, so status churns auth-failed → connecting →
+  // auth-failed. If the budget lived in the effect's local scope it would
+  // reset to 0 on every re-arm and the terminal state would never be reached
+  // (the infinite "reconnecting…" spinner). Holding it in a ref means the
+  // count only resets on a CONFIRMED successful sync (see the effect below),
+  // not on a transient connecting/connected, so the budget genuinely drains.
+  const authAttemptRef = useRef(0);
+  // D2 — reset the recovery budget ONLY on a confirmed sync. A transient
+  // `connecting`/`connected` during the oscillation does NOT count as
+  // recovery (the rebuilt provider can immediately auth-fail again); only
+  // `synced === true` proves the fresh token actually authenticated AND the
+  // doc re-synced. This is what makes the escalation reachable.
+  useEffect(() => {
+    if (!synced) return;
+    authAttemptRef.current = 0;
+    // Resetting the terminal flag on the external `synced` signal is the
+    // "subscribe + publish" shape this effect exists for (the Yjs provider is
+    // the external resource). The functional update is a no-op render when the
+    // flag is already cleared (the common case), so it doesn't cascade.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setAuthRecoveryExhausted((prev) => (prev ? false : prev));
+  }, [synced]);
   // H8 — depend on the STABLE `tokenQuery.refetch` (react-query keeps its
   // identity stable across renders), not the whole `tokenQuery` object
   // (new identity every render).
   const refetchToken = tokenQuery.refetch;
   useEffect(() => {
-    // Only the auth-failed branch arms the backoff. Leaving auth-failed by
-    // ANY path tears the chain down + clears the terminal flag via THIS
-    // effect's cleanup (a status change re-runs the effect → cleanup fires).
-    // We deliberately do NOT call setState synchronously in the effect body
-    // (that would trip cascading renders); the only setState is the async
-    // "budget spent" inside a setTimeout, and the reset is in cleanup.
+    // Only the auth-failed branch arms the backoff. We deliberately do NOT
+    // call setState synchronously in the effect body (that would trip
+    // cascading renders); the only setState is the async "budget spent"
+    // inside a setTimeout, and the budget reset lives in the confirmed-sync
+    // effect above (NOT in this cleanup — resetting on every leave-auth-failed
+    // is exactly the oscillation bug that kept the spinner alive forever).
     if (status !== 'auth-failed') return;
+    // Already escalated to terminal for this drained budget — don't re-arm
+    // the chain (it would refetch forever). A confirmed sync re-arms us by
+    // resetting `authAttemptRef` + clearing the terminal flag.
+    if (authRecoveryExhausted) return;
 
     // D2 — a single effect owns the whole backoff for THIS auth-failed
     // episode: it arms timer #1, whose callback refetches then arms timer
-    // #2, etc. (1s, 2s, 4s). Re-running on a `status` change to / from
-    // `auth-failed` is what starts / cancels the chain, so we no longer
-    // burn the budget on unrelated re-renders. After the 3rd attempt we
-    // escalate to terminal instead of looping.
+    // #2, etc. (1s, 2s, 4s). The attempt count persists in `authAttemptRef`
+    // across provider rebuilds, so a fetchable-but-rejected wsToken drains
+    // the budget across the oscillation instead of resetting each cycle.
+    // After the 3rd attempt we escalate to terminal instead of looping.
     let cancelled = false;
-    let attempt = 0;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const scheduleNext = (): void => {
       if (cancelled) return;
-      if (attempt >= 3) {
+      if (authAttemptRef.current >= 3) {
         setAuthRecoveryExhausted(true);
         return;
       }
-      const delay = 1000 * 2 ** attempt; // 1s, 2s, 4s
-      attempt += 1;
+      const delay = 1000 * 2 ** authAttemptRef.current; // 1s, 2s, 4s
+      authAttemptRef.current += 1;
       timer = setTimeout(() => {
         void Promise.resolve(refetchToken()).finally(() => {
-          // If the refetch produced a token that re-syncs, `status` flips
-          // and this effect's cleanup cancels the chain. If it stays
-          // `auth-failed` (still-bad credentials), self-reschedule the next
-          // backoff step until the budget is spent.
+          // If the refetch produced a token that re-syncs, `synced` flips and
+          // the confirmed-sync effect resets the budget; if status leaves
+          // auth-failed transiently this effect's cleanup cancels the in-flight
+          // timer (but keeps the count). If it stays / returns to auth-failed
+          // (still-bad credentials), self-reschedule until the budget drains.
           scheduleNext();
         });
       }, delay);
     };
     scheduleNext();
     return () => {
+      // Cancel only the in-flight timer; keep `authAttemptRef` so the count
+      // survives a provider rebuild's transient connecting state.
       cancelled = true;
       if (timer) clearTimeout(timer);
-      // D2 — clear the terminal flag when we leave auth-failed (this cleanup
-      // runs on the status change away from auth-failed) so a later,
-      // unrelated failure recovers afresh. setState in cleanup is not a
-      // synchronous-effect-body render trigger.
-      setAuthRecoveryExhausted((prev) => (prev ? false : prev));
     };
-  }, [status, refetchToken]);
+  }, [status, refetchToken, authRecoveryExhausted]);
+
+  // D1b (round 3) — the editor's MOUNT gate (`hasEverSynced`) must hold the
+  // editor mounted through a routine reconnect, and only tear down when
+  // recovery is GENUINELY TERMINAL. `useCollabDocument` no longer clears
+  // `hasEverSynced` on `auth-failed`; instead we mask it here once the
+  // bounded recovery budget is spent, so the editor stays "reconnecting…"
+  // during recovery and flips to the terminal "session expired" state only
+  // when we've truly given up.
+  const effectiveHasEverSynced = hasEverSynced && !authRecoveryExhausted;
 
   const { user, isLoading: isAuthLoading } = useAuth();
 
@@ -265,7 +322,18 @@ export function useCollabSession(pageId: string | null | undefined): CollabSessi
     };
   }, [yText, awareness]);
 
-  return { yText, yUndoManager, awareness, status, synced, hasEverSynced, authRecoveryExhausted, readonly, subscribeStateless, sendStateless };
+  return {
+    yText,
+    yUndoManager,
+    awareness,
+    status,
+    synced,
+    hasEverSynced: effectiveHasEverSynced,
+    authRecoveryExhausted,
+    readonly,
+    subscribeStateless,
+    sendStateless,
+  };
 }
 
 /**

@@ -238,15 +238,26 @@ export function useCollabDocument(options: UseCollabDocumentOptions): UseCollabD
       },
       onAuthenticationFailed: () => {
         // Token verify failed (expired / wrong secret / cross-page). We
-        // don't reconnect — the next use-yjs-token refetch (or the
-        // token-refresh notifier nudged by a silent access-token
-        // refresh) will hand us a fresh token and the parent effect will
-        // rebuild the provider with it. The doc is no longer synced.
-        // H5 — auth-failed is a TERMINAL state (the token is rejected, not
-        // a transient blip), so we DO clear the sticky mount gate: the
-        // editor must go readonly until a fresh token re-syncs.
+        // don't reconnect on THIS provider — the next use-yjs-token refetch
+        // (or the token-refresh notifier nudged by a silent access-token
+        // refresh, plus the bounded backoff in `useCollabSession`) will hand
+        // us a fresh token and the parent effect rebuilds the provider with
+        // it. The live doc is no longer synced, so block edits/saves via
+        // `synced`.
+        //
+        // D1b (round 3) — do NOT clear the sticky `hasEverSynced` mount gate
+        // here. An auth-failure usually triggers a recovery (fresh token →
+        // rebuild) that re-syncs within a couple of seconds, and clearing the
+        // gate would flip the editor readonly + unmount CodeMirror mid-edit on
+        // every routine near-expiry reconnect. We keep the editor MOUNTED
+        // (the status toast shows "reconnecting…") while recovery is in
+        // flight; the mount gate is only torn down when recovery is GENUINELY
+        // TERMINAL — `useCollabSession` masks `hasEverSynced` to `false` once
+        // `authRecoveryExhausted` is set (the budget is spent). A provider
+        // rebuild on a fresh token resets `hasEverSynced` via the effect
+        // cleanup anyway, so the unavoidable rebind-to-new-Y.Doc still happens
+        // for a real failure — just not the spurious mid-recovery remount.
         setSynced(false);
-        setHasEverSynced(false);
         setStatus('auth-failed');
       },
       onSynced: ({ state }) => {
