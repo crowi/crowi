@@ -3,8 +3,23 @@ name: CI
 on:
   push:
     branches: [main, dev, dev2-2]
+    # Skip the code-validating pipeline (test / lint / changeset-status) when a
+    # push touches ONLY non-code paths. A mixed code+docs change still runs CI
+    # (paths-ignore skips only when EVERY changed file matches). ci.yml itself is
+    # deliberately not listed so CI-config changes still get validated.
+    paths-ignore: &ci-skip
+      - '**/*.md'
+      - '**/*.mdx'
+      - 'docs/**'
+      - 'apps/crowi-site/**' # validated by its own Cloudflare Pages deploy
+      - '.changeset/**'
+      - '.claude/**'
+      - '.github/workflows/docker.yml'
+      - '.github/workflows/docker-elasticsearch.yml'
+      - '.github/workflows/release.yml'
   pull_request:
     branches: [main, dev, dev2-2]
+    paths-ignore: *ci-skip
 
 jobs:
   test:
