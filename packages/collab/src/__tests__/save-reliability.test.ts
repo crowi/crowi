@@ -286,11 +286,15 @@ describe('save-flow reliability (editor-preview-reliability round 2)', () => {
     expect(page.revision.toString()).toBe(r1.revisionId);
   });
 
-  test('Decision 2 / C3: a baseline read failure REJECTS the save (never commits blindly)', async () => {
-    // The safety requirement: if we can't read the previous body to verify
-    // the save, we must reject (DB_ERROR → client retries), never degrade to
-    // a no-op that lets a possibly-empty body through. We make
-    // `Revision.findById(...).select('body')` throw for the baseline read.
+  test('C3 (round 3): the save path no longer reads the previous body, so a transient Revision.findById(baseline) failure does NOT fail an otherwise-valid save', async () => {
+    // Round 3 removed the dead baseline read from the save path: it only ever
+    // fed `persistYjsState(..., allowShrink:true)`, and `evaluateAntiShrink`
+    // returns ok on `allowShrink` BEFORE consulting the baseline — so the
+    // value was discarded, yet a flaky `Revision.findById` read turned an
+    // otherwise-valid save into a spurious DB_ERROR. We assert the save now
+    // succeeds even when reading the *current* revision id via `findById`
+    // would have thrown (empty-overwrite is independently blocked by the
+    // required `Revision.body` + the client synced gate, not this read).
     const docBaseRevisions = createDocBaseRevisionStore();
     const flow = createSaveFlow({ models, contributorsTracker: createContributorsTracker(), pageEventPublisher: makeMockPublisher(), docBaseRevisions });
     const { pageId } = await fixtures.seedPage();
@@ -301,33 +305,34 @@ describe('save-flow reliability (editor-preview-reliability round 2)', () => {
     const r1 = await flow.executeSave({ pageId, userId: user._id.toString(), document: doc });
     const revisionCountBefore = await models.Revision.countDocuments({}).exec();
 
+    // Make the `.select('body')` baseline-style read on r1 throw. The save
+    // path no longer performs it, so the save must still succeed; any other
+    // findById (e.g. an internal read that doesn't `.select('body')`) passes
+    // through unchanged.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const Revision = models.Revision as any;
     const originalFindById = Revision.findById.bind(Revision);
     const spy = jest.spyOn(Revision, 'findById').mockImplementation((id: unknown) => {
-      // Only the baseline read (current revision = r1) should blow up; let
-      // any other findById pass through.
       if (String(id) === r1.revisionId) {
         return { select: () => ({ lean: () => ({ exec: () => Promise.reject(new Error('simulated DB outage')) }) }) };
       }
       return originalFindById(id);
     });
 
+    let r2: { revisionId: string };
     try {
       doc.getText(CONTENT_FIELD).insert(doc.getText(CONTENT_FIELD).length, ' appended');
-      await expect(flow.executeSave({ pageId, userId: user._id.toString(), document: doc })).rejects.toMatchObject({
-        code: 'DB_ERROR',
-        name: 'CollabSaveError',
-      });
+      r2 = await flow.executeSave({ pageId, userId: user._id.toString(), document: doc });
     } finally {
       spy.mockRestore();
     }
 
-    // No revision committed; the page still points at the real content.
+    // The save committed a new revision and advanced the page pointer.
     const revisionCountAfter = await models.Revision.countDocuments({}).exec();
-    expect(revisionCountAfter).toBe(revisionCountBefore);
+    expect(revisionCountAfter).toBe(revisionCountBefore + 1);
     const page = await Page().findById(pageId).exec();
-    expect(page.currentRevision.toString()).toBe(r1.revisionId);
+    expect(page.currentRevision.toString()).toBe(r2.revisionId);
+    expect(page.revision.toString()).toBe(r2.revisionId);
   });
 
   test('a normal-sized save persists its yjsState', async () => {

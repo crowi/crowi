@@ -73,6 +73,47 @@ describe('compaction anti-shrink (editor-preview-reliability §1B)', () => {
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('desync guard rejected the store-only checkpoint'));
   });
 
+  test('store-only fast path (round 3): a baseline-body READ FAILURE on an empty live doc SKIPS the checkpoint (never overwrites with empty)', async () => {
+    // Round 3: when the live doc is empty, the desync verdict hinges entirely
+    // on whether the baseline body is non-empty. A transient baseline read
+    // failure must NOT degrade to `baselineBody=null` (which would let the
+    // empty doc overwrite a good yjsState); it must SKIP the checkpoint
+    // (return null) so the 10-min time-trigger re-attempts once content is
+    // re-established.
+    const { pageId } = await fixtures.seedPage();
+    await fixtures.seedRevision(pageId, BODY);
+
+    const goodState = encodeYjsDelta(BODY);
+    await Page()
+      .updateOne({ _id: pageId }, { $set: { yjsState: goodState } })
+      .exec();
+
+    // Make the baseline body read throw. `latestRevisionBody` reads the page
+    // (for the revision pointer) then the revision body via
+    // `.select('body').lean().exec()`; we fail the revision read.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const Revision = models.Revision as any;
+    const spy = jest.spyOn(Revision, 'findById').mockImplementation(() => ({
+      select: () => ({ lean: () => ({ exec: () => Promise.reject(new Error('simulated baseline read outage')) }) }),
+    }));
+
+    let result: Awaited<ReturnType<ReturnType<typeof createCompactor>['storeCheckpoint']>>;
+    try {
+      const compactor = createCompactor({ models: { Page: models.Page, PageYjsUpdate: models.PageYjsUpdate, Revision: models.Revision } });
+      const empty = new Y.Doc();
+      result = await compactor.storeCheckpoint(pageId, empty);
+    } finally {
+      spy.mockRestore();
+    }
+
+    // Skipped (not persisted), so onStoreDocument's time-trigger can retry.
+    expect(result).toBeNull();
+    // The good state survives untouched — the empty doc never overwrote it.
+    const page = await Page().findById(pageId).exec();
+    expect(Buffer.compare(page.yjsState as Buffer, goodState)).toBe(0);
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('skipping store-only checkpoint'));
+  });
+
   test('full merge path (C1 regression): an EMPTY-merge reject keeps the folded rows AND the surviving yjsState (no data loss)', async () => {
     // C1 was: on a full-merge reject the code kept the stale yjsState BUT
     // still pruned the folded deltas — so the next load applied the stale
