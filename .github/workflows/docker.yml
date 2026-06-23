@@ -31,6 +31,10 @@ on:
       ref:
         description: 'Git ref/sha to build FROM (default: the v<version> tag). Use to apply a build-only Dockerfile/CI fix without force-moving the release tag.'
         required: false
+      announce:
+        description: 'Post a Discord release announcement (automatic on a real release; set true to also announce a manual re-cut).'
+        type: boolean
+        default: false
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
@@ -302,3 +306,32 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=docker-web
           cache-to: type=gha,mode=max,scope=docker-web
+
+  # Announce a finished release (GitHub Release + npm + all Docker images live)
+  # to the Discord community in ONE message. Runs after every image job so the
+  # post only fires once everything is actually pullable. Fires automatically on
+  # the real release path (workflow_run); a manual re-cut can opt in via the
+  # `announce` dispatch input. No-ops (cleanly) when DISCORD_WEBHOOK_URL is unset
+  # so forks / unconfigured environments don't fail.
+  announce:
+    needs: [resolve, build, build-web]
+    if: needs.resolve.outputs.should-build == 'true' && (github.event_name == 'workflow_run' || github.event.inputs.announce == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Announce release to Discord
+        env:
+          WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          DIST: ${{ needs.resolve.outputs.dist-version }}
+        run: |
+          if [ -z "$WEBHOOK" ]; then
+            echo "DISCORD_WEBHOOK_URL not set; skipping announcement."
+            exit 0
+          fi
+          VER="${DIST#v}"
+          DESC=$(printf '**Release notes**: https://github.com/crowi/crowi/releases/tag/%s\n\n**Docker**\n```\ndocker pull crowi/crowi:%s\ndocker pull crowi/crowi:%s-slim\ndocker pull crowi/crowi-web:%s\n```' "$DIST" "$VER" "$VER" "$VER")
+          jq -n \
+            --arg t "Crowi $DIST released 🎉" \
+            --arg u "https://github.com/crowi/crowi/releases/tag/$DIST" \
+            --arg d "$DESC" \
+            '{username: "Crowi Releases", embeds: [{title: $t, url: $u, color: 3447003, description: $d}]}' \
+          | curl -fsS -H "Content-Type: application/json" -d @- "$WEBHOOK"
