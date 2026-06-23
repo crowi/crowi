@@ -19,6 +19,7 @@ import { createOnDisconnect } from './hooks/on-disconnect';
 import { createCompactor } from './compaction';
 import { createContributorsTracker, type ContributorsTracker } from './contributors';
 import { createDocBaseRevisionStore } from './doc-base-revision';
+import { createInvalidatedPagesStore, createPageInvalidator, type PageInvalidator } from './invalidation';
 import { createSaveFlow, type SaveFlow } from './save-flow';
 import { type PresenceHooks, noopPresenceHooks } from './presence';
 import { wrapOnAuthenticateWithPresence, wrapOnDisconnectWithPresence } from './presence-wiring';
@@ -91,6 +92,30 @@ export interface CreateCollabServerOptions {
    * run unchanged.
    */
   presence?: PresenceHooks;
+  /**
+   * G1 — drain grace (ms) between the force-reload broadcast and forcing the
+   * stale connections closed during an external-edit invalidation. Defaults
+   * to {@link DEFAULT_INVALIDATE_GRACE_MS}. Tests pass a small value (or a
+   * synchronous `invalidateSchedule`) to drive the drain deterministically.
+   */
+  invalidateGraceMs?: number;
+  /**
+   * G1 — schedule the post-grace close. Defaults to `setTimeout`. Tests
+   * inject a synchronous scheduler.
+   */
+  invalidateSchedule?: (fn: () => void, ms: number) => void;
+}
+
+/**
+ * What `createCollabServer` returns: the Hocuspocus engine PLUS the G1
+ * external-edit invalidator bound to that engine. The host api process keeps
+ * the invalidator on its `AttachedCollab` handle so `Page.updatePage` (and
+ * any in-process path that bumps `currentRevision` + nulls `yjsState`) can
+ * call `invalidatePages([pageId], reason)` after it commits.
+ */
+export interface CollabEngine {
+  hocuspocus: Hocuspocus<CollabContext>;
+  invalidator: PageInvalidator;
 }
 
 /**
@@ -108,7 +133,7 @@ export interface CreateCollabServerOptions {
  * a count-trigger compaction racing a store-trigger checkpoint for
  * the same page.
  */
-export function createCollabServer(opts: CreateCollabServerOptions): Hocuspocus<CollabContext> {
+export function createCollabServer(opts: CreateCollabServerOptions): CollabEngine {
   const { models, wsTokenUtil, debounce, maxDebounce, checkEditorCap } = opts;
   const pageEventPublisher = opts.pageEventPublisher ?? noopPageEventPublisher;
   const contributorsTracker = opts.contributorsTracker ?? createContributorsTracker();
@@ -119,6 +144,11 @@ export function createCollabServer(opts: CreateCollabServerOptions): Hocuspocus<
   // every successful save). One store per engine so all docs in this process
   // agree on their bases.
   const docBaseRevisions = createDocBaseRevisionStore();
+  // G1 — the external-edit invalidation tombstone store, shared between the
+  // invalidator (marks a page mid-drain) and `onLoadDocument` (gates a new
+  // connection so it re-materialises from the new revision body instead of
+  // re-recording a doc base that would let a racing save clobber the edit).
+  const invalidatedPages = createInvalidatedPagesStore();
   const saveFlow =
     opts.saveFlow ??
     createSaveFlow({
@@ -152,6 +182,7 @@ export function createCollabServer(opts: CreateCollabServerOptions): Hocuspocus<
   const onLoadDocument = createOnLoadDocument({
     models: { Page: models.Page, Revision: models.Revision, PageYjsUpdate: models.PageYjsUpdate },
     docBaseRevisions,
+    invalidatedPages,
   });
   const onStoreDocument = createOnStoreDocument({
     models: { Page: models.Page },
@@ -199,6 +230,17 @@ export function createCollabServer(opts: CreateCollabServerOptions): Hocuspocus<
     },
   });
 
+  // G1 — bind the external-edit invalidator to the engine we just built so
+  // the api process can drive `crowi:force-reload` + drain + tombstone for a
+  // live doc after an external write commits.
+  const invalidator = createPageInvalidator({
+    instance: hocuspocus,
+    docBaseRevisions,
+    invalidatedPages,
+    graceMs: opts.invalidateGraceMs,
+    schedule: opts.invalidateSchedule,
+  });
+
   debug('collab Hocuspocus engine constructed (debounce=%d/%d)', debounce ?? 2000, maxDebounce ?? 10000);
-  return hocuspocus;
+  return { hocuspocus, invalidator };
 }

@@ -4,6 +4,7 @@ import Debug from 'debug';
 import type { CollabModels } from '../models';
 import type { CollabContext } from '../types';
 import type { DocBaseRevisionStore } from '../doc-base-revision';
+import type { InvalidatedPagesStore } from '../invalidation';
 import { CONTENT_FIELD } from '../yjs-doc';
 import { payloadToUint8Array } from '../yjs-payload';
 
@@ -18,6 +19,16 @@ export interface OnLoadDocumentDeps {
    * Optional so synthetic test drivers / the Phase 3 smoke test can omit it.
    */
   docBaseRevisions?: DocBaseRevisionStore;
+  /**
+   * G1 — the external-edit invalidation tombstone store. When a page is
+   * mid-drain (its live doc was just invalidated by an external write) the
+   * persisted `yjsState` is already null, so the fresh build below
+   * re-materialises from the NEW `currentRevision` body anyway; we just skip
+   * recording a doc base while the tombstone is active so an in-flight stale
+   * save still CONFLICTs (the invalidator's sentinel base stays in place
+   * until the drain ends). Optional so synthetic test drivers can omit it.
+   */
+  invalidatedPages?: InvalidatedPagesStore;
 }
 
 /**
@@ -84,6 +95,7 @@ export function createOnLoadDocument(deps: OnLoadDocumentDeps) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const PageYjsUpdate = deps.models.PageYjsUpdate as any;
   const docBaseRevisions = deps.docBaseRevisions;
+  const invalidatedPages = deps.invalidatedPages;
 
   /**
    * Apply every pending `PageYjsUpdate` for `pageId` into `document`
@@ -207,8 +219,22 @@ export function createOnLoadDocument(deps: OnLoadDocumentDeps) {
     // materialised from (its "base") so `executeSave`'s compare-and-set
     // locks against it. `currentRevision ?? revision` mirrors the pointer
     // the save flow advances; `null` when the page has no revision yet.
-    const baseRevisionId = (page.currentRevision ?? page.revision ?? null) as { toString(): string } | null;
-    docBaseRevisions?.set(String(documentName), baseRevisionId ? baseRevisionId.toString() : null);
+    //
+    // G1 — but NOT while an external-edit invalidation is draining this
+    // page. The invalidator wrote a sentinel base (`INVALIDATED_DOC_BASE`)
+    // so any in-flight save on the stale doc CONFLICTs; if we overwrote it
+    // here with the (already-advanced) live `currentRevision`, a save racing
+    // the drain would suddenly match and clobber the external edit. The
+    // tombstone self-clears after the grace window, after which the next
+    // load records a real base normally. The doc still re-materialises from
+    // the new revision body below (the external write nulled yjsState), so
+    // the connection that survives the drain sees correct content.
+    if (!invalidatedPages?.isInvalidating(String(documentName))) {
+      const baseRevisionId = (page.currentRevision ?? page.revision ?? null) as { toString(): string } | null;
+      docBaseRevisions?.set(String(documentName), baseRevisionId ? baseRevisionId.toString() : null);
+    } else {
+      debug('page %s is mid-invalidation drain — leaving the sentinel doc base in place', documentName);
+    }
 
     // Path A — restore from the most recent checkpoint.
     const yjsState = page.yjsState as Buffer | null | undefined;

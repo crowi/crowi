@@ -136,6 +136,83 @@ export interface CreateSaveFlowOptions {
  *   9. Return the new revision id to the caller (stateless handler
  *      sends `crowi:save-ok { revisionId }` to the client).
  */
+/**
+ * G2 — attempt to coalesce a CAS-loser into the same-process winner.
+ *
+ * Returns `{ winnerRevisionId }` when ALL coalesce conditions hold (a
+ * same-process collab save won AND its body is byte-identical to the loser's
+ * body), `null` otherwise (the caller then keeps the CONFLICT).
+ *
+ * The contributors $addToSet is strictly best-effort: a failure to record
+ * the loser as a contributor must NEVER turn a coalesced save-ok back into a
+ * failure (the winner's revision is already canonical), so we swallow it.
+ */
+async function tryCoalesce(args: {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  Page: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  Revision: any;
+  docBaseRevisions: DocBaseRevisionStore;
+  pageId: string;
+  loserBody: string;
+  loserUserId: Types.ObjectId;
+}): Promise<{ winnerRevisionId: string } | null> {
+  const { Page, Revision, docBaseRevisions, pageId, loserBody, loserUserId } = args;
+
+  // Re-read the page's live pointer (the winner just moved it).
+  let freshPage: { currentRevision?: { toString(): string } | null } | null;
+  try {
+    freshPage = await Page.findById(pageId).select('currentRevision').lean().exec();
+  } catch (err) {
+    // A read failure here just means "we couldn't prove a coalesce" — fall
+    // back to CONFLICT (safe: the client reloads).
+    debug('coalesce: re-read of page %s failed: %s', pageId, (err as Error).message);
+    return null;
+  }
+  const liveRevisionId = freshPage?.currentRevision ? freshPage.currentRevision.toString() : null;
+  if (!liveRevisionId) return null;
+
+  // Condition 1 — the IN-PROCESS doc base advanced to the live pointer. A
+  // same-process collab save advances the base to the revision it created
+  // (and that revision is now the live `currentRevision`); an out-of-band
+  // move (HTTP / other instance / CLI) never touches the in-process base, so
+  // it still holds our stale value and this check fails → CONFLICT.
+  const advancedBase = docBaseRevisions.get(pageId);
+  if (advancedBase !== liveRevisionId) {
+    debug(
+      'coalesce: doc base (%s) did not advance to live revision (%s) for page %s — not a same-process save',
+      advancedBase ?? '(none)',
+      liveRevisionId,
+      pageId,
+    );
+    return null;
+  }
+
+  // Condition 2 — the winner's body is byte-identical to ours.
+  let winnerRevision: { body?: string } | null;
+  try {
+    winnerRevision = await Revision.findById(liveRevisionId).select('body').lean().exec();
+  } catch (err) {
+    debug('coalesce: winner revision %s body read failed: %s', liveRevisionId, (err as Error).message);
+    return null;
+  }
+  if (!winnerRevision || typeof winnerRevision.body !== 'string' || winnerRevision.body !== loserBody) {
+    debug('coalesce: winner body differs from loser body for page %s — keeping CONFLICT', pageId);
+    return null;
+  }
+
+  // Both conditions hold — coalesce. Best-effort: fold the loser's trigger
+  // user into the winner's contributors (a co-editor who pressed save at the
+  // same instant). A failure must not undo the coalesce.
+  try {
+    await Revision.updateOne({ _id: liveRevisionId }, { $addToSet: { contributors: loserUserId } }).exec();
+  } catch (err) {
+    console.warn(`[crowi:collab] save: coalesce $addToSet contributors failed for revision ${liveRevisionId}; save still ok.`, (err as Error).message);
+  }
+
+  return { winnerRevisionId: liveRevisionId };
+}
+
 export function createSaveFlow(opts: CreateSaveFlowOptions): SaveFlow {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const Page = opts.models.Page as any;
@@ -305,10 +382,54 @@ export function createSaveFlow(opts: CreateSaveFlowOptions): SaveFlow {
       }
       if ((pointerWrite?.matchedCount ?? 0) === 0) {
         // The lock failed: `currentRevision` moved between our read and this
-        // write (a concurrent collab save, an HTTP save, or another
-        // instance). Our Revision stays in history unreferenced; reject so
-        // the client reloads. We do NOT prune PageYjsUpdate rows and do NOT
-        // ack a non-committed revision (A3).
+        // write. The mover is one of:
+        //   (i)  a concurrent SAME-PROCESS collab save on the SAME shared
+        //        server doc (two `executeSave` both read docBase=R1, both
+        //        prepared a Revision, the CAS let one win); or
+        //   (ii) an out-of-band move (an HTTP `Page.updatePage`, another
+        //        instance, an admin-CLI DB edit).
+        //
+        // G2 — conditional coalesce. Case (i) is a SPURIOUS conflict: both
+        // saves carried the SAME body (they edited the same live doc, and a
+        // save snapshots the doc's current text), so the winner already
+        // persisted exactly what this loser would have. Forcing the loser to
+        // reload contradicts "co-editing never false-CONFLICTs". So we
+        // coalesce — return the WINNER's revisionId as save-ok — ONLY when
+        // BOTH hold; otherwise we keep the CONFLICT (case (ii), where the
+        // winning body may differ and a reload is genuinely required):
+        //
+        //   1. the doc base advanced to the page's NEW live `currentRevision`
+        //      (proves a same-process collab save won — `executeSave`
+        //      advances the base on success; an out-of-band move does NOT
+        //      touch the in-process base, so it stays at our stale value);
+        //   2. the new `currentRevision`'s body EXACTLY equals the body we
+        //      were about to persist.
+        //
+        // The loser's just-saved Revision stays in history, unreferenced
+        // (tolerated — the orphan already occurred today). We do NOT move the
+        // pointer, persist yjsState, or prune PageYjsUpdate rows: the winner
+        // already owns all of that. Best-effort: fold the loser's trigger
+        // user into the winner's `contributors` (metadata only).
+        const coalesced = await tryCoalesce({
+          Page,
+          Revision,
+          docBaseRevisions,
+          pageId,
+          loserBody: body,
+          loserUserId: user._id,
+        });
+        if (coalesced) {
+          debug('save coalesced for page %s — winner revision=%s (loser body identical)', pageId, coalesced.winnerRevisionId);
+          // The winner already pruned rows / wrote yjsState / advanced the
+          // base, so we skip steps 6-7 here. Still fan out the page event so
+          // this user's "I was editing" signal is not lost.
+          await opts.pageEventPublisher.publish('update', { pageId, userId: userIdStr });
+          return { revisionId: coalesced.winnerRevisionId };
+        }
+        // No coalesce — a genuine divergence (out-of-band edit, or a racing
+        // save with a different body). Our Revision stays in history
+        // unreferenced; reject so the client reloads. We do NOT prune
+        // PageYjsUpdate rows and do NOT ack a non-committed revision (A3).
         throw new CollabSaveError('CONFLICT', `pointer compare-and-set for page ${pageId} did not match (currentRevision moved concurrently); reload required`);
       }
 
