@@ -117,7 +117,7 @@ describe('useCollabSession lifecycle (D1 / D2)', () => {
     expect(result.current.hasEverSynced).toBe(true);
   });
 
-  it('D2: auth-failed re-arms the bounded backoff, escalates to terminal, then clears on recovery', async () => {
+  it('D2: auth-failed re-arms the bounded backoff, escalates to terminal, then clears ONLY on a confirmed sync', async () => {
     // The first token resolves (provider #1 built). Every subsequent refetch
     // REJECTS — so no new provider is built and the single provider stays in
     // auth-failed; the backoff self-reschedules until the budget is spent and
@@ -129,24 +129,49 @@ describe('useCollabSession lifecycle (D1 / D2)', () => {
     const { result } = renderHook(() => useCollabSession('page-1'), { wrapper: makeWrapper() });
     await waitFor(() => expect(providerInstances.length).toBe(1));
 
+    // First sync so hasEverSynced latches (the editor is mounted) before the
+    // failure.
+    act(() => {
+      providerInstances[0]?.config.onStatus?.({ status: 'connected' });
+      providerInstances[0]?.config.onSynced?.({ state: true });
+    });
+    expect(result.current.hasEverSynced).toBe(true);
+
     // Drive the provider into the terminal auth-failed state.
     act(() => {
       providerInstances[0]?.config.onAuthenticationFailed?.();
     });
     expect(result.current.status).toBe('auth-failed');
     expect(result.current.authRecoveryExhausted).toBe(false);
+    // D1b — the mount gate stays up during recovery (editor mounted,
+    // "reconnecting…"); it is NOT cleared on auth-failed.
+    expect(result.current.hasEverSynced).toBe(true);
 
     // The 3-step backoff self-reschedules; each refetch rejects, status stays
-    // auth-failed, and after the budget is spent we escalate to terminal.
+    // auth-failed, and after the budget is spent we escalate to terminal. The
+    // attempt counter survives the oscillation (it lives in a ref), so the
+    // budget genuinely drains instead of resetting on every transient connect.
     await waitFor(() => expect(result.current.authRecoveryExhausted).toBe(true), { timeout: 15000 });
     // No new provider was built on the rejected refetches.
     expect(providerInstances.length).toBe(1);
+    // D1b — once terminal, the mount gate is masked off (editor flips to the
+    // terminal "session expired" state).
+    expect(result.current.hasEverSynced).toBe(false);
 
-    // Recovery via any path (here: a successful connect on the existing
-    // provider) clears the terminal flag and re-arms for any future episode.
+    // A transient connect WITHOUT a sync must NOT clear the terminal flag —
+    // the rebuilt provider could immediately auth-fail again; only a confirmed
+    // sync proves recovery.
     act(() => {
       providerInstances[0]?.config.onStatus?.({ status: 'connected' });
     });
+    expect(result.current.authRecoveryExhausted).toBe(true);
+
+    // A CONFIRMED sync (SyncStep2) clears the terminal flag, restores the
+    // mount gate, and re-arms for any future episode.
+    act(() => {
+      providerInstances[0]?.config.onSynced?.({ state: true });
+    });
     await waitFor(() => expect(result.current.authRecoveryExhausted).toBe(false));
+    expect(result.current.hasEverSynced).toBe(true);
   }, 20000);
 });

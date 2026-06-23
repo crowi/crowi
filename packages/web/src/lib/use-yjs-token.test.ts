@@ -158,6 +158,59 @@ describe('useYjsToken', () => {
     expect(getYjsToken).toHaveBeenCalledTimes(2);
   });
 
+  it('D1a: a connected session past the wsToken TTL does NOT refetch on a coincident access-token refresh', async () => {
+    // The token is already (well) expired — under the old logic the
+    // notifier-driven refetch would fire on a silent access-token refresh,
+    // rebuilding the live provider mid-edit. D1a gates that refetch on "not
+    // currently connected": an established WebSocket stays authenticated for
+    // its whole life regardless of the wsToken's `exp`, so while `connected`
+    // we must NOT refetch even past the TTL.
+    const expired = {
+      wsToken: 'jwt.expired-but-connected',
+      pageId: 'page-d1a',
+      expiresAt: new Date(Date.now() - 60_000).toISOString(),
+      readonly: false,
+    };
+    getYjsToken.mockResolvedValue(okResponse(expired));
+
+    const { result } = renderHook(() => useYjsToken('page-d1a', { getConnectionStatus: () => 'connected' }), { wrapper: makeWrapper() });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(getYjsToken).toHaveBeenCalledTimes(1);
+
+    // A silent access-token refresh fires while the connection is healthy.
+    // Even though the cached wsToken is expired, no refetch happens.
+    await act(async () => {
+      emitTokenRefreshed();
+      await Promise.resolve();
+    });
+    expect(getYjsToken).toHaveBeenCalledTimes(1);
+  });
+
+  it('D1a: a NON-connected session past the wsToken TTL DOES refetch on an access-token refresh (recovery path)', async () => {
+    // The complement: when the connection is not established (auth-failed /
+    // disconnected), an expired wsToken SHOULD be refetched so recovery can
+    // (re)connect with a fresh token.
+    const expired = {
+      wsToken: 'jwt.expired',
+      pageId: 'page-d1a2',
+      expiresAt: new Date(Date.now() - 1000).toISOString(),
+      readonly: false,
+    };
+    const fresh = { ...expired, wsToken: 'jwt.fresh', expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString() };
+    getYjsToken.mockResolvedValueOnce(okResponse(expired)).mockResolvedValue(okResponse(fresh));
+
+    const { result } = renderHook(() => useYjsToken('page-d1a2', { getConnectionStatus: () => 'auth-failed' }), { wrapper: makeWrapper() });
+    await waitFor(() => expect(result.current.data?.wsToken).toBe('jwt.expired'));
+    expect(getYjsToken).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      emitTokenRefreshed();
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(result.current.data?.wsToken).toBe('jwt.fresh'));
+    expect(getYjsToken).toHaveBeenCalledTimes(2);
+  });
+
   it('propagates the readonly bit from the response', async () => {
     const body = {
       wsToken: 'jwt.readonly',

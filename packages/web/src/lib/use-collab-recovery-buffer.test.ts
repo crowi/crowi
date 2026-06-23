@@ -199,6 +199,51 @@ describe('useCollabRecoveryBuffer', () => {
     expect(result.current.recoverable).toBeNull(); // own-session snapshots aren't surfaced as recoverable
   });
 
+  it('tail (round 3): clear() cancels the armed interval so a pending tick cannot resurrect the cleared buffer', () => {
+    // The race: `clear()` removes the entry + sets recoverable=null, but the
+    // still-armed 5s snapshot interval (active while `enabled`) fires moments
+    // later and re-writes the buffer we just cleared, resurrecting a stale
+    // "restore unsaved changes?" prompt on the next mount. `clear()` must
+    // cancel the timer + suppress the flush handlers until the next enable
+    // cycle re-arms them.
+    const text = 'unsaved work';
+    const { result } = renderHook(() =>
+      useCollabRecoveryBuffer({
+        pageId: 'p1',
+        getText: () => text,
+        enabled: true,
+        snapshotIntervalMs: 1000,
+      }),
+    );
+
+    // First tick writes the buffer.
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(window.localStorage.getItem(KEY('p1'))).not.toBeNull();
+
+    // Clear (e.g. the user restored / discarded). The interval is still armed
+    // (enabled is unchanged), so without the fix the next tick would re-write.
+    act(() => {
+      result.current.clear();
+    });
+    expect(window.localStorage.getItem(KEY('p1'))).toBeNull();
+
+    // Advance well past several interval periods — the cancelled timer must
+    // not resurrect the buffer.
+    act(() => {
+      vi.advanceTimersByTime(5000);
+    });
+    expect(window.localStorage.getItem(KEY('p1'))).toBeNull();
+
+    // A deliberate snapshotNow lifts suppression so the buffer can be kept
+    // fresh again (the user is editing once more).
+    act(() => {
+      result.current.snapshotNow();
+    });
+    expect(JSON.parse(window.localStorage.getItem(KEY('p1'))!).text).toBe('unsaved work');
+  });
+
   it('is a no-op when pageId is null (create flow)', () => {
     const { result } = renderHook(() =>
       useCollabRecoveryBuffer({
