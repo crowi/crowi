@@ -139,10 +139,18 @@ describe('buildManifest', () => {
     expect(eventsRequestUrl(BASE_URL)).toBe(manifest.settings.event_subscriptions.request_url);
   });
 
-  it('subscribes to link_shared and sets the wiki host as the unfurl domain', () => {
+  it('subscribes to link_shared and registers the wiki host as an unfurl domain under features', () => {
     expect(manifest.settings.event_subscriptions.bot_events).toEqual(['link_shared']);
-    expect(manifest.settings.unfurl_domains).toEqual(['wiki.example.com']);
+    // unfurl_domains lives under `features`, not `settings` (Slack rejects
+    // it under settings as "Invalid additional property").
+    expect(manifest.features.unfurl_domains).toEqual(['wiki.example.com']);
+    expect((manifest.settings as Record<string, unknown>).unfurl_domains).toBeUndefined();
     expect(unfurlDomain(BASE_URL)).toBe('wiki.example.com');
+  });
+
+  it('declares a bot user (required for bot events + chat.unfurl)', () => {
+    expect(manifest.features.bot_user.display_name).toBe('Acme Wiki');
+    expect(manifest.features.bot_user.always_online).toBe(false);
   });
 
   it('requests least-privilege bot scopes only', () => {

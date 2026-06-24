@@ -14,13 +14,21 @@ import { PLUGIN_NAME } from './constants';
  */
 export interface SlackManifest {
   display_information: { name: string; description: string };
+  features: {
+    /** A bot user is required to receive bot events + call `chat.unfurl`. */
+    bot_user: { display_name: string; always_online: boolean };
+    /**
+     * Domains Slack sends `link_shared` for. Lives under `features` (NOT
+     * `settings` — Slack rejects it there: "Invalid additional property").
+     */
+    unfurl_domains?: string[];
+  };
   oauth_config: { scopes: { bot: string[] } };
   settings: {
     event_subscriptions: {
       request_url: string;
       bot_events: string[];
     };
-    unfurl_domains?: string[];
     org_deploy_enabled: boolean;
     socket_mode_enabled: boolean;
   };
@@ -92,6 +100,10 @@ export function buildManifest(input: BuildManifestInput): SlackManifest {
       name,
       description,
     },
+    features: {
+      bot_user: { display_name: name, always_online: false },
+      ...(host ? { unfurl_domains: [host] } : {}),
+    },
     oauth_config: {
       scopes: { bot: BOT_SCOPES },
     },
@@ -100,7 +112,6 @@ export function buildManifest(input: BuildManifestInput): SlackManifest {
         request_url: eventsRequestUrl(input.baseUrl),
         bot_events: SUBSCRIBED_BOT_EVENTS,
       },
-      ...(host ? { unfurl_domains: [host] } : {}),
       org_deploy_enabled: false,
       socket_mode_enabled: false,
     },
