@@ -41,35 +41,49 @@ HTTP ルートを提供します。
 }
 ```
 
-有効化すると、管理サイドバーの **通知** セクションに「Slack」設定が
-現れます。
+有効化すると、管理サイドバーの **プラットフォームサービス** セクションに
+「Slack」設定が現れます。
 
 ### 2. manifest を生成する
 
 管理画面の Slack 設定を開き、**「Generate Slack App manifest」** ボタンを
 押すと、Slack App の manifest JSON が表示されます。ダイアログの内容を
-コピーしてください。manifest には次の値が埋め込まれています。
+コピーしてください。ボタンの下には Slack アプリの新規作成ページ
+([api.slack.com/apps](https://api.slack.com/apps)) へのリンクも表示されます。
+manifest には次の値が埋め込まれています。
 
+- アプリ名 / bot 名 = この wiki の名前 (`app:title`)
 - `event_subscriptions.request_url` = `{CLIENT_URL}/api/v2/plugins/@crowi/plugin-slack/events`
 - 購読する bot イベント = `link_shared`
 - unfurl 対象ドメイン = この Crowi インスタンスのホスト
 - OAuth スコープ (最小権限) = `links:read` / `links:write` / `chat:write`
 
-### 3. Slack App を作成してインストールする
+### 3. Slack App を自分たちで作成する
 
-Slack の [Your Apps](https://api.slack.com/apps) で **「Create New App」 →
-「From an app manifest」** を選び、ワークスペースを選択して、コピーした
-manifest を貼り付けます。作成後、ワークスペースに **インストール**
-します。
+Slack App は **自分たちのワークスペース用に自分で作成** します (公開アプリや
+Marketplace アプリを使うわけではありません)。Slack の
+[Your Apps](https://api.slack.com/apps) で **「Create New App」 → 「From an
+app manifest」** を選び、インストール先のワークスペースを選んで、step 2 で
+コピーした manifest を貼り付けて作成します。
 
-### 4. token と signing secret を入力する
+> Slack 側でアプリを作成・インストールするには、対象ワークスペースで
+> アプリのインストールが許可されている (ワークスペース管理者である、または
+> 承認を得られる) 必要があります。
 
-インストール後、Slack App の設定画面から次の 2 つを取得し、Crowi の
-管理画面の Slack 設定に入力して保存します。
+### 4. ワークスペースにインストールして token を取得する
+
+作成したアプリの設定画面で、左メニューの **「Install App」** を開き、
+**「Install to Workspace」** で自分たちのワークスペースにインストールします
+(初回はアプリの権限への承認を求められます)。インストールすると同じ
+**「Install App」** ページに **Bot User OAuth Token (`xoxb-…`)** が表示される
+ので、これをコピーします。**Signing Secret** は **「Basic Information」**
+ページから取得します。
+
+この 2 つを Crowi の管理画面の Slack 設定に入力して保存します。
 
 | 設定項目 | 取得元 | 機密 |
 | -------- | ------ | ---- |
-| Bot User OAuth Token (`xoxb-…`) | 「OAuth & Permissions」 | はい |
+| Bot User OAuth Token (`xoxb-…`) | 「Install App」 (インストール後に表示) | はい |
 | Signing Secret | 「Basic Information」 | はい |
 
 どちらも `@sensitive` 設定として扱われ、`CROWI_ENCRYPTION_KEY` が
