@@ -168,6 +168,19 @@ describe('buildUnfurlAttachment — public vs restricted branch', () => {
     expect((att.text ?? '').length).toBeLessThanOrEqual(301);
   });
 
+  it('converts the excerpt markdown to mrkdwn, resolving relative links via baseUrl', () => {
+    const page: ResolvedPage = {
+      path: '/team/handbook/onboarding',
+      grant: 1,
+      body: '# Onboarding\n\nSee the [handbook](/team/handbook).',
+      updatedAtMs: null,
+    };
+    const att = buildUnfurlAttachment(url, page, 'https://wiki.example.com');
+    expect(att.text).toContain('*Onboarding*');
+    expect(att.text).toContain('<https://wiki.example.com/team/handbook|handbook>');
+    expect(att.text).not.toContain('# Onboarding');
+  });
+
   it('emits a minimal 🔒 restricted card for a non-public page (no body)', () => {
     const page: ResolvedPage = { path: '/secret/notes', grant: 2, body: 'top secret contents', updatedAtMs: 1_700_000_000_000 };
     const att = buildUnfurlAttachment(url, page);

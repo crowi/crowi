@@ -1,4 +1,5 @@
 import { GRANT_PUBLIC } from './constants-grant';
+import { markdownToMrkdwn } from './mrkdwn';
 
 /**
  * A single Slack `attachment` (legacy unfurl block) keyed by the link URL
@@ -39,6 +40,13 @@ export interface ResolvedPage {
 const EXCERPT_MAX_CHARS = 300;
 
 /**
+ * Upper bound on how much raw body we feed the markdown converter. The
+ * excerpt only needs the head, and converting a whole large page would be
+ * wasted work (the result is truncated to `EXCERPT_MAX_CHARS` anyway).
+ */
+const SOURCE_SCAN_CHARS = EXCERPT_MAX_CHARS * 4;
+
+/**
  * Build the `chat.unfurl` attachment for one shared Crowi link.
  *
  * **Data-leakage guard (RFC-0013 §7.1 / §8)**: a Slack unfurl is visible
@@ -51,8 +59,13 @@ const EXCERPT_MAX_CHARS = 300;
  *
  * The card text is English-only on purpose: it renders inside Slack, not
  * the Crowi UI, and Slack workspaces have no Crowi locale to key off.
+ *
+ * `baseUrl` (the wiki's public origin) is used only to resolve
+ * site-relative markdown links in the excerpt to absolute Slack links;
+ * pass `null` when it is unavailable (such links then render as plain
+ * text).
  */
-export function buildUnfurlAttachment(url: string, page: ResolvedPage): SlackUnfurlAttachment {
+export function buildUnfurlAttachment(url: string, page: ResolvedPage, baseUrl: string | null = null): SlackUnfurlAttachment {
   const breadcrumb = pageBreadcrumb(page.path);
 
   if (page.grant !== GRANT_PUBLIC) {
@@ -71,7 +84,7 @@ export function buildUnfurlAttachment(url: string, page: ResolvedPage): SlackUnf
     mrkdwn_in: ['text'],
   };
 
-  const excerpt = buildExcerpt(page.body);
+  const excerpt = buildExcerpt(page.body, baseUrl);
   if (excerpt) {
     attachment.text = excerpt;
   }
@@ -101,16 +114,34 @@ function pageBreadcrumb(path: string): string {
 }
 
 /**
- * First non-empty stretch of the body, trimmed to `EXCERPT_MAX_CHARS`
- * with an ellipsis. Returns null for an empty / whitespace-only body so
- * the attachment simply omits the `text` field.
+ * Build the excerpt: convert the head of the body from Markdown to Slack
+ * mrkdwn (so headings / lists / links read cleanly rather than as raw
+ * source — see `mrkdwn.ts`), then trim to `EXCERPT_MAX_CHARS` with an
+ * ellipsis. Returns null for an empty / whitespace-only body so the
+ * attachment simply omits the `text` field.
  */
-function buildExcerpt(body: string | null): string | null {
+function buildExcerpt(body: string | null, baseUrl: string | null): string | null {
   if (!body) return null;
-  const normalized = body.replace(/\r\n/g, '\n').trim();
+  const head = body.length > SOURCE_SCAN_CHARS ? body.slice(0, SOURCE_SCAN_CHARS) : body;
+  const normalized = markdownToMrkdwn(head, { baseUrl }).trim();
   if (!normalized) return null;
   if (normalized.length <= EXCERPT_MAX_CHARS) {
     return normalized;
   }
-  return `${normalized.slice(0, EXCERPT_MAX_CHARS).trimEnd()}…`;
+  return truncateExcerpt(normalized, EXCERPT_MAX_CHARS);
+}
+
+/**
+ * Hard-cap the excerpt at `max` chars + ellipsis. If the cut landed inside
+ * a Slack link token (`<url|text`), drop that half-formed token so the
+ * card never renders a dangling `<…`.
+ */
+function truncateExcerpt(text: string, max: number): string {
+  let cut = text.slice(0, max);
+  const lastOpen = cut.lastIndexOf('<');
+  const lastClose = cut.lastIndexOf('>');
+  if (lastOpen > lastClose) {
+    cut = cut.slice(0, lastOpen);
+  }
+  return `${cut.trimEnd()}…`;
 }

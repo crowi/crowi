@@ -138,7 +138,7 @@ async function unfurlSharedLinks(args: UnfurlSharedLinksArgs): Promise<void> {
   for (const [url, path] of urlToPath) {
     const page = await resolvePage(ctx, path);
     if (page) {
-      unfurls[url] = buildUnfurlAttachment(url, page);
+      unfurls[url] = buildUnfurlAttachment(url, page, baseUrl);
     }
   }
 
