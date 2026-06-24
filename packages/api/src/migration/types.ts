@@ -27,6 +27,28 @@ export type MigrationDb = mongo.Db;
 export type MigrationLayer = 'boot' | 'preflight';
 
 /**
+ * Boot-block classification for a migration (RFC-0008 §4.2.7 amendment, see
+ * `.feature-state/specs/feature-migration-preflight-severity.md`).
+ *
+ *   - `blocking`  — an index-impacting / data-integrity migration (e.g.
+ *                   `user-unique-prepare`). When pending, boot is refused
+ *                   under the `block` policy (downgradeable to a warning via
+ *                   `MIGRATION_PREFLIGHT_UNAPPLIED_POLICY=warn`), because
+ *                   booting against not-yet-prepared data risks an autoIndex
+ *                   E11000 (§9).
+ *   - `cosmetic`  — a body-display-only migration (e.g. `wikilink-format`).
+ *                   When pending it only ever warns and boot continues —
+ *                   independent of the global policy. This avoids the
+ *                   structural deadlock where new content keeps a corpus-scan
+ *                   `isPending` perpetually true (§6.1/§6.2) and would
+ *                   otherwise refuse the whole cluster forever (BUG 2).
+ *
+ * Only `preflight` migrations are boot-probed; for `boot`-layer migrations the
+ * value is descriptive only (boot migrations are auto-applied, never probed).
+ */
+export type MigrationSeverity = 'cosmetic' | 'blocking';
+
+/**
  * Minimal logger surface the runner hands to a migration. Backed by the
  * runner's structured logger (console / `debug`); kept narrow so a
  * migration can't reach into transport details.
@@ -137,6 +159,16 @@ export interface MigrationDefinition {
   toVersion: string;
 
   layer: MigrationLayer;
+
+  /**
+   * REQUIRED boot-block classification (§4.2.7 amendment). A `cosmetic`
+   * preflight migration never refuses boot; a `blocking` one does (under the
+   * `block` policy). No default — omitting it is a compile error, so every
+   * migration is forced to declare its boot-block risk. For `boot`-layer
+   * migrations this is descriptive only: the boot probe evaluates `preflight`
+   * migrations exclusively, so a `boot` migration's severity never gates boot.
+   */
+  severity: MigrationSeverity;
 
   /** Short, human-readable description (shown by `plan` / `list`). */
   description: string;
