@@ -35,7 +35,7 @@
   },
   "scripts": {
     "dev": "node scripts/dev.mjs",
-    "dev:api": "turbo run dev --concurrency=20 --filter @crowi/api --filter @crowi/api-contract --filter @crowi/collab --filter @crowi/runner --filter \"@crowi/plugin-*\"",
+    "dev:api": "turbo run dev --concurrency=30 --filter @crowi/api --filter @crowi/api-contract --filter @crowi/collab --filter @crowi/runner --filter \"@crowi/plugin-*\"",
     "dev:web": "turbo run dev --filter @crowi/web",
     "dev:site": "turbo run dev --filter @crowi/site",
     "migrate": "node scripts/migrate.mjs",

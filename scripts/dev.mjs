@@ -32,10 +32,14 @@ const FAIL_MARKER_PREFIX = '@@crowi:fail'
 
 // Same filter list as the legacy root `dev` script. Kept here verbatim so the
 // turbo orchestration (concurrency / filters) is unchanged.
+// `--concurrency` MUST exceed the number of persistent `dev` tasks turbo runs
+// (api/web/api-contract/collab/runner + every `@crowi/plugin-*`); turbo errors
+// out otherwise. Kept above the plugin count with headroom so adding a plugin
+// doesn't break `pnpm dev`.
 const TURBO_ARGS = [
   'run',
   'dev',
-  '--concurrency=20',
+  '--concurrency=30',
   '--filter',
   '@crowi/api',
   '--filter',
