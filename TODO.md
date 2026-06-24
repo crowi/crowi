@@ -22,6 +22,7 @@ spec: `feature-v2-alpha1-release-prep.md`（実本番 = v1 DB への in-place �
 - [x] **v1→v2 データ移行（RFC-0008）** — migration framework
 - [x] **HTML タグ移行の不具合修正** — wikilink close-tag 誤爆 + TOC HTML 混入の修正と復旧 migration（spec: `feature-migration-html-tag-fixes.md`）
 - [x] **wikilink-format コード領域除外 + apply タイムスタンプ保全** — フェンス/インラインコード内 `</…>` を誤検知しない（`code-mask.ts` の `splitCodeSegments`）+ body-rewrite migration の `apply` がページの `updatedAt`/`lastUpdateUser` を bump せず保全（spec: `feature-migration-wikilink-code-exclusion.md`）
+- [x] **migration preflight severity（RFC-0008 BUG 2）** — `MigrationDefinition` に必須 `severity:'cosmetic'|'blocking'` を追加し boot probe を severity 別に分割。cosmetic preflight が pending でも warn-and-continue（`block` でも起動継続）、`user-unique-prepare` のみ blocking で従来通り起動拒否。新規ページ再 pending 化による永続起動拒否デッドロックを解消。`migrate list`/`plan` に `[blocking]`/`[cosmetic]` タグ（spec: `feature-migration-preflight-severity.md`）
 - [ ] **version bump + tag** — linked group を `2.0.0-alpha.0` へ。npm publish はしない
 
 ---
