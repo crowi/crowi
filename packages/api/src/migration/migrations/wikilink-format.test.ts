@@ -178,6 +178,104 @@ describe('migration/wikilink-format — rewriteAndDetect / rewriteWikilinks (pur
   });
 });
 
+describe('migration/wikilink-format — code-region exclusion (pure)', () => {
+  describe('basics', () => {
+    it('suppresses a token inside a fenced code block', () => {
+      const body = 'intro\n```tsx\n</AppShell>\n```\nend';
+      expect(rewriteWikilinks(body)).toBe(body);
+      expect(bodyHasRewritableWikilink(body)).toBe(false);
+    });
+
+    it('suppresses a token inside an inline code span (incl. an uppercase, non-HTML name)', () => {
+      // `</font>` is HTML-filtered anyway; `</AppShell>` is the load-bearing
+      // one — uppercase, NOT in KNOWN_HTML_ELEMENTS, so only code-segmentation
+      // protects it.
+      const body = 'see `</font>` and `</AppShell>` examples';
+      expect(rewriteWikilinks(body)).toBe(body);
+      expect(bodyHasRewritableWikilink(body)).toBe(false);
+    });
+
+    it('suppresses a token after an unclosed fence (code to EOF)', () => {
+      const body = 'intro\n```tsx\n</AppShell>\nmore\n';
+      expect(rewriteWikilinks(body)).toBe(body);
+      expect(bodyHasRewritableWikilink(body)).toBe(false);
+    });
+
+    it('does NOT protect a token after an unmatched single backtick (no over-suppression)', () => {
+      // A lone backtick with no closer is not a code span, so the following
+      // `</AppShell>` is rewritten as a real wikilink.
+      const body = 'a ` then </AppShell> here';
+      expect(rewriteWikilinks(body)).toBe('a ` then [[/AppShell]] here');
+      expect(bodyHasRewritableWikilink(body)).toBe(true);
+    });
+
+    it('does NOT exclude indented code (renderer divergence) — the token is still rewritten', () => {
+      const body = 'para\n\n    </AppShell>\n';
+      expect(rewriteWikilinks(body)).toBe('para\n\n    [[/AppShell]]\n');
+    });
+
+    it('rewrites a genuine wikilink on a 4-space paragraph-continuation line (no over-suppression)', () => {
+      const body = 'lead\n    see </docs/api>\n';
+      expect(rewriteWikilinks(body)).toBe('lead\n    see [[/docs/api]]\n');
+    });
+  });
+
+  describe('failure-mode regressions (the three bugs the same-length-fill scheme drops)', () => {
+    it('(a①) preserves two adjacent inline spans byte-for-byte (no merge / drop)', () => {
+      const body = '`</A>` `</B>`';
+      const result = rewriteAndDetect(body);
+      expect(result.body).toBe(body);
+      expect(result.body).toContain('`</A>`');
+      expect(result.body).toContain('`</B>`');
+      expect(result.occurrences).toEqual([]);
+    });
+
+    it('(a②) preserves a fence immediately followed by an inline span byte-for-byte', () => {
+      const body = '```tsx\n</A>\n```\n`</B>`';
+      const result = rewriteAndDetect(body);
+      expect(result.body).toBe(body);
+      expect(result.occurrences).toEqual([]);
+    });
+
+    it('(b) does not swap two code regions when an inline span precedes a fence', () => {
+      const body = '`</A>` text\n```tsx\n</B>\n```\n';
+      const result = rewriteAndDetect(body);
+      expect(result.body).toBe(body);
+      // Each region stays in place, byte-identical.
+      expect(result.body.indexOf('`</A>`')).toBeLessThan(result.body.indexOf('</B>'));
+    });
+
+    it('(c) a page whose target tokens are all inside code does not pend', () => {
+      const body = 'doc\n```tsx\n</AppShell>\n```\nand `</Widget>` inline';
+      expect(rewriteWikilinks(body)).toBe(body);
+      expect(bodyHasRewritableWikilink(body)).toBe(false);
+    });
+
+    it('(d) rewrites a real out-of-code token that comes BEFORE the code region, keeping code byte-identical', () => {
+      const body = 'see </docs/api> for details\n```tsx\n</AppShell>\n```';
+      const result = rewriteAndDetect(body);
+      expect(result.body).toBe('see [[/docs/api]] for details\n```tsx\n</AppShell>\n```');
+      expect(result.occurrences).toEqual([{ raw: '</docs/api>', path: '/docs/api', alias: undefined }]);
+      // The fence is preserved verbatim.
+      expect(result.body).toContain('```tsx\n</AppShell>\n```');
+    });
+  });
+
+  describe('by-reference / idempotency', () => {
+    it('returns the input by reference when only code-region tokens exist', () => {
+      const body = '```tsx\n</AppShell>\n```';
+      const result = rewriteAndDetect(body);
+      expect(result.body).toBe(body); // referential equality (no rewrite happened)
+    });
+
+    it('is idempotent across two passes when a real token sits beside a code region', () => {
+      const body = 'see </docs/api>\n```tsx\n</AppShell>\n```';
+      const once = rewriteWikilinks(body);
+      expect(rewriteWikilinks(once)).toBe(once);
+    });
+  });
+});
+
 describe('migration/wikilink-format — bodyHasRewritableWikilink (pure verdict)', () => {
   it('is false when there is no `</` at all', () => {
     expect(bodyHasRewritableWikilink('only [[/already/v2]] here')).toBe(false);
@@ -202,16 +300,23 @@ describe('migration/wikilink-format — framework wiring', () => {
   let Page;
   let Revision;
   let admin: UserDocument;
+  // A non-admin author distinct from the migration acting user (the oldest
+  // admin). Pages created by this user have `lastUpdateUser === author`, so the
+  // preserve-timestamps assertion is non-vacuous (without the fix the apply
+  // would rewrite `lastUpdateUser` to `admin`).
+  let author: UserDocument;
 
   const PATH_PREFIX = '/__wikilink-migration';
 
   beforeAll(async () => {
     Page = crowi.model('Page');
     Revision = crowi.model('Revision');
-    const [user] = (await Fixture.generate('User', [
+    const [adminUser, authorUser] = (await Fixture.generate('User', [
       { name: 'Wikilink Admin', username: 'wikilink-admin', email: 'wikilink-admin@example.com', admin: true },
+      { name: 'Wikilink Author', username: 'wikilink-author', email: 'wikilink-author@example.com', admin: false },
     ])) as UserDocument[];
-    admin = user;
+    admin = adminUser;
+    author = authorUser;
   });
 
   beforeEach(async () => {
@@ -229,6 +334,7 @@ describe('migration/wikilink-format — framework wiring', () => {
     await Page.deleteMany({ path: { $regex: `^${PATH_PREFIX}` } });
     await Revision.deleteMany({ path: { $regex: `^${PATH_PREFIX}` } });
     await crowi.model('User').deleteOne({ _id: admin._id });
+    await crowi.model('User').deleteOne({ _id: author._id });
   });
 
   it('registry exposes wikilink-format as a preflight migration with the right range', () => {
@@ -355,5 +461,117 @@ describe('migration/wikilink-format — framework wiring', () => {
     const page = await Page.findById(pageId).populate('revision');
     expect(page.revision.body).toBe('see </docs/api> here');
     expect(await MigrationApplication().countDocuments({ migrationId: 'wikilink-format' })).toBe(0);
+  });
+
+  describe('code-region exclusion (Mongo wiring)', () => {
+    it('a page whose only `</…>` token is inside a tsx fence is NOT pending and applies clean', async () => {
+      const body = 'Component usage:\n```tsx\n<AppShell>\n  <Page />\n</AppShell>\n```\n';
+      await Page.createPage(`${PATH_PREFIX}/fence-only`, body, admin, {});
+
+      const runner = new MigrationRunner(crowi);
+      expect(await runner.isPending(wikilinkFormat)).toBe(false);
+
+      const report = await runner.detect(wikilinkFormat);
+      expect(report?.counts?.pages).toBe(0);
+
+      const outcome = await runner.apply(wikilinkFormat);
+      expect(outcome.result).toBe('detected-clean');
+      expect(outcome.stats['rewrite-wikilink']).toBeUndefined();
+    });
+
+    it('rewrites only the out-of-code token and keeps the fence + inline span byte-identical', async () => {
+      const fence = '```tsx\n</AppShell>\n```';
+      const inline = '`</Widget>`';
+      const body = `see </docs/api> for details\n${fence}\nand ${inline} inline`;
+      const created = await Page.createPage(`${PATH_PREFIX}/mixed-code`, body, admin, {});
+
+      const runner = new MigrationRunner(crowi);
+      expect(await runner.isPending(wikilinkFormat)).toBe(true);
+      await runner.apply(wikilinkFormat);
+
+      const page = await Page.findById(created._id).populate('revision');
+      expect(page.revision.body).toBe(`see [[/docs/api]] for details\n${fence}\nand ${inline} inline`);
+      // (f) the code regions survive the apply byte-for-byte.
+      expect(page.revision.body).toContain(fence);
+      expect(page.revision.body).toContain(inline);
+    });
+  });
+
+  describe('apply preserves updatedAt / lastUpdateUser (preserve-in-place)', () => {
+    // A fixed past sentinel so "unchanged" is distinguishable from "bumped to now".
+    const PAST = new Date('2020-01-02T03:04:05.000Z');
+
+    it('keeps the original lastUpdateUser (a non-bot author) and the past updatedAt after apply', async () => {
+      // (i) create the page as `author` (non-admin) so lastUpdateUser != the
+      // migration acting user (the oldest admin).
+      const created = await Page.createPage(`${PATH_PREFIX}/preserve`, 'see </docs/api> here', author, {});
+      const pageId = created._id;
+
+      // Sanity: before apply, lastUpdateUser is the author, NOT the admin
+      // (read the stored ref, which is a plain ObjectId).
+      const before = await Page.findById(pageId).select('lastUpdateUser').lean();
+      expect(String(before.lastUpdateUser)).toBe(String(author._id));
+      expect(String(before.lastUpdateUser)).not.toBe(String(admin._id));
+
+      // (ii) pin updatedAt to a fixed past sentinel.
+      await Page.updateOne({ _id: pageId }, { $set: { updatedAt: PAST } });
+
+      await new MigrationRunner(crowi).apply(wikilinkFormat);
+
+      const after = await Page.findById(pageId).populate('revision');
+      // The body was rewritten …
+      expect(after.revision.body).toBe('see [[/docs/api]] here');
+      // (iii) … but updatedAt and lastUpdateUser are preserved.
+      expect(new Date(after.updatedAt).toISOString()).toBe(PAST.toISOString());
+      expect(String(after.lastUpdateUser)).toBe(String(author._id));
+      expect(String(after.lastUpdateUser)).not.toBe(String(admin._id));
+    });
+
+    it('(iv) the search-index path sees the ORIGINAL updatedAt (no Mongo/index divergence)', async () => {
+      const created = await Page.createPage(`${PATH_PREFIX}/preserve-index`, 'link </docs/api> here', author, {});
+      const pageId = created._id;
+      await Page.updateOne({ _id: pageId }, { $set: { updatedAt: PAST } });
+
+      // Install a capturing fake searcher so we can observe the doc that
+      // indexPageInSearch builds from the in-memory page the event carries.
+      const registries = (crowi as unknown as { pluginRegistries: { active: { search: unknown } } }).pluginRegistries;
+      const previous = registries.active.search;
+      const indexed: { id: string; updatedAt: unknown }[] = [];
+      registries.active.search = {
+        index: async (doc: { id: string; meta?: { updated_at?: unknown } }) => {
+          indexed.push({ id: doc.id, updatedAt: doc.meta?.updated_at });
+        },
+        remove: async () => undefined,
+        query: async () => ({ total: 0, hits: [] }),
+      };
+
+      try {
+        await new MigrationRunner(crowi).apply(wikilinkFormat);
+        // indexPageInSearch runs as a tracked fire-and-forget side effect.
+        await crowi.drainSideEffects();
+      } finally {
+        registries.active.search = previous;
+      }
+
+      const entry = indexed.find((e) => e.id === String(pageId));
+      expect(entry).toBeDefined();
+      // The indexed updated_at is the ORIGINAL past value — never bumped to now.
+      expect(new Date(entry?.updatedAt as Date).toISOString()).toBe(PAST.toISOString());
+    });
+
+    it('does not overwrite a legacy null lastUpdateUser with undefined', async () => {
+      const created = await Page.createPage(`${PATH_PREFIX}/legacy-null`, 'see </docs/api> here', author, {});
+      const pageId = created._id;
+      // Simulate a legacy page with no lastUpdateUser / updatedAt.
+      await Page.updateOne({ _id: pageId }, { $unset: { lastUpdateUser: '', updatedAt: '' } });
+
+      await new MigrationRunner(crowi).apply(wikilinkFormat);
+
+      const after = await Page.findById(pageId).populate('revision');
+      expect(after.revision.body).toBe('see [[/docs/api]] here');
+      // Preserve-in-place skips the assignment entirely, so the field stays
+      // null/undefined — never written as `undefined` on top of a legacy null.
+      expect(after.lastUpdateUser == null).toBe(true);
+    });
   });
 });

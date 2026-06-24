@@ -21,6 +21,7 @@ spec: `feature-v2-alpha1-release-prep.md`（実本番 = v1 DB への in-place �
   - [ ] slim image + 外部 operator 向け doc — blocked-on `feature-plugin-search-mongo`
 - [x] **v1→v2 データ移行（RFC-0008）** — migration framework
 - [x] **HTML タグ移行の不具合修正** — wikilink close-tag 誤爆 + TOC HTML 混入の修正と復旧 migration（spec: `feature-migration-html-tag-fixes.md`）
+- [x] **wikilink-format コード領域除外 + apply タイムスタンプ保全** — フェンス/インラインコード内 `</…>` を誤検知しない（`code-mask.ts` の `splitCodeSegments`）+ body-rewrite migration の `apply` がページの `updatedAt`/`lastUpdateUser` を bump せず保全（spec: `feature-migration-wikilink-code-exclusion.md`）
 - [ ] **version bump + tag** — linked group を `2.0.0-alpha.0` へ。npm publish はしない
 
 ---
