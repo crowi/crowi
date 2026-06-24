@@ -72,7 +72,10 @@ export interface RunBootMigrationsOptions {
 
 export interface RunBootMigrationsResult {
   appliedBootIds: string[];
-  pendingPreflightIds: string[];
+  /** Pending `severity:'blocking'` preflight migrations (gate boot under `block`). */
+  pendingBlockingIds: string[];
+  /** Pending `severity:'cosmetic'` preflight migrations (never gate boot). */
+  pendingCosmeticIds: string[];
   policy: PreflightUnappliedPolicy;
 }
 
@@ -98,25 +101,45 @@ export async function runBootMigrations(crowi: Crowi, options: RunBootMigrations
     }
   }
 
-  // ── 2. Probe preflight migrations (cheap isPending) ──
-  const pendingPreflightIds: string[] = [];
+  // ── 2. Probe preflight migrations (cheap isPending), split by severity ──
+  //
+  // Every preflight migration is still probed (RFC-0008 §6.1/§6.2: inspection
+  // = source of truth). What changed is only the *consequence* of a pending
+  // verdict, decided per-migration by `severity`:
+  //   - `cosmetic` pending → always warn-and-continue (global knob ignored);
+  //   - `blocking` pending → refuse boot under `block`, warn-and-continue under
+  //     `warn` (the existing emergency override).
+  const pendingBlockingIds: string[] = [];
+  const pendingCosmeticIds: string[] = [];
   for (const def of registry.byLayer('preflight')) {
     if (await runner.isPending(def)) {
-      pendingPreflightIds.push(def.id);
+      (def.severity === 'blocking' ? pendingBlockingIds : pendingCosmeticIds).push(def.id);
     }
   }
 
-  if (pendingPreflightIds.length > 0) {
-    if (policy === 'block') {
-      // Whole-cluster fail-fast (§4.2.7).
-      throw new PreflightBlockedError(pendingPreflightIds);
-    }
-    // warn: operator explicitly accepts the risk.
+  // Cosmetic pending always warns and continues, regardless of policy. Emitted
+  // before the blocking decision so it is observable even on the block-throw
+  // path (the result object is not returned then). A distinct message per
+  // severity keeps operator grep / alert rules simple.
+  if (pendingCosmeticIds.length > 0) {
     console.warn(
-      `[crowi:migration] WARNING: ${pendingPreflightIds.length} preflight migration(s) unapplied [${pendingPreflightIds.join(', ')}] ` +
-        `but ${POLICY_ENV_VAR}=warn — continuing boot. Data may not be in the target shape; autoIndex may fail with E11000.`,
+      `[crowi:migration] WARNING: ${pendingCosmeticIds.length} cosmetic preflight migration(s) unapplied ` +
+        `[${pendingCosmeticIds.join(', ')}] — body display only; boot continues.`,
     );
   }
 
-  return { appliedBootIds, pendingPreflightIds, policy };
+  if (pendingBlockingIds.length > 0) {
+    if (policy === 'block') {
+      // Whole-cluster fail-fast for blocking migrations only (§4.2.7). The
+      // result object (and its severity split) is not returned on this path.
+      throw new PreflightBlockedError(pendingBlockingIds);
+    }
+    // warn: operator explicitly accepts the data-integrity risk.
+    console.warn(
+      `[crowi:migration] WARNING: ${pendingBlockingIds.length} preflight migration(s) unapplied ` +
+        `[${pendingBlockingIds.join(', ')}] — data-integrity risk; autoIndex may fail with E11000.`,
+    );
+  }
+
+  return { appliedBootIds, pendingBlockingIds, pendingCosmeticIds, policy };
 }
