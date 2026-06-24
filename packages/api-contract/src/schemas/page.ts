@@ -220,6 +220,14 @@ export const ListPagesResponseSchema = z.object({
   pages: z.array(PageSchema),
   pager: PagerSchema,
   portalPage: PageSchema.nullable().optional(),
+  // When listing a portal path (`/foo/`) that has NO portal document of
+  // its own but a content page DOES live at the stripped path (`/foo`),
+  // this carries that content page. The list view uses it to suppress the
+  // "Create Portal" CTA and surface a "portalize this page" banner instead
+  // (feature-update-pages-list-ux §4). Mutually exclusive with `portalPage`
+  // — only set when `portalPage` is null. Absent / null for ordinary
+  // listings.
+  contentPage: PageSchema.nullable().optional(),
 });
 export type ListPagesResponse = z.infer<typeof ListPagesResponseSchema>;
 

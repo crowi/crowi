@@ -82,6 +82,11 @@ const pageRevisionConflictBody = () => ({
   error: { code: 'PAGE_REVISION_ERROR' as const, message: 'Revision error.' },
 });
 
+// §6 — shared 400 body for the `/x` ↔ `/x/` twin-creation guard, used by both
+// the create and rename paths so the message stays identical.
+const pageTwinExistsBody = (twinPath: string) =>
+  pageBadRequestBody('PAGE_TWIN_EXISTS', `A page with the opposite trailing slash already exists at ${twinPath}. Portalize it instead.`);
+
 // Structured 400 body shared by both subtree-rename paths (page_id-based and
 // path-based). `partial: true` marks a mid-execution best-effort failure.
 const renameTreeFailedBody = (message: string, conflicts: { path: string; reasons: string[] }[], partial?: boolean) => ({
@@ -235,6 +240,12 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
         try {
           let pages: PageDocument[] = [];
           let portalPage: PageDocument | null = null;
+          // §4 — when listing a portal path (`/foo/`) that has no portal
+          // document of its own, surface the content page sitting at the
+          // stripped path (`/foo`) so the list view can offer "portalize
+          // this page" instead of "Create Portal". Mutually exclusive with
+          // `portalPage`. Only ever set in the path branch below.
+          let contentPage: PageDocument | null = null;
 
           if (userParam) {
             // List pages by creator.
@@ -266,6 +277,21 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
               rawPortalPage ? Page.populate(rawPortalPage, [{ path: 'creator' }, { path: 'lastUpdateUser' }]) : null,
               Page.populate(rawPages, [{ path: 'creator' }, { path: 'lastUpdateUser' }]),
             ])) as [PageDocument | null, PageDocument[]];
+
+            // §4 — a portal path (`/foo/`) with no portal document but a
+            // content page at the stripped path (`/foo`): resolve that
+            // content page (grant/draft-respecting; not-found → null) so the
+            // client can offer to portalize it. Skipped for /trash and when
+            // a real portal already exists (the two are exclusive).
+            if (!isTrashPath && !portalPage && path.endsWith('/')) {
+              const strippedPath = path.replace(/\/+$/, '');
+              if (strippedPath !== '') {
+                const rawContentPage = await Page.findPortalPage(strippedPath, user, null);
+                contentPage = rawContentPage
+                  ? ((await Page.populate(rawContentPage, [{ path: 'creator' }, { path: 'lastUpdateUser' }])) as PageDocument)
+                  : null;
+              }
+            }
           } else {
             // List all pages the user can access (including path='/').
             //
@@ -333,6 +359,15 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             const portalId = String(portalPage._id);
             pages = pages.filter((page) => String(page._id) !== portalId);
           }
+          // §4 — the content page surfaced separately as `contentPage` is
+          // also matched by `findListByStartWith` (the un-slashed twin of
+          // the portal path), so drop it from the child rows for the same
+          // reason as `portalPage`: it is rendered as the portalize banner,
+          // not as a child.
+          if (contentPage) {
+            const contentId = String(contentPage._id);
+            pages = pages.filter((page) => String(page._id) !== contentId);
+          }
 
           const pageResponses = pages.map((page) => pageToResponse(page));
           // The portal document is rendered as a full page (PageContent)
@@ -356,6 +391,11 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             portalPageResponse.revision.renderedAst = renderedAst;
           }
 
+          // §4 — content page emitted lean (no renderedAst): the client uses
+          // it only to drive the portalize banner (id / path / revision id),
+          // never to render the page body.
+          const contentPageResponse = contentPage ? pageToResponse(contentPage) : null;
+
           const prev = offset > 0 ? Math.max(0, offset - limit) : null;
           const next = pages.length === limit ? offset + limit : null;
 
@@ -364,6 +404,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
               pages: pageResponses,
               pager: { prev, next, offset },
               portalPage: portalPageResponse,
+              contentPage: contentPageResponse,
             },
             200,
           );
@@ -376,6 +417,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
               pages: [],
               pager: { prev: null, next: null, offset: 0 },
               portalPage: null,
+              contentPage: null,
             },
             200,
           );
@@ -415,6 +457,16 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
           const existing = await Page.findPage(path, user, null, /* ignoreNotFound */ true);
           if (existing !== null) {
             return c.json(pageBadRequestBody('PAGE_EXISTS', 'Page exists'), 400);
+          }
+
+          // §6 — block the `/x` ↔ `/x/` double-state: refuse to create a
+          // page whose trailing-slash twin already exists as a real page.
+          // Use `normalizePath` so the twin check sees the same path the
+          // creation will use.
+          const normalizedCreatePath = Page.normalizePath(path);
+          const twin = await Page.findExistingTwin(normalizedCreatePath);
+          if (twin) {
+            return c.json(pageTwinExistsBody(twin.path), 400);
           }
 
           // RFC-0010 — record the edit channel (web / oauth / pat) so the
@@ -876,6 +928,15 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
           // ------------------------------------------------------------
           // Single-page rename (default / back-compat).
           // ------------------------------------------------------------
+          // §6 — block the `/x` ↔ `/x/` double-state: refuse to move onto a
+          // path whose trailing-slash twin already exists as a real page.
+          // The source page itself is excluded, so portalizing `/x` → `/x/`
+          // (where the twin `/x` IS the page being moved) is allowed.
+          const twinAtNewPath = await Page.findExistingTwin(newPagePath, { excludeId: pageData._id });
+          if (twinAtNewPath) {
+            return c.json(pageTwinExistsBody(twinAtNewPath.path), 400);
+          }
+
           // Collision at the destination path — unlink an existing
           // redirect when the caller has permission, otherwise refuse.
           const existingAtNewPath = await Page.findOne({ path: newPagePath });
@@ -892,10 +953,16 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             }
           }
 
-          // Legacy controller: portal paths (ending in '/') never get a
-          // redirect page even if requested.
+          // Honour `create_redirect` regardless of the destination's
+          // portal-ness. Portalizing `/x` → `/x/` leaves a redirect at the
+          // old content path so existing links / bookmarks to `/x` keep
+          // resolving (to the new portal) — the same behaviour every other
+          // rename already has (RenameDialog always requests a redirect). The
+          // redirect stub has `redirectTo` set, so `findExistingTwin` (which
+          // filters `redirectTo: null`) does not treat it as a `/x` ↔ `/x/`
+          // twin, and it is hidden from listings (also `redirectTo: null`).
           const options = {
-            createRedirectPage: !newPageIsPortal && Boolean(create_redirect),
+            createRedirectPage: Boolean(create_redirect),
           };
 
           await Page.rename(pageData, newPagePath, user, options);

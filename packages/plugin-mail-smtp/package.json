@@ -2,6 +2,11 @@
   "name": "@crowi/plugin-mail-smtp",
   "version": "0.1.0-alpha.0",
   "description": "SMTP mail sender for Crowi 2.0. Default-on; delivers core-assembled email over SMTP via nodemailer.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/crowi/crowi.git",
+    "directory": "packages/plugin-mail-smtp"
+  },
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
@@ -25,7 +30,7 @@
     "type-check": "tsc --noEmit"
   },
   "peerDependencies": {
-    "zod": "catalog:"
+    "zod": "^4"
   },
   "dependencies": {
     "@crowi/plugin-api": "workspace:^",

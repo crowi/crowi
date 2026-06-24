@@ -2,6 +2,11 @@
   "name": "@crowi/plugin-mail-resend",
   "version": "0.1.0-alpha.0",
   "description": "Resend mail sender for Crowi 2.0. Delivers core-assembled email via the Resend HTTP API.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/crowi/crowi.git",
+    "directory": "packages/plugin-mail-resend"
+  },
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
@@ -25,7 +30,7 @@
     "type-check": "tsc --noEmit"
   },
   "peerDependencies": {
-    "zod": "catalog:"
+    "zod": "^4"
   },
   "dependencies": {
     "@crowi/plugin-api": "workspace:^",

@@ -102,13 +102,19 @@ interface PageListEmptyCardProps {
   /** Optional large illustration glyph above the empty-state message. */
   icon?: LucideIcon;
   message: string;
+  /**
+   * Optional call-to-action rendered (centred) below the message — e.g.
+   * a "create page" button so an empty listing still offers a way to add
+   * the first page under it.
+   */
+  action?: React.ReactNode;
 }
 
 /**
  * Card-shaped empty state, sized to mirror the rows-card so swapping
  * between "no pages" and "some pages" does not jolt the layout.
  */
-export function PageListEmptyCard({ icon: Icon, message }: PageListEmptyCardProps) {
+export function PageListEmptyCard({ icon: Icon, message, action }: PageListEmptyCardProps) {
   // `gap-0` cancels shadcn Card's default flex gap (no inner stack to
   // space here), but `p-10` is preserved on both axes so the icon and
   // message keep breathing room from the card border.
@@ -116,6 +122,7 @@ export function PageListEmptyCard({ icon: Icon, message }: PageListEmptyCardProp
     <Card className="gap-0 p-10 text-center">
       {Icon && <Icon className="mb-3 h-10 w-10 mx-auto text-muted-foreground/50" />}
       <p className="text-sm text-muted-foreground">{message}</p>
+      {action && <div className="mt-4 flex justify-center">{action}</div>}
     </Card>
   );
 }

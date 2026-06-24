@@ -101,7 +101,12 @@ RUN pnpm --filter ${RUNNER_APP}... build
 # otherwise left as symlinks to the source checkout, which don't exist here.
 FROM builder AS deployer
 ARG RUNNER_APP
-RUN pnpm deploy --filter=${RUNNER_APP} --prod /deploy
+# --legacy: pnpm v10 changed `pnpm deploy` to refuse non-injected workspaces by
+# default (ERR_PNPM_DEPLOY_NONINJECTED_WORKSPACE unless inject-workspace-packages
+# =true). --legacy keeps the pre-v10 deploy algorithm (resolve workspace: deps +
+# copy into node_modules) this stage relies on, scoped to this build step so dev
+# installs are unaffected (vs. flipping inject-workspace-packages repo-wide).
+RUN pnpm deploy --legacy --filter=${RUNNER_APP} --prod /deploy
 
 # -----------------------------------------------------------------------------
 # Stage 4: runtime

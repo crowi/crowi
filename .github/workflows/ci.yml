@@ -3,8 +3,23 @@ name: CI
 on:
   push:
     branches: [main, dev, dev2-2]
+    # Skip the code-validating pipeline (test / lint / changeset-status) when a
+    # push touches ONLY non-code paths. A mixed code+docs change still runs CI
+    # (paths-ignore skips only when EVERY changed file matches). ci.yml itself is
+    # deliberately not listed so CI-config changes still get validated.
+    paths-ignore: &ci-skip
+      - '**/*.md'
+      - '**/*.mdx'
+      - 'docs/**'
+      - 'apps/crowi-site/**' # validated by its own Cloudflare Pages deploy
+      - '.changeset/**'
+      - '.claude/**'
+      - '.github/workflows/docker.yml'
+      - '.github/workflows/docker-elasticsearch.yml'
+      - '.github/workflows/release.yml'
   pull_request:
     branches: [main, dev, dev2-2]
+    paths-ignore: *ci-skip
 
 jobs:
   test:
@@ -44,13 +59,13 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
 
       - name: Setup Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ matrix.node-version }}
           cache: 'pnpm'
@@ -69,13 +84,13 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 24.x
           cache: 'pnpm'
@@ -106,7 +121,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -114,7 +129,7 @@ jobs:
         uses: pnpm/action-setup@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 24.x
           cache: 'pnpm'

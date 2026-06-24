@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Bell, BellOff, Bookmark, ClipboardCopy, History, Link2, MoreHorizontal, MoveRight, ThumbsUp, Trash2 } from 'lucide-react';
+import { Bell, BellOff, Bookmark, ClipboardCopy, Compass, History, Link2, MoreHorizontal, MoveRight, ThumbsUp, Trash2 } from 'lucide-react';
 import type { PageWithRevision } from '@crowi/api-contract';
 import { PageStatusEnum } from '@crowi/api-contract';
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,7 @@ import { useToggleLike } from '@/lib/use-like';
 import { useToggleWatch } from '@/lib/use-watch';
 import { m } from '@paraglide/messages.js';
 import { DeletePageDialog } from './delete-page-dialog';
+import { PortalizeDialog } from './portalize-dialog';
 import { RenameDialog } from './rename-dialog';
 
 interface PageActionsMenuProps {
@@ -40,6 +41,7 @@ interface PageActionsMenuProps {
 export function PageActionsMenu({ page, compact = false, isAuthenticated = false, foldSocial = false, isLiked = false }: PageActionsMenuProps) {
   const router = useRouter();
   const [isRenameOpen, setIsRenameOpen] = useState(false);
+  const [isPortalizeOpen, setIsPortalizeOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   // Drafts hide the social affordances (watch / bookmark / copy-link)
   // that the compact dropdown otherwise folds in. The page-level
@@ -48,6 +50,10 @@ export function PageActionsMenu({ page, compact = false, isAuthenticated = false
   // A user's home page (`/user/<username>`) is bound to the username, so it
   // can't be renamed — the server rejects it too (`isRenamableName`).
   const canRename = !isUserHomePath(page.path);
+  // "Portalize" turns this content page into the `/path/` portal. Offered
+  // only for a renamable, non-portal page (a path already ending in `/` is
+  // already a portal). User home pages are excluded via `canRename`.
+  const canPortalize = canRename && !page.path.endsWith('/');
 
   const handleCopyMarkdown = () => {
     const body = page.revision?.body ?? '';
@@ -111,6 +117,12 @@ export function PageActionsMenu({ page, compact = false, isAuthenticated = false
               {m['page.action_rename']()}
             </DropdownMenuItem>
           )}
+          {canPortalize && (
+            <DropdownMenuItem onSelect={() => setIsPortalizeOpen(true)}>
+              <Compass className="h-4 w-4 mr-2" />
+              {m['page.action_portalize']()}
+            </DropdownMenuItem>
+          )}
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => setIsDeleteOpen(true)} className="text-red-600 focus:text-red-600">
             <Trash2 className="h-4 w-4 mr-2" />
@@ -120,6 +132,7 @@ export function PageActionsMenu({ page, compact = false, isAuthenticated = false
       </DropdownMenu>
 
       {canRename && <RenameDialog page={page} open={isRenameOpen} onOpenChange={setIsRenameOpen} />}
+      {canPortalize && <PortalizeDialog page={page} open={isPortalizeOpen} onOpenChange={setIsPortalizeOpen} />}
       <DeletePageDialog pageId={page._id} pagePath={page.path} revisionId={page.revision?._id} open={isDeleteOpen} onOpenChange={setIsDeleteOpen} />
     </>
   );

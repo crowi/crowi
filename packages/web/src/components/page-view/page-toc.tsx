@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import type { TocEntryResponse } from '@crowi/api-contract';
+import { type TocEntryResponse, stripKnownHtmlTags } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 import { cn } from '@/lib/utils';
 
@@ -102,6 +102,12 @@ export function TocList({ toc, activeId, onNavigate }: { toc: TocEntryResponse[]
       {toc.map((entry) => {
         const indent = Math.max(0, entry.level - minLevel);
         const isActive = activeId === entry.anchorId;
+        // `entry.text` is the RAW heading text (inline HTML included, as
+        // authored / stored). Strip the known HTML tags out at display time
+        // using the SAME helper the server slugs `anchorId` from, so the
+        // visible label is clean while `href`/scroll-spy keep using the
+        // server-generated `anchorId` (never re-slugged here).
+        const label = stripKnownHtmlTags(entry.text);
         return (
           <li key={entry.anchorId}>
             <a
@@ -115,9 +121,9 @@ export function TocList({ toc, activeId, onNavigate }: { toc: TocEntryResponse[]
                   : 'border-transparent text-muted-foreground hover:text-foreground hover:border-foreground/40',
               )}
               style={{ paddingLeft: `${indent * 0.75 + 0.75}rem` }}
-              title={entry.text}
+              title={label}
             >
-              {entry.text}
+              {label}
             </a>
           </li>
         );

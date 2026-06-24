@@ -93,6 +93,11 @@ describe('useCreateDraft', () => {
     expect(created).toEqual({ pageId: 'new-page' });
     expect(createPost).toHaveBeenCalledWith({ json: { path: '/docs/new' } });
     expect(invalidate).toHaveBeenCalledWith({ queryKey: draftsKeys.all });
+    // A new draft is visible-to-author in the parent's child listing, so the
+    // sidebar tree / page list (`['pages']` family) must refresh too —
+    // otherwise returning to an already-cached parent omits the new page
+    // until its 60s staleTime lapses.
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['pages'] });
   });
 
   it('throws DraftPathConflictError carrying the owner on 409', async () => {

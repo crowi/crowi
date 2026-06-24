@@ -1,3 +1,4 @@
+import { KNOWN_HTML_ELEMENTS } from '@crowi/api-contract';
 import { STATUS_PUBLISHED } from 'src/models/page';
 
 import { resolveActingUserId } from '../helpers';
@@ -26,130 +27,6 @@ import type { MigrationContext } from '../types';
  * The textual conversion logic below is moved verbatim from the old command so
  * the rewrite output is byte-identical to the legacy migrator.
  */
-
-/**
- * HTML5 element name set used to reject `</foo>` matches whose first path
- * segment is actually a closing HTML tag. Source:
- * https://developer.mozilla.org/en-US/docs/Web/HTML/Element — the full
- * standard element list as of the HTML Living Standard.
- *
- * Kept as a top-level `Set<string>` so detection runs O(1) per match.
- * `h1`..`h6` are listed explicitly because the regex captures `foo` for
- * `</foo>` and we want both `</h1>` and `</h6>` to be rejected.
- */
-export const KNOWN_HTML_ELEMENTS: ReadonlySet<string> = new Set([
-  'a',
-  'abbr',
-  'address',
-  'area',
-  'article',
-  'aside',
-  'audio',
-  'b',
-  'base',
-  'bdi',
-  'bdo',
-  'blockquote',
-  'body',
-  'br',
-  'button',
-  'canvas',
-  'caption',
-  'cite',
-  'code',
-  'col',
-  'colgroup',
-  'data',
-  'datalist',
-  'dd',
-  'del',
-  'details',
-  'dfn',
-  'dialog',
-  'div',
-  'dl',
-  'dt',
-  'em',
-  'embed',
-  'fieldset',
-  'figcaption',
-  'figure',
-  'footer',
-  'form',
-  'h1',
-  'h2',
-  'h3',
-  'h4',
-  'h5',
-  'h6',
-  'head',
-  'header',
-  'hgroup',
-  'hr',
-  'html',
-  'i',
-  'iframe',
-  'img',
-  'input',
-  'ins',
-  'kbd',
-  'label',
-  'legend',
-  'li',
-  'link',
-  'main',
-  'map',
-  'mark',
-  'menu',
-  'meta',
-  'meter',
-  'nav',
-  'noscript',
-  'object',
-  'ol',
-  'optgroup',
-  'option',
-  'output',
-  'p',
-  'picture',
-  'pre',
-  'progress',
-  'q',
-  'rp',
-  'rt',
-  'ruby',
-  's',
-  'samp',
-  'script',
-  'section',
-  'select',
-  'slot',
-  'small',
-  'source',
-  'span',
-  'strong',
-  'style',
-  'sub',
-  'summary',
-  'sup',
-  'table',
-  'tbody',
-  'td',
-  'template',
-  'textarea',
-  'tfoot',
-  'th',
-  'thead',
-  'time',
-  'title',
-  'tr',
-  'track',
-  'u',
-  'ul',
-  'var',
-  'video',
-  'wbr',
-]);
 
 /**
  * v1 angle-bracket internal link form. The capture group grabs the path-style
@@ -255,24 +132,6 @@ export function rewriteAndDetect(body: string): { body: string; occurrences: Wik
 export function rewriteWikilinks(body: string): string {
   return rewriteAndDetect(body).body;
 }
-
-/**
- * Resolve which user is recorded as the author of every rewritten revision.
- * The `updatePage`-equivalent path (`rewritePageBody`) ultimately calls
- * `Revision.prepareRevision`, which **throws** when handed a falsy user, so a
- * preflight rewrite MUST resolve a real acting user up front rather than rely
- * on per-page `lastUpdateUser`/`creator` (those can dangle to a deleted user).
- *
- * Order, mirroring the legacy `migrate-wikilink` command:
- *   1. `process.env.CROWI_MIGRATE_USER` — interpreted as an email; the named
- *      user must exist.
- *   2. otherwise the oldest admin user (`{ admin: true }` sorted by createdAt),
- *      deterministic across re-runs.
- *
- * (Implementation moved to `../helpers.ts` and shared with other preflight
- * body-rewrite migrations like `files-url-to-attachments`. The call site below
- * passes the migration name so the error mentions which migration tripped.)
- */
 
 /**
  * Walk every published page, keep those whose current revision body holds a

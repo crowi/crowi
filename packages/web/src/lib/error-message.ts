@@ -64,6 +64,7 @@ export const ERROR_MESSAGE_KEYS = {
   PAGE_NOT_FOUND: m['errors.page_not_found'],
   PAGE_NOT_GRANTED: m['errors.page_not_granted'],
   PAGE_REVISION_ERROR: m['errors.page_revision_error'],
+  PAGE_TWIN_EXISTS: m['errors.page_twin_exists'],
   INVALID_GRANT: m['errors.invalid_grant'],
   // comment / notification
   COMMENT_NOT_FOUND: m['errors.comment_not_found'],

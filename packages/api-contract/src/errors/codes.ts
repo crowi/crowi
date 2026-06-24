@@ -40,6 +40,7 @@ export const ERROR_CODES = [
   'PAGE_NOT_FOUND',
   'PAGE_NOT_GRANTED',
   'PAGE_REVISION_ERROR',
+  'PAGE_TWIN_EXISTS',
   'INVALID_GRANT',
   // --- comment / notification domain ---
   'COMMENT_NOT_FOUND',

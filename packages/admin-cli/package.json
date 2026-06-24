@@ -2,6 +2,11 @@
   "name": "@crowi/admin-cli",
   "version": "0.1.0-alpha.1",
   "description": "Operator-side admin CLI (`crowi-admin`) for Crowi 2.0. Talks directly to MongoDB through @crowi/api's lightweight CLI bootstrap; not a replacement for the upcoming end-user @crowi/cli.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/crowi/crowi.git",
+    "directory": "packages/admin-cli"
+  },
   "main": "dist/cli.js",
   "types": "dist/cli.d.ts",
   "bin": {

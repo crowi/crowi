@@ -2,6 +2,11 @@
   "name": "@crowi/cli",
   "version": "0.1.0-alpha.0",
   "description": "End-user CLI (`crowi`) for Crowi 2.0. Talks to a Crowi server over HTTP using OAuth (RFC-0010 / RFC-0012); read + write + search + edit your wiki from the terminal.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/crowi/crowi.git",
+    "directory": "packages/cli"
+  },
   "main": "dist/cli.js",
   "types": "dist/cli.d.ts",
   "bin": {

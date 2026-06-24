@@ -1,12 +1,17 @@
 'use client';
 
-import { type ListPagesRequest, PageStatusEnum, type PageWithRevision } from '@crowi/api-contract';
+import { type ListPagesRequest, PageStatusEnum, type PageWithRevision, type TocEntryResponse } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 import { Compass, Folder, HelpCircle, MoreHorizontal, MoveRight, Pencil, Plus } from 'lucide-react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { CreatePageListButton } from '@/components/create-page/create-page-dialog';
+import { CreatePageCtaButton, CreatePageListButton } from '@/components/create-page/create-page-dialog';
 import { PageContent } from '@/components/page-view/page-content';
+import { useTocScrollSpy } from '@/components/page-view/page-toc';
+import { PageTocColumns } from '@/components/page-view/page-toc-columns';
+import { PortalizeBanner } from '@/components/page-view/portalize-dialog';
+import { PortalMetaBar } from './portal-meta-bar';
 import { RenameDialog } from '@/components/page-view/rename-dialog';
 import { StaleRevisionBanner } from '@/components/page-view/stale-revision-banner';
 import { Button } from '@/components/ui/button';
@@ -14,7 +19,7 @@ import { Card } from '@/components/ui/card';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { ErrorAlert } from '@/components/ui/error-alert';
-import { pageDisplayName } from '@/lib/page-path';
+import { pageDisplayName, pagePathToHref } from '@/lib/page-path';
 import { isStalePageRevision } from '@/lib/page-revision';
 import { useAuth } from '@/lib/use-auth';
 import { draftEditHref } from '@/lib/use-drafts';
@@ -60,6 +65,10 @@ interface PageListProps {
 // default and let the API impose its own hard cap.
 const DEFAULT_PAGE_LIMIT = 100;
 
+// Stable empty TOC so the scroll-spy effect dep doesn't churn when a
+// portal has no headings (or there is no portal at all).
+const EMPTY_TOC: TocEntryResponse[] = [];
+
 function getPortalTitle(path: string): string {
   if (path === '/') return m['page_list.title_all']();
   return pageDisplayName(path) || m['page_list.title_default']();
@@ -100,6 +109,13 @@ export function PageList({ initialParams = {}, variant = 'default', disableCreat
   const showCreateButton = !isTrash && !disableCreatePortal && !!portalPath && portalPath !== '/' && !isOtherUserNamespace;
 
   const { data, isLoading, error } = usePageList(params);
+
+  // Scroll-spy for the portal body's TOC rail. Computed before the early
+  // returns so the hook order stays stable; the source is the raw portal
+  // document (independent of the draft/render gating below), and it no-ops
+  // when there is no portal / no headings.
+  const portalToc = (isTrash ? undefined : (data?.portalPage as PageWithRevision | undefined))?.revision?.meta?.toc ?? EMPTY_TOC;
+  const activeTocId = useTocScrollSpy(portalToc);
 
   const handlePageChange = (offset: number) => {
     setParams((prev) => ({ ...prev, offset }));
@@ -149,6 +165,12 @@ export function PageList({ initialParams = {}, variant = 'default', disableCreat
   const portalCreatorId = typeof rawPortalPage?.creator === 'string' ? rawPortalPage.creator : rawPortalPage?.creator?._id;
   const ownDraftPortalId = isDraftPortal && user && portalCreatorId === user.id ? rawPortalPage?._id : undefined;
 
+  // §4 — a portal path (`/foo/`) with no portal document of its own, but a
+  // content page at the stripped path (`/foo`): the server surfaces it as
+  // `contentPage` so we can offer "portalize this page" instead of "Create
+  // Portal". Mutually exclusive with `portalPage` (the server only sets one).
+  const contentPage = !portalPage ? ((data?.contentPage as PageWithRevision | undefined) ?? undefined) : undefined;
+
   // When `?revision_id=` opened the portal document at a past revision, the
   // server rewinds `portalPage.revision` to that version and keeps the latest
   // in `latestRevision`. Mirror the normal-page stale judgement
@@ -156,23 +178,18 @@ export function PageList({ initialParams = {}, variant = 'default', disableCreat
   // + one-click "revert to this version" button.
   const isStalePortalRevision = isStalePageRevision(portalPage);
 
-  // Empty: nothing to render in the portal slot and no children. Show a
-  // minimal header so the user still sees breadcrumb / title + "no pages".
-  if (!data || (data.pages.length === 0 && !portalPage && !ownDraftPortalId)) {
-    return (
-      <div className="space-y-6">
-        {portalPath && <PortalFallbackHeader path={portalPath} showCreatePortal={!isTrash && !disableCreatePortal} />}
-        <PageListEmptyCard message={isTrash ? m['page_list.empty_trash']() : m['page_list.empty_default']()} />
-      </div>
-    );
-  }
+  // `hasChildren` implies `data` is present (the rows came from it), so the
+  // children section below can read `data.pager` without a guard.
+  const pages = data?.pages ?? [];
+  const hasChildren = !!data && pages.length > 0;
 
-  return (
+  const body = (
     <div className="space-y-6">
-      {/* Portal document — its own body + page-level actions (rename / delete /
-          like / bookmark / watch) come from the shared PageHeader, so the
-          portal can be operated exactly like a normal page. */}
+      {/* --- Header block --- */}
       {portalPage ? (
+        // Portal document — its own body + page-level actions (rename /
+        // delete / like / bookmark / watch) come from the shared PageHeader,
+        // so the portal can be operated exactly like a normal page.
         <div>
           {isStalePortalRevision && portalPage.revision?._id && (
             <div className="mb-6">
@@ -190,6 +207,18 @@ export function PageList({ initialParams = {}, variant = 'default', disableCreat
             <PageContent page={portalPage} />
           </div>
         </div>
+      ) : contentPage && portalPath ? (
+        // §4 — content lives at the stripped path: no "Create Portal"
+        // (that would create a second doc at `/foo/`), no folder rename
+        // (ambiguous while a content page sits here). Instead, a portalize
+        // banner sits in the portal-body slot offering to move `/foo` →
+        // `/foo/`.
+        <div>
+          <PortalFallbackHeader path={portalPath} showCreatePortal={false} />
+          <div className="mt-6">
+            <PortalizeBanner page={contentPage} title={m['page_list.portalize_banner_title']()} description={<ContentPageSentence path={contentPage.path} />} />
+          </div>
+        </div>
       ) : (
         portalPath && (
           <PortalFallbackHeader
@@ -204,19 +233,69 @@ export function PageList({ initialParams = {}, variant = 'default', disableCreat
         )
       )}
 
-      {/* Children list */}
-      {data.pages.length > 0 && (
+      {/* --- Portal meta (comments / backlinks / attachments) --- */}
+      {/* A compact chip row ABOVE the list (the list can be long, so these
+          page-level affordances would be lost below it). Portal-only — the
+          comments/backlinks/attachments belong to the portal document. */}
+      {portalPage && <PortalMetaBar page={portalPage} />}
+
+      {/* --- Children block (always rendered) --- */}
+      {hasChildren ? (
         <section className="space-y-2">
           <PageListSectionHeader
-            label={formatPageCount(data.pages.length, data.pager)}
+            label={formatPageCount(pages.length, data.pager)}
             labelAction={showCreateButton && portalPath && <CreatePageListButton path={portalPath} />}
             action={!isTrash && <PageSortMenu sort={params.sort} order={params.order} onChange={handleSortChange} />}
           />
-          <PageRowsCard pages={data.pages} variant={variant} />
+          <PageRowsCard pages={pages} variant={variant} />
           <Pagination pager={data.pager} limit={params.limit} onPageChange={handlePageChange} />
         </section>
+      ) : (
+        // No child pages. Surface "no pages" + a "create page" CTA so an
+        // empty list / portal still offers a way to add the first page
+        // under it. The CTA follows the same gating as the list-header
+        // button (trash / root / member dir / other-user namespace hide it),
+        // and a failed fetch (`!data`) shows the empty card without a CTA.
+        <PageListEmptyCard
+          message={isTrash ? m['page_list.empty_trash']() : m['page_list.empty_default']()}
+          action={data && showCreateButton && portalPath ? <CreatePageCtaButton path={portalPath} /> : undefined}
+        />
       )}
     </div>
+  );
+
+  // A portal renders a body with headings, so it gets the same full-width
+  // 3-column shell + right-rail TOC as a normal page. Every other listing
+  // (plain folder / trash / root / member dir) has no body, so it stays in
+  // the centered column.
+  if (portalPage) {
+    return (
+      <PageTocColumns toc={portalToc} activeTocId={activeTocId}>
+        {body}
+      </PageTocColumns>
+    );
+  }
+  return body;
+}
+
+/**
+ * §4 portalize-banner body: the localised "a page exists at {path}" sentence
+ * with the path rendered as a link to that content page, so the user can jump
+ * straight to it (it is otherwise unreachable from the `/foo/` listing). The
+ * sentence is split around `{path}` so the link sits inside the localised
+ * string regardless of word order.
+ */
+function ContentPageSentence({ path }: { path: string }) {
+  const sentence = m['page_list.portalize_banner_body']({ path });
+  const [before, after = ''] = sentence.split(path);
+  return (
+    <>
+      {before}
+      <Link href={pagePathToHref(path)} className="font-medium text-foreground underline underline-offset-2 hover:opacity-80">
+        {path}
+      </Link>
+      {after}
+    </>
   );
 }
 
