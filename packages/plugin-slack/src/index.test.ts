@@ -27,7 +27,7 @@ function stubCtx(config: SlackPluginConfig): PluginContext {
   return {
     config: <T>() => config as T,
     dependencyConfig: <T>() => ({}) as T,
-    appInfo: () => ({ title: 'Crowi' }),
+    appInfo: () => ({ title: 'Crowi', baseUrl: BASE_URL }),
     setConfig: async () => undefined,
     pageMetadata: {
       get: async () => null,

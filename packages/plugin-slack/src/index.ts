@@ -30,21 +30,19 @@ type SlackConfig = z.infer<typeof SlackConfigSchema>;
 /**
  * Resolve the public origin Slack must reach the inbound endpoint at.
  *
- * `CLIENT_URL` (= `crowi.getBaseUrl()`) is the SSOT in production, but in
- * dev Slack cannot reach `localhost`, so an operator running a tunnel
- * (ngrok / cloudflared) sets `SLACK_MANIFEST_REQUEST_URL` to that public
- * origin and the manifest's `request_url` is built from it. When unset,
- * we fall back to `CLIENT_URL`.
+ * The wiki's base origin comes from core via `ctx.appInfo().baseUrl`
+ * (sourced from `CLIENT_URL` / `getBaseUrl()`) — the plugin never reads
+ * the env directly. In dev Slack cannot reach `localhost`, so an operator
+ * running a tunnel (ngrok / cloudflared) sets `SLACK_MANIFEST_REQUEST_URL`
+ * (a Slack-manifest-specific dev knob, not core app config) to that public
+ * origin; when set it wins. Returns '' when nothing is configured.
  */
-function resolveBaseUrl(): string | null {
+function resolveBaseUrl(ctx: PluginContext): string {
   const override = process.env.SLACK_MANIFEST_REQUEST_URL?.trim();
   if (override) {
     return override;
   }
-  // `getBaseUrl()` is not on the thin PluginContext surface; read CLIENT_URL
-  // directly (the same env it is sourced from) so the plugin stays decoupled
-  // from `@crowi/server`.
-  return process.env.CLIENT_URL?.trim() || null;
+  return ctx.appInfo().baseUrl;
 }
 
 /** Apply the current (decrypted) config to the module-scope Slack client. */
@@ -76,13 +74,13 @@ const plugin: CrowiPlugin = {
     // request signature is the only authentication (verified inside the
     // handler). The raw body must reach the handler intact (Phase 0
     // guarantees no validator consumes it).
-    scope.route('POST', EVENTS_ROUTE_PATH, (c) => handleSlackEvent(c, ctx, resolveBaseUrl()), { public: true });
+    scope.route('POST', EVENTS_ROUTE_PATH, (c) => handleSlackEvent(c, ctx, resolveBaseUrl(ctx)), { public: true });
 
     // `@action` target for the "Generate Slack App manifest" button —
     // authed (admin-only, reached from the config form). Returns the
     // manifest JSON the operator pastes into Slack.
     scope.route('POST', '/manifest', (c) => {
-      const baseUrl = resolveBaseUrl();
+      const baseUrl = resolveBaseUrl(ctx);
       if (!baseUrl) {
         return c.json({ error: 'CLIENT_URL (or SLACK_MANIFEST_REQUEST_URL) is not set; cannot build a manifest.' }, 400);
       }

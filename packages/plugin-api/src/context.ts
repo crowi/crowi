@@ -74,6 +74,16 @@ export interface AppInfo {
    * handle an absent name.
    */
   title: string;
+
+  /**
+   * The wiki's public base origin (core `CLIENT_URL` / `getBaseUrl()`),
+   * e.g. `https://wiki.example.com`. An **empty string** when no public
+   * origin is configured — unlike `title` there is no sensible default,
+   * so a plugin that needs an absolute URL (outbound webhook / manifest)
+   * must handle the empty case. Plugins read this instead of
+   * `process.env.CLIENT_URL` directly.
+   */
+  baseUrl: string;
 }
 
 /**

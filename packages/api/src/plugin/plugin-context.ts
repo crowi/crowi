@@ -81,7 +81,14 @@ export function createPluginContext(plugin: CrowiPlugin, crowi: Crowi, lookup: P
       const all = crowi.getConfig();
       const crowiNs = (all && typeof all === 'object' ? (all as { crowi?: Record<string, unknown> }).crowi : undefined) ?? {};
       const raw = crowiNs['app:title'];
-      return { title: typeof raw === 'string' && raw.trim() ? raw.trim() : 'Crowi' };
+      // `getBaseUrl()` is `CLIENT_URL || null`; collapse a missing/blank
+      // origin to '' so the AppInfo contract stays non-null (no sensible
+      // default exists for a URL — consumers check for empty).
+      const base = crowi.getBaseUrl();
+      return {
+        title: typeof raw === 'string' && raw.trim() ? raw.trim() : 'Crowi',
+        baseUrl: typeof base === 'string' && base.trim() ? base.trim() : '',
+      };
     },
 
     async setConfig(key: string, value: unknown): Promise<void> {
