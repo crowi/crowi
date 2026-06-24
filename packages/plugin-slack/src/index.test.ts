@@ -27,6 +27,7 @@ function stubCtx(config: SlackPluginConfig): PluginContext {
   return {
     config: <T>() => config as T,
     dependencyConfig: <T>() => ({}) as T,
+    appInfo: () => ({ title: 'Crowi' }),
     setConfig: async () => undefined,
     pageMetadata: {
       get: async () => null,
@@ -117,7 +118,21 @@ describe('verifySlackSignature', () => {
 });
 
 describe('buildManifest', () => {
-  const manifest = buildManifest({ baseUrl: BASE_URL });
+  const manifest = buildManifest({ baseUrl: BASE_URL, wikiName: 'Acme Wiki' });
+
+  it('names the app after the wiki and describes the integration broadly', () => {
+    expect(manifest.display_information.name).toBe('Acme Wiki');
+    expect(manifest.display_information.description).toContain('Acme Wiki');
+    // Description is forward-looking (not unfurl-only) for later capabilities.
+    expect(manifest.display_information.description).toMatch(/notifications|slash commands/);
+  });
+
+  it("truncates an over-long wiki name to Slack's 35-char name limit", () => {
+    const m = buildManifest({ baseUrl: BASE_URL, wikiName: 'A'.repeat(50) });
+    expect(m.display_information.name).toBe('A'.repeat(35));
+    expect(m.display_information.name.length).toBeLessThanOrEqual(35);
+    expect(m.display_information.description.length).toBeLessThanOrEqual(140);
+  });
 
   it('points request_url at the namespaced /events route', () => {
     expect(manifest.settings.event_subscriptions.request_url).toBe('https://wiki.example.com/api/v2/plugins/@crowi/plugin-slack/events');

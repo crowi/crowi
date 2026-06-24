@@ -28,6 +28,14 @@ export interface PluginContext {
    */
   dependencyConfig<T>(dependencyName: string): T;
 
+  /**
+   * Read core application info (the wiki name, …) — settings that live
+   * outside this plugin's own config namespace but that an integration
+   * may need (e.g. to brand an outbound manifest). Read live at call
+   * time, so it reflects admin edits made after boot.
+   */
+  appInfo(): AppInfo;
+
   /** Write a single config field, persisting to Mongo. */
   setConfig(key: string, value: unknown): Promise<void>;
 
@@ -50,6 +58,22 @@ export interface PluginContext {
 
   /** Structured logger scoped to this plugin (auto-prefixed with name). */
   log: PluginLogger;
+}
+
+/**
+ * Read-only view of core application settings exposed to plugins via
+ * `ctx.appInfo()`. Intentionally a small, curated surface (not a generic
+ * "read any core config" escape hatch) — add fields here as concrete
+ * plugin needs appear.
+ */
+export interface AppInfo {
+  /**
+   * The configured wiki name (core `app:title`), trimmed. Always a
+   * non-empty string: when the operator has not set a custom title it
+   * defaults to `'Crowi'` (the seed value), so consumers never have to
+   * handle an absent name.
+   */
+  title: string;
 }
 
 /**

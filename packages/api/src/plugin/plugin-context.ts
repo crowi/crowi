@@ -73,6 +73,17 @@ export function createPluginContext(plugin: CrowiPlugin, crowi: Crowi, lookup: P
       return result.data as T;
     },
 
+    appInfo() {
+      // Read `app:title` from the in-memory config cache (the same `crowi`
+      // namespace readPluginConfigNamespace walks). Trim, and default an
+      // empty/missing title to the seed 'Crowi' so the AppInfo contract
+      // always hands plugins a non-empty name (no per-plugin fallback).
+      const all = crowi.getConfig();
+      const crowiNs = (all && typeof all === 'object' ? (all as { crowi?: Record<string, unknown> }).crowi : undefined) ?? {};
+      const raw = crowiNs['app:title'];
+      return { title: typeof raw === 'string' && raw.trim() ? raw.trim() : 'Crowi' };
+    },
+
     async setConfig(key: string, value: unknown): Promise<void> {
       await crowi.getConfigService().saveConfigValue('crowi', formatPluginConfigKey(plugin.name, key), value);
     },

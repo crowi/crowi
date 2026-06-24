@@ -86,7 +86,9 @@ const plugin: CrowiPlugin = {
       if (!baseUrl) {
         return c.json({ error: 'CLIENT_URL (or SLACK_MANIFEST_REQUEST_URL) is not set; cannot build a manifest.' }, 400);
       }
-      return c.json(buildManifest({ baseUrl }));
+      // App name = the wiki's own name (core app:title); appInfo() already
+      // defaults a blank title to 'Crowi', so this is always non-empty.
+      return c.json(buildManifest({ baseUrl, wikiName: ctx.appInfo().title }));
     });
 
     ctx.log.debug('registered slack routes (events + manifest)');

@@ -34,7 +34,17 @@ export interface BuildManifestInput {
    * `localhost`. Must be an absolute `https://…` origin.
    */
   baseUrl: string;
+  /**
+   * The wiki's display name (core `app:title`, via `ctx.appInfo()`), used
+   * as the Slack App name. Always a non-empty string — the `'Crowi'`
+   * default is supplied by `appInfo()`, not here.
+   */
+  wikiName: string;
 }
+
+/** Slack caps `display_information.name` at 35 chars, `description` at 140. */
+const MAX_NAME_LEN = 35;
+const MAX_DESCRIPTION_LEN = 140;
 
 /** The bot events we subscribe to (Phase 1: link unfurling only). */
 const SUBSCRIBED_BOT_EVENTS = ['link_shared'];
@@ -72,10 +82,15 @@ export function unfurlDomain(baseUrl: string): string | null {
 
 export function buildManifest(input: BuildManifestInput): SlackManifest {
   const host = unfurlDomain(input.baseUrl);
+  const name = input.wikiName.slice(0, MAX_NAME_LEN);
+  // Describe the integration broadly (not just unfurl) so the manifest
+  // stays accurate as later capabilities — notifications, slash commands —
+  // ship under the same Slack App.
+  const description = `Slack integration for ${name}: wiki page link unfurls, with notifications and slash commands to come.`.slice(0, MAX_DESCRIPTION_LEN);
   return {
     display_information: {
-      name: 'Crowi',
-      description: 'Unfurls Crowi wiki page links shared in Slack.',
+      name,
+      description,
     },
     oauth_config: {
       scopes: { bot: BOT_SCOPES },
