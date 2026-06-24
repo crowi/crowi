@@ -22,6 +22,7 @@ interface MigrationSummary {
   fromVersion: string;
   toVersion: string;
   layer: 'boot' | 'preflight';
+  severity: 'blocking' | 'cosmetic';
   description: string;
 }
 interface DetectReport {
@@ -141,9 +142,9 @@ export function registerMigrate(program: Command): void {
           console.log('No migrations are registered.');
           return;
         }
-        console.log('ID                        from → to    layer       description');
+        console.log('ID                        from → to    layer       severity    description');
         for (const r of rows) {
-          console.log(`${r.id.padEnd(25)} ${formatRange(r).padEnd(12)} ${r.layer.padEnd(11)} ${r.description}`);
+          console.log(`${r.id.padEnd(25)} ${formatRange(r).padEnd(12)} ${r.layer.padEnd(11)} ${`[${r.severity}]`.padEnd(11)} ${r.description}`);
         }
       });
     });
@@ -168,7 +169,7 @@ export function registerMigrate(program: Command): void {
           return;
         }
         pending.forEach((e, i) => {
-          console.log(`  [${i + 1}/${pending.length}] ${e.id.padEnd(25)} (${formatRange(e)})`);
+          console.log(`  [${i + 1}/${pending.length}] ${e.id.padEnd(25)} [${e.severity}] (${formatRange(e)})`);
           console.log(`        ${e.description}`);
           console.log(`        ${e.detail ? `Detected: ${e.detail.summary}` : 'Detected: details unavailable (no detect stage; isPending = true)'}`);
         });
