@@ -36,8 +36,13 @@ export interface ResolvedPage {
   updatedAtMs: number | null;
 }
 
-/** Max characters of body to surface as the unfurl excerpt. */
-const EXCERPT_MAX_CHARS = 300;
+/**
+ * Max characters of body to surface as the unfurl excerpt. Slack collapses
+ * long attachment text behind a "Show more" toggle and expands it in place
+ * on click, so this is the *expanded* length — keep it generous enough that
+ * "Show more" reveals a useful amount, not the few lines shown collapsed.
+ */
+export const EXCERPT_MAX_CHARS = 1000;
 
 /**
  * Upper bound on how much raw body we feed the markdown converter. The

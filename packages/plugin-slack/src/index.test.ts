@@ -4,7 +4,7 @@ import type { PluginContext } from '@crowi/plugin-api';
 import slackPlugin, { SlackConfigSchema } from './index';
 import { verifySlackSignature } from './signature';
 import { buildManifest, eventsRequestUrl, unfurlDomain } from './manifest';
-import { buildUnfurlAttachment, type ResolvedPage } from './unfurl';
+import { EXCERPT_MAX_CHARS, buildUnfurlAttachment, type ResolvedPage } from './unfurl';
 import { extractPagePaths, isPageIdPath, pageIdFromPath } from './link-parse';
 import { handleSlackEvent, type SlackPluginConfig } from './events';
 
@@ -190,16 +190,17 @@ describe('buildUnfurlAttachment — public vs restricted branch', () => {
   });
 
   it('truncates a long body to an excerpt with an ellipsis', () => {
-    const page: ResolvedPage = { path: '/long', grant: 1, body: 'x'.repeat(500), updatedAtMs: null };
+    const page: ResolvedPage = { path: '/long', grant: 1, body: 'x'.repeat(EXCERPT_MAX_CHARS + 500), updatedAtMs: null };
     const att = buildUnfurlAttachment(url, page);
     expect(att.text?.endsWith('…')).toBe(true);
-    expect((att.text ?? '').length).toBeLessThanOrEqual(301);
+    expect((att.text ?? '').length).toBeLessThanOrEqual(EXCERPT_MAX_CHARS + 1);
   });
 
   it('drops a half-formed <url|text> token when truncation lands inside it', () => {
-    // 285 chars of body + a link whose converted <https://…|docs> token
-    // straddles the 300-char cut, so truncation lands inside the token.
-    const body = `${'a'.repeat(285)} [docs](https://example.com/very/long/path/here)`;
+    // Body fills to just before the cut, then a link whose converted
+    // <https://…|docs> token straddles EXCERPT_MAX_CHARS so truncation
+    // lands inside the token.
+    const body = `${'a'.repeat(EXCERPT_MAX_CHARS - 15)} [docs](https://example.com/very/long/path/here)`;
     const att = buildUnfurlAttachment(url, { path: '/long', grant: 1, body, updatedAtMs: null });
     expect(att.text?.endsWith('…')).toBe(true);
     // No dangling, never-closed `<` left at the tail of the excerpt.
