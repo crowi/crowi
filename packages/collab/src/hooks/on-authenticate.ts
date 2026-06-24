@@ -14,6 +14,28 @@ const defaultCheckEditorCap = async (_pageId: string): Promise<{ readonly: boole
 const debug = Debug('crowi:collab:auth');
 
 /**
+ * editor-preview-reliability §6 — promote the two diagnostics that
+ * actually explain a "WebSocket closed before the connection was
+ * established" report (token verify failure + cap-driven readonly) from
+ * `debug()` (invisible in prod) to a sampled `console.warn`. Sampling
+ * keeps a token-replay flood or a busy 20-cap page from drowning the
+ * logs while still surfacing the signal an operator needs to tell apart
+ * "expired token / wrong secret / clock skew" from "page is full".
+ *
+ * 1-in-N sampling via a per-process counter (no timers, no deps). N=20
+ * is a pragmatic floor: frequent enough to catch a steady-state problem
+ * within a few seconds of normal traffic, sparse enough to stay quiet.
+ */
+const WARN_SAMPLE_RATE = 20;
+let warnSampleCounter = 0;
+function sampledWarn(message: string): void {
+  warnSampleCounter += 1;
+  if (warnSampleCounter % WARN_SAMPLE_RATE === 1) {
+    console.warn(`[crowi:collab] ${message} (sampled 1/${WARN_SAMPLE_RATE})`);
+  }
+}
+
+/**
  * Minimal `findById(...).select(...).lean().exec()` chain shape — only
  * the methods this hook touches. Keeps the cast narrow instead of
  * reaching for `any` on the loosely-typed `CollabModels.Page`.
@@ -115,6 +137,12 @@ export function createOnAuthenticate(deps: OnAuthenticateDeps) {
     const claims = deps.wsTokenUtil.verifyWsToken(presented);
     if (!claims) {
       debug('reject: wsToken verify failed');
+      // §6 — prod-visible (sampled): a verify failure is the #1 cause of
+      // the "closed before established" report (expired token / wrong or
+      // unshared WS_TOKEN_SECRET across replicas / clock skew).
+      sampledWarn(
+        `onAuthenticate rejected a connection: wsToken verify failed for document ${String(documentName)} (expired / bad signature / secret mismatch / clock skew)`,
+      );
       throw new Error('invalid token');
     }
 
@@ -151,6 +179,11 @@ export function createOnAuthenticate(deps: OnAuthenticateDeps) {
       const result = await editorCapCounter.tryAcquire(claims.pageId, claims.userId, socketId);
       if (!result.acquired) {
         debug('cap-exceeded on acquire (count=%d cap=%d) — promoting to readonly', result.count, result.cap);
+        // §6 — prod-visible (sampled): a cap-driven readonly is the
+        // benign explanation for "I can't type" reports — distinct from
+        // a token failure. Surfacing it sampled lets an operator tell
+        // "page is full (20+ editors)" apart from an auth problem.
+        sampledWarn(`onAuthenticate promoted a connection to readonly: editor cap reached for page ${claims.pageId} (count=${result.count} cap=${result.cap})`);
         readonly = true;
       } else {
         debug('cap acquired page=%s user=%s socket=%s count=%d', claims.pageId, claims.userId, socketId, result.count);

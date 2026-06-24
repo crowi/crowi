@@ -6,11 +6,11 @@ import { WebSocketServer, type WebSocket as WsWebSocket } from 'ws';
 // transitive `crossws` ESM-only dependency of `@hocuspocus/server`
 // doesn't break Jest at test-collect time. Only TS types are imported
 // statically here (type imports are erased at runtime).
-import type { CollabModels, CollabPageEventPublisher, EditorCapCounter, CollabWsTokenUtil } from '@crowi/collab';
+import type { CollabModels, CollabPageEventPublisher, EditorCapCounter, CollabWsTokenUtil, InvalidateReason } from '@crowi/collab';
 import type { Extension } from '@hocuspocus/server';
 import type Crowi from 'src/crowi';
 import { getEditorCapCounter } from 'src/util/collab-cap';
-import { createWsTokenUtil } from 'src/util/ws-token';
+import { createWsTokenUtil, isWsTokenSecretFromEnv } from 'src/util/ws-token';
 import { createPresenceCollabDeps } from 'src/service/presence';
 import { buildCollabRedisExtension } from './extension-redis';
 
@@ -59,6 +59,19 @@ export interface AttachedCollab {
    * to live Y.Docs.
    */
   shutdown(): Promise<void>;
+  /**
+   * feature-editor-preview-reliability G1 — invalidate the live collab
+   * doc(s) for the given pages after an external edit committed (an HTTP /
+   * MCP / in-process `Page.updatePage` that nulled `yjsState` + bumped
+   * `currentRevision`). Broadcasts `crowi:force-reload`, tombstones the doc
+   * base so an in-flight stale save CONFLICTs, gates new connections during
+   * the drain, and force-closes the stale connections after a short grace.
+   *
+   * In-process / single-instance ONLY: a live doc on a DIFFERENT replica is
+   * not reachable here (RFC-0003 §5b — documented limitation). Best-effort:
+   * never throws back into the triggering write.
+   */
+  invalidatePages(pageIds: string[], reason: InvalidateReason): Promise<void>;
 }
 
 /**
@@ -75,7 +88,80 @@ export interface AttachedCollab {
  * save flow). The api's `Crowi.start` invokes this right before
  * `server.listen`.
  */
+/**
+ * Explicit "I run more than one api replica" declaration. This is the
+ * GENUINE multi-instance signal the WS_TOKEN_SECRET boot guard keys off —
+ * NOT the mere presence of `REDIS_URL` (E1): Redis is configured in plenty
+ * of single-replica deployments (sessions / Socket.IO), so failing on
+ * `REDIS_URL` alone over-triggers. Any truthy value (`1`, `true`, a replica
+ * count > 1) declares multi-instance.
+ */
+const MULTI_INSTANCE_ENV = 'CROWI_MULTI_INSTANCE';
+
+/**
+ * Whether the operator has declared a multi-instance deployment.
+ *
+ * Convention (must match `.env.example` + the ja/en docs): a SET flag
+ * enables multi-instance. Truthy for `1` / `true` / any integer ≥ 2 (a
+ * replica count); unset / `0` / `false` mean single-instance (the default).
+ * We accept both a boolean-ish flag and a replica count so it slots into
+ * common orchestration env (e.g. setting it from a `REPLICAS` value).
+ */
+function isMultiInstanceDeclared(): boolean {
+  const raw = process.env[MULTI_INSTANCE_ENV];
+  if (!raw) return false;
+  const trimmed = raw.trim().toLowerCase();
+  if (trimmed === 'true') return true;
+  if (trimmed === 'false') return false;
+  const asNumber = Number(trimmed);
+  if (Number.isFinite(asNumber)) return asNumber >= 2 || trimmed === '1';
+  // Any other non-empty string is treated as a truthy declaration.
+  return true;
+}
+
+/**
+ * editor-preview-reliability §4 / E1 — fail fast when a GENUINELY
+ * multi-instance deployment is missing a stable `WS_TOKEN_SECRET`.
+ *
+ * A per-process random `WS_TOKEN_SECRET` is fatal across replicas: replica
+ * B cannot verify a token minted by replica A, so half the connections
+ * silently fail `onAuthenticate` and users see "WebSocket closed before the
+ * connection was established".
+ *
+ * E1 fix — the multi-instance signal is the EXPLICIT `CROWI_MULTI_INSTANCE`
+ * declaration, not `REDIS_URL` presence. So:
+ *   - single-instance dev (no declaration) boots fine even with NO
+ *     `WS_TOKEN_SECRET` — `.env.example` ships no secret; the per-process
+ *     random fallback is harmless for one replica (`ws-token.ts` already
+ *     logged the fallback warning).
+ *   - a declared multi-instance deployment with no env secret → throw to
+ *     abort boot.
+ *
+ * `isWsTokenSecretFromEnv()` is the single source of truth for "configured"
+ * — `.env.example` ships no value, so a fresh copy that never set a real
+ * secret reads as "not from env" and the guard only bites once the operator
+ * declares multi-instance.
+ */
+export function assertWsTokenSecretForMultiInstance(_crowi: Crowi): void {
+  if (isWsTokenSecretFromEnv()) return;
+  if (!isMultiInstanceDeclared()) return;
+
+  throw new Error(
+    `[crowi:collab] ${MULTI_INSTANCE_ENV} declares a multi-instance deployment but WS_TOKEN_SECRET is not set. ` +
+      'A per-process random secret cannot be cross-verified by other api replicas, so wsToken authentication ' +
+      'fails intermittently ("WebSocket closed before the connection was established"). Set WS_TOKEN_SECRET to a ' +
+      'stable base64-encoded 32-byte value (`openssl rand -base64 32`) shared across all replicas, or unset ' +
+      `${MULTI_INSTANCE_ENV} if you actually run a single replica.`,
+  );
+}
+
 export async function attachCollabServer(httpServer: HttpServer, crowi: Crowi): Promise<AttachedCollab> {
+  // editor-preview-reliability §4 — guard a multi-instance deployment
+  // against a non-shared (random) wsToken secret before we wire any
+  // sockets. Runs first so the failure is unambiguous at boot rather
+  // than as scattered onAuthenticate rejections later.
+  assertWsTokenSecretForMultiInstance(crowi);
+
   // Reach for the api-side models — they were already wired by
   // `setupModels` against the same Mongoose connection collab will
   // use, so save / load / compaction all operate on the same row
@@ -186,7 +272,7 @@ export async function attachCollabServer(httpServer: HttpServer, crowi: Crowi): 
   // also owns a periodic refresher whose timer must be stopped on
   // shutdown — hence the handle is kept (see `shutdown()` below).
   const presenceDeps = createPresenceCollabDeps(crowi);
-  const hocuspocus = collab.createCollabServer({
+  const { hocuspocus, invalidator } = collab.createCollabServer({
     models,
     wsTokenUtil,
     debounce: DEFAULT_DEBOUNCE_MS,
@@ -278,6 +364,9 @@ export async function attachCollabServer(httpServer: HttpServer, crowi: Crowi): 
 
   let didShutdown = false;
   return {
+    async invalidatePages(pageIds, reason) {
+      await invalidator.invalidatePages(pageIds, reason);
+    },
     async shutdown() {
       // Re-entry from a second SIGINT (operator impatient with Ctrl-C)
       // or from app.ts orchestration. The first call owns the teardown.

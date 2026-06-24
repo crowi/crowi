@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { PresenceViewersMessageSchema, type PresenceTokenResponse, type PresenceViewer } from '@crowi/api-contract';
 import { apiClientV2 } from './api-client';
 import { createAntiFlickerState, ingestBroadcast, refreshAdmissions, visibleViewers } from './presence-anti-flicker';
 import { resolveWsUrl } from './resolve-ws-url';
+import { subscribeTokenRefreshed } from './token-refresh-notifier';
 
 /**
  * RFC-0005 Phase 2 — live presence WebSocket client.
@@ -106,6 +107,26 @@ function sameViewers(a: PresenceViewer[], b: PresenceViewer[]): boolean {
  * server would otherwise reject it (mirrors `use-yjs-token`).
  */
 function usePresenceToken(pageId: string | null | undefined) {
+  const queryClient = useQueryClient();
+
+  // §4 / H7 — re-fetch the presence token on a silent access-token refresh
+  // ONLY when the cached presence token is actually expired (or about to
+  // be), mirroring `useYjsToken`. Invalidating unconditionally rebuilt the
+  // presence WebSocket on every healthy access-token refresh; a presence
+  // token still well within its TTL is left in place so the live socket
+  // isn't churned. A presence WebSocket closed with 4401 (stale token)
+  // recovers as soon as this refetch hands `usePresence`'s connection
+  // effect a fresh token.
+  useEffect(() => {
+    if (!pageId) return;
+    return subscribeTokenRefreshed(() => {
+      const cached = queryClient.getQueryData<PresenceTokenResponse>(['presenceToken', pageId]);
+      const expiresInMs = cached ? Date.parse(cached.expiresAt) - Date.now() : -1;
+      if (expiresInMs > 30_000) return;
+      void queryClient.invalidateQueries({ queryKey: ['presenceToken', pageId], refetchType: 'active' });
+    });
+  }, [pageId, queryClient]);
+
   return useQuery({
     queryKey: ['presenceToken', pageId],
     queryFn: async (): Promise<PresenceTokenResponse> => {
@@ -130,9 +151,12 @@ function usePresenceToken(pageId: string | null | undefined) {
     },
     refetchOnWindowFocus: false,
     staleTime: 30_000,
-    // Presence is auxiliary UI — one failed token request just hides
-    // the row, no need to hammer the endpoint.
-    retry: 1,
+    // §4 — presence is auxiliary UI, but a single failed token request
+    // (e.g. a transient 401 that the next attempt's silent refresh
+    // fixes) used to hide the row outright. Bumped 1 → 3 so a brief auth
+    // blip self-heals before the row disappears; still bounded so a hard
+    // failure (handler not deployed) settles quickly.
+    retry: 3,
   });
 }
 

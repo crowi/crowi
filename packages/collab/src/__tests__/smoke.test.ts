@@ -162,7 +162,7 @@ describe('@crowi/collab Phase 3 hook smoke', () => {
     expect(loadedDoc.getText(CONTENT_FIELD).toString()).toBe('hello collab seed body\n');
 
     const compactor = createCompactor({
-      models: { Page: models.Page, PageYjsUpdate: models.PageYjsUpdate },
+      models: { Page: models.Page, PageYjsUpdate: models.PageYjsUpdate, Revision: models.Revision },
     });
     const onStoreDocument = createOnStoreDocument({ models: { Page: models.Page }, compactor });
     await onStoreDocument({
@@ -361,7 +361,7 @@ describe('@crowi/collab Phase 3 hook smoke', () => {
     // both untouched.
     const before = await Page.findById(pageId).select('yjsState yjsCheckpointAt').exec();
     const compactor = createCompactor({
-      models: { Page: models.Page, PageYjsUpdate: models.PageYjsUpdate },
+      models: { Page: models.Page, PageYjsUpdate: models.PageYjsUpdate, Revision: models.Revision },
     });
     const onStoreDocument = createOnStoreDocument({ models: { Page: models.Page }, compactor });
     const doc = new Y.Doc();

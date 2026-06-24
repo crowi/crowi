@@ -16,7 +16,18 @@
  * `packages/api/src/collab/attach.ts` for the integration point.
  */
 
-export { createCollabServer, type CreateCollabServerOptions } from './server';
+export { createCollabServer, type CreateCollabServerOptions, type CollabEngine } from './server';
+export {
+  createInvalidatedPagesStore,
+  createPageInvalidator,
+  type InvalidatedPagesStore,
+  type PageInvalidator,
+  type InvalidateReason,
+  type InvalidatorInstance,
+  type CreatePageInvalidatorOptions,
+  INVALIDATED_DOC_BASE,
+  DEFAULT_INVALIDATE_GRACE_MS,
+} from './invalidation';
 export {
   createSaveFlow,
   CollabSaveError,
@@ -28,6 +39,7 @@ export {
 } from './save-flow';
 export { createCompactor, type Compactor, type CompactPageDeps, type CompactPageResult } from './compaction';
 export { createContributorsTracker, type ContributorsTracker } from './contributors';
+export { createDocBaseRevisionStore, type DocBaseRevisionStore } from './doc-base-revision';
 export { type PresenceHooks, noopPresenceHooks } from './presence';
 export { CONTENT_FIELD } from './yjs-doc';
 export { payloadToUint8Array } from './yjs-payload';

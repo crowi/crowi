@@ -3,6 +3,9 @@ import Debug from 'debug';
 import type { CollabModels } from '../models';
 import type { CollabContext } from '../types';
 import type { Compactor } from '../compaction';
+import type { DocBaseRevisionStore } from '../doc-base-revision';
+import type { InvalidatedPagesStore } from '../invalidation';
+import { INVALIDATED_DOC_BASE } from '../invalidation';
 
 const debug = Debug('crowi:collab:store');
 
@@ -17,6 +20,23 @@ const TIME_TRIGGER_MS = 10 * 60 * 1000;
 export interface OnStoreDocumentDeps {
   models: Pick<CollabModels, 'Page'>;
   compactor: Pick<Compactor, 'storeCheckpoint' | 'compactPage'>;
+  /**
+   * Blocker 2 — the server-doc base store. When a page is mid external-edit
+   * invalidation the invalidator writes `INVALIDATED_DOC_BASE` here; we skip
+   * the checkpoint so the last-close store can't re-persist the now-stale live
+   * doc into `Page.yjsState` (resurrecting old content over the external
+   * edit). Optional so synthetic test drivers / the Phase 3 smoke test can
+   * omit it; when absent the gate falls back to `invalidatedPages` (also
+   * optional), and with neither present the store is unconditional (legacy).
+   */
+  docBaseRevisions?: Pick<DocBaseRevisionStore, 'get'>;
+  /**
+   * Blocker 2 — the external-edit invalidation tombstone store. A second,
+   * independent signal that survives until the drain's close/unload completes:
+   * a checkpoint while the tombstone is active would persist the stale doc, so
+   * we skip it. Optional (see {@link docBaseRevisions}).
+   */
+  invalidatedPages?: Pick<InvalidatedPagesStore, 'isInvalidating'>;
 }
 
 /**
@@ -40,11 +60,33 @@ export function createOnStoreDocument(deps: OnStoreDocumentDeps) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const Page = deps.models.Page as any;
 
+  const docBaseRevisions = deps.docBaseRevisions;
+  const invalidatedPages = deps.invalidatedPages;
+
   return async (data: onStoreDocumentPayload<CollabContext>): Promise<void> => {
     const { documentName, document, lastContext } = data;
 
     if (lastContext?.readonly) {
       console.warn(`[crowi:collab] onStoreDocument fired with readonly context for page ${String(documentName)} — skipping checkpoint.`);
+      return;
+    }
+
+    // Blocker 2 — SKIP the checkpoint while the page is mid external-edit
+    // invalidation. A last-close store (or any debounce-driven store) during
+    // the drain would write the STALE live Y.Doc back into `Page.yjsState`,
+    // resurrecting the pre-edit content over the external write: the next
+    // `onLoadDocument` would then take Path A (restore the stale yjsState),
+    // skip the body seed, and even record the external revision as the doc
+    // base so a later save clobbers the external edit. We gate on values that
+    // survive until the close/unload actually completes — the sentinel doc
+    // base (`INVALIDATED_DOC_BASE`) and the `invalidatedPages` tombstone, both
+    // held by the invalidator until its scheduled drain finishes. Either being
+    // present means "do not persist this doc". The external write already
+    // nulled `yjsState`, so leaving it null is correct (the reconnect
+    // re-materialises from the new revision body).
+    const name = String(documentName);
+    if (docBaseRevisions?.get(name) === INVALIDATED_DOC_BASE || invalidatedPages?.isInvalidating(name)) {
+      debug('onStoreDocument SKIPPED for page %s — page is mid external-edit invalidation (would re-persist a stale doc)', documentName);
       return;
     }
 

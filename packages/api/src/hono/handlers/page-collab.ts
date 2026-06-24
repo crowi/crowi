@@ -91,6 +91,10 @@ export const registerPageCollabRoutes = <E extends OpenAPIHono<CrowiHonoBindings
         readonly,
       });
 
+      // Round 2 (Decision 1): the save optimistic lock moved server-side
+      // (anchored to the revision the server's Hocuspocus doc was
+      // materialised from), so the wsToken response no longer carries
+      // `currentRevision` — the client never pins an edit base any more.
       return c.json(
         {
           wsToken: token,

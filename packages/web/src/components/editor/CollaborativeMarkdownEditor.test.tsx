@@ -18,6 +18,7 @@ const { getYjsToken, FakeProvider, providerInstances } = vi.hoisted(() => {
     config: Record<string, unknown> & {
       onStatus?: (e: { status: string }) => void;
       onAuthenticationFailed?: () => void;
+      onSynced?: (e: { state: boolean }) => void;
     };
   }
   const instances: Instance[] = [];
@@ -205,8 +206,10 @@ describe('CollaborativeMarkdownEditor', () => {
       yText: null,
       yUndoManager: null,
       awareness: null,
-      provider: null,
       status: 'connecting' as const,
+      synced: false,
+      hasEverSynced: false,
+      authRecoveryExhausted: false,
       readonly: false,
       subscribeStateless: () => () => undefined,
       sendStateless: () => false,

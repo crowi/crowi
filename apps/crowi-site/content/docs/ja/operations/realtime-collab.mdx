@@ -60,6 +60,10 @@ services:
   されず、編集者上限 counter は fail-open になります)。
 - ブラウザは `NEXT_PUBLIC_API_URL` から `/collab/` への WebSocket URL を
   自動導出するため、`NEXT_PUBLIC_COLLAB_URL` の指定は不要です。
+- `WS_TOKEN_SECRET` はシングルインスタンスでは省略可です — 未設定のまま
+  でもプロセスごとにランダム鍵が生成され (起動時に警告ログ)、1 レプリカなら
+  無害です。api ノードを 2 台以上に増やすときにのみ `CROWI_MULTI_INSTANCE`
+  とあわせて設定してください。
 
 ## マルチインスタンスデプロイ
 
@@ -67,15 +71,47 @@ api を複数レプリカで運用する場合の追加要件:
 
 1. **`REDIS_URL` を全レプリカで同じ Redis に向ける** — extension-redis が
    自動 attach され、レプリカ間で Yjs アップデートが pub/sub されます。
-2. **`WS_TOKEN_SECRET` を全レプリカで同一値に揃える** — wsToken は任意の
-   レプリカで発行されて任意のレプリカで検証されるため、値がずれると
-   接続が確立できません (詳細は [関連環境変数](#関連環境変数) 参照)。
+2. **`CROWI_MULTI_INSTANCE` を宣言し、`WS_TOKEN_SECRET` を全レプリカで同一値に
+   揃える** — wsToken は任意のレプリカで発行されて任意のレプリカで検証される
+   ため、値がずれると接続が確立できません (詳細は
+   [関連環境変数](#関連環境変数) 参照)。各レプリカに `CROWI_MULTI_INSTANCE=1`
+   (またはレプリカ数) を設定すると、`WS_TOKEN_SECRET` が未設定 (または
+   プレースホルダ) のままだと api は**起動時にエラーで停止**します
+   (プロセスごとのランダム鍵では他レプリカが wsToken を検証できないため)。
+   シングルインスタンス構成 (`CROWI_MULTI_INSTANCE` 未設定) では
+   `WS_TOKEN_SECRET` 未設定でも起動できます。`REDIS_URL` の有無だけでは
+   マルチインスタンスとは判定しません (Redis はシングルレプリカでも使われる
+   ため)。
 3. **スティッキーセッション不要** — クライアントは任意の api レプリカに
    接続できます。Yjs 更新は Redis pub/sub 経由で他レプリカへ即座に
    伝搬します。
 4. **`Page.yjsState` が真実の源** — レプリカ全体の再起動時も MongoDB に
    永続化された yjsState から復元されます。Redis はライブのルーティング
    専用です。
+
+> **重要 (データ消失リスク・推奨はシングルインスタンス)**: マルチインスタンス
+> 構成には、まれにですが**編集内容が失われる**既知のリスクがあります。
+> `extension-redis` はライブの pub/sub のみを担い、切断中レプリカの Y.Doc を
+> 再構築しません。あるレプリカが古い `Page.yjsState` から Y.Doc を materialise
+> し、その状態でチェックポイント (compaction) を書き戻すと、別レプリカが書いた
+> 新しい状態を上書きしうるためです。compaction には**クロスインスタンスの
+> ロックがありません** (cross-instance ロック + last-writer 調停は現時点で
+> スコープ外)。`@crowi/collab` はこれを**サーバドキュメント保存ロック**で
+> 緩和します。ページの revision ポインタは、ライブのサーバ側ドキュメントが
+> materialise された revision を基底とする単一のアトミックな compare-and-set
+> で前進させるため、別経路の編集 (または別レプリカ) がポインタを動かした後の
+> 保存は `CONFLICT` で拒否され、クライアントは再読み込みします (`revision` と
+> `currentRevision` が乖離することはありません)。自動チェックポイントには
+> **desync ガード**を追加しています。非空ページに対して空ドキュメントを
+> 書き込もうとするチェックポイント (= 読み込み失敗で materialise された
+> ドキュメントの兆候) はスキップし、スキップ時は既存の状態と保留中デルタの
+> 両方を保持するため編集は失われません。エディタからの意図的な削除は (ページの
+> 全消去を含め) 明示的なユーザー操作として通常どおり保存されます (削除は短命の
+> 行ではなく `Page.yjsState` に永続化されます)。これらにより single/multi
+> 両方で最悪ケースを緩和しますが、**完全には防げません**。このため Crowi は
+> 当面**シングルインスタンス (例: Lightsail 1 台) を推奨**します。マルチ
+> インスタンスは同時編集の負荷分散が必要な場合のみ、このリスクを理解した上で
+> 採用してください。
 
 ```yaml
 # 2 instance 例
@@ -178,7 +214,8 @@ labels:
 
 | 変数名 | 必須 | 用途 |
 | ------ | ---- | ---- |
-| `WS_TOKEN_SECRET` | はい (マルチで揃える) | wsToken (短命 JWT) の HMAC 署名鍵。マルチインスタンス構成では全レプリカで**同じ値**を指定する必要があります。未設定時はプロセス起動ごとにランダム生成され、警告ログが出ます (シングル開発環境のみ許容)。 |
+| `WS_TOKEN_SECRET` | マルチでは必須 (全レプリカで揃える) | wsToken (短命 JWT) の HMAC 署名鍵。マルチインスタンス構成では全レプリカで**同じ値**を指定する必要があります。`CROWI_MULTI_INSTANCE` が設定されているのに `WS_TOKEN_SECRET` が未設定 (または既知のプレースホルダ) の場合、api は**起動を中止**します (プロセスごとのランダム鍵では他レプリカが検証できないため)。シングルインスタンス (`CROWI_MULTI_INSTANCE` 未設定) では未設定でも起動でき、プロセス起動ごとにランダム生成され警告ログが出ます。同梱の `.env.example` は意図的に空にしています (世界中で既知の鍵をテンプレートに入れないため)。 |
+| `CROWI_MULTI_INSTANCE` | いいえ (既定はシングル) | マルチインスタンス構成を宣言します (`1` / `true`、またはレプリカ数 `>= 2`)。`WS_TOKEN_SECRET` 起動ガードはこの値を基準に判定します (`REDIS_URL` の有無ではありません)。そのため Redis をセッション/Socket.IO 用途のみに使う 1 レプリカ構成は共有鍵なしで起動できます。api ノードを 2 台以上に増やすときに全レプリカへ設定してください。 |
 | `COLLAB_MAX_EDITORS_PER_PAGE` | いいえ (デフォルト `20`) | ページごとの同時編集者上限。21 人目以降は read-only でリアルタイム表示は受けられますが編集できません。 |
 | `NEXT_PUBLIC_COLLAB_URL` | いいえ | ブラウザが WebSocket 接続する URL。未指定時は `window.location.host` + `NEXT_PUBLIC_API_URL` から `/collab/` を derive します。リバースプロキシで `/collab/*` を api 同居ホストに向けているなら設定不要。 |
 | `REDIS_URL` | マルチでは必須 | セッション/Socket.IO アダプタ + 共同編集の pub/sub + 編集者上限 counter。未設定時の挙動は次節参照。 |
@@ -238,19 +275,51 @@ docker compose logs -f api
   Hocuspocus engine 内では伝搬しますが、他レプリカへの pub/sub は
   途切れます。編集者上限 counter は **fail-open** (上限チェックを
   通す) に倒れます。Redis 復旧後は自動で pub/sub が再開します。
-- **`WS_TOKEN_SECRET` 不一致**: あるレプリカが発行した wsToken を別の
+- **`WS_TOKEN_SECRET` 不一致 / 未設定**: あるレプリカが発行した wsToken を別の
   レプリカが検証できず、`onAuthenticate` で reject されます。クライアントは
   WebSocket connect 後すぐに切断され、エディタが "接続できませんでした"
   状態のままになります。対処: 全レプリカで同じ secret を再設定して
-  ローリング再起動。
+  ローリング再起動。なお `CROWI_MULTI_INSTANCE` を宣言しつつ `WS_TOKEN_SECRET`
+  を未設定 (または既知のプレースホルダ) にした場合、api は**起動時にエラーで
+  停止**してこの問題を未然に防ぎます。シングルインスタンス構成
+  (`CROWI_MULTI_INSTANCE` 未設定) は secret なしで問題なく起動します。これらの
+  診断 (wsToken 検証失敗 / 編集者上限到達) は本番ログに**サンプリングされた警告**
+  として出力されるため、"接続できませんでした" の真因 (期限切れ / secret 不一致 /
+  クロック skew / 上限到達) を切り分けられます。
+- **マルチインスタンスでの編集消失 (既知のリスク)**: 上記「マルチインスタンス
+  デプロイ」の重要注記を参照。stale なレプリカが古い `Page.yjsState` から
+  materialise した Y.Doc で compaction を書き戻すと、新しい状態を上書きしうる
+  既知のリスクです。サーバドキュメント保存ロックと desync ガードで緩和されますが
+  完全には防げず、シングルインスタンス運用を推奨します。
 - **WebSocket Upgrade 失敗**: リバースプロキシで `Upgrade` ヘッダが
   落とされていると `/collab/` 接続が 400/426 で失敗します。`nginx` 設定で
   `proxy_set_header Upgrade $http_upgrade` を確認してください。
-- **`Page.yjsState` 破損 / 外部編集**: `onLoadDocument` で yjsState が
-  欠落または `Y.applyUpdate` が失敗した場合、Crowi は revision の
-  Markdown 本文から Y.Doc を再構築し、接続中の全クライアントへ
-  force-reload 通知を送ります。クライアント側は警告ダイアログを出して
-  ページを reload します。
+- **ライブ編集セッション中の外部編集**: 共同編集セッションが開いている
+  ページに対して、REST API・MCP の `crowi_update_page`・プロセス内の
+  `Page.updatePage` などの**外部経路**から本文が更新されると、Crowi は
+  `currentRevision` を新しい revision に張り替え `Page.yjsState` を null に
+  します。このとき**同一 api プロセス内**にライブな Y.Doc があれば、Crowi は
+  保存コミット後にその Y.Doc を無効化します — 接続中の全クライアントへ
+  `crowi:force-reload` を broadcast し、ドキュメントの基底 revision を
+  tombstone して進行中の古い保存を `CONFLICT` で拒否し、短い猶予の後に
+  ライブ接続を閉じます。これにより、先に reload したクライアントが古い
+  ライブ Y.Doc に再アタッチして `CONFLICT` ループに陥ることを防ぎます。
+  クライアント側は警告ダイアログを出してページを reload し、未保存の
+  ローカル編集は復旧バッファから復元できます。次回接続時は新しい
+  `currentRevision` の本文から再構築されます。
+  - **既知の制約 (マルチインスタンス / プロセス外)**: 無効化のハンドルは
+    **その api プロセス内**のライブ Y.Doc にしか届きません。**別レプリカ**で
+    開いているライブ Y.Doc や、**プロセス外の書き込み** (DB を直接叩く
+    admin CLI の `Page.updatePage` 等) には届かないため、マルチインスタンス
+    構成では外部編集後に接続中クライアントが**古い内容のまま編集を続ける**
+    可能性があり、**手動で再接続**するまで収束しません。クロスインスタンスの
+    無効化チャネル (Redis pub/sub による全レプリカへの伝搬) は将来対応であり
+    現時点ではスコープ外です (RFC-0003 §5b)。これも**シングルインスタンス
+    運用を推奨**する理由のひとつです。
+- **`Page.yjsState` 破損**: `onLoadDocument` で yjsState の
+  `Y.applyUpdate` が失敗した場合、Crowi は revision の Markdown 本文から
+  Y.Doc を再構築し、接続中の全クライアントへ force-reload 通知を送ります。
+  クライアント側は警告ダイアログを出してページを reload します。
 - **`renderedAst` 不整合 (RFC-0002 連動)**: 共同編集の保存は
   `Revision.prepareRevision` を呼び出して renderedAst を自動再生成
   します。何らかの理由で `Page.body` と最新 `Revision.body` がずれた

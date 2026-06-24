@@ -81,7 +81,7 @@ describe('@crowi/collab Phase 4 compaction', () => {
     expect(await countPending(pageId)).toBe(5);
 
     const compactor = createCompactor({
-      models: { Page: models.Page, PageYjsUpdate: models.PageYjsUpdate },
+      models: { Page: models.Page, PageYjsUpdate: models.PageYjsUpdate, Revision: models.Revision },
     });
     const result = await compactor.compactPage(pageId);
 
@@ -112,7 +112,7 @@ describe('@crowi/collab Phase 4 compaction', () => {
     });
 
     const compactor = createCompactor({
-      models: { Page: models.Page, PageYjsUpdate: models.PageYjsUpdate },
+      models: { Page: models.Page, PageYjsUpdate: models.PageYjsUpdate, Revision: models.Revision },
     });
 
     // Run two compactPage calls concurrently. The second one (whichever
@@ -162,7 +162,7 @@ describe('@crowi/collab Phase 4 compaction', () => {
 
     try {
       const compactor = createCompactor({
-        models: { Page: models.Page, PageYjsUpdate: models.PageYjsUpdate },
+        models: { Page: models.Page, PageYjsUpdate: models.PageYjsUpdate, Revision: models.Revision },
       });
       const result = await compactor.compactPage(pageId);
       expect(result?.compactedCount).toBe(3);
@@ -177,7 +177,7 @@ describe('@crowi/collab Phase 4 compaction', () => {
   it('onChange appends to PageYjsUpdate and skips when context.readonly is true', async () => {
     const { pageId } = await seedPage();
     const compactor = createCompactor({
-      models: { Page: models.Page, PageYjsUpdate: models.PageYjsUpdate },
+      models: { Page: models.Page, PageYjsUpdate: models.PageYjsUpdate, Revision: models.Revision },
     });
     const onChange = createOnChange({
       models: { PageYjsUpdate: models.PageYjsUpdate },
@@ -206,7 +206,7 @@ describe('@crowi/collab Phase 4 compaction', () => {
   it('onChange fires compactPage when pending count crosses the 100 threshold', async () => {
     const { pageId } = await seedPage();
     const compactor = createCompactor({
-      models: { Page: models.Page, PageYjsUpdate: models.PageYjsUpdate },
+      models: { Page: models.Page, PageYjsUpdate: models.PageYjsUpdate, Revision: models.Revision },
     });
     const compactSpy = jest.spyOn(compactor, 'compactPage');
     const onChange = createOnChange({
@@ -272,7 +272,7 @@ describe('@crowi/collab Phase 4 compaction', () => {
     }
 
     const compactor = createCompactor({
-      models: { Page: models.Page, PageYjsUpdate: models.PageYjsUpdate },
+      models: { Page: models.Page, PageYjsUpdate: models.PageYjsUpdate, Revision: models.Revision },
     });
     const compactSpy = jest.spyOn(compactor, 'compactPage');
     const onStoreDocument = createOnStoreDocument({ models: { Page: models.Page }, compactor });
@@ -313,7 +313,7 @@ describe('@crowi/collab Phase 4 compaction', () => {
     await Page.updateOne({ _id: pageId }, { $set: { yjsCheckpointAt: new Date(Date.now() - 11 * 60 * 1000) } }).exec();
 
     const compactor = createCompactor({
-      models: { Page: models.Page, PageYjsUpdate: models.PageYjsUpdate },
+      models: { Page: models.Page, PageYjsUpdate: models.PageYjsUpdate, Revision: models.Revision },
     });
     jest.spyOn(compactor, 'storeCheckpoint').mockResolvedValue(null);
     const compactSpy = jest.spyOn(compactor, 'compactPage');

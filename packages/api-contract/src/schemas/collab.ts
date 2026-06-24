@@ -57,6 +57,12 @@ export type RevisionType = z.infer<typeof RevisionTypeSchema>;
  *                     readonly clients still subscribe to live
  *                     updates but their writes are rejected by
  *                     Hocuspocus.
+ *
+ * Round 2 (Decision 1): the save optimistic lock moved SERVER-SIDE — it is
+ * now anchored to the revision the server's Hocuspocus document was
+ * materialised from, not to a client-pinned base. The wsToken response no
+ * longer carries `currentRevision` (the client never pins / echoes a base
+ * any more).
  */
 export const WsTokenResponseSchema = z.object({
   wsToken: z.string(),
@@ -97,6 +103,13 @@ export type WsTokenPayload = z.infer<typeof WsTokenPayloadSchema>;
  * `message` is the optional checkpoint message (currently unused in
  * the v2.1 UI per spec open question 1, but reserved on the wire so
  * we can light it up without a wire-format break).
+ *
+ * Round 2 (Decision 1): the save optimistic lock is anchored SERVER-SIDE
+ * to the revision the server's Hocuspocus document was materialised from,
+ * so the client no longer sends a `baseRevisionId` — the field was
+ * removed. A divergence (an out-of-band save moved `currentRevision`) is
+ * caught by the server's compare-and-set pointer write and surfaced as
+ * `crowi:save-error` `code: 'CONFLICT'`.
  */
 export const CollabSaveMessageSchema = z.object({
   kind: z.literal('crowi:save'),
@@ -121,7 +134,12 @@ export type CollabSaveOk = z.infer<typeof CollabSaveOkSchema>;
  * fails. The Phase 8 Save UI surfaces `message` in a toast. `code`
  * lets the client branch on retry vs surface-and-stop (e.g.
  * `'RENDERER_FAILED'` is a hard error from the RFC-0002 renderer; the
- * client should not retry).
+ * client should not retry). `code: 'CONFLICT'` is the
+ * editor-preview-reliability server-doc-lock rejection (round 2, Decision
+ * 1) — the page's live `currentRevision` diverged from the revision the
+ * server doc was materialised from (an out-of-band save), so the client
+ * must prompt a reload rather than retry, mirroring the HTTP
+ * `PageRevisionConflictError`.
  */
 export const CollabSaveErrorSchema = z.object({
   kind: z.literal('crowi:save-error'),

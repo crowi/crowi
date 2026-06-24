@@ -47,7 +47,9 @@ jest.mock('@crowi/collab', () => ({
       closeConnections: jest.fn(),
     };
     lastFakeHocuspocus = fake;
-    return fake;
+    // G1 — `createCollabServer` now returns the engine PLUS the
+    // external-edit invalidator bound to it.
+    return { hocuspocus: fake, invalidator: { invalidatePages: jest.fn(async () => undefined) } };
   }),
 }));
 

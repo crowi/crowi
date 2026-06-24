@@ -14,6 +14,12 @@ import type { StatelessListener } from './use-collab-document';
  */
 export interface CollabSaveSession {
   status: 'connecting' | 'connected' | 'disconnected' | 'auth-failed';
+  /**
+   * editor-preview-reliability §2 — `true` once the initial Yjs sync has
+   * completed. The save guard requires `status==='connected' && synced`
+   * so we never checkpoint a pre-sync (possibly empty / stale) doc.
+   */
+  synced: boolean;
   readonly: boolean;
   sendStateless: (payload: string) => boolean;
   subscribeStateless: (listener: StatelessListener) => () => void;
@@ -24,9 +30,13 @@ export interface CollabSaveSession {
  * already-pending case (user double-clicked). `'NOT_READY'` covers
  * the un-connected / no-provider branch. `'READONLY'` is the
  * 20-cap defence. `'TIMEOUT'` is the 5-second ack window.
- * Everything else is propagated verbatim from the server.
+ * `'CONFLICT'` is the server-doc-lock rejection (editor-preview-
+ * reliability round 2, Decision 1): the page's live `currentRevision`
+ * diverged from the revision the server doc was materialised from (an
+ * out-of-band save), so the caller must prompt a reload rather than
+ * retry. Everything else is propagated verbatim from the server.
  */
-export type CollabSaveFailureReason = 'BUSY' | 'NOT_READY' | 'READONLY' | 'TIMEOUT' | 'WIRE_FORMAT' | 'SERVER';
+export type CollabSaveFailureReason = 'BUSY' | 'NOT_READY' | 'READONLY' | 'TIMEOUT' | 'CONFLICT' | 'WIRE_FORMAT' | 'SERVER';
 
 export interface CollabSaveFailure {
   reason: CollabSaveFailureReason;
@@ -93,7 +103,11 @@ export function useCollabSave(session: CollabSaveSession | null): UseCollabSaveR
       pending.resolve(ok);
     } else {
       const err = body as CollabSaveError;
-      const failure: CollabSaveFailure = { reason: 'SERVER', code: err.code, message: err.message };
+      // Decision 1 — surface the server-doc-lock rejection as a first-class
+      // `CONFLICT` reason so the Save UI can branch to "reload required"
+      // instead of treating it as a generic server error to retry.
+      const reason: CollabSaveFailureReason = err.code === 'CONFLICT' ? 'CONFLICT' : 'SERVER';
+      const failure: CollabSaveFailure = { reason, code: err.code, message: err.message };
       setIsSaving(false);
       setLastError(failure);
       pending.reject(failure);
@@ -153,11 +167,24 @@ export function useCollabSave(session: CollabSaveSession | null): UseCollabSaveR
       setLastError(failure);
       return Promise.reject(failure);
     }
+    // §2 — refuse to save before the initial sync completes. `status ===
+    // 'connected'` (socket open) stands before SyncStep2, when the local
+    // doc may still be empty / stale; saving then would push that
+    // pre-sync content over the server's authoritative revision.
+    if (!session.synced) {
+      const failure: CollabSaveFailure = { reason: 'NOT_READY', message: 'Realtime session is still syncing' };
+      setLastError(failure);
+      return Promise.reject(failure);
+    }
     if (pendingRef.current) {
       const failure: CollabSaveFailure = { reason: 'BUSY', message: 'A save is already in flight' };
       return Promise.reject(failure);
     }
 
+    // Decision 1 (round 2): the save optimistic lock is anchored
+    // server-side to the revision the server's Hocuspocus doc was
+    // materialised from, so the client no longer sends an edit-base
+    // revision. A divergence surfaces as `crowi:save-error` `CONFLICT`.
     const message: CollabSaveMessage = { kind: 'crowi:save' };
     const sent = session.sendStateless(JSON.stringify(message));
     if (!sent) {

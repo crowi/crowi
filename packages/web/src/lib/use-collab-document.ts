@@ -99,6 +99,28 @@ interface UseCollabDocumentResult {
   awareness: CollabAwareness | null;
   provider: HocuspocusProvider | null;
   status: CollabStatus;
+  /**
+   * editor-preview-reliability §2 — `true` once the HocuspocusProvider
+   * has completed the initial Yjs sync (SyncStep2 received, surfaced via
+   * `provider.synced` / the `onSynced` callback). `status==='connected'`
+   * only means the socket is open — it stands BEFORE the first sync, so
+   * the editor must gate readiness and the Save guard on `synced`, not
+   * `status`, to avoid editing/saving against an empty pre-sync doc
+   * (lost-update + the empty-preview footgun). Resets to `false` on
+   * provider rebuild (token refresh / page swap).
+   */
+  synced: boolean;
+  /**
+   * editor-preview-reliability H5 — sticky "has completed the initial sync
+   * at least once during this provider's life". Unlike `synced` (which
+   * tracks the live sync state and dips to `false` on a transient
+   * disconnect so the Save guard blocks saving while offline), this stays
+   * `true` across a brief reconnect. The editor uses it as its MOUNT gate
+   * so a network blip no longer remounts CodeMirror / flips it readonly
+   * mid-edit (losing cursor / scroll / IME / undo). Resets to `false` only
+   * on provider rebuild (token refresh / page swap) and on `auth-failed`.
+   */
+  hasEverSynced: boolean;
   readonly: boolean;
   /**
    * Publish the local user identity to remote peers via
@@ -173,6 +195,15 @@ export function useCollabDocument(options: UseCollabDocumentOptions): UseCollabD
   }
   const [session, setSession] = useState<SessionHandles | null>(null);
   const [status, setStatus] = useState<CollabStatus>('connecting');
+  // §2 — initial-sync gate. Distinct from `status`: the socket can be
+  // `connected` for a beat before SyncStep2 lands, during which the doc
+  // is still empty. Reset to `false` whenever the provider is rebuilt.
+  const [synced, setSynced] = useState(false);
+  // H5 — sticky "has synced at least once" mount gate. Set on the first
+  // `onSynced(true)`; only reset on provider teardown / auth-failure, so a
+  // transient disconnect/reconnect (which dips `synced`) doesn't remount
+  // the editor.
+  const [hasEverSynced, setHasEverSynced] = useState(false);
 
   // Stateless listener fan-out. `Set` instead of `Array` so unsubscribe
   // is O(1) and identical listeners can't double-register. The ref
@@ -198,15 +229,46 @@ export function useCollabDocument(options: UseCollabDocumentOptions): UseCollabD
         } else if (wsStatus === WebSocketStatus.Connected) {
           setStatus('connected');
         } else if (wsStatus === WebSocketStatus.Disconnected) {
+          // A dropped socket invalidates the sync gate — the doc may
+          // diverge from the server while offline, so block edit/save
+          // until the reconnect re-syncs (onSynced fires again).
+          setSynced(false);
           setStatus('disconnected');
         }
       },
       onAuthenticationFailed: () => {
         // Token verify failed (expired / wrong secret / cross-page). We
-        // don't reconnect — the next use-yjs-token refetch will hand
-        // us a fresh token and the parent effect will rebuild the
-        // provider with it.
+        // don't reconnect on THIS provider — the next use-yjs-token refetch
+        // (or the token-refresh notifier nudged by a silent access-token
+        // refresh, plus the bounded backoff in `useCollabSession`) will hand
+        // us a fresh token and the parent effect rebuilds the provider with
+        // it. The live doc is no longer synced, so block edits/saves via
+        // `synced`.
+        //
+        // D1b (round 3) — do NOT clear the sticky `hasEverSynced` mount gate
+        // here. An auth-failure usually triggers a recovery (fresh token →
+        // rebuild) that re-syncs within a couple of seconds, and clearing the
+        // gate would flip the editor readonly + unmount CodeMirror mid-edit on
+        // every routine near-expiry reconnect. We keep the editor MOUNTED
+        // (the status toast shows "reconnecting…") while recovery is in
+        // flight; the mount gate is only torn down when recovery is GENUINELY
+        // TERMINAL — `useCollabSession` masks `hasEverSynced` to `false` once
+        // `authRecoveryExhausted` is set (the budget is spent). A provider
+        // rebuild on a fresh token resets `hasEverSynced` via the effect
+        // cleanup anyway, so the unavoidable rebind-to-new-Y.Doc still happens
+        // for a real failure — just not the spurious mid-recovery remount.
+        setSynced(false);
         setStatus('auth-failed');
+      },
+      onSynced: ({ state }) => {
+        // §2 — `state === true` once SyncStep2 has been applied and the
+        // local doc reflects the server's authoritative content. Only
+        // now is it safe to let the user edit / save. A disconnect that
+        // re-syncs fires this again with `true`; we never flip it back
+        // to `false` here (provider teardown / auth-failure resets it).
+        setSynced(state);
+        // H5 — latch the sticky mount gate on the first successful sync.
+        if (state) setHasEverSynced(true);
       },
       onStateless: ({ payload }) => {
         // Fan-out to subscribers. We iterate over a snapshot (`[...set]`)
@@ -244,6 +306,8 @@ export function useCollabDocument(options: UseCollabDocumentOptions): UseCollabD
       doc.destroy();
       setSession(null);
       setStatus('connecting');
+      setSynced(false);
+      setHasEverSynced(false);
     };
   }, [pageId, wsToken]);
 
@@ -287,6 +351,8 @@ export function useCollabDocument(options: UseCollabDocumentOptions): UseCollabD
     awareness: session?.awareness ?? null,
     provider: session?.provider ?? null,
     status,
+    synced,
+    hasEverSynced,
     readonly,
     setLocalAwareness,
     subscribeStateless,

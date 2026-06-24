@@ -79,6 +79,9 @@ export function createOnStateless(deps: OnStatelessDeps) {
         userId: context.userId,
         document,
         message: message.data.message,
+        // Round 2, Decision 1 — the save lock is anchored SERVER-SIDE to the
+        // revision this Hocuspocus doc was materialised from (recorded in
+        // `onLoadDocument`), so the client no longer sends a base revision.
       });
       // Phase 8 will subscribe to this on the client (Save button toast).
       // The wire format `{ kind, revisionId }` is intentionally not

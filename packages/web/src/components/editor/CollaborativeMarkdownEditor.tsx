@@ -1,6 +1,6 @@
 'use client';
 
-import { forwardRef, useEffect, useMemo } from 'react';
+import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Extension } from '@codemirror/state';
 import { keymap } from '@codemirror/view';
 import { yCollab } from 'y-codemirror.next';
@@ -35,6 +35,39 @@ export interface CollabSession {
   yUndoManager: Y.UndoManager | null;
   awareness: CollabAwareness | null;
   status: CollabStatus;
+  /**
+   * editor-preview-reliability §2 — `true` once the initial Yjs sync has
+   * completed (`provider.synced`). The Save guard gates on this, not
+   * `status`, so the user can't save a pre-sync / offline doc. Dips to
+   * `false` on a transient disconnect (block saves while offline).
+   */
+  synced: boolean;
+  /**
+   * editor-preview-reliability H5 / D1b — sticky "has synced at least once".
+   * The editor's MOUNT gate uses this instead of `synced` so a transient
+   * disconnect (which dips `synced`) doesn't remount CodeMirror / flip it
+   * readonly mid-edit. Stays `true` through a routine `auth-failed` reconnect
+   * (D1b — recovery keeps the editor mounted, showing "reconnecting…");
+   * `useCollabSession` masks it to `false` only when recovery is GENUINELY
+   * TERMINAL (`authRecoveryExhausted`) or the provider is rebuilt / the page
+   * swaps.
+   */
+  hasEverSynced: boolean;
+  /**
+   * editor-preview-reliability D2 — `true` once the bounded auth-failed
+   * recovery budget is spent (the wsToken keeps getting rejected after the
+   * retries). The caller escalates this to a terminal "session expired —
+   * sign in again" message and dismisses the "reconnecting…" spinner.
+   *
+   * D2 (round 3): the budget + this flag reset ONLY on a CONFIRMED sync
+   * (`synced === true`), NOT on a transient `connecting`/`connected`. A
+   * fetchable-but-rejected wsToken rebuilds the provider each cycle (status
+   * oscillates auth-failed → connecting → auth-failed); counting attempts in
+   * a ref that survives the oscillation is what lets the budget genuinely
+   * drain to terminal instead of resetting every cycle (the infinite-spinner
+   * bug). A real recovery (the doc re-syncs) clears it and re-arms.
+   */
+  authRecoveryExhausted: boolean;
   readonly: boolean;
   subscribeStateless: (listener: StatelessListener) => () => void;
   sendStateless: (payload: string) => boolean;
@@ -107,14 +140,129 @@ export type CollaborativeMarkdownEditorProps = CollaborativeMarkdownEditorCommon
  * change during a live session.
  */
 export function useCollabSession(pageId: string | null | undefined): CollabSession {
-  const tokenQuery = useYjsToken(pageId);
+  // D1a — expose the LIVE connection status to `useYjsToken` so its
+  // notifier-driven refetch can skip while we're `connected` (an established
+  // WebSocket doesn't care that the wsToken's TTL lapsed; refetching would
+  // only rebuild the provider + remount the editor). `useYjsToken` runs
+  // before `useCollabDocument` in this hook, so we feed the status through a
+  // ref updated by an effect once `status` is known.
+  const connectionStatusRef = useRef<CollabStatus>('connecting');
+  const getConnectionStatus = useCallback(() => connectionStatusRef.current, []);
+  const tokenQuery = useYjsToken(pageId, { getConnectionStatus });
   const wsToken = tokenQuery.data?.wsToken ?? null;
   const tokenReadonly = tokenQuery.data?.readonly ?? false;
-  const { yText, yUndoManager, awareness, status, readonly, setLocalAwareness, subscribeStateless, sendStateless } = useCollabDocument({
+  const { yText, yUndoManager, awareness, status, synced, hasEverSynced, readonly, setLocalAwareness, subscribeStateless, sendStateless } = useCollabDocument({
     pageId,
     wsToken,
     initialReadonly: tokenReadonly,
   });
+  useEffect(() => {
+    connectionStatusRef.current = status;
+  }, [status]);
+
+  // Decision 1 (round 2): the save optimistic lock moved SERVER-SIDE
+  // (anchored to the revision the server's Hocuspocus doc was materialised
+  // from), so the client no longer pins / advances any edit-base revision.
+  // The whole client-base subsystem (baseRevisionId state, the once-per-page
+  // anchoring, advanceBaseRevision) was removed.
+
+  // §4 / D2 — bounded recovery from the `auth-failed` state with a
+  // SELF-RESCHEDULING backoff + terminal escalation. The provider won't
+  // reconnect with the rejected token; a fresh wsToken rebuilds it.
+  // `useYjsToken` already refetches on a silent access-token refresh (the
+  // common case), but `auth-failed` can also happen with a still-valid
+  // access token (the wsToken simply expired), so nudge a bounded number of
+  // explicit refetches here.
+  //
+  // D2 — surface "budget spent" so the caller can escalate to a terminal
+  // message + dismiss the reconnecting spinner instead of spinning forever.
+  const [authRecoveryExhausted, setAuthRecoveryExhausted] = useState(false);
+  // D2 (round 3) — the attempt counter MUST survive the provider oscillation.
+  // For a wsToken the server keeps rejecting (e.g. WS_TOKEN_SECRET mismatch /
+  // revoked), each refetch produces a fetchable-but-rejected token that
+  // rebuilds the provider, so status churns auth-failed → connecting →
+  // auth-failed. If the budget lived in the effect's local scope it would
+  // reset to 0 on every re-arm and the terminal state would never be reached
+  // (the infinite "reconnecting…" spinner). Holding it in a ref means the
+  // count only resets on a CONFIRMED successful sync (see the effect below),
+  // not on a transient connecting/connected, so the budget genuinely drains.
+  const authAttemptRef = useRef(0);
+  // D2 — reset the recovery budget ONLY on a confirmed sync. A transient
+  // `connecting`/`connected` during the oscillation does NOT count as
+  // recovery (the rebuilt provider can immediately auth-fail again); only
+  // `synced === true` proves the fresh token actually authenticated AND the
+  // doc re-synced. This is what makes the escalation reachable.
+  useEffect(() => {
+    if (!synced) return;
+    authAttemptRef.current = 0;
+    // Resetting the terminal flag on the external `synced` signal is the
+    // "subscribe + publish" shape this effect exists for (the Yjs provider is
+    // the external resource). The functional update is a no-op render when the
+    // flag is already cleared (the common case), so it doesn't cascade.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setAuthRecoveryExhausted((prev) => (prev ? false : prev));
+  }, [synced]);
+  // H8 — depend on the STABLE `tokenQuery.refetch` (react-query keeps its
+  // identity stable across renders), not the whole `tokenQuery` object
+  // (new identity every render).
+  const refetchToken = tokenQuery.refetch;
+  useEffect(() => {
+    // Only the auth-failed branch arms the backoff. We deliberately do NOT
+    // call setState synchronously in the effect body (that would trip
+    // cascading renders); the only setState is the async "budget spent"
+    // inside a setTimeout, and the budget reset lives in the confirmed-sync
+    // effect above (NOT in this cleanup — resetting on every leave-auth-failed
+    // is exactly the oscillation bug that kept the spinner alive forever).
+    if (status !== 'auth-failed') return;
+    // Already escalated to terminal for this drained budget — don't re-arm
+    // the chain (it would refetch forever). A confirmed sync re-arms us by
+    // resetting `authAttemptRef` + clearing the terminal flag.
+    if (authRecoveryExhausted) return;
+
+    // D2 — a single effect owns the whole backoff for THIS auth-failed
+    // episode: it arms timer #1, whose callback refetches then arms timer
+    // #2, etc. (1s, 2s, 4s). The attempt count persists in `authAttemptRef`
+    // across provider rebuilds, so a fetchable-but-rejected wsToken drains
+    // the budget across the oscillation instead of resetting each cycle.
+    // After the 3rd attempt we escalate to terminal instead of looping.
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const scheduleNext = (): void => {
+      if (cancelled) return;
+      if (authAttemptRef.current >= 3) {
+        setAuthRecoveryExhausted(true);
+        return;
+      }
+      const delay = 1000 * 2 ** authAttemptRef.current; // 1s, 2s, 4s
+      authAttemptRef.current += 1;
+      timer = setTimeout(() => {
+        void Promise.resolve(refetchToken()).finally(() => {
+          // If the refetch produced a token that re-syncs, `synced` flips and
+          // the confirmed-sync effect resets the budget; if status leaves
+          // auth-failed transiently this effect's cleanup cancels the in-flight
+          // timer (but keeps the count). If it stays / returns to auth-failed
+          // (still-bad credentials), self-reschedule until the budget drains.
+          scheduleNext();
+        });
+      }, delay);
+    };
+    scheduleNext();
+    return () => {
+      // Cancel only the in-flight timer; keep `authAttemptRef` so the count
+      // survives a provider rebuild's transient connecting state.
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [status, refetchToken, authRecoveryExhausted]);
+
+  // D1b (round 3) — the editor's MOUNT gate (`hasEverSynced`) must hold the
+  // editor mounted through a routine reconnect, and only tear down when
+  // recovery is GENUINELY TERMINAL. `useCollabDocument` no longer clears
+  // `hasEverSynced` on `auth-failed`; instead we mask it here once the
+  // bounded recovery budget is spent, so the editor stays "reconnecting…"
+  // during recovery and flips to the terminal "session expired" state only
+  // when we've truly given up.
+  const effectiveHasEverSynced = hasEverSynced && !authRecoveryExhausted;
 
   const { user, isLoading: isAuthLoading } = useAuth();
 
@@ -174,7 +322,18 @@ export function useCollabSession(pageId: string | null | undefined): CollabSessi
     };
   }, [yText, awareness]);
 
-  return { yText, yUndoManager, awareness, status, readonly, subscribeStateless, sendStateless };
+  return {
+    yText,
+    yUndoManager,
+    awareness,
+    status,
+    synced,
+    hasEverSynced: effectiveHasEverSynced,
+    authRecoveryExhausted,
+    readonly,
+    subscribeStateless,
+    sendStateless,
+  };
 }
 
 /**
@@ -223,7 +382,23 @@ export const CollaborativeMarkdownEditor = forwardRef<MarkdownEditorHandle, Coll
   // its own `useQuery` via the `enabled` flag.
   const ownedSession = useCollabSession(session ? null : pageId);
   const active = session ?? ownedSession;
-  const { yText, yUndoManager, awareness, status, readonly, subscribeStateless } = active;
+  const { yText, yUndoManager, awareness, status, hasEverSynced, readonly, subscribeStateless } = active;
+
+  // §2 — readiness is the initial-sync gate, not merely `yText != null`.
+  // `yText` is non-null the instant the provider is constructed (sync
+  // pending), so the old `!yText` gate let the user type into an empty
+  // pre-sync doc; those edits were silently dropped when SyncStep2
+  // replaced the doc (lost update) and the preview showed blank.
+  //
+  // H5 — gate on `hasEverSynced` (sticky), NOT the live `synced`. `synced`
+  // dips to `false` on a transient disconnect; if the MOUNT gate keyed off
+  // it, a network blip would remount CodeMirror and flip it readonly
+  // mid-edit (losing cursor/scroll/IME/undo). `hasEverSynced` stays true
+  // across a reconnect (it only resets on provider rebuild / auth-failure),
+  // so yCollab mounts once after the first sync and survives blips. The
+  // save guard still uses the live `synced` (see `useCollabSave`), so
+  // offline saving is still blocked while the editor stays mounted.
+  const ready = Boolean(hasEverSynced && yText);
 
   // Build the CodeMirror extension list. `yCollab` is the bridge
   // that wires Y.Text ↔ EditorView (doc + selection); the explicit
@@ -233,7 +408,7 @@ export const CollaborativeMarkdownEditor = forwardRef<MarkdownEditorHandle, Coll
   // the editor can mount immediately with an empty doc and the user
   // sees the editor chrome rather than a spinner.
   const extraExtensions = useMemo<Extension[]>(() => {
-    if (!yText || !awareness || !yUndoManager) return [];
+    if (!ready || !yText || !awareness || !yUndoManager) return [];
     return [
       yCollab(yText, awareness, { undoManager: yUndoManager }),
       keymap.of([
@@ -255,7 +430,7 @@ export const CollaborativeMarkdownEditor = forwardRef<MarkdownEditorHandle, Coll
         },
       ]),
     ];
-  }, [yText, awareness, yUndoManager]);
+  }, [ready, yText, awareness, yUndoManager]);
 
   // Mirror Y.Text → caller's `body` string. Throttled to ≤ 7 emits
   // per second (leading-edge fire + trailing-edge guarantee) so the
@@ -333,11 +508,13 @@ export const CollaborativeMarkdownEditor = forwardRef<MarkdownEditorHandle, Coll
     return unsubscribe;
   }, [subscribeStateless, onForceReload]);
 
-  // While Y.Text hasn't arrived yet we force readonly to avoid the
-  // user typing into the empty mounted doc — those edits would
-  // silently be dropped when yCollab attaches and overwrites the
-  // EditorView's doc with Y.Text contents.
-  const editorReadonly = readonly || !yText;
+  // §2 — until the initial sync completes we force readonly so the user
+  // can't type into the empty pre-sync doc (those edits would be dropped
+  // when SyncStep2 replaces the doc with the server's authoritative
+  // content). `ready` = `synced && yText`; this replaces the old `!yText`
+  // gate, which lifted readonly the instant the provider existed (= sync
+  // pending, doc still empty).
+  const editorReadonly = readonly || !ready;
 
   // No `onChange`: yCollab owns dispatch, so the inner editor skips
   // the updateListener entirely (see `build-extensions.ts`).
@@ -352,15 +529,20 @@ export const CollaborativeMarkdownEditor = forwardRef<MarkdownEditorHandle, Coll
   // sync: if the doc was seeded before `yCollab` attached, the
   // already-present content produced no observe event and never
   // rendered.
+  //
+  // §2 — the `ready` key boundary is now `synced`, not `yText != null`.
+  // We remount once the INITIAL SYNC lands (so the seeded doc reflects
+  // the server's authoritative content), not merely when the provider is
+  // constructed. Same remount contract, later — and correct — trigger.
   const inner = uploadPageId ?? pageId ?? 'collab';
   return (
     <MarkdownEditor
-      key={`${inner}-${yText ? 'ready' : 'pending'}`}
+      key={`${inner}-${ready ? 'ready' : 'pending'}`}
       ref={ref}
       value=""
-      getInitialDoc={yText ? () => yText.toString() : undefined}
+      getInitialDoc={ready && yText ? () => yText.toString() : undefined}
       readonly={editorReadonly}
-      disableHistory={Boolean(yText)}
+      disableHistory={ready}
       extraExtensions={extraExtensions}
       paste={uploadConfig}
       dnd={uploadConfig}

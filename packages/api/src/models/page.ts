@@ -272,6 +272,26 @@ export default (crowi: Crowi) => {
   const debug = Debug('crowi:models:page');
   const pageEvent = crowi.event('Page');
 
+  /**
+   * feature-editor-preview-reliability G1 — drive the in-process collab
+   * external-edit invalidator after an external write (`updatePage`) commits.
+   * Fire-and-forget: the invalidator is itself best-effort and never throws,
+   * but we still guard the call so an absent attachment (CLI / tests / boot
+   * not yet finished) or a synchronous throw can never bubble into the write.
+   *
+   * Multi-instance / out-of-process is out of scope (RFC-0003 §5b): the
+   * handle only reaches docs live in THIS api process. A live doc on another
+   * replica needs future Redis pub/sub — documented in the realtime-collab
+   * operations doc.
+   */
+  function invalidateLiveCollabDoc(pageId: Types.ObjectId | string): void {
+    const attachment = crowi.collabAttachment;
+    if (!attachment) return;
+    void attachment.invalidatePages([String(pageId)], 'page-body-replaced').catch((err: unknown) => {
+      debug('collab invalidatePages failed for page %s: %s', String(pageId), (err as Error)?.message ?? err);
+    });
+  }
+
   function isPortalPath(path) {
     return path.endsWith('/');
   }
@@ -1201,6 +1221,7 @@ export default (crowi: Crowi) => {
   pageSchema.statics.updatePage = async function (pageData, body, user, options = {}) {
     const Revision = crowi.model('Revision');
     const Bookmark = crowi.model('Bookmark');
+    const PageYjsUpdate = crowi.model('PageYjsUpdate');
     // Default to the page's CURRENT grant when the caller doesn't pass one, so a
     // body-only update leaves visibility untouched. A previous `options.grant ||
     // null` turned every grant-less call (e.g. `updatePage(page, body, user, {})`
@@ -1227,6 +1248,23 @@ export default (crowi: Crowi) => {
     pageData.yjsCheckpointAt = null;
 
     await Page.pushRevision(pageData, newRevision, user, { preserveTimestamps: options.preserveTimestamps });
+
+    // feature-editor-preview-reliability (High, G1) — an external body write
+    // abandons the persisted collab lineage (yjsState nulled above). The
+    // pending `PageYjsUpdate` append rows descend from that OLD lineage, so a
+    // fresh `onLoadDocument` materialisation would replay them on top of the
+    // new revision body and auto-merge stale content back in (contradicting
+    // the "external edit canonical, manual merge" design). Drop them here so
+    // the next materialisation replays nothing. Best-effort + fire-and-forget:
+    // a delete failure must never fail / delay the HTTP write, and the collab
+    // load path has its own time-gated purge as a backstop. `onLoadDocument`
+    // only re-applies rows that POSTDATE this new revision (genuine
+    // not-yet-folded edits), so clearing the pre-edit rows is safe.
+    void PageYjsUpdate.deleteMany({ pageId: pageData._id })
+      .exec()
+      .catch((err: unknown) => {
+        debug('updatePage: PageYjsUpdate.deleteMany failed for page %s: %s', String(pageData._id), (err as Error)?.message ?? err);
+      });
     const bookmarkCount = await Bookmark.countByPageId(pageData._id);
 
     // The 4th arg flags "a new revision was created" so events/page.ts can
@@ -1236,9 +1274,20 @@ export default (crowi: Crowi) => {
     if (grant != pageData.grant) {
       const data = await Page.updateGrant(pageData, grant, user);
       pageEvent.emit('update', data, user, bookmarkCount, true);
+      invalidateLiveCollabDoc(pageData._id);
       return data;
     }
     pageEvent.emit('update', pageData, user, bookmarkCount, true);
+    // feature-editor-preview-reliability G1 — this external edit just nulled
+    // `yjsState` + bumped `currentRevision` (above). If a collab session is
+    // live on this page in THIS process, the live Y.Doc is now stale: a
+    // force-reload broadcast alone is a no-op under `unloadImmediately`
+    // (the doc survives while ≥1 client stays connected), so we drive the
+    // in-process invalidator (broadcast + tombstone + drain) AFTER the write
+    // committed. Best-effort + fire-and-forget: it must never fail / delay
+    // the HTTP write, and out-of-process / multi-instance live docs are out
+    // of scope (RFC-0003 §5b — documented limitation).
+    invalidateLiveCollabDoc(pageData._id);
     return pageData;
   };
 

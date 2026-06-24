@@ -25,10 +25,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { ErrorAlert } from '@/components/ui/error-alert';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { type CollabToastState, reduceCollabStatusToast } from '@/lib/collab-status-toast';
+import { observeYTextUntil } from '@/lib/observe-ytext-until';
 import { defaultDraftBody, pageDisplayName, pagePathToHref } from '@/lib/page-path';
 import { useAuth } from '@/lib/use-auth';
 import type { CollabStatus } from '@/lib/use-collab-document';
 import { useCollabSave } from '@/lib/use-collab-save';
+import { useCollabRecoveryBuffer } from '@/lib/use-collab-recovery-buffer';
 import { DraftPathConflictError, draftEditHref, useCreateDraft, useDrafts } from '@/lib/use-drafts';
 import { usePage } from '@/lib/use-page';
 import { invalidatePageContentQueries, PageRevisionConflictError, useSetPageGrant, useUpdatePage } from '@/lib/use-page-mutations';
@@ -45,6 +48,8 @@ type Feedback = { kind: 'conflict' | 'error'; message: string };
  * stacking new ones every time the connection cycles.
  */
 const COLLAB_STATUS_TOAST_ID = 'collab-status';
+/** Stable id for the §3 recovery-buffer restore prompt so it never stacks. */
+const COLLAB_RECOVERY_TOAST_ID = 'collab-recovery';
 
 type EditMode = { kind: 'update'; pageId: string } | { kind: 'create'; path: string } | { kind: 'invalid' };
 
@@ -208,6 +213,26 @@ function EditorShell({
   // own WebSocket. `useCollabSession(null)` is the no-op branch for
   // the create flow where `realtimePageId` is null.
   const session = useCollabSession(realtimePageId);
+  // Tail — keep the LIVE Y.Text in a ref so deferred callbacks (the restore
+  // toast's onClick, which fires long after its effect ran) always target
+  // the current doc, not a `yText` captured before a provider rebuild
+  // (token refresh / reconnect swaps the provider → a new Y.Text). Synced
+  // in an effect (not during render) per the refs lint rule.
+  const liveYTextRef = useRef<Y.Text | null>(null);
+  useEffect(() => {
+    liveYTextRef.current = session.yText;
+  }, [session.yText]);
+  // Restore gating (round 3) — keep the LIVE `synced` flag in a ref so the
+  // deferred restore-toast onClick (which can fire long after its effect ran)
+  // only inserts into a doc that is CURRENTLY synced. The prompt effect gates
+  // on `session.synced`, but between showing the prompt and the user clicking
+  // Restore the provider may have rebuilt (token refresh / reconnect) into a
+  // fresh, still-pre-sync (empty) Y.Text; inserting then would duplicate /
+  // strand content once SyncStep2 lands. The ref lets the click re-check.
+  const liveSyncedRef = useRef(false);
+  useEffect(() => {
+    liveSyncedRef.current = session.synced;
+  }, [session.synced]);
   // Phase 8 Save flow: when realtime save is enabled the spinner +
   // disabled state of the Save button is driven by `useCollabSave`'s
   // in-flight state instead of the HTTP mutation's `isPending`.
@@ -218,17 +243,106 @@ function EditorShell({
   // editors) because the dialog needs the same lifetime as the
   // session — the moment the user reloads, both vanish together.
   const [forceReload, setForceReload] = useState<{ open: boolean; reason?: string }>({ open: false });
-  const handleForceReload = useCallback((reason?: string) => {
-    setForceReload({ open: true, reason });
-  }, []);
 
-  // Unsaved-changes tracking. Two flavours:
-  //   - realtime save (Y.Text local mutations since last `crowi:save` ok)
-  //   - HTTP save     (caller-side body string non-empty / divergent)
-  // The dirty signal drives both the browser `beforeunload` guard and
-  // the in-app cancel-button dialog. We reset realtime-dirty on every
-  // successful save; HTTP dirty is recomputed from props each render.
+  // Unsaved-changes tracking (realtime-save flavour). Declared here so
+  // the recovery buffer + save handlers below can read/reset it; the
+  // observer that sets it lives further down. HTTP dirty is recomputed
+  // from props each render.
   const [realtimeDirty, setRealtimeDirty] = useState(false);
+  const [unsavedDialogOpen, setUnsavedDialogOpen] = useState(false);
+
+  // §3 — local recovery buffer. Snapshots the current editor text to
+  // localStorage on a timer while an active realtime editing session is
+  // dirty, so a force-reload / readonly-flip / auth-failed can't lose
+  // the user's unsaved typing. Scoped to the realtime page (create flow
+  // passes null → disabled).
+  //
+  // B2 — gate on `hasEverSynced` (the sticky editable signal), NOT the live
+  // `synced`. `synced` dips to `false` on a transient disconnect, during
+  // which the editor stays mounted + editable (offline typing is exactly
+  // the §3 case to protect); gating on it would turn snapshotting OFF
+  // precisely when the user is making un-synced edits. The save guard still
+  // uses live `synced`, so this only changes the snapshot cadence.
+  //
+  // Tail — memoise the `getText` closure so the hook's snapshot effects
+  // don't re-subscribe (and reset their interval) on every parent render.
+  const sessionYText = session.yText;
+  const getRecoveryText = useCallback(() => sessionYText?.toString() ?? null, [sessionYText]);
+  const recovery = useCollabRecoveryBuffer({
+    pageId: realtimePageId ?? null,
+    getText: getRecoveryText,
+    enabled: useRealtimeSave && session.hasEverSynced && !session.readonly && realtimeDirty,
+  });
+
+  // Tail — only snapshot when THIS user has unsaved local edits. The
+  // auth-failed / readonly-flip / force-reload snapshots fire imperatively
+  // (bypassing the `enabled` gate), so without this guard they'd capture a
+  // co-editor's content the local user never touched and later offer to
+  // "restore" it. Held in a ref so the deferred callbacks read the live
+  // dirty state. (B3's empty-doc guard in the hook is the second line of
+  // defence.)
+  const realtimeDirtyRef = useRef(false);
+  useEffect(() => {
+    realtimeDirtyRef.current = realtimeDirty;
+  }, [realtimeDirty]);
+  const snapshotIfDirty = useCallback(() => {
+    if (realtimeDirtyRef.current) recovery.snapshotNow();
+  }, [recovery]);
+
+  const handleForceReload = useCallback(
+    (reason?: string) => {
+      // Snapshot before the dialog → reload destroys the in-memory doc.
+      snapshotIfDirty();
+      setForceReload({ open: true, reason });
+    },
+    [snapshotIfDirty],
+  );
+
+  // Shared realtime-save handler. On success: clear dirty, toast, navigate.
+  // On a `CONFLICT` (server-doc-lock) rejection the page diverged elsewhere
+  // (an out-of-band save), so reuse the force-reload dialog (it explains
+  // "the page changed elsewhere — reload to continue") instead of a
+  // transient error toast the user might retry into the same conflict. The
+  // recovery buffer has already snapshotted the unsaved text, so reloading
+  // does not lose the user's work.
+  //
+  // Decision 1 (round 2): the edit base lives server-side now, so there is
+  // no client base to advance on success.
+  const runRealtimeSave = useCallback(
+    (closeUnsavedDialog: boolean) => {
+      collabSave
+        .save()
+        .then(() => {
+          setRealtimeDirty(false);
+          // M2 — the just-saved text is now durable on the server, so drop
+          // the local recovery buffer; otherwise the next mount would see a
+          // stale snapshot and spuriously prompt "restore unsaved changes?"
+          // (and could restore over newer content).
+          recovery.clear();
+          if (closeUnsavedDialog) setUnsavedDialogOpen(false);
+          toast.success(m['collab.save_success']());
+          (onAfterSave ?? onCancel)();
+        })
+        .catch((err: { reason?: string; message?: string }) => {
+          if (closeUnsavedDialog) setUnsavedDialogOpen(false);
+          if (err?.reason === 'CONFLICT') {
+            // M3 — snapshot the unsaved text before the reload dialog so the
+            // user's work survives the CONFLICT reload (the dialog → reload
+            // destroys the in-memory doc).
+            snapshotIfDirty();
+            setForceReload({ open: true, reason: 'page-body-replaced' });
+            return;
+          }
+          toast.error(m['collab.save_failed']({ message: err?.message ?? '' }));
+        });
+    },
+    [collabSave, onAfterSave, onCancel, recovery, snapshotIfDirty],
+  );
+
+  // The realtime-dirty observer: a local Y.Text mutation since the last
+  // successful `crowi:save` marks the doc dirty. (The `realtimeDirty`
+  // state itself is declared near the top so the recovery buffer + save
+  // handlers can read it.)
   useEffect(() => {
     if (!useRealtimeSave) return;
     const yText = session.yText;
@@ -243,8 +357,6 @@ function EditorShell({
     };
   }, [useRealtimeSave, session.yText]);
   const isDirty = useRealtimeSave ? realtimeDirty : body.length > 0;
-
-  const [unsavedDialogOpen, setUnsavedDialogOpen] = useState(false);
 
   // Browser-level guard for tab close / refresh / external-link
   // navigation. Modern browsers ignore the custom message but still
@@ -278,21 +390,7 @@ function EditorShell({
 
   const handleDialogSave = useCallback(() => {
     if (useRealtimeSave) {
-      collabSave
-        .save()
-        .then(() => {
-          setRealtimeDirty(false);
-          setUnsavedDialogOpen(false);
-          toast.success(m['collab.save_success']());
-          // Leave the editor for the page view. `onAfterSave` also
-          // refreshes the page cache; fall back to the plain cancel
-          // navigation when the caller didn't wire it.
-          (onAfterSave ?? onCancel)();
-        })
-        .catch((err: { message?: string }) => {
-          toast.error(m['collab.save_failed']({ message: err?.message ?? '' }));
-          setUnsavedDialogOpen(false);
-        });
+      runRealtimeSave(true);
       return;
     }
     // HTTP mode: the parent's `onSave` performs the mutation + handles
@@ -302,47 +400,188 @@ function EditorShell({
     // dirty body intact and can retry.
     onSave();
     setUnsavedDialogOpen(false);
-  }, [useRealtimeSave, collabSave, onCancel, onSave, onAfterSave]);
+  }, [useRealtimeSave, runRealtimeSave, onSave]);
 
   const handleDialogDiscard = useCallback(() => {
     setUnsavedDialogOpen(false);
+    // M2 — the user explicitly discarded their unsaved changes, so drop
+    // the recovery buffer too; otherwise re-opening the page would prompt
+    // to restore the very edits they just chose to throw away.
+    recovery.clear();
     onCancel();
-  }, [onCancel]);
-  // Collab status toasts: a 'disconnected' surfaces a persistent offline
-  // error toast; the first 'connected' after that replaces it with a
-  // 'reconnected' confirmation; 'auth-failed' is terminal.
+  }, [onCancel, recovery]);
+  // Collab status toasts. A 'disconnected' (socket drop) or 'auth-failed'
+  // (wsToken rejected) is an INTERRUPTION; the first 'connected' after either
+  // clears the toast and confirms recovery. `auth-failed` is NOT terminal:
+  // silent recovery (access-token refresh → fresh wsToken → provider rebuild)
+  // reconnects automatically, so we show "reconnecting…" rather than a
+  // data-losing "reload" instruction. A genuinely dead session (refresh token
+  // also expired) is handled out-of-band by the SessionReauthModal via the
+  // shared `auth:session-expired` signal — an in-place re-login, not a reload.
+  //
+  // The decision is a pure reducer (`reduceCollabStatusToast`, unit-tested):
+  // the previous inline logic only marked the offline path as recoverable, so
+  // the `auth-failed → connecting → connected` reconnect (which never passes
+  // through 'disconnected') never cleared the persistent toast, leaving an
+  // editor that HAD silently reconnected showing "session expired — reload".
   const prevStatusRef = useRef<CollabStatus>('connecting');
-  // Whether the persistent offline toast is currently showing. A
-  // reconnect goes 'disconnected' → 'connecting' → 'connected', so the
-  // recovery toast must key off "was offline" rather than the
-  // immediately-previous status (which is 'connecting', not
-  // 'disconnected', by the time 'connected' arrives).
-  const wasOfflineRef = useRef(false);
+  const toastStateRef = useRef<CollabToastState>({ interrupted: false });
+  // D2 — once we've shown the terminal "session expired" message for this
+  // auth-failed episode, don't keep firing it. Reset on page change + when
+  // recovery succeeds (we leave the exhausted state).
+  const authTerminalShownRef = useRef(false);
   useEffect(() => {
     if (!realtimePageId) return;
     const prev = prevStatusRef.current;
     const next = session.status;
     if (next === prev) return;
     prevStatusRef.current = next;
-    if (next === 'disconnected') {
-      wasOfflineRef.current = true;
-      toast.error(m['edit.connection_offline'](), {
-        id: COLLAB_STATUS_TOAST_ID,
-        duration: Infinity,
-      });
-    } else if (next === 'connected' && wasOfflineRef.current) {
-      wasOfflineRef.current = false;
-      toast.success(m['edit.connection_reconnected'](), {
-        id: COLLAB_STATUS_TOAST_ID,
-        duration: 3000,
-      });
-    } else if (next === 'auth-failed') {
-      toast.error(m['edit.connection_auth_failed'](), {
-        id: COLLAB_STATUS_TOAST_ID,
-        duration: Infinity,
-      });
+    const { state, toast: action } = reduceCollabStatusToast(toastStateRef.current, prev, next);
+    toastStateRef.current = state;
+    if (next === 'auth-failed') {
+      // §3 — the wsToken was rejected, so any unsynced local edits never
+      // reached the server. Snapshot now (only if THIS user is dirty) so a
+      // re-login / reload can still restore them even if recovery ultimately
+      // fails. (Empty docs are not snapshotted — see the hook's writeEntry
+      // guard — so a desynced/empty doc can't overwrite a meaningful buffer.)
+      snapshotIfDirty();
     }
-  }, [realtimePageId, session.status]);
+    switch (action.type) {
+      case 'offline':
+        toast.error(m['edit.connection_offline'](), { id: COLLAB_STATUS_TOAST_ID, duration: Infinity });
+        break;
+      case 'reconnecting':
+        toast.loading(m['edit.connection_reconnecting'](), { id: COLLAB_STATUS_TOAST_ID, duration: Infinity });
+        break;
+      case 'reconnected':
+        toast.success(m['edit.connection_reconnected'](), { id: COLLAB_STATUS_TOAST_ID, duration: 3000 });
+        break;
+      case 'none':
+        break;
+    }
+  }, [realtimePageId, session.status, snapshotIfDirty]);
+
+  // D2 — terminal escalation. When the bounded auth-failed recovery budget
+  // is spent (`authRecoveryExhausted`), the wsToken keeps getting rejected
+  // and silent recovery won't fix it. Replace the infinite "reconnecting…"
+  // spinner with a terminal "session expired — sign in again" message (an
+  // in-place re-login via the SessionReauthModal, NOT a data-losing reload).
+  // Snapshot first so the unsaved text survives the re-auth. When recovery
+  // later succeeds the flag clears and we re-arm for any future episode.
+  useEffect(() => {
+    if (!realtimePageId) return;
+    if (session.authRecoveryExhausted) {
+      if (authTerminalShownRef.current) return;
+      authTerminalShownRef.current = true;
+      snapshotIfDirty();
+      // Replaces the reconnecting spinner in place (same toast id).
+      toast.error(m['edit.connection_session_expired'](), { id: COLLAB_STATUS_TOAST_ID, duration: Infinity });
+    } else {
+      authTerminalShownRef.current = false;
+    }
+  }, [realtimePageId, session.authRecoveryExhausted, snapshotIfDirty]);
+
+  // §3 — readonly-flip (20-editor cap reached): writes are silently
+  // rejected from here on, so snapshot the current text once so it can
+  // be recovered if the user reloads / navigates away.
+  const prevReadonlyRef = useRef(false);
+  useEffect(() => {
+    if (!realtimePageId) return;
+    if (session.readonly && !prevReadonlyRef.current) {
+      snapshotIfDirty();
+    }
+    prevReadonlyRef.current = session.readonly;
+  }, [realtimePageId, session.readonly, snapshotIfDirty]);
+
+  // §3 — restore proposal. Once a prior session left a recovery
+  // snapshot AND the editor has synced to the server's current content,
+  // offer to append the unsaved text. We only prompt when the recovered
+  // text differs from what synced in (so an already-saved snapshot
+  // doesn't nag), and only once per page session (the ref guard).
+  const recoveryPromptedRef = useRef(false);
+  // M5 + tail — reset ALL mount-lifetime per-page editor state when the page
+  // changes (an in-place `?page_id=` swap keeps this EditorShell mounted).
+  // Without this the restore prompt would be permanently suppressed, the
+  // status-toast reducer would carry the previous page's `interrupted` /
+  // last-status across into the new page's session (mis-firing toasts), and —
+  // the M5 gap (round 3) — `realtimeDirty` would stay `true` from the prior
+  // page, so the new page would open already "dirty" (false unsaved-changes
+  // guard + premature recovery snapshots of un-edited content).
+  useEffect(() => {
+    recoveryPromptedRef.current = false;
+    prevStatusRef.current = 'connecting';
+    toastStateRef.current = { interrupted: false };
+    prevReadonlyRef.current = false;
+    authTerminalShownRef.current = false;
+    // Adjusting `realtimeDirty` when the page id changes is the React
+    // "reset state when a key prop changes" pattern (the in-place `?page_id=`
+    // swap keeps this component mounted, so a remount-via-key isn't available).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setRealtimeDirty(false);
+  }, [realtimePageId]);
+  useEffect(() => {
+    if (!useRealtimeSave || !session.synced || recoveryPromptedRef.current) return;
+    const snapshot = recovery.recoverable;
+    if (!snapshot) return;
+    const yText = session.yText;
+    if (!yText) return;
+    if (yText.toString() === snapshot.text) {
+      // Snapshot matches the synced doc — nothing unsaved was lost.
+      recovery.clear();
+      recoveryPromptedRef.current = true;
+      return;
+    }
+    recoveryPromptedRef.current = true;
+    toast(m['collab.recovery_prompt'](), {
+      duration: Infinity,
+      id: COLLAB_RECOVERY_TOAST_ID,
+      action: {
+        label: m['collab.recovery_restore'](),
+        onClick: () => {
+          // Restore gating (round 3) — only restore into a CURRENTLY-synced
+          // doc. If the provider rebuilt (token refresh / reconnect) since the
+          // prompt appeared, the live Y.Text may be a fresh, still-pre-sync
+          // (empty) doc; inserting now would be clobbered / duplicated once
+          // SyncStep2 lands. Defer: keep the buffer + leave the prompt for the
+          // next sync (the prompt effect re-fires once `synced` is true again
+          // because we DON'T clear() here). Re-open the toast so the user
+          // sees we didn't lose their work.
+          if (!liveSyncedRef.current) {
+            recoveryPromptedRef.current = false;
+            return;
+          }
+          // B1 — NEVER blind-replace the live shared doc. By the time the
+          // user clicks Restore, the live doc may hold newer co-editor
+          // content the snapshot pre-dates; a `delete(0,len)+insert` would
+          // clobber it (and the server-doc lock can't catch it — the
+          // reopened base == current). Read the LIVE Y.Text (via the ref, so
+          // a provider rebuild between the prompt and the click can't strand
+          // us on a stale doc) and:
+          //   - if the live doc is EMPTY, the snapshot is safe to insert as
+          //     the doc's content;
+          //   - otherwise APPEND the recovered text below a clear separator
+          //     so BOTH the live (possibly newer) content AND the user's
+          //     recovered work survive, and the user reconciles by hand.
+          const live = liveYTextRef.current;
+          if (live) {
+            live.doc?.transact(() => {
+              if (live.length === 0) {
+                live.insert(0, snapshot.text);
+              } else if (!live.toString().includes(snapshot.text)) {
+                // Don't duplicate if the recovered text is already present.
+                live.insert(live.length, `\n\n${m['collab.recovery_separator']()}\n\n${snapshot.text}`);
+              }
+            });
+          }
+          recovery.clear();
+        },
+      },
+      cancel: {
+        label: m['collab.recovery_dismiss'](),
+        onClick: () => recovery.clear(),
+      },
+    });
+  }, [useRealtimeSave, session.synced, session.yText, recovery]);
 
   // Two editor refs because wide (md+ grid) and narrow (Tabs) each mount
   // their own `MarkdownEditor` — both panels live in the DOM at all
@@ -394,14 +633,14 @@ function EditorShell({
       (isWide ? wideEditorRef : narrowEditorRef).current?.focusEnd();
       return true;
     };
-    // Content may already be present (warm session) or arrive shortly via
-    // a sync delta — handle both.
-    if (focusVisibleEnd()) return;
-    const observer = (): void => {
-      if (focusVisibleEnd()) yText.unobserve(observer);
-    };
-    yText.observe(observer);
-    return () => yText.unobserve(observer);
+    // Content may already be present (warm session) or arrive shortly via a
+    // sync delta — `observeYTextUntil` handles both. It returns a cleanup that
+    // does NOT unobserve again after the observer self-stops on a successful
+    // focus, which previously double-removed the handler and made yjs log
+    // "Tried to remove event handler that doesn't exist." on ~every new-page
+    // draft (the seeded body arrives after mount, so the observer path runs and
+    // then this effect re-runs on the `isWide` settle / unmounts).
+    return observeYTextUntil(yText, focusVisibleEnd);
   }, [autoFocusOnReady, session.yText, isWide]);
 
   /**
@@ -551,22 +790,10 @@ function EditorShell({
           {useRealtimeSave ? (
             <Button
               variant="default"
-              onClick={() => {
-                collabSave
-                  .save()
-                  .then(() => {
-                    setRealtimeDirty(false);
-                    toast.success(m['collab.save_success']());
-                    // Editor-QoL: leave the editor and return to the
-                    // page view. `onAfterSave` invalidates the page
-                    // cache so the view loads the just-saved revision.
-                    onAfterSave?.();
-                  })
-                  .catch((err: { message?: string }) => {
-                    toast.error(m['collab.save_failed']({ message: err?.message ?? '' }));
-                  });
-              }}
-              disabled={collabSave.isSaving || readonly || session.status !== 'connected'}
+              onClick={() => runRealtimeSave(false)}
+              // §2 — also gate on `synced`: a connected-but-not-yet-synced
+              // session must not save (the doc may be empty / stale).
+              disabled={collabSave.isSaving || readonly || session.status !== 'connected' || !session.synced}
               type="button"
             >
               {collabSave.isSaving ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Save className="mr-1 h-4 w-4" />}

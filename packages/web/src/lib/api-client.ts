@@ -2,6 +2,7 @@ import { createClient } from '@crowi/api-contract';
 import { clearTokens, storeTokens } from './auth-token';
 import { API_TIMEOUT_MS, fetchWithTimeout } from './fetch-timeout';
 import { env } from './runtime-env';
+import { notifyTokenRefreshed } from './token-refresh-notifier';
 
 /**
  * Runtime-resolved browser API origin. `''` = same-origin (relative URLs);
@@ -67,6 +68,11 @@ async function refreshAccessToken(): Promise<string | null> {
     if (response.ok) {
       const data = await response.json();
       storeTokens({ accessToken: data.accessToken, refreshToken: data.refreshToken }, data.expiresIn);
+      // §4 — let the realtime layer (collab / presence token hooks)
+      // re-fetch their short-lived tokens now that credentials are
+      // fresh, instead of waiting for their own ~5-min interval. This is
+      // the single point a silent refresh becomes observable to them.
+      notifyTokenRefreshed();
       return data.accessToken;
     }
     clearTokens();
