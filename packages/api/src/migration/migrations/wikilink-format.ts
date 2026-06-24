@@ -4,6 +4,7 @@ import { STATUS_PUBLISHED } from 'src/models/page';
 import { resolveActingUserId } from '../helpers';
 import { defineMigration } from '../types';
 import type { MigrationContext } from '../types';
+import { splitCodeSegments } from './code-mask';
 
 /**
  * RFC-0008 §10.2 step 4 / §4.3.1 — `wikilink-format` (preflight layer).
@@ -108,19 +109,32 @@ export interface WikilinkOccurrence {
  * occurrence list so callers don't walk the regex twice. `body` is returned by
  * reference when nothing changed, letting callers cheap-skip via
  * `result.body === body`. Pure function — no side effects, no I/O.
+ *
+ * Code regions (fenced blocks + inline spans) are excluded: `</…>` written as a
+ * code example is left byte-identical, so it is never misdetected as a v1
+ * wikilink. We segment the body via `splitCodeSegments` and run the detection
+ * regex only on the non-`code` segments, re-joining in original order
+ * (segment-and-rewrite — see `code-mask.ts` for why this beats a fill/restore
+ * scheme). Indented code blocks are an accepted divergence (still rewritten).
  */
 export function rewriteAndDetect(body: string): { body: string; occurrences: WikilinkOccurrence[] } {
   const occurrences: WikilinkOccurrence[] = [];
-  const rewritten = body.replace(WIKILINK_DETECTION_REGEX, (whole, innerPath: string, aliasWithPipe?: string) => {
-    if (!shouldRewriteWikilink(innerPath)) return whole;
-    occurrences.push({
-      raw: whole,
-      path: innerPath,
-      alias: aliasWithPipe ? aliasWithPipe.slice(1) : undefined,
+  const rewriteSegment = (text: string): string =>
+    text.replace(WIKILINK_DETECTION_REGEX, (whole, innerPath: string, aliasWithPipe?: string) => {
+      if (!shouldRewriteWikilink(innerPath)) return whole;
+      occurrences.push({
+        raw: whole,
+        path: innerPath,
+        alias: aliasWithPipe ? aliasWithPipe.slice(1) : undefined,
+      });
+      const aliasSegment = aliasWithPipe ?? '';
+      return `[[${innerPath}${aliasSegment}]]`;
     });
-    const aliasSegment = aliasWithPipe ?? '';
-    return `[[${innerPath}${aliasSegment}]]`;
-  });
+
+  const segments = splitCodeSegments(body);
+  const rewritten = segments.map((segment) => (segment.code ? segment.text : rewriteSegment(segment.text))).join('');
+  // By reference when nothing changed, preserving the detect / isPending
+  // cheap-skip (`result.body === body`).
   return { body: occurrences.length === 0 ? body : rewritten, occurrences };
 }
 

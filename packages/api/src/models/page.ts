@@ -181,6 +181,25 @@ export interface PageDocument extends Document {
   getNotificationTargetUsers(): any;
 }
 
+/** Options for `Page.pushRevision`. */
+export interface PushRevisionOptions {
+  /**
+   * When true, leave `lastUpdateUser` / `updatedAt` at their current values
+   * instead of bumping them to the acting user / now. Used by body-rewrite
+   * migrations so an `apply` doesn't reorder recently-updated lists or
+   * overwrite a page's "last updated by" with the migration bot. legacy pages
+   * whose values are null/undefined are left untouched (never set to
+   * `undefined`). See `migration/runner.ts` `rewritePageBody`.
+   */
+  preserveTimestamps?: boolean;
+}
+
+/** Options for `Page.updatePage` (4th arg). */
+export interface UpdatePageOptions extends PushRevisionOptions {
+  grant?: number;
+  editVia?: string;
+}
+
 export interface PageModel extends Model<PageDocument> {
   GRANT_PUBLIC: number;
   GRANT_RESTRICTED: number;
@@ -232,9 +251,9 @@ export interface PageModel extends Model<PageDocument> {
   updatePageProperty(page, updateData): any;
   updateGrant(page, grant, userData): any;
   pushToGrantedUsers(page, userData): any;
-  pushRevision(pageData, newRevision, user): any;
+  pushRevision(pageData, newRevision, user, options?: PushRevisionOptions): any;
   createPage(path, body, user, options): any;
-  updatePage(pageData: PageDocument, body, user, options: any): any;
+  updatePage(pageData: PageDocument, body, user, options: UpdatePageOptions): any;
   deletePage(pageData: PageDocument, user): any;
   revertDeletedPage(pageData: PageDocument, user): Promise<PageDocument>;
   completelyDeletePage(pageData: PageDocument, user?): Promise<PageDocument>;
@@ -1102,7 +1121,7 @@ export default (crowi: Crowi) => {
     return page.save();
   };
 
-  pageSchema.statics.pushRevision = async function (pageData, newRevision, user) {
+  pageSchema.statics.pushRevision = async function (pageData, newRevision, user, options = {}) {
     const isCreate = pageData.revision === undefined;
     if (isCreate) {
       debug('pushRevision on Create');
@@ -1113,8 +1132,15 @@ export default (crowi: Crowi) => {
     debug('Successfully saved new revision', newRevision);
 
     pageData.revision = newRevision;
-    pageData.lastUpdateUser = user;
-    pageData.updatedAt = Date.now();
+    // preserveTimestamps (body-rewrite migrations): keep the page's existing
+    // lastUpdateUser / updatedAt so an `apply` neither bumps the page to the
+    // top of recently-updated lists nor rewrites "last updated by" to the
+    // migration bot. Skip the assignment entirely — a legacy page whose values
+    // are null/undefined is therefore never overwritten with `undefined`.
+    if (!options.preserveTimestamps) {
+      pageData.lastUpdateUser = user;
+      pageData.updatedAt = Date.now();
+    }
 
     const data = pageData.save();
 
@@ -1200,7 +1226,7 @@ export default (crowi: Crowi) => {
     pageData.yjsState = null;
     pageData.yjsCheckpointAt = null;
 
-    await Page.pushRevision(pageData, newRevision, user);
+    await Page.pushRevision(pageData, newRevision, user, { preserveTimestamps: options.preserveTimestamps });
     const bookmarkCount = await Bookmark.countByPageId(pageData._id);
 
     // The 4th arg flags "a new revision was created" so events/page.ts can

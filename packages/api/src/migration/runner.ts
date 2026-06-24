@@ -100,7 +100,14 @@ function buildContext(
     // next onLoadDocument rebuilds the Y.Doc from the new body (§4.3.1).
     const actingUserId = options?.userId ?? page.lastUpdateUser?.toString?.() ?? page.creator?.toString?.();
     const user = actingUserId ? await User.findById(actingUserId).exec() : null;
-    await Page.updatePage(page, newBody, user, {});
+    // preserveTimestamps: a body-rewrite migration is a non-destructive,
+    // forward-only fixup. It must NOT bump the page's `updatedAt` (which would
+    // reorder recently-updated lists) nor overwrite `lastUpdateUser` with the
+    // migration bot. Preserving in place (rather than bumping then restoring)
+    // also keeps the search index consistent: the `update` event fires with the
+    // original `updatedAt`, so `indexPageInSearch` indexes the original value
+    // and never diverges from Mongo (RFC-0008 follow-up — see the migration spec).
+    await Page.updatePage(page, newBody, user, { preserveTimestamps: true });
   };
 
   const invalidateYjsPersistence = async (pageIds: string[]): Promise<void> => {

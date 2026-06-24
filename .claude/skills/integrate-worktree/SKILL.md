@@ -34,7 +34,7 @@ description: |
 
 ```
 worktree 作業確認 → main へ merge → conflict 解消 → 自動チェック
-  → gw end → tmux window close → simplify → stale spec/task 掃除
+  → dev/watch 停止 → gw end → tmux window close → simplify → stale spec/task 掃除
 ```
 
 ### Step 1: worktree の作業内容を確認
@@ -143,6 +143,32 @@ Conflict resolution:
 
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 ```
+
+### Step 5.5: worktree の dev/watch プロセスを停止 (gw end の前に必須)
+
+`gw end` は内部で `git worktree remove`(`--force` なし)を実行する。このとき
+worktree の `pnpm dev` スタック — 特に **`next dev --turbopack`**(`.next/dev/cache/turbopack/`
+へ常時書き込む)・`tsx watch`・`turbo`・`esbuild` — がホスト側で生きていると、git の
+再帰削除と書き込みが競合し、最後の `rmdir` が **`Directory not empty` (ENOTEMPTY)** で失敗する。
+結果、git は worktree を **deregister するのに物理ディレクトリだけ残す**(`gw end` が exit 255 で
+失敗し、`crowi-<name>/` が孤児として残る)。`docker compose down` はコンテナを止めるだけで
+これらホストプロセスは止めないため、**削除前に明示的に止める**。
+
+```bash
+WT="${WORKTREE_PATH%/}"   # Step 1 で特定済み
+# bundler/watcher 系のみを対象 (素の node = Claude/MCP/editor は Step 6.5 に任せる)。
+# 各 PID の cwd が worktree 配下にあることを確認してから止めるので、他 worktree は触らない。
+for pid in $(pgrep -f 'next|tsx|turbo|esbuild|vitest|jest|nodemon|hocuspocus' 2>/dev/null); do
+  cwd=$(lsof -a -p "$pid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -1)
+  case "${cwd:+$cwd/}" in "$WT"/*) echo "stop dev proc $pid ($cwd)"; kill "$pid" 2>/dev/null ;; esac
+done
+sleep 1   # SIGTERM が効くのを待つ
+```
+
+このロジックは `gw` の `pre_end_hook`(`~/.gw/hooks/docker-compose-down.sh`)にも保険として
+入っているが、フック未導入の環境でも安全に閉じられるよう skill 側でも先に止める。tmux で
+`pnpm dev` を別 pane に出している場合は、Step 6.5 の window kill が先に効けばそちらでも止まる
+(が、Step 6.5 は `gw end` の **後**なので、この Step 5.5 がレース回避の本命)。
 
 ### Step 6: worktree close
 
