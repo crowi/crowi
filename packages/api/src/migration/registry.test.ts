@@ -12,6 +12,7 @@ const fixture = (id: string, fromVersion: string, toVersion: string, order?: num
     fromVersion,
     toVersion,
     layer: 'preflight',
+    severity: 'blocking',
     description: `fixture ${id}`,
     order,
     stages: [],
