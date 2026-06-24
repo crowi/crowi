@@ -9,8 +9,9 @@ describe('markdownToMrkdwn', () => {
     expect(markdownToMrkdwn('## Closed ##')).toBe('*Closed*');
   });
 
-  it('does not treat a mid-line # as a heading', () => {
-    expect(markdownToMrkdwn('see issue #42 now')).toBe('see issue #42 now');
+  it('only treats `# ` (hash + space) at line start as a heading', () => {
+    expect(markdownToMrkdwn('see issue #42 now')).toBe('see issue #42 now'); // mid-line
+    expect(markdownToMrkdwn('#NoSpace')).toBe('#NoSpace'); // line-start, but no space → not a heading
   });
 
   it('normalises -, * and + bullets to • and preserves indent', () => {
@@ -37,6 +38,9 @@ describe('markdownToMrkdwn', () => {
 
   it('drops images down to their alt text (before the link rule)', () => {
     expect(markdownToMrkdwn('![a logo](https://x/y.png)')).toBe('a logo');
+    // Empty-alt image collapses to nothing, leaving the two surrounding
+    // spaces. The double space is known/accepted (invisible in a Slack card;
+    // collapsing runs would risk eating intended spacing elsewhere).
     expect(markdownToMrkdwn('see ![](https://x/y.png) here')).toBe('see  here');
   });
 
@@ -54,8 +58,13 @@ describe('markdownToMrkdwn', () => {
     expect(markdownToMrkdwn('~~~\nplain\n~~~')).toBe('plain');
   });
 
-  it('returns empty for empty / whitespace-only input', () => {
+  it('returns an empty string for empty input', () => {
     expect(markdownToMrkdwn('')).toBe('');
+  });
+
+  it('leaves whitespace-only input unchanged (trimming happens in buildExcerpt)', () => {
+    // markdownToMrkdwn never trims; buildExcerpt() trims and then drops an
+    // empty result to null — see index.test.ts's whitespace-body case.
     expect(markdownToMrkdwn('   \n  ')).toBe('   \n  ');
   });
 

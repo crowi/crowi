@@ -168,7 +168,17 @@ describe('buildUnfurlAttachment — public vs restricted branch', () => {
     expect((att.text ?? '').length).toBeLessThanOrEqual(301);
   });
 
-  it('converts the excerpt markdown to mrkdwn, resolving relative links via baseUrl', () => {
+  it('drops a half-formed <url|text> token when truncation lands inside it', () => {
+    // 285 chars of body + a link whose converted <https://…|docs> token
+    // straddles the 300-char cut, so truncation lands inside the token.
+    const body = `${'a'.repeat(285)} [docs](https://example.com/very/long/path/here)`;
+    const att = buildUnfurlAttachment(url, { path: '/long', grant: 1, body, updatedAtMs: null });
+    expect(att.text?.endsWith('…')).toBe(true);
+    // No dangling, never-closed `<` left at the tail of the excerpt.
+    expect(att.text).not.toMatch(/<[^>]*$/);
+  });
+
+  it('routes the excerpt through markdownToMrkdwn with baseUrl (relative links resolved)', () => {
     const page: ResolvedPage = {
       path: '/team/handbook/onboarding',
       grant: 1,
@@ -176,9 +186,15 @@ describe('buildUnfurlAttachment — public vs restricted branch', () => {
       updatedAtMs: null,
     };
     const att = buildUnfurlAttachment(url, page, 'https://wiki.example.com');
-    expect(att.text).toContain('*Onboarding*');
+    // The relative link resolving to an absolute Slack link proves the
+    // excerpt was both converted AND given the baseUrl; the conversion
+    // rules themselves are owned by mrkdwn.test.ts.
     expect(att.text).toContain('<https://wiki.example.com/team/handbook|handbook>');
-    expect(att.text).not.toContain('# Onboarding');
+  });
+
+  it('omits the text field when the body converts to only whitespace', () => {
+    const att = buildUnfurlAttachment(url, { path: '/blank', grant: 1, body: '   \n\n   ', updatedAtMs: null });
+    expect(att.text).toBeUndefined();
   });
 
   it('emits a minimal 🔒 restricted card for a non-public page (no body)', () => {
