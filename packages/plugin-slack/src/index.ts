@@ -59,10 +59,27 @@ const plugin: CrowiPlugin = {
   adminPlacement: {
     // Phase 1 has no register* hook (registerNotifier lands in Phase 3), so
     // `deriveSectionFromHooks` would return empty — declare the section
-    // explicitly so the plugin appears in the admin sidebar.
-    section: 'notification',
+    // explicitly. Slack is an external service integration, so it lives in
+    // the "Platform services" sidebar section.
+    section: 'platform',
     label: 'Slack',
-    icon: 'bell',
+    icon: 'share',
+  },
+
+  // Localized help text for the config form. The `manifest` field is an
+  // `@action` button; its description renders as a hint beneath the button
+  // (URLs are linkified) pointing the operator at where to create the app.
+  configI18n: {
+    ja: {
+      manifest: {
+        description: 'Slack アプリの新規作成はこちら → https://api.slack.com/apps/ （"From an app manifest" を選び、生成した JSON を貼り付けてください）',
+      },
+    },
+    en: {
+      manifest: {
+        description: 'Create a new Slack app → https://api.slack.com/apps/ (choose "From an app manifest" and paste the generated JSON).',
+      },
+    },
   },
 
   registerRoutes: (scope, ctx) => {

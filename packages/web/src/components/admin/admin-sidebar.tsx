@@ -35,7 +35,7 @@ interface AdminNavItem {
  * the plugin-api contract — plugins inject sidebar entries by
  * matching this key.
  */
-type SectionKey = 'settings' | 'users' | 'storage' | 'mail' | 'search' | 'renderer' | 'shared';
+type SectionKey = 'settings' | 'users' | 'storage' | 'mail' | 'search' | 'renderer' | 'shared' | 'platform';
 
 interface AdminNavGroup {
   key: SectionKey;
@@ -122,6 +122,15 @@ const STATIC_GROUPS: AdminNavGroup[] = [
     // their settings page under this heading.
     heading: () => m['admin.section_search'](),
     items: [{ href: '/admin/search', label: () => m['admin.nav_search'](), icon: Search }],
+  },
+  {
+    // External platform / service integrations (Slack, …) inject here via
+    // the `'platform'` section. Hidden until a platform plugin exposes
+    // config.
+    key: 'platform',
+    heading: () => m['admin.section_platform'](),
+    items: [],
+    hideWhenEmpty: true,
   },
   {
     // Renderer plugins (PlantUML, KaTeX, …) inject here via the

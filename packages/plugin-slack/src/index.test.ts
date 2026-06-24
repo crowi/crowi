@@ -44,7 +44,7 @@ describe('@crowi/plugin-slack plugin contract', () => {
   it('exports a CrowiPlugin with the expected name + version + section', () => {
     expect(slackPlugin.name).toBe('@crowi/plugin-slack');
     expect(slackPlugin.version).toBe('0.1.0-dev');
-    expect(slackPlugin.adminPlacement?.section).toBe('notification');
+    expect(slackPlugin.adminPlacement?.section).toBe('platform');
     expect(typeof slackPlugin.registerRoutes).toBe('function');
     expect(typeof slackPlugin.reconfigure).toBe('function');
   });
@@ -54,6 +54,11 @@ describe('@crowi/plugin-slack plugin contract', () => {
     expect(shape.botToken.description).toContain('@sensitive');
     expect(shape.signingSecret.description).toContain('@sensitive');
     expect(shape.manifest.description).toContain('@action "Generate Slack App manifest" POST /manifest');
+  });
+
+  it('ships localized manifest help linking to the Slack app creation page', () => {
+    expect(slackPlugin.configI18n?.ja?.manifest?.description).toContain('https://api.slack.com/apps/');
+    expect(slackPlugin.configI18n?.en?.manifest?.description).toContain('https://api.slack.com/apps/');
   });
 });
 

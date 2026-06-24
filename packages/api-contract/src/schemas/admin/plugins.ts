@@ -27,7 +27,7 @@ export const PluginFieldSchema = z.object({
 });
 export type PluginField = z.infer<typeof PluginFieldSchema>;
 
-export const AdminSidebarSection = z.enum(['settings', 'shared', 'storage', 'mail', 'notification', 'auth', 'search', 'renderer']);
+export const AdminSidebarSection = z.enum(['settings', 'shared', 'storage', 'mail', 'notification', 'auth', 'search', 'renderer', 'platform']);
 export type AdminSidebarSectionValue = z.infer<typeof AdminSidebarSection>;
 
 export const PluginAdminPlacementSchema = z.object({

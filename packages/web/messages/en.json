@@ -696,6 +696,7 @@
   "admin.section_users": "User management",
   "admin.section_search": "Search",
   "admin.section_renderer": "Renderers",
+  "admin.section_platform": "Platform services",
   "admin.nav_dashboard": "Admin dashboard",
   "admin.nav_app": "Application",
   "admin.nav_app_summary": "Site title / confidential note / registration mode status",

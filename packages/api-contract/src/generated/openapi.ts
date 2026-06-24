@@ -12165,7 +12165,7 @@ export interface paths {
                                 registers: string[];
                                 adminPlacement: {
                                     /** @enum {string} */
-                                    section: "settings" | "shared" | "storage" | "mail" | "notification" | "auth" | "search" | "renderer";
+                                    section: "settings" | "shared" | "storage" | "mail" | "notification" | "auth" | "search" | "renderer" | "platform";
                                     label: string;
                                     icon?: string;
                                 };
@@ -14789,7 +14789,7 @@ export interface components {
             registers: string[];
             adminPlacement: {
                 /** @enum {string} */
-                section: "settings" | "shared" | "storage" | "mail" | "notification" | "auth" | "search" | "renderer";
+                section: "settings" | "shared" | "storage" | "mail" | "notification" | "auth" | "search" | "renderer" | "platform";
                 label: string;
                 icon?: string;
             };
@@ -14804,7 +14804,7 @@ export interface components {
                 registers: string[];
                 adminPlacement: {
                     /** @enum {string} */
-                    section: "settings" | "shared" | "storage" | "mail" | "notification" | "auth" | "search" | "renderer";
+                    section: "settings" | "shared" | "storage" | "mail" | "notification" | "auth" | "search" | "renderer" | "platform";
                     label: string;
                     icon?: string;
                 };

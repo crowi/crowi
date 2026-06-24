@@ -118,7 +118,7 @@ function FieldRow({ field, pluginName, state, setState, issue }: FieldRowProps) 
   // manifest") and shows the JSON result. Short-circuit before the value
   // controls so it never renders as a stray text input.
   if (field.action) {
-    return <PluginActionButton pluginName={pluginName} action={field.action} />;
+    return <PluginActionButton pluginName={pluginName} action={field.action} description={description} />;
   }
 
   if (field.kind === 'secret') {
@@ -258,7 +258,11 @@ function FieldRow({ field, pluginName, state, setState, issue }: FieldRowProps) 
         }}
         className="max-w-md"
       />
-      {description && <p className="text-muted-foreground text-xs">{description}</p>}
+      {description && (
+        <p className="text-muted-foreground text-xs">
+          <LinkifiedText text={description} />
+        </p>
+      )}
       {issue && (
         <p className="text-destructive text-xs" role="alert">
           {issue}
@@ -271,6 +275,8 @@ function FieldRow({ field, pluginName, state, setState, issue }: FieldRowProps) 
 interface PluginActionButtonProps {
   pluginName: string;
   action: NonNullable<PluginField['action']>;
+  /** Localized help text shown under the button; bare URLs are linkified. */
+  description?: string;
 }
 
 /**
@@ -282,7 +288,7 @@ interface PluginActionButtonProps {
  * response body (e.g. the Slack App manifest JSON) is shown in a dialog
  * with a copy button — the "show + copy" UX the manifest flow needs.
  */
-function PluginActionButton({ pluginName, action }: PluginActionButtonProps) {
+function PluginActionButton({ pluginName, action, description }: PluginActionButtonProps) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
@@ -325,6 +331,11 @@ function PluginActionButton({ pluginName, action }: PluginActionButtonProps) {
         {pending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Play className="h-4 w-4 mr-1" />}
         {pending ? m['admin.plugins.action_pending']() : action.label}
       </Button>
+      {description && (
+        <p className="text-muted-foreground text-xs">
+          <LinkifiedText text={description} />
+        </p>
+      )}
       {error && <ErrorAlert message={error} />}
 
       <Dialog open={result !== null} onOpenChange={(open) => !open && setResult(null)}>
@@ -346,6 +357,33 @@ function PluginActionButton({ pluginName, action }: PluginActionButtonProps) {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+/**
+ * Render help text with bare `http(s)` URLs turned into links (e.g. a
+ * plugin's "create your app here → https://…" hint). Plain text otherwise.
+ */
+function LinkifiedText({ text }: { text: string }) {
+  const parts = text.split(/(https?:\/\/[^\s]+)/g);
+  return (
+    <>
+      {parts.map((part, i) =>
+        /^https?:\/\//.test(part) ? (
+          <a
+            key={`${i}:${part}`}
+            href={part}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary underline underline-offset-2 hover:no-underline"
+          >
+            {part}
+          </a>
+        ) : (
+          <span key={`${i}:${part}`}>{part}</span>
+        ),
+      )}
+    </>
   );
 }
 

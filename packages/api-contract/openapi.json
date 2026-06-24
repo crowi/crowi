@@ -6792,7 +6792,8 @@
                   "notification",
                   "auth",
                   "search",
-                  "renderer"
+                  "renderer",
+                  "platform"
                 ]
               },
               "label": {
@@ -6862,7 +6863,8 @@
                         "notification",
                         "auth",
                         "search",
-                        "renderer"
+                        "renderer",
+                        "platform"
                       ]
                     },
                     "label": {
@@ -37420,7 +37422,8 @@
                                   "notification",
                                   "auth",
                                   "search",
-                                  "renderer"
+                                  "renderer",
+                                  "platform"
                                 ]
                               },
                               "label": {

@@ -4611,6 +4611,7 @@ components:
                 - auth
                 - search
                 - renderer
+                - platform
             label:
               type: string
             icon:
@@ -4663,6 +4664,7 @@ components:
                       - auth
                       - search
                       - renderer
+                      - platform
                   label:
                     type: string
                   icon:
@@ -24567,6 +24569,7 @@ paths:
                                 - auth
                                 - search
                                 - renderer
+                                - platform
                             label:
                               type: string
                             icon:

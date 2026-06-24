@@ -696,6 +696,7 @@
   "admin.section_users": "ユーザー管理",
   "admin.section_search": "検索",
   "admin.section_renderer": "レンダラー",
+  "admin.section_platform": "プラットフォームサービス",
   "admin.nav_dashboard": "管理ダッシュボード",
   "admin.nav_app": "アプリ設定",
   "admin.nav_app_summary": "サイト名 / 機密情報の注意書き / 登録モードの確認",

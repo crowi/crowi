@@ -82,7 +82,7 @@ export interface CrowiPlugin {
    * from a fixed allow-list to keep the bundle small.
    */
   adminPlacement?: {
-    section?: 'settings' | 'shared' | 'storage' | 'mail' | 'notification' | 'auth' | 'search' | 'renderer';
+    section?: 'settings' | 'shared' | 'storage' | 'mail' | 'notification' | 'auth' | 'search' | 'renderer' | 'platform';
     label?: string;
     icon?: string;
   };
