@@ -69,6 +69,7 @@ merge 後の simplify レビューで挙がった非ブロッキング改善。�
 - [ ] **MCP result body advisory**（body を返す read tool 増加時に `okResult` で text/structured 一経路化）
 - [ ] **renameTree merge advisory**（subtree-rename 2 ルートの重複集約、`checkPagesRenamable` の N+1 ほか）
 - [ ] **migration-html-tag-fixes merge advisory** — `forEachPublishedCurrentRevision` の採用拡大（`wikilink-format` / `files-url-to-attachments` を寄せて walk 3 実装→1・per-page `findById` N+1 解消）+ web `known-tags.ts` の `HTML_TAGS` を `@crowi/api-contract` の `KNOWN_HTML_ELEMENTS` から生成（SVG/custom 要素差分は別管理）
+- [ ] **wikilink-code-exclusion merge advisory** — code 領域マスク（`code-mask.ts` `splitCodeSegments`）が `wikilink-format` のみに配線。同種の「code 内を誤書換」ハザードを持つ `files-url-to-attachments`（`/files/<id>`）/ `wikilink-html-recover`（`[[/font]]`）にも適用すべき（理想は `rewriteOutsideCode` を共有 primitive 化して 3 migration が経由）。ついでに `code-mask.ts` の dead `.replace(/\r?\n$/)` + 冗長 fenceChar ternary を除去、`replace-url.ts:29-30` の stale な grant-corruption コメント（`grant ?? pageData.grant` 化済み）も修正
 - [ ] **eslint 8 → 9 major up**（`packages/api` / `packages/collab` の direct eslint 8.57.1。flat config 統一含む。GHSA `js-yaml` advisory が transitive 経由で残るのは eslint 8 chain が `@eslint/eslintrc → js-yaml@4.1.1` を要求するため）
 - [ ] **mongoose 8 → 9 major up**（`packages/api` / `packages/collab` / `packages/plugin-search-mongo`。GHSA `ip-address` advisory が transitive 経由で残るのは mongoose 8 → mongodb 6.20 → socks 2.8.4 → ip-address@9.0.5 chain で、socks 2.8.7+ の ip-address 10.x 切替が引けないため）
 
