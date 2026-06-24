@@ -76,6 +76,11 @@ export const relocateReservedApiPaths = defineMigration({
   fromVersion: '1.x',
   toVersion: '2.0',
   layer: 'preflight',
+  // Path move only; no E11000 hazard. `isPending` is `Page.exists({path:/^\/api/})`
+  // and stabilises post-apply (does not re-trigger). Unapplied means old
+  // `/api/*` pages 404, which is a recommended pre-go-live fix, not a
+  // data-integrity risk. Cosmetic.
+  severity: 'cosmetic',
   description: 'Relocate v1 pages out of the v2-reserved /api namespace into /api-legacy',
 
   /**

@@ -232,6 +232,10 @@ export const filesUrlToAttachments = defineMigration({
   fromVersion: '1.x',
   toVersion: '2.1',
   layer: 'preflight',
+  // Body URL rewrite only; a `/files/<id>` → 302 fallback keeps pages working
+  // even unapplied. `isPending` scans the live corpus → re-triggers on new
+  // content. Cosmetic.
+  severity: 'cosmetic',
   description: 'Rewrite v1 /files/<id> attachment URLs to v2 /api/v2/attachments/<id>',
 
   /**
