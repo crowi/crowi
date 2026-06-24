@@ -76,9 +76,26 @@ preflight 移行が入ると api は起動を拒否するため、イメージ�
 
 - **boot** 移行は、api 起動時に自動で適用されます。
 - **preflight** 移行は重い / 破壊的になりうるため、自動では適用されません。
-  代わりに、**未適用の preflight 移行が 1 つでもあると api は起動を拒否
-  します** (デフォルトの `block` ポリシー)。メンテナンスウィンドウで
-  `crowi-admin migrate apply` を使って明示的に実行します。
+  起動のたびに probe され、未適用だったときの挙動は移行ごとの **severity**
+  (重大度、下記参照) で決まります。`blocking` の移行は **起動を拒否** し
+  (デフォルトの `block` ポリシー)、`cosmetic` の移行は **警告を出して起動を
+  継続** します。preflight 移行はメンテナンスウィンドウで
+  `crowi-admin migrate apply` を使って明示的に適用します。
+
+各移行は、未適用の preflight 移行が起動にどう影響するかを決める `severity` を
+持ちます。
+
+- **`blocking`** — インデックス・データ整合性に関わる移行 (現状は
+  `user-unique-prepare` のみ)。未適用だとデフォルトの `block` ポリシー下で
+  api は起動を拒否します。準備されていないデータに対して起動すると、一意
+  インデックスの構築時に `E11000` で失敗する恐れがあるためです。
+  `migrate plan` / `migrate list` では `[blocking]` タグが付きます。
+- **`cosmetic`** — 本文表示のみに関わる移行 (`wikilink-format` など)。未適用
+  でも api は **起動し**、警告ログを出すだけです (**`block` ポリシー下でも
+  同様**)。cosmetic 移行はライブのコーパスを再スキャンするため、古い記法で
+  新しいページが書かれると再び未適用扱いになり続けます。これを起動拒否の
+  対象にするとクラスタがデッドロックします。`migrate plan` / `migrate list`
+  では `[cosmetic]` タグが付きます。
 
 ```bash
 # 未適用の移行をプレビュー (デフォルトは preflight)
@@ -93,23 +110,41 @@ crowi-admin migrate apply
 crowi-admin migrate status
 ```
 
-> **Tip**: 開発中は `MIGRATION_PREFLIGHT_UNAPPLIED_POLICY=warn` を設定する
-> ことで、preflight 移行が未適用のままでも api を起動できます (起動拒否が
-> 警告に格下げされます)。本番では、中途半端に移行されたデータベースが
-> リクエストを処理しないよう、デフォルトの `block` ポリシーのままに
-> してください。
+> **Tip**: `block` ポリシーが効くのは `blocking` の移行だけです。そのため
+> 本番ではデフォルトの `block` のままで問題ありません。`cosmetic` の移行
+> (本文を書き換えるもの) はポリシーに関係なく起動を拒否せず、起動を拒否
+> するのはデータ整合性に関わる `blocking` の移行だけだからです。`blocking`
+> の移行が未適用のまま起動したい場合 (たとえば単一インスタンスでの調査用)
+> は、`MIGRATION_PREFLIGHT_UNAPPLIED_POLICY=warn` を設定すると、その起動拒否
+> を警告に格下げできます。(以前のドキュメントは「中途半端に移行された
+> データベースがリクエストを処理しないよう、常に `block` のままに」と案内
+> していましたが、移行ごとの severity の導入により、この一律のルールは
+> 当てはまらなくなりました。cosmetic 移行はそもそもデータ整合性のリスク
+> ではありません。)
+>
+> **マルチインスタンスの注意**: `MIGRATION_PREFLIGHT_UNAPPLIED_POLICY`
+> (環境変数) は、管理画面の Config (`migration.preflightUnappliedPolicy`)
+> より優先されます。環境変数を持つレプリカと Config だけに頼るレプリカが
+> 混在すると、同一のデータベースに対して **異なる** ポリシーが解決される
+> 可能性があります。クラスタ全体で一致させるため、環境変数を **全レプリカに
+> 一貫して** 設定してください (例: Kubernetes の ConfigMap を全 Pod に注入)。
 
 v2 alpha 時点で登録されている移行は以下のとおりです。
 
-| ID | レイヤー | 内容 |
-| ---- | ---- | ---- |
-| `page-status-default` | boot | `page.status` のバックフィル (RFC-0004) |
-| `revisions-schema-unify` | boot | リビジョンスキーマの統一 (`type:snapshot` のバックフィル) |
-| `wikilink-format` | preflight | wikilink 記法の変換 |
-| `user-unique-prepare` | preflight | ユーザーの重複排除 (一意インデックスの準備) |
-| `relocate-reserved-api-paths` | preflight | `/api` 予約名前空間からの v1 ページ退避 |
-| `files-url-to-attachments` | preflight | 本文の v1 ファイル URL (`/files/<id>`) を v2 形式 (`/api/v2/attachments/<id>`) へ書き換え |
-| `wikilink-html-recover` | preflight | 誤変換された HTML 終了タグ (`</font>` など) の復旧 |
+| ID | レイヤー | severity | 内容 |
+| ---- | ---- | ---- | ---- |
+| `page-status-default` | boot | — | `page.status` のバックフィル (RFC-0004) |
+| `revisions-schema-unify` | boot | — | リビジョンスキーマの統一 (`type:snapshot` のバックフィル) |
+| `wikilink-format` | preflight | cosmetic | wikilink 記法の変換 |
+| `user-unique-prepare` | preflight | **blocking** | ユーザーの重複排除 (一意インデックスの準備) |
+| `relocate-reserved-api-paths` | preflight | cosmetic | `/api` 予約名前空間からの v1 ページ退避 |
+| `files-url-to-attachments` | preflight | cosmetic | 本文の v1 ファイル URL (`/files/<id>`) を v2 形式 (`/api/v2/attachments/<id>`) へ書き換え |
+| `wikilink-html-recover` | preflight | cosmetic | 誤変換された HTML 終了タグ (`</font>` など) の復旧 |
+
+(severity は `preflight` 移行にのみ適用されます。`boot` 移行は自動適用され
+probe されないため、起動拒否の severity を持ちません。`blocking` は
+`user-unique-prepare` のみで、残りは `cosmetic` です。`cosmetic` が未適用でも
+警告は出ますが起動は拒否されません。)
 
 boot 移行 (`page-status-default` / `revisions-schema-unify`) は api 起動時に
 自動適用されるので、運用者の操作は不要です。以下では、明示的な適用が必要な
