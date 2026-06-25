@@ -1,6 +1,6 @@
 ---
 title: リリース runbook
-description: Crowi 2.0 のリリース手順 — changesets + npm Trusted Publishing(OIDC) + Docker(full/slim) + Elasticsearch カスタム image を CI で公開する
+description: Crowi 2.0 のリリース手順 — changesets + npm Trusted Publishing(OIDC) + Docker(full/slim/web) + Elasticsearch カスタム image を CI で公開する
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
@@ -29,7 +29,7 @@ Docker / Elasticsearch image の出し方をまとめます。
 | npm publish（OIDC・provenance 付き） | Version PR のマージ後 | CI（`release.yml`） |
 | 製品版タグ `v<dist-version>` 作成・push | publish 成功時のみ | CI（`release.yml`） |
 | 製品版 GitHub Release（集約 release notes） | publish 成功時のみ | CI（`release.yml`） |
-| Docker full/slim を multi-arch build+push | publish を伴う Release run の完了 | CI（`docker.yml`、`workflow_run`） |
+| Docker full / slim / web を multi-arch build+push | publish を伴う Release run の完了 | CI（`docker.yml`、`workflow_run`） |
 | Elasticsearch カスタム image | 手動（`workflow_dispatch`） | 人間（Crowi 本体と独立） |
 
 ## 一度きりの手動セットアップ（外部・人手）
@@ -133,6 +133,9 @@ Docker image は npm 各パッケージの版とは **独立した「Crowi デ�
 - **タグ規則**:
   - 不変: `crowi/crowi:2.0.0-alpha.N`（full）/ `:2.0.0-alpha.N-slim`（slim）
   - 移動: `:alpha` / `:alpha-slim`（その channel の最新を指す）
+  - **web image**: `crowi/crowi-web:2.0.0-alpha.N`（不変）+ 移動タグ `:alpha`。Next.js
+    レンダラ専用 image で full/slim の区別はなく **単一 image**。`packages/web/Dockerfile`
+    から `docker.yml` の `build-web` job が api image と並行に multi-arch でビルド・push します。
   - **prerelease は `latest` を奪いません**。`latest` / `latest-slim` が v2 を指すのは
     stable 以降です（下記 channel 切替を参照）。
 - **自己記述。** image には OCI ラベル `org.crowi.bundle` でバンドルした各 `@crowi/*` の版が
@@ -192,10 +195,12 @@ pnpm changeset pre exit
 
 ## Docker 再ビルドの方針
 
-- **どのパッケージが上がっても、製品版が +1 され full / slim image が再ビルド+新タグ** されます。
+- **どのパッケージが上がっても、製品版が +1 され full / slim / web image が再ビルド+新タグ** されます。
   「Crowi リリース 1 回 = monorepo のあるスナップショット = image 1 セット」が原則です。
 - **手動再ビルド** が必要な場合は `docker.yml` の `workflow_dispatch`（`version` input に
-  製品版タグ名を指定）で、既存の製品版を再ビルドできます。
+  製品版タグ名を指定）で、既存の製品版を再ビルドできます。ビルドのみの Dockerfile/CI 修正を
+  **リリースタグを動かさずに** 反映したいときは `ref` input にビルド元ツリー（例: `main`）を
+  渡します（`version` が image タグ、`ref` がチェックアウトするツリーを決める）。
 
 ## Elasticsearch カスタム image の出し方
 
@@ -246,6 +251,14 @@ pnpm changeset pre exit
 - **Docker image が出ない**: `docker.yml` が `workflow_run` で発火したか、対象 Release run が
   `dist-version` artifact を upload しているか（= 実際に publish があった run か）を確認します。
   publish を伴わない Version PR だけの run では image は build されません。
+- **npm publish が E422（provenance / `repository.url` is ""）で落ちる**: provenance 付き publish
+  （`NPM_CONFIG_PROVENANCE=true`）は、公開 `@crowi/*` の各 `package.json` に `repository`
+  フィールド（monorepo の `directory` 付き）が必要です。無いと `E422 ... "repository.url" is ""`
+  で弾かれます。全パッケージに設定済みですが、**新規の公開パッケージを足すときは `repository` を
+  必ず入れて**ください。
+- **Docker(api) ビルドが `ERR_PNPM_DEPLOY_NONINJECTED_WORKSPACE` で落ちる**: pnpm 10 で
+  `pnpm deploy` が injected workspace を要求するようになったためです。`packages/api/Dockerfile`
+  は `pnpm deploy --legacy` で v10 以前の挙動を維持しています。
 
 ## 関連
 

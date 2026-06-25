@@ -138,6 +138,12 @@ anything. Always check the scope of impact before applying. The migration
 needs an admin user to attribute the rewrites to — set `CROWI_MIGRATE_USER=<email>`
 if no admin user is resolvable.
 
+This migration **excludes code regions** — a `</…>` or wikilink-like string
+inside a fenced code block or inline code is left untouched (no false-positive
+rewrite). Its **`apply` also preserves the page's `updatedAt` / `lastUpdateUser`**:
+a migration rewrite is a maintenance operation, not a user edit, so it does not
+bump those fields — page list ordering and "last edited by" stay intact.
+
 > **Tip**: v1-era wikilink syntax can also be interpreted at render time
 > by the `@crowi/plugin-renderer-crowi-legacy` plugin. If you would rather
 > not convert the data itself, enabling that plugin is an alternative.

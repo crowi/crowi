@@ -1,6 +1,6 @@
 ---
 title: Release runbook
-description: How to release Crowi 2.0 — changesets + npm Trusted Publishing (OIDC) + Docker (full/slim) + an Elasticsearch custom image, all published from CI
+description: How to release Crowi 2.0 — changesets + npm Trusted Publishing (OIDC) + Docker (full/slim/web) + an Elasticsearch custom image, all published from CI
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
@@ -29,7 +29,7 @@ images.
 | npm publish (OIDC, with provenance) | After the Version PR merges | CI (`release.yml`) |
 | Create + push distribution tag `v<dist-version>` | Only on a successful publish | CI (`release.yml`) |
 | Aggregate GitHub Release on the distribution tag | Only on a successful publish | CI (`release.yml`) |
-| Build+push Docker full/slim (multi-arch) | Completion of a publishing Release run | CI (`docker.yml`, `workflow_run`) |
+| Build+push Docker full / slim / web (multi-arch) | Completion of a publishing Release run | CI (`docker.yml`, `workflow_run`) |
 | Elasticsearch custom image | Manual (`workflow_dispatch`) | Human (independent of Crowi core) |
 
 ## One-time manual setup (external, by hand)
@@ -142,6 +142,10 @@ each npm package's version.
 - **Tag rules**:
   - Immutable: `crowi/crowi:2.0.0-alpha.N` (full) / `:2.0.0-alpha.N-slim` (slim)
   - Moving: `:alpha` / `:alpha-slim` (point to the latest of that channel)
+  - **Web image**: `crowi/crowi-web:2.0.0-alpha.N` (immutable) + the moving `:alpha`
+    tag. This is the Next.js renderer image — a **single image** with no full/slim
+    split — built multi-arch from `packages/web/Dockerfile` by `docker.yml`'s
+    `build-web` job, in parallel with the api images.
   - **Prereleases do not take `latest`.** `latest` / `latest-slim` point to v2 only
     from stable onward (see channel switching below).
 - **Self-describing.** The image embeds the version of each bundled `@crowi/*`
@@ -208,11 +212,13 @@ as a PR exits pre mode and produces stable versions.
 ## Docker rebuild policy
 
 - **Whatever package bumps, the distribution version increments by +1 and the full /
-  slim images are rebuilt + retagged.** The principle is "one Crowi release = one
-  monorepo snapshot = one image set".
+  slim / web images are rebuilt + retagged.** The principle is "one Crowi release =
+  one monorepo snapshot = one image set".
 - For a **manual rebuild**, use `docker.yml`'s `workflow_dispatch` (pass the
   distribution tag name in the `version` input) to rebuild an existing distribution
-  version.
+  version. To apply a build-only Dockerfile/CI fix **without moving the release
+  tag**, also pass a `ref` input with the tree to build from (e.g. `main`) — `version`
+  controls the image tag, `ref` controls the tree checked out.
 
 ## Cutting the Elasticsearch custom image
 
@@ -267,6 +273,15 @@ an `es-v*` tag push (auxiliary).
   that the triggering Release run uploaded a `dist-version` artifact (i.e. it was an
   actual publishing run). A Version-PR-only run with no publish does not build
   images.
+- **npm publish fails with E422 (provenance / `repository.url` is "")**: publishing
+  with provenance (`NPM_CONFIG_PROVENANCE=true`) requires every published `@crowi/*`
+  `package.json` to declare a `repository` field (with the monorepo `directory`
+  subpath); without it npm rejects the upload with `E422 ... "repository.url" is "".`
+  All packages already have one — **a newly added published package must include a
+  `repository` field** or its publish step fails.
+- **Docker (api) build fails with `ERR_PNPM_DEPLOY_NONINJECTED_WORKSPACE`**: pnpm 10
+  changed `pnpm deploy` to refuse non-injected workspaces; `packages/api/Dockerfile`
+  passes `pnpm deploy --legacy` to keep the pre-v10 behaviour.
 
 ## Related
 
