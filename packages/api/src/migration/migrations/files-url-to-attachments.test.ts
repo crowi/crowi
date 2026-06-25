@@ -112,6 +112,76 @@ describe('migration/files-url-to-attachments — rewriteFilesUrls (pure)', () =>
       expect(result.counts.externalSkipped).toBe(1);
     });
   });
+
+  describe('code-region exclusion (via rewriteOutsideCode)', () => {
+    it('does NOT rewrite a /files/<id> written inside a fenced code block (byte-identical, no count)', () => {
+      const body = 'Embed an image like:\n```md\n![pic](/files/' + ID_A + ')\n```\n';
+      const result = rewriteFilesUrls(body, origins);
+      expect(result.body).toBe(body); // by reference — nothing outside code matched
+      expect(result.counts).toEqual({ relative: 0, selfHostAbsolute: 0, externalSkipped: 0 });
+    });
+
+    it('does NOT rewrite a /files/<id> written inside an inline code span', () => {
+      const body = `use \`![pic](/files/${ID_A})\` in your page`;
+      const result = rewriteFilesUrls(body, origins);
+      expect(result.body).toBe(body);
+      expect(result.counts.relative).toBe(0);
+    });
+
+    it('rewrites the genuine out-of-code URL and keeps the fenced one byte-identical (mixed page)', () => {
+      const fence = '```md\n![ex](/files/' + ID_B + ')\n```';
+      const body = `![real](/files/${ID_A})\n${fence}\n`;
+      const result = rewriteFilesUrls(body, origins);
+      expect(result.body).toBe(`![real](/api/v2/attachments/${ID_A})\n${fence}\n`);
+      // The fenced URL is untouched; only the genuine one is counted.
+      expect(result.counts.relative).toBe(1);
+      // The code region survives verbatim.
+      expect(result.body).toContain(fence);
+    });
+
+    it('preserves adjacent code regions and rejoins byte-identically', () => {
+      // inline span, then a genuine URL, then a fence — order + bytes preserved.
+      const inline = '`![doc](/files/' + ID_A + ')`';
+      const fence = '```\n![doc](/files/' + ID_B + ')\n```';
+      const body = `${inline} then ![real](/files/${ID_A}) then\n${fence}\n`;
+      const result = rewriteFilesUrls(body, origins);
+      expect(result.body).toBe(`${inline} then ![real](/api/v2/attachments/${ID_A}) then\n${fence}\n`);
+      expect(result.body).toContain(inline);
+      expect(result.body).toContain(fence);
+    });
+
+    it('returns the body BY REFERENCE when every /files/<id> is inside code', () => {
+      const body = 'fenced:\n```\n![a](/files/' + ID_A + ')\n```\nand inline `![b](/files/' + ID_B + ')`';
+      const result = rewriteFilesUrls(body, origins);
+      expect(result.body).toBe(body); // same reference
+    });
+
+    it('is idempotent — a second pass over a mixed (code + genuine) body is a no-op', () => {
+      const fence = '```\n![ex](/files/' + ID_B + ')\n```';
+      const once = rewriteFilesUrls(`![real](/files/${ID_A})\n${fence}\n`, origins);
+      const twice = rewriteFilesUrls(once.body, origins);
+      expect(twice.body).toBe(once.body);
+      expect(twice.counts).toEqual({ relative: 0, selfHostAbsolute: 0, externalSkipped: 0 });
+    });
+
+    // AD-2 (accepted divergence, documented in
+    // .feature-state/specs/feature-migration-rewrite-outside-code.md §"AD-2"):
+    // when the Markdown image's alt text contains an inline-code span,
+    // `splitInlineCode` carves that span out as a code segment, so the
+    // `![see ` head and the `](/files/<id>)` URL land in two SEPARATE non-code
+    // segments. `buildFilesUrlRegex` matches head + URL as one unit, so neither
+    // segment matches on its own and the genuine URL is left unrewritten. This
+    // is a per-segment false-negative (the URL stays 404, no data corruption),
+    // pinned here so the behaviour change is intentional, not a silent
+    // regression.
+    it('accepted divergence: alt-text-with-inline-code straddles segment boundary — URL left unrewritten', () => {
+      const body = `![see \`code\`](/files/${ID_A})`;
+      const result = rewriteFilesUrls(body, origins);
+      // The genuine /files/<id> is NOT rewritten — accepted false-negative.
+      expect(result.body).toBe(body);
+      expect(result.counts.relative).toBe(0);
+    });
+  });
 });
 
 describe('migration/files-url-to-attachments — bodyHasRewritableFilesUrl (pure verdict)', () => {
@@ -297,6 +367,56 @@ describe('migration/files-url-to-attachments — framework wiring', () => {
     const page = await Page.findById(pageId).populate('revision');
     expect(page.revision.body).toBe(`![pic](/files/${ID_A})`);
     expect(await MigrationApplication().countDocuments({ migrationId: 'files-url-to-attachments' })).toBe(0);
+  });
+
+  describe('code-region exclusion (Mongo wiring)', () => {
+    it('a page whose only /files/<id> is inside a fenced block is NOT pending and applies clean', async () => {
+      const body = 'Embed an image:\n```md\n![pic](/files/' + ID_A + ')\n```\n';
+      await Page.createPage(`${PATH_PREFIX}/fence-only`, body, admin, {});
+
+      const runner = new MigrationRunner(crowi);
+      expect(await runner.isPending(filesUrlToAttachments)).toBe(false);
+
+      const report = await runner.detect(filesUrlToAttachments);
+      expect(report?.counts?.pages).toBe(0);
+
+      const outcome = await runner.apply(filesUrlToAttachments);
+      expect(outcome.result).toBe('detected-clean');
+      expect(outcome.stats['rewrite-files-url']).toBeUndefined();
+    });
+
+    it('a page whose only /files/<id> is inside an inline span is NOT pending', async () => {
+      await Page.createPage(`${PATH_PREFIX}/inline-only`, `write \`![pic](/files/${ID_A})\` like this`, admin, {});
+      const runner = new MigrationRunner(crowi);
+      expect(await runner.isPending(filesUrlToAttachments)).toBe(false);
+    });
+
+    it('apply leaves a fenced-only page byte-identical', async () => {
+      const body = '```md\n![pic](/files/' + ID_A + ')\n```\n';
+      const created = await Page.createPage(`${PATH_PREFIX}/fence-noop`, body, admin, {});
+
+      await new MigrationRunner(crowi).apply(filesUrlToAttachments);
+
+      const page = await Page.findById(created._id).populate('revision');
+      expect(page.revision.body).toBe(body);
+    });
+
+    it('rewrites only the out-of-code URL and keeps the fence + inline span byte-identical (mixed page)', async () => {
+      const fence = '```md\n![ex](/files/' + ID_B + ')\n```';
+      const inline = '`![doc](/files/' + ID_A + ')`';
+      const body = `![real](/files/${ID_A})\n${fence}\nand ${inline} inline`;
+      const created = await Page.createPage(`${PATH_PREFIX}/mixed-code`, body, admin, {});
+
+      const runner = new MigrationRunner(crowi);
+      expect(await runner.isPending(filesUrlToAttachments)).toBe(true);
+      await runner.apply(filesUrlToAttachments);
+
+      const page = await Page.findById(created._id).populate('revision');
+      expect(page.revision.body).toBe(`![real](/api/v2/attachments/${ID_A})\n${fence}\nand ${inline} inline`);
+      // The code regions survive the apply byte-for-byte.
+      expect(page.revision.body).toContain(fence);
+      expect(page.revision.body).toContain(inline);
+    });
   });
 });
 
