@@ -79,14 +79,21 @@ export function splitCodeSegments(body: string): CodeSegment[] {
     else lineEnd += 1; // include the newline
     const line = body.slice(lineStart, lineEnd);
 
-    const fenceMatch = FENCE_OPEN_REGEX.exec(line.replace(/\r?\n$/, ''));
+    // No `\r?\n` strip on the opener: `FENCE_OPEN_REGEX` is `^`-anchored and
+    // carries no end-of-line pattern, so a trailing newline never affects the
+    // match (unlike the closing-fence test below, where the strip is
+    // load-bearing — see `closeRegex.test(...)`).
+    const fenceMatch = FENCE_OPEN_REGEX.exec(line);
     if (fenceMatch) {
       // A fenced code block opens here. Flush text accumulated before it, then
       // consume lines up to (and including) the matching closing fence or EOF.
       flushPendingText();
+      // `fenceChar` is exactly one of `` ` `` / `~` because group 2 of
+      // `FENCE_OPEN_REGEX` is `` (`{3,}|~{3,}) ``, so it can be inlined into the
+      // close pattern verbatim (no per-char ternary needed).
       const fenceChar = fenceMatch[2][0];
       const fenceLen = fenceMatch[2].length;
-      const closeRegex = new RegExp(`^ {0,3}${fenceChar === '`' ? '`' : '~'}{${fenceLen},}[ \\t]*$`);
+      const closeRegex = new RegExp(`^ {0,3}${fenceChar}{${fenceLen},}[ \\t]*$`);
 
       // Consume lines up to (and including) the closing fence; an unclosed
       // fence runs to EOF. Either way the whole span is one code segment.
@@ -99,6 +106,16 @@ export function splitCodeSegments(body: string): CodeSegment[] {
         const nextLine = body.slice(cursor, nextEnd);
         fenceText += nextLine;
         cursor = nextEnd;
+        // The `\r?\n` strip here is LOAD-BEARING — do NOT remove it. `closeRegex`
+        // ends in `[ \t]*$` and is built with no `m` flag, so its `$` anchors at
+        // end-of-string. `nextLine` still carries its trailing newline (we keep
+        // it for a byte-identical re-join), and `[ \t]*` cannot consume a `\n`,
+        // so without the strip the close test fails on every newline-terminated
+        // fence line (CRLF or LF). The fence would then run to EOF, wrongly
+        // swallowing text that follows the closing fence into the code segment.
+        // (An EOF-only fence happens to pass either way because `$` also matches
+        // end-of-string — which is why a content-after-close-fence test is what
+        // actually guards this. See code-mask.test.ts.)
         if (closeRegex.test(nextLine.replace(/\r?\n$/, ''))) break;
       }
       segments.push({ code: true, text: fenceText });
@@ -116,6 +133,37 @@ export function splitCodeSegments(body: string): CodeSegment[] {
   // segment (the whole body, via `splitInlineCode`'s trailing `pushPlain`), so
   // the caller's by-reference cheap-skip still works on the re-join.
   return segments;
+}
+
+/**
+ * Apply `fn` only to the non-code segments of `body`, re-joining in original
+ * order. Returns `body` BY REFERENCE when `fn` left every non-code segment
+ * unchanged (preserving the caller's `result === body` cheap-skip for
+ * isPending). Code regions (fenced + inline, per `splitCodeSegments`) are
+ * passed through byte-identical.
+ *
+ * `fn` may be impure (carry an accumulator in a closure) — e.g. a `body.replace`
+ * callback that pushes occurrences / bumps counts. It is invoked once per
+ * non-code segment in document order; the code segments between them are never
+ * passed to `fn`, so a token written as a code example stays untouched and is
+ * never misdetected.
+ *
+ * This is the shared entry point for all three body-rewrite migrations
+ * (`wikilink-format`, `files-url-to-attachments`, `wikilink-html-recover`); the
+ * segment-and-rewrite scheme (vs. a fill/restore one) is justified in this
+ * file's header. The by-reference cheap-skip is owned here, via per-segment
+ * `!==` identity tracking, so a caller that still keeps its own accumulator
+ * guard stays consistent (both agree on "changed").
+ */
+export function rewriteOutsideCode(body: string, fn: (text: string) => string): string {
+  let changed = false;
+  const out = splitCodeSegments(body).map((seg) => {
+    if (seg.code) return seg.text;
+    const next = fn(seg.text);
+    if (next !== seg.text) changed = true;
+    return next;
+  });
+  return changed ? out.join('') : body;
 }
 
 /**
