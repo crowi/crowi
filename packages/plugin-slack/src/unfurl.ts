@@ -58,9 +58,9 @@ const SOURCE_SCAN_CHARS = EXCERPT_MAX_CHARS * 4;
  * to everyone in the channel, with no Crowi auth in the loop. So only
  * `GRANT_PUBLIC` pages get the rich card (title + excerpt + breadcrumb +
  * updated-at). Any non-public page (restricted / specified / owner) gets
- * a minimal "🔒 restricted" card with NO body — grant-aware full unfurl
- * needs a Slack-user ↔ Crowi-user mapping (Phase 2 account linking) and
- * is intentionally out of scope for v1.
+ * a minimal "🔒 restricted" card with NO body and NO path (the path can
+ * itself be sensitive) — grant-aware full unfurl needs a Slack-user ↔
+ * Crowi-user mapping (Phase 2 account linking) and is out of scope for v1.
  *
  * The card text is English-only on purpose: it renders inside Slack, not
  * the Crowi UI, and Slack workspaces have no Crowi locale to key off.
@@ -71,21 +71,23 @@ const SOURCE_SCAN_CHARS = EXCERPT_MAX_CHARS * 4;
  * text).
  */
 export function buildUnfurlAttachment(url: string, page: ResolvedPage, baseUrl: string | null = null): SlackUnfurlAttachment {
-  const breadcrumb = pageBreadcrumb(page.path);
-
   if (page.grant !== GRANT_PUBLIC) {
+    // Restricted: no body AND no footer. The footer would otherwise carry
+    // the page path (`pageBreadcrumb`), which can itself be sensitive — and
+    // for an opaque `/<id>` permalink the posted URL hides the path, so
+    // showing it here would reveal what the link deliberately did not
+    // (RFC-0013 §8 data-leakage guard).
     return {
       title: '🔒 Restricted page',
       title_link: url,
       text: 'This Crowi page is not public, so its contents are not shown here.',
-      footer: breadcrumb,
     };
   }
 
   const attachment: SlackUnfurlAttachment = {
     title: pageTitle(page.path),
     title_link: url,
-    footer: breadcrumb,
+    footer: pageBreadcrumb(page.path),
     mrkdwn_in: ['text'],
   };
 

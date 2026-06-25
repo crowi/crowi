@@ -232,6 +232,10 @@ describe('buildUnfurlAttachment — public vs restricted branch', () => {
     expect(att.title).toContain('Restricted');
     expect(att.text).not.toContain('top secret contents');
     expect(att.ts).toBeUndefined();
+    // No footer/path: an opaque /<id> permalink hides the path, so the card
+    // must not reveal it anywhere (RFC-0013 §8 data-leakage guard).
+    expect(att.footer).toBeUndefined();
+    expect(JSON.stringify(att)).not.toContain('/secret/notes');
   });
 
   it('treats GRANT_OWNER / GRANT_SPECIFIED as non-public too', () => {
