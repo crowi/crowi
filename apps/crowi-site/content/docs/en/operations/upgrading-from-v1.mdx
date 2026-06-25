@@ -194,6 +194,16 @@ The migration is idempotent — once reverted, `</x>` matches neither the
 recovery scan nor the `wikilink-format` rewrite, so re-running has no double
 effect.
 
+> **Note**: A `[[/font]]` (and the like) written inside a code fence (```` ``` ````)
+> or an inline code span (`` `…` ``) is **out of scope** for this migration — a
+> `[[/font]]` written as a code example (e.g. in documentation about the migration)
+> is left byte-identical, never reverted to `</font>`. This matches the
+> code-exclusion behaviour of `wikilink-format` (`</…>`) and
+> `files-url-to-attachments` (`/files/<id>`); all three body-rewrite migrations
+> behave identically. Because of this, a page whose only such token lives inside
+> code is never falsely reported as "pending", so it cannot block boot forever
+> under the preflight + `block` policy.
+
 ### /api namespace relocation
 
 v1 served its API under `/_api/*`, so `/api/*` (no underscore) was an
@@ -372,6 +382,15 @@ to — set `CROWI_MIGRATE_USER=<email>` if none is resolvable.
 > image is not left broken even if the body rewrite has not run yet (absolute
 > URLs pointing at an external host cannot be saved by the redirect, which is why
 > the body rewrite is the primary fix).
+
+> **Note**: A `/files/<id>` URL written inside a code fence (```` ``` ````) or an
+> inline code span (`` `…` ``) is **out of scope** for this migration — a
+> `![pic](/files/<id>)` written as a code example is left byte-identical, never
+> rewritten. This matches the code-exclusion behaviour of `wikilink-format`
+> (`</…>`) and `wikilink-html-recover` (`[[/font]]`); all three body-rewrite
+> migrations behave identically. Because of this, a page whose only such URL lives
+> inside code is never falsely reported as "pending", so it cannot block boot
+> forever under the preflight + `block` policy.
 
 ## What to do before migrating
 
