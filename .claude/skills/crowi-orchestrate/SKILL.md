@@ -121,9 +121,11 @@ git log --first-parent --no-merges <lastReviewedMainSha>..main
 ## D. Dependabot security alerts watcher (品質系)
 
 GitHub Dependabot の open security alerts を定期チェックし、**前回の tick 時点から
-新しく出てきた advisory のみ** を簡潔に報告する。**自動 bump はしない**(deps 更新は
-影響範囲が広く、lint/test の検証と判断を伴う行動なので、user の手で `/dependabot-fix`
-等を打ってもらう想定)。
+新しく出てきた advisory のみ** を簡潔に報告する **watcher**。**自動 bump はしない**
+(deps 更新は影響範囲が広く、lint/test の検証と判断を伴う行動)。実際の fix
+(direct bump / parent bump / per-major override / major-upgrade 待ちは TODO 退避 +
+検証 + commit)は **`/crowi-deps` skill に集約**してあるので、新規が出たら user が
+`/crowi-deps` を打つ(D は検知・報告に徹する)。
 
 ### 取得
 
@@ -154,8 +156,9 @@ gh api repos/crowi/crowi/dependabot/alerts --paginate -X GET -f state=open \
 - **新規あり**: severity / package / first_patched をテーブルで列挙。
   - **direct dep** か **transitive** かを `grep -E '"<pkg>"\s*:' packages/*/package.json
     apps/*/package.json package.json` で簡易判定 (見つかれば direct)。
-  - direct なら「`package.json` を bump して `pnpm install`」、transitive なら
-    「親 dep を bump するか、`pnpm.overrides` で resolver hint」と一言添える。
+  - **直し方は `/crowi-deps` に集約**(direct は version bump / transitive は親 bump →
+    不可なら per-major override / major upgrade 待ちは TODO 退避)。報告には
+    「`/crowi-deps` で対応可」と一言添える。
   - **high / critical** が混じってる、または **prod scope** だけで 3件以上溜まったら
     `PushNotification` で ping。
 
