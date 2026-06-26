@@ -55,6 +55,7 @@
     "editor-fullscreen-fixes",
     "editor-line-wrapping",
     "editor-page-settings-drawer",
+    "editor-preview-reliability",
     "editor-qol-new-page",
     "editor-scroll-sync",
     "editor-session-reauth",
@@ -82,6 +83,7 @@
     "mcp-prompt-injection-mitigation",
     "migration-framework",
     "migration-html-tag-fixes",
+    "migration-preflight-severity",
     "mobile-search",
     "mongoose-major-upgrade",
     "more-transactional-emails",
@@ -99,6 +101,7 @@
     "plugin-config-i18n",
     "plugin-search-mongo",
     "plugin-sidebar-label-english",
+    "plugin-zod-peer-range",
     "portal-compass-icon",
     "portal-create-cta",
     "portal-edit-stale-after-save",
@@ -116,6 +119,7 @@
     "replace-url-admin-cli",
     "reserve-api-namespace",
     "revision-revert",
+    "rewrite-outside-code-migrations",
     "rfc-0003-realtime-collab",
     "rfc-0004-editor-ux",
     "rfc-0005-page-presence",
@@ -127,6 +131,7 @@
     "shared-error-codes-i18n",
     "sidebar-portal-marker",
     "slim-runner-image",
+    "smtp-nodemailer-9-security",
     "suspended-user-profile-visible",
     "theme-dark-mode",
     "user-approval-queue",
@@ -135,6 +140,7 @@
     "watch-autosubscribe",
     "watcher-backfill",
     "web-error-screens",
-    "web-image-runtime-config"
+    "web-image-runtime-config",
+    "wikilink-format-code-exclusion-preserve-timestamps"
   ]
 }

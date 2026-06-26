@@ -1,6 +1,6 @@
 {
   "name": "@crowi/plugin-renderer-plantuml",
-  "version": "0.1.0-alpha.0",
+  "version": "0.1.0-alpha.1",
   "description": "PlantUML diagram renderer for Crowi 2.x. Sends ```plantuml fenced blocks to a PlantUML server and inlines the returned SVG (or PNG). Cache TTL 1h.",
   "repository": {
     "type": "git",

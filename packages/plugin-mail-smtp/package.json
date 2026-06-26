@@ -1,6 +1,6 @@
 {
   "name": "@crowi/plugin-mail-smtp",
-  "version": "0.1.0-alpha.0",
+  "version": "0.1.0-alpha.1",
   "description": "SMTP mail sender for Crowi 2.0. Default-on; delivers core-assembled email over SMTP via nodemailer.",
   "repository": {
     "type": "git",

@@ -1,6 +1,6 @@
 {
   "name": "@crowi/plugin-aws",
-  "version": "0.1.0-alpha.0",
+  "version": "0.1.0-alpha.1",
   "description": "AWS base configuration for Crowi 2.0 — shared region / accessKeyId / secretAccessKey for downstream AWS service plugins (S3, SES, ...).",
   "repository": {
     "type": "git",
