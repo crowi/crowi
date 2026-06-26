@@ -69,8 +69,8 @@ docker compose run --rm --entrypoint node api \
 ```
 
 これは下記の preflight `block` ポリシーで特に重要です。デプロイで未適用の
-preflight 移行が入ると api は起動を拒否するため、イメージ内からこの方法で
-解除します。
+**blocking** preflight 移行が入ると api は起動を拒否するため、イメージ内から
+この方法で解除します。
 
 移行は 2 つのレイヤーに分かれています。
 
@@ -112,7 +112,7 @@ crowi-admin migrate status
 
 > **Tip**: `block` ポリシーが効くのは `blocking` の移行だけです。そのため
 > 本番ではデフォルトの `block` のままで問題ありません。`cosmetic` の移行
-> (本文を書き換えるもの) はポリシーに関係なく起動を拒否せず、起動を拒否
+> (表示のみに関わるもの) はポリシーに関係なく起動を拒否せず、起動を拒否
 > するのはデータ整合性に関わる `blocking` の移行だけだからです。`blocking`
 > の移行が未適用のまま起動したい場合 (たとえば単一インスタンスでの調査用)
 > は、`MIGRATION_PREFLIGHT_UNAPPLIED_POLICY=warn` を設定すると、その起動拒否

@@ -73,7 +73,7 @@ docker compose run --rm --entrypoint node api \
 ```
 
 This matters most for the preflight `block` policy below: when a deploy
-introduces an unapplied preflight migration the api refuses to boot, and the
+introduces an unapplied **blocking** preflight migration the api refuses to boot, and the
 command above is how you unblock it from inside the image.
 
 Migrations are split into two layers:
@@ -117,7 +117,7 @@ crowi-admin migrate status
 
 > **Tip**: The `block` policy only ever applies to `blocking` migrations, so
 > you can safely keep the default `block` in production: `cosmetic` migrations
-> (the body-rewrite ones) never refuse boot regardless of policy, and only the
+> (the display-only ones) never refuse boot regardless of policy, and only the
 > data-integrity `blocking` migration does. If you ever need to boot with a
 > `blocking` migration still pending — a controlled, single-instance
 > investigation, for example — set `MIGRATION_PREFLIGHT_UNAPPLIED_POLICY=warn`
