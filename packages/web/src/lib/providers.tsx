@@ -3,10 +3,10 @@
 import { QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState, type ReactNode, useEffect, useMemo } from 'react';
 import { ThemeProvider } from '@/components/theme-provider';
+import { AuthSync } from './AuthSync';
 import { ConnectionProvider, useConnection } from './connection-context';
 import { getConnectionErrorHandlers, setConnectionErrorHandlers } from './connection-error-ref';
 import { isNetworkError, isServerErrorStatus } from './is-network-error';
-import { ConnectionErrorContext } from './use-auth';
 
 /**
  * Extract an HTTP status from a thrown error, if it carries one.
@@ -82,16 +82,23 @@ export function Providers({ children }: { children: ReactNode }) {
     <ThemeProvider>
       <QueryClientProvider client={queryClient}>
         <ConnectionProvider>
-          <ConnectionErrorBridge>{children}</ConnectionErrorBridge>
+          <ConnectionErrorBridge>
+            {/* Single mounted island for all auth-state listeners (session
+                expiry / cross-tab logout / token refresh / retry). Kept out of
+                the thin `useAuth` so the listeners register once, not 15×. */}
+            <AuthSync />
+            {children}
+          </ConnectionErrorBridge>
         </ConnectionProvider>
       </QueryClientProvider>
     </ThemeProvider>
   );
 }
 
-// ConnectionContextの値をConnectionErrorContextに橋渡しするコンポーネント。
-// あわせて module-level ref (connection-error-ref.ts) にも同じハンドラを書き、
-// React ツリー外の QueryCache.onError から参照できるようにする。
+// ConnectionContext の値を module-level ref (connection-error-ref.ts) に書き、
+// React ツリー外の QueryCache.onError / fetchMe (use-auth) から参照できるように
+// するブリッジ。以前あった ConnectionErrorContext (React Context) は consumer が
+// いなくなった (両者とも module ref を読む) ため撤去した。
 function ConnectionErrorBridge({ children }: { children: ReactNode }) {
   const connection = useConnection();
 
@@ -112,5 +119,5 @@ function ConnectionErrorBridge({ children }: { children: ReactNode }) {
     return () => setConnectionErrorHandlers(null);
   }, [errorHandlers]);
 
-  return <ConnectionErrorContext.Provider value={errorHandlers}>{children}</ConnectionErrorContext.Provider>;
+  return <>{children}</>;
 }
