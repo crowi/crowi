@@ -34,7 +34,7 @@
   },
   "dependencies": {
     "@crowi/plugin-api": "workspace:^",
-    "nodemailer": "^8.0.9"
+    "nodemailer": "^9.0.1"
   },
   "devDependencies": {
     "@crowi/plugin-api": "workspace:*",
