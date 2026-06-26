@@ -36,7 +36,15 @@ const listeners = new Set<() => void>();
 
 /** In-process snapshot of access-token presence. */
 function readPresence(): boolean {
-  return typeof window !== 'undefined' ? localStorage.getItem(ACCESS_KEY) != null : false;
+  if (typeof window === 'undefined') return false;
+  try {
+    return localStorage.getItem(ACCESS_KEY) != null;
+  } catch {
+    // localStorage can throw (Safari private mode, storage disabled). getSnapshot
+    // runs during render for every useAuth consumer, so fail soft to "no token"
+    // rather than letting the throw propagate through render.
+    return false;
+  }
 }
 
 /**
@@ -60,12 +68,15 @@ export function notifyAuthTokenChange(): void {
 // for N observers → N² notifications. Registered once on module load; the
 // in-process `subscribe` below only adds/removes from the listener Set.
 //
-// React to a write/remove AND a value change (`oldValue !== newValue`): a
-// cross-tab account switch writes a DIFFERENT non-null token (presence stays
-// `true`), and AuthSync still needs that notify to re-render and swap users.
+// Only a PRESENCE change matters to this store: login (null → token) and logout
+// (token → null) flip the boolean it exposes. A value → different-value write
+// (silent refresh / cross-tab account switch) leaves presence `true`, so
+// getSnapshot is unchanged and notifying would be an inert no-op (React bails on
+// an equal snapshot). The user swap on a real cross-tab account switch is driven
+// by AuthSync's own `storage` listener, not this store.
 if (typeof window !== 'undefined') {
   window.addEventListener('storage', (e: StorageEvent) => {
-    if (e.key === ACCESS_KEY && e.oldValue !== e.newValue) {
+    if (e.key === ACCESS_KEY && (e.oldValue == null) !== (e.newValue == null)) {
       notifyAuthTokenChange();
     }
   });

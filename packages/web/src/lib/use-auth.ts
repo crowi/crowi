@@ -1,13 +1,13 @@
 'use client';
 
-import { useCallback } from 'react';
-import { useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
+import { useCallback, useSyncExternalStore } from 'react';
 import { apiClientV2 } from './api-client';
 import { clearTokens, getRefreshToken } from './auth-token';
 import { useHasAccessToken } from './auth-token-store';
 import { getConnectionErrorHandlers } from './connection-error-ref';
-import { isNetworkError, isServerErrorStatus } from './is-network-error';
+import { isServerErrorStatus } from './is-network-error';
 
 interface User {
   id: string;
@@ -45,7 +45,9 @@ export const authKeys = {
  *   - 5xx → `setServerError()`, throw WITHOUT clearing tokens (transient: the
  *     error reducer retains the previous `data`, and `isAuthenticated=hasToken`
  *     stays true, so the authed header doesn't drop to "logged out")
- *   - network → `setNetworkError()`, throw without clearing tokens
+ *   - network → just throw; the global `QueryCache.onError` (providers.tsx)
+ *     classifies + surfaces it via `setNetworkError`. Calling it here too would
+ *     double-fire it and double-step the connection retry counter.
  *   - 401 → `clearTokens()` (presence → false → redirect guard fires), throw.
  *     `retry: false` keeps this from racing the api-client refresh interceptor
  *     that already handled the 401.
@@ -56,20 +58,24 @@ export const authKeys = {
 async function fetchMe(): Promise<MeResponse> {
   const handlers = getConnectionErrorHandlers();
 
-  let res: Awaited<ReturnType<typeof apiClientV2.auth.me.$get>>;
-  try {
-    res = await apiClientV2.auth.me.$get();
-  } catch (error) {
-    // Connection outage / timeout: keep tokens so the optimistic authed UI
-    // survives a transient blip; surface the connection banner.
-    if (isNetworkError(error)) handlers?.setNetworkError();
-    throw error;
-  }
+  // A network outage / timeout rejects here. Don't classify it locally — the
+  // global QueryCache.onError already calls setNetworkError for network errors,
+  // so doing it here too would double-fire it (and double-step the connection
+  // retry counter). Let it propagate to onError.
+  const res = await apiClientV2.auth.me.$get();
 
   if (res.ok) {
-    const data = await res.json();
-    handlers?.setConnected();
-    return data;
+    try {
+      const data = await res.json();
+      handlers?.setConnected();
+      return data;
+    } catch (error) {
+      // 200 with an unparseable body: surface a server error and keep tokens
+      // (this is not an auth failure). onError can't classify this status-less
+      // throw, so this local call is the only signal.
+      handlers?.setServerError('サーバーからの応答を解析できませんでした');
+      throw error;
+    }
   }
 
   if (isServerErrorStatus(res.status)) {
@@ -81,6 +87,17 @@ async function fetchMe(): Promise<MeResponse> {
   // `hasToken` to false so `isAuthenticated`/`user` go false/null at once.
   clearTokens();
   throw new Error(`Authentication failed (${res.status})`);
+}
+
+// Hydration gate. Returns false during SSR + the FIRST client (hydration)
+// render, then true — driven by useSyncExternalStore's server/client snapshot
+// transition, so it needs no setState-in-effect (which trips
+// react-hooks/set-state-in-effect and causes a cascading render).
+const subscribeHydration = () => () => {};
+const getHydratedClient = () => true;
+const getHydratedServer = () => false;
+function useHydrated(): boolean {
+  return useSyncExternalStore(subscribeHydration, getHydratedClient, getHydratedServer);
 }
 
 /**
@@ -100,6 +117,14 @@ export function useAuth() {
   // Calling it behind `&&` would short-circuit under SSR and make the hook
   // call conditional.
   const hasToken = useHasAccessToken();
+
+  // During SSR + the first client (hydration) render, `useHasAccessToken`
+  // returns the server snapshot (false) before useSyncExternalStore corrects to
+  // the real localStorage value. Seed "loading" for that window so a logged-in
+  // user reloading an (auth) page isn't momentarily seen as unauthenticated
+  // (hasToken=false + isLoading=false) and bounced to /login by the layout
+  // redirect guard. After hydration, `hasToken` is authoritative.
+  const hydrated = useHydrated();
 
   const query = useQuery({
     queryKey: authKeys.me(),
@@ -130,13 +155,14 @@ export function useAuth() {
 
   const refetch = useCallback(() => queryClient.refetchQueries({ queryKey: authKeys.me() }), [queryClient]);
 
-  const data = query.data;
   return {
     // `hasToken` gate is load-bearing: never read RETAINED stale `data` once
     // the token is gone (401 / logout / cross-tab logout).
-    user: hasToken ? (data?.user ?? null) : null,
+    user: hasToken ? (query.data?.user ?? null) : null,
     // v5 `isLoading = isPending && isFetching`; `enabled:false` ⇒ idle ⇒ false.
-    isLoading: query.isLoading,
+    // `!hydrated` keeps it true through the hydration window (see above) so the
+    // redirect guard doesn't fire before token presence resolves.
+    isLoading: !hydrated || query.isLoading,
     isAuthenticated: hasToken,
     logout,
     refetch,
