@@ -1,6 +1,6 @@
 # TODO List
 
-Crowi 2.0 (Express + Swig → Next.js + Hono)。**2.0.0-alpha.2 リリース済み・alpha.3 準備中**。
+Crowi 2.0 (Express + Swig → Next.js + Hono)。**2.0.0-alpha.3 リリース済み・alpha.4 準備中**。
 
 > このファイルは**全体感の把握用**。実装詳細・経緯は書かない（肥大化防止）。
 > 詳細は git log / RFC (`docs/rfcs/`) / spec (`.feature-state/specs/`) を参照。
@@ -10,7 +10,7 @@ Crowi 2.0 (Express + Swig → Next.js + Hono)。**2.0.0-alpha.2 リリース済�
 
 ## 🎯 Now
 
-alpha.0–.2 は published、alpha.3 の changeset 蓄積中。
+alpha.0–.3 は published、alpha.4 / stable 向けに changeset 蓄積中（pre(alpha) mode）。
 直近の active 作業は worktree `feature-slack`（Slack plugin, RFC-0013）。具体タスクは High Priority を参照。
 
 ---
