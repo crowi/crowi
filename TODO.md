@@ -1,6 +1,6 @@
 # TODO List
 
-Crowi 2.0 (Express + Swig → Next.js + Hono)。**2.0.0-alpha1 リリース準備中**。
+Crowi 2.0 (Express + Swig → Next.js + Hono)。**2.0.0-alpha.2 リリース済み・alpha.3 準備中**。
 
 > このファイルは**全体感の把握用**。実装詳細・経緯は書かない（肥大化防止）。
 > 詳細は git log / RFC (`docs/rfcs/`) / spec (`.feature-state/specs/`) を参照。
@@ -8,28 +8,17 @@ Crowi 2.0 (Express + Swig → Next.js + Hono)。**2.0.0-alpha1 リリース準�
 
 ---
 
-## 🎯 Now — 2.0.0-alpha1 リリース準備
+## 🎯 Now
 
-spec: `feature-v2-alpha1-release-prep.md`（実本番 = v1 DB への in-place アップグレード前提）
-
-- [ ] **外部共有機能の削除**（Share モデルは dormant 据え置き、LinkSharePopover は残す）
-- [ ] **ソーシャルログイン削除**（Google/GitHub。認証ポリシー設定は不活性化で残す、User schema は dormant）
-- [ ] **通知設定メニュー削除**（admin サイドバーの stub のみ）
-- [x] **renameTree 移行** — `POST /pages/rename` に `include_descendants`
-- [ ] **prod build / runner 検証** — prod build で plugin 解決できるか
-  - [x] runner-project 方式 Phase 1（spec: `feature-prod-runner-project.md`）
-  - [ ] slim image + 外部 operator 向け doc — blocked-on `feature-plugin-search-mongo`
-- [x] **v1→v2 データ移行（RFC-0008）** — migration framework
-- [x] **HTML タグ移行の不具合修正** — wikilink close-tag 誤爆 + TOC HTML 混入の修正と復旧 migration（spec: `feature-migration-html-tag-fixes.md`）
-- [x] **wikilink-format コード領域除外 + apply タイムスタンプ保全** — フェンス/インラインコード内 `</…>` を誤検知しない（`code-mask.ts` の `splitCodeSegments`）+ body-rewrite migration の `apply` がページの `updatedAt`/`lastUpdateUser` を bump せず保全（spec: `feature-migration-wikilink-code-exclusion.md`）
-- [ ] **version bump + tag** — linked group を `2.0.0-alpha.0` へ。npm publish はしない
+alpha.0–.2 は published、alpha.3 の changeset 蓄積中。
+直近の active 作業は worktree `feature-slack`（Slack plugin, RFC-0013）。具体タスクは High Priority を参照。
 
 ---
 
 ## High Priority — 進行中
 
 ### Plugin Architecture (RFC-0001)
-- [ ] Step 8: notifier (Slack) plugin 化
+- [ ] Step 8: notifier (Slack) plugin 化（worktree `feature-slack` で進行中。spec: `feature-slack-plugin.md`）
 - [ ] Step 10: auth provider plugin 化（OAuth。alpha1 で削除、将来 plugin で復活）
 - [ ] 将来: encryption KeyProvider plugin (KMS)、S3 以外の attachment storage
 
@@ -38,9 +27,7 @@ spec: `feature-v2-alpha1-release-prep.md`（実本番 = v1 DB への in-place �
 
 ### 配布 / リリース（2.0.0 stable 時）
 - [ ] **無印 `crowi` パッケージの整理**（spec: `feature-crowi-quickstart-package.md`）
-- [x] **web image の API URL 実行時注入**（同一オリジン既定。spec: `feature-web-image-runtime-config.md`）
-- [x] **web image クロスオリジン runtime-env 注入**（§e フォローオン。spec: `feature-web-cross-origin-runtime-env.md`）
-- [x] **CI リリース自動化** — changesets + npm OIDC + Docker(full/slim) + ES image。手順は operations/release-runbook（spec: `feature-ci-release-automation.md`）
+- [ ] **slim image + 外部 operator 向け doc** — runner-project 方式。blocked-on `feature-plugin-search-mongo`
 
 ### 管理画面 残（フェーズ4）
 - [ ] Slack channel 通知（page-path→channel mapping + Slack 統合設定）
@@ -69,7 +56,7 @@ merge 後の simplify レビューで挙がった非ブロッキング改善。�
 - [ ] **MCP result body advisory**（body を返す read tool 増加時に `okResult` で text/structured 一経路化）
 - [ ] **renameTree merge advisory**（subtree-rename 2 ルートの重複集約、`checkPagesRenamable` の N+1 ほか）
 - [ ] **migration-html-tag-fixes merge advisory** — `forEachPublishedCurrentRevision` の採用拡大（`wikilink-format` / `files-url-to-attachments` を寄せて walk 3 実装→1・per-page `findById` N+1 解消）+ web `known-tags.ts` の `HTML_TAGS` を `@crowi/api-contract` の `KNOWN_HTML_ELEMENTS` から生成（SVG/custom 要素差分は別管理）
-- [x] **wikilink-code-exclusion merge advisory** — code 領域マスク（`code-mask.ts` `splitCodeSegments`）が `wikilink-format` のみに配線だった件。`rewriteOutsideCode` を共有 primitive 化し、`files-url-to-attachments`（`/files/<id>`）/ `wikilink-html-recover`（`[[/font]]`）も含む 3 migration の検出・書き換えを非コードセグメント経由に統一（誤書換 + preflight デッドロックを解消）。`code-mask.ts` の dead `.replace(/\r?\n$/)`（:82）+ 冗長 fenceChar ternary（:89）を除去、close-fence 側（:102）は load-bearing と判明したため理由コメント付きで残置（feature-migration-rewrite-outside-code）。残: `replace-url.ts:29-30` の stale な grant-corruption コメント（`grant ?? pageData.grant` 化済み）の trivial 修正は別 commit に切り出し（本 feature の out of scope）
+- [ ] **replace-url.ts:29-30 の stale コメント修正** — `grant ?? pageData.grant` 化済みの comment-only trivial fix（旧 wikilink-code-exclusion の out-of-scope 分）
 - [ ] **editor-preview-reliability merge advisory** — (F3) `InvalidateReason` は3コード宣言だが api は `updatePage` から `'page-body-replaced'` のみ emit、`deletePage`/`rename` が live collab doc を invalidate しない（編集中に rename/削除されると stale doc 編集を継続→save 時に初めて conflict）。rename/deletePage を既存 reason code で invalidate 配線、または未使用2コード削除で型を正直に。+ (F1) `use-yjs-token.ts`/`use-presence.ts` の token-refetch-on-silent-refresh 重複ブロックを `useRefetchTokenOnSilentRefresh(queryKey)` に抽出。F2(presence/notifications の WS lifecycle 重複)は既存 backlog「WS 基盤の重複抽出」が該当・本 merge で拡大を確認
 - [ ] **eslint 8 → 9 major up**（`packages/api` / `packages/collab` の direct eslint 8.57.1。flat config 統一含む。GHSA `js-yaml` advisory が transitive 経由で残るのは eslint 8 chain が `@eslint/eslintrc → js-yaml@4.1.1` を要求するため）
 - [ ] **mongoose 8 → 9 major up**（`packages/api` / `packages/collab` / `packages/plugin-search-mongo`。GHSA `ip-address` advisory が transitive 経由で残るのは mongoose 8 → mongodb 6.20 → socks 2.8.4 → ip-address@9.0.5 chain で、socks 2.8.7+ の ip-address 10.x 切替が引けないため）
@@ -78,8 +65,11 @@ merge 後の simplify レビューで挙がった非ブロッキング改善。�
 
 ## ✅ 完了済み（主なマイルストーン）
 
-- **フェーズ1 ページ機能** — CRUD / list / portal / revision / bookmark / like / seen-by / comment / watch / trash / backlink / notification / user page / history
+- **2.0.0-alpha.0 / .1 / .2 リリース** — 外部共有機能の削除（Share モデルは dormant 据え置き・LinkSharePopover は残置）/ ソーシャルログイン削除（Google/GitHub。認証ポリシー設定は不活性化で残置）/ 通知設定メニュー削除 / renameTree 移行（`POST /pages/rename` の `include_descendants`）/ version bump + tag（spec: `feature-v2-alpha1-release-prep.md`）
+- **v1→v2 データ移行（RFC-0008）** — migration framework + HTML タグ移行の不具合修正（wikilink close-tag 誤爆 + TOC HTML 混入の修復）+ wikilink-format コード領域除外（`code-mask.ts` の `splitCodeSegments` / `rewriteOutsideCode` で 3 body-rewrite migration を非コードセグメント経由に統一）+ apply タイムスタンプ保全
+- **配布 / リリース基盤** — runner-project 方式（spec: `feature-prod-runner-project.md`）/ web image の API URL 実行時注入（同一・クロスオリジン。spec: `feature-web-image-runtime-config.md` / `feature-web-cross-origin-runtime-env.md`）/ CI リリース自動化（changesets + npm OIDC + Docker full/slim + ES image。spec: `feature-ci-release-automation.md`）
 - **特定 revision への revert** — stale 帯の「この版に戻す」+ `POST /pages/revert-to-revision` + MCP `crowi_revert_to_revision`（非破壊・portal 対応。spec: `feature-revision-revert.md`）
+- **フェーズ1 ページ機能** — CRUD / list / portal / revision / bookmark / like / seen-by / comment / watch / trash / backlink / notification / user page / history
 - **RFC-0001 Plugin Architecture** — plugin-api / PluginManager / storage(local,s3) / search(ES,OpenSearch) / schema-driven admin form
 - **検索** — 全文検索 UI + admin 検索ステータス + ES / OpenSearch driver
 - **認証 / アカウント** — login / register / installer / 招待受諾 / メール確認・変更 / パスワードリセット
