@@ -4,7 +4,7 @@
 '@crowi/api-contract': minor
 ---
 
-Page presence & header UI (RFC-0005) v2.2 is now available. A live presence row showing "who is viewing right now" in realtime was added to the page view, and the header meta row was restructured into unified clickable chips.
+Page presence & header UI (RFC-0005) v2.0 is now available. A live presence row showing "who is viewing right now" in realtime was added to the page view, and the header meta row was restructured into unified clickable chips.
 
 Main features:
 

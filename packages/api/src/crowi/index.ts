@@ -251,7 +251,7 @@ class Crowi {
     // can hand plugins a registry that already has the core 4
     // transforms (TOC / wikilinks / mentions / codeBlockLanguages)
     // registered. External plugins append; they cannot insert before
-    // core in v2.1 phase 2.
+    // core in v2.0 phase 2.
     await step('setupRenderer', () => this.setupRenderer());
     // RFC-0003 Phase 9 (same-process attach): the cross-process
     // pageEvent subscriber that used to fan collab saves into the

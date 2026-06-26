@@ -130,7 +130,7 @@ export interface PageDocument extends Document {
    * code path explicit. Phase 5 will populate it alongside `revision`
    * inside the save transaction; older pages and pages saved before
    * Phase 5 lands return `null` here and read code should fall back to
-   * `revision`. The duplication is intentional during the v2.1
+   * `revision`. The duplication is intentional during the v2.0
    * transition — see `openQuestions[0]` in the Phase 1 task file.
    */
   currentRevision?: Types.ObjectId | null;
@@ -323,7 +323,7 @@ export default (crowi: Crowi) => {
       createdAt: { type: Date, default: Date.now },
       updatedAt: Date,
       // RFC-0003: pointer to the latest collaborative-save `Revision`.
-      // Co-exists with `revision` during the v2.1 transition; the
+      // Co-exists with `revision` during the v2.0 transition; the
       // legacy field stays the source of truth until Phase 5 lands
       // the dual-write inside the save transaction.
       currentRevision: { type: Schema.Types.ObjectId, ref: 'Revision', default: null },

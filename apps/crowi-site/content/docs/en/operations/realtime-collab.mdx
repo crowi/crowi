@@ -1,9 +1,9 @@
 ---
 title: Operating realtime collaborative editing
-description: Operator guide for deploying Crowi 2.1's realtime collaborative editing (RFC-0003)
+description: Operator guide for deploying Crowi 2.0's realtime collaborative editing (RFC-0003)
 ---
 
-Crowi 2.1's realtime collaborative editing ships with Hocuspocus attached
+Crowi 2.0's realtime collaborative editing ships with Hocuspocus attached
 as a library inside the `@crowi/api` process. There is no separate
 collab process or extra port to manage; running the existing api
 container is enough to enable realtime editing.
@@ -34,7 +34,7 @@ The minimal stack is api + web + MongoDB.
 # docker-compose.yml (excerpt)
 services:
   api:
-    image: ghcr.io/crowi/api:2.1
+    image: ghcr.io/crowi/api:2.0
     environment:
       MONGO_URI: mongodb://mongo:27017/crowi
       WS_TOKEN_SECRET: ${WS_TOKEN_SECRET}
@@ -45,7 +45,7 @@ services:
     ports:
       - "3000:3000"
   web:
-    image: ghcr.io/crowi/web:2.1
+    image: ghcr.io/crowi/web:2.0
     environment:
       NEXT_PUBLIC_API_URL: https://crowi.example.com
     ports:
@@ -84,7 +84,7 @@ Additional requirements when running multiple api replicas:
 # 2-replica example
 services:
   api:
-    image: ghcr.io/crowi/api:2.1
+    image: ghcr.io/crowi/api:2.0
     deploy:
       replicas: 2
     environment:
@@ -167,7 +167,7 @@ Key points:
   hurt UX.
 - Sticky sessions are **not** required.
 
-> **Note (Crowi 2.2 / RFC-0005)**: The page-presence feature attaches its
+> **Note (Crowi 2.0 / RFC-0005)**: The page-presence feature attaches its
 > WebSocket at `/presence/:pageId`, with **exactly the same setup** as
 > `/collab`. In your reverse proxy, route a `/presence` location to the
 > api upstream the same way as `/collab` and forward the `Upgrade` header

@@ -1,9 +1,9 @@
 ---
 title: リアルタイム共同編集の運用
-description: Crowi 2.1 のリアルタイム共同編集 (RFC-0003) を本番環境にデプロイするためのオペレーターガイド
+description: Crowi 2.0 のリアルタイム共同編集 (RFC-0003) を本番環境にデプロイするためのオペレーターガイド
 ---
 
-Crowi 2.1 のリアルタイム共同編集機能は、Hocuspocus を `@crowi/api`
+Crowi 2.0 のリアルタイム共同編集機能は、Hocuspocus を `@crowi/api`
 プロセス内にライブラリとして同居 attach する構成で出荷されています。
 別プロセスや別ポートを起動する必要はなく、既存の api コンテナを動かせば
 そのままリアルタイム共同編集が有効になります。
@@ -33,7 +33,7 @@ Crowi 2.1 のリアルタイム共同編集機能は、Hocuspocus を `@crowi/ap
 # docker-compose.yml (抜粋)
 services:
   api:
-    image: ghcr.io/crowi/api:2.1
+    image: ghcr.io/crowi/api:2.0
     environment:
       MONGO_URI: mongodb://mongo:27017/crowi
       WS_TOKEN_SECRET: ${WS_TOKEN_SECRET}
@@ -43,7 +43,7 @@ services:
     ports:
       - "3000:3000"
   web:
-    image: ghcr.io/crowi/web:2.1
+    image: ghcr.io/crowi/web:2.0
     environment:
       NEXT_PUBLIC_API_URL: https://crowi.example.com
     ports:
@@ -81,7 +81,7 @@ api を複数レプリカで運用する場合の追加要件:
 # 2 instance 例
 services:
   api:
-    image: ghcr.io/crowi/api:2.1
+    image: ghcr.io/crowi/api:2.0
     deploy:
       replicas: 2
     environment:
@@ -163,7 +163,7 @@ labels:
   ユーザー体験が悪化します。
 - スティッキーセッションは**不要**です。
 
-> **Note (Crowi 2.2 / RFC-0005)**: ページプレゼンス機能の WebSocket は
+> **Note (Crowi 2.0 / RFC-0005)**: ページプレゼンス機能の WebSocket は
 > `/presence/:pageId` に attach されており、`/collab/*` と**まったく同じ
 > 構成**です。リバースプロキシでは `/presence` ロケーションを `/collab`
 > と同じ要領で api アップストリームへ向け、`Upgrade` ヘッダを転送して
