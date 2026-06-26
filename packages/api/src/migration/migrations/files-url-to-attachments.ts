@@ -4,6 +4,7 @@ import { STATUS_PUBLISHED } from 'src/models/page';
 import { resolveActingUserId } from '../helpers';
 import { defineMigration } from '../types';
 import type { MigrationContext } from '../types';
+import { rewriteOutsideCode } from './code-mask';
 
 /**
  * v1 → v2 — `files-url-to-attachments` (preflight layer).
@@ -124,24 +125,34 @@ function isSelfHostOrigin(schemeAndHost: string, origins: readonly string[]): bo
  *
  * `origins` is the self-host allow-list (`getAppOrigins()`); pass `[]` to
  * disable rule 2 (CLIENT_URL / BASE_URL unset).
+ *
+ * Code regions (fenced blocks + inline spans) are excluded via the shared
+ * `rewriteOutsideCode` primitive: a `/files/<id>` written as a code example is
+ * left byte-identical (never rewritten, never counted) so it cannot be
+ * corrupted, nor falsely report the migration as pending. Indented code is an
+ * accepted divergence (still rewritten). AD-2 (an `![alt](url)` whose alt text
+ * contains an inline-code span straddles a segment boundary, leaving its URL
+ * unrewritten) is documented in the spec — an accepted false-negative.
  */
 export function rewriteFilesUrls(body: string, origins: readonly string[]): { body: string; counts: FilesUrlRewriteCounts } {
   const counts = emptyCounts();
-  const rewritten = body.replace(buildFilesUrlRegex(), (whole, head: string, schemeAndHost: string | undefined, id: string, rest: string) => {
-    if (schemeAndHost === undefined) {
-      // Rule 1 — relative `/files/<id>` is unconditionally this site.
-      counts.relative += 1;
-      return `${head}(${V2_ATTACHMENT_PREFIX}${id}${rest})`;
-    }
-    if (isSelfHostOrigin(schemeAndHost, origins)) {
-      // Rule 2 — self-host absolute URL; relativise (drop the host).
-      counts.selfHostAbsolute += 1;
-      return `${head}(${V2_ATTACHMENT_PREFIX}${id}${rest})`;
-    }
-    // Rule 3 — external host; leave untouched.
-    counts.externalSkipped += 1;
-    return whole;
-  });
+  const rewriteSegment = (text: string): string =>
+    text.replace(buildFilesUrlRegex(), (whole, head: string, schemeAndHost: string | undefined, id: string, rest: string) => {
+      if (schemeAndHost === undefined) {
+        // Rule 1 — relative `/files/<id>` is unconditionally this site.
+        counts.relative += 1;
+        return `${head}(${V2_ATTACHMENT_PREFIX}${id}${rest})`;
+      }
+      if (isSelfHostOrigin(schemeAndHost, origins)) {
+        // Rule 2 — self-host absolute URL; relativise (drop the host).
+        counts.selfHostAbsolute += 1;
+        return `${head}(${V2_ATTACHMENT_PREFIX}${id}${rest})`;
+      }
+      // Rule 3 — external host; leave untouched.
+      counts.externalSkipped += 1;
+      return whole;
+    });
+  const rewritten = rewriteOutsideCode(body, rewriteSegment);
   const changed = counts.relative > 0 || counts.selfHostAbsolute > 0;
   return { body: changed ? rewritten : body, counts };
 }

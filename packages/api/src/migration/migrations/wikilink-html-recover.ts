@@ -1,6 +1,7 @@
 import { STATUS_PUBLISHED, type PageModel } from 'src/models/page';
 import type { MigrationContext } from '../types';
 import { defineMigration } from '../types';
+import { rewriteOutsideCode, splitCodeSegments } from './code-mask';
 import { STOP, forEachPublishedCurrentRevision } from './published-current-revision';
 import { resolveActingUserId } from '../helpers';
 
@@ -111,20 +112,44 @@ export function detectRecoverable(body: string): RecoverableOccurrence[] {
 }
 
 /**
+ * `detectRecoverable` restricted to the non-code segments of `body`: a
+ * `[[/font]]` written as a code example (inside a fence or inline span) is NOT
+ * reported, so it never reaches the collision probe / pending verdict and is
+ * never reverted to `</font>`. This is the detect-side counterpart of routing
+ * the rewrite through `rewriteOutsideCode`; `rewrite` and `detect` are
+ * asymmetric (an async per-element collision probe sits between them), so they
+ * cannot share one `fn` — `detect` materialises occurrences here instead.
+ *
+ * `detectRecoverable` resets `lastIndex` at entry, so calling it once per
+ * non-code segment is safe (no cross-segment state). AD-1 (a stray backtick
+ * straddling `[[/font]]` so the token is absorbed into an inline-code span) is
+ * documented in the spec — an accepted false-negative.
+ */
+export function detectRecoverableOutsideCode(body: string): RecoverableOccurrence[] {
+  return splitCodeSegments(body)
+    .filter((s) => !s.code)
+    .flatMap((s) => detectRecoverable(s.text));
+}
+
+/**
  * Rewrite `body`, reverting `[[/<x>]]` → `</x>` for every recoverable element.
  * Elements in `skip` (those that collide with a live same-named page) are left
  * untouched. Returns the input by reference when nothing changed so callers can
  * cheap-skip.
+ *
+ * Code regions (fenced blocks + inline spans) are excluded via the shared
+ * `rewriteOutsideCode` primitive: a `[[/font]]` written as a code example is
+ * left byte-identical (never reverted) so a migration-doc example cannot be
+ * corrupted. The detect side mirrors this via `detectRecoverableOutsideCode`.
  */
 export function rewriteBody(body: string, skip: ReadonlySet<string>): string {
-  let changed = false;
-  const rewritten = body.replace(WIKILINK_HTML_CANDIDATE_REGEX, (whole, segment: string) => {
-    if (!shouldRecoverSegment(segment)) return whole;
-    if (skip.has(segment)) return whole;
-    changed = true;
-    return `</${segment}>`;
-  });
-  return changed ? rewritten : body;
+  return rewriteOutsideCode(body, (text) =>
+    text.replace(WIKILINK_HTML_CANDIDATE_REGEX, (whole, segment: string) => {
+      if (!shouldRecoverSegment(segment)) return whole;
+      if (skip.has(segment)) return whole;
+      return `</${segment}>`;
+    }),
+  );
 }
 
 interface PageWork {
@@ -207,7 +232,7 @@ async function scan(ctx: MigrationContext): Promise<ScanResult> {
     if (typeof body !== 'string' || !body.includes('[[/')) return;
     const pagePath = typeof (revision as { path?: unknown }).path === 'string' ? (revision as { path: string }).path : undefined;
 
-    const occurrences = detectRecoverable(body);
+    const occurrences = detectRecoverableOutsideCode(body);
     if (occurrences.length === 0) return;
 
     // Partition this page's elements into collide-skip vs revertible. Each
@@ -292,7 +317,7 @@ export const wikilinkHtmlRecover = defineMigration({
     await forEachPublishedCurrentRevision(ctx, { projection: 'body' }, async ({ revision }) => {
       const body = (revision as { body?: unknown }).body;
       if (typeof body !== 'string' || !body.includes('[[/')) return;
-      for (const occ of detectRecoverable(body)) {
+      for (const occ of detectRecoverableOutsideCode(body)) {
         if (!(await pageExists(occ.element))) {
           pending = true;
           return STOP;

@@ -6,7 +6,14 @@ import type { MigrationApplicationModel } from 'src/models/migration-application
 
 import { MigrationRunner } from '../runner';
 import { rewriteWikilinks } from './wikilink-format';
-import { detectRecoverable, formatCollisions, rewriteBody, shouldRecoverSegment, wikilinkHtmlRecover } from './wikilink-html-recover';
+import {
+  detectRecoverable,
+  detectRecoverableOutsideCode,
+  formatCollisions,
+  rewriteBody,
+  shouldRecoverSegment,
+  wikilinkHtmlRecover,
+} from './wikilink-html-recover';
 
 /**
  * `wikilink-html-recover` preflight migration.
@@ -98,6 +105,64 @@ describe('migration/wikilink-html-recover — recovery rules (pure)', () => {
       const once = rewriteBody('see [[/font]] here', new Set());
       expect(detectRecoverable(once)).toEqual([]);
       expect(rewriteBody(once, new Set())).toBe(once);
+    });
+
+    describe('code-region exclusion (via rewriteOutsideCode)', () => {
+      it('does NOT revert a [[/font]] written inside a fenced code block (byte-identical)', () => {
+        const body = 'This migration reverts:\n```\n[[/font]]\n```\n';
+        expect(rewriteBody(body, new Set())).toBe(body); // by reference
+      });
+
+      it('does NOT revert a [[/font]] written inside an inline code span', () => {
+        const body = 'the token `[[/font]]` is recovered';
+        expect(rewriteBody(body, new Set())).toBe(body);
+      });
+
+      it('reverts a genuine [[/font]] while leaving a fenced [[/font]] byte-identical (mixed)', () => {
+        const fence = '```\n[[/font]]\n```';
+        const body = `see [[/font]] then\n${fence}\n`;
+        expect(rewriteBody(body, new Set())).toBe(`see </font> then\n${fence}\n`);
+      });
+
+      it('preserves adjacent code regions and rejoins byte-identically', () => {
+        const inline = '`[[/center]]`';
+        const fence = '```\n[[/font]]\n```';
+        const body = `${inline} then [[/font]] then\n${fence}\n`;
+        expect(rewriteBody(body, new Set())).toBe(`${inline} then </font> then\n${fence}\n`);
+      });
+    });
+  });
+
+  describe('detectRecoverableOutsideCode', () => {
+    it('finds a genuine [[/font]] outside code', () => {
+      expect(detectRecoverableOutsideCode('a [[/font]] b')).toEqual([{ raw: '[[/font]]', element: 'font' }]);
+    });
+
+    it('does NOT detect a [[/font]] inside a fenced code block', () => {
+      expect(detectRecoverableOutsideCode('```\n[[/font]]\n```\n')).toEqual([]);
+    });
+
+    it('does NOT detect a [[/font]] inside an inline code span', () => {
+      expect(detectRecoverableOutsideCode('use `[[/font]]` here')).toEqual([]);
+    });
+
+    it('detects only the out-of-code occurrence in a mixed body', () => {
+      expect(detectRecoverableOutsideCode('[[/font]] and `[[/center]]`')).toEqual([{ raw: '[[/font]]', element: 'font' }]);
+    });
+
+    // AD-1 (accepted divergence, documented in
+    // .feature-state/specs/feature-migration-rewrite-outside-code.md §"AD-1"):
+    // a stray backtick acting as an inline-span opener, followed by a closing
+    // backtick after the token, makes `splitInlineCode` absorb `[[/font]]` into
+    // a code span — so per-segment detection misses it. The whole-body
+    // `detectRecoverable` WOULD find it, so this is a behaviour change. It is a
+    // false-negative (a genuine [[/font]] is left as-is, never corrupted), so it
+    // is accepted; pinned here so the change is intentional.
+    it('accepted divergence: stray backtick straddles [[/font]] — token absorbed into code span, not detected', () => {
+      const body = '`text [[/font]]`';
+      // Whole-body detection finds it; the code-aware version does not.
+      expect(detectRecoverable(body)).toEqual([{ raw: '[[/font]]', element: 'font' }]);
+      expect(detectRecoverableOutsideCode(body)).toEqual([]);
     });
   });
 
@@ -345,5 +410,88 @@ describe('migration/wikilink-html-recover — framework wiring', () => {
     const page = await Page.findById(pageId).populate('revision');
     expect(page.revision.body).toBe('see [[/font]] here');
     expect(await MigrationApplication().countDocuments({ migrationId: 'wikilink-html-recover' })).toBe(0);
+  });
+
+  describe('code-region exclusion (Mongo wiring)', () => {
+    it('a page whose only [[/font]] is inside a fenced block is NOT pending and applies clean', async () => {
+      await Page.createPage(`${PATH_PREFIX}/fence-only`, 'reverts:\n```\n[[/font]]\n```\n', admin, {});
+      const runner = new MigrationRunner(crowi);
+      expect(await runner.isPending(wikilinkHtmlRecover)).toBe(false);
+
+      const report = await runner.detect(wikilinkHtmlRecover);
+      expect(report?.counts?.pages).toBe(0);
+    });
+
+    it('a page whose only [[/font]] is inside an inline span is NOT pending', async () => {
+      await Page.createPage(`${PATH_PREFIX}/inline-only`, 'the token `[[/font]]` is recovered', admin, {});
+      const runner = new MigrationRunner(crowi);
+      expect(await runner.isPending(wikilinkHtmlRecover)).toBe(false);
+    });
+
+    it('apply leaves a fenced-only [[/font]] page byte-identical', async () => {
+      const body = '```\n[[/font]]\n```\n';
+      const created = await Page.createPage(`${PATH_PREFIX}/fence-noop`, body, admin, {});
+      await new MigrationRunner(crowi).apply(wikilinkHtmlRecover);
+      const page = await Page.findById(created._id).populate('revision');
+      expect(page.revision.body).toBe(body);
+    });
+
+    it('reverts only the out-of-code [[/font]] and keeps the fence byte-identical (mixed page)', async () => {
+      const fence = '```\n[[/font]]\n```';
+      const body = `see [[/font]] then\n${fence}\n`;
+      const created = await Page.createPage(`${PATH_PREFIX}/mixed-code`, body, admin, {});
+
+      const runner = new MigrationRunner(crowi);
+      expect(await runner.isPending(wikilinkHtmlRecover)).toBe(true);
+      await runner.apply(wikilinkHtmlRecover);
+
+      const page = await Page.findById(created._id).populate('revision');
+      expect(page.revision.body).toBe(`see </font> then\n${fence}\n`);
+      expect(page.revision.body).toContain(fence);
+    });
+
+    it('does NOT call the pageExists probe for a fenced-only [[/font]] (detect skips code regions)', async () => {
+      // The collision probe is `Page.exists`. A [[/font]] confined to a fence
+      // must never reach detect → so `Page.exists` is never queried for it.
+      await Page.createPage(`${PATH_PREFIX}/no-probe`, 'doc:\n```\n[[/font]]\n```\n', admin, {});
+
+      const existsSpy = jest.spyOn(Page, 'exists');
+      try {
+        const runner = new MigrationRunner(crowi);
+        await runner.isPending(wikilinkHtmlRecover);
+        const probedFont = existsSpy.mock.calls.some(([filter]) => (filter as { path?: string })?.path === '/font');
+        expect(probedFont).toBe(false);
+      } finally {
+        existsSpy.mockRestore();
+      }
+    });
+  });
+
+  describe('isPending collision × code-region matrix', () => {
+    it('genuine [[/font]] + no /font page → pending', async () => {
+      await Page.createPage(`${PATH_PREFIX}/m1`, 'see [[/font]] here', admin, {});
+      const runner = new MigrationRunner(crowi);
+      expect(await runner.isPending(wikilinkHtmlRecover)).toBe(true);
+    });
+
+    it('genuine [[/font]] + live /font page → not pending (collision)', async () => {
+      await Page.createPage('/font', 'genuine font page', admin, {});
+      await Page.createPage(`${PATH_PREFIX}/m2`, 'see [[/font]] here', admin, {});
+      const runner = new MigrationRunner(crowi);
+      expect(await runner.isPending(wikilinkHtmlRecover)).toBe(false);
+    });
+
+    it('code-only [[/font]] + no /font page → not pending (code excluded)', async () => {
+      await Page.createPage(`${PATH_PREFIX}/m3`, '```\n[[/font]]\n```\n', admin, {});
+      const runner = new MigrationRunner(crowi);
+      expect(await runner.isPending(wikilinkHtmlRecover)).toBe(false);
+    });
+
+    it('code-only [[/font]] + live /font page → not pending (code excluded; collision irrelevant)', async () => {
+      await Page.createPage('/font', 'genuine font page', admin, {});
+      await Page.createPage(`${PATH_PREFIX}/m4`, '```\n[[/font]]\n```\n', admin, {});
+      const runner = new MigrationRunner(crowi);
+      expect(await runner.isPending(wikilinkHtmlRecover)).toBe(false);
+    });
   });
 });
