@@ -1,6 +1,6 @@
 {
   "name": "@crowi/collab",
-  "version": "0.1.0-alpha.1",
+  "version": "0.1.0-alpha.2",
   "description": "Hocuspocus hooks + save flow library for Crowi 2.0 realtime collaborative editing (RFC-0003). Embedded in the @crowi/api process via attachCollabServer — no longer ships a standalone CLI.",
   "private": true,
   "main": "dist/index.js",
