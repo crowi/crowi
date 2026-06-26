@@ -25,8 +25,13 @@ export interface MigrationSummary {
   fromVersion: string;
   toVersion: string;
   layer: MigrationLayer;
-  /** Boot-block classification — lets operators judge boot-block risk from `plan` / `list`. */
-  severity: MigrationSeverity;
+  /**
+   * Boot-block classification — present only for `preflight` migrations (the
+   * boot-probed layer); `undefined` for `boot` migrations, which are
+   * auto-applied and never probed. Lets operators judge boot-block risk from
+   * `plan` / `list`.
+   */
+  severity?: MigrationSeverity;
   description: string;
 }
 
@@ -57,7 +62,8 @@ function toSummary(def: MigrationDefinition): MigrationSummary {
     fromVersion: def.fromVersion,
     toVersion: def.toVersion,
     layer: def.layer,
-    severity: def.severity,
+    // `severity` is a `preflight`-only field (boot migrations are never probed).
+    ...(def.layer === 'preflight' ? { severity: def.severity } : {}),
     description: def.description,
   };
 }

@@ -75,9 +75,13 @@ export class MigrationRegistry {
     return this.migrations;
   }
 
-  /** Migrations of a given layer, in order. */
-  byLayer(layer: MigrationLayer): readonly MigrationDefinition[] {
-    return this.migrations.filter((m) => m.layer === layer);
+  /**
+   * Migrations of a given layer, in order. The return type narrows by the
+   * `layer` literal so `byLayer('preflight')` yields `severity`-bearing
+   * definitions (and `byLayer('boot')` ones without).
+   */
+  byLayer<L extends MigrationLayer>(layer: L): readonly Extract<MigrationDefinition, { layer: L }>[] {
+    return this.migrations.filter((m): m is Extract<MigrationDefinition, { layer: L }> => m.layer === layer);
   }
 
   /** Look up a migration by id, or undefined. */

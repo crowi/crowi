@@ -1,6 +1,7 @@
 import { crowi } from 'src/test/setup';
 import type { MigrationApplicationModel } from 'src/models/migration-application';
 
+import { relocateReservedApiPaths } from './migrations/relocate-reserved-api-paths';
 import { userUniquePrepare } from './migrations/user-unique-prepare';
 import { createRegistry, MigrationRegistry } from './registry';
 import { runBootMigrations, PreflightBlockedError } from './run-boot-migrations';
@@ -25,12 +26,10 @@ const MigrationApplication = () => crowi.model('MigrationApplication') as Migrat
 // 再固定").
 function pendingOnce(id: string, layer: 'boot' | 'preflight' = 'preflight', severity: 'blocking' | 'cosmetic' = 'blocking') {
   const state = { pending: true, stageRuns: 0 };
-  const def: MigrationDefinition = defineMigration({
+  const base = {
     id,
     fromVersion: '1.x',
     toVersion: '2.0',
-    layer,
-    severity,
     description: `fixture ${id}`,
     isPending: async () => state.pending,
     detect: async () => ({ summary: '1 target remaining', counts: { targets: 1 } }),
@@ -44,7 +43,10 @@ function pendingOnce(id: string, layer: 'boot' | 'preflight' = 'preflight', seve
         },
       },
     ],
-  });
+  };
+  // `severity` lives only on `preflight` defs; branch so the literal matches
+  // the discriminated `MigrationDefinition` union (boot defs carry no severity).
+  const def: MigrationDefinition = defineMigration(layer === 'preflight' ? { ...base, layer, severity } : { ...base, layer });
   return { def, state };
 }
 
@@ -272,5 +274,9 @@ describe('runBootMigrations — two layers (§4.2.1/§4.2.7)', () => {
 describe('registered migration severities (regression guard)', () => {
   it('keeps user-unique-prepare classified as blocking (else E11000 re-surfaces)', () => {
     expect(userUniquePrepare.severity).toBe('blocking');
+  });
+
+  it('keeps relocate-reserved-api-paths cosmetic (a path move is no E11000 hazard; must not gate boot)', () => {
+    expect(relocateReservedApiPaths.severity).toBe('cosmetic');
   });
 });

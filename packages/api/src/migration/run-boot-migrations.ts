@@ -12,22 +12,27 @@ import type { MigrationLogger } from './types';
  *   1. Apply every `layer:'boot'` migration that `isPending` flags, in
  *      version-range + `order` sequence, appending each result to the
  *      `migrationApplications` audit log.
- *   2. Probe every `layer:'preflight'` migration with `isPending` (cheap)
- *      and, when any is unapplied, either refuse boot (`block`, default) or
- *      log loudly and continue (`warn`) — per `preflightUnappliedPolicy`.
+ *   2. Probe every `layer:'preflight'` migration with `isPending` (cheap) and
+ *      split the pending ones by `severity` (§4.2.7 amendment / §12.7):
+ *        - `cosmetic` pending → always warn-and-continue (policy ignored);
+ *        - `blocking` pending → refuse boot under `block` (the default), or
+ *          warn-and-continue under `warn` — per `preflightUnappliedPolicy`.
  *
- * `block` is the safe default (§4.2.7): if a preflight migration hasn't run
- * before v2 boot, *every replica fail-fasts* with a clear error before
- * autoIndex would otherwise hit E11000 (§9) on not-yet-deduped data. The
- * operator then runs `crowi-admin migrate apply` once and brings the cluster
- * up.
- *
- * Phase 1 ships with an empty registry, so this is a fast no-op; the wiring
- * is what matters. Phase 2 adds `page-status-default` as the first boot
- * migration.
+ * `block` is the safe default (§4.2.7) for `blocking` migrations: if
+ * `user-unique-prepare` hasn't run before v2 boot, *every replica fail-fasts*
+ * with a clear error before autoIndex would otherwise hit E11000 (§9) on
+ * not-yet-deduped data. The operator then runs `crowi-admin migrate apply`
+ * once and brings the cluster up. A pending `cosmetic` migration never blocks
+ * boot: its `isPending` re-scans the live corpus, so new content could keep it
+ * pending forever and a uniform block would deadlock the cluster (BUG 2).
  */
 
 const POLICY_ENV_VAR = 'MIGRATION_PREFLIGHT_UNAPPLIED_POLICY';
+
+/** Compile-time exhaustiveness guard (throws if a future `severity` reaches it). */
+function assertNever(value: never): never {
+  throw new Error(`[crowi:migration] unhandled migration severity: ${String(value)}`);
+}
 
 /** Error thrown when boot is refused under the `block` policy. */
 export class PreflightBlockedError extends Error {
@@ -112,8 +117,18 @@ export async function runBootMigrations(crowi: Crowi, options: RunBootMigrations
   const pendingBlockingIds: string[] = [];
   const pendingCosmeticIds: string[] = [];
   for (const def of registry.byLayer('preflight')) {
-    if (await runner.isPending(def)) {
-      (def.severity === 'blocking' ? pendingBlockingIds : pendingCosmeticIds).push(def.id);
+    if (!(await runner.isPending(def))) continue;
+    switch (def.severity) {
+      case 'blocking':
+        pendingBlockingIds.push(def.id);
+        break;
+      case 'cosmetic':
+        pendingCosmeticIds.push(def.id);
+        break;
+      default:
+        // Exhaustive: a new severity must consciously pick a boot-gate side
+        // rather than silently fall through to non-blocking (fail-open).
+        assertNever(def.severity);
     }
   }
 

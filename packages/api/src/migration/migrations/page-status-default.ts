@@ -31,9 +31,6 @@ export const pageStatusDefault = defineMigration({
   fromVersion: '1.x',
   toVersion: '2.0',
   layer: 'boot',
-  // Descriptive only: `boot`-layer migrations are auto-applied, never
-  // boot-probed, so severity does not gate boot here.
-  severity: 'cosmetic',
   description: 'Backfill page.status (RFC-0004)',
 
   /**

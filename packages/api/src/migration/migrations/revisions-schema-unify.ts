@@ -39,9 +39,6 @@ export const revisionsSchemaUnify = defineMigration({
   fromVersion: '2.0',
   toVersion: '2.1',
   layer: 'boot',
-  // Descriptive only: `boot`-layer migrations are auto-applied, never
-  // boot-probed, so severity does not gate boot here.
-  severity: 'cosmetic',
   description: 'Unify revision schema (backfill type:snapshot)',
 
   /**
