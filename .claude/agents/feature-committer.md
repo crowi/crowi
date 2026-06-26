@@ -118,7 +118,7 @@ git diff --cached --name-only | grep -E '\.(log|tmp|cache|swp|swo)$|\.DS_Store|~
 
 ### 4. feature-state を誤って含めていないか
 ```bash
-git diff --cached --name-only | grep -E '\.feature-state/|\.migration-state/'
+git diff --cached --name-only | grep -E '\.feature-state/'
 ```
 ヒットしたら **中止**。state ディレクトリは gitignore 済み、コミット対象外。
 

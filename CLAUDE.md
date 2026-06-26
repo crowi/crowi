@@ -249,16 +249,11 @@ pnpm changeset status     # list accumulated, unreleased changesets
 Add one file just before merging to main (or within the PR). The initial `.changeset/initial-release.md` is a sentinel covering the whole restructure, placed when `feature-monorepo-packages-restructure` completed — do not delete it.
 
 ### State directories
-- `.migration-state/` (repo root, gitignored except `.gitkeep`): per-task
-  files for the `/migrate` workflow.
 - `.reviews/` (gitignored): per-skill review notes; not committed.
 
 ## Slash Commands / Skills
 
 User-invocable skills (see `.claude/skills/`):
-- **`/migrate <feature>`** — runs the planner → implementer → simplify →
-  reviewer → committer pipeline for one migration task. State in
-  `.migration-state/tasks/<id>.json`.
 - **`/integrate-worktree <name>`** — merges a `gw` worktree into main and
   runs simplify. See "Parallel worktree workflow" above.
 - **`/simplify <description>`** — 3-agent reuse / quality / efficiency review

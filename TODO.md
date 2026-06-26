@@ -105,7 +105,7 @@ merge 後の simplify レビューで挙がった非ブロッキング改善。�
 - main 直コミット（`commitStrategy: main-direct`）。push / PR は明示指示待ち
 - 並行作業は `gw start <name>` → 完了後 `/integrate-worktree <name>`
 - API は Hono、`/api/v2` prefix。contract 編集後は `pnpm --filter @crowi/api-contract build`
-- state: `.migration-state/` / `.feature-state/`（root、gitignore 済）
+- state: `.feature-state/`（root、gitignore 済）
 - format/lint: pre-commit で biome format、pre-push で `pnpm lint` + `check:openapi`
 
 ## Operator runbooks
