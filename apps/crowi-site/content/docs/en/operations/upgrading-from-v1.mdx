@@ -73,17 +73,34 @@ docker compose run --rm --entrypoint node api \
 ```
 
 This matters most for the preflight `block` policy below: when a deploy
-introduces an unapplied preflight migration the api refuses to boot, and the
+introduces an unapplied **blocking** preflight migration the api refuses to boot, and the
 command above is how you unblock it from inside the image.
 
 Migrations are split into two layers:
 
 - **boot** migrations apply automatically when the api starts.
 - **preflight** migrations are heavier / potentially destructive, so they
-  are *not* applied automatically. Instead, **the api refuses to boot while
-  any preflight migration is unapplied** (the default `block` policy). You
-  run them explicitly with `crowi-admin migrate apply` during a maintenance
+  are *not* applied automatically. They are probed on every boot, and what
+  happens when one is still unapplied depends on its **severity** (see below):
+  a `blocking` migration **refuses boot** (the default `block` policy), while a
+  `cosmetic` one only **warns and lets boot continue**. You apply preflight
+  migrations explicitly with `crowi-admin migrate apply` during a maintenance
   window.
+
+Each migration carries a `severity` that decides what an unapplied preflight
+migration does to boot:
+
+- **`blocking`** — an index-impacting / data-integrity migration (today only
+  `user-unique-prepare`). If it is unapplied, the api refuses to boot under the
+  default `block` policy, because booting against not-yet-prepared data risks
+  an `E11000` failure when the unique index builds. `migrate plan` /
+  `migrate list` tag it `[blocking]`.
+- **`cosmetic`** — a body-display-only migration (such as `wikilink-format`).
+  If it is unapplied the api **still boots** and only logs a warning, **even
+  under the `block` policy**. Cosmetic migrations re-scan the live corpus, so a
+  newly written page in the old syntax can make them pending again forever;
+  blocking boot on them would deadlock the cluster. `migrate plan` /
+  `migrate list` tag them `[cosmetic]`.
 
 ```bash
 # Preview pending migrations (preflight by default)
@@ -98,23 +115,40 @@ crowi-admin migrate apply
 crowi-admin migrate status
 ```
 
-> **Tip**: In development you can let the api boot with preflight
-> migrations still pending by setting
-> `MIGRATION_PREFLIGHT_UNAPPLIED_POLICY=warn` — it downgrades the boot
-> refusal to a warning. Keep the default `block` policy in production so a
-> half-migrated database cannot serve traffic.
+> **Tip**: The `block` policy only ever applies to `blocking` migrations, so
+> you can safely keep the default `block` in production: `cosmetic` migrations
+> (the display-only ones) never refuse boot regardless of policy, and only the
+> data-integrity `blocking` migration does. If you ever need to boot with a
+> `blocking` migration still pending — a controlled, single-instance
+> investigation, for example — set `MIGRATION_PREFLIGHT_UNAPPLIED_POLICY=warn`
+> to downgrade its boot refusal to a warning. (Earlier docs advised "always
+> keep `block`" to avoid serving a half-migrated database; with per-migration
+> severity that blanket rule no longer holds — cosmetic migrations were never
+> a data-integrity hazard.)
+>
+> **Multi-instance note**: `MIGRATION_PREFLIGHT_UNAPPLIED_POLICY` (env var)
+> takes precedence over the `migration.preflightUnappliedPolicy` admin Config.
+> If some replicas have the env var and others rely only on the Config, they
+> can resolve **different** policies against the same database. Set the env var
+> **consistently on every replica** (e.g. one Kubernetes ConfigMap injected
+> into all pods) so the whole cluster agrees.
 
 The migrations registered as of the v2 alpha are:
 
-| ID | Layer | What it does |
-| ---- | ---- | ---- |
-| `page-status-default` | boot | Backfill `page.status` (RFC-0004) |
-| `revisions-schema-unify` | boot | Unify the revision schema (backfill `type:snapshot`) |
-| `wikilink-format` | preflight | Convert wikilink syntax |
-| `user-unique-prepare` | preflight | Deduplicate users (prepare for the unique index) |
-| `relocate-reserved-api-paths` | preflight | Move v1 pages out of the reserved `/api` namespace |
-| `files-url-to-attachments` | preflight | Rewrite v1 file URLs (`/files/<id>`) in page bodies to the v2 form (`/api/v2/attachments/<id>`) |
-| `wikilink-html-recover` | preflight | Recover HTML close tags (`</font>` etc.) corrupted into wikilinks |
+| ID | Layer | Severity | What it does |
+| ---- | ---- | ---- | ---- |
+| `page-status-default` | boot | — | Backfill `page.status` (RFC-0004) |
+| `revisions-schema-unify` | boot | — | Unify the revision schema (backfill `type:snapshot`) |
+| `wikilink-format` | preflight | cosmetic | Convert wikilink syntax |
+| `user-unique-prepare` | preflight | **blocking** | Deduplicate users (prepare for the unique index) |
+| `relocate-reserved-api-paths` | preflight | cosmetic | Move v1 pages out of the reserved `/api` namespace |
+| `files-url-to-attachments` | preflight | cosmetic | Rewrite v1 file URLs (`/files/<id>`) in page bodies to the v2 form (`/api/v2/attachments/<id>`) |
+| `wikilink-html-recover` | preflight | cosmetic | Recover HTML close tags (`</font>` etc.) corrupted into wikilinks |
+
+(Severity applies only to `preflight` migrations — `boot` migrations are
+applied automatically and never probed, so they have no boot-block severity.
+`user-unique-prepare` is the only `blocking` migration; the rest are
+`cosmetic`, so an unapplied one warns but never refuses boot.)
 
 The boot migrations (`page-status-default` / `revisions-schema-unify`) apply
 automatically when the api starts, so they need no operator action. The

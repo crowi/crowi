@@ -158,7 +158,9 @@ Each migration declares a **`layer`** (`'boot' | 'preflight'`):
 2. For each layer='boot' migration, call isPending() (cheap probe).
    - If pending, apply it in order; append the result to migrationApplications.
 3. For each layer='preflight' migration, call isPending() (cheap probe).
-   - If any are pending, refuse boot (default) or warn only (configurable).
+   - For each pending one, branch on its severity: a `blocking` one refuses
+     boot (default) or warns only (configurable); a `cosmetic` one always
+     warns and continues (§4.2.7 amendment / §12.7).
 4. Start the application (autoIndex then builds schema-declared indexes, incl. unique — see §9).
 ```
 
@@ -168,7 +170,7 @@ Step 3 is the framework's key safety net: if `user-unique-prepare` hasn't run be
 
 #### §4.2.7 `block` semantics in a multi-instance deployment
 
-When `preflightUnappliedPolicy: 'block'` (default) and a preflight migration is unapplied, **every replica fail-fasts on boot**; the cluster does not come up partially. This is intentional and is the safe behavior:
+When `preflightUnappliedPolicy: 'block'` (default) and a **`blocking`-severity** preflight migration is unapplied, **every replica fail-fasts on boot**; the cluster does not come up partially. (A pending `cosmetic` migration never gates boot — see the §12.7 amendment.) This is intentional and is the safe behavior:
 
 - An unapplied preflight migration means the data is not yet in v2 shape.
 - Allowing *some* instances to start against not-yet-migrated data is more dangerous than refusing all of them — each would independently hit autoIndex E11000 (§9) or operate on inconsistent data.
@@ -336,7 +338,7 @@ When the inspection result and the latest record disagree, **always trust inspec
 | not pending | none | Skip → record `detected-clean`. |
 | not pending | `applied` | Do nothing (consistent). |
 
-**Asymmetry of false positives (important):** the general claim "a false positive is merely a wasteful re-run (idempotent, same result)" holds for `rebuild` and for `layer='boot'` migrations. It does **not** hold for `layer='preflight'` under `block`: there, a false positive in `isPending` means **boot refusal for the whole cluster (§4.2.7) = an outage**, not a harmless re-run. So `isPending` for preflight migrations must be written conservatively.
+**Asymmetry of false positives (important):** the general claim "a false positive is merely a wasteful re-run (idempotent, same result)" holds for `rebuild` and for `layer='boot'` migrations. It does **not** hold for a `blocking`-severity `layer='preflight'` migration under `block`: there, a false positive in `isPending` means **boot refusal for the whole cluster (§4.2.7) = an outage**, not a harmless re-run. So `isPending` for preflight migrations must be written conservatively. (A `cosmetic` preflight migration only ever warns, so a false positive there is a noisy log, not an outage — see the §12.7 amendment.)
 
 **Coverage is the author's responsibility.** False negatives are the most dangerous outcome (data left behind that nothing flags). PR review must include "does `isPending` correctly catch all remaining targets?" as a required check.
 
@@ -613,6 +615,10 @@ Idempotent seeds (currently only the OAuth client seed) stay outside the framewo
 
 ### §12.7 Preflight boot-refusal policy details
 `migration.preflightUnappliedPolicy: 'block' | 'warn'` ships (default `block`; semantics in §4.2.7). Env-var override and restart/health-check interaction in clusters are finalized during implementation.
+
+**Amendment (per-migration severity, BUG 2 resolution).** The original §4.2.7 made the `block`/`warn` policy apply uniformly to *every* preflight migration. That deadlocked cosmetic (body-rewrite) migrations such as `wikilink-format`: because `isPending` re-scans the live corpus (§6.1/§6.2 — inspection is the source of truth), new v1-syntax content keeps the verdict `true` forever, so under `block` the whole cluster would refuse boot permanently. Each `MigrationDefinition` now carries a required `severity: 'cosmetic' | 'blocking'`. A `cosmetic` preflight migration *only ever warns and continues* (independent of the policy); a `blocking` one (currently only `user-unique-prepare`, which prepares data for the unique-index autoIndex build to avoid E11000) still refuses boot under `block` and is downgradeable via `MIGRATION_PREFLIGHT_UNAPPLIED_POLICY=warn`. The per-replica policy-divergence concern below remains open.
+
+`resolvePreflightPolicy` prefers the `MIGRATION_PREFLIGHT_UNAPPLIED_POLICY` env var over the `migration.preflightUnappliedPolicy` Config namespace. In a multi-instance deployment, a replica with the env var set and one relying on the DB Config can therefore resolve different policies against the same database — a pre-existing concern the severity amendment does not address. Mitigation: set the env var consistently on every replica (e.g. one Kubernetes ConfigMap injected into all pods). Cluster-wide synchronisation of a Config change is left to a future feature.
 
 ### §12.8 Explicit pre-go-live index build
 If autoIndex building a large unique index at boot blocks startup unacceptably (§9.3), add an optional preflight step that builds the index via `createIndex` from the admin CLI before go-live, so the boot-time autoIndex build is a no-op. Deferred until the cost is demonstrated.

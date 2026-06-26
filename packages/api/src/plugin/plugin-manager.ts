@@ -312,7 +312,7 @@ export class PluginManager {
       // already has the core 4 transforms in place when we get here
       // (Crowi.init() runs setupRenderer before setupPlugins). External
       // plugins append to the back — they cannot insert before core in
-      // v2.1 phase 2.
+      // v2.0 phase 2.
       const renderer = this.crowi.getRenderer();
       plugin.registerRenderer(makeRendererScope(renderer.registry, plugin.name, ctx.log), ctx);
     }

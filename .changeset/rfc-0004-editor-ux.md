@@ -4,7 +4,7 @@
 '@crowi/api-contract': minor
 ---
 
-Editor UX enhancement (RFC-0004) v2.2 is now available. Four features were added on top of the minimal CodeMirror 6 editor introduced in RFC-0003, lifting the editor from "usable" to "productive".
+Editor UX enhancement (RFC-0004) v2.0 is now available. Four features were added on top of the minimal CodeMirror 6 editor introduced in RFC-0003, lifting the editor from "usable" to "productive".
 
 Main features:
 

@@ -19,11 +19,11 @@ and summarises the RFCs that currently exist.
 | Number | Title | Target | Status |
 | ------ | ----- | ------ | ------ |
 | [RFC-0001](https://github.com/crowi/crowi/blob/main/docs/rfcs/0001-plugin-architecture.md) | Plugin Architecture | Crowi 2.0 | Landed |
-| [RFC-0002](https://github.com/crowi/crowi/blob/main/docs/rfcs/0002-renderer-plugin-architecture.md) | Renderer Plugin Architecture | Crowi 2.1 | Phase 1–6 landed; Phase 7+ pending |
-| [RFC-0003](https://github.com/crowi/crowi/blob/main/docs/rfcs/0003-realtime-collaborative-editing.md) | Real-time Collaborative Editing | Crowi 2.1 | Landed |
-| [RFC-0004](https://github.com/crowi/crowi/blob/main/docs/rfcs/0004-editor-ux-enhancement.md) | Editor UX Enhancement | Crowi 2.2 | Landed |
-| [RFC-0005](https://github.com/crowi/crowi/blob/main/docs/rfcs/0005-page-presence.md) | Page Presence & Header UI | Crowi 2.2 | Landed |
-| [RFC-0006](https://github.com/crowi/crowi/blob/main/docs/rfcs/0006-hono-integration.md) | HTTP API: Express + ts-rest → Hono | Crowi 2.2 | Landed (2026-05-22) |
+| [RFC-0002](https://github.com/crowi/crowi/blob/main/docs/rfcs/0002-renderer-plugin-architecture.md) | Renderer Plugin Architecture | Crowi 2.0 | Phase 1–6 landed; Phase 7+ pending |
+| [RFC-0003](https://github.com/crowi/crowi/blob/main/docs/rfcs/0003-realtime-collaborative-editing.md) | Real-time Collaborative Editing | Crowi 2.0 | Landed |
+| [RFC-0004](https://github.com/crowi/crowi/blob/main/docs/rfcs/0004-editor-ux-enhancement.md) | Editor UX Enhancement | Crowi 2.0 | Landed |
+| [RFC-0005](https://github.com/crowi/crowi/blob/main/docs/rfcs/0005-page-presence.md) | Page Presence & Header UI | Crowi 2.0 | Landed |
+| [RFC-0006](https://github.com/crowi/crowi/blob/main/docs/rfcs/0006-hono-integration.md) | HTTP API: Express + ts-rest → Hono | Crowi 2.0 | Landed (2026-05-22) |
 
 ## RFC-0001: Plugin Architecture
 
@@ -49,7 +49,7 @@ progress.
 
 ## RFC-0003: Real-time Collaborative Editing
 
-A proposal to add real-time collaborative editing to Crowi 2.1. It uses
+A proposal to add real-time collaborative editing to Crowi 2.0. It uses
 Yjs as the synchronisation engine and Hocuspocus as the WebSocket
 backend. Multiple users can edit the same page simultaneously, and
 changes converge deterministically via CRDT semantics. The canonical
@@ -65,7 +65,7 @@ A proposal to add four editor productivity features on top of the
 minimal CodeMirror 6 editor from RFC-0003: autocomplete for `@user`
 mentions and `[[Page` wikilinks, paste handling for URLs / images,
 drag-and-drop upload, and a management view for draft pages
-(`/me/creating-pages`). Landed for Crowi 2.2.
+(`/me/creating-pages`). Landed for Crowi 2.0.
 
 ## RFC-0005: Page Presence & Header UI
 

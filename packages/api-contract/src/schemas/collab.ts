@@ -16,7 +16,7 @@ import { UserPublicSchema } from './userPublic';
  *
  * Keeping the types here (and not in `page.ts`) keeps the
  * collaborative additions discoverable as one bundle and avoids
- * polluting the legacy page contract with v2.1-only fields.
+ * polluting the legacy page contract with v2.0-only fields.
  */
 
 /**
@@ -101,7 +101,7 @@ export type WsTokenPayload = z.infer<typeof WsTokenPayloadSchema>;
  * dispatcher; Phase 8 wires it to the Save button.
  *
  * `message` is the optional checkpoint message (currently unused in
- * the v2.1 UI per spec open question 1, but reserved on the wire so
+ * the v2.0 UI per spec open question 1, but reserved on the wire so
  * we can light it up without a wire-format break).
  *
  * Round 2 (Decision 1): the save optimistic lock is anchored SERVER-SIDE

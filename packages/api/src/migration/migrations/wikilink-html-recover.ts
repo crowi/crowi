@@ -291,6 +291,9 @@ export const wikilinkHtmlRecover = defineMigration({
   fromVersion: '2.1',
   toVersion: '2.1',
   layer: 'preflight',
+  // HTML close-tag repair only; no index impact. `isPending` walks the live
+  // corpus → re-triggers on new content. Cosmetic (see `severity`).
+  severity: 'cosmetic',
   // `fromVersion: '2.1'` already sequences this after `wikilink-format`
   // (`fromVersion: '1.x'`) — the registry orders by `fromVersion` FIRST
   // (registry.ts compareMigrations), so the misfire's source is registered

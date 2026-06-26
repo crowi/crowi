@@ -190,6 +190,11 @@ export const wikilinkFormat = defineMigration({
   fromVersion: '1.x',
   toVersion: '2.1',
   layer: 'preflight',
+  // Body display syntax only; no index / integrity impact. `isPending` scans
+  // the live corpus, so new v1-syntax content re-triggers it forever — the
+  // BUG 2 deadlock. Cosmetic so a pending verdict only warns, never refuses
+  // boot.
+  severity: 'cosmetic',
   description: 'Migrate wikilink syntax',
 
   /**

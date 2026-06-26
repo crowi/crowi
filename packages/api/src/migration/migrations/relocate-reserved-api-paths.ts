@@ -20,9 +20,12 @@ import type { MigrationContext } from '../types';
  * so `api-legacy` does not collide). A pre-existing page at the relocation
  * target is avoided by appending a `-N` suffix.
  *
- * It is `preflight` because it rewrites user-visible page paths: boot
- * blocks until an operator runs `crowi-admin migrate apply` in a
- * maintenance window. The move is done with plain `updateOne` /
+ * It is `preflight` because it rewrites user-visible page paths, so it runs
+ * explicitly from `crowi-admin migrate apply` in a maintenance window rather
+ * than auto-applying at boot. Its `severity` is `cosmetic`: a stranded
+ * `/api/*` page is a display / availability issue, not an autoIndex E11000
+ * hazard, so a pending probe only warns and never refuses boot (§4.2.7
+ * amendment). The move is done with plain `updateOne` /
  * `updateMany` on the Page + Revision collections rather than
  * `Page.rename`, deliberately bypassing the `pageEvent('update')` chain
  * (mention dispatch / render-cache / backlink) — a path-only relocation of
@@ -76,6 +79,11 @@ export const relocateReservedApiPaths = defineMigration({
   fromVersion: '1.x',
   toVersion: '2.0',
   layer: 'preflight',
+  // Path move only; no E11000 hazard. `isPending` is `Page.exists({path:/^\/api/})`
+  // and stabilises post-apply (does not re-trigger). Unapplied means old
+  // `/api/*` pages 404, which is a recommended pre-go-live fix, not a
+  // data-integrity risk. Cosmetic.
+  severity: 'cosmetic',
   description: 'Relocate v1 pages out of the v2-reserved /api namespace into /api-legacy',
 
   /**

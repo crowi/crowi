@@ -232,11 +232,12 @@ class Crowi {
     // RFC-0004 backfill that stamps `status='published'` onto legacy pages
     // predating the `Page.status` field — see
     // `migration/migrations/page-status-default.ts`) and probes
-    // `layer:'preflight'` migrations, refusing boot when any is unapplied
-    // under the default `block` policy (§4.2.1/§4.2.7). `broadcastForceReload`
-    // is intentionally omitted here: the live Hocuspocus handle is attached
-    // later in `start()`, after init, so boot migrations rely on
-    // persistence-layer Yjs invalidation only.
+    // `layer:'preflight'` migrations, splitting pending ones by `severity`
+    // (§4.2.1/§4.2.7 amendment): a `blocking` one refuses boot under the
+    // default `block` policy, a `cosmetic` one only warns and lets boot
+    // continue. `broadcastForceReload` is intentionally omitted here: the live
+    // Hocuspocus handle is attached later in `start()`, after init, so boot
+    // migrations rely on persistence-layer Yjs invalidation only.
     await step('runBootMigrations', () => runBootMigrations(this));
     // RFC-0010 Phase 3: seed the first-party `crowi-cli` OAuth client.
     // Idempotent upsert (`$setOnInsert`) — runs after setupModels so the
@@ -250,7 +251,7 @@ class Crowi {
     // can hand plugins a registry that already has the core 4
     // transforms (TOC / wikilinks / mentions / codeBlockLanguages)
     // registered. External plugins append; they cannot insert before
-    // core in v2.1 phase 2.
+    // core in v2.0 phase 2.
     await step('setupRenderer', () => this.setupRenderer());
     // RFC-0003 Phase 9 (same-process attach): the cross-process
     // pageEvent subscriber that used to fan collab saves into the

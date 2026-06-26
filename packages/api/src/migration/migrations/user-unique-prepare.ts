@@ -129,6 +129,11 @@ export const userUniquePrepare = defineMigration({
   fromVersion: '1.x',
   toVersion: '2.0',
   layer: 'preflight',
+  // The ONLY blocking migration: dedups so the unique index can build without
+  // E11000 (RFC §9/§11). Booting unapplied risks an autoIndex failure, so a
+  // pending verdict must refuse boot under the `block` policy. Do NOT
+  // reclassify to cosmetic — that would re-expose E11000.
+  severity: 'blocking',
   description: 'Deduplicate users (unique index via autoIndex)',
 
   /**

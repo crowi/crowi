@@ -1,6 +1,8 @@
 import { crowi } from 'src/test/setup';
 import type { MigrationApplicationModel } from 'src/models/migration-application';
 
+import { relocateReservedApiPaths } from './migrations/relocate-reserved-api-paths';
+import { userUniquePrepare } from './migrations/user-unique-prepare';
 import { createRegistry, MigrationRegistry } from './registry';
 import { runBootMigrations, PreflightBlockedError } from './run-boot-migrations';
 import { MigrationRunner } from './runner';
@@ -17,13 +19,17 @@ const MigrationApplication = () => crowi.model('MigrationApplication') as Migrat
 
 // A fixture migration whose `isPending` flips after the (recording) stage
 // runs, so we can exercise the "becomes clean after apply" path.
-function pendingOnce(id: string, layer: 'boot' | 'preflight' = 'preflight') {
+//
+// `severity` defaults to 'blocking' so the existing boot-block test
+// (`frt-pre-block`) keeps asserting a throw; flipping the default to
+// 'cosmetic' would silently turn that into a no-throw (spec §"runner.test.ts
+// 再固定").
+function pendingOnce(id: string, layer: 'boot' | 'preflight' = 'preflight', severity: 'blocking' | 'cosmetic' = 'blocking') {
   const state = { pending: true, stageRuns: 0 };
-  const def: MigrationDefinition = defineMigration({
+  const base = {
     id,
     fromVersion: '1.x',
     toVersion: '2.0',
-    layer,
     description: `fixture ${id}`,
     isPending: async () => state.pending,
     detect: async () => ({ summary: '1 target remaining', counts: { targets: 1 } }),
@@ -37,7 +43,10 @@ function pendingOnce(id: string, layer: 'boot' | 'preflight' = 'preflight') {
         },
       },
     ],
-  });
+  };
+  // `severity` lives only on `preflight` defs; branch so the literal matches
+  // the discriminated `MigrationDefinition` union (boot defs carry no severity).
+  const def: MigrationDefinition = defineMigration(layer === 'preflight' ? { ...base, layer, severity } : { ...base, layer });
   return { def, state };
 }
 
@@ -64,6 +73,7 @@ describe('MigrationRunner.apply — reconciliation (§6.2)', () => {
       fromVersion: '1.x',
       toVersion: '2.0',
       layer: 'preflight',
+      severity: 'blocking',
       description: 'clean',
       isPending: async () => false,
       stages: [{ name: 'noop', fn: async () => ({ name: 'noop' }) }],
@@ -94,6 +104,7 @@ describe('MigrationRunner.apply — reconciliation (§6.2)', () => {
       fromVersion: '1.x',
       toVersion: '2.0',
       layer: 'preflight',
+      severity: 'blocking',
       description: 'consistent',
       isPending: async () => false,
       stages: [{ name: 'noop', fn: async () => ({ name: 'noop' }) }],
@@ -123,6 +134,7 @@ describe('MigrationRunner.apply — reconciliation (§6.2)', () => {
       fromVersion: '1.x',
       toVersion: '2.0',
       layer: 'preflight',
+      severity: 'blocking',
       description: 'fail',
       isPending: async () => true,
       stages: [
@@ -180,14 +192,18 @@ describe('runBootMigrations — two layers (§4.2.1/§4.2.7)', () => {
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
 
     const result = await runBootMigrations(crowi, { registry, policy: 'warn' });
-    expect(result.pendingPreflightIds).toEqual(['frt-pre-warn']);
+    // `frt-pre-warn` is `pendingOnce` default severity='blocking', downgraded
+    // to a warning by the warn policy.
+    expect(result.pendingBlockingIds).toEqual(['frt-pre-warn']);
+    expect(result.pendingCosmeticIds).toEqual([]);
     warn.mockRestore();
   });
 
   it('is a clean no-op with the empty (Phase 1) registry', async () => {
     const result = await runBootMigrations(crowi, { registry: createRegistry([]), policy: 'block' });
     expect(result.appliedBootIds).toEqual([]);
-    expect(result.pendingPreflightIds).toEqual([]);
+    expect(result.pendingBlockingIds).toEqual([]);
+    expect(result.pendingCosmeticIds).toEqual([]);
   });
 
   it('does not refuse boot when the only preflight migration is already clean', async () => {
@@ -196,11 +212,71 @@ describe('runBootMigrations — two layers (§4.2.1/§4.2.7)', () => {
       fromVersion: '1.x',
       toVersion: '2.0',
       layer: 'preflight',
+      severity: 'blocking',
       description: 'clean preflight',
       isPending: async () => false,
       stages: [],
     });
     const result = await runBootMigrations(crowi, { registry: new MigrationRegistry([def]), policy: 'block' });
-    expect(result.pendingPreflightIds).toEqual([]);
+    expect(result.pendingBlockingIds).toEqual([]);
+    expect(result.pendingCosmeticIds).toEqual([]);
+  });
+
+  it('does not block boot when a cosmetic preflight migration is pending under block policy', async () => {
+    // BUG 2 fix: a cosmetic migration whose corpus-scan isPending stays true
+    // (e.g. wikilink-format re-pending on new content) must NOT refuse boot.
+    const { def } = pendingOnce('frt-pre-cosmetic', 'preflight', 'cosmetic');
+    const registry = new MigrationRegistry([def]);
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    const result = await runBootMigrations(crowi, { registry, policy: 'block' });
+
+    expect(result.pendingCosmeticIds).toEqual(['frt-pre-cosmetic']);
+    expect(result.pendingBlockingIds).toEqual([]);
+    // The cosmetic-tagged warn-log carries the pending id.
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('cosmetic preflight migration(s) unapplied [frt-pre-cosmetic]'));
+    warn.mockRestore();
+  });
+
+  it('blocks on blocking but warns on cosmetic when both are pending under block policy', async () => {
+    const { def: blockingDef } = pendingOnce('frt-pre-blk', 'preflight', 'blocking');
+    const { def: cosmeticDef } = pendingOnce('frt-pre-cos', 'preflight', 'cosmetic');
+    const registry = new MigrationRegistry([blockingDef, cosmeticDef]);
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    // The cosmetic warn-log fires *before* the throw; the error carries only
+    // the blocking id. The result object is not returned on this path.
+    await expect(runBootMigrations(crowi, { registry, policy: 'block' })).rejects.toMatchObject({
+      name: 'PreflightBlockedError',
+      pendingIds: ['frt-pre-blk'],
+    });
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('cosmetic preflight migration(s) unapplied [frt-pre-cos]'));
+    warn.mockRestore();
+  });
+
+  it('warns separately for blocking and cosmetic when both are pending under warn policy', async () => {
+    const { def: blockingDef } = pendingOnce('frt-warn-blk', 'preflight', 'blocking');
+    const { def: cosmeticDef } = pendingOnce('frt-warn-cos', 'preflight', 'cosmetic');
+    const registry = new MigrationRegistry([blockingDef, cosmeticDef]);
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    const result = await runBootMigrations(crowi, { registry, policy: 'warn' });
+
+    expect(result.pendingBlockingIds).toEqual(['frt-warn-blk']);
+    expect(result.pendingCosmeticIds).toEqual(['frt-warn-cos']);
+    // Two distinct warn-logs, one per severity.
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('cosmetic preflight migration(s) unapplied [frt-warn-cos]'));
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('preflight migration(s) unapplied [frt-warn-blk] — data-integrity risk'));
+    warn.mockRestore();
+  });
+});
+
+describe('registered migration severities (regression guard)', () => {
+  it('keeps user-unique-prepare classified as blocking (else E11000 re-surfaces)', () => {
+    expect(userUniquePrepare.severity).toBe('blocking');
+  });
+
+  it('keeps relocate-reserved-api-paths cosmetic (a path move is no E11000 hazard; must not gate boot)', () => {
+    expect(relocateReservedApiPaths.severity).toBe('cosmetic');
   });
 });

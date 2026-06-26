@@ -38,7 +38,7 @@ export const DND_MAX_FILE_BYTES = 50 * 1024 * 1024;
 export const DND_MAX_FILES = 5;
 
 /**
- * Default file-type allow-list (RFC §"D&D limits"). v2.2 ships this as a
+ * Default file-type allow-list (RFC §"D&D limits"). v2.0 ships this as a
  * single global list; the RFC leaves per-instance configuration as an
  * open question (deferred). The MIME set is sourced from
  * `@crowi/api-contract` so it cannot drift from the server's

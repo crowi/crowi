@@ -27,6 +27,31 @@ export type MigrationDb = mongo.Db;
 export type MigrationLayer = 'boot' | 'preflight';
 
 /**
+ * Boot-block classification for a `preflight` migration (RFC-0008 §4.2.7
+ * amendment / §12.7).
+ *
+ *   - `blocking`  — an index-impacting / data-integrity migration (e.g.
+ *                   `user-unique-prepare`). When pending, boot is refused
+ *                   under the `block` policy (downgradeable to a warning via
+ *                   `MIGRATION_PREFLIGHT_UNAPPLIED_POLICY=warn`), because
+ *                   booting against not-yet-prepared data risks an autoIndex
+ *                   E11000 (§9).
+ *   - `cosmetic`  — a display-only migration (no data-integrity hazard), e.g.
+ *                   the body-rewriting `wikilink-format` or the path-relocating
+ *                   `relocate-reserved-api-paths`. When pending it only ever
+ *                   warns and boot continues — independent of the global
+ *                   policy. This avoids the structural deadlock where new
+ *                   content keeps a corpus-scan `isPending` perpetually true
+ *                   (§6.1/§6.2) and would otherwise refuse the whole cluster
+ *                   forever (BUG 2).
+ *
+ * `severity` lives only on a `preflight` migration (see the
+ * `MigrationDefinition` discriminated union): `boot`-layer migrations are
+ * auto-applied and never boot-probed, so they carry no `severity`.
+ */
+export type MigrationSeverity = 'cosmetic' | 'blocking';
+
+/**
  * Minimal logger surface the runner hands to a migration. Backed by the
  * runner's structured logger (console / `debug`); kept narrow so a
  * migration can't reach into transport details.
@@ -128,15 +153,14 @@ export interface MigrationStage {
   fn: (ctx: MigrationContext) => Promise<StageResult>;
 }
 
-export interface MigrationDefinition {
+/** Fields shared by every migration, independent of `layer`. */
+interface MigrationDefinitionBase {
   /** Stable identifier. Convention: dateless kebab-case slug (§5.4). */
   id: string;
 
   /** Version range this migration covers (e.g. '1.x' → '2.0'). */
   fromVersion: string;
   toVersion: string;
-
-  layer: MigrationLayer;
 
   /** Short, human-readable description (shown by `plan` / `list`). */
   description: string;
@@ -153,8 +177,9 @@ export interface MigrationDefinition {
   /**
    * REQUIRED. A cheap pending probe — O(1) or index-backed. Called on every
    * boot for every instance (§4.2.1), so it MUST NOT be a full-collection
-   * scan. For `preflight` + `block`, a false positive blocks boot for the
-   * whole cluster (§4.2.7), so authors must write this conservatively (§6.2).
+   * scan. For a `blocking` `preflight` migration under `block`, a false
+   * positive refuses boot for the whole cluster (§4.2.7), so authors must
+   * write this conservatively (§6.2).
    */
   isPending: (ctx: MigrationContext) => Promise<boolean>;
 
@@ -167,11 +192,40 @@ export interface MigrationDefinition {
 }
 
 /**
+ * A `preflight` migration: heavy / potentially destructive, applied explicitly
+ * from `crowi-admin migrate apply`. Boot only *probes* these and, per the
+ * REQUIRED `severity`, either refuses boot (`blocking` under `block`) or warns
+ * and continues (`cosmetic`, always). `severity` has no default — omitting it
+ * is a compile error, so every preflight migration is forced to declare its
+ * boot-block risk (§4.2.7 amendment / §12.7).
+ */
+export interface PreflightMigrationDefinition extends MigrationDefinitionBase {
+  layer: 'preflight';
+  severity: MigrationSeverity;
+}
+
+/**
+ * A `boot` migration: lightweight / safe, auto-applied during the boot
+ * sequence. It is never boot-probed, so it carries no `severity` — boot-block
+ * risk is a `preflight`-only concept.
+ */
+export interface BootMigrationDefinition extends MigrationDefinitionBase {
+  layer: 'boot';
+}
+
+/**
+ * A migration definition. The `layer` discriminant decides whether a
+ * `severity` is required: a `preflight` migration declares one (it gates
+ * boot), a `boot` migration does not (auto-applied, never probed).
+ */
+export type MigrationDefinition = PreflightMigrationDefinition | BootMigrationDefinition;
+
+/**
  * Identity helper that attaches the `MigrationDefinition` type to a literal
  * so migration modules get inference + a single import to depend on. Returns
  * its argument unchanged (no runtime behaviour, mirrors `defineConfig`-style
  * helpers).
  */
-export function defineMigration(def: MigrationDefinition): MigrationDefinition {
+export function defineMigration<T extends MigrationDefinition>(def: T): T {
   return def;
 }

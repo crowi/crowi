@@ -12,6 +12,7 @@ const fixture = (id: string, fromVersion: string, toVersion: string, order?: num
     fromVersion,
     toVersion,
     layer: 'preflight',
+    severity: 'blocking',
     description: `fixture ${id}`,
     order,
     stages: [],
@@ -35,7 +36,15 @@ describe('MigrationRegistry', () => {
   });
 
   it('filters by layer', () => {
-    const boot = defineMigration({ ...fixture('boot-one', '1.x', '2.0'), layer: 'boot' });
+    const boot = defineMigration({
+      id: 'boot-one',
+      fromVersion: '1.x',
+      toVersion: '2.0',
+      layer: 'boot',
+      description: 'fixture boot-one',
+      stages: [],
+      isPending: async () => false,
+    });
     const reg = new MigrationRegistry([boot, fixture('pre-one', '1.x', '2.0')]);
     expect(reg.byLayer('boot').map((m) => m.id)).toEqual(['boot-one']);
     expect(reg.byLayer('preflight').map((m) => m.id)).toEqual(['pre-one']);

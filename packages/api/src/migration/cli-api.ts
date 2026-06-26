@@ -3,7 +3,7 @@ import type { MigrationApplicationModel } from 'src/models/migration-application
 
 import { createRegistry, type MigrationRegistry } from './registry';
 import { MigrationRunner, type RunnerOptions } from './runner';
-import type { DetectReport, MigrationDefinition, MigrationLayer } from './types';
+import type { DetectReport, MigrationDefinition, MigrationLayer, MigrationSeverity } from './types';
 
 /**
  * RFC-0008 §8 — the api-side surface the `@crowi/admin-cli` `migrate` /
@@ -25,6 +25,13 @@ export interface MigrationSummary {
   fromVersion: string;
   toVersion: string;
   layer: MigrationLayer;
+  /**
+   * Boot-block classification — present only for `preflight` migrations (the
+   * boot-probed layer); `undefined` for `boot` migrations, which are
+   * auto-applied and never probed. Lets operators judge boot-block risk from
+   * `plan` / `list`.
+   */
+  severity?: MigrationSeverity;
   description: string;
 }
 
@@ -55,6 +62,8 @@ function toSummary(def: MigrationDefinition): MigrationSummary {
     fromVersion: def.fromVersion,
     toVersion: def.toVersion,
     layer: def.layer,
+    // `severity` is a `preflight`-only field (boot migrations are never probed).
+    ...(def.layer === 'preflight' ? { severity: def.severity } : {}),
     description: def.description,
   };
 }

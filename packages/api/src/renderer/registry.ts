@@ -70,7 +70,7 @@ export class RendererRegistryImpl {
   addUnifiedPlugin(plugin: unknown, registeringPlugin: string, log: PluginLogger, options?: { phase?: RenderPhase }): void {
     const phase = options?.phase ?? 'transform';
     if (phase !== 'transform') {
-      log.warn(`addUnifiedPlugin phase='${phase}' is not yet implemented in v2.1 — discarding registration`);
+      log.warn(`addUnifiedPlugin phase='${phase}' is not yet implemented in v2.0 — discarding registration`);
       return;
     }
     this.unifiedTransform.push({ plugin, registeringPlugin });

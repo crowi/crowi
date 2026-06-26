@@ -66,7 +66,7 @@ merge 後の simplify レビューで挙がった非ブロッキング改善。�
 ## ✅ 完了済み（主なマイルストーン）
 
 - **2.0.0-alpha.0 / .1 / .2 リリース** — 外部共有機能の削除（Share モデルは dormant 据え置き・LinkSharePopover は残置）/ ソーシャルログイン削除（Google/GitHub。認証ポリシー設定は不活性化で残置）/ 通知設定メニュー削除 / renameTree 移行（`POST /pages/rename` の `include_descendants`）/ version bump + tag（spec: `feature-v2-alpha1-release-prep.md`）
-- **v1→v2 データ移行（RFC-0008）** — migration framework + HTML タグ移行の不具合修正（wikilink close-tag 誤爆 + TOC HTML 混入の修復）+ wikilink-format コード領域除外（`code-mask.ts` の `splitCodeSegments` / `rewriteOutsideCode` で 3 body-rewrite migration を非コードセグメント経由に統一）+ apply タイムスタンプ保全
+- **v1→v2 データ移行（RFC-0008）** — migration framework + HTML タグ移行の不具合修正（wikilink close-tag 誤爆 + TOC HTML 混入の修復）+ wikilink-format コード領域除外（`code-mask.ts` の `splitCodeSegments` / `rewriteOutsideCode` で 3 body-rewrite migration を非コードセグメント経由に統一）+ apply タイムスタンプ保全 + preflight severity 分割（migration 毎に `severity:'cosmetic'|'blocking'`、boot probe を severity 別に。cosmetic pending は warn-and-continue、`user-unique-prepare` のみ blocking で起動拒否。永続起動拒否デッドロック解消。CLI に `[blocking]`/`[cosmetic]` タグ。spec: `feature-migration-preflight-severity.md`）
 - **配布 / リリース基盤** — runner-project 方式（spec: `feature-prod-runner-project.md`）/ web image の API URL 実行時注入（同一・クロスオリジン。spec: `feature-web-image-runtime-config.md` / `feature-web-cross-origin-runtime-env.md`）/ CI リリース自動化（changesets + npm OIDC + Docker full/slim + ES image。spec: `feature-ci-release-automation.md`）
 - **特定 revision への revert** — stale 帯の「この版に戻す」+ `POST /pages/revert-to-revision` + MCP `crowi_revert_to_revision`（非破壊・portal 対応。spec: `feature-revision-revert.md`）
 - **フェーズ1 ページ機能** — CRUD / list / portal / revision / bookmark / like / seen-by / comment / watch / trash / backlink / notification / user page / history
