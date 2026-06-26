@@ -1,11 +1,13 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef, useContext, createContext } from 'react';
+import { useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClientV2 } from './api-client';
 import { clearTokens, getRefreshToken } from './auth-token';
+import { useHasAccessToken } from './auth-token-store';
+import { getConnectionErrorHandlers } from './connection-error-ref';
 import { isNetworkError, isServerErrorStatus } from './is-network-error';
-import type { ConnectionErrorHandlers } from './connection-error-ref';
 
 interface User {
   id: string;
@@ -18,154 +20,125 @@ interface User {
   createdAt: string;
 }
 
-interface AuthState {
-  user: User | null;
-  isLoading: boolean;
-  isAuthenticated: boolean;
+interface MeResponse {
+  user: User;
 }
 
-// 接続エラーハンドラーのコンテキスト（connection-contextとは別に、オプショナルに使用）
-// 型は connection-error-ref.ts と共有する（QueryCache.onError の module-level
-// ブリッジでも同じハンドラ形を使うため）。
-const ConnectionErrorContext = createContext<ConnectionErrorHandlers | null>(null);
+/**
+ * Query-key factory for the auth resource. The `['auth']` root never collides
+ * with admin's `['admin','auth']` (`use-admin-auth-settings.ts`).
+ */
+export const authKeys = {
+  all: ['auth'] as const,
+  me: () => [...authKeys.all, 'me'] as const,
+} as const;
 
-export function useConnectionErrorHandlers(): ConnectionErrorHandlers | null {
-  return useContext(ConnectionErrorContext);
+/**
+ * queryFn for `['auth','me']`. Runs OUTSIDE the React tree (no hooks), so the
+ * connection handlers come from the module-level ref
+ * (`connection-error-ref.ts`) that `ConnectionErrorBridge` keeps pointed at the
+ * live `ConnectionProvider`.
+ *
+ * Returns the WHOLE `{ user }` body (not the bare `data.user`) so the query's
+ * `data === { user }` and `useAuth().user = data?.user`. Status policy:
+ *   - 200 → `setConnected()`, return body
+ *   - 5xx → `setServerError()`, throw WITHOUT clearing tokens (transient: the
+ *     error reducer retains the previous `data`, and `isAuthenticated=hasToken`
+ *     stays true, so the authed header doesn't drop to "logged out")
+ *   - network → `setNetworkError()`, throw without clearing tokens
+ *   - 401 → `clearTokens()` (presence → false → redirect guard fires), throw.
+ *     `retry: false` keeps this from racing the api-client refresh interceptor
+ *     that already handled the 401.
+ *
+ * Raw `.json()` parse is intentional until P0-2 introduces `parseApiResponse`;
+ * kept thin so it can be swapped later.
+ */
+async function fetchMe(): Promise<MeResponse> {
+  const handlers = getConnectionErrorHandlers();
+
+  let res: Awaited<ReturnType<typeof apiClientV2.auth.me.$get>>;
+  try {
+    res = await apiClientV2.auth.me.$get();
+  } catch (error) {
+    // Connection outage / timeout: keep tokens so the optimistic authed UI
+    // survives a transient blip; surface the connection banner.
+    if (isNetworkError(error)) handlers?.setNetworkError();
+    throw error;
+  }
+
+  if (res.ok) {
+    const data = await res.json();
+    handlers?.setConnected();
+    return data;
+  }
+
+  if (isServerErrorStatus(res.status)) {
+    handlers?.setServerError(`サーバーエラーが発生しました (${res.status})`);
+    throw new Error(`Server error (${res.status})`);
+  }
+
+  // 401 / auth failure — drop tokens. The reactive store notify flips
+  // `hasToken` to false so `isAuthenticated`/`user` go false/null at once.
+  clearTokens();
+  throw new Error(`Authentication failed (${res.status})`);
 }
 
-export { ConnectionErrorContext };
-
+/**
+ * Thin wrapper over the `['auth','me']` React Query singleton. Every consumer
+ * (15+ mount sites) shares one in-flight `/auth/me` and one cache entry, so
+ * there is no duplicate fetch and no layout/child mismatch.
+ *
+ * `hasToken` (reactive access-token presence) is the SINGLE authority for "is
+ * the client authenticated"; `isAuthenticated` / `user` are gated by it so a
+ * 401 that retains stale `data` can never read back as authenticated, and a
+ * transient 5xx that keeps the token stays authed. See the spec truth table.
+ */
 export function useAuth() {
   const router = useRouter();
-  const initialCheckDone = useRef(false);
-  const [authState, setAuthState] = useState<AuthState>({
-    user: null,
-    isLoading: true,
-    isAuthenticated: false,
+  const queryClient = useQueryClient();
+  // Subscribe to token presence FIRST and unconditionally (Rules of Hooks).
+  // Calling it behind `&&` would short-circuit under SSR and make the hook
+  // call conditional.
+  const hasToken = useHasAccessToken();
+
+  const query = useQuery({
+    queryKey: authKeys.me(),
+    queryFn: fetchMe,
+    enabled: hasToken,
+    // No auto-refetch on focus / remount / reconnect — kills loading flicker.
+    // Recovery is driven by the reactive `enabled` flip and AuthSync.
+    staleTime: Infinity,
+    gcTime: Infinity,
+    // 401 is handled by the api-client refresh interceptor; retrying here races it.
+    retry: false,
+    // No `placeholderData` on purpose: on a stable key a 5xx produces
+    // `status:'error'` (not `pending`) with `data` retained, so placeholderData
+    // is inert. 5xx resilience comes from `hasToken` + the error reducer.
   });
-
-  // ConnectionErrorHandlers をオプショナルに取得
-  const connectionHandlers = useConnectionErrorHandlers();
-
-  const fetchUser = useCallback(async () => {
-    const accessToken = localStorage.getItem('accessToken');
-
-    if (!accessToken) {
-      setAuthState({
-        user: null,
-        isLoading: false,
-        isAuthenticated: false,
-      });
-      return;
-    }
-
-    // If we have a token, assume authenticated to avoid flicker while verifying
-    if (!initialCheckDone.current) {
-      initialCheckDone.current = true;
-      setAuthState((prev) => ({
-        ...prev,
-        isAuthenticated: true,
-      }));
-    }
-
-    try {
-      // Use apiClientV2 (`hc<AppType>`) so the 401 → /auth/refresh → retry
-      // interceptor in `api-client.ts` runs. Raw `fetch` here used to
-      // bypass it and log the user out as soon as the 15-minute access
-      // token expired — even when a fresh refresh token was available.
-      const response = await apiClientV2.auth.me.$get();
-
-      if (response.ok) {
-        const data = await response.json();
-        setAuthState({
-          user: data.user,
-          isLoading: false,
-          isAuthenticated: true,
-        });
-        // 接続成功を通知
-        connectionHandlers?.setConnected();
-      } else if (isServerErrorStatus(response.status)) {
-        // サーバーエラー（5xx）: トークンはクリアせず、サーバーエラーを通知
-        connectionHandlers?.setServerError(`サーバーエラーが発生しました (${response.status})`);
-        // ローディング状態は解除するが、認証状態は維持
-        setAuthState((prev) => ({
-          ...prev,
-          isLoading: false,
-        }));
-      } else {
-        // 認証エラー（401等）: トークンをクリア
-        clearTokens();
-        setAuthState({
-          user: null,
-          isLoading: false,
-          isAuthenticated: false,
-        });
-      }
-    } catch (error) {
-      // ネットワークエラー: トークンはクリアせず、エラーを通知
-      if (isNetworkError(error)) {
-        connectionHandlers?.setNetworkError();
-        // ローディング状態は解除するが、認証状態は維持
-        setAuthState((prev) => ({
-          ...prev,
-          isLoading: false,
-        }));
-      } else {
-        // その他のエラー: 安全のためログアウト
-        clearTokens();
-        setAuthState({
-          user: null,
-          isLoading: false,
-          isAuthenticated: false,
-        });
-      }
-    }
-    // connectionHandlersは依存配列に含めない（最新の値は常に参照される）
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const logout = useCallback(async () => {
     const refreshToken = getRefreshToken();
-
-    // Call logout API if we have a token. `apiClientV2` attaches the
-    // Authorization header and refreshes on 401 transparently; logout
-    // failures are non-fatal — we clear tokens locally regardless.
     try {
-      await apiClientV2.auth.logout.$post({
-        json: refreshToken ? { refreshToken } : {},
-      });
+      await apiClientV2.auth.logout.$post({ json: refreshToken ? { refreshToken } : {} });
     } catch {
-      // Ignore — local cleanup happens below either way.
+      // Non-fatal — local cleanup happens regardless.
     }
-
-    // Clear tokens
-    clearTokens();
-
-    setAuthState({
-      user: null,
-      isLoading: false,
-      isAuthenticated: false,
-    });
-
+    clearTokens(); // reactive notify → `enabled` false
+    queryClient.clear(); // wipe ALL cache so the next user can't see the previous user's pages/notifications
     router.push('/login');
-  }, [router]);
+  }, [router, queryClient]);
 
-  // リトライコールバックを登録（初回のみ）
-  useEffect(() => {
-    if (connectionHandlers) {
-      connectionHandlers.registerRetryCallback(fetchUser);
-    }
-    // fetchUserは常に最新の関数が参照されるため、初回登録のみでよい
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const refetch = useCallback(() => queryClient.refetchQueries({ queryKey: authKeys.me() }), [queryClient]);
 
-  useEffect(() => {
-    fetchUser();
-  }, [fetchUser]);
-
+  const data = query.data;
   return {
-    ...authState,
+    // `hasToken` gate is load-bearing: never read RETAINED stale `data` once
+    // the token is gone (401 / logout / cross-tab logout).
+    user: hasToken ? (data?.user ?? null) : null,
+    // v5 `isLoading = isPending && isFetching`; `enabled:false` ⇒ idle ⇒ false.
+    isLoading: query.isLoading,
+    isAuthenticated: hasToken,
     logout,
-    refetch: fetchUser,
+    refetch,
   };
 }
