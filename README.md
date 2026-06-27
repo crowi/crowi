@@ -12,11 +12,15 @@
 </div>
 
 > [!CAUTION]
-> **Crowi v2 — codename *Reignite* — is under active development.**
+> **Crowi v2 — codename *Reignite* — is in active prerelease.**
 >
-> - No stable v2 release yet. Do not run this branch in production.
+> - Prereleases are published (latest **`2.0.0-alpha.3`**) and support an in-place
+>   upgrade from a v1 MongoDB. There is no *stable* v2 yet, so the API / config
+>   surface can still change between alphas — pin a version and read the release
+>   notes. For a real deployment use a published release, not this branch's HEAD.
 > - Crowi v1.x is deprecated and unmaintained.
-> - Track progress in [`TODO.md`](./TODO.md) and the [v2 announcement on Zenn](https://zenn.dev/sotarok/articles/34795a35a4ef74).
+> - Track progress in [`TODO.md`](./TODO.md), the [docs](https://crowi.wiki), and the
+>   [v2 announcement on Zenn](https://zenn.dev/sotarok/articles/34795a35a4ef74).
 
 ## What is Crowi
 
@@ -25,6 +29,12 @@ page hierarchy, so `/team/handbook/onboarding` reads exactly the way it's
 written. v2 ("Reignite") rebuilds the stack from Express + Swig + jQuery
 to a **Hono API + Next.js 16 (App Router) + React 19**, while keeping v1's
 MongoDB data shape intact — your existing wiki migrates over.
+
+**v2 highlights:** real-time collaborative editing (Yjs / Hocuspocus), an
+embedded Model Context Protocol (MCP) server for AI agents, OAuth 2.0 +
+personal access tokens, a pluggable storage / search / renderer / mail
+architecture, sensitive-config encryption (AES-256-GCM), dark mode, and the
+`@crowi/cli` end-user CLI.
 
 ## Monorepo layout
 
@@ -36,23 +46,32 @@ crowi/
 │   ├── crowi-runner/      # Reference runner project (@crowi/runner-app): dev launch
 │   │                      #   point + build source for the full Docker image. Owns
 │   │                      #   @crowi/api + the full plugin set + crowi.config.json.
+│   ├── crowi-runner-slim/ # Minimal runner project: build source for the slim Docker
+│   │                      #   image (core + a minimal plugin set)
 │   └── crowi-site/        # crowi.wiki LP + docs (Next.js + Fumadocs, port 4303)
 ├── .env.example           # Dev runtime env template (copy to .env)
 └── packages/
     ├── api/                          # Hono 4 API library (port 4301)
     ├── api-contract/                  # Shared Hono (@hono/zod-openapi) contracts + Zod schemas
     ├── web/                           # Next.js 16 frontend (port 4302)
+    ├── collab/                        # Realtime collab server (Yjs / Hocuspocus), attached to the api
     ├── runner/                        # Config loader + plugin resolver (used by @crowi/api boot)
+    ├── cli/                           # `@crowi/cli` end-user CLI (read / write / search over the HTTP API)
+    ├── admin-cli/                     # `crowi-admin` CLI (init / migrate / re-encrypt; DB-direct)
     ├── plugin-api/                    # Plugin SDK (CrowiPlugin / registries / context)
     ├── plugin-aws/                    # Shared AWS credentials base plugin
     ├── plugin-storage-local/          # Default-on local FS storage driver
     ├── plugin-storage-aws-s3/         # S3 storage driver
     ├── plugin-search-elasticsearch/   # Elasticsearch search driver
+    ├── plugin-search-opensearch/      # OpenSearch search driver
+    ├── plugin-search-mongo/           # MongoDB-native search driver (no external service)
+    ├── plugin-mail-smtp/              # SMTP mail transport
+    ├── plugin-mail-resend/            # Resend mail transport
+    ├── plugin-mail-aws-ses/           # AWS SES mail transport
     ├── plugin-renderer-emoji/         # `:emoji:` → 🎉 renderer
     ├── plugin-renderer-katex/         # KaTeX math renderer
     ├── plugin-renderer-plantuml/      # PlantUML diagram renderer
-    ├── plugin-renderer-crowi-legacy/  # v1-era wikilinks / strikethrough / etc.
-    └── admin-cli/                     # `crowi-admin` CLI (init / migrate / re-encrypt)
+    └── plugin-renderer-crowi-legacy/  # v1-era wikilinks / strikethrough / etc.
 ```
 
 The API package is plugin-agnostic at runtime — `@crowi/runner`
@@ -63,20 +82,21 @@ in `crowi.config.json:plugins`; the api never needs to be rebuilt.
 
 ## Tech stack
 
-- **API**: Hono 4 + `@hono/zod-openapi` + Mongoose + JWT auth (`jwtAuth` middleware)
+- **API**: Hono 4 + `@hono/zod-openapi` + Mongoose + JWT auth (`jwtAuth` middleware); OAuth 2.0 + PAT; embedded MCP server
+- **Realtime**: Yjs + Hocuspocus, attached to the api process (`@crowi/collab`)
 - **Web**: Next.js 16 (App Router, Turbopack) + React 19 + Tailwind CSS v4 + shadcn/ui + @tanstack/react-query
 - **Site**: Next.js 16 (static export) + Fumadocs UI + i18n (ja / en)
 - **Shared**: TypeScript 5.x strict, pnpm workspaces, Turborepo
 - **Lint / Format**: Biome (format) + ESLint (lint), lefthook hooks
-- **Tests**: Jest + supertest + mongodb-memory-server (API)
+- **Tests**: Jest + supertest + mongodb-memory-server (API + collab)
 
 ## Requirements
 
 - Node.js 24.x
-- pnpm 8.x or later
+- pnpm 10.x (pinned via `packageManager` in `package.json`)
 - MongoDB
 - Redis
-- Elasticsearch (optional, plugin-driven)
+- A search backend (optional, plugin-driven): Elasticsearch / OpenSearch, or the external-service-free MongoDB driver
 - Docker / Docker Compose (for local infrastructure)
 
 ## Local development
@@ -147,7 +167,8 @@ dependencies and listed in `crowi.config.json:plugins`. The shipped
 first-party plugins live under `packages/plugin-*/`:
 
 - **Storage**: `plugin-storage-local` (default), `plugin-storage-aws-s3`
-- **Search**: `plugin-search-elasticsearch`
+- **Search**: `plugin-search-elasticsearch`, `plugin-search-opensearch`, `plugin-search-mongo` (no external service)
+- **Mail**: `plugin-mail-smtp`, `plugin-mail-resend`, `plugin-mail-aws-ses`
 - **Renderers**: `plugin-renderer-emoji`, `plugin-renderer-katex`, `plugin-renderer-plantuml`, `plugin-renderer-crowi-legacy`
 
 Write your own by depending on `@crowi/plugin-api`, exporting a default
