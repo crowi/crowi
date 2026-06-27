@@ -29,7 +29,7 @@ spec: `feature-v2-alpha1-release-prep.md`（実本番 = v1 DB への in-place �
 ## High Priority — 進行中
 
 ### Plugin Architecture (RFC-0001)
-- [x] Slack plugin Phase 0/1: registerRoutes SDK 配線 + `@crowi/plugin-slack` unfurl（spec: `feature-slack-plugin.md`。残: Phase 2 slash / Phase 3 notifier / Phase E embed）
+- [x] Slack plugin Phase 0/1 完成（unfurl まで）: registerRoutes SDK 配線 + `@crowi/plugin-slack`（manifest/`ctx.appInfo()`/admin "platform" section 含む。spec: `feature-slack-plugin.md`）。残: Phase 2 slash+write（**auth-plugin RFC-0014 と連動・別途**）/ Phase 3 notifier / Phase E embed
 - [ ] Step 10: auth provider plugin 化（OAuth。alpha1 で削除、将来 plugin で復活）
 - [ ] 将来: encryption KeyProvider plugin (KMS)、S3 以外の attachment storage
 
