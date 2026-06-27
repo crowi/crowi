@@ -1,7 +1,8 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
-import { useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
+import { subscribeAuthTokenChange } from './auth-token-store';
 import { useConnection } from './connection-context';
 import { isReauthSuppressed } from './session-reauth-context';
 import { subscribeTokenRefreshed } from './token-refresh-notifier';
@@ -30,6 +31,16 @@ function readUserId(token: string | null): string | null {
   }
 }
 
+/** userId of the access token currently in localStorage (null if absent). */
+function currentUserId(): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    return readUserId(localStorage.getItem(ACCESS_KEY));
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Centralizes every auth-state listener in ONE mounted island so the thin
  * `useAuth` wrapper (rendered in 15+ places) does not register them N times.
@@ -46,6 +57,21 @@ function readUserId(token: string | null): string | null {
 export function AuthSync(): null {
   const queryClient = useQueryClient();
   const { registerRetryCallback } = useConnection();
+
+  // Identity change → drop the previous user's non-auth cache and reset the auth
+  // query so the active observer refetches /auth/me for the new user. `clear()` +
+  // `refetchQueries` is a v5 no-op when an observer is active (clear removes the
+  // query first), so use removeQueries + resetQueries. While an inline-reauth
+  // editor is mounted, recover in place instead (preserve the unsaved buffer).
+  // Shared by the cross-tab (storage) and same-tab (in-process notify) paths.
+  const handleAccountSwitch = useCallback(() => {
+    if (isReauthSuppressed()) {
+      window.dispatchEvent(new CustomEvent('auth:session-expired'));
+      return;
+    }
+    queryClient.removeQueries({ predicate: (q) => q.queryKey[0] !== authKeys.all[0] });
+    void queryClient.resetQueries({ queryKey: authKeys.me() });
+  }, [queryClient]);
 
   // session-expired (refresh failed, dispatched by api-client.ts): wipe ALL
   // cache so a re-login as a different user can't read the previous user's
@@ -101,18 +127,8 @@ export function AuthSync(): null {
         // do nothing. The reactive store keeps `enabled` true and the active
         // auth observer already holds the right user.
         if (prevUser == null || nextUser == null || prevUser === nextUser) return;
-
-        // Genuinely different user: account switch. Presence stays true so the
-        // reactive `enabled` never flips — drop the previous user's non-auth
-        // cache and reset the auth query so the active observer refetches
-        // /auth/me for the new user. `clear()` + `refetchQueries` is a v5 no-op
-        // (clear removes the query first), so use removeQueries + resetQueries.
-        if (isReauthSuppressed()) {
-          window.dispatchEvent(new CustomEvent('auth:session-expired'));
-          return;
-        }
-        queryClient.removeQueries({ predicate: (q) => q.queryKey[0] !== authKeys.all[0] });
-        void queryClient.resetQueries({ queryKey: authKeys.me() });
+        // Genuinely different user: account switch.
+        handleAccountSwitch();
         return;
       }
 
@@ -123,7 +139,30 @@ export function AuthSync(): null {
     };
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
-  }, [queryClient]);
+  }, [queryClient, handleAccountSwitch]);
+
+  // Same-tab account switch: a re-login as a DIFFERENT user WITHOUT logging out
+  // first (e.g. visiting /login or an invite / activation / reset link while
+  // already signed in, which has no authed-user guard) overwrites the access
+  // token A → B in place. `storage` never fires in the writing tab and presence
+  // stays `true`, so neither the storage handler above nor the reactive
+  // `enabled` flip would refetch — the staleTime:Infinity ['auth','me'] would
+  // keep serving the PREVIOUS user (and their non-auth cache survives). Subscribe
+  // to the in-process token-change notify (fired by storeTokens / clearTokens)
+  // and compare the userId claim to catch this.
+  useEffect(() => {
+    let lastUserId = currentUserId();
+    return subscribeAuthTokenChange(() => {
+      const prevUserId = lastUserId;
+      const nextUserId = currentUserId();
+      lastUserId = nextUserId;
+      // Only a real user change matters. login (null → user) and logout (user →
+      // null) are handled by the `enabled` flip / logout() path; a silent
+      // refresh keeps the same userId.
+      if (prevUserId == null || nextUserId == null || prevUserId === nextUserId) return;
+      handleAccountSwitch();
+    });
+  }, [handleAccountSwitch]);
 
   // Silent refresh succeeded (notifyTokenRefreshed): the auth query is active
   // (enabled:true) so invalidate refetches it — the disabled-stale filter

@@ -14,6 +14,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
  *     removeQueries(non-auth) + resetQueries(auth), NOT clear() (AC20)
  *   - cross-tab same-user silent refresh (userId equal, token string differs) →
  *     no-op (must not wipe the cache on every token rotation)
+ *   - SAME-tab account switch (re-login as a different user without logout) →
+ *     in-process notify → same removeQueries + resetQueries; same-user same-tab
+ *     refresh → no-op
  *   - silent token refresh → invalidateQueries(auth, active) (AC11)
  *   - retry button → refetchQueries(auth) via single registerRetryCallback (AC9)
  */
@@ -29,6 +32,7 @@ const { suppressed } = vi.hoisted(() => ({ suppressed: { value: false } }));
 vi.mock('./session-reauth-context', () => ({ isReauthSuppressed: () => suppressed.value }));
 
 import { AuthSync } from './AuthSync';
+import { notifyAuthTokenChange } from './auth-token-store';
 import { ConnectionProvider, useConnection } from './connection-context';
 import { notifyTokenRefreshed } from './token-refresh-notifier';
 import { authKeys } from './use-auth';
@@ -76,6 +80,7 @@ beforeEach(() => {
   push.mockReset();
   suppressed.value = false;
   capturedRetry = null;
+  localStorage.clear();
 });
 
 afterEach(() => {
@@ -184,6 +189,45 @@ describe('AuthSync', () => {
     window.removeEventListener('auth:session-expired', onExpired);
 
     expect(inlineFired).toBe(false); // same user → no spurious "session expired" modal over the editor
+  });
+
+  it('removes non-auth cache and resets the auth query on a SAME-TAB account switch (re-login as a different user, no logout)', () => {
+    localStorage.setItem('accessToken', mkAccessToken('user-a'));
+    const client = makeClient();
+    client.setQueryData(['page', 'x'], { foo: 1 }); // previous user's non-auth cache
+    const clearSpy = vi.spyOn(client, 'clear');
+    const resetSpy = vi.spyOn(client, 'resetQueries');
+    renderSync(client); // AuthSync captures lastUserId = user-a
+
+    // Authenticate as a different user in the same tab: storeTokens overwrites the
+    // token in place (presence stays true) and notifies in-process — no storage
+    // event fires in the writing tab.
+    act(() => {
+      localStorage.setItem('accessToken', mkAccessToken('user-b'));
+      notifyAuthTokenChange();
+    });
+
+    expect(clearSpy).not.toHaveBeenCalled();
+    expect(client.getQueryData(['page', 'x'])).toBeUndefined(); // previous user's cache dropped
+    expect(resetSpy).toHaveBeenCalledWith({ queryKey: authKeys.me() });
+  });
+
+  it('ignores a same-tab silent refresh (same userId, new token string)', () => {
+    localStorage.setItem('accessToken', mkAccessToken('user-a', 1));
+    const client = makeClient();
+    client.setQueryData(['page', 'x'], { foo: 1 });
+    const removeSpy = vi.spyOn(client, 'removeQueries');
+    const resetSpy = vi.spyOn(client, 'resetQueries');
+    renderSync(client);
+
+    act(() => {
+      localStorage.setItem('accessToken', mkAccessToken('user-a', 2));
+      notifyAuthTokenChange();
+    });
+
+    expect(removeSpy).not.toHaveBeenCalled();
+    expect(resetSpy).not.toHaveBeenCalled();
+    expect(client.getQueryData(['page', 'x'])).toEqual({ foo: 1 }); // survives a same-tab refresh
   });
 
   it('ignores cross-tab login (oldValue null) — leaves recovery to the reactive store', () => {

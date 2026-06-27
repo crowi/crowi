@@ -89,6 +89,18 @@ function subscribe(listener: () => void): () => void {
   };
 }
 
+/**
+ * Subscribe to ANY same-tab access-token change. Backed by the same in-process
+ * listener set that `storeTokens` / `clearTokens` notify, so a same-tab account
+ * switch (token A → token B, presence stays `true`) reaches the subscriber even
+ * though `useHasAccessToken`'s boolean snapshot is unchanged. Returns an
+ * unsubscribe fn. (Cross-tab writes arrive via the module `storage` listener
+ * above, which only re-notifies on a presence change.)
+ */
+export function subscribeAuthTokenChange(listener: () => void): () => void {
+  return subscribe(listener);
+}
+
 function getSnapshot(): boolean {
   return readPresence();
 }
