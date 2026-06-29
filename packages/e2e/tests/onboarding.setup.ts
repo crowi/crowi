@@ -1,10 +1,12 @@
 import { expect, test } from '@playwright/test';
-import { e2eUsers, storageStatePath } from '../src/config';
+import { createPageViaApi } from '../src/api';
+import { E2E_SHARED_PAGE_PATH, e2eUsers, storageStatePath } from '../src/config';
 import { extractInviteLink, waitForLatestMessageTo } from '../src/mailpit';
 import { AdminMailPage } from '../src/pages/admin-mail-page';
 import { AdminUsersPage } from '../src/pages/admin-users-page';
 import { InstallerPage } from '../src/pages/installer-page';
 import { InviteAcceptPage } from '../src/pages/invite-accept-page';
+import { writeSharedState } from '../src/shared-state';
 
 test('onboarding: install admin, configure mailpit SMTP, invite users, and accept invites', async ({ page, browser }) => {
   await page.goto('/');
@@ -50,5 +52,13 @@ test('onboarding: install admin, configure mailpit SMTP, invite users, and accep
     await new InviteAcceptPage(invitePage).acceptInvite(inviteLinks.userB, e2eUsers.userB);
     await context.storageState({ path: storageStatePath.userB });
     await context.close();
+  });
+
+  await test.step('create the shared collab page and record its id', async () => {
+    const pageId = await createPageViaApi(page.context(), {
+      path: E2E_SHARED_PAGE_PATH,
+      body: '# E2E collab shared page\n\nSeeded by the onboarding setup project.\n',
+    });
+    await writeSharedState({ pageId, pagePath: E2E_SHARED_PAGE_PATH });
   });
 });

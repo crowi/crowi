@@ -45,5 +45,11 @@ export default defineConfig({
       testMatch: /.*\.setup\.ts/,
       use: { ...devices['Desktop Chrome'] },
     },
+    {
+      name: 'e2e',
+      dependencies: ['setup'],
+      testMatch: /.*\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'] },
+    },
   ],
 });

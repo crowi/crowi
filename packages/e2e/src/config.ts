@@ -19,6 +19,21 @@ export const storageStatePath = {
   userB: path.join(E2E_AUTH_DIR, 'user-b.json'),
 } as const;
 
+/**
+ * Where the `setup` project records shared artifacts the `e2e` project reuses
+ * (currently the collab shared page id). Kept in `.auth/` so the whole reusable
+ * state set lives in one gitignored directory.
+ */
+export const sharedStatePath = path.join(E2E_AUTH_DIR, 'shared.json');
+
+/** Path of the single shared wiki page the collab scenario edits. */
+export const E2E_SHARED_PAGE_PATH = '/e2e/collab/shared';
+
+export interface E2eSharedState {
+  pageId: string;
+  pagePath: string;
+}
+
 export interface E2eUserCredentials {
   username: string;
   name: string;
