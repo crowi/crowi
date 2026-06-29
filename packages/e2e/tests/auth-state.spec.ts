@@ -59,4 +59,35 @@ test.describe('auth state propagation', () => {
 
     await expectUserMenuIdentity(page, e2eUsers.userB);
   });
+
+  test('transient server error keeps the session instead of bouncing to login', async ({ userAPage }) => {
+    await userAPage.goto(`/user/${e2eUsers.userA.username}`);
+    await expectUserMenuIdentity(userAPage, e2eUsers.userA);
+
+    // Emulate the API server being temporarily down for the auth check. This is
+    // network-layer fault injection (Playwright route interception) — the app
+    // is unmodified; only the `/auth/me` response is replaced with a 503.
+    await userAPage.route('**/api/v2/auth/me', async (route) => {
+      await route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { message: 'emulated outage' } }),
+      });
+    });
+
+    await userAPage.reload();
+
+    // A 5xx must NOT log an authenticated user out: the app surfaces the
+    // server-error modal and stays put rather than redirecting to /login
+    // (the `fetchMe` 5xx branch keeps the tokens).
+    await expect(userAPage.getByRole('dialog')).toContainText('サーバーエラー');
+    await expect(userAPage).not.toHaveURL(/\/login(?:\?.*)?$/);
+
+    // Recovery: once the server is healthy again, retrying restores the
+    // authenticated identity WITHOUT a re-login — proving the session was never
+    // cleared during the outage.
+    await userAPage.unroute('**/api/v2/auth/me');
+    await userAPage.getByRole('button', { name: '今すぐ再接続' }).click();
+    await expectUserMenuIdentity(userAPage, e2eUsers.userA);
+  });
 });
