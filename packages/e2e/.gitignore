@@ -1,0 +1,6 @@
+.auth/
+.artifacts/
+playwright-report/
+test-results/
+runner/data/
+runner/tmp/

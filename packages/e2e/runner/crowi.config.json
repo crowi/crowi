@@ -1,0 +1,16 @@
+{
+  "plugins": [
+    "@crowi/plugin-renderer-plantuml",
+    "@crowi/plugin-renderer-emoji",
+    "@crowi/plugin-renderer-katex"
+  ],
+  "storage": {
+    "driver": "local"
+  },
+  "search": {
+    "driver": "mongo"
+  },
+  "mail": {
+    "driver": "smtp"
+  }
+}
