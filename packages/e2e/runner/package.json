@@ -1,0 +1,5 @@
+{
+  "name": "@crowi/e2e-runner",
+  "private": true,
+  "description": "Runtime project directory used by @crowi/e2e so Crowi resolves the E2E crowi.config.json from a safe, dedicated cwd."
+}

@@ -1,0 +1,9 @@
+{
+  "extends": "@crowi/tsconfig/app-node.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM"],
+    "types": ["node", "@playwright/test"],
+    "noEmit": true
+  },
+  "include": ["playwright.config.ts", "src/**/*.ts", "tests/**/*.ts"]
+}
