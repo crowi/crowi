@@ -17,6 +17,8 @@
  * already exposed in localStorage.
  */
 
+import { notifyAuthTokenChange } from './auth-token-store';
+
 const ACCESS_KEY = 'accessToken';
 const REFRESH_KEY = 'refreshToken';
 const COOKIE_NAME = 'crowi.accessToken';
@@ -36,6 +38,9 @@ export function storeTokens(tokens: { accessToken: string; refreshToken?: string
   localStorage.setItem(ACCESS_KEY, tokens.accessToken);
   if (tokens.refreshToken) localStorage.setItem(REFRESH_KEY, tokens.refreshToken);
   document.cookie = `${COOKIE_NAME}=${encodeURIComponent(tokens.accessToken)}; path=/; max-age=${accessTokenTtlSeconds}; samesite=lax`;
+  // Same-tab notify: the reactive token-presence store re-evaluates `useAuth`'s
+  // `enabled` gate (false → true on login / inline reauth → auto-fetch /auth/me).
+  notifyAuthTokenChange();
 }
 
 /**
@@ -46,6 +51,9 @@ export function clearTokens(): void {
   localStorage.removeItem(ACCESS_KEY);
   localStorage.removeItem(REFRESH_KEY);
   document.cookie = `${COOKIE_NAME}=; path=/; max-age=0; samesite=lax`;
+  // Same-tab notify: flips `useAuth`'s `enabled` gate to false so the query
+  // goes idle and the layout redirect guard fires (logout / 401 / reauth fail).
+  notifyAuthTokenChange();
 }
 
 /** Convenience read used by callers that only need the access token. */
