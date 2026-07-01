@@ -15,6 +15,9 @@ pre-commit:
     - name: workspace-protocol
       glob: "**/package.json"
       run: node scripts/check-workspace-protocol.mjs
+    - name: publishable-metadata
+      glob: "**/package.json"
+      run: node scripts/check-package-publishable.mjs
 
 pre-push:
   jobs:

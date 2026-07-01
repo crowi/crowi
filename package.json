@@ -51,6 +51,7 @@
     "format": "biome format --write .",
     "format:check": "biome format .",
     "check:workspace": "node scripts/check-workspace-protocol.mjs",
+    "check:packages": "node scripts/check-package-publishable.mjs",
     "check:openapi": "node scripts/check-openapi-fresh.mjs",
     "clean": "turbo run clean",
     "e2e": "pnpm --filter @crowi/e2e e2e",
