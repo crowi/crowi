@@ -258,6 +258,10 @@ User-invocable skills (see `.claude/skills/`):
   runs simplify. See "Parallel worktree workflow" above.
 - **`/simplify <description>`** — 3-agent reuse / quality / efficiency review
   over recent changes; applies low-risk fixes inline.
+- **`/crowi-review [scope]`** — Codex adversarial review of a scope (worktree
+  diff / main-direct range / area) → Claude neutral verification → report +
+  low-risk inline fixes. No PR/merge (main-direct); falls back to Claude
+  subagents when `codex exec` is unavailable.
 
 ## Crowi Theme
 
