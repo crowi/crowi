@@ -55,7 +55,7 @@ export default (crowi: Crowi) => {
   shareAccessSchema.statics.access = async function (shareId, trackingId) {
     const query = { share: shareId, tracking: trackingId };
     const update = { lastAccessedAt: new Date() };
-    return this.findOneAndUpdate(query, update, { upsert: true, new: true }).exec();
+    return this.findOneAndUpdate(query, update, { upsert: true, returnDocument: 'after' }).exec();
   };
 
   const ShareAccess = model<ShareAccessDocument, ShareAccessModel>('ShareAccess', shareAccessSchema);

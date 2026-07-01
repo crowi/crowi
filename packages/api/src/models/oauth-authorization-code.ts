@@ -129,7 +129,7 @@ export default (_crowi: Crowi) => {
     return OAuthAuthorizationCode.findOneAndUpdate(
       { codeHash, consumedAt: null, expiresAt: { $gt: new Date() } },
       { consumedAt: new Date() },
-      { new: true },
+      { returnDocument: 'after' },
     ).exec();
   };
 

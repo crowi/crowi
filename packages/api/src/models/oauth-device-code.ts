@@ -212,7 +212,7 @@ export default (_crowi: Crowi) => {
     return OAuthDeviceCode.findOneAndUpdate(
       { deviceCodeHash, status: 'approved', consumedAt: null, expiresAt: { $gt: new Date() } },
       { consumedAt: new Date() },
-      { new: true },
+      { returnDocument: 'after' },
     ).exec();
   };
 
