@@ -140,8 +140,6 @@ Conflict resolution:
 - <file>: <採用した側 + 理由>
 
 (必要なら) Also: <gitignore 追加など merge と同時にやった整備>
-
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 ```
 
 ### Step 5.5: worktree の dev/watch プロセスを停止 (gw end の前に必須)
@@ -156,7 +154,7 @@ worktree の `pnpm dev` スタック — 特に **`next dev --turbopack`**(`.nex
 
 ```bash
 WT="${WORKTREE_PATH%/}"   # Step 1 で特定済み
-# bundler/watcher 系のみを対象 (素の node = Claude/MCP/editor は Step 6.5 に任せる)。
+# bundler/watcher 系のみを対象 (素の node = エージェント CLI / MCP / editor は Step 6.5 に任せる)。
 # 各 PID の cwd が worktree 配下にあることを確認してから止めるので、他 worktree は触らない。
 for pid in $(pgrep -f 'next|tsx|turbo|esbuild|vitest|jest|nodemon|hocuspocus' 2>/dev/null); do
   cwd=$(lsof -a -p "$pid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -1)
@@ -186,7 +184,7 @@ git branch -d <branch>  # 安全削除 (-D は使わない、merge 済みなら 
 ### Step 6.5: 該当 tmux window を閉じる (任意)
 
 `gw end` で worktree path 自体は消えるが、対応する tmux window は残る。同じ worktree
-で作業していた pane (Claude session、vim、mongosh 等) はもう不要なので、安全に
+で作業していた pane (エージェント CLI session、vim、mongosh 等) はもう不要なので、安全に
 閉じられるなら閉じる。
 
 #### 判定ロジック
@@ -203,13 +201,13 @@ tmux list-panes -a -F '#{window_id}|#{pane_id}|#{pane_current_path}|#{pane_curre
 
 - **(a) 通常 process**: `pane_current_command` が `zsh` / `bash` / `vim` / `make` /
   `mongosh` / `node` 等 → ユーザーの作業道具。**そのまま kill 候補**。
-- **(b) Claude session 作業中**: `pane_current_command` が `2.x.x` 形式 (Claude Code バージョン)
+- **(b) エージェント CLI session 作業中**: `pane_current_command` が `2.x.x` 形式 (Claude Code / Codex のバージョン)
   かつ pane title 先頭が **`⠐⠴⠼⠦` などのブレイル文字** (進行中スピナー) →
   **kill しない、Step 6.5 全体を中止**。
-- **(c) Claude session アイドル**: `2.x.x` かつ title 先頭が **`✳` (アスタリスク)** →
+- **(c) エージェント CLI session アイドル**: `2.x.x` かつ title 先頭が **`✳` (アスタリスク)** →
   プロンプト待ちで安全に kill 可能。**そのまま kill 候補**。
 
-`pane_current_command` が `2.x.x` の判定は実用的な heuristic。Claude Code のバージョン
+`pane_current_command` が `2.x.x` の判定は実用的な heuristic。エージェント CLI (Claude Code / Codex) のバージョン
 文字列が常に `<major>.<minor>.<patch>` で始まる前提に依存するので、将来検出が壊れたら
 title 文字 (`✳` vs ブレイル) のみで判定するように退避してよい。
 
@@ -226,7 +224,7 @@ tmux list-panes -a -F '#{window_id}|#{pane_current_path}' \
     done
 ```
 
-(b) が 1 つでもあれば中止し、ユーザーに「window <id> で Claude session が作業中。
+(b) が 1 つでもあれば中止し、ユーザーに「window <id> で エージェント CLI session が作業中。
 手動で確認してから閉じてください」と報告して Step 7 に進む。
 
 #### 想定外時の振る舞い
