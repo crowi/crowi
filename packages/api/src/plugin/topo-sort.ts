@@ -3,9 +3,9 @@ import type { CrowiPlugin } from '@crowi/plugin-api';
 /**
  * Topologically sort the loaded plugins so each plugin's `requires`
  * are processed (registered) before the plugin itself. A `requires`
- * entry that points at a plugin not in the input set is ignored
- * (already-loaded core defaults / sibling plugins): we only sort what
- * we have.
+ * entry outside the input set is skipped only when it is declared
+ * already-loaded (core defaults / sibling plugins); an entry that is
+ * neither in the input set nor already-loaded is rejected (see @throws).
  *
  * @throws on cycle, naming the plugins involved
  * @throws on a `requires` entry that genuinely cannot be resolved
@@ -39,7 +39,10 @@ export function topoSortPlugins(plugins: CrowiPlugin[], alreadyLoaded: ReadonlyS
   const visit = (name: string, trail: string[]): void => {
     if (visited.has(name)) return;
     if (visiting.has(name)) {
-      throw new Error(`Plugin dependency cycle detected: ${[...trail, name].join(' → ')}`);
+      // Report only the cycle itself, from the first re-encounter of `name` —
+      // not the acyclic prefix in `trail` that merely led into it.
+      const cycle = trail.slice(trail.indexOf(name));
+      throw new Error(`Plugin dependency cycle detected: ${[...cycle, name].join(' → ')}`);
     }
     const plugin = byName.get(name);
     if (!plugin) return; // already-loaded dep, not in this batch

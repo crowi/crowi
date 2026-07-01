@@ -37,6 +37,13 @@ describe('topoSortPlugins', () => {
     expect(() => topoSortPlugins(plugins)).toThrow(/cycle/);
   });
 
+  it('reports only the cycle, not the acyclic path leading into it', () => {
+    // root → a, and a ⇄ b form the cycle. The error must show `a → b → a`,
+    // not `root → a → b → a` (root points into the cycle but is not part of it).
+    const plugins = [stub('root', ['a']), stub('a', ['b']), stub('b', ['a'])];
+    expect(() => topoSortPlugins(plugins)).toThrow(/cycle detected: a → b → a$/);
+  });
+
   it('throws on duplicate plugin names', () => {
     const plugins = [stub('dup'), stub('dup')];
     expect(() => topoSortPlugins(plugins)).toThrow(/loaded twice/);
