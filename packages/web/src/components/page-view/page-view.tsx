@@ -1,40 +1,40 @@
 'use client';
 
-import { useEffect, useReducer, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { useQueryClient } from '@tanstack/react-query';
 import type { PageWithRevision, PresencePageUpdatedMessage, TocEntryResponse } from '@crowi/api-contract';
 import { PageStatusEnum } from '@crowi/api-contract';
+import { m } from '@paraglide/messages.js';
+import { useQueryClient } from '@tanstack/react-query';
 import { Edit2, FilePlus2, Info, Loader2, Trash2 } from 'lucide-react';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { LoadingSpinner } from '@/components/ui/loading-spinner';
-import { ErrorAlert } from '@/components/ui/error-alert';
+import { useRouter } from 'next/navigation';
+import { useEffect, useReducer, useRef, useState } from 'react';
+import { PageComments } from '@/components/page-comments';
 import { AccessDeniedCard } from '@/components/ui/access-denied-card';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { ErrorAlert } from '@/components/ui/error-alert';
+import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { NotFoundCard } from '@/components/ui/not-found-card';
 import { apiClientV2 } from '@/lib/api-client';
+import { isUserHomePath, pagePathToHref } from '@/lib/page-path';
+import { isStalePageRevision } from '@/lib/page-revision';
 import { useAuth } from '@/lib/use-auth';
 import { usePage } from '@/lib/use-page';
-import { usePresence } from '@/lib/use-presence';
-import { isUserHomePath, pagePathToHref } from '@/lib/page-path';
-import { usePageGrantAccent } from '@/lib/use-page-grant-accent';
 import { usePageChildren } from '@/lib/use-page-children';
-import { isStalePageRevision } from '@/lib/page-revision';
+import { usePageGrantAccent } from '@/lib/use-page-grant-accent';
 import { useRevertDeletedPage } from '@/lib/use-page-mutations';
+import { usePresence } from '@/lib/use-presence';
 import { useMarkSeenOnView } from '@/lib/use-seen';
-import { PageHeader } from './page-header';
-import { PageContent } from './page-content';
-import { PortalizeBanner } from './portalize-dialog';
+import { AttachmentList } from './attachment-list';
+import { BacklinkList } from './backlink-list';
 import { LiveSyncBanner } from './live-sync-banner';
 import { initialLiveSyncBannerState, isDisplayingOld, reduceLiveSyncBanner } from './live-sync-banner-state';
+import { PageContent } from './page-content';
+import { PageHeader } from './page-header';
 import { useTocScrollSpy } from './page-toc';
 import { PageTocColumns } from './page-toc-columns';
+import { PortalizeBanner } from './portalize-dialog';
 import { StaleRevisionBanner } from './stale-revision-banner';
-import { BacklinkList } from './backlink-list';
-import { AttachmentList } from './attachment-list';
-import { PageComments } from '@/components/page-comments';
-import { m } from '@paraglide/messages.js';
 
 // Debounce window (ms) coalescing a burst of `page-updated` frames into a
 // single body swap. Inside 200–500ms per the spec; mirrors the
@@ -199,13 +199,16 @@ export function PageView({ path, revisionId }: PageViewProps) {
 
   const handleReadOld = (): void => dispatchBanner({ type: 'read-old' });
   const handleShowLatest = (): void => {
-    const target = latestSeenRevisionIdRef.current;
     void (async () => {
       // Only `showing-latest-again` is behind the cache (newer saves
       // arrived while showing old); `showing-old`'s cache is already the
-      // latest, so switching the view is enough.
-      if (bannerState.kind === 'showing-latest-again' && target) {
-        await swapToRevision(target);
+      // latest, so switching the view is enough. Advance the cache first
+      // and flip the view ONLY if it succeeds — otherwise the banner would
+      // claim "latest" while the cache is still behind. A failed fetch
+      // keeps `showing-latest-again` so the reader can retry.
+      if (bannerState.kind === 'showing-latest-again') {
+        const target = latestSeenRevisionIdRef.current;
+        if (!target || !(await swapToRevision(target))) return;
       }
       dispatchBanner({ type: 'show-latest' });
     })();
@@ -346,7 +349,13 @@ export function PageView({ path, revisionId }: PageViewProps) {
     // view is immune to background refetch / mutation invalidation. Gating
     // (stale / draft / presence) stays keyed on the latest `page`, so the
     // WebSocket keeps running the whole time.
-    const displayedPage = isDisplayingOld(bannerState) && snapshot?.page ? snapshot.page : page;
+    //
+    // The `path` match guards SPA navigation: the reset effect runs
+    // post-commit, so on X→Y the `path` prop (and cached `page`) flip to Y
+    // one render before the effect clears the snapshot. Without this guard
+    // page X's old body would flash under page Y for that frame; the guard
+    // falls back to Y's `page` until the effect resets the snapshot.
+    const displayedPage = isDisplayingOld(bannerState) && snapshot?.page && snapshot.page.path === page.path ? snapshot.page : page;
     return (
       <PageTocColumns toc={toc} activeTocId={activeTocId}>
         <LiveSyncBanner state={bannerState} onReadOld={handleReadOld} onShowLatest={handleShowLatest} onDismiss={handleDismiss} />
