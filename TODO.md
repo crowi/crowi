@@ -18,7 +18,7 @@ alpha.0–.3 は published、alpha.4 / stable 向けに changeset 蓄積中（pr
 ## High Priority — 進行中
 
 ### Plugin Architecture (RFC-0001)
-- [ ] Step 8: notifier (Slack) plugin 化（worktree `feature-slack` で進行中。spec: `feature-slack-plugin.md`）
+- [x] Slack plugin Phase 0/1 完成（unfurl まで）: registerRoutes SDK 配線 + `@crowi/plugin-slack`（manifest/`ctx.appInfo()`/admin "platform" section 含む。spec: `feature-slack-plugin.md`）。残: Phase 2 slash+write（**auth-plugin RFC-0014 と連動・別途**）/ Phase 3 notifier / Phase E embed
 - [ ] Step 10: auth provider plugin 化（OAuth。alpha1 で削除、将来 plugin で復活）
 - [ ] 将来: encryption KeyProvider plugin (KMS)、S3 以外の attachment storage
 
@@ -34,7 +34,6 @@ alpha.0–.3 は published、alpha.4 / stable 向けに changeset 蓄積中（pr
 
 ### その他 残作業
 - [ ] error code 細分化（comment/revision の `INVALID_REQUEST`）
-- [ ] Slack event endpoint（`/_api/slack/event`）
 - [ ] web テスト基盤整備 + API coverage 強化
 
 ---

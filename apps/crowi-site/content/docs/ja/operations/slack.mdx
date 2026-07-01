@@ -1,0 +1,135 @@
+---
+title: Slack 連携
+description: Crowi のページリンクを Slack で unfurl (リッチプレビュー) する設定
+---
+
+`@crowi/plugin-slack` を有効にすると、Crowi のページ URL を Slack に貼った
+ときに **unfurl** (リッチプレビュー) されるようになります。公開ページは
+タイトル・抜粋・パンくず・更新日時のカードに、非公開ページは内容を伏せた
+最小カードに展開されます。設計の詳細は
+[RFC-0013](https://github.com/crowi/crowi/blob/main/docs/rfcs/0013-slack-plugin.md)
+を参照してください。
+
+> **Note**: Phase 1 は unfurl のみです。スラッシュコマンドや通知連携は
+> 後続フェーズで追加されます。
+
+## 仕組み
+
+Slack 連携は他のプラグインと同様、ランナープロジェクトに
+`@crowi/plugin-slack` を追加して有効化します。プラグインは次の 2 つの
+HTTP ルートを提供します。
+
+| ルート | 認証 | 用途 |
+| ------ | ---- | ---- |
+| `POST /api/v2/plugins/@crowi/plugin-slack/events` | Slack 署名のみ (公開) | Slack Events API の受信口。`link_shared` を受けて `chat.unfurl` を呼ぶ |
+| `POST /api/v2/plugins/@crowi/plugin-slack/manifest` | 管理者 (JWT) | Slack App manifest の生成 (管理画面のボタンから呼ばれる) |
+
+受信口は Crowi の認証に対しては公開ですが、**Slack のリクエスト署名**
+(HMAC-SHA256、±5 分のリプレイガード付き) で検証され、署名が一致しない
+リクエストは拒否されます。
+
+## セットアップ
+
+### 1. プラグインを有効化する
+
+ランナープロジェクトの `package.json` の依存に `@crowi/plugin-slack` を
+追加し、`crowi.config.json` の `plugins` 配列に列挙します。
+
+```json
+{
+  "plugins": ["@crowi/plugin-slack"]
+}
+```
+
+有効化すると、管理サイドバーの **プラットフォームサービス** セクションに
+「Slack」設定が現れます。
+
+### 2. manifest を生成する
+
+管理画面の Slack 設定を開き、**「Generate Slack App manifest」** ボタンを
+押すと、Slack App の manifest JSON が表示されます。ダイアログの内容を
+コピーしてください。ボタンの下には Slack アプリの新規作成ページ
+([api.slack.com/apps](https://api.slack.com/apps)) へのリンクも表示されます。
+manifest には次の値が埋め込まれています。
+
+- アプリ名 / bot 名 = この wiki の名前 (`app:title`)
+- `event_subscriptions.request_url` = `{CLIENT_URL}/api/v2/plugins/@crowi/plugin-slack/events`
+- 購読する bot イベント = `link_shared`
+- unfurl 対象ドメイン = この Crowi インスタンスのホスト
+- OAuth スコープ (最小権限) = `links:read` / `links:write` / `chat:write`
+
+### 3. Slack App を自分たちで作成する
+
+Slack App は **自分たちのワークスペース用に自分で作成** します (公開アプリや
+Marketplace アプリを使うわけではありません)。Slack の
+[Your Apps](https://api.slack.com/apps) で **「Create New App」 → 「From an
+app manifest」** を選び、インストール先のワークスペースを選んで、step 2 で
+コピーした manifest を貼り付けて作成します。
+
+> Slack 側でアプリを作成・インストールするには、対象ワークスペースで
+> アプリのインストールが許可されている (ワークスペース管理者である、または
+> 承認を得られる) 必要があります。
+
+### 4. ワークスペースにインストールして token を取得する
+
+作成したアプリの設定画面で、左メニューの **「Install App」** を開き、
+**「Install to Workspace」** で自分たちのワークスペースにインストールします
+(初回はアプリの権限への承認を求められます)。インストールすると同じ
+**「Install App」** ページに **Bot User OAuth Token (`xoxb-…`)** が表示される
+ので、これをコピーします。**Signing Secret** は **「Basic Information」**
+ページから取得します。
+
+この 2 つを Crowi の管理画面の Slack 設定に入力して保存します。
+
+| 設定項目 | 取得元 | 機密 |
+| -------- | ------ | ---- |
+| Bot User OAuth Token (`xoxb-…`) | 「Install App」 (インストール後に表示) | はい |
+| Signing Secret | 「Basic Information」 | はい |
+
+どちらも `@sensitive` 設定として扱われ、`CROWI_ENCRYPTION_KEY` が
+設定されていれば暗号化されて保存されます (詳細は
+[機密設定の暗号化](./encryption))。保存すると `reconfigure` が走り、
+**サーバを再起動しなくても** Slack クライアントが再構築されます。
+
+### 5. 動作確認
+
+公開ページの URL を Slack のチャンネルに貼ると、タイトル・抜粋・
+パンくず・更新日時のカードが展開されれば成功です。
+
+## データ漏洩ガード
+
+Slack の unfurl はチャンネルにいる全員に見えるため、可視性に注意が
+必要です。Phase 1 では次のルールで内容を制御します。
+
+- **公開 (Public) ページ** のみ、タイトル + 抜粋 + パンくず + 更新日時の
+  リッチカードを表示します。
+- それ以外 (リンクを知っている人のみ / 特定ユーザー / 自分のみ) は、
+  「🔒 Restricted page」という **本文を含まない** 最小カードになります。
+
+Slack ユーザーと Crowi ユーザーを紐付けた grant 認識つきの完全な unfurl
+は、アカウントリンク (後続フェーズ) を前提とするため v1 では行いません。
+
+## 開発環境での注意 (トンネル)
+
+Slack は `localhost` に到達できないため、開発環境では ngrok や
+cloudflared などのトンネルで Crowi を公開する必要があります。生成される
+manifest の `request_url` をトンネルの公開 URL にするには、環境変数
+`SLACK_MANIFEST_REQUEST_URL` にその公開オリジン (例:
+`https://abc123.ngrok.app`) を設定します。未設定の場合は `CLIENT_URL` が
+使われます。本番環境では `CLIENT_URL` が既に公開オリジンなので、通常は
+設定不要です。
+
+## トラブルシューティング
+
+| 症状 | 確認すること |
+| ---- | ------------ |
+| unfurl が出ない | Slack App がワークスペースにインストールされているか。manifest の unfurl ドメインがこのインスタンスのホストと一致しているか |
+| Slack から検証エラー | `request_url` がインターネットから到達可能か (dev はトンネルが必要)。signing secret が正しく入力されているか |
+| 非公開ページが空カードになる | 仕様です。公開ページのみリッチ unfurl されます |
+| 設定変更が反映されない | 保存後に `reconfigure` が走るため通常は即時反映。bot token を貼り直して再保存してください |
+
+## 関連ページ
+
+- [プラグインアーキテクチャ](../plugins/overview) — プラグインの仕組み
+- [機密設定の暗号化](./encryption) — token / signing secret の暗号化
+- [管理画面](./admin) — 管理画面の全体像

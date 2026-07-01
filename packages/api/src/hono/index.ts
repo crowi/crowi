@@ -17,6 +17,8 @@ import type Crowi from 'src/crowi';
 
 import { createHonoApp } from './app';
 import { attachMcp } from '../mcp/attach';
+import { createPluginContext } from '../plugin/plugin-context';
+import { makePluginRouterScope } from '../plugin/registries';
 import { createCors } from './middleware/cors';
 import { registerAdminCryptoRoutes } from './handlers/adminCrypto';
 import { registerAdminAppRoutes } from './handlers/admin/app';
@@ -57,6 +59,28 @@ export { createHonoApp, createJwtAdminRequired, createJwtAuth, defaultHook, hono
 export type { CrowiHonoBindings } from './app';
 
 /**
+ * RFC-0013 Phase 0 — call every loaded plugin's `registerRoutes(scope,
+ * ctx)` with a per-plugin scope bound to `app`. The scope mounts each
+ * route at `/plugins/<name>/<path>`; non-`public` routes get a per-path
+ * `createJwtAuth` install (see `makePluginRouterScope`).
+ *
+ * This runs from `buildHonoApp` rather than `PluginManager.activate`
+ * because the Hono app does not exist at boot-time activation. If the
+ * PluginManager has not bootstrapped (e.g. a unit harness that builds the
+ * app without `crowi.init()`), there are simply no plugins to mount.
+ */
+const mountPluginRoutes = (app: ReturnType<typeof createHonoApp>, crowi: Crowi): void => {
+  const manager = crowi.pluginManager;
+  if (!manager) return;
+  for (const plugin of manager.getLoadedPlugins()) {
+    if (!plugin.registerRoutes) continue;
+    const scope = makePluginRouterScope(app, crowi, plugin.name);
+    const ctx = createPluginContext(plugin, crowi, manager);
+    plugin.registerRoutes(scope, ctx);
+  }
+};
+
+/**
  * Build the Hono application chain.
  *
  * Phase 4 commits extend this chain by wrapping the previous return
@@ -80,6 +104,16 @@ export const buildHonoApp = (crowi: Crowi) => {
   // doesn't extend the typed openapi chain — so we install before
   // any `register*Routes(...)` calls.
   base.use('*', createCors(crowi));
+  // RFC-0013 Phase 0 — mount plugin-contributed HTTP routes. Each loaded
+  // plugin's `registerRoutes(scope, ctx)` is called here (NOT at boot-time
+  // activation, where the Hono app does not exist yet) with a per-plugin
+  // scope that side-effect-mutates `base`'s underlying instance at
+  // `/plugins/<name>/<path>`. Routes are plain Hono routes — they do not
+  // extend the typed openapi chain (same pattern as `attachMcp`), so the
+  // call is for its side effect and the chain continues from `base`.
+  // Mounted near the public-route group: plugin webhooks (e.g. Slack
+  // events) are `public` and authenticate themselves out-of-band.
+  mountPluginRoutes(base, crowi);
   const withApp = registerAppRoutes(base, crowi);
   const withInstaller = registerInstallerRoutes(withApp, crowi);
   const withTokenAuth = registerTokenAuthRoutes(withInstaller, crowi);

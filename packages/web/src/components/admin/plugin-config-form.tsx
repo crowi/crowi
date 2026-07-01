@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Loader2, Save, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Loader2, Save, CheckCircle2, AlertTriangle, Play, Copy, Check } from 'lucide-react';
 import type { PluginConfigResponse, PluginField, UpdatePluginConfigRequest } from '@crowi/api-contract';
 import { Button } from '@/components/ui/button';
 import { ErrorAlert } from '@/components/ui/error-alert';
@@ -10,8 +10,11 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { SecretField } from '@/components/admin/secret-field';
 import { PluginConfigValidationError, useUpdateAdminPluginConfig } from '@/lib/use-admin-plugins';
+import { apiV2BaseUrl } from '@/lib/api-client';
+import { getAccessToken } from '@/lib/auth-token';
 import { m } from '@paraglide/messages.js';
 
 interface PluginConfigFormProps {
@@ -80,7 +83,7 @@ export function PluginConfigForm({ config }: PluginConfigFormProps) {
       {serverError && <ErrorAlert message={serverError} />}
 
       {config.fields.map((field) => (
-        <FieldRow key={field.name} field={field} state={state} setState={setState} issue={issues.get(field.name)} />
+        <FieldRow key={field.name} field={field} pluginName={config.name} state={state} setState={setState} issue={issues.get(field.name)} />
       ))}
 
       <div className="flex items-center justify-end gap-3 pt-2">
@@ -96,18 +99,27 @@ export function PluginConfigForm({ config }: PluginConfigFormProps) {
 
 interface FieldRowProps {
   field: PluginField;
+  pluginName: string;
   state: FieldState;
   setState: React.Dispatch<React.SetStateAction<FieldState>>;
   issue: string | undefined;
 }
 
-function FieldRow({ field, state, setState, issue }: FieldRowProps) {
+function FieldRow({ field, pluginName, state, setState, issue }: FieldRowProps) {
   const description = field.description;
   // Localized label from the plugin's `configI18n` overlay; falls back to the
   // raw schema field name. `field.name` is still the wire key used for ids and
   // state, so only the *display* text switches to `labelDisplay`.
   const labelDisplay = field.label ?? field.name;
   const optional = field.optional ? <span className="text-muted-foreground text-xs ml-2">{m['admin.plugins.field_optional']()}</span> : null;
+
+  // `@action` fields carry no editable value — they exist purely to render a
+  // button that POSTs to the plugin's endpoint (e.g. "Generate Slack App
+  // manifest") and shows the JSON result. Short-circuit before the value
+  // controls so it never renders as a stray text input.
+  if (field.action) {
+    return <PluginActionButton pluginName={pluginName} action={field.action} description={description} />;
+  }
 
   if (field.kind === 'secret') {
     const meta = state.values[field.name] as SecretFieldState | undefined;
@@ -246,7 +258,11 @@ function FieldRow({ field, state, setState, issue }: FieldRowProps) {
         }}
         className="max-w-md"
       />
-      {description && <p className="text-muted-foreground text-xs">{description}</p>}
+      {description && (
+        <p className="text-muted-foreground text-xs">
+          <LinkifiedText text={description} />
+        </p>
+      )}
       {issue && (
         <p className="text-destructive text-xs" role="alert">
           {issue}
@@ -254,6 +270,130 @@ function FieldRow({ field, state, setState, issue }: FieldRowProps) {
       )}
     </div>
   );
+}
+
+interface PluginActionButtonProps {
+  pluginName: string;
+  action: NonNullable<PluginField['action']>;
+  /** Localized help text shown under the button; bare URLs are linkified. */
+  description?: string;
+}
+
+/**
+ * Renders an `@action` button next to (in place of) a config field and
+ * executes the plugin's contributed endpoint on click. Plugin routes are
+ * NOT on the typed `apiClientV2` chain (they have no request/response
+ * contract), so we fetch the namespaced path directly at
+ * `/api/v2/plugins/<name>/<path>` with the admin's bearer token. The
+ * response body (e.g. the Slack App manifest JSON) is shown in a dialog
+ * with a copy button — the "show + copy" UX the manifest flow needs.
+ */
+function PluginActionButton({ pluginName, action, description }: PluginActionButtonProps) {
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const run = async () => {
+    setPending(true);
+    setError(null);
+    try {
+      const token = getAccessToken();
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers.authorization = `Bearer ${token}`;
+      const response = await fetch(`${apiV2BaseUrl()}/plugins/${pluginName}${action.path}`, {
+        method: action.method,
+        headers,
+      });
+      const text = await response.text();
+      if (!response.ok) {
+        throw new Error(text || m['admin.plugins.action_failed']());
+      }
+      // Pretty-print JSON responses; fall back to the raw text otherwise.
+      setResult(prettyJson(text));
+      setCopied(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : m['admin.plugins.action_failed']());
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const copy = async () => {
+    if (result == null) return;
+    await navigator.clipboard.writeText(result);
+    setCopied(true);
+  };
+
+  return (
+    <div className="space-y-1.5">
+      <Button type="button" variant="outline" onClick={run} disabled={pending}>
+        {pending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Play className="h-4 w-4 mr-1" />}
+        {pending ? m['admin.plugins.action_pending']() : action.label}
+      </Button>
+      {description && (
+        <p className="text-muted-foreground text-xs">
+          <LinkifiedText text={description} />
+        </p>
+      )}
+      {error && <ErrorAlert message={error} />}
+
+      <Dialog open={result !== null} onOpenChange={(open) => !open && setResult(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{m['admin.plugins.action_result_title']({ label: action.label })}</DialogTitle>
+            <DialogDescription>{m['admin.plugins.action_result_description']()}</DialogDescription>
+          </DialogHeader>
+          <Textarea readOnly value={result ?? ''} rows={16} className="font-mono text-xs" />
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={copy}>
+              {copied ? <Check className="h-4 w-4 mr-1" /> : <Copy className="h-4 w-4 mr-1" />}
+              {copied ? m['admin.plugins.action_copied']() : m['admin.plugins.action_copy']()}
+            </Button>
+            <DialogClose asChild>
+              <Button type="button">{m['admin.plugins.action_close']()}</Button>
+            </DialogClose>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+/**
+ * Render help text with bare `http(s)` URLs turned into links (e.g. a
+ * plugin's "create your app here → https://…" hint). Plain text otherwise.
+ */
+function LinkifiedText({ text }: { text: string }) {
+  const parts = text.split(/(https?:\/\/[^\s]+)/g);
+  return (
+    <>
+      {parts.map((part, i) =>
+        /^https?:\/\//.test(part) ? (
+          <a
+            key={`${i}:${part}`}
+            href={part}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary underline underline-offset-2 hover:no-underline"
+          >
+            {part}
+          </a>
+        ) : (
+          <span key={`${i}:${part}`}>{part}</span>
+        ),
+      )}
+    </>
+  );
+}
+
+/** Pretty-print a JSON string; return the input unchanged when it isn't JSON. */
+function prettyJson(text: string): string {
+  try {
+    return JSON.stringify(JSON.parse(text), null, 2);
+  } catch {
+    return text;
+  }
 }
 
 function deriveOutcome(response: { hotReloaded: boolean; reconfigureFailed: boolean }): SaveOutcome {

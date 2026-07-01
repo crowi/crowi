@@ -82,7 +82,7 @@ export interface CrowiPlugin {
    * from a fixed allow-list to keep the bundle small.
    */
   adminPlacement?: {
-    section?: 'settings' | 'shared' | 'storage' | 'mail' | 'notification' | 'auth' | 'search' | 'renderer';
+    section?: 'settings' | 'shared' | 'storage' | 'mail' | 'notification' | 'auth' | 'search' | 'renderer' | 'platform';
     label?: string;
     icon?: string;
   };
@@ -138,13 +138,24 @@ export interface CrowiPlugin {
   registerHooks?: (events: EventBus, ctx: PluginContext) => void;
 
   /**
-   * ts-rest contract that the plugin contributes. Mounted at
-   * `/api/v2/plugins/<name>/*` (the `<name>` path segment guarantees
+   * HTTP routes the plugin contributes, mounted at
+   * `/api/v2/plugins/<name>/<path>` (the `<name>` path segment guarantees
    * that core endpoints and other plugins cannot collide). Used for
-   * "Test connection" buttons, OAuth callbacks, custom admin views,
-   * etc. The contract surface uses ts-rest so the admin UI can call
-   * plugin endpoints with the same `apiClient.<plugin>.<method>` shape
-   * it uses for core endpoints.
+   * inbound webhooks (Slack events / slash / interactivity), "Test
+   * connection" buttons, `@action` targets, OAuth callbacks, etc.
+   *
+   * Each route is a plain Hono handler — `scope.route(method, path,
+   * (c) => Response, opts?)`. The handler receives the raw `Context`, so
+   * `c.req.text()` / `c.req.raw` give the exact request bytes (no
+   * validator consumes the body ahead of it — the Slack signature check
+   * relies on this). Pass `{ public: true }` to bypass `createJwtAuth`
+   * for self-authenticating webhooks; omit it for Crowi-session-gated
+   * routes.
+   *
+   * Called once at boot — but unlike the other `register*` hooks, this
+   * runs inside `buildHonoApp` (the Hono app does not exist yet when
+   * plugins activate), so a plugin's `registerRoutes` fires slightly
+   * later than its `registerStorage` / `registerNotifier` / etc.
    */
   registerRoutes?: (scope: PluginRouterScope, ctx: PluginContext) => void;
 

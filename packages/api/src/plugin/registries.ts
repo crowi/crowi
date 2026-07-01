@@ -5,11 +5,20 @@ import type {
   MailSenderRegistry,
   NotifierDriver,
   NotifierRegistry,
+  PluginRouteHandler,
+  PluginRouteMethod,
+  PluginRouteOptions,
+  PluginRouterScope,
   SearchDriver,
   SearchRegistry,
   StorageDriver,
   StorageRegistry,
 } from '@crowi/plugin-api';
+import type { OpenAPIHono } from '@hono/zod-openapi';
+
+import type Crowi from 'src/crowi';
+import type { CrowiHonoBindings } from 'src/hono/app';
+import { createJwtAuth } from 'src/hono/middleware/auth';
 
 /**
  * Generic backing registry for all the typed registries below. Each
@@ -79,3 +88,53 @@ export const makeNotifierScope = (registry: DriverRegistry<NotifierDriver>, plug
 export const makeMailScope = (registry: DriverRegistry<MailSender>, plugin: string): MailSenderRegistry => ({
   register: (driverName, driver) => registry.register(driverName, driver, plugin),
 });
+
+/**
+ * Per-plugin scope handed to `registerRoutes(scope, ctx)`. Unlike the
+ * driver scopes above (which only close over a name + a registry), this
+ * one mutates the live Hono app: every `scope.route(...)` mounts a route
+ * on `app`'s underlying instance at `/plugins/<plugin>/<path>` (the
+ * `/api/v2` prefix is stripped at the listener boundary, so the route
+ * answers at `/api/v2/plugins/<plugin>/<path>`).
+ *
+ * The `<plugin>` npm name becomes a path segment as-is — npm names allow
+ * `/` (`@crowi/plugin-slack`) but Hono treats each `/`-delimited piece as
+ * a static segment, so the namespace still guarantees collision-freedom
+ * against core endpoints and other plugins (RFC-0013 §4).
+ *
+ * Routes are mounted **directly on the underlying Hono instance** (the
+ * same side-effect-mutate pattern as `attachMcp` /
+ * `registerAttachmentStreamRoutes`) rather than on the typed
+ * `@hono/zod-openapi` chain: plugin routes are plain Hono routes with no
+ * request/response contract, so they neither extend `AppType` nor appear
+ * in the OpenAPI document. Keeping them off the typed chain also keeps
+ * the body un-consumed by any validator, preserving the raw-body
+ * invariant the Slack signature check depends on (RFC-0013 §8).
+ *
+ * `public: true` mounts the route bare; otherwise `createJwtAuth(crowi)`
+ * is installed on that exact path (the per-path install mirrors
+ * `oauth.ts`'s public-vs-authed handling).
+ */
+export const makePluginRouterScope = (app: OpenAPIHono<CrowiHonoBindings>, crowi: Crowi, plugin: string): PluginRouterScope => {
+  const mountPath = (path: string): string => {
+    // Tolerate a missing leading slash so `route('POST', 'events', …)`
+    // and `route('POST', '/events', …)` both land at the same place.
+    const suffix = path.startsWith('/') ? path : `/${path}`;
+    return `/plugins/${plugin}${suffix}`;
+  };
+
+  return {
+    route(method: PluginRouteMethod, path: string, handler: PluginRouteHandler, opts?: PluginRouteOptions): void {
+      const fullPath = mountPath(path);
+      // Non-public routes get a per-path jwtAuth install (public webhooks
+      // authenticate themselves out-of-band, e.g. Slack request signing).
+      if (!opts?.public) {
+        app.use(fullPath, createJwtAuth(crowi));
+      }
+      // The handler is a plain `(c) => Response` — register it on the
+      // underlying instance for the requested verb. `app.on(method, …)`
+      // takes the method as a string so both verbs share one code path.
+      app.on(method, fullPath, handler);
+    },
+  };
+};

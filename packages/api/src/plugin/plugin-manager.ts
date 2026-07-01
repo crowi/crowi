@@ -317,9 +317,13 @@ export class PluginManager {
       plugin.registerRenderer(makeRendererScope(renderer.registry, plugin.name, ctx.log), ctx);
     }
 
-    // registerHooks and registerRoutes are wired in a later step
-    // (the EventBus and PluginRouterScope instances are not yet
-    // constructed in v0.1).
+    // `registerRoutes` is intentionally NOT called here: the Hono app
+    // does not exist yet at activation time (plugins activate during
+    // `setupPlugins`, which runs before `buildHonoApp`). It is instead
+    // invoked from `buildHonoApp`, which walks `getLoadedPlugins()` and
+    // builds a per-plugin `makePluginRouterScope` over the live app
+    // (RFC-0013 §4). `registerHooks` stays deferred — the EventBus is
+    // not yet a wired extension point in v0.1.
   }
 
   private resolveActiveDrivers(config: CrowiConfigFile): PluginRegistries['active'] {

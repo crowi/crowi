@@ -1,0 +1,133 @@
+---
+title: Slack integration
+description: Unfurl Crowi page links shared in Slack into rich previews
+---
+
+Enabling `@crowi/plugin-slack` makes Crowi page URLs **unfurl** (render a
+rich preview) when shared in Slack. Public pages expand into a card with
+the title, excerpt, breadcrumb, and last-updated time; non-public pages
+expand into a minimal card with their contents hidden. See
+[RFC-0013](https://github.com/crowi/crowi/blob/main/docs/rfcs/0013-slack-plugin.md)
+for the full design.
+
+> **Note**: Phase 1 is unfurl only. Slash commands and notifications come
+> in later phases.
+
+## How it works
+
+Like other plugins, the Slack integration is enabled by adding
+`@crowi/plugin-slack` to the runner project. The plugin contributes two
+HTTP routes:
+
+| Route | Auth | Purpose |
+| ----- | ---- | ------- |
+| `POST /api/v2/plugins/@crowi/plugin-slack/events` | Slack signature only (public) | Inbound Slack Events API endpoint. Receives `link_shared` and calls `chat.unfurl` |
+| `POST /api/v2/plugins/@crowi/plugin-slack/manifest` | Admin (JWT) | Generates the Slack App manifest (called from the admin button) |
+
+The inbound endpoint is public to Crowi's own auth, but every request is
+verified by **Slack's request signature** (HMAC-SHA256 with a ±5-minute
+replay guard); requests whose signature doesn't match are rejected.
+
+## Setup
+
+### 1. Enable the plugin
+
+Add `@crowi/plugin-slack` to your runner project's `package.json`
+dependencies and list it in the `plugins` array of `crowi.config.json`.
+
+```json
+{
+  "plugins": ["@crowi/plugin-slack"]
+}
+```
+
+Once enabled, a "Slack" settings entry appears under the **Platform
+services** section of the admin sidebar.
+
+### 2. Generate the manifest
+
+Open the Slack settings in the admin UI and click **"Generate Slack App
+manifest"**. The Slack App manifest JSON is shown in a dialog — copy it.
+A link to the Slack app creation page
+([api.slack.com/apps](https://api.slack.com/apps)) is shown beneath the
+button. The manifest embeds:
+
+- app & bot name = your wiki's name (`app:title`)
+- `event_subscriptions.request_url` = `{CLIENT_URL}/api/v2/plugins/@crowi/plugin-slack/events`
+- subscribed bot events = `link_shared`
+- unfurl domains = this Crowi instance's host
+- OAuth scopes (least-privilege) = `links:read` / `links:write` / `chat:write`
+
+### 3. Create your own Slack App
+
+You create the Slack App **yourself, for your own workspace** (this is not
+a public or Marketplace app). In Slack's
+[Your Apps](https://api.slack.com/apps), choose **"Create New App" → "From
+an app manifest"**, select the workspace you want to install into, and
+paste the manifest you copied in step 2.
+
+> Creating and installing an app requires that app installation is allowed
+> in the target workspace (you are a workspace admin, or can get approval).
+
+### 4. Install to your workspace and get the token
+
+In the app's settings, open **"Install App"** in the left menu and click
+**"Install to Workspace"** to install it into your workspace (you'll be
+asked to approve the app's permissions the first time). Once installed, the
+same **"Install App"** page shows the **Bot User OAuth Token (`xoxb-…`)** —
+copy it. The **Signing Secret** is on the **"Basic Information"** page.
+
+Enter both into Crowi's Slack admin settings and save.
+
+| Setting | Found under | Sensitive |
+| ------- | ----------- | --------- |
+| Bot User OAuth Token (`xoxb-…`) | "Install App" (shown after installing) | Yes |
+| Signing Secret | "Basic Information" | Yes |
+
+Both are `@sensitive` settings and, when `CROWI_ENCRYPTION_KEY` is set,
+are stored encrypted (see [Sensitive config encryption](./encryption)).
+Saving runs `reconfigure`, so the Slack client is rebuilt **without a
+server restart**.
+
+### 5. Verify
+
+Share a public page URL in a Slack channel. If it expands into a card with
+the title, excerpt, breadcrumb, and last-updated time, you're done.
+
+## Data-leakage guard
+
+A Slack unfurl is visible to everyone in the channel, so visibility
+matters. In Phase 1 the contents are gated as follows:
+
+- Only **public** pages get the rich card (title + excerpt + breadcrumb +
+  updated-at).
+- Everything else (anyone-with-the-link / specified users / owner-only)
+  becomes a minimal "🔒 Restricted page" card with **no body**.
+
+Grant-aware full unfurl that maps a Slack user to a Crowi user requires
+account linking (a later phase) and is intentionally out of scope for v1.
+
+## Development note (tunnel)
+
+Slack cannot reach `localhost`, so in development you must expose Crowi
+through a tunnel such as ngrok or cloudflared. To make the generated
+manifest's `request_url` point at the tunnel, set the
+`SLACK_MANIFEST_REQUEST_URL` env var to its public origin (e.g.
+`https://abc123.ngrok.app`). When unset, the manifest falls back to
+`CLIENT_URL`. In production, `CLIENT_URL` is already public, so this is
+normally left blank.
+
+## Troubleshooting
+
+| Symptom | Check |
+| ------- | ----- |
+| No unfurl appears | Is the Slack App installed in the workspace? Does the manifest's unfurl domain match this instance's host? |
+| Slack reports a verification error | Is `request_url` reachable from the internet (dev needs a tunnel)? Is the signing secret entered correctly? |
+| Non-public pages show an empty card | Working as intended — only public pages get a rich unfurl |
+| Config changes don't take effect | `reconfigure` runs on save, so changes are normally live. Re-paste the bot token and save again |
+
+## Related pages
+
+- [Plugin architecture](../plugins/overview) — how plugins work
+- [Sensitive config encryption](./encryption) — encrypting the token / signing secret
+- [Admin UI](./admin) — the admin UI overview
