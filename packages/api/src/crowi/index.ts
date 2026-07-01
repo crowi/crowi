@@ -8,6 +8,7 @@ import { createClient } from 'redis';
 import { type AttachedCollab, attachCollabServer } from 'src/collab/attach';
 import events from 'src/events';
 import { registerMentionDispatch } from 'src/events/mention-dispatch';
+import { registerPresencePageBroadcast } from 'src/events/presence-broadcast';
 import { registerRenderCacheInvalidation } from 'src/events/render-cache';
 import { buildHonoApp } from 'src/hono';
 import { stripApiV2Prefix } from 'src/hono/path-rewrite';
@@ -368,6 +369,13 @@ class Crowi {
       // happen here (not in setupEvents) because the listener captures
       // the renderer.cache handle constructed one line above.
       registerRenderCacheInvalidation(this);
+      // feature-live-page-content-sync (RFC-0003 §v2.1): fan a
+      // `page-updated` signal out over the presence channel on every
+      // new-body save so readers soft-refresh in place. Registered here
+      // (not `setupEvents`) so it is skipped in CLI mode alongside
+      // render-cache — a bulk migration must not broadcast a storm of
+      // page-updated frames.
+      registerPresencePageBroadcast(this);
       // RFC-0002 Phase 8: dispatch `@username` mention notifications on
       // page save. Wired here (not in `setupEvents`) because the dispatcher
       // reads `Revision.meta.mentions[]` produced by the renderer pipeline,

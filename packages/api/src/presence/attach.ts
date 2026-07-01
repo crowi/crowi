@@ -8,7 +8,7 @@ import type Crowi from 'src/crowi';
 import type { UserDocument } from 'src/models/user';
 import type { PageDocument } from 'src/models/page';
 import { createPresenceTokenUtil } from 'src/util/presence-token';
-import { getPresenceService, type PresenceService } from 'src/service/presence';
+import { getPresenceService, type PresenceService, type PageUpdatedPayload } from 'src/service/presence';
 
 const debug = Debug('crowi:presence:attach');
 
@@ -156,10 +156,36 @@ export async function attachPresenceServer(httpServer: HttpServer, crowi: Crowi)
     }
   };
 
+  /**
+   * Push a page-updated signal to every locally-connected client for
+   * `pageId` (feature-live-page-content-sync). Mirrors `broadcastViewers`
+   * but needs no presence re-read — the payload arrives complete from
+   * the publisher. `sendJson` no-ops on a non-OPEN socket, so collecting
+   * the targets synchronously is safe.
+   */
+  const broadcastPageUpdated = (pageId: string, payload: PageUpdatedPayload): void => {
+    const message = {
+      type: 'page-updated' as const,
+      pageId: payload.pageId,
+      revisionId: payload.revisionId,
+      editorUserId: payload.editorUserId,
+      editorDisplayName: payload.editorDisplayName,
+    };
+    for (const conn of connections.values()) {
+      if (conn.pageId === pageId) sendJson(conn.ws, message);
+    }
+  };
+
   // Subscribe to viewer-list changes (local + cross-instance). The
   // unsubscribe fn is invoked on shutdown.
   const unsubscribe = presence.onViewersChanged((pageId: string) => {
     void broadcastViewers(pageId);
+  });
+
+  // Subscribe to page-updated signals (local + cross-instance) and fan
+  // them out to this instance's viewer sockets. Unsubscribed on shutdown.
+  const unsubscribePageUpdated = presence.onPageUpdated((pageId: string, payload: PageUpdatedPayload) => {
+    broadcastPageUpdated(pageId, payload);
   });
 
   /**
@@ -395,9 +421,14 @@ export async function attachPresenceServer(httpServer: HttpServer, crowi: Crowi)
         // best-effort — server may already be tearing down.
       }
 
-      // 2. Stop reacting to viewer-list changes.
+      // 2. Stop reacting to viewer-list + page-updated changes.
       try {
         unsubscribe();
+      } catch {
+        // best-effort
+      }
+      try {
+        unsubscribePageUpdated();
       } catch {
         // best-effort
       }

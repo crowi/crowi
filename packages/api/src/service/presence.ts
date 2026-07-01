@@ -61,6 +61,15 @@ const VIEWER_HASH_PREFIX = 'crowi:presence:viewers:';
 /** Redis pub/sub channel for cross-instance viewer-list invalidation. */
 const PRESENCE_UPDATES_CHANNEL = 'crowi:presence:updates';
 /**
+ * Redis pub/sub channel for cross-instance page-updated fan-out
+ * (feature-live-page-content-sync). Distinct from
+ * `PRESENCE_UPDATES_CHANNEL`, which carries bare pageId strings for the
+ * viewer-list — this one carries a JSON `PageUpdatedPayload` so mixing
+ * them on one channel would corrupt the viewer-list subscriber's
+ * `emitChange(message)` (it treats the payload as a pageId).
+ */
+const PRESENCE_PAGE_UPDATED_CHANNEL = 'crowi:presence:page-updated';
+/**
  * Redis key prefix for the per-page *editing hash* — the presence-owned
  * short-lived editing signal that drives the `✏️` badge. One field per
  * editor connection (`<userId>:<socketId>`), value `lastSeenAt`.
@@ -128,6 +137,21 @@ export interface ViewerIdentity {
   username: string;
   displayName: string;
   avatarUrl: string | null;
+}
+
+/**
+ * Signal payload for the read-side soft-refresh
+ * (feature-live-page-content-sync). Mirrors the api-contract
+ * `PresencePageUpdatedMessage` wire shape. Deliberately identity-only —
+ * NO `body` / `renderedAst` — so a private page's content never crosses
+ * the presence channel; the client re-fetches the body from the
+ * permission-checked `GET /pages/revisions/{id}`.
+ */
+export interface PageUpdatedPayload {
+  pageId: string;
+  revisionId: string;
+  editorUserId: string;
+  editorDisplayName: string;
 }
 
 /**
@@ -209,7 +233,22 @@ export interface PresenceService {
    * changed (local or cross-instance). Returns an unsubscribe fn.
    */
   onViewersChanged(listener: (pageId: string) => void): () => void;
-  /** Tear down the dedicated pub/sub subscriber client. */
+  /**
+   * Broadcast that a new revision was saved for `pageId`
+   * (feature-live-page-content-sync). Fans out to every connected
+   * viewer socket (local + cross-instance) so the read-side
+   * soft-refresh can swap the body in place. Uses the `'page-updated'`
+   * local emitter event + the dedicated Redis channel — the viewer-list
+   * `'change'` path is untouched.
+   */
+  publishPageUpdated(pageId: string, payload: PageUpdatedPayload): Promise<void>;
+  /**
+   * Subscribe to page-updated signals. The listener is invoked with the
+   * `pageId` + full `PageUpdatedPayload` whenever a new revision was
+   * saved for a page (local or cross-instance). Returns an unsubscribe fn.
+   */
+  onPageUpdated(listener: (pageId: string, payload: PageUpdatedPayload) => void): () => void;
+  /** Tear down the dedicated pub/sub subscriber client(s). */
   shutdown(): Promise<void>;
 }
 
@@ -359,6 +398,15 @@ function createInProcessPresenceService(emitter: EventEmitter, emitChange: (page
       emitter.on('change', listener);
       return () => emitter.off('change', listener);
     },
+    async publishPageUpdated(pageId, payload) {
+      // Single-instance: emit directly to the local subscribers. No
+      // Redis, so there is no cross-instance leg and no double-delivery.
+      emitter.emit('page-updated', pageId, payload);
+    },
+    onPageUpdated(listener) {
+      emitter.on('page-updated', listener);
+      return () => emitter.off('page-updated', listener);
+    },
     async shutdown() {
       emitter.removeAllListeners();
     },
@@ -390,6 +438,35 @@ async function createRedisPresenceService(redis: PresenceRedisClient, emitter: E
     // behaviour for *this* process — local clients still work, but
     // cross-instance fan-out is lost. Never fatal.
     console.warn('[crowi:presence] pub/sub subscriber setup failed — cross-instance fan-out disabled:', (err as Error).message);
+  }
+
+  // SECOND subscriber, dedicated to the page-updated channel. node-redis
+  // v4 puts a connection into subscriber mode on `subscribe` and it can
+  // then no longer issue regular commands — so this needs its own
+  // `duplicate()` distinct from both the primary (hash writes) and the
+  // viewer-list subscriber above. Its own failure is likewise non-fatal:
+  // cross-instance page-updated fan-out is lost for this process while
+  // local delivery keeps working.
+  let pageUpdatedSubscriber: PresenceRedisClient | null = null;
+  try {
+    const dup = redis.duplicate();
+    await dup.connect();
+    await dup.subscribe(PRESENCE_PAGE_UPDATED_CHANNEL, (message: string) => {
+      try {
+        const payload = JSON.parse(message) as PageUpdatedPayload;
+        if (payload && typeof payload.pageId === 'string' && typeof payload.revisionId === 'string') {
+          emitter.emit('page-updated', payload.pageId, payload);
+        }
+      } catch {
+        // Corrupt frame — ignore (same fail-soft posture as the corrupt
+        // viewer-hash field path).
+        debug('dropping unparseable page-updated frame on %s', PRESENCE_PAGE_UPDATED_CHANNEL);
+      }
+    });
+    pageUpdatedSubscriber = dup;
+    debug('presence pub/sub subscriber connected on %s', PRESENCE_PAGE_UPDATED_CHANNEL);
+  } catch (err) {
+    console.warn('[crowi:presence] page-updated subscriber setup failed — cross-instance fan-out disabled:', (err as Error).message);
   }
 
   /**
@@ -596,6 +673,31 @@ async function createRedisPresenceService(redis: PresenceRedisClient, emitter: E
       return () => emitter.off('change', listener);
     },
 
+    async publishPageUpdated(pageId, payload) {
+      // Two-step, mirroring `publishChange`: emit locally so *this*
+      // instance's viewer sockets get the lowest-latency delivery, then
+      // publish so the OTHER instances' page-updated subscribers pick it
+      // up. Redis loops the publish back to this instance's own
+      // subscriber too, so `broadcastPageUpdated` runs twice on the
+      // origin and its local viewers receive the same frame twice —
+      // harmless because the client coalesces via debounce + a
+      // `revision.createdAt` monotonicity guard (see
+      // feature-live-page-content-sync spec §"double-send"). Kept
+      // symmetric with the viewer-list path rather than optimised to a
+      // single leg.
+      emitter.emit('page-updated', pageId, payload);
+      try {
+        await redis.publish(PRESENCE_PAGE_UPDATED_CHANNEL, JSON.stringify(payload));
+      } catch (err) {
+        console.warn(`[crowi:presence] page-updated publish failed for page ${pageId}:`, (err as Error).message);
+      }
+    },
+
+    onPageUpdated(listener) {
+      emitter.on('page-updated', listener);
+      return () => emitter.off('page-updated', listener);
+    },
+
     async shutdown() {
       emitter.removeAllListeners();
       if (subscriber) {
@@ -605,6 +707,14 @@ async function createRedisPresenceService(redis: PresenceRedisClient, emitter: E
           debug('subscriber disconnect failed: %s', (err as Error).message);
         }
         subscriber = null;
+      }
+      if (pageUpdatedSubscriber) {
+        try {
+          await pageUpdatedSubscriber.disconnect();
+        } catch (err) {
+          debug('page-updated subscriber disconnect failed: %s', (err as Error).message);
+        }
+        pageUpdatedSubscriber = null;
       }
     },
   };
@@ -732,4 +842,4 @@ export const _setPresenceServiceForTesting = (service: PresenceService | null): 
   cachedService = service == null ? null : Promise.resolve(service);
 };
 
-export { PRESENCE_UPDATES_CHANNEL, VIEWER_HASH_PREFIX, VIEWER_TTL_MS, EDITING_HASH_PREFIX, EDITING_TTL_MS, EDITING_REFRESH_MS };
+export { PRESENCE_UPDATES_CHANNEL, PRESENCE_PAGE_UPDATED_CHANNEL, VIEWER_HASH_PREFIX, VIEWER_TTL_MS, EDITING_HASH_PREFIX, EDITING_TTL_MS, EDITING_REFRESH_MS };
