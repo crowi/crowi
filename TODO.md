@@ -58,7 +58,7 @@ merge 後の simplify レビューで挙がった非ブロッキング改善。�
 - [ ] **replace-url.ts:29-30 の stale コメント修正** — `grant ?? pageData.grant` 化済みの comment-only trivial fix（旧 wikilink-code-exclusion の out-of-scope 分）
 - [ ] **editor-preview-reliability merge advisory** — (F3) `InvalidateReason` は3コード宣言だが api は `updatePage` から `'page-body-replaced'` のみ emit、`deletePage`/`rename` が live collab doc を invalidate しない（編集中に rename/削除されると stale doc 編集を継続→save 時に初めて conflict）。rename/deletePage を既存 reason code で invalidate 配線、または未使用2コード削除で型を正直に。+ (F1) `use-yjs-token.ts`/`use-presence.ts` の token-refetch-on-silent-refresh 重複ブロックを `useRefetchTokenOnSilentRefresh(queryKey)` に抽出。F2(presence/notifications の WS lifecycle 重複)は既存 backlog「WS 基盤の重複抽出」が該当・本 merge で拡大を確認
 - [ ] **eslint 8 → 9 major up**（`packages/api` / `packages/collab` の direct eslint 8.57.1。flat config 統一含む。GHSA `js-yaml` advisory が transitive 経由で残るのは eslint 8 chain が `@eslint/eslintrc → js-yaml@4.1.1` を要求するため）
-- [ ] **mongoose 8 → 9 major up**（`packages/api` / `packages/collab` / `packages/plugin-search-mongo`。GHSA `ip-address` advisory が transitive 経由で残るのは mongoose 8 → mongodb 6.20 → socks 2.8.4 → ip-address@9.0.5 chain で、socks 2.8.7+ の ip-address 10.x 切替が引けないため）
+- [x] **mongoose 8 → 9 major up**（`packages/api` / `packages/collab` / `packages/plugin-search-mongo`。mongodb 6→7・mms 10→11 同伴。GHSA `ip-address` chain は mongoose major とは直交し、root `pnpm.overrides` の `"socks": "^2.8.7"` で解消）
 
 ---
 
