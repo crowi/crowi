@@ -1,5 +1,11 @@
 # @crowi/web
 
+## 2.0.0-alpha.5
+
+### Patch Changes
+
+- Version bump to stay in lockstep with the fixed `@crowi/api` / `@crowi/api-contract` group (no `@crowi/web` code change).
+
 ## 2.0.0-alpha.4
 
 ### Patch Changes

@@ -32,6 +32,8 @@
   },
   "changesets": [
     "admin-nav-restructure",
+    "api-contract-plugin-action-schema",
+    "api-plugin-routes-wiring",
     "app-info-version-capabilities",
     "auth-dark-mode",
     "avatar-client-crop-resize",
