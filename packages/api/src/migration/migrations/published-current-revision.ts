@@ -1,3 +1,4 @@
+import type { Types } from 'mongoose';
 import { STATUS_PUBLISHED } from 'src/models/page';
 import type { MigrationContext } from '../types';
 
@@ -80,7 +81,7 @@ export async function forEachPublishedCurrentRevision(
   // its page (preserving page order). Returns STOP if `visit` asked to abort.
   const flush = async (): Promise<typeof STOP | void> => {
     if (batch.length === 0) return;
-    const ids = batch.map((p) => p.revision);
+    const ids = batch.map((p) => p.revision).filter((id): id is Types.ObjectId => id != null);
     const revisions = await Revision.find({ _id: { $in: ids } })
       .select(projection)
       .lean()
