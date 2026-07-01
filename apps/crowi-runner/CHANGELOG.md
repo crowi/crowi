@@ -1,5 +1,15 @@
 # @crowi/runner-app
 
+## 2.0.0-alpha.1
+
+### Patch Changes
+
+- Updated dependencies [66f1de2]
+- Updated dependencies [e9aad03]
+- Updated dependencies [2f70464]
+  - @crowi/plugin-api@0.1.0-alpha.2
+  - @crowi/plugin-slack@0.1.0-alpha.0
+
 ## 2.0.0-alpha.0
 
 ### Patch Changes
