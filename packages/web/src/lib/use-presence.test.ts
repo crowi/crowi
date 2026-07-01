@@ -231,6 +231,31 @@ describe('usePresence', () => {
     expect(result.current.status).toBe('connected');
   });
 
+  it('invokes onPageUpdated for another user save and suppresses the caller own save', async () => {
+    getPresenceToken.mockResolvedValue(tokenOkResponse(TOKEN_OK));
+    const onPageUpdated = vi.fn();
+
+    const { result } = renderHook(() => usePresence('page-1', { onPageUpdated }), { wrapper: makeWrapper() });
+    await flush();
+    const ws = FakeWebSocket.instances[0];
+
+    const fromBob = { type: 'page-updated', pageId: 'page-1', revisionId: 'rev-9', editorUserId: 'bob', editorDisplayName: 'Bob' };
+    act(() => {
+      ws.open();
+      ws.emitRaw(JSON.stringify(fromBob));
+    });
+    expect(onPageUpdated).toHaveBeenCalledTimes(1);
+    expect(onPageUpdated).toHaveBeenCalledWith(fromBob);
+    // A page-updated frame never touches the viewer list.
+    expect(result.current.viewers).toEqual([]);
+
+    // The caller's own save (editorUserId === selfUserId 'me') is suppressed.
+    act(() => {
+      ws.emitRaw(JSON.stringify({ type: 'page-updated', pageId: 'page-1', revisionId: 'rev-10', editorUserId: 'me', editorDisplayName: 'Me' }));
+    });
+    expect(onPageUpdated).toHaveBeenCalledTimes(1);
+  });
+
   it('reports error status when the WebSocket closes uncleanly', async () => {
     getPresenceToken.mockResolvedValue(tokenOkResponse(TOKEN_OK));
 
