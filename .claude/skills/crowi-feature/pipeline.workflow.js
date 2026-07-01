@@ -75,6 +75,18 @@ const VERDICT = {
     verdict: { type: 'string', enum: ['APPROVED', 'NEEDS_WORK', 'ESCALATE'] },
     summary: { type: 'string' },
     blocking: { type: 'array', items: { type: 'string' } },
+    // Non-blocking improvements. autofix=true → an implementer polish pass fixes
+    // them before commit (the default — never defer to a TODO); autofix=false →
+    // genuinely out-of-scope, surfaced to the human in the run summary.
+    advisories: {
+      type: 'array',
+      items: {
+        type: 'object',
+        required: ['description', 'autofix'],
+        additionalProperties: true,
+        properties: { description: { type: 'string' }, autofix: { type: 'boolean' } },
+      },
+    },
   },
 }
 const COMMIT_RESULT = {
@@ -146,7 +158,9 @@ async function runPhase(p) {
         `boundaries, and crowi-site docs reflection (when docsTargets is set). Record concrete ` +
         `NEEDS_WORK feedback on the task when not approving. Return your verdict: APPROVED when all AC ` +
         `are met and the quality bar passes; NEEDS_WORK when fixable issues remain; ESCALATE only when ` +
-        `a human design decision is genuinely required.`,
+        `a human design decision is genuinely required. Also return advisories[] — non-blocking ` +
+        `improvements each tagged autofix (in-scope / mechanical → fixed before commit, the default) or ` +
+        `defer (genuinely out-of-scope → surfaced to the human, NOT written to any TODO). Lean autofix.`,
       { agentType: 'feature-reviewer', label: `review:${ID}${suffix(p)}#${attempt}`, schema: VERDICT },
     )
     if (verdict === null) return { ok: false, needsHuman: true, reason: 'reviewer did not complete' }
@@ -158,6 +172,28 @@ async function runPhase(p) {
 
   if (!verdict || verdict.verdict !== 'APPROVED') {
     return { ok: false, needsHuman: true, reason: `still NEEDS_WORK after ${MAX_REVIEW} attempts: ${verdict ? verdict.summary : 'no verdict'}` }
+  }
+
+  // Default: fix the reviewer's in-scope advisories BEFORE commit rather than
+  // deferring them to a TODO. One polish pass; the implementer re-runs every
+  // required check, so a broken advisory-fix cannot land. `defer` advisories are
+  // left for the human (surfaced in the run summary), never written to a TODO.
+  const autofix = (verdict.advisories || []).filter((a) => a && a.autofix)
+  if (autofix.length) {
+    phase('Build')
+    const polished = await agent(
+      `crowi-feature IMPLEMENTER (advisory polish) for task "${ID}"${t}. The reviewer APPROVED the AC ` +
+        `but flagged these in-scope improvements — fix them ALL now (this is the default, not optional): ` +
+        autofix.map((a, i) => `(${i + 1}) ${a.description}`).join('  ') +
+        `. Keep the diff tight, refresh commitPlan, and re-run type-check / test / lint / format — they ` +
+        `MUST all stay green. If one of these turns out to be a larger change than a local polish, STOP ` +
+        `and set ready=false with the reason (do NOT record it as a TODO); the human decides. Set ` +
+        `ready=true once the fixes are in and every required check passes.`,
+      { agentType: 'feature-implementer', label: `polish:${ID}${suffix(p)}`, schema: IMPL_RESULT },
+    )
+    if (polished === null) return { ok: false, needsHuman: true, reason: 'advisory polish pass did not complete' }
+    if (!polished.ready) return { ok: false, needsHuman: true, reason: polished.blockedReason || polished.summary || 'advisory polish blocked' }
+    log(`[${ID}${suffix(p)}] advisory polish: fixed ${autofix.length} — ${polished.summary}`)
   }
 
   phase('Commit')

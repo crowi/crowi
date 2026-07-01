@@ -40,9 +40,11 @@ globs:
    ↓
 [Workflow: pipeline.workflow.js] ← 制御フローはコード (予告して止まる失敗が起きない)
    for each phase:
-     planner? → implementer → simplify? → reviewer ─┬(APPROVED)→ committer
+     planner? → implementer → simplify? → reviewer ─┬(APPROVED)→ polish(autofix advisory) → committer
                     ↑                                │
                     └────── NEEDS_WORK (最大 N 回) ──┘
+     ※ reviewer の advisory は既定で修正: in-scope(autofix)は commit 前に polish pass で
+       直す。out-of-scope(defer)のみ人間に surface(TODO には書かない)。
    autoContinue=false の phase 手前で GATED 返却 → 人間に resume を促す
    ↓
 [skill] Workflow の status (DONE / GATED / ESCALATE / FAILED) で報告
