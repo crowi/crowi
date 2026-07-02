@@ -4,24 +4,32 @@
 # Called by thin glue agents (haiku/low) from Workflow scripts, or directly
 # from a skill's Bash step.
 #
-# Usage:
+# Usage (exec mode — the normal path; structured output):
 #   codex-run.sh --prompt-file <path> --out <path>
 #                [--schema-file <path>]   # NOTE: OpenAI strict mode — every object
 #                                         # in the schema MUST set
 #                                         # "additionalProperties": false and list
 #                                         # every property in "required" (optional
-#                                         # fields use type: ["...","null"]),
+#                                         # fields use anyOf [T, null]),
 #                                         # or codex rejects it with a 400.
-#                [--sandbox read-only|workspace-write]   # default: read-only (exec mode only)
-#                [--mode exec|review]                    # default: exec
-#                [--review-target "--uncommitted" | "--base main" | "--commit <sha>"]
+#                [--sandbox read-only|workspace-write]   # default: read-only
 #                [--model <m>] [--effort <e>]            # default: codex config
 #                [--label <s>]                           # log prefix only
+#
+# Usage (review mode — codex's stock reviewer; free-form text output):
+#   codex-run.sh --mode review --review-target "--uncommitted"|"--base <b>"|"--commit <sha>"
+#                --out <path> [--model/--effort/--label]
+#   Measured on codex-cli 0.142.5: `codex exec review` REJECTS a custom PROMPT
+#   when a target flag is given, and silently IGNORES --output-schema (the
+#   final message stays free-form). So review mode takes NO --prompt-file and
+#   NO --schema-file — any reviewer that needs custom instructions (embedded
+#   AC, adversarial framing) or structured findings must use exec mode with a
+#   read-only sandbox and ask codex to run `git diff`/`git status` itself.
 #
 # Exit code contract (the glue agent branches on this):
 #   0 — success; <out> holds the result (valid JSON when --schema-file given)
 #   2 — codex unavailable (not installed / auth / quota / rate-limit — fall back to Claude)
-#   3 — codex ran but the output is invalid (empty out / invalid JSON)
+#   3 — codex ran but the output is invalid (empty out / invalid JSON), or bad usage
 #
 # stderr of codex is always appended to <out>.stderr, stdout to <out>.log,
 # so a failed run can be debugged after the fact.
@@ -51,16 +59,34 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-if [ -z "$PROMPT_FILE" ] || [ -z "$OUT" ]; then
-  echo "[$LABEL] --prompt-file and --out are required" >&2
-  exit 3
-fi
-if [ ! -s "$PROMPT_FILE" ]; then
-  echo "[$LABEL] prompt file missing or empty: $PROMPT_FILE" >&2
-  exit 3
-fi
 case "$MODE" in exec|review) ;; *) echo "[$LABEL] invalid --mode: $MODE" >&2; exit 3 ;; esac
 case "$SANDBOX" in read-only|workspace-write) ;; *) echo "[$LABEL] invalid --sandbox: $SANDBOX" >&2; exit 3 ;; esac
+if [ -z "$OUT" ]; then
+  echo "[$LABEL] --out is required" >&2
+  exit 3
+fi
+if [ "$MODE" = "exec" ]; then
+  if [ -z "$PROMPT_FILE" ]; then
+    echo "[$LABEL] --prompt-file is required in exec mode" >&2
+    exit 3
+  fi
+  if [ ! -s "$PROMPT_FILE" ]; then
+    echo "[$LABEL] prompt file missing or empty: $PROMPT_FILE" >&2
+    exit 3
+  fi
+else
+  # review mode: codex-cli rejects PROMPT alongside a target flag and ignores
+  # --output-schema (measured 0.142.5) — refuse both so callers don't silently
+  # lose their instructions/schema. Use exec mode instead when you need them.
+  if [ -z "$REVIEW_TARGET" ]; then
+    echo "[$LABEL] --review-target is required in review mode" >&2
+    exit 3
+  fi
+  if [ -n "$PROMPT_FILE" ] || [ -n "$SCHEMA_FILE" ]; then
+    echo "[$LABEL] review mode takes no --prompt-file/--schema-file (codex rejects/ignores them); use --mode exec" >&2
+    exit 3
+  fi
+fi
 
 # ---- preflight -------------------------------------------------------------
 if [ "${CODEX_RUN_FORCE_UNAVAILABLE:-0}" = "1" ]; then
@@ -79,24 +105,24 @@ LOG_FILE="$OUT.log"
 : > "$LOG_FILE"
 
 # ---- command assembly ------------------------------------------------------
-# review mode: `codex exec review` is sandboxed by codex itself (no -s flag);
-# it DOES accept --output-schema / -o (verified on codex-cli 0.142.5).
+# review mode: `codex exec review` is sandboxed by codex itself (no -s flag),
+# takes no PROMPT with a target flag, and ignores --output-schema (see header) —
+# the preflight above already rejected --prompt-file/--schema-file for it.
 build_cmd() {
   CMD=(codex exec)
   if [ "$MODE" = "review" ]; then
     CMD+=(review)
-    if [ -n "$REVIEW_TARGET" ]; then
-      # intentionally word-split: the target is a flag group like "--base main"
-      # shellcheck disable=SC2206
-      CMD+=($REVIEW_TARGET)
-    fi
+    # intentionally word-split: the target is a flag group like "--base main"
+    # shellcheck disable=SC2206
+    CMD+=($REVIEW_TARGET)
   else
     CMD+=(-s "$SANDBOX")
   fi
   [ -n "$MODEL" ] && CMD+=(-m "$MODEL")
   [ -n "$EFFORT" ] && CMD+=(-c "model_reasoning_effort=\"$EFFORT\"")
   [ -n "$SCHEMA_FILE" ] && CMD+=(--output-schema "$SCHEMA_FILE")
-  CMD+=(-o "$OUT" -)
+  CMD+=(-o "$OUT")
+  if [ "$MODE" = "exec" ]; then CMD+=(-); fi
 }
 
 # Patterns that mean "codex itself is unavailable" (quota / auth / rate-limit),
@@ -127,7 +153,11 @@ run_once() {
   {
     echo "--- [$LABEL] attempt $attempt: $(printf '%q ' "${CMD[@]}")"
   } >> "$STDERR_FILE"
-  "${CMD[@]}" < "$PROMPT_FILE" >> "$LOG_FILE" 2>> "$STDERR_FILE"
+  if [ "$MODE" = "exec" ]; then
+    "${CMD[@]}" < "$PROMPT_FILE" >> "$LOG_FILE" 2>> "$STDERR_FILE"
+  else
+    "${CMD[@]}" < /dev/null >> "$LOG_FILE" 2>> "$STDERR_FILE"
+  fi
 }
 
 succeeded() {

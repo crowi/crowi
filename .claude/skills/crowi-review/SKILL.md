@@ -62,27 +62,33 @@ codex / subagent の出力は**まず `.reviews/crowi-review/` に書き**、そ
 ## Stage 0 — Codex 敵対的レビュー (wrapper 経由)
 
 すべての codex 呼び出しは **`.claude/scripts/codex-run.sh`** に集約する
-(直接 `codex exec` を叩かない)。レビューは読み取り専用で完結し、findings は
-`--out` に構造化 JSON で受け取る。
+(直接 `codex exec` を叩かない)。**常に exec モード + `--sandbox read-only`** を使い、
+findings は `--out` に構造化 JSON で受け取る。
 
-1. スコープを wrapper の引数に翻訳する:
-   - 未コミット変更 → `--mode review --review-target "--uncommitted"`
-   - ブランチ差分 → `--mode review --review-target "--base main"`
-   - 単一 commit → `--mode review --review-target "--commit <sha>"`
-   - **git range (`A..B`) / path・エリア** — review サブコマンドで表現できないので
-     `--mode exec --sandbox read-only` に落とし、prompt に「`git diff A..B` を自分で
-     実行して (または `<path>` 配下を読んで) レビューせよ」を含める。
+> wrapper の `--mode review` (codex 標準レビュー) は本 skill では**使わない**:
+> codex-cli の review サブコマンドはカスタム prompt をターゲットフラグと併用できず、
+> `--output-schema` も無視する (0.142.5 実測)。敵対指示 + 構造化 findings が必須の
+> 本 skill は exec モードでスコープ取得も codex 自身にやらせる。
+
+1. スコープを prompt 内の取得指示に翻訳する (`<SCOPE_INSTRUCTIONS>`):
+   - 未コミット変更 → 「`git status --porcelain` + `git diff HEAD` で取得し、
+     untracked ファイルは直接読め」
+   - ブランチ差分 → 「`git diff main...HEAD`」
+   - 単一 commit → 「`git show <sha>`」
+   - git range → 「`git diff A..B`」
+   - path・エリア → 「`<path>` 配下のファイルを読め」
 2. 実行:
 
 ```bash
 mkdir -p .reviews/crowi-review
 cat > .reviews/crowi-review/prompt.md <<'PROMPT'
-Perform an adversarial code review of <SCOPE>. For each finding give: a stable
-id, severity (critical/high/medium/low), file (+ line when known), the defect,
-a concrete reproduction trigger, the impact, and a concrete fix. Be hostile —
-surface everything that could be wrong (correctness, security, resource/leak,
-race, API/contract drift). Do NOT edit code. Do NOT run destructive git
-commands. Return JSON matching the output schema.
+Perform an adversarial code review of <SCOPE>. Gather the changes yourself:
+<SCOPE_INSTRUCTIONS>. For each finding give: a stable id, severity
+(critical/high/medium/low), file (+ line when known), the defect, a concrete
+reproduction trigger, the impact, and a concrete fix. Be hostile — surface
+everything that could be wrong (correctness, security, resource/leak, race,
+API/contract drift). Do NOT edit code. Do NOT run destructive git commands.
+Return JSON matching the output schema.
 PROMPT
 cat > .reviews/crowi-review/schema.json <<'SCHEMA'
 { "type": "object", "required": ["findings"], "additionalProperties": false,
@@ -99,11 +105,10 @@ cat > .reviews/crowi-review/schema.json <<'SCHEMA'
       "impact": {"type": "string"}, "fix": {"type": "string"}
     } } } } }
 SCHEMA
-bash .claude/scripts/codex-run.sh \
+bash .claude/scripts/codex-run.sh --sandbox read-only \
   --prompt-file .reviews/crowi-review/prompt.md \
   --schema-file .reviews/crowi-review/schema.json \
-  --out .reviews/crowi-review/findings.json --label crowi-review \
-  <上記 1 で決めた --mode / --review-target / --sandbox>
+  --out .reviews/crowi-review/findings.json --label crowi-review
 ```
 
 (schema は OpenAI strict 準拠 — `additionalProperties: false` + 全 property を

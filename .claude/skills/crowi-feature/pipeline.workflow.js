@@ -158,11 +158,13 @@ function codexReviewerPrompt(p, attempt) {
     `You are a MECHANICAL REVIEW RUNNER for crowi-feature task "${ID}"${tag(p)} (attempt ` +
     `${attempt}/${MAX_REVIEW}). Follow the steps EXACTLY in order. Do NOT review or fix any code ` +
     `yourself — your only judgments are pass/fail of commands and copying data.\n\n` +
-    `STEP 1 — objective gates. Run each with Bash from the repo root, in order (generous timeouts):\n` +
-    `  (a) if \`git diff --name-only HEAD\` touches packages/api-contract/: ` +
+    `STEP 1 — objective gates. First list the pending work: \`git status --porcelain\` (this ` +
+    `includes untracked files — a brand-new file must count). Then run each gate with Bash from ` +
+    `the repo root, in order (generous timeouts):\n` +
+    `  (a) if any pending file is under packages/api-contract/: ` +
     `pnpm --filter @crowi/api-contract build && pnpm check:openapi\n` +
     `  (b) pnpm --filter @crowi/api type-check\n` +
-    `  (c) if the diff touches packages/web/: pnpm --filter @crowi/web type-check\n` +
+    `  (c) if any pending file is under packages/web/: pnpm --filter @crowi/web type-check\n` +
     `  (d) pnpm --filter @crowi/api test\n` +
     `  (e) pnpm lint   (errors must be 0; warnings tolerated)\n` +
     `If ANY gate fails: do NOT run codex. Your verdict is ` +
@@ -173,17 +175,19 @@ function codexReviewerPrompt(p, attempt) {
     `${isMulti(p) ? ` for phase ${p.id}` : ''}, context.docsTargets, and the most recent ` +
     `reviewFeedback if present. Also read the "## 設計の主な判断" section of ` +
     `.feature-state/specs/${ID}.md if that file exists.\n` +
-    `  Write ${runDir}/prompt.md: instructions for an adversarial review of the UNCOMMITTED diff — ` +
-    `verify every acceptance criterion (embed the AC list verbatim), api-contract integrity, ` +
-    `security, transaction boundaries, and crowi-site docs reflection when docsTargets is set ` +
-    `(embed docsTargets + the design judgments verbatim). Ask for verdict APPROVED (all AC met, ` +
-    `quality bar passes) / NEEDS_WORK (fixable issues; list them in blocking[]) / ESCALATE (only ` +
-    `when a human design decision is genuinely required), plus advisories[] — non-blocking ` +
-    `improvements each tagged autofix true (in-scope/mechanical, the default) or false (genuinely ` +
-    `out-of-scope). Lean autofix.\n` +
+    `  Write ${runDir}/prompt.md: instructions for an adversarial review of the UNCOMMITTED work — ` +
+    `tell the reviewer to gather it itself with \`git status --porcelain\` + \`git diff HEAD\` and ` +
+    `to read untracked files directly. It must verify every acceptance criterion (embed the AC ` +
+    `list verbatim), api-contract integrity, security, transaction boundaries, and crowi-site docs ` +
+    `reflection when docsTargets is set (embed docsTargets + the design judgments verbatim). Ask ` +
+    `for verdict APPROVED (all AC met, quality bar passes) / NEEDS_WORK (fixable issues; list them ` +
+    `in blocking[], each with file:line) / ESCALATE (only when a human design decision is genuinely ` +
+    `required), plus advisories[] — non-blocking improvements each tagged autofix true ` +
+    `(in-scope/mechanical, the default) or false (genuinely out-of-scope). Lean autofix.\n` +
     `  Write ${runDir}/schema.json with the SCHEMA block below.\n\n` +
-    `STEP 3 — run codex with Bash (set timeout to 600000ms):\n` +
-    `  bash .claude/scripts/codex-run.sh --mode review --review-target "--uncommitted" ` +
+    `STEP 3 — run codex with Bash (set timeout to 600000ms). Use exec mode — codex's review ` +
+    `subcommand ignores custom prompts/schemas:\n` +
+    `  bash .claude/scripts/codex-run.sh --sandbox read-only ` +
     `--prompt-file ${runDir}/prompt.md --schema-file ${runDir}/schema.json ` +
     `--out ${runDir}/out.json --label review-${sanitize(ID)}\n` +
     `  - exit 0 -> your verdict is the JSON in ${runDir}/out.json\n` +
@@ -191,12 +195,19 @@ function codexReviewerPrompt(p, attempt) {
     `note:<last line of ${runDir}/out.json.stderr>} and STOP (skip STEP 4)\n` +
     `  - exit 3 -> return {status:"invalid_output", note:<same>} and STOP (skip STEP 4)\n\n` +
     `STEP 4 — record + return (only when you hold a verdict from STEP 1 or STEP 3):\n` +
-    `  Update .feature-state/tasks/${ID}.json: set reviewFeedback = {attempt: ${attempt}, ` +
-    `by: "gates"|"codex", at: <current UTC time from \`date -u +%FT%TZ\`>, verdict, summary, ` +
-    `blocking, advisories}${isMulti(p) ? ` on the phases[] entry with id "${p.id}"` : ''} and append ` +
-    `a matching history entry. Write atomically: write the full JSON to ` +
-    `.feature-state/tasks/${ID}.json.tmp with Write, then \`mv\` it over the original with Bash.\n` +
-    `  Return {status:"ok", data:<the verdict JSON>}.\n\n` +
+    `  Update .feature-state/tasks/${ID}.json exactly the way the feature-reviewer agent would, so ` +
+    `the implementer/committer agents can consume it${isMulti(p) ? ` (all on the phases[] entry with id "${p.id}")` : ''}:\n` +
+    `  - status: "APPROVED" when verdict=APPROVED; "NEEDS_WORK" when verdict=NEEDS_WORK; leave the ` +
+    `current status untouched for ESCALATE\n` +
+    `  - reviewAttempts: ${attempt}\n` +
+    `  - reviewFeedback: {decision: <verdict>, by: "gates"|"codex", reviewedAt: <UTC time from ` +
+    `\`date -u +%FT%TZ\`>, summary: <summary>, issues: [one {severity:"high", file:<file:line if ` +
+    `present in the blocking entry, else "">, message:<the blocking entry>, suggestion:""} per ` +
+    `blocking entry], advisories: <advisories>}\n` +
+    `  - append a matching history entry {phase:"reviewer", at:<same time>, summary:<verdict + 1 line>}\n` +
+    `  Write atomically: write the full JSON to .feature-state/tasks/${ID}.json.tmp with Write, ` +
+    `then \`mv\` it over the original with Bash.\n` +
+    `  Return {status:"ok", data:<the verdict JSON — verdict/summary/blocking/advisories>}.\n\n` +
     `SCHEMA:\n<<<\n${JSON.stringify(VERDICT_STRICT)}\n>>>`
   )
 }
