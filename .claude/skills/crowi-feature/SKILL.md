@@ -98,9 +98,23 @@ worktree ローカル**（共有しない）。理由:
   "commitStrategy": "main-direct",
   "maxReviewAttempts": 3,
   "runSimplify": true,
-  "minScopeSize": "small"
+  "minScopeSize": "small",
+  "codexReviewer": false
 }
 ```
+
+`codexReviewer`（既定 `false`）: `true` にすると review ステージが
+**客観ゲート先行 + Codex レビュー**に切り替わる — thin glue (haiku) がまず
+契約 build / check:openapi (契約変更時) / type-check / test / lint を bash で
+実行し、**1 つでも fail なら codex を呼ばずに即 NEEDS_WORK**（トークンほぼゼロ・
+確実）。全部 green のときだけ `codex-run.sh --mode review --review-target
+"--uncommitted"` で敵対レビューを走らせ、AC / 設計判断 / docsTargets を埋め込んだ
+VERDICT (APPROVED/NEEDS_WORK/ESCALATE + blocking + advisories) を返させる。
+glue が `tasks/{id}.json` に `reviewFeedback` を tmp+rename で記録する。
+codex 不可・出力不正時は**従来の feature-reviewer agent に自動 fallback**
+（`feature-reviewer.md` は温存）。fallback 発動は Workflow 返り値の
+`codexFallbacks[]` に載るので報告に明記する。Phase 1 (crowi-design / crowi-review)
+で Codex の判定品質を見てから `true` に切り替える運用。
 
 ### queue.json スキーマ（PER-WORKTREE, volatile）
 
@@ -329,7 +343,8 @@ reviewer,committer} エージェントを `agentType` でそのまま再利用�
 skill がやること (= Workflow の外側、人間ゲートを持つ層):
 
 ```
-2.1. config.json を読む: minScopeSize (既定 small) / maxReviewAttempts (既定 3) / runSimplify
+2.1. config.json を読む: minScopeSize (既定 small) / maxReviewAttempts (既定 3) / runSimplify /
+     codexReviewer (既定 false)
 2.2. needsPlanner を決める: spec.scope > minScopeSize なら true
      (順序 trivial<small<medium<large)
 2.3. multi-phase 判定: spec に `### Phase N:` が 2 本以上あれば phases[] を抽出。
@@ -339,7 +354,7 @@ skill がやること (= Workflow の外側、人間ゲートを持つ層):
      `--phase=N` 指定時は phases を N 以降に絞る。
 2.4. Workflow を起動 (同じ turn 内で必ず発火):
      Workflow({ scriptPath: '.claude/skills/crowi-feature/pipeline.workflow.js',
-                args: { id, needsPlanner, runSimplify, maxReviewAttempts, phases } })
+                args: { id, needsPlanner, runSimplify, maxReviewAttempts, codexReviewer, phases } })
 2.5. Workflow の返り値 status で分岐 (これだけが skill の判断材料):
      - DONE      → 完了報告 (step 4)
      - GATED     → 「Phase <gatedAt> は要調整。続けるなら `/feature {id} --phase=<gatedAt>`」
