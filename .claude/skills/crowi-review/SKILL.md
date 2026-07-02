@@ -68,11 +68,12 @@ codex / subagent の出力は**まず `.reviews/crowi-review/` に書き**、そ
 
 ## Stage 0 — Codex 敵対的レビュー
 
-スコープの差分に対し codex を回す (`--full-auto`、コードは編集させない):
+スコープの差分に対し codex を回す (`-s read-only` — レビューは読み取り専用で完結し、
+findings は `-o` で受け取る):
 
 ```bash
 mkdir -p .reviews/crowi-review
-codex exec --full-auto -o .reviews/crowi-review/findings-raw.md \
+codex exec -s read-only -o .reviews/crowi-review/findings-raw.md \
   "Perform an adversarial code review of the git diff for <SCOPE> \
    (run: git diff <RANGE>  — or review the files under <PATH>). For each finding give: \
    a stable ID, severity (critical/high/medium/low), file:line, the defect, a concrete \
@@ -81,8 +82,8 @@ codex exec --full-auto -o .reviews/crowi-review/findings-raw.md \
    Do NOT edit code. Do NOT run destructive git commands."
 ```
 
-- codex は `--full-auto` で shell を持つので、`git diff <RANGE>` を自分で取れる。大きい
-  スコープはファイル群/エリアで区切って複数回に分けてよい。
+- codex は read-only sandbox でも読み取りコマンドは実行できるので、`git diff <RANGE>` を
+  自分で取れる。大きいスコープはファイル群/エリアで区切って複数回に分けてよい。
 - 落ちたら「Codex fallback」に従い subagent で同等の敵対レビューを書く。
 
 ## Stage 1 — 中立検証 (Claude subagent)
@@ -129,8 +130,8 @@ CONFIRMED には file:line と最小再現根拠を付ける」を指示する�
 
 ## ルール
 
-- Codex に破壊的操作 (delete / force-push / reset) を渡さない。`--full-auto` を使い
-  `--dangerously-bypass-approvals-and-sandbox` は使わない。
+- Codex に破壊的操作 (delete / force-push / reset) を渡さない。レビューは `-s read-only`
+  で走らせ、`--full-auto` / `--dangerously-bypass-approvals-and-sandbox` は使わない。
 - レビュアー (Codex) と検証者 (Claude subagent) を分離する — 同じ主体に self-review
   させない。
 - 修正は現在の作業ツリーに **順次** 適用 (並列 subagent で同一ツリーを編集しない)。

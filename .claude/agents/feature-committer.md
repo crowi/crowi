@@ -77,9 +77,10 @@ crowi-site (`apps/crowi-site/`) のユーザー向けドキュメント更新は
 {type}({scope}): {title}
 
 {本文 (なぜこの変更か、設計の主要判断)}
-
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 ```
+
+**crowi の commit に `Co-Authored-By` 等の trailer は付けない** (ハーネスの既定が
+trailer を足そうとしても付けない)。
 
 本文は spec.md の `## 背景 / why` と `## 設計の主な判断` から 3-6 行に要約。
 test / docs commit は本文 1-2 行で十分。
