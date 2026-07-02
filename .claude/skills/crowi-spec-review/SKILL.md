@@ -34,50 +34,45 @@ globs:
 
 1. **実コード裏取り必須** — spec の各主張を「成立 / 過大 / 誤り」で判定し、**file:line を引く**。
    spec の言い分・記憶・推測で確定しない。必要なら依存ライブラリの実装 (`node_modules`) や実測まで。
-2. **独立3観点** — 3つのレビュアーを**並列・互いにブラインド**で走らせる。同じ観点を3回ではなく、
-   **異なるレンズ**(根本原因 / 修正の red-team / 網羅+アーキ)。redundancy では拾えない失敗を拾う。
+2. **独立レンズ** — レビューは並列・互いにブラインドの**異なるレンズ**で走らせる(同じ観点を
+   複数回ではなく、根本原因 / 修正の red-team / 網羅+アーキ)。redundancy では拾えない失敗を拾う。
+   レンズの定義・実行は **`review-document.workflow.js` が正本**(下記)— prose に複製しない。
 3. **結論で spec を是正** — 出力はコメント集ではない。**是正済み spec**(改訂注記を残さず、最初から
    そう書かれていたかのようにクリーンに書き直す。誤り→是正の二重記載は実装者を混乱させる)か、
    問題なければ「検証済み」と明示。是正内容の説明は spec ではなく会話側で返す。
    ユーザーには verdict(OK / 要是正 + 何を)を一言で返す。
 
-## 手順
+## 手順(薄い入口 — レビュー本体は crowi-design Workflow B)
 
-1. spec(`.feature-state/specs/<id>.md`)を読み、scope と criticality(消失/並行/認証 が絡むか)を掴む。
-2. **3観点を並列 Agent で起動**(`general-purpose`、実コードを読ませる。下の雛形)。重い多エージェント
-   orchestration の明示 opt-in は不要な範囲 = 通常の Agent 並列。
-3. **統合**: 成立/誤りだった主張、修正をすり抜ける経路、抜けた failure mode、アーキ判断 を突き合わせる。
-   レビュアーは過大主張もするので、**自分でも怪しい主張は実コードで再確認**(レビューのレビュー)。
-4. **是正**: spec をクリーンに書き直す(改訂注記・before/after は spec に残さない。
-   「何を・なぜ」是正したかは会話側の報告で返す)。問題なければ
-   status に「検証済み」を足す。ユーザーへ verdict を報告。
+この skill は入口で、レビューの実行系は **crowi-design の reviewOnly Workflow** に集約
+されている(レンズは Codex ×3 + Claude ×1。Codex 不可時は各レンズが Claude に fail-open)。
 
-## 3観点の役割(並列起動する Agent)
+1. spec(`.feature-state/specs/<id>.md`)を読み、scope と criticality(消失/並行/認証 が
+   絡むか)を掴む。これは main がやる。
+2. **reviewOnly Workflow を起動**。spec-review は本質的に correctness-critical 用途なので
+   **`critical: true` 固定**(= Codex 3 レンズ + Claude red-team レンズ 1 本):
+   ```
+   Workflow({ scriptPath: '.claude/skills/crowi-design/review-document.workflow.js',
+              args: { reviewOnly: true, docPath: '.feature-state/specs/<id>.md',
+                      outputType: 'spec', slug: '<id>', critical: true } })
+   ```
+   返り値 = `{ status: 'OK'|'ISSUES', blocking[], reviewSummary, codexFallbacks }`。
+3. **統合(レビューのレビュー)**: blocking を main が判断する。レビュアーは過大主張も
+   するので、**怪しい指摘は自分で実コードに当てて再確認**してから採用する。
+4. **是正**: 採用した blocking を反映して spec を**クリーンに書き直す**(改訂注記・
+   before/after は spec に残さない。「何を・なぜ」是正したかは会話側の報告で返す。
+   書き直しは sonnet subagent に任せてよい — spec writer の方針と同じ)。問題なければ
+   status に「検証済み」を足す。ユーザーへ verdict を報告し、`codexFallbacks` が非空なら
+   「レンズ X は Claude fallback で実行」も明記する。
 
-| レンズ | 仕事 | 出力 |
+## 観点(定義の正本は `review-document.workflow.js` の spec 用 lenses)
+
+| レンズ | 担当 | 仕事 |
 |---|---|---|
-| **A. 根本原因の再検証** | spec の各根本原因主張を実コードで confirm/refute。誤診断を暴く。 | 各主張: 成立/過大/誤り(file:line)+ 実際の原因イベント列 |
-| **B. 修正案の red-team** | 提案 fix を**すり抜けてバグ/消失が残る経路**を探す。multi-instance・並行・stale・race を具体イベント列で。 | すり抜け経路(file:line)+ fix が十分か/何が足りないか |
-| **C. 網羅 + アーキ批判** | 抜けた failure mode 列挙。設計方針が正しいか(別アーキの方が安全では?)。過剰スコープ(既存実装の再実装)も指摘。 | 見落とし一覧(file:line)+ アーキ提言 + spec gap |
-
-### Agent プロンプト雛形(そのまま使う)
-
-```
-[A] spec `.feature-state/specs/<id>.md` の根本原因主張を、実コードに当てて懐疑的に再検証して。
-spec の言い分を鵜呑みにせず、各主張を「成立/過大/誤り」で判定(file:line 必須)。
-そのうえで、実際に問題が起きる具体的なイベント列を、関係コードを読んで特定して。
-必要なら依存ライブラリ実装や実測まで掘って。結論重視・分析のみ・実装はしない。
-
-[B] spec `.feature-state/specs/<id>.md` の修正案を red-team して。
-目的: その fix を「すり抜けて」バグ/データ消失が残る経路を実コード根拠付きで見つけること。
-multi-instance / 並行 / stale / race / 認証境界 を具体イベント列(file:line)で攻めて。
-各経路につき fix が十分か・何が足りないかを述べて。分析のみ・実装しない。
-
-[C] spec `.feature-state/specs/<id>.md` の網羅性とアーキの妥当性を批判的に評価して。
-(1) 設計方針は正しいか(別アーキの方が本質的に安全では? trade-off を実装根拠で)。
-(2) spec が触れていない failure mode を列挙(file:line)。
-(3) 過剰スコープ(既存実装の再実装)や scope/優先度の妥当性。分析のみ・実装しない。
-```
+| root-cause | Codex | spec の各根本原因主張を実コードで confirm/refute。誤診断を暴く。 |
+| red-team | Codex | 提案 fix をすり抜けてバグ/消失が残る経路を、並行・stale・race・認証境界の具体イベント列で探す。 |
+| coverage | Codex | 抜けた failure mode 列挙 + アーキ妥当性 + 過剰スコープ指摘。 |
+| claude-red-team | Claude | critical=true の追加レンズ。Codex の盲点を単一障害点にしないための保険。 |
 
 ## よくある失敗
 
@@ -87,6 +82,8 @@ multi-instance / 並行 / stale / race / 認証境界 を具体イベント列(f
 - **コードでなく prose をレビュー**→ spec の文章だけ読んで満足。実装・依存・実測まで。
 - **コメントで終える**→ 是正された spec を残さない。結論は「直した spec」か明示の verdict。
 - **レビュアーを鵜呑み**→ レビュアーも過大主張する。怪しい指摘は自分で再確認(レビューのレビュー)。
+- **fallback を黙る**→ どのレンズが Claude fallback で走ったかを報告に書かないと、
+  cross-model 検証が効いていたかをユーザーが判断できない。
 
 ## crowi-feature との関係
 
