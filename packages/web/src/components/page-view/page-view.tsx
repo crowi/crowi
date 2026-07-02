@@ -73,13 +73,6 @@ export function PageView({ path, revisionId }: PageViewProps) {
   const canMarkSeen = Boolean(page?._id) && !isLoading && !isError && !notFound && !notGranted && !isDeleted && !redirectTo;
   useMarkSeenOnView(page?._id, canMarkSeen);
 
-  // TOC + its scroll-spy are computed here (before the early returns, so the
-  // hook order stays stable) and shared by the right-rail `PageToc` and the
-  // header `PageTocMenu`. `toc` is derived from the possibly-null page; the
-  // hook no-ops for an empty list.
-  const toc = page?.revision?.meta?.toc ?? EMPTY_TOC;
-  const activeTocId = useTocScrollSpy(toc);
-
   useEffect(() => {
     if (redirectTo) {
       const redirectUrl = `${redirectTo}?redirectFrom=${encodeURIComponent(path)}`;
@@ -124,8 +117,9 @@ export function PageView({ path, revisionId }: PageViewProps) {
    * Returns whether the cache was actually advanced.
    */
   const swapToRevision = async (targetRevisionId: string): Promise<boolean> => {
-    const cachedPage = readWrapper()?.page;
-    if (!cachedPage) return false;
+    // Existence check before spending a fetch; the authoritative
+    // monotonicity compare happens post-fetch against the *current* cache.
+    if (!readWrapper()?.page) return false;
 
     let fetchedRevision: PageWithRevision['revision'];
     try {
@@ -138,19 +132,37 @@ export function PageView({ path, revisionId }: PageViewProps) {
       return false;
     }
 
-    // Monotonicity guard (ms resolution) — only advance to a strictly
-    // newer revision. Uses `createdAt`, not ObjectId order, so a
-    // cross-instance same-second save cannot rewind the cache.
-    const cachedTime = Date.parse(cachedPage.revision.createdAt);
+    // Re-read the cache AFTER the fetch: overlapping page-updated frames can
+    // spawn concurrent fetches, and comparing against a pre-fetch snapshot
+    // would let a late-resolving older fetch rewind a newer revision a
+    // faster one already wrote. Compare against the *current* cache — no
+    // await between this read and the setQueryData below, so it is atomic in
+    // JS's single thread — and drop the stale result instead. Monotonicity
+    // uses `createdAt` (ms), not ObjectId order, so a cross-instance
+    // same-second save cannot rewind the cache either.
+    const currentPage = readWrapper()?.page;
+    if (!currentPage) return false;
+    const currentTime = Date.parse(currentPage.revision.createdAt);
     const fetchedTime = Date.parse(fetchedRevision.createdAt);
-    if (!(fetchedTime > cachedTime)) return false;
+    if (!(fetchedTime > currentTime)) return false;
 
     // Capture the version currently shown BEFORE writing, so "read the
     // previous version" renders the true pre-swap body.
-    setSnapshot({ page: cachedPage, notFound: false, notGranted: false });
+    setSnapshot({ page: currentPage, notFound: false, notGranted: false });
 
     const scrollY = typeof window !== 'undefined' ? window.scrollY : 0;
-    const newPage: PageWithRevision = { ...cachedPage, revision: fetchedRevision, latestRevision: fetchedRevision._id };
+    const newPage: PageWithRevision = {
+      ...currentPage,
+      revision: fetchedRevision,
+      latestRevision: fetchedRevision._id,
+      // Advance the page metadata too, or the meta chip / header would keep
+      // showing the previous revision's editor and timestamp while the body
+      // changed under them. `author` is populated by GET /pages/revisions/:id
+      // (findRevision `.populate('author')`); fall back to the cached value
+      // if it is ever absent.
+      lastUpdateUser: fetchedRevision.author ?? currentPage.lastUpdateUser,
+      updatedAt: fetchedRevision.createdAt,
+    };
     queryClient.setQueryData<PageQueryData>(pageQueryKey, { page: newPage, notFound: false, notGranted: false });
 
     // Restore scroll after React commits + the browser paints the new
@@ -229,6 +241,21 @@ export function PageView({ path, revisionId }: PageViewProps) {
       debounceTimerRef.current = null;
     }
   }, [path]);
+
+  // Which revision is actually on screen: normally the latest `page`, but
+  // the local snapshot while the reader chose "read the previous version"
+  // (the `['page']` cache always holds the latest — never rewound — so the
+  // old view is immune to background refetch / mutation invalidation). The
+  // `path` match guards SPA navigation: the reset effect runs post-commit,
+  // so `path` / cached `page` flip to the new page one render before the
+  // snapshot clears; falling back to `page` keeps page X's old body from
+  // flashing under page Y. Derived here (before the early returns, so hook
+  // order stays stable) so the TOC + its scroll-spy track the *displayed*
+  // body — otherwise the right-rail / compact TOC would point at the latest
+  // revision's anchors over an older body. Shared with the render block.
+  const displayedPage = isDisplayingOld(bannerState) && snapshot?.page && snapshot.page.path === page?.path ? snapshot.page : (page ?? null);
+  const toc = displayedPage?.revision?.meta?.toc ?? EMPTY_TOC;
+  const activeTocId = useTocScrollSpy(toc);
 
   if (isLoading) {
     return <LoadingSpinner message={m['page.loading']()} />;
@@ -344,25 +371,18 @@ export function PageView({ path, revisionId }: PageViewProps) {
     const handleEdit = () => {
       router.push(`/_edit?page_id=${encodeURIComponent(page._id)}`);
     };
-    // While "reading the previous version" render the local snapshot; the
-    // `['page']` cache always holds the latest (never rewound), so the old
-    // view is immune to background refetch / mutation invalidation. Gating
-    // (stale / draft / presence) stays keyed on the latest `page`, so the
-    // WebSocket keeps running the whole time.
-    //
-    // The `path` match guards SPA navigation: the reset effect runs
-    // post-commit, so on X→Y the `path` prop (and cached `page`) flip to Y
-    // one render before the effect clears the snapshot. Without this guard
-    // page X's old body would flash under page Y for that frame; the guard
-    // falls back to Y's `page` until the effect resets the snapshot.
-    const displayedPage = isDisplayingOld(bannerState) && snapshot?.page && snapshot.page.path === page.path ? snapshot.page : page;
+    // `displayedPage` (computed above the early returns) is the snapshot
+    // while reading the previous version, else the latest `page`. The
+    // `?? page` only narrows the nullable top-level value to non-null inside
+    // this `if (page)` block — it can never actually fall back here.
+    const renderedPage = displayedPage ?? page;
     return (
       <PageTocColumns toc={toc} activeTocId={activeTocId}>
         <LiveSyncBanner state={bannerState} onReadOld={handleReadOld} onShowLatest={handleShowLatest} onDismiss={handleDismiss} />
         <article className="space-y-12">
           {isStaleRevision && page.revision?._id && <StaleRevisionBanner pagePath={page.path} pageId={page._id} revisionId={page.revision._id} />}
           <PageHeader
-            page={displayedPage}
+            page={renderedPage}
             onEdit={handleEdit}
             showActions={!isStaleRevision}
             showPresence={!isStaleRevision && !isDraft}
@@ -374,7 +394,7 @@ export function PageView({ path, revisionId }: PageViewProps) {
           {showPortalizeBanner && (
             <PortalizeBanner page={page} title={m['page.portalize_descendants_title']()} description={m['page.portalize_descendants_body']()} />
           )}
-          <PageContent page={displayedPage} />
+          <PageContent page={renderedPage} />
           {!isStaleRevision && (
             <>
               <BacklinkList pageId={page._id} />
