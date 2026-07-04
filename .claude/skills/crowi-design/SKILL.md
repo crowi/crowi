@@ -106,7 +106,13 @@ Workflow の返り値 `codexFallbacks[]` に fallback 発動が記録される�
 5. **報告**(`status` で分岐):
    - **DONE**(verdict APPROVED)→ doc を提示:
      - **spec** → `.feature-state/specs/feature-<slug>.md`(敵対的レビュー済み)。
-       次の一手: **`/crowi-feature feature-<slug>`** で実装へ。
+       次の一手: **`/crowi-feature feature-<slug>`** で実装へ(または `/crowi-kickoff`)。
+       あわせて **「wiki に publish するか」を確認**(一文で可)。publish する場合:
+       `crowi_get_page` で `/crowi/spec/feature-<slug>` の存在を確認 → 無ければ
+       `crowi_create_page`(body = spec 全文そのまま)、有れば revision_id を取って
+       `crowi_update_page`(楽観ロック。409 は再取得して 1 回リトライ)。
+       MCP 未接続のセッションでは「wiki publish は skip(MCP 未接続)」と報告するだけで
+       よい(エラーにしない)。**RFC は publish 対象外**(正本は repo の docs/rfcs/ commit)。
      - **RFC** → `docs/rfcs/00NN-<slug>.md`(**未 commit**)。ユーザーにレビューを依頼し、
        OK をもらったら **`docs(rfc): add RFC-00NN ...` を main 直 commit**(push しない)。
        実装パス: RFC → spec(`/crowi-design spec ...`)→ `/crowi-feature`。
@@ -158,6 +164,12 @@ correctness-critical 用なので `critical: true` 固定で本 Workflow を呼�
   architect が書き、Workflow B の writer が読む)。
 - spec 出力: `.feature-state/specs/feature-<slug>.md`(非 commit)。
 - RFC 出力: `docs/rfcs/00NN-<slug>.md`(レビュー後に commit)。
+
+**wiki との正本ルール**(crowi-kickoff と共通):
+1. 作業中の正本は `.feature-state/specs/`(gitignore・エージェントが読む・完了時に削除)。
+2. wiki `/crowi/spec/<id>` は**耐久スナップショット**(セッション横断・複数マシン・実装後も残る)。
+3. 同期は一方向のみ: design → wiki(publish)/ wiki → specs/(kickoff の pull)。
+   双方向同期・差分マージはしない。両方に存在して食い違ったら `.feature-state/specs/` が勝つ。
 
 ## 重要な前提
 

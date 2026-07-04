@@ -42,7 +42,17 @@ description: |
   ```bash
   ls .feature-state/specs/*.md 2>/dev/null | grep -E "(^|/)(feature-)?<入力>\.md$"
   ```
-  複数一致なら列挙して中止。0 件なら「spec が無い」で中止。
+  複数一致なら列挙して中止。
+- **0 件なら wiki を確認**(pull・一方向): `crowi_get_page` で `/crowi/spec/<入力>` →
+  無ければ `/crowi/spec/feature-<入力>` も試す。見つかったら body を
+  `.feature-state/specs/<id>.md` に書き出して(「wiki から pull した」と報告)続行。
+  pull した spec も Step 2 の ready 判定は通常どおり行う(wiki にあるからと言って
+  ready とは限らない)。MCP 未接続なら「specs/ に無い(wiki は未確認: MCP 未接続)」で中止。
+  wiki にも無ければ「spec が無い」で中止。
+
+  **wiki との正本ルール**(crowi-design と共通): 作業中の正本は `.feature-state/specs/`、
+  wiki `/crowi/spec/<id>` は耐久スナップショット。同期は一方向のみ(design → wiki の
+  publish / wiki → specs/ のこの pull)。食い違ったら `.feature-state/specs/` が勝つ。
 - **main worktree で実行していること**(`git worktree list` の先頭パスと
   `git rev-parse --show-toplevel` が一致)。worktree 内からの実行は中止
   (「kickoff は main セッションから」)。main が dirty でも kickoff 自体は可
@@ -127,7 +137,7 @@ cd <worktree-abs-path> && claude
 
 | ケース | 挙動 |
 |---|---|
-| spec が specs/ に無い | 中止(将来: wiki `/crowi/spec/<id>` からの pull — Task 07 で追加予定) |
+| spec が specs/ に無い | wiki `/crowi/spec/<id>` から pull を試みる(Step 1)。wiki にも無ければ中止 |
 | gw start 失敗(同名 branch 残骸等) | gw のエラーを提示して中止。`-f` 系は使わずユーザーに委ねる |
 | claude 起動待ち timeout | 手動手順を表示(worktree は残す) |
 | send-keys 後に反応が無い | 追いパンチしない。報告に「投入したが未確認」と書き、ユーザーに window 確認を促す |
