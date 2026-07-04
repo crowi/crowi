@@ -73,10 +73,11 @@ ready for merge な worktree を取り込む。
 ## C. main 直作業の review watcher (品質系)
 
 main に **直接** 積まれた作業 (worktree 経由でない) が **意味のある塊** になったら、
-その範囲をレビューする。手段は 2 択: 組み込み `/code-review` (Claude subagent)、または
-**`crowi-review`** (Codex 敵対レビュー → Claude 中立検証; `codex exec` が使える環境で推奨、
-落ちれば Claude subagent に自動 fallback)。worktree 経由の取り込みは integrate-worktree
-の Step 7 (simplify) で既にレビュー済みなので、ここでは **二重レビューしない**。
+その範囲をレビューする。手段は **`crowi-review` を既定**とする (codex preflight OK 時。
+wrapper が落ちれば skill 側が Claude subagent に自動 fallback)。codex が使えない環境
+でのみ組み込み `/code-review` (Claude subagent) を使う。worktree 経由の取り込みは
+integrate-worktree の Step 7 (simplify) で既にレビュー済みなので、ここでは
+**二重レビューしない**。
 
 ### 状態
 
@@ -109,8 +110,8 @@ git log --first-parent --no-merges <lastReviewedMainSha>..main
 ### レビュー実行
 
 発火したら `<lastReviewedMainSha>..main` の直作業差分をレビュー (correctness bug +
-reuse / simplify / efficiency)。手段は `/code-review` (組み込み) か **`crowi-review`**
-(Codex 敵対レビュー・そのスコープを渡す; `codex exec` があれば推奨)。
+reuse / simplify / efficiency)。手段は **`crowi-review` が既定** (そのスコープを渡す。
+`command -v codex` が通らない環境でのみ組み込み `/code-review`)。
 - **low-risk な指摘**: main が clean なら直接修正して別 commit (例 `refactor(review): …`)。
 - **main が dirty** (= user が作業中): 勝手に commit しない。指摘を**報告に留め**、適用は
   main clean 時 or user 承認後。
