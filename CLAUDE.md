@@ -194,6 +194,52 @@ Detailed phase status lives in `TODO.md`.
   the merged diff.
 - Never use `git worktree add/remove` directly — use the `gw` wrapper.
 
+### Parallel worktree dev ports + dev portal + tailscale (mobile verification)
+`pnpm dev` auto-detects the worktree and assigns each one a deterministic
+4-port block (stride 10): `api = anchor`, `web = anchor+1`, `site = anchor+2`,
+`proxy = anchor+3`. `main` is pinned to `anchor 4301` (today's ports, no
+migration); every other worktree gets the next free block starting at 4310,
+recorded in `~/.crowi-dev-ports.json` (outside the repo, shared across every
+worktree checkout) so the same worktree always gets the same anchor. Pin one
+explicitly with `pnpm dev --anchor 4350`.
+
+- **The proxy (`anchor+3`) is the canonical dev entry point**, not the raw web
+  port. `pnpm dev` fronts api + web + the collab/presence/notifications
+  WebSocket namespaces behind one same-origin reverse proxy (Caddy if
+  installed, otherwise a zero-dep node fallback — see `scripts/dev-caddy.mjs`),
+  the same routing table as the prod front proxy (`Caddyfile`). This is what
+  lets realtime editing work at all: Next's `rewrites()` is HTTP-only and
+  can't forward a WS `upgrade`, so opening the web port directly skips the
+  proxy and collab/presence/notifications won't connect (see the doc comment
+  in `packages/web/src/lib/resolve-ws-url.ts`).
+- **tailscale serve** publishes only the proxy port (`tailscale serve --bg
+  --https=<anchor+3> localhost:<anchor+3>`) so an iPhone/other Mac on the same
+  tailnet can open `https://<your-machine>.<tailnet>.ts.net:<anchor+3>` and get
+  full realtime editing without restarting `pnpm dev`. Requires tailnet
+  HTTPS/MagicDNS enabled; missing/not-logged-in `tailscale` just warns and
+  continues (localhost still works). Ctrl-C / closing a worktree only turns
+  off *that* worktree's serve (`--https=<anchor+3> off` — never `tailscale
+  serve reset`, which would also drop every other worktree's proxy).
+- **`pnpm dev:portal`** serves a read-only dashboard on a fixed `:4300` listing
+  every live worktree (from `git worktree list`) with its up/down status
+  (proxy port probe), localhost + tailscale proxy URLs, and DB (shared vs.
+  isolated). It's a separate long-lived process from `pnpm dev` — restarting
+  one worktree doesn't take the portal down for the others — and self-GCs
+  registry entries for worktrees that no longer exist.
+- **DB isolation is opt-in and mongo-only** (redis/ES always stay shared —
+  redis's URL parser ignores the db-number path segment, and both are
+  ephemeral state). Add `dev.local.json` at the worktree root (gitignored):
+  `{ "isolateDb": true }`, or pass `--isolate-db`; the mongo DB name becomes
+  `crowi_<key>` instead of the shared one. `pnpm migrate apply` (the only
+  destructive migrate subcommand — `--dry-run`/`plan`/`status` are exempt)
+  refuses to run from a non-main worktree against the shared DB unless you
+  isolate it, pass `--yes`, or set `CROWI_MIGRATE_FORCE=1` (non-interactive
+  environments fail closed instead of hanging on a prompt).
+- Implementation lives in `scripts/dev-ports.mjs` (registry/lock/key
+  normalization), `scripts/dev-caddy.mjs` (proxy config generation + fallback),
+  `scripts/dev-portal/` (the dashboard), and the `scripts/dev.mjs` /
+  `scripts/migrate.mjs` extensions that wire them together.
+
 ### simplify after merge
 After merging a worktree, the integrate-worktree skill spawns 3 review agents
 (reuse / quality / efficiency) over the merge diff. Every finding is either
