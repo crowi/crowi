@@ -75,7 +75,10 @@ pnpm format
 
 # packages/e2e を触った場合のみ (必須・選択実行):
 pnpm --filter @crowi/e2e type-check
-pnpm --filter @crowi/e2e e2e tests/{変更した spec}.spec.ts   # 変更 spec だけ。全 suite は回さない
+pnpm --filter @crowi/e2e e2e tests/{変更した spec}.spec.ts   # 選択ルールは下記
+# ※ 選択ルール: tests/*.spec.ts に変更があればその spec のみ。src/ / runner/ /
+#   playwright.config.ts 等の共有部のみの変更なら全 spec (`pnpm --filter @crowi/e2e e2e`)
+#   — ヘルパ変更は全 spec に波及しうるため。
 # ※ setup project (onboarding.setup.ts) は playwright の project dependency として自動同伴。
 # ※ infra (docker の mongo/redis) が落ちていて起動できない場合は silent skip せず
 #   「blocked: e2e infra down (docker compose up -d が必要)」として ready=false 側に倒す。
@@ -196,4 +199,4 @@ planner が作った概形に、実際に編集したファイルを `files: [..
 - spec.md は **編集しない** (人間レビュー済みの正本)
 - `.feature-state/` (root) を使うこと、`.claude/feature-state/` には書かない
 - 実装が大きくなりそうなら **task を分割するよう planner に差し戻し** を提案する
-- main 直コミット運用なので、ブランチを切らない (作業は main で行う)
+- 新しくブランチを切らない (main セッションでは main、gw worktree では既存の作業 branch のまま作業する)

@@ -168,9 +168,11 @@ function codexReviewerPrompt(p, attempt) {
     `  (d) pnpm --filter @crowi/api test\n` +
     `  (e) pnpm lint   (errors must be 0; warnings tolerated)\n` +
     `  (f) if any pending file is under packages/e2e/: pnpm --filter @crowi/e2e type-check, then ` +
-    `run ONLY the changed spec files: pnpm --filter @crowi/e2e e2e tests/<changed>.spec.ts (the ` +
-    `setup project runs automatically). If the run cannot start because the docker infra ` +
-    `(mongo/redis) is down, that gate fails with message "blocked: e2e infra down".\n` +
+    `run the affected specs — changed tests/*.spec.ts files only when specs changed, the FULL ` +
+    `suite (pnpm --filter @crowi/e2e e2e) when only shared support files (src/, runner/, ` +
+    `playwright.config.ts) changed. The setup project runs automatically. If the run cannot ` +
+    `start because the docker infra (mongo/redis) is down, that gate fails with message ` +
+    `"blocked: e2e infra down".\n` +
     `If ANY gate fails: do NOT run codex. Your verdict is ` +
     `{verdict:"NEEDS_WORK", summary:"objective gates failed", blocking:[one entry per failed gate: ` +
     `the command + the key error lines], advisories:[]} — go directly to STEP 4.\n\n` +

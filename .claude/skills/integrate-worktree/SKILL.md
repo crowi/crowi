@@ -119,6 +119,7 @@ pnpm --filter @crowi/api test
 pnpm lint                                 # errors=0 必須
 
 # merge 差分に packages/e2e/** が含まれる場合のみ (選択実行):
+# tests/*.spec.ts に変更があればその spec のみ、src/ 等の共有部のみなら全 spec
 pnpm --filter @crowi/e2e e2e tests/<変更された spec>.spec.ts
 ```
 

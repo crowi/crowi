@@ -70,11 +70,11 @@ watcher) が次の tick で拾い、裏取りした上で `integrate-worktree` �
 6. `pnpm --filter @crowi/api test`
 7. `pnpm lint` (errors=0 必須、warnings は許容)
 8. 契約を触っていれば `pnpm check:openapi` (drift なし)
-9. `git diff main..HEAD --name-only | grep '^packages/e2e/'` が非空なら、変更された
-   `tests/*.spec.ts` を選択実行して green (`pnpm --filter @crowi/e2e e2e tests/<file>.spec.ts`。
-   setup project は自動同伴)。**infra (docker の mongo/redis) が落ちていて実行できない
-   場合は fail 扱いではなく「blocked: e2e infra down」として signal を立てず報告**
-   (infra を上げて再実行を促す)
+9. `git diff main..HEAD --name-only | grep '^packages/e2e/'` が非空なら e2e を選択実行して
+   green (`pnpm --filter @crowi/e2e e2e ...`。setup project は自動同伴)。選択ルール:
+   `tests/*.spec.ts` に変更があればその spec のみ、src/ 等の共有部のみの変更なら全 spec。
+   **infra (docker の mongo/redis) が落ちていて実行できない場合は fail 扱いではなく
+   「blocked: e2e infra down」として signal を立てず報告**(infra を上げて再実行を促す)
 
 ### Step 3: signal を立てる (全 green のときだけ)
 

@@ -107,9 +107,10 @@ worktree ローカル**（共有しない）。理由:
 **客観ゲート先行 + Codex レビュー**に切り替わる — thin glue (haiku) がまず
 契約 build / check:openapi (契約変更時) / type-check / test / lint を bash で
 実行し、**1 つでも fail なら codex を呼ばずに即 NEEDS_WORK**（トークンほぼゼロ・
-確実）。全部 green のときだけ `codex-run.sh --mode review --review-target
-"--uncommitted"` で敵対レビューを走らせ、AC / 設計判断 / docsTargets を埋め込んだ
-VERDICT (APPROVED/NEEDS_WORK/ESCALATE + blocking + advisories) を返させる。
+確実）。全部 green のときだけ `codex-run.sh`（**exec モード** + read-only +
+`--prompt-file`/`--schema-file` — codex の review サブコマンドはカスタム prompt /
+schema を受けないため使わない）で敵対レビューを走らせ、AC / 設計判断 / docsTargets
+を埋め込んだ VERDICT (APPROVED/NEEDS_WORK/ESCALATE + blocking + advisories) を返させる。
 glue が `tasks/{id}.json` に `reviewFeedback` を tmp+rename で記録する。
 codex 不可・出力不正時は**従来の feature-reviewer agent に自動 fallback**
 （`feature-reviewer.md` は温存）。fallback 発動は Workflow 返り値の

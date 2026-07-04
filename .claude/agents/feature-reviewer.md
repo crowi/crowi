@@ -87,6 +87,12 @@ pnpm --filter @crowi/web type-check  # web 編集時
 pnpm --filter @crowi/api test
 pnpm lint                             # errors=0 必須、warnings は許容
 pnpm format:check 2>/dev/null || pnpm format  # diff があれば NEEDS_WORK
+
+# packages/e2e を触っている場合のみ (implementer と同じ選択ルール):
+pnpm --filter @crowi/e2e type-check
+pnpm --filter @crowi/e2e e2e tests/<変更された spec>.spec.ts  # spec 変更時はその spec のみ
+# src/ 等の共有ヘルパのみの変更なら全 spec (`pnpm --filter @crowi/e2e e2e`)。
+# infra down は fail でなく NEEDS_WORK + 「blocked: e2e infra down」。
 ```
 
 `pnpm lint` で 1 件でも error が出たら **NEEDS_WORK** に倒す。warnings は累積課題として
