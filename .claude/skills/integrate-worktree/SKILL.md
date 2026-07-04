@@ -243,8 +243,10 @@ merge 直後は、両側の変更が混ざってコードに重複や非効率�
 simplify <description of merged work>
 ```
 
-simplify が見つけた issue は直接修正し、別 commit (例: `refactor(merge): ...`) としてコミット。
-修正がなければ skip。
+simplify が見つけた issue は **その場で全部修正**し、別 commit (例: `refactor(merge): ...`) として
+コミット。直さないと判断したものは**捨てる**(報告に 1 行残すだけ)。**TODO.md 等への advisory
+退避は禁止**(fix or drop — 全 skill 共通方針。`docs(todo): record ... advisory` 型の commit を
+作らない)。修正がなければ skip。
 
 ### Step 8: stale な spec / task ファイルを掃除 (提案 → 削除)
 

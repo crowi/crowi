@@ -196,9 +196,16 @@ Detailed phase status lives in `TODO.md`.
 
 ### simplify after merge
 After merging a worktree, the integrate-worktree skill spawns 3 review agents
-(reuse / quality / efficiency) over the merge diff. Findings worth applying
-land in a `refactor(merge): ...` commit; advisories that need separate work
-go to `TODO.md`.
+(reuse / quality / efficiency) over the merge diff. Every finding is either
+**fixed on the spot** (a `refactor(merge): ...` commit) or **dropped**.
+
+### Review findings: fix or drop (applies everywhere)
+Review / simplify / QA findings are NEVER parked in `TODO.md` or any backlog.
+The only two outcomes are: fix it now, or drop it (report the drop in one
+line). This applies to every skill and agent (feature pipeline, crowi-review,
+integrate-worktree, orchestrate C, crowi-fix, future skills). `TODO.md` is for
+roadmap items and blocked dependency majors only — not a review-advisory
+graveyard.
 
 ### Hooks (lefthook)
 - **pre-commit**: Biome format on staged files

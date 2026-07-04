@@ -114,7 +114,8 @@ reuse / simplify / efficiency)。手段は `/code-review` (組み込み) か **`
 - **low-risk な指摘**: main が clean なら直接修正して別 commit (例 `refactor(review): …`)。
 - **main が dirty** (= user が作業中): 勝手に commit しない。指摘を**報告に留め**、適用は
   main clean 時 or user 承認後。
-- **大きい / 判断系**: TODO 化、または重要なら `PushNotification` で ping。
+- **大きい / 判断系**: 報告に留めユーザー判断を仰ぐ(直す指示が出れば直す、出なければ**捨てる**)。
+  **TODO へは書かない**(fix or drop — 全 skill 共通方針)。重要なら `PushNotification` で ping。
 
 ### 後始末
 
