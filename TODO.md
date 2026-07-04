@@ -42,6 +42,7 @@ alpha.0–.3 は published、alpha.4 / stable 向けに changeset 蓄積中（pr
 
 レビュー / simplify の advisory はここに積まない（**fix or drop** — 直すか捨てるかの二択。CLAUDE.md「Review findings: fix or drop」参照）。残すのは機能ロードマップ残と dep major 待ちのみ。
 
+- [ ] **E2E coverage (point-by-point)**: page CRUD → editor save/draft → comments → search → notifications → admin の順で、新機能/バグ修正のついでに `packages/e2e` を拡充（一括タスクにしない。運用は e2eTargets — feature-planner.md 参照）
 - [ ] **RFC-0002 renderer 残**（Mermaid、GitHub Embed plugin、mention N+1 ほか）
 - [ ] **monorepo restructure follow-ups**（catalog 化、compose healthcheck、dev/prod parity ほか）
 - [ ] **crypto Phase 3**（KeyProvider pluggable 化、lookup-key secret の hash 化）
