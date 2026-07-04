@@ -26,8 +26,6 @@ import type { UserDocument } from 'src/models/user';
  * Yjs snapshot (so the next `onLoadDocument` rebuilds from the new body — the
  * same invariant `updatePage` upholds), and deliberately leave `updatedAt` /
  * `lastUpdateUser` / `grant` untouched so listings and visibility don't move.
- * (`updatePage` would also corrupt grant here — `grant = options.grant || null`
- * nulls a public page's grant when called with `{}`.)
  *
  * Derived data after a run: served HTML is fresh because `prepareRevision`
  * re-renders `renderedAst` onto the new revision; only the per-page embed cache
