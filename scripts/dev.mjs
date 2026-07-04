@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// Dev launcher for `pnpm dev` (feature-boot-progress-ui, Part 2).
+// Dev launcher for `pnpm dev` (feature-boot-progress-ui, Part 2;
+// feature-dev-portal-worktree extends it with per-worktree ports + proxy).
 //
 // Wraps — never replaces — turbo. It spawns the same `turbo run dev --filter …`
 // invocation that the legacy `dev` script used (so turbo keeps owning `^build`,
@@ -8,9 +9,9 @@
 //
 //   - api  readiness: the `@@crowi:ready api <url>` marker emitted by the api
 //                     boot reporter (`packages/api/src/util/boot-reporter.ts`).
-//   - web  readiness: an HTTP probe of :4302 (any HTTP response = listening),
-//                     with ECONNREFUSED → backoff retries to absorb the
-//                     pre-listen window.
+//   - web  readiness: an HTTP probe of the web dev port (any HTTP response =
+//                     listening), with ECONNREFUSED → backoff retries to
+//                     absorb the pre-listen window.
 //   - deps readiness: derived — once the api marker lands, the `^build` watch
 //                     group (api-contract / collab / runner / plugins) must have
 //                     finished its first compile, so we mark it ✓ then (we never
@@ -22,9 +23,45 @@
 //
 // SIGINT/SIGTERM is forwarded to the turbo child (own process group) so the
 // whole tree — turbo → api/web/plugins — stops cleanly with no zombies.
+//
+// feature-dev-portal-worktree adds, ahead of the turbo spawn:
+//   1. worktree detection → normalized registry key (`./dev-ports.mjs`).
+//   2. anchor resolution/allocation (registry + lock, or `--anchor`).
+//   3. opt-in mongo DB isolation (`dev.local.json` or `--isolate-db`).
+//   4. env injection into the turbo child (PORT/PORT_WEB/PORT_SITE/
+//      CROWI_API_URL/ALLOWED_DEV_ORIGINS — see turbo.json's
+//      `globalPassThroughEnv`, which must allowlist these or turbo's strict
+//      env mode silently strips them and every worktree collides on :4302).
+// …and, once the turbo child is spawned (in parallel with its boot, not
+// gated on api/web readiness — a reverse proxy tolerates its upstreams not
+// being up yet):
+//   5. same-origin proxy on anchor+3 (Caddy, or the zero-dep node fallback
+//      from `./dev-caddy.mjs` when `caddy` isn't installed).
+//   6. `tailscale serve` on the proxy port only (best-effort: warn+continue
+//      when tailscale isn't installed/logged in).
+// On SIGINT/SIGTERM (or a fatal boot failure) both are torn down: the proxy
+// process/server is killed, and `tailscale serve --https=<proxy> off` scopes
+// the teardown to exactly this worktree's port (`tailscale serve reset` is
+// never used — that would take down every other worktree's proxy, and the
+// portal, too).
 
 import { execFileSync, spawn } from 'node:child_process'
 import http from 'node:http'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+import {
+  allocateAnchor,
+  buildAllowedDevOrigins,
+  isolatedDbName,
+  normalizeWorktreeKey,
+  portsForAnchor,
+  readDevLocalConfig,
+  resolveBaseMongoUri,
+  resolveTailscaleHostname,
+  withMongoDbName,
+} from './dev-ports.mjs'
+import { generateCaddyfile, isCaddyAvailable, startCaddyProcess, startNodeProxyFallback, writeCaddyConfig } from './dev-caddy.mjs'
 
 // ── shared contract with boot-reporter.ts ──
 const READY_MARKER_PREFIX = '@@crowi:ready'
@@ -53,11 +90,6 @@ const TURBO_ARGS = [
   '--filter',
   '@crowi/plugin-*',
 ]
-
-const WEB_PROBE_URL = 'http://localhost:4302/'
-
-// Known dev ports → human label, for a friendlier port-conflict message.
-const PORT_LABELS = { 4301: 'api', 4302: 'web', 4303: 'site' }
 
 // ── pure helpers (kept tiny + side-effect-free for reasoning/testing) ──
 
@@ -153,6 +185,32 @@ export function renderRow(label, state, detail = '') {
   return `  ${icon} ${label.padEnd(6)}${tail}`
 }
 
+/**
+ * Parse `pnpm dev`'s own CLI flags: `--anchor <n>` (pin the port block) and
+ * `--isolate-db` (opt-in mongo DB isolation, in addition to `dev.local.json`).
+ * @param {string[]} argv `process.argv.slice(2)`
+ * @returns {{ anchor: number | undefined, isolateDb: boolean }}
+ */
+export function parseDevCliArgs(argv) {
+  let anchor
+  let isolateDb = false
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i]
+    if (arg === '--anchor') {
+      const raw = argv[i + 1]
+      i += 1
+      const parsed = Number(raw)
+      if (!Number.isInteger(parsed) || parsed <= 0) {
+        throw new Error(`--anchor must be a positive integer, got ${JSON.stringify(raw)}`)
+      }
+      anchor = parsed
+    } else if (arg === '--isolate-db') {
+      isolateDb = true
+    }
+  }
+  return { anchor, isolateDb }
+}
+
 const ANSI = {
   hideCursor: '\x1b[?25l',
   showCursor: '\x1b[?25h',
@@ -172,12 +230,73 @@ if (import.meta.main) {
   main()
 }
 
-function main() {
+async function main() {
   const isTTY = Boolean(process.stdout.isTTY)
+  const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+  const key = normalizeWorktreeKey(repoRoot)
+
+  let cli
+  try {
+    cli = parseDevCliArgs(process.argv.slice(2))
+  } catch (err) {
+    process.stderr.write(`[dev] ${err.message}\n`)
+    process.exit(1)
+    return
+  }
+
+  let anchor
+  try {
+    ;({ anchor } = await allocateAnchor({ key, explicitAnchor: cli.anchor }))
+  } catch (err) {
+    process.stderr.write(`[dev] failed to allocate a dev port anchor: ${err.message}\n`)
+    process.exit(1)
+    return
+  }
+  const ports = portsForAnchor(anchor)
+  const WEB_PROBE_URL = `http://localhost:${ports.web}/`
+  const PROXY_URL = `http://localhost:${ports.proxy}/`
+  // Known dev ports → human label, for a friendlier port-conflict message.
+  const PORT_LABELS = { [ports.api]: 'api', [ports.web]: 'web', [ports.site]: 'site', [ports.proxy]: 'proxy' }
+
+  const isolateDb = cli.isolateDb || readDevLocalConfig(repoRoot).isolateDb
+  let isolatedMongoUri
+  if (isolateDb) {
+    const baseMongoUri = resolveBaseMongoUri(path.join(repoRoot, '.env'))
+    try {
+      isolatedMongoUri = withMongoDbName(baseMongoUri, isolatedDbName(key))
+    } catch (err) {
+      process.stdout.write(`[dev] warning: could not derive an isolated MONGO_URI (${err.message}) — using the shared DB instead.\n`)
+    }
+  }
+
+  // Load-bearing (§3): without the tailscale host in ALLOWED_DEV_ORIGINS, both
+  // Next's dev-asset gate AND the Turbopack HMR websocket's Origin check
+  // silently reject the tailscale origin.
+  const tailscaleHost = resolveTailscaleHostname()
+  if (!tailscaleHost) {
+    process.stdout.write('[dev] tailscale not detected (not installed, or not logged in) — proxy works over localhost only.\n')
+  }
+  const allowedDevOrigins = buildAllowedDevOrigins({ tailscaleHost })
+
+  const childEnvOverlay = {
+    PORT: String(ports.api),
+    PORT_WEB: String(ports.web),
+    PORT_SITE: String(ports.site),
+    // Next rewrites() target; the proxy (Caddy) takes /api first in practice,
+    // this keeps direct-web-port access working too.
+    CROWI_API_URL: `http://localhost:${ports.api}`,
+    ALLOWED_DEV_ORIGINS: allowedDevOrigins,
+    ...(isolatedMongoUri ? { MONGO_URI: isolatedMongoUri } : {}),
+  }
+
+  process.stdout.write(
+    `[dev] worktree "${key}" → anchor ${anchor} (api ${ports.api} · web ${ports.web} · site ${ports.site} · proxy ${ports.proxy})` +
+      `${isolateDb ? ` · db isolated (${isolatedDbName(key)})` : ' · db shared (main)'}\n`,
+  )
 
   /** @type {{ api: boolean, web: boolean, deps: boolean }} */
   const ready = { api: false, web: false, deps: false }
-  let apiUrl = 'http://localhost:4301'
+  let apiUrl = `http://localhost:${ports.api}`
   let phase = 'boot' // 'boot' → overlay dashboard; 'stream' → passthrough
   let dashboardLines = 0
   let bootFailed = false
@@ -197,8 +316,89 @@ function main() {
     stdio: ['inherit', 'pipe', 'pipe'],
     // Own process group so SIGINT can be delivered to the whole turbo tree.
     detached: true,
-    env: { ...colorEnv, ...process.env },
+    env: { ...colorEnv, ...process.env, ...childEnvOverlay },
   })
+
+  // ── same-origin proxy (§4) + tailscale serve (§7) ──
+  // Started in parallel with turbo's boot (not gated on api/web readiness) —
+  // a reverse proxy tolerates its upstreams not being up yet.
+  let proxyChild = null // Caddy ChildProcess
+  let proxyServer = null // node fallback http.Server
+  let tailscaleServeOn = false
+
+  const startProxy = () => {
+    if (isCaddyAvailable()) {
+      const configPath = writeCaddyConfig(key, generateCaddyfile({ apiPort: ports.api, webPort: ports.web, proxyPort: ports.proxy }))
+      proxyChild = startCaddyProcess(configPath)
+      proxyChild.stderr?.on('data', (d) => process.stderr.write(`[caddy] ${d}`))
+      proxyChild.on('error', (err) => {
+        process.stdout.write(`[dev] warning: caddy failed to start (${err.message}) — proxy (anchor+3) unavailable this run.\n`)
+        proxyChild = null
+      })
+      proxyChild.on('exit', (code, signal) => {
+        if (!bootFailed && code !== null && code !== 0) {
+          process.stdout.write(`[dev] warning: caddy exited early (code ${code}${signal ? `, signal ${signal}` : ''}).\n`)
+        }
+        proxyChild = null
+      })
+    } else {
+      process.stdout.write('[dev] caddy not found on PATH — falling back to the zero-dep node proxy.\n')
+      try {
+        proxyServer = startNodeProxyFallback({ apiPort: ports.api, webPort: ports.web, proxyPort: ports.proxy })
+        proxyServer.on('error', (err) => {
+          const port = err.code === 'EADDRINUSE' ? ports.proxy : null
+          if (port) reportPortConflict(port)
+          else process.stdout.write(`[dev] warning: fallback proxy error (${err.message}).\n`)
+          proxyServer = null
+        })
+      } catch (err) {
+        process.stdout.write(`[dev] warning: failed to start the fallback proxy (${err.message}) — proxy (anchor+3) unavailable this run.\n`)
+      }
+    }
+  }
+  startProxy()
+
+  const startTailscaleServe = () => {
+    if (!tailscaleHost) return // already warned above
+    try {
+      execFileSync('tailscale', ['serve', '--bg', `--https=${ports.proxy}`, `localhost:${ports.proxy}`], { stdio: 'ignore' })
+      tailscaleServeOn = true
+    } catch (err) {
+      process.stdout.write(`[dev] warning: \`tailscale serve\` failed to start (${err.message}) — localhost proxy still works.\n`)
+    }
+  }
+  startTailscaleServe()
+
+  // Scoped to exactly this worktree's proxy port — never `tailscale serve
+  // reset` (that would also drop every other worktree's proxy and the
+  // portal's own serve).
+  const stopProxyAndTailscale = () => {
+    if (tailscaleServeOn) {
+      try {
+        execFileSync('tailscale', ['serve', `--https=${ports.proxy}`, 'off'], { stdio: 'ignore' })
+      } catch {
+        /* best-effort teardown; nothing more we can do here */
+      }
+      tailscaleServeOn = false
+    }
+    if (proxyChild) {
+      try {
+        proxyChild.kill('SIGTERM')
+      } catch {
+        /* already dead */
+      }
+      proxyChild = null
+    }
+    if (proxyServer) {
+      try {
+        proxyServer.close()
+        proxyServer.closeAllConnections?.()
+      } catch {
+        /* already closed */
+      }
+      proxyServer = null
+    }
+  }
 
   const clearDashboard = () => {
     if (!isTTY || dashboardLines === 0) return
@@ -241,7 +441,12 @@ function main() {
         drawDashboard() // final render with both ✓
         process.stdout.write(ANSI.showCursor)
       }
-      process.stdout.write(`\n${ANSI.bold}${ANSI.green}🚀 Accepting requests${ANSI.reset}  web ${WEB_PROBE_URL}\n\n`)
+      // The proxy (anchor+3) is the canonical dev entry point — collab /
+      // presence / notifications only work same-origin through it (see
+      // resolve-ws-url.ts). Direct web-port access still works for
+      // everything except realtime.
+      const tailscaleLine = tailscaleHost ? `  ·  tailscale https://${tailscaleHost}:${ports.proxy}/` : ''
+      process.stdout.write(`\n${ANSI.bold}${ANSI.green}🚀 Accepting requests${ANSI.reset}  proxy ${PROXY_URL}${tailscaleLine}\n\n`)
       dashboardLines = 0 // freeze: from here on we passthrough
     }
   }
@@ -270,6 +475,7 @@ function main() {
       process.stdout.write(ANSI.showCursor)
     }
     process.stdout.write(`\n${lines.join('\n')}\n\n`)
+    stopProxyAndTailscale()
     // Kill the whole turbo process group; child 'exit' then exits us non-zero.
     try {
       process.kill(-child.pid, 'SIGTERM')
@@ -384,6 +590,7 @@ function main() {
     if (forwarding) return
     forwarding = true
     if (isTTY) process.stdout.write(ANSI.showCursor)
+    stopProxyAndTailscale()
     try {
       // Negative pid → deliver to the whole process group (turbo + children).
       process.kill(-child.pid, signal)
@@ -401,6 +608,7 @@ function main() {
 
   child.on('exit', (code, signal) => {
     if (isTTY) process.stdout.write(ANSI.showCursor)
+    stopProxyAndTailscale() // safety net in case turbo exited on its own
     // A fatal api boot failure tore the tree down on purpose — surface it as a
     // non-zero exit regardless of how turbo itself terminated.
     if (bootFailed) {
@@ -413,6 +621,7 @@ function main() {
   })
   child.on('error', (err) => {
     if (isTTY) process.stdout.write(ANSI.showCursor)
+    stopProxyAndTailscale()
     process.stderr.write(`\n[dev] failed to start turbo: ${err.message}\n`)
     process.exit(1)
   })

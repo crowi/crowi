@@ -28,6 +28,11 @@ packages/web/paraglide/
 # local settings
 .claude/settings.local.json
 
+# per-worktree opt-in dev DB isolation declaration (feature-dev-portal-worktree
+# §3/§5) — `{ "isolateDb": true }` at the worktree root. Machine/worktree-local,
+# never shared.
+/dev.local.json
+
 # scheduler runtime lock (/loop + /schedule); process-specific, never share
 .claude/scheduled_tasks.lock
 

@@ -76,6 +76,11 @@ jobs:
       - name: Run tests
         run: pnpm test
 
+      - name: Run root scripts/ tests
+        # Not part of any turbo package (scripts/ isn't a workspace package), so
+        # `pnpm test` (turbo run test) doesn't reach it — run separately.
+        run: pnpm test:scripts
+
       - name: Build project
         run: pnpm build
 
