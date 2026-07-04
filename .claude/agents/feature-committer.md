@@ -61,7 +61,7 @@ APPROVED の実装を、task.commitPlan で計画された **複数 commit** に
 ```json
 {
   "type": "feat",            // feat / fix / refactor / test / docs / chore
-  "scope": "api",            // api / web / api-contract / site / todo / *
+  "scope": "api",            // api / web / api-contract / e2e / site / todo / *
   "title": "implement attachment thumbnail generation",
   "files": ["packages/api/src/util/thumbnail.ts", "..."]
 }
@@ -69,7 +69,8 @@ APPROVED の実装を、task.commitPlan で計画された **複数 commit** に
 
 crowi-site (`apps/crowi-site/`) のユーザー向けドキュメント更新は **`docs(site)`** scope の
 独立した commit にする (`TODO.md` 更新の `docs(todo)` とは別)。ja / en 両方のファイルを
-同じ `docs(site)` commit にまとめてよい。
+同じ `docs(site)` commit にまとめてよい。`packages/e2e/` の Playwright spec は
+**`test(e2e)`** scope の独立した commit にする。
 
 メッセージは Conventional Commits:
 
@@ -210,7 +211,7 @@ Push / PR: 未実施 (ユーザー指示待ち)
 
 ## 注意事項
 
-- commitPlan の順序を尊重する (api-contract → api → web → test → docs(site) → docs(todo) が典型)
+- commitPlan の順序を尊重する (api-contract → api → web → test → test(e2e) → docs(site) → docs(todo) が典型)
 - 1 commit が大きすぎる場合は reviewer に差し戻して分割提案を求める
 - spec.md は **編集しない** (ただし task 全体完了時の削除は「spec の後始末」に従う)
 - `.feature-state/` (root) を使うこと

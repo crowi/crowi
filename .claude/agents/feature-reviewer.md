@@ -56,6 +56,10 @@ implementer + simplify を経た実装を、本番品質に乗せられるか判
     - 更新がある場合: **ja / en 両方** が揃っているか、新規ページなら frontmatter
       (title/description) と `meta.json` の `pages` 追記があるか
     - CLAUDE.md / TODO.md / RFC 更新の有無
+12. E2E 反映の有無:
+    - `context.e2eTargets.assessment` が `critical-flow` なのに `packages/e2e/` の変更が
+      diff に無い → 指摘する (advisory・autofix 側)
+    - 追加された spec が entries の対象フローを実際に踏んでいるか
 
 ### advisory の扱い (デフォルト: 修正する)
 

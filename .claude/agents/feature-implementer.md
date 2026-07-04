@@ -36,9 +36,10 @@ planner が用意した task ファイルを読んで、Hono API / Next.js UI / 
 6. UI 実装 (packages/web/src/app/) ※ task の stack に応じて
 7. テスト追加 (jest + supertest + MongoDB Memory Server)
 8. crowi-site ドキュメント更新 (下記「ドキュメント更新」※ context.docsTargets がある場合)
-9. 必須チェック (下記) を全部走らせる
-10. commitPlan の各エントリに `files: [...]` を埋める (docs(site) の files も含める)
-11. status を REVIEW に更新、history に entry 追加
+9. E2E spec の追加/拡張 (下記「E2E spec (e2eTargets)」※ context.e2eTargets の entries がある場合)
+10. 必須チェック (下記) を全部走らせる
+11. commitPlan の各エントリに `files: [...]` を埋める (docs(site) / test(e2e) の files も含める)
+12. status を REVIEW に更新、history に entry 追加
 ```
 
 ## 必須チェック (省略不可)
@@ -71,6 +72,13 @@ pnpm lint
 
 # フォーマット (必須)
 pnpm format
+
+# packages/e2e を触った場合のみ (必須・選択実行):
+pnpm --filter @crowi/e2e type-check
+pnpm --filter @crowi/e2e e2e tests/{変更した spec}.spec.ts   # 変更 spec だけ。全 suite は回さない
+# ※ setup project (onboarding.setup.ts) は playwright の project dependency として自動同伴。
+# ※ infra (docker の mongo/redis) が落ちていて起動できない場合は silent skip せず
+#   「blocked: e2e infra down (docker compose up -d が必要)」として ready=false 側に倒す。
 ```
 
 `pnpm lint` で warnings は許容するが errors=0 必須。
@@ -126,6 +134,18 @@ errors を残したまま REVIEW に出すのは禁止。直すか、解決不�
 - frontmatter の有無・meta.json の整合・リンク切れが無いかを目視確認する
   (crowi-site は別ビルドだが、壊れたページを残さない)。
 - 更新したファイルは commitPlan の `docs(site)` エントリの `files` に入れる。
+
+## E2E spec (e2eTargets)
+
+`context.e2eTargets` の entries がある場合 (= planner がクリティカルフローに触れると
+判定) は、`packages/e2e/tests/` に Playwright spec を追加/拡張する。
+
+- 既存 spec (`auth-state.spec.ts` / `collab.spec.ts`) のスタイルと
+  `src/` のヘルパ (fixtures / auth / db / preflight) を再利用する。
+- `action: "extend"` は既存 spec ファイルへの test 追加、`action: "create"` は新規ファイル
+  (`testMatch: *.spec.ts` に載る名前にする)。
+- 実行は上記「必須チェック」の選択実行で。追加したファイルは commitPlan の
+  `test(e2e)` エントリの `files` に入れる。
 
 ## 受け入れ基準への対応
 

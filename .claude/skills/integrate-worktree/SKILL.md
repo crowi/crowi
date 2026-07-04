@@ -117,6 +117,9 @@ pnpm --filter @crowi/api type-check
 pnpm --filter @crowi/web type-check
 pnpm --filter @crowi/api test
 pnpm lint                                 # errors=0 必須
+
+# merge 差分に packages/e2e/** が含まれる場合のみ (選択実行):
+pnpm --filter @crowi/e2e e2e tests/<変更された spec>.spec.ts
 ```
 
 1 つでも失敗したら中止。conflict 解消の判断ミスや、両側の変更の組み合わせで型が合わなく

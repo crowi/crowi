@@ -167,19 +167,26 @@ function codexReviewerPrompt(p, attempt) {
     `  (c) if any pending file is under packages/web/: pnpm --filter @crowi/web type-check\n` +
     `  (d) pnpm --filter @crowi/api test\n` +
     `  (e) pnpm lint   (errors must be 0; warnings tolerated)\n` +
+    `  (f) if any pending file is under packages/e2e/: pnpm --filter @crowi/e2e type-check, then ` +
+    `run ONLY the changed spec files: pnpm --filter @crowi/e2e e2e tests/<changed>.spec.ts (the ` +
+    `setup project runs automatically). If the run cannot start because the docker infra ` +
+    `(mongo/redis) is down, that gate fails with message "blocked: e2e infra down".\n` +
     `If ANY gate fails: do NOT run codex. Your verdict is ` +
     `{verdict:"NEEDS_WORK", summary:"objective gates failed", blocking:[one entry per failed gate: ` +
     `the command + the key error lines], advisories:[]} — go directly to STEP 4.\n\n` +
     `STEP 2 — build the review prompt (only when every gate passed):\n` +
     `  Read .feature-state/tasks/${ID}.json and extract: the acceptance criteria` +
-    `${isMulti(p) ? ` for phase ${p.id}` : ''}, context.docsTargets, and the most recent ` +
-    `reviewFeedback if present. Also read the "## 設計の主な判断" section of ` +
+    `${isMulti(p) ? ` for phase ${p.id}` : ''}, context.docsTargets, context.e2eTargets, and the ` +
+    `most recent reviewFeedback if present. Also read the "## 設計の主な判断" section of ` +
     `.feature-state/specs/${ID}.md if that file exists.\n` +
     `  Write ${runDir}/prompt.md: instructions for an adversarial review of the UNCOMMITTED work — ` +
     `tell the reviewer to gather it itself with \`git status --porcelain\` + \`git diff HEAD\` and ` +
     `to read untracked files directly. It must verify every acceptance criterion (embed the AC ` +
-    `list verbatim), api-contract integrity, security, transaction boundaries, and crowi-site docs ` +
-    `reflection when docsTargets is set (embed docsTargets + the design judgments verbatim). Ask ` +
+    `list verbatim), api-contract integrity, security, transaction boundaries, crowi-site docs ` +
+    `reflection when docsTargets is set (embed docsTargets + the design judgments verbatim), and — ` +
+    `when e2eTargets.assessment is "critical-flow" — that packages/e2e/ changes covering the listed ` +
+    `flows are present in the diff (missing e2e coverage is an advisory with autofix=true, not ` +
+    `blocking). Ask ` +
     `for verdict APPROVED (all AC met, quality bar passes) / NEEDS_WORK (fixable issues; list them ` +
     `in blocking[], each with file:line) / ESCALATE (only when a human design decision is genuinely ` +
     `required), plus advisories[] — non-blocking improvements each tagged autofix true ` +
