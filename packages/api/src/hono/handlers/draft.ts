@@ -138,14 +138,14 @@ export const registerDraftRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(ap
         try {
           const newPage = await Page.create({
             path,
-            creator: user,
-            lastUpdateUser: user,
+            creator: user._id,
+            lastUpdateUser: user._id,
             createdAt: Date.now(),
             updatedAt: Date.now(),
             redirectTo: null,
             grant: GRANT_PUBLIC,
             status: STATUS_DRAFT,
-            grantedUsers: [user],
+            grantedUsers: [user._id],
           });
 
           // Seed the first revision so the page is loadable / editable

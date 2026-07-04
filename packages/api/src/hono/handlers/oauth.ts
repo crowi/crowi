@@ -36,6 +36,7 @@ import { authorizeRoute, deviceAuthorizeRoute, deviceInfoRoute, deviceVerifyRout
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import type { Context } from 'hono';
 import Debug from 'debug';
+import type { Types } from 'mongoose';
 
 import type Crowi from 'src/crowi';
 import { createJwtUtil } from 'src/util/jwt';
@@ -490,7 +491,7 @@ export const registerOAuthRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(ap
     });
 
   /** Mint a fresh access (JWT) + refresh (DB-backed) pair for a grant. */
-  async function issueTokens(user: { _id: { toString(): string }; email: string }, clientId: string, scopes: string[]) {
+  async function issueTokens(user: { _id: Types.ObjectId; email: string }, clientId: string, scopes: string[]) {
     const accessToken = jwtUtil.signOauthAccessToken({
       user,
       scopes,
