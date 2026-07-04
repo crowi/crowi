@@ -13,14 +13,14 @@ vi.mock('./runtime-env', () => ({
 import { resolveWsUrl } from './resolve-ws-url';
 
 /**
- * feature-web-image-runtime-config: the WS URL resolver backs all three
- * realtime namespaces (`/collab`, `/presence`, `/notifications`). Resolution
- * order under test:
+ * feature-web-image-runtime-config / feature-dev-portal-worktree: the WS URL
+ * resolver backs all three realtime namespaces (`/collab`, `/presence`,
+ * `/notifications`). Resolution order under test:
  *   1. NEXT_PUBLIC_COLLAB_URL explicit override
- *   2. NEXT_PUBLIC_API_URL (cross-origin / dev / Vercel)
- *   3. dev (NODE_ENV==='development') → http://localhost:4301 (api dev port)
- *   4. window.location (same-origin distributed image, prod)
- *   5. http://localhost:4301 (SSR / nothing configured)
+ *   2. NEXT_PUBLIC_API_URL (cross-origin / Vercel)
+ *   3. window.location (same-origin default — both dev's per-worktree proxy
+ *      and the distributed prod image)
+ *   4. http://localhost:4301 (SSR / nothing configured)
  */
 describe('resolveWsUrl', () => {
   const originalCollab = process.env.NEXT_PUBLIC_COLLAB_URL;
@@ -35,16 +35,19 @@ describe('resolveWsUrl', () => {
     vi.unstubAllEnvs();
   });
 
-  describe('dev (NODE_ENV=development) dials the api port, not window.location', () => {
-    it('returns localhost:4301 when no env is set, even though window is :3000', () => {
-      // Regression: in `pnpm dev` web is :4302 and the WS api is :4301; the
-      // Next dev server cannot proxy the WS upgrade, so falling through to
-      // window.location (:4302/:3000) would target a port with no WS server.
+  describe('dev (NODE_ENV=development) derives from window.location, same as prod', () => {
+    it('derives from window.location instead of dialing a hardcoded api port', () => {
+      // feature-dev-portal-worktree §4: `pnpm dev` fronts api+web+collab/
+      // presence/notifications behind one same-origin proxy (Caddy, or the
+      // zero-dep fallback) on the worktree's `anchor+3`. The browser must
+      // dial ITS OWN origin (the proxy) for the WS upgrade to reach the api —
+      // a hardcoded `:4301` would bypass the proxy and break both realtime
+      // editing over tailscale and any worktree not anchored at 4301.
       vi.stubEnv('NODE_ENV', 'development');
       delete process.env.NEXT_PUBLIC_COLLAB_URL;
       delete process.env.NEXT_PUBLIC_API_URL;
-      expect(resolveWsUrl('notifications')).toBe('ws://localhost:4301/notifications');
-      expect(resolveWsUrl('collab')).toBe('ws://localhost:4301/collab');
+      expect(resolveWsUrl('notifications')).toBe('ws://localhost:3000/notifications');
+      expect(resolveWsUrl('collab')).toBe('ws://localhost:3000/collab');
     });
   });
 
