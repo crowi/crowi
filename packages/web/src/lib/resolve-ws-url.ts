@@ -16,22 +16,25 @@
  *   2. **`NEXT_PUBLIC_API_URL`** when set — cross-origin api, or dev/Vercel
  *      builds that bake the api URL.
  *
- *   3. **dev (`NODE_ENV==='development'`) → api dev port on the browser's host**
- *      (`<protocol>//<hostname>:4301`, or `http://localhost:4301` during SSR) —
- *      in `pnpm dev` the web app is on :4302 and the api (with the WS endpoints)
- *      on :4301: two different origins, and the Next dev server cannot proxy the
- *      WS `upgrade`. So dev must dial the api port directly (keeping the same
- *      host so LAN / Tailscale dev still reaches the dev machine) and must NOT
- *      fall through to `window.location` (:4302, no WS server there). NODE_ENV
- *      is build-inlined, so this branch is compiled out of production bundles.
+ *   3. **`window.location`** derivation — the default for both the dev
+ *      launcher's single-origin proxy (`pnpm dev`, feature-dev-portal-worktree
+ *      §4) and the distributed same-origin `crowi/crowi-web` image, where no
+ *      API URL is baked in. In dev, `pnpm dev` fronts api+web+the three WS
+ *      namespaces behind one Caddy (or zero-dep fallback) proxy on
+ *      `anchor+3`, routing by path exactly like the prod front proxy
+ *      (`Caddyfile`) — so the browser dialing its own origin reaches the api
+ *      the same way in dev and in prod, and it's what makes realtime editing
+ *      reachable from an iPhone over tailscale (Next's `rewrites()` is
+ *      HTTP-only and can't forward a WS `upgrade`, so there is no way to make
+ *      this work without a same-origin proxy in front of both). This means
+ *      the canonical dev entry point is the proxy origin (`anchor+3`), not the
+ *      raw web port (`anchor+1`) — opening the web port directly skips the
+ *      proxy and collab/presence/notifications won't connect.
  *
- *   4. **`window.location`** derivation — the default for the distributed
- *      same-origin `crowi/crowi-web` image, where no API URL is baked in. The
- *      browser dials its own origin (`ws[s]://<host>`) and the outer reverse
- *      proxy routes `/collab|/presence|/notifications` WS upgrades to the api.
- *
- *   5. **`http://localhost:4301`** SSR / last-resort fallback — `window` is
- *      undefined during SSR, and nothing else was configured.
+ *   4. **`http://localhost:4301`** SSR / last-resort fallback — `window` is
+ *      undefined during SSR, and nothing else was configured. (This is the
+ *      main worktree's default api anchor; harmless as a fallback since a WS
+ *      client is never constructed during SSR.)
  *
  * The resolved base is normalised so the appended namespace never produces a
  * double slash or a doubled namespace segment:
@@ -62,23 +65,10 @@ function resolveWsBase(): string {
   const apiUrl = env('NEXT_PUBLIC_API_URL');
   if (apiUrl) return apiUrl;
 
-  // Dev (`pnpm dev`): web is on :4302, api (with the WS endpoints) on :4301 —
-  // different origins, and the Next dev server cannot proxy the WS upgrade. So
-  // dial the api port (:4301) on the SAME host the browser used, so LAN /
-  // Tailscale / remote dev (allowedDevOrigins) reaches the dev machine's api,
-  // not the viewer's own localhost. Falling through to `window.location`
-  // (:4302) would target a port with no WS server. NODE_ENV is build-inlined,
-  // so this is compiled out of production bundles. (For an api on a different
-  // host, set NEXT_PUBLIC_API_URL / NEXT_PUBLIC_COLLAB_URL.)
-  if (process.env.NODE_ENV === 'development') {
-    if (typeof window !== 'undefined') {
-      return `${window.location.protocol}//${window.location.hostname}:4301`;
-    }
-    return 'http://localhost:4301';
-  }
-
-  // Production same-origin image: no baked URL. Derive from the browser origin;
-  // the outer reverse proxy routes the WS upgrade to the api.
+  // Same-origin default (dev's proxy AND the distributed prod image): no
+  // baked URL, derive from the browser origin. The outer reverse proxy
+  // (Caddy — either the dev launcher's per-worktree proxy or the prod front
+  // proxy) routes the WS upgrade to the api.
   if (typeof window !== 'undefined') {
     return `${window.location.protocol}//${window.location.host}`;
   }
