@@ -38,27 +38,15 @@ alpha.0–.3 は published、alpha.4 / stable 向けに changeset 蓄積中（pr
 
 ---
 
-## バックログ — deferred refactor / advisory
+## バックログ（機能ロードマップ残 / dep major 待ち）
 
-merge 後の simplify レビューで挙がった非ブロッキング改善。詳細は各 advisory コミット参照。
+レビュー / simplify の advisory はここに積まない（**fix or drop** — 直すか捨てるかの二択。CLAUDE.md「Review findings: fix or drop」参照）。残すのは機能ロードマップ残と dep major 待ちのみ。
 
-- [ ] **WS 基盤の重複抽出**（notifications/presence/collab の 3-way 重複）
-- [ ] **RFC-0003 collab advisory**（util 重複、collab models 型付け、Yjs batch 化 ほか）
-- [ ] **RFC-0004 editor advisory**（autocomplete COLLSCAN、attachment helper 共有 ほか）
-- [ ] **RFC-0005 presence advisory**（heartbeat pipeline 化、token util 抽出）
-- [ ] **feature 別 advisory**（inline-attachment regex、mail-token helper、error-codes i18n ほか）
 - [ ] **RFC-0002 renderer 残**（Mermaid、GitHub Embed plugin、mention N+1 ほか）
 - [ ] **monorepo restructure follow-ups**（catalog 化、compose healthcheck、dev/prod parity ほか）
 - [ ] **crypto Phase 3**（KeyProvider pluggable 化、lookup-key secret の hash 化）
 - [ ] **RFC-0008 follow-ups**（`rebuild renderer`/`backlink` 本実装、watcher backfill 統一、RFC 追従）
-- [ ] **STATIC_CAPABILITIES drift guard**（boot 時に static capability ↔ route group の assert test）
-- [ ] **MCP result body advisory**（body を返す read tool 増加時に `okResult` で text/structured 一経路化）
-- [ ] **renameTree merge advisory**（subtree-rename 2 ルートの重複集約、`checkPagesRenamable` の N+1 ほか）
-- [ ] **migration-html-tag-fixes merge advisory** — `forEachPublishedCurrentRevision` の採用拡大（`wikilink-format` / `files-url-to-attachments` を寄せて walk 3 実装→1・per-page `findById` N+1 解消）+ web `known-tags.ts` の `HTML_TAGS` を `@crowi/api-contract` の `KNOWN_HTML_ELEMENTS` から生成（SVG/custom 要素差分は別管理）
-- [ ] **replace-url.ts:29-30 の stale コメント修正** — `grant ?? pageData.grant` 化済みの comment-only trivial fix（旧 wikilink-code-exclusion の out-of-scope 分）
-- [ ] **editor-preview-reliability merge advisory** — (F3) `InvalidateReason` は3コード宣言だが api は `updatePage` から `'page-body-replaced'` のみ emit、`deletePage`/`rename` が live collab doc を invalidate しない（編集中に rename/削除されると stale doc 編集を継続→save 時に初めて conflict）。rename/deletePage を既存 reason code で invalidate 配線、または未使用2コード削除で型を正直に。+ (F1) `use-yjs-token.ts`/`use-presence.ts` の token-refetch-on-silent-refresh 重複ブロックを `useRefetchTokenOnSilentRefresh(queryKey)` に抽出。F2(presence/notifications の WS lifecycle 重複)は既存 backlog「WS 基盤の重複抽出」が該当・本 merge で拡大を確認
 - [ ] **eslint 8 → 9 major up**（`packages/api` / `packages/collab` の direct eslint 8.57.1。flat config 統一含む。GHSA `js-yaml` advisory が transitive 経由で残るのは eslint 8 chain が `@eslint/eslintrc → js-yaml@4.1.1` を要求するため）
-- [ ] **mongoose 9 merge advisory** — `published-current-revision.ts` の `PageRow { _id: unknown; revision?: unknown }` を `Page.find().lean()` の推論型（または `Pick<PageDocument,'_id'|'revision'>`）に寄せると、v9 codemod で足した `.filter((id): id is Types.ObjectId => ...)` の型アサーションが不要になり `.filter((id) => id != null)` の runtime narrowing だけで済む（`.cursor()` の型付けと `batch: PageRow[]` への代入互換だけ要確認）。`relocate-reserved-api-paths.ts` の同種 cast は merge 直後に解消済み
 - [x] **mongoose 8 → 9 major up**（`packages/api` / `packages/collab` / `packages/plugin-search-mongo`。mongodb 6→7・mms 10→11 同伴。GHSA `ip-address` chain は mongoose major とは直交し、root `pnpm.overrides` の `"socks": "^2.8.7"` で解消）
 
 ---
