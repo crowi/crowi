@@ -6,15 +6,16 @@ description: |
   (B) specs/ を groom して着手 ready / 不足要素 / 削除候補を報告する、
   (C) main に直接積まれた作業が意味のある塊になったら code-review をかける、
   (D) GitHub Dependabot security alerts を確認して新規 advisory のみ報告する、
-  の 4 系統を実行する。push しない・spec を自動削除しない・dirty な main に勝手に
+  (E) 統合 signal の立っていない停滞 worktree を検知して報告する、
+  の 5 系統を実行する。push しない・spec を自動削除しない・dirty な main に勝手に
   commit しない・dep を自動 bump しない・詰まったら ping して待つ。
-  キーワード: orchestrate, loop, watcher, integrate, groom, spec 整理, code-review, dependabot, security
+  キーワード: orchestrate, loop, watcher, integrate, groom, spec 整理, code-review, dependabot, security, 停滞, stalled, 統合漏れ
 ---
 
-# Crowi Orchestrate (per-tick: ready worktree 取り込み + spec groom + main review + dependabot)
+# Crowi Orchestrate (per-tick: ready worktree 取り込み + spec groom + main review + dependabot + 停滞検知)
 
 main セッションで `/loop /crowi-orchestrate` として **1 tick ごとに呼ばれる** 前提の
-skill。単発 (`/crowi-orchestrate`) でも動く。4 系統を順に実行する。
+skill。単発 (`/crowi-orchestrate`) でも動く。5 系統 (A〜E) を順に実行する。
 
 **鉄則 (毎 tick 守る):**
 - **push しない** (常にユーザー指示待ち)。
@@ -69,6 +70,12 @@ ready for merge な worktree を取り込む。
   見える spec。判定根拠の例: 同名 task が `COMMITTED` かつ worktree が既に無い、かつ
   機能コードが main に存在。→ 「`<id>` は削除候補 (根拠: …)」と提示し、**削除は
   user 承認を待つ** (絶対に自分で消さない)。
+- **化石 task (アーカイブ候補・提案のみ)**: `tasks/*.json` のうち以下すべてを満たすもの:
+  (1) status が `COMMITTED` / `INTEGRATED` 相当の終端状態、(2) `git worktree list` に
+  同名 worktree が無い、(3) `specs/` に同名 spec が無い (= 進行の気配ゼロ)。
+  → 一覧で提示し、**user 承認後にまとめて `rm`** (gitignore 配下なので commit 不要)。
+  自動削除しない。初回は歴史的化石が大量に出る想定なので、一括承認の UX
+  (「全部消す / 個別に選ぶ / 何もしない」) を許容する。
 
 ## C. main 直作業の review watcher (品質系)
 
@@ -181,11 +188,60 @@ gh api repos/crowi/crowi/dependabot/alerts --paginate -X GET -f state=open \
 - これにより「次回までに新たに出た / 消えた」が正しく差分管理される。
 - 報告したかどうかは別管理せず、open ⇄ known の集合差で判定する。
 
+## E. worktree 停滞 watcher (検知系)
+
+orchestrate A は READY_TO_INTEGRATE **signal を待つだけ**なので、complete-feature を
+打ち忘れた worktree は永遠に不可視になる (過去の実害: editor-preview-reliability
+39 commit・ci-automation 12 commit の長期滞留)。E はこれを検知して**報告だけ**する watcher。
+
+閾値: `STALL_THRESHOLD_DAYS = 3` (仮置き。運用で調整)。
+
+### 検知ロジック
+
+```bash
+git worktree list --porcelain   # main 以外の各 worktree を列挙
+# 各 worktree <wt> (id = dir basename から crowi- を除去) について:
+git -C <wt> log main..HEAD --oneline | wc -l    # 積んだ commit 数
+git -C <wt> log -1 --format=%ct                  # 最終 commit の epoch
+git -C <wt> status --porcelain | head -1         # dirty か (作業中の気配)
+# .feature-state/tasks/<id>.json の status / readyForMerge.headSha
+```
+
+**停滞判定** (すべて成立):
+
+1. `main..HEAD` の commit 数 > 0
+2. `readyForMerge` が無い、または `readyForMerge.headSha` ≠ 現在の HEAD (stale signal)
+3. 最終 commit から閾値以上経過
+
+dirty な worktree は「セッション作業中の可能性が高い」ので併記するが、判定からは
+除外しない (dirty のまま放置も負債)。
+
+### 状態管理
+
+`.feature-state/orchestrate-state.json` に `worktreeWatch` を追加 (既存キーと同居):
+
+```json
+"worktreeWatch": {
+  "<id>": { "stalledSince": "<ISO>", "lastReportedHead": "<sha>" }
+}
+```
+
+- **報告は変化のみ** (D と同じ思想): 新規に停滞入りした worktree / head が進んで
+  (or signal が立って) 解消した worktree だけを報告。毎 tick の全列挙はしない。
+- 解消したら entry を削除。書き込みは tmp+rename で atomic (既存パターン)。
+
+### 行動しない
+
+E は**報告のみ**。integrate しない・worktree セッションに agmsg で割り込まない・
+complete-feature を代行しない。報告文面の例:
+「`<id>` が停滞候補 (N commits ahead, 最終 commit M 日前, signal 無し)。worktree
+セッションで `/crowi-complete-feature` か `/crowi-handoff` の実行を検討してください」。
+
 ## 出力
 
-- A で何かが起きた (integrate した / 詰まった / stale signal)、B で新規に ready / stale
-  が出た、C で review を実行した (指摘あり)、または D で新規 advisory が出た場合のみ、
-  簡潔に報告。
+- A で何かが起きた (integrate した / 詰まった / stale signal)、B で新規に ready / stale /
+  化石 task が出た、C で review を実行した (指摘あり)、D で新規 advisory が出た、
+  または E で停滞の出入りがあった場合のみ、簡潔に報告。
 - どれも変化なしなら「変化なし」一言で終える (毎 tick の冗長な列挙はしない)。
 
 ## loop との組み合わせ
