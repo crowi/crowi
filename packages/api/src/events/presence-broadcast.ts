@@ -1,7 +1,7 @@
 import Debug from 'debug';
 import type Crowi from 'src/crowi';
 import { STATUS_DELETED } from 'src/models/page';
-import { getPresenceService, type PageUpdatedPayload } from 'src/service/presence';
+import { type CommentChangedPayload, getPresenceService, type PageUpdatedPayload } from 'src/service/presence';
 
 const debug = Debug('crowi:events:presence-broadcast');
 
@@ -49,6 +49,18 @@ interface EditorLike {
   _id?: unknown;
   name?: unknown;
   username?: unknown;
+}
+
+/**
+ * The shape of a Comment document as emitted on `crowi.event('Comment')`.
+ * `page` / `creator` are ObjectIds (or populated docs); `toIdString`
+ * coerces either. `creator` is only read for the `'add'` path (the
+ * comment author, used for self-suppression on the client).
+ */
+interface CommentLike {
+  _id?: unknown;
+  page?: unknown;
+  creator?: unknown;
 }
 
 /**
@@ -104,5 +116,56 @@ export function registerPresencePageBroadcast(crowi: Crowi): void {
           debug('publishPageUpdated(%s) failed: %s', pageId, message);
         }),
     );
+  });
+
+  // feature-live-page-comment-sync — the sibling of the page-updated
+  // fan-out above, but on the Comment event stream: a new comment
+  // (`'add'`, emitted from the Comment post-save hook) or a deleted one
+  // (`'remove'`, emitted from `Comment.removeCommentById`) fans a
+  // `comment-changed` signal out to every viewer socket on the page so
+  // the reader's comment list stays live. Best-effort / swallow, same as
+  // the page-updated path — a fan-out problem must never break the
+  // comment save / delete.
+  const commentEvent = crowi.event('Comment');
+
+  const publishCommentChanged = (pageId: string, payload: CommentChangedPayload): void => {
+    crowi.trackSideEffect(
+      getPresenceService(crowi)
+        .then((service) => service.publishCommentChanged(pageId, payload))
+        .catch((err: unknown) => {
+          const message = err instanceof Error ? err.message : String(err);
+          debug('publishCommentChanged(%s) failed: %s', pageId, message);
+        }),
+    );
+  };
+
+  commentEvent.on('add', (savedCommentRaw: unknown) => {
+    const comment = (savedCommentRaw ?? undefined) as CommentLike | undefined;
+    if (!comment) return;
+    const pageId = toIdString(comment.page);
+    const commentId = toIdString(comment._id);
+    if (!pageId || !commentId) {
+      debug('skip comment-changed(added) broadcast: unresolvable pageId/commentId');
+      return;
+    }
+    const actorUserId = toIdString(comment.creator) ?? undefined;
+    publishCommentChanged(pageId, { pageId, changeType: 'added', commentId, actorUserId });
+  });
+
+  commentEvent.on('remove', (removedCommentRaw: unknown) => {
+    // `removeCommentById` emits the pre-delete document (or null when the
+    // id did not resolve) — guard both.
+    const comment = (removedCommentRaw ?? undefined) as CommentLike | undefined;
+    if (!comment) return;
+    const pageId = toIdString(comment.page);
+    const commentId = toIdString(comment._id);
+    if (!pageId || !commentId) {
+      debug('skip comment-changed(removed) broadcast: unresolvable pageId/commentId');
+      return;
+    }
+    // No actorUserId on removal — the deleter is not known at the model
+    // event layer, and a redundant re-fetch on the deleter's own client
+    // is idempotent (spec §self-suppress).
+    publishCommentChanged(pageId, { pageId, changeType: 'removed', commentId });
   });
 }

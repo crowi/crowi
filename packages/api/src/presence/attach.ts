@@ -1,14 +1,14 @@
 import type { Server as HttpServer, IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
-import Debug from 'debug';
-import { WebSocketServer, type WebSocket as WsWebSocket } from 'ws';
-import { PresenceClientMessageSchema } from '@crowi/api-contract';
 import type { PresenceViewer } from '@crowi/api-contract';
+import { PresenceClientMessageSchema } from '@crowi/api-contract';
+import Debug from 'debug';
 import type Crowi from 'src/crowi';
-import type { UserDocument } from 'src/models/user';
 import type { PageDocument } from 'src/models/page';
+import type { UserDocument } from 'src/models/user';
+import { type CommentChangedPayload, getPresenceService, type PageUpdatedPayload, type PresenceService } from 'src/service/presence';
 import { createPresenceTokenUtil } from 'src/util/presence-token';
-import { getPresenceService, type PresenceService, type PageUpdatedPayload } from 'src/service/presence';
+import { WebSocketServer, type WebSocket as WsWebSocket } from 'ws';
 
 const debug = Debug('crowi:presence:attach');
 
@@ -176,6 +176,27 @@ export async function attachPresenceServer(httpServer: HttpServer, crowi: Crowi)
     }
   };
 
+  /**
+   * Push a comment-changed signal to every locally-connected client for
+   * `pageId` (feature-live-page-comment-sync). The sibling of
+   * `broadcastPageUpdated`: identity-only payload, no presence re-read,
+   * so collecting the targets synchronously is safe. The client
+   * re-fetches the comment list from the permission-checked
+   * `GET /comments?page_id=` — the body never rides this frame.
+   */
+  const broadcastCommentChanged = (pageId: string, payload: CommentChangedPayload): void => {
+    const message = {
+      type: 'comment-changed' as const,
+      pageId: payload.pageId,
+      changeType: payload.changeType,
+      commentId: payload.commentId,
+      ...(payload.actorUserId !== undefined ? { actorUserId: payload.actorUserId } : {}),
+    };
+    for (const conn of connections.values()) {
+      if (conn.pageId === pageId) sendJson(conn.ws, message);
+    }
+  };
+
   // Subscribe to viewer-list changes (local + cross-instance). The
   // unsubscribe fn is invoked on shutdown.
   const unsubscribe = presence.onViewersChanged((pageId: string) => {
@@ -186,6 +207,13 @@ export async function attachPresenceServer(httpServer: HttpServer, crowi: Crowi)
   // them out to this instance's viewer sockets. Unsubscribed on shutdown.
   const unsubscribePageUpdated = presence.onPageUpdated((pageId: string, payload: PageUpdatedPayload) => {
     broadcastPageUpdated(pageId, payload);
+  });
+
+  // Subscribe to comment-changed signals (local + cross-instance) and
+  // fan them out to this instance's viewer sockets. Unsubscribed on
+  // shutdown.
+  const unsubscribeCommentChanged = presence.onCommentChanged((pageId: string, payload: CommentChangedPayload) => {
+    broadcastCommentChanged(pageId, payload);
   });
 
   /**
@@ -421,7 +449,8 @@ export async function attachPresenceServer(httpServer: HttpServer, crowi: Crowi)
         // best-effort — server may already be tearing down.
       }
 
-      // 2. Stop reacting to viewer-list + page-updated changes.
+      // 2. Stop reacting to viewer-list + page-updated + comment-changed
+      //    changes.
       try {
         unsubscribe();
       } catch {
@@ -429,6 +458,11 @@ export async function attachPresenceServer(httpServer: HttpServer, crowi: Crowi)
       }
       try {
         unsubscribePageUpdated();
+      } catch {
+        // best-effort
+      }
+      try {
+        unsubscribeCommentChanged();
       } catch {
         // best-effort
       }

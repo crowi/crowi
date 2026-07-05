@@ -1,6 +1,6 @@
-import Crowi from 'src/crowi';
-import { Types, Document, Model, Schema, model } from 'mongoose';
 import Debug from 'debug';
+import { Document, Model, model, Schema, Types } from 'mongoose';
+import Crowi from 'src/crowi';
 
 export interface CommentDocument extends Document {
   _id: Types.ObjectId;
@@ -97,6 +97,13 @@ export default (crowi: Crowi) => {
           debug('Failed to create comment Activity', err);
         }),
     );
+
+    // feature-live-page-comment-sync — emit an 'add' event symmetric to
+    // `removeCommentById`'s 'remove'. The presence-broadcast listener
+    // fans this out over the /presence channel so viewers see the new
+    // comment without a reload. Best-effort: a listener throw must never
+    // break the save, so the listener wraps its own async work.
+    commentEvent.emit('add', savedComment);
   });
 
   const commentEvent = crowi.event('Comment');

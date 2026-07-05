@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events';
+import type { PresenceCommentChangedMessage, PresenceViewer } from '@crowi/api-contract';
 import Debug from 'debug';
-import type { PresenceViewer } from '@crowi/api-contract';
 import type Crowi from 'src/crowi';
 
 const debug = Debug('crowi:service:presence');
@@ -69,6 +69,16 @@ const PRESENCE_UPDATES_CHANNEL = 'crowi:presence:updates';
  * `emitChange(message)` (it treats the payload as a pageId).
  */
 const PRESENCE_PAGE_UPDATED_CHANNEL = 'crowi:presence:page-updated';
+/**
+ * Redis pub/sub channel for cross-instance comment-changed fan-out
+ * (feature-live-page-comment-sync). A third distinct channel carrying a
+ * JSON `CommentChangedPayload`. It does NOT open a third subscriber
+ * client: `createRedisPresenceService` subscribes it on the *same* dup
+ * that already owns `PRESENCE_PAGE_UPDATED_CHANNEL` (node-redis v4
+ * multiplexes many channels on one subscriber connection), so the
+ * connection count is unchanged.
+ */
+const PRESENCE_COMMENT_CHANGED_CHANNEL = 'crowi:presence:comment-changed';
 /**
  * Redis key prefix for the per-page *editing hash* — the presence-owned
  * short-lived editing signal that drives the `✏️` badge. One field per
@@ -153,6 +163,17 @@ export interface PageUpdatedPayload {
   editorUserId: string;
   editorDisplayName: string;
 }
+
+/**
+ * Signal payload for the live comment append / removal
+ * (feature-live-page-comment-sync). Reuses the api-contract wire type
+ * minus its `type` discriminant (the attach layer re-adds `type` when
+ * it frames the WebSocket message). Deliberately identity-only — NO
+ * comment body — so a private page's discussion never crosses the
+ * presence channel; the client re-fetches the list from the
+ * permission-checked `GET /comments?page_id=`.
+ */
+export type CommentChangedPayload = Omit<PresenceCommentChangedMessage, 'type'>;
 
 /**
  * Minimum node-redis v4 surface the presence service leans on. Keeps
@@ -248,6 +269,22 @@ export interface PresenceService {
    * saved for a page (local or cross-instance). Returns an unsubscribe fn.
    */
   onPageUpdated(listener: (pageId: string, payload: PageUpdatedPayload) => void): () => void;
+  /**
+   * Broadcast that a comment was added to / removed from `pageId`
+   * (feature-live-page-comment-sync). Fans out to every connected viewer
+   * socket (local + cross-instance) so the reader's comment list can
+   * append / drop the entry in place. Uses the `'comment-changed'` local
+   * emitter event + a dedicated Redis channel — the viewer-list
+   * `'change'` and `'page-updated'` paths are untouched.
+   */
+  publishCommentChanged(pageId: string, payload: CommentChangedPayload): Promise<void>;
+  /**
+   * Subscribe to comment-changed signals. The listener is invoked with
+   * the `pageId` + full `CommentChangedPayload` whenever a comment was
+   * added / removed on a page (local or cross-instance). Returns an
+   * unsubscribe fn.
+   */
+  onCommentChanged(listener: (pageId: string, payload: CommentChangedPayload) => void): () => void;
   /** Tear down the dedicated pub/sub subscriber client(s). */
   shutdown(): Promise<void>;
 }
@@ -407,6 +444,15 @@ function createInProcessPresenceService(emitter: EventEmitter, emitChange: (page
       emitter.on('page-updated', listener);
       return () => emitter.off('page-updated', listener);
     },
+    async publishCommentChanged(pageId, payload) {
+      // Single-instance: emit directly to the local subscribers. No
+      // Redis, so there is no cross-instance leg and no double-delivery.
+      emitter.emit('comment-changed', pageId, payload);
+    },
+    onCommentChanged(listener) {
+      emitter.on('comment-changed', listener);
+      return () => emitter.off('comment-changed', listener);
+    },
     async shutdown() {
       emitter.removeAllListeners();
     },
@@ -440,13 +486,18 @@ async function createRedisPresenceService(redis: PresenceRedisClient, emitter: E
     console.warn('[crowi:presence] pub/sub subscriber setup failed — cross-instance fan-out disabled:', (err as Error).message);
   }
 
-  // SECOND subscriber, dedicated to the page-updated channel. node-redis
-  // v4 puts a connection into subscriber mode on `subscribe` and it can
-  // then no longer issue regular commands — so this needs its own
-  // `duplicate()` distinct from both the primary (hash writes) and the
-  // viewer-list subscriber above. Its own failure is likewise non-fatal:
-  // cross-instance page-updated fan-out is lost for this process while
-  // local delivery keeps working.
+  // SECOND subscriber, shared by the page-updated AND comment-changed
+  // channels. node-redis v4 puts a connection into subscriber mode on
+  // `subscribe` and it can then no longer issue regular commands — so
+  // this needs its own `duplicate()` distinct from both the primary
+  // (hash writes) and the viewer-list subscriber above. But a single
+  // subscriber connection multiplexes any number of channels, so the
+  // sibling comment-changed feed (feature-live-page-comment-sync) rides
+  // this same `dup` as a second channel rather than opening a third
+  // client — keeping the connection count at two subscribers. Its own
+  // failure is likewise non-fatal: cross-instance page-updated /
+  // comment-changed fan-out is lost for this process while local
+  // delivery keeps working.
   let pageUpdatedSubscriber: PresenceRedisClient | null = null;
   try {
     const dup = redis.duplicate();
@@ -463,10 +514,22 @@ async function createRedisPresenceService(redis: PresenceRedisClient, emitter: E
         debug('dropping unparseable page-updated frame on %s', PRESENCE_PAGE_UPDATED_CHANNEL);
       }
     });
+    // Second channel on the SAME subscriber — comment-changed fan-out.
+    await dup.subscribe(PRESENCE_COMMENT_CHANGED_CHANNEL, (message: string) => {
+      try {
+        const payload = JSON.parse(message) as CommentChangedPayload;
+        if (payload && typeof payload.pageId === 'string' && typeof payload.commentId === 'string') {
+          emitter.emit('comment-changed', payload.pageId, payload);
+        }
+      } catch {
+        // Corrupt frame — ignore (same fail-soft posture as page-updated).
+        debug('dropping unparseable comment-changed frame on %s', PRESENCE_COMMENT_CHANGED_CHANNEL);
+      }
+    });
     pageUpdatedSubscriber = dup;
-    debug('presence pub/sub subscriber connected on %s', PRESENCE_PAGE_UPDATED_CHANNEL);
+    debug('presence pub/sub subscriber connected on %s + %s', PRESENCE_PAGE_UPDATED_CHANNEL, PRESENCE_COMMENT_CHANGED_CHANNEL);
   } catch (err) {
-    console.warn('[crowi:presence] page-updated subscriber setup failed — cross-instance fan-out disabled:', (err as Error).message);
+    console.warn('[crowi:presence] page-updated / comment-changed subscriber setup failed — cross-instance fan-out disabled:', (err as Error).message);
   }
 
   /**
@@ -698,6 +761,30 @@ async function createRedisPresenceService(redis: PresenceRedisClient, emitter: E
       return () => emitter.off('page-updated', listener);
     },
 
+    async publishCommentChanged(pageId, payload) {
+      // Two-step, mirroring `publishPageUpdated`: emit locally so *this*
+      // instance's viewer sockets get the lowest-latency delivery, then
+      // publish so the OTHER instances' comment-changed subscribers pick
+      // it up. Redis loops the publish back to this instance's own
+      // subscriber too, so `broadcastCommentChanged` runs twice on the
+      // origin and its local viewers receive the same frame twice —
+      // harmless because the client coalesces via an idempotent
+      // invalidate → re-fetch and a seen-set diff for the new-comment
+      // highlight (see feature-live-page-comment-sync spec §"double
+      // delivery"). Kept symmetric with the page-updated path.
+      emitter.emit('comment-changed', pageId, payload);
+      try {
+        await redis.publish(PRESENCE_COMMENT_CHANGED_CHANNEL, JSON.stringify(payload));
+      } catch (err) {
+        console.warn(`[crowi:presence] comment-changed publish failed for page ${pageId}:`, (err as Error).message);
+      }
+    },
+
+    onCommentChanged(listener) {
+      emitter.on('comment-changed', listener);
+      return () => emitter.off('comment-changed', listener);
+    },
+
     async shutdown() {
       emitter.removeAllListeners();
       if (subscriber) {
@@ -842,4 +929,13 @@ export const _setPresenceServiceForTesting = (service: PresenceService | null): 
   cachedService = service == null ? null : Promise.resolve(service);
 };
 
-export { PRESENCE_UPDATES_CHANNEL, PRESENCE_PAGE_UPDATED_CHANNEL, VIEWER_HASH_PREFIX, VIEWER_TTL_MS, EDITING_HASH_PREFIX, EDITING_TTL_MS, EDITING_REFRESH_MS };
+export {
+  EDITING_HASH_PREFIX,
+  EDITING_REFRESH_MS,
+  EDITING_TTL_MS,
+  PRESENCE_COMMENT_CHANGED_CHANNEL,
+  PRESENCE_PAGE_UPDATED_CHANNEL,
+  PRESENCE_UPDATES_CHANNEL,
+  VIEWER_HASH_PREFIX,
+  VIEWER_TTL_MS,
+};
