@@ -1,6 +1,6 @@
 'use client';
 
-import type { PageWithRevision, PresencePageUpdatedMessage, TocEntryResponse } from '@crowi/api-contract';
+import type { PageWithRevision, PresenceCommentChangedMessage, PresencePageUpdatedMessage, TocEntryResponse } from '@crowi/api-contract';
 import { PageStatusEnum } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 import { useQueryClient } from '@tanstack/react-query';
@@ -21,6 +21,7 @@ import { isStalePageRevision } from '@/lib/page-revision';
 import { useAuth } from '@/lib/use-auth';
 import { usePage } from '@/lib/use-page';
 import { usePageChildren } from '@/lib/use-page-children';
+import { commentKeys } from '@/lib/use-page-comments';
 import { usePageGrantAccent } from '@/lib/use-page-grant-accent';
 import { useRevertDeletedPage } from '@/lib/use-page-mutations';
 import { usePresence } from '@/lib/use-presence';
@@ -206,8 +207,23 @@ export function PageView({ path, revisionId }: PageViewProps) {
     scheduleForwardSwap();
   };
 
+  // feature-live-page-comment-sync — a comment was added / removed on
+  // the page by another user. Re-fetch the comment list so it reflects
+  // the change in place; the new-comment highlight is derived by
+  // PageComments from the resulting query-data diff (spec §highlight), so
+  // no id is threaded through here. Deliberately does NOT invalidate
+  // ['page'] (unlike `useInvalidateComments`): the header commentCount
+  // chip live-update is out of scope, and a comment creates no revision
+  // so the page cache is unaffected here regardless.
+  const handleCommentChanged = (payload: PresenceCommentChangedMessage): void => {
+    void queryClient.invalidateQueries({ queryKey: commentKeys.detail(payload.pageId) });
+  };
+
   const presenceEnabled = Boolean(page) && !isStalePageRevision(page) && page?.status !== PageStatusEnum.DRAFT && isAuthenticated;
-  const presence = usePresence(presenceEnabled && page ? page._id : null, { onPageUpdated: handlePageUpdated });
+  const presence = usePresence(presenceEnabled && page ? page._id : null, {
+    onPageUpdated: handlePageUpdated,
+    onCommentChanged: handleCommentChanged,
+  });
 
   const handleReadOld = (): void => dispatchBanner({ type: 'read-old' });
   const handleShowLatest = (): void => {

@@ -376,6 +376,28 @@ html[data-page-grant="2"] {
   transition: background 200ms;
 }
 
+/* New-comment highlight (feature-live-page-comment-sync). When another
+ * user posts a comment while you are viewing the page, the live-appended
+ * comment gets the same amber wash as the TOC section highlight. Unlike
+ * `.is-target` (persistent while the fragment is active) this is
+ * transient: PageComments removes `.is-new` after a few seconds and the
+ * matching `transition` fades the background back to transparent.
+ *
+ * Only `background` is touched — no margin/padding/geometry — so applying
+ * or removing the highlight never shifts layout and cannot overflow the
+ * comment column (which, unlike the prose container, has no guaranteed
+ * side gutter to bleed a negative margin into). The base rule carries the
+ * `transition` so the fade-out animates on both add and remove. */
+.comment-item {
+  background: transparent;
+  border-radius: 0.5rem;
+  transition: background 200ms;
+}
+
+.comment-item.is-new {
+  background: rgba(240, 210, 100, 0.18);
+}
+
 /*
  * Renderer plugin placeholders (RFC-0002 Phase 4)
  *
