@@ -1,18 +1,20 @@
 import type Crowi from 'src/crowi';
 import {
-  createPresenceService,
-  createPresenceCollabDeps,
   _setPresenceServiceForTesting,
+  type CommentChangedPayload,
+  createPresenceCollabDeps,
+  createPresenceService,
+  EDITING_HASH_PREFIX,
+  EDITING_REFRESH_MS,
+  EDITING_TTL_MS,
   type PageUpdatedPayload,
+  PRESENCE_COMMENT_CHANGED_CHANNEL,
+  PRESENCE_PAGE_UPDATED_CHANNEL,
+  PRESENCE_UPDATES_CHANNEL,
   type PresenceRedisClient,
   type PresenceService,
-  PRESENCE_UPDATES_CHANNEL,
-  PRESENCE_PAGE_UPDATED_CHANNEL,
   VIEWER_HASH_PREFIX,
   VIEWER_TTL_MS,
-  EDITING_HASH_PREFIX,
-  EDITING_TTL_MS,
-  EDITING_REFRESH_MS,
 } from './presence';
 
 /**
@@ -454,6 +456,132 @@ describe('presence service — page-updated fan-out (feature-live-page-content-s
   });
 });
 
+/**
+ * feature-live-page-comment-sync — live comment fan-out. `publishComment
+ * Changed` rides a THIRD dedicated channel (JSON payload) but does NOT
+ * open a third subscriber client: it piggybacks the page-updated
+ * subscriber's `dup` as a second channel, so the two subscriber
+ * connections stay at two.
+ */
+describe('presence service — comment-changed fan-out (feature-live-page-comment-sync)', () => {
+  const payload = (overrides: Partial<CommentChangedPayload> = {}): CommentChangedPayload => ({
+    pageId: PAGE_A,
+    changeType: 'added',
+    commentId: 'comment-1',
+    actorUserId: 'u1',
+    ...overrides,
+  });
+
+  it('publishes comment-changed on its own channel (not viewer-list, not page-updated)', async () => {
+    const redis = new FakeRedis();
+    const publishSpy = jest.spyOn(redis, 'publish');
+    const service = await createPresenceService(redis);
+
+    const p = payload();
+    await service.publishCommentChanged(PAGE_A, p);
+
+    expect(publishSpy).toHaveBeenCalledWith(PRESENCE_COMMENT_CHANGED_CHANNEL, JSON.stringify(p));
+    expect(publishSpy.mock.calls.some(([ch]) => ch === PRESENCE_UPDATES_CHANNEL)).toBe(false);
+    expect(publishSpy.mock.calls.some(([ch]) => ch === PRESENCE_PAGE_UPDATED_CHANNEL)).toBe(false);
+    await service.shutdown();
+  });
+
+  it('subscribes comment-changed WITHOUT opening a third subscriber client', async () => {
+    const primary = new FakeRedis();
+    const dups: FakeRedis[] = [];
+    const realDuplicate = FakeRedis.prototype.duplicate;
+    jest.spyOn(primary, 'duplicate').mockImplementation(function (this: FakeRedis) {
+      const d = realDuplicate.call(this) as FakeRedis;
+      dups.push(d);
+      return d;
+    });
+
+    const service = await createPresenceService(primary);
+    // Exactly two subscriber clients — viewer-list + the shared
+    // page-updated/comment-changed one. Piggybacking the comment-changed
+    // channel must NOT add a third connection.
+    expect(dups).toHaveLength(2);
+    // The comment-changed subscribe landed on one of those two dups, so a
+    // cross-instance publish still reaches a listener on this service.
+    const seen: CommentChangedPayload[] = [];
+    service.onCommentChanged((_pageId, p) => seen.push(p));
+    await service.publishCommentChanged(PAGE_A, payload());
+    expect(seen.length).toBeGreaterThanOrEqual(1);
+    await service.shutdown();
+  });
+
+  it('fans a comment-changed out to a second instance via the dedicated channel', async () => {
+    const shared = new FakeRedis();
+    const instanceA = await createPresenceService(shared);
+    const instanceB = await createPresenceService(shared);
+
+    const seenByB: Array<{ pageId: string; payload: CommentChangedPayload }> = [];
+    instanceB.onCommentChanged((pageId, p) => seenByB.push({ pageId, payload: p }));
+
+    const p = payload();
+    await instanceA.publishCommentChanged(PAGE_A, p);
+
+    expect(seenByB).toContainEqual({ pageId: PAGE_A, payload: p });
+
+    await instanceA.shutdown();
+    await instanceB.shutdown();
+  });
+
+  it('carries a removed frame with no actorUserId across instances', async () => {
+    const shared = new FakeRedis();
+    const instanceA = await createPresenceService(shared);
+    const instanceB = await createPresenceService(shared);
+
+    const seenByB: CommentChangedPayload[] = [];
+    instanceB.onCommentChanged((_pageId, p) => seenByB.push(p));
+
+    const removed = payload({ changeType: 'removed', commentId: 'comment-9', actorUserId: undefined });
+    await instanceA.publishCommentChanged(PAGE_A, removed);
+
+    expect(seenByB).toHaveLength(1);
+    expect(seenByB[0].changeType).toBe('removed');
+    expect(seenByB[0].actorUserId).toBeUndefined();
+
+    await instanceA.shutdown();
+    await instanceB.shutdown();
+  });
+
+  it('double-delivers to the ORIGIN instance (local emit + Redis loopback)', async () => {
+    const shared = new FakeRedis();
+    const origin = await createPresenceService(shared);
+    const seen: CommentChangedPayload[] = [];
+    origin.onCommentChanged((_pageId, p) => seen.push(p));
+
+    await origin.publishCommentChanged(PAGE_A, payload());
+
+    // Client-side invalidate → re-fetch is idempotent and the seen-set
+    // highlight diff yields no new id the second time, so the double
+    // delivery is harmless — but the transport DOES deliver twice.
+    expect(seen).toHaveLength(2);
+    await origin.shutdown();
+  });
+
+  it('disconnecting the shared second subscriber closes the comment-changed channel too', async () => {
+    const primary = new FakeRedis();
+    const dups: FakeRedis[] = [];
+    const realDuplicate = FakeRedis.prototype.duplicate;
+    jest.spyOn(primary, 'duplicate').mockImplementation(function (this: FakeRedis) {
+      const d = realDuplicate.call(this) as FakeRedis;
+      dups.push(d);
+      return d;
+    });
+
+    const service = await createPresenceService(primary);
+    expect(dups).toHaveLength(2);
+    const disconnectSpies = dups.map((d) => jest.spyOn(d, 'disconnect'));
+
+    await service.shutdown();
+    for (const spy of disconnectSpies) {
+      expect(spy).toHaveBeenCalled();
+    }
+  });
+});
+
 describe('presence service — in-process fallback (no Redis)', () => {
   it('tracks viewers without Redis and dedupes multi-tab', async () => {
     const service = await createPresenceService(null);
@@ -524,6 +652,22 @@ describe('presence service — in-process fallback (no Redis)', () => {
     // Unsubscribe stops further delivery.
     unsubscribe();
     await service.publishPageUpdated(PAGE_A, payload);
+    expect(seen).toHaveLength(1);
+    await service.shutdown();
+  });
+
+  it('publishCommentChanged emits to local onCommentChanged listeners exactly once (no Redis loopback)', async () => {
+    const service = await createPresenceService(null);
+    const seen: CommentChangedPayload[] = [];
+    const unsubscribe = service.onCommentChanged((_pageId, p) => seen.push(p));
+    const payload: CommentChangedPayload = { pageId: PAGE_A, changeType: 'added', commentId: 'comment-1', actorUserId: 'u1' };
+
+    await service.publishCommentChanged(PAGE_A, payload);
+    // Single-instance: no Redis loopback, so exactly one delivery.
+    expect(seen).toEqual([payload]);
+
+    unsubscribe();
+    await service.publishCommentChanged(PAGE_A, payload);
     expect(seen).toHaveLength(1);
     await service.shutdown();
   });
