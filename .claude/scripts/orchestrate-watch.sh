@@ -67,10 +67,14 @@ $(git -C "$ROOT" worktree list --porcelain 2>/dev/null | sed -n 's/^worktree //p
 EOF
 
   # ---- lane C: main direct-work review threshold ---------------------------
+  # Dedup on BASE (lastReviewedMainSha), not main head: main advances with every
+  # commit and would re-emit each time; base only moves when the model acts on
+  # the review (updates lastReviewedMainSha), which is exactly when a fresh
+  # threshold event becomes meaningful again.
   base="$(jq -r '.lastReviewedMainSha // empty' "$STATE" 2>/dev/null)"
   if [ -n "$base" ] && git -C "$ROOT" rev-parse -q --verify "$base" >/dev/null 2>&1; then
     mainhead="$(git -C "$ROOT" rev-parse main 2>/dev/null)"
-    if [ "$mainhead" != "$base" ] && ! has "$mainhead" "$seen_review"; then
+    if [ "$mainhead" != "$base" ] && ! has "$base" "$seen_review"; then
       # impl commits = first-parent non-merge commits touching packages/** source
       cnt=0
       while read -r sha; do
@@ -83,7 +87,7 @@ $(git -C "$ROOT" log --first-parent --no-merges --format=%H "$base..main" 2>/dev
 EOF
       if [ "$cnt" -ge 2 ]; then
         echo "REVIEW_THRESHOLD: $cnt impl commits on main since ${base:0:8}"
-        seen_review="$seen_review $mainhead"
+        seen_review="$seen_review $base"
       fi
     fi
   fi
