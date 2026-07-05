@@ -18,6 +18,7 @@ import {
   allocateAnchor,
   buildAllowedDevOrigins,
   isolatedDbName,
+  localIpv4Origins,
   MAIN_ANCHOR,
   normalizeWorktreeKey,
   parseTailscaleHostname,
@@ -315,17 +316,82 @@ describe('resolveBaseMongoUri', () => {
   })
 })
 
+describe('localIpv4Origins', () => {
+  it('returns non-internal IPv4 addresses, skipping loopback and IPv6', () => {
+    const interfaces = {
+      lo0: [
+        { address: '127.0.0.1', family: 'IPv4', internal: true },
+        { address: '::1', family: 'IPv6', internal: true },
+      ],
+      en0: [
+        { address: '10.0.3.109', family: 'IPv4', internal: false },
+        { address: 'fe80::1', family: 'IPv6', internal: false },
+      ],
+      utun4: [{ address: '100.83.129.55', family: 'IPv4', internal: false }],
+    }
+    assert.deepEqual(localIpv4Origins(interfaces), ['10.0.3.109', '100.83.129.55'])
+  })
+
+  it('accepts the numeric family form (Node 18+)', () => {
+    assert.deepEqual(localIpv4Origins({ en0: [{ address: '10.0.0.5', family: 4, internal: false }] }), ['10.0.0.5'])
+  })
+
+  it('tolerates an empty / undefined interfaces map', () => {
+    assert.deepEqual(localIpv4Origins({}), [])
+  })
+})
+
 describe('buildAllowedDevOrigins', () => {
+  // Inject an empty interfaces map so these stay deterministic (the real
+  // os.networkInterfaces() would add this host's own IPs).
+  const NO_IFACES = { interfaces: {} }
+
   it('always includes localhost/127.0.0.1 even with no tailscale host', () => {
-    assert.equal(buildAllowedDevOrigins({ tailscaleHost: null }), 'localhost,127.0.0.1')
+    assert.equal(buildAllowedDevOrigins({ tailscaleHost: null, ...NO_IFACES }), 'localhost,127.0.0.1')
   })
 
   it('appends the tailscale hostname when present', () => {
-    assert.equal(buildAllowedDevOrigins({ tailscaleHost: 'my-mac.tailnet.ts.net' }), 'localhost,127.0.0.1,my-mac.tailnet.ts.net')
+    assert.equal(
+      buildAllowedDevOrigins({ tailscaleHost: 'my-mac.tailnet.ts.net', ...NO_IFACES }),
+      'localhost,127.0.0.1,my-mac.tailnet.ts.net',
+    )
   })
 
   it('de-duplicates', () => {
-    assert.equal(buildAllowedDevOrigins({ tailscaleHost: 'localhost' }), 'localhost,127.0.0.1')
+    assert.equal(buildAllowedDevOrigins({ tailscaleHost: 'localhost', ...NO_IFACES }), 'localhost,127.0.0.1')
+  })
+
+  // Regression (feature-dev-portal-worktree follow-up): the launcher used to
+  // OVERWRITE ALLOWED_DEV_ORIGINS with a bare localhost list when the tailscale
+  // CLI was absent. Because turbo now passes the var through and Next won't let
+  // .env.local override an already-set process.env var, a host the developer
+  // had whitelisted (e.g. 100.83.129.55) got blocked. It must MERGE, not replace.
+  it('merges an existing value (string) instead of replacing it', () => {
+    const out = buildAllowedDevOrigins({
+      tailscaleHost: null,
+      existing: '100.83.129.55,nocturne.tailf38f2a.ts.net,dev-nocturne.crowi.wiki',
+      interfaces: {},
+    }).split(',')
+    for (const h of ['localhost', '127.0.0.1', '100.83.129.55', 'nocturne.tailf38f2a.ts.net', 'dev-nocturne.crowi.wiki']) {
+      assert.ok(out.includes(h), `expected ${h} in ${JSON.stringify(out)}`)
+    }
+  })
+
+  it('accepts existing as an array too, trimming and de-duping', () => {
+    const out = buildAllowedDevOrigins({ tailscaleHost: null, existing: [' 10.0.3.109 ', 'localhost'], interfaces: {} }).split(',')
+    assert.equal(out.filter((h) => h === 'localhost').length, 1)
+    assert.ok(out.includes('10.0.3.109'))
+  })
+
+  // Model B: the machine's own non-loopback IPv4s are whitelisted so
+  // http://<ip>:<port> dev access passes Next's dev-origin/HMR gate WITHOUT the
+  // tailscale CLI (the 100.x tailscale address is just another interface IP).
+  it('includes non-loopback interface IPv4 addresses (Model B)', () => {
+    const out = buildAllowedDevOrigins({
+      tailscaleHost: null,
+      interfaces: { utun4: [{ address: '100.83.129.55', family: 'IPv4', internal: false }] },
+    }).split(',')
+    assert.ok(out.includes('100.83.129.55'), `expected the tailscale IP in ${JSON.stringify(out)}`)
   })
 })
 

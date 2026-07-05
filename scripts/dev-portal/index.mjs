@@ -28,6 +28,7 @@ import {
   DEFAULT_LOCK_PATH,
   DEFAULT_REGISTRY_PATH,
   isolatedDbName,
+  localIpv4Origins,
   normalizeWorktreeKey,
   portsForAnchor,
   pruneRegistry,
@@ -91,7 +92,7 @@ function escapeHtml(s) {
 /**
  * Cross-reference the registry against live worktrees, GC stale entries, and
  * build one row per live worktree.
- * @returns {Promise<Array<{ key: string, branch: string | null, anchor: number | null, up: boolean, localUrl: string | null, tailscaleUrl: string | null, db: string }>>}
+ * @returns {Promise<Array<{ key: string, branch: string | null, anchor: number | null, up: boolean, localUrl: string | null, ipUrls: string[], tailscaleUrl: string | null, db: string }>>}
  */
 export async function buildPortalRows() {
   const worktrees = listLiveWorktrees()
@@ -108,6 +109,9 @@ export async function buildPortalRows() {
 
   const registry = readRegistry(DEFAULT_REGISTRY_PATH)
   const tailscaleHost = resolveTailscaleHostname()
+  // This host's own LAN/tailscale IPv4s — the proxy binds 0.0.0.0 (Model B), so
+  // these are the URLs a phone/other machine actually dials.
+  const ipHosts = localIpv4Origins()
 
   return Promise.all(
     worktrees.map(async (w) => {
@@ -115,7 +119,7 @@ export async function buildPortalRows() {
       const anchor = registry[key]
       if (anchor === undefined) {
         // Registered as a worktree but `pnpm dev` hasn't run there yet.
-        return { key, branch: w.branch, anchor: null, up: false, localUrl: null, tailscaleUrl: null, db: 'shared (main)' }
+        return { key, branch: w.branch, anchor: null, up: false, localUrl: null, ipUrls: [], tailscaleUrl: null, db: 'shared (main)' }
       }
       const { proxy } = portsForAnchor(anchor)
       const up = await probeProxyUp(proxy)
@@ -126,6 +130,7 @@ export async function buildPortalRows() {
         anchor,
         up,
         localUrl: `http://localhost:${proxy}/`,
+        ipUrls: ipHosts.map((ip) => `http://${ip}:${proxy}/`),
         tailscaleUrl: tailscaleHost ? `https://${tailscaleHost}:${proxy}/` : null,
         db: isolateDb ? isolatedDbName(key) : 'shared (main)',
       }
@@ -143,13 +148,20 @@ export function renderPortalHtml(rows) {
         .map((r) => {
           const status = r.anchor === null ? '⚪ not started' : r.up ? '🟢 up' : '🔴 down'
           const local = r.localUrl ? `<a href="${escapeHtml(r.localUrl)}">${escapeHtml(r.localUrl)}</a>` : '—'
-          const tailnet = r.tailscaleUrl ? `<a href="${escapeHtml(r.tailscaleUrl)}">${escapeHtml(r.tailscaleUrl)}</a>` : '—'
+          // Reachable-from-another-device URLs: this host's LAN/tailscale IPs
+          // (proxy binds 0.0.0.0) plus the tailscale MagicDNS URL when the CLI
+          // resolved one. Each is a link; joined so a phone can pick whichever
+          // network it's on.
+          const reachableUrls = [...(r.ipUrls ?? []), r.tailscaleUrl].filter(Boolean)
+          const reachable = reachableUrls.length
+            ? reachableUrls.map((u) => `<a href="${escapeHtml(u)}">${escapeHtml(u)}</a>`).join('<br>')
+            : '—'
           return `      <tr>
         <td>${escapeHtml(r.key)}</td>
         <td>${escapeHtml(r.branch ?? '—')}</td>
         <td>${status}</td>
         <td>${local}</td>
-        <td>${tailnet}</td>
+        <td>${reachable}</td>
         <td>${escapeHtml(r.db)}</td>
       </tr>`
         })
@@ -177,7 +189,7 @@ export function renderPortalHtml(rows) {
 <h1>Crowi dev portal</h1>
 <table>
   <thead>
-    <tr><th>worktree</th><th>branch</th><th>status</th><th>proxy (localhost)</th><th>proxy (tailscale)</th><th>db</th></tr>
+    <tr><th>worktree</th><th>branch</th><th>status</th><th>proxy (localhost)</th><th>proxy (reachable)</th><th>db</th></tr>
   </thead>
   <tbody>
 ${body}
@@ -200,11 +212,13 @@ function startServer() {
       res.end(`dev-portal: failed to build the worktree list: ${err instanceof Error ? err.message : String(err)}`)
     }
   })
-  // Loopback only, same rationale as dev-caddy's fallback proxy default:
-  // `tailscale serve` reaches this via its own loopback target, so there's no
-  // need to expose the raw port on every interface.
-  server.listen(PORTAL_PORT, '127.0.0.1', () => {
-    process.stdout.write(`[dev-portal] listening on http://localhost:${PORTAL_PORT}\n`)
+  // Bind 0.0.0.0 (Model B) so the portal is reachable at
+  // http://<lan-or-tailscale-ip>:4300 from a phone / another machine — no
+  // tailscale CLI required. Dev-only; this also exposes it on the LAN, an
+  // accepted tradeoff for the "verify from any device" workflow.
+  server.listen(PORTAL_PORT, '0.0.0.0', () => {
+    const reachable = [`http://localhost:${PORTAL_PORT}`, ...localIpv4Origins().map((ip) => `http://${ip}:${PORTAL_PORT}`)]
+    process.stdout.write(`[dev-portal] listening on:\n${reachable.map((u) => `  ${u}`).join('\n')}\n`)
   })
   return server
 }

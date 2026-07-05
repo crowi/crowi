@@ -163,7 +163,13 @@ export async function withLock(lockPath, fn, opts) {
 
 // ── OS port probing (real impl; tests inject a fake `isRangeFree`) ──
 
-function isPortFree(port, host = '127.0.0.1') {
+// Probe on 0.0.0.0, NOT loopback: the per-worktree proxy (and the portal) bind
+// 0.0.0.0 (Model B), so a slot is only truly free if it's bindable on every
+// interface. A loopback-only probe would miss a stray process holding the port
+// on just a LAN/tailscale address and then hand out an anchor whose proxy can't
+// start. 0.0.0.0 is the strictest "free everywhere" check and conflicts with any
+// specific-address binding on the same port.
+function isPortFree(port, host = '0.0.0.0') {
   return new Promise((resolve) => {
     const srv = net.createServer()
     srv.unref()
@@ -366,16 +372,51 @@ export function resolveBaseMongoUri(envFilePath) {
 // ── ALLOWED_DEV_ORIGINS (§3 — load-bearing for HMR WS Origin gate too) ──
 
 /**
- * Build the comma-separated `ALLOWED_DEV_ORIGINS` value: `localhost` (the
- * proxy→web hop is same-host-different-port, which Next's `allowedDevOrigins`
- * treats as cross-origin — see `resolve-ws-url.ts` doc comment) plus the
- * tailscale hostname when resolved, de-duplicated.
- * @param {{ tailscaleHost?: string | null, extra?: string[] }} [opts]
+ * This machine's non-internal IPv4 addresses (LAN + the tailscale `100.x`
+ * address, etc.). Pure over an injected `interfaces` map (defaults to
+ * `os.networkInterfaces()` in real use; tests inject a fake). Used to whitelist
+ * IP-based dev access (Model B) WITHOUT needing the `tailscale` CLI — the
+ * tailscale address is just another local interface IP here.
+ * @param {NodeJS.Dict<os.NetworkInterfaceInfo[]>} [interfaces]
+ * @returns {string[]}
+ */
+export function localIpv4Origins(interfaces = os.networkInterfaces()) {
+  const out = []
+  for (const addrs of Object.values(interfaces ?? {})) {
+    for (const a of addrs ?? []) {
+      // Node <=17 reports `family` as the string 'IPv4'; Node 18+ may report
+      // the number 4 — accept both.
+      if ((a.family === 'IPv4' || a.family === 4) && !a.internal) out.push(a.address)
+    }
+  }
+  return out
+}
+
+/**
+ * Build the comma-separated `ALLOWED_DEV_ORIGINS` value. **MERGES, never
+ * replaces** — the launcher injects this into the turbo child env, and turbo
+ * now passes `ALLOWED_DEV_ORIGINS` through, so a bare value here would SHADOW
+ * whatever the developer put in `packages/web/.env.local` (Next won't let a
+ * `.env` file override an already-set `process.env` var). The union is:
+ *   - `base` localhost hosts (the proxy→web hop is same-host-different-port,
+ *     which Next's `allowedDevOrigins` treats as cross-origin),
+ *   - `existing` — the developer's current value (string or array; the caller
+ *     passes `process.env` + `packages/web/.env.local`),
+ *   - this machine's non-loopback IPv4 interface addresses (Model B — makes
+ *     `http://<ip>:<port>` dev access pass Next's dev-origin + HMR Origin gate
+ *     with no tailscale CLI),
+ *   - the tailscale MagicDNS hostname when resolved.
+ * De-duplicated, order-stable.
+ * @param {{ tailscaleHost?: string | null, base?: string[], existing?: string | string[], interfaces?: NodeJS.Dict<os.NetworkInterfaceInfo[]> }} [opts]
  * @returns {string}
  */
 export function buildAllowedDevOrigins(opts = {}) {
-  const { tailscaleHost, extra = ['localhost', '127.0.0.1'] } = opts
-  const hosts = [...extra, tailscaleHost].filter((h) => typeof h === 'string' && h.length > 0)
+  const { tailscaleHost, base = ['localhost', '127.0.0.1'], existing = [], interfaces } = opts
+  const existingList = Array.isArray(existing) ? existing : String(existing).split(',')
+  const hosts = [...base, ...existingList, ...localIpv4Origins(interfaces), tailscaleHost]
+    .filter((h) => typeof h === 'string')
+    .map((h) => h.trim())
+    .filter(Boolean)
   return [...new Set(hosts)].join(',')
 }
 

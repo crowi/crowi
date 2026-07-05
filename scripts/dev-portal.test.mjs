@@ -86,6 +86,24 @@ describe('renderPortalHtml', () => {
     assert.match(html, /🔴 down/)
   })
 
+  it('renders reachable IP URLs (Model B) as links in the reachable column', () => {
+    const rows = [
+      {
+        key: 'main',
+        branch: 'main',
+        anchor: 4301,
+        up: true,
+        localUrl: 'http://localhost:4304/',
+        ipUrls: ['http://100.83.129.55:4304/', 'http://10.0.3.109:4304/'],
+        tailscaleUrl: null,
+        db: 'shared (main)',
+      },
+    ]
+    const html = renderPortalHtml(rows)
+    assert.match(html, /href="http:\/\/100\.83\.129\.55:4304\/"/)
+    assert.match(html, /href="http:\/\/10\.0\.3\.109:4304\/"/)
+  })
+
   it('renders a "—" placeholder for a missing tailscale URL, and a link when present', () => {
     const rows = [
       { key: 'a', branch: null, anchor: 4310, up: true, localUrl: 'http://localhost:4313/', tailscaleUrl: null, db: 'shared (main)' },
