@@ -32,6 +32,10 @@ description: |
   を実行する。**したがって kickoff がセッションを spawn する必要はない** —
   gw が開いた window に指示を send-keys で投入するだけでよい
   (agmsg spawn で別セッションを立てると二重になる。やらない)。
+- hook 構成によってはさらに **右 pane に `pnpm dev` が自動分割起動**される
+  (`split-window -d` — dev-portal の anchor 自動採番で port 衝突しない。
+  `GW_NO_DEV=1 gw start <id>` でスキップ可)。このため**指示の投入先は
+  window ではなく claude の pane_id を明示指定**する(Step 5)。
 - worktree dir は `../crowi-<id>`、branch は `<id>/impl` 形式、window 名 = branch 名。
 
 ## ワークフロー
@@ -97,16 +101,19 @@ printf '{ "currentTask": "%s", "lastUpdated": "%s" }\n' "<id>" "$(date -u +%FT%T
 1. window を特定: `tmux list-windows -a -F '#{window_id}|#{window_name}'` から
    window 名 = branch 名(`<id>/impl`)の行。見つからなければ
    `pane_current_path` が worktree 配下の window を探す。
-2. **claude の起動完了を待つ**: 対象 pane の `pane_current_command` が
-   バージョン形式(`2.x.x`)になるまで 2 秒間隔で poll(上限 60 秒)。
+2. **claude の pane を特定して起動完了を待つ**: hook 構成によっては window に
+   dev pane(右・`pnpm dev`)が併設されるため、**window 宛(= アクティブ pane 宛)の
+   send-keys は使わない**。`tmux list-panes -t <window> -F '#{pane_id}|#{pane_current_command}'`
+   で `pane_current_command` がバージョン形式(`2.x.x`)の pane が現れるまで
+   2 秒間隔で poll(上限 60 秒)し、その **pane_id** を投入先にする。
 3. 指示を投入(入力 → 1 秒待ち → Enter。slash メニューの誤発火を避けるため
    **平文で書き、行頭を `/` にしない**):
 
 ```bash
-tmux send-keys -t "<window>" \
+tmux send-keys -t "<claude の pane_id>" \
   "crowi-kickoff からの指示です。/crowi-feature <id> を実行してください。COMMITTED まで完走したら /crowi-complete-feature、中断・引き継ぎ時は /crowi-handoff を実行。push は禁止(ユーザー指示待ち)。"
 sleep 1
-tmux send-keys -t "<window>" Enter
+tmux send-keys -t "<claude の pane_id>" Enter
 ```
 
 4. **fallback**: tmux 環境でない / window が見つからない / 60 秒待っても claude が
