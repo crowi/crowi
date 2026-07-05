@@ -17,8 +17,8 @@ import { API_HTTP_PATHS, generateCaddyfile, pickProxyTarget, startNodeProxyFallb
 describe('generateCaddyfile', () => {
   const config = generateCaddyfile({ apiPort: 4310, webPort: 4311, proxyPort: 4313 })
 
-  it('listens on the given host:proxyPort', () => {
-    assert.match(config, /^127\.0\.0\.1:4313 \{/m)
+  it('listens on 0.0.0.0:proxyPort by default (Model B — reachable via LAN/tailscale IP)', () => {
+    assert.match(config, /^0\.0\.0\.0:4313 \{/m)
   })
 
   it('routes /api and /files (bare + wildcard) to the api port', () => {
@@ -43,9 +43,21 @@ describe('generateCaddyfile', () => {
     assert.match(config, /\n\treverse_proxy localhost:4311\n/)
   })
 
-  it('honors a custom listenHost', () => {
-    const custom = generateCaddyfile({ apiPort: 1, webPort: 2, proxyPort: 3, listenHost: '0.0.0.0' })
-    assert.match(custom, /^0\.0\.0\.0:3 \{/m)
+  it('honors a custom listenHost (loopback still overridable)', () => {
+    const custom = generateCaddyfile({ apiPort: 1, webPort: 2, proxyPort: 3, listenHost: '127.0.0.1' })
+    assert.match(custom, /^127\.0\.0\.1:3 \{/m)
+  })
+})
+
+describe('startNodeProxyFallback default bind host', () => {
+  it('binds 0.0.0.0 by default so the proxy is reachable via LAN/tailscale IP (Model B)', async () => {
+    const server = startNodeProxyFallback({ apiPort: 1, webPort: 2, proxyPort: 0 })
+    await new Promise((resolve, reject) => {
+      server.on('listening', resolve)
+      server.on('error', reject)
+    })
+    assert.equal(server.address().address, '0.0.0.0')
+    await new Promise((resolve) => server.close(resolve))
   })
 })
 

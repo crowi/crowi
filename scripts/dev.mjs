@@ -54,9 +54,11 @@ import {
   allocateAnchor,
   buildAllowedDevOrigins,
   isolatedDbName,
+  localIpv4Origins,
   normalizeWorktreeKey,
   portsForAnchor,
   readDevLocalConfig,
+  readEnvFileValue,
   resolveBaseMongoUri,
   resolveTailscaleHostname,
   withMongoDbName,
@@ -269,14 +271,23 @@ async function main() {
     }
   }
 
-  // Load-bearing (§3): without the tailscale host in ALLOWED_DEV_ORIGINS, both
+  // Load-bearing (§3): without the accessing host in ALLOWED_DEV_ORIGINS, both
   // Next's dev-asset gate AND the Turbopack HMR websocket's Origin check
-  // silently reject the tailscale origin.
+  // silently reject it. We MERGE (never replace) so we don't clobber whatever
+  // the developer already put in packages/web/.env.local — turbo now passes
+  // ALLOWED_DEV_ORIGINS through, and Next won't let a .env file override an
+  // already-set process.env var, so injecting a bare list here used to shadow
+  // the user's value and block their tailscale/LAN IP. `localIpv4Origins()`
+  // inside buildAllowedDevOrigins adds this machine's own IPs (Model B), so
+  // http://<ip>:<port> access works even without the `tailscale` CLI.
   const tailscaleHost = resolveTailscaleHostname()
   if (!tailscaleHost) {
-    process.stdout.write('[dev] tailscale not detected (not installed, or not logged in) — proxy works over localhost only.\n')
+    process.stdout.write('[dev] tailscale CLI not detected — proxy is still reachable over localhost + this host’s LAN/tailscale IPs.\n')
   }
-  const allowedDevOrigins = buildAllowedDevOrigins({ tailscaleHost })
+  const existingAllowed = [process.env.ALLOWED_DEV_ORIGINS, readEnvFileValue(path.join(repoRoot, 'packages', 'web', '.env.local'), 'ALLOWED_DEV_ORIGINS')]
+    .filter(Boolean)
+    .join(',')
+  const allowedDevOrigins = buildAllowedDevOrigins({ tailscaleHost, existing: existingAllowed })
 
   const childEnvOverlay = {
     PORT: String(ports.api),
@@ -443,10 +454,21 @@ async function main() {
       }
       // The proxy (anchor+3) is the canonical dev entry point — collab /
       // presence / notifications only work same-origin through it (see
-      // resolve-ws-url.ts). Direct web-port access still works for
-      // everything except realtime.
+      // resolve-ws-url.ts). Direct web-port access still works for everything
+      // except realtime. The proxy binds 0.0.0.0 (Model B), so it's also
+      // reachable by IP from a phone / another device.
+      const ipHosts = localIpv4Origins()
+      const proxyIpUrls = ipHosts.map((ip) => `http://${ip}:${ports.proxy}/`)
       const tailscaleLine = tailscaleHost ? `  ·  tailscale https://${tailscaleHost}:${ports.proxy}/` : ''
-      process.stdout.write(`\n${ANSI.bold}${ANSI.green}🚀 Accepting requests${ANSI.reset}  proxy ${PROXY_URL}${tailscaleLine}\n\n`)
+      process.stdout.write(`\n${ANSI.bold}${ANSI.green}🚀 Accepting requests${ANSI.reset}  proxy ${PROXY_URL}${tailscaleLine}\n`)
+      if (proxyIpUrls.length) {
+        process.stdout.write(`${ANSI.dim}   reachable from another device: ${proxyIpUrls.join('  ')}${ANSI.reset}\n`)
+      }
+      // The portal is a SEPARATE process (survives worktree restarts) — remind
+      // where it lives, since `pnpm dev` deliberately does not start it.
+      process.stdout.write(
+        `${ANSI.dim}   dev portal (all worktrees): run \`pnpm dev:portal\` once → http://${ipHosts[0] ?? 'localhost'}:4300${ANSI.reset}\n\n`,
+      )
       dashboardLines = 0 // freeze: from here on we passthrough
     }
   }
