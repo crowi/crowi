@@ -140,33 +140,43 @@ export async function buildPortalRows() {
 
 /**
  * Render the single static HTML page. Pure given `rows`.
+ *
+ * A responsive **card** layout (one card per worktree), NOT a table: on a phone
+ * a 6-column table crushed every URL into one-character-per-line columns. Each
+ * card stacks full-width, and — since the portal is opened ON the phone —
+ * the reachable IP/tailscale URLs (what actually works from another device) are
+ * the prominent tap targets, with the localhost URL kept as a muted secondary
+ * link (useful when viewing the portal on the host Mac itself).
  * @param {Awaited<ReturnType<typeof buildPortalRows>>} rows
  */
 export function renderPortalHtml(rows) {
-  const body = rows.length
-    ? rows
-        .map((r) => {
-          const status = r.anchor === null ? '⚪ not started' : r.up ? '🟢 up' : '🔴 down'
-          const local = r.localUrl ? `<a href="${escapeHtml(r.localUrl)}">${escapeHtml(r.localUrl)}</a>` : '—'
-          // Reachable-from-another-device URLs: this host's LAN/tailscale IPs
-          // (proxy binds 0.0.0.0) plus the tailscale MagicDNS URL when the CLI
-          // resolved one. Each is a link; joined so a phone can pick whichever
-          // network it's on.
-          const reachableUrls = [...(r.ipUrls ?? []), r.tailscaleUrl].filter(Boolean)
-          const reachable = reachableUrls.length
-            ? reachableUrls.map((u) => `<a href="${escapeHtml(u)}">${escapeHtml(u)}</a>`).join('<br>')
-            : '—'
-          return `      <tr>
-        <td>${escapeHtml(r.key)}</td>
-        <td>${escapeHtml(r.branch ?? '—')}</td>
-        <td>${status}</td>
-        <td>${local}</td>
-        <td>${reachable}</td>
-        <td>${escapeHtml(r.db)}</td>
-      </tr>`
-        })
-        .join('\n')
-    : '      <tr><td colspan="6">No worktrees found.</td></tr>'
+  const linkRow = (u, cls = '') => `<a class="link${cls ? ` ${cls}` : ''}" href="${escapeHtml(u)}">${escapeHtml(u)}</a>`
+
+  const card = (r) => {
+    const state = r.anchor === null ? 'idle' : r.up ? 'up' : 'down'
+    const statusText = r.anchor === null ? '⚪ not started' : r.up ? '🟢 up' : '🔴 down'
+    // Reachable-from-another-device URLs first (this host's LAN/tailscale IPs
+    // + the tailscale MagicDNS URL), then localhost as a muted secondary link.
+    const reachable = [...(r.ipUrls ?? []), r.tailscaleUrl].filter(Boolean)
+    let links
+    if (r.anchor === null) {
+      links = '<p class="hint">Run <code>pnpm dev</code> in this worktree to start it.</p>'
+    } else {
+      const parts = reachable.map((u) => linkRow(u))
+      if (r.localUrl) parts.push(linkRow(r.localUrl, 'local'))
+      links = `<div class="links">${parts.join('')}</div>`
+    }
+    return `    <article class="wt">
+      <div class="head">
+        <div class="name"><span class="key">${escapeHtml(r.key)}</span><span class="branch">${escapeHtml(r.branch ?? '—')}</span></div>
+        <span class="status ${state}">${statusText}</span>
+      </div>
+      <div class="meta"><span class="chip">db · ${escapeHtml(r.db)}</span>${r.anchor === null ? '' : `<span class="chip">anchor ${escapeHtml(String(r.anchor))}</span>`}</div>
+      ${links}
+    </article>`
+  }
+
+  const body = rows.length ? rows.map(card).join('\n') : '    <p class="empty">No worktrees found.</p>'
 
   return `<!doctype html>
 <html lang="en">
@@ -176,26 +186,61 @@ export function renderPortalHtml(rows) {
 <meta http-equiv="refresh" content="10">
 <title>Crowi dev portal</title>
 <style>
-  body { font-family: -apple-system, system-ui, sans-serif; margin: 1.5rem; background: #0b0d12; color: #e6e6e6; }
-  h1 { font-size: 1.25rem; }
-  table { border-collapse: collapse; width: 100%; }
-  th, td { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid #2a2e37; word-break: break-word; }
-  th { color: #9aa4b2; font-weight: 600; font-size: 0.8rem; text-transform: uppercase; }
-  a { color: #6ea8fe; }
-  .note { color: #9aa4b2; font-size: 0.85rem; margin-top: 1rem; }
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, system-ui, sans-serif;
+    margin: 0; padding: 1rem 0.9rem 2rem;
+    background: #0b0d12; color: #e6e6e6;
+    -webkit-text-size-adjust: 100%;
+  }
+  .wrap { max-width: 680px; margin: 0 auto; }
+  h1 { font-size: 1.2rem; margin: 0.25rem 0 0.15rem; }
+  .sub { color: #8a93a2; font-size: 0.78rem; margin: 0 0 1.1rem; }
+  .wt {
+    background: #12151c; border: 1px solid #262b36; border-radius: 12px;
+    padding: 0.85rem 0.9rem; margin-bottom: 0.7rem;
+  }
+  .head { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.6rem; }
+  .name { min-width: 0; }
+  .key { font-size: 1.02rem; font-weight: 700; overflow-wrap: anywhere; }
+  .branch { display: block; color: #8a93a2; font-size: 0.78rem; margin-top: 0.1rem; overflow-wrap: anywhere; }
+  .status { flex: none; font-size: 0.8rem; white-space: nowrap; }
+  .status.up { color: #4ade80; }
+  .status.down { color: #f87171; }
+  .status.idle { color: #8a93a2; }
+  .meta { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.6rem 0 0.15rem; }
+  .chip {
+    font-size: 0.72rem; color: #cbd3df; background: #1c2230;
+    border: 1px solid #2a3140; border-radius: 999px; padding: 0.12rem 0.55rem;
+  }
+  .links { display: flex; flex-direction: column; gap: 0.4rem; margin-top: 0.55rem; }
+  .link {
+    display: block; min-height: 44px; line-height: 1.35;
+    padding: 0.62rem 0.7rem; border-radius: 9px;
+    background: #17202e; border: 1px solid #223049;
+    color: #7cb0ff; text-decoration: none;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.88rem; overflow-wrap: anywhere;
+  }
+  .link:active { background: #1e2a3d; }
+  .link.local {
+    background: transparent; border-color: #232833; color: #7f8a99;
+    min-height: 0; padding: 0.45rem 0.7rem; font-size: 0.8rem;
+  }
+  .hint { color: #8a93a2; font-size: 0.85rem; margin: 0.55rem 0 0; }
+  code { background: #1c2230; border-radius: 5px; padding: 0.05rem 0.35rem; font-size: 0.85em; }
+  .empty { color: #8a93a2; padding: 2.5rem 0; text-align: center; }
+  .note { color: #6b7280; font-size: 0.75rem; margin-top: 1.1rem; text-align: center; }
 </style>
 </head>
 <body>
+<div class="wrap">
 <h1>Crowi dev portal</h1>
-<table>
-  <thead>
-    <tr><th>worktree</th><th>branch</th><th>status</th><th>proxy (localhost)</th><th>proxy (reachable)</th><th>db</th></tr>
-  </thead>
-  <tbody>
+<p class="sub">Tap a proxy URL to open that worktree. Auto-refreshes every 10s.</p>
 ${body}
-  </tbody>
-</table>
-<p class="note">Refreshes every 10s. Operations (start/stop/restart) are out of scope — this is a read-only list.</p>
+<p class="note">Read-only list · start/stop is out of scope.</p>
+</div>
 </body>
 </html>
 `

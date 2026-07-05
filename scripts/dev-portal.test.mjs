@@ -50,7 +50,7 @@ describe('renderPortalHtml', () => {
   it('renders "No worktrees found." when there are no rows', () => {
     const html = renderPortalHtml([])
     assert.match(html, /No worktrees found\./)
-    assert.doesNotMatch(html, /<tr>\s*<td>/)
+    assert.doesNotMatch(html, /class="wt"/)
   })
 
   it('escapes HTML-significant characters in every string field', () => {
@@ -86,7 +86,7 @@ describe('renderPortalHtml', () => {
     assert.match(html, /🔴 down/)
   })
 
-  it('renders reachable IP URLs (Model B) as links in the reachable column', () => {
+  it('renders reachable IP URLs (Model B) as tappable links', () => {
     const rows = [
       {
         key: 'main',
@@ -104,22 +104,32 @@ describe('renderPortalHtml', () => {
     assert.match(html, /href="http:\/\/10\.0\.3\.109:4304\/"/)
   })
 
-  it('renders a "—" placeholder for a missing tailscale URL, and a link when present', () => {
+  it('always shows the localhost link, and lists the tailscale URL when present', () => {
     const rows = [
-      { key: 'a', branch: null, anchor: 4310, up: true, localUrl: 'http://localhost:4313/', tailscaleUrl: null, db: 'shared (main)' },
+      { key: 'a', branch: null, anchor: 4310, up: true, localUrl: 'http://localhost:4313/', ipUrls: [], tailscaleUrl: null, db: 'shared (main)' },
       {
         key: 'b',
         branch: null,
         anchor: 4320,
         up: true,
         localUrl: 'http://localhost:4323/',
+        ipUrls: [],
         tailscaleUrl: 'https://my-mac.tailnet.ts.net:4323/',
         db: 'shared (main)',
       },
     ]
     const html = renderPortalHtml(rows)
-    assert.match(html, /<td>—<\/td>/)
+    assert.match(html, /href="http:\/\/localhost:4313\/"/)
     assert.match(html, /href="https:\/\/my-mac\.tailnet\.ts\.net:4323\/"/)
+  })
+
+  it('renders a not-started worktree without links, prompting to run pnpm dev', () => {
+    const html = renderPortalHtml([
+      { key: 'idle-wt', branch: 'idle/impl', anchor: null, up: false, localUrl: null, ipUrls: [], tailscaleUrl: null, db: 'shared (main)' },
+    ])
+    assert.match(html, /not started/)
+    assert.match(html, /pnpm dev/)
+    assert.doesNotMatch(html, /class="link"/)
   })
 
   it('preserves the given row order (main-first is the caller’s sort responsibility)', () => {
