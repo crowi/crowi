@@ -386,6 +386,192 @@ describe('Page', () => {
         });
       });
     });
+
+    // feature-rename-migration-refactor A4-1 — checkPagesRenamable batches its
+    // per-path exists/findPageByPath lookups into chunked `$in` queries
+    // (CHUNK_SIZE = 500). These focused tests exercise behaviour the existing
+    // (few-path) fixtures above can't distinguish from a single unbounded `$in`.
+    describe('checkPagesRenamable batching (A4-1)', () => {
+      // Mirrors the pre-A4-1 per-path implementation exactly (per-path
+      // `Page.exists` + `Page.findPageByPath` + `isUnlinkable`, in the same
+      // push order as `checkPagesRenamable`). This is NOT production code —
+      // it exists purely so the tests below can assert the batched `$in`
+      // implementation returns byte-for-byte the same result (including key
+      // order) as the old N+1 walk, across the CHUNK_SIZE=500 boundary.
+      async function checkPagesRenamablePerPathReference(paths: string[], forUser) {
+        let error = false;
+        const errors: Record<string, string[]> = {};
+        for (const path of paths) {
+          const e: string[] = [];
+          if (!Page.isCreatableName(path)) {
+            e.push('rename_tree.error.can_not_use_this_name');
+          }
+          const isAlreadyExists = await Page.exists({ path });
+          if (isAlreadyExists) {
+            const newPage = await Page.findPageByPath(path);
+            if (!newPage.isUnlinkable(forUser)) {
+              e.push('rename_tree.error.already_exists');
+            }
+          }
+          if (e.length > 0) {
+            error = true;
+          }
+          errors[path] = e;
+        }
+        return [error, errors] as const;
+      }
+
+      beforeEach(async () => {
+        await Page.deleteMany({});
+      });
+
+      afterEach(async () => Page.deleteMany({}));
+
+      test('does not throw and validates every path when the count exceeds CHUNK_SIZE (500)', async () => {
+        // None of these destination paths exist, so every entry should come
+        // back error-free. This drives the walk across the 500-path chunk
+        // boundary without needing per-path collision fixtures, so it stays
+        // cheap while still covering "no throw + no drop/duplicate across
+        // chunks".
+        const paths = Array.from(new Array(501).keys()).map((i) => `/batch-check/${i}`);
+        const [error, errors] = await Page.checkPagesRenamable(paths, user);
+        expect(error).toBe(false);
+        expect(Object.keys(errors)).toHaveLength(paths.length);
+        for (const path of paths) {
+          expect(errors[path]).toEqual([]);
+        }
+      });
+
+      test('CHUNK_SIZE (500) boundary: collisions/invalid names on both sides match the per-path reference implementation', async () => {
+        // 520 paths → chunk 1 = indices 0-499, chunk 2 = indices 500-519
+        // (CHUNK_SIZE = 500). Seed a mix of an invalid name, an unlinkable
+        // (redirect) collision, and a non-unlinkable collision at both the
+        // start/end of chunk 1 and the start/end of chunk 2, so a bug that
+        // drops/duplicates entries across the chunk boundary — or a batched
+        // result that diverges from the old per-path semantics — would show
+        // up as a mismatch against `checkPagesRenamablePerPathReference`.
+        const TOTAL = 520;
+        const paths = Array.from({ length: TOTAL }, (_, i) => `/batch-check2/${i}`);
+
+        const invalidNameIdx = 3; // chunk 1 — pure isCreatableName rejection (unaffected by batching, included for full-path parity)
+        const unlinkableChunk1Idx = 0; // chunk 1, first entry
+        const collidingChunk1Idx = 499; // chunk 1, last entry — invalid name AND non-unlinkable collision together
+        const unlinkableChunk2Idx = 500; // chunk 2, first entry
+        const collidingChunk2Idx = 519; // chunk 2, last entry
+
+        paths[invalidNameIdx] = '/batch-check2/invalid#name';
+        paths[collidingChunk1Idx] = '/batch-check2/invalid$499';
+
+        await Fixture.generate('Page', [
+          // Unlinkable redirect collisions (chunk 1 first + chunk 2 first) —
+          // must NOT be reported as `already_exists`.
+          { path: paths[unlinkableChunk1Idx], grant: Page.GRANT_PUBLIC, redirectTo: '/somewhere-else', creator: user, grantedUsers: [user] },
+          { path: paths[unlinkableChunk2Idx], grant: Page.GRANT_PUBLIC, redirectTo: '/somewhere-else', creator: user, grantedUsers: [user] },
+          // Non-unlinkable collisions (chunk 1 last + chunk 2 last) — must be
+          // reported as `already_exists`.
+          { path: paths[collidingChunk1Idx], grant: Page.GRANT_PUBLIC, redirectTo: null, creator: user, grantedUsers: [user] },
+          { path: paths[collidingChunk2Idx], grant: Page.GRANT_PUBLIC, redirectTo: null, creator: user, grantedUsers: [user] },
+        ]);
+
+        const [error, errors] = await Page.checkPagesRenamable(paths, user);
+        const [refError, refErrors] = await checkPagesRenamablePerPathReference(paths, user);
+
+        expect(error).toBe(true);
+        expect(error).toBe(refError);
+        // order-preserving parity: chunked-`$in` walk visits/reports paths in
+        // the same order as the per-path reference walk.
+        expect(Object.keys(errors)).toEqual(paths);
+        expect(errors).toEqual(refErrors);
+
+        // Explicit boundary-crossing spot checks (not just reference parity).
+        expect(errors[paths[invalidNameIdx]]).toEqual(['rename_tree.error.can_not_use_this_name']);
+        expect(errors[paths[unlinkableChunk1Idx]]).toEqual([]);
+        expect(errors[paths[collidingChunk1Idx]]).toEqual(['rename_tree.error.can_not_use_this_name', 'rename_tree.error.already_exists']);
+        expect(errors[paths[unlinkableChunk2Idx]]).toEqual([]);
+        expect(errors[paths[collidingChunk2Idx]]).toEqual(['rename_tree.error.already_exists']);
+      });
+
+      test('preserves isUnlinkable semantics: an unlinkable redirect is not a collision, a non-unlinkable page is', async () => {
+        await Fixture.generate('Page', [
+          // Redirect origin (`redirectTo` set) + granted for `user` (public) →
+          // isUnlinkable() === true → NOT reported as `already_exists`.
+          {
+            path: '/unlink-check/redirect-ok',
+            grant: Page.GRANT_PUBLIC,
+            redirectTo: '/somewhere-else',
+            creator: user,
+            grantedUsers: [user],
+          },
+          // Real page (no `redirectTo`) → isRedirectOriginPage() === false →
+          // isUnlinkable() === false regardless of grant → `already_exists`.
+          {
+            path: '/unlink-check/real-page',
+            grant: Page.GRANT_PUBLIC,
+            redirectTo: null,
+            creator: user,
+            grantedUsers: [user],
+          },
+        ]);
+
+        const [error, errors] = await Page.checkPagesRenamable(['/unlink-check/redirect-ok', '/unlink-check/real-page'], user);
+        expect(error).toBe(true);
+        expect(errors['/unlink-check/redirect-ok']).toEqual([]);
+        expect(errors['/unlink-check/real-page']).toContain('rename_tree.error.already_exists');
+      });
+
+      test('isUnlinkable depends on creator/grantedUsers, not just grant — the projection must carry them', async () => {
+        // GRANT_PUBLIC alone would make every case below `isGrantedFor() ===
+        // true` regardless of `creator`/`grantedUsers` (see `isPublic()`),
+        // so it can't tell apart a batch that dropped those fields from the
+        // projection. Use GRANT_RESTRICTED throughout so `isGrantedFor` must
+        // fall through to `isCreator`/`grantedUsers` — a projection missing
+        // either field would flip these outcomes.
+        const owner = user;
+        const other = createdUsers[1];
+
+        await Fixture.generate('Page', [
+          // Restricted redirect, granted only via same `creator` (not in
+          // `grantedUsers`) → isUnlinkable() === true → NOT `already_exists`.
+          {
+            path: '/unlink-check/restricted-by-creator',
+            grant: Page.GRANT_RESTRICTED,
+            redirectTo: '/somewhere-else',
+            creator: owner,
+            grantedUsers: [],
+          },
+          // Restricted redirect, granted only via `grantedUsers` (creator is
+          // someone else) → isUnlinkable() === true → NOT `already_exists`.
+          {
+            path: '/unlink-check/restricted-by-granted-users',
+            grant: Page.GRANT_RESTRICTED,
+            redirectTo: '/somewhere-else',
+            creator: other,
+            grantedUsers: [owner],
+          },
+          // Restricted redirect, granted for neither (creator is someone
+          // else, `owner` not in `grantedUsers`) → isGrantedFor() === false →
+          // isUnlinkable() === false → `already_exists`, same as an ungranted
+          // non-redirect page would be.
+          {
+            path: '/unlink-check/restricted-not-granted',
+            grant: Page.GRANT_RESTRICTED,
+            redirectTo: '/somewhere-else',
+            creator: other,
+            grantedUsers: [other],
+          },
+        ]);
+
+        const [error, errors] = await Page.checkPagesRenamable(
+          ['/unlink-check/restricted-by-creator', '/unlink-check/restricted-by-granted-users', '/unlink-check/restricted-not-granted'],
+          owner,
+        );
+
+        expect(error).toBe(true);
+        expect(errors['/unlink-check/restricted-by-creator']).toEqual([]);
+        expect(errors['/unlink-check/restricted-by-granted-users']).toEqual([]);
+        expect(errors['/unlink-check/restricted-not-granted']).toContain('rename_tree.error.already_exists');
+      });
+    });
   });
 
   // RFC-0004 Phase 2: draft page status + draft visibility filtering.

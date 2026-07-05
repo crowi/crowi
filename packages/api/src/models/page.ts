@@ -1453,6 +1453,31 @@ export default (crowi: Crowi) => {
   };
 
   pageSchema.statics.checkPagesRenamable = async function (paths, user) {
+    // A4-1 — this is the subtree-rename *preflight* validation, called with
+    // every destination path of a `renameTree` (the whole subtree — no
+    // upper bound, see `handlers/page.ts`'s `findListByStartWith(..., {
+    // limit: 0 })`). Batch the per-path `Page.exists` + `findPageByPath`
+    // lookups into `$in` queries, chunked so a very large subtree can't
+    // build a single `$in` array large enough to hit MongoDB's 16MB BSON
+    // command-size cap (which would throw here, before `renameTree` even
+    // runs). `CHUNK_SIZE` is a conservative bound for typical page-path
+    // lengths while keeping the round-trip count small.
+    const CHUNK_SIZE = 500;
+    const byPath = new Map<string, PageDocument>();
+    for (let i = 0; i < paths.length; i += CHUNK_SIZE) {
+      const chunk = paths.slice(i, i + CHUNK_SIZE);
+      // No status/redirect/grant filter — mirrors `findPageByPath`
+      // (`Page.findOne({ path })`), a plain path match. Visibility is
+      // judged afterwards by the hydrated doc's `isUnlinkable(user)`
+      // instance method, so `.lean()` is not used. Projection covers only
+      // `isUnlinkable`'s dependencies (`isRedirectOriginPage` /
+      // `isGrantedFor`) plus `path` (the Map key).
+      const found = await Page.find({ path: { $in: chunk } }).select('path redirectTo grant creator grantedUsers');
+      for (const p of found) {
+        byPath.set(p.path, p);
+      }
+    }
+
     let error = false;
     let errors = {};
     for (const path of paths) {
@@ -1460,12 +1485,10 @@ export default (crowi: Crowi) => {
       if (!Page.isCreatableName(path)) {
         e.push('rename_tree.error.can_not_use_this_name');
       }
-      const isAlreadyExists = await Page.exists({ path });
-      if (isAlreadyExists) {
-        const newPage = await Page.findPageByPath(path);
-        if (!newPage.isUnlinkable(user)) {
-          e.push('rename_tree.error.already_exists');
-        }
+      const existing = byPath.get(path); // Page.exists({ path }) equivalent
+      if (existing && !existing.isUnlinkable(user)) {
+        // Page.findPageByPath(path) + isUnlinkable(user) equivalent
+        e.push('rename_tree.error.already_exists');
       }
       if (!error && e.length > 0) {
         error = true;
