@@ -19,9 +19,6 @@ import type { MigrationContext } from '../types';
  *
  * Early stop: `visit` may return `STOP` to abort the walk at the first hit, so
  * `isPending` can short-circuit without reading every page.
- *
- * NOTE: `wikilink-format` predates this helper and keeps its own copy on
- * purpose (its tests pin the existing walk); it can adopt this later.
  */
 
 /** Sentinel a `visit` callback returns to abort the walk early. */
