@@ -131,7 +131,7 @@ export default (crowi: Crowi) => {
 
     const options = {
       upsert: true,
-      new: true,
+      returnDocument: 'after' as const,
       setDefaultsOnInsert: true,
       runValidators: true,
     };
@@ -197,7 +197,7 @@ export default (crowi: Crowi) => {
   notificationSchema.statics.open = async function (user, id) {
     const query = { _id: id, user: user._id };
     const parameters = { status: STATUS_OPENED };
-    const options = { new: true };
+    const options = { returnDocument: 'after' as const };
 
     const notification = await Notification.findOneAndUpdate(query, parameters, options);
     if (notification) {

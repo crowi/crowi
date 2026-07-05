@@ -77,16 +77,36 @@ context 完備の task 定義を作成する。
    - **ja / en は必ずペアで** entries に書く (二言語ミラー構成)。
    - カテゴリの目安: `guide/`=利用者向け機能 / `operations/`=運用・管理者・env / `plugins/`=プラグイン。
 
-6. **commitPlan の概形**
+6. **E2E 影響の特定 (e2eTargets)**
+   機能が**クリティカルフロー**に触れるかを判定し、`context.e2eTargets` を充填する。
+   クリティカルフロー表(この表が正本。他ファイルからはここを参照):
+
+   | フロー | 既存 e2e spec |
+   |---|---|
+   | 認証 (login / logout / セッション) | covered: `auth-state.spec.ts` |
+   | リアルタイム編集・collab | covered: `collab.spec.ts` |
+   | ページ CRUD・rename・trash | なし |
+   | エディタ save・draft | なし |
+   | コメント / 検索 / 通知 / 管理設定 / 添付・アップロード | なし |
+
+   - `assessment` の判定:
+     - `critical-flow` — 表のフローに触れる ∧ 既存 spec が守っていない → `entries[]` 必須
+     - `covered` — 既存 e2e spec が既に守っている(根拠の spec ファイル名を summary に)
+     - `not-applicable` — UI 非経由・内部変更
+   - **ポイントポイント導入方針**: カバレッジ拡充だけを目的とした entries は作らない。
+     この機能が触れるフローの分だけ。
+
+7. **commitPlan の概形**
    想定される commit を `feat` / `test` / `docs` (場合により `refactor`) に分けて配置。
    docsTargets が空でなければ `{"type":"docs","scope":"site"}` エントリ (crowi-site 更新) を
-   `docs(todo)` (TODO.md) とは **別に** 置く。
+   `docs(todo)` (TODO.md) とは **別に** 置く。e2eTargets の entries が空でなければ
+   `{"type":"test","scope":"e2e"}` エントリも置く。
    実装時に implementer が files リストを埋めるので、ここでは type / scope / title だけで OK。
 
-7. **task ファイルの作成**
+8. **task ファイルの作成**
    `.feature-state/tasks/{id}.json` に以下を書く。
 
-8. **queue 更新**
+9. **queue 更新**
    `.feature-state/queue.json` の `currentTask` を新タスクに、`lastUpdated` を ISO 8601 で更新。
 
 ## 重要な前提
@@ -154,6 +174,16 @@ apps/crowi-site/content/docs/en/{guide,operations,plugins}/
           "summary": "追記 / 新規する内容の1行メモ"
         }
       ]
+    },
+    "e2eTargets": {
+      "assessment": "critical-flow | covered | not-applicable",
+      "entries": [
+        {
+          "spec": "packages/e2e/tests/{flow}.spec.ts",
+          "action": "create | extend",
+          "summary": "1 行メモ"
+        }
+      ]
     }
   },
   "acceptanceCriteria": [
@@ -170,6 +200,7 @@ apps/crowi-site/content/docs/en/{guide,operations,plugins}/
     {"type": "feat", "scope": "api", "title": "implement {feature} Hono handler"},
     {"type": "feat", "scope": "web", "title": "add {feature} UI"},
     {"type": "test", "scope": "api", "title": "cover {feature} edge cases"},
+    {"type": "test", "scope": "e2e", "title": "cover {flow} end-to-end"},
     {"type": "docs", "scope": "site", "title": "document {feature} (ja/en)"},
     {"type": "docs", "scope": "todo", "title": "mark {feature} done"}
   ],
@@ -180,7 +211,8 @@ apps/crowi-site/content/docs/en/{guide,operations,plugins}/
 ```
 
 不要な commitPlan エントリは省く (UI なしなら web を削除、`docsTargets.assessment` が
-`internal-only` なら `docs(site)` を削除など)。
+`internal-only` なら `docs(site)` を削除、`e2eTargets` の entries が空なら `test(e2e)` を
+削除など)。
 
 ## 出力 (報告フォーマット)
 

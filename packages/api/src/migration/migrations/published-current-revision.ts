@@ -1,4 +1,4 @@
-import { STATUS_PUBLISHED } from 'src/models/page';
+import { type PageDocument, STATUS_PUBLISHED } from 'src/models/page';
 import type { MigrationContext } from '../types';
 
 /**
@@ -28,10 +28,7 @@ import type { MigrationContext } from '../types';
 export const STOP = Symbol('stop-walk');
 
 /** Page projection: only the fields the pairing needs. */
-interface PageRow {
-  _id: unknown;
-  revision?: unknown;
-}
+type PageRow = Pick<PageDocument, '_id' | 'revision'>;
 
 /** A current revision, with the `select(projection)` fields plus its page. */
 export interface RevisionVisit {
@@ -80,7 +77,7 @@ export async function forEachPublishedCurrentRevision(
   // its page (preserving page order). Returns STOP if `visit` asked to abort.
   const flush = async (): Promise<typeof STOP | void> => {
     if (batch.length === 0) return;
-    const ids = batch.map((p) => p.revision);
+    const ids = batch.map((p) => p.revision).filter((id) => id != null);
     const revisions = await Revision.find({ _id: { $in: ids } })
       .select(projection)
       .lean()

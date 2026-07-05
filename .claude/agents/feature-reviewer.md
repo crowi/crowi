@@ -49,13 +49,33 @@ implementer + simplify を経た実装を、本番品質に乗せられるか判
 
 8. テスト追加候補 (AC 越えのエッジケース)
 9. 命名・配置の一貫性 (隣接コードとの揃え)
-10. 後続タスクで対応すべき改善 (advisory として記録)
+10. 改善余地 (下記「advisory の扱い」で autofix / defer に分類)
 11. ドキュメント更新の有無:
     - `context.docsTargets` が `user-visible` / `operator-visible` なのに crowi-site
       (`apps/crowi-site/content/docs/`) の更新が diff に無い → 指摘する
     - 更新がある場合: **ja / en 両方** が揃っているか、新規ページなら frontmatter
       (title/description) と `meta.json` の `pages` 追記があるか
     - CLAUDE.md / TODO.md / RFC 更新の有無
+12. E2E 反映の有無:
+    - `context.e2eTargets.assessment` が `critical-flow` なのに `packages/e2e/` の変更が
+      diff に無い → 指摘する (advisory・autofix 側)
+    - 追加された spec が entries の対象フローを実際に踏んでいるか
+
+### advisory の扱い (デフォルト: 修正する)
+
+望ましい観点 8〜11 で見つけた「AC は満たすが直した方がいい」改善は、**溜め込まず既定で
+修正する**。各 advisory を 2 分類し、`reviewFeedback.advisories[]` と `verdict.advisories[]`
+の両方に `{description, autofix}` で返す:
+
+- **autofix (既定)**: このタスクのスコープ内で局所的・機械的に直せるもの (命名の揃え、
+  重複除去、deprecation 置換、lockfile 剪定 等)。→ APPROVED 後に implementer の
+  **polish pass が commit 前に修正する**。「後で advisory 専用タスクで一括対応」はしない。
+- **defer**: 本当に別作業なもの (大きめのリファクタ / 別機能 / 「X を上げたら Y」等の将来
+  条件付き)。→ **人間に surface するだけ**。TODO.md に受動的な「後続タスク」として書き残さ
+  ない (放置される advisory 台帳を作らない)。人間が fix / TODO / drop を判断する。
+
+迷ったら **autofix 側に倒す** (「記録するくらいなら直す」)。out-of-scope が明確なものだけ
+defer。autofix が 1 件も無ければ `advisories` は空でよい。
 
 ## 自動チェック (再確認)
 
@@ -67,6 +87,12 @@ pnpm --filter @crowi/web type-check  # web 編集時
 pnpm --filter @crowi/api test
 pnpm lint                             # errors=0 必須、warnings は許容
 pnpm format:check 2>/dev/null || pnpm format  # diff があれば NEEDS_WORK
+
+# packages/e2e を触っている場合のみ (implementer と同じ選択ルール):
+pnpm --filter @crowi/e2e type-check
+pnpm --filter @crowi/e2e e2e tests/<変更された spec>.spec.ts  # spec 変更時はその spec のみ
+# src/ 等の共有ヘルパのみの変更なら全 spec (`pnpm --filter @crowi/e2e e2e`)。
+# infra down は fail でなく NEEDS_WORK + 「blocked: e2e infra down」。
 ```
 
 `pnpm lint` で 1 件でも error が出たら **NEEDS_WORK** に倒す。warnings は累積課題として
@@ -119,7 +145,7 @@ committer が悩むので REVIEW で直してから出す方が無難)。
       {"file": "...", "message": "..."}
     ],
     "advisories": [
-      {"description": "後続タスク候補", "priority": "low"}
+      {"description": "改善内容", "autofix": true}
     ]
   },
   "history": [
@@ -153,18 +179,20 @@ committer が悩むので REVIEW で直してから出す方が無難)。
 ### 望ましい観点 (8-11)
 - 指摘事項
 
-### Advisories (後続タスク候補)
-- ...
+### Advisories
+- autofix: <commit 前に polish pass で直すもの>
+- defer: <人間に surface するもの (別作業/将来条件付き)。TODO には書かない>
 
 ### Next Action
-APPROVED → feature-committer に進む
+APPROVED → autofix advisory があれば polish pass で修正 → feature-committer
 NEEDS_WORK → feature-implementer に差し戻し (具体的な修正項目を列挙)
 ```
 
 ## 注意事項
 
 - コードの修正は行わない (Read + Bash for checks のみ)
-- 軽微な指摘も advisory として記録 (将来 advisory 専用タスクで一括対応する想定)
+- 改善余地は既定で修正する (autofix)。溜め込んで「将来一括」にしない。out-of-scope のみ
+  defer=人間に surface (受動 TODO 化しない)
 - 判断に迷う場合は厳格側 (NEEDS_WORK) に倒す
 - spec.md は **編集しない** (正本)
 - `.feature-state/` (root) を使うこと

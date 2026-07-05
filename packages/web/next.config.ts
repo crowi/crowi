@@ -63,12 +63,14 @@ const nextConfig: NextConfig = {
   // proxied here: Next.js `rewrites()` is HTTP-only and does not
   // forward `upgrade` events. The client instead derives the WS URL
   // from `window.location` (or `NEXT_PUBLIC_COLLAB_URL` when set) in
-  // `use-collab-document.ts`; the outer reverse proxy must route
+  // `resolve-ws-url.ts` (used by `use-collab-document.ts` and the
+  // presence/notifications hooks); an outer reverse proxy must route
   // `/collab/*` (and `/presence/*`, `/notifications/*`) WS upgrades to
-  // the api. In dev the client derives from `NEXT_PUBLIC_API_URL`
-  // (:4301) instead — cross-origin WS in dev is fine, browsers don't
-  // enforce same-origin for WebSocket and Hocuspocus doesn't gate on
-  // Origin.
+  // the api. This is true in dev too (feature-dev-portal-worktree): `pnpm
+  // dev` fronts api+web+the WS namespaces behind one same-origin proxy per
+  // worktree (Caddy, or a zero-dep fallback — see `scripts/dev-caddy.mjs`),
+  // so the client dialing its own origin reaches the api the same way dev
+  // and prod do.
   async rewrites() {
     return [
       { source: '/api/v2/:path*', destination: `${API_URL}/api/v2/:path*` },

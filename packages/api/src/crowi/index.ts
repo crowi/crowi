@@ -552,7 +552,6 @@ class Crowi {
 
   async setupDatabase() {
     // mongoUri = mongodb://user:password@host/dbname
-    mongoose.Promise = global.Promise;
 
     // Set strictQuery to true for schema consistency and query safety
     mongoose.set('strictQuery', true);

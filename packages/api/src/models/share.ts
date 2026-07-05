@@ -173,7 +173,7 @@ export default (crowi: Crowi) => {
 
   shareSchema.statics.deleteShare = async function (query = {}) {
     const defaultQuery = { status: STATUS_ACTIVE };
-    return Share.findOneAndUpdate({ ...query, ...defaultQuery }, { status: STATUS_INACTIVE }, { new: true }).exec();
+    return Share.findOneAndUpdate({ ...query, ...defaultQuery }, { status: STATUS_INACTIVE }, { returnDocument: 'after' }).exec();
   };
 
   shareSchema.statics.deleteById = async function (id) {

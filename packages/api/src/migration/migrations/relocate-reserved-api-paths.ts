@@ -1,3 +1,4 @@
+import type { Types } from 'mongoose';
 import { defineMigration } from '../types';
 import type { MigrationContext } from '../types';
 
@@ -68,10 +69,10 @@ async function findFreeTarget(Page: { exists: (q: Record<string, unknown>) => Pr
 }
 
 /** Pages still living under the reserved `/api` namespace, `_id` + `path` only. */
-async function collectApiPages(ctx: MigrationContext): Promise<{ _id: unknown; path: string }[]> {
+async function collectApiPages(ctx: MigrationContext): Promise<{ _id: Types.ObjectId; path: string }[]> {
   const Page = ctx.crowi.model('Page');
   const rows = await Page.find({ path: RESERVED_API_PATH }).select('_id path').lean().exec();
-  return (rows as { _id: unknown; path: string }[]).map((r) => ({ _id: r._id, path: r.path }));
+  return rows.map((r) => ({ _id: r._id, path: r.path }));
 }
 
 export const relocateReservedApiPaths = defineMigration({

@@ -7,7 +7,10 @@ export interface ActivityDocument extends Document {
   _id: Types.ObjectId;
   user: Types.ObjectId | any;
   targetModel: string;
-  target: string;
+  // Stored as `Schema.Types.Mixed` under `refPath: 'targetModel'`; for page
+  // activities the value is the page's ObjectId (see `createByPageLike` etc.),
+  // so the type must admit ObjectId as well as string for query filters.
+  target: Types.ObjectId | string;
   action: string;
   event: Types.ObjectId;
   eventModel: string;

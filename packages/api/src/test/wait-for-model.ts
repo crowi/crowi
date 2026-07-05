@@ -9,10 +9,10 @@
  *
  * Returns the document once found, or `null` after `maxTicks` exhausted.
  */
-import type { FilterQuery, Model } from 'mongoose';
+import type { Model, QueryFilter } from 'mongoose';
 import { crowi } from './setup';
 
-export async function waitForModel<T>(model: Model<T>, filter: FilterQuery<T>, maxTicks = 50): Promise<T | null> {
+export async function waitForModel<T>(model: Model<T>, filter: QueryFilter<T>, maxTicks = 50): Promise<T | null> {
   // Deterministically wait for the tracked fire-and-forget side effects
   // (auto-watch / backlink / Activity fan-out, wrapped via
   // `crowi.trackSideEffect` in the flake-hardening work) to settle, instead

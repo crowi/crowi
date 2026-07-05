@@ -4,9 +4,11 @@
     "**/.env.*local"
   ],
   "globalPassThroughEnv": [
+    "ALLOWED_DEV_ORIGINS",
     "BASE_URL",
     "CLIENT_URL",
     "COLLAB_MAX_EDITORS_PER_PAGE",
+    "CROWI_API_URL",
     "CROWI_ENCRYPTION_KEY",
     "HOSTNAME",
     "JWT_ACCESS_TOKEN_TTL_SECONDS",
@@ -14,6 +16,8 @@
     "MONGO_URI",
     "PASSWORD_SEED",
     "PORT",
+    "PORT_SITE",
+    "PORT_WEB",
     "REDISTOGO_URL",
     "REDIS_REJECT_UNAUTHORIZED",
     "REDIS_TLS_URL",

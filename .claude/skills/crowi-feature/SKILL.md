@@ -40,9 +40,11 @@ globs:
    ↓
 [Workflow: pipeline.workflow.js] ← 制御フローはコード (予告して止まる失敗が起きない)
    for each phase:
-     planner? → implementer → simplify? → reviewer ─┬(APPROVED)→ committer
+     planner? → implementer → simplify? → reviewer ─┬(APPROVED)→ polish(autofix advisory) → committer
                     ↑                                │
                     └────── NEEDS_WORK (最大 N 回) ──┘
+     ※ reviewer の advisory は既定で修正: in-scope(autofix)は commit 前に polish pass で
+       直す。out-of-scope(defer)のみ人間に surface(TODO には書かない)。
    autoContinue=false の phase 手前で GATED 返却 → 人間に resume を促す
    ↓
 [skill] Workflow の status (DONE / GATED / ESCALATE / FAILED) で報告
@@ -50,11 +52,11 @@ globs:
 
 各 phase の責務:
 
-- **planner**: spec を読み、コードベースを grep して再利用候補 (hooks / components / utils / 既存契約) を context に充填、AC を spec から起こす。**利用者/運用者に見える変化なら、影響する `apps/crowi-site/` ドキュメントを特定して `context.docsTargets` に充填する** (→「crowi-site ドキュメント更新」節)
-- **implementer**: 実装 + テスト + **crowi-site ドキュメント更新 (ja/en)**、必須チェック (type-check / test / lint / format) を全部走らせる、commitPlan を埋める
+- **planner**: spec を読み、コードベースを grep して再利用候補 (hooks / components / utils / 既存契約) を context に充填、AC を spec から起こす。**利用者/運用者に見える変化なら、影響する `apps/crowi-site/` ドキュメントを特定して `context.docsTargets` に充填する** (→「crowi-site ドキュメント更新」節)。**クリティカルフローに触れるなら `context.e2eTargets` も判定・充填する** (フロー表は feature-planner.md が正本)
+- **implementer**: 実装 + テスト + **crowi-site ドキュメント更新 (ja/en)** + **e2eTargets があれば `packages/e2e/` の Playwright spec 追加/拡張**、必須チェック (type-check / test / lint / format、e2e を触ったら変更 spec の選択実行) を全部走らせる、commitPlan を埋める
 - **simplify**: `simplify` skill を呼び、reuse / quality / efficiency を整える
-- **reviewer**: AC 達成 / 契約整合 / セキュリティ / トランザクション境界を確認。**docsTargets がある場合はドキュメント反映の有無も確認**
-- **committer**: task.commitPlan に従って **複数 commit** を作る (feat 本体 / test / docs 分割。crowi-site の更新は `docs(site)` commit に分ける)
+- **reviewer**: AC 達成 / 契約整合 / セキュリティ / トランザクション境界を確認。**docsTargets がある場合はドキュメント反映、e2eTargets が critical-flow の場合は e2e spec の有無も確認**
+- **committer**: task.commitPlan に従って **複数 commit** を作る (feat 本体 / test / docs 分割。crowi-site の更新は `docs(site)`、e2e spec は `test(e2e)` commit に分ける)
 
 ## state 管理
 
@@ -96,9 +98,24 @@ worktree ローカル**（共有しない）。理由:
   "commitStrategy": "main-direct",
   "maxReviewAttempts": 3,
   "runSimplify": true,
-  "minScopeSize": "small"
+  "minScopeSize": "small",
+  "codexReviewer": false
 }
 ```
+
+`codexReviewer`（既定 `false`）: `true` にすると review ステージが
+**客観ゲート先行 + Codex レビュー**に切り替わる — thin glue (haiku) がまず
+契約 build / check:openapi (契約変更時) / type-check / test / lint を bash で
+実行し、**1 つでも fail なら codex を呼ばずに即 NEEDS_WORK**（トークンほぼゼロ・
+確実）。全部 green のときだけ `codex-run.sh`（**exec モード** + read-only +
+`--prompt-file`/`--schema-file` — codex の review サブコマンドはカスタム prompt /
+schema を受けないため使わない）で敵対レビューを走らせ、AC / 設計判断 / docsTargets
+を埋め込んだ VERDICT (APPROVED/NEEDS_WORK/ESCALATE + blocking + advisories) を返させる。
+glue が `tasks/{id}.json` に `reviewFeedback` を tmp+rename で記録する。
+codex 不可・出力不正時は**従来の feature-reviewer agent に自動 fallback**
+（`feature-reviewer.md` は温存）。fallback 発動は Workflow 返り値の
+`codexFallbacks[]` に載るので報告に明記する。Phase 1 (crowi-design / crowi-review)
+で Codex の判定品質を見てから `true` に切り替える運用。
 
 ### queue.json スキーマ（PER-WORKTREE, volatile）
 
@@ -202,6 +219,16 @@ phase ごとに分けて書いてある場合、reviewer は **その phase の 
           "action": "edit",
           "metaUpdate": false,
           "summary": "サムネイル生成と表示の節を追記"
+        }
+      ]
+    },
+    "e2eTargets": {
+      "assessment": "critical-flow",
+      "entries": [
+        {
+          "spec": "packages/e2e/tests/attachments.spec.ts",
+          "action": "create",
+          "summary": "添付アップロード→サムネ表示の E2E"
         }
       ]
     }
@@ -327,7 +354,8 @@ reviewer,committer} エージェントを `agentType` でそのまま再利用�
 skill がやること (= Workflow の外側、人間ゲートを持つ層):
 
 ```
-2.1. config.json を読む: minScopeSize (既定 small) / maxReviewAttempts (既定 3) / runSimplify
+2.1. config.json を読む: minScopeSize (既定 small) / maxReviewAttempts (既定 3) / runSimplify /
+     codexReviewer (既定 false)
 2.2. needsPlanner を決める: spec.scope > minScopeSize なら true
      (順序 trivial<small<medium<large)
 2.3. multi-phase 判定: spec に `### Phase N:` が 2 本以上あれば phases[] を抽出。
@@ -337,7 +365,7 @@ skill がやること (= Workflow の外側、人間ゲートを持つ層):
      `--phase=N` 指定時は phases を N 以降に絞る。
 2.4. Workflow を起動 (同じ turn 内で必ず発火):
      Workflow({ scriptPath: '.claude/skills/crowi-feature/pipeline.workflow.js',
-                args: { id, needsPlanner, runSimplify, maxReviewAttempts, phases } })
+                args: { id, needsPlanner, runSimplify, maxReviewAttempts, codexReviewer, phases } })
 2.5. Workflow の返り値 status で分岐 (これだけが skill の判断材料):
      - DONE      → 完了報告 (step 4)
      - GATED     → 「Phase <gatedAt> は要調整。続けるなら `/feature {id} --phase=<gatedAt>`」

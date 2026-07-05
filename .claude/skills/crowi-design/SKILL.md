@@ -43,15 +43,37 @@ crowi-feature と同じく **人間ゲートを Workflow の外** に置く。
 main が保持するのは **brief サマリ + ゲート + 最終報告** だけ(生の調査ログ・コード読み・
 執筆は subagent 側に留まる)。
 
-## model アサイン(Workflow 内・コードで固定)
+## stage アサイン(Workflow 内・コードで固定)
 
-| phase | 担当 (agentType) | model / effort |
+分析・批評・長文執筆は **Codex**(`codex exec`)が主担当。各 Codex ステージは
+**thin glue agent(haiku/low)** が `.claude/scripts/codex-run.sh` 経由で駆動する
+ので、Claude 消費はほぼゼロ。Codex 不可時は **fail-open で従来の Claude 実装に
+自動 fallback** する(spec: feature-codex-role-split)。
+
+| stage | 主担当 | fallback(fail-open) |
 |---|---|---|
-| 調査 ×3(並列) | Explore | sonnet |
-| 設計案 | general-purpose | opus / high |
-| **収束(ゲート)** | **main** | session(max) |
-| 執筆 | general-purpose | RFC=opus / spec=sonnet |
-| 設計レビュー ×3(並列) | general-purpose | opus / high |
+| 調査: codebase + prior decisions | **Codex**(read-only・1 run) | Explore sonnet ×2 |
+| 調査: prior art(web 調査) | Explore sonnet | —(Claude 固定) |
+| 設計案(architect・brief 執筆) | **Codex**(workspace-write) | general-purpose(session / high) |
+| **収束(ゲート)** | **main**(session) | — |
+| 執筆 RFC | **Codex**(workspace-write) | general-purpose(session) |
+| 執筆 spec | general-purpose sonnet | —(Claude 固定・当面) |
+| 設計レビュー ×3(並列) | **Codex** ×3(read-only) | general-purpose(session / high) |
+| Claude lens(critical 時のみ +1) | general-purpose(session / high) | — |
+| 是正(revise) | RFC=**Codex** / spec=sonnet | general-purpose |
+
+### critical フラグ(Claude lens の追加基準)
+
+topic / spec が **データ消失・認証認可・並行 race・migration・crypto** に絡むなら、
+main が Workflow B の args に `critical: true` を立てる。critical 時は Codex 3 lens に
+**Claude lens(red-team 系)が 1 本追加**される — Codex の盲点を単一障害点にしない
+ための保険。通常時は Claude lens ゼロ。
+
+### fallback の報告義務
+
+Workflow の返り値 `codexFallbacks[]` に fallback 発動が記録される。**最終報告には
+「stage X は Claude fallback で実行(理由)」を必ず明記**する(黙って Claude で
+走らせない)。
 
 ## 起動フロー(skill = main がやること)
 
@@ -75,19 +97,34 @@ main が保持するのは **brief サマリ + ゲート + 最終報告** だけ
    ```
    Workflow({ scriptPath: '.claude/skills/crowi-design/review-document.workflow.js',
               args: { slug, title, outputType, briefPath, scope,
-                      decisions: { approach, answers }, maxReviewAttempts: 2 } })
+                      decisions: { approach, answers }, maxReviewAttempts: 2,
+                      critical: <bool> } })   // critical フラグの基準は上記
    ```
-   返り値 = `{ status, docPath, verdict, residualOpenQuestions, blocking?, reviewSummary }`。
+   返り値 = `{ status, docPath, verdict, residualOpenQuestions, rebutted?, blocking?,
+   reviewSummary, codexFallbacks }`。`rebutted[]` は「レビュー指摘自体が誤りだったので
+   実コード反証つきで適用しなかった」もの — 最終報告に載せる。
 5. **報告**(`status` で分岐):
    - **DONE**(verdict APPROVED)→ doc を提示:
      - **spec** → `.feature-state/specs/feature-<slug>.md`(敵対的レビュー済み)。
-       次の一手: **`/crowi-feature feature-<slug>`** で実装へ。
+       次の一手: **`/crowi-feature feature-<slug>`** で実装へ(または `/crowi-kickoff`)。
+       あわせて **「wiki に publish するか」を確認**(一文で可)。publish する場合:
+       `crowi_get_page` で `/crowi/spec/feature-<slug>` の存在を確認 → 無ければ
+       `crowi_create_page`(body = spec 全文そのまま)、有れば revision_id を取って
+       `crowi_update_page`(楽観ロック。409 は再取得して 1 回リトライ)。
+       MCP 未接続のセッションでは「wiki publish は skip(MCP 未接続)」と報告するだけで
+       よい(エラーにしない)。**RFC は publish 対象外**(正本は repo の docs/rfcs/ commit)。
      - **RFC** → `docs/rfcs/00NN-<slug>.md`(**未 commit**)。ユーザーにレビューを依頼し、
        OK をもらったら **`docs(rfc): add RFC-00NN ...` を main 直 commit**(push しない)。
        実装パス: RFC → spec(`/crowi-design spec ...`)→ `/crowi-feature`。
    - **NEEDS_WORK** → 残った `blocking` を提示し、人間の設計判断を仰ぐ(doc は残す。
      方針が定まったら `/crowi-design review <docPath>` で再レビュー、または手で是正)。
+     **大 RFC の収束ルール**: approach が合意済みなら、残 blocking を実装 gate +
+     open question に落として **Draft として確定してよい**(指摘ゼロまでレビューループを
+     回さない — 大 RFC は long tail になる)。是正必須なのは fundamental な誤りと
+     自分の混入誤りのみ。
    - **FAILED** → reason を提示。
+   - いずれの分岐でも `codexFallbacks` が非空なら「stage X は Claude fallback で実行」を
+     報告に含める。
 
 > skill 側で守るのは 1 つだけ: **§2 と §4 の Workflow 起動を実際に発火** すること
 > (「あとは自動で進みます」と予告して Workflow を呼ばずに turn を締めない)。
@@ -106,9 +143,11 @@ main が保持するのは **brief サマリ + ゲート + 最終報告** だけ
 `/crowi-design review <path>`:
 ```
 Workflow({ scriptPath: '.claude/skills/crowi-design/review-document.workflow.js',
-           args: { slug, outputType, reviewOnly: true, docPath: <path> } })
+           args: { slug, outputType, reviewOnly: true, docPath: <path>,
+                   critical: <bool> } })
 ```
-(spec の単体検証は `/crowi-spec-review` が人間入口。これは RFC にも広げた版。)
+(spec の単体検証は `/crowi-spec-review` が人間入口 — そちらは本質的に
+correctness-critical 用なので `critical: true` 固定で本 Workflow を呼ぶ。)
 
 ## crowi-spec-review / crowi-feature との関係
 
@@ -126,9 +165,18 @@ Workflow({ scriptPath: '.claude/skills/crowi-design/review-document.workflow.js'
 - spec 出力: `.feature-state/specs/feature-<slug>.md`(非 commit)。
 - RFC 出力: `docs/rfcs/00NN-<slug>.md`(レビュー後に commit)。
 
+**wiki との正本ルール**(crowi-kickoff と共通):
+1. 作業中の正本は `.feature-state/specs/`(gitignore・エージェントが読む・完了時に削除)。
+2. wiki `/crowi/spec/<id>` は**耐久スナップショット**(セッション横断・複数マシン・実装後も残る)。
+3. 同期は一方向のみ: design → wiki(publish)/ wiki → specs/(kickoff の pull)。
+   双方向同期・差分マージはしない。両方に存在して食い違ったら `.feature-state/specs/` が勝つ。
+
 ## 重要な前提
 
 - **パイプライン本体は 2 つの Workflow スクリプト**(この skill ディレクトリ)。制御フロー・
   model アサイン・レビューループはコードに集約され、「予告して turn を締める」失敗は起きない。
 - **main 直コミット運用**(RFC のみ・レビュー後)。`git push` は明示指示まで行わない。
 - crowi commit に `Co-Authored-By` trailer は付けない。
+- **この skill は Claude(Workflow ランタイム)専用**。Codex は `codex-run.sh` 経由で
+  「ステージとして呼ばれる側」(research digest / architect / RFC writer / reviewer)。
+  Codex セッションでこの skill を直接実行しようとしない。

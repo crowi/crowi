@@ -73,7 +73,7 @@ export default (crowi: Crowi) => {
   watcherSchema.statics.upsertWatcher = function (user, targetModel, target, status) {
     const query = { user, targetModel, target };
     const doc = { ...query, status };
-    const options = { upsert: true, new: true, setDefaultsOnInsert: true, runValidators: true };
+    const options = { upsert: true, returnDocument: 'after' as const, setDefaultsOnInsert: true, runValidators: true };
     return Watcher.findOneAndUpdate(query, doc, options);
   };
 

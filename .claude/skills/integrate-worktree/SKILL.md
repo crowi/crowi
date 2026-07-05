@@ -33,8 +33,9 @@ description: |
 ## ワークフロー
 
 ```
-worktree 作業確認 → main へ merge → conflict 解消 → 自動チェック
-  → dev/watch 停止 → gw end → tmux window close → simplify → stale spec/task 掃除
+worktree 作業確認 → main へ merge → conflict 解消 → 自動チェック → merge commit
+  → dev/watch 停止 → selective /crowi-qa → gw end → tmux window close → simplify
+  → stale spec/task 掃除
 ```
 
 ### Step 1: worktree の作業内容を確認
@@ -107,6 +108,20 @@ git rm --cached <noise file>
 - 実装コード / テスト / docs → コミットに含める
 - review メモ / 作業ログ / 一時ファイル → 除外して `.gitignore` に追加
 
+### Step 3.3: 交差判定用ファイルリストの捕捉 (selective `/crowi-qa` 呼び出しの準備)
+
+`--no-commit` merge (Step 3) の直後はまだ merge commit が作られておらず、`HEAD` は依然
+main を指したまま — `git diff main..HEAD --name-only` は常に空になり交差判定に使えない。
+今回の merge が変更したファイルの正しい集合は **staged 差分**から得る:
+
+```bash
+MERGED_FILES=$(git diff --cached --name-only)
+```
+
+Step 3.2 のノイズ除外が終わった直後 (= merge commit 作成前) にこの時点で捕捉し、Step 5 で
+merge commit が作られた後も使えるよう変数として保持しておく。用途は Step 5.6 (selective
+`/crowi-qa` 呼び出し) の交差判定。
+
 ### Step 4: 自動チェック
 
 merge commit を作る前に、統合後のビルド / 型 / テスト / lint が通るか確認:
@@ -117,6 +132,10 @@ pnpm --filter @crowi/api type-check
 pnpm --filter @crowi/web type-check
 pnpm --filter @crowi/api test
 pnpm lint                                 # errors=0 必須
+
+# merge 差分に packages/e2e/** が含まれる場合のみ (選択実行):
+# tests/*.spec.ts に変更があればその spec のみ、src/ 等の共有部のみなら全 spec
+pnpm --filter @crowi/e2e e2e tests/<変更された spec>.spec.ts
 ```
 
 1 つでも失敗したら中止。conflict 解消の判断ミスや、両側の変更の組み合わせで型が合わなく
@@ -167,6 +186,36 @@ sleep 1   # SIGTERM が効くのを待つ
 入っているが、フック未導入の環境でも安全に閉じられるよう skill 側でも先に止める。tmux で
 `pnpm dev` を別 pane に出している場合は、Step 6.5 の window kill が先に効けばそちらでも止まる
 (が、Step 6.5 は `gw end` の **後**なので、この Step 5.5 がレース回避の本命)。
+
+### Step 5.6: 統合後コードへの selective `/crowi-qa` 呼び出し (必須フック)
+
+Step 5.5 で止めるのは **source worktree** 側の dev/watch プロセスであり、統合後のコードを
+実際に serve しているのは main worktree で動いている別の `pnpm dev` インスタンス
+(`/crowi-qa main` の target 解決と同じ main の proxy)。merge commit (Step 5) によって main
+のファイルが書き換わり、稼働中の Turbopack / `tsx watch` が hot-reload で追随する前提で、
+この main の dev instance に対して `/crowi-qa` を呼ぶ。
+
+1. Step 3.3 で捕捉した `$MERGED_FILES` を、`.claude/skills/crowi-qa/SKILL.md` §2 (9 チャー
+   ターと対応パス表 — この表を複製せず参照する) の「対応パス」列と照合し、交差した charter
+   を特定する。
+2. `$MERGED_FILES` が §2 の「共有 runtime / proxy パス (個別割り当てを試みず全 9 charter =
+   full QA)」のいずれかに交差する場合は、charter を絞らず全 9 charter を対象にする。
+3. 交差が 1 つも無ければ `/crowi-qa` を呼ばずにこの Step をスキップして Step 6 へ進む。
+4. 交差がある (または「QA してから統合して」等の明示要求がある) 場合は main worktree の
+   dev instance に対して呼び出す:
+   ```
+   /crowi-qa main --charters <交差した charter のカンマ区切り>
+   # 共有 runtime / proxy パスに交差、または明示要求で全 charter 対象なら --charters は省略
+   ```
+   main の dev (`pnpm dev`) が起動していない場合は自動起動せず
+   `blocked: main dev server not running for post-merge QA` として報告する
+   (起動するかどうかは人間の判断)。
+
+**source worktree への任意の事前チェックとの違い**: Step 3.3 と同じタイミング (no-commit
+merge 直後・conflict 解消後) に `/crowi-qa <this-worktree> --charters ...` を手動で追加して
+早期に妥当性を見ることは妨げないが、これは本 Step の必須フックを**代替しない** —
+source worktree はコンフリクト解消前の状態を含む場合があり、統合済み main のコードの検証に
+はならないため。
 
 ### Step 6: worktree close
 
@@ -243,8 +292,10 @@ merge 直後は、両側の変更が混ざってコードに重複や非効率�
 simplify <description of merged work>
 ```
 
-simplify が見つけた issue は直接修正し、別 commit (例: `refactor(merge): ...`) としてコミット。
-修正がなければ skip。
+simplify が見つけた issue は **その場で全部修正**し、別 commit (例: `refactor(merge): ...`) として
+コミット。直さないと判断したものは**捨てる**(報告に 1 行残すだけ)。**TODO.md 等への advisory
+退避は禁止**(fix or drop — 全 skill 共通方針。`docs(todo): record ... advisory` 型の commit を
+作らない)。修正がなければ skip。
 
 ### Step 8: stale な spec / task ファイルを掃除 (提案 → 削除)
 

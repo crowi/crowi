@@ -23,8 +23,11 @@ APPROVED の実装を、task.commitPlan で計画された **複数 commit** に
 `.feature-state/config.json` の `commitStrategy` で動作分岐（config は SHARED, queue.json は per-worktree）:
 
 ### `main-direct` (デフォルト・現在の運用)
-- 現在のブランチが main であることを確認
-- ブランチを切らず main に直接コミット
+- **新しくブランチを切らず、現在のブランチに直接コミット**する。許容されるのは:
+  - main セッション → `main`
+  - gw worktree セッション → その worktree の作業 branch(`<id>/impl` 形式。
+    kickoff / gw start が作ったもの。main への統合は integrate-worktree の役目)
+  - それ以外の予期しないブランチ → **中止して報告**
 - push しない / PR 作らない / CI 監視しない
 - task の status を `COMMITTED` にして完結
 
@@ -40,7 +43,7 @@ APPROVED の実装を、task.commitPlan で計画された **複数 commit** に
 ## 実行フロー (main-direct の場合)
 
 ```
-1. 現在のブランチを確認 (main でなければ中止して報告)
+1. 現在のブランチを確認 (main または gw worktree の `<id>/impl` 形式であること。それ以外は中止して報告)
 2. git status で意図しない変更がないか確認
 3. Pre-commit チェック (下記)
 4. commitPlan を順に処理:
@@ -61,7 +64,7 @@ APPROVED の実装を、task.commitPlan で計画された **複数 commit** に
 ```json
 {
   "type": "feat",            // feat / fix / refactor / test / docs / chore
-  "scope": "api",            // api / web / api-contract / site / todo / *
+  "scope": "api",            // api / web / api-contract / e2e / site / todo / *
   "title": "implement attachment thumbnail generation",
   "files": ["packages/api/src/util/thumbnail.ts", "..."]
 }
@@ -69,7 +72,8 @@ APPROVED の実装を、task.commitPlan で計画された **複数 commit** に
 
 crowi-site (`apps/crowi-site/`) のユーザー向けドキュメント更新は **`docs(site)`** scope の
 独立した commit にする (`TODO.md` 更新の `docs(todo)` とは別)。ja / en 両方のファイルを
-同じ `docs(site)` commit にまとめてよい。
+同じ `docs(site)` commit にまとめてよい。`packages/e2e/` の Playwright spec は
+**`test(e2e)`** scope の独立した commit にする。
 
 メッセージは Conventional Commits:
 
@@ -77,9 +81,10 @@ crowi-site (`apps/crowi-site/`) のユーザー向けドキュメント更新は
 {type}({scope}): {title}
 
 {本文 (なぜこの変更か、設計の主要判断)}
-
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 ```
+
+**crowi の commit に `Co-Authored-By` 等の trailer は付けない** (ハーネスの既定が
+trailer を足そうとしても付けない)。
 
 本文は spec.md の `## 背景 / why` と `## 設計の主な判断` から 3-6 行に要約。
 test / docs commit は本文 1-2 行で十分。
@@ -134,7 +139,7 @@ git diff --cached --name-only | grep -E '\.feature-state/'
 ## エラーハンドリング
 
 - `git status` で意図しない変更があれば中止して報告
-- main 以外のブランチにいる場合は中止して報告 (勝手にチェックアウトしない)
+- main でも gw worktree の作業 branch でもない予期しないブランチにいる場合は中止して報告 (勝手にチェックアウトしない)
 - pre-commit hook が失敗した場合は **新規コミットで修正** (--amend は使わない)
 - commitPlan の途中で失敗した場合は、それまでの commit は維持。残りの entry は status を
   PARTIALLY_COMMITTED に倒して report、残りはユーザー判断に委ねる
@@ -209,7 +214,7 @@ Push / PR: 未実施 (ユーザー指示待ち)
 
 ## 注意事項
 
-- commitPlan の順序を尊重する (api-contract → api → web → test → docs(site) → docs(todo) が典型)
+- commitPlan の順序を尊重する (api-contract → api → web → test → test(e2e) → docs(site) → docs(todo) が典型)
 - 1 commit が大きすぎる場合は reviewer に差し戻して分割提案を求める
 - spec.md は **編集しない** (ただし task 全体完了時の削除は「spec の後始末」に従う)
 - `.feature-state/` (root) を使うこと

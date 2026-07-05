@@ -2,16 +2,18 @@
 name: crowi-review
 description: |
   Codex を敵対的レビュアーに使い、指定スコープ (worktree 差分 / main 直作業範囲 /
-  エリア) を review → Claude subagent で中立検証 → 報告 (+ main clean なら低リスク
-  だけその場修正) する単発レビュー skill。PR/merge の自動化はしない (crowi は
-  main-direct + integrate-worktree のため)。Codex が落ちたら Claude subagent で代替。
+  エリア) を review → 報告 (+ main clean なら低リスクだけその場修正) する単発レビュー
+  skill。findings は事前の全件検証をせず unverified タグ付きで報告し、修正を適用する
+  ものだけ着手時に実コードで裏取りする (verification-on-action)。PR/merge の自動化は
+  しない (crowi は main-direct + integrate-worktree のため)。Codex が落ちたら Claude
+  subagent で代替。
   キーワード: review, code-review, codex, adversarial, レビュー, 品質
 ---
 
 # Crowi Review
 
 **Codex が敵対的レビュアー、Claude (あなた) がオーケストレータ + 修正者。**
-review-gauntlet (lestrrat) のレビュー核 — codex 敵対レビュー → 中立検証 → gate — を
+review-gauntlet (lestrrat) のレビュー核 — codex 敵対レビュー → gate — を
 crowi の運用 (main-direct) に合わせて **PR/merge のファンアウトを外した単発版**。
 
 「連続的にかける」役割は **crowi-orchestrate C watcher** が持つ (C が本 skill を呼ぶ)。
@@ -24,6 +26,8 @@ crowi の運用 (main-direct) に合わせて **PR/merge のファンアウト�
   main-direct + integrate-worktree なので PR 駆動 merge は思想が合わない。取り込まない。
 - **push / PR 作成** — 常にユーザー指示待ち。
 - **worktree の作成** — 修正は現在の作業ツリーに直接 (main clean 時のみ・下記)。
+- **全 finding の事前 fleet 検証** — 廃止 (Claude のコード再読を削減)。裏取りは
+  **修正を適用する finding だけ**、修正着手時に行う (verification-on-action)。
 
 ## 引数とスコープ解決
 
@@ -48,79 +52,111 @@ crowi の運用 (main-direct) に合わせて **PR/merge のファンアウト�
 
 | ファイル | 内容 |
 |---|---|
-| `findings-raw.md` | Codex の生の敵対的 findings |
-| `verdicts.md` | 中立検証の判定 (survive するもの) |
-| `report.md` | 最終報告 (survivors + REFUTED/UNCERTAIN) |
+| `prompt.md` / `schema.json` | wrapper に渡すレビュー指示 + FINDINGS schema |
+| `findings.json` (+ `.stderr` / `.log`) | Codex の構造化 findings (wrapper の out) |
+| `report.md` | 最終報告 (severity 順 + unverified タグ。修正時に CONFIRMED / REFUTED へ更新) |
 
 codex / subagent の出力は**まず `.reviews/crowi-review/` に書き**、そこから Read/Grep
 する。`/tmp` は使わない。
 
-## Codex fallback — quota / system error
+## Stage 0 — Codex 敵対的レビュー (wrapper 経由)
 
-`codex exec` が **verdict/findings を返さない** 失敗 (quota・rate-limit・auth・timeout・
-その他 system error) をしたら、**verdict の不在**として扱う (実際に findings や
-`VERDICT:` 行を返したら、それは結果なので採用する)。
+すべての codex 呼び出しは **`.claude/scripts/codex-run.sh`** に集約する
+(直接 `codex exec` を叩かない)。**常に exec モード + `--sandbox read-only`** を使い、
+findings は `--out` に構造化 JSON で受け取る。
 
-失敗時: **1 回リトライ**。それでもダメなら **同じ仕事を Claude subagent で代替**して
-止まらない — Stage 0 なら `Explore` / `general-purpose` subagent で同スコープの敵対
-レビューを `findings-raw.md` に書く。報告に「Codex fallback (Claude subagent) で実行」
-と明記する。これは system 失敗時の代替であって、Codex が動くなら常に Codex を使う。
+> wrapper の `--mode review` (codex 標準レビュー) は本 skill では**使わない**:
+> codex-cli の review サブコマンドはカスタム prompt をターゲットフラグと併用できず、
+> `--output-schema` も無視する (0.142.5 実測)。敵対指示 + 構造化 findings が必須の
+> 本 skill は exec モードでスコープ取得も codex 自身にやらせる。
 
-## Stage 0 — Codex 敵対的レビュー
-
-スコープの差分に対し codex を回す (`--full-auto`、コードは編集させない):
+1. スコープを prompt 内の取得指示に翻訳する (`<SCOPE_INSTRUCTIONS>`):
+   - 未コミット変更 → 「`git status --porcelain` + `git diff HEAD` で取得し、
+     untracked ファイルは直接読め」
+   - ブランチ差分 → 「`git diff main...HEAD`」
+   - 単一 commit → 「`git show <sha>`」
+   - git range → 「`git diff A..B`」
+   - path・エリア → 「`<path>` 配下のファイルを読め」
+2. 実行:
 
 ```bash
 mkdir -p .reviews/crowi-review
-codex exec --full-auto -o .reviews/crowi-review/findings-raw.md \
-  "Perform an adversarial code review of the git diff for <SCOPE> \
-   (run: git diff <RANGE>  — or review the files under <PATH>). For each finding give: \
-   a stable ID, severity (critical/high/medium/low), file:line, the defect, a concrete \
-   reproduction trigger, the impact, and a concrete fix. Be hostile — surface everything \
-   that could be wrong (correctness, security, resource/leak, race, API/contract drift). \
-   Do NOT edit code. Do NOT run destructive git commands."
+cat > .reviews/crowi-review/prompt.md <<'PROMPT'
+Perform an adversarial code review of <SCOPE>. Gather the changes yourself:
+<SCOPE_INSTRUCTIONS>. For each finding give: a stable id, severity
+(critical/high/medium/low), file (+ line when known), the defect, a concrete
+reproduction trigger, the impact, and a concrete fix. Be hostile — surface
+everything that could be wrong (correctness, security, resource/leak, race,
+API/contract drift). Do NOT edit code. Do NOT run destructive git commands.
+Return JSON matching the output schema.
+PROMPT
+cat > .reviews/crowi-review/schema.json <<'SCHEMA'
+{ "type": "object", "required": ["findings"], "additionalProperties": false,
+  "properties": { "findings": { "type": "array", "items": {
+    "type": "object",
+    "required": ["id", "severity", "file", "line", "defect", "trigger", "impact", "fix"],
+    "additionalProperties": false,
+    "properties": {
+      "id": {"type": "string"},
+      "severity": {"type": "string", "enum": ["critical", "high", "medium", "low"]},
+      "file": {"type": "string"},
+      "line": {"anyOf": [{"type": "integer"}, {"type": "null"}]},
+      "defect": {"type": "string"}, "trigger": {"type": "string"},
+      "impact": {"type": "string"}, "fix": {"type": "string"}
+    } } } } }
+SCHEMA
+bash .claude/scripts/codex-run.sh --sandbox read-only \
+  --prompt-file .reviews/crowi-review/prompt.md \
+  --schema-file .reviews/crowi-review/schema.json \
+  --out .reviews/crowi-review/findings.json --label crowi-review
 ```
 
-- codex は `--full-auto` で shell を持つので、`git diff <RANGE>` を自分で取れる。大きい
-  スコープはファイル群/エリアで区切って複数回に分けてよい。
-- 落ちたら「Codex fallback」に従い subagent で同等の敵対レビューを書く。
+(schema は OpenAI strict 準拠 — `additionalProperties: false` + 全 property を
+`required` に。緩めると codex が 400 で落ちる。)
 
-## Stage 1 — 中立検証 (Claude subagent)
+3. exit code で分岐:
+   - **0** → `findings.json` を読み Stage 1 へ。
+   - **2 / 3**(codex 不可 / 出力不正。retry は wrapper 内蔵)→ **Claude fallback**:
+     同じスコープの敵対レビューを `general-purpose` subagent に同じ FINDINGS 形式で
+     書かせ、止まらない。報告に「Codex fallback (Claude subagent) で実行」と明記し、
+     findings のタグは `unverified (claude-fallback)` にする。
 
-`findings-raw.md` の各 finding を **refute 寄り**で監査し
-`CONFIRMED` / `ADJUSTED` / `REFUTED` / `UNCERTAIN` を付けて `verdicts.md` に書く。
-検証は **Codex ではなく Claude subagent** が行う (レビュアーと検証者を分離 = 独立性)。
+大きいスコープはファイル群/エリアで区切って複数回に分けてよい。
 
-- **findings ≤ 10** → `Explore` subagent 1 つが全件監査 (全体が見えるので取りこぼし無し)。
-- **findings > 10** → 5〜8 件ずつ shard し、chunk ごとに `Explore` subagent を並列起動
-  → `verdicts-<chunk>.md` に書き、最後に結合。shard 時は結合後に自分で dedup
-  (同一バグを指す finding を 1 件に畳む)。
+## Stage 1 — 報告 (verification-on-action)
 
-各 subagent には「コードを実際に読んで再現可否を確認、**疑わしきは REFUTED に倒す**、
-CONFIRMED には file:line と最小再現根拠を付ける」を指示する。
+**全 finding の事前検証はしない。** `report.md` に severity 順で全 finding を列挙し、
+各 finding に **`unverified (codex)`** タグ(fallback 時は `unverified (claude-fallback)`)
+を付けて、そのまま会話でも報告する。critical / high があれば `PushNotification` で ping。
 
-**CONFIRMED / ADJUSTED のみ**を work item として残す。REFUTED は捨て、UNCERTAIN は
-報告でユーザー triage に回す。survive 0 件なら「指摘なし」で報告して終了。
+裏取りは**修正を適用する finding だけ**、修正着手時に行う(直すためにどうせコードを
+読むので実質無料):
 
-## Stage 2 — 報告 (+ 低リスクのみその場修正)
+- 裏付けが取れた → 修正し、report のタグを **`CONFIRMED`** に更新。
+- 実コードで反証された → **修正せず**、report のタグを **`REFUTED`** に更新
+  (反証根拠 file:line を 1 行添える)。
 
-1. **報告 (`report.md` + 会話)**: survivors を severity 順に列挙 (file:line + 修正案)。
-   UNCERTAIN も別掲。critical/high があれば `PushNotification` で ping。
-2. **修正の扱い** (crowi-orchestrate C と同じルール):
-   - **main が clean** かつ **low-risk** (局所・挙動不変・テスト裏付け可) → その場で修正し
-     **別 commit** (`fix(review): …` / `refactor(review): …`)。type-check / test / lint が
-     通ることを確認してから commit。
-   - **main が dirty** (ユーザー作業中) → 勝手に commit しない。**報告に留め**、適用は
-     main clean 時 or ユーザー承認後。
-   - **大きい / 判断系** → TODO 化 (`docs(todo)`)、重要なら ping。
-3. **push / PR はしない**。commit までで止め、push はユーザー指示待ち。
+修正しない finding は `unverified` のまま残る(ユーザー triage 用)。
+
+## Stage 2 — 修正の扱い (低リスクのみその場修正)
+
+crowi-orchestrate C と同じルール:
+
+- **main が clean** かつ **low-risk** (局所・挙動不変・テスト裏付け可) → 裏取り
+  (上記) の上でその場で修正し **別 commit** (`fix(review): …` / `refactor(review): …`)。
+  type-check / test / lint が通ることを確認してから commit。
+- **main が dirty** (ユーザー作業中) → 勝手に commit しない。**報告に留め**、適用は
+  main clean 時 or ユーザー承認後。
+- **大きい / 判断系** → 報告してユーザーの判断を仰ぐ(直す指示が出れば直す、出なければ**捨てる**)。
+  **TODO への退避はしない**(fix or drop — 全 skill 共通方針)。重要なら ping。
+- **push / PR はしない**。commit までで止め、push はユーザー指示待ち。
 
 > API surface/behavior を変える修正は勝手に入れない (report に留めて確認を仰ぐ)。
 
 ## crowi-orchestrate / integrate-worktree との連携
 
-- **crowi-orchestrate C**: main 直作業が閾値に達したら、組み込み `/code-review` の代わりに
-  本 skill を `<lastReviewedMainSha>..main` スコープで呼べる (Codex レビューに置換)。
+- **crowi-orchestrate C**: main 直作業が閾値に達したら、本 skill を
+  `<lastReviewedMainSha>..main` スコープで呼ぶ (C 系統の既定)。
   発火条件・`lastReviewedMainSha` 更新は C 側のまま。
 - **integrate-worktree Step 7**: simplify (Claude 3 agent) の敵対レビュー版として、
   統合差分 (`git diff <merge>^..HEAD`) に本 skill をかけてもよい。simplify は
@@ -129,10 +165,9 @@ CONFIRMED には file:line と最小再現根拠を付ける」を指示する�
 
 ## ルール
 
-- Codex に破壊的操作 (delete / force-push / reset) を渡さない。`--full-auto` を使い
-  `--dangerously-bypass-approvals-and-sandbox` は使わない。
-- レビュアー (Codex) と検証者 (Claude subagent) を分離する — 同じ主体に self-review
-  させない。
+- codex は必ず `.claude/scripts/codex-run.sh` 経由で呼ぶ (レビューは read-only で完結。
+  `--full-auto` / `--dangerously-bypass-approvals-and-sandbox` は使わない)。
+- Codex に破壊的操作 (delete / force-push / reset) を渡さない。
 - 修正は現在の作業ツリーに **順次** 適用 (並列 subagent で同一ツリーを編集しない)。
   ファンアウトが要るレベルなら worktree を切る運用 (整合は integrate-worktree) に回す。
 - main dirty 時は commit しない。push は常にユーザー指示待ち。

@@ -1,5 +1,16 @@
 # @crowi/api
 
+## 2.0.0-alpha.5
+
+### Minor Changes
+
+- Wire plugin-contributed HTTP routes into the Hono app: PluginManager registers each plugin's `registerRoutes(scope, ctx)` surface during boot (public + raw body), so plugins such as `@crowi/plugin-slack` can mount their own endpoints. Also fix the plugin dependency-cycle error to report only the actual cycle rather than the acyclic prefix that led into it.
+
+### Patch Changes
+
+- Updated dependencies
+  - @crowi/api-contract@2.0.0-alpha.5
+
 ## 2.0.0-alpha.3
 
 ### Minor Changes

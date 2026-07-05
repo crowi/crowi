@@ -111,7 +111,10 @@ export interface PageDocument extends Document {
   _id: Types.ObjectId;
   path: string;
   revision: Types.ObjectId;
-  redirectTo: string;
+  // A "real" page stores `null`; a redirect stub left behind by a rename
+  // stores the destination path. Nullable throughout (see `isRedirectOriginPage`
+  // and the many `{ redirectTo: null }` real-page filters / creates).
+  redirectTo: string | null;
   status: string;
   grant: number;
   grantedUsers: Types.ObjectId[];

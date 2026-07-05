@@ -32,7 +32,8 @@
       "yauzl@3.2.0": "3.2.1",
       "ajv@>=6.0.0 <6.14.0": "6.14.0",
       "undici@6": "^6.27.0",
-      "undici@7": "^7.28.0"
+      "undici@7": "^7.28.0",
+      "socks": "^2.8.7"
     }
   },
   "scripts": {
@@ -40,10 +41,12 @@
     "dev:api": "turbo run dev --concurrency=30 --filter @crowi/api --filter @crowi/api-contract --filter @crowi/collab --filter @crowi/runner --filter \"@crowi/plugin-*\"",
     "dev:web": "turbo run dev --filter @crowi/web",
     "dev:site": "turbo run dev --filter @crowi/site",
+    "dev:portal": "node scripts/dev-portal/index.mjs",
     "migrate": "node scripts/migrate.mjs",
     "build": "turbo run build",
     "build:images": "node scripts/build-images.mjs",
     "test": "turbo run test --concurrency=3",
+    "test:scripts": "node --test scripts/*.test.mjs",
     "test:server": "turbo run test:server",
     "lint": "turbo run lint",
     "lint:fix": "turbo run lint:fix",
@@ -51,6 +54,7 @@
     "format": "biome format --write .",
     "format:check": "biome format .",
     "check:workspace": "node scripts/check-workspace-protocol.mjs",
+    "check:packages": "node scripts/check-package-publishable.mjs",
     "check:openapi": "node scripts/check-openapi-fresh.mjs",
     "clean": "turbo run clean",
     "e2e": "pnpm --filter @crowi/e2e e2e",

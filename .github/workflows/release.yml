@@ -54,6 +54,13 @@ jobs:
       - name: Build packages
         run: pnpm build
 
+      # Fail the release BEFORE `changeset publish` if any publishable package
+      # lacks the repository metadata npm provenance requires. Otherwise a single
+      # offender (e.g. a brand-new plugin) aborts publish mid-way, leaving a
+      # partial release (some packages on npm, no Docker, no tags).
+      - name: Check publishable package metadata
+        run: pnpm check:packages
+
       - name: Create Release PR or Publish
         id: changesets
         uses: changesets/action@v1

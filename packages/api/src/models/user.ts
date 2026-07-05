@@ -306,11 +306,10 @@ export default (crowi: Crowi) => {
   // validation so saving a doc loaded from a pre-existing row never trips the
   // tightened ['en','ja'] enum. Self-healing: the row is normalised on its
   // next save, no separate data migration required.
-  userSchema.pre('validate', function (next) {
+  userSchema.pre('validate', async function () {
     if (this.lang && LEGACY_LANGS.includes(this.lang)) {
       this.lang = LANG_EN;
     }
-    next();
   });
 
   userSchema.methods.isPasswordSet = function () {

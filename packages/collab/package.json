@@ -21,7 +21,7 @@
     "@crowi/api-contract": "workspace:^",
     "@hocuspocus/server": "^4.0.0",
     "debug": "^4.4.3",
-    "mongoose": "^8.24.0",
+    "mongoose": "^9.7.3",
     "uuid": "^11.1.1",
     "y-protocols": "^1.0.6",
     "yjs": "^13.6.8"
@@ -35,7 +35,7 @@
     "@typescript-eslint/parser": "^6.21.0",
     "eslint": "^8.57.1",
     "jest": "catalog:",
-    "mongodb-memory-server": "^10.1.4",
+    "mongodb-memory-server": "^11.2.0",
     "ts-jest": "catalog:",
     "tsup": "catalog:",
     "typescript": "catalog:"
