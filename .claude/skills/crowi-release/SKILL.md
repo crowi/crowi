@@ -50,8 +50,11 @@ Trusted Publisher 等はそちら)。この skill はエージェント手順に
    `git log --first-parent --oneline <tag>..main` を feat / fix / その他に分類して要約。
 5. **未統合 worktree**(orchestrate E と同じ突合): `git worktree list` の main 以外で
    `main..HEAD` 非空のもの = 「このリリースに**入らない**作業」として列挙。
-6. **E2E / QA**: 直近の `pnpm e2e` の実行有無(分かる範囲で)。
-   ※ 将来 `/crowi-qa` が入ったらここから呼ぶ(現状は hook のみ)。
+6. **QA / prod build スモーク**: 既定で `/crowi-qa main --prod-build`(全 charter)を
+   呼ぶ。人間が明示的にスキップを指示した場合のみ実行せず、Go/No-Go 材料に
+   `prod build: skipped(human instruction)` として記録する(黙って省略しない)。
+   実行した場合は結果(`ready` / `blocked` / 主要 finding の要約)を
+   `prod build: <verdict>` として同じ材料に反映する。
 
 **提示フォーマット**:
 
@@ -61,6 +64,7 @@ Trusted Publisher 等はそちら)。この skill はエージェント手順に
 入らないもの(未統合 worktree): <id: N commits, 状態>
 リスク / 未検証: <あれば>
 CI: main <green/red> / Version PR: #NNN <open/none>
+prod build: <verdict> (例: ready / blocked: <理由> / skipped(human instruction))
 → Go なら Version PR #NNN の merge を指示してください。
 ```
 
@@ -98,6 +102,9 @@ CI: main <green/red> / Version PR: #NNN <open/none>
 - verify は read-only(docker pull/run はローカルのみ・`--rm` 付き)
 - 失敗成果物の修正・再 publish を自動でしない
 - レビュー的な指摘が出たら fix or drop(TODO へ退避しない — 全 skill 共通方針)
+- **prod build スモーク(`/crowi-qa main --prod-build`)は既定で実行**。省略するのは
+  人間が明示的にスキップを指示した場合のみで、その旨を Go/No-Go 材料に記録する
+  (黙って省略しない)
 
 ## 歴史的経緯(手動時代の gotcha — CI が壊れて手動 publish に戻るときの参照)
 
