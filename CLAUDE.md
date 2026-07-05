@@ -82,9 +82,9 @@ Scripts live in root + per-package `package.json`. `pnpm <script>` filters with
 - **Realtime collab dev**: `pnpm dev` is enough — `@crowi/collab` is attached
   as a library inside the api process (RFC-0003 §"Implementation notes"), so
   there is no separate collab process / port to manage. To smoke-test collab
-  locally, open `http://localhost:4302/_edit?page_id=<pageId>` in two browser
-  windows (Chrome regular + Incognito, signed in as different users) and
-  verify that typing in one window appears in the other.
+  locally, run `/crowi-qa <target> --charters 2` (the 2-window collab charter —
+  see `.claude/skills/crowi-qa/SKILL.md` §2 for the charter table and §11 for
+  the 2-window isolation constraint) instead of driving the browser by hand.
 
 ## Architecture Overview
 
