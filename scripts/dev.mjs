@@ -54,13 +54,16 @@ import {
   allocateAnchor,
   buildAllowedDevOrigins,
   isolatedDbName,
+  isPortFree,
   localIpv4Origins,
+  MAIN_KEY,
   normalizeWorktreeKey,
   portsForAnchor,
   readDevLocalConfig,
   readEnvFileValue,
   resolveBaseMongoUri,
   resolveTailscaleHostname,
+  shouldStartMainPortal,
   withMongoDbName,
 } from './dev-ports.mjs'
 import { generateCaddyfile, isCaddyAvailable, startCaddyProcess, startNodeProxyFallback, writeCaddyConfig } from './dev-caddy.mjs'
@@ -336,6 +339,7 @@ async function main() {
   let proxyChild = null // Caddy ChildProcess
   let proxyServer = null // node fallback http.Server
   let tailscaleServeOn = false
+  let portalChild = null // shared dev portal (:4300) — main worktree only
 
   const startProxy = () => {
     if (isCaddyAvailable()) {
@@ -380,6 +384,35 @@ async function main() {
   }
   startTailscaleServe()
 
+  // Shared dev portal (:4300): only the MAIN worktree's `pnpm dev` starts it —
+  // it's the always-around home base, so feature worktrees just register into
+  // the shared registry the portal reads and a feature restart never takes the
+  // portal down. Leaves an already-running portal alone (e.g. a standalone
+  // `pnpm dev:portal`); opt out with CROWI_DEV_NO_PORTAL=1.
+  const PORTAL_PORT = 4300
+  const startPortal = async () => {
+    if (!shouldStartMainPortal(key)) return
+    if (!(await isPortFree(PORTAL_PORT))) {
+      process.stdout.write(`[dev] dev portal already running on :${PORTAL_PORT} — leaving it.\n`)
+      return
+    }
+    const portalScript = path.join(repoRoot, 'scripts', 'dev-portal', 'index.mjs')
+    portalChild = spawn(process.execPath, [portalScript], { stdio: ['ignore', 'pipe', 'pipe'] })
+    portalChild.stdout?.on('data', (d) => process.stdout.write(`[portal] ${d}`))
+    portalChild.stderr?.on('data', (d) => process.stderr.write(`[portal] ${d}`))
+    portalChild.on('error', (err) => {
+      process.stdout.write(`[dev] warning: dev portal failed to start (${err.message}).\n`)
+      portalChild = null
+    })
+    portalChild.on('exit', (code) => {
+      if (!bootFailed && code) process.stdout.write(`[dev] dev portal exited (code ${code}).\n`)
+      portalChild = null
+    })
+  }
+  // NB: `startPortal()` is invoked at the very END of main() (after every turbo
+  // child handler is wired) — its awaited port probe must not yield the event
+  // loop before `child`'s 'exit'/'error' handlers exist.
+
   // Scoped to exactly this worktree's proxy port — never `tailscale serve
   // reset` (that would also drop every other worktree's proxy and the
   // portal's own serve).
@@ -408,6 +441,14 @@ async function main() {
         /* already closed */
       }
       proxyServer = null
+    }
+    if (portalChild) {
+      try {
+        portalChild.kill('SIGTERM')
+      } catch {
+        /* already dead */
+      }
+      portalChild = null
     }
   }
 
@@ -464,11 +505,19 @@ async function main() {
       if (proxyIpUrls.length) {
         process.stdout.write(`${ANSI.dim}   reachable from another device: ${proxyIpUrls.join('  ')}${ANSI.reset}\n`)
       }
-      // The portal is a SEPARATE process (survives worktree restarts) — remind
-      // where it lives, since `pnpm dev` deliberately does not start it.
-      process.stdout.write(
-        `${ANSI.dim}   dev portal (all worktrees): run \`pnpm dev:portal\` once → http://${ipHosts[0] ?? 'localhost'}:4300${ANSI.reset}\n\n`,
-      )
+      // Portal note: the MAIN worktree's `pnpm dev` auto-starts the shared
+      // portal; feature worktrees rely on main's (which survives their restarts).
+      const portalHost = ipHosts[0] ?? 'localhost'
+      let portalNote
+      if (shouldStartMainPortal(key)) {
+        portalNote = `dev portal: http://${portalHost}:4300  (auto-started with main)`
+      } else if (key === MAIN_KEY) {
+        // main, but CROWI_DEV_NO_PORTAL is set — don't tell them to re-run `pnpm dev`.
+        portalNote = 'dev portal: off (CROWI_DEV_NO_PORTAL set) — run `pnpm dev:portal` to start it'
+      } else {
+        portalNote = `dev portal: http://${portalHost}:4300  (run \`pnpm dev\` in the main worktree, or \`pnpm dev:portal\`)`
+      }
+      process.stdout.write(`${ANSI.dim}   ${portalNote}${ANSI.reset}\n\n`)
       dashboardLines = 0 // freeze: from here on we passthrough
     }
   }
@@ -647,4 +696,9 @@ async function main() {
     process.stderr.write(`\n[dev] failed to start turbo: ${err.message}\n`)
     process.exit(1)
   })
+
+  // Portal last: every turbo-child handler above is now registered, so the
+  // awaited port probe inside startPortal() can't open a window where a
+  // fast-failing turbo's 'exit'/'error' event is missed or unhandled.
+  await startPortal()
 }

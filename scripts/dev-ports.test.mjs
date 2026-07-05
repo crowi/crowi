@@ -29,6 +29,7 @@ import {
   readEnvFileValue,
   readRegistry,
   resolveBaseMongoUri,
+  shouldStartMainPortal,
   withMongoDbName,
   writeRegistry,
 } from './dev-ports.mjs'
@@ -63,6 +64,19 @@ describe('normalizeWorktreeKey', () => {
 
   it('passes through a dir with no crowi- prefix unchanged', () => {
     assert.equal(normalizeWorktreeKey('/tmp/some-other-checkout'), 'some-other-checkout')
+  })
+})
+
+describe('shouldStartMainPortal', () => {
+  it('is true only for the main worktree', () => {
+    assert.equal(shouldStartMainPortal('main', {}), true)
+    assert.equal(shouldStartMainPortal('feature-foo', {}), false)
+  })
+
+  it('can be opted out with CROWI_DEV_NO_PORTAL=1', () => {
+    assert.equal(shouldStartMainPortal('main', { CROWI_DEV_NO_PORTAL: '1' }), false)
+    // any other value does not opt out
+    assert.equal(shouldStartMainPortal('main', { CROWI_DEV_NO_PORTAL: '0' }), true)
   })
 })
 

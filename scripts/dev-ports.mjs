@@ -48,6 +48,20 @@ export function normalizeWorktreeKey(worktreeDir) {
   return base.startsWith('crowi-') ? base.slice('crowi-'.length) : base
 }
 
+/**
+ * Whether `pnpm dev` should also start the shared dev portal (`:4300`). Only the
+ * MAIN worktree owns the portal — it's the always-around home base, so feature
+ * worktrees just register into the shared registry the portal reads, and
+ * restarting a feature worktree's dev never takes the portal down. Opt out with
+ * `CROWI_DEV_NO_PORTAL=1`.
+ * @param {string} key normalized worktree key
+ * @param {NodeJS.ProcessEnv} [env]
+ * @returns {boolean}
+ */
+export function shouldStartMainPortal(key, env = process.env) {
+  return key === MAIN_KEY && env.CROWI_DEV_NO_PORTAL !== '1'
+}
+
 // ── port scheme ──
 
 /**
@@ -168,8 +182,14 @@ export async function withLock(lockPath, fn, opts) {
 // interface. A loopback-only probe would miss a stray process holding the port
 // on just a LAN/tailscale address and then hand out an anchor whose proxy can't
 // start. 0.0.0.0 is the strictest "free everywhere" check and conflicts with any
-// specific-address binding on the same port.
-function isPortFree(port, host = '0.0.0.0') {
+// specific-address binding on the same port. Exported so the launcher can reuse
+// it to check whether the portal port (:4300) is already taken.
+/**
+ * @param {number} port
+ * @param {string} [host]
+ * @returns {Promise<boolean>}
+ */
+export function isPortFree(port, host = '0.0.0.0') {
   return new Promise((resolve) => {
     const srv = net.createServer()
     srv.unref()

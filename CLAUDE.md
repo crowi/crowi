@@ -220,12 +220,19 @@ explicitly with `pnpm dev --anchor 4350`.
   continues (localhost still works). Ctrl-C / closing a worktree only turns
   off *that* worktree's serve (`--https=<anchor+3> off` — never `tailscale
   serve reset`, which would also drop every other worktree's proxy).
-- **`pnpm dev:portal`** serves a read-only dashboard on a fixed `:4300` listing
-  every live worktree (from `git worktree list`) with its up/down status
-  (proxy port probe), localhost + tailscale proxy URLs, and DB (shared vs.
-  isolated). It's a separate long-lived process from `pnpm dev` — restarting
-  one worktree doesn't take the portal down for the others — and self-GCs
-  registry entries for worktrees that no longer exist.
+- **The dev portal** is a read-only dashboard on a fixed `:4300` listing every
+  live worktree (from `git worktree list`) with its up/down status (proxy port
+  probe), reachable proxy URLs (localhost + this host's LAN/tailscale IPs + the
+  tailscale MagicDNS URL, rendered as a mobile-friendly card layout), and DB
+  (shared vs. isolated). It's a separate long-lived process so restarting one
+  worktree doesn't take the portal down for the others, and self-GCs registry
+  entries for worktrees that no longer exist. **The main worktree's `pnpm dev`
+  auto-starts it** (main is the always-around home base; feature worktrees rely
+  on main's). Run it standalone with `pnpm dev:portal`, or opt main out with
+  `CROWI_DEV_NO_PORTAL=1`. Both the portal and each worktree's proxy bind
+  `0.0.0.0`, so they're reachable by IP (`http://<ip>:4300` /
+  `http://<ip>:<anchor+3>`) from a phone on the tailnet or LAN even without the
+  `tailscale` CLI (dev-only; also LAN-exposed, an accepted tradeoff).
 - **DB isolation is opt-in and mongo-only** (redis/ES always stay shared —
   redis's URL parser ignores the db-number path segment, and both are
   ephemeral state). Add `dev.local.json` at the worktree root (gitignored):

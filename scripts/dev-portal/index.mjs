@@ -261,6 +261,17 @@ function startServer() {
   // http://<lan-or-tailscale-ip>:4300 from a phone / another machine — no
   // tailscale CLI required. Dev-only; this also exposes it on the LAN, an
   // accepted tradeoff for the "verify from any device" workflow.
+  // Fail gracefully if a portal is already up (e.g. the main worktree's
+  // `pnpm dev` started one, and a standalone `pnpm dev:portal` is run too) —
+  // no need for a stack trace, just step aside.
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      process.stdout.write(`[dev-portal] :${PORTAL_PORT} already in use — a portal is already running; leaving it.\n`)
+      process.exit(0)
+    }
+    process.stderr.write(`[dev-portal] server error: ${err.message}\n`)
+    process.exit(1)
+  })
   server.listen(PORTAL_PORT, '0.0.0.0', () => {
     const reachable = [`http://localhost:${PORTAL_PORT}`, ...localIpv4Origins().map((ip) => `http://${ip}:${PORTAL_PORT}`)]
     process.stdout.write(`[dev-portal] listening on:\n${reachable.map((u) => `  ${u}`).join('\n')}\n`)
