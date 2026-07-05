@@ -1,10 +1,10 @@
 import linkDetectorFactory from 'src/util/linkDetector';
-import { STATUS_PUBLISHED } from 'src/models/page';
 
 import { resolveActingUserId } from '../helpers';
 import { defineMigration } from '../types';
 import type { MigrationContext } from '../types';
 import { rewriteOutsideCode } from './code-mask';
+import { forEachPublishedCurrentRevision, STOP } from './published-current-revision';
 
 /**
  * v1 → v2 — `files-url-to-attachments` (preflight layer).
@@ -211,30 +211,23 @@ interface RewritablePage {
  * Stream-walks so memory stays constant on large installs.
  */
 async function scanFilesUrls(ctx: MigrationContext, origins: readonly string[]): Promise<{ rewritable: RewritablePage[]; totals: FilesUrlRewriteCounts }> {
-  const Page = ctx.crowi.model('Page');
-  const Revision = ctx.crowi.model('Revision');
-
   const rewritable: RewritablePage[] = [];
   const totals = emptyCounts();
-  const cursor = Page.find({ $or: [{ status: STATUS_PUBLISHED }, { status: null }] })
-    .select('_id revision')
-    .lean()
-    .cursor();
 
-  for await (const page of cursor) {
-    const pageDoc = page as { _id: unknown; revision?: unknown };
-    if (!pageDoc.revision) continue;
-    const revision = await Revision.findById(pageDoc.revision).select('body').lean().exec();
-    const body = (revision as { body?: unknown } | null)?.body;
-    if (typeof body !== 'string') continue;
-    if (!body.includes(FILES_SUBSTRING_PROBE)) continue;
+  // `forEachPublishedCurrentRevision` streams the published-page walk and
+  // batch-fetches revisions (`$in`, default batch size) so memory stays
+  // constant on large installs and there is no per-page `findById`.
+  await forEachPublishedCurrentRevision(ctx, { projection: 'body' }, ({ revision, pageId }) => {
+    const body = (revision as { body?: unknown }).body;
+    if (typeof body !== 'string') return;
+    if (!body.includes(FILES_SUBSTRING_PROBE)) return;
     const result = rewriteFilesUrls(body, origins);
     totals.relative += result.counts.relative;
     totals.selfHostAbsolute += result.counts.selfHostAbsolute;
     totals.externalSkipped += result.counts.externalSkipped;
-    if (result.body === body) continue;
-    rewritable.push({ pageId: String(pageDoc._id), newBody: result.body, counts: result.counts });
-  }
+    if (result.body === body) return;
+    rewritable.push({ pageId, newBody: result.body, counts: result.counts });
+  });
   return { rewritable, totals };
 }
 
@@ -264,27 +257,23 @@ export const filesUrlToAttachments = defineMigration({
    *     `/files/<id>` text forever (immutable), so a collection-wide scan
    *     would pend permanently after any such page ever existed.
    *
-   * Short-circuits at the first rewritable page.
+   * Short-circuits at the first rewritable page. `batchSize: 1` makes
+   * `forEachPublishedCurrentRevision` fetch (and visit) one page's revision at
+   * a time, so `STOP` aborts at the first hit — strictly equivalent to the
+   * former first-hit `cursor.close(); return true` (a default batch size
+   * would fetch a whole batch's revisions before the `STOP` took effect).
    */
   isPending: async (ctx) => {
     const origins = resolveAppOrigins(ctx);
-    const Page = ctx.crowi.model('Page');
-    const Revision = ctx.crowi.model('Revision');
-    const cursor = Page.find({ $or: [{ status: STATUS_PUBLISHED }, { status: null }] })
-      .select('_id revision')
-      .lean()
-      .cursor();
-    for await (const page of cursor) {
-      const revisionId = (page as { revision?: unknown }).revision;
-      if (!revisionId) continue;
-      const revision = await Revision.findById(revisionId).select('body').lean().exec();
-      const body = (revision as { body?: unknown } | null)?.body;
+    let pending = false;
+    await forEachPublishedCurrentRevision(ctx, { projection: 'body', batchSize: 1 }, ({ revision }) => {
+      const body = (revision as { body?: unknown }).body;
       if (typeof body === 'string' && bodyHasRewritableFilesUrl(body, origins)) {
-        await cursor.close();
-        return true;
+        pending = true;
+        return STOP;
       }
-    }
-    return false;
+    });
+    return pending;
   },
 
   /**

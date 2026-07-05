@@ -1,10 +1,10 @@
 import { KNOWN_HTML_ELEMENTS } from '@crowi/api-contract';
-import { STATUS_PUBLISHED } from 'src/models/page';
 
 import { resolveActingUserId } from '../helpers';
 import { defineMigration } from '../types';
 import type { MigrationContext } from '../types';
 import { rewriteOutsideCode } from './code-mask';
+import { forEachPublishedCurrentRevision, STOP } from './published-current-revision';
 
 /**
  * RFC-0008 §10.2 step 4 / §4.3.1 — `wikilink-format` (preflight layer).
@@ -159,29 +159,20 @@ export function rewriteWikilinks(body: string): string {
  * generate noisy update events, matching the legacy command's scope.
  */
 async function collectRewritablePages(ctx: MigrationContext): Promise<{ pageId: string; newBody: string; occurrences: number }[]> {
-  const Page = ctx.crowi.model('Page');
-  const Revision = ctx.crowi.model('Revision');
-
   const out: { pageId: string; newBody: string; occurrences: number }[] = [];
   // `currentRevision ?? revision` is the body the editor seeds from
   // (on-load-document.ts), but the legacy command read `page.revision`; both
   // point at the latest body for a published page, so we read `revision` to
-  // keep parity. Stream-walk so memory stays constant on large installs.
-  const cursor = Page.find({ $or: [{ status: STATUS_PUBLISHED }, { status: null }] })
-    .select('_id revision')
-    .lean()
-    .cursor();
-
-  for await (const page of cursor) {
-    const pageDoc = page as { _id: unknown; revision?: unknown };
-    if (!pageDoc.revision) continue;
-    const revision = await Revision.findById(pageDoc.revision).select('body').lean().exec();
-    const body = (revision as { body?: unknown } | null)?.body;
-    if (typeof body !== 'string') continue;
-    if (!bodyHasRewritableWikilink(body)) continue;
+  // keep parity. `forEachPublishedCurrentRevision` streams the published-page
+  // walk and batch-fetches revisions (`$in`, default batch size) so memory
+  // stays constant on large installs and there is no per-page `findById`.
+  await forEachPublishedCurrentRevision(ctx, { projection: 'body' }, ({ revision, pageId }) => {
+    const body = (revision as { body?: unknown }).body;
+    if (typeof body !== 'string') return;
+    if (!bodyHasRewritableWikilink(body)) return;
     const result = rewriteAndDetect(body);
-    out.push({ pageId: String(pageDoc._id), newBody: result.body, occurrences: result.occurrences.length });
-  }
+    out.push({ pageId, newBody: result.body, occurrences: result.occurrences.length });
+  });
   return out;
 }
 
@@ -227,26 +218,22 @@ export const wikilinkFormat = defineMigration({
    *     body each page's editor seeds from.
    *
    * We short-circuit at the first page carrying a genuine wikilink, so this
-   * stops early rather than reading every page.
+   * stops early rather than reading every page. `batchSize: 1` makes
+   * `forEachPublishedCurrentRevision` fetch (and visit) one page's revision at
+   * a time, so `STOP` aborts at the first hit — strictly equivalent to the
+   * former first-hit `cursor.close(); return true` (a default batch size
+   * would fetch a whole batch's revisions before the `STOP` took effect).
    */
   isPending: async (ctx) => {
-    const Page = ctx.crowi.model('Page');
-    const Revision = ctx.crowi.model('Revision');
-    const cursor = Page.find({ $or: [{ status: STATUS_PUBLISHED }, { status: null }] })
-      .select('_id revision')
-      .lean()
-      .cursor();
-    for await (const page of cursor) {
-      const revisionId = (page as { revision?: unknown }).revision;
-      if (!revisionId) continue;
-      const revision = await Revision.findById(revisionId).select('body').lean().exec();
-      const body = (revision as { body?: unknown } | null)?.body;
+    let pending = false;
+    await forEachPublishedCurrentRevision(ctx, { projection: 'body', batchSize: 1 }, ({ revision }) => {
+      const body = (revision as { body?: unknown }).body;
       if (typeof body === 'string' && bodyHasRewritableWikilink(body)) {
-        await cursor.close();
-        return true;
+        pending = true;
+        return STOP;
       }
-    }
-    return false;
+    });
+    return pending;
   },
 
   /**
