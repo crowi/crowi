@@ -46,7 +46,7 @@ import Debug from 'debug';
 import { Types } from 'mongoose';
 
 import type Crowi from 'src/crowi';
-import { type PageDocument, visiblePageGrantOr, visiblePageStatusOr } from 'src/models/page';
+import { type PageDocument, type PageModel, visiblePageGrantOr, visiblePageStatusOr } from 'src/models/page';
 import type { UserDocument } from 'src/models/user';
 import { computeRevisionRenderArtifactsAsync, isPopulatedRevision, pageToResponse } from 'src/util/page-response';
 import { isValidObjectId, loadGrantedPage, toUserPublic } from 'src/util/ts-rest-helpers';
@@ -98,6 +98,46 @@ const toConflicts = (errorsByPath: Record<string, string[]>): { path: string; re
   Object.entries(errorsByPath)
     .filter(([, reasons]) => reasons.length > 0)
     .map(([path, reasons]) => ({ path, reasons }));
+
+// A4-2 — the validate ("checkPagesRenamable") → execute ("renameTree") →
+// success/failure classification core shared by both subtree-rename routes
+// (by-page-id `include_descendants` branch and by-path `/pages/rename-subtree`).
+// Deliberately does NOT build a `c.json(...)` response or emit a debug log —
+// the two callers' debug strings differ (see below), so each caller maps
+// this discriminated result onto its own response/log.
+type SubtreeRenameResult =
+  | { ok: true }
+  | { ok: false; kind: 'validation'; conflicts: { path: string; reasons: string[] }[] }
+  | { ok: false; kind: 'execution'; message: string };
+
+// `Page` isn't an importable singleton (models/page.ts exports a
+// crowi-bound factory, `export default (crowi) => {...}`) — it's a local
+// `crowi.model('Page')` inside `registerPageRoutes`. So this module-level
+// helper takes it as an argument rather than closing over a module import.
+async function executeSubtreeRename(
+  Page: PageModel,
+  pathMap: Record<string, string>,
+  user: UserDocument,
+  opts: { createRedirectPage: boolean; preserveUpdatedAt: boolean },
+): Promise<SubtreeRenameResult> {
+  const newPaths = Object.values(pathMap);
+
+  // Up-front validation: name legality + destination collisions.
+  const [hasError, errorsByPath] = (await Page.checkPagesRenamable(newPaths, user)) as [boolean, Record<string, string[]>];
+  if (hasError) {
+    return { ok: false, kind: 'validation', conflicts: toConflicts(errorsByPath) };
+  }
+
+  // Execute. Non-transactional best-effort: a mid-way failure may leave
+  // some pages already moved.
+  try {
+    await Page.renameTree(pathMap, user, opts);
+  } catch (err) {
+    const error = err as Error;
+    return { ok: false, kind: 'execution', message: error.message };
+  }
+  return { ok: true };
+}
 
 export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app: E, crowi: Crowi) => {
   const Page = crowi.model('Page');
@@ -900,22 +940,17 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             }
             const newPaths = Object.values(pathMap);
 
-            // Up-front validation: name legality + destination collisions.
-            const [hasError, errorsByPath] = (await Page.checkPagesRenamable(newPaths, user)) as [boolean, Record<string, string[]>];
-            if (hasError) {
-              const conflicts = toConflicts(errorsByPath);
-              return c.json(renameTreeFailedBody('Some pages cannot be moved to the destination path.', conflicts), 400);
-            }
-
-            // Execute. Non-transactional best-effort: a mid-way failure may
-            // leave some pages already moved.
-            try {
-              await Page.renameTree(pathMap, user, { createRedirectPage: Boolean(create_redirect), preserveUpdatedAt: true });
-            } catch (err) {
-              const error = err as Error;
-              debug('Error renaming subtree:', error.message);
+            const result = await executeSubtreeRename(Page, pathMap, user, {
+              createRedirectPage: Boolean(create_redirect),
+              preserveUpdatedAt: true,
+            });
+            if (!result.ok) {
+              if (result.kind === 'validation') {
+                return c.json(renameTreeFailedBody('Some pages cannot be moved to the destination path.', result.conflicts), 400);
+              }
+              debug('Error renaming subtree:', result.message);
               return c.json(
-                renameTreeFailedBody(`Failed to move the whole subtree — some pages may already have been moved. (${error.message})`, [], true),
+                renameTreeFailedBody(`Failed to move the whole subtree — some pages may already have been moved. (${result.message})`, [], true),
                 400,
               );
             }
@@ -1038,21 +1073,19 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
           ) as Record<string, string>;
           const newPaths = Object.values(pathMap);
 
-          // Up-front validation: name legality + destination collisions.
-          const [hasError, errorsByPath] = (await Page.checkPagesRenamable(newPaths, user)) as [boolean, Record<string, string[]>];
-          if (hasError) {
-            const conflicts = toConflicts(errorsByPath);
-            return c.json(renameTreeFailedBody('Some pages cannot be moved to the destination path.', conflicts), 400);
-          }
-
-          // Execute. Non-transactional best-effort: a mid-way failure may
-          // leave some pages already moved.
-          try {
-            await Page.renameTree(pathMap, user, { createRedirectPage: Boolean(create_redirect), preserveUpdatedAt: true });
-          } catch (err) {
-            const error = err as Error;
-            debug('Error renaming subtree by path:', error.message);
-            return c.json(renameTreeFailedBody(`Failed to move the whole subtree — some pages may already have been moved. (${error.message})`, [], true), 400);
+          const result = await executeSubtreeRename(Page, pathMap, user, {
+            createRedirectPage: Boolean(create_redirect),
+            preserveUpdatedAt: true,
+          });
+          if (!result.ok) {
+            if (result.kind === 'validation') {
+              return c.json(renameTreeFailedBody('Some pages cannot be moved to the destination path.', result.conflicts), 400);
+            }
+            debug('Error renaming subtree by path:', result.message);
+            return c.json(
+              renameTreeFailedBody(`Failed to move the whole subtree — some pages may already have been moved. (${result.message})`, [], true),
+              400,
+            );
           }
 
           return c.json({ renamed_count: newPaths.length }, 200);
