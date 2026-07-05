@@ -1,9 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
+import type { PresenceViewer } from '@crowi/api-contract';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { act, renderHook } from '@testing-library/react';
 import type { PropsWithChildren } from 'react';
 import { createElement } from 'react';
-import type { PresenceViewer } from '@crowi/api-contract';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock `apiClientV2` so the token query reads our fake `pages[':id']
 // ['presence-token'].$get`. RFC-0006 Batch 5 switched the hook from
@@ -254,6 +254,48 @@ describe('usePresence', () => {
       ws.emitRaw(JSON.stringify({ type: 'page-updated', pageId: 'page-1', revisionId: 'rev-10', editorUserId: 'me', editorDisplayName: 'Me' }));
     });
     expect(onPageUpdated).toHaveBeenCalledTimes(1);
+  });
+
+  it('invokes onCommentChanged for another user added comment and suppresses the caller own', async () => {
+    getPresenceToken.mockResolvedValue(tokenOkResponse(TOKEN_OK));
+    const onCommentChanged = vi.fn();
+
+    const { result } = renderHook(() => usePresence('page-1', { onCommentChanged }), { wrapper: makeWrapper() });
+    await flush();
+    const ws = FakeWebSocket.instances[0];
+
+    const fromBob = { type: 'comment-changed', pageId: 'page-1', changeType: 'added', commentId: 'c-1', actorUserId: 'bob' };
+    act(() => {
+      ws.open();
+      ws.emitRaw(JSON.stringify(fromBob));
+    });
+    expect(onCommentChanged).toHaveBeenCalledTimes(1);
+    expect(onCommentChanged).toHaveBeenCalledWith(fromBob);
+    // A comment-changed frame never touches the viewer list.
+    expect(result.current.viewers).toEqual([]);
+
+    // The caller's own added comment (actorUserId === selfUserId 'me') is suppressed.
+    act(() => {
+      ws.emitRaw(JSON.stringify({ type: 'comment-changed', pageId: 'page-1', changeType: 'added', commentId: 'c-2', actorUserId: 'me' }));
+    });
+    expect(onCommentChanged).toHaveBeenCalledTimes(1);
+  });
+
+  it('always invokes onCommentChanged for a removed comment (no actorUserId, even the caller own)', async () => {
+    getPresenceToken.mockResolvedValue(tokenOkResponse(TOKEN_OK));
+    const onCommentChanged = vi.fn();
+
+    renderHook(() => usePresence('page-1', { onCommentChanged }), { wrapper: makeWrapper() });
+    await flush();
+    const ws = FakeWebSocket.instances[0];
+
+    act(() => {
+      ws.open();
+      // Removal carries no actorUserId — it is never self-suppressed.
+      ws.emitRaw(JSON.stringify({ type: 'comment-changed', pageId: 'page-1', changeType: 'removed', commentId: 'c-1' }));
+    });
+    expect(onCommentChanged).toHaveBeenCalledTimes(1);
+    expect(onCommentChanged).toHaveBeenCalledWith({ type: 'comment-changed', pageId: 'page-1', changeType: 'removed', commentId: 'c-1' });
   });
 
   it('reports error status when the WebSocket closes uncleanly', async () => {
