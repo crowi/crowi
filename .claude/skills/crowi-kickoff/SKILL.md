@@ -121,9 +121,27 @@ cd <worktree-abs-path> && claude
 
 `--no-launch` 指定時は Step 5 全体を skip して手動手順の表示のみ。
 
+### Step 5.7: orchestrate watch を張る(main セッション側・未起動なら)
+
+worktree 側の完了は `/crowi-complete-feature` が `.feature-state/tasks/<id>.json` に立てる
+`READY_TO_INTEGRATE` signal で伝わる(shared store 経由 = agmsg 等のチーム基盤に依存しない
+repo-native の契約)。ただし signal は **push されない**ので、kickoff した main セッションは
+`orchestrate-watch.sh` を Monitor で常駐させて検知する(TaskList に「orchestrate watch」が
+既にあれば張り直さない。event 対応表は crowi-orchestrate の「運用モード: watch」節が正本):
+
+```
+Monitor({ command: 'bash .claude/scripts/orchestrate-watch.sh',
+          description: 'orchestrate watch (A/C/D/E lanes)', persistent: true })
+```
+
+signal を受けたら orchestrate A と同じ裏取り(clean / headSha 一致 / main clean)をして
+`/integrate-worktree <id>` へ。agmsg の完了通知(handoff skill の任意送信)は
+**二次チャネル** — 正はこの signal file。
+
 ### Step 6: 報告
 
 - worktree path / branch / window(投入済み or 手動手順)
+- signal watcher を張った(or 既存)ことを 1 行
 - 次に人間がやること(通常なし。spec が multi-phase で gated phase を含むならその旨)
 
 ## 鉄則

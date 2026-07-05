@@ -26,6 +26,37 @@ skill。単発 (`/crowi-orchestrate`) でも動く。5 系統 (A〜E) を順に�
   判断系。報告のみで user の判断を待つ)。
 - **不可逆 / 判断系で詰まったら強行せず ping して待つ**。
 
+## 運用モード: watch(推奨・event-driven)と /loop(polling)
+
+**watch モード(推奨)**: `.claude/scripts/orchestrate-watch.sh` を persistent Monitor で
+常駐させる。bash がトークンゼロで監視し続け、モデルは event が来たときだけ起きる
+(/loop は変化のない tick にもトークンを使い、セッションが寝ている間の event は
+拾えない — その逆)。
+
+起動(main セッションで 1 回。TaskList に同名 Monitor が既にあれば張り直さない):
+
+```
+Monitor({ command: 'bash .claude/scripts/orchestrate-watch.sh',
+          description: 'orchestrate watch (A/C/D/E lanes)', persistent: true })
+```
+
+event → 対応(各 lane の実行手順・鉄則は下記の従来定義のまま):
+
+| event | lane | action |
+|---|---|---|
+| `READY_TO_INTEGRATE: <id>` | A | A の裏取り → `/integrate-worktree <id>` |
+| `STALLED: <id> (...)` | E | 報告のみ(割り込まない) |
+| `REVIEW_THRESHOLD: <n> impl commits since <sha>` | C | `/crowi-review <sha>..main` → 完了後 `lastReviewedMainSha` を更新 |
+| `NEW_DEPENDABOT: #<n> <sev> <pkg>` | D | 報告(fix は `/crowi-deps`)。`knownDependabotAlerts` の更新は act 時 |
+
+B(spec groom)は分析仕事なので watch に含めない — 単発 `/crowi-orchestrate` で
+on-demand 実行する。
+
+注意: watcher の dedup はプロセス寿命(= セッション)内のみ。張り直し直後は現況を
+1 回再発火しうるが、act 前の裏取りが冪等性を担保する。script は state ファイルを
+**読むだけ**(書き込みはモデルが act するときに従来どおり行う)。/loop モードも
+従来どおり使える(watch が張れない環境の fallback)。
+
 ## A. integrate watcher (行動系)
 
 ready for merge な worktree を取り込む。
