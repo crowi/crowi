@@ -13,20 +13,20 @@ description: |
 # Crowi Review
 
 **Codex が敵対的レビュアー、Claude (あなた) がオーケストレータ + 修正者。**
-review-gauntlet (lestrrat) のレビュー核 — codex 敵対レビュー → gate — を
-crowi の運用 (main-direct) に合わせて **PR/merge のファンアウトを外した単発版**。
+指定スコープに codex の敵対レビューを 1 回かけ、findings を報告し、低リスクのものだけ
+その場で修正する単発 skill。
 
 「連続的にかける」役割は **crowi-orchestrate C watcher** が持つ (C が本 skill を呼ぶ)。
 本 skill 自体は 1 回のスコープを最後までやって終わる。自己ループ (`ScheduleWakeup`) は
 持たない。
 
-## 非目標 (取り込まないもの)
+## 非目標
 
-- **1 finding = 1 PR のファンアウト / 二重 SATISFIED gate / auto-merge** — crowi は
-  main-direct + integrate-worktree なので PR 駆動 merge は思想が合わない。取り込まない。
+- **PR 駆動のレビュー運用 (1 finding = 1 PR / auto-merge)** — crowi は
+  main-direct + integrate-worktree なので思想が合わない。
 - **push / PR 作成** — 常にユーザー指示待ち。
 - **worktree の作成** — 修正は現在の作業ツリーに直接 (main clean 時のみ・下記)。
-- **全 finding の事前 fleet 検証** — 廃止 (Claude のコード再読を削減)。裏取りは
+- **全 finding の事前 fleet 検証** — しない (Claude のコード再読を削減)。裏取りは
   **修正を適用する finding だけ**、修正着手時に行う (verification-on-action)。
 
 ## 引数とスコープ解決
