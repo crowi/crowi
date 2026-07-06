@@ -23,6 +23,12 @@ pre-push:
   jobs:
     - name: lint
       run: pnpm lint
+    # Full build so a build-only break (e.g. an MDX/Next content error the
+    # linter can't see) is caught before it reaches main. Turbo caching keeps
+    # this incremental: unchanged packages are cache hits, so only pushes that
+    # actually touch a package pay its build cost.
+    - name: build
+      run: pnpm build
     - name: openapi-fresh
       glob: "packages/api-contract/**"
       run: pnpm check:openapi
