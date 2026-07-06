@@ -502,6 +502,11 @@ async function createRedisPresenceService(redis: PresenceRedisClient, emitter: E
   try {
     const dup = redis.duplicate();
     await dup.connect();
+    // Track the connected client BEFORE subscribing so `shutdown()` can
+    // still close it if a later `subscribe()` (there are two channels on
+    // this one client) rejects mid-setup — otherwise a connected
+    // subscriber would leak past shutdown.
+    pageUpdatedSubscriber = dup;
     await dup.subscribe(PRESENCE_PAGE_UPDATED_CHANNEL, (message: string) => {
       try {
         const payload = JSON.parse(message) as PageUpdatedPayload;
@@ -526,7 +531,6 @@ async function createRedisPresenceService(redis: PresenceRedisClient, emitter: E
         debug('dropping unparseable comment-changed frame on %s', PRESENCE_COMMENT_CHANGED_CHANNEL);
       }
     });
-    pageUpdatedSubscriber = dup;
     debug('presence pub/sub subscriber connected on %s + %s', PRESENCE_PAGE_UPDATED_CHANNEL, PRESENCE_COMMENT_CHANGED_CHANNEL);
   } catch (err) {
     console.warn('[crowi:presence] page-updated / comment-changed subscriber setup failed — cross-instance fan-out disabled:', (err as Error).message);

@@ -50,13 +50,27 @@ export default (crowi: Crowi) => {
 
   commentSchema.statics.removeCommentById = async function (id) {
     const comment = await Comment.findOne({ _id: id }).exec();
-    commentEvent.emit('remove', comment);
     await Comment.deleteOne({ _id: id }).exec();
+    // Emit AFTER the row is durably deleted: the presence-broadcast
+    // listener tells viewers to re-fetch `GET /comments`, and a pre-delete
+    // emit could race that re-fetch (the viewer would still read the
+    // not-yet-deleted comment and get no later frame to correct it). Skip
+    // when the row was already gone (nothing to broadcast / clean up).
+    if (comment) commentEvent.emit('remove', comment);
   };
 
   commentSchema.statics.findCreatorsByPage = function (page) {
     return Comment.distinct('creator', { page }).exec();
   };
+
+  // Capture creation-vs-update before mongoose flips `isNew` to false in
+  // the post-save hook, so the live-sync 'add' emit below fires ONLY for a
+  // genuinely new comment. Comments are create-only today, but an
+  // unconditional emit would broadcast a false `comment-changed: added` if
+  // any future path re-saved an existing comment.
+  commentSchema.pre('save', function (this: CommentDocument) {
+    this.$locals.wasNew = this.isNew;
+  });
 
   /**
    * post save hook
@@ -99,11 +113,14 @@ export default (crowi: Crowi) => {
     );
 
     // feature-live-page-comment-sync — emit an 'add' event symmetric to
-    // `removeCommentById`'s 'remove'. The presence-broadcast listener
-    // fans this out over the /presence channel so viewers see the new
-    // comment without a reload. Best-effort: a listener throw must never
-    // break the save, so the listener wraps its own async work.
-    commentEvent.emit('add', savedComment);
+    // `removeCommentById`'s 'remove', but ONLY on creation (see the
+    // pre-save hook above). The presence-broadcast listener fans this out
+    // over the /presence channel so viewers see the new comment without a
+    // reload. Best-effort: a listener throw must never break the save, so
+    // the listener wraps its own async work.
+    if (savedComment.$locals.wasNew === true) {
+      commentEvent.emit('add', savedComment);
+    }
   });
 
   const commentEvent = crowi.event('Comment');
