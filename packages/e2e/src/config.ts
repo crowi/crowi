@@ -3,8 +3,15 @@ import path from 'node:path';
 export const E2E_DB_NAME = 'crowi_e2e';
 export const E2E_MONGO_URI = `mongodb://localhost:27017/${E2E_DB_NAME}`;
 
-export const E2E_API_PORT = 4311;
-export const E2E_WEB_PORT = 4312;
+// The e2e api/web servers sit BELOW the dev-portal port band (4300-4999, owned
+// by the per-worktree scheme in `scripts/dev-ports.mjs`: portal 4300, main
+// 4301-4304, feature worktrees at 4310/4320/… each using anchor..anchor+3).
+// Staying under 4300 avoids colliding with a feature worktree that gets anchor
+// 4310 — its web/site land on 4311/4312, which is exactly where e2e used to be.
+// Keep these in sync with the literal ports in this package's `start:api` /
+// `start:web` scripts in package.json (the shell commands can't import this).
+export const E2E_API_PORT = 4290;
+export const E2E_WEB_PORT = 4291;
 export const E2E_API_URL = `http://localhost:${E2E_API_PORT}`;
 export const E2E_WEB_URL = `http://localhost:${E2E_WEB_PORT}`;
 export const E2E_MAILPIT_API_URL = 'http://localhost:8025/api/v1';

@@ -8,8 +8,8 @@
     "e2e": "pnpm build:runtime && tsx src/global-setup.ts && playwright test",
     "e2e:headed": "pnpm build:runtime && tsx src/global-setup.ts && playwright test --headed",
     "e2e:debug": "pnpm build:runtime && tsx src/global-setup.ts && playwright test --debug",
-    "start:api": "cd runner && NODE_ENV=development PORT=4311 MONGO_URI=mongodb://localhost:27017/crowi_e2e CLIENT_URL=http://localhost:4312 WS_TOKEN_SECRET=crowi-e2e-ws-token-secret PASSWORD_SEED=crowi-e2e-password-seed REDIS_URL=redis://localhost:6379 node ../../api/dist/app.js",
-    "start:web": "pnpm --dir ../web paraglide:compile && NODE_ENV=development NEXT_PUBLIC_API_URL=http://localhost:4311 NEXT_PUBLIC_COLLAB_URL=ws://localhost:4311 pnpm --dir ../web exec next dev --turbopack --port 4312",
+    "start:api": "cd runner && NODE_ENV=development PORT=4290 MONGO_URI=mongodb://localhost:27017/crowi_e2e CLIENT_URL=http://localhost:4291 WS_TOKEN_SECRET=crowi-e2e-ws-token-secret PASSWORD_SEED=crowi-e2e-password-seed REDIS_URL=redis://localhost:6379 node ../../api/dist/app.js",
+    "start:web": "pnpm --dir ../web paraglide:compile && NODE_ENV=development NEXT_PUBLIC_API_URL=http://localhost:4290 NEXT_PUBLIC_COLLAB_URL=ws://localhost:4290 pnpm --dir ../web exec next dev --turbopack --port 4291",
     "lint": "eslint . --ext .ts",
     "type-check": "tsc --noEmit"
   },

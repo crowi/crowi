@@ -23,6 +23,11 @@ import path from 'node:path'
 
 // ── constants ──
 
+// The dev-portal port band is 4300-4999: portal 4300, main 4301-4304, then
+// feature worktrees at 4310, 4320, … each using anchor..anchor+3. Any tool with
+// a FIXED port must stay OUTSIDE this band or it will clash with a worktree's
+// block — e.g. the e2e servers sit just below at 4290/4291 (see
+// `packages/e2e/src/config.ts`).
 export const MAIN_KEY = 'main'
 export const MAIN_ANCHOR = 4301
 export const AUTO_START_ANCHOR = 4310

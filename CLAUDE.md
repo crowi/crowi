@@ -201,7 +201,9 @@ Detailed phase status lives in `TODO.md`.
 migration); every other worktree gets the next free block starting at 4310,
 recorded in `~/.crowi-dev-ports.json` (outside the repo, shared across every
 worktree checkout) so the same worktree always gets the same anchor. Pin one
-explicitly with `pnpm dev --anchor 4350`.
+explicitly with `pnpm dev --anchor 4350`. **Fixed-port tooling must stay outside
+this `4300-4999` band** or it clashes with a worktree's block — e.g. the e2e
+servers sit just below at `4290`/`4291` (`packages/e2e/src/config.ts`).
 
 - **The proxy (`anchor+3`) is the canonical dev entry point**, not the raw web
   port. `pnpm dev` fronts api + web + the collab/presence/notifications
