@@ -67,8 +67,10 @@ bash .claude/scripts/codex-run.sh --sandbox read-only \
 - `fix(<scope>): <what>` + 本文に root cause を 1-3 行。テストは同 commit か
   `test(<scope>)` 分割(diff サイズで判断)。
 - **ユーザー可視のバグ修正なら changeset(patch)を追加**。内部のみなら不要。
-- main 直でも worktree でも可。worktree の場合、完了後は `/crowi-complete-feature`
-  (task ファイル無し → synthesize が signal を立てる — 既存互換)。**push しない**。
+- main 直でも worktree でも可。**main 直の場合は commit 前に main write lock を取得し
+  commit 後に解放**(CLAUDE.md「main write lock」参照)。worktree の場合、完了後は
+  `/crowi-complete-feature`(task ファイル無し → synthesize が signal を立てる — 既存互換)。
+  **push しない**。
 
 ## 鉄則
 

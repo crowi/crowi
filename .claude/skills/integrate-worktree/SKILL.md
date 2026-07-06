@@ -57,7 +57,7 @@ git diff --name-only main..HEAD
 `git status --short` に出力があれば **中止**。worktree 側で commit していない変更は
 ユーザー判断が必要。
 
-### Step 2: merge 前の状態確認
+### Step 2: merge 前の状態確認 + main write lock 取得
 
 main 側の作業ツリーが clean か確認:
 
@@ -67,6 +67,17 @@ git status
 ```
 
 clean でなければ中止。merge は dirty な main では行わない。
+
+**main write lock を取得する**(CLAUDE.md「main write lock」が正本。並行セッションが
+main に commit / reset すると merge 状態を相互破壊するため — 実例 2026-07-06):
+
+```bash
+( set -o noclobber; printf '{ "owner": "integrate-worktree(<id>)", "purpose": "merge <id>", "at": "%s" }\n' \
+    "$(date -u +%FT%TZ)" > .feature-state/main-write.lock ) 2>/dev/null || { cat .feature-state/main-write.lock; }
+```
+
+busy なら中止して保持者を報告(奪わない)。lock は **Step 8 完了後(または中断時)に必ず
+`rm .feature-state/main-write.lock` で解放**する。
 
 ### Step 3: merge
 
@@ -381,9 +392,13 @@ rm -f <spec> <task>
   (= ユーザー or 他エージェントに差し戻し)。
 - **`gw end` が refuse する**: worktree が dirty / lock 状態の可能性。`gw end --help` を
   読んで適切なフラグを使う。`-f` (force) は最終手段でユーザー確認。
-- **merge 後に先行コミットがあると気づいた**: revert ではなく `git reset --hard` で merge
-  前に戻す (ローカルだけで未 push 前提なら安全)。push 済みなら revert を提案してユーザー
-  確認。
+- **merge 後に先行コミットがあると気づいた / merge をやり直したい**: revert ではなく
+  `git reset --hard` で merge 前に戻す (ローカルだけで未 push 前提なら安全)。push 済みなら
+  revert を提案してユーザー確認。**reset の前に必ず
+  `git log --oneline <戻し先>..HEAD` を確認し、自分の作業以外の commit が混ざっていたら
+  reset しない**(並行セッションの commit を破壊する — 実例 2026-07-06、reflog から復旧)。
+- **中断するとき**: どの経路で中断しても `.feature-state/main-write.lock` を解放してから
+  終わる(取りっぱなしは並行セッションを永久に待たせる)。
 
 ## 範囲外
 

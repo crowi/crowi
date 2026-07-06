@@ -24,9 +24,12 @@ APPROVED の実装を、task.commitPlan で計画された **複数 commit** に
 
 ### `main-direct` (デフォルト・現在の運用)
 - **新しくブランチを切らず、現在のブランチに直接コミット**する。許容されるのは:
-  - main セッション → `main`
+  - main セッション → `main`。ただし **commit 前に main write lock を取得**し、
+    全 commit 完了後に解放する(手順は CLAUDE.md「main write lock」が正本。busy なら
+    保持者を報告して待つ — 並行セッションとの相互破壊防止)
   - gw worktree セッション → その worktree の作業 branch(`<id>/impl` 形式。
-    kickoff / gw start が作ったもの。main への統合は integrate-worktree の役目)
+    kickoff / gw start が作ったもの。main への統合は integrate-worktree の役目。
+    **branch への commit に lock は不要**)
   - それ以外の予期しないブランチ → **中止して報告**
 - push しない / PR 作らない / CI 監視しない
 - task の status を `COMMITTED` にして完結

@@ -183,6 +183,29 @@ Detailed phase status lives in `TODO.md`.
 - Origin is on GitHub but pushes are intentional. Do not create branches /
   PRs unless asked.
 
+### main write lock (serializing concurrent sessions)
+
+Multiple agent sessions may operate on this repo concurrently. **Any
+operation that changes main's git state** (committing on main, merging,
+`git reset` on main) must first acquire the advisory lock:
+
+```bash
+( set -o noclobber; printf '{ "owner": "<who>", "purpose": "<1 line>", "at": "%s" }\n' \
+    "$(date -u +%FT%TZ)" > .feature-state/main-write.lock ) 2>/dev/null \
+  || { cat .feature-state/main-write.lock; }   # busy: wait or report — do NOT steal
+```
+
+Remove the file when done (also on abort). If the lock looks stale
+(>30 min old), surface it to the human instead of deleting it yourself.
+Working-tree edits and commits on worktree branches do NOT need the lock.
+Additionally, **never `git reset --hard` on main without first checking
+`git log --oneline <target>..HEAD` for commits that are not yours**.
+
+(Born from a real 2026-07-06 incident: two sessions interleaved a merge
+and a commit on main — one commit consumed the other's MERGE_HEAD, and a
+later reset --hard destroyed the first session's commit; recovered from
+the reflog.)
+
 ### Parallel worktree workflow
 - Long features run in a `gw start <name>` worktree at `crowi-<name>/`.
   Multiple worktrees can run concurrently (e.g. backlink, admin-security,
