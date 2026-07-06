@@ -571,7 +571,18 @@ export default (crowi: Crowi) => {
   };
 
   pageSchema.statics.populatePageData = function (pageData: PageDocument, revisionId) {
-    pageData.latestRevision = pageData.revision;
+    // `pageData.revision` can already be a live/populated Revision
+    // *Document* here — e.g. right after Page.pushRevision() assigns the
+    // just-created instance, or when `pageData` itself is the result of a
+    // prior populatePageData() call — rather than a bare `ObjectId`.
+    // Capture only its `_id` into `latestRevision`; aliasing the object
+    // itself made `latestRevision` and `revision` share one reference, so
+    // the `.populate('revision', ...)` below mutated it in place and
+    // `toStringId()` (page-response.ts) fell through to
+    // `Document#toString()` — Mongoose's debug inspect override — instead
+    // of returning the id string.
+    const currentRevision = pageData.revision as unknown as RevisionDocument | Types.ObjectId | undefined;
+    pageData.latestRevision = currentRevision instanceof Types.ObjectId ? currentRevision : currentRevision?._id;
     if (revisionId) {
       pageData.revision = revisionId;
     }

@@ -54,6 +54,14 @@ describe('Routes /api/v2/pages (Hono createPage)', () => {
       expect(res.body.page.creator.username).toBe('createPageTester');
       expect(res.body.page.revision.body).toBe(body);
       expect(res.body.page.revision.author.username).toBe('createPageTester');
+      // Regression guard: `latestRevision` must be the revision id as a plain
+      // string (PageResponseSchema.latestRevision: z.string()), not a
+      // stringified dump of the whole Revision document. Right after
+      // Page.createPage(), `pageData.revision` is a live Document (not yet a
+      // bare ObjectId), and Page.populatePageData() used to alias it directly
+      // into `latestRevision` instead of capturing just its id.
+      expect(res.body.page.latestRevision).toBe(res.body.page.revision._id);
+      expect(res.body.page.latestRevision).toMatch(/^[0-9a-f]{24}$/);
 
       const pageDoc = await Page.findOne({ path });
       expect(pageDoc).not.toBeNull();
@@ -131,6 +139,11 @@ describe('Routes /api/v2/pages (Hono updatePage)', () => {
       expect(updateRes.body.page.revision.body).toBe(updatedBody);
       expect(updateRes.body.page.creator.username).toBe('updatePageTester');
       expect(updateRes.body.page.revision.author.username).toBe('updatePageTester');
+      // Same aliasing bug reproduces on updatePage: Page.pushRevision() also
+      // assigns a live Revision Document to `pageData.revision` right before
+      // populatePageData() runs.
+      expect(updateRes.body.page.latestRevision).toBe(updateRes.body.page.revision._id);
+      expect(updateRes.body.page.latestRevision).toMatch(/^[0-9a-f]{24}$/);
 
       const pageDoc = await Page.findById(createdPageId);
       expect(pageDoc.revision.toString()).not.toBe(initialRevisionId);
