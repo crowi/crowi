@@ -94,6 +94,8 @@ export function GlobalSearchInput() {
         <input
           ref={inputRef}
           type="search"
+          id="global-search-input"
+          name="q"
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onFocus={() => setIsFocused(true)}

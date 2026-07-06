@@ -112,6 +112,8 @@ export function MobileSearch() {
                 <input
                   ref={inputRef}
                   type="search"
+                  id="mobile-search-input"
+                  name="q"
                   value={value}
                   onChange={(e) => setValue(e.target.value)}
                   onKeyDown={handleKeyDown}
