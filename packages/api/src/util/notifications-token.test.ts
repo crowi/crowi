@@ -147,4 +147,29 @@ describe('createNotificationsTokenUtil', () => {
     const { token } = a.signNotificationsToken({ selfUserId: 'user-roundtrip' });
     expect(b.verifyNotificationsToken(token)?.selfUserId).toBe('user-roundtrip');
   });
+
+  it('memoizes the random fallback secret when WS_TOKEN_SECRET is unset, so a separate mint / verify util pair still agrees (regression: unthrottled notifications WS reconnect storm)', () => {
+    // Mirrors the real mint (HTTP `GET /notifications/token`) / verify (WS
+    // upgrade) split: each side builds its own util instance. Without a
+    // memoized fallback, `resolveNotificationsTokenSecret()` minted a fresh
+    // `crypto.randomBytes` secret on every call, so mint and verify (almost)
+    // never agreed and every handshake was rejected with 4401 — see
+    // notifications-token.ts's `fallbackSecret` (same pattern as
+    // mail-token.ts's `resolveMailTokenSecret`).
+    const original = process.env.WS_TOKEN_SECRET;
+    delete process.env.WS_TOKEN_SECRET;
+    try {
+      const mintUtil = createNotificationsTokenUtil();
+      const { token } = mintUtil.signNotificationsToken({ selfUserId: 'user-1' });
+
+      const verifyUtil = createNotificationsTokenUtil();
+      const verified = verifyUtil.verifyNotificationsToken(token);
+
+      expect(verified).not.toBeNull();
+      expect(verified?.selfUserId).toBe('user-1');
+    } finally {
+      if (original === undefined) delete process.env.WS_TOKEN_SECRET;
+      else process.env.WS_TOKEN_SECRET = original;
+    }
+  });
 });

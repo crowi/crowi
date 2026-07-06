@@ -294,6 +294,105 @@ describe('useNotificationsSocket', () => {
     expect(FakeWebSocket.instances).toHaveLength(1);
   });
 
+  it('backs off consecutive 4401 closes with no successful message in between (mint/verify secret-mismatch storm guard)', async () => {
+    // Simulate the real-world trigger: every mint yields a *different*
+    // token (a fresh `jti` guarantees this in production), so each 4401
+    // actually flips the effect's `token` dep and a new handshake is
+    // attempted — the shape of the storm this backoff guards against
+    // (e.g. WS_TOKEN_SECRET unset with no per-process memoization, so
+    // mint and verify never agree and every attempt is doomed).
+    let mintCount = 0;
+    getNotificationsToken.mockImplementation(async () => {
+      mintCount += 1;
+      return tokenOkResponse({ ...TOKEN_OK, token: `jwt.notifications.${mintCount}` });
+    });
+    const h = makeHarness();
+
+    h.render();
+    await flush();
+    expect(FakeWebSocket.instances).toHaveLength(1);
+
+    // First 4401 in this run: invalidated immediately (no backoff) —
+    // mirrors the single-4401 test above — and this time the token
+    // really changes, so a real reconnect follows.
+    act(() => {
+      FakeWebSocket.instances[0].open();
+      FakeWebSocket.instances[0].fail(4401);
+    });
+    await flush();
+    expect(FakeWebSocket.instances).toHaveLength(2);
+
+    // Second, CONSECUTIVE 4401 — no message ever landed on socket #2.
+    // Must NOT invalidate / reconnect immediately.
+    h.invalidateSpy.mockClear();
+    act(() => {
+      FakeWebSocket.instances[1].open();
+      FakeWebSocket.instances[1].fail(4401);
+    });
+    expect(h.invalidateSpy).not.toHaveBeenCalledWith({ queryKey: ['notificationsToken', 'me'] });
+    expect(FakeWebSocket.instances).toHaveLength(2);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(999);
+    });
+    expect(FakeWebSocket.instances).toHaveLength(2);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(50);
+    });
+    expect(h.invalidateSpy).toHaveBeenCalledWith({ queryKey: ['notificationsToken', 'me'] });
+    expect(FakeWebSocket.instances).toHaveLength(3);
+  });
+
+  it('resets the consecutive-4401 backoff counter across a logout → same-user relogin', async () => {
+    // Regression guard: the session-reset check used to run only after the
+    // effect's enabled/token guard passed, so a logout (authedUserId -> null)
+    // never touched the tracked session id. Logging back in as the SAME
+    // user id then looked like "no change" and the stale attempt count from
+    // the old session leaked into the new one.
+    let mintCount = 0;
+    getNotificationsToken.mockImplementation(async () => {
+      mintCount += 1;
+      return tokenOkResponse({ ...TOKEN_OK, token: `jwt.notifications.${mintCount}` });
+    });
+    useAuthMock.mockReturnValue({ user: { id: 'me' } });
+    const h = makeHarness();
+
+    const { rerender } = h.render();
+    await flush();
+    expect(FakeWebSocket.instances).toHaveLength(1);
+
+    // One 4401 bumps the attempt counter to 1 (no message ever arrived to
+    // reset it back to 0).
+    act(() => {
+      FakeWebSocket.instances[0].open();
+      FakeWebSocket.instances[0].fail(4401);
+    });
+    await flush();
+    expect(FakeWebSocket.instances).toHaveLength(2);
+
+    // Log out, then log back in as the SAME user id.
+    useAuthMock.mockReturnValue({ user: null });
+    rerender();
+    await flush();
+
+    useAuthMock.mockReturnValue({ user: { id: 'me' } });
+    rerender();
+    await flush();
+    const socketsAfterRelogin = FakeWebSocket.instances.length;
+    expect(socketsAfterRelogin).toBeGreaterThan(2);
+
+    h.invalidateSpy.mockClear();
+    act(() => {
+      FakeWebSocket.instances[socketsAfterRelogin - 1].open();
+      FakeWebSocket.instances[socketsAfterRelogin - 1].fail(4401);
+    });
+    // The first 4401 of the new (relogin) session must invalidate
+    // immediately — it must NOT inherit the previous session's attempt
+    // count and get backed off instead.
+    expect(h.invalidateSpy).toHaveBeenCalledWith({ queryKey: ['notificationsToken', 'me'] });
+  });
+
   it('stops reconnecting after a 4403 close (forbidden)', async () => {
     getNotificationsToken.mockResolvedValue(tokenOkResponse(TOKEN_OK));
     const h = makeHarness();

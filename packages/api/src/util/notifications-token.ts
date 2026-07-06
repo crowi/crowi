@@ -50,23 +50,35 @@ export interface SignNotificationsTokenResult {
 }
 
 /**
- * Tracks whether the "secret missing" warning has already been emitted,
- * so it fires at most once per process regardless of how many
- * `createNotificationsTokenUtil()` calls the handler / model layer makes.
+ * Process-wide random fallback secret, generated at most once. Must NOT
+ * be re-generated per call: a notifications token is minted by one
+ * request (`GET /notifications/token`) and verified by a later, separate
+ * WebSocket upgrade — almost always through a different
+ * `createNotificationsTokenUtil()` instance. Regenerating a random secret
+ * on every call (the previous implementation) meant mint and verify
+ * practically never agreed whenever `WS_TOKEN_SECRET` was unset, so every
+ * handshake was rejected with `WS_CLOSE.INVALID_TOKEN` (4401) — the
+ * client then looped invalidating its token query as fast as it could,
+ * producing an unthrottled reconnect storm. Mirrors `mail-token.ts`'s
+ * `fallbackSecret` (also `presence-token.ts` / `ws-token.ts`, which
+ * memoize the whole util instead — either shape fixes the same class of
+ * bug; this one keeps reading `WS_TOKEN_SECRET` fresh per call, per the
+ * boot/test-ordering rationale below).
  */
-let warnedMissingSecret = false;
+let fallbackSecret: string | null = null;
 
 /**
  * Resolve the signing secret. Reads `WS_TOKEN_SECRET` per call so a test
  * that mutates the env between imports / util constructions still picks
- * up the latest value.
+ * up the latest value; the random fallback (used only when the env var
+ * is unset) is memoized process-wide so every caller agrees on it.
  *
  * The "secret missing" warning is emitted here (lazily, on first
  * resolution) rather than at module-load time: this module is imported
  * transitively before `app.ts` runs `dotenv.config()`, so a load-time
  * `process.env` read fires a false warning even when `.env` defines
- * `WS_TOKEN_SECRET`. `warnedMissingSecret` keeps it to once per process.
- * Silenced under tests.
+ * `WS_TOKEN_SECRET`. Memoizing `fallbackSecret` keeps the warn to once
+ * per process. Silenced under tests.
  */
 const resolveNotificationsTokenSecret = (): string => {
   const fromEnv = process.env.WS_TOKEN_SECRET;
@@ -74,16 +86,18 @@ const resolveNotificationsTokenSecret = (): string => {
     debug('notifications token secret resolved from WS_TOKEN_SECRET');
     return fromEnv;
   }
-  if (!warnedMissingSecret && process.env.NODE_ENV !== 'test') {
-    warnedMissingSecret = true;
-    console.warn(
-      '[crowi] WS_TOKEN_SECRET is not set — notifications tokens will be signed with a random in-memory secret. ' +
-        'Process restarts will invalidate outstanding notifications tokens, and multi-instance deployments ' +
-        'will not be able to cross-verify them. Set WS_TOKEN_SECRET to a stable base64-encoded 32-byte ' +
-        'value (`openssl rand -base64 32`) in production.',
-    );
+  if (!fallbackSecret) {
+    fallbackSecret = crypto.randomBytes(32).toString('base64');
+    if (process.env.NODE_ENV !== 'test') {
+      console.warn(
+        '[crowi] WS_TOKEN_SECRET is not set — notifications tokens will be signed with a random in-memory secret. ' +
+          'Process restarts will invalidate outstanding notifications tokens, and multi-instance deployments ' +
+          'will not be able to cross-verify them. Set WS_TOKEN_SECRET to a stable base64-encoded 32-byte ' +
+          'value (`openssl rand -base64 32`) in production.',
+      );
+    }
   }
-  return crypto.randomBytes(32).toString('base64');
+  return fallbackSecret;
 };
 
 /**
