@@ -19,7 +19,7 @@
  *    runs independently of this handler; we do not duplicate that
  *    work.
  */
-import { type PageUser, addCommentRoute, deleteCommentRoute, listCommentsRoute } from '@crowi/api-contract';
+import { addCommentRoute, deleteCommentRoute, listCommentsRoute, type PageUser } from '@crowi/api-contract';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import Debug from 'debug';
 import { Types } from 'mongoose';
@@ -27,14 +27,14 @@ import { Types } from 'mongoose';
 import type Crowi from 'src/crowi';
 import type { CommentDocument } from 'src/models/comment';
 import type { PageDocument } from 'src/models/page';
-import { isPopulatedUser, isValidObjectId, toISOStringOrNull, toPageUser } from 'src/util/ts-rest-helpers';
 import { autoWatchPage } from 'src/util/auto-watch';
+import { isPopulatedUser, isValidObjectId, toISOStringOrNull, toPageUser } from 'src/util/ts-rest-helpers';
 
 import type { CrowiHonoBindings } from '../app';
 import { createJwtAuth } from '../middleware/auth';
 import { applyScope } from '../middleware/require-scope';
 
-import { PAGE_NOT_FOUND_BODY, invalidRequestBody } from './_helpers/errors';
+import { invalidRequestBody, PAGE_NOT_FOUND_BODY } from './_helpers/errors';
 
 const debug = Debug('crowi:hono:handlers:comment');
 
@@ -80,6 +80,7 @@ const commentToResponse = (comment: CommentDocument) => {
 export const registerCommentRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app: E, crowi: Crowi) => {
   const Comment = crowi.model('Comment');
   const Page = crowi.model('Page');
+  const Revision = crowi.model('Revision');
   const Watcher = crowi.model('Watcher');
 
   app.use('/comments/*', createJwtAuth(crowi));
@@ -107,10 +108,24 @@ export const registerCommentRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(
           if (!isValidObjectId(revision_id)) {
             return c.json(invalidRequestBody('Invalid revision_id'), 400);
           }
+          // Grant boundary (crowi-review CLS-003): comment bodies must not
+          // be readable by callers who cannot read the owning page. Resolve
+          // the page from the revision's path and grant-check it. 404 (not
+          // 403) hides page existence, matching GET /pages/revisions/:id.
+          const revision = (await Revision.findById(new Types.ObjectId(revision_id)).exec()) as { path: string } | null;
+          const page = revision ? ((await Page.findOne({ path: revision.path }).exec()) as PageDocument | null) : null;
+          if (!page || !page.isGrantedFor(user)) {
+            return c.json(PAGE_NOT_FOUND_BODY, 404);
+          }
           comments = await Comment.getCommentsByRevisionId(new Types.ObjectId(revision_id));
         } else {
           if (!isValidObjectId(page_id!)) {
             return c.json(invalidRequestBody('Invalid page_id'), 400);
+          }
+          // Same grant boundary keyed on page_id.
+          const page = (await Page.findPageById(page_id!)) as PageDocument | null;
+          if (!page || !page.isGrantedFor(user)) {
+            return c.json(PAGE_NOT_FOUND_BODY, 404);
           }
           comments = await Comment.getCommentsByPageId(new Types.ObjectId(page_id!));
         }
@@ -194,7 +209,11 @@ export const registerCommentRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(
           return c.json(PAGE_NOT_GRANTED_BODY, 403);
         }
 
-        const existing = await Comment.findOne({ _id: new Types.ObjectId(comment_id) }).exec();
+        // Scope the lookup to the authorized page (crowi-review CLS-002):
+        // grant is checked against the caller-supplied page_id, so the
+        // comment must actually belong to that page — otherwise a caller
+        // granted on ANY page could delete a comment on a private page by id.
+        const existing = await Comment.findOne({ _id: new Types.ObjectId(comment_id), page: new Types.ObjectId(page_id) }).exec();
         if (!existing) {
           return c.json(COMMENT_NOT_FOUND_BODY, 404);
         }

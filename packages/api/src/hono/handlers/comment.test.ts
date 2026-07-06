@@ -1,8 +1,7 @@
 import { Types } from 'mongoose';
-import request from 'supertest';
-
 import { app, crowi } from 'src/test/setup';
 import { authHeaders, createTestUser } from 'src/test/test-helpers';
+import request from 'supertest';
 
 /**
  * RFC-0006 Phase 4 Batch 3 — integration tests for the migrated
@@ -97,6 +96,31 @@ describe('Routes /api/v2/comments (Hono)', () => {
       expect(listRes.body.comments[0].comment).toBe('first comment');
       expect(listRes.body.comments[0].creator.username).toBe('honoCommentTester');
       expect(listRes.body.comments[0].revision).toBe(revisionId);
+    });
+
+    it('grant-checks the page: owner can list, others get 404 (crowi-review CLS-003)', async () => {
+      // Owner-only page (grant 4) with a comment.
+      const { pageId, revisionId } = await createTestPage(`${PATH_PREFIX}private-list`, '# private', 4);
+      const addRes = await request(app)
+        .post('/api/v2/comments')
+        .set(authHeaders(accessToken))
+        .send({ page_id: pageId, revision_id: revisionId, comment: 'secret comment' });
+      expect(addRes.status).toBe(200);
+
+      // The owner can still read the comments.
+      const ownerRes = await request(app).get('/api/v2/comments').query({ page_id: pageId }).set(authHeaders(accessToken));
+      expect(ownerRes.status).toBe(200);
+      expect(ownerRes.body.comments).toHaveLength(1);
+
+      // A non-granted user cannot — 404 hides existence (not 200 with bodies).
+      const otherRes = await request(app).get('/api/v2/comments').query({ page_id: pageId }).set(authHeaders(otherAccessToken));
+      expect(otherRes.status).toBe(404);
+      expect(otherRes.body.error.code).toBe('PAGE_NOT_FOUND');
+
+      // Same boundary via revision_id.
+      const otherByRev = await request(app).get('/api/v2/comments').query({ revision_id: revisionId }).set(authHeaders(otherAccessToken));
+      expect(otherByRev.status).toBe(404);
+      expect(otherByRev.body.error.code).toBe('PAGE_NOT_FOUND');
     });
   });
 
@@ -265,6 +289,26 @@ describe('Routes /api/v2/comments (Hono)', () => {
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('INVALID_REQUEST');
+    });
+
+    it('returns 404 when the comment does not belong to the given page_id (crowi-review CLS-002)', async () => {
+      const pageA = await createTestPage(`${PATH_PREFIX}del-a`);
+      const pageB = await createTestPage(`${PATH_PREFIX}del-b`);
+      // The comment lives on page B.
+      const addRes = await request(app)
+        .post('/api/v2/comments')
+        .set(authHeaders(accessToken))
+        .send({ page_id: pageB.pageId, revision_id: pageB.revisionId, comment: 'lives on B' });
+      expect(addRes.status).toBe(200);
+      const commentId = addRes.body.comment._id as string;
+
+      // Deleting via page_id = A (the caller is granted on A) must not reach a
+      // comment that belongs to B — even though grant on A passes.
+      const delRes = await request(app).delete('/api/v2/comments').set(authHeaders(accessToken)).send({ comment_id: commentId, page_id: pageA.pageId });
+      expect(delRes.status).toBe(404);
+      expect(delRes.body.error.code).toBe('COMMENT_NOT_FOUND');
+      // The comment still exists.
+      expect(await Comment.countDocuments({ _id: new Types.ObjectId(commentId) })).toBe(1);
     });
   });
 });
