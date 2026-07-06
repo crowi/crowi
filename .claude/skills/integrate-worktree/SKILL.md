@@ -141,12 +141,29 @@ pnpm --filter @crowi/e2e e2e tests/<変更された spec>.spec.ts
 1 つでも失敗したら中止。conflict 解消の判断ミスや、両側の変更の組み合わせで型が合わなく
 なっているケースが多い。
 
+> **注意 (contract を含む merge)**: `pnpm check:openapi` は再生成物を **HEAD と比較**する
+> ため、no-commit merge 中に回すと**必ず drift 判定で落ちる**(HEAD はまだ merge 前)。
+> Step 4 では「再生成後に `git diff <artifacts>` が空 = staged と一致」だけ確認し、
+> check:openapi 本体は **merge commit 後に**実行して green を確認する。
+
 `pnpm lint` の error が出る場合は merge を `--abort` して原因切り分け。worktree 側のコード
 が新しい lint ルールに引っかかるケースは、**worktree 側で先に直してから** 再 merge する
 (主問題側の責任)。`pnpm lint` warnings は許容するが、merge commit のメッセージ末尾に
 "Note: <warnings 件数> warnings remain (existing)." として記録するのが望ましい。
 
 ### Step 5: merge commit 作成
+
+**commit の直前に merge 状態が生きていることを確認する**(必須ガード):
+
+```bash
+test -f .git/MERGE_HEAD || echo "ABORT: merge state lost"
+```
+
+Step 4 が長い(テスト・e2e 等)と、まれに MERGE_HEAD が失われて `git commit` が
+**単親の通常 commit** を作ってしまう(実例: 2026-07-06 の live-page-content-sync 統合。
+内容は正しく入るが branch が main の祖先にならず、gw end の安全チェックで発覚)。
+MERGE_HEAD が無ければ commit せず、`git reset --hard <merge 前の main>` で戻して
+Step 3 からやり直す。commit 後は `git log -1 --format='%p'` で **親が 2 つ**あることを確認。
 
 メッセージは標準的な merge commit 形式 + 衝突解消の要点:
 
