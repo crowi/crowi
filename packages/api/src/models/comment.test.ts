@@ -64,6 +64,27 @@ describe('Comment', () => {
       comments = await Comment.countCommentByPageId(createdComment.page.id);
       expect(comments).toStrictEqual(0);
     });
+
+    // QA-5-01 — Page.commentCount only recalculated on comment creation
+    // (post('save') hook), not on deletion, so it drifted upward and stuck
+    // until the next comment was posted.
+    test('recalculates Page.commentCount (QA-5-01)', async () => {
+      const creator = await User.findUserByUsername('anonymous1');
+      const [page] = await Fixture.generate('Page', [{ path: '/grant/comment-count-recalc', grant: Page.GRANT_PUBLIC, grantedUsers: [creator], creator }]);
+
+      const first = await Comment.create({ page, creator, revision: undefined, comment: 'first', commentPosition: undefined });
+      await Comment.create({ page, creator, revision: undefined, comment: 'second', commentPosition: undefined });
+      await crowi.drainSideEffects();
+
+      let updated = await Page.findById(page._id);
+      expect(updated.commentCount).toBe(2);
+
+      await Comment.removeCommentById(first._id);
+      await crowi.drainSideEffects();
+
+      updated = await Page.findById(page._id);
+      expect(updated.commentCount).toBe(1);
+    });
   });
 
   // feature-live-page-comment-sync — the presence-broadcast listener keys

@@ -63,6 +63,35 @@ export default (crowi: Crowi) => {
     return Comment.distinct('creator', { page }).exec();
   };
 
+  /**
+   * Recompute Page.commentCount from the live Comment collection. Shared by
+   * the post('save') hook (comment created) and the 'remove' event listener
+   * (comment deleted) so both paths keep the count in sync the same way
+   * (QA-5-01: deletion used to leave the count stale until the next create).
+   */
+  function recalculateCommentCount(pageId: CommentDocument['page']) {
+    const Page = crowi.model('Page');
+
+    crowi.trackSideEffect(
+      Promise.resolve()
+        .then(function () {
+          // Skip the deferred commentCount recompute once the connection
+          // is no longer `connected` — it would only throw teardown-noise.
+          // Normal operation (readyState === 1) is unaffected.
+          if (!crowi.isMongoConnected()) return;
+          return Comment.countCommentByPageId(pageId).then(function (count) {
+            return Page.updateCommentCount(pageId, count);
+          });
+        })
+        .then(function (page) {
+          debug('CommentCount Updated', page);
+        })
+        .catch(function (err) {
+          debug('Failed to update commentCount', err);
+        }),
+    );
+  }
+
   // Capture creation-vs-update before mongoose flips `isNew` to false in
   // the post-save hook, so the live-sync 'add' emit below fires ONLY for a
   // genuinely new comment. Comments are create-only today, but an
@@ -76,27 +105,9 @@ export default (crowi: Crowi) => {
    * post save hook
    */
   commentSchema.post('save', function (savedComment: CommentDocument) {
-    const Page = crowi.model('Page');
     const Activity = crowi.model('Activity');
 
-    crowi.trackSideEffect(
-      Promise.resolve()
-        .then(function () {
-          // Skip the deferred commentCount recompute once the connection
-          // is no longer `connected` — it would only throw teardown-noise.
-          // Normal operation (readyState === 1) is unaffected.
-          if (!crowi.isMongoConnected()) return;
-          return Comment.countCommentByPageId(savedComment.page).then(function (count) {
-            return Page.updateCommentCount(savedComment.page, count);
-          });
-        })
-        .then(function (page) {
-          debug('CommentCount Updated', page);
-        })
-        .catch(function (err) {
-          debug('Failed to update commentCount', err);
-        }),
-    );
+    recalculateCommentCount(savedComment.page);
 
     crowi.trackSideEffect(
       Promise.resolve()
@@ -124,14 +135,22 @@ export default (crowi: Crowi) => {
   });
 
   const commentEvent = crowi.event('Comment');
-  commentEvent.on('remove', async function (comment: CommentDocument) {
+  commentEvent.on('remove', function (comment: CommentDocument) {
     const Activity = crowi.model('Activity');
 
-    try {
-      await Activity.removeByPageCommentDelete(comment);
-    } catch (err) {
-      debug(err);
-    }
+    crowi.trackSideEffect(
+      Promise.resolve()
+        .then(function () {
+          return Activity.removeByPageCommentDelete(comment);
+        })
+        .catch(function (err) {
+          debug(err);
+        }),
+    );
+
+    // QA-5-01 — recalculate Page.commentCount on delete too, via the same
+    // machinery the post('save') hook uses on create.
+    recalculateCommentCount(comment.page);
   });
 
   const Comment = model<CommentDocument, CommentModel>('Comment', commentSchema);
