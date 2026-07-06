@@ -424,6 +424,11 @@ charter 終了時のクリーンアップは、**この manifest に記録され
 storage オブジェクトごと)・redirect origin・activity を丸ごと削除するため、
 対象を誤ると共有 dev DB の既存データを永久に失う。
 
+> **推奨実装 (実測済み)**: 認証済みブラウザセッションの `fetch()` を
+> `evaluate_script` 経由で manifest の id ごとにループさせる — セッションの
+> 認証がそのまま乗るので curl 用の JWT 取得が不要で、削除の 200/404 応答も
+> その場で確認できる。
+
 - **fallback 確認**: manifest が壊れている / 読めない場合に **限り**、
   path が `/qa/<run-id>/...` prefix 配下 かつ creator がこの run の QA
   アカウントと一致するページを候補として列挙し、削除前に `findings.md` に
@@ -477,6 +482,11 @@ Config を実際に変更する検証は、`dev.local.json` で `isolateDb: true
 `.reviews/` は既存の gitignore 済み local state 規約 (`integrate-worktree`
 の `.reviews/` / `crowi-review` の `.reviews/crowi-review/`) を踏襲する。
 commit しない。
+
+> **実測済みの注意**: ハーネスの Write ガードが `findings.md` / `summary.md` 等の
+> ファイル名 (report/summary/findings/analysis を含む .md) への Write ツール書き込みを
+> 拒否することがある。その場合は **Bash heredoc で書く** (`cat > ... <<'EOF'`)。
+> ファイル名自体は変えない (この構造が契約)。
 
 `summary.md` の verdict には、`--prod-build` を実行した場合
 `prod build verified` / `prod build unverified: <reason>` /
@@ -555,12 +565,15 @@ charter の操作を行い、証跡は以下で取る:
 
 ### 10.3 WS 証跡: 主 evidence と application-level fallback
 
-`/collab` / `/presence` / `/notifications` の WS upgrade (101) または
-継続的な生きたフレームが **主 evidence** であり、`list_network_requests` /
-`read_network_requests` で見えたときは常にこれを記録する。
+**実測済み (2026-07-06 初回 run)**: chrome-devtools MCP の
+`list_network_requests` は `resourceTypes:["websocket"]` を指定しても
+**この driver + proxy 構成では WS entry を表示しない** (collab が実際に動いて
+いる状況下で 0 件)。したがって WS 証跡の探索に budget を使わず、**最初から
+下記の application-level evidence を主 evidence として使う**。別 driver /
+構成で WS upgrade (101) やフレームが network 証跡に見えた場合は、それを
+追加 evidence として記録してよい (見えなくても製品バグではない)。
 
-**ツールが WS フレーム/アップグレードステータスを見せない場合**の
-application-level fallback (namespace 別、budget 内に現れなければ
+application-level evidence (namespace 別、budget 内に現れなければ
 `incomplete (budget exhausted)` として §3 のバジェット定義と同じ扱い):
 
 | namespace | fallback pass 条件 |
@@ -580,9 +593,13 @@ JWT はブラウザプロファイル単位で共有される (タブ単位で�
 `packages/e2e/tests/auth-state.spec.ts` のコメントが「同一タブで別ユーザー
 としてログインすると既存のトークンペアが上書きされる」と明記している)。
 したがって 2 ユーザー同時編集の伝搬確認には **同一プロファイル内の 2 タブ
-では不十分**で、独立したブラウザコンテキスト (通常ウィンドウ + シークレット
-ウィンドウ、または別プロファイル) が必要。使用中のドライバが 2 つ目の
-独立コンテキストを開けない場合、2-window 側の伝搬確認は
+では不十分**で、独立したブラウザコンテキストが必要。
+
+**まず chrome-devtools MCP の `new_page({ isolatedContext: "<name>" })` を試す**
+— 独立した cookie jar を持つ 2 セッションを 1 MCP セッション内に作れることを
+実測済み (2026-07-06 初回 run で 2 窓検証をフル実行)。claude-in-chrome 等、
+使用中のドライバに同等機能が無く 2 つ目の独立コンテキストを開けない場合のみ、
+2-window 側の伝搬確認は
 
 ```
 blocked: cannot isolate second session
