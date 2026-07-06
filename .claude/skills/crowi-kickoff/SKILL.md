@@ -106,7 +106,18 @@ printf '{ "currentTask": "%s", "lastUpdated": "%s" }\n' "<id>" "$(date -u +%FT%T
    send-keys は使わない**。`tmux list-panes -t <window> -F '#{pane_id}|#{pane_current_command}'`
    で `pane_current_command` がバージョン形式(`2.x.x`)の pane が現れるまで
    2 秒間隔で poll(上限 60 秒)し、その **pane_id** を投入先にする。
-3. 指示を投入(入力 → 1 秒待ち → Enter。slash メニューの誤発火を避けるため
+3. **まず実装モデルへ切り替える**(hook の plain `claude` は既定モデル = 高価な
+   session model で起動するため。実装は sonnet で十分な設計 — spec が
+   implementation-ready であることは ready 判定済み):
+
+```bash
+tmux send-keys -t "<claude の pane_id>" "/model sonnet"
+sleep 1
+tmux send-keys -t "<claude の pane_id>" Enter
+sleep 2
+```
+
+4. 指示を投入(入力 → 1 秒待ち → Enter。slash メニューの誤発火を避けるため
    **平文で書き、行頭を `/` にしない**):
 
 ```bash
