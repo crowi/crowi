@@ -96,7 +96,82 @@ export const PresenceViewersMessageSchema = z.object({
 });
 export type PresenceViewersMessage = z.infer<typeof PresenceViewersMessageSchema>;
 
-export const PresenceServerMessageSchema = PresenceViewersMessageSchema;
+/**
+ * Server → client message: a new revision was saved for the page being
+ * viewed (feature-live-page-content-sync, RFC-0003 §v2.1 read-side
+ * soft-refresh). Rides the same `/presence/<pageId>` channel as the
+ * viewer-list broadcast so no second WebSocket is opened.
+ *
+ * The payload deliberately carries only *identity* — `pageId`,
+ * `revisionId`, and who saved it — never the body or `renderedAst`.
+ * Shipping the body over the presence channel would leak a private
+ * page's content to every connected viewer socket; instead the client
+ * fetches the new revision from the permission-checked
+ * `GET /pages/revisions/{id}` endpoint (404 when grant is missing), so
+ * body access stays gated by the same authorization as a normal read.
+ *
+ *   - `revisionId`       — the newly-saved revision's `_id`; the client
+ *                          fetches its body to swap the content in place.
+ *   - `editorUserId`     — who saved. The client suppresses its own
+ *                          saves (`editorUserId === selfUserId`).
+ *   - `editorDisplayName`— shown in the "updated by …" banner.
+ */
+export const PresencePageUpdatedMessageSchema = z.object({
+  type: z.literal('page-updated'),
+  pageId: z.string(),
+  revisionId: z.string(),
+  editorUserId: z.string(),
+  editorDisplayName: z.string(),
+});
+export type PresencePageUpdatedMessage = z.infer<typeof PresencePageUpdatedMessageSchema>;
+
+/**
+ * Server → client message: a comment was added to / removed from the
+ * page being viewed (feature-live-page-comment-sync). Rides the same
+ * `/presence/<pageId>` channel as the viewer-list + page-updated
+ * broadcasts so no second WebSocket is opened — the sibling of
+ * `page-updated`, but the target is the comment list rather than the
+ * body revision.
+ *
+ * Like `page-updated`, the payload carries only *identity* — never the
+ * comment body. Shipping a comment's text over the presence channel
+ * would leak a private page's discussion to every connected viewer
+ * socket; instead the client re-fetches from the permission-checked
+ * `GET /comments?page_id=`, so comment access stays gated by the same
+ * authorization as a normal read.
+ *
+ *   - `changeType`  — `'added'` (a new comment) or `'removed'` (deleted).
+ *   - `commentId`   — the affected comment's `_id`. Advisory only: the
+ *                     client re-fetches the whole list and derives the
+ *                     new-comment highlight from a client-side seen-set
+ *                     diff, so a dropped / duplicated frame is harmless.
+ *   - `actorUserId` — who added the comment, present only for `'added'`.
+ *                     The client suppresses its own posts
+ *                     (`actorUserId === selfUserId`). Absent for
+ *                     `'removed'` (the deleter is not known at the model
+ *                     event layer; a redundant re-fetch is idempotent).
+ */
+export const PresenceCommentChangedMessageSchema = z.object({
+  type: z.literal('comment-changed'),
+  pageId: z.string(),
+  changeType: z.enum(['added', 'removed']),
+  commentId: z.string(),
+  actorUserId: z.string().optional(),
+});
+export type PresenceCommentChangedMessage = z.infer<typeof PresenceCommentChangedMessageSchema>;
+
+/**
+ * Discriminated union of every server → client presence frame. The
+ * client parses inbound frames with this and switches on `type`:
+ * `'viewers'` drives the live-presence row, `'page-updated'` drives the
+ * read-side soft-refresh banner, `'comment-changed'` drives the live
+ * comment append / removal.
+ */
+export const PresenceServerMessageSchema = z.discriminatedUnion('type', [
+  PresenceViewersMessageSchema,
+  PresencePageUpdatedMessageSchema,
+  PresenceCommentChangedMessageSchema,
+]);
 export type PresenceServerMessage = z.infer<typeof PresenceServerMessageSchema>;
 
 /**

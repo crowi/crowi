@@ -236,15 +236,20 @@ describe('PageHeader — compact state', () => {
   });
 
   it('renders the live presence row at compact size in the compact bar', () => {
-    usePresence.mockReturnValue({
+    // `usePresence` is now hoisted to PageView; PageHeader receives the
+    // result as a prop. The `showPresence && isAuthenticated && presence`
+    // gate needs a non-null `presence` to render the row, so pass a mock
+    // `UsePresenceResult` directly (the other 15 call sites render without
+    // presence and rely on the gate hiding the row).
+    const presence = {
       viewers: [
         { userId: 'u1', username: 'me', displayName: 'Me', avatarUrl: null, isEditing: false, joinedAt: 1 },
         { userId: 'u2', username: 'bob', displayName: 'Bob', avatarUrl: null, isEditing: false, joinedAt: 2 },
       ],
       selfUserId: 'u1',
-      status: 'connected',
-    });
-    renderHeader(<PageHeader page={makePage()} sticky showActions showPresence />);
+      status: 'connected' as const,
+    };
+    renderHeader(<PageHeader page={makePage()} sticky showActions showPresence presence={presence} />);
     // live-presence-row is a layout row with a data-size attribute but no accessible role;
     // getByTestId is the only portable way to reach it for data-size inspection.
     expect(compactBar().getByTestId('live-presence-row').getAttribute('data-size')).toBe('compact');

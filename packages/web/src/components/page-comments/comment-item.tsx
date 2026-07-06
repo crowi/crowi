@@ -1,17 +1,24 @@
 'use client';
 
-import { Trash2, Loader2 } from 'lucide-react';
+import type { Comment } from '@crowi/api-contract';
+import { m } from '@paraglide/messages.js';
+import { Loader2, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { UserAvatar } from '@/components/user-avatar';
 import { formatDistanceToNow } from '@/lib/date-utils';
-import type { Comment } from '@crowi/api-contract';
-import { m } from '@paraglide/messages.js';
 
 interface CommentItemProps {
   comment: Comment;
   canDelete: boolean;
   isDeleting?: boolean;
   onDelete?: (commentId: string) => void;
+  /**
+   * feature-live-page-comment-sync — true while this comment is in its
+   * transient new-comment highlight window (another user just posted it
+   * and the reader's list live-appended it). Applies the amber
+   * `.comment-item.is-new` background that fades out on removal.
+   */
+  isNew?: boolean;
 }
 
 /**
@@ -19,11 +26,11 @@ interface CommentItemProps {
  * Body is rendered as plain text with newlines preserved (Markdown rendering
  * is intentionally deferred — see openQuestions in the migration task).
  */
-export function CommentItem({ comment, canDelete, isDeleting, onDelete }: CommentItemProps) {
+export function CommentItem({ comment, canDelete, isDeleting, onDelete, isNew }: CommentItemProps) {
   const creator = typeof comment.creator === 'object' && comment.creator ? comment.creator : null;
 
   return (
-    <div className="flex gap-3 py-3">
+    <div className={`comment-item flex gap-3 py-3${isNew ? ' is-new' : ''}`}>
       <div className="flex-shrink-0 pt-0.5">
         {creator ? <UserAvatar user={creator} size="sm" /> : <div className="h-6 w-6 rounded-full bg-muted" aria-hidden />}
       </div>

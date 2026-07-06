@@ -11,6 +11,71 @@ participants within a few hundred milliseconds.
 For deployment instructions, see [Operating realtime collaborative
 editing](../operations/realtime-collab).
 
+## Live updates while viewing a page
+
+When someone saves a page you are **reading**, its body is swapped to
+the latest revision automatically, without a reload
+([RFC-0003](https://github.com/crowi/crowi/blob/main/docs/rfcs/0003-realtime-collaborative-editing.md)
+read-side soft-refresh). You do not need the editor open — simply
+viewing the page keeps you on the latest content.
+
+- The swap happens with **no full reload and no spinner**, and your
+  scroll position is preserved (corrected when the height changes).
+- At the same time a fixed banner appears at the top-center of the
+  screen: **"<name> updated this page — Showing the latest version"**
+  (where `<name>` is the person who saved).
+- Clicking **"Read the version you were reading"** in the banner
+  returns you locally to the version you had before the swap (no URL
+  change, no extra network request). The banner switches to "Showing
+  the version you were reading", and **"Show the latest"** brings you
+  back to the newest at any time. If an even newer save arrives while
+  you are on the old version, the banner changes to "<name> saved an
+  even newer version".
+- Both REST saves and collaborative saves (checkpoints) trigger it
+  equally.
+- It also reaches viewers connected to a different instance in a
+  multi-instance deployment (`REDIS_URL` configured).
+
+### When it does not happen (limits)
+
+- **Your own saves** never trigger a swap or a banner. If the same
+  user edits and saves from another tab, the reading tab is likewise
+  not auto-updated (your own change is assumed to be already known).
+- **Viewing a past revision** (a specific version opened via
+  `?revision_id=`) and **draft pages** do not receive live updates.
+- A burst of rapid saves is coalesced into a single swap.
+
+## Live comment display
+
+When **someone else posts a comment** on a page you are reading, it is
+appended to the comment list automatically, without a reload. This is a
+sibling of the live body soft-refresh: it rides the same `/presence`
+channel, but the target is the comment list rather than the body.
+
+- A newly-arrived comment gets a **background highlight that fades after
+  a few seconds** (the same amber as the section highlight when you jump
+  to a heading in the body), so you can tell at a glance which comment
+  just arrived.
+- When someone **deletes** a comment, it disappears from your list too,
+  so the list always stays correct.
+- **Your own posts** never trigger the auto-append or the highlight —
+  your own action already updated the list.
+- The comment body never rides the presence channel. Only a "a comment
+  changed" notification is delivered; the client then re-fetches the
+  comment list from the permission-checked API. A private page's comment
+  text never leaks to a viewer's WebSocket.
+- It also reaches viewers connected to a different instance in a
+  multi-instance deployment (`REDIS_URL` configured).
+
+### When it does not happen (limits)
+
+- **Viewing a past revision** (a specific version opened via
+  `?revision_id=`) and **draft pages** do not receive live comment
+  updates — the presence socket is not opened, exactly as with the live
+  body soft-refresh.
+- The header's "N comments" count chip is not updated instantly by this
+  live display (it refreshes the next time you open the page).
+
 ## Save is an explicit checkpoint
 
 Crowi uses an **explicit-save model**: pressing the "Save" button is

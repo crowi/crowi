@@ -1,34 +1,49 @@
 'use client';
 
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import type { TocEntryResponse } from '@crowi/api-contract';
+import type { PageWithRevision, PresenceCommentChangedMessage, PresencePageUpdatedMessage, TocEntryResponse } from '@crowi/api-contract';
 import { PageStatusEnum } from '@crowi/api-contract';
+import { m } from '@paraglide/messages.js';
+import { useQueryClient } from '@tanstack/react-query';
 import { Edit2, FilePlus2, Info, Loader2, Trash2 } from 'lucide-react';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { LoadingSpinner } from '@/components/ui/loading-spinner';
-import { ErrorAlert } from '@/components/ui/error-alert';
+import { useRouter } from 'next/navigation';
+import { useEffect, useReducer, useRef, useState } from 'react';
+import { PageComments } from '@/components/page-comments';
 import { AccessDeniedCard } from '@/components/ui/access-denied-card';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { ErrorAlert } from '@/components/ui/error-alert';
+import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { NotFoundCard } from '@/components/ui/not-found-card';
-import { usePage } from '@/lib/use-page';
+import { apiClientV2 } from '@/lib/api-client';
 import { isUserHomePath, pagePathToHref } from '@/lib/page-path';
-import { usePageGrantAccent } from '@/lib/use-page-grant-accent';
-import { usePageChildren } from '@/lib/use-page-children';
 import { isStalePageRevision } from '@/lib/page-revision';
+import { useAuth } from '@/lib/use-auth';
+import { usePage } from '@/lib/use-page';
+import { usePageChildren } from '@/lib/use-page-children';
+import { commentKeys } from '@/lib/use-page-comments';
+import { usePageGrantAccent } from '@/lib/use-page-grant-accent';
 import { useRevertDeletedPage } from '@/lib/use-page-mutations';
+import { usePresence } from '@/lib/use-presence';
 import { useMarkSeenOnView } from '@/lib/use-seen';
-import { PageHeader } from './page-header';
+import { AttachmentList } from './attachment-list';
+import { BacklinkList } from './backlink-list';
+import { LiveSyncBanner } from './live-sync-banner';
+import { initialLiveSyncBannerState, isDisplayingOld, reduceLiveSyncBanner } from './live-sync-banner-state';
 import { PageContent } from './page-content';
-import { PortalizeBanner } from './portalize-dialog';
+import { PageHeader } from './page-header';
 import { useTocScrollSpy } from './page-toc';
 import { PageTocColumns } from './page-toc-columns';
+import { PortalizeBanner } from './portalize-dialog';
 import { StaleRevisionBanner } from './stale-revision-banner';
-import { BacklinkList } from './backlink-list';
-import { AttachmentList } from './attachment-list';
-import { PageComments } from '@/components/page-comments';
-import { m } from '@paraglide/messages.js';
+
+// Debounce window (ms) coalescing a burst of `page-updated` frames into a
+// single body swap. Inside 200–500ms per the spec; mirrors the
+// notifications-socket invalidate debounce.
+const LIVE_SYNC_DEBOUNCE_MS = 300;
+
+/** The wrapper shape `usePage`'s queryFn stores under `['page', params]`. */
+type PageQueryData = { page: PageWithRevision | null; notFound: boolean; notGranted: boolean };
 
 // Stable empty array so PageToc's effect dep doesn't churn when meta.toc is absent.
 const EMPTY_TOC: TocEntryResponse[] = [];
@@ -59,13 +74,6 @@ export function PageView({ path, revisionId }: PageViewProps) {
   const canMarkSeen = Boolean(page?._id) && !isLoading && !isError && !notFound && !notGranted && !isDeleted && !redirectTo;
   useMarkSeenOnView(page?._id, canMarkSeen);
 
-  // TOC + its scroll-spy are computed here (before the early returns, so the
-  // hook order stays stable) and shared by the right-rail `PageToc` and the
-  // header `PageTocMenu`. `toc` is derived from the possibly-null page; the
-  // hook no-ops for an empty list.
-  const toc = page?.revision?.meta?.toc ?? EMPTY_TOC;
-  const activeTocId = useTocScrollSpy(toc);
-
   useEffect(() => {
     if (redirectTo) {
       const redirectUrl = `${redirectTo}?redirectFrom=${encodeURIComponent(path)}`;
@@ -76,6 +84,194 @@ export function PageView({ path, revisionId }: PageViewProps) {
   // Mirror the page's `grant` onto `<html data-page-grant=...>` so CSS
   // (`--page-grant-accent`) tints the header strip / chip / icons.
   usePageGrantAccent(page?.grant);
+
+  // ── feature-live-page-content-sync — read-side soft-refresh ──────────
+  // All swap state is owned here (PageView owns `page` + the query cache).
+  // `usePresence` is called exactly once, at PageView level, so a single
+  // `/presence` WebSocket is shared with PageHeader / LivePresenceRow via
+  // the `presence` prop — opening a second socket here would regress the
+  // 2-3s viewer-list lag the header lift originally fixed.
+  const { isAuthenticated } = useAuth();
+  const queryClient = useQueryClient();
+  const [bannerState, dispatchBanner] = useReducer(reduceLiveSyncBanner, initialLiveSyncBannerState);
+  // The pre-swap wrapper, rendered locally while "reading the previous
+  // version". Kept in state (not a ref) so it is render-visible; the
+  // `['page']` cache is never rewound to it (see spec §view-state).
+  const [snapshot, setSnapshot] = useState<PageQueryData | null>(null);
+  // Newest revision id / editor seen; also serves as the "latest
+  // available" target while displaying an old version.
+  const latestSeenRevisionIdRef = useRef<string | null>(null);
+  const latestEditorRef = useRef<string | null>(null);
+  const debounceTimerRef = useRef<number | null>(null);
+
+  // The live query key is path-based (live view ⇒ `revision_id` undefined),
+  // identical to the one `usePage` registers. Shared so `getQueryData` /
+  // `setQueryData` can never drift apart (a mismatch no-ops the swap).
+  const pageQueryKey = ['page', { path, revision_id: revisionId }];
+  const readWrapper = (): PageQueryData | undefined => queryClient.getQueryData<PageQueryData>(pageQueryKey);
+
+  /**
+   * Fetch the target revision's body and swap it into the cache with a
+   * shallow-merge that preserves page-level fields (grant / liker /
+   * commentCount / …). Guarded by a `revision.createdAt` monotonicity
+   * check so an out-of-order / stale fetch never rewinds the cache.
+   * Returns whether the cache was actually advanced.
+   */
+  const swapToRevision = async (targetRevisionId: string): Promise<boolean> => {
+    // Existence check before spending a fetch; the authoritative
+    // monotonicity compare happens post-fetch against the *current* cache.
+    if (!readWrapper()?.page) return false;
+
+    let fetchedRevision: PageWithRevision['revision'];
+    try {
+      const response = await apiClientV2.pages.revisions[':id'].$get({ param: { id: targetRevisionId } });
+      if (!response.ok) return false;
+      fetchedRevision = (await response.json()).revision;
+    } catch {
+      // A 404 (revision gone / grant lost — body stays protected) or a
+      // transient error: skip the swap, current view is preserved.
+      return false;
+    }
+
+    // Re-read the cache AFTER the fetch: overlapping page-updated frames can
+    // spawn concurrent fetches, and comparing against a pre-fetch snapshot
+    // would let a late-resolving older fetch rewind a newer revision a
+    // faster one already wrote. Compare against the *current* cache — no
+    // await between this read and the setQueryData below, so it is atomic in
+    // JS's single thread — and drop the stale result instead. Monotonicity
+    // uses `createdAt` (ms), not ObjectId order, so a cross-instance
+    // same-second save cannot rewind the cache either.
+    const currentPage = readWrapper()?.page;
+    if (!currentPage) return false;
+    const currentTime = Date.parse(currentPage.revision.createdAt);
+    const fetchedTime = Date.parse(fetchedRevision.createdAt);
+    if (!(fetchedTime > currentTime)) return false;
+
+    // Capture the version currently shown BEFORE writing, so "read the
+    // previous version" renders the true pre-swap body.
+    setSnapshot({ page: currentPage, notFound: false, notGranted: false });
+
+    const scrollY = typeof window !== 'undefined' ? window.scrollY : 0;
+    const newPage: PageWithRevision = {
+      ...currentPage,
+      revision: fetchedRevision,
+      latestRevision: fetchedRevision._id,
+      // Advance the page metadata too, or the meta chip / header would keep
+      // showing the previous revision's editor and timestamp while the body
+      // changed under them. `author` is populated by GET /pages/revisions/:id
+      // (findRevision `.populate('author')`); fall back to the cached value
+      // if it is ever absent.
+      lastUpdateUser: fetchedRevision.author ?? currentPage.lastUpdateUser,
+      updatedAt: fetchedRevision.createdAt,
+    };
+    queryClient.setQueryData<PageQueryData>(pageQueryKey, { page: newPage, notFound: false, notGranted: false });
+
+    // Restore scroll after React commits + the browser paints the new
+    // body, so the reader's position is preserved across the swap.
+    if (typeof window !== 'undefined') {
+      requestAnimationFrame(() => window.scrollTo(0, scrollY));
+    }
+    return true;
+  };
+
+  const performForwardSwap = async (): Promise<void> => {
+    const target = latestSeenRevisionIdRef.current;
+    if (!target) return;
+    const editorDisplayName = latestEditorRef.current ?? '';
+    if (await swapToRevision(target)) {
+      dispatchBanner({ type: 'swapped', editorDisplayName });
+    }
+  };
+
+  const scheduleForwardSwap = (): void => {
+    // In-flight guard (mirrors use-notifications-socket): the first frame
+    // of a burst schedules the single swap; later frames only update the
+    // `latestSeen*` refs the timer reads when it fires.
+    if (debounceTimerRef.current !== null) return;
+    debounceTimerRef.current = window.setTimeout(() => {
+      debounceTimerRef.current = null;
+      void performForwardSwap();
+    }, LIVE_SYNC_DEBOUNCE_MS);
+  };
+
+  // Handed to `usePresence`; already self-suppressed (editor !== self).
+  const handlePageUpdated = (payload: PresencePageUpdatedMessage): void => {
+    latestSeenRevisionIdRef.current = payload.revisionId;
+    latestEditorRef.current = payload.editorDisplayName;
+    if (isDisplayingOld(bannerState)) {
+      // The reader chose the old version — never auto-advance the cache;
+      // just escalate the banner to "an even newer version was saved".
+      dispatchBanner({ type: 'newer-while-old', editorDisplayName: payload.editorDisplayName });
+      return;
+    }
+    scheduleForwardSwap();
+  };
+
+  // feature-live-page-comment-sync — a comment was added / removed on
+  // the page by another user. Re-fetch the comment list so it reflects
+  // the change in place; the new-comment highlight is derived by
+  // PageComments from the resulting query-data diff (spec §highlight), so
+  // no id is threaded through here. Deliberately does NOT invalidate
+  // ['page'] (unlike `useInvalidateComments`): the header commentCount
+  // chip live-update is out of scope, and a comment creates no revision
+  // so the page cache is unaffected here regardless.
+  const handleCommentChanged = (payload: PresenceCommentChangedMessage): void => {
+    void queryClient.invalidateQueries({ queryKey: commentKeys.detail(payload.pageId) });
+  };
+
+  const presenceEnabled = Boolean(page) && !isStalePageRevision(page) && page?.status !== PageStatusEnum.DRAFT && isAuthenticated;
+  const presence = usePresence(presenceEnabled && page ? page._id : null, {
+    onPageUpdated: handlePageUpdated,
+    onCommentChanged: handleCommentChanged,
+  });
+
+  const handleReadOld = (): void => dispatchBanner({ type: 'read-old' });
+  const handleShowLatest = (): void => {
+    void (async () => {
+      // Only `showing-latest-again` is behind the cache (newer saves
+      // arrived while showing old); `showing-old`'s cache is already the
+      // latest, so switching the view is enough. Advance the cache first
+      // and flip the view ONLY if it succeeds — otherwise the banner would
+      // claim "latest" while the cache is still behind. A failed fetch
+      // keeps `showing-latest-again` so the reader can retry.
+      if (bannerState.kind === 'showing-latest-again') {
+        const target = latestSeenRevisionIdRef.current;
+        if (!target || !(await swapToRevision(target))) return;
+      }
+      dispatchBanner({ type: 'show-latest' });
+    })();
+  };
+  const handleDismiss = (): void => dispatchBanner({ type: 'dismiss' });
+
+  // SPA navigation swaps the `path` prop WITHOUT remounting PageView, so
+  // reset every live-sync view-state or page X's banner / snapshot would
+  // bleed into page Y. (`usePresence` self-resets on `pageId` change.)
+  useEffect(() => {
+    dispatchBanner({ type: 'dismiss' });
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSnapshot(null);
+    latestSeenRevisionIdRef.current = null;
+    latestEditorRef.current = null;
+    if (debounceTimerRef.current !== null) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
+  }, [path]);
+
+  // Which revision is actually on screen: normally the latest `page`, but
+  // the local snapshot while the reader chose "read the previous version"
+  // (the `['page']` cache always holds the latest — never rewound — so the
+  // old view is immune to background refetch / mutation invalidation). The
+  // `path` match guards SPA navigation: the reset effect runs post-commit,
+  // so `path` / cached `page` flip to the new page one render before the
+  // snapshot clears; falling back to `page` keeps page X's old body from
+  // flashing under page Y. Derived here (before the early returns, so hook
+  // order stays stable) so the TOC + its scroll-spy track the *displayed*
+  // body — otherwise the right-rail / compact TOC would point at the latest
+  // revision's anchors over an older body. Shared with the render block.
+  const displayedPage = isDisplayingOld(bannerState) && snapshot?.page && snapshot.page.path === page?.path ? snapshot.page : (page ?? null);
+  const toc = displayedPage?.revision?.meta?.toc ?? EMPTY_TOC;
+  const activeTocId = useTocScrollSpy(toc);
 
   if (isLoading) {
     return <LoadingSpinner message={m['page.loading']()} />;
@@ -191,23 +387,30 @@ export function PageView({ path, revisionId }: PageViewProps) {
     const handleEdit = () => {
       router.push(`/_edit?page_id=${encodeURIComponent(page._id)}`);
     };
+    // `displayedPage` (computed above the early returns) is the snapshot
+    // while reading the previous version, else the latest `page`. The
+    // `?? page` only narrows the nullable top-level value to non-null inside
+    // this `if (page)` block — it can never actually fall back here.
+    const renderedPage = displayedPage ?? page;
     return (
       <PageTocColumns toc={toc} activeTocId={activeTocId}>
+        <LiveSyncBanner state={bannerState} onReadOld={handleReadOld} onShowLatest={handleShowLatest} onDismiss={handleDismiss} />
         <article className="space-y-12">
           {isStaleRevision && page.revision?._id && <StaleRevisionBanner pagePath={page.path} pageId={page._id} revisionId={page.revision._id} />}
           <PageHeader
-            page={page}
+            page={renderedPage}
             onEdit={handleEdit}
             showActions={!isStaleRevision}
             showPresence={!isStaleRevision && !isDraft}
             sticky={!isStaleRevision}
             toc={toc}
             activeTocId={activeTocId}
+            presence={presence}
           />
           {showPortalizeBanner && (
             <PortalizeBanner page={page} title={m['page.portalize_descendants_title']()} description={m['page.portalize_descendants_body']()} />
           )}
-          <PageContent page={page} />
+          <PageContent page={renderedPage} />
           {!isStaleRevision && (
             <>
               <BacklinkList pageId={page._id} />

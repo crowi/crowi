@@ -9,7 +9,7 @@ import { Breadcrumb } from '@/components/breadcrumb';
 import { Button } from '@/components/ui/button';
 import { pageDisplayName } from '@/lib/page-path';
 import { useAuth } from '@/lib/use-auth';
-import { usePresence } from '@/lib/use-presence';
+import type { UsePresenceResult } from '@/lib/use-presence';
 import { useMeasuredHeight, useStickyHeader } from '@/lib/use-sticky-header';
 import { cn } from '@/lib/utils';
 import type { LucideIcon } from 'lucide-react';
@@ -45,6 +45,16 @@ interface PageHeaderProps {
    * page someone is actually reading right now.
    */
   showPresence?: boolean;
+  /**
+   * The result of `usePresence(pageId)`, hoisted to the PageView so a
+   * single `/presence` WebSocket is shared across the expanded / compact
+   * header rows (feature-live-page-content-sync lift). Optional because
+   * the deleted-page and user-cover hosts render PageHeader without
+   * presence (they pass `showPresence` false, so the row is never shown);
+   * only the live view supplies it. The `LivePresenceRow` gate narrows
+   * `undefined` away before rendering.
+   */
+  presence?: UsePresenceResult;
   /**
    * `false` opts out of the sticky / compact behaviour — the header
    * renders inline in its expanded form and no fixed overlay is
@@ -117,6 +127,7 @@ export function PageHeader({
   sticky = false,
   toc = [],
   activeTocId = null,
+  presence,
 }: PageHeaderProps) {
   const { user, isAuthenticated } = useAuth();
 
@@ -139,12 +150,10 @@ export function PageHeader({
   const { compact: scrolled } = useStickyHeader(expandedHeight);
   const compact = sticky && scrolled;
 
-  // Hoisted so the expanded and compact LivePresenceRow share ONE
-  // WebSocket. With each row calling `usePresence` itself the compact
-  // mount on scroll opened a second WS and the viewer list lagged
-  // 2-3s behind the expanded row every time the header stuck.
-  // `usePresence(null)` is a no-op when presence is off.
-  const presence = usePresence(showPresence && isAuthenticated ? page._id : null);
+  // `presence` is supplied by the PageView (single hoisted `usePresence`
+  // call → one shared `/presence` WebSocket for the expanded + compact
+  // rows). Hosts that don't show presence (deleted page / user cover)
+  // omit it; the `LivePresenceRow` gates below narrow it before use.
 
   const isLiked = isAuthenticated && !!user && (page.liker ?? []).includes(user.id);
   // Separate "link-only" (RESTRICTED — anyone with the URL can view)
@@ -258,7 +267,7 @@ export function PageHeader({
 
       {((showPresence && isAuthenticated) || tocMenu) && (
         <div className="flex items-center gap-2">
-          <div className="min-w-0 flex-1">{showPresence && isAuthenticated && <LivePresenceRow presence={presence} />}</div>
+          <div className="min-w-0 flex-1">{showPresence && isAuthenticated && presence && <LivePresenceRow presence={presence} />}</div>
           {tocMenu}
         </div>
       )}
@@ -363,7 +372,7 @@ export function PageHeader({
             </div>
             {((showPresence && isAuthenticated) || tocMenuCompact) && (
               <div className="flex items-center gap-2">
-                <div className="min-w-0 flex-1">{showPresence && isAuthenticated && <LivePresenceRow presence={presence} size="compact" />}</div>
+                <div className="min-w-0 flex-1">{showPresence && isAuthenticated && presence && <LivePresenceRow presence={presence} size="compact" />}</div>
                 {tocMenuCompact}
               </div>
             )}

@@ -11040,6 +11040,31 @@ paths:
                       - message
                 required:
                   - error
+        '404':
+          description: >-
+            Page / revision not found, or the caller cannot access it (existence
+            hidden)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - PAGE_NOT_FOUND
+                      message:
+                        type: string
+                        enum:
+                          - Page not found
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
     post:
       tags:
         - comment

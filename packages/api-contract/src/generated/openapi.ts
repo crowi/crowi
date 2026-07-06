@@ -3855,6 +3855,22 @@ export interface paths {
                         };
                     };
                 };
+                /** @description Page / revision not found, or the caller cannot access it (existence hidden) */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "PAGE_NOT_FOUND";
+                                /** @enum {string} */
+                                message: "Page not found";
+                            };
+                        };
+                    };
+                };
             };
         };
         put?: never;

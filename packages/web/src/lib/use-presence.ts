@@ -1,8 +1,14 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import {
+  type PresenceCommentChangedMessage,
+  type PresencePageUpdatedMessage,
+  PresenceServerMessageSchema,
+  type PresenceTokenResponse,
+  type PresenceViewer,
+} from '@crowi/api-contract';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { PresenceViewersMessageSchema, type PresenceTokenResponse, type PresenceViewer } from '@crowi/api-contract';
+import { useEffect, useRef, useState } from 'react';
 import { apiClientV2 } from './api-client';
 import { createAntiFlickerState, ingestBroadcast, refreshAdmissions, visibleViewers } from './presence-anti-flicker';
 import { resolveWsUrl } from './resolve-ws-url';
@@ -52,6 +58,29 @@ const PRESENCE_CLOSE_NO_ACCESS = 4403;
 const PRESENCE_CLOSE_INVALID_TOKEN = 4401;
 
 export type PresenceStatus = 'connecting' | 'connected' | 'error';
+
+/**
+ * Options for {@link usePresence}. `onPageUpdated` is the
+ * feature-live-page-content-sync read-side soft-refresh hook: it fires
+ * once per `page-updated` frame that is NOT the caller's own save. It is
+ * delivered as a callback (not a returned value) because it is a
+ * one-shot event, not render state — mixing it into the returned
+ * viewer-list state would churn renders. The callback is read through a
+ * ref, so passing a fresh closure each render is fine and never rebuilds
+ * the WebSocket.
+ */
+export interface UsePresenceOptions {
+  onPageUpdated?: (payload: PresencePageUpdatedMessage) => void;
+  /**
+   * feature-live-page-comment-sync read-side hook: fires once per
+   * `comment-changed` frame that is NOT the caller's own added comment
+   * (`changeType === 'added' && actorUserId === selfUserId` is
+   * suppressed; `'removed'` always fires — the deleter is unknown at the
+   * event layer and a redundant re-fetch is idempotent). Same
+   * ref-delivered one-shot contract as `onPageUpdated`.
+   */
+  onCommentChanged?: (payload: PresenceCommentChangedMessage) => void;
+}
 
 export interface UsePresenceResult {
   /**
@@ -160,7 +189,7 @@ function usePresenceToken(pageId: string | null | undefined) {
   });
 }
 
-export function usePresence(pageId: string | null | undefined): UsePresenceResult {
+export function usePresence(pageId: string | null | undefined, options?: UsePresenceOptions): UsePresenceResult {
   const { data: tokenData, isError: tokenError } = usePresenceToken(pageId);
 
   const [viewers, setViewers] = useState<PresenceViewer[]>([]);
@@ -169,6 +198,21 @@ export function usePresence(pageId: string | null | undefined): UsePresenceResul
   // The anti-flicker state survives reconnects within the same page
   // session, so a viewer admitted before a blip stays admitted.
   const flickerRef = useRef(createAntiFlickerState());
+
+  // Keep the latest `onPageUpdated` in a ref so the WebSocket effect
+  // (deps: pageId / token / selfUserId) never rebuilds when the callback
+  // identity changes across renders — the same pattern the notifications
+  // socket uses for its queryClient closure.
+  const onPageUpdatedRef = useRef(options?.onPageUpdated);
+  useEffect(() => {
+    onPageUpdatedRef.current = options?.onPageUpdated;
+  });
+
+  // Same ref pattern for the comment-changed callback.
+  const onCommentChangedRef = useRef(options?.onCommentChanged);
+  useEffect(() => {
+    onCommentChangedRef.current = options?.onCommentChanged;
+  });
 
   const token = tokenData?.token ?? null;
   const selfUserId = tokenData?.selfUserId ?? null;
@@ -241,8 +285,36 @@ export function usePresence(pageId: string | null | undefined): UsePresenceResul
           // Non-JSON frame — ignore, presence only speaks JSON.
           return;
         }
-        const message = PresenceViewersMessageSchema.safeParse(parsed);
+        const message = PresenceServerMessageSchema.safeParse(parsed);
         if (!message.success) return;
+
+        // feature-live-page-content-sync: a `page-updated` frame drives
+        // the read-side soft-refresh, not the viewer list. Suppress the
+        // caller's own saves (`editorUserId === selfUserId`); a `null`
+        // selfUserId (token not yet resolved) is treated as "not me" so
+        // the signal is never silently dropped during that brief window.
+        if (message.data.type === 'page-updated') {
+          if (message.data.editorUserId !== selfUserId) {
+            onPageUpdatedRef.current?.(message.data);
+          }
+          return;
+        }
+
+        // feature-live-page-comment-sync: a `comment-changed` frame
+        // drives the live comment list, not the viewer list. Suppress the
+        // caller's own added comment (`actorUserId === selfUserId`); a
+        // `removed` frame carries no actorUserId and always fires (the
+        // deleter is unknown at the event layer, and a redundant re-fetch
+        // is idempotent). A `null` selfUserId (token not yet resolved) is
+        // treated as "not me" so the signal is never silently dropped.
+        if (message.data.type === 'comment-changed') {
+          const isOwnAdd = message.data.changeType === 'added' && message.data.actorUserId === selfUserId;
+          if (!isOwnAdd) {
+            onCommentChangedRef.current?.(message.data);
+          }
+          return;
+        }
+
         // A parsed `viewers` broadcast proves the connection is truly
         // established — the server rejects a bad token *before* sending
         // any frame. Resetting the backoff here (rather than on `onopen`,

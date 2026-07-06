@@ -48,6 +48,10 @@ export const listCommentsRoute = createRoute({
       description: 'Authentication required',
       content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
     },
+    404: {
+      description: 'Page / revision not found, or the caller cannot access it (existence hidden)',
+      content: { 'application/json': { schema: PageNotFoundErrorSchema } },
+    },
   },
 });
 

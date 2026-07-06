@@ -65,4 +65,58 @@ describe('Comment', () => {
       expect(comments).toStrictEqual(0);
     });
   });
+
+  // feature-live-page-comment-sync — the presence-broadcast listener keys
+  // off these Comment events, so their firing semantics matter (crowi-review
+  // CLS-001 / CLS-006).
+  describe('live-sync Comment events', () => {
+    let commentEvent;
+
+    beforeAll(() => {
+      commentEvent = crowi.event('Comment');
+    });
+
+    test("'add' fires once on creation and not on a later re-save (CLS-006)", async () => {
+      const page = await Page.findOne({ path: '/grant/public' });
+      const creator = await User.findUserByUsername('anonymous1');
+      const adds = [];
+      const onAdd = (c) => adds.push(c);
+      commentEvent.on('add', onAdd);
+      try {
+        const created = await Comment.create({ page, creator, revision: undefined, comment: 'live add', commentPosition: undefined });
+        expect(adds).toHaveLength(1);
+        expect(adds[0]._id.toString()).toBe(created._id.toString());
+
+        // Re-saving an existing comment is not a creation → no 'add'.
+        created.comment = 'edited body';
+        await created.save();
+        expect(adds).toHaveLength(1);
+
+        await Comment.removeCommentById(created._id);
+      } finally {
+        commentEvent.off('add', onAdd);
+      }
+    });
+
+    test("'remove' fires only after the row is deleted (CLS-001)", async () => {
+      const page = await Page.findOne({ path: '/grant/public' });
+      const creator = await User.findUserByUsername('anonymous1');
+      const created = await Comment.create({ page, creator, revision: undefined, comment: 'to remove', commentPosition: undefined });
+
+      // The listener runs synchronously at emit time; issuing the count
+      // query then observes whether the delete already committed.
+      let countAtEmit;
+      const onRemove = () => {
+        countAtEmit = Comment.countDocuments({ _id: created._id });
+      };
+      commentEvent.on('remove', onRemove);
+      try {
+        await Comment.removeCommentById(created._id);
+        expect(countAtEmit).toBeDefined();
+        await expect(countAtEmit).resolves.toBe(0);
+      } finally {
+        commentEvent.off('remove', onRemove);
+      }
+    });
+  });
 });
