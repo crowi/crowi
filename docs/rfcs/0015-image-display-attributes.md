@@ -16,11 +16,14 @@
     direction for embeddable content. This RFC implements the image-specific
     version first and keeps the shape compatible with later plugin-registered
     affordances.
-  - RFC-0008 (Migration Framework) — its `renderer:rebuild` command is a **hard
-    release-sequencing dependency** for the `0.7.0`→`0.8.0` renderer-version bump:
-    the bump makes cached `renderedAst` stale, and `renderer:rebuild` is the
-    backfill path (§10). The bump must not ship before that rebuild is available.
 - **Related**:
+  - RFC-0008 (Migration Framework) — its `renderer:rebuild` command is an
+    **optional performance follow-up**, not a hard dependency. Bumping
+    `RENDERER_PIPELINE_VERSION` to `0.8.0` (in scope, §6.1/§10) makes old
+    revisions ride the existing parse-on-read-on-mismatch path — correct but at a
+    per-read compute cost. `renderer:rebuild` merely persists that recompute to
+    remove the cost; it can be sequenced afterwards and is not required for
+    correctness (§10).
   - RFC-0009 (Revision Storage Compaction) — rendered mdast and revision storage
     behavior remain the persistence boundary.
   - RFC-0016 (Native Apple app) — native clients render raw Markdown and should
@@ -60,12 +63,21 @@ auto-populate a `<figcaption>`; explicit `caption="..."` is deferred until the
 parser and accessibility rules are mature enough (see §7 for the accessibility
 rationale).
 
-The scope of v1 is deliberately two changes: (a) the `{...}` mdast attribute
-syntax, and (b) a shared img/figure render helper that re-validates display
-props. v1 does **not** change existing raw-HTML `<img>` behaviour beyond that
-re-validation, and it does **not** introduce renderer-version migration
-infrastructure — the `0.8.0` renderer-version bump depends on RFC-0008's
-`renderer:rebuild` (§10).
+The scope of v1 is deliberately three changes: (a) the `{...}` mdast attribute
+syntax, (b) a shared img/figure render helper that re-validates display props,
+and (c) the `RENDERER_PIPELINE_VERSION` bump from `0.7.0` to `0.8.0` that the new
+bundled transform requires (§6.1). The bump is required for correctness — without
+it, revisions saved under `0.7.0` return their stored pre-transform AST verbatim
+on read (`astIsFresh` treats an equal stored version as fresh,
+`packages/api/src/util/page-response.ts:162`), so the transform would never run
+on saved pages even though preview always recomputes it (`page-preview.ts:82`),
+breaking page-view↔preview parity. Bumping to `0.8.0` makes those revisions
+version-mismatch and recompute on read (§10), which restores parity. v1 does
+**not** change existing raw-HTML `<img>` behaviour beyond that re-validation, and
+it does **not** introduce renderer-version migration infrastructure — old
+revisions simply ride the existing parse-on-read-on-mismatch path at a documented
+per-read compute cost. RFC-0008's `renderer:rebuild` optionally persists that
+recompute to remove the cost (a sequenced follow-up, not a gate — §10).
 
 The editor adds a CodeMirror hover/focus affordance on image Markdown. The
 affordance lets authors add and edit width, block alignment, and float without
@@ -135,9 +147,12 @@ therefore belongs in the API renderer, not as a client-only preview rewrite.
   feature. The only raw-HTML `<img>` change here is that the shared render helper
   re-validates the four Crowi display props (§9); everything else about raw
   `<img>` prop-spread stays as it is today.
-- Renderer-version migration infrastructure. Backfilling stale `renderedAst`
-  after the `0.8.0` bump is RFC-0008's `renderer:rebuild` job, which this RFC
-  depends on rather than reinventing (§10).
+- Renderer-version *persistence* infrastructure. The `0.8.0` bump itself is in
+  scope and required (§6.1). What is out of scope is new machinery to *persist*
+  the read-time recompute — a persist-on-read write path, locking, or throttling.
+  Old revisions ride the existing parse-on-read-on-mismatch fallback; RFC-0008's
+  `renderer:rebuild` optionally backfills stale `renderedAst` later to drop the
+  per-read cost (§10). This RFC does not reinvent that.
 - Native iOS/macOS rendering support in v1.
 
 ## §4 Prior Art
@@ -225,8 +240,8 @@ Supported values:
 
 | Key | Values | Meaning |
 | --- | --- | --- |
-| `width` | positive number plus `%` or `px` | Display width. Percent values are capped to `1..100%`; pixel values are capped to an implementation-defined maximum such as `4096px`. |
-| `height` | positive number plus `%` or `px` | Display height. Width plus intrinsic aspect ratio remains preferred; height exists for constrained diagrams. |
+| `width` | positive number plus `%` or `px` | Display width. Valid range is the closed interval `1..100%` for percent and `1..4096px` for pixels; **an out-of-range value is dropped (not clamped)** — the attribute is ignored and the image renders at its default width. |
+| `height` | positive number plus `%` or `px` | Display height, with the same `1..100%` / `1..4096px` closed-interval range and the same **drop-not-clamp** rule as `width`. Width plus intrinsic aspect ratio remains preferred; height exists for constrained diagrams. |
 | `align` | `left`, `center`, `right` | Block placement without text wrapping. |
 | `float` | `left`, `right` | Opt-in text wrapping. On narrow screens, float is disabled and the figure becomes a normal block. |
 
@@ -251,13 +266,22 @@ The image attribute transform should run after headings and before wikilinks and
 mentions. That keeps the adjacent `{...}` text node intact before transforms
 that split or rewrite text nodes.
 
-The pipeline version should bump from `0.7.0` to `0.8.0`, because adding a
-bundled transform is a minor renderer-version change under the documented policy
-(`packages/api/src/renderer/version.ts:8-16`,
-`packages/api/src/renderer/version.ts:30`). The *release* of that bump is gated on
-RFC-0008's `renderer:rebuild` (§10): the transform can be built first, but
-`RENDERER_PIPELINE_VERSION` flips to `0.8.0` only once stale `renderedAst` can be
-backfilled.
+The pipeline version **must** bump from `0.7.0` to `0.8.0` in the same change,
+because adding a bundled transform is a minor renderer-version change under the
+documented policy (`packages/api/src/renderer/version.ts:8-16`,
+`packages/api/src/renderer/version.ts:30`). This is not optional: the read path
+returns a stored `renderedAst` verbatim whenever the stored `rendererVersion`
+equals the running version (`astIsFresh`,
+`packages/api/src/util/page-response.ts:162`). If the transform shipped while
+`RENDERER_PIPELINE_VERSION` stayed `0.7.0`, every revision already saved at
+`0.7.0` would keep returning its pre-transform stored AST — the transform would
+never run on saved pages. Preview, by contrast, always recomputes from the raw
+body (`crowi.getRenderer().run(...)`,
+`packages/api/src/hono/handlers/page-preview.ts:82`), so the transform *would*
+run there. That divergence breaks page-view↔preview parity on exactly the pages
+that already exist. Bumping to `0.8.0` makes the stored versions mismatch, which
+drives the read path through the existing parse-on-read recompute
+(`page-response.ts:183`) so the transform applies on read and parity holds (§10).
 
 ### §6.2 Parser Behavior
 
@@ -316,8 +340,11 @@ name:
 - The shared web image helper (defined once, wired on every img/figure render
   path) re-parses each display property at render time:
   - `data-crowi-image-width` / `-height`: re-parsed as a bounded positive number
-    followed by exactly `%` or `px`, applying the same caps as §5 (`1..100%`,
-    `1..4096px`). Anything else is dropped.
+    followed by exactly `%` or `px`, accepted only inside the same closed-interval
+    range as §5 (`1..100%`, `1..4096px`). **An out-of-range value is dropped, not
+    clamped** — this is the single canonical rule, applied identically by the API
+    transform (§6.2) and this web helper. Anything else (non-numeric, missing or
+    wrong unit, out of range) is dropped.
   - `data-crowi-image-align`: accepted only if it is exactly `left`, `center`, or
     `right`.
   - `data-crowi-image-float`: accepted only if it is exactly `left` or `right`.
@@ -383,15 +410,30 @@ The figure container must not inherit `src` or `alt` from the original image; on
 the inner `<img>` carries image URL and alt text. v1 emits **no** `<figcaption>`
 (see §7 for why alt-as-caption is dropped).
 
-**Renderer-owned figure marker.** `figure` and `figcaption` are already known HTML
-tags (`packages/web/src/components/editor/known-tags.ts:59-60`), so an author can
-write a raw `<figure>` today and it passes through the renderer. The web component
-must therefore style **only** transform-generated figures, identified by a
-renderer-owned marker the transform stamps (a fixed class such as `crowi-figure`,
-or a `data-` key). The figure component override allow-lists the props it honours
-(the marker class, the renderer-owned layout classes) and ignores arbitrary props
-on raw `<figure>`; a user raw `<figure>` without the marker renders as an ordinary
-passthrough figure, unaffected by this feature's layout CSS.
+**Figure marker — a forged-marker-safe styling opt-in, not a trust boundary.**
+`figure` and `figcaption` are already known HTML tags
+(`packages/web/src/components/editor/known-tags.ts:59-60`), so an author can write
+a raw `<figure class="crowi-figure crowi-image-float-right">` today and it passes
+through the renderer. `hast-util-raw` parses it into a hast element carrying that
+exact className, and because the figure component override runs with
+`passNode: false`, the component sees **only the user-controlled className** — no
+`node` context that could prove origin. The `crowi-figure` marker is therefore
+**forgeable and is not a trust/origin proof** (the same forgeability as the
+transport `data-*` in §6.3).
+
+The security model is deliberately **forged-marker-safe**: the marker is a
+*styling opt-in*, not a trust boundary. The figure override honours the marker by
+applying only **fixed renderer-owned layout classes that are safe CSS**
+(float / align / responsive collapse), and it derives any width / style **from
+re-validated values only — regardless of origin** (the same re-parse / enum /
+numeric re-validation the shared img helper performs in §6.3, applied on the
+figure path too). It never honours a raw `style` or arbitrary class on a
+`<figure>`. Consequently, a raw-HTML forged marker can only pull in cosmetic safe
+layout CSS the author could already apply by hand — it grants no new capability
+and is not an injection vector. A user raw `<figure>` without the marker renders
+as an ordinary passthrough figure, unaffected by this feature's layout CSS. §11's
+Phase 1 requires a test that a forged raw-HTML marker `<figure>` produces only
+safe layout CSS and no injection.
 
 **Preserve source position.** When the transform replaces a top-level `paragraph`
 with the synthetic `figure` node, it must copy the original paragraph's `position`
@@ -438,7 +480,9 @@ parent's child array so it never emits invalid `<p><figure>...`.
 ### §6.4 Layout Semantics
 
 `align` and `float` are separate axes, and both apply only to standalone images
-(the figure case); they are ignored on inline images (§6.3):
+(the figure case); they are ignored on inline images (§6.3). Concretely, they are
+applied **only on the `<figure>` component**, never on the `<img>` element (the
+img layer carries width/height only — §6.5 layer split):
 
 - `align=left|center|right` controls block placement only. It does not cause
   surrounding text to wrap.
@@ -452,10 +496,14 @@ breakpoint, floated figures render as normal blocks with `float: none`,
 The web renderer must implement an explicit `figure` component override and the
 shared image helper behavior in both page view and preview. `figure` is already a
 known HTML tag, but this feature needs a component override plus CSS classes to
-attach the layout contract rather than relying on unstyled passthrough, and the
-override must key off the renderer-owned figure marker (§6.3) so it styles only
-transform-generated figures, not user raw `<figure>`. v1 does not add a
-`figcaption` override for this feature (no auto-caption is emitted).
+attach the layout contract rather than relying on unstyled passthrough. The
+override keys off the `crowi-figure` marker (§6.3) so it applies this feature's
+layout CSS only to figures carrying the marker, leaving an unmarked user raw
+`<figure>` as ordinary passthrough. Because the marker is forgeable (§6.3), that
+layout CSS is restricted to safe renderer-owned classes and re-validated
+width/style regardless of origin, so a forged marker is cosmetic-only, not an
+injection. v1 does not add a `figcaption` override for this feature (no
+auto-caption is emitted).
 
 The helper should use fixed classes or data attributes for layout, for example
 `crowi-image`, `crowi-image-align-center`, and `crowi-image-float-right`. Width
@@ -514,16 +562,50 @@ RFC extends the image variant to accept the normalized display props from the
 shared helper, with an exact **merge** (not replace) contract so the existing
 modal/cursor behavior is never clobbered:
 
-- **style**: the helper's re-validated width/height `style` object is merged
+`InlineAttachmentLink` is an `<img>`-layer surface, so per the layer split below
+it receives **only width/height** — never `align` / `float`, which belong to the
+`<figure>` layer:
+
+- **style**: the helper's re-validated **width/height** `style` object is merged
   *into* the existing style object, i.e. `style={{ cursor: 'zoom-in', ...display }}`
   — the `cursor: zoom-in` affordance is preserved and width/height are added, not
   substituted for the whole object.
-- **className**: the re-validated layout classes are merged with the incoming
-  `className` (the `imgClassName` from `page-content.tsx:373`), not replaced.
+- **className**: the re-validated **width/height** class(es) are merged with the
+  incoming `className` (the `imgClassName` from `page-content.tsx:373`), not
+  replaced. **No align/float class is added on the `<img>`** — the img override has
+  no node context (`passNode: false`) and cannot know if this image is a standalone
+  figure's child; align/float live on the `<figure>` component only.
 - **modal handler + cursor**: the `onClick` handler and the `cursor: zoom-in`
   affordance remain, unchanged, page-view-only.
 - The variant accepts only the normalized display props from the shared helper —
   never arbitrary Markdown / raw-HTML props.
+
+**Layer split (width/height vs align/float).** Normalization happens once (the
+shared helper), but the two axes apply on different elements:
+
+- **width / height** apply on the `<img>` (plain img) or `InlineAttachmentLink`
+  (attachment img).
+- **align / float** apply **only in the `<figure>` component** (§6.4). The `img`
+  override runs with `passNode: false` (`render-mdast.ts:164-195`), so it has no
+  node context and cannot tell whether an `<img>` is a standalone figure's child or
+  a mid-sentence inline/raw image. It therefore applies only the context-free-safe
+  width/height and never applies the block-level align/float — matching the inline
+  rule in §6.3 (inline and raw imgs never receive align/float).
+
+**Standalone attachment image → figure.** When a *standalone attachment* image
+(e.g. `![alt](/api/v2/attachments/<id>){width=70% float=right}` alone in its
+paragraph) is synthesized into a `<figure>`, the figure's inner `<img>` still
+carries the attachment URL, so on page view it flows through the `img` override
+and `extractAttachmentId` re-wraps it as an `InlineAttachmentLink`
+(`page-content.tsx:377-379`). The resulting structure is
+`<figure class="crowi-figure crowi-image-float-right">` → `InlineAttachmentLink`
+(inner `<img>` with `cursor: zoom-in` + modal). The split avoids double-applying:
+the **figure** carries align/float; the **inner attachment img** carries
+width/height; neither axis is applied on both. (Preview does not route attachments
+through the modal, so its inner element is a plain `<img>` with the same
+width/height.) A test must cover this standalone-attachment-figure case, asserting
+align/float on the figure only, width/height on the inner img only, and the
+`cursor: zoom-in` + modal preserved.
 
 The implementation must include a page-view test exercising an attachment image
 with display attributes, plus a **parity assertion** that the attachment path
@@ -601,7 +683,16 @@ The image affordance should:
 - show controls for width, align, and float (with align / float presented as
   standalone-image options, matching §6.3);
 - apply edits by re-locating the current image syntax in `view.state.doc`
-  before dispatching, instead of trusting stale offsets.
+  before dispatching, instead of trusting stale offsets;
+- **respect read-only.** The affordance is a mutation surface, so it must hide /
+  disable its controls and make apply a no-op whenever `view.state.readOnly` is
+  true — the same live read-only source the existing drop/paste handlers gate on
+  (`packages/web/src/components/editor/drop-handler.ts:152-160`, `isReadOnly(view)`
+  = `view.state.readOnly`). Read-only can flip mid-session (the 20-editor collab
+  cap downgrades the connection to read-only via the token's readonly bit; the
+  editor reconfigures the readonly compartment so `state.readOnly` always reflects
+  the current mode), so the affordance must read the live flag rather than a
+  mount-time value. A mid-session read-only-flip test is required.
 
 The affordance shape should be compatible with RFC-0013 Decision 8, where embed
 affordances are generic and plugin-registered (`docs/rfcs/0013-slack-plugin.md:394-400`).
@@ -632,7 +723,9 @@ The renderer must enforce these invariants:
 - Only the keys `width`, `height`, `align`, and `float` are recognized in the
   `{...}` block.
 - `width` and `height` accept only a positive numeric value plus `%` or `px`,
-  within the §5 caps.
+  inside the §5 range (`1..100%` / `1..4096px`); an out-of-range value is
+  **dropped, not clamped** (the single canonical rule shared by transform and
+  helper).
 - `align` accepts only `left`, `center`, or `right`.
 - `float` accepts only `left` or `right`.
 - Unknown keys are ignored.
@@ -642,12 +735,16 @@ The renderer must enforce these invariants:
 - Renderer-owned `data-crowi-image-*` properties are transport-only. The shared
   web helper **re-validates each value at render time** (a bounded number plus
   `%`|`px` for width/height, the fixed enums for align/float) and applies only
-  well-formed values, then strips the transport properties. It does this the same
-  way for values that came from the Crowi transform and for values authored in
-  raw HTML, so a forged `data-crowi-image-*` cannot inject anything the enum /
-  numeric grammar would not already allow a Markdown author to write. The helper
-  never forwards transport `data-*` (or any unknown `data-*`) to the final
-  `<img>`.
+  well-formed values, then strips **only those four transport properties**. It
+  does this the same way for values that came from the Crowi transform and for
+  values authored in raw HTML, so a forged `data-crowi-image-*` cannot inject
+  anything the enum / numeric grammar would not already allow a Markdown author to
+  write. The helper never forwards the four transport `data-crowi-image-*` keys to
+  the final `<img>`. **It does not touch any other raw `<img>` prop** — `style`,
+  `class`, `width`, `height`, and unknown `data-*` on a raw `<img>` pass through
+  unchanged (byte-identical for unrelated raw imgs, §10). Stripping unknown
+  `data-*` or forbidding raw `style`/`class`/`width`/`height` passthrough is
+  out of scope (a separate raw-HTML hardening RFC, §3).
 - Layout classes are chosen from fixed renderer-owned values, not from user
   input.
 - Width/height React `style` is generated from fixed keys after re-validation,
@@ -701,40 +798,57 @@ New attribute blocks degrade acceptably outside Crowi. Renderers that support
 Pandoc-style attributes may interpret the block. Renderers that do not support
 it will usually show `{...}` as literal text after the image.
 
-Persisted `renderedAst` requires renderer-version handling, and this RFC resolves
-it by **sequencing the `0.8.0` bump behind RFC-0008's `renderer:rebuild`**, not by
-inventing new persistence machinery here.
+Persisted `renderedAst` requires a renderer-version bump, and the bump is **in
+scope and required** for this feature (§6.1) — the read path returns a stored AST
+verbatim whenever its stored version equals the running version, so the transform
+would never reach saved pages under an unchanged `0.7.0`. This RFC bumps
+`RENDERER_PIPELINE_VERSION` to `0.8.0` and relies on the **existing**
+parse-on-read-on-mismatch path for old revisions; it does not invent new
+persistence machinery.
 
-Revisions saved with pipeline `0.7.0` carry a stored renderer version, so after
-the bump to `0.8.0` they mismatch the running pipeline and the read path
-recomputes the full rendered AST on every read
-(`astIsFresh` at `packages/api/src/util/page-response.ts:155-162`; the recompute
-via `runRender` at `packages/api/src/util/page-response.ts:183`). That existing
-parse-on-read fallback does not persist the recomputed AST, so the parse /
-transform / Shiki cost is paid on every read until the page is re-saved or a
-rebuild job writes fresh artifacts. This recent `0.7.0` corpus is the main
-performance cliff.
+How the bump behaves on the existing corpus:
 
-The resolution is a hard dependency, not a new mechanism invented in this RFC:
+- Revisions saved with pipeline `0.7.0` carry a stored renderer version, so after
+  the bump to `0.8.0` they mismatch the running pipeline and the read path
+  recomputes the full rendered AST on read (`astIsFresh` at
+  `packages/api/src/util/page-response.ts:155-162`; the recompute via `runRender`
+  at `packages/api/src/util/page-response.ts:183`). Because the recompute runs the
+  full pipeline — including the new image-attrs transform — the served page-view
+  AST and the preview AST are produced by the *same* transform set, so **parity
+  holds** (§6.5): both surfaces recompute on mismatch.
+- That existing parse-on-read fallback does not persist the recomputed AST, so the
+  parse / transform / Shiki cost is paid on each read of an old revision until the
+  page is re-saved (a save re-stamps `rendererVersion` to `0.8.0` and persists the
+  fresh AST, `revision.ts:346-347`) or a rebuild job writes fresh artifacts. This
+  recent `0.7.0` corpus carries a one-time-per-read compute cost until then. This
+  is a performance consideration, **not** a correctness gate.
+- Missing renderer versions remain trusted as fresh
+  (`packages/api/src/util/page-response.ts:155-162`), so very old stored artifacts
+  (saved before `rendererVersion` existed) do NOT auto-recompute — they keep
+  serving their stored AST and need an explicit re-save or rebuild if operators
+  want historical pages to pick up the new rendering.
+
+RFC-0008's `renderer:rebuild` is an **optional performance follow-up**, not a
+prerequisite:
 
 - `renderer:rebuild` is currently deferred to RFC-0008
   (`docs/rfcs/0002-renderer-plugin-architecture.md:100`;
-  `packages/api/src/renderer/version.ts:25`). This RFC makes shipping that rebuild
-  job a **release-sequencing gate**: the `0.8.0` renderer-version bump MUST NOT
-  ship before RFC-0008's `renderer:rebuild` is available to backfill stale
-  `renderedAst` / `rendererVersion`.
-- Until rebuild ships, old revisions rely on the **existing** parse-on-read
-  fallback (`page-response.ts:155-162,183`) with a documented one-time
-  per-request CPU cost. This RFC does not add a persist-on-read write path,
-  locking, or throttling — that would duplicate infrastructure RFC-0008 owns.
-- Missing renderer versions remain trusted as fresh
-  (`packages/api/src/util/page-response.ts:155-162`), so very old stored artifacts
-  (saved before `rendererVersion` existed) still need explicit rebuild tooling or
-  a re-save if operators want historical pages to pick up the new rendering.
+  `packages/api/src/renderer/version.ts:25`). It persists the read-time recompute
+  by writing fresh `renderedAst` / `rendererVersion` back to old revisions, which
+  removes the per-read cost above. It is a performance mitigation, sequenced as a
+  follow-up — the `0.8.0` bump does not wait on it and is correct without it.
+- This RFC does not add a persist-on-read write path, locking, or throttling —
+  that persistence is exactly what RFC-0008 owns. Until rebuild runs, old
+  revisions ride the parse-on-read-on-mismatch fallback
+  (`page-response.ts:155-162,183`) and remain correct.
 
-Because the bump is gated on RFC-0008, the practical rollout is: land the
-transform + web helper + tests on `0.7.0` behavior first if desired, and flip
-`RENDERER_PIPELINE_VERSION` to `0.8.0` only once `renderer:rebuild` can run.
+**Release / ops implication.** Shipping the `0.8.0` bump triggers a read-time
+recompute across the entire `0.7.0` corpus (every read of a not-yet-re-saved page
+pays the parse/transform/Shiki cost) until those pages are re-saved or a rebuild
+job backfills them. Operators sequencing the rollout should plan for this
+transient CPU cost — for example by scheduling `renderer:rebuild` (once
+available) shortly after the bump — but they do **not** need to block the bump on
+it.
 
 ## §11 Phased Plan
 
@@ -742,7 +856,9 @@ transform + web helper + tests on `0.7.0` behavior first if desired, and flip
 
 - Add `packages/api/src/renderer/core/image-attrs.ts`.
 - Register it in `buildCorePlugins` after headings and before wikilinks.
-- Add unit tests for: valid width/height, align, float, float-over-align
+- Add unit tests for: valid width/height (range boundaries `100%` / `4096px` OK),
+  out-of-range width/height **dropped, not clamped** (`200%` / `5000px` / `0%` /
+  `0px` → attribute dropped, image at default), align, float, float-over-align
   precedence, unknown-key ignoring, invalid-value ignoring, partial text-node
   preservation, bounded malformed-block scanning, whitespace / soft-break
   handling, inline image behavior (width/height applied, align/float **ignored**),
@@ -762,15 +878,20 @@ transform + web helper + tests on `0.7.0` behavior first if desired, and flip
   `cursor: zoom-in` + modal handler, not replacing them).
 - Add web tests: a re-validation test proving a forged raw-HTML
   `<img data-crowi-image-*>` with a malformed value produces no style/class; a
+  forged raw-HTML marker `<figure class="crowi-figure …">` test proving it applies
+  only safe layout CSS and no injection (the marker is not a trust proof, §6.3); a
   page-view attachment test with display attributes; and a parity assertion that
   the attachment path and the preview path yield the same final `style` /
   `className` for the same input (aside from the page-view-only cursor/modal).
 - Ensure preview via `POST /api/v2/pages/preview` and saved page rendering match
   for image-attribute interpretation, including attachment image URLs.
-- Bump `RENDERER_PIPELINE_VERSION` from `0.7.0` to `0.8.0` — gated on RFC-0008's
-  `renderer:rebuild` per §10. The bump MUST NOT be released before that rebuild
-  job is available; until then, land the transform + helper on current behavior
-  and flip the version only once rebuild can backfill stale `renderedAst`.
+- Bump `RENDERER_PIPELINE_VERSION` from `0.7.0` to `0.8.0` in this same change
+  (§6.1/§10) — required, not optional. Without it, saved `0.7.0` revisions keep
+  returning their pre-transform stored AST while preview recomputes, breaking
+  parity. The bump makes old revisions recompute on read (existing
+  parse-on-read-on-mismatch path), so the transform applies and parity holds.
+  RFC-0008's `renderer:rebuild` is an optional later step that persists that
+  recompute to drop the per-read cost — it does not gate this bump.
 
 ### Phase 2: Editor Affordance
 
@@ -779,6 +900,9 @@ transform + web helper + tests on `0.7.0` behavior first if desired, and flip
 - Rewrite the source Markdown attribute block through transactions.
 - Register through `buildExtensions` so normal and collaborative editors both
   use the same built-in extension.
+- Gate the affordance on `view.state.readOnly`: hide / disable controls and make
+  apply a no-op when read-only. Add a mid-session read-only-flip test (controls
+  vanish / disable and apply becomes a no-op after the flip).
 - Keep the implementation compatible with the generic affordance direction from
   RFC-0013.
 
@@ -909,11 +1033,14 @@ language.
    a built-in CodeMirror extension first. The exact plugin SDK and runtime
    registration API for future embed affordances should be finalized with the
    RFC-0013 implementation work.
-3. **`renderer:rebuild` availability (dependency, not an open mechanism).** §10
-   resolves the renderer-version rollout by gating the `0.8.0` bump on RFC-0008's
-   `renderer:rebuild`; this RFC does not invent a persist-on-read path. The
-   residual item is purely sequencing: RFC-0008's rebuild job must land (or be
-   confirmed available) before the `0.8.0` version bump is released.
+3. **`renderer:rebuild` availability (optional follow-up, not a gate).** The
+   `0.8.0` bump is in scope and correct on its own (§6.1/§10): old revisions
+   recompute on read via the existing parse-on-read-on-mismatch path, so the
+   transform applies and parity holds. RFC-0008's `renderer:rebuild` is an
+   optional performance follow-up that *persists* that recompute to remove the
+   per-read cost. The residual item is purely an operational one: whether/when to
+   run rebuild after the bump to drop the transient per-read cost across the
+   `0.7.0` corpus. This does not block the feature.
 
 ## §14 References
 
