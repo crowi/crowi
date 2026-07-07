@@ -176,4 +176,26 @@ describe('InlineAttachmentLink — image variant', () => {
     fireEvent(img, clickEvent);
     expect(clickEvent.defaultPrevented).toBe(false);
   });
+
+  it('merges a caller-supplied display style (width/height) with cursor: zoom-in, never replacing it (RFC-0015 §D11 merge contract)', () => {
+    withQuery(
+      <InlineAttachmentProvider>
+        <InlineAttachmentLink attachmentId={HEX} variant="image" href={`/api/v2/attachments/${HEX}`} alt="a diagram" style={{ width: '60%' }} />
+      </InlineAttachmentProvider>,
+    );
+    const img = screen.getByRole('img', { name: 'a diagram' }) as HTMLImageElement;
+    expect(img.style.cursor).toBe('zoom-in');
+    expect(img.style.width).toBe('60%');
+  });
+
+  it('keeps cursor: zoom-in as the sole style when no display style is supplied', () => {
+    withQuery(
+      <InlineAttachmentProvider>
+        <InlineAttachmentLink attachmentId={HEX} variant="image" href={`/api/v2/attachments/${HEX}`} alt="a diagram" />
+      </InlineAttachmentProvider>,
+    );
+    const img = screen.getByRole('img', { name: 'a diagram' }) as HTMLImageElement;
+    expect(img.style.cursor).toBe('zoom-in');
+    expect(img.style.width).toBe('');
+  });
 });
