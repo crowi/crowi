@@ -121,6 +121,39 @@ export function lockBackoffDelay(attempt, base = 100, max = 1000) {
 }
 
 /**
+ * Reclaim a stale lockfile via an atomic rename, instead of a bare
+ * `unlinkSync`. Renaming a source path can only succeed for one caller
+ * across all racing processes; a loser observes `ENOENT` (the path is
+ * already gone) and falls through to the normal retry loop.
+ *
+ * A plain `unlinkSync(lockPath)` steal does not have this property: if
+ * process A unlinks the stale lock and then immediately re-acquires it
+ * (`openSync(lockPath, 'wx')`), a process B that already decided (from its
+ * own earlier `statSync`) to steal the same lock still succeeds when its
+ * queued `unlinkSync(lockPath)` finally runs, silently deleting A's brand
+ * new lock — both A and B then believe they hold it. Renaming first closes
+ * this for the common case: whichever of A/B's rename call reaches the
+ * filesystem first wins outright, and the loser's rename fails cleanly
+ * instead of deleting whatever now occupies the path.
+ * @param {string} lockPath
+ * @returns {boolean} true if this call won the steal
+ */
+export function stealStaleLock(lockPath) {
+  const stolenPath = `${lockPath}.steal.${process.pid}`
+  try {
+    fs.renameSync(lockPath, stolenPath)
+  } catch {
+    return false // another process already renamed/removed it first
+  }
+  try {
+    fs.unlinkSync(stolenPath)
+  } catch {
+    /* already gone somehow; the steal itself still succeeded */
+  }
+  return true
+}
+
+/**
  * Acquire the registry lock: an `O_EXCL` lockfile (atomic create-if-absent,
  * portable, no dependency). Retries with backoff while the lock is held by a
  * live process; steals a stale lock (older than `staleMs`, e.g. a crashed
@@ -151,12 +184,8 @@ export async function acquireLock(lockPath = DEFAULT_LOCK_PATH, opts = {}) {
       try {
         const { mtimeMs } = fs.statSync(lockPath)
         if (Date.now() - mtimeMs > staleMs) {
-          try {
-            fs.unlinkSync(lockPath)
-          } catch {
-            /* another process already reclaimed it */
-          }
-          continue // retry immediately, no backoff
+          stealStaleLock(lockPath)
+          continue // retry immediately regardless of who won the steal, no backoff
         }
       } catch {
         continue // lock vanished between EEXIST and stat — retry immediately

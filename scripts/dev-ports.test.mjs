@@ -30,6 +30,7 @@ import {
   readRegistry,
   resolveBaseMongoUri,
   shouldStartMainPortal,
+  stealStaleLock,
   withMongoDbName,
   writeRegistry,
 } from './dev-ports.mjs'
@@ -122,6 +123,32 @@ describe('pickNextAnchor', () => {
     const isRangeFree = async (anchor) => anchor !== 4310
     const anchor = await pickNextAnchor({ used: new Set(), isRangeFree })
     assert.equal(anchor, 4320)
+  })
+})
+
+describe('stealStaleLock', () => {
+  it('only the first of two racing steals on the same stale lock wins (atomic rename)', () => {
+    const { lockPath } = tmpPaths('steal-race')
+    fs.writeFileSync(lockPath, '999999') // simulate a crashed holder's leftover lockfile
+
+    const first = stealStaleLock(lockPath)
+    const second = stealStaleLock(lockPath)
+
+    assert.equal(first, true, 'the first caller must win the steal')
+    assert.equal(second, false, 'a second steal on an already-stolen lock must not silently succeed')
+    assert.ok(!fs.existsSync(lockPath))
+  })
+
+  it('does not throw when the lockfile is already gone', () => {
+    const { lockPath } = tmpPaths('steal-missing')
+    assert.equal(stealStaleLock(lockPath), false)
+  })
+
+  it('does not leave a `.steal.<pid>` temp file behind after winning', () => {
+    const { lockPath } = tmpPaths('steal-cleanup')
+    fs.writeFileSync(lockPath, '999999')
+    assert.equal(stealStaleLock(lockPath), true)
+    assert.deepEqual(fs.readdirSync(path.dirname(lockPath)).filter((f) => f.includes('.steal.')), [])
   })
 })
 
