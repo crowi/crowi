@@ -79,6 +79,7 @@ alpha.0–.3 は published、alpha.4 / stable 向けに changeset 蓄積中（pr
 - **legacy 除去（RFC-0006）** — Express routes/controllers/Swig views/ts-rest 層を全削除
 - **web エラー画面 / 接続レジリエンス** — `apiV2Fetch` タイムアウト / error boundary / `ConnectionProvider`（spec: `feature-web-error-screens.md`）
 - **エディタ collab 堅牢化** — save 楽観ロック + anti-shrink ガード + synced gate + 復旧バッファ + token-refresh seam + multi-instance WS_TOKEN_SECRET 厳格化（spec: `feature-editor-preview-reliability.md`）
+- **画像表示属性（RFC-0015）** — Markdown 画像 `![alt](url){width= height= align= float=}` の bundled core transform（standalone は合成 figure・inline は width/height のみ）+ web 側 value-based 再検証 helper（raw-HTML 偽造 `data-crowi-image-*` を無力化）+ CodeMirror hover/focus affordance。`RENDERER_PIPELINE_VERSION` 0.7.0→0.8.0 bump 込み（spec: `feature-image-display-attributes.md`）
 
 ---
 
