@@ -21,10 +21,12 @@
  *   - 0.5.x  Phase 5 (crowi-legacy + wikilink migrator)
  *   - 0.6.x  Phase 6 (plantuml + emoji + katex + addCodeBlockRenderer)
  *   - 0.7.x  dark mode (shiki dual-theme CSS-variable output)
+ *   - 0.8.x  RFC-0015 image display attributes (`remarkImageAttrs`
+ *     core transform — bundled plugin addition, minor bump)
  *
  * Until `renderer:rebuild` ships (deferred to RFC-0008), version
  * mismatch is informational only — the read path's parse-on-read
  * fallback handles missing or stale `renderedAst` transparently at
  * a per-request CPU cost.
  */
-export const RENDERER_PIPELINE_VERSION = '0.7.0';
+export const RENDERER_PIPELINE_VERSION = '0.8.0';
