@@ -76,8 +76,13 @@ export function parseWorktreeList(porcelain) {
     .map(({ dir, branch }) => ({ dir, branch }))
 }
 
+// Called from inside `buildPortalRows`'s `withLock` callback (see below), so
+// a bounded timeout keeps the worst case well under `acquireLock`'s default
+// 15s stale threshold — otherwise a hung/stalled `git` call here would hold
+// the shared registry lock long enough for another process to treat it as
+// abandoned and steal it out from under this still-running request.
 function listLiveWorktrees() {
-  const out = execFileSync('git', ['worktree', 'list', '--porcelain'], { cwd: repoRoot, encoding: 'utf8' })
+  const out = execFileSync('git', ['worktree', 'list', '--porcelain'], { cwd: repoRoot, encoding: 'utf8', timeout: 5000 })
   return parseWorktreeList(out)
 }
 
@@ -103,22 +108,32 @@ function escapeHtml(s) {
 /**
  * Cross-reference the registry against live worktrees, GC stale entries, and
  * build one row per live worktree.
+ *
+ * Enumerating live worktrees happens INSIDE the lock, not before it: `git
+ * worktree list` is read-only and fast, so holding the lock a few extra
+ * milliseconds is cheap, and it closes a lost-update race where a worktree
+ * `allocateAnchor`'d between an outside-the-lock enumeration and the lock
+ * acquisition would have its brand new registry entry pruned by this GC
+ * before the caller ever saw it registered.
+ * @param {{ listLiveWorktrees?: () => { dir: string, branch: string | null }[], registryPath?: string, lockPath?: string }} [opts]
+ *   Overridable for tests; production callers use the defaults.
  * @returns {Promise<Array<{ key: string, branch: string | null, anchor: number | null, up: boolean, localUrl: string | null, ipUrls: string[], tailscaleUrl: string | null, db: string }>>}
  */
-export async function buildPortalRows() {
-  const worktrees = listLiveWorktrees()
-  const liveKeys = worktrees.map((w) => normalizeWorktreeKey(w.dir))
+export async function buildPortalRows(opts = {}) {
+  const { listLiveWorktrees: listLiveWorktreesFn = listLiveWorktrees, registryPath = DEFAULT_REGISTRY_PATH, lockPath = DEFAULT_LOCK_PATH } = opts
 
-  // Stale GC, under the same lock the launcher/dev-ports use.
-  await withLock(DEFAULT_LOCK_PATH, () => {
-    const registry = readRegistry(DEFAULT_REGISTRY_PATH)
+  let worktrees
+  await withLock(lockPath, () => {
+    worktrees = listLiveWorktreesFn()
+    const liveKeys = worktrees.map((w) => normalizeWorktreeKey(w.dir))
+    const registry = readRegistry(registryPath)
     const pruned = pruneRegistry(registry, liveKeys)
     if (Object.keys(pruned).length !== Object.keys(registry).length) {
-      writeRegistry(pruned, DEFAULT_REGISTRY_PATH)
+      writeRegistry(pruned, registryPath)
     }
   })
 
-  const registry = readRegistry(DEFAULT_REGISTRY_PATH)
+  const registry = readRegistry(registryPath)
   const tailscaleHost = resolveTailscaleHostname()
   // This host's own LAN/tailscale IPv4s — the proxy binds 0.0.0.0 (Model B), so
   // these are the URLs a phone/other machine actually dials.

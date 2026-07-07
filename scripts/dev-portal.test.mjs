@@ -1,16 +1,37 @@
-// Unit tests for scripts/dev-portal/index.mjs's two pure functions. Run with
-// `node --test` (see dev-ports.test.mjs for the rationale). `parseWorktreeList`
-// (parses `git worktree list --porcelain`) and `renderPortalHtml` (escapes
-// user-controlled strings into one static HTML page) are exactly the
-// "pure functions exported + testable" the task's architecturalNotes calls
-// for — everything else in that module is either a `git`/`http` side effect
-// (`listLiveWorktrees`, `probeProxyUp`) or the already-covered registry code
-// in `dev-ports.mjs`.
+// Unit tests for scripts/dev-portal/index.mjs. Run with `node --test` (see
+// dev-ports.test.mjs for the rationale). `parseWorktreeList` (parses `git
+// worktree list --porcelain`) and `renderPortalHtml` (escapes user-controlled
+// strings into one static HTML page) are pure and directly testable.
+// `buildPortalRows` has real side effects (`git`, the registry file/lock,
+// a TCP probe) but accepts injected overrides (`listLiveWorktrees`,
+// `registryPath`, `lockPath`) specifically so its GC-ordering contract can be
+// tested without touching the real filesystem or network.
 
 import assert from 'node:assert/strict'
-import { describe, it } from 'node:test'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import { after, before, describe, it } from 'node:test'
 
-import { parseWorktreeList, renderPortalHtml } from './dev-portal/index.mjs'
+import { readRegistry, writeRegistry } from './dev-ports.mjs'
+import { buildPortalRows, parseWorktreeList, renderPortalHtml } from './dev-portal/index.mjs'
+
+let tmpDir
+
+before(() => {
+  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'crowi-dev-portal-test-'))
+})
+
+after(() => {
+  fs.rmSync(tmpDir, { recursive: true, force: true })
+})
+
+function tmpPaths(name) {
+  return {
+    registryPath: path.join(tmpDir, `${name}.registry.json`),
+    lockPath: path.join(tmpDir, `${name}.lock`),
+  }
+}
 
 describe('parseWorktreeList', () => {
   it('parses multiple worktree blocks, stripping the refs/heads/ prefix from branch', () => {
@@ -160,5 +181,34 @@ describe('renderPortalHtml', () => {
     ]
     const html = renderPortalHtml(rows)
     assert.ok(html.indexOf('>main<') < html.indexOf('>feature-a<'), 'main row must come before feature-a in the rendered order')
+  })
+})
+
+describe('buildPortalRows', () => {
+  // Regression: `listLiveWorktrees()` used to run BEFORE the registry lock
+  // was acquired, so a worktree `allocateAnchor`'d by a concurrent process in
+  // that gap wasn't in the enumeration this GC used, and its brand new
+  // registry entry got pruned. Enumeration must happen inside the lock.
+  it('enumerates live worktrees while the registry lock is held, not before it', async () => {
+    const { registryPath, lockPath } = tmpPaths('lock-order')
+    // A key with no matching live worktree so the GC has something to prune —
+    // proves pruning still works end-to-end with the moved enumeration.
+    writeRegistry({ 'stale-key': 4310 }, registryPath)
+
+    let lockHeldDuringEnumeration = false
+    const fakeListLiveWorktrees = () => {
+      lockHeldDuringEnumeration = fs.existsSync(lockPath)
+      // Not registered in the registry, so building its row skips the
+      // network probe entirely (anchor stays undefined/null).
+      return [{ dir: '/Volumes/working/crowi/crowi-unregistered', branch: 'feature' }]
+    }
+
+    const rows = await buildPortalRows({ listLiveWorktrees: fakeListLiveWorktrees, registryPath, lockPath })
+
+    assert.equal(lockHeldDuringEnumeration, true, 'listLiveWorktrees must run while withLock holds the lock')
+    assert.deepEqual(readRegistry(registryPath), {}, 'stale-key must be pruned since it is absent from the live set')
+    assert.equal(rows.length, 1)
+    assert.equal(rows[0].key, 'unregistered')
+    assert.equal(rows[0].anchor, null)
   })
 })
