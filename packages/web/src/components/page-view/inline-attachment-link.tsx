@@ -66,6 +66,16 @@ interface InlineAttachmentLinkProps {
   children?: React.ReactNode;
   /** `image` variant only. */
   alt?: string;
+  /**
+   * `image` variant only. RFC-0015 image display attributes — the
+   * caller's already-re-validated width/height style (from
+   * `getImageDisplayStyle`, `@/components/editor/image-display`).
+   * MERGED (not replaced) with this component's own
+   * `{ cursor: 'zoom-in' }` so both survive together (§D11 merge
+   * contract — the click-to-open affordance is page-view-only and
+   * must never be dropped by a display-attribute image).
+   */
+  style?: React.CSSProperties;
 }
 
 // A modifier-key or non-primary-button click is left alone so the
@@ -86,7 +96,7 @@ const isPlainPrimaryClick = (event: React.MouseEvent) => event.button === 0 && !
  *
  * Outside an `InlineAttachmentProvider` it degrades to the plain element.
  */
-export function InlineAttachmentLink({ attachmentId, variant, href, className, children, alt }: InlineAttachmentLinkProps) {
+export function InlineAttachmentLink({ attachmentId, variant, href, className, children, alt, style }: InlineAttachmentLinkProps) {
   const ctx = useContext(InlineAttachmentContext);
 
   const handleClick = useCallback(
@@ -109,8 +119,11 @@ export function InlineAttachmentLink({ attachmentId, variant, href, className, c
         className={className}
         loading="lazy"
         onClick={handleClick}
-        // Pointer affordance hints the click-to-open behaviour.
-        style={{ cursor: 'zoom-in' }}
+        // Pointer affordance hints the click-to-open behaviour, merged
+        // with the caller's re-validated width/height (§D11 merge
+        // contract — `cursor: zoom-in` must survive alongside display
+        // attributes, never be replaced by them).
+        style={{ cursor: 'zoom-in', ...style }}
       />
     );
   }

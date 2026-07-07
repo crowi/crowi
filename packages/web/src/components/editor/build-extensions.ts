@@ -5,6 +5,7 @@ import { EditorState, type Extension } from '@codemirror/state';
 import { EditorView, keymap } from '@codemirror/view';
 import { autocompleteExtension } from './autocomplete-extension';
 import { dropHandler } from './drop-handler';
+import { imageAffordanceExtension } from './image-affordance-extension';
 import { listKeymap } from './list-keymap';
 import { pasteHandler } from './paste-handler';
 
@@ -96,6 +97,12 @@ export interface BuildExtensionsProps {
  *    `extraExtensions` — both attach DOM event handlers, so ordering vs
  *    autocomplete is immaterial, but keeping them before
  *    `extraExtensions` lets a caller still override.
+ *  - `imageAffordanceExtension()` (RFC-0015 §D13) — the image
+ *    display-attribute hover/focus tooltip. A built-in (not threaded
+ *    through `extraExtensions`) so both the normal and collaborative
+ *    editor get it without a new prop; it reads `EditorState.readOnly`
+ *    itself (same source as `dropHandler`'s suppression), so ordering
+ *    relative to the `readonly` facet below is immaterial.
  *  - `extraExtensions` last so caller-supplied extensions win on
  *    precedence ties (CodeMirror layers later extensions on top).
  */
@@ -120,6 +127,11 @@ export function buildExtensions(props: BuildExtensionsProps): Extension[] {
     // without a page context. Read-only suppression is decided per drop
     // from `EditorState.readOnly`, so this needs no readonly prop.
     dnd ? dropHandler({ pageId: dnd.pageId }) : [],
+    // RFC-0015 §D13 — image display-attribute affordance, always on
+    // (no opt-out prop — it's read-only-aware on its own, mirroring
+    // `dropHandler`'s pattern, so there's no bare-mount case it needs
+    // to be excluded from).
+    imageAffordanceExtension(),
     // RFC-0003 Phase 7: skip the built-in undo stack + its keymap when
     // a Yjs `UndoManager` is taking over via `extraExtensions`. The
     // `defaultKeymap` is kept (it carries cursor / selection / line

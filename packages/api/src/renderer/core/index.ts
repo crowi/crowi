@@ -7,6 +7,7 @@ import { remarkCodeBlockLanguages } from './code-blocks';
 import { makeCodeBlockDispatch } from './code-block-dispatch';
 import { makeEmbedTagDispatch } from './embed-tags';
 import { makeRemarkHeadings, type UnifiedTransformPlugin } from './headings';
+import { remarkImageAttrs } from './image-attrs';
 import { remarkMentions } from './mentions';
 import { makeRemarkSyntaxHighlight } from './syntax-highlight';
 import { makeUrlInlineExpandDispatch } from './url-inline-expand';
@@ -20,14 +21,19 @@ export { makeUrlInlineExpandDispatch } from './url-inline-expand';
 
 /**
  * Build the bundled core renderer transform plugins, in their fixed
- * order (headings → wikilinks → mentions → code-blocks → syntax-
- * highlight). The pipeline prepends these to the registry's external
- * plugins on every run.
+ * order (headings → image-attrs → wikilinks → mentions → code-blocks →
+ * syntax-highlight). The pipeline prepends these to the registry's
+ * external plugins on every run.
  *
  * Order rationale:
  *   - headings runs first so the slugger sees pristine heading text
  *     before any text rewrite (wikilinks / mentions inside headings
  *     would otherwise change the visible label).
+ *   - image-attrs (RFC-0015) runs next, BEFORE wikilinks/mentions, so
+ *     the `{...}` attribute-block text immediately following an image
+ *     is still an intact, unsplit text node when it scans for the
+ *     block — wikilinks/mentions rewrite text nodes on their own
+ *     patterns and would otherwise fragment it first.
  *   - wikilinks + mentions next, both walking text nodes and skipping
  *     inside code / inlineCode.
  *   - code-blocks (the lang aggregator) runs BEFORE syntax-highlight
@@ -43,7 +49,7 @@ export { makeUrlInlineExpandDispatch } from './url-inline-expand';
  * imported from CJS.
  */
 export function buildCorePlugins(deps: PipelineEsmDeps): UnifiedTransformPlugin[] {
-  return [makeRemarkHeadings(deps), remarkWikiLinks, remarkMentions, remarkCodeBlockLanguages, makeRemarkSyntaxHighlight(deps)];
+  return [makeRemarkHeadings(deps), remarkImageAttrs, remarkWikiLinks, remarkMentions, remarkCodeBlockLanguages, makeRemarkSyntaxHighlight(deps)];
 }
 
 /**

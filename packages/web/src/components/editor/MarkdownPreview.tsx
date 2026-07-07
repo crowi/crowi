@@ -2,6 +2,14 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { usePreview } from '@/lib/use-preview';
+import {
+  getFigureLayoutClassName,
+  getImageDisplayStyle,
+  hasFigureMarker,
+  mergeImageClassName,
+  mergeImageStyle,
+  stripImageDisplayTransportProps,
+} from './image-display';
 import { LI_CLASSNAME, mergeListClassName, OL_CLASSNAME, UL_CLASSNAME } from './list-classnames';
 import { renderMdastToReactNode } from './render-mdast';
 import { isPlantumlEmbed, PlantumlDiagram } from '@/components/page-view/plantuml-diagram';
@@ -140,7 +148,11 @@ function makePreviewHeading(Tag: HeadingTag) {
   return Heading;
 }
 
-const previewComponents = {
+// Exported so tests can render this exact component map through
+// `renderMdastToReactNode` directly (e.g. the page-view↔preview parity
+// assertion in `page-content.test.tsx`, AC-B6) without going through
+// the network-backed `MarkdownPreview` component itself.
+export const previewComponents = {
   h1: makePreviewHeading('h1'),
   h2: makePreviewHeading('h2'),
   h3: makePreviewHeading('h3'),
@@ -238,7 +250,7 @@ const previewComponents = {
   // `page-content.tsx` for the React warning this resolves.
   input: ({ type, checked, ...props }: { type?: string; checked?: unknown; [key: string]: unknown }) =>
     type === 'checkbox' ? <input type="checkbox" checked={Boolean(checked)} readOnly {...props} /> : <input type={type} {...props} />,
-  img: ({ src, alt, className, ...props }: { src?: string | Blob; alt?: string; className?: unknown }) => {
+  img: ({ src, alt, className, style: rawStyle, ...rest }: { src?: string | Blob; alt?: string; className?: unknown; style?: React.CSSProperties }) => {
     const srcString = typeof src === 'string' ? src : undefined;
     // PlantUML PNG fallback — wrap for cap-to-width + click-to-enlarge,
     // matching the show page.
@@ -250,9 +262,47 @@ const previewComponents = {
         </PlantumlDiagram>
       );
     }
+    // RFC-0015 image display attributes — same img-layer helper as the
+    // show page (`page-content.tsx`), so preview↔page-view parity
+    // holds for the same input (AC-B6). An unrelated raw `<img>`'s own
+    // `class`/`style` is MERGED (never replaced) with the base utility
+    // classes / re-validated display style (AC-B3) — same
+    // `mergeImageClassName`/`mergeImageStyle` helpers as the show page.
+    const imgClassName = mergeImageClassName('max-w-full h-auto rounded-lg my-6', className);
+    const displayStyle = getImageDisplayStyle(rest);
+    const mergedStyle = mergeImageStyle(rawStyle, displayStyle);
+    const restProps = stripImageDisplayTransportProps(rest);
     return (
       // biome-ignore lint/performance/noImgElement: rich-text rendered as plain markdown
-      <img src={srcString} alt={alt || ''} className="max-w-full h-auto rounded-lg my-6" loading="lazy" {...props} />
+      <img src={srcString} alt={alt || ''} className={imgClassName} loading="lazy" style={mergedStyle} {...restProps} />
+    );
+  },
+  // RFC-0015 image display attributes — see `page-content.tsx`'s
+  // `figure` override for the forged-marker-safe rationale (identical
+  // logic here for preview↔page-view parity, AC-B6). The marker-less
+  // branch passes every prop (including `style`) through ordinarily —
+  // `style` is only dropped on the marker-bearing branch.
+  figure: ({ className, children, ...props }: ChildrenProps & { className?: unknown }) => {
+    if (!hasFigureMarker(className)) {
+      return (
+        <figure className={typeof className === 'string' ? className : undefined} {...props}>
+          {children}
+        </figure>
+      );
+    }
+    // Marker-bearing branch only: drop any incoming `style` (raw or
+    // forged) before deriving the safe, re-validated layout class —
+    // `props`'s declared type has no `style` field, so strip it via a
+    // cast instead of destructuring a field TypeScript doesn't know
+    // about.
+    const restRaw = { ...(props as Record<string, unknown>) };
+    delete restRaw.style;
+    const layoutClass = getFigureLayoutClassName(restRaw);
+    const restProps = stripImageDisplayTransportProps(restRaw);
+    return (
+      <figure className={layoutClass ? `crowi-figure ${layoutClass}` : 'crowi-figure'} {...restProps}>
+        {children}
+      </figure>
     );
   },
   // PlantUML SVG embed (`<div class="plantuml-embed">`) — same zoom wrapper

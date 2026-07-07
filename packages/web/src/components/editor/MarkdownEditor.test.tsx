@@ -1,4 +1,6 @@
 import { EditorState } from '@codemirror/state';
+import { ensureSyntaxTree } from '@codemirror/language';
+import { showTooltip } from '@codemirror/view';
 import { act, cleanup, render } from '@testing-library/react';
 import { createRef } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -47,6 +49,14 @@ describe('buildExtensions', () => {
     // end-to-end in the component-level test below.
     expect(state).toBeDefined();
     expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('registers the RFC-0015 image display-attribute affordance as a built-in — no extra prop needed (AC-C3)', () => {
+    const doc = '![alt](x.png){width=60%}';
+    const state = EditorState.create({ doc, selection: { anchor: 2 }, extensions: buildExtensions({}) });
+    ensureSyntaxTree(state, doc.length, 5_000);
+    const tooltips = state.facet(showTooltip).filter((t) => t !== null);
+    expect(tooltips).not.toHaveLength(0);
   });
 });
 

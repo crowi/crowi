@@ -529,3 +529,58 @@ html[data-page-grant="2"] {
   max-width: 100%;
 }
 
+/* RFC-0015 image display attributes — fixed, renderer-owned layout
+ * classes for the synthesized `crowi-figure` (standalone attributed
+ * image). Width/height are NOT here — those apply as an inline
+ * `style` on the inner `<img>` (see
+ * `packages/web/src/components/editor/image-display.ts`'s
+ * `getImageDisplayStyle`); this file only owns align/float/responsive
+ * layout, which is always safe, renderer-picked CSS regardless of
+ * whether the `crowi-figure` marker on a given element is genuine or
+ * raw-HTML-forged (forged-marker-safe model, RFC §D6). `crowi-figure`
+ * itself carries no layout — it is only ever combined with at most one
+ * of the classes below (`getFigureLayoutClassName` picks float over
+ * align when a standalone image sets both). */
+.crowi-figure {
+  margin-top: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+.crowi-image-align-left {
+  display: flex;
+  justify-content: flex-start;
+}
+.crowi-image-align-center {
+  display: flex;
+  justify-content: center;
+}
+.crowi-image-align-right {
+  display: flex;
+  justify-content: flex-end;
+}
+.crowi-image-float-left {
+  float: left;
+  margin: 0.25rem 1.25rem 0.75rem 0;
+  max-width: 50%;
+}
+.crowi-image-float-right {
+  float: right;
+  margin: 0.25rem 0 0.75rem 1.25rem;
+  max-width: 50%;
+}
+
+/* Mobile fallback (RFC §6.4/AC-B8): below Crowi's `md` breakpoint
+ * (768px — the same cutoff `autocomplete-extension.ts`'s
+ * `isMobileWidth` and `edit-page-client.tsx`'s `WIDE_QUERY` use), a
+ * floated figure collapses to a normal, full-width block instead of
+ * wrapping text around a half-width image — there isn't enough room
+ * on a narrow screen for the wrap to read well. */
+@media (max-width: 767px) {
+  .crowi-image-float-left,
+  .crowi-image-float-right {
+    float: none;
+    max-width: 100%;
+    margin-left: 0;
+    margin-right: 0;
+  }
+}
+
