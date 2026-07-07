@@ -80,11 +80,98 @@ URL with image syntax.
 ![Screenshot](/api/v2/attachments/64f0a1b2c3d4e5f6a7b8c9d0)
 ```
 
-> **Note**: **Drag-and-drop upload** into the editor and **automatic
-> insertion of uploaded images into the body** are not yet implemented in
-> the v2 alpha. For now, the workflow is to upload via the Attachments
-> section first, then paste the assigned URL into the body manually.
-> Support is planned for a future release.
+Besides typing the URL by hand, uploading directly into the editor via
+**paste** or **drag-and-drop** (below) automatically inserts the image
+syntax for you.
+
+> **Note**: Paste and drag-and-drop always insert a plain, attribute-less
+> `![filename](url)` by default. Add a `{width= height= align= float=}`
+> attribute block by hand afterward if you want to set the image's size,
+> alignment, or text-wrap float (see [Writing Markdown](./markdown)'s
+> "Image display attributes" section). Hovering over — or placing the
+> cursor inside — an image's Markdown span in the editor also shows a
+> tooltip with `width` / `align` / `float` controls.
+
+## Uploading directly into the editor
+
+On the page edit screen (`/_edit?page_id=<page ID>`), you can upload a
+file by **pasting** it into the editor or **dragging and dropping** it.
+The uploaded attachment is bound to the page you're editing, and its
+Markdown syntax is inserted automatically at the cursor.
+
+> **Note**: This only works inside the edit screen's editor. Uploading
+> from the Attachments section in the page footer still works as
+> described above.
+
+### Pasting an image
+
+Pasting a screenshot or an image copied from another app uploads it
+automatically.
+
+- The filename is auto-generated as `pasted-<timestamp>.<ext>` (e.g.
+  `pasted-1717891234.png`).
+- While uploading, a placeholder `![Uploading pasted-1717891234.png
+  (37%)…](#)` is inserted at the cursor, with the percentage updating
+  live. Other members editing the same page collaboratively see this
+  progress too.
+- Once the upload finishes, the placeholder is replaced with
+  `![pasted-1717891234.png](/api/v2/attachments/...)`.
+- Pasting the same image twice creates two separate attachments (there
+  is no client-side de-duplication). Delete the extra one from the
+  attachment list if you don't need it.
+
+Pasted images are accepted up to **10 MB**, for these types:
+
+| Type | MIME type |
+| ---- | --------- |
+| PNG | `image/png` |
+| JPEG | `image/jpeg` |
+| GIF | `image/gif` |
+| WebP | `image/webp` |
+| SVG | `image/svg+xml` |
+
+> **Tip**: For what happens when you paste non-image text or a bare
+> URL, see [Writing Markdown](./markdown) — pasting a URL is
+> automatically converted into link syntax.
+
+### Dragging and dropping files
+
+Dragging a file over the editor highlights the drop target; dropping it
+starts the upload at the cursor position.
+
+- Images are inserted as `![filename](url)`, other files as
+  `[filename](url)`.
+- The progress-placeholder behaviour is the same as pasting.
+- Dropping multiple files at once processes them **serially**, in the
+  order the OS reports them, with one placeholder per file.
+- The per-file limit is **50 MB**, and a single drop can carry at most
+  **5 files**. Exceeding either limit shows a toast notification.
+
+The default allow-list of file types accepted by drag-and-drop is (an
+operator can change this — see [Storage driver](../operations/storage)):
+
+| Category | Accepted |
+| -------- | -------- |
+| Images | Same as paste (PNG / JPEG / GIF / WebP / SVG) |
+| Documents | `.pdf` / `.txt` / `.md` / `.csv` |
+| Archives | `.zip` |
+
+Dropping a type not on the allow-list shows a toast naming the rejected
+type.
+
+> **Note**: When the edit screen is in **read-only mode** (the
+> simultaneous-editor cap was reached, or you lack edit permission —
+> see [Realtime collaborative editing](./realtime-editing)),
+> drag-and-drop is disabled and a permission toast is shown instead.
+
+### When an upload fails
+
+If an upload fails (e.g. a network disconnect), the placeholder is
+replaced with a static error marker: `![Upload failed:
+<filename>](#)` (or `[Upload failed: …](#)` for non-images).
+
+The error marker stays in the body as-is — there is no retry button.
+Delete the marker by hand, then paste / drop again.
 
 ## Removing an attachment
 

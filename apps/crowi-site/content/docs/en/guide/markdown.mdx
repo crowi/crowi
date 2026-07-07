@@ -99,6 +99,73 @@ label such as `[label](url)` is not expanded and is treated as a plain link.
 A fenced code block with a language specified, such as ` ```ts `, is rendered
 with syntax highlighting applied at save time.
 
+### Image display attributes `{width= height= align= float=}`
+
+You can follow an image `![alt](url)` with a Pandoc-style attribute block to
+set its width, height, alignment, and text-wrap float
+([RFC-0015](https://github.com/crowi/crowi/blob/main/docs/rfcs/0015-image-display-attributes.md)).
+
+```markdown
+![Screenshot](screenshot.png){width=60%}
+```
+
+- Between the image and the `{` you can have zero or more ASCII
+  spaces/tabs, or exactly one soft line break followed by spaces/tabs.
+  Anything else — two or more soft breaks, non-whitespace text before
+  the `{`, or a space right after the opening brace as in
+  `{ width=60%}` — is not recognised as an attribute block and is left
+  as plain text.
+- Only these 4 attributes are supported:
+
+  | Attribute | Accepted values | Meaning |
+  | --------- | ------------------------------------------ | -------------------------------------------- |
+  | `width` | `<number>%` (1–100) or `<number>px` (1–4096) | Image width |
+  | `height` | `<number>%` (1–100) or `<number>px` (1–4096) | Image height |
+  | `align` | `left` / `center` / `right` | Block placement (**standalone images only**) |
+  | `float` | `left` / `right` | Text-wrap float (**standalone images only**, wins over `align`) |
+
+- An out-of-range value (`width=200%`, `height=5000px`, etc.), a
+  non-numeric value, or an unrecognised key is simply **ignored for
+  that one attribute** — it is dropped, never clamped. The image itself
+  never disappears and the page never breaks. If no attribute in the
+  block ends up valid, the original Markdown renders exactly as if the
+  attribute block were absent.
+- When both `align` and `float` are set, `float` wins.
+
+**Standalone (figure) vs. inline images**:
+
+- When the image plus its attribute block is the **only content in its
+  paragraph** (no other text or image around it), it renders as a
+  `<figure>` and `align` / `float` apply.
+- When text follows the image on the same line (an inline image), only
+  `width` / `height` apply — `align` / `float` are ignored, since
+  block-level placement and text-wrap have no coherent meaning for an
+  image in the middle of a sentence.
+- v1 does not support a `caption` syntax; no `<figcaption>` is emitted.
+
+```markdown
+![Architecture diagram](diagram.png){width=70% align=center}
+
+Placed mid-sentence it stays inline: ![icon](icon.png){width=24px} like so.
+
+Float to the right: ![thumbnail](thumb.png){width=200px float=right}
+```
+
+An image with `float` set collapses back to a normal, full-width block
+(no wrap) on narrow screens (below 768px).
+
+**Editor affordance**: hovering over (or placing the cursor inside) an
+image's Markdown span shows a small tooltip with `width` / `align` /
+`float` controls. `align` / `float` are only offered for a standalone
+image, matching the semantics above. Using the tooltip rewrites the
+`{...}` block for you. The tooltip does not appear when the page is
+read-only.
+
+> **Note**: The attachment insert button still inserts a plain
+> `![filename](/api/v2/attachments/<id>)` with no attributes. Add a
+> `{...}` block by hand afterward if you want to set its size or
+> placement (see [Attachments](./attachments)).
+
 ## Extensions via renderer plugins
 
 The following syntax only works when the corresponding **renderer plugin** is
