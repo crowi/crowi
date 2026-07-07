@@ -44,6 +44,27 @@ describe('parseWorktreeList', () => {
     const porcelain = 'worktree /Volumes/working/crowi/crowi\nHEAD abc123\nbranch refs/heads/main'
     assert.deepEqual(parseWorktreeList(porcelain), [{ dir: '/Volumes/working/crowi/crowi', branch: 'main' }])
   })
+
+  // Regression: a worktree removed via `rm -rf` (instead of `git worktree
+  // remove`) lingers in `git worktree list --porcelain`, annotated
+  // `prunable ...`, until `git worktree prune` runs. It must be excluded here
+  // so its registry entry actually gets GC'd instead of reserving its anchor
+  // block forever (see `pruneRegistry` in `../dev-ports.mjs`).
+  it('drops a prunable worktree (directory removed without `git worktree remove`)', () => {
+    const porcelain = [
+      'worktree /Volumes/working/crowi/crowi',
+      'HEAD abc123',
+      'branch refs/heads/main',
+      '',
+      'worktree /Volumes/working/crowi/crowi-gone',
+      'HEAD def456',
+      'branch refs/heads/gone-branch',
+      'prunable gitdir file points to non-existent location',
+      '',
+    ].join('\n')
+
+    assert.deepEqual(parseWorktreeList(porcelain), [{ dir: '/Volumes/working/crowi/crowi', branch: 'main' }])
+  })
 })
 
 describe('renderPortalHtml', () => {

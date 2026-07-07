@@ -45,6 +45,14 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 
 /**
  * Parse `git worktree list --porcelain` into `[{ dir, branch }]`. Pure.
+ *
+ * A worktree whose directory was removed without `git worktree remove` (e.g.
+ * a plain `rm -rf`, common when an agent deletes a worktree by hand) stays in
+ * this list annotated with a `prunable ...` line until `git worktree prune`
+ * runs (or the default 3-month auto-expiry). Such blocks are dropped here so
+ * they don't count as a live worktree — otherwise `pruneRegistry` (see
+ * `../dev-ports.mjs`) never sees its key disappear from `liveKeys` and its
+ * anchor block stays reserved forever.
  * @param {string} porcelain
  * @returns {{ dir: string, branch: string | null }[]}
  */
@@ -57,12 +65,15 @@ export function parseWorktreeList(porcelain) {
       const lines = block.split('\n')
       const dirLine = lines.find((l) => l.startsWith('worktree '))
       const branchLine = lines.find((l) => l.startsWith('branch '))
+      const prunable = lines.some((l) => l === 'prunable' || l.startsWith('prunable '))
       return {
         dir: dirLine ? dirLine.slice('worktree '.length) : null,
         branch: branchLine ? branchLine.slice('branch '.length).replace(/^refs\/heads\//, '') : null,
+        prunable,
       }
     })
-    .filter((w) => w.dir !== null)
+    .filter((w) => w.dir !== null && !w.prunable)
+    .map(({ dir, branch }) => ({ dir, branch }))
 }
 
 function listLiveWorktrees() {
