@@ -6,6 +6,14 @@ import type { PageWithRevision } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 import Link from 'next/link';
 import { useCopyFeedback } from '@/lib/use-copy-feedback';
+import {
+  getFigureLayoutClassName,
+  getImageDisplayStyle,
+  hasFigureMarker,
+  mergeImageClassName,
+  mergeImageStyle,
+  stripImageDisplayTransportProps,
+} from '@/components/editor/image-display';
 import { LI_CLASSNAME, mergeListClassName, OL_CLASSNAME, UL_CLASSNAME } from '@/components/editor/list-classnames';
 import { renderMdastToReactNode } from '@/components/editor/render-mdast';
 import { MentionLink } from '@/components/page-view/mention-link';
@@ -356,7 +364,7 @@ const components = {
   // non-interactive checkbox. Any other `<input>` passes through.
   input: ({ type, checked, ...props }: { type?: string; checked?: unknown; [key: string]: unknown }) =>
     type === 'checkbox' ? <input type="checkbox" checked={Boolean(checked)} readOnly {...props} /> : <input type={type} {...props} />,
-  img: ({ src, alt, className, ...props }: { src?: string | Blob; alt?: string; className?: unknown }) => {
+  img: ({ src, alt, className, style: rawStyle, ...rest }: { src?: string | Blob; alt?: string; className?: unknown; style?: React.CSSProperties }) => {
     const srcString = typeof src === 'string' ? src : undefined;
     // Server-rendered PlantUML PNG fallback (`<img class="plantuml-embed">`).
     // Route it through the same cap-to-width + click-to-enlarge wrapper the
@@ -370,17 +378,68 @@ const components = {
         </PlantumlDiagram>
       );
     }
-    const imgClassName = 'max-w-full h-auto rounded-lg my-6';
+    // RFC-0015 image display attributes — img layer (width/height
+    // only; align/float are figure-only, see the `figure` override
+    // below). `getImageDisplayStyle` re-validates by VALUE regardless
+    // of whether the `data-crowi-image-*` came from the transform or
+    // was forged via raw HTML (§D4/§D5 — this is the trust boundary).
+    // An unrelated raw `<img>`'s own `class`/`style` (and any other
+    // prop) are NOT touched by this feature — MERGED, never replaced
+    // (AC-B3): `mergeImageClassName` folds the incoming `className`
+    // into the base utility classes, `mergeImageStyle` folds the
+    // incoming `style` under the re-validated display style.
+    const imgClassName = mergeImageClassName('max-w-full h-auto rounded-lg my-6', className);
+    const displayStyle = getImageDisplayStyle(rest);
+    const mergedStyle = mergeImageStyle(rawStyle, displayStyle);
+    const restProps = stripImageDisplayTransportProps(rest);
     // An embedded attachment image still renders the image, but a plain
     // left-click opens the detail modal instead of navigating to the raw
     // file. Right-click (save / copy) and modifier-clicks are untouched.
+    // `restProps` is deliberately NOT forwarded here (unlike the plain
+    // `<img>` branch below): `InlineAttachmentLink`'s image variant only
+    // ever accepts the re-validated width/height style (§D11 merge
+    // contract) — arbitrary raw-HTML/Markdown props have no defined
+    // meaning on this wrapper and are intentionally out of scope.
     const attachmentId = extractAttachmentId(srcString);
     if (attachmentId && srcString) {
-      return <InlineAttachmentLink attachmentId={attachmentId} variant="image" href={srcString} className={imgClassName} alt={alt} />;
+      return <InlineAttachmentLink attachmentId={attachmentId} variant="image" href={srcString} className={imgClassName} alt={alt} style={displayStyle} />;
     }
     return (
       // biome-ignore lint/performance/noImgElement: rich-text rendered as plain markdown
-      <img src={srcString} alt={alt || ''} className={imgClassName} loading="lazy" {...props} />
+      <img src={srcString} alt={alt || ''} className={imgClassName} loading="lazy" style={mergedStyle} {...restProps} />
+    );
+  },
+  // RFC-0015 image display attributes — synthesized standalone-image
+  // wrapper. `crowi-figure` is a STYLING marker, not a trust boundary
+  // (`hasFigureMarker`'s doc comment): a marker-less raw `<figure>`
+  // passes through ORDINARILY (every prop, including `style`,
+  // untouched — same passthrough spirit as `div`'s override below),
+  // while a marker-bearing one (genuine or raw-HTML-forged —
+  // indistinguishable, `passNode: false` gives no node context) only
+  // ever receives ONE fixed, re-derived safe layout class. The
+  // incoming `style` is dropped ONLY on the marker-bearing branch
+  // (forged-marker-safe, RFC §D6/AC-B4).
+  figure: ({ className, children, ...props }: ChildrenProps & { className?: unknown }) => {
+    if (!hasFigureMarker(className)) {
+      return (
+        <figure className={typeof className === 'string' ? className : undefined} {...props}>
+          {children}
+        </figure>
+      );
+    }
+    // Marker-bearing branch only: drop any incoming `style` (raw or
+    // forged) before deriving the safe, re-validated layout class —
+    // `props`'s declared type has no `style` field (same convention as
+    // the `img` override above), so strip it via a cast instead of
+    // destructuring a field TypeScript doesn't know about.
+    const restRaw = { ...(props as Record<string, unknown>) };
+    delete restRaw.style;
+    const layoutClass = getFigureLayoutClassName(restRaw);
+    const restProps = stripImageDisplayTransportProps(restRaw);
+    return (
+      <figure className={layoutClass ? `crowi-figure ${layoutClass}` : 'crowi-figure'} {...restProps}>
+        {children}
+      </figure>
     );
   },
   // Server-rendered PlantUML SVG arrives as `<div class="plantuml-embed">`
