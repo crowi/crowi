@@ -4,6 +4,13 @@
  * `user.admin === true`, returning 403 `ADMIN_REQUIRED` on failure. Wire
  * shape matches `AdminRequiredErrorSchema`.
  *
+ * RFC-0010 reserves `admin:*` scopes (excluded from `ISSUABLE_SCOPES`), so
+ * admin API is a web-session-only surface in v1 — no PAT or OAuth access
+ * token is meant to reach it, regardless of the issuing admin's intent or
+ * the token's scopes. This middleware is the enforcement boundary for that
+ * invariant: it rejects any `c.get('authContext').kind !== 'web'` request
+ * before the `user.admin` check, even when the underlying user is an admin.
+ *
  * Implementation note: the inner `jwtAuth` middleware uses `c.json(...)`
  * which **returns a Response without setting it on `c.res`**, so when
  * jwtAuth short-circuits (no token / expired token / inactive user)
@@ -34,8 +41,11 @@ export const createJwtAdminRequired = (crowi: Crowi) => {
   return createMiddleware<{ Variables: HonoAuthVariables }>(async (c, next) => {
     let shortCircuit: Response | undefined;
     const jwtResult = await jwtAuth(c, async () => {
+      // Web-session-only boundary (RFC-0010) — an admin's own PAT/OAuth
+      // token can never substitute for a browser session here, regardless
+      // of scope, so it's checked alongside the admin flag itself.
       const user = c.get('user');
-      if (!user?.admin) {
+      if (c.get('authContext').kind !== 'web' || !user?.admin) {
         shortCircuit = c.json(ADMIN_REQUIRED_BODY, 403);
         return;
       }
