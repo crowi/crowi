@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 const LOCALE_LABELS: Record<Locale, string> = {
   ja: '日本語',
   en: 'English',
+  ko: '한국어',
 };
 
 interface LocaleSwitcherProps {
