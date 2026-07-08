@@ -375,9 +375,18 @@ TASK=$(ls .feature-state/tasks/*.json 2>/dev/null | grep -E "(^|/)(feature-)?${I
   (まだ `IN_PROGRESS` / `REVIEW` / `NEEDS_WORK` のままなら誤判定の可能性 →
   削除せず報告)。
 - 同名 worktree が **既に消滅**しているか (`git worktree list` に出ない)。
-- spec が **他の spec から `depends-on:` で参照**されていないか
-  (`grep -lR "<basename>" .feature-state/specs/` で確認)。参照あり → 削除せず
-  報告し、orchestrate B の stale 候補として温存。
+- spec が **他の spec から参照**されていないか
+  (`grep -lR "<basename>" .feature-state/specs/` で確認)。**この grep は
+  frontmatter の `depends-on:` に限らず本文中の任意の言及にもヒットする** —
+  ヒットが出たら `rm` を同じ手順内で続行せず、**必ずヒット箇所を読んで**
+  「blocking な依存(未解決の前提)」か「単なる説明的な言及(既に解決済み・
+  参照先が既定解の脚注等)」かを判断する。前者なら削除せず報告して orchestrate B
+  の stale 候補として温存。後者(今回の merge で解決済みと確認できる)なら
+  削除してよいが、**「参照ありだが確認の上で削除した」と 1 行報告する**
+  (実例 2026-07-08: `feature-plugin-route-authz-tiers.md` が
+  `feature-admin-boundary-authcontext` を「共有 middleware を直せば自動波及する」
+  という既定解の脚注として言及していただけで blocking ではなかった — が、
+  この確認をせず機械的に削除してしまった失敗から追記)。
 
 すべて OK なら削除に進む。1 つでも崩れたら **削除せず**、その理由を「skip:
 <理由>」として記録し、Step 9 へ。
