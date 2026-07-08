@@ -137,7 +137,16 @@ merge commit が作られた後も使えるよう変数として保持してお�
 
 merge commit を作る前に、統合後のビルド / 型 / テスト / lint が通るか確認:
 
+> **注意 (依存追加を含む merge)**: merge 差分に `package.json` / `pnpm-lock.yaml` の
+> 変更が含まれる場合は、型/テストの前に **`pnpm install` を必ず回す**。worktree では
+> 入っていた新規依存が main の `node_modules` には未インストールで、`Cannot find module
+> 'xxx'` 型の type-check 失敗が出る(実例: 2026-07-07 の image-display-attributes で
+> `@types/unist` 追加を install し忘れて type-check が落ちた。install 後 green)。
+> install で `pnpm-lock.yaml` が更新されたら stage に含めて merge commit に同梱する。
+
 ```bash
+grep -qE '(^|/)(package\.json|pnpm-lock\.yaml)$' <(git diff --cached --name-only) \
+  && pnpm install   # 依存追加を含む merge のときだけ
 pnpm --filter @crowi/api-contract build  # contract 編集を含む場合
 pnpm --filter @crowi/api type-check
 pnpm --filter @crowi/web type-check
@@ -222,6 +231,18 @@ Step 5.5 で止めるのは **source worktree** 側の dev/watch プロセスで
 (`/crowi-qa main` の target 解決と同じ main の proxy)。merge commit (Step 5) によって main
 のファイルが書き換わり、稼働中の Turbopack / `tsx watch` が hot-reload で追随する前提で、
 この main の dev instance に対して `/crowi-qa` を呼ぶ。
+
+> **注意 (global asset を追加する merge の stale バンドル)**: 稼働中の Turbopack dev は
+> **`globals.css` 等への大きめの global CSS 追加を hot-reload で拾わないことがある**
+> (実例: 2026-07-07 の image-display-attributes で、`.crowi-image-align-*` /
+> `-float-*` ルールがソース `globals.css` にあるのに配信 CSS バンドルに 0 件 — dev
+> サーバが merge 前起動だったため)。この種の「ソースは正しいが配信バンドルに無い」
+> QA finding は **製品バグではなく dev の stale バンドル**なので、QA が CSS/global asset
+> 系の視覚 finding を上げたら、**製品バグと断ずる前に (a) 配信バンドルを read-only で
+> 取得して該当ルールの有無を確認、(b) 素の CSS(`@layer` 外)は正しいビルドで必ず出る
+> ことを確認、(c) 疑わしければ dev 再起動か `--prod-build` で再現確認**する。stale と
+> 確定したら fix ではなく drop(コード修正なし)+ dev 再起動を推奨、で閉じる。共有 main
+> dev の再起動は system-state 変更なので勝手にやらず人間に委ねる。
 
 1. Step 3.3 で捕捉した `$MERGED_FILES` を、`.claude/skills/crowi-qa/SKILL.md` §2 (9 チャー
    ターと対応パス表 — この表を複製せず参照する) の「対応パス」列と照合し、交差した charter
