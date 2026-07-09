@@ -136,7 +136,7 @@ follow-up RFC that wires plugin HTTP contribution onto Hono". This is it.
     // Mount a Hono handler at /api/v2/plugins/<plugin-name>/<path>.
     route(method: 'GET'|'POST'|..., path: string,
           handler: (c: Context) => Response | Promise<Response>,
-          opts?: { public?: boolean }): void;
+          opts?: { auth?: 'public' | 'user' | 'admin' }): void;
   }
   ```
 - **Mounting**: `PluginManager` builds a per-plugin scope inside `buildHonoApp`
@@ -144,18 +144,20 @@ follow-up RFC that wires plugin HTTP contribution onto Hono". This is it.
   prefix is stripped at the boundary, so they answer at
   `/api/v2/plugins/<name>/...`). Name-segmented → no collision with core or
   other plugins.
-- **`public` routes** bypass `createJwtAuth` (mirroring the `/oauth/*` public
-  precedent). Slack inbound endpoints are **public to Crowi auth** and
-  authenticated solely by the **Slack request signature** (§8). Non-public
-  routes (admin test buttons / `@action` targets, OAuth callbacks) keep
-  `createJwtAuth`.
+- **Authorization tiers**: `auth?: 'public' | 'user' | 'admin'` (default `'user'`):
+  - `'public'`: no auth (Slack inbound endpoints, authenticated solely by
+    **Slack request signature** — §8; OAuth callbacks).
+  - `'user'`: any authenticated Crowi user (default for OAuth callbacks, API
+    integration endpoints).
+  - `'admin'`: admin only (admin test buttons / manifest generation / `@action`
+    targets from the admin config form).
 - **Raw body**: the handler must reach the **exact raw request body**
   (`c.req.text()` / `c.req.raw`) for HMAC verification — so plugin routes mount
   **before** any body-consuming middleware, or the scope guarantees an
   un-consumed body. This is a hard requirement for Slack.
 - **Scope/auth note**: the SDK can later let a route declare a required Crowi
-  scope (RFC-0010) for token-authed plugin APIs; v1 only needs `public` vs
-  `authed`.
+  scope (RFC-0010) for token-authed plugin APIs; Phase 0 implements 3-tier
+  authorization (`public` / `user` / `admin`).
 - Wiring this also retroactively enables `@action` endpoints and OAuth
   callbacks for *all* plugins — broadly useful, not Slack-only.
 
@@ -177,7 +179,7 @@ follow-up RFC that wires plugin HTTP contribution onto Hono". This is it.
   - OAuth scopes: `links:read`, `links:write`, `chat:write` (Phase 1);
     `commands` (Phase 2)
   - (Phase 2) `slash_commands` + `interactivity.request_url`
-- **Inbound routes** (Phase 0 `registerRoutes`, `public: true`):
+- **Inbound routes** (Phase 0 `registerRoutes`, `auth: 'public'`):
   - `POST /plugins/@crowi/plugin-slack/events` — Events API (unfurl, …)
   - `POST /plugins/@crowi/plugin-slack/slash` — slash commands (Phase 2)
   - `POST /plugins/@crowi/plugin-slack/interactions` — interactivity (Phase 2)
