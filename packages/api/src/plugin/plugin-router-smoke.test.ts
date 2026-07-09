@@ -16,20 +16,28 @@
  *   (a) a trivial plugin route answers at
  *       `/api/v2/plugins/<name>/<path>` (200) and the `<name>` segment
  *       isolates two plugins that mount the same sub-path.
- *   (b) a `public: true` route is reachable unauthenticated; a
- *       non-public route is 401 without a JWT and 200 with one.
+ *   (b) an `auth: 'public'` route is reachable unauthenticated; a
+ *       `'user'` (default) route is 401 without a JWT and 200 with one.
  *   (c) a public route handler reads the exact raw body via
  *       `c.req.text()` (no body-consuming validator ran ahead of it).
  *   (d) the existing real plugins (storage/mail/renderer/search) still
  *       boot — implicitly covered by the shared harness building the real
  *       app in `beforeAll` without error (every other suite relies on it).
+ *
+ * Also covers the route authz-tiers feature (feature-plugin-route-authz-tiers):
+ *   (e) an `auth: 'admin'` route is 403 (`ADMIN_REQUIRED`) for a non-admin
+ *       authenticated user and 200 for an admin.
+ *   (f) the real `@crowi/plugin-slack` plugin's `POST /manifest` route is
+ *       gated behind `auth: 'admin'` end-to-end (AC-4).
  */
 import type { CrowiPlugin } from '@crowi/plugin-api';
+import slackPlugin from '@crowi/plugin-slack';
 import { getRequestListener } from '@hono/node-server';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import request from 'supertest';
 
 import { crowi, Fixture } from 'src/test/setup';
+import { authHeaders, createTestUser } from 'src/test/test-helpers';
 import { buildHonoApp } from 'src/hono';
 import { stripApiV2Prefix } from 'src/hono/path-rewrite';
 import type { UserDocument } from 'src/models/user';
@@ -68,7 +76,17 @@ describe('plugin HTTP routes (registerRoutes)', () => {
   });
 
   afterAll(async () => {
-    await crowi.model('User').deleteMany({ email: 'plugin-route@example.com' });
+    await crowi.model('User').deleteMany({
+      email: {
+        $in: [
+          'plugin-route@example.com',
+          'plugin-route-non-admin@example.com',
+          'plugin-route-admin@example.com',
+          'slack-manifest-non-admin@example.com',
+          'slack-manifest-admin@example.com',
+        ],
+      },
+    });
   });
 
   it('mounts a public route at /api/v2/plugins/<name>/<path> reachable unauthenticated', async () => {
@@ -76,7 +94,7 @@ describe('plugin HTTP routes (registerRoutes)', () => {
       name: '@crowi/plugin-smoke',
       version: '0.0.0',
       registerRoutes: (scope) => {
-        scope.route('GET', '/ping', (c) => c.json({ pong: true }), { public: true });
+        scope.route('GET', '/ping', (c) => c.json({ pong: true }), { auth: 'public' });
       },
     };
     const app = buildAppFromPlugins([plugin]);
@@ -91,7 +109,7 @@ describe('plugin HTTP routes (registerRoutes)', () => {
       name,
       version: '0.0.0',
       registerRoutes: (scope) => {
-        scope.route('GET', '/who', (c) => c.json({ marker }), { public: true });
+        scope.route('GET', '/who', (c) => c.json({ marker }), { auth: 'public' });
       },
     });
     const app = buildAppFromPlugins([makePlugin('@crowi/plugin-a', 'A'), makePlugin('@crowi/plugin-b', 'B')]);
@@ -138,7 +156,7 @@ describe('plugin HTTP routes (registerRoutes)', () => {
             const text = await c.req.text();
             return c.json({ received: text, length: text.length });
           },
-          { public: true },
+          { auth: 'public' },
         );
       },
     };
@@ -148,5 +166,72 @@ describe('plugin HTTP routes (registerRoutes)', () => {
     expect(res.status).toBe(200);
     expect(res.body.received).toBe(rawBody);
     expect(res.body.length).toBe(rawBody.length);
+  });
+
+  it("gates an auth: 'admin' route: 401 without a token, 403 for a non-admin user, 200 for an admin", async () => {
+    const plugin: CrowiPlugin = {
+      name: '@crowi/plugin-adminonly',
+      version: '0.0.0',
+      registerRoutes: (scope) => {
+        scope.route('GET', '/danger', (c) => c.json({ userId: c.get('user')._id.toString() }), { auth: 'admin' });
+      },
+    };
+    const app = buildAppFromPlugins([plugin]);
+    const { accessToken: nonAdminToken } = await createTestUser({
+      name: 'Plugin Route Non Admin',
+      username: 'pluginRouteNonAdmin',
+      email: 'plugin-route-non-admin@example.com',
+      admin: false,
+    });
+    const { user: adminUser, accessToken: adminToken } = await createTestUser({
+      name: 'Plugin Route Admin',
+      username: 'pluginRouteAdmin',
+      email: 'plugin-route-admin@example.com',
+      admin: true,
+    });
+
+    const unauth = await request(app).get('/api/v2/plugins/@crowi/plugin-adminonly/danger');
+    expect(unauth.status).toBe(401);
+    expect(unauth.body.error?.code).toBe('AUTHENTICATION_REQUIRED');
+
+    const nonAdmin = await request(app).get('/api/v2/plugins/@crowi/plugin-adminonly/danger').set(authHeaders(nonAdminToken));
+    expect(nonAdmin.status).toBe(403);
+    expect(nonAdmin.body.error?.code).toBe('ADMIN_REQUIRED');
+
+    const admin = await request(app).get('/api/v2/plugins/@crowi/plugin-adminonly/danger').set(authHeaders(adminToken));
+    expect(admin.status).toBe(200);
+    expect(admin.body.userId).toBe(adminUser._id.toString());
+  });
+
+  describe('AC-4: @crowi/plugin-slack POST /manifest is admin-gated', () => {
+    it('returns 403 (ADMIN_REQUIRED) for a non-admin authenticated user', async () => {
+      const app = buildAppFromPlugins([slackPlugin]);
+      const { accessToken: nonAdminToken } = await createTestUser({
+        name: 'Slack Manifest Non Admin',
+        username: 'slackManifestNonAdmin',
+        email: 'slack-manifest-non-admin@example.com',
+        admin: false,
+      });
+
+      const res = await request(app).post('/api/v2/plugins/@crowi/plugin-slack/manifest').set(authHeaders(nonAdminToken)).send({});
+
+      expect(res.status).toBe(403);
+      expect(res.body.error?.code).toBe('ADMIN_REQUIRED');
+    });
+
+    it('returns 200 with the manifest JSON for an admin user', async () => {
+      const app = buildAppFromPlugins([slackPlugin]);
+      const { accessToken: adminToken } = await createTestUser({
+        name: 'Slack Manifest Admin',
+        username: 'slackManifestAdmin',
+        email: 'slack-manifest-admin@example.com',
+        admin: true,
+      });
+
+      const res = await request(app).post('/api/v2/plugins/@crowi/plugin-slack/manifest').set(authHeaders(adminToken)).send({});
+
+      expect(res.status).toBe(200);
+      expect(typeof res.body.settings?.event_subscriptions?.request_url).toBe('string');
+    });
   });
 });

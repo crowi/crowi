@@ -87,6 +87,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@crowi/plugin-slack": "workspace:*",
     "@crowi/tsconfig": "workspace:*",
     "@types/bcryptjs": "^3.0.0",
     "@types/csrf": "^1.3.2",
