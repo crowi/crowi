@@ -396,6 +396,11 @@ TASK=$(ls .feature-state/tasks/*.json 2>/dev/null | grep -E "(^|/)(feature-)?${I
 `.feature-state/` は **gitignore 配下** (`/.feature-state/`) なので git には乗らない。
 普通の `rm` で消すだけで、commit は不要 / 不可。
 
+**ゲート(`rm` の前に自問して Yes と答えられることを確認):** grep がヒットした場合、
+その全ヒットを実際に file:line で読んで「blocking か説明的言及か」を判定したか?
+していなければ、ここで `rm` を打たず読解に戻る(grep してヒットを見た直後に
+`rm` を連続実行しない — 実例 2026-07-08 の失敗パターンそのもの)。
+
 ```bash
 rm -f <spec> <task>
 ```

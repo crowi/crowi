@@ -336,6 +336,31 @@ Add one file just before merging to main (or within the PR). The initial `.chang
 ### State directories
 - `.reviews/` (gitignored): per-skill review notes; not committed.
 
+### Wiki page writes (mandatory two-step — no inline body)
+
+**Never compose a `crowi_update_page` / `crowi_create_page` body inline as a
+tool-call argument reasoned in the moment.** Always:
+
+1. `Write` the full intended body to a scratch file first.
+2. `Read` that file back — the content you pass to the MCP call must be what
+   the Read tool just returned, not something recalled/retyped from memory.
+3. If the exact body is not ready yet, do not call the tool at all — never
+   pass a stand-in string ("-- see file --", "TBD", etc.) "to fix in the next
+   call". There is no such thing as a placeholder wiki write; every call must
+   carry the real content.
+4. After the call returns, check the response body's length against the
+   scratch file's length. If they diverge, immediately `crowi_get_page` to
+   confirm the live page and redo the write before moving on to anything else.
+
+(Born from a real 2026-07-08/09 incident: `crowi_update_page` was called
+twice with a literal placeholder string as the body, overwriting the real
+page content until the next call. Caught immediately both times only because
+the next action happened to be reading the page back — this protocol removes
+the dependency on noticing by chance. A memory note alone did not prevent the
+second occurrence within the same session; this rule lives in CLAUDE.md
+specifically because CLAUDE.md is always loaded into context, unlike memory
+files, which are retrieved conditionally.)
+
 ## Slash Commands / Skills
 
 User-invocable skills (see `.claude/skills/`):

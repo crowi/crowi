@@ -111,6 +111,8 @@ Workflow の返り値 `codexFallbacks[]` に fallback 発動が記録される�
        `crowi_get_page` で `/crowi/spec/feature-<slug>` の存在を確認 → 無ければ
        `crowi_create_page`(body = spec 全文そのまま)、有れば revision_id を取って
        `crowi_update_page`(楽観ロック。409 は再取得して 1 回リトライ)。
+       **CLAUDE.md「Wiki page writes」の二段階手順(Write→Read→そのまま渡す。
+       body をその場で組み立てない)を必ず守る**。
        MCP 未接続のセッションでは「wiki publish は skip(MCP 未接続)」と報告するだけで
        よい(エラーにしない)。**RFC は publish 対象外**(正本は repo の docs/rfcs/ commit)。
      - **RFC** → `docs/rfcs/00NN-<slug>.md`(**未 commit**)。ユーザーにレビューを依頼し、
