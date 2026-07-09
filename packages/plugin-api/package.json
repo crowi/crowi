@@ -27,7 +27,8 @@
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch --no-clean",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "test": "jest --passWithNoTests"
   },
   "peerDependencies": {
     "hono": "^4.12.25",
@@ -35,8 +36,11 @@
   },
   "devDependencies": {
     "@crowi/tsconfig": "workspace:*",
+    "@types/jest": "catalog:",
     "@types/node": "catalog:",
     "hono": "^4.12.25",
+    "jest": "catalog:",
+    "ts-jest": "catalog:",
     "tsup": "catalog:",
     "typescript": "catalog:",
     "zod": "catalog:"

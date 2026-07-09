@@ -148,9 +148,10 @@ export interface CrowiPlugin {
    * (c) => Response, opts?)`. The handler receives the raw `Context`, so
    * `c.req.text()` / `c.req.raw` give the exact request bytes (no
    * validator consumes the body ahead of it — the Slack signature check
-   * relies on this). Pass `{ public: true }` to bypass `createJwtAuth`
-   * for self-authenticating webhooks; omit it for Crowi-session-gated
-   * routes.
+   * relies on this). Pass `{ auth: 'public' }` to bypass Crowi auth for
+   * self-authenticating webhooks, `{ auth: 'admin' }` for routes that
+   * require `user.admin === true`, or omit `opts` for the `'user'`
+   * default (any authenticated Crowi user).
    *
    * Called once at boot — but unlike the other `register*` hooks, this
    * runs inside `buildHonoApp` (the Hono app does not exist yet when

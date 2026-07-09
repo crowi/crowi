@@ -1,4 +1,5 @@
 import Debug from 'debug';
+import { ACTION_FIELD_MARKER, getActionAnnotation } from '@crowi/plugin-api';
 import type { AuthDriver, CrowiPlugin, MailSender, NotifierDriver, SearchDriver, StorageDriver } from '@crowi/plugin-api';
 import { type CrowiConfigFile, resolvePlugins } from '@crowi/runner';
 import type Crowi from 'src/crowi';
@@ -261,6 +262,30 @@ export class PluginManager {
   }
 
   /**
+   * Walk `plugin.configSchema` (if any) and warn for every field whose
+   * description starts with the `@action` marker but fails to parse
+   * (`getActionAnnotation()` returns null) — same walk shape as
+   * `listSensitiveKeys()`. The most common cause is a plugin author
+   * declaring a verb `PluginRouteMethod` doesn't support (e.g. `PUT` /
+   * `DELETE`, see `schema-markers.ts`): the annotation is silently
+   * unparseable and the admin form renders no button, which is otherwise
+   * a dead surface with no signal. This turns that into a boot-time log
+   * line instead.
+   */
+  private warnOnMalformedActions(plugin: CrowiPlugin): void {
+    const schema = plugin.configSchema;
+    if (!schema) return;
+    for (const [fieldName, field] of Object.entries(schema.shape)) {
+      const description = field.description;
+      if (typeof description !== 'string' || !description.trimStart().startsWith(ACTION_FIELD_MARKER)) continue;
+      if (getActionAnnotation(field) !== null) continue;
+      console.warn(
+        `[crowi:plugin:${plugin.name}] config field '${fieldName}': @action annotation looks malformed (unsupported method) and will not render a button.`,
+      );
+    }
+  }
+
+  /**
    * Deactivate a loaded plugin. Phase 4 only touches the render
    * cache: every cached entry contributed by the named plugin is
    * removed (`invalidatePlugin(name)`). Phase 5+ will broaden this
@@ -295,6 +320,8 @@ export class PluginManager {
   private async activate(plugin: CrowiPlugin): Promise<void> {
     debug('activating %s@%s', plugin.name, plugin.version);
     const ctx = createPluginContext(plugin, this.crowi, this);
+
+    this.warnOnMalformedActions(plugin);
 
     // onInstall runs unconditionally for now. A follow-up will track
     // installed-once state in Mongo and skip on subsequent boots.

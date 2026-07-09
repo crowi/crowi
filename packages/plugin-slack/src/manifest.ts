@@ -62,7 +62,7 @@ const BOT_SCOPES = ['links:read', 'links:write', 'chat:write'];
 
 /**
  * The path the Events API webhook is mounted at (Phase 0 `registerRoutes`
- * + `public: true`). Kept here so the manifest's `request_url` and the
+ * + `auth: 'public'`). Kept here so the manifest's `request_url` and the
  * route registration in `index.ts` cannot drift.
  */
 export const EVENTS_ROUTE_PATH = '/events';

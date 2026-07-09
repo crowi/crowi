@@ -1,4 +1,5 @@
 import type { CrowiPlugin } from '@crowi/plugin-api';
+import { z } from 'zod/v3';
 import { PluginManager } from './plugin-manager';
 
 function makeFakeCrowi(): any {
@@ -154,5 +155,61 @@ describe('PluginManager.reconfigureAffected', () => {
     expect(aReconfigure).toHaveBeenCalled();
     expect(bReconfigure).toHaveBeenCalled();
     expect(result).toEqual({ attempted: 2, succeeded: 2 });
+  });
+});
+
+describe('PluginManager.activate — malformed @action boot warning (AC-6)', () => {
+  // `activate()` is private; the manager's `bootstrap()` entry point pulls
+  // in `@crowi/runner` + a real Hono/DB boot, which is heavier than this
+  // pure-function warning needs. Invoke it directly, matching the existing
+  // `buildDependentsMap()` precedent above.
+  const activate = (manager: PluginManager, plugin: CrowiPlugin): Promise<void> =>
+    // biome-ignore lint/suspicious/noExplicitAny: test access to private fields
+    (manager as any).activate(plugin);
+
+  afterEach(jest.restoreAllMocks);
+
+  it('warns once when an @action field declares an unsupported verb (PUT)', async () => {
+    const consoleSpy = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const configSchema = z
+      .object({
+        broken: z.string().describe('@action "Update resource" PUT /resource').default(''),
+      })
+      .strict();
+    const plugin = stubPlugin({ name: '@crowi/plugin-broken-action', configSchema });
+    const manager = new PluginManager(makeFakeCrowi());
+
+    await activate(manager, plugin);
+
+    expect(consoleSpy).toHaveBeenCalledTimes(1);
+    const [message] = consoleSpy.mock.calls[0];
+    expect(message).toContain('@crowi/plugin-broken-action');
+    expect(message).toContain('broken');
+    expect(message).toContain('@action annotation looks malformed');
+  });
+
+  it('does not warn for a well-formed @action field (GET/POST)', async () => {
+    const consoleSpy = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const configSchema = z
+      .object({
+        manifest: z.string().describe('@action "Generate Slack App manifest" POST /manifest').default(''),
+      })
+      .strict();
+    const plugin = stubPlugin({ name: '@crowi/plugin-ok-action', configSchema });
+    const manager = new PluginManager(makeFakeCrowi());
+
+    await activate(manager, plugin);
+
+    expect(consoleSpy).not.toHaveBeenCalled();
+  });
+
+  it('does not warn for a plugin with no configSchema at all', async () => {
+    const consoleSpy = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const plugin = stubPlugin({ name: '@crowi/plugin-no-schema' });
+    const manager = new PluginManager(makeFakeCrowi());
+
+    await activate(manager, plugin);
+
+    expect(consoleSpy).not.toHaveBeenCalled();
   });
 });
