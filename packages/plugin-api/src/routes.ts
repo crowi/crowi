@@ -27,17 +27,15 @@ export type PluginRouteHandler = (c: Context) => Response | Promise<Response>;
 /** Per-route options passed alongside the handler. */
 export interface PluginRouteOptions {
   /**
-   * When `true`, the route is mounted **without** `createJwtAuth`, so it
-   * is reachable by unauthenticated requests (Crowi-auth public). Use for
-   * inbound webhooks that authenticate themselves out-of-band — e.g. the
-   * Slack Events API endpoint, which is gated by Slack's request-signature
-   * check rather than a Crowi session (RFC-0013 §8).
-   *
-   * Omitted / `false` mounts the route under `createJwtAuth`, so it
-   * requires a valid Crowi JWT just like a core authenticated endpoint
-   * (admin "Test connection" / `@action` targets, OAuth callbacks).
+   * Authorization tier this route requires.
+   * - `'public'`: no auth (self-authenticating webhooks — Slack signature
+   *   check etc.).
+   * - `'user'` (default): any authenticated Crowi user (`createJwtAuth`).
+   * - `'admin'`: `user.admin === true` (`createJwtAdminRequired`) — use for
+   *   Test-connection / `@action` targets reached only from the admin
+   *   config form.
    */
-  public?: boolean;
+  auth?: 'public' | 'user' | 'admin';
 }
 
 /**
@@ -56,11 +54,12 @@ export interface PluginRouterScope {
    * Mount `handler` for `method` at `<path>` under this plugin's
    * namespace. `path` is relative to `/api/v2/plugins/<plugin-name>` and
    * should start with `/` (e.g. `route('POST', '/events', handler, {
-   * public: true })` → `POST /api/v2/plugins/<name>/events`).
+   * auth: 'public' })` → `POST /api/v2/plugins/<name>/events`).
    *
-   * Pass `{ public: true }` to bypass `createJwtAuth` for self-
-   * authenticating inbound webhooks; omit it for routes that require a
-   * Crowi session.
+   * Pass `{ auth: 'public' }` to bypass Crowi auth entirely for self-
+   * authenticating inbound webhooks, `{ auth: 'admin' }` to require
+   * `user.admin === true`, or omit `opts` for the `'user'` default (any
+   * authenticated Crowi user).
    */
   route(method: PluginRouteMethod, path: string, handler: PluginRouteHandler, opts?: PluginRouteOptions): void;
 }

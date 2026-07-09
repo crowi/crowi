@@ -66,7 +66,7 @@ const examplePlugin: CrowiPlugin = {
 
   registerRoutes: (scope, _ctx) => {
     // A self-authenticating inbound webhook (public — no Crowi session).
-    scope.route('POST', '/events', (c) => c.json({ ok: true }), { public: true });
+    scope.route('POST', '/events', (c) => c.json({ ok: true }), { auth: 'public' });
     // A Crowi-session-gated "Test connection" target (default = authed).
     scope.route('GET', '/test', (c) => c.json({ ok: true }));
   },

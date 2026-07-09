@@ -1,5 +1,7 @@
 import type { z } from 'zod/v3';
 
+import type { PluginRouteMethod } from './routes';
+
 /**
  * `configSchema` description-string markers.
  *
@@ -53,7 +55,7 @@ export interface ActionAnnotation {
   /** Visible button label, e.g. "Test connection". */
   label: string;
   /** HTTP verb of the plugin endpoint to call. */
-  method: 'GET' | 'POST' | 'PUT' | 'DELETE';
+  method: PluginRouteMethod;
   /** Path relative to `/api/v2/plugins/<name>/`, with leading slash. */
   path: string;
 }
@@ -64,9 +66,14 @@ export interface ActionAnnotation {
  * Format: `@action "<label>" <METHOD> <path>`
  *   e.g. `@action "Test connection" POST /test`
  *
- * The label may include spaces when wrapped in double quotes; the
- * method is one of `GET` / `POST` / `PUT` / `DELETE`; the path begins
- * with `/`.
+ * The label may include spaces when wrapped in double quotes; the method
+ * must be one of `PluginRouteMethod` (`GET` / `POST` — the only verbs a
+ * plugin route can actually be mounted on, see `routes.ts`); the path
+ * begins with `/`. A description that starts with the `@action` marker
+ * but declares an unsupported verb (e.g. `PUT` / `DELETE`) fails to match
+ * and returns `null` here — callers that walk a plugin's `configSchema`
+ * (e.g. `PluginManager.activate()`) are expected to warn on that case at
+ * boot, since it would otherwise be a silent dead button.
  */
 export function getActionAnnotation(field: z.ZodTypeAny): ActionAnnotation | null {
   const description = field.description;
@@ -76,7 +83,7 @@ export function getActionAnnotation(field: z.ZodTypeAny): ActionAnnotation | nul
 
   const rest = trimmed.slice(ACTION_FIELD_MARKER.length).trimStart();
   // `"<label>" <METHOD> <path>`
-  const match = rest.match(/^"([^"]+)"\s+(GET|POST|PUT|DELETE)\s+(\/\S*)/);
+  const match = rest.match(/^"([^"]+)"\s+(GET|POST)\s+(\/\S*)/);
   if (!match) return null;
 
   const [, label, method, path] = match;
