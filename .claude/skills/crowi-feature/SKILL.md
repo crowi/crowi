@@ -396,6 +396,13 @@ skill がやること (= Workflow の外側、人間ゲートを持つ層):
 - skill 側で守るのは 1 つだけ: **§2.4 の Workflow 起動を、spec 承認と同じ turn で実際に発火**
   すること (「あとは自動で進みます」と予告して Workflow を呼ばずに turn を締めない)。
   起動後は Workflow が完了 status を返すまで進み、skill はその status を受けて報告する。
+- **Workflow 起動後に `ScheduleWakeup` / heartbeat / ポーリング用 wakeup を張らない。**
+  Workflow はハーネスが追跡する background task なので、完了時に**自動で再起動 (再 invoke)
+  される** — 保険の heartbeat は不要。かつ非 /loop コンテキストでは `ScheduleWakeup` に
+  渡す `prompt` が無く、`prompt is required when stop is not true` で弾かれる (実例
+  2026-07-09 の impl セッション: Workflow 起動直後に「完了通知取りこぼしの保険」として
+  1200s の wakeup を prompt 無しで張ろうとし失敗 — 無害だが不要かつエラー)。起動後は
+  ただ待つ (完了 notification が来る)。
 
 ### 4. 完了
 

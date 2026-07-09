@@ -131,6 +131,10 @@ Workflow の返り値 `codexFallbacks[]` に fallback 発動が記録される�
 > skill 側で守るのは 1 つだけ: **§2 と §4 の Workflow 起動を実際に発火** すること
 > (「あとは自動で進みます」と予告して Workflow を呼ばずに turn を締めない)。
 > Workflow を呼ぶのは「skill の指示で呼ぶ」= 正当な opt-in(勝手な多エージェント化ではない)。
+> **Workflow 起動後に `ScheduleWakeup` / heartbeat を張らない** — ハーネスが追跡する
+> background task なので完了時に自動再起動される(保険の wakeup は不要かつ、非 /loop
+> では prompt 無しで `prompt is required when stop is not true` エラーになる。crowi-feature
+> SKILL.md の同注記参照)。
 
 ## サブコマンド
 
