@@ -18,6 +18,7 @@ import type { OpenAPIHono } from '@hono/zod-openapi';
 
 import type Crowi from 'src/crowi';
 import type { CrowiHonoBindings } from 'src/hono/app';
+import { createJwtAdminRequired } from 'src/hono/middleware/admin';
 import { createJwtAuth } from 'src/hono/middleware/auth';
 
 /**
@@ -111,9 +112,13 @@ export const makeMailScope = (registry: DriverRegistry<MailSender>, plugin: stri
  * the body un-consumed by any validator, preserving the raw-body
  * invariant the Slack signature check depends on (RFC-0013 §8).
  *
- * `public: true` mounts the route bare; otherwise `createJwtAuth(crowi)`
- * is installed on that exact path (the per-path install mirrors
- * `oauth.ts`'s public-vs-authed handling).
+ * `opts.auth` selects the authorization tier installed on that exact path
+ * (the per-path install mirrors `oauth.ts`'s public-vs-authed handling):
+ * `'public'` mounts the route bare, `'user'` (the default when `opts` is
+ * omitted) installs `createJwtAuth(crowi)`, and `'admin'` installs
+ * `createJwtAdminRequired(crowi)` — the same middleware every `/admin/*`
+ * handler uses, so a plugin's admin-tier route enforces `user.admin ===
+ * true` identically to a core admin endpoint.
  */
 export const makePluginRouterScope = (app: OpenAPIHono<CrowiHonoBindings>, crowi: Crowi, plugin: string): PluginRouterScope => {
   const mountPath = (path: string): string => {
@@ -126,11 +131,14 @@ export const makePluginRouterScope = (app: OpenAPIHono<CrowiHonoBindings>, crowi
   return {
     route(method: PluginRouteMethod, path: string, handler: PluginRouteHandler, opts?: PluginRouteOptions): void {
       const fullPath = mountPath(path);
-      // Non-public routes get a per-path jwtAuth install (public webhooks
-      // authenticate themselves out-of-band, e.g. Slack request signing).
-      if (!opts?.public) {
+      const auth = opts?.auth ?? 'user';
+      if (auth === 'admin') {
+        app.use(fullPath, createJwtAdminRequired(crowi));
+      } else if (auth === 'user') {
         app.use(fullPath, createJwtAuth(crowi));
       }
+      // auth === 'public': no middleware installed — public webhooks
+      // authenticate themselves out-of-band, e.g. Slack request signing.
       // The handler is a plain `(c) => Response` — register it on the
       // underlying instance for the requested verb. `app.on(method, …)`
       // takes the method as a string so both verbs share one code path.
