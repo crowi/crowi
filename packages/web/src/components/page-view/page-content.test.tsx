@@ -369,3 +369,130 @@ describe('PageContent — height override + max-width invariant (AC-B7)', () => 
     expect(img.className).toContain('max-w-full');
   });
 });
+
+const LONG_TOKEN = 'apps/api/src/schema/migrations/2026-07-08-add-auth-token-family-columns.sql';
+
+/** A minimal GFM table mdast: a header row (becomes `<thead><tr><th>`) plus one body row (`<tbody><tr><td>`), matching how `mdast-util-to-hast`'s `table` handler shapes GFM `|...|` tables (see `mdast-util-to-hast/lib/handlers/table.js`). `cellValue` seeds the first body cell so a long-token regression is easy to assert on. */
+function gfmTableAst(cellValue: string) {
+  return {
+    type: 'root',
+    children: [
+      {
+        type: 'table',
+        children: [
+          {
+            type: 'tableRow',
+            children: [
+              { type: 'tableCell', children: [{ type: 'text', value: 'Path' }] },
+              { type: 'tableCell', children: [{ type: 'text', value: 'Note' }] },
+            ],
+          },
+          {
+            type: 'tableRow',
+            children: [
+              { type: 'tableCell', children: [{ type: 'text', value: cellValue }] },
+              { type: 'tableCell', children: [{ type: 'text', value: 'migration file' }] },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+}
+
+/** Render `renderedAst` through the preview path the same way `MarkdownPreview` wraps its output in production — inside a `.crowi-prose` container (see `MarkdownPreview.tsx`'s default `className ?? 'crowi-prose min-w-0'`) — so `.crowi-prose th`/`.crowi-prose td` scoping is exercised the same way it is at runtime, not left unscoped like the bare `renderMdastToReactNode` calls above (which don't need `.crowi-prose` for their own assertions). */
+function renderPreviewInCrowiProse(renderedAst: unknown) {
+  const previewNode = renderMdastToReactNode(renderedAst, {
+    sectionWrap: false,
+    components: previewComponents as unknown as Parameters<typeof renderMdastToReactNode>[1]['components'],
+  });
+  return render(<div className="crowi-prose min-w-0">{previewNode}</div>);
+}
+
+describe('PageContent — GFM table DOM parity: page view vs. editor preview (mobile table-scroll fix)', () => {
+  it('renders the overflow-x-auto wrapper > table > th/td structure, inside .crowi-prose, on the page-view path', () => {
+    renderPage(pageWithAst(gfmTableAst(LONG_TOKEN)));
+
+    const table = screen.getByRole('table');
+    const wrapper = table.parentElement as HTMLElement;
+    expect(wrapper.className).toContain('overflow-x-auto');
+    expect(wrapper.closest('.crowi-prose')).not.toBeNull();
+
+    const headerCells = screen.getAllByRole('columnheader');
+    expect(headerCells).toHaveLength(2);
+    expect(headerCells.every((el) => el.tagName === 'TH')).toBe(true);
+
+    const dataCells = screen.getAllByRole('cell');
+    expect(dataCells).toHaveLength(2);
+    expect(dataCells.every((el) => el.tagName === 'TD')).toBe(true);
+    expect(dataCells[0].textContent).toBe(LONG_TOKEN);
+  });
+
+  it('renders the identical wrapper/table/th/td structure for the same GFM table on the editor-preview path (parity with page view)', () => {
+    const ast = gfmTableAst(LONG_TOKEN);
+
+    renderPage(pageWithAst(ast));
+    const pageTable = screen.getByRole('table');
+    const pageWrapper = pageTable.parentElement as HTMLElement;
+    const pageResult = {
+      wrapperClassName: pageWrapper.className,
+      tableClassName: pageTable.className,
+      headerTagNames: screen.getAllByRole('columnheader').map((el) => el.tagName),
+      cellTagNames: screen.getAllByRole('cell').map((el) => el.tagName),
+      cellText: screen.getAllByRole('cell').map((el) => el.textContent),
+    };
+    cleanup();
+
+    renderPreviewInCrowiProse(ast);
+    const previewTable = screen.getByRole('table');
+    const previewWrapper = previewTable.parentElement as HTMLElement;
+
+    expect(previewWrapper.className).toBe(pageResult.wrapperClassName);
+    expect(previewTable.className).toBe(pageResult.tableClassName);
+    expect(screen.getAllByRole('columnheader').map((el) => el.tagName)).toEqual(pageResult.headerTagNames);
+    expect(screen.getAllByRole('cell').map((el) => el.tagName)).toEqual(pageResult.cellTagNames);
+    expect(screen.getAllByRole('cell').map((el) => el.textContent)).toEqual(pageResult.cellText);
+    expect(previewWrapper.closest('.crowi-prose')).not.toBeNull();
+  });
+});
+
+describe('PageContent — raw HTML <table> keeps its tag structure + .crowi-prose scope under conflicting class attributes', () => {
+  it('preserves table/th/td tags and .crowi-prose scope for a raw HTML table carrying conflicting whitespace/wrap utility classes', () => {
+    // `known-tags.ts` allow-lists table/thead/tbody/tr/th/td, so this raw
+    // HTML block survives `escapeUnknownRawHtml` + `raw()` as real elements
+    // instead of being demoted to text or stripped (see `render-mdast.ts`).
+    const renderedAst = {
+      type: 'root',
+      children: [
+        {
+          type: 'html',
+          value:
+            `<table class="foo"><thead><tr><th class="whitespace-normal">Path</th></tr></thead>` +
+            `<tbody><tr><td class="whitespace-normal break-all">${LONG_TOKEN}</td></tr></tbody></table>`,
+        },
+      ],
+    };
+    renderPage(pageWithAst(renderedAst));
+
+    const table = screen.getByRole('table');
+    expect(table.tagName).toBe('TABLE');
+    expect(table.closest('.crowi-prose')).not.toBeNull();
+
+    const th = screen.getByRole('columnheader');
+    expect(th.tagName).toBe('TH');
+    // The raw `class` still lands on the DOM node (JSX spreads `...props`,
+    // including the raw `class`, after the component's base `className`) —
+    // deciding which wins at the *computed-style* level is the unlayered
+    // `.crowi-prose th, .crowi-prose td` CSS rule in `globals.css`, which
+    // jsdom does not load (see `vitest.config.ts`) and is therefore out of
+    // scope for this assertion; only the tag/structure survival is checked
+    // here.
+    expect(th.className).toContain('whitespace-normal');
+
+    const td = screen.getByRole('cell');
+    expect(td.tagName).toBe('TD');
+    expect(td.className).toContain('whitespace-normal');
+    expect(td.className).toContain('break-all');
+    expect(td.textContent).toBe(LONG_TOKEN);
+  });
+});

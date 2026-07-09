@@ -45,6 +45,12 @@ code blocks, and so on — works as-is.
   paragraphs and list items rather than pushing the article past the
   viewport. Fenced `<pre>` code blocks are exempt and keep their
   horizontal scroll.
+- Tables keep their column structure instead — a cell holding a long
+  unbreakable token (a file path, an identifier) never wraps
+  character-by-character. If a table ends up wider than its container,
+  it scrolls horizontally on its own rather than stretching the page.
+  This applies to both GFM `|...|` tables and raw HTML `<table>` written
+  directly in the page body.
 
 ## Crowi core extensions
 

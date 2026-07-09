@@ -351,6 +351,29 @@ html[data-page-grant="2"] {
   overflow-wrap: anywhere;
 }
 
+/* Table cells opt out of the `anywhere` wrap above. A table's intrinsic
+ * (min-content) column width shrinks to ~1 character once any wrap point
+ * exists in a cell, so a long unbroken token (a path, an identifier) makes
+ * every cell in its column collapse to one-character-per-line instead of
+ * triggering the `overflow-x-auto` wrapper that already surrounds every
+ * rendered table (`page-content.tsx` / `MarkdownPreview.tsx`). Resetting
+ * both `white-space` and `overflow-wrap` restores each cell's real
+ * intrinsic width, so the table (not the viewport) grows past the wrapper
+ * and the wrapper's existing horizontal scroll takes over, matching GitHub
+ * / Claude Code table behaviour. Written unlayered (like the rule above)
+ * so it beats the `utilities`-layer Tailwind classes `@import "tailwindcss"`
+ * generates regardless of selector specificity — including a raw HTML
+ * `<td class="whitespace-normal">` written directly in the page body,
+ * which the component's own `className` cannot reliably out-rank because
+ * JSX spreads `...props` (and thus the raw `class`) after the base
+ * `className`. No `!important`: an author's own inline `style` on a raw
+ * `<td>`/`<th>` is left free to override this, intentionally. */
+.crowi-prose th,
+.crowi-prose td {
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+
 .crowi-prose section[data-section-id] {
   /* Each section is its own scroll target reach, but scroll-mt is already
    * on the heading inside; section is a layout container only. */
