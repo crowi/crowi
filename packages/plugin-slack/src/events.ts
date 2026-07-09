@@ -34,7 +34,7 @@ type SlackEnvelope =
 
 /**
  * Handle one inbound Slack request (mounted at `POST /events`,
- * `public: true`). This is the single internal dispatcher RFC-0013 §5
+ * `auth: 'public'`). This is the single internal dispatcher RFC-0013 §5
  * calls for — future `/slash` and `/interactions` routes will share it.
  *
  * Flow:

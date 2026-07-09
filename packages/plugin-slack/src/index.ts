@@ -91,20 +91,25 @@ const plugin: CrowiPlugin = {
     // request signature is the only authentication (verified inside the
     // handler). The raw body must reach the handler intact (Phase 0
     // guarantees no validator consumes it).
-    scope.route('POST', EVENTS_ROUTE_PATH, (c) => handleSlackEvent(c, ctx, resolveBaseUrl(ctx)), { public: true });
+    scope.route('POST', EVENTS_ROUTE_PATH, (c) => handleSlackEvent(c, ctx, resolveBaseUrl(ctx)), { auth: 'public' });
 
     // `@action` target for the "Generate Slack App manifest" button —
-    // authed (admin-only, reached from the config form). Returns the
-    // manifest JSON the operator pastes into Slack.
-    scope.route('POST', '/manifest', (c) => {
-      const baseUrl = resolveBaseUrl(ctx);
-      if (!baseUrl) {
-        return c.json({ error: 'CLIENT_URL (or SLACK_MANIFEST_REQUEST_URL) is not set; cannot build a manifest.' }, 400);
-      }
-      // App name = the wiki's own name (core app:title); appInfo() already
-      // defaults a blank title to 'Crowi', so this is always non-empty.
-      return c.json(buildManifest({ baseUrl, wikiName: ctx.appInfo().title }));
-    });
+    // admin-only, reached from the config form. Returns the manifest JSON
+    // the operator pastes into Slack.
+    scope.route(
+      'POST',
+      '/manifest',
+      (c) => {
+        const baseUrl = resolveBaseUrl(ctx);
+        if (!baseUrl) {
+          return c.json({ error: 'CLIENT_URL (or SLACK_MANIFEST_REQUEST_URL) is not set; cannot build a manifest.' }, 400);
+        }
+        // App name = the wiki's own name (core app:title); appInfo() already
+        // defaults a blank title to 'Crowi', so this is always non-empty.
+        return c.json(buildManifest({ baseUrl, wikiName: ctx.appInfo().title }));
+      },
+      { auth: 'admin' },
+    );
 
     ctx.log.debug('registered slack routes (events + manifest)');
   },
