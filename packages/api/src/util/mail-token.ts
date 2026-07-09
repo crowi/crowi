@@ -1,7 +1,7 @@
-import crypto from 'node:crypto';
-import jwt from 'jsonwebtoken';
 import { type MailTokenPayload, MailTokenPayloadSchema, type MailTokenPurpose } from '@crowi/api-contract';
 import Debug from 'debug';
+
+import { createSignedTokenUtil } from './signed-token-factory';
 
 const debug = Debug('crowi:util:mail-token');
 
@@ -49,58 +49,19 @@ export interface SignMailTokenResult {
 }
 
 /**
- * Process-wide random fallback secret, generated at most once. Must NOT
- * be per-call: a mail token is signed in one request (e.g. the invite
- * email) and verified in a later, separate request (the accept link) —
- * often by a different `createMailTokenUtil()` instance. If each call
- * minted its own random secret, every cross-handler token would fail
- * verification whenever WS_TOKEN_SECRET is unset.
+ * Thin wrapper around `createSignedTokenUtil` (secret resolution —
+ * placeholder rejection included — memoization, sign, verify all live
+ * there now; see `util/signed-token-factory.ts`). Per-purpose TTLs are
+ * expressed through the factory's `ttlSeconds` claims-function form.
+ * `verifyMailToken`'s purpose match check is mail-token-specific
+ * wiring, so it stays here rather than in the shared factory.
  */
-let fallbackSecret: string | null = null;
-
-/**
- * Resolve the signing secret. Reads WS_TOKEN_SECRET per call so a test
- * mutating the env between imports still picks up the latest value; the
- * random fallback is memoized process-wide.
- *
- * The "secret missing" warning is emitted here (lazily, on first
- * resolution) rather than at module-load time: this module is imported
- * transitively before `app.ts` runs `dotenv.config()`, so a load-time
- * `process.env` read fires a false warning even when `.env` defines
- * `WS_TOKEN_SECRET`. The memoized `fallbackSecret` makes the warn fire
- * exactly once per process. Silenced under tests.
- */
-const resolveMailTokenSecret = (): string => {
-  const fromEnv = process.env.WS_TOKEN_SECRET;
-  if (fromEnv && fromEnv.length > 0) {
-    return fromEnv;
-  }
-  if (!fallbackSecret) {
-    fallbackSecret = crypto.randomBytes(32).toString('base64');
-    if (process.env.NODE_ENV !== 'test') {
-      console.warn(
-        '[crowi] WS_TOKEN_SECRET is not set — mail tokens (invite / activate / reset links) will be signed ' +
-          'with a random in-memory secret. Process restarts will invalidate outstanding links, and multi-instance ' +
-          'deployments will not be able to cross-verify them. Set WS_TOKEN_SECRET to a stable base64-encoded ' +
-          '32-byte value (`openssl rand -base64 32`) in production.',
-      );
-    }
-  }
-  return fallbackSecret;
-};
-
-function buildMailTokenUtil() {
-  const secret = resolveMailTokenSecret();
-
-  function signMailToken(claims: MailTokenClaims): SignMailTokenResult {
-    const iat = Math.floor(Date.now() / 1000);
-    const exp = iat + MAIL_TOKEN_TTL_SECONDS[claims.purpose];
-    const token = jwt.sign({ ...claims, iat, exp }, secret, {
-      issuer: MAIL_TOKEN_ISSUER,
-      algorithm: 'HS256',
-    });
-    return { token, expiresAt: new Date(exp * 1000) };
-  }
+export function createMailTokenUtil() {
+  const util = createSignedTokenUtil<MailTokenClaims, MailTokenPayload>({
+    issuer: MAIL_TOKEN_ISSUER,
+    ttlSeconds: (claims) => MAIL_TOKEN_TTL_SECONDS[claims.purpose],
+    payloadSchema: MailTokenPayloadSchema,
+  });
 
   /**
    * Verify a mail token and require its `purpose` to match. Returns the
@@ -108,32 +69,21 @@ function buildMailTokenUtil() {
    * signature, wrong issuer, malformed claims, purpose mismatch).
    */
   function verifyMailToken(token: string, expectedPurpose: MailTokenPurpose): MailTokenPayload | null {
-    try {
-      const decoded = jwt.verify(token, secret, {
-        issuer: MAIL_TOKEN_ISSUER,
-        algorithms: ['HS256'],
-      });
-      const parsed = MailTokenPayloadSchema.safeParse(decoded);
-      if (!parsed.success) {
-        debug('mail token payload failed schema validation:', parsed.error.issues);
-        return null;
-      }
-      if (parsed.data.purpose !== expectedPurpose) {
-        debug('mail token purpose mismatch: expected %s, got %s', expectedPurpose, parsed.data.purpose);
-        return null;
-      }
-      return parsed.data;
-    } catch (err) {
-      debug('mail token verification failed:', (err as Error).message);
+    const parsed = util.verify(token);
+    if (parsed === null) return null;
+    if (parsed.purpose !== expectedPurpose) {
+      debug('mail token purpose mismatch: expected %s, got %s', expectedPurpose, parsed.purpose);
       return null;
     }
+    return parsed;
   }
 
-  return { signMailToken, verifyMailToken, issuer: MAIL_TOKEN_ISSUER, ttlSeconds: MAIL_TOKEN_TTL_SECONDS };
+  return {
+    signMailToken: (claims: MailTokenClaims): SignMailTokenResult => util.sign(claims),
+    verifyMailToken,
+    issuer: MAIL_TOKEN_ISSUER,
+    ttlSeconds: MAIL_TOKEN_TTL_SECONDS,
+  };
 }
 
-export type MailTokenUtil = ReturnType<typeof buildMailTokenUtil>;
-
-export function createMailTokenUtil(): MailTokenUtil {
-  return buildMailTokenUtil();
-}
+export type MailTokenUtil = ReturnType<typeof createMailTokenUtil>;
