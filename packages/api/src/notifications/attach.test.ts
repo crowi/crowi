@@ -1,6 +1,7 @@
-// Pin a stable WS_TOKEN_SECRET *before* the attach module loads.
-// The util now reads the env per-call, but the module-load-time
-// missing-secret warn still inspects it at import time.
+// Pin a stable WS_TOKEN_SECRET before any token util is constructed
+// below. The secret is resolved fresh per `createNotificationsTokenUtil()`
+// call (see util/signed-token-factory.ts), not at module import time;
+// pinning it up front just keeps the value stable for the whole file.
 process.env.WS_TOKEN_SECRET = process.env.WS_TOKEN_SECRET ?? 'test-ws-token-secret-base64-32bytes-=';
 
 import http from 'node:http';

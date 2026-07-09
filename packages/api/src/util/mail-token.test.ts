@@ -1,6 +1,9 @@
-// Pin a stable WS_TOKEN_SECRET before the util module loads (the
-// module-load-time warn check reads the env at import time). Mirrors
-// notifications-token.test.ts.
+// Pin a stable WS_TOKEN_SECRET before any token util is constructed
+// below — the secret is resolved fresh on every `createXTokenUtil()`
+// call (see signed-token-factory.ts), not at module import time. The
+// "rejects an expired token" test signs directly with
+// `process.env.WS_TOKEN_SECRET`, so a stable value must be in place for
+// the whole file. Mirrors notifications-token.test.ts.
 process.env.WS_TOKEN_SECRET = process.env.WS_TOKEN_SECRET ?? 'test-ws-token-secret-base64-32bytes-=';
 
 import jwt from 'jsonwebtoken';
@@ -69,5 +72,36 @@ describe('createMailTokenUtil', () => {
     const notifUtil = createNotificationsTokenUtil();
     const { token } = notifUtil.signNotificationsToken({ selfUserId: 'user-1' });
     expect(mailUtil.verifyMailToken(token, 'invite')).toBeNull();
+  });
+
+  it('AC-5 (security-critical regression): a password-reset token is NOT signed with a placeholder WS_TOKEN_SECRET itself', () => {
+    // Before signed-token-factory.ts, mail-token.ts had no placeholder
+    // rejection (unlike ws-token.ts): a `.env` copied from an older
+    // template with `WS_TOKEN_SECRET=changeme` left uncorrected in
+    // production would sign password-reset links with that world-known
+    // string, letting anyone forge a valid reset token for any user.
+    const original = process.env.WS_TOKEN_SECRET;
+    process.env.WS_TOKEN_SECRET = 'changeme';
+    try {
+      const { token } = createMailTokenUtil().signMailToken({ purpose: 'reset', userId: 'victim-user-id', email: 'victim@example.com' });
+
+      // A forgery signed with the literal placeholder must NOT verify —
+      // it would if the real token above had actually been signed with
+      // that same placeholder string. Strip `iss` from the decoded
+      // claims first: jsonwebtoken's `sign()` rejects a payload that
+      // already carries `iss` when `options.issuer` is also passed.
+      const claims = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'));
+      delete claims.iss;
+      const forged = jwt.sign(claims, 'changeme', { issuer: 'crowi-mail-token', algorithm: 'HS256' });
+      expect(forged).not.toBe(token);
+      expect(createMailTokenUtil().verifyMailToken(forged, 'reset')).toBeNull();
+
+      // The genuine token (signed with the random fallback secret) still
+      // verifies normally.
+      expect(createMailTokenUtil().verifyMailToken(token, 'reset')?.userId).toBe('victim-user-id');
+    } finally {
+      if (original === undefined) delete process.env.WS_TOKEN_SECRET;
+      else process.env.WS_TOKEN_SECRET = original;
+    }
   });
 });
