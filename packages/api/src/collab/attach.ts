@@ -174,10 +174,13 @@ export async function attachCollabServer(httpServer: HttpServer, crowi: Crowi): 
     PluginRenderCache: crowi.model('PluginRenderCache'),
   };
 
-  // Same sign+verify pair the wsToken HTTP handler uses. In the
-  // RFC-0003 same-process attach world, the api signs in
-  // `routes/ts-rest/page-collab.ts` and verifies here against the
-  // **same closure-captured secret** — no env distribution drift.
+  // Independent `createWsTokenUtil()` call from the one
+  // `hono/handlers/page-collab.ts` builds for signing — each resolves
+  // its own secret via `util/signed-token-factory.ts`, but both agree
+  // on the same value (read `WS_TOKEN_SECRET` fresh from the same env,
+  // or share the same process-wide random fallback when it's unset), so
+  // sign / verify can never drift apart within one process. No env
+  // distribution drift either way.
   const wsTokenUtil: CollabWsTokenUtil = createWsTokenUtil();
 
   // Process-wide cap counter shared with the wsToken HTTP handler

@@ -1,7 +1,9 @@
-// Pin a stable WS_TOKEN_SECRET *before* the util module loads. The
-// secret is now resolved per `createNotificationsTokenUtil()` call (no
-// cached singleton), but the module-load-time warn check still reads
-// the env at import time, so we set it before importing.
+// Pin a stable WS_TOKEN_SECRET before any token util is constructed
+// below. The secret is resolved fresh on every
+// `createNotificationsTokenUtil()` call (no cached singleton — see
+// signed-token-factory.ts), not at module import time; two tests below
+// sign directly with `process.env.WS_TOKEN_SECRET`, so a stable value
+// must be in place for the whole file.
 process.env.WS_TOKEN_SECRET = process.env.WS_TOKEN_SECRET ?? 'test-ws-token-secret-base64-32bytes-=';
 
 import jwt from 'jsonwebtoken';
@@ -146,6 +148,40 @@ describe('createNotificationsTokenUtil', () => {
     // other (because both resolve `WS_TOKEN_SECRET` from the same env).
     const { token } = a.signNotificationsToken({ selfUserId: 'user-roundtrip' });
     expect(b.verifyNotificationsToken(token)?.selfUserId).toBe('user-roundtrip');
+  });
+
+  it('AC-5 (security-critical regression): notifications and presence tokens are NOT signed with a placeholder WS_TOKEN_SECRET itself', () => {
+    // Before signed-token-factory.ts, only ws-token.ts rejected known
+    // placeholder secrets (`changeme` etc). notifications-token.ts and
+    // presence-token.ts signed with the placeholder string verbatim,
+    // letting anyone who knows the placeholder forge a valid token for
+    // either channel. Both now route through the shared factory, so
+    // both get the same rejection.
+    const original = process.env.WS_TOKEN_SECRET;
+    process.env.WS_TOKEN_SECRET = 'changeme';
+    try {
+      // Strip `iss` from the decoded claims: jsonwebtoken's `sign()`
+      // rejects a payload that already carries `iss` when
+      // `options.issuer` is also passed.
+      const decode = (token: string): Record<string, unknown> => {
+        const claims = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'));
+        delete claims.iss;
+        return claims;
+      };
+
+      const notifResult = createNotificationsTokenUtil().signNotificationsToken({ selfUserId: 'user-1' });
+      const forgedNotif = jwt.sign(decode(notifResult.token), 'changeme', { issuer: 'crowi-notifications', algorithm: 'HS256' });
+      expect(forgedNotif).not.toBe(notifResult.token);
+      expect(createNotificationsTokenUtil().verifyNotificationsToken(forgedNotif)).toBeNull();
+
+      const presenceResult = createPresenceTokenUtil().signPresenceToken({ userId: 'user-1', pageId: 'page-1' });
+      const forgedPresence = jwt.sign(decode(presenceResult.token), 'changeme', { issuer: 'crowi-presence', algorithm: 'HS256' });
+      expect(forgedPresence).not.toBe(presenceResult.token);
+      expect(createPresenceTokenUtil().verifyPresenceToken(forgedPresence)).toBeNull();
+    } finally {
+      if (original === undefined) delete process.env.WS_TOKEN_SECRET;
+      else process.env.WS_TOKEN_SECRET = original;
+    }
   });
 
   it('memoizes the random fallback secret when WS_TOKEN_SECRET is unset, so a separate mint / verify util pair still agrees (regression: unthrottled notifications WS reconnect storm)', () => {
