@@ -1,5 +1,6 @@
 import { Types } from 'mongoose';
 import request from 'supertest';
+import type { CrowiPlugin } from '@crowi/plugin-api';
 import { app, crowi } from 'src/test/setup';
 import { authHeaders, createTestUser } from 'src/test/test-helpers';
 import type { PluginRenderCacheModel } from 'src/models/plugin-render-cache';
@@ -128,5 +129,70 @@ describe('Routes /api/v2/admin/plugins (Hono) — Phase 4 cache clear endpoints'
       expect(remaining).toHaveLength(1);
       expect(remaining[0].pluginName).toBe('@crowi/plugin-other');
     });
+  });
+});
+
+describe('GET /api/v2/admin/plugins — status/error fields (feature-plugin-registration-isolation AC-7)', () => {
+  let adminToken: string;
+  let userToken: string;
+
+  beforeAll(async () => {
+    const admin = await createTestUser({
+      name: 'Plugins List Admin',
+      username: 'pluginsListAdmin',
+      email: 'plugins-list-admin@example.com',
+      admin: true,
+    });
+    adminToken = admin.accessToken;
+
+    const normal = await createTestUser({
+      name: 'Plugins List Normal',
+      username: 'pluginsListNormal',
+      email: 'plugins-list-normal@example.com',
+      admin: false,
+    });
+    userToken = normal.accessToken;
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('returns 401 without auth', async () => {
+    const res = await request(app).get('/api/v2/admin/plugins');
+    expect(res.status).toBe(401);
+    expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
+  });
+
+  it('returns 403 for a non-admin user', async () => {
+    const res = await request(app).get('/api/v2/admin/plugins').set(authHeaders(userToken));
+    expect(res.status).toBe(403);
+    expect(res.body.error.code).toBe('ADMIN_REQUIRED');
+  });
+
+  it('surfaces a failed plugin as status: "failed" with its error message, alongside status: "active" loaded plugins', async () => {
+    const manager = crowi.pluginManager;
+    if (!manager) throw new Error('PluginManager not bootstrapped in harness');
+    const failedPlugin: CrowiPlugin = { name: '@crowi/plugin-boom', version: '0.0.0' };
+    // `getFailedPlugins()` is normally empty in this harness (nothing fails
+    // to activate in the dev runner's plugin set) — stub it the same way
+    // `plugin-router-smoke.test.ts` stubs `getLoadedPlugins()` to exercise
+    // a synthetic case without touching the shared crowi instance.
+    jest.spyOn(manager, 'getFailedPlugins').mockReturnValue([{ plugin: failedPlugin, error: 'activation exploded' }]);
+
+    const res = await request(app).get('/api/v2/admin/plugins').set(authHeaders(adminToken));
+
+    expect(res.status).toBe(200);
+    const failedEntry = (res.body.plugins as Array<{ name: string; status: string; error?: string }>).find((p) => p.name === '@crowi/plugin-boom');
+    expect(failedEntry).toMatchObject({ status: 'failed', error: 'activation exploded' });
+
+    const activeEntries = (res.body.plugins as Array<{ name: string; status: string }>).filter((p) => p.name !== '@crowi/plugin-boom');
+    // The dev runner's implicit-default plugin set always loads at least
+    // one plugin (see the `clears only the named plugin entries` test
+    // above) — every one of those is `status: 'active'`.
+    expect(activeEntries.length).toBeGreaterThan(0);
+    for (const entry of activeEntries) {
+      expect(entry.status).toBe('active');
+    }
   });
 });

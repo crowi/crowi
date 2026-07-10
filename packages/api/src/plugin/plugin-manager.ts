@@ -77,6 +77,12 @@ export class PluginManager {
   private notifier = new DriverRegistry<NotifierDriver>('notifier');
   private mail = new DriverRegistry<MailSender>('mail');
   private loadedPlugins: CrowiPlugin[] = [];
+  /**
+   * Plugins whose `activate()` threw during the last `bootstrap()` run,
+   * with the error message that was thrown. Populated by `activateAll()`;
+   * see `getFailedPlugins()`.
+   */
+  private failedPlugins: { plugin: CrowiPlugin; error: string }[] = [];
   /** plugin name → set of plugin names that `requires` it */
   private dependents = new Map<string, Set<string>>();
 
@@ -116,9 +122,11 @@ export class PluginManager {
     // are encrypted at rest just like legacy keys.
     registerSensitiveConfigKeys(this.listSensitiveKeys().map((k) => `crowi:${k}`));
 
-    for (const plugin of ordered) {
-      await this.activate(plugin);
-    }
+    // Narrows `this.loadedPlugins` (currently == `ordered`, see above) down
+    // to just the plugins that activated without throwing — `buildDependentsMap()`
+    // and `resolveActiveDrivers()` below both read `this.loadedPlugins`, so they
+    // automatically see the post-isolation set. See `activateAll()`.
+    await this.activateAll(ordered);
 
     this.buildDependentsMap();
     this.crowi.getConfigService().onConfigChange((changedNamespaces, source) => this.handleConfigChange(changedNamespaces, source));
@@ -254,6 +262,18 @@ export class PluginManager {
   }
 
   /**
+   * Plugins whose `activate()` threw during the last `activateAll()` run
+   * (i.e. the last `bootstrap()`), with the error message. These are
+   * excluded from `getLoadedPlugins()` / `getLoadedPlugin()` — see
+   * `activateAll()`. Surfaced by `GET /admin/plugins` as `status: 'failed'`
+   * rows so operators can see and (via `crowi.config.json`) remove a
+   * broken plugin without the rest of the app being unreachable.
+   */
+  getFailedPlugins(): readonly { plugin: CrowiPlugin; error: string }[] {
+    return this.failedPlugins;
+  }
+
+  /**
    * Run `assertZodV3ConfigSchema()` over every plugin in `plugins` that
    * declares a `configSchema`, in order. Called once from `bootstrap()`
    * right after topo-sort — see the call site for why this must happen
@@ -343,6 +363,38 @@ export class PluginManager {
       console.warn(`[crowi:plugin:${name}] deactivate failed during render-cache invalidation: ${message}`);
     }
     return true;
+  }
+
+  /**
+   * Call `activate()` on every plugin in `ordered`, isolating each call in
+   * its own try/catch (same policy as `runReconfigure()` / `deactivate()`
+   * — a single broken plugin must not prevent every other plugin, or the
+   * rest of boot, from proceeding). A plugin whose `activate()` throws is
+   * recorded in `failedPlugins` (see `getFailedPlugins()`) and excluded
+   * from `this.loadedPlugins`; any `register*` calls it made before
+   * throwing are intentionally not rolled back — the resulting
+   * unresolved-driver-name path is handled by `resolveOrWarn()` below,
+   * same as any other unregistered driver name.
+   *
+   * Extracted from `bootstrap()` (which pulls in a real `@crowi/runner`
+   * config/plugin resolution) so it can be unit-tested directly against
+   * synthetic plugins, matching the `assertAllConfigSchemas()` precedent.
+   */
+  private async activateAll(ordered: readonly CrowiPlugin[]): Promise<void> {
+    const activated: CrowiPlugin[] = [];
+    this.failedPlugins = [];
+    for (const plugin of ordered) {
+      try {
+        await this.activate(plugin);
+        activated.push(plugin);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(`[crowi:plugin:${plugin.name}] activation failed; plugin disabled: ${message}`);
+        debug('activate %s failed: %s', plugin.name, message);
+        this.failedPlugins.push({ plugin, error: message });
+      }
+    }
+    this.loadedPlugins = activated;
   }
 
   private async activate(plugin: CrowiPlugin): Promise<void> {

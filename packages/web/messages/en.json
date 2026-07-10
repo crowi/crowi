@@ -767,6 +767,8 @@
   "admin.plugins.clear_cache_confirm_pending": "Clearing…",
   "admin.plugins.clear_cache_success_toast": "Cleared {count} cache entries.",
   "admin.plugins.clear_cache_error_toast": "Failed to clear cache: {message}",
+  "admin.plugins.status_failed_badge": "Activation failed",
+  "admin.plugins.status_failed_reason": "Reason: {message}",
   "admin.section_shared": "Shared services",
   "admin.breadcrumb_root": "Admin",
   "admin.crypto.key_missing_title": "Encryption key not set",

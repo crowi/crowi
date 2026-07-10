@@ -6810,6 +6810,17 @@
           },
           "supportsHotReload": {
             "type": "boolean"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "failed"
+            ],
+            "default": "active"
+          },
+          "error": {
+            "type": "string"
           }
         },
         "required": [
@@ -6881,6 +6892,17 @@
                 },
                 "supportsHotReload": {
                   "type": "boolean"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "active",
+                    "failed"
+                  ],
+                  "default": "active"
+                },
+                "error": {
+                  "type": "string"
                 }
               },
               "required": [
@@ -37512,6 +37534,17 @@
                           },
                           "supportsHotReload": {
                             "type": "boolean"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "active",
+                              "failed"
+                            ],
+                            "default": "active"
+                          },
+                          "error": {
+                            "type": "string"
                           }
                         },
                         "required": [

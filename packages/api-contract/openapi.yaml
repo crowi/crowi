@@ -4621,6 +4621,14 @@ components:
             - label
         supportsHotReload:
           type: boolean
+        status:
+          type: string
+          enum:
+            - active
+            - failed
+          default: active
+        error:
+          type: string
       required:
         - name
         - version
@@ -4674,6 +4682,14 @@ components:
                   - label
               supportsHotReload:
                 type: boolean
+              status:
+                type: string
+                enum:
+                  - active
+                  - failed
+                default: active
+              error:
+                type: string
             required:
               - name
               - version
@@ -24627,6 +24643,14 @@ paths:
                             - label
                         supportsHotReload:
                           type: boolean
+                        status:
+                          type: string
+                          enum:
+                            - active
+                            - failed
+                          default: active
+                        error:
+                          type: string
                       required:
                         - name
                         - version

@@ -68,7 +68,11 @@ interface PluginRowProps {
 }
 
 function PluginRow({ plugin }: PluginRowProps) {
-  const href = plugin.hasConfig ? `/admin/plugins/edit?name=${encodeURIComponent(plugin.name)}` : null;
+  const isFailed = plugin.status === 'failed';
+  // A failed plugin never made it into the loaded set (see
+  // `PluginManager.getFailedPlugins()`), so its config form (which reads
+  // `manager.getLoadedPlugin(name)`) has nothing to show — don't link there.
+  const href = !isFailed && plugin.hasConfig ? `/admin/plugins/edit?name=${encodeURIComponent(plugin.name)}` : null;
 
   const inner = (
     <div className="flex items-center justify-between gap-4 px-4 py-3">
@@ -77,6 +81,11 @@ function PluginRow({ plugin }: PluginRowProps) {
           <span className="font-medium">{plugin.adminPlacement.label}</span>
           <span className="text-muted-foreground text-xs font-mono truncate">{plugin.name}</span>
           <span className="text-muted-foreground text-xs">v{plugin.version}</span>
+          {isFailed && (
+            <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive" title={plugin.error}>
+              {m['admin.plugins.status_failed_badge']()}
+            </span>
+          )}
         </div>
         <PluginRowMeta plugin={plugin} />
       </div>
@@ -98,5 +107,6 @@ function PluginRowMeta({ plugin }: { plugin: PluginInfo }) {
   if (plugin.registers.length > 0) parts.push(`${m['admin.plugins.column_registers']()}: ${plugin.registers.join(', ')}`);
   if (plugin.requires && plugin.requires.length > 0) parts.push(`${m['admin.plugins.column_requires']()}: ${plugin.requires.join(', ')}`);
   if (!plugin.hasConfig) parts.push(m['admin.plugins.no_config']());
+  if (plugin.status === 'failed' && plugin.error) parts.push(m['admin.plugins.status_failed_reason']({ message: plugin.error }));
   return <p className="text-muted-foreground text-xs mt-0.5">{parts.join(' / ')}</p>;
 }

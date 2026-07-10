@@ -44,6 +44,14 @@ function activate(manager: PluginManager, plugin: CrowiPlugin): Promise<void> {
   return (manager as any).activate(plugin);
 }
 
+// `activateAll()` is private — the loop `bootstrap()` calls to isolate each
+// plugin's `activate()` in its own try/catch (feature-plugin-registration-isolation).
+// Invoke it directly, same rationale as `activate()`/`assertAllConfigSchemas()` above.
+function activateAll(manager: PluginManager, plugins: CrowiPlugin[]): Promise<void> {
+  // biome-ignore lint/suspicious/noExplicitAny: test access to private fields
+  return (manager as any).activateAll(plugins);
+}
+
 // `assertAllConfigSchemas()` is private and is what `bootstrap()` calls
 // immediately after topo-sort, before `listSensitiveKeys()` — i.e. before
 // any per-plugin `activate()` runs. Invoke it directly (same pattern as
@@ -307,5 +315,99 @@ describe('PluginManager.bootstrap — configSchema guard runs before listSensiti
     const manager = new PluginManager(makeFakeCrowi());
 
     expect(() => assertAllConfigSchemas(manager, [noSchema])).not.toThrow();
+  });
+});
+
+describe('PluginManager.activateAll — per-plugin activation isolation (feature-plugin-registration-isolation, AC-1–AC-4)', () => {
+  afterEach(jest.restoreAllMocks);
+
+  // Shared by AC-1/AC-2/AC-3 below, which each exercise a different facet
+  // (side effects / getLoadedPlugins() / getFailedPlugins()) of the same
+  // one-throws-in-the-middle scenario.
+  function makeThreeWithSecondFailing(): { first: CrowiPlugin; second: CrowiPlugin; third: CrowiPlugin; manager: PluginManager } {
+    const first = stubPlugin({ name: '@crowi/plugin-first', registerStorage: jest.fn() });
+    const second = stubPlugin({
+      name: '@crowi/plugin-second',
+      registerStorage: () => {
+        throw new Error('registerStorage exploded');
+      },
+    });
+    const third = stubPlugin({ name: '@crowi/plugin-third', registerStorage: jest.fn() });
+    return { first, second, third, manager: new PluginManager(makeFakeCrowi()) };
+  }
+
+  it('a throwing 2nd-of-3 activate() does not stop the other two from loading (AC-1)', async () => {
+    jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    const { first, second, third, manager } = makeThreeWithSecondFailing();
+
+    await activateAll(manager, [first, second, third]);
+
+    expect(first.registerStorage).toHaveBeenCalledTimes(1);
+    expect(third.registerStorage).toHaveBeenCalledTimes(1);
+  });
+
+  it('excludes only the failed plugin from getLoadedPlugins()/getLoadedPlugin(), keeping the other two loaded (AC-2)', async () => {
+    jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    const { first, second, third, manager } = makeThreeWithSecondFailing();
+
+    await activateAll(manager, [first, second, third]);
+
+    expect(manager.getLoadedPlugins().map((p) => p.name)).toEqual(['@crowi/plugin-first', '@crowi/plugin-third']);
+    expect(manager.getLoadedPlugin('@crowi/plugin-first')).toBe(first);
+    expect(manager.getLoadedPlugin('@crowi/plugin-third')).toBe(third);
+    expect(manager.getLoadedPlugin('@crowi/plugin-second')).toBeUndefined();
+  });
+
+  it('surfaces the failed plugin + its error message via getFailedPlugins() and excludes it from getLoadedPlugins() (AC-3)', async () => {
+    jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    const { first, second, third, manager } = makeThreeWithSecondFailing();
+
+    await activateAll(manager, [first, second, third]);
+
+    expect(manager.getFailedPlugins()).toEqual([{ plugin: second, error: 'registerStorage exploded' }]);
+    expect(manager.getLoadedPlugins()).not.toContain(second);
+  });
+
+  it("logs '[crowi:plugin:<name>] activation failed; plugin disabled: <message>' on console.error (AC-4)", async () => {
+    const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    const failing = stubPlugin({
+      name: '@crowi/plugin-boom',
+      registerStorage: () => {
+        throw new Error('kaboom');
+      },
+    });
+    const manager = new PluginManager(makeFakeCrowi());
+
+    await activateAll(manager, [failing]);
+
+    expect(consoleSpy).toHaveBeenCalledWith('[crowi:plugin:@crowi/plugin-boom] activation failed; plugin disabled: kaboom');
+  });
+
+  it('stringifies a non-Error throw for the log message and getFailedPlugins() entry', async () => {
+    const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    const failing = stubPlugin({
+      name: '@crowi/plugin-string-throw',
+      registerStorage: () => {
+        // biome-ignore lint/style/useThrowOnlyError: exercising the `String(err)` fallback branch
+        throw 'raw string boom';
+      },
+    });
+    const manager = new PluginManager(makeFakeCrowi());
+
+    await activateAll(manager, [failing]);
+
+    expect(manager.getFailedPlugins()).toEqual([{ plugin: failing, error: 'raw string boom' }]);
+    expect(consoleSpy).toHaveBeenCalledWith('[crowi:plugin:@crowi/plugin-string-throw] activation failed; plugin disabled: raw string boom');
+  });
+
+  it('activates every plugin normally when none throw (no false positives)', async () => {
+    const a = stubPlugin({ name: '@crowi/plugin-a' });
+    const b = stubPlugin({ name: '@crowi/plugin-b' });
+    const manager = new PluginManager(makeFakeCrowi());
+
+    await activateAll(manager, [a, b]);
+
+    expect(manager.getLoadedPlugins().map((p) => p.name)).toEqual(['@crowi/plugin-a', '@crowi/plugin-b']);
+    expect(manager.getFailedPlugins()).toEqual([]);
   });
 });

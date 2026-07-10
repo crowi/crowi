@@ -141,6 +141,35 @@ z.string().describe('@action "Test connection" POST /test')
 全レンダーキャッシュをまとめてクリアするボタンがあります。プラグインの
 出力形が変わったときなどに利用してください。
 
+## 1 プラグインの活性化失敗が起動全体を止めない
+
+各プラグインの活性化 (`activate()`) と HTTP ルート登録 (`registerRoutes`) は、
+プラグインごとに独立して隔離されています。1 つのプラグインが起動時に
+例外を投げても、他のプラグインの読み込みやサーバ全体の起動は継続します。
+
+- **活性化 (`activate()`) が失敗した場合**: そのプラグインは「読み込み済み」
+  の扱いから外れ、設定フォームやドライバ登録の対象になりません。サーバの
+  ログに `[crowi:plugin:<name>] activation failed; plugin disabled: <エラー
+  内容>` という行が出力されます。`/admin/plugins` の一覧には引き続きこの
+  プラグインが表示され、行に「起動失敗」バッジが付きます。バッジにカーソル
+  を合わせると失敗理由を確認できます。
+- **HTTP ルート登録 (`registerRoutes`) が失敗した場合**: プラグイン自体の
+  活性化は成功しているため一覧には通常どおり表示されますが、そのプラグイン
+  が提供する `/api/v2/plugins/<name>/...` 配下のエンドポイントは登録され
+  ません。ログには `[crowi:plugin:<name>] registerRoutes failed; this
+  plugin's HTTP routes are not mounted: <エラー内容>` という行が出力されます。
+
+いずれの場合も、まずサーバログで実際のエラー内容を確認し、必要であれば
+`crowi.config.json` の `plugins` 配列から該当のプラグインを外して api を
+再起動してください。
+
+> **Note**: `storage.driver` / `search.driver` のように、`crowi.config.json`
+> の既定値が指すドライバを提供するプラグインが活性化に失敗した場合でも、
+> 現状の実装では起動は継続します (該当ドライバは「未登録」として扱われ、
+> legacy な in-core 実装にフォールバックします)。今後、この種の
+> implicit-default なドライバに限って起動を止める判定ロジックの追加を
+> 検討する可能性があります。
+
 ## プラグインの削除
 
 プラグインを外すには `crowi.config.json` の `plugins` から該当の名前を

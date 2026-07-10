@@ -12202,6 +12202,12 @@ export interface paths {
                                     icon?: string;
                                 };
                                 supportsHotReload: boolean;
+                                /**
+                                 * @default active
+                                 * @enum {string}
+                                 */
+                                status: "active" | "failed";
+                                error?: string;
                             }[];
                         };
                     };
@@ -14826,6 +14832,12 @@ export interface components {
                 icon?: string;
             };
             supportsHotReload: boolean;
+            /**
+             * @default active
+             * @enum {string}
+             */
+            status: "active" | "failed";
+            error?: string;
         };
         ListPluginsResponse: {
             plugins: {
@@ -14841,6 +14853,12 @@ export interface components {
                     icon?: string;
                 };
                 supportsHotReload: boolean;
+                /**
+                 * @default active
+                 * @enum {string}
+                 */
+                status: "active" | "failed";
+                error?: string;
             }[];
         };
         PluginConfigResponse: {

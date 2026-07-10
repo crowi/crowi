@@ -68,15 +68,30 @@ export type { CrowiHonoBindings } from './app';
  * because the Hono app does not exist at boot-time activation. If the
  * PluginManager has not bootstrapped (e.g. a unit harness that builds the
  * app without `crowi.init()`), there are simply no plugins to mount.
+ *
+ * Each plugin's `registerRoutes` call is isolated in its own try/catch —
+ * same policy as `PluginManager`'s `activate()`/`reconfigure()`/`deactivate()`
+ * isolation (feature-plugin-registration-isolation): one plugin's mount-time
+ * throw must not prevent other plugins' routes, or the rest of `buildHonoApp`,
+ * from being registered. This is a distinct failure mode from an `activate()`
+ * failure — the plugin already activated successfully (its driver
+ * registrations are live), only its HTTP routes fail to mount — so it is
+ * *not* recorded in `PluginManager.getFailedPlugins()` and stays in
+ * `getLoadedPlugins()`.
  */
 const mountPluginRoutes = (app: ReturnType<typeof createHonoApp>, crowi: Crowi): void => {
   const manager = crowi.pluginManager;
   if (!manager) return;
   for (const plugin of manager.getLoadedPlugins()) {
     if (!plugin.registerRoutes) continue;
-    const scope = makePluginRouterScope(app, crowi, plugin.name);
-    const ctx = createPluginContext(plugin, crowi, manager);
-    plugin.registerRoutes(scope, ctx);
+    try {
+      const scope = makePluginRouterScope(app, crowi, plugin.name);
+      const ctx = createPluginContext(plugin, crowi, manager);
+      plugin.registerRoutes(scope, ctx);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(`[crowi:plugin:${plugin.name}] registerRoutes failed; this plugin's HTTP routes are not mounted: ${message}`);
+    }
   }
 };
 
