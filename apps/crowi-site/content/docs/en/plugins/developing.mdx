@@ -67,8 +67,18 @@ To give the plugin config values, declare a Zod schema in
 `configSchema`. The admin screen at `/admin/plugins` walks this schema
 to auto-generate a config form.
 
+> **Caution**: Import `configSchema` from the `zod/v3` compat subpath —
+> `import { z } from 'zod/v3'` — never from the top-level (v4-native)
+> `zod` package. `@crowi/plugin-api`'s `peerDependencies: { zod: "^4" }`
+> is about which npm package to install; the config-schema introspection
+> (`@sensitive` / `@action` marker detection, admin form field
+> serialization) depends on the internal shape of the `zod/v3` compat
+> shim that the v4 package ships. A schema built from the top-level
+> `zod` (v4) API fails boot with an explicit error (see the
+> `@crowi/plugin-api` README for details).
+
 ```ts
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import type { CrowiPlugin } from '@crowi/plugin-api';
 
 const myPlugin: CrowiPlugin = {
