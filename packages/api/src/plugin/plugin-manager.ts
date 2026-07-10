@@ -6,6 +6,7 @@ import type Crowi from 'src/crowi';
 import { registerSensitiveConfigKeys } from 'src/models/config-sensitive';
 import type { ConfigChangeSource } from 'src/service/config';
 import { createPluginContext } from './plugin-context';
+import { isPluginInstalled, markPluginInstalled } from './plugin-install-tracker';
 import { formatPluginConfigKey, parsePluginNamespace } from './plugin-namespace';
 import { makeRendererScope } from 'src/renderer';
 import { DriverRegistry, makeAuthScope, makeMailScope, makeNotifierScope, makeSearchScope, makeStorageScope } from './registries';
@@ -56,9 +57,10 @@ export interface PluginRegistries {
  *   3. `topoSortPlugins()` orders by `requires`.
  *   4. For each plugin in order:
  *      a) build a `PluginContext` for it
- *      b) if first time loaded, `await onInstall(ctx)` (idempotency
- *         is the plugin's responsibility — we re-call on every boot
- *         until the install-tracker is added in a follow-up step)
+ *      b) if the plugin declares `onInstall` and has never completed
+ *         it before (per the `plugin-installed` Config namespace, see
+ *         plugin-install-tracker.ts), `await onInstall(ctx)` and
+ *         record completion — subsequent boots skip it
  *      c) call each provided `register*` callback with the matching
  *         registry scope
  *   5. Resolve active drivers from `crowi.config.json:storage.driver`
@@ -407,10 +409,16 @@ export class PluginManager {
 
     this.warnOnMalformedActions(plugin);
 
-    // onInstall runs unconditionally for now. A follow-up will track
-    // installed-once state in Mongo and skip on subsequent boots.
-    if (plugin.onInstall) {
+    // onInstall runs once per plugin, ever — install-once state is
+    // tracked in a dedicated Mongo Config namespace (see
+    // plugin-install-tracker.ts) so it survives across boots and
+    // across the plugin being temporarily removed from
+    // `crowi.config.json` and re-added later. The record is only
+    // written after `onInstall` completes without throwing, so a
+    // failed `onInstall` is retried on the next boot.
+    if (plugin.onInstall && !isPluginInstalled(this.crowi, plugin.name)) {
       await plugin.onInstall(ctx);
+      await markPluginInstalled(this.crowi, plugin.name);
     }
 
     if (plugin.registerStorage) plugin.registerStorage(makeStorageScope(this.storage, plugin.name), ctx);

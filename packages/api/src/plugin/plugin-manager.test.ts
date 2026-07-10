@@ -2,6 +2,7 @@ import type { CrowiPlugin } from '@crowi/plugin-api';
 import { z } from 'zod/v3';
 import { z as zV4 } from 'zod';
 import { PluginManager } from './plugin-manager';
+import { isPluginInstalled } from './plugin-install-tracker';
 
 function makeFakeCrowi(): any {
   const fakeConfig = {
@@ -14,6 +15,31 @@ function makeFakeCrowi(): any {
     model: () => ({}),
     config: { crowi: {} },
     onConfigChangeMock: fakeConfig.onConfigChange,
+  };
+}
+
+/**
+ * Variant of `makeFakeCrowi()` with a real in-memory Config store
+ * behind `getConfigService().saveConfigValue()` / `getConfig()`, so
+ * writes made by one call are visible to reads made by a later call —
+ * matching the real `ConfigService` (Mongo-backed, in-memory cache) it
+ * stands in for. Needed only by the onInstall install-once tests
+ * below: two `activate()` calls against the SAME fake crowi instance
+ * simulate "boot N" then "boot N+1", with the store persisting across
+ * them exactly like Mongo persists across real boots.
+ */
+function makeFakeCrowiWithConfigStore(): any {
+  const store: Record<string, Record<string, unknown>> = {};
+  const configService = {
+    onConfigChange: jest.fn(),
+    saveConfigValue: jest.fn(async (ns: string, key: string, value: unknown) => {
+      store[ns] = { ...store[ns], [key]: value };
+    }),
+  };
+  return {
+    getConfigService: () => configService,
+    getConfig: () => store,
+    model: () => ({}),
   };
 }
 
@@ -409,5 +435,66 @@ describe('PluginManager.activateAll — per-plugin activation isolation (feature
 
     expect(manager.getLoadedPlugins().map((p) => p.name)).toEqual(['@crowi/plugin-a', '@crowi/plugin-b']);
     expect(manager.getFailedPlugins()).toEqual([]);
+  });
+});
+
+describe('PluginManager.activate — onInstall install-once idempotency (feature-plugin-oninstall-idempotency, AC-1–AC-4)', () => {
+  it('calls onInstall on the first boot and persists an install record (AC-1, AC-2)', async () => {
+    const onInstall = jest.fn().mockResolvedValue(undefined);
+    const plugin = stubPlugin({ name: '@crowi/plugin-installable', onInstall });
+    const fakeCrowi = makeFakeCrowiWithConfigStore();
+    const manager = new PluginManager(fakeCrowi);
+
+    await activate(manager, plugin);
+
+    expect(onInstall).toHaveBeenCalledTimes(1);
+    expect(fakeCrowi.getConfigService().saveConfigValue).toHaveBeenCalledWith('plugin-installed', '@crowi/plugin-installable', expect.any(String));
+    expect(isPluginInstalled(fakeCrowi, '@crowi/plugin-installable')).toBe(true);
+  });
+
+  it('does not call onInstall again on a second boot simulation, given the record from the first (AC-1, AC-5)', async () => {
+    const onInstall = jest.fn().mockResolvedValue(undefined);
+    const plugin = stubPlugin({ name: '@crowi/plugin-installable', onInstall });
+    const fakeCrowi = makeFakeCrowiWithConfigStore();
+    const manager = new PluginManager(fakeCrowi);
+
+    // "boot 1"
+    await activate(manager, plugin);
+    // "boot 2" — same fake crowi instance, so the install record from
+    // boot 1 persists exactly like it would across a real Mongo-backed
+    // restart (also covers AC-5: the record is keyed by plugin name,
+    // not tied to any particular boot's `ordered` list membership).
+    await activate(manager, plugin);
+
+    expect(onInstall).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not persist an install record when onInstall throws, and retries it on the next boot (AC-3)', async () => {
+    const onInstall = jest.fn().mockRejectedValueOnce(new Error('boom')).mockResolvedValueOnce(undefined);
+    const plugin = stubPlugin({ name: '@crowi/plugin-flaky-install', onInstall });
+    const fakeCrowi = makeFakeCrowiWithConfigStore();
+    const manager = new PluginManager(fakeCrowi);
+
+    // "boot 1" — onInstall throws, so no record is written.
+    await expect(activate(manager, plugin)).rejects.toThrow('boom');
+    expect(isPluginInstalled(fakeCrowi, '@crowi/plugin-flaky-install')).toBe(false);
+
+    // "boot 2" — onInstall is retried because no record exists yet.
+    await activate(manager, plugin);
+
+    expect(onInstall).toHaveBeenCalledTimes(2);
+    expect(isPluginInstalled(fakeCrowi, '@crowi/plugin-flaky-install')).toBe(true);
+  });
+
+  it('never reads or writes the install-tracking record for a plugin with no onInstall (AC-4)', async () => {
+    const plugin = stubPlugin({ name: '@crowi/plugin-no-install' });
+    const fakeCrowi = makeFakeCrowiWithConfigStore();
+    const getConfigSpy = jest.spyOn(fakeCrowi, 'getConfig');
+    const manager = new PluginManager(fakeCrowi);
+
+    await activate(manager, plugin);
+
+    expect(fakeCrowi.getConfigService().saveConfigValue).not.toHaveBeenCalled();
+    expect(getConfigSpy).not.toHaveBeenCalled();
   });
 });
