@@ -27,6 +27,15 @@
  * The `data[].snippet` field carries the driver-supplied highlight string
  * verbatim (typically with `<mark>` tokens). The handler does NOT escape
  * it; the web client is responsible for sanitising before HTML render.
+ *
+ * Authorization (SEC-SEARCH-DELEGATED defense-in-depth):
+ *   - The active `SearchDriver` is expected to filter hits by grant, but
+ *     that check is fully delegated to a pluggable (possibly
+ *     third-party) implementation. This handler does not trust it
+ *     blindly: `Page.findListByPageIds` is called with the requesting
+ *     `user._id` as viewer, which re-applies `visiblePageGrantOr` at the
+ *     Mongo query level, so any hit the viewer isn't authorized to read
+ *     is dropped before it reaches `data[]`.
  */
 import { searchPagesRoute, type SearchHit as SearchHitResponse } from '@crowi/api-contract';
 import type { OpenAPIHono } from '@hono/zod-openapi';
@@ -122,8 +131,15 @@ export const registerSearchRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(a
       // Run the two Mongo joins in parallel: Page populate (creator +
       // revision.author) and bulk bookmark counts. Both are bounded by
       // `limit` (max 100) so the parallel work is small.
+      //
+      // `findListByPageIds` is given `user._id` as the viewer so it
+      // re-applies `visiblePageGrantOr` (SEC-SEARCH-DELEGATED
+      // defense-in-depth): the driver should already have filtered by
+      // grant, but a stale index or a third-party driver's filtering bug
+      // can outrun it — the API boundary re-checks rather than trusting
+      // the driver's hits unconditionally.
       const [pages, bookmarkCounts] = await Promise.all([
-        Page.findListByPageIds(objectIds, { limit: hits.length }) as Promise<PageDocument[]>,
+        Page.findListByPageIds(objectIds, { limit: hits.length }, user._id) as Promise<PageDocument[]>,
         Bookmark.getCountsByPageIds(objectIds),
       ]);
 
@@ -135,11 +151,12 @@ export const registerSearchRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(a
       const data: SearchHitResponse[] = [];
       for (const hit of hits) {
         const populated = pageById.get(hit.id);
-        // Drop hits whose Page document is missing (e.g. concurrently
-        // deleted between the index hit and the populate query). The
-        // driver should also have filtered by grant, but a stale
-        // index can outrun the filter — keeping `data` consistent
-        // with `meta.results` lets clients trust the count.
+        // Drop hits whose Page document didn't come back from
+        // `findListByPageIds` — either it no longer exists (e.g.
+        // concurrently deleted between the index hit and the populate
+        // query) or the viewer isn't authorized to see it (grant
+        // re-filter above). Both cases fall through the same `pageById`
+        // lookup, keeping `data` consistent with `meta.results`.
         if (!populated) continue;
         data.push({
           pageId: hit.id,
