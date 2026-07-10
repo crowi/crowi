@@ -689,4 +689,76 @@ describe('Page', () => {
       expect(reloaded?.grant).toBe(Page.GRANT_RESTRICTED);
     });
   });
+
+  describe('findListByPageIds — grant refilter (SEC-SEARCH-DELEGATED)', () => {
+    let owner;
+    let other;
+    let publicPage;
+    let legacyPublicPage;
+    let ownerGrantedPage;
+    let missingId;
+
+    beforeAll(() => {
+      owner = createdUsers[0];
+      other = createdUsers[1];
+    });
+
+    beforeEach(async () => {
+      await Page.deleteMany({ path: { $regex: '^/refilter' } });
+      [publicPage, legacyPublicPage, ownerGrantedPage] = await Fixture.generate('Page', [
+        { path: '/refilter/public', grant: Page.GRANT_PUBLIC, creator: owner, grantedUsers: [owner] },
+        // Pre-grant-field pages stored `grant: null`; visiblePageGrantOr treats
+        // that the same as public (see its `{ grant: null }` clause).
+        { path: '/refilter/legacy-public', grant: null, creator: owner, grantedUsers: [owner] },
+        { path: '/refilter/owner-only', grant: Page.GRANT_OWNER, creator: owner, grantedUsers: [owner] },
+      ]);
+      // 24-hex id with no backing Page doc, mirroring search.ts's
+      // "populate couldn't find the doc" (e.g. concurrently deleted) case.
+      missingId = '0123456789abcdef01234567';
+    });
+
+    afterEach(async () => {
+      await Page.deleteMany({ path: { $regex: '^/refilter' } });
+    });
+
+    test('without a viewerId, returns every id regardless of grant (back-compat, no filter applied)', async () => {
+      const ids = [publicPage._id, ownerGrantedPage._id];
+      const pages = await Page.findListByPageIds(ids, { limit: ids.length });
+      const paths = pages.map((p) => p.path);
+      expect(paths).toContain('/refilter/public');
+      expect(paths).toContain('/refilter/owner-only');
+    });
+
+    test('with a viewerId who is not in grantedUsers, drops the owner-only page but keeps the public one', async () => {
+      const ids = [publicPage._id, ownerGrantedPage._id];
+      const pages = await Page.findListByPageIds(ids, { limit: ids.length }, other._id);
+      const paths = pages.map((p) => p.path);
+      expect(paths).toContain('/refilter/public');
+      expect(paths).not.toContain('/refilter/owner-only');
+    });
+
+    test('with a viewerId not in grantedUsers, keeps a legacy grant:null page (treated as public)', async () => {
+      const ids = [legacyPublicPage._id, ownerGrantedPage._id];
+      const pages = await Page.findListByPageIds(ids, { limit: ids.length }, other._id);
+      const paths = pages.map((p) => p.path);
+      expect(paths).toContain('/refilter/legacy-public');
+      expect(paths).not.toContain('/refilter/owner-only');
+    });
+
+    test('with a viewerId who is in grantedUsers, keeps the owner-only page', async () => {
+      const ids = [publicPage._id, ownerGrantedPage._id];
+      const pages = await Page.findListByPageIds(ids, { limit: ids.length }, owner._id);
+      const paths = pages.map((p) => p.path);
+      expect(paths).toContain('/refilter/public');
+      expect(paths).toContain('/refilter/owner-only');
+    });
+
+    test('grant refiltering and missing-doc dropping compose: only the visible+existing id survives', async () => {
+      const ids = [publicPage._id, ownerGrantedPage._id, missingId];
+      const pages = await Page.findListByPageIds(ids, { limit: ids.length }, other._id);
+      const paths = pages.map((p) => p.path);
+      expect(pages).toHaveLength(1);
+      expect(paths).toEqual(['/refilter/public']);
+    });
+  });
 });
