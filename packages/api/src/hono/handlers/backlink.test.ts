@@ -1,8 +1,7 @@
 import { Types } from 'mongoose';
-import request from 'supertest';
-
 import { app, crowi } from 'src/test/setup';
-import { authHeaders, createTestUser, createPageViaApi } from 'src/test/test-helpers';
+import { authHeaders, createPageViaApi, createTestUser } from 'src/test/test-helpers';
+import request from 'supertest';
 
 /**
  * RFC-0006 Phase 4 Batch 3 — integration tests for the migrated
@@ -37,6 +36,22 @@ const waitForBacklinkCount = async (pageId: string, expected: number, accessToke
   return last;
 };
 
+/**
+ * Same polling shape as `waitForBacklinkCount`, but counts the raw
+ * `Backlink` rows directly instead of the (now grant-filtered) API
+ * response — needed by the grant-enforcement tests below, where the
+ * caller doing the polling is deliberately *not* granted for one of the
+ * `fromPage`s, so the API-visible count never reaches the raw count.
+ */
+const waitForRawBacklinkCount = async (pageId: string, expected: number, maxTicks = 50) => {
+  const Backlink = crowi.model('Backlink');
+  for (let i = 0; i < maxTicks; i += 1) {
+    const count = await Backlink.countDocuments({ page: new Types.ObjectId(pageId) });
+    if (count === expected) return;
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+};
+
 describe('Routes /api/v2/backlinks (Hono)', () => {
   const PATH_PREFIX = '/hono-backlink-test/';
   let accessToken: string;
@@ -66,12 +81,11 @@ describe('Routes /api/v2/backlinks (Hono)', () => {
       expect(res.status).toBe(400);
     });
 
-    it('returns 200 with empty backlinks list for a non-existent page_id', async () => {
+    it('returns 404 for a non-existent page_id (SEC-BACKLINK-LEAK: target page must be granted to the caller)', async () => {
       const ghostId = new Types.ObjectId().toHexString();
       const res = await request(app).get('/api/v2/backlinks').set(authHeaders(accessToken)).query({ page_id: ghostId });
-      expect(res.status).toBe(200);
-      expect(res.body.backlinks).toEqual([]);
-      expect(res.body.hasNext).toBe(false);
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
     });
 
     it('returns backlinks with fromPage / fromRevision.author / updatedAt', async () => {
@@ -128,6 +142,89 @@ describe('Routes /api/v2/backlinks (Hono)', () => {
       expect(res.status).toBe(200);
       expect(res.body.backlinks).toHaveLength(2);
       expect(res.body.hasNext).toBe(true);
+    });
+  });
+
+  /**
+   * SEC-BACKLINK-LEAK — grant enforcement on both the target `page_id`
+   * and each `fromPage`. See `.feature-state/specs/feature-backlink-grant-enforcement.md`.
+   */
+  describe('GET /api/v2/backlinks — grant enforcement (SEC-BACKLINK-LEAK)', () => {
+    let otherToken: string;
+    let otherId: string;
+
+    beforeAll(async () => {
+      const other = await createTestUser({
+        name: 'Backlink Other',
+        username: 'honoBacklinkOther',
+        email: 'hono-backlink-other@example.com',
+      });
+      otherToken = other.accessToken;
+      otherId = other.user._id.toString();
+    });
+
+    it('returns 404 (not 403) when the target page_id is not granted to the caller', async () => {
+      const target = await createPageViaApi(otherToken, `${PATH_PREFIX}target-private`, '# secret', 4 /* GRANT_OWNER, granted to `other` only */);
+
+      const res = await request(app).get('/api/v2/backlinks').set(authHeaders(accessToken)).query({ page_id: target._id });
+
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
+    });
+
+    it('excludes fromPage entries the caller has no grant for, while keeping granted ones', async () => {
+      const target = await createPageViaApi(accessToken, `${PATH_PREFIX}target-grant-filter`, '# target');
+      const [visibleSource, hiddenSource] = await Promise.all([
+        createPageViaApi(accessToken, `${PATH_PREFIX}src-grant-visible`, `<${target.path}>`),
+        createPageViaApi(otherToken, `${PATH_PREFIX}src-grant-hidden`, `<${target.path}>`, 4 /* GRANT_OWNER, granted to `other` only */),
+      ]);
+
+      // Wait for both raw backlink rows to land (not the API-visible count,
+      // which is deliberately 1 lower once grant filtering applies).
+      await waitForRawBacklinkCount(target._id, 2);
+      const res = await request(app).get('/api/v2/backlinks').set(authHeaders(accessToken)).query({ page_id: target._id, limit: 100 });
+
+      expect(res.status).toBe(200);
+      const fromPageIds = (res.body.backlinks as Array<{ fromPage: { _id: string } }>).map((b) => b.fromPage._id);
+      expect(fromPageIds).toContain(visibleSource._id);
+      expect(fromPageIds).not.toContain(hiddenSource._id);
+      expect(res.body.hasNext).toBe(false);
+
+      // Sanity check: `other` — who IS granted (creator + grantedUsers) —
+      // still sees the same backlink, so this is a grant filter and not an
+      // accidental blanket exclusion.
+      const otherRes = await request(app).get('/api/v2/backlinks').set(authHeaders(otherToken)).query({ page_id: target._id, limit: 100 });
+      const otherFromPageIds = (otherRes.body.backlinks as Array<{ fromPage: { _id: string } }>).map((b) => b.fromPage._id);
+      expect(otherFromPageIds).toContain(hiddenSource._id);
+    });
+
+    it('applies the draft filter and the grant filter together', async () => {
+      const target = await createPageViaApi(accessToken, `${PATH_PREFIX}target-combined`, '# target');
+      const source = await createPageViaApi(accessToken, `${PATH_PREFIX}src-combined`, `<${target.path}>`);
+      await waitForBacklinkCount(target._id, 1, accessToken);
+
+      // Flip the (already-linked) source into a hidden draft owned by
+      // `other` AND a private (GRANT_OWNER, granted to `other` only) page.
+      // Either filter alone would exclude it from the caller's view;
+      // assert the combination still excludes it — i.e. neither filter
+      // short-circuits past the other.
+      const Page = crowi.model('Page');
+      await Page.updateOne(
+        { _id: source._id },
+        { $set: { status: 'draft', creator: new Types.ObjectId(otherId), grant: 4, grantedUsers: [new Types.ObjectId(otherId)] } },
+      );
+
+      const res = await request(app).get('/api/v2/backlinks').set(authHeaders(accessToken)).query({ page_id: target._id, limit: 100 });
+
+      expect(res.status).toBe(200);
+      expect(res.body.backlinks).toEqual([]);
+      expect(res.body.hasNext).toBe(false);
+
+      // The draft's author still sees it (draft filter passes for the
+      // author) and is also grant-holder, so the backlink surfaces.
+      const otherRes = await request(app).get('/api/v2/backlinks').set(authHeaders(otherToken)).query({ page_id: target._id, limit: 100 });
+      const otherFromPageIds = (otherRes.body.backlinks as Array<{ fromPage: { _id: string } }>).map((b) => b.fromPage._id);
+      expect(otherFromPageIds).toContain(source._id);
     });
   });
 });
