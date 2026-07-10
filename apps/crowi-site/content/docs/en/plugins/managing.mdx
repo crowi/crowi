@@ -141,6 +141,36 @@ MongoDB `PluginRenderCache`. The `/admin/plugins` screen has a button to
 clear all render cache at once. Use it after a plugin's output shape
 changes, for example.
 
+## A single plugin's activation failure does not stop the boot
+
+Each plugin's activation (`activate()`) and HTTP route registration
+(`registerRoutes`) are isolated per plugin. If one plugin throws during
+boot, other plugins still load and the server still starts.
+
+- **When `activate()` fails**: that plugin is excluded from the "loaded"
+  set — it has no config form and none of its drivers get registered. The
+  server log gets a line reading `[crowi:plugin:<name>] activation
+  failed; plugin disabled: <error message>`. The plugin still shows up in
+  the `/admin/plugins` list, with an "Activation failed" badge on its
+  row; hover the badge to see the failure reason.
+- **When `registerRoutes` fails**: the plugin itself activated
+  successfully, so it appears in the list as usual, but none of the
+  endpoints it would have mounted under `/api/v2/plugins/<name>/...` are
+  registered. The log gets a line reading `[crowi:plugin:<name>]
+  registerRoutes failed; this plugin's HTTP routes are not mounted:
+  <error message>`.
+
+In either case, check the server log for the actual error first, then —
+if needed — remove the plugin from the `plugins` array in
+`crowi.config.json` and restart the api.
+
+> **Note**: Even if a plugin that provides an implicit-default driver
+> (such as `storage.driver` / `search.driver`) fails to activate, the
+> current implementation still lets the boot continue — that driver is
+> treated as "not registered" and legacy in-core handling takes over. A
+> future change may add stricter hard-fail handling specifically for
+> those implicit-default drivers.
+
 ## Removing a plugin
 
 To remove a plugin, drop its name from the `plugins` array in
