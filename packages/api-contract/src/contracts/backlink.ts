@@ -14,6 +14,7 @@ import { createRoute } from '@hono/zod-openapi';
 
 import { GetBacklinksRequestSchema, GetBacklinksResponseSchema } from '../schemas/backlink';
 import { AuthenticationRequiredErrorSchema, InvalidPageIdErrorSchema } from '../schemas/common';
+import { PageNotFoundErrorSchema } from '../schemas/page';
 
 export const getBacklinksRoute = createRoute({
   method: 'get',
@@ -36,6 +37,10 @@ export const getBacklinksRoute = createRoute({
     401: {
       description: 'Authentication required',
       content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
+    },
+    404: {
+      description: 'Page not found or not granted',
+      content: { 'application/json': { schema: PageNotFoundErrorSchema } },
     },
   },
 });
