@@ -67,8 +67,18 @@ export default myPlugin;
 宣言します。管理画面 `/admin/plugins` がこのスキーマを辿って設定フォーム
 を自動生成します。
 
+> **注意**: `configSchema` は `zod` パッケージのトップレベル (v4 ネイティブ)
+> API ではなく、必ず `import { z } from 'zod/v3'` の互換サブパスから
+> import してください。`@crowi/plugin-api` の `peerDependencies` が
+> `zod: "^4"` を要求するのは npm パッケージとしての話で、その v4
+> パッケージが同梱する `zod/v3` 互換 shim の内部表現に設定スキーマの
+> introspection (`@sensitive` / `@action` マーカー検出、管理フォームの
+> フィールド判定) が依存しているためです。トップレベル `zod` (v4) で
+> 書いたスキーマは boot 時に明示的なエラーで起動が失敗します
+> (詳細は `@crowi/plugin-api` の README を参照)。
+
 ```ts
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import type { CrowiPlugin } from '@crowi/plugin-api';
 
 const myPlugin: CrowiPlugin = {

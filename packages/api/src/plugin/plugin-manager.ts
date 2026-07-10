@@ -98,6 +98,18 @@ export class PluginManager {
     const ordered = topoSortPlugins(plugins);
     this.loadedPlugins = ordered;
 
+    // Validate every plugin's `configSchema` entry point *before* any
+    // zod/v3-dependent introspection runs. `listSensitiveKeys()` below
+    // walks `Object.entries(schema.shape)` to find `@sensitive` fields —
+    // a zod v4-native schema has a different internal shape, so that
+    // walk would silently see nothing (or something meaningless) rather
+    // than throw, and `@sensitive` detection would already be bypassed
+    // for that plugin before boot ever reaches `activate()`'s own guard
+    // (below, kept for direct/private-call coverage). Validating right
+    // here, immediately after topo-sort and before `listSensitiveKeys()`,
+    // closes that gap.
+    this.assertAllConfigSchemas(ordered);
+
     // Register every plugin's `@sensitive`-marked configSchema fields
     // with the core sensitive-config registry so values written
     // through `configService.saveConfig('crowi', { 'plugin:…': … })`
@@ -242,6 +254,22 @@ export class PluginManager {
   }
 
   /**
+   * Run `assertZodV3ConfigSchema()` over every plugin in `plugins` that
+   * declares a `configSchema`, in order. Called once from `bootstrap()`
+   * right after topo-sort — see the call site for why this must happen
+   * before `listSensitiveKeys()` — and separately from each `activate()`
+   * call for direct/private-call coverage (e.g. tests that invoke
+   * `activate()` without going through `bootstrap()`).
+   */
+  private assertAllConfigSchemas(plugins: readonly CrowiPlugin[]): void {
+    for (const plugin of plugins) {
+      if (plugin.configSchema) {
+        assertZodV3ConfigSchema(plugin.name, plugin.configSchema);
+      }
+    }
+  }
+
+  /**
    * Walk every loaded plugin's `configSchema` and return the union of
    * field paths marked `@sensitive`. The "re-encrypt all" admin
    * routine consults this list. See RFC-0001 §5.
@@ -321,6 +349,10 @@ export class PluginManager {
     debug('activating %s@%s', plugin.name, plugin.version);
     const ctx = createPluginContext(plugin, this.crowi, this);
 
+    if (plugin.configSchema) {
+      assertZodV3ConfigSchema(plugin.name, plugin.configSchema);
+    }
+
     this.warnOnMalformedActions(plugin);
 
     // onInstall runs unconditionally for now. A follow-up will track
@@ -387,4 +419,30 @@ export class PluginManager {
     debug(`[warn] ${kind}.driver '${driverName}' not registered. Installed: ${installed}. Falling back to legacy in-core handling.`);
     return null;
   }
+}
+
+/**
+ * Verify that a plugin's `configSchema` was built from the `zod/v3`
+ * compat entry point, not the top-level `zod` (v4) API.
+ * `CrowiPlugin.configSchema` is typed against `zod/v3`'s `z.ZodObject`
+ * (see `@crowi/plugin-api`'s `plugin.ts`), but that type only guides
+ * authors who happen to import from the right subpath — nothing in
+ * `peerDependencies: { zod: "^4" }` signals *which* entry point to use,
+ * so a plugin author who reasonably reads that as "write against v4's
+ * top-level API" ends up with a schema whose runtime shape every
+ * introspection helper in this codebase (`schema-serializer.ts`,
+ * `schema-markers.ts`, `listSensitiveKeys()`) silently fails to walk —
+ * most importantly, `@sensitive` fields stop being detected and are
+ * written to Mongo as plaintext (see the design-audit finding this
+ * guard closes). `_def.typeName` is a marker zod v3 puts on every
+ * schema node (`'ZodObject'` for `z.object(...)`); zod v4-native
+ * schemas have a different internal shape and lack it, so this check
+ * reliably tells the two apart without needing a real `instanceof`.
+ */
+function assertZodV3ConfigSchema(pluginName: string, schema: unknown): void {
+  const typeName = (schema as { _def?: { typeName?: unknown } })?._def?.typeName;
+  if (typeName === 'ZodObject') return;
+  throw new Error(
+    `Plugin '${pluginName}' declares configSchema built with the top-level 'zod' (v4) API. Import from 'zod/v3' instead — @crowi/plugin-api's config-schema introspection requires the zod v3 compat shape (see @crowi/plugin-api README).`,
+  );
 }
