@@ -3764,6 +3764,22 @@ export interface paths {
                         };
                     };
                 };
+                /** @description Page not found or not granted */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "PAGE_NOT_FOUND";
+                                /** @enum {string} */
+                                message: "Page not found";
+                            };
+                        };
+                    };
+                };
             };
         };
         put?: never;
