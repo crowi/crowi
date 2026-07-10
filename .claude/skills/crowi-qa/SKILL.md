@@ -413,16 +413,24 @@ prefix 配下に置く: `/qa/<run-id>/<charter>/...`。
 
 ### 6.3 manifest と hard delete による cleanup
 
-charter は作成したページの id を、作成した **その場で** run のエビデンス
-ルート配下の manifest ファイル `.reviews/qa/<run-id>/created.json` (配列。
-各要素 `{ pageId, path, charter }`) に追記する。
+charter は作成したページ・コメントの id を、作成した **その場で** run の
+エビデンスルート配下の manifest ファイル `.reviews/qa/<run-id>/created.json`
+に追記する。配列の各要素は判別用の `type` フィールドを持つ: ページは
+`{ type: "page", pageId, path, charter }`、コメントは
+`{ type: "comment", commentId, pageId, charter }` (§6.4 の `api-fixture`
+セットアップが `seed-fixtures.mjs` 経由で書き込む形)。`type` フィールドの
+無い要素 (旧 run の manifest、または browser-editor セットアップが書く従来
+形式) は読み取り時に `type: "page"` として扱う後方互換パーサを使う。
 
-charter 終了時のクリーンアップは、**この manifest に記録された page id
-のみ**を対象に **hard delete** (`DELETE /pages` を `completely: true` で
-呼び、`Page.completelyDeletePage` に落とす) を行う。`completely: true` は
-レビジョンチェックをバイパスし、bookmark・comment・attachment (バッキング
-storage オブジェクトごと)・redirect origin・activity を丸ごと削除するため、
-対象を誤ると共有 dev DB の既存データを永久に失う。
+charter 終了時のクリーンアップは、**この manifest に記録された `type:
+"page"` の page id のみ**を対象に **hard delete** (`DELETE /pages` を
+`completely: true` で呼び、`Page.completelyDeletePage` に落とす) を行う。
+`completely: true` はレビジョンチェックをバイパスし、bookmark・comment・
+attachment (バッキング storage オブジェクトごと)・redirect origin・
+activity を丸ごと削除するため、対象を誤ると共有 dev DB の既存データを永久に
+失う。`api-fixture` セットアップ (§6.4) が作成したページ・コメントは QA
+専有インスタンス上に存在し、ambient dev 向けのこの hard delete ループの
+対象にはしない — それらは同じ run の DB drop (§6.4) でまとめて破棄される。
 
 > **推奨実装 (実測済み)**: 認証済みブラウザセッションの `fetch()` を
 > `evaluate_script` 経由で manifest の id ごとにループさせる — セッションの
@@ -433,8 +441,11 @@ storage オブジェクトごと)・redirect origin・activity を丸ごと削�
   path が `/qa/<run-id>/...` prefix 配下 かつ creator がこの run の QA
   アカウントと一致するページを候補として列挙し、削除前に `findings.md` に
   列挙して manifest 破損の事実とともに報告する (manifest が健全なときは
-  この fallback 列挙は行わない)。どちらの経路でも一致しないページには
-  削除も soft-delete もせず、既存データに一切触れない。
+  この fallback 列挙は行わない)。この列挙は `type: "page"` 相当 (`type`
+  フィールドの無い旧形式を含む) のみを対象にし、`type: "comment"` は列挙
+  対象に含めない (コメントはページではなく、対応するページの hard delete
+  に連鎖して消える)。どちらの経路でも一致しないページには削除も
+  soft-delete もせず、既存データに一切触れない。
 - **通常の soft delete は使わない理由**: `Page.deletePage` (`completely`
   省略) は `status: deleted` にして `/trash/...` へリネーム + redirect
   page を作るだけで実データ (ページ本体・コメント・添付) は残り、かつ
@@ -443,6 +454,167 @@ storage オブジェクトごと)・redirect origin・activity を丸ごと削�
   hard delete で完全に除去し、それ以外のページはゴミ箱にも入れず何もしない。
 - hard delete に失敗した場合は `summary.md` に残留物 (page id / path) を
   明記する (運用側が手動で削除するための情報)。
+
+### 6.4 `api-fixture` セットアップと QA 専有インスタンス
+
+table・backlink・検索結果・コメント・grant 可視性のように、検証対象が
+「保存済みページの見え方」であるチャーターは、エディタでページ本文を手打ち
+する代わりに `.claude/skills/crowi-qa/scripts/seed-fixtures.mjs` (Node 標準
+`fetch` のみに依存 — Mongo driver・workspace パッケージの import には依存
+しない) でページ/コメントをシードし、作成した URL へ直接ナビゲートして表示
+確認から始める。エディタ状態そのものが検証対象のチャーター (#2・#4) は
+このセットアップを使わず、従来どおり ambient dev に対するブラウザ/エディタ
+操作でセットアップする。
+
+#### 6.4.1 setup mode ルーティング表
+
+| charter | setup mode | 専有インスタンス起動不可時 | 理由 |
+|---|---|---|---|
+| collab / presence (#2) | `browser-editor` (ambient dev) | — (専有インスタンスを使わない) | Yjs/エディタ状態と WS 挙動そのものが検証対象 |
+| エディタ保存・draft (#4) | `browser-editor` (ambient dev) | — (同上) | エディタ操作そのものが検証対象 |
+| ページ CRUD・rename・trash (#3) のうち table/markdown 表示確認 | `api-fixture` (専有インスタンス) | `browser-editor` へフォールバック | 保存済みページの表示確認であり入力操作は不要 |
+| backlink 表示 | `api-fixture` (target→source の順序制約 + readiness polling 必須。6.4.4 参照) | `browser-editor` へフォールバック | save イベント由来の backlink 副作用を検証したい |
+| grant 可視性 (シード本人が owner のページの表示確認) | `api-fixture` | `browser-editor` へフォールバック | 単一 identity で作成・閲覧できる範囲に限定 (owner 視点のみ) |
+| grant access-denied (別ユーザーからの拒否確認) | `browser` (api-fixture 化しない) | 変更なし | 第二 identity が必要で今回のスコープ外 |
+| 検索結果 (新規保存したページがヒットするかの確認) | `api-fixture` (503 short-circuit + readiness polling 必須。6.4.4 参照) | `browser-editor` へフォールバック | 実際のページ保存と検索側副作用が必要。per-run DB は search 未設定が既定なので 503 → 即 blocked が通常パス |
+| 検索の grant フィルタリング (非 owner に非表示になることの確認) | `browser` (api-fixture 化しない) | 変更なし | 第二 identity が必要で今回のスコープ外 |
+| コメント (#5) | `api-fixture` (同一 run が作った fixture ページに対してのみ) | `browser-editor` へフォールバック | コメント作成はセットアップ、UI 表示が検証対象 |
+| 管理設定 (#8) | 既定 `browser` または `read-only` (§7) | 変更なし | ambient 共有 DB での config mutation は §7 で禁止 |
+| 添付・アップロード (#9) | アップロード操作自体の検証は `browser`。既存ファイルの表示確認のみなら対応する API があれば `api-fixture` (対応する attachment API が今回未検証のため、現状は `browser` のまま) | 変更なし | アップロード操作自体が検証対象になり得る |
+
+認証チャーター (#1) は既存の §4.1/§4.2 の 2 層構成をそのまま維持し、この
+表の対象に含めない (すでに read-only/isolated-mutating の分離ルールが
+あるため)。
+
+#### 6.4.2 QA 専有インスタンス: 書き込み先を「判定」せず「所有」する
+
+`api-fixture` セットアップのチャーターが 1 つでも run に含まれる場合、run
+は最初に一度だけ **QA 専有インスタンス**を起動する。mutating なフィクスチャ
+書き込みは常にこの専有インスタンスに対してのみ行い、**ambient dev インスタ
+ンス (共有 DB・isolated DB を問わず) には一切 mutating な書き込みをしない**。
+書き込み先の安全性は「環境の分類・判定」ではなく「自分で名前を決めて自分で
+起動した」というコンストラクションで保証する — §14.3-§14.7 の
+`--prod-build` 用インスタンスと同じ発想の dev 版であり、機構は流用する
+(新設しない)。
+
+- **起動は run につき最大 1 回**: 複数の `api-fixture` チャーターが専有
+  インスタンス 1 本を共有する。`api-fixture` チャーターが 1 つも無い run
+  では起動しない (既存挙動に回帰なし)。
+- **`--prod-build` との関係**: `--prod-build` run では §14 のインスタンス
+  がそのまま seeding 対象になる。専有インスタンスを二重起動しない。
+- **DB 名**: `crowi_qa_dev_<run-id>` (§14.3 の `crowi_qa_prod_<run-id>` と
+  同じ命名スタイル。run id は §6.1 の既存 run id)。MongoDB は最初の書き込み
+  で DB を暗黙に作成するため、作成手順は不要。63 バイト制限に触れる場合は
+  run id 部分を短縮ハッシュにする。
+- **env サニタイズ**: §14.3 と同一の理由・同一の手順。`MONGOLAB_URI` /
+  `MONGODB_URI` / `MONGOHQ_URL` を明示的に unset した上で `MONGO_URI` だけ
+  を設定して起動する。dev モードの api は `apps/crowi-runner` を cwd に
+  `tsx` で起動する (`packages/api/package.json` の `dev` スクリプトと同じ
+  cwd 解決。`tsx watch` の watch は不要 — 専有インスタンスは 1 回起動して
+  run 終了時に落とすだけなので、素の `tsx` でよい):
+
+  ```bash
+  cd apps/crowi-runner
+  env -u MONGOLAB_URI -u MONGODB_URI -u MONGOHQ_URL \
+    MONGO_URI="mongodb://localhost/crowi_qa_dev_<run-id>" \
+    NODE_ENV=development PORT=<apiPort> \
+    npx tsx --tsconfig ../../packages/api/tsconfig.json \
+      --env-file-if-exists=../../.env \
+      ../../packages/api/src/app.ts
+  ```
+
+  `--env-file-if-exists` で読む repo-root `.env` に `MONGO_URI` が定義され
+  ていても、Node の `--env-file` はプロセスに **既に設定済みの** 環境変数を
+  ファイルの値で上書きしない (Node の仕様) ため、上記の明示 `MONGO_URI` が
+  優先される。web は `packages/web` を cwd に `next dev` を起動し、
+  `PORT_WEB=<webPort>` / `CROWI_API_URL=http://localhost:<apiPort>` を渡す
+  (`scripts/dev.mjs` が `pnpm dev` に注入するのと同じ変数)。前段の同一
+  オリジン proxy は `scripts/dev-caddy.mjs` の `startNodeProxyFallback()`
+  を流用する (§14.5 と同じ — dev-port registry には登録しない使い捨て
+  ポートを OS プローブで都度選ぶ)。unset が信頼できない場合は §14.3 と同じ
+  く fail-closed で `blocked: conflicting Mongo env var present — cannot
+  guarantee isolation` として起動しない。起動後は接続先 DB 名をログで確認
+  してから provisioning に進む。
+- **provisioning**: §14.4 と同一手順の dev 版。`GET
+  <一時 proxy>/api/v2/installer` で `installer_required` を確認し、`POST
+  /installer/createAdmin` を run 専用の固定資格情報 (実運用の秘密情報では
+  ない固定値。例 `crowi-qa-fixture@example.com` / 固定パスワード —
+  `packages/e2e/src/config.ts` の `e2eUsers.admin` と同じ発想) で呼ぶ。
+  `already_installed` が返る想定外のケースは同じ資格情報でログインを試し、
+  失敗すれば `blocked: qa DB in unexpected state` で打ち切る。
+- **後始末**: §14.7 と同一機構。成否によらず api/web/proxy プロセスを終了
+  し、`crowi_qa_dev_<run-id>` を drop する。drop 失敗時は `summary.md` に
+  残留 DB 名を明記する。
+- **フォールバック**: 専有インスタンスの起動に失敗した場合 (ポート確保
+  不可・Mongo 不達等) は `blocked: qa-owned instance failed to start
+  (<reason>)` とし、該当 `api-fixture` チャーターは従来の browser-editor
+  セットアップ (ambient dev 上でエディタ手打ち) へフォールバックする —
+  検証能力自体は後退しない。ambient dev への mutating write はこの
+  フォールバックでも従来の境界 (§4.2・§5・§7) に従う。
+
+#### 6.4.3 `seed-fixtures.mjs` の使い方
+
+QA 専有インスタンスへのログイン・フィクスチャ書き込み・readiness polling・
+manifest 追記は `.claude/skills/crowi-qa/scripts/seed-fixtures.mjs` が HTTP
+のみで行う (Mongo driver・workspace import には依存しない)。専有インスタン
+スの起動・provisioning・DB drop はこのスクリプトの責務ではなく、上記
+6.4.2 の手順どおり skill 側 (エージェントが Bash で駆動) が行う。
+
+```bash
+node .claude/skills/crowi-qa/scripts/seed-fixtures.mjs \
+  --proxy-url http://127.0.0.1:<一時 proxy port> \
+  --run-id <run-id> \
+  --charter <table|grant|backlink|search|comment> \
+  --email crowi-qa-fixture@example.com \
+  --password <6.4.2 で provisioning した固定パスワード> \
+  --manifest-path .reviews/qa/<run-id>/created.json
+```
+
+標準出力に作成したリソースの JSON summary (`ok` / `charter` / `resources`
+/ 該当時 `blocked` / `query`) を 1 個だけ出力する。**生の `accessToken` /
+`refreshToken` はログ・標準出力のどこにも出力しない** (§12 の redaction 方針
+と同じ結論を、そもそも出力しない設計で満たす)。`ok: false` (exit code 1) は
+readiness polling が `blocked: ...` に分類されたことを示す — この場合でも
+作成済みのページ/コメントは manifest に記録済みで、失敗したのは「副作用が
+観測できるまで待つ」ステップだけである。exit code 2 は用法/通信エラー
+(必須フラグ欠落・ログイン失敗・HTTP エラー等)。
+
+ブラウザ側の認証はこのスクリプトの `accessToken` を受け取らない — ブラウザ
+は専有インスタンスのログイン画面から、同じ固定資格情報で通常の UI ログイン
+を行う (§14.6 のログイン手順と同じ)。Node プロセスとブラウザプロセスの間で
+トークンを受け渡す経路は作らない。
+
+#### 6.4.4 charter ごとのフィクスチャ内容と readiness polling
+
+- **table / grant**: `/qa/<run-id>/table/display` または
+  `/qa/<run-id>/grant/visible` にページを 1 枚作成するだけ。readiness
+  polling は不要 — 作成 API の応答が返った時点でそのまま表示確認できる。
+- **backlink**: 必ず **target を先に**作成する
+  (`/qa/<run-id>/backlink/target`)。次に source
+  (`/qa/<run-id>/backlink/source`) を作成し、本文に target の正確な path
+  へ解決される **markdown リンク** (`[target](/qa/<run-id>/backlink/
+  target)`) を含める — 裸の `[[x]]` wikilink は予約済みで解決されないため
+  使わない。この順序を逆にすると backlink 行は書かれず、後続のポーリングは
+  必ずタイムアウトする。両ページの保存後、`GET /api/v2/backlinks?page_id=
+  <target のページ id>` を有限回 (既定 300ms 間隔 × 最大 10 回) ポーリング
+  し、`backlinks` に source ページが含まれることを確認する。タイムアウト
+  時は `blocked: backlink side effect not observed within <timeout>` として
+  このチャーターの api-fixture セットアップだけを打ち切る (browser 側で
+  「backlink が表示されない」という偽陰性確認をさせない)。
+- **検索**: 対象ページ (`/qa/<run-id>/search/target`) を本文に一意な
+  トークンを含めて保存した後、`GET /api/v2/search?q=<token>` を同様に
+  有限回ポーリングする。**503 (SEARCH_UNAVAILABLE) を検知した時点で即座に**
+  `blocked: search backend unreachable (503)` (既存 §1.6 と同一分類) として
+  打ち切り、ポーリングを継続しない — 新規 per-run DB は search 未設定が
+  既定なので、これはこの環境での通常パス。200 応答で対象ページ id がまだ
+  現れない場合のみポーリングを続け、タイムアウト時は `blocked: search
+  index side effect not observed within <timeout>` とする。
+- **コメント**: `/qa/<run-id>/comment/thread` にページを 1 枚作成し、
+  そのレスポンス (または `GET /api/v2/pages?page_id=...`) から revision id
+  を取得した上で `POST /api/v2/comments` を呼ぶ。**同一 run 内でこの
+  スクリプトが新規作成した fixture ページ (manifest 上 `type: "page"`) に
+  のみ**コメントを追加する。readiness polling は不要 (コメント作成は
+  同期的)。
 
 ## §7. 管理設定 charter (#8) は既定で read-only
 
@@ -720,6 +892,10 @@ exit code で分岐:
 proxy 経由) で動くかをスモーク確認する。**mutation を伴うため §1.7 の
 `--url` ガード対象**で、`--i-understand-destructive` なしでは非ローカル
 `--url` に対して実行しない。
+
+以下 14.3-14.7 (run 専用 DB・provisioning・一時 proxy・後始末) は §6.4 の
+`api-fixture` セットアップ用 QA 専有インスタンス (dev モード) が流用する
+既存機構でもある — dev モードでの読み替えは §6.4.2 を参照。
 
 ### 14.1 web: standalone ビルド
 
