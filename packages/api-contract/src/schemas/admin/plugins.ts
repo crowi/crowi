@@ -69,6 +69,17 @@ export const PluginInfoSchema = z.object({
    * it apply config changes live.
    */
   supportsHotReload: z.boolean(),
+  /**
+   * `'failed'` means the plugin's `activate()` call threw during boot
+   * (see `PluginManager.getFailedPlugins()`) — it is not in the loaded
+   * set, has no live driver registration, and its config form is not
+   * reachable. `'active'` (the default) is every plugin that activated
+   * successfully. Defaults to `'active'` for wire back-compat with
+   * responses that predate this field.
+   */
+  status: z.enum(['active', 'failed']).default('active'),
+  /** Present only when `status: 'failed'` — the activation error message. */
+  error: z.string().optional(),
 });
 export type PluginInfo = z.infer<typeof PluginInfoSchema>;
 
