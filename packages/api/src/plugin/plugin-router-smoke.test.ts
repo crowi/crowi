@@ -203,6 +203,48 @@ describe('plugin HTTP routes (registerRoutes)', () => {
     expect(admin.body.userId).toBe(adminUser._id.toString());
   });
 
+  describe('feature-plugin-registration-isolation AC-5: a throwing registerRoutes is isolated per-plugin', () => {
+    afterEach(jest.restoreAllMocks);
+
+    it("does not prevent another plugin's routes or a non-plugin route from mounting, and logs the failure", async () => {
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+      const broken: CrowiPlugin = {
+        name: '@crowi/plugin-broken-routes',
+        version: '0.0.0',
+        registerRoutes: () => {
+          throw new Error('registerRoutes exploded');
+        },
+      };
+      const healthy: CrowiPlugin = {
+        name: '@crowi/plugin-healthy-routes',
+        version: '0.0.0',
+        registerRoutes: (scope) => {
+          scope.route('GET', '/ok', (c) => c.json({ ok: true }), { auth: 'public' });
+        },
+      };
+
+      // Building the app itself must not throw, even though `broken`'s
+      // `registerRoutes` throws synchronously during the mount loop — this
+      // is the crux of AC-5 (pre-fix, this would propagate out of
+      // `buildHonoApp` and take the whole boot down with it).
+      const app = buildAppFromPlugins([broken, healthy]);
+
+      const healthyRes = await request(app).get('/api/v2/plugins/@crowi/plugin-healthy-routes/ok');
+      expect(healthyRes.status).toBe(200);
+      expect(healthyRes.body).toEqual({ ok: true });
+
+      // A non-plugin route registered *after* `mountPluginRoutes` in
+      // `buildHonoApp` still responds — proof the whole chain kept building
+      // past the broken plugin.
+      const nonPluginRes = await request(app).get('/api/v2/app/info');
+      expect(nonPluginRes.status).toBe(200);
+
+      expect(consoleSpy).toHaveBeenCalledWith(
+        "[crowi:plugin:@crowi/plugin-broken-routes] registerRoutes failed; this plugin's HTTP routes are not mounted: registerRoutes exploded",
+      );
+    });
+  });
+
   describe('AC-4: @crowi/plugin-slack POST /manifest is admin-gated', () => {
     it('returns 403 (ADMIN_REQUIRED) for a non-admin authenticated user', async () => {
       const app = buildAppFromPlugins([slackPlugin]);
