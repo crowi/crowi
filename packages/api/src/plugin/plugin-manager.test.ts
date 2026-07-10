@@ -1,5 +1,6 @@
 import type { CrowiPlugin } from '@crowi/plugin-api';
 import { z } from 'zod/v3';
+import { z as zV4 } from 'zod';
 import { PluginManager } from './plugin-manager';
 
 function makeFakeCrowi(): any {
@@ -32,6 +33,33 @@ function loadPluginsInto(manager: PluginManager, plugins: CrowiPlugin[]): void {
   // biome-ignore lint/suspicious/noExplicitAny: test access to private fields
   (manager as any).buildDependentsMap();
 }
+
+// `activate()` is private; the manager's `bootstrap()` entry point pulls in
+// `@crowi/runner` + a real Hono/DB boot, which is heavier than these
+// pure-function checks need. Invoke it directly, matching the
+// `buildDependentsMap()` precedent above. Shared by the malformed-@action
+// and zod v3/v4 configSchema guard describe blocks below.
+function activate(manager: PluginManager, plugin: CrowiPlugin): Promise<void> {
+  // biome-ignore lint/suspicious/noExplicitAny: test access to private fields
+  return (manager as any).activate(plugin);
+}
+
+// `assertAllConfigSchemas()` is private and is what `bootstrap()` calls
+// immediately after topo-sort, before `listSensitiveKeys()` — i.e. before
+// any per-plugin `activate()` runs. Invoke it directly (same pattern as
+// `activate()` above) to prove the "validate every plugin up front" boot
+// order independently of `activate()`'s own per-plugin guard.
+function assertAllConfigSchemas(manager: PluginManager, plugins: CrowiPlugin[]): void {
+  // biome-ignore lint/suspicious/noExplicitAny: test access to private fields
+  (manager as any).assertAllConfigSchemas(plugins);
+}
+
+// Exact guard message for a plugin named '@crowi/plugin-v4-mistake' —
+// asserted from both the per-plugin `activate()` guard and the
+// up-front `assertAllConfigSchemas()` pass below; kept as one constant
+// so the two assertions can't drift apart.
+const V4_MISTAKE_GUARD_ERROR =
+  "Plugin '@crowi/plugin-v4-mistake' declares configSchema built with the top-level 'zod' (v4) API. Import from 'zod/v3' instead — @crowi/plugin-api's config-schema introspection requires the zod v3 compat shape (see @crowi/plugin-api README).";
 
 describe('PluginManager.reconfigureAffected', () => {
   it('calls reconfigure on the changed plugin', async () => {
@@ -159,14 +187,6 @@ describe('PluginManager.reconfigureAffected', () => {
 });
 
 describe('PluginManager.activate — malformed @action boot warning (AC-6)', () => {
-  // `activate()` is private; the manager's `bootstrap()` entry point pulls
-  // in `@crowi/runner` + a real Hono/DB boot, which is heavier than this
-  // pure-function warning needs. Invoke it directly, matching the existing
-  // `buildDependentsMap()` precedent above.
-  const activate = (manager: PluginManager, plugin: CrowiPlugin): Promise<void> =>
-    // biome-ignore lint/suspicious/noExplicitAny: test access to private fields
-    (manager as any).activate(plugin);
-
   afterEach(jest.restoreAllMocks);
 
   it('warns once when an @action field declares an unsupported verb (PUT)', async () => {
@@ -211,5 +231,81 @@ describe('PluginManager.activate — malformed @action boot warning (AC-6)', () 
     await activate(manager, plugin);
 
     expect(consoleSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('PluginManager.activate — zod/v3 vs top-level zod (v4) configSchema guard', () => {
+  it('activates normally when configSchema is built with zod/v3', async () => {
+    const configSchema = z
+      .object({
+        apiKey: z.string().describe('@sensitive API key').default(''),
+      })
+      .strict();
+    const plugin = stubPlugin({ name: '@crowi/plugin-v3-ok', configSchema });
+    const manager = new PluginManager(makeFakeCrowi());
+
+    await expect(activate(manager, plugin)).resolves.toBeUndefined();
+  });
+
+  it("throws a descriptive error when configSchema is built with the top-level 'zod' (v4) API", async () => {
+    const configSchema = zV4.object({
+      apiKey: zV4.string().describe('@sensitive API key').default(''),
+    });
+    // `CrowiPlugin.configSchema` is typed against zod/v3's `z.ZodObject`;
+    // a v4 schema doesn't satisfy that type, matching the real-world
+    // misuse this guard targets (a plugin author importing from the
+    // wrong entry point). Cast through `unknown` to construct the fixture.
+    const plugin = stubPlugin({ name: '@crowi/plugin-v4-mistake', configSchema: configSchema as unknown as CrowiPlugin['configSchema'] });
+    const manager = new PluginManager(makeFakeCrowi());
+
+    await expect(activate(manager, plugin)).rejects.toThrow(V4_MISTAKE_GUARD_ERROR);
+  });
+
+  it('activates normally when the plugin declares no configSchema', async () => {
+    const plugin = stubPlugin({ name: '@crowi/plugin-no-schema-guard' });
+    const manager = new PluginManager(makeFakeCrowi());
+
+    await expect(activate(manager, plugin)).resolves.toBeUndefined();
+  });
+});
+
+describe('PluginManager.bootstrap — configSchema guard runs before listSensitiveKeys() (boot order)', () => {
+  // `bootstrap()` itself pulls in `@crowi/runner`'s real config/plugin
+  // resolution, too heavy for these pure-function checks (same rationale
+  // as the `activate()` helper above). `assertAllConfigSchemas()` is the
+  // extracted step `bootstrap()` calls right after topo-sort and before
+  // `registerSensitiveConfigKeys(this.listSensitiveKeys()...)` — these
+  // tests exercise that step directly to prove every plugin's
+  // `configSchema` is validated as a single up-front pass, not
+  // interleaved with (or preceded by) any zod/v3-dependent introspection.
+  it('does not throw when every plugin in the ordered list uses a zod/v3 configSchema', () => {
+    const a = stubPlugin({
+      name: '@crowi/plugin-a',
+      configSchema: z.object({ apiKey: z.string().describe('@sensitive API key').default('') }).strict(),
+    });
+    const b = stubPlugin({ name: '@crowi/plugin-b', configSchema: z.object({ port: z.number().default(80) }).strict() });
+    const manager = new PluginManager(makeFakeCrowi());
+
+    expect(() => assertAllConfigSchemas(manager, [a, b])).not.toThrow();
+  });
+
+  it('throws for a v4-mistake plugin even when it is not first in the ordered list', () => {
+    const ok = stubPlugin({ name: '@crowi/plugin-ok', configSchema: z.object({ port: z.number().default(80) }).strict() });
+    const v4Schema = zV4.object({ apiKey: zV4.string().describe('@sensitive API key').default('') });
+    const mistake = stubPlugin({ name: '@crowi/plugin-v4-mistake', configSchema: v4Schema as unknown as CrowiPlugin['configSchema'] });
+    const manager = new PluginManager(makeFakeCrowi());
+
+    // This is the boot-order regression this describe block guards: the
+    // guard must catch the offending plugin here, in the up-front pass
+    // `bootstrap()` runs before `listSensitiveKeys()`/`activate()` ever
+    // see it — not only later, inside that plugin's own `activate()` call.
+    expect(() => assertAllConfigSchemas(manager, [ok, mistake])).toThrow(V4_MISTAKE_GUARD_ERROR);
+  });
+
+  it('skips plugins without a configSchema', () => {
+    const noSchema = stubPlugin({ name: '@crowi/plugin-no-schema' });
+    const manager = new PluginManager(makeFakeCrowi());
+
+    expect(() => assertAllConfigSchemas(manager, [noSchema])).not.toThrow();
   });
 });
