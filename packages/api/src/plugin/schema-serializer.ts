@@ -4,6 +4,14 @@
 // zod v4, so we explicitly pin this file to the `zod/v3` compat module
 // that the v4 package ships. The v4 schemas live in `@crowi/api-contract`
 // and never reach this code path.
+//
+// Detection below compares `_def.typeName` strings rather than using
+// `instanceof z.ZodXxx`: `instanceof` silently returns false against a
+// zod v4-native schema (no exception, no type error — see
+// `PluginManager`'s `assertZodV3ConfigSchema` boot guard, which is the
+// first line of defense against that; this is the second, and also
+// sidesteps any hoisting-induced prototype mismatch across duplicate
+// `zod/v3` copies in node_modules).
 import { type ZodTypeAny, z } from 'zod/v3';
 import { ACTION_FIELD_MARKER, SENSITIVE_FIELD_MARKER, getActionAnnotation } from '@crowi/plugin-api';
 
@@ -83,18 +91,19 @@ function unwrapMeta(node: ZodTypeAny): UnwrapResult {
 
   // Unwrap up to a small depth to avoid pathological loops.
   for (let i = 0; i < 6; i++) {
-    if (cur instanceof z.ZodOptional) {
+    const typeName = cur._def?.typeName;
+    if (typeName === 'ZodOptional') {
       optional = true;
       cur = cur._def.innerType;
       continue;
     }
-    if (cur instanceof z.ZodDefault) {
+    if (typeName === 'ZodDefault') {
       const def = cur._def.defaultValue;
       defaultValue = typeof def === 'function' ? def() : def;
       cur = cur._def.innerType;
       continue;
     }
-    if (cur instanceof z.ZodEffects) {
+    if (typeName === 'ZodEffects') {
       // refine / transform — keep the underlying schema for kind detection
       cur = cur._def.schema;
       continue;
@@ -106,23 +115,24 @@ function unwrapMeta(node: ZodTypeAny): UnwrapResult {
 }
 
 function detectKind(unwrapped: ZodTypeAny, sensitive: boolean): { kind: SerializedPluginField['kind']; options?: string[] } {
-  if (unwrapped instanceof z.ZodString) {
+  const typeName = unwrapped._def?.typeName;
+  if (typeName === 'ZodString') {
     return { kind: sensitive ? 'secret' : 'string' };
   }
-  if (unwrapped instanceof z.ZodNumber) {
+  if (typeName === 'ZodNumber') {
     return { kind: 'number' };
   }
-  if (unwrapped instanceof z.ZodBoolean) {
+  if (typeName === 'ZodBoolean') {
     return { kind: 'boolean' };
   }
-  if (unwrapped instanceof z.ZodEnum) {
+  if (typeName === 'ZodEnum') {
     return { kind: 'enum', options: [...unwrapped._def.values] };
   }
-  if (unwrapped instanceof z.ZodNativeEnum) {
+  if (typeName === 'ZodNativeEnum') {
     const values = Object.values(unwrapped._def.values).filter((v): v is string => typeof v === 'string');
     return { kind: 'enum', options: values };
   }
-  if (unwrapped instanceof z.ZodArray && unwrapped._def.type instanceof z.ZodString) {
+  if (typeName === 'ZodArray' && unwrapped._def.type?._def?.typeName === 'ZodString') {
     return { kind: 'string-array' };
   }
   // Unrecognised shape — fall back to string (admin form renders an Input).
