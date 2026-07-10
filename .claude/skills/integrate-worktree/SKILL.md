@@ -35,7 +35,7 @@ description: |
 ```
 worktree 作業確認 → main へ merge → conflict 解消 → 自動チェック → merge commit
   → dev/watch 停止 → selective /crowi-qa → gw end → tmux window close → simplify
-  → stale spec/task 掃除
+  → stale spec/task 掃除 → 直列チェーン前進 (kickoff-chain があれば次を kickoff)
 ```
 
 ### Step 1: worktree の作業内容を確認
@@ -422,6 +422,35 @@ rm -f <spec> <task>
   実装されたケース、あるいは crowi-complete-feature が synthesize した task のみ
   あった場合) → 黙ってスキップ。
 - `rm` が失敗 (permission 等) → 削除せず警告のみ、Step 9 へ進む。
+
+### Step 9: 直列チェーンの前進 (crowi-kickoff の複数 spec 指定時のみ)
+
+`crowi-kickoff` に複数 spec を渡した直列チェーンでは、integrate 完了が次 spec の着手
+トリガーになる。`.feature-state/kickoff-chain.json`
+(`{ "after": "<待ち id>", "then": ["<次>", ...] }`)を確認する:
+
+```bash
+CHAIN=.feature-state/kickoff-chain.json
+[ -f "$CHAIN" ] && jq -c . "$CHAIN" || echo "(チェーンなし)"
+```
+
+- ファイルが無い → 通常の単発統合。Step 9 は何もしない。
+- ファイルがあり `after` が **今 integrate した `<identifier>`(feature- prefix 両変種で照合)
+  と一致** → チェーンを前進させる:
+  1. `next = then[0]`、`rest = then[1:]` を取り出す。
+  2. `rest` が空でなければ `<stateDir>/kickoff-chain.json` を
+     `{ "after": next, "then": rest, "createdAt": <元の値> }` に atomic (tmp+rename) 更新。
+     空なら `rm -f` でチェーンファイルを消す(チェーン完了)。
+  3. **`next` を `/crowi-kickoff <next>` で着手する**(この integrate と同じ main セッションで
+     続けて実行 — kickoff は自前で ready 判定・worktree 作成・起動・watch 確認をやる)。
+     kickoff が not-ready 等で中止した場合はチェーンもそこで停止し、その旨を報告する
+     (無理に次へ飛ばさない)。
+- ファイルがあるが `after` が今の id と **不一致**(別の worktree が割り込みで integrate された)
+  → チェーンは自分の head を待ち続けているだけなので **触らない**(何もしない)。
+
+> チェーンを integrate 側で前進させる理由: kickoff は「入口を開ける」だけで完了を待てない
+> (Workflow は背景実行)。「次を着手してよい」と確定するのは READY_TO_INTEGRATE → 統合完了
+> の瞬間なので、その完了点を持つ integrate-worktree が次の kickoff を呼ぶのが唯一整合する。
 
 ## 失敗ハンドリング
 

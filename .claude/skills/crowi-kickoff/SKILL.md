@@ -20,7 +20,33 @@ description: |
 /crowi-kickoff feature-attachment-thumbnail
 /crowi-kickoff attachment-thumbnail            # feature- prefix は省略可
 /crowi-kickoff feature-foo --no-launch         # worktree 作成まで。指示投入はしない
+/crowi-kickoff feat-a feat-b feat-c            # 直列チェーン: 先頭だけ起動し、integrate 完了ごとに次を自動 kickoff
 ```
+
+## 直列チェーン(複数 spec を順番に)
+
+複数の spec id を渡すと、**1 本ずつ直列**に流す(並列に全部起動しない)。先頭だけを
+今 kickoff し、`/integrate-worktree` がそれを main に統合し終えた時点で次を自動 kickoff
+する。整合の要る feature を順に着地させたい / 並列 worktree を増やしたくないときに使う。
+
+- **前提チェックは全 spec ぶん先にやる**(Step 1-3 を渡された全 id に対して実行)。1 つでも
+  not-ready / 重複なら、**チェーンを一切開始せず**欠落を列挙して中止する(途中で詰まる
+  連鎖を作らない)。全 id が ready のときだけ進む。
+- 先頭 id だけ Step 4-5(worktree 作成・起動・指示投入)を行う。残りは起動しない。
+- チェーン状態を `<stateDir>/kickoff-chain.json` に atomic (tmp+rename) で書く:
+  ```json
+  { "after": "feature-<先頭id>", "then": ["feature-<2番目>", "feature-<3番目>"], "createdAt": "<UTC>" }
+  ```
+  `after` = 「これが integrate されたら次へ」の現在待ち id、`then` = 以降のキュー。
+  `then` が空になる単一 id 指定のときはこのファイルを作らない(通常の単発 kickoff と同じ)。
+- Step 5.7 の watch は先頭 1 回だけ張ればよい(以降のチェーン前進は integrate 側が担う)。
+- **チェーンの前進は `/integrate-worktree` の最終ステップ (Step 9) が行う** — integrate が
+  `after` に一致する id を統合し終えたら、`then[0]` を次として `/crowi-kickoff` し、
+  ファイルを更新/削除する。詳細は integrate-worktree Step 9。
+- 途中の spec が NEEDS_WORK/ESCALATE で READY にならなければ、そこで連鎖は自然に一時停止
+  する(次に進まない)。再開したい場合は当該 spec を仕上げて integrate すれば連鎖が続く。
+- 報告(Step 6)には「チェーン: 先頭 <id> 起動、以降 <then> を integrate ごとに自動着手」
+  と 1 行含める。
 
 ## 前提(実測済みの環境)
 
