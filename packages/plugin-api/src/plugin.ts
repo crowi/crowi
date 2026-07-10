@@ -46,6 +46,17 @@ export interface CrowiPlugin {
    * Zod schema describing this plugin's *global* configurable values.
    * The admin UI generates a config form by walking this schema.
    *
+   * Build this with `import { z } from 'zod/v3'` — NOT the top-level
+   * `import { z } from 'zod'` (v4). `peerDependencies: { zod: "^4" }`
+   * only says which npm package to install; the v4 package ships a
+   * `zod/v3` compat subpath, and that subpath's runtime shape is what
+   * every introspection helper here (`schema-serializer.ts`,
+   * `schema-markers.ts`, `PluginManager.listSensitiveKeys()`) actually
+   * walks. A schema built from the top-level v4 API fails boot with an
+   * explicit error (`PluginManager.activate()`'s config-schema guard —
+   * see this package's README) rather than silently losing
+   * `@sensitive` detection.
+   *
    * Mark sensitive fields with the `@sensitive` description marker
    * (see `SENSITIVE_FIELD_MARKER`); they are encrypted at rest via the
    * same KeyProvider used by core's sensitive Config.
