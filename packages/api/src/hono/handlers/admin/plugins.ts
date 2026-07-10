@@ -96,7 +96,10 @@ const hasReconfigureOrDependent = (plugin: CrowiPlugin, all: readonly CrowiPlugi
   return false;
 };
 
-const toPluginInfo = (plugin: CrowiPlugin, all: readonly CrowiPlugin[]): PluginInfo => ({
+// `failure` is only ever passed for a plugin from `getFailedPlugins()`, so
+// its presence alone determines `status: 'failed'` — no need to carry a
+// redundant `status` literal alongside the error message.
+const toPluginInfo = (plugin: CrowiPlugin, all: readonly CrowiPlugin[], failure?: { error: string }): PluginInfo => ({
   name: plugin.name,
   version: plugin.version,
   requires: plugin.requires,
@@ -104,6 +107,8 @@ const toPluginInfo = (plugin: CrowiPlugin, all: readonly CrowiPlugin[]): PluginI
   registers: collectRegistrySlots(plugin),
   adminPlacement: resolvePlacement(plugin),
   supportsHotReload: hasReconfigureOrDependent(plugin, all),
+  status: failure ? 'failed' : 'active',
+  error: failure?.error,
 });
 
 const readPluginNamespace = (crowi: Crowi, pluginName: string): Record<string, unknown> => {
@@ -127,9 +132,15 @@ export const registerAdminPluginsRoutes = <E extends OpenAPIHono<CrowiHonoBindin
     .openapi(adminPluginsRoutes.listPluginsRoute, async (c) => {
       const manager = crowi.pluginManager;
       if (!manager) return c.json({ plugins: [] }, 200);
+      // `all` (used for `hasReconfigureOrDependent`'s "any dependent
+      // implements reconfigure" walk) is intentionally the successfully
+      // activated set only — a plugin that failed activation never
+      // registered a driver, so it cannot be a reconfigure-relevant
+      // dependency target either.
       const all = manager.getLoadedPlugins();
-      const plugins = all.map((p) => toPluginInfo(p, all));
-      return c.json({ plugins }, 200);
+      const activePlugins = all.map((p) => toPluginInfo(p, all));
+      const failedPlugins = manager.getFailedPlugins().map((f) => toPluginInfo(f.plugin, all, { error: f.error }));
+      return c.json({ plugins: [...activePlugins, ...failedPlugins] }, 200);
     })
     .openapi(adminPluginsRoutes.getPluginConfigRoute, async (c) => {
       const { name, locale } = c.req.valid('query');
