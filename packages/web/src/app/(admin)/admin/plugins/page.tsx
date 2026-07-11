@@ -106,6 +106,7 @@ function PluginRowMeta({ plugin }: { plugin: PluginInfo }) {
   parts.push(`${m['admin.plugins.column_section']()}: ${plugin.adminPlacement.section}`);
   if (plugin.registers.length > 0) parts.push(`${m['admin.plugins.column_registers']()}: ${plugin.registers.join(', ')}`);
   if (plugin.requires && plugin.requires.length > 0) parts.push(`${m['admin.plugins.column_requires']()}: ${plugin.requires.join(', ')}`);
+  if (plugin.modelAccess && plugin.modelAccess.length > 0) parts.push(`${m['admin.plugins.column_model_access']()}: ${plugin.modelAccess.join(', ')}`);
   if (!plugin.hasConfig) parts.push(m['admin.plugins.no_config']());
   if (plugin.status === 'failed' && plugin.error) parts.push(m['admin.plugins.status_failed_reason']({ message: plugin.error }));
   return <p className="text-muted-foreground text-xs mt-0.5">{parts.join(' / ')}</p>;

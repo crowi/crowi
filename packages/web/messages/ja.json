@@ -733,6 +733,7 @@
   "admin.plugins.column_version": "バージョン",
   "admin.plugins.column_registers": "登録",
   "admin.plugins.column_requires": "依存",
+  "admin.plugins.column_model_access": "アクセス可能なモデル",
   "admin.plugins.column_section": "セクション",
   "admin.plugins.no_config": "(設定項目なし)",
   "admin.plugins.save": "変更を保存",
