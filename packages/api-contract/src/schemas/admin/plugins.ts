@@ -49,6 +49,13 @@ export const PluginInfoSchema = z.object({
   name: z.string(),
   version: z.string(),
   requires: z.array(z.string()).optional(),
+  /**
+   * Core Mongoose model names this plugin declared in its
+   * `CrowiPlugin.modelAccess` allow-list — the only models it may
+   * reach via `ctx.model(name)`. Surfaced so an admin can audit which
+   * plugins touch which core collections.
+   */
+  modelAccess: z.array(z.string()).optional(),
   /** Has a configSchema (= showable config form). */
   hasConfig: z.boolean(),
   /**

@@ -103,6 +103,7 @@ const toPluginInfo = (plugin: CrowiPlugin, all: readonly CrowiPlugin[], failure?
   name: plugin.name,
   version: plugin.version,
   requires: plugin.requires,
+  modelAccess: plugin.modelAccess,
   hasConfig: !!plugin.configSchema,
   registers: collectRegistrySlots(plugin),
   adminPlacement: resolvePlacement(plugin),
