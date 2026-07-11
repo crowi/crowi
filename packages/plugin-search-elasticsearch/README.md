@@ -50,11 +50,16 @@ in the admin UI applies without a server restart**. When you save:
   in the background (its HTTP keep-alive pool drains),
 - the admin UI shows a "saved — applied immediately" toast.
 
-Mechanics: the driver holds a module-scope state ref; each operation
-(`query` / `index` / `remove` / `rebuild`) snapshots the state once at
-the top of the call, so a save that lands mid-request cannot retarget
-an inflight operation onto a different cluster. The next request sees
-the new settings.
+Mechanics: the driver holds its state in a `StateCell` (from the plugin
+SDK's `ctx.state()`, not a hand-rolled module-scope variable). Each
+operation (`query` / `index` / `remove` / `rebuild`) reads the cell
+through `withValue()`, which snapshots the state for the call's whole
+duration, so a save that lands mid-request cannot retarget an inflight
+operation onto a different cluster — the next request sees the new
+settings. The previous Elasticsearch client is closed once every
+inflight operation that was still using it has settled (not the
+instant `reconfigure` returns), so a save can never cut off a
+request that's already in progress.
 
 ### Caveats
 
@@ -100,6 +105,6 @@ you can exercise the hot-reload path end to end:
 ## See also
 
 - RFC-0001 §"Search" for the migration story from the legacy ES7 indexer.
-- [`@crowi/plugin-storage-aws-s3`](../plugin-storage-aws-s3) — the
-  reference implementation of the same state-ref + snapshot hot-reload
+- [`@crowi/plugin-storage-aws-s3`](../plugin-storage-aws-s3) — another
+  driver built on the same `ctx.state()` / `StateCell` hot-reload
   pattern.

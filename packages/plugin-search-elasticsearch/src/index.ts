@@ -9,10 +9,9 @@
  */
 
 import { z } from 'zod/v3';
-import type { CrowiPlugin, PluginContext } from '@crowi/plugin-api';
+import type { CrowiPlugin, PluginContext, StateCell } from '@crowi/plugin-api';
 import {
   applyConfig,
-  applyConfigInPlace,
   createElasticsearchDriver,
   type Analyzer,
   type ElasticsearchDriver,
@@ -21,7 +20,7 @@ import {
   type PageStreamDoc,
 } from './driver';
 
-export { applyConfig, applyConfigInPlace, createElasticsearchDriver } from './driver';
+export { applyConfig, createElasticsearchDriver } from './driver';
 export type { ElasticsearchDriver, ElasticsearchDriverConfig, ElasticsearchDriverDeps, ESDriverState, PageStreamDoc, Analyzer } from './driver';
 export { parseQuery } from './parse-query';
 export { buildSearchBody } from './query-builder';
@@ -66,15 +65,26 @@ export type ElasticsearchConfig = z.infer<typeof ElasticsearchConfigSchema>;
 const PLUGIN_NAME = '@crowi/plugin-search-elasticsearch';
 
 /**
- * Module-scope driver state ref. `registerSearch` initialises it from
- * the boot-time config and registers a driver bound to it; the driver
- * methods snapshot from it on every call; `reconfigure` mutates its
- * fields in place when admin saves new connection / index / analyzer /
- * requestTimeout values. The single-instance assumption is fine — the
- * plugin registers exactly one `'elasticsearch'` driver, owned by this
- * module. `null` before `registerSearch` runs.
+ * `true` once `registerSearch` has actually registered a driver (i.e.
+ * boot-time `url` was non-empty and it created the `ctx.state()` cell).
+ * `registerSearch` intentionally does *not* register a driver at all
+ * when `url` is empty (see its NOTE below), so this — not "does the
+ * cell exist" — is what `reconfigure` checks to tell "never configured,
+ * restart required" apart from "configured, then `url` was cleared via
+ * a later `reconfigure`" (the cell exists and its `client` is `null` in
+ * both cases). A plain boot-time flag, not a hand-rolled resource state
+ * — the actual driver-owned resource (the ES `Client`) lives entirely
+ * in the `StateCell` from `ctx.state()`.
+ *
+ * Reset to `false` at the top of every `registerSearch` call (not just
+ * set to `true` on success): a real process only ever calls
+ * `registerSearch` once per plugin, but the module itself is a
+ * singleton, so anything that re-invokes it against the same module
+ * instance (tests re-running "boot" with a different config, a future
+ * reactivate-without-restart path) must not see a stale `true` left
+ * over from an earlier, unrelated activation.
  */
-let state: ESDriverState | null = null;
+let activatedAtBoot = false;
 
 function toDriverConfig(config: ElasticsearchConfig): ElasticsearchDriverConfig {
   return {
@@ -100,6 +110,9 @@ const plugin: CrowiPlugin = {
   },
 
   registerSearch: (registry, ctx) => {
+    // Reset first — see the doc comment on `activatedAtBoot` above for
+    // why this can't just be a one-way `= true` on the success path.
+    activatedAtBoot = false;
     const config = ctx.config<ElasticsearchConfig>();
 
     if (!config.url) {
@@ -110,14 +123,15 @@ const plugin: CrowiPlugin = {
       return;
     }
 
-    state = applyConfig(toDriverConfig(config));
-    const driver = buildDriver(state, ctx);
+    const cell = ctx.state<ESDriverState>(applyConfig(toDriverConfig(config)));
+    activatedAtBoot = true;
+    const driver = buildDriver(cell, ctx);
     registry.register('elasticsearch', driver);
     ctx.log.debug('registered elasticsearch search driver (node=%s, indexName=%s, analyzer=%s)', driver.node, driver.baseIndexName, config.analyzer);
   },
 
   reconfigure: (ctx) => {
-    if (!state) {
+    if (!activatedAtBoot) {
       // registerSearch skipped (boot-time url was empty). Configuring a
       // url now needs a restart — see the registerSearch note above.
       ctx.log.warn('reconfigure: driver was not registered at boot (url was empty); a server restart is required to enable Elasticsearch search.');
@@ -127,17 +141,22 @@ const plugin: CrowiPlugin = {
     if (!config.url) {
       ctx.log.warn('reconfigure: url cleared; search requests will fail with a "Search not configured" error until a url is set.');
     }
-    const { oldClient } = applyConfigInPlace(state, toDriverConfig(config));
-    // Fire-and-forget: the ES Client keeps an HTTP keep-alive pool, so
-    // the old one must be closed — but awaiting it would block the
-    // admin save response. Inflight requests already snapshotted the
-    // old client and drain to completion regardless.
-    if (oldClient) {
-      void oldClient.close().catch((err: unknown) => {
-        ctx.log.warn('reconfigure: closing the previous Elasticsearch client failed: %o', err);
-      });
-    }
-    ctx.log.debug('reconfigured elasticsearch search driver (node=%s, index=%s, analyzer=%s)', state.node || '<unset>', state.baseIndexName, config.analyzer);
+    const next = applyConfig(toDriverConfig(config));
+    const cell = ctx.state<ESDriverState>(next);
+    cell.set(next, {
+      // The ES Client keeps an HTTP keep-alive pool, so the old one
+      // must be closed — but this now runs only once every in-flight
+      // `withValue()` call against it (index/remove/query/rebuild) has
+      // settled (AC-3's drain-after behaviour), not fire-and-forget the
+      // instant `reconfigure` returns.
+      dispose: (prev) => {
+        if (!prev.client) return;
+        prev.client.close().catch((err: unknown) => {
+          ctx.log.warn('reconfigure: closing the previous Elasticsearch client failed: %o', err);
+        });
+      },
+    });
+    ctx.log.debug('reconfigured elasticsearch search driver (node=%s, index=%s, analyzer=%s)', next.node || '<unset>', next.baseIndexName, config.analyzer);
   },
 };
 
@@ -167,12 +186,12 @@ interface UserModelLike {
   countDocuments: (q?: unknown) => { exec: () => Promise<number> };
 }
 
-function buildDriver(driverState: ESDriverState, ctx: PluginContext): ElasticsearchDriver {
+function buildDriver(cell: StateCell<ESDriverState>, ctx: PluginContext): ElasticsearchDriver {
   const Page = ctx.model('Page') as PageModelLike;
   const Bookmark = ctx.model('Bookmark') as BookmarkModelLike;
   const User = ctx.model('User') as UserModelLike;
 
-  return createElasticsearchDriver(driverState, {
+  return createElasticsearchDriver(cell, {
     log: ctx.log,
     iteratePages: async (handler) => {
       const cursor = Page.getStreamOfFindAll({ publicOnly: false });
