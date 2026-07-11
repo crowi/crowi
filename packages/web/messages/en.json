@@ -733,6 +733,7 @@
   "admin.plugins.column_version": "Version",
   "admin.plugins.column_registers": "Registers",
   "admin.plugins.column_requires": "Requires",
+  "admin.plugins.column_model_access": "Model access",
   "admin.plugins.column_section": "Section",
   "admin.plugins.no_config": "(no configurable values)",
   "admin.plugins.save": "Save changes",

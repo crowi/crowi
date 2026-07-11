@@ -32,7 +32,6 @@ const buildPluginCtx = (config: ReturnType<typeof plantumlConfigSchema.parse>): 
       remove: async () => undefined,
     },
     model: () => undefined,
-    crypto: { encrypt: (s) => s, decrypt: (s) => s },
     log: silentLogger,
   }) as PluginContext;
 

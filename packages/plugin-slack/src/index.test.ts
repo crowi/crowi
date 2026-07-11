@@ -35,7 +35,6 @@ function stubCtx(config: SlackPluginConfig): PluginContext {
       remove: async () => undefined,
     },
     model: () => ({}),
-    crypto: { encrypt: (s) => s, decrypt: (s) => s },
     log: { debug: () => undefined, info: () => undefined, warn: () => undefined, error: () => undefined },
   };
 }
@@ -59,6 +58,12 @@ describe('@crowi/plugin-slack plugin contract', () => {
   it('ships localized manifest help linking to the Slack app creation page', () => {
     expect(slackPlugin.configI18n?.ja?.manifest?.description).toContain('https://api.slack.com/apps/');
     expect(slackPlugin.configI18n?.en?.manifest?.description).toContain('https://api.slack.com/apps/');
+  });
+
+  // feature-plugin-capability-scoping: declares exactly the models it
+  // reads (read-only) via ctx.model('Page') in events.ts.
+  it('declares modelAccess for the models it reads via ctx.model()', () => {
+    expect(slackPlugin.modelAccess).toEqual(['Page']);
   });
 });
 

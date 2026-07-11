@@ -43,6 +43,20 @@ export interface CrowiPlugin {
   requires?: string[];
 
   /**
+   * Core Mongoose model names (e.g. `['Page', 'Bookmark']`) this plugin
+   * is allowed to reach via `ctx.model(name)`. The PluginManager
+   * validates every entry against the set of registered core model
+   * names at boot — an unknown name fails boot with a descriptive
+   * error. `ctx.model(name)` throws at call time for any `name` not
+   * listed here.
+   *
+   * A model listed here is granted full (unrestricted) read/write
+   * access — there is no read-only mode. Omit or leave empty for a
+   * plugin that never calls `ctx.model()`.
+   */
+  modelAccess?: string[];
+
+  /**
    * Zod schema describing this plugin's *global* configurable values.
    * The admin UI generates a config form by walking this schema.
    *

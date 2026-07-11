@@ -12193,6 +12193,7 @@ export interface paths {
                                 name: string;
                                 version: string;
                                 requires?: string[];
+                                modelAccess?: string[];
                                 hasConfig: boolean;
                                 registers: string[];
                                 adminPlacement: {
@@ -14823,6 +14824,7 @@ export interface components {
             name: string;
             version: string;
             requires?: string[];
+            modelAccess?: string[];
             hasConfig: boolean;
             registers: string[];
             adminPlacement: {
@@ -14844,6 +14846,7 @@ export interface components {
                 name: string;
                 version: string;
                 requires?: string[];
+                modelAccess?: string[];
                 hasConfig: boolean;
                 registers: string[];
                 adminPlacement: {

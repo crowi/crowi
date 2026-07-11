@@ -407,6 +407,10 @@ export class PluginManager {
       assertZodV3ConfigSchema(plugin.name, plugin.configSchema);
     }
 
+    if (plugin.modelAccess) {
+      assertValidModelAccess(plugin.name, plugin.modelAccess, Object.keys(this.crowi.models));
+    }
+
     this.warnOnMalformedActions(plugin);
 
     // onInstall runs once per plugin, ever — install-once state is
@@ -505,4 +509,27 @@ function assertZodV3ConfigSchema(pluginName: string, schema: unknown): void {
   throw new Error(
     `Plugin '${pluginName}' declares configSchema built with the top-level 'zod' (v4) API. Import from 'zod/v3' instead — @crowi/plugin-api's config-schema introspection requires the zod v3 compat shape (see @crowi/plugin-api README).`,
   );
+}
+
+/**
+ * Verify that every entry in a plugin's `modelAccess` declaration names
+ * a real core model. `Crowi.init()` runs `setupModels()` before
+ * `setupPlugins()` (see `crowi/index.ts`), so `validModelNames` — read
+ * from `this.crowi.models` at the `activate()` call site — is already
+ * complete by the time this runs. An unknown model name is very likely
+ * a typo (`modelAccess: ['Pages']` instead of `['Page']`) that would
+ * otherwise silently make `ctx.model('Pages')` throw the *unrelated*
+ * "did not declare it in 'modelAccess'" error at first use, deep inside
+ * a `register*` callback — surfacing it here, at boot, names the
+ * offending plugin immediately instead.
+ */
+function assertValidModelAccess(pluginName: string, modelAccess: readonly string[], validModelNames: readonly string[]): void {
+  const validSet = new Set(validModelNames);
+  for (const name of modelAccess) {
+    if (!validSet.has(name)) {
+      throw new Error(
+        `Plugin '${pluginName}' declares modelAccess including '${name}', which is not a registered core model. Valid model names: ${validModelNames.join(', ')}.`,
+      );
+    }
+  }
 }

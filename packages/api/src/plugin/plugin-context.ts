@@ -1,7 +1,6 @@
 import Debug from 'debug';
-import type { CrowiPlugin, PageMetadataAccessor, PluginContext, PluginCrypto, PluginLogger } from '@crowi/plugin-api';
+import type { CrowiPlugin, PageMetadataAccessor, PluginContext, PluginLogger } from '@crowi/plugin-api';
 import type Crowi from 'src/crowi';
-import { decrypt, encrypt } from 'src/util/crypto';
 import { formatPluginConfigKey, pluginConfigKeyPrefix } from './plugin-namespace';
 
 /**
@@ -34,8 +33,6 @@ export function createPluginContext(plugin: CrowiPlugin, crowi: Crowi, lookup: P
       error: (msg, ...args) => console.error(`[crowi:plugin:${plugin.name}] ${msg}`, ...args),
     };
   })();
-
-  const crypto: PluginCrypto = { encrypt, decrypt };
 
   return {
     config<T>(): T {
@@ -98,6 +95,9 @@ export function createPluginContext(plugin: CrowiPlugin, crowi: Crowi, lookup: P
     pageMetadata: makePageMetadataAccessor(plugin.name, crowi),
 
     model(name: string): unknown {
+      if (!plugin.modelAccess?.includes(name)) {
+        throw new Error(`Plugin '${plugin.name}' called model('${name}') but did not declare it in 'modelAccess'.`);
+      }
       // crowi.model has a strongly-typed signature elsewhere; the
       // plugin contract intentionally types this loosely so plugins
       // can narrow at the call site.
@@ -105,7 +105,6 @@ export function createPluginContext(plugin: CrowiPlugin, crowi: Crowi, lookup: P
       return (crowi.model as any)(name);
     },
 
-    crypto,
     log,
   };
 }

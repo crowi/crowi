@@ -155,12 +155,20 @@ configI18n: {
 コアと安全にやり取りするための唯一の窓口です。`@crowi/server` を直接
 import してはいけません。
 
+トラスト境界: プラグインが到達できるのは明示的に宣言したものだけです。
+`model(name)` は `CrowiPlugin.modelAccess` の allow-list でゲートされて
+おり(下記)、「任意のコアモデルに触れる」ような無条件アクセスはありません。
+対称暗号化 / 復号の capability も意図的に存在しません — secret を読む正当な
+経路は `config<T>()` のみで、`@sensitive` フィールドは既に復号済みの値と
+して返ります。プラグインは `PluginContext` 経由で他プラグインや core の
+secret に到達できません。
+
 - `config<T>()` — このプラグインの型付き設定を読む
 - `dependencyConfig<T>(name)` — `requires` に宣言した依存プラグインの設定を読む
 - `setConfig(key, value)` — 設定フィールドを 1 つ書き込む
 - `pageMetadata` — このプラグイン名前空間のページメタデータを読み書き
-- `model(name)` — コアの Mongoose モデル (Page / User / Comment …) にアクセス
-- `crypto` — 対称 暗号化 / 復号
+- `model(name)` — `modelAccess` に宣言したコアの Mongoose モデル (Page /
+  User / Comment …) にのみフルアクセス。未宣言のモデル名を渡すと throw する
 - `log` — プラグイン名で自動プレフィックスされる構造化ロガー
 
 ## 拡張ポイント一覧
@@ -197,6 +205,31 @@ PluginManager が依存グラフを解決し、`requires` を先に読み込み�
 `@crowi/plugin-aws` を `requires` に宣言し、`ctx.dependencyConfig()` で
 `region` / `accessKeyId` / `secretAccessKey` を読み取ります。自前の
 スキーマで重複定義する必要はありません。
+
+## コアモデルへのアクセス (modelAccess)
+
+`ctx.model(name)` でコアの Mongoose モデルに触るプラグインは、`requires`
+と同じ形状の `modelAccess?: string[]` に触るモデル名を宣言します。
+
+```ts
+modelAccess: ['Page', 'Bookmark'],
+```
+
+- `modelAccess` に含まれないモデル名で `ctx.model()` を呼ぶと
+  `Plugin '<name>' called model('<requested>') but did not declare it in
+  'modelAccess'.` で throw します。
+- 宣言した名前が実在するコアモデルかどうかは起動時 (`PluginManager.activate()`)
+  に検証され、存在しない名前を宣言すると起動エラーになります (`configSchema`
+  の zod v3/v4 チェックと同じ隔離ポリシーで、そのプラグインだけが無効化されます)。
+- 宣言したモデルにはフルアクセス (read/write) が返ります。read-only に絞る
+  仕組みは現時点ではありません。
+- `GET /admin/plugins` のレスポンスにも各プラグインの `modelAccess` が含まれ、
+  管理者はどのプラグインがどのコアコレクションに触れるかを一覧で確認できます。
+
+一次プラグインの実例: `@crowi/plugin-search-elasticsearch` /
+`@crowi/plugin-search-opensearch` は `['Page', 'Bookmark', 'User']`、
+`@crowi/plugin-search-mongo` は `['Page', 'Revision']`、`@crowi/plugin-slack`
+は `['Page']` を宣言しており、いずれも読み取り専用の用途です。
 
 ## レンダラプラグインを作る
 
