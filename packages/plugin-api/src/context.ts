@@ -1,8 +1,17 @@
 /**
  * The context object passed to every plugin callback. It is the only
  * conduit through which a plugin reads core state (config, models,
- * crypto helpers, logging) — plugins must NOT import from
- * `@crowi/server` directly to keep the contract surface thin.
+ * logging) — plugins must NOT import from `@crowi/server` directly to
+ * keep the contract surface thin.
+ *
+ * Trust boundary: a plugin only reaches what it explicitly declares.
+ * `model(name)` is gated by the plugin's own `CrowiPlugin.modelAccess`
+ * allow-list (see `model()` below) — there is no ambient "any core
+ * model" access. There is intentionally no symmetric encrypt/decrypt
+ * capability on this context: the only legitimate secret-reading path
+ * is `config<T>()`, which already hands back `@sensitive` fields
+ * transparently decrypted. A plugin cannot reach another plugin's or
+ * core's secrets through `PluginContext`.
  */
 export interface PluginContext {
   /**
@@ -43,18 +52,21 @@ export interface PluginContext {
   pageMetadata: PageMetadataAccessor;
 
   /**
-   * Mongoose model accessor. Returns the named core model. Plugins
-   * touch core collections (Page, User, Comment, ...) through this
-   * accessor rather than importing model files directly.
+   * Mongoose model accessor, gated by this plugin's declared
+   * `CrowiPlugin.modelAccess` allow-list. Plugins touch core
+   * collections (Page, User, Comment, ...) through this accessor
+   * rather than importing model files directly.
+   *
+   * Throws when `name` is not listed in the plugin's `modelAccess` —
+   * a plugin must declare every core model it touches. A model name
+   * listed in `modelAccess` is returned with full (unrestricted)
+   * read/write access; there is no read-only proxying.
    *
    * Typed loosely (`unknown`) at this layer because the core model
    * types live in `@crowi/server`; plugins narrow the return type at
    * the call site.
    */
   model(name: string): unknown;
-
-  /** Symmetric encrypt / decrypt against the configured KeyProvider. */
-  crypto: PluginCrypto;
 
   /** Structured logger scoped to this plugin (auto-prefixed with name). */
   log: PluginLogger;
@@ -99,11 +111,6 @@ export interface PageMetadataAccessor {
   set<T>(pageId: string, value: T): Promise<void>;
   /** Remove this plugin's metadata for a specific page. */
   remove(pageId: string): Promise<void>;
-}
-
-export interface PluginCrypto {
-  encrypt(plaintext: string): string;
-  decrypt(ciphertext: string): string;
 }
 
 export interface PluginLogger {
