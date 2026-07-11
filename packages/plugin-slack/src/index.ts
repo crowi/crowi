@@ -56,6 +56,9 @@ const plugin: CrowiPlugin = {
   name: PLUGIN_NAME,
   version: '0.1.0-dev',
   configSchema: SlackConfigSchema,
+  // Read-only: events.ts reads Page via ctx.model() to resolve the
+  // page an inbound Slack event / unfurl refers to; no writes.
+  modelAccess: ['Page'],
   adminPlacement: {
     // Phase 1 has no register* hook (registerNotifier lands in Phase 3), so
     // `deriveSectionFromHooks` would return empty — declare the section

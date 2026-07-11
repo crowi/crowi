@@ -91,6 +91,10 @@ const plugin: CrowiPlugin = {
   name: PLUGIN_NAME,
   version: '0.1.0-dev',
   configSchema: OpenSearchConfigSchema,
+  // Read-only: driver.ts / index.ts read Page/Bookmark/User via
+  // ctx.model() to build search documents and resolve grants; no
+  // writes.
+  modelAccess: ['Page', 'Bookmark', 'User'],
   adminPlacement: {
     label: 'OpenSearch',
     icon: 'search',

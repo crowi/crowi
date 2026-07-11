@@ -55,6 +55,9 @@ const plugin: CrowiPlugin = {
   name: PLUGIN_NAME,
   version: '0.1.0-dev',
   configSchema: MongoSearchConfigSchema,
+  // Read-only: driver.ts reads Page/Revision via ctx.model() for the
+  // live $regex search; no writes.
+  modelAccess: ['Page', 'Revision'],
   adminPlacement: {
     label: 'MongoDB',
     icon: 'database',
