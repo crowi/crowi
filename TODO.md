@@ -82,6 +82,7 @@ alpha.0–.3 は published、alpha.4 / stable 向けに changeset 蓄積中（pr
 - **画像表示属性（RFC-0015）** — Markdown 画像 `![alt](url){width= height= align= float=}` の bundled core transform（standalone は合成 figure・inline は width/height のみ）+ web 側 value-based 再検証 helper（raw-HTML 偽造 `data-crowi-image-*` を無力化）+ CodeMirror hover/focus affordance。`RENDERER_PIPELINE_VERSION` 0.7.0→0.8.0 bump 込み（spec: `feature-image-display-attributes.md`）
 - **Plugin activate/registerRoutes の per-plugin 隔離** — 1 plugin の起動時 throw で boot 全体が落ちないよう activate ループ / `registerRoutes` ループを個別 try/catch で隔離。`PluginManager.getFailedPlugins()` + `GET /admin/plugins` の `status:'failed'`（admin UI に「起動失敗」バッジ）で可視化（design-audit-2026-07 finding: plugin-sdk-no-registration-isolation。spec: `feature-plugin-registration-isolation.md`）
 - **Plugin `onInstall` の install-once 契約実装** — SDK ドキュメントが約束する「1回目の boot でのみ実行・冪等」を実装に反映。専用 Config namespace `plugin-installed`（`plugin-install-tracker.ts`）で永続化し、`onInstall` 成功後のみ記録・throw 時は次回 boot で自動リトライ（design-audit-2026-07 finding: plugin-sdk-oninstall-contract-mismatch。spec: `feature-plugin-oninstall-idempotency.md`）
+- **grant 判定の query-time / in-memory 食い違い解消** — `visiblePageGrantOr` に creator 節を追加し `isGrantedFor` と同一ルールから導出、`updateGrant` が page.creator を `grantedUsers` から落とさないよう修正、`isGrantedFor` の membership 判定を `.equals()` 値比較に統一（design-audit-2026-07 finding: SEC-GRANT-DUAL-PREDICATE。spec: `feature-grant-predicate-unification.md`）
 
 ---
 

@@ -1,3 +1,4 @@
+import { visiblePageGrantOr } from 'src/models/page';
 import { crowi, Fixture } from 'src/test/setup';
 
 describe('Page', () => {
@@ -207,6 +208,19 @@ describe('Page', () => {
         const user = await User.findOne({ email: 'anonymous1@example.com' });
         const page = await Page.findOne({ path: '/grant/restricted' });
         expect(page.isGrantedFor(user)).toBe(false);
+      });
+    });
+
+    describe('with a populated grantedUsers array', () => {
+      test('should return true for a member found via ObjectId value equality, not reference identity', async () => {
+        const user = await User.findOne({ email: 'anonymous0@example.com' });
+        const page = await Page.findOne({ path: '/grant/restricted' }).populate('grantedUsers');
+        // `user` and the populated `grantedUsers` entries are distinct
+        // document instances loaded from separate queries — `indexOf`
+        // (reference/primitive comparison) would fail to match them even
+        // though the underlying ObjectId is the same value.
+        expect(page.grantedUsers[0]).not.toBe(user);
+        expect(page.isGrantedFor(user)).toBe(true);
       });
     });
   });
@@ -759,6 +773,70 @@ describe('Page', () => {
       const paths = pages.map((p) => p.path);
       expect(pages).toHaveLength(1);
       expect(paths).toEqual(['/refilter/public']);
+    });
+  });
+
+  // `visiblePageGrantOr` (query-time) and `isGrantedFor` (in-memory) must be
+  // derived from the same rule table, including the creator clause. A
+  // non-creator (e.g. an admin) changing a page's grant must not reset
+  // `grantedUsers` to just themselves, which would silently drop the page
+  // from the creator's own listings even though `isGrantedFor`/`isCreator`
+  // still lets the creator open it by id.
+  describe('Grant predicate parity — creator stays visible after a non-creator grant change', () => {
+    let creator;
+    let admin;
+    let stranger;
+
+    beforeAll(async () => {
+      const users = await Fixture.generate('User', [
+        { name: 'Grant Parity Creator', username: 'grantParityCreator', email: 'grant-parity-creator@example.com' },
+        { name: 'Grant Parity Admin', username: 'grantParityAdmin', email: 'grant-parity-admin@example.com' },
+        { name: 'Grant Parity Stranger', username: 'grantParityStranger', email: 'grant-parity-stranger@example.com' },
+      ]);
+      [creator, admin, stranger] = users;
+    });
+
+    afterEach(async () => {
+      await Page.deleteMany({ path: { $regex: '^/grant-parity' } });
+    });
+
+    // admin is not the creator, and grant changes previously reset
+    // grantedUsers to just the actor performing the change.
+    async function createPageThenRestrictedByAdmin(path: string) {
+      const page = await Page.createPage(path, 'body', creator, {});
+      await Page.updateGrant(page, Page.GRANT_SPECIFIED, admin);
+      return page;
+    }
+
+    test("creator's page still appears in findListByStartWith after a non-creator (admin) restricts the grant", async () => {
+      await createPageThenRestrictedByAdmin('/grant-parity/team-doc');
+
+      const pages = await Page.findListByStartWith('/grant-parity', creator, {});
+      const paths = pages.map((p) => p.path);
+      expect(paths).toContain('/grant-parity/team-doc');
+    });
+
+    test('isGrantedFor(creator) and a visiblePageGrantOr(creator) query never disagree (creator + stranger)', async () => {
+      const page = await createPageThenRestrictedByAdmin('/grant-parity/parity-doc');
+
+      const reloaded = await Page.findById(page._id);
+      expect(reloaded.isGrantedFor(creator)).toBe(true);
+      expect(reloaded.isGrantedFor(stranger)).toBe(false);
+
+      const foundForCreator = await Page.findOne({ _id: page._id, $or: visiblePageGrantOr(creator._id) });
+      expect(foundForCreator).not.toBeNull();
+
+      const foundForStranger = await Page.findOne({ _id: page._id, $or: visiblePageGrantOr(stranger._id) });
+      expect(foundForStranger).toBeNull();
+    });
+
+    test('updateGrant keeps the creator in grantedUsers even when a different user changes the grant', async () => {
+      const page = await createPageThenRestrictedByAdmin('/grant-parity/keep-creator');
+
+      const reloaded = await Page.findById(page._id).select('grantedUsers').lean();
+      const grantedIds = (reloaded?.grantedUsers ?? []).map((id) => id.toString());
+      expect(grantedIds).toContain(admin._id.toString());
+      expect(grantedIds).toContain(creator._id.toString());
     });
   });
 });

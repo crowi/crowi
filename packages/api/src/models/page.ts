@@ -62,7 +62,9 @@ export function visiblePageStatusOr(viewerId: Types.ObjectId | string, creatorId
 /**
  * `$or` grant clause for "pages readable by a given user": public and
  * legacy-null pages are always readable; restricted / specified / owner
- * pages only when the user is in `grantedUsers`.
+ * pages only when the user is in `grantedUsers`; the page's creator can
+ * always read it regardless of `grantedUsers` membership (kept in sync
+ * with the in-memory `isGrantedFor` rule below).
  */
 export function visiblePageGrantOr(userId: Types.ObjectId | string): Array<Record<string, unknown>> {
   return [
@@ -71,6 +73,7 @@ export function visiblePageGrantOr(userId: Types.ObjectId | string): Array<Recor
     { grant: GRANT_RESTRICTED, grantedUsers: userId },
     { grant: GRANT_SPECIFIED, grantedUsers: userId },
     { grant: GRANT_OWNER, grantedUsers: userId },
+    { creator: userId },
   ];
 }
 
@@ -421,11 +424,15 @@ export default (crowi: Crowi) => {
       return true;
     }
 
-    if (this.grantedUsers.indexOf(userData._id) >= 0) {
-      return true;
-    }
-
-    return false;
+    // Value-compare via `.equals()` (same pattern as `isSeenUser` below)
+    // instead of `indexOf`, which is a reference/primitive comparison and
+    // can misjudge populated arrays or non-identical ObjectId instances.
+    // Unlike `isSeenUser`, no cast is needed here: `grantedUsers` is typed
+    // as `Types.ObjectId[]`, and `Types.ObjectId` already exposes
+    // `.equals()` — it also works correctly if the array happens to hold
+    // populated `UserDocument`s, since Mongoose's `Document.prototype.equals`
+    // delegates to the same `_id.equals()` comparison.
+    return this.grantedUsers.some((granted) => granted.equals(userData._id));
   };
 
   pageSchema.methods.isLatestRevision = function () {
@@ -1141,11 +1148,14 @@ export default (crowi: Crowi) => {
 
   pageSchema.statics.updateGrant = async function (page, grant, userData) {
     page.grant = grant;
-    if (grant == GRANT_PUBLIC) {
-      page.grantedUsers = [];
-    } else {
-      page.grantedUsers = [];
+    page.grantedUsers = [];
+    if (grant !== GRANT_PUBLIC) {
       page.grantedUsers.addToSet(userData._id);
+      // Keep the creator granted even when someone else (e.g. an admin) is
+      // the one changing the grant, so `grantedUsers` never drifts out of
+      // sync with `visiblePageGrantOr`'s creator clause / `isGrantedFor`'s
+      // `isCreator` shortcut.
+      page.grantedUsers.addToSet(page.creator);
     }
 
     const data = await page.save();
