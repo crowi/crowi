@@ -493,6 +493,48 @@ describe('PluginManager.activateAll — per-plugin activation isolation (feature
   });
 });
 
+describe('PluginManager.getOrCreateStateCell (feature-plugin-state-cell-primitive, AC-2)', () => {
+  it('returns the same cell for repeated calls with the same plugin name', () => {
+    const manager = new PluginManager(makeFakeCrowi());
+
+    const first = manager.getOrCreateStateCell('@crowi/plugin-a', { n: 1 });
+    const second = manager.getOrCreateStateCell('@crowi/plugin-a', { n: 999 });
+
+    expect(second).toBe(first);
+  });
+
+  it('ignores `initial` on the second call — the cell still holds the value from the first call', () => {
+    const manager = new PluginManager(makeFakeCrowi());
+
+    const first = manager.getOrCreateStateCell('@crowi/plugin-a', { n: 1 });
+    manager.getOrCreateStateCell('@crowi/plugin-a', { n: 999 });
+
+    expect(first.get()).toEqual({ n: 1 });
+  });
+
+  it('gives different plugins independent cells', () => {
+    const manager = new PluginManager(makeFakeCrowi());
+
+    const a = manager.getOrCreateStateCell('@crowi/plugin-a', { n: 1 });
+    const b = manager.getOrCreateStateCell('@crowi/plugin-b', { n: 2 });
+
+    expect(a).not.toBe(b);
+    expect(a.get()).toEqual({ n: 1 });
+    expect(b.get()).toEqual({ n: 2 });
+  });
+
+  it('a value written via set() on one lookup is visible through a cell obtained from a later lookup call (activation ctx vs. reconfigure ctx)', () => {
+    const manager = new PluginManager(makeFakeCrowi());
+
+    const activationCell = manager.getOrCreateStateCell('@crowi/plugin-a', { n: 1 });
+    activationCell.set({ n: 2 });
+
+    const reconfigureCell = manager.getOrCreateStateCell('@crowi/plugin-a', { n: 1 });
+
+    expect(reconfigureCell.get()).toEqual({ n: 2 });
+  });
+});
+
 describe('PluginManager.activate — onInstall install-once idempotency (feature-plugin-oninstall-idempotency, AC-1–AC-4)', () => {
   it('calls onInstall on the first boot and persists an install record (AC-1, AC-2)', async () => {
     const onInstall = jest.fn().mockResolvedValue(undefined);

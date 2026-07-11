@@ -1,5 +1,5 @@
 import Debug from 'debug';
-import type { CrowiPlugin, PageMetadataAccessor, PluginContext, PluginLogger } from '@crowi/plugin-api';
+import type { CrowiPlugin, PageMetadataAccessor, PluginContext, PluginLogger, StateCell } from '@crowi/plugin-api';
 import type Crowi from 'src/crowi';
 import { formatPluginConfigKey, pluginConfigKeyPrefix } from './plugin-namespace';
 
@@ -11,6 +11,16 @@ import { formatPluginConfigKey, pluginConfigKeyPrefix } from './plugin-namespace
  */
 export interface PluginLookup {
   getLoadedPlugin(name: string): CrowiPlugin | undefined;
+
+  /**
+   * Backs `PluginContext.state()`. Returns the single `StateCell` owned
+   * by `pluginName`, creating it with `initial` on the first call —
+   * every subsequent call (from any `PluginContext` instance built for
+   * this plugin) returns the same cell and ignores `initial`. Keyed by
+   * plugin name (not by `ctx` instance) so the activation-time `ctx`
+   * and every later `reconfigure(ctx)` share one cell.
+   */
+  getOrCreateStateCell<T>(pluginName: string, initial: T): StateCell<T>;
 }
 
 /**
@@ -106,6 +116,8 @@ export function createPluginContext(plugin: CrowiPlugin, crowi: Crowi, lookup: P
     },
 
     log,
+
+    state: <T>(initial: T) => lookup.getOrCreateStateCell(plugin.name, initial),
   };
 }
 
