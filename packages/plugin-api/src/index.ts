@@ -13,7 +13,7 @@
 
 export type { CrowiPlugin } from './plugin';
 
-export type { PluginContext, AppInfo, PageMetadataAccessor, PluginLogger } from './context';
+export type { PluginContext, AppInfo, PageMetadataAccessor, PluginLogger, StateCell } from './context';
 
 export type { StorageDriver, StorageRegistry, StoragePutMeta, StoragePutResult } from './registries/storage';
 

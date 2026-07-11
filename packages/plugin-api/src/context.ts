@@ -70,6 +70,67 @@ export interface PluginContext {
 
   /** Structured logger scoped to this plugin (auto-prefixed with name). */
   log: PluginLogger;
+
+  /**
+   * Hot-reload state primitive. Returns a {@link StateCell} that holds a
+   * mutable value — the driver-owned resource (an S3 client, an SMTP
+   * transport, a search client, ...) that `reconfigure` rebuilds when
+   * admin saves new config. Every call across every `PluginContext`
+   * instance for this plugin (the activation-time `ctx` passed to
+   * `registerStorage`/`registerSearch`/`registerMailSender` etc., and
+   * every later `reconfigure(ctx)` call) returns the **same** cell — the
+   * runtime keys it by plugin name, not by `ctx` instance. `initial` is
+   * only used the first time this plugin ever calls `state()`; later
+   * calls ignore it and just return the existing cell.
+   *
+   * Use this instead of a module-scope `let`/`const` — it protects
+   * in-flight `withValue()` callers from a concurrent `set()` swapping
+   * the value out from under them, and gives `set()`'s `dispose` option
+   * a correct place to tear down the previous value (close a client,
+   * end a connection pool, ...) once nothing is still using it.
+   */
+  state<T>(initial: T): StateCell<T>;
+}
+
+/**
+ * A hot-reload-safe mutable cell, returned by `PluginContext.state()`.
+ * Designed for driver plugins (storage / search / mail / ...) that
+ * `reconfigure()` rebuilds a stateful resource for: `withValue()` marks
+ * the current value "in use" for the duration of the callback so a
+ * concurrent `set()` cannot tear it down mid-call, and `set()`'s
+ * `dispose` option only runs once every such in-flight caller has
+ * settled.
+ */
+export interface StateCell<T> {
+  /**
+   * Atomic snapshot of the current value. Safe to read once and reuse
+   * across `await`s in the caller — but prefer {@link withValue} when the
+   * value may be disposed (e.g. an SDK client that `dispose` closes),
+   * since `get()` gives no in-flight protection.
+   */
+  get(): T;
+
+  /**
+   * Run `fn` against the current value while marking it "in use", so a
+   * concurrent `set()`'s `dispose` waits for `fn` to settle (resolve or
+   * reject) before tearing down the value `fn` captured. This is the
+   * primary way driver methods should read the cell.
+   */
+  withValue<R>(fn: (value: T) => R | Promise<R>): Promise<R>;
+
+  /**
+   * Swap in `next`. If `opts.dispose` is given, it runs — asynchronously,
+   * never inline — once every `withValue()` call that was in flight
+   * against the previous value at the moment of the swap has settled
+   * (immediately, on the next microtask, if none were in flight).
+   *
+   * `dispose` must handle (and log, if relevant) its own errors — a
+   * rejected `dispose` is swallowed by the runtime rather than
+   * surfaced anywhere, since there is no caller left waiting on it by
+   * the time it runs. Wrap the teardown in its own `try`/`catch` (or
+   * `.catch()`) instead of letting it throw.
+   */
+  set(next: T, opts?: { dispose?: (prev: T) => void | Promise<void> }): void;
 }
 
 /**
