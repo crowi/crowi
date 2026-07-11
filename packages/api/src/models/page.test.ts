@@ -211,7 +211,7 @@ describe('Page', () => {
       });
     });
 
-    describe('with a populated grantedUsers array (feature-grant-predicate-unification: .equals() value comparison)', () => {
+    describe('with a populated grantedUsers array', () => {
       test('should return true for a member found via ObjectId value equality, not reference identity', async () => {
         const user = await User.findOne({ email: 'anonymous0@example.com' });
         const page = await Page.findOne({ path: '/grant/restricted' }).populate('grantedUsers');
@@ -776,12 +776,12 @@ describe('Page', () => {
     });
   });
 
-  // feature-grant-predicate-unification: `visiblePageGrantOr` (query-time) and
-  // `isGrantedFor` (in-memory) must be derived from the same rule table,
-  // including the creator clause. Before the fix, a non-creator (e.g. an
-  // admin) changing a page's grant reset `grantedUsers` to just themselves,
-  // which silently dropped the page from the creator's own listings even
-  // though `isGrantedFor`/`isCreator` still let the creator open it by id.
+  // `visiblePageGrantOr` (query-time) and `isGrantedFor` (in-memory) must be
+  // derived from the same rule table, including the creator clause. A
+  // non-creator (e.g. an admin) changing a page's grant must not reset
+  // `grantedUsers` to just themselves, which would silently drop the page
+  // from the creator's own listings even though `isGrantedFor`/`isCreator`
+  // still lets the creator open it by id.
   describe('Grant predicate parity — creator stays visible after a non-creator grant change', () => {
     let creator;
     let admin;
