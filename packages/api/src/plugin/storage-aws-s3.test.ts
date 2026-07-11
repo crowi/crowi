@@ -70,7 +70,6 @@ function makeCtx(own: { bucket: string }, aws: { region?: string; accessKeyId?: 
     setConfig: jest.fn(),
     pageMetadata: { get: jest.fn(), set: jest.fn(), remove: jest.fn() } as any,
     model: () => ({}),
-    crypto: { encrypt: (s) => s, decrypt: (s) => s },
     log: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
   };
 }

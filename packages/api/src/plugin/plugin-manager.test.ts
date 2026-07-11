@@ -13,6 +13,11 @@ function makeFakeCrowi(): any {
     getConfigService: () => fakeConfig,
     getConfig: () => ({ crowi: {} }),
     model: () => ({}),
+    // `assertValidModelAccess()` reads `Object.keys(crowi.models)` as the
+    // set of valid core model names (feature-plugin-capability-scoping) —
+    // a subset of the real `packages/api/src/models/index.ts` registry is
+    // enough for these tests.
+    models: { Page: {}, User: {}, Revision: {}, Bookmark: {} },
     config: { crowi: {} },
     onConfigChangeMock: fakeConfig.onConfigChange,
   };
@@ -300,6 +305,56 @@ describe('PluginManager.activate — zod/v3 vs top-level zod (v4) configSchema g
     const manager = new PluginManager(makeFakeCrowi());
 
     await expect(activate(manager, plugin)).resolves.toBeUndefined();
+  });
+});
+
+describe('PluginManager.activate — modelAccess allow-list boot validation (feature-plugin-capability-scoping)', () => {
+  it('activates normally when every declared modelAccess name is a registered core model', async () => {
+    const plugin = stubPlugin({ name: '@crowi/plugin-model-ok', modelAccess: ['Page', 'Bookmark'] });
+    const manager = new PluginManager(makeFakeCrowi());
+
+    await expect(activate(manager, plugin)).resolves.toBeUndefined();
+  });
+
+  it("throws a descriptive error naming the plugin and the unknown model when modelAccess declares a name that isn't a registered core model", async () => {
+    const plugin = stubPlugin({ name: '@crowi/plugin-model-typo', modelAccess: ['Page', 'Pages'] });
+    const manager = new PluginManager(makeFakeCrowi());
+
+    await expect(activate(manager, plugin)).rejects.toThrow(
+      "Plugin '@crowi/plugin-model-typo' declares modelAccess including 'Pages', which is not a registered core model.",
+    );
+  });
+
+  it('activates normally when the plugin declares no modelAccess at all', async () => {
+    const plugin = stubPlugin({ name: '@crowi/plugin-no-model-access' });
+    const manager = new PluginManager(makeFakeCrowi());
+
+    await expect(activate(manager, plugin)).resolves.toBeUndefined();
+  });
+
+  it('activates normally when modelAccess is an empty array', async () => {
+    const plugin = stubPlugin({ name: '@crowi/plugin-empty-model-access', modelAccess: [] });
+    const manager = new PluginManager(makeFakeCrowi());
+
+    await expect(activate(manager, plugin)).resolves.toBeUndefined();
+  });
+
+  it('a plugin whose modelAccess names an unknown model is isolated by activateAll() like a bad configSchema, without stopping other plugins', async () => {
+    jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    const ok = stubPlugin({ name: '@crowi/plugin-model-ok-2', registerStorage: jest.fn() });
+    const bad = stubPlugin({ name: '@crowi/plugin-model-bad', modelAccess: ['NotAModel'] });
+    const manager = new PluginManager(makeFakeCrowi());
+
+    await activateAll(manager, [ok, bad]);
+
+    expect(manager.getLoadedPlugins().map((p) => p.name)).toEqual(['@crowi/plugin-model-ok-2']);
+    expect(manager.getFailedPlugins()).toEqual([
+      {
+        plugin: bad,
+        error:
+          "Plugin '@crowi/plugin-model-bad' declares modelAccess including 'NotAModel', which is not a registered core model. Valid model names: Page, User, Revision, Bookmark.",
+      },
+    ]);
   });
 });
 

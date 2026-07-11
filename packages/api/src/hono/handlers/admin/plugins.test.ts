@@ -195,4 +195,24 @@ describe('GET /api/v2/admin/plugins — status/error fields (feature-plugin-regi
       expect(entry.status).toBe('active');
     }
   });
+
+  it("surfaces a primary plugin's declared modelAccess allow-list (feature-plugin-capability-scoping)", async () => {
+    const res = await request(app).get('/api/v2/admin/plugins').set(authHeaders(adminToken));
+
+    expect(res.status).toBe(200);
+    const plugins = res.body.plugins as Array<{ name: string; modelAccess?: string[] }>;
+    const byName = new Map(plugins.map((p) => [p.name, p.modelAccess]));
+
+    // `@crowi/plugin-search-mongo` is one of the `IMPLICIT_DEFAULT_PLUGINS`
+    // (see `@crowi/runner`'s `config-file.ts`), so it is always loaded even
+    // with no `crowi.config.json` present (this test harness's `ROOT_DIR` /
+    // `process.cwd()` is `packages/api`, which has none) — a read-only
+    // `ctx.model()` user, so its declared allow-list is exactly the models
+    // it reads (see `driver.ts`). The other primary plugins
+    // (search-elasticsearch/opensearch, slack) declare their own
+    // `modelAccess` too — asserted directly against their exported
+    // `CrowiPlugin` object in each package's own test suite, since they
+    // are not part of this harness's implicit/no-config plugin set.
+    expect(byName.get('@crowi/plugin-search-mongo')).toEqual(['Page', 'Revision']);
+  });
 });

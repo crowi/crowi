@@ -28,7 +28,6 @@ const stubPluginCtx: PluginContext = {
     remove: async () => undefined,
   },
   model: () => undefined,
-  crypto: { encrypt: (s) => s, decrypt: (s) => s },
   log: silentLogger,
 } as PluginContext;
 

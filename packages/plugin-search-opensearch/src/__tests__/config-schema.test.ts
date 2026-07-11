@@ -42,4 +42,10 @@ describe('plugin default export', () => {
     // plugin config namespace. See spec for rationale.
     expect(plugin.onInstall).toBeUndefined();
   });
+
+  // feature-plugin-capability-scoping: declares exactly the models it
+  // reads (read-only) via ctx.model() in registerSearch — see index.ts.
+  it('declares modelAccess for the models it reads via ctx.model()', () => {
+    expect(plugin.modelAccess).toEqual(['Page', 'Bookmark', 'User']);
+  });
 });
