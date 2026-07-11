@@ -6770,6 +6770,12 @@
               "type": "string"
             }
           },
+          "modelAccess": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "hasConfig": {
             "type": "boolean"
           },
@@ -6847,6 +6853,12 @@
                   "type": "string"
                 },
                 "requires": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "modelAccess": {
                   "type": "array",
                   "items": {
                     "type": "string"
@@ -37489,6 +37501,12 @@
                             "type": "string"
                           },
                           "requires": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "modelAccess": {
                             "type": "array",
                             "items": {
                               "type": "string"
