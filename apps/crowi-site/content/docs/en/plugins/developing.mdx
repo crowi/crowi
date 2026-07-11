@@ -169,6 +169,8 @@ another plugin's or core's secrets through `PluginContext`.
 - `model(name)` — access a core Mongoose model (Page / User / Comment …), only
   when it is declared in `modelAccess` — throws otherwise
 - `log` — a structured logger auto-prefixed with the plugin name
+- `state<T>(initial)` — returns a hot-reload `StateCell<T>` (see "Writing a
+  hot-reload driver (state-cell)" below)
 
 ## Extension points
 
@@ -193,6 +195,53 @@ You can also declare lifecycle hooks:
 
 If you do not implement `reconfigure`, the plugin is treated as
 "config changes require a server restart".
+
+### Writing a hot-reload driver (state-cell)
+
+A driver plugin that implements `reconfigure` (storage / search / mail
+sending, …) holds a swappable resource — an S3 client, an SMTP
+transport, a search client. Instead of hand-rolling that as a
+module-scope `let` / `const`, use the `StateCell<T>` returned by
+`ctx.state<T>(initial)`.
+
+```ts
+interface DriverState {
+  client: SomeClient;
+}
+
+registerStorage: (registry, ctx) => {
+  const cell = ctx.state<DriverState>(buildState(ctx));
+  registry.register('my-driver', createDriver(cell));
+},
+
+reconfigure: (ctx) => {
+  const next = buildState(ctx);
+  const cell = ctx.state<DriverState>(next);
+  cell.set(next, { dispose: (prev) => prev.client.destroy() });
+},
+```
+
+`StateCell<T>` has three methods:
+
+- `get()` — a synchronous snapshot of the current value
+- `withValue(fn)` — marks the current value "in use" for the duration of
+  `fn`. This is how a driver's methods should normally read the state
+  (`cell.withValue(async ({ client }) => { ... })`)
+- `set(next, { dispose })` — swaps in a new value. `dispose(prev)` does
+  not run until every `withValue()` call that was in flight at the
+  moment of the swap has settled (immediately, on the next microtask, if
+  none were in flight) — so a resource that is still in use is never
+  torn down out from under a caller. A rejected `dispose` is never
+  propagated anywhere (the runtime swallows it), so catch and log your
+  own errors inside `dispose` rather than letting it throw
+
+For the same plugin, `state()` called from the activation-time `ctx`
+(`registerStorage`/`registerSearch`/`registerMailSender`, …) and from a
+later `reconfigure`'s `ctx` (a different instance) return the **same**
+`StateCell` — `initial` is ignored on every call after the first.
+`packages/plugin-storage-aws-s3`, `packages/plugin-mail-smtp`, and
+`packages/plugin-search-elasticsearch` are reference implementations of
+this pattern.
 
 ## Dependency plugins
 

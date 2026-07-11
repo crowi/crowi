@@ -9,6 +9,7 @@
  * touching AWS.
  */
 import type { PluginContext, StorageDriver } from '@crowi/plugin-api';
+import { makeSharedPluginState } from './state-cell-test-support';
 
 const sentSpies = {
   put: jest.fn(),
@@ -17,12 +18,15 @@ const sentSpies = {
 };
 
 let constructedClients: Array<{ region?: string }> = [];
+let constructedInstances: Array<{ destroy: jest.Mock }> = [];
 
 jest.mock('@aws-sdk/client-s3', () => {
   class FakeS3Client {
     public readonly tag = Symbol('s3-client');
+    public readonly destroy = jest.fn();
     constructor(public readonly cfg: { region?: string }) {
       constructedClients.push({ region: cfg.region });
+      constructedInstances.push(this);
     }
     async send(command: any) {
       const kind = command.__kind;
@@ -63,6 +67,8 @@ jest.mock('@aws-sdk/s3-request-presigner', () => ({
   getSignedUrl: jest.fn(async (_client, command) => `signed://${command.input.Bucket}/${command.input.Key}`),
 }));
 
+const sharedPluginState = makeSharedPluginState();
+
 function makeCtx(own: { bucket: string }, aws: { region?: string; accessKeyId?: string; secretAccessKey?: string }): PluginContext {
   return {
     config: () => own as any,
@@ -71,6 +77,7 @@ function makeCtx(own: { bucket: string }, aws: { region?: string; accessKeyId?: 
     pageMetadata: { get: jest.fn(), set: jest.fn(), remove: jest.fn() } as any,
     model: () => ({}),
     log: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
+    state: sharedPluginState.state,
   };
 }
 
@@ -84,6 +91,8 @@ describe('@crowi/plugin-storage-aws-s3 hot-reload', () => {
     sentSpies.get.mockClear();
     sentSpies.delete.mockClear();
     constructedClients = [];
+    constructedInstances = [];
+    sharedPluginState.reset();
     plugin = require('@crowi/plugin-storage-aws-s3').default;
     registeredDriver = null;
   });
@@ -158,5 +167,38 @@ describe('@crowi/plugin-storage-aws-s3 hot-reload', () => {
 
     expect(sentSpies.put).toHaveBeenCalledTimes(1);
     expect(sentSpies.put).toHaveBeenCalledWith(expect.objectContaining({ Bucket: 'old' }));
+  });
+
+  it('reconfigure disposes the previous S3Client (destroy()) only once an in-flight put against it settles (AC-3/AC-5)', async () => {
+    const driver = register(makeCtx({ bucket: 'old' }, { region: 'us-east-1' }));
+    const oldClient = constructedInstances.at(-1);
+    if (!oldClient) throw new Error('expected registerStorage to have constructed an S3Client');
+
+    const sdk = require('@aws-sdk/client-s3');
+    let releaseSend: ((v: unknown) => void) | undefined;
+    const releasePromise = new Promise<unknown>((r) => {
+      releaseSend = r;
+    });
+    sdk.S3Client.prototype.send = jest.fn(async function (this: any, command: any) {
+      sentSpies.put({ ...command.input, clientTag: this.tag });
+      await releasePromise;
+      return {};
+    });
+
+    const inflight = driver.put('k1', Buffer.from('a'), { contentType: 'text/plain' });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    await plugin.reconfigure!(makeCtx({ bucket: 'new' }, { region: 'us-east-1' }));
+    // The in-flight put against `oldClient` hasn't settled yet — dispose (destroy()) must wait.
+    expect(oldClient.destroy).not.toHaveBeenCalled();
+
+    releaseSend?.(undefined);
+    await inflight;
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(oldClient.destroy).toHaveBeenCalledTimes(1);
   });
 });

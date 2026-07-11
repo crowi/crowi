@@ -1,6 +1,6 @@
 import Debug from 'debug';
 import { ACTION_FIELD_MARKER, getActionAnnotation } from '@crowi/plugin-api';
-import type { AuthDriver, CrowiPlugin, MailSender, NotifierDriver, SearchDriver, StorageDriver } from '@crowi/plugin-api';
+import type { AuthDriver, CrowiPlugin, MailSender, NotifierDriver, SearchDriver, StateCell, StorageDriver } from '@crowi/plugin-api';
 import { type CrowiConfigFile, resolvePlugins } from '@crowi/runner';
 import type Crowi from 'src/crowi';
 import { registerSensitiveConfigKeys } from 'src/models/config-sensitive';
@@ -8,6 +8,7 @@ import type { ConfigChangeSource } from 'src/service/config';
 import { createPluginContext } from './plugin-context';
 import { isPluginInstalled, markPluginInstalled } from './plugin-install-tracker';
 import { formatPluginConfigKey, parsePluginNamespace } from './plugin-namespace';
+import { createStateCell } from './plugin-state-cell';
 import { makeRendererScope } from 'src/renderer';
 import { DriverRegistry, makeAuthScope, makeMailScope, makeNotifierScope, makeSearchScope, makeStorageScope } from './registries';
 import { topoSortPlugins } from './topo-sort';
@@ -87,6 +88,13 @@ export class PluginManager {
   private failedPlugins: { plugin: CrowiPlugin; error: string }[] = [];
   /** plugin name → set of plugin names that `requires` it */
   private dependents = new Map<string, Set<string>>();
+  /**
+   * plugin name → its `PluginContext.state()` cell. Backs
+   * `getOrCreateStateCell()` — one cell per plugin, shared across the
+   * activation-time `ctx` and every later `reconfigure(ctx)` for that
+   * plugin (see `createPluginContext`'s `state` field).
+   */
+  private stateCells = new Map<string, StateCell<unknown>>();
 
   constructor(private readonly crowi: Crowi) {}
 
@@ -261,6 +269,25 @@ export class PluginManager {
    */
   getLoadedPlugins(): readonly CrowiPlugin[] {
     return this.loadedPlugins;
+  }
+
+  /**
+   * Backs `PluginContext.state()` (see `PluginLookup.getOrCreateStateCell`
+   * in `plugin-context.ts`). One cell per plugin name, created lazily on
+   * first call and reused by every later call — including calls from a
+   * *different* `PluginContext` instance for the same plugin, which is
+   * exactly what happens between activation (`registerStorage` etc.) and
+   * a later `reconfigure()`, each of which gets its own `ctx`.
+   *
+   * Not cleaned up on `deactivate()` — see the class doc for why a full
+   * plugin unload is deferred to Phase 5+.
+   */
+  getOrCreateStateCell<T>(pluginName: string, initial: T): StateCell<T> {
+    const existing = this.stateCells.get(pluginName) as StateCell<T> | undefined;
+    if (existing) return existing;
+    const cell = createStateCell(initial);
+    this.stateCells.set(pluginName, cell as StateCell<unknown>);
+    return cell;
   }
 
   /**

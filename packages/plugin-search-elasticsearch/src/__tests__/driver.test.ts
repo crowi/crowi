@@ -1,8 +1,66 @@
-import { applyConfig, applyConfigInPlace, createElasticsearchDriver, docToEsSource, parseUri, shouldIndex } from '../driver';
-import type { ElasticsearchDriverConfig, PageStreamDoc } from '../driver';
-import type { SearchableDoc } from '@crowi/plugin-api';
+import { applyConfig, createElasticsearchDriver, docToEsSource, parseUri, shouldIndex } from '../driver';
+import type { ElasticsearchDriverConfig, ESDriverState, PageStreamDoc } from '../driver';
+import type { SearchableDoc, StateCell } from '@crowi/plugin-api';
 
 const CONFIG: ElasticsearchDriverConfig = { url: 'http://localhost:9200/crowi', indexName: 'crowi', requestTimeout: 5000, analyzer: 'default' };
+
+/**
+ * Minimal `StateCell<T>` for these tests. `createElasticsearchDriver`
+ * now takes a `StateCell<ESDriverState>` (feature-plugin-state-cell-primitive)
+ * instead of a raw mutable state ref. The real implementation lives in
+ * `@crowi/api` (`packages/api/src/plugin/plugin-state-cell.ts`, with its
+ * own exhaustive dispose-drain unit tests) — this package only depends
+ * on `@crowi/plugin-api` (the type-only contract), not `@crowi/api`, so
+ * tests here need their own tiny cell. Same generation/refCount
+ * algorithm as the real one, just local to this test file.
+ */
+function createTestStateCell<T>(initial: T): StateCell<T> {
+  let generation = 0;
+  let current = initial;
+  const generations = new Map<number, { value: T; refCount: number; dispose?: (v: T) => void | Promise<void> }>();
+  generations.set(0, { value: initial, refCount: 0 });
+
+  function maybeDispose(gen: number): void {
+    if (gen === generation) return;
+    const entry = generations.get(gen);
+    if (!entry || entry.refCount > 0) return;
+    generations.delete(gen);
+    if (entry.dispose) {
+      const dispose = entry.dispose;
+      // Mirrors the real cell's `.catch(() => {})` guard against an
+      // unhandled promise rejection (see plugin-state-cell.ts).
+      Promise.resolve()
+        .then(() => dispose(entry.value))
+        .catch(() => {});
+    }
+  }
+
+  return {
+    get: () => current,
+    async withValue(fn) {
+      const gen = generation;
+      const entry = generations.get(gen);
+      if (!entry) throw new Error('state cell: generation missing — internal invariant broken');
+      entry.refCount++;
+      try {
+        return await fn(entry.value);
+      } finally {
+        entry.refCount--;
+        maybeDispose(gen);
+      }
+    },
+    set(next, opts) {
+      const prevGen = generation;
+      // `prevGen`'s entry always exists (created at construction or by the previous `set()`).
+      const prevEntry = generations.get(prevGen)!;
+      prevEntry.dispose = opts?.dispose;
+      generation++;
+      current = next;
+      generations.set(generation, { value: next, refCount: 0 });
+      maybeDispose(prevGen);
+    },
+  };
+}
 
 describe('shouldIndex', () => {
   const base: PageStreamDoc = { _id: 'p1', path: '/foo', redirectTo: null, status: 'published', grant: 1 };
@@ -95,7 +153,7 @@ describe('docToEsSource', () => {
 
 describe('createElasticsearchDriver query()', () => {
   const installFakeClient = (response: unknown) => {
-    const driver = createElasticsearchDriver(applyConfig(CONFIG), { countUsers: async () => 5 });
+    const driver = createElasticsearchDriver(createTestStateCell(applyConfig(CONFIG)), { countUsers: async () => 5 });
     const fakeSearch = jest.fn().mockResolvedValue(response);
     (driver.client as unknown as { search: typeof fakeSearch }).search = fakeSearch;
     return { driver, fakeSearch };
@@ -144,7 +202,7 @@ describe('createElasticsearchDriver query()', () => {
 
 describe('createElasticsearchDriver index/remove()', () => {
   it('index() sends a single ES9 index request (no _type, no bulk overhead)', async () => {
-    const driver = createElasticsearchDriver(applyConfig(CONFIG));
+    const driver = createElasticsearchDriver(createTestStateCell(applyConfig(CONFIG)));
     const fakeIndex = jest.fn().mockResolvedValue({ result: 'created' });
     (driver.client as unknown as { index: typeof fakeIndex }).index = fakeIndex;
 
@@ -166,7 +224,7 @@ describe('createElasticsearchDriver index/remove()', () => {
   });
 
   it('remove() sends a single ES9 delete request', async () => {
-    const driver = createElasticsearchDriver(applyConfig(CONFIG));
+    const driver = createElasticsearchDriver(createTestStateCell(applyConfig(CONFIG)));
     const fakeDelete = jest.fn().mockResolvedValue({ result: 'deleted' });
     (driver.client as unknown as { delete: typeof fakeDelete }).delete = fakeDelete;
 
@@ -177,7 +235,7 @@ describe('createElasticsearchDriver index/remove()', () => {
   });
 
   it('remove() swallows 404 (idempotent)', async () => {
-    const driver = createElasticsearchDriver(applyConfig(CONFIG));
+    const driver = createElasticsearchDriver(createTestStateCell(applyConfig(CONFIG)));
     const notFound = Object.assign(new Error('not found'), { statusCode: 404 });
     const fakeDelete = jest.fn().mockRejectedValue(notFound);
     (driver.client as unknown as { delete: typeof fakeDelete }).delete = fakeDelete;
@@ -186,7 +244,7 @@ describe('createElasticsearchDriver index/remove()', () => {
   });
 
   it('remove() rethrows non-404 errors', async () => {
-    const driver = createElasticsearchDriver(applyConfig(CONFIG));
+    const driver = createElasticsearchDriver(createTestStateCell(applyConfig(CONFIG)));
     const serverErr = Object.assign(new Error('boom'), { statusCode: 500 });
     const fakeDelete = jest.fn().mockRejectedValue(serverErr);
     (driver.client as unknown as { delete: typeof fakeDelete }).delete = fakeDelete;
@@ -198,7 +256,7 @@ describe('createElasticsearchDriver index/remove()', () => {
 describe('createElasticsearchDriver query() user-count caching', () => {
   it('caches countUsers() across query calls', async () => {
     const countUsers = jest.fn(async () => 42);
-    const driver = createElasticsearchDriver(applyConfig(CONFIG), { countUsers });
+    const driver = createElasticsearchDriver(createTestStateCell(applyConfig(CONFIG)), { countUsers });
     const fakeSearch = jest.fn().mockResolvedValue({ hits: { total: 0, hits: [] } });
     (driver.client as unknown as { search: typeof fakeSearch }).search = fakeSearch;
 
@@ -229,46 +287,27 @@ describe('applyConfig', () => {
   });
 });
 
-describe('reconfigure: applyConfigInPlace + driver state ref', () => {
-  it('swaps state.client and returns the previous client for closing', () => {
-    const state = applyConfig(CONFIG);
-    const firstClient = state.client;
-    const { oldClient } = applyConfigInPlace(state, { ...CONFIG, url: 'http://other:9200/other' });
-    expect(oldClient).toBe(firstClient);
-    expect(state.client).not.toBe(firstClient);
-    expect(state.client).not.toBeNull();
-  });
-
-  it('updates baseIndexName / aliasName / analyzer / requestTimeout in place', () => {
-    const state = applyConfig(CONFIG);
-    applyConfigInPlace(state, { url: 'http://es:9200/wiki', indexName: 'wiki', requestTimeout: 12000, analyzer: 'kuromoji' });
-    expect(state.baseIndexName).toBe('wiki');
-    expect(state.aliasName).toBe('wiki-current');
-    expect(state.analyzer).toBe('kuromoji');
-    expect(state.requestTimeout).toBe(12000);
-    expect(state.node).toBe('http://es:9200');
-  });
-
-  it('a driver bound to the state ref sees the new alias on the next query', async () => {
-    const state = applyConfig(CONFIG);
-    const driver = createElasticsearchDriver(state);
+describe('reconfigure: driver bound to a StateCell', () => {
+  it('a driver bound to the state cell sees the new alias on the next query', async () => {
+    const cell = createTestStateCell(applyConfig(CONFIG));
+    const driver = createElasticsearchDriver(cell);
 
     const firstSearch = jest.fn().mockResolvedValue({ hits: { total: 0, hits: [] } });
-    (state.client as unknown as { search: typeof firstSearch }).search = firstSearch;
+    (cell.get().client as unknown as { search: typeof firstSearch }).search = firstSearch;
     await driver.query({ q: 'before' });
     expect(firstSearch.mock.calls[0][0].index).toBe('crowi-current');
 
-    applyConfigInPlace(state, { ...CONFIG, url: 'http://es:9200/wiki', indexName: 'wiki' });
+    cell.set(applyConfig({ ...CONFIG, url: 'http://es:9200/wiki', indexName: 'wiki' }));
     const secondSearch = jest.fn().mockResolvedValue({ hits: { total: 0, hits: [] } });
-    (state.client as unknown as { search: typeof secondSearch }).search = secondSearch;
+    (cell.get().client as unknown as { search: typeof secondSearch }).search = secondSearch;
     await driver.query({ q: 'after' });
     expect(secondSearch.mock.calls[0][0].index).toBe('wiki-current');
   });
 
   it('an inflight query() completes on the snapshotted old client despite a mid-flight reconfigure', async () => {
-    const state = applyConfig(CONFIG);
-    const driver = createElasticsearchDriver(state);
-    const oldClient = state.client;
+    const cell = createTestStateCell(applyConfig(CONFIG));
+    const driver = createElasticsearchDriver(cell);
+    const oldClient = cell.get().client;
 
     // Old client's search resolves only after we trigger it explicitly.
     let releaseOldSearch: (() => void) | undefined;
@@ -280,13 +319,13 @@ describe('reconfigure: applyConfigInPlace + driver state ref', () => {
     );
     (oldClient as unknown as { search: typeof oldSearch }).search = oldSearch;
 
-    // Start the query; it snapshots the old client.
+    // Start the query; it snapshots the old client via withValue().
     const inflight = driver.query({ q: 'inflight' });
     await Promise.resolve(); // let query() reach the snapshot + await
 
     // Reconfigure mid-flight: swaps in a brand-new client.
-    applyConfigInPlace(state, { ...CONFIG, url: 'http://es:9200/wiki', indexName: 'wiki' });
-    expect(state.client).not.toBe(oldClient);
+    cell.set(applyConfig({ ...CONFIG, url: 'http://es:9200/wiki', indexName: 'wiki' }));
+    expect(cell.get().client).not.toBe(oldClient);
 
     // The inflight query must still resolve via the OLD client.
     releaseOldSearch?.();
@@ -295,10 +334,43 @@ describe('reconfigure: applyConfigInPlace + driver state ref', () => {
     expect(result.hits[0].path).toBe('/old');
   });
 
+  it('a reconfigure dispose() is deferred until the inflight query() (holding a withValue()) settles (AC-3)', async () => {
+    const cell = createTestStateCell(applyConfig(CONFIG));
+    const driver = createElasticsearchDriver(cell);
+    const oldClient = cell.get().client;
+
+    let releaseOldSearch: (() => void) | undefined;
+    const oldSearch = jest.fn(
+      () =>
+        new Promise((resolve) => {
+          releaseOldSearch = () => resolve({ hits: { total: 0, hits: [] } });
+        }),
+    );
+    (oldClient as unknown as { search: typeof oldSearch }).search = oldSearch;
+
+    const inflight = driver.query({ q: 'inflight' });
+    await Promise.resolve();
+
+    const dispose = jest.fn();
+    cell.set(applyConfig({ ...CONFIG, url: 'http://es:9200/wiki', indexName: 'wiki' }), { dispose });
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(dispose).not.toHaveBeenCalled();
+
+    releaseOldSearch?.();
+    await inflight;
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(dispose).toHaveBeenCalledTimes(1);
+  });
+
   it('throws "Search not configured" once url is reconfigured to empty', async () => {
-    const state = applyConfig(CONFIG);
-    const driver = createElasticsearchDriver(state);
-    applyConfigInPlace(state, { ...CONFIG, url: '' });
+    const cell = createTestStateCell(applyConfig(CONFIG));
+    const driver = createElasticsearchDriver(cell);
+    cell.set(applyConfig({ ...CONFIG, url: '' }));
 
     await expect(driver.query({ q: 'x' })).rejects.toThrow(/Search not configured/);
     await expect(driver.index({ id: 'p', path: '/p', body: 'b' })).rejects.toThrow(/Search not configured/);
@@ -313,6 +385,16 @@ describe('plugin reconfigure() hook', () => {
   const pluginModule = require('../index') as typeof import('../index');
   const plugin = pluginModule.default;
 
+  // Mirrors `PluginManager.getOrCreateStateCell()`: one cell per test
+  // (reset in `beforeEach`), shared across every `makeCtx()`-built ctx
+  // in that test — exactly like the real activation-time `ctx` and a
+  // later `reconfigure(ctx)` share one cell via the plugin name (AC-2).
+  let sharedCell: StateCell<unknown> | undefined;
+
+  beforeEach(() => {
+    sharedCell = undefined;
+  });
+
   const makeCtx = (config: Record<string, unknown>) => {
     const log = { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() };
     const models: Record<string, unknown> = {
@@ -326,6 +408,10 @@ describe('plugin reconfigure() hook', () => {
       model: (name: string) => models[name],
       setConfig: async () => {},
       dependencyConfig: <T>() => ({}) as T,
+      state: <T>(initial: T): StateCell<T> => {
+        if (!sharedCell) sharedCell = createTestStateCell(initial) as StateCell<unknown>;
+        return sharedCell as StateCell<T>;
+      },
     };
   };
 
@@ -333,7 +419,7 @@ describe('plugin reconfigure() hook', () => {
     expect(typeof plugin.reconfigure).toBe('function');
   });
 
-  it('swaps the live client and closes the previous one fire-and-forget', async () => {
+  it('swaps the live client and closes the previous one once drained (AC-3/AC-5)', async () => {
     const { registerSearch, reconfigure } = plugin;
     if (!registerSearch || !reconfigure) throw new Error('plugin must expose registerSearch + reconfigure');
 
@@ -354,7 +440,44 @@ describe('plugin reconfigure() hook', () => {
     expect(driver.baseIndexName).toBe('wiki');
     expect(driver.aliasName).toBe('wiki-current');
     expect(driver.client).not.toBe(firstClient);
-    // close() is fire-and-forget but must have been invoked.
+
+    // No search/index/remove/rebuild was in flight against the previous
+    // client, so its dispose (close()) fires on the next microtask —
+    // not fire-and-forget the instant reconfigure() returns, but not
+    // held up either.
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
     expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  it('resets the "activated at boot" flag on a later registerSearch() call with an empty url (regression: stale flag must not survive a re-run)', async () => {
+    const { registerSearch, reconfigure } = plugin;
+    if (!registerSearch || !reconfigure) throw new Error('plugin must expose registerSearch + reconfigure');
+
+    // First "boot": url is configured, so the driver registers and the
+    // internal `activatedAtBoot` flag flips to true.
+    const registry1 = { register: jest.fn() };
+    const bootCtx = makeCtx({ url: 'http://localhost:9200/crowi', indexName: 'crowi', requestTimeout: 5000, analyzer: 'default' });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    registerSearch(registry1 as any, bootCtx as any);
+    expect(registry1.register).toHaveBeenCalledTimes(1);
+
+    // A later `registerSearch()` call against the same module instance
+    // sees an empty url and must reset the flag rather than leave it
+    // stuck at `true` from the earlier call — without the fix,
+    // `reconfigure()` below would wrongly skip its "restart required"
+    // guard and proceed as if a driver were still live.
+    const registry2 = { register: jest.fn() };
+    const emptyUrlCtx = makeCtx({ url: '', indexName: 'crowi', requestTimeout: 5000, analyzer: 'default' });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    registerSearch(registry2 as any, emptyUrlCtx as any);
+    expect(registry2.register).not.toHaveBeenCalled();
+
+    const reCtx = makeCtx({ url: 'http://es:9200/wiki', indexName: 'wiki', requestTimeout: 9000, analyzer: 'kuromoji' });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await reconfigure(reCtx as any);
+
+    expect(reCtx.log.warn).toHaveBeenCalledWith(expect.stringContaining('restart is required'));
   });
 });

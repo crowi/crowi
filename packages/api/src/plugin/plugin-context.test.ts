@@ -22,7 +22,19 @@ function stubPlugin(overrides: Partial<CrowiPlugin> & Pick<CrowiPlugin, 'name'>)
   } as CrowiPlugin;
 }
 
-const noopLookup: PluginLookup = { getLoadedPlugin: () => undefined };
+const noopLookup: PluginLookup = {
+  getLoadedPlugin: () => undefined,
+  getOrCreateStateCell: (_pluginName, initial) => {
+    let current = initial;
+    return {
+      get: () => current,
+      withValue: async (fn) => fn(current),
+      set: (next) => {
+        current = next;
+      },
+    };
+  },
+};
 
 describe('createPluginContext — ctx.model() gated by plugin.modelAccess (feature-plugin-capability-scoping)', () => {
   it("throws \"did not declare it in 'modelAccess'\" when the requested model isn't declared", () => {

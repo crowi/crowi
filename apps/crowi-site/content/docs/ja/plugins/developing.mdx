@@ -170,6 +170,8 @@ secret に到達できません。
 - `model(name)` — `modelAccess` に宣言したコアの Mongoose モデル (Page /
   User / Comment …) にのみフルアクセス。未宣言のモデル名を渡すと throw する
 - `log` — プラグイン名で自動プレフィックスされる構造化ロガー
+- `state<T>(initial)` — hot-reload 用の `StateCell<T>` を返す (下記「hot-reload
+  な driver の書き方 (state-cell)」参照)
 
 ## 拡張ポイント一覧
 
@@ -194,6 +196,50 @@ secret に到達できません。
 
 `reconfigure` を実装しない場合、そのプラグインは「設定変更にはサーバ
 再起動が必要」として扱われます。
+
+### hot-reload な driver の書き方 (state-cell)
+
+`reconfigure` を実装する driver プラグイン (storage / search / mail 送信など)
+は、S3 クライアントや SMTP transport のような「差し替え可能なリソース」を
+module スコープの `let` / `const` に手で持つのではなく、`ctx.state<T>(initial)`
+が返す `StateCell<T>` を使います。
+
+```ts
+interface DriverState {
+  client: SomeClient;
+}
+
+registerStorage: (registry, ctx) => {
+  const cell = ctx.state<DriverState>(buildState(ctx));
+  registry.register('my-driver', createDriver(cell));
+},
+
+reconfigure: (ctx) => {
+  const next = buildState(ctx);
+  const cell = ctx.state<DriverState>(next);
+  cell.set(next, { dispose: (prev) => prev.client.destroy() });
+},
+```
+
+`StateCell<T>` は 3 つのメソッドを持ちます。
+
+- `get()` — 現在値の同期スナップショット
+- `withValue(fn)` — `fn` の実行中は現在値を「使用中」としてマークする。
+  driver の各メソッドはこれ経由で state にアクセスするのが基本形
+  (`cell.withValue(async ({ client }) => { ... })`)
+- `set(next, { dispose })` — 値を差し替える。`dispose(prev)` は、swap の
+  瞬間に in-flight だった `withValue()` 呼び出しが全て解決するまで呼ばれない
+  (in-flight が無ければ次の microtask で呼ばれる) — 使用中のリソースを
+  破棄してしまう事故を防ぐ。`dispose` が reject しても呼び出し元には伝播
+  しない (ランタイムが揉み消す) ので、エラーは `dispose` 自身の中で
+  catch してログするか、そもそも throw しない実装にすること
+
+同一プラグインなら、activate 時 (`registerStorage`/`registerSearch`/
+`registerMailSender` 等) の `ctx` と、後続の `reconfigure` の `ctx`
+(別インスタンス) が返す `state()` は **同じ `StateCell`** です — 2 回目
+以降の呼び出しでは `initial` 引数は無視されます。`packages/plugin-storage-aws-s3`
+/ `packages/plugin-mail-smtp` / `packages/plugin-search-elasticsearch` が
+この実装例です。
 
 ## 依存プラグイン
 

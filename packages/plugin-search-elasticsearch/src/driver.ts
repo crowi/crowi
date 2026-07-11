@@ -11,7 +11,7 @@
 import { Client } from '@elastic/elasticsearch';
 
 type ClientOptions = NonNullable<ConstructorParameters<typeof Client>[0]>;
-import type { SearchDriver, SearchHits, SearchQuery, SearchableDoc, PluginLogger } from '@crowi/plugin-api';
+import type { SearchDriver, SearchHits, SearchQuery, SearchableDoc, PluginLogger, StateCell } from '@crowi/plugin-api';
 import { parseQuery } from './parse-query';
 import { buildSearchBody, type FunctionScoreParams } from './query-builder';
 import defaultMapping from './mappings/default.json';
@@ -78,14 +78,13 @@ export interface ElasticsearchDriver extends SearchDriver {
 }
 
 /**
- * Mutable driver state. `createElasticsearchDriver` receives a ref to
- * this; each driver method snapshots the fields it needs *once at the
- * top* of the call, so a concurrent `reconfigure` cannot swap the
- * client / index name mid-operation. `reconfigure` mutates the fields
- * in place via {@link applyConfigInPlace}; the next call sees the new
- * values. An empty `url` leaves `client` as `null` — the methods then
- * throw a `Search not configured` error rather than touching a stale
- * client.
+ * Driver state, held by the `StateCell<ESDriverState>` `createElasticsearchDriver`
+ * receives. Each driver method reads the cell through `withValue()`,
+ * which snapshots the fields it needs for the duration of the call, so
+ * a concurrent `reconfigure` cannot swap the client / index name
+ * mid-operation — the next call sees the new values. An empty `url`
+ * leaves `client` as `null` — the methods then throw a
+ * `Search not configured` error rather than touching a stale client.
  */
 export interface ESDriverState {
   /** `null` when `url` is empty (driver configured-but-disabled). */
@@ -132,31 +131,18 @@ export function applyConfig(config: ElasticsearchDriverConfig): ESDriverState {
   };
 }
 
-/**
- * Mutate `target` in place to reflect `config`. Used by `reconfigure`:
- * the old client reference is returned so the caller can `close()` it
- * (fire-and-forget) once the swap is done — inflight operations have
- * already snapshotted the old client and will run to completion.
- */
-export function applyConfigInPlace(target: ESDriverState, config: ElasticsearchDriverConfig): { oldClient: Client | null } {
-  const oldClient = target.client;
-  // Assign over the freshly-built state so a new ESDriverState field
-  // propagates through reconfigure automatically — no manual field
-  // list here to fall out of sync with applyConfig.
-  Object.assign(target, applyConfig(config));
-  return { oldClient };
-}
-
 /** TTL for the cached user count used by the bookmark-count function-score factor. */
 const USER_COUNT_TTL_MS = 5 * 60 * 1000;
 
 /**
- * Build the search driver around a {@link ESDriverState} ref. Methods
- * snapshot `state` *once at the top* — a `reconfigure` running
- * concurrently with an inflight call cannot swap the client mid-call;
- * the next call sees the new client / index name.
+ * Build the search driver around a hot-reload {@link StateCell}. Every
+ * method reads the cell through `withValue()`, which snapshots the
+ * fields it needs for the duration of the call and marks the state "in
+ * use" — a concurrent `reconfigure` cannot tear the client down
+ * mid-call (its `dispose` waits), and the next call sees the new client
+ * / index name.
  */
-export function createElasticsearchDriver(state: ESDriverState, deps: ElasticsearchDriverDeps = {}): ElasticsearchDriver {
+export function createElasticsearchDriver(cell: StateCell<ESDriverState>, deps: ElasticsearchDriverDeps = {}): ElasticsearchDriver {
   const log = deps.log;
 
   // Cached user count: refreshed on miss, every USER_COUNT_TTL_MS.
@@ -176,132 +162,144 @@ export function createElasticsearchDriver(state: ESDriverState, deps: Elasticsea
   };
 
   const driver: ElasticsearchDriver = {
-    // Getters off the state ref: `reconfigure` makes these mutable, so
-    // they must always reflect the *current* state, not a boot-time
-    // literal. Tests read `driver.client` to install fakes — since the
-    // getter returns the same object reference, mutating its methods
-    // still works.
+    // Getters off the cell: `reconfigure` swaps it, so these must
+    // always reflect the *current* state, not a boot-time literal.
+    // `cell.get()` is synchronous, so no `withValue()` wrapping is
+    // needed here. Tests read `driver.client` to install fakes — since
+    // the underlying client object is the same reference for the
+    // lifetime of a generation, mutating its methods still works.
     get aliasName() {
-      return state.aliasName;
+      return cell.get().aliasName;
     },
     get node() {
-      return state.node;
+      return cell.get().node;
     },
     get baseIndexName() {
-      return state.baseIndexName;
+      return cell.get().baseIndexName;
     },
     get client() {
-      return requireClient(state.client);
+      return requireClient(cell.get().client);
     },
 
     async index(doc: SearchableDoc): Promise<void> {
-      const { client, aliasName } = snapshot(state);
-      const source = docToEsSource(doc);
-      await client.index({
-        index: aliasName,
-        id: doc.id,
-        document: source as unknown as Record<string, unknown>,
+      return cell.withValue(async (state) => {
+        const { client, aliasName } = snapshot(state);
+        const source = docToEsSource(doc);
+        await client.index({
+          index: aliasName,
+          id: doc.id,
+          document: source as unknown as Record<string, unknown>,
+        });
       });
     },
 
     async remove(id: string): Promise<void> {
-      const { client, aliasName } = snapshot(state);
-      try {
-        await client.delete({ index: aliasName, id });
-      } catch (err) {
-        // Idempotent: a missing doc is fine. ES9 throws a
-        // `ResponseError` with statusCode 404 when the id doesn't
-        // exist; swallow only that case.
-        if (isNotFoundError(err)) return;
-        throw err;
-      }
+      return cell.withValue(async (state) => {
+        const { client, aliasName } = snapshot(state);
+        try {
+          await client.delete({ index: aliasName, id });
+        } catch (err) {
+          // Idempotent: a missing doc is fine. ES9 throws a
+          // `ResponseError` with statusCode 404 when the id doesn't
+          // exist; swallow only that case.
+          if (isNotFoundError(err)) return;
+          throw err;
+        }
+      });
     },
 
     async query(q: SearchQuery): Promise<SearchHits> {
-      const { client, aliasName } = snapshot(state);
-      const page = q.page && q.page > 0 ? q.page : 1;
-      const limit = clampLimit(q.limit);
-      const from = (page - 1) * limit;
+      return cell.withValue(async (state) => {
+        const { client, aliasName } = snapshot(state);
+        const page = q.page && q.page > 0 ? q.page : 1;
+        const limit = clampLimit(q.limit);
+        const from = (page - 1) * limit;
 
-      let functionScore: FunctionScoreParams | undefined;
-      const userCount = await getCachedUserCount();
-      if (userCount !== null) {
-        const factor = 10000 / (userCount || 1);
-        functionScore = {
-          fieldValueFactor: { field: 'bookmark_count', modifier: 'log1p', factor, missing: 0 },
-          boostMode: 'sum',
-        };
-      }
+        let functionScore: FunctionScoreParams | undefined;
+        const userCount = await getCachedUserCount();
+        if (userCount !== null) {
+          const factor = 10000 / (userCount || 1);
+          functionScore = {
+            fieldValueFactor: { field: 'bookmark_count', modifier: 'log1p', factor, missing: 0 },
+            boostMode: 'sum',
+          };
+        }
 
-      const body = buildSearchBody({
-        parsed: parseQuery(q.q),
-        pathPrefix: q.pathPrefix,
-        viewer: q.viewer,
-        grants: q.grants,
-        functionScore,
-        from,
-        size: limit,
+        const body = buildSearchBody({
+          parsed: parseQuery(q.q),
+          pathPrefix: q.pathPrefix,
+          viewer: q.viewer,
+          grants: q.grants,
+          functionScore,
+          from,
+          size: limit,
+        });
+
+        // ES9 client narrows SearchRequest types (esp. `highlight.fields`)
+        // beyond what `buildSearchBody` returns; the runtime shape is correct,
+        // so cast through `unknown` to the SearchRequest shape.
+        const response = await client.search({
+          index: aliasName,
+          ...body,
+        } as unknown as Parameters<Client['search']>[0]);
+
+        const totalRaw = response.hits?.total;
+        const total = typeof totalRaw === 'number' ? totalRaw : (totalRaw?.value ?? 0);
+
+        const rawHits = (response.hits?.hits ?? []) as unknown as EsHit[];
+        const hits = rawHits.map((h) => {
+          const source = (h._source ?? {}) as { path?: string };
+          const snippet = pickSnippet(h.highlight);
+          return {
+            id: String(h._id),
+            path: source.path ?? '',
+            score: typeof h._score === 'number' ? h._score : undefined,
+            ...(snippet ? { snippet } : {}),
+          };
+        });
+
+        return { total, hits };
       });
-
-      // ES9 client narrows SearchRequest types (esp. `highlight.fields`)
-      // beyond what `buildSearchBody` returns; the runtime shape is correct,
-      // so cast through `unknown` to the SearchRequest shape.
-      const response = await client.search({
-        index: aliasName,
-        ...body,
-      } as unknown as Parameters<Client['search']>[0]);
-
-      const totalRaw = response.hits?.total;
-      const total = typeof totalRaw === 'number' ? totalRaw : (totalRaw?.value ?? 0);
-
-      const rawHits = (response.hits?.hits ?? []) as unknown as EsHit[];
-      const hits = rawHits.map((h) => {
-        const source = (h._source ?? {}) as { path?: string };
-        const snippet = pickSnippet(h.highlight);
-        return {
-          id: String(h._id),
-          path: source.path ?? '',
-          score: typeof h._score === 'number' ? h._score : undefined,
-          ...(snippet ? { snippet } : {}),
-        };
-      });
-
-      return { total, hits };
     },
 
     async rebuild(): Promise<void> {
-      // Snapshot up front: a `reconfigure` mid-rebuild must not retarget
-      // a long-running rebuild onto a different cluster / index name —
-      // it runs to completion against the cluster it started on.
-      const { client, aliasName, baseIndexName, analyzer } = snapshot(state);
-      if (!deps.iteratePages || !deps.countAllPages || !deps.getBookmarkCountsBulk) {
-        throw new Error('@crowi/plugin-search-elasticsearch: rebuild() requires iteratePages / countAllPages / getBookmarkCountsBulk deps.');
-      }
+      return cell.withValue(async (state) => {
+        // Snapshot up front: a `reconfigure` mid-rebuild must not retarget
+        // a long-running rebuild onto a different cluster / index name —
+        // it runs to completion against the cluster it started on (and,
+        // since `rebuild()` holds this `withValue()` call open for its
+        // whole duration, the old client's `dispose` — if the operator
+        // reconfigures mid-rebuild — waits until the rebuild finishes).
+        const { client, aliasName, baseIndexName, analyzer } = snapshot(state);
+        if (!deps.iteratePages || !deps.countAllPages || !deps.getBookmarkCountsBulk) {
+          throw new Error('@crowi/plugin-search-elasticsearch: rebuild() requires iteratePages / countAllPages / getBookmarkCountsBulk deps.');
+        }
 
-      const newIndexName = createTimestampedIndexName(baseIndexName);
-      log?.info('rebuild: creating index %s', newIndexName);
+        const newIndexName = createTimestampedIndexName(baseIndexName);
+        log?.info('rebuild: creating index %s', newIndexName);
 
-      const mapping = loadMapping(analyzer);
-      await client.indices.create({ index: newIndexName, ...mapping });
+        const mapping = loadMapping(analyzer);
+        await client.indices.create({ index: newIndexName, ...mapping });
 
-      log?.info('rebuild: prefetching bookmark counts');
-      const bookmarkCounts = await deps.getBookmarkCountsBulk();
+        log?.info('rebuild: prefetching bookmark counts');
+        const bookmarkCounts = await deps.getBookmarkCountsBulk();
 
-      log?.info('rebuild: indexing all pages');
-      await indexAllPages({
-        client,
-        indexTarget: newIndexName,
-        iteratePages: deps.iteratePages,
-        countAllPages: deps.countAllPages,
-        bookmarkCounts,
-        log,
+        log?.info('rebuild: indexing all pages');
+        await indexAllPages({
+          client,
+          indexTarget: newIndexName,
+          iteratePages: deps.iteratePages,
+          countAllPages: deps.countAllPages,
+          bookmarkCounts,
+          log,
+        });
+
+        log?.info('rebuild: switching alias %s -> %s', aliasName, newIndexName);
+        await switchAlias(client, aliasName, newIndexName);
+
+        log?.info('rebuild: cleaning up old indices');
+        await deleteOldIndices(client, baseIndexName, newIndexName);
       });
-
-      log?.info('rebuild: switching alias %s -> %s', aliasName, newIndexName);
-      await switchAlias(client, aliasName, newIndexName);
-
-      log?.info('rebuild: cleaning up old indices');
-      await deleteOldIndices(client, baseIndexName, newIndexName);
     },
   };
 

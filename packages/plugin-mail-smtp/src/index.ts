@@ -1,6 +1,6 @@
 import nodemailer, { type Transporter } from 'nodemailer';
 import { z } from 'zod/v3';
-import type { CrowiPlugin, EmailMessage, MailSender, PluginContext } from '@crowi/plugin-api';
+import type { CrowiPlugin, EmailMessage, MailSender, StateCell } from '@crowi/plugin-api';
 
 const SmtpConfigSchema = z
   .object({
@@ -27,15 +27,6 @@ export interface SmtpDriverState {
   transport: Transporter | null;
 }
 
-/**
- * Module-scope state ref. `registerMailSender` initialises it from the
- * boot-time config; `send` snapshots the transport on each call;
- * `reconfigure` rebuilds it when the admin saves new values.
- */
-const state: SmtpDriverState = {
-  transport: null,
-};
-
 const plugin: CrowiPlugin = {
   name: '@crowi/plugin-mail-smtp',
   version: '0.1.0-dev',
@@ -47,25 +38,22 @@ const plugin: CrowiPlugin = {
   },
 
   registerMailSender: (registry, ctx) => {
-    const host = applyConfigToState(ctx, state);
-    registry.register('smtp', createSmtpSender(state));
-    ctx.log.debug('registered smtp mail sender (host=%s)', host || '<unset>');
+    const config = ctx.config<SmtpConfig>();
+    const cell = ctx.state<SmtpDriverState>({ transport: buildTransport(config) });
+    registry.register('smtp', createSmtpSender(cell));
+    ctx.log.debug('registered smtp mail sender (host=%s)', config.host || '<unset>');
   },
 
   reconfigure: (ctx) => {
-    const host = applyConfigToState(ctx, state);
-    ctx.log.debug('reconfigured smtp mail sender (host=%s)', host || '<unset>');
+    const config = ctx.config<SmtpConfig>();
+    const next: SmtpDriverState = { transport: buildTransport(config) };
+    const cell = ctx.state<SmtpDriverState>(next);
+    cell.set(next, { dispose: (prev) => prev.transport?.close() });
+    ctx.log.debug('reconfigured smtp mail sender (host=%s)', config.host || '<unset>');
   },
 };
 
 export default plugin;
-
-/** Apply config to `target` and return the configured host (for logging). */
-function applyConfigToState(ctx: PluginContext, target: SmtpDriverState): string {
-  const config = ctx.config<SmtpConfig>();
-  target.transport = buildTransport(config);
-  return config.host;
-}
 
 /**
  * Build a nodemailer transport from config, or `null` when no host is
@@ -93,27 +81,29 @@ export function buildTransport(config: SmtpConfig): Transporter | null {
 }
 
 /**
- * Build the mail sender. `send` reads `state.transport` once at the top
- * so a concurrent `reconfigure` cannot swap the transport mid-send; the
- * `EmailMessage` is a subset of nodemailer's `Mail.Options`, so it is
- * passed through verbatim.
+ * Build the mail sender around a hot-reload {@link StateCell}. `send`
+ * reads the cell through `withValue()`, which snapshots the transport
+ * for the duration of the call so a concurrent `reconfigure` cannot
+ * swap it out mid-send; the `EmailMessage` is a subset of nodemailer's
+ * `Mail.Options`, so it is passed through verbatim.
  */
-export function createSmtpSender(driverState: SmtpDriverState): MailSender {
+export function createSmtpSender(cell: StateCell<SmtpDriverState>): MailSender {
   return {
     async send(message: EmailMessage) {
-      const transport = driverState.transport;
-      if (!transport) {
-        throw new Error('@crowi/plugin-mail-smtp: SMTP host is not configured.');
-      }
-      await transport.sendMail({
-        to: message.to,
-        from: message.from,
-        subject: message.subject,
-        text: message.text,
-        html: message.html,
-        replyTo: message.replyTo,
-        cc: message.cc,
-        bcc: message.bcc,
+      return cell.withValue(async ({ transport }) => {
+        if (!transport) {
+          throw new Error('@crowi/plugin-mail-smtp: SMTP host is not configured.');
+        }
+        await transport.sendMail({
+          to: message.to,
+          from: message.from,
+          subject: message.subject,
+          text: message.text,
+          html: message.html,
+          replyTo: message.replyTo,
+          cc: message.cc,
+          bcc: message.bcc,
+        });
       });
     },
   };
