@@ -154,12 +154,20 @@ The second argument of each `register*` callback, `PluginContext`, is
 the only conduit for a plugin to interact with the core safely. Do not
 import `@crowi/server` directly.
 
+Trust boundary: a plugin only reaches what it explicitly declares.
+`model(name)` is gated by a `CrowiPlugin.modelAccess` allow-list (see
+below) — there is no ambient "any core model" access. There is also
+intentionally no symmetric encrypt/decrypt capability: the only
+legitimate way to read a secret is `config<T>()`, which already returns
+`@sensitive` fields transparently decrypted. A plugin cannot reach
+another plugin's or core's secrets through `PluginContext`.
+
 - `config<T>()` — read this plugin's typed config
 - `dependencyConfig<T>(name)` — read a dependency plugin declared in `requires`
 - `setConfig(key, value)` — write a single config field
 - `pageMetadata` — read / write page metadata in this plugin's namespace
-- `model(name)` — access core Mongoose models (Page / User / Comment …)
-- `crypto` — symmetric encrypt / decrypt
+- `model(name)` — access a core Mongoose model (Page / User / Comment …), only
+  when it is declared in `modelAccess` — throws otherwise
 - `log` — a structured logger auto-prefixed with the plugin name
 
 ## Extension points
@@ -196,6 +204,34 @@ Credential sharing is the typical case. `@crowi/plugin-storage-aws-s3`
 declares `@crowi/plugin-aws` in `requires` and reads `region` /
 `accessKeyId` / `secretAccessKey` via `ctx.dependencyConfig()`. There is
 no need to duplicate the fields in its own schema.
+
+## Core model access (modelAccess)
+
+A plugin that touches a core Mongoose model via `ctx.model(name)`
+declares which model names it needs in `modelAccess?: string[]`, the
+same shape as `requires`.
+
+```ts
+modelAccess: ['Page', 'Bookmark'],
+```
+
+- Calling `ctx.model()` for a name not listed in `modelAccess` throws
+  `Plugin '<name>' called model('<requested>') but did not declare it in
+  'modelAccess'.`
+- Every declared name is validated against the registered core models at
+  boot (`PluginManager.activate()`) — an unknown name fails boot with a
+  descriptive error, isolating just that plugin (the same isolation
+  policy as the `configSchema` zod v3/v4 guard).
+- A declared model gets full (unrestricted) read/write access — there is
+  no read-only mode today.
+- `GET /admin/plugins` includes each plugin's `modelAccess` in its
+  response, so an admin can see at a glance which plugins touch which
+  core collections.
+
+In-repo examples: `@crowi/plugin-search-elasticsearch` and
+`@crowi/plugin-search-opensearch` declare `['Page', 'Bookmark', 'User']`,
+`@crowi/plugin-search-mongo` declares `['Page', 'Revision']`, and
+`@crowi/plugin-slack` declares `['Page']` — all four are read-only users.
 
 ## Building a renderer plugin
 
