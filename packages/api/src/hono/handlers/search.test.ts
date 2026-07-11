@@ -262,4 +262,81 @@ describe('Routes /api/v2/search (Hono)', () => {
       });
     });
   });
+
+  describe('Grant refilter (SEC-SEARCH-DELEGATED defense-in-depth)', () => {
+    it('drops a hit for a page the viewer has no grant for, even though the driver returned it', async () => {
+      const owner = await createTestUser({
+        name: 'Search Refilter Owner',
+        username: 'searchRefilterOwner',
+        email: 'search-refilter-owner@example.com',
+      });
+      // grant 4 = GRANT_OWNER — only `owner` (and grantedUsers) can read it.
+      const privatePage = await createPageViaApi(owner.accessToken, `${PATH_PREFIX}owner-only`, '# secret', 4);
+
+      const driver = buildMockDriver({
+        total: 1,
+        hits: [{ id: privatePage._id, path: privatePage.path, snippet: '<mark>secret</mark>' }],
+      });
+      await withMockDriver(driver, async () => {
+        // Search as `accessToken`'s user, who is NOT in grantedUsers for privatePage.
+        const res = await search(accessToken, { q: 'secret' });
+        expect(res.status).toBe(200);
+        // total reflects the driver's raw report; results/data reflect the
+        // grant-refiltered set.
+        expect(res.body.meta.total).toBe(1);
+        expect(res.body.meta.results).toBe(0);
+        expect(res.body.data).toEqual([]);
+      });
+    });
+
+    it('keeps a hit for a page the viewer does have a grant for', async () => {
+      const owner = await createTestUser({
+        name: 'Search Refilter Owner 2',
+        username: 'searchRefilterOwner2',
+        email: 'search-refilter-owner-2@example.com',
+      });
+      const privatePage = await createPageViaApi(owner.accessToken, `${PATH_PREFIX}owner-only-self`, '# secret', 4);
+
+      const driver = buildMockDriver({
+        total: 1,
+        hits: [{ id: privatePage._id, path: privatePage.path, snippet: '<mark>secret</mark>' }],
+      });
+      await withMockDriver(driver, async () => {
+        // Search as the owner themself — is in grantedUsers.
+        const res = await search(owner.accessToken, { q: 'secret' });
+        expect(res.status).toBe(200);
+        expect(res.body.meta.total).toBe(1);
+        expect(res.body.meta.results).toBe(1);
+        expect(res.body.data).toHaveLength(1);
+        expect(res.body.data[0].pageId).toBe(privatePage._id);
+      });
+    });
+
+    it('composes grant-refilter with missing-doc drop: only the visible+existing hit survives', async () => {
+      const owner = await createTestUser({
+        name: 'Search Refilter Owner 3',
+        username: 'searchRefilterOwner3',
+        email: 'search-refilter-owner-3@example.com',
+      });
+      const privatePage = await createPageViaApi(owner.accessToken, `${PATH_PREFIX}owner-only-mixed`, '# secret', 4);
+      const publicPage = await createPageViaApi(accessToken, `${PATH_PREFIX}public-mixed`, '# secret too');
+
+      const driver = buildMockDriver({
+        total: 3,
+        hits: [
+          { id: privatePage._id, path: privatePage.path }, // no grant for accessToken's user
+          { id: publicPage._id, path: publicPage.path }, // visible to everyone
+          { id: '0123456789abcdef01234567', path: '/missing' }, // no backing doc
+        ],
+      });
+      await withMockDriver(driver, async () => {
+        const res = await search(accessToken, { q: 'secret' });
+        expect(res.status).toBe(200);
+        expect(res.body.meta.total).toBe(3);
+        expect(res.body.meta.results).toBe(1);
+        expect(res.body.data).toHaveLength(1);
+        expect(res.body.data[0].pageId).toBe(publicPage._id);
+      });
+    });
+  });
 });

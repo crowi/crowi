@@ -240,7 +240,7 @@ export interface PageModel extends Model<PageDocument> {
   isExistById(id): any;
   isNonExistentUserPage(path: string): Promise<boolean>;
   isNonExistentUserTrashPage(path: string): Promise<boolean>;
-  findListByPageIds(ids, options): any;
+  findListByPageIds(ids, options, viewerId?: Types.ObjectId | string): any;
   findPageByRedirectTo(path): any;
   findPagesByIds(ids): any;
   findListByCreator(user, option, currentUser): any;
@@ -892,13 +892,22 @@ export default (crowi: Crowi) => {
     return userData === null;
   };
 
-  pageSchema.statics.findListByPageIds = function (ids, options) {
+  pageSchema.statics.findListByPageIds = function (ids, options, viewerId?: Types.ObjectId | string) {
     options = options || {};
     const limit = options.limit || 50;
     const offset = options.skip || 0;
 
+    const query: Record<string, unknown> = { _id: { $in: ids } };
+    // Defense-in-depth (SEC-SEARCH-DELEGATED): when a viewer is given,
+    // re-apply the grant filter here rather than trusting the caller's
+    // `ids` to already be authorization-checked (e.g. a pluggable search
+    // driver's hits).
+    if (viewerId !== undefined) {
+      query.$or = visiblePageGrantOr(viewerId);
+    }
+
     return (
-      Page.find({ _id: { $in: ids } })
+      Page.find(query)
         // .sort({createdAt: -1}) // TODO optionize
         .skip(offset)
         .limit(limit)
