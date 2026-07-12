@@ -2,6 +2,7 @@
 
 import type { AdminPager, UserPublic } from '@crowi/api-contract';
 import { UserStatusEnum } from '@crowi/api-contract';
+import { m } from '@paraglide/messages.js';
 import { Loader2, MoreHorizontal, Send } from 'lucide-react';
 import { UserIdentityCell } from '@/components/admin/user-identity-cell';
 import { Button } from '@/components/ui/button';
@@ -13,12 +14,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Pager } from '@/components/ui/pager';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { useResendAdminInvite } from '@/lib/use-admin-users';
-import { notify } from '@/lib/notify';
-import { cn } from '@/lib/utils';
 import { formatDate } from '@/lib/date-utils';
-import { m } from '@paraglide/messages.js';
+import { notify } from '@/lib/notify';
+import { useResendAdminInvite } from '@/lib/use-admin-users';
+import { cn } from '@/lib/utils';
 
 export type UserRowActionKind = 'edit' | 'make-admin' | 'remove-admin' | 'activate' | 'suspend' | 'reset-password' | 'update-email' | 'delete';
 
@@ -71,42 +72,7 @@ function statusPillClass(status: number | undefined): string {
 }
 
 export function UsersPager({ pager, onPageChange }: { pager: AdminPager; onPageChange: (page: number) => void }) {
-  if (pager.pagesCount <= 1) return null;
-
-  return (
-    <nav className="flex items-center justify-center gap-1" aria-label={m['admin.users.pager_aria_label']()}>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        disabled={pager.previous === null}
-        onClick={() => pager.previous !== null && onPageChange(pager.previous)}
-      >
-        {m['admin.users.pager_previous']()}
-      </Button>
-
-      {pager.previousDots && <span className="px-2 text-muted-foreground">...</span>}
-
-      {pager.pages.map((p) => (
-        <Button
-          key={p}
-          type="button"
-          variant={p === pager.page ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => onPageChange(p)}
-          aria-current={p === pager.page ? 'page' : undefined}
-        >
-          {p}
-        </Button>
-      ))}
-
-      {pager.nextDots && <span className="px-2 text-muted-foreground">...</span>}
-
-      <Button type="button" variant="outline" size="sm" disabled={pager.next === null} onClick={() => pager.next !== null && onPageChange(pager.next)}>
-        {m['admin.users.pager_next']()}
-      </Button>
-    </nav>
-  );
+  return <Pager mode="numbered" page={pager.page} totalPages={pager.pagesCount} onPageChange={onPageChange} ariaLabel={m['admin.users.pager_aria_label']()} />;
 }
 
 /**
