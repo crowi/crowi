@@ -31,6 +31,42 @@ export async function createPageViaApi(context: BrowserContext, input: { path: s
 }
 
 /**
+ * Create many pages via `createPageViaApi`, in bounded-concurrency batches.
+ * Used by pagination.spec.ts to seed enough siblings under one parent path
+ * to trigger a real 2nd page — `Page.createPage` never auto-creates an
+ * intermediate portal document, so concurrent siblings under the same
+ * parent path are race-free.
+ */
+export async function createPagesViaApi(context: BrowserContext, inputs: Array<{ path: string; body: string }>, concurrency = 20): Promise<void> {
+  for (let i = 0; i < inputs.length; i += concurrency) {
+    const batch = inputs.slice(i, i + concurrency);
+    await Promise.all(batch.map((input) => createPageViaApi(context, input)));
+  }
+}
+
+/**
+ * Invite a batch of users via `POST /api/v2/admin/users/invite` with
+ * `sendEmail: false`, so a test can cheaply seed dozens of `REGISTERED`
+ * users (no Mailpit round trip) purely to trigger a real 2nd page in the
+ * admin users list.
+ */
+export async function inviteUsersViaApi(context: BrowserContext, emails: string[]): Promise<void> {
+  const accessToken = await accessTokenFromContext(context);
+  const response = await fetch(`${E2E_API_URL}/api/v2/admin/users/invite`, {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({ emailList: emails, sendEmail: false }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to invite E2E users: HTTP ${response.status} ${await response.text()}`);
+  }
+}
+
+/**
  * Read a page's current (latest) revision id via the API. Needed to post
  * a comment, which references the revision it was written against.
  */
