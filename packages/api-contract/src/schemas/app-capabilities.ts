@@ -1,3 +1,5 @@
+import { z } from '@hono/zod-openapi';
+
 /**
  * The static capability baseline + API surface version advertised at
  * `GET /api/v2/app/info` and consumed by the `@crowi/cli` end-user CLI for
@@ -7,8 +9,10 @@
  * (`packages/api/src/hono/handlers/app.ts`) and the CLI
  * (`packages/cli/src/lib/capability.ts`) so the "always-on" set and the
  * floor version can never drift apart silently. Dynamically-detected
- * capabilities (e.g. `search`, `collab`) are NOT listed here — the handler
- * appends those at runtime based on live server state.
+ * capabilities (e.g. `search`, `collab`) are listed separately below, in
+ * `DYNAMIC_CAPABILITIES` — the handler appends those at runtime based on
+ * live server state, but references the named constants rather than
+ * re-typing the tags as string literals.
  *
  * NOTE: this is the source of truth for the coarse *capability vocabulary*,
  * not for OAuth grant support itself — the canonical OAuth registry is
@@ -39,6 +43,29 @@ export const STATIC_CAPABILITIES = [
   'attachments',
   'notifications',
 ] as const;
+
+/**
+ * Capabilities the handler (`packages/api/src/hono/handlers/app.ts`) detects
+ * at runtime from live server state — `search` only when a search driver is
+ * active, `collab` unconditionally (Hocuspocus is library-attached), and
+ * `collab:redis` additionally when `REDIS_URL` is set. Listed here (rather
+ * than left as bare string literals in the handler) so both the wire schema
+ * and the handler's return type are compiler-checked against the same
+ * vocabulary.
+ */
+export const DYNAMIC_CAPABILITIES = ['search', 'collab', 'collab:redis'] as const;
+
+/**
+ * The full known capability vocabulary: everything `GET /app/info.capabilities`
+ * can ever contain. Used to build the wire-level enum (`CapabilitySchema`).
+ */
+export const ALL_CAPABILITIES = [...STATIC_CAPABILITIES, ...DYNAMIC_CAPABILITIES] as const;
+
+/** Wire-level enum for a single capability tag. */
+export const CapabilitySchema = z.enum(ALL_CAPABILITIES).openapi('Capability');
+
+/** A single known capability tag (static or dynamic). */
+export type Capability = (typeof ALL_CAPABILITIES)[number];
 
 /**
  * The API surface version advertised in `app/info.apiVersion` and the
