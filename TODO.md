@@ -25,6 +25,9 @@ alpha.0–.3 は published、alpha.4 / stable 向けに changeset 蓄積中（pr
 ### OAuth 2.0 (RFC-0010)
 - [ ] Phase 5: admin による任意 OAuth クライアント登録 UI（Phase 1-4 完了）
 
+### GRANT_RESTRICTED 共有バナー + grant-on-first-access
+- [x] Phase 1: アクセス制御 grant-on-first-access（専用エンドポイント `POST /pages/link-access`）完成。残: Phase 2 共有バナー UI（spec: `feature-restricted-grant-share-banner.md`）
+
 ### 配布 / リリース（2.0.0 stable 時）
 - [ ] **無印 `crowi` パッケージの整理**（spec: `feature-crowi-quickstart-package.md`）
 - [ ] **slim image + 外部 operator 向け doc** — runner-project 方式。blocked-on `feature-plugin-search-mongo`
