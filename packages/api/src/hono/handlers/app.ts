@@ -12,12 +12,18 @@
  * smoke-test guarantee — see `docs/migrations/0006-hono-context.md`
  * §11).
  */
-import { API_SURFACE_VERSION, getAppInfoRoute, STATIC_CAPABILITIES } from '@crowi/api-contract';
+import { API_SURFACE_VERSION, type AppInfoResponse, type Capability, DYNAMIC_CAPABILITIES, getAppInfoRoute, STATIC_CAPABILITIES } from '@crowi/api-contract';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 
 import type Crowi from 'src/crowi';
 
 import type { CrowiHonoBindings } from '../app';
+
+// Named refs into DYNAMIC_CAPABILITIES (`@crowi/api-contract`) so the tags
+// below are never re-typed as bare string literals in the handler. Positional
+// — must track DYNAMIC_CAPABILITIES's declared order (`search`, `collab`,
+// `collab:redis`) in app-capabilities.ts exactly.
+const [CAPABILITY_SEARCH, CAPABILITY_COLLAB, CAPABILITY_COLLAB_REDIS] = DYNAMIC_CAPABILITIES;
 
 /**
  * Build the coarse capability list advertised at `GET /app/info`. Static
@@ -27,16 +33,20 @@ import type { CrowiHonoBindings } from '../app';
  *   - `collab` always (Hocuspocus is library-attached unconditionally);
  *     `collab:redis` additionally when `REDIS_URL` is set so multi-instance
  *     pub/sub is wired up.
- * No I/O — both probes read state already held on the Crowi instance.
+ * No I/O — both probes read state already held on the Crowi instance. The
+ * `Capability[]` return type keeps this compiler-checked against
+ * `@crowi/api-contract`'s vocabulary (a typo wouldn't be assignable to
+ * `Capability`) — see `app-capabilities.ts` for the shared source of truth
+ * (`DYNAMIC_CAPABILITIES`).
  */
-const buildCapabilities = (crowi: Crowi): string[] => {
-  const capabilities: string[] = [...STATIC_CAPABILITIES];
+const buildCapabilities = (crowi: Crowi): Capability[] => {
+  const capabilities: Capability[] = [...STATIC_CAPABILITIES];
   if (crowi.getSearcher() != null) {
-    capabilities.push('search');
+    capabilities.push(CAPABILITY_SEARCH);
   }
-  capabilities.push('collab');
+  capabilities.push(CAPABILITY_COLLAB);
   if (crowi.redis != null) {
-    capabilities.push('collab:redis');
+    capabilities.push(CAPABILITY_COLLAB_REDIS);
   }
   return capabilities;
 };
@@ -75,7 +85,7 @@ export const registerAppRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app:
         apiVersion: API_SURFACE_VERSION,
         capabilities: buildCapabilities(crowi),
         canSelfRegister,
-      },
+      } satisfies AppInfoResponse,
       200,
     );
   });
