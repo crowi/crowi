@@ -1,6 +1,7 @@
 import Debug from 'debug';
 import type { CrowiPlugin, PageMetadataAccessor, PluginContext, PluginLogger, StateCell } from '@crowi/plugin-api';
 import type Crowi from 'src/crowi';
+import { credentialVaultModelNamesList, isCredentialVaultModel } from './credential-vault-models';
 import { formatPluginConfigKey, pluginConfigKeyPrefix } from './plugin-namespace';
 
 /**
@@ -68,6 +69,16 @@ export function createPluginContext(plugin: CrowiPlugin, crowi: Crowi, lookup: P
         // time, so this branch only fires on a programming bug.
         throw new Error(`Dependency plugin '${dependencyName}' is not loaded — PluginManager invariant broken.`);
       }
+      // Declaring `requires` is only the caller's side of the contract —
+      // the dependency itself must explicitly opt in to being read by
+      // dependents (feature-plugin-capability-hardening). Without this,
+      // any plugin could self-declare `requires: ['@crowi/plugin-aws']`
+      // and read AWS credentials it was never meant to see.
+      if (dep.exposesConfigToDependents !== true) {
+        throw new Error(
+          `Plugin '${plugin.name}' tried to read dependency config of '${dependencyName}', but the dependency did not declare 'exposesConfigToDependents'.`,
+        );
+      }
       const schema = dep.configSchema;
       if (!schema) {
         throw new Error(`Dependency plugin '${dependencyName}' did not declare a configSchema.`);
@@ -105,6 +116,15 @@ export function createPluginContext(plugin: CrowiPlugin, crowi: Crowi, lookup: P
     pageMetadata: makePageMetadataAccessor(plugin.name, crowi),
 
     model(name: string): unknown {
+      // Re-checked here (not just at boot in `assertValidModelAccess()`)
+      // as defense-in-depth: a credential-vault model name must never be
+      // returned even if a plugin somehow bypassed boot validation with
+      // one declared in `modelAccess` (feature-plugin-capability-hardening).
+      if (isCredentialVaultModel(name)) {
+        throw new Error(
+          `Plugin '${plugin.name}' called model('${name}'), but credential-bearing core models cannot be granted to plugins. Denied models: ${credentialVaultModelNamesList()}.`,
+        );
+      }
       if (!plugin.modelAccess?.includes(name)) {
         throw new Error(`Plugin '${plugin.name}' called model('${name}') but did not declare it in 'modelAccess'.`);
       }

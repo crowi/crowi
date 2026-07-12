@@ -5,6 +5,7 @@ import { type CrowiConfigFile, resolvePlugins } from '@crowi/runner';
 import type Crowi from 'src/crowi';
 import { registerSensitiveConfigKeys } from 'src/models/config-sensitive';
 import type { ConfigChangeSource } from 'src/service/config';
+import { credentialVaultModelNamesList, isCredentialVaultModel } from './credential-vault-models';
 import { createPluginContext } from './plugin-context';
 import { isPluginInstalled, markPluginInstalled } from './plugin-install-tracker';
 import { formatPluginConfigKey, parsePluginNamespace } from './plugin-namespace';
@@ -540,19 +541,34 @@ function assertZodV3ConfigSchema(pluginName: string, schema: unknown): void {
 
 /**
  * Verify that every entry in a plugin's `modelAccess` declaration names
- * a real core model. `Crowi.init()` runs `setupModels()` before
- * `setupPlugins()` (see `crowi/index.ts`), so `validModelNames` — read
- * from `this.crowi.models` at the `activate()` call site — is already
- * complete by the time this runs. An unknown model name is very likely
- * a typo (`modelAccess: ['Pages']` instead of `['Page']`) that would
- * otherwise silently make `ctx.model('Pages')` throw the *unrelated*
- * "did not declare it in 'modelAccess'" error at first use, deep inside
- * a `register*` callback — surfacing it here, at boot, names the
- * offending plugin immediately instead.
+ * a real core model, and that none of them names a credential-vault
+ * model (feature-plugin-capability-hardening). `Crowi.init()` runs
+ * `setupModels()` before `setupPlugins()` (see `crowi/index.ts`), so
+ * `validModelNames` — read from `this.crowi.models` at the `activate()`
+ * call site — is already complete by the time this runs. An unknown
+ * model name is very likely a typo (`modelAccess: ['Pages']` instead of
+ * `['Page']`) that would otherwise silently make `ctx.model('Pages')`
+ * throw the *unrelated* "did not declare it in 'modelAccess'" error at
+ * first use, deep inside a `register*` callback — surfacing it here, at
+ * boot, names the offending plugin immediately instead.
+ *
+ * The credential-vault check runs first: `Config` / `PersonalAccessToken`
+ * / `OAuthClient` / etc. (see `credential-vault-models.ts`) are always
+ * real, registered core models, so without this ordering they would
+ * otherwise pass the "is it a known model" check silently. There is no
+ * legitimate plugin use case for declaring one — see the module doc on
+ * `CREDENTIAL_VAULT_MODEL_NAMES`. `ctx.model()` re-checks this at call
+ * time (`plugin-context.ts`) as defense-in-depth, so boot validation is
+ * never the only barrier.
  */
 function assertValidModelAccess(pluginName: string, modelAccess: readonly string[], validModelNames: readonly string[]): void {
   const validSet = new Set(validModelNames);
   for (const name of modelAccess) {
+    if (isCredentialVaultModel(name)) {
+      throw new Error(
+        `Plugin '${pluginName}' declares modelAccess including '${name}', but credential-bearing core models cannot be granted to plugins. Denied models: ${credentialVaultModelNamesList()}.`,
+      );
+    }
     if (!validSet.has(name)) {
       throw new Error(
         `Plugin '${pluginName}' declares modelAccess including '${name}', which is not a registered core model. Valid model names: ${validModelNames.join(', ')}.`,
