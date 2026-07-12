@@ -25,9 +25,6 @@ alpha.0–.3 は published、alpha.4 / stable 向けに changeset 蓄積中（pr
 ### OAuth 2.0 (RFC-0010)
 - [ ] Phase 5: admin による任意 OAuth クライアント登録 UI（Phase 1-4 完了）
 
-### GRANT_RESTRICTED 共有バナー + grant-on-first-access
-- [x] Phase 1: アクセス制御 grant-on-first-access（専用エンドポイント `POST /pages/link-access`）完成。残: Phase 2 共有バナー UI（spec: `feature-restricted-grant-share-banner.md`）
-
 ### 配布 / リリース（2.0.0 stable 時）
 - [ ] **無印 `crowi` パッケージの整理**（spec: `feature-crowi-quickstart-package.md`）
 - [ ] **slim image + 外部 operator 向け doc** — runner-project 方式。blocked-on `feature-plugin-search-mongo`
@@ -91,6 +88,7 @@ alpha.0–.3 は published、alpha.4 / stable 向けに changeset 蓄積中（pr
 - **ページネーション UI の Pager 統合** — 3 重複実装を単一 `<Pager>` + `pager-range` に統合し文言を Paraglide 化（spec: `feature-unified-pager.md`）
 - **中央 env 検証（boot 時に一括 validate）** — 散在した `process.env` 読取を `env-schema` + `validateEnv()` に一本化、fail-fast/warn/typo 検出を統一（spec: `feature-boot-env-validation.md`）
 - **Plugin capability hardening** — credential-vault モデルの `modelAccess` deny-list + `dependencyConfig` の依存側 opt-in 化で SDK トラスト境界の主張を真にする（plugin-api major。spec: `feature-plugin-capability-hardening.md`）
+- **GRANT_RESTRICTED 共有バナー + grant-on-first-access** — 専用エンドポイント `POST /pages/link-access` によるリンク初回アクセス時招待 + 実挙動を正直に伝える常設共有バナー UI（spec: `feature-restricted-grant-share-banner.md`）
 
 ---
 
