@@ -342,4 +342,127 @@ describe('Routes /api/v2/search (Hono)', () => {
       });
     });
   });
+
+  // feature-restricted-grant-share-banner §7 — status / redirect hydration
+  // boundary. Grant filtering (above) is populate-layer, pre-existing, and
+  // uniform for admin/non-admin; this section is the NEW status/redirect
+  // per-hit drop, which must be equally uniform (no admin bypass).
+  describe('Status / redirect hydration boundary (feature-restricted-grant-share-banner §7)', () => {
+    const setStatus = (pageId: string, status: string | null) => crowi.model('Page').updateOne({ _id: pageId }, { $set: { status } });
+
+    it('regression pin: grant-refiltered hits never leak content (title/path/snippet/body) — pre-existing populate-layer behaviour, not new §7 code', async () => {
+      const owner = await createTestUser({
+        name: 'Search Status Grant Regression Owner',
+        username: 'searchStatusGrantRegressionOwner',
+        email: 'search-status-grant-regression-owner@example.com',
+      });
+      const page = await createPageViaApi(owner.accessToken, `${PATH_PREFIX}grant-regression`, '# secret grant-regression-marker', 2 /* GRANT_RESTRICTED */);
+
+      const driver = buildMockDriver({
+        total: 1,
+        hits: [{ id: page._id, path: page.path, snippet: '<mark>grant-regression-marker</mark>' }],
+      });
+      await withMockDriver(driver, async () => {
+        // `accessToken`'s user is not in grantedUsers for this page — stale
+        // ES `granted_users` (if any) doesn't matter, populate drops it.
+        const res = await search(accessToken, { q: 'grant-regression-marker' });
+        expect(res.status).toBe(200);
+        expect(res.body.data).toEqual([]);
+        expect(JSON.stringify(res.body)).not.toContain('grant-regression-marker');
+      });
+    });
+
+    it('drops a redirect-stub hit for both admin and non-admin viewers', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}redirect-stub-status`, '# redirect-stub-marker');
+      await crowi.model('Page').updateOne({ _id: page._id }, { $set: { redirectTo: '/somewhere-else' } });
+      const admin = await createTestUser({
+        name: 'Search Status Admin Redirect',
+        username: 'searchStatusAdminRedirect',
+        email: 'search-status-admin-redirect@example.com',
+        admin: true,
+      });
+
+      for (const token of [accessToken, admin.accessToken]) {
+        const driver = buildMockDriver({ total: 1, hits: [{ id: page._id, path: page.path }] });
+        await withMockDriver(driver, async () => {
+          const res = await search(token, { q: 'redirect-stub-marker' });
+          expect(res.status).toBe(200);
+          expect(res.body.data).toEqual([]);
+        });
+      }
+    });
+
+    it.each(['deleted', 'wip', 'deprecated'] as const)('drops a stale-indexed %s page for both admin and non-admin viewers', async (status) => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}${status}-status`, `# ${status}-status-marker`);
+      await setStatus(page._id, status);
+      const admin = await createTestUser({
+        name: `Search Status Admin ${status}`,
+        username: `searchStatusAdmin${status}`,
+        email: `search-status-admin-${status}@example.com`,
+        admin: true,
+      });
+
+      for (const token of [accessToken, admin.accessToken]) {
+        const driver = buildMockDriver({ total: 1, hits: [{ id: page._id, path: page.path }] });
+        await withMockDriver(driver, async () => {
+          const res = await search(token, { q: `${status}-status-marker` });
+          expect(res.status).toBe(200);
+          expect(res.body.data).toEqual([]);
+        });
+      }
+    });
+
+    it("keeps another user's draft out for both admin and non-admin viewers, but keeps the creator's own draft (list-visibility parity)", async () => {
+      const draftOwner = await createTestUser({
+        name: 'Search Status Draft Owner',
+        username: 'searchStatusDraftOwner',
+        email: 'search-status-draft-owner@example.com',
+      });
+      const page = await createPageViaApi(draftOwner.accessToken, `${PATH_PREFIX}draft-status`, '# draft-status-marker');
+      await setStatus(page._id, 'draft');
+      const admin = await createTestUser({
+        name: 'Search Status Admin Draft',
+        username: 'searchStatusAdminDraft',
+        email: 'search-status-admin-draft@example.com',
+        admin: true,
+      });
+
+      for (const token of [accessToken, admin.accessToken]) {
+        const driver = buildMockDriver({ total: 1, hits: [{ id: page._id, path: page.path }] });
+        await withMockDriver(driver, async () => {
+          const res = await search(token, { q: 'draft-status-marker' });
+          expect(res.status).toBe(200);
+          expect(res.body.data).toEqual([]);
+        });
+      }
+
+      const ownDriver = buildMockDriver({ total: 1, hits: [{ id: page._id, path: page.path }] });
+      await withMockDriver(ownDriver, async () => {
+        const res = await search(draftOwner.accessToken, { q: 'draft-status-marker' });
+        expect(res.status).toBe(200);
+        expect(res.body.data).toHaveLength(1);
+        expect(res.body.data[0].pageId).toBe(page._id);
+      });
+    });
+
+    it('does not over-filter: a normal published page and a granted GRANT_RESTRICTED page still appear', async () => {
+      const publicPage = await createPageViaApi(accessToken, `${PATH_PREFIX}ok-published-public`, '# ok-published-marker');
+      const restrictedPage = await createPageViaApi(accessToken, `${PATH_PREFIX}ok-published-restricted`, '# ok-restricted-marker', 2);
+
+      const driver = buildMockDriver({
+        total: 2,
+        hits: [
+          { id: publicPage._id, path: publicPage.path },
+          { id: restrictedPage._id, path: restrictedPage.path },
+        ],
+      });
+      await withMockDriver(driver, async () => {
+        const res = await search(accessToken, { q: 'ok' });
+        expect(res.status).toBe(200);
+        const ids = (res.body.data as { pageId: string }[]).map((d) => d.pageId);
+        expect(ids).toContain(publicPage._id);
+        expect(ids).toContain(restrictedPage._id);
+      });
+    });
+  });
 });
