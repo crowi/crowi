@@ -108,15 +108,25 @@ describe('(auth)/%5Fr/[id]/page — legacy /_r/<id> alias route revival', () => 
     // workflow (and `pnpm build` / CI's own "Build project" step build it
     // again regardless), so this test reuses that artifact when present and
     // triggers a build itself otherwise — never silently skipping.
+    const ROUTE_KEY = '/(auth)/_r/[id]/page';
+    const readManifest = (p: string): Record<string, string> =>
+      existsSync(p) ? (JSON.parse(readFileSync(p, 'utf-8')) as Record<string, string>) : {};
+
     it('the built app-paths-manifest.json contains /(auth)/_r/[id]/page', () => {
       const manifestPath = path.join(process.cwd(), '.next/server/app-paths-manifest.json');
 
-      if (!existsSync(manifestPath)) {
+      // Trigger a build when the manifest is missing OR present but does not
+      // yet carry the route. The second case is the common one on a dev box:
+      // a running `next dev` writes a dev-mode manifest that lazily omits
+      // routes never visited (including `%5Fr`), so a mere existsSync guard
+      // would reuse that stale manifest and fail. Rebuilding when the key is
+      // absent makes the test self-healing regardless of what wrote `.next`
+      // (CI's fresh prod build already contains it, so it never rebuilds there).
+      if (readManifest(manifestPath)[ROUTE_KEY] === undefined) {
         execSync('pnpm build', { cwd: process.cwd(), stdio: 'inherit' });
       }
 
-      const manifest = JSON.parse(readFileSync(manifestPath, 'utf-8')) as Record<string, string>;
-      expect(manifest['/(auth)/_r/[id]/page']).toBeDefined();
+      expect(readManifest(manifestPath)[ROUTE_KEY]).toBeDefined();
     }, 300_000);
   });
 });
