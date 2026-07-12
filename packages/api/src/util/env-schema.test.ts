@@ -261,6 +261,46 @@ describe('util/env-schema validateEnv', () => {
     });
   });
 
+  describe('WS_TOKEN_SECRET (NODE_ENV-dependent minimum length — feature-signed-token-secret-strength)', () => {
+    test('NODE_ENV=production with a 1-31 char value fails boot, message names the variable, required length, and the openssl generation command', () => {
+      let thrown: Error | null = null;
+      try {
+        validateEnv(makeEnv({ NODE_ENV: 'production', WS_TOKEN_SECRET: 'short-secret', CLIENT_URL: 'https://wiki.example.com' }));
+      } catch (err) {
+        thrown = err as Error;
+      }
+      expect(thrown).not.toBeNull();
+      expect(thrown?.message).toContain('WS_TOKEN_SECRET');
+      expect(thrown?.message).toMatch(/at least 32 characters/);
+      expect(thrown?.message).toContain('openssl rand -base64 32');
+    });
+
+    test("an unset NODE_ENV defaults to the production (strict) severity, matching values.nodeEnv's own fallback", () => {
+      expect(() => validateEnv(makeEnv({ WS_TOKEN_SECRET: 'short-secret', CLIENT_URL: 'https://wiki.example.com' }))).toThrow(/WS_TOKEN_SECRET/);
+    });
+
+    test.each(['development', 'test', 'staging'])('NODE_ENV=%s with the same short value warns instead of failing boot', (nodeEnv) => {
+      const result = validateEnv(makeEnv({ NODE_ENV: nodeEnv, WS_TOKEN_SECRET: 'short-secret', CLIENT_URL: 'https://wiki.example.com' }));
+      expect(result.warnings.some((w) => w.startsWith('WS_TOKEN_SECRET:') && w.includes('at least 32 characters'))).toBe(true);
+    });
+
+    test('a value >= 32 characters passes with no warning, in production or otherwise', () => {
+      const strong = 'a'.repeat(32);
+      expect(validateEnv(makeEnv({ NODE_ENV: 'production', WS_TOKEN_SECRET: strong, CLIENT_URL: 'https://wiki.example.com' })).warnings).toEqual([]);
+      expect(validateEnv(makeEnv({ NODE_ENV: 'development', WS_TOKEN_SECRET: strong, CLIENT_URL: 'https://wiki.example.com' })).warnings).toEqual([]);
+    });
+
+    test('a known placeholder value is exempt even in production — signed-token-factory.ts already treats it as unset (random fallback + its own warning)', () => {
+      const result = validateEnv(makeEnv({ NODE_ENV: 'production', WS_TOKEN_SECRET: 'changeme', CLIENT_URL: 'https://wiki.example.com' }));
+      expect(result.warnings).toEqual([]);
+    });
+
+    test('unset WS_TOKEN_SECRET is unaffected — no warning, no failure', () => {
+      const result = validateEnv(makeEnv({ NODE_ENV: 'production', CLIENT_URL: 'https://wiki.example.com' }));
+      expect(result.warnings).toEqual([]);
+    });
+  });
+
   describe('AC-11: typo detection heuristic', () => {
     test('a near-miss of a known Crowi-prefixed variable warns with a suggestion', () => {
       const result = validateEnv(makeEnv({ CROWI_ENCRYPTON_KEY: 'whatever' }));
@@ -309,7 +349,11 @@ describe('util/env-schema validateEnv', () => {
     test('exact known names (including taxonomy-only ones) never warn regardless of content', () => {
       const result = validateEnv(
         makeEnv({
-          WS_TOKEN_SECRET: 'anything',
+          // >= 32 chars: this test asserts the typo heuristic ignores known
+          // names regardless of content, not the WS_TOKEN_SECRET length
+          // check (covered in its own `describe` block below) — a shorter
+          // value here would trip that separate check instead.
+          WS_TOKEN_SECRET: 'x'.repeat(40),
           REDIS_REJECT_UNAUTHORIZED: 'nonsense',
           BASE_URL: 'anything',
           PASSWORD_SEED: 'anything',
