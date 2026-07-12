@@ -28,6 +28,7 @@ vi.mock('./api-client', () => ({
   },
 }));
 
+import { PAGE_LIST_FAMILY_ROOT } from './page-query-keys';
 import { DraftPathConflictError, draftsKeys, useCancelDraft, useCreateDraft, useDrafts } from './use-drafts';
 
 /** Build a `Response`-shaped object matching what `hc` returns. */
@@ -94,10 +95,10 @@ describe('useCreateDraft', () => {
     expect(createPost).toHaveBeenCalledWith({ json: { path: '/docs/new' } });
     expect(invalidate).toHaveBeenCalledWith({ queryKey: draftsKeys.all });
     // A new draft is visible-to-author in the parent's child listing, so the
-    // sidebar tree / page list (`['pages']` family) must refresh too —
-    // otherwise returning to an already-cached parent omits the new page
-    // until its 60s staleTime lapses.
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['pages'] });
+    // sidebar tree / page list (`PAGE_LIST_FAMILY_ROOT` family) must refresh
+    // too — otherwise returning to an already-cached parent omits the new
+    // page until its 60s staleTime lapses.
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: PAGE_LIST_FAMILY_ROOT });
   });
 
   it('throws DraftPathConflictError carrying the owner on 409', async () => {
