@@ -3,7 +3,7 @@ import { EditorSelection, EditorState } from '@codemirror/state';
 import type { EditorView } from '@codemirror/view';
 import { markdown } from '@codemirror/lang-markdown';
 import { ensureSyntaxTree } from '@codemirror/language';
-import { continueListMarkup, dedentListItem, indentListItem } from './list-keymap';
+import { continueListMarkup, dedentListItem, indentListItem, listKeymap } from './list-keymap';
 
 /**
  * RFC-0005 — unit tests for the markdown list keymap commands.
@@ -94,6 +94,18 @@ describe('continueListMarkup (#1 — tight list continuation)', () => {
     expect(continueListMarkup(view)).toBe(false);
   });
 
+  it('declines a mid-list ordered item (has a following sibling) so the built-in renumbering fallback runs instead', () => {
+    // `2. b` is not the last item of its list (`3. c` follows) — inserting
+    // `3. ` here ourselves would duplicate the existing `3. c`'s number.
+    // Delegate to `insertNewlineContinueMarkup`, which renumbers the rest
+    // of the list (verified end-to-end via a real EditorView in
+    // MarkdownEditor.test.tsx).
+    const doc = '1. a\n2. b\n3. c';
+    const view = mountView(doc, doc.indexOf('b') + 1);
+    expect(continueListMarkup(view)).toBe(false);
+    expect(view.state.doc.toString()).toBe(doc);
+  });
+
   it('declines a non-empty selection', () => {
     const view = mountViewRange('- abc', 2, 4);
     expect(continueListMarkup(view)).toBe(false);
@@ -138,5 +150,100 @@ describe('indentListItem / dedentListItem (#2 — Tab indent / unindent)', () =>
     const view = mountView('1. a\n2. b', 9);
     expect(indentListItem(view)).toBe(true);
     expect(view.state.doc.toString()).toBe('1. a\n   2. b');
+  });
+
+  it('indents an already-nested single-digit ordered item by the same 3-column width, independent of depth (AC: ordered marker Tab depth-independence)', () => {
+    // `2. c` is already nested one level under `1. a` (via the `1. b`
+    // sibling list). Tab must add exactly 3 columns — the same unit as
+    // the level-0 case above — not a wider amount derived from the
+    // existing 3-space indentation.
+    const doc = '1. a\n   1. b\n   2. c';
+    const view = mountView(doc, doc.length);
+    expect(indentListItem(view)).toBe(true);
+    expect(view.state.doc.toString()).toBe('1. a\n   1. b\n      2. c');
+  });
+});
+
+describe('markerWidth is level-independent (bug1 — indent width no longer grows with existing nesting)', () => {
+  it('indents an already-nested bullet item by exactly one marker width (2), not the old bug — content col + 2', () => {
+    // The headline bug1 repro: `- a\n  - b` (b already nested one level
+    // under a). The pre-fix `markerWidth` measured from the line start
+    // (including the 2-space existing indent) and produced `- a\n      - b`
+    // (6 spaces = existing 4 + wrong unit 2... historically it compounded
+    // to +4). The fix must add exactly 2, landing on 4 total.
+    const doc = '- a\n  - b';
+    const view = mountView(doc, doc.length);
+    expect(indentListItem(view)).toBe(true);
+    expect(view.state.doc.toString()).toBe('- a\n    - b');
+  });
+
+  it('adds the same +2 at depth 2 as at depth 1 — the indent unit does not depend on depth (AC: depth-independence, isolated-nesting fallback branch)', () => {
+    const doc = '- a\n  - b\n    - c';
+    const view = mountView(doc, doc.length);
+    expect(indentListItem(view)).toBe(true);
+    expect(view.state.doc.toString()).toBe('- a\n  - b\n      - c');
+  });
+
+  it('dedents a depth-2 nested item by exactly one marker width (2), landing back at depth 1', () => {
+    const doc = '- a\n  - b\n      - c'; // c correctly nested two levels under a (parent b's marker width = 2)
+    const view = mountView(doc, doc.length);
+    expect(dedentListItem(view)).toBe(true);
+    expect(view.state.doc.toString()).toBe('- a\n  - b\n    - c');
+  });
+
+  it('indent then dedent round-trips at depth 2 (AC: Tab/Shift-Tab round-trip at nested depth)', () => {
+    const doc = '- a\n  - b\n    - c';
+    const view = mountView(doc, doc.length);
+    indentListItem(view);
+    dedentListItem(view);
+    expect(view.state.doc.toString()).toBe(doc);
+  });
+});
+
+describe('indentReferenceItem / parentListItem (bug1b — mixed marker kinds and ordered digit-count boundaries)', () => {
+  it('Tab: an ordered parent + not-yet-nested bullet child indents by the parent marker width (3), not the child’s own (2)', () => {
+    const doc = '1. parent\n- child';
+    const view = mountView(doc, doc.length);
+    expect(indentListItem(view)).toBe(true);
+    expect(view.state.doc.toString()).toBe('1. parent\n   - child');
+  });
+
+  it('Shift-Tab: a bullet child actually nested under an ordered parent dedents by the parent marker width (3), fully flattening', () => {
+    const doc = '1. parent\n   - child';
+    const view = mountView(doc, doc.length);
+    expect(dedentListItem(view)).toBe(true);
+    expect(view.state.doc.toString()).toBe('1. parent\n- child');
+  });
+
+  it('Tab: an ordered-list digit-count boundary (`10.` parent, `9.` not-yet-nested child) indents by the parent width (4)', () => {
+    const doc = '10. parent\n9. child';
+    const view = mountView(doc, doc.length);
+    expect(indentListItem(view)).toBe(true);
+    expect(view.state.doc.toString()).toBe('10. parent\n    9. child');
+  });
+
+  it('Shift-Tab: a `9.` child nested under a `10.` parent dedents by the parent width (4), leaving no remainder', () => {
+    const doc = '10. parent\n    9. child';
+    const view = mountView(doc, doc.length);
+    expect(dedentListItem(view)).toBe(true);
+    expect(view.state.doc.toString()).toBe('10. parent\n9. child');
+  });
+
+  it('Tab: a blank line between two adjacent lists guards against treating them as nesting — falls back to the item’s own marker width', () => {
+    // `- unrelated` is a separate top-level list, not a continuation of
+    // `1. parent`'s list — the blank line must prevent indentReferenceItem
+    // from picking the ordered parent's width (3) here.
+    const doc = '1. parent\n\n- unrelated';
+    const view = mountView(doc, doc.length);
+    expect(indentListItem(view)).toBe(true);
+    expect(view.state.doc.toString()).toBe('1. parent\n\n  - unrelated');
+  });
+});
+
+describe('listKeymap structure (bug2 — no new Backspace binding, 4-entry shape preserved)', () => {
+  it('has exactly the 4 documented entries (Enter continuation, Enter fallback, Tab, Shift-Tab) and no Backspace entry', () => {
+    expect(listKeymap).toHaveLength(4);
+    expect(listKeymap.map((b) => b.key)).toEqual(['Enter', 'Enter', 'Tab', 'Shift-Tab']);
+    expect(listKeymap.some((b) => b.key === 'Backspace')).toBe(false);
   });
 });
