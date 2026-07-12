@@ -168,11 +168,21 @@ export const registerSearchRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(a
         });
       }
 
+      // Subtract the hits we dropped (not-granted / no backing doc) from
+      // the driver's raw total (CROWI-SEC-REVIEW-003): reporting the raw
+      // total alongside a filtered `data` is a private-page existence
+      // oracle — `data: []` with `total: 1` tells an ungranted caller
+      // that a private page matching their query exists. Per-page
+      // subtraction kills that crisp oracle; an exact authorized total
+      // across all result pages needs the grant predicate pushed into
+      // the driver query itself (tracked by
+      // feature-central-page-authorization's query-level-grant retrofit).
+      const dropped = hits.length - data.length;
       return c.json(
         {
           meta: {
             ...(took !== undefined ? { took } : {}),
-            total,
+            total: Math.max(0, total - dropped),
             results: data.length,
           },
           data,

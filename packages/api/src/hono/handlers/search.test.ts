@@ -239,8 +239,9 @@ describe('Routes /api/v2/search (Hono)', () => {
       await withMockDriver(driver, async () => {
         const res = await search(accessToken, { q: 'real' });
         expect(res.status).toBe(200);
-        // total reflects driver report; results reflects what we could populate.
-        expect(res.body.meta.total).toBe(2);
+        // total subtracts dropped hits (CROWI-SEC-REVIEW-003): the missing
+        // doc was dropped, so the reported total shrinks with it.
+        expect(res.body.meta.total).toBe(1);
         expect(res.body.meta.results).toBe(1);
         expect(res.body.data).toHaveLength(1);
         expect(res.body.data[0].pageId).toBe(page._id);
@@ -281,9 +282,10 @@ describe('Routes /api/v2/search (Hono)', () => {
         // Search as `accessToken`'s user, who is NOT in grantedUsers for privatePage.
         const res = await search(accessToken, { q: 'secret' });
         expect(res.status).toBe(200);
-        // total reflects the driver's raw report; results/data reflect the
-        // grant-refiltered set.
-        expect(res.body.meta.total).toBe(1);
+        // total subtracts the refiltered hit (CROWI-SEC-REVIEW-003):
+        // `data: []` with `total: 1` would be a private-page existence
+        // oracle, so the dropped hit shrinks the total too.
+        expect(res.body.meta.total).toBe(0);
         expect(res.body.meta.results).toBe(0);
         expect(res.body.data).toEqual([]);
       });
@@ -332,7 +334,8 @@ describe('Routes /api/v2/search (Hono)', () => {
       await withMockDriver(driver, async () => {
         const res = await search(accessToken, { q: 'secret' });
         expect(res.status).toBe(200);
-        expect(res.body.meta.total).toBe(3);
+        // 2 of 3 hits dropped (ungranted + missing doc) -> total 3 - 2 = 1.
+        expect(res.body.meta.total).toBe(1);
         expect(res.body.meta.results).toBe(1);
         expect(res.body.data).toHaveLength(1);
         expect(res.body.data[0].pageId).toBe(publicPage._id);
