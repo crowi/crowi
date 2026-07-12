@@ -1,4 +1,5 @@
 import type { CrowiPlugin, PluginContext } from '@crowi/plugin-api';
+import { CREDENTIAL_VAULT_MODEL_NAMES } from './credential-vault-models';
 import { createPluginContext, type PluginLookup } from './plugin-context';
 
 /**
@@ -67,6 +68,106 @@ describe('createPluginContext — ctx.model() gated by plugin.modelAccess (featu
 
     expect(ctx.model('Page')).toBe(PageModel);
     expect(() => ctx.model('User')).toThrow("did not declare it in 'modelAccess'");
+  });
+});
+
+describe('createPluginContext — ctx.model() credential-vault deny-list call-time gate (feature-plugin-capability-hardening)', () => {
+  it.each([
+    ...CREDENTIAL_VAULT_MODEL_NAMES,
+  ])("throws for '%s' even when the plugin declares it in modelAccess (defense-in-depth against a bypassed boot check)", (deniedModel) => {
+    const plugin = stubPlugin({ name: '@crowi/plugin-vault-grab', modelAccess: [deniedModel] });
+    const ctx = createPluginContext(plugin, makeFakeCrowi({ [deniedModel]: {} }), noopLookup);
+
+    expect(() => ctx.model(deniedModel)).toThrow('credential-bearing core models cannot be granted to plugins');
+  });
+
+  it('does not affect access to a non-denied model declared in modelAccess', () => {
+    const PageModel = { find: jest.fn() };
+    const plugin = stubPlugin({ name: '@crowi/plugin-vault-safe', modelAccess: ['Page'] });
+    const ctx = createPluginContext(plugin, makeFakeCrowi({ Page: PageModel }), noopLookup);
+
+    expect(ctx.model('Page')).toBe(PageModel);
+  });
+});
+
+describe('createPluginContext — ctx.dependencyConfig() opt-in gate (feature-plugin-capability-hardening)', () => {
+  it('throws when the caller did not list the dependency in requires (existing contract preserved)', () => {
+    const plugin = stubPlugin({ name: '@crowi/plugin-caller' });
+    const ctx = createPluginContext(plugin, makeFakeCrowi(), noopLookup);
+
+    expect(() => ctx.dependencyConfig('@crowi/plugin-aws')).toThrow(
+      "Plugin '@crowi/plugin-caller' tried to read dependency config of '@crowi/plugin-aws', but did not list it in 'requires'.",
+    );
+  });
+
+  it('throws when the dependency is listed in requires but did not opt in with exposesConfigToDependents', () => {
+    const dep = stubPlugin({
+      name: '@crowi/plugin-quiet',
+      configSchema: { safeParse: () => ({ success: true, data: {} }) } as unknown as CrowiPlugin['configSchema'],
+    });
+    const plugin = stubPlugin({ name: '@crowi/plugin-caller', requires: ['@crowi/plugin-quiet'] });
+    const lookup: PluginLookup = { ...noopLookup, getLoadedPlugin: (name) => (name === dep.name ? dep : undefined) };
+    const ctx = createPluginContext(plugin, makeFakeCrowi(), lookup);
+
+    expect(() => ctx.dependencyConfig('@crowi/plugin-quiet')).toThrow(
+      "Plugin '@crowi/plugin-caller' tried to read dependency config of '@crowi/plugin-quiet', but the dependency did not declare 'exposesConfigToDependents'.",
+    );
+  });
+
+  it('throws when the dependency sets exposesConfigToDependents to a truthy non-boolean value (strict === true gate, not truthiness)', () => {
+    const dep = stubPlugin({
+      name: '@crowi/plugin-loose',
+      // Cast past the `boolean` type to simulate a misconfigured / JS
+      // plugin export — the runtime gate must not be fooled by a
+      // truthy-but-not-`true` value (feature-plugin-capability-hardening).
+      exposesConfigToDependents: 'yes' as unknown as boolean,
+      configSchema: { safeParse: () => ({ success: true, data: {} }) } as unknown as CrowiPlugin['configSchema'],
+    });
+    const plugin = stubPlugin({ name: '@crowi/plugin-caller', requires: ['@crowi/plugin-loose'] });
+    const lookup: PluginLookup = { ...noopLookup, getLoadedPlugin: (name) => (name === dep.name ? dep : undefined) };
+    const ctx = createPluginContext(plugin, makeFakeCrowi(), lookup);
+
+    expect(() => ctx.dependencyConfig('@crowi/plugin-loose')).toThrow(
+      "Plugin '@crowi/plugin-caller' tried to read dependency config of '@crowi/plugin-loose', but the dependency did not declare 'exposesConfigToDependents'.",
+    );
+  });
+
+  it('returns the parsed (decrypted) config when the dependency opted in with exposesConfigToDependents: true', () => {
+    const dep = stubPlugin({
+      name: '@crowi/plugin-generous',
+      exposesConfigToDependents: true,
+      configSchema: { safeParse: (ns: unknown) => ({ success: true, data: ns }) } as unknown as CrowiPlugin['configSchema'],
+    });
+    const plugin = stubPlugin({ name: '@crowi/plugin-caller', requires: ['@crowi/plugin-generous'] });
+    const lookup: PluginLookup = { ...noopLookup, getLoadedPlugin: (name) => (name === dep.name ? dep : undefined) };
+    const crowi = makeFakeCrowi();
+    crowi.getConfig = () => ({ crowi: { 'plugin:@crowi/plugin-generous:secretAccessKey': 'decrypted-value' } });
+    const ctx = createPluginContext(plugin, crowi, lookup);
+
+    expect(ctx.dependencyConfig<{ secretAccessKey: string }>('@crowi/plugin-generous')).toEqual({ secretAccessKey: 'decrypted-value' });
+  });
+
+  it('regression: the real @crowi/plugin-aws declares exposesConfigToDependents, so a storage/mail-style dependent can still read its config', async () => {
+    const awsPlugin = (await import('@crowi/plugin-aws')).default;
+    expect(awsPlugin.exposesConfigToDependents).toBe(true);
+
+    const dependent = stubPlugin({ name: '@crowi/plugin-storage-aws-s3-like', requires: [awsPlugin.name] });
+    const lookup: PluginLookup = { ...noopLookup, getLoadedPlugin: (name) => (name === awsPlugin.name ? awsPlugin : undefined) };
+    const crowi = makeFakeCrowi();
+    crowi.getConfig = () => ({
+      crowi: {
+        'plugin:@crowi/plugin-aws:region': 'ap-northeast-1',
+        'plugin:@crowi/plugin-aws:accessKeyId': 'AKIAEXAMPLE',
+        'plugin:@crowi/plugin-aws:secretAccessKey': 'decrypted-secret',
+      },
+    });
+    const ctx = createPluginContext(dependent, crowi, lookup);
+
+    expect(ctx.dependencyConfig('@crowi/plugin-aws')).toMatchObject({
+      region: 'ap-northeast-1',
+      accessKeyId: 'AKIAEXAMPLE',
+      secretAccessKey: 'decrypted-secret',
+    });
   });
 });
 
