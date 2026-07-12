@@ -25,7 +25,9 @@
  *     boot-time report.
  *
  * Deliberately NOT covered here (see the spec's "未確定事項" / out-of-scope
- * list): `WS_TOKEN_SECRET`'s placeholder-rejection logic, `REDIS_URL`
+ * list): `WS_TOKEN_SECRET`'s placeholder-rejection logic (still owned by
+ * `util/signed-token-factory.ts` — this module only adds a minimum-length
+ * check on top, see {@link WS_TOKEN_SECRET_DESCRIPTOR}), `REDIS_URL`
  * connection-time failures (vs. format), `CROWI_ENCRYPTION_KEY`'s runtime
  * re-read in `util/crypto.ts` (`EnvKeyProvider.getKey()`), and module-level
  * constants that are evaluated at `import` time (`util/jwt.ts`,
@@ -33,6 +35,8 @@
  * as taxonomy (so a typo is at least visible as a warning) but their actual
  * parsing stays where it is.
  */
+
+import { isKnownSignedTokenSecretPlaceholder } from './signed-token-factory';
 
 /** A single env var's shape: canonical name, legacy aliases, and an optional content check. */
 export interface EnvVarDescriptor {
@@ -51,7 +55,16 @@ export interface EnvVarDescriptor {
    * themselves), just not content-validated here.
    */
   readonly check?: {
-    readonly severity: 'fail' | 'warn';
+    /**
+     * Fixed for almost every descriptor. `WS_TOKEN_SECRET` is the one
+     * exception (its minimum-length check must fail boot in production but
+     * only warn elsewhere — see the feature-signed-token-secret-strength
+     * spec's "未確定事項"), so a descriptor may instead supply a function of
+     * the validated `env` that resolves to `'fail'` or `'warn'` at check
+     * time, read from the SAME `env` argument `validateEnv()` received (not
+     * ambient `process.env` — see `WS_TOKEN_SECRET_DESCRIPTOR`'s doc comment).
+     */
+    readonly severity: 'fail' | 'warn' | ((env: NodeJS.ProcessEnv) => 'fail' | 'warn');
     /** Returns a human-readable reason when `raw` is invalid, or `null` when valid. */
     readonly validate: (raw: string) => string | null;
   };
@@ -108,6 +121,44 @@ function validateEncryptionKey(raw: string): string | null {
     return `must decode to exactly 32 bytes after base64 decoding (got ${buf.length}). Generate one with \`openssl rand -base64 32\`.`;
   }
   return null;
+}
+
+/**
+ * Minimum length, in characters (not decoded bytes — the spec's open
+ * question resolves this as a plain character count so a strong-but-not-
+ * base64 secret is never incorrectly rejected), for `WS_TOKEN_SECRET`: the
+ * shared secret `createSignedTokenUtil`'s `DEFAULT_SECRET_ENV_VAR` falls
+ * back to (`util/signed-token-factory.ts`), and the only env var any of its
+ * four current call sites (ws / presence / notifications / mail token) pass
+ * to `secretEnvVar` — all four omit the option, so `WS_TOKEN_SECRET` is the
+ * complete set. A value this short is trivially guessable as an HMAC-SHA256
+ * signing key; `openssl rand -base64 32` (44 base64 characters) comfortably
+ * clears this bar.
+ */
+const MIN_SIGNED_TOKEN_SECRET_LENGTH = 32;
+
+/**
+ * A known placeholder (`changeme` etc.) is exempt — `signed-token-factory.ts`
+ * already treats it as "not configured" (random in-memory fallback + its own
+ * warning), and this check must not change that classification, only tighten
+ * what counts as a genuinely *configured* secret.
+ */
+function validateSignedTokenSecretLength(raw: string): string | null {
+  if (isKnownSignedTokenSecretPlaceholder(raw)) return null;
+  if (raw.length >= MIN_SIGNED_TOKEN_SECRET_LENGTH) return null;
+  return (
+    `must be at least ${MIN_SIGNED_TOKEN_SECRET_LENGTH} characters (got ${raw.length}) — it signs realtime ` +
+    'collab / presence / notifications / mail tokens as an HMAC-SHA256 key, and a value this short is easily ' +
+    'guessable. Generate a strong one with `openssl rand -base64 32`.'
+  );
+}
+
+/** `NODE_ENV`'s fallback when unset — shared by {@link isProductionEnv} and `EnvValidationResult.values.nodeEnv` so the two can't drift apart. */
+const DEFAULT_NODE_ENV = 'production';
+
+/** The effective NODE_ENV boot decisions use (mirrors `EnvValidationResult.values.nodeEnv`'s own fallback), not merely whatever happens to be set. */
+function isProductionEnv(env: NodeJS.ProcessEnv): boolean {
+  return (env.NODE_ENV || DEFAULT_NODE_ENV) === DEFAULT_NODE_ENV;
 }
 
 function validateAbsoluteUrl(raw: string): string | null {
@@ -227,12 +278,33 @@ const MIGRATION_POLICY_DESCRIPTOR: EnvVarDescriptor = {
 };
 
 /**
+ * Feature-signed-token-secret-strength: promoted out of
+ * {@link TAXONOMY_ONLY_NAMES} to its own descriptor with a content check.
+ * Severity is NOT a fixed `'fail'`/`'warn'` like every other descriptor —
+ * `NODE_ENV=production` (including unset, which defaults to `'production'`,
+ * matching `values.nodeEnv`'s own fallback) must boot-fail on a
+ * short-but-set value, while every other `NODE_ENV` (dev / test / anything
+ * else explicitly set) only warns. This reads `NODE_ENV` from the `env`
+ * argument `validateEnv()` was called with, never ambient `process.env` —
+ * the existing test suite (`env-schema.test.ts`) exercises `NODE_ENV`
+ * entirely through synthetic `makeEnv()` objects that never touch the real
+ * process env, and jest runs with the real `process.env.NODE_ENV` pinned to
+ * `'test'` regardless of what a given test's synthetic env claims.
+ */
+const WS_TOKEN_SECRET_DESCRIPTOR: EnvVarDescriptor = {
+  name: 'WS_TOKEN_SECRET',
+  check: {
+    severity: (env) => (isProductionEnv(env) ? 'fail' : 'warn'),
+    validate: validateSignedTokenSecretLength,
+  },
+};
+
+/**
  * Taxonomy-only variables: registered so typo-detection recognises them (and
  * so a real consumer's own resolution logic isn't duplicated here), but their
  * content is not checked.
  */
 const TAXONOMY_ONLY_NAMES = [
-  'WS_TOKEN_SECRET',
   'REDIS_REJECT_UNAUTHORIZED',
   'BASE_URL',
   'PASSWORD_SEED',
@@ -266,6 +338,7 @@ export const ENV_VAR_DESCRIPTORS: readonly EnvVarDescriptor[] = [
   JWT_REFRESH_TTL_DESCRIPTOR,
   COLLAB_MAX_EDITORS_DESCRIPTOR,
   MIGRATION_POLICY_DESCRIPTOR,
+  WS_TOKEN_SECRET_DESCRIPTOR,
   ...TAXONOMY_ONLY_DESCRIPTORS,
 ];
 
@@ -433,7 +506,8 @@ export function validateEnv(env: NodeJS.ProcessEnv): EnvValidationResult {
     const reason = descriptor.check.validate(resolved.raw);
     if (reason == null) continue;
     const message = `${resolved.key}: ${reason}`;
-    if (descriptor.check.severity === 'fail') {
+    const severity = typeof descriptor.check.severity === 'function' ? descriptor.check.severity(env) : descriptor.check.severity;
+    if (severity === 'fail') {
       failMessages.push(message);
     } else {
       warnMessages.push(message);
@@ -451,7 +525,7 @@ export function validateEnv(env: NodeJS.ProcessEnv): EnvValidationResult {
   return {
     values: {
       baseUrl: env.BASE_URL || null,
-      nodeEnv: env.NODE_ENV || 'production',
+      nodeEnv: env.NODE_ENV || DEFAULT_NODE_ENV,
       port: port ? Number.parseInt(port, 10) : 4301,
       redisUrl: resolvedByDescriptor.get(REDIS_URL_DESCRIPTOR)?.raw ?? null,
       mongoUri: resolvedByDescriptor.get(MONGO_URI_DESCRIPTOR)?.raw ?? 'mongodb://localhost/crowi',

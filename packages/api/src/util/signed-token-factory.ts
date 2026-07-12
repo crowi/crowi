@@ -82,8 +82,21 @@ export function isSignedTokenSecretConfiguredFromEnv(envVarName: string): boolea
   if (!fromEnv) return false;
   const trimmed = fromEnv.trim();
   if (trimmed.length === 0) return false;
-  if (SIGNED_TOKEN_SECRET_PLACEHOLDERS.has(trimmed.toLowerCase())) return false;
+  if (isKnownSignedTokenSecretPlaceholder(trimmed)) return false;
   return true;
+}
+
+/**
+ * Whether `trimmed` (already trimmed, compared case-insensitively — same as
+ * {@link isSignedTokenSecretConfiguredFromEnv}) is one of the known
+ * non-functional placeholder values above. Exported so
+ * `util/env-schema.ts`'s `WS_TOKEN_SECRET` minimum-length check can exempt a
+ * value this factory already treats as "not configured" (random fallback +
+ * its own warning), instead of keeping a second, driftable copy of the
+ * placeholder list.
+ */
+export function isKnownSignedTokenSecretPlaceholder(trimmed: string): boolean {
+  return SIGNED_TOKEN_SECRET_PLACEHOLDERS.has(trimmed.toLowerCase());
 }
 
 /**
