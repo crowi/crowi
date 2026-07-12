@@ -154,16 +154,34 @@ The second argument of each `register*` callback, `PluginContext`, is
 the only conduit for a plugin to interact with the core safely. Do not
 import `@crowi/server` directly.
 
-Trust boundary: a plugin only reaches what it explicitly declares.
-`model(name)` is gated by a `CrowiPlugin.modelAccess` allow-list (see
-below) — there is no ambient "any core model" access. There is also
-intentionally no symmetric encrypt/decrypt capability: the only
-legitimate way to read a secret is `config<T>()`, which already returns
-`@sensitive` fields transparently decrypted. A plugin cannot reach
-another plugin's or core's secrets through `PluginContext`.
+Trust boundary: a plugin only reaches what it explicitly declares, and a
+plugin cannot reach another plugin's or core's secrets through
+`PluginContext`:
+
+- `model(name)` is gated by a `CrowiPlugin.modelAccess` allow-list (see
+  below) — there is no ambient "any core model" access. Credential-vault
+  models (`Config`, `PersonalAccessToken`, the OAuth client/token/grant
+  models, `Share`, `ShareAccess`) can never be declared in `modelAccess`
+  at all — doing so fails boot (see "Core model access" below).
+- There is also intentionally no symmetric encrypt/decrypt capability:
+  the only legitimate way to read your own plugin's secrets is
+  `config<T>()`, which already returns `@sensitive` fields transparently
+  decrypted.
+- `dependencyConfig<T>(name)` only returns a dependency's decrypted
+  config (`@sensitive` fields included) when that plugin explicitly
+  declares `CrowiPlugin.exposesConfigToDependents: true`. Listing it in
+  `requires` alone is not enough (see "Dependency plugins" below).
+
+One honest caveat remains: a plugin granted `modelAccess: ['User']` gets
+the raw Mongoose document, password hash included — there is no field
+projection today. Field-level read/write proxying is deferred to a
+post-2.0 repository/HTTP layer separation; only grant `User`
+`modelAccess` to a plugin you trust with the whole document.
 
 - `config<T>()` — read this plugin's typed config
-- `dependencyConfig<T>(name)` — read a dependency plugin declared in `requires`
+- `dependencyConfig<T>(name)` — read a dependency plugin declared in
+  `requires`, provided that dependency also declares
+  `exposesConfigToDependents: true`
 - `setConfig(key, value)` — write a single config field
 - `pageMetadata` — read / write page metadata in this plugin's namespace
 - `model(name)` — access a core Mongoose model (Page / User / Comment …), only
@@ -254,6 +272,30 @@ declares `@crowi/plugin-aws` in `requires` and reads `region` /
 `accessKeyId` / `secretAccessKey` via `ctx.dependencyConfig()`. There is
 no need to duplicate the fields in its own schema.
 
+Listing a dependency in `requires` is not, by itself, enough to read its
+config — `ctx.dependencyConfig(name)` only returns decrypted config when
+the target plugin declares `CrowiPlugin.exposesConfigToDependents:
+boolean` as `true`. Without that opt-in, the call throws, naming both the
+calling plugin and the dependency and stating that `did not declare
+'exposesConfigToDependents'`. This is an explicit opt-in on the
+dependency's side:
+
+```ts
+// @crowi/plugin-aws (the dependency): sharing credentials with other
+// plugins is this plugin's entire purpose, so it opts in.
+const plugin: CrowiPlugin = {
+  name: '@crowi/plugin-aws',
+  configSchema: AwsConfigSchema,
+  exposesConfigToDependents: true,
+};
+```
+
+A plugin that does not declare `exposesConfigToDependents` keeps its
+config private no matter how many other plugins list it in `requires`.
+`@crowi/plugin-aws` is the only in-repo plugin that declares
+`exposesConfigToDependents: true`. The opt-in is a single all-or-nothing
+flag on the whole plugin, not per config field.
+
 ## Core model access (modelAccess)
 
 A plugin that touches a core Mongoose model via `ctx.model(name)`
@@ -281,6 +323,24 @@ In-repo examples: `@crowi/plugin-search-elasticsearch` and
 `@crowi/plugin-search-opensearch` declare `['Page', 'Bookmark', 'User']`,
 `@crowi/plugin-search-mongo` declares `['Page', 'Revision']`, and
 `@crowi/plugin-slack` declares `['Page']` — all four are read-only users.
+
+### Credential-vault model deny-list
+
+The following credential-bearing core models can never be listed in
+`modelAccess`, even though they are real, registered core models.
+Declaring one fails boot: `assertValidModelAccess()` throws (e.g.
+`Plugin '<name>' declares modelAccess including '<model>', but
+credential-bearing core models cannot be granted to plugins.`).
+
+- `Config` — holds core's and every plugin's decrypted `@sensitive` values
+- `PersonalAccessToken`
+- `OAuthClient` / `OAuthAuthorizationCode` / `OAuthDeviceCode` / `OAuthRefreshToken`
+- `Share` / `ShareAccess` — page-share tokens (a quasi-credential)
+
+There is no legitimate plugin use case for touching these collections
+directly. `ctx.model()` also re-checks the same deny-list at call time
+(defense-in-depth), so a credential-vault model is never returned even
+if some path around the boot check existed.
 
 ## Building a renderer plugin
 

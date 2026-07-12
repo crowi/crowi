@@ -155,16 +155,34 @@ configI18n: {
 コアと安全にやり取りするための唯一の窓口です。`@crowi/server` を直接
 import してはいけません。
 
-トラスト境界: プラグインが到達できるのは明示的に宣言したものだけです。
-`model(name)` は `CrowiPlugin.modelAccess` の allow-list でゲートされて
-おり(下記)、「任意のコアモデルに触れる」ような無条件アクセスはありません。
-対称暗号化 / 復号の capability も意図的に存在しません — secret を読む正当な
-経路は `config<T>()` のみで、`@sensitive` フィールドは既に復号済みの値と
-して返ります。プラグインは `PluginContext` 経由で他プラグインや core の
-secret に到達できません。
+トラスト境界: プラグインが到達できるのは明示的に宣言したものだけであり、
+プラグインは `PluginContext` 経由で他プラグインや core の secret に
+到達できません。
+
+- `model(name)` は `CrowiPlugin.modelAccess` の allow-list でゲートされて
+  おり(下記)、「任意のコアモデルに触れる」ような無条件アクセスはありません。
+  さらに `Config` / `PersonalAccessToken` / OAuth 系(client/token/grant)/
+  `Share` / `ShareAccess` といった credential を保持するコアモデルは、
+  そもそも `modelAccess` に宣言すること自体ができません(宣言すると起動
+  時に fail します。詳しくは下記「コアモデルへのアクセス」参照)。
+- 対称暗号化 / 復号の capability も意図的に存在しません — 自分自身の
+  secret を読む正当な経路は `config<T>()` のみで、`@sensitive` フィールド
+  は既に復号済みの値として返ります。
+- `dependencyConfig<T>(name)` は、対象プラグインが
+  `CrowiPlugin.exposesConfigToDependents: true` を明示的に宣言している
+  場合のみ復号済み config(`@sensitive` フィールド含む)を返します。
+  呼び出し側が `requires` に列挙しているだけでは読めません(詳しくは下記
+  「依存プラグイン」参照)。
+
+唯一残る正直な caveat は `User` モデルです — `modelAccess: ['User']` を
+宣言したプラグインは password hash を含む生の Mongoose document を取得
+できます。field 単位の projection は現時点では無く、post-2.0 の
+repository/HTTP 層分離まで持ち越しています。`User` への `modelAccess` は
+そのプラグインを信頼できる場合にのみ付与してください。
 
 - `config<T>()` — このプラグインの型付き設定を読む
-- `dependencyConfig<T>(name)` — `requires` に宣言した依存プラグインの設定を読む
+- `dependencyConfig<T>(name)` — `requires` に宣言し、かつ対象プラグインが
+  `exposesConfigToDependents: true` を宣言している依存プラグインの設定を読む
 - `setConfig(key, value)` — 設定フィールドを 1 つ書き込む
 - `pageMetadata` — このプラグイン名前空間のページメタデータを読み書き
 - `model(name)` — `modelAccess` に宣言したコアの Mongoose モデル (Page /
@@ -252,6 +270,29 @@ PluginManager が依存グラフを解決し、`requires` を先に読み込み�
 `region` / `accessKeyId` / `secretAccessKey` を読み取ります。自前の
 スキーマで重複定義する必要はありません。
 
+`requires` に列挙するだけでは依存プラグインの config は読めません —
+`ctx.dependencyConfig(name)` は対象プラグインが `CrowiPlugin`
+の `exposesConfigToDependents?: boolean` を `true` で宣言している場合
+のみ復号済み config を返し、宣言していなければ「呼び出し元プラグイン名 /
+対象プラグイン名 / `did not declare 'exposesConfigToDependents'`」を
+明記した throw になります。これは依存される側の明示的な opt-in です:
+
+```ts
+// @crowi/plugin-aws (依存される側): credential を他プラグインに
+// 読ませることがこのプラグインの存在目的そのものなので opt-in する
+const plugin: CrowiPlugin = {
+  name: '@crowi/plugin-aws',
+  configSchema: AwsConfigSchema,
+  exposesConfigToDependents: true,
+};
+```
+
+`exposesConfigToDependents` を宣言していないプラグインの config は、
+`requires` にどれだけ列挙されても他プラグインから読めません。
+一次プラグインの中で `exposesConfigToDependents: true` を宣言している
+のは `@crowi/plugin-aws` のみです。opt-in はフィールド単位ではなく
+プラグイン全体に対する all-or-nothing のフラグです。
+
 ## コアモデルへのアクセス (modelAccess)
 
 `ctx.model(name)` でコアの Mongoose モデルに触るプラグインは、`requires`
@@ -276,6 +317,24 @@ modelAccess: ['Page', 'Bookmark'],
 `@crowi/plugin-search-opensearch` は `['Page', 'Bookmark', 'User']`、
 `@crowi/plugin-search-mongo` は `['Page', 'Revision']`、`@crowi/plugin-slack`
 は `['Page']` を宣言しており、いずれも読み取り専用の用途です。
+
+### credential-vault モデルの deny-list
+
+以下の credential を保持するコアモデルは、実在するコアモデルであっても
+`modelAccess` に宣言できません。宣言すると `assertValidModelAccess()` が
+起動時に fail させます(メッセージ例: `Plugin '<name>' declares
+modelAccess including '<model>', but credential-bearing core models
+cannot be granted to plugins.`)。
+
+- `Config` — core / 他プラグインの `@sensitive` 設定値(復号済み)を保持
+- `PersonalAccessToken`
+- `OAuthClient` / `OAuthAuthorizationCode` / `OAuthDeviceCode` / `OAuthRefreshToken`
+- `Share` / `ShareAccess` — ページ共有トークン(準 credential)
+
+これらのモデルを直接触る正当なプラグインユースケースは存在しません。
+`ctx.model()` の呼び出し時にも同じ deny-list が再チェックされる
+(defense-in-depth)ため、仮に boot 検証を回避する経路があっても
+credential-vault モデルは返りません。
 
 ## レンダラプラグインを作る
 
