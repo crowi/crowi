@@ -27,6 +27,26 @@ orchestrator instead of a file. Copy `.env.example` and edit it.
 cp .env.example .env
 ```
 
+The API validates all of these environment variables together at boot. If
+`PORT`, `MONGO_URI` (or an alias), `REDIS_URL` (or an alias), or
+`CROWI_ENCRYPTION_KEY` is malformed, boot fails immediately with a single
+error message listing every problem found. A malformed `CLIENT_URL`,
+`CROWI_MULTI_INSTANCE`, `NODE_ENV`, `JWT_ACCESS_TOKEN_TTL_SECONDS`,
+`JWT_REFRESH_TOKEN_TTL_SECONDS`, `COLLAB_MAX_EDITORS_PER_PAGE`, or
+`MIGRATION_PREFLIGHT_UNAPPLIED_POLICY` does not block boot — these are
+reported together as a single consolidated warning in the boot log instead
+(an unset `CLIENT_URL` also gets a warning there, since links in outgoing
+mail would otherwise be relative).
+
+An env var carrying one of the known Crowi prefixes (`CROWI_`, `WS_TOKEN_`,
+`JWT_`, `COLLAB_`, `REDIS`, `MONGO`, `MIGRATION_`) that matches no known
+variable name exactly is checked against every known name using Levenshtein
+(edit) distance; if the closest match is within a distance of 2, it is
+flagged as a likely typo ("did you mean `XXX`?") in the same warning report
+— this never fails boot, since the heuristic is allowed false positives.
+Ordinary OS/CI environment variables without one of those prefixes (`PATH`,
+`CI`, `GITHUB_*`, `npm_*`, etc.) are never flagged.
+
 ### Key environment variables
 
 | Variable | Required | Purpose |

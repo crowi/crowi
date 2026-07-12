@@ -22,6 +22,7 @@ import { resetKeyProvider } from 'src/util/crypto';
 import { runOAuthClientSeed } from 'src/util/oauth-client-seed';
 import { runBootMigrations } from 'src/migration/run-boot-migrations';
 import { type BootReporter, createBootReporter, formatFailMarker } from 'src/util/boot-reporter';
+import { validateEnv } from 'src/util/env-schema';
 import { buildRedisOpts } from 'src/util/redis-opts';
 import ConfigService from '../service/config';
 import LRU from '../service/lru';
@@ -91,6 +92,33 @@ class Crowi {
   redisUrl: string | null;
 
   redisOpts: any;
+
+  /**
+   * `MONGO_URI` (or an alias), resolved + format-validated once by
+   * `validateEnv()` in the constructor. Replaces the alias-resolution that
+   * used to live inline in `setupDatabase()`.
+   */
+  mongoUri: string;
+
+  /**
+   * `CROWI_ENCRYPTION_KEY`, trimmed + format-validated once by
+   * `validateEnv()` in the constructor; `null` when unset (or
+   * whitespace-only — trimmed the same way `validateEnv()` decided whether
+   * to run its own format check, so this can never disagree with the
+   * validation result). `setupEncryption()` reads this instead of
+   * `this.env.CROWI_ENCRYPTION_KEY` directly, so "is the key configured" has
+   * exactly one answer instead of two independently-truthy checks.
+   */
+  encryptionKey: string | null = null;
+
+  /**
+   * `warn`-severity findings from the constructor's one-time
+   * `validateEnv()` call (item #25 / feature-boot-env-validation). Flushed
+   * as a consolidated report by `emitEnvValidationWarnings()`, called from
+   * both boot entry points (`runInitLayers()` and `initForCli()`) so
+   * neither path drifts from the other.
+   */
+  envValidationWarnings: string[] = [];
 
   /**
    * PluginManager + resolved registries. Available after `setupPlugins`
@@ -163,11 +191,22 @@ class Crowi {
     this.version = pkg.version;
 
     this.env = env;
-    this.baseUrl = this.env.BASE_URL || null;
-    this.node_env = this.env.NODE_ENV || 'production';
-    this.port = this.env.PORT ? Number.parseInt(this.env.PORT) : 4301;
-    // Remove REDISTOGO_URL in the near future.
-    this.redisUrl = this.env.REDISTOGO_URL || this.env.REDIS_TLS_URL || this.env.REDIS_URL || null;
+
+    // Single validation pass for every Crowi-owned env var (item #25).
+    // Throws (all `fail`-severity problems at once) before anything else
+    // runs; `warnings` are stashed and flushed later via
+    // `emitEnvValidationWarnings()` so they don't get lost before a
+    // `bootReporter` exists. `this.env` itself is untouched — only the
+    // handful of derived fields below are replaced.
+    const envResult = validateEnv(env);
+    this.envValidationWarnings = envResult.warnings;
+
+    this.baseUrl = envResult.values.baseUrl;
+    this.node_env = envResult.values.nodeEnv;
+    this.port = envResult.values.port;
+    this.redisUrl = envResult.values.redisUrl;
+    this.mongoUri = envResult.values.mongoUri;
+    this.encryptionKey = envResult.values.encryptionKey;
 
     const redisRejectUnauthorized = this.env.REDIS_REJECT_UNAUTHORIZED !== '0';
     this.redisOpts = this.buildRedisOpts(this.redisUrl, redisRejectUnauthorized);
@@ -217,6 +256,8 @@ class Crowi {
   }
 
   private async runInitLayers(reporter: BootReporter): Promise<void> {
+    this.emitEnvValidationWarnings();
+
     // ── core: encryption / database / models / redis ──
     reporter.beginLayer('core');
     await step('setupEncryption', () => this.setupEncryption());
@@ -284,6 +325,7 @@ class Crowi {
    * the Node process exits cleanly.
    */
   async initForCli() {
+    this.emitEnvValidationWarnings();
     this.setupEncryption();
     await this.setupDatabase();
     await this.setupModels();
@@ -460,7 +502,8 @@ class Crowi {
    * Host / Origin header here would let an attacker poison reset /
    * activation links in a victim's inbox (host-header injection). When
    * `CLIENT_URL` is unset this returns `null` and mail links fall back to
-   * relative paths — `setupMailer` warns about that at boot.
+   * relative paths — the constructor's env validation warns about that at
+   * boot (`env-schema.ts`'s `CLIENT_URL_DESCRIPTOR.warnWhenUnset`).
    */
   getBaseUrl() {
     return this.env.CLIENT_URL || null;
@@ -494,6 +537,21 @@ class Crowi {
     }
   }
 
+  /**
+   * Flush the constructor's `validateEnv()` warnings (if any) as a single
+   * consolidated report via `bootNote()`. Called once at the top of each
+   * boot entry point (`runInitLayers()` for `init()`, and `initForCli()`)
+   * so both paths report the same findings — `validateEnv()` itself only
+   * ever runs once, in the constructor.
+   */
+  private emitEnvValidationWarnings(): void {
+    if (this.envValidationWarnings.length === 0) return;
+    this.bootNote(() => {
+      console.warn(`[crowi] env validation: ${this.envValidationWarnings.length} warning(s)`);
+      this.envValidationWarnings.forEach((w) => console.warn(`  - ${w}`));
+    });
+  }
+
   getEnv() {
     return this.env;
   }
@@ -525,13 +583,22 @@ class Crowi {
   }
 
   /**
-   * Validate CROWI_ENCRYPTION_KEY at boot. When set, it must base64-decode to
-   * exactly 32 bytes (AES-256). When unset we log a warning and let Config
-   * fall back to plaintext at-rest storage — same behaviour as pre-encryption
+   * React to CROWI_ENCRYPTION_KEY at boot. The base64/32-byte format check
+   * itself already ran (and would have aborted boot) in `validateEnv()` —
+   * see the constructor — so reaching here means the key is either unset or
+   * well-formed. When unset we log a warning and let Config fall back to
+   * plaintext at-rest storage — same behaviour as pre-encryption
    * deployments — so a missing key never blocks boot.
    */
   setupEncryption() {
-    const raw = process.env.CROWI_ENCRYPTION_KEY;
+    // Read `this.encryptionKey` — the constructor's `validateEnv()` output —
+    // not `this.env.CROWI_ENCRYPTION_KEY` directly, so "is the key
+    // configured" has exactly one answer instead of two independent reads of
+    // `process.env` that could in principle drift. `this.encryptionKey` is
+    // already trimmed and already validated (a malformed value, whitespace-
+    // only included, throws in the constructor before this method ever
+    // runs), so `null` here unambiguously means "genuinely unset".
+    const raw = this.encryptionKey;
     if (!raw) {
       // `note()` clears the live boot spinner before warning so the line
       // isn't corrupted (no-op passthrough outside boot / in plain mode).
@@ -541,36 +608,26 @@ class Crowi {
       });
       return;
     }
-    const buf = Buffer.from(raw, 'base64');
-    if (buf.length !== 32) {
-      throw new Error(`Invalid CROWI_ENCRYPTION_KEY: expected 32 bytes after base64 decode, got ${buf.length}. Generate one with \`openssl rand -base64 32\`.`);
-    }
     // Drop any cached key from a previous init in long-lived test processes.
     resetKeyProvider();
     debug('CROWI_ENCRYPTION_KEY is configured (sensitive Config values will be encrypted at rest)');
   }
 
   async setupDatabase() {
-    // mongoUri = mongodb://user:password@host/dbname
-
     // Set strictQuery to true for schema consistency and query safety
     mongoose.set('strictQuery', true);
 
-    const mongoUri =
-      this.env.MONGOLAB_URI || // for B.C.
-      this.env.MONGODB_URI || // MONGOLAB changes their env name
-      this.env.MONGOHQ_URL ||
-      this.env.MONGO_URI ||
-      'mongodb://localhost/crowi';
-
+    // Alias resolution (MONGOLAB_URI / MONGODB_URI / MONGOHQ_URL / MONGO_URI)
+    // + format validation already happened once in `validateEnv()` — see the
+    // constructor's `this.mongoUri`.
     try {
       // mongoose 7 removed the callback form of connect(); it is promise-only.
-      await mongoose.connect(mongoUri);
+      await mongoose.connect(this.mongoUri);
       this.mongoose = mongoose;
       return mongoose;
     } catch (e) {
       debug('DB Connect Error: ', e);
-      debug('DB Connect Error: ', mongoUri);
+      debug('DB Connect Error: ', this.mongoUri);
       // Fold the underlying driver message (ECONNREFUSED / auth / DNS) into
       // the thrown error so the root cause is visible with DEBUG off — the
       // raw `e` only ever reached the silenced debug line above. `cause`
@@ -664,18 +721,14 @@ class Crowi {
     // boot sequence reads uniformly and future eager checks have a home.
     this.mailer = new MailService(this);
 
-    // Absolute links in emails (invite / activation / reset /
-    // email-change) require a public origin. It comes solely from
-    // CLIENT_URL; without it links would be relative and unusable.
-    if (!this.getBaseUrl()) {
-      this.bootNote(() =>
-        console.warn(
-          '[crowi] CLIENT_URL is not set — links in outgoing emails (invite / activation / password reset / ' +
-            'email change) will be relative and will not work. Set CLIENT_URL to the web app origin ' +
-            '(e.g. https://wiki.example.com).',
-        ),
-      );
-    }
+    // Absolute links in emails (invite / activation / reset / email-change)
+    // require a public origin, sourced solely from CLIENT_URL — without it
+    // links fall back to relative paths and don't work. The warning for
+    // that used to live here as its own `console.warn`, firing mid-boot
+    // (the `services` layer); it now lives in `env-schema.ts`
+    // (`CLIENT_URL_DESCRIPTOR.warnWhenUnset`) so it surfaces as part of the
+    // one consolidated env-validation report emitted at the top of boot
+    // (AC-12) instead of a second, separately-timed warning here.
   }
 
   setupLRU() {
