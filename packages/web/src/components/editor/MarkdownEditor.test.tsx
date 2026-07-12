@@ -1,6 +1,6 @@
-import { EditorState } from '@codemirror/state';
+import { EditorSelection, EditorState } from '@codemirror/state';
 import { ensureSyntaxTree } from '@codemirror/language';
-import { showTooltip } from '@codemirror/view';
+import { EditorView, runScopeHandlers, showTooltip } from '@codemirror/view';
 import { act, cleanup, render } from '@testing-library/react';
 import { createRef } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -57,6 +57,143 @@ describe('buildExtensions', () => {
     ensureSyntaxTree(state, doc.length, 5_000);
     const tooltips = state.facet(showTooltip).filter((t) => t !== null);
     expect(tooltips).not.toHaveLength(0);
+  });
+});
+
+/**
+ * list-indent-keymap-fix — production key-dispatch priority (Backspace /
+ * Enter) and readonly no-op verification.
+ *
+ * `makeState` above only builds an `EditorState`; it never routes a
+ * `keydown` through CodeMirror's own keymap-resolution machinery
+ * (`@codemirror/view`'s internal `handleKeyEvents` → `runScopeHandlers`).
+ * Which of `listKeymap` / `defaultKeymap` actually wins for a given key —
+ * in particular, whether the upstream `markdownKeymap`'s Backspace /
+ * `Prec.high` Enter is really gone after `addKeymap: false` — can only be
+ * observed by mounting a real `EditorView` with the same
+ * `buildExtensions(...)` production uses and dispatching through
+ * `runScopeHandlers(view, event, 'editor')`. `view.destroy()` is required
+ * in `afterEach` (same reason as `image-affordance-extension.test.ts` /
+ * `drop-handler.test.ts`): CodeMirror schedules an async layout-measure
+ * pass that throws an uncaught exception under jsdom if left dangling.
+ */
+function mountView(doc: string, cursorAt: number, opts: Parameters<typeof buildExtensions>[0] = {}): EditorView {
+  const state = EditorState.create({
+    doc,
+    selection: EditorSelection.cursor(cursorAt),
+    extensions: buildExtensions(opts),
+  });
+  ensureSyntaxTree(state, doc.length, 5_000);
+  return new EditorView({ state });
+}
+
+/** Dispatch a real `keydown` for `key` through the view's keymap resolution, the same path a browser keystroke takes. */
+function dispatchKey(view: EditorView, key: string): boolean {
+  return runScopeHandlers(view, new KeyboardEvent('keydown', { key }), 'editor');
+}
+
+describe('production key dispatch — Backspace (real EditorView + runScopeHandlers)', () => {
+  let view: EditorView;
+  afterEach(() => view?.destroy());
+
+  it('deletes exactly one character at a level-0 list item content start (no marker snap)', () => {
+    const doc = '- a';
+    view = mountView(doc, doc.indexOf('a'));
+    expect(dispatchKey(view, 'Backspace')).toBe(true);
+    expect(view.state.doc.toString()).toBe('-a');
+  });
+
+  it('deletes exactly one character at a nested (depth 1) list item content start', () => {
+    const doc = '- a\n  - b';
+    view = mountView(doc, doc.indexOf('b'));
+    expect(dispatchKey(view, 'Backspace')).toBe(true);
+    expect(view.state.doc.toString()).toBe('- a\n  -b');
+  });
+
+  it('deletes exactly one character at a depth-2 list item content start, including the 6-space CommonMark nesting threshold', () => {
+    const doc = '- a\n  - b\n      - c';
+    view = mountView(doc, doc.indexOf('c'));
+    expect(dispatchKey(view, 'Backspace')).toBe(true);
+    expect(view.state.doc.toString()).toBe('- a\n  - b\n      -c');
+  });
+
+  it('deletes exactly one character at a blockquote content start — no markup-aware quote-mark removal (addKeymap:false strips list+blockquote deleteMarkupBackward together)', () => {
+    const doc = '> quote';
+    view = mountView(doc, doc.indexOf('quote'));
+    expect(dispatchKey(view, 'Backspace')).toBe(true);
+    expect(view.state.doc.toString()).toBe('>quote');
+  });
+});
+
+describe('production key dispatch — Enter (real EditorView + runScopeHandlers)', () => {
+  let view: EditorView;
+  afterEach(() => view?.destroy());
+
+  it('continueListMarkup wins over the upstream Enter now that addKeymap:false stops it shadowing (tight continuation of a loose list)', () => {
+    const doc = '- z\n\n- x\n- y';
+    view = mountView(doc, doc.indexOf('\n'));
+    expect(dispatchKey(view, 'Enter')).toBe(true);
+    expect(view.state.doc.toString()).toBe('- z\n- \n\n- x\n- y');
+  });
+
+  it('renumbers the rest of the ordered list on a mid-list Enter (falls through to insertNewlineContinueMarkup)', () => {
+    const doc = '1. a\n2. b\n3. c';
+    view = mountView(doc, doc.indexOf('b') + 1);
+    expect(dispatchKey(view, 'Enter')).toBe(true);
+    expect(view.state.doc.toString()).toBe('1. a\n2. b\n3. \n4. c');
+  });
+
+  it('still inserts marker+1 on an Enter at the end of the ordered list (continueListMarkup handles the append case)', () => {
+    const doc = '1. a\n2. b';
+    view = mountView(doc, doc.length);
+    expect(dispatchKey(view, 'Enter')).toBe(true);
+    expect(view.state.doc.toString()).toBe('1. a\n2. b\n3. ');
+  });
+});
+
+describe('readonly no-op — Tab / Shift-Tab / Enter / Backspace never mutate view.state.doc (real EditorView + runScopeHandlers)', () => {
+  let view: EditorView;
+  afterEach(() => view?.destroy());
+
+  it('Tab (indentListItem) is a no-op', () => {
+    const doc = '- a\n  - b';
+    view = mountView(doc, doc.indexOf('b'), { readonly: true });
+    expect(dispatchKey(view, 'Tab')).toBe(false);
+    expect(view.state.doc.toString()).toBe(doc);
+  });
+
+  it('Shift-Tab (dedentListItem) is a no-op', () => {
+    const doc = '- a\n  - b';
+    view = mountView(doc, doc.indexOf('b'), { readonly: true });
+    expect(dispatchKey(view, 'Shift-Tab')).toBe(false);
+    expect(view.state.doc.toString()).toBe(doc);
+  });
+
+  it('Enter is a no-op via the continueListMarkup path (a case that mutates when not readonly)', () => {
+    const doc = '- a';
+    view = mountView(doc, doc.length, { readonly: true });
+    expect(dispatchKey(view, 'Enter')).toBe(false);
+    expect(view.state.doc.toString()).toBe(doc);
+  });
+
+  it("Enter is a no-op via the Enter-fallback path (an empty item continueListMarkup already declines, isolating the fallback's own guard)", () => {
+    const doc = '- a\n- ';
+    view = mountView(doc, doc.length, { readonly: true });
+    expect(dispatchKey(view, 'Enter')).toBe(false);
+    expect(view.state.doc.toString()).toBe(doc);
+  });
+
+  it("Backspace is a no-op (defaultKeymap's deleteCharBackward guards state.readOnly itself)", () => {
+    // `deleteCharBackward` itself returns `false` under readOnly (no
+    // dispatch), but its `standardKeymap` binding also carries
+    // `preventDefault: true` — `runScopeHandlers` reports that as
+    // `handled` regardless of whether a command actually ran, so the
+    // load-bearing assertion here is that the doc never changes, not
+    // the raw `runScopeHandlers` return value.
+    const doc = '- a\n  - b';
+    view = mountView(doc, doc.indexOf('b'), { readonly: true });
+    dispatchKey(view, 'Backspace');
+    expect(view.state.doc.toString()).toBe(doc);
   });
 });
 

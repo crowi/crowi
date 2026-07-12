@@ -73,8 +73,12 @@ export interface BuildExtensionsProps {
  *     view itself, just verify the produced array.
  *
  * Order rationale:
- *  - `markdown()` first so syntax-highlighting + langauge-aware indent
- *    decisions see the language definition.
+ *  - `markdown({ addKeymap: false })` first so syntax-highlighting +
+ *    langauge-aware indent decisions see the language definition.
+ *    `addKeymap: false` opts out of the upstream `markdownKeymap`
+ *    (Backspace's markup-aware delete + a `Prec.high` Enter that would
+ *    otherwise shadow `listKeymap`'s Enter below) — see the inline
+ *    comment at the `markdown(...)` call.
  *  - `syntaxHighlighting(defaultHighlightStyle)` second so the tag tree
  *    set up by `markdown()` is themed.
  *  - `history()` + `keymap.of([listKeymap, defaultKeymap, historyKeymap])`
@@ -109,7 +113,17 @@ export interface BuildExtensionsProps {
 export function buildExtensions(props: BuildExtensionsProps): Extension[] {
   const { readonly = false, extraExtensions, onChange, disableHistory = false, autocomplete = true, paste, dnd } = props;
   return [
-    markdown(),
+    // `addKeymap: false` opts out of the upstream `markdownKeymap`
+    // (Backspace → `deleteMarkupBackward`, `Prec.high` Enter →
+    // `insertNewlineContinueMarkup`) — Crowi owns its own Enter / Tab /
+    // Shift-Tab bindings below (`listKeymap`), and letting the upstream
+    // `Prec.high` Enter through was shadowing `continueListMarkup`'s
+    // tight continuation. Backspace now falls through to
+    // `defaultKeymap`'s `deleteCharBackward` (plain one-character
+    // delete, readonly-guarded) instead of the markup-aware upstream
+    // command, which no longer strips a list marker or a blockquote's
+    // `> ` when pressed right after it.
+    markdown({ addKeymap: false }),
     syntaxHighlighting(defaultHighlightStyle),
     // Soft-wrap long lines instead of scrolling horizontally. A wiki
     // editor is prose-first, so a textarea-like wrap reads far better
