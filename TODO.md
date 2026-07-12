@@ -35,6 +35,7 @@ alpha.0–.3 は published、alpha.4 / stable 向けに changeset 蓄積中（pr
 ### その他 残作業
 - [ ] error code 細分化（comment/revision の `INVALID_REQUEST`）
 - [ ] web テスト基盤整備 + API coverage 強化
+- [x] **並列 jest の DB 接続 flake 根治 Phase 1**（接続確立プロトコルの bounded retry + sentinel の run-scoped 化で `connect ETIMEDOUT` / SIGSEGV を根治 完了）。残: Phase 2 テスト専用 mongod 分離 / Phase 3 lint 強制 + collab・plugin-search-mongo 統一 / Phase 4 flake 自動検出（spec: `feature-test-parallel-db-flake-hardening.md`）
 
 ---
 
