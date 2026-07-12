@@ -28,6 +28,25 @@ API は起動時に、カレントワーキングディレクトリの `.env` �
 cp .env.example .env
 ```
 
+API は起動時にこれらの環境変数をまとめて検証します。`PORT` / `MONGO_URI`
+(またはエイリアス) / `REDIS_URL` (またはエイリアス) / `CROWI_ENCRYPTION_KEY`
+の形式が不正な場合、検出できた問題をすべて含む 1 つのエラーメッセージと
+ともに起動が即座に失敗します。`CLIENT_URL` / `CROWI_MULTI_INSTANCE` /
+`NODE_ENV` / `JWT_ACCESS_TOKEN_TTL_SECONDS` / `JWT_REFRESH_TOKEN_TTL_SECONDS`
+/ `COLLAB_MAX_EDITORS_PER_PAGE` / `MIGRATION_PREFLIGHT_UNAPPLIED_POLICY`
+などの形式不正は起動を妨げず、起動ログに 1 箇所へまとめて warning として
+出力されます(`CLIENT_URL` が未設定の場合も、送信メール内のリンクが相対
+パスになってしまう旨の warning が同じレポートに含まれます)。
+
+`CROWI_` / `WS_TOKEN_` / `JWT_` / `COLLAB_` / `REDIS` / `MONGO` /
+`MIGRATION_` のいずれかの既知プレフィックスを持つものの、既知の変数名の
+どれとも完全一致しない環境変数は、タイポの疑いとして同じ warning
+レポートに含まれます。判定にはレーベンシュタイン距離(編集距離)を使い、
+既知の変数名のうち最も近いものとの距離が 2 以下であれば「もしかして
+`XXX` では?」という形で warning を出します(fail にはなりません — 誤検知
+を許容するヒューリスティックです)。`PATH` / `CI` / `GITHUB_*` / `npm_*`
+など上記プレフィックスを持たない一般的な OS/CI 環境変数は対象外です。
+
 ### 主要な環境変数
 
 | 変数名 | 必須 | 用途 |
