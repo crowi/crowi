@@ -6505,6 +6505,241 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/pages/link-access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resolve a page by id, granting first-time link-share access to GRANT_RESTRICTED pages */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        page_id: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description The resolved page, with `granted` telling whether this call just added the caller to grantedUsers */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            page: {
+                                _id: string;
+                                path: string;
+                                revision: {
+                                    _id: string;
+                                    path: string;
+                                    body: string;
+                                    /** @default markdown */
+                                    format: string;
+                                    author?: {
+                                        _id: string;
+                                        id?: string;
+                                        username: string;
+                                        name: string;
+                                        /** Format: email */
+                                        email: string;
+                                        image?: string | null;
+                                        createdAt: string;
+                                    } | null;
+                                    createdAt: string;
+                                    meta?: {
+                                        toc?: {
+                                            level: number;
+                                            text: string;
+                                            anchorId: string;
+                                        }[];
+                                        wikiLinks?: {
+                                            raw: string;
+                                            target: string;
+                                            displayText?: string;
+                                        }[];
+                                        mentions?: {
+                                            username: string;
+                                        }[];
+                                        codeBlockLanguages?: string[];
+                                    };
+                                    renderedAst?: unknown;
+                                    rendererVersion?: string;
+                                    parentRevisionId?: string | null;
+                                    /** @enum {string} */
+                                    type?: "snapshot" | "incremental";
+                                    savedBy?: string | {
+                                        _id: string;
+                                        id?: string;
+                                        username: string;
+                                        name: string;
+                                        /** Format: email */
+                                        email: string;
+                                        image?: string | null;
+                                        createdAt: string;
+                                    } | null;
+                                    contributors?: (string | {
+                                        _id: string;
+                                        id?: string;
+                                        username: string;
+                                        name: string;
+                                        /** Format: email */
+                                        email: string;
+                                        image?: string | null;
+                                        createdAt: string;
+                                    })[];
+                                    message?: string;
+                                    /** @enum {string} */
+                                    editVia?: "web" | "oauth" | "pat";
+                                };
+                                redirectTo?: string | null;
+                                /** @enum {string|null} */
+                                status?: "wip" | "published" | "deleted" | "deprecated" | "draft" | null;
+                                grant?: number;
+                                grantedUsers?: string[];
+                                creator?: {
+                                    _id: string;
+                                    id?: string;
+                                    username: string;
+                                    name: string;
+                                    /** Format: email */
+                                    email: string;
+                                    image?: string | null;
+                                    createdAt: string;
+                                } | null;
+                                lastUpdateUser?: {
+                                    _id: string;
+                                    id?: string;
+                                    username: string;
+                                    name: string;
+                                    /** Format: email */
+                                    email: string;
+                                    image?: string | null;
+                                    createdAt: string;
+                                } | null;
+                                liker?: string[];
+                                /** @default 0 */
+                                commentCount: number;
+                                extended?: {
+                                    [key: string]: unknown;
+                                };
+                                createdAt: string;
+                                updatedAt?: string;
+                                currentRevision?: string | null;
+                                yjsCheckpointAt?: string | null;
+                                latestRevision?: string;
+                                likerCount?: number;
+                                seenUsersCount?: number;
+                            };
+                            granted: boolean;
+                        };
+                    };
+                };
+                /** @description Invalid page_id */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "INVALID_PAGE_ID";
+                                message: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "AUTHENTICATION_REQUIRED";
+                                /** @enum {string} */
+                                message: "Authentication is required";
+                                redirectTo?: string;
+                            };
+                        };
+                    };
+                };
+                /** @description The caller has no access to the page (isGrantedFor is false) or lacks scope / is a non-web session — 403 is about the caller lacking access, never about the page grant type per se */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "PAGE_NOT_GRANTED";
+                                /** @enum {string} */
+                                message: "Page is not granted for the user";
+                            };
+                        } | {
+                            error: {
+                                /** @enum {string} */
+                                code: "INSUFFICIENT_SCOPE";
+                                message: string;
+                                details?: {
+                                    requiredScope: string;
+                                };
+                            };
+                        };
+                    };
+                };
+                /** @description Page not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "PAGE_NOT_FOUND";
+                                /** @enum {string} */
+                                message: "Page not found";
+                            };
+                        };
+                    };
+                };
+                /** @description Rate limit exceeded for POST /pages/link-access (per-user). Same wire shape as autocomplete rate limiting. */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @enum {string} */
+                            error: "rate_limited";
+                            message: string;
+                            retryAfterSeconds: number;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/pages/watch": {
         parameters: {
             query?: never;
