@@ -46,8 +46,16 @@ export default class PageEvent extends EventEmitter {
     if (revisionCreated === true) this.notifyPageUpdate(savedPage, user);
   }
 
-  // Hard delete (Page.completelyDeletePage). Soft delete flows through
-  // 'update' with `status='deleted'` and is handled by indexPageInSearch.
+  // Hard delete (Page.completelyDeletePage) ONLY. Soft delete does NOT
+  // reach here, nor does it flow through 'update': `Page.deletePage` calls
+  // `Page.rename(..., { createRedirectPage: true })`, and that branch of
+  // `Page.rename` returns early via `Page.createPage(...)` (which emits
+  // 'create' for the new public redirect stub) BEFORE the `pageEvent.emit
+  // ('update', ...)` at the end of `rename` — so the trashed document
+  // itself never fires a page event at all. Its search-index entry is
+  // reindexed/removed out-of-band instead, by the `deletePage` Hono
+  // handler calling `indexPageInSearchById` directly
+  // (feature-restricted-grant-share-banner).
   onDelete(savedPage: unknown, _user: unknown) {
     if (isPageLike(savedPage)) void removePageFromSearch(this.crowi, savedPage);
   }
@@ -61,9 +69,12 @@ export default class PageEvent extends EventEmitter {
    *     `crowi.event('Page').emit('update', pageDoc, userDoc, ...)`).
    *
    * Guards:
-   *   - Soft delete flows through `update` with `status === 'deleted'`
-   *     (via `Page.rename`). We must NOT auto-watch the user who deleted /
-   *     renamed a page just because the event passes through here.
+   *   - Defensive `status === 'deleted'` skip below: in the current call
+   *     graph, 'update' is never actually emitted for a trashed document
+   *     (`Page.deletePage`'s rename takes the `createRedirectPage` branch,
+   *     which returns early before emitting 'update' — see the corrected
+   *     comment on `onDelete` above), so this guard is a backstop against
+   *     auto-watching a deleter, not a path that fires today.
    *   - Best-effort: failures are swallowed (same posture as backlink /
    *     search indexing) — the comment handler is the only path that needs
    *     the result synchronously.

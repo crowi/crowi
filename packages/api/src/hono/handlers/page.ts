@@ -21,6 +21,7 @@
  *   Express bridge is removed.
  */
 import {
+  claimPageLinkAccessRoute,
   createPageRoute,
   deletePageRoute,
   getPageRoute,
@@ -43,15 +44,19 @@ import {
 } from '@crowi/api-contract';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import Debug from 'debug';
+import { createMiddleware } from 'hono/factory';
 import { Types } from 'mongoose';
 
 import type Crowi from 'src/crowi';
 import { type PageDocument, type PageModel, visiblePageGrantOr, visiblePageStatusOr } from 'src/models/page';
 import type { UserDocument } from 'src/models/user';
 import { computeRevisionRenderArtifactsAsync, isPopulatedRevision, pageToResponse } from 'src/util/page-response';
+import { indexPageInSearchById } from 'src/util/page-search-index';
+import { createRateLimiter } from 'src/util/rate-limit';
 import { isValidObjectId, loadGrantedPage, toUserPublic } from 'src/util/ts-rest-helpers';
 
 import type { CrowiHonoBindings } from '../app';
+import { withRateLimit } from '../middleware/rate-limit';
 import { applyScope } from '../middleware/require-scope';
 
 import { INVALID_PAGE_ID_BODY, PAGE_NOT_FOUND_BODY } from './_helpers/errors';
@@ -164,12 +169,50 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
   applyScope(app, setPageGrantRoute, 'pages:write');
   applyScope(app, likePageRoute, 'pages:write');
   applyScope(app, unlikePageRoute, 'pages:write');
+  // `grantedUsers` is a durable ACL — `pages:write`, not `pages:read` (this
+  // is the first of two defense-in-depth layers restricting grant-on-access
+  // to web sessions; see `requireWebSessionMiddleware` below).
+  applyScope(app, claimPageLinkAccessRoute, 'pages:write');
   applyScope(app, setWatchStatusRoute, 'pages:write');
   applyScope(app, deletePageRoute, 'pages:write');
   applyScope(app, revertDeletedPageRoute, 'pages:write');
   applyScope(app, revertToRevisionRoute, 'pages:write');
   applyScope(app, renamePageRoute, 'pages:write');
   applyScope(app, renameSubtreeRoute, 'pages:write');
+
+  // feature-restricted-grant-share-banner Phase 1 — grant-on-first-access
+  // is confined to web sessions (RFC-0010 `authContext.kind`). This is the
+  // SECOND (and authoritative) defense-in-depth layer: web sessions hold
+  // `ALL_SCOPES` (middleware/auth.ts), so a `pages:write` OAuth token /
+  // PAT would otherwise sail through the scope guard above. Registered
+  // BEFORE the rate limiter below so a non-web caller is rejected without
+  // ever counting against the per-user rate-limit bucket — otherwise 30
+  // rejected OAuth/PAT requests would exhaust that same user's real web
+  // session budget (see the middleware registration order right below).
+  const requireWebSessionMiddleware = createMiddleware<CrowiHonoBindings>(async (c, next) => {
+    if (c.get('authContext').kind !== 'web') {
+      return c.json(PAGE_NOT_GRANTED_BODY, 403);
+    }
+    await next();
+  });
+  app.use('/pages/link-access', requireWebSessionMiddleware);
+
+  // Per-user rate limit for the claim endpoint — same limiter/middleware
+  // shape as `autocomplete.ts` (30 req/min/user; `IdRedirector` fires this
+  // at most once per id-URL navigation, so real usage is far below budget
+  // while an ObjectId-enumeration sweep is throttled to a crawl).
+  const linkAccessRateLimiter = createRateLimiter({
+    name: 'page-link-access',
+    limit: 30,
+    windowMs: 60_000,
+    redisClient: crowi.redis ?? null,
+  });
+  const linkAccessRateLimitMiddleware = withRateLimit({
+    limiter: linkAccessRateLimiter,
+    wireShape: 'autocomplete-envelope',
+    message: () => 'Too many link-access requests. Try again shortly.',
+  });
+  app.use('/pages/link-access', linkAccessRateLimitMiddleware);
 
   /**
    * Build the seen-users response. `seenUsersCount` reflects the full
@@ -594,6 +637,16 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
           }
 
           const updated = (await Page.updateGrant(pageData, grant, user)) as PageDocument;
+          // feature-restricted-grant-share-banner §6 — symmetric with the
+          // claim handler above: `updateGrant` resets `grantedUsers` to just
+          // the actor, so any link-invited co-editors indexed by a prior
+          // claim must be reflected in ES too (fire-and-forget; re-reads
+          // fresh so it always reflects this write, not this in-memory
+          // snapshot). Tracked via `trackSideEffect` (same convention as
+          // `events/page.ts`'s autoWatch/notifyPageUpdate/registerBacklinks)
+          // so the test harness's `drainSideEffects()` can await it before
+          // asserting on the search driver.
+          crowi.trackSideEffect(indexPageInSearchById(crowi, page_id));
           const populated = await Page.populatePageData(updated, null);
           return c.json({ page: pageToResponse(populated) }, 200);
         } catch (err) {
@@ -687,6 +740,52 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
         return c.json({ page: pageToResponse(populated) }, 200);
       })
       // --------------------------------------------------------------
+      // POST /pages/link-access — claimPageLinkAccess (grant-on-first-
+      // access for GRANT_RESTRICTED pages). ONLY caller: `IdRedirector`.
+      // Web-session + scope enforcement already happened in the
+      // middlewares registered above — nothing to check here (single
+      // authoritative enforcement point).
+      // --------------------------------------------------------------
+      .openapi(claimPageLinkAccessRoute, async (c) => {
+        const user = c.get('user');
+        const { page_id } = c.req.valid('json');
+
+        debug('claimPageLinkAccess called with:', { page_id, userId: user._id });
+
+        if (!isValidObjectId(page_id)) {
+          return c.json(INVALID_PAGE_ID_BODY, 400);
+        }
+
+        try {
+          const { page, granted } = await Page.findPageByIdForSharedLinkAccess(page_id, user);
+
+          // Only reindex when a write actually happened — public / creator
+          // / already-granted pass-through calls make zero ACL changes, so
+          // there is nothing new for the search index to reflect.
+          // `indexPageInSearchById` re-reads fresh from Mongo, so it always
+          // indexes the just-committed `grantedUsers`, not this in-memory
+          // snapshot. Tracked via `trackSideEffect` so tests can
+          // `drainSideEffects()` before asserting on the search driver.
+          if (granted) {
+            crowi.trackSideEffect(indexPageInSearchById(crowi, page_id));
+          }
+
+          const populated = await Page.populatePageData(page, null);
+          return c.json({ page: pageToResponse(populated), granted }, 200);
+        } catch (err) {
+          const error = err as Error;
+          debug('Error claiming page link access:', error.message);
+
+          if (error.message === 'Page not found' || error.name === 'Crowi:Page:NotFound') {
+            return c.json(PAGE_NOT_FOUND_BODY, 404);
+          }
+          if (error.message === 'Page is not granted for the user') {
+            return c.json(PAGE_NOT_GRANTED_BODY, 403);
+          }
+          return c.json(PAGE_NOT_FOUND_BODY, 404);
+        }
+      })
+      // --------------------------------------------------------------
       // GET /pages/watch — getWatchStatus
       // --------------------------------------------------------------
       .openapi(getWatchStatusRoute, async (c) => {
@@ -764,6 +863,13 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
           // pageData so the response reflects the soft-deleted page
           // itself, which is what clients want.
           await Page.deletePage(pageData, user);
+          // Soft delete does not flow through a page event (see the
+          // corrected comment in events/page.ts's onDelete), so nothing
+          // else removes this now-trashed page from the search index.
+          // Fire-and-forget, symmetric with the claim / setPageGrant
+          // reindex calls above; tracked via `trackSideEffect` so tests can
+          // `drainSideEffects()` before asserting on the search driver.
+          crowi.trackSideEffect(indexPageInSearchById(crowi, page_id));
           const populated = await Page.populatePageData(pageData, null);
           return c.json({ page: pageToResponse(populated) }, 200);
         } catch (err) {
