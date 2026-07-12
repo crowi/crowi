@@ -7,6 +7,7 @@ import type { PageWithRevision } from '@crowi/api-contract';
 import { PageStatusEnum } from '@crowi/api-contract';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { buildPageShareUrl } from '@/lib/build-page-share-url';
 import { notify } from '@/lib/notify';
 import { isUserHomePath } from '@/lib/page-path';
 import { useToggleBookmark } from '@/lib/use-bookmark';
@@ -192,7 +193,7 @@ function BookmarkMenuItem({ pageId }: { pageId: string }) {
 function CopyLinkMenuItem({ pageId }: { pageId: string }) {
   const handleCopy = () => {
     if (typeof window === 'undefined') return;
-    void navigator.clipboard?.writeText(`${window.location.origin}/${pageId}`).catch(() => {
+    void navigator.clipboard?.writeText(buildPageShareUrl(pageId)).catch(() => {
       // clipboard unavailable (insecure context / denied) — silently ignore.
     });
   };

@@ -1,21 +1,17 @@
 'use client';
 
-import { useState } from 'react';
-import { Check, Copy, Link2 } from 'lucide-react';
 import type { PageWithRevision } from '@crowi/api-contract';
+import { m } from '@paraglide/messages.js';
+import { Check, Copy, Link2 } from 'lucide-react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
+import { buildPageShareUrl } from '@/lib/build-page-share-url';
 import { useAppInfo } from '@/lib/use-app-info';
-import { m } from '@paraglide/messages.js';
 
 interface LinkSharePopoverProps {
   page: PageWithRevision;
-}
-
-function buildIdUrl(pageId: string): string {
-  if (typeof window === 'undefined') return `/${pageId}`;
-  return `${window.location.origin}/${pageId}`;
 }
 
 export function LinkSharePopover({ page }: LinkSharePopoverProps) {
@@ -23,7 +19,7 @@ export function LinkSharePopover({ page }: LinkSharePopoverProps) {
   const [open, setOpen] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
-  const idUrl = buildIdUrl(page._id);
+  const idUrl = buildPageShareUrl(page._id);
   const title = appInfo?.title || 'Crowi';
   const shareLink = `${title} ${page.path} ${idUrl}`;
   const markdown = `[${page.path}](${idUrl})`;
