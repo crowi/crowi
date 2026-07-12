@@ -1,6 +1,7 @@
 import type { CrowiPlugin } from '@crowi/plugin-api';
 import { z } from 'zod/v3';
 import { z as zV4 } from 'zod';
+import { CREDENTIAL_VAULT_MODEL_NAMES } from './credential-vault-models';
 import { PluginManager } from './plugin-manager';
 import { isPluginInstalled } from './plugin-install-tracker';
 
@@ -353,6 +354,49 @@ describe('PluginManager.activate — modelAccess allow-list boot validation (fea
         plugin: bad,
         error:
           "Plugin '@crowi/plugin-model-bad' declares modelAccess including 'NotAModel', which is not a registered core model. Valid model names: Page, User, Revision, Bookmark.",
+      },
+    ]);
+  });
+});
+
+describe('PluginManager.activate — credential-vault deny-list boot validation (feature-plugin-capability-hardening)', () => {
+  it("throws a descriptive error naming the plugin and 'credential-bearing core models' when modelAccess declares a deny-listed model", async () => {
+    const plugin = stubPlugin({ name: '@crowi/plugin-vault-grab', modelAccess: ['Config'] });
+    const manager = new PluginManager(makeFakeCrowi());
+
+    await expect(activate(manager, plugin)).rejects.toThrow(
+      "Plugin '@crowi/plugin-vault-grab' declares modelAccess including 'Config', but credential-bearing core models cannot be granted to plugins.",
+    );
+  });
+
+  it.each([...CREDENTIAL_VAULT_MODEL_NAMES])("rejects '%s' regardless of whatever else is declared alongside it", async (deniedModel) => {
+    const plugin = stubPlugin({ name: '@crowi/plugin-vault-grab-2', modelAccess: ['Page', deniedModel] });
+    const manager = new PluginManager(makeFakeCrowi());
+
+    await expect(activate(manager, plugin)).rejects.toThrow('credential-bearing core models cannot be granted to plugins');
+  });
+
+  it('activates normally when modelAccess only declares non-denied models (e.g. Page)', async () => {
+    const plugin = stubPlugin({ name: '@crowi/plugin-vault-safe', modelAccess: ['Page', 'Bookmark'] });
+    const manager = new PluginManager(makeFakeCrowi());
+
+    await expect(activate(manager, plugin)).resolves.toBeUndefined();
+  });
+
+  it('a plugin declaring a deny-listed model is isolated by activateAll() without stopping other plugins', async () => {
+    jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    const ok = stubPlugin({ name: '@crowi/plugin-vault-ok', registerStorage: jest.fn() });
+    const bad = stubPlugin({ name: '@crowi/plugin-vault-bad', modelAccess: ['PersonalAccessToken'] });
+    const manager = new PluginManager(makeFakeCrowi());
+
+    await activateAll(manager, [ok, bad]);
+
+    expect(manager.getLoadedPlugins().map((p) => p.name)).toEqual(['@crowi/plugin-vault-ok']);
+    expect(manager.getFailedPlugins()).toEqual([
+      {
+        plugin: bad,
+        error:
+          "Plugin '@crowi/plugin-vault-bad' declares modelAccess including 'PersonalAccessToken', but credential-bearing core models cannot be granted to plugins. Denied models: Config, OAuthAuthorizationCode, OAuthClient, OAuthDeviceCode, OAuthRefreshToken, PersonalAccessToken, Share, ShareAccess.",
       },
     ]);
   });

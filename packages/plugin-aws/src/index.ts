@@ -39,6 +39,11 @@ const plugin: CrowiPlugin = {
   name: '@crowi/plugin-aws',
   version: '0.1.0-dev',
   configSchema: AwsConfigSchema,
+  // This plugin's entire purpose is to hold shared AWS credentials for
+  // dependents (`@crowi/plugin-storage-aws-s3`, `@crowi/plugin-mail-aws-ses`)
+  // to read via `ctx.dependencyConfig<AwsConfig>('@crowi/plugin-aws')` — see
+  // `CrowiPlugin.exposesConfigToDependents` (feature-plugin-capability-hardening).
+  exposesConfigToDependents: true,
   adminPlacement: {
     section: 'shared',
     label: 'AWS',

@@ -53,8 +53,30 @@ export interface CrowiPlugin {
    * A model listed here is granted full (unrestricted) read/write
    * access — there is no read-only mode. Omit or leave empty for a
    * plugin that never calls `ctx.model()`.
+   *
+   * Credential-bearing core models (`Config`, `PersonalAccessToken`,
+   * OAuth client/token/grant models, `Share`, `ShareAccess`) can never
+   * be listed here — declaring one fails boot, and `ctx.model()` also
+   * refuses to return one at call time as defense-in-depth. There is no
+   * legitimate plugin use case for touching those collections directly.
    */
   modelAccess?: string[];
+
+  /**
+   * Opt in to letting *other* plugins read this plugin's config through
+   * their `ctx.dependencyConfig<T>(this.name)` (they must also list this
+   * plugin in their own `requires`). Defaults to `false` — a plugin's
+   * config, including `@sensitive` fields, is private to itself unless
+   * it explicitly declares this flag.
+   *
+   * Set this on a plugin that exists specifically to hold credentials
+   * shared by other plugins — e.g. `@crowi/plugin-aws` sets it so
+   * `@crowi/plugin-storage-aws-s3` and `@crowi/plugin-mail-aws-ses` can
+   * read its `region` / `accessKeyId` / `secretAccessKey` without
+   * duplicating them in their own `configSchema`. Most plugins should
+   * leave this unset.
+   */
+  exposesConfigToDependents?: boolean;
 
   /**
    * Zod schema describing this plugin's *global* configurable values.
