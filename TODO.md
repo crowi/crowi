@@ -88,6 +88,7 @@ alpha.0–.3 は published、alpha.4 / stable 向けに changeset 蓄積中（pr
 - **ページネーション UI の Pager 統合** — 3 重複実装を単一 `<Pager>` + `pager-range` に統合し文言を Paraglide 化（spec: `feature-unified-pager.md`）
 - **中央 env 検証（boot 時に一括 validate）** — 散在した `process.env` 読取を `env-schema` + `validateEnv()` に一本化、fail-fast/warn/typo 検出を統一（spec: `feature-boot-env-validation.md`）
 - **Plugin capability hardening** — credential-vault モデルの `modelAccess` deny-list + `dependencyConfig` の依存側 opt-in 化で SDK トラスト境界の主張を真にする（plugin-api major。spec: `feature-plugin-capability-hardening.md`）
+- **`/app/info` capabilities の enum 化** — `capabilities`/`apiVersion` を known vocabulary の enum + named const 参照へ型付けし CLI 連携のズレを compile check 化（spec: `feature-app-info-capabilities-typed.md`）
 
 ---
 
