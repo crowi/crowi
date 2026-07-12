@@ -500,6 +500,13 @@ export function shouldIndex(doc: PageStreamDoc): boolean {
   // draft-author filter, so an indexed draft would leak its path/existence
   // to other users. Pages are (re)indexed on the update event at publish.
   if (doc.status === 'draft') return false;
+  // feature-restricted-grant-share-banner — wip / deprecated are excluded
+  // from the index too, matching list's visibility boundary
+  // (`visiblePageStatusOr` in `@crowi/api`). Without this, these pages
+  // would sit in the index as permanent dead hits once the search
+  // hydration's status drop lands (they're always returned by the driver,
+  // then always dropped, wasting a result slot every time).
+  if (doc.status === 'wip' || doc.status === 'deprecated') return false;
   return true;
 }
 
