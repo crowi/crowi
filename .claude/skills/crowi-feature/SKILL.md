@@ -548,9 +548,10 @@ crowi-site の更新は **`docs(site)` scope の独立した commit** にする
 `TODO.md` は **spec ではなく全体感の把握用**。肥大化させない (過去に一度 slim 化済み)。
 `docs(todo)` で TODO を更新するときは:
 
-- 完了項目は `[x]` に切り替えて **1 行に圧縮** (実装詳細・経緯は git log / RFC / spec が持つ)。
-- 新規項目も 1 行。spec/RFC があれば prose を書かず `spec: feature-xxx.md` のポインタだけ。
-- 1 項目 = 1 行。複数行の prose を TODO に書かない。
+- 形式は固定: `- **<短い名前>** — <1 文>（spec: feature-xxx.md）`。**1 項目 = 300 字以内**
+  (「1 行」だと 1 物理行に長文を詰めて回避されるため、上限は文字数。
+  `scripts/check-todo-brevity.mjs` が pre-commit / 統合ゲートで機械強制する)。
+- 実装詳細・経緯・設計判断は書かない — git log / spec / changeset が持つ。
 - crowi-site ドキュメント (`apps/crowi-site/`) が利用者向けの詳細を持つので、TODO に運用詳細を
   二重に書かない (`Operator runbooks` 節も 1 行ポインタに留める)。
 

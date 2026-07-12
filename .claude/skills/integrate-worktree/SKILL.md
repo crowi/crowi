@@ -152,6 +152,7 @@ pnpm --filter @crowi/api type-check
 pnpm --filter @crowi/web type-check
 pnpm --filter @crowi/api test
 pnpm lint                                 # errors=0 必須
+node scripts/check-todo-brevity.mjs       # merge 差分に TODO.md を含む場合 (docs(todo) の肥大化を機械拒否)
 
 # merge 差分に packages/e2e/** が含まれる場合のみ (選択実行):
 # tests/*.spec.ts に変更があればその spec のみ、src/ 等の共有部のみなら全 spec
