@@ -36,7 +36,13 @@
 import { createRoute, z } from '@hono/zod-openapi';
 
 import { AuthenticationRequiredErrorSchema, InvalidPageIdErrorSchema } from '../schemas/common';
+// Shared with `GET /pages/autocomplete` — same per-user fixed-window
+// limiter envelope, reused verbatim (see claimPageLinkAccessRoute's 429
+// below) so the wire shape isn't duplicated across resources.
+import { AutocompleteRateLimitErrorSchema } from '../schemas/autocomplete';
+import { InsufficientScopeErrorSchema } from '../schemas/oauth';
 import {
+  ClaimPageLinkAccessResponseSchema,
   CreatePageRequestSchema,
   GetPageRequestSchema,
   GetPageResponseSchema,
@@ -379,6 +385,62 @@ export const unlikePageRoute = createRoute({
   },
 });
 
+// feature-restricted-grant-share-banner Phase 1 — the only endpoint that
+// resolves a page by id AND performs grant-on-first-access. Every other
+// by-id path (`getPageRoute`'s `page_id` branch, `likePageRoute` /
+// `unlikePageRoute` / etc. via `loadGrantedPage`) is unchanged and does
+// NOT invite the caller into `grantedUsers` — only `IdRedirector` (the
+// share-URL landing component) calls this route. See the spec's
+// "アクセス制御の実装" section for why grant-on-access is confined to this
+// one endpoint instead of living inside `getPageRoute`.
+export const claimPageLinkAccessRoute = createRoute({
+  method: 'post',
+  path: '/pages/link-access',
+  tags: ['page'],
+  security: [{ bearerAuth: [] }],
+  summary: 'Resolve a page by id, granting first-time link-share access to GRANT_RESTRICTED pages',
+  request: {
+    body: {
+      content: { 'application/json': { schema: PageIdBodySchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: 'The resolved page, with `granted` telling whether this call just added the caller to grantedUsers',
+      content: { 'application/json': { schema: ClaimPageLinkAccessResponseSchema } },
+    },
+    400: {
+      description: 'Invalid page_id',
+      content: { 'application/json': { schema: InvalidPageIdErrorSchema } },
+    },
+    401: {
+      description: 'Authentication required',
+      content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
+    },
+    403: {
+      description:
+        'The caller has no access to the page (isGrantedFor is false) or lacks scope / is a non-web session — 403 is about the caller lacking access, never about the page grant type per se',
+      content: {
+        'application/json': {
+          schema: z.union([PageNotGrantedErrorSchema, InsufficientScopeErrorSchema]),
+        },
+      },
+    },
+    404: {
+      description: 'Page not found',
+      content: { 'application/json': { schema: PageNotFoundErrorSchema } },
+    },
+    // Per-user rate limit (30 req/min) — same wire shape as autocomplete's
+    // 429 (`{ error: 'rate_limited', message, retryAfterSeconds }`), reused
+    // rather than duplicated (see the `AutocompleteRateLimitErrorSchema`
+    // import above).
+    429: {
+      description: 'Rate limit exceeded for POST /pages/link-access (per-user). Same wire shape as autocomplete rate limiting.',
+      content: { 'application/json': { schema: AutocompleteRateLimitErrorSchema } },
+    },
+  },
+});
+
 export const getWatchStatusRoute = createRoute({
   method: 'get',
   path: '/pages/watch',
@@ -637,6 +699,8 @@ export const pageRoutes = {
   likePageRoute,
   // POST /pages/unlike — unlikePage
   unlikePageRoute,
+  // POST /pages/link-access — claimPageLinkAccess (grant-on-first-access)
+  claimPageLinkAccessRoute,
   // GET /pages/watch — getWatchStatus
   getWatchStatusRoute,
   // PUT /pages/watch — setWatchStatus
