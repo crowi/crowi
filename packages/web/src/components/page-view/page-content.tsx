@@ -18,6 +18,7 @@ import { LI_CLASSNAME, mergeListClassName, OL_CLASSNAME, UL_CLASSNAME } from '@/
 import { renderMdastToReactNode } from '@/components/editor/render-mdast';
 import { MentionLink } from '@/components/page-view/mention-link';
 import { extractAttachmentId, InlineAttachmentLink, InlineAttachmentProvider } from '@/components/page-view/inline-attachment-link';
+import { MarkdownTableFullscreen } from '@/components/page-view/markdown-table-fullscreen';
 import { isPlantumlEmbed, PlantumlDiagram } from '@/components/page-view/plantuml-diagram';
 
 interface PageContentProps {
@@ -312,13 +313,11 @@ const components = {
       {children}
     </blockquote>
   ),
-  table: ({ children, ...props }: ChildrenProps) => (
-    <div className="my-6 overflow-x-auto">
-      <table className="w-full border-collapse text-sm" {...props}>
-        {children}
-      </table>
-    </div>
-  ),
+  // Page-view-only fullscreen affordance — see `markdown-table-fullscreen.tsx`.
+  // The editor preview's `table` override (`MarkdownPreview.tsx`) stays the
+  // plain `overflow-x-auto` wrapper this used to be; only the reading
+  // surface gets the expand-to-Dialog chrome.
+  table: MarkdownTableFullscreen,
   thead: ({ children, ...props }: ChildrenProps) => (
     <thead className="border-b border-foreground/15" {...props}>
       {children}
@@ -596,7 +595,19 @@ export function PageContent({ page }: PageContentProps) {
   return (
     <TargetHashContext.Provider value={targetHashContextValue}>
       <InlineAttachmentProvider>
-        <div className="crowi-prose min-w-0">{renderedNode}</div>
+        {/* `key={revisionId}` forces a full remount of this subtree on a new
+            revision. `hast-util-to-jsx-runtime` assigns each `<table>` a
+            POSITIONAL key (`table-0`, `table-1`, …), so without this key a
+            re-render that reorders/inserts tables could fiber-swap a table
+            still `open` in `MarkdownTableFullscreen` onto a DIFFERENT
+            logical table's props/children — a content-correctness bug, not
+            just a lost UI state. The whole-container key sidesteps that by
+            never letting React attempt positional reconciliation across a
+            revision boundary: every open table Dialog (and any other local
+            UI state under here) is discarded instead. */}
+        <div className="crowi-prose min-w-0" key={revisionId}>
+          {renderedNode}
+        </div>
       </InlineAttachmentProvider>
     </TargetHashContext.Provider>
   );
