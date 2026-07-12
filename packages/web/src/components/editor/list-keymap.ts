@@ -29,11 +29,13 @@ type SyntaxNode = ReturnType<ReturnType<typeof syntaxTree>['resolveInner']>;
  *
  *  2. **Tab / Shift-Tab indent (#2).** The built-in keymap has no
  *     Tab binding. `indentListItem` / `dedentListItem` indent or
- *     dedent the current list item by one markdown nesting level
- *     (parent marker width, 2 spaces for `- `). Both return `false`
- *     when the cursor is *not* inside a list item so the editor's
- *     default Tab (focus move) is preserved — `indentWithTab` would
- *     trap focus and is intentionally not used.
+ *     dedent the current list item by one markdown nesting level — a
+ *     level-independent unit (2 spaces for `- `, 3 for `1. `) taken
+ *     from the reference item's own marker width, not the current
+ *     item's (see `indentReferenceItem` / `parentListItem` below).
+ *     Both return `false` when the cursor is *not* inside a list item
+ *     so the editor's default Tab (focus move) is preserved —
+ *     `indentWithTab` would trap focus and is intentionally not used.
  */
 
 /** Climb to the nearest enclosing `ListItem` syntax node, or `null`. */
@@ -52,21 +54,58 @@ function listMarkOf(item: SyntaxNode): SyntaxNode | null {
 }
 
 /**
- * Width of the list-item marker indentation: the columns from the
- * line start up to (and including) the whitespace after the
- * `ListMark`. For `- ` this is `2`; for `  - ` (nested) it is `4`;
- * for `1. ` it is `3`. Used as the per-level indent unit so Tab nests
- * a child item directly under its parent's content column.
+ * Width of a single list-item marker: the marker's own glyph width
+ * plus the whitespace after it, measured from the marker's own start
+ * (`mark.from`) — not from the line start. For `- ` this is `2`; for
+ * `1. ` it is `3`. This is a level-independent constant per marker
+ * kind/digit-count: it does *not* grow with the item's existing
+ * indentation, so it is safe to use as the one-nesting-level indent
+ * unit regardless of how deeply the item is already nested.
  */
 function markerWidth(doc: Text, item: SyntaxNode): number {
   const mark = listMarkOf(item);
   if (!mark) return 2;
   const line = doc.lineAt(item.from);
-  // Marker end → first non-space after it = content column.
-  const afterMark = mark.to - line.from;
-  const rest = line.text.slice(afterMark);
+  const rest = line.text.slice(mark.to - line.from);
   const space = /^[ \t]*/.exec(rest)?.[0].length ?? 0;
-  return afterMark + space;
+  return mark.to - mark.from + space;
+}
+
+/** `item`'s enclosing `ListItem` (the list item it is nested under), if any — the dedent unit's reference item. */
+function parentListItem(item: SyntaxNode): SyntaxNode | null {
+  const list = item.parent; // the List (Bullet/Ordered) that directly contains `item`
+  const container = list?.parent ?? null;
+  return container?.name === 'ListItem' ? container : null;
+}
+
+/**
+ * The item whose marker width should be used as the indent unit when
+ * Tab nests `item` one level deeper. Priority:
+ *
+ *  1. The previous sibling `ListItem` in the same list (the usual
+ *     case: `- a` / `- b`, Tab on `b` nests it under `a` — same-depth
+ *     homogeneous lists all take this branch and get the same width
+ *     `item` itself used to report).
+ *  2. If `item` is the first item of its list, and that list directly
+ *     follows (no blank line between) a different list (marker kind
+ *     changed mid-document — the bug1b Tab repro), the last item of
+ *     that preceding list.
+ *  3. Otherwise `item` itself (an already-isolated nested item being
+ *     indented one level further — the core bug1 repro, where the
+ *     depth-independent width of `item` itself is already correct).
+ */
+function indentReferenceItem(doc: Text, item: SyntaxNode): SyntaxNode {
+  const prevItem = item.prevSibling;
+  if (prevItem?.name === 'ListItem') return prevItem;
+
+  const list = item.parent;
+  const prevList = list?.prevSibling ?? null;
+  const noBlankLineBetween = list != null && prevList != null && doc.lineAt(prevList.to).number + 1 === doc.lineAt(list.from).number;
+  if (prevItem == null && prevList && (prevList.name === 'BulletList' || prevList.name === 'OrderedList') && noBlankLineBetween) {
+    const lastItem = prevList.lastChild;
+    if (lastItem?.name === 'ListItem') return lastItem;
+  }
+  return item;
 }
 
 /**
@@ -80,6 +119,7 @@ function markerWidth(doc: Text, item: SyntaxNode): number {
  */
 export const continueListMarkup: Command = (view) => {
   const { state } = view;
+  if (state.readOnly) return false;
   const range = state.selection.main;
   if (!range.empty) return false;
 
@@ -119,6 +159,14 @@ export const continueListMarkup: Command = (view) => {
   let nextMarker: string;
   const orderedMatch = /^(\d+)([.)])$/.exec(markText);
   if (orderedMatch) {
+    // Appending one item at the end of an ordered list only needs the
+    // next number, derived from the current marker (handled here). A
+    // mid-list item (one with a following sibling `ListItem`) instead
+    // needs every item after it renumbered — that's the built-in
+    // `insertNewlineContinueMarkup`'s job (see the doc comment above),
+    // so decline and let it fall through rather than inserting a
+    // duplicate number ourselves.
+    if (item.nextSibling?.name === 'ListItem') return false;
     nextMarker = `${Number(orderedMatch[1]) + 1}${orderedMatch[2]}`;
   } else {
     nextMarker = markText;
@@ -139,6 +187,7 @@ export const continueListMarkup: Command = (view) => {
 /** Indent the current list item by one nesting level (Tab). */
 export const indentListItem: Command = (view) => {
   const { state } = view;
+  if (state.readOnly) return false;
   const range = state.selection.main;
   const tree = syntaxTree(state);
   const item = enclosingListItem(tree.resolveInner(range.from, -1));
@@ -146,9 +195,11 @@ export const indentListItem: Command = (view) => {
   if (!item) return false;
 
   // Indent every line touched by the selection that belongs to a list
-  // item, by inserting `width` spaces of its parent marker indent.
+  // item, by inserting `width` spaces — the marker width of the item
+  // `item` is about to nest under (see `indentReferenceItem`), not
+  // `item`'s own marker width.
   const startLine = state.doc.lineAt(range.from);
-  const width = markerWidth(state.doc, item);
+  const width = markerWidth(state.doc, indentReferenceItem(state.doc, item));
   const pad = ' '.repeat(width);
 
   const changes: ChangeSpec[] = [];
@@ -172,12 +223,16 @@ export const indentListItem: Command = (view) => {
 /** Dedent the current list item by one nesting level (Shift-Tab). */
 export const dedentListItem: Command = (view) => {
   const { state } = view;
+  if (state.readOnly) return false;
   const range = state.selection.main;
   const tree = syntaxTree(state);
   const item = enclosingListItem(tree.resolveInner(range.from, -1));
   if (!item) return false;
 
-  const width = markerWidth(state.doc, item);
+  // Dedent by the marker width of the parent item `item` is actually
+  // nested under (see `parentListItem`), not `item`'s own marker
+  // width — the two can differ when marker kinds/digit-counts mix.
+  const width = markerWidth(state.doc, parentListItem(item) ?? item);
   const startLine = state.doc.lineAt(range.from);
 
   const changes: ChangeSpec[] = [];
@@ -225,7 +280,11 @@ export const dedentListItem: Command = (view) => {
  */
 export const listKeymap: readonly KeyBinding[] = [
   { key: 'Enter', run: continueListMarkup },
-  { key: 'Enter', run: insertNewlineContinueMarkup },
+  // `insertNewlineContinueMarkup` (`@codemirror/lang-markdown`) does not
+  // guard `state.readOnly` itself, unlike every `@codemirror/commands`
+  // editing command — wrap it so readonly editors stay a no-op here too
+  // (falls through to `defaultKeymap`'s readonly-guarded Enter).
+  { key: 'Enter', run: (view) => (view.state.readOnly ? false : insertNewlineContinueMarkup(view)) },
   { key: 'Tab', run: indentListItem },
   { key: 'Shift-Tab', run: dedentListItem },
 ];
