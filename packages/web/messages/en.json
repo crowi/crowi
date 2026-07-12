@@ -239,6 +239,8 @@
   "page.share.markdown_label": "Markdown",
   "page.share.copy": "Copy",
   "page.share.copied": "Copied",
+  "page.share.restricted_banner_title": "Share this link to invite an editor",
+  "page.share.restricted_banner_body": "Anyone you share the URL below with becomes an editor of this page — they can view, edit, move, delete, and re-share it, not just read it. Sign-in is required.",
   "page.meta_updated": "Updated {time}",
   "page.meta_likes_empty": "No likes yet",
   "page.meta_likes_aria": "{count} likes — show who liked this page",

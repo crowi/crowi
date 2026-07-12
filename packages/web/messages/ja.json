@@ -239,6 +239,8 @@
   "page.share.markdown_label": "Markdown",
   "page.share.copy": "コピー",
   "page.share.copied": "コピーしました",
+  "page.share.restricted_banner_title": "リンクを共有すると編集メンバーを招待できます",
+  "page.share.restricted_banner_body": "以下の URL を共有すると、相手はこのページの編集メンバーになり、閲覧だけでなく編集・移動・削除・共有設定の変更まで行えるようになります。アクセスにはログインが必要です。",
   "page.meta_updated": "{time} に更新",
   "page.meta_likes_empty": "まだいいねがありません",
   "page.meta_likes_aria": "{count} 件のいいね — いいねした人を表示",
