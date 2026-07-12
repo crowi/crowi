@@ -4,31 +4,35 @@ import type { PageWithRevision, RenamePageRequest, RenameSubtreeRequest, SetPage
 import { m } from '@paraglide/messages.js';
 import { type QueryClient, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClientV2 } from './api-client';
+import { PAGE_LIST_FAMILY_ROOT, pageKeys, revisionsKeys, userPageKeys } from './page-query-keys';
 import { draftsKeys } from './use-drafts';
 
 /**
  * Invalidate every query family that reflects a page's content after a
  * body-changing save:
- *   - `['page']`     — the single-page detail (both `page_id`- and
- *                      `path`-keyed `usePage` queries) → the normal page view
- *   - `['pages']`    — the list / portal family (`usePageList` →
- *                      `['pages','list',…]`) AND the sidebar tree
- *                      (`usePageChildrenLevels` → `['pages','children',…]`)
- *   - `['revisions']`— the page-history list (a save pushes a new revision)
- *   - `['drafts']`   — the "creating pages" list (a first save publishes a draft)
+ *   - `pageKeys.all`          — the single-page detail (both `page_id`- and
+ *                               `path`-keyed `usePage` queries) → the normal
+ *                               page view
+ *   - `PAGE_LIST_FAMILY_ROOT` — the list / portal family (`usePageList` →
+ *                               `pageListKeys`) AND the sidebar tree
+ *                               (`usePageChildrenLevels` → `pageChildrenKeys`)
+ *   - `revisionsKeys.all`     — the page-history list (a save pushes a new revision)
+ *   - `draftsKeys.all`        — the "creating pages" list (a first save publishes a draft)
  *
  * Both save paths route through here — the realtime `crowi:save` flow
  * (which bypasses react-query entirely; see `handleAfterSave`) and the HTTP
  * `useUpdatePage` fallback — so the invalidation set can never drift between
  * them again. The portal-staleness bug came from exactly that drift: the
- * page *detail* view (`['page']`) was invalidated but the *portal* view,
- * driven by the list family (`['pages']`), was not — so a portal kept
- * serving its pre-edit revision after a save.
+ * page *detail* view (`pageKeys.all`) was invalidated but the *portal* view,
+ * driven by the list family (`PAGE_LIST_FAMILY_ROOT`), was not — so a portal
+ * kept serving its pre-edit revision after a save. All of these keys now
+ * have exactly one owner (`page-query-keys.ts`), so a future rename of a
+ * root string can't drift the two apart again.
  */
 export function invalidatePageContentQueries(queryClient: QueryClient): void {
-  queryClient.invalidateQueries({ queryKey: ['page'] });
-  queryClient.invalidateQueries({ queryKey: ['pages'] });
-  queryClient.invalidateQueries({ queryKey: ['revisions'] });
+  queryClient.invalidateQueries({ queryKey: pageKeys.all });
+  queryClient.invalidateQueries({ queryKey: PAGE_LIST_FAMILY_ROOT });
+  queryClient.invalidateQueries({ queryKey: revisionsKeys.all });
   queryClient.invalidateQueries({ queryKey: draftsKeys.all });
 }
 
@@ -178,7 +182,7 @@ export function useSetPageGrant() {
       throw new Error(m['edit.grant_update_failed']());
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['page'] });
+      queryClient.invalidateQueries({ queryKey: pageKeys.all });
     },
   });
 }
@@ -211,13 +215,13 @@ export function useDeletePage() {
     },
     onSuccess: () => {
       // Invalidate page queries so the trashed view (or 404) is reflected.
-      queryClient.invalidateQueries({ queryKey: ['page'] });
+      queryClient.invalidateQueries({ queryKey: pageKeys.all });
       // The /trash listing must drop the just-(soft|hard)-deleted row.
-      queryClient.invalidateQueries({ queryKey: ['pages'] });
+      queryClient.invalidateQueries({ queryKey: PAGE_LIST_FAMILY_ROOT });
       // /user/:username/pages may surface deleted pages — refresh only the
       // user/<username>/pages keys, not every cache under `['user']`.
       queryClient.invalidateQueries({
-        predicate: (query) => query.queryKey[0] === 'user' && query.queryKey[2] === 'pages',
+        predicate: (query) => userPageKeys.isPagesQuery(query.queryKey),
       });
     },
   });
@@ -245,11 +249,11 @@ export function useRevertDeletedPage() {
       throw new Error(m['errors.revert_failed']());
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['page'] });
+      queryClient.invalidateQueries({ queryKey: pageKeys.all });
       // The /trash listing must drop the just-restored row.
-      queryClient.invalidateQueries({ queryKey: ['pages'] });
+      queryClient.invalidateQueries({ queryKey: PAGE_LIST_FAMILY_ROOT });
       queryClient.invalidateQueries({
-        predicate: (query) => query.queryKey[0] === 'user' && query.queryKey[2] === 'pages',
+        predicate: (query) => userPageKeys.isPagesQuery(query.queryKey),
       });
     },
   });
@@ -280,15 +284,15 @@ export function useRevertToRevision() {
       throw new Error(m['errors.revert_failed']());
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['page'] });
+      queryClient.invalidateQueries({ queryKey: pageKeys.all });
       // The revert can be triggered from a portal listing, so refresh the
       // page lists too: the portal document now sits at a new latest revision.
-      queryClient.invalidateQueries({ queryKey: ['pages'] });
+      queryClient.invalidateQueries({ queryKey: PAGE_LIST_FAMILY_ROOT });
       // A new revision was stacked — refresh the page-history list so the
       // reverted revision shows immediately. Without this the history view
       // serves the pre-revert revisions off the 60s default staleTime and the
       // new one only appears after a full browser reload.
-      queryClient.invalidateQueries({ queryKey: ['revisions'] });
+      queryClient.invalidateQueries({ queryKey: revisionsKeys.all });
     },
   });
 }
@@ -328,8 +332,8 @@ export function useRenamePage() {
     onSuccess: () => {
       // A subtree rename moves many pages — invalidate the page + listing
       // caches so the sidebar tree and any list views refresh.
-      queryClient.invalidateQueries({ queryKey: ['page'] });
-      queryClient.invalidateQueries({ queryKey: ['pages'] });
+      queryClient.invalidateQueries({ queryKey: pageKeys.all });
+      queryClient.invalidateQueries({ queryKey: PAGE_LIST_FAMILY_ROOT });
     },
   });
 }
@@ -357,8 +361,8 @@ export function useRenameSubtree() {
       throw new Error(m['errors.rename_failed']());
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['page'] });
-      queryClient.invalidateQueries({ queryKey: ['pages'] });
+      queryClient.invalidateQueries({ queryKey: pageKeys.all });
+      queryClient.invalidateQueries({ queryKey: PAGE_LIST_FAMILY_ROOT });
     },
   });
 }
