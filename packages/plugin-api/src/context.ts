@@ -4,14 +4,33 @@
  * logging) — plugins must NOT import from `@crowi/server` directly to
  * keep the contract surface thin.
  *
- * Trust boundary: a plugin only reaches what it explicitly declares.
- * `model(name)` is gated by the plugin's own `CrowiPlugin.modelAccess`
- * allow-list (see `model()` below) — there is no ambient "any core
- * model" access. There is intentionally no symmetric encrypt/decrypt
- * capability on this context: the only legitimate secret-reading path
- * is `config<T>()`, which already hands back `@sensitive` fields
- * transparently decrypted. A plugin cannot reach another plugin's or
- * core's secrets through `PluginContext`.
+ * Trust boundary: a plugin only reaches what it explicitly declares, and
+ * a plugin cannot reach another plugin's or core's secrets through
+ * `PluginContext`:
+ *
+ * - `model(name)` is gated by the plugin's own `CrowiPlugin.modelAccess`
+ *   allow-list (see `model()` below) — there is no ambient "any core
+ *   model" access. Credential-vault models (`Config`,
+ *   `PersonalAccessToken`, OAuth client/token/grant models, `Share`,
+ *   `ShareAccess`) can never be granted at all: declaring one in
+ *   `modelAccess` fails boot, and `model()` refuses to return one at
+ *   call time even if that check were somehow bypassed.
+ * - There is intentionally no symmetric encrypt/decrypt capability on
+ *   this context: the only legitimate secret-reading path is
+ *   `config<T>()`, which already hands back `@sensitive` fields
+ *   transparently decrypted for *this* plugin's own config.
+ * - `dependencyConfig<T>(name)` only returns another plugin's config —
+ *   `@sensitive` fields included — when that plugin has explicitly
+ *   opted in via `CrowiPlugin.exposesConfigToDependents: true`. Listing
+ *   a plugin in `requires` is not, by itself, enough to read its config.
+ *
+ * One caveat remains, intentionally out of scope for this trust
+ * boundary: a plugin granted `modelAccess: ['User']` gets the raw
+ * Mongoose document, password hash included — there is no field
+ * projection today. Field-level read/write proxying for `User` (and any
+ * other model) is deferred to a post-2.0 repository/HTTP layer
+ * separation; until then, only grant `User` `modelAccess` to plugins you
+ * trust with that document as a whole.
  */
 export interface PluginContext {
   /**
@@ -27,13 +46,19 @@ export interface PluginContext {
    * Read a typed dependency plugin's config. The target plugin must
    * be listed in this plugin's `requires` array — reading another
    * plugin's config without declaring the dependency is a contract
-   * violation and throws.
+   * violation and throws. In addition, the target plugin must have
+   * opted in with `CrowiPlugin.exposesConfigToDependents: true` —
+   * `requires` alone is only this plugin's side of the contract, not
+   * permission granted by the dependency. Throws when the dependency
+   * has not opted in.
    *
-   * Useful for shared-credential plugins like `@crowi/plugin-aws`:
-   * the base plugin owns `region` / `accessKeyId` / `secretAccessKey`,
-   * and dependents (`@crowi/plugin-storage-aws-s3`,
-   * `@crowi/plugin-mail-aws-ses`) read them through this method
-   * instead of duplicating the fields in their own configSchema.
+   * Useful for shared-credential plugins like `@crowi/plugin-aws`,
+   * which sets `exposesConfigToDependents: true` because sharing
+   * `region` / `accessKeyId` / `secretAccessKey` with dependents
+   * (`@crowi/plugin-storage-aws-s3`, `@crowi/plugin-mail-aws-ses`) is
+   * its entire purpose — they read them through this method instead of
+   * duplicating the fields in their own configSchema. Most plugins do
+   * not opt in, so most `dependencyConfig` calls against them throw.
    */
   dependencyConfig<T>(dependencyName: string): T;
 
@@ -60,7 +85,15 @@ export interface PluginContext {
    * Throws when `name` is not listed in the plugin's `modelAccess` —
    * a plugin must declare every core model it touches. A model name
    * listed in `modelAccess` is returned with full (unrestricted)
-   * read/write access; there is no read-only proxying.
+   * read/write access; there is no read-only proxying. Credential-vault
+   * models (`Config`, `PersonalAccessToken`, OAuth client/token/grant
+   * models, `Share`, `ShareAccess`) can never be listed in `modelAccess`
+   * at all — declaring one fails boot, and this method also refuses to
+   * return one at call time.
+   *
+   * Caveat: `modelAccess: ['User']` hands back the raw document,
+   * password hash included — there is no field projection today (see
+   * the trust-boundary note on this interface).
    *
    * Typed loosely (`unknown`) at this layer because the core model
    * types live in `@crowi/server`; plugins narrow the return type at
