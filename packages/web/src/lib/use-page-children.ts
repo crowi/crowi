@@ -3,6 +3,7 @@
 import type { ListPageChildrenResponse } from '@crowi/api-contract';
 import { useQueries, useQuery } from '@tanstack/react-query';
 import { apiClientV2 } from './api-client';
+import { pageChildrenKeys } from './page-query-keys';
 
 /**
  * Sidebar hierarchy data. The sidebar tree fetches the children of every
@@ -12,12 +13,10 @@ import { apiClientV2 } from './api-client';
  * The server returns the *complete* first-level segment set (unpaginated),
  * so the sidebar never drops a directory the way a `/pages/list` slice
  * would.
+ *
+ * `pageChildrenKeys` lives in `page-query-keys.ts` (this file's only prior
+ * import source, besides itself).
  */
-
-export const pageChildrenKeys = {
-  all: ['pages', 'children'] as const,
-  detail: (path: string) => ['pages', 'children', path] as const,
-};
 
 async function fetchPageChildren(path: string): Promise<ListPageChildrenResponse> {
   const response = await apiClientV2.pages.children.$get({ query: { path } });

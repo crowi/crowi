@@ -3,6 +3,7 @@
 import type { ListPagesRequest } from '@crowi/api-contract';
 import { useQuery } from '@tanstack/react-query';
 import { apiClientV2 } from './api-client';
+import { pageListKeys } from './page-query-keys';
 
 /**
  * RFC-0006 Phase 4 Batch 4 — switched from `apiClient.page.listPages`
@@ -18,11 +19,15 @@ interface UsePageListOptions {
 
 // `sort` / `order` carry server-side defaults, so callers that don't care
 // about ordering (e.g. the rename-dialog descendant probe) may omit them.
-type UsePageListParams = Omit<ListPagesRequest, 'sort' | 'order'> & Partial<Pick<ListPagesRequest, 'sort' | 'order'>>;
+//
+// Exported so `page-query-keys.ts` can type `pageListKeys.detail` against
+// this hook's actual params — the key factory lives in the registry, but
+// this type stays the source of truth here.
+export type UsePageListParams = Omit<ListPagesRequest, 'sort' | 'order'> & Partial<Pick<ListPagesRequest, 'sort' | 'order'>>;
 
 export function usePageList(params: UsePageListParams, options: UsePageListOptions = {}) {
   return useQuery({
-    queryKey: ['pages', 'list', params],
+    queryKey: pageListKeys.detail(params),
     enabled: options.enabled ?? true,
     queryFn: async () => {
       const response = await apiClientV2.pages.list.$get({

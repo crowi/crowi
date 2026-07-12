@@ -2,6 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { apiClientV2 } from './api-client';
+import { pageKeys } from './page-query-keys';
 import type { GetPageRequest, PageWithRevision } from '@crowi/api-contract';
 
 /**
@@ -22,7 +23,7 @@ export interface PageState {
 
 export function usePage(params: GetPageRequest) {
   const query = useQuery({
-    queryKey: ['page', params],
+    queryKey: pageKeys.detail(params),
     queryFn: async () => {
       const response = await apiClientV2.pages.$get({
         query: {
@@ -70,7 +71,7 @@ export function usePage(params: GetPageRequest) {
     // Enable query only when we have either path or page_id.
     enabled: Boolean(params.path || params.page_id),
     // Avoid refetching on every navigation / window focus — page detail
-    // mutations call `invalidateQueries({ queryKey: ['page'] })` so the
+    // mutations call `invalidateQueries({ queryKey: pageKeys.all })` so the
     // cache stays correct, and a 30 s window is fine for read-only nav.
     staleTime: 30_000,
     refetchOnWindowFocus: false,

@@ -4,7 +4,7 @@ import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-quer
 import { apiClientV2 } from './api-client';
 import type { PageWithRevision } from '@crowi/api-contract';
 import { isLinkOnlyGrant } from './page-grant';
-import { pageChildrenKeys } from './use-page-children';
+import { pageChildrenKeys } from './page-query-keys';
 import { searchKeys } from './use-search';
 import type { PageState } from './use-page';
 
