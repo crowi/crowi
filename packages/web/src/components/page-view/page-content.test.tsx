@@ -1,12 +1,15 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { PropsWithChildren } from 'react';
 import { createElement } from 'react';
 import type { PageWithRevision } from '@crowi/api-contract';
+import { m } from '@paraglide/messages.js';
 import { renderMdastToReactNode } from '@/components/editor/render-mdast';
 import { previewComponents } from '@/components/editor/MarkdownPreview';
 import { PageContent } from './page-content';
+
+const expandTableLabel = m['page.table_fullscreen_open']();
 
 // The inline modal's `useAttachment` fetch should never need to fire in
 // these render-interception tests, but mock the client defensively.
@@ -107,10 +110,10 @@ describe('PageContent — attachment render interception', () => {
   });
 });
 
-/** Build a page whose revision's `renderedAst` is exactly `renderedAst`. `body` is a non-empty placeholder — `PageContent` renders from `renderedAst` but gates the empty-body message on `body` itself. */
-function pageWithAst(renderedAst: unknown): PageWithRevision {
+/** Build a page whose revision's `renderedAst` is exactly `renderedAst`. `body` is a non-empty placeholder — `PageContent` renders from `renderedAst` but gates the empty-body message on `body` itself. `id` defaults to a fixed value; pass a distinct one to simulate a new revision landing (see the revision-identity-reset tests below). */
+function pageWithAst(renderedAst: unknown, id = 'rev-3'): PageWithRevision {
   return {
-    revision: { _id: 'rev-3', body: 'placeholder', renderedAst },
+    revision: { _id: id, body: 'placeholder', renderedAst },
   } as unknown as PageWithRevision;
 }
 
@@ -428,31 +431,61 @@ describe('PageContent — GFM table DOM parity: page view vs. editor preview (mo
     expect(dataCells[0].textContent).toBe(LONG_TOKEN);
   });
 
-  it('renders the identical wrapper/table/th/td structure for the same GFM table on the editor-preview path (parity with page view)', () => {
+  it('wraps the page-view table in the fullscreen affordance (outer relative/group-table wrapper + toolbar expand button), outside the overflow-x-auto scrollport', () => {
+    renderPage(pageWithAst(gfmTableAst(LONG_TOKEN)));
+
+    const table = screen.getByRole('table');
+    // The immediate wrapper is unchanged: still the overflow-x-auto
+    // scrollport directly around <table>.
+    const scrollWrapper = table.parentElement as HTMLElement;
+    expect(scrollWrapper.className).toBe('overflow-x-auto');
+
+    // A NEW outer wrapper carries the fullscreen chrome — relative +
+    // named group for the hover-reveal button, and the always-mounted
+    // toolbar row containing the expand trigger.
+    const outerWrapper = scrollWrapper.parentElement as HTMLElement;
+    expect(outerWrapper.className).toContain('relative');
+    expect(outerWrapper.className).toContain('group/table');
+
+    const expandButton = screen.getByRole('button', { name: expandTableLabel });
+    expect(outerWrapper.contains(expandButton)).toBe(true);
+    // The trigger lives OUTSIDE the scrollable wrapper (its own toolbar
+    // row), never overlapping cell content.
+    expect(scrollWrapper.contains(expandButton)).toBe(false);
+  });
+
+  it('renders the identical cell structure/content for the same GFM table on the editor-preview path (parity with page view) — the fullscreen chrome itself is page-view-only', () => {
     const ast = gfmTableAst(LONG_TOKEN);
 
     renderPage(pageWithAst(ast));
-    const pageTable = screen.getByRole('table');
-    const pageWrapper = pageTable.parentElement as HTMLElement;
     const pageResult = {
-      wrapperClassName: pageWrapper.className,
-      tableClassName: pageTable.className,
       headerTagNames: screen.getAllByRole('columnheader').map((el) => el.tagName),
       cellTagNames: screen.getAllByRole('cell').map((el) => el.tagName),
       cellText: screen.getAllByRole('cell').map((el) => el.textContent),
     };
+    // The immediate scroll wrapper keeps its historical `overflow-x-auto`
+    // class list unchanged; the fullscreen chrome is layered OUTSIDE it in
+    // a new wrapper rather than modifying it (see
+    // `markdown-table-fullscreen.tsx`).
+    const pageTable = screen.getByRole('table');
+    expect((pageTable.parentElement as HTMLElement).className).toBe('overflow-x-auto');
     cleanup();
 
     renderPreviewInCrowiProse(ast);
     const previewTable = screen.getByRole('table');
     const previewWrapper = previewTable.parentElement as HTMLElement;
 
-    expect(previewWrapper.className).toBe(pageResult.wrapperClassName);
-    expect(previewTable.className).toBe(pageResult.tableClassName);
+    // Cell-level rendering (tags + text) stays byte-identical across the
+    // two surfaces — this feature does not touch thead/tbody/th/td.
     expect(screen.getAllByRole('columnheader').map((el) => el.tagName)).toEqual(pageResult.headerTagNames);
     expect(screen.getAllByRole('cell').map((el) => el.tagName)).toEqual(pageResult.cellTagNames);
     expect(screen.getAllByRole('cell').map((el) => el.textContent)).toEqual(pageResult.cellText);
+    // The editor preview keeps its untouched original wrapper (still
+    // "my-6 overflow-x-auto" directly around <table>) and has NO fullscreen
+    // affordance — `MarkdownPreview.tsx`'s `table` override is zero-diff.
+    expect(previewWrapper.className).toBe('my-6 overflow-x-auto');
     expect(previewWrapper.closest('.crowi-prose')).not.toBeNull();
+    expect(screen.queryByRole('button')).toBeNull();
   });
 });
 
@@ -494,5 +527,186 @@ describe('PageContent — raw HTML <table> keeps its tag structure + .crowi-pros
     expect(td.className).toContain('whitespace-normal');
     expect(td.className).toContain('break-all');
     expect(td.textContent).toBe(LONG_TOKEN);
+
+    // Fullscreen affordance is transparent to GFM vs. raw HTML — a raw
+    // table with a colliding `class` attribute gets the same expand
+    // button + Dialog behaviour.
+    const expandButton = screen.getByRole('button', { name: expandTableLabel });
+    fireEvent.click(expandButton);
+
+    // Single mount: the table moved into the Radix Dialog portal
+    // (document.body), never duplicated — `getByRole('table')` still
+    // resolves to exactly one element.
+    const dialogTable = screen.getByRole('table');
+    expect(document.body.contains(dialogTable)).toBe(true);
+    expect(dialogTable.closest('[role="dialog"]')).not.toBeNull();
+    expect(screen.getByRole('cell').textContent).toBe(LONG_TOKEN);
+  });
+});
+
+describe('PageContent — editor preview has no fullscreen affordance (page-view-only scope, negative test)', () => {
+  it('renders no expand trigger for a GFM table on the editor-preview path', () => {
+    renderPreviewInCrowiProse(gfmTableAst(LONG_TOKEN));
+    expect(screen.getByRole('table')).toBeTruthy();
+    // Role-independent: a broken implementation that propagates
+    // `aria-hidden` instead of not rendering the trigger would still leave
+    // a `<button>` node in the DOM even though `queryByRole` excludes it.
+    expect(document.body.querySelector('button')).toBeNull();
+  });
+
+  it('renders no expand trigger for a raw HTML table on the editor-preview path', () => {
+    const renderedAst = {
+      type: 'root',
+      children: [{ type: 'html', value: '<table class="foo"><tbody><tr><td>x</td></tr></tbody></table>' }],
+    };
+    renderPreviewInCrowiProse(renderedAst);
+    expect(screen.getByRole('table')).toBeTruthy();
+    expect(document.body.querySelector('button')).toBeNull();
+  });
+});
+
+describe('PageContent — own-attribute affordance suppression for an author-hidden / contenteditable raw <table>', () => {
+  const cases: Array<[string, string]> = [
+    ['hidden', '<table hidden><tbody><tr><td>x</td></tr></tbody></table>'],
+    ['hidden="until-found"', '<table hidden="until-found"><tbody><tr><td>x</td></tr></tbody></table>'],
+    ['aria-hidden="true"', '<table aria-hidden="true"><tbody><tr><td>x</td></tr></tbody></table>'],
+    ['aria-hidden="TRUE"', '<table aria-hidden="TRUE"><tbody><tr><td>x</td></tr></tbody></table>'],
+    ['contenteditable', '<table contenteditable><tbody><tr><td>x</td></tr></tbody></table>'],
+    ['contenteditable="TRUE"', '<table contenteditable="TRUE"><tbody><tr><td>x</td></tr></tbody></table>'],
+    ['contenteditable="PLAINTEXT-ONLY"', '<table contenteditable="PLAINTEXT-ONLY"><tbody><tr><td>x</td></tr></tbody></table>'],
+  ];
+
+  it.each(cases)('renders no expand button at all for <table %s> (own-attribute read only, no propagation to the wrapper)', (_label, html) => {
+    const { container } = renderPage(pageWithAst({ type: 'root', children: [{ type: 'html', value: html }] }));
+    // `queryByRole('button')` alone would false-pass a broken implementation
+    // that propagates `aria-hidden` onto the wrapper instead of skipping
+    // the toolbar render (the button would still be in the DOM, just
+    // excluded from the accessibility tree) — use a role-independent DOM
+    // query instead.
+    expect(container.querySelector('button')).toBeNull();
+  });
+});
+
+describe('PageContent — form/interactive content does NOT suppress the fullscreen affordance (regression guard, documented known limitation)', () => {
+  it('still shows the expand trigger for a table with a live <input> in a cell', () => {
+    const renderedAst = {
+      type: 'root',
+      children: [{ type: 'html', value: '<table><tbody><tr><td><input type="text" value="draft"></td></tr></tbody></table>' }],
+    };
+    renderPage(pageWithAst(renderedAst));
+    expect(screen.getByRole('button', { name: expandTableLabel })).toBeTruthy();
+  });
+
+  it('still shows the expand trigger for a GFM table wrapped in a raw HTML <a href> anchor, and the trigger click opens the dialog instead of navigating', () => {
+    const renderedAst = {
+      type: 'root',
+      children: [
+        { type: 'html', value: '<a href="https://example.com/elsewhere">' },
+        gfmTableAst('anchored cell').children[0],
+        { type: 'html', value: '</a>' },
+      ],
+    };
+    renderPage(pageWithAst(renderedAst));
+
+    const link = screen.getByRole('link');
+    expect(link.getAttribute('href')).toBe('https://example.com/elsewhere');
+    const expandButton = screen.getByRole('button', { name: expandTableLabel });
+    expect(link.contains(expandButton)).toBe(true);
+
+    // `fireEvent.click` returns the underlying `dispatchEvent` result:
+    // `false` means the event was cancelled (`preventDefault()` was
+    // called) — `handleOpen`'s `preventDefault`/`stopPropagation` stop the
+    // ancestor <a>'s native navigation and any ancestor listener, so the
+    // click only opens the dialog (「アンカー内トリガーのクリック競合」).
+    const notCancelled = fireEvent.click(expandButton);
+    expect(notCancelled).toBe(false);
+    expect(document.body.querySelector('[role="dialog"]')).not.toBeNull();
+  });
+});
+
+describe('PageContent — expand button click interaction shows the table content inside the Dialog portal', () => {
+  it('opens the Dialog on click and renders the same cell content inside document.body', () => {
+    renderPage(pageWithAst(gfmTableAst('interaction cell')));
+    fireEvent.click(screen.getByRole('button', { name: expandTableLabel }));
+
+    // The Dialog mounts into a portal on document.body — query there
+    // (mirrors the pattern in attachment-detail-modal.test.tsx).
+    const dialog = document.body.querySelector('[role="dialog"]') as HTMLElement;
+    expect(dialog).not.toBeNull();
+    expect(dialog.textContent).toContain('interaction cell');
+  });
+});
+
+describe('PageContent — single-mount id safety for raw HTML elements carrying an id', () => {
+  it('keeps exactly one element with a given id in the document, both closed and after opening the dialog', () => {
+    const renderedAst = {
+      type: 'root',
+      children: [{ type: 'html', value: '<table><tbody><tr><td id="pricing">42</td></tr></tbody></table>' }],
+    };
+    renderPage(pageWithAst(renderedAst));
+    expect(document.querySelectorAll('#pricing')).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole('button', { name: expandTableLabel }));
+    expect(document.querySelectorAll('#pricing')).toHaveLength(1);
+  });
+});
+
+describe('PageContent — inline SVG url(#id) references survive the fullscreen Dialog (no subtree id-stripping)', () => {
+  it('keeps the gradient id and the fill="url(#id)" reference intact after opening the dialog', () => {
+    const svg =
+      '<svg><defs><linearGradient id="g"><stop offset="0%" stop-color="red"></stop></linearGradient></defs>' +
+      '<rect fill="url(#g)" width="10" height="10"></rect></svg>';
+    const renderedAst = {
+      type: 'root',
+      children: [{ type: 'html', value: `<table><tbody><tr><td>${svg}</td></tr></tbody></table>` }],
+    };
+    renderPage(pageWithAst(renderedAst));
+    expect(document.querySelector('rect')?.getAttribute('fill')).toBe('url(#g)');
+    expect(document.querySelectorAll('[id="g"]')).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole('button', { name: expandTableLabel }));
+    expect(document.querySelector('rect')?.getAttribute('fill')).toBe('url(#g)');
+    expect(document.querySelectorAll('[id="g"]')).toHaveLength(1);
+  });
+});
+
+describe('PageContent — multiple tables on one page are independent', () => {
+  it('opening one table dialog does not affect another table on the same page', () => {
+    const renderedAst = {
+      type: 'root',
+      children: [
+        { type: 'html', value: '<table><tbody><tr><td>Table1Cell</td></tr></tbody></table>' },
+        { type: 'html', value: '<table><tbody><tr><td>Table2Cell</td></tr></tbody></table>' },
+      ],
+    };
+    renderPage(pageWithAst(renderedAst));
+    const buttons = screen.getAllByRole('button', { name: expandTableLabel });
+    expect(buttons).toHaveLength(2);
+
+    fireEvent.click(buttons[0]);
+
+    // The second table's inline content is untouched...
+    expect(screen.getByText('Table2Cell')).toBeTruthy();
+    // ...and only the first table's content is inside the open dialog.
+    const dialog = document.body.querySelector('[role="dialog"]');
+    expect(dialog?.textContent).toContain('Table1Cell');
+    expect(dialog?.textContent).not.toContain('Table2Cell');
+  });
+});
+
+describe('PageContent — revision change resets table dialog identity (fiber-swap / stale-content guard)', () => {
+  it('closes an open table dialog when the page revision changes, via the whole-container key={revisionId}', () => {
+    const renderedAst = { type: 'root', children: [{ type: 'html', value: '<table><tbody><tr><td>cell</td></tr></tbody></table>' }] };
+    const { rerender } = renderPage(pageWithAst(renderedAst, 'rev-a'));
+
+    fireEvent.click(screen.getByRole('button', { name: expandTableLabel }));
+    expect(document.body.querySelector('[role="dialog"]')).not.toBeNull();
+
+    // A new revision lands (same table content, different `_id`) — the
+    // whole-container `key={revisionId}` forces a full remount, discarding
+    // any stale `open` state instead of risking a positional-key fiber
+    // swap onto a different logical table.
+    rerender(<PageContent page={pageWithAst(renderedAst, 'rev-b')} />);
+    expect(document.body.querySelector('[role="dialog"]')).toBeNull();
   });
 });
