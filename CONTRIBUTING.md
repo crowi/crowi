@@ -51,6 +51,13 @@ welcome anytime.
   code we preserve your authorship (merge or cherry-pick), and when we
   reimplement we credit the PR in the commit.
 
+## Community
+
+If you're interested in contributing on an ongoing basis — or just want to
+talk to the dev team — join the Crowi Discord community:
+https://discord.gg/jnWzJeu . It's the best place to discuss ideas before they
+become issues or PRs.
+
 ## Development basics
 
 See [CLAUDE.md](CLAUDE.md) and [README](README.md) for the monorepo layout and
