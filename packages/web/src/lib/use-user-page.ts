@@ -3,6 +3,7 @@
 import { useQuery, useInfiniteQuery } from '@tanstack/react-query';
 import type { PaginationRequest } from '@crowi/api-contract';
 import { apiClientV2 } from './api-client';
+import { userPageKeys } from './page-query-keys';
 
 /**
  * RFC-0006 Phase 4 Batch 2 — migrated from `apiClient.user.*` (ts-rest)
@@ -30,7 +31,7 @@ const userNotFound = async (response: Response): Promise<never> => {
  */
 export function useUserPage(username: string) {
   return useQuery({
-    queryKey: ['user', username],
+    queryKey: userPageKeys.profile(username),
     queryFn: async () => {
       const response = await apiClientV2.user[':username'].$get({ param: { username } });
       if (response.ok) {
@@ -55,7 +56,7 @@ export function useUserPage(username: string) {
  */
 export function useUserBookmarks(username: string, params: PaginationRequest = { limit: 10, offset: 0 }) {
   return useQuery({
-    queryKey: ['user', username, 'bookmarks', params],
+    queryKey: userPageKeys.bookmarksDetail(username, params),
     queryFn: async () => {
       const response = await apiClientV2.user[':username'].bookmarks.$get({
         param: { username },
@@ -75,7 +76,7 @@ export function useUserBookmarks(username: string, params: PaginationRequest = {
  */
 export function useUserPages(username: string, params: PaginationRequest = { limit: 10, offset: 0 }) {
   return useQuery({
-    queryKey: ['user', username, 'pages', params],
+    queryKey: userPageKeys.pagesDetail(username, params),
     queryFn: async () => {
       const response = await apiClientV2.user[':username'].pages.$get({
         param: { username },
@@ -95,7 +96,7 @@ export function useUserPages(username: string, params: PaginationRequest = { lim
  */
 export function useUserBookmarksInfinite(username: string, limit: number = 10) {
   return useInfiniteQuery({
-    queryKey: ['user', username, 'bookmarks', 'infinite', limit],
+    queryKey: userPageKeys.bookmarksInfinite(username, limit),
     queryFn: async ({ pageParam = 0 }) => {
       const response = await apiClientV2.user[':username'].bookmarks.$get({
         param: { username },
@@ -122,7 +123,7 @@ export function useUserBookmarksInfinite(username: string, limit: number = 10) {
  */
 export function useUserPagesInfinite(username: string, limit: number = 10) {
   return useInfiniteQuery({
-    queryKey: ['user', username, 'pages', 'infinite', limit],
+    queryKey: userPageKeys.pagesInfinite(username, limit),
     queryFn: async ({ pageParam = 0 }) => {
       const response = await apiClientV2.user[':username'].pages.$get({
         param: { username },

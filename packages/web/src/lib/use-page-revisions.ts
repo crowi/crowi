@@ -2,6 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { apiClientV2 } from './api-client';
+import { revisionsKeys } from './page-query-keys';
 import type { Pager, Revision, RevisionMeta } from '@crowi/api-contract';
 
 /**
@@ -18,16 +19,13 @@ export interface UsePageRevisionsResult {
   refetch: () => void;
 }
 
-const revisionsKey = (pageId: string, params: { limit?: number; offset?: number }) =>
-  ['revisions', { pageId, limit: params.limit ?? null, offset: params.offset ?? null }] as const;
-
 /**
  * List revisions for a single page (meta only — no body).
  * Backed by GET /pages/:page_id/revisions.
  */
 export function usePageRevisions(pageId: string | null | undefined, params: { limit?: number; offset?: number } = {}): UsePageRevisionsResult {
   const query = useQuery({
-    queryKey: revisionsKey(pageId ?? '', params),
+    queryKey: revisionsKeys.list(pageId ?? '', params),
     queryFn: async () => {
       if (!pageId) {
         return { revisions: [] as RevisionMeta[], pager: null as Pager | null };

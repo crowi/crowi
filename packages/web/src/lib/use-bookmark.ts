@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClientV2 } from './api-client';
+import { userPageKeys } from './page-query-keys';
 import type { Bookmark } from '@crowi/api-contract';
 
 /**
@@ -85,11 +86,11 @@ export function useToggleBookmark(pageId: string | undefined) {
       if (pageId) {
         queryClient.invalidateQueries({ queryKey: bookmarkKeys.detail(pageId) });
       }
-      // Invalidate user bookmark lists only (`['user', username, 'bookmarks', ...]`).
+      // Invalidate user bookmark lists only (`userPageKeys.bookmarks*`).
       // `['user']` alone would also refetch unrelated user/* queries
       // (profile / pages / etc.) on every bookmark toggle.
       queryClient.invalidateQueries({
-        predicate: (query) => query.queryKey[0] === 'user' && query.queryKey[2] === 'bookmarks',
+        predicate: (query) => userPageKeys.isBookmarksQuery(query.queryKey),
       });
     },
   });

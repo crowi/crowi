@@ -10,6 +10,8 @@ vi.mock('./api-client', () => ({
 }));
 
 import { invalidatePageContentQueries, useUpdatePage } from './use-page-mutations';
+import { PAGE_LIST_FAMILY_ROOT, pageKeys, revisionsKeys } from './page-query-keys';
+import { draftsKeys } from './use-drafts';
 
 beforeEach(() => {
   putPage.mockReset();
@@ -21,20 +23,23 @@ afterEach(() => {
 
 describe('invalidatePageContentQueries', () => {
   // The portal-staleness bug: a body save invalidated the single-page
-  // detail family (`['page']`) but forgot the list/portal family
-  // (`['pages']`), so a portal view (driven by `usePageList` →
-  // `['pages','list',…]`) kept serving the pre-edit revision. This helper
-  // is the single source of truth shared by BOTH save paths (realtime
+  // detail family (`pageKeys.all`) but forgot the list/portal family
+  // (`PAGE_LIST_FAMILY_ROOT`), so a portal view (driven by `usePageList` →
+  // `pageListKeys`) kept serving the pre-edit revision. This helper is the
+  // single source of truth shared by BOTH save paths (realtime
   // `crowi:save` + HTTP `useUpdatePage`) so the set can never drift again.
+  // Asserting against the `page-query-keys.ts` registry exports (rather
+  // than bare literals) means a future root-string rename fails to
+  // compile here instead of silently drifting.
   it('invalidates every query family that reflects a page body change', () => {
     const invalidateQueries = vi.fn();
     invalidatePageContentQueries({ invalidateQueries } as never);
 
     const keys = invalidateQueries.mock.calls.map((c) => c[0].queryKey);
-    expect(keys).toContainEqual(['page']);
-    expect(keys).toContainEqual(['pages']);
-    expect(keys).toContainEqual(['revisions']);
-    expect(keys).toContainEqual(['drafts']);
+    expect(keys).toContainEqual(pageKeys.all);
+    expect(keys).toContainEqual(PAGE_LIST_FAMILY_ROOT);
+    expect(keys).toContainEqual(revisionsKeys.all);
+    expect(keys).toContainEqual(draftsKeys.all);
   });
 });
 
@@ -55,7 +60,7 @@ describe('useUpdatePage', () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     const keys = invalidateSpy.mock.calls.map((c) => c[0]?.queryKey);
-    expect(keys).toContainEqual(['page']);
-    expect(keys).toContainEqual(['pages']);
+    expect(keys).toContainEqual(pageKeys.all);
+    expect(keys).toContainEqual(PAGE_LIST_FAMILY_ROOT);
   });
 });

@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClientV2 } from './api-client';
+import { PAGE_LIST_FAMILY_ROOT } from './page-query-keys';
 import type { DraftConflictOwner, DraftSummary, ListDraftsResponse } from '@crowi/api-contract';
 
 /**
@@ -102,11 +103,11 @@ export function useCreateDraft() {
       queryClient.invalidateQueries({ queryKey: draftsKeys.all });
       // A draft is visible to its author in the parent's child listing
       // (`findChildSegments` includes own drafts), so the sidebar tree
-      // (`['pages','children',…]`) and any page list (`['pages','list',…]`)
-      // must refresh too — both live under the `['pages']` family. Without
+      // (`pageChildrenKeys`) and any page list (`pageListKeys`) must
+      // refresh too — both live under `PAGE_LIST_FAMILY_ROOT`. Without
       // this, returning to an already-cached parent omits the just-created
       // page until its 60s staleTime lapses.
-      queryClient.invalidateQueries({ queryKey: ['pages'] });
+      queryClient.invalidateQueries({ queryKey: PAGE_LIST_FAMILY_ROOT });
     },
   });
 }
