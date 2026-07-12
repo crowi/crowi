@@ -4837,6 +4837,22 @@ components:
             - issues
       required:
         - error
+    Capability:
+      type: string
+      enum:
+        - oauth
+        - oauth:auth-code
+        - oauth:device
+        - oauth:pkce
+        - pat
+        - pages
+        - comments
+        - bookmarks
+        - attachments
+        - notifications
+        - search
+        - collab
+        - collab:redis
   parameters: {}
 paths:
   /app/info:
@@ -4867,7 +4883,7 @@ paths:
                   capabilities:
                     type: array
                     items:
-                      type: string
+                      $ref: '#/components/schemas/Capability'
                   canSelfRegister:
                     type: boolean
                 required:

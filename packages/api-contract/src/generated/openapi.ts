@@ -35,7 +35,7 @@ export interface paths {
                             confidential: string | null;
                             version: string;
                             apiVersion: string;
-                            capabilities: string[];
+                            capabilities: components["schemas"]["Capability"][];
                             canSelfRegister: boolean;
                         };
                     };
@@ -14914,6 +14914,8 @@ export interface components {
                 }[];
             };
         };
+        /** @enum {string} */
+        Capability: "oauth" | "oauth:auth-code" | "oauth:device" | "oauth:pkce" | "pat" | "pages" | "comments" | "bookmarks" | "attachments" | "notifications" | "search" | "collab" | "collab:redis";
     };
     responses: never;
     parameters: never;

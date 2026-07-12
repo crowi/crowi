@@ -1,3 +1,4 @@
+import { ALL_CAPABILITIES, AppInfoResponseSchema, CapabilitySchema } from '@crowi/api-contract';
 import request from 'supertest';
 import { app, crowi } from 'src/test/setup';
 
@@ -7,12 +8,23 @@ import { app, crowi } from 'src/test/setup';
  * `GET /api/v2/app/info` is now served by Hono (see
  * `packages/api/src/hono/handlers/app.ts`). The wire format is
  * `{ title: string | null, confidential: string | null, version: string,
- * apiVersion: string, capabilities: string[] }` where `title` is `null`
+ * apiVersion: string, capabilities: Capability[] }` where `title` is `null`
  * when the operator has not customised it (the `'Crowi'` seed value counts
  * as "not customised") and `confidential` is `null` when the
  * confidentiality notice (`app:confidential`) is unset/empty. `version` /
  * `apiVersion` / `capabilities` are the version-skew / feature-detection
- * signal read by the `@crowi/cli` end-user CLI.
+ * signal read by the `@crowi/cli` end-user CLI. `capabilities` is validated
+ * against the known `Capability` vocabulary (`STATIC_CAPABILITIES` +
+ * `DYNAMIC_CAPABILITIES`, `@crowi/api-contract`'s `app-capabilities.ts`) —
+ * see the `capabilities enum (Capability vocabulary)` describe block below.
+ * `apiVersion` deliberately stays a plain `z.string()` rather than a
+ * `z.literal` (see the doc comment on `AppInfoResponseSchema` in
+ * `@crowi/api-contract`'s `schemas/app.ts`): the CLI's WARN-ONLY
+ * version-skew probe parses this response with
+ * `AppInfoResponseSchema.partial().safeParse(...)`, and a literal would make
+ * that safeParse reject the whole body — not just the field — the moment a
+ * future server advertises a different surface version, defeating the
+ * warning it exists to produce.
  */
 describe('GET /api/v2/app/info (Hono)', () => {
   let Config: ReturnType<typeof crowi.model<'Config'>>;
@@ -94,6 +106,35 @@ describe('GET /api/v2/app/info (Hono)', () => {
     // statically-compiled subsystems the CLI relies on.
     expect(Array.isArray(res.body.capabilities)).toBe(true);
     expect(res.body.capabilities).toEqual(expect.arrayContaining(['oauth', 'pages', 'comments', 'bookmarks', 'attachments', 'notifications']));
+
+    // The full response parses against the strict (non-partial)
+    // AppInfoResponseSchema — every advertised capability is a known
+    // Capability vocabulary member.
+    expect(() => AppInfoResponseSchema.parse(res.body)).not.toThrow();
+  });
+
+  // AC: "capabilities フィールドが既知 vocabulary(STATIC_CAPABILITIES + 動的3値)の
+  // enum として wire schema 上で検証される。未知の文字列を含む body が...厳密な parse で
+  // 失敗することを unit test で示す。"
+  describe('capabilities enum (Capability vocabulary)', () => {
+    it('parses every STATIC_CAPABILITIES + DYNAMIC_CAPABILITIES value against CapabilitySchema', () => {
+      expect(ALL_CAPABILITIES.length).toBeGreaterThan(0);
+      for (const capability of ALL_CAPABILITIES) {
+        expect(CapabilitySchema.safeParse(capability).success).toBe(true);
+      }
+    });
+
+    it('rejects an unknown capability tag via CapabilitySchema', () => {
+      expect(CapabilitySchema.safeParse('not-a-real-capability').success).toBe(false);
+    });
+
+    it('rejects a body with an unknown capability via the strict AppInfoResponseSchema parse', async () => {
+      const res = await request(app).get('/api/v2/app/info');
+      expect(res.status).toBe(200);
+
+      const bodyWithUnknownCapability = { ...res.body, capabilities: [...res.body.capabilities, 'not-a-real-capability'] };
+      expect(AppInfoResponseSchema.safeParse(bodyWithUnknownCapability).success).toBe(false);
+    });
   });
 
   // `canSelfRegister` is the public UX hint that lets the unauthenticated

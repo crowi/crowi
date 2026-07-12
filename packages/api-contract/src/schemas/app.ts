@@ -1,5 +1,7 @@
 import { z } from '@hono/zod-openapi';
 
+import { CapabilitySchema } from './app-capabilities';
+
 /**
  * Public application info shared with every authenticated page (header,
  * page title, etc.). Sensitive config never appears here.
@@ -15,14 +17,25 @@ import { z } from '@hono/zod-openapi';
  * notice shows on screenshots / printouts (corporate IT requirement).
  *
  * `version` is the running Crowi server version (the `@crowi/api` package
- * version). `apiVersion` is the API surface version (currently `"v2"`).
- * `capabilities` is a coarse list of subsystems the server exposes —
- * unconditionally-compiled features plus dynamically-detected ones
- * (e.g. `"search"` only when a search driver is active). Together these
- * three fields are the version-skew / feature-detection signal the
- * `@crowi/cli` end-user CLI reads from this public, unauthenticated
- * endpoint. The CLI parses them leniently: an older server that omits
- * them degrades to a static baseline with version-skew warnings
+ * version). `apiVersion` is the API surface version (currently always
+ * `API_SURFACE_VERSION` = `"v2"`, from `./app-capabilities`) — kept as
+ * `z.string()` rather than `z.literal(API_SURFACE_VERSION)` on purpose: the
+ * `@crowi/cli` end-user CLI parses this response with
+ * `AppInfoResponseSchema.partial().safeParse(body)` to implement its
+ * WARN-ONLY version-skew note (`packages/cli/src/lib/capability.ts`), and a
+ * `.partial()` object schema still rejects the WHOLE parse (not just the
+ * mismatched field) when a present field fails its own validator. A literal
+ * `apiVersion` would make that safeParse fail outright the moment a future
+ * server advertises a different surface version — exactly the skew case the
+ * CLI needs to detect and warn about, not silently swallow. `capabilities`
+ * does not have this hazard today (no currently-shipped client sends an
+ * out-of-vocabulary tag), so it is the strict `CapabilitySchema` enum: a
+ * coarse list of subsystems the server exposes — unconditionally-compiled
+ * features plus dynamically-detected ones (e.g. `"search"` only when a
+ * search driver is active). Together these three fields are the
+ * version-skew / feature-detection signal the CLI reads from this public,
+ * unauthenticated endpoint. The CLI parses them leniently: an older server
+ * that omits them degrades to a static baseline with version-skew warnings
  * suppressed.
  *
  * `canSelfRegister` tells the unauthenticated login / register pages
@@ -41,7 +54,7 @@ export const AppInfoResponseSchema = z.object({
   confidential: z.string().nullable(),
   version: z.string(),
   apiVersion: z.string(),
-  capabilities: z.array(z.string()),
+  capabilities: z.array(CapabilitySchema),
   canSelfRegister: z.boolean(),
 });
 export type AppInfoResponse = z.infer<typeof AppInfoResponseSchema>;
