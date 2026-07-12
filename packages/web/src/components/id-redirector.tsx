@@ -7,7 +7,7 @@ import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { ErrorAlert } from '@/components/ui/error-alert';
 import { AccessDeniedCard } from '@/components/ui/access-denied-card';
 import { NotFoundCard } from '@/components/ui/not-found-card';
-import { usePage } from '@/lib/use-page';
+import { useClaimPageLinkAccess } from '@/lib/use-claim-page-link-access';
 import { pagePathToHref } from '@/lib/page-path';
 import { m } from '@paraglide/messages.js';
 
@@ -17,7 +17,12 @@ interface IdRedirectorProps {
 
 export function IdRedirector({ pageId }: IdRedirectorProps) {
   const router = useRouter();
-  const { page, isLoading, isError, error, notFound, notGranted } = usePage({ page_id: pageId });
+  // feature-restricted-grant-share-banner Phase 1 — id-URL landings must
+  // go through `POST /pages/link-access` (grant-on-first-access for
+  // GRANT_RESTRICTED pages), not the plain read-only `usePage({ page_id })`
+  // — otherwise a GRANT_RESTRICTED page's share URL never actually invites
+  // its first visitor into `grantedUsers`.
+  const { page, isLoading, isError, error, notFound, notGranted } = useClaimPageLinkAccess(pageId);
 
   // Use replace (not push) so the id URL stays out of browser history.
   useEffect(() => {
