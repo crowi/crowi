@@ -285,7 +285,7 @@ three options.
 | Grant | Internal value | Description |
 | ----- | -------------- | ----------- |
 | Public | `1` | All signed-in users can view and edit. The default. |
-| Anyone with the link | `2` | Restricted. Only explicitly granted users can access it. |
+| Anyone with the link | `2` | Restricted to people with the link. A signed-in user who opens the page's ID URL (`/<page id>`) is automatically registered as an editor of that page the first time they open it. |
 | Just me | `4` | Only the creator can access it. |
 
 > **Note**: The codebase still contains a definition for the
@@ -297,9 +297,19 @@ Grants behave as follows.
 
 - For pages whose grant is not Public, a grant check runs for viewing,
   editing, commenting, and history access alike.
-- If a user without access rights directly specifies a page ID, the page is
-  treated as "not found" to hide its very existence (a design that does not
-  leak whether the user has permission).
+- The first time a signed-in user opens the ID URL of an **Anyone with the
+  link** page, they automatically become an editor of that page. From then
+  on — including by opening the page's regular path directly — they can
+  view, edit, move, delete, and change its sharing settings, not just read
+  it. There is no way to individually revoke this membership; it is lost
+  for everyone who joined this way once any editor re-saves the page's
+  sharing settings. Opening an **Anyone with the link** page always shows a
+  banner near the top of the screen — "Share this link to invite an
+  editor" — with the share URL and a copy button.
+- If a user without access rights directly specifies the page ID of a
+  **Just me** or **Specified users** page, the page is treated as "not
+  found" to hide its very existence (a design that does not leak whether
+  the user has permission).
 - A portal page (ending with `/`) is always Public.
 
 The grant can be changed while editing a page. Switching from Public to a

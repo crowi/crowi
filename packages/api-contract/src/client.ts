@@ -644,6 +644,11 @@ const pageChain = new OpenAPIHono()
   .openapi(pageRoutes.getSeenUsersRoute, (c) => c.json(stubSeenUsers, 200))
   .openapi(pageRoutes.likePageRoute, (c) => c.json(stubPageResponse, 200))
   .openapi(pageRoutes.unlikePageRoute, (c) => c.json(stubPageResponse, 200))
+  // `granted: false` mirrors the pass-through case (public / creator /
+  // already-granted) — spread `stubPageWithRevision` (not the bare
+  // `stubPageResponse`) since `ClaimPageLinkAccessResponseSchema` requires
+  // the revision-populated `PageWithRevisionSchema`.
+  .openapi(pageRoutes.claimPageLinkAccessRoute, (c) => c.json({ ...stubPageWithRevision, granted: false }, 200))
   .openapi(pageRoutes.getWatchStatusRoute, (c) => c.json(stubWatchStatus, 200))
   .openapi(pageRoutes.setWatchStatusRoute, (c) => c.json(stubWatchStatus, 200))
   .openapi(pageRoutes.deletePageRoute, (c) => c.json(stubPageResponse, 200))

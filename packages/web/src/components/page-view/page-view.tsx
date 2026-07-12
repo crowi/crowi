@@ -35,6 +35,7 @@ import { PageHeader } from './page-header';
 import { useTocScrollSpy } from './page-toc';
 import { PageTocColumns } from './page-toc-columns';
 import { PortalizeBanner } from './portalize-dialog';
+import { RestrictedShareBanner, shouldShowRestrictedShareBanner } from './restricted-share-banner';
 import { StaleRevisionBanner } from './stale-revision-banner';
 
 // Debounce window (ms) coalescing a burst of `page-updated` frames into a
@@ -384,6 +385,7 @@ export function PageView({ path, revisionId }: PageViewProps) {
     // index them. Suppressed for drafts, the historical (stale) view, and the
     // user-home page (which can't be renamed).
     const showPortalizeBanner = !isStaleRevision && !isDraft && hasDescendants && !isUserHomePath(page.path);
+    const showRestrictedShareBanner = shouldShowRestrictedShareBanner(page, { isStaleRevision, isDraft });
     const handleEdit = () => {
       router.push(`/_edit?page_id=${encodeURIComponent(page._id)}`);
     };
@@ -407,6 +409,7 @@ export function PageView({ path, revisionId }: PageViewProps) {
             activeTocId={activeTocId}
             presence={presence}
           />
+          {showRestrictedShareBanner && <RestrictedShareBanner pageId={page._id} />}
           {showPortalizeBanner && (
             <PortalizeBanner page={page} title={m['page.portalize_descendants_title']()} description={m['page.portalize_descendants_body']()} />
           )}

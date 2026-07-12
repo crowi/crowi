@@ -1,7 +1,9 @@
 import { Types } from 'mongoose';
+import type { SearchDriver, SearchableDoc } from '@crowi/plugin-api';
 import { app, crowi } from 'src/test/setup';
 import { waitForModel } from 'src/test/wait-for-model';
 import { authHeaders, createTestUser, createPageViaApi } from 'src/test/test-helpers';
+import { createJwtUtil } from 'src/util/jwt';
 import request from 'supertest';
 
 const cleanupPathPrefix = (prefix: string) => {
@@ -9,6 +11,44 @@ const cleanupPathPrefix = (prefix: string) => {
   const Revision = crowi.model('Revision');
   const filter = { path: { $regex: `^${prefix}` } };
   return Promise.all([Page.deleteMany(filter), Revision.deleteMany(filter)]);
+};
+
+// --- feature-restricted-grant-share-banner Phase 1 test helpers ---------
+// Mirrors the local mock-driver helpers in `search.test.ts` — duplicated
+// here rather than shared, matching that file's own "not shared" posture.
+interface MockSearchDriver extends SearchDriver {
+  indexed: SearchableDoc[];
+  removed: string[];
+}
+
+const buildMockSearchDriver = (): MockSearchDriver => {
+  const driver: MockSearchDriver = {
+    indexed: [],
+    removed: [],
+    async index(doc: SearchableDoc) {
+      driver.indexed.push(doc);
+    },
+    async remove(id: string) {
+      driver.removed.push(id);
+    },
+    async query() {
+      return { total: 0, hits: [] };
+    },
+  };
+  return driver;
+};
+
+const withMockSearchDriver = async (driver: SearchDriver, fn: () => Promise<void>) => {
+  if (!crowi.pluginRegistries) {
+    throw new Error('pluginRegistries not initialized — Crowi.init() must run first');
+  }
+  const original = crowi.pluginRegistries.active.search;
+  crowi.pluginRegistries.active.search = driver;
+  try {
+    await fn();
+  } finally {
+    crowi.pluginRegistries.active.search = original;
+  }
 };
 
 describe('Routes /api/v2/pages (Hono createPage)', () => {
@@ -2250,6 +2290,515 @@ describe('Routes /api/v2/pages (Hono getPage — past revision / stale detection
       // Viewing the latest: latestRevision equals the viewed revision, so the
       // web treats it as NOT stale and shows no banner.
       expect(res.body.page.latestRevision).toBe(v2RevisionId);
+    });
+  });
+
+  // feature-restricted-grant-share-banner Phase 1 — grant-on-first-access
+  // is confined to `POST /pages/link-access`; `GET /pages?page_id=` (this
+  // `page_id` branch) must stay byte-for-byte unchanged, for every caller
+  // kind, so `/_edit?page_id=` / `/_attachments?page_id=` (which use this
+  // same branch via `usePage({ page_id })`) can never become an implicit
+  // invite surface.
+  describe('page_id branch — grant-on-first-access regression (feature-restricted-grant-share-banner)', () => {
+    const REGRESSION_PREFIX = '/hono-page-get-linkaccess-regression-test/';
+    let ownerToken: string;
+
+    beforeAll(async () => {
+      ({ accessToken: ownerToken } = await createTestUser({
+        name: 'GetPageId Regression Owner',
+        username: 'getPageIdRegressionOwner',
+        email: 'get-page-id-regression-owner@example.com',
+      }));
+    });
+
+    afterEach(() => cleanupPathPrefix(REGRESSION_PREFIX));
+
+    it('still 403s a non-granted web caller for a GRANT_RESTRICTED page_id, without writing grantedUsers', async () => {
+      const page = await createPageViaApi(ownerToken, `${REGRESSION_PREFIX}web`, '# restricted', 2 /* GRANT_RESTRICTED */);
+      const { accessToken: strangerToken, user: stranger } = await createTestUser({
+        name: 'GetPageId Regression Stranger Web',
+        username: 'getPageIdRegressionStrangerWeb',
+        email: 'get-page-id-regression-stranger-web@example.com',
+      });
+
+      const res = await request(app).get('/api/v2/pages').query({ page_id: page._id }).set(authHeaders(strangerToken));
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe('PAGE_NOT_GRANTED');
+
+      const Page = crowi.model('Page');
+      const reloaded = await Page.findById(page._id).select('grantedUsers').lean();
+      expect((reloaded?.grantedUsers ?? []).map(String)).not.toContain(stranger._id.toString());
+    });
+
+    it('still 403s a non-granted OAuth/PAT caller for a GRANT_RESTRICTED page_id (no grant-on-access here either)', async () => {
+      const page = await createPageViaApi(ownerToken, `${REGRESSION_PREFIX}oauth-pat`, '# restricted', 2);
+      const { user: stranger } = await createTestUser({
+        name: 'GetPageId Regression Stranger OAuth',
+        username: 'getPageIdRegressionStrangerOauth',
+        email: 'get-page-id-regression-stranger-oauth@example.com',
+      });
+      const oauthToken = createJwtUtil(crowi).signOauthAccessToken({ user: stranger, scopes: ['pages:read'], clientId: 'crowi-cli' });
+
+      const res = await request(app).get('/api/v2/pages').query({ page_id: page._id }).set(authHeaders(oauthToken));
+      expect(res.status).toBe(403);
+
+      const Page = crowi.model('Page');
+      const reloaded = await Page.findById(page._id).select('grantedUsers').lean();
+      expect((reloaded?.grantedUsers ?? []).map(String)).not.toContain(stranger._id.toString());
+    });
+
+    it('/_edit / /_attachments auth-boundary escape regression: reading a restricted page_id never grants access, and write ops through the same lookup stay 403/404', async () => {
+      const page = await createPageViaApi(ownerToken, `${REGRESSION_PREFIX}edit-escape`, '# restricted', 2);
+      const { accessToken: strangerToken, user: stranger } = await createTestUser({
+        name: 'GetPageId Regression Edit Escape',
+        username: 'getPageIdRegressionEditEscape',
+        email: 'get-page-id-regression-edit-escape@example.com',
+      });
+
+      // `/_edit?page_id=` and `/_attachments?page_id=` both resolve through
+      // `usePage({ page_id })` -> `GET /pages?page_id=`. Simulate opening
+      // either screen: still 403, still no grantedUsers write.
+      const readRes = await request(app).get('/api/v2/pages').query({ page_id: page._id }).set(authHeaders(strangerToken));
+      expect(readRes.status).toBe(403);
+
+      const Page = crowi.model('Page');
+      const afterRead = await Page.findById(page._id).select('grantedUsers').lean();
+      expect((afterRead?.grantedUsers ?? []).map(String)).not.toContain(stranger._id.toString());
+
+      // Editor/save-adjacent operations (findPageByIdAndGrantedUser-backed)
+      // must still be denied for the same non-granted user — reading the
+      // page_id branch must not have silently upgraded their access.
+      const updateRes = await request(app).put('/api/v2/pages').set(authHeaders(strangerToken)).send({ page_id: page._id, body: '# hijacked' });
+      expect([403, 404]).toContain(updateRes.status);
+
+      const afterWrite = await Page.findById(page._id).select('grantedUsers').lean();
+      expect((afterWrite?.grantedUsers ?? []).map(String)).not.toContain(stranger._id.toString());
+    });
+  });
+});
+
+describe('Routes /api/v2/pages/link-access (Hono claimPageLinkAccessRoute — grant-on-first-access, feature-restricted-grant-share-banner Phase 1)', () => {
+  const PATH_PREFIX = '/hono-page-link-access-test/';
+  const GRANT_PUBLIC = 1;
+  const GRANT_RESTRICTED = 2;
+  const GRANT_SPECIFIED = 3;
+  const GRANT_OWNER = 4;
+
+  let owner: Awaited<ReturnType<typeof createTestUser>>['user'];
+  let ownerToken: string;
+  let ownerId: string;
+  let claimant: Awaited<ReturnType<typeof createTestUser>>['user'];
+  let claimantToken: string;
+  let claimantId: string;
+
+  beforeAll(async () => {
+    const ownerSeed = await createTestUser({ name: 'Link Access Owner', username: 'linkAccessOwner', email: 'link-access-owner@example.com' });
+    owner = ownerSeed.user;
+    ownerToken = ownerSeed.accessToken;
+    ownerId = owner._id.toString();
+
+    const claimantSeed = await createTestUser({ name: 'Link Access Claimant', username: 'linkAccessClaimant', email: 'link-access-claimant@example.com' });
+    claimant = claimantSeed.user;
+    claimantToken = claimantSeed.accessToken;
+    claimantId = claimant._id.toString();
+  });
+
+  afterEach(() => cleanupPathPrefix(PATH_PREFIX));
+
+  const claim = (token: string, pageId: string) => request(app).post('/api/v2/pages/link-access').set(authHeaders(token)).send({ page_id: pageId });
+
+  const grantedUsersOf = async (pageId: string): Promise<string[]> => {
+    const Page = crowi.model('Page');
+    const reloaded = await Page.findById(pageId).select('grantedUsers').lean();
+    return (reloaded?.grantedUsers ?? []).map(String);
+  };
+
+  describe('grant-on-first-access', () => {
+    it('grants a non-creator, non-granted user access to a GRANT_RESTRICTED page (granted: true) and the redirect-after-claim path read then succeeds', async () => {
+      const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}first-claim`, '# restricted', GRANT_RESTRICTED);
+
+      const res = await claim(claimantToken, page._id);
+      expect(res.status).toBe(200);
+      expect(res.body.granted).toBe(true);
+      expect(res.body.page._id).toBe(page._id);
+      expect(await grantedUsersOf(page._id)).toContain(claimantId);
+
+      // Regression: IdRedirector -> PageView's post-redirect path read
+      // actually succeeds now that the claim committed.
+      const pathRes = await request(app).get('/api/v2/pages').query({ path: page.path }).set(authHeaders(claimantToken));
+      expect(pathRes.status).toBe(200);
+    });
+
+    it('403s a different user who never claimed the page, both via the claim endpoint and the canonical path', async () => {
+      const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}never-claimed`, '# restricted', GRANT_RESTRICTED);
+      const stranger = await createTestUser({
+        name: 'Link Access Never Claimed',
+        username: 'linkAccessNeverClaimed',
+        email: 'link-access-never-claimed@example.com',
+      });
+
+      const pathRes = await request(app).get('/api/v2/pages').query({ path: page.path }).set(authHeaders(stranger.accessToken));
+      expect(pathRes.status).toBe(403);
+      expect(pathRes.body.error.code).toBe('PAGE_NOT_GRANTED');
+      expect(await grantedUsersOf(page._id)).not.toContain(stranger.user._id.toString());
+    });
+
+    it.each([
+      ['GRANT_SPECIFIED', GRANT_SPECIFIED],
+      ['GRANT_OWNER', GRANT_OWNER],
+    ])('does not invite into a %s page (grant-on-access is confined to GRANT_RESTRICTED)', async (_label, grant) => {
+      const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}non-restricted-${grant}`, '# body', grant);
+
+      const res = await claim(claimantToken, page._id);
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe('PAGE_NOT_GRANTED');
+      expect(await grantedUsersOf(page._id)).not.toContain(claimantId);
+    });
+  });
+
+  describe('pass-through (zero grant side effects)', () => {
+    it('a GRANT_PUBLIC page resolves with granted: false for any authenticated user', async () => {
+      const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}public-passthrough`, '# body', GRANT_PUBLIC);
+      const res = await claim(claimantToken, page._id);
+      expect(res.status).toBe(200);
+      expect(res.body.granted).toBe(false);
+    });
+
+    it('the creator opening their own GRANT_RESTRICTED page is a pass-through', async () => {
+      const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}creator-passthrough`, '# body', GRANT_RESTRICTED);
+      const res = await claim(ownerToken, page._id);
+      expect(res.status).toBe(200);
+      expect(res.body.granted).toBe(false);
+    });
+
+    it('a second claim by an already-granted user is a pass-through, with no duplicate grantedUsers entry', async () => {
+      const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}already-granted`, '# body', GRANT_RESTRICTED);
+
+      const first = await claim(claimantToken, page._id);
+      expect(first.body.granted).toBe(true);
+
+      const second = await claim(claimantToken, page._id);
+      expect(second.status).toBe(200);
+      expect(second.body.granted).toBe(false);
+
+      const ids = await grantedUsersOf(page._id);
+      expect(ids.filter((id) => id === claimantId)).toHaveLength(1);
+    });
+
+    it('a GRANT_OWNER page opened by its own creator (id link to their own private page) is a pass-through', async () => {
+      const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}owner-self`, '# body', GRANT_OWNER);
+      const res = await claim(ownerToken, page._id);
+      expect(res.status).toBe(200);
+      expect(res.body.granted).toBe(false);
+    });
+
+    it('a GRANT_SPECIFIED page opened by an existing grantedUsers member (non-creator) is a pass-through', async () => {
+      const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}specified-member`, '# body', GRANT_SPECIFIED);
+      // `PUT /pages/grant` (setPageGrant -> Page.updateGrant) only ever adds
+      // the *caller* (the one changing the grant) to `grantedUsers` — there
+      // is no HTTP path to add a non-creator member to a GRANT_SPECIFIED
+      // page's allow-list (that legacy UI is out of scope, see the spec's
+      // "outOfScope"). Seed `claimant`'s membership directly via the model
+      // to exercise the genuine "non-creator existing member" pass-through.
+      const Page = crowi.model('Page');
+      await Page.findByIdAndUpdate(page._id, { $addToSet: { grantedUsers: claimantId } });
+
+      const res = await claim(claimantToken, page._id);
+      expect(res.status).toBe(200);
+      expect(res.body.granted).toBe(false);
+      expect(await grantedUsersOf(page._id)).toContain(claimantId);
+    });
+
+    it('same-user concurrent claims do not create duplicate grantedUsers entries (Promise.all)', async () => {
+      const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}concurrent-claims`, '# body', GRANT_RESTRICTED);
+
+      const responses = await Promise.all(Array.from({ length: 5 }, () => claim(claimantToken, page._id)));
+      expect(responses.every((r) => r.status === 200)).toBe(true);
+
+      const ids = await grantedUsersOf(page._id);
+      expect(ids.filter((id) => id === claimantId)).toHaveLength(1);
+    });
+  });
+
+  describe('deleted / redirect-stub / rename interactions', () => {
+    it('does not grant access to a deleted GRANT_RESTRICTED page', async () => {
+      const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}deleted`, '# body', GRANT_RESTRICTED);
+      const delRes = await request(app).delete('/api/v2/pages').set(authHeaders(ownerToken)).send({ page_id: page._id });
+      expect(delRes.status).toBe(200);
+
+      const res = await claim(claimantToken, page._id);
+      expect(res.status).toBe(403);
+      expect(await grantedUsersOf(page._id)).not.toContain(claimantId);
+    });
+
+    it('a redirect stub left behind by a rename resolves as a public pass-through, not an invite target', async () => {
+      const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}rename-source`, '# body', GRANT_RESTRICTED);
+      const renameRes = await request(app)
+        .post('/api/v2/pages/rename')
+        .set(authHeaders(ownerToken))
+        .send({ page_id: page._id, new_path: `${PATH_PREFIX}rename-dest`, create_redirect: true });
+      expect(renameRes.status).toBe(200);
+
+      const Page = crowi.model('Page');
+      const stub = await Page.findOne({ path: `${PATH_PREFIX}rename-source` }).lean();
+      expect(stub).not.toBeNull();
+      expect(stub?.redirectTo).toBe(`${PATH_PREFIX}rename-dest`);
+
+      const res = await claim(claimantToken, (stub?._id as { toString(): string }).toString());
+      expect(res.status).toBe(200);
+      expect(res.body.granted).toBe(false);
+    });
+
+    it('claiming the SAME _id after a plain rename (no redirect stub) still grants access — the shared link survives the rename', async () => {
+      const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}renamed-source`, '# body', GRANT_RESTRICTED);
+      const renameRes = await request(app)
+        .post('/api/v2/pages/rename')
+        .set(authHeaders(ownerToken))
+        .send({ page_id: page._id, new_path: `${PATH_PREFIX}renamed-dest` });
+      expect(renameRes.status).toBe(200);
+
+      const res = await claim(claimantToken, page._id);
+      expect(res.status).toBe(200);
+      expect(res.body.granted).toBe(true);
+    });
+  });
+
+  describe('scope / web-session boundaries (RFC-0010)', () => {
+    it('403 INSUFFICIENT_SCOPE for a pages:read-only OAuth token', async () => {
+      const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}scope-oauth-read`, '# body', GRANT_RESTRICTED);
+      const scoped = await createTestUser({ name: 'Link Access Scope Read', username: 'linkAccessScopeRead', email: 'link-access-scope-read@example.com' });
+      const oauthToken = createJwtUtil(crowi).signOauthAccessToken({ user: scoped.user, scopes: ['pages:read'], clientId: 'crowi-cli' });
+
+      const res = await claim(oauthToken, page._id);
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe('INSUFFICIENT_SCOPE');
+      expect(await grantedUsersOf(page._id)).not.toContain(scoped.user._id.toString());
+    });
+
+    it('403 PAGE_NOT_GRANTED (web-session-only) for a pages:write OAuth token, even though scope is satisfied', async () => {
+      const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}scope-oauth-write`, '# body', GRANT_RESTRICTED);
+      const scoped = await createTestUser({ name: 'Link Access Scope Write', username: 'linkAccessScopeWrite', email: 'link-access-scope-write@example.com' });
+      const oauthToken = createJwtUtil(crowi).signOauthAccessToken({ user: scoped.user, scopes: ['pages:write'], clientId: 'crowi-cli' });
+
+      const res = await claim(oauthToken, page._id);
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe('PAGE_NOT_GRANTED');
+      expect(await grantedUsersOf(page._id)).not.toContain(scoped.user._id.toString());
+    });
+
+    it('403 PAGE_NOT_GRANTED (web-session-only) for a pages:write PAT', async () => {
+      const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}scope-pat-write`, '# body', GRANT_RESTRICTED);
+      const scoped = await createTestUser({ name: 'Link Access Scope PAT', username: 'linkAccessScopePat', email: 'link-access-scope-pat@example.com' });
+      const created = await request(app)
+        .post('/api/v2/me/access-tokens')
+        .set(authHeaders(scoped.accessToken))
+        .send({ name: 'link-access-pat', scopes: ['pages:write'] });
+      expect(created.status).toBe(201);
+      const patToken = created.body.token as string;
+
+      const res = await claim(patToken, page._id);
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe('PAGE_NOT_GRANTED');
+      expect(await grantedUsersOf(page._id)).not.toContain(scoped.user._id.toString());
+    });
+
+    it("30 rejected non-web (OAuth) requests do not consume the same user's web rate-limit bucket", async () => {
+      // Dedicated fresh user: this test intentionally drives the limiter's
+      // per-user bucket near its budget, so it must not share an identity
+      // with any other test in this file.
+      const bucketUser = await createTestUser({
+        name: 'Link Access Bucket Isolation',
+        username: 'linkAccessBucketIsolation',
+        email: 'link-access-bucket-isolation@example.com',
+      });
+      const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}bucket-isolation`, '# body', GRANT_RESTRICTED);
+      const oauthToken = createJwtUtil(crowi).signOauthAccessToken({ user: bucketUser.user, scopes: ['pages:write'], clientId: 'crowi-cli' });
+
+      // Limit is 30/min/user. The web-session guard runs BEFORE the rate
+      // limiter (registration order), so these 30 non-web rejections must
+      // never reach — let alone count against — the limiter.
+      const rejections = await Promise.all(Array.from({ length: 30 }, () => claim(oauthToken, page._id)));
+      expect(rejections.every((r) => r.status === 403)).toBe(true);
+
+      // The SAME user's real web session must still be processed normally
+      // (200, not 429) right after.
+      const webRes = await claim(bucketUser.accessToken, page._id);
+      expect(webRes.status).toBe(200);
+      expect(webRes.body.granted).toBe(true);
+    });
+  });
+
+  describe('rate limiting (30 req/min/user)', () => {
+    it('429s with Retry-After once the per-user budget is exceeded; a different user is unaffected', async () => {
+      // Dedicated fresh user: this test intentionally exhausts the
+      // limiter's per-user bucket, so it must not share an identity with
+      // any other test in this file (would make later assertions flaky).
+      const rateLimitedUser = await createTestUser({
+        name: 'Link Access Rate Limited',
+        username: 'linkAccessRateLimited',
+        email: 'link-access-rate-limited@example.com',
+      });
+      const otherUser = await createTestUser({
+        name: 'Link Access Rate Other',
+        username: 'linkAccessRateOther',
+        email: 'link-access-rate-other@example.com',
+      });
+      const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}rate-limit`, '# body', GRANT_RESTRICTED);
+
+      // 2*budget+1 concurrent requests span at most two fixed windows —
+      // by pigeonhole, one window receives >30 hits wherever the window
+      // boundary falls (same technique — and the same flakiness rationale
+      // — as autocomplete.test.ts's rate-limit test).
+      const responses = await Promise.all(Array.from({ length: 61 }, () => claim(rateLimitedUser.accessToken, page._id)));
+      expect(responses.every((r) => r.status === 200 || r.status === 429)).toBe(true);
+
+      const limited = responses.find((r) => r.status === 429);
+      expect(limited).toBeDefined();
+      expect(limited?.body.error).toBe('rate_limited');
+      expect(typeof limited?.body.retryAfterSeconds).toBe('number');
+      expect(limited?.headers['retry-after']).toBeDefined();
+
+      const otherRes = await claim(otherUser.accessToken, page._id);
+      expect(otherRes.status).toBe(200);
+    });
+  });
+
+  describe('search reindex integration (indexPageInSearchById)', () => {
+    it('reindexes the page (with the new grantee reflected) only when a write actually happens', async () => {
+      const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}reindex-on-grant`, '# body', GRANT_RESTRICTED);
+      const driver = buildMockSearchDriver();
+
+      await withMockSearchDriver(driver, async () => {
+        const res = await claim(claimantToken, page._id);
+        expect(res.status).toBe(200);
+        expect(res.body.granted).toBe(true);
+
+        // The reindex is a `crowi.trackSideEffect`-tracked fire-and-forget
+        // (not awaited by the handler before it responds) — drain it
+        // WHILE the mock driver is still swapped in, otherwise the real
+        // index write could land after `withMockSearchDriver` restores the
+        // original driver and be lost to this assertion.
+        await crowi.drainSideEffects();
+      });
+
+      expect(driver.indexed).toHaveLength(1);
+      expect(driver.indexed[0]?.meta?.granted_users).toContain(claimantId);
+    });
+
+    it('does not reindex on a no-op pass-through (public page)', async () => {
+      const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}no-reindex-public`, '# body', GRANT_PUBLIC);
+      const driver = buildMockSearchDriver();
+
+      await withMockSearchDriver(driver, async () => {
+        const res = await claim(claimantToken, page._id);
+        expect(res.status).toBe(200);
+        expect(res.body.granted).toBe(false);
+
+        await crowi.drainSideEffects();
+      });
+
+      expect(driver.indexed).toHaveLength(0);
+    });
+
+    it('does not trigger backlink registration (no page event / write amplification)', async () => {
+      const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}no-event-amplification`, '# body', GRANT_RESTRICTED);
+      const Backlink = crowi.model('Backlink');
+      const backlinkSpy = jest.spyOn(Backlink, 'createBySavedPage');
+
+      try {
+        const res = await claim(claimantToken, page._id);
+        expect(res.status).toBe(200);
+        expect(res.body.granted).toBe(true);
+
+        await crowi.drainSideEffects();
+        expect(backlinkSpy).not.toHaveBeenCalled();
+      } finally {
+        backlinkSpy.mockRestore();
+      }
+    });
+
+    it('still returns 200 (granted: true) even if the search reindex helper itself throws', async () => {
+      const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}reindex-throws`, '# body', GRANT_RESTRICTED);
+      const throwingDriver: SearchDriver = {
+        async index() {
+          throw new Error('search cluster down');
+        },
+        async remove() {},
+        async query() {
+          return { total: 0, hits: [] };
+        },
+      };
+
+      await withMockSearchDriver(throwingDriver, async () => {
+        const res = await claim(claimantToken, page._id);
+        expect(res.status).toBe(200);
+        expect(res.body.granted).toBe(true);
+      });
+    });
+  });
+
+  describe('list visibility (GET /pages/list)', () => {
+    it('a claimed GRANT_RESTRICTED page is invisible before the claim and visible after', async () => {
+      const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}list-visibility`, '# body', GRANT_RESTRICTED);
+      const viewer = await createTestUser({
+        name: 'Link Access List Visibility',
+        username: 'linkAccessListVisibility',
+        email: 'link-access-list-visibility@example.com',
+      });
+
+      const before = await request(app).get('/api/v2/pages/list').query({ path: '/' }).set(authHeaders(viewer.accessToken));
+      expect(before.status).toBe(200);
+      expect((before.body.pages as { _id: string }[]).map((p) => p._id)).not.toContain(page._id);
+
+      const claimRes = await claim(viewer.accessToken, page._id);
+      expect(claimRes.status).toBe(200);
+
+      const after = await request(app).get('/api/v2/pages/list').query({ path: '/' }).set(authHeaders(viewer.accessToken));
+      expect(after.status).toBe(200);
+      expect((after.body.pages as { _id: string }[]).map((p) => p._id)).toContain(page._id);
+    });
+  });
+
+  describe('setPageGrant reindex symmetry (§6)', () => {
+    it('reindexes the page after a grant reset, reflecting the post-reset grantedUsers (link-invited co-editor drops out of ES)', async () => {
+      const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}grant-reset-reindex`, '# body', GRANT_RESTRICTED);
+      const claimRes = await claim(claimantToken, page._id);
+      expect(claimRes.body.granted).toBe(true);
+
+      const driver = buildMockSearchDriver();
+      await withMockSearchDriver(driver, async () => {
+        const res = await request(app).put('/api/v2/pages/grant').set(authHeaders(ownerToken)).send({ page_id: page._id, grant: GRANT_OWNER });
+        expect(res.status).toBe(200);
+
+        // Drain the tracked fire-and-forget reindex while the mock driver
+        // is still swapped in (see the comment in the claim-endpoint
+        // reindex test above).
+        await crowi.drainSideEffects();
+      });
+
+      expect(driver.indexed.length).toBeGreaterThanOrEqual(1);
+      const last = driver.indexed[driver.indexed.length - 1];
+      expect(last?.meta?.granted_users).not.toContain(claimantId);
+      expect(last?.meta?.granted_users).toContain(ownerId);
+    });
+  });
+
+  describe('soft-delete ES remove', () => {
+    it('removes the page from the search index on soft-delete', async () => {
+      const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}soft-delete-remove`, '# body', GRANT_PUBLIC);
+      const driver = buildMockSearchDriver();
+
+      await withMockSearchDriver(driver, async () => {
+        const res = await request(app).delete('/api/v2/pages').set(authHeaders(ownerToken)).send({ page_id: page._id });
+        expect(res.status).toBe(200);
+
+        // Drain the tracked fire-and-forget reindex while the mock driver
+        // is still swapped in (see the comment in the claim-endpoint
+        // reindex test above).
+        await crowi.drainSideEffects();
+      });
+
+      expect(driver.removed).toContain(page._id);
     });
   });
 });

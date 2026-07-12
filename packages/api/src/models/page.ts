@@ -237,6 +237,13 @@ export interface PageModel extends Model<PageDocument> {
   findUpdatedList(offset, limit, cb): any;
   findPageById(id): Promise<PageDocument>;
   findPageByIdAndGrantedUser(id, userData): Promise<PageDocument>;
+  /**
+   * feature-restricted-grant-share-banner Phase 1 — grant-on-first-access
+   * (invite-link) resolution for the `IdRedirector`-only share URL. See
+   * the implementation below (right after `findPageByIdAndGrantedUser`)
+   * for the eligibility rule and the TOCTOU-safe atomic write.
+   */
+  findPageByIdForSharedLinkAccess(id, userData): Promise<{ page: PageDocument; granted: boolean }>;
   findPage(path, userData, revisionId?, ignoreNotFound?): Promise<PageDocument | null>;
   findPageByPath(path): Promise<PageDocument>;
   isExistByPath(path): any;
@@ -810,6 +817,97 @@ export default (crowi: Crowi) => {
     }
 
     return pageData;
+  };
+
+  /**
+   * feature-restricted-grant-share-banner Phase 1 — grant-on-first-access
+   * (invite-link) resolution for the share ID URL. Called ONLY by the
+   * `POST /pages/link-access` handler (which `IdRedirector` alone uses) —
+   * every other by-id path keeps using `findPageByIdAndGrantedUser` above,
+   * unchanged.
+   *
+   * This is a pure ACL read/mutation: it never touches the search index or
+   * emits a page event (that's the handler's job, via
+   * `util/page-search-index.ts`'s `indexPageInSearchById` — importing it
+   * here would be circular, since that module already imports
+   * `STATUS_DELETED` / `STATUS_DRAFT` from this one).
+   *
+   * The invite write is attempted only when ALL of the following hold —
+   * otherwise the first read is handed straight to the same `isGrantedFor`
+   * gate every by-id read uses, so pages the caller could already open
+   * (public / their own / already-granted) pass through with zero writes:
+   *   - `grant === GRANT_RESTRICTED`, the caller isn't the creator, and
+   *     isn't already in `grantedUsers`.
+   *   - the page is an actually-published real page: `status` is `null` or
+   *     `STATUS_PUBLISHED` (never invite into a trashed/wip/deprecated/
+   *     draft page) and `redirectTo` is nullish (`== null`, not `===` — a
+   *     rename-redirect stub is a different document with its own `_id`;
+   *     legacy real pages may have `redirectTo` missing rather than
+   *     explicitly `null`).
+   *
+   * When eligible, the write is one atomic `findOneAndUpdate` that pins the
+   * exact same "still a published, still-restricted, not-yet-granted real
+   * page" predicate used above, so a concurrent grant change / soft-delete
+   * between this function's read and its write can never be invited
+   * against stale state (TOCTOU-safe). A `null` result (filter didn't
+   * match — grant changed, page got trashed, or another tab's own claim
+   * beat us to it) re-reads fresh and falls through to the same
+   * `isGrantedFor` gate as the pass-through case.
+   */
+  pageSchema.statics.findPageByIdForSharedLinkAccess = async function (id, userData) {
+    const pageData = await Page.findPageById(id);
+
+    // RFC-0004: a draft page is visible only to its author — same
+    // existence-hiding rule as `findPageByIdAndGrantedUser` above.
+    if (pageData.isDraft() && (!userData || !pageData.isCreator(userData))) {
+      throw pageNotFoundError();
+    }
+
+    const isEligibleForLinkGrant =
+      !!userData &&
+      pageData.grant === GRANT_RESTRICTED &&
+      !pageData.isCreator(userData) &&
+      !pageData.grantedUsers.some((granted) => granted.equals(userData._id)) &&
+      pageData.isPublished() &&
+      pageData.redirectTo == null;
+
+    let currentPageData = pageData;
+    let granted = false; // did THIS call add the caller to grantedUsers?
+
+    if (isEligibleForLinkGrant) {
+      const updated = await Page.findOneAndUpdate(
+        {
+          _id: pageData._id,
+          grant: GRANT_RESTRICTED,
+          status: { $in: [null, STATUS_PUBLISHED] },
+          redirectTo: null,
+          grantedUsers: { $ne: userData._id },
+        },
+        { $addToSet: { grantedUsers: userData._id } },
+        { new: true },
+      );
+
+      if (updated) {
+        // Matched: the write committed atomically against a still-eligible
+        // document, and `{ new: true }` handed back that exact post-write
+        // state — no separate re-read window for a concurrent delete to
+        // land in between write and response.
+        currentPageData = updated;
+        granted = true;
+      } else {
+        // Filter didn't match: a concurrent grant change / soft-delete, or
+        // another tab's own claim, raced ahead of us. Re-read fresh and let
+        // the shared `isGrantedFor` gate below decide (403 if we lost
+        // access, 200 pass-through if the other tab already granted us).
+        currentPageData = await Page.findPageById(id);
+      }
+    }
+
+    if (userData && !currentPageData.isGrantedFor(userData)) {
+      throw new Error('Page is not granted for the user'); // PAGE_GRANT_ERROR, null);
+    }
+
+    return { page: currentPageData, granted };
   };
 
   // find page and check if granted user

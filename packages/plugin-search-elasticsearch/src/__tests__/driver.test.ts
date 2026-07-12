@@ -76,6 +76,15 @@ describe('shouldIndex', () => {
     // path must drop them just like the incremental indexing path does.
     expect(shouldIndex({ ...base, status: 'draft' })).toBe(false);
   });
+
+  // feature-restricted-grant-share-banner §"index 側の status 境界の整合" —
+  // wip / deprecated are excluded too, matching list's visibility boundary,
+  // so the search hydration's status drop never turns these into
+  // permanent dead hits.
+  it('excludes wip and deprecated pages', () => {
+    expect(shouldIndex({ ...base, status: 'wip' })).toBe(false);
+    expect(shouldIndex({ ...base, status: 'deprecated' })).toBe(false);
+  });
 });
 
 describe('parseUri', () => {

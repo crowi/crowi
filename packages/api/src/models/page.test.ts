@@ -1,4 +1,4 @@
-import { visiblePageGrantOr } from 'src/models/page';
+import { STATUS_DELETED, visiblePageGrantOr } from 'src/models/page';
 import { crowi, Fixture } from 'src/test/setup';
 
 describe('Page', () => {
@@ -837,6 +837,218 @@ describe('Page', () => {
       const grantedIds = (reloaded?.grantedUsers ?? []).map((id) => id.toString());
       expect(grantedIds).toContain(admin._id.toString());
       expect(grantedIds).toContain(creator._id.toString());
+    });
+  });
+
+  // feature-restricted-grant-share-banner Phase 1 — grant-on-first-access
+  // (invite-link) resolution. This static is a pure ACL read/mutation (no
+  // search reindex / page event side effects — those are the handler's
+  // job, verified separately in hono/handlers/page.test.ts).
+  describe('.findPageByIdForSharedLinkAccess (feature-restricted-grant-share-banner Phase 1)', () => {
+    let linkCreator;
+    let claimant;
+
+    beforeAll(async () => {
+      const users = await Fixture.generate('User', [
+        { name: 'Link Access Model Creator', username: 'linkAccessModelCreator', email: 'link-access-model-creator@example.com' },
+        { name: 'Link Access Model Claimant', username: 'linkAccessModelClaimant', email: 'link-access-model-claimant@example.com' },
+      ]);
+      [linkCreator, claimant] = users;
+    });
+
+    afterEach(async () => {
+      await Page.deleteMany({ path: { $regex: '^/link-access-model' } });
+    });
+
+    const grantedUsersOf = async (id) => {
+      const reloaded = await Page.findById(id).select('grantedUsers').lean();
+      return (reloaded?.grantedUsers ?? []).map((v) => v.toString());
+    };
+
+    test('grants first-time access to a GRANT_RESTRICTED page: granted === true, and the caller lands in grantedUsers', async () => {
+      const [page] = await Fixture.generate('Page', [
+        { path: '/link-access-model/first-grant', grant: Page.GRANT_RESTRICTED, creator: linkCreator, grantedUsers: [linkCreator] },
+      ]);
+
+      const result = await Page.findPageByIdForSharedLinkAccess(page._id, claimant);
+      expect(result.granted).toBe(true);
+      expect(result.page.isGrantedFor(claimant)).toBe(true);
+      expect(await grantedUsersOf(page._id)).toContain(claimant._id.toString());
+    });
+
+    test('a second claim by the same user is a pass-through: granted === false, no duplicate grantedUsers entry', async () => {
+      const [page] = await Fixture.generate('Page', [
+        { path: '/link-access-model/second-claim', grant: Page.GRANT_RESTRICTED, creator: linkCreator, grantedUsers: [linkCreator] },
+      ]);
+
+      const first = await Page.findPageByIdForSharedLinkAccess(page._id, claimant);
+      expect(first.granted).toBe(true);
+
+      const second = await Page.findPageByIdForSharedLinkAccess(page._id, claimant);
+      expect(second.granted).toBe(false);
+
+      const ids = await grantedUsersOf(page._id);
+      expect(ids.filter((id) => id === claimant._id.toString())).toHaveLength(1);
+    });
+
+    test.each([
+      ['GRANT_PUBLIC', () => Page.GRANT_PUBLIC],
+      ['GRANT_SPECIFIED', () => Page.GRANT_SPECIFIED],
+      ['GRANT_OWNER', () => Page.GRANT_OWNER],
+    ])('%s pages do not trigger grant-on-access (pass-through for public, 403 for the rest)', async (label, grantFn) => {
+      const [page] = await Fixture.generate('Page', [
+        { path: `/link-access-model/non-restricted-${label}`, grant: grantFn(), creator: linkCreator, grantedUsers: [linkCreator] },
+      ]);
+
+      if (label === 'GRANT_PUBLIC') {
+        const result = await Page.findPageByIdForSharedLinkAccess(page._id, claimant);
+        expect(result.granted).toBe(false);
+      } else {
+        await expect(Page.findPageByIdForSharedLinkAccess(page._id, claimant)).rejects.toThrow('Page is not granted for the user');
+      }
+      expect(await grantedUsersOf(page._id)).not.toContain(claimant._id.toString());
+    });
+
+    test('the creator opening their own GRANT_RESTRICTED page is a pass-through (granted === false, no write)', async () => {
+      const [page] = await Fixture.generate('Page', [
+        { path: '/link-access-model/creator-passthrough', grant: Page.GRANT_RESTRICTED, creator: linkCreator, grantedUsers: [linkCreator] },
+      ]);
+
+      const result = await Page.findPageByIdForSharedLinkAccess(page._id, linkCreator);
+      expect(result.granted).toBe(false);
+    });
+
+    test('does not invite into a deleted GRANT_RESTRICTED page (throws, no write)', async () => {
+      const [page] = await Fixture.generate('Page', [
+        {
+          path: '/link-access-model/deleted',
+          grant: Page.GRANT_RESTRICTED,
+          creator: linkCreator,
+          grantedUsers: [linkCreator],
+          status: STATUS_DELETED,
+        },
+      ]);
+
+      await expect(Page.findPageByIdForSharedLinkAccess(page._id, claimant)).rejects.toThrow('Page is not granted for the user');
+      expect(await grantedUsersOf(page._id)).not.toContain(claimant._id.toString());
+    });
+
+    test('a redirect stub (GRANT_PUBLIC, redirectTo set — the real shape Page.rename creates) is a pass-through, not an invite target', async () => {
+      const [stub] = await Fixture.generate('Page', [
+        {
+          path: '/link-access-model/stub-source',
+          grant: Page.GRANT_PUBLIC,
+          creator: linkCreator,
+          grantedUsers: [],
+          redirectTo: '/link-access-model/stub-target',
+        },
+      ]);
+
+      const result = await Page.findPageByIdForSharedLinkAccess(stub._id, claimant);
+      expect(result.granted).toBe(false);
+    });
+
+    test('grant-on-first-access still succeeds after a normal rename (same real _id, redirectTo stays null) — the shared link survives the rename', async () => {
+      const [page] = await Fixture.generate('Page', [
+        { path: '/link-access-model/rename-source', grant: Page.GRANT_RESTRICTED, creator: linkCreator, grantedUsers: [linkCreator] },
+      ]);
+
+      await Page.rename(page, '/link-access-model/rename-dest', linkCreator, {});
+
+      const result = await Page.findPageByIdForSharedLinkAccess(page._id, claimant);
+      expect(result.granted).toBe(true);
+    });
+
+    test('legacy pages with a missing (not explicit null) redirectTo field are still eligible for grant-on-access', async () => {
+      const [page] = await Fixture.generate('Page', [
+        {
+          path: '/link-access-model/legacy-missing-redirect-to',
+          grant: Page.GRANT_RESTRICTED,
+          creator: linkCreator,
+          grantedUsers: [linkCreator],
+          // redirectTo intentionally omitted — legacy shape (field missing,
+          // not explicitly null).
+        },
+      ]);
+      const stored = await Page.findById(page._id).select('redirectTo').lean();
+      expect(stored?.redirectTo).toBeUndefined();
+
+      const result = await Page.findPageByIdForSharedLinkAccess(page._id, claimant);
+      expect(result.granted).toBe(true);
+    });
+
+    test('TOCTOU: a concurrent grant change landing between read and write leaves the write unmatched — fresh reread falls to 403', async () => {
+      const [page] = await Fixture.generate('Page', [
+        { path: '/link-access-model/toctou-grant-change', grant: Page.GRANT_RESTRICTED, creator: linkCreator, grantedUsers: [linkCreator] },
+      ]);
+
+      const realFindPageById = Page.findPageById.bind(Page);
+      const spy = jest.spyOn(Page, 'findPageById').mockImplementationOnce(async (id) => {
+        const pageData = await realFindPageById(id);
+        // Simulate a `PUT /pages/grant` landing between our read and our
+        // atomic write — by the time the atomic findOneAndUpdate runs,
+        // grant is no longer GRANT_RESTRICTED.
+        await Page.updateGrant(pageData, Page.GRANT_OWNER, linkCreator);
+        return pageData; // stale snapshot: still shows GRANT_RESTRICTED
+      });
+
+      try {
+        await expect(Page.findPageByIdForSharedLinkAccess(page._id, claimant)).rejects.toThrow('Page is not granted for the user');
+      } finally {
+        spy.mockRestore();
+      }
+
+      const reloaded = await Page.findById(page._id).select('grant grantedUsers').lean();
+      expect(reloaded?.grant).toBe(Page.GRANT_OWNER);
+      expect((reloaded?.grantedUsers ?? []).map((id) => id.toString())).not.toContain(claimant._id.toString());
+    });
+
+    test('TOCTOU: a concurrent soft-delete landing between read and write leaves the write unmatched — fresh reread falls to 403', async () => {
+      const [page] = await Fixture.generate('Page', [
+        { path: '/link-access-model/toctou-delete', grant: Page.GRANT_RESTRICTED, creator: linkCreator, grantedUsers: [linkCreator] },
+      ]);
+
+      const realFindPageById = Page.findPageById.bind(Page);
+      const spy = jest.spyOn(Page, 'findPageById').mockImplementationOnce(async (id) => {
+        const pageData = await realFindPageById(id);
+        // Simulate a soft-delete landing between our read and our atomic
+        // write — by the time findOneAndUpdate runs, status is no longer
+        // published.
+        await Page.updatePageProperty(pageData, { status: STATUS_DELETED });
+        return pageData; // stale snapshot: still shows status published
+      });
+
+      try {
+        await expect(Page.findPageByIdForSharedLinkAccess(page._id, claimant)).rejects.toThrow('Page is not granted for the user');
+      } finally {
+        spy.mockRestore();
+      }
+
+      const reloaded = await Page.findById(page._id).select('status grantedUsers').lean();
+      expect(reloaded?.status).toBe(STATUS_DELETED);
+      expect((reloaded?.grantedUsers ?? []).map((id) => id.toString())).not.toContain(claimant._id.toString());
+    });
+
+    test('a soft-delete landing AFTER the atomic write already committed does not roll back the invite', async () => {
+      const [page] = await Fixture.generate('Page', [
+        { path: '/link-access-model/delete-after-commit', grant: Page.GRANT_RESTRICTED, creator: linkCreator, grantedUsers: [linkCreator] },
+      ]);
+
+      // The write commits normally (no interleaving this time) ...
+      const result = await Page.findPageByIdForSharedLinkAccess(page._id, claimant);
+      expect(result.granted).toBe(true);
+      expect(result.page.isGrantedFor(claimant)).toBe(true);
+
+      // ... and only THEN does the page get soft-deleted (the moral
+      // equivalent of "deleted one second after the invite link was
+      // clicked"). This must not roll back the just-committed grant — the
+      // invite is understood the same as if it had happened moments before
+      // the delete (spec's security注記 point 6).
+      await Page.updatePageProperty(page, { status: STATUS_DELETED });
+
+      const reloaded = await Page.findById(page._id).select('status grantedUsers').lean();
+      expect(reloaded?.status).toBe(STATUS_DELETED);
+      expect((reloaded?.grantedUsers ?? []).map((id) => id.toString())).toContain(claimant._id.toString());
     });
   });
 });

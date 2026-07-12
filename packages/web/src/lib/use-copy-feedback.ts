@@ -11,8 +11,9 @@ const DEFAULT_FEEDBACK_MS = 1500;
  * never lands on an unmounted component. Clipboard failures (insecure
  * context / denied) are swallowed — `copied` simply stays `false`.
  *
- * Shared by the heading-anchor and code-block copy buttons; the keyed
- * multi-row variant in `link-share-popover` keeps its own state.
+ * Shared by the heading-anchor copy button, code-block copy button, and
+ * `RestrictedShareBanner`; the keyed multi-row variant in
+ * `link-share-popover` keeps its own state.
  */
 export function useCopyFeedback(feedbackMs = DEFAULT_FEEDBACK_MS) {
   const [copied, setCopied] = useState(false);

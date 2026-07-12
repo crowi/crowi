@@ -176,6 +176,17 @@ export const GetPageResponseSchema = z.object({
 });
 export type GetPageResponse = z.infer<typeof GetPageResponseSchema>;
 
+// feature-restricted-grant-share-banner Phase 1 — response for
+// `claimPageLinkAccessRoute` (`POST /pages/link-access`). Reuses
+// `GetPageResponseSchema` (not the bare `PageResponseSchema` in
+// `contracts/page.ts`) because the web hook returns the same
+// `PageWithRevision` shape as `usePage`, and adds `granted`: whether *this*
+// call just wrote the caller into `grantedUsers` (as opposed to a
+// pass-through 200 for a page the caller already had access to — public /
+// creator / already-granted).
+export const ClaimPageLinkAccessResponseSchema = GetPageResponseSchema.extend({ granted: z.boolean() });
+export type ClaimPageLinkAccessResponse = z.infer<typeof ClaimPageLinkAccessResponseSchema>;
+
 // List pages request schema
 export const ListPagesRequestSchema = z.object({
   path: z.string().optional(),

@@ -36,15 +36,26 @@
  *     `user._id` as viewer, which re-applies `visiblePageGrantOr` at the
  *     Mongo query level, so any hit the viewer isn't authorized to read
  *     is dropped before it reaches `data[]`.
+ *   - feature-restricted-grant-share-banner §7 — grant is not the only
+ *     dimension a stale/third-party-filtered index hit can leak: a
+ *     soft-deleted / `wip` / `deprecated` / redirect-stub page can still
+ *     be sitting in the index (reindex gaps, landing-order inversion — see
+ *     `util/page-search-index.ts`). The hydration loop below re-checks
+ *     `status` / `redirectTo` against the freshly-populated Mongo document
+ *     for every hit, one-for-one with the boundary `visiblePageStatusOr`
+ *     already enforces for list visibility — uniformly for admin and
+ *     non-admin viewers alike (no admin bypass; `isGrantedFor`'s admin
+ *     posture doesn't special-case status either). Grant itself is NOT
+ *     re-checked in this loop — that's already the populate filter's job
+ *     immediately above, so an in-loop `isGrantedFor` would be redundant.
  */
-import { searchPagesRoute, type SearchHit as SearchHitResponse } from '@crowi/api-contract';
+import { type SearchHit as SearchHitResponse, searchPagesRoute } from '@crowi/api-contract';
+import type { SearchHits, SearchQuery } from '@crowi/plugin-api';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import Debug from 'debug';
 import { Types } from 'mongoose';
-
 import type Crowi from 'src/crowi';
 import type { PageDocument } from 'src/models/page';
-import type { SearchHits, SearchQuery } from '@crowi/plugin-api';
 import { pageToResponse } from 'src/util/page-response';
 
 import type { CrowiHonoBindings } from '../app';
@@ -158,6 +169,17 @@ export const registerSearchRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(a
         // re-filter above). Both cases fall through the same `pageById`
         // lookup, keeping `data` consistent with `meta.results`.
         if (!populated) continue;
+        // Redirect stub — a different document left behind by a rename;
+        // the indexer excludes these (`shouldIndex`), so a hit here is
+        // always stale index garbage regardless of viewer.
+        if (populated.redirectTo != null) continue;
+        // Same status boundary as `visiblePageStatusOr` (list visibility):
+        // published / legacy-null always visible, a draft only to its own
+        // creator. `deleted` (and any other status) falls outside this and
+        // is dropped — soft-deleted pages must never surface in search
+        // results even if a reindex gap left them in the index.
+        const isVisibleByStatus = populated.isPublished() || (populated.isDraft() && populated.isCreator(user));
+        if (!isVisibleByStatus) continue;
         data.push({
           pageId: hit.id,
           path: hit.path,
