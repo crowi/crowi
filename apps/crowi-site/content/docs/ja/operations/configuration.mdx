@@ -38,6 +38,12 @@ API は起動時にこれらの環境変数をまとめて検証します。`POR
 出力されます(`CLIENT_URL` が未設定の場合も、送信メール内のリンクが相対
 パスになってしまう旨の warning が同じレポートに含まれます)。
 
+`WS_TOKEN_SECRET` は例外的に、**`NODE_ENV` の値によって重大度が変わる**
+唯一の変数です — 値が設定されているものの 32 文字未満のとき、
+`NODE_ENV=production`(未設定時のデフォルトも production 扱い)では
+起動が失敗し、それ以外(`development` / `test` など)では上記と同じ
+1 箇所の warning レポートに含まれます。詳細は下表を参照してください。
+
 `CROWI_` / `WS_TOKEN_` / `JWT_` / `COLLAB_` / `REDIS` / `MONGO` /
 `MIGRATION_` のいずれかの既知プレフィックスを持つものの、既知の変数名の
 どれとも完全一致しない環境変数は、タイポの疑いとして同じ warning
@@ -69,7 +75,7 @@ API は起動時にこれらの環境変数をまとめて検証します。`POR
 
 | 変数名 | 必須 | 用途 |
 | ------ | ---- | ---- |
-| `WS_TOKEN_SECRET` | マルチで必須 | WebSocket 接続認証に使う短命 JWT (wsToken) の HMAC 署名鍵。マルチインスタンスでは全レプリカで**同じ値**にする。未設定時はプロセスごとにランダム生成され、警告ログが出る |
+| `WS_TOKEN_SECRET` | マルチで必須 | WebSocket 接続認証に使う短命 JWT (wsToken) の HMAC 署名鍵 (presence・通知・メールトークンとも共用)。マルチインスタンスでは全レプリカで**同じ値**にする。未設定時はプロセスごとにランダム生成され、警告ログが出る。**設定する場合は 32 文字以上必須** — 32 文字未満だと `NODE_ENV=production` (デフォルト) では起動失敗、それ以外は警告 (既知のプレースホルダ値は対象外)。`openssl rand -base64 32` で生成 |
 | `COLLAB_MAX_EDITORS_PER_PAGE` | いいえ (デフォルト `20`) | 1 ページあたりの同時編集者上限。超過したクライアントは read-only で接続する |
 | `NEXT_PUBLIC_COLLAB_URL` | いいえ | ブラウザが接続する WebSocket URL。**実行時**(`window.__ENV`)に読まれる。未指定時の解決順: `NEXT_PUBLIC_API_URL` → dev の api ポート → `window.location`。api/web が **別ホスト** のとき、または Vercel(edge が WS を proxy できない)で設定 |
 | `NEXT_PUBLIC_API_URL` | いいえ(クロスオリジン時のみ) | ブラウザから見た api の絶対オリジン。**実行時**(`window.__ENV`、再ビルド不要)に読まれる。推奨の同一オリジン + リバースプロキシ構成では **未設定**(ブラウザは相対 `/api/v2` を使う)。クロスオリジン構成でのみ設定 — [デプロイ構成](./deployment) 参照 |

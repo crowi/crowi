@@ -220,7 +220,7 @@ Key points:
 
 | Variable | Required | Purpose |
 | -------- | -------- | ------- |
-| `WS_TOKEN_SECRET` | Yes in multi-instance (cluster-wide identical) | HMAC signing key for the short-lived wsToken (JWT). **Must be identical** across all api replicas in multi-instance mode. If `CROWI_MULTI_INSTANCE` is set but `WS_TOKEN_SECRET` is unset (or a known placeholder), api **aborts boot** (a per-process random secret can't be cross-verified). In single-instance mode (`CROWI_MULTI_INSTANCE` unset) it may be left unset — a random secret is generated per process and a warning is logged. The shipped `.env.example` leaves it empty on purpose (no world-known secret is templated). |
+| `WS_TOKEN_SECRET` | Yes in multi-instance (cluster-wide identical) | HMAC signing key for the short-lived wsToken (JWT). **Must be identical** across all api replicas in multi-instance mode. If `CROWI_MULTI_INSTANCE` is set but `WS_TOKEN_SECRET` is unset (or a known placeholder), api **aborts boot** (a per-process random secret can't be cross-verified). In single-instance mode (`CROWI_MULTI_INSTANCE` unset) it may be left unset — a random secret is generated per process and a warning is logged. The shipped `.env.example` leaves it empty on purpose (no world-known secret is templated). **Must be at least 32 characters when set** — a shorter value aborts boot under `NODE_ENV=production` (also the default when `NODE_ENV` is unset) and only warns otherwise (known placeholder values are exempt). Generate one with `openssl rand -base64 32`. |
 | `CROWI_MULTI_INSTANCE` | No (default single-instance) | Declares a multi-instance api deployment (`1` / `true`, or a replica count `>= 2`). This — **not** `REDIS_URL` presence — is the signal the `WS_TOKEN_SECRET` boot guard keys off, so a single replica that happens to use Redis (sessions / Socket.IO) boots without a shared secret. Set it on every replica when you scale past one api node. |
 | `COLLAB_MAX_EDITORS_PER_PAGE` | No (default `20`) | Per-page simultaneous-editor cap. The 21st editor and beyond receive read-only realtime updates but cannot type. |
 | `NEXT_PUBLIC_COLLAB_URL` | No | The WebSocket URL the browser dials. When unset, it is derived from `window.location.host` and `NEXT_PUBLIC_API_URL`. Leave this unset if `/collab/*` is reverse-proxied to the same host as the api. |
@@ -299,6 +299,16 @@ Verification:
   **sampled warnings**, so you can distinguish the true cause of a
   "could not connect" report (expired token / secret mismatch / clock
   skew / cap reached).
+- **`WS_TOKEN_SECRET` is too short (under 32 characters):** when it is set
+  but shorter than 32 characters (known placeholders are exempt), api
+  aborts boot under `NODE_ENV=production` (also the default when
+  `NODE_ENV` is unset). The error message names the variable, its current
+  length, the 32-character minimum, and how to generate a strong one
+  (`openssl rand -base64 32`). Under any other `NODE_ENV` (`development`,
+  `test`, ...) boot is not blocked — it is folded into the same
+  consolidated boot-time warning report as every other env-validation
+  finding. This is a plain length check only, with no entropy or
+  dictionary heuristics.
 - **Lost edits on multi-instance (known risk):** see the Important note
   under "Multi-instance deployment" above. A stale replica that
   materialises a Y.Doc from an old `Page.yjsState` and writes a
