@@ -1,6 +1,6 @@
 const fs = require('node:fs');
 const net = require('node:net');
-const { SENTINEL_PATH } = require('./test-mongo-sentinel');
+const { getSentinelPath } = require('./test-mongo-sentinel');
 
 // Local Mongo that `docker compose up -d` exposes. Overridable so a dev can
 // point the suite at a different test server without editing config.
@@ -45,10 +45,15 @@ function probeTcp(uri, timeoutMs) {
 }
 
 function writeSentinel(uri) {
+  // Resolved at CALL time (not module-load time) via `getSentinelPath()` —
+  // by the time this first runs, `globalSetup` below has already assigned
+  // `CROWI_TEST_RUN_ID`, so the path is run-scoped from the very first
+  // write.
+  const sentinelPath = getSentinelPath();
   // Atomic write so a worker can never read a half-written file.
-  const tmp = `${SENTINEL_PATH}.${process.pid}.tmp`;
+  const tmp = `${sentinelPath}.${process.pid}.tmp`;
   fs.writeFileSync(tmp, uri);
-  fs.renameSync(tmp, SENTINEL_PATH);
+  fs.renameSync(tmp, sentinelPath);
 }
 
 /**
@@ -70,6 +75,27 @@ function writeSentinel(uri) {
  *     memory-server (no-infrastructure machines still work).
  */
 module.exports = async function globalSetup() {
+  // Run-scope the sentinel BEFORE the first `writeSentinel()` call below —
+  // this is what fixes the cross-run race described in the design doc
+  // ("未報告バグ: sentinel の cross-run race"): two concurrent full-suite
+  // runs (e.g. main worktree + a feature worktree, this repo's standard
+  // workflow) now each generate their own id and therefore write to two
+  // different sentinel paths, so neither run's teardown or startup can ever
+  // clobber the other's in-flight strategy.
+  //
+  // `??=` (not a plain assignment): a run id set by an external caller
+  // BEFORE spawning this jest process — the Phase 4 flake reporter spawns
+  // `@crowi/api`'s jest directly (not through turbo) and sets this itself
+  // so it can correlate the JSON Lines retry side-channel with the run it
+  // orchestrated — must win over self-generation here.
+  //
+  // Every forked worker inherits this via `child_process.fork`'s env copy
+  // at fork time, which happens strictly AFTER this function returns (see
+  // `test-mongo-sentinel.js`'s doc comment for the full jest-internals
+  // citation) — so every worker sees the same id without this value ever
+  // needing to travel through the sentinel file itself.
+  process.env.CROWI_TEST_RUN_ID ??= `${process.pid}-${Date.now().toString(36)}`;
+
   if (process.env.MONGO_URI && process.env.MONGO_URI.trim()) {
     writeSentinel(''); // env wins; don't also auto-detect.
     return;
