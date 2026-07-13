@@ -400,18 +400,30 @@ describe('@crowi/collab Phase 4 compaction', () => {
     await Page.updateOne({ _id: pageId }, { $set: { yjsState: Buffer.from([0xff, 0xff, 0xff, 0xff]) } }).exec();
     await PageYjsUpdate.create({ pageId, payload: encodeYjsDelta('residual'), createdAt: new Date() });
 
-    const onLoadDocument = createOnLoadDocument({
-      models: { Page: models.Page, Revision: models.Revision, PageYjsUpdate: models.PageYjsUpdate },
-    });
-    const doc = new Y.Doc();
-    await expect(
-      onLoadDocument({
-        documentName: pageId,
-        document: doc,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any),
-    ).resolves.not.toThrow();
-    expect(doc.getText(CONTENT_FIELD).toString().length).toBeGreaterThan(0);
+    // Deterministically hits `hooks/on-load-document.ts`'s yjsState
+    // Y.applyUpdate-failed body-seed-fallback warn — assert the operator
+    // warning contract alongside the recovery behaviour. Ported from
+    // `packages/api/src/test/setup.ts`'s spy-per-test pattern; spy is
+    // inline (no shared helper) so mockRestore() runs even if an
+    // expect() above throws.
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      const onLoadDocument = createOnLoadDocument({
+        models: { Page: models.Page, Revision: models.Revision, PageYjsUpdate: models.PageYjsUpdate },
+      });
+      const doc = new Y.Doc();
+      await expect(
+        onLoadDocument({
+          documentName: pageId,
+          document: doc,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } as any),
+      ).resolves.not.toThrow();
+      expect(doc.getText(CONTENT_FIELD).toString().length).toBeGreaterThan(0);
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('failed Y.applyUpdate; falling back to body seed'), expect.any(String));
+    } finally {
+      warnSpy.mockRestore();
+    }
   });
 
   it('onLoadDocument: corrupt PageYjsUpdate rows are deleted on load so warnings do not repeat', async () => {
@@ -428,17 +440,29 @@ describe('@crowi/collab Phase 4 compaction', () => {
     await PageYjsUpdate.create({ pageId, payload: encodeYjsDelta('ok'), createdAt: new Date() });
     expect(await countPending(pageId)).toBe(2);
 
-    const onLoadDocument = createOnLoadDocument({
-      models: { Page: models.Page, Revision: models.Revision, PageYjsUpdate: models.PageYjsUpdate },
-    });
-    await onLoadDocument({
-      documentName: pageId,
-      document: new Y.Doc(),
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any);
-    // The corrupt row is gone; the well-formed one is left in place
-    // because only compaction (not load) removes successful rows.
-    expect(await countPending(pageId)).toBe(1);
+    // Deterministically hits `hooks/on-load-document.ts`'s corrupt
+    // PageYjsUpdate skip warn — assert the operator warning contract
+    // alongside the cleanup behaviour. Ported from
+    // `packages/api/src/test/setup.ts`'s spy-per-test pattern; spy is
+    // inline (no shared helper) so mockRestore() runs even if an
+    // expect() above throws.
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      const onLoadDocument = createOnLoadDocument({
+        models: { Page: models.Page, Revision: models.Revision, PageYjsUpdate: models.PageYjsUpdate },
+      });
+      await onLoadDocument({
+        documentName: pageId,
+        document: new Y.Doc(),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any);
+      // The corrupt row is gone; the well-formed one is left in place
+      // because only compaction (not load) removes successful rows.
+      expect(await countPending(pageId)).toBe(1);
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('skipping corrupt PageYjsUpdate'), expect.any(String));
+    } finally {
+      warnSpy.mockRestore();
+    }
   });
 
   it('payloadToUint8Array: forwards a raw Uint8Array as-is (covers the test-side branch)', () => {
