@@ -2,7 +2,7 @@
 // Guards against the committed OpenAPI artifacts drifting from the
 // `@hono/zod-openapi` contracts they are generated from.
 //
-// The web client uses `hc<AppType>` (types straight from the contracts, no
+// The web client uses `CrowiApiClient` (types straight from the contracts, no
 // spec involved), so this drift is invisible day-to-day — but the published
 // `openapi.{json,yaml}` / `src/generated/openapi.ts` are the source of truth
 // for non-TS clients (mobile, future CLIs) generated via openapi-generator.

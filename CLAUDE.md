@@ -116,13 +116,13 @@ Scripts live in root + per-package `package.json`. `pnpm <script>` filters with
   - `(public)/`: login / register / installer
   - `(auth)/`: gated by `useAuth` redirect; mounts shared header (NotificationBell + admin shortcut + user dropdown)
   - `(admin)/`: gated by `user.admin === true`; renders sidebar + breadcrumb. Non-admin sees `AccessDeniedCard`.
-- **Data fetching**: `@tanstack/react-query` everywhere. `apiClientV2` (a `hc<AppType>` Hono RPC client) is created from the shared `AppType`. Hooks live in `src/lib/use-*.ts`. Convention: `xxxKeys = { all, detail(id) }` query-key factories; mutations invalidate or `setQueryData` on success.
+- **Data fetching**: `@tanstack/react-query` everywhere. `apiClientV2` (a `CrowiApiClient`, built by `createClient(...)`) is the typed Hono RPC client for the whole route surface. Hooks live in `src/lib/use-*.ts`. Convention: `xxxKeys = { all, detail(id) }` query-key factories; mutations invalidate or `setQueryData` on success.
 - **Shared UI**: `components/ui/` (shadcn) + cross-cutting primitives `LoadingSpinner` / `ErrorAlert` / `AccessDeniedCard` / `NotFoundCard`.
 - **Auth state**: `useAuth` (JWT in client cookie / context).
 
 ### API Contracts (`packages/api-contract`)
 - All API contracts and Zod schemas live here, built with tsup (CJS + ESM + .d.ts).
-- Contracts are `@hono/zod-openapi` `createRoute(...)` route definitions, grouped per namespace (`page`, `user`, `bookmark`, `notification`, `admin`, `adminCrypto`, ...). `client.ts` composes them into the exported `AppType` (split into several `OpenAPIHono` chains, intersected — see the TS2589 note there).
+- Contracts are `@hono/zod-openapi` `createRoute(...)` route definitions, grouped per namespace (`page`, `user`, `bookmark`, `notification`, `admin`, `adminCrypto`, ...). `client.ts` composes them into `CrowiApiClient`, the intersection of several `OpenAPIHono` chains (split to avoid TS2589 — see the note there); `createClient(...)` is the sole way to obtain one.
 - Common error schemas in `schemas/common.ts`: `AuthenticationRequiredError`, `AdminRequiredError`, `UserStatusError`, etc. Middlewares return these as JSON instead of redirecting.
 - Build after editing: `pnpm --filter @crowi/api-contract build` (turbo pipeline auto-runs `^build` for `dev`, but standalone scripts may need it manually).
 
