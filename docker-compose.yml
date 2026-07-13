@@ -25,6 +25,31 @@ services:
     ports:
       - 27017:27017
 
+  # Test-only MongoDB (feature-test-parallel-db-flake-hardening Phase 2 / A2).
+  # A full `@crowi/api` jest run opens ~270 connections against one shared
+  # mongod (per-file boot connect + teardown connect x ~136 files) and churns
+  # create-db/autoIndex/dropDatabase at the same rate; putting that on the
+  # SAME server + disk path as the always-on dev `mongodb` service above is a
+  # stall-window contributor (see the spec's "発生機序" — VirtioFS bind-mount
+  # fsync under churn is the leading hypothesis, not yet proven). Deliberately
+  # INDEPENDENT of `mongodb`: separate container, separate host port (27018),
+  # tmpfs data dir instead of the bind mount. tmpfs means this container is
+  # fully disposable — a restart or `docker compose down` loses all data, and
+  # that's fine, since every test only ever writes a per-file scratch database
+  # that its own teardown() drops before the file's tests are even reported.
+  # `global-setup.js` probes this port FIRST, falling back to `mongodb`
+  # (27017) and then to an in-process mongodb-memory-server when neither is
+  # reachable — a developer who hasn't pulled this compose change (or hasn't
+  # run `docker compose up -d` at all) keeps working exactly as before.
+  crowi-test-mongodb:
+    image: mongo:8
+    container_name: crowi-test-mongodb
+    restart: unless-stopped
+    tmpfs:
+      - /data/db
+    ports:
+      - 27018:27017
+
   redis:
     image: redis:7
     container_name: crowi-redis
