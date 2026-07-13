@@ -8,6 +8,7 @@ import {
   type PresenceViewer,
 } from '@crowi/api-contract';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import type { RefObject } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { apiClientV2 } from './api-client';
 import { createAntiFlickerState, ingestBroadcast, refreshAdmissions, visibleViewers } from './presence-anti-flicker';
@@ -62,14 +63,26 @@ export type PresenceStatus = 'connecting' | 'connected' | 'error';
 /**
  * Options for {@link usePresence}. `onPageUpdated` is the
  * feature-live-page-content-sync read-side soft-refresh hook: it fires
- * once per `page-updated` frame that is NOT the caller's own save. It is
- * delivered as a callback (not a returned value) because it is a
- * one-shot event, not render state — mixing it into the returned
- * viewer-list state would churn renders. The callback is read through a
- * ref, so passing a fresh closure each render is fine and never rebuilds
- * the WebSocket.
+ * once per `page-updated` frame, including the caller's own save (see
+ * its jsdoc below — feature-live-page-sync-reconcile moved self/other
+ * silencing to the consumer). It is delivered as a callback (not a
+ * returned value) because it is a one-shot event, not render state —
+ * mixing it into the returned viewer-list state would churn renders.
+ * The callback is read through a ref, so passing a fresh closure each
+ * render is fine and never rebuilds the WebSocket.
  */
 export interface UsePresenceOptions {
+  /**
+   * feature-live-page-sync-reconcile — fires for EVERY `page-updated`
+   * frame, including the caller's own save. Self/other suppression used
+   * to happen inside this hook (`editorUserId === selfUserId`), but a
+   * frame carrying the reader's own save from another tab/device must
+   * still reach the reconcile fence-counting logic (`pageUpdatedSeq`)
+   * and silently swap the cache — only the BANNER is skipped for a self
+   * save, and that decision now lives in the consumer (`PageView`'s
+   * `handlePageUpdated`), which alone knows `selfUserId` at the same time
+   * as the read-old banner state.
+   */
   onPageUpdated?: (payload: PresencePageUpdatedMessage) => void;
   /**
    * feature-live-page-comment-sync read-side hook: fires once per
@@ -80,6 +93,32 @@ export interface UsePresenceOptions {
    * ref-delivered one-shot contract as `onPageUpdated`.
    */
   onCommentChanged?: (payload: PresenceCommentChangedMessage) => void;
+  /**
+   * feature-live-page-sync-reconcile — fires once per connection epoch,
+   * right after the FIRST `viewers` broadcast of that epoch (never on
+   * `onopen`: the transport handshake completes before the server has
+   * finished re-checking the read grant + registering the socket in its
+   * `connections` map, so a push sent in that gap would never reach a
+   * socket the caller believed was already "connected"). The first
+   * `viewers` broadcast is proof the socket is registered — see the
+   * `reconnectAttempts = 0` reset below, which uses the same signal.
+   * Fires for the FIRST connection epoch too (fresh mount), not just
+   * reconnects — the caller (PageView's reconcile) treats every epoch
+   * identically (spec §11).
+   */
+  onReconnected?: () => void;
+  /**
+   * feature-live-page-sync-reconcile — fires once when this socket is
+   * closed with `PRESENCE_CLOSE_NO_ACCESS` (4403), whether the rejection
+   * happened on the initial connect or mid-session (heartbeat re-check).
+   * Does NOT fire for `PRESENCE_CLOSE_INVALID_TOKEN` (4401) — that close
+   * means only the token is stale, not that the read grant was revoked.
+   * This is a "verify, don't assume" signal: `hasReadPermission`'s catch
+   * also maps a transient permission-check error to the same 4403, so the
+   * consumer must re-check via the authoritative page API before treating
+   * this as a real access revocation (spec §10).
+   */
+  onAccessRevoked?: () => void;
 }
 
 export interface UsePresenceResult {
@@ -92,6 +131,18 @@ export interface UsePresenceResult {
   selfUserId: string | null;
   /** Connection state. `'error'` ⇒ the presence row should hide itself. */
   status: PresenceStatus;
+  /**
+   * feature-live-page-sync-reconcile — a frame fence counter, incremented
+   * once for every `page-updated` frame received (regardless of self /
+   * other). Returned as a `RefObject`, NOT a plain number: the reconcile
+   * head-GET reads `.current` once right before issuing the fetch and
+   * once right after it resolves, and the two reads must observe the
+   * mutation LIVE — destructuring this into a number at the call site
+   * would freeze it at the value from the render that called
+   * `usePresence`, and a frame arriving during the fetch would never be
+   * detected (see spec §3, the same closure trap as `bannerStateRef`).
+   */
+  pageUpdatedSeq: RefObject<number>;
 }
 
 /**
@@ -214,6 +265,22 @@ export function usePresence(pageId: string | null | undefined, options?: UsePres
     onCommentChangedRef.current = options?.onCommentChanged;
   });
 
+  // Same ref pattern for the reconcile-barrier / access-revoked callbacks.
+  const onReconnectedRef = useRef(options?.onReconnected);
+  useEffect(() => {
+    onReconnectedRef.current = options?.onReconnected;
+  });
+  const onAccessRevokedRef = useRef(options?.onAccessRevoked);
+  useEffect(() => {
+    onAccessRevokedRef.current = options?.onAccessRevoked;
+  });
+
+  // Frame fence counter (spec §3) — a `useRef`, not `useState`: a render
+  // is neither required nor desired on every `page-updated` frame, and
+  // the reconcile consumer must read `.current` live at two points
+  // spanning an `await` (see `UsePresenceResult.pageUpdatedSeq` above).
+  const pageUpdatedSeqRef = useRef(0);
+
   const token = tokenData?.token ?? null;
   const selfUserId = tokenData?.selfUserId ?? null;
 
@@ -259,6 +326,12 @@ export function usePresence(pageId: string | null | undefined, options?: UsePres
       if (disposed) return;
       setStatus('connecting');
 
+      // feature-live-page-sync-reconcile — one connection "epoch" is one
+      // call to `connect()` (initial mount OR a reconnect). Declared fresh
+      // here (not hoisted to the effect body) so each epoch gets its own
+      // one-shot latch for `onReconnected`.
+      let hasFiredReconnectedThisEpoch = false;
+
       const url = `${resolvePresenceUrl()}/${encodeURIComponent(pageId)}?token=${encodeURIComponent(token)}`;
       const ws = new WebSocket(url);
       socket = ws;
@@ -288,15 +361,18 @@ export function usePresence(pageId: string | null | undefined, options?: UsePres
         const message = PresenceServerMessageSchema.safeParse(parsed);
         if (!message.success) return;
 
-        // feature-live-page-content-sync: a `page-updated` frame drives
-        // the read-side soft-refresh, not the viewer list. Suppress the
-        // caller's own saves (`editorUserId === selfUserId`); a `null`
-        // selfUserId (token not yet resolved) is treated as "not me" so
-        // the signal is never silently dropped during that brief window.
+        // feature-live-page-content-sync / feature-live-page-sync-reconcile:
+        // a `page-updated` frame drives the read-side soft-refresh, not the
+        // viewer list. The frame fence counter is incremented for EVERY
+        // frame (self included) — the reconcile head-GET fence needs to
+        // know a save happened at all, regardless of who made it — and the
+        // callback likewise now fires unconditionally; self/other silencing
+        // of the BANNER (not the cache swap) moved to the consumer
+        // (`PageView`), which is the only place that can consult the
+        // read-old banner state at the same time (spec §7).
         if (message.data.type === 'page-updated') {
-          if (message.data.editorUserId !== selfUserId) {
-            onPageUpdatedRef.current?.(message.data);
-          }
+          pageUpdatedSeqRef.current += 1;
+          onPageUpdatedRef.current?.(message.data);
           return;
         }
 
@@ -322,6 +398,16 @@ export function usePresence(pageId: string | null | undefined, options?: UsePres
         // handshake-then-reject case, e.g. an expired token, from
         // pinning the reconnect delay at its 1s floor forever.
         reconnectAttempts = 0;
+        // feature-live-page-sync-reconcile — the FIRST `viewers` broadcast
+        // of this epoch is the reconnect barrier (spec §11): it proves the
+        // socket is registered in the server's `connections` map, so a
+        // reconcile GET fired from here observes any update saved before
+        // this point. Fires once per epoch, including the very first
+        // (fresh-mount) connection — the consumer treats every epoch alike.
+        if (!hasFiredReconnectedThisEpoch) {
+          hasFiredReconnectedThisEpoch = true;
+          onReconnectedRef.current?.();
+        }
         const { dueAt } = ingestBroadcast(flicker, message.data.viewers, Date.now());
         project(dueAt);
       };
@@ -342,7 +428,15 @@ export function usePresence(pageId: string | null | undefined, options?: UsePres
         // be rejected again on an immediate retry — stop reconnecting.
         // A fresh token from `usePresenceToken`'s refetch re-runs this
         // effect; a restored grant is picked up on that reconnect.
-        if (event.code === PRESENCE_CLOSE_NO_ACCESS || event.code === PRESENCE_CLOSE_INVALID_TOKEN) return;
+        if (event.code === PRESENCE_CLOSE_NO_ACCESS) {
+          // feature-live-page-sync-reconcile — verify-first (spec §10):
+          // this close code also fires for a merely TRANSIENT permission-
+          // check error, so the consumer re-validates via the page API
+          // rather than assuming the grant is really gone.
+          onAccessRevokedRef.current?.();
+          return;
+        }
+        if (event.code === PRESENCE_CLOSE_INVALID_TOKEN) return;
         // Otherwise reconnect with capped exponential backoff.
         const delay = Math.min(PRESENCE_RECONNECT_BASE_MS * 2 ** reconnectAttempts, PRESENCE_RECONNECT_MAX_MS);
         reconnectAttempts += 1;
@@ -377,5 +471,5 @@ export function usePresence(pageId: string | null | undefined, options?: UsePres
     setViewers([]);
   }, [pageId]);
 
-  return { viewers, selfUserId, status };
+  return { viewers, selfUserId, status, pageUpdatedSeq: pageUpdatedSeqRef };
 }
