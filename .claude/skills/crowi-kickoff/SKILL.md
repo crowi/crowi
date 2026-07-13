@@ -54,10 +54,15 @@ description: |
   1. `~/.gw/hooks/feature-state-link.sh` — worktree 側 `.feature-state/` を作成し
      specs/ tasks/ config.json を main store へ symlink、`queue.json` を
      `{ "currentTask": null }` で seed(worktree ローカル)
-  2. `tmux new-window -c <worktree> -n <branch名> "claude"` — **claude セッションを自動起動**
+  2. `~/.gw/hooks/tmux-claude.sh` — **claude セッションを自動起動**(`tmux new-window
+     -n <branch名>` で `claude --remote-control '<repo>:<id>' --name '<repo>:<id>'`。
+     RC 有効 + session/terminal title = `<repo>:<id>`(例 `crowi:live-page-sync-reconcile`)。
+     kickoff 後に質問で止まった session を picker/title で見つけて remote で動かせる)
   を実行する。**したがって kickoff がセッションを spawn する必要はない** —
   gw が開いた window に指示を send-keys で投入するだけでよい
   (agmsg spawn で別セッションを立てると二重になる。やらない)。
+  なお claude は RC/name 付きでも `pane_current_command` は version 文字列(`2.x.x`)の
+  ままなので、Step 5 の pane 検出は不変。
 - hook 構成によってはさらに **右 pane に `pnpm dev` が自動分割起動**される
   (`split-window -d` — dev-portal の anchor 自動採番で port 衝突しない。
   `GW_NO_DEV=1 gw start <id>` でスキップ可)。このため**指示の投入先は
