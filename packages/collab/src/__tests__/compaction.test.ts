@@ -474,6 +474,18 @@ describe('@crowi/collab Phase 4 compaction', () => {
   it('TTL index regression: PageYjsUpdate has expireAfterSeconds=3600 on createdAt', async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const PageYjsUpdate = models.PageYjsUpdate as any;
+    // Build the schema's indexes before reading them. registerTestModels() →
+    // mongoose.model() kicks the autoIndex build off in the background
+    // (fire-and-forget) and startInMemoryMongo() does not await it, so reading
+    // indexInformation() immediately is a race: a fast/real-mongo run wins it,
+    // but a slower memory-server run (CI's fallback) reads before
+    // pageYjsUpdate_ttl exists and gets `undefined`. createIndexes() explicitly
+    // builds every schema-declared index and resolves when done — deterministic
+    // regardless of the autoIndex setting (Model.init() would only await the
+    // build when autoIndex is enabled). Same pattern as
+    // api/src/models/user-uniqueness.test.ts. Removing the TTL declaration from
+    // the schema still leaves it unbuilt, so this stays a real regression guard.
+    await PageYjsUpdate.createIndexes();
     // Index info varies slightly across Mongo driver versions; both
     // `getIndexes()` and `indexInformation({full: true})` work but the
     // latter exposes the expireAfterSeconds option directly.
