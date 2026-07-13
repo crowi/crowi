@@ -748,10 +748,11 @@ class Crowi {
     //
     // `buildHonoApp(crowi)` returns the `/api/v2/*` route surface.
     // Routes are registered at their un-prefixed paths
-    // (`/app/info`, `/pages/:id`, ...) to keep the inferred AppType
-    // chain shallow for the `hc<AppType>` client; the `/api/v2`
-    // prefix is stripped by `stripApiV2Prefix` on the boundary so
-    // production URLs match.
+    // (`/app/info`, `/pages/:id`, ...) to keep each inferred chain
+    // type shallow for the `CrowiApiClient` typed client (see
+    // `packages/api-contract/src/client.ts`); the `/api/v2` prefix is
+    // stripped by `stripApiV2Prefix` on the boundary so production
+    // URLs match.
     //
     // We use `createAdaptorServer` instead of `serve` so the
     // WebSocket `'upgrade'` handlers (collab / presence) can be

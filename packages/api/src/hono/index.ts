@@ -5,12 +5,14 @@
  * serves `/api/v2/*` requests. Each migrated resource adds its handlers
  * by calling `registerXRoutes(...)` against the running chain.
  *
- * **AppType placement**: `AppType` is re-exported from
- * `@crowi/api-contract/client` (option 2 — see the file header there).
- * The contract package builds a no-op Hono chain over the same
- * `createRoute(...)` definitions that the real handlers consume, so
- * the inferred type matches the runtime shape without `@crowi/api`
- * having to be built before `@crowi/api-contract`.
+ * **Client type placement**: the typed client's public type
+ * (`CrowiApiClient`, built by `createClient(...)`) lives entirely in
+ * `@crowi/api-contract/client` (option 2 — see the file header there);
+ * `@crowi/api` does not re-export it. The contract package builds a
+ * no-op Hono chain over the same `createRoute(...)` definitions that
+ * the real handlers below consume, so the inferred type matches the
+ * runtime shape without `@crowi/api` having to be built before
+ * `@crowi/api-contract`.
  */
 import type { Context, Next } from 'hono';
 import type Crowi from 'src/crowi';
@@ -101,8 +103,8 @@ const mountPluginRoutes = (app: ReturnType<typeof createHonoApp>, crowi: Crowi):
  * Phase 4 commits extend this chain by wrapping the previous return
  * value with the next `registerXRoutes(...)`. Keeping the entire chain
  * inside a single expression preserves OpenAPIHono's per-route type
- * accumulation, which keeps the contract `AppType` and the runtime
- * chain in lock-step.
+ * accumulation, which keeps the contract's `CrowiApiClient` and the
+ * runtime chain in lock-step.
  *
  * Order doesn't affect routing (Hono dispatches by `method + path`) but
  * we keep it aligned with the contract stub chain in
@@ -273,9 +275,3 @@ export const buildHonoApp = (crowi: Crowi) => {
 
   return withNotification;
 };
-
-// `AppType` lives in `@crowi/api-contract` (option 2 — see
-// `packages/api-contract/src/client.ts` for the placement decision) so
-// consumers can import it without depending on `@crowi/api`'s build
-// artefacts.
-export type { AppType } from '@crowi/api-contract';

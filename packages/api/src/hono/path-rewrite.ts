@@ -3,13 +3,13 @@
  *
  * The OpenAPI contracts in `@crowi/api-contract` register every route
  * at its un-prefixed path (`/app/info`, `/pages/:id`, ...) — keeping
- * the path literal short keeps the inferred `AppType` chain shallow,
- * which matters for the `hc<AppType>` client (RFC-0006 Phase 4 hit
+ * the path literal short keeps each inferred chain type shallow, which
+ * matters for the `CrowiApiClient` typed client (RFC-0006 Phase 4 hit
  * TS2589 on a deeper chain).
  *
  * Production traffic arrives as `/api/v2/<path>`. Rather than re-mount
  * every route through `app.route('/api/v2', child)` (which re-engages
- * the AppType chain — see the TS2589 note in
+ * the chain-depth problem — see the TS2589 note in
  * `packages/api-contract/src/client.ts`), we strip the prefix on the
  * boundary: the production listener in `crowi/index.ts:start()` and
  * the test request listener in `src/test/setup.ts` both pre-process

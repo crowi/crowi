@@ -8,9 +8,9 @@
  * `@crowi/api-contract`'s `contracts/app.ts`.
  *
  * The function returns the chained `OpenAPIHono` so callers can keep
- * extending the chain without breaking `AppType` inference (Phase 3
- * smoke-test guarantee — see `docs/migrations/0006-hono-context.md`
- * §11).
+ * extending the chain without breaking the typed client's inference
+ * (Phase 3 smoke-test guarantee — see
+ * `docs/migrations/0006-hono-context.md` §11).
  */
 import { API_SURFACE_VERSION, type AppInfoResponse, type Capability, DYNAMIC_CAPABILITIES, getAppInfoRoute, STATIC_CAPABILITIES } from '@crowi/api-contract';
 import type { OpenAPIHono } from '@hono/zod-openapi';
