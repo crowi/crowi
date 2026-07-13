@@ -7,7 +7,8 @@ import { requireProfile } from './_shared';
 /**
  * The `GET /api/v2/auth/me` response (TokenMeResponseSchema). Parsed
  * leniently — the CLI accepts extra/missing fields for version-skew
- * tolerance, so this is a structural view, not a strict bind to AppType.
+ * tolerance, so this is a structural view, not a strict bind to the
+ * generated `CrowiApiClient` type.
  */
 interface AuthMeResponse {
   user?: {
