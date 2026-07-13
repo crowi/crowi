@@ -201,6 +201,15 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
   // shape as `autocomplete.ts` (30 req/min/user; `IdRedirector` fires this
   // at most once per id-URL navigation, so real usage is far below budget
   // while an ObjectId-enumeration sweep is throttled to a crawl).
+  //
+  // This throttle is anti-enumeration only, NOT an access gate: the gates
+  // (web-session middleware, `pages:write` scope, GRANT_RESTRICTED-published
+  // filter, atomic findOneAndUpdate) never touch Redis. `createRateLimiter`
+  // fails OPEN on a Redis outage (rate-limit.ts) — an accepted tradeoff here
+  // (reviewed 2026-07-12, CROWI-GRANT-REVIEW-003): a claim needs the exact
+  // 12-byte ObjectId, whose ~64 non-time bits make brute force infeasible
+  // even unthrottled, and GRANT_RESTRICTED semantics already treat "holds the
+  // id URL" as intended access. Do not re-flag as a bypass.
   const linkAccessRateLimiter = createRateLimiter({
     name: 'page-link-access',
     limit: 30,
