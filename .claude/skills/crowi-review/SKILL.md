@@ -105,7 +105,7 @@ cat > .reviews/crowi-review/schema.json <<'SCHEMA'
       "impact": {"type": "string"}, "fix": {"type": "string"}
     } } } } }
 SCHEMA
-bash .claude/scripts/codex-run.sh --sandbox read-only \
+bash .claude/scripts/codex-run.sh --sandbox read-only --tier terra \
   --prompt-file .reviews/crowi-review/prompt.md \
   --schema-file .reviews/crowi-review/schema.json \
   --out .reviews/crowi-review/findings.json --label crowi-review

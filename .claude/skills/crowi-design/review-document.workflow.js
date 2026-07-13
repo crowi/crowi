@@ -82,7 +82,7 @@ const envelope = (dataSchema) => ({
   },
 })
 
-function gluePrompt({ runDir, label, prompt, schema, sandbox, docPathCheck }) {
+function gluePrompt({ runDir, label, prompt, schema, sandbox, docPathCheck, tier }) {
   return (
     `You are a MECHANICAL RUNNER. Do not analyze the task yourself, do not read the repository, ` +
     `do not improvise.\n` +
@@ -91,7 +91,7 @@ function gluePrompt({ runDir, label, prompt, schema, sandbox, docPathCheck }) {
     `   - ${runDir}/schema.json <- the content of the SCHEMA block\n` +
     `2) Run with Bash (set timeout to 600000ms):\n` +
     `   bash .claude/scripts/codex-run.sh --prompt-file ${runDir}/prompt.md --schema-file ${runDir}/schema.json ` +
-    `--out ${runDir}/out.json --sandbox ${sandbox} --label ${label}\n` +
+    `--out ${runDir}/out.json --sandbox ${sandbox} --tier ${tier} --label ${label}\n` +
     `3) Return via structured output, branching ONLY on the script's exit code:\n` +
     `   - exit 0 -> Read ${runDir}/out.json and return {status:"ok", data:<its parsed JSON>}.` +
     (docPathCheck
@@ -107,9 +107,9 @@ function gluePrompt({ runDir, label, prompt, schema, sandbox, docPathCheck }) {
   )
 }
 
-async function codexStage({ label, phase: ph, prompt, schema, sandbox, docPathCheck, fallback }) {
+async function codexStage({ label, phase: ph, prompt, schema, sandbox, docPathCheck, fallback, tier = 'terra' }) {
   const runDir = `.reviews/codex-runs/${RUN_SCOPE}/${sanitize(label)}`
-  const glue = await agent(gluePrompt({ runDir, label: sanitize(label), prompt, schema, sandbox, docPathCheck }), {
+  const glue = await agent(gluePrompt({ runDir, label: sanitize(label), prompt, schema, sandbox, docPathCheck, tier }), {
     model: 'haiku',
     effort: 'low',
     schema: envelope(schema),
@@ -246,11 +246,18 @@ function lensPrompt(l, doc) {
 
 async function runReview(doc, attempt) {
   phase('Review')
+  // Escalation (crowi-design decision 2026-07-13): reviewers run on the
+  // general tier (terra) for early rounds, but the DECISIVE final round
+  // (attempt === MAX — the one that flips APPROVED vs NEEDS_WORK) runs on the
+  // frontier tier (sol). So a doc that terra keeps bouncing gets one strongest
+  // judgment before we give up, without paying sol on every round.
+  const reviewTier = attempt === MAX ? 'sol' : 'terra'
   const jobs = lenses.map((l) => () =>
     codexStage({
       label: `review_${l.key}_${attempt}`,
       phase: 'Review',
       sandbox: 'read-only',
+      tier: reviewTier,
       schema: REVIEW,
       prompt: lensPrompt(l, doc) + `\nReturn your final answer as JSON matching the output schema.`,
       fallback: () =>
@@ -327,6 +334,7 @@ let draft = isRfc
       label: 'write',
       phase: 'Write',
       sandbox: 'workspace-write',
+      tier: 'sol', // authoring the authoritative RFC is a hardest-tier stage
       schema: WRITE_RESULT,
       docPathCheck: true,
       prompt: writerBody + `\nReturn your final answer as JSON matching the output schema.`,

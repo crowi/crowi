@@ -13,7 +13,13 @@
 #                                         # fields use anyOf [T, null]),
 #                                         # or codex rejects it with a 400.
 #                [--sandbox read-only|workspace-write]   # default: read-only
-#                [--model <m>] [--effort <e>]            # default: codex config
+#                [--tier sol|terra|luna]                 # semantic model tier:
+#                                         # sol=hardest (gpt-5.6-sol, effort high)
+#                                         # terra=general (gpt-5.6-terra, medium)
+#                                         # luna=simple (gpt-5.6-luna, low).
+#                                         # Model ids live only here; callers pass
+#                                         # the tier. Omit → codex config default.
+#                [--model <m>] [--effort <e>]            # override tier defaults
 #                [--label <s>]                           # log prefix only
 #
 # Usage (review mode — codex's stock reviewer; free-form text output):
@@ -42,7 +48,7 @@
 set -u
 
 PROMPT_FILE="" OUT="" SCHEMA_FILE="" SANDBOX="read-only" MODE="exec"
-REVIEW_TARGET="" MODEL="" EFFORT="" LABEL="codex-run"
+REVIEW_TARGET="" MODEL="" EFFORT="" TIER="" LABEL="codex-run"
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -54,10 +60,29 @@ while [ $# -gt 0 ]; do
     --review-target) REVIEW_TARGET="$2"; shift 2 ;;
     --model)         MODEL="$2"; shift 2 ;;
     --effort)        EFFORT="$2"; shift 2 ;;
+    --tier)          TIER="$2"; shift 2 ;;
     --label)         LABEL="$2"; shift 2 ;;
     *) echo "[$LABEL] unknown option: $1" >&2; exit 3 ;;
   esac
 done
+
+# ---- tier → (model, effort) --------------------------------------------
+# Callers pass a SEMANTIC tier (sol=hardest / terra=general / luna=simple)
+# instead of hard-coding a model id, so the actual model names live in ONE
+# place — swap them here when a new codex generation ships. Each tier also
+# carries a default reasoning effort (sol runs hard, luna runs cheap).
+# Explicit --model / --effort still win over the tier defaults (escape hatch),
+# and passing no --tier keeps the legacy behavior (codex config default).
+if [ -n "$TIER" ]; then
+  case "$TIER" in
+    sol)   TIER_MODEL="gpt-5.6-sol";   TIER_EFFORT="high" ;;
+    terra) TIER_MODEL="gpt-5.6-terra"; TIER_EFFORT="medium" ;;
+    luna)  TIER_MODEL="gpt-5.6-luna";  TIER_EFFORT="low" ;;
+    *) echo "[$LABEL] invalid --tier: $TIER (want sol|terra|luna)" >&2; exit 3 ;;
+  esac
+  [ -z "$MODEL" ] && MODEL="$TIER_MODEL"
+  [ -z "$EFFORT" ] && EFFORT="$TIER_EFFORT"
+fi
 
 case "$MODE" in exec|review) ;; *) echo "[$LABEL] invalid --mode: $MODE" >&2; exit 3 ;; esac
 case "$SANDBOX" in read-only|workspace-write) ;; *) echo "[$LABEL] invalid --sandbox: $SANDBOX" >&2; exit 3 ;; esac

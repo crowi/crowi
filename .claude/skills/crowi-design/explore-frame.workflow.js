@@ -68,7 +68,7 @@ const envelope = (dataSchema) => ({
   },
 })
 
-function gluePrompt({ runDir, label, prompt, schema, sandbox, writeCheckPath }) {
+function gluePrompt({ runDir, label, prompt, schema, sandbox, writeCheckPath, tier }) {
   return (
     `You are a MECHANICAL RUNNER. Do not analyze the task yourself, do not read the repository, ` +
     `do not improvise.\n` +
@@ -77,7 +77,7 @@ function gluePrompt({ runDir, label, prompt, schema, sandbox, writeCheckPath }) 
     `   - ${runDir}/schema.json <- the content of the SCHEMA block\n` +
     `2) Run with Bash (set timeout to 600000ms):\n` +
     `   bash .claude/scripts/codex-run.sh --prompt-file ${runDir}/prompt.md --schema-file ${runDir}/schema.json ` +
-    `--out ${runDir}/out.json --sandbox ${sandbox} --label ${label}\n` +
+    `--out ${runDir}/out.json --sandbox ${sandbox} --tier ${tier} --label ${label}\n` +
     `3) Return via structured output, branching ONLY on the script's exit code:\n` +
     `   - exit 0 -> Read ${runDir}/out.json and return {status:"ok", data:<its parsed JSON>}.` +
     (writeCheckPath
@@ -93,9 +93,9 @@ function gluePrompt({ runDir, label, prompt, schema, sandbox, writeCheckPath }) 
   )
 }
 
-async function codexStage({ label, phase: ph, prompt, schema, sandbox, writeCheckPath, fallback }) {
+async function codexStage({ label, phase: ph, prompt, schema, sandbox, writeCheckPath, fallback, tier = 'terra' }) {
   const runDir = `.reviews/codex-runs/${sanitize(SLUG)}/${sanitize(label)}`
-  const glue = await agent(gluePrompt({ runDir, label: sanitize(label), prompt, schema, sandbox, writeCheckPath }), {
+  const glue = await agent(gluePrompt({ runDir, label: sanitize(label), prompt, schema, sandbox, writeCheckPath, tier }), {
     model: 'haiku',
     effort: 'low',
     schema: envelope(schema),
@@ -190,6 +190,7 @@ const [research, art] = await parallel([
       label: 'research',
       phase: 'Research',
       sandbox: 'read-only',
+      tier: 'terra', // codebase/prior-decision digest — general read+summarize
       schema: RESEARCH,
       prompt:
         `crowi-design RESEARCH for the design topic: "${TOPIC}".\n` +
@@ -272,6 +273,7 @@ const frame = await codexStage({
   label: 'frame',
   phase: 'Frame',
   sandbox: 'workspace-write',
+  tier: 'sol', // design synthesis (approaches + brief) is the hardest stage
   schema: FRAME,
   writeCheckPath: BRIEF_PATH,
   prompt:

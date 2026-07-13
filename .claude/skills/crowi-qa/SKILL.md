@@ -869,7 +869,7 @@ cat > .reviews/qa/<run-id>/flows/<charter>/schema.json <<'SCHEMA'
   }
 }
 SCHEMA
-bash .claude/scripts/codex-run.sh --sandbox read-only \
+bash .claude/scripts/codex-run.sh --sandbox read-only --tier luna \
   --prompt-file .reviews/qa/<run-id>/flows/<charter>/prompt.md \
   --schema-file .reviews/qa/<run-id>/flows/<charter>/schema.json \
   --out .reviews/qa/<run-id>/flows/<charter>/analysis.json --label crowi-qa

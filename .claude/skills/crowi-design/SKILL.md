@@ -50,17 +50,25 @@ main が保持するのは **brief サマリ + ゲート + 最終報告** だけ
 ので、Claude 消費はほぼゼロ。Codex 不可時は **fail-open で従来の Claude 実装に
 自動 fallback** する(spec: feature-codex-role-split)。
 
-| stage | 主担当 | fallback(fail-open) |
-|---|---|---|
-| 調査: codebase + prior decisions | **Codex**(read-only・1 run) | Explore sonnet ×2 |
-| 調査: prior art(web 調査) | Explore sonnet | —(Claude 固定) |
-| 設計案(architect・brief 執筆) | **Codex**(workspace-write) | general-purpose(session / high) |
-| **収束(ゲート)** | **main**(session) | — |
-| 執筆 RFC | **Codex**(workspace-write) | general-purpose(session) |
-| 執筆 spec | general-purpose sonnet | —(Claude 固定・当面) |
-| 設計レビュー ×3(並列) | **Codex** ×3(read-only) | general-purpose(session / high) |
-| Claude lens(critical 時のみ +1) | general-purpose(session / high) | — |
-| 是正(revise) | RFC=**Codex** / spec=sonnet | general-purpose |
+各 Codex ステージは `codex-run.sh --tier` で **semantic なモデル tier**(sol=最難 /
+terra=一般 / luna=単純)を選ぶ。実 model id(`gpt-5.6-{sol,terra,luna}`)と tier 既定
+effort(sol=high / terra=medium / luna=low)は wrapper に 1 箇所だけ持つ。
+
+| stage | 主担当 | tier | fallback(fail-open) |
+|---|---|---|---|
+| 調査: codebase + prior decisions | **Codex**(read-only・1 run) | terra | Explore sonnet ×2 |
+| 調査: prior art(web 調査) | Explore sonnet | —(Claude) | —(Claude 固定) |
+| 設計案(architect・brief 執筆) | **Codex**(workspace-write) | **sol** | general-purpose(session / high) |
+| **収束(ゲート)** | **main**(session) | — | — |
+| 執筆 RFC | **Codex**(workspace-write) | **sol** | general-purpose(session) |
+| 執筆 spec | general-purpose sonnet | —(Claude) | —(Claude 固定・当面) |
+| 設計レビュー ×3(並列) | **Codex** ×3(read-only) | terra →(最終 attempt)**sol** | general-purpose(session / high) |
+| Claude lens(critical 時のみ +1) | general-purpose(session / high) | — | — |
+| 是正(revise) | RFC=**Codex** / spec=sonnet | terra | general-purpose |
+
+**レビューのエスカレーション**: 設計レビューは早期ラウンドは terra、APPROVED/NEEDS_WORK を
+分ける**最終 attempt(`attempt === maxReviewAttempts`)だけ sol** に上げる — terra が弾き
+続ける doc に一度だけ最強判定を当てる(毎ラウンド sol を焚かない)。
 
 ### critical フラグ(Claude lens の追加基準)
 

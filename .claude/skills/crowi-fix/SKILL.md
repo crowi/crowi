@@ -50,7 +50,7 @@ description: |
 mkdir -p .reviews/codex-runs/fix-<topic>
 # prompt: 「git status --porcelain + git diff HEAD で修正を取得し(untracked は直接読む)、
 #          退行・境界・並行の観点で敵対レビューせよ」+ FINDINGS schema (crowi-review と同形)
-bash .claude/scripts/codex-run.sh --sandbox read-only \
+bash .claude/scripts/codex-run.sh --sandbox read-only --tier terra \
   --prompt-file .reviews/codex-runs/fix-<topic>/prompt.md \
   --schema-file .reviews/codex-runs/fix-<topic>/schema.json \
   --out .reviews/codex-runs/fix-<topic>/out.json --label fix-<topic>
