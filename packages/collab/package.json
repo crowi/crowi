@@ -13,7 +13,7 @@
     "dev": "tsup --watch --no-clean",
     "build": "tsup",
     "lint": "eslint src/ --ext .ts",
-    "test": "jest --passWithNoTests",
+    "test": "jest --passWithNoTests --maxWorkers=5",
     "type-check": "tsc --noEmit",
     "clean": "rm -rf dist tsconfig.tsbuildinfo"
   },
