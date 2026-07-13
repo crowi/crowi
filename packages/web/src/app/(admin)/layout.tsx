@@ -25,11 +25,17 @@ import { m } from '@paraglide/messages.js';
 import { UserMenuItems } from '@/components/user-menu-items';
 import { Toaster } from '@/components/ui/sonner';
 import { MAX_VISIBLE_TOASTS } from '@/lib/notify';
+import { MAIN_CONTENT_ID, useRouteFocus } from '@/lib/use-route-focus';
+import { SkipLink } from '@/components/skip-link';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { user, isLoading, isAuthenticated, logout } = useAuth();
   const { state: connectionState } = useConnection();
+
+  // Moves focus to `#main-content` on every client-side route change
+  // (skips the first mount) — see use-route-focus.ts.
+  useRouteFocus();
 
   useEffect(() => {
     // 接続エラー中はリダイレクトしない
@@ -100,6 +106,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <ServerErrorModal />
       <Toaster visibleToasts={MAX_VISIBLE_TOASTS} />
 
+      <SkipLink />
+
       <header className="crowi-top-border bg-background text-foreground shadow-header dark:shadow-none dark:border-b dark:border-border relative z-40">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3 min-w-0">
@@ -140,7 +148,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <aside className="lg:sticky lg:top-8 lg:self-start">
           <AdminSidebar />
         </aside>
-        <main>
+        <main id={MAIN_CONTENT_ID} tabIndex={-1} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
           <AdminBreadcrumb />
           {children}
         </main>
