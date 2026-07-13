@@ -51,9 +51,10 @@ function resolvedExternalMongoUri() {
  * `maxPoolSize=10`, applied UNIFORMLY across every resolution path (docker
  * autodetect / `MONGO_URI` override / `TEST_MONGO_URI` override / the
  * in-process `mongodb-memory-server` fallback) — previously only the
- * autodetected docker URI got a pool cap (baked into `global-setup.js`'s
- * `DOCKER_MONGO_URI` default), which left the `MONGO_URI`/`TEST_MONGO_URI`
- * override paths connecting with the driver's default `maxPoolSize=100`.
+ * autodetected docker candidate URIs got a pool cap (baked into
+ * `global-setup.js`'s own URI constants), which left the `MONGO_URI`/
+ * `TEST_MONGO_URI` override paths connecting with the driver's default
+ * `maxPoolSize=100`.
  * Under `--maxWorkers=N` that is an N×100 simultaneous-connect burst
  * against one shared mongod, which can overflow the listen backlog and
  * surface as a transient `connect ETIMEDOUT` (see `global-setup.js`'s
@@ -101,23 +102,42 @@ async function dropPerFileDatabase(mongoUri) {
 /**
  * jest environment for the @crowi/api server-side test project.
  *
- * Resolution order for the test MongoDB:
+ * Resolution order for the test MongoDB (this class only ever reads the
+ * sentinel FILE that `global-setup.js` already resolved to one of these — it
+ * does not re-decide between them; see that module's doc comment for the
+ * full 5-segment priority (`MONGO_URI` > `TEST_MONGO_URI` >
+ * `crowi-test-mongodb`:27018 > dev `mongodb`:27017 > memory-server). `CI ===
+ * 'true'` is NOT a 6th segment — it's a gate that, only when `TEST_MONGO_URI`
+ * is unset, blocks segments 3-4 (the un-overridden 27018/27017 auto-detect
+ * cascade) so a CI runner never silently adopts a port it happens to have
+ * something listening on instead of the `MONGO_URI` it was actually
+ * configured with):
  *
- *   1. `process.env.MONGO_URI` is set → connect to that MongoDB
+ *   1. `process.env.MONGO_URI` is set → connect to that MongoDB directly
  *      (CI uses `services: mongo` on the GitHub Actions runner; local
- *      developers can point this at the `docker compose up -d` mongo).
- *      When `MONGO_URI` is NOT set, `global-setup.js` instead probes for a
- *      reachable local docker Mongo and records the result in a run-scoped
- *      sentinel FILE (see `test-mongo-sentinel.js`) — once, in the jest
- *      main process before any worker forks — so a plain `pnpm test` with
- *      the docker stack up uses the real server (and avoids the per-file
- *      mongodb-memory-server churn that SIGSEGVs on full parallel runs)
- *      WITHOUT each worker doing its own racy probe. Each test file gets
- *      its own database under that server so jest can run `--maxWorkers=N`
- *      in parallel without collisions, and teardown drops the per-file db.
+ *      developers can point this at any MongoDB, including but not limited
+ *      to the `docker compose up -d` ones below). This is a plain
+ *      `process.env` read, not a sentinel read.
  *
- *   2. Otherwise → `mongodb-memory-server` is started in-process.
- *      This is the "no infrastructure" fallback for local
+ *   2. Otherwise, an external docker Mongo `global-setup.js` already probed
+ *      and recorded in the run-scoped sentinel FILE (see
+ *      `test-mongo-sentinel.js`) — once, in the jest main process before any
+ *      worker forks, so no worker does its own racy probe. This covers
+ *      THREE sub-cases, all indistinguishable from here (the sentinel just
+ *      holds a URI): an explicit `TEST_MONGO_URI` override, the dedicated
+ *      tmpfs `crowi-test-mongodb` (port 27018, feature-test-parallel-db-flake-hardening
+ *      Phase 2 / A2 — preferred, keeps full-suite churn off the always-on
+ *      dev Mongo's disk path), or the dev `mongodb` service (port 27017,
+ *      fallback when 27018 isn't reachable). A plain `pnpm test` with the
+ *      docker stack up uses whichever of these `global-setup.js` picked, and
+ *      avoids the per-file mongodb-memory-server churn that SIGSEGVs on full
+ *      parallel runs. Each test file gets its own database under that
+ *      server so jest can run `--maxWorkers=N` in parallel without
+ *      collisions, and teardown drops the per-file db.
+ *
+ *   3. Otherwise (sentinel is empty — nothing reachable, or `CI === 'true'`
+ *      blocked auto-detection) → `mongodb-memory-server` is started
+ *      in-process. This is the "no infrastructure" fallback for local
  *      `pnpm test` invocations on machines without the docker stack
  *      running. Each environment instance gets its own memory-server
  *      so there's no inter-file state.
