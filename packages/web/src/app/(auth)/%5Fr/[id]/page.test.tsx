@@ -109,8 +109,7 @@ describe('(auth)/%5Fr/[id]/page — legacy /_r/<id> alias route revival', () => 
     // again regardless), so this test reuses that artifact when present and
     // triggers a build itself otherwise — never silently skipping.
     const ROUTE_KEY = '/(auth)/_r/[id]/page';
-    const readManifest = (p: string): Record<string, string> =>
-      existsSync(p) ? (JSON.parse(readFileSync(p, 'utf-8')) as Record<string, string>) : {};
+    const readManifest = (p: string): Record<string, string> => (existsSync(p) ? (JSON.parse(readFileSync(p, 'utf-8')) as Record<string, string>) : {});
 
     it('the built app-paths-manifest.json contains /(auth)/_r/[id]/page', () => {
       const manifestPath = path.join(process.cwd(), '.next/server/app-paths-manifest.json');
