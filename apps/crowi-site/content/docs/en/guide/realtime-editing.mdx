@@ -35,12 +35,22 @@ viewing the page keeps you on the latest content.
   equally.
 - It also reaches viewers connected to a different instance in a
   multi-instance deployment (`REDIS_URL` configured).
+- It also catches up automatically, without a reload, after the tab
+  was backgrounded or after a network disconnect: both returning to a
+  backgrounded tab and the presence connection re-establishing after a
+  drop re-check for anything saved in the meantime, so nothing saved
+  during that gap is lost. On top of that, while the tab stays open a
+  periodic check runs every 3 minutes as a backstop, so even an update
+  missed by every other trigger self-heals within roughly 3 minutes.
+- If your own read access is revoked while you're viewing a page, the
+  view automatically switches to the access-denied state.
 
 ### When it does not happen (limits)
 
-- **Your own saves** never trigger a swap or a banner. If the same
-  user edits and saves from another tab, the reading tab is likewise
-  not auto-updated (your own change is assumed to be already known).
+- **Your own saves** never show a banner in this tab (your own change
+  is assumed to be already known). The content itself, though, is
+  still swapped in silently (no banner) when the same user saves it
+  from another tab or device.
 - **Viewing a past revision** (a specific version opened via
   `?revision_id=`) and **draft pages** do not receive live updates.
 - A burst of rapid saves is coalesced into a single swap.
