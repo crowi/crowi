@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useRef, useState, useTransition } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Search } from 'lucide-react';
@@ -10,7 +10,7 @@ import { ErrorAlert } from '@/components/ui/error-alert';
 import { Input } from '@/components/ui/input';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { Button } from '@/components/ui/button';
-import { SearchHitItem } from '@/components/search/search-hit-item';
+import { PageListEmptyCard, PageListSectionHeader, PageRowsCard } from '@/components/page-list/page-list-shared';
 import { SearchPager } from '@/components/search/search-pager';
 import { ALL_TAB, type SearchTypeTabValue, SearchTypeTabs, isSearchTypeTabValue } from '@/components/search/search-type-tabs';
 import { SearchDisabledError, useSearchPages } from '@/lib/use-search';
@@ -122,6 +122,11 @@ function SearchPageInner() {
   const hasOtherError = !!error && !isSearchDisabled;
   const hasQuery = urlQ.length > 0;
 
+  // Built once per fetch (not per row) so `getSnippet` below is an O(1)
+  // Map lookup rather than an O(n) `.find()` inside every `PageRowsCard`
+  // row.
+  const snippetByPageId = useMemo(() => new Map((data?.data ?? []).map((hit) => [hit.pageId, hit.snippet])), [data]);
+
   return (
     <div className="space-y-6">
       <div>
@@ -156,11 +161,7 @@ function SearchPageInner() {
             </p>
           )}
 
-          {!hasQuery && (
-            <div className="rounded-md bg-muted/30 p-8 text-center">
-              <p className="text-muted-foreground">{m['search.empty_query']()}</p>
-            </div>
-          )}
+          {!hasQuery && <PageListEmptyCard icon={Search} message={m['search.empty_query']()} />}
 
           {hasQuery && isSearchDisabled && (
             <>
@@ -181,20 +182,15 @@ function SearchPageInner() {
 
           {hasQuery && !error && !isLoading && data && (
             <div aria-busy={isFetching} className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                {data.meta.total === 0 ? m['search.results.none']() : m['search.results.summary']({ total: data.meta.total, q: urlQ })}
-              </p>
+              <PageListSectionHeader
+                icon={Search}
+                label={data.meta.total === 0 ? m['search.results.none']() : m['search.results.summary']({ total: data.meta.total, q: urlQ })}
+              />
 
               {data.data.length > 0 ? (
-                <div className="rounded-md border bg-card divide-y">
-                  {data.data.map((hit) => (
-                    <SearchHitItem key={hit.pageId} hit={hit} />
-                  ))}
-                </div>
+                <PageRowsCard pages={data.data.map((hit) => hit.page)} getSnippet={(page) => snippetByPageId.get(page._id)} />
               ) : (
-                <div className="rounded-md bg-muted/30 p-8 text-center">
-                  <p className="text-muted-foreground">{m['search.results.empty_for_query']({ q: urlQ })}</p>
-                </div>
+                <PageListEmptyCard icon={Search} message={m['search.results.empty_for_query']({ q: urlQ })} />
               )}
 
               <SearchPager page={urlPage} total={data.meta.total} limit={RESULTS_PER_PAGE} onPageChange={handlePageChange} />
