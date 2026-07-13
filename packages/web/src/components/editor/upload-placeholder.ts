@@ -216,7 +216,7 @@ export function makeProgressUpdater(view: EditorView, uploadId: string, filename
 
 /**
  * POST a file to `/api/v2/attachments/upload` with browser-side upload
- * progress. Neither ts-rest nor `hc<AppType>`'s `$post` surfaces upload
+ * progress. Neither ts-rest nor `apiClientV2`'s `$post` surfaces upload
  * progress, so this uses `XMLHttpRequest` directly — `xhr.upload.
  * onprogress` is the only cross-browser way to observe a multipart
  * upload streaming out. The endpoint, field names, and error envelope

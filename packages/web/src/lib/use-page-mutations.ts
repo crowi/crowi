@@ -38,7 +38,7 @@ export function invalidatePageContentQueries(queryClient: QueryClient): void {
 
 /**
  * RFC-0006 Phase 4 Batch 4 — switched from `apiClient.page.*` (ts-rest)
- * to `apiClientV2.pages.*.$method` (hc<AppType>). The legacy
+ * to `apiClientV2.pages.*.$method` (`createClient`). The legacy
  * `unwrapResult` helper is replaced with explicit `response.ok` /
  * `response.status` checks because hc returns a plain `Response`-shaped
  * object rather than ts-rest's `{ status, body }` discriminated union.

@@ -7,7 +7,7 @@ import { watchKeys } from './use-watch';
 
 /**
  * RFC-0006 Phase 4 Batch 3 — switched from `apiClient.comment.*`
- * (ts-rest) to `apiClientV2.comments.$method` (hc<AppType>). The wire
+ * (ts-rest) to `apiClientV2.comments.$method` (`createClient`). The wire
  * payload (`{ comments }`, `{ comment }`, `{ ok: true }`) is preserved.
  * Error envelopes (`{ error: { code, message } }`) are mapped through
  * `extractErrorMessage` so users see the server's intended message

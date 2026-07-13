@@ -11,7 +11,7 @@ export const adminMailSettingsKeys = {
 
 /**
  * RFC-0006 Phase 4 Batch 9 — switched from `apiClient.admin.mail.*`
- * (ts-rest) to `apiClientV2.admin.mail.*.$method` (hc<AppType>). Wire
+ * (ts-rest) to `apiClientV2.admin.mail.*.$method` (`createClient`). Wire
  * payload unchanged. The 400 `MailSettingsValidationError` envelope
  * (`{ bodyResult: { issues } }`) is still produced by the contract's
  * per-route hook override.

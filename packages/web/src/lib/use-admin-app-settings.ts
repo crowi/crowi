@@ -11,7 +11,7 @@ export const adminAppSettingsKeys = {
 
 /**
  * RFC-0006 Phase 4 Batch 9 — switched from `apiClient.admin.app.*`
- * (ts-rest) to `apiClientV2.admin.app.$method` (hc<AppType>). Wire
+ * (ts-rest) to `apiClientV2.admin.app.$method` (`createClient`). Wire
  * payload unchanged. 401 / 403 collapse to `null` so the admin layout
  * gates the redirect.
  */

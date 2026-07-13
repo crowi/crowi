@@ -14,7 +14,7 @@ import { m } from '@paraglide/messages.js';
  * with the updated liker / likerCount.
  *
  * RFC-0006 Phase 4 Batch 4 — switched from `apiClient.page.{like,unlike}Page`
- * (ts-rest) to `apiClientV2.pages.{like,unlike}.$post` (hc<AppType>).
+ * (ts-rest) to `apiClientV2.pages.{like,unlike}.$post` (`createClient`).
  */
 export const likeKeys = {
   all: ['like'] as const,

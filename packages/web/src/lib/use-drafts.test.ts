@@ -4,12 +4,12 @@ import type { PropsWithChildren } from 'react';
 import { createElement } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Mock `apiClientV2` (hc<AppType>) at the module level so the hooks
+// Mock `apiClientV2` (`createClient`) at the module level so the hooks
 // read our fake `pages.drafts.*` operations. Vitest hoists `vi.mock`
 // above imports; `vi.hoisted` makes the shared stubs reachable from
 // both the factory and the test bodies without a TDZ violation.
 //
-// hc<AppType> returns a `Response`-shaped object, so each fake resolves
+// `apiClientV2` returns a `Response`-shaped object, so each fake resolves
 // to `{ ok, status, json }` rather than ts-rest's `{ status, body }`.
 const { listGet, createPost, cancelDelete } = vi.hoisted(() => ({
   listGet: vi.fn(),

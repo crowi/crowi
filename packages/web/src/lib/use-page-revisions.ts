@@ -7,7 +7,7 @@ import type { Pager, Revision, RevisionMeta } from '@crowi/api-contract';
 
 /**
  * RFC-0006 Phase 4 Batch 3 — switched from `apiClient.revision.*`
- * (ts-rest) to `apiClientV2.pages.*.$get` (hc<AppType>). Wire payload
+ * (ts-rest) to `apiClientV2.pages.*.$get` (`createClient`). Wire payload
  * is unchanged.
  */
 export interface UsePageRevisionsResult {

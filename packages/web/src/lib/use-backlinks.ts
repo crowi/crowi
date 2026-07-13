@@ -6,7 +6,7 @@ import type { GetBacklinksResponse } from '@crowi/api-contract';
 
 /**
  * RFC-0006 Phase 4 Batch 3 — switched from `apiClient.backlink.*`
- * (ts-rest) to `apiClientV2.backlinks.$get` (hc<AppType>). Wire payload
+ * (ts-rest) to `apiClientV2.backlinks.$get` (`createClient`). Wire payload
  * is unchanged.
  */
 export const backlinksKeys = {

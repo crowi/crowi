@@ -12,7 +12,7 @@ import type { DraftConflictOwner, DraftSummary, ListDraftsResponse } from '@crow
  * has just `all`.
  *
  * RFC-0006 Phase 4 Batch 6 — switched from `apiClient.draft.*` (ts-rest)
- * to `apiClientV2.pages.drafts.*.$method` (hc<AppType>). Wire payload is
+ * to `apiClientV2.pages.drafts.*.$method` (`createClient`). Wire payload is
  * unchanged; the only call-site difference is `response.ok` /
  * `response.json()` instead of ts-rest's `result.status` + `result.body`.
  */

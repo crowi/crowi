@@ -8,9 +8,9 @@ import type { Attachment, AttachmentMeta, ListAttachmentsResponse } from '@crowi
 /**
  * RFC-0006 Phase 4 Batch 6 — switched from `apiClient.attachment.*`
  * (ts-rest) to `apiClientV2.pages[':pageId'].attachments.*` /
- * `apiClientV2.attachments[':id'].*` (hc<AppType>). Wire payload is
+ * `apiClientV2.attachments[':id'].*` (`createClient`). Wire payload is
  * unchanged. `useAddAttachment` continues to use a bare `fetch` for the
- * multipart upload because hc<AppType>'s `$post` does not surface
+ * multipart upload because `apiClientV2`'s `$post` does not surface
  * `XMLHttpRequest`-style upload progress and the existing code path is
  * already a hand-rolled fetch.
  */
@@ -74,8 +74,8 @@ export function useAttachment(id: string | undefined) {
 
 /**
  * Upload a file as an attachment of `pageId`. Hand-rolled `fetch` rather
- * than going through the typed client because hc<AppType>'s `$post` does
- * not currently surface upload progress; this fetch keeps the auth /
+ * than going through the typed client because `apiClientV2`'s `$post`
+ * does not currently surface upload progress; this fetch keeps the auth /
  * refresh behaviour aligned with the rest of the app by reading the
  * access token from `auth-token`.
  */

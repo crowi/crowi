@@ -69,7 +69,8 @@ export function useAuthMockModule(useAuthFn: Mock) {
 // ---------------------------------------------------------------------------
 
 /**
- * Build a `Response`-shaped object matching what `hc<AppType>` returns.
+ * Build a `Response`-shaped object matching what `apiClientV2` (a
+ * `createClient` typed client) returns.
  *
  * This replaces the local `makeResponse` / `tokenOkResponse` / `okResponse` /
  * `errorResponse` helpers that appeared identically in:

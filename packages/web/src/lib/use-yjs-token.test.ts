@@ -8,7 +8,7 @@ import { createElement } from 'react';
 // .$get`. Vitest hoists `vi.mock` above imports; `vi.hoisted` makes the
 // shared stub accessible from both the factory and the test bodies
 // without a TDZ violation. RFC-0006 Batch 5 switched the hook from
-// ts-rest's `apiClient.pageCollab.getYjsToken` to hc<AppType>'s
+// ts-rest's `apiClient.pageCollab.getYjsToken` to `apiClientV2`'s
 // Response-shaped fetch call.
 const { getYjsToken, tokenRefreshListeners, emitTokenRefreshed } = vi.hoisted(() => {
   const listeners = new Set<() => void>();

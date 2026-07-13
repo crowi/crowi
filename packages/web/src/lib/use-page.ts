@@ -7,7 +7,7 @@ import type { GetPageRequest, PageWithRevision } from '@crowi/api-contract';
 
 /**
  * RFC-0006 Phase 4 Batch 4 — switched from `apiClient.page.getPage`
- * (ts-rest) to `apiClientV2.pages.$get` (hc<AppType>). Wire payload is
+ * (ts-rest) to `apiClientV2.pages.$get` (`createClient`). Wire payload is
  * unchanged.
  */
 export interface PageState {

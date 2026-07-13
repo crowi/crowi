@@ -42,7 +42,7 @@ const throwGenericError = async (response: Response, fallback: string, notFoundM
 
 /**
  * RFC-0006 Phase 4 Batch 9 — switched from `apiClient.admin.plugins.*`
- * (ts-rest) to `apiClientV2.admin.plugins.*.$method` (hc<AppType>).
+ * (ts-rest) to `apiClientV2.admin.plugins.*.$method` (`createClient`).
  * Wire payload byte-identical; 422 still surfaces
  * `PluginConfigValidationError`.
  */

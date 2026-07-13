@@ -7,7 +7,7 @@ import { pageListKeys } from './page-query-keys';
 
 /**
  * RFC-0006 Phase 4 Batch 4 — switched from `apiClient.page.listPages`
- * (ts-rest) to `apiClientV2.pages.list.$get` (hc<AppType>). Query
+ * (ts-rest) to `apiClientV2.pages.list.$get` (`createClient`). Query
  * params are coerced to strings on the wire because hc's typed query
  * forwards verbatim; Zod's `z.coerce.number()` / `z.coerce.boolean()`
  * on the server side handles the conversion.

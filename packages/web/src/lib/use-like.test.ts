@@ -5,7 +5,7 @@ import { createElement, type PropsWithChildren } from 'react';
 
 // Mock `apiClientV2` so the like/unlike calls hit our fake (Batch 4
 // switched the hook from ts-rest's `apiClient.page.{like,unlike}Page`
-// to hc<AppType>'s `apiClientV2.pages.{like,unlike}.$post`).
+// to `apiClientV2.pages.{like,unlike}.$post`).
 const { likePage, unlikePage } = vi.hoisted(() => ({
   likePage: vi.fn(),
   unlikePage: vi.fn(),

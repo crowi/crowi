@@ -19,7 +19,7 @@ export const adminStorageKeys = {
  * write. See `.feature-state/specs/feature-admin-storage.md`.
  *
  * RFC-0006 Phase 4 Batch 9 — switched from `apiClient.admin.storage.*`
- * to `apiClientV2.admin.storage.$get` (hc<AppType>).
+ * to `apiClientV2.admin.storage.$get` (`createClient`).
  */
 export function useAdminStorage() {
   return useQuery<GetStorageStatusResponse, Error>({

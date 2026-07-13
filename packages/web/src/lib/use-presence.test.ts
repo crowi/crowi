@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock `apiClientV2` so the token query reads our fake `pages[':id']
 // ['presence-token'].$get`. RFC-0006 Batch 5 switched the hook from
-// ts-rest's `apiClient.presence.getPresenceToken` to hc<AppType>'s
+// ts-rest's `apiClient.presence.getPresenceToken` to `apiClientV2`'s
 // Response-shaped fetch call.
 const { getPresenceToken } = vi.hoisted(() => ({ getPresenceToken: vi.fn() }));
 vi.mock('./api-client', () => ({
@@ -107,7 +107,7 @@ const TOKEN_OK = {
 };
 
 /**
- * `Response`-shaped helpers for the hc<AppType> mock. Batch 5 switched
+ * `Response`-shaped helpers for the `apiClientV2` mock. Batch 5 switched
  * the hook to read `response.ok` + `response.json()` directly (instead
  * of the ts-rest `{ status, body }` envelope), so every mock here
  * returns the shape the real `fetch` would return.

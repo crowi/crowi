@@ -8,10 +8,10 @@ import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/
  * security) all use this exact shape; collapsing them into one factory
  * removes ~80 lines of near-duplicate hook code.
  *
- * RFC-0006 Phase 4 Batch 9 — adapted to `hc<AppType>` (`apiClientV2`)
- * which returns a `Response` rather than the ts-rest `{ status, body }`
- * envelope. The factory parses the body on demand so the call sites
- * stay declarative.
+ * RFC-0006 Phase 4 Batch 9 — adapted to the typed `apiClientV2` client
+ * (`createClient`) which returns a `Response` rather than the ts-rest
+ * `{ status, body }` envelope. The factory parses the body on demand so
+ * the call sites stay declarative.
  *
  * Notes / non-goals:
  * - The app and mail settings hooks use a *different* shape (return null on
@@ -35,9 +35,9 @@ interface AdminSettingsHooksConfig<Settings, UpdateRequest> {
    *  GET and the post-PUT `setQueryData` so the form sees fresh data
    *  without a follow-up fetch. */
   queryKey: QueryKey;
-  /** hc<AppType> GET method — returns a Response. */
+  /** `apiClientV2` GET method — returns a Response. */
   fetch: () => Promise<Response>;
-  /** hc<AppType> PUT method — returns a Response. */
+  /** `apiClientV2` PUT method — returns a Response. */
   update: (body: UpdateRequest) => Promise<Response>;
   /** User-facing fallback message when fetch fails for an unknown reason. */
   fetchErrorMessage: string;

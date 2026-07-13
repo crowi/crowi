@@ -77,7 +77,7 @@ const throwAdminUserEditError = async (response: Response, fallback: string): Pr
 
 /**
  * RFC-0006 Phase 4 Batch 9 — switched from `apiClient.admin.users.*`
- * (ts-rest) to `apiClientV2.admin.users.*.$method` (hc<AppType>). Wire
+ * (ts-rest) to `apiClientV2.admin.users.*.$method` (`createClient`). Wire
  * payload byte-identical; 409 still surfaces `EmailConflictError`.
  */
 export function useAdminUsers(params: UseAdminUsersParams) {

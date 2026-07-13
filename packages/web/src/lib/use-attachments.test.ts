@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createElement, type PropsWithChildren } from 'react';
 import type { AttachmentMeta } from '@crowi/api-contract';
 
-// Mock `apiClientV2` (hc<AppType>) so `getAttachmentMeta` hits our fake.
+// Mock `apiClientV2` (`createClient`) so `getAttachmentMeta` hits our fake.
 // The hook calls `apiClientV2.attachments[':id'].meta.$get(...)` and
 // expects a Response-shaped object (`ok` / `status` / `json`).
 const { metaGet } = vi.hoisted(() => ({ metaGet: vi.fn() }));

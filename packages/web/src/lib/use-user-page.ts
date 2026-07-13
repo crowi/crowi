@@ -7,7 +7,7 @@ import { userPageKeys } from './page-query-keys';
 
 /**
  * RFC-0006 Phase 4 Batch 2 — migrated from `apiClient.user.*` (ts-rest)
- * to `apiClientV2.user[':username'].$get` (hc<AppType>). The path-param
+ * to `apiClientV2.user[':username'].$get` (`createClient`). The path-param
  * + pagination query shape is unchanged; the only call-site difference
  * is `response.ok` / `response.json()` vs ts-rest's `result.status`
  * narrowing. Both 401 and 404 surface a structured error envelope

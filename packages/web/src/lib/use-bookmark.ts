@@ -12,7 +12,7 @@ import type { Bookmark } from '@crowi/api-contract';
  *   (uses prefix matching via invalidateQueries)
  *
  * RFC-0006 Phase 4 Batch 3 — switched from `apiClient.bookmark.*` (ts-rest)
- * to `apiClientV2.bookmarks.*.$method` (hc<AppType>). Wire payload is
+ * to `apiClientV2.bookmarks.*.$method` (`createClient`). Wire payload is
  * unchanged; the only call-site difference is `response.ok` /
  * `response.json()` instead of ts-rest's `result.status` + `result.body`.
  * Errors come back with the same `{ error: { code, message } }` envelope
