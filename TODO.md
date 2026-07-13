@@ -61,6 +61,7 @@ alpha.0–.3 は published、alpha.4 / stable 向けに changeset 蓄積中（pr
 - **特定 revision への revert** — stale 帯の「この版に戻す」+ `POST /pages/revert-to-revision` + MCP `crowi_revert_to_revision`（非破壊・portal 対応。spec: `feature-revision-revert.md`）
 - **web auth state 集約（fugu-report P0-1）** — `useAuth` の React Query singleton 化 + reactive token store + `AuthSync` island（spec: `feature-web-auth-state-centralization.md`）
 - **閲覧中ページのライブ差し替え（read-side soft-refresh）** — 他者保存を presence WS 相乗りでフルリロードなしに最新 revision へ反映（spec: `feature-live-page-content-sync.md`）
+- **ページ閲覧のライブ反映 reconcile（push 取りこぼし補完）** — tab 復帰/再接続/4403 close/show-latest/周期バックストップの5トリガーで head-GET reconcile を追加し取りこぼしを解消。GET /pages の未知例外も 500 に分離（spec: `feature-live-page-sync-reconcile.md`）
 - **閲覧中ページのコメントのライブ表示** — 他者のコメント投稿/削除を presence 相乗りで一覧へ反映（spec: `feature-live-page-comment-sync.md`）
 - **フェーズ1 ページ機能** — CRUD / list / portal / revision / bookmark / like / seen-by / comment / watch / trash / backlink / notification / user page / history
 - **RFC-0001 Plugin Architecture** — plugin-api / PluginManager / storage(local,s3) / search(ES,OpenSearch) / schema-driven admin form

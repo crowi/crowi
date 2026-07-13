@@ -59,7 +59,7 @@ import type { CrowiHonoBindings } from '../app';
 import { withRateLimit } from '../middleware/rate-limit';
 import { applyScope } from '../middleware/require-scope';
 
-import { INVALID_PAGE_ID_BODY, PAGE_NOT_FOUND_BODY } from './_helpers/errors';
+import { INTERNAL_ERROR_BODY, INVALID_PAGE_ID_BODY, PAGE_NOT_FOUND_BODY } from './_helpers/errors';
 
 const debug = Debug('crowi:hono:handlers:page');
 
@@ -308,8 +308,15 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
           if (error.message === 'Page is not granted for the user') {
             return c.json(PAGE_NOT_GRANTED_BODY, 403);
           }
-          // Legacy fallback — unknown errors collapse to PAGE_NOT_FOUND.
-          return c.json(PAGE_NOT_FOUND_BODY, 404);
+          // feature-live-page-sync-reconcile — anything else (e.g. a
+          // transient `computeRevisionRenderArtifactsAsync` / renderer
+          // failure) is a genuine server error, not a not-found. Collapsing
+          // it into 404 used to make a page that failed to RENDER look like
+          // a page that doesn't EXIST — a client reconciling its cache
+          // against this endpoint (read-side soft-refresh) would wrongly
+          // treat a live, readable page as deleted. Return 500 so callers
+          // can tell "try again" from "gone" apart.
+          return c.json(INTERNAL_ERROR_BODY, 500);
         }
       })
       // --------------------------------------------------------------

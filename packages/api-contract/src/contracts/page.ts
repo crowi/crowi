@@ -35,7 +35,7 @@
  */
 import { createRoute, z } from '@hono/zod-openapi';
 
-import { AuthenticationRequiredErrorSchema, InvalidPageIdErrorSchema } from '../schemas/common';
+import { AuthenticationRequiredErrorSchema, InternalServerErrorSchema, InvalidPageIdErrorSchema } from '../schemas/common';
 // Shared with `GET /pages/autocomplete` — same per-user fixed-window
 // limiter envelope, reused verbatim (see claimPageLinkAccessRoute's 429
 // below) so the wire shape isn't duplicated across resources.
@@ -124,6 +124,15 @@ export const getPageRoute = createRoute({
     404: {
       description: 'Page not found',
       content: { 'application/json': { schema: PageNotFoundErrorSchema } },
+    },
+    // feature-live-page-sync-reconcile — separates a genuine unknown-error
+    // 500 (e.g. a transient render-artifact / renderer failure) from the
+    // not-found/not-granted 404/403 branches above, so a reconcile head-GET
+    // can tell "page is really gone/forbidden" from "read failed, try
+    // again later" (see `packages/api/src/hono/handlers/page.ts`'s split catch).
+    500: {
+      description: 'Internal server error',
+      content: { 'application/json': { schema: InternalServerErrorSchema } },
     },
   },
 });

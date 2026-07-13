@@ -248,6 +248,7 @@ describe('PageHeader — compact state', () => {
       ],
       selfUserId: 'u1',
       status: 'connected' as const,
+      pageUpdatedSeq: { current: 0 },
     };
     renderHeader(<PageHeader page={makePage()} sticky showActions showPresence presence={presence} />);
     // live-presence-row is a layout row with a data-size attribute but no accessible role;

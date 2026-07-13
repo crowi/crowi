@@ -85,6 +85,29 @@ export async function getPageLatestRevisionId(context: BrowserContext, pageId: s
   return revisionId;
 }
 
+/**
+ * Update an existing page's body as the user backing `context`
+ * (`PUT /api/v2/pages`). Looks up the current revision id itself so the
+ * caller doesn't have to (the update is rejected with 409 if `revision_id`
+ * is stale — reading it immediately before the call keeps this race-free
+ * for the single-writer-at-a-time way e2e specs use it).
+ */
+export async function updatePageViaApi(context: BrowserContext, input: { pageId: string; body: string }): Promise<void> {
+  const accessToken = await accessTokenFromContext(context);
+  const revisionId = await getPageLatestRevisionId(context, input.pageId);
+  const response = await fetch(`${E2E_API_URL}/api/v2/pages`, {
+    method: 'PUT',
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({ page_id: input.pageId, body: input.body, revision_id: revisionId }),
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to update E2E page ${input.pageId}: HTTP ${response.status} ${await response.text()}`);
+  }
+}
+
 /** Post a comment as the user backing `context`. Returns the new comment id. */
 export async function addCommentViaApi(context: BrowserContext, input: { pageId: string; revisionId: string; comment: string }): Promise<string> {
   const accessToken = await accessTokenFromContext(context);

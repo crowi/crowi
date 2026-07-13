@@ -2377,6 +2377,53 @@ describe('Routes /api/v2/pages (Hono getPage — past revision / stale detection
   });
 });
 
+// feature-live-page-sync-reconcile — the getPage catch used to collapse
+// EVERY unknown exception into 404 (`PAGE_NOT_FOUND`), which made a page
+// that failed to RENDER indistinguishable from a page that doesn't exist.
+// A reconcile head-GET (the read-side soft-refresh's tab-revisit /
+// reconnect-barrier / periodic-backstop fetch) treats 404 as "page was
+// deleted" and switches the viewer to `NotFoundCard` — so a transient
+// render-artifact failure used to make a perfectly live page vanish for
+// every viewer reconciling their cache. This split routes anything other
+// than the genuine not-found/not-granted branches to 500 instead.
+describe('Routes /api/v2/pages (Hono getPage — unknown-error 500 split, feature-live-page-sync-reconcile)', () => {
+  const PATH_PREFIX = '/hono-page-get-500-split-test/';
+  let accessToken: string;
+
+  beforeAll(async () => {
+    ({ accessToken } = await createTestUser({ name: 'Get500 Test', username: 'get500Tester', email: 'get-500-tester@example.com' }));
+  });
+
+  afterEach(() => cleanupPathPrefix(PATH_PREFIX));
+
+  it('returns 500 INTERNAL_ERROR (not 404) when the render-artifact fallback pipeline throws', async () => {
+    const path = `${PATH_PREFIX}render-failure`;
+    await createPageViaApi(accessToken, path, '# body');
+
+    const pageResponseModule = await import('src/util/page-response');
+    const spy = jest.spyOn(pageResponseModule, 'computeRevisionRenderArtifactsAsync').mockRejectedValueOnce(new Error('renderer boom'));
+
+    try {
+      const res = await request(app).get('/api/v2/pages').query({ path }).set(authHeaders(accessToken));
+
+      expect(res.status).toBe(500);
+      expect(res.body.error.code).toBe('INTERNAL_ERROR');
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('still returns 404 PAGE_NOT_FOUND for a genuinely missing page (unaffected by the 500 split)', async () => {
+    const res = await request(app)
+      .get('/api/v2/pages')
+      .query({ path: `${PATH_PREFIX}does-not-exist` })
+      .set(authHeaders(accessToken));
+
+    expect(res.status).toBe(404);
+    expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
+  });
+});
+
 describe('Routes /api/v2/pages/link-access (Hono claimPageLinkAccessRoute — grant-on-first-access, feature-restricted-grant-share-banner Phase 1)', () => {
   const PATH_PREFIX = '/hono-page-link-access-test/';
   const GRANT_PUBLIC = 1;

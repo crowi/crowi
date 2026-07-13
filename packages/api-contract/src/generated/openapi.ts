@@ -4703,6 +4703,22 @@ export interface paths {
                         };
                     };
                 };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "INTERNAL_ERROR";
+                                /** @enum {string} */
+                                message: "Internal server error";
+                            };
+                        };
+                    };
+                };
             };
         };
         /** Update existing page */

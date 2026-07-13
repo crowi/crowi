@@ -21,7 +21,7 @@ function viewer(userId: string, overrides: Partial<PresenceViewer> = {}): Presen
 }
 
 function makePresence(viewers: PresenceViewer[], selfUserId: string | null, status: PresenceStatus = 'connected'): UsePresenceResult {
-  return { viewers, selfUserId, status };
+  return { viewers, selfUserId, status, pageUpdatedSeq: { current: 0 } };
 }
 
 afterEach(() => {

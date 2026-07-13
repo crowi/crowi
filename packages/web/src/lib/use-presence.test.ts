@@ -231,7 +231,7 @@ describe('usePresence', () => {
     expect(result.current.status).toBe('connected');
   });
 
-  it('invokes onPageUpdated for another user save and suppresses the caller own save', async () => {
+  it('invokes onPageUpdated for another user save AND for the caller own save (feature-live-page-sync-reconcile: self/other silencing moved to the consumer)', async () => {
     getPresenceToken.mockResolvedValue(tokenOkResponse(TOKEN_OK));
     const onPageUpdated = vi.fn();
 
@@ -249,11 +249,143 @@ describe('usePresence', () => {
     // A page-updated frame never touches the viewer list.
     expect(result.current.viewers).toEqual([]);
 
-    // The caller's own save (editorUserId === selfUserId 'me') is suppressed.
+    // The caller's own save (editorUserId === selfUserId 'me') now ALSO
+    // reaches the callback — a self save from another tab/device must
+    // still swap the cache (silently); only the banner is suppressed,
+    // and that decision lives in the consumer, which alone knows the
+    // read-old banner state.
     act(() => {
       ws.emitRaw(JSON.stringify({ type: 'page-updated', pageId: 'page-1', revisionId: 'rev-10', editorUserId: 'me', editorDisplayName: 'Me' }));
     });
-    expect(onPageUpdated).toHaveBeenCalledTimes(1);
+    expect(onPageUpdated).toHaveBeenCalledTimes(2);
+  });
+
+  it('increments pageUpdatedSeq for every page-updated frame (self included), read live via .current — not a frozen snapshot', async () => {
+    getPresenceToken.mockResolvedValue(tokenOkResponse(TOKEN_OK));
+
+    const { result } = renderHook(() => usePresence('page-1'), { wrapper: makeWrapper() });
+    await flush();
+    const ws = FakeWebSocket.instances[0];
+
+    // Contract: a RefObject, not a plain number — the reconcile consumer
+    // relies on reading `.current` at two different points in time.
+    expect(result.current.pageUpdatedSeq).toHaveProperty('current');
+    const seqRef = result.current.pageUpdatedSeq;
+    expect(seqRef.current).toBe(0);
+
+    act(() => {
+      ws.open();
+      ws.emitRaw(JSON.stringify({ type: 'page-updated', pageId: 'page-1', revisionId: 'rev-1', editorUserId: 'bob', editorDisplayName: 'Bob' }));
+    });
+    expect(seqRef.current).toBe(1);
+
+    // A self save also increments the counter (no self-suppression here).
+    act(() => {
+      ws.emitRaw(JSON.stringify({ type: 'page-updated', pageId: 'page-1', revisionId: 'rev-2', editorUserId: 'me', editorDisplayName: 'Me' }));
+    });
+    expect(seqRef.current).toBe(2);
+    // The SAME ref object identity is returned across renders/re-reads —
+    // a caller that read it once and cached the object still observes
+    // the live mutation via `.current`.
+    expect(result.current.pageUpdatedSeq).toBe(seqRef);
+  });
+
+  it('fires onReconnected once per connection epoch, after the FIRST viewers broadcast (not onopen)', async () => {
+    getPresenceToken.mockResolvedValue(tokenOkResponse(TOKEN_OK));
+    const onReconnected = vi.fn();
+
+    renderHook(() => usePresence('page-1', { onReconnected }), { wrapper: makeWrapper() });
+    await flush();
+    const ws = FakeWebSocket.instances[0];
+
+    act(() => {
+      ws.open();
+    });
+    // onopen alone must NOT fire it — the server may still reject before
+    // ever sending a frame (e.g. a bad token).
+    expect(onReconnected).not.toHaveBeenCalled();
+
+    act(() => {
+      ws.emit([viewer('me')]);
+    });
+    expect(onReconnected).toHaveBeenCalledTimes(1);
+
+    // A second viewers broadcast in the SAME epoch does not re-fire it.
+    act(() => {
+      ws.emit([viewer('me'), viewer('alice')]);
+    });
+    expect(onReconnected).toHaveBeenCalledTimes(1);
+
+    // Reconnecting (a new epoch) fires it again, once, after ITS first
+    // viewers broadcast.
+    act(() => {
+      ws.fail(1006);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(15_000);
+    });
+    const ws2 = FakeWebSocket.instances[1];
+    act(() => {
+      ws2.open();
+    });
+    expect(onReconnected).toHaveBeenCalledTimes(1);
+    act(() => {
+      ws2.emit([viewer('me')]);
+    });
+    expect(onReconnected).toHaveBeenCalledTimes(2);
+  });
+
+  it('never fires onReconnected when the connection never receives a viewers broadcast (presence.join() failure, spec §11 barrier is best-effort)', async () => {
+    getPresenceToken.mockResolvedValue(tokenOkResponse(TOKEN_OK));
+    const onReconnected = vi.fn();
+
+    renderHook(() => usePresence('page-1', { onReconnected }), { wrapper: makeWrapper() });
+    await flush();
+    const ws = FakeWebSocket.instances[0];
+
+    // The transport handshake completes (`onopen`) — this alone must never
+    // fire the barrier (asserted by the sibling test above). Here the
+    // server-side `presence.join()` call itself is assumed to have failed
+    // (e.g. Redis hSet down): no `viewers` broadcast for THIS connection
+    // ever arrives, however long the tab stays connected — heartbeats keep
+    // firing (the socket looks alive from the client's perspective) but
+    // `onReconnected` must never fire for this epoch. The periodic
+    // 3-minute backstop (page-view.tsx, not this hook) is the fallback
+    // that recovers this gap — see page-view-reconcile.test.tsx's
+    // "reconnect barrier missing -> periodic backstop recovers" test.
+    act(() => {
+      ws.open();
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5 * 60_000); // several heartbeat cycles, still nothing
+    });
+    expect(onReconnected).not.toHaveBeenCalled();
+  });
+
+  it('fires onAccessRevoked only for a 4403 close, not 4401', async () => {
+    getPresenceToken.mockResolvedValue(tokenOkResponse(TOKEN_OK));
+    const onAccessRevoked = vi.fn();
+
+    renderHook(() => usePresence('page-1', { onAccessRevoked }), { wrapper: makeWrapper() });
+    await flush();
+    const ws = FakeWebSocket.instances[0];
+
+    act(() => {
+      ws.open();
+      ws.fail(4401);
+    });
+    expect(onAccessRevoked).not.toHaveBeenCalled();
+
+    // A fresh connection closed with 4403 fires it exactly once.
+    getPresenceToken.mockResolvedValue(tokenOkResponse({ ...TOKEN_OK, token: 'jwt.presence.2' }));
+    renderHook(() => usePresence('page-2', { onAccessRevoked }), { wrapper: makeWrapper() });
+    await flush();
+    const ws2 = FakeWebSocket.instances[FakeWebSocket.instances.length - 1];
+    act(() => {
+      ws2.open();
+      ws2.fail(4403);
+    });
+    expect(onAccessRevoked).toHaveBeenCalledTimes(1);
   });
 
   it('invokes onCommentChanged for another user added comment and suppresses the caller own', async () => {

@@ -29,7 +29,8 @@ import { useMarkSeenOnView } from '@/lib/use-seen';
 import { AttachmentList } from './attachment-list';
 import { BacklinkList } from './backlink-list';
 import { LiveSyncBanner } from './live-sync-banner';
-import { initialLiveSyncBannerState, isDisplayingOld, reduceLiveSyncBanner } from './live-sync-banner-state';
+import { initialLiveSyncBannerState, isDisplayingOld, type LiveSyncBannerEvent, reduceLiveSyncBanner } from './live-sync-banner-state';
+import { isHeadNewer, isLifecycleChanged, mergePageLevelFields, pageLevelFieldsChanged, pageUserDisplayName } from './live-sync-reconcile';
 import { PageContent } from './page-content';
 import { PageHeader } from './page-header';
 import { useTocScrollSpy } from './page-toc';
@@ -43,8 +44,35 @@ import { StaleRevisionBanner } from './stale-revision-banner';
 // notifications-socket invalidate debounce.
 const LIVE_SYNC_DEBOUNCE_MS = 300;
 
+// feature-live-page-sync-reconcile — the periodic revalidation backstop
+// interval (spec §14, fixed by design — NOT implementer discretion). Bounds
+// the staleness of any residual miss (cross-instance pub/sub outage,
+// delete/rename's no-frame lifecycle change, ...) that the event-driven
+// triggers below cannot otherwise observe.
+const RECONCILE_BACKSTOP_MS = 3 * 60 * 1000;
+
 /** The wrapper shape `usePage`'s queryFn stores under `['page', params]`. */
 type PageQueryData = { page: PageWithRevision | null; notFound: boolean; notGranted: boolean };
+
+/**
+ * Wraps a resolved page into `usePage`'s query-cache shape. `notFound` /
+ * `notGranted` are always false here — every call site that uses this
+ * already has a genuine page in hand; the 403/404/redirect branches go
+ * through `triggerUsePageRevalidate` instead of writing the cache directly.
+ */
+function toPageQueryData(page: PageWithRevision): PageQueryData {
+  return { page, notFound: false, notGranted: false };
+}
+
+/**
+ * Result of one head-GET reconcile flight (`runReconcileFlight`). Every
+ * branch of the spec's decision tree (§2/§3/§4/§5/§8/§9) maps to exactly
+ * one of these — `handleShowLatest` inspects it to decide whether the
+ * cache actually reached the fetched head before flipping the banner.
+ */
+type ReconcileOutcome = 'swap' | 'swap-self' | 'page-level-merge' | 'no-op' | 'deferred-old' | 'unauthorized' | 'redirect' | 'failure' | 'discarded';
+
+const RECONCILE_SUCCESS_OUTCOMES: ReadonlySet<ReconcileOutcome> = new Set(['swap', 'swap-self', 'no-op', 'page-level-merge']);
 
 // Stable empty array so PageToc's effect dep doesn't churn when meta.toc is absent.
 const EMPTY_TOC: TocEntryResponse[] = [];
@@ -86,7 +114,8 @@ export function PageView({ path, revisionId }: PageViewProps) {
   // (`--page-grant-accent`) tints the header strip / chip / icons.
   usePageGrantAccent(page?.grant);
 
-  // ── feature-live-page-content-sync — read-side soft-refresh ──────────
+  // ── feature-live-page-content-sync / feature-live-page-sync-reconcile —
+  // read-side soft-refresh ──────────────────────────────────────────────
   // All swap state is owned here (PageView owns `page` + the query cache).
   // `usePresence` is called exactly once, at PageView level, so a single
   // `/presence` WebSocket is shared with PageHeader / LivePresenceRow via
@@ -95,6 +124,16 @@ export function PageView({ path, revisionId }: PageViewProps) {
   const { isAuthenticated } = useAuth();
   const queryClient = useQueryClient();
   const [bannerState, dispatchBanner] = useReducer(reduceLiveSyncBanner, initialLiveSyncBannerState);
+  // Mirrors `bannerState` synchronously (dispatch alone is not enough — a
+  // reconcile flight awaits the head-GET and must re-check the CURRENT
+  // banner state after that await, not the value closed over when the
+  // flight started; see spec §8). Every write to the banner goes through
+  // `setBanner` below so this ref and the reducer state never drift apart.
+  const bannerStateRef = useRef(initialLiveSyncBannerState);
+  const setBanner = (event: LiveSyncBannerEvent): void => {
+    bannerStateRef.current = reduceLiveSyncBanner(bannerStateRef.current, event);
+    dispatchBanner(event);
+  };
   // The pre-swap wrapper, rendered locally while "reading the previous
   // version". Kept in state (not a ref) so it is render-visible; the
   // `['page']` cache is never rewound to it (see spec §view-state).
@@ -103,7 +142,43 @@ export function PageView({ path, revisionId }: PageViewProps) {
   // available" target while displaying an old version.
   const latestSeenRevisionIdRef = useRef<string | null>(null);
   const latestEditorRef = useRef<string | null>(null);
+  // Whether the most recently observed update (push frame or reconcile
+  // head-GET) was the viewer's own save (another tab/device) — silences
+  // the banner (not the swap) for that one update (spec §7).
+  const latestIsSelfRef = useRef(false);
   const debounceTimerRef = useRef<number | null>(null);
+
+  // ── reconcile fences / single-flight state (spec §3/§4/§12) ──────────
+  // Fence #1 — bumped when this PageView stops displaying the current
+  // page (path change or unmount). Any in-flight flight started before the
+  // bump is discarded on resolve and NEVER rerun (see the path-change
+  // effect below).
+  const generationRef = useRef(0);
+  // Fence #2 — bumped the instant authority is known to have changed
+  // (4403 close, or this flight itself discovering 403/404/redirect).
+  // Discards any OTHER in-flight flight's result without rerunning it —
+  // some other path has already reached the correct conclusion.
+  const authorityEpochRef = useRef(0);
+  // Single-flight bookkeeping: at most one head-GET in flight at a time.
+  // New triggers arriving while one is in flight set `dirtyRef` instead of
+  // starting a second fetch; the in-flight flight discards its own result
+  // and reruns once it observes the flag (or a live frame — see
+  // `pageUpdatedSeq`) rather than letting the trigger "coalesce" into a
+  // fetch that started before the update it was meant to observe.
+  const inFlightPromiseRef = useRef<Promise<ReconcileOutcome> | null>(null);
+  const dirtyRef = useRef(false);
+  // Set for the duration of a `handleShowLatest`-initiated flight (and any
+  // flight it coalesces with) so the flight does NOT defer to the
+  // read-old guard — the reader explicitly asked to jump to the latest
+  // FROM that guarded state (spec §6 bypasses §8 for this one caller).
+  const bypassReadOldGuardRef = useRef(false);
+  // Fresh-every-render indirection so long-lived subscriptions (the
+  // visibilitychange listener / periodic timer below, and `usePresence`'s
+  // one-shot `onReconnected` ref-callback) always invoke the CURRENT
+  // render's reconcile closure — not a stale one pinned to `selfUserId:
+  // null` from the very first render.
+  const reconcilePageHeadRef = useRef<(opts?: { bypassReadOldGuard?: boolean }) => Promise<ReconcileOutcome>>(async () => 'no-op');
+  const periodicTimerRef = useRef<number | null>(null);
 
   // The live query key is path-based (live view ⇒ `revision_id` undefined),
   // identical to the one `usePage` registers. Shared so `getQueryData` /
@@ -112,11 +187,37 @@ export function PageView({ path, revisionId }: PageViewProps) {
   const readWrapper = (): PageQueryData | undefined => queryClient.getQueryData<PageQueryData>(pageQueryKey);
 
   /**
+   * Snapshot the currently-displayed page + write `nextPage` into the live
+   * cache, preserving scroll position across the swap (spec §view-state).
+   * Shared by both swap paths — `swapToRevision`'s by-id push swap below
+   * and `runReconcileFlight`'s head-GET swap — since the snapshot / write /
+   * restore-scroll sequence is identical for both; only how the
+   * replacement page object is built differs per caller.
+   */
+  const applySwap = (currentPage: PageWithRevision, nextPage: PageWithRevision): void => {
+    // Capture the version currently shown BEFORE writing, so "read the
+    // previous version" renders the true pre-swap body.
+    setSnapshot(toPageQueryData(currentPage));
+    const scrollY = typeof window !== 'undefined' ? window.scrollY : 0;
+    queryClient.setQueryData<PageQueryData>(pageQueryKey, toPageQueryData(nextPage));
+    // Restore scroll after React commits + the browser paints the new
+    // body, so the reader's position is preserved across the swap.
+    if (typeof window !== 'undefined') {
+      requestAnimationFrame(() => window.scrollTo(0, scrollY));
+    }
+  };
+
+  /**
    * Fetch the target revision's body and swap it into the cache with a
    * shallow-merge that preserves page-level fields (grant / liker /
    * commentCount / …). Guarded by a `revision.createdAt` monotonicity
    * check so an out-of-order / stale fetch never rewinds the cache.
    * Returns whether the cache was actually advanced.
+   *
+   * by-id, push-path ONLY — strict `>` compare and the narrow field-set
+   * below are deliberate (see `live-sync-reconcile.ts`'s header comment):
+   * a push frame's revision id is not guaranteed to be the server's
+   * absolute head, unlike a head-GET result.
    */
   const swapToRevision = async (targetRevisionId: string): Promise<boolean> => {
     // Existence check before spending a fetch; the authoritative
@@ -148,11 +249,6 @@ export function PageView({ path, revisionId }: PageViewProps) {
     const fetchedTime = Date.parse(fetchedRevision.createdAt);
     if (!(fetchedTime > currentTime)) return false;
 
-    // Capture the version currently shown BEFORE writing, so "read the
-    // previous version" renders the true pre-swap body.
-    setSnapshot({ page: currentPage, notFound: false, notGranted: false });
-
-    const scrollY = typeof window !== 'undefined' ? window.scrollY : 0;
     const newPage: PageWithRevision = {
       ...currentPage,
       revision: fetchedRevision,
@@ -165,13 +261,7 @@ export function PageView({ path, revisionId }: PageViewProps) {
       lastUpdateUser: fetchedRevision.author ?? currentPage.lastUpdateUser,
       updatedAt: fetchedRevision.createdAt,
     };
-    queryClient.setQueryData<PageQueryData>(pageQueryKey, { page: newPage, notFound: false, notGranted: false });
-
-    // Restore scroll after React commits + the browser paints the new
-    // body, so the reader's position is preserved across the swap.
-    if (typeof window !== 'undefined') {
-      requestAnimationFrame(() => window.scrollTo(0, scrollY));
-    }
+    applySwap(currentPage, newPage);
     return true;
   };
 
@@ -179,8 +269,13 @@ export function PageView({ path, revisionId }: PageViewProps) {
     const target = latestSeenRevisionIdRef.current;
     if (!target) return;
     const editorDisplayName = latestEditorRef.current ?? '';
+    const isSelf = latestIsSelfRef.current;
     if (await swapToRevision(target)) {
-      dispatchBanner({ type: 'swapped', editorDisplayName });
+      // silent swap (spec §7): the reader's own save (another tab/device)
+      // still advances the cache, but never announces itself.
+      if (!isSelf) {
+        setBanner({ type: 'swapped', editorDisplayName });
+      }
     }
   };
 
@@ -195,14 +290,18 @@ export function PageView({ path, revisionId }: PageViewProps) {
     }, LIVE_SYNC_DEBOUNCE_MS);
   };
 
-  // Handed to `usePresence`; already self-suppressed (editor !== self).
+  // Handed to `usePresence`. feature-live-page-sync-reconcile: `usePresence`
+  // no longer suppresses the caller's own save — self/other is decided HERE
+  // (the only place that knows both `selfUserId` and the read-old banner
+  // state at once).
   const handlePageUpdated = (payload: PresencePageUpdatedMessage): void => {
     latestSeenRevisionIdRef.current = payload.revisionId;
     latestEditorRef.current = payload.editorDisplayName;
-    if (isDisplayingOld(bannerState)) {
+    latestIsSelfRef.current = payload.editorUserId === presence.selfUserId;
+    if (isDisplayingOld(bannerStateRef.current)) {
       // The reader chose the old version — never auto-advance the cache;
       // just escalate the banner to "an even newer version was saved".
-      dispatchBanner({ type: 'newer-while-old', editorDisplayName: payload.editorDisplayName });
+      setBanner({ type: 'newer-while-old', editorDisplayName: payload.editorDisplayName });
       return;
     }
     scheduleForwardSwap();
@@ -220,43 +319,280 @@ export function PageView({ path, revisionId }: PageViewProps) {
     void queryClient.invalidateQueries({ queryKey: commentKeys.detail(payload.pageId) });
   };
 
+  // feature-live-page-sync-reconcile — the ONLY action taken directly from
+  // the head-GET / grant-revocation authority signals: invalidate `usePage`'s
+  // query so its own queryFn (403 → notGranted / 404 → notFound) re-derives
+  // the display. No swap logic lives here; the redirect / AccessDenied /
+  // NotFound transitions are all driven by `usePage`'s existing branches.
+  const triggerUsePageRevalidate = (): void => {
+    void queryClient.invalidateQueries({ queryKey: pageQueryKey });
+  };
+
+  // Bumps fence #2 (spec §12) and triggers the same `usePage` revalidate —
+  // shared by every call site that concludes authority has changed (a
+  // genuine 403/404/redirect from a reconcile flight, or the 4403
+  // access-revoked signal below). Bumping alone never flips the display;
+  // only the revalidate's own resolution (via `usePage`'s existing
+  // notGranted/notFound branches) does.
+  const bumpAuthorityAndRevalidate = (): void => {
+    authorityEpochRef.current += 1;
+    triggerUsePageRevalidate();
+  };
+
+  // feature-live-page-sync-reconcile (spec §10) — fires the instant this
+  // socket is closed with 4403, WITHOUT waiting for any in-flight head-GET.
+  // Verify-first: bumping `authorityEpochRef` here does not itself flip the
+  // display — only a genuine 403 from the triggered revalidation does
+  // (handled by `usePage`'s existing notGranted branch once it resolves).
+  const handleAccessRevoked = (): void => {
+    bumpAuthorityAndRevalidate();
+  };
+
+  // feature-live-page-sync-reconcile (spec §11) — the reconnect barrier.
+  // Indirected through the ref because `usePresence`'s callback is stored
+  // via ref-forwarding too and may be invoked well after this specific
+  // render's closures would otherwise go stale.
+  const handleReconnected = (): void => {
+    void reconcilePageHeadRef.current();
+  };
+
   const presenceEnabled = Boolean(page) && !isStalePageRevision(page) && page?.status !== PageStatusEnum.DRAFT && isAuthenticated;
   const presence = usePresence(presenceEnabled && page ? page._id : null, {
     onPageUpdated: handlePageUpdated,
     onCommentChanged: handleCommentChanged,
+    onReconnected: handleReconnected,
+    onAccessRevoked: handleAccessRevoked,
   });
 
-  const handleReadOld = (): void => dispatchBanner({ type: 'read-old' });
+  /**
+   * One head-GET attempt. NOT single-flight-aware by itself (that's
+   * `reconcilePageHead` below) — this is the recursive "discard stale
+   * result, refetch" loop (spec §4), so it may issue more than one GET
+   * per outer call.
+   */
+  const runReconcileFlight = async (): Promise<ReconcileOutcome> => {
+    const genAtStart = generationRef.current;
+    const epochAtStart = authorityEpochRef.current;
+    const seqAtStart = presence.pageUpdatedSeq.current;
+
+    let status: number | null = null;
+    let fetchedPage: PageWithRevision | null = null;
+    try {
+      const response = await apiClientV2.pages.$get({ query: { path, page_id: undefined, revision_id: revisionId } });
+      status = response.status;
+      // Narrow directly on `response.status` (not the copied `status`
+      // local) so `response.json()` resolves to the 200 variant's body —
+      // the other status variants don't carry a `page` field.
+      if (response.status === 200) {
+        const body = await response.json();
+        fetchedPage = body.page as PageWithRevision;
+      }
+    } catch {
+      status = null;
+    }
+
+    // Fence #1 (generation) / fence #2 (authorityEpoch) — evaluated before
+    // ANY write action, and before even inspecting the response further.
+    // Both take priority over the frame fence / dirty-rerun logic below:
+    // if either changed, this flight's conclusion (whatever it is) is
+    // moot — discard-ONLY, never rerun (spec §12).
+    if (generationRef.current !== genAtStart) return 'discarded';
+    if (authorityEpochRef.current !== epochAtStart) return 'discarded';
+
+    // The frame fence (spec §3/§4): true when a live frame arrived (or
+    // another trigger marked dirty) while this GET was in flight, meaning
+    // this response's HEAD cannot be trusted — the caller discards it
+    // whole and issues a fresh GET immediately. Clears the dirty flag as
+    // a side effect (consumed exactly once per rerun).
+    const isDirtyOrFrameMoved = (): boolean => {
+      if (!dirtyRef.current && presence.pageUpdatedSeq.current === seqAtStart) return false;
+      dirtyRef.current = false;
+      return true;
+    };
+
+    if (status !== 200 && status !== 403 && status !== 404) {
+      // Network failure or an unrelated 5xx — silent no-op (spec §9).
+      if (isDirtyOrFrameMoved()) return runReconcileFlight();
+      return 'failure';
+    }
+
+    if (status === 403 || status === 404) {
+      // Exempt from the frame fence (spec §2/§9): an access/lifecycle
+      // fact, not something a `page-updated` frame could represent.
+      bumpAuthorityAndRevalidate();
+      return 'unauthorized';
+    }
+
+    // status === 200
+    const fetched = fetchedPage as PageWithRevision;
+    const currentPage = readWrapper()?.page;
+    if (!currentPage) return 'discarded';
+
+    if (isLifecycleChanged(currentPage, fetched)) {
+      // Exempt from the frame fence (spec §2), checked BEFORE it: a
+      // redirect stub / page replacement is a fact independent of any
+      // `page-updated` frame, so it must be honored even if a frame
+      // happened to arrive mid-flight — unlike the revision-compare/swap
+      // decision below, which the frame fence DOES gate.
+      bumpAuthorityAndRevalidate();
+      return 'redirect';
+    }
+
+    // From here on, the frame fence gates ONLY the revision-compare/swap
+    // decision (spec §3/§4) — the lifecycle check above is deliberately
+    // exempt from it, which is why this check isn't hoisted any earlier.
+    if (isDirtyOrFrameMoved()) return runReconcileFlight();
+
+    if (isHeadNewer(currentPage.revision, fetched.revision)) {
+      if (!bypassReadOldGuardRef.current && isDisplayingOld(bannerStateRef.current)) {
+        // Read-old guard (spec §8), re-checked HERE (post-await), not from
+        // a snapshot taken before the fetch — the reader may have clicked
+        // "read the previous version" while this GET was in flight.
+        latestSeenRevisionIdRef.current = fetched.revision._id;
+        latestEditorRef.current = pageUserDisplayName(fetched.lastUpdateUser);
+        setBanner({ type: 'newer-while-old', editorDisplayName: latestEditorRef.current });
+        return 'deferred-old';
+      }
+
+      applySwap(currentPage, fetched);
+      const isSelf = fetched.lastUpdateUser?._id != null && fetched.lastUpdateUser._id === presence.selfUserId;
+      latestIsSelfRef.current = isSelf;
+      if (!isSelf) {
+        setBanner({ type: 'swapped', editorDisplayName: pageUserDisplayName(fetched.lastUpdateUser) });
+      }
+      return isSelf ? 'swap-self' : 'swap';
+    }
+
+    if (pageLevelFieldsChanged(currentPage, fetched)) {
+      // Grant-only change (spec §5): merge page-level fields only — no
+      // snapshot / banner / scroll, the displayed body hasn't moved.
+      queryClient.setQueryData<PageQueryData>(pageQueryKey, toPageQueryData(mergePageLevelFields(currentPage, fetched)));
+      return 'page-level-merge';
+    }
+
+    return 'no-op';
+  };
+
+  /**
+   * Public, single-flight-aware entry point for every reconcile trigger
+   * (tab-revisit / reconnect-barrier / periodic backstop / show-latest).
+   * At most one head-GET is ever in flight; a trigger arriving mid-flight
+   * marks `dirtyRef` and shares the SAME promise, which only resolves once
+   * a flight completes cleanly (or is fenced off) — see `runReconcileFlight`.
+   */
+  const reconcilePageHead = (opts?: { bypassReadOldGuard?: boolean }): Promise<ReconcileOutcome> => {
+    // Unconditional comment invalidate (spec §13) — fires on every trigger,
+    // independent of whether this call starts a new GET or just marks the
+    // in-flight one dirty, and independent of the eventual head result.
+    if (page?._id) {
+      void queryClient.invalidateQueries({ queryKey: commentKeys.detail(page._id) });
+    }
+    if (opts?.bypassReadOldGuard) {
+      bypassReadOldGuardRef.current = true;
+    }
+    if (inFlightPromiseRef.current) {
+      dirtyRef.current = true;
+      return inFlightPromiseRef.current;
+    }
+    const flight = runReconcileFlight().finally(() => {
+      inFlightPromiseRef.current = null;
+      bypassReadOldGuardRef.current = false;
+    });
+    inFlightPromiseRef.current = flight;
+    return flight;
+  };
+
+  // Keep the ref-forwarded entry point current every render (see
+  // `reconcilePageHeadRef`'s declaration above for why this indirection
+  // exists).
+  useEffect(() => {
+    reconcilePageHeadRef.current = reconcilePageHead;
+  });
+
+  const handleReadOld = (): void => setBanner({ type: 'read-old' });
   const handleShowLatest = (): void => {
     void (async () => {
-      // Only `showing-latest-again` is behind the cache (newer saves
-      // arrived while showing old); `showing-old`'s cache is already the
-      // latest, so switching the view is enough. Advance the cache first
-      // and flip the view ONLY if it succeeds — otherwise the banner would
-      // claim "latest" while the cache is still behind. A failed fetch
-      // keeps `showing-latest-again` so the reader can retry.
-      if (bannerState.kind === 'showing-latest-again') {
-        const target = latestSeenRevisionIdRef.current;
-        if (!target || !(await swapToRevision(target))) return;
+      if (bannerState.kind !== 'showing-latest-again') {
+        // `showing-old`'s cache is already the latest (no fetch behind
+        // it) — just flip the view.
+        setBanner({ type: 'show-latest' });
+        return;
       }
-      dispatchBanner({ type: 'show-latest' });
+      // feature-live-page-sync-reconcile (spec §6): trigger the SAME
+      // authoritative reconcile mechanism (head-GET → `applySwap`) instead
+      // of an independent by-id fetch off `latestSeenRevisionIdRef`
+      // — that ref has no total order across frames and a stale one could
+      // point short of the true head. Bypasses the read-old guard: the
+      // reader is explicitly asking to leave it.
+      const outcome = await reconcilePageHead({ bypassReadOldGuard: true });
+      if (RECONCILE_SUCCESS_OUTCOMES.has(outcome)) {
+        setBanner({ type: 'show-latest' });
+      }
+      // Otherwise (redirect / unauthorized / failure / discarded /
+      // deferred-old) stay on `showing-latest-again` so the reader can retry.
     })();
   };
-  const handleDismiss = (): void => dispatchBanner({ type: 'dismiss' });
+  const handleDismiss = (): void => setBanner({ type: 'dismiss' });
+
+  // feature-live-page-sync-reconcile (spec §11/§14) — tab-revisit trigger
+  // + the periodic backstop timer, which only runs while the tab is
+  // visible. Combined into one `visibilitychange` listener since both care
+  // about the same transition.
+  useEffect(() => {
+    if (!presenceEnabled || typeof document === 'undefined') return;
+
+    const startBackstop = () => {
+      if (periodicTimerRef.current !== null) return;
+      periodicTimerRef.current = window.setInterval(() => {
+        void reconcilePageHeadRef.current();
+      }, RECONCILE_BACKSTOP_MS);
+    };
+    const stopBackstop = () => {
+      if (periodicTimerRef.current !== null) {
+        window.clearInterval(periodicTimerRef.current);
+        periodicTimerRef.current = null;
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void reconcilePageHeadRef.current();
+        startBackstop();
+      } else {
+        stopBackstop();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    if (document.visibilityState === 'visible') startBackstop();
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      stopBackstop();
+    };
+  }, [presenceEnabled]);
 
   // SPA navigation swaps the `path` prop WITHOUT remounting PageView, so
   // reset every live-sync view-state or page X's banner / snapshot would
-  // bleed into page Y. (`usePresence` self-resets on `pageId` change.)
+  // bleed into page Y. (`usePresence` self-resets on `pageId` change.) The
+  // cleanup also bumps `generationRef` (fence #1) — it runs on BOTH a
+  // `path` change and an unmount, which is exactly the "no longer
+  // displaying this page" condition a reconcile flight must be discarded
+  // against (spec §12).
   useEffect(() => {
-    dispatchBanner({ type: 'dismiss' });
+    setBanner({ type: 'dismiss' });
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSnapshot(null);
     latestSeenRevisionIdRef.current = null;
     latestEditorRef.current = null;
+    latestIsSelfRef.current = false;
     if (debounceTimerRef.current !== null) {
       clearTimeout(debounceTimerRef.current);
       debounceTimerRef.current = null;
     }
+    return () => {
+      generationRef.current += 1;
+    };
   }, [path]);
 
   // Which revision is actually on screen: normally the latest `page`, but
