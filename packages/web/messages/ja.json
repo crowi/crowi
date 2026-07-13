@@ -97,6 +97,7 @@
   "common.pager.next": "次へ",
   "common.pager.page_aria": "{page} ページ目",
   "common.pager.page_label": "{page} ページ目",
+  "a11y.skip_to_content": "コンテンツへスキップ",
   "errors.permission_denied_edit": "このページを編集する権限がありません。",
   "errors.permission_denied_delete": "このページを削除する権限がありません。",
   "errors.permission_denied_revert": "このページを復元する権限がありません。",

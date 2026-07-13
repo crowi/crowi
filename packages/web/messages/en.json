@@ -97,6 +97,7 @@
   "common.pager.next": "Next",
   "common.pager.page_aria": "Page {page}",
   "common.pager.page_label": "Page {page}",
+  "a11y.skip_to_content": "Skip to content",
   "errors.permission_denied_edit": "You do not have permission to edit this page.",
   "errors.permission_denied_delete": "You do not have permission to delete this page.",
   "errors.permission_denied_revert": "You do not have permission to restore this page.",

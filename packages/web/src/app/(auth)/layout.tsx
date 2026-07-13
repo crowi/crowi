@@ -29,6 +29,8 @@ import { PageSidebar } from '@/components/page-sidebar/page-sidebar';
 import { decodePagePathFromUrl } from '@/lib/page-path';
 import { Toaster } from '@/components/ui/sonner';
 import { MAX_VISIBLE_TOASTS } from '@/lib/notify';
+import { MAIN_CONTENT_ID, useRouteFocus } from '@/lib/use-route-focus';
+import { SkipLink } from '@/components/skip-link';
 
 // Routes whose nested layout escapes the centred column to fill the
 // viewport (`w-screen`); the fixed left rail would overlap them, so the
@@ -62,6 +64,10 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
   // here so the entire (auth) shell — including NotificationBell —
   // shares one WebSocket per tab, not one per render scope.
   useNotificationsSocket({ enabled: isAuthenticated });
+
+  // Moves focus to `#main-content` on every client-side route change
+  // (skips the first mount) — see use-route-focus.ts.
+  useRouteFocus();
 
   useEffect(() => {
     // 接続エラー中、またはエディタの再認証中はリダイレクトしない
@@ -117,6 +123,8 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
 
       {/* サーバーエラーモーダル */}
       <ServerErrorModal />
+
+      <SkipLink />
 
       <SearchFocusProvider>
         <header className="crowi-top-border bg-background text-foreground shadow-header dark:shadow-none dark:border-b dark:border-border relative z-40">
@@ -176,7 +184,13 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       */}
       <div aria-hidden className="h-1 transition-colors" style={{ backgroundColor: 'var(--page-grant-accent)' }} />
 
-      <main className="max-w-4xl mx-auto px-4 py-8">{children}</main>
+      <main
+        id={MAIN_CONTENT_ID}
+        tabIndex={-1}
+        className="max-w-4xl mx-auto px-4 py-8 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      >
+        {children}
+      </main>
 
       {showSidebar && <PageSidebar path={sidebarPath} />}
 
