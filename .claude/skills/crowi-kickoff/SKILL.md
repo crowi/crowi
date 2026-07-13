@@ -51,23 +51,25 @@ description: |
 ## 前提(実測済みの環境)
 
 - `gw start <id>` は post_start_hook で
-  1. `~/.gw/hooks/feature-state-link.sh` — worktree 側 `.feature-state/` を作成し
+  1. `.gw/feature-state-link.sh` — worktree 側 `.feature-state/` を作成し
      specs/ tasks/ config.json を main store へ symlink、`queue.json` を
      `{ "currentTask": null }` で seed(worktree ローカル)
-  2. `tmux new-window -n <branch名>` で **claude セッションを自動起動**
+  2. `.gw/tmux-claude.sh` で `tmux new-window -n <branch名>` に **claude セッションを自動起動**
   を実行する。**したがって kickoff がセッションを spawn する必要はない** —
   gw が開いた window に指示を send-keys で投入するだけでよい
   (agmsg spawn で別セッションを立てると二重になる。やらない)。
-  - **claude の起動フラグは crowi の project-local `.gwrc`(repo root・gitignore
-    済み)で override**している: `~/.gw/hooks/tmux-claude.sh` が
+  - **起動フラグ・hook は crowi の project-local `.gwrc`(repo root・gitignore 済み)で
+    override**している。hook スクリプトは **`./.gw/`(repo-local・home 非依存)** に置き、
+    `.gwrc` は `$GW_WORKTREE_PATH` から main worktree root を導出して `$MAIN/.gw/*.sh` を
+    呼ぶ(CWD にも `~` にも依存しない)。`.gw/tmux-claude.sh` は
     `claude --remote-control '<repo>:<id>' --name '<repo>:<id>'` で起動し、RC 有効 +
     session/terminal title = `<repo>:<id>`(例 `crowi:live-page-sync-reconcile`)にする。
     kickoff 後に質問で止まった session を picker/title で見つけて remote で動かすため。
-    これは crowi の `.gwrc` だけの override で `~/.gwrc`(global)は触らない。
+    crowi の `.gwrc` だけの override で `~/.gwrc`(global)は触らない。
     **前提: gw が project-local `.gwrc` を読むビルドであること**(gw の
-    `feature-project-local-config` 機能。未対応バイナリでは global の素 `claude`
-    起動に fall back = RC/name 無し)。初回 `gw start` 時は direnv 式 trust gate で
-    hook 承認プロンプトが出る。
+    `feature-project-local-config` 機能。未対応バイナリでは global の素 `claude` 起動に
+    fall back = RC/name 無し)。`.gwrc` を編集すると direnv 式 trust hash が変わるので、
+    次の `gw start` で trust 再承認プロンプトが出る(承認まで global 値に fall back)。
   - なお claude は RC/name 付きでも `pane_current_command` は version 文字列(`2.x.x`)の
     ままなので、Step 5 の pane 検出は不変。
 - hook 構成によってはさらに **右 pane に `pnpm dev` が自動分割起動**される

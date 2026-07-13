@@ -54,3 +54,4 @@ packages/web/paraglide/
 
 # personal project-local gw config (Remote Control + session naming; not imposed on contributors)
 /.gwrc
+/.gw/
