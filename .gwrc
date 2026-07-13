@@ -1,0 +1,10 @@
+# crowi project-local gw config (read by gw's project-local-config feature).
+# Overrides ONLY these keys over ~/.gwrc, for the crowi repo only.
+#
+# Self-contained: the hook scripts live in this repo's ./.gw (NOT ~/.gw/hooks),
+# so the per-project hook has no home-dir dependency. Since `gw start` may run
+# from any CWD (and `gw checkout`/`end` from a worktree), derive the MAIN
+# worktree root from $GW_WORKTREE_PATH (same way .gw/feature-state-link.sh does)
+# and invoke the scripts by absolute path under it.
+post_start_hook = MAIN="$(git -C "$GW_WORKTREE_PATH" worktree list --porcelain | sed -n '1s/^worktree //p')" && "$MAIN/.gw/feature-state-link.sh" && "$MAIN/.gw/tmux-claude.sh"
+post_checkout_hook = MAIN="$(git -C "$GW_WORKTREE_PATH" worktree list --porcelain | sed -n '1s/^worktree //p')" && "$MAIN/.gw/feature-state-link.sh" && "$MAIN/.gw/tmux-claude.sh"
