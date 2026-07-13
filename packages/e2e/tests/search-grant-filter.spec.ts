@@ -43,7 +43,12 @@ test('search results respect page grant: an owner-only page is visible to its cr
   await test.step('creator (userA) sees the page in both the API response and the result list', async () => {
     const body = await searchAndReadResponse(userAPage, token);
     expect(body.data.map((hit) => hit.pageId)).toContain(pageId);
-    await expect(userAPage.getByRole('link', { name: pagePath })).toBeVisible();
+    // The result row (feature-page-list-surface-reuse: shared `PageListItem`)
+    // renders basename + parent-directory instead of the full path, and the
+    // basename here IS `token` (the page's leaf path segment), so matching
+    // on `token` — rather than the now-absent full-path accessible name —
+    // still uniquely identifies this run's row.
+    await expect(userAPage.getByRole('link', { name: token })).toBeVisible();
   });
 
   await test.step('another authenticated user (userB) sees it in neither the API response nor the result list', async () => {
@@ -52,6 +57,6 @@ test('search results respect page grant: an owner-only page is visible to its cr
     // meta.results stays consistent with the (already-filtered) data.length.
     expect(body.data.map((hit) => hit.pageId)).not.toContain(pageId);
     expect(body.meta.results).toBe(body.data.length);
-    await expect(userBPage.getByRole('link', { name: pagePath })).toHaveCount(0);
+    await expect(userBPage.getByRole('link', { name: token })).toHaveCount(0);
   });
 });

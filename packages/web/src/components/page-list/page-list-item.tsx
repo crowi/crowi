@@ -11,7 +11,9 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { UserAvatar } from '@/components/user-avatar';
+import { SearchHitSnippet } from '@/components/search/search-hit-snippet';
 import { formatDistanceToNow } from '@/lib/date-utils';
+import { resolveDisplayUser } from '@/lib/page-display-user';
 import { pageDisplayName, pageDisplayParent, pagePathToHref } from '@/lib/page-path';
 import { useDeletePage, useRevertDeletedPage } from '@/lib/use-page-mutations';
 import { cn } from '@/lib/utils';
@@ -21,6 +23,13 @@ export type PageListVariant = 'default' | 'trash';
 interface PageListItemProps {
   page: Page;
   variant?: PageListVariant;
+  /**
+   * Sanitised search-result excerpt, rendered as an extra line below the
+   * directory/author/time line. Only search passes this — every other
+   * list (`PageList` / `UserRecentPages` / `UserBookmarks`) has no
+   * per-row snippet, so the row keeps its plain two-line layout there.
+   */
+  snippet?: string;
 }
 
 /**
@@ -34,7 +43,7 @@ interface PageListItemProps {
  * (like / comment) hug the right edge so they form a tidy column down
  * the list. The whole row is one link / hit-target.
  */
-export function PageListItem({ page, variant = 'default' }: PageListItemProps) {
+export function PageListItem({ page, variant = 'default', snippet }: PageListItemProps) {
   const isTrash = variant === 'trash';
 
   const rowClass = 'group flex items-center gap-3 px-3 py-2.5 transition-colors hover:bg-accent/50';
@@ -44,7 +53,7 @@ export function PageListItem({ page, variant = 'default' }: PageListItemProps) {
   if (isTrash) {
     return (
       <div className={rowClass}>
-        <PageRowBody page={page} isTrash />
+        <PageRowBody page={page} isTrash snippet={snippet} />
         <TrashItemActions pageId={page._id} pagePath={page.path} />
       </div>
     );
@@ -52,17 +61,16 @@ export function PageListItem({ page, variant = 'default' }: PageListItemProps) {
 
   return (
     <Link href={pagePathToHref(page.path)} className={cn(rowClass, 'focus-visible:bg-accent/50 focus-visible:outline-none')}>
-      <PageRowBody page={page} />
+      <PageRowBody page={page} snippet={snippet} />
     </Link>
   );
 }
 
-function PageRowBody({ page, isTrash = false }: { page: Page; isTrash?: boolean }) {
+function PageRowBody({ page, isTrash = false, snippet }: { page: Page; isTrash?: boolean; snippet?: string }) {
   // Populated user fields may arrive as bare ObjectId strings; only the
-  // object form carries a name / avatar.
-  const creator = typeof page.creator === 'object' && page.creator ? page.creator : null;
-  const lastUpdateUser = typeof page.lastUpdateUser === 'object' && page.lastUpdateUser ? page.lastUpdateUser : null;
-  const displayUser = lastUpdateUser || creator;
+  // object form carries a name / avatar. `resolveDisplayUser` also falls
+  // back to the revision author (last resort) — see its doc comment.
+  const displayUser = resolveDisplayUser(page);
   // Preserve the legacy '?' placeholder for populated-but-empty users
   // (e.g. legacy rows where both `name` and `username` are blank): a stray
   // empty author column would otherwise misalign neighbouring rows.
@@ -157,6 +165,9 @@ function PageRowBody({ page, isTrash = false }: { page: Page; isTrash?: boolean 
             {formatDistanceToNow(updatedAt)}
           </time>
         </div>
+
+        {/* Line 3 (search results only) — sanitised match excerpt */}
+        {snippet && <SearchHitSnippet snippet={snippet} />}
       </div>
     </>
   );

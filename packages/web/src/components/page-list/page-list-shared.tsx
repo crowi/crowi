@@ -23,17 +23,24 @@ import { PageListItem, type PageListVariant } from './page-list-item';
 interface PageRowsCardProps {
   pages: Page[];
   variant?: PageListVariant;
+  /**
+   * Per-page sanitised search-excerpt lookup. Only the search results view
+   * passes this (built once per render as a `pageId → snippet` `Map` for
+   * O(1) lookup) — every other caller (`PageList` / `UserRecentPages` /
+   * `UserBookmarks`) omits it, so those rows keep their plain layout.
+   */
+  getSnippet?: (page: Page) => string | undefined;
 }
 
 /**
  * Card-wrapped list of rows. The `divide-y` separates each `PageListItem`,
  * `overflow-hidden` clips the hover background to the rounded corners.
  */
-export function PageRowsCard({ pages, variant = 'default' }: PageRowsCardProps) {
+export function PageRowsCard({ pages, variant = 'default', getSnippet }: PageRowsCardProps) {
   return (
     <Card className="gap-0 divide-y overflow-hidden py-0">
       {pages.map((page) => (
-        <PageListItem key={page._id} page={page} variant={variant} />
+        <PageListItem key={page._id} page={page} variant={variant} snippet={getSnippet?.(page)} />
       ))}
     </Card>
   );
