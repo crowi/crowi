@@ -22,6 +22,7 @@
     "REDIS_REJECT_UNAUTHORIZED",
     "REDIS_TLS_URL",
     "REDIS_URL",
+    "TEST_MONGO_URI",
     "WS_TOKEN_SECRET"
   ],
   "tasks": {

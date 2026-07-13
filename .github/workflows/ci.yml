@@ -36,7 +36,11 @@ jobs:
       # a local fallback only — CI uses the real binary so we don't
       # depend on every CI runner being able to download a mongo
       # binary on cold cache misses (the historic CI failure mode).
-      mongo:
+      #
+      # Anchored (`&api-test-mongo-service`) so the `flake-report` job below
+      # can alias the exact same service instead of drifting out of sync —
+      # it spawns @crowi/api's jest directly and needs the identical mongo.
+      mongo: &api-test-mongo-service
         image: mongo:8.0.4
         ports:
           - 27017:27017
@@ -50,7 +54,10 @@ jobs:
           --health-timeout 5s
           --health-retries 12
 
-    env:
+    # Anchored (`&api-test-env`) so `flake-report` below can alias the same
+    # env instead of duplicating it — see that job's comment for why it needs
+    # to match exactly.
+    env: &api-test-env
       NODE_ENV: test
       PASSWORD_SEED: test_password_seed
       # `mongo` service is reachable on localhost (the runner publishes
@@ -117,6 +124,55 @@ jobs:
             git diff
             exit 1
           fi
+
+  flake-report:
+    # Non-blocking flake detector for @crowi/api's full suite
+    # (feature-test-parallel-db-flake-hardening, Phase 4 / B2): runs the full
+    # suite once, solo-reruns whatever didn't pass, and classifies each as
+    # FLAKY (green alone) or REGRESSION (fails alone too) — see
+    # `scripts/test-flake-report.mjs`. Mirrors `changeset-status`'s
+    # `continue-on-error: true` NON-BLOCKING position below, but — unlike
+    # that job — needs the SAME `services`/`env` as the `test` job above:
+    # `scripts/test-flake-report.mjs` spawns @crowi/api's real jest suite
+    # directly (bypassing turbo), so without `services.mongo` + `MONGO_URI`,
+    # `crowi-environment.js`'s CI fail-fast throws for every test file, and
+    # both the full-suite run and every solo rerun fail identically —
+    # misclassifying every single file as REGRESSION.
+    runs-on: ubuntu-latest
+
+    services:
+      mongo: *api-test-mongo-service
+
+    env: *api-test-env
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24.x
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build workspace packages
+        # `scripts/test-flake-report.mjs` spawns `@crowi/api`'s jest DIRECTLY
+        # (bypassing turbo — see that script's doc comment), so it doesn't
+        # benefit from turbo's own `test` task `dependsOn: ["^build"]` the
+        # `test` job above relies on implicitly. Build everything up front so
+        # @crowi/api's workspace dependencies (api-contract, collab, runner,
+        # plugin-api, ...) have a `dist/` to resolve against.
+        run: pnpm build
+
+      - name: Run flake report (non-blocking)
+        run: pnpm test:flake
+        continue-on-error: true
 
   changeset-status:
     # Warn-only check: surfaces missing changesets on PRs without blocking merges.

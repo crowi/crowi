@@ -1,7 +1,11 @@
 // `root: true` stops ESLint's ancestor-config search at this package.
-// Without it, `@crowi/collab` (pinned to ESLint 8 + @typescript-eslint 6)
-// would pick up the repo's ESLint 9 flat config and load a mismatched
-// plugin major. Mirrors `packages/api/.eslintrc.js`.
+// Without it, `@crowi/plugin-search-mongo` (pinned to ESLint 8 +
+// @typescript-eslint 6) would pick up the repo's ESLint 9 flat config and
+// load a mismatched plugin major. Copied from `packages/collab/.eslintrc.js`
+// (feature-test-parallel-db-flake-hardening Phase 3 / B1) — this is the
+// FIRST `.eslintrc.js` any `@crowi/plugin-*` package has: before this,
+// `pnpm lint` (turbo) silently skipped this package entirely (no `lint`
+// script, no eslint devDependency at all).
 module.exports = {
   root: true,
   parser: '@typescript-eslint/parser',
@@ -28,13 +32,12 @@ module.exports = {
       },
     },
     // B1 (feature-test-parallel-db-flake-hardening Phase 3): same
-    // DB-bypass guard as `packages/api/.eslintrc.js` — block a test file
-    // from opening its own ad hoc DB connection instead of going through
-    // the harness (`__tests__/setup.ts`'s `startInMemoryMongo()`).
-    // `excludedFiles` carves out this package's own harness implementation
-    // files (mirrors `packages/api/.eslintrc.js`'s `src/test/**/*`
-    // exclusion) as a SEPARATE override so the `no-explicit-any: off`
-    // above stays scoped to exactly the files it already applied to.
+    // DB-bypass guard as `packages/api/.eslintrc.js` / `packages/collab/.eslintrc.js`
+    // — block a test file from opening its own ad hoc DB connection instead
+    // of going through the harness (`__tests__/setup.ts`). `excludedFiles`
+    // carves out this package's own harness implementation files, as a
+    // SEPARATE override so the `no-explicit-any: off` above stays scoped to
+    // exactly the files it already applied to.
     {
       files: ['**/*.test.ts', 'src/__tests__/**/*'],
       excludedFiles: ['src/__tests__/setup.ts', 'src/__tests__/global-setup.js', 'src/__tests__/mongo-sentinel.js'],

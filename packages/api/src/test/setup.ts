@@ -21,6 +21,8 @@ import Crowi from 'src/crowi';
 import { buildHonoApp } from 'src/hono';
 import { stripApiV2Prefix } from 'src/hono/path-rewrite';
 
+import { bootCrowiWithRetry } from './db-connect-retry';
+
 // Silence boot-time noise that fires once per test file and drowns
 // the actual ✓ / ✕ output in the jest report:
 //
@@ -117,23 +119,61 @@ export const MONGO_DB_NAME = global.MONGO_DB_NAME as string;
 // the timeout has to be set here.)
 jest.setTimeout(60000);
 
+// This `beforeAll` alone gets a longer explicit timeout (90000ms, the
+// second argument below) than the file default set above: the bounded
+// connect retry it runs (see immediately below) can take up to 2 attempts
+// x the driver's default 30000ms `serverSelectionTimeoutMS` plus one
+// backoff (~62s worst case) before the rest of `crowi.init()`'s boot
+// layers even start. See `db-connect-retry.ts`'s `BEFORE_ALL_HOOK_TIMEOUT_MS`
+// doc comment for the exact arithmetic. `afterAll`'s explicit `60000`
+// below is unchanged.
 beforeAll(async () => {
-  // Spread process.env FIRST and then layer the test-harness values on
-  // top. The original order (`{ ...test, ...process.env }`) silently
-  // let an externally-set `MONGO_URI` (e.g. the CI's `mongodb://
-  // localhost:27017` from the docker `mongo` service) override the
-  // crowi-environment.js per-file db, which collapses every parallel
-  // jest worker onto a single shared database and recycles Config
-  // documents from previous runs across test files.
-  crowi = new Crowi(ROOT_DIR, {
-    ...process.env,
-    PORT: '13001',
-    MONGO_URI: MONGO_URI,
-    BASE_URL: 'http://localhost:13001',
-    // Public origin (used by getBaseUrl() for CORS + mail links).
-    CLIENT_URL: 'http://localhost:13001',
-  });
-  await crowi.init();
+  // Bounded connect retry (feature-test-parallel-db-flake-hardening Phase 1
+  // / A1-1): `setupDatabase()` itself is unchanged (still a one-shot
+  // `mongoose.connect()`, same as production) — `bootCrowiWithRetry` only
+  // wraps the test-harness side of it, retrying at most once and only for
+  // a failure it can prove (a) came from `setupDatabase()`'s connect step
+  // and (b) carries transient-network evidence. See `db-connect-retry.ts`
+  // for the full classification + retry-budget writeup.
+  //
+  // `expect.getState().testPath` identifies the file for the console.warn
+  // + JSON Lines side-channel event a retry emits; it's set by the circus
+  // runner before `setupFilesAfterEnv` modules load, so it's always
+  // available here.
+  const testFilePath = expect.getState().testPath ?? 'unknown-test-file';
+  crowi = await bootCrowiWithRetry(
+    () =>
+      // Spread process.env FIRST and then layer the test-harness values on
+      // top. The original order (`{ ...test, ...process.env }`) silently
+      // let an externally-set `MONGO_URI` (e.g. the CI's `mongodb://
+      // localhost:27017` from the docker `mongo` service) override the
+      // crowi-environment.js per-file db, which collapses every parallel
+      // jest worker onto a single shared database and recycles Config
+      // documents from previous runs across test files.
+      new Crowi(ROOT_DIR, {
+        ...process.env,
+        PORT: '13001',
+        MONGO_URI: MONGO_URI,
+        BASE_URL: 'http://localhost:13001',
+        // Public origin (used by getBaseUrl() for CORS + mail links).
+        CLIENT_URL: 'http://localhost:13001',
+      }),
+    testFilePath,
+    // Assign the module-level `crowi` binding on EVERY attempt, before
+    // `init()` is awaited — not just on eventual success. Mirrors the
+    // pre-retry code's `crowi = new Crowi(...); await crowi.init();`
+    // ordering (where `crowi` held a real, if not fully initialized,
+    // instance even when `init()` threw). Without this, a failure that
+    // exhausts all retries (or is non-retryable) would leave `crowi`
+    // unassigned, and `afterAll` below would throw on `crowi.drainSideEffects()`
+    // / `crowi.teardownForCli()` — masking the real boot failure with an
+    // unrelated "Cannot read properties of undefined" and skipping
+    // whatever partial cleanup the instance could still do (e.g. quitting
+    // a redis client the connect-retry-triggering failure left open).
+    (instance) => {
+      crowi = instance;
+    },
+  );
 
   const honoApp = buildHonoApp(crowi);
   // Wrap `honoApp.fetch` so the `/api/v2` prefix in supertest URLs is
@@ -157,7 +197,7 @@ beforeAll(async () => {
     return res;
   };
   app = getRequestListener(fetchFn);
-}, 60000);
+}, 90000);
 
 // Between tests, drain any in-flight fire-and-forget side effects (event
 // listeners + Mongoose post('save') hooks that start un-awaited DB/redis
