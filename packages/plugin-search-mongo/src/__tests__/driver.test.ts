@@ -1,10 +1,10 @@
-import { MongoMemoryServer } from 'mongodb-memory-server';
 import mongoose, { Schema, Types } from 'mongoose';
 
 import type { PluginContext, SearchQuery } from '@crowi/plugin-api';
 
 import { buildSnippet, createMongoSearchDriver } from '../driver';
 import { keywordRegex } from '../query-builder';
+import { startTestMongo, type TestMongo } from './setup';
 
 // Minimal Page / Revision document shapes + schemas mirroring the fields
 // the driver reads.
@@ -39,7 +39,7 @@ const RevisionSchema = new Schema<TestRevision>({
   body: { type: String, default: '' },
 });
 
-let mongod: MongoMemoryServer;
+let testMongo: TestMongo;
 let Page: mongoose.Model<TestPage>;
 let Revision: mongoose.Model<TestRevision>;
 
@@ -76,15 +76,13 @@ async function seedPage(opts: {
 }
 
 beforeAll(async () => {
-  mongod = await MongoMemoryServer.create();
-  await mongoose.connect(mongod.getUri());
+  testMongo = await startTestMongo();
   Page = mongoose.model('Page', PageSchema);
   Revision = mongoose.model('Revision', RevisionSchema);
 });
 
 afterAll(async () => {
-  await mongoose.disconnect();
-  await mongod.stop();
+  await testMongo.stop();
 });
 
 afterEach(async () => {
