@@ -70,6 +70,17 @@ Scripts live in root + per-package `package.json`. `pnpm <script>` filters with
 
 - **Dev**: `docker compose up -d` for infra (mongo/redis/es/plantuml) →
   `pnpm dev` for api+web+plugins. `pnpm dev:api` / `pnpm dev:web` for one side.
+- **Test infra**: `docker compose up -d` also starts `crowi-test-mongodb` (port
+  27018, tmpfs data dir), a MongoDB dedicated to `@crowi/api`'s jest suite and
+  kept independent from the always-on dev `mongodb` (27017) — a full parallel
+  run's per-file create-db/autoIndex/dropDatabase churn no longer competes
+  with dev data for the same disk path. tmpfs means it is fully disposable:
+  a restart or `docker compose down` loses all data with no consequence
+  (tests only ever write per-file scratch databases their own teardown
+  already drops). `packages/api/src/test/global-setup.js` probes 27018 first,
+  falls back to the dev `mongodb` (27017), and finally to an in-process
+  `mongodb-memory-server` when neither is reachable — a checkout that hasn't
+  pulled this compose change keeps working unchanged.
 - **Targeted run**: `pnpm --filter @crowi/api <script>` to run a script in
   one package only.
 - **Lint must be errors=0** (warnings tolerated). pre-push lefthook enforces.
