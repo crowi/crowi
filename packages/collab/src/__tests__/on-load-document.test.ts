@@ -120,19 +120,32 @@ describe('@crowi/collab Phase 6 onLoadDocument force-reload broadcast', () => {
     const spy = makeBroadcastSpy();
     const instance = makeInstanceWith(pageId, spy);
 
-    const onLoadDocument = createOnLoadDocument({
-      models: { Page: models.Page, Revision: models.Revision, PageYjsUpdate: models.PageYjsUpdate },
-    });
-    const newDoc = new Y.Doc();
-    await onLoadDocument({
-      documentName: pageId,
-      document: newDoc,
-      instance,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any);
+    // Deterministically hits `hooks/on-load-document.ts`'s yjsState
+    // Y.applyUpdate-failed body-seed-fallback warn — assert the operator
+    // warning contract (not just its downstream effects) so a regression
+    // that silently drops the warn is caught. Ported from
+    // `packages/api/src/test/setup.ts`'s spy-per-test pattern; spy is
+    // inline (no shared helper) so mockRestore() runs even if an
+    // expect() above throws.
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      const onLoadDocument = createOnLoadDocument({
+        models: { Page: models.Page, Revision: models.Revision, PageYjsUpdate: models.PageYjsUpdate },
+      });
+      const newDoc = new Y.Doc();
+      await onLoadDocument({
+        documentName: pageId,
+        document: newDoc,
+        instance,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any);
 
-    expect(newDoc.getText(CONTENT_FIELD).toString()).toBe('fallback body');
-    expect(spy.calls).toEqual([JSON.stringify({ kind: 'crowi:force-reload', reason: 'yjs-state-corruption' })]);
+      expect(newDoc.getText(CONTENT_FIELD).toString()).toBe('fallback body');
+      expect(spy.calls).toEqual([JSON.stringify({ kind: 'crowi:force-reload', reason: 'yjs-state-corruption' })]);
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('failed Y.applyUpdate; falling back to body seed'), expect.any(String));
+    } finally {
+      warnSpy.mockRestore();
+    }
   });
 
   test('valid yjsState path does NOT broadcast (normal restore, no editors to notify)', async () => {

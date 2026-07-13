@@ -8,6 +8,35 @@ import type { CollabModels, CollabRenderer } from '../models';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { getSentinelPath } = require('./mongo-sentinel') as { getSentinelPath: () => string };
 
+// Silence the ~20 `[crowi:collab]` / `[crowi:collab:presence]` console.warn
+// sites (compaction / save-flow / invalidation / presence / hooks — see
+// `hooks/on-load-document.ts` etc.) that intentional "hit the fallback /
+// corrupt-row path" tests trip. These are designed-in operator warnings
+// (the tests are green; the noise just drowns full-suite output), not
+// unexpected failures. Ported from `packages/api/src/test/setup.ts`'s
+// `QUIET_PREFIXES` pattern — module load time patch, prefix front-match,
+// production boot unaffected (this file is test-only).
+//
+// The trailing space on each prefix is deliberate: it excludes the test
+// harness's own `[crowi:collab:tests] ` diagnostic prefix (`makeCrowiStub()`
+// below), which must stay visible.
+{
+  const QUIET_PREFIXES = ['[crowi:collab] ', '[crowi:collab:presence] '];
+  const isQuiet = (args: unknown[]) => typeof args[0] === 'string' && QUIET_PREFIXES.some((prefix) => (args[0] as string).startsWith(prefix));
+
+  const originalLog = console.log;
+  console.log = (...args: unknown[]) => {
+    if (isQuiet(args)) return;
+    originalLog(...args);
+  };
+
+  const originalWarn = console.warn;
+  console.warn = (...args: unknown[]) => {
+    if (isQuiet(args)) return;
+    originalWarn(...args);
+  };
+}
+
 /**
  * Lifecycle helpers for the collab test suites. Spins up a per-file Mongo
  * database, opens a Mongoose connection, registers the api package's model
