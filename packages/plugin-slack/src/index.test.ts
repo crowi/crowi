@@ -35,6 +35,9 @@ function stubCtx(config: SlackPluginConfig): PluginContext {
       remove: async () => undefined,
     },
     model: () => ({}),
+    // `state` (hot-reload StateCell primitive) is never consulted by the
+    // dispatcher paths under test — a cast no-op stub keeps the mock minimal.
+    state: (() => ({ get: () => undefined, withValue: async () => undefined, set: () => undefined })) as unknown as PluginContext['state'],
     log: { debug: () => undefined, info: () => undefined, warn: () => undefined, error: () => undefined },
   };
 }
