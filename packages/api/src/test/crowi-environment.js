@@ -8,6 +8,21 @@ const { getSentinelPath } = require('./test-mongo-sentinel');
 const ROOT_DIR = path.join(__dirname, '../..');
 const MODEL_DIR = path.join(__dirname, '../models');
 
+// `[test-harness] ` — NOT `[crowi] `. `setup.ts` silences every
+// `[crowi] `-prefixed console.warn as boot-time noise (see that file's
+// `QUIET_PREFIXES`); using that prefix here would make this warning
+// invisible on screen even though "must be visible" is the entire point
+// (Phase 3 / B3-4 — this replaces a silent fallback, so silently filtering
+// the replacement warning would defeat the purpose just as badly).
+function warnSentinelUnreadable(detail) {
+  console.warn(
+    `[test-harness] crowi-environment: could not determine this run's resolved Mongo strategy (${detail}). ` +
+      'Falling back to the per-file mongodb-memory-server path as if nothing were reachable. If this is ' +
+      'unexpected, check that global-setup.js ran successfully for CROWI_TEST_RUN_ID=' +
+      `${process.env.CROWI_TEST_RUN_ID ?? '(unset)'} (feature-test-parallel-db-flake-hardening Phase 3 / B3-4).`,
+  );
+}
+
 // The external Mongo URI that `global-setup.js` resolved once (the docker
 // server, if reachable). Read from the sentinel file — a plain
 // `process.env` read in `global-setup.js` (main process, pre-fork) DOES
@@ -17,32 +32,131 @@ const MODEL_DIR = path.join(__dirname, '../models');
 // empty sentinel) apart from "my own run's sentinel was never written" —
 // see `getSentinelPath()`, which throws instead of resolving a stale or
 // machine-shared path when `CROWI_TEST_RUN_ID` itself never propagated.
+//
+// Sentinel content (Phase 3 / B3-2, written by `global-setup.js`'s
+// `writeSentinel()`): JSON `{ strategy, uri }` for EVERY branch WITHOUT
+// EXCEPTION — including the `MONGO_URI` hard-override branch (`strategy:
+// 'env-override'`, `uri: process.env.MONGO_URI`). An earlier revision had
+// that branch write literal `''` and this function skip reading the
+// sentinel entirely whenever `process.env.MONGO_URI` was set, on the theory
+// that the env var was already authoritative — that exempted CI's MOST
+// common shape (`services.mongo` sets `MONGO_URI` on every job) from ever
+// having its sentinel validated at all, which is exactly backwards from the
+// "a full green run proves every worker inherited a working sentinel" goal
+// this file exists to provide. `readSentinelRecord()` below is now called
+// UNCONDITIONALLY, on every branch, so a broken sentinel warns regardless of
+// whether `MONGO_URI` happens to also be set. `strategy: 'memory-server'`
+// (`uri: null`) is a LEGITIMATE recorded outcome (nothing reachable, or the
+// CI guard blocked auto-detection) and must NOT warn — see the return
+// statement below. Anything else that prevents extracting a `strategy`
+// (missing file, empty content, invalid JSON, malformed shape) means this
+// run's OWN sentinel is broken, which is exactly the "自分の run の
+// sentinel を読めなかった" case Phase 3 / B3-4 requires a loud warn for, on
+// every environment (not just CI) and on every branch (not just the
+// non-`MONGO_URI` ones).
+function readSentinelRecord(sentinelPath) {
+  let raw;
+  try {
+    raw = fs.readFileSync(sentinelPath, 'utf8');
+  } catch (err) {
+    warnSentinelUnreadable(`sentinel file missing or unreadable at ${sentinelPath}: ${err.message}`);
+    return undefined;
+  }
+
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    // A blank read here (as opposed to a missing file, caught above) means
+    // something wrote this run's sentinel without going through
+    // `writeSentinel()`'s strategy-recording path (every branch always
+    // writes a non-empty JSON record — see that function's doc comment) —
+    // broken, not a legitimate empty-strategy state.
+    warnSentinelUnreadable(`sentinel file at ${sentinelPath} was empty — expected a JSON {strategy, uri} record`);
+    return undefined;
+  }
+
+  let record;
+  try {
+    record = JSON.parse(trimmed);
+  } catch (err) {
+    warnSentinelUnreadable(`sentinel file at ${sentinelPath} was not valid JSON (${err.message}): ${trimmed}`);
+    return undefined;
+  }
+
+  if (!record || typeof record !== 'object' || typeof record.strategy !== 'string') {
+    warnSentinelUnreadable(`sentinel file at ${sentinelPath} did not contain a recognizable {strategy, uri} record: ${trimmed}`);
+    return undefined;
+  }
+
+  return record;
+}
+
 function resolvedExternalMongoUri() {
   // Resolve (and thereby assert) the sentinel path FIRST, on EVERY call —
   // including the `MONGO_URI` override branch below, which doesn't
-  // actually need the file's contents. `getSentinelPath()` throws loudly
-  // when `CROWI_TEST_RUN_ID` never propagated to this worker; an early
-  // `return` for the `MONGO_URI` branch that skipped this call would
-  // silently exempt that whole code path from the "a full suite passing
-  // proves every worker inherited the run id" assertion this run-scoping
-  // exists to provide (A1-4 / AC9 in the design doc) — and `MONGO_URI` is
-  // set on EVERY CI run (`services.mongo`), so skipping it there would
-  // leave the assertion untested on exactly the environment we most want
-  // it to cover. NOT inside the try/catch below: an unset
-  // `CROWI_TEST_RUN_ID` is a broken-harness condition (env propagation
-  // failure) and must throw loudly, not be swallowed into the same
-  // silent-fallback path as "the sentinel file for my run doesn't exist
-  // yet / isn't reachable".
+  // strictly need the file's contents to pick its return value.
+  // `getSentinelPath()` throws loudly when `CROWI_TEST_RUN_ID` never
+  // propagated to this worker; an early `return` for the `MONGO_URI` branch
+  // that skipped this call would silently exempt that whole code path from
+  // the "a full suite passing proves every worker inherited the run id"
+  // assertion this run-scoping exists to provide (A1-4 / AC9 in the design
+  // doc) — and `MONGO_URI` is set on EVERY CI run (`services.mongo`), so
+  // skipping it there would leave the assertion untested on exactly the
+  // environment we most want it to cover. NOT inside the try/catch below:
+  // an unset `CROWI_TEST_RUN_ID` is a broken-harness condition (env
+  // propagation failure) and must throw loudly, not be swallowed into the
+  // same silent-fallback path as "the sentinel file for my run doesn't
+  // exist yet / isn't reachable".
   const sentinelPath = getSentinelPath();
 
+  // Read + validate this run's OWN sentinel unconditionally, on EVERY
+  // branch below — including `MONGO_URI` (Phase 3 rework: see this
+  // function's module-level doc comment for why an earlier revision's
+  // early-return before ever reading the sentinel was the wrong call).
+  const record = readSentinelRecord(sentinelPath);
+
   if (process.env.MONGO_URI && process.env.MONGO_URI.trim()) {
+    // `MONGO_URI` itself remains authoritative regardless of what the
+    // sentinel recorded — env propagation to THIS worker is independent of
+    // whether the sentinel file happens to be readable, so a broken
+    // sentinel must not ALSO break a working `MONGO_URI` run; the
+    // `readSentinelRecord()` call above already surfaced the
+    // broken-harness warning as a side effect.
     return process.env.MONGO_URI;
   }
-  try {
-    const uri = fs.readFileSync(sentinelPath, 'utf8').trim();
-    return uri || undefined;
-  } catch {
-    return undefined;
+
+  if (!record) return undefined;
+
+  // `memory-server` (or any other strategy recording a `null`/missing uri)
+  // is a legitimately resolved outcome — NOT a "couldn't read my own
+  // sentinel" failure — so it must not warn (that would spam every
+  // no-infrastructure local run and every CI-guard invocation with a
+  // warning that looks like a broken harness when nothing is actually
+  // broken).
+  return typeof record.uri === 'string' && record.uri.trim() ? record.uri : undefined;
+}
+
+/**
+ * Post-splice self-check (Phase 3 / B3-1): `maxPoolSize=10` must actually be
+ * present on `uri` after `buildPerFileUri()` (below) spliced it. This is
+ * normally a no-op — `buildPerFileUri()` always sets the param right before
+ * calling this — but ALL FOUR resolution paths (docker autodetect /
+ * `MONGO_URI` override / `TEST_MONGO_URI` override / memory-server) funnel
+ * through that ONE function, so asserting here is a single choke point that
+ * would catch a future regression (e.g. a reordered `searchParams` call, or
+ * swapping in a different URL builder) on every path at once, rather than
+ * only on whichever path a human happens to be looking at when it breaks.
+ * `serverSelectionTimeoutMS` / `connectTimeoutMS` are deliberately NOT
+ * asserted — A1-3 never splices them (kept at the driver's 30000ms
+ * default), so there is no invariant to check for those two params.
+ */
+function assertMaxPoolSizeSpliced(uri) {
+  const value = new URL(uri).searchParams.get('maxPoolSize');
+  if (value !== '10') {
+    throw new Error(
+      `[test-harness] crowi-environment: expected maxPoolSize=10 on the resolved test Mongo URI after buildPerFileUri() ` +
+        `spliced it, but found ${JSON.stringify(value)} instead. This is a splice-logic bug, not a config problem — see ` +
+        'feature-test-parallel-db-flake-hardening A1-3 / Phase 3 B3-1.',
+    );
   }
 }
 
@@ -65,12 +179,17 @@ function resolvedExternalMongoUri() {
  * keep reusing for the rest of its lifetime (not a short-lived probe), so
  * shortening its timeouts would turn a tolerable operation-level stall
  * into a new, unrelated failure class. See the design doc's A1-1/A1-3.
+ *
+ * Self-asserts the splice took (`assertMaxPoolSizeSpliced()` above,
+ * Phase 3 / B3-1) before returning.
  */
 function buildPerFileUri(rawUri, dbName) {
   const url = new URL(rawUri);
   url.pathname = `/${dbName}`;
   url.searchParams.set('maxPoolSize', '10');
-  return url.toString();
+  const result = url.toString();
+  assertMaxPoolSizeSpliced(result);
+  return result;
 }
 
 /**
@@ -123,8 +242,12 @@ async function dropPerFileDatabase(mongoUri) {
  *      and recorded in the run-scoped sentinel FILE (see
  *      `test-mongo-sentinel.js`) — once, in the jest main process before any
  *      worker forks, so no worker does its own racy probe. This covers
- *      THREE sub-cases, all indistinguishable from here (the sentinel just
- *      holds a URI): an explicit `TEST_MONGO_URI` override, the dedicated
+ *      THREE sub-cases — as of Phase 3 / B3-2 distinguishable from here via
+ *      the sentinel's recorded `strategy` field (`env-override` /
+ *      `docker-test` / `docker-dev`; see `resolvedExternalMongoUri()`'s doc
+ *      comment for the full JSON shape), though `resolvedExternalMongoUri()`
+ *      only ever hands this class the resolved `uri`, not the strategy
+ *      label itself: an explicit `TEST_MONGO_URI` override, the dedicated
  *      tmpfs `crowi-test-mongodb` (port 27018, feature-test-parallel-db-flake-hardening
  *      Phase 2 / A2 — preferred, keeps full-suite churn off the always-on
  *      dev Mongo's disk path), or the dev `mongodb` service (port 27017,
@@ -133,14 +256,20 @@ async function dropPerFileDatabase(mongoUri) {
  *      avoids the per-file mongodb-memory-server churn that SIGSEGVs on full
  *      parallel runs. Each test file gets its own database under that
  *      server so jest can run `--maxWorkers=N` in parallel without
- *      collisions, and teardown drops the per-file db.
+ *      collisions, and teardown drops the per-file db. `buildPerFileUri()`
+ *      splices `maxPoolSize=10` onto whichever of these URIs is used, and
+ *      self-asserts the splice took (Phase 3 / B3-1).
  *
- *   3. Otherwise (sentinel is empty — nothing reachable, or `CI === 'true'`
- *      blocked auto-detection) → `mongodb-memory-server` is started
- *      in-process. This is the "no infrastructure" fallback for local
- *      `pnpm test` invocations on machines without the docker stack
- *      running. Each environment instance gets its own memory-server
- *      so there's no inter-file state.
+ *   3. Otherwise (sentinel strategy is `memory-server` — nothing reachable,
+ *      or `CI === 'true'` blocked auto-detection) → `mongodb-memory-server`
+ *      is started in-process. This is the "no infrastructure" fallback for
+ *      local `pnpm test` invocations on machines without the docker stack
+ *      running. Each environment instance gets its own memory-server so
+ *      there's no inter-file state. If the sentinel can't even be read/
+ *      parsed at all (broken, not merely "empty" — Phase 3 / B3-4), this
+ *      class also falls into this branch, but ONLY after `console.warn`ing
+ *      loudly first (`warnSentinelUnreadable()`), on every environment —
+ *      not just CI — instead of the silent fallback this replaced.
  *
  * Why per-test-file dbs instead of one shared db plus collection
  * clears: jest constructs a fresh `CrowiEnvironment` per test file
@@ -262,4 +391,4 @@ module.exports = CrowiEnvironment;
 // class or a `{ default: class }` shape) keeps working unmodified — the
 // class itself IS `module.exports` either way, and a function/class is a
 // perfectly normal place to hang extra static properties in JS.
-CrowiEnvironment.__test__ = { buildPerFileUri, resolvedExternalMongoUri, dropPerFileDatabase };
+CrowiEnvironment.__test__ = { buildPerFileUri, resolvedExternalMongoUri, dropPerFileDatabase, assertMaxPoolSizeSpliced };

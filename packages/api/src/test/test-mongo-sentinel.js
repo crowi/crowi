@@ -1,6 +1,20 @@
 const os = require('node:os');
 const path = require('node:path');
 
+// `@crowi/api`'s run-scoped sentinel path resolver — the ORIGINAL of this
+// pattern (feature-test-parallel-db-flake-hardening Phase 1 / A1-4 for the
+// run-scoping + loud-throw itself; Phase 3 / B1 for the protocol-identical
+// duplication below). `packages/collab/src/__tests__/mongo-sentinel.js` and
+// `packages/plugin-search-mongo/src/__tests__/mongo-sentinel.js` are
+// DELIBERATE DUPLICATES of this file (same probe-order/run-id/naming
+// protocol, package-prefixed filenames, no shared npm package).
+//
+// THIS FILE MUST STAY IN SYNC WITH:
+//   - packages/collab/src/__tests__/mongo-sentinel.js
+//   - packages/plugin-search-mongo/src/__tests__/mongo-sentinel.js
+// If you change the protocol here (run-id generation, the
+// loud-throw-on-unset behaviour, sentinel naming), check the other two.
+//
 // File written ONCE by `global-setup.js` (jest main process, before any
 // worker forks) and read by every worker's `crowi-environment.js`. It
 // carries the resolved external Mongo URI (the docker server, if reachable)

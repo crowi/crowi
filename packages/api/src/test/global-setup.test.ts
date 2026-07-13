@@ -177,7 +177,18 @@ describe('globalSetup', () => {
     return readFileSync(getSentinelPath(), 'utf8');
   }
 
-  it('MONGO_URI hard override: writes an empty sentinel and never probes', async () => {
+  /**
+   * Parses the sentinel as the Phase 3 / B3-2 `{ strategy, uri }` JSON
+   * record every branch writes WITHOUT EXCEPTION (Phase 3 rework) —
+   * including the `MONGO_URI` hard-override branch, which used to write
+   * literal `''` but now records `{ strategy: 'env-override', uri:
+   * process.env.MONGO_URI }` like every other branch.
+   */
+  function sentinelRecord(): { strategy: string; uri: string | null } {
+    return JSON.parse(sentinelContent());
+  }
+
+  it('MONGO_URI hard override: records strategy env-override with the raw MONGO_URI value, and never probes', async () => {
     process.env.MONGO_URI = 'mongodb://example.invalid:27017/whatever';
     delete process.env.TEST_MONGO_URI;
     delete process.env.CI;
@@ -185,11 +196,11 @@ describe('globalSetup', () => {
 
     await globalSetup(undefined, undefined, { probeTcp: probe });
 
-    expect(sentinelContent()).toBe('');
+    expect(sentinelRecord()).toEqual({ strategy: 'env-override', uri: 'mongodb://example.invalid:27017/whatever' });
     expect(calls).toHaveLength(0);
   });
 
-  it('CI fast-fail path (no TEST_MONGO_URI): writes an empty sentinel and never probes', async () => {
+  it('CI fast-fail path (no TEST_MONGO_URI): records strategy memory-server and never probes', async () => {
     delete process.env.MONGO_URI;
     delete process.env.TEST_MONGO_URI;
     process.env.CI = 'true';
@@ -197,7 +208,7 @@ describe('globalSetup', () => {
 
     await globalSetup(undefined, undefined, { probeTcp: probe });
 
-    expect(sentinelContent()).toBe('');
+    expect(sentinelRecord()).toEqual({ strategy: 'memory-server', uri: null });
     expect(calls).toHaveLength(0);
   });
 
@@ -210,7 +221,7 @@ describe('globalSetup', () => {
 
     await globalSetup(undefined, undefined, { probeTcp: probe });
 
-    expect(sentinelContent()).toBe(override);
+    expect(sentinelRecord()).toEqual({ strategy: 'env-override', uri: override });
     // Exactly one probe call, against the override only.
     expect(calls).toEqual([override]);
   });
@@ -224,13 +235,13 @@ describe('globalSetup', () => {
 
     await globalSetup(undefined, undefined, { probeTcp: probe });
 
-    expect(sentinelContent()).toBe('');
+    expect(sentinelRecord()).toEqual({ strategy: 'memory-server', uri: null });
     // Both retry attempts target the override only — 27018/27017 (both
     // reachable per the `Set` above) never appear in the call list.
     expect(calls).toEqual([override, override]);
   });
 
-  it('TEST_MONGO_URI override: writes it to the sentinel when reachable, probing only that candidate (never 27018/27017)', async () => {
+  it('TEST_MONGO_URI override: records strategy env-override when reachable, probing only that candidate (never 27018/27017)', async () => {
     delete process.env.MONGO_URI;
     delete process.env.CI;
     const override = 'mongodb://example.invalid:27099/?maxPoolSize=10';
@@ -239,12 +250,12 @@ describe('globalSetup', () => {
 
     await globalSetup(undefined, undefined, { probeTcp: probe });
 
-    expect(sentinelContent()).toBe(override);
+    expect(sentinelRecord()).toEqual({ strategy: 'env-override', uri: override });
     // Exactly one probe call, against the override only.
     expect(calls).toEqual([override]);
   });
 
-  it('no env override, crowi-test-mongodb (27018) reachable: writes the 27018 URI, never probing 27017', async () => {
+  it('no env override, crowi-test-mongodb (27018) reachable: records strategy docker-test, never probing 27017', async () => {
     delete process.env.MONGO_URI;
     delete process.env.TEST_MONGO_URI;
     delete process.env.CI;
@@ -252,14 +263,14 @@ describe('globalSetup', () => {
 
     await globalSetup(undefined, undefined, { probeTcp: probe });
 
-    expect(sentinelContent()).toBe(TEST_MONGODB_URI);
+    expect(sentinelRecord()).toEqual({ strategy: 'docker-test', uri: TEST_MONGODB_URI });
     // Exactly one probe call, against 27018 only — pinning the full call
     // list (not just asserting DEV_MONGO_URI's absence) rules out a vacuous
     // pass if the call list were ever empty for an unrelated reason.
     expect(calls).toEqual([TEST_MONGODB_URI]);
   });
 
-  it('no env override, 27018 unreachable, dev mongo (27017) reachable: writes the 27017 URI', async () => {
+  it('no env override, 27018 unreachable, dev mongo (27017) reachable: records strategy docker-dev', async () => {
     delete process.env.MONGO_URI;
     delete process.env.TEST_MONGO_URI;
     delete process.env.CI;
@@ -267,7 +278,7 @@ describe('globalSetup', () => {
 
     await globalSetup(undefined, undefined, { probeTcp: probe });
 
-    expect(sentinelContent()).toBe(DEV_MONGO_URI);
+    expect(sentinelRecord()).toEqual({ strategy: 'docker-dev', uri: DEV_MONGO_URI });
     // 27018 is probed TWICE (the transient-stall retry fires because it's
     // unreachable both times) BEFORE falling through to 27017 — pin the
     // exact ordered call list so this proves the cascade order, not just
@@ -275,7 +286,7 @@ describe('globalSetup', () => {
     expect(calls).toEqual([TEST_MONGODB_URI, TEST_MONGODB_URI, DEV_MONGO_URI]);
   });
 
-  it('no env override, neither reachable: writes an empty sentinel (memory-server fallback)', async () => {
+  it('no env override, neither reachable: records strategy memory-server', async () => {
     delete process.env.MONGO_URI;
     delete process.env.TEST_MONGO_URI;
     delete process.env.CI;
@@ -283,10 +294,65 @@ describe('globalSetup', () => {
 
     await globalSetup(undefined, undefined, { probeTcp: probe });
 
-    expect(sentinelContent()).toBe('');
+    expect(sentinelRecord()).toEqual({ strategy: 'memory-server', uri: null });
     // Both candidates are probed TWICE each (the transient-stall retry fires
     // for both, since neither ever answers) before giving up — pin the exact
     // ordered call list, not just the empty-sentinel result.
     expect(calls).toEqual([TEST_MONGODB_URI, TEST_MONGODB_URI, DEV_MONGO_URI, DEV_MONGO_URI]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// warnOnWorkerPoolDrift (Phase 3 / B3-3): maxWorkers vs. CPU count, and the
+// estimated maxWorkers×maxPoolSize socket count vs. CPU count
+// ---------------------------------------------------------------------------
+
+describe('warnOnWorkerPoolDrift', () => {
+  const { warnOnWorkerPoolDrift, ASSUMED_MAX_POOL_SIZE, SOCKET_BUDGET_PER_CPU } = globalSetup.__test__ as {
+    warnOnWorkerPoolDrift: (globalConfig: { maxWorkers?: number } | undefined, deps: { cpuCount?: number }) => void;
+    ASSUMED_MAX_POOL_SIZE: number;
+    SOCKET_BUDGET_PER_CPU: number;
+  };
+
+  let warnSpy: jest.SpyInstance;
+
+  beforeEach(() => {
+    warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    warnSpy.mockRestore();
+  });
+
+  it('does NOT warn for the current accepted default (maxWorkers=5) on a normal multi-core machine', () => {
+    warnOnWorkerPoolDrift({ maxWorkers: 5 }, { cpuCount: 8 });
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  it('warns when maxWorkers exceeds the CPU count', () => {
+    warnOnWorkerPoolDrift({ maxWorkers: 9 }, { cpuCount: 4 });
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('exceeds this machine'));
+  });
+
+  it('warns when the estimated socket count is far beyond the CPU-count budget (e.g. maxPoolSize reverted toward the driver default)', () => {
+    // maxWorkers(5) x ASSUMED_MAX_POOL_SIZE(10) = 50 estimated sockets;
+    // cpuCount(1) x SOCKET_BUDGET_PER_CPU exceeded even though maxWorkers
+    // itself (5) does not exceed cpuCount... except cpuCount=1 also trips
+    // the maxWorkers check, so pin BOTH the socket-drift message AND that
+    // the estimate in the message matches the documented formula.
+    warnOnWorkerPoolDrift({ maxWorkers: 5 }, { cpuCount: 1 });
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining(`~${5 * ASSUMED_MAX_POOL_SIZE}`));
+    expect(SOCKET_BUDGET_PER_CPU).toBeGreaterThan(0);
+  });
+
+  it('never fails (throws) regardless of how extreme the input is — warn only, per B3-3', () => {
+    expect(() => warnOnWorkerPoolDrift({ maxWorkers: 999 }, { cpuCount: 1 })).not.toThrow();
+  });
+
+  it('falls back to os.cpus().length when deps.cpuCount is not injected (production default)', () => {
+    // No `cpuCount` in deps — must not throw, and must use the real
+    // `os.cpus().length` (whatever it is on this machine) rather than
+    // crashing on `undefined`.
+    expect(() => warnOnWorkerPoolDrift({ maxWorkers: 1 }, {})).not.toThrow();
   });
 });

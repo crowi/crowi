@@ -1,7 +1,22 @@
 const fs = require('node:fs');
 const net = require('node:net');
+const os = require('node:os');
 const { getSentinelPath } = require('./test-mongo-sentinel');
 
+// `@crowi/api`'s jest `globalSetup` — the ORIGINAL of this probe cascade
+// (feature-test-parallel-db-flake-hardening, Phase 2 / A2 for the
+// 27018→27017→memory-server cascade itself; Phase 3 / B1 for the
+// protocol-identical duplication below). `packages/collab/src/__tests__/global-setup.js`
+// and `packages/plugin-search-mongo/src/__tests__/global-setup.js` are
+// DELIBERATE DUPLICATES of this file (each package probes independently —
+// no shared npm package; see the design doc's B1 section for why).
+//
+// THIS FILE MUST STAY IN SYNC WITH:
+//   - packages/collab/src/__tests__/global-setup.js
+//   - packages/plugin-search-mongo/src/__tests__/global-setup.js
+// If you change the protocol here (probe order, run-id generation, sentinel
+// naming/format, maxPoolSize splice), check the other two.
+//
 // The dedicated, tmpfs-backed test mongod (`docker-compose.yml`'s
 // `crowi-test-mongodb` service, feature-test-parallel-db-flake-hardening
 // Phase 2 / A2). Probed FIRST — putting full-suite churn (~270 connects/run,
@@ -107,16 +122,131 @@ async function resolveDockerCandidateUri({ testMongoUriEnv, probe }) {
   return null;
 }
 
-function writeSentinel(uri) {
-  // Resolved at CALL time (not module-load time) via `getSentinelPath()` —
-  // by the time this first runs, `globalSetup` below has already assigned
-  // `CROWI_TEST_RUN_ID`, so the path is run-scoped from the very first
-  // write.
+/**
+ * Write the run-scoped sentinel as a JSON `{ strategy, uri }` record (Phase
+ * 3 / B3-2), used by EVERY branch below WITHOUT EXCEPTION — including the
+ * `MONGO_URI` hard-override branch, which records `{ strategy:
+ * 'env-override', uri: process.env.MONGO_URI }` (an earlier revision wrote
+ * literal `''` there instead, on the theory that `crowi-environment.js`
+ * never needs to read it since it returns straight from `process.env`; that
+ * turned out to be the wrong call — a run-scoped record with NOTHING to
+ * validate on the single MOST common branch in practice, CI's `MONGO_URI`
+ * via `services.mongo`, defeats the entire "a full green run proves every
+ * worker inherited the sentinel" property this file exists to provide, so
+ * every branch now records a real, parseable strategy unconditionally).
+ * `crowi-environment.js` can tell "docker-test (27018) chosen" apart from
+ * "env-override chosen" apart from "nothing reachable, memory-server
+ * fallback" apart from "sentinel unreadable / corrupt" (the last of which it
+ * now warns loudly about instead of silently falling back, on EVERY branch
+ * including its own `MONGO_URI` read — see that module's
+ * `resolvedExternalMongoUri()`). `strategy` is one of `docker-test` /
+ * `docker-dev` / `env-override` / `memory-server`; `uri` is `null` for
+ * `memory-server`.
+ *
+ * (Re-raised in adversarial review as "shouldn't `MONGO_URI` just write `''`
+ * per the design doc's B3-2 list of 4 resolved strategies?" — that list
+ * enumerates the outcomes of the PROBE/resolution logic below (`docker-test`
+ * / `docker-dev` / `env-override` for `TEST_MONGO_URI` / `memory-server`),
+ * which `MONGO_URI` deliberately bypasses entirely; it does not say the
+ * `MONGO_URI` branch must record nothing. Re-confirmed: writing `''` here
+ * reopens exactly the gap `crowi-environment.test.ts`'s
+ * "still returns process.env.MONGO_URI when set even if this run's OWN
+ * sentinel is broken/missing" test now guards against — CI always sets
+ * `MONGO_URI`, so a blank/absent sentinel on this branch alone would make
+ * `resolvedExternalMongoUri()`'s B3-4 warn fire on literally every CI run.)
+ *
+ * Resolved at CALL time (not module-load time) via `getSentinelPath()` — by
+ * the time this first runs, `globalSetup` below has already assigned
+ * `CROWI_TEST_RUN_ID`, so the path is run-scoped from the very first write.
+ */
+function writeSentinel(payload) {
   const sentinelPath = getSentinelPath();
+  const content = JSON.stringify(payload);
   // Atomic write so a worker can never read a half-written file.
   const tmp = `${sentinelPath}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, uri);
+  fs.writeFileSync(tmp, content);
   fs.renameSync(tmp, sentinelPath);
+}
+
+/**
+ * `maxPoolSize` this module bakes into the URIs it resolves (`TEST_MONGODB_URI`
+ * / `DEV_MONGO_URI` above) — the SAME value `crowi-environment.js` splices
+ * uniformly onto every resolution path (`MONGO_URI` / `TEST_MONGO_URI`
+ * override / memory-server; see that module's `buildPerFileUri()` and its
+ * post-splice self-assert, Phase 3 / B3-1). Kept as its own constant here
+ * (rather than parsed back out of the URI strings) so the drift-warn math
+ * below (`warnOnWorkerPoolDrift`) stays correct even if a future edit
+ * changes those URI literals.
+ */
+const ASSUMED_MAX_POOL_SIZE = 10;
+
+/**
+ * How many of those pooled connections a single test file's own
+ * steady-state footprint holds open at once: 1 — the `beforeAll` boot
+ * connection each file's tests reuse for its own lifetime (`setup.ts`). The
+ * brief per-file `teardown()` connection (`maxPoolSize=1`, A1-2) overlaps it
+ * only for the instant of the drop, not for the file's steady state, so it
+ * is not counted here.
+ */
+const ASSUMED_POOLS_PER_WORKER = 1;
+
+/**
+ * `estimatedSockets > cpuCount * this` is treated as "far enough beyond this
+ * machine's size to warrant a warning" — NOT "any amount over cpuCount",
+ * which would fire on literally every normal run: today's default
+ * (`--maxWorkers=5`, `packages/api/package.json:42`) times `maxPoolSize=10`
+ * already estimates 50 simultaneous sockets, which already exceeds the CPU
+ * count of most laptops — and that configuration is the intentionally
+ * analyzed, ACCEPTED one (see A1-3 in the design doc), not drift. Flagging
+ * it on every single run would just train developers to ignore the
+ * warning. This multiplier is a heuristic, not a hard limit (this check is
+ * a warn, never a fail — machine sizes vary too much for a universal
+ * threshold, Phase 3 / B3-3); it only fires once a change (`--maxWorkers`
+ * raised, or the `maxPoolSize=10` cap accidentally reverted toward the
+ * driver's default of 100) pushes the estimate well past what today's
+ * default already spends.
+ */
+const SOCKET_BUDGET_PER_CPU = 10;
+
+/**
+ * `global-setup.js` never has the resolved test Mongo URI in hand on the
+ * `MONGO_URI` / CI-guard branches (see `writeSentinel()`'s doc comment
+ * above), so it cannot assert `maxPoolSize=10` the way `crowi-environment.js`
+ * does post-splice (Phase 3 / B3-1) — there is nothing to assert against on
+ * those paths. What it CAN check, independent of which URI ends up
+ * resolved, is whether `--maxWorkers` and the assumed pool size together add
+ * up to a socket count wildly disproportionate to this machine — e.g.
+ * someone raised `--maxWorkers` without reconsidering the shared mongod's
+ * listen backlog, or a future edit accidentally reverted the uniform
+ * `maxPoolSize=10` splice (A1-3) back toward the driver's default of 100.
+ * WARN only, never fail (Phase 3 / B3-3).
+ *
+ * `deps.cpuCount` is a test-only injection point (defaults to
+ * `os.cpus().length`) so `global-setup.test.ts` can drive both branches
+ * deterministically without depending on the actual host's core count.
+ */
+function warnOnWorkerPoolDrift(globalConfig, deps) {
+  const cpuCount = deps.cpuCount ?? os.cpus().length;
+  const maxWorkers = typeof globalConfig?.maxWorkers === 'number' && globalConfig.maxWorkers > 0 ? globalConfig.maxWorkers : 1;
+  const estimatedSockets = maxWorkers * ASSUMED_POOLS_PER_WORKER * ASSUMED_MAX_POOL_SIZE;
+
+  if (maxWorkers > cpuCount) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[test-harness] jest --maxWorkers=${maxWorkers} exceeds this machine's CPU count (${cpuCount}) — each worker ` +
+        'boots its own Crowi + Mongo connection, so oversubscribing workers past core count adds contention without ' +
+        'adding throughput (feature-test-parallel-db-flake-hardening Phase 3 / B3-3).',
+    );
+  }
+  if (estimatedSockets > cpuCount * SOCKET_BUDGET_PER_CPU) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[test-harness] estimated simultaneous DB sockets against the shared test mongod (~${estimatedSockets} = ` +
+        `maxWorkers(${maxWorkers}) × maxPoolSize(${ASSUMED_MAX_POOL_SIZE})) is far beyond this machine's CPU count ` +
+        `(${cpuCount}) — check whether --maxWorkers was raised or the maxPoolSize=10 cap (A1-3) was reverted, either ` +
+        'of which risks the listen-backlog-overflow ETIMEDOUT class this pool cap exists to prevent.',
+    );
+  }
 }
 
 /**
@@ -139,30 +269,44 @@ function writeSentinel(uri) {
  *
  *   1. `MONGO_URI` already set (CI `services.mongo`, or an explicit local
  *      override) → leave detection alone entirely; `crowi-environment.js`
- *      reads `MONGO_URI` directly. No probe of any kind.
+ *      reads `MONGO_URI` directly, NOT this sentinel's `uri` field. No probe
+ *      of any kind. Sentinel strategy: `env-override`, `uri:
+ *      process.env.MONGO_URI` (recorded, not merely probed-and-echoed, so
+ *      `crowi-environment.js` still has a real record to validate against a
+ *      broken/missing sentinel on this branch too — see `writeSentinel()`'s
+ *      doc comment).
  *   2. `TEST_MONGO_URI` set → probed as the sole candidate, regardless of
- *      `CI`. Reachable: use it. Unreachable: fall straight to the
- *      memory-server (step 5) WITHOUT trying 27018/27017 — see
- *      `resolveDockerCandidateUri`'s doc comment.
+ *      `CI`. Reachable: use it (sentinel strategy `env-override`).
+ *      Unreachable: fall straight to the memory-server (step 5) WITHOUT
+ *      trying 27018/27017 — see `resolveDockerCandidateUri`'s doc comment.
  *   3. Neither set AND `process.env.CI === 'true'` → CI must supply
  *      `MONGO_URI` (or an explicit `TEST_MONGO_URI`); the 27018/27017
  *      auto-detect cascade never runs there (a CI runner could otherwise
  *      coincidentally have something answering on one of those ports and
  *      get silently adopted instead of the URI CI actually configured).
+ *      Sentinel strategy: `memory-server` (matches step 5's recorded
+ *      strategy — `crowi-environment.js`'s OWN `process.env.CI === 'true'`
+ *      check, not this sentinel value, is what actually fail-fasts that
+ *      branch; see that module's `setup()`).
  *   4. No override, not CI → probe `crowi-test-mongodb` (27018), then dev
- *      `mongodb` (27017), in that order.
- *   5. Nothing reachable → empty sentinel; `crowi-environment.js` falls back
- *      to a per-file in-process memory-server (no-infrastructure machines
- *      still work).
+ *      `mongodb` (27017), in that order. Sentinel strategy: `docker-test` or
+ *      `docker-dev` respectively (Phase 3 / B3-2).
+ *   5. Nothing reachable → sentinel strategy `memory-server`, `uri: null`;
+ *      `crowi-environment.js` falls back to a per-file in-process
+ *      memory-server (no-infrastructure machines still work).
  *
- * `deps.probeTcp` is a test-only injection point (defaults to the real
- * `probeTcp` above) — jest itself only ever calls this with the standard
- * `(globalConfig, projectConfig)` arguments, so production behaviour is
- * unchanged; `global-setup.test.ts` calls this function directly with a 3rd
- * argument to drive every resolution path deterministically.
+ * `deps.probeTcp` / `deps.cpuCount` are test-only injection points (default
+ * to the real `probeTcp` above / `os.cpus().length`) — jest itself only ever
+ * calls this with the standard `(globalConfig, projectConfig)` arguments, so
+ * production behaviour is unchanged; `global-setup.test.ts` calls this
+ * function directly with a 3rd argument to drive every resolution path (and
+ * the `warnOnWorkerPoolDrift` branches) deterministically.
  */
-async function globalSetup(_globalConfig, _projectConfig, deps = {}) {
+async function globalSetup(globalConfig, _projectConfig, deps = {}) {
   const probe = deps.probeTcp ?? probeTcp;
+  // Independent of which Mongo strategy ends up resolved below — see
+  // `warnOnWorkerPoolDrift`'s doc comment.
+  warnOnWorkerPoolDrift(globalConfig, deps);
 
   // Run-scope the sentinel BEFORE the first `writeSentinel()` call below —
   // this is what fixes the cross-run race described in the design doc
@@ -186,7 +330,10 @@ async function globalSetup(_globalConfig, _projectConfig, deps = {}) {
   process.env.CROWI_TEST_RUN_ID ??= `${process.pid}-${Date.now().toString(36)}`;
 
   if (isNonBlank(process.env.MONGO_URI)) {
-    writeSentinel(''); // env wins; don't also auto-detect.
+    // env wins; don't also auto-detect. Recorded (not merely `''`, see
+    // `writeSentinel()`'s doc comment) so `crowi-environment.js` still has a
+    // real strategy to validate on this branch — CI's MOST common shape.
+    writeSentinel({ strategy: 'env-override', uri: process.env.MONGO_URI });
     return;
   }
 
@@ -202,14 +349,17 @@ async function globalSetup(_globalConfig, _projectConfig, deps = {}) {
   // an explicit override.
   if (!hasTestMongoUriOverride && process.env.CI === 'true') {
     // CI must supply MONGO_URI via services.mongo; never auto-detect there.
-    writeSentinel('');
+    // Recorded strategy is `memory-server` — see this function's doc
+    // comment, step 3: it's `crowi-environment.js`'s OWN `CI === 'true'`
+    // check that actually fail-fasts this branch, not this sentinel value.
+    writeSentinel({ strategy: 'memory-server', uri: null });
     return;
   }
 
   const candidateUri = await resolveDockerCandidateUri({ testMongoUriEnv, probe });
 
   if (!candidateUri) {
-    writeSentinel('');
+    writeSentinel({ strategy: 'memory-server', uri: null });
     if (hasTestMongoUriOverride) {
       // Don't blame 27018/27017 here — they were never probed (see
       // `resolveDockerCandidateUri`'s doc comment), so naming them as
@@ -231,7 +381,12 @@ async function globalSetup(_globalConfig, _projectConfig, deps = {}) {
     return;
   }
 
-  writeSentinel(candidateUri);
+  // Strategy naming for the sentinel record (Phase 3 / B3-2): `env-override`
+  // when `TEST_MONGO_URI` itself was the reachable candidate, else
+  // `docker-test` (27018) / `docker-dev` (27017) depending on which rung of
+  // the auto-detect cascade answered.
+  const strategy = hasTestMongoUriOverride ? 'env-override' : candidateUri === TEST_MONGODB_URI ? 'docker-test' : 'docker-dev';
+  writeSentinel({ strategy, uri: candidateUri });
   if (hasTestMongoUriOverride) {
     // eslint-disable-next-line no-console
     console.log(`[test] using TEST_MONGO_URI override at ${candidateUri} (per-file dbs).`);
@@ -255,4 +410,12 @@ module.exports = globalSetup;
 // callable function directly, and a function is a perfectly normal place to
 // hang extra static properties in JS (same pattern as `crowi-environment.js`'s
 // `CrowiEnvironment.__test__`).
-globalSetup.__test__ = { resolveDockerCandidateUri, probeTcp, TEST_MONGODB_URI, DEV_MONGO_URI };
+globalSetup.__test__ = {
+  resolveDockerCandidateUri,
+  probeTcp,
+  TEST_MONGODB_URI,
+  DEV_MONGO_URI,
+  warnOnWorkerPoolDrift,
+  ASSUMED_MAX_POOL_SIZE,
+  SOCKET_BUDGET_PER_CPU,
+};
