@@ -146,8 +146,8 @@ Group に分けています。
 | `(admin)/` | 管理画面 | `user.admin === true` |
 
 データ取得は `@tanstack/react-query` を全面的に使います。`apiClientV2`
-(Hono RPC クライアント、`hc<AppType>`) は共有契約から生成され、フックは
-`src/lib/use-*.ts` に置かれます。共有 UI は `components/ui/` (shadcn) と、`LoadingSpinner` /
+(型付き Hono RPC クライアント。`createClient` が返す `CrowiApiClient` 型)
+は共有契約から生成され、フックは `src/lib/use-*.ts` に置かれます。共有 UI は `components/ui/` (shadcn) と、`LoadingSpinner` /
 `ErrorAlert` / `AccessDeniedCard` / `NotFoundCard` などの横断的
 プリミティブで構成されます。
 

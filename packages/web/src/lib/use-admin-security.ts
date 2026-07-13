@@ -10,7 +10,7 @@ export const adminSecurityKeys = {
 
 /**
  * RFC-0006 Phase 4 Batch 9 — switched from `apiClient.admin.security.*`
- * (ts-rest) to `apiClientV2.admin.security.$method` (hc<AppType>). Wire
+ * (ts-rest) to `apiClientV2.admin.security.$method` (`createClient`). Wire
  * payload unchanged.
  */
 const hooks = createAdminSettingsHooks<SecuritySettings, UpdateSecuritySettingsRequest>({

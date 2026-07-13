@@ -10,7 +10,7 @@ import type { Notification } from '@crowi/api-contract';
  * - ['notifications', 'list', { limit, offset }]: paginated notification list
  *
  * RFC-0006 Phase 4 Batch 3 — switched from `apiClient.notification.*`
- * (ts-rest) to `apiClientV2.notifications.*.$method` (hc<AppType>).
+ * (ts-rest) to `apiClientV2.notifications.*.$method` (`createClient`).
  * Wire payload is unchanged. 401 silently degrades to a zero-state so
  * signed-out pages don't surface noisy auth errors (matches the legacy
  * `unwrapResult` silent option).

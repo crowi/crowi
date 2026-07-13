@@ -91,11 +91,12 @@ async function refreshAccessToken(): Promise<string | null> {
  * (ts-rest `initClient(apiContract)`) is gone. The `apiContract`
  * aggregator was emptied in Batch 9 when the 9 admin sub-contracts
  * moved to Hono; Phase 6 then dropped the framework package itself.
- * All resources now go through `apiClientV2` (`hc<AppType>`).
+ * All resources now go through `apiClientV2` (built by `createClient`,
+ * see `@crowi/api-contract`'s `CrowiApiClient`).
  */
 
 /**
- * RFC-0006 Phase 3 — `hc<AppType>` client for Hono-served resources.
+ * RFC-0006 Phase 3 — typed `createClient` client for Hono-served resources.
  *
  * Wraps the global `fetch` with the same access-token / refresh-token
  * dance as the ts-rest `apiClient` above so call sites can flip from

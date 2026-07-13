@@ -107,8 +107,8 @@ export const makeMailScope = (registry: DriverRegistry<MailSender>, plugin: stri
  * same side-effect-mutate pattern as `attachMcp` /
  * `registerAttachmentStreamRoutes`) rather than on the typed
  * `@hono/zod-openapi` chain: plugin routes are plain Hono routes with no
- * request/response contract, so they neither extend `AppType` nor appear
- * in the OpenAPI document. Keeping them off the typed chain also keeps
+ * request/response contract, so they neither extend `CrowiApiClient` nor
+ * appear in the OpenAPI document. Keeping them off the typed chain also keeps
  * the body un-consumed by any validator, preserving the raw-body
  * invariant the Slack signature check depends on (RFC-0013 §8).
  *

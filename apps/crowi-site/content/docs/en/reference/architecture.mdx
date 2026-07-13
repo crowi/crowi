@@ -148,8 +148,9 @@ runner project loaded. It uses the Next.js 16 App Router, dividing
 | `(admin)/` | admin screens | `user.admin === true` |
 
 Data fetching uses `@tanstack/react-query` throughout. `apiClientV2`
-(the Hono RPC client, `hc<AppType>`) is generated from the shared
-contracts, and hooks live in `src/lib/use-*.ts`. Shared UI consists of
+(the typed Hono RPC client returned by `createClient`, typed as
+`CrowiApiClient`) is generated from the shared contracts, and hooks
+live in `src/lib/use-*.ts`. Shared UI consists of
 `components/ui/` (shadcn) plus cross-cutting primitives like
 `LoadingSpinner` / `ErrorAlert` / `AccessDeniedCard` / `NotFoundCard`.
 

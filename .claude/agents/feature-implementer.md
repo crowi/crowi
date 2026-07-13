@@ -109,7 +109,7 @@ errors を残したまま REVIEW に出すのは禁止。直すか、解決不�
 
 ### Next.js (web)
 - Server Components がデフォルト、必要なら `'use client'`
-- データ取得は `tanstack/react-query` + Hono RPC client (`apiClientV2`、`hc<AppType>`)
+- データ取得は `tanstack/react-query` + Hono RPC client (`apiClientV2`、`createClient` が返す `CrowiApiClient`)
 - mutation は `unwrapResult` helper を経由
 - queryKey は `xxxKeys = { all, detail(id) }` factory パターン
 - 設定フォームは `createAdminSettingsHooks` factory を再利用 (該当時)

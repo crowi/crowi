@@ -51,7 +51,8 @@ const { getYjsToken, FakeProvider, providerInstances } = vi.hoisted(() => {
 // RFC-0006 Batch 5 — `useYjsToken` reads `apiClientV2.pages[':id']
 // ['yjs-token'].$get` (Response-shaped) instead of the ts-rest
 // `apiClient.pageCollab.getYjsToken` envelope. The mock surface
-// matches what hc<AppType> exposes at runtime.
+// matches what `apiClientV2` (a `createClient` typed client) exposes
+// at runtime.
 vi.mock('@/lib/api-client', () => ({
   apiClientV2: {
     pages: {
@@ -130,7 +131,7 @@ const validTokenResponse = (overrides: { readonly?: boolean; pageId?: string } =
   readonly: overrides.readonly ?? false,
 });
 
-/** Build a `Response`-shaped mock matching what hc<AppType>'s real fetch returns. */
+/** Build a `Response`-shaped mock matching what `apiClientV2`'s real fetch returns. */
 const tokenOkResponse = <T,>(body: T): { ok: true; status: number; json: () => Promise<T> } => ({
   ok: true,
   status: 200,

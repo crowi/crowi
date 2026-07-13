@@ -11,7 +11,7 @@ export const adminCryptoKeys = {
 
 /**
  * RFC-0006 Phase 4 Batch 8 — switched from `apiClient.adminCrypto.*`
- * (ts-rest) to `apiClientV2.admin.crypto.*.$method` (hc<AppType>). Wire
+ * (ts-rest) to `apiClientV2.admin.crypto.*.$method` (`createClient`). Wire
  * payload unchanged. Non-200 responses (401 / 403 from regressions —
  * the admin layout is responsible for gating) collapse to `null` so
  * the card hides itself instead of throwing.

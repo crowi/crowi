@@ -2,15 +2,20 @@
 /**
  * RFC-0006 — typed Hono client factory.
  *
- * Wraps the runtime `hc<AppType>(baseUrl)` call from `hono/client` with
- * the request-init plumbing the web app needs (auth header / pluggable
- * fetch). Exports an `AppType` that describes the Hono route surface
- * declared by every `createRoute(...)` in `@crowi/api-contract/contracts`.
+ * Wraps runtime `hc<...>(baseUrl)` calls from `hono/client` with the
+ * request-init plumbing the web app needs (auth header / pluggable
+ * fetch). There is no single unified type describing the whole Hono
+ * route surface — see "Phase 6" below for why one was tried and
+ * abandoned. The real surface is the seven per-chain types exported
+ * below (`AppAuthMeUserChain` etc.), and `CrowiApiClient` — their
+ * intersection — is the public client type every consumer should
+ * import. `createClient(...)` is the one function every consumer
+ * should call to obtain one.
  *
- * **AppType placement decision (Phase 3 build-order smoke test, see
- * `docs/migrations/0006-hono-context.md` §11 & §14)**:
+ * **Client-type placement decision (Phase 3 build-order smoke test,
+ * see `docs/migrations/0006-hono-context.md` §11 & §14)**:
  *
- * - **Option 1** (`@crowi/api-contract` imports `AppType` from
+ * - **Option 1** (`@crowi/api-contract` imports the chain types from
  *   `@crowi/api/hono`) **failed** the smoke test — `pnpm --filter
  *   @crowi/api-contract build` runs before `@crowi/api`'s `dist/` is
  *   emitted (workspace dep graph: `@crowi/api -> @crowi/api-contract`,
@@ -18,13 +23,13 @@
  *   `@crowi/api/hono`.
  *
  * - **Option 2 adopted**: `@crowi/api-contract` is the single source of
- *   truth for `AppType`. It builds a no-op Hono chain that mirrors the
- *   real route surface (every `createRoute(...)` exported by the
- *   contracts) and exports `AppType` as an intersection of every
- *   sub-chain's `typeof`. The real `@crowi/api` handler chain produces
- *   the same shape because both sides consume the same `createRoute`
- *   definitions, so the `hc<AppType>` client is type-safe against the
- *   real server.
+ *   truth for the client type. It builds a no-op Hono chain that
+ *   mirrors the real route surface (every `createRoute(...)` exported
+ *   by the contracts) and exports `CrowiApiClient` as an intersection
+ *   of every sub-chain's `hc<...>` return type. The real `@crowi/api`
+ *   handler chain produces the same shape because both sides consume
+ *   the same `createRoute` definitions, so the client is type-safe
+ *   against the real server.
  *
  * If the route-definition <-> handler-implementation match ever drifts
  * (e.g. a contract is registered here but never wired in `@crowi/api`),
@@ -36,25 +41,31 @@
  * Phase 4 Batch 9 hit TypeScript error 2589 ("type instantiation
  * excessively deep") when the contract chain reached 90+ chained
  * `.openapi(...)` calls; the previous workaround flattened the four
- * sub-chains into one via `.route('/', sub)` calls and surfaced
- * `AppType = typeof contractApp`, which still tripped 2589 in
- * downstream `hc<AppType>` consumers. That commit reached
+ * sub-chains into one via `.route('/', sub)` calls and surfaced a
+ * single `AppType = typeof contractApp` alias, which still tripped
+ * 2589 in downstream `hc<AppType>(...)` consumers. That commit reached
  * for `@ts-expect-error` on the `hc<AppType>(baseUrl)` call and
  * exported `CrowiApiClient = any`, which forced four frontend hooks to
  * cast `response.json() as <Schema>`.
  *
  * The fix in this file:
  *
- * 1. The route surface is partitioned into six independent
+ * 1. The route surface is partitioned into seven independent
  *    `OpenAPIHono` chains, each holding ≤ ~22 `.openapi(...)` calls so
  *    no single chain exceeds TS's instantiation-depth ceiling on its
  *    own.
- * 2. `AppType` is declared as the **intersection** of every chain's
- *    `typeof`. `hc<T>` from `hono/client` constrains `T` to `Hono<any,
- *    any, any>`, which an intersection of multiple `OpenAPIHono`
- *    chains satisfies (each summand is a Hono), and the inferred
- *    `Client<T, Prefix>` propagates each chain's routes through
- *    `UnionToIntersection<Client<...>>` in the upstream hc declaration.
+ * 2. `CrowiApiClient` is declared as the **intersection** of every
+ *    chain's `hc<...>` return type. There is deliberately no single
+ *    alias naming "the whole app" — an earlier revision exported one
+ *    (`AppType`, aliasing just the first chain) but nothing in this
+ *    repo actually needed it as a generic parameter, and the name
+ *    invited callers to assume it covered every route when it covered
+ *    only ~30 of ~130. `hc<T>` from `hono/client` constrains `T` to
+ *    `Hono<any, any, any>`, which an intersection of multiple
+ *    `OpenAPIHono` chains satisfies (each summand is a Hono), and the
+ *    inferred `Client<T, Prefix>` propagates each chain's routes
+ *    through `UnionToIntersection<Client<...>>` in the upstream hc
+ *    declaration.
  * 3. The chains are **not** merged via `.route('/', sub)`; that call
  *    is what caused the type to flatten and explode in the previous
  *    layout. Merging is only useful when the runtime needs a single
@@ -265,8 +276,8 @@ type ClearRenderCacheResponse = z.infer<typeof ClearRenderCacheResponseSchema>;
  * `@crowi/api` registers the real handlers — so they return schema-
  * conforming stub bodies purely to thread the response type through
  * `OpenAPIHono`'s per-route type accumulator. Phase 4 commits extend
- * this chain one resource at a time so `AppType` stays in lock-step
- * with the real `@crowi/api` chain.
+ * this chain one resource at a time so `CrowiApiClient` stays in
+ * lock-step with the real `@crowi/api` chain.
  *
  * Stub bodies use the success status only (200 / 201); the error arms
  * are part of the route's `responses` map and `hc`'s type inference
@@ -719,9 +730,10 @@ const lateContractApp = new OpenAPIHono()
  *
  * Phase 6 (TS2589 escape hatch removal) — these chains are no longer
  * concatenated onto a single `contractApp` via `.route('/', sub)`.
- * Instead, every chain stands alone and `AppType` below is an
- * intersection of their `typeof`s, which `hc<T>` happily collapses via
- * its built-in `UnionToIntersection<Client<T, Prefix>>` plumbing.
+ * Instead, every chain stands alone and `CrowiApiClient` below is an
+ * intersection of their `hc<...>` return types, which `hc<T>` happily
+ * collapses via its built-in `UnionToIntersection<Client<T, Prefix>>`
+ * plumbing.
  */
 const adminSettingsContractApp = new OpenAPIHono()
   .openapi(adminAppRoutes.getAppSettingsRoute, (c) => c.json(stubGetAppSettings, 200))
@@ -798,20 +810,6 @@ export type AdminUsersPluginsContractApp = typeof adminUsersPluginsContractApp;
 export type OAuthContractApp = typeof oauthContractApp;
 
 /**
- * `AppType` is exposed as an alias of one representative sub-chain so
- * legacy consumers that `import type { AppType }` keep building. The
- * accurate client surface is `CrowiApiClient` below, which intersects
- * the per-chain `hc` instantiations one at a time so TypeScript never
- * has to fold every chain's schema into a single `Client<T, Prefix>`
- * type expression. (Folding-via-intersection was the layout we tried
- * first and it tripped TS2589 in `Client<T, Prefix>`'s
- * `T extends HonoBase<any, infer S, any>` arm — `infer S` only sees
- * the first summand, so only one chain's routes showed up on the
- * proxy.)
- */
-export type AppType = AppAuthMeUserChain;
-
-/**
  * Default request init applied to every call unless the caller overrides
  * it. The `headers` shape matches Hono's `hc` (a plain record / async
  * supplier of one); `fetch` matches the fetch spec exactly.
@@ -837,7 +835,8 @@ export interface ClientOptions {
  * is a path-traversal `Proxy`: it lazily reflects whatever property
  * chain the caller dots into. The actual route dispatch happens on the
  * server, so the proxy's runtime behaviour is identical regardless of
- * which `AppType` we hand `hc`. We hand it one chain (`AppType`) and
+ * which chain type we hand `hc`. We hand it one chain
+ * (`AppAuthMeUserChain`, arbitrarily — any of the seven would do) and
  * then assert the returned proxy as the full intersection below.
  */
 export type CrowiApiClient = ReturnType<typeof hc<AppAuthMeUserChain>> &
@@ -855,7 +854,7 @@ export type CrowiApiClient = ReturnType<typeof hc<AppAuthMeUserChain>> &
  * disconnect rationale).
  */
 export const createClient = (baseUrl: string, options: ClientOptions = {}): CrowiApiClient =>
-  hc<AppType>(baseUrl, {
+  hc<AppAuthMeUserChain>(baseUrl, {
     headers: options.headers,
     fetch: options.fetch,
   }) as unknown as CrowiApiClient;

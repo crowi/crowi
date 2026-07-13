@@ -23,7 +23,7 @@ const WATCH_STALE_TIME = 5 * 60 * 1000;
 
 /**
  * RFC-0006 Phase 4 Batch 4 — switched from `apiClient.page.{get,set}WatchStatus`
- * (ts-rest) to `apiClientV2.pages.watch.${get,put}` (hc<AppType>). Wire
+ * (ts-rest) to `apiClientV2.pages.watch.${get,put}` (`createClient`). Wire
  * payload is unchanged.
  */
 export function useWatchStatus(pageId: string | undefined, options?: { enabled?: boolean }) {

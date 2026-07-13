@@ -18,7 +18,7 @@ import { apiClientV2 } from './api-client';
  * apiClientV2 fetch wrapper's refresh dance.
  *
  * RFC-0006 Phase 4 Batch 4 — switched from `apiClient.pagePreview.*`
- * (ts-rest) to `apiClientV2.pages.preview.$post` (hc<AppType>).
+ * (ts-rest) to `apiClientV2.pages.preview.$post` (`createClient`).
  */
 export function usePreview() {
   return useMutation({

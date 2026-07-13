@@ -35,7 +35,7 @@ export const searchKeys = {
 
 /**
  * RFC-0006 Phase 4 Batch 7 — switched from `apiClient.search.*`
- * (ts-rest) to `apiClientV2.search.$get` (hc<AppType>). Wire payload
+ * (ts-rest) to `apiClientV2.search.$get` (`createClient`). Wire payload
  * unchanged. 503 SERVICE_UNAVAILABLE branches to `SearchDisabledError`
  * so the consumer can render a "search is disabled" panel instead of a
  * generic failure toast.
@@ -45,7 +45,7 @@ export function useSearchPages(params: UseSearchPagesParams) {
   return useQuery({
     queryKey: searchKeys.query(params),
     queryFn: async (): Promise<SearchPagesResponse> => {
-      // hc<AppType> serialises query values as strings. `page` / `limit`
+      // `apiClientV2` serialises query values as strings. `page` / `limit`
       // are coerced by the Zod schema on the server side
       // (`z.coerce.number`); `tree` / `type` stay verbatim.
       const response = await apiClientV2.search.$get({

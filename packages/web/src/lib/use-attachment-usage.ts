@@ -15,7 +15,7 @@ import type { AttachmentUsageResponse } from '@crowi/api-contract';
  *
  * RFC-0006 Phase 4 Batch 6 — switched from `apiClient.attachment.*`
  * (ts-rest) to `apiClientV2.pages[':pageId'].attachments.usage.$get`
- * (hc<AppType>).
+ * (`createClient`).
  */
 export function useAttachmentUsage(pageId: string | undefined) {
   return useQuery({

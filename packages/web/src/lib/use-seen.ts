@@ -8,7 +8,7 @@ import type { SeenUsersResponse } from '@crowi/api-contract';
 /**
  * RFC-0006 Phase 4 Batch 4 — switched from `apiClient.page.{getSeenUsers,seenPage}`
  * (ts-rest) to `apiClientV2.pages['seen-users'].$get` and
- * `apiClientV2.pages.seen.$post` (hc<AppType>). Wire payload is unchanged.
+ * `apiClientV2.pages.seen.$post` (`createClient`). Wire payload is unchanged.
  */
 export const seenKeys = {
   all: ['seen-users'] as const,

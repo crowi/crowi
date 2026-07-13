@@ -23,7 +23,7 @@ export const adminSearchKeys = {
  * rebuild semantics are plugin-defined).
  *
  * RFC-0006 Phase 4 Batch 9 — switched from `apiClient.admin.search.*`
- * to `apiClientV2.admin.search.$get` (hc<AppType>).
+ * to `apiClientV2.admin.search.$get` (`createClient`).
  */
 export function useAdminSearch() {
   return useQuery<GetSearchStatusResponse, Error>({

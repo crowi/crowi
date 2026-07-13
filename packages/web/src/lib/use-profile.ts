@@ -15,7 +15,7 @@ function profileLangToLocale(lang: string | undefined | null): Locale | null {
 
 /**
  * RFC-0006 Phase 4 Batch 2 — switched all `me` hooks from
- * `apiClient.me.*` (ts-rest) to `apiClientV2.me.*.$method` (hc<AppType>).
+ * `apiClient.me.*` (ts-rest) to `apiClientV2.me.*.$method` (`createClient`).
  * Wire payload is unchanged; the only difference at the call site is
  * `response.ok` / `response.json()` instead of ts-rest's `result.status` +
  * `result.body`. The `unwrapResult` helper isn't reused here because the
@@ -95,7 +95,7 @@ export function useUploadPicture() {
 
   return useMutation({
     mutationFn: async (file: File) => {
-      // hc<AppType>'s `$post` for multipart/form-data takes the field
+      // `apiClientV2`'s `$post` for multipart/form-data takes the field
       // map as `form` (mirrors Hono's `c.req.parseBody()` field shape).
       const response = await apiClientV2.me.picture.$post({
         form: { file },
