@@ -115,8 +115,8 @@ pnpm changeset status     # 蓄積された未公開 changeset 一覧
   は `hono/handlers/admin/` 配下)。
 - `hono/app.ts` でハンドラを Hono アプリに組み込み、必要なミドルウェアを
   `hono/middleware/` に追加します。
-- Web 側からは、契約から生成された `apiClientV2` (Hono RPC クライアント、
-  `hc<AppType>`) 経由でエンドポイントを呼び出します。
+- Web 側からは、契約から生成された `apiClientV2` (型付き Hono RPC クライアント、
+  `createClient` が返す `CrowiApiClient` 型) 経由でエンドポイントを呼び出します。
 
 Crowi 2.0 全体のフェーズ状況はリポジトリの `TODO.md` に記載されて
 います。

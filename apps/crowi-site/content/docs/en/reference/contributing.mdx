@@ -114,7 +114,8 @@ The legacy Express + ts-rest stack was fully retired by RFC-0006
 - Wiring the handler into the Hono app in `hono/app.ts`, and adding
   any required middleware under `hono/middleware/`.
 - On the web side, consume the endpoint through the `apiClientV2`
-  Hono RPC client (`hc<AppType>`) generated from the contracts.
+  typed Hono RPC client (`createClient`, typed as `CrowiApiClient`)
+  generated from the contracts.
 
 The current phase status of the wider Crowi 2.0 work is recorded in
 the repository's `TODO.md`.
