@@ -341,6 +341,27 @@ Verification:
     cross-instance invalidation channel (Redis pub/sub fanned to every
     replica) is future work and out of scope for now (RFC-0003 §5b) — another
     reason a **single instance is recommended**.
+- **Rename / delete during a live editing session** ([RFC-0017](https://github.com/crowi/crowi/blob/main/docs/rfcs/0017-collab-invalidate-on-rename-delete.md) Phase 1): when a page with an open collab
+  session is renamed, soft-deleted, or reverted, Crowi advances a monotonic
+  epoch on the Page model (`collabLifecycleVersion`) in the SAME write as
+  the mutation. This epoch is signed into the wsToken at issue time and
+  checked at three boundaries — connection `onAuthenticate`, the save's
+  atomic compare-and-set, and checkpoint writes — so **a live editing
+  session that started before a rename/delete has its save rejected, even
+  in a multi-instance deployment, regardless of which replica performed
+  the rename/delete**. This holds even for a plain rename, where the path
+  and revision pointer alone wouldn't change — the epoch mismatch is what
+  rejects the stale save. In other words, **write-safety for rename/delete
+  is already cross-replica safe as of Phase 1**.
+  - **Limitation until Phase 2**: the reload *prompt* (the
+    `crowi:force-reload` broadcast + forced disconnect), however, has the
+    same reach as the G1 external-edit invalidation above — it only reaches
+    live Y.Docs **in the api process that performed the rename/delete**. An
+    editor connected to a different replica may not see the reload prompt
+    until its rejected save surfaces as a `CONFLICT` error (i.e. writes are
+    safe, but prompt latency stays replica-local). Cross-replica prompt
+    fan-out (via Redis pub/sub to every replica) is Phase 2 work and not
+    yet implemented as of this writing.
 - **`Page.yjsState` corruption:** in `onLoadDocument`, if `Y.applyUpdate`
   throws on the persisted yjsState, Crowi rebuilds the Y.Doc from the latest
   revision's Markdown body and broadcasts a force-reload notice to connected

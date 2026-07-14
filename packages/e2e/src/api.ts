@@ -86,6 +86,30 @@ export async function getPageLatestRevisionId(context: BrowserContext, pageId: s
 }
 
 /**
+ * Read a page's current (latest) revision BODY via the API, by page id
+ * (works across a rename/soft-delete since `page_id` is stable and
+ * `findPageByIdAndGrantedUser` does not filter on `status`/`path`).
+ *
+ * RFC-0017 Phase 1 — used to assert a stale collab save (attempted from a
+ * pre-lifecycle-transition session) never landed as a new revision: the
+ * persisted body must still equal whatever it was before the rename/delete.
+ */
+export async function getPageBody(context: BrowserContext, pageId: string): Promise<string> {
+  const accessToken = await accessTokenFromContext(context);
+  const response = await fetch(`${E2E_API_URL}/api/v2/pages?page_id=${encodeURIComponent(pageId)}`, {
+    headers: { authorization: `Bearer ${accessToken}` },
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to read E2E page ${pageId}: HTTP ${response.status} ${await response.text()}`);
+  }
+  const body = (await response.json()) as { page?: { revision?: { body?: string } | string } };
+  const revision = body.page?.revision;
+  const revisionBody = typeof revision === 'string' ? undefined : revision?.body;
+  if (revisionBody === undefined) throw new Error(`Get page response did not include a revision body: ${JSON.stringify(body)}`);
+  return revisionBody;
+}
+
+/**
  * Update an existing page's body as the user backing `context`
  * (`PUT /api/v2/pages`). Looks up the current revision id itself so the
  * caller doesn't have to (the update is rejected with 409 if `revision_id`
@@ -105,6 +129,52 @@ export async function updatePageViaApi(context: BrowserContext, input: { pageId:
   });
   if (!response.ok) {
     throw new Error(`Failed to update E2E page ${input.pageId}: HTTP ${response.status} ${await response.text()}`);
+  }
+}
+
+/**
+ * Rename a page as the user backing `context` (`POST /api/v2/pages/rename`).
+ * RFC-0017 Phase 1 — used to exercise the collab lifecycle epoch: a rename
+ * must invalidate any live collab editor open on `pageId`, even though the
+ * rename itself never touches `currentRevision`.
+ *
+ * `includeDescendants` triggers a subtree rename (`Page.renameTree`) —
+ * AC-32/AC-39/AC-41's "subtree rename invalidates moved descendants" case:
+ * each descendant is moved (and epoch-advanced + `page-renamed`-broadcast)
+ * via its own per-page `Page.rename`, not just the root.
+ */
+export async function renamePageViaApi(context: BrowserContext, input: { pageId: string; newPath: string; includeDescendants?: boolean }): Promise<void> {
+  const accessToken = await accessTokenFromContext(context);
+  const response = await fetch(`${E2E_API_URL}/api/v2/pages/rename`, {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({ page_id: input.pageId, new_path: input.newPath, include_descendants: input.includeDescendants }),
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to rename E2E page ${input.pageId} to ${input.newPath}: HTTP ${response.status} ${await response.text()}`);
+  }
+}
+
+/**
+ * Soft-delete a page as the user backing `context` (`DELETE /api/v2/pages`).
+ * RFC-0017 Phase 1 — used to exercise the collab lifecycle epoch: a delete
+ * must invalidate any live collab editor open on `pageId`.
+ */
+export async function deletePageViaApi(context: BrowserContext, input: { pageId: string }): Promise<void> {
+  const accessToken = await accessTokenFromContext(context);
+  const response = await fetch(`${E2E_API_URL}/api/v2/pages`, {
+    method: 'DELETE',
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({ page_id: input.pageId }),
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to delete E2E page ${input.pageId}: HTTP ${response.status} ${await response.text()}`);
   }
 }
 

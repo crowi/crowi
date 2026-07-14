@@ -10,6 +10,11 @@
  *   `onAuthenticate` draft-author gate.
  * - `PUBLISHED_STATUS` — the terminal status a draft transitions to on
  *   its first successful collab save (RFC-0005 publish-on-save).
+ * - `DELETED_STATUS` — RFC-0017 Phase 1: a soft-deleted page. Used by
+ *   `onAuthenticate` / `onLoadDocument` / `executeSave` / `persistYjsState`
+ *   to reject materialising or persisting into a deleted page (must stay
+ *   byte-identical to `STATUS_DELETED` in `@crowi/api`'s `models/page.ts`).
  */
 export const DRAFT_STATUS = 'draft';
 export const PUBLISHED_STATUS = 'published';
+export const DELETED_STATUS = 'deleted';

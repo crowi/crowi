@@ -1,13 +1,14 @@
-import * as Y from 'yjs';
 import Debug from 'debug';
 import { Types } from 'mongoose';
-import type { CollabModels } from './models';
+import * as Y from 'yjs';
 import type { ContributorsTracker } from './contributors';
-import type { CollabPageEventPublisher } from './types';
 import type { DocBaseRevisionStore } from './doc-base-revision';
-import { DRAFT_STATUS, PUBLISHED_STATUS } from './page-status';
-import { CONTENT_FIELD } from './yjs-doc';
+import type { DocEpochStore } from './doc-epoch';
+import type { CollabModels } from './models';
+import { DELETED_STATUS, DRAFT_STATUS, PUBLISHED_STATUS } from './page-status';
 import { persistYjsState } from './persist-yjs-state';
+import type { CollabPageEventPublisher } from './types';
+import { CONTENT_FIELD } from './yjs-doc';
 
 const debug = Debug('crowi:collab:save');
 
@@ -68,6 +69,19 @@ export interface CreateSaveFlowOptions {
    * `createOnLoadDocument` so both sides agree on the doc's base.
    */
   docBaseRevisions: DocBaseRevisionStore;
+  /**
+   * RFC-0017 Phase 1 §4.1/AC-1..8 — the collab lifecycle epoch anchor, read
+   * (not written) here: `executeSave`'s atomic CAS folds
+   * `collabLifecycleVersion: expectedEpoch` alongside the existing
+   * `{ _id, currentRevision }` server-doc lock, using the epoch
+   * `onLoadDocument` recorded for this doc (`doc-epoch.ts`). Optional —
+   * when absent, or the doc was never loaded in THIS process, the epoch
+   * predicate is omitted and the CAS degrades to the pre-RFC-0017
+   * `{ _id, currentRevision }` + `status` predicate (AC-7: fail-safe, not a
+   * bypass — a process that never recorded an epoch cannot forge a
+   * MATCHING stale one either).
+   */
+  docEpochRevisions?: DocEpochStore;
 }
 
 /**
@@ -239,6 +253,7 @@ export function createSaveFlow(opts: CreateSaveFlowOptions): SaveFlow {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const PageYjsUpdate = opts.models.PageYjsUpdate as any;
   const docBaseRevisions = opts.docBaseRevisions;
+  const docEpochRevisions = opts.docEpochRevisions;
 
   return {
     async executeSave({ pageId, userId, document, message }) {
@@ -380,19 +395,31 @@ export function createSaveFlow(opts: CreateSaveFlowOptions): SaveFlow {
       // `currentRevision`) is handled by matching `currentRevision: null`
       // too — its first collab save then sets both pointers, normalising it.
       const docBaseFilterValue = liveRevision && page.currentRevision != null ? (page.currentRevision as Types.ObjectId) : null;
+      // RFC-0017 Phase 1 §4.1/AC-1..8 — fold the collab lifecycle epoch +
+      // deleted-status guard into the SAME atomic CAS. `expectedEpoch` is
+      // this process's `onLoadDocument`-recorded epoch for this doc
+      // (`undefined` when never loaded here — the predicate is then omitted,
+      // AC-7 fail-safe fallback). `status` is ALWAYS filtered regardless
+      // (AC-3: belt-and-suspenders for legacy rows / an unknown epoch).
+      //
+      // AC-1 (rename case, load-bearing): rename doesn't touch
+      // `currentRevision`, so `docBaseFilterValue` still matches — the epoch
+      // predicate is the ONLY thing that rejects a stale post-rename save.
+      const expectedEpoch = docEpochRevisions?.get(pageId);
+      const pointerFilter: Record<string, unknown> = { _id: pageId, currentRevision: docBaseFilterValue, status: { $ne: DELETED_STATUS } };
+      if (expectedEpoch !== undefined) {
+        pointerFilter.collabLifecycleVersion = expectedEpoch;
+      }
       let pointerWrite: { matchedCount?: number } | null = null;
       try {
-        pointerWrite = await Page.updateOne(
-          { _id: pageId, currentRevision: docBaseFilterValue },
-          {
-            $set: {
-              revision: newRevision._id,
-              currentRevision: newRevision._id,
-              lastUpdateUser: user._id,
-              updatedAt: new Date(),
-            },
+        pointerWrite = await Page.updateOne(pointerFilter, {
+          $set: {
+            revision: newRevision._id,
+            currentRevision: newRevision._id,
+            lastUpdateUser: user._id,
+            updatedAt: new Date(),
           },
-        ).exec();
+        }).exec();
       } catch (err) {
         throw new CollabSaveError('DB_ERROR', `Page pointer updateOne failed: ${(err as Error).message}`);
       }
@@ -480,7 +507,12 @@ export function createSaveFlow(opts: CreateSaveFlowOptions): SaveFlow {
       // legitimate) — `baselineBody` is never consulted on this path (C3), so
       // we pass `null` rather than spend a DB round-trip reading it.
       try {
-        await persistYjsState(Page, { pageId, document, baselineBody: null, allowShrink: true, origin: 'save' });
+        // RFC-0017 Phase 1 §4.2 — reuse the SAME `expectedEpoch` read for the
+        // pointer CAS above: a collab save never itself advances the epoch
+        // (only a lifecycle transition does), and that CAS having just
+        // succeeded already proves the epoch was still `expectedEpoch` at
+        // write time.
+        await persistYjsState(Page, { pageId, document, baselineBody: null, allowShrink: true, origin: 'save', expectedEpoch });
       } catch (err) {
         console.warn(`[crowi:collab] save: yjsState write failed for page ${pageId}; recoverable on next load.`, (err as Error).message);
       }

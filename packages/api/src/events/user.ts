@@ -1,6 +1,6 @@
-import Crowi from 'src/crowi';
 import { EventEmitter } from 'node:events';
 import Debug from 'debug';
+import Crowi from 'src/crowi';
 import { UserDocument } from 'src/models/user';
 
 const debug = Debug('crowi:events:user');
@@ -21,7 +21,11 @@ export default class UserEvent extends EventEmitter {
     // User page created manually is already exists.
     if (page !== null) {
       const renamedUserPagePath = `/tmp/user-${user.username}-${Date.now()}`;
-      await Page.rename(page, renamedUserPagePath, user, {});
+      // RFC-0017 Phase 1 §D7 — this is an internal repair rename (moving a
+      // pre-existing manual page out of the way so the real user home page
+      // can be created), not a user-requested rename: suppress its
+      // `page-renamed` prompt. The epoch still advances unconditionally.
+      await Page.rename(page, renamedUserPagePath, user, { invalidation: { mode: 'skip', reason: 'user-activation' } });
     }
 
     await this.createUserPage(userPagePath, user);

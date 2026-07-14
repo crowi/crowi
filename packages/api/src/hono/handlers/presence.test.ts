@@ -5,10 +5,10 @@
 // share one secret, suppressing the in-memory-fallback warning.
 process.env.WS_TOKEN_SECRET = process.env.WS_TOKEN_SECRET ?? 'test-ws-token-secret-base64-32bytes-=';
 
-import request from 'supertest';
 import { app, crowi } from 'src/test/setup';
 import { authHeaders, createTestUser } from 'src/test/test-helpers';
 import { createPresenceTokenUtil } from 'src/util/presence-token';
+import request from 'supertest';
 
 describe('Routes /api/v2/pages/:id/presence-token (Hono getPresenceToken)', () => {
   const PATH_PREFIX = '/hono-presence-token/';
@@ -134,7 +134,7 @@ describe('Routes /api/v2/pages/:id/presence-token (Hono getPresenceToken)', () =
     // A token minted for the collab channel must not verify as a
     // presence token — the issuers differ.
     const { createWsTokenUtil } = await import('src/util/ws-token');
-    const wsToken = createWsTokenUtil().signWsToken({ userId: 'u', pageId: 'p', readonly: false }).token;
+    const wsToken = createWsTokenUtil().signWsToken({ userId: 'u', pageId: 'p', readonly: false, epoch: 0 }).token;
     const verified = createPresenceTokenUtil().verifyPresenceToken(wsToken);
     expect(verified).toBeNull();
   });
