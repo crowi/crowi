@@ -591,6 +591,21 @@ html[data-page-grant="2"] {
   max-width: 50%;
 }
 
+/* Floated images never run past a section title — headings are
+ * semantic boundaries, so they always clear preceding floats. Applying
+ * this uniformly to every heading is intentionally simpler than
+ * detecting "the next heading after a float" in the renderer, and both
+ * page view and editor preview render inside `.crowi-prose`, so this one
+ * rule covers both. Independent of the mobile fallback below. */
+.crowi-prose h1,
+.crowi-prose h2,
+.crowi-prose h3,
+.crowi-prose h4,
+.crowi-prose h5,
+.crowi-prose h6 {
+  clear: both;
+}
+
 /* Mobile fallback (RFC §6.4/AC-B8): below Crowi's `md` breakpoint
  * (768px — the same cutoff `autocomplete-extension.ts`'s
  * `isMobileWidth` and `edit-page-client.tsx`'s `WIDE_QUERY` use), a

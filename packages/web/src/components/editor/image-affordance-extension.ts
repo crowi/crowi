@@ -249,7 +249,57 @@ export function applyImageAttrsPatch(view: EditorView, pos: number, patch: Image
 const ALIGN_OPTIONS = ['left', 'center', 'right'] as const;
 const FLOAT_OPTIONS = ['left', 'right'] as const;
 
-/** Append one `align:`/`float:`-style toggle button per option to `group` (shared by the align and float control rows below — identical shape, differing only in label/options/current value/click handler). */
+/**
+ * Inline SVG icons for the align/float toggle buttons (RFC-0015 §D13,
+ * approved icon design 案B — the SVG bodies are the spec's literal
+ * mockups). They follow the lucide visual language — `viewBox="0 0 24
+ * 24"`, `stroke="currentColor"`, `stroke-width 2`, round caps/joins —
+ * but are authored inline here rather than pulled from an icon library,
+ * because the affordance is raw DOM inside a CodeMirror extension (no
+ * React / no lucide-react). `align` icons draw "where the image box
+ * sits": one rounded-rect image box pushed to the left / centre / right
+ * of the 24-wide viewBox (box `x` = 3 / 7.5 / 12), plus a dashed guide
+ * line marking the alignment reference edge (the left edge, the centre
+ * axis, or the right edge), so the alignment reads at a glance. `float`
+ * icons draw "an image box with text wrapping around it": the box in a
+ * top corner, short text lines beside it, full-width lines below (the
+ * wrap). Everything is stroke-only (`fill="none"` on the svg) so it
+ * inherits the button's themed text colour via `currentColor` and stays
+ * legible in both light and dark themes.
+ *
+ * Every string is a static literal with no interpolation of user input,
+ * so assigning them via `innerHTML` (below) carries no injection risk.
+ */
+const AFFORDANCE_ICON_BODIES: Record<string, Record<string, string>> = {
+  align: {
+    // Box against the left edge; dashed guide down the left edge (x=3).
+    left: '<rect x="3" y="8" width="9" height="8" rx="1.5"/><line x1="3" y1="4" x2="3" y2="20" stroke-dasharray="2 2"/>',
+    // Box centred (x = 12 - 9/2 = 7.5); dashed guides on the centre axis (x=12).
+    center:
+      '<rect x="7.5" y="8" width="9" height="8" rx="1.5"/><line x1="12" y1="3" x2="12" y2="6" stroke-dasharray="2 2"/><line x1="12" y1="18" x2="12" y2="21" stroke-dasharray="2 2"/>',
+    // Box against the right edge; dashed guide down the right edge (x=21).
+    right: '<rect x="12" y="8" width="9" height="8" rx="1.5"/><line x1="21" y1="4" x2="21" y2="20" stroke-dasharray="2 2"/>',
+  },
+  float: {
+    left: '<rect x="3" y="4" width="8" height="8" rx="1.5"/><line x1="14" y1="6" x2="21" y2="6"/><line x1="14" y1="10" x2="21" y2="10"/><line x1="3" y1="16" x2="21" y2="16"/><line x1="3" y1="20" x2="21" y2="20"/>',
+    right:
+      '<rect x="13" y="4" width="8" height="8" rx="1.5"/><line x1="3" y1="6" x2="10" y2="6"/><line x1="3" y1="10" x2="10" y2="10"/><line x1="3" y1="16" x2="21" y2="16"/><line x1="3" y1="20" x2="21" y2="20"/>',
+  },
+};
+
+/** Wrap an icon body in the shared `<svg>` frame (size comes from the theme's `.cm-image-affordance-btn svg` rule). */
+function affordanceIcon(body: string): string {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
+}
+
+/**
+ * Append one toggle button per option to `group` (shared by the align
+ * and float control rows below — identical shape, differing only in
+ * label/options/current value/click handler). The button face shows an
+ * inline SVG icon; the former text label (`align: left` etc.) lives on
+ * `title` (hover tooltip) and `aria-label` (accessible name) so the
+ * meaning is still available in words and to screen readers.
+ */
 function appendToggleButtons<T extends string>(
   group: HTMLElement,
   label: string,
@@ -261,7 +311,15 @@ function appendToggleButtons<T extends string>(
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'cm-image-affordance-btn';
-    btn.textContent = `${label}: ${value}`;
+    const name = `${label}: ${value}`;
+    const iconBody = AFFORDANCE_ICON_BODIES[label]?.[value];
+    if (iconBody) {
+      btn.innerHTML = affordanceIcon(iconBody);
+    } else {
+      btn.textContent = name;
+    }
+    btn.title = name;
+    btn.setAttribute('aria-label', name);
     btn.setAttribute('aria-pressed', String(current === value));
     btn.addEventListener('click', () => onToggle(value));
     group.appendChild(btn);
@@ -457,12 +515,20 @@ const affordanceTheme = EditorView.theme({
     gap: '4px',
   },
   '.cm-image-affordance-btn': {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
     border: '1px solid var(--border)',
     borderRadius: 'calc(var(--radius) - 2px)',
-    padding: '3px 6px',
+    padding: '5px',
     background: 'var(--background)',
     color: 'var(--foreground)',
     cursor: 'pointer',
+  },
+  '.cm-image-affordance-btn svg': {
+    display: 'block',
+    width: '18px',
+    height: '18px',
   },
   '.cm-image-affordance-btn[aria-pressed="true"]': {
     backgroundColor: 'var(--accent)',

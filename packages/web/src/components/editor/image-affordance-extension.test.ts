@@ -213,10 +213,77 @@ describe('cursor (focus) tooltip trigger — showTooltip facet', () => {
     const tooltipView = tooltip.create(view);
     const widthInput = tooltipView.dom.querySelector('input') as HTMLInputElement;
     expect(widthInput.value).toBe('60%');
-    const buttons = Array.from(tooltipView.dom.querySelectorAll('button')).map((b) => b.textContent);
+    const buttons = Array.from(tooltipView.dom.querySelectorAll('button')).map((b) => b.getAttribute('aria-label'));
     expect(buttons).toEqual(['align: left', 'align: center', 'align: right', 'float: left', 'float: right']);
     const centerBtn = tooltipView.dom.querySelector('button[aria-pressed="true"]');
-    expect(centerBtn?.textContent).toBe('align: center');
+    expect(centerBtn?.getAttribute('aria-label')).toBe('align: center');
+    view.destroy();
+  });
+
+  it('renders each align/float control as an SVG icon button with the label kept on title + aria-label, no visible text (icon affordance)', () => {
+    const doc = '![alt](x.png){width=60% align=center}';
+    const state = focusState(doc, 2);
+    const tooltip = activeTooltip(state)!;
+    const view = new EditorView({ state });
+    const tooltipView = tooltip.create(view);
+    const buttons = Array.from(tooltipView.dom.querySelectorAll('button'));
+    expect(buttons).toHaveLength(5);
+    for (const btn of buttons) {
+      const svg = btn.querySelector('svg');
+      // Icon-only face: an <svg> child and no text label bleeding onto the button.
+      expect(svg).not.toBeNull();
+      expect(btn.textContent?.trim()).toBe('');
+      // Icons inherit the themed text colour so they stay legible in light/dark.
+      expect(svg!.getAttribute('stroke')).toBe('currentColor');
+      expect(svg!.getAttribute('fill')).toBe('none');
+      // Accessible name / hover tooltip retain the former text label, byte-identical to each other.
+      const name = btn.getAttribute('aria-label');
+      expect(name).toMatch(/^(align|float): (left|center|right)$/);
+      expect(btn.getAttribute('title')).toBe(name);
+    }
+    view.destroy();
+  });
+
+  it('draws align icons as a single image box positioned left/center/right (box x = 3/7.5/12) with a dashed alignment guide line, and float icons as a box with wrapping text lines (approved design 案B)', () => {
+    // A standalone image (own line, blank lines around) so both control groups render.
+    const doc = 'para\n\n![alt](x.png)\n\npara';
+    const state = focusState(doc, doc.indexOf('![alt]') + 2);
+    const tooltip = activeTooltip(state)!;
+    const view = new EditorView({ state });
+    const tooltipView = tooltip.create(view);
+    const byLabel = new Map(Array.from(tooltipView.dom.querySelectorAll('button')).map((b) => [b.getAttribute('aria-label') as string, b] as const));
+
+    // align: one stroke-only image box (inherits the svg's fill=none) whose
+    // x position marks the alignment — spec box x: left 3 / center 7.5 /
+    // right 12 — plus at least one dashed guide line (stroke-dasharray "2 2")
+    // marking the alignment reference edge.
+    const expectedBoxX: Record<string, number> = { left: 3, center: 7.5, right: 12 };
+    const alignBoxX: Record<string, number> = {};
+    for (const value of ['left', 'center', 'right'] as const) {
+      const svg = byLabel.get(`align: ${value}`)!.querySelector('svg')!;
+      const rects = Array.from(svg.querySelectorAll('rect'));
+      expect(rects).toHaveLength(1);
+      const box = rects[0];
+      expect(box.getAttribute('fill')).toBeNull();
+      const x = Number(box.getAttribute('x'));
+      expect(x).toBe(expectedBoxX[value]);
+      alignBoxX[value] = x;
+      // The dashed guide line that shows the alignment reference edge.
+      const dashed = Array.from(svg.querySelectorAll('line')).filter((l) => l.getAttribute('stroke-dasharray') === '2 2');
+      expect(dashed.length).toBeGreaterThanOrEqual(1);
+    }
+    // The box's horizontal position strictly increases left → center → right,
+    // which is the whole point of the icon (position within the frame).
+    expect(alignBoxX.left).toBeLessThan(alignBoxX.center);
+    expect(alignBoxX.center).toBeLessThan(alignBoxX.right);
+
+    // float: a single image box + wrapping text lines around it (no dashed guides).
+    for (const value of ['left', 'right'] as const) {
+      const svg = byLabel.get(`float: ${value}`)!.querySelector('svg')!;
+      expect(svg.querySelectorAll('rect')).toHaveLength(1);
+      expect(svg.querySelectorAll('line').length).toBeGreaterThanOrEqual(3);
+      expect(Array.from(svg.querySelectorAll('line')).filter((l) => l.getAttribute('stroke-dasharray'))).toHaveLength(0);
+    }
     view.destroy();
   });
 
@@ -226,7 +293,7 @@ describe('cursor (focus) tooltip trigger — showTooltip facet', () => {
     const tooltip = activeTooltip(state)!;
     const view = new EditorView({ state });
     const tooltipView = tooltip.create(view);
-    const buttons = Array.from(tooltipView.dom.querySelectorAll('button')).map((b) => b.textContent);
+    const buttons = Array.from(tooltipView.dom.querySelectorAll('button')).map((b) => b.getAttribute('aria-label'));
     expect(buttons).toEqual(['align: left', 'align: center', 'align: right', 'float: left', 'float: right']);
     view.destroy();
   });
@@ -248,7 +315,7 @@ describe('cursor (focus) tooltip trigger — showTooltip facet', () => {
     const tooltip = activeTooltip(state)!;
     const view = new EditorView({ state });
     const tooltipView = tooltip.create(view);
-    const rightBtn = Array.from(tooltipView.dom.querySelectorAll('button')).find((b) => b.textContent === 'align: right')!;
+    const rightBtn = Array.from(tooltipView.dom.querySelectorAll('button')).find((b) => b.getAttribute('aria-label') === 'align: right')!;
     rightBtn.click();
     expect(view.state.doc.toString()).toBe('![alt](x.png) {align=right}');
     view.destroy();
