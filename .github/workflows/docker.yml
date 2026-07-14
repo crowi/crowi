@@ -66,7 +66,7 @@ jobs:
         if: github.event_name == 'workflow_run'
         id: download
         continue-on-error: true
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: dist-version
           path: dist-version

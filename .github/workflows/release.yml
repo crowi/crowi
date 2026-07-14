@@ -136,7 +136,7 @@ jobs:
       #       download from this (the triggering) run.
       - name: Upload distribution version artifact
         if: steps.changesets.outputs.published == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dist-version
           path: dist-version.txt
