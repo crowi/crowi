@@ -1,0 +1,26 @@
+{
+  "name": "@crowi/plugin-renderer-mermaid",
+  "version": "0.0.0-spike",
+  "private": true,
+  "description": "Phase 0 compatibility spike for a server-side, browserless Mermaid diagram renderer for Crowi 2.x. Not yet a CrowiPlugin — see .feature-state/specs/feature-plugin-renderer-mermaid.md Phase 0.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/crowi/crowi.git",
+    "directory": "packages/plugin-renderer-mermaid"
+  },
+  "scripts": {
+    "type-check": "tsc --noEmit",
+    "test": "jest --passWithNoTests"
+  },
+  "devDependencies": {
+    "@crowi/tsconfig": "workspace:*",
+    "@types/jest": "catalog:",
+    "@types/jsdom": "^28.0.3",
+    "@types/node": "catalog:",
+    "jest": "catalog:",
+    "jsdom": "^29.1.1",
+    "mermaid": "^11.16.0",
+    "ts-jest": "catalog:",
+    "typescript": "catalog:"
+  }
+}
