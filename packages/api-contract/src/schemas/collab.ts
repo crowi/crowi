@@ -83,6 +83,19 @@ export type WsTokenResponse = z.infer<typeof WsTokenResponseSchema>;
  *                  rejects mismatches in `onAuthenticate`
  *   - `readonly` — sticky readonly bit set when the editor cap is
  *                  exhausted at issue time
+ *   - `epoch`    — RFC-0017 Phase 1: the page's `collabLifecycleVersion`
+ *                  at the moment this token was minted. `onAuthenticate`
+ *                  refuses (reject-and-remint, never accept-with-fallback)
+ *                  any token whose `epoch` doesn't equal the page's CURRENT
+ *                  value — including a token from BEFORE this field
+ *                  existed, since the schema makes it required (a decoded
+ *                  payload missing it fails `safeParse` and `verifyWsToken`
+ *                  returns `null`, same as any other invalid token). This
+ *                  is what closes the rename/delete self-invalidation hole
+ *                  (see `docs/rfcs/0017-collab-invalidate-on-rename-delete.md`
+ *                  §0.1): a token minted before a transition must never
+ *                  authenticate a load that would re-baseline the doc on
+ *                  the POST-transition state.
  *   - `iat`/`exp` — standard JWT claims (seconds since epoch);
  *                  `exp - iat` is 5 minutes
  */
@@ -90,6 +103,7 @@ export const WsTokenPayloadSchema = z.object({
   userId: z.string(),
   pageId: z.string(),
   readonly: z.boolean(),
+  epoch: z.number().int().nonnegative(),
   iat: z.number().int(),
   exp: z.number().int(),
 });
