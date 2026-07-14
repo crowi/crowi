@@ -16,11 +16,31 @@ import type { WsTokenPayload } from '@crowi/api-contract';
  *   - `readonly` — true when the wsToken was minted readonly (cap
  *                  reached at issue time) **or** when the Phase 6 cap
  *                  re-check fired during onAuthenticate.
+ *   - `epoch`     — RFC-0017 Phase 1: the `collabLifecycleVersion` this
+ *                  connection authenticated against (verified equal to
+ *                  the page's CURRENT epoch at `onAuthenticate` time — see
+ *                  `hooks/on-authenticate.ts`). Pinned for the connection's
+ *                  lifetime, unlike the doc-level epoch store (`server.ts`'s
+ *                  `docEpochRevisions`, keyed by documentName) which is
+ *                  overwritten by the next `onLoadDocument`. `onChange`
+ *                  compares the two: a mismatch means this connection is
+ *                  attached to a Y.Doc generation the doc-level store has
+ *                  since moved past (e.g. a stale, drain-detached
+ *                  connection whose replacement already re-materialised
+ *                  with a newer epoch) — see `hooks/on-change.ts`. Optional
+ *                  (not `undefined` on any REAL connection — always set by
+ *                  `onAuthenticate` — but keeping it optional on the type
+ *                  lets synthetic test drivers build a minimal context
+ *                  without every call site needing the field; `onChange`
+ *                  treats `undefined` as "unknown, don't refuse" — the same
+ *                  fail-safe-not-bypass posture the doc-level epoch store
+ *                  uses when a process never recorded a base).
  */
 export interface CollabContext {
   userId: string;
   pageId: string;
   readonly: boolean;
+  epoch?: number;
 }
 
 /**
