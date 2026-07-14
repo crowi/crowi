@@ -1,6 +1,6 @@
 {
   "name": "@crowi/plugin-storage-aws-s3",
-  "version": "0.1.0-alpha.1",
+  "version": "0.1.0-alpha.2",
   "description": "AWS S3 storage driver for Crowi 2.0. Depends on @crowi/plugin-aws for shared credentials.",
   "repository": {
     "type": "git",
