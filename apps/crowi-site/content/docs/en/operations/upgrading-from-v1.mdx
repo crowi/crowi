@@ -115,6 +115,16 @@ crowi-admin migrate apply
 crowi-admin migrate status
 ```
 
+> **Tip**: `crowi-admin`'s stdout carries only the command's own output. The
+> boot-time `[crowi] Loaded N plugin(s)` line moves to stderr in development
+> and is fully suppressed under `NODE_ENV=production`, so a pipe like
+> `crowi-admin migrate plan --json | jq` never breaks. Node's own deprecation
+> warnings (e.g. `DEP0169`) are also always suppressed under `crowi-admin`.
+> Running through `pnpm migrate plan`, though, still prints pnpm's own script
+> banner (`> crowi@... migrate`, etc.) to stdout — that's pnpm's own behavior
+> and can't be silenced from the code — so pipe with `pnpm -s migrate plan
+> --json | jq` (`-s` for silent) instead.
+
 > **Tip**: The `block` policy only ever applies to `blocking` migrations, so
 > you can safely keep the default `block` in production: `cosmetic` migrations
 > (the display-only ones) never refuse boot regardless of policy, and only the
