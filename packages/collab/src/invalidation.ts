@@ -111,20 +111,65 @@ export interface PageInvalidator {
 }
 
 /**
- * The narrow slice of a Hocuspocus engine the invalidator touches: look up a
- * live document (to broadcast force-reload), **detach it from the registry**
- * (so a reconnect during the drain can't re-attach to the stale Y.Doc), and
- * force-close its connections. A real `Hocuspocus` exposes `documents` as a
- * `Map<string, Document>` (which has `.delete`), so it satisfies this
- * structurally; tests pass a minimal fake.
+ * A live Hocuspocus connection, as exposed by `Document.getConnections()`.
+ * `close(event)` is `Connection.prototype.close` (installed
+ * `@hocuspocus/server@4.0.0`, `dist/hocuspocus-server.cjs`): if the
+ * connection is still attached to its document, it detaches, fires the
+ * `onClose` callbacks, and sends a close frame to the client — the same
+ * effect `Hocuspocus.closeConnections` produces, just reached via the
+ * document object directly instead of a registry name lookup (see
+ * `InvalidatorInstance`'s doc comment below for why that distinction is
+ * load-bearing).
+ */
+export interface InvalidatorConnection {
+  close(event?: { code: number; reason: string }): void;
+}
+
+/**
+ * The narrow slice of a Hocuspocus engine/document the invalidator touches:
+ * look up a live document (to broadcast force-reload and enumerate its
+ * connections), **detach it from the registry** (so a reconnect during the
+ * drain can't re-attach to the stale Y.Doc), and force-close the
+ * connections that were attached to THAT captured document object. A real
+ * `Hocuspocus` / `Document` (installed `@hocuspocus/server@4.0.0`)
+ * satisfies this structurally; tests pass a minimal fake.
+ *
+ * **AC-34 (bug fix, verified against the installed `@hocuspocus/server@4.0.0`
+ * dist)**: `Hocuspocus.prototype.closeConnections(documentName)` re-looks-up
+ * the document BY NAME every time it's called (`this.documents.forEach((d)
+ * => { if (documentName && d.name !== documentName) return; ... })`). Once
+ * `instance.documents.delete(documentName)` below has run (the SAME-tick
+ * detach that lets a reconnect materialise fresh instead of re-attaching to
+ * the stale doc), a LATER `instance.closeConnections(documentName)` call —
+ * exactly what the scheduled drain used to do — finds NOTHING under that
+ * name and closes ZERO connections, silently stranding any client that
+ * ignored the force-reload broadcast and kept its stale connection open.
+ * Worse, if a NEW document has since been registered under the same name
+ * (a reconnect that raced the drain and re-materialised), a name-based
+ * `closeConnections` call would kick THAT fresh connection instead — wrong
+ * target entirely. The fix: capture the `Document` reference BEFORE
+ * detaching it, and after the grace period close ITS connections directly
+ * via `getConnections()` — a reference to a JS object stays valid after its
+ * registry entry is deleted, and only its actual attached connections are
+ * closed regardless of what (if anything) is registered under the name by
+ * then.
  */
 export interface InvalidatorInstance {
   documents: {
-    get(documentName: string): { broadcastStateless(payload: string): void } | undefined;
+    get(documentName: string): { broadcastStateless(payload: string): void; getConnections(): InvalidatorConnection[] } | undefined;
     delete(documentName: string): void;
   };
-  closeConnections(documentName?: string): void;
 }
+
+/**
+ * Mirrors `@hocuspocus/common`'s `ResetConnection` `CloseEvent` (code 4205:
+ * "the server successfully processed the request, asks that the requester
+ * reset its document view, and is not returning any content"). Duplicated
+ * as a plain object here rather than adding `@hocuspocus/common` as a
+ * direct dependency for one constant — `@hocuspocus/server` re-exports the
+ * `Connection` / `Document` TYPES but not this value.
+ */
+const RESET_CONNECTION_CLOSE_EVENT = { code: 4205, reason: 'Reset Connection' };
 
 export interface CreatePageInvalidatorOptions {
   /** The live Hocuspocus engine whose documents we broadcast to / close. */
@@ -211,15 +256,27 @@ export function createPageInvalidator(opts: CreatePageInvalidatorOptions): PageI
 
           // Step 2b (close) — after the grace window, force the stale
           // connections closed so a client that ignored the broadcast is
-          // kicked and must reconnect (then re-materialises clean). Under
-          // `unloadImmediately: true` the last close also destroys the live
-          // Y.Doc, so the stale doc can never be re-attached to.
+          // kicked and must reconnect (then re-materialises clean).
+          //
+          // AC-34 fix: close the CAPTURED `doc`'s own connections directly
+          // (`doc.getConnections()`) instead of `instance.closeConnections
+          // (pageId)`. The latter re-looks-up the registry BY NAME — an
+          // entry this same function already deleted above — and would
+          // silently close nothing (or, worse, close a DIFFERENT document
+          // that reconnected under the same name during the grace window).
+          // The `doc` reference stays valid and its connections stay
+          // attached to it regardless of the registry state; closing each
+          // one directly reaches a stale client even though it's no longer
+          // reachable by name.
           schedule(() => {
             try {
-              instance.closeConnections(pageId);
-              debug('invalidatePages: closed connections for page %s after %dms grace', pageId, graceMs);
+              const connections = doc.getConnections();
+              for (const connection of connections) {
+                connection.close(RESET_CONNECTION_CLOSE_EVENT);
+              }
+              debug('invalidatePages: closed %d stale connection(s) for page %s after %dms grace', connections.length, pageId, graceMs);
             } catch (err) {
-              console.warn(`[crowi:collab] invalidatePages: closeConnections failed for page ${pageId}:`, (err as Error).message);
+              console.warn(`[crowi:collab] invalidatePages: closing stale connections failed for page ${pageId}:`, (err as Error).message);
             } finally {
               invalidatedPages.clear(pageId);
             }
