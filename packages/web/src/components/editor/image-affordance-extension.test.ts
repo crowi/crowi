@@ -3,7 +3,7 @@ import { Compartment, EditorState } from '@codemirror/state';
 import { markdown } from '@codemirror/lang-markdown';
 import { ensureSyntaxTree } from '@codemirror/language';
 import { EditorView, activateHover, hasHoverTooltips, showTooltip, type Tooltip } from '@codemirror/view';
-import { applyImageAttrsPatch, imageAffordanceExtension, locateImageAttrsTarget } from './image-affordance-extension';
+import { applyImageAttrsPatch, imageAffordanceExtension, imageHoverTooltipSource, locateImageAttrsTarget } from './image-affordance-extension';
 
 /**
  * RFC-0015 image display attributes — CodeMirror editor affordance
@@ -295,5 +295,110 @@ describe('mouse-hover trigger wiring (AC-C1 hover half — smoke test; full UX l
 
     activateHover(view, 2, 1);
     expect(hasHoverTooltips(view.state)).toBe(false);
+  });
+});
+
+/**
+ * Duplicate-panel fix: the hover trigger and the cursor trigger both
+ * build a (visually identical) affordance and CodeMirror does not
+ * de-duplicate across the two `showTooltip` sources, so a caret sitting
+ * inside the same image markup the mouse is over used to stack two
+ * panels. The hover trigger yields to the (stable) cursor trigger on the
+ * same span; a hover for a DIFFERENT image is left alone.
+ */
+describe('duplicate-panel suppression — hover yields to the cursor trigger on the same span', () => {
+  function noParentState(doc: string, caret: number): EditorState {
+    const state = EditorState.create({ doc, selection: { anchor: caret }, extensions: [markdown(), imageAffordanceExtension()] });
+    ensureSyntaxTree(state, doc.length, 5_000);
+    return state;
+  }
+
+  describe('hover source function (direct)', () => {
+    let view: EditorView;
+    afterEach(() => view?.destroy());
+
+    it('returns null when the cursor trigger already shows the affordance for the SAME span', () => {
+      const doc = '![alt](x.png){width=60%}';
+      view = new EditorView({ state: noParentState(doc, 2) }); // caret inside the span
+      expect(imageHoverTooltipSource(view, 2)).toBeNull();
+    });
+
+    it('returns a tooltip when the caret is OUTSIDE the span (hover-only case — no regression)', () => {
+      const doc = 'plain ![alt](x.png){width=60%} text';
+      const imgPos = doc.indexOf('![alt]') + 2;
+      view = new EditorView({ state: noParentState(doc, 0) }); // caret outside any image
+      expect(imageHoverTooltipSource(view, imgPos)).not.toBeNull();
+    });
+
+    it('returns a tooltip for image B even while the cursor trigger shows image A (different spans are not suppressed)', () => {
+      const doc = '![a](a.png)\n\n![b](b.png)';
+      const posA = doc.indexOf('![a]') + 2;
+      const posB = doc.indexOf('![b]') + 2;
+      view = new EditorView({ state: noParentState(doc, posA) }); // caret in image A
+      expect(imageHoverTooltipSource(view, posB)).not.toBeNull();
+    });
+  });
+
+  describe('rendered panel count (real EditorView mounted in the document)', () => {
+    let view: EditorView;
+    let host: HTMLElement;
+
+    afterEach(() => {
+      view?.destroy();
+      host?.remove();
+    });
+
+    /** Tooltips render on CodeMirror's rAF-scheduled measure + our reverse-order `queueMicrotask` — give both a few macrotask turns to settle. */
+    const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 30));
+    const panelCount = () => document.querySelectorAll('.cm-image-affordance').length;
+
+    function mount(doc: string, caret: number): EditorView {
+      host = document.createElement('div');
+      document.body.appendChild(host);
+      view = new EditorView({
+        state: EditorState.create({ doc, selection: { anchor: caret }, extensions: [markdown(), imageAffordanceExtension()] }),
+        parent: host,
+      });
+      ensureSyntaxTree(view.state, doc.length, 5_000);
+      return view;
+    }
+
+    it('shows exactly one panel when the caret is in the span AND the mouse hovers the same span', async () => {
+      mount('![alt](x.png){width=60%}', 2);
+      await settle();
+      expect(panelCount()).toBe(1); // cursor trigger's panel
+
+      activateHover(view, 2, 1); // hover the same span
+      await settle();
+      expect(hasHoverTooltips(view.state)).toBe(false); // hover suppressed itself
+      expect(panelCount()).toBe(1); // still just one
+    });
+
+    it('converges to one panel in the reverse order — hover first, then the caret enters the same span', async () => {
+      mount('plain ![alt](x.png){width=60%} text', 0); // caret outside
+      const imgPos = view.state.doc.toString().indexOf('![alt]') + 2;
+
+      activateHover(view, imgPos, 1); // mouse hovers the image, caret still outside
+      await settle();
+      expect(hasHoverTooltips(view.state)).toBe(true);
+      expect(panelCount()).toBe(1); // hover panel
+
+      view.dispatch({ selection: { anchor: imgPos } }); // click into the markup → cursor trigger fires too
+      await settle();
+      expect(hasHoverTooltips(view.state)).toBe(false); // the reverse-order listener closed the hover
+      expect(panelCount()).toBe(1); // converged, not stacked
+    });
+
+    it('keeps two panels for two DIFFERENT images — caret in A, mouse over B (out-of-scope of the fix)', async () => {
+      mount('![a](a.png)\n\n![b](b.png)', 2); // caret in image A
+      await settle();
+      expect(panelCount()).toBe(1); // A's cursor panel
+
+      const posB = view.state.doc.toString().indexOf('![b]') + 2;
+      activateHover(view, posB, 1); // hover image B
+      await settle();
+      expect(hasHoverTooltips(view.state)).toBe(true);
+      expect(panelCount()).toBe(2); // one per image — not suppressed
+    });
   });
 });
