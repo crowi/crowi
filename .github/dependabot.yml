@@ -1,0 +1,22 @@
+# GitHub Actions runtime version drift (e.g. Node 20 -> Node 24 EOL bumps)
+# recurs periodically. This keeps the actions used in .github/workflows/
+# up to date automatically instead of relying on someone noticing the
+# deprecation warning in a workflow run.
+#
+# Scope: `github-actions` ecosystem only (see the design notes in
+# .feature-state/specs/feature-gh-actions-node24-migration.md). Other
+# ecosystems (npm, docker, ...) are out of scope for this config.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      # Bundle minor/patch bumps into a single low-noise PR. Major bumps
+      # (potentially breaking) stay as individual PRs so they get a
+      # dedicated review.
+      actions-minor:
+        update-types:
+          - "minor"
+          - "patch"
