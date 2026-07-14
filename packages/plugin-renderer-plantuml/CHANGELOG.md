@@ -1,5 +1,16 @@
 # @crowi/plugin-renderer-plantuml
 
+## 0.1.0-alpha.2
+
+### Patch Changes
+
+- Updated dependencies [336eec1]
+- Updated dependencies [8ff0e64]
+- Updated dependencies [b20ff59]
+- Updated dependencies [d611836]
+- Updated dependencies [5e857f6]
+  - @crowi/plugin-api@1.0.0-alpha.3
+
 ## 0.1.0-alpha.1
 
 ### Patch Changes

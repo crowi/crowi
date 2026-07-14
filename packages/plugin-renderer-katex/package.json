@@ -1,6 +1,6 @@
 {
   "name": "@crowi/plugin-renderer-katex",
-  "version": "0.1.0-alpha.0",
+  "version": "0.1.0-alpha.1",
   "description": "KaTeX math renderer for Crowi 2.x. Parses `$inline$` and `$$display$$` via remark-math and renders to HTML server-side via katex.renderToString.",
   "repository": {
     "type": "git",

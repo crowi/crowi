@@ -1,5 +1,101 @@
 # @crowi/api
 
+## 2.0.0-alpha.7
+
+### Minor Changes
+
+- d413c6d: Validate every Crowi-owned environment variable in a single pass at boot instead of the previous ad hoc mix of throw / warn / silent-fallback behavior scattered across the codebase.
+
+  - `PORT`, `MONGO_URI` (or its legacy aliases), `REDIS_URL` (or its legacy aliases), and `CROWI_ENCRYPTION_KEY` now fail boot immediately with one error message listing every malformed variable, instead of surfacing a confusing low-level error later (a bad `PORT` used to only fail once `server.listen()` ran, a bad `MONGO_URI` only once the driver tried to connect).
+  - `CLIENT_URL`, `CROWI_MULTI_INSTANCE`, `NODE_ENV`, `JWT_ACCESS_TOKEN_TTL_SECONDS`, `JWT_REFRESH_TOKEN_TTL_SECONDS`, `COLLAB_MAX_EDITORS_PER_PAGE`, and `MIGRATION_PREFLIGHT_UNAPPLIED_POLICY` now print a single consolidated boot-time warning when malformed, instead of silently falling back to a default or (for `CROWI_MULTI_INSTANCE`) being misinterpreted as truthy.
+  - An environment variable that carries a known Crowi prefix (`CROWI_`, `WS_TOKEN_`, `JWT_`, `COLLAB_`, `REDIS*`, `MONGO*`, `MIGRATION_`) but matches no known variable name — a likely typo — is flagged in the same warning report.
+
+  Well-formed configurations are unaffected; only malformed values that previously failed silently or late now surface at boot.
+
+- 1625e85: Markdown images now support a Pandoc-style attribute block right after the image: `![alt](url){width=60% align=center}`. Supported keys are `width` / `height` (a number followed by `%` or `px`, within sane bounds) and `align` (`left`/`center`/`right`) / `float` (`left`/`right`, wins over `align` when both are set). A standalone image (nothing else in its paragraph) renders as a `<figure>` so `align`/`float` apply; an image followed by more text stays inline and only `width`/`height` apply. Any out-of-range or unrecognised value is simply dropped instead of breaking the page, and a plain `![alt](url)` with no attribute block renders exactly as before.
+
+  The new server-side transform is bundled into the core renderer pipeline (`RENDERER_PIPELINE_VERSION` 0.7.0 → 0.8.0), and the web renderer re-validates every display attribute by value — not by trusting the `data-crowi-image-*` attribute names — so the same rules apply whether they came from the Markdown transform or were hand-written as raw HTML. The editor also gained a hover/focus tooltip on image spans for setting width/align/float without typing the `{...}` syntax by hand; it respects read-only mode (including the realtime-collab editor cap being reached mid-session). Uploading an attachment via paste/drag-and-drop/the insert button still emits a plain image with no attributes by default.
+
+- 336eec1: Close two residual paths from the plugin SDK's trust boundary to core/other-plugin secrets, making the "a plugin cannot reach another plugin's or core's secrets through PluginContext" claim true rather than aspirational.
+
+  BREAKING (`@crowi/plugin-api`): credential-vault core models (`Config`, `PersonalAccessToken`, `OAuthClient`, `OAuthAuthorizationCode`, `OAuthDeviceCode`, `OAuthRefreshToken`, `Share`, `ShareAccess`) can no longer be listed in `CrowiPlugin.modelAccess` at all — declaring one now fails boot with a descriptive error (`PluginManager.activate()`'s `assertValidModelAccess()`), and `ctx.model()` also refuses to return one at call time as defense-in-depth. Previously any plugin could declare `modelAccess: ['Config']` and read every core/plugin `@sensitive` value in decrypted form, or read/write `PersonalAccessToken` / OAuth token rows directly — there was no legitimate plugin use case for this, so no first-party plugin is affected.
+
+  BREAKING (`@crowi/plugin-api`): `ctx.dependencyConfig(name)` now also requires the target plugin to opt in with a new `CrowiPlugin.exposesConfigToDependents?: boolean` field. Previously, listing a dependency in `requires` was sufficient to read its decrypted config (`@sensitive` fields included) — a plugin could self-declare `requires: ['@crowi/plugin-aws']` and read AWS credentials without `@crowi/plugin-aws`'s consent. `@crowi/plugin-aws` now declares `exposesConfigToDependents: true` (its whole purpose is sharing credentials with `@crowi/plugin-storage-aws-s3` / `@crowi/plugin-mail-aws-ses`), so that existing dependency chain keeps working unchanged; any other plugin that depended on this implicit access would need to add the flag.
+
+  The `PluginContext` trust-boundary doc (`packages/plugin-api/src/context.ts`), `CrowiPlugin`'s TSDoc, and the plugins developing guide (ja/en) are updated to state the now-true claims, plus the one remaining honest caveat: `modelAccess: ['User']` still returns the raw document (password hash included) — field projection is deferred to a post-2.0 repository/HTTP layer separation.
+
+- 8ff0e64: Narrow the plugin SDK's trust boundary: remove `ctx.crypto` and gate `ctx.model()` behind a declared allow-list.
+
+  BREAKING (`@crowi/plugin-api`): `PluginContext.crypto` (and the `PluginCrypto` type) is removed. It exposed the same global `CROWI_ENCRYPTION_KEY`-derived encrypt/decrypt used for core's sensitive Config and every other plugin's `@sensitive` fields, so any installed plugin could decrypt any other plugin's or core's secrets. No first-party plugin used it — the legitimate way to read a plugin's own `@sensitive` config values is unchanged: `ctx.config<T>()` already returns them transparently decrypted.
+
+  `ctx.model(name)` now requires the plugin to declare the model in a new `CrowiPlugin.modelAccess?: string[]` field (same shape as `requires`). Calling `ctx.model()` for an undeclared model throws `Plugin '<name>' called model('<requested>') but did not declare it in 'modelAccess'.` A model listed in `modelAccess` still gets full (unrestricted) read/write access — there is no read-only mode yet. `PluginManager.activate()` validates every declared model name against the registered core models at boot and fails loudly (isolating just that plugin, same as a bad `configSchema`) on an unknown name.
+
+  `GET /admin/plugins` now includes each plugin's declared `modelAccess` in `PluginInfo`, so an admin can audit which plugins touch which core collections.
+
+  The four first-party plugins that call `ctx.model()` (`@crowi/plugin-search-elasticsearch`, `@crowi/plugin-search-mongo`, `@crowi/plugin-search-opensearch`, `@crowi/plugin-slack`) now declare their actual (read-only) usage: `['Page', 'Bookmark', 'User']` for the ES/OpenSearch drivers, `['Page', 'Revision']` for the Mongo driver, `['Page']` for Slack.
+
+- fa5023f: `GRANT_RESTRICTED` ("Anyone with the link") pages now actually work like a link-share invite. Opening a restricted page's id URL (`/<page._id>`, and the revived legacy `/_r/<page._id>` short link) via `IdRedirector` adds the visitor to the page's `grantedUsers` on first visit, so a follow-up direct visit to the page's real path — or from the list/search — no longer 404s. Previously `GRANT_RESTRICTED` behaved like `GRANT_SPECIFIED` for anyone who hadn't already been added, silently breaking the promise made by the link-share popover. A permanent banner now appears at the top of a `GRANT_RESTRICTED` page (hidden for wip/deprecated/draft/stale-revision views, where the link wouldn't actually be claimable) that honestly states sharing the URL below invites the recipient as an editor, with a copy-to-clipboard control and no dismiss option.
+
+  The grant-on-first-access write is confined to a new `POST /pages/link-access` endpoint called only by `IdRedirector`: it is web-session only (OAuth/PAT tokens are rejected before the per-user rate limiter counts them), rate-limited at 30 req/min/user, and atomic (a concurrent grant change or soft-delete can never be raced into an invite). `GET /pages?page_id=` and every other by-id caller (`/_edit`, `/_attachments`, comment/bookmark/watch helpers) are unchanged — visiting those does not grant access.
+
+  Also fixes a search-index visibility gap surfaced while implementing this: search results could include stale hits for soft-deleted / redirect-stub pages, and the Elasticsearch/OpenSearch drivers now exclude `wip` / `deprecated` pages from the index (matching list visibility) instead of leaving them as permanent dead hits.
+
+- 0dfdd9d: Enforce a 32-character minimum length for `WS_TOKEN_SECRET` — the shared HMAC signing key behind realtime collab, presence, notifications, and mail tokens — as part of the boot-time environment validation added in a previous release.
+
+  A value that is set but shorter than 32 characters now aborts boot under `NODE_ENV=production` (also the default when `NODE_ENV` is unset), with an error naming the variable, its current length, the required minimum, and how to generate a strong one (`openssl rand -base64 32`). Under any other `NODE_ENV` (`development`, `test`, ...) the same condition only produces a warning in the consolidated boot-time report, so local development is unaffected. Unset values, values of 32 characters or more, and known placeholder values (still treated as unconfigured, falling back to a random per-process secret as before) are all unaffected by this change.
+
+  This closes a gap where an operator could set a trivially guessable secret (e.g. a dictionary word) that was neither empty nor a known placeholder, and it would silently be accepted as a "configured" signing key for password-reset and invite mail tokens.
+
+### Patch Changes
+
+- 0ee683c: Enforce that `/admin/*` routes only accept web-session authentication, closing a gap where an admin's own PAT or OAuth access token could reach admin endpoints.
+
+  `createJwtAdminRequired` now rejects any request whose `authContext.kind` is not `web` with the existing `403 ADMIN_REQUIRED` response, before checking `user.admin`. RFC-0010 reserves `admin:*` scopes so no PAT/OAuth token is meant to carry admin access — this closes the gap where a scoped, non-admin-intent PAT issued by an admin user could still reach every `/admin/*` endpoint regardless of its scopes. Web-session admin requests (the existing UI flow) are unaffected; non-admin requests keep their existing `403 ADMIN_REQUIRED` behavior.
+
+- 134de8b: `GET /app/info`'s `capabilities` field is now documented and validated as a closed `Capability` enum (`STATIC_CAPABILITIES` + the three runtime-detected tags `search` / `collab` / `collab:redis`) instead of a generic `string[]`, in both the exported Zod schema and the generated OpenAPI spec. `@crowi/api-contract` exports the new `Capability` type, `CapabilitySchema`, and `DYNAMIC_CAPABILITIES` / `ALL_CAPABILITIES` constants alongside the existing `STATIC_CAPABILITIES`. The `@crowi/api` handler's internal `buildCapabilities()` now returns `Capability[]`, so its literals are compiler-checked against this same vocabulary and the handler and the wire schema can no longer silently drift apart.
+
+  `apiVersion` intentionally stays a plain `string` (not narrowed to a `"v2"` literal): the `@crowi/cli` end-user CLI parses `app/info` with a lenient, partial schema parse to implement its WARN-ONLY version-skew note, and a literal type there would make that parse reject the whole response — not just the mismatched field — the moment a future server advertises a different API surface version, silently defeating the very warning it exists to produce.
+
+- 8631cc3: Enforce page permissions on `GET /backlinks`.
+
+  The endpoint now grant-checks the target `page_id` before listing its backlinks, returning 404 (hiding existence) to callers who cannot read the page — previously any authenticated user could probe the existence and link graph of a private page by id. Each `fromPage` in the response is now also grant-checked individually and dropped if the caller cannot read it, the same way hidden-draft `fromPage`s already were. The route gains a `404` response in its contract.
+
+- c863808: `GET /pages` now returns 500 (`INTERNAL_ERROR`) instead of 404 (`PAGE_NOT_FOUND`) for an unknown error raised after the page was already found — most notably a transient render-artifact/renderer failure — so a client reconciling its cache (or any other caller) can no longer mistake "failed to render" for "page was deleted".
+- d779c60: Fix a page-visibility bug where a non-creator (e.g. an admin) changing a private page's grant could silently drop the page from the creator's own listings/search/portal results, even though the creator could still open it directly by id. `visiblePageGrantOr` (the query-time `$or` filter used by all listing/search/portal queries) now includes a creator clause, deriving from the same rule as the in-memory `isGrantedFor` check. `Page.updateGrant` also keeps the creator in `grantedUsers` alongside whoever changed the grant, and `isGrantedFor`'s membership check now uses ObjectId value comparison (`.equals()`) instead of reference comparison, fixing a case where populated `grantedUsers` entries could be missed.
+- 0e15f17: Make `onInstall` install-once and idempotent, matching the `@crowi/plugin-api` SDK contract.
+
+  `PluginManager.activate()` previously called every plugin's `onInstall(ctx)` unconditionally on every boot, even though the SDK's TSDoc already promised "idempotent — the runtime tracks which plugins have already had `onInstall` invoked and skips on subsequent boots." A plugin author who writes a one-shot legacy config migration in `onInstall` (the documented use case) would see it re-applied on every restart, and any operator edits made after boot would get clobbered by the migration re-running. `activate()` now checks a new `plugin-installed` Config namespace (`plugin-install-tracker.ts`) before calling `onInstall`, and only records the plugin as installed after `onInstall` completes without throwing — a failed `onInstall` is retried on the next boot instead of being silently marked done. No first-party plugin implements `onInstall` yet, so this closes the contract gap ahead of any real usage rather than fixing an observed regression.
+
+- d697e26: Isolate a single plugin's boot-time failure so it no longer takes the whole server down with it.
+
+  `PluginManager.bootstrap()`'s activation loop and `mountPluginRoutes`'s `registerRoutes` loop previously had no per-plugin try/catch, unlike the existing `runReconfigure`/`deactivate` lifecycle paths — a plugin that threw during `activate()` (a bad `registerStorage`, a failing `onInstall` migration, ...) or during `registerRoutes` (an exception while building its HTTP routes) took the entire boot down, leaving even the admin UI unreachable for disabling it. Both loops are now isolated per plugin: an `activate()` failure logs `[crowi:plugin:<name>] activation failed; plugin disabled: <message>`, excludes that plugin from `PluginManager.getLoadedPlugins()`/`getLoadedPlugin(name)`, and is recorded in the new `PluginManager.getFailedPlugins()`; a `registerRoutes` failure logs `[crowi:plugin:<name>] registerRoutes failed; this plugin's HTTP routes are not mounted: <message>` but leaves the plugin's driver registrations (and its `getLoadedPlugins()` membership) intact, since activation itself already succeeded. `GET /admin/plugins` now includes failed plugins with `status: 'failed'` and their error message (successful plugins get `status: 'active'`), and the admin plugin list shows an "Activation failed" badge for them. Deliberately out of scope for this change: rolling back a partially-completed `activate()` call's earlier `register*` calls, and a hard-fail path for plugins that provide an implicit-default driver (`storage.driver: 'local'` / `search.driver: 'mongo'`) — every plugin is isolated the same best-effort way for now.
+
+- b20ff59: Plugin SDK: `PluginRouteOptions.public?: boolean` is replaced by `auth?: 'public' | 'user' | 'admin'` (default `'user'`). `makePluginRouterScope` now installs `createJwtAdminRequired` — the same middleware every core `/admin/*` handler uses — for `auth: 'admin'` routes, so plugins finally have a real admin-only tier instead of only "no auth" / "any authenticated user".
+
+  BREAKING (pre-1.0 SDK): plugins passing `{ public: true }` must switch to `{ auth: 'public' }`; the `public` field no longer exists on `PluginRouteOptions`.
+
+  Fixes a real gap in `@crowi/plugin-slack`: its `POST /manifest` `@action` target (which returns the Slack App manifest, including the wiki's base URL and name) was documented as admin-only but was actually reachable by any authenticated non-admin user. It is now mounted with `auth: 'admin'` and returns `403 ADMIN_REQUIRED` for non-admin users. The Events API webhook keeps `auth: 'public'` (Slack's own request-signature check is its authentication).
+
+  Also narrows `@action` annotation parsing (`schema-markers.ts`) to the two verbs a plugin route can actually be mounted on (`GET` / `POST` — `PluginRouteMethod`), so a plugin declaring `@action "..." PUT ...` / `DELETE` no longer produces a silently-dead admin-form button: `getActionAnnotation` still returns `null` for it, and `PluginManager` now logs a boot-time warning identifying the offending plugin and config field.
+
+- 5e857f6: Fail plugin boot loudly when a `configSchema` is built from the wrong zod entry point, instead of silently losing `@sensitive` detection and writing secrets to storage as plaintext.
+
+  `@crowi/plugin-api`'s `peerDependencies: { zod: "^4" }` only says which npm package to install; it does not say which entry point to import from, and every config-schema introspection helper (`@sensitive`/`@action` marker detection, the admin form field serializer, `listSensitiveKeys()`) depends on the internal shape of the `zod/v3` compat subpath the v4 package ships. A `configSchema` built from the top-level `zod` (v4) API has a different internal shape that all of that introspection silently fails to walk. `PluginManager.bootstrap()` now validates every loaded plugin's `configSchema` right after resolving plugin order, before it calls `listSensitiveKeys()` (which is itself zod/v3-dependent), and throws a descriptive error naming the offending plugin when it wasn't built from `zod/v3`; `activate()` keeps its own equivalent per-plugin check for direct/private-call coverage. `schema-serializer.ts`'s kind detection also switched from `instanceof z.ZodXxx` to `_def.typeName` string comparisons, which is more robust against duplicate `zod/v3` module copies and gives the same defense in depth. `@crowi/plugin-api` gains a README (previously missing despite `package.json`'s `files` already listing it) documenting this, plus a `configSchema` TSDoc note.
+
+- 96a531c: `GET /search` no longer trusts the active search driver's grant filtering unconditionally. `Page.findListByPageIds` now accepts an optional viewer id and, when given one, re-applies the same grant `$or` predicate the rest of the app uses (public / legacy-null / pages the viewer is granted on) before returning results. The search handler passes the requesting user's id, so a driver bug, a stale index, or a future third-party `@crowi/plugin-search-*` that forgets to filter by grant can no longer leak a private page's title, path, or snippet into another user's search results.
+- Updated dependencies [134de8b]
+- Updated dependencies [8631cc3]
+- Updated dependencies [336eec1]
+- Updated dependencies [8ff0e64]
+- Updated dependencies [d697e26]
+- Updated dependencies [b20ff59]
+- Updated dependencies [d611836]
+- Updated dependencies [5e857f6]
+- Updated dependencies [fa5023f]
+  - @crowi/api-contract@2.0.0-alpha.7
+  - @crowi/plugin-api@1.0.0-alpha.3
+  - @crowi/runner@0.1.0-alpha.1
+
 ## 2.0.0-alpha.6
 
 ### Minor Changes

@@ -1,5 +1,43 @@
 # @crowi/runner-app
 
+## 2.0.0-alpha.2
+
+### Patch Changes
+
+- Updated dependencies [0ee683c]
+- Updated dependencies [134de8b]
+- Updated dependencies [8631cc3]
+- Updated dependencies [d413c6d]
+- Updated dependencies [c863808]
+- Updated dependencies [d779c60]
+- Updated dependencies [1625e85]
+- Updated dependencies [336eec1]
+- Updated dependencies [8ff0e64]
+- Updated dependencies [0e15f17]
+- Updated dependencies [d697e26]
+- Updated dependencies [b20ff59]
+- Updated dependencies [d611836]
+- Updated dependencies [5e857f6]
+- Updated dependencies [fa5023f]
+- Updated dependencies [96a531c]
+- Updated dependencies [0dfdd9d]
+  - @crowi/api@2.0.0-alpha.7
+  - @crowi/plugin-api@1.0.0-alpha.3
+  - @crowi/plugin-search-elasticsearch@0.1.0-alpha.3
+  - @crowi/plugin-search-mongo@0.1.0-alpha.2
+  - @crowi/plugin-search-opensearch@0.1.0-alpha.2
+  - @crowi/plugin-slack@0.1.0-alpha.1
+  - @crowi/plugin-storage-aws-s3@0.1.0-alpha.2
+  - @crowi/plugin-mail-smtp@0.1.0-alpha.2
+  - @crowi/plugin-mail-aws-ses@0.1.0-alpha.2
+  - @crowi/plugin-mail-resend@0.1.0-alpha.2
+  - @crowi/plugin-renderer-crowi-legacy@0.1.0-alpha.2
+  - @crowi/plugin-renderer-emoji@0.1.0-alpha.1
+  - @crowi/plugin-renderer-katex@0.1.0-alpha.1
+  - @crowi/plugin-renderer-plantuml@0.1.0-alpha.2
+  - @crowi/plugin-storage-local@0.1.0-alpha.3
+  - @crowi/runner@0.1.0-alpha.1
+
 ## 2.0.0-alpha.1
 
 ### Patch Changes
