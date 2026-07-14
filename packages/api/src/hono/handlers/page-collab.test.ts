@@ -6,12 +6,12 @@
 // otherwise polluted test output on every util instance.
 process.env.WS_TOKEN_SECRET = process.env.WS_TOKEN_SECRET ?? 'test-ws-token-secret-base64-32bytes-=';
 
-import request from 'supertest';
 import { app, crowi } from 'src/test/setup';
 import { authHeaders, createTestUser } from 'src/test/test-helpers';
-import { createWsTokenUtil } from 'src/util/ws-token';
 import { _setEditorCapCounterForTesting } from 'src/util/collab-cap';
 import type { EditorCapCounter } from 'src/util/editor-cap-counter';
+import { createWsTokenUtil } from 'src/util/ws-token';
+import request from 'supertest';
 
 describe('Routes /api/v2/pages/:id/yjs-token (Hono getYjsToken)', () => {
   const PATH_PREFIX = '/hono-collab-token/';
@@ -156,6 +156,36 @@ describe('Routes /api/v2/pages/:id/yjs-token (Hono getYjsToken)', () => {
     expect(typeof decoded.iat).toBe('number');
     expect(typeof decoded.exp).toBe('number');
     expect(decoded.exp - decoded.iat).toBe(300);
+    // RFC-0017 Phase 1 §D6 — a freshly-created page starts at epoch 0.
+    expect(decoded.epoch).toBe(0);
+  });
+
+  // RFC-0017 Phase 1 §D5/AC-17 — a soft-deleted page must reject a fresh
+  // Yjs token the same not-found-style way a missing/ungranted page does.
+  it('returns 404 PAGE_NOT_FOUND for a soft-deleted page (does not leak existence)', async () => {
+    const pageId = await createPage('deleted');
+    const Page = crowi.model('Page');
+    await Page.updateOne({ _id: pageId }, { $set: { status: 'deleted' } });
+
+    const res = await request(app).get(`/api/v2/pages/${pageId}/yjs-token`).set(authHeaders(accessToken));
+
+    expect(res.status).toBe(404);
+    expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
+  });
+
+  // RFC-0017 Phase 1 §D6/AC-12 — the epoch claim mints the page's CURRENT
+  // collabLifecycleVersion, not a caller-supplied or stale value.
+  it('mints the epoch claim from the page CURRENT collabLifecycleVersion', async () => {
+    const pageId = await createPage('epoch-claim');
+    const Page = crowi.model('Page');
+    await Page.updateOne({ _id: pageId }, { $set: { collabLifecycleVersion: 4 } });
+
+    const res = await request(app).get(`/api/v2/pages/${pageId}/yjs-token`).set(authHeaders(accessToken));
+    expect(res.status).toBe(200);
+
+    const [, payloadB64] = (res.body.wsToken as string).split('.');
+    const decoded = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8'));
+    expect(decoded.epoch).toBe(4);
   });
 
   it('returns 200 with readonly:true once the editor cap is reached (Phase 6 cap-driven readonly path)', async () => {
@@ -220,12 +250,13 @@ describe('Routes /api/v2/pages/:id/yjs-token (Hono getYjsToken)', () => {
     // `onAuthenticate` rely on this invariant holding for any given
     // process.
     const util = createWsTokenUtil();
-    const { token } = util.signWsToken({ userId: 'user-1', pageId: 'page-1', readonly: true });
+    const { token } = util.signWsToken({ userId: 'user-1', pageId: 'page-1', readonly: true, epoch: 0 });
     const payload = util.verifyWsToken(token);
     expect(payload).not.toBeNull();
     expect(payload?.userId).toBe('user-1');
     expect(payload?.pageId).toBe('page-1');
     expect(payload?.readonly).toBe(true);
+    expect(payload?.epoch).toBe(0);
     expect(payload?.exp).toBeGreaterThan(payload?.iat ?? 0);
   });
 });

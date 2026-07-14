@@ -1,4 +1,4 @@
-import { WsTokenPayloadSchema, type WsTokenPayload } from '@crowi/api-contract';
+import { type WsTokenPayload, WsTokenPayloadSchema } from '@crowi/api-contract';
 
 import { createSignedTokenUtil, isSignedTokenSecretConfiguredFromEnv } from './signed-token-factory';
 
@@ -29,6 +29,14 @@ export interface WsTokenClaims {
   userId: string;
   pageId: string;
   readonly: boolean;
+  /**
+   * RFC-0017 Phase 1 — the page's `collabLifecycleVersion` at mint time.
+   * `onAuthenticate` refuses (reject-and-remint) any token whose `epoch`
+   * doesn't match the page's CURRENT value, closing the rename/delete
+   * self-invalidation hole documented in
+   * `docs/rfcs/0017-collab-invalidate-on-rename-delete.md` §0.1.
+   */
+  epoch: number;
 }
 
 export interface SignWsTokenResult {
