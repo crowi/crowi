@@ -1,3 +1,4 @@
+import type { InvalidateReason } from '@crowi/collab';
 import Debug from 'debug';
 import { Document, Model, model, Schema, Types } from 'mongoose';
 import Crowi from 'src/crowi';
@@ -156,6 +157,23 @@ export interface PageDocument extends Document {
   yjsState?: Buffer | null;
   /** RFC-0003: timestamp of the most recent `yjsState` checkpoint. */
   yjsCheckpointAt?: Date | null;
+  /**
+   * RFC-0017 Phase 1: monotonic collab lifecycle epoch. Advanced (atomically,
+   * in the SAME `updateOne` as the mutation) whenever a lifecycle transition
+   * durably changes what a live collab editor is attached to — rename
+   * (`path`), soft delete / revert (`status`), or an external body replace
+   * (`currentRevision`). A wsToken mints the page's epoch at the time it was
+   * issued; `onAuthenticate` / `executeSave`'s atomic CAS / `onLoadDocument`'s
+   * replay filter all compare against the CURRENT row value, so a token or a
+   * materialised Y.Doc that predates a transition is refused even when the
+   * legacy path/status/currentRevision-based checks would otherwise pass
+   * (self-invalidation hole — see `docs/rfcs/0017-collab-invalidate-on-rename-delete.md`).
+   * `default: 0` so every pre-existing row hydrates to a defined value
+   * without a backfill migration being load-bearing for correctness (the
+   * migration in `migration/migrations/collab-lifecycle-version.ts` is
+   * additive housekeeping, not a prerequisite).
+   */
+  collabLifecycleVersion: number;
 
   // dynamic fields
   latestRevision?: Types.ObjectId;
@@ -261,7 +279,7 @@ export interface PageModel extends Model<PageDocument> {
   findUnfurlablePages(type, array, grants?: number[]): any;
   findUnfurlablePagesByIds(ids): any;
   findUnfurlablePagesByPaths(paths): any;
-  updatePageProperty(page, updateData): any;
+  updatePageProperty(page, updateData, options?: { advanceEpoch?: boolean }): any;
   updateGrant(page, grant, userData): any;
   pushToGrantedUsers(page, userData): any;
   pushRevision(pageData, newRevision, user, options?: PushRevisionOptions): any;
@@ -269,16 +287,62 @@ export interface PageModel extends Model<PageDocument> {
   updatePage(pageData: PageDocument, body, user, options: UpdatePageOptions): any;
   deletePage(pageData: PageDocument, user): any;
   revertDeletedPage(pageData: PageDocument, user): Promise<PageDocument>;
-  completelyDeletePage(pageData: PageDocument, user?): Promise<PageDocument>;
-  removePage(pageData: PageDocument): any;
-  removePageById(pageId): any;
-  removePageByPath(pagePath): any;
+  completelyDeletePage(pageData: PageDocument, user?: UserDocument | null, options?: PageRemovalInvalidationOption): Promise<PageDocument>;
+  removePage(pageData: PageDocument, options?: PageRemovalInvalidationOption): any;
+  removePageById(pageId, options?: PageRemovalInvalidationOption): any;
+  removePageByPath(pagePath, options?: PageRemovalInvalidationOption): any;
   removeRedirectOriginPageByPath(pagePath): any;
-  rename(pageData, newPagePath, user, options): any;
+  rename(pageData, newPagePath, user, options: RenameOptions): any;
   getPathMap(paths, search, replace): any;
   checkPagesRenamable(paths, user): any;
-  renameTree(pathMap, user, options): any;
+  renameTree(pathMap, user, options): Promise<RenameTreeResult>;
   allPageCount(): any;
+}
+
+/**
+ * RFC-0017 Phase 1 §D7/§D9 — typed lifecycle invalidation contracts.
+ *
+ * `mode` controls ONLY the best-effort `crowi:force-reload` prompt
+ * (`invalidateLiveCollabDoc`); the `collabLifecycleVersion` epoch advance is
+ * unconditional on every call that durably changes `path` / `status` /
+ * removes the row — `skip` exists so internal repair steps (soft-delete's
+ * `/trash/` rename, `revertDeletedPage`'s internal restoration rename /
+ * redirect-origin cleanup, user-page activation) don't spam a prompt for a
+ * transition the acting user didn't request, while the epoch still moves so
+ * a stale live editor is still write-guarded.
+ */
+export type PageLifecycleInvalidation =
+  | { mode: 'emit'; reason: 'page-renamed' }
+  | { mode: 'skip'; reason: 'internal-repair' | 'user-activation' | 'revert-deleted' };
+
+export type PageRemovalInvalidation =
+  | { mode: 'emit'; reason: 'page-deleted'; target: 'live-page' }
+  | { mode: 'skip'; reason: 'revert-deleted' | 'internal-cleanup' };
+
+/** `Page.rename` 4th-arg options, extended with the optional invalidation override. */
+export interface RenameOptions {
+  createRedirectPage?: boolean;
+  preserveUpdatedAt?: boolean;
+  invalidation?: PageLifecycleInvalidation;
+}
+
+/**
+ * `Page.completelyDeletePage` / `removePage*` optional invalidation override.
+ * Defaults documented at each call site below — `completelyDeletePage`
+ * defaults to `emit` (the typed user-facing hard-delete call); `removePage`
+ * family defaults to `skip` (internal cleanup is the common case; the one
+ * user-facing caller — draft cancel — opts into `emit` explicitly).
+ */
+export interface PageRemovalInvalidationOption {
+  invalidation?: PageRemovalInvalidation;
+}
+
+/** RFC-0017 Phase 1 §D8 — `renameTree` allSettled-style outcome. */
+export interface RenameTreeResult {
+  /** The pre-rename `PageDocument`s that renamed successfully. */
+  successes: PageDocument[];
+  /** Per-path failures — a subtree rename never rolls back a partial success. */
+  failures: { oldPath: string; error: string }[];
 }
 
 export default (crowi: Crowi) => {
@@ -286,23 +350,62 @@ export default (crowi: Crowi) => {
   const pageEvent = crowi.event('Page');
 
   /**
-   * feature-editor-preview-reliability G1 — drive the in-process collab
-   * external-edit invalidator after an external write (`updatePage`) commits.
-   * Fire-and-forget: the invalidator is itself best-effort and never throws,
-   * but we still guard the call so an absent attachment (CLI / tests / boot
-   * not yet finished) or a synchronous throw can never bubble into the write.
+   * feature-editor-preview-reliability G1, generalised by RFC-0017 Phase 1 —
+   * drive the in-process collab external-edit invalidator after a lifecycle
+   * write commits. Fire-and-forget: the invalidator is itself best-effort
+   * and never throws, but we still guard the call so an absent attachment
+   * (CLI / tests / boot not yet finished) or a synchronous throw can never
+   * bubble into the write. `reason` defaults to `'page-body-replaced'` (the
+   * original G1 external-body-edit caller); rename/delete pass
+   * `'page-renamed'` / `'page-deleted'` so the client's force-reload dialog
+   * can eventually show a reason-specific copy (Phase 3, out of scope here).
    *
    * Multi-instance / out-of-process is out of scope (RFC-0003 §5b): the
    * handle only reaches docs live in THIS api process. A live doc on another
    * replica needs future Redis pub/sub — documented in the realtime-collab
-   * operations doc.
+   * operations doc. This is prompt-transport ONLY: correctness against a
+   * stale editor is the `collabLifecycleVersion` epoch (RFC-0017 §4),
+   * enforced independently of whether this call ever reaches a live doc.
    */
-  function invalidateLiveCollabDoc(pageId: Types.ObjectId | string): void {
+  function invalidateLiveCollabDoc(pageId: Types.ObjectId | string, reason: InvalidateReason = 'page-body-replaced'): void {
     const attachment = crowi.collabAttachment;
     if (!attachment) return;
-    void attachment.invalidatePages([String(pageId)], 'page-body-replaced').catch((err: unknown) => {
+    void attachment.invalidatePages([String(pageId)], reason).catch((err: unknown) => {
       debug('collab invalidatePages failed for page %s: %s', String(pageId), (err as Error)?.message ?? err);
     });
+  }
+
+  /**
+   * RFC-0017 Phase 1 §D9/§D10 — defense-in-depth cleanup of the collab
+   * lineage at a delete boundary (soft delete / hard delete / draft cancel)
+   * and re-run (idempotently) after a revert. NOT load-bearing for
+   * correctness: the `collabLifecycleVersion` epoch advance already makes a
+   * pre-transition `yjsState` / `PageYjsUpdate` row non-replayable (stale
+   * epoch), so a purge failure can never resurrect deleted content — this
+   * only reclaims storage / limits how long deleted content is readable from
+   * the append log (privacy). Best-effort: swallow + warn, never throw.
+   */
+  async function purgeCollabLineage(pageId: Types.ObjectId | string): Promise<void> {
+    const PageYjsUpdate = crowi.model('PageYjsUpdate');
+    try {
+      await Promise.all([
+        Page.updateOne({ _id: pageId }, { $set: { yjsState: null, yjsCheckpointAt: null } }).exec(),
+        PageYjsUpdate.deleteMany({ pageId }).exec(),
+      ]);
+    } catch (err) {
+      debug('purgeCollabLineage failed for page %s: %s', String(pageId), (err as Error)?.message ?? err);
+    }
+  }
+
+  /**
+   * RFC-0017 Phase 1 §D7/§D9 — the shared `mode === 'emit'` guard used by
+   * `rename` / `completelyDeletePage` / `removePage`: fire the reload prompt
+   * only when the caller's typed invalidation opted in, `skip` is a no-op.
+   */
+  function emitInvalidationIfRequested(pageId: Types.ObjectId | string, invalidation: PageLifecycleInvalidation | PageRemovalInvalidation): void {
+    if (invalidation.mode === 'emit') {
+      invalidateLiveCollabDoc(pageId, invalidation.reason);
+    }
   }
 
   function isPortalPath(path) {
@@ -367,6 +470,12 @@ export default (crowi: Crowi) => {
       // RFC-0003: timestamp anchor for the most recent `yjsState`
       // checkpoint. Driven by the compaction loop (Phase 4).
       yjsCheckpointAt: { type: Date, default: null },
+      // RFC-0017 Phase 1: monotonic collab lifecycle epoch. See the
+      // `PageDocument` interface field doc above for the full contract.
+      // No index — advanced on every lifecycle write but never queried by
+      // value (only compared against a per-request expected value), so an
+      // index would only add write overhead.
+      collabLifecycleVersion: { type: Number, default: 0, required: false },
     },
     {
       toJSON: { getters: true },
@@ -1240,8 +1349,15 @@ export default (crowi: Crowi) => {
     return Page.findUnfurlablePages('path', paths, [GRANT_PUBLIC]);
   };
 
-  pageSchema.statics.updatePageProperty = function (page, updateData) {
-    return Page.updateOne({ _id: page._id }, { $set: updateData });
+  pageSchema.statics.updatePageProperty = function (page, updateData, options?: { advanceEpoch?: boolean }) {
+    // RFC-0017 Phase 1 §D1/§D10 — a lifecycle caller (rename / soft delete /
+    // revert) folds the `collabLifecycleVersion` epoch `$inc` into THIS SAME
+    // `updateOne` so the field write and the epoch advance land atomically:
+    // there is no window where `path`/`status` is durable but the epoch
+    // hasn't moved yet (or vice versa). Callers that don't pass
+    // `advanceEpoch` (grant changes, metadata edits, …) are unaffected.
+    const update = options?.advanceEpoch ? { $set: updateData, $inc: { collabLifecycleVersion: 1 } } : { $set: updateData };
+    return Page.updateOne({ _id: page._id }, update);
   };
 
   pageSchema.statics.updateGrant = async function (page, grant, userData) {
@@ -1377,6 +1493,15 @@ export default (crowi: Crowi) => {
     pageData.currentRevision = newRevision;
     pageData.yjsState = null;
     pageData.yjsCheckpointAt = null;
+    // RFC-0017 Phase 1 §D1 — `pushRevision` persists via `pageData.save()`
+    // (not an atomic `updateOne`), so the epoch advance is folded into the
+    // SAME read-modify-write instead of a separate `$inc`. This has a
+    // theoretical lost-update window (a concurrent save() on the same
+    // in-memory `pageData` could race), but the independent `{ _id,
+    // currentRevision }` CAS in `executeSave` backstops it — this write
+    // already moves `currentRevision`, so a stale collab doc is rejected by
+    // that CAS regardless of whether this particular epoch increment lands.
+    pageData.collabLifecycleVersion = (pageData.collabLifecycleVersion ?? 0) + 1;
 
     await Page.pushRevision(pageData, newRevision, user, { preserveTimestamps: options.preserveTimestamps });
 
@@ -1427,15 +1552,33 @@ export default (crowi: Crowi) => {
     const newPath = Page.getDeletedPageName(pageData.path);
     const isNonExistentUserPage = await Page.isNonExistentUserPage(pageData.path);
     if (Page.isDeletableName(pageData.path) || isNonExistentUserPage) {
-      await Page.updatePageProperty(pageData, { status: STATUS_DELETED, lastUpdateUser: user });
-      await Share.deleteByPageId(pageData._id);
+      // RFC-0017 Phase 1 §D1/§D9/AC-21 — the epoch `$inc` rides the SAME
+      // `updateOne` as the STATUS_DELETED write. The `throw` above (non-
+      // deletable) never reaches this line, so a validation failure never
+      // advances the epoch.
+      await Page.updatePageProperty(pageData, { status: STATUS_DELETED, lastUpdateUser: user }, { advanceEpoch: true });
       pageData.status = STATUS_DELETED;
+
+      // AC-23/AC-24 — emit + collab-lineage purge run IMMEDIATELY after the
+      // status write is durable, so a throw in a later step (Share cleanup,
+      // the `/trash/` rename below) can never suppress the reload prompt or
+      // leave stale yjsState/PageYjsUpdate rows behind. The epoch already
+      // advanced above regardless of either outcome.
+      invalidateLiveCollabDoc(pageData._id, 'page-deleted');
+      await purgeCollabLineage(pageData._id);
+
+      await Share.deleteByPageId(pageData._id);
 
       // ページ名が /trash/ 以下に存在する場合、おかしなことになる
       // が、 /trash 以下にページが有るのは、個別に作っていたケースのみ。
       // 一応しばらく前から uncreatable pages になっているのでこれでいいことにする
       debug('Deleted the page, and rename it', pageData.path, newPath);
-      return Page.rename(pageData, newPath, user, { createRedirectPage: true });
+      // §D7/AC-25 — internal `/trash/` rename: the user-facing event is
+      // `page-deleted` (already emitted above), so this rename's OWN prompt
+      // is suppressed (`mode: 'skip'`) to avoid a spurious second
+      // `page-renamed` broadcast. The epoch still advances (monotonic,
+      // harmless) because `Page.rename`'s epoch `$inc` is unconditional.
+      return Page.rename(pageData, newPath, user, { createRedirectPage: true, invalidation: { mode: 'skip', reason: 'internal-repair' } });
     }
     throw new Error('Page is not deletable.');
   };
@@ -1456,33 +1599,63 @@ export default (crowi: Crowi) => {
       throw new Error('The new page of to revert is exists and the redirect path of the page is not the deleted page.');
     }
 
-    await Page.completelyDeletePage(originPageData);
-    await Page.updatePageProperty(pageData, { status: STATUS_PUBLISHED, lastUpdateUser: user });
+    // §D9/AC-28 — the redirect-origin stub cleanup is internal repair, not a
+    // user-facing hard delete: skip its own `page-deleted` prompt.
+    await Page.completelyDeletePage(originPageData, user, { invalidation: { mode: 'skip', reason: 'revert-deleted' } });
+    // §D1 — status flip epoch-advances (same `updateOne`). This is the
+    // correctness-load-bearing advance: once it lands, the pre-delete
+    // yjsState/PageYjsUpdate lineage is stamped with a stale epoch and can
+    // never be replayed by a future onLoadDocument (AC-29).
+    await Page.updatePageProperty(pageData, { status: STATUS_PUBLISHED, lastUpdateUser: user }, { advanceEpoch: true });
     pageData.status = STATUS_PUBLISHED;
 
     debug('Revert deleted the page, and rename again it', pageData, newPath);
-    await Page.rename(pageData, newPath, user, {});
+    // Internal restoration rename — skip its own prompt (§D7); epoch still
+    // advances unconditionally.
+    await Page.rename(pageData, newPath, user, { invalidation: { mode: 'skip', reason: 'revert-deleted' } });
     pageData.path = newPath;
+
+    // §D9 — idempotent re-purge AFTER both epoch-advancing writes landed.
+    // NOT load-bearing for correctness (the epoch advance above already
+    // makes the pre-delete lineage non-replayable) — this only reclaims
+    // storage / bounds how long deleted-era content is readable from the
+    // append log, including any row appended mid-drain before the
+    // `deletePage`-time purge ran (AC-29).
+    await purgeCollabLineage(pageData._id);
     return pageData;
   };
 
   /**
    * This is danger.
    */
-  pageSchema.statics.completelyDeletePage = async function (pageData, user) {
+  pageSchema.statics.completelyDeletePage = async function (pageData, user, options) {
     // Delete Bookmarks, Attachments, Revisions, Pages and emit delete
     const Bookmark = crowi.model('Bookmark');
     const Attachment = crowi.model('Attachment');
     const Comment = crowi.model('Comment');
     const Activity = crowi.model('Activity');
     const pageId = pageData._id;
+    // §D9/AC-26 — default `emit`: this is the typed USER-FACING hard-delete
+    // call. `revertDeletedPage`'s internal redirect-origin cleanup passes
+    // `mode: 'skip'` explicitly (see above) so a revert never double-fires
+    // the user-facing prompt.
+    const invalidation: PageRemovalInvalidation = options?.invalidation ?? { mode: 'emit', reason: 'page-deleted', target: 'live-page' };
 
     debug('Completely delete', pageData.path);
 
     await Bookmark.removeBookmarksByPageId(pageId);
     await Attachment.removeAttachmentsByPageId(pageId);
     await Comment.removeCommentsByPageId(pageId);
-    await Page.removePageById(pageId);
+    // This method is the coalescing boundary (§D9: "completelyDeletePage は
+    // removePageById(pageId, { mode: 'skip' }) を呼び自分の境界で1回
+    // coalesced emit") — the inner `removePageById` never emits on its own,
+    // avoiding a double-fire.
+    await Page.removePageById(pageId, { invalidation: { mode: 'skip', reason: 'internal-cleanup' } });
+    // AC-26 — emit right after the target row is gone, BEFORE the
+    // redirect-origin / activity cleanup below (which may throw without
+    // suppressing the already-fired prompt; the row is physically deleted
+    // either way, so there is nothing left for an epoch predicate to guard).
+    emitInvalidationIfRequested(pageId, invalidation);
     await Page.removeRedirectOriginPageByPath(pageData.path);
     await Activity.removeByPage(pageId);
 
@@ -1491,9 +1664,16 @@ export default (crowi: Crowi) => {
     return pageData;
   };
 
-  pageSchema.statics.removePage = async function (pageData) {
+  pageSchema.statics.removePage = async function (pageData, options) {
     const Revision = crowi.model('Revision');
+    const PageYjsUpdate = crowi.model('PageYjsUpdate');
     const { _id } = pageData;
+    // §D9/AC-27 — default `skip`: most callers are internal cleanup
+    // (`completelyDeletePage`'s own coalesced boundary,
+    // `removeRedirectOriginPageByPath`'s recursion). The one user-facing
+    // caller (draft cancel, `hono/handlers/draft.ts`) opts into `emit`
+    // explicitly.
+    const invalidation: PageRemovalInvalidation = options?.invalidation ?? { mode: 'skip', reason: 'internal-cleanup' };
 
     debug('Remove phisically, the page', _id);
     try {
@@ -1502,19 +1682,32 @@ export default (crowi: Crowi) => {
       debug(' --> error', _id);
       throw err;
     }
+    emitInvalidationIfRequested(_id, invalidation);
+    // §D9/AC-27 — privacy: the page row is gone, so any residual append-log
+    // rows are now orphaned and would otherwise stay readable (raw
+    // collection scan) until the 1h TTL sweeps them. Deleted unconditionally
+    // (independent of emit/skip — this is hygiene, not a prompt). Best-
+    // effort: the row is already physically removed, so a failure here can
+    // never re-expose it (every collab load path rejects a missing page
+    // before it would read `PageYjsUpdate`).
+    try {
+      await PageYjsUpdate.deleteMany({ pageId: _id }).exec();
+    } catch (err) {
+      debug('removePage: PageYjsUpdate.deleteMany failed for page %s: %s', String(_id), (err as Error)?.message ?? err);
+    }
     await Revision.removeRevisionsByPath(pageData.path);
     return pageData;
   };
 
-  pageSchema.statics.removePageById = async function (pageId) {
+  pageSchema.statics.removePageById = async function (pageId, options) {
     const pageData = await Page.findPageById(pageId);
-    await Page.removePage(pageData);
+    await Page.removePage(pageData, options);
     return pageData;
   };
 
-  pageSchema.statics.removePageByPath = async function (pagePath) {
+  pageSchema.statics.removePageByPath = async function (pagePath, options) {
     const pageData = await Page.findPageByPath(pagePath);
-    await Page.removePage(pageData);
+    await Page.removePage(pageData, options);
     return pageData;
   };
 
@@ -1546,17 +1739,33 @@ export default (crowi: Crowi) => {
       });
   };
 
-  pageSchema.statics.rename = async function (pageData, newPagePath, user, options) {
+  pageSchema.statics.rename = async function (pageData, newPagePath, user, options: RenameOptions) {
     const Revision = crowi.model('Revision');
     const path = pageData.path;
     const createRedirectPage = options.createRedirectPage || false;
     const preserveUpdatedAt = options.preserveUpdatedAt || false;
+    // §D7 — default `emit`: the typed user-facing / per-descendant rename
+    // contract. Internal repair callers (soft-delete's `/trash/` rename,
+    // `revertDeletedPage`'s restoration rename, user-page activation) pass
+    // `mode: 'skip'` explicitly at their call sites.
+    const invalidation: PageLifecycleInvalidation = options.invalidation ?? { mode: 'emit', reason: 'page-renamed' };
 
     const updatedAt = preserveUpdatedAt ? {} : { updatedAt: Date.now() };
     const updateData = { path: newPagePath, lastUpdateUser: user, ...updatedAt };
 
-    // pageData の path を変更
-    await Page.updatePageProperty(pageData, updateData);
+    // pageData の path を変更 — §D1: the epoch `$inc` rides this SAME
+    // `updateOne`, unconditionally (independent of `invalidation.mode`).
+    await Page.updatePageProperty(pageData, updateData, { advanceEpoch: true });
+
+    // §D7/§6.1/AC-30 — emit immediately after the durable path write (and
+    // BEFORE the `createRedirectPage` early return below), NOT after the
+    // revision-path rewrite. `Revision.updateRevisionListByPath` and the
+    // redirect-page creation are both best-effort follow-ups relative to
+    // the path write that already made the rename durable and advanced the
+    // epoch; if either throws, the reload prompt must still have fired —
+    // wiring the emit any later would silently swallow it on that throw.
+    emitInvalidationIfRequested(pageData._id, invalidation);
+
     // reivisions の path を変更
     const data = await Revision.updateRevisionListByPath(path, { path: newPagePath });
     pageData.path = newPagePath;
@@ -1643,19 +1852,50 @@ export default (crowi: Crowi) => {
         }
       }
     });
-    return mapWithConcurrency(Object.entries(pathMap), RENAME_TREE_CONCURRENCY, async ([oldPath, newPath]) => {
-      try {
-        const options = {
-          createRedirectPage: !isPortalPath(newPath) && createRedirectPage,
-          preserveUpdatedAt,
-        };
-        const oldPage = await Page.findPageByPath(oldPath);
-        await Page.rename(oldPage, newPath, user, options);
-        return oldPage;
-      } catch (err) {
-        throw new Error(`Failed to update page (${oldPath}).`);
+    // RFC-0017 Phase 1 §D8/AC-31 — allSettled-style reporting. `mapWithConcurrency`'s
+    // worker loop has no cancellation (see its doc comment above): when one
+    // item's `fn` throws, ONLY that worker's `Promise.all` leg rejects — the
+    // OTHER in-flight workers keep pulling and completing later items
+    // regardless, mutating the shared `results` array. Letting a per-item
+    // failure propagate as a throw would therefore reject the overall call
+    // while orphaning whatever those other workers finish afterward: real
+    // renames that already landed (epoch advanced + `page-renamed` emitted
+    // by `Page.rename`, §D7/AC-32) but would never be reported to the
+    // caller. Catching per-item instead means every item always resolves
+    // (nothing reaches `Promise.all` as a rejection), so nothing started
+    // before OR after a sibling's failure is lost from the report.
+    const outcomes = await mapWithConcurrency(
+      Object.entries(pathMap),
+      RENAME_TREE_CONCURRENCY,
+      async ([oldPath, newPath]): Promise<{ ok: true; page: PageDocument } | { ok: false; oldPath: string; error: string }> => {
+        try {
+          const renameOptions: RenameOptions = {
+            createRedirectPage: !isPortalPath(newPath) && createRedirectPage,
+            preserveUpdatedAt,
+          };
+          const oldPage = await Page.findPageByPath(oldPath);
+          // Per-page `Page.rename` epoch-advances + emits `page-renamed` for
+          // ITS OWN documentName (default `mode: 'emit'`, §D7/AC-32) — a
+          // subtree rename therefore invalidates every moved descendant's
+          // live editor individually, not just the root.
+          await Page.rename(oldPage, newPath, user, renameOptions);
+          return { ok: true, page: oldPage };
+        } catch (err) {
+          return { ok: false, oldPath, error: `Failed to update page (${oldPath}).` };
+        }
+      },
+    );
+
+    const successes: PageDocument[] = [];
+    const failures: { oldPath: string; error: string }[] = [];
+    for (const outcome of outcomes) {
+      if (outcome.ok) {
+        successes.push(outcome.page);
+      } else {
+        failures.push({ oldPath: outcome.oldPath, error: outcome.error });
       }
-    });
+    }
+    return { successes, failures };
   };
 
   pageSchema.statics.allPageCount = function () {
