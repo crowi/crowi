@@ -158,7 +158,9 @@ Float to the right: ![thumbnail](thumb.png){width=200px float=right}
 ```
 
 An image with `float` set collapses back to a normal, full-width block
-(no wrap) on narrow screens (below 768px).
+(no wrap) on narrow screens (below 768px). A float is also always
+cleared at the next section heading (`#`–`######`), so a heading after a
+floated image starts below it rather than beside it.
 
 **Editor affordance**: hovering over (or placing the cursor inside) an
 image's Markdown span shows a small tooltip with `width` / `align` /
