@@ -14,10 +14,11 @@
 > [!CAUTION]
 > **Crowi v2 — codename *Reignite* — is in active prerelease.**
 >
-> - Prereleases are published (latest **`2.0.0-alpha.3`**) and support an in-place
->   upgrade from a v1 MongoDB. There is no *stable* v2 yet, so the API / config
->   surface can still change between alphas — pin a version and read the release
->   notes. For a real deployment use a published release, not this branch's HEAD.
+> - **Alpha** prereleases are published and support an in-place upgrade from a
+>   v1 MongoDB. There is no *stable* v2 yet, so the API / config surface can
+>   still change between alphas — pin a specific version from the
+>   [releases](https://github.com/crowi/crowi/releases) and read the notes. For
+>   a real deployment use a published release, not this branch's HEAD.
 > - Crowi v1.x is deprecated and unmaintained.
 > - Track progress in [`TODO.md`](./TODO.md), the [docs](https://crowi.wiki), and the
 >   [v2 announcement on Zenn](https://zenn.dev/sotarok/articles/34795a35a4ef74).
@@ -145,6 +146,31 @@ Storage backend selection is driven by the runner's `crowi.config.json`
 (`storage.driver: 'local' | 's3' | ...`) plus the corresponding
 `@crowi/plugin-storage-*` package — there is no `FILE_UPLOAD` env any
 more.
+
+## Docker images
+
+Published on Docker Hub. Alpha prereleases carry a moving **`alpha`** channel
+tag that always points at the newest alpha (the `latest` tag is reserved for a
+future stable release), so you can follow the channel without chasing version
+numbers — or pin an exact `2.0.0-alpha.N` tag for a reproducible deploy.
+
+| Image | Contents |
+| --- | --- |
+| [`crowi/crowi`](https://hub.docker.com/r/crowi/crowi) | Full api / runner — core + all first-party plugins |
+| `crowi/crowi:…-slim` | Slim runner — core + a minimal plugin set (same image repo) |
+| [`crowi/crowi-web`](https://hub.docker.com/r/crowi/crowi-web) | Next.js frontend renderer |
+
+```bash
+docker pull crowi/crowi:alpha        # full api / runner (newest alpha)
+docker pull crowi/crowi:alpha-slim   # slim variant
+docker pull crowi/crowi-web:alpha    # web frontend
+```
+
+See the
+[deployment](https://github.com/crowi/crowi/blob/main/apps/crowi-site/content/docs/en/operations/deployment.mdx)
+and
+[self-hosting](https://github.com/crowi/crowi/blob/main/apps/crowi-site/content/docs/en/operations/self-hosting.mdx)
+guides for reverse-proxy, env, and Docker Compose setup.
 
 ## Tests / type-check / lint / build
 
