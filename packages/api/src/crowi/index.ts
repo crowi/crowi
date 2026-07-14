@@ -6,6 +6,7 @@ import mongoose from 'mongoose';
 import path, { sep } from 'path';
 import { createClient } from 'redis';
 import { type AttachedCollab, attachCollabServer } from 'src/collab/attach';
+import { ALL_BOOT_STEPS, CLI_SKIP_STEPS, resolveBootOrder } from 'src/crowi/boot-steps';
 import events from 'src/events';
 import { registerMentionDispatch } from 'src/events/mention-dispatch';
 import { registerPresencePageBroadcast } from 'src/events/presence-broadcast';
@@ -18,10 +19,8 @@ import { PluginManager, type PluginRegistries } from 'src/plugin';
 import { type AttachedPresence, attachPresenceServer } from 'src/presence/attach';
 import { createRenderer, type Renderer } from 'src/renderer';
 import { MailService } from 'src/service/mail';
+import { type BootLayer, type BootReporter, createBootReporter, formatFailMarker } from 'src/util/boot-reporter';
 import { resetKeyProvider } from 'src/util/crypto';
-import { runOAuthClientSeed } from 'src/util/oauth-client-seed';
-import { runBootMigrations } from 'src/migration/run-boot-migrations';
-import { type BootReporter, createBootReporter, formatFailMarker } from 'src/util/boot-reporter';
 import { validateEnv } from 'src/util/env-schema';
 import { buildRedisOpts } from 'src/util/redis-opts';
 import ConfigService from '../service/config';
@@ -265,59 +264,29 @@ class Crowi {
     this.initialized = true;
   }
 
+  /**
+   * Runs `ALL_BOOT_STEPS` (see `boot-steps.ts`) in `resolveBootOrder()`'s
+   * output order — the topological sort of each step's `after` deps, which
+   * (because every `after` in `ALL_BOOT_STEPS` is a backward reference) is
+   * exactly the array's declaration order. `reporter.beginLayer`/`endLayer`
+   * is display-only grouping layered on top: it fires whenever
+   * `bootStep.layer` changes between consecutive steps, not something that
+   * feeds back into ordering (RFC feature-boot-sequence-declarative).
+   */
   private async runInitLayers(reporter: BootReporter): Promise<void> {
     this.emitEnvValidationWarnings();
 
-    // ── core: encryption / database / models / redis ──
-    reporter.beginLayer('core');
-    await step('setupEncryption', () => this.setupEncryption());
-    await step('setupDatabase', () => this.setupDatabase());
-    await step('setupModels', () => this.setupModels());
-    await step('setupRedisClient', () => this.setupRedisClient());
-    reporter.endLayer();
-
-    // ── config: load / migrations / oauth seed ──
-    reporter.beginLayer('config');
-    await step('setupConfig', () => this.setupConfig());
-    // RFC-0008: the migration framework's boot step. Applies any pending
-    // `layer:'boot'` migrations (currently `page-status-default`, the
-    // RFC-0004 backfill that stamps `status='published'` onto legacy pages
-    // predating the `Page.status` field — see
-    // `migration/migrations/page-status-default.ts`) and probes
-    // `layer:'preflight'` migrations, splitting pending ones by `severity`
-    // (§4.2.1/§4.2.7 amendment): a `blocking` one refuses boot under the
-    // default `block` policy, a `cosmetic` one only warns and lets boot
-    // continue. `broadcastForceReload` is intentionally omitted here: the live
-    // Hocuspocus handle is attached later in `start()`, after init, so boot
-    // migrations rely on persistence-layer Yjs invalidation only.
-    await step('runBootMigrations', () => runBootMigrations(this));
-    // RFC-0010 Phase 3: seed the first-party `crowi-cli` OAuth client.
-    // Idempotent upsert (`$setOnInsert`) — runs after setupModels so the
-    // OAuthClient model is registered; disjoint from the migrations above.
-    await step('seedOAuthClients', () => runOAuthClientSeed(this));
-    reporter.endLayer();
-
-    // ── services: renderer / plugins / mailer / lru ──
-    reporter.beginLayer('services');
-    // Renderer must boot BEFORE plugins so PluginManager.activate()
-    // can hand plugins a registry that already has the core 4
-    // transforms (TOC / wikilinks / mentions / codeBlockLanguages)
-    // registered. External plugins append; they cannot insert before
-    // core in v2.0 phase 2.
-    await step('setupRenderer', () => this.setupRenderer());
-    // RFC-0003 Phase 9 (same-process attach): the cross-process
-    // pageEvent subscriber that used to fan collab saves into the
-    // api event loop is gone — the embedded Hocuspocus engine (see
-    // `src/collab/attach.ts`) calls `crowi.event('Page').emit(...)`
-    // directly after a save flow completes.
-    // Plugins must boot AFTER config/models are ready (so PluginContext
-    // can read config and access models) but BEFORE the legacy
-    // mailer initialiser — that is migrating to plugin-provided drivers
-    // and any conflict should fail noisily here.
-    await step('setupPlugins', () => this.setupPlugins());
-    await step('setupMailer', () => this.setupMailer());
-    await step('setupLRU', () => this.setupLRU());
-    reporter.endLayer();
+    const ordered = resolveBootOrder(ALL_BOOT_STEPS);
+    let currentLayer: BootLayer | null = null;
+    for (const bootStep of ordered) {
+      if (bootStep.layer !== currentLayer) {
+        if (currentLayer) reporter.endLayer();
+        reporter.beginLayer(bootStep.layer);
+        currentLayer = bootStep.layer;
+      }
+      await step(bootStep.debugLabel ?? bootStep.name, () => bootStep.run(this, { mode: 'server' }));
+    }
+    if (currentLayer) reporter.endLayer();
   }
 
   /**
@@ -337,15 +306,19 @@ class Crowi {
   async initForCli() {
     this.cliContext = true;
     this.emitEnvValidationWarnings();
-    this.setupEncryption();
-    await this.setupDatabase();
-    await this.setupModels();
-    await this.setupConfig();
-    // Skip the page-save side-effect listeners (mention dispatch / render-cache
-    // invalidation): a migration's `updatePage` writes must not @-ping users or
-    // race the teardown connection close — see `setupRenderer`.
-    this.setupRenderer({ registerPageEventListeners: false });
-    await this.setupPlugins();
+    // `CLI_SKIP_STEPS` (boot-steps.ts) is the single, named place that
+    // records what the CLI omits — redis / bootMigrations / seedOAuthClients
+    // / mailer / lru. The remaining steps (encryption, database, models,
+    // config, renderer, plugins) run in the same order `runInitLayers()`
+    // would run them, minus the skipped ones; the `renderer` step itself
+    // reads `ctx.mode === 'cli'` to skip the page-save side-effect listeners
+    // (mention dispatch / render-cache invalidation) — a migration's
+    // `updatePage` writes must not @-ping users or race the teardown
+    // connection close.
+    const ordered = resolveBootOrder(ALL_BOOT_STEPS, { skip: CLI_SKIP_STEPS });
+    for (const bootStep of ordered) {
+      await bootStep.run(this, { mode: 'cli' });
+    }
     this.initialized = true;
   }
 
