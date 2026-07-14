@@ -1,9 +1,12 @@
-import * as Y from 'yjs';
 import mongoose from 'mongoose';
-import { startInMemoryMongo, registerTestModels, type SmokeMongo } from './setup';
-import type { CollabModels } from '../models';
+import * as Y from 'yjs';
+import { createDocBaseRevisionStore } from '../doc-base-revision';
+import { createDocEpochStore } from '../doc-epoch';
 import { createOnLoadDocument } from '../hooks/on-load-document';
+import { createInvalidatedPagesStore } from '../invalidation';
+import type { CollabModels } from '../models';
 import { CONTENT_FIELD } from '../yjs-doc';
+import { registerTestModels, type SmokeMongo, startInMemoryMongo } from './setup';
 
 /**
  * Phase 6 onLoadDocument force-reload broadcast.
@@ -277,5 +280,132 @@ describe('@crowi/collab Phase 6 onLoadDocument force-reload broadcast', () => {
     } as any);
 
     expect(newDoc.getText(CONTENT_FIELD).toString()).toBe('a\nb\nc');
+  });
+
+  describe('RFC-0017 Phase 1 — collab lifecycle epoch', () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const Page = () => models.Page as any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const PageYjsUpdate = () => models.PageYjsUpdate as any;
+
+    test('AC-19: a STATUS_DELETED page is rejected BEFORE any Y.Doc materialisation, and its epoch is recorded UNCONDITIONALLY', async () => {
+      const { pageId } = await seedPageWithBody('deleted-era body');
+      await Page()
+        .updateOne({ _id: pageId }, { $set: { status: 'deleted' }, $inc: { collabLifecycleVersion: 1 } })
+        .exec();
+
+      const docEpochRevisions = createDocEpochStore();
+      const onLoadDocument = createOnLoadDocument({
+        models: { Page: models.Page, Revision: models.Revision, PageYjsUpdate: models.PageYjsUpdate },
+        docEpochRevisions,
+      });
+      const newDoc = new Y.Doc();
+      await expect(
+        onLoadDocument({
+          documentName: pageId,
+          document: newDoc,
+          instance: { documents: new Map() },
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } as any),
+      ).rejects.toThrow('page not found');
+
+      // Rejected before any body-seed happened.
+      expect(newDoc.getText(CONTENT_FIELD).toString()).toBe('');
+      // But the epoch WAS recorded (unconditional — see doc-epoch.ts).
+      expect(docEpochRevisions.get(pageId)).toBe(1);
+    });
+
+    test('epoch is recorded even while mid external-edit-invalidation drain (docBaseRevisions is conditionally skipped, docEpochRevisions is not)', async () => {
+      const { pageId } = await seedPageWithBody('live body');
+      await Page()
+        .updateOne({ _id: pageId }, { $set: { collabLifecycleVersion: 2 } })
+        .exec();
+
+      const docBaseRevisions = createDocBaseRevisionStore();
+      const docEpochRevisions = createDocEpochStore();
+      const invalidatedPages = createInvalidatedPagesStore();
+      invalidatedPages.mark(pageId, 5000);
+
+      const onLoadDocument = createOnLoadDocument({
+        models: { Page: models.Page, Revision: models.Revision, PageYjsUpdate: models.PageYjsUpdate },
+        docBaseRevisions,
+        docEpochRevisions,
+        invalidatedPages,
+      });
+      const newDoc = new Y.Doc();
+      await onLoadDocument({
+        documentName: pageId,
+        document: newDoc,
+        instance: { documents: new Map() },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any);
+
+      expect(docBaseRevisions.get(pageId)).toBeUndefined();
+      expect(docEpochRevisions.get(pageId)).toBe(2);
+    });
+
+    test('AC-15: replays only current-epoch PageYjsUpdate rows and best-effort sweeps stale-epoch ones', async () => {
+      const { pageId } = await seedPageWithBody('placeholder body');
+      await Page()
+        .updateOne({ _id: pageId }, { $set: { collabLifecycleVersion: 1 } })
+        .exec();
+
+      const encodeDelta = (text: string): Buffer => {
+        const d = new Y.Doc();
+        d.getText(CONTENT_FIELD).insert(0, text);
+        return Buffer.from(Y.encodeStateAsUpdate(d));
+      };
+
+      // A current-epoch row (should replay) and a stale-epoch row (should
+      // NOT replay, and should be swept).
+      await PageYjsUpdate().create({ pageId, payload: encodeDelta('CURRENT EPOCH CONTENT'), createdAt: new Date(), collabLifecycleVersion: 1 });
+      await PageYjsUpdate().create({ pageId, payload: encodeDelta('STALE EPOCH CONTENT — MUST NOT MERGE'), createdAt: new Date(), collabLifecycleVersion: 0 });
+
+      const onLoadDocument = createOnLoadDocument({
+        models: { Page: models.Page, Revision: models.Revision, PageYjsUpdate: models.PageYjsUpdate },
+      });
+      const newDoc = new Y.Doc();
+      await onLoadDocument({
+        documentName: pageId,
+        document: newDoc,
+        instance: { documents: new Map() },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any);
+
+      const text = newDoc.getText(CONTENT_FIELD).toString();
+      expect(text).toContain('CURRENT EPOCH CONTENT');
+      expect(text).not.toContain('STALE EPOCH CONTENT');
+
+      // Best-effort sweep: the stale-epoch row is gone (it can never become
+      // current again — epoch only advances).
+      expect(await PageYjsUpdate().countDocuments({ pageId }).exec()).toBe(1);
+    });
+
+    test('AC-15: a row missing collabLifecycleVersion (pre-RFC-0017) is treated as epoch 0 — replays on a never-transitioned page', async () => {
+      const { pageId } = await seedPageWithBody('placeholder body');
+      // Page never transitioned: collabLifecycleVersion stays at its
+      // schema default (0).
+
+      const encodeDelta = (text: string): Buffer => {
+        const d = new Y.Doc();
+        d.getText(CONTENT_FIELD).insert(0, text);
+        return Buffer.from(Y.encodeStateAsUpdate(d));
+      };
+      // No collabLifecycleVersion field at all — the legacy row shape.
+      await PageYjsUpdate().create({ pageId, payload: encodeDelta('LEGACY ROW, NO EPOCH FIELD'), createdAt: new Date() });
+
+      const onLoadDocument = createOnLoadDocument({
+        models: { Page: models.Page, Revision: models.Revision, PageYjsUpdate: models.PageYjsUpdate },
+      });
+      const newDoc = new Y.Doc();
+      await onLoadDocument({
+        documentName: pageId,
+        document: newDoc,
+        instance: { documents: new Map() },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any);
+
+      expect(newDoc.getText(CONTENT_FIELD).toString()).toContain('LEGACY ROW, NO EPOCH FIELD');
+    });
   });
 });

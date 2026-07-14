@@ -1,13 +1,16 @@
-import * as Y from 'yjs';
 import { Types } from 'mongoose';
-import type { CollabModels } from '../models';
+import * as Y from 'yjs';
 import { createContributorsTracker } from '../contributors';
 import { createDocBaseRevisionStore } from '../doc-base-revision';
-import { createSaveFlow, CollabSaveError } from '../save-flow';
-import { startInMemoryMongo, registerTestModels, type SmokeMongo } from './setup';
-import { makeFixtures, type CollabFixtures } from './fixtures';
-import { CONTENT_FIELD } from '../yjs-doc';
+import { createDocEpochStore } from '../doc-epoch';
+import { createOnLoadDocument } from '../hooks/on-load-document';
+import { createInvalidatedPagesStore } from '../invalidation';
+import type { CollabModels } from '../models';
+import { CollabSaveError, createSaveFlow } from '../save-flow';
 import type { CollabPageEventPublisher } from '../types';
+import { CONTENT_FIELD } from '../yjs-doc';
+import { type CollabFixtures, makeFixtures } from './fixtures';
+import { registerTestModels, type SmokeMongo, startInMemoryMongo } from './setup';
 
 /**
  * Phase 5 save-flow tests. We drive `executeSave` end-to-end against
@@ -320,5 +323,328 @@ describe('createSaveFlow.executeSave', () => {
     expect(err).toBeInstanceOf(Error);
     expect(err).toBeInstanceOf(CollabSaveError);
     expect(err.code).toBe('READONLY');
+  });
+
+  /**
+   * RFC-0017 Phase 1 §4.1/AC-1..8 — the collab lifecycle epoch fold into
+   * `executeSave`'s atomic pointer CAS. This is the correctness core: a
+   * stale save must be rejected the instant a lifecycle transition
+   * (rename/delete/revert/body-replace) advances the page's epoch, even
+   * when `currentRevision` (the pre-existing CAS anchor) is UNCHANGED —
+   * the rename case, where path/status CAS alone would incorrectly pass
+   * (RFC-0017 §0.1). Nested inside the outer describe to reuse its
+   * `models`/`fixtures`/`memMongo` (registering the api dist models twice
+   * in one Jest file throws `OverwriteModelError`).
+   */
+  describe('RFC-0017 Phase 1 epoch CAS', () => {
+    /**
+     * Materialise a server doc via the REAL `onLoadDocument` hook so the
+     * epoch (and doc base) are recorded exactly the way production does —
+     * not hand-set on the stores, so these tests exercise the actual
+     * recording path too.
+     */
+    const materialise = async (
+      docBaseRevisions: ReturnType<typeof createDocBaseRevisionStore>,
+      docEpochRevisions: ReturnType<typeof createDocEpochStore>,
+      pageId: string,
+    ): Promise<Y.Doc> => {
+      const onLoadDocument = createOnLoadDocument({
+        models: { Page: models.Page, Revision: models.Revision, PageYjsUpdate: models.PageYjsUpdate },
+        docBaseRevisions,
+        docEpochRevisions,
+        invalidatedPages: createInvalidatedPagesStore(),
+      });
+      const doc = new Y.Doc();
+      await onLoadDocument({
+        documentName: pageId,
+        document: doc,
+        instance: { documents: new Map() },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any);
+      return doc;
+    };
+
+    test('AC-1: a rename (currentRevision UNCHANGED, epoch advanced) rejects a stale save via the epoch predicate ALONE', async () => {
+      const docBaseRevisions = createDocBaseRevisionStore();
+      const docEpochRevisions = createDocEpochStore();
+      const publisher: CollabPageEventPublisher = { async publish() {} };
+      const flow = createSaveFlow({
+        models,
+        contributorsTracker: createContributorsTracker(),
+        pageEventPublisher: publisher,
+        docBaseRevisions,
+        docEpochRevisions,
+      });
+
+      const { pageId } = await fixtures.seedPage();
+      const user = await seedUser(models);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const Page = models.Page as any;
+
+      const doc = await materialise(docBaseRevisions, docEpochRevisions, pageId);
+      const before = await Page.findById(pageId).exec();
+      const preRenameRevision = before.currentRevision ?? before.revision ?? null;
+
+      // Simulate `Page.rename`'s epoch $inc — path changes, `currentRevision`
+      // (and `revision`) do NOT. If the CAS only checked `{ _id,
+      // currentRevision }` this save would PASS (self-invalidation hole).
+      await Page.updateOne({ _id: pageId }, { $set: { path: `${before.path}-renamed` }, $inc: { collabLifecycleVersion: 1 } }).exec();
+
+      doc.getText(CONTENT_FIELD).insert(0, 'stale content from before the rename');
+      await expect(flow.executeSave({ pageId, userId: user._id.toString(), document: doc })).rejects.toMatchObject({ code: 'CONFLICT' });
+
+      // currentRevision truly was unchanged by the rename (proving the
+      // epoch predicate — not a currentRevision mismatch — is what rejected).
+      const afterAttempt = await Page.findById(pageId).exec();
+      const afterAttemptRevision = afterAttempt.currentRevision ?? afterAttempt.revision ?? null;
+      expect(String(afterAttemptRevision)).toBe(String(preRenameRevision));
+    });
+
+    test("AC-2: a mutation that lands AFTER executeSave's own internal page read (TOCTOU) still rejects", async () => {
+      const docBaseRevisions = createDocBaseRevisionStore();
+      const docEpochRevisions = createDocEpochStore();
+      const publisher: CollabPageEventPublisher = { async publish() {} };
+      const flow = createSaveFlow({
+        models,
+        contributorsTracker: createContributorsTracker(),
+        pageEventPublisher: publisher,
+        docBaseRevisions,
+        docEpochRevisions,
+      });
+
+      const { pageId } = await fixtures.seedPage();
+      const user = await seedUser(models);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const Page = models.Page as any;
+      const doc = await materialise(docBaseRevisions, docEpochRevisions, pageId);
+
+      // Inject the lifecycle mutation to land EXACTLY between executeSave's
+      // own internal `Page.findById` read (step 2) and its final atomic
+      // `updateOne` (step 5b) — the race window AC-2 targets. `expectedEpoch`
+      // was already captured at materialise time (0); this proves the FINAL
+      // atomic write's filter, not the earlier in-memory read, is what
+      // enforces correctness.
+      const originalFindById = Page.findById.bind(Page);
+      Page.findById = (...args: unknown[]) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const query = (originalFindById as any)(...args);
+        const originalExec = query.exec.bind(query);
+        query.exec = async () => {
+          const result = await originalExec();
+          // The mutation lands AFTER this read resolves.
+          await Page.updateOne({ _id: pageId }, { $inc: { collabLifecycleVersion: 1 } }).exec();
+          return result;
+        };
+        return query;
+      };
+
+      try {
+        doc.getText(CONTENT_FIELD).insert(0, 'raced by a mutation landing mid-executeSave');
+        await expect(flow.executeSave({ pageId, userId: user._id.toString(), document: doc })).rejects.toMatchObject({ code: 'CONFLICT' });
+      } finally {
+        Page.findById = originalFindById;
+      }
+    });
+
+    test('AC-3: a STATUS_DELETED page rejects a save even when the epoch matches (belt-and-suspenders status predicate)', async () => {
+      const docBaseRevisions = createDocBaseRevisionStore();
+      const docEpochRevisions = createDocEpochStore();
+      const publisher: CollabPageEventPublisher = { async publish() {} };
+      const flow = createSaveFlow({
+        models,
+        contributorsTracker: createContributorsTracker(),
+        pageEventPublisher: publisher,
+        docBaseRevisions,
+        docEpochRevisions,
+      });
+
+      const { pageId } = await fixtures.seedPage();
+      const user = await seedUser(models);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const Page = models.Page as any;
+
+      const doc = await materialise(docBaseRevisions, docEpochRevisions, pageId);
+
+      // Soft-delete WITHOUT advancing the epoch (isolates the status
+      // predicate specifically — the epoch advance is covered by AC-1/AC-9/10).
+      await Page.updateOne({ _id: pageId }, { $set: { status: 'deleted' } }).exec();
+
+      doc.getText(CONTENT_FIELD).insert(0, 'stale content targeting a deleted page');
+      await expect(flow.executeSave({ pageId, userId: user._id.toString(), document: doc })).rejects.toMatchObject({ code: 'CONFLICT' });
+    });
+
+    test('AC-4: the CAS miss from a lifecycle transition does not mis-coalesce into a false save-ok', async () => {
+      const docBaseRevisions = createDocBaseRevisionStore();
+      const docEpochRevisions = createDocEpochStore();
+      const publisher: CollabPageEventPublisher = { async publish() {} };
+      const flow = createSaveFlow({
+        models,
+        contributorsTracker: createContributorsTracker(),
+        pageEventPublisher: publisher,
+        docBaseRevisions,
+        docEpochRevisions,
+      });
+
+      const { pageId } = await fixtures.seedPage();
+      const user = await seedUser(models);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const Page = models.Page as any;
+
+      const doc = await materialise(docBaseRevisions, docEpochRevisions, pageId);
+      // A lifecycle transition (rename) — advances the epoch WITHOUT ever
+      // advancing `docBaseRevisions` (only `Page.rename` / `deletePage` /
+      // `revertDeletedPage` touch the epoch; nothing in the collab package
+      // itself moves the in-process doc base except a collab save).
+      await Page.updateOne({ _id: pageId }, { $inc: { collabLifecycleVersion: 1 } }).exec();
+
+      doc.getText(CONTENT_FIELD).insert(0, 'a body nobody else has written');
+      // `tryCoalesce`'s condition 1 (`docBaseRevisions` advanced to the live
+      // pointer) never holds for a lifecycle-only transition — settles to a
+      // genuine CONFLICT after the bounded micro-retry budget, never a
+      // save-ok.
+      await expect(flow.executeSave({ pageId, userId: user._id.toString(), document: doc })).rejects.toMatchObject({ code: 'CONFLICT' });
+    });
+
+    test('AC-5: expectedEpoch is server-recorded — a caller cannot smuggle a client-supplied epoch into executeSave', async () => {
+      const docBaseRevisions = createDocBaseRevisionStore();
+      const docEpochRevisions = createDocEpochStore();
+      const publisher: CollabPageEventPublisher = { async publish() {} };
+      const flow = createSaveFlow({
+        models,
+        contributorsTracker: createContributorsTracker(),
+        pageEventPublisher: publisher,
+        docBaseRevisions,
+        docEpochRevisions,
+      });
+
+      const { pageId } = await fixtures.seedPage();
+      const user = await seedUser(models);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const Page = models.Page as any;
+
+      const doc = await materialise(docBaseRevisions, docEpochRevisions, pageId);
+      await Page.updateOne({ _id: pageId }, { $inc: { collabLifecycleVersion: 1 } }).exec();
+
+      doc.getText(CONTENT_FIELD).insert(0, 'attempted bypass');
+      // `ExecuteSaveInput` has no `epoch`/`expectedEpoch` field at all — the
+      // TS surface doesn't expose one to smuggle a stale-but-matching value
+      // through. Casting past the type to prove the runtime ALSO ignores it
+      // (the extra property is simply not destructured by `executeSave`).
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const bypassAttempt = { pageId, userId: user._id.toString(), document: doc, expectedEpoch: 0, epoch: 0 } as any;
+      await expect(flow.executeSave(bypassAttempt)).rejects.toMatchObject({ code: 'CONFLICT' });
+    });
+
+    test('AC-6: a doc materialised DURING an invalidation drain still records expectedEpoch (sibling store is unconditional)', async () => {
+      const docBaseRevisions = createDocBaseRevisionStore();
+      const docEpochRevisions = createDocEpochStore();
+      const invalidatedPages = createInvalidatedPagesStore();
+      const publisher: CollabPageEventPublisher = { async publish() {} };
+      const flow = createSaveFlow({
+        models,
+        contributorsTracker: createContributorsTracker(),
+        pageEventPublisher: publisher,
+        docBaseRevisions,
+        docEpochRevisions,
+      });
+
+      const { pageId } = await fixtures.seedPage();
+      const user = await seedUser(models);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const Page = models.Page as any;
+
+      // Mark the page as mid-drain (mirrors the invalidator having just run).
+      invalidatedPages.mark(pageId, 5000);
+
+      const onLoadDocument = createOnLoadDocument({
+        models: { Page: models.Page, Revision: models.Revision, PageYjsUpdate: models.PageYjsUpdate },
+        docBaseRevisions,
+        docEpochRevisions,
+        invalidatedPages,
+      });
+      const doc = new Y.Doc();
+      await onLoadDocument({
+        documentName: pageId,
+        document: doc,
+        instance: { documents: new Map() },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any);
+
+      // The doc base is NOT recorded mid-drain (existing G1 behaviour) — but
+      // the epoch IS (RFC-0017 Phase 1, unconditional).
+      expect(docBaseRevisions.get(pageId)).toBeUndefined();
+      expect(docEpochRevisions.get(pageId)).toBe(0);
+
+      // Advance the epoch (simulating the SAME transition that triggered the
+      // drain) — the stale doc-base-unknown save still gets the epoch CAS
+      // guard because `expectedEpoch` WAS recorded.
+      await Page.updateOne({ _id: pageId }, { $inc: { collabLifecycleVersion: 1 } }).exec();
+      doc.getText(CONTENT_FIELD).insert(0, 'stale content materialised mid-drain');
+      await expect(flow.executeSave({ pageId, userId: user._id.toString(), document: doc })).rejects.toMatchObject({ code: 'CONFLICT' });
+    });
+
+    test('AC-7: an unrecorded epoch (synthetic driver / process restart) degrades to the fail-safe fallback, not a bypass', async () => {
+      // `docEpochRevisions` is never populated for this pageId (as if this
+      // process restarted after the doc was last loaded, or a synthetic test
+      // driver never called `onLoadDocument`).
+      const docBaseRevisions = createDocBaseRevisionStore();
+      const docEpochRevisions = createDocEpochStore();
+      const publisher: CollabPageEventPublisher = { async publish() {} };
+      const flow = createSaveFlow({
+        models,
+        contributorsTracker: createContributorsTracker(),
+        pageEventPublisher: publisher,
+        docBaseRevisions,
+        docEpochRevisions,
+      });
+
+      const { pageId } = await fixtures.seedPage();
+      const user = await seedUser(models);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const Page = models.Page as any;
+
+      const doc = new Y.Doc();
+      doc.getText(CONTENT_FIELD).insert(0, 'first save from a fresh process, no doc base recorded');
+
+      // The page's epoch has ALREADY advanced (e.g. a rename before this
+      // process ever saw the page) — with no recorded `expectedEpoch`, the
+      // predicate is omitted (fail-safe fallback) rather than fabricating a
+      // match, so the save proceeds on the `{ _id, currentRevision }` +
+      // status predicate alone (identical to pre-RFC-0017 behaviour).
+      await Page.updateOne({ _id: pageId }, { $inc: { collabLifecycleVersion: 5 } }).exec();
+
+      const result = await flow.executeSave({ pageId, userId: user._id.toString(), document: doc });
+      expect(result.revisionId).toMatch(/^[0-9a-f]{24}$/);
+    });
+
+    test("AC-8: cross-replica enforcement — a directly-advanced DB epoch (simulating another replica) rejects this process's save", async () => {
+      const docBaseRevisions = createDocBaseRevisionStore();
+      const docEpochRevisions = createDocEpochStore();
+      const publisher: CollabPageEventPublisher = { async publish() {} };
+      const flow = createSaveFlow({
+        models,
+        contributorsTracker: createContributorsTracker(),
+        pageEventPublisher: publisher,
+        docBaseRevisions,
+        docEpochRevisions,
+      });
+
+      const { pageId } = await fixtures.seedPage();
+      const user = await seedUser(models);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const Page = models.Page as any;
+
+      // This process materialised the doc and recorded epoch 0 (as if via a
+      // real onLoadDocument on THIS replica).
+      const doc = await materialise(docBaseRevisions, docEpochRevisions, pageId);
+
+      // ANOTHER replica renames the page — simulated by advancing the epoch
+      // directly on the shared DB row (no in-process store on THIS replica
+      // is touched, exactly mirroring a genuinely different process).
+      await Page.updateOne({ _id: pageId }, { $inc: { collabLifecycleVersion: 1 } }).exec();
+
+      doc.getText(CONTENT_FIELD).insert(0, "this replica does not know about the other replica's rename");
+      await expect(flow.executeSave({ pageId, userId: user._id.toString(), document: doc })).rejects.toMatchObject({ code: 'CONFLICT' });
+    });
   });
 });
