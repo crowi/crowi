@@ -110,6 +110,16 @@ crowi-admin migrate apply
 crowi-admin migrate status
 ```
 
+> **Tip**: `crowi-admin` の stdout はコマンド本来の出力だけです。boot 時の
+> `[crowi] Loaded N plugin(s)` は開発時は stderr へ、`NODE_ENV=production` では
+> 完全に抑制されるため、`crowi-admin migrate plan --json | jq` のような
+> パイプが壊れません。Node 自体の非推奨警告 (`DEP0169` など) も
+> `crowi-admin` では常に出ません。ただし `pnpm migrate plan` 経由だと
+> pnpm 自身のスクリプトバナー (`> crowi@... migrate` など) が stdout に
+> 出ます — これはコード側からは消せない pnpm の挙動なので、パイプする
+> ときは `pnpm -s migrate plan --json | jq` のように `-s` (silent) を
+> 付けてください。
+
 > **Tip**: `block` ポリシーが効くのは `blocking` の移行だけです。そのため
 > 本番ではデフォルトの `block` のままで問題ありません。`cosmetic` の移行
 > (表示のみに関わるもの) はポリシーに関係なく起動を拒否せず、起動を拒否
