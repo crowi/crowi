@@ -172,6 +172,16 @@ class Crowi {
    */
   bootReporter: BootReporter | null = null;
 
+  /**
+   * Set by `initForCli()` before any boot step runs. Lets a step shared by
+   * both boot entry points — currently only `setupPlugins()` — tell them
+   * apart, so `@crowi/admin-cli` can keep its own stdout reserved for command
+   * output (`--json | jq` piping) instead of mixing in boot noise, without
+   * touching `init()`'s (the server's) unrelated boot UI
+   * (feature-admin-cli-quiet-output). Stays `false` for the server.
+   */
+  cliContext = false;
+
   initialized = false;
 
   /**
@@ -325,6 +335,7 @@ class Crowi {
    * the Node process exits cleanly.
    */
   async initForCli() {
+    this.cliContext = true;
     this.emitEnvValidationWarnings();
     this.setupEncryption();
     await this.setupDatabase();
@@ -450,6 +461,20 @@ class Crowi {
     this.pluginRegistries = await this.pluginManager.bootstrap();
     const loaded = this.pluginManager.getLoadedPlugins();
     const summary = `[crowi] Loaded ${loaded.length} plugin(s): ${loaded.map((p) => `${p.name}@${p.version}`).join(', ')}`;
+
+    if (this.cliContext) {
+      // `@crowi/admin-cli` (feature-admin-cli-quiet-output): never put this on
+      // stdout — a CLI command's stdout is the operator's actual output
+      // (`crowi-admin migrate plan --json | jq` must not see boot noise).
+      // dev still surfaces it, just on stderr so a terminal keeps seeing it
+      // while `2>/dev/null` / a pipe stays clean; prod suppresses it outright
+      // (an operator running crowi-admin wants pure command output only).
+      if (this.node_env !== 'production') {
+        console.error(summary);
+      }
+      return;
+    }
+
     // Route through `bootNote` so the summary clears/re-draws the in-progress
     // `services` spinner instead of corrupting it (plain console.log outside
     // boot / in plain mode).
