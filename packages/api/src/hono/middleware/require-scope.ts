@@ -27,11 +27,12 @@ import { AUTH_REQUIRED_BODY } from './auth';
 
 /**
  * A `@hono/zod-openapi` `createRoute(...)` definition exposes its HTTP
- * method + path; we read both to attach the scope guard to the exact
- * `method + path` pair (not the whole prefix — `GET /pages` is read but
- * `POST /pages` is write).
+ * method and, via `getRoutingPath()`, the Hono routing path
+ * (`/user/:username`) — as opposed to the OpenAPI `path` (`/user/{username}`).
+ * We attach the scope guard to the exact `method + routing-path` pair (not the
+ * whole prefix — `GET /pages` is read but `POST /pages` is write).
  */
-type RouteLike = { method: string; path: string };
+type RouteLike = { method: string; getRoutingPath: () => string };
 
 /**
  * Attach `requireScope(scope)` to a single `method + path` route on the
@@ -39,16 +40,19 @@ type RouteLike = { method: string; path: string };
  * `app.on`) BEFORE the `.openapi(route, handler)` call means the guard
  * runs first and the handler only sees scope-satisfied requests.
  *
- * Using the contract route's own `method` / `path` keeps the scope
- * mapping declarative and free of stringly-typed path drift — the path
- * comes from the same object the handler registers.
+ * The path MUST come from `route.getRoutingPath()` (Hono form, `:param`),
+ * not `route.path` (OpenAPI form, `{param}`). `.openapi()` registers the
+ * handler on the routing path, so a guard registered on the literal
+ * `{param}` path would never match a real request — silently skipping the
+ * scope check on every parameterized route. Reusing the route object keeps
+ * the mapping declarative and free of stringly-typed path drift.
  *
  * `app` is typed as the bare `Hono` to avoid extending the already-deep
  * `OpenAPIHono` chain (TS2589); the middleware itself is fully typed
  * against `CrowiHonoBindings`.
  */
 export const applyScope = (app: Hono<CrowiHonoBindings>, route: RouteLike, scope: Scope): void => {
-  app.on(route.method, route.path, requireScope(scope));
+  app.on(route.method, route.getRoutingPath(), requireScope(scope));
 };
 
 export const requireScope = (scope: Scope) =>

@@ -139,4 +139,29 @@ describe('requireScope (Hono scope-aware auth)', () => {
       expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
     });
   });
+
+  // Regression: applyScope must attach the guard on Hono's routing path
+  // (`/user/:username`), not the OpenAPI path (`/user/{username}`). If the
+  // literal `{username}` path is used, the guard never matches a real request
+  // and the scope check is silently skipped for every parameterized route
+  // (GET /user/{username} → profile:read here). The non-parameterized /me
+  // routes above cannot catch this because their two path forms are identical.
+  describe('parameterized-path route (RFC-0010 scope guard must still run)', () => {
+    it('rejects GET /user/:username with a token lacking profile:read', async () => {
+      const res = await request(app)
+        .get('/api/v2/user/scope-test')
+        .set('Authorization', `Bearer ${oauthToken(['pages:read'])}`);
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe('INSUFFICIENT_SCOPE');
+      expect(res.body.error.details).toEqual({ requiredScope: 'profile:read' });
+      expect(res.headers['www-authenticate']).toContain('insufficient_scope');
+    });
+
+    it('passes GET /user/:username with profile:read (guard runs and allows)', async () => {
+      const res = await request(app)
+        .get('/api/v2/user/scope-test')
+        .set('Authorization', `Bearer ${oauthToken(['profile:read'])}`);
+      expect(res.status).toBe(200);
+    });
+  });
 });
