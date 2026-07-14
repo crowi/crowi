@@ -14,6 +14,15 @@ import { registerWatcherBackfill } from './commands/watcher-backfill';
  * declarations next to its implementation.
  */
 export function createProgram(): Command {
+  // feature-admin-cli-quiet-output: admin-cli talks directly to MongoDB /
+  // storage drivers, and transitive deps (e.g. `url.parse()`, DEP0169) still
+  // emit Node's own DeprecationWarning — operator-irrelevant noise on every
+  // invocation, dev and prod alike. Equivalent to `--no-deprecation`, set
+  // programmatically here (not via a `node` flag) so it applies regardless of
+  // how the CLI is invoked (`pnpm migrate ...`, `crowi-admin ...`, or the
+  // built `dist/bin.js` directly, as prod does).
+  process.noDeprecation = true;
+
   const program = new Command();
   program
     .name('crowi-admin')
