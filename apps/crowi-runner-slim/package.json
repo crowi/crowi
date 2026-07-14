@@ -1,6 +1,6 @@
 {
   "name": "@crowi/runner-app-slim",
-  "version": "2.0.0-alpha.0",
+  "version": "2.0.0-alpha.1",
   "private": true,
   "description": "Crowi slim reference runner project: the minimal start-up set (MongoDB-only — local storage + Mongo regex search + SMTP mail) and the build source for the official slim Docker image. A base/starter for operators who want to fully customize their plugin set.",
   "scripts": {

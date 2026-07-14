@@ -1,6 +1,6 @@
 {
   "name": "@crowi/plugin-renderer-emoji",
-  "version": "0.1.0-alpha.0",
+  "version": "0.1.0-alpha.1",
   "description": "Emoji shortcode renderer for Crowi 2.x. Replaces `:smile:` and friends with Unicode emoji via remark-emoji. Skips code blocks and inline code.",
   "repository": {
     "type": "git",
