@@ -13,7 +13,6 @@
  */
 import type { AuthenticationRequiredErrorSchema, Scope, UserStatusErrorSchema } from '@crowi/api-contract';
 import { ALL_SCOPES, isScope, parseScopeClaim } from '@crowi/api-contract';
-import Debug from 'debug';
 import { getCookie } from 'hono/cookie';
 import { createMiddleware } from 'hono/factory';
 import type { z } from 'zod';
@@ -60,7 +59,6 @@ export interface HonoAuthVariables {
 }
 
 export const createJwtAuth = (crowi: Crowi) => {
-  const debug = Debug('crowi:hono:middleware:auth');
   const User = crowi.model('User');
   const PersonalAccessToken = crowi.model('PersonalAccessToken');
   const jwtUtil = createJwtUtil(crowi);
@@ -142,49 +140,55 @@ export const createJwtAuth = (crowi: Crowi) => {
       };
     }
 
-    try {
-      const user = await User.findById(resolved.userId);
-      if (!user) {
-        return c.json(AUTH_REQUIRED_BODY, 401);
-      }
-
-      if (user.status !== User.STATUS_ACTIVE) {
-        let code: 'USER_REGISTERED' | 'USER_SUSPENDED' | 'USER_INVITED' = 'USER_SUSPENDED';
-        let message = 'User account is not active';
-        let redirectTo = '/login/error/suspended';
-
-        if (user.status === User.STATUS_REGISTERED) {
-          code = 'USER_REGISTERED';
-          message = 'User registration is not complete';
-          redirectTo = '/login/error/registered';
-        } else if (user.status === User.STATUS_SUSPENDED) {
-          code = 'USER_SUSPENDED';
-          message = 'User account is suspended';
-          redirectTo = '/login/error/suspended';
-        } else if (user.status === User.STATUS_INVITED) {
-          code = 'USER_INVITED';
-          message = 'User invitation is pending';
-          redirectTo = '/login/invited';
-        }
-
-        const body: UserStatusError = {
-          error: { code, message, redirectTo },
-        };
-        return c.json(body, 403);
-      }
-
-      c.set('user', user as UserDocument);
-
-      // RFC-0010 scope resolution — deferred to the credential-specific
-      // applier so this status-check path is shared across web / OAuth /
-      // PAT. Sets `authScopes` + `authContext` (and, for PATs, bumps
-      // `lastUsedAt`).
-      await resolved.apply();
-
-      await next();
-    } catch (error) {
-      debug('JWT authentication error:', error);
+    // NOTE (deliberately no try/catch): a genuine authentication failure is
+    // always an explicit early return (401 / 403) below. Everything that can
+    // *throw* here — `User.findById`, `resolved.apply()` (e.g. a PAT
+    // last-used write) — is infrastructure, and a throw from `await next()` is
+    // a downstream handler error; both must surface as a 500 via the app's
+    // `onError` (error-handler.ts), NOT be masked as `AUTHENTICATION_REQUIRED`
+    // 401. The previous `try { … await next() } catch { return 401 }` wrapper
+    // turned a transient DB failure (and any handler throw) into a spurious
+    // 401 — hiding real 500s from clients/logs. Because a throw here
+    // short-circuits before `next()`, the boundary stays fail-closed: an
+    // unauthenticated request never reaches the handler.
+    const user = await User.findById(resolved.userId);
+    if (!user) {
       return c.json(AUTH_REQUIRED_BODY, 401);
     }
+
+    if (user.status !== User.STATUS_ACTIVE) {
+      let code: 'USER_REGISTERED' | 'USER_SUSPENDED' | 'USER_INVITED' = 'USER_SUSPENDED';
+      let message = 'User account is not active';
+      let redirectTo = '/login/error/suspended';
+
+      if (user.status === User.STATUS_REGISTERED) {
+        code = 'USER_REGISTERED';
+        message = 'User registration is not complete';
+        redirectTo = '/login/error/registered';
+      } else if (user.status === User.STATUS_SUSPENDED) {
+        code = 'USER_SUSPENDED';
+        message = 'User account is suspended';
+        redirectTo = '/login/error/suspended';
+      } else if (user.status === User.STATUS_INVITED) {
+        code = 'USER_INVITED';
+        message = 'User invitation is pending';
+        redirectTo = '/login/invited';
+      }
+
+      const body: UserStatusError = {
+        error: { code, message, redirectTo },
+      };
+      return c.json(body, 403);
+    }
+
+    c.set('user', user as UserDocument);
+
+    // RFC-0010 scope resolution — deferred to the credential-specific
+    // applier so this status-check path is shared across web / OAuth /
+    // PAT. Sets `authScopes` + `authContext` (and, for PATs, bumps
+    // `lastUsedAt`).
+    await resolved.apply();
+
+    await next();
   });
 };
