@@ -28,7 +28,7 @@ planner が用意した task ファイルを読んで、Hono API / Next.js UI / 
 ## 実装フロー
 
 ```
-1. task ファイルを読む (status を IN_PROGRESS に更新)
+1. task ファイルを読む (`bash .claude/scripts/task-state.sh task set-status {id} IN_PROGRESS`)
 2. spec.md を読み、設計の主な判断 / open questions を頭に入れる
 3. context.reuseTargets を Read して再利用方針を確定
 4. 必要なら契約を追加・修正 (packages/api-contract/)
@@ -38,9 +38,16 @@ planner が用意した task ファイルを読んで、Hono API / Next.js UI / 
 8. crowi-site ドキュメント更新 (下記「ドキュメント更新」※ context.docsTargets がある場合)
 9. E2E spec の追加/拡張 (下記「E2E spec (e2eTargets)」※ context.e2eTargets の entries がある場合)
 10. 必須チェック (下記) を全部走らせる
-11. commitPlan の各エントリに `files: [...]` を埋める (docs(site) / test(e2e) の files も含める)
-12. status を REVIEW に更新、history に entry 追加
+11. commitPlan の各エントリに `files: [...]` を埋める。JSON を一時ファイルに書き
+    `bash .claude/scripts/task-state.sh task set-field {id} commitPlan --value-file <path>`
+    で反映 (docs(site) / test(e2e) の files も含める)
+12. `bash .claude/scripts/task-state.sh task set-status {id} REVIEW`、続けて
+    `bash .claude/scripts/task-state.sh task append-history {id} '{"phase":"implementer","summary":"..."}'`
 ```
+
+task ファイルへの書き込みは **すべて `.claude/scripts/task-state.sh` 経由**(status /
+history / commitPlan)。`.feature-state/tasks/*.json` を Write/Edit で直接書き換えることは
+PreToolUse hook が拒否する(詳細・復旧手順は `task-state.sh --help`)。
 
 ## 必須チェック (省略不可)
 
@@ -160,8 +167,10 @@ errors を残したまま REVIEW に出すのは禁止。直すか、解決不�
 ## NEEDS_WORK への対応
 
 - task ファイルの `reviewFeedback.issues` を全部読む
-- 修正後、`history` に「implementer (re-work)」エントリを追加
-- 必須チェックを再度全部走らせて status を REVIEW に戻す
+- 修正後、`bash .claude/scripts/task-state.sh task append-history {id}
+  '{"phase":"implementer (re-work)","summary":"..."}'` で history に追加
+- 必須チェックを再度全部走らせて `bash .claude/scripts/task-state.sh task set-status {id} REVIEW`
+  で status を戻す
 
 ## commitPlan の files 充填
 
@@ -194,8 +203,8 @@ planner が作った概形に、実際に編集したファイルを `files: [..
 
 ## 注意事項
 
-- task ファイルへの書き込みは status / history / commitPlan.files のみ。
-  reviewer が書く欄 (`reviewFeedback`) は触らない
+- task ファイルへの書き込みは `.claude/scripts/task-state.sh` 経由で status / history /
+  commitPlan.files のみ。reviewer が書く欄 (`reviewFeedback`) は触らない
 - spec.md は **編集しない** (人間レビュー済みの正本)
 - `.feature-state/` (root) を使うこと、`.claude/feature-state/` には書かない
 - 実装が大きくなりそうなら **task を分割するよう planner に差し戻し** を提案する

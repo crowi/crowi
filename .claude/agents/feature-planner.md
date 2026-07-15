@@ -104,10 +104,16 @@ context 完備の task 定義を作成する。
    実装時に implementer が files リストを埋めるので、ここでは type / scope / title だけで OK。
 
 8. **task ファイルの作成**
-   `.feature-state/tasks/{id}.json` に以下を書く。
+   下の「task ファイルスキーマ」に沿った JSON を Write で **scratch パス**
+   (セッションの scratchpad 配下等。`.feature-state/tasks/` 直下は `*.json` への
+   Write/Edit が PreToolUse hook で拒否される) に書き出し、
+   `bash .claude/scripts/task-state.sh task create {id} <scratch-path>` で配置する。
+   `.feature-state/tasks/{id}.json` を Write/Edit で直接作成・上書きしない
+   (詳細・検証内容は `task-state.sh --help`)。
 
 9. **queue 更新**
-   `.feature-state/queue.json` の `currentTask` を新タスクに、`lastUpdated` を ISO 8601 で更新。
+   `bash .claude/scripts/task-state.sh queue set-current {id}` で `currentTask` を更新する
+   (`lastUpdated` は script が自動設定)。
 
 ## 重要な前提
 
@@ -149,6 +155,7 @@ apps/crowi-site/content/docs/en/{guide,operations,plugins}/
   "scope": "trivial | small | medium | large",
   "stack": "api | web | full-stack",
   "dependencies": ["他タスクID"],
+  "phases": [],
   "context": {
     "specPath": ".feature-state/specs/{id}.md",
     "reuseTargets": [
@@ -214,6 +221,12 @@ apps/crowi-site/content/docs/en/{guide,operations,plugins}/
 `internal-only` なら `docs(site)` を削除、`e2eTargets` の entries が空なら `test(e2e)` を
 削除など)。
 
+`phases` は `task-state.sh` が強制する必須トップレベルキー(`--help` 参照)。spec に
+`### Phase N:` ヘッダが 2 本以上あれば multi-phase 判定(`crowi-feature/SKILL.md` の
+「Multi-phase spec の扱い」)で組み立てた phase 配列をそのまま埋め込む。単一 phase の
+spec なら `[]` のままで良い(`task-state.sh` は空配列を single-phase task の正当な表現
+として受け付ける)。
+
 ## 出力 (報告フォーマット)
 
 200-400 字程度の要約のみ:
@@ -234,7 +247,9 @@ scope が `large` の場合、**複数 task に分割するよう提案** する
 
 ## 注意事項
 
-- コードの実装は行わない (Read + 書き込みは task / queue ファイルのみ)
+- コードの実装は行わない (Read のみ。task / queue ファイルへの書き込みは
+  `.claude/scripts/task-state.sh` 経由のみで、Write/Edit は draft の一時ファイルにしか使わない —
+  `.feature-state/tasks/*.json` / `queue.json` への直接 Write/Edit は hook が拒否する)
 - spec.md は **編集しない** (人間レビュー済みの正本)
 - 旧実装制約は無いが、隣接コードのスタイル一貫性は重視 (architecturalNotes に明記)
 - `.feature-state/` (root) を使うこと、`.claude/feature-state/` には書かない

@@ -128,12 +128,14 @@ gw start <id>        # hook が .feature-state 配線 + tmux window + claude 起
 ```
 
 - **gw が無い環境では中止**(`git worktree add` 直呼びはしない — 既存規約)。
-- hook が seed した worktree 側 `queue.json` の `currentTask` を上書き(tmp+rename で atomic):
+- hook が seed した worktree 側 `queue.json` の `currentTask` を上書き。
+  `queue.json` への直接 Write/Edit は PreToolUse hook が拒否するので、
+  worktree 側の `task-state.sh` を経由する(script 自身が tmp+不変条件検証+atomic
+  rename+`.bak` を行う):
 
 ```bash
 WT="../crowi-<id>"
-printf '{ "currentTask": "%s", "lastUpdated": "%s" }\n' "<id>" "$(date -u +%FT%TZ)" \
-  > "$WT/.feature-state/queue.json.tmp" && mv "$WT/.feature-state/queue.json.tmp" "$WT/.feature-state/queue.json"
+bash "$WT/.claude/scripts/task-state.sh" queue set-current "<id>"
 ```
 
 ### Step 5: 実装指示の投入(gw が開いた window へ send-keys)
