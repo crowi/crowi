@@ -1,6 +1,26 @@
 #!/usr/bin/env node
-// `pnpm test:flake` — opt-in flake detector for `@crowi/api`'s full jest
-// suite (feature-test-parallel-db-flake-hardening, Phase 4 / B2).
+// `pnpm test:flake` — opt-in, LOCAL, full-suite flake detector for
+// `@crowi/api` (feature-test-parallel-db-flake-hardening, Phase 4 / B2).
+//
+// ── CI note (feature-flake-report-detection-redesign) ──
+//
+// This script used to ALSO be what CI's `flake-report` job ran (a second,
+// independent full-suite invocation, separate from the `test` job's own
+// `pnpm test`). That was the redesign's core bug (GAP 1): the independent
+// run could — and in practice did — observe a DIFFERENT outcome than the
+// run that actually gated `test`, so `flake-report` was classifying flakes
+// nobody's `test` job ever saw. CI now uses a producer/consumer pair
+// instead — `scripts/test-flake-report-produce.mjs` (in the `test` job,
+// `if: always()`, writes a manifest + artifact from the SAME run that
+// gates `test`) and `scripts/test-flake-report-consume.mjs` (in
+// `flake-report`, downloads that artifact and solo-reruns only the files
+// `@crowi/api` jest itself did not pass — see `.github/workflows/ci.yml`).
+//
+// This script remains as a LOCAL, ad hoc diagnostic (`pnpm test:flake`): a
+// developer who wants to check the whole suite's flakiness without waiting
+// for a CI run can still run it directly. Running its own independent full
+// suite is fine here — there is no separate "real" run it could disagree
+// with, unlike the CI case above.
 //
 // Root `pnpm test` is `turbo run test --concurrency=3`: a package-by-package
 // dispatch where every workspace's jest is its own independent child process,
@@ -8,7 +28,8 @@
 // So this script spawns `@crowi/api`'s jest DIRECTLY — `pnpm --filter
 // @crowi/api test --json --outputFile=<path>` — bypassing turbo entirely.
 // `@crowi/collab` / `@crowi/plugin-search-mongo` are deliberately OUT of
-// scope (see the spec's "やらないこと" — B2 is `@crowi/api`-only).
+// scope (see the spec's "やらないこと" — B2/the redesign are both
+// `@crowi/api`-only).
 //
 // NOTE on the shape of that command: no literal `--` separates `test` from
 // the extra jest flags. `pnpm --filter <pkg> <script> -- <args>` (WITH an
@@ -24,17 +45,16 @@
 // Flow: run the full suite once → read jest's `--json --outputFile` result →
 // for every test FILE whose `status !== 'passed'`, solo-rerun just that file
 // (same `pnpm --filter @crowi/api test --runTestsByPath <file>` shape) →
-// a file that passes alone is classified `FLAKY` (something about running
-// under full parallel load made it fail, not the code); a file that fails
-// alone too is a real `REGRESSION`. This is a fail → solo-rerun CLASSIFIER,
-// not a retry: jest's own `retryTimes` (silently re-running a test body
-// until it goes green) is deliberately NOT used anywhere in this repo — that
-// would hide the very signal this script exists to surface. The bounded
-// CONNECT retry in `src/test/db-connect-retry.ts` (Phase 1 / A1) is a
-// different, narrower layer: it retries only `beforeAll`'s DB boot step, and
-// only for a specific transient-network failure class — this script doesn't
-// touch that decision at all, it only reads its output (see "near-miss"
-// below).
+// classify each rerun outcome as FLAKY / REGRESSION / INCONCLUSIVE (AC-4 of
+// the redesign — see `flake-report-shared.mjs`'s `classifyRerunOutcome`).
+// This is a fail → solo-rerun CLASSIFIER, not a retry: jest's own
+// `retryTimes` (silently re-running a test body until it goes green) is
+// deliberately NOT used anywhere in this repo — that would hide the very
+// signal this script exists to surface. The bounded CONNECT retry in
+// `src/test/db-connect-retry.ts` (Phase 1 / A1) is a different, narrower
+// layer: it retries only `beforeAll`'s DB boot step, and only for a specific
+// transient-network failure class — this script doesn't touch that decision
+// at all, it only reads its output (see "near-miss" below).
 //
 // ── near-miss (a retry happened but the file still went green) ──
 //
@@ -47,15 +67,10 @@
 // therefore ALSO appends one JSON-Lines row per retry to a run-scoped side
 // channel file, independent of whether the file's tests end up green:
 // `os.tmpdir()/crowi-api-test-retry-events.<CROWI_TEST_RUN_ID>.jsonl` (see
-// `db-connect-retry.ts`'s `resolveRetryEventsPath()`). This script
-// reconstructs that SAME path formula independently — it does not import
-// `db-connect-retry.ts` (a root `.mjs` script can't import a
-// `packages/api/src/test/*.ts` module, and `packages/api`'s build output
-// doesn't ship test-only files anyway). This mirrors the "protocol-identical
-// but deliberately duplicated, no shared module" choice Phase 3 / B1 already
-// made for `@crowi/collab` / `@crowi/plugin-search-mongo`'s probe modules —
-// see this file's own `resolveNearMissEventsPath()` and keep it in sync with
-// `db-connect-retry.ts`'s `resolveRetryEventsPath()` if either changes.
+// `flake-report-shared.mjs`'s `resolveNearMissEventsPath()`, an independent
+// duplicate of `db-connect-retry.ts`'s `resolveRetryEventsPath()` — a root
+// `.mjs` script can't import a `packages/api/src/test/*.ts` module, and
+// `packages/api`'s build output doesn't ship test-only files anyway).
 //
 // This script sets `CROWI_TEST_RUN_ID` itself (generated fresh, unless the
 // caller already set one) in the full-suite child's env BEFORE spawning it —
@@ -63,24 +78,20 @@
 // exists specifically so an external orchestrator like this one can supply
 // the value first (see that file's doc comment). Because the spawn is direct
 // (not through turbo), the value reaches the child as a normal inherited env
-// var — no `turbo.json` `globalPassThroughEnv` entry is needed (same
-// reasoning Phase 1 used to justify NOT adding `CROWI_TEST_RUN_ID` there).
-// Each solo rerun gets its OWN freshly generated run id — reusing the
-// full-suite's id would let a rerun's own connect retries (if any) pollute
-// the ORIGINAL run's near-miss count for a failure that has nothing to do
-// with the near-miss signal this report is trying to measure.
+// var — no `turbo.json` `globalPassThroughEnv` entry is needed for THIS
+// local tool (CI's producer/consumer redesign added one for its own,
+// turbo-mediated `pnpm test` — see `turbo.json`). Each solo rerun gets its
+// OWN freshly generated run id — reusing the full-suite's id would let a
+// rerun's own connect retries (if any) pollute the ORIGINAL run's near-miss
+// count for a failure that has nothing to do with the near-miss signal this
+// report is trying to measure.
 //
 // ── placement ──
 //
-// Local: `pnpm test:flake` (this script, registered as a plain non-turbo
-// script — no `turbo.json` task). CI: a NON-BLOCKING job (see
-// `.github/workflows/ci.yml`) that duplicates the `test` job's
-// `services.mongo` + `env` (without them, `crowi-environment.js`'s CI
-// fail-fast throws for every file, and the full suite AND every solo rerun
-// fail identically — misclassifying every file as `REGRESSION`). NOT wired
-// into the pre-push hook (this repeats the ENTIRE suite plus one rerun per
-// failure — too slow to gate every push, and its value is trend-watching in
-// CI, not blocking a single developer's push).
+// Local only: `pnpm test:flake` (this script, registered as a plain
+// non-turbo script — no `turbo.json` task). NOT wired into the pre-push
+// hook (this repeats the ENTIRE suite plus one rerun per failure — too slow
+// to gate every push).
 
 import { spawnSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
@@ -88,95 +99,17 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import {
+  annotateClassification,
+  classifyRerunOutcome,
+  generateRunId,
+  groupNearMissByFile,
+  parseNearMissJsonl,
+  resolveNearMissEventsPath,
+  selectNonPassedTestFiles,
+} from './flake-report-shared.mjs'
+
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-
-// ── pure helpers (covered by test-flake-report.test.mjs) ──
-
-/**
- * Same generation formula as `global-setup.js`'s `CROWI_TEST_RUN_ID ??= ...`
- * self-generation — not imported (see module doc comment), deliberately
- * duplicated. Uniqueness only needs to hold across processes started around
- * the same moment on one machine, which `pid` + a base36 timestamp gives us.
- */
-export function generateRunId() {
-  return `${process.pid}-${Date.now().toString(36)}`
-}
-
-/**
- * Independent duplicate of `db-connect-retry.ts`'s `resolveRetryEventsPath()`
- * path formula — see this module's doc comment for why it isn't imported.
- * Keep the two in sync if either changes.
- */
-export function resolveNearMissEventsPath(runId) {
-  return path.join(tmpdir(), `crowi-api-test-retry-events.${runId}.jsonl`)
-}
-
-/**
- * Given a parsed jest `--json --outputFile` document, returns `{ file,
- * status, message }` for every test file whose `status !== 'passed'` —
- * `failed` under a normal full run, but also covers jest's `focused` /
- * `skipped` statuses so this classifier never silently ignores a
- * non-nominal outcome (see `formatTestResults.js`'s 4 possible values).
- * Pure — takes the already-parsed JSON, no file I/O.
- */
-export function selectNonPassedTestFiles(jestJsonResult) {
-  const testResults = jestJsonResult && Array.isArray(jestJsonResult.testResults) ? jestJsonResult.testResults : []
-  return testResults
-    .filter((result) => result.status !== 'passed')
-    .map((result) => ({ file: result.name, status: result.status, message: result.message ?? '' }))
-}
-
-/**
- * Solo-rerun exit code → classification. `0` means the file passed standalone
- * (it only failed under full-suite parallel load) → `FLAKY`; anything else
- * means it fails on its own too → `REGRESSION` (a real break, not flake).
- */
-export function classifyRerunExitCode(exitCode) {
-  return exitCode === 0 ? 'FLAKY' : 'REGRESSION'
-}
-
-/**
- * Parses a near-miss JSON-Lines side channel's raw content into `{ events,
- * warnings }`. Blank lines are skipped silently (the file is append-only and
- * may end with a trailing newline); a line that isn't valid JSON is skipped
- * but reported back as a warning string rather than throwing — a single
- * corrupt row (e.g. a torn write from an unrelated concurrent run somehow
- * sharing the path, which run-scoping should prevent, but this is cheap
- * insurance) shouldn't take down the whole report.
- */
-export function parseNearMissJsonl(content) {
-  const events = []
-  const warnings = []
-  for (const rawLine of content.split('\n')) {
-    const line = rawLine.trim()
-    if (!line) continue
-    try {
-      events.push(JSON.parse(line))
-    } catch (err) {
-      warnings.push(`could not parse a near-miss JSONL line as JSON (${err.message}): ${line}`)
-    }
-  }
-  return { events, warnings }
-}
-
-/**
- * Groups near-miss events by `testFilePath` so the report can attach them to
- * the file they occurred in, regardless of whether that file also appears in
- * `failures` (the whole point of "near miss" is the file went on to pass).
- */
-export function groupNearMissByFile(events) {
-  const byFile = new Map()
-  for (const event of events) {
-    const key = event && typeof event.testFilePath === 'string' ? event.testFilePath : '(unknown file)'
-    if (!byFile.has(key)) byFile.set(key, [])
-    byFile.get(key).push(event)
-  }
-  return [...byFile.entries()].map(([testFilePath, fileEvents]) => ({
-    testFilePath,
-    count: fileEvents.length,
-    events: fileEvents,
-  }))
-}
 
 /** Assembles the final structured report. Pure — no `Date.now()` inside. */
 export function buildReport({ runId, generatedAt, fullSuiteOutputFile, totalTestFiles, failures, nearMiss }) {
@@ -196,20 +129,16 @@ export function buildReport({ runId, generatedAt, fullSuiteOutputFile, totalTest
 // ── glue (spawns real child processes — not covered by the unit tests, same
 // precedent as `migrate.mjs`'s untested `main()`) ──
 
-function spawnApiTest(extraArgs, env) {
-  // NO literal `--` before `extraArgs`: `pnpm --filter @crowi/api test -- --json`
-  // (with an explicit `--`) makes PNPM ITSELF forward that `--` as a literal
-  // token into the resulting command (`env -u DEBUG TZ=UTC jest --maxWorkers=5
-  // -- --json ...`) — and jest's OWN CLI parser treats a `--` as "everything
-  // after this is a positional testPathPattern, not a flag", so `--json`
-  // would silently become a (non-matching) file-path pattern instead of the
-  // JSON-output flag. Passing `extraArgs` with no separator lets pnpm forward
-  // them as plain flags, which is what jest actually needs here.
-  return spawnSync('pnpm', ['--filter', '@crowi/api', 'test', ...extraArgs], {
-    cwd: repoRoot,
-    stdio: 'inherit',
-    env,
-  })
+/**
+ * `capture: true` returns stdout/stderr as strings (needed for a solo
+ * rerun's `classifyRerunOutcome` stderr pattern-matching) instead of
+ * streaming straight to the terminal — the caller re-emits both afterward so
+ * nothing is lost, just buffered one file at a time.
+ */
+function spawnApiTest(extraArgs, env, { capture = false } = {}) {
+  // NO literal `--` before `extraArgs` — see this file's top comment.
+  const spawnOptions = capture ? { cwd: repoRoot, env, encoding: 'utf8' } : { cwd: repoRoot, env, stdio: 'inherit' }
+  return spawnSync('pnpm', ['--filter', '@crowi/api', 'test', ...extraArgs], spawnOptions)
 }
 
 function main() {
@@ -246,24 +175,24 @@ function main() {
   for (const entry of nonPassed) {
     const rerunRunId = generateRunId()
     process.stderr.write(`[test-flake] solo rerun: ${entry.file} (run id ${rerunRunId})...\n`)
-    const rerunRes = spawnApiTest(['--runTestsByPath', entry.file], { ...process.env, CROWI_TEST_RUN_ID: rerunRunId })
-    const classification = classifyRerunExitCode(rerunRes.status ?? 1)
+    const rerunRes = spawnApiTest(['--runTestsByPath', entry.file], { ...process.env, CROWI_TEST_RUN_ID: rerunRunId }, { capture: true })
+    if (rerunRes.stdout) process.stdout.write(rerunRes.stdout)
+    if (rerunRes.stderr) process.stderr.write(rerunRes.stderr)
+    const { classification, reason } = classifyRerunOutcome({ status: rerunRes.status, signal: rerunRes.signal, error: rerunRes.error, stderr: rerunRes.stderr })
     failures.push({
       file: entry.file,
       classification,
+      reason,
       fullSuiteStatus: entry.status,
       firstFailureMessage: entry.message,
       rerunExitCode: rerunRes.status ?? null,
+      rerunSignal: rerunRes.signal ?? null,
     })
     // `::error::` / `::warning::` are GitHub Actions workflow-command
-    // annotations — harmless no-ops outside CI, but this is exactly the
-    // "identifiable via annotation or log" surface the non-blocking CI job
-    // needs (a `continue-on-error: true` step still shows these).
-    if (classification === 'REGRESSION') {
-      console.log(`::error file=${entry.file}::REGRESSION — ${entry.file} fails standalone too, not just under full-suite load`)
-    } else {
-      console.log(`::warning file=${entry.file}::FLAKY — ${entry.file} failed under the full suite but passed standalone`)
-    }
+    // annotations — harmless no-ops outside CI, but a useful signal when
+    // this script is ever run from a CI context (identifiable via
+    // annotation or log).
+    annotateClassification(classification, entry.file, reason, { regressionContext: 'under full-suite load', flakyContext: 'failed under the full suite' })
   }
 
   const nearMissEventsPath = resolveNearMissEventsPath(runId)
