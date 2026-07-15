@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('path');
 const { randomBytes } = require('node:crypto');
 const { getSentinelPath } = require('./test-mongo-sentinel');
+const failureTaxonomyChannel = require('./failure-taxonomy-channel');
 
 const ROOT_DIR = path.join(__dirname, '../..');
 const MODEL_DIR = path.join(__dirname, '../models');
@@ -218,6 +219,237 @@ async function dropPerFileDatabase(mongoUri) {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// Worker-side enrichment (feature-flake-failure-taxonomy AC-2/AC-3):
+// `handleTestEvent` below, plus its pure classification helpers.
+// ─────────────────────────────────────────────────────────────────────────
+
+// MUST STAY IN SYNC with `op-ring-buffer.ts`'s exported `GLOBAL_KEY`
+// constant — see that file's doc comment for why the two can't share an
+// import (separate module systems: this file is plain CJS loaded outside
+// jest's per-file Runtime, `op-ring-buffer.ts` is ts-jest-transformed and
+// lives INSIDE the vm context this environment builds).
+// `crowi-environment.test.ts`'s "RING_BUFFER_GLOBAL_KEY / op-ring-buffer.ts
+// GLOBAL_KEY drift guard" test asserts the two literals are equal.
+const RING_BUFFER_GLOBAL_KEY = '__crowiOpRingBuffer';
+
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
+
+function isLoopbackHost(host) {
+  return LOOPBACK_HOSTS.has(host);
+}
+
+// Matches Node's own connection-failure error message shape, e.g. `connect
+// ETIMEDOUT 127.0.0.1:54321` / `connect ECONNREFUSED 127.0.0.1:54321` — the
+// exact shape Supertest's client-side HTTP request against its own ephemeral
+// `app.listen(0)` server produces when that connection never completes (see
+// the spec's design section and `op-ring-buffer.ts`'s doc comment for why
+// this failure never reaches `fetchFn`/the ring buffer at all).
+const HOST_PORT_ERROR_PATTERN = /(?:ETIMEDOUT|ECONNREFUSED|ECONNRESET)\s+([^\s:]+):(\d+)/;
+
+/** Walks `error.message`, then `error.cause.message`, etc. (bounded depth — this is a lightweight top-of-chain scan, not `db-connect-retry.ts`'s full `MongoServerSelectionError.reason.servers` unwrap, which exists specifically for the BOOT-connect path this module doesn't touch). */
+function collectErrorMessages(error, depth = 3) {
+  const messages = [];
+  let node = error;
+  let i = 0;
+  while (node && typeof node === 'object' && i < depth) {
+    if (typeof node.message === 'string') messages.push(node.message);
+    node = node.cause;
+    i += 1;
+  }
+  return messages;
+}
+
+/** Returns the FIRST host:port pair found in `messages` via `HOST_PORT_ERROR_PATTERN`, or `null` if none of them look like a connection failure at all. */
+function extractHostPort(messages) {
+  for (const message of messages) {
+    const match = typeof message === 'string' ? message.match(HOST_PORT_ERROR_PATTERN) : null;
+    if (match) return { host: match[1], port: Number(match[2]) };
+  }
+  return null;
+}
+
+/**
+ * AC-3: decides whether a connection failure's `host:port` belongs to Mongo
+ * or not by comparing it against THIS WORKER'S OWN resolved `MONGO_URI`
+ * (`resolvedMongoUri`, `CrowiEnvironment#mongoUri` — set once in `setup()`
+ * from whichever of docker/`MONGO_URI`/`TEST_MONGO_URI`/memory-server this
+ * worker actually landed on) — never a hardcoded port. Both `docker-test`
+ * (27018) and the in-process `mongodb-memory-server` (an OS-assigned dynamic
+ * port) are equally valid "this IS Mongo" answers here; a bare "is it
+ * 27017/27018" check would misclassify either the docker-dev fallback port
+ * or a memory-server instance as `ephemeral`, and worse, could coincidentally
+ * misclassify a genuinely ephemeral Supertest port that happens to land on
+ * 27017/27018 as Mongo.
+ *   - `'mongo'`: same port AND same (or loopback-equivalent) host as the
+ *     resolved Mongo URI.
+ *   - `'ephemeral'`: a loopback host that is NOT the resolved Mongo URI —
+ *     Supertest's own local `http.Server` only ever binds loopback.
+ *   - `'other'`: a non-loopback host that also isn't Mongo — unexpected;
+ *     left for `classifyOpContext` to fall through to `unclassified` rather
+ *     than guessed at here.
+ *   - `null`: no host:port evidence at all (not a connection-failure shape).
+ */
+function classifyPortClass(hostPort, resolvedMongoUri) {
+  if (!hostPort) return null;
+  if (resolvedMongoUri) {
+    try {
+      const mongoUrl = new URL(resolvedMongoUri);
+      const mongoPort = Number(mongoUrl.port) || 27017;
+      const sameHost = hostPort.host === mongoUrl.hostname || (isLoopbackHost(hostPort.host) && isLoopbackHost(mongoUrl.hostname));
+      if (hostPort.port === mongoPort && sameHost) return 'mongo';
+    } catch {
+      // resolvedMongoUri unparsable — fall through; can't positively confirm mongo.
+    }
+  }
+  return isLoopbackHost(hostPort.host) ? 'ephemeral' : 'other';
+}
+
+/**
+ * operationKind classification precedence (AC-2/AC-3; spec's "設計の主な判断"
+ * §HTTP operation 相関). Pure — takes already-extracted inputs so it's
+ * directly unit-testable without a real Circus event or ring buffer.
+ *
+ *   1. `portClass === 'ephemeral'` → `pre-dispatch`, `httpStatus: null`,
+ *      `dispatched: false` — this error shape can only originate from
+ *      Supertest's own client-to-ephemeral-server connection, which fails
+ *      BEFORE `fetchFn`/the ring buffer ever observes the request (see
+ *      `op-ring-buffer.ts`'s doc comment) — highest precedence because it is
+ *      the most specific, unambiguous signal available.
+ *   2. `portClass === 'mongo'` → `unit` — a genuine Mongo-level connectivity
+ *      failure, not an HTTP dispatch outcome (whether it happened inside an
+ *      HTTP handler or a direct Mongoose call in the test body).
+ *   3. A ring-buffer entry recorded for THIS test → `http`, using that
+ *      entry's `httpStatus` (itself possibly `null` if the app threw before
+ *      producing a response — a DIFFERENT nullable-status cause than
+ *      pre-dispatch: "dispatched but no status" vs. "never dispatched").
+ *   4. No host:port evidence at all (`portClass === null`) and no matching
+ *      ring-buffer entry → `unit` (e.g. a direct Mongoose assertion / E11000
+ *      with no HTTP involved).
+ *   5. Fallback → `unclassified` (e.g. `portClass === 'other'` with no
+ *      matching ring-buffer entry — a connection failure against neither
+ *      Mongo nor a loopback ephemeral port, an unexpected shape this
+ *      taxonomy doesn't have enough evidence to name confidently).
+ */
+function classifyOpContext({ errorMessages, recentOps, testFullName, resolvedMongoUri }) {
+  const hostPort = extractHostPort(errorMessages);
+  const portClass = classifyPortClass(hostPort, resolvedMongoUri);
+
+  const matchingOps = (recentOps || []).filter((op) => testFullName == null || op.testFullName === testFullName);
+  const lastOp = matchingOps.length > 0 ? matchingOps[matchingOps.length - 1] : null;
+
+  if (portClass === 'ephemeral') {
+    return {
+      operationKind: 'pre-dispatch',
+      httpStatus: null,
+      httpMethod: lastOp ? lastOp.method : null,
+      httpPath: lastOp ? lastOp.path : null,
+      portClass,
+      dispatched: false,
+    };
+  }
+  if (portClass === 'mongo') {
+    return { operationKind: 'unit', httpStatus: null, httpMethod: null, httpPath: null, portClass, dispatched: false };
+  }
+  if (lastOp) {
+    return { operationKind: 'http', httpStatus: lastOp.httpStatus, httpMethod: lastOp.method, httpPath: lastOp.path, portClass, dispatched: true };
+  }
+  if (portClass === null) {
+    return { operationKind: 'unit', httpStatus: null, httpMethod: null, httpPath: null, portClass, dispatched: false };
+  }
+  return { operationKind: 'unclassified', httpStatus: null, httpMethod: null, httpPath: null, portClass, dispatched: false };
+}
+
+/** Circus `hook.type` → this taxonomy's `phase` field. `test_fn_failure`/`error` map to fixed phases below without consulting this. */
+function phaseForEvent(event) {
+  if (event.name === 'hook_failure') return `hook:${event.hook.type}`;
+  if (event.name === 'test_fn_failure') return 'test';
+  if (event.name === 'error') return 'unhandled';
+  return 'unknown';
+}
+
+/** Normalizes whatever `error`-shaped value Circus attaches to an event — `jest-circus`'s own `_getError` (`utils.js`) tolerates non-`Error` thrown values, so this must too. */
+function normalizeError(error) {
+  if (error instanceof Error) {
+    return { name: error.name, message: error.message };
+  }
+  if (error && typeof error === 'object' && typeof error.message === 'string') {
+    return { name: typeof error.name === 'string' ? error.name : 'Error', message: error.message };
+  }
+  return { name: 'UnknownError', message: String(error) };
+}
+
+/**
+ * Reimplements `jest-circus`'s `getTestID` (space-joined ancestor titles,
+ * `ROOT_DESCRIBE_BLOCK` excluded) against a Circus `test` (or `describeBlock`)
+ * object, WITHOUT importing `jest-circus` — it is not resolvable from
+ * `packages/api` (only `jest` itself is a direct dependency; `jest-circus` is
+ * one of `jest`'s own transitive deps, not hoisted to a location this
+ * package's plain `require` can reach under pnpm's strict layout). The join
+ * format (`' '`, not `' > '`) matches `jestAdapterInit.js`'s
+ * `expect.jestExpect.setState({ currentTestName: getTestID(event.test) })` —
+ * i.e. it matches `expect.getState().currentTestName`, the SAME value
+ * `op-ring-buffer.ts`'s `recordDispatchStart` tags each entry with — so ring
+ * buffer entries correlate correctly against the identity computed here.
+ */
+function testFullNameFromCircusNode(node) {
+  if (!node || typeof node !== 'object') return null;
+  const parts = [];
+  let current = node;
+  while (current) {
+    if (typeof current.name === 'string' && current.name !== 'ROOT_DESCRIBE_BLOCK') {
+      parts.unshift(current.name);
+    }
+    current = current.parent;
+  }
+  return parts.length > 0 ? parts.join(' ') : null;
+}
+
+const ERROR_MESSAGE_MAX_LENGTH = 2000;
+
+/**
+ * PURE core of `handleTestEvent` (the actual class method below is a thin
+ * wrapper that gathers `this.*` context and calls this): given a Circus
+ * event/state and this worker's own context (resolved Mongo URI, ring
+ * buffer snapshot, test file path), returns the `kind: 'worker-enrichment'`
+ * record to append, or `null` when the event isn't one this taxonomy cares
+ * about. Separated out from the class method purely for direct unit-test
+ * coverage without constructing a real Circus run.
+ *
+ * Listens to exactly the three Circus events that carry a failure this
+ * taxonomy cares about (`hook_failure` / `test_fn_failure` / `error`) — see
+ * `jest-circus`'s `eventHandler.js` for the full event catalogue; every
+ * other event returns `null`. This is supplementary enrichment, NOT the
+ * authoritative record (`failure-taxonomy-reporter.js` is — see that file's
+ * doc comment): a worker that dies mid-test (the SIGSEGV case AC-1 exists
+ * for) never reaches any of these handlers at all, by design.
+ */
+function buildWorkerEnrichmentRecord(event, state, workerContext) {
+  if (event.name !== 'hook_failure' && event.name !== 'test_fn_failure' && event.name !== 'error') return null;
+
+  const test = event.name === 'error' ? (state && state.currentlyRunningTest) || null : event.test || null;
+  const phase = phaseForEvent(event);
+  const { name: errorName, message: errorMessage } = normalizeError(event.error);
+  const testFullName = testFullNameFromCircusNode(test) ?? testFullNameFromCircusNode(event.describeBlock);
+
+  const opContext = classifyOpContext({
+    errorMessages: collectErrorMessages(event.error),
+    recentOps: workerContext.ringBuffer,
+    testFullName,
+    resolvedMongoUri: workerContext.mongoUri,
+  });
+
+  return {
+    kind: 'worker-enrichment',
+    testFilePath: workerContext.testFilePath || null,
+    testFullName,
+    phase,
+    errorName,
+    errorMessage: typeof errorMessage === 'string' ? errorMessage.slice(0, ERROR_MESSAGE_MAX_LENGTH) : null,
+    opContext,
+  };
+}
+
 /**
  * jest environment for the @crowi/api server-side test project.
  *
@@ -281,6 +513,42 @@ async function dropPerFileDatabase(mongoUri) {
  * is the cheapest way to guarantee isolation.
  */
 class CrowiEnvironment extends NodeEnvironment {
+  constructor(config, context) {
+    super(config, context);
+    // `NodeEnvironment`'s own constructor discards `context` (its `this.context`
+    // is the vm context it creates, a different, pre-existing meaning) — capture
+    // `context.testPath` ourselves so `handleTestEvent` (feature-flake-failure-taxonomy
+    // AC-2) can tag its enrichment records with the file they came from.
+    this.testFilePath = context && context.testPath;
+  }
+
+  /**
+   * Jest Circus hook (`JestEnvironment#handleTestEvent`, see `@jest/environment`'s
+   * type declaration) — `jest-circus`'s `jestAdapterInit.js` calls this
+   * bound to the instance (`environment.handleTestEvent.bind(environment)`),
+   * so `this` here is a real `CrowiEnvironment`. Gathers this worker's
+   * context and delegates to the pure `buildWorkerEnrichmentRecord` above.
+   *
+   * Fail-open (AC-1/AC-2, feature-flake-failure-taxonomy): the entire body
+   * is one `try`/`catch` that only ever `console.warn`s — an enrichment bug
+   * must never affect (or mask) the real test run.
+   */
+  async handleTestEvent(event, state) {
+    try {
+      const record = buildWorkerEnrichmentRecord(event, state, {
+        mongoUri: this.mongoUri,
+        testFilePath: this.testFilePath,
+        ringBuffer: this.global && Array.isArray(this.global[RING_BUFFER_GLOBAL_KEY]) ? this.global[RING_BUFFER_GLOBAL_KEY] : [],
+      });
+      if (!record) return;
+      const runId = failureTaxonomyChannel.currentRunId();
+      failureTaxonomyChannel.appendRecord(runId, record);
+    } catch (err) {
+      // Fail-open — see this method's doc comment.
+      console.warn(`[test-harness] crowi-environment: handleTestEvent enrichment failed (${err.message}).`);
+    }
+  }
+
   async setup() {
     await super.setup();
 
@@ -391,4 +659,15 @@ module.exports = CrowiEnvironment;
 // class or a `{ default: class }` shape) keeps working unmodified — the
 // class itself IS `module.exports` either way, and a function/class is a
 // perfectly normal place to hang extra static properties in JS.
-CrowiEnvironment.__test__ = { buildPerFileUri, resolvedExternalMongoUri, dropPerFileDatabase, assertMaxPoolSizeSpliced };
+CrowiEnvironment.__test__ = {
+  buildPerFileUri,
+  resolvedExternalMongoUri,
+  dropPerFileDatabase,
+  assertMaxPoolSizeSpliced,
+  // feature-flake-failure-taxonomy AC-2/AC-3 classification helpers:
+  classifyPortClass,
+  classifyOpContext,
+  testFullNameFromCircusNode,
+  buildWorkerEnrichmentRecord,
+  RING_BUFFER_GLOBAL_KEY,
+};
