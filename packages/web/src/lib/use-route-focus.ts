@@ -24,8 +24,15 @@ export const MAIN_CONTENT_ID = 'main-content';
  *
  * **First mount is deliberately skipped.** Stealing focus on the very
  * first paint would fight the browser's own initial-load focus behaviour
- * (e.g. a user tabbing from the address bar), so a `useRef` latch lets the
- * first render through untouched and only acts on the 2nd+ pathname value.
+ * (e.g. a user tabbing from the address bar), so focus only moves when the
+ * pathname actually *changes* from its previous value. This is intentionally
+ * a previous-pathname comparison, not a "skip the first effect" boolean latch:
+ * React StrictMode (dev default) double-invokes the mount effect, and a
+ * boolean latch consumed by the first invoke would let the second invoke
+ * steal focus on initial load — surfacing a spurious focus-visible ring on
+ * `#main-content` right after a page load. The comparison is idempotent under
+ * such a double-invoke (the second run sees the ref already equal to
+ * `pathname`).
  *
  * A "logic-only" hook (no JSX) — mirrors `useNotificationsSocket` /
  * `useStickyHeader`: mounted once per shell layout, adds no node to the
@@ -33,13 +40,17 @@ export const MAIN_CONTENT_ID = 'main-content';
  */
 export function useRouteFocus(): void {
   const pathname = usePathname();
-  const isFirstRenderRef = useRef(true);
+  // Seeded with the initial pathname so the first render focuses nothing; only
+  // an actual pathname change moves focus. See the doc comment above for why
+  // this is a previous-value comparison rather than a first-render boolean
+  // latch (StrictMode double-invoke safety).
+  const previousPathnameRef = useRef(pathname);
 
   useEffect(() => {
-    if (isFirstRenderRef.current) {
-      isFirstRenderRef.current = false;
+    if (previousPathnameRef.current === pathname) {
       return;
     }
+    previousPathnameRef.current = pathname;
     document.getElementById(MAIN_CONTENT_ID)?.focus();
   }, [pathname]);
 }
