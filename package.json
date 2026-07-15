@@ -48,6 +48,7 @@
     "test": "turbo run test --concurrency=3",
     "test:scripts": "node --test scripts/*.test.mjs",
     "test:flake": "node scripts/test-flake-report.mjs",
+    "test:flake-taxonomy": "node scripts/test-flake-taxonomy.mjs",
     "test:server": "turbo run test:server",
     "lint": "turbo run lint",
     "lint:fix": "turbo run lint:fix",
