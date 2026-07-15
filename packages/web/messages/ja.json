@@ -235,6 +235,7 @@
   "page.plantuml_zoom": "図を拡大",
   "page.table_fullscreen_open": "表を拡大表示",
   "page.share.aria_open": "リンクを共有",
+  "page.share.menu_copy_url": "URLをコピー",
   "page.share.title": "共有",
   "page.share.url_copied": "URL をコピーしました",
   "page.share.link_label": "タイトルとURL",

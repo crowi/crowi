@@ -232,7 +232,7 @@ describe('PageHeader — compact state', () => {
     fireEvent.click(trigger);
     expect(screen.getByRole('menuitem', { name: 'ウォッチ' })).toBeTruthy();
     expect(screen.getByRole('menuitem', { name: 'ブックマーク' })).toBeTruthy();
-    expect(screen.getByRole('menuitem', { name: 'タイトルとURL' })).toBeTruthy();
+    expect(screen.getByRole('menuitem', { name: 'URLをコピー' })).toBeTruthy();
   });
 
   it('renders the live presence row at compact size in the compact bar', () => {
