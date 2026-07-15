@@ -9,7 +9,7 @@
     "build": "next build",
     "start": "next start --port ${PORT_WEB:-4302}",
     "lint": "eslint",
-    "type-check": "tsc --noEmit",
+    "type-check": "next typegen && tsc --noEmit",
     "paraglide:compile": "paraglide-js compile --project ./project.inlang --outdir ./paraglide --strategy cookie baseLocale",
     "predev": "pnpm paraglide:compile",
     "prebuild": "pnpm paraglide:compile",
