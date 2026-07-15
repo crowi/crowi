@@ -235,6 +235,7 @@
   "page.plantuml_zoom": "Enlarge diagram",
   "page.table_fullscreen_open": "Expand table",
   "page.share.aria_open": "Share link",
+  "page.share.menu_copy_url": "Copy URL",
   "page.share.title": "Share",
   "page.share.url_copied": "URL Copied!",
   "page.share.link_label": "Title + URL",

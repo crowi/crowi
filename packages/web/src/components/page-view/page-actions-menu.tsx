@@ -1,22 +1,22 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { Bell, BellOff, Bookmark, ClipboardCopy, Compass, History, Link2, MoreHorizontal, MoveRight, ThumbsUp, Trash2 } from 'lucide-react';
 import type { PageWithRevision } from '@crowi/api-contract';
 import { PageStatusEnum } from '@crowi/api-contract';
+import { m } from '@paraglide/messages.js';
+import { Bell, BellOff, Bookmark, ClipboardCopy, Compass, History, Link2, MoreHorizontal, MoveRight, ThumbsUp, Trash2 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { buildPageShareUrl } from '@/lib/build-page-share-url';
 import { notify } from '@/lib/notify';
 import { isUserHomePath } from '@/lib/page-path';
 import { useToggleBookmark } from '@/lib/use-bookmark';
 import { useToggleLike } from '@/lib/use-like';
 import { useToggleWatch } from '@/lib/use-watch';
-import { m } from '@paraglide/messages.js';
 import { DeletePageDialog } from './delete-page-dialog';
 import { PortalizeDialog } from './portalize-dialog';
 import { RenameDialog } from './rename-dialog';
+import { ShareDialog } from './share-dialog';
 
 interface PageActionsMenuProps {
   page: PageWithRevision;
@@ -44,6 +44,7 @@ export function PageActionsMenu({ page, compact = false, isAuthenticated = false
   const [isRenameOpen, setIsRenameOpen] = useState(false);
   const [isPortalizeOpen, setIsPortalizeOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isShareOpen, setIsShareOpen] = useState(false);
   // Drafts hide the social affordances (watch / bookmark / copy-link)
   // that the compact dropdown otherwise folds in. The page-level
   // history / rename / delete actions still apply to the draft.
@@ -89,7 +90,7 @@ export function PageActionsMenu({ page, compact = false, isAuthenticated = false
             <>
               {isAuthenticated && <WatchMenuItem pageId={page._id} />}
               <BookmarkMenuItem pageId={page._id} />
-              <CopyLinkMenuItem pageId={page._id} />
+              <CopyLinkMenuItem onSelect={() => setIsShareOpen(true)} />
               <DropdownMenuSeparator />
             </>
           )}
@@ -99,7 +100,7 @@ export function PageActionsMenu({ page, compact = false, isAuthenticated = false
             <>
               {isAuthenticated && <LikeMenuItem pageId={page._id} isLiked={isLiked} />}
               {isAuthenticated && <WatchMenuItem pageId={page._id} />}
-              <CopyLinkMenuItem pageId={page._id} />
+              <CopyLinkMenuItem onSelect={() => setIsShareOpen(true)} />
               <DropdownMenuSeparator />
             </>
           )}
@@ -135,6 +136,7 @@ export function PageActionsMenu({ page, compact = false, isAuthenticated = false
       {canRename && <RenameDialog page={page} open={isRenameOpen} onOpenChange={setIsRenameOpen} />}
       {canPortalize && <PortalizeDialog page={page} open={isPortalizeOpen} onOpenChange={setIsPortalizeOpen} />}
       <DeletePageDialog pageId={page._id} pagePath={page.path} revisionId={page.revision?._id} open={isDeleteOpen} onOpenChange={setIsDeleteOpen} />
+      <ShareDialog page={page} open={isShareOpen} onOpenChange={setIsShareOpen} />
     </>
   );
 }
@@ -189,18 +191,16 @@ function BookmarkMenuItem({ pageId }: { pageId: string }) {
   );
 }
 
-/** Copy page URL to the clipboard from a dropdown item (compact header). */
-function CopyLinkMenuItem({ pageId }: { pageId: string }) {
-  const handleCopy = () => {
-    if (typeof window === 'undefined') return;
-    void navigator.clipboard?.writeText(buildPageShareUrl(pageId)).catch(() => {
-      // clipboard unavailable (insecure context / denied) — silently ignore.
-    });
-  };
+/**
+ * Opens the mobile share Dialog (`ShareDialog`) from a dropdown item
+ * (compact header / portal `foldSocial` header). The Dialog itself
+ * auto-copies the id URL as soon as it opens — see `SharePanelContent`.
+ */
+function CopyLinkMenuItem({ onSelect }: { onSelect: () => void }) {
   return (
-    <DropdownMenuItem onSelect={handleCopy}>
+    <DropdownMenuItem onSelect={onSelect}>
       <Link2 className="h-4 w-4 mr-2" />
-      {m['page.share.link_label']()}
+      {m['page.share.menu_copy_url']()}
     </DropdownMenuItem>
   );
 }
