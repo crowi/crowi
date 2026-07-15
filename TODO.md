@@ -97,6 +97,7 @@ alpha.0–.3 は published、alpha.4 / stable 向けに changeset 蓄積中（pr
 - **ページ系 react-query queryKey レジストリ統合** — save 後の portal-staleness 再発防止に、page/list/children/revisions/user-page の queryKey を単一 `page-query-keys.ts` に集約（spec: `feature-page-cache-key-registry.md`）
 - **アプリシェルの a11y 基盤(skip-link + ルート遷移フォーカス管理 + mobile-search の Sheet 化)** — (auth)/(admin) 両 layout に skip-link + `use-route-focus` フックを追加、mobile-search.tsx の手製 `createPortal` オーバーレイを Radix Dialog ベースの `Sheet` に置換しフォーカストラップ/復元/Esc クローズ/scroll lock を委譲（spec: `feature-app-shell-a11y.md`）
 - **boot 手順の宣言的ステップ定義への統一** — `runInitLayers`/`initForCli` の二重手書きステップ列挙を `boot-steps.ts` の `ALL_BOOT_STEPS` + `resolveBootOrder()`（`topoSortPlugins` の DFS を踏襲）に統一し、CLI 省略対象を `CLI_SKIP_STEPS` 一箇所に集約（spec: `feature-boot-sequence-declarative.md`）
+- **モバイル共有メニューの URL コピー修正** — page-actions-menu の「URLをコピー」項目を PC と共通の `SharePanelContent` 共有ダイアログに統一し、auto-copy + タイトル/Markdown 行を提供（spec: `feature-mobile-share-menu-fix.md`）
 
 ---
 
