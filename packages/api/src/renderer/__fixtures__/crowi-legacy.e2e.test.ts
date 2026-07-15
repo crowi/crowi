@@ -34,6 +34,7 @@ describe('e2e: @crowi/plugin-renderer-crowi-legacy (v1 quirks)', () => {
     const scope = makeRendererScope(reg, PLUGIN, silentLogger);
     crowiLegacyPlugin.registerRenderer?.(scope, {
       log: silentLogger,
+      actor: { kind: 'system' },
       // Other PluginContext fields aren't read by registerRenderer.
     } as never);
   };
@@ -42,7 +43,7 @@ describe('e2e: @crowi/plugin-renderer-crowi-legacy (v1 quirks)', () => {
     const reg = new RendererRegistryImpl();
     enablePlugin(reg);
 
-    const ctx: RenderContext = { mode: 'save', log: silentLogger };
+    const ctx: RenderContext = { mode: 'save', log: silentLogger, actor: { kind: 'system' } };
     const { tree } = await runPipeline('##hoge', reg, ctx, loadDeps);
 
     expect(tree.children).toHaveLength(1);
@@ -56,7 +57,7 @@ describe('e2e: @crowi/plugin-renderer-crowi-legacy (v1 quirks)', () => {
     const reg = new RendererRegistryImpl();
     // Intentionally do NOT register the plugin — only the bundled
     // core 4 transforms (+ core remark-breaks) run.
-    const ctx: RenderContext = { mode: 'save', log: silentLogger };
+    const ctx: RenderContext = { mode: 'save', log: silentLogger, actor: { kind: 'system' } };
     const { tree } = await runPipeline('##hoge', reg, ctx, loadDeps);
 
     expect(tree.children).toHaveLength(1);
@@ -67,7 +68,7 @@ describe('e2e: @crowi/plugin-renderer-crowi-legacy (v1 quirks)', () => {
     const reg = new RendererRegistryImpl();
     enablePlugin(reg);
 
-    const ctx: RenderContext = { mode: 'save', log: silentLogger };
+    const ctx: RenderContext = { mode: 'save', log: silentLogger, actor: { kind: 'system' } };
     // Core remark-breaks runs before the plugin, so the paragraph
     // arriving at the plugin is [text("##hoge"), break, text("bar")].
     // The plugin must produce: heading "hoge" + paragraph "bar".
@@ -86,7 +87,7 @@ describe('e2e: @crowi/plugin-renderer-crowi-legacy (v1 quirks)', () => {
     enablePlugin(reg);
 
     const body = ['# Title', '', '##sub', '', 'See [[/foo]]'].join('\n');
-    const ctx: RenderContext = { mode: 'save', log: silentLogger };
+    const ctx: RenderContext = { mode: 'save', log: silentLogger, actor: { kind: 'system' } };
     const { metadata } = await runPipeline(body, reg, ctx, loadDeps);
 
     // Proper `# Title` (with space) goes through the core headings

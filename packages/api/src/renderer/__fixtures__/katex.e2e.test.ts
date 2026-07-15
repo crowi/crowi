@@ -29,6 +29,7 @@ const stubPluginCtx: PluginContext = {
   },
   model: () => undefined,
   log: silentLogger,
+  actor: { kind: 'system' },
 } as PluginContext;
 
 /**
@@ -60,6 +61,7 @@ describe('e2e: @crowi/plugin-renderer-katex', () => {
     const ctx: RenderContext = {
       mode: 'view',
       log: silentLogger,
+      actor: { kind: 'system' },
       cache: scopeForPlugin(storage, PLUGIN),
       auth: createAuthContextStub(),
     };
@@ -81,6 +83,7 @@ describe('e2e: @crowi/plugin-renderer-katex', () => {
     const ctx: RenderContext = {
       mode: 'view',
       log: silentLogger,
+      actor: { kind: 'system' },
       cache: scopeForPlugin(storage, PLUGIN),
       auth: createAuthContextStub(),
     };
@@ -102,6 +105,7 @@ describe('e2e: @crowi/plugin-renderer-katex', () => {
     const ctx: RenderContext = {
       mode: 'view',
       log: silentLogger,
+      actor: { kind: 'system' },
       cache: scopeForPlugin(storage, PLUGIN),
       auth: createAuthContextStub(),
     };
@@ -122,6 +126,7 @@ describe('e2e: @crowi/plugin-renderer-katex', () => {
     const ctx: RenderContext = {
       mode: 'view',
       log: silentLogger,
+      actor: { kind: 'system' },
       cache: scopeForPlugin(storage, PLUGIN),
       auth: createAuthContextStub(),
     };

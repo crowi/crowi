@@ -21,7 +21,7 @@ const loadDeps = createPipelineEsmDepsLoader();
 // skipped entirely.
 const runCore = async (body: string) => {
   const reg = new RendererRegistryImpl();
-  return runPipeline(body, reg, { mode: 'save', log: silentLogger }, loadDeps);
+  return runPipeline(body, reg, { mode: 'save', log: silentLogger, actor: { kind: 'system' } }, loadDeps);
 };
 
 describe('pipeline + core renderers', () => {

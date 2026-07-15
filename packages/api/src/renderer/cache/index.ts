@@ -10,11 +10,12 @@ import type {
   RenderResult,
   ScopedCacheStorage,
 } from '@crowi/plugin-api';
+import { acquireRenderSlot, type RenderPriority } from '../core/render-admission';
 import { MongoCacheStorage } from './mongodb-cache';
 import { errorPlaceholder, sizeLimitPlaceholder } from './reservation';
 
 export { MongoCacheStorage, createMongoCacheStorage } from './mongodb-cache';
-export { errorPlaceholder, sizeLimitPlaceholder, renderReservation } from './reservation';
+export { errorPlaceholder, sizeLimitPlaceholder, renderReservation, dispatchLimitPlaceholder } from './reservation';
 export type { CacheSetReject } from './mongodb-cache';
 
 /**
@@ -51,6 +52,27 @@ export const RENDER_ERROR_TTL: Readonly<Record<RenderError['code'], number>> = {
 export function defaultEmbedKey(input: EmbedInput): string {
   const json = JSON.stringify({ tag: input.tag, url: input.url });
   return createHash('sha256').update(json).digest('hex');
+}
+
+/** Shared by `cachedRender` / `cachedRenderOrPending` — the `CacheKey` for a single render call. */
+function buildCacheKey(pluginName: string, renderer: EmbedRenderer, input: EmbedInput): CacheKey {
+  const embedKey = renderer.computeEmbedKey ? renderer.computeEmbedKey(input) : defaultEmbedKey(input);
+  return {
+    pluginName,
+    pluginCacheVersion: renderer.cacheVersion,
+    pageId: input.pageId,
+    embedKey,
+  };
+}
+
+/** Shared by `cachedRender` / `cachedRenderOrPending` — fresh / stale-within-window classification for a cache hit. */
+function classifyFreshness(cached: CacheEntry, now: number): { isFresh: boolean; isWithinStaleWindow: boolean } {
+  const expiresMs = cached.expiresAt.getTime();
+  const ttlMs = expiresMs - cached.fetchedAt.getTime();
+  const staleWindowMs = ttlMs * DEFAULT_STALE_MULTIPLIER;
+  const isFresh = now < expiresMs;
+  const isWithinStaleWindow = !isFresh && now < expiresMs + staleWindowMs;
+  return { isFresh, isWithinStaleWindow };
 }
 
 /**
@@ -119,22 +141,12 @@ export async function cachedRender(
   input: EmbedInput,
   ctx: RenderContext,
 ): Promise<CachedRenderResult> {
-  const embedKey = renderer.computeEmbedKey ? renderer.computeEmbedKey(input) : defaultEmbedKey(input);
-  const key: CacheKey = {
-    pluginName,
-    pluginCacheVersion: renderer.cacheVersion,
-    pageId: input.pageId,
-    embedKey,
-  };
+  const key = buildCacheKey(pluginName, renderer, input);
 
   const cached = await storage.get(key);
   const now = Date.now();
   if (cached) {
-    const expiresMs = cached.expiresAt.getTime();
-    const ttlMs = expiresMs - cached.fetchedAt.getTime();
-    const staleWindowMs = ttlMs * DEFAULT_STALE_MULTIPLIER;
-    const isFresh = now < expiresMs;
-    const isWithinStaleWindow = !isFresh && now < expiresMs + staleWindowMs;
+    const { isFresh, isWithinStaleWindow } = classifyFreshness(cached, now);
 
     if (isFresh) {
       return { html: cached.html, freshness: 'fresh', result: cached.result };
@@ -208,7 +220,17 @@ async function renderAndStore(
       },
     };
   }
+  return persistRenderResult(storage, key, renderer, result);
+}
 
+/**
+ * Shared tail of `renderAndStore` / `cachedRenderOrPending`'s admission-
+ * gated render path: TTL computation, error → placeholder substitution,
+ * and the size-limit-reject fallback. Split out so `cachedRenderOrPending`
+ * (below) persists a successful `renderer.render()` result exactly the
+ * same way `cachedRender` always has, without duplicating the logic.
+ */
+async function persistRenderResult(storage: MongoCacheStorage, key: CacheKey, renderer: EmbedRenderer, result: RenderResult): Promise<RenderAndStoreResult> {
   const now = new Date();
   const ttlSec = pickTtl(result);
   const expiresAt = new Date(now.getTime() + ttlSec * 1000);
@@ -239,6 +261,152 @@ async function renderAndStore(
   }
 
   return { html: cachedHtml, result: cacheEntry.result };
+}
+
+/** What `cachedRenderOrPending` returns — a rendered/cached result, or `pending` (nothing written to the cache). */
+export type CachedRenderOrPendingResult = { kind: 'rendered'; html: string; freshness: 'fresh' | 'stale'; result: RenderResult } | { kind: 'pending' };
+
+// Separate from `inFlightRender` (above) even though both key by the
+// same `cacheKeyString` shape — a `pluginName` only ever goes through
+// ONE of `cachedRender` / `cachedRenderOrPending` (registration-time
+// `admissionControl` presence decides which, see `code-block-dispatch.ts`),
+// so there is no real overlap; keeping the maps separate just keeps the
+// stored promise's resolved type (`RenderAndStoreResult` vs. `| null`)
+// distinct without a union.
+const inFlightAdmissionRender = new Map<string, Promise<RenderAndStoreResult | null>>();
+
+/**
+ * Admission-control-aware sibling of `cachedRender` (spec §5 / §6).
+ * Identical fresh / stale-serve-then-background-refresh / miss branching,
+ * but the actual `renderer.render()` call (foreground miss AND the SWR
+ * background refresh) is wrapped with `acquireRenderSlot` when
+ * `renderer.admissionControl` is declared. Admission rejection (queue
+ * overflow, aborted while queued) and a thrown `renderer.render()` both
+ * resolve to `{ kind: 'pending' }` — nothing is written to `storage`, so
+ * a later, successful retry is never shadowed by a stale cached failure.
+ *
+ * `cachedRender` itself is untouched — this is a sibling, not a
+ * replacement, and only plugins that declare `admissionControl` (today,
+ * only Mermaid) are ever routed here (`code-block-dispatch.ts`).
+ */
+export async function cachedRenderOrPending(
+  storage: MongoCacheStorage,
+  pluginName: string,
+  renderer: EmbedRenderer,
+  input: EmbedInput,
+  ctx: RenderContext,
+  admission: { priority: RenderPriority },
+): Promise<CachedRenderOrPendingResult> {
+  if (!renderer.admissionControl) {
+    // No admission declared for this registration — behave exactly like
+    // `cachedRender` (fresh/stale/miss branching, no admission gate).
+    const rendered = await cachedRender(storage, pluginName, renderer, input, ctx);
+    return { kind: 'rendered', ...rendered };
+  }
+
+  const key = buildCacheKey(pluginName, renderer, input);
+
+  const cached = await storage.get(key);
+  const now = Date.now();
+  if (cached) {
+    const { isFresh, isWithinStaleWindow } = classifyFreshness(cached, now);
+
+    if (isFresh) {
+      return { kind: 'rendered', html: cached.html, freshness: 'fresh', result: cached.result };
+    }
+    if (isWithinStaleWindow) {
+      // Cache-hit path (fresh or stale-serve) never touches admission —
+      // only the background refresh kicked off below acquires a slot,
+      // matching spec §6's "admission gates renderer.render(), not the
+      // cache read" invariant.
+      const ks = cacheKeyString(key);
+      if (!inFlightAdmissionRender.has(ks)) {
+        setImmediate(() => {
+          void dedupedRenderOrSkip(ks, storage, key, renderer, input, ctx, admission).catch((err) => {
+            ctx.log.warn(
+              `[plugin-render-cache] background re-render (admission) failed for plugin=${pluginName} pageId=${input.pageId}: ${stringifyError(err)}`,
+            );
+          });
+        });
+      }
+      return { kind: 'rendered', html: cached.html, freshness: 'stale', result: cached.result };
+    }
+    // expired beyond stale window — fall through to a blocking attempt.
+  }
+
+  const ks = cacheKeyString(key);
+  const outcome = await dedupedRenderOrSkip(ks, storage, key, renderer, input, ctx, admission);
+  if (outcome === null) return { kind: 'pending' };
+  return { kind: 'rendered', html: outcome.html, freshness: 'fresh', result: outcome.result };
+}
+
+function dedupedRenderOrSkip(
+  ks: string,
+  storage: MongoCacheStorage,
+  key: CacheKey,
+  renderer: EmbedRenderer,
+  input: EmbedInput,
+  ctx: RenderContext,
+  admission: { priority: RenderPriority },
+): Promise<RenderAndStoreResult | null> {
+  const existing = inFlightAdmissionRender.get(ks);
+  if (existing) return existing;
+  const p = renderUnderAdmissionAndStore(storage, key, renderer, input, ctx, admission).finally(() => {
+    inFlightAdmissionRender.delete(ks);
+  });
+  inFlightAdmissionRender.set(ks, p);
+  return p;
+}
+
+/**
+ * Acquire an admission slot, call `renderer.render()`, release the slot,
+ * and persist on success — `null` on any admission rejection or a
+ * thrown `render()` (spec §5 classification B: caller treats `null` as
+ * `{ kind: 'pending' }` and writes nothing to the cache).
+ */
+async function renderUnderAdmissionAndStore(
+  storage: MongoCacheStorage,
+  key: CacheKey,
+  renderer: EmbedRenderer,
+  input: EmbedInput,
+  ctx: RenderContext,
+  admission: { priority: RenderPriority },
+): Promise<RenderAndStoreResult | null> {
+  const admissionControl = renderer.admissionControl;
+  // Unreachable via the two call sites above (both already checked
+  // `renderer.admissionControl` is set) — kept as a defensive fallback
+  // rather than a non-null assertion.
+  if (!admissionControl) return renderAndStore(storage, key, renderer, input, ctx);
+
+  let ticket: { release(): void };
+  try {
+    ticket = await acquireRenderSlot({
+      pluginName: key.pluginName,
+      actor: ctx.actor,
+      priority: admission.priority,
+      signal: ctx.signal,
+      admissionControl,
+    });
+  } catch {
+    // Queue overflow, or the signal aborted while queued.
+    return null;
+  }
+
+  let result: RenderResult;
+  try {
+    result = await renderer.render(input, ctx);
+  } catch {
+    // A thrown `render()` under admission is, by contract (spec §5),
+    // always an infra failure (child-process timeout/crash) — Mermaid's
+    // own `index.ts` never lets a classification-A (notation error /
+    // §3 reject / sanitizer reject / size limit) failure escape as an
+    // exception. Treat it as pending, same as an admission rejection.
+    return null;
+  } finally {
+    ticket.release();
+  }
+
+  return persistRenderResult(storage, key, renderer, result);
 }
 
 /**

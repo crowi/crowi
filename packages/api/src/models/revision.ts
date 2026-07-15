@@ -2,6 +2,7 @@ import Crowi from 'src/crowi';
 import { Types, Document, Model, Schema, model } from 'mongoose';
 import type { MentionResponse, RevisionMetaShape, RevisionType, TocEntryResponse, WikiLinkResponse } from '@crowi/api-contract';
 import { RENDERER_PIPELINE_VERSION } from 'src/renderer/version';
+import { actorFromUser } from 'src/util/ts-rest-helpers';
 import { PageDocument } from './page';
 // import Debug from 'debug'
 
@@ -341,6 +342,7 @@ export default (crowi: Crowi) => {
     const { metadata, renderedAst } = await crowi.getRenderer().runRender(body || '', {
       mode: 'save',
       pageId: pageData._id?.toString(),
+      actor: actorFromUser(user),
     });
     newRevision.meta = metadataToRevisionMeta(metadata);
     newRevision.renderedAst = renderedAst;

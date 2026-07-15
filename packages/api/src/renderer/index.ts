@@ -1,5 +1,5 @@
 import Debug from 'debug';
-import type { PluginLogger, RenderContext } from '@crowi/plugin-api';
+import type { PluginLogger, RenderActor, RenderContext } from '@crowi/plugin-api';
 import type Crowi from 'src/crowi';
 import type { UserModel } from 'src/models/user';
 import { type MongoCacheStorage, createMongoCacheStorage } from './cache';
@@ -11,6 +11,20 @@ import { serializeMdast } from './serialize';
 export type { PipelineMetadata, PipelineResult, PipelineEsmDeps, ShikiHighlighter } from './pipeline';
 export { RendererRegistryImpl, makeRendererScope, createAuthContextStub } from './registry';
 export { serializeMdast } from './serialize';
+
+/**
+ * Options accepted by `Renderer.run`/`runMetadata`/`runRender`. `actor` is
+ * required (spec §6 — admission control's per-user concurrency cap needs
+ * an actor on every call, end to end); `signal` is optional and only
+ * meaningful for the preview call site (`page-preview.ts`), which can
+ * propagate the originating request's abort.
+ */
+export interface RunOptions {
+  mode?: RenderContext['mode'];
+  pageId?: string;
+  actor: RenderActor;
+  signal?: AbortSignal;
+}
 
 /**
  * The renderer surface attached to `Crowi.renderer` after
@@ -29,16 +43,16 @@ export interface Renderer {
    */
   cache: MongoCacheStorage;
   /** Run the parse + transform pipeline against `body`. */
-  run(body: string, options?: { mode?: RenderContext['mode']; pageId?: string }): Promise<PipelineResult>;
+  run(body: string, options: RunOptions): Promise<PipelineResult>;
   /** Convenience: just the metadata (used by `prepareRevision` + on-the-fly fallback). */
-  runMetadata(body: string, options?: { mode?: RenderContext['mode']; pageId?: string }): Promise<PipelineMetadata>;
+  runMetadata(body: string, options: RunOptions): Promise<PipelineMetadata>;
   /**
    * Convenience: run the pipeline and return both metadata and the
    * JSON-serialisable rendered AST. Used by `prepareRevision` (save
    * path) and by `computeRevisionRenderedAstAsync` (read-path on-the-
    * fly fallback for legacy revisions).
    */
-  runRender(body: string, options?: { mode?: RenderContext['mode']; pageId?: string }): Promise<{ metadata: PipelineMetadata; renderedAst: unknown }>;
+  runRender(body: string, options: RunOptions): Promise<{ metadata: PipelineMetadata; renderedAst: unknown }>;
   /**
    * Eagerly initialise heavy ESM-only deps (shiki + unified). Fired
    * fire-and-forget from `Crowi.init`'s `setupRenderer` so the first
@@ -98,23 +112,25 @@ export function createRenderer(crowi: Crowi): Renderer {
   // never consult either. The dispatch layer (embed-tags /
   // url-inline-expand) attaches a per-plugin `cache` + `auth` before
   // calling into plugin code.
-  const buildCtx = (options: { mode?: RenderContext['mode']; pageId?: string } = {}): RenderContext => ({
+  const buildCtx = (options: RunOptions): RenderContext => ({
     mode: options.mode ?? 'save',
     log: coreLogger,
+    actor: options.actor,
+    ...(options.signal ? { signal: options.signal } : {}),
   });
 
   return {
     registry,
     cache,
-    async run(body, options = {}) {
+    async run(body, options) {
       const ctx = buildCtx(options);
       return runPipeline(body, registry, ctx, loadDeps, { cache, pageId: options.pageId ?? null, resolveMentionUsernames });
     },
-    async runMetadata(body, options = {}) {
+    async runMetadata(body, options) {
       const result = await this.run(body, options);
       return result.metadata;
     },
-    async runRender(body, options = {}) {
+    async runRender(body, options) {
       const result = await this.run(body, options);
       return {
         metadata: result.metadata,

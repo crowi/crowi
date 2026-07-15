@@ -32,7 +32,7 @@ import type Crowi from 'src/crowi';
 import type { PageDocument } from 'src/models/page';
 import type { RevisionDocument, RevisionMetaContent } from 'src/models/revision';
 import { type PopulatedRevision, computeRevisionRenderArtifactsAsync, toRevisionResponse } from 'src/util/page-response';
-import { isPopulatedUser, isValidObjectId, toISOStringOrNull, toPageUser } from 'src/util/ts-rest-helpers';
+import { actorFromUser, isPopulatedUser, isValidObjectId, toISOStringOrNull, toPageUser } from 'src/util/ts-rest-helpers';
 
 import type { CrowiHonoBindings } from '../app';
 import { createJwtAuth } from '../middleware/auth';
@@ -239,6 +239,7 @@ export const registerRevisionRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>
             obj.meta,
             obj.renderedAst,
             revision.body,
+            actorFromUser(user),
             obj.rendererVersion,
             page._id?.toString(),
           );

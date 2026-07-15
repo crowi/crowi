@@ -14,10 +14,18 @@ import { makeUrlInlineExpandDispatch } from './url-inline-expand';
 import { remarkWikiLinks } from './wikilinks';
 
 export type { UnifiedTransformPlugin } from './headings';
-export { makeCodeBlockDispatch } from './code-block-dispatch';
+export { makeCodeBlockDispatch, hasPendingMermaidMarker, redispatchPendingCodeBlocks, type CodeBlockDispatchDeps } from './code-block-dispatch';
 export { makeEmbedTagDispatch } from './embed-tags';
 export { makeMentionResolve, type MentionUsernameResolver } from './mention-resolve';
 export { makeUrlInlineExpandDispatch } from './url-inline-expand';
+export {
+  acquireRenderSlot,
+  type AcquireRenderSlotOptions,
+  type RenderPriority,
+  type RenderSlotTicket,
+  RenderAdmissionAbortedError,
+  RenderAdmissionQueueOverflowError,
+} from './render-admission';
 
 /**
  * Build the bundled core renderer transform plugins, in their fixed

@@ -53,7 +53,7 @@ import type { UserDocument } from 'src/models/user';
 import { computeRevisionRenderArtifactsAsync, isPopulatedRevision, pageToResponse } from 'src/util/page-response';
 import { indexPageInSearchById } from 'src/util/page-search-index';
 import { createRateLimiter } from 'src/util/rate-limit';
-import { isValidObjectId, loadGrantedPage, toUserPublic } from 'src/util/ts-rest-helpers';
+import { actorFromUser, isValidObjectId, loadGrantedPage, toUserPublic } from 'src/util/ts-rest-helpers';
 
 import type { CrowiHonoBindings } from '../app';
 import { withRateLimit } from '../middleware/rate-limit';
@@ -284,6 +284,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
               page.revision.meta,
               page.revision.renderedAst,
               page.revision.body,
+              actorFromUser(user),
               page.revision.rendererVersion,
               page._id?.toString(),
             );
@@ -483,6 +484,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
               portalPage.revision.meta,
               portalPage.revision.renderedAst,
               portalPage.revision.body,
+              actorFromUser(user),
               portalPage.revision.rendererVersion,
               portalPage._id?.toString(),
             );

@@ -4,9 +4,12 @@ import { authHeaders, createTestUser } from 'src/test/test-helpers';
 
 describe('Routes /api/v2/pages/preview (Hono previewPage)', () => {
   let accessToken: string;
+  let accessTokenUserId: string;
 
   beforeAll(async () => {
-    ({ accessToken } = await createTestUser({ name: 'Preview Tester', username: 'previewTester', email: 'preview-tester@example.com' }));
+    const { accessToken: token, user } = await createTestUser({ name: 'Preview Tester', username: 'previewTester', email: 'preview-tester@example.com' });
+    accessToken = token;
+    accessTokenUserId = user._id.toString();
   });
 
   it('returns 401 when no Authorization header is provided', async () => {
@@ -80,5 +83,29 @@ describe('Routes /api/v2/pages/preview (Hono previewPage)', () => {
     expect(lines[0]).toBe(1); // heading
     expect(lines[1]).toBe(3); // paragraph
     expect(lines[2]).toBe(5); // code fence opens at line 5
+  });
+
+  // feature-plugin-renderer-mermaid spec §6/§7 — `Renderer.run`'s `options`
+  // gained a required `actor` field and an optional `signal`; this handler
+  // is the one call site that also needs the abort signal (so a
+  // superseded preview request's queued admission-control job can be
+  // dropped, spec §6's AbortSignal-terminates-queued-jobs behaviour).
+  // `crowi.getRenderer()` returns a stable singleton (`Crowi.getRenderer`
+  // doc comment), so spying on its `run` method directly observes the
+  // real call this handler makes.
+  it('passes actor: { kind: "user", userId } (the authenticated caller) and the request AbortSignal to renderer.run()', async () => {
+    const renderer = crowi.getRenderer();
+    const spy = jest.spyOn(renderer, 'run');
+    try {
+      const res = await request(app).post('/api/v2/pages/preview').set(authHeaders(accessToken)).send({ body: '# hello' });
+
+      expect(res.status).toBe(200);
+      expect(spy).toHaveBeenCalled();
+      const [, options] = spy.mock.calls[0] ?? [];
+      expect(options?.actor).toEqual({ kind: 'user', userId: accessTokenUserId });
+      expect(options?.signal).toBeInstanceOf(AbortSignal);
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

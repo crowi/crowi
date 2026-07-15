@@ -18,6 +18,7 @@ const loadDeps = createPipelineEsmDepsLoader();
 const buildCtx = (storage: ReturnType<typeof createMongoCacheStorage>, pluginName: string): RenderContext => ({
   mode: 'view',
   log: silentLogger,
+  actor: { kind: 'system' },
   cache: scopeForPlugin(storage, pluginName),
   auth: createAuthContextStub(),
 });

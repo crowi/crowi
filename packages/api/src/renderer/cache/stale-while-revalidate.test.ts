@@ -21,6 +21,7 @@ const buildStorage = (): MongoCacheStorage => {
 const buildCtx = (storage: MongoCacheStorage, pluginName: string): RenderContext => ({
   mode: 'view',
   log: silentLog,
+  actor: { kind: 'system' },
   cache: scopeForPlugin(storage, pluginName),
   auth: createAuthContextStub(),
 });

@@ -18,6 +18,7 @@ const loadDeps = createPipelineEsmDepsLoader();
 const buildCtx = (storage: ReturnType<typeof createMongoCacheStorage>): RenderContext => ({
   mode: 'view',
   log: silentLogger,
+  actor: { kind: 'system' },
   cache: scopeForPlugin(storage, '@crowi/plugin-test'),
   auth: createAuthContextStub(),
 });

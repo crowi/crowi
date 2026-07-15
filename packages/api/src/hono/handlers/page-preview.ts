@@ -30,6 +30,7 @@ import type { Root, RootContent } from 'mdast';
 
 import type Crowi from 'src/crowi';
 import { serializeMdast } from 'src/renderer';
+import { actorFromUser } from 'src/util/ts-rest-helpers';
 
 import type { CrowiHonoBindings } from '../app';
 
@@ -67,6 +68,7 @@ const injectSourceLineAnchors = (tree: Root): void => {
 
 export const registerPagePreviewRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app: E, crowi: Crowi) => {
   return app.openapi(previewPageRoute, async (c) => {
+    const user = c.get('user');
     const { body } = c.req.valid('json');
 
     try {
@@ -77,9 +79,34 @@ export const registerPagePreviewRoutes = <E extends OpenAPIHono<CrowiHonoBinding
       // that case, which is the right behaviour for preview content that
       // may belong to no persisted page yet.
       //
+      // `actor` + `signal`: feature-plugin-renderer-mermaid spec §6/§7 —
+      // admission control needs the actor end-to-end, and the abort
+      // signal lets a superseded preview request's queued admission job
+      // (§6) be dropped instead of wasting a render slot. This is Phase 1
+      // scope only (spec's own "### Phase 1" AC list requires exactly
+      // this: `RenderContext.actor`/`signal` reach this call site) —
+      // `Renderer.run`'s `options.actor` is a required field now, so
+      // every call site needed this regardless of preview parity.
+      // Because `pageId` is still omitted above, `runPipeline` still
+      // skips the whole plugin-dispatch stage (`pipeline.ts:334`), so a
+      // ```mermaid fence in preview body still degrades to plain text —
+      // by design, not an oversight: wiring `previewPolicy:'server-render'`
+      // into an actual page-less dispatch path (`makePreviewCodeBlockDispatch`,
+      // `pipeline.ts`'s branch, `renderCodeBlockForPreview`, the
+      // `use-preview.ts` AbortController, the preview rate limiter) is
+      // spec §7 / "### Phase 2" — a separate, human-gated task
+      // (`autoContinue:false`) specifically because it touches shared
+      // renderer-core files every other plugin's preview behaviour also
+      // flows through. See `.feature-state/tasks/feature-plugin-renderer-mermaid.json`
+      // phases[1] vs phases[2].
+      //
       // `getRenderer()` throws if setup hasn't run; the catch maps it to
       // 500 alongside any pipeline failure.
-      const { tree } = await crowi.getRenderer().run(body, { mode: 'view' });
+      const { tree } = await crowi.getRenderer().run(body, {
+        mode: 'view',
+        actor: actorFromUser(user),
+        signal: c.req.raw.signal,
+      });
       injectSourceLineAnchors(tree);
       return c.json({ renderedAst: serializeMdast(tree) }, 200);
     } catch (err) {

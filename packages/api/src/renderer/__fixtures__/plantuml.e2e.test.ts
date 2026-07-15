@@ -33,6 +33,7 @@ const buildPluginCtx = (config: ReturnType<typeof plantumlConfigSchema.parse>): 
     },
     model: () => undefined,
     log: silentLogger,
+    actor: { kind: 'system' },
   }) as PluginContext;
 
 describe('e2e: @crowi/plugin-renderer-plantuml', () => {
@@ -68,6 +69,7 @@ describe('e2e: @crowi/plugin-renderer-plantuml', () => {
     const ctx: RenderContext = {
       mode: 'view',
       log: silentLogger,
+      actor: { kind: 'system' },
       cache: scopeForPlugin(storage, PLUGIN),
       auth: createAuthContextStub(),
     };
@@ -96,6 +98,7 @@ describe('e2e: @crowi/plugin-renderer-plantuml', () => {
     const ctx: RenderContext = {
       mode: 'view',
       log: silentLogger,
+      actor: { kind: 'system' },
       cache: scopeForPlugin(storage, PLUGIN),
       auth: createAuthContextStub(),
     };
@@ -125,6 +128,7 @@ describe('e2e: @crowi/plugin-renderer-plantuml', () => {
     const ctx: RenderContext = {
       mode: 'view',
       log: silentLogger,
+      actor: { kind: 'system' },
       cache: scopeForPlugin(storage, PLUGIN),
       auth: createAuthContextStub(),
     };
@@ -144,6 +148,7 @@ describe('e2e: @crowi/plugin-renderer-plantuml', () => {
     const ctx: RenderContext = {
       mode: 'view',
       log: silentLogger,
+      actor: { kind: 'system' },
       cache: scopeForPlugin(storage, PLUGIN),
       auth: createAuthContextStub(),
     };

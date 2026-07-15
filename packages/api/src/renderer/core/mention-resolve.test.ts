@@ -100,7 +100,7 @@ describe('core/mention-resolve transform', () => {
 describe('mention-resolve through runPipeline (save-mode)', () => {
   const run = async (body: string, resolver?: MentionUsernameResolver) => {
     const reg = new RendererRegistryImpl();
-    return runPipeline(body, reg, { mode: 'save', log: silentLogger }, loadDeps, {
+    return runPipeline(body, reg, { mode: 'save', log: silentLogger, actor: { kind: 'system' } }, loadDeps, {
       cache: undefined as never,
       pageId: null,
       resolveMentionUsernames: resolver,
@@ -132,7 +132,7 @@ describe('mention-resolve through runPipeline (save-mode)', () => {
   it('does not resolve in non-save modes (read keeps every mention link)', async () => {
     const resolver = jest.fn<Promise<Set<string>>, [string[]]>(async () => new Set());
     const reg = new RendererRegistryImpl();
-    const { tree } = await runPipeline('Hi @ghost!', reg, { mode: 'read', log: silentLogger }, loadDeps, {
+    const { tree } = await runPipeline('Hi @ghost!', reg, { mode: 'read', log: silentLogger, actor: { kind: 'system' } }, loadDeps, {
       cache: undefined as never,
       pageId: null,
       resolveMentionUsernames: resolver,

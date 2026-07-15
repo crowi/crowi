@@ -49,6 +49,8 @@ export type {
   RenderPhase,
   RenderResult,
   RenderError,
+  RenderActor,
+  AdmissionControlConfig,
   Reservation,
   CacheStorage,
   ScopedCacheStorage,

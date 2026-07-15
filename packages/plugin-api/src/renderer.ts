@@ -85,9 +85,59 @@ export interface CodeBlockRenderer {
    * strip comments, etc.
    */
   computeEmbedKey?(info: CodeBlockInfo): string;
+  /**
+   * Opt into a CPU-bounded admission control pool (`render-admission.ts`,
+   * `packages/api/src/renderer/core/render-admission.ts`). When present,
+   * `cachedRenderOrPending` (`packages/api/src/renderer/cache/index.ts`)
+   * and `renderCodeBlockForPreview` acquire a ticket from the named pool
+   * (keyed per `pluginName`) immediately around the `render()` call and
+   * release it on completion; when absent (the default — PlantUML /
+   * KaTeX / emoji and existing embed/URL-expansion plugins), `render()`
+   * is called directly with no admission gate, matching today's
+   * behaviour. See spec §6 for the full design (global / per-user
+   * concurrency caps + priority queue).
+   */
+  admissionControl?: AdmissionControlConfig;
+  /**
+   * Opt into server-rendering during editor live preview
+   * (`POST /pages/preview`, which runs with no `pageId`). Default
+   * `'source'` (omitted) leaves the fenced block untouched in preview —
+   * today's behaviour for every existing `CodeBlockRenderer`. Plugins
+   * that declare `'server-render'` MUST be no-I/O and deterministic:
+   * `makePreviewCodeBlockDispatch` calls them outside the persisted-
+   * cache path (`packages/api/src/renderer/core/code-block-dispatch.ts`).
+   */
+  previewPolicy?: 'source' | 'server-render';
   /** Render a single code block. */
   render(info: CodeBlockInfo, ctx: RenderContext): EmbedFragment | RenderResult | Promise<EmbedFragment | RenderResult>;
 }
+
+/**
+ * Per-`pluginName` admission-control pool declaration (§6). Shared by
+ * `CodeBlockRenderer` and `EmbedRenderer` — `EmbedRenderer` carries it so
+ * `code-block-dispatch.ts`'s `codeBlockAsEmbedRenderer` adaptor can copy
+ * `CodeBlockRenderer.admissionControl` straight through to the
+ * `EmbedRenderer` shape `cachedRenderOrPending` actually consumes.
+ */
+export interface AdmissionControlConfig {
+  /** Process-wide concurrent `render()` calls in flight for this plugin. */
+  maxConcurrentGlobal: number;
+  /** Concurrent `render()` calls in flight for a single `actor` (kind:'user' only). */
+  maxConcurrentPerUser: number;
+  /** Max jobs allowed to wait for a slot before new requests are rejected outright. */
+  queueDepth: number;
+}
+
+/**
+ * Who is driving this render call. Threaded through `RenderContext` so
+ * admission control (§6) can apply a per-user concurrency cap. Today
+ * every real call site is authenticated (`createJwtAuth` has no
+ * anonymous fallback), so `'user'` is the only variant actually
+ * produced — `'anonymous'` / `'system'` are reserved for future
+ * unauthenticated-read and offline-tooling call sites and must not be
+ * synthesised speculatively.
+ */
+export type RenderActor = { kind: 'user'; userId: string } | { kind: 'anonymous' } | { kind: 'system' };
 
 export interface CodeBlockInfo {
   /** The language tag from the fence (the `ts` in ```` ```ts ````). */
@@ -133,6 +183,17 @@ export interface EmbedRenderer {
    * volatility (`?utm_*`) or (b) include external state (Accept-Language).
    */
   computeEmbedKey?(input: EmbedInput): string;
+  /**
+   * Opt into admission control (§6). See `CodeBlockRenderer.admissionControl`
+   * for the full rationale — declared here too because `cachedRenderOrPending`
+   * (`packages/api/src/renderer/cache/index.ts`) is written against the
+   * `EmbedRenderer` shape (`code-block-dispatch.ts`'s
+   * `codeBlockAsEmbedRenderer` adaptor copies a `CodeBlockRenderer`'s
+   * declaration through unchanged). Native `EmbedRenderer` plugins
+   * (embed-tags / URL-inline-expansion) can also opt in if a future one
+   * turns out to be CPU-bound.
+   */
+  admissionControl?: AdmissionControlConfig;
   /** Render a single embed. */
   render(input: EmbedInput, ctx: RenderContext): RenderResult | Promise<RenderResult>;
   /**
@@ -379,6 +440,25 @@ export interface RenderContext {
    * encrypted-config-backed implementation.
    */
   auth?: AuthContext;
+  /**
+   * Who is driving this render. Required so admission control (§6) can
+   * apply its per-user concurrency cap end-to-end — every entry point
+   * (`Renderer.run`/`runMetadata`/`runRender`, `packages/api/src/renderer/
+   * index.ts`) requires callers to supply this. See `RenderActor`'s doc
+   * comment for which variant real call sites actually produce today.
+   */
+  actor: RenderActor;
+  /**
+   * Optional cancellation signal, propagated from the originating HTTP
+   * request (`c.req.raw.signal` on `POST /pages/preview`). A waiting
+   * (not-yet-running) admission-control job is removed from its queue
+   * the instant this fires; an already-running child-process render is
+   * NOT force-killed (§6 — the cost of killing/respawning a worker
+   * outweighs letting an already-cheap render finish and discarding the
+   * result). Absent on the save / read call sites, which have no
+   * request to cancel against.
+   */
+  signal?: AbortSignal;
 }
 
 /**

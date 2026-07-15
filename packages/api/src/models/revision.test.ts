@@ -186,5 +186,28 @@ describe('Revision (RFC-0003 collab fields)', () => {
       // The unified pipeline produced a TOC entry from the H1 header.
       expect(rev.meta?.toc?.[0]?.text).toBe('Heading');
     });
+
+    // feature-plugin-renderer-mermaid spec §6 — `Renderer.runRender`'s
+    // `options.actor` is now required (admission control needs an
+    // end-to-end actor identity). `prepareRevision` builds it from the
+    // SAVING user (the `user` param, third positional arg — not
+    // `options.savedBy`, which only overrides the `Revision.savedBy`
+    // pointer). `crowi.getRenderer()` returns a stable singleton, so
+    // spying on its `runRender` method directly observes the real call
+    // `prepareRevision` (`packages/api/src/models/revision.ts:341-347`) makes.
+    test('passes actor: { kind: "user", userId } — the saving user, not options.savedBy — to runRender', async () => {
+      const page = await seedPage('actor-wiring');
+      const otherUserId = new mongoose.Types.ObjectId();
+      const renderer = crowi.getRenderer();
+      const spy = jest.spyOn(renderer, 'runRender');
+      try {
+        await Revision.prepareRevision(page, '# Heading\n\nbody', user, { savedBy: otherUserId });
+        expect(spy).toHaveBeenCalled();
+        const [, options] = spy.mock.calls[0] ?? [];
+        expect(options?.actor).toEqual({ kind: 'user', userId: user._id.toString() });
+      } finally {
+        spy.mockRestore();
+      }
+    });
   });
 });
