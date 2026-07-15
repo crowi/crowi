@@ -58,6 +58,15 @@ On the history screen you can pick any two revisions and view the **diff**.
 - For a page with only one revision (a page that has never been updated since
   creation), the single first revision is shown.
 
+By default, the diff view only shows changed lines plus 3 lines of
+surrounding context; unchanged regions are folded, GitHub-style. A folded
+region can be expanded individually by clicking it. Press "Show unchanged
+lines too" to switch off folding and show every line, and press it again
+("Show changed lines only") to fold back. This works the same way in both
+split and unified view. When the two revisions being compared are exactly
+identical, the diff view is replaced with a plain "There are no changes
+between these revisions" message.
+
 ## Viewing a specific revision
 
 You can open a specific past revision directly with the query string
