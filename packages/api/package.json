@@ -39,7 +39,7 @@
     "dev": "cd ../../apps/crowi-runner && NODE_ENV=development tsx watch --tsconfig ../../packages/api/tsconfig.json --clear-screen=false --env-file-if-exists=../../.env ../../packages/api/src/app.ts",
     "lint": "eslint src/ --ext .ts,.tsx",
     "lint:fix": "eslint src/ --ext .ts,.tsx --fix",
-    "test": "env -u DEBUG TZ=UTC jest --maxWorkers=5",
+    "test": "env -u DEBUG TZ=UTC jest --maxWorkers=5 ${CROWI_TEST_JSON_OUTPUT_FILE:+--json --outputFile=$CROWI_TEST_JSON_OUTPUT_FILE}",
     "test:server": "env -u DEBUG jest lib --maxWorkers=5",
     "coverage": "npm test -- --coverage",
     "build": "tsc && tsc-alias",
