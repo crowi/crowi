@@ -1,7 +1,18 @@
+import { Types } from 'mongoose';
+import type { CodeBlockRenderer, PluginLogger, RenderActor } from '@crowi/plugin-api';
 import type { RevisionMetaContent } from 'src/models/revision';
+import type { PluginRenderCacheModel } from 'src/models/plugin-render-cache';
 import { crowi } from 'src/test/setup';
 import { RENDERER_PIPELINE_VERSION } from 'src/renderer/version';
 import { computeRevisionRenderArtifactsAsync } from './page-response';
+
+const TEST_ACTOR: RenderActor = { kind: 'system' };
+const silentLogger: PluginLogger = {
+  debug: () => undefined,
+  info: () => undefined,
+  warn: () => undefined,
+  error: () => undefined,
+};
 
 /**
  * `computeRevisionRenderArtifactsAsync` — the read-path fallback that fills in
@@ -53,6 +64,7 @@ describe('computeRevisionRenderArtifactsAsync — toc tracks the AST it is serve
       STORED_META,
       STALE_STORED_AST,
       BODY,
+      TEST_ACTOR,
       '0.6.0', // older than RENDERER_PIPELINE_VERSION → recompute
     );
 
@@ -77,7 +89,7 @@ describe('computeRevisionRenderArtifactsAsync — toc tracks the AST it is serve
       mentions: [],
       codeBlockLanguages: [],
     };
-    const result = await computeRevisionRenderArtifactsAsync(crowi, storedWithLinks, STALE_STORED_AST, BODY, '0.6.0');
+    const result = await computeRevisionRenderArtifactsAsync(crowi, storedWithLinks, STALE_STORED_AST, BODY, TEST_ACTOR, '0.6.0');
     // toc is recomputed, but the stored wikiLinks survive.
     expect(result.meta?.wikiLinks).toEqual([{ raw: '/kept/link', target: '/kept/link' }]);
     expect(result.meta?.toc?.[0].anchorId).toBe('workspace-の作成');
@@ -89,6 +101,7 @@ describe('computeRevisionRenderArtifactsAsync — toc tracks the AST it is serve
       STORED_META,
       STALE_STORED_AST, // here it is the FRESH AST (version matches)
       BODY,
+      TEST_ACTOR,
       RENDERER_PIPELINE_VERSION,
     );
     // Fresh path: the stored AST + stored toc are returned verbatim, no recompute.
@@ -98,8 +111,102 @@ describe('computeRevisionRenderArtifactsAsync — toc tracks the AST it is serve
   });
 
   it('treats a missing rendererVersion as fresh (trust the stored AST + toc)', async () => {
-    const result = await computeRevisionRenderArtifactsAsync(crowi, STORED_META, STALE_STORED_AST, BODY /* no version */);
+    const result = await computeRevisionRenderArtifactsAsync(crowi, STORED_META, STALE_STORED_AST, BODY, TEST_ACTOR /* no version */);
     expect(result.renderedAst).toBe(STALE_STORED_AST);
     expect(result.meta?.toc).toBe(STORED_META.toc);
+  });
+});
+
+describe('computeRevisionRenderArtifactsAsync — mermaidRenderPending marker scan on the astIsFresh path (feature-plugin-renderer-mermaid spec §5)', () => {
+  const COMPLETE_META: RevisionMetaContent = { toc: [], wikiLinks: [], mentions: [], codeBlockLanguages: [] };
+  const PLUGIN = '@crowi/plugin-fixture-pending-scan';
+
+  it('a stored AST with no mermaidRenderPending marker anywhere is returned as the exact same object (no clone, no redispatch attempted, full pipeline never re-run)', async () => {
+    const pageId = new Types.ObjectId().toHexString();
+    const storedAst = {
+      type: 'root',
+      children: [{ type: 'code', lang: 'mermaid', value: 'flowchart TD\n  A --> B' }], // no `data.mermaidRenderPending` — the vast majority case
+    };
+    // AC "マーカーの無い大多数のケースで runPipeline/runRender 相当が一切
+    // 呼ばれないこと" — spy directly on the renderer's `runRender` (the
+    // only full-pipeline entry point `computeRevisionRenderArtifactsAsync`
+    // has access to) rather than relying on reference-identity alone.
+    const runRenderSpy = jest.spyOn(crowi.getRenderer(), 'runRender');
+    try {
+      const result = await computeRevisionRenderArtifactsAsync(
+        crowi,
+        COMPLETE_META,
+        storedAst,
+        'body unused on the fresh path',
+        TEST_ACTOR,
+        RENDERER_PIPELINE_VERSION,
+        pageId,
+      );
+      // Reference equality (not just deep equality) — proves the fast path
+      // returned the input object untouched rather than cloning + walking
+      // it (which `redispatchPendingCodeBlocks` would require).
+      expect(result.renderedAst).toBe(storedAst);
+      expect(runRenderSpy).not.toHaveBeenCalled();
+    } finally {
+      runRenderSpy.mockRestore();
+    }
+  });
+
+  it('a stored AST WITH a mermaidRenderPending marker is resolved via a scoped redispatch, and the ORIGINAL stored object is left unmutated', async () => {
+    const pageId = new Types.ObjectId().toHexString();
+    const renderer: CodeBlockRenderer = {
+      cacheVersion: 1,
+      admissionControl: { maxConcurrentGlobal: 4, maxConcurrentPerUser: 2, queueDepth: 200 },
+      render: (info) => ({ html: `<img alt="Mermaid diagram" src="data:image/svg+xml;base64,${Buffer.from(info.source).toString('base64')}">`, ttlSec: 3600 }),
+    };
+    crowi.getRenderer().registry.addCodeBlockRenderer('mermaid-pending-scan-fixture', renderer, PLUGIN, silentLogger);
+
+    const storedAst = {
+      type: 'root',
+      children: [{ type: 'code', lang: 'mermaid-pending-scan-fixture', value: 'flowchart TD\n  A --> B', data: { mermaidRenderPending: true } }],
+    };
+    const PluginRenderCache = crowi.model('PluginRenderCache') as unknown as PluginRenderCacheModel;
+    await PluginRenderCache.deleteMany({ pageId: new Types.ObjectId(pageId) }).exec();
+
+    const result = await computeRevisionRenderArtifactsAsync(
+      crowi,
+      COMPLETE_META,
+      storedAst,
+      'body unused on the fresh path',
+      TEST_ACTOR,
+      RENDERER_PIPELINE_VERSION,
+      pageId,
+    );
+
+    // The returned AST reflects the resolved node...
+    const resultRoot = result.renderedAst as { children: Array<{ type: string; value?: string }> };
+    expect(resultRoot.children[0].type).toBe('html');
+    expect(resultRoot.children[0].value).toContain('<img');
+    // ...but the ORIGINAL stored object (what `Revision.renderedAst`
+    // still points at) was never mutated — spec §5: "Revision.renderedAst
+    // 自体への書き戻しはしない".
+    expect((storedAst.children[0] as { type: string }).type).toBe('code');
+    expect((storedAst.children[0] as { data: { mermaidRenderPending: boolean } }).data.mermaidRenderPending).toBe(true);
+
+    const doc = await PluginRenderCache.findOne({ pageId: new Types.ObjectId(pageId) })
+      .lean()
+      .exec();
+    expect(doc).toBeTruthy();
+  });
+
+  it('a stored AST whose code node has no marker at all (pre-Mermaid-activation content) is left completely untouched', async () => {
+    const pageId = new Types.ObjectId().toHexString();
+    const storedAst = { type: 'root', children: [{ type: 'code', lang: 'some-other-lang', value: 'plain code, never touched by this feature' }] };
+    const result = await computeRevisionRenderArtifactsAsync(
+      crowi,
+      COMPLETE_META,
+      storedAst,
+      'body unused on the fresh path',
+      TEST_ACTOR,
+      RENDERER_PIPELINE_VERSION,
+      pageId,
+    );
+    expect(result.renderedAst).toBe(storedAst);
+    expect((result.renderedAst as { children: Array<{ type: string }> }).children[0].type).toBe('code');
   });
 });
