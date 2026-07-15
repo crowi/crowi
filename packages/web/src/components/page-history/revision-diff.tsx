@@ -33,6 +33,22 @@ interface RevisionDiffProps {
 export function RevisionDiff({ fromId, toId }: RevisionDiffProps) {
   const { revisions, isLoading, isError, error, refetch } = useRevisionPair(fromId, toId);
   const [splitView, setSplitView] = useState(true);
+  // GitHub-style fold: by default only the changed lines (+3 lines of
+  // surrounding context) render, and unchanged regions collapse behind a
+  // click-to-expand indicator. This toggle switches to showing every line.
+  const [showAllLines, setShowAllLines] = useState(false);
+  // RevisionDiff stays mounted while the parent swaps `fromId`/`toId` (no
+  // `key` remount), so without this the "show all lines" choice would leak
+  // into the next revision pair. Reset it during render when the compared
+  // pair changes — the React-recommended way to adjust state in response to
+  // a prop change without an effect (avoids an extra commit + the
+  // synchronous-setState-in-effect lint rule) — matching the non-persistent
+  // fold state required by the spec.
+  const [comparedPair, setComparedPair] = useState({ fromId, toId });
+  if (comparedPair.fromId !== fromId || comparedPair.toId !== toId) {
+    setComparedPair({ fromId, toId });
+    setShowAllLines(false);
+  }
   // react-diff-viewer-continued ships its own light/dark palettes via
   // `useDarkTheme`. Drive it from the app theme so the diff colours match
   // the rest of the UI; `resolvedTheme` is `'dark'` for explicit dark or
@@ -82,7 +98,13 @@ export function RevisionDiff({ fromId, toId }: RevisionDiffProps) {
   }
 
   const oldValue = fromRevision?.body ?? '';
+  const newValue = toRevision.body ?? '';
   const fromLabel = fromRevision ? fromRevision._id.slice(-8) : m['page_history.diff_initial_revision']();
+  // showDiffOnly folds unchanged regions down to a single "Expand N lines"
+  // indicator, so an exact-match pair collapses the whole file into one
+  // block — technically clickable but not a helpful way to say "nothing
+  // changed". Detect it up front and show a plain message instead.
+  const hasNoChanges = oldValue === newValue;
 
   return (
     <div className="space-y-3">
@@ -93,23 +115,42 @@ export function RevisionDiff({ fromId, toId }: RevisionDiffProps) {
           <span className="font-medium">{m['page_history.diff_to']()}</span>{' '}
           <code className="bg-muted px-1.5 py-0.5 rounded text-xs">{toRevision._id.slice(-8)}</code>
         </div>
-        <Button variant="outline" size="sm" onClick={() => setSplitView((v) => !v)} type="button">
-          {splitView ? m['page_history.diff_unified_view']() : m['page_history.diff_split_view']()}
-        </Button>
+        <div className="flex items-center gap-2">
+          {!hasNoChanges && (
+            <Button variant="outline" size="sm" onClick={() => setShowAllLines((v) => !v)} type="button">
+              {showAllLines ? m['page_history.diff_show_changes_only']() : m['page_history.diff_show_all_lines']()}
+            </Button>
+          )}
+          <Button variant="outline" size="sm" onClick={() => setSplitView((v) => !v)} type="button">
+            {splitView ? m['page_history.diff_unified_view']() : m['page_history.diff_split_view']()}
+          </Button>
+        </div>
       </div>
-      <div className="rounded-md border overflow-hidden text-sm">
-        <ReactDiffViewer
-          oldValue={oldValue}
-          newValue={toRevision.body ?? ''}
-          splitView={splitView}
-          useDarkTheme={resolvedTheme === 'dark'}
-          // markdown 本文は行単位での差分が分かりやすい
-          compareMethod={DiffMethod.LINES}
-          leftTitle={`From: ${fromLabel}`}
-          rightTitle={splitView ? `To: ${toRevision._id.slice(-8)}` : undefined}
-          showDiffOnly={false}
-        />
-      </div>
+      {hasNoChanges ? (
+        <div className="rounded-md border p-6 text-sm text-muted-foreground text-center">{m['page_history.diff_no_changes']()}</div>
+      ) : (
+        <div className="rounded-md border overflow-hidden text-sm">
+          <ReactDiffViewer
+            oldValue={oldValue}
+            newValue={newValue}
+            splitView={splitView}
+            useDarkTheme={resolvedTheme === 'dark'}
+            // markdown 本文は行単位での差分が分かりやすい
+            compareMethod={DiffMethod.LINES}
+            leftTitle={`From: ${fromLabel}`}
+            rightTitle={splitView ? `To: ${toRevision._id.slice(-8)}` : undefined}
+            // GitHub-style fold by default: only changed lines plus 3 lines
+            // of surrounding context render, and unchanged regions collapse
+            // behind a click-to-expand indicator. These two match the
+            // library's own defaults, but are pinned explicitly here so the
+            // intent doesn't depend on defaults that could change upstream.
+            // The header toggle flips `showDiffOnly` off to show every line,
+            // including unchanged context.
+            showDiffOnly={!showAllLines}
+            extraLinesSurroundingDiff={3}
+          />
+        </div>
+      )}
     </div>
   );
 }
