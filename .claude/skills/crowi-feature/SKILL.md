@@ -88,8 +88,13 @@ worktree ローカル**（共有しない）。理由:
 
 > 1 worktree = 1 タスク（= 1 `tasks/{id}.json`）。`currentTask` はその worktree
 > ローカルの「今のタスク」。タスク一覧が欲しければ `ls tasks/` を見る（集約
-> しない）。`tasks/{id}.json` への書き込みは torn write を避けるため
-> tmp+rename で atomic に行う。
+> しない）。`tasks/{id}.json` / `queue.json` への書き込みは agent の Write/Edit を
+> PreToolUse hook が拒否し、**`.claude/scripts/task-state.sh` のサブコマンド経由のみ**で
+> 行う — jq 変換 → tmp → 不変条件検証（壊れ JSON 拒否・必須キー保持・`phases[].title`/
+> `specSectionAnchor`/`autoContinue`/phase 数/id 不変）→ atomic rename + `.bak` 退避を
+> script 側で担保する。再計画で保護フィールドを変える必要があるときだけ
+> `task replace-unsafe`（diff 出力 + `--reason` 必須 + history 自動 append）を使う。
+> 詳細・復旧手順は `bash .claude/scripts/task-state.sh --help`。
 
 ### config.json スキーマ（SHARED, 静的）
 
@@ -111,7 +116,7 @@ worktree ローカル**（共有しない）。理由:
 `--prompt-file`/`--schema-file` — codex の review サブコマンドはカスタム prompt /
 schema を受けないため使わない）で敵対レビューを走らせ、AC / 設計判断 / docsTargets
 を埋め込んだ VERDICT (APPROVED/NEEDS_WORK/ESCALATE + blocking + advisories) を返させる。
-glue が `tasks/{id}.json` に `reviewFeedback` を tmp+rename で記録する。
+glue が `tasks/{id}.json` に `reviewFeedback` を `task-state.sh task set-field` 経由で記録する。
 codex 不可・出力不正時は**従来の feature-reviewer agent に自動 fallback**
 （`feature-reviewer.md` は温存）。fallback 発動は Workflow 返り値の
 `codexFallbacks[]` に載るので報告に明記する。Phase 1 (crowi-design / crowi-review)

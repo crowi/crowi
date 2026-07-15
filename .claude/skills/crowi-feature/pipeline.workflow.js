@@ -154,6 +154,12 @@ const envelope = (dataSchema) => ({
 
 function codexReviewerPrompt(p, attempt) {
   const runDir = `.reviews/codex-runs/${sanitize(ID)}/review_${sanitize(p.id)}_${attempt}`
+  // All task.json writes go through task-state.sh (never Write/Edit — a
+  // PreToolUse hook blocks direct writes to .feature-state/tasks/*.json).
+  const statusCmd = isMulti(p)
+    ? `bash .claude/scripts/task-state.sh task set-phase-status ${ID} ${p.id} <STATUS>`
+    : `bash .claude/scripts/task-state.sh task set-status ${ID} <STATUS>`
+  const phaseFlag = isMulti(p) ? ` --phase ${p.id}` : ''
   return (
     `You are a MECHANICAL REVIEW RUNNER for crowi-feature task "${ID}"${tag(p)} (attempt ` +
     `${attempt}/${MAX_REVIEW}). Follow the steps EXACTLY in order. Do NOT review or fix any code ` +
@@ -203,19 +209,25 @@ function codexReviewerPrompt(p, attempt) {
     `  - exit 2, or the Bash call errors / times out -> return {status:"codex_unavailable", ` +
     `note:<last line of ${runDir}/out.json.stderr>} and STOP (skip STEP 4)\n` +
     `  - exit 3 -> return {status:"invalid_output", note:<same>} and STOP (skip STEP 4)\n\n` +
-    `STEP 4 — record + return (only when you hold a verdict from STEP 1 or STEP 3):\n` +
-    `  Update .feature-state/tasks/${ID}.json exactly the way the feature-reviewer agent would, so ` +
-    `the implementer/committer agents can consume it${isMulti(p) ? ` (all on the phases[] entry with id "${p.id}")` : ''}:\n` +
-    `  - status: "APPROVED" when verdict=APPROVED; "NEEDS_WORK" when verdict=NEEDS_WORK; leave the ` +
-    `current status untouched for ESCALATE\n` +
-    `  - reviewAttempts: ${attempt}\n` +
-    `  - reviewFeedback: {decision: <verdict>, by: "gates"|"codex", reviewedAt: <UTC time from ` +
-    `\`date -u +%FT%TZ\`>, summary: <summary>, issues: [one {severity:"high", file:<file:line if ` +
-    `present in the blocking entry, else "">, message:<the blocking entry>, suggestion:""} per ` +
-    `blocking entry], advisories: <advisories>}\n` +
-    `  - append a matching history entry {phase:"reviewer", at:<same time>, summary:<verdict + 1 line>}\n` +
-    `  Write atomically: write the full JSON to .feature-state/tasks/${ID}.json.tmp with Write, ` +
-    `then \`mv\` it over the original with Bash.\n` +
+    `STEP 4 — record + return (only when you hold a verdict from STEP 1 or STEP 3). Update ` +
+    `.feature-state/tasks/${ID}.json ONLY via .claude/scripts/task-state.sh — do NOT Write/Edit the ` +
+    `file directly (a PreToolUse hook blocks that; task-state.sh is the only allowed write path and ` +
+    `exists specifically to stop that failure mode)${isMulti(p) ? `. Every command below targets ` +
+    `the phases[] entry with id "${p.id}"` : ''}:\n` +
+    `  1) status — \`${statusCmd}\` where <STATUS> is APPROVED when verdict=APPROVED, NEEDS_WORK ` +
+    `when verdict=NEEDS_WORK. Skip this command entirely for ESCALATE (leave the current status ` +
+    `as-is).\n` +
+    `  2) reviewAttempts — \`bash .claude/scripts/task-state.sh task set-field ${ID} reviewAttempts ` +
+    `${attempt}${phaseFlag}\`\n` +
+    `  3) reviewFeedback — write {decision: <verdict>, by: "gates"|"codex", reviewedAt: <UTC time ` +
+    `from \`date -u +%FT%TZ\`>, summary: <summary>, issues: [one {severity:"high", file:<file:line ` +
+    `if present in the blocking entry, else "">, message:<the blocking entry>, suggestion:""} per ` +
+    `blocking entry], advisories: <advisories>} to ${runDir}/review-feedback.json (a scratch path, ` +
+    `NOT under .feature-state/tasks/ — the hook blocks Write there too), then run ` +
+    `\`bash .claude/scripts/task-state.sh task set-field ${ID} reviewFeedback ` +
+    `--value-file ${runDir}/review-feedback.json${phaseFlag}\`\n` +
+    `  4) history — \`bash .claude/scripts/task-state.sh task append-history ${ID} ` +
+    `'{"phase":"reviewer","at":"<UTC time from date -u +%FT%TZ>","summary":"<verdict + 1 line>"}'\`\n` +
     `  Return {status:"ok", data:<the verdict JSON — verdict/summary/blocking/advisories>}.\n\n` +
     `SCHEMA:\n<<<\n${JSON.stringify(VERDICT_STRICT)}\n>>>`
   )

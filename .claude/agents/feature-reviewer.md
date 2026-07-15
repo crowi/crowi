@@ -125,6 +125,19 @@ committer が悩むので REVIEW で直してから出す方が無難)。
 
 ## task ファイルの更新
 
+反映は **`.claude/scripts/task-state.sh` 経由のみ**(Write/Edit で `.feature-state/tasks/*.json`
+を直接書き換えることは PreToolUse hook が拒否する):
+
+```bash
+bash .claude/scripts/task-state.sh task set-status {id} <APPROVED|NEEDS_WORK>
+bash .claude/scripts/task-state.sh task set-field {id} reviewAttempts <N>
+# reviewFeedback は大きい JSON なので一時ファイルに書いてから --value-file で渡す
+bash .claude/scripts/task-state.sh task set-field {id} reviewFeedback --value-file <scratch-path>
+bash .claude/scripts/task-state.sh task append-history {id} '{"phase":"reviewer","decision":"..."}'
+```
+
+各値の形(上記コマンドで設定する内容の参考):
+
 ```json
 {
   "status": "APPROVED" | "NEEDS_WORK",

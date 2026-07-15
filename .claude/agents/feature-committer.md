@@ -56,6 +56,7 @@ APPROVED の実装を、task.commitPlan で計画された **複数 commit** に
      - git commit (HEREDOC で渡す)
      - エラーなら中止して報告
 5. task ファイルの status を COMMITTED に更新 + commitInfo を記録
+   (`.claude/scripts/task-state.sh` 経由。下記「task ファイルの更新」参照)
 6. spec ファイルの後始末 (下記「spec の後始末」参照)
 7. 報告
 ```
@@ -151,6 +152,20 @@ git diff --cached --name-only | grep -E '\.feature-state/'
 
 ## task ファイルの更新
 
+反映は **`.claude/scripts/task-state.sh` 経由のみ**(Write/Edit で `.feature-state/tasks/*.json`
+を直接書き換えることは PreToolUse hook が拒否する):
+
+```bash
+bash .claude/scripts/task-state.sh task set-status {id} COMMITTED
+# multi-phase タスクは対象 phase だけを COMMITTED にする:
+bash .claude/scripts/task-state.sh task set-phase-status {id} {phase-id} COMMITTED
+# commitInfo は一時ファイルに書いてから --value-file で渡す
+bash .claude/scripts/task-state.sh task set-field {id} commitInfo --value-file <scratch-path>
+bash .claude/scripts/task-state.sh task append-history {id} '{"phase":"committer","summary":"main に 3 commits"}'
+```
+
+各値の形(参考):
+
 ```json
 {
   "status": "COMMITTED",
@@ -185,7 +200,9 @@ committer の責務。実装済み spec が `specs/` に溜まり続けないよ
 ため spec は保持」) を明記する。
 
 削除は `.feature-state/specs/{id}.md` のみ。**task ファイル (`tasks/{id}.json`) は
-履歴・commitInfo を持つので削除しない** (queue から currentTask=null にするのは従来通り)。
+履歴・commitInfo を持つので削除しない** (queue から currentTask を外すのは
+`.claude/scripts/task-state.sh queue set-current null` を実行する — 従来の
+Write/Edit 直接書き換えは hook が拒否する)。
 spec は gitignore 配下なので削除もコミットには影響しない (`git` 操作不要、ファイル削除のみ)。
 
 ## 出力 (報告フォーマット)

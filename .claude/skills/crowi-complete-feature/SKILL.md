@@ -80,8 +80,10 @@ watcher) が次の tick で拾い、裏取りした上で `integrate-worktree` �
 
 ゲートが落ちていれば **ファイルは一切触らず** Step 4 で報告して終わる
 (synthesize もしない — ready でない signal は作らない)。全 green のときのみ、
-task ファイルの有無で 3a / 3b に分岐する。いずれも torn write を避けるため
-**tmp+rename で atomic** に書く。
+task ファイルの有無で 3a / 3b に分岐する。いずれも `.feature-state/tasks/*.json` への
+Write/Edit は PreToolUse hook が拒否するため、**`.claude/scripts/task-state.sh` 経由でのみ**
+書く(script が tmp+不変条件検証+atomic rename+`.bak` を担保する。詳細は
+`task-state.sh --help`)。
 
 `readyForMerge` ブロックは両分岐で共通:
 
@@ -99,7 +101,16 @@ task ファイルの有無で 3a / 3b に分岐する。いずれも torn write 
 
 `status` を `READY_TO_INTEGRATE` にし、`readyForMerge` を上書きする。
 **他のフィールドは保持** (name / context / acceptanceCriteria / commitInfo /
-history 等)。`history` には `READY_TO_INTEGRATE` エントリを 1 つ append する。
+history 等 — `task-state.sh` の各サブコマンドは対象フィールドしか触らないので
+自然に保持される)。`history` には `READY_TO_INTEGRATE` エントリを 1 つ append する。
+
+```bash
+# readyForMerge は一時ファイルに書いてから --value-file で渡す
+bash .claude/scripts/task-state.sh task set-field {id} readyForMerge --value-file <scratch-path>
+bash .claude/scripts/task-state.sh task set-status {id} READY_TO_INTEGRATE
+bash .claude/scripts/task-state.sh task append-history {id} \
+  '{"at":"<ISO8601>","event":"READY_TO_INTEGRATE","by":"crowi-complete-feature","note":"All objective gates green. Signal set for crowi-orchestrate integrate watcher."}'
+```
 
 #### Step 3b: task を synthesize (ファイルが無い場合)
 
@@ -112,6 +123,15 @@ spec を経由していないので、内容は **git から起こす**。最低
 - `context` / `acceptanceCriteria` — コミット本文から起こせる範囲で要約 (spec が
   無いので簡潔で可)。起こせなければ `context` のみで `acceptanceCriteria` は省略可。
 - `origin` — synthesize した事実を必ず明記 (下記テンプレの固定文)。
+- `openQuestions` — 無ければ空配列 (`task-state.sh task create` は
+  `id`/`name`/`status`/`scope`/`context`/`openQuestions`/`history`/`phases` の存在を必須と
+  する)。
+- `phases` — synthesize した task は phase 分割が無いので `[]` を渡す
+  (`task-state.sh` は空配列を single-phase task の正当な表現として受け付ける)。
+
+以下の JSON を Write で **scratch パス**(`.feature-state/tasks/` 直下は不可 — hook が
+拒否する)に書き出し、`bash .claude/scripts/task-state.sh task create {id} <scratch-path>`
+で配置する:
 
 ```json
 {
@@ -122,6 +142,8 @@ spec を経由していないので、内容は **git から起こす**。最低
   "origin": "Manual fix branch (<branch>), not created via the spec -> task feature workflow. This task record was synthesized by crowi-complete-feature solely to carry the READY_TO_INTEGRATE signal for crowi-orchestrate.",
   "context": "<何をなぜ直したか。コミット本文から>",
   "acceptanceCriteria": ["<コミット本文から起こせれば>"],
+  "openQuestions": [],
+  "phases": [],
   "commitInfo": { "branch": "<branch>", "commits": ["<sha> <subject>", "..."] },
   "readyForMerge": { "...共通ブロック..." },
   "history": [
