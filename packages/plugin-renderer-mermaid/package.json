@@ -1,26 +1,53 @@
 {
   "name": "@crowi/plugin-renderer-mermaid",
-  "version": "0.0.0-spike",
+  "version": "0.1.0-alpha.1",
   "private": true,
-  "description": "Phase 0 compatibility spike for a server-side, browserless Mermaid diagram renderer for Crowi 2.x. Not yet a CrowiPlugin — see .feature-state/specs/feature-plugin-renderer-mermaid.md Phase 0.",
+  "description": "Mermaid diagram renderer for Crowi 2.x. Renders ```mermaid fenced blocks server-side (browserless, child-process isolated) to a sanitized, base64-encoded SVG <img>. Not yet listed in crowi.config.json — see .feature-state/specs/feature-plugin-renderer-mermaid.md (Phase 4 wires runner registration). `private: true` stays until then; `publishConfig` is deferred to that same phase rather than added ahead of actual publish readiness.",
   "repository": {
     "type": "git",
     "url": "https://github.com/crowi/crowi.git",
     "directory": "packages/plugin-renderer-mermaid"
   },
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch --no-clean",
     "type-check": "tsc --noEmit",
     "test": "jest --passWithNoTests"
   },
+  "peerDependencies": {
+    "zod": "^4"
+  },
+  "dependencies": {
+    "@crowi/plugin-api": "workspace:^",
+    "@crowi/plugin-renderer-svg-sanitize": "workspace:^",
+    "jsdom": "^29.1.1",
+    "mermaid": "^11.16.0"
+  },
   "devDependencies": {
+    "@crowi/plugin-api": "workspace:*",
     "@crowi/tsconfig": "workspace:*",
     "@types/jest": "catalog:",
     "@types/jsdom": "^28.0.3",
     "@types/node": "catalog:",
+    "@xmldom/xmldom": "^0.9.10",
     "jest": "catalog:",
-    "jsdom": "^29.1.1",
-    "mermaid": "^11.16.0",
     "ts-jest": "catalog:",
-    "typescript": "catalog:"
+    "tsup": "catalog:",
+    "typescript": "catalog:",
+    "zod": "catalog:"
   }
 }

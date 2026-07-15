@@ -15,24 +15,42 @@ export interface DiagramCorpusEntry {
   readonly name: string;
   /** A small but representative Mermaid source for that diagram type. */
   readonly source: string;
+  /**
+   * A source for the SAME diagram type (same recognized keyword on the
+   * first line, so the type is not just "unparseable garbage" — it is
+   * this specific grammar failing) that `mermaid.render()` deterministically
+   * rejects with a parse/lexer error. Used by Phase 1's per-diagram-type
+   * notation-error coverage (spec §1 AC: "8種それぞれについて...記法エラー系
+   * ...をカバーする", `index.test.ts`). Each was verified empirically against
+   * real `mermaid@11` output — Mermaid's per-diagram-type grammars differ
+   * enough (several migrated to a different parser generator) that a single
+   * generic corruption strategy does not reliably fail all 8, e.g. `state`
+   * needed an unclosed composite-state block rather than the stray-bracket
+   * corruption that works for the jison-based grammars.
+   */
+  readonly malformedSource: string;
 }
 
 export const DIAGRAM_CORPUS: readonly DiagramCorpusEntry[] = [
   {
     name: 'flowchart',
     source: ['flowchart TD', '  A[Start] --> B{Decision}', '  B -->|Yes| C[End]', '  B -->|No| D[Retry]', '  D --> A'].join('\n'),
+    malformedSource: ['flowchart TD', '  A[Start --> B'].join('\n'),
   },
   {
     name: 'sequence',
     source: ['sequenceDiagram', '  participant Alice', '  participant Bob', '  Alice->>Bob: Hello Bob', '  Bob-->>Alice: Hi Alice'].join('\n'),
+    malformedSource: ['sequenceDiagram', '  Alice ->->->-> Bob'].join('\n'),
   },
   {
     name: 'class',
     source: ['classDiagram', '  class Animal', '  Animal : +String name', '  Animal : +makeSound()', '  Animal <|-- Duck', '  Animal <|-- Cat'].join('\n'),
+    malformedSource: ['classDiagram', '  class Animal {{{ ]]] broken'].join('\n'),
   },
   {
     name: 'state',
     source: ['stateDiagram-v2', '  [*] --> Still', '  Still --> Moving', '  Moving --> Still', '  Moving --> Crash', '  Crash --> [*]'].join('\n'),
+    malformedSource: ['stateDiagram-v2', '  state Foo {', '  [*] --> Bar'].join('\n'), // unclosed composite-state block
   },
   {
     name: 'er',
@@ -45,6 +63,7 @@ export const DIAGRAM_CORPUS: readonly DiagramCorpusEntry[] = [
       '    string custId',
       '  }',
     ].join('\n'),
+    malformedSource: ['erDiagram', '  CUSTOMER }}}--{{{ broken'].join('\n'),
   },
   {
     name: 'journey',
@@ -57,14 +76,17 @@ export const DIAGRAM_CORPUS: readonly DiagramCorpusEntry[] = [
       '  section At work',
       '    Do work: 1: Me',
     ].join('\n'),
+    malformedSource: ['journey', '  section', '    ]]]broken[[[: not-a-number: Me'].join('\n'),
   },
   {
     name: 'pie',
     source: ['pie title Pets adopted by volunteers', '  "Dogs" : 42', '  "Cats" : 58'].join('\n'),
+    malformedSource: ['pie', '  "Dogs" : not-a-number'].join('\n'),
   },
   {
     name: 'git-graph',
     source: ['gitGraph', '  commit', '  branch develop', '  checkout develop', '  commit', '  checkout main', '  merge develop', '  commit'].join('\n'),
+    malformedSource: ['gitGraph', '  ]]]totally broken[[['].join('\n'),
   },
 ];
 
