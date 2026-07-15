@@ -22,6 +22,7 @@ import { buildHonoApp } from 'src/hono';
 import { stripApiV2Prefix } from 'src/hono/path-rewrite';
 
 import { bootCrowiWithRetry } from './db-connect-retry';
+import { recordDispatchEnd, recordDispatchStart } from './op-ring-buffer';
 
 // Silence boot-time noise that fires once per test file and drowns
 // the actual ✓ / ✕ output in the jest report:
@@ -189,12 +190,44 @@ beforeAll(async () => {
   // Side-effect-free requests (e.g. rate-limit 429 floods) hit the
   // fast path: the set is empty, so the drain's `while` is false on the
   // first check and resolves effectively synchronously.
+  //
+  // Request-boundary ring buffer (feature-flake-failure-taxonomy AC-2): this
+  // is the ONLY place a supertest request reaches Hono, so it is the sole
+  // observation point for `op-ring-buffer.ts`'s "was this op dispatched, and
+  // with what HTTP status" bookkeeping — see that module's doc comment.
+  // Every ring-buffer call is individually wrapped so a bug there can never
+  // affect a real request's control flow (start/end recording is best-effort
+  // either side of the SAME `try`/`catch` shape the real fetch already had).
   const fetchFn = async (request: Request): Promise<Response> => {
-    const res = await honoApp.fetch(stripApiV2Prefix(request));
-    if (responseBarrier.enabled) {
-      await crowi.drainSideEffects();
+    let opEntry: ReturnType<typeof recordDispatchStart> | null = null;
+    try {
+      opEntry = recordDispatchStart(request.method, new URL(request.url).pathname);
+    } catch {
+      // fail-open — see this block's doc comment above.
     }
-    return res;
+    try {
+      const res = await honoApp.fetch(stripApiV2Prefix(request));
+      if (opEntry) {
+        try {
+          recordDispatchEnd(opEntry, res.status);
+        } catch {
+          // fail-open
+        }
+      }
+      if (responseBarrier.enabled) {
+        await crowi.drainSideEffects();
+      }
+      return res;
+    } catch (err) {
+      if (opEntry) {
+        try {
+          recordDispatchEnd(opEntry, null);
+        } catch {
+          // fail-open
+        }
+      }
+      throw err;
+    }
   };
   app = getRequestListener(fetchFn);
 }, 90000);
