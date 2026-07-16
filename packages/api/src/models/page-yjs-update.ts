@@ -1,5 +1,5 @@
+import { type Document, type Model, model, Schema, type Types } from 'mongoose';
 import type Crowi from 'src/crowi';
-import { type Document, type Model, Schema, type Types, model } from 'mongoose';
 
 /**
  * Append-only log of high-frequency Yjs updates for a page.
@@ -29,6 +29,19 @@ export interface PageYjsUpdateDocument extends Document {
   pageId: Types.ObjectId;
   payload: Buffer;
   createdAt: Date;
+  /**
+   * RFC-0017 Phase 1 — the collab lifecycle epoch (`Page.collabLifecycleVersion`)
+   * recorded by `onLoadDocument`/`onChange` at the moment this delta was
+   * appended. `onLoadDocument`'s residual replay filters to
+   * `collabLifecycleVersion === page.collabLifecycleVersion` (current-epoch
+   * rows only) so a delta appended before a rename/delete/revert is never
+   * replayed onto the post-transition doc. `undefined` on pre-RFC-0017 rows
+   * — treated as epoch `0` (stale as soon as any lifecycle transition
+   * advances the page past `0`; the 1h TTL sweeps it either way — no
+   * backfill needed, see `migration/migrations/collab-lifecycle-version.ts`'s
+   * doc comment).
+   */
+  collabLifecycleVersion?: number;
 }
 
 // biome-ignore lint/suspicious/noEmptyInterface: placeholder for future statics that Phase 4 will introduce
@@ -48,6 +61,14 @@ export default (_crowi: Crowi) => {
       // step should bail out if a single delta exceeds the limit.
       payload: { type: Buffer, required: true },
       createdAt: { type: Date, required: true, default: () => new Date() },
+      // RFC-0017 Phase 1: the collab lifecycle epoch this delta was appended
+      // under. No `default` (unlike `Page.collabLifecycleVersion`) — a
+      // missing value here is deliberately distinct from an explicit `0` so
+      // pre-RFC-0017 rows and rows appended by a process that never recorded
+      // an epoch (see `on-change.ts`'s fail-safe skip) both read back as
+      // "unknown", which the replay filter treats as stale rather than
+      // guessing a match.
+      collabLifecycleVersion: { type: Number, required: false },
     },
     {
       // `createdAt` is declared explicitly above so the TTL index has

@@ -37,4 +37,27 @@ export class EditorPage {
   async waitForText(text: string): Promise<void> {
     await this.page.waitForFunction((needle) => document.querySelector('.cm-content')?.textContent?.includes(needle) ?? false, text, { timeout: 30_000 });
   }
+
+  /**
+   * Click the realtime Save button (`crowi:save` over the collab session).
+   *
+   * RFC-0017 Phase 1 — this is deliberately a JS-level `element.click()`
+   * (via `locator.evaluate`), not a simulated Playwright mouse click: a
+   * stale-save assertion wants to attempt the save regardless of whether a
+   * `CollabForceReloadDialog` (Radix `AlertDialog`) has already opened and
+   * visually covers the footer — the button itself stays enabled (nothing
+   * auto-disables Save on a force-reload broadcast, only the eventual
+   * connection close after the drain grace does), so a real click still
+   * reaches its `onClick` handler. A regular Playwright `.click()` would
+   * instead fail the actionability check ("subject to pointer-event
+   * interception") once the dialog's overlay is on top, making the race
+   * with the broadcast flaky.
+   */
+  async clickSave(): Promise<void> {
+    // Locate by innerText (not accessible name / role name) — the Save
+    // button's icon child is decorative (`aria-hidden`), but matching on
+    // rendered text is simpler and avoids any accname-computation edge case.
+    const button = this.page.locator('footer button', { hasText: /^(Save|保存)$/ }).first();
+    await button.evaluate((el) => (el as HTMLButtonElement).click());
+  }
 }

@@ -1,15 +1,25 @@
-import * as Y from 'yjs';
 import Debug from 'debug';
 import type { Types } from 'mongoose';
+import * as Y from 'yjs';
+import type { DocEpochStore } from './doc-epoch';
 import type { CollabModels } from './models';
-import { payloadToUint8Array } from './yjs-payload';
 import { persistYjsState } from './persist-yjs-state';
 import { CONTENT_FIELD } from './yjs-doc';
+import { payloadToUint8Array } from './yjs-payload';
 
 const debug = Debug('crowi:collab:compact');
 
 export interface CompactPageDeps {
   models: Pick<CollabModels, 'Page' | 'PageYjsUpdate' | 'Revision'>;
+  /**
+   * RFC-0017 Phase 1 §4.2/AC-16 — the collab lifecycle epoch anchor, read
+   * (not written) here so both compaction write paths (`store-only` fast
+   * path, `full-merge`) fold `collabLifecycleVersion: expectedEpoch` into
+   * the `persistYjsState` checkpoint the same way `executeSave` does.
+   * Optional — omitted in tests that don't care about epoch; the checkpoint
+   * then degrades to the status-only predicate (see `persist-yjs-state.ts`).
+   */
+  docEpochRevisions?: DocEpochStore;
 }
 
 export interface CompactPageResult {
@@ -79,6 +89,7 @@ export function createCompactor(deps: CompactPageDeps): Compactor {
   const PageYjsUpdate = deps.models.PageYjsUpdate as any;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const Revision = deps.models.Revision as any;
+  const docEpochRevisions = deps.docEpochRevisions;
 
   /**
    * Read the latest `Revision.body` for `pageId` — the anti-shrink
@@ -110,6 +121,30 @@ export function createCompactor(deps: CompactPageDeps): Compactor {
    * — used to short-circuit a noop store cycle.
    */
   async function runCompaction(pageId: string, fromDocument?: Y.Doc): Promise<CompactPageResult | null> {
+    // RFC-0017 Phase 1 §4.2 (compaction generation race fix) — capture
+    // `expectedEpoch` ONCE here, synchronously, before the first `await`
+    // in this function. `docEpochRevisions` is a shared, mutable, process-
+    // wide `Map<pageId, epoch>` that `onLoadDocument` overwrites
+    // UNCONDITIONALLY on every load for the same `pageId` (`doc-epoch.ts`).
+    // The rest of this function does several `await`s (the `PageYjsUpdate`
+    // find below, the Y.Doc merge/baseline-body read) before it used to
+    // re-read `docEpochRevisions.get(pageId)` right at the `persistYjsState`
+    // call sites — a window in which a DIFFERENT, concurrent connection's
+    // `onLoadDocument` for the SAME `pageId` (e.g. a reconnect racing the
+    // invalidator's drain after a rename/delete/revert) can overwrite the
+    // store to the NEW post-transition epoch. Reading it late would then
+    // hand `persistYjsState` the NEW epoch to CAS against even though this
+    // compaction's `pendingRows`/`fromDocument` reflect the OLD, pre-
+    // transition generation — the write would match the DB's (already-
+    // advanced) `collabLifecycleVersion` and land, resurrecting stale
+    // content. Freezing the value here (before any `await`, i.e. before any
+    // point where a concurrent `.set()` could interleave) ties the CAS to
+    // the generation THIS compaction actually observed, so a transition
+    // that lands mid-flight correctly causes the later `persistYjsState`
+    // zero-match reject instead of a stale write. See
+    // `compaction-epoch-race.test.ts` for the regression this guards.
+    const expectedEpoch = docEpochRevisions?.get(pageId);
+
     // Snapshot the pending rows first so the `_id` list is stable for
     // the deleteMany at the end. Anything appended after this find
     // call is *not* in `collectedIds`, so it survives the delete and
@@ -155,7 +190,13 @@ export function createCompactor(deps: CompactPageDeps): Compactor {
           return null;
         }
       }
-      const result = await persistYjsState(Page, { pageId, document: fromDocument, baselineBody, origin: 'store-only' });
+      const result = await persistYjsState(Page, {
+        pageId,
+        document: fromDocument,
+        baselineBody,
+        origin: 'store-only',
+        expectedEpoch,
+      });
       if (!result.ok) {
         // Return `null` (not an ok-shaped 0-byte result) so `onStoreDocument`
         // does NOT treat the reject as "persisted": a null lets the 10-min
@@ -241,7 +282,7 @@ export function createCompactor(deps: CompactPageDeps): Compactor {
         (err as Error).message,
       );
     }
-    const result = await persistYjsState(Page, { pageId, document: ydoc, baselineBody, origin: 'full-merge' });
+    const result = await persistYjsState(Page, { pageId, document: ydoc, baselineBody, origin: 'full-merge', expectedEpoch });
 
     if (!result.ok) {
       // Reject: leave yjsState AND the folded rows untouched (C1 fix).

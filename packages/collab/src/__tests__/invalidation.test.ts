@@ -1,15 +1,15 @@
-import * as Y from 'yjs';
 import { Types } from 'mongoose';
-import type { CollabModels } from '../models';
+import * as Y from 'yjs';
 import { createContributorsTracker } from '../contributors';
-import { createSaveFlow } from '../save-flow';
 import { createDocBaseRevisionStore, type DocBaseRevisionStore } from '../doc-base-revision';
 import { createOnLoadDocument } from '../hooks/on-load-document';
 import { createInvalidatedPagesStore, createPageInvalidator, INVALIDATED_DOC_BASE, type InvalidatedPagesStore } from '../invalidation';
-import { startInMemoryMongo, registerTestModels, type SmokeMongo } from './setup';
-import { makeFixtures, type CollabFixtures } from './fixtures';
-import { CONTENT_FIELD } from '../yjs-doc';
+import type { CollabModels } from '../models';
+import { createSaveFlow } from '../save-flow';
 import type { CollabPageEventPublisher } from '../types';
+import { CONTENT_FIELD } from '../yjs-doc';
+import { type CollabFixtures, makeFixtures } from './fixtures';
+import { registerTestModels, type SmokeMongo, startInMemoryMongo } from './setup';
 
 /**
  * feature-editor-preview-reliability G1 — external-edit invalidation of a
@@ -37,44 +37,69 @@ const seedUser = async (models: CollabModels) => {
   });
 };
 
-/** A minimal Hocuspocus `Document` stand-in tracking broadcasts. */
+/**
+ * A fake connection — models `@hocuspocus/server`'s `Connection`, which the
+ * real `Document.getConnections()` returns. `close()` is independent of the
+ * document REGISTRY (`instance.documents`): it stays reachable through a
+ * captured `FakeDoc` reference even after that reference was removed from
+ * `instance.documents` — this is exactly the AC-34 regression this fake
+ * exists to catch (see `invalidation.ts`'s `InvalidatorInstance` doc
+ * comment for the real-Hocuspocus behaviour this models).
+ */
+interface FakeConnection {
+  closed: boolean;
+  close(event?: { code: number; reason: string }): void;
+}
+
+/** A minimal Hocuspocus `Document` stand-in tracking broadcasts + connections. */
 interface FakeDoc {
   name: string;
   broadcasts: string[];
+  connections: FakeConnection[];
   broadcastStateless(payload: string): void;
+  getConnections(): FakeConnection[];
 }
 
-/** A minimal Hocuspocus engine stand-in with `documents` + `closeConnections`. */
+/** A minimal Hocuspocus engine stand-in with just `documents` (get/delete). */
 interface FakeInstance {
   documents: Map<string, FakeDoc>;
-  closedDocs: string[];
-  closeConnections(documentName?: string): void;
 }
 
-const makeFakeDoc = (name: string): FakeDoc => {
+const makeFakeConnection = (): FakeConnection => {
+  const conn: FakeConnection = {
+    closed: false,
+    close() {
+      conn.closed = true;
+    },
+  };
+  return conn;
+};
+
+/**
+ * `connectionCount` defaults to 1 (a single connected client) — tests that
+ * want to assert the AC-34 fix reaches a lingering connection after detach
+ * don't need to pass anything; tests with no live connections (the "no-op"
+ * case) pass 0.
+ */
+const makeFakeDoc = (name: string, connectionCount = 1): FakeDoc => {
   const broadcasts: string[] = [];
+  const connections = Array.from({ length: connectionCount }, () => makeFakeConnection());
   return {
     name,
     broadcasts,
+    connections,
     broadcastStateless(payload) {
       broadcasts.push(payload);
+    },
+    getConnections() {
+      return connections;
     },
   };
 };
 
 const makeFakeInstance = (): FakeInstance => {
   const documents = new Map<string, FakeDoc>();
-  const closedDocs: string[] = [];
-  return {
-    documents,
-    closedDocs,
-    closeConnections(documentName) {
-      if (documentName) {
-        closedDocs.push(documentName);
-        documents.delete(documentName);
-      }
-    },
-  };
+  return { documents };
 };
 
 describe('external-edit invalidation (G1)', () => {
@@ -182,9 +207,13 @@ describe('external-edit invalidation (G1)', () => {
     // (b) the doc base is tombstoned (an in-flight stale save would CONFLICT).
     expect(docBaseRevisions.get(pageId)).toBe(INVALIDATED_DOC_BASE);
 
-    // Run the drain (force-close): the stale doc is dropped from the engine.
+    // Run the drain (force-close). AC-34 — the invalidator closes the
+    // CAPTURED `liveFake`'s own connection directly; it must reach it even
+    // though `liveFake` is no longer reachable via `instance.documents` (it
+    // was detached above). Asserting on the captured reference — not a
+    // fresh `instance.documents.get(pageId)` lookup — is the whole point.
     drains.forEach((fn) => fn());
-    expect(instance.closedDocs).toContain(pageId);
+    expect(liveFake.connections.every((c) => c.closed)).toBe(true);
     expect(invalidatedPages.isInvalidating(pageId)).toBe(false);
 
     // (c) the reconnect re-materialises from the NEW revision body, not the
@@ -289,6 +318,53 @@ describe('external-edit invalidation (G1)', () => {
     // No live doc → nothing to drain; the tombstone is cleared right away so
     // the next connection records a real base normally.
     expect(invalidatedPages.isInvalidating(pageId)).toBe(false);
-    expect(instance.closedDocs).toHaveLength(0);
+  });
+
+  // AC-34/AC-35 — the invalidator drain must reach a connection that never
+  // voluntarily reloads (a client that ignores the force-reload broadcast
+  // and keeps its socket open through the grace period). Before the fix
+  // this connection was UNREACHABLE once its document was detached from
+  // `instance.documents` (see `invalidation.ts`'s `InvalidatorInstance` doc
+  // comment) — `instance.closeConnections(pageId)` re-looks-up the
+  // registry by name and finds nothing there.
+  test('a connection that never voluntarily disconnects is still force-closed after the grace period (detach does not strand it)', async () => {
+    const docBaseRevisions = createDocBaseRevisionStore();
+    const invalidatedPages = createInvalidatedPagesStore();
+    const { pageId } = await fixtures.seedPage();
+
+    const instance = makeFakeInstance();
+    // Two "clients" connected to the same live doc — neither ever calls
+    // `.disconnect()` / reloads on its own.
+    const staleDoc = makeFakeDoc(pageId, 2);
+    instance.documents.set(pageId, staleDoc);
+
+    const drains: Array<() => void> = [];
+    const invalidator = createPageInvalidator({
+      instance,
+      docBaseRevisions,
+      invalidatedPages,
+      graceMs: 50,
+      schedule: (fn) => drains.push(fn),
+    });
+    await invalidator.invalidatePages([pageId], 'page-renamed');
+
+    // Detach already happened synchronously (Blocker 1) — a registry lookup
+    // by name would find nothing, exactly the state that used to strand
+    // `instance.closeConnections(pageId)`.
+    expect(instance.documents.has(pageId)).toBe(false);
+    expect(staleDoc.connections.some((c) => c.closed)).toBe(false);
+
+    // AC-35 — while the stale connections are still open (mid-grace), a
+    // fresh materialisation must not be able to clobber the tombstone base
+    // (already covered by the other tests above; re-asserted here for the
+    // specific "connections never disconnected" shape).
+    expect(invalidatedPages.isInvalidating(pageId)).toBe(true);
+
+    // Run the drain — BOTH lingering connections must be closed, reached
+    // only through the captured `staleDoc` reference (not a fresh registry
+    // lookup, which would find nothing).
+    drains.forEach((fn) => fn());
+    expect(staleDoc.connections.every((c) => c.closed)).toBe(true);
+    expect(invalidatedPages.isInvalidating(pageId)).toBe(false);
   });
 });

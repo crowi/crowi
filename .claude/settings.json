@@ -10,6 +10,15 @@
             "command": "node .claude/scripts/validate-bash.js"
           }
         ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/scripts/validate-task-state-write.js"
+          }
+        ]
       }
     ]
   },

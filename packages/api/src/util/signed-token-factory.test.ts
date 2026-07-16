@@ -234,7 +234,7 @@ describe('AC-5 (security-critical regression): a placeholder WS_TOKEN_SECRET mus
 
   it('collab wsToken is not signed with the placeholder secret (pre-existing protection, kept for parity)', () => {
     withEnv('WS_TOKEN_SECRET', PLACEHOLDER, () => {
-      const { token } = createWsTokenUtil().signWsToken({ userId: 'user-1', pageId: 'page-1', readonly: false });
+      const { token } = createWsTokenUtil().signWsToken({ userId: 'user-1', pageId: 'page-1', readonly: false, epoch: 0 });
       const forged = jwt.sign(decodeClaims(token), PLACEHOLDER, { issuer: 'crowi-collab', algorithm: 'HS256' });
       expect(forged).not.toBe(token);
       expect(createWsTokenUtil().verifyWsToken(forged)).toBeNull();

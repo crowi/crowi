@@ -7,14 +7,14 @@ process.env.WS_TOKEN_SECRET = process.env.WS_TOKEN_SECRET ?? 'test-ws-token-secr
 import path from 'node:path';
 import mongoose from 'mongoose';
 import * as Y from 'yjs';
-import { startInMemoryMongo, registerTestModels, type SmokeMongo } from './setup';
-import type { CollabModels } from '../models';
-import type { CollabWsTokenUtil } from '../types';
+import { createCompactor } from '../compaction';
 import { createOnAuthenticate } from '../hooks/on-authenticate';
 import { createOnLoadDocument } from '../hooks/on-load-document';
 import { createOnStoreDocument } from '../hooks/on-store-document';
-import { createCompactor } from '../compaction';
+import type { CollabModels } from '../models';
+import type { CollabWsTokenUtil } from '../types';
 import { CONTENT_FIELD } from '../yjs-doc';
+import { registerTestModels, type SmokeMongo, startInMemoryMongo } from './setup';
 
 /**
  * Phase 3 smoke test. Exercises the hook trio end-to-end without
@@ -43,7 +43,8 @@ const apiPkgPath = require.resolve('@crowi/api/package.json', { paths: [process.
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const apiWsToken = require(path.join(path.dirname(apiPkgPath), 'dist', 'util', 'ws-token.js')) as {
   createWsTokenUtil(): {
-    signWsToken(claims: { userId: string; pageId: string; readonly: boolean }): { token: string; expiresAt: Date };
+    // RFC-0017 Phase 1 — `epoch` is a required wsToken claim.
+    signWsToken(claims: { userId: string; pageId: string; readonly: boolean; epoch: number }): { token: string; expiresAt: Date };
     verifyWsToken: CollabWsTokenUtil['verifyWsToken'];
   };
 };
@@ -121,7 +122,7 @@ describe('@crowi/collab Phase 3 hook smoke', () => {
     //    api factory here to assert the contract (same secret, same
     //    issuer, same TTL) the multi-instance Phase 9 path will need.
     const apiUtil = apiWsToken.createWsTokenUtil();
-    const { token } = apiUtil.signWsToken({ userId: userId.toString(), pageId, readonly: false });
+    const { token } = apiUtil.signWsToken({ userId: userId.toString(), pageId, readonly: false, epoch: 0 });
 
     const onAuthenticate = createOnAuthenticate({
       wsTokenUtil,
@@ -129,7 +130,7 @@ describe('@crowi/collab Phase 3 hook smoke', () => {
     });
     const authPayload = makeAuthPayload(token, pageId);
     const ctx = await onAuthenticate(authPayload);
-    expect(ctx).toEqual({ userId: userId.toString(), pageId, readonly: false });
+    expect(ctx).toEqual({ userId: userId.toString(), pageId, readonly: false, epoch: 0 });
     // onAuthenticate mutates connectionConfig.readOnly so Hocuspocus's
     // protocol layer can also enforce it.
     expect(authPayload.connectionConfig.readOnly).toBe(false);
@@ -204,7 +205,7 @@ describe('@crowi/collab Phase 3 hook smoke', () => {
     const userId = new mongoose.Types.ObjectId();
     const otherPageId = new mongoose.Types.ObjectId().toString();
     const apiUtil = apiWsToken.createWsTokenUtil();
-    const { token } = apiUtil.signWsToken({ userId: userId.toString(), pageId: otherPageId, readonly: false });
+    const { token } = apiUtil.signWsToken({ userId: userId.toString(), pageId: otherPageId, readonly: false, epoch: 0 });
 
     // documentName is a different page than the one the token was minted for.
     const Page = models.Page;
@@ -251,7 +252,7 @@ describe('@crowi/collab Phase 3 hook smoke', () => {
     it('accepts the draft author', async () => {
       const authorId = new mongoose.Types.ObjectId();
       const pageId = await seedPage('draft', authorId);
-      const { token } = apiWsToken.createWsTokenUtil().signWsToken({ userId: authorId.toString(), pageId, readonly: false });
+      const { token } = apiWsToken.createWsTokenUtil().signWsToken({ userId: authorId.toString(), pageId, readonly: false, epoch: 0 });
 
       const onAuthenticate = createOnAuthenticate({ wsTokenUtil, models: { Page: models.Page } });
       const ctx = await onAuthenticate(makeAuthPayload(token, pageId));
@@ -265,7 +266,7 @@ describe('@crowi/collab Phase 3 hook smoke', () => {
       const pageId = await seedPage('draft', authorId);
       // Token is valid (correct signature / pageId) but minted for a
       // different user — the draft author gate must still reject it.
-      const { token } = apiWsToken.createWsTokenUtil().signWsToken({ userId: intruderId.toString(), pageId, readonly: false });
+      const { token } = apiWsToken.createWsTokenUtil().signWsToken({ userId: intruderId.toString(), pageId, readonly: false, epoch: 0 });
 
       const onAuthenticate = createOnAuthenticate({ wsTokenUtil, models: { Page: models.Page } });
       await expect(onAuthenticate(makeAuthPayload(token, pageId))).rejects.toThrow(/permission denied/);
@@ -275,7 +276,7 @@ describe('@crowi/collab Phase 3 hook smoke', () => {
       const authorId = new mongoose.Types.ObjectId();
       const otherId = new mongoose.Types.ObjectId();
       const pageId = await seedPage('published', authorId);
-      const { token } = apiWsToken.createWsTokenUtil().signWsToken({ userId: otherId.toString(), pageId, readonly: false });
+      const { token } = apiWsToken.createWsTokenUtil().signWsToken({ userId: otherId.toString(), pageId, readonly: false, epoch: 0 });
 
       const onAuthenticate = createOnAuthenticate({ wsTokenUtil, models: { Page: models.Page } });
       const ctx = await onAuthenticate(makeAuthPayload(token, pageId));

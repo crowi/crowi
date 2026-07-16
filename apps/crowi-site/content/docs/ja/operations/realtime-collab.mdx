@@ -324,6 +324,27 @@ docker compose logs -f api
     無効化チャネル (Redis pub/sub による全レプリカへの伝搬) は将来対応であり
     現時点ではスコープ外です (RFC-0003 §5b)。これも**シングルインスタンス
     運用を推奨**する理由のひとつです。
+- **ライブ編集セッション中の rename / delete**([RFC-0017](https://github.com/crowi/crowi/blob/main/docs/rfcs/0017-collab-invalidate-on-rename-delete.md) Phase 1): 共同編集中のページが rename・
+  soft delete・revert された場合、Crowi は Page モデル上の monotonic な
+  epoch (`collabLifecycleVersion`) を該当ミューテーションと**同じ書き込み**
+  で必ず進めます。この epoch は wsToken の発行時に署名され、接続の
+  `onAuthenticate`・保存の atomic compare-and-set・checkpoint の書き込みの
+  3 箇所で検証されるため、**rename / delete 前に発行されたライブ編集
+  セッションからの保存は、マルチインスタンス構成でも(どのレプリカが
+  rename / delete を行ったかに関わらず)確実に reject されます**。
+  path や revision が変わらない rename のケースでも、epoch の不一致だけで
+  古い保存を CONFLICT として弾けるのがこの仕組みの要点です — つまり
+  **rename / delete に対する write-safety は Phase 1 の時点で既に
+  cross-replica 安全**です。
+  - **Phase 2 までの制約**: 一方で reload prompt (`crowi:force-reload`
+    broadcast + 強制切断) は、この G1 の外部編集無効化と同様に
+    **rename / delete を実行した api プロセス内のライブ Y.Doc にしか
+    届きません**。別レプリカで開いているエディタは、reject された保存が
+    `CONFLICT` エラーとして表示されるまで reload prompt を見ない可能性が
+    あります(=書き込みは安全だが、通知の即時性はレプリカローカルに
+    留まります)。クロスレプリカな prompt 配信 (Redis pub/sub での
+    全レプリカへの伝搬) は Phase 2 の対応であり、本ドキュメント時点では
+    未実装です。
 - **`Page.yjsState` 破損**: `onLoadDocument` で yjsState の
   `Y.applyUpdate` が失敗した場合、Crowi は revision の Markdown 本文から
   Y.Doc を再構築し、接続中の全クライアントへ force-reload 通知を送ります。

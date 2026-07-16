@@ -1,7 +1,8 @@
 import type { onAuthenticatePayload } from '@hocuspocus/server';
 import Debug from 'debug';
+import { resolvePageEpoch } from '../doc-epoch';
 import type { CollabModels } from '../models';
-import { DRAFT_STATUS } from '../page-status';
+import { DELETED_STATUS, DRAFT_STATUS } from '../page-status';
 import { type CollabContext, type CollabWsTokenUtil, type EditorCapCounter, noopEditorCapCounter } from '../types';
 
 /**
@@ -54,6 +55,8 @@ interface DraftablePageRow {
   _id: unknown;
   status?: string;
   creator?: unknown;
+  /** RFC-0017 Phase 1 §5/§D5. */
+  collabLifecycleVersion?: number;
 }
 
 export interface OnAuthenticateDeps {
@@ -96,7 +99,19 @@ export interface OnAuthenticateDeps {
  *      never-existed document. We **do not** re-run the full
  *      `loadGrantedPage` permission re-check here: the wsToken is 5
  *      minutes long and was already gated by the api process.
- *   4b. Draft author check (RFC-0004) — a `status: 'draft'` page is
+ *   4a. RFC-0017 Phase 1 §5/§D5 — deleted-status reject: a page soft-
+ *      deleted after the token was minted is rejected the same generic
+ *      way as a missing page (no distinguishing message).
+ *   4b. RFC-0017 Phase 1 §5/§D5/§16 PINNED — collab lifecycle epoch gate:
+ *      `claims.epoch !== page.collabLifecycleVersion` is rejected
+ *      (reject-and-remint). This is NOT an accept-with-fallback: a legacy
+ *      pre-epoch token can't even reach this line (`WsTokenPayloadSchema`
+ *      requires `epoch`, so `verifyWsToken` already returned `null` for it
+ *      at step 2). This closes the rename/delete self-invalidation hole —
+ *      a token minted BEFORE a lifecycle transition must never authenticate
+ *      a load that would re-baseline the doc on the POST-transition state
+ *      (RFC-0017 §0.1).
+ *   4c. Draft author check (RFC-0004) — a `status: 'draft'` page is
  *      editable only by its author, so reject any connection whose
  *      `userId` doesn't match `Page.creator`. The api-side wsToken
  *      route applies the same gate at sign time; re-checking here
@@ -152,11 +167,35 @@ export function createOnAuthenticate(deps: OnAuthenticateDeps) {
     }
 
     // RFC-0004: also pull `status` + `creator` so a draft page can be
-    // gated to its author below. `lean()` returns a plain object, so
-    // `creator` is an ObjectId — compare via `String(...)`.
-    const page = (await (deps.models.Page as DraftablePageModel).findById(claims.pageId).select('_id status creator').lean().exec()) as DraftablePageRow | null;
+    // gated to its author below. RFC-0017 Phase 1: also pull
+    // `collabLifecycleVersion` for the epoch gate. `lean()` returns a
+    // plain object, so `creator` is an ObjectId — compare via `String(...)`.
+    const page = (await (deps.models.Page as DraftablePageModel)
+      .findById(claims.pageId)
+      .select('_id status creator collabLifecycleVersion')
+      .lean()
+      .exec()) as DraftablePageRow | null;
     if (!page) {
       debug('reject: page %s not found', claims.pageId);
+      throw new Error('invalid token');
+    }
+
+    // RFC-0017 Phase 1 §5/§D5 — soft-deleted page: reject with the SAME
+    // generic message as "page not found" (no leak of deleted-vs-missing).
+    if (page.status === DELETED_STATUS) {
+      debug('reject: page %s is deleted', claims.pageId);
+      throw new Error('invalid token');
+    }
+
+    // RFC-0017 Phase 1 §5/§D5/§16 PINNED — collab lifecycle epoch gate:
+    // reject-and-remint, never accept-with-fallback. `page.collabLifecycleVersion`
+    // missing (pre-migration legacy row bypassing the schema default) reads
+    // as `0`. Generic message — indistinguishable from any other invalid
+    // token, so a caller can't probe whether the mismatch was due to a
+    // rename/delete/revert vs. some other invalidity.
+    const currentEpoch = resolvePageEpoch(page.collabLifecycleVersion);
+    if (claims.epoch !== currentEpoch) {
+      debug('reject: page %s epoch mismatch (token=%d, current=%d)', claims.pageId, claims.epoch, currentEpoch);
       throw new Error('invalid token');
     }
 
@@ -201,6 +240,14 @@ export function createOnAuthenticate(deps: OnAuthenticateDeps) {
       userId: claims.userId,
       pageId: claims.pageId,
       readonly,
+      // RFC-0017 Phase 1 — pinned for this connection's lifetime. `onChange`
+      // compares it against the doc-level epoch store (which a fresh
+      // `onLoadDocument` for a NEW materialisation overwrites) to detect a
+      // stale, drain-detached connection best-effort. `claims.epoch ===
+      // currentEpoch` is guaranteed here (the gate above already rejected
+      // any mismatch), so either value would do — using `currentEpoch`
+      // (server-read) rather than echoing `claims.epoch` back.
+      epoch: currentEpoch,
     };
   };
 }

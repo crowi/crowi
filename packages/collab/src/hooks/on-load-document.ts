@@ -1,10 +1,12 @@
 import type { Hocuspocus, onLoadDocumentPayload } from '@hocuspocus/server';
-import * as Y from 'yjs';
 import Debug from 'debug';
-import type { CollabModels } from '../models';
-import type { CollabContext } from '../types';
+import * as Y from 'yjs';
 import type { DocBaseRevisionStore } from '../doc-base-revision';
+import { type DocEpochStore, resolvePageEpoch } from '../doc-epoch';
 import type { InvalidatedPagesStore } from '../invalidation';
+import type { CollabModels } from '../models';
+import { DELETED_STATUS } from '../page-status';
+import type { CollabContext } from '../types';
 import { CONTENT_FIELD } from '../yjs-doc';
 import { payloadToUint8Array } from '../yjs-payload';
 
@@ -19,6 +21,15 @@ export interface OnLoadDocumentDeps {
    * Optional so synthetic test drivers / the Phase 3 smoke test can omit it.
    */
   docBaseRevisions?: DocBaseRevisionStore;
+  /**
+   * RFC-0017 Phase 1 §4.1.1 — the collab lifecycle epoch anchor,
+   * recorded UNCONDITIONALLY on every load (drain or not — see
+   * `doc-epoch.ts`'s doc comment for why this differs from
+   * `docBaseRevisions`'s conditional recording). Optional so synthetic test
+   * drivers can omit it (epoch enforcement then degrades to the fail-safe
+   * "expected epoch unknown" fallback everywhere it's read).
+   */
+  docEpochRevisions?: DocEpochStore;
   /**
    * G1 — the external-edit invalidation tombstone store. When a page is
    * mid-drain (its live doc was just invalidated by an external write) the
@@ -95,41 +106,66 @@ export function createOnLoadDocument(deps: OnLoadDocumentDeps) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const PageYjsUpdate = deps.models.PageYjsUpdate as any;
   const docBaseRevisions = deps.docBaseRevisions;
+  const docEpochRevisions = deps.docEpochRevisions;
   const invalidatedPages = deps.invalidatedPages;
 
   /**
    * Apply every pending `PageYjsUpdate` for `pageId` into `document`
    * in chronological order. Corrupt rows are warn+skipped. Safe to
    * call on every load path because Y.applyUpdate is idempotent.
+   *
+   * RFC-0017 Phase 1 §4.2/AC-15 — replay ONLY current-epoch rows.
+   * `collabLifecycleVersion` missing on a row (pre-RFC-0017, or a row
+   * appended by an epoch-unaware process — see `on-change.ts`'s fail-safe
+   * skip) is treated as epoch `0`: it replays fine on a never-transitioned
+   * page (current epoch `0`) and is correctly excluded once any lifecycle
+   * transition has advanced the page past `0`. Stale-epoch rows are
+   * best-effort swept alongside poisoned ones — they can never become
+   * current again (epoch only advances), so leaving them for the 1h TTL
+   * buys nothing.
    */
-  async function replayResidualUpdates(pageId: string, document: Y.Doc): Promise<void> {
-    const rows: Array<{ _id: unknown; payload: unknown }> = await PageYjsUpdate.find({ pageId }).sort({ createdAt: 1 }).select('_id payload').lean().exec();
+  async function replayResidualUpdates(pageId: string, document: Y.Doc, currentEpoch: number): Promise<void> {
+    const rows: Array<{ _id: unknown; payload: unknown; collabLifecycleVersion?: number }> = await PageYjsUpdate.find({ pageId })
+      .sort({ createdAt: 1 })
+      .select('_id payload collabLifecycleVersion')
+      .lean()
+      .exec();
     if (rows.length === 0) return;
 
     let applied = 0;
-    const poisoned: unknown[] = [];
+    let skippedStaleEpoch = 0;
+    const toSweep: unknown[] = [];
     for (const row of rows) {
+      const rowEpoch = row.collabLifecycleVersion ?? 0;
+      if (rowEpoch !== currentEpoch) {
+        skippedStaleEpoch += 1;
+        toSweep.push(row._id);
+        continue;
+      }
       try {
         Y.applyUpdate(document, payloadToUint8Array(row.payload));
         applied += 1;
       } catch (err) {
-        poisoned.push(row._id);
+        toSweep.push(row._id);
         console.warn(`[crowi:collab] onLoadDocument: skipping corrupt PageYjsUpdate for page ${String(pageId)}:`, (err as Error).message);
       }
     }
 
-    // Fail-closed cleanup: drop the corrupt rows so we don't repeat
-    // the same warning on every subsequent load of this page. TTL
-    // (1h) would eventually clear them anyway — this just shrinks
-    // the warning window from an hour to one load.
-    if (poisoned.length > 0) {
+    // Fail-closed cleanup: drop the corrupt / stale-epoch rows so we don't
+    // repeat the same warning (or the same stale-epoch skip) on every
+    // subsequent load of this page. TTL (1h) would eventually clear them
+    // anyway — this just shrinks the window.
+    if (toSweep.length > 0) {
       try {
-        await PageYjsUpdate.deleteMany({ _id: { $in: poisoned } }).exec();
+        await PageYjsUpdate.deleteMany({ _id: { $in: toSweep } }).exec();
       } catch (err) {
-        console.warn(`[crowi:collab] onLoadDocument: failed to clean up ${poisoned.length} corrupt rows for page ${String(pageId)}:`, (err as Error).message);
+        console.warn(
+          `[crowi:collab] onLoadDocument: failed to clean up ${toSweep.length} corrupt/stale-epoch rows for page ${String(pageId)}:`,
+          (err as Error).message,
+        );
       }
     }
-    debug('replayed %d (poisoned %d) residual updates for page %s', applied, poisoned.length, pageId);
+    debug('replayed %d (stale-epoch skipped %d, of %d total) residual updates for page %s', applied, skippedStaleEpoch, rows.length, pageId);
   }
 
   /**
@@ -164,18 +200,33 @@ export function createOnLoadDocument(deps: OnLoadDocumentDeps) {
    * the replay round-trip when nothing is left). Best-effort: a delete failure
    * is logged and the surviving count is reported optimistically as
    * `total - olderRows` so the caller still replays the newer rows.
+   *
+   * RFC-0017 Phase 1 §4.2/AC-15/AC-29 — ALSO purges rows whose
+   * `collabLifecycleVersion` doesn't match `currentEpoch`, independent of
+   * the time check. This is what makes the revert scenario safe when a row
+   * was appended (by a stale, epoch-unaware `onChange`) to the deleted
+   * page's `_id` mid-drain, BEFORE the delete-time `purgeCollabLineage`
+   * ran, and the drain hasn't re-purged yet: the row's epoch is stamped
+   * from before the delete/revert transitions, so it's excluded here even
+   * though its `createdAt` might be at/after `before` (a revert's reverted
+   * revision can predate a same-timestamp stale append).
    */
-  async function purgeStaleResidualUpdates(pageId: string, before: Date): Promise<number> {
+  async function purgeStaleResidualUpdates(pageId: string, before: Date, currentEpoch: number): Promise<number> {
     let total = 0;
     let stale = 0;
     try {
-      const rows: Array<{ _id: unknown; createdAt?: Date }> = await PageYjsUpdate.find({ pageId }).select('_id createdAt').lean().exec();
+      const rows: Array<{ _id: unknown; createdAt?: Date; collabLifecycleVersion?: number }> = await PageYjsUpdate.find({ pageId })
+        .select('_id createdAt collabLifecycleVersion')
+        .lean()
+        .exec();
       total = rows.length;
-      const staleIds = rows.filter((row) => row.createdAt instanceof Date && row.createdAt.getTime() < before.getTime()).map((row) => row._id);
+      const staleIds = rows
+        .filter((row) => (row.createdAt instanceof Date && row.createdAt.getTime() < before.getTime()) || (row.collabLifecycleVersion ?? 0) !== currentEpoch)
+        .map((row) => row._id);
       stale = staleIds.length;
       if (staleIds.length > 0) {
         const result = await PageYjsUpdate.deleteMany({ _id: { $in: staleIds } }).exec();
-        debug('purged %d stale (pre-external-edit) residual updates for page %s', result?.deletedCount ?? staleIds.length, pageId);
+        debug('purged %d stale (pre-external-edit or stale-epoch) residual updates for page %s', result?.deletedCount ?? staleIds.length, pageId);
       }
     } catch (err) {
       console.warn(`[crowi:collab] onLoadDocument: failed to purge stale residual rows for page ${String(pageId)}:`, (err as Error).message);
@@ -239,12 +290,31 @@ export function createOnLoadDocument(deps: OnLoadDocumentDeps) {
   return async (data: onLoadDocumentPayload<CollabContext>): Promise<void> => {
     const { documentName, document, instance } = data;
 
-    const page = await Page.findById(documentName).select('_id revision currentRevision yjsState').exec();
+    const page = await Page.findById(documentName).select('_id revision currentRevision yjsState status collabLifecycleVersion').exec();
     if (!page) {
       // Defensive — `onAuthenticate` already confirmed existence, so
       // this branch only fires on a race where the page was deleted
       // between auth and load.
       debug('page %s not found at load time', documentName);
+      throw new Error('page not found');
+    }
+
+    // RFC-0017 Phase 1 §4.1.1/AC-19 — record the epoch UNCONDITIONALLY
+    // (drain or not, about-to-reject-as-deleted or not — see `doc-epoch.ts`'s
+    // doc comment for why this store, unlike `docBaseRevisions` below, has
+    // no conditional-skip branch). Missing on-disk (pre-migration legacy
+    // row bypassing the schema default) reads as `0`.
+    const currentEpoch = resolvePageEpoch(page.collabLifecycleVersion);
+    docEpochRevisions?.set(String(documentName), currentEpoch);
+
+    // RFC-0017 Phase 1 §5/AC-19 — reject a soft-deleted page BEFORE any
+    // Y.Doc materialisation (no yjsState restore, no body seed). Generic
+    // message — `onAuthenticate` already gated this connection once, so a
+    // deleted-mid-session race is the only way to reach here; the message
+    // must not distinguish "deleted" from "missing" (same leak-prevention
+    // posture as the not-found branch above).
+    if (page.status === DELETED_STATUS) {
+      debug('page %s is deleted at load time — rejecting materialisation', documentName);
       throw new Error('page not found');
     }
 
@@ -405,7 +475,7 @@ export function createOnLoadDocument(deps: OnLoadDocumentDeps) {
     // deletion keeps the OLD non-null yjsState → `baseRestored`) nor by the C2
     // only-content case (`bodySeedChars === 0`).
     if (!baseRestored && !bodySeedFallback && bodySeedChars > 0 && bodySeedRevisionCreatedAt) {
-      const surviving = await purgeStaleResidualUpdates(String(documentName), bodySeedRevisionCreatedAt);
+      const surviving = await purgeStaleResidualUpdates(String(documentName), bodySeedRevisionCreatedAt, currentEpoch);
       if (surviving === 0) {
         return;
       }
@@ -419,6 +489,7 @@ export function createOnLoadDocument(deps: OnLoadDocumentDeps) {
     //   - C2: an abandoned-lineage fallback where the body seed was empty,
     //     so the deltas carry the only content.
     // Yjs CRDT idempotency makes already-folded deltas safe to re-apply.
-    await replayResidualUpdates(String(documentName), document);
+    // RFC-0017 Phase 1 §4.2/AC-15 — current-epoch-only (see the function doc).
+    await replayResidualUpdates(String(documentName), document, currentEpoch);
   };
 }

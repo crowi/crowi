@@ -5,11 +5,11 @@ process.env.WS_TOKEN_SECRET = process.env.WS_TOKEN_SECRET ?? 'test-ws-token-secr
 
 import path from 'node:path';
 import mongoose from 'mongoose';
-import { startInMemoryMongo, registerTestModels, type SmokeMongo } from './setup';
-import type { CollabModels } from '../models';
-import type { CollabWsTokenUtil, EditorCapCounter } from '../types';
 import { createOnAuthenticate } from '../hooks/on-authenticate';
 import { createOnDisconnect } from '../hooks/on-disconnect';
+import type { CollabModels } from '../models';
+import type { CollabWsTokenUtil, EditorCapCounter } from '../types';
+import { registerTestModels, type SmokeMongo, startInMemoryMongo } from './setup';
 
 /**
  * Phase 6 editor cap defence (collab side). Drives the hooks directly
@@ -26,7 +26,8 @@ const apiPkgPath = require.resolve('@crowi/api/package.json', { paths: [process.
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const apiWsToken = require(path.join(path.dirname(apiPkgPath), 'dist', 'util', 'ws-token.js')) as {
   createWsTokenUtil(): {
-    signWsToken(claims: { userId: string; pageId: string; readonly: boolean }): { token: string; expiresAt: Date };
+    // RFC-0017 Phase 1 — `epoch` is a required wsToken claim.
+    signWsToken(claims: { userId: string; pageId: string; readonly: boolean; epoch: number }): { token: string; expiresAt: Date };
     verifyWsToken: CollabWsTokenUtil['verifyWsToken'];
   };
 };
@@ -130,7 +131,7 @@ describe('@crowi/collab Phase 6 editor cap defence', () => {
     });
     const pageId = page._id.toString();
     const apiUtil = apiWsToken.createWsTokenUtil();
-    const { token } = apiUtil.signWsToken({ userId: userId.toString(), pageId, readonly });
+    const { token } = apiUtil.signWsToken({ userId: userId.toString(), pageId, readonly, epoch: 0 });
     return { pageId, userId: userId.toString(), token };
   };
 
@@ -197,7 +198,7 @@ describe('@crowi/collab Phase 6 editor cap defence', () => {
 
     const payload = makeAuthPayload(token, pageId, 'sock-ok');
     const ctx = await onAuthenticate(payload);
-    expect(ctx).toEqual({ userId, pageId, readonly: false });
+    expect(ctx).toEqual({ userId, pageId, readonly: false, epoch: 0 });
     expect(payload.connectionConfig.readOnly).toBe(false);
     expect(counter.calls).toEqual([{ method: 'tryAcquire', pageId, userId, socketId: 'sock-ok' }]);
   });

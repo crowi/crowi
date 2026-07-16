@@ -80,8 +80,52 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Set flake-report run id
+        # Run-scoped id (feature-flake-report-detection-redesign AC-1):
+        # `turbo.json`'s `globalPassThroughEnv` forwards `CROWI_TEST_RUN_ID`
+        # into the api jest child spawned by `pnpm test` below, so
+        # `global-setup.js`'s `CROWI_TEST_RUN_ID ??= ...` adopts THIS value
+        # instead of self-generating one. `CROWI_TEST_JSON_OUTPUT_FILE`
+        # gates `packages/api`'s `test` script into ALSO writing jest's
+        # `--json --outputFile` result — CI-only (env-gated), local `pnpm
+        # test` is unaffected. The `flake-report` job below recomputes the
+        # SAME `CROWI_TEST_RUN_ID` from the SAME `github.run_id`/`run_attempt`
+        # context, which is what lets it verify the producer manifest's run
+        # id without any extra cross-job handoff.
+        run: |
+          RUN_ID="${{ github.run_id }}-${{ github.run_attempt }}"
+          echo "CROWI_TEST_RUN_ID=$RUN_ID" >> "$GITHUB_ENV"
+          echo "CROWI_TEST_JSON_OUTPUT_FILE=/tmp/crowi-api-test-result.$RUN_ID.json" >> "$GITHUB_ENV"
+
       - name: Run tests
         run: pnpm test
+
+      - name: Emit flake-report producer manifest
+        # Always runs — even after a failed "Run tests" — so a red run still
+        # gets an artifact `flake-report` can classify
+        # (feature-flake-report-detection-redesign AC-2). Fail-open +
+        # `continue-on-error` (belt-and-suspenders): this bookkeeping step
+        # must never flip a green `test` job red.
+        if: always()
+        continue-on-error: true
+        run: node scripts/test-flake-report-produce.mjs
+
+      - name: Upload flake-report artifact
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: flake-report-${{ github.run_id }}-${{ github.run_attempt }}
+          # Exact run-scoped basenames the manifest itself names (no globs —
+          # AC-2's "manifest の run-ID を検証してから読む"). The near-miss
+          # jsonl and (rarely) the jest json commonly don't exist — `warn`
+          # (not `error`) so a merely-partial producer output still uploads
+          # whatever it did produce.
+          path: |
+            /tmp/crowi-flake-report-manifest.${{ env.CROWI_TEST_RUN_ID }}.json
+            /tmp/crowi-api-test-result.${{ env.CROWI_TEST_RUN_ID }}.json
+            /tmp/crowi-api-test-retry-events.${{ env.CROWI_TEST_RUN_ID }}.jsonl
+          if-no-files-found: warn
 
       - name: Run root scripts/ tests
         # Not part of any turbo package (scripts/ isn't a workspace package), so
@@ -126,18 +170,28 @@ jobs:
           fi
 
   flake-report:
-    # Non-blocking flake detector for @crowi/api's full suite
-    # (feature-test-parallel-db-flake-hardening, Phase 4 / B2): runs the full
-    # suite once, solo-reruns whatever didn't pass, and classifies each as
-    # FLAKY (green alone) or REGRESSION (fails alone too) — see
-    # `scripts/test-flake-report.mjs`. Mirrors `changeset-status`'s
-    # `continue-on-error: true` NON-BLOCKING position below, but — unlike
-    # that job — needs the SAME `services`/`env` as the `test` job above:
-    # `scripts/test-flake-report.mjs` spawns @crowi/api's real jest suite
-    # directly (bypassing turbo), so without `services.mongo` + `MONGO_URI`,
-    # `crowi-environment.js`'s CI fail-fast throws for every test file, and
-    # both the full-suite run and every solo rerun fail identically —
-    # misclassifying every single file as REGRESSION.
+    # CONSUMER half of the producer/consumer flake-report redesign
+    # (feature-flake-report-detection-redesign, superseding the old
+    # independent-full-suite `pnpm test:flake` job): downloads the `test`
+    # job's producer artifact (manifest + @crowi/api jest `--json` output +
+    # near-miss jsonl, all keyed by the SAME `CROWI_TEST_RUN_ID` both jobs
+    # independently compute from `github.run_id`-`github.run_attempt`),
+    # verifies the manifest's run id, and solo-reruns ONLY the files
+    # @crowi/api jest itself did not pass in the run that actually gated
+    # `test` — no more disjoint full-suite run that could (and did) observe
+    # a different outcome than the one that gated `test`. Classifies each
+    # into FLAKY / REGRESSION / INCONCLUSIVE and never reports green when
+    # the evidence is missing, foreign, or out of @crowi/api's scope (a
+    # non-API failure, a cancelled `test` run, or a lost artifact) — see
+    # `scripts/test-flake-report-consume.mjs`. `needs: test` + `if: always()`
+    # so a cancelled `test` run still reaches this job (reported as
+    # cancelled, never silently skipped-and-invisible). Non-blocking
+    # end-to-end (mirrors `changeset-status`'s `continue-on-error: true`
+    # position below) — solo-reruns still need the SAME `services`/`env` as
+    # `test` (spawns @crowi/api's jest directly, bypassing turbo).
+    name: 'flake-report (@crowi/api jest only)'
+    needs: test
+    if: always()
     runs-on: ubuntu-latest
 
     services:
@@ -161,18 +215,51 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Set flake-report run id
+        # Independently recomputed from the SAME `github.run_id`/`run_attempt`
+        # this workflow run's `test` job used — the run-ID correlation AC-2
+        # requires, without any extra cross-job handoff. Deliberately BEFORE
+        # "Build workspace packages" below: every later step in this job is
+        # `if: always()` so it still runs after a failed build, and needs
+        # `env.CROWI_TEST_RUN_ID` to already be set — a build failure must
+        # not leave the required source-unavailable provenance artifact
+        # unwritable/unlocatable (a prior ordering bug did exactly that).
+        run: echo "CROWI_TEST_RUN_ID=${{ github.run_id }}-${{ github.run_attempt }}" >> "$GITHUB_ENV"
+
       - name: Build workspace packages
-        # `scripts/test-flake-report.mjs` spawns `@crowi/api`'s jest DIRECTLY
-        # (bypassing turbo — see that script's doc comment), so it doesn't
-        # benefit from turbo's own `test` task `dependsOn: ["^build"]` the
-        # `test` job above relies on implicitly. Build everything up front so
-        # @crowi/api's workspace dependencies (api-contract, collab, runner,
-        # plugin-api, ...) have a `dist/` to resolve against.
+        # Solo-reruns spawn `@crowi/api`'s jest DIRECTLY (bypassing turbo —
+        # see `scripts/test-flake-report-consume.mjs`), so, like the job this
+        # replaces, it needs a `dist/` for @crowi/api's workspace
+        # dependencies (api-contract, collab, runner, plugin-api, ...) up
+        # front.
         run: pnpm build
 
-      - name: Run flake report (non-blocking)
-        run: pnpm test:flake
+      - name: Download flake-report artifact
+        id: download
+        if: always()
         continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          name: flake-report-${{ github.run_id }}-${{ github.run_attempt }}
+          path: /tmp/flake-report-artifact
+
+      - name: Classify + report (non-blocking)
+        if: always()
+        continue-on-error: true
+        env:
+          CROWI_FLAKE_REPORT_TEST_JOB_RESULT: ${{ needs.test.result }}
+          CROWI_FLAKE_REPORT_ARTIFACT_DIR: /tmp/flake-report-artifact
+          CROWI_FLAKE_REPORT_ARTIFACT_DOWNLOAD_OUTCOME: ${{ steps.download.outcome }}
+        run: node scripts/test-flake-report-consume.mjs
+
+      - name: Upload flake-report classification artifact
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: flake-report-classification-${{ github.run_id }}-${{ github.run_attempt }}
+          path: /tmp/crowi-flake-report-classification.${{ env.CROWI_TEST_RUN_ID }}.json
+          if-no-files-found: warn
 
   changeset-status:
     # Warn-only check: surfaces missing changesets on PRs without blocking merges.

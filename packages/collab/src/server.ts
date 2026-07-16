@@ -1,28 +1,29 @@
-import { Hocuspocus, type Extension } from '@hocuspocus/server';
+import { type Extension, Hocuspocus } from '@hocuspocus/server';
 import Debug from 'debug';
+import { createCompactor } from './compaction';
+import { type ContributorsTracker, createContributorsTracker } from './contributors';
+import { createDocBaseRevisionStore } from './doc-base-revision';
+import { createDocEpochStore } from './doc-epoch';
+import { createOnAuthenticate, type OnAuthenticateDeps } from './hooks/on-authenticate';
+import { createOnAwarenessUpdate } from './hooks/on-awareness-update';
+import { createOnChange } from './hooks/on-change';
+import { createOnDisconnect } from './hooks/on-disconnect';
+import { createOnLoadDocument } from './hooks/on-load-document';
+import { createOnStateless } from './hooks/on-stateless';
+import { createOnStoreDocument } from './hooks/on-store-document';
+import { createInvalidatedPagesStore, createPageInvalidator, type PageInvalidator } from './invalidation';
 import type { CollabModels } from './models';
+import { noopPresenceHooks, type PresenceHooks } from './presence';
+import { wrapOnAuthenticateWithPresence, wrapOnDisconnectWithPresence } from './presence-wiring';
+import { createSaveFlow, type SaveFlow } from './save-flow';
 import {
   type CollabContext,
+  type CollabPageEventPublisher,
   type CollabWsTokenUtil,
   type EditorCapCounter,
   noopEditorCapCounter,
-  type CollabPageEventPublisher,
   noopPageEventPublisher,
 } from './types';
-import { createOnAuthenticate, type OnAuthenticateDeps } from './hooks/on-authenticate';
-import { createOnLoadDocument } from './hooks/on-load-document';
-import { createOnStoreDocument } from './hooks/on-store-document';
-import { createOnChange } from './hooks/on-change';
-import { createOnStateless } from './hooks/on-stateless';
-import { createOnAwarenessUpdate } from './hooks/on-awareness-update';
-import { createOnDisconnect } from './hooks/on-disconnect';
-import { createCompactor } from './compaction';
-import { createContributorsTracker, type ContributorsTracker } from './contributors';
-import { createDocBaseRevisionStore } from './doc-base-revision';
-import { createInvalidatedPagesStore, createPageInvalidator, type PageInvalidator } from './invalidation';
-import { createSaveFlow, type SaveFlow } from './save-flow';
-import { type PresenceHooks, noopPresenceHooks } from './presence';
-import { wrapOnAuthenticateWithPresence, wrapOnDisconnectWithPresence } from './presence-wiring';
 
 const debug = Debug('crowi:collab:server');
 
@@ -144,6 +145,12 @@ export function createCollabServer(opts: CreateCollabServerOptions): CollabEngin
   // every successful save). One store per engine so all docs in this process
   // agree on their bases.
   const docBaseRevisions = createDocBaseRevisionStore();
+  // RFC-0017 Phase 1 §4.1.1 — the collab lifecycle epoch anchor, shared
+  // between `onLoadDocument` (records unconditionally on every load),
+  // `executeSave` (reads into the atomic CAS), `onChange` (reads to stamp
+  // each appended `PageYjsUpdate` row), and the compactor (reads into its
+  // `persistYjsState` checkpoints). See `doc-epoch.ts`.
+  const docEpochRevisions = createDocEpochStore();
   // G1 — the external-edit invalidation tombstone store, shared between the
   // invalidator (marks a page mid-drain) and `onLoadDocument` (gates a new
   // connection so it re-materialises from the new revision body instead of
@@ -156,10 +163,12 @@ export function createCollabServer(opts: CreateCollabServerOptions): CollabEngin
       contributorsTracker,
       pageEventPublisher,
       docBaseRevisions,
+      docEpochRevisions,
     });
 
   const compactor = createCompactor({
     models: { Page: models.Page, PageYjsUpdate: models.PageYjsUpdate, Revision: models.Revision },
+    docEpochRevisions,
   });
 
   const presence = opts.presence ?? noopPresenceHooks;
@@ -182,6 +191,7 @@ export function createCollabServer(opts: CreateCollabServerOptions): CollabEngin
   const onLoadDocument = createOnLoadDocument({
     models: { Page: models.Page, Revision: models.Revision, PageYjsUpdate: models.PageYjsUpdate },
     docBaseRevisions,
+    docEpochRevisions,
     invalidatedPages,
   });
   const onStoreDocument = createOnStoreDocument({
@@ -196,6 +206,7 @@ export function createCollabServer(opts: CreateCollabServerOptions): CollabEngin
   const onChange = createOnChange({
     models: { PageYjsUpdate: models.PageYjsUpdate },
     compactor,
+    docEpochRevisions,
   });
   const onStateless = createOnStateless({ saveFlow });
   const onAwarenessUpdate = createOnAwarenessUpdate({ contributorsTracker });

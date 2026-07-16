@@ -1,7 +1,8 @@
-import * as Y from 'yjs';
 import Debug from 'debug';
 import type { Model } from 'mongoose';
-import { evaluateAntiShrink, type AntiShrinkVerdict } from './yjs-anti-shrink';
+import * as Y from 'yjs';
+import { DELETED_STATUS } from './page-status';
+import { type AntiShrinkVerdict, evaluateAntiShrink } from './yjs-anti-shrink';
 
 const debug = Debug('crowi:collab:persist');
 
@@ -60,6 +61,17 @@ export interface PersistYjsStateInput {
    * an operator can tell apart "save", "store-only", "full-merge".
    */
   origin: 'save' | 'store-only' | 'full-merge';
+  /**
+   * RFC-0017 Phase 1 §4.2/AC-16 — expected `collabLifecycleVersion` this
+   * checkpoint's `updateOne` filter must match (in addition to the
+   * unconditional `status: { $ne: 'deleted' }` predicate). Sourced from the
+   * caller's epoch store (`onLoadDocument`'s recorded value for this doc).
+   * `undefined` (doc never loaded in this process) omits the epoch clause —
+   * the write then degrades to the status-only predicate, the same
+   * fail-safe-fallback posture `executeSave`'s CAS uses (a process that
+   * never recorded an epoch cannot forge a MATCHING stale one either).
+   */
+  expectedEpoch?: number;
 }
 
 export type PersistYjsStateResult =
@@ -77,7 +89,21 @@ export type PersistYjsStateResult =
        * `PageYjsUpdate` rows in place (do not prune on a reject).
        */
       ok: false;
+      reason: 'anti-shrink';
       verdict: AntiShrinkVerdict;
+    }
+  | {
+      /**
+       * RFC-0017 Phase 1 §4.2/AC-16 — the epoch/status `updateOne` filter
+       * matched ZERO rows: the page transitioned (rename/delete/revert/
+       * body-replace) since `expectedEpoch` was recorded, or the page is
+       * soft-deleted. Treated identically to an anti-shrink reject by every
+       * caller (nothing written, folded rows left in place for the caller
+       * to decide) — kept as a distinct `reason` only so a future caller
+       * that DOES want to tell them apart (e.g. for telemetry) can.
+       */
+      ok: false;
+      reason: 'epoch-mismatch';
     };
 
 /**
@@ -117,7 +143,7 @@ export async function persistYjsState(page: PageModelLike, input: PersistYjsStat
           'yjsState left intact and folded rows preserved — the next onLoadDocument rebuilds from the surviving base + deltas.',
       );
     }
-    return { ok: false, verdict };
+    return { ok: false, reason: 'anti-shrink', verdict };
   }
 
   // A successful write clears the reject streak so a page that recovers
@@ -125,7 +151,29 @@ export async function persistYjsState(page: PageModelLike, input: PersistYjsStat
   rejectCounts.delete(input.pageId);
 
   const stateBuf = Buffer.from(Y.encodeStateAsUpdate(input.document));
-  await page.updateOne({ _id: input.pageId }, { $set: { yjsState: stateBuf, yjsCheckpointAt: new Date() } }).exec();
+  // RFC-0017 Phase 1 §4.2/AC-16 — `status` is ALWAYS filtered (legacy rows /
+  // an unknown `expectedEpoch` are still guarded against writing into a
+  // deleted page); `collabLifecycleVersion` is added only when
+  // `expectedEpoch` is known (see `PersistYjsStateInput.expectedEpoch`'s
+  // doc comment for the fail-safe-fallback rationale).
+  const filter: Record<string, unknown> = { _id: input.pageId, status: { $ne: DELETED_STATUS } };
+  if (input.expectedEpoch !== undefined) {
+    filter.collabLifecycleVersion = input.expectedEpoch;
+  }
+  const writeResult = (await page.updateOne(filter, { $set: { yjsState: stateBuf, yjsCheckpointAt: new Date() } }).exec()) as { matchedCount?: number } | null;
+  if ((writeResult?.matchedCount ?? 0) === 0) {
+    // RFC-0017 Phase 1 §4.2/AC-16 — zero-match means "do not persist": the
+    // lifecycle transitioned (or the page is deleted) since `expectedEpoch`
+    // was recorded. Same no-data-loss policy as an anti-shrink reject —
+    // caller leaves folded rows in place, the next onLoadDocument rebuilds
+    // from the surviving (now-current) base instead of this stale write.
+    console.warn(
+      `[crowi:collab] persistYjsState: epoch/status guard rejected the ${input.origin} checkpoint for page ${input.pageId} ` +
+        '(the page transitioned — rename/delete/revert/body-replace — or was deleted since this doc was loaded); ' +
+        'yjsState left intact and folded rows preserved.',
+    );
+    return { ok: false, reason: 'epoch-mismatch' };
+  }
   debug('persistYjsState: wrote %d bytes for page %s (origin=%s)', stateBuf.length, input.pageId, input.origin);
   return { ok: true, bytes: stateBuf.length, verdict };
 }

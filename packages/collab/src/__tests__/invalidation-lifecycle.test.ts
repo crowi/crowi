@@ -1,17 +1,17 @@
-import * as Y from 'yjs';
 import { Types } from 'mongoose';
-import type { CollabModels } from '../models';
+import * as Y from 'yjs';
 import { createCompactor } from '../compaction';
 import { createDocBaseRevisionStore, type DocBaseRevisionStore } from '../doc-base-revision';
 import { createOnChange } from '../hooks/on-change';
 import { createOnLoadDocument } from '../hooks/on-load-document';
 import { createOnStoreDocument } from '../hooks/on-store-document';
 import { createInvalidatedPagesStore, createPageInvalidator, type InvalidatedPagesStore, type PageInvalidator } from '../invalidation';
+import type { CollabModels } from '../models';
 import type { CollabContext } from '../types';
 import { CONTENT_FIELD } from '../yjs-doc';
 import { payloadToUint8Array } from '../yjs-payload';
-import { encodeYjsDelta, makeFixtures, type CollabFixtures } from './fixtures';
-import { registerTestModels, startInMemoryMongo, type SmokeMongo } from './setup';
+import { type CollabFixtures, encodeYjsDelta, makeFixtures } from './fixtures';
+import { registerTestModels, type SmokeMongo, startInMemoryMongo } from './setup';
 
 /**
  * G1 regression tests that exercise the Hocuspocus document lifecycle shape.
@@ -32,10 +32,21 @@ import { registerTestModels, startInMemoryMongo, type SmokeMongo } from './setup
  * calls that missed these races, while staying deterministic under Jest/CJS.
  */
 
+/**
+ * Mirrors `@hocuspocus/server`'s `Connection` (returned by the real
+ * `Document.getConnections()`) — the AC-34 invalidator drain fix closes
+ * these directly, bypassing a by-name registry lookup that fails once the
+ * document has been detached from `instance.documents`.
+ */
+interface HarnessConnectionHandle {
+  closed: boolean;
+  close(event?: { code: number; reason: string }): void;
+}
+
 class HarnessDocument extends Y.Doc {
   readonly name: string;
   readonly broadcasts: string[] = [];
-  directConnections = 0;
+  readonly liveConnections = new Set<HarnessConnectionHandle>();
 
   constructor(name: string) {
     super();
@@ -47,7 +58,12 @@ class HarnessDocument extends Y.Doc {
   }
 
   getConnectionsCount(): number {
-    return this.directConnections;
+    return this.liveConnections.size;
+  }
+
+  /** AC-34/AC-36 — the surface `createPageInvalidator`'s drain calls directly. */
+  getConnections(): HarnessConnectionHandle[] {
+    return [...this.liveConnections];
   }
 }
 
@@ -80,7 +96,22 @@ class HocuspocusLifecycleHarness {
       invalidatedPages: this.invalidatedPages,
     });
     this.onChange = createOnChange({ models: { PageYjsUpdate: models.PageYjsUpdate }, compactor });
-    this.onStoreDocument = createOnStoreDocument({ models: { Page: models.Page }, compactor });
+    // AC-34 regression note: `docBaseRevisions`/`invalidatedPages` MUST be
+    // wired here (mirrors production `server.ts`) so a forced close that
+    // lands DURING a drain (the invalidator's grace-period close, now that
+    // it actually reaches a stale connection — see the AC-34 fix in
+    // `invalidation.ts`) is correctly SKIPPED by `onStoreDocument`'s G1
+    // guard instead of checkpointing the stale live doc's content back
+    // into `Page.yjsState` over the external edit. Omitting these two here
+    // previously went unnoticed only because the drain could never reach a
+    // still-connected stale connection in the first place (the bug this
+    // harness now exists to catch).
+    this.onStoreDocument = createOnStoreDocument({
+      models: { Page: models.Page },
+      compactor,
+      docBaseRevisions: this.docBaseRevisions,
+      invalidatedPages: this.invalidatedPages,
+    });
     this.invalidator = createPageInvalidator({
       instance: this,
       docBaseRevisions: this.docBaseRevisions,
@@ -92,7 +123,27 @@ class HocuspocusLifecycleHarness {
 
   async openDirectConnection(pageId: string, context: CollabContext): Promise<HarnessConnection> {
     const document = await this.createDocument(pageId, context);
-    document.directConnections += 1;
+
+    // AC-34/AC-36 — register a connection HANDLE on the document itself
+    // (mirrors `Document.connections`, a `Map` keyed by connection, not by
+    // registry name). The invalidator's drain closes these directly via
+    // `document.getConnections()`, which stays valid even after
+    // `instance.documents.delete(pageId)` has already run — unlike the old
+    // `instance.closeConnections(documentName)` approach this harness used
+    // to model, which re-looked-up the registry by name and would find
+    // nothing post-detach (the very bug this fix + harness now covers).
+    const handle: HarnessConnectionHandle = {
+      closed: false,
+      close: () => {
+        if (handle.closed) return;
+        handle.closed = true;
+        document.liveConnections.delete(handle);
+        if (document.liveConnections.size === 0) {
+          void this.storeAndUnload(pageId, document, context);
+        }
+      },
+    };
+    document.liveConnections.add(handle);
 
     return {
       document,
@@ -125,20 +176,9 @@ class HocuspocusLifecycleHarness {
         if (this.documents.get(pageId) !== document) {
           return;
         }
-        document.directConnections = Math.max(0, document.directConnections - 1);
-        if (document.directConnections === 0) {
-          await this.storeAndUnload(pageId, document, context);
-        }
+        handle.close();
       },
     };
-  }
-
-  closeConnections(documentName?: string): void {
-    for (const [pageId, document] of [...this.documents]) {
-      if (documentName && pageId !== documentName) continue;
-      document.directConnections = 0;
-      void this.storeAndUnload(pageId, document, { userId: 'force-close', pageId, readonly: false });
-    }
   }
 
   private async createDocument(pageId: string, context: CollabContext): Promise<HarnessDocument> {
@@ -171,7 +211,7 @@ class HocuspocusLifecycleHarness {
       lastContext: context,
       lastTransactionOrigin: { source: 'local', context },
     } as never);
-    if (document.directConnections === 0 && this.documents.get(pageId) === document) {
+    if (document.liveConnections.size === 0 && this.documents.get(pageId) === document) {
       this.documents.delete(pageId);
       document.destroy();
     }
@@ -340,5 +380,55 @@ describe('external-edit invalidation real lifecycle edges (G1)', () => {
     const conn = await harness.openDirectConnection(pageId, contextFor(pageId));
     expect(conn.document?.getText(CONTENT_FIELD).toString()).toBe('EXTERNAL BODY ONLY');
     await conn.disconnect();
+  });
+
+  // AC-34/AC-35/AC-36 — a client that ignores the force-reload broadcast and
+  // never calls `.disconnect()` itself must still be force-closed once the
+  // grace period elapses. Before the fix this connection was reachable ONLY
+  // through the (already-detached) document reference — a by-name registry
+  // lookup, which is what the OLD `instance.closeConnections(documentName)`
+  // approach used, finds nothing once `instance.documents.delete(...)` has
+  // run (verified against the installed `@hocuspocus/server@4.0.0` — see
+  // `invalidation.ts`'s `InvalidatorInstance` doc comment).
+  test('a connection that never calls disconnect() is still force-closed by the drain, and the document is evicted + destroyed', async () => {
+    const drains: Array<() => void> = [];
+    const harness = new HocuspocusLifecycleHarness(models, { schedule: (fn) => drains.push(fn) });
+    const { pageId } = await seedPageWithRevision('initial body');
+
+    const stubbornConn = await harness.openDirectConnection(pageId, contextFor(pageId));
+    await stubbornConn.transact((doc) => {
+      const text = doc.getText(CONTENT_FIELD);
+      text.delete(0, text.length);
+      text.insert(0, 'STALE — NEVER RELOADED');
+    });
+    const staleDocument = stubbornConn.document;
+    if (!staleDocument) throw new Error('document not materialised');
+
+    await externalEdit(pageId, 'EXTERNAL BODY WINS');
+    await harness.invalidator.invalidatePages([pageId], 'page-body-replaced');
+
+    // Detach already happened synchronously — the registry no longer has
+    // this document under `pageId`.
+    expect(harness.documents.has(pageId)).toBe(false);
+    // The stubborn connection never called `.disconnect()` — it is still
+    // "live" from its own point of view.
+    expect(staleDocument.getConnectionsCount()).toBe(1);
+
+    // Run the drain. Without the AC-34 fix, this would be a no-op (a
+    // by-name `closeConnections(pageId)` call finds nothing post-detach)
+    // and `staleDocument` would leak forever with its connection still
+    // attached. With the fix, the captured document's own connection is
+    // closed directly.
+    drains.forEach((fn) => fn());
+    await waitFor(() => staleDocument.getConnectionsCount() === 0);
+
+    // A fresh connection now materialises the external body — proving the
+    // stale document was actually evicted/destroyed (the harness only
+    // destroys via `storeAndUnload`'s last-connection branch, which the
+    // force-close above just triggered).
+    const fresh = await harness.openDirectConnection(pageId, contextFor(pageId));
+    expect(fresh.document).not.toBe(staleDocument);
+    expect(fresh.document?.getText(CONTENT_FIELD).toString()).toBe('EXTERNAL BODY WINS');
+    await fresh.disconnect();
   });
 });

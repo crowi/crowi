@@ -1,8 +1,9 @@
 import type { onChangePayload } from '@hocuspocus/server';
 import Debug from 'debug';
+import type { Compactor } from '../compaction';
+import type { DocEpochStore } from '../doc-epoch';
 import type { CollabModels } from '../models';
 import type { CollabContext } from '../types';
-import type { Compactor } from '../compaction';
 
 const debug = Debug('crowi:collab:change');
 
@@ -26,6 +27,15 @@ const COUNT_QUERY_INTERVAL = 10;
 export interface OnChangeDeps {
   models: Pick<CollabModels, 'PageYjsUpdate'>;
   compactor: Pick<Compactor, 'compactPage'>;
+  /**
+   * RFC-0017 Phase 1 §4.2/AC-14 — the collab lifecycle epoch anchor, read
+   * (not written) here to STAMP each appended `PageYjsUpdate` row with the
+   * epoch this document generation was materialised under. Optional so
+   * tests that don't care about epoch can omit it (rows are then appended
+   * without a `collabLifecycleVersion`, read back as epoch `0` by the
+   * replay filter — same as any pre-RFC-0017 row).
+   */
+  docEpochRevisions?: DocEpochStore;
 }
 
 /**
@@ -64,6 +74,7 @@ export function createOnChange(deps: OnChangeDeps) {
   const counters = new Map<string, number>();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const PageYjsUpdate = deps.models.PageYjsUpdate as any;
+  const docEpochRevisions = deps.docEpochRevisions;
 
   return async (data: onChangePayload<CollabContext>): Promise<void> => {
     const { documentName, update, context } = data;
@@ -73,11 +84,37 @@ export function createOnChange(deps: OnChangeDeps) {
       return;
     }
 
+    // RFC-0017 Phase 1 §4.2/AC-14 — `onChange` never reads the DB's live
+    // epoch per-keystroke (RFC §2.2); it compares two IN-MEMORY signals:
+    //   - `context.epoch`      — the epoch THIS connection authenticated
+    //                            against (pinned for the connection's
+    //                            lifetime, set by `onAuthenticate`).
+    //   - `docEpochStoreEpoch` — the epoch the CURRENTLY materialised doc
+    //                            generation for this `documentName` was
+    //                            loaded under (`onLoadDocument`, overwritten
+    //                            by the next materialisation).
+    // A mismatch means this connection is attached to a Y.Doc generation
+    // the doc-level store has since moved past — e.g. a stale, drain-
+    // detached connection (§invalidation.ts) whose replacement already
+    // re-materialised with a newer epoch after a rename/delete/revert.
+    // Refusing the append here is best-effort defence-in-depth: even if it
+    // lands, the replay filter (`onLoadDocument`) and the `executeSave` /
+    // `persistYjsState` epoch-CAS are what actually enforce correctness.
+    // Either signal being unknown (`undefined`) means "can't prove stale" —
+    // fail-safe: stamp what's known and let the append proceed.
+    const docEpochStoreEpoch = docEpochRevisions?.get(documentName);
+    const stampEpoch = docEpochStoreEpoch ?? context?.epoch;
+    if (context?.epoch !== undefined && docEpochStoreEpoch !== undefined && context.epoch !== docEpochStoreEpoch) {
+      debug('onChange refused for page %s: connection epoch=%d, current doc epoch=%d (stale connection)', documentName, context.epoch, docEpochStoreEpoch);
+      return;
+    }
+
     const payload = Buffer.from(update);
     await PageYjsUpdate.create({
       pageId: documentName,
       payload,
       createdAt: new Date(),
+      collabLifecycleVersion: stampEpoch,
     });
 
     const next = (counters.get(documentName) ?? 0) + 1;

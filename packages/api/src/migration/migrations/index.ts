@@ -1,4 +1,5 @@
 import type { MigrationDefinition } from '../types';
+import { collabLifecycleVersion } from './collab-lifecycle-version';
 import { filesUrlToAttachments } from './files-url-to-attachments';
 import { pageStatusDefault } from './page-status-default';
 import { relocateReservedApiPaths } from './relocate-reserved-api-paths';
@@ -25,4 +26,5 @@ export const allMigrations: MigrationDefinition[] = [
   relocateReservedApiPaths, // fix/mcp-endpoint (preflight) — v2 /api namespace reservation
   filesUrlToAttachments, // feature-migration-files-url-rewrite (preflight) — v1 /files/<id> body rewrite (independent regex from wikilink-format/html-tag-fixes)
   wikilinkHtmlRecover, // migration-html-tag-fixes (preflight) — recover </font> etc. corrupted by wikilink-format
+  collabLifecycleVersion, // feature-collab-invalidate-on-rename-delete (boot) — RFC-0017 Phase 1 backfill
 ];

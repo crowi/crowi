@@ -64,7 +64,7 @@ describe('createNotificationsTokenUtil', () => {
 
   it('rejects a collab wsToken presented to the notifications verifier (issuer isolation)', () => {
     const collabUtil = createWsTokenUtil();
-    const collabResult = collabUtil.signWsToken({ userId: 'user-1', pageId: 'page-1', readonly: false });
+    const collabResult = collabUtil.signWsToken({ userId: 'user-1', pageId: 'page-1', readonly: false, epoch: 0 });
     const notificationsUtil = createNotificationsTokenUtil();
 
     expect(notificationsUtil.verifyNotificationsToken(collabResult.token)).toBeNull();

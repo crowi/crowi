@@ -37,7 +37,7 @@ import type { OpenAPIHono } from '@hono/zod-openapi';
 import Debug from 'debug';
 
 import type Crowi from 'src/crowi';
-import { STATUS_DRAFT } from 'src/models/page';
+import { STATUS_DELETED, STATUS_DRAFT } from 'src/models/page';
 import { checkEditorCap } from 'src/util/collab-cap';
 import { isValidObjectId, loadGrantedPage } from 'src/util/ts-rest-helpers';
 import { createWsTokenUtil } from 'src/util/ws-token';
@@ -83,12 +83,27 @@ export const registerPageCollabRoutes = <E extends OpenAPIHono<CrowiHonoBindings
       return c.json(PAGE_NOT_FOUND_BODY, 404);
     }
 
+    // RFC-0017 Phase 1 §D5 — a soft-deleted page must reject a fresh Yjs
+    // token the same not-found-style way missing/ungranted pages do, so a
+    // deleted page id's existence is never leaked (AC-17). This is
+    // defence-in-depth on top of the epoch gate below (`onAuthenticate` /
+    // `executeSave` also reject via `status: { $ne: STATUS_DELETED }`) —
+    // closing it here means a deleted page never even gets a token minted.
+    if (loaded.page.status === STATUS_DELETED) {
+      debug('getYjsToken rejected: page %s is deleted', pageId);
+      return c.json(PAGE_NOT_FOUND_BODY, 404);
+    }
+
     try {
       const { readonly } = await checkEditorCap(crowi, pageId);
       const { token, expiresAt } = wsTokenUtil.signWsToken({
         userId: user._id.toString(),
         pageId,
         readonly,
+        // RFC-0017 Phase 1 §D6 — sign the page's CURRENT epoch (server-
+        // recorded, not caller-supplied) so `onAuthenticate` can refuse a
+        // stale reconnect after a rename/delete/revert (AC-5, AC-12).
+        epoch: loaded.page.collabLifecycleVersion,
       });
 
       // Round 2 (Decision 1): the save optimistic lock moved server-side

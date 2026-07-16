@@ -1,3 +1,4 @@
+import { StrictMode } from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook } from '@testing-library/react';
 
@@ -29,6 +30,26 @@ describe('useRouteFocus', () => {
     expect(focusSpy).not.toHaveBeenCalled();
   });
 
+  // Regression: React StrictMode (dev default) double-invokes effects on
+  // mount. A "skip the first render" ref latch is consumed by the first
+  // invoke and then the second invoke (same initial pathname) steals focus —
+  // producing a spurious focus-visible ring on `#main-content` right after a
+  // page load. Focus must key off an actual pathname *change*, so the initial
+  // pathname (however many times its effect runs) never focuses.
+  it('does not focus #main-content on first mount even under StrictMode double-effect', () => {
+    renderHook(() => useRouteFocus(), { wrapper: StrictMode });
+    expect(focusSpy).not.toHaveBeenCalled();
+  });
+
+  it('focuses exactly once on a route change under StrictMode', () => {
+    const { rerender } = renderHook(() => useRouteFocus(), { wrapper: StrictMode });
+    expect(focusSpy).not.toHaveBeenCalled();
+
+    usePathname.mockReturnValue('/second');
+    rerender();
+    expect(focusSpy).toHaveBeenCalledTimes(1);
+  });
+
   it('focuses #main-content once the pathname changes after mount', () => {
     const { rerender } = renderHook(() => useRouteFocus());
     expect(focusSpy).not.toHaveBeenCalled();
@@ -44,6 +65,19 @@ describe('useRouteFocus', () => {
     usePathname.mockReturnValue('/second');
     rerender();
     usePathname.mockReturnValue('/third');
+    rerender();
+
+    expect(focusSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('focuses again when navigating back to a previously-visited pathname (A -> B -> A)', () => {
+    // Guards against a "visited set" mistake: focus keys off the *immediately
+    // previous* pathname, so returning to an earlier value is still a change.
+    const { rerender } = renderHook(() => useRouteFocus());
+
+    usePathname.mockReturnValue('/second');
+    rerender();
+    usePathname.mockReturnValue('/first');
     rerender();
 
     expect(focusSpy).toHaveBeenCalledTimes(2);

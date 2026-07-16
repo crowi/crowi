@@ -135,8 +135,19 @@ async function executeSubtreeRename(
 
   // Execute. Non-transactional best-effort: a mid-way failure may leave
   // some pages already moved.
+  //
+  // RFC-0017 Phase 1 §D8 — `Page.renameTree` reports per-item outcomes
+  // (`{ successes, failures }`) instead of throwing on the first failure,
+  // so a sibling rename that completes AFTER an earlier one failed is never
+  // lost from the report (see `Page.renameTree`'s doc comment). A non-empty
+  // `failures` array is the same "some pages may already have been moved"
+  // partial-failure case this 400 has always covered — the message stays a
+  // representative summary (first failure) so the wire shape is unchanged.
   try {
-    await Page.renameTree(pathMap, user, opts);
+    const result = await Page.renameTree(pathMap, user, opts);
+    if (result.failures.length > 0) {
+      return { ok: false, kind: 'execution', message: result.failures[0].error };
+    }
   } catch (err) {
     const error = err as Error;
     return { ok: false, kind: 'execution', message: error.message };

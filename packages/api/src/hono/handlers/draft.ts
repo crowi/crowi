@@ -217,7 +217,13 @@ export const registerDraftRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(ap
         // `removePage` physically deletes the Page and its revisions —
         // the right semantics for "cancel": the path is freed and no
         // /trash redirect stub is left behind (unlike soft delete).
-        await Page.removePage(page);
+        //
+        // RFC-0017 Phase 1 §D9 — this IS the one user-facing `removePage`
+        // caller (every other call site is internal cleanup, which defaults
+        // to `skip`): opt into `emit` explicitly so a live editor on this
+        // draft gets a reload prompt instead of silently saving into a
+        // deleted row.
+        await Page.removePage(page, { invalidation: { mode: 'emit', reason: 'page-deleted', target: 'live-page' } });
 
         debug('cancelDraft removed draft', { id, path: page.path });
         return c.json({ pageId: id }, 200);
