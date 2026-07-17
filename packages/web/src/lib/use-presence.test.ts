@@ -171,6 +171,50 @@ describe('usePresence', () => {
     expect(ws.sent).toHaveLength(2);
   });
 
+  it('reports connecting -> connected -> error -> connecting -> connected across an unclean-close reconnect', async () => {
+    getPresenceToken.mockResolvedValue(tokenOkResponse(TOKEN_OK));
+
+    const { result } = renderHook(() => usePresence('page-1'), { wrapper: makeWrapper() });
+    // Before the token resolves the hook has not even attempted a
+    // connection yet, but the status still starts at 'connecting'.
+    expect(result.current.status).toBe('connecting');
+
+    await flush();
+    expect(FakeWebSocket.instances).toHaveLength(1);
+    const ws = FakeWebSocket.instances[0];
+
+    act(() => {
+      ws.open();
+    });
+    expect(result.current.status).toBe('connected');
+
+    // An unclean close flips to 'error' immediately...
+    act(() => {
+      ws.fail(1006);
+    });
+    expect(result.current.status).toBe('error');
+
+    // ...and back to 'connecting' as soon as the backoff-scheduled retry
+    // actually opens a new connection attempt — NOT stuck on 'error' for
+    // the whole backoff window, and not skipping straight to 'connected'
+    // without visiting 'connecting' first.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(999);
+    });
+    expect(FakeWebSocket.instances).toHaveLength(1);
+    expect(result.current.status).toBe('error');
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(FakeWebSocket.instances).toHaveLength(2);
+    expect(result.current.status).toBe('connecting');
+
+    act(() => {
+      FakeWebSocket.instances[1].open();
+    });
+    expect(result.current.status).toBe('connected');
+  });
+
   it('surfaces viewers from a broadcast after the anti-flicker delay', async () => {
     getPresenceToken.mockResolvedValue(tokenOkResponse(TOKEN_OK));
 

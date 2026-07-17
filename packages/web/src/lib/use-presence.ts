@@ -6,11 +6,13 @@ import {
   PresenceServerMessageSchema,
   type PresenceTokenResponse,
   type PresenceViewer,
+  WS_CLOSE_CODES,
 } from '@crowi/api-contract';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { RefObject } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { apiClientV2 } from './api-client';
+import { type CloseCodePolicy, createReconnectingSocket } from './create-reconnecting-socket';
 import { createAntiFlickerState, ingestBroadcast, refreshAdmissions, visibleViewers } from './presence-anti-flicker';
 import { resolveWsUrl } from './resolve-ws-url';
 import { subscribeTokenRefreshed } from './token-refresh-notifier';
@@ -27,6 +29,14 @@ import { subscribeTokenRefreshed } from './token-refresh-notifier';
  *   5. apply the 3s client-side anti-flicker delay before surfacing
  *      newly-joined avatars (see `presence-anti-flicker.ts`)
  *
+ * The socket lifecycle (backoff, reconnectAttempts, reset-on-first-message,
+ * 4-handler teardown) is delegated to the shared
+ * `create-reconnecting-socket.ts` primitive — this hook is a thin consumer
+ * that injects `buildUrl` / `onMessage` / `onCloseCode`, plus `onConnecting`
+ * / `onOpen` to drive its own `status` state, and keeps only the
+ * presence-specific pieces (heartbeat, anti-flicker admission, the
+ * reconnect-epoch barrier) for itself.
+ *
  * Failure is non-fatal: when the WebSocket never connects (presence
  * handler not deployed, network) the hook reports `status: 'error'`
  * and an empty viewer list, and the presence row hides itself — the
@@ -37,26 +47,21 @@ import { subscribeTokenRefreshed } from './token-refresh-notifier';
 /** Heartbeat cadence — must stay below the server's 30s viewer TTL. */
 const PRESENCE_HEARTBEAT_MS = 15_000;
 
-/** WebSocket reconnect backoff after an unclean close, capped. */
-const PRESENCE_RECONNECT_BASE_MS = 1_000;
-const PRESENCE_RECONNECT_MAX_MS = 15_000;
-
 /**
- * Close code the presence server sends when the viewer's read grant
- * was revoked mid-session (`WS_CLOSE.NO_ACCESS` in `presence/attach.ts`).
- * Reconnecting after this is futile — the server would re-check and
- * reject again — so the client stops and leaves the row hidden.
+ * `INVALID_TOKEN` / `FORBIDDEN` are shared wire constants (`@crowi/api-contract`,
+ * single source across client + server — see `presence/attach.ts`). Presence
+ * aliases `FORBIDDEN` to `NO_ACCESS` locally: the grant-based rejection this
+ * channel sends reads better under that name than the generic one.
+ *
+ *   - `NO_ACCESS` (4403) — the viewer's read grant was revoked mid-session.
+ *     Reconnecting after this is futile — the server would re-check and
+ *     reject again — so the client stops and leaves the row hidden.
+ *   - `INVALID_TOKEN` (4401) — the presence token in hand is stale/expired.
+ *     An immediate retry with the *same* token just loops — the client
+ *     stops and waits for `usePresenceToken` to refetch a fresh one, which
+ *     re-runs the connection effect.
  */
-const PRESENCE_CLOSE_NO_ACCESS = 4403;
-
-/**
- * Close code for an invalid / expired presence token (`WS_CLOSE
- * .INVALID_TOKEN` in `presence/attach.ts`). The token in hand is stale,
- * so an immediate retry with the *same* token just loops — the client
- * stops and waits for `usePresenceToken` to refetch a fresh one, which
- * re-runs the connection effect.
- */
-const PRESENCE_CLOSE_INVALID_TOKEN = 4401;
+const { INVALID_TOKEN, FORBIDDEN: NO_ACCESS } = WS_CLOSE_CODES;
 
 export type PresenceStatus = 'connecting' | 'connected' | 'error';
 
@@ -101,22 +106,22 @@ export interface UsePresenceOptions {
    * `connections` map, so a push sent in that gap would never reach a
    * socket the caller believed was already "connected"). The first
    * `viewers` broadcast is proof the socket is registered — see the
-   * `reconnectAttempts = 0` reset below, which uses the same signal.
-   * Fires for the FIRST connection epoch too (fresh mount), not just
-   * reconnects — the caller (PageView's reconcile) treats every epoch
-   * identically (spec §11).
+   * `reset-backoff` return in `onMessage` below, which uses the same
+   * signal. Fires for the FIRST connection epoch too (fresh mount), not
+   * just reconnects — the caller (PageView's reconcile) treats every
+   * epoch identically (spec §11).
    */
   onReconnected?: () => void;
   /**
    * feature-live-page-sync-reconcile — fires once when this socket is
-   * closed with `PRESENCE_CLOSE_NO_ACCESS` (4403), whether the rejection
-   * happened on the initial connect or mid-session (heartbeat re-check).
-   * Does NOT fire for `PRESENCE_CLOSE_INVALID_TOKEN` (4401) — that close
-   * means only the token is stale, not that the read grant was revoked.
-   * This is a "verify, don't assume" signal: `hasReadPermission`'s catch
-   * also maps a transient permission-check error to the same 4403, so the
-   * consumer must re-check via the authoritative page API before treating
-   * this as a real access revocation (spec §10).
+   * closed with `NO_ACCESS` (4403), whether the rejection happened on
+   * the initial connect or mid-session (heartbeat re-check). Does NOT
+   * fire for `INVALID_TOKEN` (4401) — that close means only the token is
+   * stale, not that the read grant was revoked. This is a "verify, don't
+   * assume" signal: `hasReadPermission`'s catch also maps a transient
+   * permission-check error to the same 4403, so the consumer must
+   * re-check via the authoritative page API before treating this as a
+   * real access revocation (spec §10).
    */
   onAccessRevoked?: () => void;
 }
@@ -296,12 +301,16 @@ export function usePresence(pageId: string | null | undefined, options?: UsePres
     if (!pageId || !token) return;
 
     const flicker = flickerRef.current;
-    let socket: WebSocket | null = null;
     let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
     let admissionTimer: ReturnType<typeof setTimeout> | null = null;
-    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-    let reconnectAttempts = 0;
     let disposed = false;
+
+    // feature-live-page-sync-reconcile — one connection "epoch" is one
+    // successful transport handshake (initial mount OR a reconnect).
+    // Reset in `onOpen` below so each epoch gets its own one-shot latch
+    // for `onReconnected`; by the time any message could arrive, `onOpen`
+    // has already run exactly once for that attempt.
+    let hasFiredReconnectedThisEpoch = false;
 
     // Recompute the rendered list from the anti-flicker state and
     // schedule the next admission re-check at the earliest `dueAt`.
@@ -322,38 +331,35 @@ export function usePresence(pageId: string | null | undefined, options?: UsePres
       }
     };
 
-    const connect = () => {
-      if (disposed) return;
-      setStatus('connecting');
+    const socket = createReconnectingSocket({
+      buildUrl: () => `${resolvePresenceUrl()}/${encodeURIComponent(pageId)}?token=${encodeURIComponent(token)}`,
 
-      // feature-live-page-sync-reconcile — one connection "epoch" is one
-      // call to `connect()` (initial mount OR a reconnect). Declared fresh
-      // here (not hoisted to the effect body) so each epoch gets its own
-      // one-shot latch for `onReconnected`.
-      let hasFiredReconnectedThisEpoch = false;
+      // Fires before EVERY connection attempt, including reconnects — the
+      // pre-extraction `connect()` closure called `setStatus('connecting')`
+      // at the very top of itself for the same reason: once a close has
+      // flipped the row to 'error', the next attempt (whether immediate or
+      // after the backoff delay) should show 'connecting' again rather
+      // than leaving the row stuck on 'error' until (if ever) the retry
+      // actually succeeds.
+      onConnecting: () => {
+        setStatus('connecting');
+      },
 
-      const url = `${resolvePresenceUrl()}/${encodeURIComponent(pageId)}?token=${encodeURIComponent(token)}`;
-      const ws = new WebSocket(url);
-      socket = ws;
-
-      ws.onopen = () => {
-        if (disposed) return;
+      onOpen: () => {
         setStatus('connected');
+        hasFiredReconnectedThisEpoch = false;
         // Fire one heartbeat immediately, then on the 15s cadence.
         const beat = () => {
-          if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: 'heartbeat' }));
-          }
+          socket.send(JSON.stringify({ type: 'heartbeat' }));
         };
         beat();
         heartbeatTimer = setInterval(beat, PRESENCE_HEARTBEAT_MS);
-      };
+      },
 
-      ws.onmessage = (event) => {
-        if (disposed || typeof event.data !== 'string') return;
+      onMessage: (data) => {
         let parsed: unknown;
         try {
-          parsed = JSON.parse(event.data);
+          parsed = JSON.parse(data);
         } catch {
           // Non-JSON frame — ignore, presence only speaks JSON.
           return;
@@ -369,7 +375,8 @@ export function usePresence(pageId: string | null | undefined, options?: UsePres
         // callback likewise now fires unconditionally; self/other silencing
         // of the BANNER (not the cache swap) moved to the consumer
         // (`PageView`), which is the only place that can consult the
-        // read-old banner state at the same time (spec §7).
+        // read-old banner state at the same time (spec §7). Note this does
+        // NOT reset the backoff — only a `viewers` broadcast (below) does.
         if (message.data.type === 'page-updated') {
           pageUpdatedSeqRef.current += 1;
           onPageUpdatedRef.current?.(message.data);
@@ -397,7 +404,6 @@ export function usePresence(pageId: string | null | undefined, options?: UsePres
         // which fires for the doomed handshake too) stops a
         // handshake-then-reject case, e.g. an expired token, from
         // pinning the reconnect delay at its 1s floor forever.
-        reconnectAttempts = 0;
         // feature-live-page-sync-reconcile — the FIRST `viewers` broadcast
         // of this epoch is the reconnect barrier (spec §11): it proves the
         // socket is registered in the server's `connections` map, so a
@@ -410,14 +416,10 @@ export function usePresence(pageId: string | null | undefined, options?: UsePres
         }
         const { dueAt } = ingestBroadcast(flicker, message.data.viewers, Date.now());
         project(dueAt);
-      };
+        return 'reset-backoff';
+      },
 
-      ws.onerror = () => {
-        // `onclose` always follows `onerror`; handle teardown there.
-      };
-
-      ws.onclose = (event) => {
-        if (disposed) return;
+      onCloseCode: (code): CloseCodePolicy => {
         if (heartbeatTimer) {
           clearInterval(heartbeatTimer);
           heartbeatTimer = null;
@@ -428,38 +430,27 @@ export function usePresence(pageId: string | null | undefined, options?: UsePres
         // be rejected again on an immediate retry — stop reconnecting.
         // A fresh token from `usePresenceToken`'s refetch re-runs this
         // effect; a restored grant is picked up on that reconnect.
-        if (event.code === PRESENCE_CLOSE_NO_ACCESS) {
+        if (code === NO_ACCESS) {
           // feature-live-page-sync-reconcile — verify-first (spec §10):
           // this close code also fires for a merely TRANSIENT permission-
           // check error, so the consumer re-validates via the page API
           // rather than assuming the grant is really gone.
           onAccessRevokedRef.current?.();
-          return;
+          return 'stop';
         }
-        if (event.code === PRESENCE_CLOSE_INVALID_TOKEN) return;
+        if (code === INVALID_TOKEN) return 'stop';
         // Otherwise reconnect with capped exponential backoff.
-        const delay = Math.min(PRESENCE_RECONNECT_BASE_MS * 2 ** reconnectAttempts, PRESENCE_RECONNECT_MAX_MS);
-        reconnectAttempts += 1;
-        reconnectTimer = setTimeout(connect, delay);
-      };
-    };
+        return 'backoff-retry';
+      },
+    });
 
-    connect();
+    socket.start();
 
     return () => {
       disposed = true;
       if (heartbeatTimer) clearInterval(heartbeatTimer);
       if (admissionTimer) clearTimeout(admissionTimer);
-      if (reconnectTimer) clearTimeout(reconnectTimer);
-      if (socket) {
-        // Drop the lifecycle handlers before close so the teardown
-        // close doesn't trigger a reconnect.
-        socket.onopen = null;
-        socket.onmessage = null;
-        socket.onerror = null;
-        socket.onclose = null;
-        socket.close();
-      }
+      socket.stop();
     };
   }, [pageId, token, selfUserId]);
 
