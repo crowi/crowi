@@ -1,5 +1,4 @@
 import type { Server as HttpServer, IncomingMessage } from 'node:http';
-import type { Duplex } from 'node:stream';
 import type { PresenceViewer } from '@crowi/api-contract';
 import { PresenceClientMessageSchema, WS_CLOSE_CODES } from '@crowi/api-contract';
 import Debug from 'debug';
@@ -8,7 +7,8 @@ import type { PageDocument } from 'src/models/page';
 import type { UserDocument } from 'src/models/user';
 import { type CommentChangedPayload, getPresenceService, type PageUpdatedPayload, type PresenceService } from 'src/service/presence';
 import { createPresenceTokenUtil } from 'src/util/presence-token';
-import { WebSocketServer, type WebSocket as WsWebSocket } from 'ws';
+import { attachWsNamespace, politeCloseWithReason, splitUrl } from 'src/ws/attach-namespace';
+import type { WebSocket as WsWebSocket } from 'ws';
 
 const debug = Debug('crowi:presence:attach');
 
@@ -31,12 +31,6 @@ const PRESENCE_PATH = '/presence';
  */
 const { INVALID_TOKEN, FORBIDDEN: NO_ACCESS, SHUTDOWN } = WS_CLOSE_CODES;
 
-/** Split a request URL into its pathname and raw query string. */
-const splitUrl = (rawUrl: string): { pathname: string; query: string } => {
-  const queryIdx = rawUrl.indexOf('?');
-  return queryIdx < 0 ? { pathname: rawUrl, query: '' } : { pathname: rawUrl.slice(0, queryIdx), query: rawUrl.slice(queryIdx + 1) };
-};
-
 /**
  * Per-connection read-permission cache TTL. After a viewer's read
  * grant is confirmed once, subsequent heartbeats skip the Mongo lookup
@@ -45,12 +39,6 @@ const splitUrl = (rawUrl: string): { pathname: string; query: string } => {
  * heartbeat interval. RFC-0005 §"Permission boundary".
  */
 const PERMISSION_CACHE_TTL_MS = 60_000;
-
-/**
- * Grace window between asking sockets to close politely and force-
- * terminating stragglers on shutdown. Mirrors `collab/attach.ts`.
- */
-const SHUTDOWN_DRAIN_MS = 500;
 
 /**
  * Public surface returned from `attachPresenceServer`. The api boot
@@ -67,9 +55,18 @@ interface PresencePageModel {
   findById(id: string): { exec(): Promise<PageDocument | null> };
 }
 
+/** Denormalised viewer identity resolved once during `authenticate`. */
+interface ViewerIdentity {
+  userId: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string | null;
+}
+
 /**
- * One live presence connection. `userId` / `pageId` are populated once
- * the token verifies; `permittedUntil` memoises the read-grant check.
+ * One live presence connection. Doubles as the `attachWsNamespace`
+ * context: built by `authenticate` once the token / permission checks
+ * pass, then threaded through `onOpen` / `onClose` unchanged.
  */
 interface PresenceConnection {
   ws: WsWebSocket;
@@ -77,13 +74,18 @@ interface PresenceConnection {
   pageId: string;
   /** epoch-ms after which the read-grant must be re-verified. */
   permittedUntil: number;
+  identity: ViewerIdentity;
 }
 
 /**
  * Wire the RFC-0005 `/presence` WebSocket into the api's existing
  * Express http.Server, using the `ws` library's `noServer` mode — same
  * process, same event loop, same Mongoose connection, same Redis
- * client as `/collab`.
+ * client as `/collab`. The upgrade filter / shutdown drain / pre-auth
+ * close-registration race fix are provided by the shared
+ * `attachWsNamespace` primitive (`src/ws/attach-namespace.ts`); this
+ * module supplies the presence-specific authentication and business
+ * logic (join/leave, viewer-list broadcast).
  *
  * Connection lifecycle:
  *   1. Upgrade filter accepts `/presence` / `/presence/*`.
@@ -109,13 +111,9 @@ export async function attachPresenceServer(httpServer: HttpServer, crowi: Crowi)
   const Page = crowi.model('Page') as unknown as PresencePageModel;
   const User = crowi.model('User');
 
-  // `noServer: true` — the upgrade handshake is owned by the api
-  // process; we forward only `/presence/*` upgrades here.
-  const wss = new WebSocketServer({ noServer: true });
-
   // Every live connection, keyed by socket. Used to broadcast a page's
-  // viewer list to exactly its connected clients and to drain on
-  // shutdown.
+  // viewer list to exactly its connected clients and for the multi-tab
+  // dedup check in `handleClose`.
   const connections = new Map<WsWebSocket, PresenceConnection>();
 
   /** Send a JSON message to one socket; ignore a dead socket. */
@@ -236,7 +234,7 @@ export async function attachPresenceServer(httpServer: HttpServer, crowi: Crowi)
   };
 
   /** Load the connecting user's denormalised identity for the hash. */
-  const loadViewerIdentity = async (userId: string) => {
+  const loadViewerIdentity = async (userId: string): Promise<ViewerIdentity | null> => {
     const userDoc = (await User.findById(userId).exec()) as UserDocument | null;
     if (!userDoc) return null;
     return {
@@ -248,12 +246,13 @@ export async function attachPresenceServer(httpServer: HttpServer, crowi: Crowi)
   };
 
   /**
-   * Wire one freshly-upgraded `ws.WebSocket`. Authentication runs
-   * inline: a bad token / page mismatch / revoked grant closes the
-   * socket immediately. A clean connection is added to `connections`
-   * and gets the first viewer-list broadcast.
+   * `attachWsNamespace`'s `authenticate` callback: token verify + path
+   * check + permission/identity re-check (former steps 1-4 of
+   * `wireConnection`). A `null` return means the socket was already
+   * closed with the appropriate code — the primitive sends none of its
+   * own.
    */
-  const wireConnection = async (ws: WsWebSocket, request: IncomingMessage): Promise<void> => {
+  const authenticate = async (request: IncomingMessage, ws: WsWebSocket): Promise<PresenceConnection | null> => {
     const { pathname, query } = splitUrl(request.url ?? '');
     const token = new URLSearchParams(query).get('token') ?? '';
 
@@ -262,7 +261,7 @@ export async function attachPresenceServer(httpServer: HttpServer, crowi: Crowi)
     if (!claims) {
       debug('reject: presence token missing / invalid');
       ws.close(INVALID_TOKEN, 'invalid token');
-      return;
+      return null;
     }
 
     // 2. `/presence/<pageId>` path segment, when present, must match
@@ -272,82 +271,31 @@ export async function attachPresenceServer(httpServer: HttpServer, crowi: Crowi)
     if (pathSegment.length > 0 && pathSegment !== claims.pageId) {
       debug('reject: path pageId %s != token pageId %s', pathSegment, claims.pageId);
       ws.close(INVALID_TOKEN, 'invalid token');
-      return;
+      return null;
     }
-
-    // The token verified, so userId / pageId are known. Register the
-    // close + error handlers NOW, before the async permission / identity
-    // round-trips below. A socket that closes *during* those awaits (a
-    // fast client navigation, React's dev double-mount) would otherwise
-    // fire `'close'` into the void — the handler being attached only
-    // after the awaits — leaving a phantom `connections` entry whose
-    // `'close'` never runs. That phantom poisons the multi-tab
-    // `userStillConnected` check in `handleClose`, so a later *real*
-    // disconnect skips `presence.leave` and the viewer is stuck in the
-    // hash for every other client on the page.
-    const conn: PresenceConnection = {
-      ws,
-      userId: claims.userId,
-      pageId: claims.pageId,
-      permittedUntil: 0,
-    };
-    let closed = false;
-    ws.on('close', () => {
-      closed = true;
-      void handleClose(conn);
-    });
-    ws.on('error', (err: Error) => {
-      // A single bad socket must not crash the api process.
-      console.error('[crowi:presence] websocket error', err);
-    });
 
     // 3. re-check read permission (token was minted up to 5 min ago).
     const permitted = await hasReadPermission(claims.pageId, claims.userId);
     if (!permitted) {
       debug('reject: user %s lost read grant on page %s', claims.userId, claims.pageId);
       ws.close(NO_ACCESS, 'no access');
-      return;
+      return null;
     }
 
     const identity = await loadViewerIdentity(claims.userId);
     if (!identity) {
       debug('reject: connecting user %s not found', claims.userId);
       ws.close(NO_ACCESS, 'no access');
-      return;
+      return null;
     }
 
-    // The socket closed while permission / identity were resolving —
-    // the close handler has already run; do not register a viewer.
-    if (closed) {
-      debug('presence socket closed during setup user=%s page=%s', conn.userId, conn.pageId);
-      return;
-    }
-
-    conn.permittedUntil = Date.now() + PERMISSION_CACHE_TTL_MS;
-    connections.set(ws, conn);
-    ws.on('message', (data: Buffer | ArrayBuffer) => {
-      void handleClientMessage(conn, data);
-    });
-
-    // Register the viewer. `join` publishes a viewer-list change, which
-    // flows back through `onViewersChanged` → `broadcastViewers`, so
-    // this socket (and every other on the page) gets the fresh list.
-    try {
-      await presence.join(conn.pageId, identity);
-    } catch (err) {
-      console.warn(`[crowi:presence] join failed for page ${conn.pageId}:`, (err as Error).message);
-    }
-
-    // The socket closed while `join` was in flight — the close handler
-    // ran before the viewer entry existed, so reconcile now to remove
-    // the entry `join` just wrote.
-    if (closed) {
-      debug('presence socket closed during join user=%s page=%s', conn.userId, conn.pageId);
-      void handleClose(conn);
-      return;
-    }
-
-    debug('presence connected user=%s page=%s', conn.userId, conn.pageId);
+    return {
+      ws,
+      userId: claims.userId,
+      pageId: claims.pageId,
+      permittedUntil: Date.now() + PERMISSION_CACHE_TTL_MS,
+      identity,
+    };
   };
 
   /**
@@ -418,21 +366,51 @@ export async function attachPresenceServer(httpServer: HttpServer, crowi: Crowi)
   };
 
   /**
-   * `'upgrade'` handler. Path-filter first so the sibling `/collab`
-   * handler keeps its slot; `socket.destroy()` is intentionally NOT
-   * called on a no-match so Node moves on to the next listener.
+   * `attachWsNamespace`'s `onOpen`: former steps 5-6 of `wireConnection`
+   * (register + join). Runs after `authenticate` resolved and the
+   * primitive confirmed the socket is still open.
    */
-  const upgradeHandler = (request: IncomingMessage, socket: Duplex, head: Buffer): void => {
-    const { pathname } = splitUrl(request.url ?? '');
-    if (pathname !== PRESENCE_PATH && !pathname.startsWith(`${PRESENCE_PATH}/`)) {
-      return; // not ours — let other upgrade handlers try.
-    }
-    wss.handleUpgrade(request, socket, head, (ws) => {
-      void wireConnection(ws, request);
+  const openConnection = async (ws: WsWebSocket, conn: PresenceConnection): Promise<void> => {
+    connections.set(ws, conn);
+    ws.on('message', (data: Buffer | ArrayBuffer) => {
+      void handleClientMessage(conn, data);
     });
+
+    // Register the viewer. `join` publishes a viewer-list change, which
+    // flows back through `onViewersChanged` → `broadcastViewers`, so
+    // this socket (and every other on the page) gets the fresh list.
+    try {
+      await presence.join(conn.pageId, conn.identity);
+    } catch (err) {
+      console.warn(`[crowi:presence] join failed for page ${conn.pageId}:`, (err as Error).message);
+    }
+
+    // The socket closed while `join` was in flight. The primitive's own
+    // close listener (registered right before this `onOpen` call) will
+    // have already run `handleClose` once — this reconciles by running
+    // it again now that `join` is guaranteed to have settled, in case
+    // `join` raced a premature `leave` and re-wrote the entry.
+    if (ws.readyState !== ws.OPEN) {
+      debug('presence socket closed during join user=%s page=%s', conn.userId, conn.pageId);
+      void handleClose(conn);
+      return;
+    }
+
+    debug('presence connected user=%s page=%s', conn.userId, conn.pageId);
   };
 
-  httpServer.on('upgrade', upgradeHandler);
+  const wsNamespace = attachWsNamespace<PresenceConnection>(httpServer, {
+    path: PRESENCE_PATH,
+    authenticate,
+    onOpen: (ws, conn) => {
+      void openConnection(ws, conn);
+    },
+    onClose: (conn) => {
+      void handleClose(conn);
+    },
+    politeClose: politeCloseWithReason(SHUTDOWN, 'server shutting down'),
+  });
+
   debug('presence attached to http.Server (path=%s)', PRESENCE_PATH);
 
   let didShutdown = false;
@@ -441,15 +419,8 @@ export async function attachPresenceServer(httpServer: HttpServer, crowi: Crowi)
       if (didShutdown) return;
       didShutdown = true;
 
-      // 1. Refuse new upgrades.
-      try {
-        httpServer.off('upgrade', upgradeHandler);
-      } catch {
-        // best-effort — server may already be tearing down.
-      }
-
-      // 2. Stop reacting to viewer-list + page-updated + comment-changed
-      //    changes.
+      // Stop reacting to viewer-list + page-updated + comment-changed
+      // changes BEFORE the drain sequence starts closing sockets.
       try {
         unsubscribe();
       } catch {
@@ -466,36 +437,11 @@ export async function attachPresenceServer(httpServer: HttpServer, crowi: Crowi)
         // best-effort
       }
 
-      // 3. Politely close every live socket.
-      for (const conn of connections.values()) {
-        try {
-          conn.ws.close(SHUTDOWN, 'server shutting down');
-        } catch {
-          // ignore — best-effort
-        }
-      }
+      // off upgrade → politely close every live socket → drain wait →
+      // force-terminate stragglers → wss.close().
+      await wsNamespace.shutdown();
 
-      // 4. Brief drain so close frames flush.
-      if (connections.size > 0) {
-        await new Promise<void>((resolveDrain) => setTimeout(resolveDrain, SHUTDOWN_DRAIN_MS));
-      }
-
-      // 5. Force-terminate stragglers.
-      try {
-        for (const conn of connections.values()) {
-          try {
-            conn.ws.terminate();
-          } catch {
-            // ignore
-          }
-        }
-        connections.clear();
-        wss.close();
-      } catch (err) {
-        console.error('[crowi:presence] wss.close failed during shutdown:', err);
-      }
-
-      // 6. Tear down the presence service's pub/sub subscriber.
+      // Tear down the presence service's pub/sub subscriber.
       try {
         await presence.shutdown();
       } catch (err) {
