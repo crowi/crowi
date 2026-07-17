@@ -167,8 +167,21 @@ function codexReviewerPrompt(p, attempt) {
     `STEP 1 — objective gates. First list the pending work: \`git status --porcelain\` (this ` +
     `includes untracked files — a brand-new file must count). Then run each gate with Bash from ` +
     `the repo root, in order (generous timeouts):\n` +
-    `  (a) if any pending file is under packages/api-contract/: ` +
-    `pnpm --filter @crowi/api-contract build && pnpm check:openapi\n` +
+    `  (a) if any pending file is under packages/api-contract/: pnpm --filter @crowi/api-contract ` +
+    `build. Then check OpenAPI freshness WITHOUT calling \`pnpm check:openapi\` directly — that ` +
+    `script's freshness signal is \`git status --porcelain\` against git HEAD (its own header ` +
+    `comment says it targets pre-push, i.e. AFTER this feature's contract diff is already ` +
+    `committed). Review always runs BEFORE the commit phase, so a correct-but-uncommitted contract ` +
+    `diff would always be misreported as "stale" by that check — a structural false positive, not a ` +
+    `defect in the task. Verify freshness instead by diffing a regen against a pre-regen snapshot of ` +
+    `the SAME working tree (git-HEAD-independent):\n` +
+    `    d=$(mktemp -d)\n` +
+    `    cp packages/api-contract/openapi.json packages/api-contract/openapi.yaml packages/api-contract/src/generated/openapi.ts "$d/"\n` +
+    `    pnpm --filter @crowi/api-contract generate\n` +
+    `    diff -q packages/api-contract/openapi.json "$d/openapi.json" && diff -q packages/api-contract/openapi.yaml "$d/openapi.yaml" && diff -q packages/api-contract/src/generated/openapi.ts "$d/openapi.ts"; FRESH=$?; rm -rf "$d"\n` +
+    `  \`generate\` failing (a build/type error) is itself a gate failure. Otherwise FRESH=0 means ` +
+    `the artifacts are fresh (gate passes); FRESH!=0 means stale (gate fails — the diffed lines are ` +
+    `the blocking detail).\n` +
     `  (b) pnpm --filter @crowi/api type-check\n` +
     `  (c) if any pending file is under packages/web/: pnpm --filter @crowi/web type-check\n` +
     `  (d) pnpm --filter @crowi/api test\n` +
