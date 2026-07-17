@@ -39,6 +39,7 @@ alpha.0–.3 は published、alpha.4 / stable 向けに changeset 蓄積中（pr
 - [x] **残存テスト flake の計測基盤 + baseline taxonomy 確立**（親プロセス reporter で worker crash 含め権威記録。観測 class: ephemeral-port timeout・401 不整合・E11000・SIGSEGV、remedy は class ごと別 spec へ）。spec: `feature-flake-failure-taxonomy.md`
 - [x] **flake-report を本番 test job の結果から分類するよう再設計**（独立フル実行を廃止し producer/consumer + run-ID 相関の artifact 契約に。FLAKY/REGRESSION/INCONCLUSIVE(INFRASTRUCTURE) の3状態化、api以外の失敗/artifact欠落/cancelを緑と誤表示しない provenance を summary+artifact に明記）。spec: `feature-flake-report-detection-redesign.md`
 - [x] **collab lifecycle epoch で rename/delete 後のライブエディタを無効化**（RFC-0017 Phase 1、cross-replica prompt fanout は Phase 2 対象外）。spec: `feature-collab-invalidate-on-rename-delete.md`
+- [x] **WS client reconnect primitive** — presence / notifications の WebSocket reconnect ロジックを共有 client primitive に抽出し、close code を一元化した（spec: `feature-ws-client-socket-primitive.md`）
 
 ---
 
