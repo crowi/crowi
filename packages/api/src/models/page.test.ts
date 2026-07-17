@@ -669,6 +669,137 @@ describe('Page', () => {
     });
   });
 
+  describe('findSubpagesByUserNamespace (feature-user-page-subpages-tab)', () => {
+    let author;
+    let other;
+
+    beforeAll(() => {
+      author = createdUsers[0];
+      other = createdUsers[1];
+    });
+
+    beforeEach(async () => {
+      await Page.deleteMany({});
+    });
+
+    afterEach(async () => {
+      await Page.deleteMany({});
+    });
+
+    test('recurses into all depths under the namespace, sorted path-ascending', async () => {
+      await Fixture.generate('Page', [
+        { path: '/user/alice/notes', grant: Page.GRANT_PUBLIC, creator: author, status: 'published' },
+        { path: '/user/alice/project/deep/nested', grant: Page.GRANT_PUBLIC, creator: author, status: 'published' },
+        { path: '/user/alice2/other', grant: Page.GRANT_PUBLIC, creator: author, status: 'published' },
+      ]);
+
+      const { rawPages, total } = await Page.findSubpagesByUserNamespace('/user/alice/', author._id, { limit: 50, offset: 0 });
+      const paths = rawPages.map((p) => p.path);
+      // Sorted path-ascending; the other namespace (`/user/alice2/...`) and the
+      // intermediate `/user/alice/project` (which doesn't exist as its own
+      // document) never appear.
+      expect(paths).toEqual(['/user/alice/notes', '/user/alice/project/deep/nested']);
+      expect(total).toBe(2);
+    });
+
+    test('excludes the home page (no trailing slash) and the trailing-slash self-twin', async () => {
+      await Fixture.generate('Page', [
+        // `/user/alice` (no slash) never matches the `^/user/alice/` regex —
+        // included here to document that fact, not because it's the risk.
+        { path: '/user/alice', grant: Page.GRANT_PUBLIC, creator: author, status: 'published' },
+        // `/user/alice/` IS matched by the prefix regex (a string is a
+        // prefix of itself) and is a real, separate document from the home
+        // page — the `$ne: prefix` exclusion is the thing under test.
+        { path: '/user/alice/', grant: Page.GRANT_PUBLIC, creator: author, status: 'published' },
+        { path: '/user/alice/notes', grant: Page.GRANT_PUBLIC, creator: author, status: 'published' },
+      ]);
+
+      const { rawPages, total } = await Page.findSubpagesByUserNamespace('/user/alice/', author._id, { limit: 50, offset: 0 });
+      const paths = rawPages.map((p) => p.path);
+      expect(paths).toEqual(['/user/alice/notes']);
+      expect(paths).not.toContain('/user/alice');
+      expect(paths).not.toContain('/user/alice/');
+      expect(total).toBe(1);
+    });
+
+    test('excludes redirect pages and soft-deleted pages', async () => {
+      await Fixture.generate('Page', [
+        { path: '/user/alice/redirected', grant: Page.GRANT_PUBLIC, creator: author, status: 'published', redirectTo: '/user/alice/target' },
+        { path: '/user/alice/removed', grant: Page.GRANT_PUBLIC, creator: author, status: 'deleted' },
+        { path: '/user/alice/visible', grant: Page.GRANT_PUBLIC, creator: author, status: 'published' },
+      ]);
+
+      const { rawPages, total } = await Page.findSubpagesByUserNamespace('/user/alice/', author._id, { limit: 50, offset: 0 });
+      expect(rawPages.map((p) => p.path)).toEqual(['/user/alice/visible']);
+      expect(total).toBe(1);
+    });
+
+    test('excludes wip/deprecated pages even when grant is public (visiblePageStatusOr has no clause for them)', async () => {
+      await Fixture.generate('Page', [
+        { path: '/user/alice/wip-page', grant: Page.GRANT_PUBLIC, creator: author, status: 'wip' },
+        { path: '/user/alice/deprecated-page', grant: Page.GRANT_PUBLIC, creator: author, status: 'deprecated' },
+        { path: '/user/alice/ok', grant: Page.GRANT_PUBLIC, creator: author, status: 'published' },
+      ]);
+
+      const { rawPages, total } = await Page.findSubpagesByUserNamespace('/user/alice/', other._id, { limit: 50, offset: 0 });
+      expect(rawPages.map((p) => p.path)).toEqual(['/user/alice/ok']);
+      expect(total).toBe(1);
+    });
+
+    test('a draft page is visible only to its creator', async () => {
+      await Fixture.generate('Page', [{ path: '/user/alice/draft-page', grant: Page.GRANT_PUBLIC, creator: author, status: 'draft' }]);
+
+      const asAuthor = await Page.findSubpagesByUserNamespace('/user/alice/', author._id, { limit: 50, offset: 0 });
+      expect(asAuthor.rawPages.map((p) => p.path)).toEqual(['/user/alice/draft-page']);
+      expect(asAuthor.total).toBe(1);
+
+      const asOther = await Page.findSubpagesByUserNamespace('/user/alice/', other._id, { limit: 50, offset: 0 });
+      expect(asOther.rawPages).toEqual([]);
+      expect(asOther.total).toBe(0);
+    });
+
+    test('a restricted-grant page is visible only to grantedUsers/creator', async () => {
+      await Fixture.generate('Page', [
+        { path: '/user/alice/restricted', grant: Page.GRANT_RESTRICTED, grantedUsers: [author], creator: author, status: 'published' },
+      ]);
+
+      const asOther = await Page.findSubpagesByUserNamespace('/user/alice/', other._id, { limit: 50, offset: 0 });
+      expect(asOther.total).toBe(0);
+
+      const asAuthor = await Page.findSubpagesByUserNamespace('/user/alice/', author._id, { limit: 50, offset: 0 });
+      expect(asAuthor.total).toBe(1);
+    });
+
+    test('total reflects only the viewer-authorized rows, never leaking hidden pages', async () => {
+      await Fixture.generate('Page', [
+        { path: '/user/alice/public-a', grant: Page.GRANT_PUBLIC, creator: author, status: 'published' },
+        { path: '/user/alice/public-b', grant: Page.GRANT_PUBLIC, creator: author, status: 'published' },
+        { path: '/user/alice/restricted-hidden', grant: Page.GRANT_RESTRICTED, grantedUsers: [author], creator: author, status: 'published' },
+        { path: '/user/alice/other-draft-hidden', grant: Page.GRANT_PUBLIC, creator: author, status: 'draft' },
+      ]);
+
+      const { rawPages, total } = await Page.findSubpagesByUserNamespace('/user/alice/', other._id, { limit: 50, offset: 0 });
+      expect(total).toBe(2);
+      expect(rawPages).toHaveLength(2);
+    });
+
+    test('paginates via limit/offset without duplicates or gaps when nothing else writes concurrently', async () => {
+      await Fixture.generate(
+        'Page',
+        Array.from({ length: 5 }, (_, i) => ({ path: `/user/alice/page-${i}`, grant: Page.GRANT_PUBLIC, creator: author, status: 'published' })),
+      );
+
+      const page1 = await Page.findSubpagesByUserNamespace('/user/alice/', author._id, { limit: 2, offset: 0 });
+      const page2 = await Page.findSubpagesByUserNamespace('/user/alice/', author._id, { limit: 2, offset: 2 });
+      const page3 = await Page.findSubpagesByUserNamespace('/user/alice/', author._id, { limit: 2, offset: 4 });
+
+      const allPaths = [...page1.rawPages, ...page2.rawPages, ...page3.rawPages].map((p) => p.path);
+      expect(allPaths).toEqual(['/user/alice/page-0', '/user/alice/page-1', '/user/alice/page-2', '/user/alice/page-3', '/user/alice/page-4']);
+      expect(page1.total).toBe(5);
+      expect(page2.total).toBe(5);
+    });
+  });
+
   describe('.updatePage — grant preservation (regression)', () => {
     let Revision;
     let actor;

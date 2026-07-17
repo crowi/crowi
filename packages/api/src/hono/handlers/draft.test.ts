@@ -137,6 +137,50 @@ describe('Routes /api/v2/pages/drafts (Hono draft)', () => {
       expect(second.status).toBe(201);
       expect(second.body.pageId).toBe(first.body.pageId);
     });
+
+    // feature-user-page-subpages-tab — draft orphan hardening. Before this
+    // fix, a `Revision.prepareRevision` / `Page.pushRevision` failure AFTER
+    // `Page.create` left a revision-less `status: 'draft'` Page behind
+    // forever: invisible in the editor (no body to load) but permanently
+    // visible to its "creator" in any path-rooted listing that includes
+    // drafts (the Subpages tab's `visiblePageStatusOr` draft clause doesn't
+    // care whether a revision exists). The `catch` block now compensates by
+    // deleting that orphaned Page — best-effort, and the original 400
+    // response must be unaffected either way.
+    describe('draft orphan hardening (compensating delete on seed-revision failure)', () => {
+      it('still returns 400 invalid_path when Revision.prepareRevision throws, and leaves no orphaned Page behind', async () => {
+        const path = `${PATH_PREFIX}orphan-prepare-revision`;
+        const Revision = crowi.model('Revision');
+        const spy = jest.spyOn(Revision, 'prepareRevision').mockRejectedValueOnce(new Error('prepareRevision boom'));
+
+        try {
+          const res = await request(app).post('/api/v2/pages/drafts').set(authHeaders(aliceToken)).send({ path });
+          expect(res.status).toBe(400);
+          expect(res.body.error).toBe('invalid_path');
+
+          const Page = crowi.model('Page');
+          expect(await Page.findOne({ path })).toBeNull();
+        } finally {
+          spy.mockRestore();
+        }
+      });
+
+      it('still returns 400 invalid_path when Page.pushRevision throws, and leaves no orphaned Page behind', async () => {
+        const path = `${PATH_PREFIX}orphan-push-revision`;
+        const Page = crowi.model('Page');
+        const spy = jest.spyOn(Page, 'pushRevision').mockRejectedValueOnce(new Error('pushRevision boom'));
+
+        try {
+          const res = await request(app).post('/api/v2/pages/drafts').set(authHeaders(aliceToken)).send({ path });
+          expect(res.status).toBe(400);
+          expect(res.body.error).toBe('invalid_path');
+
+          expect(await Page.findOne({ path })).toBeNull();
+        } finally {
+          spy.mockRestore();
+        }
+      });
+    });
   });
 
   describe('GET /api/v2/pages/drafts', () => {
