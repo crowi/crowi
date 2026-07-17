@@ -50,7 +50,7 @@ alpha.0–.3 は published、alpha.4 / stable 向けに changeset 蓄積中（pr
 レビュー / simplify の advisory はここに積まない（**fix or drop** — 直すか捨てるかの二択。CLAUDE.md「Review findings: fix or drop」参照）。残すのは機能ロードマップ残と dep major 待ちのみ。
 
 - [ ] **E2E coverage (point-by-point)**: page CRUD → editor save/draft → comments → search → notifications → admin の順で、新機能/バグ修正のついでに `packages/e2e` を拡充（一括タスクにしない。運用は e2eTargets — feature-planner.md 参照）
-- [ ] **RFC-0002 renderer 残**（Mermaid、GitHub Embed plugin、mention N+1 ほか）
+- [ ] **RFC-0002 renderer 残**（Mermaid、GitHub Embed plugin、mention N+1 ほか。`addEmbedTag` registry の最初の利用者は link-card で出荷済み — spec: `feature-link-card-embed.md`）
 - [ ] **monorepo restructure follow-ups**（catalog 化、compose healthcheck、dev/prod parity ほか）
 - [ ] **crypto Phase 3**（KeyProvider pluggable 化、lookup-key secret の hash 化）
 - [ ] **RFC-0008 follow-ups**（`rebuild renderer`/`backlink` 本実装、watcher backfill 統一、RFC 追従）
@@ -103,6 +103,7 @@ alpha.0–.3 は published、alpha.4 / stable 向けに changeset 蓄積中（pr
 - **boot 手順の宣言的ステップ定義への統一** — `runInitLayers`/`initForCli` の二重手書きステップ列挙を `boot-steps.ts` の `ALL_BOOT_STEPS` + `resolveBootOrder()`（`topoSortPlugins` の DFS を踏襲）に統一し、CLI 省略対象を `CLI_SKIP_STEPS` 一箇所に集約（spec: `feature-boot-sequence-declarative.md`）
 - **モバイル共有メニューの URL コピー修正** — page-actions-menu の「URLをコピー」項目を PC と共通の `SharePanelContent` 共有ダイアログに統一し、auto-copy + タイトル/Markdown 行を提供（spec: `feature-mobile-share-menu-fix.md`）
 - **ユーザーページに「配下ページ (Subpages)」タブを追加** — `/user/<username>/` 配下を path 起点で全階層再帰的に一覧表示する専用 endpoint + static + UI を新設（既存の creator 起点「作成したページ」タブとは別次元）。付随して draft 作成失敗時の孤児 Page hardening を同梱（spec: `feature-user-page-subpages-tab.md`）
+- **URL カード埋め込み `@[card](url)`** — `addEmbedTag` registry の最初の利用者として新規 `@crowi/plugin-renderer-link-card`（SSRF ガード付き OGP fetch）を実装 + editor に裸 URL ⇔ `@[card](url)` 変換 affordance を追加（spec: `feature-link-card-embed.md`）
 
 ---
 
