@@ -18,7 +18,7 @@
 import { createRoute } from '@hono/zod-openapi';
 
 import { AuthenticationRequiredErrorSchema, InternalServerErrorSchema } from '../schemas/common';
-import { PreviewPageRequestSchema, PreviewPageResponseSchema } from '../schemas/page-preview';
+import { PreviewPageRequestSchema, PreviewPageResponseSchema, PreviewRateLimitErrorSchema } from '../schemas/page-preview';
 
 export const previewPageRoute = createRoute({
   method: 'post',
@@ -39,6 +39,10 @@ export const previewPageRoute = createRoute({
     401: {
       description: 'Authentication required',
       content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
+    },
+    429: {
+      description: 'Per-user rate limit exceeded',
+      content: { 'application/json': { schema: PreviewRateLimitErrorSchema } },
     },
     500: {
       description: 'Renderer pipeline failure',
