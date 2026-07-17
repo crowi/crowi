@@ -2,6 +2,7 @@ import type { InvalidateReason } from '@crowi/collab';
 import Debug from 'debug';
 import { Document, Model, model, Schema, Types } from 'mongoose';
 import Crowi from 'src/crowi';
+import { escapeRegExp } from 'src/util/regex';
 import { RevisionDocument } from './revision';
 import { UserDocument } from './user';
 
@@ -275,6 +276,17 @@ export interface PageModel extends Model<PageDocument> {
   getStreamOfFindAll(options?): any;
   findListByStartWith(path, userData, option): Promise<PageDocument[]>;
   findChildrenByPath(path, userData, option): any;
+  /**
+   * `GET /user/{username}/subpages` — path-rooted, fully recursive listing
+   * under `prefix` (e.g. `/user/alice/`), self excluded. See the
+   * implementation below (right after `findChildrenByPath`) for the
+   * self-exclusion rationale and the count/items query-sharing contract.
+   */
+  findSubpagesByUserNamespace(
+    prefix: string,
+    viewerId: Types.ObjectId,
+    options: { limit: number; offset: number },
+  ): Promise<{ rawPages: PageDocument[]; total: number }>;
   findChildSegments(path, userData): Promise<Array<{ segment: string; path: string; isPage: boolean; hasPortal: boolean; count: number }>>;
   findUnfurlablePages(type, array, grants?: number[]): any;
   findUnfurlablePagesByIds(ids): any;
@@ -1266,6 +1278,64 @@ export default (crowi: Crowi) => {
   pageSchema.statics.findChildrenByPath = async function (path, userData, option) {
     path = addTrailingSlash(path);
     return Page.findListByStartWith(path, userData, { limit: 0, ...option });
+  };
+
+  /**
+   * `GET /user/{username}/subpages` only. Lists every page under `prefix`
+   * (e.g. `/user/alice/`, caller-supplied and unescaped — escaping happens
+   * here) recursively across all depths, visible to `viewerId`.
+   *
+   * Deliberately independent of `findListByStartWith`: that function is a
+   * shared contract (portal listing + trash) with its own external
+   * behaviour (trailing-slash-includes-parent, default `updatedAt desc`
+   * sort, `includeDeletedPage` branch, unescaped regex) that this feature
+   * must not perturb. The logic this endpoint needs is small enough (a path
+   * prefix condition + an explicit self-exclusion) that duplicating it here
+   * is cheaper than risking a shared-helper refactor of `findListByStartWith`.
+   *
+   * Self-exclusion: the regex `^${escapeRegExp(prefix)}` also matches
+   * `prefix` itself (a string is always a prefix of itself). `prefix` (e.g.
+   * `/user/alice/`, trailing slash) can exist as a real, separate document
+   * from the home page (`/user/alice`, no trailing slash) whenever the home
+   * page itself doesn't exist — `isCreatableName`'s reserved-word list
+   * doesn't block it, and `findExistingTwin` only guards the draft-create
+   * path. `$ne: prefix` drops that row explicitly, mirroring
+   * `findChildSegments`'s `doc.path === prefix` skip.
+   *
+   * `find` and `countDocuments` share the same `match` object and run as two
+   * independent queries (not a single aggregation) — same best-effort
+   * count/items consistency trade-off `getUserPages`/`getUserBookmarks`
+   * already accept (a concurrent write between the two calls can make
+   * `total` momentarily drift from the returned rows; resolved by the next
+   * `refetchOnMount: 'always'` refetch on the web side).
+   *
+   * `.select(...)` excludes `revision`/`currentRevision`/`yjsState`/
+   * `extended` — none render in this list, and `yjsState` alone can approach
+   * 16MB, so leaving it selected would be needless egress + memory.
+   */
+  pageSchema.statics.findSubpagesByUserNamespace = async function (
+    prefix: string,
+    viewerId: Types.ObjectId,
+    { limit, offset }: { limit: number; offset: number },
+  ): Promise<{ rawPages: PageDocument[]; total: number }> {
+    const pathRegex = new RegExp(`^${escapeRegExp(prefix)}`);
+    const match = {
+      redirectTo: null,
+      path: { $regex: pathRegex, $ne: prefix },
+      $and: [{ $or: visiblePageGrantOr(viewerId) }, { $or: visiblePageStatusOr(viewerId) }],
+    };
+
+    const [rawPages, total] = await Promise.all([
+      Page.find(match)
+        .select('path redirectTo status grant grantedUsers creator lastUpdateUser liker commentCount createdAt updatedAt')
+        .sort({ path: 1, _id: 1 })
+        .skip(offset)
+        .limit(limit)
+        .exec(),
+      Page.countDocuments(match),
+    ]);
+
+    return { rawPages, total };
   };
 
   /**
