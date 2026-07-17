@@ -4,7 +4,7 @@ import type { PageWithRevision, RenamePageRequest, RenameSubtreeRequest, SetPage
 import { m } from '@paraglide/messages.js';
 import { type QueryClient, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClientV2 } from './api-client';
-import { PAGE_LIST_FAMILY_ROOT, pageKeys, revisionsKeys, userPageKeys } from './page-query-keys';
+import { invalidateUserSubpagesQueries, PAGE_LIST_FAMILY_ROOT, pageKeys, revisionsKeys, userPageKeys } from './page-query-keys';
 import { draftsKeys } from './use-drafts';
 
 /**
@@ -151,12 +151,20 @@ export function useUpdatePage() {
       }
       throw new Error(m['errors.update_failed']());
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       // Refresh the page detail AND the list/portal family — editing a
       // portal returns to its `usePageList` view, which would otherwise
       // keep serving the pre-edit revision. Also covers page history
       // (new revision) + drafts (a first save publishes a draft).
       invalidatePageContentQueries(queryClient);
+      // A body-only save never changes /user/<username>/ subpages
+      // membership — but `useUpdatePage` doubles as the `grant` change
+      // path too (`variables.grant !== undefined`), and grant DOES change
+      // subpages visibility. Only invalidate in that case so an ordinary
+      // body save doesn't pay for a refetch it doesn't need.
+      if (variables.grant !== undefined) {
+        invalidateUserSubpagesQueries(queryClient);
+      }
     },
   });
 }
@@ -183,6 +191,9 @@ export function useSetPageGrant() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: pageKeys.all });
+      // A grant change directly changes who can see the page in the
+      // /user/<username>/ subpages listing.
+      invalidateUserSubpagesQueries(queryClient);
     },
   });
 }
@@ -223,6 +234,8 @@ export function useDeletePage() {
       queryClient.invalidateQueries({
         predicate: (query) => userPageKeys.isPagesQuery(query.queryKey),
       });
+      // A deleted page must also drop out of /user/<username>/ subpages.
+      invalidateUserSubpagesQueries(queryClient);
     },
   });
 }
@@ -255,6 +268,8 @@ export function useRevertDeletedPage() {
       queryClient.invalidateQueries({
         predicate: (query) => userPageKeys.isPagesQuery(query.queryKey),
       });
+      // A restored page reappears in /user/<username>/ subpages.
+      invalidateUserSubpagesQueries(queryClient);
     },
   });
 }
@@ -335,6 +350,17 @@ export function useRenamePage() {
       queryClient.invalidateQueries({ queryKey: pageKeys.all });
       queryClient.invalidateQueries({ queryKey: PAGE_LIST_FAMILY_ROOT });
     },
+    // `onSettled` (not `onSuccess`): `renameTree` (subtree rename) has no
+    // transaction and moves pages individually with limited concurrency, so
+    // a mid-way failure can leave SOME pages already moved while the
+    // mutation still rejects with a structured 400 (`partial: true` via
+    // `RenameTreeConflictError`). A mounted Subpages tab must refetch and
+    // converge on the true (partially-moved) membership/order even in that
+    // failure case — `onSuccess` alone would leave it showing the pre-rename
+    // state until the next 60s staleTime lapse.
+    onSettled: () => {
+      invalidateUserSubpagesQueries(queryClient);
+    },
   });
 }
 
@@ -363,6 +389,12 @@ export function useRenameSubtree() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: pageKeys.all });
       queryClient.invalidateQueries({ queryKey: PAGE_LIST_FAMILY_ROOT });
+    },
+    // `onSettled`, not `onSuccess` — see `useRenamePage`'s comment: a
+    // subtree rename can partially move pages before failing, and the
+    // mounted Subpages tab must refetch to converge either way.
+    onSettled: () => {
+      invalidateUserSubpagesQueries(queryClient);
     },
   });
 }
