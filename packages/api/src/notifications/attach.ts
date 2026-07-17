@@ -1,11 +1,11 @@
 import type { Server as HttpServer, IncomingMessage } from 'node:http';
-import type { Duplex } from 'node:stream';
-import Debug from 'debug';
-import { WebSocketServer, type WebSocket as WsWebSocket } from 'ws';
 import { NotificationsServerMessageSchema, WS_CLOSE_CODES } from '@crowi/api-contract';
+import Debug from 'debug';
 import type Crowi from 'src/crowi';
 import { createNotificationsTokenUtil } from 'src/util/notifications-token';
-import { NOTIFICATIONS_CHANNEL_PREFIX, channelForUser } from './channel';
+import { attachWsNamespace, politeCloseWithReason, splitUrl } from 'src/ws/attach-namespace';
+import type { WebSocket as WsWebSocket } from 'ws';
+import { channelForUser } from './channel';
 
 const debug = Debug('crowi:notifications:attach');
 
@@ -18,18 +18,6 @@ const debug = Debug('crowi:notifications:attach');
  * http.Server listener).
  */
 const NOTIFICATIONS_PATH = '/notifications';
-
-/**
- * Grace window between asking sockets to close politely and force-
- * terminating stragglers on shutdown. Mirrors presence / collab.
- */
-const SHUTDOWN_DRAIN_MS = 500;
-
-/** Split a request URL into its pathname and raw query string. */
-const splitUrl = (rawUrl: string): { pathname: string; query: string } => {
-  const queryIdx = rawUrl.indexOf('?');
-  return queryIdx < 0 ? { pathname: rawUrl, query: '' } : { pathname: rawUrl.slice(0, queryIdx), query: rawUrl.slice(queryIdx + 1) };
-};
 
 /**
  * Minimum node-redis v4 surface the notifications handler leans on.
@@ -60,7 +48,10 @@ export interface AttachedNotifications {
   shutdown(): Promise<void>;
 }
 
-/** One live notifications connection. `userId` is populated once the token verifies. */
+/**
+ * One live notifications connection. Doubles as the `attachWsNamespace`
+ * context: built by `authenticate` once the token / path checks pass.
+ */
 interface NotificationsConnection {
   ws: WsWebSocket;
   userId: string;
@@ -69,7 +60,12 @@ interface NotificationsConnection {
 /**
  * Wire the RFC `/notifications` WebSocket into the api's existing
  * `http.Server`, using `ws`'s `noServer` mode — same process, same
- * event loop, same Redis client as `/collab` and `/presence`.
+ * event loop, same Redis client as `/collab` and `/presence`. The
+ * upgrade filter / shutdown drain / pre-auth close-registration race
+ * fix are provided by the shared `attachWsNamespace` primitive
+ * (`src/ws/attach-namespace.ts`); this module supplies the
+ * notifications-specific authentication and subscribe/unsubscribe
+ * business logic.
  *
  * Connection lifecycle:
  *   1. Upgrade filter accepts `/notifications` / `/notifications/*`.
@@ -125,10 +121,6 @@ export async function attachNotificationsServer(httpServer: HttpServer, crowi: C
     }
   }
 
-  // `noServer: true` — the upgrade handshake is owned by the api
-  // process; we forward only `/notifications/*` upgrades here.
-  const wss = new WebSocketServer({ noServer: true });
-
   // userId → set of live sockets for that user (multi-tab). Drives:
   //  - the lazy subscribe/unsubscribe of Redis channels (first/last
   //    socket for a userId triggers it),
@@ -143,7 +135,7 @@ export async function attachNotificationsServer(httpServer: HttpServer, crowi: C
    *   1. User A's last tab closes → handleClose schedules an async
    *      `unsubscribe`.
    *   2. Before that unsubscribe completes, user A's NEW tab opens →
-   *      wireConnection sees an empty set and schedules a `subscribe`.
+   *      `openConnection` sees an empty set and schedules a `subscribe`.
    *   3. The two ops can land in any order on the Redis subscriber;
    *      if unsubscribe wins, the new tab is left without a live
    *      subscription and silently misses every invalidation.
@@ -264,12 +256,12 @@ export async function attachNotificationsServer(httpServer: HttpServer, crowi: C
   };
 
   /**
-   * Wire one freshly-upgraded `ws.WebSocket`. Authentication runs
-   * inline: a bad token / userId mismatch closes the socket
-   * immediately. A clean connection is registered and the user's
-   * Redis channel is (lazily) subscribed.
+   * `attachWsNamespace`'s `authenticate` callback: token verify + path
+   * check (former steps 1-2 of `wireConnection`). A `null` return means
+   * the socket was already closed with the appropriate code — the
+   * primitive sends none of its own.
    */
-  const wireConnection = async (ws: WsWebSocket, request: IncomingMessage): Promise<void> => {
+  const authenticate = async (request: IncomingMessage, ws: WsWebSocket): Promise<NotificationsConnection | null> => {
     const { pathname, query } = splitUrl(request.url ?? '');
     const token = new URLSearchParams(query).get('token') ?? '';
 
@@ -278,7 +270,7 @@ export async function attachNotificationsServer(httpServer: HttpServer, crowi: C
     if (!claims) {
       debug('reject: notifications token missing / invalid');
       ws.close(WS_CLOSE_CODES.INVALID_TOKEN, 'invalid token');
-      return;
+      return null;
     }
 
     // 2. `/notifications/<userId>` path segment, when present, must
@@ -306,63 +298,23 @@ export async function attachNotificationsServer(httpServer: HttpServer, crowi: C
       } catch {
         debug('reject: malformed percent-encoding in path segment %s', rawSegment);
         ws.close(WS_CLOSE_CODES.FORBIDDEN, 'forbidden');
-        return;
+        return null;
       }
       const normalised = decoded.replace(/\/+$/, '');
       if (normalised.includes('/')) {
         debug('reject: extra path segment after userId: %s', normalised);
         ws.close(WS_CLOSE_CODES.FORBIDDEN, 'forbidden');
-        return;
+        return null;
       }
       pathSegment = normalised;
     }
     if (pathSegment.length > 0 && pathSegment !== claims.selfUserId) {
       debug('reject: path userId %s != token selfUserId %s', pathSegment, claims.selfUserId);
       ws.close(WS_CLOSE_CODES.FORBIDDEN, 'forbidden');
-      return;
+      return null;
     }
 
-    const userId = claims.selfUserId;
-    const conn: NotificationsConnection = { ws, userId };
-
-    // Register the close handler BEFORE the await on
-    // `ensureSubscribed` so a socket that closes during the subscribe
-    // round-trip is reconciled cleanly — same race-window fix as
-    // presence/attach.ts (see the rationale comment there).
-    let closed = false;
-    ws.on('close', () => {
-      closed = true;
-      void handleClose(conn);
-    });
-    ws.on('error', (err: Error) => {
-      // A single bad socket must not crash the api process.
-      console.error('[crowi:notifications] websocket error', err);
-    });
-
-    const sockets = connectionsByUser.get(userId);
-    const isFirstForUser = !sockets || sockets.size === 0;
-    if (sockets) {
-      sockets.add(conn);
-    } else {
-      connectionsByUser.set(userId, new Set([conn]));
-    }
-
-    if (isFirstForUser) {
-      await ensureSubscribed(userId);
-    }
-
-    // The socket closed while subscribe was in flight — the close
-    // handler may have already run before the connection was tracked.
-    // Reconcile by running close cleanup once: deleting an absent
-    // socket from the set is a no-op, and `handleClose` does the
-    // unsubscribe when the set empties.
-    if (closed) {
-      debug('notifications socket closed during setup user=%s', userId);
-      void handleClose(conn);
-      return;
-    }
-
-    debug('notifications connected user=%s', userId);
+    return { ws, userId: claims.selfUserId };
   };
 
   /** Handle a socket close — drop the connection and maybe unsubscribe. */
@@ -376,22 +328,50 @@ export async function attachNotificationsServer(httpServer: HttpServer, crowi: C
   };
 
   /**
-   * `'upgrade'` handler. Path-filter first so the sibling `/collab` /
-   * `/presence` handlers keep their slot; `socket.destroy()` is
-   * intentionally NOT called on a no-match so Node moves on to the
-   * next listener.
+   * `attachWsNamespace`'s `onOpen`: former steps 4-5 of `wireConnection`
+   * (register + lazily subscribe). Runs after `authenticate` resolved
+   * and the primitive confirmed the socket is still open.
    */
-  const upgradeHandler = (request: IncomingMessage, socket: Duplex, head: Buffer): void => {
-    const { pathname } = splitUrl(request.url ?? '');
-    if (pathname !== NOTIFICATIONS_PATH && !pathname.startsWith(`${NOTIFICATIONS_PATH}/`)) {
-      return; // not ours — let other upgrade handlers try.
+  const openConnection = async (conn: NotificationsConnection): Promise<void> => {
+    const { userId, ws } = conn;
+    const sockets = connectionsByUser.get(userId);
+    const isFirstForUser = !sockets || sockets.size === 0;
+    if (sockets) {
+      sockets.add(conn);
+    } else {
+      connectionsByUser.set(userId, new Set([conn]));
     }
-    wss.handleUpgrade(request, socket, head, (ws) => {
-      void wireConnection(ws, request);
-    });
+
+    if (isFirstForUser) {
+      await ensureSubscribed(userId);
+    }
+
+    // The socket closed while subscribe was in flight. The primitive's
+    // own close listener (registered right before this `onOpen` call)
+    // will have already run `handleClose` once — this reconciles by
+    // running it again now that the subscribe is guaranteed to have
+    // settled, in case it raced a premature unsubscribe.
+    if (ws.readyState !== ws.OPEN) {
+      debug('notifications socket closed during setup user=%s', userId);
+      void handleClose(conn);
+      return;
+    }
+
+    debug('notifications connected user=%s', userId);
   };
 
-  httpServer.on('upgrade', upgradeHandler);
+  const wsNamespace = attachWsNamespace<NotificationsConnection>(httpServer, {
+    path: NOTIFICATIONS_PATH,
+    authenticate,
+    onOpen: (_ws, conn) => {
+      void openConnection(conn);
+    },
+    onClose: (conn) => {
+      void handleClose(conn);
+    },
+    politeClose: politeCloseWithReason(WS_CLOSE_CODES.SHUTDOWN, 'server shutting down'),
+  });
+
   debug('notifications attached to http.Server (path=%s, redis=%s)', NOTIFICATIONS_PATH, subscriber !== null ? 'on' : 'off');
 
   let didShutdown = false;
@@ -400,47 +380,11 @@ export async function attachNotificationsServer(httpServer: HttpServer, crowi: C
       if (didShutdown) return;
       didShutdown = true;
 
-      // 1. Refuse new upgrades.
-      try {
-        httpServer.off('upgrade', upgradeHandler);
-      } catch {
-        // best-effort — server may already be tearing down.
-      }
+      // off upgrade → politely close every live socket → drain wait →
+      // force-terminate stragglers → wss.close().
+      await wsNamespace.shutdown();
 
-      // 2. Politely close every live socket.
-      for (const sockets of connectionsByUser.values()) {
-        for (const conn of sockets) {
-          try {
-            conn.ws.close(WS_CLOSE_CODES.SHUTDOWN, 'server shutting down');
-          } catch {
-            // ignore — best-effort
-          }
-        }
-      }
-
-      // 3. Brief drain so close frames flush.
-      if (connectionsByUser.size > 0) {
-        await new Promise<void>((resolveDrain) => setTimeout(resolveDrain, SHUTDOWN_DRAIN_MS));
-      }
-
-      // 4. Force-terminate stragglers.
-      try {
-        for (const sockets of connectionsByUser.values()) {
-          for (const conn of sockets) {
-            try {
-              conn.ws.terminate();
-            } catch {
-              // ignore
-            }
-          }
-        }
-        connectionsByUser.clear();
-        wss.close();
-      } catch (err) {
-        console.error('[crowi:notifications] wss.close failed during shutdown:', err);
-      }
-
-      // 5. Tear down the Redis subscriber (when one was built).
+      // Tear down the Redis subscriber (when one was built).
       if (subscriber !== null) {
         try {
           await subscriber.disconnect();
@@ -453,4 +397,4 @@ export async function attachNotificationsServer(httpServer: HttpServer, crowi: C
   };
 }
 
-export { NOTIFICATIONS_CHANNEL_PREFIX, channelForUser } from './channel';
+export { channelForUser, NOTIFICATIONS_CHANNEL_PREFIX } from './channel';
