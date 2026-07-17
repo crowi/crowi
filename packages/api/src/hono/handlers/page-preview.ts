@@ -22,6 +22,22 @@
  * on every top-level block before serialising — that's how the editor
  * scroll-sync ties CodeMirror viewport positions to preview-pane
  * blocks bidirectionally.
+ *
+ * Rate limiting (feature-plugin-renderer-mermaid spec §7 item 7):
+ *  - 600 req/min/user, name `'preview'`. Same `createRateLimiter(...)` /
+ *    `withRateLimit(...)` pattern as `autocomplete.ts` — a shared limiter
+ *    instance per process (Redis-backed when `crowi.redis !== null`).
+ *  - Applied on the `/pages/preview` literal path. jwtAuth is already
+ *    installed broadly on `/pages/*` by the revision handler (see above),
+ *    so this only needs to install AFTER that — order is enforced by
+ *    `buildHonoApp`'s registration order, not by this file.
+ *  - 429 envelope: `{ error: 'rate_limited', message, retryAfterSeconds }`
+ *    (`PreviewRateLimitErrorSchema` — same wire shape as
+ *    `AutocompleteRateLimitErrorSchema`).
+ *  - This is a secondary defence against bodyless-request floods; the
+ *    primary capacity control is the per-user admission-control
+ *    concurrency cap (spec §6), which bounds actual render CPU work
+ *    regardless of request rate.
  */
 import { previewPageRoute } from '@crowi/api-contract';
 import type { OpenAPIHono } from '@hono/zod-openapi';
@@ -31,12 +47,18 @@ import type { Root, RootContent } from 'mdast';
 import type Crowi from 'src/crowi';
 import { serializeMdast } from 'src/renderer';
 import { actorFromUser } from 'src/util/ts-rest-helpers';
+import { createRateLimiter } from 'src/util/rate-limit';
 
 import type { CrowiHonoBindings } from '../app';
+import { withRateLimit } from '../middleware/rate-limit';
 
 import { INTERNAL_ERROR_BODY } from './_helpers/errors';
 
 const debug = Debug('crowi:hono:handlers:page-preview');
+
+/** feature-plugin-renderer-mermaid spec §7 item 7 — per-user budget for `POST /pages/preview`. */
+const PREVIEW_RATE_LIMIT = 600;
+const PREVIEW_RATE_WINDOW_MS = 60_000;
 
 // mdast's `Data` is intentionally empty (open to augmentation); the
 // `hProperties` field is the `mdast-util-to-hast` convention shared
@@ -67,6 +89,24 @@ const injectSourceLineAnchors = (tree: Root): void => {
 };
 
 export const registerPagePreviewRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app: E, crowi: Crowi) => {
+  // One shared limiter per process. `crowi.redis` is `null` in
+  // single-instance dev, which selects the in-memory fallback (see
+  // `util/rate-limit.ts`).
+  const limiter = createRateLimiter({
+    name: 'preview',
+    limit: PREVIEW_RATE_LIMIT,
+    windowMs: PREVIEW_RATE_WINDOW_MS,
+    redisClient: crowi.redis ?? null,
+  });
+  app.use(
+    '/pages/preview',
+    withRateLimit({
+      limiter,
+      wireShape: 'autocomplete-envelope', // PreviewRateLimitErrorSchema is a byte-identical wire shape.
+      message: () => 'Preview rate limit exceeded. Try again shortly.',
+    }),
+  );
+
   return app.openapi(previewPageRoute, async (c) => {
     const user = c.get('user');
     const { body } = c.req.valid('json');
@@ -75,30 +115,29 @@ export const registerPagePreviewRoutes = <E extends OpenAPIHono<CrowiHonoBinding
       // `mode: 'view'` mirrors what `computeRevisionRenderArtifactsAsync`
       // uses for read-path on-the-fly fallback; the registered transforms
       // decide whether to short-circuit based on it. No `pageId` is
-      // supplied — plugin-dispatch transforms degrade to plain text in
-      // that case, which is the right behaviour for preview content that
-      // may belong to no persisted page yet.
+      // supplied — `pipeline.ts`'s page-less branch runs ONLY
+      // `previewPolicy: 'server-render'` code-block dispatch
+      // (`makePreviewCodeBlockDispatch`); embed-tags / url-inline-expand
+      // stay skipped exactly as before this feature (spec §7 item 3 — no
+      // `pageId` to key an embed-cache row against).
       //
       // `actor` + `signal`: feature-plugin-renderer-mermaid spec §6/§7 —
       // admission control needs the actor end-to-end, and the abort
       // signal lets a superseded preview request's queued admission job
-      // (§6) be dropped instead of wasting a render slot. This is Phase 1
-      // scope only (spec's own "### Phase 1" AC list requires exactly
-      // this: `RenderContext.actor`/`signal` reach this call site) —
-      // `Renderer.run`'s `options.actor` is a required field now, so
-      // every call site needed this regardless of preview parity.
-      // Because `pageId` is still omitted above, `runPipeline` still
-      // skips the whole plugin-dispatch stage (`pipeline.ts:334`), so a
-      // ```mermaid fence in preview body still degrades to plain text —
-      // by design, not an oversight: wiring `previewPolicy:'server-render'`
-      // into an actual page-less dispatch path (`makePreviewCodeBlockDispatch`,
-      // `pipeline.ts`'s branch, `renderCodeBlockForPreview`, the
-      // `use-preview.ts` AbortController, the preview rate limiter) is
-      // spec §7 / "### Phase 2" — a separate, human-gated task
-      // (`autoContinue:false`) specifically because it touches shared
-      // renderer-core files every other plugin's preview behaviour also
-      // flows through. See `.feature-state/tasks/feature-plugin-renderer-mermaid.json`
-      // phases[1] vs phases[2].
+      // (§6) be dropped instead of wasting a render slot.
+      // `Renderer.run`'s `options.actor` is a required field, so every
+      // call site needs this regardless of preview parity.
+      //
+      // `c.req.raw.signal` on premature disconnect (spec §7 item 8's "実機
+      // で確認" requirement): reproduced against this repo's pinned
+      // `@hono/node-server` (2.0.3) on Node v24.15.0 — a standalone `serve()`
+      // handler awaited 2s, a raw TCP client sent the request headers+body
+      // then called `socket.destroy()` ~200ms later (simulating a tab close
+      // / navigation mid-request, not a graceful FIN). The handler's
+      // `c.req.raw.signal` fired its `abort` event with `signal.aborted ===
+      // true`. Confirmed guaranteed on this stack — no fallback to
+      // rate-limit-only cancellation is needed for the "abort a queued
+      // preview's admission job" behaviour this powers.
       //
       // `getRenderer()` throws if setup hasn't run; the catch maps it to
       // 500 alongside any pipeline failure.
