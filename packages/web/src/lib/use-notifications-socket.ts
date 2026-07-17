@@ -318,6 +318,12 @@ export function useNotificationsSocket(options: UseNotificationsSocketOptions = 
         // handshake-then-reject loop doesn't pin the reconnect delay at
         // its 1s floor forever. Same pattern as `usePresence`.
         invalidTokenAttemptsRef.current = 0;
+        // Also clear the catch-up latch: we are now healthily connected, so a
+        // LATER 4401 retry loop (which does not set `hasClosedBefore`) must not
+        // inherit a `true` left over from an earlier ordinary close in this
+        // same effect run — otherwise each doomed retry's `onopen` would fan
+        // out a catch-up refetch, the very storm `onOpen`'s guard prevents.
+        hasClosedBefore = false;
         scheduleInvalidate();
         return 'reset-backoff';
       },

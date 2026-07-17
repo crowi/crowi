@@ -325,18 +325,21 @@ export async function attachCollabServer(httpServer: HttpServer, crowi: Crowi): 
     // context.
     resolveContext: async (request) => request,
     onOpen,
-    // Ask Hocuspocus to close connections politely. The primitive calls
-    // this once per currently-open connection, but `closeConnections()`
-    // is Hocuspocus's own engine-wide API (no single-connection
-    // variant) — re-invoking it for every open socket is redundant
-    // (closing an already-closing connection is a no-op) but harmless,
-    // and keeps this callback's shape identical to presence's /
-    // notifications' per-connection one. Clients see a normal close
-    // frame and can flush their last `update` message to the server
-    // before they disconnect, which `afterDrain`'s flush then persists.
-    politeClose: () => {
-      hocuspocus.closeConnections();
-    },
+    // Ask Hocuspocus to close connections politely. The primitive calls this
+    // once per currently-open connection, but `closeConnections()` is
+    // Hocuspocus's own engine-wide API (no single-connection variant) — it
+    // already closes ALL connections, so a one-shot guard runs it exactly once
+    // instead of O(N) times (each of which re-walks every connection). Clients
+    // see a normal close frame and can flush their last `update` before
+    // disconnecting, which `afterDrain`'s flush then persists.
+    politeClose: (() => {
+      let closed = false;
+      return () => {
+        if (closed) return;
+        closed = true;
+        hocuspocus.closeConnections();
+      };
+    })(),
     // Flush any in-flight `onStoreDocument` debounces once sockets have
     // had the drain window to deliver their final updates, before
     // stragglers are force-terminated. The next-after-debounce

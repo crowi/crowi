@@ -180,6 +180,41 @@ describe('attachWsNamespace — authenticate race fix (AC-3)', () => {
     await closeServer(running);
   });
 
+  it('never opens (or tracks) a socket whose resolveContext settles after shutdown began — no ghost connection past the drain', async () => {
+    const server = http.createServer();
+    let resolveCtx: ((ctx: { id: string } | null) => void) | null = null;
+    const pending = new Promise<{ id: string } | null>((resolve) => {
+      resolveCtx = resolve;
+    });
+    const onOpen = jest.fn();
+
+    const wsNamespace = attachWsNamespace<{ id: string }>(server, {
+      path: '/slow-shutdown',
+      resolveContext: async () => pending,
+      onOpen,
+      politeClose: () => {},
+    });
+
+    const { server: running, port } = await listen(server);
+
+    const client = new WebSocket(`ws://127.0.0.1:${port}/slow-shutdown`);
+    await new Promise<void>((resolve) => client.on('open', () => resolve()));
+    // Client stays connected; the server is mid-resolveContext for it.
+
+    // Shutdown drains now — this socket is not yet in `connections`, so it
+    // escapes the drain. Without the didShutdown guard it would add itself +
+    // fire onOpen after shutdown returned.
+    await wsNamespace.shutdown();
+
+    // resolveContext only settles AFTER shutdown has returned.
+    resolveCtx!({ id: 'late' });
+    await new Promise((r) => setTimeout(r, 100));
+
+    expect(onOpen).not.toHaveBeenCalled();
+
+    await closeServer(running);
+  });
+
   it('registers the error listener before authenticate resolves, so an error mid-await never crashes the process', async () => {
     const server = http.createServer();
     let capturedWs: WebSocket | null = null;

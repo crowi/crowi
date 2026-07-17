@@ -1,5 +1,6 @@
 import type { Server as HttpServer, IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
+import { WS_CLOSE_CODES } from '@crowi/api-contract';
 import { WebSocketServer, type WebSocket as WsWebSocket } from 'ws';
 
 /**
@@ -149,6 +150,13 @@ export function attachWsNamespace<TContext>(httpServer: HttpServer, options: Att
   // for the generic parts above.
   const connections = new Map<WsWebSocket, TContext>();
 
+  // Set once `shutdown()` begins. Checked inside `wireConnection` AFTER the
+  // async `resolveContext` await: a socket still resolving when shutdown drains
+  // is not yet in `connections`, so it escapes politeClose/terminate — without
+  // this guard it would then add itself + fire `onOpen` after shutdown already
+  // returned, leaking a ghost viewer/subscription and an un-drained socket.
+  let didShutdown = false;
+
   const wireConnection = async (ws: WsWebSocket, request: IncomingMessage): Promise<void> => {
     // Both `close` and `error` are registered BEFORE `resolveContext`
     // runs (AC-3): (a) an `error` event during the resolve round-trip
@@ -181,6 +189,17 @@ export function attachWsNamespace<TContext>(httpServer: HttpServer, options: Att
       // Disconnected while `resolveContext` was resolving — do not open.
       return;
     }
+    if (didShutdown) {
+      // Shutdown drained (and possibly returned) while this socket was still
+      // resolving — it missed the drain, so close it now instead of adding a
+      // ghost connection + firing `onOpen` post-shutdown.
+      try {
+        ws.close(WS_CLOSE_CODES.SHUTDOWN, 'server shutting down');
+      } catch {
+        // best-effort
+      }
+      return;
+    }
 
     connections.set(ws, context);
     ws.on('close', () => {
@@ -208,7 +227,6 @@ export function attachWsNamespace<TContext>(httpServer: HttpServer, options: Att
 
   httpServer.on('upgrade', upgradeHandler);
 
-  let didShutdown = false;
   return {
     async shutdown() {
       if (didShutdown) return;

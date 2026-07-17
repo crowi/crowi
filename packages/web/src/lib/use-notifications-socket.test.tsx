@@ -373,6 +373,54 @@ describe('useNotificationsSocket', () => {
     expect(h.invalidateSpy).not.toHaveBeenCalledWith({ queryKey: notificationKeys.all });
   });
 
+  it('does NOT inherit a stale catch-up latch: after an ordinary reconnect + a valid frame, a later 4401 retry re-open fires no catch-up', async () => {
+    // The gap the doomed-retry test above does not cover: an ordinary close
+    // earlier in the SAME effect run sets `hasClosedBefore = true`. A valid
+    // frame then arrives (healthy connection). If the latch were not cleared
+    // by that frame, a subsequent 4401 retry's `onopen` would still pass the
+    // catch-up gate — the storm, just delayed. A valid message must reset it.
+    getNotificationsToken.mockResolvedValue(tokenOkResponse(TOKEN_OK));
+    const h = makeHarness();
+
+    h.render();
+    await flush();
+    expect(FakeWebSocket.instances).toHaveLength(1);
+
+    // Open, then an ordinary close → reconnect (this sets hasClosedBefore).
+    act(() => {
+      FakeWebSocket.instances[0].open();
+      FakeWebSocket.instances[0].fail(1006);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(15_000);
+    });
+    expect(FakeWebSocket.instances).toHaveLength(2);
+
+    // The reconnect opens and delivers a valid frame — healthy again, latch
+    // must clear here.
+    act(() => {
+      FakeWebSocket.instances[1].open();
+      FakeWebSocket.instances[1].emitChanged();
+      vi.advanceTimersByTime(200);
+    });
+
+    // Now a 4401 (stale token) → immediate 'reconnect' retry.
+    act(() => {
+      FakeWebSocket.instances[1].fail(4401);
+    });
+    await flush();
+    expect(FakeWebSocket.instances).toHaveLength(3);
+
+    // The doomed retry opens — with the latch cleared by the earlier valid
+    // frame, no catch-up fires.
+    h.invalidateSpy.mockClear();
+    act(() => {
+      FakeWebSocket.instances[2].open();
+      vi.advanceTimersByTime(200);
+    });
+    expect(h.invalidateSpy).not.toHaveBeenCalledWith({ queryKey: notificationKeys.all });
+  });
+
   it('backs off consecutive 4401 closes with no successful message in between (mint/verify secret-mismatch storm guard)', async () => {
     // Simulate the real-world trigger: every mint yields a *different*
     // token (a fresh `jti` guarantees this in production), so each 4401
