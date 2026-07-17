@@ -159,10 +159,30 @@ export function planIssueActions(report, openIssues, mode, repoRoot = process.cw
   return normalizedFiles.map((entry) => {
     const title = buildFlakeIssueTitle(entry.file)
     const existingIssue = findOpenIssueByTitle(openIssues, title)
+    // `firstFailureMessage` rides along on the action: it is the only field
+    // `buildOccurrenceFromEnv` needs from the report entry, and carrying it
+    // here (where the normalized file and its entry are still paired) spares
+    // `main()` from re-deriving the same normalized key to look the entry back
+    // up — a second copy of this normalization that would silently miss every
+    // lookup if the two ever drifted.
+    const firstFailureMessage = entry.firstFailureMessage ?? ''
     return existingIssue
-      ? { type: 'add-comment', file: entry.file, title, issueNumber: existingIssue.number }
-      : { type: 'create-issue', file: entry.file, title }
+      ? { type: 'add-comment', file: entry.file, title, issueNumber: existingIssue.number, firstFailureMessage }
+      : { type: 'create-issue', file: entry.file, title, firstFailureMessage }
   })
+}
+
+/**
+ * `output[title]`/`output[summary]` for AC-9's neutral check-run — the
+ * secondary "this run was not as clean as its green checks suggest" signal.
+ * Pure so the FLAKY-notable predicate and its rendering stay in one tested
+ * place; `publishNeutralCheckRun` is the `gh` glue around it.
+ */
+export function buildCheckRunOutput(flakyCount) {
+  return {
+    title: `flake-report: ${flakyCount} FLAKY`,
+    summary: `${flakyCount} FLAKY @crowi/api jest file(s) this run — see the flake-report-classification artifact and any filed flaky-test issue(s) for detail.`,
+  }
 }
 
 // ── glue (gh spawns + report I/O — not covered by unit tests, same
@@ -257,7 +277,34 @@ function emitAnnotation(files) {
   console.log(`::notice::flake-report: ${files.length} FLAKY — ${files.join(', ')}`)
 }
 
-function buildOccurrenceFromEnv(entry) {
+/**
+ * Best-effort neutral check-run (AC-9). Lives here rather than in a `jq` step
+ * in `ci.yml` because the gate it needs (`classified` + FLAKY≥1 + `file` mode)
+ * and the report's location are already resolved above — a shell twin would be
+ * a second, untested copy of both, and a drift between them would look exactly
+ * like a healthy no-FLAKY run. `headSha` comes from the workflow (a PR's
+ * `GITHUB_SHA` is the merge commit, not the head the checks are attached to).
+ */
+function publishNeutralCheckRun(repo, headSha, flakyCount) {
+  if (!repo || !headSha) {
+    console.log(`[flake-report-issue] check-run: skipped (repo="${repo}" headSha="${headSha}")`)
+    return
+  }
+  const { title, summary } = buildCheckRunOutput(flakyCount)
+  const result = spawnSync(
+    'gh',
+    ['api', `repos/${repo}/check-runs`, '-f', 'name=flake-report', '-f', `head_sha=${headSha}`, '-f', 'status=completed', '-f', 'conclusion=neutral', '-f', `output[title]=${title}`, '-f', `output[summary]=${summary}`],
+    { encoding: 'utf8' },
+  )
+  if (result.status === 0) {
+    console.log(`[flake-report-issue] published a neutral check-run (${flakyCount} FLAKY)`)
+  } else {
+    process.stderr.write(`[flake-report-issue] could not publish the neutral check-run (non-blocking, ignored): ${spawnFailureDetail(result)}\n`)
+  }
+}
+
+/** Builds one occurrence record from the run's GitHub context + the action's own `firstFailureMessage` (`planIssueActions` carries it over from the report entry). */
+function buildOccurrenceFromEnv(action) {
   const serverUrl = process.env.GITHUB_SERVER_URL ?? 'https://github.com'
   const repo = process.env.GITHUB_REPOSITORY ?? ''
   const runId = process.env.GITHUB_RUN_ID ?? ''
@@ -265,7 +312,7 @@ function buildOccurrenceFromEnv(entry) {
     detectedAt: new Date().toISOString(),
     runUrl: `${serverUrl}/${repo}/actions/runs/${runId}`,
     ref: process.env.CROWI_FLAKE_REF_LABEL ?? '(unknown ref)',
-    firstFailureMessage: entry.firstFailureMessage ?? '',
+    firstFailureMessage: action.firstFailureMessage ?? '',
   }
 }
 
@@ -296,6 +343,12 @@ function main() {
   const repo = process.env.GITHUB_REPOSITORY ?? ''
   let openIssues = []
   if (mode === 'file') {
+    // Before the dedup fetch below, so the check-run still lands on a run
+    // whose `gh issue list` could not be trusted (the filing skip there is
+    // about not creating a DUPLICATE issue — it says nothing about whether
+    // this run was flaky, which is all the check-run reports).
+    publishNeutralCheckRun(repo, process.env.CROWI_FLAKE_HEAD_SHA ?? '', report.counts.FLAKY)
+
     const fetched = fetchOpenFlakyIssues(repo)
     if (!fetched.ok) {
       // Cannot confirm the open `flaky-test` issue set — skip filing
@@ -317,11 +370,9 @@ function main() {
     return
   }
 
-  const filesByPath = new Map((report.files ?? []).map((entry) => [sanitizeSingleLine(toRepoRelativeFilePath(entry.file, repoRoot)), entry]))
   let labelEnsured = false
   for (const action of actions) {
-    const entry = filesByPath.get(action.file) ?? {}
-    const occurrence = buildOccurrenceFromEnv(entry)
+    const occurrence = buildOccurrenceFromEnv(action)
     if (action.type === 'create-issue') {
       if (!labelEnsured) {
         ensureFlakyLabel()

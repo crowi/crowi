@@ -118,48 +118,40 @@ EOF
   # forward = a fresh occurrence comment). It never files/fixes/closes
   # anything; the fixer is a human/manager decision (`/crowi-fix`).
   if [ $((pass % FLAKE_EVERY)) -eq 0 ] && command -v gh >/dev/null 2>&1; then
-    flaky_issues="$(gh issue list --repo crowi/crowi --label flaky-test --state open --json number,title,updatedAt --limit 200 \
-      --jq '.[] | "\(.number)\t\(.updatedAt)\t\(.title)"' 2>/dev/null)"
-    gh_flake_status=$?
-    if [ "$gh_flake_status" -eq 0 ]; then
-      has_flake_baseline=1
-      jq -e 'has("knownFlakyTestIssues")' "$STATE" >/dev/null 2>&1 || has_flake_baseline=0
-      known_lines="$(jq -r '(.knownFlakyTestIssues // [])[] | "\(.number) \(.updatedAt)"' "$STATE" 2>/dev/null)"
-      if [ "$has_flake_baseline" -eq 0 ] && [ "$flake_baseline_seeded" -eq 0 ]; then
-        # No on-disk baseline yet (`knownFlakyTestIssues` key absent — state is
-        # only ever written by the model, after it acts on a report, never by
-        # this read-only script). Silently absorb the CURRENT open set into the
-        # in-memory dedup set instead of reporting every pre-existing
-        # flaky-test issue as NEW (AC-7/AC-8: same first-run "既存はサイレント受理"
-        # treatment as lane D's documented, but here actually enforced,
-        # contract). Guarded by flake_baseline_seeded so this absorption only
-        # happens once per watcher lifetime — once seeded, later passes fall
-        # through to the normal comparison below even though the on-disk key
-        # may still be unset (it becomes accurate again as soon as the model
-        # acts on any reported event and writes the current known set).
-        while IFS=$'\t' read -r num updated _title; do
-          [ -n "$num" ] || continue
-          seen_flake="$seen_flake $num:$updated"
-        done <<EOF
-$flaky_issues
-EOF
-        flake_baseline_seeded=1
-      else
-        while IFS=$'\t' read -r num updated title; do
-          [ -n "$num" ] || continue
-          key="$num:$updated"
-          has "$key" "$seen_flake" && continue
-          seen_flake="$seen_flake $key"
-          known_updated="$(printf '%s\n' "$known_lines" | awk -v n="$num" '$1==n{print $2; exit}')"
-          if [ -z "$known_updated" ]; then
-            echo "NEW_FLAKY_ISSUE: #$num $title"
-          elif [ "$known_updated" != "$updated" ]; then
-            echo "UPDATED_FLAKY_ISSUE: #$num $title"
-          fi
-        done <<EOF
-$flaky_issues
-EOF
+    if flaky_issues="$(gh issue list --repo crowi/crowi --label flaky-test --state open --json number,title,updatedAt --limit 200 \
+      --jq '.[] | "\(.number)\t\(.updatedAt)\t\(.title)"' 2>/dev/null)"; then
+      # Seeding pass: no on-disk baseline yet (`knownFlakyTestIssues` key
+      # absent — state is only ever written by the model, after it acts on a
+      # report, never by this read-only script). Absorb the CURRENT open set
+      # into the in-memory dedup set silently instead of reporting every
+      # pre-existing flaky-test issue as NEW (AC-7/AC-8). Once per watcher
+      # lifetime (`flake_baseline_seeded`) — later passes compare normally
+      # even while the on-disk key is still unset (it becomes accurate as soon
+      # as the model acts on any reported event and writes the known set).
+      seeding=0
+      if [ "$flake_baseline_seeded" -eq 0 ] && ! jq -e 'has("knownFlakyTestIssues")' "$STATE" >/dev/null 2>&1; then
+        seeding=1
       fi
+      # Two jq-built sets for the `has` idiom the other lanes use: a number set
+      # (is this issue known at all → NEW) and a number:updatedAt set (known at
+      # THIS updatedAt → nothing; known at an older one → UPDATED).
+      known_nums="$(jq -r '(.knownFlakyTestIssues // []) | map(.number) | join(" ")' "$STATE" 2>/dev/null)"
+      known_keys="$(jq -r '(.knownFlakyTestIssues // []) | map("\(.number):\(.updatedAt)") | join(" ")' "$STATE" 2>/dev/null)"
+      while IFS=$'\t' read -r num updated title; do
+        [ -n "$num" ] || continue
+        key="$num:$updated"
+        has "$key" "$seen_flake" && continue
+        seen_flake="$seen_flake $key"
+        [ "$seeding" -eq 1 ] && continue
+        if ! has "$num" "$known_nums"; then
+          echo "NEW_FLAKY_ISSUE: #$num $title"
+        elif ! has "$key" "$known_keys"; then
+          echo "UPDATED_FLAKY_ISSUE: #$num $title"
+        fi
+      done <<EOF
+$flaky_issues
+EOF
+      [ "$seeding" -eq 1 ] && flake_baseline_seeded=1
     fi
     # else: `gh issue list` itself failed this pass (rate limit/network/auth
     # blip) — skip lane F ENTIRELY for this pass, do not touch

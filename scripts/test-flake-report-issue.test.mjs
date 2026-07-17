@@ -17,6 +17,7 @@ import { fileURLToPath } from 'node:url'
 
 import { resolveClassificationReportPath } from './flake-report-shared.mjs'
 import {
+  buildCheckRunOutput,
   buildFlakeIssueBody,
   buildFlakeIssueTitle,
   buildFlakeOccurrenceComment,
@@ -164,37 +165,47 @@ describe('planIssueActions', () => {
     assert.deepEqual(planIssueActions(report, [], 'file'), [])
   })
 
-  it('plans create-issue for a FLAKY file with no matching open issue', () => {
+  it('plans create-issue for a FLAKY file with no matching open issue, carrying its firstFailureMessage', () => {
     const report = { status: 'classified', files: [{ file: 'a.test.ts', classification: 'FLAKY', firstFailureMessage: 'boom' }] }
     const actions = planIssueActions(report, [], 'file')
-    assert.deepEqual(actions, [{ type: 'create-issue', file: 'a.test.ts', title: 'flake: a.test.ts' }])
+    assert.deepEqual(actions, [{ type: 'create-issue', file: 'a.test.ts', title: 'flake: a.test.ts', firstFailureMessage: 'boom' }])
+  })
+
+  it('defaults a missing firstFailureMessage to an empty string rather than leaving it undefined on the action', () => {
+    const report = { status: 'classified', files: [{ file: 'a.test.ts', classification: 'FLAKY' }] }
+    const actions = planIssueActions(report, [], 'file')
+    assert.equal(actions[0].firstFailureMessage, '')
   })
 
   it('AC-1: normalizes an absolute jest test path (as jest --json reports it) to a repo-relative dedup title/file, given an explicit repoRoot', () => {
     const report = { status: 'classified', files: [{ file: '/repo/packages/api/src/foo.test.ts', classification: 'FLAKY', firstFailureMessage: 'boom' }] }
     const actions = planIssueActions(report, [], 'file', '/repo')
-    assert.deepEqual(actions, [{ type: 'create-issue', file: 'packages/api/src/foo.test.ts', title: 'flake: packages/api/src/foo.test.ts' }])
+    assert.deepEqual(actions, [
+      { type: 'create-issue', file: 'packages/api/src/foo.test.ts', title: 'flake: packages/api/src/foo.test.ts', firstFailureMessage: 'boom' },
+    ])
   })
 
   it('AC-1: dedup matches an absolute-path FLAKY entry against an open issue whose title already uses the repo-relative form', () => {
     const report = { status: 'classified', files: [{ file: '/repo/packages/api/src/foo.test.ts', classification: 'FLAKY' }] }
     const openIssues = [{ number: 9, title: 'flake: packages/api/src/foo.test.ts' }]
     const actions = planIssueActions(report, openIssues, 'file', '/repo')
-    assert.deepEqual(actions, [{ type: 'add-comment', file: 'packages/api/src/foo.test.ts', title: 'flake: packages/api/src/foo.test.ts', issueNumber: 9 }])
+    assert.deepEqual(actions, [
+      { type: 'add-comment', file: 'packages/api/src/foo.test.ts', title: 'flake: packages/api/src/foo.test.ts', issueNumber: 9, firstFailureMessage: '' },
+    ])
   })
 
   it('plans add-comment (not a new issue) when an open issue with the exact dedup title already exists', () => {
     const report = { status: 'classified', files: [{ file: 'a.test.ts', classification: 'FLAKY' }] }
     const openIssues = [{ number: 7, title: 'flake: a.test.ts' }]
     const actions = planIssueActions(report, openIssues, 'file')
-    assert.deepEqual(actions, [{ type: 'add-comment', file: 'a.test.ts', title: 'flake: a.test.ts', issueNumber: 7 }])
+    assert.deepEqual(actions, [{ type: 'add-comment', file: 'a.test.ts', title: 'flake: a.test.ts', issueNumber: 7, firstFailureMessage: '' }])
   })
 
   it('a title that only partially matches (e.g. a renamed/closed issue not in the open set) still creates a new issue rather than reopening', () => {
     const report = { status: 'classified', files: [{ file: 'a.test.ts', classification: 'FLAKY' }] }
     const openIssues = [{ number: 5, title: 'flake: a.test.ts (old, now closed and re-titled by a human)' }]
     const actions = planIssueActions(report, openIssues, 'file')
-    assert.deepEqual(actions, [{ type: 'create-issue', file: 'a.test.ts', title: 'flake: a.test.ts' }])
+    assert.deepEqual(actions, [{ type: 'create-issue', file: 'a.test.ts', title: 'flake: a.test.ts', firstFailureMessage: '' }])
   })
 
   it('filters REGRESSION/INCONCLUSIVE files out and only plans actions for the FLAKY ones, preserving file order', () => {
@@ -227,9 +238,41 @@ describe('planIssueActions', () => {
   })
 })
 
+describe('buildCheckRunOutput', () => {
+  it('AC-9: titles the neutral check-run with the FLAKY count', () => {
+    assert.equal(buildCheckRunOutput(3).title, 'flake-report: 3 FLAKY')
+  })
+
+  it('points the summary at the artifact and the filed issues rather than restating the failure', () => {
+    const { summary } = buildCheckRunOutput(1)
+    assert.match(summary, /1 FLAKY/)
+    assert.match(summary, /flake-report-classification artifact/)
+    assert.match(summary, /flaky-test issue/)
+  })
+})
+
 describe('main() end-to-end via subprocess', () => {
   const scriptPath = fileURLToPath(new URL('./test-flake-report-issue.mjs', import.meta.url))
   const repoRoot = fileURLToPath(new URL('..', import.meta.url))
+
+  /** The one-FLAKY-file report every test below drives `main()` with — kept in one place so a report-shape change is one edit, not one per test. */
+  const FLAKY_REPORT = {
+    status: 'classified',
+    counts: { FLAKY: 1, REGRESSION: 0, INCONCLUSIVE: 0 },
+    files: [{ file: 'packages/api/src/foo.test.ts', classification: 'FLAKY', firstFailureMessage: 'boom' }],
+  }
+
+  /** Writes `FLAKY_REPORT` at the run-scoped path `main()` resolves from `CROWI_TEST_RUN_ID`, runs `fn({ runId, reportPath })`, and always removes it again. */
+  function withFlakyReport(label, fn) {
+    const runId = `test-issue-${label}-${process.pid}-${Date.now().toString(36)}`
+    const reportPath = resolveClassificationReportPath(runId)
+    writeFileSync(reportPath, JSON.stringify(FLAKY_REPORT))
+    try {
+      return fn({ runId, reportPath })
+    } finally {
+      rmSync(reportPath, { force: true })
+    }
+  }
 
   it('no-ops (exit 0, log only) when no classification report exists for the given run id', () => {
     const runId = `test-issue-noreport-${process.pid}-${Date.now().toString(36)}`
@@ -243,18 +286,7 @@ describe('main() end-to-end via subprocess', () => {
   })
 
   it('emits a ::notice:: annotation (no gh call) in annotate mode when the report has FLAKY files', () => {
-    const runId = `test-issue-annotate-${process.pid}-${Date.now().toString(36)}`
-    const reportPath = resolveClassificationReportPath(runId)
-    try {
-      writeFileSync(
-        reportPath,
-        JSON.stringify({
-          status: 'classified',
-          counts: { FLAKY: 1, REGRESSION: 0, INCONCLUSIVE: 0 },
-          files: [{ file: 'packages/api/src/foo.test.ts', classification: 'FLAKY', firstFailureMessage: 'boom' }],
-        }),
-      )
-
+    withFlakyReport('annotate', ({ runId }) => {
       const result = spawnSync('node', [scriptPath], {
         cwd: repoRoot,
         env: { ...process.env, CROWI_TEST_RUN_ID: runId, CROWI_FLAKE_ISSUE_MODE: 'annotate' },
@@ -262,10 +294,7 @@ describe('main() end-to-end via subprocess', () => {
       })
       assert.equal(result.status, 0)
       assert.match(result.stdout, /::notice::flake-report: 1 FLAKY — packages\/api\/src\/foo\.test\.ts/)
-    } finally {
-      rmSync(reportPath, { force: true })
-      assert.equal(existsSync(reportPath), false)
-    }
+    })
   })
 
   it('AC-4 fail-open: still exits 0 (and logs, never throws) when every `gh` call fails', () => {
@@ -281,27 +310,17 @@ describe('main() end-to-end via subprocess', () => {
     writeFileSync(fakeGhPath, '#!/bin/sh\n[ "$1" = "--version" ] && exit 0\n[ "$1" = "issue" ] && [ "$2" = "list" ] && echo "[]" && exit 0\nexit 1\n')
     chmodSync(fakeGhPath, 0o755)
 
-    const runId = `test-issue-ghfail-${process.pid}-${Date.now().toString(36)}`
-    const reportPath = resolveClassificationReportPath(runId)
     try {
-      writeFileSync(
-        reportPath,
-        JSON.stringify({
-          status: 'classified',
-          counts: { FLAKY: 1, REGRESSION: 0, INCONCLUSIVE: 0 },
-          files: [{ file: 'packages/api/src/foo.test.ts', classification: 'FLAKY', firstFailureMessage: 'boom' }],
-        }),
-      )
-
-      const result = spawnSync('node', [scriptPath], {
-        cwd: repoRoot,
-        env: { ...process.env, PATH: `${fakeBinDir}:${process.env.PATH}`, CROWI_TEST_RUN_ID: runId, CROWI_FLAKE_ISSUE_MODE: 'file', GITHUB_REPOSITORY: 'crowi/crowi' },
-        encoding: 'utf8',
+      withFlakyReport('ghfail', ({ runId }) => {
+        const result = spawnSync('node', [scriptPath], {
+          cwd: repoRoot,
+          env: { ...process.env, PATH: `${fakeBinDir}:${process.env.PATH}`, CROWI_TEST_RUN_ID: runId, CROWI_FLAKE_ISSUE_MODE: 'file', GITHUB_REPOSITORY: 'crowi/crowi' },
+          encoding: 'utf8',
+        })
+        assert.equal(result.status, 0, `expected exit 0 even though every gh call failed (stderr: ${result.stderr})`)
+        assert.match(result.stderr, /could not file an issue/)
       })
-      assert.equal(result.status, 0, `expected exit 0 even though every gh call failed (stderr: ${result.stderr})`)
-      assert.match(result.stderr, /could not file an issue/)
     } finally {
-      rmSync(reportPath, { force: true })
       rmSync(scratchDir, { recursive: true, force: true })
     }
   })
@@ -312,18 +331,7 @@ describe('main() end-to-end via subprocess', () => {
     // itself gets ENOENT. PATH is narrowed to just node's own directory
     // (rather than blanked) so the outer `spawnSync('node', ...)` can still
     // resolve `node` itself.
-    const runId = `test-issue-nogh-${process.pid}-${Date.now().toString(36)}`
-    const reportPath = resolveClassificationReportPath(runId)
-    try {
-      writeFileSync(
-        reportPath,
-        JSON.stringify({
-          status: 'classified',
-          counts: { FLAKY: 1, REGRESSION: 0, INCONCLUSIVE: 0 },
-          files: [{ file: 'packages/api/src/foo.test.ts', classification: 'FLAKY', firstFailureMessage: 'boom' }],
-        }),
-      )
-
+    withFlakyReport('nogh', ({ runId }) => {
       const result = spawnSync('node', [scriptPath], {
         cwd: repoRoot,
         env: { ...process.env, PATH: path.dirname(process.execPath), CROWI_TEST_RUN_ID: runId, CROWI_FLAKE_ISSUE_MODE: 'file', GITHUB_REPOSITORY: 'crowi/crowi' },
@@ -331,9 +339,7 @@ describe('main() end-to-end via subprocess', () => {
       })
       assert.equal(result.status, 0, `expected exit 0 (stderr: ${result.stderr})`)
       assert.match(result.stdout, /no-op: gh CLI not found on PATH/)
-    } finally {
-      rmSync(reportPath, { force: true })
-    }
+    })
   })
 
   /**
@@ -359,29 +365,19 @@ describe('main() end-to-end via subprocess', () => {
     )
     chmodSync(fakeGhPath, 0o755)
 
-    const runId = `test-issue-untrusted-list-${process.pid}-${Date.now().toString(36)}`
-    const reportPath = resolveClassificationReportPath(runId)
     try {
-      writeFileSync(
-        reportPath,
-        JSON.stringify({
-          status: 'classified',
-          counts: { FLAKY: 1, REGRESSION: 0, INCONCLUSIVE: 0 },
-          files: [{ file: 'packages/api/src/foo.test.ts', classification: 'FLAKY', firstFailureMessage: 'boom' }],
-        }),
-      )
-
-      const result = spawnSync('node', [scriptPath], {
-        cwd: repoRoot,
-        env: { ...process.env, PATH: `${fakeBinDir}:${process.env.PATH}`, CROWI_TEST_RUN_ID: runId, CROWI_FLAKE_ISSUE_MODE: 'file', GITHUB_REPOSITORY: 'crowi/crowi' },
-        encoding: 'utf8',
+      withFlakyReport('untrusted-list', ({ runId }) => {
+        const result = spawnSync('node', [scriptPath], {
+          cwd: repoRoot,
+          env: { ...process.env, PATH: `${fakeBinDir}:${process.env.PATH}`, CROWI_TEST_RUN_ID: runId, CROWI_FLAKE_ISSUE_MODE: 'file', GITHUB_REPOSITORY: 'crowi/crowi' },
+          encoding: 'utf8',
+        })
+        assert.equal(result.status, 0, `expected exit 0 even though the open flaky-test issue set could not be trusted (stderr: ${result.stderr})`)
+        assert.match(result.stdout, /no-op: could not confirm the open flaky-test issue set/)
+        const calls = existsSync(callLogPath) ? readFileSync(callLogPath, 'utf8') : ''
+        assert.equal(/^issue create/m.test(calls), false, `expected no "gh issue create" call, got calls:\n${calls}`)
       })
-      assert.equal(result.status, 0, `expected exit 0 even though the open flaky-test issue set could not be trusted (stderr: ${result.stderr})`)
-      assert.match(result.stdout, /no-op: could not confirm the open flaky-test issue set/)
-      const calls = existsSync(callLogPath) ? readFileSync(callLogPath, 'utf8') : ''
-      assert.equal(/^issue create/m.test(calls), false, `expected no "gh issue create" call, got calls:\n${calls}`)
     } finally {
-      rmSync(reportPath, { force: true })
       rmSync(scratchDir, { recursive: true, force: true })
     }
   }
