@@ -209,4 +209,39 @@ describe('computeRevisionRenderArtifactsAsync — mermaidRenderPending marker sc
     expect(result.renderedAst).toBe(storedAst);
     expect((result.renderedAst as { children: Array<{ type: string }> }).children[0].type).toBe('code');
   });
+
+  // feature-plugin-renderer-mermaid Phase 3 (spec §9): the PlantUML
+  // sanitizer swap + output class rename (`plantuml-embed` →
+  // `diagram-embed plantuml-embed`) bumped ONLY the plugin's own
+  // `cacheVersion` (a `PluginRenderCache`-lookup-only escape hatch) —
+  // `RENDERER_PIPELINE_VERSION` (this file's own `version` argument) was
+  // deliberately left untouched. A `Revision.renderedAst` written before
+  // this Phase therefore still embeds the OLD sanitizer's HTML string
+  // (old class, old regex-stripped output) verbatim; nothing re-renders
+  // it until the page is next saved. This pins that specific regression
+  // scenario, though the underlying mechanism (astIsFresh ⇒ verbatim
+  // stored-AST passthrough, no pipeline re-run) is already exercised
+  // generically above and in the `mermaidRenderPending` describe block.
+  it('a stored AST embedding legacy pre-Phase-3 PlantUML output (old sanitizer, old `plantuml-embed`-only class) is served byte-identical and never re-rendered', async () => {
+    const pageId = new Types.ObjectId().toHexString();
+    const legacyPlantumlHtml = '<div class="plantuml-embed"><svg><path d="M0 0 L1 1"/></svg></div>';
+    const storedAst = { type: 'root', children: [{ type: 'html', value: legacyPlantumlHtml }] };
+    const runRenderSpy = jest.spyOn(crowi.getRenderer(), 'runRender');
+    try {
+      const result = await computeRevisionRenderArtifactsAsync(
+        crowi,
+        COMPLETE_META,
+        storedAst,
+        'body unused on the fresh path',
+        TEST_ACTOR,
+        RENDERER_PIPELINE_VERSION, // unchanged by Phase 3 — this stays the "fresh" path
+        pageId,
+      );
+      expect(result.renderedAst).toBe(storedAst);
+      expect((result.renderedAst as { children: Array<{ value: string }> }).children[0].value).toBe(legacyPlantumlHtml);
+      expect(runRenderSpy).not.toHaveBeenCalled();
+    } finally {
+      runRenderSpy.mockRestore();
+    }
+  });
 });
