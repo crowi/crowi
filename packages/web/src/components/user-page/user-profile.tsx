@@ -6,7 +6,10 @@ import { UserAvatar } from '@/components/user-avatar';
 import type { UserPublic } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 
-export type UserProfileTab = 'pages' | 'bookmarks';
+// 'subpages' has no stat pill in the header (see the AC: the tab exists but
+// the profile stat row is unchanged) — it is only reachable by clicking the
+// footer tab itself, not via `onStatClick`.
+export type UserProfileTab = 'pages' | 'bookmarks' | 'subpages';
 
 interface UserProfileProps {
   user: UserPublic;
