@@ -144,3 +144,71 @@ export function useUserPagesInfinite(username: string, limit: number = 10) {
     enabled: !!username,
   });
 }
+
+/**
+ * Hook to fetch pages under `/user/<username>/` (path-rooted, fully
+ * recursive — distinct from `useUserPages`' creator-rooted listing).
+ *
+ * Two deliberate differences from the sibling `useUserBookmarks`/
+ * `useUserPages` above:
+ *
+ *   - `refetchOnMount: 'always'` — subpages membership/visibility can
+ *     change from ANY client (another browser, another user's rename /
+ *     grant change / delete), and there is no cross-client cache
+ *     invalidation channel (each browsing context owns its own
+ *     `QueryClient`). Re-opening the tab is the one moment we can cheaply
+ *     guarantee freshness, so it always refetches regardless of the 60s
+ *     default `staleTime` — see the spec's "タブの再オープンは常に
+ *     authoritative" design note.
+ *   - `queryFn` receives `{ signal }` and forwards it to `$get`'s `init`
+ *     so a react-query cancellation (e.g. rapid tab close/reopen) also
+ *     aborts the in-flight HTTP request. `fetchWithTimeout` already knows
+ *     how to compose an incoming signal with its own timeout controller
+ *     (`AbortSignal.any`), so this hook only needs to pass it through.
+ */
+export function useUserSubpages(username: string, params: PaginationRequest = { limit: 10, offset: 0 }) {
+  return useQuery({
+    queryKey: userPageKeys.subpagesDetail(username, params),
+    queryFn: async ({ signal }) => {
+      const response = await apiClientV2.user[':username'].subpages.$get(
+        { param: { username }, query: { limit: String(params.limit), offset: String(params.offset) } },
+        { init: { signal } },
+      );
+      if (response.ok) {
+        return response.json();
+      }
+      return userNotFound(response);
+    },
+    enabled: !!username,
+    refetchOnMount: 'always',
+  });
+}
+
+/**
+ * Hook to fetch `/user/<username>/` subpages with infinite scrolling. See
+ * {@link useUserSubpages} for the `refetchOnMount`/`signal` rationale.
+ */
+export function useUserSubpagesInfinite(username: string, limit: number = 10) {
+  return useInfiniteQuery({
+    queryKey: userPageKeys.subpagesInfinite(username, limit),
+    queryFn: async ({ pageParam = 0, signal }) => {
+      const response = await apiClientV2.user[':username'].subpages.$get(
+        { param: { username }, query: { limit: String(limit), offset: String(pageParam) } },
+        { init: { signal } },
+      );
+      if (response.ok) {
+        return response.json();
+      }
+      return userNotFound(response);
+    },
+    initialPageParam: 0,
+    getNextPageParam: (lastPage) => {
+      if (lastPage.pager.next !== null) {
+        return lastPage.pager.next;
+      }
+      return undefined;
+    },
+    enabled: !!username,
+    refetchOnMount: 'always',
+  });
+}

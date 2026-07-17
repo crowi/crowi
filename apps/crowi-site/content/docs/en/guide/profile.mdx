@@ -15,9 +15,20 @@ out as follows:
 - A **cover** section at the top — a coloured cover band with the
   user's avatar, display name, `@username`, introduction, and a pair
   of stat pills (created pages count, bookmarks count).
-- A pair of **tabs** below the cover:
-  - **Pages** — pages the user has recently created.
+- **Three tabs** below the cover:
+  - **Pages** — pages the user has **created**. A page shows up here as
+    long as this user created it, no matter where it lives (**creator-rooted**).
   - **Bookmarks** — pages the user has bookmarked.
+  - **Subpages** — every page that **actually exists under**
+    `/user/<username>/`, recursively across all depths, regardless of who
+    created it (**path-rooted**). This is a different set from the
+    "Pages" tab: a page another user created at, say,
+    `/user/<username>/project` shows up here but not under "Pages"; and a
+    page this user created outside `/user/<username>/` shows up under
+    "Pages" but not here. The tab shows a 10-item preview plus the total
+    count, with a "View all" link to a full listing that loads 30 at a
+    time. Only pages the viewer is allowed to see (following the same
+    grant rules as every other page listing) ever appear.
 
 In addition, by Crowi convention the path `/user/<username>` itself
 also works as a **wiki page**. If a page exists at this path, its body

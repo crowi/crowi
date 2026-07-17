@@ -615,6 +615,7 @@ const appAuthMeUserChain = new OpenAPIHono()
   .openapi(userRoutes.getUserPageRoute, (c) => c.json(stubUserPage, 200))
   .openapi(userRoutes.getUserBookmarksRoute, (c) => c.json(stubUserBookmarks, 200))
   .openapi(userRoutes.getUserPagesRoute, (c) => c.json(stubUserPages, 200))
+  .openapi(userRoutes.getUserSubpagesRoute, (c) => c.json(stubUserPages, 200))
   .openapi(userRoutes.listMembersRoute, (c) => c.json(stubListUsers, 200));
 
 // bookmark / backlink / comment / revision — 11 routes. Revision's

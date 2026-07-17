@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { ErrorAlert } from '@/components/ui/error-alert';
 import { NotFoundCard } from '@/components/ui/not-found-card';
-import { UserProfile, UserRecentPages, UserBookmarks, type UserProfileTab } from '@/components/user-page';
+import { UserProfile, UserRecentPages, UserBookmarks, UserSubpages, type UserProfileTab } from '@/components/user-page';
 import { PageHeader, PageContent } from '@/components/page-view';
 import { useUserPage } from '@/lib/use-user-page';
 import { usePage } from '@/lib/use-page';
@@ -98,6 +98,7 @@ export default function UserPage({ params }: UserPageProps) {
           <TabsList className="w-full justify-start">
             <TabsTrigger value="pages">{m['user_page.tab_pages']()}</TabsTrigger>
             <TabsTrigger value="bookmarks">{m['user_page.tab_bookmarks']()}</TabsTrigger>
+            <TabsTrigger value="subpages">{m['user_page.tab_subpages']()}</TabsTrigger>
           </TabsList>
 
           <TabsContent value="pages" className="mt-4">
@@ -106,6 +107,10 @@ export default function UserPage({ params }: UserPageProps) {
 
           <TabsContent value="bookmarks" className="mt-4">
             <UserBookmarks username={username} preview previewLimit={10} />
+          </TabsContent>
+
+          <TabsContent value="subpages" className="mt-4">
+            <UserSubpages username={username} preview previewLimit={10} />
           </TabsContent>
         </Tabs>
       </div>

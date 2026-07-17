@@ -1,12 +1,13 @@
 /**
  * RFC-0006 Phase 4 Batch 2 — `user` resource Hono port.
  *
- * Replaces `packages/api/src/routes/ts-rest/user.ts`. Three endpoints,
+ * Replaces `packages/api/src/routes/ts-rest/user.ts`. Four endpoints,
  * all behind `createJwtAuth(crowi)` applied broadly to `/user/*`:
  *
  *   GET /user/:username             — profile + recent activity
  *   GET /user/:username/bookmarks   — paginated bookmarks
- *   GET /user/:username/pages       — paginated created pages
+ *   GET /user/:username/pages       — paginated created (creator-rooted) pages
+ *   GET /user/:username/subpages    — paginated /user/:username/* pages (path-rooted)
  *
  * Wire-format parity is preserved. The legacy handlers checked `req.user`
  * manually and returned `AUTHENTICATION_REQUIRED`; the middleware does
@@ -17,11 +18,14 @@
  * /user/<username>/..., so hiding only the profile is a broken link, not
  * privacy.
  *
- * Both pagination endpoints respect the same `visiblePageStatusOr` +
- * `GRANT_PUBLIC` policy as the ts-rest version when viewing another
- * user's pages.
+ * The `pages` (creator-rooted) and `subpages` (path-rooted) endpoints are
+ * deliberately different sets: `pages` is "pages this user wrote" (any
+ * path); `subpages` is "pages that live under /user/<username>/" (any
+ * creator). Both respect the same `visiblePageStatusOr` + grant policy —
+ * see `findSubpagesByUserNamespace` (`src/models/page.ts`) for the
+ * subpages-specific query.
  */
-import { getUserBookmarksRoute, getUserPageRoute, getUserPagesRoute, listMembersRoute } from '@crowi/api-contract';
+import { getUserBookmarksRoute, getUserPageRoute, getUserPagesRoute, getUserSubpagesRoute, listMembersRoute } from '@crowi/api-contract';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import Debug from 'debug';
 import type { Types } from 'mongoose';
@@ -93,6 +97,19 @@ export const registerUserRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
   applyScope(app, getUserBookmarksRoute, 'profile:read');
   applyScope(app, getUserPagesRoute, 'profile:read');
   applyScope(app, listMembersRoute, 'profile:read');
+  // `getUserSubpagesRoute` requires BOTH scopes (AND): `profile:read`
+  // because resolving `{username}` is a profile-namespace lookup (same as
+  // the three routes above), and `pages:read` because the payload is a
+  // listing of page resources (same scope every other page-listing route
+  // requires). Two `applyScope` calls on the SAME route register two
+  // independent `requireScope` middlewares on the same method+routing-path;
+  // Hono runs method-scoped middleware in registration order via `next()`,
+  // so either guard failing short-circuits before the other guard / the
+  // handler runs — i.e. the stack is AND, not OR. This relies on
+  // `applyScope` registering on `route.getRoutingPath()` (not the OpenAPI
+  // `{username}` form) so it actually matches the real request path.
+  applyScope(app, getUserSubpagesRoute, 'profile:read');
+  applyScope(app, getUserSubpagesRoute, 'pages:read');
 
   return app
     .openapi(getUserPageRoute, async (c) => {
@@ -216,6 +233,43 @@ export const registerUserRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
       } catch (err) {
         const error = err as Error;
         debug('Error fetching user pages:', error.message, error.stack);
+        return c.json(INTERNAL_ERROR_BODY, 500);
+      }
+    })
+    .openapi(getUserSubpagesRoute, async (c) => {
+      const currentUser = c.get('user');
+      const { username } = c.req.valid('param');
+      const { limit, offset } = c.req.valid('query');
+
+      debug('getUserSubpages called with:', { username, limit, offset, currentUserId: currentUser._id });
+
+      try {
+        const targetUser = await User.findUserByUsername(username);
+        if (!targetUser || !isViewableUserStatus(targetUser.status)) {
+          return c.json(USER_NOT_FOUND_BODY, 404);
+        }
+
+        // Canonical prefix comes from the RESOLVED `targetUser.username`,
+        // not the raw route param, so casing/normalization quirks in the
+        // URL never diverge from the stored path prefix.
+        const prefix = `/user/${targetUser.username}/`;
+        const { rawPages, total } = await Page.findSubpagesByUserNamespace(prefix, currentUser._id, { limit, offset });
+        const pages = (await Page.populate(rawPages, [{ path: 'creator' }, { path: 'lastUpdateUser' }])) as unknown as PageDocument[];
+
+        const prev = offset > 0 ? Math.max(0, offset - limit) : null;
+        const next = offset + limit < total ? offset + limit : null;
+
+        return c.json(
+          {
+            pages: pages.map((page) => pageToResponse(page)),
+            pager: { prev, next, offset },
+            total,
+          },
+          200,
+        );
+      } catch (err) {
+        const error = err as Error;
+        debug('Error fetching user subpages:', error.message, error.stack);
         return c.json(INTERNAL_ERROR_BODY, 500);
       }
     })

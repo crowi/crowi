@@ -135,8 +135,13 @@ export const registerDraftRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(ap
         const occupied = await resolveOccupied();
         if (occupied) return occupied;
 
+        // Tracked outside the `try` so the `catch` block can tell "Page.create
+        // itself failed" (newPage stays undefined) apart from "Page.create
+        // succeeded but the seed revision failed" (newPage is set) — only the
+        // latter needs the compensating delete below.
+        let newPage: PageDocument | undefined;
         try {
-          const newPage = await Page.create({
+          newPage = await Page.create({
             path,
             creator: user._id,
             lastUpdateUser: user._id,
@@ -165,6 +170,28 @@ export const registerDraftRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(ap
             const raced = await resolveOccupied();
             if (raced) return raced;
           }
+
+          // The Page document was already created but the seed revision
+          // failed to save (`Revision.prepareRevision` / `Page.pushRevision`
+          // threw) — without this, a `status: 'draft'` Page with no revision
+          // is left behind forever: it's invisible in the editor (no body to
+          // load) but visible to its "creator" in any path-rooted listing
+          // that includes drafts (e.g. the Subpages tab), as a permanently
+          // broken row. Best-effort: a delete failure must not replace the
+          // original 400 with a different error, so it's only logged.
+          if (newPage) {
+            try {
+              await Page.deleteOne({ _id: newPage._id });
+            } catch (cleanupErr) {
+              debug(
+                'createDraft: failed to compensate-delete orphaned draft page %s (%s): %s',
+                newPage._id.toString(),
+                path,
+                (cleanupErr as Error)?.message ?? cleanupErr,
+              );
+            }
+          }
+
           debug('createDraft failed:', (err as Error).message);
           return c.json({ error: 'invalid_path' as const, message: (err as Error).message || 'Failed to create draft.' }, 400);
         }

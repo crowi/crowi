@@ -1,4 +1,5 @@
 import type { GetPageRequest, PaginationRequest } from '@crowi/api-contract';
+import type { QueryClient } from '@tanstack/react-query';
 import type { UsePageListParams } from './use-page-list';
 
 /**
@@ -66,6 +67,24 @@ export const userPageKeys = {
   pagesAll: (username: string) => ['user', username, 'pages'] as const,
   pagesDetail: (username: string, params: PaginationRequest) => ['user', username, 'pages', params] as const,
   pagesInfinite: (username: string, limit: number) => ['user', username, 'pages', 'infinite', limit] as const,
+  // `subpages` — the path-rooted `/user/<username>/*` listing (`GET
+  // /user/{username}/subpages`), distinct from the creator-rooted `pages`
+  // family above. Same `{ all, detail, infinite, isXQuery }` shape.
+  subpagesAll: (username: string) => ['user', username, 'subpages'] as const,
+  subpagesDetail: (username: string, params: PaginationRequest) => ['user', username, 'subpages', params] as const,
+  subpagesInfinite: (username: string, limit: number) => ['user', username, 'subpages', 'infinite', limit] as const,
   isBookmarksQuery: (queryKey: readonly unknown[]): boolean => queryKey[0] === 'user' && queryKey[2] === 'bookmarks',
   isPagesQuery: (queryKey: readonly unknown[]): boolean => queryKey[0] === 'user' && queryKey[2] === 'pages',
+  isSubpagesQuery: (queryKey: readonly unknown[]): boolean => queryKey[0] === 'user' && queryKey[2] === 'subpages',
 };
+
+/**
+ * Invalidate every mounted Subpages tab (`/user/<username>/subpages`) query
+ * regardless of username. Shared by every mutation that can change a page's
+ * `/user/<username>/` namespace membership or visibility — draft
+ * create/cancel, grant change, delete, restore, rename / rename-subtree —
+ * see `use-page-mutations.ts` and `use-drafts.ts`.
+ */
+export function invalidateUserSubpagesQueries(queryClient: QueryClient): void {
+  queryClient.invalidateQueries({ predicate: (query) => userPageKeys.isSubpagesQuery(query.queryKey) });
+}

@@ -1,9 +1,9 @@
 'use client';
 
+import type { DraftConflictOwner, DraftSummary, ListDraftsResponse } from '@crowi/api-contract';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClientV2 } from './api-client';
-import { PAGE_LIST_FAMILY_ROOT } from './page-query-keys';
-import type { DraftConflictOwner, DraftSummary, ListDraftsResponse } from '@crowi/api-contract';
+import { invalidateUserSubpagesQueries, PAGE_LIST_FAMILY_ROOT } from './page-query-keys';
 
 /**
  * RFC-0004 — react-query bindings for the drafts API
@@ -108,6 +108,13 @@ export function useCreateDraft() {
       // this, returning to an already-cached parent omits the just-created
       // page until its 60s staleTime lapses.
       queryClient.invalidateQueries({ queryKey: PAGE_LIST_FAMILY_ROOT });
+      // A draft under /user/<username>/ is visible to its own author
+      // (`visiblePageStatusOr`'s draft clause) in the Subpages tab — same
+      // "same browsing context, immediate reflection" rationale as above.
+      // Broad (any username) predicate, matching `isPagesQuery`/
+      // `isBookmarksQuery`'s existing invalidation shape — a query key
+      // can't express "any username in the middle of the array".
+      invalidateUserSubpagesQueries(queryClient);
     },
   });
 }
@@ -144,6 +151,8 @@ export function useCancelDraft() {
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: draftsKeys.all });
+      // A cancelled draft must drop out of /user/<username>/ subpages too.
+      invalidateUserSubpagesQueries(queryClient);
     },
   });
 }
