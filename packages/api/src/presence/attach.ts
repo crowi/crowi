@@ -246,7 +246,7 @@ export async function attachPresenceServer(httpServer: HttpServer, crowi: Crowi)
   };
 
   /**
-   * `attachWsNamespace`'s `authenticate` callback: token verify + path
+   * `attachWsNamespace`'s `resolveContext` callback: token verify + path
    * check + permission/identity re-check (former steps 1-4 of
    * `wireConnection`). A `null` return means the socket was already
    * closed with the appropriate code — the primitive sends none of its
@@ -401,7 +401,7 @@ export async function attachPresenceServer(httpServer: HttpServer, crowi: Crowi)
 
   const wsNamespace = attachWsNamespace<PresenceConnection>(httpServer, {
     path: PRESENCE_PATH,
-    authenticate,
+    resolveContext: authenticate,
     onOpen: (ws, conn) => {
       void openConnection(ws, conn);
     },

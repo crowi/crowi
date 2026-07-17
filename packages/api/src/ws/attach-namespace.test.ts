@@ -1,5 +1,5 @@
-import http from 'node:http';
 import type { IncomingMessage } from 'node:http';
+import http from 'node:http';
 import { AddressInfo } from 'node:net';
 import WebSocket, { WebSocketServer } from 'ws';
 import { attachWsNamespace } from './attach-namespace';
@@ -12,17 +12,18 @@ import { attachWsNamespace } from './attach-namespace';
  * Coverage, per the task's AC:
  *   - AC-1: upgrade filtering (bare/prefixed path accepted, non-match
  *     falls through to a sibling handler rather than being destroyed).
- *   - AC-3: the "register close/error before an async authenticate" race
- *     fix — BOTH listeners must already be attached before `authenticate`
- *     is even called (not just checked afterwards via `ws.readyState`), a
- *     socket that disconnects mid-authenticate must never reach `onOpen`,
- *     and an `'error'` event during that window must not crash the process.
+ *   - AC-3: the "register close/error before the async resolveContext await"
+ *     race fix — BOTH listeners must already be attached before
+ *     `resolveContext` is even called (not just checked afterwards via
+ *     `ws.readyState`), a socket that disconnects mid-resolve must never
+ *     reach `onOpen`, and an `'error'` event during that window must not
+ *     crash the process.
  *   - AC-1 / AC-4: the shutdown drain sequence (politeClose, once per
  *     tracked connection → wait `drainMs` → afterDrain → force-terminate
  *     stragglers → `wss.close()`), its idempotency, and that an error
  *     thrown by any namespace-supplied step (politeClose / terminate /
  *     wss.close) is caught rather than aborting the rest of the sequence.
- *   - the `authenticate`-omitted path (collab's shape): every upgrade is
+ *   - the identity `resolveContext` path (collab's shape): every upgrade is
  *     accepted immediately with the raw `IncomingMessage` as context.
  */
 
@@ -97,6 +98,7 @@ describe('attachWsNamespace — upgrade filtering (AC-1)', () => {
 
     attachWsNamespace<IncomingMessage>(server, {
       path: '/foo',
+      resolveContext: async (request) => request,
       onOpen: (ws) => {
         opened.push('foo');
         ws.close(1000);
@@ -149,7 +151,7 @@ describe('attachWsNamespace — authenticate race fix (AC-3)', () => {
 
     attachWsNamespace<{ id: string }>(server, {
       path: '/slow',
-      authenticate: async () => pending,
+      resolveContext: async () => pending,
       onOpen,
       onClose,
       politeClose: () => {},
@@ -189,7 +191,7 @@ describe('attachWsNamespace — authenticate race fix (AC-3)', () => {
 
     attachWsNamespace<{ id: string }>(server, {
       path: '/erroring',
-      authenticate: async (_request, ws) => {
+      resolveContext: async (_request, ws) => {
         capturedWs = ws as unknown as WebSocket;
         return pending;
       },
@@ -225,7 +227,7 @@ describe('attachWsNamespace — authenticate race fix (AC-3)', () => {
 
     attachWsNamespace<{ id: string }>(server, {
       path: '/close-order',
-      authenticate: async (_request, ws) => {
+      resolveContext: async (_request, ws) => {
         capturedWs = ws as unknown as WebSocket;
         // The primitive must have already attached its own `close`
         // listener by the time `authenticate` starts running — this is
@@ -256,7 +258,7 @@ describe('attachWsNamespace — authenticate race fix (AC-3)', () => {
 
     attachWsNamespace<{ id: string }>(server, {
       path: '/reject',
-      authenticate: async (_request, ws) => {
+      resolveContext: async (_request, ws) => {
         ws.close(4401, 'nope');
         return null;
       },
@@ -279,7 +281,7 @@ describe('attachWsNamespace — authenticate race fix (AC-3)', () => {
 
     attachWsNamespace<{ id: string }>(server, {
       path: '/ok',
-      authenticate: async () => ({ id: 'context-value' }),
+      resolveContext: async () => ({ id: 'context-value' }),
       onOpen,
       onClose,
       politeClose: () => {},
@@ -306,13 +308,15 @@ describe('attachWsNamespace — authenticate race fix (AC-3)', () => {
   });
 });
 
-describe('attachWsNamespace — authenticate omitted (collab shape)', () => {
+describe('attachWsNamespace — identity resolveContext (collab shape)', () => {
   it('accepts every upgrade immediately with the raw IncomingMessage as context', async () => {
     const server = http.createServer();
     const seenUrls: string[] = [];
 
     attachWsNamespace<IncomingMessage>(server, {
       path: '/noauth',
+      // collab's shape: resolveContext is the identity — no attach-time gate.
+      resolveContext: async (request) => request,
       onOpen: (ws, request) => {
         seenUrls.push(request.url ?? '');
         ws.close(1000);
@@ -350,7 +354,7 @@ describe('attachWsNamespace — shutdown drain sequence', () => {
 
     const wsNamespace = attachWsNamespace<undefined>(server, {
       path: '/drain',
-      authenticate: async () => undefined,
+      resolveContext: async () => undefined,
       onOpen: () => {
         order.push('onOpen');
       },
@@ -395,6 +399,7 @@ describe('attachWsNamespace — shutdown drain sequence', () => {
     const politeCloseSpy = jest.fn();
     const wsNamespace = attachWsNamespace<undefined>(server, {
       path: '/empty',
+      resolveContext: async () => undefined,
       onOpen: () => {},
       politeClose: politeCloseSpy,
       drainMs: 5000, // would make the test hang if the "skip when empty" path regressed
@@ -415,6 +420,7 @@ describe('attachWsNamespace — shutdown drain sequence', () => {
     const server = http.createServer();
     const wsNamespace = attachWsNamespace<undefined>(server, {
       path: '/after-shutdown',
+      resolveContext: async () => undefined,
       onOpen: () => {},
       politeClose: () => {},
     });
@@ -432,6 +438,7 @@ describe('attachWsNamespace — shutdown drain sequence', () => {
     const closeSpy = jest.spyOn(WebSocketServer.prototype, 'close');
     const wsNamespace = attachWsNamespace<undefined>(server, {
       path: '/wss-close',
+      resolveContext: async () => undefined,
       onOpen: () => {},
       politeClose: () => {},
     });
@@ -451,7 +458,7 @@ describe('attachWsNamespace — shutdown drain sequence', () => {
 
     const wsNamespace = attachWsNamespace<undefined>(server, {
       path: '/shutdown-errors',
-      authenticate: async () => undefined,
+      resolveContext: async () => undefined,
       onOpen: (ws) => {
         serverWs = ws as unknown as WebSocket;
       },

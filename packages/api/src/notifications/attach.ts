@@ -256,7 +256,7 @@ export async function attachNotificationsServer(httpServer: HttpServer, crowi: C
   };
 
   /**
-   * `attachWsNamespace`'s `authenticate` callback: token verify + path
+   * `attachWsNamespace`'s `resolveContext` callback: token verify + path
    * check (former steps 1-2 of `wireConnection`). A `null` return means
    * the socket was already closed with the appropriate code — the
    * primitive sends none of its own.
@@ -362,7 +362,7 @@ export async function attachNotificationsServer(httpServer: HttpServer, crowi: C
 
   const wsNamespace = attachWsNamespace<NotificationsConnection>(httpServer, {
     path: NOTIFICATIONS_PATH,
-    authenticate,
+    resolveContext: authenticate,
     onOpen: (_ws, conn) => {
       void openConnection(conn);
     },

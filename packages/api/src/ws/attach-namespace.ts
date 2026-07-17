@@ -51,29 +51,29 @@ export interface AttachWsNamespaceOptions<TContext> {
   path: string;
   /**
    * Resolve the per-connection context (e.g. verified token claims +
-   * whatever the namespace needs for its business logic). Return `null`
-   * to reject the connection — sending a close frame with the
-   * appropriate code/reason is the CALLER's responsibility (`ws` is
-   * passed in exactly so `authenticate` can call `ws.close(...)` itself;
-   * namespaces disagree on which code means what, so the primitive
-   * never picks one on their behalf).
+   * whatever the namespace needs for its business logic) from the upgrade
+   * request. Return `null` to reject the connection — sending a close frame
+   * with the appropriate code/reason is the CALLER's responsibility (`ws`
+   * is passed in exactly so the resolver can call `ws.close(...)` itself;
+   * namespaces disagree on which code means what, so the primitive never
+   * picks one on their behalf).
    *
-   * Omit this entirely for a namespace whose auth is handled downstream
-   * of the raw socket (collab: Hocuspocus's own `onAuthenticate` hook,
-   * invoked from inside `onOpen`'s `handleMessage` wiring) — every
-   * upgrade is then accepted immediately with `context` set to the raw
-   * `IncomingMessage`.
+   * A namespace whose auth is handled downstream of the raw socket (collab:
+   * Hocuspocus's own `onAuthenticate` hook, invoked from inside `onOpen`'s
+   * `handleMessage` wiring) accepts every upgrade by returning the request
+   * itself — `async (request) => request` with `TContext = IncomingMessage`
+   * — rather than gating here.
    *
    * The primitive registers the socket's `close` / `error` listeners
-   * BEFORE calling `authenticate`, and re-checks `ws.readyState` the
-   * moment `authenticate` resolves — so a socket that disconnects mid-
-   * await is never handed to `onOpen` (AC-3's race fix, generalized
-   * once here instead of copy-pasted per namespace; see
-   * `presence/attach.ts`'s original `wireConnection` doc comment for
-   * the phantom-connection failure mode this prevents).
+   * BEFORE calling `resolveContext`, and re-checks `ws.readyState` the
+   * moment it resolves — so a socket that disconnects mid-await is never
+   * handed to `onOpen` (AC-3's race fix, generalized once here instead of
+   * copy-pasted per namespace; see `presence/attach.ts`'s original
+   * `wireConnection` doc comment for the phantom-connection failure mode
+   * this prevents).
    */
-  authenticate?: (request: IncomingMessage, ws: WsWebSocket) => Promise<TContext | null>;
-  /** Called once a connection is accepted (authenticated, and still open at that point). */
+  resolveContext: (request: IncomingMessage, ws: WsWebSocket) => Promise<TContext | null>;
+  /** Called once a connection is accepted (context resolved, and still open at that point). */
   onOpen: (ws: WsWebSocket, context: TContext) => void;
   /** Called when an accepted connection's socket closes. */
   onClose?: (context: TContext) => void;
@@ -118,8 +118,8 @@ export interface AttachedWsNamespace {
  * What this owns:
  *   - upgrade filtering (bare/prefixed path) + `WebSocketServer({
  *     noServer: true })` + `httpServer.on('upgrade', ...)` registration.
- *   - the "register close/error before an async authenticate" race fix
- *     (AC-3), in one place.
+ *   - the "register close/error before the async resolveContext await"
+ *     race fix (AC-3), in one place.
  *   - a generic `error` listener so a single bad socket never crashes
  *     the process (every consumer previously re-implemented this
  *     identically).
@@ -136,7 +136,7 @@ export interface AttachedWsNamespace {
  * its Redis subscriber after).
  */
 export function attachWsNamespace<TContext>(httpServer: HttpServer, options: AttachWsNamespaceOptions<TContext>): AttachedWsNamespace {
-  const { path, authenticate, onOpen, onClose, politeClose, afterDrain, drainMs = DEFAULT_DRAIN_MS } = options;
+  const { path, resolveContext, onOpen, onClose, politeClose, afterDrain, drainMs = DEFAULT_DRAIN_MS } = options;
 
   // `noServer: true` — the upgrade handshake is owned by the api process;
   // we forward only `${path}` / `${path}/*` upgrades here.
@@ -150,17 +150,17 @@ export function attachWsNamespace<TContext>(httpServer: HttpServer, options: Att
   const connections = new Map<WsWebSocket, TContext>();
 
   const wireConnection = async (ws: WsWebSocket, request: IncomingMessage): Promise<void> => {
-    // Both `close` and `error` are registered BEFORE `authenticate`
-    // runs (AC-3): (a) an `error` event during the auth round-trip
+    // Both `close` and `error` are registered BEFORE `resolveContext`
+    // runs (AC-3): (a) an `error` event during the resolve round-trip
     // would otherwise crash the process (Node throws on an `'error'`
     // emit with zero listeners); (b) a `close` that fires mid-await
     // must be observed even though the "real" per-connection close
     // handler (the one that cleans up `connections` + calls
     // `onClose`) only gets attached once the connection is actually
-    // accepted below — a listener attached AFTER `authenticate`
+    // accepted below — a listener attached AFTER `resolveContext`
     // resolves would never see a `close` that already fired during
     // the await. `closed` is set by this early listener and
-    // re-checked the moment `authenticate` settles, so a socket that
+    // re-checked the moment `resolveContext` settles, so a socket that
     // disconnects mid-await is never handed to `onOpen` (see
     // `presence/attach.ts`'s original `wireConnection` doc comment
     // for the phantom-connection failure mode this prevents).
@@ -172,13 +172,13 @@ export function attachWsNamespace<TContext>(httpServer: HttpServer, options: Att
       console.error(`[crowi:ws${path}] websocket error`, err);
     });
 
-    const context: TContext | null = authenticate ? await authenticate(request, ws) : (request as unknown as TContext);
+    const context = await resolveContext(request, ws);
     if (context === null) {
       // Rejected — the caller already sent its own close frame/code.
       return;
     }
     if (closed || ws.readyState !== ws.OPEN) {
-      // Disconnected while `authenticate` was resolving — do not open.
+      // Disconnected while `resolveContext` was resolving — do not open.
       return;
     }
 

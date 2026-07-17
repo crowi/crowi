@@ -280,10 +280,11 @@ export async function attachCollabServer(httpServer: HttpServer, crowi: Crowi): 
   });
 
   /**
-   * `attachWsNamespace`'s `onOpen` — collab has no `authenticate` step
-   * (Hocuspocus's own `onAuthenticate` hook does auth downstream, from
-   * inside `handleMessage`), so the primitive hands `onOpen` the raw
-   * `IncomingMessage` as its context and calls it immediately. Wires one
+   * `attachWsNamespace`'s `onOpen` — collab's `resolveContext` is the
+   * identity (no attach-time auth; Hocuspocus's own `onAuthenticate` hook
+   * does auth downstream, from inside `handleMessage`), so the primitive
+   * hands `onOpen` the raw `IncomingMessage` as its context and calls it
+   * immediately. Wires one
    * `ws.WebSocket` to its Hocuspocus `ClientConnection`. Hocuspocus
    * delivers events into the connection via `handleMessage` /
    * `handleClose` — when running through the `Server` wrapper (crossws)
@@ -318,8 +319,11 @@ export async function attachCollabServer(httpServer: HttpServer, crowi: Crowi): 
 
   const wsNamespace = attachWsNamespace<IncomingMessage>(httpServer, {
     path: COLLAB_PATH,
-    // No `authenticate` — Hocuspocus owns auth via its own
-    // `onAuthenticate` hook, not at attach time.
+    // Identity resolver — collab does no attach-time auth (Hocuspocus owns
+    // it via its own `onAuthenticate` hook, invoked downstream from
+    // `onOpen`), so every upgrade is accepted with the raw request as its
+    // context.
+    resolveContext: async (request) => request,
     onOpen,
     // Ask Hocuspocus to close connections politely. The primitive calls
     // this once per currently-open connection, but `closeConnections()`
