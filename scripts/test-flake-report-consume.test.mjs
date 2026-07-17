@@ -428,10 +428,20 @@ describe('main() cancellation mid solo-rerun (real subprocess + real SIGTERM —
 
     try {
       await new Promise((resolve, reject) => {
+        // Genuine-failure backstop only, NOT a pacing window: everything this
+        // test waits for is event-driven (the stderr marker triggers the
+        // SIGTERM, the child's own `exit` resolves), so this timer exists
+        // solely to convert a truly-hung child into a failure instead of
+        // hanging `node --test` (which has no per-test timeout) forever. It
+        // must therefore be sized orders of magnitude above any slow-but-
+        // correct run: at 10s it flaked on a loaded CI runner where node
+        // startup + script import alone blew the window (run 29601027804 —
+        // the same fixed-deadline race class as #917, in the flake pipeline's
+        // own test).
         const hardTimeout = setTimeout(() => {
           child.kill('SIGKILL')
           reject(new Error(`consumer subprocess did not exit after SIGTERM within this test's own safety timeout (stderr so far: ${stderrSoFar})`))
-        }, 10_000)
+        }, 120_000)
         child.once('exit', () => {
           clearTimeout(hardTimeout)
           resolve()
