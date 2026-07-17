@@ -430,6 +430,8 @@
   "edit.attach_save_first": "添付するには先にページを保存してください",
   "edit.attach_too_large": "ファイルサイズが {limit} の上限を超えています",
   "edit.attach_failed": "ファイルの添付に失敗しました",
+  "edit.link_card_convert_to_card": "カードに変換",
+  "edit.link_card_revert_to_link": "リンクに戻す",
   "edit.tab_editor": "エディタ",
   "edit.tab_preview": "プレビュー",
   "edit.preview_placeholder": "プレビュー",

@@ -430,6 +430,8 @@
   "edit.attach_save_first": "Save the page first to enable attachments",
   "edit.attach_too_large": "File is larger than the {limit} limit",
   "edit.attach_failed": "Failed to attach file",
+  "edit.link_card_convert_to_card": "Convert to card",
+  "edit.link_card_revert_to_link": "Convert to link",
   "edit.tab_editor": "Editor",
   "edit.tab_preview": "Preview",
   "edit.preview_placeholder": "Preview",

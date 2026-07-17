@@ -6,6 +6,7 @@ import { EditorView, keymap } from '@codemirror/view';
 import { autocompleteExtension } from './autocomplete-extension';
 import { dropHandler } from './drop-handler';
 import { imageAffordanceExtension } from './image-affordance-extension';
+import { linkCardAffordanceExtension } from './link-card-affordance-extension';
 import { listKeymap } from './list-keymap';
 import { pasteHandler } from './paste-handler';
 
@@ -107,6 +108,11 @@ export interface BuildExtensionsProps {
  *    editor get it without a new prop; it reads `EditorState.readOnly`
  *    itself (same source as `dropHandler`'s suppression), so ordering
  *    relative to the `readonly` facet below is immaterial.
+ *  - `linkCardAffordanceExtension()` — the bare-URL <-> `@[card](url)`
+ *    conversion tooltip. Same built-in / always-on / self-gating-on-
+ *    readonly pattern as `imageAffordanceExtension()` immediately
+ *    above; ordering between the two is immaterial (they never target
+ *    overlapping syntax spans).
  *  - `extraExtensions` last so caller-supplied extensions win on
  *    precedence ties (CodeMirror layers later extensions on top).
  */
@@ -146,6 +152,10 @@ export function buildExtensions(props: BuildExtensionsProps): Extension[] {
     // `dropHandler`'s pattern, so there's no bare-mount case it needs
     // to be excluded from).
     imageAffordanceExtension(),
+    // Link-card conversion affordance (bare URL <-> `@[card](url)`) —
+    // same "always on, read-only-aware on its own" pattern as
+    // `imageAffordanceExtension()` immediately above.
+    linkCardAffordanceExtension(),
     // RFC-0003 Phase 7: skip the built-in undo stack + its keymap when
     // a Yjs `UndoManager` is taking over via `extraExtensions`. The
     // `defaultKeymap` is kept (it carries cursor / selection / line
