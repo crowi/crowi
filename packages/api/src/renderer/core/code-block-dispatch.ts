@@ -1,8 +1,17 @@
 import { createHash } from 'node:crypto';
 import type { Code, Html, Root, RootContent } from 'mdast';
 import type { CodeBlockInfo, CodeBlockRenderer, EmbedFragment, EmbedInput, EmbedRenderer, RenderContext, RenderResult } from '@crowi/plugin-api';
-import { cachedRender, cachedRenderOrPending, dispatchLimitPlaceholder, type MongoCacheStorage, scopeForPlugin } from '../cache';
+import {
+  cachedRender,
+  cachedRenderOrPending,
+  dispatchLimitPlaceholder,
+  errorPlaceholder,
+  type MongoCacheStorage,
+  normalizeRenderResult,
+  scopeForPlugin,
+} from '../cache';
 import { createAuthContextStub, type RendererRegistryImpl } from '../registry';
+import { acquireRenderSlot, type RenderSlotTicket } from './render-admission';
 
 /**
  * feature-plugin-renderer-mermaid spec §5 classification C / §6 — max
@@ -108,6 +117,184 @@ export const makeCodeBlockDispatch =
     }
   };
 
+export type PreviewCodeBlockDispatchDeps = Pick<CodeBlockDispatchDeps, 'cache'>;
+
+/**
+ * feature-plugin-renderer-mermaid spec §7 items 2-6 — the page-less
+ * (editor live-preview) sibling of `makeCodeBlockDispatch`. Reuses
+ * `collectCandidates` / `walkBlocks` / `groupByParent` UNMODIFIED (the
+ * classification-C dispatch cap they already enforce applies uniformly
+ * regardless of `pageId`, spec §6), but only dispatches candidates whose
+ * registration opts into `previewPolicy: 'server-render'` — every other
+ * registration (PlantUML, and any future default-policy
+ * `CodeBlockRenderer`) is left exactly as `makeCodeBlockDispatch` would
+ * have found it: a bare `code` node, matching today's preview behaviour.
+ *
+ * Never touches `cachedRender` / `cachedRenderOrPending` — each
+ * server-render candidate goes through `renderCodeBlockForPreview`
+ * instead (`../cache`), so no `PluginRenderCache` row is ever written
+ * for preview content, and no `pending`-marker bookkeeping applies
+ * (nothing here is ever retried on a later read — every preview call is
+ * a fresh one-shot render of the caller's current draft).
+ */
+export const makePreviewCodeBlockDispatch =
+  (registry: RendererRegistryImpl, ctx: RenderContext, deps: PreviewCodeBlockDispatchDeps) =>
+  async (tree: Root): Promise<void> => {
+    if (!registry.hasCodeBlockRenderers()) return;
+    const candidates = collectCandidates(tree, registry).filter(
+      (candidate) => registry.getCodeBlockRenderer(candidate.lang)?.renderer.previewPolicy === 'server-render',
+    );
+    if (candidates.length === 0) return;
+
+    await Promise.all(
+      candidates.map(async (candidate) => {
+        const registration = registry.getCodeBlockRenderer(candidate.lang);
+        if (!registration) return; // defensive — the filter above already did this same lookup
+        if (candidate.overDispatchLimit) {
+          // Classification C (spec §5/§6) — same fixed placeholder, and
+          // the same "never touches render()/acquireRenderSlot" guarantee,
+          // as the save path's over-limit candidates.
+          candidate.replacementHtml = dispatchLimitPlaceholder(MAX_ADMISSION_DISPATCH_COUNT, registration.renderer.reservation);
+          return;
+        }
+        // Internal binding (see `bindPreviewPluginName`'s doc comment) —
+        // `renderCodeBlockForPreview`'s exported signature is the spec's
+        // literal `(cb, info, ctx, startLine)`, so the admission-pool key
+        // (`registration.plugin`) travels via this WeakMap instead of a
+        // 5th parameter.
+        bindPreviewPluginName(registration.renderer, registration.plugin);
+        const scopedCtx = scopedRenderContext(ctx, deps.cache, registration.plugin);
+        candidate.replacementHtml = await renderCodeBlockForPreview(
+          registration.renderer,
+          { lang: candidate.lang, source: candidate.source },
+          scopedCtx,
+          candidate.startLine,
+        );
+      }),
+    );
+
+    for (const group of groupByParent(candidates)) {
+      group.parent.children = rewriteChildren(group.parent.children, group.matches);
+    }
+  };
+
+/**
+ * Internal binding of a registered `CodeBlockRenderer` instance to the
+ * plugin name that registered it — populated by `makePreviewCodeBlockDispatch`
+ * (and, in tests, directly) right before calling `renderCodeBlockForPreview`.
+ *
+ * This exists ONLY so `renderCodeBlockForPreview`'s exported signature can
+ * stay exactly the spec's literal `(cb, info, ctx, startLine)` (§7 item 5)
+ * while it still resolves a plugin-identity string for the
+ * `acquireRenderSlot` pool key — `CodeBlockRenderer` itself carries no
+ * plugin identity (unlike the registry's `{ plugin, renderer }` pair
+ * `collectCandidates` resolves), so *some* side channel is unavoidable; a
+ * WeakMap keyed by the renderer object (rather than a 5th parameter) is
+ * that channel. A registered renderer is a stable singleton reference
+ * (registered once at boot, looked up by lang on every dispatch), so
+ * binding is idempotent and cheap to repeat on every call.
+ *
+ * The bound name MUST be the same `registration.plugin` value
+ * `cachedRenderOrPending` is called with on the save path (spec §6:
+ * "経路優先度(save/read > preview)" only means anything if both paths
+ * share ONE pool per plugin; a distinct/unbound key here would silently
+ * give preview jobs their own uncontended pool — pinned by the "shares
+ * the SAME admission pool" test below).
+ */
+const previewPluginNameByRenderer = new WeakMap<CodeBlockRenderer, string>();
+
+/** Bind `cb` to its owning plugin name for `renderCodeBlockForPreview`'s internal admission-pool-key lookup. See `previewPluginNameByRenderer`'s doc comment for why this indirection exists. */
+export function bindPreviewPluginName(cb: CodeBlockRenderer, pluginName: string): void {
+  previewPluginNameByRenderer.set(cb, pluginName);
+}
+
+/**
+ * Non-persistent sibling of `cachedRender` (`../cache`) for the editor
+ * live-preview dispatch path (feature-plugin-renderer-mermaid spec §7
+ * item 5). `makePreviewCodeBlockDispatch` above calls this once per
+ * `previewPolicy: 'server-render'` candidate INSTEAD OF `cachedRender` /
+ * `cachedRenderOrPending` — preview never reads or writes
+ * `PluginRenderCache` (spec invariant: a live keystroke must never
+ * persist a row for content that may never be saved).
+ *
+ * Reproduces exactly the two pieces of `cachedRender` preview still
+ * needs, without the persistence step:
+ *   1. admission-gated `render()` invocation — same `acquireRenderSlot`
+ *      / `ticket.release()` wrapping `../cache`'s
+ *      `renderUnderAdmissionAndStore` uses, always `priority: 'low'`
+ *      (preview never outranks save/read in the wait queue, spec §6).
+ *      Requires a plugin-identity string for the pool key — see
+ *      `bindPreviewPluginName`'s doc comment for how `cb` resolves one
+ *      without widening this function's own parameter list.
+ *   2. the same exception → `{code:'unknown'}` / `RenderResult.error` →
+ *      `errorPlaceholder` normalisation `../cache`'s `normalizeRenderResult`
+ *      applies — imported and called here directly (not reimplemented)
+ *      so a thrown `render()` and a returned `RenderResult.error`
+ *      produce BYTE-IDENTICAL placeholder html to the save path (pinned
+ *      by the two "error normalisation parity" tests below).
+ *
+ * Preview failures fall under classification A (the plugin itself
+ * already returns a `RenderResult.error` / fixed placeholder html) or
+ * classification B (admission rejection / a thrown `render()`) — spec
+ * §7 item 5's closing line is explicit that preview does not get a
+ * third failure kind of its own.
+ *
+ * `startLine`, when a number, wraps the resolved HTML in
+ * `<div data-source-line="N">…</div>` — the scroll-sync anchor
+ * `injectSourceLineAnchors` (`hono/handlers/page-preview.ts`) cannot
+ * reach a `code` → `html` replacement node (see that function's doc
+ * comment), so this is the one place left that can still attach it
+ * (spec §7 item 6).
+ */
+export async function renderCodeBlockForPreview(
+  cb: CodeBlockRenderer,
+  info: CodeBlockInfo,
+  ctx: RenderContext,
+  startLine: number | undefined,
+): Promise<string> {
+  let ticket: RenderSlotTicket | undefined;
+  if (cb.admissionControl) {
+    const pluginName = previewPluginNameByRenderer.get(cb);
+    if (pluginName === undefined) {
+      // Every real call site (`makePreviewCodeBlockDispatch`) binds this
+      // before invoking — an admission-declaring renderer reaching here
+      // unbound is a caller bug (missing `bindPreviewPluginName`), not a
+      // runtime condition to silently paper over with a guessed key.
+      throw new Error('renderCodeBlockForPreview: cb.admissionControl is set but no plugin name is bound — call bindPreviewPluginName(cb, pluginName) first');
+    }
+    try {
+      ticket = await acquireRenderSlot({
+        pluginName,
+        actor: ctx.actor,
+        priority: 'low',
+        signal: ctx.signal,
+        admissionControl: cb.admissionControl,
+      });
+    } catch {
+      // Queue overflow, or ctx.signal aborted while queued. There is no
+      // persisted "pending" marker to fall back to in preview (nothing
+      // is written), so this degrades to the same fixed placeholder a
+      // thrown render() gets below — classification B, normalised the
+      // same way `../cache`'s `normalizeRenderResult` normalises an
+      // infra failure.
+      return wrapWithSourceLine(errorPlaceholder('unknown', cb.reservation), startLine);
+    }
+  }
+
+  try {
+    const { html } = await normalizeRenderResult(() => cb.render(info, ctx), cb.reservation);
+    return wrapWithSourceLine(html, startLine);
+  } finally {
+    ticket?.release();
+  }
+}
+
+/** spec §7 item 6 — wrap the resolved HTML in the scroll-sync anchor div when a source line is known. */
+function wrapWithSourceLine(html: string, startLine: number | undefined): string {
+  if (typeof startLine !== 'number') return html;
+  return `<div data-source-line="${startLine}">${html}</div>`;
+}
+
 interface MutableParent {
   type?: string;
   children?: RootContent[];
@@ -120,6 +307,15 @@ interface Candidate {
   codeIndex: number;
   lang: string;
   source: string;
+  /**
+   * feature-plugin-renderer-mermaid spec §7 item 2 — the original `code`
+   * node's `position.start.line`, filled in unconditionally by
+   * `collectCandidates` (the save path never reads it; the preview path,
+   * `makePreviewCodeBlockDispatch` below, uses it to embed the
+   * `data-source-line` scroll-sync anchor directly into the replacement
+   * HTML string, see `renderCodeBlockForPreview`'s doc comment for why).
+   */
+  startLine?: number;
   /** Filled in after the async render. */
   replacementHtml?: string;
   /** feature-plugin-renderer-mermaid §5 — set when `cachedRenderOrPending` returned `{ kind: 'pending' }`. */
@@ -135,12 +331,26 @@ interface Candidate {
  * skips phrasing-only nodes (no point descending into them; fenced
  * code is never inside a paragraph / link / etc.).
  *
- * Also enforces the classification-C dispatch-count cap (spec §5/§6):
- * `admissionDispatchCount` counts ONLY candidates whose registration
- * declares `admissionControl` (today, only Mermaid) in document order;
- * the (`MAX_ADMISSION_DISPATCH_COUNT` + 1)th such candidate onward is
- * flagged `overDispatchLimit` here, at collection time — before any
- * cache or admission I/O happens for it.
+ * Also enforces the classification-C dispatch-count cap (spec §5/§6/§7):
+ * `admissionDispatchCount` counts candidates whose registration declares
+ * `admissionControl` (the save-path admission-queue gate, §6) OR
+ * `previewPolicy: 'server-render'` (the preview-path opt-in, §7) — today
+ * (Mermaid only) these two are always declared together, so the union is
+ * behaviourally identical to either condition alone for the shipped
+ * plugin set, but the union closes a real gap: a future
+ * `previewPolicy: 'server-render'` registration that does NOT declare
+ * `admissionControl` would call `cb.render()` directly in
+ * `renderCodeBlockForPreview` with no admission gate (see that function's
+ * doc comment), so the diagram-count cap is the ONLY thing bounding how
+ * many times such a renderer runs in one pipeline execution — counting
+ * it only on `admissionControl` presence would let it dispatch
+ * unboundedly in preview. The (`MAX_ADMISSION_DISPATCH_COUNT` + 1)th such
+ * candidate onward is flagged `overDispatchLimit` here, at collection
+ * time — before any cache or admission I/O happens for it. This is a
+ * distinct concern from `registration.renderer.admissionControl`'s OTHER
+ * job, deciding `cachedRenderOrPending` vs. plain `cachedRender` in
+ * `makeCodeBlockDispatch` below — that routing decision stays keyed on
+ * `admissionControl` alone (spec §5).
  */
 function collectCandidates(tree: Root, registry: RendererRegistryImpl): Candidate[] {
   const out: Candidate[] = [];
@@ -157,7 +367,7 @@ function collectCandidates(tree: Root, registry: RendererRegistryImpl): Candidat
       const registration = registry.getCodeBlockRenderer(lang);
       if (!registration) continue;
       let overDispatchLimit = false;
-      if (registration.renderer.admissionControl) {
+      if (registration.renderer.admissionControl || registration.renderer.previewPolicy === 'server-render') {
         admissionDispatchCount += 1;
         overDispatchLimit = admissionDispatchCount > MAX_ADMISSION_DISPATCH_COUNT;
       }
@@ -166,6 +376,7 @@ function collectCandidates(tree: Root, registry: RendererRegistryImpl): Candidat
         codeIndex: i,
         lang,
         source: code.value ?? '',
+        startLine: code.position?.start?.line,
         overDispatchLimit,
       });
     }
@@ -174,8 +385,18 @@ function collectCandidates(tree: Root, registry: RendererRegistryImpl): Candidat
 }
 
 /**
+ * Plugin-scoped `RenderContext` (per-plugin cache view + auth stub) that
+ * every dispatch path — `buildDispatchContext` below (page-bound save /
+ * redispatch) and `makePreviewCodeBlockDispatch` (page-less preview) —
+ * needs before calling into plugin code.
+ */
+function scopedRenderContext(ctx: RenderContext, cache: MongoCacheStorage, plugin: string): RenderContext {
+  return { ...ctx, cache: scopeForPlugin(cache, plugin), auth: createAuthContextStub() };
+}
+
+/**
  * Shared by `makeCodeBlockDispatch` / `redispatchPendingCodeBlocks` — build
- * the per-candidate `RenderContext` (plugin-scoped cache + auth stub), the
+ * the per-candidate `RenderContext` (via `scopedRenderContext`), the
  * `CodeBlockRenderer` → `EmbedRenderer` adaptor, and the re-packed
  * `EmbedInput` (see `codeBlockAsEmbedRenderer`'s doc comment for why lang/
  * source travel as `tag`/`url`) a `cachedRender` / `cachedRenderOrPending`
@@ -188,11 +409,7 @@ function buildDispatchContext(
   ctx: RenderContext,
   deps: CodeBlockDispatchDeps,
 ): { scopedCtx: RenderContext; adaptor: EmbedRenderer; input: EmbedInput } {
-  const scopedCtx: RenderContext = {
-    ...ctx,
-    cache: scopeForPlugin(deps.cache, registration.plugin),
-    auth: createAuthContextStub(),
-  };
+  const scopedCtx = scopedRenderContext(ctx, deps.cache, registration.plugin);
   const adaptor = codeBlockAsEmbedRenderer(registration.renderer);
   const input: EmbedInput = { tag: candidate.lang, url: candidate.source, pageId: deps.pageId };
   return { scopedCtx, adaptor, input };

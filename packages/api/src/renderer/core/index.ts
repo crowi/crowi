@@ -14,7 +14,14 @@ import { makeUrlInlineExpandDispatch } from './url-inline-expand';
 import { remarkWikiLinks } from './wikilinks';
 
 export type { UnifiedTransformPlugin } from './headings';
-export { makeCodeBlockDispatch, hasPendingMermaidMarker, redispatchPendingCodeBlocks, type CodeBlockDispatchDeps } from './code-block-dispatch';
+export {
+  makeCodeBlockDispatch,
+  makePreviewCodeBlockDispatch,
+  hasPendingMermaidMarker,
+  redispatchPendingCodeBlocks,
+  type CodeBlockDispatchDeps,
+  type PreviewCodeBlockDispatchDeps,
+} from './code-block-dispatch';
 export { makeEmbedTagDispatch } from './embed-tags';
 export { makeMentionResolve, type MentionUsernameResolver } from './mention-resolve';
 export { makeUrlInlineExpandDispatch } from './url-inline-expand';

@@ -207,11 +207,32 @@ async function renderAndStore(
   input: EmbedInput,
   ctx: RenderContext,
 ): Promise<RenderAndStoreResult> {
+  const { result } = await normalizeRenderResult(() => renderer.render(input, ctx), renderer.reservation);
+  return persistRenderResult(storage, key, renderer, result);
+}
+
+/**
+ * Shared exception/error → user-facing-html normalisation. Used by both
+ * the persisted save path (`renderAndStore` above, via
+ * `resolveResultHtml`/`persistRenderResult`) and the non-persistent
+ * editor live-preview path (`renderCodeBlockForPreview`,
+ * `../core/code-block-dispatch.ts`, feature-plugin-renderer-mermaid spec
+ * §7 item 5) — a thrown `render()` and a returned `RenderResult.error`
+ * must resolve to BYTE-IDENTICAL placeholder html on both paths, so this
+ * is the one place that logic lives rather than being duplicated per
+ * caller. A thrown `render()` is treated as an `unknown` infra failure
+ * (matching `renderAndStore`'s historical behaviour); never touches
+ * `CacheStorage` — callers that persist (`renderAndStore`) layer TTL /
+ * cache-write concerns on top via `persistRenderResult`.
+ */
+export async function normalizeRenderResult(
+  render: () => RenderResult | Promise<RenderResult>,
+  reservation: EmbedRenderer['reservation'],
+): Promise<{ html: string; result: RenderResult }> {
   let result: RenderResult;
   try {
-    result = await renderer.render(input, ctx);
+    result = await render();
   } catch (err) {
-    // Thrown error → treat as `unknown` and cache.
     result = {
       html: '',
       error: {
@@ -220,7 +241,12 @@ async function renderAndStore(
       },
     };
   }
-  return persistRenderResult(storage, key, renderer, result);
+  return { html: resolveResultHtml(result, reservation), result };
+}
+
+/** Pure/sync core of `normalizeRenderResult` — the plugin's `html` on success, or `errorPlaceholder(code, reservation)` on error. Also reused by `persistRenderResult` (admission-gated results never flow through `normalizeRenderResult` itself, only through this). */
+function resolveResultHtml(result: RenderResult, reservation: EmbedRenderer['reservation']): string {
+  return result.error ? errorPlaceholder(result.error.code, reservation) : result.html;
 }
 
 /**
@@ -238,7 +264,7 @@ async function persistRenderResult(storage: MongoCacheStorage, key: CacheKey, re
   // Error responses get a fixed placeholder regardless of what the
   // plugin returned in `html`. We still cache the plugin's error meta
   // so admin telemetry has context.
-  const html = result.error ? errorPlaceholder(result.error.code, renderer.reservation) : result.html;
+  const html = resolveResultHtml(result, renderer.reservation);
   const cachedHtml: string = html;
 
   const cacheEntry: CacheEntry = {
