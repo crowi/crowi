@@ -27,12 +27,16 @@ import { attachWsNamespace } from './attach-namespace';
  *     accepted immediately with the raw `IncomingMessage` as context.
  */
 
-// These are real-socket integration tests (http.Server + ws upgrades + drain
-// timers). Under a loaded CI runner a single test can legitimately chain
-// several multi-second socket round-trips, so give the whole file generous
-// headroom above jest's 5s default — the per-probe ceilings (see `probeWs`)
-// are what actually bound each assertion; this only stops a slow-but-correct
-// run from tripping the outer test timeout (part of the #917 flake fix).
+// Flake-proofing by construction (#917 postmortem): every wait in this file is
+// EVENT-driven with no local deadline — a positive expectation awaits the event
+// itself (`openWs` / `waitForCloseCode`), so a slow-but-correct CI run can
+// never flake it; only a genuinely broken accept/close path fails, via jest's
+// outer test timeout (raised here because a loaded runner can make several
+// correct socket round-trips add up). Negative expectations ("this upgrade is
+// NOT accepted") never watch a socket for the absence of an event — absence-
+// within-a-window is inherently a race — they assert the mechanism directly
+// (a synchronously-emitted fake upgrade must not touch the socket; shutdown
+// must remove the 'upgrade' listener).
 jest.setTimeout(30_000);
 
 interface RunningServer {
@@ -63,52 +67,57 @@ async function closeServer(server: http.Server): Promise<void> {
   });
 }
 
-interface WsOutcome {
-  opened: boolean;
-  closeCode?: number;
+/**
+ * Open a WebSocket and resolve once `open` fires. Deliberately NO local
+ * deadline: the event either comes (however slowly — CI load cannot fail
+ * this) or the accept path is genuinely broken and jest's outer timeout
+ * fails the test. Rejects if the connection closes/errors before opening,
+ * so a wrongly-rejected upgrade fails fast with the close code in the
+ * message rather than hanging to the outer timeout.
+ */
+function openWs(url: string): Promise<WebSocket> {
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(url);
+    ws.on('open', () => resolve(ws));
+    ws.on('close', (code: number) => reject(new Error(`closed before open (code ${code})`)));
+    ws.on('error', () => {
+      // `close` follows `error`; reject there with the code.
+    });
+  });
 }
 
 /**
- * Open a WebSocket and resolve with the result observed within `timeoutMs`.
- *
- * A positive-expectation probe resolves the instant the `open` event fires, so
- * `timeoutMs` is only the ceiling for the FAILURE case — it does not slow the
- * happy path. The default is deliberately generous (not 1s): under a loaded CI
- * runner (`--maxWorkers=5`, all workers contending) a real upgrade round-trip
- * against a freshly-listened `http.Server` has been observed to take >1s, which
- * settled the probe with `opened:false` and made the AC-1 filtering test flake
- * (flaky-test issue #917). Callers asserting NON-open (e.g. `/unknown`) pass a
- * short explicit `timeoutMs` — that window only has to outlast a would-be open,
- * which load does not manufacture, so it stays small to keep the suite fast.
+ * Connect and resolve with the close code of the FIRST close event —
+ * whether the server rejects pre-open or closes after opening. Same
+ * deadline-free contract as `openWs`.
  */
-function probeWs(url: string, timeoutMs = 8000): Promise<WsOutcome> {
+function waitForCloseCode(url: string): Promise<number> {
   return new Promise((resolve) => {
-    const result: WsOutcome = { opened: false };
     const ws = new WebSocket(url);
-    let settled = false;
-    const settle = (): void => {
-      if (settled) return;
-      settled = true;
-      try {
-        ws.close();
-      } catch {
-        // ignore
-      }
-      resolve(result);
-    };
-    ws.on('open', () => {
-      result.opened = true;
-      setTimeout(settle, 50);
-    });
-    ws.on('close', (code: number) => {
-      result.closeCode = code;
-      settle();
-    });
+    ws.on('close', (code: number) => resolve(code));
     ws.on('error', () => {
-      // Let `close` settle.
+      // `close` follows `error`.
     });
-    setTimeout(settle, timeoutMs);
   });
+}
+
+/**
+ * Synchronously emit a fake `'upgrade'` on the server and return spies for
+ * every way an upgrade handler could touch the socket. This is how the
+ * NEGATIVE assertions ("this path is not claimed / not accepted") are made
+ * deterministic: `http.Server` runs `'upgrade'` listeners synchronously, so
+ * right after `emit` returns, an untouched socket PROVES no handler claimed
+ * it — no real socket, no clock, no race. (A regressed handler that DID
+ * accept it would have to write handshake bytes / destroy — the spies.)
+ */
+function emitFakeUpgrade(server: http.Server, url: string): { destroy: jest.Mock; write: jest.Mock; end: jest.Mock } {
+  const destroy = jest.fn();
+  const write = jest.fn();
+  const end = jest.fn();
+  const fakeSocket = { destroy, write, end, on: jest.fn(), once: jest.fn(), removeListener: jest.fn(), setTimeout: jest.fn() };
+  const fakeRequest = { url, headers: {}, method: 'GET' };
+  server.emit('upgrade', fakeRequest as unknown as IncomingMessage, fakeSocket as unknown as import('node:stream').Duplex, Buffer.alloc(0));
+  return { destroy, write, end };
 }
 
 describe('attachWsNamespace — upgrade filtering (AC-1)', () => {
@@ -141,18 +150,28 @@ describe('attachWsNamespace — upgrade filtering (AC-1)', () => {
 
     const { server: running, port } = await listen(server);
 
-    const fooBare = await probeWs(`ws://127.0.0.1:${port}/foo`);
-    expect(fooBare.opened).toBe(true);
-    const fooPrefixed = await probeWs(`ws://127.0.0.1:${port}/foo/doc-123`);
-    expect(fooPrefixed.opened).toBe(true);
-    const bar = await probeWs(`ws://127.0.0.1:${port}/bar`);
-    expect(bar.opened).toBe(true);
+    // Positive expectations: await the `open` event itself (deadline-free —
+    // see the helpers' doc comments; #917 was this test flaking on a probe
+    // window under CI load).
+    (await openWs(`ws://127.0.0.1:${port}/foo`)).close();
+    (await openWs(`ws://127.0.0.1:${port}/foo/doc-123`)).close();
+    (await openWs(`ws://127.0.0.1:${port}/bar`)).close();
 
-    // No handler at all for `/unknown` — the upgrade must never
-    // complete (proves neither handler destroys the socket, but also
-    // that a truly unclaimed path never gets a bogus accept).
-    const unknown = await probeWs(`ws://127.0.0.1:${port}/unknown`, 500);
-    expect(unknown.opened).toBe(false);
+    // Negative expectation, deterministically: emit a fake `/unknown`
+    // upgrade with both handlers attached — listeners run synchronously,
+    // and neither may touch the socket (no destroy: siblings must keep
+    // their chance; no write/end: nobody may accept an unclaimed path).
+    const unknown = emitFakeUpgrade(running, '/unknown');
+    expect(unknown.destroy).not.toHaveBeenCalled();
+    expect(unknown.write).not.toHaveBeenCalled();
+    expect(unknown.end).not.toHaveBeenCalled();
+
+    // Device sanity — proves the fake emit really reaches the handler (the
+    // /unknown silence above is a filter decision, not a vacuous emit): a
+    // MATCHING path with a bogus handshake (no sec-websocket-key) makes
+    // `wss.handleUpgrade` abort onto the socket, which the spies observe.
+    const claimed = emitFakeUpgrade(running, '/foo');
+    expect(claimed.write.mock.calls.length + claimed.end.mock.calls.length + claimed.destroy.mock.calls.length).toBeGreaterThan(0);
 
     expect(opened).toEqual(['foo', 'foo', 'bar']);
     await closeServer(running);
@@ -169,9 +188,17 @@ describe('attachWsNamespace — authenticate race fix (AC-3)', () => {
     const onOpen = jest.fn();
     const onClose = jest.fn();
 
+    // Deadline-free "server observed the close" signal: the listener is
+    // attached inside resolveContext — i.e. at handleUpgrade time, before the
+    // client can possibly terminate — so awaiting it can neither miss an
+    // already-fired close nor race a fixed sleep against TCP teardown.
+    let serverSawClose!: Promise<void>;
     attachWsNamespace<{ id: string }>(server, {
       path: '/slow',
-      resolveContext: async () => pending,
+      resolveContext: async (_request, ws) => {
+        serverSawClose = new Promise<void>((resolve) => ws.on('close', () => resolve()));
+        return pending;
+      },
       onOpen,
       onClose,
       politeClose: () => {},
@@ -181,13 +208,16 @@ describe('attachWsNamespace — authenticate race fix (AC-3)', () => {
 
     const client = new WebSocket(`ws://127.0.0.1:${port}/slow`);
     await new Promise<void>((resolve) => client.on('open', () => resolve()));
-    // Disconnect immediately, well before `authenticate` resolves.
+    // Disconnect immediately, well before `authenticate` resolves — then wait
+    // for the SERVER to have observed it (event, not a sleep).
     client.terminate();
-    // Give the server a moment to observe the close (readyState flips
-    // to CLOSED asynchronously as the TCP teardown completes).
-    await new Promise((r) => setTimeout(r, 150));
+    await serverSawClose;
 
     resolveAuth!({ id: 'abc' });
+    // One breather so wireConnection's post-await chain (which would call
+    // onOpen if the guard regressed) has run. Absence-after-settle is safe:
+    // the chain is synchronous once the promise resolves, so waiting longer
+    // could only strengthen the assertion, never break it.
     await new Promise((r) => setTimeout(r, 100));
 
     // The phantom-connection bug this fix prevents: without it, `onOpen`
@@ -322,8 +352,10 @@ describe('attachWsNamespace — authenticate race fix (AC-3)', () => {
     });
 
     const { server: running, port } = await listen(server);
-    const outcome = await probeWs(`ws://127.0.0.1:${port}/reject`, 2000);
-    expect(outcome.closeCode).toBe(4401);
+    // The server actively closes with 4401, so the close event WILL arrive —
+    // await it deadline-free rather than racing a probe window.
+    const closeCode = await waitForCloseCode(`ws://127.0.0.1:${port}/reject`);
+    expect(closeCode).toBe(4401);
     expect(onOpen).not.toHaveBeenCalled();
 
     await closeServer(running);
@@ -331,8 +363,20 @@ describe('attachWsNamespace — authenticate race fix (AC-3)', () => {
 
   it('calls onOpen once accepted, and onClose when the client disconnects normally', async () => {
     const server = http.createServer();
-    const onOpen = jest.fn();
-    const onClose = jest.fn();
+    // Deferred-wrapping spies: the assertions await the callback EVENTS
+    // instead of sleeping a fixed window after a client-side signal (a
+    // loaded runner can stretch the server-side round trip past any fixed
+    // sleep — the same #917 race class, just narrower).
+    let onOpenFired!: () => void;
+    const onOpenSeen = new Promise<void>((resolve) => {
+      onOpenFired = resolve;
+    });
+    let onCloseFired!: () => void;
+    const onCloseSeen = new Promise<void>((resolve) => {
+      onCloseFired = resolve;
+    });
+    const onOpen = jest.fn(() => onOpenFired());
+    const onClose = jest.fn(() => onCloseFired());
 
     attachWsNamespace<{ id: string }>(server, {
       path: '/ok',
@@ -344,18 +388,18 @@ describe('attachWsNamespace — authenticate race fix (AC-3)', () => {
 
     const { server: running, port } = await listen(server);
     const client = new WebSocket(`ws://127.0.0.1:${port}/ok`);
+    // Await BOTH sides' open events (client-side too — `ws` throws on a
+    // `close()` before the client handshake completes). Both are events,
+    // no deadlines.
     await new Promise<void>((resolve) => client.on('open', () => resolve()));
-    await new Promise((r) => setTimeout(r, 50));
+    await onOpenSeen;
 
     expect(onOpen).toHaveBeenCalledTimes(1);
     expect(onOpen.mock.calls[0][1]).toEqual({ id: 'context-value' });
     expect(onClose).not.toHaveBeenCalled();
 
-    await new Promise<void>((resolve) => {
-      client.on('close', () => resolve());
-      client.close();
-    });
-    await new Promise((r) => setTimeout(r, 50));
+    client.close();
+    await onCloseSeen;
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(onClose).toHaveBeenCalledWith({ id: 'context-value' });
 
@@ -380,8 +424,8 @@ describe('attachWsNamespace — identity resolveContext (collab shape)', () => {
     });
 
     const { server: running, port } = await listen(server);
-    const outcome = await probeWs(`ws://127.0.0.1:${port}/noauth?x=1`);
-    expect(outcome.opened).toBe(true);
+    const ws = await openWs(`ws://127.0.0.1:${port}/noauth?x=1`);
+    ws.close();
     expect(seenUrls).toEqual(['/noauth?x=1']);
 
     await closeServer(running);
@@ -479,11 +523,20 @@ describe('attachWsNamespace — shutdown drain sequence', () => {
       onOpen: () => {},
       politeClose: () => {},
     });
-    const { server: running, port } = await listen(server);
-    await wsNamespace.shutdown();
+    const { server: running } = await listen(server);
 
-    const outcome = await probeWs(`ws://127.0.0.1:${port}/after-shutdown`, 500);
-    expect(outcome.opened).toBe(false);
+    // Assert the mechanism itself, deterministically: attach registered
+    // exactly one 'upgrade' listener; shutdown must remove it. (A socket
+    // probe here would be an absence-over-time race — see the file header.)
+    expect(running.listenerCount('upgrade')).toBe(1);
+    await wsNamespace.shutdown();
+    expect(running.listenerCount('upgrade')).toBe(0);
+
+    // Belt-and-suspenders via the same deterministic fake-upgrade device:
+    // with zero listeners, an upgrade for the namespace path touches nothing.
+    const afterShutdown = emitFakeUpgrade(running, '/after-shutdown');
+    expect(afterShutdown.write).not.toHaveBeenCalled();
+    expect(afterShutdown.end).not.toHaveBeenCalled();
 
     await closeServer(running);
   });
