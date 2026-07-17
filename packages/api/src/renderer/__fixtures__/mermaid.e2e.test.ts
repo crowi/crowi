@@ -188,4 +188,39 @@ describe('e2e: @crowi/plugin-renderer-mermaid', () => {
     const result = await runPipeline(body, reg, ctx, loadDeps, { cache: storage, pageId });
     expect(result.tree.children[0].type).toBe('code');
   });
+
+  // feature-plugin-renderer-mermaid spec §7 — editor preview parity. The
+  // real `@crowi/plugin-renderer-mermaid` already declares
+  // `previewPolicy: 'server-render'` (Phase 1); this proves the page-less
+  // dispatch branch (`pipeline.ts`'s `pageId`-falsy branch →
+  // `makePreviewCodeBlockDispatch` → `renderCodeBlockForPreview`) actually
+  // reaches the real plugin end-to-end — not just a fixture renderer
+  // (`code-block-dispatch.test.ts` covers the generic mechanism with
+  // fixtures; this is the real-plugin proof `mermaid.e2e.test.ts` exists
+  // for).
+  it('editor preview parity (spec §7): a ```mermaid fence renders through the page-less dispatch branch with no pageId and writes nothing to PluginRenderCache', async () => {
+    const reg = new RendererRegistryImpl();
+    mermaidPlugin.registerRenderer?.(makeRendererScope(reg, PLUGIN, silentLogger), buildPluginCtx());
+    const storage = createMongoCacheStorage(crowi);
+    const ctx: RenderContext = {
+      mode: 'view',
+      log: silentLogger,
+      actor: { kind: 'user', userId: new Types.ObjectId().toHexString() },
+    };
+    const body = ['```mermaid', 'flowchart TD', '  A --> B', '```'].join('\n');
+
+    // `pageId: null` mirrors `POST /pages/preview`'s call into `runPipeline`.
+    const result = await runPipeline(body, reg, ctx, loadDeps, { cache: storage, pageId: null });
+
+    const top = result.tree.children[0];
+    expect(top.type).toBe('html');
+    const html = (top as { value: string }).value;
+    expect(html).toContain('<div data-source-line="1">');
+    expect(html).toContain('<img');
+    expect(html).toContain('class="diagram-embed mermaid-embed"');
+    expect(html).toContain('src="data:image/svg+xml;base64,');
+
+    const PluginRenderCache = crowi.model('PluginRenderCache') as unknown as PluginRenderCacheModel;
+    expect(await PluginRenderCache.countDocuments({}).exec()).toBe(0);
+  }, 30_000);
 });
