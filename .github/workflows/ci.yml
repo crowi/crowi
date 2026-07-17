@@ -188,11 +188,23 @@ jobs:
     # cancelled, never silently skipped-and-invisible). Non-blocking
     # end-to-end (mirrors `changeset-status`'s `continue-on-error: true`
     # position below) — solo-reruns still need the SAME `services`/`env` as
-    # `test` (spawns @crowi/api's jest directly, bypassing turbo).
+    # `test` (spawns @crowi/api's jest directly, bypassing turbo). Classify is
+    # followed by two more non-blocking, `feature-flake-report-triage-loop`
+    # steps that turn a classified FLAKY≥1 report into something a human
+    # actually sees (the classify step itself was previously read by nobody —
+    # see `scripts/test-flake-report-issue.mjs`'s top comment): filing/
+    # updating a `flaky-test`-labeled GitHub issue per FLAKY file (or, on a
+    # fork PR, degrading to a `::notice::` annotation), and publishing a
+    # neutral-conclusion `flake-report` check-run so a FLAKY run is
+    # distinguishable from a genuinely clean one without turning it red.
     name: 'flake-report (@crowi/api jest only)'
     needs: test
     if: always()
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      checks: write
 
     services:
       mongo: *api-test-mongo-service
@@ -226,6 +238,25 @@ jobs:
         # unwritable/unlocatable (a prior ordering bug did exactly that).
         run: echo "CROWI_TEST_RUN_ID=${{ github.run_id }}-${{ github.run_attempt }}" >> "$GITHUB_ENV"
 
+      - name: Determine flake-report triage mode
+        # `file` = a push or a SAME-REPO pull_request (the default
+        # `GITHUB_TOKEN` there has the `issues`/`checks` write permissions
+        # granted above and can safely file/comment on issues + publish a
+        # check-run). `annotate` = a fork PR, whose `GITHUB_TOKEN` is
+        # read-only — the "File or annotate FLAKY issues" step below degrades
+        # to a `::notice::` workflow annotation instead of calling `gh`. Same
+        # fork-PR detection formula as the `changeset-status` job's `if:`
+        # below. Computed once via `$GITHUB_ENV` (not re-evaluated inline in
+        # each later step) so both the issue-triage and check-run steps read
+        # the identical decision.
+        run: |
+          if [ "${{ github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) }}" = "true" ]; then
+            echo "CROWI_FLAKE_ISSUE_MODE=file" >> "$GITHUB_ENV"
+          else
+            echo "CROWI_FLAKE_ISSUE_MODE=annotate" >> "$GITHUB_ENV"
+          fi
+          echo "CROWI_FLAKE_REF_LABEL=${{ github.event_name == 'pull_request' && format('PR #{0}', github.event.pull_request.number) || github.ref_name }}" >> "$GITHUB_ENV"
+
       - name: Build workspace packages
         # Solo-reruns spawn `@crowi/api`'s jest DIRECTLY (bypassing turbo —
         # see `scripts/test-flake-report-consume.mjs`), so, like the job this
@@ -251,6 +282,63 @@ jobs:
           CROWI_FLAKE_REPORT_ARTIFACT_DIR: /tmp/flake-report-artifact
           CROWI_FLAKE_REPORT_ARTIFACT_DOWNLOAD_OUTCOME: ${{ steps.download.outcome }}
         run: node scripts/test-flake-report-consume.mjs
+
+      - name: File or annotate FLAKY issues (non-blocking)
+        # feature-flake-report-triage-loop: reads the classification report
+        # `Classify + report` just wrote (never re-derives classification
+        # logic — see scripts/test-flake-report-issue.mjs's top comment) and,
+        # per FLAKY file, files/updates a `flaky-test`-labeled GitHub issue
+        # (`file` mode) or emits a `::notice::` annotation instead (`annotate`
+        # mode, fork PRs). Fail-open end to end: the script itself always
+        # exits 0, and this step ALSO sets `continue-on-error: true` as
+        # belt-and-suspenders — filing an issue must never affect this job's
+        # (already non-blocking) red/green, let alone `test`'s.
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/test-flake-report-issue.mjs
+
+      - name: Publish neutral flake-report check-run (non-blocking, optional)
+        # Secondary signal (feature-flake-report-triage-loop AC-9): a
+        # neutral-conclusion check-run makes a FLAKY≥1 run visibly distinct
+        # from a genuinely clean one, without turning anything red (the
+        # non-blocking / `continue-on-error` principle this whole job is
+        # built on stays intact). Reads the SAME classification report
+        # directly (via `jq`, preinstalled on `ubuntu-latest`) rather than
+        # adding a third script — this is pure presentation, not a decision.
+        # Skipped on fork PRs (`CROWI_FLAKE_ISSUE_MODE != file`), same as the
+        # issue-triage step above — a fork PR's `GITHUB_TOKEN` cannot create
+        # check-runs on this repo either.
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "$CROWI_FLAKE_ISSUE_MODE" != "file" ]; then
+            echo "flake-report check-run: skipped (fork PR, read-only token)"
+            exit 0
+          fi
+          REPORT="/tmp/crowi-flake-report-classification.${CROWI_TEST_RUN_ID}.json"
+          if [ ! -f "$REPORT" ]; then
+            echo "flake-report check-run: skipped (no classification report at $REPORT)"
+            exit 0
+          fi
+          STATUS="$(jq -r '.status' "$REPORT")"
+          FLAKY="$(jq -r '.counts.FLAKY // 0' "$REPORT")"
+          if [ "$STATUS" != "classified" ] || [ "$FLAKY" -lt 1 ]; then
+            echo "flake-report check-run: skipped (status=$STATUS FLAKY=$FLAKY)"
+            exit 0
+          fi
+          HEAD_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
+          gh api "repos/${{ github.repository }}/check-runs" \
+            -f name="flake-report" \
+            -f head_sha="$HEAD_SHA" \
+            -f status="completed" \
+            -f conclusion="neutral" \
+            -f "output[title]=flake-report: ${FLAKY} FLAKY" \
+            -f "output[summary]=${FLAKY} FLAKY @crowi/api jest file(s) this run — see the flake-report-classification artifact and any filed flaky-test issue(s) for detail." \
+            || echo "flake-report check-run: gh api call failed (non-blocking, ignored)"
 
       - name: Upload flake-report classification artifact
         if: always()

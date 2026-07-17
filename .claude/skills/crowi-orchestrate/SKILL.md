@@ -7,15 +7,16 @@ description: |
   (C) main に直接積まれた作業が意味のある塊になったら code-review をかける、
   (D) GitHub Dependabot security alerts を確認して新規 advisory のみ報告する、
   (E) 統合 signal の立っていない停滞 worktree を検知して報告する、
-  の 5 系統を実行する。push しない・spec を自動削除しない・dirty な main に勝手に
+  (F) flake-report が起票した flaky-test issue の新規/更新を検知して報告する、
+  の 6 系統を実行する。push しない・spec を自動削除しない・dirty な main に勝手に
   commit しない・dep を自動 bump しない・詰まったら ping して待つ。
-  キーワード: orchestrate, loop, watcher, integrate, groom, spec 整理, code-review, dependabot, security, 停滞, stalled, 統合漏れ
+  キーワード: orchestrate, loop, watcher, integrate, groom, spec 整理, code-review, dependabot, security, 停滞, stalled, 統合漏れ, flaky, flake-report, flaky-test
 ---
 
-# Crowi Orchestrate (per-tick: ready worktree 取り込み + spec groom + main review + dependabot + 停滞検知)
+# Crowi Orchestrate (per-tick: ready worktree 取り込み + spec groom + main review + dependabot + 停滞検知 + flaky-test 検知)
 
 main セッションで `/loop /crowi-orchestrate` として **1 tick ごとに呼ばれる** 前提の
-skill。単発 (`/crowi-orchestrate`) でも動く。5 系統 (A〜E) を順に実行する。
+skill。単発 (`/crowi-orchestrate`) でも動く。6 系統 (A〜F) を順に実行する。
 
 **鉄則 (毎 tick 守る):**
 - **push しない** (常にユーザー指示待ち)。
@@ -37,7 +38,7 @@ skill。単発 (`/crowi-orchestrate`) でも動く。5 系統 (A〜E) を順に�
 
 ```
 Monitor({ command: 'bash .claude/scripts/orchestrate-watch.sh',
-          description: 'orchestrate watch (A/C/D/E lanes)', persistent: true })
+          description: 'orchestrate watch (A/C/D/E/F lanes)', persistent: true })
 ```
 
 event → 対応(各 lane の実行手順・鉄則は下記の従来定義のまま):
@@ -48,6 +49,7 @@ event → 対応(各 lane の実行手順・鉄則は下記の従来定義のま
 | `STALLED: <id> (...)` | E | 報告のみ(割り込まない) |
 | `REVIEW_THRESHOLD: <n> impl commits since <sha>` | C | `/crowi-review <sha>..main` → 完了後 `lastReviewedMainSha` を更新 |
 | `NEW_DEPENDABOT: #<n> <sev> <pkg>` | D | 報告(fix は `/crowi-deps`)。`knownDependabotAlerts` の更新は act 時 |
+| `NEW_FLAKY_ISSUE: #<n> <title>` / `UPDATED_FLAKY_ISSUE: #<n> <title>` | F | 報告のみ(fix は manager 判断で `/crowi-fix`)。`knownFlakyTestIssues` の更新は act 時 |
 
 B(spec groom)は分析仕事なので watch に含めない — 単発 `/crowi-orchestrate` で
 on-demand 実行する。
@@ -268,11 +270,57 @@ complete-feature を代行しない。報告文面の例:
 「`<id>` が停滞候補 (N commits ahead, 最終 commit M 日前, signal 無し)。worktree
 セッションで `/crowi-complete-feature` か `/crowi-handoff` の実行を検討してください」。
 
+## F. flaky-test issue watcher (検知系)
+
+CI `flake-report` job (`scripts/test-flake-report-issue.mjs`) は FLAKY≥1 の分類ごとに
+`flaky-test` label 付き GitHub issue を起票/occurrence コメント追記するが、これ自体は
+non-blocking job の一部で誰も見ていない可能性がある。F はこの起票/更新を検知して
+**報告だけ**する watcher(D・E と同じく行動しない)。
+
+### 取得
+
+watcher event 起点(通常はこちら)。手動 tick(単発 `/crowi-orchestrate`)では同じ
+コマンドを直接叩く:
+
+```bash
+gh issue list --repo crowi/crowi --label flaky-test --state open --json number,title,updatedAt --limit 200
+```
+
+### 状態
+
+`.feature-state/orchestrate-state.json` の `knownFlakyTestIssues: [{number, updatedAt}]`
+を**読みのみ**(D と同じ契約。書き込みは act 時にモデルが行う)。
+
+- **無ければ初回は現況(現在 open な全 flaky-test issue)で silent 初期化**し(D と同じ
+  思想 — 過去に溜まっていた分をまとめて new 扱いしない)、この tick の F の報告は skip。
+- 書き込みは tmp+rename で atomic に。
+
+### 報告条件
+
+known に無い issue number → 新規(`NEW_FLAKY_ISSUE`)、known にあるが `updatedAt` が
+進んだ issue → 新しい occurrence が追記された(`UPDATED_FLAKY_ISSUE`)。それぞれ
+manager 向けに 1 行で要約する: issue の title(= `flake: <path>`)・直近 occurrence の
+run URL / ref・(分かれば)これまでの発生回数目安。
+
+### 対応判断
+
+F(および watcher・orchestrate 全体)は**検知報告のみ**。issue のクローズ/再オープン・
+テストの修正は一切代行しない — 優先度判断は manager が行い、修正が必要なら
+`/crowi-fix` へ回す。flake の root-cause は早合点しやすく誤診断のコストが高いので、
+F はここでも断定せず事実(issue 番号・title・occurrence)の伝達に徹する。
+
+### 後始末
+
+act 後(報告した後)に `knownFlakyTestIssues` を **現況の open flaky-test issue 一覧
+(`[{number, updatedAt}]`)で常に上書き**する(D の後始末と同じ、open ⇄ known の集合差で
+次回の新規/更新を判定する)。
+
 ## 出力
 
 - A で何かが起きた (integrate した / 詰まった / stale signal)、B で新規に ready / stale /
   化石 task が出た、C で review を実行した (指摘あり)、D で新規 advisory が出た、
-  または E で停滞の出入りがあった場合のみ、簡潔に報告。
+  E で停滞の出入りがあった、または F で flaky-test issue の新規/更新があった場合のみ、
+  簡潔に報告。
 - どれも変化なしなら「変化なし」一言で終える (毎 tick の冗長な列挙はしない)。
 
 ## loop との組み合わせ
