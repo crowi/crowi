@@ -28,8 +28,16 @@ vi.mock('./api-client', () => ({
   },
 }));
 
-import { PAGE_LIST_FAMILY_ROOT } from './page-query-keys';
+import { PAGE_LIST_FAMILY_ROOT, userPageKeys } from './page-query-keys';
 import { DraftPathConflictError, draftsKeys, useCancelDraft, useCreateDraft, useDrafts } from './use-drafts';
+
+/** True if any `invalidateQueries({ predicate })` call would match a subpages query key. */
+function wasSubpagesInvalidated(invalidate: { mock: { calls: unknown[][] } }): boolean {
+  return invalidate.mock.calls
+    .map((call) => (call[0] as { predicate?: (q: { queryKey: readonly unknown[] }) => boolean })?.predicate)
+    .filter((predicate): predicate is (q: { queryKey: readonly unknown[] }) => boolean => typeof predicate === 'function')
+    .some((predicate) => predicate({ queryKey: userPageKeys.subpagesAll('alice') }));
+}
 
 /** Build a `Response`-shaped object matching what `hc` returns. */
 const makeResponse = <T>(status: number, body: T): { ok: boolean; status: number; json: () => Promise<T> } => ({
@@ -99,6 +107,10 @@ describe('useCreateDraft', () => {
     // too — otherwise returning to an already-cached parent omits the new
     // page until its 60s staleTime lapses.
     expect(invalidate).toHaveBeenCalledWith({ queryKey: PAGE_LIST_FAMILY_ROOT });
+    // feature-user-page-subpages-tab — a draft under /user/<username>/ is
+    // visible to its own author in the Subpages tab (visiblePageStatusOr's
+    // draft clause), so creating one must refresh that cache too.
+    expect(wasSubpagesInvalidated(invalidate)).toBe(true);
   });
 
   it('throws DraftPathConflictError carrying the owner on 409', async () => {
@@ -166,6 +178,9 @@ describe('useCancelDraft', () => {
     const optimistic = setData.mock.calls.at(-1)?.[1] as { drafts: typeof SAMPLE_DRAFTS };
     expect(optimistic.drafts.map((d) => d.pageId)).toEqual(['p2']);
     expect(invalidate).toHaveBeenCalledWith({ queryKey: draftsKeys.all });
+    // feature-user-page-subpages-tab — cancelling a draft must drop its row
+    // out of the author's Subpages tab too.
+    expect(wasSubpagesInvalidated(invalidate)).toBe(true);
   });
 
   it('rolls the optimistic removal back when the server rejects', async () => {
