@@ -5,6 +5,7 @@
     "@crowi/plugin-renderer-plantuml",
     "@crowi/plugin-renderer-emoji",
     "@crowi/plugin-renderer-katex",
+    "@crowi/plugin-renderer-link-card",
     "@crowi/plugin-slack"
   ],
   "storage": {
