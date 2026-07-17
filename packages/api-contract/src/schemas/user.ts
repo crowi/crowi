@@ -53,6 +53,22 @@ export const ListUsersRequestSchema = z.object({
 });
 export type ListUsersRequest = z.infer<typeof ListUsersRequestSchema>;
 
+// `GET /user/{username}/subpages` request — unlike `PaginationRequestSchema`
+// (used by the sibling bookmarks/pages endpoints), `limit` is bounded:
+// this endpoint recurses over the whole `/user/<username>/` namespace, so a
+// single request costs more per row than a flat member-directory page. The
+// bound is tighter than `ListUsersRequestSchema`'s 100 (30 default matches
+// the web `UserRecentPages`/`UserBookmarks` full-mode Load More page size;
+// the preview call passes `limit=10` explicitly). `offset` stays unbounded,
+// matching the sibling `PaginationRequestSchema` — the walk cost is the same
+// known characteristic as every other offset-paginated list (`GET
+// /pages/list` included), so there is no reason to cap this endpoint alone.
+export const UserSubpagesRequestSchema = z.object({
+  limit: z.coerce.number().int().min(1).max(50).optional().default(30),
+  offset: z.coerce.number().int().min(0).optional().default(0),
+});
+export type UserSubpagesRequest = z.infer<typeof UserSubpagesRequestSchema>;
+
 // Member-directory list response — active users only, name-ascending.
 export const ListUsersResponseSchema = z.object({
   users: z.array(UserListItemSchema),

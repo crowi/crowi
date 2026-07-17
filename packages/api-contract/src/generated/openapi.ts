@@ -2904,6 +2904,246 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/user/{username}/subpages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get pages under /user/{username}/ (path-rooted, fully recursive, paginated) */
+        get: {
+            parameters: {
+                query?: {
+                    limit?: number;
+                    offset?: number | null;
+                };
+                header?: never;
+                path: {
+                    username: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Paginated subpages (path-ascending, `_id` tie-break) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            pages: {
+                                _id: string;
+                                path: string;
+                                revision?: string | {
+                                    _id: string;
+                                    path: string;
+                                    body: string;
+                                    /** @default markdown */
+                                    format: string;
+                                    author?: {
+                                        _id: string;
+                                        id?: string;
+                                        username: string;
+                                        name: string;
+                                        /** Format: email */
+                                        email: string;
+                                        image?: string | null;
+                                        createdAt: string;
+                                    } | null;
+                                    createdAt: string;
+                                    meta?: {
+                                        toc?: {
+                                            level: number;
+                                            text: string;
+                                            anchorId: string;
+                                        }[];
+                                        wikiLinks?: {
+                                            raw: string;
+                                            target: string;
+                                            displayText?: string;
+                                        }[];
+                                        mentions?: {
+                                            username: string;
+                                        }[];
+                                        codeBlockLanguages?: string[];
+                                    };
+                                    renderedAst?: unknown;
+                                    rendererVersion?: string;
+                                    parentRevisionId?: string | null;
+                                    /** @enum {string} */
+                                    type?: "snapshot" | "incremental";
+                                    savedBy?: string | {
+                                        _id: string;
+                                        id?: string;
+                                        username: string;
+                                        name: string;
+                                        /** Format: email */
+                                        email: string;
+                                        image?: string | null;
+                                        createdAt: string;
+                                    } | null;
+                                    contributors?: (string | {
+                                        _id: string;
+                                        id?: string;
+                                        username: string;
+                                        name: string;
+                                        /** Format: email */
+                                        email: string;
+                                        image?: string | null;
+                                        createdAt: string;
+                                    })[];
+                                    message?: string;
+                                    /** @enum {string} */
+                                    editVia?: "web" | "oauth" | "pat";
+                                };
+                                redirectTo?: string | null;
+                                /** @enum {string|null} */
+                                status?: "wip" | "published" | "deleted" | "deprecated" | "draft" | null;
+                                grant?: number;
+                                grantedUsers?: string[];
+                                creator?: string | {
+                                    _id: string;
+                                    id?: string;
+                                    username: string;
+                                    name: string;
+                                    /** Format: email */
+                                    email: string;
+                                    image?: string | null;
+                                    createdAt: string;
+                                } | null;
+                                lastUpdateUser?: string | {
+                                    _id: string;
+                                    id?: string;
+                                    username: string;
+                                    name: string;
+                                    /** Format: email */
+                                    email: string;
+                                    image?: string | null;
+                                    createdAt: string;
+                                } | null;
+                                liker?: string[];
+                                /** @default 0 */
+                                commentCount: number;
+                                extended?: {
+                                    [key: string]: unknown;
+                                };
+                                createdAt: string;
+                                updatedAt?: string;
+                                currentRevision?: string | null;
+                                yjsCheckpointAt?: string | null;
+                                latestRevision?: string;
+                                likerCount?: number;
+                                seenUsersCount?: number;
+                            }[];
+                            pager: {
+                                prev: number | null;
+                                next: number | null;
+                                offset: number;
+                            };
+                            total: number;
+                        };
+                    };
+                };
+                /** @description Invalid limit/offset */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "VALIDATION_ERROR";
+                                message: string;
+                                details?: {
+                                    fieldErrors: {
+                                        [key: string]: string[];
+                                    };
+                                    formErrors: string[];
+                                };
+                            };
+                        };
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "AUTHENTICATION_REQUIRED";
+                                /** @enum {string} */
+                                message: "Authentication is required";
+                                redirectTo?: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Missing profile:read and/or pages:read scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "INSUFFICIENT_SCOPE";
+                                message: string;
+                                details?: {
+                                    requiredScope: string;
+                                };
+                            };
+                        };
+                    };
+                };
+                /** @description User not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "USER_NOT_FOUND";
+                                /** @enum {string} */
+                                message: "User not found";
+                            };
+                        };
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "INTERNAL_ERROR";
+                                /** @enum {string} */
+                                message: "Internal server error";
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/users": {
         parameters: {
             query?: never;

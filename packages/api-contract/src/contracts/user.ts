@@ -16,7 +16,8 @@
  */
 import { createRoute, z } from '@hono/zod-openapi';
 
-import { AuthenticationRequiredErrorSchema, InternalServerErrorSchema } from '../schemas/common';
+import { AuthenticationRequiredErrorSchema, InternalServerErrorSchema, ValidationErrorSchema } from '../schemas/common';
+import { InsufficientScopeErrorSchema } from '../schemas/oauth';
 import {
   ListUsersRequestSchema,
   ListUsersResponseSchema,
@@ -25,6 +26,7 @@ import {
   UserNotFoundErrorSchema,
   UserPageResponseSchema,
   UserPagesResponseSchema,
+  UserSubpagesRequestSchema,
 } from '../schemas/user';
 
 const UsernameParamSchema = z.object({ username: z.string() });
@@ -118,6 +120,56 @@ export const getUserPagesRoute = createRoute({
   },
 });
 
+/**
+ * `GET /user/{username}/subpages` — path-rooted, fully-recursive listing of
+ * every page the caller may view under `/user/{username}/` (creator-agnostic;
+ * contrast with `getUserPagesRoute`, which is creator-rooted). Requires BOTH
+ * `profile:read` (resolving `{username}` is a profile-namespace lookup) and
+ * `pages:read` (the payload is page-resource rows) — see the handler's two
+ * `applyScope(...)` calls. `limit`/`offset` are validated by
+ * `UserSubpagesRequestSchema` (bounded `limit`, unbounded `offset`); an
+ * out-of-range or non-integer value 400s via the shared `defaultHook`, which
+ * is why 400 is declared here (mirrors the `autocomplete` contract's
+ * precedent for surfacing an auto-generated validation response).
+ */
+export const getUserSubpagesRoute = createRoute({
+  method: 'get',
+  path: '/user/{username}/subpages',
+  tags: ['user'],
+  security: [{ bearerAuth: [] }],
+  summary: 'Get pages under /user/{username}/ (path-rooted, fully recursive, paginated)',
+  request: {
+    params: UsernameParamSchema,
+    query: UserSubpagesRequestSchema,
+  },
+  responses: {
+    200: {
+      description: 'Paginated subpages (path-ascending, `_id` tie-break)',
+      content: { 'application/json': { schema: UserPagesResponseSchema } },
+    },
+    400: {
+      description: 'Invalid limit/offset',
+      content: { 'application/json': { schema: ValidationErrorSchema } },
+    },
+    401: {
+      description: 'Authentication required',
+      content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
+    },
+    403: {
+      description: 'Missing profile:read and/or pages:read scope',
+      content: { 'application/json': { schema: InsufficientScopeErrorSchema } },
+    },
+    404: {
+      description: 'User not found',
+      content: { 'application/json': { schema: UserNotFoundErrorSchema } },
+    },
+    500: {
+      description: 'Internal server error',
+      content: { 'application/json': { schema: InternalServerErrorSchema } },
+    },
+  },
+});
+
 // Member directory — list active users (avatar + name + @username) for the
 // special `/user/` portal. Plural `/users` so it never collides with the
 // `/user/{username}` profile routes. Authenticated, non-admin.
@@ -150,5 +202,6 @@ export const userRoutes = {
   getUserPageRoute,
   getUserBookmarksRoute,
   getUserPagesRoute,
+  getUserSubpagesRoute,
   listMembersRoute,
 };
