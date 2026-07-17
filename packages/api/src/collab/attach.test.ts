@@ -213,11 +213,19 @@ describe('attachCollabServer (RFC-0003 Phase 9 same-process attach)', () => {
     expect(lastFakeHocuspocus?.handleConnection.mock.calls.length ?? 0).toBe(baseline);
   });
 
-  it('shutdown calls flushPendingStores + closeConnections and is idempotent', async () => {
+  it('shutdown calls flushPendingStores + closeConnections (per still-connected socket) and is idempotent', async () => {
     const fake = lastFakeHocuspocus;
     expect(fake).not.toBeNull();
     const flushBefore = fake?.flushPendingStores.mock.calls.length ?? 0;
     const closeBefore = fake?.closeConnections.mock.calls.length ?? 0;
+
+    // `attachWsNamespace`'s `politeClose` is invoked once per socket the
+    // primitive is still tracking at shutdown time (never when there
+    // are zero live connections) — every earlier probe in this
+    // describe block already closed its own socket, so a fresh one is
+    // opened and kept alive through the call below.
+    const client = new WebSocket(`ws://127.0.0.1:${testServer.port}/collab/shutdown-probe?token=ignored`);
+    await new Promise<void>((resolve) => client.on('open', () => resolve()));
 
     // Call shutdown on the shared `testServer.attachment` — this is
     // safe to do twice because the contract is idempotent, and
@@ -228,6 +236,8 @@ describe('attachCollabServer (RFC-0003 Phase 9 same-process attach)', () => {
     await testServer.attachment.shutdown();
     expect(fake?.flushPendingStores.mock.calls.length).toBeGreaterThan(flushBefore);
     expect(fake?.closeConnections.mock.calls.length).toBeGreaterThan(closeBefore);
+
+    client.terminate();
 
     // Second call — must be a safe no-op (idempotent contract).
     await expect(testServer.attachment.shutdown()).resolves.toBeUndefined();

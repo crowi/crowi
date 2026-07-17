@@ -41,6 +41,7 @@ alpha.0–.3 は published、alpha.4 / stable 向けに changeset 蓄積中（pr
 - [x] **flake-report の検知結果を triage ループへ配線**（classify 後に GitHub issue 自動起票/occurrence 追記 + fork PR は annotation に degrade、orchestrate watcher に F レーン（NEW/UPDATED_FLAKY_ISSUE 検知・報告のみ）追加、任意で neutral check-run。non-blocking job で検知されても誰にも見られていなかった問題に対処）。spec: `feature-flake-report-triage-loop.md`
 - [x] **collab lifecycle epoch で rename/delete 後のライブエディタを無効化**（RFC-0017 Phase 1、cross-replica prompt fanout は Phase 2 対象外）。spec: `feature-collab-invalidate-on-rename-delete.md`
 - [x] **WS client reconnect primitive** — presence / notifications の WebSocket reconnect ロジックを共有 client primitive に抽出し、close code を一元化した（spec: `feature-ws-client-socket-primitive.md`）
+- [x] **WS server attach primitive** — collab / presence / notifications の WebSocket upgrade-attach-shutdown 骨格を共有 server primitive (`attachWsNamespace`) に抽出した（spec: `feature-ws-namespace-attach-primitive.md`）
 
 ---
 

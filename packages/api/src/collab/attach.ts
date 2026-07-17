@@ -1,17 +1,17 @@
 import type { Server as HttpServer, IncomingMessage } from 'node:http';
-import type { Duplex } from 'node:stream';
-import Debug from 'debug';
-import { WebSocketServer, type WebSocket as WsWebSocket } from 'ws';
 // Runtime values are loaded lazily inside `attachCollabServer` so the
 // transitive `crossws` ESM-only dependency of `@hocuspocus/server`
 // doesn't break Jest at test-collect time. Only TS types are imported
 // statically here (type imports are erased at runtime).
-import type { CollabModels, CollabPageEventPublisher, EditorCapCounter, CollabWsTokenUtil, InvalidateReason } from '@crowi/collab';
+import type { CollabModels, CollabPageEventPublisher, CollabWsTokenUtil, EditorCapCounter, InvalidateReason } from '@crowi/collab';
 import type { Extension } from '@hocuspocus/server';
+import Debug from 'debug';
 import type Crowi from 'src/crowi';
+import { createPresenceCollabDeps } from 'src/service/presence';
 import { getEditorCapCounter } from 'src/util/collab-cap';
 import { createWsTokenUtil, isWsTokenSecretFromEnv } from 'src/util/ws-token';
-import { createPresenceCollabDeps } from 'src/service/presence';
+import { attachWsNamespace } from 'src/ws/attach-namespace';
+import type { WebSocket as WsWebSocket } from 'ws';
 import { buildCollabRedisExtension } from './extension-redis';
 
 const debug = Debug('crowi:collab:attach');
@@ -35,14 +35,6 @@ const COLLAB_PATH = '/collab';
  */
 const DEFAULT_DEBOUNCE_MS = 2000;
 const DEFAULT_MAX_DEBOUNCE_MS = 10000;
-
-/**
- * Graceful-drain window between asking sockets to close politely and
- * force-terminating any stragglers. Clients normally close within a
- * round-trip; this gives them ~500 ms to flush their final `update`
- * frame before SIGINT kicks them off.
- */
-const SHUTDOWN_DRAIN_MS = 500;
 
 /**
  * Public surface returned from `attachCollabServer`. The api boot
@@ -287,31 +279,28 @@ export async function attachCollabServer(httpServer: HttpServer, crowi: Crowi): 
     presence: presenceDeps,
   });
 
-  // `noServer: true` — the upgrade handshake is owned by the api
-  // process; we forward only `/collab/*` upgrades into Hocuspocus.
-  const wss = new WebSocketServer({ noServer: true });
-
-  // Track sockets so `shutdown` can terminate any still-open
-  // connections without waiting for them to drain (test harnesses
-  // / abnormal client behaviour leave sockets in CLOSE_WAIT
-  // otherwise, and `server.close()` would hang).
-  const liveSockets = new Set<WsWebSocket>();
-
   /**
-   * Wire one `ws.WebSocket` to its Hocuspocus `ClientConnection`.
-   * Hocuspocus delivers events into the connection via
-   * `handleMessage` / `handleClose` — when running through the
-   * `Server` wrapper (crossws) it's done by the adapter; here we do
-   * it manually so the dependency on `ws` stays narrow.
+   * `attachWsNamespace`'s `onOpen` — collab has no `authenticate` step
+   * (Hocuspocus's own `onAuthenticate` hook does auth downstream, from
+   * inside `handleMessage`), so the primitive hands `onOpen` the raw
+   * `IncomingMessage` as its context and calls it immediately. Wires one
+   * `ws.WebSocket` to its Hocuspocus `ClientConnection`. Hocuspocus
+   * delivers events into the connection via `handleMessage` /
+   * `handleClose` — when running through the `Server` wrapper (crossws)
+   * it's done by the adapter; here we do it manually so the dependency
+   * on `ws` stays narrow.
    *
    * Buffer → Uint8Array: the default `binaryType` for the `ws`
    * server is `nodebuffer`, and Hocuspocus expects `Uint8Array` in
    * `handleMessage`. `Buffer` inherits from `Uint8Array` so a
    * direct pass-through is structurally valid, but we coerce
    * explicitly so a future `binaryType` flip stays safe.
+   *
+   * No `ws.on('error', ...)` here — the primitive already registers a
+   * generic one (before `onOpen` runs) so a single bad socket can never
+   * crash the process.
    */
-  const wireConnection = (ws: WsWebSocket, request: IncomingMessage): void => {
-    liveSockets.add(ws);
+  const onOpen = (ws: WsWebSocket, request: IncomingMessage): void => {
     const clientConnection = hocuspocus.handleConnection(ws as never, request as never);
     ws.on('message', (data: Buffer | ArrayBuffer) => {
       // `ws` default `binaryType: 'nodebuffer'` → Buffer (extends
@@ -323,46 +312,37 @@ export async function attachCollabServer(httpServer: HttpServer, crowi: Crowi): 
       clientConnection.handleMessage(view);
     });
     ws.on('close', (code: number, reason: Buffer) => {
-      liveSockets.delete(ws);
       clientConnection.handleClose({ code, reason: reason?.toString?.() ?? '' });
     });
-    ws.on('error', (err: Error) => {
-      // Don't crash the api process on a single bad socket. Mirror
-      // Hocuspocus's upstream Server behaviour (`console.error` +
-      // continue).
-      console.error('[crowi:collab] websocket error', err);
-    });
   };
 
-  /**
-   * `'upgrade'` event handler. Path filter the request first so
-   * sibling upgrade handlers (none today, but planned: socket.io for
-   * notifications) keep their slots. `socket.destroy()` is **not**
-   * called on a no-match — letting Node.js move on to the next
-   * registered listener is the documented behaviour for cooperating
-   * upgrade handlers.
-   */
-  const upgradeHandler = (request: IncomingMessage, socket: Duplex, head: Buffer): void => {
-    // HTTP request lines look like `/path?query` — strip at the
-    // first `?` to get the pathname. A full WHATWG URL parse here
-    // would allocate on every upgrade for no extra correctness.
-    const rawUrl = request.url ?? '';
-    const queryIdx = rawUrl.indexOf('?');
-    const pathname = queryIdx < 0 ? rawUrl : rawUrl.slice(0, queryIdx);
-    // Accept the bare path (`/collab`, what HocuspocusProvider hits
-    // today) and the namespaced path (`/collab/anything`) — leaves
-    // room for a future variant that includes the document name in
-    // the URL without forcing a server-side migration.
-    if (pathname !== COLLAB_PATH && !pathname.startsWith(`${COLLAB_PATH}/`)) {
-      // Not ours — let other handlers attempt the upgrade.
-      return;
-    }
-    wss.handleUpgrade(request, socket, head, (ws) => {
-      wireConnection(ws, request);
-    });
-  };
+  const wsNamespace = attachWsNamespace<IncomingMessage>(httpServer, {
+    path: COLLAB_PATH,
+    // No `authenticate` — Hocuspocus owns auth via its own
+    // `onAuthenticate` hook, not at attach time.
+    onOpen,
+    // Ask Hocuspocus to close connections politely. The primitive calls
+    // this once per currently-open connection, but `closeConnections()`
+    // is Hocuspocus's own engine-wide API (no single-connection
+    // variant) — re-invoking it for every open socket is redundant
+    // (closing an already-closing connection is a no-op) but harmless,
+    // and keeps this callback's shape identical to presence's /
+    // notifications' per-connection one. Clients see a normal close
+    // frame and can flush their last `update` message to the server
+    // before they disconnect, which `afterDrain`'s flush then persists.
+    politeClose: () => {
+      hocuspocus.closeConnections();
+    },
+    // Flush any in-flight `onStoreDocument` debounces once sockets have
+    // had the drain window to deliver their final updates, before
+    // stragglers are force-terminated. The next-after-debounce
+    // `onStoreDocument` actually runs before we drop references to the
+    // Y.Docs.
+    afterDrain: () => {
+      hocuspocus.flushPendingStores();
+    },
+  });
 
-  httpServer.on('upgrade', upgradeHandler);
   debug('collab attached to http.Server (path=%s)', COLLAB_PATH);
 
   let didShutdown = false;
@@ -376,75 +356,25 @@ export async function attachCollabServer(httpServer: HttpServer, crowi: Crowi): 
       if (didShutdown) return;
       didShutdown = true;
 
-      // 1. Refuse new connections first so the rest of the sequence
-      //    operates on a closed front door — no `'upgrade'` event can
-      //    add to `liveSockets` while we drain.
-      try {
-        httpServer.off('upgrade', upgradeHandler);
-      } catch {
-        // best-effort — the api may already be tearing the server down
-      }
+      // off upgrade → closeConnections (politely) → drain wait →
+      // flushPendingStores → force-terminate stragglers → wss.close().
+      await wsNamespace.shutdown();
 
-      // 2. Ask Hocuspocus to close connections politely. Clients see
-      //    a normal close frame and can flush their last `update`
-      //    message to the server before they disconnect — which the
-      //    next step then persists.
-      try {
-        hocuspocus.closeConnections();
-      } catch (err) {
-        console.error('[crowi:collab] closeConnections failed during shutdown:', err);
-      }
-
-      // 3. Brief drain window so any in-flight client `update` frames
-      //    actually deliver before we terminate sockets. Cheap insurance
-      //    against the "SIGINT mid-edit" data-loss window.
-      if (liveSockets.size > 0) {
-        await new Promise<void>((resolveDrain) => setTimeout(resolveDrain, SHUTDOWN_DRAIN_MS));
-      }
-
-      // 4. Flush any in-flight `onStoreDocument` debounces now that
-      //    sockets have had a chance to deliver their final updates.
-      //    The next-after-debounce `onStoreDocument` actually runs
-      //    before we drop references to the Y.Docs.
-      try {
-        hocuspocus.flushPendingStores();
-      } catch (err) {
-        console.error('[crowi:collab] flushPendingStores failed during shutdown:', err);
-      }
-
-      // 5. Force-terminate any straggler sockets. Required because
-      //    `wss.close()` waits for normal close handshakes otherwise,
-      //    which can hang on abnormal teardown (test harness with a
-      //    dropped client, mis-behaving browser).
-      try {
-        for (const ws of liveSockets) {
-          try {
-            ws.terminate();
-          } catch {
-            // ignore — best-effort
-          }
-        }
-        liveSockets.clear();
-        wss.close();
-      } catch (err) {
-        console.error('[crowi:collab] wss.close failed during shutdown:', err);
-      }
-
-      // 5b. Stop the RFC-0005 presence editing-hash refresher so its
-      //     `setInterval` does not outlive the collab engine. The
-      //     timer is already `.unref()`-d (it never blocks process
-      //     exit), but a test harness that calls `shutdown()` and
-      //     keeps the process alive would otherwise see it tick on.
+      // Stop the RFC-0005 presence editing-hash refresher so its
+      // `setInterval` does not outlive the collab engine. The timer is
+      // already `.unref()`-d (it never blocks process exit), but a test
+      // harness that calls `shutdown()` and keeps the process alive
+      // would otherwise see it tick on.
       try {
         presenceDeps.shutdown();
       } catch (err) {
         console.error('[crowi:collab] presence refresher shutdown failed:', err);
       }
 
-      // 6. Disconnect the cap counter last. With a shared `crowi.redis`
-      //    this is a documented no-op, but we still await it so a
-      //    future per-counter client doesn't silently regress this
-      //    ordering.
+      // Disconnect the cap counter last. With a shared `crowi.redis`
+      // this is a documented no-op, but we still await it so a
+      // future per-counter client doesn't silently regress this
+      // ordering.
       //
       // Note (Phase 9): registered Hocuspocus extensions
       // (`@hocuspocus/extension-redis`) define `onDestroy` lifecycle
