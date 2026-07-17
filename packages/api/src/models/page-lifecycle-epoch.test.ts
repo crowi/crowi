@@ -143,9 +143,16 @@ describe('Page lifecycle — RFC-0017 Phase 1 collabLifecycleVersion contract', 
 
   test('AC-21: a non-deletable page throws BEFORE writing anything — epoch never advances', async () => {
     const user = await seedUser('non-deletable');
+    // Activation kicks off a fire-and-forget user-home-page creation
+    // (userEvent 'activated' → onActivated → createUserPage). Creating the
+    // same path here would race it — E11000 when the hook wins, an
+    // epoch-advancing repair rename when it loses. Drain the side effect
+    // and assert against the hook-created home page instead.
+    await crowi.drainSideEffects();
     // A user home page is never deletable (isDeletableName / USER_HOME_PAGE_PATH).
     const userPagePath = Page().getUserPagePath(user);
-    const page = await Page().createPage(userPagePath, 'body', user, { allowNonExistentUserPage: true });
+    const page = await Page().findPage(userPagePath, user, {}, true);
+    expect(page).toBeTruthy();
     expect(page.collabLifecycleVersion).toBe(0);
 
     await expect(Page().deletePage(page, user)).rejects.toThrow('Page is not deletable.');
