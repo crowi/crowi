@@ -2,7 +2,7 @@ import type { Server as HttpServer, IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
 import Debug from 'debug';
 import { WebSocketServer, type WebSocket as WsWebSocket } from 'ws';
-import { NotificationsServerMessageSchema } from '@crowi/api-contract';
+import { NotificationsServerMessageSchema, WS_CLOSE_CODES } from '@crowi/api-contract';
 import type Crowi from 'src/crowi';
 import { createNotificationsTokenUtil } from 'src/util/notifications-token';
 import { NOTIFICATIONS_CHANNEL_PREFIX, channelForUser } from './channel';
@@ -18,19 +18,6 @@ const debug = Debug('crowi:notifications:attach');
  * http.Server listener).
  */
 const NOTIFICATIONS_PATH = '/notifications';
-
-/**
- * WebSocket close codes the notifications handler uses. 4401 / 4403
- * are in the 4000–4999 application-private range and mirror the
- * presence handler so a shared client backoff layer can interpret
- * them consistently; 1001 ("going away") is the standard code for a
- * graceful server shutdown.
- */
-const WS_CLOSE = {
-  INVALID_TOKEN: 4401,
-  FORBIDDEN: 4403,
-  SHUTDOWN: 1001,
-} as const;
 
 /**
  * Grace window between asking sockets to close politely and force-
@@ -290,7 +277,7 @@ export async function attachNotificationsServer(httpServer: HttpServer, crowi: C
     const claims = token.length > 0 ? tokenUtil.verifyNotificationsToken(token) : null;
     if (!claims) {
       debug('reject: notifications token missing / invalid');
-      ws.close(WS_CLOSE.INVALID_TOKEN, 'invalid token');
+      ws.close(WS_CLOSE_CODES.INVALID_TOKEN, 'invalid token');
       return;
     }
 
@@ -318,20 +305,20 @@ export async function attachNotificationsServer(httpServer: HttpServer, crowi: C
         decoded = decodeURIComponent(rawSegment);
       } catch {
         debug('reject: malformed percent-encoding in path segment %s', rawSegment);
-        ws.close(WS_CLOSE.FORBIDDEN, 'forbidden');
+        ws.close(WS_CLOSE_CODES.FORBIDDEN, 'forbidden');
         return;
       }
       const normalised = decoded.replace(/\/+$/, '');
       if (normalised.includes('/')) {
         debug('reject: extra path segment after userId: %s', normalised);
-        ws.close(WS_CLOSE.FORBIDDEN, 'forbidden');
+        ws.close(WS_CLOSE_CODES.FORBIDDEN, 'forbidden');
         return;
       }
       pathSegment = normalised;
     }
     if (pathSegment.length > 0 && pathSegment !== claims.selfUserId) {
       debug('reject: path userId %s != token selfUserId %s', pathSegment, claims.selfUserId);
-      ws.close(WS_CLOSE.FORBIDDEN, 'forbidden');
+      ws.close(WS_CLOSE_CODES.FORBIDDEN, 'forbidden');
       return;
     }
 
@@ -424,7 +411,7 @@ export async function attachNotificationsServer(httpServer: HttpServer, crowi: C
       for (const sockets of connectionsByUser.values()) {
         for (const conn of sockets) {
           try {
-            conn.ws.close(WS_CLOSE.SHUTDOWN, 'server shutting down');
+            conn.ws.close(WS_CLOSE_CODES.SHUTDOWN, 'server shutting down');
           } catch {
             // ignore — best-effort
           }

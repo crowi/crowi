@@ -29,6 +29,7 @@ export * from './schemas/draft';
 export * from './schemas/autocomplete';
 export * from './schemas/collab';
 export * from './schemas/presence';
+export * from './schemas/ws-close-codes';
 export * from './schemas/attachment';
 export * from './schemas/adminCrypto';
 export * from './schemas/search';

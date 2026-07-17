@@ -246,6 +246,44 @@ describe('useNotificationsSocket', () => {
     expect(h.invalidateSpy).toHaveBeenCalledWith({ queryKey: notificationKeys.all });
   });
 
+  it('fires a catch-up invalidate even when the FIRST connection attempt closes before ever opening', async () => {
+    // Regression guard: the catch-up gate used to be keyed off "has this
+    // primitive instance ever fired onOpen before" (`hasOpenedBefore`),
+    // which stays false through a close that happens before the very
+    // first `onopen` — so the reconnect that finally succeeds never saw
+    // itself as a "reconnect" and skipped the catch-up invalidate. It
+    // must instead be keyed off "has this instance ever closed before"
+    // (independent of whether it ever opened), so a network blip on the
+    // very first attempt still counts as a retry once it eventually
+    // connects.
+    getNotificationsToken.mockResolvedValue(tokenOkResponse(TOKEN_OK));
+    const h = makeHarness();
+
+    h.render();
+    await flush();
+    expect(FakeWebSocket.instances).toHaveLength(1);
+    h.invalidateSpy.mockClear();
+
+    // The very first connection attempt fails BEFORE onopen ever fires
+    // (e.g. connection refused) — backoff reconnects.
+    act(() => {
+      FakeWebSocket.instances[0].fail(1006);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000);
+    });
+    expect(FakeWebSocket.instances).toHaveLength(2);
+
+    // This second attempt succeeds — it IS a genuine reconnect (the
+    // first attempt never got a chance to open), so the catch-up
+    // invalidate must still fire.
+    act(() => {
+      FakeWebSocket.instances[1].open();
+      vi.advanceTimersByTime(200);
+    });
+    expect(h.invalidateSpy).toHaveBeenCalledWith({ queryKey: notificationKeys.all });
+  });
+
   it('ignores malformed / non-JSON frames', async () => {
     getNotificationsToken.mockResolvedValue(tokenOkResponse(TOKEN_OK));
     const h = makeHarness();
@@ -268,7 +306,12 @@ describe('useNotificationsSocket', () => {
     expect(h.invalidateSpy).not.toHaveBeenCalled();
   });
 
-  it('does not auto-reconnect after a 4401 close but invalidates the token query so a fresh token reconnects', async () => {
+  it("routes the first 4401 through the 'reconnect' policy — immediate retry (same stale token) + immediate token-query invalidate", async () => {
+    // This mock resolves the SAME token on every refetch, so the effect
+    // never actually re-runs — the reconnect below is entirely this
+    // primitive instance's own immediate retry (AC-3's 'reconnect'
+    // policy), isolated from the separate effect-rerun path exercised by
+    // the "consecutive 4401s" test below.
     getNotificationsToken.mockResolvedValue(tokenOkResponse(TOKEN_OK));
     const h = makeHarness();
 
@@ -281,17 +324,23 @@ describe('useNotificationsSocket', () => {
       FakeWebSocket.instances[0].open();
       FakeWebSocket.instances[0].fail(4401);
     });
-    // 4401 must mark the token query stale so a fresh token gets
-    // refetched and a new handshake is attempted. Key is scoped by
-    // authed user id so user A's stale token cannot be served to user B.
+    // 4401 must mark the token query stale immediately (no backoff on
+    // the first occurrence) so a fresh token gets refetched. Key is
+    // scoped by authed user id so user A's stale token cannot be served
+    // to user B.
     expect(h.invalidateSpy).toHaveBeenCalledWith({ queryKey: ['notificationsToken', 'me'] });
 
-    // No exponential-backoff timer should be running — reconnect is
-    // gated on the token effect re-running with a new token.
+    // AC-3: the first 4401 also routes through the primitive's own
+    // 'reconnect' policy — an immediate retry, no backoff delay.
+    await flush();
+    expect(FakeWebSocket.instances).toHaveLength(2);
+
+    // With no further close simulated on the reconnected socket, nothing
+    // else happens even over a long stretch of wall time.
     await act(async () => {
       await vi.advanceTimersByTimeAsync(60_000);
     });
-    expect(FakeWebSocket.instances).toHaveLength(1);
+    expect(FakeWebSocket.instances).toHaveLength(2);
   });
 
   it('backs off consecutive 4401 closes with no successful message in between (mint/verify secret-mismatch storm guard)', async () => {
@@ -320,28 +369,42 @@ describe('useNotificationsSocket', () => {
       FakeWebSocket.instances[0].fail(4401);
     });
     await flush();
-    expect(FakeWebSocket.instances).toHaveLength(2);
+    expect(getNotificationsToken).toHaveBeenCalledTimes(2);
+    // AC-3: the first 4401 produces TWO new sockets in this flush — this
+    // primitive instance's own immediate 'reconnect' retry (still using
+    // the stale token) AND the effect re-run with the freshly minted
+    // token; the effect re-run's cleanup tears the stale retry back down
+    // as part of the SAME flush, so only the freshest (last) instance is
+    // still live. That is the one a real 4401 storm would keep closing.
+    expect(FakeWebSocket.instances).toHaveLength(3);
+    const reconnectedSocket = FakeWebSocket.instances[FakeWebSocket.instances.length - 1];
+    expect(reconnectedSocket.url).toContain(`jwt.notifications.${mintCount}`);
 
-    // Second, CONSECUTIVE 4401 — no message ever landed on socket #2.
-    // Must NOT invalidate / reconnect immediately.
-    h.invalidateSpy.mockClear();
+    // Second, CONSECUTIVE 4401 on the freshly-reconnected socket — no
+    // message ever landed. AC-3: this routes through 'backoff-retry',
+    // NOT another immediate 'reconnect' — must NOT mint again, and must
+    // NOT open another socket, immediately.
+    const socketsBeforeSecondClose = FakeWebSocket.instances.length;
     act(() => {
-      FakeWebSocket.instances[1].open();
-      FakeWebSocket.instances[1].fail(4401);
+      reconnectedSocket.open();
+      reconnectedSocket.fail(4401);
     });
-    expect(h.invalidateSpy).not.toHaveBeenCalledWith({ queryKey: ['notificationsToken', 'me'] });
-    expect(FakeWebSocket.instances).toHaveLength(2);
+    expect(getNotificationsToken).toHaveBeenCalledTimes(2);
+    expect(FakeWebSocket.instances).toHaveLength(socketsBeforeSecondClose);
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(999);
     });
-    expect(FakeWebSocket.instances).toHaveLength(2);
+    expect(getNotificationsToken).toHaveBeenCalledTimes(2);
+    expect(FakeWebSocket.instances).toHaveLength(socketsBeforeSecondClose);
 
+    // Crossing the 1s backoff threshold lets both the next mint AND the
+    // WS-level 'backoff-retry' reconnect through.
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(50);
+      await vi.advanceTimersByTimeAsync(2_000);
     });
-    expect(h.invalidateSpy).toHaveBeenCalledWith({ queryKey: ['notificationsToken', 'me'] });
-    expect(FakeWebSocket.instances).toHaveLength(3);
+    expect(getNotificationsToken).toHaveBeenCalledTimes(3);
+    expect(FakeWebSocket.instances.length).toBeGreaterThan(socketsBeforeSecondClose);
   });
 
   it('resets the consecutive-4401 backoff counter across a logout → same-user relogin', async () => {
@@ -363,13 +426,16 @@ describe('useNotificationsSocket', () => {
     expect(FakeWebSocket.instances).toHaveLength(1);
 
     // One 4401 bumps the attempt counter to 1 (no message ever arrived to
-    // reset it back to 0).
+    // reset it back to 0). AC-3 also produces this primitive instance's
+    // own immediate 'reconnect' retry alongside the effect re-run — see
+    // the "backs off consecutive 4401s" test above for why this settles
+    // at 3 sockets, not 2.
     act(() => {
       FakeWebSocket.instances[0].open();
       FakeWebSocket.instances[0].fail(4401);
     });
     await flush();
-    expect(FakeWebSocket.instances).toHaveLength(2);
+    expect(FakeWebSocket.instances).toHaveLength(3);
 
     // Log out, then log back in as the SAME user id.
     useAuthMock.mockReturnValue({ user: null });
