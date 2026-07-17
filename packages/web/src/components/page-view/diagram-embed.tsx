@@ -7,38 +7,50 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 
 /**
- * True when a server-rendered embed carries the `plantuml-embed` class.
- * The PlantUML renderer plugin emits either `<div class="plantuml-embed">`
- * (inlined SVG, the default) or `<img class="plantuml-embed">` (PNG
- * fallback); both the show page and the editor preview route those through
- * {@link PlantumlDiagram}. `className` arrives as `unknown` from the
+ * True when a server-rendered embed carries the shared `diagram-embed`
+ * marker class AND does not carry a renderer-specific error class (e.g.
+ * `mermaid-error`, `plantuml-error`) — feature-plugin-renderer-mermaid
+ * spec §9. Both `@crowi/plugin-renderer-plantuml` (`<div class="diagram-embed
+ * plantuml-embed">` inlined SVG, or `<img class="diagram-embed
+ * plantuml-embed">` PNG fallback) and `@crowi/plugin-renderer-mermaid`
+ * (`<img class="diagram-embed mermaid-embed" alt="...">`) route through
+ * this check; both the show page and the editor preview do. The error
+ * class exclusion matters because a renderer's fixed accessible error
+ * placeholder (e.g. `<div class="mermaid-embed mermaid-error"
+ * role="status">`) deliberately never carries `diagram-embed` (see
+ * `@crowi/plugin-renderer-mermaid`'s `ERROR_HTML`) — this function checks
+ * the exclusion explicitly rather than relying solely on that other
+ * invariant holding forever. `className` arrives as `unknown` from the
  * hast-util-to-jsx-runtime component map, so we narrow defensively.
  */
-export function isPlantumlEmbed(className: unknown): boolean {
-  return typeof className === 'string' && className.split(/\s+/).includes('plantuml-embed');
+export function isDiagramEmbed(className: unknown): boolean {
+  if (typeof className !== 'string') return false;
+  const classes = className.split(/\s+/);
+  if (!classes.includes('diagram-embed')) return false;
+  return !classes.some((c) => c.endsWith('-error'));
 }
 
-interface PlantumlDiagramProps {
-  /** The diagram body — an inline `<svg>` (SVG path) or `<img>` (PNG path). */
+interface DiagramEmbedProps {
+  /** The diagram body — an inline `<svg>` (SVG path) or `<img>` (PNG / data-URL path). */
   children: React.ReactNode;
-  /** The server-emitted wrapper `className` (includes `plantuml-embed`). */
+  /** The server-emitted wrapper `className` (includes `diagram-embed`). */
   className?: string;
 }
 
 /**
- * Wraps a server-rendered PlantUML diagram so it (a) never overflows the
- * article column — the inline diagram is capped to the body width by the
- * `.crowi-prose .plantuml-embed` rules in `globals.css` — and (b) can be
- * enlarged: hovering reveals a `+` affordance and a click opens a
+ * Wraps a server-rendered diagram (PlantUML or Mermaid) so it (a) never
+ * overflows the article column — the inline diagram is capped to the body
+ * width by the `.crowi-prose .diagram-embed` rules in `globals.css` — and
+ * (b) can be enlarged: hovering reveals a `+` affordance and a click opens a
  * near-full-screen lightbox where the diagram renders at natural size with
  * scroll/pan, so a wide sequence diagram stays readable.
  *
  * The diagram body is reused verbatim inside the lightbox. Because the
  * lightbox renders outside `.crowi-prose`, the cap-to-width rules don't
  * apply there, so the SVG/PNG falls back to its intrinsic size. PlantUML
- * bakes black strokes on a transparent canvas (see the `.dark .plantuml-embed`
- * note in `globals.css`), so the lightbox sits on a white surface in both
- * themes to keep the diagram legible.
+ * and Mermaid both bake black strokes on a transparent canvas (see the
+ * `.dark .diagram-embed` note in `globals.css`), so the lightbox sits on a
+ * white surface in both themes to keep the diagram legible.
  */
 /**
  * Memoized so that a markdown re-render (e.g. typing in the editor preview, a
@@ -47,7 +59,7 @@ interface PlantumlDiagramProps {
  * `className` only changes when the embed itself changes. Without memo, the
  * dialog snaps shut every time the parent renders.
  */
-export const PlantumlDiagram = memo(function PlantumlDiagram({ children, className }: PlantumlDiagramProps) {
+export const DiagramEmbed = memo(function DiagramEmbed({ children, className }: DiagramEmbedProps) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -62,7 +74,7 @@ export const PlantumlDiagram = memo(function PlantumlDiagram({ children, classNa
         <button
           type="button"
           onClick={() => setOpen(true)}
-          aria-label={m['page.plantuml_zoom']()}
+          aria-label={m['page.diagram_zoom']()}
           className="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-md border border-border/60 bg-background/80 text-muted-foreground opacity-0 backdrop-blur transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover/diagram:opacity-100"
         >
           <Plus className="h-4 w-4" aria-hidden="true" />
@@ -70,7 +82,7 @@ export const PlantumlDiagram = memo(function PlantumlDiagram({ children, classNa
       </span>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="flex w-full max-w-[calc(100vw-2rem)] max-h-[calc(100vh-4rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[calc(100vw-4rem)]">
-          <DialogTitle className="sr-only">{m['page.plantuml_zoom']()}</DialogTitle>
+          <DialogTitle className="sr-only">{m['page.diagram_zoom']()}</DialogTitle>
           {/* Natural-size diagram on a white canvas. Top-left aligned (not
               flex-centered): a diagram wider/taller than the modal must
               stay fully reachable by scrolling — centering would strand the

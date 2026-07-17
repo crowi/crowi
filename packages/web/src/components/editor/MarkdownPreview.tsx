@@ -12,7 +12,7 @@ import {
 } from './image-display';
 import { LI_CLASSNAME, mergeListClassName, OL_CLASSNAME, UL_CLASSNAME } from './list-classnames';
 import { renderMdastToReactNode } from './render-mdast';
-import { isPlantumlEmbed, PlantumlDiagram } from '@/components/page-view/plantuml-diagram';
+import { DiagramEmbed, isDiagramEmbed } from '@/components/page-view/diagram-embed';
 import { m } from '@paraglide/messages.js';
 
 const DEBOUNCE_MS = 250;
@@ -252,14 +252,15 @@ export const previewComponents = {
     type === 'checkbox' ? <input type="checkbox" checked={Boolean(checked)} readOnly {...props} /> : <input type={type} {...props} />,
   img: ({ src, alt, className, style: rawStyle, ...rest }: { src?: string | Blob; alt?: string; className?: unknown; style?: React.CSSProperties }) => {
     const srcString = typeof src === 'string' ? src : undefined;
-    // PlantUML PNG fallback — wrap for cap-to-width + click-to-enlarge,
+    // Server-rendered diagram embed (PlantUML PNG fallback or Mermaid's
+    // `<img>` success output) — wrap for cap-to-width + click-to-enlarge,
     // matching the show page.
-    if (isPlantumlEmbed(className)) {
+    if (isDiagramEmbed(className)) {
       return (
-        <PlantumlDiagram className="plantuml-embed">
+        <DiagramEmbed className={typeof className === 'string' ? className : undefined}>
           {/* biome-ignore lint/performance/noImgElement: rich-text rendered as plain markdown */}
           <img src={srcString} alt={alt || ''} className="max-w-full h-auto" loading="lazy" />
-        </PlantumlDiagram>
+        </DiagramEmbed>
       );
     }
     // RFC-0015 image display attributes — same img-layer helper as the
@@ -305,11 +306,14 @@ export const previewComponents = {
       </figure>
     );
   },
-  // PlantUML SVG embed (`<div class="plantuml-embed">`) — same zoom wrapper
-  // as the show page; other raw-HTML <div>s render plainly.
+  // PlantUML SVG embed (`<div class="diagram-embed plantuml-embed">`) —
+  // same zoom wrapper as the show page. Mermaid's error placeholder is
+  // also a `<div>` but deliberately lacks the `diagram-embed` marker
+  // (spec §9), so it falls through to the plain-div branch below; other
+  // raw-HTML <div>s render plainly too.
   div: ({ className, children, ...props }: ChildrenProps & { className?: unknown }) => {
-    if (isPlantumlEmbed(className)) {
-      return <PlantumlDiagram className="plantuml-embed">{children}</PlantumlDiagram>;
+    if (isDiagramEmbed(className)) {
+      return <DiagramEmbed className={typeof className === 'string' ? className : undefined}>{children}</DiagramEmbed>;
     }
     return (
       <div className={typeof className === 'string' ? className : undefined} {...props}>

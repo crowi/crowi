@@ -232,7 +232,7 @@
   "page.markdown_copy_failed": "Failed to copy markdown",
   "page.code_copy": "Copy",
   "page.code_copied": "Copied",
-  "page.plantuml_zoom": "Enlarge diagram",
+  "page.diagram_zoom": "Enlarge diagram",
   "page.table_fullscreen_open": "Expand table",
   "page.share.aria_open": "Share link",
   "page.share.menu_copy_url": "Copy URL",

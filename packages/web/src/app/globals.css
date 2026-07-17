@@ -519,21 +519,24 @@ html[data-page-grant="2"] {
   color: var(--shiki-dark);
 }
 
-/* Cap server-rendered diagrams (PlantUML `<div class="plantuml-embed">…</div>`
- * with an inline `<svg>`, or the PNG `<img class="plantuml-embed">` fallback;
- * future Mermaid output is expected to reuse the same class) to the article
- * width in both themes, so a wide diagram can't push the column (and the
- * header strip) past the viewport. PlantUML bakes the size into the `<svg>`
- * as width/height *attributes and inline style* with
- * `preserveAspectRatio="none"`, so the inline `height` must be overridden
- * (`!important`) to `auto` for the SVG to scale down proportionally instead
- * of squishing. The click-to-enlarge lightbox (`PlantumlDiagram`) renders the
- * diagram outside `.crowi-prose`, so it keeps its natural size there. */
-.crowi-prose .plantuml-embed {
+/* Cap server-rendered diagrams to the article width in both themes, so a
+ * wide diagram can't push the column (and the header strip) past the
+ * viewport. Both diagram renderer plugins share the `diagram-embed` marker
+ * class (feature-plugin-renderer-mermaid spec §9): PlantUML emits
+ * `<div class="diagram-embed plantuml-embed">…</div>` with an inline `<svg>`
+ * (or `<img class="diagram-embed plantuml-embed">` for its PNG fallback),
+ * Mermaid emits `<img class="diagram-embed mermaid-embed" alt="...">`. Some
+ * PlantUML SVGs bake the size into `<svg>` as width/height *attributes and
+ * inline style* with `preserveAspectRatio="none"`, so the inline `height`
+ * must be overridden (`!important`) to `auto` for the SVG to scale down
+ * proportionally instead of squishing. The click-to-enlarge lightbox
+ * (`DiagramEmbed`) renders the diagram outside `.crowi-prose`, so it keeps
+ * its natural size there. */
+.crowi-prose .diagram-embed {
   max-width: 100%;
 }
-.crowi-prose .plantuml-embed svg,
-.crowi-prose .plantuml-embed img {
+.crowi-prose .diagram-embed svg,
+.crowi-prose .diagram-embed img {
   max-width: 100% !important;
   height: auto !important;
 }
@@ -543,8 +546,9 @@ html[data-page-grant="2"] {
  * scope (the markup is produced server-side and cached), so under `.dark` we
  * wrap each diagram in a neutral white background with padding + rounded
  * corners so it stays legible instead of black-on-near-black. Light mode is
- * unchanged (transparent on the page background). */
-.dark .crowi-prose .plantuml-embed {
+ * unchanged (transparent on the page background). Applies to both PlantUML
+ * and Mermaid via the shared `diagram-embed` marker. */
+.dark .crowi-prose .diagram-embed {
   background-color: #fff;
   border-radius: var(--radius);
   padding: 0.75rem;
