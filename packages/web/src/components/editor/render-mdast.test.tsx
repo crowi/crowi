@@ -28,6 +28,58 @@ describe('renderMdastToReactNode', () => {
     expect(html).toContain('data-source-line="7"');
   });
 
+  // feature-plugin-renderer-mermaid spec §7 item 6 — a `code` → `html`
+  // replacement node (what `renderCodeBlockForPreview`,
+  // `packages/api/src/renderer/cache/index.ts`, produces for a
+  // `previewPolicy: 'server-render'` fence) carries NO `position` and
+  // therefore no `data.hProperties` route for `data-source-line` — the
+  // mdast `html` handler always emits `{type:'raw', ...}`, and
+  // `mdast-util-to-hast`'s `applyData` only copies `data.hProperties`
+  // when the result becomes a hast `element` (never true for `raw`). So
+  // `renderCodeBlockForPreview` embeds `data-source-line="N"` directly
+  // into the HTML STRING instead. This test proves that string survives
+  // the real `toHast → hast-util-raw → toJsxRuntime` pipeline — not a
+  // false-positive check of the mdast tree's fields, which this
+  // replacement node structurally lacks. The other top-level blocks
+  // (heading / paragraph, same mdast alongside it) keep using the
+  // existing `data.hProperties` route unmodified, proving the two
+  // mechanisms coexist without one clobbering the other.
+  it('a code→html replacement node with data-source-line embedded in its HTML string survives toHast→hast-util-raw alongside the existing hProperties route on other top-level blocks', () => {
+    const mdast = {
+      type: 'root',
+      children: [
+        {
+          type: 'heading',
+          depth: 1,
+          data: { hProperties: { 'data-source-line': 1 } },
+          children: [{ type: 'text', value: 'Title' }],
+        },
+        {
+          type: 'paragraph',
+          data: { hProperties: { 'data-source-line': 3 } },
+          children: [{ type: 'text', value: 'intro' }],
+        },
+        // No `position` / `data` at all — matches what `rewriteChildren`
+        // (`code-block-dispatch.ts`) actually produces: a fresh `{type:
+        // 'html', value}` node with the anchor baked into `value` by
+        // `renderCodeBlockForPreview`.
+        {
+          type: 'html',
+          value: '<div data-source-line="5"><img class="diagram-embed mermaid-embed" alt="Mermaid diagram" src="data:image/svg+xml;base64,PHN2Zy8+"></div>',
+        },
+      ],
+    };
+    const node = renderMdastToReactNode(mdast, { sectionWrap: false, components: {} });
+    const html = renderToStaticMarkup(node);
+
+    // The other top-level blocks' hProperties-driven anchors still work.
+    expect(html).toContain('data-source-line="1"');
+    expect(html).toContain('data-source-line="3"');
+    // The code-block replacement's HTML-string-embedded anchor survives too.
+    expect(html).toContain('data-source-line="5"');
+    expect(html).toContain('src="data:image/svg+xml;base64,PHN2Zy8+"');
+  });
+
   it('renders an unknown inline tag as the literal text the author typed', () => {
     // `shows "No <thing> yet" tooltip` — `<thing>` is a documentation
     // placeholder and must stay visible, not vanish into an empty
