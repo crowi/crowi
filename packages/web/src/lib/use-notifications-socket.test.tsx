@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { act, renderHook } from '@testing-library/react';
 import type { PropsWithChildren } from 'react';
 import { createElement } from 'react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // feature-web-cross-origin-runtime-env: `resolve-ws-url` now reads
 // NEXT_PUBLIC_* via next-runtime-env's runtime `env()` (`./runtime-env`). Mock
@@ -35,8 +35,8 @@ const { useAuthMock } = vi.hoisted(() => {
 });
 vi.mock('./use-auth', () => ({ useAuth: useAuthMock }));
 
-import { useNotificationsSocket, resolveNotificationsUrl } from './use-notifications-socket';
 import { notificationKeys } from './use-notifications';
+import { resolveNotificationsUrl, useNotificationsSocket } from './use-notifications-socket';
 
 /**
  * Minimal fake WebSocket — captures instances so tests can drive
@@ -341,6 +341,36 @@ describe('useNotificationsSocket', () => {
       await vi.advanceTimersByTimeAsync(60_000);
     });
     expect(FakeWebSocket.instances).toHaveLength(2);
+  });
+
+  it('does NOT catch-up invalidate when a doomed 4401 retry re-opens (a rejected handshake is not a reconnect)', async () => {
+    // The server completes the WS upgrade and only THEN verifies the token,
+    // so a retry that is doomed to be rejected still fires `onopen`. If a
+    // 4401 close armed the catch-up gate, every rung of the 4401 retry
+    // ladder would re-open, fan out a full notification refetch, and drop —
+    // the storm `onOpen`'s guard exists to prevent, merely paced by the
+    // backoff. Only an ordinary close (see the 1006 test above) may arm it.
+    getNotificationsToken.mockResolvedValue(tokenOkResponse(TOKEN_OK));
+    const h = makeHarness();
+
+    h.render();
+    await flush();
+    expect(FakeWebSocket.instances).toHaveLength(1);
+
+    act(() => {
+      FakeWebSocket.instances[0].open();
+      FakeWebSocket.instances[0].fail(4401);
+    });
+    await flush();
+    expect(FakeWebSocket.instances).toHaveLength(2);
+
+    // The doomed retry opens (the upgrade always succeeds) — no catch-up.
+    h.invalidateSpy.mockClear();
+    act(() => {
+      FakeWebSocket.instances[1].open();
+      vi.advanceTimersByTime(200);
+    });
+    expect(h.invalidateSpy).not.toHaveBeenCalledWith({ queryKey: notificationKeys.all });
   });
 
   it('backs off consecutive 4401 closes with no successful message in between (mint/verify secret-mismatch storm guard)', async () => {

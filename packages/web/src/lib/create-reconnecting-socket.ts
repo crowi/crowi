@@ -22,16 +22,11 @@
  *     `onMessage`.
  *   - connection-state UI (`usePresence`'s `'connecting' | 'connected' |
  *     'error'`) — driven by `onConnecting` / `onOpen` / `onCloseCode`.
- *   - the "first vs. Nth close of this kind" bookkeeping notifications uses
- *     to invalidate its token query immediately once, then back off — that
- *     state (and the resulting side effect) lives in the caller's
- *     `onCloseCode`; see `use-notifications-socket.ts`'s doc comment for how
- *     its 4401 handling maps onto this primitive's own `'reconnect'` (first
- *     4401 since the last reset) / `'backoff-retry'` (every one after)
- *     policies, which pace the WS-level retry itself, while a SEPARATE
- *     timer the hook owns paces the token-mint HTTP call on the same
- *     backoff shape (see that file's module doc for why the two must stay
- *     decoupled).
+ *   - "first vs. Nth close of this kind" bookkeeping, and any side effect a
+ *     caller wants to hang off a particular close code — that state lives in
+ *     the caller's `onCloseCode`, which returns only the resulting retry
+ *     policy. (`use-notifications-socket.ts` is the worked example: its
+ *     module doc explains the token-mint recovery it drives from there.)
  */
 
 /** WebSocket reconnect backoff after an unclean close, capped — the default
@@ -42,12 +37,10 @@ const DEFAULT_BACKOFF_MAX_MS = 15_000;
 
 /**
  * Capped exponential backoff delay (ms) for the nth (0-indexed) consecutive
- * retry attempt. Exported so a caller that needs a companion backoff
- * schedule OUTSIDE this primitive (e.g. `use-notifications-socket.ts`'s
- * token-mint retry timer, which paces a DIFFERENT HTTP call on the same
- * schedule as this primitive's own `'reconnect'` / `'backoff-retry'`
- * policy replies) computes the identical delay instead of re-deriving the
- * formula.
+ * retry attempt. Exported so a caller pacing a companion schedule OUTSIDE
+ * this primitive (a retry of some other call that should stay in step with
+ * the socket's own) gets the identical delay from the identical defaults,
+ * rather than re-deriving the formula from matching literals.
  */
 export function backoffDelayMs(attempt: number, baseMs = DEFAULT_BACKOFF_BASE_MS, maxMs = DEFAULT_BACKOFF_MAX_MS): number {
   return Math.min(baseMs * 2 ** attempt, maxMs);

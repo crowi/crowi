@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { NotificationsServerMessageSchema, type NotificationsTokenResponse, WS_CLOSE_CODES } from '@crowi/api-contract';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useRef } from 'react';
 import { apiClientV2 } from './api-client';
 import { backoffDelayMs, type CloseCodePolicy, createReconnectingSocket } from './create-reconnecting-socket';
 import { resolveWsUrl } from './resolve-ws-url';
@@ -62,8 +62,9 @@ import { notificationKeys } from './use-notifications';
  *     closure, so they are a stopgap, not the actual fix.
  *   - the `notificationsToken` mint HTTP call — paced by this hook's own
  *     `invalidTokenTimer`, reusing the primitive's exported
- *     `backoffDelayMs` formula so the two schedules stay visibly
- *     identical without duplicating the math. This one is NOT
+ *     `backoffDelayMs` (with its defaults — the same ones the primitive
+ *     applies to its own retries, so the two schedules are identical by
+ *     construction rather than by matching literals). This one is NOT
  *     delegated to the primitive itself: unlike an ordinary reconnect,
  *     each mint is a distinct HTTP request to a DIFFERENT endpoint than
  *     the WebSocket upgrade, and in the secret-mismatch storm case the
@@ -91,14 +92,6 @@ import { notificationKeys } from './use-notifications';
  * `(auth)/layout.tsx` shell so a single hook call there gives every
  * authed page the realtime push without per-page wiring.
  */
-
-/** WebSocket reconnect backoff after an unclean close, capped. Passed
- * explicitly to `createReconnectingSocket` (its own default matches) so
- * the invalid-token mint backoff below — scheduled via the same
- * primitive's exported `backoffDelayMs` — stays visibly on the same
- * schedule. */
-const RECONNECT_BASE_MS = 1_000;
-const RECONNECT_MAX_MS = 15_000;
 
 /**
  * Client-side debounce window for batching `changed` ticks. A
@@ -195,7 +188,11 @@ function useNotificationsToken(enabled: boolean, authedUserId: string | null) {
     // the connection a fair chance to recover from a transient blip
     // without hammering the server.
     retry: 3,
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 15_000),
+    // Same capped schedule the WS retries use — `backoffDelayMs`'s own
+    // defaults. Wrapped rather than passed by reference: react-query calls
+    // `retryDelay(attemptIndex, error)`, and `error` would land in the
+    // `baseMs` parameter.
+    retryDelay: (attemptIndex) => backoffDelayMs(attemptIndex),
   });
 }
 
@@ -288,8 +285,6 @@ export function useNotificationsSocket(options: UseNotificationsSocketOptions = 
     };
 
     const socket = createReconnectingSocket({
-      backoffBaseMs: RECONNECT_BASE_MS,
-      backoffMaxMs: RECONNECT_MAX_MS,
       buildUrl: () => `${resolveNotificationsUrl()}/${encodeURIComponent(selfUserId)}?token=${encodeURIComponent(token)}`,
 
       onOpen: () => {
@@ -328,7 +323,16 @@ export function useNotificationsSocket(options: UseNotificationsSocketOptions = 
       },
 
       onCloseCode: (code): CloseCodePolicy => {
-        hasClosedBefore = true;
+        // NOTE: `hasClosedBefore` is set only on the ordinary-close path at
+        // the bottom, NOT here. The server completes the upgrade and only
+        // then verifies the token (`notifications/attach.ts` hands the
+        // socket to `wireConnection` from inside `handleUpgrade`), so a
+        // doomed 4401 retry still fires `onopen` — flagging every close
+        // here would make each rejected handshake in a 4401 loop pass
+        // `onOpen`'s guard and fan out a full notification refetch, i.e.
+        // exactly the storm that guard exists to prevent, merely paced by
+        // the backoff. A rejected handshake never established a session,
+        // so there is nothing to catch up on.
         // 4401 (stale token): kick the token query to refetch — the new
         // token (once React re-renders with it) flips the effect's
         // `token` dep, which re-runs the effect and handshakes anew with
@@ -359,7 +363,7 @@ export function useNotificationsSocket(options: UseNotificationsSocketOptions = 
             // Repeated 4401s with no successful message in between mean
             // every retry is doomed (e.g. a mint/verify secret mismatch) —
             // back off instead of hammering the token endpoint.
-            invalidTokenTimer = setTimeout(invalidateToken, backoffDelayMs(attempt - 1, RECONNECT_BASE_MS, RECONNECT_MAX_MS));
+            invalidTokenTimer = setTimeout(invalidateToken, backoffDelayMs(attempt - 1));
           }
           return attempt === 0 ? 'reconnect' : 'backoff-retry';
         }
@@ -370,7 +374,10 @@ export function useNotificationsSocket(options: UseNotificationsSocketOptions = 
           clearDebounce();
           return 'stop';
         }
-        // Otherwise reconnect with capped exponential backoff.
+        // An ordinary unclean close (1006 etc.): the session may well have
+        // been live, so the reopen IS a real reconnect that may have missed
+        // ticks — arm `onOpen`'s catch-up invalidate for it.
+        hasClosedBefore = true;
         return 'backoff-retry';
       },
     });
