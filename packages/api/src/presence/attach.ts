@@ -1,7 +1,7 @@
 import type { Server as HttpServer, IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
 import type { PresenceViewer } from '@crowi/api-contract';
-import { PresenceClientMessageSchema } from '@crowi/api-contract';
+import { PresenceClientMessageSchema, WS_CLOSE_CODES } from '@crowi/api-contract';
 import Debug from 'debug';
 import type Crowi from 'src/crowi';
 import type { PageDocument } from 'src/models/page';
@@ -22,15 +22,14 @@ const debug = Debug('crowi:presence:attach');
 const PRESENCE_PATH = '/presence';
 
 /**
- * WebSocket close codes the presence handler uses. 4401 / 4403 are in
- * the 4000–4999 application-private range; 1001 ("going away") is the
- * standard code for a graceful server shutdown.
+ * WebSocket close codes the presence handler uses — the shared
+ * `@crowi/api-contract` export, single source with the notifications
+ * handler and every client reconnect consumer. `NO_ACCESS` is a locally
+ * meaningful alias for the generic `FORBIDDEN` code: presence's
+ * grant-based rejection reads better under that name (see
+ * `WS_CLOSE_CODES`'s own doc for the full rationale).
  */
-const WS_CLOSE = {
-  INVALID_TOKEN: 4401,
-  NO_ACCESS: 4403,
-  SHUTDOWN: 1001,
-} as const;
+const { INVALID_TOKEN, FORBIDDEN: NO_ACCESS, SHUTDOWN } = WS_CLOSE_CODES;
 
 /** Split a request URL into its pathname and raw query string. */
 const splitUrl = (rawUrl: string): { pathname: string; query: string } => {
@@ -262,7 +261,7 @@ export async function attachPresenceServer(httpServer: HttpServer, crowi: Crowi)
     const claims = token.length > 0 ? presenceTokenUtil.verifyPresenceToken(token) : null;
     if (!claims) {
       debug('reject: presence token missing / invalid');
-      ws.close(WS_CLOSE.INVALID_TOKEN, 'invalid token');
+      ws.close(INVALID_TOKEN, 'invalid token');
       return;
     }
 
@@ -272,7 +271,7 @@ export async function attachPresenceServer(httpServer: HttpServer, crowi: Crowi)
     const pathSegment = pathname.startsWith(`${PRESENCE_PATH}/`) ? pathname.slice(PRESENCE_PATH.length + 1) : '';
     if (pathSegment.length > 0 && pathSegment !== claims.pageId) {
       debug('reject: path pageId %s != token pageId %s', pathSegment, claims.pageId);
-      ws.close(WS_CLOSE.INVALID_TOKEN, 'invalid token');
+      ws.close(INVALID_TOKEN, 'invalid token');
       return;
     }
 
@@ -306,14 +305,14 @@ export async function attachPresenceServer(httpServer: HttpServer, crowi: Crowi)
     const permitted = await hasReadPermission(claims.pageId, claims.userId);
     if (!permitted) {
       debug('reject: user %s lost read grant on page %s', claims.userId, claims.pageId);
-      ws.close(WS_CLOSE.NO_ACCESS, 'no access');
+      ws.close(NO_ACCESS, 'no access');
       return;
     }
 
     const identity = await loadViewerIdentity(claims.userId);
     if (!identity) {
       debug('reject: connecting user %s not found', claims.userId);
-      ws.close(WS_CLOSE.NO_ACCESS, 'no access');
+      ws.close(NO_ACCESS, 'no access');
       return;
     }
 
@@ -376,7 +375,7 @@ export async function attachPresenceServer(httpServer: HttpServer, crowi: Crowi)
       const stillPermitted = await hasReadPermission(conn.pageId, conn.userId);
       if (!stillPermitted) {
         debug('heartbeat: user %s lost grant on page %s — disconnecting', conn.userId, conn.pageId);
-        conn.ws.close(WS_CLOSE.NO_ACCESS, 'no access');
+        conn.ws.close(NO_ACCESS, 'no access');
         return;
       }
       conn.permittedUntil = Date.now() + PERMISSION_CACHE_TTL_MS;
@@ -470,7 +469,7 @@ export async function attachPresenceServer(httpServer: HttpServer, crowi: Crowi)
       // 3. Politely close every live socket.
       for (const conn of connections.values()) {
         try {
-          conn.ws.close(WS_CLOSE.SHUTDOWN, 'server shutting down');
+          conn.ws.close(SHUTDOWN, 'server shutting down');
         } catch {
           // ignore — best-effort
         }
