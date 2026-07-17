@@ -90,6 +90,32 @@ The `@[tag](url)` syntax invokes an embed provided by a renderer plugin. When
 no embed renderer is registered for `tag`, it is displayed as-is — `@`
 followed by a plain inline link.
 
+#### Link cards `@[card](url)`
+
+When the `@crowi/plugin-renderer-link-card` plugin is enabled, writing
+`@[card](url)` fetches the target page's OGP meta tags (`og:title` /
+`og:description` / `og:image` / `og:site_name`) and renders a link-preview
+card.
+
+```markdown
+@[card](https://example.com/some-article)
+```
+
+- The card shows a title, description, domain, and (if available) a
+  thumbnail image.
+- A page with no `og:image` renders as a text-only card (title, description,
+  domain — no image).
+- If the fetch fails (timeout, 404, etc.), it degrades to a minimal error
+  card that is still a working link to the URL — the link never loses its
+  navigation function.
+- The editor helps with this conversion: hovering/focusing a bare URL shows
+  "Convert to card"; hovering/focusing `@[card](url)` shows "Convert to
+  link". This affordance is not shown for a link that already has an
+  explicit label (`[label](url)`) — an authored label is respected.
+- The image is a direct link to the source site (no proxying or caching).
+  See the `@crowi/plugin-renderer-link-card` README for plugin details and
+  its SSRF safeguards.
+
 ### Inline URL expansion
 
 When you write a bare URL inside a paragraph, registered URL expansion rules
