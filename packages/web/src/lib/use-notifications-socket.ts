@@ -2,8 +2,9 @@
 
 import { useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { NotificationsServerMessageSchema, type NotificationsTokenResponse } from '@crowi/api-contract';
+import { NotificationsServerMessageSchema, type NotificationsTokenResponse, WS_CLOSE_CODES } from '@crowi/api-contract';
 import { apiClientV2 } from './api-client';
+import { backoffDelayMs, type CloseCodePolicy, createReconnectingSocket } from './create-reconnecting-socket';
 import { resolveWsUrl } from './resolve-ws-url';
 import { useAuth } from './use-auth';
 import { notificationKeys } from './use-notifications';
@@ -33,16 +34,51 @@ import { notificationKeys } from './use-notifications';
  *      any change that landed while we were disconnected
  *   5. on unclean close, exponential backoff reconnect (1s → 15s);
  *      4401 (expired token) reactively invalidates the
- *      `notificationsToken` query so the next refetch yields a fresh
- *      token + a new effect run + a new handshake; the first 4401 in a
- *      row invalidates immediately (the common case: a genuinely expired
- *      token after a long-open tab), but each further 4401 without an
- *      intervening successful message applies the same capped backoff as
- *      a normal reconnect — defense in depth against a mint/verify secret
- *      mismatch (e.g. `WS_TOKEN_SECRET` unset or inconsistent across
- *      instances), where every retry is doomed and would otherwise loop
- *      as fast as invalidate+refetch allows; 4403 (forbidden) is a
- *      bug-shaped state and we just stop
+ *      `notificationsToken` query so a refetch yields a fresh token +
+ *      (once React re-renders with it) a new effect run + a new
+ *      handshake; the first 4401 in a row invalidates immediately (the
+ *      common case: a genuinely expired token after a long-open tab),
+ *      but each further 4401 without an intervening successful message
+ *      applies the same capped backoff as a normal reconnect before
+ *      invalidating again — defense in depth against a mint/verify
+ *      secret mismatch (e.g. `WS_TOKEN_SECRET` unset or inconsistent
+ *      across instances), where every retry is doomed and would
+ *      otherwise loop as fast as invalidate+refetch allows; 4403
+ *      (forbidden) is a bug-shaped state and we just stop
+ *
+ * The socket lifecycle (backoff, reconnectAttempts, reset-on-first-message,
+ * 4-handler teardown) is delegated to the shared
+ * `create-reconnecting-socket.ts` primitive. This hook is a thin consumer
+ * that injects `buildUrl` / `onMessage` / `onCloseCode`, keeping only the
+ * notification-specific pieces (the debounced invalidate, the two-stage
+ * 4401 policy) for itself. Two DIFFERENT things are paced by (the same
+ * shape of) capped exponential backoff here, deliberately kept separate:
+ *
+ *   - the WS-level reconnect attempt itself — expressed as the
+ *     primitive's own `'reconnect'` (first 4401 since the last reset) /
+ *     `'backoff-retry'` (every one after that) policy return value (see
+ *     AC-3), so the primitive's own internal scheduling drives it; both
+ *     retry with the SAME (still stale) token baked into `buildUrl`'s
+ *     closure, so they are a stopgap, not the actual fix.
+ *   - the `notificationsToken` mint HTTP call — paced by this hook's own
+ *     `invalidTokenTimer`, reusing the primitive's exported
+ *     `backoffDelayMs` formula so the two schedules stay visibly
+ *     identical without duplicating the math. This one is NOT
+ *     delegated to the primitive itself: unlike an ordinary reconnect,
+ *     each mint is a distinct HTTP request to a DIFFERENT endpoint than
+ *     the WebSocket upgrade, and in the secret-mismatch storm case the
+ *     resulting token refetch can resolve (and re-run this whole effect
+ *     with a brand-new, still-doomed primitive instance) far faster
+ *     than the WS-level backoff timer above would ever get to fire —
+ *     so the WS-level policy alone cannot bound the mint rate, and
+ *     dropping this second timer would reopen the exact storm
+ *     `95f7862d` fixed.
+ *
+ * The *actual* fix for a genuinely stale token runs outside this
+ * primitive instance either way: once `notificationsToken` refetches and
+ * resolves to a real fresh token, `token` changes, the effect re-runs
+ * from scratch, and the cleanup (`socket.stop()`) cancels whatever retry
+ * this instance had pending.
  *
  * Failure is non-fatal: when the WebSocket never connects (handler
  * not deployed, network) the hook stays silent and the UI keeps
@@ -56,19 +92,13 @@ import { notificationKeys } from './use-notifications';
  * authed page the realtime push without per-page wiring.
  */
 
-/** WebSocket reconnect backoff after an unclean close, capped. */
+/** WebSocket reconnect backoff after an unclean close, capped. Passed
+ * explicitly to `createReconnectingSocket` (its own default matches) so
+ * the invalid-token mint backoff below — scheduled via the same
+ * primitive's exported `backoffDelayMs` — stays visibly on the same
+ * schedule. */
 const RECONNECT_BASE_MS = 1_000;
 const RECONNECT_MAX_MS = 15_000;
-
-/**
- * Capped exponential backoff delay (ms) for the nth (0-indexed)
- * consecutive retry attempt. Shared by the generic unclean-close
- * reconnect and the repeated-4401 guard so both back off on the same
- * schedule (1s → 2s → 4s → … → 15s).
- */
-function backoffDelayMs(attempt: number): number {
-  return Math.min(RECONNECT_BASE_MS * 2 ** attempt, RECONNECT_MAX_MS);
-}
 
 /**
  * Client-side debounce window for batching `changed` ticks. A
@@ -80,30 +110,23 @@ function backoffDelayMs(attempt: number): number {
 const INVALIDATE_DEBOUNCE_MS = 200;
 
 /**
- * Close code for an invalid / expired notifications token (the
- * notifications attach handler's `WS_CLOSE.INVALID_TOKEN`). The token
- * in hand is stale, so an immediate retry with the same token loops —
- * reactively invalidate the `notificationsToken` query to force a
- * fresh refetch, which re-runs the effect with the new token.
+ * `INVALID_TOKEN` / `FORBIDDEN` are shared wire constants
+ * (`@crowi/api-contract`, single source across client + server — see
+ * `notifications/attach.ts`).
  *
- * A *single* 4401 is invalidated immediately (see the connect() effect):
- * the common case is a legitimately expired token on a long-open tab,
- * and there is no reason to delay recovery. But if the mint always
- * disagrees with the verifier (e.g. `WS_TOKEN_SECRET` unset with no
- * per-process memoization, or mismatched across instances), *every*
- * mint → connect → 4401 cycle repeats this close code with no natural
- * backpressure — invalidate+refetch+reconnect as fast as the browser
- * can schedule it. Consecutive 4401s (no successful message in between)
- * therefore back off the same way an ordinary unclean close does.
+ *   - `INVALID_TOKEN` (4401) — the token in hand is stale / expired. See
+ *     the module doc: the real recovery goes through invalidating the
+ *     `notificationsToken` query, paced separately from (though on the
+ *     same backoff shape as) this instance's own `'reconnect'` /
+ *     `'backoff-retry'` WS-level retries, which reuse the same,
+ *     still-stale token and are only ever a stopgap until the effect
+ *     re-runs with a fresh one.
+ *   - `FORBIDDEN` (4403) — the token's `selfUserId` did not match the URL
+ *     path. In practice this only fires on a bug-shaped request (we
+ *     always sign with the authed user id), but stop reconnecting all
+ *     the same — looping would just churn the server.
  */
-const NOTIFICATIONS_CLOSE_INVALID_TOKEN = 4401;
-/**
- * Close code for a token whose `selfUserId` did not match the URL
- * path. In practice this only fires on a bug-shaped request (we
- * always sign with the authed user id), but stop reconnecting all the
- * same — looping would just churn the server.
- */
-const NOTIFICATIONS_CLOSE_FORBIDDEN = 4403;
+const { INVALID_TOKEN, FORBIDDEN } = WS_CLOSE_CODES;
 
 /**
  * Resolve the `/notifications` WebSocket base URL. Delegates to the shared
@@ -206,14 +229,15 @@ export function useNotificationsSocket(options: UseNotificationsSocketOptions = 
   const token = tokenData?.token ?? null;
   const selfUserId = tokenData?.selfUserId ?? null;
 
-  // Consecutive-4401 counter for the backoff guard below. A 4401 resolves
-  // by invalidating the token query, which (once refetched) changes
-  // `token` and re-runs this effect from scratch — so a plain effect-local
-  // counter would reset to 0 on every single retry and never see the
+  // Consecutive-4401 counter for the reconnect/backoff policy below. A
+  // 4401 that genuinely resolves invalidates the token query, which (once
+  // refetched with a WORKING token) changes `token` and re-runs this
+  // effect from scratch — so a plain effect-local counter would reset to
+  // 0 on every single retry-driven effect run and never see the
   // "consecutive" failures it needs to back off. A ref survives across
   // those effect re-runs; it's reset (inside the effect, below) only on a
   // genuine session change (login/logout), not on our own retry-driven
-  // token refresh.
+  // token refresh. `onMessage` also resets it — see below.
   const invalidTokenAttemptsRef = useRef(0);
   const invalidTokenSessionRef = useRef<string | null>(null);
 
@@ -231,12 +255,18 @@ export function useNotificationsSocket(options: UseNotificationsSocketOptions = 
 
     if (!enabled || !token || !selfUserId || tokenError) return;
 
-    let socket: WebSocket | null = null;
-    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     let invalidTokenTimer: ReturnType<typeof setTimeout> | null = null;
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-    let reconnectAttempts = 0;
     let disposed = false;
+    // Whether THIS effect run's primitive has already seen a close before
+    // (of any kind, not just a successful `onOpen`). Mirrors the
+    // pre-extraction `reconnectAttempts > 0` check, but keyed off "has
+    // this instance ever closed" rather than "has this instance ever
+    // opened" — a connection that fails before its first `onopen` (e.g. a
+    // network blip) still counts as a retry once it eventually opens, so
+    // the catch-up invalidate must still fire on that first successful
+    // open. Only a genuine first-ever connection (no prior close) skips it.
+    let hasClosedBefore = false;
 
     const scheduleInvalidate = () => {
       if (debounceTimer !== null) return;
@@ -257,31 +287,29 @@ export function useNotificationsSocket(options: UseNotificationsSocketOptions = 
       }
     };
 
-    const connect = () => {
-      if (disposed) return;
-      const url = `${resolveNotificationsUrl()}/${encodeURIComponent(selfUserId)}?token=${encodeURIComponent(token)}`;
-      const ws = new WebSocket(url);
-      socket = ws;
+    const socket = createReconnectingSocket({
+      backoffBaseMs: RECONNECT_BASE_MS,
+      backoffMaxMs: RECONNECT_MAX_MS,
+      buildUrl: () => `${resolveNotificationsUrl()}/${encodeURIComponent(selfUserId)}?token=${encodeURIComponent(token)}`,
 
-      ws.onopen = () => {
-        if (disposed) return;
+      onOpen: () => {
         // Catch-up invalidate only on a *real* reconnect (i.e. after at
-        // least one backoff-scheduled attempt). The initial connect at
-        // mount time is redundant — `useUnreadCount` / `useNotifications`
-        // have already fired a fresh REST fetch — and firing it here
-        // turns a broken handshake (open → server-reject → close) into
-        // an infinite `/notifications/status` storm: every doomed
-        // reconnect re-opens, invalidates, refetches, then drops.
-        if (reconnectAttempts > 0) {
+        // least one prior close in this effect run — see `hasClosedBefore`
+        // above). The initial connect at mount time is redundant —
+        // `useUnreadCount` / `useNotifications` have already fired a fresh
+        // REST fetch — and firing it here turns a broken handshake (open →
+        // server-reject → close) into an infinite `/notifications/status`
+        // storm: every doomed reconnect re-opens, invalidates, refetches,
+        // then drops.
+        if (hasClosedBefore) {
           scheduleInvalidate();
         }
-      };
+      },
 
-      ws.onmessage = (event) => {
-        if (disposed || typeof event.data !== 'string') return;
+      onMessage: (data) => {
         let parsed: unknown;
         try {
-          parsed = JSON.parse(event.data);
+          parsed = JSON.parse(data);
         } catch {
           // Non-JSON frame — ignore, notifications only speaks JSON.
           return;
@@ -290,30 +318,32 @@ export function useNotificationsSocket(options: UseNotificationsSocketOptions = 
         if (!message.success) return;
         // A parsed server message proves the connection is truly
         // established — the server rejects a bad token *before*
-        // sending any frame. Reset the backoff here (rather than on
+        // sending any frame. Resetting the backoff here (rather than on
         // `onopen`, which fires for the doomed handshake too) so a
-        // handshake-then-reject loop doesn't pin the reconnect delay
-        // at its 1s floor forever. Same pattern as `usePresence`.
-        reconnectAttempts = 0;
+        // handshake-then-reject loop doesn't pin the reconnect delay at
+        // its 1s floor forever. Same pattern as `usePresence`.
         invalidTokenAttemptsRef.current = 0;
         scheduleInvalidate();
-      };
+        return 'reset-backoff';
+      },
 
-      ws.onerror = () => {
-        // `onclose` always follows `onerror`; handle teardown there.
-      };
-
-      ws.onclose = (event) => {
-        if (disposed) return;
-        // 4401 (stale token): kick the token query to refetch. The new
-        // token flips the effect's `token` dep, which re-runs the
-        // effect and handshakes anew. We do NOT reconnect inline — the
-        // effect re-run is the only path that resolves the stale
-        // credential. Cancel any in-flight debounced invalidate first
-        // so a pending tick from just-before-close doesn't fire after
-        // this branch's queryClient.invalidate (same effect run, same
-        // closure — the trailing timer would still hold a live ref).
-        if (event.code === NOTIFICATIONS_CLOSE_INVALID_TOKEN) {
+      onCloseCode: (code): CloseCodePolicy => {
+        hasClosedBefore = true;
+        // 4401 (stale token): kick the token query to refetch — the new
+        // token (once React re-renders with it) flips the effect's
+        // `token` dep, which re-runs the effect and handshakes anew with
+        // a brand-new primitive instance; that is the *real* fix. Two
+        // backoffs run here, deliberately kept separate (see the module
+        // doc): the WS-level retry (AC-3 — `'reconnect'` on the first
+        // 4401 since the last successful message, `'backoff-retry'` on
+        // every one after that, both against the SAME still-stale token)
+        // and the token-mint HTTP call, paced by `invalidTokenTimer`
+        // below on the identical schedule via the primitive's exported
+        // `backoffDelayMs`. Cancel any in-flight debounced invalidate
+        // first so a pending tick from just-before-close doesn't fire
+        // after this branch's queryClient.invalidate (same effect run,
+        // same closure — the trailing timer would still hold a live ref).
+        if (code === INVALID_TOKEN) {
           clearDebounce();
           const attempt = invalidTokenAttemptsRef.current;
           invalidTokenAttemptsRef.current += 1;
@@ -329,40 +359,29 @@ export function useNotificationsSocket(options: UseNotificationsSocketOptions = 
             // Repeated 4401s with no successful message in between mean
             // every retry is doomed (e.g. a mint/verify secret mismatch) —
             // back off instead of hammering the token endpoint.
-            invalidTokenTimer = setTimeout(invalidateToken, backoffDelayMs(attempt - 1));
+            invalidTokenTimer = setTimeout(invalidateToken, backoffDelayMs(attempt - 1, RECONNECT_BASE_MS, RECONNECT_MAX_MS));
           }
-          return;
+          return attempt === 0 ? 'reconnect' : 'backoff-retry';
         }
         // 4403 (forbidden): a bug-shaped state (we always sign with the
         // authed user id). Looping would just churn the server, so stop.
         // Same debounce-cancel rationale as 4401.
-        if (event.code === NOTIFICATIONS_CLOSE_FORBIDDEN) {
+        if (code === FORBIDDEN) {
           clearDebounce();
-          return;
+          return 'stop';
         }
         // Otherwise reconnect with capped exponential backoff.
-        const delay = backoffDelayMs(reconnectAttempts);
-        reconnectAttempts += 1;
-        reconnectTimer = setTimeout(connect, delay);
-      };
-    };
+        return 'backoff-retry';
+      },
+    });
 
-    connect();
+    socket.start();
 
     return () => {
       disposed = true;
-      if (reconnectTimer) clearTimeout(reconnectTimer);
       if (invalidTokenTimer) clearTimeout(invalidTokenTimer);
       clearDebounce();
-      if (socket) {
-        // Drop the lifecycle handlers before close so the teardown
-        // close doesn't trigger a reconnect.
-        socket.onopen = null;
-        socket.onmessage = null;
-        socket.onerror = null;
-        socket.onclose = null;
-        socket.close();
-      }
+      socket.stop();
     };
   }, [enabled, token, selfUserId, authedUserId, tokenError, queryClient]);
 }
