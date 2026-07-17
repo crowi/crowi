@@ -59,11 +59,6 @@ export class Semaphore {
     const next = this.queue.shift();
     if (next) next();
   }
-
-  /** Test/telemetry helper — how many `acquire()` calls currently hold a slot. */
-  get activeCount(): number {
-    return this.active;
-  }
 }
 
 const sharedSemaphore = new Semaphore(FETCH_CONCURRENCY_LIMIT);
@@ -141,9 +136,13 @@ async function fetchOgLocked(inputUrl: string, deps: FetchOgDeps): Promise<Fetch
         if (!location || hop === MAX_REDIRECTS) {
           return { kind: 'error', code: 'http-error', httpStatus: response.status };
         }
-        // Drain (don't just discard) the redirect body before following
-        // the next hop — an unconsumed body can delay the underlying
-        // connection's return to the pool under `keep-alive`.
+        // Cancel (never drain) the redirect body before following the next
+        // hop: draining would buffer however many bytes the server chooses
+        // to attach to a 3xx — an attacker-controlled redirect chain could
+        // use that as an amplification vector inside our own 5s window.
+        // The cost is that an aborted body may prevent this connection's
+        // keep-alive reuse for a same-origin next hop — accepted; most
+        // hops change origin anyway (http→https), where no reuse exists.
         await response.body?.cancel().catch(() => undefined);
         try {
           current = new URL(location, current);
@@ -239,7 +238,9 @@ async function readBodyCapped(response: Response, maxBytes: number): Promise<{ o
       chunks.push(value);
     }
   }
-  return { ok: true, buffer: Buffer.concat(chunks.map((c) => Buffer.from(c))) };
+  // `Buffer.concat` accepts `Uint8Array[]` directly — a `Buffer.from` per
+  // chunk would copy every chunk twice (up to 2x the 512KB cap in memcpy).
+  return { ok: true, buffer: Buffer.concat(chunks) };
 }
 
 /** Resolve the charset to decode the body with — header first, then a `<meta charset>` sniff in the first 2KB, else UTF-8. */
@@ -322,7 +323,8 @@ function decodeHtmlEntities(s: string): string {
     .replace(/&amp;/g, '&');
 }
 
-function isHttpUrl(value: string | undefined): value is string {
+/** True when `value` parses as an absolute `http:`/`https:` URL. The single scheme gate for BOTH defence layers — the fetch entry (here) and the card renderer's `safeHref`/`safeImageSrc` (`render-card.ts`) import this one predicate so a future policy change cannot desynchronize them. */
+export function isHttpUrl(value: string | undefined): value is string {
   if (!value) return false;
   try {
     const u = new URL(value);

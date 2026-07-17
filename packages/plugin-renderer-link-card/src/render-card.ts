@@ -1,4 +1,5 @@
-import type { OgMeta } from './fetch-og';
+import { escapeHtml } from '@crowi/plugin-api';
+import { isHttpUrl, type OgMeta } from './fetch-og';
 
 /**
  * Card HTML builders. Output is restricted to the elements the web
@@ -18,26 +19,6 @@ import type { OgMeta } from './fetch-og';
  * trust that at its own boundary).
  */
 
-/** `&`/`<`/`>`/`"`/`'` escape — same convention as `@crowi/plugin-renderer-katex`'s local `escapeHtml` (no shared util package exists for this). */
-function escapeHtml(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => {
-    switch (c) {
-      case '&':
-        return '&amp;';
-      case '<':
-        return '&lt;';
-      case '>':
-        return '&gt;';
-      case '"':
-        return '&quot;';
-      case "'":
-        return '&#39;';
-      default:
-        return c;
-    }
-  });
-}
-
 /** `url`'s hostname, or the raw string if it doesn't parse as a URL at all (defensive fallback — should not happen for anything that reached this module). */
 function extractDomain(url: string): string {
   try {
@@ -47,17 +28,7 @@ function extractDomain(url: string): string {
   }
 }
 
-/** Whether `value` parses as an absolute `http:`/`https:` URL — the shared safety check behind both `safeHref` and `safeImageSrc` below. */
-function isHttpUrl(value: string): boolean {
-  try {
-    const protocol = new URL(value).protocol;
-    return protocol === 'http:' || protocol === 'https:';
-  } catch {
-    return false;
-  }
-}
-
-/** The href value to emit for `url` — the url itself when it's a safe http(s) absolute URL, otherwise an inert `#` so a non-http(s) scheme (`javascript:`, `data:`, …) never becomes a clickable navigation target. */
+/** The href value to emit for `url` — the url itself when it's a safe http(s) absolute URL (per `fetch-og.ts`'s shared `isHttpUrl`, the single scheme gate for both defence layers), otherwise an inert `#` so a non-http(s) scheme (`javascript:`, `data:`, …) never becomes a clickable navigation target. */
 function safeHref(url: string): string {
   return isHttpUrl(url) ? url : '#';
 }

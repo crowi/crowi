@@ -1,6 +1,7 @@
 import { syntaxTree } from '@codemirror/language';
-import { MapMode, StateField, type EditorState, type Extension, type Text } from '@codemirror/state';
-import { closeHoverTooltips, EditorView, hoverTooltip, showTooltip, type Tooltip, type TooltipView } from '@codemirror/view';
+import { type EditorState, type Extension, MapMode, type Text } from '@codemirror/state';
+import { EditorView, type Tooltip, type TooltipView } from '@codemirror/view';
+import { createAffordanceTooltip } from './affordance-tooltip';
 
 /**
  * RFC-0015 image display attributes — CodeMirror editor affordance
@@ -402,89 +403,11 @@ function computeTooltip(state: EditorState, pos: number): Tooltip | null {
   };
 }
 
-interface CursorTooltipState {
-  tooltip: Tooltip | null;
-}
+/** Cursor+hover trigger pair (AC-C1's "focus" and "hover" halves) — the timing-sensitive plumbing (reference-stable cursor field, same-span hover suppression, hover-close on cursor take-over) lives in the shared `createAffordanceTooltip` factory. */
+const affordanceTooltip = createAffordanceTooltip(computeTooltip);
 
-/**
- * Cursor/selection trigger (AC-C1's "focus" half) — shows the same
- * tooltip when the caret sits inside an image span, e.g. after
- * keyboard navigation with no mouse involved at all. Reuses the same
- * `computeTooltip` so hover and focus are visually identical.
- *
- * Keeps the previous `Tooltip` object (by reference) when it still
- * describes the same span, so CodeMirror does not tear down and
- * recreate the `TooltipView` (and thus the DOM the user may be
- * mid-interacting with) on every unrelated transaction.
- *
- * This is the STABLE of the two triggers: it lives as long as the caret
- * stays in the span (a mouse leaving doesn't dismiss it), so when both
- * triggers would fire for one image the hover trigger yields to this one
- * (see `imageHoverTooltipSource`).
- */
-const cursorTooltipField = StateField.define<CursorTooltipState>({
-  create(state) {
-    return { tooltip: computeTooltip(state, state.selection.main.head) };
-  },
-  update(value, tr) {
-    const next = computeTooltip(tr.state, tr.state.selection.main.head);
-    if (value.tooltip && next && sameSpan(value.tooltip, next)) {
-      return value;
-    }
-    return { tooltip: next };
-  },
-  provide: (field) => showTooltip.from(field, (value) => value.tooltip),
-});
-
-/** True when two tooltips describe the exact same image span (identical `pos` and `end`). */
-function sameSpan(a: Tooltip, b: Tooltip): boolean {
-  return a.pos === b.pos && a.end === b.end;
-}
-
-/**
- * Mouse-hover trigger source (AC-C1's "hover" half). CodeMirror's
- * built-in `hoverTooltip` owns debounce/positioning/hide-on-mouse-leave;
- * this only decides WHAT to show. It returns the same tooltip as the
- * cursor trigger — EXCEPT it suppresses itself (returns `null`) when the
- * cursor trigger is already showing the affordance for the very same
- * image span, so the two triggers never stack two identical panels over
- * one image (the reported duplicate). Suppression is on the hover side
- * because the cursor tooltip is the stable one; the hover one is the
- * transient one that should yield. Exported for direct unit testing of
- * that suppression.
- */
-export function imageHoverTooltipSource(view: EditorView, pos: number): Tooltip | null {
-  const hover = computeTooltip(view.state, pos);
-  if (!hover) return null;
-  const cursor = view.state.field(cursorTooltipField).tooltip;
-  if (cursor && sameSpan(cursor, hover)) return null;
-  return hover;
-}
-
-/**
- * Reverse-order convergence for the path the hover source alone cannot
- * catch: a hover affordance is already open over an image, then the caret
- * enters that SAME span (e.g. the user clicks the image markup), so the
- * cursor trigger produces its own panel. CodeMirror's `hoverTooltip`
- * does not drop itself on a bare selection change, so without this the
- * two panels stack. When the cursor tooltip newly covers a span that an
- * active hover tooltip also covers, close the hover so only the stable
- * cursor panel remains. A DIFFERENT-span hover (caret in image A, mouse
- * over image B) is intentionally left alone (out-of-scope per spec).
- * Dispatched via `queueMicrotask` because an `updateListener` must not
- * dispatch during the in-progress update.
- */
-function closeHoverWhenCursorTakesOver(hover: ReturnType<typeof hoverTooltip>): Extension {
-  return EditorView.updateListener.of((update) => {
-    const prev = update.startState.field(cursorTooltipField).tooltip;
-    const next = update.state.field(cursorTooltipField).tooltip;
-    if (!next) return;
-    if (prev && sameSpan(prev, next)) return; // caret still on the same span — nothing newly appeared.
-    const hoverOverlaps = update.state.field(hover.active).some((t) => sameSpan(t, next));
-    if (!hoverOverlaps) return;
-    queueMicrotask(() => update.view.dispatch({ effects: closeHoverTooltips }));
-  });
-}
+/** The hover trigger's source — re-exported from the shared factory for direct unit testing of the same-span suppression (the duplicate-tooltip fix). */
+export const imageHoverTooltipSource = affordanceTooltip.hoverSource;
 
 /** Minimal, Crowi-design-token-based styling for the tooltip (same token approach as `autocomplete-extension.ts`'s dropdown theme). */
 const affordanceTheme = EditorView.theme({
@@ -543,6 +466,5 @@ const affordanceTheme = EditorView.theme({
  * get it with no new prop — AC-C3).
  */
 export function imageAffordanceExtension(): Extension {
-  const hover = hoverTooltip(imageHoverTooltipSource, { hoverTime: 300 });
-  return [cursorTooltipField, hover, closeHoverWhenCursorTakesOver(hover), affordanceTheme];
+  return [affordanceTooltip.extension, affordanceTheme];
 }

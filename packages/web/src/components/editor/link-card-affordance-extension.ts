@@ -1,7 +1,8 @@
 import { syntaxTree } from '@codemirror/language';
-import { type EditorState, type Extension, MapMode, StateField } from '@codemirror/state';
-import { closeHoverTooltips, EditorView, hoverTooltip, showTooltip, type Tooltip, type TooltipView } from '@codemirror/view';
+import { type EditorState, type Extension, MapMode } from '@codemirror/state';
+import { EditorView, type Tooltip, type TooltipView } from '@codemirror/view';
 import { m } from '@paraglide/messages.js';
+import { createAffordanceTooltip } from './affordance-tooltip';
 import { isSuppressedContext } from './autocomplete-extension';
 
 /**
@@ -186,55 +187,11 @@ function computeTooltip(state: EditorState, pos: number): Tooltip | null {
   };
 }
 
-interface CursorTooltipState {
-  tooltip: Tooltip | null;
-}
+/** Cursor+hover trigger pair — all the timing-sensitive plumbing (reference-stable cursor field, same-span hover suppression, hover-close on cursor take-over) lives in the shared `createAffordanceTooltip` factory. */
+const affordanceTooltip = createAffordanceTooltip(computeTooltip);
 
-/** Cursor/selection trigger — shows the affordance when the caret sits inside a bare URL or `@[card](url)`, e.g. after keyboard navigation. Reference-stable across transactions that don't change which span is targeted, so CodeMirror doesn't tear down and rebuild the `TooltipView` on every unrelated edit. */
-const linkCardCursorTooltipField = StateField.define<CursorTooltipState>({
-  create(state) {
-    return { tooltip: computeTooltip(state, state.selection.main.head) };
-  },
-  update(value, tr) {
-    const next = computeTooltip(tr.state, tr.state.selection.main.head);
-    if (value.tooltip && next && sameSpan(value.tooltip, next)) return value;
-    return { tooltip: next };
-  },
-  provide: (field) => showTooltip.from(field, (value) => value.tooltip),
-});
-
-function sameSpan(a: Tooltip, b: Tooltip): boolean {
-  return a.pos === b.pos && a.end === b.end;
-}
-
-/**
- * Mouse-hover trigger. Suppresses itself when the cursor trigger is
- * already showing the affordance for the exact same span, so the two
- * triggers never stack two panels over one target (duplicate-tooltip-
- * fix technique, same as `image-affordance-extension.ts`'s
- * `imageHoverTooltipSource`). Exported for direct unit testing of that
- * suppression.
- */
-export function linkCardHoverTooltipSource(view: EditorView, pos: number): Tooltip | null {
-  const hover = computeTooltip(view.state, pos);
-  if (!hover) return null;
-  const cursor = view.state.field(linkCardCursorTooltipField).tooltip;
-  if (cursor && sameSpan(cursor, hover)) return null;
-  return hover;
-}
-
-/** Reverse-order convergence: close an open hover panel when the cursor trigger newly covers the exact same span (e.g. the user clicks into a hovered URL). See `image-affordance-extension.ts:closeHoverWhenCursorTakesOver` for the full rationale — identical technique, scoped to this extension's own state field. */
-function closeHoverWhenCursorTakesOver(hover: ReturnType<typeof hoverTooltip>): Extension {
-  return EditorView.updateListener.of((update) => {
-    const prev = update.startState.field(linkCardCursorTooltipField).tooltip;
-    const next = update.state.field(linkCardCursorTooltipField).tooltip;
-    if (!next) return;
-    if (prev && sameSpan(prev, next)) return;
-    const hoverOverlaps = update.state.field(hover.active).some((t) => sameSpan(t, next));
-    if (!hoverOverlaps) return;
-    queueMicrotask(() => update.view.dispatch({ effects: closeHoverTooltips }));
-  });
-}
+/** The hover trigger's source — re-exported from the shared factory for direct unit testing of the same-span suppression. */
+export const linkCardHoverTooltipSource = affordanceTooltip.hoverSource;
 
 /** Crowi-design-token-based styling, matching `image-affordance-extension.ts`'s `affordanceTheme` approach. */
 const linkCardAffordanceTheme = EditorView.theme({
@@ -262,6 +219,5 @@ const linkCardAffordanceTheme = EditorView.theme({
  * `imageAffordanceExtension()`).
  */
 export function linkCardAffordanceExtension(): Extension {
-  const hover = hoverTooltip(linkCardHoverTooltipSource, { hoverTime: 300 });
-  return [linkCardCursorTooltipField, hover, closeHoverWhenCursorTakesOver(hover), linkCardAffordanceTheme];
+  return [affordanceTooltip.extension, linkCardAffordanceTheme];
 }

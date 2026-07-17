@@ -11,54 +11,46 @@
  * in the Crowi monorepo.
  */
 
+export type { AppInfo, PageMetadataAccessor, PluginContext, PluginLogger, StateCell } from './context';
+export type { EventBus, PluginEvents } from './events';
+export { escapeHtml } from './html';
 export type { CrowiPlugin } from './plugin';
 
-export type { PluginContext, AppInfo, PageMetadataAccessor, PluginLogger, StateCell } from './context';
-
-export type { StorageDriver, StorageRegistry, StoragePutMeta, StoragePutResult } from './registries/storage';
-
+export type { AuthDriver, AuthProfile, AuthRegistry, AuthVerifyResult } from './registries/auth';
+export type { EmailMessage, MailSender, MailSenderRegistry } from './registries/mail';
+export type { NotificationPayload, NotifierDriver, NotifierRegistry } from './registries/notifier';
 export type {
-  SearchDriver,
-  SearchRegistry,
   SearchableDoc,
-  SearchQuery,
-  SearchQueryViewer,
-  SearchQueryGrants,
-  SearchPageType,
-  SearchHits,
+  SearchDriver,
   SearchHit,
+  SearchHits,
+  SearchPageType,
+  SearchQuery,
+  SearchQueryGrants,
+  SearchQueryViewer,
+  SearchRegistry,
 } from './registries/search';
-
-export type { AuthDriver, AuthRegistry, AuthProfile, AuthVerifyResult } from './registries/auth';
-
-export type { NotifierDriver, NotifierRegistry, NotificationPayload } from './registries/notifier';
-
-export type { MailSender, MailSenderRegistry, EmailMessage } from './registries/mail';
-
+export type { StorageDriver, StoragePutMeta, StoragePutResult, StorageRegistry } from './registries/storage';
 export type {
-  RendererRegistry,
-  NodeRenderer,
-  CodeBlockRenderer,
+  AuthContext,
+  CacheEntry,
+  CacheKey,
+  CacheStorage,
   CodeBlockInfo,
-  EmbedRenderer,
-  EmbedInput,
+  CodeBlockRenderer,
   EmbedFragment,
-  UrlInlineExpansionRule,
+  EmbedInput,
+  EmbedRenderer,
   InlineExpansion,
+  NodeRenderer,
   RenderContext,
+  RenderError,
+  RendererRegistry,
   RenderPhase,
   RenderResult,
-  RenderError,
   Reservation,
-  CacheStorage,
   ScopedCacheStorage,
-  CacheKey,
-  CacheEntry,
-  AuthContext,
+  UrlInlineExpansionRule,
 } from './renderer';
-
-export type { EventBus, PluginEvents } from './events';
-
-export type { PluginRouterScope, PluginRouteHandler, PluginRouteMethod, PluginRouteOptions } from './routes';
-
-export { SENSITIVE_FIELD_MARKER, ACTION_FIELD_MARKER, isSensitiveField, getActionAnnotation } from './schema-markers';
+export type { PluginRouteHandler, PluginRouteMethod, PluginRouteOptions, PluginRouterScope } from './routes';
+export { ACTION_FIELD_MARKER, getActionAnnotation, isSensitiveField, SENSITIVE_FIELD_MARKER } from './schema-markers';

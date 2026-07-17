@@ -1,7 +1,8 @@
+import type { CrowiPlugin, NodeRenderer } from '@crowi/plugin-api';
+import { escapeHtml } from '@crowi/plugin-api';
 import { createJiti } from 'jiti';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import katex from 'katex';
-import type { CrowiPlugin, NodeRenderer } from '@crowi/plugin-api';
 
 /**
  * @crowi/plugin-renderer-katex
@@ -135,22 +136,3 @@ export default plugin;
 
 // Internal renderers exported for unit-tests.
 export const _renderers = { renderMathBlock, renderMathInline };
-
-function escapeHtml(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => {
-    switch (c) {
-      case '&':
-        return '&amp;';
-      case '<':
-        return '&lt;';
-      case '>':
-        return '&gt;';
-      case '"':
-        return '&quot;';
-      case "'":
-        return '&#39;';
-      default:
-        return c;
-    }
-  });
-}
