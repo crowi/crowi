@@ -52,7 +52,17 @@ const CACHE_TTL_SEC = 60 * 60;
  */
 export function createPlantUmlRenderer(config: PlantUmlConfig): CodeBlockRenderer {
   return {
-    cacheVersion: 1,
+    // Phase 3 (feature-plugin-renderer-mermaid spec §9): bumped from 1 to
+    // 2 when the sanitizer switched from the regex-based implementation
+    // to the shared `@crowi/plugin-renderer-svg-sanitize` package and the
+    // output class changed from `plantuml-embed` to `diagram-embed
+    // plantuml-embed`. This only invalidates `PluginRenderCache` lookups
+    // (an operational escape hatch, `mongodb-cache.ts`'s
+    // `pluginCacheVersion` mismatch = miss) — it does NOT bump
+    // `RENDERER_PIPELINE_VERSION`, so already-saved `Revision.renderedAst`
+    // blobs (written with the old sanitizer/class) keep serving verbatim
+    // until their page is next saved (spec §9 "next-save-only").
+    cacheVersion: 2,
     reservation: { variant: 'aspect', aspectRatio: 16 / 9 },
     computeEmbedKey: (info: CodeBlockInfo) => {
       // Hash the diagram source only — operator changing serverUrl /
@@ -92,8 +102,22 @@ export function createPlantUmlRenderer(config: PlantUmlConfig): CodeBlockRendere
       if (config.outputFormat === 'svg') {
         const svg = await response.text();
         const sanitized = sanitizeSvg(svg);
+        if (!sanitized.ok) {
+          // The server-supplied SVG failed the shared sanitizer's
+          // structural checks (malformed XML, non-svg root, ...) — treat
+          // it the same as any other bad-response failure rather than
+          // ever falling back to unsanitized output.
+          return {
+            html: '',
+            error: { code: 'unknown', message: `PlantUML server returned an SVG document rejected by the sanitizer (${sanitized.reason})` },
+          };
+        }
         return {
-          html: `<div class="plantuml-embed">${sanitized}</div>`,
+          // `diagram-embed` (spec §9) is the shared marker `DiagramEmbed`
+          // (`packages/web/src/components/page-view/diagram-embed.tsx`)
+          // matches on for the click-to-enlarge / dark-mode-neutral-face
+          // treatment; `plantuml-embed` stays for renderer-specific CSS.
+          html: `<div class="diagram-embed plantuml-embed">${sanitized.svg}</div>`,
           ttlSec: CACHE_TTL_SEC,
         };
       }
@@ -105,7 +129,7 @@ export function createPlantUmlRenderer(config: PlantUmlConfig): CodeBlockRendere
       const buf = Buffer.from(await response.arrayBuffer());
       const b64 = buf.toString('base64');
       return {
-        html: `<img class="plantuml-embed" alt="" src="data:image/png;base64,${b64}">`,
+        html: `<img class="diagram-embed plantuml-embed" alt="" src="data:image/png;base64,${b64}">`,
         ttlSec: CACHE_TTL_SEC,
       };
     },

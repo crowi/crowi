@@ -906,6 +906,9 @@ importers:
       '@crowi/plugin-api':
         specifier: workspace:^
         version: link:../plugin-api
+      '@crowi/plugin-renderer-svg-sanitize':
+        specifier: workspace:^
+        version: link:../plugin-renderer-svg-sanitize
       plantuml-encoder:
         specifier: ^1.4.0
         version: 1.4.0

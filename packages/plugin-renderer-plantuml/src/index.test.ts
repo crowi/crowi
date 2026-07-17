@@ -6,10 +6,15 @@ import { sanitizeSvg } from './sanitize';
 /**
  * Minimal RenderContext stub — only `log` is consulted by the plugin.
  * `auth` / `cache` are intentionally absent because the PlantUML
- * renderer does not call them at the render seam.
+ * renderer does not call them at the render seam. `actor` became a
+ * required `RenderContext` field in feature-plugin-renderer-mermaid
+ * Phase 1 (spec §6, admission control) — PlantUML never reads it (it
+ * declares no `admissionControl`), so a fixed `'system'` actor is fine
+ * here.
  */
 const stubCtx: RenderContext = {
   mode: 'view',
+  actor: { kind: 'system' },
   log: {
     debug: () => undefined,
     info: () => undefined,
@@ -80,60 +85,74 @@ describe('encoder', () => {
   });
 });
 
-describe('SVG sanitization (sanitizeSvg)', () => {
-  it('preserves a plain svg + path + text element verbatim', () => {
-    const input = '<svg><path d="M0 0 L1 1"/><g><text x="0" y="0">Hi</text></g></svg>';
-    expect(sanitizeSvg(input)).toBe(input);
+/**
+ * `sanitizeSvg` (`./sanitize.ts`) is now a thin adapter over the shared
+ * `@crowi/plugin-renderer-svg-sanitize` package (feature-plugin-renderer-mermaid
+ * spec §9, Phase 3) — that package's own `sanitize.test.ts` is the
+ * exhaustive vector suite (script / foreignObject / on* / javascript: /
+ * data: / protocol-relative / CSS @import & url() / xmlns tricks /
+ * DOCTYPE / processing instructions / xml:base / SMIL, plus a benign
+ * "plantuml-shaped SVG survives with structure intact" regression using
+ * this exact `allowSafeHref: true` policy). Duplicating that suite here
+ * would just be two copies of the same assertions to keep in sync — this
+ * describe block is deliberately narrow: it proves the ADAPTER is wired
+ * correctly (right policy, right return shape) and that PlantUML's own
+ * "preserves href to a safe URL" contract survived the swap.
+ */
+describe('SVG sanitization (sanitizeSvg — adapter over @crowi/plugin-renderer-svg-sanitize)', () => {
+  const SVG_NS = 'xmlns="http://www.w3.org/2000/svg"';
+
+  it('preserves a benign svg + path + text element', () => {
+    const input = `<svg ${SVG_NS}><path d="M0 0 L1 1"/><g><text x="0" y="0">Hi</text></g></svg>`;
+    const result = sanitizeSvg(input);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.svg).toContain('<path');
+      expect(result.svg).toContain('Hi');
+    }
   });
 
-  it('strips a top-level <script> block', () => {
-    const input = '<svg><script>alert(1)</script><path d="M0 0"/></svg>';
-    const out = sanitizeSvg(input);
-    expect(out).not.toMatch(/<script/i);
-    expect(out).not.toMatch(/alert\(1\)/);
-    expect(out).toContain('<path');
+  it('strips a top-level <script> block (delegated to the shared sanitizer)', () => {
+    const input = `<svg ${SVG_NS}><script>alert(1)</script><path d="M0 0"/></svg>`;
+    const result = sanitizeSvg(input);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.svg).not.toMatch(/<script/i);
+      expect(result.svg).not.toMatch(/alert\(1\)/);
+      expect(result.svg).toContain('<path');
+    }
   });
 
-  it('strips a <script> with attributes + whitespace', () => {
-    const input = '<svg><script  type="application/javascript">  let x = 1;  </script></svg>';
-    expect(sanitizeSvg(input)).not.toMatch(/<script/i);
-  });
-
-  it('strips onclick / onload / onerror handler attributes', () => {
-    const input = '<svg><rect onclick="evil()" onload=\'evil()\' x="0"></rect><image onerror=evil src="x"/></svg>';
-    const out = sanitizeSvg(input);
-    expect(out).not.toMatch(/onclick/i);
-    expect(out).not.toMatch(/onload/i);
-    expect(out).not.toMatch(/onerror/i);
-    // Other attrs (x, src) preserved.
-    expect(out).toContain('x="0"');
-    expect(out).toContain('src="x"');
-  });
-
-  it('strips href="javascript:..." (single + double quoted + xlink:href)', () => {
-    const input = '<svg><a href="javascript:alert(1)">x</a><a href=\'javascript:alert(2)\'>y</a><use xlink:href="javascript:alert(3)"/></svg>';
-    const out = sanitizeSvg(input);
-    expect(out).not.toMatch(/javascript:/i);
-    expect(out).not.toMatch(/xlink:href\s*=\s*"javascript/i);
-  });
-
-  it('strips <foreignObject> blocks', () => {
-    const input = '<svg><foreignObject><div onclick="x">html</div></foreignObject><path/></svg>';
-    const out = sanitizeSvg(input);
-    expect(out).not.toMatch(/foreignObject/i);
-    expect(out).toContain('<path');
+  it('strips href="javascript:..." even though allowSafeHref is true (only https survives)', () => {
+    const input = `<svg ${SVG_NS}><a href="javascript:alert(1)">x</a></svg>`;
+    const result = sanitizeSvg(input);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.svg).not.toMatch(/javascript:/i);
+    }
   });
 
   it('is idempotent', () => {
-    const input = '<svg><script>x</script><a href="javascript:y" onclick="z"></a></svg>';
+    const input = `<svg ${SVG_NS}><script>x</script><a href="javascript:y" onclick="z"></a></svg>`;
     const once = sanitizeSvg(input);
-    const twice = sanitizeSvg(once);
-    expect(twice).toBe(once);
+    expect(once.ok).toBe(true);
+    if (!once.ok) return;
+    const twice = sanitizeSvg(once.svg);
+    expect(twice).toEqual(once);
   });
 
-  it('preserves href to a safe URL', () => {
-    const input = '<svg><a href="https://example.com">x</a></svg>';
-    expect(sanitizeSvg(input)).toContain('href="https://example.com"');
+  it('preserves href to a safe https URL (PlantUML allowSafeHref: true policy)', () => {
+    const input = `<svg ${SVG_NS}><a href="https://example.com">x</a></svg>`;
+    const result = sanitizeSvg(input);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.svg).toContain('href="https://example.com"');
+    }
+  });
+
+  it('rejects malformed / non-svg-root input instead of falling back to unsanitized output', () => {
+    expect(sanitizeSvg('not xml at all <<<').ok).toBe(false);
+    expect(sanitizeSvg('<html><body>no svg here</body></html>').ok).toBe(false);
   });
 });
 
@@ -147,19 +166,28 @@ describe('render path (success)', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [calledUrl] = fetchMock.mock.calls[0];
     expect(calledUrl).toMatch(/^http:\/\/plantuml:8080\/svg\//);
-    expect(result.html).toContain('<div class="plantuml-embed">');
+    expect(result.html).toContain('<div class="diagram-embed plantuml-embed">');
     expect(result.html).toContain('<svg');
     expect(result.ttlSec).toBe(60 * 60);
     expect(result.error).toBeUndefined();
   });
 
   it('sanitizes the PlantUML server SVG response', async () => {
-    const dirty = '<svg><script>bad()</script><path d="M0 0"/></svg>';
+    const dirty = '<svg xmlns="http://www.w3.org/2000/svg"><script>bad()</script><path d="M0 0"/></svg>';
     fetchMock.mockResolvedValueOnce(new Response(dirty, { status: 200 }));
     const renderer = createPlantUmlRenderer(DEFAULT_CONFIG);
     const result = (await renderer.render({ lang: 'plantuml', source: 'x' }, stubCtx)) as RenderResult;
     expect(result.html).not.toMatch(/<script/i);
     expect(result.html).toContain('<path');
+    expect(result.error).toBeUndefined();
+  });
+
+  it('maps a sanitizer-rejected (malformed) SVG response to RenderError code:"unknown" instead of falling back to unsanitized output', async () => {
+    fetchMock.mockResolvedValueOnce(new Response('<not-svg-at-all/>', { status: 200 }));
+    const renderer = createPlantUmlRenderer(DEFAULT_CONFIG);
+    const result = (await renderer.render({ lang: 'plantuml', source: 'x' }, stubCtx)) as RenderResult;
+    expect(result.html).toBe('');
+    expect(result.error?.code).toBe('unknown');
   });
 
   it('renders PNG responses as a base64 data: img', async () => {
@@ -167,7 +195,7 @@ describe('render path (success)', () => {
     fetchMock.mockResolvedValueOnce(new Response(png, { status: 200 }));
     const renderer = createPlantUmlRenderer({ ...DEFAULT_CONFIG, outputFormat: 'png' });
     const result = (await renderer.render({ lang: 'plantuml', source: 'x' }, stubCtx)) as RenderResult;
-    expect(result.html).toContain('<img');
+    expect(result.html).toContain('<img class="diagram-embed plantuml-embed"');
     expect(result.html).toContain('data:image/png;base64,');
     expect(result.html).toContain(png.toString('base64'));
   });
@@ -182,9 +210,9 @@ describe('render path (success)', () => {
     expect(k1).toBe(k2);
   });
 
-  it('declares cacheVersion=1 and aspect-ratio reservation', () => {
+  it('declares cacheVersion=2 (bumped from 1 — spec §9, PluginRenderCache-only invalidation) and aspect-ratio reservation', () => {
     const renderer = createPlantUmlRenderer(DEFAULT_CONFIG);
-    expect(renderer.cacheVersion).toBe(1);
+    expect(renderer.cacheVersion).toBe(2);
     expect(renderer.reservation).toEqual({ variant: 'aspect', aspectRatio: 16 / 9 });
   });
 
