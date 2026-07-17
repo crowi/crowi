@@ -27,6 +27,14 @@ import { attachWsNamespace } from './attach-namespace';
  *     accepted immediately with the raw `IncomingMessage` as context.
  */
 
+// These are real-socket integration tests (http.Server + ws upgrades + drain
+// timers). Under a loaded CI runner a single test can legitimately chain
+// several multi-second socket round-trips, so give the whole file generous
+// headroom above jest's 5s default — the per-probe ceilings (see `probeWs`)
+// are what actually bound each assertion; this only stops a slow-but-correct
+// run from tripping the outer test timeout (part of the #917 flake fix).
+jest.setTimeout(30_000);
+
 interface RunningServer {
   server: http.Server;
   port: number;
@@ -60,8 +68,20 @@ interface WsOutcome {
   closeCode?: number;
 }
 
-/** Open a WebSocket and resolve with the result observed within `timeoutMs`. */
-function probeWs(url: string, timeoutMs = 1000): Promise<WsOutcome> {
+/**
+ * Open a WebSocket and resolve with the result observed within `timeoutMs`.
+ *
+ * A positive-expectation probe resolves the instant the `open` event fires, so
+ * `timeoutMs` is only the ceiling for the FAILURE case — it does not slow the
+ * happy path. The default is deliberately generous (not 1s): under a loaded CI
+ * runner (`--maxWorkers=5`, all workers contending) a real upgrade round-trip
+ * against a freshly-listened `http.Server` has been observed to take >1s, which
+ * settled the probe with `opened:false` and made the AC-1 filtering test flake
+ * (flaky-test issue #917). Callers asserting NON-open (e.g. `/unknown`) pass a
+ * short explicit `timeoutMs` — that window only has to outlast a would-be open,
+ * which load does not manufacture, so it stays small to keep the suite fast.
+ */
+function probeWs(url: string, timeoutMs = 8000): Promise<WsOutcome> {
   return new Promise((resolve) => {
     const result: WsOutcome = { opened: false };
     const ws = new WebSocket(url);
