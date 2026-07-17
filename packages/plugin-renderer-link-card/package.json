@@ -1,0 +1,46 @@
+{
+  "name": "@crowi/plugin-renderer-link-card",
+  "version": "0.1.0-dev",
+  "description": "OGP link-card renderer for Crowi 2.x. Renders `@[card](url)` embeds as a title/description/domain/image preview card via an SSRF-guarded fetch of the target page's OGP meta tags.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/crowi/crowi.git",
+    "directory": "packages/plugin-renderer-link-card"
+  },
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch --no-clean",
+    "type-check": "tsc --noEmit",
+    "test": "jest --passWithNoTests"
+  },
+  "dependencies": {
+    "@crowi/plugin-api": "workspace:^"
+  },
+  "devDependencies": {
+    "@crowi/plugin-api": "workspace:*",
+    "@crowi/tsconfig": "workspace:*",
+    "@types/jest": "catalog:",
+    "@types/node": "catalog:",
+    "jest": "catalog:",
+    "ts-jest": "catalog:",
+    "tsup": "catalog:",
+    "typescript": "catalog:"
+  }
+}
