@@ -1,6 +1,7 @@
 'use client';
 
 import { useMutation } from '@tanstack/react-query';
+import { useRef } from 'react';
 import { apiClientV2 } from './api-client';
 
 /**
@@ -19,11 +20,35 @@ import { apiClientV2 } from './api-client';
  *
  * RFC-0006 Phase 4 Batch 4 — switched from `apiClient.pagePreview.*`
  * (ts-rest) to `apiClientV2.pages.preview.$post` (`createClient`).
+ *
+ * feature-plugin-renderer-mermaid spec §7 item 8 — every call aborts
+ * whichever previous call is still in flight before issuing its own
+ * request, via a `useRef<AbortController | null>` that survives across
+ * `mutationFn` invocations (a plain local variable would be re-created
+ * per call and could never see the previous controller). The signal
+ * rides `apiClientV2.pages.preview.$post`'s `ClientRequestOptions.init`
+ * (`hono`'s `hc` client — see the doc comment on `fetchWithTimeout`,
+ * which composes this signal with its own internal timeout signal via
+ * `AbortSignal.any`, so `fetchWithTimeout` itself needs no change).
+ * `MarkdownPreview.tsx` needs no change either: its existing `stale`
+ * cleanup flag is already set before the next debounce fires, so the
+ * aborted call's `.catch` bails out early instead of calling
+ * `setErrored(true)`.
+ *
+ * Superseded server-side work is also cut short: the aborted request's
+ * `c.req.raw.signal` (`hono/handlers/page-preview.ts`) is threaded
+ * through to `RenderContext.signal`, so a still-queued (not yet
+ * running) admission-control job for that request is dropped instead
+ * of wasting a render slot (`render-admission.ts`, spec §6).
  */
 export function usePreview() {
+  const controllerRef = useRef<AbortController | null>(null);
   return useMutation({
     mutationFn: async (body: string): Promise<unknown> => {
-      const response = await apiClientV2.pages.preview.$post({ json: { body } });
+      controllerRef.current?.abort();
+      const controller = new AbortController();
+      controllerRef.current = controller;
+      const response = await apiClientV2.pages.preview.$post({ json: { body } }, { init: { signal: controller.signal } });
       if (!response.ok) {
         throw new Error('Failed to render preview');
       }
