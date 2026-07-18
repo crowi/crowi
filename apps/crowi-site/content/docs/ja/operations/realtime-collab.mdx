@@ -38,7 +38,8 @@ services:
       MONGO_URI: mongodb://mongo:27017/crowi
       WS_TOKEN_SECRET: ${WS_TOKEN_SECRET}
       CROWI_ENCRYPTION_KEY: ${CROWI_ENCRYPTION_KEY}
-      # REDIS_URL は任意 (セッション/Socket.IO 共用)
+      # REDIS_URL はシングルインスタンスでは任意。7 つの消費者の内訳は
+      # 後述の「Redis 接続数の見積もり」を参照
       REDIS_URL: redis://redis:6379
     ports:
       - "3000:3000"
@@ -54,10 +55,21 @@ services:
 
 このとき:
 
-- `REDIS_URL` は省略可ですが、セッション保存と Socket.IO アダプタの
-  共用先として通常は設定済みのはずです。
-- 共同編集自体は Redis なしでも動作します (extension-redis は attach
-  されず、編集者上限 counter は fail-open になります)。
+- `REDIS_URL` はシングルインスタンスでは省略可ですが、7 つの消費者は
+  未設定時の退行の仕方が一様ではありません。
+  - 共同編集 pub/sub (extension-redis は attach されません)・プレゼンス
+    fan-out・通知 invalidation・設定同期は**レプリカ間の連携**専用の
+    ため、単一インスタンスでは連携先自体が存在せず、実質的に no-op で
+    何も失われません。
+  - 編集者上限カウンタは Redis なしでは **fail-open** になり、21 人目
+    以降を弾く代わりに `COLLAB_MAX_EDITORS_PER_PAGE` の強制自体を止め
+    ます (詳細は[障害時の挙動](#障害時の挙動-failure-modes)) — これは
+    意図的な degrade-safe な選択であり no-op ではありません。
+  - rate limiting はプロセス内メモリの window にフォールバックする
+    ため単一インスタンスでも動作は継続しますが、レプリカ間での共有は
+    できません。
+  - LRU (最近見たページ) にはフォールバックがなく、`REDIS_URL` 未設定
+    ではシングルインスタンスかどうかに関わらずこの機能自体が使えません。
 - ブラウザは `NEXT_PUBLIC_API_URL` から `/collab/` への WebSocket URL を
   自動導出するため、`NEXT_PUBLIC_COLLAB_URL` の指定は不要です。
 - `WS_TOKEN_SECRET` はシングルインスタンスでは省略可です — 未設定のまま
@@ -215,28 +227,36 @@ labels:
 | 変数名 | 必須 | 用途 |
 | ------ | ---- | ---- |
 | `WS_TOKEN_SECRET` | マルチでは必須 (全レプリカで揃える) | wsToken (短命 JWT) の HMAC 署名鍵。マルチインスタンス構成では全レプリカで**同じ値**を指定する必要があります。`CROWI_MULTI_INSTANCE` が設定されているのに `WS_TOKEN_SECRET` が未設定 (または既知のプレースホルダ) の場合、api は**起動を中止**します (プロセスごとのランダム鍵では他レプリカが検証できないため)。シングルインスタンス (`CROWI_MULTI_INSTANCE` 未設定) では未設定でも起動でき、プロセス起動ごとにランダム生成され警告ログが出ます。同梱の `.env.example` は意図的に空にしています (世界中で既知の鍵をテンプレートに入れないため)。設定する場合は**最低 32 文字**必要です — 32 文字未満の値は `NODE_ENV=production` (未設定時のデフォルトも production 扱い) では起動時エラーで停止し、それ以外の `NODE_ENV` では起動ログの警告レポートに含まれます (既知のプレースホルダ値は対象外)。`openssl rand -base64 32` で生成してください。 |
-| `CROWI_MULTI_INSTANCE` | いいえ (既定はシングル) | マルチインスタンス構成を宣言します (`1` / `true`、またはレプリカ数 `>= 2`)。`WS_TOKEN_SECRET` 起動ガードはこの値を基準に判定します (`REDIS_URL` の有無ではありません)。そのため Redis をセッション/Socket.IO 用途のみに使う 1 レプリカ構成は共有鍵なしで起動できます。api ノードを 2 台以上に増やすときに全レプリカへ設定してください。 |
+| `CROWI_MULTI_INSTANCE` | いいえ (既定はシングル) | マルチインスタンス構成を宣言します (`1` / `true`、またはレプリカ数 `>= 2`)。`WS_TOKEN_SECRET` 起動ガードはこの値を基準に判定します (`REDIS_URL` の有無ではありません)。そのため Redis を rate limiting や編集者上限カウンタなどの用途のみに使う 1 レプリカ構成は共有鍵なしで起動できます。api ノードを 2 台以上に増やすときに全レプリカへ設定してください。 |
 | `COLLAB_MAX_EDITORS_PER_PAGE` | いいえ (デフォルト `20`) | ページごとの同時編集者上限。21 人目以降は read-only でリアルタイム表示は受けられますが編集できません。 |
 | `NEXT_PUBLIC_COLLAB_URL` | いいえ | ブラウザが WebSocket 接続する URL。未指定時は `window.location.host` + `NEXT_PUBLIC_API_URL` から `/collab/` を derive します。リバースプロキシで `/collab/*` を api 同居ホストに向けているなら設定不要。 |
-| `REDIS_URL` | マルチでは必須 | セッション/Socket.IO アダプタ + 共同編集の pub/sub + 編集者上限 counter。未設定時の挙動は次節参照。 |
+| `REDIS_URL` | マルチでは必須 | 共同編集の pub/sub・編集者上限カウンタ・プレゼンス・通知 invalidation・設定同期・rate limiting・LRU (最近見たページ) のための連携用途。未設定時の挙動は次節参照。 |
 | `CROWI_ENCRYPTION_KEY` | 推奨 | 機密 Config (OAuth secret 等) を AES-256-GCM で暗号化。共同編集には直接影響しませんが、`pnpm --filter @crowi/api crypto:gen-key` で生成して全レプリカで揃えてください。 |
 
 ## Redis 接続数の見積もり
 
-`@hocuspocus/extension-redis` は **pub + sub の 2 接続** を api インスタンス
-ごとに張ります。既存のセッション/Socket.IO 用接続と合算して Redis 側の
-`maxclients` を見積もる必要があります。
+api インスタンスあたりの接続数は、インスタンスのライフサイクル段階に
+よって変わります(固定本数ではありません):
+
+- **boot 完了直後** (共同編集セッションがまだ 1 つも開始していない状態):
+  **6 本** — 共有クライアント 1 本 (編集者上限カウンタ・LRU・rate
+  limiting・プレゼンスのハッシュ書き込み・通知 publish がすべて相乗り)
+  + プレゼンス subscriber 2 本 + 通知 subscriber 1 本 + Config
+  publisher/subscriber 2 本。
+- **そのインスタンスで最初の共同編集セッションが開始した後**: **8 本**
+  — 上記 6 本 + `@hocuspocus/extension-redis` が張る専用 `ioredis`
+  pub + sub 接続 2 本 (`lazyConnect: true` のため最初のドキュメント
+  読み込みまでは接続されません)。
 
 例: 10 api レプリカ + 1 web レプリカの構成
 
-- 共同編集 extension-redis: 10 × 2 = 20 接続 (pub + sub の専用 ioredis client)
-- セッション/Socket.IO: 10 × 1 = 10 接続 (node-redis client)
-- 編集者上限 counter: セッション/Socket.IO と同じ node-redis client に相乗り (追加接続 0)
-- web 側からの直接 Redis 接続: なし (api 経由)
+- boot 直後: 10 × 6 = 60 接続。
+- 全レプリカで共同編集セッションが 1 回でも開始された後: 10 × 8 = 80 接続。
+- web 側からの直接 Redis 接続: なし (api 経由)。
 
-合計約 30 接続が常時消費されます。デフォルトの `maxclients=10000` 内で
-十分まかなえますが、Redis Cluster や ElastiCache の低リソースインスタンス
-(`cache.t3.micro` / `cache.t4g.micro` 等) では余裕を持って割り当ててください。
+デフォルトの `maxclients=10000` 内で十分まかなえますが、Redis Cluster や
+ElastiCache の低リソースインスタンス (`cache.t3.micro` / `cache.t4g.micro`
+等) では余裕を持って割り当ててください。
 
 ## 2 インスタンス smoke テスト手順
 
@@ -265,7 +285,18 @@ docker compose logs -f api
 4. nginx などのロードバランサーが**手前にある場合は、各ウィンドウが
    別レプリカに振り分けられていること**を確認 (api 側ログの `onConnect`
    出力で `instance=` 識別子が異なれば OK)。
-5. 一方の api コンテナを `docker compose stop api-1` で停止 → 残った
+5. **プレゼンス**: 2 ウィンドウとも同じページを開いたまま、お互いの
+   ウィンドウのライブ閲覧者表示にもう一方のユーザーが表示されることを
+   確認する — プレゼンス subscriber がレプリカ間で viewer 状態を Redis
+   経由で伝搬していることの確認になる。次の手順でレプリカを停止すると
+   残りは 1 レプリカだけになりレプリカ間の伝搬が確認できなくなるため、
+   **この確認は次の手順より先に**行うこと。
+6. **通知**: 一方のウィンドウからもう一方のユーザー宛の通知を発生させ
+   (例: コメントでメンションする)、2 つのブラウザが別レプリカに
+   振り分けられている状態でもリアルタイムで届くことを確認する — 通知
+   subscriber のクロスインスタンス invalidation が Redis 経由で機能して
+   いることの確認になる。同じ理由でこの確認も**次の手順より先に**行うこと。
+7. 一方の api コンテナを `docker compose stop api-1` で停止 → 残った
    レプリカに自動再接続し、編集が継続できることを確認。
 
 ## 障害時の挙動 (Failure modes)
