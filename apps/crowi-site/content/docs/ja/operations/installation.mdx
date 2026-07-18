@@ -21,7 +21,7 @@ Crowi 2.0 は Turborepo + pnpm のモノレポ構成で、API・Web フロント
 | ソフトウェア | バージョン | 用途 |
 | ------------ | ---------- | ---- |
 | Node.js | 24.x | API / Web の実行ランタイム |
-| pnpm | 9.15.9 (corepack 経由) | パッケージマネージャ (`packageManager` は `pnpm@9.15.9`) |
+| pnpm | 10.34.3 (corepack 経由) | パッケージマネージャ (`packageManager` は `pnpm@10.34.3`) |
 | MongoDB | 7 以降 (開発用イメージは `mongo:8`) | Wiki データの永続化 |
 | Redis | 7 以降 | セッション・リアルタイム共同編集の pub/sub |
 | Elasticsearch | 任意 | 全文検索バックエンド (プラグイン駆動) |
@@ -56,14 +56,16 @@ docker compose up -d
 cp .env.example .env
 # MONGO_URI / REDIS_URL / CROWI_ENCRYPTION_KEY などを必要に応じて編集
 
-# 5. すべて起動 (API :4301 / Web :4302 / プラグインの watch ビルド)
+# 5. すべて起動 (API :4301 / Web :4302 / 同一オリジン proxy :4304)
 pnpm dev
 ```
 
 api は `tsx watch` で起動するため、初回起動はおよそ 1 秒で完了します。
-起動後、ブラウザで `http://localhost:4302` を開くとインストーラ画面が
-表示されます。最初の管理者アカウントを作成すると Wiki が使えるように
-なります。
+起動後、ブラウザで `http://localhost:4304` を開くとインストーラ画面が
+表示されます — 同一オリジン dev proxy の `:4304` が正式な入口です
+(リアルタイム編集・presence・通知はこの proxy 経由でのみ接続でき、
+素の web ポートは WS upgrade を転送できません)。最初の管理者アカウントを
+作成すると Wiki が使えるようになります。
 
 ### ポート構成
 
@@ -71,9 +73,10 @@ api は `tsx watch` で起動するため、初回起動はおよそ 1 秒で完
 
 | アプリ | ポート | 内容 |
 | ------ | ------ | ---- |
-| `@crowi/api` | `4301` | Hono API サーバ |
-| `@crowi/web` | `4302` | Next.js 16 フロントエンド |
-| `@crowi/crowi-site` | `4303` | crowi.wiki LP + ドキュメント (任意) |
+| `@crowi/api` | `4301` | Hono API サーバ (素) |
+| `@crowi/web` | `4302` | Next.js 16 フロントエンド (素 — リアルタイム WS 不通) |
+| `@crowi/site` | `4303` | crowi.wiki LP + ドキュメント (任意) |
+| dev proxy | `4304` | **正式な入口** — api + web + WebSocket namespace を前段する同一オリジン reverse proxy |
 
 ドキュメントサイトは開発時には不要です。必要なときだけ `pnpm dev:site`
 で個別に起動してください。

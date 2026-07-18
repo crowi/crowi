@@ -57,9 +57,9 @@ Ordinary OS/CI environment variables without one of those prefixes (`PATH`,
 
 | Variable | Required | Purpose |
 | -------- | -------- | ------- |
-| `MONGO_URI` | Yes | MongoDB connection string (e.g. `mongodb://localhost/crowi`) |
+| `MONGO_URI` | No (default `mongodb://localhost/crowi`) | MongoDB connection string. Production deployments normally override it |
 | `PORT` | No (default `4301`) | The port the API server listens on |
-| `NODE_ENV` | No | `development` / `production` |
+| `NODE_ENV` | No | `development` / `production` / `test` |
 | `REDIS_URL` | Conditional | Sessions, the Socket.IO adapter, realtime-collab pub/sub, and the editor-cap counter. Optional for single-instance, **required for multi-instance deployments**. Use `rediss://` for TLS |
 | `PASSWORD_SEED` | Yes | Legacy password hashing seed (still used for fallback verification) |
 | `CLIENT_URL` | Required in production | The web origin, set on the **api** side. Used as the CORS allowlist origin and to build links in outgoing mail. Localhost origins are allowed automatically in development |
@@ -78,7 +78,7 @@ details.
 | -------- | -------- | ------- |
 | `WS_TOKEN_SECRET` | Required for multi-instance | HMAC signing key for the short-lived JWT (wsToken) used to authenticate WebSocket connections (also shared by presence, notifications, and mail tokens). Must be the **same value** on every replica in a multi-instance deployment. When unset, a random secret is generated per process and a warning is logged. **Must be at least 32 characters when set** — under 32 characters, boot fails under `NODE_ENV=production` (the default) and warns otherwise (known placeholder values are exempt). Generate one with `openssl rand -base64 32` |
 | `COLLAB_MAX_EDITORS_PER_PAGE` | No (default `20`) | Per-page simultaneous-editor cap. Clients above the cap connect read-only |
-| `NEXT_PUBLIC_COLLAB_URL` | No | The WebSocket URL the browser dials, read at **runtime** (`window.__ENV`). When unset: `NEXT_PUBLIC_API_URL` → dev api port → `window.location`. Set it when the api/web run on **distinct hosts** or on Vercel (whose edge cannot proxy WS) |
+| `NEXT_PUBLIC_COLLAB_URL` | No | The WebSocket URL the browser dials, read at **runtime** (`window.__ENV`). When unset: `NEXT_PUBLIC_API_URL` → `window.location` (in dev, the `:4304` same-origin proxy). Set it when the api/web run on **distinct hosts** or on Vercel (whose edge cannot proxy WS) |
 | `NEXT_PUBLIC_API_URL` | No (cross-origin only) | The absolute api origin as seen by the **browser**, read at **runtime** (`window.__ENV`, no rebuild). Leave **unset** for the recommended same-origin + reverse-proxy setup (the browser uses relative `/api/v2`). Set it only for the cross-origin topology — see [Deployment topologies](./deployment) |
 | `CROWI_API_URL` | No | The api URL the Next **server** uses for its `rewrites()` proxy. Baked at build for `output: 'standalone'`, so it applies only in `pnpm dev` / on Vercel's edge — self-host production uses a front reverse proxy instead |
 

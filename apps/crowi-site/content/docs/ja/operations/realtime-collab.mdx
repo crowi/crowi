@@ -352,8 +352,9 @@ docker compose logs -f api
 - **`renderedAst` 不整合 (RFC-0002 連動)**: 共同編集の保存は
   `Revision.prepareRevision` を呼び出して renderedAst を自動再生成
   します。何らかの理由で `Page.body` と最新 `Revision.body` がずれた
-  場合は、`crowi-admin renderer:rebuild` (RFC-0002) で再ビルドして
-  ください。
+  場合は、対象ページを通常どおり保存し直せば両方が再生成されます
+  (一括再ビルド用の `crowi-admin rebuild renderer` は RFC-0008 で
+  予定されていますが未実装です)。
 - **api プロセスダウン**: 接続中の全クライアントが reconnect ループに
   入ります。ヘルスチェックで他レプリカへフェイルオーバーする構成なら
   クライアントは自動的に他レプリカへ繋ぎ直し、Y.Doc は MongoDB の

@@ -213,17 +213,21 @@ letting Vercel's edge be the proxy:
 
 ## (D) Local development
 
-`pnpm dev` runs api on `:4301` and web on `:4302` as **separate origins**:
+`pnpm dev` runs api on `:4301` and web on `:4302`, and fronts both with a
+**same-origin reverse proxy on `:4304`** (Caddy when installed, otherwise a
+zero-dependency Node fallback) using the same routing table as the production
+front proxy. **`:4304` is the canonical dev entry point**:
 
-- **HTTP**: the browser calls relative `/api/v2/...`; the Next dev server's
-  `rewrites()` proxies them to `:4301` (dev evaluates `rewrites()` at runtime, so
-  this works whether or not `NEXT_PUBLIC_API_URL` is set).
-- **WebSocket**: the resolver dials **`http://localhost:4301`** directly in dev
-  (`NODE_ENV==='development'`), because the Next dev server cannot proxy the WS
-  upgrade and `window.location` (`:4302`) has no WS server. This branch is
-  compiled out of production bundles.
+- **HTTP**: the browser calls relative `/api/v2/...` against `:4304`; the
+  proxy routes api paths to `:4301` and everything else to the web server.
+- **WebSocket**: `/collab`, `/presence`, and `/notifications` upgrade through
+  the same `:4304` origin — the resolver derives the URL from
+  `window.location` by default, so no extra configuration is needed. Opening
+  the raw web port `:4302` directly skips the proxy, and realtime features
+  will not connect there (Next's `rewrites()` is HTTP-only and cannot forward
+  a WS upgrade).
 
-No `CROWI_API_URL` is needed in dev.
+No `CROWI_API_URL` or `NEXT_PUBLIC_*` configuration is needed in dev.
 
 ## Summary
 
@@ -232,7 +236,7 @@ No `CROWI_API_URL` is needed in dev.
 | **(A) same-origin proxy** *(recommended)* | relative, via proxy | `window.location`, via proxy | ✅ work (same-origin) | **No** |
 | (B) cross-origin self-host | `NEXT_PUBLIC_API_URL` (runtime) | `NEXT_PUBLIC_COLLAB_URL` (runtime) | ❌ break (relative + cookie) | No (runtime env) |
 | (C) Vercel + edge proxy | relative, via Vercel edge (`CROWI_API_URL` build env) | `NEXT_PUBLIC_COLLAB_URL` (direct) | ✅ work (same-origin) | n/a (per-deploy build) |
-| (D) dev | relative, via Next rewrites → `:4301` | `localhost:4301` (dev branch) | ✅ work | n/a |
+| (D) dev | relative, via the `:4304` dev proxy | `window.location`, via the `:4304` dev proxy | ✅ work | n/a |
 
 ## Next steps
 

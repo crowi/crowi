@@ -107,7 +107,8 @@ card.
   domain — no image).
 - If the fetch fails (timeout, 404, etc.), it degrades to a minimal error
   card that is still a working link to the URL — the link never loses its
-  navigation function.
+  navigation function; if the card was shown before, a temporary failure
+  keeps the previous card on screen.
 - The editor helps with this conversion: hovering/focusing a bare URL shows
   "Convert to card"; hovering/focusing `@[card](url)` shows "Convert to
   link". This affordance is not shown for a link that already has an

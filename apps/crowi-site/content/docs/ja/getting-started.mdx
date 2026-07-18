@@ -99,10 +99,14 @@ api は `tsx watch` で起動するため、初回起動はおよそ 1 秒で完
 
 | サービス | URL |
 | -------- | --- |
-| Web (フロントエンド) | http://localhost:4302 |
-| API | http://localhost:4301 |
+| **Crowi (同一オリジン dev proxy)** | http://localhost:4304 |
+| Web (素のフロントエンド) | http://localhost:4302 |
+| API (素) | http://localhost:4301 |
 
-ブラウザで http://localhost:4302 を開くと Crowi の画面が表示されます。
+ブラウザで **http://localhost:4304** を開くと Crowi の画面が表示されます —
+`pnpm dev` は api と web を同一オリジンの reverse proxy で前段しており、
+リアルタイム編集・presence・通知の WebSocket はこの proxy 経由でのみ
+接続できます(素の web ポート `:4302` は WS upgrade を転送できません)。
 初回はインストーラ画面が出るので、管理者ユーザーを作成してください。
 
 片側だけ起動したい場合は、次の絞り込みスクリプトも使えます。

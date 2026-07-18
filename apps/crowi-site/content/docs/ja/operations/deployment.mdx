@@ -197,16 +197,20 @@ api は別所(VM / コンテナ基盤)の公開オリジンに置き、web を V
 
 ## (D) ローカル開発
 
-`pnpm dev` は api を `:4301`、web を `:4302` で **別オリジン** として起動します:
+`pnpm dev` は api(`:4301`)と web(`:4302`)を起動し、その前段に
+**同一オリジンの reverse proxy(`:4304`)** を立てます(Caddy があれば
+Caddy、無ければ依存ゼロの node フォールバック。ルーティング表は本番の
+前段 proxy と同一)。**`:4304` が dev の正式な入口です**:
 
-- **HTTP**: ブラウザは相対 `/api/v2/...` を叩き、Next dev サーバの `rewrites()` が `:4301`
-  へ proxy します(dev は `rewrites()` を実行時評価するので、`NEXT_PUBLIC_API_URL` の有無に
-  関わらず動きます)。
-- **WebSocket**: dev(`NODE_ENV==='development'`)では resolver が **`http://localhost:4301`**
-  を直接指します。Next dev サーバは WS upgrade を proxy できず、`window.location`(`:4302`)に
-  は WS サーバが無いためです。この分岐は本番バンドルからは inline で除去されます。
+- **HTTP**: ブラウザは `:4304` に対して相対 `/api/v2/...` を叩き、proxy が
+  api パスを `:4301` へ、それ以外を web へ振り分けます。
+- **WebSocket**: `/collab`・`/presence`・`/notifications` も同じ `:4304`
+  オリジンを upgrade します — resolver は既定で `window.location` から URL を
+  導出するため、追加設定は不要です。素の web ポート `:4302` を直接開くと
+  proxy を迂回し、リアルタイム系は接続できません(Next の `rewrites()` は
+  HTTP 専用で WS upgrade を転送できません)。
 
-dev では `CROWI_API_URL` は不要です。
+dev では `CROWI_API_URL` も `NEXT_PUBLIC_*` も不要です。
 
 ## まとめ
 
@@ -215,7 +219,7 @@ dev では `CROWI_API_URL` は不要です。
 | **(A) 同一オリジン proxy**(推奨) | 相対・proxy 経由 | `window.location`・proxy 経由 | ✅ 動く(同一オリジン) | **不要** |
 | (B) クロスオリジン self-host | `NEXT_PUBLIC_API_URL`(実行時) | `NEXT_PUBLIC_COLLAB_URL`(実行時) | ❌ 壊れる(相対 + cookie) | 不要(実行時 env) |
 | (C) Vercel + edge proxy | 相対・Vercel edge 経由(`CROWI_API_URL` build env) | `NEXT_PUBLIC_COLLAB_URL`(直接) | ✅ 動く(同一オリジン) | n/a(deploy ごと build) |
-| (D) dev | 相対・Next rewrites → `:4301` | `localhost:4301`(dev 分岐) | ✅ 動く | n/a |
+| (D) dev | 相対・`:4304` dev proxy 経由 | `window.location`・`:4304` dev proxy 経由 | ✅ 動く | n/a |
 
 ## 次のステップ
 

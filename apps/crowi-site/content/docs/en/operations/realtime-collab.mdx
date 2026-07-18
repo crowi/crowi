@@ -368,8 +368,9 @@ Verification:
   clients. Each client displays a warning dialog and reloads the page.
 - **`renderedAst` drift (RFC-0002 coupling):** collab saves go through
   `Revision.prepareRevision`, which regenerates `renderedAst`. If
-  `Page.body` and the latest `Revision.body` ever drift, rebuild via
-  `crowi-admin renderer:rebuild` (RFC-0002).
+  `Page.body` and the latest `Revision.body` ever drift, a normal re-save of
+  the affected page regenerates both. (A bulk `crowi-admin rebuild renderer`
+  command is planned in RFC-0008 but not implemented yet.)
 - **api process down:** all connected clients enter a reconnect loop.
   If your health check fails over to other replicas, clients dial
   the next available api and the Y.Doc is restored from

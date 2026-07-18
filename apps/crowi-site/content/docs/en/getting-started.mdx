@@ -102,11 +102,16 @@ setup). Once running, the following URLs are available:
 
 | Service | URL |
 | ------- | --- |
-| Web (frontend) | http://localhost:4302 |
-| API | http://localhost:4301 |
+| **Crowi (same-origin dev proxy)** | http://localhost:4304 |
+| Web (raw frontend) | http://localhost:4302 |
+| API (raw) | http://localhost:4301 |
 
-Open http://localhost:4302 in a browser to see Crowi. On the first run
-an installer screen appears — create your administrator user there.
+Open **http://localhost:4304** in a browser to see Crowi — `pnpm dev`
+fronts the api and web behind a same-origin reverse proxy there, which
+is what lets realtime editing, presence, and notifications connect
+(the raw web port `:4302` cannot forward WebSocket upgrades). On the
+first run an installer screen appears — create your administrator user
+there.
 
 To start just one side, use these filtered scripts:
 

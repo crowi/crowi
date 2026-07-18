@@ -21,7 +21,7 @@ you need the following.
 | Software | Version | Purpose |
 | -------- | ------- | ------- |
 | Node.js | 24.x | Runtime for the API / web |
-| pnpm | 9.15.9 (via corepack) | Package manager (`packageManager` is `pnpm@9.15.9`) |
+| pnpm | 10.34.3 (via corepack) | Package manager (`packageManager` is `pnpm@10.34.3`) |
 | MongoDB | 7+ (the dev image is `mongo:8`) | Persists wiki data |
 | Redis | 7+ | Sessions and realtime-collab pub/sub |
 | Elasticsearch | Optional | Full-text search backend (plugin-driven) |
@@ -56,13 +56,16 @@ docker compose up -d
 cp .env.example .env
 # Edit MONGO_URI / REDIS_URL / CROWI_ENCRYPTION_KEY etc. as needed
 
-# 5. Start everything (API :4301 / web :4302 / plugins in watch mode)
+# 5. Start everything (API :4301 / web :4302 / same-origin proxy :4304)
 pnpm dev
 ```
 
 The api boots through `tsx watch`, so the first start completes in
-about a second. Once it is running, open `http://localhost:4302` in a
-browser to see the installer screen. Create the first administrator
+about a second. Once it is running, open `http://localhost:4304` in a
+browser to see the installer screen — the same-origin dev proxy on
+`:4304` is the canonical entry point (realtime editing, presence, and
+notifications only connect through it; the raw web port cannot forward
+WebSocket upgrades). Create the first administrator
 account to start using the wiki.
 
 ### Ports
@@ -71,9 +74,10 @@ The default ports for each app started by `pnpm dev` are as follows.
 
 | App | Port | Description |
 | --- | ---- | ----------- |
-| `@crowi/api` | `4301` | Hono API server |
-| `@crowi/web` | `4302` | Next.js 16 frontend |
-| `@crowi/crowi-site` | `4303` | crowi.wiki LP + docs (optional) |
+| `@crowi/api` | `4301` | Hono API server (raw) |
+| `@crowi/web` | `4302` | Next.js 16 frontend (raw — no realtime WS) |
+| `@crowi/site` | `4303` | crowi.wiki LP + docs (optional) |
+| dev proxy | `4304` | **Canonical entry point** — same-origin reverse proxy fronting api + web + WebSocket namespaces |
 
 The documentation site is not needed for development. Start it separately
 with `pnpm dev:site` only when you need it.

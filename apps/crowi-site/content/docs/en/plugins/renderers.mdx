@@ -28,6 +28,38 @@ Crowi's renderer rests on three design commitments:
 The core renderer pipeline (TOC / wikilink / mention / code block) is
 registered **before** plugins. Renderer plugins append on top of it.
 
+## Caching and failure behaviour
+
+Crowi caches server-rendered results for embed and code-block plugins. It uses
+stale-while-revalidate: a cached result is served immediately while Crowi
+refreshes it in the background. Once an entry has been expired beyond its stale
+window, Crowi waits for a new render.
+
+Failures are cached too, with a retry cadence based on their cause:
+
+- **Temporary upstream failures** — network, timeout, and unknown errors retry
+  after about 5 minutes.
+- **Persistent failures** — a policy-blocked URL or a not-found response, such
+  as a 404, retries after about 1 hour.
+- **Authorization failures** — retry after 1 minute.
+- **Rate limits** — when a rate-limited upstream provides `Retry-After`, Crowi
+  honours it, capped at 24 hours (without the header, about 5 minutes).
+
+**Keeping a previous render** — if a re-render fails for a transient cause and
+the embed or diagram rendered successfully before, its last good rendering
+stays on screen for up to 24 hours from that success; each later view of the page triggers a retry on the cadence above. A
+not-found response receives the same retention period. This prevents a flaky
+upstream or a restarting PlantUML server from immediately replacing an existing
+card or diagram with an error placeholder.
+
+**Policy and access changes** — a URL newly blocked by the SSRF guard, or an
+authorization failure, takes effect on the next re-render. The old rendering is
+not retained.
+
+**Failure display** — plugins can provide their own failure rendering, such as
+the link card's error card that remains a working link. Otherwise, Crowi shows
+a generic placeholder.
+
 ## First-party renderer plugins
 
 The Crowi repository ships the following five renderer plugins.
@@ -69,11 +101,17 @@ diagram source is deflate + base64 encoded, and the SVG (sanitised) or
 PNG returned by the server is embedded.
 
 This plugin requires an external server. Crowi's `docker-compose.yml`
-ships a PlantUML server (`:8080`), so it works out of the box in
-development. The server URL is changeable via the admin config
-(`serverUrl`), and the output format (`svg` / `png`) is selectable.
+ships a PlantUML server (`:8080`). Note that the plugin's default
+`serverUrl` is `http://plantuml:8080` — the compose-internal hostname,
+which is only resolvable from inside the compose network. With the
+standard `pnpm dev` setup (the api running on the host), set `serverUrl`
+to `http://localhost:8080` in the admin UI instead. The output format
+(`svg` / `png`) is also selectable there.
 Render results are cached with a 1-hour TTL, and failures such as
-network errors are cached as errors for 5 minutes.
+network errors are cached as errors for 5 minutes. If a diagram rendered
+successfully before, a briefly unreachable PlantUML server keeps the last
+good diagram on screen (later views retry on the error cadence); see
+[Caching and failure behaviour](#caching-and-failure-behaviour) above.
 
 ### crowi-legacy
 
@@ -112,8 +150,10 @@ the "Link cards" section of [Markdown syntax](../guide/markdown).
 - **No allowlist/denylist UI in v1** — if you need to block specific
   domains from being embedded, wait for a future admin setting or fork
   the plugin to add your own guard.
-- On failure (timeout, 4xx/5xx, non-HTML content, etc.), it degrades to a
-  minimal error card that is still a working link to the URL.
+- **On failure** (timeout, 4xx/5xx, non-HTML content, etc.), it degrades to a
+  minimal error card that is still a working link to the URL. If the card
+  rendered before, transient failures keep showing the last good card; see
+  [Caching and failure behaviour](#caching-and-failure-behaviour) above.
 
 > **Note**: This is a different thing from
 > `@crowi/plugin-renderer-github-embed` mentioned above (planned, not yet
