@@ -312,6 +312,25 @@ B --> A: reply
 - 描画結果はキャッシュされ、PlantUML サーバの一時的な障害でサーバへ
   リクエストが殺到しないようになっています。
 
+### Mermaid 図 — `@crowi/plugin-renderer-mermaid`
+
+` ```mermaid ` フェンスドコードブロックの内容を、サーバ内で描画して SVG として本文に埋め込みます。
+
+````markdown
+```mermaid
+flowchart LR
+  A[開始] --> B{条件}
+  B -->|yes| C[処理]
+  B -->|no| D[終了]
+```
+````
+
+- flowchart / sequence / class / state / ER / journey / pie / git-graph など、Mermaid の主要な図の種類に対応します。
+- PlantUML と違って外部サーバは不要で、運用者による設定もありません — プラグインが有効なら書くだけで使えます。
+- 編集中のライブプレビューでも描画されます(保存前に図を確認できます)。
+- 図のソースは 20KB までです。記法エラーのある図は固定のエラー表示になります。そのほかの制限値やセキュリティ上の設計は [レンダラプラグイン](../plugins/renderers) の Mermaid 節を参照してください。
+- プラグイン有効化より前に保存されたページの ` ```mermaid ` フェンスは、再保存するまでコードブロックのまま表示されます。
+
 ### Crowi v1 互換 — `@crowi/plugin-renderer-crowi-legacy`
 
 Crowi 1.x 時代の **CommonMark 準拠ではない書き癖** を、2.x でも従来どおり

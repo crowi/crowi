@@ -62,7 +62,7 @@ a generic placeholder.
 
 ## First-party renderer plugins
 
-The Crowi repository ships the following five renderer plugins.
+The Crowi repository ships the following six renderer plugins.
 
 | Plugin | Role | External dependency | Status |
 | ------ | ---- | ------------------- | ------ |
@@ -143,8 +143,10 @@ dark mode, the area surrounding the diagram is shown as a neutral
 
 **Limits**: diagram source is capped at 20KB and the generated SVG at
 60KB. Up to 50 diagrams can be processed per page save or preview
-request. The server renders up to 4 diagrams concurrently overall (up
-to 2 per user at a time), and the live editor preview is rate-limited
+request. Concurrent rendering is capped per API process
+(replica): up to 4 diagrams at a time, of which at most 2 per user
+within the same process (multi-replica deployments scale accordingly).
+The live editor preview is rate-limited
 to 600 requests/60s per user. A diagram with a syntax error shows a
 fixed error placeholder. A transient failure (e.g. server overload) is
 retried automatically the next time the page is opened.

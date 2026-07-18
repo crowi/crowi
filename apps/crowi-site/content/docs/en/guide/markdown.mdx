@@ -266,6 +266,32 @@ B --> A: reply
 - Rendered results are cached so that a transient PlantUML server outage does
   not flood it with requests.
 
+### Mermaid diagrams — `@crowi/plugin-renderer-mermaid`
+
+Renders the content of a ` ```mermaid ` fenced code block server-side and
+embeds the resulting SVG into the body.
+
+````markdown
+```mermaid
+flowchart LR
+  A[Start] --> B{Condition}
+  B -->|yes| C[Do work]
+  B -->|no| D[End]
+```
+````
+
+- Supports Mermaid's main diagram types: flowchart, sequence, class, state,
+  ER, journey, pie, and git-graph.
+- Unlike PlantUML, no external server and no operator configuration are
+  needed — if the plugin is enabled, just write the fence.
+- Diagrams also render in the editor's live preview, so you can check them
+  before saving.
+- Diagram source is limited to 20KB. A diagram with a syntax error shows a
+  fixed error placeholder. For the other limits and the security design,
+  see the Mermaid section of [Renderer plugins](../plugins/renderers).
+- ` ```mermaid ` fences saved before the plugin was enabled keep rendering
+  as plain code blocks until the page is re-saved.
+
 ### Crowi v1 compatibility — `@crowi/plugin-renderer-crowi-legacy`
 
 A compatibility plugin that lets **non-CommonMark writing habits from the
