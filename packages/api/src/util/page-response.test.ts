@@ -1,9 +1,10 @@
-import { Types } from 'mongoose';
 import type { CodeBlockRenderer, PluginLogger, RenderActor } from '@crowi/plugin-api';
-import type { RevisionMetaContent } from 'src/models/revision';
+import { _shutdownSingletonForTest, createMermaidRenderer } from '@crowi/plugin-renderer-mermaid';
+import { Types } from 'mongoose';
 import type { PluginRenderCacheModel } from 'src/models/plugin-render-cache';
-import { crowi } from 'src/test/setup';
+import type { RevisionMetaContent } from 'src/models/revision';
 import { RENDERER_PIPELINE_VERSION } from 'src/renderer/version';
+import { crowi } from 'src/test/setup';
 import { computeRevisionRenderArtifactsAsync } from './page-response';
 
 const TEST_ACTOR: RenderActor = { kind: 'system' };
@@ -242,6 +243,69 @@ describe('computeRevisionRenderArtifactsAsync — mermaidRenderPending marker sc
       expect(runRenderSpy).not.toHaveBeenCalled();
     } finally {
       runRenderSpy.mockRestore();
+    }
+  });
+
+  // feature-plugin-renderer-mermaid Phase 4 (spec §9/§10): wiring
+  // @crowi/plugin-renderer-mermaid into apps/crowi-runner activates the
+  // plugin for NEW code-block-dispatch calls from the moment this Phase
+  // deploys — `RENDERER_PIPELINE_VERSION` is deliberately left untouched
+  // (a plain, new-bundled-plugin addition would ordinarily warrant a
+  // "minor" bump per this constant's own doc comment in version.ts, but
+  // spec §9 explicitly carves out an exception for Mermaid/PlantUML
+  // specifically to avoid a version-bump-driven recompute of every
+  // unrelated revision on next read). Pinned here so an accidental future
+  // bump alongside an unrelated change is caught immediately.
+  it('RENDERER_PIPELINE_VERSION is unchanged by Phase 4 (spec §9 next-save-only — Mermaid activation must not trigger a wide recompute of unrelated revisions)', () => {
+    expect(RENDERER_PIPELINE_VERSION).toBe('0.8.0');
+  });
+
+  // Registers the REAL @crowi/plugin-renderer-mermaid renderer (not a
+  // fixture) — the exact way apps/crowi-runner's boot sequence does via
+  // registerRenderer (spec §10) — into the SAME registry
+  // computeRevisionRenderArtifactsAsync reads from
+  // (crowi.getRenderer().registry), then proves that a Revision saved
+  // BEFORE this Phase (no CodeBlockRenderer existed for 'mermaid' yet, so
+  // the fenced block is still a raw, un-dispatched `code` node with no
+  // `mermaidRenderPending` marker) is served byte-identical on the fresh
+  // (matching-version) path — still a plain code block, never dispatched
+  // to the now-live renderer — until the author explicitly re-saves the
+  // page. This is strictly stronger than the generic
+  // no-marker-untouched test earlier in this describe block: that test
+  // has NO 'mermaid' renderer registered at all, so it cannot show that
+  // the renderer's mere presence in a live registry doesn't retroactively
+  // reprocess old content.
+  it('registering the REAL Mermaid renderer (post-Phase-4 wiring) does not retroactively touch a pre-existing, un-dispatched ```mermaid code node — it stays a plain code block until re-saved', async () => {
+    const pageId = new Types.ObjectId().toHexString();
+    crowi.getRenderer().registry.addCodeBlockRenderer('mermaid', createMermaidRenderer(), '@crowi/plugin-renderer-mermaid', silentLogger);
+
+    const storedAst = {
+      type: 'root',
+      children: [{ type: 'code', lang: 'mermaid', value: 'flowchart TD\n  A --> B' }], // pre-Phase-4 content — never dispatched, no marker
+    };
+    const runRenderSpy = jest.spyOn(crowi.getRenderer(), 'runRender');
+    try {
+      const result = await computeRevisionRenderArtifactsAsync(
+        crowi,
+        COMPLETE_META,
+        storedAst,
+        'body unused on the fresh path',
+        TEST_ACTOR,
+        RENDERER_PIPELINE_VERSION,
+        pageId,
+      );
+      expect(result.renderedAst).toBe(storedAst);
+      const codeNode = (result.renderedAst as { children: Array<{ type: string; lang?: string }> }).children[0];
+      expect(codeNode.type).toBe('code');
+      expect(codeNode.lang).toBe('mermaid');
+      expect(runRenderSpy).not.toHaveBeenCalled();
+    } finally {
+      runRenderSpy.mockRestore();
+      // The real renderer's render() is never invoked above (proven by
+      // the spy), so the child-process pool is never lazily spawned —
+      // this is a no-op, kept for hygiene/consistency with every other
+      // suite that touches the real plugin.
+      await _shutdownSingletonForTest();
     }
   });
 });
