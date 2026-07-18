@@ -144,7 +144,9 @@ services:
       - ./data/mongodb:/data/db        # persist via bind mount
 
   redis:
-    image: redis:8.8.0
+    # Same reviewed tag+digest pin as the repo's docker-compose.yml
+    # (see the Redis engine-support policy in operations/realtime-collab).
+    image: redis:8.8.0@sha256:234c902a2db49461a129e2d4aeff85b28cf20187ed274a67f6e50995fa713c7b
     restart: unless-stopped
 
   elasticsearch:

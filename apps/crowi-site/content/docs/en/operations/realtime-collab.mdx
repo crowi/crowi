@@ -266,21 +266,39 @@ accordingly for very small Redis tiers (ElastiCache `cache.t4g.micro` /
 
 ## Two-instance smoke test
 
-Stand up a multi-instance environment via `docker compose --scale`:
+Stand up a real two-replica environment from the shipped compose stack.
+Two things need lifting first: the api's fixed host-port publish (it
+would collide across replicas — browsers go through the `caddy`
+same-origin proxy anyway), and the multi-instance requirements: a
+`WS_TOKEN_SECRET` shared by every replica, plus `CROWI_MULTI_INSTANCE`
+declared so boot enforces the secret up front.
 
 ```bash
-# 1. Start the existing compose stack with api scaled to 2 replicas
-docker compose --profile app up -d --build --scale api=2
+# 0. In .env (read by every api replica via env_file), set a real
+#    shared secret once:
+#    WS_TOKEN_SECRET=<output of `openssl rand -base64 32`>
 
-# 2. Verify both api containers are up
+# 1. A minimal scale override — drop the host-port publish and declare
+#    multi-instance. (`!override` needs Docker Compose v2.24.4+.)
+cat > docker-compose.smoke.yml <<'OVERRIDE'
+services:
+  api:
+    ports: !override []
+    environment:
+      CROWI_MULTI_INSTANCE: "2"
+OVERRIDE
+
+# 2. Start the stack with api scaled to 2 replicas
+docker compose -f docker-compose.yml -f docker-compose.smoke.yml \
+  --profile app up -d --build --scale api=2
+
+# 3. Verify both api containers are up
 docker compose ps api
 # crowi-api-1   Up   3000/tcp
 # crowi-api-2   Up   3000/tcp
 
-# 3. Tail logs to see extension-redis attach on both replicas
-docker compose logs -f api
-# Expect 2 lines like:
-#   crowi:collab:extension-redis attaching extension-redis (identifier=…)
+# 4. See extension-redis attach on both replicas (one identifier each)
+docker compose logs api | grep extension-redis
 ```
 
 Verification:
@@ -290,9 +308,11 @@ Verification:
 2. Navigate both windows to `/_edit?page_id=<pageId>` for the same page.
 3. Type in one window — the change should appear in the other in
    real time.
-4. If a load balancer is in front, confirm that each browser is
-   routed to a different replica (compare the `instance=` identifier
-   in the api's `onConnect` log).
+4. The `caddy` front proxy reaches the `api` service through Docker's
+   DNS, which distributes connections across the replicas. There is no
+   per-connection replica identifier in the api logs — treat step 7
+   (stopping one replica while editing keeps working) as the positive
+   proof that both replicas were serving traffic.
 5. **Presence**: with both windows still on the same page, confirm each
    window's live-viewer indicator shows the other user — this exercises
    the presence subscribers propagating viewer state across replicas
@@ -305,17 +325,23 @@ Verification:
    pinned to different replicas — this exercises the notification
    subscriber's cross-instance invalidation via Redis. Also run this
    **before** the next step, for the same reason.
-7. Stop one container (`docker compose stop api-1`); the surviving
-   replica should accept the reconnecting clients and editing should
-   resume.
+7. Stop one replica (`docker stop crowi-api-1` — `docker compose stop`
+   only addresses whole services); the surviving replica should accept
+   the reconnecting clients and editing should resume.
 
 ## Failure modes
 
-- **Redis outage (`REDIS_URL` set but unreachable):** ioredis keeps
-  retrying. New Yjs updates still propagate within each api instance
-  via the embedded Hocuspocus engine, but cross-instance pub/sub is
-  paused. The editor-cap counter falls **open** (admits the editor).
-  Pub/sub resumes automatically when Redis comes back.
+- **Redis outage after a successful boot:** the clients keep retrying.
+  New Yjs updates still propagate within each api instance via the
+  embedded Hocuspocus engine, but cross-instance pub/sub is paused. The
+  editor-cap counter falls **open** (admits the editor). Pub/sub resumes
+  automatically when Redis comes back.
+- **Redis unreachable at boot:** the api bounds the initial connection
+  attempt (~10 tries, a few seconds), logs `Redis connection failed.
+  Continuing without Redis...`, and starts degraded — the collab Redis
+  extension is then **never attached**, so cross-instance pub/sub does
+  NOT resume by itself when Redis returns. Restart the api once Redis is
+  reachable again.
 - **`WS_TOKEN_SECRET` mismatch / unset:** wsTokens minted on one replica
   cannot be verified on another and `onAuthenticate` rejects the
   connection. The client sees an immediate disconnect and the editor
@@ -602,7 +628,7 @@ a clean "unsupported feature" failure:
 | Notification invalidation | `PUBLISH`, `SUBSCRIBE`, `UNSUBSCRIBE` | `crowi:notifications:user:<userId>` |
 | Config sync | `PUBLISH`, `SUBSCRIBE` | fixed channel `config` |
 | Rate limiting | `INCR`, `PEXPIRE` | `crowi:ratelimit:<name>:<userId>:<window>` |
-| LRU (recently-viewed pages) | `ZREMRANGEBYRANK`, `ZADD`, `ZRANGE` (`ZREMRANGEBYRANK` + `ZADD` pipelined via `MULTI`/`EXEC`) | an operator-chosen namespace key (no fixed `crowi:` prefix) |
+| LRU (recently-viewed pages) | `ZREMRANGEBYRANK`, `ZADD`, `ZRANGE`, `MULTI`, `EXEC` (the write pair is pipelined inside a `MULTI`/`EXEC` transaction — an ACL missing those two breaks LRU writes) | an operator-chosen namespace key (no fixed `crowi:` prefix) |
 | Boot connection | connection handshake only | n/a |
 
 Two more command sources are easy to miss because Crowi's own code
@@ -619,7 +645,7 @@ never issues them directly:
   failure) — but grant them explicitly rather than relying on that
   survival behaviour in production.
 - **The upstream Redlock the collab extension runs internally.**
-  `@hocuspocus/extension-redis` acquires, extends, and releases a
+  `@hocuspocus/extension-redis` acquires and releases a
   cross-instance store lock via `@sesamecare-oss/redlock` on **every
   collaborative save**, using `EVAL`/`EVALSHA` to run a Lua script.
   Redis ACLs authorize commands called from *inside* a Lua script too,

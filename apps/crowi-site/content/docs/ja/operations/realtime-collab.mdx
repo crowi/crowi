@@ -260,20 +260,37 @@ ElastiCache の低リソースインスタンス (`cache.t3.micro` / `cache.t4g.
 
 ## 2 インスタンス smoke テスト手順
 
-実機での multi-instance 検証は `docker compose --scale` で簡単に組めます:
+同梱の compose 構成から実 2 レプリカ環境を組みます。事前に 2 点だけ
+準備が必要です: api の固定ホストポート公開の解除(レプリカ間で衝突する
+— ブラウザはもともと `caddy` 同一オリジン proxy 経由)と、multi-instance
+要件(全レプリカ共有の `WS_TOKEN_SECRET` + `CROWI_MULTI_INSTANCE` 宣言 —
+宣言すると boot が secret の未設定を起動時エラーで弾いてくれます):
 
 ```bash
-# 1. 既存の compose 構成にスケール指示を加えて起動
-docker compose --profile app up -d --build --scale api=2
+# 0. .env(env_file 経由で全 api レプリカが読む)に共有 secret を設定:
+#    WS_TOKEN_SECRET=<`openssl rand -base64 32` の出力>
 
-# 2. 2 つの api コンテナが立っていることを確認
+# 1. スケール用の最小 override — ホストポート公開を外し multi-instance を
+#    宣言する(`!override` は Docker Compose v2.24.4+)
+cat > docker-compose.smoke.yml <<'OVERRIDE'
+services:
+  api:
+    ports: !override []
+    environment:
+      CROWI_MULTI_INSTANCE: "2"
+OVERRIDE
+
+# 2. api を 2 レプリカにスケールして起動
+docker compose -f docker-compose.yml -f docker-compose.smoke.yml \
+  --profile app up -d --build --scale api=2
+
+# 3. 2 つの api コンテナが立っていることを確認
 docker compose ps api
 # crowi-api-1   Up   3000/tcp
 # crowi-api-2   Up   3000/tcp
 
-# 3. 各 api コンテナのログをそれぞれ tail
-docker compose logs -f api
-# extension-redis (identifier=…) の attach ログを 2 行確認
+# 4. 両レプリカで extension-redis の attach を確認(identifier が 1 つずつ)
+docker compose logs api | grep extension-redis
 ```
 
 検証手順:
@@ -282,9 +299,10 @@ docker compose logs -f api
    ブラウザ) で別ユーザーとしてログイン。
 2. 同じページの `/_edit?page_id=<pageId>` を 2 ウィンドウで開く。
 3. 一方で文字を入力 → もう一方にリアルタイムで反映されることを確認。
-4. nginx などのロードバランサーが**手前にある場合は、各ウィンドウが
-   別レプリカに振り分けられていること**を確認 (api 側ログの `onConnect`
-   出力で `instance=` 識別子が異なれば OK)。
+4. `caddy` 前段 proxy は Docker の DNS 経由で `api` サービスへ到達し、
+   接続はレプリカ間に分散されます。api ログに接続単位のレプリカ識別子は
+   出ない ため、「両レプリカが実際にトラフィックを担っていた」ことの
+   確認は手順 7(片方を停止しても編集が継続する)を正とします。
 5. **プレゼンス**: 2 ウィンドウとも同じページを開いたまま、お互いの
    ウィンドウのライブ閲覧者表示にもう一方のユーザーが表示されることを
    確認する — プレゼンス subscriber がレプリカ間で viewer 状態を Redis
@@ -296,16 +314,23 @@ docker compose logs -f api
    振り分けられている状態でもリアルタイムで届くことを確認する — 通知
    subscriber のクロスインスタンス invalidation が Redis 経由で機能して
    いることの確認になる。同じ理由でこの確認も**次の手順より先に**行うこと。
-7. 一方の api コンテナを `docker compose stop api-1` で停止 → 残った
-   レプリカに自動再接続し、編集が継続できることを確認。
+7. 一方のレプリカを `docker stop crowi-api-1` で停止(`docker compose
+   stop` はサービス単位でしか指定できない)→ 残ったレプリカに自動再接続
+   し、編集が継続できることを確認。
 
 ## 障害時の挙動 (Failure modes)
 
-- **Redis 障害 (`REDIS_URL` 設定済み、接続不可)**: extension-redis の
-  ioredis 再接続ループが動き続けます。新規 Yjs 更新はローカルの
-  Hocuspocus engine 内では伝搬しますが、他レプリカへの pub/sub は
-  途切れます。編集者上限 counter は **fail-open** (上限チェックを
-  通す) に倒れます。Redis 復旧後は自動で pub/sub が再開します。
+- **起動成功後の Redis 障害**: クライアントの再接続ループが動き続け
+  ます。新規 Yjs 更新はローカルの Hocuspocus engine 内では伝搬しますが、
+  他レプリカへの pub/sub は途切れます。編集者上限 counter は
+  **fail-open** (上限チェックを通す) に倒れます。Redis 復旧後は自動で
+  pub/sub が再開します。
+- **boot 時点で Redis に到達できない場合**: api は初回接続を有界化して
+  います(約 10 回・数秒)。上限到達で `Redis connection failed.
+  Continuing without Redis...` をログに出して Redis なしの縮退状態で
+  起動します — このとき collab の Redis extension は**そもそも attach
+  されない**ため、Redis が復旧してもクロスインスタンス pub/sub は自動
+  では再開しません。復旧後に api を再起動してください。
 - **`WS_TOKEN_SECRET` 不一致 / 未設定**: あるレプリカが発行した wsToken を別の
   レプリカが検証できず、`onAuthenticate` で reject されます。クライアントは
   WebSocket connect 後すぐに切断され、エディタが "接続できませんでした"
@@ -586,7 +611,7 @@ pub/sub・編集者上限カウンタ・プレゼンス・通知 invalidation・
 | 通知 invalidation | `PUBLISH`, `SUBSCRIBE`, `UNSUBSCRIBE` | `crowi:notifications:user:<userId>` |
 | 設定同期 (Config) | `PUBLISH`, `SUBSCRIBE` | 固定チャンネル `config` |
 | rate limiting | `INCR`, `PEXPIRE` | `crowi:ratelimit:<name>:<userId>:<window>` |
-| LRU (最近見たページ) | `ZREMRANGEBYRANK`, `ZADD`, `ZRANGE` (`ZREMRANGEBYRANK` + `ZADD` は `MULTI`/`EXEC` でパイプライン) | 運用者が選ぶ namespace キー (固定の `crowi:` prefix なし) |
+| LRU (最近見たページ) | `ZREMRANGEBYRANK`, `ZADD`, `ZRANGE`, `MULTI`, `EXEC` (書き込み 2 コマンドは `MULTI`/`EXEC` トランザクション内で発行 — この 2 つを欠く ACL では LRU の書き込みが失敗する) | 運用者が選ぶ namespace キー (固定の `crowi:` prefix なし) |
 | boot 接続 | 接続確立コマンドのみ | なし |
 
 見落としやすい、もう2種類のコマンド発行元があります (いずれも
@@ -606,7 +631,7 @@ Crowi 自身のコードが直接発行するものではありません):
 - **collab extension が内部で実行する upstream の Redlock**:
   `@hocuspocus/extension-redis` は**共同編集の保存のたびに**
   `@sesamecare-oss/redlock` 経由でクロスインスタンスの store lock
-  を acquire/extend/release します。これは `EVAL`/`EVALSHA` で
+  を acquire/release します。これは `EVAL`/`EVALSHA` で
   Lua スクリプトを実行する形で行われます。Redis の ACL は Lua
   スクリプト**内部**から呼ばれるコマンドにもユーザー権限を要求する
   ため、ACL には `EVAL`/`EVALSHA` に加えて、スクリプト内部の

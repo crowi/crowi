@@ -173,7 +173,9 @@ services:
       context: .
       dockerfile: packages/api/Dockerfile
     image: crowi-api:dev
-    container_name: crowi-api
+    # No container_name on purpose: a fixed name cannot be scaled
+    # (`--scale api=2` — see operations/realtime-collab's two-instance
+    # smoke test). Compose names replicas crowi-api-1, crowi-api-2, ...
     restart: unless-stopped
     depends_on:
       - mongodb
