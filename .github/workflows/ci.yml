@@ -21,6 +21,18 @@ on:
     branches: [main, dev, dev2-2]
     paths-ignore: *ci-skip
 
+env:
+  # Single source of truth for the Redis 8.x patch tag Redis-consuming steps
+  # below pin to (keep in sync with docker-compose.yml's `redis` /
+  # `crowi-test-redis` / `crowi-test-redis-tls` services — same tag
+  # everywhere per feature-redis-8-upgrade Phase 1). `services:` blocks
+  # can't reference the `env` context (not in GitHub's context-availability
+  # table for `jobs.<job_id>.services.<service_id>.image`), so the `redis` /
+  # `crowi-test-redis` service definitions below duplicate this string
+  # literally instead — bump both together when following a new patch
+  # release.
+  REDIS_IMAGE: redis:8.8.0@sha256:234c902a2db49461a129e2d4aeff85b28cf20187ed274a67f6e50995fa713c7b
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -50,6 +62,42 @@ jobs:
         # "connection refused" on the first test file.
         options: >-
           --health-cmd "mongosh --quiet --eval 'db.runCommand({ ping: 1 }).ok' | grep -q 1"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+      # Shared Redis 8.x, exercised by 7 of the 8 Redis-consumer smoke tests
+      # (feature-redis-8-upgrade Phase 2 — everything except Config pub/sub,
+      # which needs a single-subscriber instance and uses `crowi-test-redis`
+      # below instead). `services:` can't reference `env.REDIS_IMAGE` (see
+      # the workflow-level `env:` comment above), so the tag is duplicated
+      # here literally. Anchored so `flake-report` below can alias it — that
+      # job spawns @crowi/api's jest directly and needs the identical Redis.
+      redis: &api-test-redis-service
+        image: redis:8.8.0@sha256:234c902a2db49461a129e2d4aeff85b28cf20187ed274a67f6e50995fa713c7b
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+      # Config-pub/sub-smoke-ONLY Redis (feature-redis-8-upgrade Phase 1/2).
+      # `ConfigService.setupPubSub()`'s fixed, global `'config'` channel makes
+      # every subscribing process unconditionally run
+      # `load()`/`postUpdate()`/`setupMailer()` — CI jobs are single-tenant
+      # per run so this isolation matters less than in a shared dev Redis,
+      # but keeping the same dedicated-instance shape as docker-compose.yml
+      # avoids a CI-only code path in the smoke test's connection-resolution
+      # logic. See docker-compose.yml's `crowi-test-redis` comment for the
+      # full rationale.
+      crowi-test-redis: &api-test-crowi-redis-service
+        image: redis:8.8.0@sha256:234c902a2db49461a129e2d4aeff85b28cf20187ed274a67f6e50995fa713c7b
+        ports:
+          - 6380:6379
+        options: >-
+          --health-cmd "redis-cli ping"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 12
@@ -97,6 +145,48 @@ jobs:
           echo "CROWI_TEST_RUN_ID=$RUN_ID" >> "$GITHUB_ENV"
           echo "CROWI_TEST_JSON_OUTPUT_FILE=/tmp/crowi-api-test-result.$RUN_ID.json" >> "$GITHUB_ENV"
 
+      - &redis-tls-fixture-start
+        name: Start Redis TLS fixture
+        # TLS connectivity smoke fixture (feature-redis-8-upgrade Phase 1/2,
+        # boot/TLS consumer #8). Reuses the self-signed cert pair added in
+        # fee9c9a4 (packages/api/src/util/__fixtures__/tls/) rather than a
+        # new cert-generation mechanism. Unlike `mongo`/`redis`/
+        # `crowi-test-redis` above, this can't be a `services:` entry:
+        # GitHub Actions starts `services:` containers BEFORE `actions/
+        # checkout`, so they can't mount a repo file — this step runs as a
+        # normal job step, after checkout, instead. TLS-only port, no ACL
+        # (`--tls-auth-clients no` — no CA cert needed since we don't verify
+        # client certs; the smoke client connects with `rejectUnauthorized:
+        # false`, matching redis-opts.test.ts's existing TLS repro). See
+        # docker-compose.yml's `crowi-test-redis-tls` for the local
+        # equivalent (same image, same flags, same port). Anchored so
+        # `flake-report` below can alias it instead of duplicating — that
+        # job also solo-reruns @crowi/api's jest directly and needs the
+        # identical fixture.
+        run: |
+          docker run -d --name crowi-test-redis-tls \
+            -p 6381:6381 \
+            -v "$PWD/packages/api/src/util/__fixtures__/tls:/tls:ro" \
+            "$REDIS_IMAGE" \
+            redis-server --port 0 --tls-port 6381 \
+              --tls-cert-file /tls/localhost-cert.pem \
+              --tls-key-file /tls/localhost-key.pem \
+              --tls-auth-clients no
+
+      - &redis-tls-fixture-wait
+        name: Wait for Redis TLS fixture
+        run: |
+          for _ in $(seq 1 30); do
+            if docker exec crowi-test-redis-tls redis-cli --tls --insecure -p 6381 ping 2>/dev/null | grep -q PONG; then
+              echo "crowi-test-redis-tls is ready"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "crowi-test-redis-tls did not become ready in time" >&2
+          docker logs crowi-test-redis-tls || true
+          exit 1
+
       - name: Run tests
         run: pnpm test
 
@@ -134,6 +224,11 @@ jobs:
 
       - name: Build project
         run: pnpm build
+
+      - &redis-tls-fixture-stop
+        name: Stop Redis TLS fixture
+        if: always()
+        run: docker rm -f crowi-test-redis-tls || true
 
   lint:
     runs-on: ubuntu-latest
@@ -208,6 +303,13 @@ jobs:
 
     services:
       mongo: *api-test-mongo-service
+      # feature-redis-8-upgrade Phase 1: this job spawns @crowi/api's jest
+      # directly (bypassing turbo, see the "Build workspace packages" step
+      # below), so the Redis-consumer smoke tests it solo-reruns need the
+      # SAME Redis services the `test` job above provides — aliased rather
+      # than redefined so the two jobs can't drift out of sync.
+      redis: *api-test-redis-service
+      crowi-test-redis: *api-test-crowi-redis-service
 
     env: *api-test-env
 
@@ -256,6 +358,16 @@ jobs:
             echo "CROWI_FLAKE_ISSUE_MODE=annotate" >> "$GITHUB_ENV"
           fi
           echo "CROWI_FLAKE_REF_LABEL=${{ github.event_name == 'pull_request' && format('PR #{0}', github.event.pull_request.number) || github.ref_name }}" >> "$GITHUB_ENV"
+
+      # Same fixture as the `test` job's "Start Redis TLS fixture" step
+      # (see that step's comment for the full rationale) — this job's
+      # "Classify + report" step below solo-reruns @crowi/api's jest
+      # directly, so it needs the same TLS-connectivity smoke fixture
+      # available. Aliased rather than redefined so the two jobs can't
+      # drift out of sync.
+      - *redis-tls-fixture-start
+
+      - *redis-tls-fixture-wait
 
       - name: Build workspace packages
         # Solo-reruns spawn `@crowi/api`'s jest DIRECTLY (bypassing turbo —
@@ -314,6 +426,8 @@ jobs:
           name: flake-report-classification-${{ github.run_id }}-${{ github.run_attempt }}
           path: /tmp/crowi-flake-report-classification.${{ env.CROWI_TEST_RUN_ID }}.json
           if-no-files-found: warn
+
+      - *redis-tls-fixture-stop
 
   changeset-status:
     # Warn-only check: surfaces missing changesets on PRs without blocking merges.
