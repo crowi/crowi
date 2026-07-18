@@ -1,8 +1,7 @@
 {
   "name": "@crowi/plugin-renderer-mermaid",
   "version": "0.1.0-alpha.1",
-  "private": true,
-  "description": "Mermaid diagram renderer for Crowi 2.x. Renders ```mermaid fenced blocks server-side (browserless, child-process isolated) to a sanitized, base64-encoded SVG <img>. Not yet listed in crowi.config.json — see .feature-state/specs/feature-plugin-renderer-mermaid.md (Phase 4 wires runner registration). `private: true` stays until then; `publishConfig` is deferred to that same phase rather than added ahead of actual publish readiness.",
+  "description": "Mermaid diagram renderer for Crowi 2.x. Renders ```mermaid fenced blocks server-side (browserless, child-process isolated) to a sanitized, base64-encoded SVG <img>. Registered in apps/crowi-runner's crowi.config.json (spec §10).",
   "repository": {
     "type": "git",
     "url": "https://github.com/crowi/crowi.git",
@@ -22,10 +21,14 @@
     "dist",
     "README.md"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch --no-clean",
     "type-check": "tsc --noEmit",
+    "pretest": "pnpm build",
     "test": "jest --passWithNoTests"
   },
   "peerDependencies": {
