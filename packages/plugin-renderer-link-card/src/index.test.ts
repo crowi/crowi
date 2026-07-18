@@ -46,55 +46,111 @@ describe('createLinkCardRenderer — EmbedRenderer contract', () => {
     expect(renderer.cacheVersion).toBe(LINK_CARD_CACHE_VERSION);
   });
 
-  it('maps a successful fetch to a card RenderResult with no `error` set (so the core never substitutes the generic link-less error placeholder)', async () => {
+  it('maps a successful fetch to a card RenderResult with no `error` set', async () => {
     jest.spyOn(fetchOgModule, 'fetchOg').mockResolvedValue({ kind: 'ok', meta: { title: 'Example' } });
     const renderer = createLinkCardRenderer();
     const result = await renderer.render({ tag: 'card', url: 'https://example.test/page', pageId: 'p1' }, stubCtx);
     expect(result.error).toBeUndefined();
+    expect(result.errorHtml).toBeUndefined();
     expect(result.html).toContain('crowi-link-card');
     expect(result.html).toContain('Example');
     expect(result.ttlSec).toBeGreaterThan(0);
   });
 
-  it('maps a non-HTML-content-type fetch-og error to a working-link error card too (AC-3: not a successful degrade)', async () => {
+  it('maps a non-HTML-content-type fetch-og error to an `error` + working-link `errorHtml` (AC-3: not a successful degrade)', async () => {
     jest.spyOn(fetchOgModule, 'fetchOg').mockResolvedValue({ kind: 'error', code: 'unsupported-content-type' });
     const renderer = createLinkCardRenderer();
     const result = await renderer.render({ tag: 'card', url: 'https://example.test/file.pdf', pageId: 'p1' }, stubCtx);
-    expect(result.error).toBeUndefined();
-    expect(result.html).toContain('crowi-link-card-error');
-    expect(result.html).toContain('href="https://example.test/file.pdf"');
+    expect(result.error?.code).toBe('blocked');
+    expect(result.html).toBe('');
+    expect(result.errorHtml).toContain('crowi-link-card-error');
+    expect(result.errorHtml).toContain('href="https://example.test/file.pdf"');
   });
 
-  it('maps every fetch-og error to a working-link error card with no `error` set (AC-1: error stays a functioning link)', async () => {
+  it('maps every fetch-og error to `error` + a working-link `errorHtml` (AC-1: error stays a functioning link)', async () => {
     jest.spyOn(fetchOgModule, 'fetchOg').mockResolvedValue({ kind: 'error', code: 'blocked' });
     const renderer = createLinkCardRenderer();
     const result = await renderer.render({ tag: 'card', url: 'https://example.test/blocked', pageId: 'p1' }, stubCtx);
-    expect(result.error).toBeUndefined();
-    expect(result.html).toContain('crowi-link-card-error');
-    expect(result.html).toContain('href="https://example.test/blocked"');
+    expect(result.error?.code).toBe('blocked');
+    expect(result.html).toBe('');
+    expect(result.errorHtml).toContain('crowi-link-card-error');
+    expect(result.errorHtml).toContain('href="https://example.test/blocked"');
   });
 
-  it('gives a persistent-class error (blocked / bad-scheme / unsupported-content-type / 4xx) a longer ttlSec than a transient one (timeout / network / 5xx)', async () => {
+  it('maps blocked / bad-scheme / unsupported-content-type to RenderError code "blocked"', async () => {
+    const renderer = createLinkCardRenderer();
+    for (const code of ['blocked', 'bad-scheme', 'unsupported-content-type'] as const) {
+      jest.spyOn(fetchOgModule, 'fetchOg').mockResolvedValueOnce({ kind: 'error', code });
+      const result = await renderer.render({ tag: 'card', url: 'https://example.test/x', pageId: 'p1' }, stubCtx);
+      expect(result.error).toEqual({ code: 'blocked', message: code });
+    }
+  });
+
+  it('maps a 4xx http-error to RenderError code "not_found"', async () => {
+    jest.spyOn(fetchOgModule, 'fetchOg').mockResolvedValueOnce({ kind: 'error', code: 'http-error', httpStatus: 404 });
+    const renderer = createLinkCardRenderer();
+    const result = await renderer.render({ tag: 'card', url: 'https://example.test/missing', pageId: 'p1' }, stubCtx);
+    expect(result.error).toEqual({ code: 'not_found', message: 'http-error (HTTP 404)' });
+  });
+
+  it('maps a 5xx http-error to RenderError code "network"', async () => {
+    jest.spyOn(fetchOgModule, 'fetchOg').mockResolvedValueOnce({ kind: 'error', code: 'http-error', httpStatus: 500 });
+    const renderer = createLinkCardRenderer();
+    const result = await renderer.render({ tag: 'card', url: 'https://example.test/broken', pageId: 'p1' }, stubCtx);
+    expect(result.error).toEqual({ code: 'network', message: 'http-error (HTTP 500)' });
+  });
+
+  it('maps a 429 http-error WITH a parsed Retry-After to RenderError code "rate_limit" + retryAfterSec', async () => {
+    jest.spyOn(fetchOgModule, 'fetchOg').mockResolvedValueOnce({ kind: 'error', code: 'http-error', httpStatus: 429, retryAfterSec: 30 });
+    const renderer = createLinkCardRenderer();
+    const result = await renderer.render({ tag: 'card', url: 'https://example.test/too-many', pageId: 'p1' }, stubCtx);
+    expect(result.error).toEqual({ code: 'rate_limit', message: 'http-error (HTTP 429)', retryAfterSec: 30 });
+  });
+
+  it('maps a 429 http-error WITHOUT a Retry-After to the general 4xx "not_found" code (no invented cadence)', async () => {
+    jest.spyOn(fetchOgModule, 'fetchOg').mockResolvedValueOnce({ kind: 'error', code: 'http-error', httpStatus: 429 });
+    const renderer = createLinkCardRenderer();
+    const result = await renderer.render({ tag: 'card', url: 'https://example.test/too-many-no-header', pageId: 'p1' }, stubCtx);
+    expect(result.error).toEqual({ code: 'not_found', message: 'http-error (HTTP 429)' });
+  });
+
+  it('maps a redirect-exhausted 3xx http-error to RenderError code "network" (transient — matches pre-migration TTL, NOT the persistent "not_found" 4xx bucket)', async () => {
+    const renderer = createLinkCardRenderer();
+    for (const httpStatus of [301, 302, 303, 307, 308]) {
+      jest.spyOn(fetchOgModule, 'fetchOg').mockResolvedValueOnce({ kind: 'error', code: 'http-error', httpStatus });
+      const result = await renderer.render({ tag: 'card', url: 'https://example.test/too-many-redirects', pageId: 'p1' }, stubCtx);
+      expect(result.error).toEqual({ code: 'network', message: `http-error (HTTP ${httpStatus})` });
+    }
+  });
+
+  it('maps an http-error with no httpStatus at all to RenderError code "network" (transient fallback, matches pre-migration TTL)', async () => {
+    jest.spyOn(fetchOgModule, 'fetchOg').mockResolvedValueOnce({ kind: 'error', code: 'http-error' });
+    const renderer = createLinkCardRenderer();
+    const result = await renderer.render({ tag: 'card', url: 'https://example.test/no-status', pageId: 'p1' }, stubCtx);
+    expect(result.error).toEqual({ code: 'network', message: 'http-error' });
+  });
+
+  it('maps timeout / network fetch-og codes straight through to the same-named RenderError code', async () => {
     const renderer = createLinkCardRenderer();
 
-    jest.spyOn(fetchOgModule, 'fetchOg').mockResolvedValueOnce({ kind: 'error', code: 'blocked' });
-    const blocked = await renderer.render({ tag: 'card', url: 'https://example.test/a', pageId: 'p1' }, stubCtx);
-
-    jest.spyOn(fetchOgModule, 'fetchOg').mockResolvedValueOnce({ kind: 'error', code: 'http-error', httpStatus: 404 });
-    const notFound = await renderer.render({ tag: 'card', url: 'https://example.test/b', pageId: 'p1' }, stubCtx);
-
     jest.spyOn(fetchOgModule, 'fetchOg').mockResolvedValueOnce({ kind: 'error', code: 'timeout' });
-    const timeout = await renderer.render({ tag: 'card', url: 'https://example.test/c', pageId: 'p1' }, stubCtx);
+    const timeout = await renderer.render({ tag: 'card', url: 'https://example.test/slow', pageId: 'p1' }, stubCtx);
+    expect(timeout.error).toEqual({ code: 'timeout', message: 'timeout' });
 
-    jest.spyOn(fetchOgModule, 'fetchOg').mockResolvedValueOnce({ kind: 'error', code: 'http-error', httpStatus: 500 });
-    const serverError = await renderer.render({ tag: 'card', url: 'https://example.test/d', pageId: 'p1' }, stubCtx);
+    jest.spyOn(fetchOgModule, 'fetchOg').mockResolvedValueOnce({ kind: 'error', code: 'network' });
+    const network = await renderer.render({ tag: 'card', url: 'https://example.test/unreachable', pageId: 'p1' }, stubCtx);
+    expect(network.error).toEqual({ code: 'network', message: 'network' });
+  });
 
-    jest.spyOn(fetchOgModule, 'fetchOg').mockResolvedValueOnce({ kind: 'error', code: 'unsupported-content-type' });
-    const unsupportedContentType = await renderer.render({ tag: 'card', url: 'https://example.test/e', pageId: 'p1' }, stubCtx);
+  it('maps too-large / unknown fetch-og codes to RenderError code "unknown"', async () => {
+    const renderer = createLinkCardRenderer();
 
-    expect(blocked.ttlSec).toBeGreaterThan(timeout.ttlSec ?? 0);
-    expect(notFound.ttlSec).toBeGreaterThan(serverError.ttlSec ?? 0);
-    expect(timeout.ttlSec).toEqual(serverError.ttlSec);
-    expect(unsupportedContentType.ttlSec).toEqual(blocked.ttlSec);
+    jest.spyOn(fetchOgModule, 'fetchOg').mockResolvedValueOnce({ kind: 'error', code: 'too-large' });
+    const tooLarge = await renderer.render({ tag: 'card', url: 'https://example.test/huge', pageId: 'p1' }, stubCtx);
+    expect(tooLarge.error).toEqual({ code: 'unknown', message: 'too-large' });
+
+    jest.spyOn(fetchOgModule, 'fetchOg').mockResolvedValueOnce({ kind: 'error', code: 'unknown' });
+    const unknown = await renderer.render({ tag: 'card', url: 'https://example.test/weird', pageId: 'p1' }, stubCtx);
+    expect(unknown.error).toEqual({ code: 'unknown', message: 'unknown' });
   });
 });

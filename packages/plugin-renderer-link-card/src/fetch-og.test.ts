@@ -250,6 +250,52 @@ describe('fetchOg — scheme / timeout / network / HTTP-error / size-cap failure
     expect(result).toEqual({ kind: 'error', code: 'http-error', httpStatus: 500 });
   });
 
+  it('parses a numeric-seconds Retry-After header on a 429', async () => {
+    const fetchImpl = jest.fn().mockResolvedValue(new Response('', { status: 429, headers: { 'retry-after': '30' } }));
+    const result = await fetchOg('https://example.test/too-many', { fetchImpl, dnsLookup: allowLookup() });
+    expect(result).toEqual({ kind: 'error', code: 'http-error', httpStatus: 429, retryAfterSec: 30 });
+  });
+
+  it('parses an HTTP-date Retry-After header on a 429', async () => {
+    const future = new Date(Date.now() + 45_000);
+    const fetchImpl = jest.fn().mockResolvedValue(new Response('', { status: 429, headers: { 'retry-after': future.toUTCString() } }));
+    const result = await fetchOg('https://example.test/too-many-date', { fetchImpl, dnsLookup: allowLookup() });
+    expect(result.kind).toBe('error');
+    expect(result.kind === 'error' && result.retryAfterSec).toBeGreaterThanOrEqual(44);
+    expect(result.kind === 'error' && result.retryAfterSec).toBeLessThanOrEqual(46);
+  });
+
+  it('leaves retryAfterSec undefined on a 429 with no Retry-After header', async () => {
+    const fetchImpl = jest.fn().mockResolvedValue(new Response('', { status: 429 }));
+    const result = await fetchOg('https://example.test/too-many-no-header', { fetchImpl, dnsLookup: allowLookup() });
+    expect(result).toEqual({ kind: 'error', code: 'http-error', httpStatus: 429 });
+  });
+
+  it('does not parse Retry-After for a non-429 status even if the header is present', async () => {
+    const fetchImpl = jest.fn().mockResolvedValue(new Response('', { status: 503, headers: { 'retry-after': '30' } }));
+    const result = await fetchOg('https://example.test/unavailable', { fetchImpl, dnsLookup: allowLookup() });
+    expect(result).toEqual({ kind: 'error', code: 'http-error', httpStatus: 503 });
+  });
+
+  it('clamps an absurdly large numeric Retry-After to the 24h cap', async () => {
+    const fetchImpl = jest.fn().mockResolvedValue(new Response('', { status: 429, headers: { 'retry-after': String(60 * 60 * 24 * 365) } }));
+    const result = await fetchOg('https://example.test/too-many-huge', { fetchImpl, dnsLookup: allowLookup() });
+    expect(result).toEqual({ kind: 'error', code: 'http-error', httpStatus: 429, retryAfterSec: 24 * 60 * 60 });
+  });
+
+  it('discards a Retry-After digit string too large to be a safe integer', async () => {
+    const fetchImpl = jest.fn().mockResolvedValue(new Response('', { status: 429, headers: { 'retry-after': '9'.repeat(30) } }));
+    const result = await fetchOg('https://example.test/too-many-unsafe', { fetchImpl, dnsLookup: allowLookup() });
+    expect(result).toEqual({ kind: 'error', code: 'http-error', httpStatus: 429 });
+  });
+
+  it('clamps an HTTP-date Retry-After far in the future to the 24h cap', async () => {
+    const farFuture = new Date(Date.now() + 1000 * 60 * 60 * 24 * 365 * 10); // 10 years out
+    const fetchImpl = jest.fn().mockResolvedValue(new Response('', { status: 429, headers: { 'retry-after': farFuture.toUTCString() } }));
+    const result = await fetchOg('https://example.test/too-many-date-huge', { fetchImpl, dnsLookup: allowLookup() });
+    expect(result).toEqual({ kind: 'error', code: 'http-error', httpStatus: 429, retryAfterSec: 24 * 60 * 60 });
+  });
+
   it('rejects a response body larger than the 512KB cap', async () => {
     const oversized = `<html><head><meta property="og:title" content="x"></head><body>${'a'.repeat(600 * 1024)}</body></html>`;
     const fetchImpl = jest.fn().mockResolvedValue(htmlResponse(oversized));
