@@ -142,7 +142,7 @@ pnpm dev:site      # crowi.wiki LP + docs (port 4303)
 | `PORT` | API server port (default `4301`) |
 | `NODE_ENV` | `production` or `development` |
 
-See [Redis licensing and engine support policy](https://github.com/crowi/crowi/blob/main/apps/crowi-site/content/docs/en/operations/realtime-collab.mdx#redis-licensing-and-engine-support-policy) for supported Redis versions, image pinning, and ACL security guidance covering every `REDIS_URL` consumer above.
+See [Redis licensing and engine support policy](https://github.com/crowi/crowi/blob/main/apps/crowi-site/content/docs/en/operations/redis.mdx#redis-licensing-and-engine-support-policy) for supported Redis versions, image pinning, and ACL security guidance covering every `REDIS_URL` consumer above.
 Storage backend selection is driven by the runner's `crowi.config.json`
 (`storage.driver: 'local' | 's3' | ...`) plus the corresponding
 `@crowi/plugin-storage-*` package — there is no `FILE_UPLOAD` env any
