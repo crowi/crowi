@@ -11,6 +11,10 @@ description: |
 
 # Crowi Docs Refresh (site ドキュメントの追随 + 陳腐化掃除)
 
+> 標準の呼び出し元: 手動の `/crowi-docs-refresh` に加えて、**integrate-worktree の
+> Step 10** が統合完了時の drain point(他に READY_TO_INTEGRATE が残っていない時)に
+> 自動で呼ぶ。どちらの経路でも本 skill の動作は同一(watermark 駆動)。
+
 `apps/crowi-site/`(crowi.wiki の LP + docs・Fumadocs)を main の実装に追随させる。
 2 つの仕事を 1 回で行う: **①未文書化の user-visible 変更を書き足す**(前回実行以降の
 delta 駆動)、**②既存ページの陳腐化を実コード照合で見つけて直す**(claim 検証)。

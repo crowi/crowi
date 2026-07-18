@@ -36,6 +36,7 @@ description: |
 worktree 作業確認 → main へ merge → conflict 解消 → 自動チェック → merge commit
   → dev/watch 停止 → selective /crowi-qa → gw end → tmux window close → simplify
   → stale spec/task 掃除 → 直列チェーン前進 (kickoff-chain があれば次を kickoff)
+  → site docs 追随 (/crowi-docs-refresh — drain point のみ)
 ```
 
 ### Step 1: worktree の作業内容を確認
@@ -452,6 +453,35 @@ CHAIN=.feature-state/kickoff-chain.json
 > チェーンを integrate 側で前進させる理由: kickoff は「入口を開ける」だけで完了を待てない
 > (Workflow は背景実行)。「次を着手してよい」と確定するのは READY_TO_INTEGRATE → 統合完了
 > の瞬間なので、その完了点を持つ integrate-worktree が次の kickoff を呼ぶのが唯一整合する。
+
+### Step 10: site docs 追随 (`/crowi-docs-refresh` — drain point のみ)
+
+統合された機能の user-visible 変更を crowi.wiki の docs に追随させる。統合完了は
+docs delta が確定する瞬間なので、ここが呼び出し点。ただし **毎統合ではなく drain
+point でのみ** 実行する:
+
+```bash
+python3 -c "
+import json, glob
+p=[f for f in glob.glob('.feature-state/tasks/*.json') if json.load(open(f)).get('status')=='READY_TO_INTEGRATE']
+print('PENDING' if p else 'DRAIN')"
+```
+
+- **DRAIN**(他に `READY_TO_INTEGRATE` の task が残っていない)→ `/crowi-docs-refresh` を
+  実行する。docs-refresh は watermark(`.feature-state/docs-sync-state.json`)駆動なので、
+  スキップされた過去の統合分もこの 1 回でまとめてカバーされる。
+- **PENDING**(別の worktree が統合待ち)→ skip して報告に 1 行(「docs 追随は後続の
+  integrate に委譲」)。次の integrate の Step 10 が delta ごと拾う。連続統合で
+  照合 sweep(Codex)を統合回数ぶん回さないための設計。
+- Step 9 のチェーン前進(次 spec の kickoff)は **skip 条件にしない** — kickoff した
+  feature の統合は数時間先で、いま確定している docs delta を待たせる理由がないため。
+
+制約:
+- **必ず Step 8 の lock 解放後に呼ぶ**(docs-refresh は自分で main-write lock を
+  取得する — 保持したまま呼ぶと自己デッドロック)。
+- docs-refresh の失敗(codex 不可・build 失敗等)は **統合の失敗にしない**。報告に
+  1 行残して終わる(docs は次回実行の watermark 差分で追い付ける)。
+- push はしない(docs-refresh 側の鉄則と同じ — site deploy のタイミングはユーザーが握る)。
 
 ## 失敗ハンドリング
 
