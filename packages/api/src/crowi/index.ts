@@ -298,7 +298,8 @@ class Crowi {
    * effect of starting up).
    *
    * `setupConfig` works without Redis because `service/config.ts:setupPubSub`
-   * short-circuits when `redisOpts === null`.
+   * short-circuits unless the boot Redis connection was actually
+   * established (`crowi.redis`).
    *
    * The CLI follows up with `teardownForCli()` to disconnect Mongo so
    * the Node process exits cleanly.
@@ -637,8 +638,35 @@ class Crowi {
 
   async setupRedisClient() {
     if (this.redisOpts) {
+      // Bound ONLY the initial (boot) connection. node-redis's default
+      // reconnectStrategy always returns a retry delay, so `connect()`
+      // never rejects — a configured-but-unreachable Redis retried forever
+      // and the degrade catch below was unreachable (boot hung). Once the
+      // connection has been established at least once, fall back to the
+      // default backoff unchanged: steady-state reconnect policy belongs
+      // to feature-multi-instance-redis-correctness, not this boot guard.
+      const BOOT_CONNECT_MAX_RETRIES = 10;
+      let established = false;
+      const socket = (this.redisOpts.socket ?? {}) as Record<string, unknown>;
+      const redisClient = createClient({
+        ...this.redisOpts,
+        socket: {
+          ...socket,
+          reconnectStrategy: (retries: number) => {
+            // `retries` is zero-based (0 after the first failed attempt), so
+            // `retries + 1` = connection attempts made so far.
+            if (!established && retries + 1 >= BOOT_CONNECT_MAX_RETRIES) {
+              return new Error(`Redis unreachable after ${retries + 1} boot connection attempts`);
+            }
+            return Math.min(retries * 50, 500); // node-redis's own default backoff
+          },
+        },
+      });
+      redisClient.on('ready', () => {
+        established = true;
+      });
+      redisClient.on('error', (err) => debug('Redis client error:', (err as Error).message));
       try {
-        const redisClient = createClient(this.redisOpts);
         await redisClient.connect();
         this.redis = redisClient;
         debug('Redis client connected successfully');

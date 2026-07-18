@@ -58,12 +58,49 @@ describe('Test for Crowi application context', () => {
       ['redis://user:password@localhost:6379', true, { socket: { host: 'localhost', port: 6379 }, password: 'password' }],
       ['redis://user:password@localhost:6379', false, { socket: { host: 'localhost', port: 6379 }, password: 'password' }],
 
-      ['rediss://localhost:6379', true, { socket: { host: 'localhost', port: 6379, tls: { requestCert: true, rejectUnauthorized: true } } }],
-      ['rediss://localhost:6379', false, { socket: { host: 'localhost', port: 6379, tls: { requestCert: true, rejectUnauthorized: false } } }],
+      // node-redis v4 requires the LITERAL `tls: true` with the TLS options
+      // flattened into the socket object (`RedisTlsSocketOptions`); a nested
+      // object silently selects a plaintext transport. See
+      // `util/redis-opts.test.ts` for the behavioral (handshake) repro.
+      ['rediss://localhost:6379', true, { socket: { host: 'localhost', port: 6379, tls: true, requestCert: true, rejectUnauthorized: true } }],
+      ['rediss://localhost:6379', false, { socket: { host: 'localhost', port: 6379, tls: true, requestCert: true, rejectUnauthorized: false } }],
     ];
 
     test.each(table)('parse %s', (url, redisRejectUnauthorized, expected) => {
       expect(crowi.buildRedisOpts(url, redisRejectUnauthorized)).toStrictEqual(expected);
     });
+  });
+
+  describe('boot degrade when Redis is configured but unreachable', () => {
+    // Reserve a port nothing listens on: bind an ephemeral port, then close.
+    const reserveDeadPort = async (): Promise<number> => {
+      const net = await import('node:net');
+      const srv = net.createServer();
+      await new Promise<void>((resolve) => srv.listen(0, '127.0.0.1', resolve));
+      const port = (srv.address() as import('node:net').AddressInfo).port;
+      await new Promise<void>((resolve) => srv.close(() => resolve()));
+      return port;
+    };
+
+    test('.setupRedisClient resolves with redis=null instead of hanging (repro: default reconnectStrategy retries forever, the degrade catch was unreachable)', async () => {
+      const savedOpts = crowi.redisOpts;
+      const savedRedis = crowi.redis;
+      try {
+        crowi.redisOpts = crowi.buildRedisOpts(`redis://127.0.0.1:${await reserveDeadPort()}`, false);
+        await crowi.setupRedisClient();
+        expect(crowi.redis).toBeNull();
+      } finally {
+        crowi.redisOpts = savedOpts;
+        crowi.redis = savedRedis;
+      }
+    }, 60_000);
+
+    test('.setupPubSub is a no-op when the boot Redis connection degraded (repro: it gated on redisOpts and hung on the same dead server)', async () => {
+      const ConfigService = (await import('src/service/config')).default;
+      const deadOpts = crowi.buildRedisOpts(`redis://127.0.0.1:${await reserveDeadPort()}`, false);
+      const svc = new ConfigService({ redisOpts: deadOpts, redis: null, model: () => ({}) } as never);
+      await svc.setupPubSub();
+      expect(svc.pubSub.publisher).toBeNull();
+    }, 15_000);
   });
 });

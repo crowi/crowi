@@ -162,12 +162,21 @@ export default class ConfigService {
   }
 
   async setupPubSub() {
-    const { redisOpts } = this.crowi;
+    const { redisOpts, redis } = this.crowi;
 
-    if (redisOpts) {
+    // Gate on the ESTABLISHED boot connection (`crowi.redis`), not just on
+    // Redis being configured: when `setupRedisClient` degraded (server
+    // unreachable), connecting two more clients here would hit the same
+    // unbounded retry loop and hang boot.
+    if (redisOpts && redis) {
       try {
         this.pubSub.publisher = createClient(redisOpts);
         this.pubSub.subscriber = createClient(redisOpts);
+        // Without an 'error' listener, a steady-state Redis outage after
+        // these clients connect raises an unhandled EventEmitter 'error'
+        // and crashes the process.
+        this.pubSub.publisher.on('error', (err: Error) => debug('config pub/sub publisher error:', err.message));
+        this.pubSub.subscriber.on('error', (err: Error) => debug('config pub/sub subscriber error:', err.message));
 
         await this.pubSub.publisher.connect();
         await this.pubSub.subscriber.connect();
