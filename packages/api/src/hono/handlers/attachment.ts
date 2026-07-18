@@ -311,8 +311,14 @@ export const registerAttachmentRoutes = <E extends OpenAPIHono<CrowiHonoBindings
           const Revision = crowi.model('Revision');
 
           // All revisions, newest first. `renderedAst` is deliberately
-          // excluded — heavy and the scan only needs raw body.
-          const revisions = (await Revision.find({ path: page.path }).select('_id body createdAt author').sort({ createdAt: -1 }).populate('author')) as Array<{
+          // excluded — heavy and the scan only needs raw body. DC-5
+          // (`feature-revision-page-ref`): query by the immutable `page` id
+          // (already resolved above via the grant check), not the mutable
+          // `path` string — a rename's cosmetic path-sync failing would
+          // otherwise lose track of this page's own past revisions, and a
+          // path later reused by an unrelated page would otherwise pull in
+          // that page's revision metadata here.
+          const revisions = (await Revision.find({ page: page._id }).select('_id body createdAt author').sort({ createdAt: -1 }).populate('author')) as Array<{
             _id: Types.ObjectId;
             body?: string;
             createdAt?: Date;

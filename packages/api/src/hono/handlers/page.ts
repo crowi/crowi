@@ -971,10 +971,17 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             return c.json(PAGE_NOT_FOUND_BODY, 404);
           }
 
-          // The revision to revert TO. Must belong to this page (same path)
-          // so a caller cannot graft another page's body onto this one.
+          // The revision to revert TO. Must belong to this page. DC-5
+          // (`feature-revision-page-ref`): checked via the revision's
+          // immutable `page` id ref, NOT `path` equality — `path` is a
+          // mutable, reused string, so comparing paths would let a caller
+          // with edit access to page B "revert" it to the body of some
+          // unrelated page A's revision, as long as A's path was ever
+          // reused by B (e.g. A was hard-deleted and B later created at the
+          // same path). An orphaned revision (no `page` ref — pre-migration
+          // or a standard-lifecycle deviation) fails closed the same way.
           const oldRevision = await Revision.findRevision(new Types.ObjectId(revision_id));
-          if (!oldRevision || oldRevision.path !== pageData.path) {
+          if (!oldRevision?.page || !oldRevision.page.equals(pageData._id)) {
             return c.json(pageBadRequestBody('PAGE_REVERT_TO_REVISION_FAILED', 'Revision does not belong to this page'), 400);
           }
 

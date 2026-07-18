@@ -1055,6 +1055,27 @@ export default (crowi: Crowi) => {
       throw new Error('Page is not granted for the user'); // PAGE_GRANT_ERROR, null);
     }
 
+    // DC-5 (`feature-revision-page-ref`): `revisionId` is caller-supplied
+    // (`GET /pages?path=...&revision_id=...`) and `populatePageData` below
+    // blindly assigns + populates whatever id it is given, with no
+    // ownership check of its own. `path` is a mutable, reused string — if a
+    // private page is hard-deleted and its path is later reused by an
+    // unrelated public page, a caller who still holds a since-deleted
+    // revision id could otherwise read that private page's body through
+    // the new page's (granted) response. Verify the revision actually
+    // belongs to THIS page via the immutable `page` id ref before trusting
+    // it. Skip the check (preserve legacy behaviour) for values that don't
+    // even look like an ObjectId — some internal callers pass a truthy
+    // non-id sentinel here (see `events/user.ts`'s `onActivated`) and this
+    // fix is scoped to the actual grant-leak, not those pre-existing shapes.
+    if (revisionId && Types.ObjectId.isValid(revisionId)) {
+      const Revision = crowi.model('Revision');
+      const requestedRevision = await Revision.findById(revisionId).select('page').exec();
+      if (!requestedRevision?.page || !requestedRevision.page.equals(pageData._id)) {
+        throw pageNotFoundError();
+      }
+    }
+
     return Page.populatePageData(pageData, revisionId || null);
   };
 
@@ -1765,7 +1786,10 @@ export default (crowi: Crowi) => {
     } catch (err) {
       debug('removePage: PageYjsUpdate.deleteMany failed for page %s: %s', String(_id), (err as Error)?.message ?? err);
     }
-    await Revision.removeRevisionsByPath(pageData.path);
+    // DC-5: id-based, so a path later reused by a different page can never
+    // cause this to delete the wrong page's revisions (see
+    // `Revision.removeRevisionsByPageId`'s doc comment).
+    await Revision.removeRevisionsByPageId(pageData._id);
     return pageData;
   };
 
@@ -1836,7 +1860,15 @@ export default (crowi: Crowi) => {
     // wiring the emit any later would silently swallow it on that throw.
     emitInvalidationIfRequested(pageData._id, invalidation);
 
-    // reivisions の path を変更
+    // reivisions の path を変更 — DC-5: this is now a best-effort, DISPLAY-ONLY
+    // sync of the denormalized `revision.path` string, not a
+    // correctness-critical relationship update. History retrieval
+    // (`hono/handlers/revision.ts` list/get routes, `Revision.removeRevisionsByPageId`,
+    // `Revision.findAuthorsByPage`) resolves the owning page via the
+    // immutable `revision.page` id set once in `prepareRevision`, so if this
+    // step throws (as tested in `page-lifecycle-epoch.test.ts`), the
+    // revisions are merely left showing a stale `path` in the wire response
+    // — they are never lost from history.
     const data = await Revision.updateRevisionListByPath(path, { path: newPagePath });
     pageData.path = newPagePath;
 
