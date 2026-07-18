@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
-import type { Code, Html, Root, RootContent } from 'mdast';
 import type { CodeBlockInfo, CodeBlockRenderer, EmbedFragment, EmbedInput, EmbedRenderer, RenderContext, RenderResult } from '@crowi/plugin-api';
+import type { Code, Html, Root, RootContent } from 'mdast';
 import {
   cachedRender,
   cachedRenderOrPending,
@@ -104,7 +104,7 @@ export const makeCodeBlockDispatch =
     for (const group of groupByParent(candidates)) {
       group.parent.children = rewriteChildren(group.parent.children, group.matches);
     }
-    // Stamp `data.mermaidRenderPending = true` on the still-`code` nodes
+    // Stamp `data.renderPending = true` on the still-`code` nodes
     // that hit an infra failure under admission. Runs AFTER the
     // replace-in-place pass above (which already left these nodes
     // untouched) so the index into `parent.children` is still valid —
@@ -113,7 +113,7 @@ export const makeCodeBlockDispatch =
       if (!candidate.markPending) continue;
       const node = candidate.parent.children[candidate.codeIndex] as Code & { data?: Record<string, unknown> };
       if (!node || node.type !== 'code') continue; // defensive — should always still be the original code node
-      node.data = { ...node.data, mermaidRenderPending: true };
+      node.data = { ...node.data, renderPending: true };
     }
   };
 
@@ -157,18 +157,13 @@ export const makePreviewCodeBlockDispatch =
           candidate.replacementHtml = dispatchLimitPlaceholder(MAX_ADMISSION_DISPATCH_COUNT, registration.renderer.reservation);
           return;
         }
-        // Internal binding (see `bindPreviewPluginName`'s doc comment) —
-        // `renderCodeBlockForPreview`'s exported signature is the spec's
-        // literal `(cb, info, ctx, startLine)`, so the admission-pool key
-        // (`registration.plugin`) travels via this WeakMap instead of a
-        // 5th parameter.
-        bindPreviewPluginName(registration.renderer, registration.plugin);
         const scopedCtx = scopedRenderContext(ctx, deps.cache, registration.plugin);
         candidate.replacementHtml = await renderCodeBlockForPreview(
           registration.renderer,
           { lang: candidate.lang, source: candidate.source },
           scopedCtx,
           candidate.startLine,
+          registration.plugin,
         );
       }),
     );
@@ -177,36 +172,6 @@ export const makePreviewCodeBlockDispatch =
       group.parent.children = rewriteChildren(group.parent.children, group.matches);
     }
   };
-
-/**
- * Internal binding of a registered `CodeBlockRenderer` instance to the
- * plugin name that registered it — populated by `makePreviewCodeBlockDispatch`
- * (and, in tests, directly) right before calling `renderCodeBlockForPreview`.
- *
- * This exists ONLY so `renderCodeBlockForPreview`'s exported signature can
- * stay exactly the spec's literal `(cb, info, ctx, startLine)` (§7 item 5)
- * while it still resolves a plugin-identity string for the
- * `acquireRenderSlot` pool key — `CodeBlockRenderer` itself carries no
- * plugin identity (unlike the registry's `{ plugin, renderer }` pair
- * `collectCandidates` resolves), so *some* side channel is unavoidable; a
- * WeakMap keyed by the renderer object (rather than a 5th parameter) is
- * that channel. A registered renderer is a stable singleton reference
- * (registered once at boot, looked up by lang on every dispatch), so
- * binding is idempotent and cheap to repeat on every call.
- *
- * The bound name MUST be the same `registration.plugin` value
- * `cachedRenderOrPending` is called with on the save path (spec §6:
- * "経路優先度(save/read > preview)" only means anything if both paths
- * share ONE pool per plugin; a distinct/unbound key here would silently
- * give preview jobs their own uncontended pool — pinned by the "shares
- * the SAME admission pool" test below).
- */
-const previewPluginNameByRenderer = new WeakMap<CodeBlockRenderer, string>();
-
-/** Bind `cb` to its owning plugin name for `renderCodeBlockForPreview`'s internal admission-pool-key lookup. See `previewPluginNameByRenderer`'s doc comment for why this indirection exists. */
-export function bindPreviewPluginName(cb: CodeBlockRenderer, pluginName: string): void {
-  previewPluginNameByRenderer.set(cb, pluginName);
-}
 
 /**
  * Non-persistent sibling of `cachedRender` (`../cache`) for the editor
@@ -223,9 +188,10 @@ export function bindPreviewPluginName(cb: CodeBlockRenderer, pluginName: string)
  *      / `ticket.release()` wrapping `../cache`'s
  *      `renderUnderAdmissionAndStore` uses, always `priority: 'low'`
  *      (preview never outranks save/read in the wait queue, spec §6).
- *      Requires a plugin-identity string for the pool key — see
- *      `bindPreviewPluginName`'s doc comment for how `cb` resolves one
- *      without widening this function's own parameter list.
+ *      `pluginName` MUST be the same `registration.plugin` value the
+ *      save path keys its pool with — a divergent key would silently
+ *      give preview jobs their own uncontended pool (pinned by the
+ *      "shares the SAME admission pool" test below).
  *   2. the same exception → `{code:'unknown'}` / `RenderResult.error` →
  *      `errorPlaceholder` normalisation `../cache`'s `normalizeRenderResult`
  *      applies — imported and called here directly (not reimplemented)
@@ -251,17 +217,10 @@ export async function renderCodeBlockForPreview(
   info: CodeBlockInfo,
   ctx: RenderContext,
   startLine: number | undefined,
+  pluginName: string,
 ): Promise<string> {
   let ticket: RenderSlotTicket | undefined;
   if (cb.admissionControl) {
-    const pluginName = previewPluginNameByRenderer.get(cb);
-    if (pluginName === undefined) {
-      // Every real call site (`makePreviewCodeBlockDispatch`) binds this
-      // before invoking — an admission-declaring renderer reaching here
-      // unbound is a caller bug (missing `bindPreviewPluginName`), not a
-      // runtime condition to silently paper over with a guessed key.
-      throw new Error('renderCodeBlockForPreview: cb.admissionControl is set but no plugin name is bound — call bindPreviewPluginName(cb, pluginName) first');
-    }
     try {
       ticket = await acquireRenderSlot({
         pluginName,
@@ -514,12 +473,12 @@ function rewriteChildren(children: RootContent[], matches: Candidate[]): RootCon
 
 /**
  * Cheap pre-check: does `tree` contain any `code` node carrying
- * `data.mermaidRenderPending === true`? Used by `computeRevisionRenderArtifactsAsync`
+ * `data.renderPending === true`? Used by `computeRevisionRenderArtifactsAsync`
  * (`packages/api/src/util/page-response.ts`) to skip the (rare) redispatch
  * path entirely for the overwhelming majority of reads. No registry
  * lookup / async work here — pure tree walk.
  */
-export function hasPendingMermaidMarker(tree: Root): boolean {
+export function hasPendingRenderMarker(tree: Root): boolean {
   let found = false;
   walkBlocks(tree as MutableParent, (parent) => {
     if (found) return;
@@ -527,8 +486,8 @@ export function hasPendingMermaidMarker(tree: Root): boolean {
     if (!children) return;
     for (const child of children) {
       if (child.type !== 'code') continue;
-      const code = child as Code & { data?: { mermaidRenderPending?: boolean } };
-      if (code.data?.mermaidRenderPending === true) {
+      const code = child as Code & { data?: { renderPending?: boolean } };
+      if (code.data?.renderPending === true) {
         found = true;
         return;
       }
@@ -552,8 +511,8 @@ function collectPendingCandidates(tree: Root): PendingCandidate[] {
     for (let i = 0; i < children.length; i++) {
       const child = children[i];
       if (child.type !== 'code') continue;
-      const code = child as Code & { data?: { mermaidRenderPending?: boolean } };
-      if (code.data?.mermaidRenderPending !== true) continue;
+      const code = child as Code & { data?: { renderPending?: boolean } };
+      if (code.data?.renderPending !== true) continue;
       const lang = (code.lang ?? '').trim();
       if (!lang) continue;
       out.push({ parent: parent as PendingCandidate['parent'], codeIndex: i, lang, source: code.value ?? '' });
@@ -564,13 +523,13 @@ function collectPendingCandidates(tree: Root): PendingCandidate[] {
 
 /**
  * Limited redispatch for the read path (spec §5, second bullet): retry
- * ONLY the `code` nodes still carrying `data.mermaidRenderPending`,
+ * ONLY the `code` nodes still carrying `data.renderPending`,
  * routed through `cachedRenderOrPending` with `priority: 'high'` (never
  * plain `cachedRender` — a retry that is STILL failing must not get
  * cached as a fresh error, see cache/index.ts's doc comment). Does not
  * touch any other node and never re-runs the full parse/transform
  * pipeline; callers are expected to have already checked
- * `hasPendingMermaidMarker(tree)` before paying for this walk.
+ * `hasPendingRenderMarker(tree)` before paying for this walk.
  *
  * Mutates `tree` in place (matching `makeCodeBlockDispatch`'s own
  * convention) and reports whether anything actually changed, so the

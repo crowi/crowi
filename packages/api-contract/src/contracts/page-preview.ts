@@ -16,9 +16,9 @@
  * persisted page at all.
  */
 import { createRoute } from '@hono/zod-openapi';
-
+import { AutocompleteRateLimitErrorSchema } from '../schemas/autocomplete';
 import { AuthenticationRequiredErrorSchema, InternalServerErrorSchema } from '../schemas/common';
-import { PreviewPageRequestSchema, PreviewPageResponseSchema, PreviewRateLimitErrorSchema } from '../schemas/page-preview';
+import { PreviewPageRequestSchema, PreviewPageResponseSchema } from '../schemas/page-preview';
 
 export const previewPageRoute = createRoute({
   method: 'post',
@@ -41,8 +41,11 @@ export const previewPageRoute = createRoute({
       content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
     },
     429: {
+      // Same wire shape as autocomplete's 429 — reused rather than
+      // duplicated (matching contracts/page.ts's link-access 429). A
+      // `Retry-After` header carries the machine-readable cooldown.
       description: 'Per-user rate limit exceeded',
-      content: { 'application/json': { schema: PreviewRateLimitErrorSchema } },
+      content: { 'application/json': { schema: AutocompleteRateLimitErrorSchema } },
     },
     500: {
       description: 'Renderer pipeline failure',

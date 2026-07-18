@@ -24,5 +24,4 @@ export interface ReadyMessage {
   type: 'ready';
 }
 
-export type WorkerInboundMessage = RenderRequestMessage;
 export type WorkerOutboundMessage = ReadyMessage | RenderResponseMessage;

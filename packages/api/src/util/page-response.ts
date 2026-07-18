@@ -1,23 +1,14 @@
 import type { Revision, RevisionMetaShape } from '@crowi/api-contract';
-import Debug from 'debug';
-import { Types } from 'mongoose';
+import type { RenderActor, RenderContext } from '@crowi/plugin-api';
 import type { Root } from 'mdast';
-import type { PluginLogger, RenderActor, RenderContext } from '@crowi/plugin-api';
+import { Types } from 'mongoose';
 import type Crowi from 'src/crowi';
 import type { PageDocument } from 'src/models/page';
 import { metadataToRevisionMeta, type RevisionMetaContent } from 'src/models/revision';
-import { hasPendingMermaidMarker, redispatchPendingCodeBlocks } from 'src/renderer/core';
+import { coreLogger } from 'src/renderer';
+import { hasPendingRenderMarker, redispatchPendingCodeBlocks } from 'src/renderer/core';
 import { RENDERER_PIPELINE_VERSION } from 'src/renderer/version';
 import { isPopulatedUser, type PopulatedUser, toISOStringOrNull, toPageUser, toStringId } from './ts-rest-helpers';
-
-const debug = Debug('crowi:util:page-response');
-
-const pendingRedispatchLogger: PluginLogger = {
-  debug: (msg, ...args) => debug(msg, ...args),
-  info: (msg, ...args) => debug(`[info] ${msg}`, ...args),
-  warn: (msg, ...args) => console.warn(`[crowi:util:page-response] ${msg}`, ...args),
-  error: (msg, ...args) => console.error(`[crowi:util:page-response] ${msg}`, ...args),
-};
 
 /**
  * Shape of a populated `revision` field as it appears on Mongoose documents
@@ -178,12 +169,12 @@ export const computeRevisionRenderArtifactsAsync = async (
   // feature-plugin-renderer-mermaid spec §5 — every return site below
   // that would otherwise serve `storedAst` verbatim (both branches that
   // guard on `astIsFresh`) instead serves this: a cheap no-op for the
-  // overwhelming majority of pages (no `mermaidRenderPending` marker
+  // overwhelming majority of pages (no `renderPending` marker
   // anywhere), or a narrowly-scoped retry of just the marked nodes.
   // Computed once, up front, and reused by every `astIsFresh` branch —
   // never computed when `!astIsFresh` (that path recomputes the AST
   // fully via `runRender` below instead).
-  const freshStoredAst = astIsFresh ? await resolvePendingMermaidNodes(crowi, storedAst, actor, pageId) : storedAst;
+  const freshStoredAst = astIsFresh ? await resolvePendingRenderNodes(crowi, storedAst, actor, pageId) : storedAst;
 
   if (metaIsComplete && astIsFresh) {
     return {
@@ -225,7 +216,7 @@ export const computeRevisionRenderArtifactsAsync = async (
 
 /**
  * feature-plugin-renderer-mermaid spec §5 — scan a stored `renderedAst`
- * for `data.mermaidRenderPending` markers (left by a save-time admission-
+ * for `data.renderPending` markers (left by a save-time admission-
  * control / child-process infra failure, `code-block-dispatch.ts`'s
  * `makeCodeBlockDispatch`) and, if any are found, retry ONLY those nodes
  * via `redispatchPendingCodeBlocks` (`priority: 'high'`).
@@ -240,14 +231,14 @@ export const computeRevisionRenderArtifactsAsync = async (
  * a successful retry; the next read repeats this same scan against the
  * still-unmodified stored document.
  */
-async function resolvePendingMermaidNodes(crowi: Crowi, storedAst: unknown, actor: RenderActor, pageId: string | undefined): Promise<unknown> {
+async function resolvePendingRenderNodes(crowi: Crowi, storedAst: unknown, actor: RenderActor, pageId: string | undefined): Promise<unknown> {
   if (!pageId) return storedAst; // no page identity to key a cache entry on — degrade to no-op, same as the rest of this file
   if (!isMdastRootLike(storedAst)) return storedAst;
-  if (!hasPendingMermaidMarker(storedAst)) return storedAst;
+  if (!hasPendingRenderMarker(storedAst)) return storedAst;
 
   const renderer = crowi.getRenderer();
   const workingTree = structuredClone(storedAst);
-  const ctx: RenderContext = { mode: 'read', log: pendingRedispatchLogger, actor };
+  const ctx: RenderContext = { mode: 'read', log: coreLogger, actor };
   const { changed } = await redispatchPendingCodeBlocks(workingTree, renderer.registry, ctx, { cache: renderer.cache, pageId });
   return changed ? workingTree : storedAst;
 }

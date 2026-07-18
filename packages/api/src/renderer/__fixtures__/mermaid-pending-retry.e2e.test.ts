@@ -1,13 +1,13 @@
-import { Types } from 'mongoose';
 import type { CodeBlockRenderer, PluginLogger, RenderContext } from '@crowi/plugin-api';
 import type { Code, Root } from 'mdast';
-import { crowi } from 'src/test/setup';
+import { Types } from 'mongoose';
 import type { PluginRenderCacheModel } from 'src/models/plugin-render-cache';
+import { crowi } from 'src/test/setup';
 import { createMongoCacheStorage, scopeForPlugin } from '../cache';
-import { hasPendingMermaidMarker, makeCodeBlockDispatch, redispatchPendingCodeBlocks } from '../core';
+import { hasPendingRenderMarker, makeCodeBlockDispatch, redispatchPendingCodeBlocks } from '../core';
 import * as renderAdmission from '../core/render-admission';
 import { _resetAllPoolsForTest, acquireRenderSlot, type RenderSlotTicket } from '../core/render-admission';
-import { createAuthContextStub, RendererRegistryImpl, makeRendererScope } from '../registry';
+import { createAuthContextStub, makeRendererScope, RendererRegistryImpl } from '../registry';
 import { serializeMdast } from '../serialize';
 
 /**
@@ -132,9 +132,9 @@ describe('e2e: save-fail → pending marker → read-time retry → resolved (sp
     const tree: Root = { type: 'root', children: [{ type: 'code', lang: 'mermaid', value: 'flowchart TD\n  A --> B' } as Code] };
     await makeCodeBlockDispatch(reg, ctx, { cache: storage, pageId })(tree);
 
-    const node = tree.children[0] as Code & { data?: { mermaidRenderPending?: boolean } };
+    const node = tree.children[0] as Code & { data?: { renderPending?: boolean } };
     expect(node.type).toBe('code'); // untouched — "save succeeds" (no exception, no error placeholder baked in)
-    expect(node.data?.mermaidRenderPending).toBe(true);
+    expect(node.data?.renderPending).toBe(true);
     // Admission rejects BEFORE `renderer.render()` is ever invoked (spec
     // §5/§6 — the ticket gate wraps the actual render call).
     expect(renderCallCount).toBe(0);
@@ -146,8 +146,8 @@ describe('e2e: save-fail → pending marker → read-time retry → resolved (sp
     // The marker survives `serializeMdast` (what actually gets persisted
     // into `Revision.renderedAst`) — position is stripped, `data` is not.
     const serialized = serializeMdast(tree) as Root;
-    const serializedNode = serialized.children[0] as Code & { data?: { mermaidRenderPending?: boolean } };
-    expect(serializedNode.data?.mermaidRenderPending).toBe(true);
+    const serializedNode = serialized.children[0] as Code & { data?: { renderPending?: boolean } };
+    expect(serializedNode.data?.renderPending).toBe(true);
   });
 
   it('(2) reading while the real admission overflow persists re-attempts admission (a genuine retry, not a no-op), stays pending, and still writes nothing to the cache', async () => {
@@ -157,7 +157,7 @@ describe('e2e: save-fail → pending marker → read-time retry → resolved (sp
 
     const tree: Root = { type: 'root', children: [{ type: 'code', lang: 'mermaid', value: 'flowchart TD\n  A --> B' } as Code] };
     await makeCodeBlockDispatch(reg, ctx, { cache: storage, pageId })(tree);
-    expect(hasPendingMermaidMarker(tree)).toBe(true);
+    expect(hasPendingRenderMarker(tree)).toBe(true);
 
     // Prove the read-time retry genuinely re-attempts admission (not a
     // short-circuit that skips straight to "still pending" without
@@ -171,9 +171,9 @@ describe('e2e: save-fail → pending marker → read-time retry → resolved (sp
     expect(acquireSpy.mock.calls.length).toBeGreaterThan(callsBeforeRetry); // a real admission attempt actually happened
     expect(changed).toBe(false);
     expect(renderCallCount).toBe(0); // still never reached — admission still saturated
-    const node = tree.children[0] as Code & { data?: { mermaidRenderPending?: boolean } };
+    const node = tree.children[0] as Code & { data?: { renderPending?: boolean } };
     expect(node.type).toBe('code');
-    expect(node.data?.mermaidRenderPending).toBe(true);
+    expect(node.data?.renderPending).toBe(true);
 
     const PluginRenderCache = crowi.model('PluginRenderCache') as unknown as PluginRenderCacheModel;
     const count = await PluginRenderCache.countDocuments({ pageId: new Types.ObjectId(pageId) }).exec();
@@ -189,7 +189,7 @@ describe('e2e: save-fail → pending marker → read-time retry → resolved (sp
 
     const tree: Root = { type: 'root', children: [{ type: 'code', lang: 'mermaid', value: 'flowchart TD\n  A --> B' } as Code] };
     await makeCodeBlockDispatch(reg, ctx, { cache: storage, pageId })(tree);
-    expect(hasPendingMermaidMarker(tree)).toBe(true);
+    expect(hasPendingRenderMarker(tree)).toBe(true);
 
     // Infra recovers — release the real ticket, freeing the pool's one slot.
     clearInjectedFailure();
@@ -201,7 +201,7 @@ describe('e2e: save-fail → pending marker → read-time retry → resolved (sp
     const node = tree.children[0] as unknown as { type: string; value?: string };
     expect(node.type).toBe('html');
     expect((node as { value: string }).value).toContain('<img');
-    expect(hasPendingMermaidMarker(tree)).toBe(false);
+    expect(hasPendingRenderMarker(tree)).toBe(false);
 
     const PluginRenderCache = crowi.model('PluginRenderCache') as unknown as PluginRenderCacheModel;
     const doc = await PluginRenderCache.findOne({ pageId: new Types.ObjectId(pageId) })
@@ -212,7 +212,7 @@ describe('e2e: save-fail → pending marker → read-time retry → resolved (sp
 
     // A subsequent read with no marker left does nothing (fresh cache hit,
     // no further render() calls) — `redispatchPendingCodeBlocks` itself is
-    // only ever invoked when `hasPendingMermaidMarker` is true in the
+    // only ever invoked when `hasPendingRenderMarker` is true in the
     // production call site (`page-response.ts`), which this proves is now false.
   });
 });

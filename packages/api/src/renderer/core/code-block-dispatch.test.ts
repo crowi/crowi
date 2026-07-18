@@ -1,19 +1,13 @@
 import type { AdmissionControlConfig, CodeBlockInfo, CodeBlockRenderer, PluginLogger, RenderContext } from '@crowi/plugin-api';
 import type { Code, Root } from 'mdast';
 import { Types } from 'mongoose';
-import { crowi } from 'src/test/setup';
 import type { PluginRenderCacheModel } from 'src/models/plugin-render-cache';
+import { crowi } from 'src/test/setup';
 import { createMongoCacheStorage, scopeForPlugin } from '../cache';
 import { createPipelineEsmDepsLoader, runPipeline } from '../pipeline';
-import { RendererRegistryImpl, createAuthContextStub, makeRendererScope } from '../registry';
+import { createAuthContextStub, makeRendererScope, RendererRegistryImpl } from '../registry';
+import { MAX_ADMISSION_DISPATCH_COUNT, makeCodeBlockDispatch, makePreviewCodeBlockDispatch, renderCodeBlockForPreview } from './code-block-dispatch';
 import * as renderAdmission from './render-admission';
-import {
-  MAX_ADMISSION_DISPATCH_COUNT,
-  bindPreviewPluginName,
-  makeCodeBlockDispatch,
-  makePreviewCodeBlockDispatch,
-  renderCodeBlockForPreview,
-} from './code-block-dispatch';
 
 const silentLogger: PluginLogger = {
   debug: () => undefined,
@@ -806,13 +800,13 @@ describe('renderCodeBlockForPreview', () => {
 
   it('a successful render is returned verbatim (no wrap) when startLine is undefined', async () => {
     const cb: CodeBlockRenderer = { cacheVersion: 1, previewPolicy: 'server-render', render: () => ({ html: '<div>ok</div>' }) };
-    const html = await renderCodeBlockForPreview(cb, previewCodeInfo, buildPreviewCtx(), undefined);
+    const html = await renderCodeBlockForPreview(cb, previewCodeInfo, buildPreviewCtx(), undefined, 'p-preview-fixture');
     expect(html).toBe('<div>ok</div>');
   });
 
   it('wraps the resolved html in <div data-source-line="N"> when startLine is a number', async () => {
     const cb: CodeBlockRenderer = { cacheVersion: 1, previewPolicy: 'server-render', render: () => ({ html: '<div>ok</div>' }) };
-    const html = await renderCodeBlockForPreview(cb, previewCodeInfo, buildPreviewCtx(), 7);
+    const html = await renderCodeBlockForPreview(cb, previewCodeInfo, buildPreviewCtx(), 7, 'p-preview-fixture');
     expect(html).toBe('<div data-source-line="7"><div>ok</div></div>');
   });
 
@@ -826,7 +820,7 @@ describe('renderCodeBlockForPreview', () => {
         throw new Error('child-process crash');
       },
     };
-    const html = await renderCodeBlockForPreview(cb, previewCodeInfo, buildPreviewCtx(), undefined);
+    const html = await renderCodeBlockForPreview(cb, previewCodeInfo, buildPreviewCtx(), undefined, 'p-preview-fixture');
     expect(html).toContain('crowi-embed-placeholder-error-unknown');
   });
 
@@ -836,21 +830,11 @@ describe('renderCodeBlockForPreview', () => {
       previewPolicy: 'server-render',
       render: () => ({ html: '', error: { code: 'timeout' as const } }),
     };
-    const html = await renderCodeBlockForPreview(cb, previewCodeInfo, buildPreviewCtx(), undefined);
+    const html = await renderCodeBlockForPreview(cb, previewCodeInfo, buildPreviewCtx(), undefined, 'p-preview-fixture');
     expect(html).toContain('crowi-embed-placeholder-error-timeout');
   });
 
-  it('throws when cb.admissionControl is set but no pluginName was bound (bindPreviewPluginName was skipped — caller bug, not a runtime condition to guess through)', async () => {
-    const cb: CodeBlockRenderer = {
-      cacheVersion: 1,
-      previewPolicy: 'server-render',
-      admissionControl: GENEROUS_ADMISSION,
-      render: () => ({ html: '<div>ok</div>' }),
-    };
-    await expect(renderCodeBlockForPreview(cb, previewCodeInfo, buildPreviewCtx(), undefined)).rejects.toThrow(/bindPreviewPluginName/);
-  });
-
-  it('acquires an admission ticket (priority: "low") when cb.admissionControl is declared, keyed on the bound pluginName', async () => {
+  it('acquires an admission ticket (priority: "low") when cb.admissionControl is declared, keyed on the passed pluginName', async () => {
     const acquireSpy = jest.spyOn(renderAdmission, 'acquireRenderSlot');
     const cb: CodeBlockRenderer = {
       cacheVersion: 1,
@@ -858,11 +842,10 @@ describe('renderCodeBlockForPreview', () => {
       admissionControl: GENEROUS_ADMISSION,
       render: () => ({ html: '<div>ok</div>' }),
     };
-    bindPreviewPluginName(cb, 'p-preview-admission');
     const ctx = buildPreviewCtx();
 
     try {
-      const html = await renderCodeBlockForPreview(cb, previewCodeInfo, ctx, undefined);
+      const html = await renderCodeBlockForPreview(cb, previewCodeInfo, ctx, undefined, 'p-preview-admission');
       expect(html).toBe('<div>ok</div>');
       expect(acquireSpy).toHaveBeenCalledTimes(1);
       expect(acquireSpy.mock.calls[0][0]).toMatchObject({ pluginName: 'p-preview-admission', priority: 'low', actor: ctx.actor });
@@ -879,10 +862,9 @@ describe('renderCodeBlockForPreview', () => {
       admissionControl: TIGHT,
       render: () => ({ html: '<div>ok</div>' }),
     };
-    bindPreviewPluginName(cb, 'p-preview-release-success');
     const ctx = buildPreviewCtx();
 
-    const firstHtml = await renderCodeBlockForPreview(cb, previewCodeInfo, ctx, undefined);
+    const firstHtml = await renderCodeBlockForPreview(cb, previewCodeInfo, ctx, undefined, 'p-preview-release-success');
     expect(firstHtml).toBe('<div>ok</div>');
 
     // If the first ticket had NOT been released, `acquireRenderSlot` would
@@ -890,7 +872,7 @@ describe('renderCodeBlockForPreview', () => {
     // instead of granting it synchronously — assert the queue BEFORE
     // awaiting, since a queued call would otherwise hang forever (nothing
     // left to drain it).
-    const secondPromise = renderCodeBlockForPreview(cb, previewCodeInfo, ctx, undefined);
+    const secondPromise = renderCodeBlockForPreview(cb, previewCodeInfo, ctx, undefined, 'p-preview-release-success');
     expect(renderAdmission._getQueueLengthForTest('p-preview-release-success')).toBe(0);
     const secondHtml = await secondPromise;
     expect(secondHtml).toBe('<div>ok</div>');
@@ -906,16 +888,15 @@ describe('renderCodeBlockForPreview', () => {
         throw new Error('child-process crash');
       },
     };
-    bindPreviewPluginName(cb, 'p-preview-release-exception');
     const ctx = buildPreviewCtx();
 
-    const firstHtml = await renderCodeBlockForPreview(cb, previewCodeInfo, ctx, undefined);
+    const firstHtml = await renderCodeBlockForPreview(cb, previewCodeInfo, ctx, undefined, 'p-preview-release-exception');
     expect(firstHtml).toContain('crowi-embed-placeholder-error-unknown');
 
     // Same non-queued-immediate-grant assertion as the success-path test
     // above, proving `finally { ticket?.release() }` runs on the
     // exception path too (not just the success path it already covered).
-    const secondPromise = renderCodeBlockForPreview(cb, previewCodeInfo, ctx, undefined);
+    const secondPromise = renderCodeBlockForPreview(cb, previewCodeInfo, ctx, undefined, 'p-preview-release-exception');
     expect(renderAdmission._getQueueLengthForTest('p-preview-release-exception')).toBe(0);
     const secondHtml = await secondPromise;
     expect(secondHtml).toContain('crowi-embed-placeholder-error-unknown');
@@ -936,13 +917,12 @@ describe('renderCodeBlockForPreview', () => {
         });
       },
     };
-    bindPreviewPluginName(cb, 'p-preview-overflow');
     const ctx = buildPreviewCtx();
 
-    const firstPromise = renderCodeBlockForPreview(cb, previewCodeInfo, ctx, undefined);
+    const firstPromise = renderCodeBlockForPreview(cb, previewCodeInfo, ctx, undefined, 'p-preview-overflow');
     await waitUntil(() => renderSpy.mock.calls.length === 1); // first job now holds the only slot.
 
-    const secondHtml = await renderCodeBlockForPreview(cb, previewCodeInfo, ctx, undefined);
+    const secondHtml = await renderCodeBlockForPreview(cb, previewCodeInfo, ctx, undefined, 'p-preview-overflow');
     expect(secondHtml).toContain('crowi-embed-placeholder-error-unknown');
     expect(renderSpy).toHaveBeenCalledTimes(1); // the overflowed second call never reached render().
 
@@ -966,12 +946,11 @@ describe('renderCodeBlockForPreview', () => {
         });
       },
     };
-    bindPreviewPluginName(cb, 'p-preview-abort');
-    const firstPromise = renderCodeBlockForPreview(cb, previewCodeInfo, buildPreviewCtx(), undefined);
+    const firstPromise = renderCodeBlockForPreview(cb, previewCodeInfo, buildPreviewCtx(), undefined, 'p-preview-abort');
     await waitUntil(() => renderSpy.mock.calls.length === 1); // first job holds the only slot.
 
     const controller = new AbortController();
-    const secondPromise = renderCodeBlockForPreview(cb, previewCodeInfo, buildPreviewCtx({ signal: controller.signal }), undefined);
+    const secondPromise = renderCodeBlockForPreview(cb, previewCodeInfo, buildPreviewCtx({ signal: controller.signal }), undefined, 'p-preview-abort');
     await waitUntil(() => renderAdmission._getQueueLengthForTest('p-preview-abort') === 1);
     controller.abort();
 
@@ -987,7 +966,7 @@ describe('renderCodeBlockForPreview', () => {
     const acquireSpy = jest.spyOn(renderAdmission, 'acquireRenderSlot');
     const cb: CodeBlockRenderer = { cacheVersion: 1, render: () => ({ html: '<div>ok</div>' }) };
     try {
-      const html = await renderCodeBlockForPreview(cb, previewCodeInfo, buildPreviewCtx(), undefined);
+      const html = await renderCodeBlockForPreview(cb, previewCodeInfo, buildPreviewCtx(), undefined, 'p-preview-fixture');
       expect(html).toBe('<div>ok</div>');
       expect(acquireSpy).not.toHaveBeenCalled();
     } finally {

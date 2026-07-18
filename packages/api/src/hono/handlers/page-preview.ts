@@ -32,7 +32,7 @@
  *    so this only needs to install AFTER that — order is enforced by
  *    `buildHonoApp`'s registration order, not by this file.
  *  - 429 envelope: `{ error: 'rate_limited', message, retryAfterSeconds }`
- *    (`PreviewRateLimitErrorSchema` — same wire shape as
+ *    (the shared `AutocompleteRateLimitErrorSchema` wire shape — same as
  *    `AutocompleteRateLimitErrorSchema`).
  *  - This is a secondary defence against bodyless-request floods; the
  *    primary capacity control is the per-user admission-control
@@ -46,8 +46,8 @@ import type { Root, RootContent } from 'mdast';
 
 import type Crowi from 'src/crowi';
 import { serializeMdast } from 'src/renderer';
-import { actorFromUser } from 'src/util/ts-rest-helpers';
 import { createRateLimiter } from 'src/util/rate-limit';
+import { actorFromUser } from 'src/util/ts-rest-helpers';
 
 import type { CrowiHonoBindings } from '../app';
 import { withRateLimit } from '../middleware/rate-limit';
@@ -102,7 +102,7 @@ export const registerPagePreviewRoutes = <E extends OpenAPIHono<CrowiHonoBinding
     '/pages/preview',
     withRateLimit({
       limiter,
-      wireShape: 'autocomplete-envelope', // PreviewRateLimitErrorSchema is a byte-identical wire shape.
+      wireShape: 'autocomplete-envelope', // the contract reuses AutocompleteRateLimitErrorSchema (same wire shape).
       message: () => 'Preview rate limit exceeded. Try again shortly.',
     }),
   );

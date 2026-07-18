@@ -17,6 +17,7 @@
  */
 
 import { JSDOM } from 'jsdom';
+import { parseTranslate } from './parse-translate.ts';
 
 // jsdom exposes non-configurable getters for a few names (`navigator`,
 // `location`, ...) directly on the *global* `EventTarget`-like object;
@@ -191,13 +192,4 @@ function fontSizePx(el: Element): number {
   const style = el.getAttribute('style') ?? '';
   const match = /font-size:\s*([\d.]+)px/.exec(style);
   return match ? Number.parseFloat(match[1]) : 16;
-}
-
-/** (dx, dy) offset from an element's own `transform="translate(x,y)"` attribute, defaulting to {0, 0}. */
-function parseTranslate(el: Element): { dx: number; dy: number } {
-  const transform = el.getAttribute('transform');
-  if (!transform) return { dx: 0, dy: 0 };
-  const match = /translate\(\s*(-?[\d.]+)[,\s]+(-?[\d.]+)/.exec(transform);
-  if (!match) return { dx: 0, dy: 0 };
-  return { dx: Number.parseFloat(match[1]), dy: Number.parseFloat(match[2]) };
 }

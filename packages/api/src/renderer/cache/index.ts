@@ -259,7 +259,7 @@ async function renderAndStore(
 /**
  * Shared exception/error → user-facing-html normalisation. Used by both
  * the persisted save path (`renderAndStore` above, via
- * `resolveResultHtml`/`persistRenderResult`) and the non-persistent
+ * `persistRenderResult`) and the non-persistent
  * editor live-preview path (`renderCodeBlockForPreview`,
  * `../core/code-block-dispatch.ts`, feature-plugin-renderer-mermaid spec
  * §7 item 5) — a thrown `render()` and a returned `RenderResult.error`
@@ -286,12 +286,7 @@ export async function normalizeRenderResult(
       },
     };
   }
-  return { html: resolveResultHtml(result, reservation), result };
-}
-
-/** Pure/sync core of `normalizeRenderResult` — the plugin's `html` on success, or `errorPlaceholder(code, reservation)` on error. Also reused by `persistRenderResult` (admission-gated results never flow through `normalizeRenderResult` itself, only through this). */
-function resolveResultHtml(result: RenderResult, reservation: EmbedRenderer['reservation']): string {
-  return result.error ? errorPlaceholder(result.error.code, reservation) : result.html;
+  return { html: result.error ? errorPlaceholder(result.error.code, reservation) : result.html, result };
 }
 
 /**

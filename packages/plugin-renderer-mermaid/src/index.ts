@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { CodeBlockInfo, CodeBlockRenderer, CrowiPlugin, RenderResult } from '@crowi/plugin-api';
+import { escapeHtml } from '@crowi/plugin-api';
 import { encodeSvgToDataUrl } from './encode-svg';
 import { detectRejectedSource } from './reject-patterns';
 import { MermaidSyntaxError, renderMermaidSvg } from './render-engine';
@@ -73,12 +74,11 @@ export function createMermaidRenderer(): CodeBlockRenderer {
     previewPolicy: 'server-render',
     computeEmbedKey: (info: CodeBlockInfo) => createHash('sha256').update(info.source).digest('hex'),
     async render(info): Promise<RenderResult> {
-      // §3 — full-source scan, before anything touches the render
-      // engine / admission control (cheap check gates the expensive
-      // resource, spec §6).
-      if (detectRejectedSource(info.source)) return classAErrorResult();
-
+      // Cheap checks gate the expensive resource (spec §6): the O(1)
+      // byte-size gate first, then the §3 full-source regex scan —
+      // both class-A rejects, so order only affects cost.
       if (Buffer.byteLength(info.source, 'utf8') > MAX_SOURCE_BYTES) return classAErrorResult();
+      if (detectRejectedSource(info.source)) return classAErrorResult();
 
       let rawSvg: string;
       try {
@@ -100,7 +100,7 @@ export function createMermaidRenderer(): CodeBlockRenderer {
 
       const alt = buildAltText(info.source);
       return {
-        html: `<img class="diagram-embed mermaid-embed" alt="${escapeHtmlAttr(alt)}" src="${encoded.dataUrl}">`,
+        html: `<img class="diagram-embed mermaid-embed" alt="${escapeHtml(alt)}" src="${encoded.dataUrl}">`,
         ttlSec: SUCCESS_TTL_SEC,
       };
     },
@@ -139,25 +139,6 @@ export function buildAltText(source: string): string {
   const firstLine = (source.split('\n').find((l) => l.trim().length > 0) ?? '').trim();
   const match = DIAGRAM_TYPE_KEYWORDS.find((k) => k.re.test(firstLine));
   return match ? `Mermaid diagram (${match.type})` : 'Mermaid diagram';
-}
-
-function escapeHtmlAttr(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => {
-    switch (c) {
-      case '&':
-        return '&amp;';
-      case '<':
-        return '&lt;';
-      case '>':
-        return '&gt;';
-      case '"':
-        return '&quot;';
-      case "'":
-        return '&#39;';
-      default:
-        return c;
-    }
-  });
 }
 
 const plugin: CrowiPlugin = {

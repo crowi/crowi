@@ -22,19 +22,3 @@ export const PreviewPageResponseSchema = z.object({
   renderedAst: z.unknown(),
 });
 export type PreviewPageResponse = z.infer<typeof PreviewPageResponseSchema>;
-
-/**
- * 429 body for `POST /pages/preview` when the per-user rate limit
- * (feature-plugin-renderer-mermaid spec §7 item 7, 600 req/min) is
- * exceeded. Byte-identical wire shape to `AutocompleteRateLimitErrorSchema`
- * (`schemas/autocomplete.ts`) — a distinct schema so this endpoint's
- * OpenAPI response stays self-documenting, and so the two endpoint
- * families can diverge independently later without a shared-schema
- * coupling. A `Retry-After` header carries the machine-readable cooldown.
- */
-export const PreviewRateLimitErrorSchema = z.object({
-  error: z.literal('rate_limited'),
-  message: z.string(),
-  retryAfterSeconds: z.number(),
-});
-export type PreviewRateLimitError = z.infer<typeof PreviewRateLimitErrorSchema>;

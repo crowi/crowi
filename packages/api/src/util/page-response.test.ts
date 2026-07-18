@@ -118,15 +118,15 @@ describe('computeRevisionRenderArtifactsAsync — toc tracks the AST it is serve
   });
 });
 
-describe('computeRevisionRenderArtifactsAsync — mermaidRenderPending marker scan on the astIsFresh path (feature-plugin-renderer-mermaid spec §5)', () => {
+describe('computeRevisionRenderArtifactsAsync — renderPending marker scan on the astIsFresh path (feature-plugin-renderer-mermaid spec §5)', () => {
   const COMPLETE_META: RevisionMetaContent = { toc: [], wikiLinks: [], mentions: [], codeBlockLanguages: [] };
   const PLUGIN = '@crowi/plugin-fixture-pending-scan';
 
-  it('a stored AST with no mermaidRenderPending marker anywhere is returned as the exact same object (no clone, no redispatch attempted, full pipeline never re-run)', async () => {
+  it('a stored AST with no renderPending marker anywhere is returned as the exact same object (no clone, no redispatch attempted, full pipeline never re-run)', async () => {
     const pageId = new Types.ObjectId().toHexString();
     const storedAst = {
       type: 'root',
-      children: [{ type: 'code', lang: 'mermaid', value: 'flowchart TD\n  A --> B' }], // no `data.mermaidRenderPending` — the vast majority case
+      children: [{ type: 'code', lang: 'mermaid', value: 'flowchart TD\n  A --> B' }], // no `data.renderPending` — the vast majority case
     };
     // AC "マーカーの無い大多数のケースで runPipeline/runRender 相当が一切
     // 呼ばれないこと" — spy directly on the renderer's `runRender` (the
@@ -153,7 +153,7 @@ describe('computeRevisionRenderArtifactsAsync — mermaidRenderPending marker sc
     }
   });
 
-  it('a stored AST WITH a mermaidRenderPending marker is resolved via a scoped redispatch, and the ORIGINAL stored object is left unmutated', async () => {
+  it('a stored AST WITH a renderPending marker is resolved via a scoped redispatch, and the ORIGINAL stored object is left unmutated', async () => {
     const pageId = new Types.ObjectId().toHexString();
     const renderer: CodeBlockRenderer = {
       cacheVersion: 1,
@@ -164,7 +164,7 @@ describe('computeRevisionRenderArtifactsAsync — mermaidRenderPending marker sc
 
     const storedAst = {
       type: 'root',
-      children: [{ type: 'code', lang: 'mermaid-pending-scan-fixture', value: 'flowchart TD\n  A --> B', data: { mermaidRenderPending: true } }],
+      children: [{ type: 'code', lang: 'mermaid-pending-scan-fixture', value: 'flowchart TD\n  A --> B', data: { renderPending: true } }],
     };
     const PluginRenderCache = crowi.model('PluginRenderCache') as unknown as PluginRenderCacheModel;
     await PluginRenderCache.deleteMany({ pageId: new Types.ObjectId(pageId) }).exec();
@@ -187,7 +187,7 @@ describe('computeRevisionRenderArtifactsAsync — mermaidRenderPending marker sc
     // still points at) was never mutated — spec §5: "Revision.renderedAst
     // 自体への書き戻しはしない".
     expect((storedAst.children[0] as { type: string }).type).toBe('code');
-    expect((storedAst.children[0] as { data: { mermaidRenderPending: boolean } }).data.mermaidRenderPending).toBe(true);
+    expect((storedAst.children[0] as { data: { renderPending: boolean } }).data.renderPending).toBe(true);
 
     const doc = await PluginRenderCache.findOne({ pageId: new Types.ObjectId(pageId) })
       .lean()
@@ -222,7 +222,7 @@ describe('computeRevisionRenderArtifactsAsync — mermaidRenderPending marker sc
   // it until the page is next saved. This pins that specific regression
   // scenario, though the underlying mechanism (astIsFresh ⇒ verbatim
   // stored-AST passthrough, no pipeline re-run) is already exercised
-  // generically above and in the `mermaidRenderPending` describe block.
+  // generically above and in the `renderPending` describe block.
   it('a stored AST embedding legacy pre-Phase-3 PlantUML output (old sanitizer, old `plantuml-embed`-only class) is served byte-identical and never re-rendered', async () => {
     const pageId = new Types.ObjectId().toHexString();
     const legacyPlantumlHtml = '<div class="plantuml-embed"><svg><path d="M0 0 L1 1"/></svg></div>';
@@ -267,7 +267,7 @@ describe('computeRevisionRenderArtifactsAsync — mermaidRenderPending marker sc
   // (crowi.getRenderer().registry), then proves that a Revision saved
   // BEFORE this Phase (no CodeBlockRenderer existed for 'mermaid' yet, so
   // the fenced block is still a raw, un-dispatched `code` node with no
-  // `mermaidRenderPending` marker) is served byte-identical on the fresh
+  // `renderPending` marker) is served byte-identical on the fresh
   // (matching-version) path — still a plain code block, never dispatched
   // to the now-live renderer — until the author explicitly re-saves the
   // page. This is strictly stronger than the generic

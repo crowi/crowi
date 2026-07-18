@@ -1,15 +1,15 @@
-import Debug from 'debug';
 import type { PluginLogger, RenderActor, RenderContext } from '@crowi/plugin-api';
+import Debug from 'debug';
 import type Crowi from 'src/crowi';
 import type { UserModel } from 'src/models/user';
-import { type MongoCacheStorage, createMongoCacheStorage } from './cache';
+import { createMongoCacheStorage, type MongoCacheStorage } from './cache';
 import type { MentionUsernameResolver } from './core/mention-resolve';
 import { createPipelineEsmDepsLoader, type LoadPipelineEsmDeps, type PipelineMetadata, type PipelineResult, runPipeline } from './pipeline';
 import { RendererRegistryImpl } from './registry';
 import { serializeMdast } from './serialize';
 
-export type { PipelineMetadata, PipelineResult, PipelineEsmDeps, ShikiHighlighter } from './pipeline';
-export { RendererRegistryImpl, makeRendererScope, createAuthContextStub } from './registry';
+export type { PipelineEsmDeps, PipelineMetadata, PipelineResult, ShikiHighlighter } from './pipeline';
+export { createAuthContextStub, makeRendererScope, RendererRegistryImpl } from './registry';
 export { serializeMdast } from './serialize';
 
 /**
@@ -64,7 +64,8 @@ export interface Renderer {
 
 const debug = Debug('crowi:renderer');
 
-const coreLogger: PluginLogger = {
+/** The renderer core's own `PluginLogger` (debug-gated info, console warn/error). Exported for renderer-core work that runs outside `buildCtx` (e.g. the read-path pending redispatch in `util/page-response.ts`). */
+export const coreLogger: PluginLogger = {
   debug: (msg, ...args) => debug(msg, ...args),
   info: (msg, ...args) => debug(`[info] ${msg}`, ...args),
   warn: (msg, ...args) => console.warn(`[crowi:renderer] ${msg}`, ...args),
