@@ -18872,6 +18872,25 @@ paths:
                       - message
                 required:
                   - error
+        '429':
+          description: Per-user rate limit exceeded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    enum:
+                      - rate_limited
+                  message:
+                    type: string
+                  retryAfterSeconds:
+                    type: number
+                required:
+                  - error
+                  - message
+                  - retryAfterSeconds
         '500':
           description: Renderer pipeline failure
           content:

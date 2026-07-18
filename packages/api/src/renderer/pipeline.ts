@@ -2,7 +2,7 @@ import type { RenderContext } from '@crowi/plugin-api';
 import type { Root } from 'mdast';
 import type { TocEntryResponse, WikiLinkResponse, MentionResponse } from '@crowi/api-contract';
 import type { MongoCacheStorage } from './cache';
-import { buildCorePlugins, buildPluginDispatchPlugins } from './core';
+import { buildCorePlugins, buildPluginDispatchPlugins, makePreviewCodeBlockDispatch } from './core';
 import { makeMentionResolve, type MentionUsernameResolver } from './core/mention-resolve';
 import { RendererRegistryImpl } from './registry';
 
@@ -320,21 +320,36 @@ export async function runPipeline(
   const tree = processor.parse(body) as Root;
   const transformed = processor.runSync(tree) as Root;
 
-  // Phase 4 plugin-dispatch — embed-tag + url-inline-expand. These
-  // need to be async (cache I/O + plugin render()) so they cannot
-  // run inside the synchronous unified `runSync` phase. We post-
-  // process the transformed tree in registration order:
-  //   1. parse `@[tag](url)` from text nodes and dispatch to
-  //      registered embed renderers.
-  //   2. walk paragraph children for bare URLs and dispatch to the
-  //      registered url-inline-expanders.
-  // Skipped when no dispatch object is supplied (unit tests bypassing
-  // Mongo) or `pageId` is null (orphan revision body) — `@[tag](url)`
-  // stays as plain text.
-  if (dispatch && dispatch.pageId) {
-    const dispatchPlugins = buildPluginDispatchPlugins(registry, ctx, { cache: dispatch.cache, pageId: dispatch.pageId });
-    for (const transform of dispatchPlugins) {
-      await transform(transformed);
+  // Phase 4 plugin-dispatch — embed-tag + url-inline-expand + code-block
+  // dispatch. These need to be async (cache I/O + plugin render()) so
+  // they cannot run inside the synchronous unified `runSync` phase. Two
+  // branches, both post-processing the transformed tree:
+  //   - `dispatch.pageId` truthy (save / on-the-fly read/view) — the
+  //     full 3-stage pipeline in registration order: (1) parse
+  //     `@[tag](url)` from text nodes and dispatch to registered embed
+  //     renderers, (2) walk paragraph children for bare URLs and
+  //     dispatch to the registered url-inline-expanders, (3) code-block
+  //     dispatch (PlantUML / Mermaid / …) via `cachedRender` /
+  //     `cachedRenderOrPending` (Mongo-cached).
+  //   - `dispatch` present but `pageId` is null/absent (feature-plugin-
+  //     renderer-mermaid spec §7 item 3 — the editor live-preview call,
+  //     `POST /pages/preview`) — embed-tags and url-inline-expand stay
+  //     fully skipped, exactly as before this feature (a bare
+  //     `@[tag](url)` / URL has no `pageId` to key an embed-cache row
+  //     against, so there is nothing safe to dispatch to). Only
+  //     `previewPolicy: 'server-render'` code-block registrations
+  //     dispatch, through the non-persistent `makePreviewCodeBlockDispatch`
+  //     — no `PluginRenderCache` write ever happens for preview content.
+  // `dispatch` itself omitted entirely (unit tests bypassing Mongo) →
+  // neither branch runs; `@[tag](url)` / code fences stay as plain text.
+  if (dispatch) {
+    if (dispatch.pageId) {
+      const dispatchPlugins = buildPluginDispatchPlugins(registry, ctx, { cache: dispatch.cache, pageId: dispatch.pageId });
+      for (const transform of dispatchPlugins) {
+        await transform(transformed);
+      }
+    } else {
+      await makePreviewCodeBlockDispatch(registry, ctx, { cache: dispatch.cache })(transformed);
     }
   }
 

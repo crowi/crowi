@@ -19,7 +19,7 @@ import { renderMdastToReactNode } from '@/components/editor/render-mdast';
 import { MentionLink } from '@/components/page-view/mention-link';
 import { extractAttachmentId, InlineAttachmentLink, InlineAttachmentProvider } from '@/components/page-view/inline-attachment-link';
 import { MarkdownTableFullscreen } from '@/components/page-view/markdown-table-fullscreen';
-import { isPlantumlEmbed, PlantumlDiagram } from '@/components/page-view/plantuml-diagram';
+import { DiagramEmbed, isDiagramEmbed } from '@/components/page-view/diagram-embed';
 
 interface PageContentProps {
   page: PageWithRevision;
@@ -365,16 +365,19 @@ const components = {
     type === 'checkbox' ? <input type="checkbox" checked={Boolean(checked)} readOnly {...props} /> : <input type={type} {...props} />,
   img: ({ src, alt, className, style: rawStyle, ...rest }: { src?: string | Blob; alt?: string; className?: unknown; style?: React.CSSProperties }) => {
     const srcString = typeof src === 'string' ? src : undefined;
-    // Server-rendered PlantUML PNG fallback (`<img class="plantuml-embed">`).
-    // Route it through the same cap-to-width + click-to-enlarge wrapper the
-    // SVG path uses; the wrapper carries the `plantuml-embed` class so the
-    // inner <img> only needs the responsive sizing utilities.
-    if (isPlantumlEmbed(className)) {
+    // Server-rendered diagram embed — PlantUML's PNG fallback
+    // (`<img class="diagram-embed plantuml-embed">`) or Mermaid's success
+    // output (`<img class="diagram-embed mermaid-embed" alt="...">`).
+    // Route it through the same cap-to-width + click-to-enlarge wrapper;
+    // the wrapper carries the real incoming `className` (so
+    // `.crowi-prose .diagram-embed` CSS applies) while the inner <img>
+    // only needs the responsive sizing utilities.
+    if (isDiagramEmbed(className)) {
       return (
-        <PlantumlDiagram className="plantuml-embed">
+        <DiagramEmbed className={typeof className === 'string' ? className : undefined}>
           {/* biome-ignore lint/performance/noImgElement: rich-text rendered as plain markdown */}
           <img src={srcString} alt={alt || ''} className="max-w-full h-auto" loading="lazy" />
-        </PlantumlDiagram>
+        </DiagramEmbed>
       );
     }
     // RFC-0015 image display attributes — img layer (width/height
@@ -441,12 +444,16 @@ const components = {
       </figure>
     );
   },
-  // Server-rendered PlantUML SVG arrives as `<div class="plantuml-embed">`
-  // (raw HTML parsed by `raw()`); route it through the zoom wrapper. Every
-  // other raw-HTML <div> in a body renders plainly.
+  // Server-rendered PlantUML SVG arrives as `<div class="diagram-embed
+  // plantuml-embed">` (raw HTML parsed by `raw()`); route it through the
+  // zoom wrapper. Mermaid's success output is always an `<img>` (handled
+  // above) — its error placeholder is a `<div>` too, but deliberately
+  // lacks the `diagram-embed` marker (spec §9) so `isDiagramEmbed` excludes
+  // it here and it renders as a plain div instead. Every other raw-HTML
+  // <div> in a body renders plainly.
   div: ({ className, children, ...props }: ChildrenProps & { className?: unknown }) => {
-    if (isPlantumlEmbed(className)) {
-      return <PlantumlDiagram className="plantuml-embed">{children}</PlantumlDiagram>;
+    if (isDiagramEmbed(className)) {
+      return <DiagramEmbed className={typeof className === 'string' ? className : undefined}>{children}</DiagramEmbed>;
     }
     return (
       <div className={typeof className === 'string' ? className : undefined} {...props}>

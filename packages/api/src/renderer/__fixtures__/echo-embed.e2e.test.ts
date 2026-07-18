@@ -36,6 +36,7 @@ describe('e2e: fixture echo-embed plugin (Phase 4)', () => {
     const ctx: RenderContext = {
       mode: 'view',
       log: silentLogger,
+      actor: { kind: 'system' },
       cache: scopeForPlugin(storage, PLUGIN),
       auth: createAuthContextStub(),
     };
@@ -82,6 +83,7 @@ describe('e2e: fixture echo-embed plugin (Phase 4)', () => {
     const ctx: RenderContext = {
       mode: 'view',
       log: silentLogger,
+      actor: { kind: 'system' },
       cache: scopeForPlugin(storage, PLUGIN),
       auth: createAuthContextStub(),
     };

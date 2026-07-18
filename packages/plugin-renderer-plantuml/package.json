@@ -35,6 +35,7 @@
   },
   "dependencies": {
     "@crowi/plugin-api": "workspace:^",
+    "@crowi/plugin-renderer-svg-sanitize": "workspace:^",
     "plantuml-encoder": "^1.4.0"
   },
   "devDependencies": {

@@ -1,6 +1,6 @@
+import type { NodeRenderer, PluginLogger, RenderContext, RendererRegistry, RenderPhase } from '@crowi/plugin-api';
 import { createJiti } from 'jiti';
 import type { Root } from 'mdast';
-import type { NodeRenderer, PluginLogger, RendererRegistry, RenderContext, RenderPhase } from '@crowi/plugin-api';
 import katexPlugin, { _renderers, loadRemarkMath } from './index';
 
 /**
@@ -41,8 +41,15 @@ const silentLogger: PluginLogger = {
   error: () => undefined,
 };
 
+/**
+ * `actor` became a required `RenderContext` field in
+ * feature-plugin-renderer-mermaid Phase 1 (spec §6, admission
+ * control) — KaTeX never reads it (it declares no
+ * `admissionControl`), so a fixed `'system'` actor is fine here.
+ */
 const stubCtx: RenderContext = {
   mode: 'view',
+  actor: { kind: 'system' },
   log: silentLogger,
 };
 

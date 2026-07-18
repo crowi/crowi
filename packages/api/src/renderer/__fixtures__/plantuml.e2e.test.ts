@@ -33,6 +33,7 @@ const buildPluginCtx = (config: ReturnType<typeof plantumlConfigSchema.parse>): 
     },
     model: () => undefined,
     log: silentLogger,
+    actor: { kind: 'system' },
   }) as PluginContext;
 
 describe('e2e: @crowi/plugin-renderer-plantuml', () => {
@@ -68,6 +69,7 @@ describe('e2e: @crowi/plugin-renderer-plantuml', () => {
     const ctx: RenderContext = {
       mode: 'view',
       log: silentLogger,
+      actor: { kind: 'system' },
       cache: scopeForPlugin(storage, PLUGIN),
       auth: createAuthContextStub(),
     };
@@ -81,7 +83,11 @@ describe('e2e: @crowi/plugin-renderer-plantuml', () => {
 
     const top = result.tree.children[0];
     expect(top.type).toBe('html');
-    expect((top as { value: string }).value).toContain('plantuml-embed');
+    // feature-plugin-renderer-mermaid Phase 3 (spec §9) — the output class
+    // is `diagram-embed plantuml-embed` (was `plantuml-embed`), routed
+    // through the real pipeline (registry → cache → sanitizer), not just
+    // the plugin's own unit tests.
+    expect((top as { value: string }).value).toContain('<div class="diagram-embed plantuml-embed">');
     expect((top as { value: string }).value).toContain('<svg');
   });
 
@@ -96,6 +102,7 @@ describe('e2e: @crowi/plugin-renderer-plantuml', () => {
     const ctx: RenderContext = {
       mode: 'view',
       log: silentLogger,
+      actor: { kind: 'system' },
       cache: scopeForPlugin(storage, PLUGIN),
       auth: createAuthContextStub(),
     };
@@ -125,6 +132,7 @@ describe('e2e: @crowi/plugin-renderer-plantuml', () => {
     const ctx: RenderContext = {
       mode: 'view',
       log: silentLogger,
+      actor: { kind: 'system' },
       cache: scopeForPlugin(storage, PLUGIN),
       auth: createAuthContextStub(),
     };
@@ -186,6 +194,7 @@ describe('e2e: @crowi/plugin-renderer-plantuml', () => {
     const ctx: RenderContext = {
       mode: 'view',
       log: silentLogger,
+      actor: { kind: 'system' },
       cache: scopeForPlugin(storage, PLUGIN),
       auth: createAuthContextStub(),
     };

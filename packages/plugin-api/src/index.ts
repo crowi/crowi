@@ -32,6 +32,7 @@ export type {
 } from './registries/search';
 export type { StorageDriver, StoragePutMeta, StoragePutResult, StorageRegistry } from './registries/storage';
 export type {
+  AdmissionControlConfig,
   AuthContext,
   CacheEntry,
   CacheKey,
@@ -43,6 +44,7 @@ export type {
   EmbedRenderer,
   InlineExpansion,
   NodeRenderer,
+  RenderActor,
   RenderContext,
   RenderError,
   RendererRegistry,

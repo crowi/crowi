@@ -11,7 +11,7 @@ type ChildrenProps = { children?: React.ReactNode };
  * Page-view `table` override: wraps a rendered `<table>` so it can be
  * expanded into a near-fullscreen Radix `Dialog` on top of the existing
  * horizontal-scroll wrapper (the `overflow-x-auto` div below). Modeled on
- * `PlantumlDiagram` (`plantuml-diagram.tsx`) — a `memo`'d component that
+ * `DiagramEmbed` (`diagram-embed.tsx`) — a `memo`'d component that
  * owns its own `open` state — but the table itself is mounted in exactly
  * ONE place at a time (never cloned): inline while closed
  * (`{!open && table}`), inside the Dialog while open (`{open && table}`).

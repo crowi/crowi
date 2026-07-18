@@ -1,10 +1,23 @@
 import type { Revision, RevisionMetaShape } from '@crowi/api-contract';
+import Debug from 'debug';
 import { Types } from 'mongoose';
+import type { Root } from 'mdast';
+import type { PluginLogger, RenderActor, RenderContext } from '@crowi/plugin-api';
 import type Crowi from 'src/crowi';
 import type { PageDocument } from 'src/models/page';
 import { metadataToRevisionMeta, type RevisionMetaContent } from 'src/models/revision';
+import { hasPendingMermaidMarker, redispatchPendingCodeBlocks } from 'src/renderer/core';
 import { RENDERER_PIPELINE_VERSION } from 'src/renderer/version';
 import { isPopulatedUser, type PopulatedUser, toISOStringOrNull, toPageUser, toStringId } from './ts-rest-helpers';
+
+const debug = Debug('crowi:util:page-response');
+
+const pendingRedispatchLogger: PluginLogger = {
+  debug: (msg, ...args) => debug(msg, ...args),
+  info: (msg, ...args) => debug(`[info] ${msg}`, ...args),
+  warn: (msg, ...args) => console.warn(`[crowi:util:page-response] ${msg}`, ...args),
+  error: (msg, ...args) => console.error(`[crowi:util:page-response] ${msg}`, ...args),
+};
 
 /**
  * Shape of a populated `revision` field as it appears on Mongoose documents
@@ -143,6 +156,7 @@ export const computeRevisionRenderArtifactsAsync = async (
   storedMeta: RevisionMetaContent | undefined,
   storedAst: unknown,
   body: string,
+  actor: RenderActor,
   storedRendererVersion?: string,
   pageId?: string,
 ): Promise<{ meta?: RevisionMetaShape; renderedAst?: unknown }> => {
@@ -161,16 +175,26 @@ export const computeRevisionRenderArtifactsAsync = async (
   // `renderer:rebuild` lands (RFC-0008), operators can backfill.
   const astIsFresh = astIsStored && (storedRendererVersion === undefined || storedRendererVersion === RENDERER_PIPELINE_VERSION);
 
+  // feature-plugin-renderer-mermaid spec §5 — every return site below
+  // that would otherwise serve `storedAst` verbatim (both branches that
+  // guard on `astIsFresh`) instead serves this: a cheap no-op for the
+  // overwhelming majority of pages (no `mermaidRenderPending` marker
+  // anywhere), or a narrowly-scoped retry of just the marked nodes.
+  // Computed once, up front, and reused by every `astIsFresh` branch —
+  // never computed when `!astIsFresh` (that path recomputes the AST
+  // fully via `runRender` below instead).
+  const freshStoredAst = astIsFresh ? await resolvePendingMermaidNodes(crowi, storedAst, actor, pageId) : storedAst;
+
   if (metaIsComplete && astIsFresh) {
     return {
       meta: Object.keys(fromStored).length > 0 ? fromStored : undefined,
-      renderedAst: storedAst,
+      renderedAst: freshStoredAst,
     };
   }
   if (!body) {
     return {
       meta: metaIsComplete && Object.keys(fromStored).length > 0 ? fromStored : undefined,
-      renderedAst: astIsFresh ? storedAst : undefined,
+      renderedAst: astIsFresh ? freshStoredAst : undefined,
     };
   }
 
@@ -180,7 +204,7 @@ export const computeRevisionRenderArtifactsAsync = async (
   // genuinely don't know the page (unit tests, orphan revision bodies)
   // can omit it — dispatch then degrades to no-op and the `code` /
   // `@[tag](url)` nodes survive as plain text.
-  const { metadata, renderedAst } = await crowi.getRenderer().runRender(body, { mode: 'read', pageId });
+  const { metadata, renderedAst } = await crowi.getRenderer().runRender(body, { mode: 'read', pageId, actor });
   const fresh = pickStoredMeta(metadataToRevisionMeta(metadata));
   // Tie the toc source to the AST source. When the stored AST is fresh
   // (`astIsFresh`), we serve `storedAst` and keep the stored-wins merge
@@ -195,9 +219,44 @@ export const computeRevisionRenderArtifactsAsync = async (
   const mergedMeta: RevisionMetaShape = astIsFresh ? { ...fresh, ...fromStored } : { ...fresh, ...fromStored, toc: fresh.toc };
   return {
     meta: Object.keys(mergedMeta).length > 0 ? mergedMeta : undefined,
-    renderedAst: astIsFresh ? storedAst : renderedAst,
+    renderedAst: astIsFresh ? freshStoredAst : renderedAst,
   };
 };
+
+/**
+ * feature-plugin-renderer-mermaid spec §5 — scan a stored `renderedAst`
+ * for `data.mermaidRenderPending` markers (left by a save-time admission-
+ * control / child-process infra failure, `code-block-dispatch.ts`'s
+ * `makeCodeBlockDispatch`) and, if any are found, retry ONLY those nodes
+ * via `redispatchPendingCodeBlocks` (`priority: 'high'`).
+ *
+ * No-op (returns `storedAst` unchanged, no clone) for the overwhelming
+ * majority of reads — pages with no pending marker anywhere, or a
+ * `storedAst` shape too far from a mdast `Root` to scan (defensive; the
+ * marker never being present there is the expected case for those too).
+ * The tree is deep-cloned before any mutation so this NEVER writes back
+ * into the Mongoose-owned `Revision.renderedAst` object the caller
+ * passed in — only the returned value (this request's response) reflects
+ * a successful retry; the next read repeats this same scan against the
+ * still-unmodified stored document.
+ */
+async function resolvePendingMermaidNodes(crowi: Crowi, storedAst: unknown, actor: RenderActor, pageId: string | undefined): Promise<unknown> {
+  if (!pageId) return storedAst; // no page identity to key a cache entry on — degrade to no-op, same as the rest of this file
+  if (!isMdastRootLike(storedAst)) return storedAst;
+  if (!hasPendingMermaidMarker(storedAst)) return storedAst;
+
+  const renderer = crowi.getRenderer();
+  const workingTree = structuredClone(storedAst);
+  const ctx: RenderContext = { mode: 'read', log: pendingRedispatchLogger, actor };
+  const { changed } = await redispatchPendingCodeBlocks(workingTree, renderer.registry, ctx, { cache: renderer.cache, pageId });
+  return changed ? workingTree : storedAst;
+}
+
+function isMdastRootLike(value: unknown): value is Root {
+  return (
+    typeof value === 'object' && value !== null && (value as { type?: unknown }).type === 'root' && Array.isArray((value as { children?: unknown }).children)
+  );
+}
 
 export type PageToResponseOptions = RevisionResponseOptions;
 

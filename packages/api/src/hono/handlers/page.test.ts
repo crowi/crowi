@@ -2493,6 +2493,51 @@ describe('Routes /api/v2/pages (Hono getPage — unknown-error 500 split, featur
   });
 });
 
+// feature-plugin-renderer-mermaid spec §6 — `computeRevisionRenderArtifactsAsync`
+// now requires an `actor: RenderActor` argument (admission control's
+// per-user concurrency cap needs an end-to-end actor identity, AC
+// "Phase 1" item on `RenderContext.actor`/`Renderer.run` options). Type-
+// check alone proves the call SHAPE is correct; this proves the VALUE
+// actually reaching it is the authenticated caller, not e.g. a stray
+// `{ kind: 'system' }` — a spy on the real (imported) function, exercised
+// through the full HTTP path.
+describe('Routes /api/v2/pages (Hono getPage — actor wiring, feature-plugin-renderer-mermaid spec §6)', () => {
+  const PATH_PREFIX = '/hono-page-get-actor-wiring-test/';
+  let accessToken: string;
+  let userId: string;
+
+  beforeAll(async () => {
+    const { accessToken: token, user } = await createTestUser({
+      name: 'ActorWiring Tester',
+      username: 'actorWiringTester',
+      email: 'actor-wiring-tester@example.com',
+    });
+    accessToken = token;
+    userId = user._id.toString();
+  });
+
+  afterEach(() => cleanupPathPrefix(PATH_PREFIX));
+
+  it('passes actor: { kind: "user", userId } — the authenticated caller, not a placeholder — to computeRevisionRenderArtifactsAsync', async () => {
+    const path = `${PATH_PREFIX}actor`;
+    await createPageViaApi(accessToken, path, '# body');
+
+    const pageResponseModule = await import('src/util/page-response');
+    const spy = jest.spyOn(pageResponseModule, 'computeRevisionRenderArtifactsAsync');
+    try {
+      const res = await request(app).get('/api/v2/pages').query({ path }).set(authHeaders(accessToken));
+
+      expect(res.status).toBe(200);
+      expect(spy).toHaveBeenCalled();
+      // computeRevisionRenderArtifactsAsync(crowi, storedMeta, storedAst, body, actor, storedRendererVersion?, pageId?)
+      const actorArg = spy.mock.calls[0]?.[4];
+      expect(actorArg).toEqual({ kind: 'user', userId });
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});
+
 describe('Routes /api/v2/pages/link-access (Hono claimPageLinkAccessRoute — grant-on-first-access, feature-restricted-grant-share-banner Phase 1)', () => {
   const PATH_PREFIX = '/hono-page-link-access-test/';
   const GRANT_PUBLIC = 1;

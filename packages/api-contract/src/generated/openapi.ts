@@ -7916,6 +7916,20 @@ export interface paths {
                         };
                     };
                 };
+                /** @description Per-user rate limit exceeded */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @enum {string} */
+                            error: "rate_limited";
+                            message: string;
+                            retryAfterSeconds: number;
+                        };
+                    };
+                };
                 /** @description Renderer pipeline failure */
                 500: {
                     headers: {

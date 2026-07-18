@@ -125,7 +125,7 @@ describe('PageContent — RFC-0015 image display attributes (AC-B1, AC-B3, AC-X1
     expect(screen.queryByRole('figure')).toBeNull();
   });
 
-  it('leaves the PlantUML PNG-fallback embed path unaffected — no display-attribute processing runs before the plantuml-embed early return (AC-X3)', () => {
+  it('leaves the PlantUML PNG-fallback embed path unaffected — no display-attribute processing runs before the isDiagramEmbed early return (AC-X3)', () => {
     const renderedAst = {
       type: 'root',
       children: [
@@ -136,7 +136,7 @@ describe('PageContent — RFC-0015 image display attributes (AC-B1, AC-B3, AC-X1
               type: 'image',
               url: '/plantuml/render/x.png',
               alt: 'diagram',
-              data: { hProperties: { className: 'plantuml-embed', 'data-crowi-image-width': '60%' } },
+              data: { hProperties: { className: 'diagram-embed plantuml-embed', 'data-crowi-image-width': '60%' } },
             },
           ],
         },
@@ -144,7 +144,7 @@ describe('PageContent — RFC-0015 image display attributes (AC-B1, AC-B3, AC-X1
     };
     renderPage(pageWithAst(renderedAst));
     const img = screen.getByRole('img', { name: 'diagram' }) as HTMLImageElement;
-    // The plantuml branch returns its own hard-coded `<img>` before any
+    // The diagram-embed branch returns its own hard-coded `<img>` before any
     // display-attribute code runs — no style, class is the plain
     // responsive utility set, not a display-attribute-derived one.
     expect(img.getAttribute('style')).toBeNull();
@@ -708,5 +708,55 @@ describe('PageContent — revision change resets table dialog identity (fiber-sw
     // swap onto a different logical table.
     rerender(<PageContent page={pageWithAst(renderedAst, 'rev-b')} />);
     expect(document.body.querySelector('[role="dialog"]')).toBeNull();
+  });
+});
+
+describe('PageContent — Mermaid diagram embed reuses the shared DiagramEmbed wrapper (feature-plugin-renderer-mermaid Phase 3, spec §9)', () => {
+  const zoomLabel = m['page.diagram_zoom']();
+
+  it('wraps a Mermaid success <img> (class="diagram-embed mermaid-embed") with the same click-to-enlarge affordance as PlantUML', () => {
+    const renderedAst = {
+      type: 'root',
+      children: [
+        { type: 'html', value: '<img class="diagram-embed mermaid-embed" alt="Mermaid diagram (flowchart)" src="data:image/svg+xml;base64,PHN2Zy8+">' },
+      ],
+    };
+    renderPage(pageWithAst(renderedAst));
+
+    const img = screen.getByRole('img', { name: 'Mermaid diagram (flowchart)' }) as HTMLImageElement;
+    // alt is present, non-empty, and exactly the fixed/closed-enum literal
+    // the plugin emits (spec §9's adversarial invariant — alt is never
+    // derived from Mermaid source text — is exercised with adversarial
+    // payloads at the plugin layer, `@crowi/plugin-renderer-mermaid`'s
+    // `index.test.ts`; this re-checks the Web layer preserves that literal
+    // as-is rather than mangling or blanking it).
+    expect(img.alt).toBe('Mermaid diagram (flowchart)');
+
+    expect(screen.getByRole('button', { name: zoomLabel })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: zoomLabel }));
+    const dialog = screen.getByRole('dialog');
+    expect(dialog.querySelector('img[alt="Mermaid diagram (flowchart)"]')).not.toBeNull();
+  });
+
+  it('does NOT wrap the Mermaid error placeholder (class="mermaid-embed mermaid-error", no diagram-embed marker) — no zoom button, no dialog', () => {
+    const renderedAst = {
+      type: 'root',
+      children: [{ type: 'html', value: '<div class="mermaid-embed mermaid-error" role="status"><span>Mermaid diagram could not be rendered</span></div>' }],
+    };
+    renderPage(pageWithAst(renderedAst));
+
+    expect(screen.getByRole('status').textContent).toContain('Mermaid diagram could not be rendered');
+    expect(screen.queryByRole('button', { name: zoomLabel })).toBeNull();
+  });
+
+  it('wraps a PlantUML SVG success <div> (class="diagram-embed plantuml-embed") with the same wrapper', () => {
+    const renderedAst = {
+      type: 'root',
+      children: [{ type: 'html', value: '<div class="diagram-embed plantuml-embed"><svg><rect width="10" height="10"/></svg></div>' }],
+    };
+    renderPage(pageWithAst(renderedAst));
+
+    expect(screen.getByRole('button', { name: zoomLabel })).toBeTruthy();
+    expect(document.querySelector('svg rect')).not.toBeNull();
   });
 });

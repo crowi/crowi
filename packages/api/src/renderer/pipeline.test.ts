@@ -1,7 +1,10 @@
 import type { Code, Html, Root } from 'mdast';
-import type { PluginLogger } from '@crowi/plugin-api';
+import type { CodeBlockRenderer, EmbedRenderer, PluginLogger, UrlInlineExpansionRule } from '@crowi/plugin-api';
+import { crowi } from 'src/test/setup';
+import type { PluginRenderCacheModel } from 'src/models/plugin-render-cache';
+import { createMongoCacheStorage } from './cache';
 import { createPipelineEsmDepsLoader, runPipeline } from './pipeline';
-import { RendererRegistryImpl, createAuthContextStub } from './registry';
+import { RendererRegistryImpl, createAuthContextStub, makeRendererScope } from './registry';
 import { serializeMdast } from './serialize';
 
 const silentLogger: PluginLogger = {
@@ -21,7 +24,7 @@ const loadDeps = createPipelineEsmDepsLoader();
 // skipped entirely.
 const runCore = async (body: string) => {
   const reg = new RendererRegistryImpl();
-  return runPipeline(body, reg, { mode: 'save', log: silentLogger }, loadDeps);
+  return runPipeline(body, reg, { mode: 'save', log: silentLogger, actor: { kind: 'system' } }, loadDeps);
 };
 
 describe('pipeline + core renderers', () => {
@@ -511,5 +514,163 @@ describe('AuthContext stub (Phase 4 — Phase 7 implements)', () => {
   it('config() throws because Phase 4 only ships the interface', () => {
     const auth = createAuthContextStub();
     expect(() => auth.config({} as never)).toThrow(/AuthContext not yet implemented — Phase 7/);
+  });
+});
+
+/**
+ * feature-plugin-renderer-mermaid spec §7 item 3 — `runPipeline`'s
+ * dispatch branching. `dispatch.pageId` truthy keeps the existing full
+ * 3-stage pipeline (already exercised by `code-block-dispatch.test.ts` /
+ * `embed-tags.test.ts` / `url-inline-expand.test.ts`); this describe
+ * block focuses on the two OTHER branches: `dispatch` present but
+ * `pageId` falsy (the editor preview call), and `dispatch` omitted
+ * entirely.
+ */
+describe('runPipeline dispatch branching (page-bound vs page-less vs no-dispatch)', () => {
+  const PLUGIN = '@crowi/plugin-fixture-pipeline-dispatch';
+
+  beforeEach(async () => {
+    const PluginRenderCache = crowi.model('PluginRenderCache') as unknown as PluginRenderCacheModel;
+    await PluginRenderCache.deleteMany({}).exec();
+  });
+
+  it('dispatch present but pageId null (preview): only previewPolicy:"server-render" code fences dispatch — embed tags / bare URLs / default-policy fences all stay untouched with zero I/O', async () => {
+    const embedRenderSpy = jest.fn();
+    const embedRenderer: EmbedRenderer = {
+      cacheVersion: 1,
+      render: () => {
+        embedRenderSpy();
+        return { html: '<div>embed should never appear</div>' };
+      },
+    };
+    const urlExpandSpy = jest.fn();
+    const urlRule: UrlInlineExpansionRule = {
+      cacheVersion: 1,
+      match: /example\.com/,
+      expand: () => {
+        urlExpandSpy();
+        return { kind: 'replaced', html: '<div>url should never appear</div>' };
+      },
+    };
+    const serverRenderSpy = jest.fn();
+    const serverRenderRenderer: CodeBlockRenderer = {
+      cacheVersion: 1,
+      previewPolicy: 'server-render',
+      render: (info) => {
+        serverRenderSpy(info);
+        return { html: `<div data-lang="${info.lang}">${info.source}</div>` };
+      },
+    };
+    const defaultPolicySpy = jest.fn();
+    const defaultPolicyRenderer: CodeBlockRenderer = {
+      cacheVersion: 1,
+      render: () => {
+        defaultPolicySpy();
+        return { html: '<div>plantuml-like should never appear</div>' };
+      },
+    };
+
+    const reg = new RendererRegistryImpl();
+    const scope = makeRendererScope(reg, PLUGIN, silentLogger);
+    scope.addEmbedTag('previewfixture', embedRenderer);
+    scope.addUrlInlineExpander(urlRule);
+    scope.addCodeBlockRenderer('preview-server-render-pipeline-fixture', serverRenderRenderer);
+    scope.addCodeBlockRenderer('preview-default-policy-pipeline-fixture', defaultPolicyRenderer);
+
+    const md = [
+      '@[previewfixture](x)',
+      '',
+      'https://example.com',
+      '',
+      '```preview-server-render-pipeline-fixture',
+      'A -> B',
+      '```',
+      '',
+      '```preview-default-policy-pipeline-fixture',
+      '@startuml',
+      '```',
+    ].join('\n');
+
+    const storage = createMongoCacheStorage(crowi);
+    const ctx = { mode: 'view' as const, log: silentLogger, actor: { kind: 'system' as const } };
+    const { tree } = await runPipeline(md, reg, ctx, loadDeps, { cache: storage, pageId: null });
+
+    // embed tag + bare URL: no I/O, source stays untouched (still `@` +
+    // link, or a bare autolink — never the embed's `html` replacement).
+    expect(embedRenderSpy).not.toHaveBeenCalled();
+    expect(urlExpandSpy).not.toHaveBeenCalled();
+    const serialised = JSON.stringify(serializeMdast(tree));
+    expect(serialised).not.toContain('embed should never appear');
+    expect(serialised).not.toContain('url should never appear');
+
+    // previewPolicy:'server-render' fence: dispatched — read the raw
+    // (unescaped) node value directly rather than substring-matching the
+    // JSON-stringified (and therefore quote-escaped) form.
+    expect(serverRenderSpy).toHaveBeenCalledTimes(1);
+    const serverRenderNode = tree.children[2] as unknown as { type: string; value: string };
+    expect(serverRenderNode.type).toBe('html');
+    expect(serverRenderNode.value).toContain('data-lang="preview-server-render-pipeline-fixture"');
+
+    // default-policy fence (PlantUML-shaped): left as a bare code node, no I/O.
+    expect(defaultPolicySpy).not.toHaveBeenCalled();
+    expect(serialised).not.toContain('plantuml-like should never appear');
+    const defaultPolicyNode = tree.children[3] as unknown as { type: string; lang?: string };
+    expect(defaultPolicyNode.type).toBe('code');
+    expect(defaultPolicyNode.lang).toBe('preview-default-policy-pipeline-fixture');
+
+    // No PluginRenderCache row was written by the preview run.
+    const PluginRenderCache = crowi.model('PluginRenderCache') as unknown as PluginRenderCacheModel;
+    expect(await PluginRenderCache.countDocuments({}).exec()).toBe(0);
+  });
+
+  it('dispatch present with pageId as an empty string (also falsy): same page-less branch as pageId: null', async () => {
+    const serverRenderSpy = jest.fn();
+    const serverRenderRenderer: CodeBlockRenderer = {
+      cacheVersion: 1,
+      previewPolicy: 'server-render',
+      render: (info) => {
+        serverRenderSpy(info);
+        return { html: `<div data-lang="${info.lang}">${info.source}</div>` };
+      },
+    };
+    const reg = new RendererRegistryImpl();
+    makeRendererScope(reg, PLUGIN, silentLogger).addCodeBlockRenderer('preview-server-render-pipeline-fixture-2', serverRenderRenderer);
+
+    const md = ['```preview-server-render-pipeline-fixture-2', 'A -> B', '```'].join('\n');
+    const storage = createMongoCacheStorage(crowi);
+    const ctx = { mode: 'view' as const, log: silentLogger, actor: { kind: 'system' as const } };
+    // The branch condition (`pipeline.ts`) is a truthy check on
+    // `dispatch.pageId`, not `!== null` — an empty string is a distinct
+    // falsy value worth covering on its own, even though no real call
+    // site (`Renderer.run`'s `options.pageId ?? null`) ever produces one.
+    const { tree } = await runPipeline(md, reg, ctx, loadDeps, { cache: storage, pageId: '' });
+
+    expect(serverRenderSpy).toHaveBeenCalledTimes(1);
+    const node = tree.children[0] as unknown as { type: string; value: string };
+    expect(node.type).toBe('html');
+    expect(node.value).toContain('data-lang="preview-server-render-pipeline-fixture-2"');
+  });
+
+  it('dispatch omitted entirely: code fences and embed tags both stay completely untouched (existing unit-test behaviour)', async () => {
+    const renderSpy = jest.fn();
+    const renderer: CodeBlockRenderer = {
+      cacheVersion: 1,
+      previewPolicy: 'server-render',
+      render: () => {
+        renderSpy();
+        return { html: '<div>should never appear</div>' };
+      },
+    };
+    const reg = new RendererRegistryImpl();
+    makeRendererScope(reg, PLUGIN, silentLogger).addCodeBlockRenderer('preview-server-render-no-dispatch-fixture', renderer);
+
+    const md = ['```preview-server-render-no-dispatch-fixture', 'A -> B', '```'].join('\n');
+    const ctx = { mode: 'save' as const, log: silentLogger, actor: { kind: 'system' as const } };
+    const { tree } = await runPipeline(md, reg, ctx, loadDeps); // no `dispatch` argument at all
+
+    expect(renderSpy).not.toHaveBeenCalled();
+    const top = tree.children[0] as unknown as { type: string; lang?: string };
+    expect(top.type).toBe('code');
+    expect(top.lang).toBe('preview-server-render-no-dispatch-fixture');
   });
 });

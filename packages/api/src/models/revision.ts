@@ -2,6 +2,7 @@ import type { MentionResponse, RevisionMetaShape, RevisionType, TocEntryResponse
 import { Document, Model, model, Schema, Types } from 'mongoose';
 import Crowi from 'src/crowi';
 import { RENDERER_PIPELINE_VERSION } from 'src/renderer/version';
+import { actorFromUser } from 'src/util/ts-rest-helpers';
 import { PageDocument } from './page';
 // import Debug from 'debug'
 
@@ -390,6 +391,7 @@ export default (crowi: Crowi) => {
     const { metadata, renderedAst } = await crowi.getRenderer().runRender(body || '', {
       mode: 'save',
       pageId: pageData._id?.toString(),
+      actor: actorFromUser(user),
     });
     newRevision.meta = metadataToRevisionMeta(metadata);
     newRevision.renderedAst = renderedAst;

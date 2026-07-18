@@ -66,19 +66,29 @@ export function renderReservation(reservation: Reservation): string {
 }
 
 /**
+ * Shared tail of every `*Placeholder` builder below: the same
+ * `crowi-embed-placeholder-error` wrapper div, optional reservation
+ * shape, and a `crowi-embed-placeholder-error-label` span — only the
+ * class suffix, any extra attributes (e.g. `sizeLimitPlaceholder`'s
+ * `data-reason`), and the label text vary per error kind.
+ */
+function buildErrorPlaceholderHtml(classSuffix: string, label: string, reservation: Reservation | undefined, extraAttrs = ''): string {
+  const shapeHtml = reservation ? renderReservation(reservation) : '';
+  return [
+    `<div class="crowi-embed-placeholder crowi-embed-placeholder-error crowi-embed-placeholder-error-${classSuffix}"${extraAttrs} role="status">`,
+    shapeHtml,
+    `<span class="crowi-embed-placeholder-error-label">${label}</span>`,
+    '</div>',
+  ].join('');
+}
+
+/**
  * Placeholder HTML for a render error. The user-facing message comes
  * from a fixed table per error code; plugin-supplied `error.message`
  * never reaches the HTML (potential PII / API-key leak).
  */
 export function errorPlaceholder(code: RenderError['code'], reservation: Reservation | undefined): string {
-  const label = ERROR_LABELS[code];
-  const shapeHtml = reservation ? renderReservation(reservation) : '';
-  return [
-    `<div class="crowi-embed-placeholder crowi-embed-placeholder-error crowi-embed-placeholder-error-${code}" role="status">`,
-    shapeHtml,
-    `<span class="crowi-embed-placeholder-error-label">${label}</span>`,
-    '</div>',
-  ].join('');
+  return buildErrorPlaceholderHtml(code, ERROR_LABELS[code], reservation);
 }
 
 /**
@@ -87,13 +97,22 @@ export function errorPlaceholder(code: RenderError['code'], reservation: Reserva
  */
 export function sizeLimitPlaceholder(reason: CacheSetReject, reservation: Reservation | undefined): string {
   const label = reason === 'entry-too-large' ? 'Embed exceeded the per-entry size limit' : 'Page exceeded the cumulative embed-cache quota';
-  const shapeHtml = reservation ? renderReservation(reservation) : '';
-  return [
-    `<div class="crowi-embed-placeholder crowi-embed-placeholder-error crowi-embed-placeholder-error-size-limit" data-reason="${reason}" role="status">`,
-    shapeHtml,
-    `<span class="crowi-embed-placeholder-error-label">${label}</span>`,
-    '</div>',
-  ].join('');
+  return buildErrorPlaceholderHtml('size-limit', label, reservation, ` data-reason="${reason}"`);
+}
+
+/**
+ * Placeholder for the classification-C "too many admission-gated
+ * dispatches in one pipeline run" case (feature-plugin-renderer-mermaid
+ * spec §5 classification C / §6's per-pipeline-run dispatch-count cap).
+ * Deliberately generic (no plugin-specific class name) — `collectCandidates`
+ * (`../core/code-block-dispatch.ts`) enforces this cap for ANY
+ * registration that declares `admissionControl`, not Mermaid
+ * specifically, and never calls `cachedRender` / `acquireRenderSlot` for
+ * the over-limit candidates (so this HTML is built directly, never
+ * cached).
+ */
+export function dispatchLimitPlaceholder(limit: number, reservation: Reservation | undefined): string {
+  return buildErrorPlaceholderHtml('dispatch-limit', `Too many diagrams in this document (limit: ${limit}) — this one was not rendered.`, reservation);
 }
 
 const ERROR_LABELS: Record<RenderError['code'], string> = {

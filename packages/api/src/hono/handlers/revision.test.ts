@@ -23,13 +23,17 @@ const cleanupPathPrefix = (prefix: string) => {
 describe('Routes /api/v2/pages/.../revisions (Hono)', () => {
   const PATH_PREFIX = '/hono-revision-test/';
   let accessToken: string;
+  let accessTokenUserId: string;
   let otherAccessToken: string;
 
   beforeAll(async () => {
-    [{ accessToken }, { accessToken: otherAccessToken }] = await Promise.all([
+    const [{ accessToken: token, user }, { accessToken: otherToken }] = await Promise.all([
       createTestUser({ name: 'Revision Tester', username: 'honoRevisionTester', email: 'hono-revision-tester@example.com' }),
       createTestUser({ name: 'Revision Other', username: 'honoRevisionOther', email: 'hono-revision-other@example.com' }),
     ]);
+    accessToken = token;
+    accessTokenUserId = user._id.toString();
+    otherAccessToken = otherToken;
   });
 
   afterEach(() => cleanupPathPrefix(PATH_PREFIX));
@@ -355,6 +359,28 @@ describe('Routes /api/v2/pages/.../revisions (Hono)', () => {
       expect(asOwner.status).toBe(200);
       expect(asOwner.body.revision._id).toBe(revisionId);
       expect(asOwner.body.revision.body).toBe('# private body');
+    });
+
+    // feature-plugin-renderer-mermaid spec §6 — same actor-wiring proof as
+    // `page.test.ts`'s "Hono getPage — actor wiring" describe, for this
+    // handler's own `computeRevisionRenderArtifactsAsync` call site
+    // (`revision.ts:237-244`).
+    it('passes actor: { kind: "user", userId } — the authenticated caller — to computeRevisionRenderArtifactsAsync', async () => {
+      const { revisionId } = await createTestPage(`${PATH_PREFIX}actor-wiring`, '# body');
+
+      const pageResponseModule = await import('src/util/page-response');
+      const spy = jest.spyOn(pageResponseModule, 'computeRevisionRenderArtifactsAsync');
+      try {
+        const res = await request(app).get(`/api/v2/pages/revisions/${revisionId}`).set(authHeaders(accessToken));
+
+        expect(res.status).toBe(200);
+        expect(spy).toHaveBeenCalled();
+        // computeRevisionRenderArtifactsAsync(crowi, storedMeta, storedAst, body, actor, storedRendererVersion?, pageId?)
+        const actorArg = spy.mock.calls[0]?.[4];
+        expect(actorArg).toEqual({ kind: 'user', userId: accessTokenUserId });
+      } finally {
+        spy.mockRestore();
+      }
     });
   });
 

@@ -71,13 +71,13 @@ Crowi のリポジトリには、次の 5 つのレンダラプラグインが�
 | `@crowi/plugin-renderer-emoji` | `:smile:` などのショートコードを Unicode 絵文字へ変換 | なし | 実装済み (Phase 6) |
 | `@crowi/plugin-renderer-katex` | `$inline$` / `$$display$$` の LaTeX 数式を KaTeX でサーバ側 HTML 化 | なし | 実装済み (Phase 6) |
 | `@crowi/plugin-renderer-plantuml` | ` ```plantuml ` ブロックを PlantUML サーバで描画して SVG/PNG を埋め込む | PlantUML サーバ | 実装済み (Phase 6) |
+| `@crowi/plugin-renderer-mermaid` | ` ```mermaid ` ブロックをサーバ内で browserless レンダリングし、サニタイズ済み SVG を埋め込む | なし (サーバ内で完結) | 実装済み (Phase 6.1) |
 | `@crowi/plugin-renderer-crowi-legacy` | Crowi v1 由来の記法のクセ (例: `##hoge` の空白なし見出し) を再現 | なし | 実装済み (Phase 6)・既定オフ |
 | `@crowi/plugin-renderer-link-card` | `@[card](url)` の URL 先ページを OGP リンクカードとして埋め込み | なし(取得先の外部サイトへ直接 fetch) | 実装済み |
 
 > **Tip**: GitHub の PR / Issue をカード表示する `@crowi/plugin-renderer-github-embed`
-> や Mermaid 図の `@crowi/plugin-renderer-mermaid` は RFC-0002 で計画されて
-> いますが、それぞれ Phase 7 / Phase 6.1 として進行中であり、まだ出荷されて
-> いません。
+> は RFC-0002 で計画されていますが、Phase 7 として進行中であり、まだ出荷
+> されていません。
 
 ### emoji
 
@@ -113,6 +113,48 @@ SVG (サニタイズ済み) または PNG が埋め込まれます。
 エラーとしてキャッシュされます。過去に成功した図があれば、PlantUML
 サーバが一時的に落ちていても直前の図が表示され続けます(上記
 [キャッシュと失敗時の挙動](#キャッシュと失敗時の挙動) を参照)。
+
+### Mermaid
+
+`@crowi/plugin-renderer-mermaid` は ` ```mermaid ` のフェンス付き
+コードブロックを、サーバ内で完全に描画します。ブラウザ側で Mermaid の
+JS が実行されることは一切なく、ページには最終的なサニタイズ済み SVG を
+base64 エンコードした `<img>` としてのみ埋め込まれます。運用者による
+設定は不要です — プラグインを有効化するだけで使えます (管理画面に
+設定項目はありません)。flowchart / sequence / class / state / ER /
+journey / pie / git-graph など、Mermaid が対応する主要な図の種類を
+サポートします。
+
+**セキュリティ**: 図はブラウザではなく、`fork()` された隔離子プロセス
+内で、外部リソースを一切ロードしない strict 設定の Mermaid によって
+描画されます。生成された SVG は独立した DOM ベースのサニタイザ
+(`@crowi/plugin-renderer-svg-sanitize`、PlantUML と共有) で `script` /
+イベントハンドラ / `javascript:` などを除去したうえで、base64 の
+`data:` URL として `<img>` に埋め込まれます。図の設定を上書きする
+ディレクティブや外部リソースを参照する構文は、ソース全体を対象に
+入力段階で拒否されます。子プロセス自体にも `fetch` / `XMLHttpRequest` /
+`node:net` などネットワーク対応 API を削除・遮断する deny-by-default の
+境界があり、サニタイズより手前の層でも外部到達を防ぎます。
+
+**テーマ**: 常に 1 種類 (light) のテーマでレンダリングされます。
+ダークモードでは、図を囲む領域が中立 (白背景) の面として表示されます。
+
+**制限値**: 図のソースは 20KB、生成される SVG は 60KB までです。1 回の
+ページ保存・プレビューあたり同時に処理できる図は最大 50 個です。
+サーバ全体では同時に 4 個までの図を並行して描画し (1 ユーザーが同時に
+使えるのは最大 2 個まで)、編集中のプレビューは 1 ユーザーあたり
+600 リクエスト/60 秒に制限されます。記法エラーのある図は固定の
+エラー表示になります。一時的な障害(サーバの過負荷など)でレンダリング
+に失敗した場合は、そのページを次に開いたときに自動的に再試行されます。
+
+**既存ページへの適用について**: 既存の ` ```mermaid ` フェンスは、
+著者がページを明示的に再保存するまでコードブロックのまま表示され
+続けます。プラグインを有効化しただけで過去のページが一括で描画し
+直されることはありません。
+
+> **運用者向け**: 上記の子プロセスによるネットワーク遮断に加えて、
+> コンテナ/OS レベルの egress 制御 (ネットワーク名前空間の分離など) を
+> defense-in-depth として追加で検討することを推奨します。
 
 ### crowi-legacy
 

@@ -87,6 +87,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@crowi/plugin-renderer-mermaid": "workspace:*",
     "@crowi/plugin-slack": "workspace:*",
     "@crowi/tsconfig": "workspace:*",
     "@types/bcryptjs": "^3.0.0",

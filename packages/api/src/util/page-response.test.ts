@@ -1,7 +1,19 @@
+import type { CodeBlockRenderer, PluginLogger, RenderActor } from '@crowi/plugin-api';
+import { _shutdownSingletonForTest, createMermaidRenderer } from '@crowi/plugin-renderer-mermaid';
+import { Types } from 'mongoose';
+import type { PluginRenderCacheModel } from 'src/models/plugin-render-cache';
 import type { RevisionMetaContent } from 'src/models/revision';
-import { crowi } from 'src/test/setup';
 import { RENDERER_PIPELINE_VERSION } from 'src/renderer/version';
+import { crowi } from 'src/test/setup';
 import { computeRevisionRenderArtifactsAsync } from './page-response';
+
+const TEST_ACTOR: RenderActor = { kind: 'system' };
+const silentLogger: PluginLogger = {
+  debug: () => undefined,
+  info: () => undefined,
+  warn: () => undefined,
+  error: () => undefined,
+};
 
 /**
  * `computeRevisionRenderArtifactsAsync` — the read-path fallback that fills in
@@ -53,6 +65,7 @@ describe('computeRevisionRenderArtifactsAsync — toc tracks the AST it is serve
       STORED_META,
       STALE_STORED_AST,
       BODY,
+      TEST_ACTOR,
       '0.6.0', // older than RENDERER_PIPELINE_VERSION → recompute
     );
 
@@ -77,7 +90,7 @@ describe('computeRevisionRenderArtifactsAsync — toc tracks the AST it is serve
       mentions: [],
       codeBlockLanguages: [],
     };
-    const result = await computeRevisionRenderArtifactsAsync(crowi, storedWithLinks, STALE_STORED_AST, BODY, '0.6.0');
+    const result = await computeRevisionRenderArtifactsAsync(crowi, storedWithLinks, STALE_STORED_AST, BODY, TEST_ACTOR, '0.6.0');
     // toc is recomputed, but the stored wikiLinks survive.
     expect(result.meta?.wikiLinks).toEqual([{ raw: '/kept/link', target: '/kept/link' }]);
     expect(result.meta?.toc?.[0].anchorId).toBe('workspace-の作成');
@@ -89,6 +102,7 @@ describe('computeRevisionRenderArtifactsAsync — toc tracks the AST it is serve
       STORED_META,
       STALE_STORED_AST, // here it is the FRESH AST (version matches)
       BODY,
+      TEST_ACTOR,
       RENDERER_PIPELINE_VERSION,
     );
     // Fresh path: the stored AST + stored toc are returned verbatim, no recompute.
@@ -98,8 +112,200 @@ describe('computeRevisionRenderArtifactsAsync — toc tracks the AST it is serve
   });
 
   it('treats a missing rendererVersion as fresh (trust the stored AST + toc)', async () => {
-    const result = await computeRevisionRenderArtifactsAsync(crowi, STORED_META, STALE_STORED_AST, BODY /* no version */);
+    const result = await computeRevisionRenderArtifactsAsync(crowi, STORED_META, STALE_STORED_AST, BODY, TEST_ACTOR /* no version */);
     expect(result.renderedAst).toBe(STALE_STORED_AST);
     expect(result.meta?.toc).toBe(STORED_META.toc);
+  });
+});
+
+describe('computeRevisionRenderArtifactsAsync — mermaidRenderPending marker scan on the astIsFresh path (feature-plugin-renderer-mermaid spec §5)', () => {
+  const COMPLETE_META: RevisionMetaContent = { toc: [], wikiLinks: [], mentions: [], codeBlockLanguages: [] };
+  const PLUGIN = '@crowi/plugin-fixture-pending-scan';
+
+  it('a stored AST with no mermaidRenderPending marker anywhere is returned as the exact same object (no clone, no redispatch attempted, full pipeline never re-run)', async () => {
+    const pageId = new Types.ObjectId().toHexString();
+    const storedAst = {
+      type: 'root',
+      children: [{ type: 'code', lang: 'mermaid', value: 'flowchart TD\n  A --> B' }], // no `data.mermaidRenderPending` — the vast majority case
+    };
+    // AC "マーカーの無い大多数のケースで runPipeline/runRender 相当が一切
+    // 呼ばれないこと" — spy directly on the renderer's `runRender` (the
+    // only full-pipeline entry point `computeRevisionRenderArtifactsAsync`
+    // has access to) rather than relying on reference-identity alone.
+    const runRenderSpy = jest.spyOn(crowi.getRenderer(), 'runRender');
+    try {
+      const result = await computeRevisionRenderArtifactsAsync(
+        crowi,
+        COMPLETE_META,
+        storedAst,
+        'body unused on the fresh path',
+        TEST_ACTOR,
+        RENDERER_PIPELINE_VERSION,
+        pageId,
+      );
+      // Reference equality (not just deep equality) — proves the fast path
+      // returned the input object untouched rather than cloning + walking
+      // it (which `redispatchPendingCodeBlocks` would require).
+      expect(result.renderedAst).toBe(storedAst);
+      expect(runRenderSpy).not.toHaveBeenCalled();
+    } finally {
+      runRenderSpy.mockRestore();
+    }
+  });
+
+  it('a stored AST WITH a mermaidRenderPending marker is resolved via a scoped redispatch, and the ORIGINAL stored object is left unmutated', async () => {
+    const pageId = new Types.ObjectId().toHexString();
+    const renderer: CodeBlockRenderer = {
+      cacheVersion: 1,
+      admissionControl: { maxConcurrentGlobal: 4, maxConcurrentPerUser: 2, queueDepth: 200 },
+      render: (info) => ({ html: `<img alt="Mermaid diagram" src="data:image/svg+xml;base64,${Buffer.from(info.source).toString('base64')}">`, ttlSec: 3600 }),
+    };
+    crowi.getRenderer().registry.addCodeBlockRenderer('mermaid-pending-scan-fixture', renderer, PLUGIN, silentLogger);
+
+    const storedAst = {
+      type: 'root',
+      children: [{ type: 'code', lang: 'mermaid-pending-scan-fixture', value: 'flowchart TD\n  A --> B', data: { mermaidRenderPending: true } }],
+    };
+    const PluginRenderCache = crowi.model('PluginRenderCache') as unknown as PluginRenderCacheModel;
+    await PluginRenderCache.deleteMany({ pageId: new Types.ObjectId(pageId) }).exec();
+
+    const result = await computeRevisionRenderArtifactsAsync(
+      crowi,
+      COMPLETE_META,
+      storedAst,
+      'body unused on the fresh path',
+      TEST_ACTOR,
+      RENDERER_PIPELINE_VERSION,
+      pageId,
+    );
+
+    // The returned AST reflects the resolved node...
+    const resultRoot = result.renderedAst as { children: Array<{ type: string; value?: string }> };
+    expect(resultRoot.children[0].type).toBe('html');
+    expect(resultRoot.children[0].value).toContain('<img');
+    // ...but the ORIGINAL stored object (what `Revision.renderedAst`
+    // still points at) was never mutated — spec §5: "Revision.renderedAst
+    // 自体への書き戻しはしない".
+    expect((storedAst.children[0] as { type: string }).type).toBe('code');
+    expect((storedAst.children[0] as { data: { mermaidRenderPending: boolean } }).data.mermaidRenderPending).toBe(true);
+
+    const doc = await PluginRenderCache.findOne({ pageId: new Types.ObjectId(pageId) })
+      .lean()
+      .exec();
+    expect(doc).toBeTruthy();
+  });
+
+  it('a stored AST whose code node has no marker at all (pre-Mermaid-activation content) is left completely untouched', async () => {
+    const pageId = new Types.ObjectId().toHexString();
+    const storedAst = { type: 'root', children: [{ type: 'code', lang: 'some-other-lang', value: 'plain code, never touched by this feature' }] };
+    const result = await computeRevisionRenderArtifactsAsync(
+      crowi,
+      COMPLETE_META,
+      storedAst,
+      'body unused on the fresh path',
+      TEST_ACTOR,
+      RENDERER_PIPELINE_VERSION,
+      pageId,
+    );
+    expect(result.renderedAst).toBe(storedAst);
+    expect((result.renderedAst as { children: Array<{ type: string }> }).children[0].type).toBe('code');
+  });
+
+  // feature-plugin-renderer-mermaid Phase 3 (spec §9): the PlantUML
+  // sanitizer swap + output class rename (`plantuml-embed` →
+  // `diagram-embed plantuml-embed`) bumped ONLY the plugin's own
+  // `cacheVersion` (a `PluginRenderCache`-lookup-only escape hatch) —
+  // `RENDERER_PIPELINE_VERSION` (this file's own `version` argument) was
+  // deliberately left untouched. A `Revision.renderedAst` written before
+  // this Phase therefore still embeds the OLD sanitizer's HTML string
+  // (old class, old regex-stripped output) verbatim; nothing re-renders
+  // it until the page is next saved. This pins that specific regression
+  // scenario, though the underlying mechanism (astIsFresh ⇒ verbatim
+  // stored-AST passthrough, no pipeline re-run) is already exercised
+  // generically above and in the `mermaidRenderPending` describe block.
+  it('a stored AST embedding legacy pre-Phase-3 PlantUML output (old sanitizer, old `plantuml-embed`-only class) is served byte-identical and never re-rendered', async () => {
+    const pageId = new Types.ObjectId().toHexString();
+    const legacyPlantumlHtml = '<div class="plantuml-embed"><svg><path d="M0 0 L1 1"/></svg></div>';
+    const storedAst = { type: 'root', children: [{ type: 'html', value: legacyPlantumlHtml }] };
+    const runRenderSpy = jest.spyOn(crowi.getRenderer(), 'runRender');
+    try {
+      const result = await computeRevisionRenderArtifactsAsync(
+        crowi,
+        COMPLETE_META,
+        storedAst,
+        'body unused on the fresh path',
+        TEST_ACTOR,
+        RENDERER_PIPELINE_VERSION, // unchanged by Phase 3 — this stays the "fresh" path
+        pageId,
+      );
+      expect(result.renderedAst).toBe(storedAst);
+      expect((result.renderedAst as { children: Array<{ value: string }> }).children[0].value).toBe(legacyPlantumlHtml);
+      expect(runRenderSpy).not.toHaveBeenCalled();
+    } finally {
+      runRenderSpy.mockRestore();
+    }
+  });
+
+  // feature-plugin-renderer-mermaid Phase 4 (spec §9/§10): wiring
+  // @crowi/plugin-renderer-mermaid into apps/crowi-runner activates the
+  // plugin for NEW code-block-dispatch calls from the moment this Phase
+  // deploys — `RENDERER_PIPELINE_VERSION` is deliberately left untouched
+  // (a plain, new-bundled-plugin addition would ordinarily warrant a
+  // "minor" bump per this constant's own doc comment in version.ts, but
+  // spec §9 explicitly carves out an exception for Mermaid/PlantUML
+  // specifically to avoid a version-bump-driven recompute of every
+  // unrelated revision on next read). Pinned here so an accidental future
+  // bump alongside an unrelated change is caught immediately.
+  it('RENDERER_PIPELINE_VERSION is unchanged by Phase 4 (spec §9 next-save-only — Mermaid activation must not trigger a wide recompute of unrelated revisions)', () => {
+    expect(RENDERER_PIPELINE_VERSION).toBe('0.8.0');
+  });
+
+  // Registers the REAL @crowi/plugin-renderer-mermaid renderer (not a
+  // fixture) — the exact way apps/crowi-runner's boot sequence does via
+  // registerRenderer (spec §10) — into the SAME registry
+  // computeRevisionRenderArtifactsAsync reads from
+  // (crowi.getRenderer().registry), then proves that a Revision saved
+  // BEFORE this Phase (no CodeBlockRenderer existed for 'mermaid' yet, so
+  // the fenced block is still a raw, un-dispatched `code` node with no
+  // `mermaidRenderPending` marker) is served byte-identical on the fresh
+  // (matching-version) path — still a plain code block, never dispatched
+  // to the now-live renderer — until the author explicitly re-saves the
+  // page. This is strictly stronger than the generic
+  // no-marker-untouched test earlier in this describe block: that test
+  // has NO 'mermaid' renderer registered at all, so it cannot show that
+  // the renderer's mere presence in a live registry doesn't retroactively
+  // reprocess old content.
+  it('registering the REAL Mermaid renderer (post-Phase-4 wiring) does not retroactively touch a pre-existing, un-dispatched ```mermaid code node — it stays a plain code block until re-saved', async () => {
+    const pageId = new Types.ObjectId().toHexString();
+    crowi.getRenderer().registry.addCodeBlockRenderer('mermaid', createMermaidRenderer(), '@crowi/plugin-renderer-mermaid', silentLogger);
+
+    const storedAst = {
+      type: 'root',
+      children: [{ type: 'code', lang: 'mermaid', value: 'flowchart TD\n  A --> B' }], // pre-Phase-4 content — never dispatched, no marker
+    };
+    const runRenderSpy = jest.spyOn(crowi.getRenderer(), 'runRender');
+    try {
+      const result = await computeRevisionRenderArtifactsAsync(
+        crowi,
+        COMPLETE_META,
+        storedAst,
+        'body unused on the fresh path',
+        TEST_ACTOR,
+        RENDERER_PIPELINE_VERSION,
+        pageId,
+      );
+      expect(result.renderedAst).toBe(storedAst);
+      const codeNode = (result.renderedAst as { children: Array<{ type: string; lang?: string }> }).children[0];
+      expect(codeNode.type).toBe('code');
+      expect(codeNode.lang).toBe('mermaid');
+      expect(runRenderSpy).not.toHaveBeenCalled();
+    } finally {
+      runRenderSpy.mockRestore();
+      // The real renderer's render() is never invoked above (proven by
+      // the spy), so the child-process pool is never lazily spawned —
+      // this is a no-op, kept for hygiene/consistency with every other
+      // suite that touches the real plugin.
+      await _shutdownSingletonForTest();
+    }
   });
 });

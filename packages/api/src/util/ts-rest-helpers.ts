@@ -1,5 +1,6 @@
 import type { PageUser, UserPublic } from '@crowi/api-contract';
 import { UserPublicStatus } from '@crowi/api-contract';
+import type { RenderActor } from '@crowi/plugin-api';
 import { Types } from 'mongoose';
 import type { PageDocument } from 'src/models/page';
 import type { UserDocument } from 'src/models/user';
@@ -25,6 +26,9 @@ export const toISOStringOrNull = (date: Date | undefined | null): string | null 
 export const toStringId = (id: Types.ObjectId | string): string => {
   return typeof id === 'string' ? id : id.toString();
 };
+
+/** Build the `RenderActor` every authenticated call site passes to the renderer (feature-plugin-renderer-mermaid spec §6). */
+export const actorFromUser = (user: { _id: Types.ObjectId | string }): RenderActor => ({ kind: 'user', userId: toStringId(user._id) });
 
 export const toPageUser = (user: PopulatedUser): PageUser => ({
   _id: user._id.toString(),
