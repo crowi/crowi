@@ -61,7 +61,7 @@ included here.
 | Service | Port | Purpose |
 | ------- | ---- | ------- |
 | MongoDB | 27017 | Persistence for pages / revisions / users / etc. |
-| Redis | 6379 | Sessions / real-time collaboration pub/sub |
+| Redis | 6379 | Coordination: realtime-collab/presence/notifications pub/sub, editor-cap counter, Config sync, rate limiting, LRU |
 | Elasticsearch | 9200 | Full-text search backend (optional) |
 | PlantUML | 8080 | PlantUML diagram rendering server (optional) |
 

@@ -60,7 +60,7 @@ Ordinary OS/CI environment variables without one of those prefixes (`PATH`,
 | `MONGO_URI` | No (default `mongodb://localhost/crowi`) | MongoDB connection string. Production deployments normally override it |
 | `PORT` | No (default `4301`) | The port the API server listens on |
 | `NODE_ENV` | No | `development` / `production` / `test` |
-| `REDIS_URL` | Conditional | Sessions, the Socket.IO adapter, realtime-collab pub/sub, and the editor-cap counter. Optional for single-instance, **required for multi-instance deployments**. Use `rediss://` for TLS |
+| `REDIS_URL` | Conditional | Coordination for realtime-collab pub/sub, the editor-cap counter, presence, notification invalidation, Config sync, rate limiting, and LRU. Optional for single-instance, **required for multi-instance deployments**. Use `rediss://` for TLS |
 | `PASSWORD_SEED` | Yes | Legacy password hashing seed (still used for fallback verification) |
 | `CLIENT_URL` | Required in production | The web origin, set on the **api** side. Used as the CORS allowlist origin and to build links in outgoing mail. Localhost origins are allowed automatically in development |
 | `CROWI_ENCRYPTION_KEY` | Recommended | Base64-encoded 32-byte master key used to encrypt sensitive Config with AES-256-GCM. Falls back to plaintext when unset. See [Encrypting sensitive config](./encryption) |

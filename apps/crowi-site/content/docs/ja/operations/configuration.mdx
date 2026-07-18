@@ -60,7 +60,7 @@ API は起動時にこれらの環境変数をまとめて検証します。`POR
 | `MONGO_URI` | いいえ (デフォルト `mongodb://localhost/crowi`) | MongoDB の接続文字列。本番では通常明示的に設定する |
 | `PORT` | いいえ (デフォルト `4301`) | API サーバの待ち受けポート |
 | `NODE_ENV` | いいえ | `development` / `production` / `test` |
-| `REDIS_URL` | 条件付き | セッション・Socket.IO アダプタ・リアルタイム共同編集の pub/sub・編集者上限カウンタ。シングルインスタンスでは省略可、**マルチインスタンス構成では必須**。TLS には `rediss://` を使用 |
+| `REDIS_URL` | 条件付き | リアルタイム共同編集の pub/sub・編集者上限カウンタ・プレゼンス・通知 invalidation・設定同期・rate limiting・LRU のための連携用途。シングルインスタンスでは省略可、**マルチインスタンス構成では必須**。TLS には `rediss://` を使用 |
 | `PASSWORD_SEED` | はい | レガシーパスワードハッシュのシード (フォールバック検証で使用) |
 | `CLIENT_URL` | 本番では必須 | Web のオリジン。**api 側**に設定する。CORS の許可オリジン、および送信メール内のリンク生成に使われる。開発環境では localhost が自動許可される |
 | `CROWI_ENCRYPTION_KEY` | 推奨 | 機密 Config を AES-256-GCM で暗号化する 32 バイトのマスターキー (base64)。未設定時は平文保存にフォールバック。詳細は [機密設定の暗号化](./encryption) |
