@@ -32,14 +32,14 @@ import type Crowi from 'src/crowi';
 import type { PageDocument } from 'src/models/page';
 import type { RevisionDocument, RevisionMetaContent } from 'src/models/revision';
 import type { UserDocument } from 'src/models/user';
-import { type PopulatedRevision, computeRevisionRenderArtifactsAsync, toRevisionResponse } from 'src/util/page-response';
-import { isPopulatedUser, isValidObjectId, toISOStringOrNull, toPageUser } from 'src/util/ts-rest-helpers';
+import { computeRevisionRenderArtifactsAsync, type PopulatedRevision, toRevisionResponse } from 'src/util/page-response';
+import { isPopulatedUser, isValidObjectId, resolveGrantedRevisionOwner, toISOStringOrNull, toPageUser } from 'src/util/ts-rest-helpers';
 
 import type { CrowiHonoBindings } from '../app';
 import { createJwtAuth } from '../middleware/auth';
 import { applyScope } from '../middleware/require-scope';
 
-import { PAGE_NOT_FOUND_BODY, invalidRequestBody } from './_helpers/errors';
+import { invalidRequestBody, PAGE_NOT_FOUND_BODY } from './_helpers/errors';
 
 const debug = Debug('crowi:hono:handlers:revision');
 
@@ -92,16 +92,10 @@ export const registerRevisionRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>
   const Page = crowi.model('Page');
   const Revision = crowi.model('Revision');
 
-  // DC-5: resolve the page that owns a revision via its immutable `page`
-  // id ref, gated on the caller's grant. `null` covers both "no page ref"
-  // (orphaned revision — fail closed) and "not granted" — callers respond
-  // 404 to hide existence either way.
-  const resolveGrantedRevisionOwner = async (pageId: Types.ObjectId | null | undefined, user: UserDocument): Promise<PageDocument | null> => {
-    if (!pageId) return null;
-    const page = (await Page.findById(pageId)) as PageDocument | null;
-    if (!page || !page.isGrantedFor(user)) return null;
-    return page;
-  };
+  // DC-5 grant boundary — shared implementation in `ts-rest-helpers.ts`
+  // (also used by comment.ts's by-revision listing); this thin bind only
+  // fixes the Page model argument.
+  const resolveOwner = (pageId: Types.ObjectId | null | undefined, user: UserDocument) => resolveGrantedRevisionOwner(Page, pageId, user);
 
   // `/pages/*` covers all three routes; the broad apply is idempotent if
   // the page handler (Batch 4) registers it again with the same middleware
@@ -220,7 +214,7 @@ export const registerRevisionRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>
           // could previously resolve to *whichever unrelated page
           // currently occupies that path* (path is reused over time),
           // which was itself a latent grant bug — see the spec's finding.
-          const page = await resolveGrantedRevisionOwner(revisions[0].page, user);
+          const page = await resolveOwner(revisions[0].page, user);
           if (!page) {
             return c.json(PAGE_NOT_FOUND_BODY, 404);
           }
@@ -255,7 +249,7 @@ export const registerRevisionRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>
           // from non-granted callers (404 not 403); an orphaned revision
           // (pre-migration / standard-path deviation, see
           // `revision-page-ref-backfill`) fails closed the same way.
-          const page = await resolveGrantedRevisionOwner(revision.page, user);
+          const page = await resolveOwner(revision.page, user);
           if (!page) {
             return c.json(PAGE_NOT_FOUND_BODY, 404);
           }

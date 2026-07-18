@@ -1,10 +1,10 @@
 import Debug from 'debug';
 import type { Types } from 'mongoose';
 import type Crowi from 'src/crowi';
-import ActivityDefine from 'src/util/activityDefine';
 import type { ActivityDocument } from 'src/models/activity';
 import type { RevisionDocument, RevisionMention } from 'src/models/revision';
 import type { UserDocument } from 'src/models/user';
+import ActivityDefine from 'src/util/activityDefine';
 
 const debug = Debug('crowi:events:mention-dispatch');
 
@@ -110,23 +110,17 @@ export async function dispatchMentions(crowi: Crowi, savedPage: PageLike | undef
     return;
   }
 
-  // Previous revision on the same page. Sort by createdAt descending, skip
-  // the current revision, take 1. DC-5 (`feature-revision-page-ref`):
-  // prefer the immutable `page` id ref over the mutable `path` string.
-  // `Page.rename` does best-effort sync revision rows' `path` (see
-  // `page.ts` `Page.rename`), but that sync step is not correctness-
-  // critical and can fail partway through — when it does, stale `path`
-  // values would otherwise mis-diff across the rename or, worse, mix
-  // mentions from an unrelated page that later reused this page's old
-  // path. `page` id stays authoritative regardless. Fall back to `path`
-  // only for a revision written before this field existed (pre-migration
-  // / a standard-lifecycle-deviation orphan), preserving the legacy
-  // behaviour for that rare case. For first-save (no prior revision) the
-  // diff degrades to "all mentions are new", which is the desired
-  // semantics.
+  // Previous revision on the same page, keyed by the immutable `page` id
+  // (DC-5 — see `RevisionDocument.page`; a `path` key could mix in an
+  // unrelated page that later reused this path). `path` fallback only for
+  // pre-migration rows without the field. First-save (no prior revision)
+  // degrades to "all mentions are new", which is the desired semantics.
+  // `select('meta')`: only `meta.mentions` is read — without it this
+  // per-save findOne fetches the full body/renderedAst of the previous
+  // revision just to throw it away.
   const notSelf = { _id: { $ne: currentRev._id } };
   const prevRevisionQuery = currentRev.page ? { page: currentRev.page, ...notSelf } : { path: currentRev.path, ...notSelf };
-  const prevRev = (await Revision.findOne(prevRevisionQuery).sort({ createdAt: -1 }).exec()) as RevisionDocument | null;
+  const prevRev = (await Revision.findOne(prevRevisionQuery).sort({ createdAt: -1 }).select('meta').exec()) as RevisionDocument | null;
   const prevMentions = extractMentionUsernames(prevRev?.meta?.mentions);
 
   const newUsernames: string[] = [];

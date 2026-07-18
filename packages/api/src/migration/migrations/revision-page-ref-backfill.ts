@@ -75,9 +75,9 @@ import { defineMigration } from '../types';
  * bound correctly refuses to guess because it predates the current
  * occupant's existence. Such rows are never deleted and never assigned a
  * guessed id, and are reported via `ctx.logger.warn` with a bounded id
- * sample for manual follow-up. They remain visible only through the
- * pre-existing `path`-keyed accessors (`Revision.findRevisionList` etc.),
- * which this feature does not remove.
+ * sample for manual follow-up. Their data is never destroyed, but they are
+ * invisible to the id-keyed read paths — inspect them via the logged ids /
+ * a direct query on `{ page: null }`.
  *
  * They ARE, however, explicitly closed out with `page: null` (not left
  * `undefined`) once triaged. This distinction matters for `isPending`

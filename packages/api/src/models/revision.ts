@@ -1,6 +1,6 @@
-import Crowi from 'src/crowi';
-import { Types, Document, Model, Schema, model } from 'mongoose';
 import type { MentionResponse, RevisionMetaShape, RevisionType, TocEntryResponse, WikiLinkResponse } from '@crowi/api-contract';
+import { Document, Model, model, Schema, Types } from 'mongoose';
+import Crowi from 'src/crowi';
 import { RENDERER_PIPELINE_VERSION } from 'src/renderer/version';
 import { PageDocument } from './page';
 // import Debug from 'debug'
@@ -158,7 +158,6 @@ export interface RevisionModel extends Model<RevisionDocument> {
   findRevisionList(path, options): Promise<RevisionDocument[]>;
   updateRevisionListByPath(path, updateData): Promise<RevisionDocument>;
   prepareRevision(pageData: PageDocument, body: string, user: { _id: Types.ObjectId }, options?: PrepareRevisionOptions): Promise<RevisionDocument>;
-  removeRevisionsByPath(path): Promise<{ deletedCount: number }>;
   removeRevisionsByPageId(pageId: Types.ObjectId): Promise<{ deletedCount: number }>;
   updatePath(pathName): void;
   findAuthorsByPage(page): Promise<RevisionDocument['author'][]>;
@@ -170,14 +169,12 @@ export default (crowi: Crowi) => {
   const revisionSchema = new Schema<RevisionDocument, RevisionModel>({
     path: { type: String, required: true, index: true },
     // DC-5 (`feature-revision-page-ref`): immutable id-based reference to the
-    // owning Page, set once in `prepareRevision` and never rewritten. Plain
-    // (non-partial) `index: true` — same tradeoff as `type` below: it ports
-    // directly to a Postgres `page_id` FK index and makes the backfill
-    // migration's `{ page: { $exists: false } }` probe index-backed. Not
+    // owning Page, set once in `prepareRevision` and never rewritten. Not
     // `required: true`: pre-migration rows genuinely lack it on disk until
     // the boot migration backfills them (and a small class of orphans may
     // never get one — see `revision-page-ref-backfill`'s doc comment).
-    page: { type: Schema.Types.ObjectId, ref: 'Page', index: true },
+    // Indexed via the compound `{ page, createdAt }` declaration below.
+    page: { type: Schema.Types.ObjectId, ref: 'Page' },
     body: { type: String, required: true },
     format: { type: String, default: 'markdown' },
     author: { type: Schema.Types.ObjectId, ref: 'User' },
@@ -305,6 +302,17 @@ export default (crowi: Crowi) => {
     },
   });
 
+  // DC-5: every `page`-keyed read sorts or scans by recency — the history
+  // list (`find({page}).sort({createdAt:-1})` + skip/limit), the attachment
+  // usage scan, and mention-dispatch's previous-revision `findOne` (which
+  // runs on every save). A compound index makes those pure index walks
+  // instead of fetch-all + in-memory sort; the `page` prefix still serves
+  // the equality-only queries (`removeRevisionsByPageId`,
+  // `findAuthorsByPage`) and the backfill's `{ page: { $exists: false } }`
+  // probe, and it ports directly to a Postgres `(page_id, created_at)`
+  // index (plain, non-partial — same portability stance as `type`).
+  revisionSchema.index({ page: 1, createdAt: -1 });
+
   revisionSchema.statics.findLatestRevision = function (path, cb) {
     // mongoose 7 dropped Query#exec(callback); bridge the promise to the
     // existing callback signature.
@@ -417,14 +425,10 @@ export default (crowi: Crowi) => {
     return newRevision;
   };
 
-  revisionSchema.statics.removeRevisionsByPath = function (path) {
-    return Revision.deleteMany({ path }).exec();
-  };
-
-  // DC-5: id-based counterpart to `removeRevisionsByPath`, used by
-  // `Page.removePage` — robust against path reuse (delete → recreate a
-  // different page at the same path would make a path-scoped delete remove
-  // the wrong page's revisions).
+  // DC-5: id-keyed bulk delete, used by `Page.removePage` — robust against
+  // path reuse (delete → recreate a different page at the same path would
+  // make a path-scoped delete remove the wrong page's revisions; the old
+  // `removeRevisionsByPath` static was removed for exactly that hazard).
   revisionSchema.statics.removeRevisionsByPageId = function (pageId) {
     return Revision.deleteMany({ page: pageId }).exec();
   };

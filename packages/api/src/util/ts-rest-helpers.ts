@@ -1,8 +1,8 @@
-import { Types } from 'mongoose';
 import type { PageUser, UserPublic } from '@crowi/api-contract';
 import { UserPublicStatus } from '@crowi/api-contract';
-import type { UserDocument } from 'src/models/user';
+import { Types } from 'mongoose';
 import type { PageDocument } from 'src/models/page';
+import type { UserDocument } from 'src/models/user';
 
 /**
  * Shape of a populated User as it appears on Mongoose documents that have
@@ -152,4 +152,34 @@ export const loadGrantedPage = async (Page: PageModelLike, pageId: string, user:
   } catch {
     return { error: pageNotFoundResponse };
   }
+};
+
+/** Structural slice of the Page model `resolveGrantedRevisionOwner` needs. */
+interface PageFindByIdLike {
+  findById(id: Types.ObjectId): { exec(): Promise<unknown> };
+}
+
+/**
+ * DC-5 (`feature-revision-page-ref`): resolve the page that OWNS a revision
+ * via the revision's immutable `page` id ref, gated on the caller's grant.
+ * `null` covers "no page ref" (orphaned pre-migration revision — fail
+ * closed), "page gone", and "not granted" alike — callers respond 404 to
+ * hide existence either way. Shared by the revision routes and comment.ts's
+ * by-revision listing so this security boundary's fail-closed semantics has
+ * exactly one implementation.
+ *
+ * Deliberately uses raw `isGrantedFor` (NOT `findPageByIdAndGrantedUser`) to
+ * preserve these routes' pre-DC-5 behaviour — the RFC-0004 draft-hiding rule
+ * has never applied to them, and folding it in is a behaviour change for the
+ * central-page-authorization work to decide, not this helper.
+ */
+export const resolveGrantedRevisionOwner = async (
+  Page: PageFindByIdLike,
+  pageId: Types.ObjectId | null | undefined,
+  user: UserDocument,
+): Promise<PageDocument | null> => {
+  if (!pageId) return null;
+  const page = (await Page.findById(pageId).exec()) as PageDocument | null;
+  if (!page || !page.isGrantedFor(user)) return null;
+  return page;
 };

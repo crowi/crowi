@@ -28,7 +28,7 @@ import type Crowi from 'src/crowi';
 import type { CommentDocument } from 'src/models/comment';
 import type { PageDocument } from 'src/models/page';
 import { autoWatchPage } from 'src/util/auto-watch';
-import { isPopulatedUser, isValidObjectId, toISOStringOrNull, toPageUser } from 'src/util/ts-rest-helpers';
+import { isPopulatedUser, isValidObjectId, resolveGrantedRevisionOwner, toISOStringOrNull, toPageUser } from 'src/util/ts-rest-helpers';
 
 import type { CrowiHonoBindings } from '../app';
 import { createJwtAuth } from '../middleware/auth';
@@ -109,17 +109,15 @@ export const registerCommentRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(
             return c.json(invalidRequestBody('Invalid revision_id'), 400);
           }
           // Grant boundary (crowi-review CLS-003): comment bodies must not
-          // be readable by callers who cannot read the owning page. DC-5
-          // (`feature-revision-page-ref`): resolve the page via the
-          // revision's immutable `page` id, NOT a `path` reverse-lookup —
-          // `path` is a mutable, reused string (delete a page, a different
-          // page later reused that same path) so a reverse lookup could
-          // resolve to an unrelated page and leak this revision's comments
-          // through that page's grant. 404 (not 403) hides page existence,
-          // matching GET /pages/revisions/:id.
+          // be readable by callers who cannot read the owning page. Resolved
+          // via the revision's immutable `page` id (DC-5 — see
+          // `RevisionDocument.page` for why a `path` reverse-lookup would
+          // leak through a reused path); the fail-closed semantics live once
+          // in `resolveGrantedRevisionOwner` (`ts-rest-helpers.ts`). 404
+          // hides page existence, matching GET /pages/revisions/:id.
           const revision = (await Revision.findById(new Types.ObjectId(revision_id)).select('page').exec()) as { page?: Types.ObjectId | null } | null;
-          const page = revision?.page ? ((await Page.findById(revision.page).exec()) as PageDocument | null) : null;
-          if (!page || !page.isGrantedFor(user)) {
+          const page = await resolveGrantedRevisionOwner(Page, revision?.page, user);
+          if (!page) {
             return c.json(PAGE_NOT_FOUND_BODY, 404);
           }
           comments = await Comment.getCommentsByRevisionId(new Types.ObjectId(revision_id));

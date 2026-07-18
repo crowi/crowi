@@ -1,6 +1,6 @@
 import faker from 'faker';
-import { crowi, Fixture } from 'src/test/setup';
 import type { MigrationApplicationModel } from 'src/models/migration-application';
+import { crowi, Fixture } from 'src/test/setup';
 
 import { MigrationRegistry } from '../registry';
 import { runBootMigrations } from '../run-boot-migrations';
@@ -162,13 +162,13 @@ describe('migration/revision-page-ref-backfill', () => {
       const path = `${PATH_PREFIX}/delete-recreate`;
 
       // Page A existed at `path` and is hard-deleted the standard way
-      // (`Revision.removeRevisionsByPath` — still the mechanism
+      // (a path-scoped delete — the mechanism
       // `Page.removePage` used before this migration ever ran), which took
       // its revisions with it. No trace of A's revisions survives to
       // confuse the migration.
       const pageA = await seedPage(path);
       await Revision.create({ path, body: 'page A legacy revision', author: user._id });
-      await Revision.removeRevisionsByPath(path);
+      await Revision.deleteMany({ path }).exec();
       await Page.deleteOne({ _id: pageA._id });
       expect(await Revision.countDocuments({ path })).toBe(0);
 
