@@ -1182,4 +1182,45 @@ describe('Page', () => {
       expect((reloaded?.grantedUsers ?? []).map((id) => id.toString())).toContain(claimant._id.toString());
     });
   });
+
+  describe('Revision.page (feature-revision-page-ref, DC-5)', () => {
+    let Revision;
+    let user;
+
+    beforeAll(() => {
+      Revision = crowi.model('Revision');
+      user = createdUsers[0];
+    });
+
+    test('prepareRevision (via Page.createPage / updatePage) stamps the immutable page id on every new revision', async () => {
+      const path = '/revision-page-ref/prepare-revision';
+      const created = await Page.createPage(path, 'v1', user, {});
+      expect(created.revision.page?.toString()).toBe(created._id.toString());
+
+      const updated = await Page.updatePage(created, 'v2', user, {});
+      expect(updated.revision.page?.toString()).toBe(created._id.toString());
+
+      const allRevisions = await Revision.find({ page: created._id }).lean();
+      expect(allRevisions).toHaveLength(2);
+    });
+
+    test('Page.removePage deletes revisions via the immutable page id, robust against path reuse', async () => {
+      const path = '/revision-page-ref/removepage-reuse';
+      const pageA = await Page.createPage(path, 'body A', user, {});
+      const pageAId = pageA._id;
+
+      await Page.removePage(pageA);
+      expect(await Page.findById(pageAId).exec()).toBeNull();
+      expect(await Revision.countDocuments({ page: pageAId })).toBe(0);
+
+      // A different page created afterwards at the SAME (now-freed) path
+      // is completely unaffected — `removeRevisionsByPageId` never touched
+      // it because it never shared A's page id, unlike the old path-keyed
+      // `removeRevisionsByPath` which would have matched by string alone.
+      const pageB = await Page.createPage(path, 'body B', user, {});
+      const revisionsForB = await Revision.find({ page: pageB._id }).lean();
+      expect(revisionsForB).toHaveLength(1);
+      expect(revisionsForB[0].body).toBe('body B');
+    });
+  });
 });

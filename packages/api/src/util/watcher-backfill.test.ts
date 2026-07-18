@@ -48,8 +48,10 @@ describe('runWatcherBackfill', () => {
    */
   const seedPage = async (path: string, creator: mongoose.Types.ObjectId, commentAuthor: mongoose.Types.ObjectId, revisionAuthor: mongoose.Types.ObjectId) => {
     const page = await Page.create({ path, creator });
-    // revision author is matched by path (Revision.findAuthorsByPage)
-    await Revision.create({ path, body: 'r', format: 'markdown', author: revisionAuthor });
+    // revision author is matched by page id (DC-5: Revision.findAuthorsByPage
+    // now queries `{ page: page._id }` — a real revision always carries this
+    // via `prepareRevision`, so the raw fixture insert below sets it too).
+    await Revision.create({ path, body: 'r', format: 'markdown', author: revisionAuthor, page: page._id });
     // comment author is matched by page id (Comment.findCreatorsByPage)
     await Comment.create({ page: page._id, creator: commentAuthor, comment: 'hi' });
     await Watcher.deleteMany({ target: page._id }); // ensure pre-watcher state
