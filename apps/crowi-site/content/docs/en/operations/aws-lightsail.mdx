@@ -144,7 +144,7 @@ services:
       - ./data/mongodb:/data/db        # persist via bind mount
 
   redis:
-    image: redis:7
+    image: redis:8.8.0
     restart: unless-stopped
 
   elasticsearch:

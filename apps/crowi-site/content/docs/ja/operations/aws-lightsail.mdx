@@ -137,7 +137,7 @@ services:
       - ./data/mongodb:/data/db        # bind mount で永続化
 
   redis:
-    image: redis:7
+    image: redis:8.8.0
     restart: unless-stopped
 
   elasticsearch:

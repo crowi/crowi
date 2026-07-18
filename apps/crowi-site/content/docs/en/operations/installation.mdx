@@ -23,7 +23,7 @@ you need the following.
 | Node.js | 24.x | Runtime for the API / web |
 | pnpm | 10.34.3 (via corepack) | Package manager (`packageManager` is `pnpm@10.34.3`) |
 | MongoDB | 7+ (the dev image is `mongo:8`) | Persists wiki data |
-| Redis | 7+ | Sessions and realtime-collab pub/sub |
+| Redis | `>=8.0 <9` (the dev image is `redis:8.8.0`) | Coordination: collab/presence/notifications pub/sub, the editor-cap counter, Config sync, rate limiting, LRU |
 | Elasticsearch | Optional | Full-text search backend (plugin-driven) |
 | Docker / Docker Compose | Optional | Used to run local infrastructure |
 
@@ -90,7 +90,7 @@ middleware**, not the application itself.
 | Service | Image | Host port |
 | ------- | ----- | --------- |
 | `mongodb` | `mongo:8` | `27017` |
-| `redis` | `redis:7` | `6379` |
+| `redis` | `redis:8.8.0` | `6379` |
 | `elasticsearch` | Custom image (9.4.0 + `analysis-kuromoji`) | `9200` |
 | `plantuml` | `plantuml/plantuml-server` | `8080` |
 
