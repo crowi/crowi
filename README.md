@@ -135,7 +135,7 @@ pnpm dev:site      # crowi.wiki LP + docs (port 4303)
 | Variable | Purpose |
 | --- | --- |
 | `MONGO_URI` | MongoDB connection string |
-| `REDIS_URL` | Sessions + socket.io adapter (use `rediss://` for TLS) |
+| `REDIS_URL` | Coordination for realtime-collab pub/sub, the editor-cap counter, presence, notification invalidation, Config sync, rate limiting, and LRU (use `rediss://` for TLS) |
 | `PASSWORD_SEED` | Legacy password hashing seed (still used for fallback verification) |
 | `CLIENT_URL` | CORS allowlist origin in production (defaults allow localhost in dev) |
 | `CROWI_ENCRYPTION_KEY` | Base64-encoded 32-byte AES-256 key for sensitive Config encryption. Generate via `openssl rand -base64 32` or `pnpm --filter @crowi/api crypto:gen-key`. Strongly recommended to set; missing key falls back to plaintext (legacy behaviour) with a startup warning. |
