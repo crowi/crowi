@@ -2,8 +2,8 @@ import { Types } from 'mongoose';
 import type { EmbedInput, EmbedRenderer, PluginLogger, RenderContext, RenderResult } from '@crowi/plugin-api';
 import { crowi } from 'src/test/setup';
 import type { PluginRenderCacheModel } from 'src/models/plugin-render-cache';
-import { DEFAULT_FRESH_TTL_SEC, DEFAULT_STALE_MULTIPLIER, RENDER_ERROR_TTL, cachedRender, scopeForPlugin } from './index';
-import { MongoCacheStorage } from './mongodb-cache';
+import { DEFAULT_FRESH_TTL_SEC, DEFAULT_STALE_MULTIPLIER, RENDER_ERROR_TTL, STALE_IF_ERROR_MAX_AGE_SEC, cachedRender, scopeForPlugin } from './index';
+import { MongoCacheStorage, SINGLE_ENTRY_REJECT_BYTES } from './mongodb-cache';
 import { createAuthContextStub } from '../registry';
 
 const silentLog: PluginLogger = {
@@ -45,17 +45,34 @@ const input = (overrides: Partial<EmbedInput> = {}): EmbedInput => ({
   pageId: overrides.pageId ?? new Types.ObjectId().toHexString(),
 });
 
+/**
+ * `renderer.calls` increments the instant the mock `render()` resolves,
+ * but the background job's `storage.setOrReject(...)` write (real Mongo
+ * I/O) lands a few event-loop turns later — polling on call count alone
+ * isn't enough for assertions against the CACHED DOC after a background
+ * revalidation. Poll a predicate over any async value until it's
+ * satisfied, with a safety bound — mirrors `backlink.test.ts`'s
+ * `waitForBacklinks`.
+ */
+const waitFor = async <T>(check: () => Promise<T>, predicate: (value: T) => boolean, maxTicks = 50): Promise<T> => {
+  let value = await check();
+  for (let i = 0; i < maxTicks && !predicate(value); i += 1) {
+    await new Promise((resolve) => setImmediate(resolve));
+    value = await check();
+  }
+  return value;
+};
+
 // The background re-render is a fire-and-forget chain whose internal awaits
 // (real Mongo I/O) produce a variable number of microtasks / event-loop turns
 // before `renderer.calls` increments. A fixed `setImmediate` tick count was
 // flaky under parallel load (the I/O round-trip can spill past two ticks).
-// Poll by yielding the event loop until the expected call count appears, with
-// a safety bound — mirrors `backlink.test.ts`'s `waitForBacklinks`.
 const waitForCalls = async (renderer: { calls: number }, expectedCalls: number, maxTicks = 50): Promise<void> => {
-  for (let i = 0; i < maxTicks; i += 1) {
-    if (renderer.calls === expectedCalls) return;
-    await new Promise((resolve) => setImmediate(resolve));
-  }
+  await waitFor(
+    async () => renderer.calls,
+    (calls) => calls === expectedCalls,
+    maxTicks,
+  );
 };
 
 describe('cachedRender stale-while-revalidate', () => {
@@ -168,6 +185,7 @@ describe('error caching', () => {
     { code: 'network' as const, expectedTtlSec: RENDER_ERROR_TTL.network },
     { code: 'timeout' as const, expectedTtlSec: RENDER_ERROR_TTL.timeout },
     { code: 'unknown' as const, expectedTtlSec: RENDER_ERROR_TTL.unknown },
+    { code: 'blocked' as const, expectedTtlSec: RENDER_ERROR_TTL.blocked },
   ];
 
   it.each(errCases)('caches %s errors with the per-code default TTL', async ({ code, expectedTtlSec }) => {
@@ -240,5 +258,231 @@ describe('default TTLs', () => {
 
   it('DEFAULT_STALE_MULTIPLIER is exported and >= 1', () => {
     expect(DEFAULT_STALE_MULTIPLIER).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe('errorHtml (RenderResult.errorHtml)', () => {
+  beforeEach(async () => {
+    const PluginRenderCache = crowi.model('PluginRenderCache') as unknown as PluginRenderCacheModel;
+    await PluginRenderCache.deleteMany({}).exec();
+  });
+
+  it('shows errorHtml instead of the generic placeholder when the plugin sets it alongside error', async () => {
+    const storage = buildStorage();
+    const ctx = buildCtx(storage, PLUGIN);
+    const renderer = buildRenderer({ html: '', errorHtml: '<a href="https://example.test">broken link</a>', error: { code: 'not_found' } });
+
+    const result = await cachedRender(storage, PLUGIN, renderer, input(), ctx);
+    expect(result.html).toBe('<a href="https://example.test">broken link</a>');
+    expect(result.html).not.toContain('crowi-embed-placeholder-error');
+  });
+
+  it('falls back to the generic placeholder when errorHtml is absent (plantuml-style regression, AC-1)', async () => {
+    const storage = buildStorage();
+    const ctx = buildCtx(storage, PLUGIN);
+    const renderer = buildRenderer({ html: '', error: { code: 'not_found' } });
+
+    const result = await cachedRender(storage, PLUGIN, renderer, input(), ctx);
+    expect(result.html).toContain('crowi-embed-placeholder-error-not_found');
+  });
+
+  it('an oversized errorHtml is rejected by the entry size limit like any other cache entry (no special-casing)', async () => {
+    const storage = buildStorage();
+    const ctx = buildCtx(storage, PLUGIN);
+    const oversizedErrorHtml = 'x'.repeat(SINGLE_ENTRY_REJECT_BYTES + 1);
+    const renderer = buildRenderer({ html: '', errorHtml: oversizedErrorHtml, error: { code: 'not_found' } });
+
+    const result = await cachedRender(storage, PLUGIN, renderer, input(), ctx);
+    expect(result.html).toContain('crowi-embed-placeholder-error-size-limit');
+  });
+});
+
+describe('stale-if-error (last-good retention)', () => {
+  beforeEach(async () => {
+    const PluginRenderCache = crowi.model('PluginRenderCache') as unknown as PluginRenderCacheModel;
+    await PluginRenderCache.deleteMany({}).exec();
+  });
+
+  const findDoc = async (pageId: string) => {
+    const PluginRenderCache = crowi.model('PluginRenderCache') as unknown as PluginRenderCacheModel;
+    return PluginRenderCache.findOne({ pluginName: PLUGIN, pageId: new Types.ObjectId(pageId) })
+      .lean()
+      .exec();
+  };
+
+  it('(a) keeps the last-good html when a BACKGROUND revalidation fails, within STALE_IF_ERROR_MAX_AGE_SEC', async () => {
+    const storage = buildStorage();
+    const ctx = buildCtx(storage, PLUGIN);
+    const renderer = buildRenderer({ html: '<good/>', ttlSec: 1 });
+    const i = input();
+
+    await cachedRender(storage, PLUGIN, renderer, i, ctx);
+    const before = await findDoc(i.pageId);
+    expect(before?.lastGoodFetchedAt).toBeDefined();
+
+    // Push into the stale-within-window bucket — same shape as the plain
+    // stale-while-revalidate background test above.
+    const PluginRenderCache = crowi.model('PluginRenderCache') as unknown as PluginRenderCacheModel;
+    const past = new Date(Date.now() - 2_000);
+    await PluginRenderCache.updateOne(
+      { pluginName: PLUGIN, pageId: new Types.ObjectId(i.pageId) },
+      { $set: { expiresAt: past, fetchedAt: new Date(past.getTime() - 1_000) } },
+    ).exec();
+
+    (renderer as { render: jest.Mock }).render.mockImplementationOnce(async () => {
+      (renderer as unknown as { calls: number }).calls++;
+      return { html: '', error: { code: 'network' } };
+    });
+
+    const result = await cachedRender(storage, PLUGIN, renderer, i, ctx);
+    // Immediate response is still the pre-failure cached entry.
+    expect(result.freshness).toBe('stale');
+    expect(result.html).toBe('<good/>');
+
+    await waitForCalls(renderer, 2);
+    // `renderer.calls` increments the instant render() resolves, but the
+    // background job's storage write lands a few ticks later — wait for
+    // the doc to actually reflect the new error before asserting on it.
+    const after = await waitFor(
+      () => findDoc(i.pageId),
+      (doc) => (doc?.result as RenderResult | undefined)?.error !== undefined,
+    );
+    expect(after?.html).toBe('<good/>'); // kept, NOT degraded to a placeholder
+    expect((after?.result as RenderResult).error?.code).toBe('network'); // new error recorded for telemetry/retry cadence
+    expect(after?.lastGoodFetchedAt?.getTime()).toBe(before!.lastGoodFetchedAt!.getTime()); // carried forward unchanged
+  });
+
+  it('(b) keeps the last-good html when a BLOCKING revalidation fails, within STALE_IF_ERROR_MAX_AGE_SEC', async () => {
+    const storage = buildStorage();
+    const ctx = buildCtx(storage, PLUGIN);
+    const renderer = buildRenderer({ html: '<good/>', ttlSec: 1 });
+    const i = input();
+
+    await cachedRender(storage, PLUGIN, renderer, i, ctx);
+    const before = await findDoc(i.pageId);
+    expect(before?.lastGoodFetchedAt).toBeDefined();
+
+    // Past the stale window entirely (ttlSec=1 -> window=4s) -> blocking path.
+    const PluginRenderCache = crowi.model('PluginRenderCache') as unknown as PluginRenderCacheModel;
+    const past = new Date(Date.now() - 10_000);
+    await PluginRenderCache.updateOne(
+      { pluginName: PLUGIN, pageId: new Types.ObjectId(i.pageId) },
+      { $set: { expiresAt: past, fetchedAt: new Date(past.getTime() - 1_000) } },
+    ).exec();
+
+    (renderer as { render: jest.Mock }).render.mockImplementationOnce(async () => {
+      (renderer as unknown as { calls: number }).calls++;
+      return { html: '', error: { code: 'network' } };
+    });
+
+    const result = await cachedRender(storage, PLUGIN, renderer, i, ctx);
+    expect(result.html).toBe('<good/>'); // kept even though THIS render() call failed
+    expect(result.result.error?.code).toBe('network');
+
+    const after = await findDoc(i.pageId);
+    expect(after?.html).toBe('<good/>');
+    expect(after?.lastGoodFetchedAt?.getTime()).toBe(before!.lastGoodFetchedAt!.getTime());
+  });
+
+  it('(c) degrades to the placeholder once the last-good exceeds STALE_IF_ERROR_MAX_AGE_SEC (BLOCKING)', async () => {
+    const storage = buildStorage();
+    const ctx = buildCtx(storage, PLUGIN);
+    const renderer = buildRenderer({ html: '<good/>', ttlSec: 1 });
+    const i = input();
+
+    await cachedRender(storage, PLUGIN, renderer, i, ctx);
+
+    const PluginRenderCache = crowi.model('PluginRenderCache') as unknown as PluginRenderCacheModel;
+    const ancientLastGood = new Date(Date.now() - (STALE_IF_ERROR_MAX_AGE_SEC + 3_600) * 1000); // just over 24h ago
+    const past = new Date(Date.now() - 10_000); // beyond the (small) stale window -> blocking
+    await PluginRenderCache.updateOne(
+      { pluginName: PLUGIN, pageId: new Types.ObjectId(i.pageId) },
+      { $set: { expiresAt: past, fetchedAt: new Date(past.getTime() - 1_000), lastGoodFetchedAt: ancientLastGood } },
+    ).exec();
+
+    (renderer as { render: jest.Mock }).render.mockImplementationOnce(async () => {
+      (renderer as unknown as { calls: number }).calls++;
+      return { html: '', error: { code: 'network' } };
+    });
+
+    const result = await cachedRender(storage, PLUGIN, renderer, i, ctx);
+    expect(result.html).toContain('crowi-embed-placeholder-error-network'); // degraded — no more keeping
+
+    const after = await findDoc(i.pageId);
+    expect(after?.lastGoodFetchedAt).toBeUndefined();
+  });
+
+  it('(d) degrades to the placeholder once the last-good exceeds STALE_IF_ERROR_MAX_AGE_SEC (BACKGROUND)', async () => {
+    const storage = buildStorage();
+    const ctx = buildCtx(storage, PLUGIN);
+    const renderer = buildRenderer({ html: '<good/>', ttlSec: 1 });
+    const i = input();
+
+    await cachedRender(storage, PLUGIN, renderer, i, ctx);
+
+    const PluginRenderCache = crowi.model('PluginRenderCache') as unknown as PluginRenderCacheModel;
+    const ancientLastGood = new Date(Date.now() - (STALE_IF_ERROR_MAX_AGE_SEC + 3_600) * 1000);
+    const past = new Date(Date.now() - 2_000); // within the stale window (4s) -> background
+    await PluginRenderCache.updateOne(
+      { pluginName: PLUGIN, pageId: new Types.ObjectId(i.pageId) },
+      { $set: { expiresAt: past, fetchedAt: new Date(past.getTime() - 1_000), lastGoodFetchedAt: ancientLastGood } },
+    ).exec();
+
+    (renderer as { render: jest.Mock }).render.mockImplementationOnce(async () => {
+      (renderer as unknown as { calls: number }).calls++;
+      return { html: '', error: { code: 'network' } };
+    });
+
+    const result = await cachedRender(storage, PLUGIN, renderer, i, ctx);
+    // The immediate response still serves the (soon-to-be-degraded) cached html.
+    expect(result.freshness).toBe('stale');
+    expect(result.html).toBe('<good/>');
+
+    await waitForCalls(renderer, 2);
+    const after = await waitFor(
+      () => findDoc(i.pageId),
+      (doc) => doc?.html !== '<good/>',
+    );
+    expect(after?.html).toContain('crowi-embed-placeholder-error-network');
+    expect(after?.lastGoodFetchedAt).toBeUndefined();
+  });
+
+  it('(e) no prior success at all (miss) degrades immediately — no lastGoodFetchedAt is ever written', async () => {
+    const storage = buildStorage();
+    const ctx = buildCtx(storage, PLUGIN);
+    const renderer = buildRenderer({ html: '', error: { code: 'network' } });
+    const i = input();
+
+    const result = await cachedRender(storage, PLUGIN, renderer, i, ctx);
+    expect(result.html).toContain('crowi-embed-placeholder-error-network');
+
+    const doc = await findDoc(i.pageId);
+    expect(doc?.lastGoodFetchedAt).toBeUndefined();
+  });
+
+  it('treats a pre-migration success entry (no lastGoodFetchedAt on disk) as good as its own fetchedAt — no backfill needed', async () => {
+    const storage = buildStorage();
+    const ctx = buildCtx(storage, PLUGIN);
+    const renderer = buildRenderer({ html: '', error: { code: 'network' } });
+    renderer.computeEmbedKey = () => 'legacy-key';
+    const i = input();
+
+    // A doc written before `lastGoodFetchedAt` existed: a success entry
+    // with the field entirely absent, expired well beyond any plausible
+    // stale window (forcing the blocking re-render path).
+    const PluginRenderCache = crowi.model('PluginRenderCache') as unknown as PluginRenderCacheModel;
+    await PluginRenderCache.create({
+      pluginName: PLUGIN,
+      pluginCacheVersion: renderer.cacheVersion,
+      pageId: new Types.ObjectId(i.pageId),
+      embedKey: 'legacy-key',
+      html: '<legacy-good/>',
+      fetchedAt: new Date(Date.now() - 100_000),
+      expiresAt: new Date(Date.now() - 90_000),
+      result: { html: '<legacy-good/>' },
+    });
+
+    const result = await cachedRender(storage, PLUGIN, renderer, i, ctx);
+    expect(result.html).toBe('<legacy-good/>'); // kept via the fetchedAt fallback, not degraded
   });
 });

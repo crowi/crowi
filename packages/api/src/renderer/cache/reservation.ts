@@ -103,6 +103,7 @@ const ERROR_LABELS: Record<RenderError['code'], string> = {
   network: 'Embed is temporarily unavailable.',
   timeout: 'Embed render timed out.',
   unknown: 'Embed could not be rendered.',
+  blocked: 'Embed source is not allowed.',
 };
 
 function clampDimension(n: number): number {
