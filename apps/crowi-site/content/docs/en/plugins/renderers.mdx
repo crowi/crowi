@@ -30,19 +30,19 @@ registered **before** plugins. Renderer plugins append on top of it.
 
 ## First-party renderer plugins
 
-The Crowi repository ships the following four renderer plugins.
+The Crowi repository ships the following five renderer plugins.
 
 | Plugin | Role | External dependency | Status |
 | ------ | ---- | ------------------- | ------ |
 | `@crowi/plugin-renderer-emoji` | Converts shortcodes like `:smile:` to Unicode emoji | None | Landed (Phase 6) |
 | `@crowi/plugin-renderer-katex` | Renders `$inline$` / `$$display$$` LaTeX math to HTML server-side via KaTeX | None | Landed (Phase 6) |
 | `@crowi/plugin-renderer-plantuml` | Renders ` ```plantuml ` blocks via a PlantUML server and embeds SVG/PNG | PlantUML server | Landed (Phase 6) |
+| `@crowi/plugin-renderer-mermaid` | Renders ` ```mermaid ` blocks server-side (browserless) and embeds a sanitized SVG | None (self-contained, server-side) | Landed (Phase 6.1) |
 | `@crowi/plugin-renderer-crowi-legacy` | Reproduces Crowi v1 syntax quirks (e.g. `##hoge` heading without a space) | None | Landed (Phase 6), default-off |
 
 > **Tip**: `@crowi/plugin-renderer-github-embed` (GitHub PR / Issue
-> cards) and `@crowi/plugin-renderer-mermaid` (Mermaid diagrams) are
-> planned in RFC-0002, but they are in progress as Phase 7 / Phase 6.1
-> respectively and have not shipped yet.
+> cards) is planned in RFC-0002, but it is in progress as Phase 7 and
+> has not shipped yet.
 
 ### emoji
 
@@ -73,6 +73,50 @@ development. The server URL is changeable via the admin config
 (`serverUrl`), and the output format (`svg` / `png`) is selectable.
 Render results are cached with a 1-hour TTL, and failures such as
 network errors are cached as errors for 5 minutes.
+
+### Mermaid
+
+`@crowi/plugin-renderer-mermaid` renders ` ```mermaid ` fenced code
+blocks entirely server-side. Mermaid's JS never runs in the browser —
+the page only ever receives the final, sanitized SVG embedded as a
+base64-encoded `<img>`. No operator configuration is required — just
+enable the plugin (there is nothing to set in the admin UI). It
+supports the main diagram types Mermaid provides: flowchart, sequence,
+class, state, ER, journey, pie, and git-graph.
+
+**Security**: diagrams are rendered not in the browser but inside a
+`fork()`ed, isolated child process, by a strictly-configured Mermaid
+instance that never loads external resources. The generated SVG is run
+through an independent, DOM-based sanitizer
+(`@crowi/plugin-renderer-svg-sanitize`, shared with PlantUML) that
+strips `script` tags, event handlers, `javascript:` URLs, and similar
+constructs before being embedded in an `<img>` as a base64 `data:`
+URL. Diagram directives that override configuration and syntax that
+references external resources are rejected at the input stage, scanning
+the entire source. The child process itself also has a deny-by-default
+boundary that removes/blocks network-capable APIs (`fetch` /
+`XMLHttpRequest` / `node:net` and similar), preventing outbound reach
+even at a layer below sanitization.
+
+**Theme**: diagrams are always rendered in a single (light) theme. In
+dark mode, the area surrounding the diagram is shown as a neutral
+(white) surface.
+
+**Limits**: diagram source is capped at 20KB and the generated SVG at
+60KB. Up to 50 diagrams can be processed per page save or preview
+request. The server renders up to 4 diagrams concurrently overall (up
+to 2 per user at a time), and the live editor preview is rate-limited
+to 600 requests/60s per user. A diagram with a syntax error shows a
+fixed error placeholder. A transient failure (e.g. server overload) is
+retried automatically the next time the page is opened.
+
+**Effect on existing pages**: existing ` ```mermaid ` fences keep
+displaying as plain code blocks until the author explicitly re-saves
+the page. Enabling the plugin does not bulk re-render past pages.
+
+> **Operators**: in addition to the child-process network boundary
+> above, consider container/OS-level egress control (e.g. network
+> namespace isolation) as additional defense-in-depth.
 
 ### crowi-legacy
 
