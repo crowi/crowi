@@ -9,7 +9,7 @@ const silentLogger: PluginLogger = {
   error: () => undefined,
 };
 
-const stubCtx: RenderContext = { mode: 'view', log: silentLogger };
+const stubCtx: RenderContext = { mode: 'view', log: silentLogger, actor: { kind: 'user', userId: 'u-test' } };
 
 describe('@crowi/plugin-renderer-link-card plugin contract', () => {
   it('exports a CrowiPlugin with the expected name + version', () => {
