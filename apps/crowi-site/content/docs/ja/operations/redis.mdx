@@ -1,0 +1,314 @@
+---
+title: Redis 運用ポリシー
+description: Crowi 2.0 で Redis を使うすべての機能(共同編集・プレゼンス・通知・設定同期・rate limiting・LRU など)に適用されるライセンス・エンジンサポート・イメージ pin・ACL・セキュリティ・接続数の方針
+---
+
+## Redis のライセンスとエンジンサポート方針
+
+> このセクションはリアルタイム共同編集に固有のものではありません —
+> このコードベースが Redis と通信する**全 8 経路**(共同編集 pub/sub・
+> 編集者上限カウンタ・プレゼンス・通知 invalidation・設定同期・rate
+> limiting・LRU (最近見たページ)・boot 接続そのもの)に適用される、
+> Redis 全体のライセンス・エンジンサポート・セキュリティ方針です。
+> [リアルタイム共同編集の運用](./realtime-collab) ではなくこの専用
+> ページに置いているのは、共同編集専用の内容ではなく Redis を使う
+> すべての機能に適用されるためです。
+
+### ライセンスの事実とプロジェクト方針
+
+- **確立事実**: Redis Open Source 8.0 以降、Redis プロジェクトは
+  RSALv2・SSPLv1・AGPLv3 の3つのライセンスから選べる選択制になって
+  います。このうち OSI 承認の open source なのは AGPLv3 のみです。
+- **確立事実**: Crowi は Redis サーバー本体を一切バンドルしません。
+  `@crowi/api`・`@crowi/web` はいずれも TCP 経由で Redis と通信する
+  だけで、npm パッケージにも api/web の Docker イメージ
+  (`packages/api/Dockerfile`・`packages/web/Dockerfile`) にも Redis
+  バイナリは含まれません。
+- **プロジェクト方針**: Crowi がテスト対象とするリファレンス構成は
+  未改変のアップストリームイメージであり、その構成を3択のうち唯一
+  OSI open source である AGPLv3 のもとで評価しています。(AGPLv3
+  §13 のネットワーク越しソース開示義務は、ライセンシー自身が対象
+  プログラムを改変していることが発火の前提条件です。Crowi の
+  リファレンス構成は Redis を改変しないため、この構図には該当
+  しません。)
+- **プロジェクト方針**: `docker-compose.yml` や quickstart docs の
+  `image:` はアップストリームイメージを参照するだけです。Crowi が
+  Redis サーバー自体を改変・サブライセンス・再配布することはあり
+  ません — compose ファイルでアップストリームイメージを参照する
+  ことは、実際にイメージレイヤー・アーカイブ・バイナリをコピーする
+  「バンドル/配布」とは別物です。
+- **プロジェクト方針**: テスト済みの正確な patch バージョンと digest
+  を記録し、`redis:7` のような moving tag は再現性が必要な運用者向け
+  手順には使いません — 詳細は後述の「イメージ pin 方針」参照。本稿
+  執筆時点で Docker Hub の `redis:7` タグはすでに RSALv2/SSPLv1
+  選択制の Redis 7.4.x 系に解決されており、BSD-3-Clause ライセンス
+  だった Redis 7.2 系ではありません — moving tag が通常のバージョン
+  ドリフトとは別に、運用者が選んだ覚えのないライセンス境界を静かに
+  越えさせうる具体例です。
+- **プロジェクト方針**: Valkey は、Redis 8 自身が満たしたのと同じ
+  基準をクリアするまでは BSD-3-Clause の best-effort な代替として
+  扱います (詳細は後述の「Valkey」参照)。
+- **運用者向け notice**: Redis 本体、および Redis 互換のマネージド
+  サービス (ElastiCache・MemoryDB・Upstash 等) はいずれも独自の
+  ライセンス/利用規約を持つ別製品です。それらの選定と遵守は Crowi
+  ではなく運用組織の責任です。
+- **非法的助言のフレーミング**: このセクションは Crowi の技術
+  アーキテクチャとメンテナ方針の記録であり、法的助言ではありません。
+  執筆時点の Crowi の理解を反映したものであり、専門家による法的
+  助言の代わりにはなりません。Redis の再配布・改変・バンドル、
+  またはマネージドサービスとしての提供を検討する場合は専門家に
+  相談してください — Crowi 自身の利用パターン (未改変のアップ
+  ストリームサーバーとネットワーク越しに通信するだけ) はこの問いに
+  答える必要がありませんが、皆さんのケースは答える必要があるかも
+  しれません。
+
+> **スコープに関する注記であり、法的結論ではありません**: Crowi
+> 自身のデプロイパターン — 未改変の Redis サーバーを Crowi の裏で
+> ネットワーク越しに動かすだけ — は、RSALv2 の「third-party へ
+> サービスとして提供する」制限が想定していると理解されている商用
+> データベース・アズ・ア・サービスの提供とは異なり、素朴な自己
+> ホスト利用に見えます。ただしこの解釈は確定した法的結論ではない
+> ため、ここでは事実としてではなく Crowi の作業上の前提として
+> 記載しています。
+
+### Valkey
+
+Valkey は Redis の BSD-3-Clause フォークですが、現時点では**正式
+サポートはしておらず** best-effort 扱いです。Crowi は共同編集
+pub/sub・編集者上限カウンタ・プレゼンス・通知 invalidation・設定
+同期・rate limiting・LRU・boot 接続の8経路をカバーする実 Redis 8
+互換性 smoke テスト一式を、CI 上で Valkey に対しては実行していません。
+この8経路の smoke テスト一式が Valkey に対しても CI で継続的に通る
+ようになった時点で — Redis 8 自身が満たしたのと同じ基準で — 正式
+サポートへ昇格します。
+
+### イメージ pin 方針
+
+- ドキュメント上の互換範囲は **`>=8.0 <9`** です。これはテスト・
+  サポート対象のバージョン範囲を示す運用者向けの明示的な方針で
+  あり、ランタイムで強制されるものではありません。Crowi はコード上
+  で Redis 7 系の接続を拒否しません。
+- `docker-compose.yml` と CI は、レビュー済みの1つの patch タグを
+  digest 付きで pin しています:
+  `redis:8.8.0@sha256:234c902a2db49461a129e2d4aeff85b28cf20187ed274a67f6e50995fa713c7b`。
+  `redis:7`・`redis:8`・`redis:latest` のような moving tag は使い
+  ません。
+- 実際に CI/compose が継続的に exercise するのは、この pin された
+  1つのパッチタグのみです。`>=8.0 <9` はサポート対象として明示して
+  いる範囲であり、その範囲内の全パッチ/マイナーバージョンを個別に
+  検証したという主張ではありません。
+
+### 複数レプリカでの移行とロールバック
+
+- **標準手順は協調的な drain/restart です**。全レプリカを揃えて
+  停止し、全レプリカの `REDIS_URL` を新しいエンドポイントへ切り替え
+  てから、揃えて再起動します。Redis の pub/sub は分散排他制御を
+  提供しないため、**レプリカが異なる Redis サーバーを向いたまま
+  同時稼働する構成 (「split-brain」) は明示的に禁止**します — この
+  構成は派手に失敗するのではなく、レプリカ間の fan-out (共同編集・
+  プレゼンス・通知・設定同期) が2つの断絶したグループへ静かに分裂
+  するだけだからです。
+- **ベンダーサポートのオンライン昇格** (マネージドなレプリカ昇格や
+  blue-green 切替など) は、**お使いの Redis ディストリビューション
+  が実際に 7→8 のトポロジ変更をその方法でサポートすると確認できた
+  場合にのみ**利用してください — Crowi 自身のツールはこれを検証
+  しません。
+- **RDB のクロスエンジン可搬性は保証しません**。Redis が書き出した
+  RDB スナップショットを Valkey が読み込める (またはその逆) という
+  前提を置かないでください。
+- **ロールバック時は再接続前に stale なコーディネーション state を
+  クリアします**。編集者上限カウンタのキー
+  (`crowi:collab:editors:<pageId>`、24 時間 TTL) やプレゼンスの
+  ハッシュ (`crowi:presence:viewers:<pageId>` /
+  `crowi:presence:editing:<pageId>`) は、切替前のインスタンスに
+  残存することがあります。これをクリアせず全レプリカを再接続すると、
+  stale なソケット ID が新しい接続と混在し、編集者上限カウンタが
+  実際より高い数値を報告して editor が意図せず read-only になったり、
+  プレゼンスに短命な幽霊 viewer が表示されたりし得ます。標準手順:
+  1. 全レプリカが旧エンドポイントから drain 済み (既存 WebSocket
+     接続が閉じ、新規接続が旧エンドポイントを向いていない) である
+     ことを確認する。
+  2. ロールバック先を**新規に立てた、または `crowi:` prefix の
+     キーをクリアした**空の Redis インスタンスにする。
+  3. 切替後、編集者上限カウンタの `peek()` とプレゼンスの viewer
+     リストが実際の接続数と一致することを確認してから、運用
+     トラフィックを戻す。
+
+  8経路のいずれも Redis にページ本文を保持しません — `Page.yjsState`
+  を含むページ本文の真実の源は MongoDB のみです。したがって、これら
+  Redis インスタンスのコールドスタートはページ本文のデータ消失を
+  意味しません — [障害時の挙動](./realtime-collab#障害時の挙動-failure-modes) 参照。
+  ただし、各消費経路が Redis 上に持つ状態が同じように「消えても
+  問題ない」わけではありません: 共同編集 pub/sub・プレゼンス・通知
+  invalidation・設定同期はレプリカ間連携専用でコールドスタートで
+  失うものはありません。編集者上限カウンタと rate limiting は
+  意図的に fail-open / インメモリ window へのフォールバックとして
+  リセットされます。LRU (最近見たページ) だけはフォールバックが
+  なく、コールドスタートでそのリストを完全に失います — 消費経路
+  ごとの内訳は[シングルインスタンスデプロイ](./realtime-collab#シングルインスタンスデプロイ)
+  参照。
+
+### 見直しトリガー (re-review triggers)
+
+以下のいずれかが発生した場合はこの方針を見直してください (詳細な
+内部設計レビューを6カテゴリに要約したものです):
+
+1. Crowi が Redis イメージ自体を fork・改変・ミラー・バンドルする
+   ようになった場合。
+2. Crowi が RESP をエンドユーザーへ直接公開する、または Redis 自体
+   の機能をサービスとして販売・提供するようになった場合。
+3. Redis が別プロセス/別サービスのままではなく、単一プロセス統合や
+   共有メモリなど、プロセス境界を越える結合に変わった場合。
+4. Redis 自体のライセンス・公式イメージの内容・バージョンポリシー
+   が変わった場合。
+5. クライアントライブラリ (`node-redis`・`ioredis`・
+   `@hocuspocus/extension-redis` 等) のライセンスが変わった場合。
+6. Valkey を正式サポートへ格上げする、または現在使っていない Redis
+   モジュールを新たに使うようになった場合。
+
+### セキュリティ運用ガイド
+
+> このガイドは執筆時点の実コードとアップストリームライブラリの
+> ソースを精査して導いたものです。**CI で検証済みの契約ではあり
+> ません** (詳細は後述の「CI が検証していること/していないこと」
+> 参照) — `redis`・`ioredis`・`@hocuspocus/extension-redis` を更新
+> した際は、発行されるコマンドがバージョン間で変わりうるため、
+> 再確認してください。
+
+**Transport / 認証情報**: `rediss://` と `REDIS_REJECT_UNAUTHORIZED`
+のデフォルト (証明書検証 有効) を維持してください。検証無効化は、
+明示的に制御された開発環境や private CA のシナリオに限定してくだ
+さい。credential は環境変数か secret manager に保持し、Config の
+平文フィールドやログには書かないでください。
+
+**ネットワーク露出**: Redis は Crowi と内部インフラからのみ到達
+可能にしてください。認証なしで公開ネットワークへ露出させないで
+ください。
+
+**ACL コマンド/キー/チャンネルの手引き**: 制限付き ACL ユーザーを
+作る場合、以下のすべてを許可しないと、「未対応機能」としてのきれい
+な失敗ではなく、共同編集の保存などが permission エラーで失敗し
+始めます:
+
+| 消費経路 | コマンド | キー / チャンネル |
+| --- | --- | --- |
+| 共同編集 pub/sub | `SUBSCRIBE`, `UNSUBSCRIBE`, `PUBLISH` | `crowi:collab:<documentName>` — ドキュメントごとの単一チャンネル。Y.Doc の同期と awareness の更新はいずれもこの1チャンネル上に多重化される (`:awareness:` / `:y-update:` のような個別サブキーはない) |
+| 編集者上限カウンタ | `SADD`, `SCARD`, `SREM`, `EXPIRE` | `crowi:collab:editors:<pageId>` |
+| プレゼンス | `HSET`, `HGET`, `HGETALL`, `HDEL`, `EXPIRE`, `PUBLISH`, `SUBSCRIBE` | `crowi:presence:viewers:<pageId>`, `crowi:presence:editing:<pageId>`, `crowi:presence:updates`, `crowi:presence:page-updated`, `crowi:presence:comment-changed` |
+| 通知 invalidation | `PUBLISH`, `SUBSCRIBE`, `UNSUBSCRIBE` | `crowi:notifications:user:<userId>` |
+| 設定同期 (Config) | `PUBLISH`, `SUBSCRIBE` | 固定チャンネル `config` |
+| rate limiting | `INCR`, `PEXPIRE` | `crowi:ratelimit:<name>:<userId>:<window>` |
+| LRU (最近見たページ) | `ZREMRANGEBYRANK`, `ZADD`, `ZRANGE`, `MULTI`, `EXEC` (書き込み 2 コマンドは `MULTI`/`EXEC` トランザクション内で発行 — この 2 つを欠く ACL では LRU の書き込みが失敗する) | 運用者が選ぶ namespace キー (固定の `crowi:` prefix なし) |
+| boot 接続 | 接続確立コマンドのみ | なし |
+
+見落としやすい、もう2種類のコマンド発行元があります (いずれも
+Crowi 自身のコードが直接発行するものではありません):
+
+- **クライアントライブラリが接続時に発行するコマンド**: node-redis
+  (共有クライアント `crowi.redis`) は接続のたびに `CLIENT SETINFO`
+  (`LIB-NAME`/`LIB-VER`) を送ります。ioredis (共同編集用の pub/sub
+  専用クライアント2本) は ready check として `INFO` を実行します。
+  ACL でこれらを拒否しても接続が即座に壊れるとは限りません —
+  ioredis は `INFO` が `NOPERM` で失敗した場合、warning を出して
+  ready check をスキップするだけですし、node-redis は permission
+  denied の `CLIENT SETINFO` エラー応答を無視します (`ErrorReply`
+  以外の無関係な失敗のときだけ connect の Promise を reject します)
+  — とはいえ、この「壊れずに生き残る」挙動に頼らず、明示的に許可
+  しておくべきです。
+- **collab extension が内部で実行する upstream の Redlock**:
+  `@hocuspocus/extension-redis` は**共同編集の保存のたびに**
+  `@sesamecare-oss/redlock` 経由でクロスインスタンスの store lock
+  を acquire/release します。これは `EVAL`/`EVALSHA` で
+  Lua スクリプトを実行する形で行われます。Redis の ACL は Lua
+  スクリプト**内部**から呼ばれるコマンドにもユーザー権限を要求する
+  ため、ACL には `EVAL`/`EVALSHA` に加えて、スクリプト内部の
+  `SELECT` (`pcall` 保護)・`EXISTS`・`SET`・`GET`・`DEL` (`pcall`
+  保護) を対象キー `crowi:collab:<documentName>:lock` に対して
+  許可する必要があります。**この行列を欠いた ACL は、Redis が
+  有効な本番環境で共同編集の保存のたびに permission エラーを発生
+  させます** — 保存は Crowi 自身の Mongo compare-and-set チェック
+  ポイントに到達せず、編集はメモリ上に留め置かれたまま (次の
+  debounce サイクルで再試行) 永続化されず、ACL を直すまで恒常的な
+  エラーログ noise が出続けます。**この Redlock 自体は永続化を保証
+  しません** — 複数インスタンス間で store の試行を直列化するだけ
+  です。Redis の store hook (この Redlock を含む) が成功した**後**、
+  Crowi 自身の Mongo compare-and-set チェックポイントが完了する**前**
+  に Crowi プロセスが落ちた場合、保存できていない編集内容はクライア
+  ントが再接続して Yjs が最後に永続化された Mongo の状態から再同期
+  するまで失われる可能性があります。
+
+**ACL のスコープはユーザーであってリスナーではない**: Redis の
+ACL は**ユーザー**にスコープされるのであって、listen している
+ポートにはスコープされません — 「TLS ポートだけを制限する」という
+設計は成立しません。制限付き運用をしたい場合は、すべての listener
+で `default` ユーザーを無効化またはパスワード保護し、Crowi の各
+クライアント (共有 node-redis クライアントと collab の ioredis
+クライアント) には常にスコープ済みの認証情報を明示的に使わせる
+必要があります。`@all` のような広いカテゴリより、key/channel
+パターンで絞った権限を優先してください。
+
+**障害時の意味論**: 編集者上限カウンタは認可/セキュリティ境界では
+なくソフトな可用性制御であり、その fail-open 挙動 (上限を強制する
+代わりに弾かず通す) は意図的な設計判断です — [障害時の挙動](./realtime-collab#障害時の挙動-failure-modes)
+参照。Redis に到達できないことは JWT / WS-token 認証を一切バイパス
+しません — どちらのチェックも Redis に依存していません。rate
+limiting も fail-open です: Redis へのラウンドトリップが例外を
+投げると、リクエストはブロックされず許可されます。そのため rate
+limiter が必要とする ACL の権限が漏れていると、Redis 障害時と
+まったく同じ「サイレントに検知されない無効化」が起きます — ACL を
+絞る際は注意してください。
+
+**key/channel の分離**: 8経路はそれぞれ独立した prefix を使います:
+`crowi:collab` (共同編集 pub/sub、ドキュメント単位のサブキー)、
+`crowi:collab:editors:<pageId>` (編集者上限)、`crowi:presence:*`
+(プレゼンスのハッシュ/チャンネル)、`crowi:notifications:user:<userId>`
+(通知)、固定チャンネル `config` (設定同期 — `crowi:` prefix では
+ない)、`crowi:ratelimit:*` (rate limiting)。LRU だけは固定 prefix
+のない、運用者が選ぶ namespace キーを使います。**worktree や
+クラスタの分離に Redis URL のデータベース番号セグメントを頼らない
+でください** — ここで説明したどの仕組みもデータベース番号には
+依存しておらず、上記の prefix の代わりにはなりません。
+
+**代替エンジンの開示**: 前述の「Valkey」参照 — テスト済みサポート・
+best-effort なプロトコル互換・非サポート構成は3つの異なる階層です。
+Valkey の BSD-3-Clause ライセンスと独立したガバナンスは、それを
+選好する運用者にとって重要ですが、バイナリ/RDB の永続化互換性は
+保証されません — 前述の「複数レプリカでの移行とロールバック」参照。
+
+**サプライチェーン**: (前述の「イメージ pin 方針」のとおり) 明示的
+なイメージファミリ/バージョンを pin し、可能な限りテスト済みの
+digest を自分たちのリリースツールに記録し、汎用的な distro alias
+を互換性の主張の代わりに使わないでください。
+
+**CI が検証していること/していないこと**: CI は8経路すべてに対して
+実 Redis 8 の smoke テストを実行しますが、**制限付き ACL ユーザー
+に対しては実行していません** — 上記の行列はソースコードの精査から
+書き起こしたものであり、自動化された permission-denial テストで
+検証されたものではありません。運用者向けの参考情報として扱い、
+契約とはみなさず、`redis`・`ioredis`・`@hocuspocus/extension-redis`
+をアップグレードした際は再確認してください。
+
+## Redis 接続数の見積もり
+
+api インスタンスあたりの接続数は、インスタンスのライフサイクル段階に
+よって変わります(固定本数ではありません):
+
+- **boot 完了直後** (共同編集セッションがまだ 1 つも開始していない状態):
+  **6 本** — 共有クライアント 1 本 (編集者上限カウンタ・LRU・rate
+  limiting・プレゼンスのハッシュ書き込み・通知 publish がすべて相乗り)
+  + プレゼンス subscriber 2 本 + 通知 subscriber 1 本 + Config
+  publisher/subscriber 2 本。
+- **そのインスタンスで最初の共同編集セッションが開始した後**: **8 本**
+  — 上記 6 本 + `@hocuspocus/extension-redis` が張る専用 `ioredis`
+  pub + sub 接続 2 本 (`lazyConnect: true` のため最初のドキュメント
+  読み込みまでは接続されません)。
+
+例: 10 api レプリカ + 1 web レプリカの構成
+
+- boot 直後: 10 × 6 = 60 接続。
+- 全レプリカで共同編集セッションが 1 回でも開始された後: 10 × 8 = 80 接続。
+- web 側からの直接 Redis 接続: なし (api 経由)。
+
+デフォルトの `maxclients=10000` 内で十分まかなえますが、Redis Cluster や
+ElastiCache の低リソースインスタンス (`cache.t3.micro` / `cache.t4g.micro`
+等) では余裕を持って割り当ててください。

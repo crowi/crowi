@@ -1,0 +1,312 @@
+---
+title: Redis operations policy
+description: License, engine-support, image-pin, ACL, security, and connection-budget policy for every Redis-backed feature in Crowi 2.0 (not specific to realtime collaboration)
+---
+
+## Redis licensing and engine support policy
+
+> This section is not specific to realtime collaborative editing — it
+> is the Redis-wide license, engine-support, and security policy for
+> **all 8 code paths** that talk to Redis in this codebase: collab
+> pub/sub, the editor-cap counter, presence, notification invalidation,
+> Config sync, rate limiting, LRU (recently-viewed pages), and the boot
+> connection itself. It lives on this dedicated page — not the
+> [realtime collaboration operator guide](./realtime-collab) — because
+> it applies to every Redis-backed feature, not just collab.
+
+### License facts and project policy
+
+- **Established fact:** starting with Redis Open Source 8.0, the Redis
+  project offers licensees a choice of three licenses — RSALv2,
+  SSPLv1, or AGPLv3. Of the three, only AGPLv3 is OSI-approved open
+  source.
+- **Established fact:** Crowi never bundles the Redis server.
+  `@crowi/api` and `@crowi/web` talk to Redis exclusively over TCP;
+  neither the npm packages nor the api/web Docker images
+  (`packages/api/Dockerfile`, `packages/web/Dockerfile`) contain a
+  Redis binary.
+- **Project policy:** the reference configuration Crowi tests against
+  is an unmodified upstream Redis image, and the project evaluates
+  that configuration under AGPLv3 — the one option of the three that
+  is OSI open source. (AGPLv3 §13's network-interaction
+  source-disclosure trigger requires the licensee to have modified the
+  covered program; Crowi's reference deployment does not modify Redis,
+  so that trigger does not apply to this usage pattern.)
+- **Project policy:** the `image:` references in `docker-compose.yml`
+  and the quickstart docs point at the upstream image only. Crowi does
+  not modify, sublicense, or redistribute the Redis server — pointing
+  a compose file at an upstream image is not the same thing as
+  bundling or distributing it (that word is reserved for cases that
+  actually copy image layers, archives, or binaries).
+- **Project policy:** the project records the exact tested patch
+  version and digest and does not use moving tags (like `redis:7`) in
+  reproducible operator-facing instructions — see "Image pin policy"
+  below. As of this writing, the `redis:7` tag on Docker Hub already
+  resolves to Redis 7.4.x under the RSALv2/SSPLv1 choice, not the
+  BSD-3-Clause-licensed Redis 7.2 line — a concrete example of how a
+  moving tag can silently carry an operator across a license boundary
+  they never opted into, independent of ordinary version drift.
+- **Project policy:** Valkey is treated as a best-effort BSD-3-Clause
+  alternative until it clears the same bar Redis 8 itself had to clear
+  — see "Valkey" below.
+- **Operator notice:** Redis itself, and any Redis-compatible managed
+  service (ElastiCache, MemoryDB, Upstash, etc.), is a separate
+  product with its own license or terms of service. Selecting it and
+  complying with its terms is the operating organization's
+  responsibility, not Crowi's.
+- **Not legal advice:** this section records Crowi's technical
+  architecture and maintainer policy — it is not legal advice. It
+  reflects Crowi's understanding as of this writing and is not a
+  substitute for qualified legal counsel. If you plan to redistribute,
+  modify, bundle, or offer Redis as a managed service, consult a
+  lawyer; Crowi's own usage pattern (talking to an unmodified upstream
+  server over the network) does not need to answer that question, but
+  yours might.
+
+> **A scoping note, not a legal conclusion:** Crowi's own deployment
+> pattern — running an unmodified Redis server behind Crowi over the
+> network — looks like the straightforward self-hosted use that
+> RSALv2's "provide … to third parties as a service" restriction is
+> understood to target commercial database-as-a-service offerings, not
+> this pattern. That reading is not a settled legal determination,
+> though, so it is stated here as Crowi's working assumption rather
+> than as fact.
+
+### Valkey
+
+Valkey is a BSD-3-Clause fork of Redis and is **not** formally
+supported today — it is treated as best-effort. Crowi does not run its
+real-Redis-8 compatibility smoke suite covering all 8 consumers
+(collab pub/sub, editor-cap counter, presence, notification
+invalidation, Config sync, rate limiting, LRU, and boot connection)
+against Valkey in CI. Valkey graduates to formally supported once that
+same 8-path smoke suite passes continuously against it in CI — the
+same bar Redis 8 itself had to clear.
+
+### Image pin policy
+
+- The documented compatibility range is **`>=8.0 <9`**. This is an
+  operator-facing statement of the versions Crowi tests and supports
+  — it is not enforced at runtime. Crowi does not refuse a Redis 7
+  connection in code.
+- `docker-compose.yml` and CI pin to a single reviewed patch tag with
+  its digest:
+  `redis:8.8.0@sha256:234c902a2db49461a129e2d4aeff85b28cf20187ed274a67f6e50995fa713c7b`.
+  Moving tags (`redis:7`, `redis:8`, `redis:latest`) are not used.
+- In practice, only that one pinned patch tag is continuously
+  exercised by CI and compose — the `>=8.0 <9` range is a stated
+  compatibility target, not a claim that every patch or minor version
+  in it has been individually verified.
+
+### Multi-replica upgrade and rollback
+
+- **Standard procedure: coordinated drain/restart.** Stop all
+  replicas together, point every replica's `REDIS_URL` at the new
+  endpoint, and restart together. Redis pub/sub provides no
+  distributed mutual exclusion, so **running replicas against
+  different Redis servers at the same time (a "split brain") is
+  explicitly disallowed** — instead of failing loudly, cross-replica
+  fan-out (collab, presence, notifications, Config sync) silently
+  splits into two disconnected groups.
+- **Vendor-supported online promotion** (a managed replica promotion,
+  blue-green cutover, etc.) is fine to use **only when you have
+  confirmed your specific Redis distribution actually supports a 7→8
+  topology change that way** — Crowi's own tooling does not verify
+  this.
+- **RDB cross-engine portability is not guaranteed.** Don't assume an
+  RDB snapshot written by Redis can be loaded by Valkey, or vice
+  versa.
+- **Rollback: clear stale coordination state before reconnecting.**
+  Coordination keys such as the editor-cap counter
+  (`crowi:collab:editors:<pageId>`, 24h TTL) and the presence hashes
+  (`crowi:presence:viewers:<pageId>` / `crowi:presence:editing:<pageId>`)
+  can linger on the pre-switch instance. Reconnecting every replica
+  without clearing them first can mix stale socket ids in with live
+  ones — the editor cap can over-report and push an editor into
+  read-only unintentionally, and presence can show short-lived ghost
+  viewers. Standard procedure:
+  1. Confirm every replica has drained from the old endpoint (existing
+     WebSocket connections closed, no new connections dialing it).
+  2. Point the rollback target at a **fresh, or
+     `crowi:`-prefix-cleared,** Redis instance.
+  3. After cutover, verify the editor-cap counter's `peek()` and the
+     presence viewer list match the actual connection count before
+     resuming traffic.
+
+  None of the 8 consumers store page content in Redis — `Page.yjsState`
+  and all page content live only in MongoDB — so a cold start of any of
+  these Redis instances never causes page-content data loss; see
+  [Failure modes](./realtime-collab#failure-modes). That doesn't mean every consumer's
+  own Redis-resident state survives a cold start equally well, though:
+  collab pub/sub, presence, notification invalidation, and Config sync
+  are pure cross-replica coordination with nothing to lose; the
+  editor-cap counter and rate limiting deliberately reset (fail open /
+  fall back to an in-memory window) rather than block; and LRU's
+  recently-viewed-pages list has no fallback at all, so a cold start
+  loses it outright — see the per-consumer breakdown in
+  [Single-instance deployment](./realtime-collab#single-instance-deployment).
+
+### Re-review triggers
+
+Re-review this policy if any of the following happen (summarized into
+six categories from a more detailed internal design review):
+
+1. Crowi starts forking, modifying, mirroring, or bundling the Redis
+   image itself.
+2. Crowi starts exposing RESP directly to end users, or starts selling
+   or otherwise offering Redis's own functionality as a service.
+3. Redis moves from a separate process/service to something that
+   crosses a process boundary with Crowi — single-process integration,
+   shared memory, etc.
+4. Redis's own license, its official image contents, or its version
+   policy changes.
+5. A client library's license changes (`node-redis`, `ioredis`,
+   `@hocuspocus/extension-redis`).
+6. Valkey is promoted to formally supported, or Crowi starts using a
+   Redis module it doesn't use today.
+
+### Security operations guide
+
+> This guide is derived from reading the actual code paths and the
+> upstream libraries' source as of this writing. It is **not** a
+> CI-verified contract — see "What CI does and doesn't verify" below
+> — and should be re-checked whenever `redis`, `ioredis`, or
+> `@hocuspocus/extension-redis` are updated, since the exact commands
+> they issue can change between versions.
+
+**Transport and credentials.** Use `rediss://` and keep
+`REDIS_REJECT_UNAUTHORIZED` at its default (certificate verification
+on); reserve verification-disabled connections for an explicitly
+controlled dev / private-CA scenario. Keep credentials in environment
+variables or a secret manager — don't put them in a Config row's
+plaintext field or log them.
+
+**Network exposure.** Redis should be reachable only from Crowi and
+its internal infrastructure. Never expose it, unauthenticated, to a
+public network.
+
+**ACL command / key / channel matrix.** Building a restricted ACL
+user? Every one of these needs to be granted, or collab saves and
+other operations will start failing with permission errors instead of
+a clean "unsupported feature" failure:
+
+| Consumer | Commands | Keys / channels |
+| --- | --- | --- |
+| Collab pub/sub | `SUBSCRIBE`, `UNSUBSCRIBE`, `PUBLISH` | `crowi:collab:<documentName>` — a single channel per document; Y.Doc sync and awareness updates are both multiplexed over it (there is no separate `:awareness:` / `:y-update:` sub-key) |
+| Editor-cap counter | `SADD`, `SCARD`, `SREM`, `EXPIRE` | `crowi:collab:editors:<pageId>` |
+| Presence | `HSET`, `HGET`, `HGETALL`, `HDEL`, `EXPIRE`, `PUBLISH`, `SUBSCRIBE` | `crowi:presence:viewers:<pageId>`, `crowi:presence:editing:<pageId>`, `crowi:presence:updates`, `crowi:presence:page-updated`, `crowi:presence:comment-changed` |
+| Notification invalidation | `PUBLISH`, `SUBSCRIBE`, `UNSUBSCRIBE` | `crowi:notifications:user:<userId>` |
+| Config sync | `PUBLISH`, `SUBSCRIBE` | fixed channel `config` |
+| Rate limiting | `INCR`, `PEXPIRE` | `crowi:ratelimit:<name>:<userId>:<window>` |
+| LRU (recently-viewed pages) | `ZREMRANGEBYRANK`, `ZADD`, `ZRANGE`, `MULTI`, `EXEC` (the write pair is pipelined inside a `MULTI`/`EXEC` transaction — an ACL missing those two breaks LRU writes) | an operator-chosen namespace key (no fixed `crowi:` prefix) |
+| Boot connection | connection handshake only | n/a |
+
+Two more command sources are easy to miss because Crowi's own code
+never issues them directly:
+
+- **Client-library connect-time commands.** `node-redis` (the shared
+  `crowi.redis` client) sends `CLIENT SETINFO` (`LIB-NAME`/`LIB-VER`)
+  on every connect; `ioredis` (the two dedicated collab pub/sub
+  clients) runs `INFO` as its ready check. Denying these via ACL does
+  not necessarily break the connection outright — ioredis logs a
+  warning and skips the ready check when `INFO` comes back `NOPERM`,
+  and node-redis swallows a permission-denied `CLIENT SETINFO` reply
+  (it only rejects the connect promise for an unrelated, non-`ErrorReply`
+  failure) — but grant them explicitly rather than relying on that
+  survival behaviour in production.
+- **The upstream Redlock the collab extension runs internally.**
+  `@hocuspocus/extension-redis` acquires and releases a
+  cross-instance store lock via `@sesamecare-oss/redlock` on **every
+  collaborative save**, using `EVAL`/`EVALSHA` to run a Lua script.
+  Redis ACLs authorize commands called from *inside* a Lua script too,
+  so the ACL must also allow the script's own `SELECT`
+  (pcall-protected), `EXISTS`, `SET`, `GET`, and `DEL`
+  (pcall-protected) against `crowi:collab:<documentName>:lock`. **An
+  ACL that omits this matrix makes every collaborative save fail with
+  a permission error in a Redis-enabled production deployment** — the
+  save never reaches Crowi's Mongo compare-and-set checkpoint, so the
+  edit stays stuck in memory (retried on the next debounce cycle)
+  instead of persisting, and it produces constant error-log noise
+  until the ACL is fixed. **This Redlock does not add a persistence
+  guarantee of its own** — it only serializes concurrent store
+  attempts across instances. If the Crowi process dies *after* the
+  Redis store hook (including this Redlock) succeeds but *before*
+  Crowi's own Mongo compare-and-set checkpoint completes, the unsaved
+  document may be lost until the client reconnects and Yjs re-syncs
+  from the last durable Mongo state.
+
+**ACL scope: users, not listeners.** Redis ACLs are scoped to
+**users**, not to a listening port — "restrict the TLS port" is not a
+coherent ACL design. A restricted deployment needs every listener to
+disable or password-protect the `default` user, and every Crowi
+client (the shared node-redis client and the collab `ioredis`
+clients) to explicitly authenticate as a scoped user. Prefer
+key/channel-pattern grants over a broad `@all` category.
+
+**Failure-time semantics.** The editor-cap counter is a soft
+availability control, not an authorization boundary — its fail-open
+behaviour (it stops enforcing the cap rather than blocking new
+editors) is a deliberate design choice; see
+[Failure modes](./realtime-collab#failure-modes). Redis being unreachable never
+bypasses JWT or WS-token authentication — neither check depends on
+Redis. Rate limiting also fails open: if a Redis round trip throws,
+the request is allowed rather than blocked, so a missing ACL grant the
+rate limiter needs produces the same silent, undetected disabling of
+the limit that a Redis outage would — watch for it when narrowing an
+ACL.
+
+**Key / channel separation.** The 8 consumers use disjoint prefixes:
+`crowi:collab` (collab pub/sub, sub-keyed per document),
+`crowi:collab:editors:<pageId>` (editor cap), `crowi:presence:*`
+(presence hashes and channels), `crowi:notifications:user:<userId>`
+(notifications), the fixed channel `config` (Config sync — not
+`crowi:`-prefixed), and `crowi:ratelimit:*` (rate limiting); LRU uses
+an operator-chosen namespace key with no fixed prefix. **Don't rely on
+the Redis URL's database-number segment for worktree or cluster
+isolation** — nothing here uses it, and it is not a substitute for the
+prefixes above.
+
+**Alternative engines.** See "Valkey" above: tested support,
+best-effort protocol compatibility, and unsupported configurations are
+three different tiers. Valkey's BSD-3-Clause license and independent
+governance matter to operators who prefer it, but binary/RDB
+persistence compatibility is not guaranteed — see "Multi-replica
+upgrade and rollback" above.
+
+**Supply chain.** Pin an explicit image family and version (see
+"Image pin policy" above), record the tested digest in your own
+release tooling where possible, and don't use a generic distro alias
+as a stand-in for a compatibility claim.
+
+**What CI does and doesn't verify.** CI runs real Redis 8 smoke tests
+for all 8 consumers, but it does **not** run them against a restricted
+ACL user — the matrix above is written from source inspection, not
+exercised by an automated permission-denial test. Treat it as an
+operator reference, not a guarantee, and re-verify it after upgrading
+`redis`, `ioredis`, or `@hocuspocus/extension-redis`.
+
+## Redis connection budget
+
+The number of connections per api instance depends on the instance's
+lifecycle stage, not a fixed count:
+
+- **Right after boot** (before any collab session has started): **6**
+  connections — 1 shared client (the editor-cap counter, LRU, rate
+  limiting, presence hash writes, and notification publish all share
+  it), 2 presence subscriber connections, 1 notification subscriber
+  connection, and 2 Config publisher/subscriber connections.
+- **After the first realtime-collab session starts on that instance**:
+  **8** connections — the 6 above plus the 2 dedicated `ioredis`
+  pub + sub connections `@hocuspocus/extension-redis` opens
+  (`lazyConnect: true`, so they don't open until the first document
+  load).
+
+Example: 10 api replicas + 1 web replica
+
+- Right after boot: 10 × 6 = 60 connections.
+- Once every replica has hosted at least one collab session: 10 × 8 = 80 connections.
+- Direct connections from web: none (proxied via the api).
+
+Comfortably fits within the default `maxclients=10000`, but plan
+accordingly for very small Redis tiers (ElastiCache `cache.t4g.micro` /
+`cache.t3.micro`, Redis Cluster shards, etc.).
