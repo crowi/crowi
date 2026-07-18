@@ -37,8 +37,6 @@ const sentinel = require('./redis-smoke-sentinel') as {
 
 export type RedisSmokeCategory = 'collab' | 'editor-cap' | 'presence' | 'notifications' | 'config' | 'rate-limit' | 'lru' | 'boot';
 
-export const REDIS_SMOKE_CATEGORIES: readonly RedisSmokeCategory[] = sentinel.REDIS_SMOKE_CATEGORIES;
-
 /** The 3 Redis connection targets Phase 1 provisioned. */
 export const REDIS_SMOKE_URLS: Readonly<Record<'shared' | 'config' | 'tls', string>> = sentinel.REDIS_SMOKE_TARGETS;
 
@@ -88,12 +86,8 @@ export const redisSmokeReachable: RedisSmokeReachability = resolveReachability()
  * concurrent worktrees / CI jobs sharing the same Redis instance (per
  * CLAUDE.md's "worktree 間で共有される Redis" note) never collide.
  */
-export function redisSmokeRunId(): string {
-  const runId = process.env.CROWI_TEST_RUN_ID;
-  if (!runId) {
-    throw new Error('redis-smoke: CROWI_TEST_RUN_ID is unset — this should always be inherited from global-setup.js.');
-  }
-  return runId;
+function redisSmokeRunId(): string {
+  return sentinel.requireRunId();
 }
 
 /**

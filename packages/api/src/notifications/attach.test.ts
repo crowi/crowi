@@ -6,12 +6,12 @@ process.env.WS_TOKEN_SECRET = process.env.WS_TOKEN_SECRET ?? 'test-ws-token-secr
 
 import http from 'node:http';
 import { AddressInfo } from 'node:net';
+import type Crowi from 'src/crowi';
+import { stopNotificationsHttpServer } from 'src/test/notifications-test-server';
+import { createNotificationsTokenUtil } from 'src/util/notifications-token';
 import WebSocket from 'ws';
 
-import type Crowi from 'src/crowi';
-import { createNotificationsTokenUtil } from 'src/util/notifications-token';
-
-import { attachNotificationsServer, channelForUser, type AttachedNotifications, type NotificationsRedisClient } from './attach';
+import { type AttachedNotifications, attachNotificationsServer, channelForUser, type NotificationsRedisClient } from './attach';
 
 /**
  * Tests for `attachNotificationsServer` — the third `ws noServer`
@@ -112,28 +112,7 @@ async function startTestServer(opts: { redis?: 'on' | 'off' } = {}): Promise<Tes
 }
 
 async function stopTestServer(s: TestServer): Promise<void> {
-  try {
-    await s.attachment.shutdown();
-  } catch {
-    // best-effort
-  }
-  // The Node test server may still hold half-closed peers; drop them
-  // so `close()` calls back deterministically. Mirrors the collab
-  // attach test (Node 18.2+ `closeAllConnections`).
-  (s.server as unknown as { closeAllConnections?: () => void }).closeAllConnections?.();
-  await new Promise<void>((resolve) => {
-    let resolved = false;
-    const finish = (): void => {
-      if (resolved) return;
-      resolved = true;
-      resolve();
-    };
-    const timer = setTimeout(finish, 1000);
-    s.server.close(() => {
-      clearTimeout(timer);
-      finish();
-    });
-  });
+  await stopNotificationsHttpServer(s.server, s.attachment);
 }
 
 /** Open a WebSocket and resolve with the result observed within `timeoutMs`. */

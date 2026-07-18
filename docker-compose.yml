@@ -15,6 +15,11 @@
 # `crowi.config.json` in. To override driver selection without a rebuild, the
 # api service re-mounts `apps/crowi-runner/crowi.config.json` at
 # /app/crowi.config.json (operator-controlled).
+# Single source for the pinned Redis engine image (feature-redis-8-upgrade
+# Phase 1). Keep in sync with ci.yml's `REDIS_IMAGE` — the one cross-file
+# sync point; the three services below alias this anchor.
+x-crowi-redis-image: &crowi-redis-image redis:8.8.0@sha256:234c902a2db49461a129e2d4aeff85b28cf20187ed274a67f6e50995fa713c7b
+
 services:
   mongodb:
     image: mongo:8
@@ -61,7 +66,7 @@ services:
   # (feature-redis-8-upgrade Phase 1 — patch cadence is manual, no Dependabot
   # `docker` ecosystem tracking yet).
   redis:
-    image: redis:8.8.0@sha256:234c902a2db49461a129e2d4aeff85b28cf20187ed274a67f6e50995fa713c7b
+    image: *crowi-redis-image
     container_name: crowi-redis
     restart: unless-stopped
     ports:
@@ -80,7 +85,7 @@ services:
   # tmpfs or other hardening needed — this only ever holds disposable smoke
   # data, never dev data).
   crowi-test-redis:
-    image: redis:8.8.0@sha256:234c902a2db49461a129e2d4aeff85b28cf20187ed274a67f6e50995fa713c7b
+    image: *crowi-redis-image
     container_name: crowi-test-redis
     restart: unless-stopped
     ports:
@@ -98,7 +103,7 @@ services:
   # (Phase 2, consumer #8) uses this — Config smoke uses `crowi-test-redis`
   # above instead.
   crowi-test-redis-tls:
-    image: redis:8.8.0@sha256:234c902a2db49461a129e2d4aeff85b28cf20187ed274a67f6e50995fa713c7b
+    image: *crowi-redis-image
     container_name: crowi-test-redis-tls
     restart: unless-stopped
     volumes:

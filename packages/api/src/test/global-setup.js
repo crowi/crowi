@@ -471,5 +471,4 @@ globalSetup.__test__ = {
   warnOnWorkerPoolDrift,
   ASSUMED_MAX_POOL_SIZE,
   SOCKET_BUDGET_PER_CPU,
-  probeRedisSmokeTargets,
 };

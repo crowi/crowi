@@ -145,6 +145,7 @@ function removeAllMarkersAndSentinel() {
 module.exports = {
   REDIS_SMOKE_TARGETS,
   REDIS_SMOKE_CATEGORIES,
+  requireRunId,
   getConnectivitySentinelPath,
   getMarkerPath,
   writeConnectivitySentinel,

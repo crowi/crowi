@@ -33,8 +33,7 @@ describeMaybe('presence smoke (real Redis 8)', () => {
     // replicas each holding their own `crowi.redis`.
     const clientA = createClient({ url: REDIS_SMOKE_URLS.shared });
     const clientB = createClient({ url: REDIS_SMOKE_URLS.shared });
-    await clientA.connect();
-    await clientB.connect();
+    await Promise.all([clientA.connect(), clientB.connect()]);
 
     let serviceA: PresenceService | null = null;
     let serviceB: PresenceService | null = null;

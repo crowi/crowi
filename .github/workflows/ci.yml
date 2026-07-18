@@ -26,12 +26,11 @@ env:
   # below pin to (keep in sync with docker-compose.yml's `redis` /
   # `crowi-test-redis` / `crowi-test-redis-tls` services — same tag
   # everywhere per feature-redis-8-upgrade Phase 1). `services:` blocks
-  # can't reference the `env` context (not in GitHub's context-availability
-  # table for `jobs.<job_id>.services.<service_id>.image`), so the `redis` /
-  # `crowi-test-redis` service definitions below duplicate this string
-  # literally instead — bump both together when following a new patch
-  # release.
-  REDIS_IMAGE: redis:8.8.0@sha256:234c902a2db49461a129e2d4aeff85b28cf20187ed274a67f6e50995fa713c7b
+  # can't reference the `env` context, but a parse-time YAML alias works —
+  # the service definitions below use `*redis-image`, so this line is the
+  # single copy in this file. Keep it in sync with docker-compose.yml's
+  # `x-crowi-redis-image` (the one remaining cross-FILE sync point).
+  REDIS_IMAGE: &redis-image redis:8.8.0@sha256:234c902a2db49461a129e2d4aeff85b28cf20187ed274a67f6e50995fa713c7b
 
 jobs:
   test:
@@ -74,7 +73,7 @@ jobs:
       # here literally. Anchored so `flake-report` below can alias it — that
       # job spawns @crowi/api's jest directly and needs the identical Redis.
       redis: &api-test-redis-service
-        image: redis:8.8.0@sha256:234c902a2db49461a129e2d4aeff85b28cf20187ed274a67f6e50995fa713c7b
+        image: *redis-image
         ports:
           - 6379:6379
         options: >-
@@ -93,7 +92,7 @@ jobs:
       # logic. See docker-compose.yml's `crowi-test-redis` comment for the
       # full rationale.
       crowi-test-redis: &api-test-crowi-redis-service
-        image: redis:8.8.0@sha256:234c902a2db49461a129e2d4aeff85b28cf20187ed274a67f6e50995fa713c7b
+        image: *redis-image
         ports:
           - 6380:6379
         options: >-
@@ -157,21 +156,14 @@ jobs:
         # normal job step, after checkout, instead. TLS-only port, no ACL
         # (`--tls-auth-clients no` — no CA cert needed since we don't verify
         # client certs; the smoke client connects with `rejectUnauthorized:
-        # false`, matching redis-opts.test.ts's existing TLS repro). See
-        # docker-compose.yml's `crowi-test-redis-tls` for the local
-        # equivalent (same image, same flags, same port). Anchored so
+        # false`, matching redis-opts.test.ts's existing TLS repro).
+        # Starts docker-compose.yml's `crowi-test-redis-tls` service so the
+        # compose file stays the SINGLE source of truth for the fixture's
+        # image/flags/port — local and CI cannot drift apart. Anchored so
         # `flake-report` below can alias it instead of duplicating — that
         # job also solo-reruns @crowi/api's jest directly and needs the
         # identical fixture.
-        run: |
-          docker run -d --name crowi-test-redis-tls \
-            -p 6381:6381 \
-            -v "$PWD/packages/api/src/util/__fixtures__/tls:/tls:ro" \
-            "$REDIS_IMAGE" \
-            redis-server --port 0 --tls-port 6381 \
-              --tls-cert-file /tls/localhost-cert.pem \
-              --tls-key-file /tls/localhost-key.pem \
-              --tls-auth-clients no
+        run: docker compose up -d crowi-test-redis-tls
 
       - &redis-tls-fixture-wait
         name: Wait for Redis TLS fixture

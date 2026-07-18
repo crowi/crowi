@@ -22,16 +22,26 @@ describeMaybe('LRU smoke (real Redis 8)', () => {
       const lru = new LRU({ redis: client } as unknown as Crowi);
       expect(lru.max).toBe(10);
 
-      // Insert 12 entries (> max=10) with strictly increasing scores (Date.now()
-      // — a tiny stagger keeps ZADD scores distinct even on a fast loop).
+      // Insert 12 entries (> max=10) with strictly increasing scores.
+      // `add()` reads `Date.now()` for the ZADD score — a monotonic mocked
+      // clock GUARANTEES distinct scores (the previous 2ms real-sleep
+      // stagger only made them probable) and drops ~24ms of sleeps; the
+      // ZREMRANGEBYRANK/ZADD pipeline still runs against real Redis.
+      let mockedNow = Date.now();
+      const nowSpy = jest.spyOn(Date, 'now').mockImplementation(() => {
+        mockedNow += 5;
+        return mockedNow;
+      });
       const pageIds: string[] = [];
-      for (let i = 0; i < 12; i += 1) {
-        const pageId = uniqueRedisSmokeId(`lru-page-${i}`);
-        pageIds.push(pageId);
-        // eslint-disable-next-line no-await-in-loop
-        await lru.add(namespace, pageId);
-        // eslint-disable-next-line no-await-in-loop
-        await new Promise((resolve) => setTimeout(resolve, 2));
+      try {
+        for (let i = 0; i < 12; i += 1) {
+          const pageId = uniqueRedisSmokeId(`lru-page-${i}`);
+          pageIds.push(pageId);
+          // eslint-disable-next-line no-await-in-loop
+          await lru.add(namespace, pageId);
+        }
+      } finally {
+        nowSpy.mockRestore();
       }
 
       // `add()`'s ZREMRANGEBYRANK trims based on the size BEFORE this call's

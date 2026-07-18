@@ -20,6 +20,7 @@ import http from 'node:http';
 import { AddressInfo } from 'node:net';
 import { createClient } from 'redis';
 import type Crowi from 'src/crowi';
+import { stopNotificationsHttpServer } from 'src/test/notifications-test-server';
 import { markRedisSmokeRan, REDIS_SMOKE_URLS, redisSmokeReachable, uniqueRedisSmokeId, waitUntil } from 'src/test/redis-smoke';
 import { createNotificationsTokenUtil } from 'src/util/notifications-token';
 import WebSocket from 'ws';
@@ -48,15 +49,7 @@ async function startRealServer(redisUrl: string): Promise<RealServer> {
 }
 
 async function stopRealServer(server: RealServer): Promise<void> {
-  await server.attachment.shutdown();
-  (server.httpServer as unknown as { closeAllConnections?: () => void }).closeAllConnections?.();
-  await new Promise<void>((resolve) => {
-    const timer = setTimeout(resolve, 1000);
-    server.httpServer.close(() => {
-      clearTimeout(timer);
-      resolve();
-    });
-  });
+  await stopNotificationsHttpServer(server.httpServer, server.attachment);
   await server.redisClient.disconnect();
 }
 
@@ -66,8 +59,7 @@ describeMaybe('notifications invalidation smoke (real Redis 8)', () => {
   });
 
   it('a publish on channelForUser(userId) from instance A reaches the authenticated WS socket connected to instance B, and only that userId', async () => {
-    const serverA = await startRealServer(REDIS_SMOKE_URLS.shared);
-    const serverB = await startRealServer(REDIS_SMOKE_URLS.shared);
+    const [serverA, serverB] = await Promise.all([startRealServer(REDIS_SMOKE_URLS.shared), startRealServer(REDIS_SMOKE_URLS.shared)]);
 
     const userId = uniqueRedisSmokeId('notif-user');
     const otherUserId = uniqueRedisSmokeId('notif-other-user');

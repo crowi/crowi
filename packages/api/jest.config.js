@@ -118,6 +118,13 @@ module.exports = {
       testEnvironment: './src/test/crowi-environment.js',
       setupFilesAfterEnv: ['./src/test/setup.ts'],
       testMatch: ['<rootDir>/src/**/*.test.ts'],
+      // Redis smoke files run in the dedicated `redis-smoke` project below
+      // WITHOUT `setup.ts` — 7 of the 8 never touch the `crowi` singleton,
+      // and the full per-file Crowi boot + scratch-Mongo create/drop cycle
+      // is pure waste for them. `crowi/index.smoke.test.ts` is the one
+      // exception (it exercises the real boot path via the singleton), so
+      // the lookbehind keeps it here.
+      testPathIgnorePatterns: ['(?<!crowi/index)\\.smoke\\.test\\.ts$'],
       moduleNameMapper: {
         '^src/(.*)': '<rootDir>/src/$1',
         '^client/(.*)': '<rootDir>/client/$1',
@@ -143,6 +150,30 @@ module.exports = {
         ],
       },
       transformIgnorePatterns: ['/node_modules/(?!(.*\\.mjs$|.*@scalar/.+))'],
+    },
+    {
+      displayName: 'redis-smoke',
+      preset: 'ts-jest',
+      restoreMocks: true,
+      // Plain node environment, no `setup.ts`: these files talk only to the
+      // real Redis targets `global-setup.js` probed (skip-gated via the
+      // connectivity sentinel) — no Crowi boot, no Mongo.
+      testEnvironment: 'node',
+      testMatch: ['<rootDir>/src/**/*.smoke.test.ts'],
+      testPathIgnorePatterns: ['crowi/index\\.smoke\\.test\\.ts$'],
+      moduleNameMapper: {
+        '^src/(.*)': '<rootDir>/src/$1',
+        '^client/(.*)': '<rootDir>/client/$1',
+        '^common/(.*)': '<rootDir>/common/$1',
+      },
+      transform: {
+        '^.+\\.tsx?$': [
+          'ts-jest',
+          {
+            tsconfig: 'tsconfig.json',
+          },
+        ],
+      },
     },
   ],
 

@@ -59,8 +59,7 @@ describeMaybe('Config pub/sub smoke (real Redis 8, dedicated crowi-test-redis in
     const serviceB = new ConfigService(fakeCrowi(loadAllConfigB, setupMailerB) as any);
 
     try {
-      await serviceA.setupPubSub();
-      await serviceB.setupPubSub();
+      await Promise.all([serviceA.setupPubSub(), serviceB.setupPubSub()]);
       expect(serviceA.pubSub.publisher).not.toBeNull();
       expect(serviceB.pubSub.subscriber).not.toBeNull();
 

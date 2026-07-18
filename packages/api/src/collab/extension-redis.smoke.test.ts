@@ -18,11 +18,10 @@
  * `redis-smoke-harness.ts`'s doc comment).
  */
 import { HocuspocusProvider } from '@hocuspocus/provider';
+import { markRedisSmokeRan, REDIS_SMOKE_URLS, redisSmokeReachable, uniqueRedisSmokeId } from 'src/test/redis-smoke';
 import WsWebSocket from 'ws';
 import type { Awareness } from 'y-protocols/awareness';
 import * as Y from 'yjs';
-
-import { markRedisSmokeRan, redisSmokeReachable, REDIS_SMOKE_URLS, uniqueRedisSmokeId } from 'src/test/redis-smoke';
 import { type RedisSmokeHarness as Harness, spawnRedisSmokeHarness as spawnHarness, stopRedisSmokeHarness as stopHarness } from './redis-smoke-harness-client';
 
 const describeMaybe = redisSmokeReachable.shared ? describe : describe.skip;
@@ -75,17 +74,18 @@ describeMaybe('collab pub/sub smoke (real Redis 8, 2-process harness)', () => {
 
   it('propagates a Y.Doc text change and bidirectional Awareness state between two independent Hocuspocus instances via the Redis extension', async () => {
     const documentName = uniqueRedisSmokeId('collab-doc');
-    const harnessA = await spawnHarness('A', REDIS_SMOKE_URLS.shared);
-    let harnessB: Harness;
-    try {
-      harnessB = await spawnHarness('B', REDIS_SMOKE_URLS.shared);
-    } catch (err) {
-      // harnessA already spawned successfully — stop it before propagating
-      // B's failure, otherwise it leaks past this test (the main
-      // try/finally below never starts if this await rejects).
-      await stopHarness(harnessA);
-      throw err;
+    // Spawn both harnesses concurrently (independent tsx child boots,
+    // ~1-3s each). allSettled + the explicit partial-failure sweep keeps a
+    // single teardown path: whichever spawn succeeded is stopped before a
+    // failure propagates.
+    const spawns = await Promise.allSettled([spawnHarness('A', REDIS_SMOKE_URLS.shared), spawnHarness('B', REDIS_SMOKE_URLS.shared)]);
+    const spawned = spawns.filter((r): r is PromiseFulfilledResult<Harness> => r.status === 'fulfilled').map((r) => r.value);
+    const failed = spawns.find((r): r is PromiseRejectedResult => r.status === 'rejected');
+    if (failed) {
+      await Promise.all(spawned.map(stopHarness));
+      throw failed.reason;
     }
+    const [harnessA, harnessB] = spawned;
 
     const docA = new Y.Doc();
     const docB = new Y.Doc();
