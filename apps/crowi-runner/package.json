@@ -17,6 +17,7 @@
     "@crowi/plugin-renderer-crowi-legacy": "workspace:^",
     "@crowi/plugin-renderer-emoji": "workspace:^",
     "@crowi/plugin-renderer-katex": "workspace:^",
+    "@crowi/plugin-renderer-mermaid": "workspace:^",
     "@crowi/plugin-renderer-plantuml": "workspace:^",
     "@crowi/plugin-search-elasticsearch": "workspace:^",
     "@crowi/plugin-search-mongo": "workspace:^",

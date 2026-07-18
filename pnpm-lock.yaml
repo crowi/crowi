@@ -97,6 +97,9 @@ importers:
       '@crowi/plugin-renderer-katex':
         specifier: workspace:^
         version: link:../../packages/plugin-renderer-katex
+      '@crowi/plugin-renderer-mermaid':
+        specifier: workspace:^
+        version: link:../../packages/plugin-renderer-mermaid
       '@crowi/plugin-renderer-plantuml':
         specifier: workspace:^
         version: link:../../packages/plugin-renderer-plantuml
