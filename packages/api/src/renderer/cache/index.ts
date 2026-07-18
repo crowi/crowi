@@ -32,6 +32,9 @@ export const DEFAULT_STALE_MULTIPLIER = 4;
 /**
  * Per-code TTLs for cached error responses (RFC §"Error caching").
  * `rate_limit` is overridable per-call via `RenderError.retryAfterSec`.
+ * `blocked` (a policy-level permanent rejection — SSRF block,
+ * disallowed scheme, disallowed content-type) shares `not_found`'s 1h
+ * persistent-failure TTL.
  */
 export const RENDER_ERROR_TTL: Readonly<Record<RenderError['code'], number>> = {
   auth: 60,
@@ -40,7 +43,17 @@ export const RENDER_ERROR_TTL: Readonly<Record<RenderError['code'], number>> = {
   network: 5 * 60,
   timeout: 5 * 60,
   unknown: 5 * 60,
+  blocked: 60 * 60,
 };
+
+/**
+ * How long a stale-if-error entry is allowed to keep showing its
+ * last-good `html` while revalidation keeps failing. Once the last-good
+ * render is older than this, `renderAndStore` degrades to
+ * `errorHtml ?? errorPlaceholder(...)` instead — a dead URL/upstream
+ * doesn't keep showing an ancient card/diagram forever.
+ */
+export const STALE_IF_ERROR_MAX_AGE_SEC = 24 * 60 * 60; // 24h
 
 /**
  * Compute the cache embed-key for an input. Default
@@ -106,11 +119,18 @@ function cacheKeyString(key: CacheKey): string {
  *   - **hit + expired**: block on re-render, cache, return.
  *
  * Errors from `render()` (both thrown and `RenderResult.error`) cache
- * with `RENDER_ERROR_TTL[code]` and surface an error placeholder.
+ * with `RENDER_ERROR_TTL[code]` and surface `RenderResult.errorHtml` when
+ * the plugin set one, else the generic `errorPlaceholder()`. When a
+ * still-fresh-enough successful render preceded the error (stale-if-
+ * error — see `resolveDisplay` / `STALE_IF_ERROR_MAX_AGE_SEC`), the
+ * previous success's `html` is kept on screen instead and the error is
+ * only recorded for telemetry/retry-cadence purposes.
  *
  * NOTE: this is the **internal** wrapper used by Phase 4 core plugins
- * (`embed-tags.ts`, `url-inline-expand.ts`). Plugins do not call it
- * directly; they call `EmbedRenderer.render()` and the core wraps.
+ * (`embed-tags.ts`, `url-inline-expand.ts`) and the Phase 6 code-block
+ * dispatch (`code-block-dispatch.ts`). Plugins do not call it directly;
+ * they call `EmbedRenderer.render()` / `CodeBlockRenderer.render()` and
+ * the core wraps.
  */
 export async function cachedRender(
   storage: MongoCacheStorage,
@@ -149,7 +169,7 @@ export async function cachedRender(
         // lands at the start of the next event loop tick (lower priority
         // than the in-flight request).
         setImmediate(() => {
-          void dedupedRenderAndStore(ks, storage, key, renderer, input, ctx).catch((err) => {
+          void dedupedRenderAndStore(ks, storage, key, renderer, input, ctx, cached).catch((err) => {
             ctx.log.warn(`[plugin-render-cache] background re-render failed for plugin=${pluginName} pageId=${input.pageId}: ${stringifyError(err)}`);
           });
         });
@@ -162,7 +182,7 @@ export async function cachedRender(
   // miss or expired: render now (de-duped against any concurrent miss
   // for the same key — second viewer awaits the first viewer's render).
   const ks = cacheKeyString(key);
-  const result = await dedupedRenderAndStore(ks, storage, key, renderer, input, ctx);
+  const result = await dedupedRenderAndStore(ks, storage, key, renderer, input, ctx, cached);
   return { html: result.html, freshness: 'fresh', result: result.result };
 }
 
@@ -173,10 +193,11 @@ function dedupedRenderAndStore(
   renderer: EmbedRenderer,
   input: EmbedInput,
   ctx: RenderContext,
+  prevEntry: CacheEntry | null,
 ): Promise<RenderAndStoreResult> {
   const existing = inFlightRender.get(ks);
   if (existing) return existing;
-  const p = renderAndStore(storage, key, renderer, input, ctx).finally(() => {
+  const p = renderAndStore(storage, key, renderer, input, ctx, prevEntry).finally(() => {
     inFlightRender.delete(ks);
   });
   inFlightRender.set(ks, p);
@@ -194,6 +215,7 @@ async function renderAndStore(
   renderer: EmbedRenderer,
   input: EmbedInput,
   ctx: RenderContext,
+  prevEntry: CacheEntry | null,
 ): Promise<RenderAndStoreResult> {
   let result: RenderResult;
   try {
@@ -213,10 +235,7 @@ async function renderAndStore(
   const ttlSec = pickTtl(result);
   const expiresAt = new Date(now.getTime() + ttlSec * 1000);
 
-  // Error responses get a fixed placeholder regardless of what the
-  // plugin returned in `html`. We still cache the plugin's error meta
-  // so admin telemetry has context.
-  const html = result.error ? errorPlaceholder(result.error.code, renderer.reservation) : result.html;
+  const { html, lastGoodFetchedAt } = resolveDisplay(result, renderer, prevEntry, now);
   const cachedHtml: string = html;
 
   const cacheEntry: CacheEntry = {
@@ -224,6 +243,7 @@ async function renderAndStore(
     result: { ...result, html: cachedHtml },
     fetchedAt: now,
     expiresAt,
+    lastGoodFetchedAt,
   };
 
   const rejection = await storage.setOrReject(key, cacheEntry);
@@ -239,6 +259,64 @@ async function renderAndStore(
   }
 
   return { html: cachedHtml, result: cacheEntry.result };
+}
+
+/**
+ * Pick what `html` (and, on success, the new `lastGoodFetchedAt`) a
+ * render attempt should be stored/displayed with.
+ *
+ *   - success: display the plugin's `html`; `lastGoodFetchedAt` = `now`
+ *     (this render IS the new last-good).
+ *   - error, with a still-fresh-enough last-good available (see
+ *     `resolvePrevGood`): keep showing that last-good `html` — a
+ *     transient upstream failure must not immediately downgrade a
+ *     working card/diagram to an error placeholder. `lastGoodFetchedAt`
+ *     carries the ORIGINAL success's value forward unchanged, so the
+ *     `STALE_IF_ERROR_MAX_AGE_SEC` clock keeps counting from the real
+ *     last success, not from this (failed) attempt.
+ *   - error, with no usable last-good (first-ever failure, or the kept
+ *     last-good aged past `STALE_IF_ERROR_MAX_AGE_SEC`): degrade to
+ *     `errorHtml ?? errorPlaceholder(...)`, same as before this policy
+ *     existed. `lastGoodFetchedAt` is left unset.
+ */
+function resolveDisplay(
+  result: RenderResult,
+  renderer: EmbedRenderer,
+  prevEntry: CacheEntry | null,
+  now: Date,
+): { html: string; lastGoodFetchedAt: Date | undefined } {
+  if (!result.error) {
+    return { html: result.html, lastGoodFetchedAt: now };
+  }
+  const prevGood = resolvePrevGood(prevEntry, now);
+  if (prevGood) {
+    return { html: prevGood.html, lastGoodFetchedAt: prevGood.lastGoodFetchedAt };
+  }
+  return { html: result.errorHtml ?? errorPlaceholder(result.error.code, renderer.reservation), lastGoodFetchedAt: undefined };
+}
+
+/**
+ * Resolve the last-good `{ html, lastGoodFetchedAt }` a failed render
+ * attempt may keep displaying, or `null` when there is none to keep
+ * (no previous entry, previous entry was itself a fully-degraded error,
+ * or the last-good is older than `STALE_IF_ERROR_MAX_AGE_SEC`).
+ *
+ * `prevEntry.result.error` truthy but `prevEntry.lastGoodFetchedAt` set
+ * means `prevEntry` is ITSELF a stale-if-error entry mid-retry-cadence —
+ * its `lastGoodFetchedAt` is the ORIGINAL success's timestamp (carried
+ * forward, see `resolveDisplay`), so chaining through it here is what
+ * lets the kept display survive multiple consecutive failed retries
+ * instead of degrading on the second failure.
+ */
+function resolvePrevGood(prevEntry: CacheEntry | null, now: Date): { html: string; lastGoodFetchedAt: Date } | null {
+  if (!prevEntry) return null;
+  // Success entries predating this field have no `lastGoodFetchedAt` on
+  // disk — treat that as "as good as `fetchedAt`" (no migration).
+  const lastGoodFetchedAt = prevEntry.result.error ? prevEntry.lastGoodFetchedAt : (prevEntry.lastGoodFetchedAt ?? prevEntry.fetchedAt);
+  if (!lastGoodFetchedAt) return null;
+  const ageSec = (now.getTime() - lastGoodFetchedAt.getTime()) / 1000;
+  if (ageSec > STALE_IF_ERROR_MAX_AGE_SEC) return null;
+  return { html: prevEntry.html, lastGoodFetchedAt };
 }
 
 /**

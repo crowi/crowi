@@ -137,6 +137,48 @@ describe('e2e: @crowi/plugin-renderer-plantuml', () => {
     expect((top as { value: string }).value).toContain('crowi-embed-placeholder-error-network');
   });
 
+  it('keeps rendering the last-good SVG (stale-if-error) instead of dropping to a placeholder when a revalidation fails', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(FAKE_SVG, { status: 200 }));
+
+    const reg1 = new RendererRegistryImpl();
+    const config = plantumlConfigSchema.parse({});
+    plantumlPlugin.registerRenderer?.(makeRendererScope(reg1, PLUGIN, silentLogger), buildPluginCtx(config));
+
+    const storage = createMongoCacheStorage(crowi);
+    const ctx: RenderContext = {
+      mode: 'view',
+      log: silentLogger,
+      cache: scopeForPlugin(storage, PLUGIN),
+      auth: createAuthContextStub(),
+    };
+
+    const body = ['```plantuml', '@startuml', 'A -> B', '@enduml', '```'].join('\n');
+    await runPipeline(body, reg1, ctx, loadDeps, { cache: storage, pageId });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    // Force the cached entry well past its stale window (plantuml's fresh
+    // TTL is 1h, so 5h back safely clears the 4x stale-multiplier window
+    // too) — the NEXT read blocks on a re-render rather than serving
+    // fresh, exercising the blocking stale-if-error path.
+    const PluginRenderCache = crowi.model('PluginRenderCache') as unknown as PluginRenderCacheModel;
+    const past = new Date(Date.now() - 5 * 60 * 60 * 1000);
+    await PluginRenderCache.updateOne({ pluginName: PLUGIN, pageId: new Types.ObjectId(pageId) }, { $set: { expiresAt: past } }).exec();
+
+    // Simulate the server going down mid-restart (spec's motivating case).
+    fetchMock.mockClear();
+    fetchMock.mockRejectedValueOnce(new Error('ECONNREFUSED'));
+    const reg2 = new RendererRegistryImpl();
+    plantumlPlugin.registerRenderer?.(makeRendererScope(reg2, PLUGIN, silentLogger), buildPluginCtx(config));
+    const second = await runPipeline(body, reg2, ctx, loadDeps, { cache: storage, pageId });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1); // revalidation was attempted…
+    const top = second.tree.children[0];
+    expect(top.type).toBe('html');
+    // …but the diagram stays on screen instead of degrading to a placeholder.
+    expect((top as { value: string }).value).toContain('<svg');
+    expect((top as { value: string }).value).not.toContain('crowi-embed-placeholder-error');
+  });
+
   it('skips dispatch for unregistered code-block langs', async () => {
     // No plugin registered → no fetch, code node passes through.
     const reg = new RendererRegistryImpl();

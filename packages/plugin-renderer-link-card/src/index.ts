@@ -1,5 +1,5 @@
-import type { CrowiPlugin, EmbedRenderer, RenderResult } from '@crowi/plugin-api';
-import { type FetchOgErrorCode, type FetchOgResult, fetchOg } from './fetch-og';
+import type { CrowiPlugin, EmbedRenderer, RenderError, RenderResult } from '@crowi/plugin-api';
+import { type FetchOgResult, fetchOg } from './fetch-og';
 import { renderCard, renderErrorCard } from './render-card';
 
 /**
@@ -18,17 +18,18 @@ import { renderCard, renderErrorCard } from './render-card';
  * `configSchema` at all (mirrors `@crowi/plugin-renderer-katex` /
  * `@crowi/plugin-renderer-emoji`, which are also config-free).
  *
- * Design note on failure rendering: `EmbedRenderer.render()` NEVER sets
- * `RenderResult.error` here. The core's error path
- * (`packages/api/src/renderer/cache/reservation.ts:errorPlaceholder`)
- * unconditionally discards a plugin's returned `html` and substitutes a
- * generic, link-less placeholder — which would violate this feature's
- * AC-1 ("エラー時はリンクとして機能するエラーカード"). Instead every
- * failure path (SSRF block, timeout, non-2xx, bad scheme, oversized
- * body, network error) renders through `renderErrorCard()` — a working
- * `<a href>` to the original URL — as a normal *successful*
- * `RenderResult`, with a shorter `ttlSec` so a transient failure is
- * retried sooner than a successful card (see `pickErrorTtlSec`).
+ * Failure rendering: every failure path (SSRF block, timeout, non-2xx,
+ * bad scheme, oversized body, non-HTML content-type, network error)
+ * sets `RenderResult.error` + `errorHtml: renderErrorCard(url)` — a
+ * working `<a href>` to the original URL. `errorHtml` is a first-class
+ * part of the core's render contract (`@crowi/plugin-api`'s
+ * `RenderResult.errorHtml`): the core shows it in place of the generic
+ * link-less `errorPlaceholder()` whenever `error` is set alongside it,
+ * so AC-1 ("エラー時はリンクとして機能するエラーカード") holds without
+ * this plugin having to pretend a failure was a successful render. TTL
+ * cadence for each failure category comes straight from the core's
+ * `RENDER_ERROR_TTL` table (`packages/api/src/renderer/cache/index.ts`)
+ * via `RenderError.code` — see `toRenderError` for the code mapping.
  */
 
 const plugin: CrowiPlugin = {
@@ -52,10 +53,6 @@ export const LINK_CARD_CACHE_VERSION = 1;
 
 /** Fresh TTL for a successful card — OGP metadata rarely changes. */
 const SUCCESS_TTL_SEC = 60 * 60; // 1h
-/** Fresh TTL for a failure that's likely to resolve itself soon (network blip, timeout, oversized response, 5xx, too-many-redirects). */
-const TRANSIENT_ERROR_TTL_SEC = 5 * 60; // 5min
-/** Fresh TTL for a failure unlikely to change on the next request (SSRF-blocked host, non-http(s) scheme, non-HTML content-type, 4xx "not found"-class response). */
-const PERSISTENT_ERROR_TTL_SEC = 60 * 60; // 1h
 
 export function createLinkCardRenderer(): EmbedRenderer {
   return {
@@ -73,7 +70,7 @@ function toRenderResult(url: string, result: FetchOgResult): RenderResult {
     case 'ok':
       return { html: renderCard(url, result.meta), ttlSec: SUCCESS_TTL_SEC };
     case 'error':
-      return { html: renderErrorCard(url), ttlSec: pickErrorTtlSec(result.code, result.httpStatus) };
+      return { html: '', errorHtml: renderErrorCard(url), error: toRenderError(result) };
     default: {
       // Exhaustiveness guard — a new `FetchOgResult` kind must be handled above.
       const _unreachable: never = result;
@@ -82,10 +79,52 @@ function toRenderResult(url: string, result: FetchOgResult): RenderResult {
   }
 }
 
-function pickErrorTtlSec(code: FetchOgErrorCode, httpStatus: number | undefined): number {
-  if (code === 'blocked' || code === 'bad-scheme' || code === 'unsupported-content-type') return PERSISTENT_ERROR_TTL_SEC;
-  if (code === 'http-error' && httpStatus !== undefined && httpStatus >= 400 && httpStatus < 500) {
-    return PERSISTENT_ERROR_TTL_SEC;
+/**
+ * Map a `fetch-og.ts` failure onto the core's `RenderError.code` table
+ * (spec §"link-card の正規経路移行"). Pre-migration, `pickErrorTtlSec`
+ * only treated a `400 <= httpStatus < 500` `http-error` as persistent
+ * (1h) — every other case (3xx, 5xx, no `httpStatus`, and every
+ * non-`http-error` code) got the transient 5min TTL. The mapping below
+ * preserves that split exactly (AC3: "TTL が移行前と同値") while adding
+ * `rate_limit`/`blocked` as new, more specific codes:
+ *
+ *   - `blocked` / `bad-scheme` / `unsupported-content-type` → `blocked`
+ *     (policy-level permanent rejection — new persistent-class code,
+ *     did not exist pre-migration).
+ *   - `http-error` 429 with a parsed `Retry-After` → `rate_limit` +
+ *     `retryAfterSec` (honours the server's own cadence instead of the
+ *     core's 5min default).
+ *   - `http-error` 4xx (incl. a 429 with no `Retry-After`) → `not_found`
+ *     (persistent, matches the old `400 <= httpStatus < 500` branch).
+ *   - `http-error` anything else — 3xx (redirect-exhausted), 5xx, or no
+ *     `httpStatus` at all (the unreachable-in-practice loop-exhaustion
+ *     fallback) → `network` (transient, matches the old fallthrough).
+ *   - `timeout` → `timeout`, `network` → `network` (pass through as-is,
+ *     both already transient pre-migration).
+ *   - `too-large` / `unknown` → `unknown` (transient pre-migration).
+ *
+ * The original `fetch-og.ts` code + httpStatus are preserved in
+ * `message` for observability even though they collapse onto a
+ * narrower `RenderError.code` set.
+ */
+function toRenderError(result: Extract<FetchOgResult, { kind: 'error' }>): RenderError {
+  const { code, httpStatus, retryAfterSec } = result;
+  const message = httpStatus !== undefined ? `${code} (HTTP ${httpStatus})` : code;
+
+  if (code === 'blocked' || code === 'bad-scheme' || code === 'unsupported-content-type') {
+    return { code: 'blocked', message };
   }
-  return TRANSIENT_ERROR_TTL_SEC;
+  if (code === 'http-error') {
+    if (httpStatus === 429 && retryAfterSec !== undefined) {
+      return { code: 'rate_limit', message, retryAfterSec };
+    }
+    if (httpStatus !== undefined && httpStatus >= 400 && httpStatus < 500) {
+      return { code: 'not_found', message };
+    }
+    // 3xx (redirect-exhausted), 5xx, or no httpStatus — transient.
+    return { code: 'network', message };
+  }
+  if (code === 'timeout' || code === 'network') return { code, message };
+  // 'too-large' | 'unknown'
+  return { code: 'unknown', message };
 }

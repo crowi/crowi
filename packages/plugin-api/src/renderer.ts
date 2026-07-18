@@ -185,20 +185,40 @@ export interface RenderResult {
   ttlSec?: number;
   /**
    * When the render failed (network / auth / not_found / rate_limit /
-   * timeout / unknown), plugins should set `error` instead of building
-   * an html error frame. The core caches the error using `RENDER_ERROR_TTL`
-   * and substitutes a fixed placeholder when re-rendering the page.
+   * timeout / unknown / blocked), plugins should set `error` instead of
+   * building an html error frame. The core caches the error using
+   * `RENDER_ERROR_TTL` and, absent `errorHtml`, substitutes a fixed
+   * placeholder when re-rendering the page.
    */
   error?: RenderError;
+  /**
+   * Optional failure-display HTML, paired with `error`. When `error` is
+   * set and `errorHtml` is present, the core shows `errorHtml` instead of
+   * the generic `errorPlaceholder()` — e.g. a link-card plugin can keep
+   * its URL clickable even when the OGP fetch failed. Same trust
+   * contract as `html`: **pre-sanitised, the core does not re-escape it**.
+   *
+   * Deliberately a separate field rather than "non-empty `html` + `error`
+   * means show `html`" — that shape makes a plugin's stray/forgotten
+   * `html` leak into the error display by accident. An explicit opt-in
+   * field means a plugin that hasn't been updated for `errorHtml` keeps
+   * the current safe-by-default behaviour (placeholder).
+   *
+   * Ignored when `error` is unset.
+   */
+  errorHtml?: string;
 }
 
 /**
  * Error categories cached with their own per-code TTLs. See
  * `packages/api/src/renderer/cache/index.ts:RENDER_ERROR_TTL` for the
- * concrete numbers.
+ * concrete numbers. `blocked` is a policy-level permanent rejection
+ * (SSRF block, disallowed scheme, disallowed content-type) — distinct
+ * from `not_found` semantically but sharing its 1h persistent-failure
+ * TTL.
  */
 export interface RenderError {
-  code: 'auth' | 'rate_limit' | 'not_found' | 'network' | 'timeout' | 'unknown';
+  code: 'auth' | 'rate_limit' | 'not_found' | 'network' | 'timeout' | 'unknown' | 'blocked';
   /** Free-form text for log/debug — NOT inlined into the user-facing placeholder. */
   message?: string;
   /**
@@ -283,6 +303,18 @@ export interface CacheEntry {
   result: RenderResult;
   fetchedAt: Date;
   expiresAt: Date;
+  /**
+   * When the currently-displayed `html` was last a genuine successful
+   * render. A success entry sets this equal to `fetchedAt`; a
+   * stale-if-error entry (see
+   * `packages/api/src/renderer/cache/index.ts:STALE_IF_ERROR_MAX_AGE_SEC`)
+   * that is keeping a prior success on screen carries that success's
+   * original value forward unchanged — it does NOT reset to the failed
+   * attempt's `fetchedAt`. Absent on entries written before this field
+   * existed; readers treat a missing value on a success entry as
+   * `fetchedAt` (no backfill migration needed).
+   */
+  lastGoodFetchedAt?: Date;
 }
 
 /**

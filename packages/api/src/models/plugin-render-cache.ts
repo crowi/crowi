@@ -19,7 +19,9 @@ import type { RenderResult } from '@crowi/plugin-api';
  * produced. `html` is duplicated for log/admin clarity (also in
  * `result.html`); `htmlBytes` is denormalised so the per-page quota
  * aggregate doesn't have to `$strLenBytes` over every cached HTML
- * string on every write.
+ * string on every write. `lastGoodFetchedAt` backs the stale-if-error
+ * policy (`packages/api/src/renderer/cache/index.ts`) — optional and
+ * unset on rows written before that policy existed (no migration).
  */
 export interface PluginRenderCacheDocument extends Document {
   _id: Types.ObjectId;
@@ -32,6 +34,7 @@ export interface PluginRenderCacheDocument extends Document {
   fetchedAt: Date;
   expiresAt: Date;
   result: RenderResult;
+  lastGoodFetchedAt?: Date;
 }
 
 export interface PluginRenderCacheModel extends Model<PluginRenderCacheDocument> {
@@ -57,6 +60,8 @@ export default (_crowi: Crowi) => {
       // `Schema.Types.Mixed` lets us round-trip the plugin's exact
       // shape (html / assets / ttlSec / error).
       result: { type: Schema.Types.Mixed, required: true },
+      // Optional — see `PluginRenderCacheDocument.lastGoodFetchedAt`.
+      lastGoodFetchedAt: { type: Date, required: false },
     },
     {
       // No `createdAt` / `updatedAt` — `fetchedAt` already captures

@@ -18,7 +18,7 @@ const buildKey = (overrides: Partial<{ pluginName: string; pluginCacheVersion: n
   embedKey: overrides.embedKey ?? 'abc123',
 });
 
-const buildEntry = (overrides: Partial<{ html: string; ttlSec: number }> = {}) => {
+const buildEntry = (overrides: Partial<{ html: string; ttlSec: number; lastGoodFetchedAt: Date }> = {}) => {
   const now = new Date();
   const ttlSec = overrides.ttlSec ?? 300;
   return {
@@ -26,6 +26,7 @@ const buildEntry = (overrides: Partial<{ html: string; ttlSec: number }> = {}) =
     fetchedAt: now,
     expiresAt: new Date(now.getTime() + ttlSec * 1000),
     result: { html: overrides.html ?? '<p>cached html</p>' },
+    lastGoodFetchedAt: overrides.lastGoodFetchedAt,
   };
 };
 
@@ -108,6 +109,38 @@ describe('MongoCacheStorage', () => {
       expect(got?.html).toBe('expired');
       // The caller can compare `expiresAt` against `now` itself.
       expect(got!.expiresAt.getTime()).toBeLessThan(Date.now());
+    });
+  });
+
+  describe('lastGoodFetchedAt', () => {
+    it('round-trips a set lastGoodFetchedAt', async () => {
+      const cache = buildCache();
+      const key = buildKey();
+      const lastGoodFetchedAt = new Date(Date.now() - 3_600_000);
+      await cache.set(key, buildEntry({ lastGoodFetchedAt }));
+
+      const got = await cache.get(key);
+      expect(got?.lastGoodFetchedAt?.getTime()).toBe(lastGoodFetchedAt.getTime());
+    });
+
+    it('leaves lastGoodFetchedAt undefined when the entry omits it', async () => {
+      const cache = buildCache();
+      const key = buildKey();
+      await cache.set(key, buildEntry());
+
+      const got = await cache.get(key);
+      expect(got?.lastGoodFetchedAt).toBeUndefined();
+    });
+
+    it('clears a previously-set lastGoodFetchedAt on a later write that omits it (degrade past stale-if-error)', async () => {
+      const cache = buildCache();
+      const key = buildKey();
+      await cache.set(key, buildEntry({ lastGoodFetchedAt: new Date() }));
+      expect((await cache.get(key))?.lastGoodFetchedAt).toBeDefined();
+
+      await cache.set(key, buildEntry());
+      const got = await cache.get(key);
+      expect(got?.lastGoodFetchedAt).toBeUndefined();
     });
   });
 

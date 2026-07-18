@@ -77,6 +77,7 @@ export class MongoCacheStorage implements CacheStorage {
       result: doc.result,
       fetchedAt: doc.fetchedAt,
       expiresAt: doc.expiresAt,
+      lastGoodFetchedAt: doc.lastGoodFetchedAt,
     };
   }
 
@@ -150,6 +151,31 @@ export class MongoCacheStorage implements CacheStorage {
       return 'page-quota-exceeded';
     }
 
+    // `lastGoodFetchedAt` is optional and, unlike every other field
+    // here, can legitimately need to be CLEARED (a stale-if-error entry
+    // degrading past `STALE_IF_ERROR_MAX_AGE_SEC` has no last-good left
+    // to track) — `$set` with an `undefined` value would just leave a
+    // stale prior value on the doc, so an absent one goes through
+    // `$unset` instead.
+    const update: { $set: Record<string, unknown>; $unset?: { lastGoodFetchedAt: '' } } = {
+      $set: {
+        pageId,
+        pluginName: key.pluginName,
+        embedKey: key.embedKey,
+        pluginCacheVersion: key.pluginCacheVersion,
+        html,
+        htmlBytes,
+        fetchedAt: entry.fetchedAt,
+        expiresAt: entry.expiresAt,
+        result: entry.result satisfies RenderResult,
+      },
+    };
+    if (entry.lastGoodFetchedAt) {
+      update.$set.lastGoodFetchedAt = entry.lastGoodFetchedAt;
+    } else {
+      update.$unset = { lastGoodFetchedAt: '' };
+    }
+
     await this.deps.PluginRenderCache.updateOne(
       {
         pageId,
@@ -157,19 +183,7 @@ export class MongoCacheStorage implements CacheStorage {
         embedKey: key.embedKey,
         pluginCacheVersion: key.pluginCacheVersion,
       },
-      {
-        $set: {
-          pageId,
-          pluginName: key.pluginName,
-          embedKey: key.embedKey,
-          pluginCacheVersion: key.pluginCacheVersion,
-          html,
-          htmlBytes,
-          fetchedAt: entry.fetchedAt,
-          expiresAt: entry.expiresAt,
-          result: entry.result satisfies RenderResult,
-        },
-      },
+      update,
       { upsert: true },
     ).exec();
     return null;
