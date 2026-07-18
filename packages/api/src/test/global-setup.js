@@ -2,6 +2,7 @@ const fs = require('node:fs');
 const net = require('node:net');
 const os = require('node:os');
 const { getSentinelPath } = require('./test-mongo-sentinel');
+const { REDIS_SMOKE_TARGETS, writeConnectivitySentinel } = require('./redis-smoke-sentinel');
 
 // `@crowi/api`'s jest `globalSetup` — the ORIGINAL of this probe cascade
 // (feature-test-parallel-db-flake-hardening, Phase 2 / A2 for the
@@ -88,6 +89,32 @@ async function probeReachable(uri, probe) {
 // reads the same way.
 function isNonBlank(value) {
   return Boolean(value && value.trim());
+}
+
+/**
+ * feature-redis-8-upgrade Phase 2 — probe the 3 Redis targets Phase 1
+ * landed (`docker-compose.yml` / `ci.yml`: shared `redis`, Config-smoke-only
+ * `crowi-test-redis`, TLS fixture `crowi-test-redis-tls`) exactly once, here
+ * in the main process before any worker forks — same reasoning as the Mongo
+ * cascade above (a single load-spiked false negative under the boot
+ * thundering-herd must not misroute a worker). Reuses the SAME `probeTcp` /
+ * `probeReachable` this file already defines for Mongo — a bare TCP connect
+ * is sufficient for a routing decision (the boot/TLS smoke test itself is
+ * what verifies the TLS handshake actually completes).
+ *
+ * Unlike Mongo, there is no `crowi-environment.js` per-worker consumer for
+ * these results — `src/test/redis-smoke.ts` reads the connectivity sentinel
+ * SYNCHRONOUSLY at each `*.smoke.test.ts` file's collection time (so
+ * `describe.skip` can be a normal declarative call; async reachability
+ * can't gate `describe` registration otherwise) — see
+ * `redis-smoke-sentinel.js`'s doc comment for the full protocol.
+ */
+async function probeRedisSmokeTargets(probe) {
+  const result = {};
+  for (const [key, url] of Object.entries(REDIS_SMOKE_TARGETS)) {
+    result[key] = { url, reachable: await probeReachable(url, probe) };
+  }
+  return result;
 }
 
 /**
@@ -329,6 +356,32 @@ async function globalSetup(globalConfig, _projectConfig, deps = {}) {
   // needing to travel through the sentinel file itself.
   process.env.CROWI_TEST_RUN_ID ??= `${process.pid}-${Date.now().toString(36)}`;
 
+  // feature-redis-8-upgrade Phase 2 — probe the 3 Redis targets ONCE, here,
+  // independent of the Mongo branching below (every early `return` past
+  // this point must still have run this). CI (`process.env.CI === 'true'`)
+  // fails the WHOLE run immediately when any target is unreachable — Phase 1
+  // guarantees all 3 exist in CI, so an unreachable one is an infra
+  // regression, never a "skip and stay green" situation (mirrors this same
+  // function's Mongo CI-guard philosophy, but the opposite polarity: Mongo
+  // auto-detects locally and requires an explicit URI in CI; Redis probes
+  // the SAME 3 fixed targets in both environments and only diverges on what
+  // an unreachable result means). Local (non-CI): record reachability and
+  // let each `*.smoke.test.ts` file's `describe.skip` react to it — no
+  // fast-fail.
+  const redisSmokeResult = await probeRedisSmokeTargets(probe);
+  writeConnectivitySentinel(redisSmokeResult);
+  if (process.env.CI === 'true') {
+    const unreachable = Object.entries(redisSmokeResult)
+      .filter(([, v]) => !v.reachable)
+      .map(([key, v]) => `${key} (${v.url})`);
+    if (unreachable.length > 0) {
+      throw new Error(
+        `[test] CI Redis smoke target(s) unreachable, failing fast (feature-redis-8-upgrade Phase 1 provisions all 3 ` +
+          `unconditionally in CI, so this is an infra regression, not an expected gap): ${unreachable.join(', ')}`,
+      );
+    }
+  }
+
   if (isNonBlank(process.env.MONGO_URI)) {
     // env wins; don't also auto-detect. Recorded (not merely `''`, see
     // `writeSentinel()`'s doc comment) so `crowi-environment.js` still has a
@@ -418,4 +471,5 @@ globalSetup.__test__ = {
   warnOnWorkerPoolDrift,
   ASSUMED_MAX_POOL_SIZE,
   SOCKET_BUDGET_PER_CPU,
+  probeRedisSmokeTargets,
 };
