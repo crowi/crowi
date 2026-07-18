@@ -55,8 +55,10 @@ describe('Test for Crowi application context', () => {
       ['redis://localhost:6379', true, { socket: { host: 'localhost', port: 6379 } }],
       ['redis://localhost:6379', false, { socket: { host: 'localhost', port: 6379 } }],
 
-      ['redis://user:password@localhost:6379', true, { socket: { host: 'localhost', port: 6379 }, password: 'password' }],
-      ['redis://user:password@localhost:6379', false, { socket: { host: 'localhost', port: 6379 }, password: 'password' }],
+      // ACL username is forwarded too (it used to be dropped, leaving the
+      // api client AUTHing as `default` while collab used the URL's user).
+      ['redis://user:password@localhost:6379', true, { socket: { host: 'localhost', port: 6379 }, username: 'user', password: 'password' }],
+      ['redis://user:password@localhost:6379', false, { socket: { host: 'localhost', port: 6379 }, username: 'user', password: 'password' }],
 
       // node-redis v4 requires the LITERAL `tls: true` with the TLS options
       // flattened into the socket object (`RedisTlsSocketOptions`); a nested

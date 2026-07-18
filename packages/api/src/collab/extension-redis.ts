@@ -123,16 +123,17 @@ function parseRedisUrlForIoredis(redisUrl: string): {
   password?: string;
   tls?: { rejectUnauthorized: boolean };
 } {
-  const { hostname, port, auth, protocol } = url.parse(redisUrl);
-  const host = hostname ?? '127.0.0.1';
-  const portNumber = port ? Number.parseInt(port, 10) : 6379;
+  // WHATWG URL, not legacy url.parse — the legacy parser pre-decoded the
+  // userinfo, double-decoding credentials and breaking passwords that
+  // contain ':' or '@' (same defect class fixed in util/redis-opts.ts;
+  // both parsers must stay credential-identical for the same REDIS_URL).
+  const u = new URL(redisUrl);
+  const host = u.hostname ? u.hostname.replace(/^\[|\]$/g, '') : '127.0.0.1';
+  const portNumber = u.port ? Number.parseInt(u.port, 10) : 6379;
   const opts: ReturnType<typeof parseRedisUrlForIoredis> = { host, port: portNumber };
-  if (auth) {
-    const [user, pass] = auth.split(':');
-    if (user) opts.username = decodeURIComponent(user);
-    if (pass !== undefined) opts.password = decodeURIComponent(pass);
-  }
-  if (protocol === 'rediss:') {
+  if (u.username) opts.username = decodeURIComponent(u.username);
+  if (u.password) opts.password = decodeURIComponent(u.password);
+  if (u.protocol === 'rediss:') {
     const rejectUnauthorized = process.env.REDIS_REJECT_UNAUTHORIZED !== '0';
     opts.tls = { rejectUnauthorized };
   }

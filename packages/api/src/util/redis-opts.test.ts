@@ -26,6 +26,50 @@ describe('buildRedisOpts', () => {
     });
   });
 
+  it('redis://user:pass@host forwards BOTH the ACL username and password (decoded), matching collab parseRedisUrlForIoredis', () => {
+    // node-redis v4 AUTHs with the top-level `username` option (ACL). The
+    // old implementation kept only the password, so an ACL URL had the api
+    // client authenticating as the `default` user while collab's ioredis
+    // parser (extension-redis.ts) passed both — same URL, divergent auth.
+    expect(buildRedisOpts('redis://app%40svc:p%40ss@localhost:6379', false)).toStrictEqual({
+      socket: { host: 'localhost', port: 6379 },
+      username: 'app@svc',
+      password: 'p@ss',
+    });
+  });
+
+  it('redis://:pass@host (empty username) stays password-only; redis://user@host (no colon) is username-only', () => {
+    expect(buildRedisOpts('redis://:secret@localhost:6379', false)).toStrictEqual({
+      socket: { host: 'localhost', port: 6379 },
+      password: 'secret',
+    });
+    expect(buildRedisOpts('redis://onlyuser@localhost:6379', false)).toStrictEqual({
+      socket: { host: 'localhost', port: 6379 },
+      username: 'onlyuser',
+    });
+  });
+
+  it('decodes credentials exactly ONCE and keeps the user:pass boundary for encoded colons (legacy url.parse pre-decoded and broke both)', () => {
+    // %2540 must decode to the literal '%40' (NOT '@' — that would be a
+    // double decode), and an encoded ':' must stay inside the password.
+    expect(buildRedisOpts('redis://acl:p%2540ss@localhost:6379', false)).toStrictEqual({
+      socket: { host: 'localhost', port: 6379 },
+      username: 'acl',
+      password: 'p%40ss',
+    });
+    expect(buildRedisOpts('redis://acl:pa%3Ass@localhost:6379', false)).toStrictEqual({
+      socket: { host: 'localhost', port: 6379 },
+      username: 'acl',
+      password: 'pa:ss',
+    });
+  });
+
+  it('IPv6 literal hosts lose the WHATWG brackets (net/tls connect want the bare address)', () => {
+    expect(buildRedisOpts('redis://[::1]:6379', false)).toStrictEqual({
+      socket: { host: '::1', port: 6379 },
+    });
+  });
+
   it('redis:// carries no tls key at all', () => {
     expect(buildRedisOpts('redis://localhost:6379', true)).toStrictEqual({
       socket: { host: 'localhost', port: 6379 },
