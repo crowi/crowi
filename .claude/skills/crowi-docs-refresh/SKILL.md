@@ -53,12 +53,32 @@ git log --merges --format="%h %s%n%b" <range>
 - **docs 必要**: 新しい記法 / config / env / UI 挙動 / 運用手順の変化 → Step 2 へ。
 - **docs 不要**: 内部 refactor・test・CI のみ → skip(判断を 1 行残す)。
 
+### モデル割り当て(Codex/Claude の分担 — 2026-07-18 user 合意)
+
+制御・glue・ゲート・commit は Claude(本 session)、分析・批評・長文は Codex。
+Codex は必ず `.claude/scripts/codex-run.sh` 経由(exec + strict schema。
+`--tier sol|terra|luna` — sol=最難関/terra=標準/luna=軽作業)。再実行前に
+stale 成果物を掃除する(codex-runs の invocation 跨ぎ再利用に注意)。
+
+| 仕事 | 担当 |
+|---|---|
+| scope 解決・delta 抽出・parity/build ゲート・commit | Claude(session) |
+| 陳腐化 sweep(docs↔code の敵対照合) | Codex **terra** |
+| 難所の挙動解明(cache 意味論・並行・security — 誤記述が実害になる箇所) | Codex **sol**(単発・難所限定) |
+| en ページの draft(長文) | Codex **terra** |
+| ja ページの draft(既存 docs の文体との一貫性) | Claude |
+| 最終照合 | **書き手と逆のモデル**(Claude 執筆分は Codex が事実照合、Codex 執筆分は Claude が照合) |
+
 ### Step 2: 書き足し(実コードから書く)
 
 - **commit message や changeset の文面だけから書かない**。該当の実コード
   (handler / plugin / component)と、あればテストの AC を読んでから書く —
   message は意図であり、docs は挙動の記述。spec ファイルは integrate 後に
-  消えているのが正常なので、頼らない。
+  消えているのが正常なので、頼らない。挙動が非自明な難所(上表)は先に
+  Codex sol へ「file:line 根拠付きで正確な挙動を説明せよ」を単発で投げ、
+  その出力を下敷きにする。
+- **en は Codex terra に draft させ、ja は Claude が書く**(en の翻訳ではなく
+  既存 ja docs の文体で書き直す)。書き上がったら逆モデルで事実照合。
 - 置き場所は既存 4 section の構造に従う(新記法 → guide/markdown、plugin →
   plugins/、env・deploy → operations/、API 面 → reference/)。新ページより
   既存ページへの追記を優先。
@@ -70,16 +90,21 @@ git log --merges --format="%h %s%n%b" <range>
 
 a. **delta 隣接ページの精読**: Step 1 の変更が触れた領域の既存ページを読み、
    今回の変更で古くなった記述(挙動・制限・既定値)を直す。
-b. **機械照合 sweep**: docs 中の検証可能な claim を実コードと突き合わせる。
-   照合先の正:
+b. **機械照合 sweep(Codex terra へ offload)**: 「以下の docs の claim 群を
+   実コードに当てて反証せよ」を `codex-run.sh --sandbox read-only --tier terra`
+   に exec + strict FINDINGS schema(crowi-review と同形)で投げる。照合先の正:
    - env 変数 → `.env.example` + `packages/api/src/util/env-schema.ts`
    - config キー → `apps/crowi-runner/crowi.config.json` + 各 plugin の config schema
    - 記法・embed tag → renderer 登録(`addEmbedTag` / `addCodeBlockRenderer` 等の呼び出し)
    - コマンド・scripts → 各 `package.json` / `crowi-admin` / `@crowi/cli`
    - ポート・URL → `scripts/dev-ports.mjs` / `Caddyfile`
-   検出した stale 記述は **fix or drop**(修正するか、誤検出として 1 行報告)。
-   確信が持てない claim は「docs が正しく code が変」の可能性もある — その場合は
-   直さず報告してユーザー判断(docs 側を勝手に実装へ合わせない)。
+   findings は Claude が **verification-on-action** で裁く(直すものだけ実コードで
+   裏取り)— **fix or drop**(修正するか、誤検出として 1 行報告)。terra の指摘の
+   うち確信が持てず裏取りも難しい claim だけ **sol にエスカレーション**して正否を
+   確定する(sweep 全体を sol で回すのは過剰)。codex 不可(exit 2)なら Claude
+   subagent で代替し、報告に明記。
+   なお「docs が正しく code が退行」の可能性が残る claim は直さず報告して
+   ユーザー判断(docs 側を勝手に実装へ合わせない)。
 
 ### Step 4: ゲート
 
