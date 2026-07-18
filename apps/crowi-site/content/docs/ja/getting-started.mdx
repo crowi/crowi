@@ -61,7 +61,7 @@ docker compose up -d
 | サービス | ポート | 用途 |
 | -------- | ------ | ---- |
 | MongoDB | 27017 | ページ・リビジョン・ユーザーなどの永続化先 |
-| Redis | 6379 | セッション / リアルタイム共同編集の pub/sub |
+| Redis | 6379 | 連携用途: リアルタイム共同編集/プレゼンス/通知の pub/sub・編集者上限カウンタ・設定同期・rate limiting・LRU |
 | Elasticsearch | 9200 | 全文検索バックエンド (任意) |
 | PlantUML | 8080 | PlantUML 図のレンダリングサーバ (任意) |
 

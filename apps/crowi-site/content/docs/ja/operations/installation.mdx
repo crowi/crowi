@@ -23,7 +23,7 @@ Crowi 2.0 は Turborepo + pnpm のモノレポ構成で、API・Web フロント
 | Node.js | 24.x | API / Web の実行ランタイム |
 | pnpm | 10.34.3 (corepack 経由) | パッケージマネージャ (`packageManager` は `pnpm@10.34.3`) |
 | MongoDB | 7 以降 (開発用イメージは `mongo:8`) | Wiki データの永続化 |
-| Redis | 7 以降 | セッション・リアルタイム共同編集の pub/sub |
+| Redis | `>=8.0 <9` (開発用イメージは `redis:8.8.0`) | 連携用途: 共同編集/プレゼンス/通知の pub/sub・編集者上限カウンタ・設定同期・rate limiting・LRU |
 | Elasticsearch | 任意 | 全文検索バックエンド (プラグイン駆動) |
 | Docker / Docker Compose | 任意 | ローカルインフラの起動に利用 |
 
@@ -89,7 +89,7 @@ api は `tsx watch` で起動するため、初回起動はおよそ 1 秒で完
 | サービス | イメージ | ホスト側ポート |
 | -------- | -------- | -------------- |
 | `mongodb` | `mongo:8` | `27017` |
-| `redis` | `redis:7` | `6379` |
+| `redis` | `redis:8.8.0` | `6379` |
 | `elasticsearch` | カスタムイメージ (9.4.0 + `analysis-kuromoji`) | `9200` |
 | `plantuml` | `plantuml/plantuml-server` | `8080` |
 

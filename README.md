@@ -135,13 +135,14 @@ pnpm dev:site      # crowi.wiki LP + docs (port 4303)
 | Variable | Purpose |
 | --- | --- |
 | `MONGO_URI` | MongoDB connection string |
-| `REDIS_URL` | Sessions + socket.io adapter (use `rediss://` for TLS) |
+| `REDIS_URL` | Coordination for realtime-collab pub/sub, the editor-cap counter, presence, notification invalidation, Config sync, rate limiting, and LRU (use `rediss://` for TLS) |
 | `PASSWORD_SEED` | Legacy password hashing seed (still used for fallback verification) |
 | `CLIENT_URL` | CORS allowlist origin in production (defaults allow localhost in dev) |
 | `CROWI_ENCRYPTION_KEY` | Base64-encoded 32-byte AES-256 key for sensitive Config encryption. Generate via `openssl rand -base64 32` or `pnpm --filter @crowi/api crypto:gen-key`. Strongly recommended to set; missing key falls back to plaintext (legacy behaviour) with a startup warning. |
 | `PORT` | API server port (default `4301`) |
 | `NODE_ENV` | `production` or `development` |
 
+See [Redis licensing and engine support policy](https://github.com/crowi/crowi/blob/main/apps/crowi-site/content/docs/en/operations/realtime-collab.mdx#redis-licensing-and-engine-support-policy) for supported Redis versions, image pinning, and ACL security guidance covering every `REDIS_URL` consumer above.
 Storage backend selection is driven by the runner's `crowi.config.json`
 (`storage.driver: 'local' | 's3' | ...`) plus the corresponding
 `@crowi/plugin-storage-*` package — there is no `FILE_UPLOAD` env any

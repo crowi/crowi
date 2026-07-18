@@ -14,7 +14,7 @@ recovery.
 | MongoDB | All documents — pages, revisions, users, comments, config | **Required** |
 | Attachment storage | The actual uploaded files | **Required** |
 | Elasticsearch | The full-text search index | Not needed (rebuildable) |
-| Redis | Sessions, Socket.IO adapter, editor counters, etc. | Not needed (assumed volatile) |
+| Redis | Ephemeral state: collab/presence/notifications pub/sub, editor-cap counter, Config sync, rate-limit windows, LRU | Not needed (assumed volatile) |
 
 The key point: **MongoDB and the attachment storage are the two things
 essential for recovery**, while Elasticsearch and Redis do not need to be
@@ -117,12 +117,27 @@ For search backend configuration, see
 
 ## Redis — no backup needed
 
-Redis is used as the session store, the Socket.IO adapter, the pub/sub
-for realtime collaborative editing, and a per-page editor counter. None of
-it is **data that matters if it is lost**.
+Redis backs 7 consumers, but they don't all serve the same purpose: the
+realtime collaborative editor's cross-instance pub/sub, presence
+fan-out, notification invalidation, and Config change pub/sub exist
+purely to coordinate across replicas (no-ops on a single instance). The
+editor-cap counter, rate limiting, and LRU (recently-viewed pages) also
+do useful work on a single instance — see the "Single-instance
+deployment" section of
+[Operating realtime collaborative editing](./realtime-collab) for how
+each one degrades when `REDIS_URL` is unset. None of it is **data that
+matters if it is lost** — page content always lives in MongoDB, never
+Redis.
 
-- Losing Redis resets login sessions and users are asked to log in again,
-  but the wiki content is unaffected.
+- Losing Redis pauses cross-instance fan-out for collab, presence, and
+  notifications — each api replica keeps serving its own locally
+  connected clients in the meantime — and clears any in-progress
+  rate-limit windows and the LRU (recently-viewed pages) store. Open
+  realtime connections do **not** need to reconnect: ioredis retries
+  automatically and pub/sub resumes on its own once Redis is back (see
+  the "Failure modes" section of
+  [Operating realtime collaborative editing](./realtime-collab)). Page
+  content and login sessions (JWT, stateless) are unaffected throughout.
 - The source of truth for realtime collaborative editing is
   `Page.yjsState` in MongoDB; Redis is only for live routing.
 
@@ -139,7 +154,9 @@ The rough flow for restoring Crowi to a new environment is as follows.
    the restore target's `.env` (required to decrypt sensitive Config).
 4. Start the api.
 5. Rebuild the search index with `crowi-admin rebuild search`.
-6. Redis can start empty (sessions are regenerated on re-login).
+6. Redis can start empty — coordination state (editor caps, presence,
+   rate-limit windows) rebuilds itself as clients reconnect; it has no
+   effect on login (JWT is stateless) or page content.
 
 > **Tip**: Before going into production, we strongly recommend running a
 > recovery from backup end-to-end once in a staging environment. Issues

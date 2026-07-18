@@ -248,7 +248,8 @@ Start the api and confirm `/api/v2/app/info` returns 200, then start the web app
 </Steps>
 
 <Callout type="info">
-  For multi-replica deployments, `REDIS_URL` (session / collab pub/sub) is
+  For multi-replica deployments, `REDIS_URL` (collab/presence/notifications
+  pub/sub, editor-cap counter, Config sync, rate limiting, LRU) is
   **required**, and `WS_TOKEN_SECRET` must be identical across all api replicas.
   See [Realtime collaboration](./realtime-collab).
 </Callout>

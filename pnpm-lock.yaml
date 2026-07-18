@@ -315,6 +315,9 @@ importers:
       hono-rate-limiter:
         specifier: 'catalog:'
         version: 0.5.3(hono@4.12.26)
+      ioredis:
+        specifier: ^5.6.1
+        version: 5.6.1
       jiti:
         specifier: ^2.7.0
         version: 2.7.0
@@ -370,6 +373,9 @@ importers:
       '@crowi/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
+      '@hocuspocus/provider':
+        specifier: ^4.0.0
+        version: 4.0.0(y-protocols@1.0.7(yjs@13.6.30))(yjs@13.6.30)
       '@types/bcryptjs':
         specifier: ^3.0.0
         version: 3.0.0
@@ -445,6 +451,12 @@ importers:
       typescript:
         specifier: 'catalog:'
         version: 5.8.3
+      y-protocols:
+        specifier: ^1.0.7
+        version: 1.0.7(yjs@13.6.30)
+      yjs:
+        specifier: ^13.6.8
+        version: 13.6.30
 
   packages/api-contract:
     dependencies:

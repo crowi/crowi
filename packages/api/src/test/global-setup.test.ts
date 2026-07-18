@@ -33,13 +33,28 @@
 import { randomUUID } from 'node:crypto';
 import { readFileSync, rmSync } from 'node:fs';
 
-// `global-setup.js` / `test-mongo-sentinel.js` are plain CJS with no type
-// declarations — required directly rather than imported (same pattern as
-// `crowi-environment.test.ts`).
+// `global-setup.js` / `test-mongo-sentinel.js` / `redis-smoke-sentinel.js`
+// are plain CJS with no type declarations — required directly rather than
+// imported (same pattern as `crowi-environment.test.ts`).
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const globalSetup = require('./global-setup');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { getSentinelPath } = require('./test-mongo-sentinel');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { REDIS_SMOKE_TARGETS, getConnectivitySentinelPath, readConnectivitySentinel } = require('./redis-smoke-sentinel');
+
+/**
+ * feature-redis-8-upgrade Phase 2 — `globalSetup` now ALSO probes the 3
+ * Redis smoke targets (see the new `describe('globalSetup — Redis smoke
+ * connectivity probe', ...)` block below) on EVERY code path, before the
+ * Mongo branching. The existing Mongo-focused `describe('globalSetup', ...)`
+ * tests below therefore mark all 3 as reachable (one call each, via the same
+ * injected fake `probe`) so their pre-existing `calls` assertions stay
+ * meaningful for Mongo instead of also having to encode the Redis retry
+ * cascade — the Redis probe's OWN behavior (reachable / unreachable / CI
+ * fail-fast) gets its own dedicated tests instead.
+ */
+const REDIS_URLS: string[] = Object.values(REDIS_SMOKE_TARGETS);
 
 type ProbeFn = (uri: string, timeoutMs: number) => Promise<boolean>;
 
@@ -163,6 +178,11 @@ describe('globalSetup', () => {
     } catch {
       // best-effort cleanup
     }
+    try {
+      rmSync(getConnectivitySentinelPath(), { force: true });
+    } catch {
+      // best-effort cleanup
+    }
     if (originalRunId === undefined) delete process.env.CROWI_TEST_RUN_ID;
     else process.env.CROWI_TEST_RUN_ID = originalRunId;
     if (originalMongoUri === undefined) delete process.env.MONGO_URI;
@@ -188,28 +208,30 @@ describe('globalSetup', () => {
     return JSON.parse(sentinelContent());
   }
 
-  it('MONGO_URI hard override: records strategy env-override with the raw MONGO_URI value, and never probes', async () => {
+  it('MONGO_URI hard override: records strategy env-override with the raw MONGO_URI value, and never probes Mongo (Redis smoke probe still runs, unconditionally)', async () => {
     process.env.MONGO_URI = 'mongodb://example.invalid:27017/whatever';
     delete process.env.TEST_MONGO_URI;
     delete process.env.CI;
-    const { probe, calls } = fakeProbe(new Set([TEST_MONGODB_URI, DEV_MONGO_URI]));
+    const { probe, calls } = fakeProbe(new Set([...REDIS_URLS, TEST_MONGODB_URI, DEV_MONGO_URI]));
 
     await globalSetup(undefined, undefined, { probeTcp: probe });
 
     expect(sentinelRecord()).toEqual({ strategy: 'env-override', uri: 'mongodb://example.invalid:27017/whatever' });
-    expect(calls).toHaveLength(0);
+    // Only the 3 Redis smoke targets — Mongo's own MONGO_URI override branch
+    // never probes.
+    expect(calls).toEqual(REDIS_URLS);
   });
 
-  it('CI fast-fail path (no TEST_MONGO_URI): records strategy memory-server and never probes', async () => {
+  it('CI fast-fail path (no TEST_MONGO_URI): records strategy memory-server and never probes Mongo (Redis smoke probe still runs, unconditionally)', async () => {
     delete process.env.MONGO_URI;
     delete process.env.TEST_MONGO_URI;
     process.env.CI = 'true';
-    const { probe, calls } = fakeProbe(new Set([TEST_MONGODB_URI, DEV_MONGO_URI]));
+    const { probe, calls } = fakeProbe(new Set([...REDIS_URLS, TEST_MONGODB_URI, DEV_MONGO_URI]));
 
     await globalSetup(undefined, undefined, { probeTcp: probe });
 
     expect(sentinelRecord()).toEqual({ strategy: 'memory-server', uri: null });
-    expect(calls).toHaveLength(0);
+    expect(calls).toEqual(REDIS_URLS);
   });
 
   it('sacred priority order: TEST_MONGO_URI still wins over the CI auto-detect guard — CI does NOT short-circuit ahead of an explicit override', async () => {
@@ -217,13 +239,14 @@ describe('globalSetup', () => {
     process.env.CI = 'true';
     const override = 'mongodb://example.invalid:27099/?maxPoolSize=10';
     process.env.TEST_MONGO_URI = override;
-    const { probe, calls } = fakeProbe(new Set([override, TEST_MONGODB_URI, DEV_MONGO_URI]));
+    const { probe, calls } = fakeProbe(new Set([...REDIS_URLS, override, TEST_MONGODB_URI, DEV_MONGO_URI]));
 
     await globalSetup(undefined, undefined, { probeTcp: probe });
 
     expect(sentinelRecord()).toEqual({ strategy: 'env-override', uri: override });
-    // Exactly one probe call, against the override only.
-    expect(calls).toEqual([override]);
+    // The 3 Redis smoke targets (unconditional), then exactly one Mongo
+    // probe call, against the override only.
+    expect(calls).toEqual([...REDIS_URLS, override]);
   });
 
   it('CI + unreachable TEST_MONGO_URI: falls straight to the memory-server sentinel WITHOUT the CI guard reviving the 27018/27017 cascade', async () => {
@@ -231,14 +254,15 @@ describe('globalSetup', () => {
     process.env.CI = 'true';
     const override = 'mongodb://example.invalid:27099/?maxPoolSize=10';
     process.env.TEST_MONGO_URI = override;
-    const { probe, calls } = fakeProbe(new Set([TEST_MONGODB_URI, DEV_MONGO_URI]));
+    const { probe, calls } = fakeProbe(new Set([...REDIS_URLS, TEST_MONGODB_URI, DEV_MONGO_URI]));
 
     await globalSetup(undefined, undefined, { probeTcp: probe });
 
     expect(sentinelRecord()).toEqual({ strategy: 'memory-server', uri: null });
-    // Both retry attempts target the override only — 27018/27017 (both
-    // reachable per the `Set` above) never appear in the call list.
-    expect(calls).toEqual([override, override]);
+    // The 3 Redis smoke targets (unconditional), then both retry attempts
+    // against the override only — 27018/27017 (both reachable per the `Set`
+    // above) never appear in the call list.
+    expect(calls).toEqual([...REDIS_URLS, override, override]);
   });
 
   it('TEST_MONGO_URI override: records strategy env-override when reachable, probing only that candidate (never 27018/27017)', async () => {
@@ -246,47 +270,50 @@ describe('globalSetup', () => {
     delete process.env.CI;
     const override = 'mongodb://example.invalid:27099/?maxPoolSize=10';
     process.env.TEST_MONGO_URI = override;
-    const { probe, calls } = fakeProbe(new Set([override, TEST_MONGODB_URI, DEV_MONGO_URI]));
+    const { probe, calls } = fakeProbe(new Set([...REDIS_URLS, override, TEST_MONGODB_URI, DEV_MONGO_URI]));
 
     await globalSetup(undefined, undefined, { probeTcp: probe });
 
     expect(sentinelRecord()).toEqual({ strategy: 'env-override', uri: override });
-    // Exactly one probe call, against the override only.
-    expect(calls).toEqual([override]);
+    // The 3 Redis smoke targets (unconditional), then exactly one Mongo
+    // probe call, against the override only.
+    expect(calls).toEqual([...REDIS_URLS, override]);
   });
 
   it('no env override, crowi-test-mongodb (27018) reachable: records strategy docker-test, never probing 27017', async () => {
     delete process.env.MONGO_URI;
     delete process.env.TEST_MONGO_URI;
     delete process.env.CI;
-    const { probe, calls } = fakeProbe(new Set([TEST_MONGODB_URI, DEV_MONGO_URI]));
+    const { probe, calls } = fakeProbe(new Set([...REDIS_URLS, TEST_MONGODB_URI, DEV_MONGO_URI]));
 
     await globalSetup(undefined, undefined, { probeTcp: probe });
 
     expect(sentinelRecord()).toEqual({ strategy: 'docker-test', uri: TEST_MONGODB_URI });
-    // Exactly one probe call, against 27018 only — pinning the full call
-    // list (not just asserting DEV_MONGO_URI's absence) rules out a vacuous
-    // pass if the call list were ever empty for an unrelated reason.
-    expect(calls).toEqual([TEST_MONGODB_URI]);
+    // The 3 Redis smoke targets (unconditional), then exactly one Mongo
+    // probe call, against 27018 only — pinning the full call list (not just
+    // asserting DEV_MONGO_URI's absence) rules out a vacuous pass if the
+    // call list were ever empty for an unrelated reason.
+    expect(calls).toEqual([...REDIS_URLS, TEST_MONGODB_URI]);
   });
 
   it('no env override, 27018 unreachable, dev mongo (27017) reachable: records strategy docker-dev', async () => {
     delete process.env.MONGO_URI;
     delete process.env.TEST_MONGO_URI;
     delete process.env.CI;
-    const { probe, calls } = fakeProbe(new Set([DEV_MONGO_URI]));
+    const { probe, calls } = fakeProbe(new Set([...REDIS_URLS, DEV_MONGO_URI]));
 
     await globalSetup(undefined, undefined, { probeTcp: probe });
 
     expect(sentinelRecord()).toEqual({ strategy: 'docker-dev', uri: DEV_MONGO_URI });
-    // 27018 is probed TWICE (the transient-stall retry fires because it's
-    // unreachable both times) BEFORE falling through to 27017 — pin the
-    // exact ordered call list so this proves the cascade order, not just
-    // that both ports were touched at some point.
-    expect(calls).toEqual([TEST_MONGODB_URI, TEST_MONGODB_URI, DEV_MONGO_URI]);
+    // The 3 Redis smoke targets (unconditional), then 27018 probed TWICE
+    // (the transient-stall retry fires because it's unreachable both times)
+    // BEFORE falling through to 27017 — pin the exact ordered call list so
+    // this proves the cascade order, not just that both ports were touched
+    // at some point.
+    expect(calls).toEqual([...REDIS_URLS, TEST_MONGODB_URI, TEST_MONGODB_URI, DEV_MONGO_URI]);
   });
 
-  it('no env override, neither reachable: records strategy memory-server', async () => {
+  it('no env override, neither reachable: records strategy memory-server (Redis smoke targets also unreachable, but non-CI so no throw)', async () => {
     delete process.env.MONGO_URI;
     delete process.env.TEST_MONGO_URI;
     delete process.env.CI;
@@ -295,10 +322,53 @@ describe('globalSetup', () => {
     await globalSetup(undefined, undefined, { probeTcp: probe });
 
     expect(sentinelRecord()).toEqual({ strategy: 'memory-server', uri: null });
-    // Both candidates are probed TWICE each (the transient-stall retry fires
-    // for both, since neither ever answers) before giving up — pin the exact
-    // ordered call list, not just the empty-sentinel result.
-    expect(calls).toEqual([TEST_MONGODB_URI, TEST_MONGODB_URI, DEV_MONGO_URI, DEV_MONGO_URI]);
+    // Every Redis smoke target is probed TWICE (unreachable, same
+    // transient-stall retry), then both Mongo candidates are probed TWICE
+    // each — pin the exact ordered call list, not just the empty-sentinel
+    // result.
+    expect(calls).toEqual([...REDIS_URLS.flatMap((url) => [url, url]), TEST_MONGODB_URI, TEST_MONGODB_URI, DEV_MONGO_URI, DEV_MONGO_URI]);
+  });
+
+  it('does NOT throw locally (non-CI) when a Redis smoke target is unreachable — only records it in the connectivity sentinel', async () => {
+    delete process.env.MONGO_URI;
+    delete process.env.TEST_MONGO_URI;
+    delete process.env.CI;
+    const { probe } = fakeProbe(new Set([TEST_MONGODB_URI, DEV_MONGO_URI])); // no Redis URL reachable
+
+    await expect(globalSetup(undefined, undefined, { probeTcp: probe })).resolves.toBeUndefined();
+
+    const redisResult = readConnectivitySentinel();
+    expect(redisResult).toEqual({
+      shared: { url: REDIS_SMOKE_TARGETS.shared, reachable: false },
+      config: { url: REDIS_SMOKE_TARGETS.config, reachable: false },
+      tls: { url: REDIS_SMOKE_TARGETS.tls, reachable: false },
+    });
+  });
+
+  it('CI + all Redis smoke targets reachable: does not throw, records reachable:true for all 3', async () => {
+    process.env.CI = 'true';
+    delete process.env.MONGO_URI;
+    delete process.env.TEST_MONGO_URI;
+    const { probe } = fakeProbe(new Set([...REDIS_URLS, TEST_MONGODB_URI, DEV_MONGO_URI]));
+
+    await expect(globalSetup(undefined, undefined, { probeTcp: probe })).resolves.toBeUndefined();
+
+    const redisResult = readConnectivitySentinel();
+    expect(redisResult).toEqual({
+      shared: { url: REDIS_SMOKE_TARGETS.shared, reachable: true },
+      config: { url: REDIS_SMOKE_TARGETS.config, reachable: true },
+      tls: { url: REDIS_SMOKE_TARGETS.tls, reachable: true },
+    });
+  });
+
+  it('CI + a Redis smoke target unreachable: throws immediately (fail-fast — never silently skips in CI), naming the unreachable target', async () => {
+    process.env.CI = 'true';
+    delete process.env.MONGO_URI;
+    delete process.env.TEST_MONGO_URI;
+    // `config` (crowi-test-redis) missing from the reachable set.
+    const { probe } = fakeProbe(new Set([REDIS_SMOKE_TARGETS.shared, REDIS_SMOKE_TARGETS.tls, TEST_MONGODB_URI, DEV_MONGO_URI]));
+
+    await expect(globalSetup(undefined, undefined, { probeTcp: probe })).rejects.toThrow(/config/);
   });
 });
 

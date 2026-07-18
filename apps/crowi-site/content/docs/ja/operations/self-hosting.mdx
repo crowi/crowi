@@ -240,7 +240,8 @@ api を起動して `/api/v2/app/info` が 200 を返すことを確認してか
 </Steps>
 
 <Callout type="info">
-  複数レプリカで運用する場合は、`REDIS_URL`（セッション / 共同編集の pub/sub）が
+  複数レプリカで運用する場合は、`REDIS_URL`（共同編集/プレゼンス/通知の pub/sub・
+  編集者上限カウンタ・設定同期・rate limiting・LRU）が
   **必須** で、`WS_TOKEN_SECRET` を全 api レプリカで同一値にします。詳細は
   [リアルタイム共同編集](./realtime-collab) を参照してください。
 </Callout>

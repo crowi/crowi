@@ -50,12 +50,68 @@ services:
     ports:
       - 27018:27017
 
+  # Pinned to a reviewed Redis 8.x patch tag (RSALv2/SSPLv1/AGPLv3 licensed;
+  # see the operations docs for the license/support policy once
+  # feature-redis-8-upgrade Phase 4 lands). Moving tags (`redis:8`,
+  # `redis:latest`, and the previous `redis:7`, which itself silently
+  # resolved to the same 7.4.x RSALv2/SSPLv1 generation) are deliberately
+  # avoided: a moving tag can cross a license/behavior boundary without
+  # anyone noticing. Digest pinned alongside the tag for supply-chain
+  # reproducibility; bump both together when following a new patch release
+  # (feature-redis-8-upgrade Phase 1 — patch cadence is manual, no Dependabot
+  # `docker` ecosystem tracking yet).
   redis:
-    image: redis:7
+    image: redis:8.8.0@sha256:234c902a2db49461a129e2d4aeff85b28cf20187ed274a67f6e50995fa713c7b
     container_name: crowi-redis
     restart: unless-stopped
     ports:
       - 6379:6379
+
+  # Test-only Redis, plaintext, Config-pub/sub-smoke ONLY
+  # (feature-redis-8-upgrade Phase 1/2). `ConfigService.setupPubSub()`
+  # subscribes to a single fixed, global 'config' channel
+  # (packages/api/src/service/config.ts) — a PUBLISH there makes EVERY
+  # process sharing the Redis instance unconditionally run
+  # `load()`/`postUpdate()`/`setupMailer()`, including a concurrent
+  # worktree's running dev api on the shared `redis` service above. Config
+  # smoke therefore needs an instance guaranteed to have no other
+  # subscriber, so it runs here instead. Same minimal-config pattern as
+  # `crowi-test-mongodb` above (image/container_name/restart/ports only, no
+  # tmpfs or other hardening needed — this only ever holds disposable smoke
+  # data, never dev data).
+  crowi-test-redis:
+    image: redis:8.8.0@sha256:234c902a2db49461a129e2d4aeff85b28cf20187ed274a67f6e50995fa713c7b
+    container_name: crowi-test-redis
+    restart: unless-stopped
+    ports:
+      - 6380:6379
+
+  # TLS connectivity smoke fixture (feature-redis-8-upgrade Phase 1/2).
+  # Reuses the self-signed cert pair added in fee9c9a4
+  # (packages/api/src/util/__fixtures__/tls/) rather than adding a new
+  # certificate-generation mechanism. TLS-only port — no plaintext port, no
+  # ACL. `--tls-auth-clients no` so the server doesn't require a CA
+  # certificate to verify client certs; the smoke client connects with
+  # `rejectUnauthorized: false` (self-signed, test-only trust — see
+  # redis-opts.test.ts), matching the "handshake succeeds, not a strict CA
+  # chain" scope documented in the spec. Only the boot/TLS handshake smoke
+  # (Phase 2, consumer #8) uses this — Config smoke uses `crowi-test-redis`
+  # above instead.
+  crowi-test-redis-tls:
+    image: redis:8.8.0@sha256:234c902a2db49461a129e2d4aeff85b28cf20187ed274a67f6e50995fa713c7b
+    container_name: crowi-test-redis-tls
+    restart: unless-stopped
+    volumes:
+      - ./packages/api/src/util/__fixtures__/tls:/tls:ro
+    ports:
+      - 6381:6381
+    command: >-
+      redis-server
+      --port 0
+      --tls-port 6381
+      --tls-cert-file /tls/localhost-cert.pem
+      --tls-key-file /tls/localhost-key.pem
+      --tls-auth-clients no
 
   elasticsearch:
     # Custom image: stock 9.4.0 + analysis-kuromoji preinstalled so the
