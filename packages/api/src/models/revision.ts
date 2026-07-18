@@ -23,6 +23,31 @@ export type { RevisionType };
 export interface RevisionDocument extends Document {
   _id: Types.ObjectId;
   path: string;
+  /**
+   * DC-5 (`feature-revision-page-ref`): the immutable `Page._id` this
+   * revision was created against. `path` above is a mutable, reused string
+   * (rename moves it, delete/recreate can hand it to an unrelated page) —
+   * `page` is the id-based source of truth for "which page does this
+   * revision actually belong to", set once in `prepareRevision` and never
+   * rewritten afterwards (unlike `path`, which `Page.rename` still
+   * best-effort syncs for display — see `Page.rename`).
+   *
+   * Optional/nullable, not `Types.ObjectId` — three real on-disk shapes
+   * exist: (a) a genuine `ObjectId` for every revision `prepareRevision`
+   * wrote, (b) the field entirely absent (`undefined`) on a revision
+   * written before this field existed and not yet visited by the boot
+   * migration, and (c) an explicit `null` on a row the migration visited
+   * but could NOT confidently resolve to a current page (standard-lifecycle
+   * deviation, or a stranded revision from a page that has since been
+   * deleted and whose path was later reused by an unrelated page — see
+   * `revision-page-ref-backfill`'s doc comment). (b) and (c) look the same
+   * to callers (falsy — read paths must fail closed either way), but they
+   * are deliberately distinct on disk: (c)'s explicit `null` is what lets
+   * the migration's `isPending` probe (`{ page: { $exists: false } }`)
+   * settle to `false` once a permanent orphan has been triaged, instead of
+   * re-flagging pending (and re-running the stage) on every boot forever.
+   */
+  page?: Types.ObjectId | null;
   body: string;
   format: string;
   author: Types.ObjectId;
@@ -134,6 +159,7 @@ export interface RevisionModel extends Model<RevisionDocument> {
   updateRevisionListByPath(path, updateData): Promise<RevisionDocument>;
   prepareRevision(pageData: PageDocument, body: string, user: { _id: Types.ObjectId }, options?: PrepareRevisionOptions): Promise<RevisionDocument>;
   removeRevisionsByPath(path): Promise<{ deletedCount: number }>;
+  removeRevisionsByPageId(pageId: Types.ObjectId): Promise<{ deletedCount: number }>;
   updatePath(pathName): void;
   findAuthorsByPage(page): Promise<RevisionDocument['author'][]>;
 }
@@ -143,6 +169,15 @@ export default (crowi: Crowi) => {
 
   const revisionSchema = new Schema<RevisionDocument, RevisionModel>({
     path: { type: String, required: true, index: true },
+    // DC-5 (`feature-revision-page-ref`): immutable id-based reference to the
+    // owning Page, set once in `prepareRevision` and never rewritten. Plain
+    // (non-partial) `index: true` — same tradeoff as `type` below: it ports
+    // directly to a Postgres `page_id` FK index and makes the backfill
+    // migration's `{ page: { $exists: false } }` probe index-backed. Not
+    // `required: true`: pre-migration rows genuinely lack it on disk until
+    // the boot migration backfills them (and a small class of orphans may
+    // never get one — see `revision-page-ref-backfill`'s doc comment).
+    page: { type: Schema.Types.ObjectId, ref: 'Page', index: true },
     body: { type: String, required: true },
     format: { type: String, default: 'markdown' },
     author: { type: Schema.Types.ObjectId, ref: 'User' },
@@ -319,10 +354,16 @@ export default (crowi: Crowi) => {
 
     const newRevision = new Revision();
     newRevision.path = pageData.path;
+    // DC-5: stamp the immutable page ref here — this is the single
+    // chokepoint every revision-creation path (HTTP save / collab save /
+    // draft / migration `rewritePageBody`) runs through, so one assignment
+    // covers all of them. `pageData._id` is populated on construction even
+    // for a not-yet-persisted page (see the `runRender` comment below).
+    newRevision.page = pageData._id;
     newRevision.body = body;
     newRevision.format = format;
     newRevision.author = user._id;
-    newRevision.createdAt = Date.now() as any as Date;
+    newRevision.createdAt = new Date();
     // Run the unified pipeline once at save time and persist BOTH
     // (a) the derived metadata (TOC + wikilinks + mentions + code-
     //     block langs) for backlinks / search / notify consumers, and
@@ -380,10 +421,18 @@ export default (crowi: Crowi) => {
     return Revision.deleteMany({ path }).exec();
   };
 
+  // DC-5: id-based counterpart to `removeRevisionsByPath`, used by
+  // `Page.removePage` — robust against path reuse (delete → recreate a
+  // different page at the same path would make a path-scoped delete remove
+  // the wrong page's revisions).
+  revisionSchema.statics.removeRevisionsByPageId = function (pageId) {
+    return Revision.deleteMany({ page: pageId }).exec();
+  };
+
   revisionSchema.statics.updatePath = function (pathName) {};
 
   revisionSchema.statics.findAuthorsByPage = function (page) {
-    return Revision.distinct('author', { path: page.path }).exec() as Promise<RevisionDocument['author'][]>;
+    return Revision.distinct('author', { page: page._id }).exec() as Promise<RevisionDocument['author'][]>;
   };
 
   const Revision = model<RevisionDocument, RevisionModel>('Revision', revisionSchema);
