@@ -109,11 +109,16 @@ export const registerCommentRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(
             return c.json(invalidRequestBody('Invalid revision_id'), 400);
           }
           // Grant boundary (crowi-review CLS-003): comment bodies must not
-          // be readable by callers who cannot read the owning page. Resolve
-          // the page from the revision's path and grant-check it. 404 (not
-          // 403) hides page existence, matching GET /pages/revisions/:id.
-          const revision = (await Revision.findById(new Types.ObjectId(revision_id)).exec()) as { path: string } | null;
-          const page = revision ? ((await Page.findOne({ path: revision.path }).exec()) as PageDocument | null) : null;
+          // be readable by callers who cannot read the owning page. DC-5
+          // (`feature-revision-page-ref`): resolve the page via the
+          // revision's immutable `page` id, NOT a `path` reverse-lookup —
+          // `path` is a mutable, reused string (delete a page, a different
+          // page later reused that same path) so a reverse lookup could
+          // resolve to an unrelated page and leak this revision's comments
+          // through that page's grant. 404 (not 403) hides page existence,
+          // matching GET /pages/revisions/:id.
+          const revision = (await Revision.findById(new Types.ObjectId(revision_id)).select('page').exec()) as { page?: Types.ObjectId | null } | null;
+          const page = revision?.page ? ((await Page.findById(revision.page).exec()) as PageDocument | null) : null;
           if (!page || !page.isGrantedFor(user)) {
             return c.json(PAGE_NOT_FOUND_BODY, 404);
           }

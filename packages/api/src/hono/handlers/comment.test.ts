@@ -58,6 +58,7 @@ describe('Routes /api/v2/comments (Hono)', () => {
     return {
       pageId: res.body.page._id as string,
       revisionId: res.body.page.revision._id as string,
+      path,
     };
   };
 
@@ -121,6 +122,37 @@ describe('Routes /api/v2/comments (Hono)', () => {
       const otherByRev = await request(app).get('/api/v2/comments').query({ revision_id: revisionId }).set(authHeaders(otherAccessToken));
       expect(otherByRev.status).toBe(404);
       expect(otherByRev.body.error.code).toBe('PAGE_NOT_FOUND');
+    });
+
+    it('DC-5 (`feature-revision-page-ref`) regression: revision_id lookup does not leak a deleted private page’s comment through a path a different page later reused', async () => {
+      // Page A: owner-only (grant 4) with a comment. Hard-deleted directly
+      // (bypassing `Page.removePage`) so its revision + comment survive —
+      // the same standard-lifecycle-deviation shape covered by
+      // `revision-page-ref-backfill`'s orphan handling.
+      const { pageId: pageAId, revisionId: revisionAId, path } = await createTestPage(`${PATH_PREFIX}reuse-path`, '# private A', 4);
+      const addRes = await request(app)
+        .post('/api/v2/comments')
+        .set(authHeaders(accessToken))
+        .send({ page_id: pageAId, revision_id: revisionAId, comment: 'secret comment on A' });
+      expect(addRes.status).toBe(200);
+      await Page.deleteOne({ _id: pageAId });
+
+      // Page B: an unrelated PUBLIC page later created at the SAME path.
+      // Pre-fix, `listComments`'s revision_id branch resolved the owning
+      // page via `Page.findOne({ path: revision.path })` — it would have
+      // matched page B here and let ANY caller read A's private comment
+      // through B's public grant.
+      await createTestPage(path, '# public B');
+
+      const asOwner = await request(app).get('/api/v2/comments').query({ revision_id: revisionAId }).set(authHeaders(accessToken));
+      const asStranger = await request(app).get('/api/v2/comments').query({ revision_id: revisionAId }).set(authHeaders(otherAccessToken));
+
+      // Both fail closed — page A is gone, so `revision.page` resolves to
+      // nothing. Neither caller can read A's comment through B's grant.
+      expect(asOwner.status).toBe(404);
+      expect(asOwner.body.error.code).toBe('PAGE_NOT_FOUND');
+      expect(asStranger.status).toBe(404);
+      expect(asStranger.body.error.code).toBe('PAGE_NOT_FOUND');
     });
   });
 

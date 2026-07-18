@@ -3,6 +3,7 @@ import { collabLifecycleVersion } from './collab-lifecycle-version';
 import { filesUrlToAttachments } from './files-url-to-attachments';
 import { pageStatusDefault } from './page-status-default';
 import { relocateReservedApiPaths } from './relocate-reserved-api-paths';
+import { revisionPageRefBackfill } from './revision-page-ref-backfill';
 import { revisionsSchemaUnify } from './revisions-schema-unify';
 import { userUniquePrepare } from './user-unique-prepare';
 import { wikilinkFormat } from './wikilink-format';
@@ -27,4 +28,5 @@ export const allMigrations: MigrationDefinition[] = [
   filesUrlToAttachments, // feature-migration-files-url-rewrite (preflight) — v1 /files/<id> body rewrite (independent regex from wikilink-format/html-tag-fixes)
   wikilinkHtmlRecover, // migration-html-tag-fixes (preflight) — recover </font> etc. corrupted by wikilink-format
   collabLifecycleVersion, // feature-collab-invalidate-on-rename-delete (boot) — RFC-0017 Phase 1 backfill
+  revisionPageRefBackfill, // feature-revision-page-ref (boot — see migration JSDoc for the layer-deviation rationale) — DC-5 Revision.page backfill
 ];

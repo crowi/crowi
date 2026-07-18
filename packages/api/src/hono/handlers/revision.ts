@@ -31,6 +31,7 @@ import { Types } from 'mongoose';
 import type Crowi from 'src/crowi';
 import type { PageDocument } from 'src/models/page';
 import type { RevisionDocument, RevisionMetaContent } from 'src/models/revision';
+import type { UserDocument } from 'src/models/user';
 import { type PopulatedRevision, computeRevisionRenderArtifactsAsync, toRevisionResponse } from 'src/util/page-response';
 import { isPopulatedUser, isValidObjectId, toISOStringOrNull, toPageUser } from 'src/util/ts-rest-helpers';
 
@@ -91,6 +92,17 @@ export const registerRevisionRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>
   const Page = crowi.model('Page');
   const Revision = crowi.model('Revision');
 
+  // DC-5: resolve the page that owns a revision via its immutable `page`
+  // id ref, gated on the caller's grant. `null` covers both "no page ref"
+  // (orphaned revision — fail closed) and "not granted" — callers respond
+  // 404 to hide existence either way.
+  const resolveGrantedRevisionOwner = async (pageId: Types.ObjectId | null | undefined, user: UserDocument): Promise<PageDocument | null> => {
+    if (!pageId) return null;
+    const page = (await Page.findById(pageId)) as PageDocument | null;
+    if (!page || !page.isGrantedFor(user)) return null;
+    return page;
+  };
+
   // `/pages/*` covers all three routes; the broad apply is idempotent if
   // the page handler (Batch 4) registers it again with the same middleware
   // factory output.
@@ -123,7 +135,9 @@ export const registerRevisionRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>
 
           // One round-trip: chained .populate() calls collapse to a
           // single `$lookup` stage. fetch +1 to derive hasNext.
-          const allRevisions = await Revision.find({ path: page.path })
+          // DC-5: query by the immutable `page` id (already resolved above
+          // via the grant check) rather than the mutable `path` string.
+          const allRevisions = await Revision.find({ page: page._id })
             .select('_id path author savedBy contributors editVia createdAt')
             .sort({ createdAt: -1 })
             .skip(offset)
@@ -191,14 +205,23 @@ export const registerRevisionRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>
             return c.json(PAGE_NOT_FOUND_BODY, 404);
           }
 
-          const paths = new Set(revisions.map((r) => r.path));
-          if (paths.size > 1) {
-            return c.json(invalidRequestBody('All revisions must share the same path'), 400);
+          // DC-5: converge on the shared `page` id rather than the mutable
+          // `path` string — a revision with no `page` (pre-migration /
+          // orphan, see `revision-page-ref-backfill`) still needs the same
+          // "all requested revisions belong to one page" invariant, so it
+          // simply never matches another revision's id (or itself, below).
+          const pageIds = new Set(revisions.map((r) => r.page?.toString()));
+          if (pageIds.size > 1) {
+            return c.json(invalidRequestBody('All revisions must share the same page'), 400);
           }
 
-          const sharedPath = revisions[0].path;
-          const page = await Page.findOne({ path: sharedPath });
-          if (!page || !page.isGrantedFor(user)) {
+          // Orphaned revision(s) with no page ref fail closed (404) here
+          // too — not a regression: the path-based lookup this replaces
+          // could previously resolve to *whichever unrelated page
+          // currently occupies that path* (path is reused over time),
+          // which was itself a latent grant bug — see the spec's finding.
+          const page = await resolveGrantedRevisionOwner(revisions[0].page, user);
+          if (!page) {
             return c.json(PAGE_NOT_FOUND_BODY, 404);
           }
 
@@ -225,10 +248,15 @@ export const registerRevisionRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>
             return c.json(PAGE_NOT_FOUND_BODY, 404);
           }
 
-          // Verify grant via the page that owns this revision's path. Hide
-          // existence from non-granted callers (404 not 403).
-          const page = await Page.findOne({ path: revision.path });
-          if (!page || !page.isGrantedFor(user)) {
+          // Verify grant via the page that owns this revision (DC-5: the
+          // immutable `revision.page` id, not a `path` reverse-lookup — a
+          // rename or a delete-then-recreate-at-the-same-path could
+          // otherwise resolve to an unrelated page's grant). Hide existence
+          // from non-granted callers (404 not 403); an orphaned revision
+          // (pre-migration / standard-path deviation, see
+          // `revision-page-ref-backfill`) fails closed the same way.
+          const page = await resolveGrantedRevisionOwner(revision.page, user);
+          if (!page) {
             return c.json(PAGE_NOT_FOUND_BODY, 404);
           }
 

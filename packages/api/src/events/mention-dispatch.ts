@@ -110,18 +110,23 @@ export async function dispatchMentions(crowi: Crowi, savedPage: PageLike | undef
     return;
   }
 
-  // Previous revision on the same path. Sort by createdAt descending,
-  // skip the current revision, take 1. We intentionally compare by path
-  // (not pageId) because Revision is path-keyed, and a page rename does
-  // not migrate revision rows — the dispatcher would otherwise mis-diff
-  // freshly-renamed pages. For first-save (no prior revision) the diff
-  // degrades to "all mentions are new", which is the desired semantics.
-  const prevRev = (await Revision.findOne({
-    path: currentRev.path,
-    _id: { $ne: currentRev._id },
-  })
-    .sort({ createdAt: -1 })
-    .exec()) as RevisionDocument | null;
+  // Previous revision on the same page. Sort by createdAt descending, skip
+  // the current revision, take 1. DC-5 (`feature-revision-page-ref`):
+  // prefer the immutable `page` id ref over the mutable `path` string.
+  // `Page.rename` does best-effort sync revision rows' `path` (see
+  // `page.ts` `Page.rename`), but that sync step is not correctness-
+  // critical and can fail partway through — when it does, stale `path`
+  // values would otherwise mis-diff across the rename or, worse, mix
+  // mentions from an unrelated page that later reused this page's old
+  // path. `page` id stays authoritative regardless. Fall back to `path`
+  // only for a revision written before this field existed (pre-migration
+  // / a standard-lifecycle-deviation orphan), preserving the legacy
+  // behaviour for that rare case. For first-save (no prior revision) the
+  // diff degrades to "all mentions are new", which is the desired
+  // semantics.
+  const notSelf = { _id: { $ne: currentRev._id } };
+  const prevRevisionQuery = currentRev.page ? { page: currentRev.page, ...notSelf } : { path: currentRev.path, ...notSelf };
+  const prevRev = (await Revision.findOne(prevRevisionQuery).sort({ createdAt: -1 }).exec()) as RevisionDocument | null;
   const prevMentions = extractMentionUsernames(prevRev?.meta?.mentions);
 
   const newUsernames: string[] = [];

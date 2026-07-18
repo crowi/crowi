@@ -188,12 +188,21 @@ describe('Routes /api/v2 attachments (Hono)', () => {
      * Insert a standalone past revision for the page's path with an explicit
      * `createdAt` so it sorts before the latest revision. It is NOT linked
      * to `page.revision`, so the usage handler treats it as a past revision.
+     *
+     * DC-5 (`feature-revision-page-ref`): `pageId` is required and stamped
+     * onto `page` — the usage handler now resolves by the immutable `page`
+     * id (`hono/handlers/attachment.ts`), not `path`, so a revision seeded
+     * without it would be invisible to `usageOf` regardless of `pagePath`
+     * matching. Pass `null` explicitly to simulate a legacy/orphan row that
+     * predates the backfill (no `page` set) for the path-reuse regression
+     * test below.
      */
-    const addPastRevision = async (pagePath: string, body: string, createdAt: Date) => {
+    const addPastRevision = async (pageId: string | null, pagePath: string, body: string, createdAt: Date) => {
       const Revision = crowi.model('Revision');
       const [rev] = await Revision.create([
         {
           path: pagePath,
+          ...(pageId !== null ? { page: new Types.ObjectId(pageId) } : {}),
           body,
           format: 'markdown',
           author: new Types.ObjectId(userId),
@@ -249,7 +258,12 @@ describe('Routes /api/v2 attachments (Hono)', () => {
       // Latest revision does NOT reference it.
       await setLatestBody(page._id, '# doc with no references\n');
       // One past revision references it.
-      const pastRevId = await addPastRevision(`${PATH_PREFIX}usage-past`, `# old\n\n![p](/api/v2/attachments/${id})\n`, new Date(Date.now() - 60_000));
+      const pastRevId = await addPastRevision(
+        page._id,
+        `${PATH_PREFIX}usage-past`,
+        `# old\n\n![p](/api/v2/attachments/${id})\n`,
+        new Date(Date.now() - 60_000),
+      );
 
       const usage = await usageOf(page._id);
       expect(usage.latest.map((a) => a._id)).not.toContain(id);
@@ -262,8 +276,8 @@ describe('Routes /api/v2 attachments (Hono)', () => {
       const page = await createPageViaApi(accessToken, `${PATH_PREFIX}usage-multi`, '# placeholder');
       const id = await uploadTo(page._id);
       await setLatestBody(page._id, '# latest, unrelated\n');
-      const older = await addPastRevision(`${PATH_PREFIX}usage-multi`, `# v1\n\n![p](/files/${id})\n`, new Date(Date.now() - 120_000));
-      const newer = await addPastRevision(`${PATH_PREFIX}usage-multi`, `# v2\n\n![p](/api/v2/attachments/${id})\n`, new Date(Date.now() - 60_000));
+      const older = await addPastRevision(page._id, `${PATH_PREFIX}usage-multi`, `# v1\n\n![p](/files/${id})\n`, new Date(Date.now() - 120_000));
+      const newer = await addPastRevision(page._id, `${PATH_PREFIX}usage-multi`, `# v2\n\n![p](/api/v2/attachments/${id})\n`, new Date(Date.now() - 60_000));
 
       const usage = await usageOf(page._id);
       const entry = usage.past.find((p) => p.attachment._id === id);
@@ -282,6 +296,33 @@ describe('Routes /api/v2 attachments (Hono)', () => {
       const entry = usage.past.find((p) => p.attachment._id === id);
       expect(entry).toBeDefined();
       expect(entry?.referencingRevisions).toEqual([]);
+    });
+
+    it('DC-5 regression: does not mix a stranded legacy revision’s metadata into a different page’s usage after a path is reused', async () => {
+      const path = `${PATH_PREFIX}usage-path-reuse`;
+
+      // Page B currently owns `path`. A stray legacy revision also sits at
+      // this same path string — a stranded row from a PRIOR (now-gone)
+      // occupant (standard-lifecycle deviation; no `page` ref, exactly the
+      // shape `revision-page-ref-backfill` reports as an unresolved
+      // orphan). Its `createdAt` predates B's own revisions.
+      const pageB = await createPageViaApi(accessToken, path, '# placeholder B');
+      const idB = await uploadTo(pageB._id);
+      // B's own latest revision does NOT reference idB, so any
+      // `referencingRevisions` entry for it must come from elsewhere.
+      await setLatestBody(pageB._id, '# page B body, no references\n');
+      const strayRevId = await addPastRevision(null, path, `# stray legacy body\n\n![p](/api/v2/attachments/${idB})\n`, new Date(Date.now() - 120_000));
+
+      const usage = await usageOf(pageB._id);
+      const entry = usage.past.find((p) => p.attachment._id === idB);
+      expect(entry).toBeDefined();
+      // Pre-fix, `Revision.find({ path: page.path })` would have pulled the
+      // stray revision into the scan (it shares `path`, not `page`) and
+      // attributed its body-reference to page B's usage response —
+      // mixing in a revisionId/createdAt/author that has nothing to do
+      // with page B's own history.
+      expect(entry?.referencingRevisions).toEqual([]);
+      expect(entry?.referencingRevisions.some((r) => r.revisionId === strayRevId)).toBe(false);
     });
   });
 

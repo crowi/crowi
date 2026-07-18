@@ -146,6 +146,59 @@ describe('events/mention-dispatch (RFC-0002 Phase 8)', () => {
     expect(carolNotif).toHaveLength(1);
   });
 
+  it('DC-5 (feature-revision-page-ref): diffs against the previous revision of the SAME page, not an unrelated page’s revision that happens to share this path', async () => {
+    const authorId = new ObjectId();
+    const aliceId = new ObjectId();
+    await Fixture.generate('User', [
+      { _id: authorId, username: 'author', email: faker.internet.email(), status: User.STATUS_ACTIVE },
+      { _id: aliceId, username: 'alice', email: faker.internet.email(), status: User.STATUS_ACTIVE },
+    ]);
+
+    const sharedPath = `${PATH_PREFIX}reused-path`;
+    const pageAId = new ObjectId(); // simulates a hard-deleted page — no live Page document.
+    const pageBId = new ObjectId();
+
+    // A stray revision from a DIFFERENT page (`page: pageAId`) that used to
+    // live at `sharedPath` before it was hard-deleted and the path reused.
+    // It already mentions alice — if the dispatcher still diffed by `path`
+    // (pre-fix), this would wrongly suppress alice's notification below.
+    await Fixture.generate('Revision', [
+      {
+        _id: new ObjectId(),
+        path: sharedPath,
+        page: pageAId,
+        body: ' ',
+        author: authorId,
+        createdAt: new Date(Date.now() - 60_000),
+        meta: { mentions: [{ username: 'alice' }] },
+      },
+    ]);
+
+    const [page] = await Fixture.generate('Page', [{ _id: pageBId, path: sharedPath, grant: 1 /* PUBLIC */, creator: authorId }]);
+    const [latest] = await Fixture.generate('Revision', [
+      {
+        _id: new ObjectId(),
+        path: sharedPath,
+        page: pageBId,
+        body: ' ',
+        author: authorId,
+        createdAt: new Date(),
+        meta: { mentions: [{ username: 'alice' }] },
+      },
+    ]);
+    page.revision = latest._id;
+    await page.save();
+
+    await dispatchMentions(crowi, page, { _id: authorId });
+
+    // Page B's own first revision mentions alice for the first time — it
+    // must notify, because the SAME-page diff correctly finds no prior
+    // revision for page B (the pageAId revision at the same path doesn't
+    // count).
+    const aliceNotif = await Notification.find({ user: aliceId, action: 'MENTION', target: pageBId });
+    expect(aliceNotif).toHaveLength(1);
+  });
+
   it('skips self-mention (author === mentioned user)', async () => {
     const authorId = new ObjectId();
     await Fixture.generate('User', [{ _id: authorId, username: 'selfie', email: faker.internet.email(), status: User.STATUS_ACTIVE }]);

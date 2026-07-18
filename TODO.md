@@ -104,6 +104,7 @@ alpha.0–.3 は published、alpha.4 / stable 向けに changeset 蓄積中（pr
 - **モバイル共有メニューの URL コピー修正** — page-actions-menu の「URLをコピー」項目を PC と共通の `SharePanelContent` 共有ダイアログに統一し、auto-copy + タイトル/Markdown 行を提供（spec: `feature-mobile-share-menu-fix.md`）
 - **ユーザーページに「配下ページ (Subpages)」タブを追加** — `/user/<username>/` 配下を path 起点で全階層再帰的に一覧表示する専用 endpoint + static + UI を新設（既存の creator 起点「作成したページ」タブとは別次元）。付随して draft 作成失敗時の孤児 Page hardening を同梱（spec: `feature-user-page-subpages-tab.md`）
 - **URL カード埋め込み `@[card](url)`** — `addEmbedTag` registry の最初の利用者として新規 `@crowi/plugin-renderer-link-card`（SSRF ガード付き OGP fetch）を実装 + editor に裸 URL ⇔ `@[card](url)` 変換 affordance を追加（spec: `feature-link-card-embed.md`）
+- **Revision に不変の page ObjectId 参照を追加(DC-5)** — `path` 文字列の逆引きに依存していた rename 後の履歴解決 / 削除 / 著者集計を、`prepareRevision` で一度だけ刻む不変の `revision.page` id 参照へ切り替え。path 再利用による誤った grant 解決の latent bug を是正し、boot migration `revision-page-ref-backfill` で既存データをバックフィル（spec: `feature-revision-page-ref.md`）
 
 ---
 

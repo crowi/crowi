@@ -2234,6 +2234,44 @@ describe('Routes /api/v2/pages/revert-to-revision (Hono revertToRevision)', () =
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('PAGE_REVERT_TO_REVISION_FAILED');
     });
+
+    it('DC-5 (feature-revision-page-ref): returns 400 — not the leaked body — when revision_id belongs to a page whose path was later reused by a different page', async () => {
+      const path = `${PATH_PREFIX}reused-path`;
+      const ownerHeaders = authHeaders(accessToken);
+
+      // Page A: owner-only, holds a private body.
+      const createA = await request(app).post('/api/v2/pages').set(ownerHeaders).send({ path, body: '# private A secret', grant: 4 });
+      expect(createA.status).toBe(200);
+      const pageAId = createA.body.page._id as string;
+      const revisionAId = createA.body.page.revision._id as string;
+
+      // Hard-delete page A WITHOUT going through Page.removePage — the
+      // revision survives, still pointing at the now-gone page A via its
+      // immutable `page` id (simulates a standard-lifecycle deviation).
+      await Page.deleteOne({ _id: pageAId });
+
+      // Page B: an unrelated PUBLIC page later created at the SAME path.
+      const createB = await request(app).post('/api/v2/pages').set(authHeaders(otherAccessToken)).send({ path, body: '# public B' });
+      expect(createB.status).toBe(200);
+      const pageBId = createB.body.page._id as string;
+
+      // Pre-fix, ownership was checked via `oldRevision.path ===
+      // pageData.path` — since both share `path`, this would have passed
+      // and let ANY caller with edit access to B "revert" it to A's
+      // private body, exposing that body in the response and overwriting
+      // B's own content.
+      const res = await request(app)
+        .post('/api/v2/pages/revert-to-revision')
+        .set(authHeaders(otherAccessToken))
+        .send({ page_id: pageBId, revision_id: revisionAId });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('PAGE_REVERT_TO_REVISION_FAILED');
+
+      // Page B is untouched.
+      const pageBDoc = await Page.findById(pageBId).populate<{ revision: { body: string } }>('revision');
+      expect(pageBDoc.revision.body).toBe('# public B');
+    });
   });
 });
 
@@ -2290,6 +2328,37 @@ describe('Routes /api/v2/pages (Hono getPage — past revision / stale detection
       // Viewing the latest: latestRevision equals the viewed revision, so the
       // web treats it as NOT stale and shows no banner.
       expect(res.body.page.latestRevision).toBe(v2RevisionId);
+    });
+
+    it('DC-5 (feature-revision-page-ref): returns 404 — not the leaked body — when revision_id belongs to a page whose path was later reused by a different page', async () => {
+      const Page = crowi.model('Page');
+      const path = `${PATH_PREFIX}reused-path`;
+      const headers = authHeaders(accessToken);
+
+      // Page A: owner-only, holds a private body.
+      const createA = await request(app).post('/api/v2/pages').set(headers).send({ path, body: '# private A secret', grant: 4 });
+      expect(createA.status).toBe(200);
+      const pageAId = createA.body.page._id as string;
+      const revisionAId = createA.body.page.revision._id as string;
+
+      // Hard-delete page A WITHOUT going through Page.removePage — the
+      // revision survives, still pointing at the now-gone page A via its
+      // immutable `page` id (simulates a standard-lifecycle deviation).
+      await Page.deleteOne({ _id: pageAId });
+
+      // Page B: an unrelated PUBLIC page later created at the SAME path.
+      const createB = await request(app).post('/api/v2/pages').set(headers).send({ path, body: '# public B' });
+      expect(createB.status).toBe(200);
+
+      // Pre-fix, `Page.findPage` handed `revisionId` straight to
+      // `populatePageData`, which blindly assigns + populates it with no
+      // ownership check — this would have served A's private body through
+      // B's public grant (`path` matches both, but `revision.page` does
+      // not match page B's `_id`).
+      const res = await request(app).get('/api/v2/pages').query({ path, revision_id: revisionAId }).set(headers);
+
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
     });
   });
 
