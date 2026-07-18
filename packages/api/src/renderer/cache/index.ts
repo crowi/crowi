@@ -13,9 +13,9 @@ import type {
 import { MongoCacheStorage } from './mongodb-cache';
 import { errorPlaceholder, sizeLimitPlaceholder } from './reservation';
 
-export { MongoCacheStorage, createMongoCacheStorage } from './mongodb-cache';
-export { errorPlaceholder, sizeLimitPlaceholder, renderReservation } from './reservation';
 export type { CacheSetReject } from './mongodb-cache';
+export { createMongoCacheStorage, MongoCacheStorage } from './mongodb-cache';
+export { errorPlaceholder, renderReservation, sizeLimitPlaceholder } from './reservation';
 
 /**
  * Default fresh-TTL when `RenderResult.ttlSec` is unset. RFC §"Stale-
@@ -54,6 +54,29 @@ export const RENDER_ERROR_TTL: Readonly<Record<RenderError['code'], number>> = {
  * doesn't keep showing an ancient card/diagram forever.
  */
 export const STALE_IF_ERROR_MAX_AGE_SEC = 24 * 60 * 60; // 24h
+
+/**
+ * Error codes whose failures may keep displaying the last-good `html`
+ * (stale-if-error). Deliberately an allowlist of transient/availability
+ * failures: a policy-level rejection (`blocked` — e.g. a host newly
+ * added to the SSRF blocklist) or an authorization failure (`auth` —
+ * token revoked, content made private) must take effect on the NEXT
+ * revalidation, not `STALE_IF_ERROR_MAX_AGE_SEC` later — retaining
+ * content past a permanent policy rejection would contradict what those
+ * codes mean. `not_found` retains: the 24h grace is exactly the
+ * "dead URL shouldn't flip the page instantly" case described above.
+ */
+export const STALE_IF_ERROR_RETAINABLE_CODES: ReadonlySet<RenderError['code']> = new Set(['network', 'timeout', 'rate_limit', 'not_found', 'unknown']);
+
+/**
+ * Upper bound for any plugin/upstream-supplied TTL (`RenderResult.ttlSec`,
+ * `RenderError.retryAfterSec`). Plugin values are untrusted at this
+ * boundary — operator-installed third-party plugins, or an upstream's
+ * attacker-controlled `Retry-After` header, could otherwise produce an
+ * `Invalid Date` `expiresAt` (failing the cache write and losing the
+ * fallback rendering) or an effectively-permanent entry.
+ */
+export const MAX_TTL_SEC = 24 * 60 * 60; // 24h
 
 /**
  * Compute the cache embed-key for an input. Default
@@ -238,9 +261,14 @@ async function renderAndStore(
   const { html, lastGoodFetchedAt } = resolveDisplay(result, renderer, prevEntry, now);
   const cachedHtml: string = html;
 
+  // `errorHtml` is display plumbing, not telemetry — when the entry is a
+  // degraded error, `entry.html` already IS the errorHtml, and a later
+  // degrade uses the fresh attempt's `errorHtml`, never this stored copy.
+  // Persisting it would just re-ship a few hundred dead bytes per read.
+  const { errorHtml: _displayOnly, ...resultMeta } = result;
   const cacheEntry: CacheEntry = {
     html: cachedHtml,
-    result: { ...result, html: cachedHtml },
+    result: { ...resultMeta, html: cachedHtml },
     fetchedAt: now,
     expiresAt,
     lastGoodFetchedAt,
@@ -286,9 +314,16 @@ function resolveDisplay(
   now: Date,
 ): { html: string; lastGoodFetchedAt: Date | undefined } {
   if (!result.error) {
-    return { html: result.html, lastGoodFetchedAt: now };
+    // `lastGoodFetchedAt` is deliberately NOT written on success entries —
+    // it would always equal `fetchedAt`. Field present ⇔ stale-if-error
+    // retained entry, one crisp invariant (readers fall back to
+    // `fetchedAt` for success entries, see `resolvePrevGood`).
+    return { html: result.html, lastGoodFetchedAt: undefined };
   }
-  const prevGood = resolvePrevGood(prevEntry, now);
+  // Only transient/availability failures may keep the last-good display —
+  // a policy-level rejection (`blocked`/`auth`) must take effect NOW, not
+  // 24h later (see `STALE_IF_ERROR_RETAINABLE_CODES`).
+  const prevGood = STALE_IF_ERROR_RETAINABLE_CODES.has(result.error.code) ? resolvePrevGood(prevEntry, now) : null;
   if (prevGood) {
     return { html: prevGood.html, lastGoodFetchedAt: prevGood.lastGoodFetchedAt };
   }
@@ -310,9 +345,11 @@ function resolveDisplay(
  */
 function resolvePrevGood(prevEntry: CacheEntry | null, now: Date): { html: string; lastGoodFetchedAt: Date } | null {
   if (!prevEntry) return null;
-  // Success entries predating this field have no `lastGoodFetchedAt` on
-  // disk — treat that as "as good as `fetchedAt`" (no migration).
-  const lastGoodFetchedAt = prevEntry.result.error ? prevEntry.lastGoodFetchedAt : (prevEntry.lastGoodFetchedAt ?? prevEntry.fetchedAt);
+  // Success entries never carry `lastGoodFetchedAt` (their `fetchedAt` IS
+  // the last-good time — this also covers, value-identically, any entry
+  // written while the field was still being set on success). Error entries
+  // carry it iff they retained a last-good display.
+  const lastGoodFetchedAt = prevEntry.result.error ? prevEntry.lastGoodFetchedAt : prevEntry.fetchedAt;
   if (!lastGoodFetchedAt) return null;
   const ageSec = (now.getTime() - lastGoodFetchedAt.getTime()) / 1000;
   if (ageSec > STALE_IF_ERROR_MAX_AGE_SEC) return null;
@@ -328,11 +365,23 @@ function resolvePrevGood(prevEntry: CacheEntry | null, now: Date): { html: strin
 function pickTtl(result: RenderResult): number {
   if (result.error) {
     if (result.error.code === 'rate_limit' && typeof result.error.retryAfterSec === 'number') {
-      return Math.max(1, result.error.retryAfterSec);
+      return clampTtl(result.error.retryAfterSec, RENDER_ERROR_TTL.rate_limit);
     }
     return RENDER_ERROR_TTL[result.error.code];
   }
-  return result.ttlSec ?? DEFAULT_FRESH_TTL_SEC;
+  return clampTtl(result.ttlSec ?? DEFAULT_FRESH_TTL_SEC, DEFAULT_FRESH_TTL_SEC);
+}
+
+/**
+ * Clamp an untrusted plugin/upstream-supplied TTL into `[1, MAX_TTL_SEC]`
+ * at the core boundary — this is the chokepoint where `expiresAt` gets
+ * built, so the "valid, bounded Date" invariant is enforced here for
+ * every plugin rather than re-implemented per plugin. Non-finite input
+ * (NaN from a plugin bug) falls back to `fallbackSec`.
+ */
+function clampTtl(ttlSec: number, fallbackSec: number): number {
+  if (!Number.isFinite(ttlSec)) return fallbackSec;
+  return Math.min(Math.max(1, ttlSec), MAX_TTL_SEC);
 }
 
 function stringifyError(err: unknown): string {

@@ -1,10 +1,18 @@
-import { Types } from 'mongoose';
 import type { EmbedInput, EmbedRenderer, PluginLogger, RenderContext, RenderResult } from '@crowi/plugin-api';
-import { crowi } from 'src/test/setup';
+import { Types } from 'mongoose';
 import type { PluginRenderCacheModel } from 'src/models/plugin-render-cache';
-import { DEFAULT_FRESH_TTL_SEC, DEFAULT_STALE_MULTIPLIER, RENDER_ERROR_TTL, STALE_IF_ERROR_MAX_AGE_SEC, cachedRender, scopeForPlugin } from './index';
-import { MongoCacheStorage, SINGLE_ENTRY_REJECT_BYTES } from './mongodb-cache';
+import { crowi } from 'src/test/setup';
 import { createAuthContextStub } from '../registry';
+import {
+  cachedRender,
+  DEFAULT_FRESH_TTL_SEC,
+  DEFAULT_STALE_MULTIPLIER,
+  MAX_TTL_SEC,
+  RENDER_ERROR_TTL,
+  STALE_IF_ERROR_MAX_AGE_SEC,
+  scopeForPlugin,
+} from './index';
+import { MongoCacheStorage, SINGLE_ENTRY_REJECT_BYTES } from './mongodb-cache';
 
 const silentLog: PluginLogger = {
   debug: () => undefined,
@@ -318,15 +326,19 @@ describe('stale-if-error (last-good retention)', () => {
 
     await cachedRender(storage, PLUGIN, renderer, i, ctx);
     const before = await findDoc(i.pageId);
-    expect(before?.lastGoodFetchedAt).toBeDefined();
+    // New invariant: success entries do NOT carry lastGoodFetchedAt (their
+    // fetchedAt IS the last-good time) — the field appears only once a failed
+    // revalidation retains this html (asserted below).
+    expect(before?.lastGoodFetchedAt).toBeUndefined();
 
     // Push into the stale-within-window bucket — same shape as the plain
     // stale-while-revalidate background test above.
     const PluginRenderCache = crowi.model('PluginRenderCache') as unknown as PluginRenderCacheModel;
     const past = new Date(Date.now() - 2_000);
+    const pushedFetchedAt = new Date(past.getTime() - 1_000);
     await PluginRenderCache.updateOne(
       { pluginName: PLUGIN, pageId: new Types.ObjectId(i.pageId) },
-      { $set: { expiresAt: past, fetchedAt: new Date(past.getTime() - 1_000) } },
+      { $set: { expiresAt: past, fetchedAt: pushedFetchedAt } },
     ).exec();
 
     (renderer as { render: jest.Mock }).render.mockImplementationOnce(async () => {
@@ -349,7 +361,9 @@ describe('stale-if-error (last-good retention)', () => {
     );
     expect(after?.html).toBe('<good/>'); // kept, NOT degraded to a placeholder
     expect((after?.result as RenderResult).error?.code).toBe('network'); // new error recorded for telemetry/retry cadence
-    expect(after?.lastGoodFetchedAt?.getTime()).toBe(before!.lastGoodFetchedAt!.getTime()); // carried forward unchanged
+    // The retained entry materializes lastGoodFetchedAt from the prior
+    // SUCCESS entry's fetchedAt (success entries don't carry the field).
+    expect(after?.lastGoodFetchedAt?.getTime()).toBe(pushedFetchedAt.getTime());
   });
 
   it('(b) keeps the last-good html when a BLOCKING revalidation fails, within STALE_IF_ERROR_MAX_AGE_SEC', async () => {
@@ -360,14 +374,18 @@ describe('stale-if-error (last-good retention)', () => {
 
     await cachedRender(storage, PLUGIN, renderer, i, ctx);
     const before = await findDoc(i.pageId);
-    expect(before?.lastGoodFetchedAt).toBeDefined();
+    // New invariant: success entries do NOT carry lastGoodFetchedAt (their
+    // fetchedAt IS the last-good time) — the field appears only once a failed
+    // revalidation retains this html (asserted below).
+    expect(before?.lastGoodFetchedAt).toBeUndefined();
 
     // Past the stale window entirely (ttlSec=1 -> window=4s) -> blocking path.
     const PluginRenderCache = crowi.model('PluginRenderCache') as unknown as PluginRenderCacheModel;
     const past = new Date(Date.now() - 10_000);
+    const pushedFetchedAt = new Date(past.getTime() - 1_000);
     await PluginRenderCache.updateOne(
       { pluginName: PLUGIN, pageId: new Types.ObjectId(i.pageId) },
-      { $set: { expiresAt: past, fetchedAt: new Date(past.getTime() - 1_000) } },
+      { $set: { expiresAt: past, fetchedAt: pushedFetchedAt } },
     ).exec();
 
     (renderer as { render: jest.Mock }).render.mockImplementationOnce(async () => {
@@ -381,7 +399,7 @@ describe('stale-if-error (last-good retention)', () => {
 
     const after = await findDoc(i.pageId);
     expect(after?.html).toBe('<good/>');
-    expect(after?.lastGoodFetchedAt?.getTime()).toBe(before!.lastGoodFetchedAt!.getTime());
+    expect(after?.lastGoodFetchedAt?.getTime()).toBe(pushedFetchedAt.getTime());
   });
 
   it('(c) degrades to the placeholder once the last-good exceeds STALE_IF_ERROR_MAX_AGE_SEC (BLOCKING)', async () => {
@@ -393,11 +411,14 @@ describe('stale-if-error (last-good retention)', () => {
     await cachedRender(storage, PLUGIN, renderer, i, ctx);
 
     const PluginRenderCache = crowi.model('PluginRenderCache') as unknown as PluginRenderCacheModel;
-    const ancientLastGood = new Date(Date.now() - (STALE_IF_ERROR_MAX_AGE_SEC + 3_600) * 1000); // just over 24h ago
-    const past = new Date(Date.now() - 10_000); // beyond the (small) stale window -> blocking
+    // The honest shape of an aged SUCCESS entry under the "field present ⇔
+    // stale-if-error entry" invariant: its last-good time IS its fetchedAt,
+    // so age the entry itself just past 24h (expiresAt = fetchedAt + its 1s
+    // ttl — long past the 4s stale window, hence the blocking path).
+    const ancientFetchedAt = new Date(Date.now() - (STALE_IF_ERROR_MAX_AGE_SEC + 3_600) * 1000); // just over 24h ago
     await PluginRenderCache.updateOne(
       { pluginName: PLUGIN, pageId: new Types.ObjectId(i.pageId) },
-      { $set: { expiresAt: past, fetchedAt: new Date(past.getTime() - 1_000), lastGoodFetchedAt: ancientLastGood } },
+      { $set: { expiresAt: new Date(ancientFetchedAt.getTime() + 1_000), fetchedAt: ancientFetchedAt } },
     ).exec();
 
     (renderer as { render: jest.Mock }).render.mockImplementationOnce(async () => {
@@ -421,11 +442,23 @@ describe('stale-if-error (last-good retention)', () => {
     await cachedRender(storage, PLUGIN, renderer, i, ctx);
 
     const PluginRenderCache = crowi.model('PluginRenderCache') as unknown as PluginRenderCacheModel;
+    // A recently-refreshed entry whose LAST-GOOD is ancient can only be a
+    // stale-if-error entry mid-retry-cadence (the chained-retention state —
+    // the one place `lastGoodFetchedAt` legitimately exists). Model exactly
+    // that: an error entry still showing '<good/>', whose original success
+    // is just past 24h old, re-entering revalidation on the background path.
     const ancientLastGood = new Date(Date.now() - (STALE_IF_ERROR_MAX_AGE_SEC + 3_600) * 1000);
     const past = new Date(Date.now() - 2_000); // within the stale window (4s) -> background
     await PluginRenderCache.updateOne(
       { pluginName: PLUGIN, pageId: new Types.ObjectId(i.pageId) },
-      { $set: { expiresAt: past, fetchedAt: new Date(past.getTime() - 1_000), lastGoodFetchedAt: ancientLastGood } },
+      {
+        $set: {
+          expiresAt: past,
+          fetchedAt: new Date(past.getTime() - 1_000),
+          lastGoodFetchedAt: ancientLastGood,
+          result: { html: '<good/>', error: { code: 'network', message: 'prior failed revalidation' } },
+        },
+      },
     ).exec();
 
     (renderer as { render: jest.Mock }).render.mockImplementationOnce(async () => {
@@ -458,6 +491,64 @@ describe('stale-if-error (last-good retention)', () => {
 
     const doc = await findDoc(i.pageId);
     expect(doc?.lastGoodFetchedAt).toBeUndefined();
+  });
+
+  it('(f) a policy-level rejection (blocked) does NOT retain the last-good html — policy takes effect on the next revalidation, not 24h later', async () => {
+    const storage = buildStorage();
+    const ctx = buildCtx(storage, PLUGIN);
+    const renderer = buildRenderer({ html: '<good/>', ttlSec: 1 });
+    const i = input();
+
+    await cachedRender(storage, PLUGIN, renderer, i, ctx);
+
+    // Past the stale window entirely (ttlSec=1 -> window=4s) -> blocking path.
+    const PluginRenderCache = crowi.model('PluginRenderCache') as unknown as PluginRenderCacheModel;
+    const past = new Date(Date.now() - 10_000);
+    await PluginRenderCache.updateOne(
+      { pluginName: PLUGIN, pageId: new Types.ObjectId(i.pageId) },
+      { $set: { expiresAt: past, fetchedAt: new Date(past.getTime() - 1_000) } },
+    ).exec();
+
+    // The host got blocklisted since the last success (e.g. an SSRF
+    // blocklist update) — `blocked` is not in
+    // STALE_IF_ERROR_RETAINABLE_CODES, so the previously-fetched html
+    // must NOT stay on screen.
+    (renderer as { render: jest.Mock }).render.mockImplementationOnce(async () => {
+      (renderer as unknown as { calls: number }).calls++;
+      return { html: '', errorHtml: '<a href="https://example.test">blocked link</a>', error: { code: 'blocked' } };
+    });
+
+    const result = await cachedRender(storage, PLUGIN, renderer, i, ctx);
+    expect(result.html).toBe('<a href="https://example.test">blocked link</a>'); // degraded, NOT '<good/>'
+
+    const after = await findDoc(i.pageId);
+    expect(after?.html).toBe('<a href="https://example.test">blocked link</a>');
+    expect(after?.lastGoodFetchedAt).toBeUndefined();
+  });
+
+  it('clamps an untrusted plugin-supplied TTL (huge retryAfterSec / huge ttlSec) to MAX_TTL_SEC at the core boundary', async () => {
+    const storage = buildStorage();
+    const ctx = buildCtx(storage, PLUGIN);
+    const i = input();
+
+    // A year-long upstream Retry-After must not produce a year-long entry.
+    const rateLimited = buildRenderer({ html: '', error: { code: 'rate_limit', retryAfterSec: 60 * 60 * 24 * 365 } });
+    const before = Date.now();
+    await cachedRender(storage, PLUGIN, rateLimited, i, ctx);
+    const doc = await findDoc(i.pageId);
+    const ttlMs = doc!.expiresAt.getTime() - before;
+    expect(ttlMs).toBeLessThanOrEqual(MAX_TTL_SEC * 1000 + 5_000);
+    expect(ttlMs).toBeGreaterThan((MAX_TTL_SEC - 60) * 1000);
+
+    // Success-path ttlSec is clamped through the same chokepoint.
+    const i2 = input();
+    const longLived = buildRenderer({ html: '<ok/>', ttlSec: 60 * 60 * 24 * 365 });
+    const before2 = Date.now();
+    await cachedRender(storage, PLUGIN, longLived, i2, ctx);
+    const doc2 = await findDoc(i2.pageId);
+    const ttlMs2 = doc2!.expiresAt.getTime() - before2;
+    expect(ttlMs2).toBeLessThanOrEqual(MAX_TTL_SEC * 1000 + 5_000);
+    expect(ttlMs2).toBeGreaterThan((MAX_TTL_SEC - 60) * 1000);
   });
 
   it('treats a pre-migration success entry (no lastGoodFetchedAt on disk) as good as its own fetchedAt — no backfill needed', async () => {

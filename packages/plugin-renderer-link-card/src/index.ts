@@ -81,27 +81,20 @@ function toRenderResult(url: string, result: FetchOgResult): RenderResult {
 
 /**
  * Map a `fetch-og.ts` failure onto the core's `RenderError.code` table
- * (spec §"link-card の正規経路移行"). Pre-migration, `pickErrorTtlSec`
- * only treated a `400 <= httpStatus < 500` `http-error` as persistent
- * (1h) — every other case (3xx, 5xx, no `httpStatus`, and every
- * non-`http-error` code) got the transient 5min TTL. The mapping below
- * preserves that split exactly (AC3: "TTL が移行前と同値") while adding
- * `rate_limit`/`blocked` as new, more specific codes:
+ * (spec §"link-card の正規経路移行"):
  *
  *   - `blocked` / `bad-scheme` / `unsupported-content-type` → `blocked`
- *     (policy-level permanent rejection — new persistent-class code,
- *     did not exist pre-migration).
+ *     (policy-level permanent rejection, persistent 1h TTL).
  *   - `http-error` 429 with a parsed `Retry-After` → `rate_limit` +
  *     `retryAfterSec` (honours the server's own cadence instead of the
  *     core's 5min default).
  *   - `http-error` 4xx (incl. a 429 with no `Retry-After`) → `not_found`
- *     (persistent, matches the old `400 <= httpStatus < 500` branch).
+ *     (persistent 1h).
  *   - `http-error` anything else — 3xx (redirect-exhausted), 5xx, or no
  *     `httpStatus` at all (the unreachable-in-practice loop-exhaustion
- *     fallback) → `network` (transient, matches the old fallthrough).
- *   - `timeout` → `timeout`, `network` → `network` (pass through as-is,
- *     both already transient pre-migration).
- *   - `too-large` / `unknown` → `unknown` (transient pre-migration).
+ *     fallback) → `network` (transient 5min).
+ *   - `timeout` → `timeout`, `network` → `network` (as-is, transient).
+ *   - `too-large` / `unknown` → `unknown` (transient).
  *
  * The original `fetch-og.ts` code + httpStatus are preserved in
  * `message` for observability even though they collapse onto a

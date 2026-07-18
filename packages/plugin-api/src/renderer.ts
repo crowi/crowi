@@ -304,15 +304,14 @@ export interface CacheEntry {
   fetchedAt: Date;
   expiresAt: Date;
   /**
-   * When the currently-displayed `html` was last a genuine successful
-   * render. A success entry sets this equal to `fetchedAt`; a
-   * stale-if-error entry (see
-   * `packages/api/src/renderer/cache/index.ts:STALE_IF_ERROR_MAX_AGE_SEC`)
-   * that is keeping a prior success on screen carries that success's
-   * original value forward unchanged — it does NOT reset to the failed
-   * attempt's `fetchedAt`. Absent on entries written before this field
-   * existed; readers treat a missing value on a success entry as
-   * `fetchedAt` (no backfill migration needed).
+   * Present ⇔ this is a stale-if-error entry keeping a prior success on
+   * screen (see `packages/api/src/renderer/cache/index.ts:
+   * STALE_IF_ERROR_MAX_AGE_SEC`): the value is that ORIGINAL success's
+   * timestamp, carried forward unchanged across consecutive failed
+   * retries — never the failed attempt's `fetchedAt`. Success entries do
+   * not carry it (their `fetchedAt` IS the last-good time; readers use
+   * that directly, which also covers, value-identically, entries written
+   * while this field was still being set on success).
    */
   lastGoodFetchedAt?: Date;
 }

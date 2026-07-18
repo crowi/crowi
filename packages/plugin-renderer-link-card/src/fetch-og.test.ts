@@ -271,16 +271,16 @@ describe('fetchOg — scheme / timeout / network / HTTP-error / size-cap failure
     expect(result).toEqual({ kind: 'error', code: 'http-error', httpStatus: 429 });
   });
 
-  it('does not parse Retry-After for a non-429 status even if the header is present', async () => {
+  it('parses Retry-After for a non-429 status too — extraction is unconditional, WHICH statuses honour it is toRenderError policy', async () => {
     const fetchImpl = jest.fn().mockResolvedValue(new Response('', { status: 503, headers: { 'retry-after': '30' } }));
     const result = await fetchOg('https://example.test/unavailable', { fetchImpl, dnsLookup: allowLookup() });
-    expect(result).toEqual({ kind: 'error', code: 'http-error', httpStatus: 503 });
+    expect(result).toEqual({ kind: 'error', code: 'http-error', httpStatus: 503, retryAfterSec: 30 });
   });
 
-  it('clamps an absurdly large numeric Retry-After to the 24h cap', async () => {
+  it('passes an absurdly large numeric Retry-After through un-clamped — the cache core clamps every plugin TTL at its own boundary (clampTtl/MAX_TTL_SEC)', async () => {
     const fetchImpl = jest.fn().mockResolvedValue(new Response('', { status: 429, headers: { 'retry-after': String(60 * 60 * 24 * 365) } }));
     const result = await fetchOg('https://example.test/too-many-huge', { fetchImpl, dnsLookup: allowLookup() });
-    expect(result).toEqual({ kind: 'error', code: 'http-error', httpStatus: 429, retryAfterSec: 24 * 60 * 60 });
+    expect(result).toEqual({ kind: 'error', code: 'http-error', httpStatus: 429, retryAfterSec: 60 * 60 * 24 * 365 });
   });
 
   it('discards a Retry-After digit string too large to be a safe integer', async () => {
@@ -289,11 +289,14 @@ describe('fetchOg — scheme / timeout / network / HTTP-error / size-cap failure
     expect(result).toEqual({ kind: 'error', code: 'http-error', httpStatus: 429 });
   });
 
-  it('clamps an HTTP-date Retry-After far in the future to the 24h cap', async () => {
+  it('passes an HTTP-date Retry-After far in the future through un-clamped (core boundary clamps it)', async () => {
     const farFuture = new Date(Date.now() + 1000 * 60 * 60 * 24 * 365 * 10); // 10 years out
     const fetchImpl = jest.fn().mockResolvedValue(new Response('', { status: 429, headers: { 'retry-after': farFuture.toUTCString() } }));
     const result = await fetchOg('https://example.test/too-many-date-huge', { fetchImpl, dnsLookup: allowLookup() });
-    expect(result).toEqual({ kind: 'error', code: 'http-error', httpStatus: 429, retryAfterSec: 24 * 60 * 60 });
+    expect(result.kind).toBe('error');
+    const tenYearsSec = 60 * 60 * 24 * 365 * 10;
+    expect(result.kind === 'error' && result.retryAfterSec).toBeGreaterThan(tenYearsSec - 60);
+    expect(result.kind === 'error' && result.retryAfterSec).toBeLessThanOrEqual(tenYearsSec + 60);
   });
 
   it('rejects a response body larger than the 512KB cap', async () => {

@@ -25,7 +25,7 @@ export type FetchOgResult =
       kind: 'error';
       code: FetchOgErrorCode;
       httpStatus?: number;
-      /** Parsed `Retry-After` response header (seconds), only ever populated for a 429 `http-error`. See `parseRetryAfterSeconds`. */
+      /** Parsed `Retry-After` response header (seconds), populated for any non-ok response that sent one. Which statuses honour it is `index.ts:toRenderError`'s policy. See `parseRetryAfterSeconds`. */
       retryAfterSec?: number;
     };
 
@@ -34,18 +34,6 @@ export const FETCH_CONCURRENCY_LIMIT = 5;
 const FETCH_TIMEOUT_MS = 5_000;
 const MAX_BODY_BYTES = 512 * 1024;
 const MAX_REDIRECTS = 3;
-/**
- * Upper bound for a parsed `Retry-After` (seconds). `retryAfterSec`
- * flows straight into `cache/index.ts:pickTtl` → `expiresAt = new
- * Date(now.getTime() + ttlSec * 1000)` with no clamp on that end — an
- * attacker- or misconfigured-upstream-controlled header (a huge
- * `delta-seconds` digit string, or a date far in the future) could
- * otherwise overflow into an `Invalid Date` and make the cache write
- * fail, losing the fallback card entirely. 24h keeps the same order of
- * magnitude as `STALE_IF_ERROR_MAX_AGE_SEC` while comfortably covering
- * any legitimate rate-limit cadence.
- */
-const MAX_RETRY_AFTER_SEC = 24 * 60 * 60;
 const USER_AGENT = 'Crowi-LinkCard/1.0';
 const HTML_CONTENT_TYPE_RE = /^(text\/html|application\/xhtml\+xml)\b/i;
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
@@ -173,10 +161,10 @@ async function fetchOgLocked(inputUrl: string, deps: FetchOgDeps): Promise<Fetch
       }
 
       if (!response.ok) {
-        // `retryAfterSec` only matters for 429 (`toRenderError` in
-        // `index.ts` is the sole consumer) — parsing it for every other
-        // status would be dead work.
-        const retryAfterSec = response.status === 429 ? parseRetryAfterSeconds(response.headers.get('retry-after')) : undefined;
+        // Pure data extraction — parsed whenever the header is present.
+        // WHICH statuses honour it is policy, and that lives in one place
+        // (`index.ts:toRenderError`), not split across both files.
+        const retryAfterSec = parseRetryAfterSeconds(response.headers.get('retry-after'));
         return { kind: 'error', code: 'http-error', httpStatus: response.status, retryAfterSec };
       }
 
@@ -288,7 +276,9 @@ function normalizeCharsetLabel(label: string): string {
  * non-negative integer) or an HTTP-date, converted to the delta from
  * now (clamped to 0 for a date already in the past). Returns
  * `undefined` for a missing/unparsable header rather than guessing.
- * The result is always clamped to `[0, MAX_RETRY_AFTER_SEC]` — see
+ * Upper-bounding is NOT done here — the cache core clamps every
+ * plugin-supplied TTL at its own boundary (`cache/index.ts:clampTtl`,
+ * `MAX_TTL_SEC`), so the invariant holds for all plugins at once. See
  * that constant's doc comment for why an unclamped value is unsafe
  * downstream.
  */
@@ -298,12 +288,12 @@ function parseRetryAfterSeconds(header: string | null): number | undefined {
   if (/^\d+$/.test(trimmed)) {
     const seconds = Number(trimmed);
     if (!Number.isSafeInteger(seconds)) return undefined;
-    return Math.min(seconds, MAX_RETRY_AFTER_SEC);
+    return seconds;
   }
   const dateMs = Date.parse(trimmed);
   if (Number.isNaN(dateMs)) return undefined;
   const deltaSec = Math.ceil((dateMs - Date.now()) / 1000);
-  return Math.min(Math.max(0, deltaSec), MAX_RETRY_AFTER_SEC);
+  return Math.max(0, deltaSec);
 }
 
 function decodeHtml(buffer: Buffer, charset: string): string {
