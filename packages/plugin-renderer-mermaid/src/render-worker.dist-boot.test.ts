@@ -37,16 +37,35 @@
  *     in the exact tree the shipped image contains, without needing a
  *     Docker daemon in the test environment.
  *
- * `pretest` (`package.json`) runs a real `tsup` build of this package
- * before this suite so its own `dist/` always reflects current source;
- * the `beforeAll` below additionally builds the whole
- * `apps/crowi-runner` dependency graph (`pnpm --filter
- * @crowi/runner-app... build`) so sibling workspace packages
- * (`@crowi/runner`, `@crowi/plugin-api`, `@crowi/plugin-renderer-svg-sanitize`,
- * ...) are fresh too — required for both new blocks below, and NOT
- * something turbo's `^build` gives this package's own `test` task for
- * free (this file is invoked directly via `pnpm --filter
- * @crowi/plugin-renderer-mermaid test`, which bypasses turbo).
+ * This suite needs BOTH this package's own fresh `dist/` AND the whole
+ * `apps/crowi-runner` dependency graph (`@crowi/runner`,
+ * `@crowi/plugin-api`, every sibling plugin, ...) built first — turbo's
+ * default `^build` only covers a package's own dependency chain, not
+ * (a) its own build or (b) an unrelated app's graph, so `turbo.json`
+ * declares an explicit `@crowi/plugin-renderer-mermaid#test` override
+ * depending on `build` (own package) and `@crowi/runner-app#build`
+ * (mirroring the existing `@crowi/collab#test` → `@crowi/api#build`
+ * override); `apps/crowi-runner/package.json` carries a no-op `build`
+ * script so turbo has a task node to hang that second dependency on.
+ *
+ * This package used to cover both needs itself: a `pretest` hook
+ * (`pnpm build`) rebuilt its own `dist/`, and this suite's `beforeAll`
+ * ran a raw `pnpm --filter @crowi/runner-app... build` for the rest.
+ * Both were invisible to turbo's scheduler, so either could run
+ * CONCURRENTLY with (and clobber the in-progress output of) turbo's own
+ * build of those same packages for other tasks in the same `turbo run
+ * test` invocation — e.g. `@crowi/api#test` (which imports this
+ * package's built `dist/index.js` for its own mermaid e2e test) racing
+ * this package's `pretest` rebuild. Declaring both dependencies in
+ * `turbo.json` instead makes turbo build this whole graph exactly once,
+ * before this suite's `jest` process even starts — for every task that
+ * needs it, not just this one.
+ *
+ * Consequence: this suite is no longer self-contained under a raw
+ * `pnpm --filter @crowi/plugin-renderer-mermaid test` (bypasses turbo,
+ * so neither dependency above is guaranteed built). Use `pnpm turbo run
+ * test --filter=@crowi/plugin-renderer-mermaid` to run this package's
+ * tests in isolation.
  */
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
@@ -131,18 +150,12 @@ const runBootScript = (projectDir: string): string => {
 };
 
 describe('render-worker.js — real dist build boot (spec Phase 4 AC 5: "Docker/build-output boot test")', () => {
-  // Guarantees `@crowi/runner`, `@crowi/plugin-api`, and
-  // `@crowi/plugin-renderer-svg-sanitize` (this package's own
-  // dependencies, whose freshness turbo's `^build` would normally
-  // guarantee — but this file's `test` script is invoked directly via
-  // `pnpm --filter @crowi/plugin-renderer-mermaid test`, bypassing
-  // turbo) are built before any test below relies on them. Mirrors
-  // `packages/api/Dockerfile`'s `builder` stage command exactly.
-  beforeAll(() => {
-    execFileSync('pnpm', ['--filter', '@crowi/runner-app...', 'build'], { cwd: REPO_ROOT, stdio: 'pipe', timeout: 180_000 });
-  }, 200_000);
+  // `@crowi/runner`, `@crowi/plugin-api`, and every sibling plugin this
+  // suite's later blocks resolve through `apps/crowi-runner` are built
+  // by turbo before this suite's `jest` process starts — see the
+  // `@crowi/plugin-renderer-mermaid#test` override in `turbo.json`.
 
-  it('dist/index.js and dist/render-worker.js exist after the package pretest build (production CJS output — not merely the .ts source every other test in this package falls back to)', () => {
+  it('dist/index.js and dist/render-worker.js exist after the turbo-scheduled build (production CJS output — not merely the .ts source every other test in this package falls back to)', () => {
     expect(existsSync(DIST_INDEX_PATH)).toBe(true);
     expect(existsSync(DIST_WORKER_PATH)).toBe(true);
   });

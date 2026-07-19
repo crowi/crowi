@@ -4,7 +4,8 @@
   "private": true,
   "description": "Crowi reference runner project: the monorepo's own api runtime project (dev launch point + the build source for the official full Docker image). Owns @crowi/api + the full first-party plugin set + crowi.config.json, and is the projectDir the api boots against (createRequire resolves plugins from here).",
   "scripts": {
-    "start": "crowi-api"
+    "start": "crowi-api",
+    "build": "node -e \"\""
   },
   "dependencies": {
     "@crowi/api": "workspace:^",

@@ -28,7 +28,6 @@
     "build": "tsup",
     "dev": "tsup --watch --no-clean",
     "type-check": "tsc --noEmit",
-    "pretest": "pnpm build",
     "test": "jest --passWithNoTests"
   },
   "peerDependencies": {

@@ -57,6 +57,19 @@
         "@crowi/api#build"
       ]
     },
+    "@crowi/plugin-renderer-mermaid#test": {
+      "dependsOn": [
+        "build",
+        "^build",
+        "@crowi/runner-app#build"
+      ]
+    },
+    "@crowi/runner-app#build": {
+      "dependsOn": [
+        "^build"
+      ],
+      "outputs": []
+    },
     "test:server": {
       "dependsOn": [
         "^build"
