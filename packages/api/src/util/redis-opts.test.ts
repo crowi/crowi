@@ -97,31 +97,43 @@ describe('buildRedisOpts', () => {
     client.on('error', () => {
       /* handshake/protocol errors surface here; the test asserts via secureSeen */
     });
-    // node-redis only saves its internal socket handle (the thing
-    // disconnect() actually destroys) once ITS OWN 'connect' event fires —
-    // after the TLS handshake completes on the CLIENT side. That does not
-    // necessarily happen in the same tick as the server's 'secureConnection'
-    // above: if the server-side event is observed first and disconnect()
-    // races ahead of the client-side socket assignment, disconnect() is a
-    // silent no-op (node-redis has nothing to destroy yet), the client
-    // proceeds to send its post-handshake RESP handshake to this bare TLS
-    // fixture (which never replies — it isn't a real Redis server), and
-    // that pending command — with nothing left to ever cancel it — hangs
-    // the test until Jest's global timeout. Waiting for the client's own
-    // 'connect' (or 'error', so a genuine connection failure doesn't hang
-    // this wait either) closes that race.
-    const clientSocketReady = new Promise<void>((resolve) => {
-      client.once('connect', () => resolve());
-      client.once('error', () => resolve());
-    });
     const connecting = client.connect().catch(() => {});
     try {
       await secureSeen;
-      await clientSocketReady;
     } finally {
-      await client.disconnect().catch(() => {});
-      await connecting;
-      await new Promise<void>((resolve) => server.close(() => resolve()));
+      // The assertion under test (a real TLS handshake happened) is already
+      // proven by `secureSeen` above — everything below is best-effort
+      // teardown, not part of what's being tested. That distinction matters
+      // because @redis/client 1.6.1 has an internal race here: once the
+      // client's own handshake completes it fires 'connect' and starts
+      // awaiting its post-handshake RESP initiator (HELLO/AUTH/etc), which
+      // this bare TLS fixture — not a real Redis server — never answers.
+      // Calling disconnect() while that initiator is still in flight races
+      // node-redis's OWN error path for the very same socket: disconnect()
+      // destroys the socket and clears its internal handle, and if the
+      // initiator's rejection handler (which also tries to destroy + clear
+      // that same handle on its own failure path) runs after, it throws
+      // `Cannot read properties of undefined (reading 'destroy')` instead of
+      // the connection error it meant to report (confirmed locally via
+      // temporary instrumentation — this fires as a client 'error' event and
+      // as the `connect()` promise's rejection reason). Depending on exact
+      // timing this can also leave the teardown promises never settling.
+      // Rather than chase the library's internal state machine, bound the
+      // whole teardown so a hang here can NEVER consume Jest's global test
+      // timeout — anything left over is a leaked handle Jest already
+      // tolerates (force-exits the worker), not a test failure.
+      const teardown = (async () => {
+        await client.disconnect().catch(() => {});
+        await connecting;
+        await new Promise<void>((resolve) => server.close(() => resolve()));
+      })();
+      await new Promise<void>((resolve) => {
+        const timer = setTimeout(resolve, 5_000);
+        teardown.then(() => {
+          clearTimeout(timer);
+          resolve();
+        });
+      });
     }
   });
 });
