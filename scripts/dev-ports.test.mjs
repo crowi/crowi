@@ -471,6 +471,10 @@ describe('readEnvFileValue --env-file parity (overlay values beat the child own 
     assert.equal(readEnvFileValue(tmpEnv('CLIENT_URL=http://localhost:9999 # temporary override\n'), 'CLIENT_URL'), 'http://localhost:9999')
     assert.equal(readEnvFileValue(tmpEnv('CLIENT_URL="http://h/#frag"\n'), 'CLIENT_URL'), 'http://h/#frag')
   })
+
+  it('strips an unquoted # comment with NO preceding whitespace, matching node --env-file (which does not require a space before #)', () => {
+    assert.equal(readEnvFileValue(tmpEnv('CLIENT_URL=http://localhost:9999#temporary\n'), 'CLIENT_URL'), 'http://localhost:9999')
+  })
 })
 
 describe('resolveDevClientUrl', () => {

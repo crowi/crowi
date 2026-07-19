@@ -403,10 +403,13 @@ export function resolveDevClientUrl({ processEnvValue, envFileValue, proxyPort }
  * Mirrors Node's `--env-file` semantics closely enough that a value this
  * helper reads is the value the api child would load itself: an optional
  * `export ` prefix is accepted, the LAST assignment of a duplicated key
- * wins, and an unquoted trailing ` # comment` is stripped (quoted values
- * keep their `#`). Divergence here is not cosmetic — dev.mjs overlays what
- * this returns into the child env, which BEATS the child's own --env-file
- * read, so a mis-parse would silently replace the operator's value.
+ * wins, and an unquoted trailing `# comment` is stripped from the FIRST
+ * unquoted `#` onward — with or without preceding whitespace, matching
+ * Node's own `--env-file` parser (verified: `FOO=bar#baz` loads as `bar`,
+ * not `bar#baz`) — while quoted values keep their `#`. Divergence here is
+ * not cosmetic — dev.mjs overlays what this returns into the child env,
+ * which BEATS the child's own --env-file read, so a mis-parse would
+ * silently replace the operator's value.
  * @param {string} envFilePath
  * @param {string} key
  * @returns {string | undefined}
@@ -431,7 +434,7 @@ export function readEnvFileValue(envFilePath, key) {
     if ((v.startsWith('"') && v.endsWith('"') && v.length >= 2) || (v.startsWith("'") && v.endsWith("'") && v.length >= 2)) {
       v = v.slice(1, -1)
     } else {
-      const hash = v.search(/\s#/)
+      const hash = v.indexOf('#')
       if (hash !== -1) v = v.slice(0, hash).trim()
     }
     found = v
