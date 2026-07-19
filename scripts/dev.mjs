@@ -61,6 +61,7 @@ import {
   portsForAnchor,
   readDevLocalConfig,
   readEnvFileValue,
+  resolveDevClientUrl,
   resolveBaseMongoUri,
   resolveTailscaleHostname,
   shouldStartMainPortal,
@@ -299,6 +300,14 @@ async function main() {
     // Next rewrites() target; the proxy (Caddy) takes /api first in practice,
     // this keeps direct-web-port access working too.
     CROWI_API_URL: `http://localhost:${ports.api}`,
+    // OAuth issuer / CORS origin. Set in the overlay (which beats the api
+    // child's --env-file read) so the per-worktree proxy origin applies;
+    // resolveDevClientUrl keeps explicit process-env / .env values winning.
+    CLIENT_URL: resolveDevClientUrl({
+      processEnvValue: process.env.CLIENT_URL,
+      envFileValue: readEnvFileValue(path.join(repoRoot, '.env'), 'CLIENT_URL'),
+      proxyPort: ports.proxy,
+    }),
     ALLOWED_DEV_ORIGINS: allowedDevOrigins,
     ...(isolatedMongoUri ? { MONGO_URI: isolatedMongoUri } : {}),
   }

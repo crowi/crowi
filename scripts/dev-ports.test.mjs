@@ -33,7 +33,7 @@ import {
   stealStaleLock,
   withMongoDbName,
   writeRegistry,
-} from './dev-ports.mjs'
+ resolveDevClientUrl } from './dev-ports.mjs'
 
 let tmpDir
 
@@ -448,5 +448,41 @@ describe('parseTailscaleHostname', () => {
 
   it('returns null when Self.DNSName is missing', () => {
     assert.equal(parseTailscaleHostname(JSON.stringify({ Self: {} })), null)
+  })
+})
+
+describe('readEnvFileValue --env-file parity (overlay values beat the child own .env read, so parity is load-bearing)', () => {
+  const tmpEnv = (content) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'crowi-envfile-'))
+    const file = path.join(dir, '.env')
+    fs.writeFileSync(file, content)
+    return file
+  }
+
+  it('accepts an `export KEY=...` prefix', () => {
+    assert.equal(readEnvFileValue(tmpEnv('export CLIENT_URL="https://dev.example"\n'), 'CLIENT_URL'), 'https://dev.example')
+  })
+
+  it('last duplicate assignment wins (matching node --env-file)', () => {
+    assert.equal(readEnvFileValue(tmpEnv('CLIENT_URL=http://a\nCLIENT_URL=http://b\n'), 'CLIENT_URL'), 'http://b')
+  })
+
+  it('strips an unquoted trailing comment but keeps # inside quotes', () => {
+    assert.equal(readEnvFileValue(tmpEnv('CLIENT_URL=http://localhost:9999 # temporary override\n'), 'CLIENT_URL'), 'http://localhost:9999')
+    assert.equal(readEnvFileValue(tmpEnv('CLIENT_URL="http://h/#frag"\n'), 'CLIENT_URL'), 'http://h/#frag')
+  })
+})
+
+describe('resolveDevClientUrl', () => {
+  it('derives the worktree proxy origin when no explicit value exists (the OAuth issuer must match the canonical dev entry point)', () => {
+    assert.equal(resolveDevClientUrl({ processEnvValue: undefined, envFileValue: null, proxyPort: 4304 }), 'http://localhost:4304')
+  })
+
+  it('respects an explicit process-env CLIENT_URL over everything', () => {
+    assert.equal(resolveDevClientUrl({ processEnvValue: 'https://wiki.example.com', envFileValue: 'http://localhost:9999', proxyPort: 4304 }), 'https://wiki.example.com')
+  })
+
+  it('respects a repo-root .env CLIENT_URL over the derived proxy origin', () => {
+    assert.equal(resolveDevClientUrl({ processEnvValue: undefined, envFileValue: 'http://localhost:9999', proxyPort: 4304 }), 'http://localhost:9999')
   })
 })

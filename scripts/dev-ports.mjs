@@ -384,6 +384,29 @@ export function isolatedDbName(key) {
  * Extract `KEY=value` from a dotenv-style file. Ignores comments/blank lines,
  * strips a single layer of matching quotes. Returns `undefined` when the file
  * or key is missing.
+ */
+/**
+ * CLIENT_URL for a dev worktree. OAuth discovery derives its issuer from
+ * CLIENT_URL (the request Host is deliberately untrusted — RFC-0010), and
+ * the same-origin proxy (anchor+3) is the canonical dev entry point — a
+ * static .env value can never track the per-worktree anchor, which is how
+ * the issuer ended up naming the raw web port and the CLI's issuer
+ * mix-up guard (correctly) rejected proxy-origin logins. Explicit values
+ * win: process env first, then an uncommented repo-root .env entry;
+ * otherwise derive the proxy origin.
+ */
+export function resolveDevClientUrl({ processEnvValue, envFileValue, proxyPort }) {
+  return processEnvValue || envFileValue || `http://localhost:${proxyPort}`
+}
+
+/**
+ * Mirrors Node's `--env-file` semantics closely enough that a value this
+ * helper reads is the value the api child would load itself: an optional
+ * `export ` prefix is accepted, the LAST assignment of a duplicated key
+ * wins, and an unquoted trailing ` # comment` is stripped (quoted values
+ * keep their `#`). Divergence here is not cosmetic — dev.mjs overlays what
+ * this returns into the child env, which BEATS the child's own --env-file
+ * read, so a mis-parse would silently replace the operator's value.
  * @param {string} envFilePath
  * @param {string} key
  * @returns {string | undefined}
@@ -395,20 +418,25 @@ export function readEnvFileValue(envFilePath, key) {
   } catch {
     return undefined
   }
+  let found
   for (const line of raw.split('\n')) {
-    const trimmed = line.trim()
+    let trimmed = line.trim()
     if (!trimmed || trimmed.startsWith('#')) continue
+    if (trimmed.startsWith('export ')) trimmed = trimmed.slice('export '.length).trim()
     const eq = trimmed.indexOf('=')
     if (eq === -1) continue
     const k = trimmed.slice(0, eq).trim()
     if (k !== key) continue
     let v = trimmed.slice(eq + 1).trim()
-    if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+    if ((v.startsWith('"') && v.endsWith('"') && v.length >= 2) || (v.startsWith("'") && v.endsWith("'") && v.length >= 2)) {
       v = v.slice(1, -1)
+    } else {
+      const hash = v.search(/\s#/)
+      if (hash !== -1) v = v.slice(0, hash).trim()
     }
-    return v
+    found = v
   }
-  return undefined
+  return found
 }
 
 /**
