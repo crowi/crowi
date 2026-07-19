@@ -258,37 +258,43 @@ describe('Routes /api/v2/pages/preview (Hono previewPage)', () => {
         email: 'preview-ratelimit@example.com',
       });
 
-      // autocomplete.test.ts fires 2*budget+1 CONCURRENT requests (budget
-      // 60) to dodge a fixed-window boundary straddle. Preview's budget is
-      // 10x larger (600) — firing 1200+ concurrent supertest connections
-      // opened this many real ephemeral sockets that the full parallel
-      // suite (5 Jest workers, each also opening sockets) intermittently
-      // couldn't service in time (`connect ETIMEDOUT`). Firing sequentially
-      // instead keeps at most one socket open at a time; the whole burst
-      // still completes in well under a second, so the same boundary-
-      // straddle risk stays negligible without the connection-pool cost.
-      // PREVIEW_RATE_LIMIT (page-preview.ts) is 600 — track it here.
-      //
-      // On top of firing sequentially, bind ONE `http.Server` for the
-      // whole 605-request burst instead of letting supertest spin up (and
-      // tear down) a fresh ephemeral listener per `request(app)` call —
-      // `app` here is a bare request-listener function, so `request(app)`
-      // normally does its own `.listen(0)`/close per call. 605 separate
-      // listen/connect/close cycles is itself real OS-level pressure under
-      // a 5-worker parallel run and was the direct cause of one observed
-      // `connect ETIMEDOUT` flake; one persistent server + 605 keep-alive
-      // requests removes that self-inflicted overhead entirely.
+      // The limiter uses a fixed 60s window (`floor(now / windowMs)`, same
+      // as autocomplete.test.ts's rate-limit test documents). Firing only
+      // budget+5 (605) SEQUENTIAL requests — this test's previous shape —
+      // is flaky on exactly that boundary-straddle: a slow CI run can
+      // straddle a window mid-burst, resetting the count before it ever
+      // exceeds the budget in either window (confirmed in CI: the file
+      // solo-reran standalone and still failed with `limited: undefined`,
+      // ruling out cross-test contention as the cause). autocomplete's
+      // rate-limit test dodges this by firing 2*budget+1 (121) requests
+      // fully CONCURRENTLY: by pigeonhole, a burst that spans at most two
+      // windows must land >budget hits in one of them, wherever the
+      // boundary falls, regardless of timing. Preview's budget is 10x
+      // larger (600), and firing 1200+ fully concurrent supertest
+      // connections previously produced real `connect ETIMEDOUT` flakes
+      // (many simultaneous fresh listen/connect/close cycles under a
+      // 5-worker parallel run) — so this fires the same 2*budget+1 total in
+      // bounded-size concurrent batches instead, over ONE persistent
+      // keep-alive `http.Server` (avoids the per-request listen/connect/
+      // close churn that caused the ETIMEDOUT flake) — batches large enough
+      // to keep total wall-clock time (and thus straddle risk) low, small
+      // enough to stay well under whatever concurrent-socket pressure
+      // caused that flake.
       const PREVIEW_RATE_LIMIT = 600;
+      const TOTAL_REQUESTS = 2 * PREVIEW_RATE_LIMIT + 1;
+      const BATCH_SIZE = 50;
       const server: Server = createServer(app).listen(0);
       try {
         const fire = () => request(server).post('/api/v2/pages/preview').set(authHeaders(rateLimitedToken)).send({ body: '# hello' });
-        let limited: Awaited<ReturnType<typeof fire>> | undefined;
-        for (let i = 0; i < PREVIEW_RATE_LIMIT + 5 && !limited; i += 1) {
-          const res = await fire();
-          expect([200, 429]).toContain(res.status);
-          if (res.status === 429) limited = res;
+        const responses: Awaited<ReturnType<typeof fire>>[] = [];
+        for (let i = 0; i < TOTAL_REQUESTS; i += BATCH_SIZE) {
+          const batchSize = Math.min(BATCH_SIZE, TOTAL_REQUESTS - i);
+          const batch = await Promise.all(Array.from({ length: batchSize }, fire));
+          responses.push(...batch);
         }
+        expect(responses.every((res) => res.status === 200 || res.status === 429)).toBe(true);
 
+        const limited = responses.find((res) => res.status === 429);
         expect(limited).toBeDefined();
         expect(limited?.body.error).toBe('rate_limited');
         expect(typeof limited?.body.retryAfterSeconds).toBe('number');
