@@ -97,9 +97,27 @@ describe('buildRedisOpts', () => {
     client.on('error', () => {
       /* handshake/protocol errors surface here; the test asserts via secureSeen */
     });
+    // node-redis only saves its internal socket handle (the thing
+    // disconnect() actually destroys) once ITS OWN 'connect' event fires —
+    // after the TLS handshake completes on the CLIENT side. That does not
+    // necessarily happen in the same tick as the server's 'secureConnection'
+    // above: if the server-side event is observed first and disconnect()
+    // races ahead of the client-side socket assignment, disconnect() is a
+    // silent no-op (node-redis has nothing to destroy yet), the client
+    // proceeds to send its post-handshake RESP handshake to this bare TLS
+    // fixture (which never replies — it isn't a real Redis server), and
+    // that pending command — with nothing left to ever cancel it — hangs
+    // the test until Jest's global timeout. Waiting for the client's own
+    // 'connect' (or 'error', so a genuine connection failure doesn't hang
+    // this wait either) closes that race.
+    const clientSocketReady = new Promise<void>((resolve) => {
+      client.once('connect', () => resolve());
+      client.once('error', () => resolve());
+    });
     const connecting = client.connect().catch(() => {});
     try {
       await secureSeen;
+      await clientSocketReady;
     } finally {
       await client.disconnect().catch(() => {});
       await connecting;
