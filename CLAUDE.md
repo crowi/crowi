@@ -296,6 +296,35 @@ integrate-worktree, orchestrate C, crowi-fix, future skills). `TODO.md` is for
 roadmap items and blocked dependency majors only — not a review-advisory
 graveyard.
 
+### Flaky test / CI-infra root cause: delegate the investigation+design, don't reason it out inline
+When a CI failure turns out to be flaky/nondeterministic or CI-infra-shaped
+(turbo build/task-graph races, jest harness/worker behavior, GHA runner
+timing, port/process reuse) rather than a straightforward deterministic
+regression, **do not diagnose the root cause and design the fix by reasoning
+inline in a Claude Sonnet session.** Stop, and hand the investigation +
+countermeasure design to Codex at `--tier sol` (`.claude/scripts/codex-run.sh
+--tier sol`, `gpt-5.6-sol`, high effort) or a Fable-model subagent (`Agent`
+with `model: "fable"`). Claude's job is to execute/glue/gate the design that
+comes back — write the repro, apply the fix, run the gates, commit — not to
+originate the root-cause theory itself.
+
+**Why**: Sonnet's fast single-pass diagnosis on parallel flake/CI-infra
+symptoms has repeatedly produced plausible-but-wrong root causes (2026-07-15:
+3 consecutive premise errors in one session, each caught only by an
+independent spec review — see the flake/CI diagnosis review-gate feedback in
+memory). These mechanisms (turbo cache/task-graph ordering, jest reporter/
+worker-crash semantics, supertest's ephemeral local server, mongodb driver
+pool behavior) don't yield to intuition; they need a harder, separately-
+verified reasoning pass before code changes.
+
+**How to apply**: mid-investigation, the moment a CI failure looks
+flaky/infra-shaped instead of a deterministic repro-first bug (the normal
+crowi-fix case), stop inline investigation. Route the diagnosis + design step
+through Codex sol or Fable, then implement from that design under the normal
+gates (repro → fix → type-check/test/lint → commit). Skipping this and just
+committing an inline Sonnet-authored theory is the failure mode this rule
+exists to prevent.
+
 ### Hooks (lefthook)
 - **pre-commit**: Biome format on staged files
 - **pre-push**: `pnpm lint` (errors=0 required) + `pnpm check:openapi` (only when `packages/api-contract/**` changed — the OpenAPI artifacts must be regenerated and committed)
