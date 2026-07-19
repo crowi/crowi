@@ -263,23 +263,24 @@ describe('Routes /api/v2/pages/preview (Hono previewPage)', () => {
       // budget+5 (605) SEQUENTIAL requests — this test's previous shape —
       // is flaky on exactly that boundary-straddle: a slow CI run can
       // straddle a window mid-burst, resetting the count before it ever
-      // exceeds the budget in either window (confirmed in CI: the file
-      // solo-reran standalone and still failed with `limited: undefined`,
-      // ruling out cross-test contention as the cause). autocomplete's
-      // rate-limit test dodges this by firing 2*budget+1 (121) requests
-      // fully CONCURRENTLY: by pigeonhole, a burst that spans at most two
-      // windows must land >budget hits in one of them, wherever the
-      // boundary falls, regardless of timing. Preview's budget is 10x
-      // larger (600), and firing 1200+ fully concurrent supertest
-      // connections previously produced real `connect ETIMEDOUT` flakes
-      // (many simultaneous fresh listen/connect/close cycles under a
-      // 5-worker parallel run) — so this fires the same 2*budget+1 total in
-      // bounded-size concurrent batches instead, over ONE persistent
-      // keep-alive `http.Server` (avoids the per-request listen/connect/
-      // close churn that caused the ETIMEDOUT flake) — batches large enough
-      // to keep total wall-clock time (and thus straddle risk) low, small
-      // enough to stay well under whatever concurrent-socket pressure
-      // caused that flake.
+      // exceeds the budget in either window. autocomplete's rate-limit test
+      // dodges this by firing 2*budget+1 (121) requests fully CONCURRENTLY:
+      // by pigeonhole, a burst that spans at most two windows must land
+      // >budget hits in one of them, wherever the boundary falls, regardless
+      // of timing. Preview's budget is 10x larger (600), and firing 1200+
+      // fully concurrent supertest connections previously produced real
+      // `connect ETIMEDOUT` flakes (many simultaneous fresh listen/connect/
+      // close cycles under a 5-worker parallel run) — so this fires the same
+      // 2*budget+1 total in size-50 concurrent batches instead (each
+      // supertest call opens its own connection regardless — superagent
+      // doesn't pool/keep-alive against a shared server — so this bounds
+      // CONCURRENT sockets, not total connection count): comfortably below
+      // typical OS ephemeral-port/backlog limits (well under the ~1200 that
+      // caused the prior ETIMEDOUT flake), while keeping total wall-clock
+      // time low enough that the whole 1201-request burst — bounded by this
+      // test's own 30s timeout below — cannot span more than 2 windows
+      // (spanning 3 would need >60s), so the pigeonhole guarantee above
+      // holds unconditionally, not just probabilistically.
       const PREVIEW_RATE_LIMIT = 600;
       const TOTAL_REQUESTS = 2 * PREVIEW_RATE_LIMIT + 1;
       const BATCH_SIZE = 50;
