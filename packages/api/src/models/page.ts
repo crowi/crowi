@@ -1005,14 +1005,14 @@ export default (crowi: Crowi) => {
           grantedUsers: { $ne: userData._id },
         },
         { $addToSet: { grantedUsers: userData._id } },
-        { new: true },
+        { returnDocument: 'after' },
       );
 
       if (updated) {
         // Matched: the write committed atomically against a still-eligible
-        // document, and `{ new: true }` handed back that exact post-write
-        // state — no separate re-read window for a concurrent delete to
-        // land in between write and response.
+        // document, and `returnDocument: 'after'` handed back that exact
+        // post-write state — no separate re-read window for a concurrent
+        // delete to land in between write and response.
         currentPageData = updated;
         granted = true;
       } else {
