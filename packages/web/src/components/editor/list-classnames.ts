@@ -3,7 +3,7 @@
  * renderer's `ul` / `ol` / `li` component overrides.
  *
  * Both the show page (`page-view/page-content.tsx`) and the editor
- * preview (`editor/MarkdownPreview.tsx`) render server-emitted mdast
+ * preview (`editor/markdown-preview.tsx`) render server-emitted mdast
  * through the same `renderMdastToReactNode` pipeline, so their list
  * styling must stay identical. These constants are the single source
  * of truth — a plain constant, not an abstraction layer.

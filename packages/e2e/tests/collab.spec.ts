@@ -26,7 +26,7 @@ test('collab propagates edits between two authenticated users', async ({ userAPa
  * permanently mutates it.
  *
  * The reload prompt is `CollabForceReloadDialog`
- * (`packages/web/src/components/editor/CollabForceReloadDialog.tsx`), a
+ * (`packages/web/src/components/editor/collab-force-reload-dialog.tsx`), a
  * Radix `AlertDialog` (`role="alertdialog"`). userB's context is used purely
  * as an authenticated actor for the API call — the mutation is not driven
  * through userB's UI, matching "a different window/API renames or deletes

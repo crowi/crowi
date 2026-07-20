@@ -31,7 +31,7 @@ vi.mock('next/navigation', () => ({
 const { suppressed } = vi.hoisted(() => ({ suppressed: { value: false } }));
 vi.mock('./session-reauth-context', () => ({ isReauthSuppressed: () => suppressed.value }));
 
-import { AuthSync } from './AuthSync';
+import { AuthSync } from './auth-sync';
 import { notifyAuthTokenChange } from './auth-token-store';
 import { ConnectionProvider, useConnection } from './connection-context';
 import { notifyTokenRefreshed } from './token-refresh-notifier';

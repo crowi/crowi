@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, cleanup, screen, act } from '@testing-library/react';
-import { CollabForceReloadDialog } from './CollabForceReloadDialog';
+import { CollabForceReloadDialog } from './collab-force-reload-dialog';
 
 afterEach(() => {
   cleanup();

@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const { mutateAsync } = vi.hoisted(() => ({ mutateAsync: vi.fn() }));
 vi.mock('@/lib/use-preview', () => ({ usePreview: () => ({ mutateAsync }) }));
 
-import { MarkdownPreview } from './MarkdownPreview';
+import { MarkdownPreview } from './markdown-preview';
 
 const DEBOUNCE_MS = 250;
 

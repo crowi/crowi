@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, type RefObject } from 'react';
-import type { MarkdownEditorHandle } from '@/components/editor/MarkdownEditor';
+import type { MarkdownEditorHandle } from '@/components/editor/markdown-editor';
 import { computeScrollProgress, computeSlidingReferenceTarget, isProgressNearEnd, isProgressNearStart } from './scroll-sync-math';
 
 interface UseScrollSyncOptions {

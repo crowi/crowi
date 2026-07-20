@@ -1,7 +1,7 @@
 import type { RefObject } from 'react';
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { MarkdownEditorHandle } from '@/components/editor/MarkdownEditor';
+import type { MarkdownEditorHandle } from '@/components/editor/markdown-editor';
 import { useScrollSync } from './use-scroll-sync';
 
 // ---------------------------------------------------------------------------

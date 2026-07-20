@@ -55,7 +55,7 @@ vi.mock('@hocuspocus/provider', () => ({
   WebSocketStatus: { Connecting: 'connecting', Connected: 'connected', Disconnected: 'disconnected' },
 }));
 
-import { useCollabSession } from './CollaborativeMarkdownEditor';
+import { useCollabSession } from './collaborative-markdown-editor';
 
 afterEach(() => {
   cleanup();

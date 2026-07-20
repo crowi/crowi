@@ -5,7 +5,7 @@ import { act, cleanup, render } from '@testing-library/react';
 import { createRef } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildExtensions } from './build-extensions';
-import { MarkdownEditor, type MarkdownEditorHandle } from './MarkdownEditor';
+import { MarkdownEditor, type MarkdownEditorHandle } from './markdown-editor';
 
 afterEach(() => cleanup());
 
