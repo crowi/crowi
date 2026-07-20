@@ -95,6 +95,18 @@ export interface MarkdownEditorHandle {
    */
   getScrollDOM(): HTMLElement | null;
   /**
+   * Total number of lines in the document. Scroll-sync needs it to know
+   * how far the source-line axis extends PAST the last
+   * `[data-source-line]` anchor: anchors only mark top-level block
+   * starts, so the trailing block's remaining lines have no anchor of
+   * their own and must be interpolated against the document end
+   * instead of collapsing onto the last anchor (see `snapshotMarkers`
+   * in `use-scroll-sync.ts`).
+   *
+   * Returns `null` if the view hasn't mounted.
+   */
+  getLineCount(): number | null;
+  /**
    * The 1-based source line anchored at `viewportFraction` (`0` = top,
    * `1` = bottom) of the editor's visible viewport, plus the
    * fractional offset (`0..1`) inside that line's vertical block.
@@ -313,6 +325,9 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
       },
       getScrollDOM() {
         return viewRef.current?.scrollDOM ?? null;
+      },
+      getLineCount() {
+        return viewRef.current?.state.doc.lines ?? null;
       },
       getProgressAt(viewportFraction) {
         const view = viewRef.current;

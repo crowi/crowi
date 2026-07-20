@@ -107,6 +107,32 @@ export function useScrollSync({ editorRef, previewRef, enabled }: UseScrollSyncO
         // viewport-relative, not container-internal).
         out.push({ sourceLine, top: el.getBoundingClientRect().top - containerTop + previewScroll.scrollTop });
       }
+      if (out.length === 0) return out;
+
+      // Sentinels for the document's two EDGES. Anchors are injected only on
+      // top-level block *starts* (`injectSourceLineAnchors`), so the lines
+      // before the first anchor and — the one that actually bit — every line
+      // after the last one (a trailing list's 2nd..nth item, a trailing
+      // paragraph's continuation lines, plus the editor's bottom padding)
+      // have no anchor to interpolate against. Without sentinels those whole
+      // stretches collapsed onto a single constant y (the first/last anchor's
+      // top), which made the sliding reference `referenceY - p * viewportH`
+      // move BACKWARDS as `p` grew, and left the endpoint pin to close the
+      // resulting gap as one visible jump. Extending the axis to the true
+      // content edges keeps the mapping monotonic and makes the pinned
+      // endpoints the continuous limit of the interior instead of a
+      // discontinuity.
+      const first = out[0];
+      if (first.sourceLine > 1 && first.top > 0) out.unshift({ sourceLine: 1, top: 0 });
+      const lineCount = editorRef.current?.getLineCount() ?? null;
+      const last = out[out.length - 1];
+      // `lineCount + 1` mirrors `getProgressAt`'s bottom probe, which reports
+      // `{ line: lineCount, ratio: 1 }` once it lands in the trailing padding.
+      // Pairing it with the full `scrollHeight` makes the tail resolve to
+      // exactly `scrollHeight - viewportH` === the pin's `targetMaxScroll`.
+      if (lineCount !== null && lineCount + 1 > last.sourceLine && previewScroll.scrollHeight > last.top) {
+        out.push({ sourceLine: lineCount + 1, top: previewScroll.scrollHeight });
+      }
       return out;
     };
 
