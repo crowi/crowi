@@ -606,6 +606,15 @@ html[data-page-grant="2"] {
   background-color: var(--accent);
 }
 
+/* Editor-preview-only `@[card](url)` placeholder. This deliberately uses
+ * the saved card's outline/body structure but has no anchor: preview mode
+ * never fetches OGP metadata, and the static card must not imply a link. */
+.crowi-prose .crowi-link-card-preview-surface {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
 .crowi-prose .crowi-link-card-body {
   display: flex;
   flex-direction: column;
@@ -631,6 +640,11 @@ html[data-page-grant="2"] {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+.crowi-prose .crowi-link-card-preview-message {
+  font-size: 0.8125rem;
+  color: var(--muted-foreground);
 }
 
 .crowi-prose .crowi-link-card-meta {
@@ -753,4 +767,3 @@ html[data-page-grant="2"] {
     margin-right: 0;
   }
 }
-

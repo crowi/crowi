@@ -432,6 +432,7 @@
   "edit.attach_failed": "Failed to attach file",
   "edit.link_card_convert_to_card": "Convert to card",
   "edit.link_card_revert_to_link": "Convert to link",
+  "edit.link_card_preview_pending": "Save the page to fetch its title and show the card.",
   "edit.tab_editor": "Editor",
   "edit.tab_preview": "Preview",
   "edit.preview_placeholder": "Preview",
