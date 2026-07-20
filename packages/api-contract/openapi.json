@@ -4777,6 +4777,9 @@
           "url": {
             "type": "string"
           },
+          "originalUrl": {
+            "type": "string"
+          },
           "inUse": {
             "type": "boolean"
           }
@@ -4792,6 +4795,7 @@
           "fileSize",
           "createdAt",
           "url",
+          "originalUrl",
           "inUse"
         ]
       },
@@ -4877,6 +4881,9 @@
           },
           "url": {
             "type": "string"
+          },
+          "originalUrl": {
+            "type": "string"
           }
         },
         "required": [
@@ -4889,7 +4896,8 @@
           "fileFormat",
           "fileSize",
           "createdAt",
-          "url"
+          "url",
+          "originalUrl"
         ]
       },
       "ListAttachmentsResponse": {
@@ -4980,6 +4988,9 @@
                 "url": {
                   "type": "string"
                 },
+                "originalUrl": {
+                  "type": "string"
+                },
                 "inUse": {
                   "type": "boolean"
                 }
@@ -4995,6 +5006,7 @@
                 "fileSize",
                 "createdAt",
                 "url",
+                "originalUrl",
                 "inUse"
               ]
             }
@@ -5090,6 +5102,9 @@
               "url": {
                 "type": "string"
               },
+              "originalUrl": {
+                "type": "string"
+              },
               "inUse": {
                 "type": "boolean"
               }
@@ -5105,6 +5120,7 @@
               "fileSize",
               "createdAt",
               "url",
+              "originalUrl",
               "inUse"
             ]
           },
@@ -5277,6 +5293,9 @@
                 "url": {
                   "type": "string"
                 },
+                "originalUrl": {
+                  "type": "string"
+                },
                 "inUse": {
                   "type": "boolean"
                 }
@@ -5292,6 +5311,7 @@
                 "fileSize",
                 "createdAt",
                 "url",
+                "originalUrl",
                 "inUse"
               ]
             }
@@ -5384,6 +5404,9 @@
                     "url": {
                       "type": "string"
                     },
+                    "originalUrl": {
+                      "type": "string"
+                    },
                     "inUse": {
                       "type": "boolean"
                     }
@@ -5399,6 +5422,7 @@
                     "fileSize",
                     "createdAt",
                     "url",
+                    "originalUrl",
                     "inUse"
                   ]
                 },
@@ -30313,6 +30337,9 @@
                           "url": {
                             "type": "string"
                           },
+                          "originalUrl": {
+                            "type": "string"
+                          },
                           "inUse": {
                             "type": "boolean"
                           }
@@ -30328,6 +30355,7 @@
                           "fileSize",
                           "createdAt",
                           "url",
+                          "originalUrl",
                           "inUse"
                         ]
                       }
@@ -30420,6 +30448,9 @@
                               "url": {
                                 "type": "string"
                               },
+                              "originalUrl": {
+                                "type": "string"
+                              },
                               "inUse": {
                                 "type": "boolean"
                               }
@@ -30435,6 +30466,7 @@
                               "fileSize",
                               "createdAt",
                               "url",
+                              "originalUrl",
                               "inUse"
                             ]
                           },
@@ -30806,6 +30838,9 @@
                           "url": {
                             "type": "string"
                           },
+                          "originalUrl": {
+                            "type": "string"
+                          },
                           "inUse": {
                             "type": "boolean"
                           }
@@ -30821,6 +30856,7 @@
                           "fileSize",
                           "createdAt",
                           "url",
+                          "originalUrl",
                           "inUse"
                         ]
                       }
@@ -31123,6 +31159,9 @@
                         "url": {
                           "type": "string"
                         },
+                        "originalUrl": {
+                          "type": "string"
+                        },
                         "inUse": {
                           "type": "boolean"
                         }
@@ -31138,6 +31177,7 @@
                         "fileSize",
                         "createdAt",
                         "url",
+                        "originalUrl",
                         "inUse"
                       ]
                     },
@@ -31779,6 +31819,9 @@
                     },
                     "url": {
                       "type": "string"
+                    },
+                    "originalUrl": {
+                      "type": "string"
                     }
                   },
                   "required": [
@@ -31791,7 +31834,8 @@
                     "fileFormat",
                     "fileSize",
                     "createdAt",
-                    "url"
+                    "url",
+                    "originalUrl"
                   ]
                 }
               }

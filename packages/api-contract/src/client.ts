@@ -499,6 +499,7 @@ const stubAttachment = {
   fileSize: 0,
   createdAt: '',
   url: '',
+  originalUrl: '',
   inUse: false,
 } as const;
 const stubListAttachments: ListAttachmentsResponse = { attachments: [] };

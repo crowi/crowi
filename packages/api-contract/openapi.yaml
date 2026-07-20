@@ -3210,6 +3210,8 @@ components:
           type: string
         url:
           type: string
+        originalUrl:
+          type: string
         inUse:
           type: boolean
       required:
@@ -3223,6 +3225,7 @@ components:
         - fileSize
         - createdAt
         - url
+        - originalUrl
         - inUse
     AttachmentMeta:
       type: object
@@ -3283,6 +3286,8 @@ components:
           type: string
         url:
           type: string
+        originalUrl:
+          type: string
       required:
         - _id
         - page
@@ -3294,6 +3299,7 @@ components:
         - fileSize
         - createdAt
         - url
+        - originalUrl
     ListAttachmentsResponse:
       type: object
       properties:
@@ -3358,6 +3364,8 @@ components:
                 type: string
               url:
                 type: string
+              originalUrl:
+                type: string
               inUse:
                 type: boolean
             required:
@@ -3371,6 +3379,7 @@ components:
               - fileSize
               - createdAt
               - url
+              - originalUrl
               - inUse
       required:
         - attachments
@@ -3436,6 +3445,8 @@ components:
               type: string
             url:
               type: string
+            originalUrl:
+              type: string
             inUse:
               type: boolean
           required:
@@ -3449,6 +3460,7 @@ components:
             - fileSize
             - createdAt
             - url
+            - originalUrl
             - inUse
         referencingRevisions:
           type: array
@@ -3570,6 +3582,8 @@ components:
                 type: string
               url:
                 type: string
+              originalUrl:
+                type: string
               inUse:
                 type: boolean
             required:
@@ -3583,6 +3597,7 @@ components:
               - fileSize
               - createdAt
               - url
+              - originalUrl
               - inUse
         past:
           type: array
@@ -3648,6 +3663,8 @@ components:
                     type: string
                   url:
                     type: string
+                  originalUrl:
+                    type: string
                   inUse:
                     type: boolean
                 required:
@@ -3661,6 +3678,7 @@ components:
                   - fileSize
                   - createdAt
                   - url
+                  - originalUrl
                   - inUse
               referencingRevisions:
                 type: array
@@ -19946,6 +19964,8 @@ paths:
                           type: string
                         url:
                           type: string
+                        originalUrl:
+                          type: string
                         inUse:
                           type: boolean
                       required:
@@ -19959,6 +19979,7 @@ paths:
                         - fileSize
                         - createdAt
                         - url
+                        - originalUrl
                         - inUse
                   past:
                     type: array
@@ -20024,6 +20045,8 @@ paths:
                               type: string
                             url:
                               type: string
+                            originalUrl:
+                              type: string
                             inUse:
                               type: boolean
                           required:
@@ -20037,6 +20060,7 @@ paths:
                             - fileSize
                             - createdAt
                             - url
+                            - originalUrl
                             - inUse
                         referencingRevisions:
                           type: array
@@ -20289,6 +20313,8 @@ paths:
                           type: string
                         url:
                           type: string
+                        originalUrl:
+                          type: string
                         inUse:
                           type: boolean
                       required:
@@ -20302,6 +20328,7 @@ paths:
                         - fileSize
                         - createdAt
                         - url
+                        - originalUrl
                         - inUse
                 required:
                   - attachments
@@ -20504,6 +20531,8 @@ paths:
                         type: string
                       url:
                         type: string
+                      originalUrl:
+                        type: string
                       inUse:
                         type: boolean
                     required:
@@ -20517,6 +20546,7 @@ paths:
                       - fileSize
                       - createdAt
                       - url
+                      - originalUrl
                       - inUse
                   url:
                     type: string
@@ -20952,6 +20982,8 @@ paths:
                     type: string
                   url:
                     type: string
+                  originalUrl:
+                    type: string
                 required:
                   - _id
                   - page
@@ -20963,6 +20995,7 @@ paths:
                   - fileSize
                   - createdAt
                   - url
+                  - originalUrl
         '400':
           description: Invalid attachment id
           content:
