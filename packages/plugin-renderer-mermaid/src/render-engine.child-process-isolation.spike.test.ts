@@ -53,16 +53,55 @@ function forkWorker(): ChildProcess {
   });
 }
 
+// `spike-worker.ts` sends `ready` only after a genuinely expensive cold
+// start (jsdom setup, network instrumentation, importing the real
+// `mermaid` dependency graph, `initialize()`) — deliberately real, not the
+// deterministic fixture `render-engine.test.ts` uses elsewhere in this
+// package, because Gate C's whole point is to observe fork/kill lifecycle
+// behavior against a genuine render (see this file's top doc comment).
+// Under CI CPU contention (turbo running multiple packages' test tasks
+// concurrently, `@crowi/api`'s own multi-worker jest suite competing for
+// the same cores) that cold start can legitimately take longer than a
+// budget sized for an unloaded machine — root-caused via Codex sol,
+// `.reviews/codex-runs/investigate-mermaid-spike-test-timeout/out.json`
+// (high confidence; CI run 29717641489 timed out here with every other
+// test file in the package, and the rest of the suite, passing). This
+// bounds a genuine startup hang (not a mid-render hang — see waitForReady's
+// own SIGKILL below) at a generous fixed budget per fork, independent of
+// the enclosing Jest test's own timeout, and rejects loudly (with the
+// child reaped) instead of leaving Jest's own timeout as the only signal.
+const WORKER_READY_TIMEOUT_MS = 30_000;
+
 function waitForReady(child: ChildProcess): Promise<void> {
   return new Promise((resolve, reject) => {
+    const cleanup = () => {
+      child.off('message', onMessage);
+      child.off('error', onError);
+      child.off('exit', onExit);
+      clearTimeout(timer);
+    };
     const onMessage = (msg: WorkerMessage) => {
       if (msg.type === 'ready') {
-        child.off('message', onMessage);
+        cleanup();
         resolve();
       }
     };
+    const onError = (err: Error) => {
+      cleanup();
+      reject(err);
+    };
+    const onExit = (code: number | null, signal: NodeJS.Signals | null) => {
+      cleanup();
+      reject(new Error(`worker exited before sending 'ready' (code=${code}, signal=${signal})`));
+    };
+    const timer = setTimeout(() => {
+      cleanup();
+      child.kill('SIGKILL');
+      reject(new Error(`worker did not send 'ready' within ${WORKER_READY_TIMEOUT_MS}ms`));
+    }, WORKER_READY_TIMEOUT_MS);
     child.on('message', onMessage);
-    child.once('error', reject);
+    child.once('error', onError);
+    child.once('exit', onExit);
   });
 }
 
@@ -113,140 +152,158 @@ function isStrictlyIncreasing(samples: readonly number[]): boolean {
 }
 
 describe('Phase 0 gate C: child-process isolation', () => {
-  it('C-5: rendering in the child does not block the parent event loop', async () => {
-    const child = forkWorker();
-    try {
-      await waitForReady(child);
+  it(
+    'C-5: rendering in the child does not block the parent event loop',
+    async () => {
+      const child = forkWorker();
+      try {
+        await waitForReady(child);
 
-      let parentTicks = 0;
-      const timer = setInterval(() => {
-        parentTicks++;
-      }, 10);
+        let parentTicks = 0;
+        const timer = setInterval(() => {
+          parentTicks++;
+        }, 10);
 
-      const resultPromise = new Promise<RenderResponseMessage>((resolve) => {
-        child.on('message', (msg: WorkerMessage) => {
-          if (msg.type === 'render-result') resolve(msg);
+        const resultPromise = new Promise<RenderResponseMessage>((resolve) => {
+          child.on('message', (msg: WorkerMessage) => {
+            if (msg.type === 'render-result') resolve(msg);
+          });
         });
-      });
-      const request: RenderRequestMessage = { type: 'render', id: 1, source: LARGE_FLOWCHART_SOURCE };
-      child.send(request);
-      const result = await resultPromise;
-      clearInterval(timer);
+        const request: RenderRequestMessage = { type: 'render', id: 1, source: LARGE_FLOWCHART_SOURCE };
+        child.send(request);
+        const result = await resultPromise;
+        clearInterval(timer);
 
-      expect(result.ok).toBe(true);
-      // The parent's own timer must have ticked repeatedly *during* the
-      // several hundred ms the child spent rendering the large fixture —
-      // if the child render blocked the parent (e.g. because it wasn't
-      // actually a separate process), this would be 0 or close to it.
-      expect(parentTicks).toBeGreaterThan(20);
-    } finally {
-      child.kill();
-    }
-  }, 15_000);
+        expect(result.ok).toBe(true);
+        // The parent's own timer must have ticked repeatedly *during* the
+        // several hundred ms the child spent rendering the large fixture —
+        // if the child render blocked the parent (e.g. because it wasn't
+        // actually a separate process), this would be 0 or close to it.
+        expect(parentTicks).toBeGreaterThan(20);
+      } finally {
+        child.kill();
+      }
+      // WORKER_READY_TIMEOUT_MS (the worker's own cold-start budget) + slack
+      // for the render itself — see WORKER_READY_TIMEOUT_MS's doc comment.
+    },
+    WORKER_READY_TIMEOUT_MS + 15_000,
+  );
 
-  it('C-6: SIGKILL mid-render leaves no zombie or unreleased handle', async () => {
-    const child = forkWorker();
-    await waitForReady(child);
-    const pid = child.pid;
-    expect(pid).toBeDefined();
-
-    let renderCompletedBeforeKill = false;
-    child.on('message', (msg: WorkerMessage) => {
-      if (msg.type === 'render-result') renderCompletedBeforeKill = true;
-    });
-
-    const exitPromise = new Promise<void>((resolve) => {
-      child.once('exit', () => resolve());
-    });
-
-    const request: RenderRequestMessage = { type: 'render', id: 1, source: LARGE_FLOWCHART_SOURCE };
-    child.send(request);
-    // Wait for the worker's own confirmation that mermaid.render() has
-    // already been invoked (see waitForRenderStarted's doc comment) —
-    // LARGE_FLOWCHART_SOURCE takes ~700-900ms to render, so the SIGKILL
-    // below (sent within single-digit ms of that confirmation) lands
-    // confidently mid-execution.
-    await waitForRenderStarted(child, request.id);
-    child.kill('SIGKILL');
-    await exitPromise;
-
-    // Never received a completed render before the kill — confirms this
-    // was genuinely mid-render, not "already finished by the time we
-    // killed it".
-    expect(renderCompletedBeforeKill).toBe(false);
-
-    // A killed process is briefly a zombie until the parent reaps it;
-    // Node's ChildProcess machinery does that reap as part of emitting
-    // `exit`, so by the time `exitPromise` resolves, the PID should no
-    // longer be signalable.
-    expect(() => process.kill(pid as number, 0)).toThrow();
-  }, 10_000);
-
-  it('C-7: 10x spawn/render/kill cycles do not monotonically grow parent resources or memory', async () => {
-    async function spawnRenderKillCycle(): Promise<void> {
+  it(
+    'C-6: SIGKILL mid-render leaves no zombie or unreleased handle',
+    async () => {
       const child = forkWorker();
       await waitForReady(child);
+      const pid = child.pid;
+      expect(pid).toBeDefined();
+
+      let renderCompletedBeforeKill = false;
+      child.on('message', (msg: WorkerMessage) => {
+        if (msg.type === 'render-result') renderCompletedBeforeKill = true;
+      });
+
       const exitPromise = new Promise<void>((resolve) => {
         child.once('exit', () => resolve());
       });
+
       const request: RenderRequestMessage = { type: 'render', id: 1, source: LARGE_FLOWCHART_SOURCE };
       child.send(request);
-      // Same "genuinely mid-render, not just requested" handshake as C-6 —
-      // each cycle kills a real in-flight render, per §8 C-7's "生成→レン
-      // ダリング開始→kill()".
+      // Wait for the worker's own confirmation that mermaid.render() has
+      // already been invoked (see waitForRenderStarted's doc comment) —
+      // LARGE_FLOWCHART_SOURCE takes ~700-900ms to render, so the SIGKILL
+      // below (sent within single-digit ms of that confirmation) lands
+      // confidently mid-execution.
       await waitForRenderStarted(child, request.id);
       child.kill('SIGKILL');
       await exitPromise;
-    }
 
-    // Sample a *pre-cycle* baseline before any spawn/render/kill cycle
-    // runs — a reviewer fix: an earlier version of this test began
-    // sampling only after the first cycle completed, so a leak incurred
-    // by that very first cycle was invisible to every comparison below
-    // (both the strictly-increasing check and the final-vs-first bound
-    // implicitly treated the post-cycle-1 sample as if it were the
-    // starting point).
-    forceGc();
-    const baselineResourceCount = process.getActiveResourcesInfo().length;
-    const baselineHeapUsed = process.memoryUsage().heapUsed;
+      // Never received a completed render before the kill — confirms this
+      // was genuinely mid-render, not "already finished by the time we
+      // killed it".
+      expect(renderCompletedBeforeKill).toBe(false);
 
-    const resourceCounts: number[] = [];
-    const heapUsedBytes: number[] = [];
-    for (let i = 0; i < 10; i++) {
-      await spawnRenderKillCycle();
-      // Let the event loop settle (socket/pipe teardown callbacks) before
-      // sampling, same as a real leak-detector would.
-      await new Promise((resolve) => setTimeout(resolve, 20));
+      // A killed process is briefly a zombie until the parent reaps it;
+      // Node's ChildProcess machinery does that reap as part of emitting
+      // `exit`, so by the time `exitPromise` resolves, the PID should no
+      // longer be signalable.
+      expect(() => process.kill(pid as number, 0)).toThrow();
+      // See WORKER_READY_TIMEOUT_MS's doc comment.
+    },
+    WORKER_READY_TIMEOUT_MS + 15_000,
+  );
+
+  it(
+    'C-7: 10x spawn/render/kill cycles do not monotonically grow parent resources or memory',
+    async () => {
+      async function spawnRenderKillCycle(): Promise<void> {
+        const child = forkWorker();
+        await waitForReady(child);
+        const exitPromise = new Promise<void>((resolve) => {
+          child.once('exit', () => resolve());
+        });
+        const request: RenderRequestMessage = { type: 'render', id: 1, source: LARGE_FLOWCHART_SOURCE };
+        child.send(request);
+        // Same "genuinely mid-render, not just requested" handshake as C-6 —
+        // each cycle kills a real in-flight render, per §8 C-7's "生成→レン
+        // ダリング開始→kill()".
+        await waitForRenderStarted(child, request.id);
+        child.kill('SIGKILL');
+        await exitPromise;
+      }
+
+      // Sample a *pre-cycle* baseline before any spawn/render/kill cycle
+      // runs — a reviewer fix: an earlier version of this test began
+      // sampling only after the first cycle completed, so a leak incurred
+      // by that very first cycle was invisible to every comparison below
+      // (both the strictly-increasing check and the final-vs-first bound
+      // implicitly treated the post-cycle-1 sample as if it were the
+      // starting point).
       forceGc();
-      resourceCounts.push(process.getActiveResourcesInfo().length);
-      heapUsedBytes.push(process.memoryUsage().heapUsed);
-    }
+      const baselineResourceCount = process.getActiveResourcesInfo().length;
+      const baselineHeapUsed = process.memoryUsage().heapUsed;
 
-    // "Does not monotonically increase", checked directly (see
-    // isStrictlyIncreasing's doc comment) for both the active-resource
-    // handle count and the parent's own (post-forced-GC) heap usage,
-    // *including* the pre-cycle baseline as the series' first element so
-    // a leak in cycle 1 alone is not invisible to this check — the
-    // original reviewer feedback this rework addresses specifically
-    // called out that handle count alone, checked only against its own
-    // peak, was not sufficient.
-    expect(isStrictlyIncreasing([baselineResourceCount, ...resourceCounts])).toBe(false);
-    expect(isStrictlyIncreasing([baselineHeapUsed, ...heapUsedBytes])).toBe(false);
+      const resourceCounts: number[] = [];
+      const heapUsedBytes: number[] = [];
+      for (let i = 0; i < 10; i++) {
+        await spawnRenderKillCycle();
+        // Let the event loop settle (socket/pipe teardown callbacks) before
+        // sampling, same as a real leak-detector would.
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        forceGc();
+        resourceCounts.push(process.getActiveResourcesInfo().length);
+        heapUsedBytes.push(process.memoryUsage().heapUsed);
+      }
 
-    // And bounded overall: the final sample should be close to the
-    // pre-cycle baseline, not just "not the single worst value" (which
-    // any bounded series trivially satisfies) and not just "close to the
-    // post-cycle-1 sample" (which would hide a leak already incurred by
-    // cycle 1) — this also catches a slower leak (e.g. +1 handle every
-    // other cycle) that isn't strictly increasing at *every* step but
-    // still trends upward across the whole run.
-    expect(resourceCounts[resourceCounts.length - 1]).toBeLessThanOrEqual(baselineResourceCount + 2);
-    const heapGrowthBytes = heapUsedBytes[heapUsedBytes.length - 1] - baselineHeapUsed;
-    // 10MB headroom for jest/test-harness noise (IPC payload buffers,
-    // per-cycle closures, ...) that is not itself evidence of a leak in
-    // the fork/render/kill cycle under test.
-    expect(heapGrowthBytes).toBeLessThan(10 * 1024 * 1024);
-  }, 30_000);
+      // "Does not monotonically increase", checked directly (see
+      // isStrictlyIncreasing's doc comment) for both the active-resource
+      // handle count and the parent's own (post-forced-GC) heap usage,
+      // *including* the pre-cycle baseline as the series' first element so
+      // a leak in cycle 1 alone is not invisible to this check — the
+      // original reviewer feedback this rework addresses specifically
+      // called out that handle count alone, checked only against its own
+      // peak, was not sufficient.
+      expect(isStrictlyIncreasing([baselineResourceCount, ...resourceCounts])).toBe(false);
+      expect(isStrictlyIncreasing([baselineHeapUsed, ...heapUsedBytes])).toBe(false);
+
+      // And bounded overall: the final sample should be close to the
+      // pre-cycle baseline, not just "not the single worst value" (which
+      // any bounded series trivially satisfies) and not just "close to the
+      // post-cycle-1 sample" (which would hide a leak already incurred by
+      // cycle 1) — this also catches a slower leak (e.g. +1 handle every
+      // other cycle) that isn't strictly increasing at *every* step but
+      // still trends upward across the whole run.
+      expect(resourceCounts[resourceCounts.length - 1]).toBeLessThanOrEqual(baselineResourceCount + 2);
+      const heapGrowthBytes = heapUsedBytes[heapUsedBytes.length - 1] - baselineHeapUsed;
+      // 10MB headroom for jest/test-harness noise (IPC payload buffers,
+      // per-cycle closures, ...) that is not itself evidence of a leak in
+      // the fork/render/kill cycle under test.
+      expect(heapGrowthBytes).toBeLessThan(10 * 1024 * 1024);
+      // 10 cold starts, each budgeted up to WORKER_READY_TIMEOUT_MS, plus
+      // slack for the renders/kills themselves — see WORKER_READY_TIMEOUT_MS's
+      // doc comment.
+    },
+    10 * WORKER_READY_TIMEOUT_MS + 30_000,
+  );
 });
 
 /**
