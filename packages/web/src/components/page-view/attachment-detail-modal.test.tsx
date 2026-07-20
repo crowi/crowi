@@ -23,15 +23,27 @@ describe('AttachmentDetailModal', () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it('shows an image enlarged with object-contain for an image attachment', () => {
+  it('shows an image enlarged with object-contain for an image attachment, sourced from originalUrl (not the display-priority canonical url)', () => {
     render(<AttachmentDetailModal attachment={makeAttachment()} open onOpenChange={() => {}} canDelete onDelete={noopDelete} isDeleting={false} />);
     const img = screen.getByRole('img', { name: 'diagram.png' });
-    expect(img.getAttribute('src')).toBe('/api/v2/attachments/att-1');
+    // feature-image-derivative-optimization Phase 2 §4 — the preview must
+    // use `originalUrl`, which is deliberately a different string from
+    // `url` in the fixture (`/original` suffix) so this assertion actually
+    // proves the modal reads the right field rather than passing by
+    // coincidence.
+    expect(img.getAttribute('src')).toBe('/api/v2/attachments/att-1/original');
+    expect(img.getAttribute('src')).not.toBe('/api/v2/attachments/att-1');
     expect(img.className).toContain('object-contain');
   });
 
-  it('embeds a PDF in an iframe titled with the file name', () => {
-    const pdf = makeAttachment({ fileName: 'spec.pdf', originalName: 'spec.pdf', fileFormat: 'application/pdf', url: '/api/v2/attachments/att-2' });
+  it('embeds a PDF in an iframe (with a fallback link) titled with the file name, both sourced from originalUrl', () => {
+    const pdf = makeAttachment({
+      fileName: 'spec.pdf',
+      originalName: 'spec.pdf',
+      fileFormat: 'application/pdf',
+      url: '/api/v2/attachments/att-2',
+      originalUrl: '/api/v2/attachments/att-2/original',
+    });
     // The Dialog mounts into a portal on document.body, so query there.
     render(<AttachmentDetailModal attachment={pdf} open onOpenChange={() => {}} canDelete onDelete={noopDelete} isDeleting={false} />);
     // No enlarged <img> preview for a PDF. querySelector('img') is intentional: we are
@@ -41,8 +53,13 @@ describe('AttachmentDetailModal', () => {
     // `iframe` has no ARIA role — querySelector is the only portable way to reach it.
     const iframe = document.body.querySelector('iframe');
     expect(iframe).not.toBeNull();
-    expect(iframe?.getAttribute('src')).toBe('/api/v2/attachments/att-2');
+    expect(iframe?.getAttribute('src')).toBe('/api/v2/attachments/att-2/original');
     expect(iframe?.getAttribute('title')).toBe('spec.pdf');
+    // The fallback `<a>` (rendered as the iframe's React children, present
+    // in the DOM regardless of whether jsdom "loads" the iframe) also uses
+    // `originalUrl`.
+    const fallbackLink = iframe?.querySelector('a');
+    expect(fallbackLink?.getAttribute('href')).toBe('/api/v2/attachments/att-2/original');
   });
 
   it('shows a file-type icon and no preview for other file types', () => {
@@ -69,10 +86,11 @@ describe('AttachmentDetailModal', () => {
     expect(screen.getByText(formatAbsoluteDateTime('2026-05-01T09:30:00.000Z'))).toBeTruthy();
   });
 
-  it('renders a download link pointing at the attachment url with a download attribute', () => {
+  it('renders a download link pointing at originalUrl (not the display-priority canonical url) with a download attribute', () => {
     render(<AttachmentDetailModal attachment={makeAttachment()} open onOpenChange={() => {}} canDelete onDelete={noopDelete} isDeleting={false} />);
     const link = screen.getByRole('link', { name: downloadLabel });
-    expect(link.getAttribute('href')).toBe('/api/v2/attachments/att-1');
+    expect(link.getAttribute('href')).toBe('/api/v2/attachments/att-1/original');
+    expect(link.getAttribute('href')).not.toBe('/api/v2/attachments/att-1');
     expect(link.hasAttribute('download')).toBe(true);
   });
 
