@@ -210,8 +210,12 @@ jobs:
           if-no-files-found: warn
 
       - name: Run root scripts/ tests
-        # Not part of any turbo package (scripts/ isn't a workspace package), so
-        # `pnpm test` (turbo run test) doesn't reach it — run separately.
+        # Root `scripts/` isn't a turbo workspace package, so `pnpm test`
+        # (turbo run test) doesn't reach it — run separately. Also picks up
+        # `packages/*/scripts/*.test.mjs` (e.g. paraglide-compile.test.mjs)
+        # via the same `node --test` glob: those live inside a workspace
+        # package but are plain zero-dep node:test scripts like this dir's,
+        # not part of that package's own vitest/jest suite.
         run: pnpm test:scripts
 
       - name: Build project
