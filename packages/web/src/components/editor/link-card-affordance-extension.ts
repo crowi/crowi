@@ -188,25 +188,28 @@ function computeTooltip(state: EditorState, pos: number): Tooltip | null {
 }
 
 /** Cursor+hover trigger pair — all the timing-sensitive plumbing (reference-stable cursor field, same-span hover suppression, hover-close on cursor take-over) lives in the shared `createAffordanceTooltip` factory. */
-const affordanceTooltip = createAffordanceTooltip(computeTooltip);
+const affordanceTooltip = createAffordanceTooltip(computeTooltip, { anchorAtTrigger: true });
 
 /** The hover trigger's source — re-exported from the shared factory for direct unit testing of the same-span suppression. */
 export const linkCardHoverTooltipSource = affordanceTooltip.hoverSource;
 
 /** Crowi-design-token-based styling, matching `image-affordance-extension.ts`'s `affordanceTheme` approach. */
 const linkCardAffordanceTheme = EditorView.theme({
-  '.cm-link-card-affordance': {
-    display: 'flex',
-    padding: '2px',
+  '.cm-link-card-affordance.cm-tooltip': {
+    background: 'transparent',
+    border: 'none',
+    boxShadow: 'none',
+    padding: '0',
   },
   '.cm-link-card-affordance-btn': {
     border: '1px solid var(--border)',
-    borderRadius: 'calc(var(--radius) - 2px)',
-    padding: '4px 8px',
+    borderRadius: '9999px',
+    padding: '7px 14px',
     background: 'var(--popover)',
     color: 'var(--popover-foreground)',
     fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
-    fontSize: '12px',
+    fontSize: '14px',
+    fontWeight: '500',
     cursor: 'pointer',
     boxShadow: '0 4px 14px rgb(0 0 0 / 0.12)',
   },

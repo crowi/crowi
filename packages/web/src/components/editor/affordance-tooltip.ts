@@ -1,4 +1,4 @@
-import { type EditorState, type Extension, StateField } from '@codemirror/state';
+import { type EditorState, type Extension, MapMode, StateField } from '@codemirror/state';
 import { closeHoverTooltips, EditorView, hoverTooltip, showTooltip, type Tooltip } from '@codemirror/view';
 
 /**
@@ -43,14 +43,38 @@ export interface AffordanceTooltipHandle {
 
 export function createAffordanceTooltip(
   computeTooltip: (state: EditorState, pos: number) => Tooltip | null,
-  { hoverTime = 300 } = {},
+  { hoverTime = 300, anchorAtTrigger = false } = {},
 ): AffordanceTooltipHandle {
+  const tooltipAt = (state: EditorState, pos: number): Tooltip | null => {
+    const tooltip = computeTooltip(state, pos);
+    if (!tooltip || !anchorAtTrigger) return tooltip;
+
+    return {
+      ...tooltip,
+      create(view) {
+        let anchor = pos;
+        const tooltipView = tooltip.create(view);
+        const update = tooltipView.update;
+        return {
+          ...tooltipView,
+          getCoords(tooltipPos) {
+            return view.coordsAtPos(anchor) ?? view.coordsAtPos(tooltipPos)!;
+          },
+          update(viewUpdate) {
+            if (viewUpdate.docChanged) anchor = viewUpdate.changes.mapPos(anchor, -1, MapMode.TrackDel) ?? anchor;
+            update?.(viewUpdate);
+          },
+        };
+      },
+    };
+  };
+
   const cursorField = StateField.define<CursorTooltipState>({
     create(state) {
-      return { tooltip: computeTooltip(state, state.selection.main.head) };
+      return { tooltip: tooltipAt(state, state.selection.main.head) };
     },
     update(value, tr) {
-      const next = computeTooltip(tr.state, tr.state.selection.main.head);
+      const next = tooltipAt(tr.state, tr.state.selection.main.head);
       if (value.tooltip && next && sameSpan(value.tooltip, next)) {
         return value;
       }
@@ -60,7 +84,7 @@ export function createAffordanceTooltip(
   });
 
   const hoverSource = (view: EditorView, pos: number): Tooltip | null => {
-    const hover = computeTooltip(view.state, pos);
+    const hover = tooltipAt(view.state, pos);
     if (!hover) return null;
     const cursor = view.state.field(cursorField).tooltip;
     if (cursor && sameSpan(cursor, hover)) return null;

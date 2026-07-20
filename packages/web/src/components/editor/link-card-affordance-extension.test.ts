@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach, beforeEach } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { overwriteGetLocale } from '@paraglide/runtime.js';
 import { EditorState } from '@codemirror/state';
 import { markdown } from '@codemirror/lang-markdown';
@@ -177,6 +177,21 @@ describe('cursor (focus) tooltip trigger — showTooltip facet', () => {
     const doc = 'See https://example.com/page here.';
     const state = focusState(doc, doc.indexOf('https://') + 3);
     expect(activeTooltip(state)).not.toBeNull();
+  });
+
+  it('positions the tooltip at the cursor that triggered it, not the URL start', () => {
+    const doc = 'See https://example.com/a-long-path here.';
+    const cursor = doc.indexOf('long-path') + 4;
+    const state = focusState(doc, cursor);
+    const tooltip = activeTooltip(state)!;
+    const view = new EditorView({ state });
+    const coords = { left: 12, right: 12, top: 8, bottom: 24 };
+    const coordsAtPos = vi.spyOn(view, 'coordsAtPos').mockReturnValue(coords);
+
+    expect(tooltip.create(view).getCoords?.(tooltip.pos)).toBe(coords);
+    expect(coordsAtPos).toHaveBeenCalledWith(cursor);
+
+    view.destroy();
   });
 
   it('shows a tooltip when the cursor sits inside @[card](url)', () => {
