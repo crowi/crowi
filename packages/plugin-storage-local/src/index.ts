@@ -1,5 +1,6 @@
+import { randomBytes } from 'node:crypto';
 import { createReadStream, createWriteStream, existsSync } from 'node:fs';
-import { mkdir, rm, stat } from 'node:fs/promises';
+import { mkdir, rename, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -52,8 +53,30 @@ export function createLocalDriver(config: LocalStorageConfig): StorageDriver {
       const target = resolveSafe(key);
       await mkdir(path.dirname(target), { recursive: true });
       const source = body instanceof Buffer ? Readable.from(body) : body;
-      await pipeline(source, createWriteStream(target));
-      return { key };
+
+      // feature-image-derivative-optimization §7a — write to a
+      // process-unique temp file, then atomically rename it into place
+      // (POSIX same-filesystem rename is atomic). A reader's `get()`
+      // therefore always observes either the previous complete object or
+      // the new complete object, never a torn/partial write — required
+      // once re-writing the SAME key (display-derivative regeneration) is
+      // a normal occurrence rather than a rare overwrite. The suffix uses
+      // `crypto.randomBytes` (not e.g. a fixed `<key>.tmp`) so two
+      // processes racing to `put()` the same key never share a temp path
+      // and interleave into a single corrupt temp file that both then
+      // rename over the target.
+      const tmpTarget = `${target}.${randomBytes(12).toString('hex')}.tmp`;
+      let renamed = false;
+      try {
+        await pipeline(source, createWriteStream(tmpTarget));
+        await rename(tmpTarget, target);
+        renamed = true;
+        return { key };
+      } finally {
+        if (!renamed) {
+          await rm(tmpTarget, { force: true });
+        }
+      }
     },
 
     async get(key) {
