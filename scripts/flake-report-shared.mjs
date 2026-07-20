@@ -143,6 +143,20 @@ const DB_CONNECT_FAILURE_PATTERN = /Cannot connect to Database Server:/
 // unmatched, this silently turned the classifier into an always-REGRESSION
 // machine for solo reruns of anything outside those 8 files.
 const REDIS_SMOKE_COVERAGE_PATTERN = /Redis smoke categories missing in CI/
+// Jest's default reporter prints this summary line to stderr BEFORE
+// globalTeardown runs, so a target file that genuinely fails has both this
+// AND `REDIS_SMOKE_COVERAGE_PATTERN` in the same captured stderr (confirmed
+// empirically: a solo rerun of a failing non-smoke file produces `Test
+// Suites: 1 failed` followed by the Redis rejection, no separate stream or
+// early return in between). Without this guard, the Redis branch below
+// would swallow every genuine solo-rerun failure of a non-smoke file as
+// INCONCLUSIVE — the classifier could never report REGRESSION for the vast
+// majority of the suite. Deliberately narrow to the Redis branch only: the
+// other four patterns below describe the target execution itself being
+// compromised (worker crash/OOM/DB-connect-failure), so a failed-suite
+// summary must NOT give them precedence — that failure summary is exactly
+// what a crashed/OOM'd run also produces, and it's still infra-caused there.
+const JEST_FAILURE_SUMMARY_PATTERN = /^(?:Test Suites|Tests):\s+.*\b[1-9]\d*\s+failed\b/m
 
 /**
  * Scans a solo rerun's captured stderr for known infrastructure-failure
@@ -157,7 +171,7 @@ export function matchInfrastructureStderr(stderr) {
   if (WORKER_CRASHED_PATTERN.test(stderr)) return 'a jest worker crashed for an unknown reason during the solo rerun (see captured stderr)'
   if (WORKER_OOM_PATTERN.test(stderr)) return 'a jest worker ran out of memory during the solo rerun (see captured stderr)'
   if (DB_CONNECT_FAILURE_PATTERN.test(stderr)) return 'the solo rerun could not connect to the test database (see captured stderr)'
-  if (REDIS_SMOKE_COVERAGE_PATTERN.test(stderr))
+  if (REDIS_SMOKE_COVERAGE_PATTERN.test(stderr) && !JEST_FAILURE_SUMMARY_PATTERN.test(stderr))
     return "the solo rerun's globalTeardown rejected for missing full-suite-only Redis smoke category coverage — expected for any single-file solo rerun, not a reflection of this file (see captured stderr)"
   return null
 }

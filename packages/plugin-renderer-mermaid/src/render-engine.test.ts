@@ -200,13 +200,17 @@ describe('MermaidRenderPool', () => {
     // budget with genuine Mermaid rendering (see the fixture's own doc
     // comment for why the old real-render version could flake under
     // CI/sibling-suite CPU contention).
-    // Fixed path shared by hardcoded convention with the fixture worker
-    // itself (see its doc comment for why this isn't an env var: a
-    // `process.env` mutation made here is invisible to a REAL `fork()`ed
-    // child under ts-jest, confirmed empirically). Removed before AND
-    // after so a previous run's leftover state (a crashed test, e.g.)
+    // Path shared by hardcoded convention with the fixture worker itself
+    // (see its doc comment for why this isn't an env var: a `process.env`
+    // mutation made here is invisible to a REAL `fork()`ed child under
+    // ts-jest, confirmed empirically), keyed by this process's own pid —
+    // `render-engine.ts`'s `spawn()` forks the fixture directly from here,
+    // so the fixture's `process.ppid` always equals this `process.pid`.
+    // Keeps two concurrent `render-engine.test.ts` runs on the same
+    // machine (e.g. two worktrees) from sharing a sentinel. Removed before
+    // AND after so a previous run's leftover state (a crashed test, e.g.)
     // can never leak in as a false "this is a respawn" signal.
-    const sentinelPath = path.join(tmpdir(), 'crowi-mermaid-recovery-fixture.sentinel');
+    const sentinelPath = path.join(tmpdir(), `crowi-mermaid-recovery-fixture-${process.pid}.sentinel`);
     rmSync(sentinelPath, { force: true });
     const pool = new MermaidRenderPool({ poolSize: 1, timeoutMs: SHORT_TIMEOUT_MS, workerPath: RECOVERY_FIXTURE_WORKER_PATH });
     try {

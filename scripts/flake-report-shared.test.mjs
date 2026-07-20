@@ -269,6 +269,35 @@ describe('classifyRerunOutcome', () => {
     })
     assert.equal(result.classification, 'INCONCLUSIVE')
   })
+
+  it('classifies a genuine target test failure plus the Redis globalTeardown rejection as REGRESSION, not INCONCLUSIVE', () => {
+    // The Redis rejection is unconditionally present on any solo rerun of a
+    // non-smoke file (see above), so it coexists in the same stderr with a
+    // real failure — the classifier must not let the always-present infra
+    // marker mask a genuine break.
+    const result = classifyRerunOutcome({
+      status: 1,
+      signal: null,
+      error: null,
+      stderr: [
+        'FAIL src/example.test.ts',
+        'Test Suites: 1 failed, 1 total',
+        'Tests:       1 failed, 6 passed, 7 total',
+        'Error: Jest: Got error running globalTeardown - .../global-teardown.js, reason: [test] Redis smoke categories missing in CI (ran 0/8): boot',
+      ].join('\n'),
+    })
+    assert.deepEqual(result, { classification: 'REGRESSION', reason: null })
+  })
+
+  it('classifies a non-zero exit whose stderr matches a worker-crash signature AND has a failed-suite summary as INCONCLUSIVE (worker/DB patterns keep precedence over the failure-summary guard)', () => {
+    const result = classifyRerunOutcome({
+      status: 1,
+      signal: null,
+      error: null,
+      stderr: 'Test Suites: 1 failed, 1 total\nA jest worker process (pid=456) was terminated by another process: signal=SIGSEGV, exitCode=null.',
+    })
+    assert.equal(result.classification, 'INCONCLUSIVE')
+  })
 })
 
 describe('manifest', () => {

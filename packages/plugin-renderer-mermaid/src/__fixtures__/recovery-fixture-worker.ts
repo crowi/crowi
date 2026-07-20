@@ -32,12 +32,17 @@
  * test is invisible to a REAL `fork()`ed child, even though the SAME test
  * process reads its own mutation back correctly (jest's Node test
  * environment does not give `child_process.fork()` the same `process.env`
- * view test code sees). So this uses a plain fixed temp-file PATH instead —
- * shared by hardcoded convention with `render-engine.test.ts` (both compute
- * the exact same `path.join(tmpdir(), 'crowi-mermaid-recovery-fixture.sentinel')`)
- * — present ⇒ this is a respawned instance (reply normally); absent ⇒ this
- * is the original (create it, then go silent). The test removes it before
- * and after each run so state never leaks across test runs.
+ * view test code sees). So this uses a temp-file PATH instead, keyed by
+ * `process.ppid` — the pid of whichever process called `fork()` (the jest
+ * worker process running this test file) — so two `render-engine.test.ts`
+ * runs on the same machine (e.g. two worktrees' `pnpm test` running
+ * concurrently, or a CI job overlapping a local run) never share a sentinel.
+ * `render-engine.ts`'s `spawn()` forks this file directly from the test
+ * process, so `process.ppid` here always equals `process.pid` there — the
+ * test computes the identical path from its own pid with no IPC needed.
+ * Present ⇒ this is a respawned instance (reply normally); absent ⇒ this is
+ * the original (create it, then go silent). The test removes it before and
+ * after each run so state never leaks across runs of the same process.
  *
  * Deliberately has no `import`/`export` — same reasoning as
  * `signal-killed-worker.ts`/`idle-crash-worker.ts`'s doc comments: this
@@ -51,7 +56,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const sentinelPath = path.join(os.tmpdir(), 'crowi-mermaid-recovery-fixture.sentinel');
+const sentinelPath = path.join(os.tmpdir(), `crowi-mermaid-recovery-fixture-${process.ppid}.sentinel`);
 const isFirstSpawn = !fs.existsSync(sentinelPath);
 if (isFirstSpawn) {
   fs.writeFileSync(sentinelPath, '');
