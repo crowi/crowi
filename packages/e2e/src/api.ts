@@ -31,6 +31,39 @@ export async function createPageViaApi(context: BrowserContext, input: { path: s
 }
 
 /**
+ * Upload a file attachment to a page as the user backing `context`
+ * (`POST /api/v2/pages/:pageId/attachments`, multipart). Returns the new
+ * attachment's id and its canonical `url`
+ * (`/api/v2/attachments/<id>` — feature-image-derivative-optimization Phase 2:
+ * this is the display-priority URL, NOT necessarily the original bytes).
+ * Node 24's native `fetch`/`FormData`/`Blob` are used directly, the same way
+ * `createPageViaApi` uses native `fetch` — no browser round-trip needed.
+ */
+export async function uploadAttachmentViaApi(
+  context: BrowserContext,
+  input: { pageId: string; fileName: string; contentType: string; data: Buffer },
+): Promise<{ id: string; url: string }> {
+  const accessToken = await accessTokenFromContext(context);
+  const form = new FormData();
+  form.append('file', new Blob([new Uint8Array(input.data)], { type: input.contentType }), input.fileName);
+
+  const response = await fetch(`${E2E_API_URL}/api/v2/pages/${input.pageId}/attachments`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${accessToken}` },
+    body: form,
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to upload E2E attachment to page ${input.pageId}: HTTP ${response.status} ${await response.text()}`);
+  }
+
+  const body = (await response.json()) as { attachment?: { _id?: string }; url?: string };
+  const id = body.attachment?._id;
+  const url = body.url;
+  if (!id || !url) throw new Error(`Upload attachment response did not include an id/url: ${JSON.stringify(body)}`);
+  return { id, url };
+}
+
+/**
  * Create many pages via `createPageViaApi`, in bounded-concurrency batches.
  * Used by pagination.spec.ts to seed enough siblings under one parent path
  * to trigger a real 2nd page — `Page.createPage` never auto-creates an
