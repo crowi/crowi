@@ -1,5 +1,6 @@
 import { createServer, type Server } from 'node:http';
 import request from 'supertest';
+import { PreviewPageRequestSchema } from '@crowi/api-contract';
 import type { CodeBlockRenderer, PluginContext, PluginLogger } from '@crowi/plugin-api';
 import mermaidPlugin, { _shutdownSingletonForTest } from '@crowi/plugin-renderer-mermaid';
 import plantumlPlugin, { plantumlConfigSchema } from '@crowi/plugin-renderer-plantuml';
@@ -233,13 +234,31 @@ describe('Routes /api/v2/pages/preview (Hono previewPage)', () => {
       console.info(`[preview latency gate] 50 diagrams (~60KB html each): elapsed=${elapsedMs}ms payload=${payloadBytes} bytes`);
     }, 15_000);
 
-    it('a plain-markdown body far larger than any single saved page today still previews with 200 (spec §7 item 13 — no preview-only body-size cap)', async () => {
-      // Deliberately NOT a diagram/admission-control scenario — this
-      // isolates the schema-level invariant `PreviewPageRequestSchema.body`
-      // (`z.string()`, no `.max()`) is meant to prove: a preview-only body
+    it('PreviewPageRequestSchema.body (spec §7 item 13 — no preview-only body-size cap) has no .max(), independent of any HTTP/render round trip', () => {
+      // This is the actual invariant under test — a preview-only body
       // ceiling would break legitimate large pages the moment their editor
-      // opens, which is why none was added. ~3MB of plain paragraphs, well
-      // past any diagram/admission-control code path.
+      // opens, which is why none was added — checked directly against the
+      // schema (no HTTP, no markdown parsing, no CI-load-dependent timing).
+      // Previously combined with the E2E round trip below into one test
+      // with a 15s timeout; that combination flaked in CI (confirmed via
+      // the flake-report classifier's own solo-rerun: this suite passes
+      // standalone, so it was CI-load timing, not a real regression) —
+      // split so this half can never be timing-sensitive at all.
+      const body = 'x'.repeat(5 * 1024 * 1024); // 5MB, comfortably past any real page
+      expect(PreviewPageRequestSchema.safeParse({ body }).success).toBe(true);
+    });
+
+    it('a plain-markdown body far larger than any single saved page today still previews with 200 (spec §7 item 13 — end-to-end HTTP/render round trip)', async () => {
+      // The schema-level invariant (no size cap) is proven above without
+      // any HTTP/render latency in the loop. This test additionally proves
+      // the full pipeline (HTTP + markdown parsing + AST serialization)
+      // actually accepts and processes a real large body — genuine
+      // end-to-end latency, so it uses the suite's global 60s timeout
+      // (`jest.setTimeout(60000)`, src/test/setup.ts) instead of a
+      // tighter per-test override; this pipeline work is normally well
+      // under a second (see the sibling 50-diagram gate's `elapsed`
+      // logging above) but the earlier 15s override still flaked under
+      // CI/sibling-suite load despite that headroom.
       const paragraph = `${'lorem ipsum dolor sit amet '.repeat(200)}\n\n`;
       const body = paragraph.repeat(600); // ~3.2MB
       expect(Buffer.byteLength(body, 'utf8')).toBeGreaterThan(3 * 1024 * 1024);
@@ -249,7 +268,7 @@ describe('Routes /api/v2/pages/preview (Hono previewPage)', () => {
       expect(res.status).toBe(200);
       const ast = res.body.renderedAst as { children: unknown[] };
       expect(ast.children.length).toBeGreaterThan(0);
-    }, 15_000);
+    });
 
     it('POST /pages/preview returns 429 with Retry-After once the per-user rate limit (600 req/min) is exceeded', async () => {
       const { accessToken: rateLimitedToken } = await createTestUser({
