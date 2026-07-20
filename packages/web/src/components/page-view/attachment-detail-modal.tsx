@@ -56,6 +56,13 @@ function FileTypeIconView({ mime, fileName, className }: { mime: string; fileNam
  * Metadata, a download button and (when `canDelete`) a delete action are
  * shown for every mode. Controlled `open` / `onOpenChange` like
  * `LikersDialog`.
+ *
+ * feature-image-derivative-optimization Phase 2 §4 — every URL this modal
+ * renders (image preview, PDF preview + fallback link, download button)
+ * uses `attachment.originalUrl`, NOT `attachment.url` (canonical, now
+ * display-priority). This modal's job is to show/save the authoritative,
+ * unmodified file — always original, even for the image case where the
+ * canonical URL would otherwise serve the optimized display derivative.
  */
 export function AttachmentDetailModal({ attachment, open, onOpenChange, canDelete, onDelete, isDeleting }: AttachmentDetailModalProps) {
   if (!attachment) return null;
@@ -84,10 +91,10 @@ export function AttachmentDetailModal({ attachment, open, onOpenChange, canDelet
         <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto bg-muted/30 p-4">
           {isImage ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={attachment.url} alt={name} className="max-h-full max-w-full object-contain" />
+            <img src={attachment.originalUrl} alt={name} className="max-h-full max-w-full object-contain" />
           ) : isPdf ? (
-            <iframe src={attachment.url} title={name} className="h-full w-full min-h-[60vh] border-0">
-              <a href={attachment.url} download={name} target="_blank" rel="noopener">
+            <iframe src={attachment.originalUrl} title={name} className="h-full w-full min-h-[60vh] border-0">
+              <a href={attachment.originalUrl} download={name} target="_blank" rel="noopener">
                 {m['page.attachment_detail_pdf_fallback']()}
               </a>
             </iframe>
@@ -125,7 +132,7 @@ export function AttachmentDetailModal({ attachment, open, onOpenChange, canDelet
               {/* `target="_blank"` keeps the raw-file fetch in a new tab so
                   the wiki page never full-page-navigates away (which would
                   truncate its streaming-SSR response). */}
-              <a href={attachment.url} download={name} target="_blank" rel="noopener">
+              <a href={attachment.originalUrl} download={name} target="_blank" rel="noopener">
                 <Download className="h-4 w-4" />
                 <span>{m['page.attachment_detail_download']()}</span>
               </a>
