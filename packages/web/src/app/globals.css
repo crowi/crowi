@@ -609,7 +609,7 @@ html[data-page-grant="2"] {
 /* Editor-preview-only `@[card](url)` placeholder. This deliberately uses
  * the saved card's outline/body structure but has no anchor: preview mode
  * never fetches OGP metadata, and the static card must not imply a link. */
-.crowi-prose .crowi-link-card-preview {
+.crowi-prose .crowi-link-card-preview-surface {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   overflow: hidden;

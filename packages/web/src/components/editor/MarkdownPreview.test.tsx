@@ -141,6 +141,6 @@ describe('MarkdownPreview — link-card placeholder', () => {
     expect(screen.getByText(url)).toBeTruthy();
     expect(screen.getByText(m['edit.link_card_preview_pending']())).toBeTruthy();
     expect(screen.queryByRole('link')).toBeNull();
-    expect(document.querySelector('.crowi-link-card-preview-surface')).toBeNull();
+    expect(document.querySelector('.crowi-link-card-preview-surface')).toBeTruthy();
   });
 });

@@ -46,9 +46,11 @@ function sourceLineAttribute(node: MdastParagraph): string {
 function renderPlaceholder(url: string, message: string, sourceLine: string): string {
   return [
     '<figure class="crowi-link-card crowi-link-card-preview"' + sourceLine + '>',
+    '<div class="crowi-link-card-preview-surface">',
     '<div class="crowi-link-card-body">',
     '<div class="crowi-link-card-title">' + escapeHtml(url) + '</div>',
     '<div class="crowi-link-card-preview-message">' + escapeHtml(message) + '</div>',
+    '</div>',
     '</div>',
     '</figure>',
   ].join('');
