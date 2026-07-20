@@ -19,6 +19,10 @@ const eslintConfig = defineConfig([
     // ignore catches stray outputs (e.g. `src/paraglide/` from a typo'd
     // `--outdir` flag) too.
     "**/paraglide/**",
+    // scripts/paraglide-compile.mjs's own bookkeeping dir — `staging/` holds
+    // the same generated-output shape as `paraglide/` above (same noise),
+    // and none of `.paraglide-meta/` is source anyway.
+    "**/.paraglide-meta/**",
   ]),
 ]);
 
