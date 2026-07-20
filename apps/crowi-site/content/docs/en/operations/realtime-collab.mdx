@@ -16,9 +16,10 @@ for the end-user guide.
 
 - Hocuspocus is attached to the api process's `http.Server` in
   `ws noServer` mode via `packages/api/src/collab/attach.ts`.
-- The WebSocket endpoint is `wss://<crowi-host>/collab/:pageId?token=…`,
-  served by the same host and port as the api. No reverse-proxy split
-  to a separate process is required.
+- The WebSocket endpoint is `wss://<crowi-host>/collab?token=…` — the
+  page ID is sent as the Hocuspocus protocol's document name, not a URL
+  path segment. It is served by the same host and port as the api. No
+  reverse-proxy split to a separate process is required.
 - For multi-instance deployments, `@hocuspocus/extension-redis` is
   attached automatically when `REDIS_URL` is set. Yjs updates are
   fanned out across replicas via Redis pub/sub, and sticky sessions
@@ -106,12 +107,15 @@ Additional requirements when running multiple api replicas:
 
 > **Important (data-loss risk — single-instance is recommended):**
 > multi-instance deployments carry a known, rare risk of **lost edits**.
-> `extension-redis` only handles live pub/sub; it does not rebuild a
-> disconnected replica's Y.Doc. If a replica materialises a Y.Doc from a
-> stale `Page.yjsState` and then writes a checkpoint (compaction), it can
-> overwrite newer state written by another replica — compaction has **no
-> cross-instance lock** (a cross-instance lock + last-writer arbitration
-> is currently out of scope). `@crowi/collab` mitigates this with a
+> `extension-redis` handles live pub/sub, and also serializes compaction:
+> its `onStoreDocument` hook acquires a Redis Redlock before any replica's
+> checkpoint write proceeds, so two replicas can never write a checkpoint
+> for the same page concurrently. That lock only prevents **concurrent**
+> writes, though — it does not guarantee every stale-state / last-writer
+> scenario is safe. If a replica materialises a Y.Doc from a stale
+> `Page.yjsState`, acquires the lock, and then writes a checkpoint
+> (compaction), it can still overwrite newer state an earlier writer wrote.
+> `@crowi/collab` mitigates this remaining gap with a
 > **server-doc save lock**: the page's revision pointer is advanced in a
 > single atomic compare-and-set anchored to the revision the live server
 > document was materialised from, so a save against a pointer that an

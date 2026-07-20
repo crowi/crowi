@@ -140,6 +140,7 @@ edited from the admin UI.
 | `plugins` | `string[]` | `[]` | npm package names of plugins to load at boot. Loaded in addition to the implicit defaults (`@crowi/plugin-storage-local`, `@crowi/plugin-search-mongo`, `@crowi/plugin-mail-smtp`) |
 | `storage.driver` | `string` | `"local"` | The storage driver name the file uploader uses. See [Storage drivers](./storage) |
 | `search.driver` | `string` | `"mongo"` | The driver name the search service uses. See [Search setup](./search-setup) |
+| `mail.driver` | `string` | `"smtp"` | The driver name the mail sender uses. Swap the `@crowi/plugin-mail-*` plugin to switch to `"resend"` / `"ses"` |
 
 If the file is missing or fields are omitted, the defaults above apply.
 Content that does not match the schema causes the server to fail at boot
@@ -191,6 +192,9 @@ follows.
 | `storage.driver` | `s3` | `@crowi/plugin-storage-aws-s3` |
 | `search.driver` | `mongo` | `@crowi/plugin-search-mongo` (default) |
 | `search.driver` | `elasticsearch` | `@crowi/plugin-search-elasticsearch` |
+| `mail.driver` | `smtp` | `@crowi/plugin-mail-smtp` (default) |
+| `mail.driver` | `resend` | `@crowi/plugin-mail-resend` |
+| `mail.driver` | `ses` | `@crowi/plugin-mail-aws-ses` |
 
 Renderer plugins (`@crowi/plugin-renderer-emoji` / `-katex` /
 `-plantuml` / `-crowi-legacy`) are enabled simply by adding them to

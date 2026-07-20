@@ -111,13 +111,20 @@ what creates a new revision.
 Every saved revision records two kinds of editor information:
 
 - **`savedBy`**: the user who clicked the Save button.
-- **`contributors`**: every user who was **present in the same edit
+- **`contributors`**: users who were **present in the same edit
   session** (visible via Yjs awareness) at the time of the save.
 
 "Present" means the page was open in their browser with awareness
 broadcasting — they do not have to have typed anything. This is how
 Crowi attributes joint editing sessions: anyone who joined the
 collaborative session is credited on the resulting revision.
+
+This tracking is **best-effort, scoped to the api process that handled
+the save**. On a single-instance deployment that's effectively
+everyone who was present; on a multi-instance deployment, only the
+awareness participants visible to the replica that processed the save
+are recorded — participants connected to a different replica may not
+be aggregated in.
 
 In the **revision history list**, savedBy and contributors are
 combined like this:

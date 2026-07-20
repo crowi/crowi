@@ -139,6 +139,7 @@ API は起動時にこれらの環境変数をまとめて検証します。`POR
 | `plugins` | `string[]` | `[]` | 起動時に読み込むプラグインの npm パッケージ名。暗黙のデフォルト (`@crowi/plugin-storage-local` / `@crowi/plugin-search-mongo` / `@crowi/plugin-mail-smtp`) に追加される形で読み込まれる |
 | `storage.driver` | `string` | `"local"` | ファイルアップローダが使うストレージドライバ名。詳細は [ストレージドライバ](./storage) |
 | `search.driver` | `string` | `"mongo"` | 検索サービスが使うドライバ名。詳細は [検索のセットアップ](./search-setup) |
+| `mail.driver` | `string` | `"smtp"` | メール送信サービスが使うドライバ名。`@crowi/plugin-mail-*` プラグインを入れ替えて `"resend"` / `"ses"` に切り替えられる |
 
 ファイルが存在しない場合や項目が省略された場合は、上記のデフォルト値が
 適用されます。スキーマに合わない内容を書くと、起動時に明示的なエラーで
@@ -188,6 +189,9 @@ API は起動時にこれらの環境変数をまとめて検証します。`POR
 | `storage.driver` | `s3` | `@crowi/plugin-storage-aws-s3` |
 | `search.driver` | `mongo` | `@crowi/plugin-search-mongo` (デフォルト) |
 | `search.driver` | `elasticsearch` | `@crowi/plugin-search-elasticsearch` |
+| `mail.driver` | `smtp` | `@crowi/plugin-mail-smtp` (デフォルト) |
+| `mail.driver` | `resend` | `@crowi/plugin-mail-resend` |
+| `mail.driver` | `ses` | `@crowi/plugin-mail-aws-ses` |
 
 レンダラ系プラグイン (`@crowi/plugin-renderer-emoji` /
 `-katex` / `-plantuml` / `-crowi-legacy`) は `plugins` に追加するだけで

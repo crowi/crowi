@@ -16,9 +16,10 @@ Crowi 2.0 のリアルタイム共同編集機能は、Hocuspocus を `@crowi/ap
 
 - Hocuspocus は `packages/api/src/collab/attach.ts` 経由で api プロセスの
   `http.Server` に `ws noServer` モードで attach されます。
-- WebSocket エンドポイントは `wss://<crowi-host>/collab/:pageId?token=…` で、
-  api と同じホスト・ポートを使います。リバースプロキシで別プロセスに
-  振り分ける必要はありません。
+- WebSocket エンドポイントは `wss://<crowi-host>/collab?token=…` です。
+  ページ ID は URL パスではなく Hocuspocus プロトコルの document name
+  として送られます。api と同じホスト・ポートを使い、リバースプロキシで
+  別プロセスに振り分ける必要はありません。
 - マルチインスタンス構成では `@hocuspocus/extension-redis` が
   `REDIS_URL` 設定時に自動 attach され、Yjs アップデートを Redis pub/sub
   で全レプリカへ伝搬します。スティッキーセッションは不要です。
@@ -104,12 +105,15 @@ api を複数レプリカで運用する場合の追加要件:
 
 > **重要 (データ消失リスク・推奨はシングルインスタンス)**: マルチインスタンス
 > 構成には、まれにですが**編集内容が失われる**既知のリスクがあります。
-> `extension-redis` はライブの pub/sub のみを担い、切断中レプリカの Y.Doc を
-> 再構築しません。あるレプリカが古い `Page.yjsState` から Y.Doc を materialise
-> し、その状態でチェックポイント (compaction) を書き戻すと、別レプリカが書いた
-> 新しい状態を上書きしうるためです。compaction には**クロスインスタンスの
-> ロックがありません** (cross-instance ロック + last-writer 調停は現時点で
-> スコープ外)。`@crowi/collab` はこれを**サーバドキュメント保存ロック**で
+> `extension-redis` はライブの pub/sub に加え、compaction の直列化も担います。
+> `onStoreDocument` フックが Redis の Redlock を取得してからチェックポイント
+> の書き込みを進めるため、同じページのチェックポイントを 2 レプリカが同時に
+> 書くことはありません。ただし、このロックは**同時書き込みの防止**であって
+> **stale-state / last-writer 問題すべての保証ではありません** — あるレプリカ
+> が古い `Page.yjsState` から Y.Doc を materialise し、ロックを取得したうえで
+> チェックポイントを書き戻すと、別レプリカが (それより前に) 書いた新しい状態を
+> 上書きしうる余地はまだ残ります。`@crowi/collab` はこの残余リスクを
+> **サーバドキュメント保存ロック**で
 > 緩和します。ページの revision ポインタは、ライブのサーバ側ドキュメントが
 > materialise された revision を基底とする単一のアトミックな compare-and-set
 > で前進させるため、別経路の編集 (または別レプリカ) がポインタを動かした後の

@@ -20,11 +20,12 @@ description: License, engine-support, image-pin, ACL, security, and connection-b
   project offers licensees a choice of three licenses — RSALv2,
   SSPLv1, or AGPLv3. Of the three, only AGPLv3 is OSI-approved open
   source.
-- **Established fact:** Crowi never bundles the Redis server.
-  `@crowi/api` and `@crowi/web` talk to Redis exclusively over TCP;
-  neither the npm packages nor the api/web Docker images
-  (`packages/api/Dockerfile`, `packages/web/Dockerfile`) contain a
-  Redis binary.
+- **Established fact:** Crowi never bundles the Redis server. Only
+  `@crowi/api` talks to Redis directly over TCP (`@crowi/web` never
+  connects to Redis directly — it reaches Redis-backed features
+  through the api); neither the npm packages nor the api/web Docker
+  images (`packages/api/Dockerfile`, `packages/web/Dockerfile`)
+  contain a Redis binary.
 - **Project policy:** the reference configuration Crowi tests against
   is an unmodified upstream Redis image, and the project evaluates
   that configuration under AGPLv3 — the one option of the three that

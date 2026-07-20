@@ -20,10 +20,10 @@ description: Crowi 2.0 で Redis を使うすべての機能(共同編集・プ�
   RSALv2・SSPLv1・AGPLv3 の3つのライセンスから選べる選択制になって
   います。このうち OSI 承認の open source なのは AGPLv3 のみです。
 - **確立事実**: Crowi は Redis サーバー本体を一切バンドルしません。
-  `@crowi/api`・`@crowi/web` はいずれも TCP 経由で Redis と通信する
-  だけで、npm パッケージにも api/web の Docker イメージ
-  (`packages/api/Dockerfile`・`packages/web/Dockerfile`) にも Redis
-  バイナリは含まれません。
+  Redis と TCP で直接通信するのは `@crowi/api` のみで(`@crowi/web` は
+  Redis に直接接続せず、api 経由で機能を利用します)、npm パッケージ
+  にも api/web の Docker イメージ (`packages/api/Dockerfile`・
+  `packages/web/Dockerfile`) にも Redis バイナリは含まれません。
 - **プロジェクト方針**: Crowi がテスト対象とするリファレンス構成は
   未改変のアップストリームイメージであり、その構成を3択のうち唯一
   OSI open source である AGPLv3 のもとで評価しています。(AGPLv3
