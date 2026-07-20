@@ -376,6 +376,30 @@ Add one file just before merging to main (or within the PR). The initial `.chang
 ### State directories
 - `.reviews/` (gitignored): per-skill review notes; not committed.
 
+### Design / spec drafts: never auto-commit, use `.feature-state/specs/`
+
+Any agent working in this repo (Claude Code, Codex, or a third-party skill
+pack such as "Superpowers") that produces a design/spec/plan document as
+part of a feature or fix must:
+
+- **Never `git add`/`git commit` the document automatically.** Write the
+  file and present it; commit only after an explicit "commit it"
+  instruction from the human. This matches crowi's own spec convention
+  (`.feature-state/specs/` is a non-commit working draft — see
+  `crowi-design`/`crowi-kickoff` above), which an external skill pack's own
+  default workflow (e.g. a scripted "commit the spec to the working
+  branch" step) does not know about and will otherwise silently override.
+- **Place the file at `.feature-state/specs/<id>.md`**, not a
+  skill-specific path like `docs/superpowers/specs/...` — this is the
+  directory `/crowi-kickoff` and `/crowi-feature` actually read from, and
+  it is gitignored (drafts never land in history unless explicitly
+  promoted).
+
+(Born from a 2026-07-20 incident: a Codex session running a "Superpowers"
+skill pack auto-committed a design doc to `docs/superpowers/specs/` inside
+a crowi worktree, following that skill's own scripted commit step instead
+of this repo's convention.)
+
 ### Wiki page writes (mandatory two-step — no inline body)
 
 **Never compose a `crowi_update_page` / `crowi_create_page` body inline as a
