@@ -143,4 +143,40 @@ describe('MarkdownPreview — link-card placeholder', () => {
     expect(screen.queryByRole('link')).toBeNull();
     expect(document.querySelector('.crowi-link-card-preview-surface')).toBeTruthy();
   });
+
+  it("renders a card tag as a non-clickable card even mid-sentence (not just when it is the paragraph's sole content)", async () => {
+    // `applyLinkCardConversion` (link-card-affordance-extension.ts) only
+    // replaces the bare-URL span it found, so converting a URL that isn't
+    // alone on its own line leaves the card tag as one triple among
+    // several paragraph children — repro for the case the placeholder
+    // matcher used to miss (it required the paragraph's ONLY children to
+    // be the triple), which fell through to a real clickable link.
+    const url = 'https://example.com/doc';
+    mutateAsync.mockResolvedValueOnce({
+      type: 'root',
+      children: [
+        {
+          type: 'paragraph',
+          data: { hProperties: { 'data-source-line': 1 } },
+          children: [
+            { type: 'text', value: 'See ' },
+            { type: 'text', value: '@' },
+            { type: 'link', url, children: [{ type: 'text', value: 'card' }] },
+            { type: 'text', value: ' for details.' },
+          ],
+        },
+      ],
+    });
+
+    render(<MarkdownPreview source={`See @[card](${url}) for details.`} />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+    });
+
+    expect(screen.getByText(url)).toBeTruthy();
+    expect(screen.getByText(/^See\s*$/)).toBeTruthy();
+    expect(screen.getByText(/for details\.$/)).toBeTruthy();
+    expect(screen.queryByRole('link')).toBeNull();
+    expect(document.querySelector('.crowi-link-card-preview-surface')).toBeTruthy();
+  });
 });

@@ -98,13 +98,12 @@ export function MarkdownPreview({ source, className, active = true }: MarkdownPr
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source, active]);
 
-  const linkCardPreviewMessage = m['edit.link_card_preview_pending']();
   const renderedNode: ReactNode = useMemo(() => {
-    return renderMdastToReactNode(replaceLinkCardPreviewPlaceholders(renderedAst, linkCardPreviewMessage), {
+    return renderMdastToReactNode(replaceLinkCardPreviewPlaceholders(renderedAst, m['edit.link_card_preview_pending']()), {
       sectionWrap: false,
       components: previewComponents as unknown as Parameters<typeof renderMdastToReactNode>[1]['components'],
     });
-  }, [renderedAst, linkCardPreviewMessage]);
+  }, [renderedAst]);
 
   if (source === '') {
     return <div className={className ?? 'text-muted-foreground'}>{m['edit.preview_placeholder']()}</div>;
