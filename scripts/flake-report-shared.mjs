@@ -131,6 +131,18 @@ const WORKER_OOM_PATTERN = /ran out of memory and crashed/
 // cannot even connect to the test Mongo is an infrastructure failure, not a
 // product regression.
 const DB_CONNECT_FAILURE_PATTERN = /Cannot connect to Database Server:/
+// `global-teardown.js`'s `checkRedisSmokeCategoryCoverage()`: CI-only
+// (`process.env.CI === 'true'`, which every solo rerun sets) and asserts
+// all 8 Redis smoke categories' `beforeAll` markers ran — an invariant only
+// the FULL suite can satisfy. A solo rerun of any single file that isn't
+// one of those 8 smoke-suite files itself will ALWAYS trip this and exit
+// non-zero, regardless of whether the file under investigation passed —
+// confirmed empirically: `CI=true pnpm --filter @crowi/api test
+// --runTestsByPath <any non-smoke file>` exits 1 via this exact
+// globalTeardown rejection even when every test in that file passes. Left
+// unmatched, this silently turned the classifier into an always-REGRESSION
+// machine for solo reruns of anything outside those 8 files.
+const REDIS_SMOKE_COVERAGE_PATTERN = /Redis smoke categories missing in CI/
 
 /**
  * Scans a solo rerun's captured stderr for known infrastructure-failure
@@ -145,6 +157,8 @@ export function matchInfrastructureStderr(stderr) {
   if (WORKER_CRASHED_PATTERN.test(stderr)) return 'a jest worker crashed for an unknown reason during the solo rerun (see captured stderr)'
   if (WORKER_OOM_PATTERN.test(stderr)) return 'a jest worker ran out of memory during the solo rerun (see captured stderr)'
   if (DB_CONNECT_FAILURE_PATTERN.test(stderr)) return 'the solo rerun could not connect to the test database (see captured stderr)'
+  if (REDIS_SMOKE_COVERAGE_PATTERN.test(stderr))
+    return "the solo rerun's globalTeardown rejected for missing full-suite-only Redis smoke category coverage — expected for any single-file solo rerun, not a reflection of this file (see captured stderr)"
   return null
 }
 

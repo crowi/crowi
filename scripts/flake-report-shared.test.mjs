@@ -179,6 +179,21 @@ describe('matchInfrastructureStderr', () => {
     assert.match(reason, /could not connect to the test database/)
   })
 
+  it('recognizes global-teardown.js rejecting a solo rerun for missing full-suite-only Redis smoke coverage', () => {
+    // The exact message shape `CI=true pnpm --filter @crowi/api test
+    // --runTestsByPath <file>` produces locally when the target file isn't
+    // one of the 8 Redis smoke suites — this fires for essentially every
+    // solo rerun, which is exactly the false-REGRESSION bug this pattern
+    // exists to close.
+    const reason = matchInfrastructureStderr(
+      'Error: Jest: Got error running globalTeardown - /repo/packages/api/src/test/global-teardown.js, reason: ' +
+        '[test] Redis smoke categories missing in CI (ran 0/8): collab, editor-cap, presence, notifications, config, rate-limit, lru, boot — ' +
+        'each category records a marker in its own `beforeAll` (proof the describe block was not skipped); a missing marker means that smoke ' +
+        'suite never ran even though CI (per feature-redis-8-upgrade Phase 1) guarantees the underlying Redis instances are reachable.',
+    )
+    assert.match(reason, /missing full-suite-only Redis smoke category coverage/)
+  })
+
   it('returns null for an ordinary assertion failure (must never invent a false positive)', () => {
     assert.equal(matchInfrastructureStderr('Expected: 200\nReceived: 401'), null)
   })
@@ -240,6 +255,18 @@ describe('classifyRerunOutcome', () => {
 
   it('classifies a non-zero exit whose stderr matches a DB connect failure as INCONCLUSIVE, not REGRESSION', () => {
     const result = classifyRerunOutcome({ status: 1, signal: null, error: null, stderr: 'Cannot connect to Database Server: connect ECONNREFUSED' })
+    assert.equal(result.classification, 'INCONCLUSIVE')
+  })
+
+  it('classifies a non-zero exit whose stderr matches the Redis-smoke-coverage globalTeardown rejection as INCONCLUSIVE, not REGRESSION', () => {
+    // Without this, every solo rerun of a non-smoke file was misclassified
+    // REGRESSION regardless of whether the target test actually passed.
+    const result = classifyRerunOutcome({
+      status: 1,
+      signal: null,
+      error: null,
+      stderr: 'Error: Jest: Got error running globalTeardown - .../global-teardown.js, reason: [test] Redis smoke categories missing in CI (ran 0/8): boot',
+    })
     assert.equal(result.classification, 'INCONCLUSIVE')
   })
 })
