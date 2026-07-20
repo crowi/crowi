@@ -19,5 +19,12 @@
     "noUnusedParameters": false
   },
   "include": ["src"],
-  "exclude": ["**/*.test.ts", "**/*.test.js", "src/test/**/*", "dist"]
+  "exclude": ["**/*.test.ts", "**/*.test.js", "src/test/**/*", "dist"],
+  "tsc-alias": {
+    "replacers": {
+      "base-url": {
+        "enabled": false
+      }
+    }
+  }
 }
