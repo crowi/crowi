@@ -3,7 +3,7 @@
 import type { PageWithRevision } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 import { Check, Copy, Link2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
@@ -69,6 +69,20 @@ interface SharePanelContentProps {
 export function SharePanelContent({ page }: SharePanelContentProps) {
   const { data: appInfo } = useAppInfo();
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  // Tracks the pending "reset the confirmation" timer so it can be cleared
+  // on unmount (below) or superseded by a later copy — without this, a
+  // panel that opens and closes within 1500ms (e.g. the auto-copy-on-open
+  // effect below, on every reopen) leaves an orphaned `setTimeout` that
+  // fires after the component — and in a test, the whole render
+  // environment — is gone, throwing instead of silently updating state
+  // that no longer matters.
+  const copyResetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // `copy()` is async (it awaits the clipboard write) — a panel that
+  // unmounts WHILE that await is still pending would otherwise resume
+  // afterward and schedule a brand-new reset timer the unmount cleanup
+  // below already ran and can never clear again. Checked immediately after
+  // the await, before touching state or scheduling anything.
+  const isMountedRef = useRef(true);
 
   const idUrl = buildPageShareUrl(page._id);
   const title = appInfo?.title || 'Crowi';
@@ -78,8 +92,13 @@ export function SharePanelContent({ page }: SharePanelContentProps) {
   const copy = async (key: string, value: string) => {
     try {
       await navigator.clipboard.writeText(value);
+      if (!isMountedRef.current) return;
       setCopiedKey(key);
-      setTimeout(() => setCopiedKey((k) => (k === key ? null : k)), 1500);
+      if (copyResetTimeoutRef.current !== null) clearTimeout(copyResetTimeoutRef.current);
+      copyResetTimeoutRef.current = setTimeout(() => {
+        copyResetTimeoutRef.current = null;
+        setCopiedKey((k) => (k === key ? null : k));
+      }, 1500);
     } catch {
       // clipboard unavailable (insecure context, denied) — surface nothing,
       // input is selectable so the user can still copy manually.
@@ -91,6 +110,13 @@ export function SharePanelContent({ page }: SharePanelContentProps) {
     // Intentionally mount-only — fires once per panel open (see the
     // container comments above), mirroring `idUrl` at that instant.
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+      if (copyResetTimeoutRef.current !== null) clearTimeout(copyResetTimeoutRef.current);
+    };
   }, []);
 
   return (
