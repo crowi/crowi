@@ -113,6 +113,10 @@ card.
   "Convert to card"; hovering/focusing `@[card](url)` shows "Convert to
   link". This affordance is not shown for a link that already has an
   explicit label (`[label](url)`) — an authored label is respected.
+- The editor's live preview (before saving) does not fetch real OGP data —
+  it shows a static placeholder card with just the URL, and it is not
+  clickable. The real card (title, description, image) is fetched after
+  you save.
 - The image is a direct link to the source site (no proxying or caching).
   See the `@crowi/plugin-renderer-link-card` README for plugin details and
   its SSRF safeguards.
