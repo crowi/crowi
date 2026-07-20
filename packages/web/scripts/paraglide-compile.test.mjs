@@ -46,6 +46,7 @@ import {
   validateStaging,
   writeAtomic,
 } from './paraglide-compile.mjs'
+import { fakeCompile } from './paraglide-compile.test-fixtures.mjs'
 
 // Filesystem mtime resolution can be coarse (e.g. 1s on some platforms); every
 // "unchanged content must not rewrite the file" assertion below waits past it
@@ -93,33 +94,9 @@ function makeFixtureWebDir({ locales = ['ja', 'en'], baseLocale = 'ja', messages
   return webDir
 }
 
-/**
- * Stands in for the real `paraglide-js compile` CLI: reads the fixture's
- * baseLocale messages and writes a staging tree with the same shape the real
- * compiler produces (entry files, `messages/_index.js`, one leaf per message
- * key named `<key with . replaced by _>.js`) — verified against a real
- * `paraglide-js compile` run of the actual packages/web project while
- * implementing the wrapper. Deterministic: identical inputs always produce
- * byte-identical output, and only a changed message's own leaf file differs
- * when one translation changes (entry files / `_index.js` only depend on the
- * key set, not values).
- */
-function fakeCompile({ webDir, stagingDir }) {
-  const settings = JSON.parse(fs.readFileSync(path.join(webDir, 'project.inlang', 'settings.json'), 'utf8'))
-  const baseMessages = JSON.parse(fs.readFileSync(path.join(webDir, 'messages', `${settings.baseLocale}.json`), 'utf8'))
-  const keys = Object.keys(baseMessages).filter((key) => key !== '$schema')
-
-  fs.mkdirSync(path.join(stagingDir, 'messages'), { recursive: true })
-  for (const name of ['runtime.js', 'server.js', 'messages.js', 'registry.js', 'README.md', '.gitignore', '.prettierignore']) {
-    fs.writeFileSync(path.join(stagingDir, name), `/* fixture ${name} */\n`)
-  }
-  const indexBody = keys.map((key) => `export * from './${key.replace(/\./g, '_')}.js'\n`).join('')
-  fs.writeFileSync(path.join(stagingDir, 'messages', '_index.js'), indexBody)
-  for (const key of keys) {
-    const leaf = `${key.replace(/\./g, '_')}.js`
-    fs.writeFileSync(path.join(stagingDir, 'messages', leaf), `export const value = ${JSON.stringify(baseMessages[key])}\n`)
-  }
-}
+// `fakeCompile` (the compile fixture standing in for the real `paraglide-js`
+// CLI) lives in ./paraglide-compile.test-fixtures.mjs, shared with
+// paraglide-compile.crossprocess-worker.mjs so the two never drift.
 
 const CROSSPROCESS_WORKER_PATH = fileURLToPath(new URL('./paraglide-compile.crossprocess-worker.mjs', import.meta.url))
 
@@ -539,7 +516,7 @@ describe('runWrapper', () => {
       inCriticalSection++
       if (inCriticalSection > 1) overlapDetected = true
       await sleep(20) // widen the race window so a real overlap would be caught
-      fakeCompile(args)
+      await fakeCompile(args)
       inCriticalSection--
     }
 

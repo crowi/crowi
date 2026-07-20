@@ -33,6 +33,14 @@
 //      reader (Turbopack, but any other process too) never observes it
 //      missing an entry file.
 //
+// Known boundary: this protection only covers invocations that go through
+// this wrapper (i.e. the `paraglide:compile` package.json script). A raw
+// `node_modules/.bin/paraglide-js compile ...` call still bypasses the lock
+// entirely and can still corrupt the live dir the original way — nothing in
+// this repo's build/test/CI graph does that today (everything funnels
+// through `pnpm paraglide:compile`), so this is a low-severity, largely
+// theoretical residual risk (e.g. manual debugging of paraglide output).
+//
 // Recovery (NOT automated here on purpose — see the spec's "やらないこと"):
 // if `pnpm dev`'s Turbopack ever gets stuck on a stale/corrupt module graph
 // (client error about a missing module factory that survives a restart):
@@ -58,6 +66,10 @@ const META_DIR_NAME = '.paraglide-meta'
 const LIVE_DIR_NAME = 'paraglide'
 const PROJECT_DIR_NAME = 'project.inlang'
 const ENTRY_FILES = ['runtime.js', 'server.js', 'messages.js', 'registry.js']
+// Static files paraglide-js emits at the staging root alongside the entry
+// files, verified against a real `paraglide-js compile` run of the actual
+// packages/web project (see `publish()`'s doc comment).
+const INCIDENTAL_ROOT_FILES = ['README.md', '.gitignore', '.prettierignore']
 
 // Compile invocation, defined once and shared verbatim between the actual
 // CLI call (`compileToStaging`) and the content-hash input (`readInputs`) so
@@ -279,7 +291,7 @@ export async function acquireLock(lockPath, opts = {}) {
 }
 
 /** Runs `fn` (may be async) while holding the lock, always releasing afterwards. */
-export async function withLock(lockPath, fn, opts) {
+async function withLock(lockPath, fn, opts) {
   const release = await acquireLock(lockPath, opts)
   try {
     return await fn()
@@ -359,9 +371,46 @@ export function computeExpectedLeaves(baseLocaleMessagesText) {
 }
 
 /**
- * Minimal existence check (not a full content diff — that happens during
- * publish): the 4 entry files, `messages/_index.js`, and every expected leaf
- * must exist in the staging output before anything gets published from it.
+ * Recursively lists every FILE under `dir`, as POSIX-style (forward-slash)
+ * paths relative to `dir` regardless of platform, so both callers below can
+ * compare against a plain string set.
+ * @param {string} dir
+ * @returns {string[]}
+ */
+function listAllFilesRelative(dir) {
+  const out = []
+  const walk = (current, prefix) => {
+    let entries
+    try {
+      entries = fs.readdirSync(current, { withFileTypes: true })
+    } catch (err) {
+      if (err.code === 'ENOENT') return
+      throw err
+    }
+    for (const entry of entries) {
+      const rel = prefix ? `${prefix}/${entry.name}` : entry.name
+      if (entry.isDirectory()) walk(path.join(current, entry.name), rel)
+      else out.push(rel)
+    }
+  }
+  walk(dir, '')
+  return out
+}
+
+/**
+ * Validates the staged compile output before anything gets published from
+ * it, in both directions:
+ *   - existence: the 4 entry files, `messages/_index.js`, and every expected
+ *     leaf must exist (not a full content diff — that happens during
+ *     publish).
+ *   - completeness: every file staging actually produced must be one this
+ *     wrapper knows how to publish. `publish()` only ever looks at the
+ *     staging root and `messages/` — a future `@inlang/paraglide-js` version
+ *     that adds output somewhere else (a new subdirectory, a new root file)
+ *     would otherwise be silently skipped forever: the run would still
+ *     "succeed", the stamp would still be written, and the live dir would
+ *     permanently miss that output with no error. Throwing loudly here
+ *     turns that into an immediate, actionable failure instead.
  * @param {{ stagingDir: string, expectedLeaves: string[] }} args
  */
 export function validateStaging({ stagingDir, expectedLeaves }) {
@@ -377,6 +426,22 @@ export function validateStaging({ stagingDir, expectedLeaves }) {
     const shown = missing.slice(0, 10).join(', ')
     const more = missing.length > 10 ? `, and ${missing.length - 10} more` : ''
     throw new Error(`paraglide-compile: staged compile is missing ${missing.length} expected output file(s): ${shown}${more}`)
+  }
+
+  const expectedPaths = new Set([
+    ...ENTRY_FILES,
+    ...INCIDENTAL_ROOT_FILES,
+    'messages/_index.js',
+    ...expectedLeaves.map((leaf) => `messages/${leaf}`),
+  ])
+  const unexpected = listAllFilesRelative(stagingDir).filter((relPath) => !expectedPaths.has(relPath))
+  if (unexpected.length > 0) {
+    const shown = unexpected.slice(0, 10).join(', ')
+    const more = unexpected.length > 10 ? `, and ${unexpected.length - 10} more` : ''
+    throw new Error(
+      `paraglide-compile: staged compile produced ${unexpected.length} unrecognized output file(s) this wrapper doesn't know how to publish safely: ${shown}${more}. ` +
+        `This likely means @inlang/paraglide-js changed its output shape (e.g. a new file or subdirectory) since publish() was written — update ENTRY_FILES/INCIDENTAL_ROOT_FILES or publish()'s staging walk to cover it, rather than risk it being silently dropped from the live dir forever.`,
+    )
   }
 }
 
@@ -394,18 +459,17 @@ function listDirFiles(dir) {
   }
 }
 
-function filesEqual(pathA, pathB) {
-  try {
-    return fs.readFileSync(pathA).equals(fs.readFileSync(pathB))
-  } catch {
-    return false
-  }
-}
-
 /** @returns {boolean} whether a write actually happened */
 function publishIfChanged(stagingPath, livePath) {
-  if (fs.existsSync(livePath) && filesEqual(stagingPath, livePath)) return false
-  writeAtomic(livePath, fs.readFileSync(stagingPath))
+  const stagingContent = fs.readFileSync(stagingPath)
+  if (fs.existsSync(livePath)) {
+    try {
+      if (stagingContent.equals(fs.readFileSync(livePath))) return false
+    } catch {
+      /* live file vanished between existsSync and readFileSync — fall through to (re)write it */
+    }
+  }
+  writeAtomic(livePath, stagingContent)
   return true
 }
 
