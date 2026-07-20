@@ -432,6 +432,7 @@
   "edit.attach_failed": "ファイルの添付に失敗しました",
   "edit.link_card_convert_to_card": "カードに変換",
   "edit.link_card_revert_to_link": "リンクに戻す",
+  "edit.link_card_preview_pending": "保存するとページタイトルを取得し、カード表示します。",
   "edit.tab_editor": "エディタ",
   "edit.tab_preview": "プレビュー",
   "edit.preview_placeholder": "プレビュー",

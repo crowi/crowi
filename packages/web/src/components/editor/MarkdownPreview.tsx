@@ -14,6 +14,7 @@ import { LI_CLASSNAME, mergeListClassName, OL_CLASSNAME, UL_CLASSNAME } from './
 import { renderMdastToReactNode } from './render-mdast';
 import { DiagramEmbed, isDiagramEmbed } from '@/components/page-view/diagram-embed';
 import { m } from '@paraglide/messages.js';
+import { replaceLinkCardPreviewPlaceholders } from './link-card-preview-placeholder';
 
 const DEBOUNCE_MS = 250;
 
@@ -97,12 +98,13 @@ export function MarkdownPreview({ source, className, active = true }: MarkdownPr
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source, active]);
 
+  const linkCardPreviewMessage = m['edit.link_card_preview_pending']();
   const renderedNode: ReactNode = useMemo(() => {
-    return renderMdastToReactNode(renderedAst, {
+    return renderMdastToReactNode(replaceLinkCardPreviewPlaceholders(renderedAst, linkCardPreviewMessage), {
       sectionWrap: false,
       components: previewComponents as unknown as Parameters<typeof renderMdastToReactNode>[1]['components'],
     });
-  }, [renderedAst]);
+  }, [renderedAst, linkCardPreviewMessage]);
 
   if (source === '') {
     return <div className={className ?? 'text-muted-foreground'}>{m['edit.preview_placeholder']()}</div>;

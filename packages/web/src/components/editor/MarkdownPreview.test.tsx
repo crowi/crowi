@@ -115,3 +115,32 @@ describe('MarkdownPreview — Mermaid diagram embed gets the same DiagramEmbed w
     expect(screen.queryByRole('button', { name: m['page.diagram_zoom']() })).toBeNull();
   });
 });
+
+describe('MarkdownPreview — link-card placeholder', () => {
+  it('renders a card tag as a non-clickable card without fetching its metadata', async () => {
+    const url = 'https://almoha.slack.com/archives/C0154CS303Z/p1784556099049899';
+    mutateAsync.mockResolvedValueOnce({
+      type: 'root',
+      children: [
+        {
+          type: 'paragraph',
+          data: { hProperties: { 'data-source-line': 1 } },
+          children: [
+            { type: 'text', value: '@' },
+            { type: 'link', url, children: [{ type: 'text', value: 'card' }] },
+          ],
+        },
+      ],
+    });
+
+    render(<MarkdownPreview source={`@[card](${url})`} />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+    });
+
+    expect(screen.getByText(url)).toBeTruthy();
+    expect(screen.getByText(m['edit.link_card_preview_pending']())).toBeTruthy();
+    expect(screen.queryByRole('link')).toBeNull();
+    expect(document.querySelector('.crowi-link-card-preview-surface')).toBeNull();
+  });
+});
