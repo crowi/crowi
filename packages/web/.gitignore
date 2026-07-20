@@ -44,3 +44,8 @@ next-env.d.ts
 # `**/paraglide` (not just `/paraglide`) so a stray output dir from a typo'd
 # `--outdir` flag (e.g. `--outdir ./src/paraglide`) also stays out of git.
 **/paraglide
+
+# scripts/paraglide-compile.mjs bookkeeping (lockfile, content-hash stamp,
+# disposable staging dir) — deliberately kept OUTSIDE `paraglide/` above so it
+# never shows up as filesystem churn in the dir Turbopack watches.
+.paraglide-meta/
