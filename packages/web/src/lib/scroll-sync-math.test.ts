@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { SLIDING_REFERENCE_EPSILON, computeScrollProgress, computeSlidingReferenceTarget, isProgressNearEnd, isProgressNearStart } from './scroll-sync-math';
+import {
+  SLIDING_REFERENCE_EPSILON,
+  computeDensityCompensatedReferenceTarget,
+  computeScrollProgress,
+  computeSlidingReferenceTarget,
+  isProgressNearEnd,
+  isProgressNearStart,
+} from './scroll-sync-math';
 
 describe('computeScrollProgress', () => {
   it('is 0 at the top of a scrollable pane', () => {
@@ -192,5 +199,68 @@ describe('computeSlidingReferenceTarget', () => {
     }
     expect(sawIncrease).toBe(true);
     expect(prev).toBe(targetMaxScroll);
+  });
+});
+
+describe('computeDensityCompensatedReferenceTarget', () => {
+  const targetViewportHeight = 800;
+  const targetMaxScroll = 11200;
+
+  it('keeps a denser preview viewport bottom visible at an interior progress', () => {
+    const target = computeDensityCompensatedReferenceTarget({
+      sourceProgress: 0.8,
+      topReferenceY: 2936,
+      bottomReferenceY: 4048,
+      targetViewportHeight,
+      targetMaxScroll,
+    });
+
+    expect(target).toBe(3248);
+    expect((target as number) + targetViewportHeight).toBe(4048);
+  });
+
+  it('matches the sliding-reference placement when both viewports have equal density', () => {
+    const target = computeDensityCompensatedReferenceTarget({
+      sourceProgress: 0.5,
+      topReferenceY: 2000,
+      bottomReferenceY: 2800,
+      targetViewportHeight,
+      targetMaxScroll,
+    });
+
+    expect(target).toBe(2000);
+  });
+
+  it('pins endpoints without requiring resolved edge references', () => {
+    expect(
+      computeDensityCompensatedReferenceTarget({
+        sourceProgress: 0,
+        topReferenceY: null,
+        bottomReferenceY: null,
+        targetViewportHeight,
+        targetMaxScroll,
+      }),
+    ).toBe(0);
+    expect(
+      computeDensityCompensatedReferenceTarget({
+        sourceProgress: 1,
+        topReferenceY: null,
+        bottomReferenceY: null,
+        targetViewportHeight,
+        targetMaxScroll,
+      }),
+    ).toBe(targetMaxScroll);
+  });
+
+  it('returns null when an interior edge reference is unresolved', () => {
+    expect(
+      computeDensityCompensatedReferenceTarget({
+        sourceProgress: 0.8,
+        topReferenceY: 2936,
+        bottomReferenceY: null,
+        targetViewportHeight,
+        targetMaxScroll,
+      }),
+    ).toBeNull();
   });
 });

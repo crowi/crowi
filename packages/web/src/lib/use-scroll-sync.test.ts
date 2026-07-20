@@ -140,11 +140,14 @@ describe('useScrollSync — sliding reference', () => {
       expect(editorRef.current?.getProgressAt).not.toHaveBeenCalled();
     });
 
-    it('aligns the reference line at the same proportional viewport height at p=0.5 (center-to-center)', () => {
+    it('uses the preview top for the reference when the mapped editor viewport is denser than it can display', () => {
       renderHook(() => useScrollSync({ editorRef, previewRef, enabled: true }));
       scrollEditorTo(EDITOR_MAX / 2); // p = 0.5 exactly
-      // fractional line 50 -> preview content y 5000; target = 5000 - 0.5*800
-      expect(previewContainer.scrollTop).toBe(5000 - 0.5 * PREVIEW_CLIENT_HEIGHT);
+      // This fixture maps the editor's viewport edges to preview y=0 / 10000,
+      // much taller than the 800px preview viewport. Density compensation
+      // puts the interpolated reference (line 50 -> y=5000) at the top so
+      // the preview can reserve all available room below it.
+      expect(previewContainer.scrollTop).toBe(5000);
     });
 
     it('degenerates to progress 0 (top-aligned) when the editor pane cannot scroll', () => {
@@ -348,5 +351,74 @@ describe('useScrollSync — tail past the last anchor', () => {
     // its own tail on screen, not be parked ~4000px above it.
     const top = previewScrollTopForEditorProgress(0.97);
     expect(top).toBeGreaterThan(PREVIEW_MAX - PREVIEW_CLIENT_HEIGHT);
+  });
+});
+
+describe('useScrollSync — density-mismatched visible bottom', () => {
+  const LINE_COUNT = 100;
+  const EDITOR_LINE_HEIGHT = 30;
+  const PREVIEW_LINE_HEIGHT = 51;
+  const DENSITY_PREVIEW_SCROLL_HEIGHT = 6000;
+  const DENSITY_PREVIEW_MAX = DENSITY_PREVIEW_SCROLL_HEIGHT - PREVIEW_CLIENT_HEIGHT;
+
+  let editorScrollDOM: HTMLElement;
+  let previewContainer: HTMLElement;
+  let editorRef: RefObject<MockHandle | null>;
+  let previewRef: RefObject<HTMLElement | null>;
+
+  function getProgressAt(viewportFraction: number): { line: number; ratio: number } {
+    const contentY = editorScrollDOM.scrollTop + viewportFraction * EDITOR_CLIENT_HEIGHT;
+    const fractional = 1 + contentY / EDITOR_LINE_HEIGHT;
+    const line = Math.floor(fractional);
+    return { line, ratio: fractional - line };
+  }
+
+  function previewYForProgress({ line, ratio }: { line: number; ratio: number }): number {
+    return (line + ratio - 1) * PREVIEW_LINE_HEIGHT;
+  }
+
+  beforeEach(() => {
+    editorScrollDOM = document.createElement('div');
+    setPaneSize(editorScrollDOM, { scrollHeight: EDITOR_SCROLL_HEIGHT, clientHeight: EDITOR_CLIENT_HEIGHT });
+    document.body.appendChild(editorScrollDOM);
+
+    previewContainer = document.createElement('div');
+    setPaneSize(previewContainer, { scrollHeight: DENSITY_PREVIEW_SCROLL_HEIGHT, clientHeight: PREVIEW_CLIENT_HEIGHT });
+    document.body.appendChild(previewContainer);
+    addMarker(previewContainer, 1, 0);
+    addMarker(previewContainer, LINE_COUNT + 1, LINE_COUNT * PREVIEW_LINE_HEIGHT);
+
+    editorRef = { current: makeEditorHandle(editorScrollDOM, getProgressAt, LINE_COUNT) };
+    previewRef = { current: previewContainer };
+  });
+
+  afterEach(() => {
+    editorScrollDOM.remove();
+    previewContainer.remove();
+  });
+
+  function scrollEditorToProgress(progress: number): number {
+    editorScrollDOM.scrollTop = progress * EDITOR_MAX;
+    act(() => {
+      editorScrollDOM.dispatchEvent(new Event('scroll'));
+    });
+    return previewContainer.scrollTop;
+  }
+
+  it('keeps the editor viewport bottom visible in a denser preview', () => {
+    renderHook(() => useScrollSync({ editorRef, previewRef, enabled: true }));
+
+    scrollEditorToProgress(0.8);
+
+    const mappedBottomY = previewYForProgress(getProgressAt(1));
+    expect(mappedBottomY).toBeLessThanOrEqual(previewContainer.scrollTop + PREVIEW_CLIENT_HEIGHT);
+  });
+
+  it('never moves the preview backwards while the editor advances through a dense region', () => {
+    renderHook(() => useScrollSync({ editorRef, previewRef, enabled: true }));
+
+    const targets = [0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9].map(scrollEditorToProgress);
+    expect(targets.every((target, index) => index === 0 || target >= targets[index - 1])).toBe(true);
+    expect(targets[targets.length - 1]).toBeLessThanOrEqual(DENSITY_PREVIEW_MAX);
   });
 });

@@ -2,7 +2,13 @@
 
 import { useEffect, type RefObject } from 'react';
 import type { MarkdownEditorHandle } from '@/components/editor/MarkdownEditor';
-import { computeScrollProgress, computeSlidingReferenceTarget, isProgressNearEnd, isProgressNearStart } from './scroll-sync-math';
+import {
+  computeDensityCompensatedReferenceTarget,
+  computeScrollProgress,
+  computeSlidingReferenceTarget,
+  isProgressNearEnd,
+  isProgressNearStart,
+} from './scroll-sync-math';
 
 interface UseScrollSyncOptions {
   /**
@@ -36,11 +42,12 @@ interface UseScrollSyncOptions {
  * instead of always pinning the mapped line at the viewport TOP on both
  * panes, the alignment height slides continuously from the top
  * (`p=0`) to the bottom (`p=1`) of the DRIVING pane's own viewport as
- * that pane's scroll progress `p` advances. At `p=0` this is
- * top-aligned exactly like before; at `p=1` (typically: appending at
- * the end of a long document) the preview's freshly-rendered bottom
- * stays in view instead of being pushed off-screen by a taller
- * preview.
+ * that pane's scroll progress `p` advances. For editor→preview, the
+ * viewport's mapped top/bottom also reveal local line-density differences;
+ * when the preview span is taller, the reference shifts upward just enough
+ * to keep the editor's visible lower edge in the preview. At `p=0` this is
+ * top-aligned exactly like before; at `p=1` the preview's bottom stays in
+ * view instead of being pushed off-screen by a taller preview.
  *
  * The editor's `getProgressAt(viewportFraction)` returns
  * `{ line, ratio }` where `ratio` is the fractional offset (`0..1`)
@@ -92,6 +99,7 @@ export function useScrollSync({ editorRef, previewRef, enabled }: UseScrollSyncO
     if (!previewScroll) return;
 
     let lock: 'editor' | 'preview' | null = null;
+    let lastForwardTarget: { progress: number; target: number } | null = null;
 
     type MarkerSnapshot = { sourceLine: number; top: number };
     const snapshotMarkers = (): MarkerSnapshot[] => {
@@ -193,25 +201,32 @@ export function useScrollSync({ editorRef, previewRef, enabled }: UseScrollSyncO
       lock = 'editor';
       const editorScroll = editorRef.current?.getScrollDOM() ?? null;
       const sourceProgress = editorScroll ? computeScrollProgress(editorScroll.scrollTop, editorScroll.scrollHeight, editorScroll.clientHeight) : 0;
-      // Reference point = the fractional line sitting at `sourceProgress`
-      // of the EDITOR's own viewport (0 = top, 1 = bottom) — this is the
-      // "sliding reference" itself, generalized from the old fixed-top
-      // probe. Endpoints are pinned by `computeSlidingReferenceTarget`
-      // below without needing a resolved reference line, so skip the DOM
-      // snapshot + binary search entirely when pinned — mirrors the
-      // symmetric skip in `onPreviewScroll` below.
-      let referenceY: number | null = null;
+      // Map the editor viewport's two edges. Their separation in preview
+      // pixels is the local density signal: when it exceeds the preview
+      // viewport, the math helper lowers the reference fraction just enough
+      // to keep the editor's visible lower edge on screen. Endpoints remain
+      // pinned without probing, mirroring the reverse direction below.
+      let topReferenceY: number | null = null;
+      let bottomReferenceY: number | null = null;
       if (!isProgressNearStart(sourceProgress) && !isProgressNearEnd(sourceProgress)) {
-        const prog = editorRef.current?.getProgressAt(sourceProgress) ?? null;
-        referenceY = prog ? previewYForFractionalLine(prog.line, prog.ratio) : null;
+        const topProgress = editorRef.current?.getProgressAt(0) ?? null;
+        const bottomProgress = editorRef.current?.getProgressAt(1) ?? null;
+        topReferenceY = topProgress ? previewYForFractionalLine(topProgress.line, topProgress.ratio) : null;
+        bottomReferenceY = bottomProgress ? previewYForFractionalLine(bottomProgress.line, bottomProgress.ratio) : null;
       }
-      const target = computeSlidingReferenceTarget({
+      const target = computeDensityCompensatedReferenceTarget({
         sourceProgress,
-        referenceY,
+        topReferenceY,
+        bottomReferenceY,
         targetViewportHeight: previewScroll.clientHeight,
         targetMaxScroll: Math.max(0, previewScroll.scrollHeight - previewScroll.clientHeight),
       });
-      if (target !== null) previewScroll.scrollTop = target;
+      if (target !== null) {
+        const forwardTarget = lastForwardTarget !== null && sourceProgress >= lastForwardTarget.progress ? Math.max(target, lastForwardTarget.target) : target;
+        previewScroll.scrollTop = forwardTarget;
+        lastForwardTarget =
+          isProgressNearStart(sourceProgress) || isProgressNearEnd(sourceProgress) ? null : { progress: sourceProgress, target: forwardTarget };
+      }
       requestAnimationFrame(() => {
         if (lock === 'editor') lock = null;
       });
