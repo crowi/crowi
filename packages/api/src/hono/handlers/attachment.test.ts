@@ -2,7 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { Types } from 'mongoose';
 import { app, crowi } from 'src/test/setup';
-import { bearerAuthHeaders as authHeaders, createTestUser, createPageViaApi } from 'src/test/test-helpers';
+import { bearerAuthHeaders as authHeaders, createPageViaApi, createTestUser, createWideJpeg } from 'src/test/test-helpers';
+import * as imageDisplayDerivative from 'src/util/image-display-derivative';
 import request from 'supertest';
 
 const cleanupPathPrefix = async (prefix: string) => {
@@ -374,6 +375,49 @@ describe('Routes /api/v2 attachments (Hono)', () => {
       const stored = await Attachment.findById(res.body.attachment._id);
       expect(stored).not.toBeNull();
     });
+
+    describe('feature-image-derivative-optimization Phase 1 — display derivative generation', () => {
+      it('calls the shared generator exactly once and persists a resized derivative for a large image', async () => {
+        const page = await createPageViaApi(accessToken, `${PATH_PREFIX}derivative-resized`, '# add');
+        const wideJpeg = await createWideJpeg();
+
+        const spy = jest.spyOn(imageDisplayDerivative, 'generateDisplayDerivativeForUpload');
+        const res = await request(app)
+          .post(`/api/v2/pages/${page._id}/attachments`)
+          .set(authHeaders(accessToken))
+          .attach('file', wideJpeg, { filename: 'wide.jpg', contentType: 'image/jpeg' });
+
+        expect(res.status).toBe(200);
+        expect(spy).toHaveBeenCalledTimes(1);
+
+        const Attachment = crowi.model('Attachment');
+        const stored = await Attachment.findById(res.body.attachment._id);
+        expect(stored?.derivatives?.display?.mode).toBe('resized');
+        expect(stored?.derivatives?.display?.format).toBe('image/jpeg');
+      });
+
+      it('still returns 200 (original-only) when derivative generation fails — the upload response is never blocked by a generation failure', async () => {
+        const page = await createPageViaApi(accessToken, `${PATH_PREFIX}derivative-failed`, '# add');
+        // A `Content-Type: image/png` file whose bytes are not a decodable
+        // image at all — the generator re-validates via sharp rather than
+        // trusting the claimed MIME, so this exercises a real decode
+        // failure (mode: failed, reason: decode-error), not a mocked one.
+        const garbage = Buffer.from('this is not a real png, just garbage bytes for the upload test');
+
+        const res = await request(app)
+          .post(`/api/v2/pages/${page._id}/attachments`)
+          .set(authHeaders(accessToken))
+          .attach('file', garbage, { filename: 'not-a-png.png', contentType: 'image/png' });
+
+        expect(res.status).toBe(200);
+        expect(res.body.attachment).toBeDefined();
+
+        const Attachment = crowi.model('Attachment');
+        const stored = await Attachment.findById(res.body.attachment._id);
+        expect(stored?.derivatives?.display?.mode).toBe('failed');
+        expect(stored?.derivatives?.display?.reason).toBe('decode-error');
+      });
+    });
   });
 
   describe('GET /api/v2/attachments/:id (raw stream)', () => {
@@ -711,6 +755,44 @@ describe('Routes /api/v2 attachments (Hono)', () => {
 
       const Attachment = crowi.model('Attachment');
       expect(await Attachment.findById(id)).toBeNull();
+    });
+
+    it('feature-image-derivative-optimization: returns 500 REMOVE_FAILED when original deletion fails — row-delete-first contract unchanged, and derivative cleanup is still attempted', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}delete-original-fails`, '# do');
+      const wideJpeg = await createWideJpeg({ r: 1, g: 2, b: 3 });
+      const upload = await request(app)
+        .post(`/api/v2/pages/${page._id}/attachments`)
+        .set(authHeaders(accessToken))
+        .attach('file', wideJpeg, { filename: 'wide.jpg', contentType: 'image/jpeg' });
+      expect(upload.status).toBe(200);
+      const id = upload.body.attachment._id;
+
+      const Attachment = crowi.model('Attachment');
+      const stored = await Attachment.findById(id);
+      const originalKey = stored?.filePath as string;
+      const derivativeKey = stored?.derivatives?.display?.filePath as string;
+      expect(derivativeKey).toBeDefined();
+
+      const driver = crowi.getPlugins().active.storage;
+      if (!driver) throw new Error('storage driver missing in test env');
+      const realDelete = driver.delete.bind(driver);
+      const deleteSpy = jest.spyOn(driver, 'delete').mockImplementation(async (key: string) => {
+        if (key === originalKey) throw new Error('simulated original delete failure');
+        return realDelete(key);
+      });
+
+      try {
+        const res = await request(app).delete(`/api/v2/attachments/${id}`).set(authHeaders(accessToken));
+        expect(res.status).toBe(500);
+        expect(res.body.error.code).toBe('REMOVE_FAILED');
+      } finally {
+        deleteSpy.mockRestore();
+      }
+
+      // Row delete happened first regardless of the original storage failure.
+      expect(await Attachment.findById(id)).toBeNull();
+      // Derivative cleanup was still attempted despite the original delete failing.
+      await expect(driver.get(derivativeKey)).rejects.toBeDefined();
     });
   });
 

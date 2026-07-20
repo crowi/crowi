@@ -1,7 +1,8 @@
-import request from 'supertest';
 import { Types } from 'mongoose';
 import { app, crowi } from 'src/test/setup';
-import { bearerAuthHeaders as authHeaders, createTestUser, createPageViaApi } from 'src/test/test-helpers';
+import { bearerAuthHeaders as authHeaders, createPageViaApi, createTestUser, createWideJpeg } from 'src/test/test-helpers';
+import * as imageDisplayDerivative from 'src/util/image-display-derivative';
+import request from 'supertest';
 
 /**
  * RFC-0004 Phase 6 — `POST /api/v2/attachments/upload`.
@@ -76,6 +77,53 @@ describe('Routes POST /api/v2/attachments/upload (Hono editor upload)', () => {
       .field('intent', 'dnd')
       .attach('file', pngBuffer, { filename: 'dropped.png', contentType: 'image/png' });
     expect(res.status).toBe(200);
+  });
+
+  describe('feature-image-derivative-optimization Phase 1 — display derivative generation', () => {
+    it('calls the shared generator exactly once and persists a resized derivative for a large pasted image', async () => {
+      const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}derivative-resized`, '# upload target');
+      const wideJpeg = await createWideJpeg();
+
+      const spy = jest.spyOn(imageDisplayDerivative, 'generateDisplayDerivativeForUpload');
+      const res = await request(app)
+        .post('/api/v2/attachments/upload')
+        .set(authHeaders(ownerToken))
+        .field('pageId', page._id)
+        .field('intent', 'dnd')
+        .attach('file', wideJpeg, { filename: 'wide.jpg', contentType: 'image/jpeg' });
+
+      expect(res.status).toBe(200);
+      expect(spy).toHaveBeenCalledTimes(1);
+
+      const Attachment = crowi.model('Attachment');
+      const id = res.body.url.split('/').pop();
+      const stored = await Attachment.findById(id);
+      expect(stored?.derivatives?.display?.mode).toBe('resized');
+      expect(stored?.derivatives?.display?.format).toBe('image/jpeg');
+    });
+
+    it('still returns 200 (original-only) when derivative generation fails — the upload response is never blocked by a generation failure', async () => {
+      const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}derivative-failed`, '# upload target');
+      // Claimed `image/png` but not a decodable image — the generator
+      // re-validates via sharp rather than trusting the claimed MIME.
+      const garbage = Buffer.from('this is not a real png, just garbage bytes for the upload test');
+
+      const res = await request(app)
+        .post('/api/v2/attachments/upload')
+        .set(authHeaders(ownerToken))
+        .field('pageId', page._id)
+        .field('intent', 'paste')
+        .attach('file', garbage, { filename: 'not-a-png.png', contentType: 'image/png' });
+
+      expect(res.status).toBe(200);
+      expect(typeof res.body.url).toBe('string');
+
+      const Attachment = crowi.model('Attachment');
+      const id = res.body.url.split('/').pop();
+      const stored = await Attachment.findById(id);
+      expect(stored?.derivatives?.display?.mode).toBe('failed');
+      expect(stored?.derivatives?.display?.reason).toBe('decode-error');
+    });
   });
 
   describe('intent-aware MIME / size limits (RFC-0004 Phase 7)', () => {
