@@ -284,9 +284,17 @@ servers sit just below at `4290`/`4291` (`packages/e2e/src/config.ts`).
   `scripts/migrate.mjs` extensions that wire them together.
 
 ### simplify after merge
-After merging a worktree, the integrate-worktree skill spawns 3 review agents
-(reuse / quality / efficiency) over the merge diff. Every finding is either
-**fixed on the spot** (a `refactor(merge): ...` commit) or **dropped**.
+After merging a worktree, the integrate-worktree skill spawns review agents
+(reuse / simplification / efficiency / altitude) over the merge diff. Every
+finding is either **fixed on the spot** (a `refactor(merge): ...` commit) or
+**dropped**. Fix discipline (integrate-worktree Step 7 is authoritative):
+mechanical fixes (dead code, reuse an existing helper) may be applied
+directly; behavioral fixes (writing new logic to answer a finding) default
+to drop, and when fixed follow crowi-fix discipline (failing repro test
+first). Any applied fixes must pass a codex 1-pass adversarial review
+BEFORE the refactor(merge) commit — the merged worktree code went through
+the feature pipeline's review, but simplify fixes are written ad hoc by the
+integrating session and previously landed on main with no independent check.
 
 ### Review findings: fix or drop (applies everywhere)
 Review / simplify / QA findings are NEVER parked in `TODO.md` or any backlog.

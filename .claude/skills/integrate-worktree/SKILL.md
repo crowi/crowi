@@ -343,10 +343,44 @@ merge 直後は、両側の変更が混ざってコードに重複や非効率�
 simplify <description of merged work>
 ```
 
-simplify が見つけた issue は **その場で全部修正**し、別 commit (例: `refactor(merge): ...`) として
-コミット。直さないと判断したものは**捨てる**(報告に 1 行残すだけ)。**TODO.md 等への advisory
-退避は禁止**(fix or drop — 全 skill 共通方針。`docs(todo): record ... advisory` 型の commit を
-作らない)。修正がなければ skip。
+simplify が見つけた issue は **fix or drop**(TODO.md 等への advisory 退避は禁止 —
+全 skill 共通方針。`docs(todo): record ... advisory` 型の commit を作らない)。
+ただし「fix」側は指摘の種類で規律を分ける:
+
+- **mechanical な修正**(挙動不変が構造的に自明なもの: 死コード/未使用 CSS の削除、
+  既存ヘルパーへの置き換え、計算・定数の移動、コメント整理)→ その場で修正してよい。
+- **behavioral な修正**(マッチャ/アルゴリズム/分岐の書き換え、並行・認証・データ
+  経路に触れるもの — 指摘に応えるために**新しいロジックを書き下ろす**類)→
+  既定は **drop**(報告 1 行。価値が大きければ planner へ独立した fix/spec として
+  回す)。それでも今直す価値があると判断した場合のみ、crowi-fix と同じ規律で直す:
+  **失敗する repro テストを先に書く → 修正 → ゲート**。
+- **修正を 1 つでも適用したら、commit 前に codex 1-pass 敵対レビューを必ず通す**
+  (crowi-fix Step 4 と同形。スコープは `git diff HEAD` = 未コミットの simplify 修正):
+
+  ```bash
+  mkdir -p .reviews/codex-runs/simplify-<id>
+  # prompt: 「git status --porcelain + git diff HEAD で未コミットの修正を取得し、
+  #          退行・境界・並行の観点で敵対レビューせよ」+ FINDINGS schema (crowi-review と同形)
+  bash .claude/scripts/codex-run.sh --sandbox read-only --tier terra \
+    --prompt-file .reviews/codex-runs/simplify-<id>/prompt.md \
+    --schema-file .reviews/codex-runs/simplify-<id>/schema.json \
+    --out .reviews/codex-runs/simplify-<id>/out.json --label simplify-<id>
+  ```
+
+  findings は fix or **revert** — 裏取りの上その場で直すか、疑わしければその simplify
+  修正自体を取り消して drop に格下げする。統合済みの worktree コードは feature
+  pipeline のレビューを通っており、simplify 修正の方が「未レビューの新参」なので、
+  **迷ったら revert が正**。exit 2(codex 不可)なら general-purpose subagent で
+  代替し報告に明記。レビュー green を確認してから `refactor(merge): ...` として
+  commit する。修正ゼロ(全部 drop)ならレビューも commit も不要。
+
+> **なぜ commit 前レビューを必須にするか**: worktree のコードは feature pipeline の
+> レビューを通って main に入るが、simplify の修正は「レビュー指摘を受けてその場の
+> session が書き下ろすコード」で、従来は type-check/test/lint 以外の独立チェック無しに
+> main に直行していた。実装 session のモデルに依らず品質を構造で担保するため、
+> 書いた本人以外(codex)の敵対レビューを必須ゲートにする(2026-07-21 ユーザー指摘。
+> 同日の実例: simplify 中にプレビューのマッチングロジックを書き下ろしで一般化した
+> behavioral 修正が、自前テスト以外の独立チェック無しで main に載った)。
 
 ### Step 8: stale な spec / task ファイルを掃除 (提案 → 削除)
 
