@@ -199,10 +199,20 @@ export function useScrollSync({ editorRef, previewRef, enabled }: UseScrollSyncO
         // Symmetric endpoint pin: bypass the anchor lookup entirely (a
         // sparsely-anchored document shouldn't keep the editor from
         // reaching its true top/bottom) and set the editor's own
-        // scrollTop directly via the live scroll element.
+        // scrollTop directly via the live scroll element. Delegates to
+        // the same `computeSlidingReferenceTarget` the editor→preview
+        // direction above uses — `referenceY: null` is safe here since
+        // the pin branches it takes for a near-start/near-end
+        // `sourceProgress` never read `referenceY`.
         const editorScroll = editorRef.current?.getScrollDOM() ?? null;
         if (editorScroll) {
-          editorScroll.scrollTop = isProgressNearStart(sourceProgress) ? 0 : Math.max(0, editorScroll.scrollHeight - editorScroll.clientHeight);
+          const target = computeSlidingReferenceTarget({
+            sourceProgress,
+            referenceY: null,
+            targetViewportHeight: editorScroll.clientHeight,
+            targetMaxScroll: Math.max(0, editorScroll.scrollHeight - editorScroll.clientHeight),
+          });
+          if (target !== null) editorScroll.scrollTop = target;
         }
       } else {
         // Reference point = the fractional line sitting at `sourceProgress`
