@@ -8,6 +8,8 @@
  * respawn protocol not blocking the parent process (spec §6 AC).
  */
 import type { fork as ForkFn } from 'node:child_process';
+import { rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { LARGE_FLOWCHART_SOURCE } from './__fixtures__/large-flowchart';
 import { _shutdownSingletonForTest, MermaidRenderPool, MermaidSyntaxError, renderMermaidSvg } from './render-engine';
@@ -161,15 +163,13 @@ describe('MermaidRenderPool', () => {
     }
   }, 30_000);
 
-  // 350ms: comfortably under the large flowchart's ~700-900ms real
-  // render time (so it reliably times out) but generous enough for a
-  // fresh/just-respawned worker's own first render call, which is
-  // slower than steady-state (module/JIT warmup) even for a trivial
-  // 2-node diagram — and this whole suite forks several real worker
-  // processes per test, so CI/local runs under CPU contention from
-  // sibling test files need real margin here, not just headroom against
-  // an idle-machine baseline.
+  // 350ms: comfortably under the large flowchart's ~700-900ms real render
+  // time (so 'a timeout does not block the parent process' below reliably
+  // times out). 'recovers after a timeout' also uses this constant but no
+  // longer needs margin for real render latency — it uses a deterministic
+  // fixture worker instead (see RECOVERY_FIXTURE_WORKER_PATH below).
   const SHORT_TIMEOUT_MS = 350;
+  const RECOVERY_FIXTURE_WORKER_PATH = path.join(__dirname, '__fixtures__/recovery-fixture-worker.ts');
 
   it('a timeout does not block the parent process — a concurrent timer keeps firing while the render call is pending', async () => {
     const pool = new MermaidRenderPool({ poolSize: 1, timeoutMs: SHORT_TIMEOUT_MS });
@@ -193,9 +193,24 @@ describe('MermaidRenderPool', () => {
   }, 30_000);
 
   it('recovers after a timeout — the respawned worker serves the next render successfully', async () => {
-    const pool = new MermaidRenderPool({ poolSize: 1, timeoutMs: SHORT_TIMEOUT_MS });
+    // Uses a deterministic fixture worker (never imports mermaid/jsdom,
+    // never replies to its first render) instead of a real slow render —
+    // what this test actually verifies is the timeout→kill→respawn
+    // PROTOCOL, not real render latency, so it shouldn't share a timing
+    // budget with genuine Mermaid rendering (see the fixture's own doc
+    // comment for why the old real-render version could flake under
+    // CI/sibling-suite CPU contention).
+    // Fixed path shared by hardcoded convention with the fixture worker
+    // itself (see its doc comment for why this isn't an env var: a
+    // `process.env` mutation made here is invisible to a REAL `fork()`ed
+    // child under ts-jest, confirmed empirically). Removed before AND
+    // after so a previous run's leftover state (a crashed test, e.g.)
+    // can never leak in as a false "this is a respawn" signal.
+    const sentinelPath = path.join(tmpdir(), 'crowi-mermaid-recovery-fixture.sentinel');
+    rmSync(sentinelPath, { force: true });
+    const pool = new MermaidRenderPool({ poolSize: 1, timeoutMs: SHORT_TIMEOUT_MS, workerPath: RECOVERY_FIXTURE_WORKER_PATH });
     try {
-      await expect(pool.render(LARGE_FLOWCHART_SOURCE)).rejects.toThrow(/timed out/);
+      await expect(pool.render('flowchart TD\n  A --> B')).rejects.toThrow(/timed out/);
       // `acquireSlot()` for this next call queues until the respawn
       // triggered by the timeout above hands the slot off (`releaseSlot`
       // only fires once the fresh worker is confirmed ready) — so this
@@ -204,6 +219,7 @@ describe('MermaidRenderPool', () => {
       expect(svg).toContain('<svg');
     } finally {
       await pool.shutdown();
+      rmSync(sentinelPath, { force: true });
     }
   }, 30_000);
 
