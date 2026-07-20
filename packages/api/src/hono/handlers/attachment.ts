@@ -199,7 +199,12 @@ const attachmentToResponse = (attachment: AttachmentDocument, inUse: boolean): A
     fileFormat: obj.fileFormat,
     fileSize: obj.fileSize,
     createdAt: toISOStringOrNull(obj.createdAt as Date | undefined) ?? new Date(0).toISOString(),
+    // feature-image-derivative-optimization Phase 2 §5 — `url` (canonical)
+    // now resolves display-priority with original fallback (attachment-stream.ts);
+    // `originalUrl` is the explicit always-original escape hatch. Both are
+    // derived from the same `fileUrl` virtual, never stored.
     url: obj.fileUrl,
+    originalUrl: `${obj.fileUrl}/original`,
     inUse,
   };
 };

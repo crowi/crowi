@@ -6,9 +6,17 @@
  *
  *   GET /attachments/by-key/:key(*)  — public-keyed delivery
  *                                       (profile pictures only)
- *   GET /attachments/:id             — by-id delivery with
- *                                       page grant check +
- *                                       placeholder fallback
+ *   GET /attachments/:id             — by-id delivery with page grant
+ *                                       check + placeholder fallback.
+ *                                       feature-image-derivative-optimization
+ *                                       Phase 2 — display-priority with
+ *                                       original fallback (§9).
+ *   GET /attachments/:id/original    — by-id delivery, ALWAYS original
+ *                                       (feature-image-derivative-optimization
+ *                                       Phase 2 §1/§2/§9). A byte-for-byte
+ *                                       duplicate of what `:id` did before
+ *                                       Phase 2 — never looks at
+ *                                       `derivatives.display`.
  *
  * These endpoints stream `Readable` bytes from the storage driver
  * (local fs / S3) and never buffer the whole file. Hono lets us
@@ -17,12 +25,18 @@
  * back onto the socket — equivalent posture to the old Express
  * `stream.pipe(res)` codepath, no buffering introduced.
  *
- * Auth: both endpoints install `createJwtAuth(crowi)` directly on the
+ * Auth: both by-id endpoints install `createJwtAuth(crowi)` directly on the
  * literal paths. They are OUTSIDE the revision-owned `/pages/*`
  * broad apply (which covers list / add / usage), and the
  * `/attachments/*` broad apply in the JSON attachment handler runs
  * AFTER this handler registers — registering jwtAuth on the literal
  * paths here keeps the request-time middleware stack identical.
+ *
+ * `/attachments/:id/original` additionally requires the `attachments:read`
+ * scope (RFC-0010, feature-image-derivative-optimization Phase 2 §3) —
+ * installed directly via `requireScope(...)`, NOT `applyScope(...)` (this
+ * route is hand-coded, not a `createRoute(...)` contract). `/attachments/:id`
+ * itself keeps its pre-existing scope gap (§3 — not this feature's to fix).
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -30,6 +44,7 @@ import { Readable } from 'node:stream';
 
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import Debug from 'debug';
+import type { Context } from 'hono';
 
 import type Crowi from 'src/crowi';
 import type { AttachmentDocument } from 'src/models/attachment';
@@ -38,6 +53,7 @@ import { isValidObjectId, loadGrantedPage } from 'src/util/ts-rest-helpers';
 
 import type { CrowiHonoBindings } from '../app';
 import { createJwtAuth } from '../middleware/auth';
+import { requireScope } from '../middleware/require-scope';
 
 const debug = Debug('crowi:hono:handlers:attachment-stream');
 
@@ -89,6 +105,13 @@ const toWebStream = (stream: Readable): ReadableStream => {
   return Readable.toWeb(stream) as ReadableStream;
 };
 
+/** Build a `200` streaming `Response`, optionally with `Content-Disposition`. Shared by every delivery branch below. */
+const streamResponse = (stream: Readable, contentType: string, disposition?: string): Response =>
+  new Response(toWebStream(stream), {
+    status: 200,
+    headers: disposition ? { 'Content-Type': contentType, 'Content-Disposition': disposition } : { 'Content-Type': contentType },
+  });
+
 export const registerAttachmentStreamRoutes = (app: OpenAPIHono<CrowiHonoBindings>, crowi: Crowi) => {
   const Attachment = crowi.model('Attachment');
   const Page = crowi.model('Page');
@@ -106,10 +129,84 @@ export const registerAttachmentStreamRoutes = (app: OpenAPIHono<CrowiHonoBinding
    */
   const buildPlaceholderResponse = (): Response => {
     const stream = fs.createReadStream(FILE_NOT_FOUND_IMAGE);
-    return new Response(toWebStream(stream), {
-      status: 200,
-      headers: { 'Content-Type': 'image/png' },
-    });
+    return streamResponse(stream, 'image/png');
+  };
+
+  /**
+   * feature-image-derivative-optimization Phase 2 §2 — the "authenticate,
+   * load the Attachment record, check the page grant" prologue shared by
+   * `GET /attachments/:id` (display-priority) and `GET /attachments/:id/original`
+   * (always-original). Extracted so both handlers share the exact same
+   * OBSERVABLE behaviour for this part (401 / 400 INVALID_ATTACHMENT_ID /
+   * placeholder-on-missing-record / 404-on-no-grant) — spec §2 explicitly
+   * allows this refactor as long as that behaviour is unchanged.
+   */
+  const loadAuthorizedAttachment = async (
+    c: Context<CrowiHonoBindings>,
+  ): Promise<{ ok: true; attachment: AttachmentDocument } | { ok: false; response: Response }> => {
+    const user = c.get('user');
+    if (!user) {
+      return { ok: false, response: c.json({ error: { code: 'AUTHENTICATION_REQUIRED', message: 'Authentication is required' } }, 401) };
+    }
+
+    const id = c.req.param('id');
+    if (!isValidObjectId(id)) {
+      return { ok: false, response: c.json(errorBody('INVALID_ATTACHMENT_ID', 'Invalid attachment id'), 400) };
+    }
+
+    let attachment: AttachmentDocument | null;
+    try {
+      attachment = (await Attachment.findById(id)) as AttachmentDocument | null;
+    } catch (err) {
+      debug('attachment lookup error', err);
+      return { ok: false, response: c.json(errorBody('UPLOAD_FAILED', 'Failed to load attachment'), 500) };
+    }
+
+    if (!attachment) {
+      // A missing record means the file was deleted or never existed;
+      // serve the placeholder so embedded references render gracefully.
+      return { ok: false, response: buildPlaceholderResponse() };
+    }
+
+    const grant = await loadGrantedPage(Page, attachment.page.toString(), user);
+    if ('error' in grant) {
+      // Collapse INVALID_PAGE_ID + PAGE_NOT_FOUND alike to 404 — the
+      // page id comes from the persisted attachment, so an
+      // INVALID_PAGE_ID would only mean the document is corrupt.
+      return { ok: false, response: c.json(errorBody('ATTACHMENT_NOT_FOUND', 'Attachment not found'), 404) };
+    }
+
+    return { ok: true, attachment };
+  };
+
+  /** `Content-Disposition: inline` with `originalName` — identical for the display AND original branches (§9). */
+  const buildInlineDisposition = (attachment: AttachmentDocument): string =>
+    `inline; filename*=UTF-8''${encodeURIComponent(attachment.originalName || attachment.fileName)}`;
+
+  /**
+   * Resolve + stream the ORIGINAL file for an already-authorized attachment.
+   * Shared by the `/attachments/:id` original-fallback branch and
+   * `/attachments/:id/original` (which is nothing but this) — both used to
+   * carry an identical copy of this block (feature-image-derivative-optimization
+   * Phase 2 §9).
+   */
+  const deliverOriginal = async (c: Context<CrowiHonoBindings>, attachment: AttachmentDocument, debugLabel: string): Promise<Response> => {
+    let stream: Readable;
+    try {
+      stream = await Attachment.findDeliveryFile(attachment);
+    } catch (err) {
+      // The record exists but the backing object is gone from storage
+      // (local `ENOENT` / S3 `NoSuchKey`). Serve the placeholder so
+      // embedded references render gracefully. Any other driver error
+      // is a genuine failure → 500.
+      if (isMissingFileError(err)) {
+        return buildPlaceholderResponse();
+      }
+      debug(debugLabel, err);
+      return c.json(errorBody('UPLOAD_FAILED', 'Failed to deliver file'), 500);
+    }
+
+    return streamResponse(stream, attachment.fileFormat, buildInlineDisposition(attachment));
   };
 
   // Install jwtAuth on both literal paths. `/attachments/*` is OUTSIDE
@@ -119,6 +216,16 @@ export const registerAttachmentStreamRoutes = (app: OpenAPIHono<CrowiHonoBinding
   // one jwtAuth invocation regardless of ordering.
   app.use('/attachments/by-key/*', createJwtAuth(crowi));
   app.use('/attachments/:id', createJwtAuth(crowi));
+  // feature-image-derivative-optimization Phase 2 §3 — `/original` requires
+  // `attachments:read` explicitly; `/attachments/:id` itself keeps its
+  // pre-existing scope gap (not this feature's to fix, see spec §3).
+  // Installed directly via `requireScope(...)` (not `applyScope(...)`,
+  // which only binds to `createRoute(...)` contracts) — this is a
+  // hand-coded stream route. MUST run after `createJwtAuth` populates
+  // `authScopes`: the JSON attachment handler's broad `/attachments/*`
+  // jwtAuth apply (`registerAttachmentRoutes`) always registers before this
+  // handler (`hono/index.ts`), so that invariant holds.
+  app.use('/attachments/:id{[0-9a-fA-F]{24}}/original', requireScope('attachments:read'));
 
   // --------------------------------------------------------------
   // GET /attachments/by-key/:key(*)
@@ -154,10 +261,7 @@ export const registerAttachmentStreamRoutes = (app: OpenAPIHono<CrowiHonoBinding
       return c.json(errorBody('UPLOAD_FAILED', 'Failed to deliver file'), 500);
     }
 
-    return new Response(toWebStream(stream), {
-      status: 200,
-      headers: { 'Content-Type': guessMimeFromKey(key) },
-    });
+    return streamResponse(stream, guessMimeFromKey(key));
   });
 
   // --------------------------------------------------------------
@@ -170,61 +274,58 @@ export const registerAttachmentStreamRoutes = (app: OpenAPIHono<CrowiHonoBinding
   // defined on the same Hono instance via the JSON attachment
   // handler, but matching on `/^[0-9a-f]{24}$/` here makes the
   // boundary explicit.
+  //
+  // feature-image-derivative-optimization Phase 2 §9 — display-priority
+  // with original fallback: if `derivatives.display` is `mode: 'resized'`
+  // AND the derivative object is actually still there, serve it (with its
+  // recorded MIME `format`); otherwise (never evaluated / passthrough /
+  // unsupported / failed / object missing) fall back to original — exactly
+  // what this handler always did. The fallback only applies when the
+  // storage `get()` fails BEFORE handing back a `Readable` — once a
+  // `Response` is constructed, a stream error mid-flight surfaces as a
+  // truncated response on the wire, same as original delivery always did.
   app.get('/attachments/:id{[0-9a-fA-F]{24}}', async (c) => {
-    const user = c.get('user');
-    if (!user) {
-      return c.json({ error: { code: 'AUTHENTICATION_REQUIRED', message: 'Authentication is required' } }, 401);
-    }
+    const result = await loadAuthorizedAttachment(c);
+    if (!result.ok) return result.response;
+    const { attachment } = result;
 
-    const id = c.req.param('id');
-    if (!isValidObjectId(id)) {
-      return c.json(errorBody('INVALID_ATTACHMENT_ID', 'Invalid attachment id'), 400);
-    }
-
-    let attachment: AttachmentDocument | null;
-    try {
-      attachment = (await Attachment.findById(id)) as AttachmentDocument | null;
-    } catch (err) {
-      debug('attachment lookup error', err);
-      return c.json(errorBody('UPLOAD_FAILED', 'Failed to load attachment'), 500);
-    }
-
-    if (!attachment) {
-      // A missing record means the file was deleted or never existed;
-      // serve the placeholder so embedded references render gracefully.
-      return buildPlaceholderResponse();
-    }
-
-    const grant = await loadGrantedPage(Page, attachment.page.toString(), user);
-    if ('error' in grant) {
-      // Collapse INVALID_PAGE_ID + PAGE_NOT_FOUND alike to 404 — the
-      // page id comes from the persisted attachment, so an
-      // INVALID_PAGE_ID would only mean the document is corrupt.
-      return c.json(errorBody('ATTACHMENT_NOT_FOUND', 'Attachment not found'), 404);
-    }
-
-    let stream: Readable;
-    try {
-      stream = await Attachment.findDeliveryFile(attachment);
-    } catch (err) {
-      // The record exists but the backing object is gone from storage
-      // (local `ENOENT` / S3 `NoSuchKey`). Serve the placeholder so
-      // embedded references render gracefully. Any other driver error
-      // is a genuine failure → 500.
-      if (isMissingFileError(err)) {
-        return buildPlaceholderResponse();
+    // §9 step 3 — the derivative is only ever eligible when the recorded
+    // mode is `resized` AND both `filePath`/`format` are set. The generator
+    // (`image-display-derivative.ts`) always sets them together for
+    // `resized`, but the Mongoose schema can't express that co-requirement,
+    // so this narrows defensively rather than trusting the stored shape.
+    const display = attachment.derivatives?.display;
+    if (display?.mode === 'resized' && display.filePath && display.format) {
+      try {
+        const stream = await fileUploader.findDeliveryFile(attachment._id, display.filePath);
+        return streamResponse(stream, display.format, buildInlineDisposition(attachment));
+      } catch (err) {
+        // §9 step 4 — a missing derivative key is a plain cache miss; fall
+        // through to original below. Any other storage error is a genuine
+        // failure.
+        if (!isMissingFileError(err)) {
+          debug('attachment display-derivative delivery error', err);
+          return c.json(errorBody('UPLOAD_FAILED', 'Failed to deliver file'), 500);
+        }
       }
-      debug('attachment delivery error', err);
-      return c.json(errorBody('UPLOAD_FAILED', 'Failed to deliver file'), 500);
     }
 
-    return new Response(toWebStream(stream), {
-      status: 200,
-      headers: {
-        'Content-Type': attachment.fileFormat,
-        'Content-Disposition': `inline; filename*=UTF-8''${encodeURIComponent(attachment.originalName || attachment.fileName)}`,
-      },
-    });
+    return deliverOriginal(c, attachment, 'attachment delivery error');
+  });
+
+  // --------------------------------------------------------------
+  // GET /attachments/:id/original
+  // --------------------------------------------------------------
+  // feature-image-derivative-optimization Phase 2 §1/§2/§9 — original,
+  // always. A byte-for-byte duplicate of what `/attachments/:id` did before
+  // Phase 2: never reads `derivatives`/`mode`/`reason`, always resolves via
+  // the same `Attachment.findDeliveryFile` (original-fixed) static. Scope
+  // (`attachments:read`) is enforced by the `requireScope(...)` `app.use`
+  // registered above; auth is the broad `/attachments/*` jwtAuth apply.
+  app.get('/attachments/:id{[0-9a-fA-F]{24}}/original', async (c) => {
+    const result = await loadAuthorizedAttachment(c);
+    if (!result.ok) return result.response;
+    return deliverOriginal(c, result.attachment, 'attachment original delivery error');
   });
 
   // --------------------------------------------------------------
