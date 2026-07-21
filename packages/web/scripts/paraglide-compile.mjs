@@ -311,6 +311,15 @@ export function writeAtomic(filePath, data) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true })
   const tmp = `${filePath}.tmp.${process.pid}`
   fs.writeFileSync(tmp, data)
+  // `rename()` refuses to replace a directory with a file (EISDIR) — clear
+  // it first so republishing over a leaf/entry that external interference
+  // replaced with a directory (see `liveDirLooksIntact`) actually recovers
+  // instead of crashing the very fast-path self-heal it exists to enable.
+  try {
+    if (fs.statSync(filePath).isDirectory()) fs.rmSync(filePath, { recursive: true, force: true })
+  } catch {
+    /* missing, or not a directory — rename below handles both normally */
+  }
   fs.renameSync(tmp, filePath)
 }
 
@@ -398,6 +407,46 @@ function listAllFilesRelative(dir) {
 }
 
 /**
+ * @param {string} filePath
+ * @returns {boolean} true only for a real regular file (follows symlinks;
+ *   false for a missing path, a directory, or a symlink resolving to
+ *   anything other than a regular file)
+ */
+function isRegularFile(filePath) {
+  try {
+    return fs.statSync(filePath).isFile()
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Existence-only check (cheap — no content reads, just `fs.statSync`, so
+ * it's safe to run as part of the fast path) that the live `paraglide/` dir
+ * still has every entry file, `messages/_index.js`, and expected leaf a
+ * successful publish would have written, each as an actual regular file
+ * (not a directory or a symlink to one — either would still pass a bare
+ * `fs.existsSync` check while being unusable as compiled output). A
+ * matching stamp only proves "the inputs match what we last compiled" — it
+ * says nothing about whether that output is still THERE, in the shape a
+ * publish would have left it. A stamp surviving external interference (a
+ * manual `rm -rf packages/web/paraglide`, a partial disk issue, some other
+ * tool) must not suppress the only regeneration step.
+ * @param {{ liveDir: string, expectedLeaves: string[] }} args
+ * @returns {boolean}
+ */
+export function liveDirLooksIntact({ liveDir, expectedLeaves }) {
+  for (const name of ENTRY_FILES) {
+    if (!isRegularFile(path.join(liveDir, name))) return false
+  }
+  if (!isRegularFile(path.join(liveDir, 'messages', '_index.js'))) return false
+  for (const leaf of expectedLeaves) {
+    if (!isRegularFile(path.join(liveDir, 'messages', leaf))) return false
+  }
+  return true
+}
+
+/**
  * Validates the staged compile output before anything gets published from
  * it, in both directions:
  *   - existence: the 4 entry files, `messages/_index.js`, and every expected
@@ -446,6 +495,23 @@ export function validateStaging({ stagingDir, expectedLeaves }) {
 }
 
 // ── non-destructive staged publish ──
+
+/**
+ * Ensures `dirPath` exists as an actual directory, clearing it first if
+ * external interference replaced it (or an ancestor `mkdirSync` would
+ * otherwise need to create) with a regular file or a symlink to one —
+ * `mkdirSync(..., { recursive: true })` throws (EEXIST/ENOTDIR) rather than
+ * repairing that on its own.
+ * @param {string} dirPath
+ */
+function ensureDir(dirPath) {
+  try {
+    if (!fs.statSync(dirPath).isDirectory()) fs.rmSync(dirPath, { recursive: true, force: true })
+  } catch {
+    /* missing — mkdirSync below creates it normally */
+  }
+  fs.mkdirSync(dirPath, { recursive: true })
+}
 
 function listDirFiles(dir) {
   try {
@@ -496,7 +562,8 @@ function publishIfChanged(stagingPath, livePath) {
  * @returns {{ published: number, removed: number }}
  */
 export function publish({ stagingDir, liveDir }) {
-  fs.mkdirSync(path.join(liveDir, 'messages'), { recursive: true })
+  ensureDir(liveDir)
+  ensureDir(path.join(liveDir, 'messages'))
 
   const stagingLeaves = listDirFiles(path.join(stagingDir, 'messages')).filter((name) => name !== '_index.js')
   let published = 0
@@ -556,10 +623,14 @@ export async function runWrapper({
     lockPath,
     async () => {
       const inputs = readInputs(webDir)
+      const expectedLeaves = computeExpectedLeaves(inputs.messagesTexts[inputs.baseLocale])
       const stamp = readStamp(stampPath)
       if (stamp && stamp.hash === inputs.hash) {
-        log('paraglide-compile: inputs unchanged, skipping (zero-write).')
-        return { skipped: true, published: 0, removed: 0 }
+        if (liveDirLooksIntact({ liveDir, expectedLeaves })) {
+          log('paraglide-compile: inputs unchanged, skipping (zero-write).')
+          return { skipped: true, published: 0, removed: 0 }
+        }
+        log('paraglide-compile: stamp matches but live output is missing/incomplete — recompiling despite matching stamp.')
       }
 
       // staging/ itself is disposable scratch space (never watched, never
@@ -569,7 +640,6 @@ export async function runWrapper({
       fs.mkdirSync(stagingDir, { recursive: true })
       await compileFn({ webDir, stagingDir })
 
-      const expectedLeaves = computeExpectedLeaves(inputs.messagesTexts[inputs.baseLocale])
       validateStaging({ stagingDir, expectedLeaves })
 
       const { published, removed } = publish({ stagingDir, liveDir })

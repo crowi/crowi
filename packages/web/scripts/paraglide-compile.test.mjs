@@ -491,6 +491,52 @@ describe('runWrapper', () => {
     assert.deepEqual(changed, ['messages/greeting_hello.js'], 'only the edited message\'s own leaf file may change')
   })
 
+  it('a matching stamp does NOT skip when the live output it describes has been removed (repro: fast path trusted stamp.json alone)', async () => {
+    const webDir = makeFixtureWebDir({ messagesByLocale: FIXTURE_MESSAGES })
+    const first = await runWrapper({ webDir, compileFn: fakeCompile, retries: 10, retryDelayMs: 10 })
+    assert.equal(first.skipped, false)
+
+    // Simulate external interference (a manual `rm -rf`, a partial disk
+    // issue, some other tool) that removes live output without touching
+    // `.paraglide-meta/stamp.json` — the stamp alone must not be enough to
+    // suppress regeneration once the output it attests to is gone.
+    fs.rmSync(path.join(webDir, 'paraglide', 'messages', 'greeting_hello.js'))
+
+    const second = await runWrapper({ webDir, compileFn: fakeCompile, retries: 10, retryDelayMs: 10 })
+    assert.equal(second.skipped, false, 'a stamp describing missing live output must not take the zero-write skip path')
+    assert.ok(fs.existsSync(path.join(webDir, 'paraglide', 'messages', 'greeting_hello.js')), 'the missing leaf must be republished')
+  })
+
+  it('a matching stamp does NOT skip when an expected leaf has been replaced by a directory (repro: existsSync alone does not check file type)', async () => {
+    const webDir = makeFixtureWebDir({ messagesByLocale: FIXTURE_MESSAGES })
+    await runWrapper({ webDir, compileFn: fakeCompile, retries: 10, retryDelayMs: 10 })
+
+    // A directory (or a symlink to one) still satisfies a bare
+    // `fs.existsSync` check while being unusable as the compiled leaf it
+    // replaced.
+    const leafPath = path.join(webDir, 'paraglide', 'messages', 'greeting_hello.js')
+    fs.rmSync(leafPath)
+    fs.mkdirSync(leafPath)
+
+    const result = await runWrapper({ webDir, compileFn: fakeCompile, retries: 10, retryDelayMs: 10 })
+    assert.equal(result.skipped, false, 'a stamp describing a leaf replaced by a directory must not take the zero-write skip path')
+    assert.ok(fs.statSync(leafPath).isFile(), 'the directory must be replaced by the real compiled leaf file')
+  })
+
+  it('recovers when paraglide/messages itself has been replaced by a regular file (repro: mkdirSync cannot create a dir where a file already exists)', async () => {
+    const webDir = makeFixtureWebDir({ messagesByLocale: FIXTURE_MESSAGES })
+    await runWrapper({ webDir, compileFn: fakeCompile, retries: 10, retryDelayMs: 10 })
+
+    const messagesDirPath = path.join(webDir, 'paraglide', 'messages')
+    fs.rmSync(messagesDirPath, { recursive: true, force: true })
+    fs.writeFileSync(messagesDirPath, 'not a directory')
+
+    const result = await runWrapper({ webDir, compileFn: fakeCompile, retries: 10, retryDelayMs: 10 })
+    assert.equal(result.skipped, false)
+    assert.ok(fs.statSync(messagesDirPath).isDirectory(), 'messages/ must be recreated as a real directory')
+    assert.ok(fs.existsSync(path.join(messagesDirPath, '_index.js')))
+  })
+
   it('AC1(d): a stale lock left by a dead PID is reclaimed and the run proceeds', async () => {
     const webDir = makeFixtureWebDir({ messagesByLocale: FIXTURE_MESSAGES })
     const metaDir = path.join(webDir, '.paraglide-meta')
