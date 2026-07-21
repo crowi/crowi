@@ -17,9 +17,9 @@ import PersonalAccessToken from './personal-access-token';
 import PluginRenderCache from './plugin-render-cache';
 import Revision from './revision';
 import Share from './share';
-import ShareAccess from './shareAccess';
+import ShareAccess from './share-access';
 import Tracking from './tracking';
-import UpdatePost from './updatePost';
+import UpdatePost from './update-post';
 import User from './user';
 import Watcher from './watcher';
 

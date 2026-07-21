@@ -32,7 +32,7 @@
 import { createRoute, z } from '@hono/zod-openapi';
 
 import { AdminRequiredErrorSchema, AuthenticationRequiredErrorSchema, InternalServerErrorSchema } from '../schemas/common';
-import { CryptoStatusResponseSchema, EncryptionNotConfiguredErrorSchema, ReencryptResponseSchema } from '../schemas/adminCrypto';
+import { CryptoStatusResponseSchema, EncryptionNotConfiguredErrorSchema, ReencryptResponseSchema } from '../schemas/admin-crypto';
 
 export const getCryptoStatusRoute = createRoute({
   method: 'get',

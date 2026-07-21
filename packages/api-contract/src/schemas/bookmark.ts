@@ -1,6 +1,6 @@
 import { z } from '@hono/zod-openapi';
 import { PageSchema, PagerSchema } from './page';
-import { UserPublicSchema } from './userPublic';
+import { UserPublicSchema } from './user-public';
 
 // Bookmark schema with populated page
 // (Originally lived in schemas/user.ts; relocated for reuse across contracts)

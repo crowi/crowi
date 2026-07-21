@@ -18,6 +18,9 @@ pre-commit:
     - name: publishable-metadata
       glob: "**/package.json"
       run: node scripts/check-package-publishable.mjs
+    - name: kebab-filenames
+      glob: "**/*.{ts,tsx}"
+      run: node scripts/check-kebab-filenames.mjs
     # TODO.md is orientation-only (one line per item); the prose rule alone
     # kept being violated, so enforce it mechanically — see the script header.
     - name: todo-brevity

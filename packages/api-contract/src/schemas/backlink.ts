@@ -1,5 +1,5 @@
 import { z } from '@hono/zod-openapi';
-import { UserPublicSchema } from './userPublic';
+import { UserPublicSchema } from './user-public';
 
 // 24-character hex ObjectId string. Mirrors isValidObjectId in
 // packages/api/src/util/ts-rest-helpers.ts so request validation rejects

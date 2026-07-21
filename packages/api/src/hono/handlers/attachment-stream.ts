@@ -33,7 +33,7 @@ import Debug from 'debug';
 
 import type Crowi from 'src/crowi';
 import type { AttachmentDocument } from 'src/models/attachment';
-import FileUploader from 'src/util/fileUploader';
+import FileUploader from 'src/util/file-uploader';
 import { isValidObjectId, loadGrantedPage } from 'src/util/ts-rest-helpers';
 
 import type { CrowiHonoBindings } from '../app';

@@ -3,11 +3,11 @@
 // the `@crowi/api` handler chain and the OpenAPI generator.
 export * from './app';
 export * from './installer';
-export * from './tokenAuth';
-export * from './inviteAccept';
-export * from './passwordReset';
+export * from './token-auth';
+export * from './invite-accept';
+export * from './password-reset';
 export * from './activation';
-export * from './emailChange';
+export * from './email-change';
 export * from './me';
 export * from './access-token';
 export * from './oauth';
@@ -25,7 +25,7 @@ export * from './draft';
 export * from './autocomplete';
 export * from './attachment';
 export * from './search';
-export * from './adminCrypto';
+export * from './admin-crypto';
 export * from './admin';
 
 // `auth` (legacy SSR) sub-contract was deleted in RFC-0006 Phase 4 Batch 1:

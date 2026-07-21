@@ -1,5 +1,5 @@
 import { z } from '@hono/zod-openapi';
-import { UserPublicSchema } from './userPublic';
+import { UserPublicSchema } from './user-public';
 
 /**
  * Attachment as returned by the ts-rest endpoints.

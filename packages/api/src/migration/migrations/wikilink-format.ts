@@ -32,7 +32,7 @@ import { forEachPublishedCurrentRevision, STOP } from './published-current-revis
 /**
  * v1 angle-bracket internal link form. The capture group grabs the path-style
  * payload (starts with `/`, no whitespace, no `<` / `>` / `|` other than the
- * optional `|alias` segment). See `packages/api/src/util/linkDetector.ts` — v1
+ * optional `|alias` segment). See `packages/api/src/util/link-detector.ts` — v1
  * used `<(/[^>]+)>` for the same primitive; we tighten it here to:
  *
  *   - leading `/` to keep this strictly path-style (not arbitrary text)

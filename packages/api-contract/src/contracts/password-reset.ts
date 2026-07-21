@@ -11,7 +11,7 @@ import { createRoute } from '@hono/zod-openapi';
 
 import { TokenAuthResponseSchema } from '../schemas/auth';
 import { ApiErrorSchema, InternalServerErrorSchema } from '../schemas/common';
-import { ForgotPasswordRequestSchema, ForgotPasswordResponseSchema, ResetPasswordRequestSchema } from '../schemas/passwordReset';
+import { ForgotPasswordRequestSchema, ForgotPasswordResponseSchema, ResetPasswordRequestSchema } from '../schemas/password-reset';
 
 export const forgotPasswordRoute = createRoute({
   method: 'post',

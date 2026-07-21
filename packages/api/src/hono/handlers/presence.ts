@@ -32,7 +32,7 @@ import Debug from 'debug';
 
 import type Crowi from 'src/crowi';
 import type { UserDocument } from 'src/models/user';
-import ActivityDefine from 'src/util/activityDefine';
+import ActivityDefine from 'src/util/activity-define';
 import { createPresenceTokenUtil } from 'src/util/presence-token';
 import { isValidObjectId, loadGrantedPage } from 'src/util/ts-rest-helpers';
 

@@ -4,7 +4,7 @@ import type Crowi from 'src/crowi';
 import type { ActivityDocument } from 'src/models/activity';
 import type { RevisionDocument, RevisionMention } from 'src/models/revision';
 import type { UserDocument } from 'src/models/user';
-import ActivityDefine from 'src/util/activityDefine';
+import ActivityDefine from 'src/util/activity-define';
 
 const debug = Debug('crowi:events:mention-dispatch');
 
