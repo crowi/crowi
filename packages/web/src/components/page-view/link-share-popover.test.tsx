@@ -1,6 +1,6 @@
 import type { PageWithRevision } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { StrictMode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildPageShareUrl } from '@/lib/build-page-share-url';
@@ -208,5 +208,42 @@ describe('LinkSharePopover — PC/wide share popover (SharePanelContent regressi
     fireEvent.click(trigger);
 
     expect(await screen.findByText(m['page.share.url_copied']())).toBeInTheDocument();
+  });
+
+  it('does not let a stale, slow-to-resolve copy overwrite a later, faster-resolving copy (repro: no per-call ordering guard, so completion order — not call order — decided the shown confirmation)', async () => {
+    let resolveAutoCopy!: () => void;
+    const writeText = vi
+      .fn()
+      // 1st call: the auto-copy-on-open effect. Deliberately left pending.
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveAutoCopy = resolve;
+          }),
+      )
+      // 2nd call: the user's own row-click copy, which resolves immediately.
+      .mockResolvedValueOnce(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+
+    const page = makePage();
+    openPopover(page);
+    await vi.waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+
+    const [shareLinkCopyButton] = screen.getAllByRole('button', { name: m['page.share.copy']() });
+    fireEvent.click(shareLinkCopyButton);
+    await screen.findByRole('button', { name: m['page.share.copied']() });
+
+    // The stale auto-copy call (still pending since before the user's own
+    // copy) resolves only now — after the user's copy already won.
+    await act(async () => {
+      resolveAutoCopy();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    // Still exactly one row (the user's) showing "copied", not reverted to
+    // the auto-copied id URL row by the late-resolving stale call.
+    expect(screen.getAllByRole('button', { name: m['page.share.copied']() })).toHaveLength(1);
+    expect(screen.queryByText(m['page.share.url_copied']())).not.toBeInTheDocument();
   });
 });

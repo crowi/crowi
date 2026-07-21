@@ -83,6 +83,14 @@ export function SharePanelContent({ page }: SharePanelContentProps) {
   // below already ran and can never clear again. Checked immediately after
   // the await, before touching state or scheduling anything.
   const isMountedRef = useRef(true);
+  // Guards against completion order: two overlapping `copy()` calls (e.g.
+  // React Strict Mode's dev-only double-invoked auto-copy effect racing a
+  // real row click) resolve their clipboard writes independently, and
+  // without this the one that happens to finish LAST wins regardless of
+  // which was called last — a slow, stale call could overwrite a newer
+  // confirmation. Incremented per call; a call only applies its result if
+  // it is still the most recently STARTED one once its await returns.
+  const latestCopyCallIdRef = useRef(0);
 
   const idUrl = buildPageShareUrl(page._id);
   const title = appInfo?.title || 'Crowi';
@@ -90,9 +98,11 @@ export function SharePanelContent({ page }: SharePanelContentProps) {
   const markdown = `[${page.path}](${idUrl})`;
 
   const copy = async (key: string, value: string) => {
+    const callId = ++latestCopyCallIdRef.current;
     try {
       await navigator.clipboard.writeText(value);
       if (!isMountedRef.current) return;
+      if (latestCopyCallIdRef.current !== callId) return;
       setCopiedKey(key);
       if (copyResetTimeoutRef.current !== null) clearTimeout(copyResetTimeoutRef.current);
       copyResetTimeoutRef.current = setTimeout(() => {
