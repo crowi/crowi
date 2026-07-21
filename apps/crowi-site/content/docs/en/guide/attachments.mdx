@@ -82,7 +82,10 @@ detail modal, or open `/api/v2/attachments/<id>/original` directly.
 > **Tip**: Attachment delivery enforces the page's view permission. Even
 > if someone knows an attachment's URL, the file is not delivered to a
 > user who cannot view the owning page (a 404 is returned to hide its
-> existence). This permission check applies to `/original` the same way.
+> existence). `/original` enforces this same page-view check, plus one
+> more requirement the canonical URL does not have: it additionally
+> requires the `attachments:read` scope, so a token scoped without it can
+> still fetch the canonical delivery URL but not `/original`.
 
 ### The "All attachments" page
 
