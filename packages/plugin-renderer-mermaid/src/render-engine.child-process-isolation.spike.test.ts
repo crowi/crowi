@@ -34,7 +34,7 @@
  * a mid-render kill.
  */
 
-import { type ChildProcess, fork } from 'node:child_process';
+import { type ChildProcess, fork, spawn } from 'node:child_process';
 import { type Dirent, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import v8 from 'node:v8';
@@ -72,33 +72,53 @@ function forkWorker(): ChildProcess {
 // child reaped) instead of leaving Jest's own timeout as the only signal.
 const WORKER_READY_TIMEOUT_MS = 30_000;
 
-function waitForReady(child: ChildProcess): Promise<void> {
+function waitForReady(child: ChildProcess, timeoutMs = WORKER_READY_TIMEOUT_MS): Promise<void> {
   return new Promise((resolve, reject) => {
+    let readyTimedOut = false;
+    let reapTimer: ReturnType<typeof setTimeout> | undefined;
     const cleanup = () => {
       child.off('message', onMessage);
       child.off('error', onError);
       child.off('exit', onExit);
-      clearTimeout(timer);
+      clearTimeout(readyTimer);
+      if (reapTimer !== undefined) clearTimeout(reapTimer);
     };
     const onMessage = (msg: WorkerMessage) => {
+      // Once the kill sequence has started, only `onExit` (or the reap
+      // backstop) may settle this promise — a `ready` message already in
+      // flight when the timer fired must not resolve as if the worker
+      // were still alive and usable.
+      if (readyTimedOut) return;
       if (msg.type === 'ready') {
         cleanup();
         resolve();
       }
     };
     const onError = (err: Error) => {
+      if (readyTimedOut) return;
       cleanup();
       reject(err);
     };
     const onExit = (code: number | null, signal: NodeJS.Signals | null) => {
       cleanup();
-      reject(new Error(`worker exited before sending 'ready' (code=${code}, signal=${signal})`));
+      reject(
+        readyTimedOut
+          ? new Error(`worker did not send 'ready' within ${timeoutMs}ms (SIGKILL sent, reaped: code=${code}, signal=${signal})`)
+          : new Error(`worker exited before sending 'ready' (code=${code}, signal=${signal})`),
+      );
     };
-    const timer = setTimeout(() => {
-      cleanup();
+    const readyTimer = setTimeout(() => {
+      readyTimedOut = true;
       child.kill('SIGKILL');
-      reject(new Error(`worker did not send 'ready' within ${WORKER_READY_TIMEOUT_MS}ms`));
-    }, WORKER_READY_TIMEOUT_MS);
+      // `onExit` (still attached) settles this promise once Node confirms
+      // the kill landed; this secondary timer is only a backstop against a
+      // child that somehow never emits 'exit' after SIGKILL, so a hung
+      // ready-wait can never become a hung rejection too.
+      reapTimer = setTimeout(() => {
+        cleanup();
+        reject(new Error(`worker did not send 'ready' within ${timeoutMs}ms and did not exit within 5000ms of SIGKILL`));
+      }, 5_000);
+    }, timeoutMs);
     child.on('message', onMessage);
     child.once('error', onError);
     child.once('exit', onExit);
@@ -304,6 +324,37 @@ describe('Phase 0 gate C: child-process isolation', () => {
     },
     10 * WORKER_READY_TIMEOUT_MS + 30_000,
   );
+});
+
+describe('waitForReady: ready-timeout reaps the killed child before rejecting', () => {
+  it("rejects only after the SIGKILL'd child is confirmed exited (not merely signaled)", async () => {
+    // A real, idling child that never sends `ready` (nor exits on its
+    // own) — exercises `waitForReady`'s actual SIGKILL + exit-confirmation
+    // path end to end, not just its promise-shape in isolation. `spawn`
+    // (not `fork`) is enough since this fixture never sends an IPC
+    // message either way.
+    const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
+    const pid = child.pid as number;
+    expect(pid).toBeDefined();
+
+    // An independent exit observer, not `waitForReady`'s own internal
+    // bookkeeping — proves the causal order directly (exit observed BEFORE
+    // the promise settles), rather than inferring it from a PID-signalable
+    // check performed after the fact, which an immediate-reject
+    // implementation could pass anyway if the OS happens to finish tearing
+    // the process down before that later check runs.
+    let exitObservedBeforeRejection = false;
+    child.once('exit', () => {
+      exitObservedBeforeRejection = true;
+    });
+
+    await expect(waitForReady(child, 200)).rejects.toThrow(/did not send 'ready' within 200ms/);
+
+    expect(exitObservedBeforeRejection).toBe(true);
+    // Belt-and-suspenders: a signalable PID at this point would also mean
+    // the child was not actually reaped yet.
+    expect(() => process.kill(pid, 0)).toThrow();
+  });
 });
 
 /**
