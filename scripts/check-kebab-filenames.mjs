@@ -53,12 +53,19 @@ export function toKebab(segment) {
 }
 
 /**
+ * @param {string} segment
+ * @returns {boolean}
+ */
+function isAllowedSegment(segment) {
+  return /^_?[a-z0-9]+(?:-[a-z0-9]+)*$/.test(segment)
+}
+
+/**
  * @param {string} filename
  * @returns {boolean}
  */
 export function isAllowedFilename(filename) {
-  const segment = firstSegment(filename)
-  return /^_?[a-z0-9]+(?:-[a-z0-9]+)*$/.test(segment)
+  return isAllowedSegment(firstSegment(filename))
 }
 
 /**
@@ -102,8 +109,8 @@ export function collectSourceFiles(root = ROOT) {
 export function findViolations(files) {
   return files.flatMap((file) => {
     const name = basename(file)
-    if (isAllowedFilename(name)) return []
     const segment = firstSegment(name)
+    if (isAllowedSegment(segment)) return []
     const privatePrefix = segment.startsWith('_') ? '_' : ''
     const bareSegment = privatePrefix === '' ? segment : segment.slice(1)
     return [
