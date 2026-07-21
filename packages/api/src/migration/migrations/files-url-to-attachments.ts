@@ -1,4 +1,4 @@
-import linkDetectorFactory from 'src/util/linkDetector';
+import linkDetectorFactory from 'src/util/link-detector';
 
 import { resolveActingUserId } from '../helpers';
 import { defineMigration } from '../types';

@@ -3,7 +3,7 @@
 import { QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState, type ReactNode, useEffect, useMemo } from 'react';
 import { ThemeProvider } from '@/components/theme-provider';
-import { AuthSync } from './AuthSync';
+import { AuthSync } from './auth-sync';
 import { ConnectionProvider, useConnection } from './connection-context';
 import { getConnectionErrorHandlers, setConnectionErrorHandlers } from './connection-error-ref';
 import { isNetworkError, isServerErrorStatus } from './is-network-error';

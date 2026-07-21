@@ -1,5 +1,5 @@
 import { z } from '@hono/zod-openapi';
-import { UserPublicSchema } from './userPublic';
+import { UserPublicSchema } from './user-public';
 
 /**
  * RFC-0003 shared schemas for the realtime collaborative editing

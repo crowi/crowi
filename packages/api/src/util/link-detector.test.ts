@@ -1,4 +1,4 @@
-import LinkDetector from 'src/util/linkDetector';
+import LinkDetector from 'src/util/link-detector';
 import { crowi } from 'src/test/setup';
 
 describe('Url test', () => {

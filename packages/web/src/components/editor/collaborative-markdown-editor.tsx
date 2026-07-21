@@ -11,7 +11,7 @@ import type { CollabAwareness, StatelessListener } from '@/lib/use-collab-docume
 import { useAuth } from '@/lib/use-auth';
 import { useYjsToken } from '@/lib/use-yjs-token';
 import { useCollabDocument, type CollabStatus } from '@/lib/use-collab-document';
-import { MarkdownEditor, type MarkdownEditorHandle } from './MarkdownEditor';
+import { MarkdownEditor, type MarkdownEditorHandle } from './markdown-editor';
 
 /**
  * Pre-built realtime session, surfaced by `useCollabSession` so that a

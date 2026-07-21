@@ -1,7 +1,7 @@
 import Crowi from 'src/crowi';
 import { Types, Document, Model, Schema, model } from 'mongoose';
 import Debug from 'debug';
-import LinkDetector from 'src/util/linkDetector';
+import LinkDetector from 'src/util/link-detector';
 import { PageDocument } from './page';
 
 export interface BacklinkDocument extends Document {

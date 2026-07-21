@@ -1,6 +1,6 @@
 /**
  * Token-based authentication schemas, shared by the `tokenAuth` Hono
- * contract (`packages/api-contract/src/contracts/tokenAuth.ts`).
+ * contract (`packages/api-contract/src/contracts/token-auth.ts`).
  *
  * The legacy SSR-style schemas (`LoginRequestSchema`, `LoginResponseSchema`,
  * `RegisterRequestSchema`, `RegisterResponseSchema`, `ErrorResponseSchema`)

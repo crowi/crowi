@@ -49,7 +49,7 @@ import Debug from 'debug';
 import type Crowi from 'src/crowi';
 import type { PageDocument } from 'src/models/page';
 import type { UserDocument } from 'src/models/user';
-import FileUploader from 'src/util/fileUploader';
+import FileUploader from 'src/util/file-uploader';
 import { mapDuplicateKeyError } from 'src/util/map-duplicate-key-error';
 import { createMailTokenUtil } from 'src/util/mail-token';
 import { pageToResponse } from 'src/util/page-response';

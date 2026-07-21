@@ -1,6 +1,6 @@
 import { z } from '@hono/zod-openapi';
 import { RevisionTypeSchema } from './collab';
-import { UserPublicSchema } from './userPublic';
+import { UserPublicSchema } from './user-public';
 
 // Page grant enum - matches Page model constants
 export const PageGrantSchema = z.enum(['1', '2', '3', '4']).transform((val) => Number(val));

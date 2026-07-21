@@ -65,7 +65,7 @@ import { Types } from 'mongoose';
 import type Crowi from 'src/crowi';
 import type { AttachmentDocument } from 'src/models/attachment';
 import type { PageDocument } from 'src/models/page';
-import FileUploader from 'src/util/fileUploader';
+import FileUploader from 'src/util/file-uploader';
 import { createRateLimiter } from 'src/util/rate-limit';
 import {
   type PopulatedUserPublic,

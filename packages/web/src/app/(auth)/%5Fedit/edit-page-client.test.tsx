@@ -47,12 +47,12 @@ vi.mock('@/lib/use-auth', () => ({
 }));
 
 // --- heavy editor / collab deps (only the update branch needs them) --
-vi.mock('@/components/editor/CollaborativeMarkdownEditor', () => ({
+vi.mock('@/components/editor/collaborative-markdown-editor', () => ({
   CollaborativeMarkdownEditor: () => null,
   useCollabSession: () => ({ status: 'connecting', yText: null, awareness: null }),
 }));
-vi.mock('@/components/editor/MarkdownEditor', () => ({ MarkdownEditor: () => null }));
-vi.mock('@/components/editor/MarkdownPreview', () => ({ MarkdownPreview: () => null }));
+vi.mock('@/components/editor/markdown-editor', () => ({ MarkdownEditor: () => null }));
+vi.mock('@/components/editor/markdown-preview', () => ({ MarkdownPreview: () => null }));
 vi.mock('@/lib/use-page', () => ({ usePage: () => ({ page: null, isLoading: true, isError: false }) }));
 vi.mock('@/lib/use-presence', () => ({ usePresence: () => undefined }));
 // `usePageTitle` pulls in `useAppInfo` (`useQuery`); mock to a no-op so the

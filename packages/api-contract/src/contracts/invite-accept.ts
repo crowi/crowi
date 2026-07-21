@@ -11,7 +11,7 @@ import { createRoute } from '@hono/zod-openapi';
 
 import { TokenAuthResponseSchema } from '../schemas/auth';
 import { ApiErrorSchema, InternalServerErrorSchema } from '../schemas/common';
-import { InviteAcceptRequestSchema, InvitePreviewResponseSchema } from '../schemas/inviteAccept';
+import { InviteAcceptRequestSchema, InvitePreviewResponseSchema } from '../schemas/invite-accept';
 
 export const invitePreviewRoute = createRoute({
   method: 'get',

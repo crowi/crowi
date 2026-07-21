@@ -1,6 +1,6 @@
 import { z } from '@hono/zod-openapi';
 import { PageSchema, PagerSchema } from './page';
-import { UserPublicSchema } from './userPublic';
+import { UserPublicSchema } from './user-public';
 
 // Notification status enum - matches Notification model constants
 // (packages/api/src/models/notification.ts)

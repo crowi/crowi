@@ -1,7 +1,7 @@
 import Crowi from 'src/crowi';
 import { Types, Document, Model, Schema, model } from 'mongoose';
 import Debug from 'debug';
-import ActivityDefine from 'src/util/activityDefine';
+import ActivityDefine from 'src/util/activity-define';
 
 export interface ActivityDocument extends Document {
   _id: Types.ObjectId;

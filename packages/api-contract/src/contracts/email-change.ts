@@ -9,7 +9,7 @@
 import { createRoute } from '@hono/zod-openapi';
 
 import { ApiErrorSchema, InternalServerErrorSchema } from '../schemas/common';
-import { ConfirmEmailChangeRequestSchema, ConfirmEmailChangeResponseSchema } from '../schemas/emailChange';
+import { ConfirmEmailChangeRequestSchema, ConfirmEmailChangeResponseSchema } from '../schemas/email-change';
 
 export const validateEmailChangeTokenRoute = createRoute({
   method: 'get',

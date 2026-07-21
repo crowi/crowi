@@ -1,7 +1,7 @@
 import { Readable } from 'node:stream';
 import type { StorageDriver } from '@crowi/plugin-api';
 import type Crowi from 'src/crowi';
-import { BY_KEY_URL_PREFIX, getStorageDriverByName } from 'src/util/fileUploader';
+import { BY_KEY_URL_PREFIX, getStorageDriverByName } from 'src/util/file-uploader';
 
 export interface StorageCopyProgress {
   current: number;

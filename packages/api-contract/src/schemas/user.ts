@@ -1,14 +1,14 @@
 import { z } from '@hono/zod-openapi';
 import { PageSchema, PagerSchema } from './page';
 import { BookmarkSchema } from './bookmark';
-import { UserPublicSchema } from './userPublic';
+import { UserPublicSchema } from './user-public';
 
 // NOTE: BookmarkSchema and UserPublicSchema are exported from their own
-// dedicated files (./bookmark, ./userPublic). They are intentionally NOT
+// dedicated files (./bookmark, ./user-public). They are intentionally NOT
 // re-exported here to avoid duplicate-name conflicts in index.ts and to
 // break a circular dependency between user.ts and bookmark.ts.
 
-import { UserPublicStatus } from './userPublic';
+import { UserPublicStatus } from './user-public';
 
 // User status enum - matches User model constants
 export const UserStatusSchema = z.enum(['1', '2', '3', '4', '5']).transform((val) => Number(val));

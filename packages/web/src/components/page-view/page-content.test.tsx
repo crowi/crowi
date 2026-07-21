@@ -6,7 +6,7 @@ import { createElement } from 'react';
 import type { PageWithRevision } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 import { renderMdastToReactNode } from '@/components/editor/render-mdast';
-import { previewComponents } from '@/components/editor/MarkdownPreview';
+import { previewComponents } from '@/components/editor/markdown-preview';
 import { PageContent } from './page-content';
 
 const expandTableLabel = m['page.table_fullscreen_open']();

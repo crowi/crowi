@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach, beforeAll } from 'vitest';
 import { render, cleanup, screen, act } from '@testing-library/react';
 import { PageGrantEnum } from '@crowi/api-contract';
-import { GrantSelect } from './GrantSelect';
+import { GrantSelect } from './grant-select';
 
 // jsdom does not implement these layout APIs that Radix Select calls
 // when its listbox opens. Stub them so the open-state assertions run.

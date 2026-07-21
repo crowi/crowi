@@ -4,7 +4,7 @@ import { m } from '@paraglide/messages.js';
 import { SlidersHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
-import { GrantSelect } from './GrantSelect';
+import { GrantSelect } from './grant-select';
 
 interface PageSettingsDrawerProps {
   /** Current grant value (Page model constant). */

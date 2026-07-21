@@ -1,5 +1,5 @@
 import { z } from '@hono/zod-openapi';
-import { UserPublicSchema } from '../userPublic';
+import { UserPublicSchema } from '../user-public';
 import { AdminPagerSchema } from './_pager';
 
 export { AdminPagerSchema, type AdminPager } from './_pager';

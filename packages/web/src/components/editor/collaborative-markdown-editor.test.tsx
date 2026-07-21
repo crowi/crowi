@@ -104,7 +104,7 @@ vi.mock('y-codemirror.next', () => ({
   yCollab: () => [],
 }));
 
-import { CollaborativeMarkdownEditor } from './CollaborativeMarkdownEditor';
+import { CollaborativeMarkdownEditor } from './collaborative-markdown-editor';
 
 afterEach(() => {
   cleanup();

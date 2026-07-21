@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { render, cleanup, act } from '@testing-library/react';
 import { Awareness } from 'y-protocols/awareness';
 import * as Y from 'yjs';
-import { CollabSameBlockWarning } from './CollabSameBlockWarning';
+import { CollabSameBlockWarning } from './collab-same-block-warning';
 
 afterEach(() => {
   cleanup();
