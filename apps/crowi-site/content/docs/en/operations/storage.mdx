@@ -166,6 +166,112 @@ A safe procedure for migrating from `local` to `s3`:
 > **Tip**: If you stage the data on S3 first in step 1, S3 is usable
 > with zero downtime the moment you switch the driver.
 
+### crowi-admin rebuild attachment-display-derivatives
+
+Images in [Attachments](../guide/attachments) get a display-optimized
+derivative generated on a best-effort basis at upload time. The `rebuild
+attachment-display-derivatives` subcommand backfills, repairs, and
+reclaims those derivatives for existing attachments.
+
+```bash
+# Generate for anything missing/failed, as usual
+crowi-admin rebuild attachment-display-derivatives
+
+# Check the target count first (writes nothing)
+crowi-admin rebuild attachment-display-derivatives --dry-run
+
+# Re-generate everything, including records already on the current recipe
+# (required after a storage migration — see below)
+crowi-admin rebuild attachment-display-derivatives --force
+
+# Repair only records whose metadata says "resized" but the object is gone
+crowi-admin rebuild attachment-display-derivatives --repair-missing
+
+# Report orphaned derivative objects (local driver only, no deletion)
+crowi-admin rebuild attachment-display-derivatives --gc
+
+# Actually delete the reported orphans
+crowi-admin rebuild attachment-display-derivatives --gc --confirm
+```
+
+Key flags:
+
+| Flag | Description |
+| ---- | ----------- |
+| `--dry-run` | Writes nothing to Mongo or storage; reports only the target count and breakdown |
+| `--concurrency <n>` | Worker pool size (default `2`) — see the capacity estimate below |
+| `--force` | Re-evaluate and overwrite records already described under the current recipe |
+| `--repair-missing` | Only targets current-recipe `resized` records; probes existence via `get()` and regenerates only the ones whose object is actually gone (a lighter mode — no decode/re-encode for objects that are still present) |
+| `--only-missing` | Only targets attachments with no `derivatives.display` recorded yet |
+| `--only-stale` | Only targets attachments whose recorded `recipeVersion` is not the current one |
+| `--page-id <id>` | Only targets attachments on this page |
+| `--since <iso>` | Only targets attachments created on/after this ISO 8601 timestamp |
+| `--until <iso>` | Only targets attachments created on/before this ISO 8601 timestamp |
+| `--gc` | Reports candidate derivative objects with no referencing Attachment (local driver only, v1) |
+| `--gc-grace-hours <n>` | Excludes `--gc` candidates newer than this many hours (default 24) — a safety margin against mistaking an in-flight `put`→publish for an orphan |
+| `--confirm` | Actually deletes `--gc` candidates (report-only otherwise) |
+
+Key points:
+
+- **A normal run (no `--force`/`--repair-missing`) is idempotent.**
+  Current-recipe `resized`/`passthrough`/`unsupported` records are
+  skipped; only `failed`, never-generated, or stale-recipe records are
+  reprocessed. **If a `resized` record's metadata says the object exists
+  but it has actually been lost from storage, a normal run does not
+  detect that and keeps skipping it** — repairing this needs `--force`
+  or `--repair-missing`.
+- Attachment rows are pulled by a **single producer** through a MongoDB
+  cursor; only the processing of each pulled item is fanned out to a
+  bounded worker pool sized by `--concurrency` (memory usage stays
+  constant, same as `storage copy`).
+- Each worker stages the original into a local tmp directory before
+  handing it to the generator, and deletes its own staged file
+  afterward. The rough amount of data staged concurrently is
+  **`--concurrency` × 100MB** (based on the actual upload ceiling for
+  the footer add path). If you raise `--concurrency` above the default,
+  re-multiply this disk/memory estimate accordingly. Free space is
+  checked before staging; an item is safely skipped and recorded as
+  failed if there isn't enough.
+- **SIGINT (Ctrl-C)** stops accepting new items, cleans up any in-flight
+  staged tmp file, prints the progress summary so far, and **exits
+  non-zero**.
+- A per-item failure does not stop the run; the Attachment ID and a
+  classified reason are printed for each one.
+
+Exit codes:
+
+| Exit code | Meaning |
+| --------- | ------- |
+| `0` | Everything succeeded (or dry-run completed) |
+| `1` | Fatal error (init failed, or an exception before work started) |
+| `2` | Partial failure (one or more items failed — check the `failed` list and consider re-running) |
+| Interrupted by SIGINT | Exits non-zero regardless of the above |
+
+> **Note**: **Running `--force` is required right after a storage
+> migration.** `storage copy` only copies originals, never derivatives
+> (derivatives are disposable cache, not durable data). If you run
+> `rebuild attachment-display-derivatives` normally after a migration,
+> every `resized` record is still treated as "complete" even though its
+> object doesn't exist on the new driver — a normal run skips all of
+> them and **regenerates nothing**. Run `--force` (re-evaluate
+> everything) or, to target only the lost descriptors, `--repair-missing`.
+> Until `--force` runs, the canonical URL keeps safely falling back to
+> the original (no data loss, just a temporary cache miss).
+
+> **Note**: **Residual orphan risk on S3.** The local driver's atomic
+> writes, plus the deletion path's atomic snapshot read and deterministic
+> key sweep, close nearly every orphan source in normal operation. A
+> residual risk remains only if the operational convention (run at most
+> one rebuild/`--gc` process at a time) is violated — e.g. two processes
+> racing on the same attachment. `--gc` only supports the local driver in
+> v1; on S3 it reports "unsupported" and exits cleanly. If long-term
+> accumulation is a concern, apply a conservative (e.g. ~1 year)
+> expiration lifecycle rule to the `derivatives/` prefix on S3 **as a
+> last-resort safety net only** — a lifecycle rule cannot tell whether an
+> object is still referenced and only judges by elapsed time, so a short
+> expiration would silently delete live derivatives and degrade delivery
+> to the original fallback. It is not a substitute for `--gc`.
+
 ## Next steps
 
 - [Configuration](./configuration) — overview of `crowi.config.json`

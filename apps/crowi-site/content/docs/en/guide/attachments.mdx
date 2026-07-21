@@ -41,21 +41,48 @@ filename (for PDFs, zips, text, and other non-image files).
 
 - Clicking a tile opens a **modal preview** in-page — you do not
   navigate away from the page.
-- The modal includes an "Open original" link that opens the raw file
-  in a new tab.
+- The modal includes an "Open original" link that opens the
+  **unmodified original file** in a new tab (as described below, images
+  in the grid and page body use a display-optimized version, but this
+  link always points at the original).
 - The list shows only attachments referenced by the page's **latest
   revision**. A "view all attachments" link at the bottom routes to a
   dedicated listing (see below).
 
 Each attachment is assigned a URL of the form `/api/v2/attachments/<id>`.
-Hitting that URL delivers the actual file: images are served `inline` in
-the browser, while other files are downloaded under their original
-filename.
+Hitting that URL delivers the actual file; non-image files are downloaded
+under their original filename.
+
+### Display-optimized images
+
+When you upload a still JPEG/PNG/WebP image, a display-optimized
+derivative (capped at 1728px wide, with metadata stripped) is generated
+on a best-effort basis right after the original is saved.
+**`/api/v2/attachments/<id>` prefers this optimized derivative whenever
+one is available** — embedded images in the page body, thumbnails in the
+attachment grid, and the editor preview all reference the same URL, so
+they automatically receive the lighter-weight derivative with no code
+changes on their side.
+
+- SVGs, GIFs (static or animated), animated WebP/APNG, and images already
+  at or below 1728px are not optimized — the original is served as-is
+  (never upscaled or duplicated).
+- If derivative generation fails, the original is unaffected and the
+  upload still succeeds; that attachment simply keeps serving the
+  original until a derivative is generated.
+- The derivative is a best-effort display cache, not durable data — the
+  original's Exif/GPS metadata is preserved unchanged. Metadata is only
+  stripped from the derivative.
+
+Right-clicking an image embedded in a page body and choosing "Save
+image as…" saves this optimized derivative, not the original. To get an
+unmodified original, use the "Open original" link in the attachment
+detail modal, or open `/api/v2/attachments/<id>/original` directly.
 
 > **Tip**: Attachment delivery enforces the page's view permission. Even
 > if someone knows an attachment's URL, the file is not delivered to a
 > user who cannot view the owning page (a 404 is returned to hide its
-> existence).
+> existence). This permission check applies to `/original` the same way.
 
 ### The "All attachments" page
 

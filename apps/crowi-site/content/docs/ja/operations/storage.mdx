@@ -163,6 +163,110 @@ crowi-admin rebuild storage copy --from local --to s3 --dry-run
 > **Tip**: 手順 1 で先に S3 へデータをステージングしておけば、ドライバを
 > 切り替えた瞬間からダウンタイムなしで S3 が使えます。
 
+### crowi-admin rebuild attachment-display-derivatives
+
+[添付ファイル](../guide/attachments) の画像は、表示用に最適化された
+派生ファイルをアップロード時にベストエフォートで生成します。
+`rebuild attachment-display-derivatives` サブコマンドは、この派生ファイルを
+既存の添付ファイルに対して事後生成・修復・回収するための運用コマンドです。
+
+```bash
+# 未生成/失敗のみを対象に、通常どおり生成する
+crowi-admin rebuild attachment-display-derivatives
+
+# まず対象件数だけを確認する (書き込みなし)
+crowi-admin rebuild attachment-display-derivatives --dry-run
+
+# 現行レシピの記述済みレコードも含め、全件を再生成する (ストレージ移行後は必須)
+crowi-admin rebuild attachment-display-derivatives --force
+
+# 「記述はあるが実体が無い」ものだけを狙って修復する
+crowi-admin rebuild attachment-display-derivatives --repair-missing
+
+# 無参照になった派生オブジェクトを報告する (local ドライバのみ、削除はしない)
+crowi-admin rebuild attachment-display-derivatives --gc
+
+# 報告された無参照オブジェクトを実際に削除する
+crowi-admin rebuild attachment-display-derivatives --gc --confirm
+```
+
+主なフラグ:
+
+| フラグ | 説明 |
+| ------ | ---- |
+| `--dry-run` | Mongo・ストレージのどちらにも書き込まず、対象件数と内訳のみ報告する |
+| `--concurrency <n>` | 並列ワーカー数 (既定 `2`)。容量見積もりは後述 |
+| `--force` | 現行 recipe で既に記述済みのレコードも再評価・上書きする |
+| `--repair-missing` | 現行 recipe の `resized` レコードだけを対象に、実体の有無を `get()` で確認し、無いものだけ再生成する (デコード・再エンコードは行わない軽量モード) |
+| `--only-missing` | `derivatives.display` が未記録の添付ファイルのみを対象にする |
+| `--only-stale` | 記録済みの `recipeVersion` が現行と異なる添付ファイルのみを対象にする |
+| `--page-id <id>` | 指定したページの添付ファイルのみを対象にする |
+| `--since <iso>` | この ISO 8601 タイムスタンプ以降に作成された添付ファイルのみを対象にする |
+| `--until <iso>` | この ISO 8601 タイムスタンプ以前に作成された添付ファイルのみを対象にする |
+| `--gc` | 無参照になった派生オブジェクトの候補を報告する (local ドライバのみ、v1) |
+| `--gc-grace-hours <n>` | `--gc` の候補から除外する猶予期間 (既定 24 時間)。生成中の `put`→publish の間隙を無参照と誤認しないための安全マージン |
+| `--confirm` | `--gc` の候補を実際に削除する (指定しない限り report-only) |
+
+ポイント:
+
+- **通常実行 (`--force`/`--repair-missing` なし) は idempotent** です。
+  現行 recipe の `resized`/`passthrough`/`unsupported` はスキップされ、
+  `failed`・未生成・古い recipe のレコードだけが再処理されます。
+  **メタデータ上は `resized` だが実体がストレージから失われている場合、
+  通常実行では検出されずスキップされ続けます** —— この修復には
+  `--force` または `--repair-missing` が必要です。
+- Attachment の行は MongoDB のカーソルで**単一の producer だけが pull**
+  し、取り出したアイテムの処理だけが `--concurrency` で有界並列化されます
+  (`storage copy` と同じくメモリ使用量は一定に保たれます)。
+- 各ワーカーは original をローカル一時ディレクトリへステージしてから
+  生成処理に渡し、処理後に自分がステージした一時ファイルを削除します。
+  同時にステージされるデータ量の目安は **`--concurrency` × 100MB**
+  (footer 添付追加の実際の上限に基づく) です。`--concurrency` を既定より
+  上げる場合は、このディスク/メモリ使用量の見積もりを掛け直してください。
+  ステージ前に空き容量を確認し、不足時はそのアイテムを安全に skip・
+  failed として記録します。
+- **SIGINT (Ctrl-C)** を受け取ると、新規アイテムの受付を止め、進行中の
+  一時ファイルを片付けてから直近の進捗サマリを出力し、**非ゼロで終了**
+  します。
+- 項目単位の失敗があっても実行は継続し、Attachment ID と分類済みの
+  理由を出力します。
+
+終了コードは次のとおりです。
+
+| 終了コード | 意味 |
+| ---------- | ---- |
+| `0` | 全件成功 (または dry-run 完了) |
+| `1` | 致命的エラー (初期化失敗、または処理開始前の例外) |
+| `2` | 部分的失敗 (1 件以上のアイテムが失敗 — `failed` の内容を確認して再実行を検討) |
+| SIGINT による中断時 | 上記に関わらず非ゼロで終了する |
+
+> **Note**: **ストレージドライバを移行した直後は `--force` の実行が
+> 必須です。** `storage copy` は original のみをコピーし、派生ファイルは
+> コピーしません(派生ファイルは durable data ではなく disposable な
+> キャッシュのため)。移行後にそのまま `rebuild
+> attachment-display-derivatives` を実行しても、全ての `resized`
+> レコードは(新ドライバ上に実体が無くても)「完了済み」として通常実行
+> ではスキップされ、**何も再生成されません**。必ず `--force`(全件
+> 再評価)、または実体が失われた記述子だけを狙いたい場合は
+> `--repair-missing` を実行してください。`--force` 実行までの間、
+> canonical URL は original へ安全にフォールバックし続けます(データ
+> 損失ではありません)。
+
+> **Note**: **S3 での派生オブジェクトの孤児残存リスク**。ローカル
+> ドライバの atomic write 化と、削除処理の原子的スナップショット取得 +
+> 決定的キーの sweep により、通常運用ではほぼすべての孤児発生源が閉じて
+> います。ただし、運用規約(rebuild/`--gc` は同時に 1 プロセスのみ)に
+> 反して複数のプロセスが同じ添付を並行処理した場合など、ごく稀に
+> 無参照オブジェクトが残ることがあります。`--gc` は v1 では local
+> ドライバのみに対応しており、S3 では「未対応」を報告して正常終了
+> します。長期的な蓄積が気になる場合は、S3 の `derivatives/` プレフィックス
+> 配下に対して十分保守的な(例えば 1 年程度の)有効期限のライフサイクル
+> ルールを **最後の砦としてのみ** 設定することを推奨します —— ライフ
+> サイクルルールは「参照されているか」を判定できず経過時間でしか判断
+> できないため、短い有効期限を設定すると生きた派生ファイルまで削除して
+> しまい、original フォールバックへ静かに劣化します。`--gc` の代替には
+> なりません。
+
 ## エディタからのアップロード制限
 
 ページ編集画面では、画像の **貼り付け (paste)** とファイルの
