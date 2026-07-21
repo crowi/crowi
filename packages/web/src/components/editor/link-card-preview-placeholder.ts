@@ -58,31 +58,41 @@ function sourceLineAttribute(node: MdastParagraph): string {
   return /^\d+$/.test(value) ? ' data-source-line="' + value + '"' : '';
 }
 
+/**
+ * `<span>` (not `<figure>`/`<div>`) is deliberately used as the outer tag:
+ * `.crowi-link-card { display: block }` (globals.css) already renders it
+ * as a block regardless of tag name, and `hast-util-raw`'s real HTML5
+ * tree-construction reparse (render-mdast.ts) implicitly closes an open
+ * `<p>` — without reopening one afterward — on a block-level start tag
+ * like `<figure>`/`<div>`, corrupting the surrounding sentence's structure
+ * whenever the placeholder isn't the paragraph's sole content. `<span>` is
+ * phrasing content, so it nests validly inside a `<p>` (or `<em>`/`<strong>`
+ * — see `replaceCardTagsInChildren`'s recursion) at any position.
+ */
 function renderPlaceholder(url: string, message: string, sourceLine: string): string {
   return [
-    '<figure class="crowi-link-card"' + sourceLine + '>',
-    '<div class="crowi-link-card-preview-surface">',
-    '<div class="crowi-link-card-body">',
-    '<div class="crowi-link-card-title">' + escapeHtml(url) + '</div>',
-    '<div class="crowi-link-card-preview-message">' + escapeHtml(message) + '</div>',
-    '</div>',
-    '</div>',
-    '</figure>',
+    '<span class="crowi-link-card"' + sourceLine + '>',
+    '<span class="crowi-link-card-preview-surface">',
+    '<span class="crowi-link-card-body">',
+    '<span class="crowi-link-card-title">' + escapeHtml(url) + '</span>',
+    '<span class="crowi-link-card-preview-message">' + escapeHtml(message) + '</span>',
+    '</span>',
+    '</span>',
+    '</span>',
   ].join('');
 }
 
 /**
- * Replaces every `@[card](url)` triple among a paragraph's DIRECT
- * children with a static placeholder, preserving any surrounding text
- * on either side (`applyLinkCardConversion` in
- * `link-card-affordance-extension.ts` only replaces the bare-URL span
- * it found, so a mid-sentence conversion — "See @[card](url) below" —
- * leaves the card tag as one triple among several paragraph children,
- * not the paragraph's sole content). Does NOT recurse into nested
- * phrasing content (emphasis/strong wrapping the triple) — the
- * realistic case this preview affordance needs to cover is the
- * top-level conversion `applyLinkCardConversion` itself produces,
- * which never nests the triple inside other inline markup.
+ * Replaces every `@[card](url)` triple among `children` with a static
+ * placeholder, preserving any surrounding text on either side
+ * (`applyLinkCardConversion` in `link-card-affordance-extension.ts` only
+ * replaces the bare-URL span it found, so a mid-sentence conversion —
+ * "See @[card](url) below" — leaves the card tag as one triple among
+ * several paragraph children, not the paragraph's sole content).
+ * Recurses into any child that itself carries a `children` array
+ * (emphasis/strong/delete wrapping the triple) — `@[tag](url)` is general
+ * Markdown syntax a user can hand-type anywhere, not only via the
+ * affordance's own conversion action.
  */
 function replaceCardTagsInChildren(children: unknown[], message: string, sourceLine: string): { changed: boolean; children: unknown[] } {
   let changed = false;
@@ -98,6 +108,15 @@ function replaceCardTagsInChildren(children: unknown[], message: string, sourceL
       out.push({ type: 'html', value: renderPlaceholder(next.url, message, sourceLine) });
       i += 2;
       continue;
+    }
+    if (isRecord(node) && Array.isArray(node.children)) {
+      const nested = replaceCardTagsInChildren(node.children, message, sourceLine);
+      if (nested.changed) {
+        changed = true;
+        out.push({ ...node, children: nested.children });
+        i += 1;
+        continue;
+      }
     }
     out.push(node);
     i += 1;
@@ -121,9 +140,9 @@ export function replaceLinkCardPreviewPlaceholders(renderedAst: unknown, message
     if (!paragraphChanged) return node;
     changed = true;
     // A paragraph whose entire content was one triple degenerates to a
-    // single `html` child — return that child directly (unwrapped) so
-    // it renders as the block-level `<figure>` the placeholder markup
-    // is, rather than nesting a block element inside a `<p>`.
+    // single `html` child — return that child directly (unwrapped) rather
+    // than a `<p>` wrapping the CSS-block-styled placeholder, matching the
+    // saved card's own top-level (non-`<p>`-wrapped) placement.
     return newChildren.length === 1 ? newChildren[0] : { ...node, children: newChildren };
   });
 

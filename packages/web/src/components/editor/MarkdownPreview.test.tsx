@@ -173,9 +173,55 @@ describe('MarkdownPreview — link-card placeholder', () => {
       await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
     });
 
+    // Checked via the single paragraph's own textContent (not
+    // `screen.getByText(/^See\s*$/)` in isolation): a bare-text-node match
+    // only works if "See " sits alone in its own element, which is exactly
+    // the pre-fix bug repro'd below — a block-level placeholder tag
+    // (`<figure>`/`<div>`) implicitly closes an open `<p>` per HTML5's
+    // tree-construction rules and does NOT reopen one afterward, so "See "
+    // and "for details." would land in two SEPARATE `<p>` elements instead
+    // of staying together in the one true source paragraph.
+    const paragraphs = document.querySelectorAll('p');
+    expect(paragraphs).toHaveLength(1);
+    expect(paragraphs[0].textContent).toContain('See');
+    expect(paragraphs[0].textContent).toMatch(/for details\.$/);
     expect(screen.getByText(url)).toBeTruthy();
-    expect(screen.getByText(/^See\s*$/)).toBeTruthy();
-    expect(screen.getByText(/for details\.$/)).toBeTruthy();
+    expect(screen.queryByRole('link')).toBeNull();
+    expect(document.querySelector('.crowi-link-card-preview-surface')).toBeTruthy();
+  });
+
+  it('converts a card tag nested inside emphasis (e.g. `**@[card](url)**`), not just a paragraph-direct triple', async () => {
+    // `@[tag](url)` is documented as general Markdown syntax any user can
+    // type directly (not only via the affordance's own conversion action,
+    // which never nests it), so `**@[card](url)**` is a reachable source a
+    // user can hand-type. Left unconverted, the (text, link, text) triple
+    // stays a real `link` node and renders as a clickable link in preview.
+    const url = 'https://example.com/doc';
+    mutateAsync.mockResolvedValueOnce({
+      type: 'root',
+      children: [
+        {
+          type: 'paragraph',
+          data: { hProperties: { 'data-source-line': 1 } },
+          children: [
+            {
+              type: 'strong',
+              children: [
+                { type: 'text', value: '@' },
+                { type: 'link', url, children: [{ type: 'text', value: 'card' }] },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    render(<MarkdownPreview source={`**@[card](${url})**`} />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+    });
+
+    expect(screen.getByText(url)).toBeTruthy();
     expect(screen.queryByRole('link')).toBeNull();
     expect(document.querySelector('.crowi-link-card-preview-surface')).toBeTruthy();
   });
