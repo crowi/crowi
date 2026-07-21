@@ -1,9 +1,10 @@
+import { type AttachmentDisplayDerivativesTaskOptions, runAttachmentDisplayDerivativesRebuild } from 'src/util/rebuild-attachment-display-derivatives';
 import { runBacklinkRebuild } from 'src/util/rebuild-backlink';
 import { runRendererRebuild } from 'src/util/rebuild-renderer';
 import { runSearchRebuild } from 'src/util/search-rebuild';
-import { type StorageCopyProgress, runStorageCopy } from 'src/util/storage-copy';
+import { runStorageCopy, type StorageCopyProgress } from 'src/util/storage-copy';
 
-import { type RebuildTask, defineRebuild } from '../rebuild-runner';
+import { defineRebuild, type RebuildTask } from '../rebuild-runner';
 
 /**
  * RFC-0008 §8.5 — the registered rebuild tasks.
@@ -77,3 +78,23 @@ export const backlinkRebuild: RebuildTask = defineRebuild({
     return { ...summary };
   },
 });
+
+/**
+ * feature-image-derivative-optimization Phase 3 — `rebuild
+ * attachment-display-derivatives`. The CLI-supplied flags close over the
+ * returned task via `opts` (mirrors `storageCopyRebuild`'s `from`/`to`);
+ * `ctx`/`runner` (dryRun/concurrency/aborted) flow in the same way every
+ * other task gets them. All the actual work lives in
+ * `util/rebuild-attachment-display-derivatives.ts` — see its module doc
+ * comment for the generate / repair-missing / gc mode split.
+ */
+export function attachmentDisplayDerivativesRebuild(opts: AttachmentDisplayDerivativesTaskOptions): RebuildTask {
+  return defineRebuild({
+    id: 'attachment-display-derivatives',
+    description: 'Regenerate display-optimized derivative images for attachments.',
+    async run(ctx, runner) {
+      const stats = await runAttachmentDisplayDerivativesRebuild(ctx.crowi, opts, ctx, runner);
+      return { ...stats };
+    },
+  });
+}

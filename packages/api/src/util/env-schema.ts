@@ -278,6 +278,33 @@ const MIGRATION_POLICY_DESCRIPTOR: EnvVarDescriptor = {
 };
 
 /**
+ * feature-image-derivative-optimization §8 — decode-time pixel ceiling
+ * (`sharp`'s `limitInputPixels`) for the display-derivative generator.
+ * Resource-safety floor, not a cosmetic tuning knob, but still only
+ * `warn`-severity here: an invalid value falls back to the spec-fixed
+ * default (50,000,000) at the point of use
+ * (`util/image-display-derivative.ts`'s own `resolvePositiveIntEnv`),
+ * exactly like `COLLAB_MAX_EDITORS_PER_PAGE` — this descriptor only makes
+ * a malformed value visible in the consolidated boot report.
+ */
+const IMAGE_DERIVATIVE_MAX_PIXELS_DESCRIPTOR: EnvVarDescriptor = {
+  name: 'IMAGE_DERIVATIVE_MAX_PIXELS',
+  check: { severity: 'warn', validate: validatePositiveInt },
+};
+
+/** feature-image-derivative-optimization §8 — upload-path admission semaphore capacity (default 2). */
+const IMAGE_DERIVATIVE_ADMISSION_CONCURRENCY_DESCRIPTOR: EnvVarDescriptor = {
+  name: 'IMAGE_DERIVATIVE_ADMISSION_CONCURRENCY',
+  check: { severity: 'warn', validate: validatePositiveInt },
+};
+
+/** feature-image-derivative-optimization §8 — upload-path admission semaphore acquire timeout in ms (default 5000). */
+const IMAGE_DERIVATIVE_ADMISSION_TIMEOUT_MS_DESCRIPTOR: EnvVarDescriptor = {
+  name: 'IMAGE_DERIVATIVE_ADMISSION_TIMEOUT_MS',
+  check: { severity: 'warn', validate: validatePositiveInt },
+};
+
+/**
  * Feature-signed-token-secret-strength: promoted out of
  * {@link TAXONOMY_ONLY_NAMES} to its own descriptor with a content check.
  * Severity is NOT a fixed `'fail'`/`'warn'` like every other descriptor —
@@ -339,6 +366,9 @@ export const ENV_VAR_DESCRIPTORS: readonly EnvVarDescriptor[] = [
   COLLAB_MAX_EDITORS_DESCRIPTOR,
   MIGRATION_POLICY_DESCRIPTOR,
   WS_TOKEN_SECRET_DESCRIPTOR,
+  IMAGE_DERIVATIVE_MAX_PIXELS_DESCRIPTOR,
+  IMAGE_DERIVATIVE_ADMISSION_CONCURRENCY_DESCRIPTOR,
+  IMAGE_DERIVATIVE_ADMISSION_TIMEOUT_MS_DESCRIPTOR,
   ...TAXONOMY_ONLY_DESCRIPTORS,
 ];
 
@@ -353,7 +383,7 @@ const EXTRA_KNOWN_NAMES = ['NEXT_PUBLIC_API_URL', 'NEXT_PUBLIC_COLLAB_URL', 'CRO
 const KNOWN_ENV_NAMES: ReadonlySet<string> = new Set([...ENV_VAR_DESCRIPTORS.flatMap((d) => [d.name, ...(d.aliases ?? [])]), ...EXTRA_KNOWN_NAMES]);
 
 /** Prefixes a Crowi-owned env var is expected to carry. Anything else (`PATH`, `CI`, `GITHUB_*`, `npm_*`, ...) is out of scope for typo-detection. */
-const TYPO_PREFIXES = ['CROWI_', 'WS_TOKEN_', 'JWT_', 'COLLAB_', 'REDIS', 'MONGO', 'MIGRATION_'] as const;
+const TYPO_PREFIXES = ['CROWI_', 'WS_TOKEN_', 'JWT_', 'COLLAB_', 'REDIS', 'MONGO', 'MIGRATION_', 'IMAGE_DERIVATIVE_'] as const;
 
 /** Edit-distance threshold for the typo heuristic (implementer's discretion per the spec, "目安 ≤2"). */
 const TYPO_DISTANCE_THRESHOLD = 2;

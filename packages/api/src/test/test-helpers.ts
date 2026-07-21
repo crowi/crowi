@@ -13,12 +13,12 @@
  * assertions. That variant calls this module's authHeaders but manages user
  * creation itself.
  */
-import request from 'supertest';
-
+import sharp from 'sharp';
 import type { UserDocument } from 'src/models/user';
 import { createJwtUtil } from 'src/util/jwt';
+import request from 'supertest';
 
-import { Fixture, app, crowi } from './setup';
+import { app, crowi, Fixture } from './setup';
 
 // ---------------------------------------------------------------------------
 // Auth headers
@@ -102,3 +102,17 @@ export const createPageViaApi = async (accessToken: string, path: string, body: 
   }
   return res.body.page as { _id: string; path: string };
 };
+
+// ---------------------------------------------------------------------------
+// createWideJpeg
+// ---------------------------------------------------------------------------
+
+/**
+ * A synthetic 2000x1000 JPEG buffer wide enough (> `TARGET_MAX_WIDTH`, see
+ * `util/image-display-derivative.ts`) to force `mode: 'resized'` display
+ * derivative generation in attachment upload tests.
+ */
+export const createWideJpeg = (background: { r: number; g: number; b: number } = { r: 10, g: 20, b: 30 }): Promise<Buffer> =>
+  sharp({ create: { width: 2000, height: 1000, channels: 3, background } })
+    .jpeg()
+    .toBuffer();

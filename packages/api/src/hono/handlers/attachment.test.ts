@@ -2,7 +2,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { Types } from 'mongoose';
 import { app, crowi } from 'src/test/setup';
-import { bearerAuthHeaders as authHeaders, createTestUser, createPageViaApi } from 'src/test/test-helpers';
+import { bearerAuthHeaders as authHeaders, createPageViaApi, createTestUser, createWideJpeg } from 'src/test/test-helpers';
+import * as imageDisplayDerivative from 'src/util/image-display-derivative';
+import { createJwtUtil } from 'src/util/jwt';
 import request from 'supertest';
 
 const cleanupPathPrefix = async (prefix: string) => {
@@ -27,7 +29,24 @@ describe('Routes /api/v2 attachments (Hono)', () => {
   // header.
   const pngBuffer = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkAAIAAAoAAv/lxKUAAAAASUVORK5CYII=', 'base64');
 
+  // The placeholder image shipped at `packages/api/public/images/file-not-found.png`,
+  // shared by both `GET /attachments/:id` and `GET /attachments/:id/original`
+  // placeholder-fallback assertions below.
+  let fileNotFoundImage: Buffer;
+
+  // Buffer the raw response bytes so placeholder/image assertions can compare
+  // the streamed body directly. Shared by both raw-stream describe blocks below.
+  const bufferParser = (response: NodeJS.ReadableStream, callback: (err: Error | null, body: Buffer) => void) => {
+    const chunks: Buffer[] = [];
+    response.on('data', (chunk: Buffer) => chunks.push(chunk));
+    response.on('end', () => callback(null, Buffer.concat(chunks)));
+    response.on('error', (err) => callback(err, Buffer.alloc(0)));
+  };
+
   beforeAll(async () => {
+    // `crowi` is not booted at module-eval time, so read it lazily here.
+    fileNotFoundImage = fs.readFileSync(path.resolve(crowi.publicDir, 'images', 'file-not-found.png'));
+
     const owner = await createTestUser({
       name: 'Attach Owner',
       username: 'attachOwner',
@@ -374,26 +393,52 @@ describe('Routes /api/v2 attachments (Hono)', () => {
       const stored = await Attachment.findById(res.body.attachment._id);
       expect(stored).not.toBeNull();
     });
+
+    describe('feature-image-derivative-optimization Phase 1 — display derivative generation', () => {
+      it('calls the shared generator exactly once and persists a resized derivative for a large image', async () => {
+        const page = await createPageViaApi(accessToken, `${PATH_PREFIX}derivative-resized`, '# add');
+        const wideJpeg = await createWideJpeg();
+
+        const spy = jest.spyOn(imageDisplayDerivative, 'generateDisplayDerivativeForUpload');
+        const res = await request(app)
+          .post(`/api/v2/pages/${page._id}/attachments`)
+          .set(authHeaders(accessToken))
+          .attach('file', wideJpeg, { filename: 'wide.jpg', contentType: 'image/jpeg' });
+
+        expect(res.status).toBe(200);
+        expect(spy).toHaveBeenCalledTimes(1);
+
+        const Attachment = crowi.model('Attachment');
+        const stored = await Attachment.findById(res.body.attachment._id);
+        expect(stored?.derivatives?.display?.mode).toBe('resized');
+        expect(stored?.derivatives?.display?.format).toBe('image/jpeg');
+      });
+
+      it('still returns 200 (original-only) when derivative generation fails — the upload response is never blocked by a generation failure', async () => {
+        const page = await createPageViaApi(accessToken, `${PATH_PREFIX}derivative-failed`, '# add');
+        // A `Content-Type: image/png` file whose bytes are not a decodable
+        // image at all — the generator re-validates via sharp rather than
+        // trusting the claimed MIME, so this exercises a real decode
+        // failure (mode: failed, reason: decode-error), not a mocked one.
+        const garbage = Buffer.from('this is not a real png, just garbage bytes for the upload test');
+
+        const res = await request(app)
+          .post(`/api/v2/pages/${page._id}/attachments`)
+          .set(authHeaders(accessToken))
+          .attach('file', garbage, { filename: 'not-a-png.png', contentType: 'image/png' });
+
+        expect(res.status).toBe(200);
+        expect(res.body.attachment).toBeDefined();
+
+        const Attachment = crowi.model('Attachment');
+        const stored = await Attachment.findById(res.body.attachment._id);
+        expect(stored?.derivatives?.display?.mode).toBe('failed');
+        expect(stored?.derivatives?.display?.reason).toBe('decode-error');
+      });
+    });
   });
 
   describe('GET /api/v2/attachments/:id (raw stream)', () => {
-    // The placeholder image shipped at `packages/api/public/images/file-not-found.png`.
-    // `crowi` is not booted at module-eval time, so read it lazily in beforeAll.
-    let fileNotFoundImage: Buffer;
-
-    beforeAll(() => {
-      fileNotFoundImage = fs.readFileSync(path.resolve(crowi.publicDir, 'images', 'file-not-found.png'));
-    });
-
-    // Buffer the raw response bytes so placeholder/image assertions can compare
-    // the streamed body directly.
-    const bufferParser = (response: NodeJS.ReadableStream, callback: (err: Error | null, body: Buffer) => void) => {
-      const chunks: Buffer[] = [];
-      response.on('data', (chunk: Buffer) => chunks.push(chunk));
-      response.on('end', () => callback(null, Buffer.concat(chunks)));
-      response.on('error', (err) => callback(err, Buffer.alloc(0)));
-    };
-
     it('returns 401 without auth', async () => {
       const res = await request(app).get('/api/v2/attachments/000000000000000000000000');
       expect(res.status).toBe(401);
@@ -515,6 +560,296 @@ describe('Routes /api/v2 attachments (Hono)', () => {
       const received = res.body as Buffer;
       expect(Buffer.isBuffer(received)).toBe(true);
       expect(received.equals(pngBuffer)).toBe(true);
+    });
+
+    describe('feature-image-derivative-optimization Phase 2 — display-priority delivery', () => {
+      it('serves the display derivative bytes with a MIME Content-Type when derivatives.display.mode is "resized" (display priority, §9 step 3)', async () => {
+        const page = await createPageViaApi(accessToken, `${PATH_PREFIX}display-priority`, '# dp');
+        const wideJpeg = await createWideJpeg();
+        const upload = await request(app)
+          .post(`/api/v2/pages/${page._id}/attachments`)
+          .set(authHeaders(accessToken))
+          .attach('file', wideJpeg, { filename: 'wide.jpg', contentType: 'image/jpeg' });
+        expect(upload.status).toBe(200);
+        const id = upload.body.attachment._id;
+
+        const Attachment = crowi.model('Attachment');
+        const stored = await Attachment.findById(id);
+        expect(stored?.derivatives?.display?.mode).toBe('resized');
+        const derivativeFilePath = stored?.derivatives?.display?.filePath as string;
+
+        const driver = crowi.getPlugins().active.storage;
+        if (!driver) throw new Error('storage driver missing in test env');
+        const derivativeStream = await driver.get(derivativeFilePath);
+        const derivativeChunks: Buffer[] = [];
+        for await (const chunk of derivativeStream) derivativeChunks.push(chunk as Buffer);
+        const derivativeBytes = Buffer.concat(derivativeChunks);
+
+        const res = await request(app).get(`/api/v2/attachments/${id}`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
+
+        expect(res.status).toBe(200);
+        // A valid MIME string ('image/jpeg'), NOT the sharp decoder identifier ('jpeg') — §6/AC1.
+        expect(res.headers['content-type']).toBe('image/jpeg');
+        expect(res.headers['content-type']).not.toBe('jpeg');
+        const received = res.body as Buffer;
+        expect(received.equals(derivativeBytes)).toBe(true);
+        // ...and genuinely NOT the original bytes — proves this actually served the resized derivative.
+        expect(received.equals(wideJpeg)).toBe(false);
+      });
+
+      it('falls back to original when derivatives.display was evaluated but classified "failed" (decode-error) — the display branch is skipped entirely', async () => {
+        const page = await createPageViaApi(accessToken, `${PATH_PREFIX}display-fallback-failed`, '# ff');
+        const garbage = Buffer.from('this is not a real png, just garbage bytes for the delivery test');
+        const upload = await request(app)
+          .post(`/api/v2/pages/${page._id}/attachments`)
+          .set(authHeaders(accessToken))
+          .attach('file', garbage, { filename: 'not-a-png.png', contentType: 'image/png' });
+        expect(upload.status).toBe(200);
+        const id = upload.body.attachment._id;
+
+        const Attachment = crowi.model('Attachment');
+        const stored = await Attachment.findById(id);
+        expect(stored?.derivatives?.display?.mode).toBe('failed');
+
+        const res = await request(app).get(`/api/v2/attachments/${id}`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
+
+        expect(res.status).toBe(200);
+        expect(res.headers['content-type']).toBe('image/png');
+        const received = res.body as Buffer;
+        expect(received.equals(garbage)).toBe(true);
+      });
+
+      it('falls back to original when derivatives.display.mode is "resized" but the derivative object is missing from storage — a cache miss, not a 500/placeholder (§9 step 4)', async () => {
+        const page = await createPageViaApi(accessToken, `${PATH_PREFIX}display-fallback-missing`, '# fm');
+        const wideJpeg = await createWideJpeg();
+        const upload = await request(app)
+          .post(`/api/v2/pages/${page._id}/attachments`)
+          .set(authHeaders(accessToken))
+          .attach('file', wideJpeg, { filename: 'wide.jpg', contentType: 'image/jpeg' });
+        expect(upload.status).toBe(200);
+        const id = upload.body.attachment._id;
+
+        const Attachment = crowi.model('Attachment');
+        const stored = await Attachment.findById(id);
+        expect(stored?.derivatives?.display?.mode).toBe('resized');
+        const derivativeFilePath = stored?.derivatives?.display?.filePath as string;
+
+        // Delete the derivative OBJECT directly through the driver while
+        // leaving `derivatives.display` (mode: resized, filePath set)
+        // untouched on the Attachment row — exactly the "metadata says
+        // resized but the object is gone" cache-miss the fallback exists
+        // for (spec §7 end / §9 step 4).
+        const driver = crowi.getPlugins().active.storage;
+        if (!driver) throw new Error('storage driver missing in test env');
+        await driver.delete(derivativeFilePath);
+
+        const res = await request(app).get(`/api/v2/attachments/${id}`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
+
+        expect(res.status).toBe(200);
+        expect(res.headers['content-type']).toBe('image/jpeg');
+        const received = res.body as Buffer;
+        expect(received.equals(wideJpeg)).toBe(true);
+      });
+
+      it('falls back to original when the display derivative get() rejects with a NoSuchKey-shaped error (S3), not just local ENOENT', async () => {
+        const page = await createPageViaApi(accessToken, `${PATH_PREFIX}display-fallback-nosuchkey`, '# fn');
+        const wideJpeg = await createWideJpeg();
+        const upload = await request(app)
+          .post(`/api/v2/pages/${page._id}/attachments`)
+          .set(authHeaders(accessToken))
+          .attach('file', wideJpeg, { filename: 'wide.jpg', contentType: 'image/jpeg' });
+        expect(upload.status).toBe(200);
+        const id = upload.body.attachment._id;
+
+        const Attachment = crowi.model('Attachment');
+        const stored = await Attachment.findById(id);
+        expect(stored?.derivatives?.display?.mode).toBe('resized');
+        const derivativeFilePath = stored?.derivatives?.display?.filePath as string;
+
+        // Reject ONLY the derivative key so original delivery (the fallback
+        // under test) still resolves through the REAL driver — `get` is
+        // otherwise delegated to the original implementation.
+        const driver = crowi.getPlugins().active.storage;
+        if (!driver) throw new Error('storage driver missing in test env');
+        const originalGet = driver.get.bind(driver);
+        const getSpy = jest.spyOn(driver, 'get').mockImplementation((key: string) => {
+          if (key === derivativeFilePath) {
+            const err = Object.assign(new Error('The specified key does not exist.'), {
+              name: 'NoSuchKey',
+              $metadata: { httpStatusCode: 404 },
+            });
+            return Promise.reject(err);
+          }
+          return originalGet(key);
+        });
+
+        try {
+          const res = await request(app).get(`/api/v2/attachments/${id}`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
+          expect(res.status).toBe(200);
+          expect(res.headers['content-type']).toBe('image/jpeg');
+          const received = res.body as Buffer;
+          expect(received.equals(wideJpeg)).toBe(true);
+        } finally {
+          getSpy.mockRestore();
+        }
+      });
+
+      it('/attachments/:id itself still has no scope check — a pages:read-only OAuth token can access it (pre-existing gap, unchanged by this feature — spec §3)', async () => {
+        const page = await createPageViaApi(accessToken, `${PATH_PREFIX}no-scope-gap`, '# gap');
+        const upload = await request(app)
+          .post(`/api/v2/pages/${page._id}/attachments`)
+          .set(authHeaders(accessToken))
+          .attach('file', pngBuffer, { filename: 'pixel.png', contentType: 'image/png' });
+        expect(upload.status).toBe(200);
+        const id = upload.body.attachment._id;
+
+        const scoped = await createTestUser({ name: 'Attach No Scope Gap', username: 'attachNoScopeGap', email: 'attach-no-scope-gap@example.com' });
+        const oauthToken = createJwtUtil(crowi).signOauthAccessToken({ user: scoped.user, scopes: ['pages:read'], clientId: 'crowi-cli' });
+
+        const res = await request(app).get(`/api/v2/attachments/${id}`).set(authHeaders(oauthToken));
+        expect(res.status).toBe(200);
+      });
+    });
+  });
+
+  describe('GET /api/v2/attachments/:id/original (raw stream, always original — feature-image-derivative-optimization Phase 2)', () => {
+    it('returns 401 without auth', async () => {
+      const res = await request(app).get('/api/v2/attachments/000000000000000000000000/original');
+      expect(res.status).toBe(401);
+    });
+
+    it('serves the file-not-found placeholder for a non-existent attachment record', async () => {
+      const res = await request(app)
+        .get('/api/v2/attachments/000000000000000000000000/original')
+        .set(authHeaders(accessToken))
+        .buffer(true)
+        .parse(bufferParser);
+
+      expect(res.status).toBe(200);
+      expect(res.headers['content-type']).toBe('image/png');
+      const received = res.body as Buffer;
+      expect(received.equals(fileNotFoundImage)).toBe(true);
+    });
+
+    it('returns 404 (not the placeholder) when the caller lacks grant on the page', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}original-grant-fail`, '# secret', 4 /* GRANT_OWNER */);
+      const upload = await request(app)
+        .post(`/api/v2/pages/${page._id}/attachments`)
+        .set(authHeaders(accessToken))
+        .attach('file', pngBuffer, { filename: 'pixel.png', contentType: 'image/png' });
+      expect(upload.status).toBe(200);
+      const id = upload.body.attachment._id;
+
+      const res = await request(app).get(`/api/v2/attachments/${id}/original`).set(authHeaders(otherAccessToken));
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('ATTACHMENT_NOT_FOUND');
+    });
+
+    it('serves the placeholder when the backing original file is missing (local ENOENT)', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}original-enoent`, '# oe');
+      const upload = await request(app)
+        .post(`/api/v2/pages/${page._id}/attachments`)
+        .set(authHeaders(accessToken))
+        .attach('file', pngBuffer, { filename: 'pixel.png', contentType: 'image/png' });
+      expect(upload.status).toBe(200);
+      const id = upload.body.attachment._id;
+
+      const Attachment = crowi.model('Attachment');
+      const stored = await Attachment.findById(id);
+      const driver = crowi.getPlugins().active.storage;
+      if (!driver) throw new Error('storage driver missing in test env');
+      await driver.delete(stored.filePath);
+
+      const res = await request(app).get(`/api/v2/attachments/${id}/original`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
+
+      expect(res.status).toBe(200);
+      expect(res.headers['content-type']).toBe('image/png');
+      const received = res.body as Buffer;
+      expect(received.equals(fileNotFoundImage)).toBe(true);
+    });
+
+    it('always returns the ORIGINAL bytes, even when a "resized" display derivative exists — never reads derivatives.display/mode/reason', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}original-ignores-display`, '# oid');
+      const wideJpeg = await createWideJpeg();
+      const upload = await request(app)
+        .post(`/api/v2/pages/${page._id}/attachments`)
+        .set(authHeaders(accessToken))
+        .attach('file', wideJpeg, { filename: 'wide.jpg', contentType: 'image/jpeg' });
+      expect(upload.status).toBe(200);
+      const id = upload.body.attachment._id;
+
+      const Attachment = crowi.model('Attachment');
+      const stored = await Attachment.findById(id);
+      expect(stored?.derivatives?.display?.mode).toBe('resized');
+
+      const res = await request(app).get(`/api/v2/attachments/${id}/original`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
+
+      expect(res.status).toBe(200);
+      expect(res.headers['content-type']).toBe('image/jpeg');
+      const received = res.body as Buffer;
+      expect(received.equals(wideJpeg)).toBe(true);
+    });
+
+    it('Content-Disposition is inline with originalName, same as /attachments/:id', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}original-disposition`, '# od');
+      const upload = await request(app)
+        .post(`/api/v2/pages/${page._id}/attachments`)
+        .set(authHeaders(accessToken))
+        .attach('file', pngBuffer, { filename: 'my pixel.png', contentType: 'image/png' });
+      expect(upload.status).toBe(200);
+      const id = upload.body.attachment._id;
+
+      const res = await request(app).get(`/api/v2/attachments/${id}/original`).set(authHeaders(accessToken));
+      expect(res.status).toBe(200);
+      expect(res.headers['content-disposition']).toBe(`inline; filename*=UTF-8''${encodeURIComponent('my pixel.png')}`);
+    });
+
+    it('403 INSUFFICIENT_SCOPE for a pages:read-only OAuth token (requires attachments:read explicitly, §3)', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}original-scope-insufficient`, '# scope');
+      const upload = await request(app)
+        .post(`/api/v2/pages/${page._id}/attachments`)
+        .set(authHeaders(accessToken))
+        .attach('file', pngBuffer, { filename: 'pixel.png', contentType: 'image/png' });
+      expect(upload.status).toBe(200);
+      const id = upload.body.attachment._id;
+
+      const scoped = await createTestUser({ name: 'Attach Scope Read', username: 'attachOriginalScopeRead', email: 'attach-original-scope-read@example.com' });
+      const oauthToken = createJwtUtil(crowi).signOauthAccessToken({ user: scoped.user, scopes: ['pages:read'], clientId: 'crowi-cli' });
+
+      const res = await request(app).get(`/api/v2/attachments/${id}/original`).set(authHeaders(oauthToken));
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe('INSUFFICIENT_SCOPE');
+    });
+
+    it('200 for an attachments:read-scoped OAuth token', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}original-scope-sufficient`, '# scope-ok');
+      const upload = await request(app)
+        .post(`/api/v2/pages/${page._id}/attachments`)
+        .set(authHeaders(accessToken))
+        .attach('file', pngBuffer, { filename: 'pixel.png', contentType: 'image/png' });
+      expect(upload.status).toBe(200);
+      const id = upload.body.attachment._id;
+
+      const scoped = await createTestUser({ name: 'Attach Scope Ok', username: 'attachOriginalScopeOk', email: 'attach-original-scope-ok@example.com' });
+      const oauthToken = createJwtUtil(crowi).signOauthAccessToken({ user: scoped.user, scopes: ['attachments:read'], clientId: 'crowi-cli' });
+
+      const res = await request(app).get(`/api/v2/attachments/${id}/original`).set(authHeaders(oauthToken)).buffer(true).parse(bufferParser);
+      expect(res.status).toBe(200);
+      expect((res.body as Buffer).equals(pngBuffer)).toBe(true);
+    });
+
+    it('200 for a web-session token (ALL_SCOPES) — unaffected by the new scope requirement', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}original-scope-web`, '# scope-web');
+      const upload = await request(app)
+        .post(`/api/v2/pages/${page._id}/attachments`)
+        .set(authHeaders(accessToken))
+        .attach('file', pngBuffer, { filename: 'pixel.png', contentType: 'image/png' });
+      expect(upload.status).toBe(200);
+      const id = upload.body.attachment._id;
+
+      const res = await request(app).get(`/api/v2/attachments/${id}/original`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
+      expect(res.status).toBe(200);
+      expect((res.body as Buffer).equals(pngBuffer)).toBe(true);
     });
   });
 
@@ -711,6 +1046,44 @@ describe('Routes /api/v2 attachments (Hono)', () => {
 
       const Attachment = crowi.model('Attachment');
       expect(await Attachment.findById(id)).toBeNull();
+    });
+
+    it('feature-image-derivative-optimization: returns 500 REMOVE_FAILED when original deletion fails — row-delete-first contract unchanged, and derivative cleanup is still attempted', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}delete-original-fails`, '# do');
+      const wideJpeg = await createWideJpeg({ r: 1, g: 2, b: 3 });
+      const upload = await request(app)
+        .post(`/api/v2/pages/${page._id}/attachments`)
+        .set(authHeaders(accessToken))
+        .attach('file', wideJpeg, { filename: 'wide.jpg', contentType: 'image/jpeg' });
+      expect(upload.status).toBe(200);
+      const id = upload.body.attachment._id;
+
+      const Attachment = crowi.model('Attachment');
+      const stored = await Attachment.findById(id);
+      const originalKey = stored?.filePath as string;
+      const derivativeKey = stored?.derivatives?.display?.filePath as string;
+      expect(derivativeKey).toBeDefined();
+
+      const driver = crowi.getPlugins().active.storage;
+      if (!driver) throw new Error('storage driver missing in test env');
+      const realDelete = driver.delete.bind(driver);
+      const deleteSpy = jest.spyOn(driver, 'delete').mockImplementation(async (key: string) => {
+        if (key === originalKey) throw new Error('simulated original delete failure');
+        return realDelete(key);
+      });
+
+      try {
+        const res = await request(app).delete(`/api/v2/attachments/${id}`).set(authHeaders(accessToken));
+        expect(res.status).toBe(500);
+        expect(res.body.error.code).toBe('REMOVE_FAILED');
+      } finally {
+        deleteSpy.mockRestore();
+      }
+
+      // Row delete happened first regardless of the original storage failure.
+      expect(await Attachment.findById(id)).toBeNull();
+      // Derivative cleanup was still attempted despite the original delete failing.
+      await expect(driver.get(derivativeKey)).rejects.toBeDefined();
     });
   });
 

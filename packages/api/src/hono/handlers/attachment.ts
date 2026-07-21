@@ -38,24 +38,23 @@
  *    `/attachments/upload`.
  */
 import { randomBytes } from 'node:crypto';
-import fs from 'node:fs';
-import { mkdirSync } from 'node:fs';
+import fs, { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 
 import {
-  type Attachment as AttachmentSchema,
   type AttachmentMeta,
-  type UploadAttachmentErrorCode,
-  type UserPublic,
-  IMAGE_UPLOAD_MIME,
-  DND_EXTRA_UPLOAD_MIME,
+  type Attachment as AttachmentSchema,
   addAttachmentRoute,
+  DND_EXTRA_UPLOAD_MIME,
   getAttachmentMetaRoute,
   getAttachmentUsageRoute,
+  IMAGE_UPLOAD_MIME,
   listAttachmentsRoute,
   removeAttachmentRoute,
+  type UploadAttachmentErrorCode,
+  type UserPublic,
   uploadAttachmentRoute,
 } from '@crowi/api-contract';
 import type { OpenAPIHono } from '@hono/zod-openapi';
@@ -66,12 +65,13 @@ import type Crowi from 'src/crowi';
 import type { AttachmentDocument } from 'src/models/attachment';
 import type { PageDocument } from 'src/models/page';
 import FileUploader from 'src/util/file-uploader';
+import { generateDisplayDerivativeForUpload } from 'src/util/image-display-derivative';
 import { createRateLimiter } from 'src/util/rate-limit';
 import {
-  type PopulatedUserPublic,
   isPopulatedUser,
   isValidObjectId,
   loadGrantedPage,
+  type PopulatedUserPublic,
   toISOStringOrNull,
   toStringId,
   toUserPublic,
@@ -199,7 +199,12 @@ const attachmentToResponse = (attachment: AttachmentDocument, inUse: boolean): A
     fileFormat: obj.fileFormat,
     fileSize: obj.fileSize,
     createdAt: toISOStringOrNull(obj.createdAt as Date | undefined) ?? new Date(0).toISOString(),
+    // feature-image-derivative-optimization Phase 2 §5 — `url` (canonical)
+    // now resolves display-priority with original fallback (attachment-stream.ts);
+    // `originalUrl` is the explicit always-original escape hatch. Both are
+    // derived from the same `fileUrl` virtual, never stored.
     url: obj.fileUrl,
+    originalUrl: `${obj.fileUrl}/original`,
     inUse,
   };
 };
@@ -235,6 +240,26 @@ const cleanupTmp = (tmpPath: string | null) => {
   if (!tmpPath) return;
   fs.unlink(tmpPath, (err) => {
     if (err) debug('failed to unlink tmp file', err);
+  });
+};
+
+/**
+ * feature-image-derivative-optimization Phase 1 §8 — the single call site
+ * both upload paths (footer add / editor paste-D&D) use to kick off
+ * display-derivative generation, right after `Attachment.create` and
+ * before the source tmp file is cleaned up. `oldFilePath` is always
+ * `undefined` here: both callers just created a brand-new Attachment row,
+ * so there is no prior `derivatives.display` to compare against.
+ *
+ * `generateDisplayDerivativeForUpload` is itself designed to never reject
+ * (every failure mode — admission timeout, decode error, storage error,
+ * anything unexpected — is classified, best-effort persisted as `mode:
+ * 'failed'`, and swallowed). The `.catch()` here is defence-in-depth only,
+ * so a bug in that guarantee can never turn into a failed upload response.
+ */
+const runDisplayDerivativeGeneration = async (crowi: Crowi, attachmentId: Types.ObjectId, pageId: Types.ObjectId, sourcePath: string): Promise<void> => {
+  await generateDisplayDerivativeForUpload({ crowi, attachmentId, pageId, sourcePath, oldFilePath: undefined }).catch((err) => {
+    debug('display derivative generation call failed unexpectedly', err);
   });
 };
 
@@ -498,7 +523,13 @@ export const registerAttachmentRoutes = <E extends OpenAPIHono<CrowiHonoBindings
             fileSize,
           })) as AttachmentDocument;
 
-          await created.populate('creator');
+          // Independent of each other — derivative generation writes to the
+          // Attachment row via a separate `updateOne` (never mutates
+          // `created` in memory) and `populate('creator')` only reads the
+          // User collection, so running them concurrently shaves the
+          // derivative-generation latency off the response without
+          // changing what either produces.
+          await Promise.all([runDisplayDerivativeGeneration(crowi, created._id, pageData._id, persisted.tmpPath), created.populate('creator')]);
 
           cleanupTmp(tmpPath);
           tmpPath = null;
@@ -600,6 +631,8 @@ export const registerAttachmentRoutes = <E extends OpenAPIHono<CrowiHonoBindings
             fileFormat: fileType,
             fileSize,
           })) as AttachmentDocument;
+
+          await runDisplayDerivativeGeneration(crowi, created._id, pageData._id, persisted.tmpPath);
 
           cleanupTmp(tmpPath);
           tmpPath = null;

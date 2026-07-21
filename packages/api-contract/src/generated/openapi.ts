@@ -8746,6 +8746,7 @@ export interface paths {
                                 fileSize: number;
                                 createdAt: string;
                                 url: string;
+                                originalUrl: string;
                                 inUse: boolean;
                             }[];
                             past: {
@@ -8773,6 +8774,7 @@ export interface paths {
                                     fileSize: number;
                                     createdAt: string;
                                     url: string;
+                                    originalUrl: string;
                                     inUse: boolean;
                                 };
                                 referencingRevisions: {
@@ -8921,6 +8923,7 @@ export interface paths {
                                 fileSize: number;
                                 createdAt: string;
                                 url: string;
+                                originalUrl: string;
                                 inUse: boolean;
                             }[];
                         };
@@ -9043,6 +9046,7 @@ export interface paths {
                                 fileSize: number;
                                 createdAt: string;
                                 url: string;
+                                originalUrl: string;
                                 inUse: boolean;
                             };
                             url: string;
@@ -9348,6 +9352,7 @@ export interface paths {
                             fileSize: number;
                             createdAt: string;
                             url: string;
+                            originalUrl: string;
                         };
                     };
                 };
@@ -14834,6 +14839,7 @@ export interface components {
             fileSize: number;
             createdAt: string;
             url: string;
+            originalUrl: string;
             inUse: boolean;
         };
         AttachmentMeta: {
@@ -14860,6 +14866,7 @@ export interface components {
             fileSize: number;
             createdAt: string;
             url: string;
+            originalUrl: string;
         };
         ListAttachmentsResponse: {
             attachments: {
@@ -14886,6 +14893,7 @@ export interface components {
                 fileSize: number;
                 createdAt: string;
                 url: string;
+                originalUrl: string;
                 inUse: boolean;
             }[];
         };
@@ -14914,6 +14922,7 @@ export interface components {
                 fileSize: number;
                 createdAt: string;
                 url: string;
+                originalUrl: string;
                 inUse: boolean;
             };
             referencingRevisions: {
@@ -14961,6 +14970,7 @@ export interface components {
                 fileSize: number;
                 createdAt: string;
                 url: string;
+                originalUrl: string;
                 inUse: boolean;
             }[];
             past: {
@@ -14988,6 +14998,7 @@ export interface components {
                     fileSize: number;
                     createdAt: string;
                     url: string;
+                    originalUrl: string;
                     inUse: boolean;
                 };
                 referencingRevisions: {

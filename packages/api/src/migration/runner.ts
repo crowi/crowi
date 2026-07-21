@@ -198,9 +198,15 @@ export class MigrationRunnerCore {
   installSigintHandler(): () => void {
     if (this.sigintHandler) return () => this.removeSigintHandler();
     const handler = () => {
-      if (this.abortRequested) return; // a second Ctrl-C — let it through to default
       this.abortRequested = true;
       this.opts.logger.warn('SIGINT received — finishing the current unit then stopping safely…');
+      // Uninstall immediately: `process.on('SIGINT', ...)` disables Node's
+      // default terminate-on-SIGINT behavior for as long as ANY listener
+      // stays registered, so leaving this one in place would silently
+      // swallow a second Ctrl-C instead of letting it fall through to the
+      // default (immediate exit) — the one signal an impatient operator
+      // needs when "finish the current unit" is taking too long.
+      this.removeSigintHandler();
     };
     this.sigintHandler = handler;
     process.on('SIGINT', handler);

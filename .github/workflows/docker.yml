@@ -228,6 +228,39 @@ jobs:
           cache-from: type=gha,scope=docker-${{ matrix.variant }}
           cache-to: type=gha,mode=max,scope=docker-${{ matrix.variant }}
 
+      # feature-image-derivative-optimization Phase 3 — `sharp` (the display-
+      # derivative generator's decode/resize/encode engine, packages/api/src/
+      # util/image-display-derivative.ts) ships native, platform-specific
+      # `@img/sharp-*` prebuilds. A host-only Jest run can't prove those
+      # prebuilds actually made it into THIS multi-arch image's `pnpm deploy`
+      # tree with the right glibc/arch pairing, nor that the non-root `node`
+      # user (Dockerfile `USER node`) can load them — so run `sharp` for real,
+      # on both pushed architectures, against the tag just pushed above.
+      # `createRequire` scoped to the REAL (symlink-resolved) location of
+      # @crowi/api's own entry file walks the SAME node_modules chain the
+      # running server resolves `sharp` through, regardless of whether pnpm's
+      # deploy tree hoists `sharp` to the top level or nests it under
+      # @crowi/api's own node_modules — so this proves the exact resolution
+      # path the running server uses, not a coincidentally-adjacent one.
+      # (`require.resolve('sharp', { paths: [...] })` against the un-resolved
+      # /app/node_modules/@crowi/api path does NOT work here: that path is a
+      # symlink into pnpm's `.pnpm` virtual store, and Node's `paths` lookup
+      # does not follow it the way `createRequire` from the real file does.)
+      # QEMU (already set up above) transparently emulates the arm64 run on
+      # this amd64 runner.
+      - name: Smoke test sharp inside the pushed image (amd64 + arm64)
+        env:
+          TAGS: ${{ steps.tags.outputs.tags }}
+        run: |
+          set -euo pipefail
+          SMOKE_TAG="$(printf '%s\n' "$TAGS" | head -n1)"
+          SHARP_SMOKE_JS='const fs = require("fs"); const { createRequire } = require("module"); const apiEntry = fs.realpathSync("/app/node_modules/@crowi/api/dist/app.js"); const req = createRequire(apiEntry); const sharp = req("sharp"); sharp({ create: { width: 8, height: 8, channels: 3, background: { r: 10, g: 20, b: 30 } } }).resize(4, 4).png().toBuffer().then((buf) => { if (!buf || buf.length === 0) throw new Error("empty buffer"); console.log("sharp smoke OK:", buf.length, "bytes"); }).catch((err) => { console.error(err); process.exit(1); });'
+          for PLATFORM in linux/amd64 linux/arm64; do
+            echo "::group::sharp smoke ($PLATFORM, $SMOKE_TAG)"
+            docker run --rm --platform "$PLATFORM" "$SMOKE_TAG" node -e "$SHARP_SMOKE_JS"
+            echo "::endgroup::"
+          done
+
   # crowi/crowi-web is a SEPARATE distribution artifact: the Next.js standalone
   # renderer (no plugins, no full/slim split). It shares the resolve job's
   # dist-version + checkout-ref + should-build gate, and reuses the shared tag

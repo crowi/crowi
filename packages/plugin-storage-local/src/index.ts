@@ -1,5 +1,6 @@
-import { createReadStream, createWriteStream, existsSync } from 'node:fs';
-import { mkdir, rm, stat } from 'node:fs/promises';
+import { randomBytes } from 'node:crypto';
+import { type Dirent, createReadStream, createWriteStream, existsSync } from 'node:fs';
+import { mkdir, readdir, rename, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -34,7 +35,46 @@ const plugin: CrowiPlugin = {
 
 export default plugin;
 
-export function createLocalDriver(config: LocalStorageConfig): StorageDriver {
+/**
+ * One object found under the `attachment/<pageId>/derivatives/<attachmentId>/`
+ * namespace (feature-image-derivative-optimization §7/§11) — the shape
+ * `--gc`'s local enumeration needs: the key to diff against the
+ * Mongo-side referenced-key set, its byte size for the candidate-bytes
+ * counter, and its `mtimeMs` for the grace-period filter.
+ */
+export interface LocalDerivativeObject {
+  key: string;
+  size: number;
+  mtimeMs: number;
+}
+
+/**
+ * A local driver that additionally exposes {@link LocalStorageDriver.listDerivativeObjects}.
+ * `createLocalDriver` always returns one of these; callers that only hold a
+ * generic `StorageDriver` (e.g. resolved via `getStorageDriverByName`) must
+ * duck-type-check for the method before calling it — this is a driver-specific,
+ * opt-in extension, NOT an addition to the core `StorageDriver` interface
+ * (`@crowi/plugin-api`'s `put`/`get`/`delete`/`signedUrl?` stays untouched; see
+ * `packages/plugin-api/src/registries/storage.ts`).
+ */
+export interface LocalStorageDriver extends StorageDriver {
+  /**
+   * Enumerate every object under the `attachment/*\/derivatives/*\/*`
+   * namespace on this driver's `rootDir` — used exclusively by
+   * `crowi-admin rebuild attachment-display-derivatives --gc` (local-only,
+   * v1). Mirrors `statKey`'s "debug/ops export alongside the driver, not a
+   * core interface method" shape. A missing `attachment/` (or per-page
+   * `derivatives/`) directory is treated as "nothing to enumerate yet", not
+   * an error.
+   */
+  listDerivativeObjects(): Promise<LocalDerivativeObject[]>;
+}
+
+/** Path segments shared with `Attachment.createAttachmentFilePath` / `buildDisplayDerivativeKey` (`packages/api/src/util/image-display-derivative.ts`) — duplicated here (not imported) so this leaf storage plugin stays independent of `@crowi/api`. */
+const ATTACHMENT_KEY_PREFIX = 'attachment';
+const DERIVATIVES_KEY_SEGMENT = 'derivatives';
+
+export function createLocalDriver(config: LocalStorageConfig): LocalStorageDriver {
   const root = path.isAbsolute(config.rootDir) ? config.rootDir : path.resolve(process.cwd(), config.rootDir);
 
   // Reject `..` / absolute paths that would escape rootDir
@@ -52,8 +92,30 @@ export function createLocalDriver(config: LocalStorageConfig): StorageDriver {
       const target = resolveSafe(key);
       await mkdir(path.dirname(target), { recursive: true });
       const source = body instanceof Buffer ? Readable.from(body) : body;
-      await pipeline(source, createWriteStream(target));
-      return { key };
+
+      // feature-image-derivative-optimization §7a — write to a
+      // process-unique temp file, then atomically rename it into place
+      // (POSIX same-filesystem rename is atomic). A reader's `get()`
+      // therefore always observes either the previous complete object or
+      // the new complete object, never a torn/partial write — required
+      // once re-writing the SAME key (display-derivative regeneration) is
+      // a normal occurrence rather than a rare overwrite. The suffix uses
+      // `crypto.randomBytes` (not e.g. a fixed `<key>.tmp`) so two
+      // processes racing to `put()` the same key never share a temp path
+      // and interleave into a single corrupt temp file that both then
+      // rename over the target.
+      const tmpTarget = `${target}.${randomBytes(12).toString('hex')}.tmp`;
+      let renamed = false;
+      try {
+        await pipeline(source, createWriteStream(tmpTarget));
+        await rename(tmpTarget, target);
+        renamed = true;
+        return { key };
+      } finally {
+        if (!renamed) {
+          await rm(tmpTarget, { force: true });
+        }
+      }
     },
 
     async get(key) {
@@ -73,7 +135,45 @@ export function createLocalDriver(config: LocalStorageConfig): StorageDriver {
 
     // No signedUrl: local files are streamed via `get()` through the
     // API. Browsers cannot fetch them directly anyway.
+
+    async listDerivativeObjects(): Promise<LocalDerivativeObject[]> {
+      const results: LocalDerivativeObject[] = [];
+      const attachmentRoot = path.join(root, ATTACHMENT_KEY_PREFIX);
+
+      const pageDirs = await readdirSafe(attachmentRoot);
+      for (const pageDir of pageDirs) {
+        if (!pageDir.isDirectory()) continue;
+        const derivativesRoot = path.join(attachmentRoot, pageDir.name, DERIVATIVES_KEY_SEGMENT);
+        const attachmentDirs = await readdirSafe(derivativesRoot);
+        for (const attachmentDir of attachmentDirs) {
+          if (!attachmentDir.isDirectory()) continue;
+          const objectDir = path.join(derivativesRoot, attachmentDir.name);
+          const files = await readdirSafe(objectDir);
+          for (const file of files) {
+            if (!file.isFile()) continue;
+            const full = path.join(objectDir, file.name);
+            const s = await stat(full);
+            results.push({
+              key: [ATTACHMENT_KEY_PREFIX, pageDir.name, DERIVATIVES_KEY_SEGMENT, attachmentDir.name, file.name].join('/'),
+              size: s.size,
+              mtimeMs: s.mtimeMs,
+            });
+          }
+        }
+      }
+      return results;
+    },
   };
+}
+
+/** `readdir` that treats a missing directory as "empty" instead of throwing — every level of the `attachment/*\/derivatives/*\/*` walk is optional (a fresh install has no `attachment/` dir at all yet). */
+async function readdirSafe(dir: string): Promise<Dirent[]> {
+  try {
+    return await readdir(dir, { withFileTypes: true });
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return [];
+    throw err;
+  }
 }
 
 /**

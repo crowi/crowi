@@ -81,6 +81,7 @@
     "remark-breaks": "^4.0.0",
     "remark-gfm": "^4.0.1",
     "remark-parse": "^11.0.0",
+    "sharp": "^0.34.5",
     "shiki": "^4.0.2",
     "unified": "^11.0.5",
     "uuid": "^11.1.1",

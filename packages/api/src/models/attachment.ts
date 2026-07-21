@@ -1,8 +1,19 @@
-import Crowi from 'src/crowi';
-import { Types, Document, Model, Schema, model } from 'mongoose';
-import Debug from 'debug';
 import crypto from 'crypto';
+import Debug from 'debug';
+import { Document, Model, model, Schema, Types } from 'mongoose';
+import Crowi from 'src/crowi';
 import FileUploader from 'src/util/file-uploader';
+import {
+  type AttachmentDerivatives,
+  type AttachmentDisplayDerivative,
+  DISPLAY_DERIVATIVE_MIME_TYPES,
+  DISPLAY_DERIVATIVE_MODES,
+  DISPLAY_DERIVATIVE_REASONS,
+  DISPLAY_DERIVATIVE_RECIPE_VERSION,
+  displayDerivativeKeyCandidates,
+} from 'src/util/image-display-derivative';
+
+export type { AttachmentDerivatives, AttachmentDisplayDerivative };
 
 export interface AttachmentDocument extends Document {
   _id: Types.ObjectId;
@@ -14,6 +25,14 @@ export interface AttachmentDocument extends Document {
   fileFormat: string;
   fileSize: number;
   createdAt: Date;
+  /**
+   * feature-image-derivative-optimization Phase 1 — best-effort display
+   * derivatives (currently just `display`). Absent entirely on
+   * legacy/not-yet-evaluated attachments — treat that as a 5th state
+   * distinct from every `mode`, and fall back to `filePath` (original).
+   * Never `required` — additive, backward-compatible with existing rows.
+   */
+  derivatives?: AttachmentDerivatives;
 
   // virtual
   fileUrl: string;
@@ -42,6 +61,37 @@ export default (crowi: Crowi) => {
     return hasher.digest('hex');
   }
 
+  // feature-image-derivative-optimization Phase 1 — every enum here is
+  // sourced from `image-display-derivative.ts` (the generator's own
+  // classification tables), not hand-duplicated, so the storage layer
+  // rejects anything the generator could never actually produce (a typo'd
+  // `reason`, a `format` that isn't one of the 3 fixed MIME strings, a
+  // `recipeVersion` other than the current literal) instead of silently
+  // accepting an arbitrary Number/String.
+  const attachmentDisplayDerivativeSchema = new Schema<AttachmentDisplayDerivative>(
+    {
+      recipeVersion: { type: Number, required: true, enum: [DISPLAY_DERIVATIVE_RECIPE_VERSION] },
+      mode: { type: String, required: true, enum: DISPLAY_DERIVATIVE_MODES },
+      reason: { type: String, enum: DISPLAY_DERIVATIVE_REASONS },
+      // Only set when mode === 'resized' — the derivative object's storage key.
+      filePath: { type: String },
+      // MIME type string (e.g. `image/jpeg`), NOT a sharp decoder identifier — see image-display-derivative.ts.
+      format: { type: String, enum: DISPLAY_DERIVATIVE_MIME_TYPES },
+      width: { type: Number },
+      height: { type: Number },
+      size: { type: Number },
+      generatedAt: { type: Date, required: true },
+    },
+    { _id: false },
+  );
+
+  const attachmentDerivativesSchema = new Schema<AttachmentDerivatives>(
+    {
+      display: { type: attachmentDisplayDerivativeSchema, default: undefined },
+    },
+    { _id: false },
+  );
+
   const attachmentSchema = new Schema<AttachmentDocument, AttachmentModel>(
     {
       page: { type: Schema.Types.ObjectId, ref: 'Page', index: true },
@@ -52,6 +102,7 @@ export default (crowi: Crowi) => {
       fileFormat: { type: String, required: true },
       fileSize: { type: Number, default: 0 },
       createdAt: { type: Date, default: Date.now },
+      derivatives: { type: attachmentDerivativesSchema, default: undefined },
     },
     {
       toJSON: {
@@ -112,14 +163,49 @@ export default (crowi: Crowi) => {
     return fileUploader.findDeliveryFile(attachment._id, attachment.filePath);
   };
 
+  // feature-image-derivative-optimization spec §10 — `findOneAndDelete`
+  // makes the row-delete and the "final snapshot" read a single atomic
+  // Mongo operation, so a `derivatives.display` published by a concurrent
+  // generator moments before this call is reliably captured (unlike
+  // trusting the caller-supplied `attachment` argument, which may have
+  // been read before that publish). Row delete stays FIRST and original
+  // delete failure still surfaces as a thrown error afterwards — the
+  // `DELETE /api/v2/attachments/:id` contract (500 on original-delete
+  // failure) is unchanged.
   attachmentSchema.statics.removeAttachment = async function (attachment) {
-    const filePath = attachment.filePath;
+    const deleted = (await Attachment.findOneAndDelete({ _id: attachment._id })) as AttachmentDocument | null;
+    if (!deleted) {
+      // Already removed by a concurrent call (or never existed) — idempotent no-op.
+      return;
+    }
 
-    await Attachment.deleteOne({ _id: attachment._id });
+    let originalDeleteError: unknown;
+    try {
+      await fileUploader.deleteFile(deleted._id, deleted.filePath);
+    } catch (err) {
+      originalDeleteError = err;
+    }
 
-    const data = await fileUploader.deleteFile(attachment._id, filePath);
+    // Always attempt derivative cleanup, regardless of whether the original
+    // delete above succeeded — union of (a) the publish-recorded display
+    // key (if any) and (b) the deterministic v1 key candidates
+    // (jpg/png/webp). (b) alone catches a "put succeeded, publish never
+    // ran" orphan (spec §7 end / §10 case D), which (a) can't see because
+    // `derivatives.display` was never set. `deleteFile` is idempotent, so
+    // sweeping all candidates unconditionally is safe.
+    const derivativeKeys = new Set<string>(displayDerivativeKeyCandidates(deleted.page, deleted._id));
+    const publishedKey = deleted.derivatives?.display?.filePath;
+    if (publishedKey) derivativeKeys.add(publishedKey);
 
-    return data;
+    await Promise.all(
+      [...derivativeKeys].map((key) =>
+        fileUploader.deleteFile(deleted._id, key).catch((err) => {
+          debug('best-effort derivative delete failed during removeAttachment for %s: %s', key, err instanceof Error ? err.message : String(err));
+        }),
+      ),
+    );
+
+    if (originalDeleteError) throw originalDeleteError;
   };
 
   const Attachment = model<AttachmentDocument, AttachmentModel>('Attachment', attachmentSchema);

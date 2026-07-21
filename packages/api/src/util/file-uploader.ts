@@ -1,7 +1,7 @@
 import { createReadStream } from 'node:fs';
 import { Readable } from 'node:stream';
-import type Crowi from 'src/crowi';
 import type { StorageDriver } from '@crowi/plugin-api';
+import type Crowi from 'src/crowi';
 
 // Resolved per call (not cached at module init) because the
 // PluginManager bootstraps after this module is required.
@@ -113,3 +113,23 @@ export default (crowi: Crowi): FileUploader => ({
  * route knowledge in two places.
  */
 export const BY_KEY_URL_PREFIX = '/api/v2/attachments/by-key/';
+
+/**
+ * Whether a storage-driver `get()`/`delete()` rejection means the object is
+ * simply missing (as opposed to a real failure). Local driver throws
+ * `code: 'ENOENT'`; the S3 driver surfaces missing as AWS SDK v3
+ * `NoSuchKey` (`$metadata.httpStatusCode === 404`, no `code`).
+ *
+ * feature-image-derivative-optimization — hoisted here (originally
+ * module-private in `hono/handlers/attachment-stream.ts`, spec §9's
+ * display-priority fallback classifier) so the `--repair-missing` rebuild
+ * mode (spec §11, "existing `get()`-only existence probe") can reuse the
+ * IDENTICAL classification instead of duplicating the ENOENT/NoSuchKey shape
+ * checks — a `util/` module is the right home since both a `hono/handlers/`
+ * consumer and a `util/` consumer need it, and `util/` must not depend on
+ * `hono/handlers/`.
+ */
+export const isMissingFileError = (err: unknown): boolean => {
+  const e = err as { code?: string; name?: string; $metadata?: { httpStatusCode?: number } };
+  return e.code === 'ENOENT' || e.name === 'NoSuchKey' || e.$metadata?.httpStatusCode === 404;
+};

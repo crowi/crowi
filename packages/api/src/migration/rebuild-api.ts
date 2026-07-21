@@ -1,7 +1,8 @@
 import type Crowi from 'src/crowi';
+import type { AttachmentDisplayDerivativesTaskOptions } from 'src/util/rebuild-attachment-display-derivatives';
 
 import { type RebuildOutcome, RebuildRunner } from './rebuild-runner';
-import { backlinkRebuild, rendererRebuild, searchRebuild, storageCopyRebuild } from './rebuilds';
+import { attachmentDisplayDerivativesRebuild, backlinkRebuild, rendererRebuild, searchRebuild, storageCopyRebuild } from './rebuilds';
 
 /**
  * RFC-0008 §8.5 — the api-side surface the `@crowi/admin-cli` `rebuild`
@@ -42,6 +43,19 @@ export interface RebuildBacklinkOptions {
   progress?: RebuildProgress;
 }
 
+/**
+ * feature-image-derivative-optimization Phase 3 — CLI-facing options for
+ * `rebuild attachment-display-derivatives`. Mirrors the api-side task's
+ * own `AttachmentDisplayDerivativesTaskOptions` plus the shared
+ * `dryRun`/`concurrency`/`progress` every rebuild command exposes.
+ */
+export interface RebuildAttachmentDisplayDerivativesOptions extends AttachmentDisplayDerivativesTaskOptions {
+  dryRun?: boolean;
+  /** Bounded worker pool size for staging + generation (default 2 — see `RunnerOptions.concurrency`'s own default of 8, which is too eager for this feature). */
+  concurrency?: number;
+  progress?: RebuildProgress;
+}
+
 /** Façade over the rebuild runner + task registry for the CLI. */
 export class RebuildCliApi {
   private readonly crowi: Crowi;
@@ -50,10 +64,11 @@ export class RebuildCliApi {
     this.crowi = crowi;
   }
 
-  private buildRunner(dryRun: boolean | undefined, progress: RebuildProgress | undefined): RebuildRunner {
+  private buildRunner(dryRun: boolean | undefined, progress: RebuildProgress | undefined, concurrency?: number): RebuildRunner {
     let count = 0;
     return new RebuildRunner(this.crowi, {
       dryRun,
+      concurrency,
       progress: {
         setTotal: () => undefined,
         increment: (delta = 1) => {
@@ -79,6 +94,11 @@ export class RebuildCliApi {
 
   rebuildBacklink(opts: RebuildBacklinkOptions = {}): Promise<RebuildOutcome> {
     return this.buildRunner(opts.dryRun, opts.progress).run(backlinkRebuild);
+  }
+
+  rebuildAttachmentDisplayDerivatives(opts: RebuildAttachmentDisplayDerivativesOptions = {}): Promise<RebuildOutcome> {
+    const { dryRun, concurrency, progress, ...taskOptions } = opts;
+    return this.buildRunner(dryRun, progress, concurrency).run(attachmentDisplayDerivativesRebuild(taskOptions));
   }
 }
 

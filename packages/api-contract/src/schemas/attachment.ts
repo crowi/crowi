@@ -10,6 +10,12 @@ import { UserPublicSchema } from './user-public';
  * - `url` is a relative URL (`/api/v2/attachments/:id`) computed by the
  *   handler from the document's `fileUrl` virtual. Browsers fetch the
  *   stream endpoint via the same origin, so absolute URLs are not needed.
+ *   feature-image-derivative-optimization Phase 2 — this URL now serves the
+ *   display derivative when one is available (falling back to original),
+ *   NOT always the original bytes.
+ * - `originalUrl` (feature-image-derivative-optimization Phase 2) is
+ *   `${url}/original` — always resolves to the original bytes regardless of
+ *   `derivatives.display`. Derived, not stored (same as `url`).
  * - `inUse` (Phase 7) is `true` when the attachment is referenced by the
  *   page's latest revision body (a `/api/v2/attachments/<id>` or legacy
  *   `/files/<id>` URI). `listAttachments` computes it by scanning the
@@ -30,6 +36,7 @@ export const AttachmentSchema = z.object({
   fileSize: z.number(),
   createdAt: z.string(),
   url: z.string(),
+  originalUrl: z.string(),
   inUse: z.boolean(),
 });
 export type Attachment = z.infer<typeof AttachmentSchema>;

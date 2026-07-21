@@ -13,10 +13,13 @@ import type { Command } from 'commander';
  * (§8.5).
  *
  * Targets:
- *   - `rebuild search`        ← ported from the old top-level `search rebuild`
- *   - `rebuild storage copy`  ← ported from the old top-level `storage copy`
- *   - `rebuild renderer`      ← new; util/rebuild-renderer.ts skeleton (TODO)
- *   - `rebuild backlink`      ← new; util/rebuild-backlink.ts skeleton (TODO)
+ *   - `rebuild search`                          ← ported from the old top-level `search rebuild`
+ *   - `rebuild storage copy`                    ← ported from the old top-level `storage copy`
+ *   - `rebuild renderer`                        ← new; util/rebuild-renderer.ts skeleton (TODO)
+ *   - `rebuild backlink`                        ← new; util/rebuild-backlink.ts skeleton (TODO)
+ *   - `rebuild attachment-display-derivatives`  ← feature-image-derivative-optimization Phase 3
+ *                                                  (generate / --repair-missing / --gc modes,
+ *                                                  see util/rebuild-attachment-display-derivatives.ts)
  *
  * Like the other admin commands, this loads the api's compiled `dist/` lazily
  * (see `storage-copy.ts` for the `require.resolve` rationale — we avoid
@@ -35,11 +38,28 @@ interface RebuildProgress {
   onLabel?: (label: string) => void;
   onIncrement?: (current: number) => void;
 }
+/** Structural mirror of the api-side `AttachmentDisplayDerivativesTaskOptions` + the shared `dryRun`/`concurrency`/`progress` knobs. */
+interface RebuildAttachmentDisplayDerivativesOptions {
+  dryRun?: boolean;
+  concurrency?: number;
+  force?: boolean;
+  repairMissing?: boolean;
+  gc?: boolean;
+  confirm?: boolean;
+  gcGraceHours?: number;
+  onlyMissing?: boolean;
+  onlyStaleRecipe?: boolean;
+  pageId?: string;
+  since?: Date;
+  until?: Date;
+  progress?: RebuildProgress;
+}
 interface RebuildCliApi {
   rebuildSearch(opts?: { dryRun?: boolean; progress?: RebuildProgress }): Promise<RebuildOutcome>;
   rebuildStorageCopy(opts: { from: string; to: string; dryRun?: boolean; progress?: RebuildProgress }): Promise<RebuildOutcome>;
   rebuildRenderer(opts?: { onlyStale?: boolean; dryRun?: boolean; progress?: RebuildProgress }): Promise<RebuildOutcome>;
   rebuildBacklink(opts?: { dryRun?: boolean; progress?: RebuildProgress }): Promise<RebuildOutcome>;
+  rebuildAttachmentDisplayDerivatives(opts?: RebuildAttachmentDisplayDerivativesOptions): Promise<RebuildOutcome>;
 }
 
 interface ApiCrowi {
@@ -89,6 +109,41 @@ export function rebuildExitCode(outcome: RebuildOutcome): number {
 }
 
 /**
+ * feature-image-derivative-optimization Phase 3 — `rebuild
+ * attachment-display-derivatives` needs an AC neither `rebuildExitCode` nor
+ * `storage copy`/`replace url`'s equivalents cover: a SIGINT-interrupted run
+ * must exit non-zero even when nothing failed outright (partial completion
+ * always needs a re-run). `rebuildExitCode` itself is intentionally left
+ * unmodified (it has no `interrupted` concept and neither does any sibling
+ * command) — this wraps it instead of changing its contract for everyone.
+ * 130 = 128 + SIGINT(2), the conventional shell exit code for "killed by
+ * SIGINT".
+ */
+export function attachmentDisplayDerivativesExitCode(outcome: RebuildOutcome): number {
+  if (outcome.interrupted) return 130;
+  return rebuildExitCode(outcome);
+}
+
+/** Parse a `--concurrency`/`--gc-grace-hours`-shaped CLI option into a positive integer, throwing a descriptive error on anything else (including `0`/negative/non-numeric). */
+export function parsePositiveIntOption(raw: string, flagName: string): number {
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || String(parsed) !== raw.trim() || parsed <= 0) {
+    throw new Error(`${flagName} must be a positive integer (got '${raw}').`);
+  }
+  return parsed;
+}
+
+/** Parse a `--since`/`--until`-shaped ISO 8601 CLI option into a `Date`, or `undefined` when omitted. Throws on an unparseable value. */
+export function parseOptionalIsoDate(raw: string | undefined, flagName: string): Date | undefined {
+  if (raw === undefined) return undefined;
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new Error(`${flagName} must be a valid ISO 8601 timestamp (got '${raw}').`);
+  }
+  return parsed;
+}
+
+/**
  * Boot a lightweight Crowi, hand the rebuild façade to `fn`, then tear it
  * down. Centralizes the .env load / loadApi guard / init / teardown ceremony
  * shared by every `rebuild` subcommand.
@@ -130,7 +185,9 @@ async function withRebuildApi(fn: (api: RebuildCliApi) => Promise<number | void>
 }
 
 export function registerRebuild(program: Command): void {
-  const rebuild = program.command('rebuild').description('Operational rebuilds of derived data (renderer / search / backlink / storage copy).');
+  const rebuild = program
+    .command('rebuild')
+    .description('Operational rebuilds of derived data (renderer / search / backlink / storage copy / attachment display derivatives).');
 
   rebuild
     .command('renderer')
@@ -181,6 +238,77 @@ export function registerRebuild(program: Command): void {
         return rebuildExitCode(outcome);
       });
     });
+
+  rebuild
+    .command('attachment-display-derivatives')
+    .description('Regenerate display-optimized derivative images for attachments (feature-image-derivative-optimization).')
+    .option('--dry-run', 'Report what would change without writing anything (Mongo or storage).', false)
+    .option('--concurrency <n>', 'Bounded worker pool size for staging + generation.', '2')
+    .option('--force', 'Re-evaluate attachments already recorded on the current recipe.', false)
+    .option('--repair-missing', "Narrower mode: only regenerate 'resized' derivatives whose storage object is actually missing.", false)
+    .option('--only-missing', 'Only target attachments with no derivatives.display recorded yet.', false)
+    .option('--only-stale', 'Only target attachments whose recorded recipeVersion is not current.', false)
+    .option('--page-id <id>', 'Only target attachments on this page.')
+    .option('--since <iso>', 'Only target attachments created on/after this ISO 8601 timestamp.')
+    .option('--until <iso>', 'Only target attachments created on/before this ISO 8601 timestamp.')
+    .option('--gc', 'Local driver only: report (or, with --confirm, delete) derivative objects with no referencing Attachment.', false)
+    .option('--gc-grace-hours <n>', 'Exclude --gc candidates newer than this many hours (race-safety window).', '24')
+    .option('--confirm', 'Actually delete --gc candidates (default is report-only).', false)
+    .action(
+      async (opts: {
+        dryRun: boolean;
+        concurrency: string;
+        force: boolean;
+        repairMissing: boolean;
+        onlyMissing: boolean;
+        onlyStale: boolean;
+        pageId?: string;
+        since?: string;
+        until?: string;
+        gc: boolean;
+        gcGraceHours: string;
+        confirm: boolean;
+      }) => {
+        if (opts.gc && opts.repairMissing) {
+          console.error('crowi-admin: --gc and --repair-missing cannot be combined.');
+          process.exit(1);
+        }
+
+        let concurrency: number;
+        let gcGraceHours: number;
+        let since: Date | undefined;
+        let until: Date | undefined;
+        try {
+          concurrency = parsePositiveIntOption(opts.concurrency, '--concurrency');
+          gcGraceHours = parsePositiveIntOption(opts.gcGraceHours, '--gc-grace-hours');
+          since = parseOptionalIsoDate(opts.since, '--since');
+          until = parseOptionalIsoDate(opts.until, '--until');
+        } catch (err) {
+          console.error(`crowi-admin: ${(err as Error).message}`);
+          process.exit(1);
+        }
+
+        await withRebuildApi(async (api) => {
+          const outcome = await api.rebuildAttachmentDisplayDerivatives({
+            dryRun: opts.dryRun,
+            concurrency,
+            force: opts.force,
+            repairMissing: opts.repairMissing,
+            onlyMissing: opts.onlyMissing,
+            onlyStaleRecipe: opts.onlyStale,
+            pageId: opts.pageId,
+            since,
+            until,
+            gc: opts.gc,
+            gcGraceHours,
+            confirm: opts.confirm,
+            progress: liveProgress(),
+          });
+          printOutcome('attachment-display-derivatives', outcome);
+          return attachmentDisplayDerivativesExitCode(outcome);
+        });
+      },
+    );
 }
 
 /**
@@ -216,7 +344,13 @@ function printOutcome(target: string, outcome: RebuildOutcome): void {
 }
 
 function formatStat(value: unknown): string {
-  if (Array.isArray(value)) return value.length === 0 ? '(none)' : value.join(', ');
+  if (Array.isArray(value)) {
+    if (value.length === 0) return '(none)';
+    // Object entries (e.g. attachment-display-derivatives' `failures:
+    // { attachmentId, reason }[]`) render as JSON instead of the useless
+    // `[object Object]` a bare `.join()` would produce.
+    return value.map((entry) => (typeof entry === 'object' && entry !== null ? JSON.stringify(entry) : String(entry))).join(', ');
+  }
   return String(value);
 }
 
