@@ -144,8 +144,7 @@ export function useScrollSync({ editorRef, previewRef, enabled }: UseScrollSyncO
       return out;
     };
 
-    const previewYForFractionalLine = (line: number, ratio: number): number | null => {
-      const markers = snapshotMarkers();
+    const previewYForFractionalLine = (markers: MarkerSnapshot[], line: number, ratio: number): number | null => {
       if (markers.length === 0) return null;
       const fractional = line + ratio;
       if (fractional <= markers[0].sourceLine) return markers[0].top;
@@ -209,10 +208,15 @@ export function useScrollSync({ editorRef, previewRef, enabled }: UseScrollSyncO
       let topReferenceY: number | null = null;
       let bottomReferenceY: number | null = null;
       if (!isProgressNearStart(sourceProgress) && !isProgressNearEnd(sourceProgress)) {
+        // Snapshot once and reuse for both edges — the DOM can't change
+        // between these two synchronous lookups, so re-querying would
+        // just repeat the same querySelectorAll + getBoundingClientRect
+        // pass for no new information.
+        const markers = snapshotMarkers();
         const topProgress = editorRef.current?.getProgressAt(0) ?? null;
         const bottomProgress = editorRef.current?.getProgressAt(1) ?? null;
-        topReferenceY = topProgress ? previewYForFractionalLine(topProgress.line, topProgress.ratio) : null;
-        bottomReferenceY = bottomProgress ? previewYForFractionalLine(bottomProgress.line, bottomProgress.ratio) : null;
+        topReferenceY = topProgress ? previewYForFractionalLine(markers, topProgress.line, topProgress.ratio) : null;
+        bottomReferenceY = bottomProgress ? previewYForFractionalLine(markers, bottomProgress.line, bottomProgress.ratio) : null;
       }
       const target = computeDensityCompensatedReferenceTarget({
         sourceProgress,
