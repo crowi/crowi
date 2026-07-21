@@ -65,13 +65,27 @@ export interface SlidingReferenceTargetInput {
   targetMaxScroll: number;
 }
 
+export interface DensityCompensatedReferenceTargetInput {
+  /** `0..1` scroll progress of the pane driving this sync. */
+  sourceProgress: number;
+  /** Content-space y of the source viewport's top edge in the target pane. */
+  topReferenceY: number | null;
+  /** Content-space y of the source viewport's bottom edge in the target pane. */
+  bottomReferenceY: number | null;
+  /** Target pane's viewport (client) height, in px. */
+  targetViewportHeight: number;
+  /** Target pane's maximum scrollTop (`scrollHeight - clientHeight`, floored at `0`). */
+  targetMaxScroll: number;
+}
+
 /**
  * Sliding-reference target `scrollTop` for the pane opposite
  * `sourceProgress`: places the reference point at the SAME viewport-height
  * fraction the source pane is currently scrolled to, so `p=0` aligns both
  * panes' tops, `p=1` aligns both bottoms, and intermediate positions align
  * at the same proportional height — continuously, not as a discrete zone
- * switch.
+ * switch. `computeDensityCompensatedReferenceTarget` applies the same
+ * baseline while reserving additional trailing room for denser previews.
  *
  * The two ends are pinned exactly (bypassing `referenceY` entirely, see
  * `SLIDING_REFERENCE_EPSILON`) so a document with anchors sparse near an
@@ -90,5 +104,30 @@ export function computeSlidingReferenceTarget({
   if (isProgressNearEnd(sourceProgress)) return targetMaxScroll;
   if (referenceY === null) return null;
   const raw = referenceY - sourceProgress * targetViewportHeight;
+  return Math.max(0, Math.min(targetMaxScroll, raw));
+}
+
+/**
+ * Density-compensated editor→preview target. The source viewport's mapped
+ * top and bottom reveal whether the target renders that same source span
+ * taller than its own viewport. When it does, reduce the reference's target
+ * viewport fraction just enough to keep the mapped bottom edge visible;
+ * otherwise this is the existing sliding-reference placement.
+ */
+export function computeDensityCompensatedReferenceTarget({
+  sourceProgress,
+  topReferenceY,
+  bottomReferenceY,
+  targetViewportHeight,
+  targetMaxScroll,
+}: DensityCompensatedReferenceTargetInput): number | null {
+  if (isProgressNearStart(sourceProgress)) return 0;
+  if (isProgressNearEnd(sourceProgress)) return targetMaxScroll;
+  if (topReferenceY === null || bottomReferenceY === null) return null;
+
+  const sourceSpanInTarget = bottomReferenceY - topReferenceY;
+  const referenceY = (1 - sourceProgress) * topReferenceY + sourceProgress * bottomReferenceY;
+  const compensatedViewportFraction = Math.max(0, Math.min(sourceProgress, 1 - (sourceSpanInTarget / targetViewportHeight) * (1 - sourceProgress)));
+  const raw = referenceY - compensatedViewportFraction * targetViewportHeight;
   return Math.max(0, Math.min(targetMaxScroll, raw));
 }

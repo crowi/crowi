@@ -2,6 +2,7 @@ import type { RefObject } from 'react';
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MarkdownEditorHandle } from '@/components/editor/markdown-editor';
+import { SLIDING_REFERENCE_EPSILON } from './scroll-sync-math';
 import { useScrollSync } from './use-scroll-sync';
 
 // ---------------------------------------------------------------------------
@@ -44,11 +45,12 @@ function addMarker(container: HTMLElement, sourceLine: number, contentY: number)
 
 type MockHandle = MarkdownEditorHandle & { scrollToLineProgressAt: ReturnType<typeof vi.fn<(line: number, ratio: number, viewportFraction: number) => void>> };
 
-function makeEditorHandle(scrollDOM: HTMLElement, getProgressAt: (fraction: number) => { line: number; ratio: number } | null): MockHandle {
+function makeEditorHandle(scrollDOM: HTMLElement, getProgressAt: (fraction: number) => { line: number; ratio: number } | null, lineCount = 100): MockHandle {
   return {
     insertAtCursor: vi.fn(() => 0),
     focusEnd: vi.fn(),
     getScrollDOM: () => scrollDOM,
+    getLineCount: () => lineCount,
     getProgressAt: vi.fn(getProgressAt),
     scrollToLineProgressAt: vi.fn<(line: number, ratio: number, viewportFraction: number) => void>(),
   };
@@ -138,11 +140,14 @@ describe('useScrollSync — sliding reference', () => {
       expect(editorRef.current?.getProgressAt).not.toHaveBeenCalled();
     });
 
-    it('aligns the reference line at the same proportional viewport height at p=0.5 (center-to-center)', () => {
+    it('uses the preview top for the reference when the mapped editor viewport is denser than it can display', () => {
       renderHook(() => useScrollSync({ editorRef, previewRef, enabled: true }));
       scrollEditorTo(EDITOR_MAX / 2); // p = 0.5 exactly
-      // fractional line 50 -> preview content y 5000; target = 5000 - 0.5*800
-      expect(previewContainer.scrollTop).toBe(5000 - 0.5 * PREVIEW_CLIENT_HEIGHT);
+      // This fixture maps the editor's viewport edges to preview y=0 / 10000,
+      // much taller than the 800px preview viewport. Density compensation
+      // puts the interpolated reference (line 50 -> y=5000) at the top so
+      // the preview can reserve all available room below it.
+      expect(previewContainer.scrollTop).toBe(5000);
     });
 
     it('degenerates to progress 0 (top-aligned) when the editor pane cannot scroll', () => {
@@ -232,5 +237,188 @@ describe('useScrollSync — sliding reference', () => {
     unmount();
     scrollEditorTo(EDITOR_MAX);
     expect(previewContainer.scrollTop).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Regression: the document TAIL — the stretch of source lines after the last
+// `[data-source-line]` anchor. Anchors are only injected on top-level mdast
+// nodes (`injectSourceLineAnchors`, 1-based `position.start.line`), so a
+// trailing list / paragraph contributes ONE anchor at its first line while
+// the editor keeps scrolling through the rest of its lines plus CodeMirror's
+// bottom padding. Reported symptom: scrolling the editor down through that
+// tail made the preview drift back UP and then snap down at the very end.
+// ---------------------------------------------------------------------------
+describe('useScrollSync — tail past the last anchor', () => {
+  const LINE_COUNT = 100;
+  // Last anchor at line 80 (e.g. the `- hoge` line of a trailing list), while
+  // the editor's own scroll range runs to fractional line LINE_COUNT + 1.
+  const LAST_ANCHOR_LINE = 80;
+  const LAST_ANCHOR_TOP = 8000;
+
+  let editorScrollDOM: HTMLElement;
+  let previewContainer: HTMLElement;
+  let editorRef: RefObject<MockHandle | null>;
+  let previewRef: RefObject<HTMLElement | null>;
+
+  /**
+   * 1-based counterpart of the outer suite's probe: `p=0` lands on line 1 and
+   * `p=1` on `LINE_COUNT + 1` (the real `getProgressAt` clamps `ratio` to 1 on
+   * the last line when the probe falls into the editor's bottom padding).
+   */
+  function getProgressAt(fraction: number): { line: number; ratio: number } {
+    const fractional = 1 + Math.max(0, Math.min(1, fraction)) * LINE_COUNT;
+    const line = Math.floor(fractional);
+    return { line, ratio: fractional - line };
+  }
+
+  beforeEach(() => {
+    editorScrollDOM = document.createElement('div');
+    setPaneSize(editorScrollDOM, { scrollHeight: EDITOR_SCROLL_HEIGHT, clientHeight: EDITOR_CLIENT_HEIGHT });
+    document.body.appendChild(editorScrollDOM);
+
+    previewContainer = document.createElement('div');
+    setPaneSize(previewContainer, { scrollHeight: PREVIEW_SCROLL_HEIGHT, clientHeight: PREVIEW_CLIENT_HEIGHT });
+    document.body.appendChild(previewContainer);
+    addMarker(previewContainer, 1, 0);
+    addMarker(previewContainer, 50, 5000);
+    addMarker(previewContainer, LAST_ANCHOR_LINE, LAST_ANCHOR_TOP);
+
+    editorRef = { current: makeEditorHandle(editorScrollDOM, getProgressAt, LINE_COUNT) };
+    previewRef = { current: previewContainer };
+  });
+
+  afterEach(() => {
+    editorScrollDOM.remove();
+    previewContainer.remove();
+  });
+
+  function previewScrollTopForEditorProgress(p: number): number {
+    editorScrollDOM.scrollTop = p * EDITOR_MAX;
+    act(() => {
+      editorScrollDOM.dispatchEvent(new Event('scroll'));
+    });
+    return previewContainer.scrollTop;
+  }
+
+  it('never scrolls the preview backwards while the editor scrolls forwards through the tail', () => {
+    renderHook(() => useScrollSync({ editorRef, previewRef, enabled: true }));
+
+    const samples: { p: number; top: number }[] = [];
+    for (let step = 0; step <= 100; step++) {
+      const p = step / 100;
+      samples.push({ p, top: previewScrollTopForEditorProgress(p) });
+    }
+
+    const regressions = samples.filter((s, i) => i > 0 && s.top < samples[i - 1].top - 0.5);
+    expect(regressions).toEqual([]);
+  });
+
+  it('reaches the preview bottom continuously instead of snapping at the last moment', () => {
+    renderHook(() => useScrollSync({ editorRef, previewRef, enabled: true }));
+
+    // Probe just OUTSIDE the pin zone: inside it the endpoint pin already
+    // returns the exact bottom, which would hide the discontinuity the pin
+    // itself creates. The step from there to the pinned end must be small —
+    // a large delta is exactly the visible "ガクッ" jump.
+    const nearEnd = previewScrollTopForEditorProgress(1 - 2 * SLIDING_REFERENCE_EPSILON);
+    const atEnd = previewScrollTopForEditorProgress(1);
+    expect(atEnd).toBe(PREVIEW_MAX);
+    expect(atEnd - nearEnd).toBeLessThan(0.02 * PREVIEW_MAX);
+  });
+
+  it('drives the editor past the last anchor when the preview scrolls into its tail (reverse direction)', () => {
+    renderHook(() => useScrollSync({ editorRef, previewRef, enabled: true }));
+
+    // `editorFractionalLineForPreviewY` shared the same clamp, so a preview
+    // position inside the tail used to resolve to the LAST ANCHOR's line and
+    // strand the editor there however far the preview scrolled.
+    previewContainer.scrollTop = 0.95 * PREVIEW_MAX;
+    act(() => {
+      previewContainer.dispatchEvent(new Event('scroll'));
+    });
+
+    expect(editorRef.current?.scrollToLineProgressAt).toHaveBeenCalledTimes(1);
+    const [line, ratio] = editorRef.current?.scrollToLineProgressAt.mock.calls[0] as [number, number, number];
+    expect(line + ratio).toBeGreaterThan(LAST_ANCHOR_LINE);
+  });
+
+  it('keeps the tail visible: an edit near the document end shows the preview end', () => {
+    renderHook(() => useScrollSync({ editorRef, previewRef, enabled: true }));
+
+    // Editing a few lines above the very bottom leaves the editor slightly
+    // short of its max scroll (trailing padding). The preview must still have
+    // its own tail on screen, not be parked ~4000px above it.
+    const top = previewScrollTopForEditorProgress(0.97);
+    expect(top).toBeGreaterThan(PREVIEW_MAX - PREVIEW_CLIENT_HEIGHT);
+  });
+});
+
+describe('useScrollSync — density-mismatched visible bottom', () => {
+  const LINE_COUNT = 100;
+  const EDITOR_LINE_HEIGHT = 30;
+  const PREVIEW_LINE_HEIGHT = 51;
+  const DENSITY_PREVIEW_SCROLL_HEIGHT = 6000;
+  const DENSITY_PREVIEW_MAX = DENSITY_PREVIEW_SCROLL_HEIGHT - PREVIEW_CLIENT_HEIGHT;
+
+  let editorScrollDOM: HTMLElement;
+  let previewContainer: HTMLElement;
+  let editorRef: RefObject<MockHandle | null>;
+  let previewRef: RefObject<HTMLElement | null>;
+
+  function getProgressAt(viewportFraction: number): { line: number; ratio: number } {
+    const contentY = editorScrollDOM.scrollTop + viewportFraction * EDITOR_CLIENT_HEIGHT;
+    const fractional = 1 + contentY / EDITOR_LINE_HEIGHT;
+    const line = Math.floor(fractional);
+    return { line, ratio: fractional - line };
+  }
+
+  function previewYForProgress({ line, ratio }: { line: number; ratio: number }): number {
+    return (line + ratio - 1) * PREVIEW_LINE_HEIGHT;
+  }
+
+  beforeEach(() => {
+    editorScrollDOM = document.createElement('div');
+    setPaneSize(editorScrollDOM, { scrollHeight: EDITOR_SCROLL_HEIGHT, clientHeight: EDITOR_CLIENT_HEIGHT });
+    document.body.appendChild(editorScrollDOM);
+
+    previewContainer = document.createElement('div');
+    setPaneSize(previewContainer, { scrollHeight: DENSITY_PREVIEW_SCROLL_HEIGHT, clientHeight: PREVIEW_CLIENT_HEIGHT });
+    document.body.appendChild(previewContainer);
+    addMarker(previewContainer, 1, 0);
+    addMarker(previewContainer, LINE_COUNT + 1, LINE_COUNT * PREVIEW_LINE_HEIGHT);
+
+    editorRef = { current: makeEditorHandle(editorScrollDOM, getProgressAt, LINE_COUNT) };
+    previewRef = { current: previewContainer };
+  });
+
+  afterEach(() => {
+    editorScrollDOM.remove();
+    previewContainer.remove();
+  });
+
+  function scrollEditorToProgress(progress: number): number {
+    editorScrollDOM.scrollTop = progress * EDITOR_MAX;
+    act(() => {
+      editorScrollDOM.dispatchEvent(new Event('scroll'));
+    });
+    return previewContainer.scrollTop;
+  }
+
+  it('keeps the editor viewport bottom visible in a denser preview', () => {
+    renderHook(() => useScrollSync({ editorRef, previewRef, enabled: true }));
+
+    scrollEditorToProgress(0.8);
+
+    const mappedBottomY = previewYForProgress(getProgressAt(1));
+    expect(mappedBottomY).toBeLessThanOrEqual(previewContainer.scrollTop + PREVIEW_CLIENT_HEIGHT);
+  });
+
+  it('never moves the preview backwards while the editor advances through a dense region', () => {
+    renderHook(() => useScrollSync({ editorRef, previewRef, enabled: true }));
+
+    const targets = [0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9].map(scrollEditorToProgress);
+    expect(targets.every((target, index) => index === 0 || target >= targets[index - 1])).toBe(true);
+    expect(targets[targets.length - 1]).toBeLessThanOrEqual(DENSITY_PREVIEW_MAX);
   });
 });
