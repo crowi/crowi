@@ -113,6 +113,12 @@ export function SharePanelContent({ page }: SharePanelContentProps) {
   }, []);
 
   useEffect(() => {
+    // Also runs the setup half of React 18 Strict Mode's dev-only fake
+    // mount→unmount→mount cycle — without resetting to `true` here, the
+    // fake unmount's cleanup below leaves this permanently `false` for the
+    // component's whole real lifetime, silently suppressing every copy
+    // confirmation in development.
+    isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
       if (copyResetTimeoutRef.current !== null) clearTimeout(copyResetTimeoutRef.current);

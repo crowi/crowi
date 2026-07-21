@@ -1,6 +1,7 @@
 import type { PageWithRevision } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { StrictMode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildPageShareUrl } from '@/lib/build-page-share-url';
 
@@ -194,5 +195,18 @@ describe('LinkSharePopover — PC/wide share popover (SharePanelContent regressi
     expect(setTimeoutSpy.mock.calls.some((call) => call[1] === 1500)).toBe(false);
 
     setTimeoutSpy.mockRestore();
+  });
+
+  it('still shows the copy confirmation under React.StrictMode (repro: isMountedRef was set false by the dev-mode fake unmount/remount and never reset true)', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+
+    const page = makePage();
+    render(<LinkSharePopover page={page} />, { wrapper: StrictMode });
+    const trigger = screen.getByLabelText(m['page.share.aria_open']());
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    fireEvent.click(trigger);
+
+    expect(await screen.findByText(m['page.share.url_copied']())).toBeInTheDocument();
   });
 });
