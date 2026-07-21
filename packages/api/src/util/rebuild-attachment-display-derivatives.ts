@@ -44,7 +44,7 @@ import type Crowi from 'src/crowi';
 import type { RebuildRunner } from 'src/migration/rebuild-runner';
 import type { MigrationContext } from 'src/migration/types';
 import type { AttachmentDocument } from 'src/models/attachment';
-import FileUploader, { isMissingFileError } from 'src/util/fileUploader';
+import FileUploader, { isMissingFileError } from 'src/util/file-uploader';
 import { DISPLAY_DERIVATIVE_RECIPE_VERSION, type GenerateAndPublishResult, generateAndPublishDisplayDerivative } from 'src/util/image-display-derivative';
 
 const debug = Debug('crowi:util:rebuild-attachment-display-derivatives');
@@ -160,6 +160,11 @@ class RebuildItemError extends Error {
   ) {
     super(message);
   }
+}
+
+/** Shared by every per-item catch block below: a `RebuildItemError` carries its own classified reason, anything else is a generic publish-error. */
+function classifyRebuildFailure(err: unknown): string {
+  return err instanceof RebuildItemError ? err.reason : `publish-error: ${errorMessage(err)}`;
 }
 
 async function defaultCheckFreeBytes(dir: string): Promise<number> {
@@ -397,8 +402,49 @@ async function processGenerateItem(
     }
   } catch (err) {
     stats.failed += 1;
-    stats.failures.push({ attachmentId: String(doc._id), reason: err instanceof RebuildItemError ? err.reason : `publish-error: ${errorMessage(err)}` });
+    stats.failures.push({ attachmentId: String(doc._id), reason: classifyRebuildFailure(err) });
   }
+}
+
+/**
+ * Shared shell for every mode below: stream an Attachment cursor (constant
+ * memory, not loaded into an array — spec §... "at any collection size")
+ * through `forEachBounded` at `runner.concurrency`, labeling progress
+ * BEFORE each item starts (mirrors `storageCopyRebuild`'s `onProgress`
+ * 'start' bridge, `migration/rebuilds/index.ts` — gives the CLI's
+ * `liveProgress()`, and any custom test `ProgressReporter`, a per-item
+ * heartbeat as each attachment begins processing, not only after the whole
+ * run finishes) and incrementing after, regardless of per-item outcome.
+ * Only the filter/projection/per-item processor differ between modes.
+ */
+async function runCursorMode<TStats extends { interrupted: boolean }>(
+  crowi: Crowi,
+  filter: Record<string, unknown>,
+  projection: Record<string, 1>,
+  runner: Pick<RebuildRunner, 'concurrency' | 'aborted'>,
+  ctx: MigrationContext,
+  stats: TStats,
+  processItem: (doc: AttachmentDocument) => Promise<void>,
+): Promise<TStats> {
+  const Attachment = crowi.model('Attachment');
+  const cursor = Attachment.find(filter, projection).sort({ _id: 1 }).cursor();
+
+  const { interrupted } = await forEachBounded(
+    cursor,
+    runner.concurrency,
+    () => runner.aborted,
+    async (rawDoc) => {
+      const doc = rawDoc as AttachmentDocument;
+      ctx.progress.setLabel(String(doc._id));
+      try {
+        await processItem(doc);
+      } finally {
+        ctx.progress.increment();
+      }
+    },
+  );
+  stats.interrupted = interrupted;
+  return stats;
 }
 
 async function runGenerateMode(
@@ -425,30 +471,9 @@ async function runGenerateMode(
     failures: [],
   };
 
-  const Attachment = crowi.model('Attachment');
-  const cursor = Attachment.find(buildGenerateFilter(opts), GENERATE_PROJECTION).sort({ _id: 1 }).cursor();
-
-  const { interrupted } = await forEachBounded(
-    cursor,
-    runner.concurrency,
-    () => runner.aborted,
-    async (rawDoc) => {
-      const doc = rawDoc as AttachmentDocument;
-      // Label BEFORE work starts (mirrors `storageCopyRebuild`'s `onProgress`
-      // 'start' bridge, `migration/rebuilds/index.ts`) — gives the CLI's
-      // `liveProgress()` (and, for tests, any custom `ProgressReporter`) a
-      // per-item heartbeat as each attachment begins processing, not only
-      // after the whole run finishes.
-      ctx.progress.setLabel(String(doc._id));
-      try {
-        await processGenerateItem(crowi, doc, runner.concurrency, ctx.dryRun, Boolean(opts.force), checkFreeBytes, perItemStageLimitBytes, stats);
-      } finally {
-        ctx.progress.increment();
-      }
-    },
+  return runCursorMode(crowi, buildGenerateFilter(opts), GENERATE_PROJECTION, runner, ctx, stats, (doc) =>
+    processGenerateItem(crowi, doc, runner.concurrency, ctx.dryRun, Boolean(opts.force), checkFreeBytes, perItemStageLimitBytes, stats),
   );
-  stats.interrupted = interrupted;
-  return stats;
 }
 
 // ---------------------------------------------------------------------------
@@ -514,10 +539,7 @@ async function repairOneItem(
       // identical rationale).
     } catch (regenerateErr) {
       stats.failed += 1;
-      stats.failures.push({
-        attachmentId: String(doc._id),
-        reason: regenerateErr instanceof RebuildItemError ? regenerateErr.reason : `publish-error: ${errorMessage(regenerateErr)}`,
-      });
+      stats.failures.push({ attachmentId: String(doc._id), reason: classifyRebuildFailure(regenerateErr) });
     }
     return;
   }
@@ -546,25 +568,9 @@ async function runRepairMissingMode(
     failures: [],
   };
 
-  const Attachment = crowi.model('Attachment');
-  const cursor = Attachment.find(buildRepairMissingFilter(opts), REPAIR_MISSING_PROJECTION).sort({ _id: 1 }).cursor();
-
-  const { interrupted } = await forEachBounded(
-    cursor,
-    runner.concurrency,
-    () => runner.aborted,
-    async (rawDoc) => {
-      const doc = rawDoc as AttachmentDocument;
-      ctx.progress.setLabel(String(doc._id));
-      try {
-        await repairOneItem(crowi, doc, runner.concurrency, ctx.dryRun, checkFreeBytes, perItemStageLimitBytes, stats);
-      } finally {
-        ctx.progress.increment();
-      }
-    },
+  return runCursorMode(crowi, buildRepairMissingFilter(opts), REPAIR_MISSING_PROJECTION, runner, ctx, stats, (doc) =>
+    repairOneItem(crowi, doc, runner.concurrency, ctx.dryRun, checkFreeBytes, perItemStageLimitBytes, stats),
   );
-  stats.interrupted = interrupted;
-  return stats;
 }
 
 // ---------------------------------------------------------------------------

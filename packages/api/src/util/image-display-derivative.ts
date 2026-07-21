@@ -36,7 +36,7 @@ import type { Types } from 'mongoose';
 import sharp from 'sharp';
 
 import type Crowi from 'src/crowi';
-import FileUploader from 'src/util/fileUploader';
+import FileUploader from 'src/util/file-uploader';
 
 const debug = Debug('crowi:util:image-display-derivative');
 
