@@ -4,11 +4,14 @@ import path from 'node:path';
 import { Readable } from 'node:stream';
 import type { StorageDriver } from '@crowi/plugin-api';
 import { createLocalDriver } from '@crowi/plugin-storage-local';
-import { crowi } from 'src/test/setup';
+import { Types } from 'mongoose';
+import sharp from 'sharp';
 import type { MigrationApplicationModel } from 'src/models/migration-application';
+import { crowi } from 'src/test/setup';
+import * as imageDisplayDerivative from 'src/util/image-display-derivative';
 
 import { createRebuildCliApi } from './rebuild-api';
-import { RebuildRunner, defineRebuild } from './rebuild-runner';
+import { defineRebuild, RebuildRunner } from './rebuild-runner';
 
 /**
  * RFC-0008 §8.5 — rebuild dispatch + shared-runner reuse.
@@ -177,5 +180,98 @@ describe('RebuildCliApi — dispatch (§8.5)', () => {
     const api = createRebuildCliApi(crowi);
     await expect(api.rebuildBacklink()).rejects.toThrow(/not implemented yet/i);
     expect(await MigrationApplication().countDocuments({})).toBe(0);
+  });
+
+  /**
+   * feature-image-derivative-optimization Phase 3 — `rebuildAttachmentDisplayDerivatives`
+   * end-to-end through `RebuildCliApi`, including the `--concurrency` forwarding
+   * fix: `buildRunner()` previously never passed `concurrency` into
+   * `RunnerOptions`, so every rebuild silently ran at the framework default (8)
+   * regardless of what the CLI flag said. Proven here by measuring ACTUAL
+   * max-concurrent generator invocations end-to-end through the CLI façade,
+   * not just by asserting `RunnerOptions.concurrency` was set.
+   */
+  describe('rebuildAttachmentDisplayDerivatives', () => {
+    async function withLocalDriver<T>(fn: (driver: StorageDriver) => Promise<T>): Promise<T> {
+      const registries = crowi.getPlugins();
+      const original = registries.active.storage;
+      const root = mkdtempSync(path.join(os.tmpdir(), 'rebuild-api-attachment-derivatives-'));
+      const driver = createLocalDriver({ rootDir: root });
+      registries.active.storage = driver;
+      try {
+        return await fn(driver);
+      } finally {
+        registries.active.storage = original;
+        rmSync(root, { recursive: true, force: true });
+      }
+    }
+
+    async function seed(driver: StorageDriver): Promise<void> {
+      const pageId = new Types.ObjectId();
+      const attachmentId = new Types.ObjectId();
+      const key = `attachment/${pageId}/original-${attachmentId}.jpg`;
+      const bytes = await sharp({ create: { width: 2000, height: 1000, channels: 3, background: { r: 1, g: 2, b: 3 } } })
+        .jpeg()
+        .toBuffer();
+      await driver.put(key, bytes, { contentType: 'image/jpeg' });
+      await crowi.model('Attachment').create({
+        _id: attachmentId,
+        page: pageId,
+        filePath: key,
+        fileName: `${attachmentId}.jpg`,
+        originalName: 'original.jpg',
+        fileFormat: 'image/jpeg',
+        fileSize: bytes.length,
+      });
+    }
+
+    // A clean slate BEFORE each test too, not just after — the sibling
+    // `rebuildStorageCopy` tests above (unrelated Attachment rows pointing at
+    // OTHER named drivers) don't clean up after themselves, and generate
+    // mode's cursor has no built-in scoping, so a leftover row would
+    // otherwise get pulled into THIS describe's `scanned` counts.
+    beforeEach(async () => {
+      await crowi.model('Attachment').deleteMany({});
+    });
+    afterEach(async () => {
+      await crowi.model('Attachment').deleteMany({});
+    });
+
+    it('dispatches to generate mode and records nothing in migrationApplications', async () => {
+      await withLocalDriver(async (driver) => {
+        await seed(driver);
+        const api = createRebuildCliApi(crowi);
+        const outcome = await api.rebuildAttachmentDisplayDerivatives({});
+        expect(outcome.stats).toMatchObject({ mode: 'generate', scanned: 1, generated: 1 });
+        expect(await MigrationApplication().countDocuments({})).toBe(0);
+      });
+    });
+
+    it('forwards `concurrency` into the underlying RunnerOptions (default 2, not the framework default 8)', async () => {
+      await withLocalDriver(async (driver) => {
+        for (let i = 0; i < 4; i += 1) await seed(driver);
+
+        const original = imageDisplayDerivative.generateAndPublishDisplayDerivative;
+        let current = 0;
+        let max = 0;
+        const spy = jest.spyOn(imageDisplayDerivative, 'generateAndPublishDisplayDerivative').mockImplementation(async (params) => {
+          current += 1;
+          max = Math.max(max, current);
+          try {
+            await new Promise((r) => setTimeout(r, 15));
+            return await original(params);
+          } finally {
+            current -= 1;
+          }
+        });
+
+        const api = createRebuildCliApi(crowi);
+        const outcome = await api.rebuildAttachmentDisplayDerivatives({ concurrency: 2 });
+
+        expect(outcome.stats).toMatchObject({ generated: 4 });
+        expect(max).toBe(2);
+        spy.mockRestore();
+      });
+    });
   });
 });

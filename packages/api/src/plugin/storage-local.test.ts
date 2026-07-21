@@ -121,6 +121,37 @@ describe('@crowi/plugin-storage-local driver', () => {
     await expect(driver.put('/etc/passwd', Buffer.from('x'), { contentType: 'text/plain' })).rejects.toThrow(/outside of rootDir/);
   });
 
+  describe('listDerivativeObjects (feature-image-derivative-optimization §11 — `--gc` local enumeration)', () => {
+    it('returns an empty array when nothing has been uploaded yet (no `attachment/` dir at all)', async () => {
+      const driver = createLocalDriver({ rootDir: tmpDir });
+      await expect(driver.listDerivativeObjects()).resolves.toEqual([]);
+    });
+
+    it('returns an empty array when `attachment/<page>/` exists but has no `derivatives/` subdir (never had a display derivative)', async () => {
+      const driver = createLocalDriver({ rootDir: tmpDir });
+      await driver.put('attachment/page1/original.jpg', Buffer.from('orig'), { contentType: 'image/jpeg' });
+      await expect(driver.listDerivativeObjects()).resolves.toEqual([]);
+    });
+
+    it('enumerates every object under attachment/*/derivatives/*/* with its key, size, and mtime', async () => {
+      const driver = createLocalDriver({ rootDir: tmpDir });
+      await driver.put('attachment/page1/derivatives/att1/display-v1.jpg', Buffer.from('12345'), { contentType: 'image/jpeg' });
+      await driver.put('attachment/page2/derivatives/att2/display-v1.webp', Buffer.from('1234567'), { contentType: 'image/webp' });
+      // A sibling original (NOT under `derivatives/`) must be excluded.
+      await driver.put('attachment/page1/original.jpg', Buffer.from('original bytes'), { contentType: 'image/jpeg' });
+
+      const objects = await driver.listDerivativeObjects();
+      expect(objects).toHaveLength(2);
+      const byKey = new Map(objects.map((o) => [o.key, o]));
+      expect(byKey.get('attachment/page1/derivatives/att1/display-v1.jpg')).toMatchObject({ size: 5 });
+      expect(byKey.get('attachment/page2/derivatives/att2/display-v1.webp')).toMatchObject({ size: 7 });
+      for (const obj of objects) {
+        expect(typeof obj.mtimeMs).toBe('number');
+        expect(obj.mtimeMs).toBeGreaterThan(0);
+      }
+    });
+  });
+
   describe('atomic write (feature-image-derivative-optimization §7a)', () => {
     it('a concurrent get() during a slow put() to the SAME key never observes a torn/partial write', async () => {
       const driver = createLocalDriver({ rootDir: tmpDir });
