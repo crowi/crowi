@@ -48,7 +48,7 @@ import type { Context } from 'hono';
 
 import type Crowi from 'src/crowi';
 import type { AttachmentDocument } from 'src/models/attachment';
-import FileUploader from 'src/util/fileUploader';
+import FileUploader, { isMissingFileError } from 'src/util/fileUploader';
 import { isValidObjectId, loadGrantedPage } from 'src/util/ts-rest-helpers';
 
 import type { CrowiHonoBindings } from '../app';
@@ -81,17 +81,6 @@ type StreamErrorCode = 'FILE_MISSING' | 'FORBIDDEN_FOR_DELETE' | 'ATTACHMENT_NOT
 const errorBody = (code: StreamErrorCode, message: string) => ({
   error: { code, message },
 });
-
-/**
- * Whether a storage-driver `get()` rejection means the object is simply
- * missing (as opposed to a real failure). Local driver throws
- * `code: 'ENOENT'`; the S3 driver surfaces missing as AWS SDK v3
- * `NoSuchKey` (`$metadata.httpStatusCode === 404`, no `code`).
- */
-const isMissingFileError = (err: unknown): boolean => {
-  const e = err as { code?: string; name?: string; $metadata?: { httpStatusCode?: number } };
-  return e.code === 'ENOENT' || e.name === 'NoSuchKey' || e.$metadata?.httpStatusCode === 404;
-};
 
 /**
  * Convert a Node `Readable` into a Web `ReadableStream` so Hono's
