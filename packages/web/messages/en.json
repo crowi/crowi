@@ -630,6 +630,7 @@
   "oauth.consent.approve": "Authorize",
   "oauth.consent.deny": "Cancel",
   "oauth.consent.approving": "Authorizing…",
+  "oauth.consent.auto_approving": "Signing in…",
   "oauth.consent.error_invalid_request": "This authorization request is invalid or incomplete.",
   "oauth.consent.error_failed": "Failed to authorize. Please try again.",
   "oauth.device.title": "Device authorization",

@@ -630,6 +630,7 @@
   "oauth.consent.approve": "許可する",
   "oauth.consent.deny": "キャンセル",
   "oauth.consent.approving": "許可しています…",
+  "oauth.consent.auto_approving": "サインインしています…",
   "oauth.consent.error_invalid_request": "この認可リクエストは無効、または情報が不足しています。",
   "oauth.consent.error_failed": "許可に失敗しました。もう一度お試しください。",
   "oauth.device.title": "デバイス認証",
