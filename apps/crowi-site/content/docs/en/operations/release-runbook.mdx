@@ -37,9 +37,9 @@ images.
 The following cannot be done from CI. Set them up by hand **once before the first
 release**.
 
-### 1. npm Trusted Publisher (19 published packages)
+### 1. npm Trusted Publisher (18 published packages)
 
-On npmjs.com, register a Trusted Publisher for **each of the 19 published
+On npmjs.com, register a Trusted Publisher for **each of the 18 published
 packages** (repo `crowi/crowi` + workflow `release.yml`, and an environment if you
 use one). This enables OIDC publishing with no long-lived `NPM_TOKEN` and with
 provenance. The packages:
@@ -55,7 +55,6 @@ provenance. The packages:
 @crowi/plugin-mail-resend
 @crowi/plugin-mail-smtp
 @crowi/plugin-renderer-crowi-legacy
-@crowi/plugin-renderer-emoji
 @crowi/plugin-renderer-katex
 @crowi/plugin-renderer-plantuml
 @crowi/plugin-search-elasticsearch

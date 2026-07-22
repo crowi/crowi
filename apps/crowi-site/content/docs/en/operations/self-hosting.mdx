@@ -61,7 +61,7 @@ the proxy.
 
 Create a directory anywhere and declare `@crowi/api` plus the **plugins you want**
 as dependencies. The example below uses S3 storage + Elasticsearch search +
-PlantUML/KaTeX/emoji renderers.
+PlantUML/KaTeX renderers.
 
 ```json title="package.json"
 {
@@ -76,8 +76,7 @@ PlantUML/KaTeX/emoji renderers.
     "@crowi/plugin-storage-aws-s3": "2.0.0-alpha.0",
     "@crowi/plugin-search-elasticsearch": "2.0.0-alpha.0",
     "@crowi/plugin-renderer-plantuml": "2.0.0-alpha.0",
-    "@crowi/plugin-renderer-katex": "2.0.0-alpha.0",
-    "@crowi/plugin-renderer-emoji": "2.0.0-alpha.0"
+    "@crowi/plugin-renderer-katex": "2.0.0-alpha.0"
   }
 }
 ```
@@ -109,8 +108,7 @@ the admin UI (`/admin/plugins`) after boot.
     "@crowi/plugin-storage-aws-s3",
     "@crowi/plugin-search-elasticsearch",
     "@crowi/plugin-renderer-plantuml",
-    "@crowi/plugin-renderer-katex",
-    "@crowi/plugin-renderer-emoji"
+    "@crowi/plugin-renderer-katex"
   ],
   "storage": { "driver": "s3" },
   "search": { "driver": "elasticsearch" }

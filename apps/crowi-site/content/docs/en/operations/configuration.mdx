@@ -151,7 +151,6 @@ edited from the admin UI.
     "@crowi/plugin-storage-aws-s3",
     "@crowi/plugin-search-elasticsearch",
     "@crowi/plugin-renderer-plantuml",
-    "@crowi/plugin-renderer-emoji",
     "@crowi/plugin-renderer-katex"
   ],
   "storage": {
@@ -226,9 +225,12 @@ follows.
 | `mail.driver` | `resend` | `@crowi/plugin-mail-resend` |
 | `mail.driver` | `ses` | `@crowi/plugin-mail-aws-ses` |
 
-Renderer plugins (`@crowi/plugin-renderer-emoji` / `-katex` /
-`-plantuml` / `-crowi-legacy`) are enabled simply by adding them to
-`plugins`; they need no driver selection like `storage` / `search`.
+Renderer plugins (`@crowi/plugin-renderer-katex` / `-plantuml` /
+`-crowi-legacy`) are enabled simply by adding them to `plugins`; they need
+no driver selection like `storage` / `search`. Emoji shortcodes and link
+cards (`@[card](url)`) are Crowi core features, not plugins — they are
+always on with no `plugins` entry required (link-card's outbound fetch can
+be disabled via the `linkCardEnabled` toggle under admin Security).
 
 > **Tip**: Even if you switch a driver name in `crowi.config.json`, a
 > warning is logged at boot if the corresponding plugin is not in

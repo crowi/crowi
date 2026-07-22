@@ -44,7 +44,7 @@ Crowi のプラグインは、貢献する拡張ポイントによっておお�
 | ストレージ | `registerStorage` | `@crowi/plugin-storage-local`、`@crowi/plugin-storage-aws-s3` |
 | 検索 | `registerSearch` | `@crowi/plugin-search-mongo`、`@crowi/plugin-search-elasticsearch`、`@crowi/plugin-search-opensearch` |
 | メール | `registerMailer` | `@crowi/plugin-mail-smtp`、`@crowi/plugin-mail-aws-ses`、`@crowi/plugin-mail-resend` |
-| レンダラ | `registerRenderer` | `@crowi/plugin-renderer-emoji` / `-katex` / `-plantuml` / `-crowi-legacy` |
+| レンダラ | `registerRenderer` | `@crowi/plugin-renderer-katex` / `-plantuml` / `-crowi-legacy` |
 | 認証 | `registerAuth` | (外部 OAuth プロバイダ向け、今後拡充予定) |
 | 通知 / 連携 | `registerNotifier` / `registerRoutes` | `@crowi/plugin-slack` (Slack 連携 — ページリンクの unfurl) |
 | ベース (設定のみ) | (register なし) | `@crowi/plugin-aws` — 後続の AWS 系プラグインに資格情報を共有 |

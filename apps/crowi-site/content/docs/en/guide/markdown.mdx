@@ -84,18 +84,39 @@ user's user page (`/user/<username>`).
 - Mentioned users receive a notification. See [Notifications](./notifications)
   for details.
 
+### Emoji shortcodes
+
+Converts emoji shortcodes such as `:smile:` and `:rocket:` into Unicode
+emoji. This is a Crowi core feature that requires no installation and is
+always on.
+
+```markdown
+Hello :smile: world! :rocket:
+```
+
+- Recognised emoji come from GitHub's shortcode set and the Unicode CLDR
+  aliases.
+- Unknown shortcodes (such as `:not-emoji:`) are left as-is, so typos do not
+  break rendering.
+- `:smile:` inside fenced code blocks or inline code is not converted.
+- For accessibility, each emoji is wrapped in
+  `<span role="img" aria-label="...">`, so screen readers announce the emoji
+  name.
+
 ### Embed tags `@[tag](url)`
 
-The `@[tag](url)` syntax invokes an embed provided by a renderer plugin. When
+The `@[tag](url)` syntax invokes an embed. `card` is a built-in tag reserved
+by Crowi core itself; any other `tag` is provided by a renderer plugin. When
 no embed renderer is registered for `tag`, it is displayed as-is — `@`
 followed by a plain inline link.
 
 #### Link cards `@[card](url)`
 
-When the `@crowi/plugin-renderer-link-card` plugin is enabled, writing
-`@[card](url)` fetches the target page's OGP meta tags (`og:title` /
+Writing `@[card](url)` fetches the target page's OGP meta tags (`og:title` /
 `og:description` / `og:image` / `og:site_name`) and renders a link-preview
-card.
+card. This is a Crowi core feature that requires no installation and is
+always on (see "Markdown features built into core" in
+[Renderer plugins](../plugins/renderers) for details).
 
 ```markdown
 @[card](https://example.com/some-article)
@@ -105,10 +126,13 @@ card.
   thumbnail image.
 - A page with no `og:image` renders as a text-only card (title, description,
   domain — no image).
-- If the fetch fails (timeout, 404, etc.), it degrades to a minimal error
-  card that is still a working link to the URL — the link never loses its
-  navigation function; if the card was shown before, a temporary failure
-  keeps the previous card on screen.
+- You can disable this feature entirely from the admin UI under Security →
+  "Allow link cards for external URLs" (on by default). Whether the feature is
+  disabled, the OGP fetch failed, or the host is unreachable, the card
+  degrades to a unified fallback card that shows just the URL as its title —
+  no OGP title/description/image, and no error-red styling — while still
+  working as a link. If the card rendered successfully before, a temporary
+  fetch failure keeps the previous card on screen.
 - The editor helps with this conversion: hovering/focusing a bare URL shows
   "Convert to card"; hovering/focusing `@[card](url)` shows "Convert to
   link". This affordance is not shown for a link that already has an
@@ -116,10 +140,10 @@ card.
 - The editor's live preview (before saving) does not fetch real OGP data —
   it shows a static placeholder card with just the URL, and it is not
   clickable. The real card (title, description, image) is fetched after
-  you save.
+  you save. This placeholder is deliberately the same visual contract as the
+  unified fallback card above.
 - The image is a direct link to the source site (no proxying or caching).
-  See the `@crowi/plugin-renderer-link-card` README for plugin details and
-  its SSRF safeguards.
+  See [Renderer plugins](../plugins/renderers) for SSRF safeguard details.
 
 ### Inline URL expansion
 
@@ -210,24 +234,6 @@ read-only.
 The following syntax only works when the corresponding **renderer plugin** is
 enabled. See [Managing plugins](../plugins/managing) for how to manage
 plugins.
-
-### Emoji shortcodes — `@crowi/plugin-renderer-emoji`
-
-Converts emoji shortcodes such as `:smile:` and `:rocket:` into Unicode
-emoji.
-
-```markdown
-Hello :smile: world! :rocket:
-```
-
-- Recognised emoji come from GitHub's shortcode set and the Unicode CLDR
-  aliases.
-- Unknown shortcodes (such as `:not-emoji:`) are left as-is, so typos do not
-  break rendering.
-- `:smile:` inside fenced code blocks or inline code is not converted.
-- For accessibility, each emoji is wrapped in
-  `<span role="img" aria-label="...">`, so screen readers announce the emoji
-  name.
 
 ### Math — `@crowi/plugin-renderer-katex`
 

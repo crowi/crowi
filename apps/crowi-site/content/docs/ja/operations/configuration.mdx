@@ -148,7 +148,6 @@ Content-Security-Policy: style-src 'self' https://api.example.com; font-src 'sel
     "@crowi/plugin-storage-aws-s3",
     "@crowi/plugin-search-elasticsearch",
     "@crowi/plugin-renderer-plantuml",
-    "@crowi/plugin-renderer-emoji",
     "@crowi/plugin-renderer-katex"
   ],
   "storage": {
@@ -221,9 +220,12 @@ Content-Security-Policy: style-src 'self' https://api.example.com; font-src 'sel
 | `mail.driver` | `resend` | `@crowi/plugin-mail-resend` |
 | `mail.driver` | `ses` | `@crowi/plugin-mail-aws-ses` |
 
-レンダラ系プラグイン (`@crowi/plugin-renderer-emoji` /
-`-katex` / `-plantuml` / `-crowi-legacy`) は `plugins` に追加するだけで
-有効になり、`storage` / `search` のようなドライバ選択は不要です。
+レンダラ系プラグイン (`@crowi/plugin-renderer-katex` / `-plantuml` /
+`-crowi-legacy`) は `plugins` に追加するだけで有効になり、`storage` /
+`search` のようなドライバ選択は不要です。絵文字ショートコードと
+リンクカード (`@[card](url)`) はプラグインではなく Crowi コアの機能で、
+`plugins` への追加なしに常時有効です(リンクカードの外部取得は管理画面
+「セキュリティ」の `linkCardEnabled` トグルで無効化できます)。
 
 > **Tip**: `crowi.config.json` でドライバ名を切り替えても、対応する
 > プラグインが `plugins` に入っていなければ起動時に警告が出ます。ドライバを
