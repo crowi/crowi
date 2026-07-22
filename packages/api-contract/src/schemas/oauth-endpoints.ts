@@ -205,6 +205,21 @@ export const DeviceInfoResponseSchema = z.object({
 export type DeviceInfoResponse = z.infer<typeof DeviceInfoResponseSchema>;
 
 /**
+ * `GET /oauth/client-info` lookup response (RFC-0016 §4.4). The web
+ * authorize page reads this *before* deciding whether to render the
+ * consent screen or auto-approve — a `trusted` client skips `ConsentCard`
+ * entirely. Carries only non-secret metadata: no `redirectUris` /
+ * `allowedScopes`, mirroring `DeviceInfoResponseSchema`'s own minimalism.
+ */
+export const ClientInfoResponseSchema = z.object({
+  clientId: z.string(),
+  name: z.string(),
+  firstParty: z.boolean(),
+  trusted: z.boolean(),
+});
+export type ClientInfoResponse = z.infer<typeof ClientInfoResponseSchema>;
+
+/**
  * Grant types the server advertises in discovery — `authorization_code` +
  * `refresh_token` (Phase 3) and the device-code grant URN (Phase 4, RFC 8628).
  */

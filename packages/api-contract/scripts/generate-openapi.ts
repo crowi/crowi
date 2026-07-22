@@ -108,6 +108,7 @@ import {
   MentionSchema,
   AuthorizeRequestSchema,
   AuthorizeResponseSchema,
+  ClientInfoResponseSchema,
   DeviceAuthorizeRequestSchema,
   DeviceAuthorizeResponseSchema,
   DeviceInfoResponseSchema,
@@ -207,6 +208,9 @@ const schemas = [
   ['DeviceInfoResponse', DeviceInfoResponseSchema],
   ['DeviceVerifyRequest', DeviceVerifyRequestSchema],
   ['DeviceVerifyResponse', DeviceVerifyResponseSchema],
+
+  // oauth client-info (RFC-0016 Phase 0)
+  ['ClientInfoResponse', ClientInfoResponseSchema],
 
   // user / shared
   ['UserPublic', UserPublicSchema],

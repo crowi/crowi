@@ -124,6 +124,7 @@ import type {
 import type { AccessTokenSchema, CreateAccessTokenResponseSchema, ListAccessTokensResponseSchema } from './schemas/access-token';
 import type {
   AuthorizeResponseSchema,
+  ClientInfoResponseSchema,
   DeviceAuthorizeResponseSchema,
   DeviceInfoResponseSchema,
   DeviceVerifyResponseSchema,
@@ -204,6 +205,7 @@ type DiscoveryResponse = z.infer<typeof DiscoveryResponseSchema>;
 type DeviceAuthorizeResponse = z.infer<typeof DeviceAuthorizeResponseSchema>;
 type DeviceInfoResponse = z.infer<typeof DeviceInfoResponseSchema>;
 type DeviceVerifyResponse = z.infer<typeof DeviceVerifyResponseSchema>;
+type ClientInfoResponse = z.infer<typeof ClientInfoResponseSchema>;
 type RecentlyViewedPagesResponse = z.infer<typeof RecentlyViewedPagesResponseSchema>;
 type UserPageResponse = z.infer<typeof UserPageResponseSchema>;
 type UserBookmarksResponse = z.infer<typeof UserBookmarksResponseSchema>;
@@ -353,6 +355,8 @@ const stubDeviceAuthorize: DeviceAuthorizeResponse = {
 };
 const stubDeviceInfo: DeviceInfoResponse = { client_id: '', scopes: [] };
 const stubDeviceVerify: DeviceVerifyResponse = { status: 'approved' };
+// OAuth client-info stub (RFC-0016 Phase 0).
+const stubClientInfo: ClientInfoResponse = { clientId: '', name: '', firstParty: false, trusted: false };
 
 const stubUserPublic = {
   _id: '',
@@ -789,7 +793,8 @@ const oauthContractApp = new OpenAPIHono()
   .openapi(oauthRoutes.discoveryRoute, (c) => c.json(stubDiscovery, 200))
   .openapi(oauthRoutes.deviceAuthorizeRoute, (c) => c.json(stubDeviceAuthorize, 200))
   .openapi(oauthRoutes.deviceInfoRoute, (c) => c.json(stubDeviceInfo, 200))
-  .openapi(oauthRoutes.deviceVerifyRoute, (c) => c.json(stubDeviceVerify, 200));
+  .openapi(oauthRoutes.deviceVerifyRoute, (c) => c.json(stubDeviceVerify, 200))
+  .openapi(oauthRoutes.clientInfoRoute, (c) => c.json(stubClientInfo, 200));
 
 /**
  * Per-chain type aliases. These are **exported** so the dts bundler

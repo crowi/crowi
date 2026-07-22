@@ -816,6 +816,29 @@
           "status"
         ]
       },
+      "ClientInfoResponse": {
+        "type": "object",
+        "properties": {
+          "clientId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "firstParty": {
+            "type": "boolean"
+          },
+          "trusted": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "clientId",
+          "name",
+          "firstParty",
+          "trusted"
+        ]
+      },
       "UserPublic": {
         "type": "object",
         "properties": {
@@ -11291,6 +11314,90 @@
                           "enum": [
                             "Internal server error"
                           ]
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/oauth/client-info": {
+      "get": {
+        "tags": [
+          "oauth"
+        ],
+        "summary": "Look up non-secret metadata for a registered OAuth client (authorize/consent screen)",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "client_id",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Client metadata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "clientId": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "firstParty": {
+                      "type": "boolean"
+                    },
+                    "trusted": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "clientId",
+                    "name",
+                    "firstParty",
+                    "trusted"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No client registered with this client_id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "NOT_FOUND"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
                         }
                       },
                       "required": [
