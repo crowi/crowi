@@ -32,11 +32,14 @@ by RFC-0016 OQ-5; not this scaffold's concern.)
 
 ```
 apps/apple/
-├── Package.swift              # the App manifest (`import AppleProductTypes`,
-│                               #   Xcode-only — see "Two packages" below)
-├── Sources/CrowiApp/           # @main SwiftUI entry point (thin; Phase 1 builds
-│                               #   the real WorkspaceStore/shell here)
-├── Support/AdditionalInfo.plist  # merged into the app's Info.plist —
+├── Crowi.swiftpm/              # the App package — MUST keep the `.swiftpm`
+│   │                           #   extension (see "Why Crowi.swiftpm, not
+│   │                           #   apps/apple/, is what you open" below)
+│   ├── Package.swift           # the App manifest (`import AppleProductTypes`,
+│   │                           #   Xcode-only — see "Two packages" below)
+│   ├── Sources/CrowiApp/       # @main SwiftUI entry point (thin; Phase 1 builds
+│   │                           #   the real WorkspaceStore/shell here)
+│   └── Support/AdditionalInfo.plist  # merged into the app's Info.plist —
 │                               #   CFBundleURLTypes declares `crowi-ios`
 ├── CrowiKit/                   # plain SwiftPM library: client/auth/render
 │   │                           #   logic, testable with the bare `swift` CLI
@@ -54,22 +57,39 @@ apps/apple/
                                  #   client — build-time only, never committed)
 ```
 
+### Why `Crowi.swiftpm`, not `apps/apple/`, is what you open
+
+Open **`apps/apple/Crowi.swiftpm`** in Xcode (`open apps/apple/Crowi.swiftpm`
+or `xed apps/apple/Crowi.swiftpm`) — never the `apps/apple/` folder itself,
+and never double-click `Package.swift` directly (macOS's generic `open` on
+the bare file opens it as a single untitled source document, not as a
+project). Xcode only allows a `.iOSApplication` product (the
+`AppleProductTypes` product this app's `Package.swift` declares) inside a
+folder whose name ends in `.swiftpm` — this is Apple's "Swift Playground App"
+package convention, not specific to Crowi. Opening the manifest from a
+differently-named folder builds fine from the plain `xcodebuild -scheme` CLI
+(verified — that is exactly what the objective gate command below does) but
+fails to even open in Xcode's own project UI with **"iOS app products are
+only permitted in Swift Playground packages"** (verified empirically during
+Phase 0, discovered when opening the scaffold in Xcode's GUI for the first
+time — the CLI gate alone does not catch this).
+
 ### Two packages, one reason: `AppleProductTypes` isn't parseable by the bare `swift` CLI
 
-The root `Package.swift` declares the `.iOSApplication` product (via
+`Crowi.swiftpm/Package.swift` declares the `.iOSApplication` product (via
 `import AppleProductTypes`) that makes this directory build as a real iOS app
 — universal iPhone/iPad, iOS 17 floor, `CFBundleURLTypes` declaring the
 `crowi-ios` scheme — **entirely from a `Package.swift`, no `.xcodeproj`
 needed**. This only works inside Xcode's own SwiftPM integration: the bare
 `swift build`/`swift test` CLI cannot even **parse** a manifest that imports
 `AppleProductTypes` (`error: no such module 'AppleProductTypes'` — verified
-directly during Phase 0). So `swift test` cannot run against the root
-manifest at all, ever, by construction — not a fixable bug.
+directly during Phase 0). So `swift test` cannot run against this manifest
+at all, ever, by construction — not a fixable bug.
 
 All the shared, unit-testable logic therefore lives in **`CrowiKit/`**, a
 plain local SwiftPM package with an ordinary manifest (no `AppleProductTypes`
 import), which the App target depends on
-(`.package(path: "CrowiKit")`). `swift test` runs there.
+(`.package(path: "../CrowiKit")`). `swift test` runs there.
 
 ## Objective gate commands (extraGates)
 
@@ -77,8 +97,8 @@ These are the exact, verified commands — copy-paste them, they are not
 placeholders:
 
 ```bash
-# from apps/apple/ — builds the whole app (incl. CrowiKit + all SwiftPM deps)
-# for the iOS Simulator destination.
+# from apps/apple/Crowi.swiftpm/ — builds the whole app (incl. CrowiKit + all
+# SwiftPM deps) for the iOS Simulator destination.
 xcodebuild build -scheme Crowi -destination 'generic/platform=iOS Simulator' -skipPackagePluginValidation
 
 # from apps/apple/CrowiKit/ — unit tests for the shared client/auth/render
@@ -104,6 +124,10 @@ execution isn't gated the same way Xcode's build system's is.
 
 - Xcode 16+ with the iOS 17 SDK and an iOS Simulator runtime installed
   (`xcrun simctl list devices available` should list at least one iPhone).
+- Open the app in Xcode with `open apps/apple/Crowi.swiftpm` or
+  `xed apps/apple/Crowi.swiftpm` (see "Why `Crowi.swiftpm`, not `apps/apple/`,
+  is what you open" above — opening anything else fails or falls back to a
+  plain single-file editor with no scheme/run button).
 - No `npm install` / `pnpm install` step — this island has no JS tooling.
 - First build resolves SwiftPM dependencies over the network
   (swift-openapi-generator / -runtime / -urlsession, swift-markdown-ui) —

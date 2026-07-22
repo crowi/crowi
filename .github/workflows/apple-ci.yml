@@ -40,7 +40,7 @@ jobs:
       # during Phase 0 — see apps/apple/README.md's "Objective gate
       # commands" section, which this step mirrors exactly).
       - name: xcodebuild build (Crowi app, iOS Simulator)
-        working-directory: apps/apple
+        working-directory: apps/apple/Crowi.swiftpm
         run: |
           xcodebuild build \
             -scheme Crowi \
