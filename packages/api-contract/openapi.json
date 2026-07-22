@@ -7165,7 +7165,8 @@
           "notifications",
           "search",
           "collab",
-          "collab:redis"
+          "collab:redis",
+          "link-card"
         ]
       }
     },
@@ -34106,11 +34107,15 @@
                       "items": {
                         "type": "string"
                       }
+                    },
+                    "linkCardEnabled": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
                     "registrationMode",
-                    "registrationWhiteList"
+                    "registrationWhiteList",
+                    "linkCardEnabled"
                   ]
                 }
               }
@@ -34261,11 +34266,15 @@
                     "items": {
                       "type": "string"
                     }
+                  },
+                  "linkCardEnabled": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
                   "registrationMode",
-                  "registrationWhiteList"
+                  "registrationWhiteList",
+                  "linkCardEnabled"
                 ]
               }
             }
@@ -34292,11 +34301,15 @@
                       "items": {
                         "type": "string"
                       }
+                    },
+                    "linkCardEnabled": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
                     "registrationMode",
-                    "registrationWhiteList"
+                    "registrationWhiteList",
+                    "linkCardEnabled"
                   ]
                 }
               }

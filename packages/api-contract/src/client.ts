@@ -532,6 +532,7 @@ const stubAuthSettings: GetAuthSettingsResponse = { requireThirdPartyAuth: false
 const stubSecuritySettings: GetSecuritySettingsResponse = {
   registrationMode: 'Open',
   registrationWhiteList: [],
+  linkCardEnabled: true,
 };
 const stubMailSettings: GetMailSettingsResponse = {
   from: '',
