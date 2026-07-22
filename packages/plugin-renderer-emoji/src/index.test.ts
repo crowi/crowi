@@ -24,6 +24,7 @@ function makeRegistry(): { scope: RendererRegistry; captured: CapturedRegistrati
     addCodeBlockRenderer: () => undefined,
     addEmbedTag: () => undefined,
     addUrlInlineExpander: () => undefined,
+    addStylesheet: () => undefined,
   };
   return { scope, captured };
 }

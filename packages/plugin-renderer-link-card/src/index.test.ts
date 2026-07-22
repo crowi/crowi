@@ -31,6 +31,7 @@ describe('@crowi/plugin-renderer-link-card plugin contract', () => {
       addCodeBlockRenderer: jest.fn(),
       addEmbedTag,
       addUrlInlineExpander,
+      addStylesheet: jest.fn(),
     };
     linkCardPlugin.registerRenderer?.(registry, { log: silentLogger } as never);
     expect(addEmbedTag).toHaveBeenCalledTimes(1);
