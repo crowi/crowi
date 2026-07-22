@@ -1,0 +1,19 @@
+# RFC-0016 §10 — apps/apple is a package.json-less tooling island (no
+# turbo/pnpm build cache to ignore here; this is Xcode/SwiftPM's own state).
+
+# SwiftPM / Xcode build products. Includes both this manifest's build AND
+# CrowiKit's (`CrowiKit/.build/`) — the swift-openapi-generator build-tool
+# plugin's generated Swift client (Types.swift / Client.swift / Server.swift)
+# lands under here (`.build/plugins/outputs/.../GeneratedSources/`) and is
+# NEVER committed — it is regenerated from the in-tree
+# `packages/api-contract/openapi.json` on every build (§10, §5.1).
+.build/
+DerivedData/
+
+# Xcode-managed SPM-only-project workspace state (schemes/breakpoints/user
+# state) — regenerated locally, not shared.
+.swiftpm/
+xcuserdata/
+*.xcuserstate
+
+.DS_Store
