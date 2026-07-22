@@ -4904,6 +4904,10 @@ paths:
                       $ref: '#/components/schemas/Capability'
                   canSelfRegister:
                     type: boolean
+                  rendererStylesheets:
+                    type: array
+                    items:
+                      type: string
                 required:
                   - title
                   - confidential
@@ -4911,6 +4915,7 @@ paths:
                   - apiVersion
                   - capabilities
                   - canSelfRegister
+                  - rendererStylesheets
         '500':
           description: Internal server error
           content:

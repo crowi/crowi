@@ -7212,6 +7212,12 @@
                     },
                     "canSelfRegister": {
                       "type": "boolean"
+                    },
+                    "rendererStylesheets": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   },
                   "required": [
@@ -7220,7 +7226,8 @@
                     "version",
                     "apiVersion",
                     "capabilities",
-                    "canSelfRegister"
+                    "canSelfRegister",
+                    "rendererStylesheets"
                   ]
                 }
               }
