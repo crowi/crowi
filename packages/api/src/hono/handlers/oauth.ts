@@ -8,6 +8,7 @@
  *   POST /oauth/device/authorize                   — public (RFC 8628 §3.1)
  *   GET  /oauth/device                             — public (consent lookup)
  *   POST /oauth/device/verify                      — JWT (web session only)
+ *   GET  /oauth/client-info                        — public (RFC-0016 §4.4, client metadata lookup)
  *
  * `/oauth/authorize` and `/oauth/device/verify` ride per-path
  * `createJwtAuth(crowi)` applies (no other handler owns `/oauth/*`, so the
@@ -32,7 +33,16 @@
  */
 import type { ForbiddenError, NotFoundError, OAuthError } from '@crowi/api-contract';
 import { DISCOVERY_SCOPES_SUPPORTED, GRANT_TYPES_SUPPORTED, TokenRequestSchema, isScope, scopeSatisfies } from '@crowi/api-contract';
-import { authorizeRoute, deviceAuthorizeRoute, deviceInfoRoute, deviceVerifyRoute, discoveryRoute, revokeRoute, tokenRoute } from '@crowi/api-contract';
+import {
+  authorizeRoute,
+  clientInfoRoute,
+  deviceAuthorizeRoute,
+  deviceInfoRoute,
+  deviceVerifyRoute,
+  discoveryRoute,
+  revokeRoute,
+  tokenRoute,
+} from '@crowi/api-contract';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import type { Context } from 'hono';
 import Debug from 'debug';
@@ -82,6 +92,13 @@ const DEVICE_NOT_FOUND_BODY: NotFoundError = {
   error: {
     code: 'NOT_FOUND',
     message: 'No pending device authorization for this code.',
+  },
+};
+
+const CLIENT_NOT_FOUND_BODY: NotFoundError = {
+  error: {
+    code: 'NOT_FOUND',
+    message: 'No client is registered with this client_id.',
   },
 };
 
@@ -488,6 +505,18 @@ export const registerOAuthRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(ap
         debug('device/verify failed:', err);
         return c.json(INTERNAL_ERROR_BODY, 500);
       }
+    })
+    .openapi(clientInfoRoute, async (c) => {
+      // Public, minimal lookup (RFC-0016 §4.4) — mirrors deviceInfoRoute's
+      // own non-secret shape. The web authorize page reads this before
+      // rendering: a trusted client skips ConsentCard entirely. Never
+      // returns redirectUris / allowedScopes.
+      const { client_id } = c.req.valid('query');
+      const client = await OAuthClient.findByClientId(client_id);
+      if (!client) {
+        return c.json(CLIENT_NOT_FOUND_BODY, 404);
+      }
+      return c.json({ clientId: client.clientId, name: client.name, firstParty: client.firstParty, trusted: client.trusted }, 200);
     });
 
   /** Mint a fresh access (JWT) + refresh (DB-backed) pair for a grant. */
