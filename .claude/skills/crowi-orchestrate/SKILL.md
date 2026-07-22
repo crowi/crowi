@@ -227,7 +227,14 @@ orchestrate A は READY_TO_INTEGRATE **signal を待つだけ**なので、compl
 打ち忘れた worktree は永遠に不可視になる (過去の実害: editor-preview-reliability
 39 commit・ci-automation 12 commit の長期滞留)。E はこれを検知して**報告だけ**する watcher。
 
-閾値: `STALL_THRESHOLD_DAYS = 3` (仮置き。運用で調整)。
+閾値: `STALL_THRESHOLD_DAYS = 3` (仮置き。運用で調整)。ただし対応する
+`.feature-state/tasks/<id>.json` の `longLived` が `true` の worktree は
+`ORCH_STALL_DAYS_LONG`(既定 14。`orchestrate-watch.sh` の env)が閾値になる —
+release ready まで数フェーズを跨ぐような長期 worktree(例: umbrella spec の実装)を
+通常閾値で誤検知しないための marker。event 名・報告形式は不変(閾値だけが変わる —
+完全放置はこれまでどおり検知される)。longLived の `STALLED` は「統合漏れ」より
+「作業中断」の可能性が高いので、報告後はまず worktree セッション/impl に agmsg で
+状況確認してから判断する(integrate を急がない)。
 
 ### 検知ロジック
 
