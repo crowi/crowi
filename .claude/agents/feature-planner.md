@@ -155,6 +155,8 @@ apps/crowi-site/content/docs/en/{guide,operations,plugins}/
   "scope": "trivial | small | medium | large",
   "stack": "api | web | full-stack",
   "dependencies": ["他タスクID"],
+  "extraGates": [{"name": "xcodebuild", "cmd": "xcodebuild test -scheme ...", "cwd": "apps/apple"}],
+  "longLived": false,
   "phases": [],
   "context": {
     "specPath": ".feature-state/specs/{id}.md",
@@ -220,6 +222,28 @@ apps/crowi-site/content/docs/en/{guide,operations,plugins}/
 不要な commitPlan エントリは省く (UI なしなら web を削除、`docsTargets.assessment` が
 `internal-only` なら `docs(site)` を削除、`e2eTargets` の entries が空なら `test(e2e)` を
 削除など)。
+
+`extraGates` / `longLived` はどちらも省略可(デフォルトは無し / `false` で、通常の
+`pnpm` 標準ゲートのみの task では書かない・完全後方互換)。使うのは主に
+`apps/apple` のような package.json を持たない tooling island を触る task:
+
+- `extraGates` — 標準ゲート (type-check / test / lint / openapi) が **diff に対して
+  素通り green** になってしまう island 固有の客観ゲート(例: `xcodebuild build` /
+  `swift test`)を `[{ "name": "<表示名>", "cmd": "<シェルコマンド>", "cwd":
+  "<worktree 相対パス、省略時 worktree root>" }]` で登録する。
+  `/crowi-complete-feature` が実装完了判定の一部として実行し(1 つでも fail なら
+  READY_TO_INTEGRATE にしない)、全て pass した場合のみ結果を `readyForMerge.checks.extra`
+  に記録する(`{ "<name>": true }` の形式; fail すると task.json 自体が更新されないため
+  checks.extra は記録されない)。
+  `task-state.sh` の `set-field` allowlist には含まれない(読み取り専用の運用 —
+  変更したければ `task create` 時点で確定させるか `replace-unsafe` で計画自体を
+  更新する)。
+- `longLived: true` — release ready まで複数フェーズを跨いで長期化する worktree
+  (umbrella spec の実装など)に立てる。orchestrate lane E の停滞検知の閾値が通常の
+  `ORCH_STALL_DAYS`(既定 3)ではなく `ORCH_STALL_DAYS_LONG`(既定 14)になる。
+  umbrella spec(他 spec を phase として参照する形式)を計画するときは、各 phase の
+  `context` に対応する sub-spec のパスを記載した上で、その umbrella の運用契約
+  (spec に明記されているはず)どおり `extraGates` / `longLived` を設定すること。
 
 `phases` は `task-state.sh` が強制する必須トップレベルキー(`--help` 参照)。spec に
 `### Phase N:` ヘッダが 2 本以上あれば multi-phase 判定(`crowi-feature/SKILL.md` の
