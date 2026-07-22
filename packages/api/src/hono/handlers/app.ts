@@ -77,6 +77,14 @@ export const registerAppRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app:
     // Version-skew / feature-detection signal for the @crowi/cli end-user
     // CLI (and any other client). `crowi.version` is the @crowi/api
     // package.json version read at boot.
+    // feature-renderer-plugin-boundary Phase 1 — the committed renderer
+    // stylesheet manifest (`RendererRegistryImpl.getStylesheets()`, see its
+    // doc comment for the pending→commit-on-route-success rule). `crowi.
+    // renderer` is always set by request time (`setupRenderer` runs during
+    // `Crowi.init()`, well before `buildHonoApp` mounts this route), but the
+    // optional-chain keeps this handler from throwing in a minimal test
+    // harness that skips renderer setup.
+    const rendererStylesheets = [...(crowi.renderer?.registry.getStylesheets() ?? [])];
     return c.json(
       {
         title,
@@ -85,6 +93,7 @@ export const registerAppRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app:
         apiVersion: API_SURFACE_VERSION,
         capabilities: buildCapabilities(crowi),
         canSelfRegister,
+        rendererStylesheets,
       } satisfies AppInfoResponse,
       200,
     );
