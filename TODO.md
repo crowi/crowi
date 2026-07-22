@@ -54,7 +54,7 @@ alpha.0–.3 は published、alpha.4 / stable 向けに changeset 蓄積中（pr
 - [ ] **monorepo restructure follow-ups**（catalog 化、compose healthcheck、dev/prod parity ほか）
 - [ ] **crypto Phase 3**（KeyProvider pluggable 化、lookup-key secret の hash 化）
 - [ ] **RFC-0008 follow-ups**（`rebuild renderer`/`backlink` 本実装、watcher backfill 統一、RFC 追従）
-- [ ] **eslint 8 → 9 major up**（`packages/api` / `packages/collab` の direct eslint 8.57.1。flat config 統一含む。GHSA `js-yaml` advisory が transitive 経由で残るのは eslint 8 chain が `@eslint/eslintrc → js-yaml@4.1.1` を要求するため）
+- [ ] **eslint 8 → 9 major up**（`packages/api` / `packages/collab` の direct eslint 8.57.1。flat config 統一が主目的 — GHSA `js-yaml` advisory は eslint version と無関係に root `pnpm.overrides` の `js-yaml@>=3.0.0 <3.15.0` / `js-yaml@>=4.0.0 <4.3.0` で解消済み）
 - [x] **mongoose 8 → 9 major up**（`packages/api` / `packages/collab` / `packages/plugin-search-mongo`。mongodb 6→7・mms 10→11 同伴。GHSA `ip-address` chain は mongoose major とは直交し、root `pnpm.overrides` の `"socks": "^2.8.7"` で解消）
 
 ---

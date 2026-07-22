@@ -33,7 +33,7 @@ import { Readable } from 'node:stream';
 
 import Debug from 'debug';
 import type { Types } from 'mongoose';
-import sharp from 'sharp';
+import sharp, { type Metadata, type OutputInfo, type Sharp } from 'sharp';
 
 import type Crowi from 'src/crowi';
 import FileUploader from 'src/util/file-uploader';
@@ -180,7 +180,7 @@ function isSupportedSharpFormat(format: string): format is SupportedSharpFormat 
   return format === 'jpeg' || format === 'png' || format === 'webp';
 }
 
-function applyEncodeOptions(pipeline: sharp.Sharp, format: SupportedSharpFormat): sharp.Sharp {
+function applyEncodeOptions(pipeline: Sharp, format: SupportedSharpFormat): Sharp {
   switch (format) {
     case 'jpeg':
       return pipeline.jpeg(JPEG_ENCODE_OPTIONS);
@@ -228,8 +228,8 @@ const PNG_CHUNK_SCAN_LIMIT = 10_000;
 /**
  * Detect an APNG's `acTL` chunk without decoding pixels.
  *
- * The sharp/libvips build this package ships against (spng-backed PNG
- * loader) does NOT expose multi-frame `pages` for PNG the way it does for
+ * The sharp/libvips build this package ships against does NOT expose
+ * multi-frame `pages` for PNG the way it does for
  * GIF/WebP/TIFF/HEIF — verified empirically: a hand-built, spec-conformant
  * 2-frame APNG (`acTL` + per-frame `fcTL`/`fdAT`) round-tripped through
  * `sharp(...).metadata()` (with and without `{ pages: -1 }` / `{ animated:
@@ -330,7 +330,7 @@ export async function generateDisplayDerivativeBuffer(sourcePath: string, opts: 
     return { mode: 'failed', reason: 'unknown-error' };
   }
 
-  let metadata: sharp.Metadata;
+  let metadata: Metadata;
   try {
     metadata = await sharp(sourcePath, { limitInputPixels: maxInputPixels }).metadata();
   } catch (err) {
@@ -354,7 +354,7 @@ export async function generateDisplayDerivativeBuffer(sourcePath: string, opts: 
     return { mode: 'passthrough', reason: 'within-target-width' };
   }
 
-  let encoded: { data: Buffer; info: sharp.OutputInfo };
+  let encoded: { data: Buffer; info: OutputInfo };
   try {
     const pipeline = sharp(sourcePath, { limitInputPixels: maxInputPixels })
       .rotate()

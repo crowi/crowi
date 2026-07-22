@@ -124,13 +124,17 @@ async function pngChunk(type: string, data: Buffer): Promise<Buffer> {
  * scan is used instead.
  *
  * `paddingBytesBeforeActl`, when > 0, inserts an unknown-but-well-formed
- * ANCILLARY chunk (type `padA` — lowercase first letter per the PNG naming
- * convention, so any conformant decoder skips it unread rather than
- * erroring) between `IHDR` and `acTL`, pushing the real `acTL` chunk's byte
- * offset past that padding. Used to prove the detector walks chunk
- * boundaries (correct at any offset) rather than relying on a
- * fixed-size raw byte-window scan (which would miss an `acTL` sitting past
- * the window — the exact bug this fixture regression-tests).
+ * ANCILLARY chunk (type `paDA` — lowercase first letter per the PNG naming
+ * convention so any conformant decoder skips it unread rather than
+ * erroring; the THIRD letter must stay uppercase — that's the reserved bit,
+ * and a decoder is entitled to reject the whole file as non-conformant if
+ * it's lowercase, which is exactly what sharp 0.35's libpng-backed PNG
+ * loader started doing once this fixture briefly used `padA` here) between
+ * `IHDR` and `acTL`, pushing the real `acTL` chunk's byte offset past that
+ * padding. Used to prove the detector walks chunk boundaries (correct at
+ * any offset) rather than relying on a fixed-size raw byte-window scan
+ * (which would miss an `acTL` sitting past the window — the exact bug this
+ * fixture regression-tests).
  */
 async function minimalApngBuffer(width: number, height: number, paddingBytesBeforeActl = 0): Promise<Buffer> {
   const zlib = await import('node:zlib');
@@ -160,7 +164,7 @@ async function minimalApngBuffer(width: number, height: number, paddingBytesBefo
   ihdrData[9] = 2;
   const ihdr = await pngChunk('IHDR', ihdrData);
 
-  const padding = paddingBytesBeforeActl > 0 ? await pngChunk('padA', Buffer.alloc(paddingBytesBeforeActl, 0x20)) : Buffer.alloc(0);
+  const padding = paddingBytesBeforeActl > 0 ? await pngChunk('paDA', Buffer.alloc(paddingBytesBeforeActl, 0x20)) : Buffer.alloc(0);
 
   const actlData = Buffer.alloc(8);
   actlData.writeUInt32BE(2, 0);
