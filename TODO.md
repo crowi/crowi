@@ -22,6 +22,9 @@ alpha.0–.3 は published、alpha.4 / stable 向けに changeset 蓄積中（pr
 - [ ] Step 10: auth provider plugin 化（OAuth。alpha1 で削除、将来 plugin で復活）
 - [ ] 将来: encryption KeyProvider plugin (KMS)、S3 以外の attachment storage
 
+### Renderer plugin 境界の確立と emoji / link-card の core 統合
+- [x] Phase 1: presentation / asset contract の一般化 完成（spec: `feature-renderer-plugin-boundary.md`）。残: Phase 2 optional plugin の core coupling 除去 / Phase 3 emoji・link-card core 統合 / Phase 4 operator 互換・package 削除
+
 ### OAuth 2.0 (RFC-0010)
 - [ ] Phase 5: admin による任意 OAuth クライアント登録 UI（Phase 1-4 完了）
 
