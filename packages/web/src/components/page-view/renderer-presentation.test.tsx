@@ -63,25 +63,25 @@ describe('isDiagramPresentationReady', () => {
   });
 
   describe('legacy .diagram-embed dual-accept (no data-attribute contract present)', () => {
-    it('is true for the PlantUML success marker', () => {
-      expect(isDiagramPresentationReady('diagram-embed plantuml-embed', {})).toBe(true);
+    it('is true for an arbitrary producer-specific success marker', () => {
+      expect(isDiagramPresentationReady('diagram-embed fake-diagram-embed', {})).toBe(true);
     });
 
-    it('is true for the Mermaid success marker', () => {
-      expect(isDiagramPresentationReady('diagram-embed mermaid-embed', {})).toBe(true);
+    it('is true for a DIFFERENT arbitrary producer-specific success marker — the predicate never inspects the specific suffix', () => {
+      expect(isDiagramPresentationReady('diagram-embed other-fake-diagram-embed', {})).toBe(true);
     });
 
     it('is false for a class list with no diagram-embed marker at all', () => {
-      expect(isDiagramPresentationReady('plantuml-embed', {})).toBe(false);
-      expect(isDiagramPresentationReady('mermaid-embed', {})).toBe(false);
+      expect(isDiagramPresentationReady('fake-diagram-embed', {})).toBe(false);
+      expect(isDiagramPresentationReady('other-fake-diagram-embed', {})).toBe(false);
     });
 
-    it('is false for the Mermaid error placeholder marker (mermaid-embed mermaid-error, no diagram-embed)', () => {
-      expect(isDiagramPresentationReady('mermaid-embed mermaid-error', {})).toBe(false);
+    it('is false for an error placeholder marker (fake-diagram-embed fake-diagram-error, no diagram-embed)', () => {
+      expect(isDiagramPresentationReady('fake-diagram-embed fake-diagram-error', {})).toBe(false);
     });
 
     it('is false when diagram-embed co-occurs with an *-error class', () => {
-      expect(isDiagramPresentationReady('diagram-embed mermaid-embed mermaid-error', {})).toBe(false);
+      expect(isDiagramPresentationReady('diagram-embed fake-diagram-embed fake-diagram-error', {})).toBe(false);
     });
 
     it('is false for a non-string className (unknown from hast-util-to-jsx-runtime)', () => {
@@ -108,19 +108,19 @@ describe('pickRendererPresentationAttrs', () => {
   });
 
   it('returns an empty object when neither is present (legacy markup)', () => {
-    expect(pickRendererPresentationAttrs({ className: 'diagram-embed plantuml-embed' })).toEqual({});
+    expect(pickRendererPresentationAttrs({ className: 'diagram-embed fake-diagram-embed' })).toEqual({});
   });
 });
 
 describe('RendererPresentation', () => {
   it('renders the diagram body and reveals a zoom affordance whose click opens a dialog with the same content', () => {
     render(
-      <RendererPresentation className="diagram-embed mermaid-embed">
-        <img alt="Mermaid diagram (flowchart)" src="data:image/svg+xml;base64,PHN2Zy8+" />
+      <RendererPresentation className="diagram-embed fake-diagram-embed">
+        <img alt="Diagram (flowchart)" src="data:image/svg+xml;base64,PHN2Zy8+" />
       </RendererPresentation>,
     );
     // The inline diagram is present outside any dialog.
-    expect(screen.getByRole('img', { name: 'Mermaid diagram (flowchart)' })).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'Diagram (flowchart)' })).toBeTruthy();
     expect(screen.queryByRole('dialog')).toBeNull();
 
     const zoomButton = screen.getByRole('button', { name: m['page.diagram_zoom']() });
@@ -128,18 +128,18 @@ describe('RendererPresentation', () => {
 
     // The dialog now renders the same diagram body verbatim.
     const dialog = screen.getByRole('dialog');
-    expect(dialog.querySelector('img[alt="Mermaid diagram (flowchart)"]')).not.toBeNull();
+    expect(dialog.querySelector('img[alt="Diagram (flowchart)"]')).not.toBeNull();
   });
 
   it('carries the incoming className onto the wrapper span so shared `.diagram-embed` CSS applies regardless of renderer', () => {
     const { container } = render(
-      <RendererPresentation className="diagram-embed plantuml-embed">
+      <RendererPresentation className="diagram-embed fake-diagram-embed">
         <svg />
       </RendererPresentation>,
     );
     const wrapper = container.querySelector('span');
     expect(wrapper?.className).toContain('diagram-embed');
-    expect(wrapper?.className).toContain('plantuml-embed');
+    expect(wrapper?.className).toContain('fake-diagram-embed');
   });
 
   it('carries the new data-crowi-renderer-presentation/state attributes onto the wrapper span so the CSS selector contract matches it', () => {

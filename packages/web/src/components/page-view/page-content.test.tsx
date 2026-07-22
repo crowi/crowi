@@ -125,7 +125,7 @@ describe('PageContent — RFC-0015 image display attributes (AC-B1, AC-B3, AC-X1
     expect(screen.queryByRole('figure')).toBeNull();
   });
 
-  it('leaves the PlantUML PNG-fallback embed path unaffected — no display-attribute processing runs before the isDiagramEmbed early return (AC-X3)', () => {
+  it('leaves a diagram PNG-fallback embed path unaffected — no display-attribute processing runs before the isDiagramEmbed early return (AC-X3)', () => {
     const renderedAst = {
       type: 'root',
       children: [
@@ -134,9 +134,9 @@ describe('PageContent — RFC-0015 image display attributes (AC-B1, AC-B3, AC-X1
           children: [
             {
               type: 'image',
-              url: '/plantuml/render/x.png',
+              url: '/diagram/render/x.png',
               alt: 'diagram',
-              data: { hProperties: { className: 'diagram-embed plantuml-embed', 'data-crowi-image-width': '60%' } },
+              data: { hProperties: { className: 'diagram-embed fake-diagram-embed', 'data-crowi-image-width': '60%' } },
             },
           ],
         },
@@ -711,48 +711,47 @@ describe('PageContent — revision change resets table dialog identity (fiber-sw
   });
 });
 
-describe('PageContent — Mermaid diagram embed reuses the shared DiagramEmbed wrapper (feature-plugin-renderer-mermaid Phase 3, spec §9)', () => {
+describe('PageContent — diagram embeds reuse the shared DiagramEmbed wrapper (feature-plugin-renderer-mermaid Phase 3, spec §9)', () => {
   const zoomLabel = m['page.diagram_zoom']();
 
-  it('wraps a Mermaid success <img> (class="diagram-embed mermaid-embed") with the same click-to-enlarge affordance as PlantUML', () => {
+  it('wraps a diagram success <img> (class="diagram-embed fake-diagram-embed") with the click-to-enlarge affordance', () => {
     const renderedAst = {
       type: 'root',
-      children: [
-        { type: 'html', value: '<img class="diagram-embed mermaid-embed" alt="Mermaid diagram (flowchart)" src="data:image/svg+xml;base64,PHN2Zy8+">' },
-      ],
+      children: [{ type: 'html', value: '<img class="diagram-embed fake-diagram-embed" alt="Diagram (flowchart)" src="data:image/svg+xml;base64,PHN2Zy8+">' }],
     };
     renderPage(pageWithAst(renderedAst));
 
-    const img = screen.getByRole('img', { name: 'Mermaid diagram (flowchart)' }) as HTMLImageElement;
+    const img = screen.getByRole('img', { name: 'Diagram (flowchart)' }) as HTMLImageElement;
     // alt is present, non-empty, and exactly the fixed/closed-enum literal
-    // the plugin emits (spec §9's adversarial invariant — alt is never
-    // derived from Mermaid source text — is exercised with adversarial
-    // payloads at the plugin layer, `@crowi/plugin-renderer-mermaid`'s
-    // `index.test.ts`; this re-checks the Web layer preserves that literal
-    // as-is rather than mangling or blanking it).
-    expect(img.alt).toBe('Mermaid diagram (flowchart)');
+    // a diagram renderer plugin emits (spec §9's adversarial invariant —
+    // alt is never derived from the diagram source text — is exercised
+    // with adversarial payloads at the plugin layer, e.g.
+    // `@crowi/plugin-renderer-mermaid`'s `index.test.ts`; this re-checks
+    // the Web layer preserves that literal as-is rather than mangling or
+    // blanking it).
+    expect(img.alt).toBe('Diagram (flowchart)');
 
     expect(screen.getByRole('button', { name: zoomLabel })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: zoomLabel }));
     const dialog = screen.getByRole('dialog');
-    expect(dialog.querySelector('img[alt="Mermaid diagram (flowchart)"]')).not.toBeNull();
+    expect(dialog.querySelector('img[alt="Diagram (flowchart)"]')).not.toBeNull();
   });
 
-  it('does NOT wrap the Mermaid error placeholder (class="mermaid-embed mermaid-error", no diagram-embed marker) — no zoom button, no dialog', () => {
+  it('does NOT wrap a diagram error placeholder (class="fake-diagram-embed fake-diagram-error", no diagram-embed marker) — no zoom button, no dialog', () => {
     const renderedAst = {
       type: 'root',
-      children: [{ type: 'html', value: '<div class="mermaid-embed mermaid-error" role="status"><span>Mermaid diagram could not be rendered</span></div>' }],
+      children: [{ type: 'html', value: '<div class="fake-diagram-embed fake-diagram-error" role="status"><span>Diagram could not be rendered</span></div>' }],
     };
     renderPage(pageWithAst(renderedAst));
 
-    expect(screen.getByRole('status').textContent).toContain('Mermaid diagram could not be rendered');
+    expect(screen.getByRole('status').textContent).toContain('Diagram could not be rendered');
     expect(screen.queryByRole('button', { name: zoomLabel })).toBeNull();
   });
 
-  it('wraps a PlantUML SVG success <div> (class="diagram-embed plantuml-embed") with the same wrapper', () => {
+  it('wraps a different diagram producer\'s SVG success <div> (class="diagram-embed other-fake-diagram-embed") with the same wrapper', () => {
     const renderedAst = {
       type: 'root',
-      children: [{ type: 'html', value: '<div class="diagram-embed plantuml-embed"><svg><rect width="10" height="10"/></svg></div>' }],
+      children: [{ type: 'html', value: '<div class="diagram-embed other-fake-diagram-embed"><svg><rect width="10" height="10"/></svg></div>' }],
     };
     renderPage(pageWithAst(renderedAst));
 

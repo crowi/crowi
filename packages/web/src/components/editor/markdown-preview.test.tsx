@@ -73,45 +73,45 @@ describe('MarkdownPreview — stale-guard on a superseded (aborted) preview requ
  * feature-plugin-renderer-mermaid Phase 3 (spec §9) — the editor preview
  * pane reuses the exact same `isDiagramEmbed`/`DiagramEmbed` wrapper as
  * the show page (`page-content.test.tsx` covers the page-view side of
- * this same invariant), so a `previewPolicy:'server-render'` Mermaid
- * fence gets click-to-enlarge parity while still being edited.
+ * this same invariant), so a `previewPolicy:'server-render'` diagram
+ * code-fence gets click-to-enlarge parity while still being edited.
  */
-describe('MarkdownPreview — Mermaid diagram embed gets the same DiagramEmbed wrapper as the show page', () => {
-  it('wraps a Mermaid success <img> (class="diagram-embed mermaid-embed") with the click-to-enlarge affordance', async () => {
+describe('MarkdownPreview — diagram embed gets the same DiagramEmbed wrapper as the show page', () => {
+  it('wraps a diagram success <img> (class="diagram-embed fake-diagram-embed") with the click-to-enlarge affordance', async () => {
     const ast = {
       type: 'root',
       children: [
         {
           type: 'html',
           value:
-            '<div data-source-line="1"><img class="diagram-embed mermaid-embed" alt="Mermaid diagram (flowchart)" src="data:image/svg+xml;base64,PHN2Zy8+"></div>',
+            '<div data-source-line="1"><img class="diagram-embed fake-diagram-embed" alt="Diagram (flowchart)" src="data:image/svg+xml;base64,PHN2Zy8+"></div>',
         },
       ],
     };
     mutateAsync.mockResolvedValueOnce(ast);
 
-    render(<MarkdownPreview source="```mermaid\nflowchart TD\n  A --> B\n```" />);
+    render(<MarkdownPreview source="```diagram\nflowchart TD\n  A --> B\n```" />);
     await act(async () => {
       await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
     });
 
-    expect(screen.getByRole('img', { name: 'Mermaid diagram (flowchart)' })).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'Diagram (flowchart)' })).toBeTruthy();
     expect(screen.getByRole('button', { name: m['page.diagram_zoom']() })).toBeTruthy();
   });
 
-  it('does NOT wrap the Mermaid error placeholder (no diagram-embed marker) — renders the status text with no zoom button', async () => {
+  it('does NOT wrap a diagram error placeholder (no diagram-embed marker) — renders the status text with no zoom button', async () => {
     const ast = {
       type: 'root',
-      children: [{ type: 'html', value: '<div class="mermaid-embed mermaid-error" role="status"><span>Mermaid diagram could not be rendered</span></div>' }],
+      children: [{ type: 'html', value: '<div class="fake-diagram-embed fake-diagram-error" role="status"><span>Diagram could not be rendered</span></div>' }],
     };
     mutateAsync.mockResolvedValueOnce(ast);
 
-    render(<MarkdownPreview source="```mermaid\nnot a real diagram\n```" />);
+    render(<MarkdownPreview source="```diagram\nnot a real diagram\n```" />);
     await act(async () => {
       await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
     });
 
-    expect(screen.getByRole('status').textContent).toContain('Mermaid diagram could not be rendered');
+    expect(screen.getByRole('status').textContent).toContain('Diagram could not be rendered');
     expect(screen.queryByRole('button', { name: m['page.diagram_zoom']() })).toBeNull();
   });
 });
