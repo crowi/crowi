@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Save } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -53,13 +54,16 @@ export function SecurityForm({ settings }: SecurityFormProps) {
   const [formData, setFormData] = useState({
     registrationMode: settings.registrationMode,
     registrationWhiteListRaw: formatWhiteList(settings.registrationWhiteList),
+    linkCardEnabled: settings.linkCardEnabled,
   });
   const [errors, setErrors] = useState<string[]>([]);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const updateSettings = useUpdateAdminSecuritySettings();
   const isDirty =
-    formData.registrationMode !== settings.registrationMode || formData.registrationWhiteListRaw !== formatWhiteList(settings.registrationWhiteList);
+    formData.registrationMode !== settings.registrationMode ||
+    formData.registrationWhiteListRaw !== formatWhiteList(settings.registrationWhiteList) ||
+    formData.linkCardEnabled !== settings.linkCardEnabled;
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -70,6 +74,12 @@ export function SecurityForm({ settings }: SecurityFormProps) {
 
   const handleRegistrationModeChange = (value: RegistrationMode) => {
     setFormData((prev) => ({ ...prev, registrationMode: value }));
+    setErrors([]);
+    setSuccessMessage(null);
+  };
+
+  const handleLinkCardEnabledChange = (checked: boolean) => {
+    setFormData((prev) => ({ ...prev, linkCardEnabled: checked }));
     setErrors([]);
     setSuccessMessage(null);
   };
@@ -86,13 +96,15 @@ export function SecurityForm({ settings }: SecurityFormProps) {
       const updated = await updateSettings.mutateAsync({
         registrationMode: formData.registrationMode,
         registrationWhiteList: whiteList,
+        linkCardEnabled: formData.linkCardEnabled,
       });
       // Reflect server-side sanitization (trim / drop empties) back into the
       // textarea so the UI matches the persisted state without a manual reload.
-      setFormData((prev) => ({
-        ...prev,
+      setFormData({
+        registrationMode: updated.registrationMode,
         registrationWhiteListRaw: formatWhiteList(updated.registrationWhiteList),
-      }));
+        linkCardEnabled: updated.linkCardEnabled,
+      });
       setSuccessMessage(m['admin.security.success_saved']());
     } catch (err) {
       setErrors([err instanceof Error ? err.message : m['admin.security.failed_to_save']()]);
@@ -155,6 +167,23 @@ export function SecurityForm({ settings }: SecurityFormProps) {
             rows={6}
           />
           <p className="text-xs text-muted-foreground">{m['admin.security.field_whitelist_help']()}</p>
+        </div>
+      </section>
+
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold">{m['admin.security.section_link_card_heading']()}</h2>
+          <p className="text-muted-foreground text-sm">{m['admin.security.section_link_card_lead']()}</p>
+        </div>
+
+        <div className="flex items-start gap-3">
+          <Switch id="linkCardEnabled" checked={formData.linkCardEnabled} onCheckedChange={handleLinkCardEnabledChange} />
+          <div className="space-y-1">
+            <Label htmlFor="linkCardEnabled" className="text-sm font-medium">
+              {m['admin.security.field_link_card_label']()}
+            </Label>
+            <p className="text-muted-foreground text-xs">{m['admin.security.field_link_card_help']()}</p>
+          </div>
         </div>
       </section>
 
