@@ -370,9 +370,6 @@ importers:
         specifier: 'catalog:'
         version: 4.4.3
     devDependencies:
-      '@crowi/plugin-renderer-mermaid':
-        specifier: workspace:*
-        version: link:../plugin-renderer-mermaid
       '@crowi/plugin-slack':
         specifier: workspace:*
         version: link:../plugin-slack
@@ -860,6 +857,9 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 24.12.4
+      hono:
+        specifier: ^4.12.25
+        version: 4.12.26
       jest:
         specifier: 'catalog:'
         version: 29.7.0(@types/node@24.12.4)(babel-plugin-macros@3.1.0)(ts-node@10.9.2(@types/node@24.12.4)(typescript@5.8.3))
@@ -1323,9 +1323,6 @@ importers:
       hast-util-to-jsx-runtime:
         specifier: ^2.3.6
         version: 2.3.6
-      katex:
-        specifier: ^0.16.11
-        version: 0.16.45
       lucide-react:
         specifier: ^0.562.0
         version: 0.562.0(react@19.2.3)
@@ -1369,9 +1366,6 @@ importers:
         specifier: ^13.6.8
         version: 13.6.30
     devDependencies:
-      '@crowi/plugin-renderer-mermaid':
-        specifier: workspace:*
-        version: link:../plugin-renderer-mermaid
       '@crowi/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig

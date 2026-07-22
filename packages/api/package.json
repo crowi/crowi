@@ -89,7 +89,6 @@
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@crowi/plugin-renderer-mermaid": "workspace:*",
     "@crowi/plugin-slack": "workspace:*",
     "@crowi/tsconfig": "workspace:*",
     "@hocuspocus/provider": "^4.0.0",

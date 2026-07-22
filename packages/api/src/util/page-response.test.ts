@@ -1,5 +1,4 @@
 import type { CodeBlockRenderer, PluginLogger, RenderActor } from '@crowi/plugin-api';
-import { _shutdownSingletonForTest, createMermaidRenderer } from '@crowi/plugin-renderer-mermaid';
 import { Types } from 'mongoose';
 import type { PluginRenderCacheModel } from 'src/models/plugin-render-cache';
 import type { RevisionMetaContent } from 'src/models/revision';
@@ -260,9 +259,11 @@ describe('computeRevisionRenderArtifactsAsync — renderPending marker scan on t
     expect(RENDERER_PIPELINE_VERSION).toBe('0.8.0');
   });
 
-  // Registers the REAL @crowi/plugin-renderer-mermaid renderer (not a
-  // fixture) — the exact way apps/crowi-runner's boot sequence does via
-  // registerRenderer (spec §10) — into the SAME registry
+  // Registers a diagram-shaped CodeBlockRenderer (feature-renderer-plugin-
+  // boundary Phase 2 §1/§4 — converted off the real
+  // `@crowi/plugin-renderer-mermaid` import onto a local fake with the
+  // same registration SHAPE `apps/crowi-runner`'s boot sequence uses via
+  // registerRenderer, spec §10) into the SAME registry
   // computeRevisionRenderArtifactsAsync reads from
   // (crowi.getRenderer().registry), then proves that a Revision saved
   // BEFORE this Phase (no CodeBlockRenderer existed for 'mermaid' yet, so
@@ -275,9 +276,17 @@ describe('computeRevisionRenderArtifactsAsync — renderPending marker scan on t
   // has NO 'mermaid' renderer registered at all, so it cannot show that
   // the renderer's mere presence in a live registry doesn't retroactively
   // reprocess old content.
-  it('registering the REAL Mermaid renderer (post-Phase-4 wiring) does not retroactively touch a pre-existing, un-dispatched ```mermaid code node — it stays a plain code block until re-saved', async () => {
+  it('registering a diagram CodeBlockRenderer (post-Phase-4 wiring) does not retroactively touch a pre-existing, un-dispatched ```mermaid code node — it stays a plain code block until re-saved', async () => {
     const pageId = new Types.ObjectId().toHexString();
-    crowi.getRenderer().registry.addCodeBlockRenderer('mermaid', createMermaidRenderer(), '@crowi/plugin-renderer-mermaid', silentLogger);
+    const renderer: CodeBlockRenderer = {
+      cacheVersion: 2,
+      admissionControl: { maxConcurrentGlobal: 4, maxConcurrentPerUser: 2, queueDepth: 200 },
+      render: (info) => ({
+        html: `<img class="diagram-embed mermaid-embed" data-crowi-renderer-presentation="diagram" data-crowi-renderer-state="ready" alt="Mermaid diagram" src="data:image/svg+xml;base64,${Buffer.from(info.source).toString('base64')}">`,
+        ttlSec: 3600,
+      }),
+    };
+    crowi.getRenderer().registry.addCodeBlockRenderer('mermaid', renderer, '@crowi/plugin-renderer-mermaid', silentLogger);
 
     const storedAst = {
       type: 'root',
@@ -301,11 +310,6 @@ describe('computeRevisionRenderArtifactsAsync — renderPending marker scan on t
       expect(runRenderSpy).not.toHaveBeenCalled();
     } finally {
       runRenderSpy.mockRestore();
-      // The real renderer's render() is never invoked above (proven by
-      // the spy), so the child-process pool is never lazily spawned —
-      // this is a no-op, kept for hygiene/consistency with every other
-      // suite that touches the real plugin.
-      await _shutdownSingletonForTest();
     }
   });
 });

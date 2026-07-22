@@ -1,13 +1,10 @@
 import { createServer, type Server } from 'node:http';
 import request from 'supertest';
 import { PreviewPageRequestSchema } from '@crowi/api-contract';
-import type { CodeBlockRenderer, PluginContext, PluginLogger } from '@crowi/plugin-api';
-import mermaidPlugin, { _shutdownSingletonForTest } from '@crowi/plugin-renderer-mermaid';
-import plantumlPlugin, { plantumlConfigSchema } from '@crowi/plugin-renderer-plantuml';
+import type { CodeBlockRenderer, PluginLogger } from '@crowi/plugin-api';
 import { app, crowi } from 'src/test/setup';
 import { authHeaders, createTestUser } from 'src/test/test-helpers';
 import type { PluginRenderCacheModel } from 'src/models/plugin-render-cache';
-import { makeRendererScope } from 'src/renderer';
 
 describe('Routes /api/v2/pages/preview (Hono previewPage)', () => {
   let accessToken: string;
@@ -329,84 +326,46 @@ describe('Routes /api/v2/pages/preview (Hono previewPage)', () => {
   // above prove the generic `previewPolicy: 'server-render'` dispatch
   // mechanism (and its zero-I/O default-policy / embed / URL passthrough
   // counterpart) at the HTTP route level, independent of any specific
-  // plugin. This block proves the SAME route reaches the two REAL
-  // production plugins end-to-end: `@crowi/plugin-renderer-mermaid`
-  // (declares `previewPolicy: 'server-render'`) actually renders through
-  // `POST /pages/preview`, and `@crowi/plugin-renderer-plantuml`
-  // (network I/O, no `previewPolicy`) is never invoked and never reaches
-  // the network — the same two guarantees `mermaid.e2e.test.ts` /
-  // `plantuml.e2e.test.ts` prove against `runPipeline` directly, here
-  // proven against the real HTTP handler + real shared renderer registry
-  // (`crowi.getRenderer().registry`) the route actually uses.
-  describe('real-plugin integration through the HTTP route (spec §7 AC "editor preview parity")', () => {
+  // plugin. This block proves the SAME route reaches the SHARED renderer
+  // registry (`crowi.getRenderer().registry` — the one `page-preview.ts`
+  // actually calls `run()` against, not a throwaway `RendererRegistryImpl`)
+  // under the two lang tags the real plugins register in production:
+  // `mermaid` (`previewPolicy: 'server-render'`) actually renders through
+  // `POST /pages/preview`, and `plantuml` (network I/O, no
+  // `previewPolicy`) is never invoked. feature-renderer-plugin-boundary
+  // Phase 2 (§1/§4) converted this block off the real
+  // `@crowi/plugin-renderer-{mermaid,plantuml}` package imports onto local
+  // fake `CodeBlockRenderer`s with the SAME registration shape — the real
+  // plugins' production seam moved to `packages/e2e/tests/renderer-plugins.spec.ts`.
+  describe('shared-registry integration through the HTTP route (spec §7 AC "editor preview parity")', () => {
     const MERMAID_PLUGIN = '@crowi/plugin-renderer-mermaid';
     const PLANTUML_PLUGIN = '@crowi/plugin-renderer-plantuml';
-    const realPluginLogger: PluginLogger = { debug: () => undefined, info: () => undefined, warn: () => undefined, error: () => undefined };
+    const fixtureLogger: PluginLogger = { debug: () => undefined, info: () => undefined, warn: () => undefined, error: () => undefined };
 
-    const buildMermaidPluginCtx = (): PluginContext =>
-      ({
-        config: <T>() => undefined as T,
-        dependencyConfig: () => {
-          throw new Error('not used by this test');
-        },
-        setConfig: async () => undefined,
-        pageMetadata: { get: async () => null, set: async () => undefined, remove: async () => undefined },
-        model: () => undefined,
-        log: realPluginLogger,
-      }) as PluginContext;
-
-    const buildPlantumlPluginCtx = (config: ReturnType<typeof plantumlConfigSchema.parse>): PluginContext =>
-      ({
-        config: <T>() => config as T,
-        dependencyConfig: () => {
-          throw new Error('not used by this test');
-        },
-        setConfig: async () => undefined,
-        pageMetadata: { get: async () => null, set: async () => undefined, remove: async () => undefined },
-        model: () => undefined,
-        log: realPluginLogger,
-        actor: { kind: 'system' },
-      }) as PluginContext;
-
-    let originalFetch: typeof globalThis.fetch | undefined;
-    let plantumlFetchMock: jest.Mock;
+    let plantumlRenderSpy: jest.Mock;
 
     beforeAll(() => {
-      // Register the REAL plugins onto the SAME registry `crowi.getRenderer()`
-      // hands the route (`page-preview.ts` calls `crowi.getRenderer().run()`),
-      // not a throwaway `RendererRegistryImpl` — otherwise this would just
-      // re-prove the fixture-based tests above, not reach production code.
-      mermaidPlugin.registerRenderer?.(makeRendererScope(crowi.getRenderer().registry, MERMAID_PLUGIN, realPluginLogger), buildMermaidPluginCtx());
-      const plantumlConfig = plantumlConfigSchema.parse({ serverUrl: 'http://plantuml-test:8080' });
-      plantumlPlugin.registerRenderer?.(
-        makeRendererScope(crowi.getRenderer().registry, PLANTUML_PLUGIN, realPluginLogger),
-        buildPlantumlPluginCtx(plantumlConfig),
+      // Register onto the SAME registry `crowi.getRenderer()` hands the
+      // route — otherwise this would just re-prove the fixture-based
+      // tests above, not the shared-registry wiring.
+      const registry = crowi.getRenderer().registry;
+      registry.addCodeBlockRenderer(
+        'mermaid',
+        {
+          cacheVersion: 2,
+          previewPolicy: 'server-render',
+          render: (info) => ({
+            html: `<img class="diagram-embed mermaid-embed" data-crowi-renderer-presentation="diagram" data-crowi-renderer-state="ready" alt="Mermaid diagram" src="data:image/svg+xml;base64,${Buffer.from(info.source).toString('base64')}">`,
+          }),
+        },
+        MERMAID_PLUGIN,
+        fixtureLogger,
       );
+      plantumlRenderSpy = jest.fn(() => ({ html: '<div>should never appear in preview</div>' }));
+      registry.addCodeBlockRenderer('plantuml', { cacheVersion: 3, render: plantumlRenderSpy }, PLANTUML_PLUGIN, fixtureLogger);
     });
 
-    afterAll(async () => {
-      // The real Mermaid plugin lazily forks a child-process pool on
-      // first render (`render-engine.ts`) — without this the forked
-      // workers outlive this test file and Jest's worker fails to exit
-      // gracefully (mirrors `mermaid.e2e.test.ts`'s own `afterAll`).
-      await _shutdownSingletonForTest();
-    });
-
-    beforeEach(() => {
-      originalFetch = globalThis.fetch;
-      plantumlFetchMock = jest.fn();
-      (globalThis as unknown as { fetch: typeof plantumlFetchMock }).fetch = plantumlFetchMock;
-    });
-
-    afterEach(() => {
-      if (originalFetch) {
-        globalThis.fetch = originalFetch;
-      } else {
-        delete (globalThis as Partial<{ fetch: unknown }>).fetch;
-      }
-    });
-
-    it('a real ```mermaid fence server-renders through the real plugin with no pageId and writes nothing to PluginRenderCache (AC 9)', async () => {
+    it('a "mermaid" fence server-renders with no pageId and writes nothing to PluginRenderCache (AC 9)', async () => {
       const PluginRenderCache = crowi.model('PluginRenderCache') as unknown as PluginRenderCacheModel;
       const before = await PluginRenderCache.countDocuments({}).exec();
 
@@ -419,17 +378,18 @@ describe('Routes /api/v2/pages/preview (Hono previewPage)', () => {
       expect(node.type).toBe('html');
       expect(node.value).toContain('<img');
       expect(node.value).toContain('class="diagram-embed mermaid-embed"');
+      expect(node.value).toContain('data-crowi-renderer-state="ready"');
       expect(node.value).toContain('src="data:image/svg+xml;base64,');
       // The `renderCodeBlockForPreview` scroll-sync anchor (spec §7 item 6).
       expect(node.value).toContain('data-source-line="1"');
-      // Zero real PlantUML network traffic from this call either.
-      expect(plantumlFetchMock).not.toHaveBeenCalled();
+      // Zero PlantUML render calls from this request either.
+      expect(plantumlRenderSpy).not.toHaveBeenCalled();
 
       const after = await PluginRenderCache.countDocuments({}).exec();
       expect(after).toBe(before);
-    }, 30_000);
+    });
 
-    it('a real ```plantuml fence and a bare URL both stay untouched with no pageId — the real plugin never calls render() and never reaches the network (AC 10)', async () => {
+    it('a "plantuml" fence and a bare URL both stay untouched with no pageId — the default-policy renderer never calls render() (AC 10)', async () => {
       const body = ['```plantuml', '@startuml', 'A -> B', '@enduml', '```', '', 'https://example.com'].join('\n');
       const res = await request(app).post('/api/v2/pages/preview').set(authHeaders(accessToken)).send({ body });
 
@@ -437,10 +397,7 @@ describe('Routes /api/v2/pages/preview (Hono previewPage)', () => {
       const ast = res.body.renderedAst as { children: Array<{ type: string; lang?: string }> };
       expect(ast.children[0].type).toBe('code');
       expect(ast.children[0].lang).toBe('plantuml');
-      // The real PlantUML plugin's `render()` fetches its server over
-      // HTTP — zero calls proves it was never invoked at all, not merely
-      // that a mocked call happened to no-op.
-      expect(plantumlFetchMock).not.toHaveBeenCalled();
+      expect(plantumlRenderSpy).not.toHaveBeenCalled();
     });
   });
 });
