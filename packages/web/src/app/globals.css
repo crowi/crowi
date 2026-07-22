@@ -558,13 +558,20 @@ html[data-page-grant="2"] {
 }
 
 /*
- * Link-card embed (`@[card](url)`, `@crowi/plugin-renderer-link-card` —
- * RFC-0002 §"Phase 4", the first `registry.addEmbedTag` consumer). The
- * renderer emits `figure.crowi-link-card > a.crowi-link-card-link >
+ * Link-card embed (`@[card](url)` — RFC-0002 §"Phase 4", the first
+ * `registry.addEmbedTag` consumer; core-reserved since
+ * feature-renderer-plugin-boundary Phase 3,
+ * `packages/api/src/renderer/core/link-card/`). A successful render
+ * emits `figure.crowi-link-card > a.crowi-link-card-link >
  * (div.crowi-link-card-body[> div.title, div.description?,
  * div.meta[> span.site-name?, span.domain]] + img.crowi-link-card-image?)`
  * using only known-tags-allow-listed elements, so `stripUnknownElements`
- * never touches this structure — see `render-card.ts`.
+ * never touches this structure — see `render-card.ts`'s `renderCard()`.
+ * The UNIFIED FALLBACK CARD (toggle off / fetch failure — spec §6.1/§6.2,
+ * `render-card.ts`'s `renderFallbackCard()`) reuses this SAME rule set —
+ * `figure.crowi-link-card > a > div.crowi-link-card-body > div.title`,
+ * with no `.crowi-link-card-description` / `.crowi-link-card-meta` /
+ * `.crowi-link-card-image` children and no error-specific styling.
  *
  * Written unlayered (like every other rule in this section), so it
  * beats the `utilities`-layer classes the generic `<img>`/`<figure>`
@@ -688,15 +695,6 @@ html[data-page-grant="2"] {
   .crowi-prose .crowi-link-card-image {
     display: none;
   }
-}
-
-.crowi-prose .crowi-link-card-error > a {
-  border-style: dashed;
-}
-
-.crowi-prose .crowi-link-card-error-label {
-  font-size: 0.75rem;
-  color: var(--muted-foreground);
 }
 
 /* RFC-0015 image display attributes — fixed, renderer-owned layout
