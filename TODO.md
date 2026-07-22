@@ -22,9 +22,6 @@ alpha.0–.3 は published、alpha.4 / stable 向けに changeset 蓄積中（pr
 - [ ] Step 10: auth provider plugin 化（OAuth。alpha1 で削除、将来 plugin で復活）
 - [ ] 将来: encryption KeyProvider plugin (KMS)、S3 以外の attachment storage
 
-### Renderer plugin 境界の確立と emoji / link-card の core 統合
-- [x] Phase 1-3 完成: presentation / asset contract の一般化 + optional plugin (KaTeX/PlantUML/Mermaid) 側の移行 + emoji・link-card の core 統合（spec: `feature-renderer-plugin-boundary.md`）。残: Phase 4 operator 互換・package 削除
-
 ### OAuth 2.0 (RFC-0010)
 - [ ] Phase 5: admin による任意 OAuth クライアント登録 UI（Phase 1-4 完了）
 
@@ -106,8 +103,9 @@ alpha.0–.3 は published、alpha.4 / stable 向けに changeset 蓄積中（pr
 - **boot 手順の宣言的ステップ定義への統一** — `runInitLayers`/`initForCli` の二重手書きステップ列挙を `boot-steps.ts` の `ALL_BOOT_STEPS` + `resolveBootOrder()`（`topoSortPlugins` の DFS を踏襲）に統一し、CLI 省略対象を `CLI_SKIP_STEPS` 一箇所に集約（spec: `feature-boot-sequence-declarative.md`）
 - **モバイル共有メニューの URL コピー修正** — page-actions-menu の「URLをコピー」項目を PC と共通の `SharePanelContent` 共有ダイアログに統一し、auto-copy + タイトル/Markdown 行を提供（spec: `feature-mobile-share-menu-fix.md`）
 - **ユーザーページに「配下ページ (Subpages)」タブを追加** — `/user/<username>/` 配下を path 起点で全階層再帰的に一覧表示する専用 endpoint + static + UI を新設（既存の creator 起点「作成したページ」タブとは別次元）。付随して draft 作成失敗時の孤児 Page hardening を同梱（spec: `feature-user-page-subpages-tab.md`）
-- **URL カード埋め込み `@[card](url)`** — `addEmbedTag` registry の最初の利用者として新規 `@crowi/plugin-renderer-link-card`（SSRF ガード付き OGP fetch）を実装 + editor に裸 URL ⇔ `@[card](url)` 変換 affordance を追加（spec: `feature-link-card-embed.md`）
+- **URL カード埋め込み `@[card](url)`** — `addEmbedTag` registry の最初の利用者として `@crowi/plugin-renderer-link-card`（SSRF ガード付き OGP fetch）を実装 + editor に裸 URL ⇔ `@[card](url)` 変換 affordance を追加。後に `@crowi/api` core へ統合され plugin package は削除済み（下記「Renderer plugin 境界の確立」参照。spec: `feature-link-card-embed.md`）
 - **Revision に不変の page ObjectId 参照を追加(DC-5)** — `path` 文字列の逆引きに依存していた rename 後の履歴解決 / 削除 / 著者集計を、`prepareRevision` で一度だけ刻む不変の `revision.page` id 参照へ切り替え。path 再利用による誤った grant 解決の latent bug を是正し、boot migration `revision-page-ref-backfill` で既存データをバックフィル（spec: `feature-revision-page-ref.md`）
+- **Renderer plugin 境界の確立 + emoji/link-card の core 統合** — presentation/asset contract の一般化 + KaTeX 自己配信 + emoji・link-card の `@crowi/api` core 統合(admin egress toggle 付き) + 旧 plugin package 削除（spec: `feature-renderer-plugin-boundary.md`）
 
 ---
 
