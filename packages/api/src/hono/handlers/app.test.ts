@@ -107,6 +107,13 @@ describe('GET /api/v2/app/info (Hono)', () => {
     expect(Array.isArray(res.body.capabilities)).toBe(true);
     expect(res.body.capabilities).toEqual(expect.arrayContaining(['oauth', 'pages', 'comments', 'bookmarks', 'attachments', 'notifications']));
 
+    // `rendererStylesheets` (feature-renderer-plugin-boundary Phase 1) is
+    // always an array. Phase 1's own loaded plugin set never registers one
+    // (KaTeX's real `addStylesheet` call lands in Phase 2 — see
+    // `registry.test.ts` for a synthetic-plugin isolation test of the
+    // commit/drop mechanics), so it is empty here.
+    expect(res.body.rendererStylesheets).toEqual([]);
+
     // The full response parses against the strict (non-partial)
     // AppInfoResponseSchema — every advertised capability is a known
     // Capability vocabulary member.
