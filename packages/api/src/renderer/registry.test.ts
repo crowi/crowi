@@ -93,6 +93,17 @@ describe('RendererRegistryImpl', () => {
       expect(warn).toHaveBeenCalledTimes(1);
     });
 
+    it('addCodeBlockRenderer: a plugin re-registering over its OWN prior registration (e.g. a reconfigure hook) is a silent self-update, not a collision', () => {
+      const reg = new RendererRegistryImpl();
+      const warn = jest.fn();
+      const first = buildCodeBlockRenderer();
+      const second = buildCodeBlockRenderer();
+      reg.addCodeBlockRenderer('plantuml', first, 'plugin-a', { ...silentLogger, warn });
+      reg.addCodeBlockRenderer('plantuml', second, 'plugin-a', { ...silentLogger, warn });
+      expect(reg.getCodeBlockRenderer('plantuml')).toEqual({ plugin: 'plugin-a', renderer: second });
+      expect(warn).not.toHaveBeenCalled();
+    });
+
     it('addUrlInlineExpander: registration-order list', () => {
       const reg = new RendererRegistryImpl();
       const ruleA: UrlInlineExpansionRule = { cacheVersion: 1, match: /a/, expand: async () => ({ kind: 'unchanged' }) };

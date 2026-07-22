@@ -165,11 +165,18 @@ export class RendererRegistryImpl {
   /**
    * Phase 6: last-wins on collision, mirror of `addEmbedTag`. The boot
    * warn surfaces the conflict so an operator can either fix the
-   * misnamed lang or accept the override.
+   * misnamed lang or accept the override — but only for a genuine
+   * CROSS-plugin collision (`existing.plugin !== registeringPlugin`). A
+   * plugin re-registering over its OWN prior registration (e.g.
+   * PlantUML's `reconfigure()` hook re-calling `addCodeBlockRenderer` for
+   * the same lang after an admin config save,
+   * feature-renderer-plugin-boundary Phase 2) is an intentional
+   * self-update, not a conflict — every admin-initiated config save would
+   * otherwise log a spurious "collision" warning.
    */
   addCodeBlockRenderer(lang: string, renderer: CodeBlockRenderer, registeringPlugin: string, log: PluginLogger): void {
     const existing = this.codeBlockRenderers.get(lang);
-    if (existing) {
+    if (existing && existing.plugin !== registeringPlugin) {
       log.warn(`[renderer] code-block-renderer collision on '${lang}': plugin '${existing.plugin}' is being overridden by '${registeringPlugin}' (last-wins)`);
     }
     this.codeBlockRenderers.set(lang, { plugin: registeringPlugin, renderer });
