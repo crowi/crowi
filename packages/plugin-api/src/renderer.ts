@@ -506,6 +506,10 @@ export interface RenderContext {
  *
  * Phase 4 stubs (warn-noop):
  *   - `addCodeBlockRenderer` (Phase 6 lights this up)
+ *
+ * feature-renderer-plugin-boundary Phase 1 adds `addStylesheet(path)` —
+ * the boot-time CSS-manifest extension point (see that method's own doc
+ * comment).
  */
 export interface RendererRegistry {
   /**
@@ -546,4 +550,29 @@ export interface RendererRegistry {
    * preserved; the first match that returns `'replaced'` wins.
    */
   addUrlInlineExpander(rule: UrlInlineExpansionRule): void;
+
+  /**
+   * Declare a static CSS asset the plugin needs the browser to load
+   * (e.g. KaTeX's ~30KB math stylesheet). `path` MUST be an
+   * API-relative absolute path confined to the plugin's own
+   * `registerRoutes` namespace — `/api/v2/plugins/<this plugin's
+   * name>/<…>` — the same prefix `PluginRouterScope.route(...)` mounts
+   * that plugin's HTTP routes under. A URL scheme, protocol-relative
+   * `//host`, backslash, `..` traversal segment, or a path outside the
+   * plugin's own namespace all throw synchronously (boot-time reject —
+   * this is not an operator-configurable external URL; see spec
+   * §2.1's "不採用案").
+   *
+   * The call only stages the path in a per-plugin pending set: it is
+   * published to the public `GET /api/v2/app/info` `rendererStylesheets`
+   * manifest ONLY after this plugin's OWN `registerRoutes(scope, ctx)`
+   * completes without throwing (so the manifest never advertises a path
+   * whose route failed to mount). A plugin with no `registerRoutes` at
+   * all, or whose `registerRoutes` throws, never gets its pending
+   * stylesheets committed — dropped wholesale, not partially. Query /
+   * fragment are allowed; duplicate calls with the same path are a
+   * no-op. Call this from `registerRenderer`, not `registerRoutes` —
+   * commit timing depends on this method having already run.
+   */
+  addStylesheet(path: string): void;
 }
