@@ -28,7 +28,7 @@ import { app, crowi } from 'src/test/setup';
  */
 describe('GET /api/v2/app/info (Hono)', () => {
   let Config: ReturnType<typeof crowi.model<'Config'>>;
-  const APP_KEYS = ['app:title', 'app:confidential', 'security:registrationMode'];
+  const APP_KEYS = ['app:title', 'app:confidential', 'security:registrationMode', 'security:linkCardEnabled'];
 
   const reloadConfigCache = async () => {
     await crowi.getConfigService().load();
@@ -103,9 +103,11 @@ describe('GET /api/v2/app/info (Hono)', () => {
     expect(res.body.apiVersion).toBe('v2');
 
     // `capabilities` is a non-empty list that always advertises the
-    // statically-compiled subsystems the CLI relies on.
+    // statically-compiled subsystems the CLI relies on. `link-card`
+    // (feature-renderer-plugin-boundary Phase 3) is default-on, so it is
+    // present here too (no `security:linkCardEnabled` row seeded yet).
     expect(Array.isArray(res.body.capabilities)).toBe(true);
-    expect(res.body.capabilities).toEqual(expect.arrayContaining(['oauth', 'pages', 'comments', 'bookmarks', 'attachments', 'notifications']));
+    expect(res.body.capabilities).toEqual(expect.arrayContaining(['oauth', 'pages', 'comments', 'bookmarks', 'attachments', 'notifications', 'link-card']));
 
     // `rendererStylesheets` (feature-renderer-plugin-boundary Phase 1) is
     // always an array. Phase 1's own loaded plugin set never registers one
@@ -178,6 +180,42 @@ describe('GET /api/v2/app/info (Hono)', () => {
       const res = await request(app).get('/api/v2/app/info');
       expect(res.status).toBe(200);
       expect(res.body.canSelfRegister).toBe(false);
+    });
+  });
+
+  // `link-card` (feature-renderer-plugin-boundary Phase 3) mirrors
+  // `canSelfRegister`'s missing/non-boolean/explicit-value coverage
+  // pattern for the `security:linkCardEnabled` toggle.
+  describe('link-card capability', () => {
+    it('is present when no security:linkCardEnabled row exists (default-on)', async () => {
+      const res = await request(app).get('/api/v2/app/info');
+      expect(res.status).toBe(200);
+      expect(res.body.capabilities).toContain('link-card');
+    });
+
+    it('is present when the stored value is a hand-edited non-boolean (defends to default-on)', async () => {
+      await Config.updateOne({ ns: 'crowi', key: 'security:linkCardEnabled' }, { $set: { value: '"on"' } }, { upsert: true }).exec();
+      await reloadConfigCache();
+
+      const res = await request(app).get('/api/v2/app/info');
+      expect(res.status).toBe(200);
+      expect(res.body.capabilities).toContain('link-card');
+    });
+
+    it('is present when explicitly true', async () => {
+      await crowi.getConfigService().saveConfigValueDurable('crowi', 'security:linkCardEnabled', true);
+
+      const res = await request(app).get('/api/v2/app/info');
+      expect(res.status).toBe(200);
+      expect(res.body.capabilities).toContain('link-card');
+    });
+
+    it('is absent when explicitly false', async () => {
+      await crowi.getConfigService().saveConfigValueDurable('crowi', 'security:linkCardEnabled', false);
+
+      const res = await request(app).get('/api/v2/app/info');
+      expect(res.status).toBe(200);
+      expect(res.body.capabilities).not.toContain('link-card');
     });
   });
 });

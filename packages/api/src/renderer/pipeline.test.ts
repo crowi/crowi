@@ -408,6 +408,40 @@ describe('pipeline + core renderers', () => {
     });
   });
 
+  describe('emoji (core, post-remarkBreaks transform — feature-renderer-plugin-boundary Phase 3)', () => {
+    // Emoji moved from a registry-registered `@crowi/plugin-renderer-
+    // emoji` plugin to a hard-coded `pipeline.ts` transform. These
+    // cases re-home the one thing worth proving at the `runPipeline`
+    // level rather than in isolation (`core/emoji.test.ts` covers the
+    // transform itself): it applies with ZERO registry registration,
+    // and it runs BEFORE any external registry transform sees the
+    // tree — same relative position `remarkBreaks` occupied when emoji
+    // was still plugin-registered.
+    it('substitutes `:smile:` with no plugin/registry registration at all — `runCore` uses a fresh, empty registry', async () => {
+      const { tree } = await runCore('Hi :smile:!');
+      const paragraph = tree.children[0] as { children: Array<{ type: string; value?: string }> };
+      const text = paragraph.children.map((c) => c.value ?? '').join('');
+      expect(text).toContain('😄');
+    });
+
+    it('runs BEFORE external registry transforms — a registry-registered transform observes already-substituted text', async () => {
+      const reg = new RendererRegistryImpl();
+      let observedText: string | undefined;
+      reg.addUnifiedPlugin(
+        () => (tree: Root) => {
+          const paragraph = tree.children[0] as { children: Array<{ type: string; value?: string }> };
+          observedText = paragraph.children.map((c) => c.value ?? '').join('');
+        },
+        'test-plugin',
+        silentLogger,
+        { phase: 'transform' },
+      );
+      await runPipeline('Hi :smile:!', reg, { mode: 'save', log: silentLogger, actor: { kind: 'system' } }, loadDeps);
+      expect(observedText).toContain('😄');
+      expect(observedText).not.toContain(':smile:');
+    });
+  });
+
   describe('on-the-fly fallback (renderedAst recompute for legacy revisions)', () => {
     it('produces an equivalent AST when the same body is re-run', async () => {
       // The fallback path runs the pipeline against the body when no

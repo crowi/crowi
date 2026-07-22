@@ -2,6 +2,7 @@ import type { CodeBlockRenderer, PluginLogger, RenderActor } from '@crowi/plugin
 import { Types } from 'mongoose';
 import type { PluginRenderCacheModel } from 'src/models/plugin-render-cache';
 import type { RevisionMetaContent } from 'src/models/revision';
+import { renderFallbackCard } from 'src/renderer/core/link-card/render-card';
 import { RENDERER_PIPELINE_VERSION } from 'src/renderer/version';
 import { crowi } from 'src/test/setup';
 import { computeRevisionRenderArtifactsAsync } from './page-response';
@@ -248,15 +249,21 @@ describe('computeRevisionRenderArtifactsAsync — renderPending marker scan on t
   // feature-plugin-renderer-mermaid Phase 4 (spec §9/§10): wiring
   // @crowi/plugin-renderer-mermaid into apps/crowi-runner activates the
   // plugin for NEW code-block-dispatch calls from the moment this Phase
-  // deploys — `RENDERER_PIPELINE_VERSION` is deliberately left untouched
-  // (a plain, new-bundled-plugin addition would ordinarily warrant a
-  // "minor" bump per this constant's own doc comment in version.ts, but
-  // spec §9 explicitly carves out an exception for Mermaid/PlantUML
-  // specifically to avoid a version-bump-driven recompute of every
-  // unrelated revision on next read). Pinned here so an accidental future
-  // bump alongside an unrelated change is caught immediately.
-  it('RENDERER_PIPELINE_VERSION is unchanged by Phase 4 (spec §9 next-save-only — Mermaid activation must not trigger a wide recompute of unrelated revisions)', () => {
-    expect(RENDERER_PIPELINE_VERSION).toBe('0.8.0');
+  // deploys — that change deliberately left `RENDERER_PIPELINE_VERSION`
+  // untouched (a plain, new-bundled-plugin addition would ordinarily
+  // warrant a "minor" bump per this constant's own doc comment in
+  // version.ts, but spec §9 explicitly carved out an exception for
+  // Mermaid/PlantUML specifically to avoid a version-bump-driven
+  // recompute of every unrelated revision on next read).
+  // feature-renderer-plugin-boundary Phase 3 DOES bump it (0.8.0 ->
+  // 0.9.0): emoji becoming a hard-coded core pipeline transform and
+  // link-card becoming a core-reserved embed tag are exactly the
+  // "new bundled transform/plugin" category `version.ts`'s policy
+  // comment defines as a minor bump — no carve-out applies to them.
+  // Pinned here so an accidental future bump/no-bump alongside an
+  // unrelated change is caught immediately.
+  it('RENDERER_PIPELINE_VERSION is 0.9.0 (feature-renderer-plugin-boundary Phase 3 — emoji + link-card core absorption is a new-bundled-transform minor bump)', () => {
+    expect(RENDERER_PIPELINE_VERSION).toBe('0.9.0');
   });
 
   // Registers a diagram-shaped CodeBlockRenderer (feature-renderer-plugin-
@@ -307,6 +314,118 @@ describe('computeRevisionRenderArtifactsAsync — renderPending marker scan on t
       const codeNode = (result.renderedAst as { children: Array<{ type: string; lang?: string }> }).children[0];
       expect(codeNode.type).toBe('code');
       expect(codeNode.lang).toBe('mermaid');
+      expect(runRenderSpy).not.toHaveBeenCalled();
+    } finally {
+      runRenderSpy.mockRestore();
+    }
+  });
+});
+
+/**
+ * feature-renderer-plugin-boundary Phase 3 spec §6.2/AC5/AC7 — "toggle
+ * flips never retroactively rewrite a stored AST; a fully-resolved
+ * current-version artifact returns verbatim". `security:linkCardEnabled`
+ * is read live only inside the `card` `EmbedRenderer.render()` call
+ * (`core/link-card/index.ts`), which the fresh (`astIsFresh &&
+ * metaIsComplete`) read path never reaches at all — proven here the
+ * same way the sibling Mermaid describe block above proves the
+ * analogous code-block-dispatch claim: `runRender` (the ONLY entry
+ * point that could re-dispatch an embed) is spied and asserted
+ * un-called, and the returned AST is the exact same object reference
+ * (not a clone / not re-serialized).
+ */
+describe('link-card toggle does not affect the stored renderedAst display contract (feature-renderer-plugin-boundary Phase 3 spec §6.2/AC5/AC7)', () => {
+  const COMPLETE_META: RevisionMetaContent = { toc: [], wikiLinks: [], mentions: [], codeBlockLanguages: [] };
+  const STORED_LINK_CARD_AST = {
+    type: 'root',
+    children: [
+      {
+        type: 'paragraph',
+        children: [
+          {
+            type: 'html',
+            value:
+              '<figure class="crowi-link-card"><a class="crowi-link-card-link" href="https://example.test/x" target="_blank" rel="noopener noreferrer"><div class="crowi-link-card-body"><div class="crowi-link-card-title">Example</div></div></a></figure>',
+          },
+        ],
+      },
+    ],
+  };
+
+  afterEach(async () => {
+    // Restore the default (a missing row already reads as enabled) so
+    // this file doesn't leak a `false` value into a later test/file
+    // sharing the same in-process Config cache.
+    await crowi.model('Config').deleteMany({ ns: 'crowi', key: 'security:linkCardEnabled' }).exec();
+    await crowi.getConfigService().load();
+  });
+
+  it.each([
+    ['disabled (toggle flipped true -> false since the AST was saved)', false],
+    ['enabled (toggle stayed true)', true],
+  ])('a fully-resolved, current-version stored AST containing a rendered link card is returned VERBATIM — %s', async (_label, linkCardEnabled) => {
+    await crowi.getConfigService().saveConfig('crowi', { 'security:linkCardEnabled': linkCardEnabled });
+
+    const runRenderSpy = jest.spyOn(crowi.getRenderer(), 'runRender');
+    try {
+      const result = await computeRevisionRenderArtifactsAsync(
+        crowi,
+        COMPLETE_META,
+        STORED_LINK_CARD_AST,
+        'body unused on the fresh path',
+        TEST_ACTOR,
+        RENDERER_PIPELINE_VERSION,
+      );
+      // Verbatim: same object reference, no re-render / re-dispatch.
+      expect(result.renderedAst).toBe(STORED_LINK_CARD_AST);
+      expect(runRenderSpy).not.toHaveBeenCalled();
+    } finally {
+      runRenderSpy.mockRestore();
+    }
+  });
+
+  // The AC7 case the sibling `it.each` above does NOT cover: a stored AST
+  // that already shows the unified fallback card (i.e. it was saved while
+  // the toggle read `false`, or the original OGP fetch failed) must stay
+  // the fallback card verbatim even after the toggle flips back to `true`
+  // — reading a page must never retroactively "upgrade" a stored fallback
+  // into a fresh OGP fetch. Uses the real `renderFallbackCard()` builder
+  // (not a hand-typed literal) so this test tracks the actual HTML shape.
+  const STORED_FALLBACK_LINK_CARD_AST = {
+    type: 'root',
+    children: [
+      {
+        type: 'paragraph',
+        children: [
+          {
+            type: 'html',
+            value: renderFallbackCard('https://example.test/unreachable'),
+          },
+        ],
+      },
+    ],
+  };
+
+  it.each([
+    ['stayed disabled (toggle stayed false)', false],
+    ['flipped false -> true since the AST was saved', true],
+  ])('a fully-resolved, current-version stored AST containing the unified FALLBACK card is returned VERBATIM — %s', async (_label, linkCardEnabled) => {
+    await crowi.getConfigService().saveConfig('crowi', { 'security:linkCardEnabled': linkCardEnabled });
+
+    const runRenderSpy = jest.spyOn(crowi.getRenderer(), 'runRender');
+    try {
+      const result = await computeRevisionRenderArtifactsAsync(
+        crowi,
+        COMPLETE_META,
+        STORED_FALLBACK_LINK_CARD_AST,
+        'body unused on the fresh path',
+        TEST_ACTOR,
+        RENDERER_PIPELINE_VERSION,
+      );
+      // Verbatim: same object reference, no re-render / re-dispatch (in
+      // particular, no fresh OGP fetch attempt even when the toggle now
+      // reads enabled).
+      expect(result.renderedAst).toBe(STORED_FALLBACK_LINK_CARD_AST);
       expect(runRenderSpy).not.toHaveBeenCalled();
     } finally {
       runRenderSpy.mockRestore();

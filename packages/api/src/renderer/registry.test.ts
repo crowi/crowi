@@ -23,7 +23,7 @@ import request from 'supertest';
 import { crowi } from 'src/test/setup';
 import { buildHonoApp } from 'src/hono';
 import { stripApiV2Prefix } from 'src/hono/path-rewrite';
-import { makeRendererScope, RendererRegistryImpl } from './registry';
+import { CORE_RENDERER_IDENTITY, makeRendererScope, RendererRegistryImpl } from './registry';
 
 const silentLogger: PluginLogger = {
   debug: () => undefined,
@@ -102,6 +102,36 @@ describe('RendererRegistryImpl', () => {
       reg.addCodeBlockRenderer('plantuml', second, 'plugin-a', { ...silentLogger, warn });
       expect(reg.getCodeBlockRenderer('plantuml')).toEqual({ plugin: 'plugin-a', renderer: second });
       expect(warn).not.toHaveBeenCalled();
+    });
+
+    it('addCoreEmbedTag: seeds a tag under the reserved CORE_RENDERER_IDENTITY, bypassing the per-plugin scope', () => {
+      const reg = new RendererRegistryImpl();
+      const renderer = buildEmbedRenderer();
+      reg.addCoreEmbedTag('card', renderer);
+      expect(reg.getEmbedTag('card')).toEqual({ plugin: CORE_RENDERER_IDENTITY, renderer });
+    });
+
+    it('addEmbedTag: a plugin registering over a core-reserved tag THROWS instead of warn-and-override', () => {
+      const reg = new RendererRegistryImpl();
+      const coreRenderer = buildEmbedRenderer();
+      const pluginRenderer = buildEmbedRenderer();
+      const warn = jest.fn();
+      reg.addCoreEmbedTag('card', coreRenderer);
+      expect(() => reg.addEmbedTag('card', pluginRenderer, 'some-plugin', { ...silentLogger, warn })).toThrow(/reserved/);
+      // The core registration is untouched by the failed attempt.
+      expect(reg.getEmbedTag('card')).toEqual({ plugin: CORE_RENDERER_IDENTITY, renderer: coreRenderer });
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it('addEmbedTag: an UNRESERVED tag still last-wins + warns as before (addCoreEmbedTag does not widen the guard to every tag)', () => {
+      const reg = new RendererRegistryImpl();
+      const warn = jest.fn();
+      const first = buildEmbedRenderer();
+      const second = buildEmbedRenderer();
+      reg.addEmbedTag('mermaid-card', first, 'plugin-a', { ...silentLogger, warn });
+      expect(() => reg.addEmbedTag('mermaid-card', second, 'plugin-b', { ...silentLogger, warn })).not.toThrow();
+      expect(reg.getEmbedTag('mermaid-card')).toEqual({ plugin: 'plugin-b', renderer: second });
+      expect(warn).toHaveBeenCalledTimes(1);
     });
 
     it('addUrlInlineExpander: registration-order list', () => {

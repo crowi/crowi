@@ -2,6 +2,7 @@ import request from 'supertest';
 import { app, crowi } from 'src/test/setup';
 import { type ConfigRow, restoreCrowiConfig, snapshotCrowiConfig } from 'src/test/config-snapshot';
 import { authHeaders, createTestUser } from 'src/test/test-helpers';
+import ConfigService from 'src/service/config';
 
 /**
  * Reset the registration-related security:* keys back to defaults between
@@ -15,6 +16,7 @@ const resetSecurityConfig = async () => {
     'security:registrationMode': 'Open',
     'security:registrationWhiteList': [],
   });
+  await configService.saveConfigValueDurable('crowi', 'security:linkCardEnabled', true);
 };
 
 describe('Routes /api/v2/admin/security (Hono)', () => {
@@ -75,6 +77,7 @@ describe('Routes /api/v2/admin/security (Hono)', () => {
       expect(res.body).toEqual({
         registrationMode: 'Open',
         registrationWhiteList: [],
+        linkCardEnabled: true,
       });
     });
 
@@ -90,6 +93,38 @@ describe('Routes /api/v2/admin/security (Hono)', () => {
       expect(res.body).toEqual({
         registrationMode: 'Resricted',
         registrationWhiteList: ['allowed@example.com', 'team@example.org'],
+        linkCardEnabled: true,
+      });
+    });
+
+    describe('linkCardEnabled default (spec §6.2: missing / non-boolean -> true)', () => {
+      it('reads true when the security:linkCardEnabled row is entirely missing', async () => {
+        await crowi.model('Config').deleteMany({ ns: 'crowi', key: 'security:linkCardEnabled' }).exec();
+        await crowi.getConfigService().load();
+
+        const res = await request(app).get('/api/v2/admin/security').set(authHeaders(adminToken));
+        expect(res.status).toBe(200);
+        expect(res.body.linkCardEnabled).toBe(true);
+      });
+
+      it('reads true when the stored value is a hand-edited non-boolean', async () => {
+        await crowi
+          .model('Config')
+          .updateOne({ ns: 'crowi', key: 'security:linkCardEnabled' }, { $set: { value: '"on"' } }, { upsert: true })
+          .exec();
+        await crowi.getConfigService().load();
+
+        const res = await request(app).get('/api/v2/admin/security').set(authHeaders(adminToken));
+        expect(res.status).toBe(200);
+        expect(res.body.linkCardEnabled).toBe(true);
+      });
+
+      it('reflects an explicit false written via configService', async () => {
+        await crowi.getConfigService().saveConfigValueDurable('crowi', 'security:linkCardEnabled', false);
+
+        const res = await request(app).get('/api/v2/admin/security').set(authHeaders(adminToken));
+        expect(res.status).toBe(200);
+        expect(res.body.linkCardEnabled).toBe(false);
       });
     });
   });
@@ -98,6 +133,7 @@ describe('Routes /api/v2/admin/security (Hono)', () => {
     const validBody = {
       registrationMode: 'Closed' as const,
       registrationWhiteList: ['user@example.com'],
+      linkCardEnabled: true,
     };
 
     it('returns 401 without auth', async () => {
@@ -134,6 +170,20 @@ describe('Routes /api/v2/admin/security (Hono)', () => {
       expect(res.status).toBe(400);
     });
 
+    it('returns 400 when linkCardEnabled is missing', async () => {
+      const { linkCardEnabled: _omit, ...bodyWithoutLinkCard } = validBody;
+      const res = await request(app).put('/api/v2/admin/security').set(authHeaders(adminToken)).send(bodyWithoutLinkCard);
+      expect(res.status).toBe(400);
+    });
+
+    it('returns 400 when linkCardEnabled is not a boolean', async () => {
+      const res = await request(app)
+        .put('/api/v2/admin/security')
+        .set(authHeaders(adminToken))
+        .send({ ...validBody, linkCardEnabled: 'true' });
+      expect(res.status).toBe(400);
+    });
+
     it('persists the registration security:* keys and returns the updated settings', async () => {
       const res = await request(app)
         .put('/api/v2/admin/security')
@@ -141,12 +191,14 @@ describe('Routes /api/v2/admin/security (Hono)', () => {
         .send({
           registrationMode: 'Resricted',
           registrationWhiteList: ['user@example.com'],
+          linkCardEnabled: false,
         });
 
       expect(res.status).toBe(200);
       expect(res.body).toEqual({
         registrationMode: 'Resricted',
         registrationWhiteList: ['user@example.com'],
+        linkCardEnabled: false,
       });
 
       // Round-trip via GET to verify the in-memory cache and the persisted
@@ -155,6 +207,7 @@ describe('Routes /api/v2/admin/security (Hono)', () => {
       expect(getRes.status).toBe(200);
       expect(getRes.body.registrationMode).toBe('Resricted');
       expect(getRes.body.registrationWhiteList).toEqual(['user@example.com']);
+      expect(getRes.body.linkCardEnabled).toBe(false);
     });
 
     it('trims whitespace and drops empty entries from registrationWhiteList', async () => {
@@ -164,6 +217,7 @@ describe('Routes /api/v2/admin/security (Hono)', () => {
         .send({
           registrationMode: 'Resricted',
           registrationWhiteList: ['  user@example.com  ', '', '   ', 'team@example.org'],
+          linkCardEnabled: true,
         });
 
       expect(res.status).toBe(200);
@@ -182,6 +236,45 @@ describe('Routes /api/v2/admin/security (Hono)', () => {
       const cfg = crowi.getConfig();
       expect(cfg.crowi['app:title']).toBe('Custom Crowi Title');
       expect(cfg.crowi['security:registrationMode']).toBe('Closed');
+    });
+
+    /**
+     * feature-renderer-plugin-boundary Phase 3 spec §6.2/AC5 — the
+     * `linkCardEnabled` write is fail-propagating and runs BEFORE the
+     * best-effort registration-settings batch write, so a durable-write
+     * failure 500s the whole PUT and leaves EVERY field (not just
+     * linkCardEnabled) unpersisted.
+     */
+    describe('linkCardEnabled durable write failure propagation', () => {
+      afterEach(() => {
+        jest.restoreAllMocks();
+      });
+
+      it('a rejected durable write 500s the response and persists NEITHER linkCardEnabled NOR the registration fields', async () => {
+        const durableSpy = jest.spyOn(ConfigService.prototype, 'saveConfigValueDurable').mockRejectedValueOnce(new Error('mongo write failed'));
+
+        const res = await request(app)
+          .put('/api/v2/admin/security')
+          .set(authHeaders(adminToken))
+          .send({
+            registrationMode: 'Closed',
+            registrationWhiteList: ['nope@example.com'],
+            linkCardEnabled: false,
+          });
+
+        expect(res.status).toBe(500);
+        expect(durableSpy).toHaveBeenCalledTimes(1);
+
+        // Nothing from this failed PUT was persisted — GET still shows
+        // the pre-PUT (reset) defaults.
+        const getRes = await request(app).get('/api/v2/admin/security').set(authHeaders(adminToken));
+        expect(getRes.status).toBe(200);
+        expect(getRes.body).toEqual({
+          registrationMode: 'Open',
+          registrationWhiteList: [],
+          linkCardEnabled: true,
+        });
+      });
     });
   });
 });
