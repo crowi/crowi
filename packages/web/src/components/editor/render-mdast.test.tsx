@@ -222,27 +222,33 @@ describe('renderMdastToReactNode', () => {
 });
 
 /**
- * `@crowi/plugin-renderer-link-card` integration fixture (reviewer
- * finding: the renderer package's own `render-card.test.ts` only
- * verified the emitted string's tag names via a regex scan — it never
- * exercised the ACTUAL front-end pipeline this HTML is injected into).
- * The two fixtures below are the byte-for-byte output of that
- * package's `renderCard()` / `renderErrorCard()` for a representative
- * input (verified by invoking them directly — see this test's git
- * history for the generating call). Pulling the plugin package itself
- * in as a dependency of `@crowi/web` would be the wrong direction (web
- * never depends on api-side renderer plugins at runtime); a literal,
- * clearly-labelled fixture here keeps that boundary while still
- * running the REAL `toHast -> raw -> stripUnknownElements ->
- * toJsxRuntime` pipeline (the same one `page-content.tsx` and
- * `MarkdownPreview.tsx` both call through via `renderMdastToReactNode`)
- * against it. If `render-card.ts`'s output shape changes, regenerate
- * these two strings from it and update both fixtures together.
+ * Link-card embed HTML integration fixture (reviewer finding: the
+ * renderer's own `render-card.test.ts` only verified the emitted
+ * string's tag names via a regex scan — it never exercised the ACTUAL
+ * front-end pipeline this HTML is injected into). The two fixtures
+ * below are literal, clearly-labelled HTML strings — not pulled from a
+ * live import (web never depends on api-side renderer code at
+ * runtime) — so this test can still run the REAL `toHast -> raw ->
+ * stripUnknownElements -> toJsxRuntime` pipeline (the same one
+ * `page-content.tsx` and `MarkdownPreview.tsx` both call through via
+ * `renderMdastToReactNode`) against it while keeping that boundary.
+ * `FULL_CARD_HTML` is the current `renderCard()` success shape
+ * (`packages/api/src/renderer/core/link-card/render-card.ts`);
+ * `ERROR_CARD_HTML` is the now-legacy `renderErrorCard()` shape a
+ * page saved before Phase 3 may still have persisted (Phase 3 replaced
+ * it with a unified fallback card for all NEW renders — see that
+ * file's `renderFallbackCard()` — but old saved `renderedAst` content
+ * isn't migrated, so the pipeline must still render this shape safely
+ * for those pages until they're re-rendered). If either function's
+ * output shape changes, regenerate the corresponding string and update
+ * the fixture.
  */
-describe('link-card embed HTML (@crowi/plugin-renderer-link-card) survives the real render pipeline', () => {
+describe('link-card embed HTML survives the real render pipeline', () => {
   const FULL_CARD_HTML =
     '<figure class="crowi-link-card"><a class="crowi-link-card-link" href="https://example.test/page" target="_blank" rel="noopener noreferrer"><div class="crowi-link-card-body"><div class="crowi-link-card-title">&lt;script&gt;alert(1)&lt;/script&gt; Title</div><div class="crowi-link-card-description">Some description text.</div><div class="crowi-link-card-meta"><span class="crowi-link-card-site-name">Example Site</span><span class="crowi-link-card-domain">example.test</span></div></div><img class="crowi-link-card-image" alt="" loading="lazy" src="https://example.test/img.png"></a></figure>';
 
+  // Legacy pre-Phase-3 renderErrorCard() shape — see the fixture doc
+  // comment above for why this is still exercised.
   const ERROR_CARD_HTML =
     '<figure class="crowi-link-card crowi-link-card-error"><a class="crowi-link-card-link" href="https://example.test/unreachable" target="_blank" rel="noopener noreferrer"><div class="crowi-link-card-body"><div class="crowi-link-card-title">example.test</div><span class="crowi-link-card-error-label">Preview unavailable</span></div></a></figure>';
 

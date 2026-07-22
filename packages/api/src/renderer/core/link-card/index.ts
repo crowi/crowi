@@ -6,8 +6,10 @@ import { renderCard, renderFallbackCard } from './render-card';
  * `@[card](url)` embed — core Markdown feature
  * (feature-renderer-plugin-boundary Phase 3). Moved verbatim (SSRF
  * guard / OGP fetch / success rendering / cache semantics unchanged)
- * from `@crowi/plugin-renderer-link-card`'s `createLinkCardRenderer()`,
- * except for the failure-path builder (see `render-card.ts`'s
+ * from the previous standalone link-card renderer plugin's
+ * `createLinkCardRenderer()` (that plugin package is deleted from the
+ * workspace as of Phase 4 — see spec §4/§5), except for the
+ * failure-path builder (see `render-card.ts`'s
  * `renderFallbackCard()` doc comment) and the new
  * `security:linkCardEnabled` live toggle read below.
  *

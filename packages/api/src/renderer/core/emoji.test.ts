@@ -4,8 +4,8 @@ import { emojiUnifiedPlugin, loadRemarkEmoji } from './emoji';
 
 /**
  * Unit tests for the core emoji transform (feature-renderer-plugin-
- * boundary Phase 3) — moved + adapted from
- * `packages/plugin-renderer-emoji/src/index.test.ts`. The
+ * boundary Phase 3) — moved + adapted from the previous standalone
+ * emoji renderer plugin's own test suite. The
  * `CrowiPlugin.registerRenderer` wrapper-call assertions from that file
  * are dropped: emoji is no longer a registry-registered plugin, it is a
  * direct `pipeline.ts` `.use()` call (see `pipeline.test.ts`'s "emoji

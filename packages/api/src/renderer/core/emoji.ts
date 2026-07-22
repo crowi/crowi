@@ -12,11 +12,11 @@ import { createJiti } from 'jiti';
  * Unknown shortcodes (`:not-emoji:`) are passed through verbatim, so
  * an author who writes `:typo:` won't see surprise corruption.
  *
- * Moved verbatim from `@crowi/plugin-renderer-emoji` (the package
- * itself stays in the workspace until Phase 4 deletes it — see spec
- * §4/§5): emoji is no longer a registry-registered plugin transform,
- * it is a hard-coded `pipeline.ts` `.use()` call inserted directly
- * between `remarkBreaks` and the registry's external transform loop.
+ * Moved verbatim from the previous standalone emoji renderer plugin
+ * (deleted from the workspace in Phase 4 — see spec §4/§5): emoji is
+ * no longer a registry-registered plugin transform, it is a
+ * hard-coded `pipeline.ts` `.use()` call inserted directly between
+ * `remarkBreaks` and the registry's external transform loop.
  * `remark-emoji` is ESM-only (depends on unified@^11), so this module
  * still loads it through `jiti` on first use — `createJiti(__filename,
  * …)` keeps working unchanged since it re-resolves relative to THIS

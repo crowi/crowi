@@ -83,9 +83,9 @@ export function renderCard(url: string, meta: OgMeta = {}): string {
 /**
  * Render the UNIFIED fallback card (feature-renderer-plugin-boundary
  * spec §6.1/§6.2) — the ONE piece of link-card's implementation that is
- * NOT a verbatim move from `@crowi/plugin-renderer-link-card`. Replaces
- * the old `renderErrorCard()`: every path that cannot show a real OGP
- * card now renders this SAME html for the SAME `url` —
+ * NOT a verbatim move from the previous standalone link-card renderer
+ * plugin. Replaces the old `renderErrorCard()`: every path that cannot
+ * show a real OGP card now renders this SAME html for the SAME `url` —
  *   (a) an OGP fetch failure (SSRF block, timeout, non-2xx, bad scheme,
  *       oversized body, non-HTML content-type, network error), and
  *   (b) the `security:linkCardEnabled` admin toggle reading `false` at
