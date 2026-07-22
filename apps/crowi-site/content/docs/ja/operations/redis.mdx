@@ -194,7 +194,7 @@ pub/sub・編集者上限カウンタ・プレゼンス・通知 invalidation・
 | --- | --- | --- |
 | 共同編集 pub/sub | `SUBSCRIBE`, `UNSUBSCRIBE`, `PUBLISH` | `crowi:collab:<documentName>` — ドキュメントごとの単一チャンネル。Y.Doc の同期と awareness の更新はいずれもこの1チャンネル上に多重化される (`:awareness:` / `:y-update:` のような個別サブキーはない) |
 | 編集者上限カウンタ | `SADD`, `SCARD`, `SREM`, `EXPIRE` | `crowi:collab:editors:<pageId>` |
-| プレゼンス | `HSET`, `HGET`, `HGETALL`, `HDEL`, `EXPIRE`, `PUBLISH`, `SUBSCRIBE` | `crowi:presence:viewers:<pageId>`, `crowi:presence:editing:<pageId>`, `crowi:presence:updates`, `crowi:presence:page-updated`, `crowi:presence:comment-changed` |
+| プレゼンス | `HSET`, `HGET`, `HGETALL`, `HDEL`, `EXPIRE`, `PUBLISH`, `SUBSCRIBE` | `crowi:presence:viewers:<pageId>`, `crowi:presence:editing:<pageId>`, `crowi:presence:feed` |
 | 通知 invalidation | `PUBLISH`, `SUBSCRIBE`, `UNSUBSCRIBE` | `crowi:notifications:user:<userId>` |
 | 設定同期 (Config) | `PUBLISH`, `SUBSCRIBE` | 固定チャンネル `config` |
 | rate limiting | `INCR`, `PEXPIRE` | `crowi:ratelimit:<name>:<userId>:<window>` |
@@ -294,19 +294,19 @@ api インスタンスあたりの接続数は、インスタンスのライフ�
 よって変わります(固定本数ではありません):
 
 - **boot 完了直後** (共同編集セッションがまだ 1 つも開始していない状態):
-  **6 本** — 共有クライアント 1 本 (編集者上限カウンタ・LRU・rate
+  **5 本** — 共有クライアント 1 本 (編集者上限カウンタ・LRU・rate
   limiting・プレゼンスのハッシュ書き込み・通知 publish がすべて相乗り)
-  + プレゼンス subscriber 2 本 + 通知 subscriber 1 本 + Config
+  + プレゼンス subscriber 1 本 + 通知 subscriber 1 本 + Config
   publisher/subscriber 2 本。
-- **そのインスタンスで最初の共同編集セッションが開始した後**: **8 本**
-  — 上記 6 本 + `@hocuspocus/extension-redis` が張る専用 `ioredis`
+- **そのインスタンスで最初の共同編集セッションが開始した後**: **7 本**
+  — 上記 5 本 + `@hocuspocus/extension-redis` が張る専用 `ioredis`
   pub + sub 接続 2 本 (`lazyConnect: true` のため最初のドキュメント
   読み込みまでは接続されません)。
 
 例: 10 api レプリカ + 1 web レプリカの構成
 
-- boot 直後: 10 × 6 = 60 接続。
-- 全レプリカで共同編集セッションが 1 回でも開始された後: 10 × 8 = 80 接続。
+- boot 直後: 10 × 5 = 50 接続。
+- 全レプリカで共同編集セッションが 1 回でも開始された後: 10 × 7 = 70 接続。
 - web 側からの直接 Redis 接続: なし (api 経由)。
 
 デフォルトの `maxclients=10000` 内で十分まかなえますが、Redis Cluster や
