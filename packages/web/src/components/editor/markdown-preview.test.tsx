@@ -226,3 +226,55 @@ describe('MarkdownPreview — link-card placeholder', () => {
     expect(document.querySelector('.crowi-link-card-preview-surface')).toBeTruthy();
   });
 });
+
+describe('MarkdownPreview — linkCardEnabled=false gates the placeholder substitution (feature-renderer-plugin-boundary Phase 3 spec §6.3)', () => {
+  it('defaults to enabled: an omitted linkCardEnabled prop still converts the card tag to the placeholder', async () => {
+    const url = 'https://example.com/doc';
+    mutateAsync.mockResolvedValueOnce({
+      type: 'root',
+      children: [
+        {
+          type: 'paragraph',
+          children: [
+            { type: 'text', value: '@' },
+            { type: 'link', url, children: [{ type: 'text', value: 'card' }] },
+          ],
+        },
+      ],
+    });
+
+    render(<MarkdownPreview source={`@[card](${url})`} />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+    });
+
+    expect(document.querySelector('.crowi-link-card-preview-surface')).toBeTruthy();
+  });
+
+  it('disabled: the card tag is NOT converted to the static placeholder — it renders as an ordinary clickable link, same as any other unrecognised embed tag', async () => {
+    const url = 'https://example.com/doc';
+    mutateAsync.mockResolvedValueOnce({
+      type: 'root',
+      children: [
+        {
+          type: 'paragraph',
+          children: [
+            { type: 'text', value: '@' },
+            { type: 'link', url, children: [{ type: 'text', value: 'card' }] },
+          ],
+        },
+      ],
+    });
+
+    render(<MarkdownPreview source={`@[card](${url})`} linkCardEnabled={false} />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+    });
+
+    expect(document.querySelector('.crowi-link-card-preview-surface')).toBeNull();
+    expect(screen.queryByText(m['edit.link_card_preview_pending']())).toBeNull();
+    // The `@` prefix + a real anchor to the card's url survive unconverted.
+    const link = screen.getByRole('link', { name: 'card' });
+    expect(link.getAttribute('href')).toBe(url);
+  });
+});
