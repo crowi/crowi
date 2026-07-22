@@ -5,16 +5,20 @@ import Crowi from 'src/crowi';
 /**
  * RFC-0010 §Mongoose models — OAuth 2.0 client registration.
  *
- * v1 ships a single first-party `crowi-cli` client (seeded idempotently at
- * boot, see `util/oauth-client-seed.ts`). The model is shaped from the
- * start to admit operator-registered apps later (confidential clients with
- * a `secretHash`, arbitrary `redirectUris`), but no registration UI exists
- * in v1 — `crowi-cli` is the only row.
+ * v1 ships two first-party clients, both seeded idempotently at boot (see
+ * `util/oauth-client-seed.ts`): `crowi-cli` and the `trusted` `crowi-ios`
+ * (RFC-0016 Phase 0). The model is shaped from the start to admit
+ * operator-registered apps later (confidential clients with a
+ * `secretHash`, arbitrary `redirectUris`), but no registration UI exists
+ * in v1 — these two seeded rows are the only ones.
  *
- * `crowi-cli` is a **public** client: it has no secret (`secretHash: null`)
- * and authenticates purely via PKCE (RFC-0010 §Security). `redirectUris`
- * for it list the loopback hosts; the actual port is matched at request
- * time by `util/oauth-redirect-uri.ts` (loopback host match, any port).
+ * Both are **public** clients: they have no secret (`secretHash: null`)
+ * and authenticate purely via PKCE (RFC-0010 §Security). `crowi-cli`'s
+ * `redirectUris` list the loopback hosts; the actual port is matched at
+ * request time by `util/oauth-redirect-uri.ts` (loopback host match, any
+ * port). `crowi-ios`'s `redirectUris` list its custom-scheme callback,
+ * matched by the same util via exact string match (trusted + firstParty
+ * only — see the `trusted` field below).
  */
 export type OAuthClientType = 'public' | 'confidential';
 
@@ -28,7 +32,18 @@ export interface OAuthClientDocument extends Document {
   redirectUris: string[];
   allowedScopes: string[];
   firstParty: boolean;
-  /** Reserved: even a trusted client still shows the consent screen in v1. */
+  /**
+   * RFC-0016 §4.4/§14 — a `trusted` **and** `firstParty` client (i) skips
+   * the web consent screen (the authorize page auto-submits instead of
+   * rendering `ConsentCard` — `hono/handlers/oauth.ts` / the web
+   * `/oauth/authorize` page) and (ii) may register a custom URI scheme as
+   * a `redirectUri`, accepted only via exact string match
+   * (`util/oauth-redirect-uri.ts`). There is no client-registration
+   * endpoint in v1 — every row comes from the boot-time seed
+   * (`util/oauth-client-seed.ts`) — so `trusted` can only ever be set by
+   * an operator-trusted, server-seeded client, never by an
+   * attacker-registered one.
+   */
   trusted: boolean;
   createdAt: Date;
 }
