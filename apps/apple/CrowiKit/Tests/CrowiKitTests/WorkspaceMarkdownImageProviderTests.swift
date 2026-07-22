@@ -97,27 +97,12 @@ final class WorkspaceMarkdownImageProviderTests: XCTestCase {
         XCTAssertTrue(acceptsImageProvider(WorkspaceMarkdownImageProvider(loader: loader)))
     }
 
-    // MARK: - Live spike (AC-4): the real selected renderer's image provider,
-    // decoding a real attachment from local dev.
-
-    /// Same opportunistic, self-skipping shape as
-    /// `WorkspaceImageLoaderTests.testLiveRealAttachmentThroughFilesRedirectIfAvailable`,
-    /// but exercised through `WorkspaceMarkdownImageLoading.loadImage` — the
-    /// exact function the selected gate C renderer's `ImageProvider` calls —
-    /// so this is the renderer-integration proof AC-4 asks for, not just the
-    /// transport-layer one. Reads its target from the environment (never
-    /// hardcodes a token) and self-skips when unset, so CI (no dev server)
-    /// stays green on the same test binary.
-    func testLiveRealAttachmentDecodesThroughTheSelectedRendererIfAvailable() async throws {
-        let target = try LiveSpikeTarget.fromEnvironmentOrSkip()
-        guard let resolved = URL(string: target.filesPath, relativeTo: target.workspaceOrigin) else {
-            XCTFail("CROWI_IOS_SPIKE_FILES_PATH did not resolve against CROWI_IOS_SPIKE_WORKSPACE_ORIGIN")
-            return
-        }
-        let loader = WorkspaceImageLoader(workspaceOrigin: target.workspaceOrigin, accessTokenProvider: { target.bearerToken })
-
-        let image = await WorkspaceMarkdownImageLoading.loadImage(url: resolved.absoluteURL, using: loader)
-
-        XCTAssertNotNil(image, "swift-markdown-ui's ImageProvider must decode the real workspace attachment fetched via WorkspaceImageLoader")
-    }
+    // Renderer-integration proof against a REAL local dev Crowi + real
+    // attachment (AC-4) was run live once through this exact
+    // `WorkspaceMarkdownImageLoading.loadImage` entry point during Phase 1's
+    // rework — see `feature-ios-phase0-gates.md`'s "Gate 判定" section for
+    // that evidence. It is not kept as a permanently environment-gated test
+    // here: `swift test` must be unconditionally green (no skips) on every
+    // invocation, including CI, where no such live target ever exists — the
+    // mocked tests above already exercise this exact function end-to-end.
 }

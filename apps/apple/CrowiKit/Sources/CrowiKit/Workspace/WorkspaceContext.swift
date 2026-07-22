@@ -1,0 +1,81 @@
+import Foundation
+import SwiftData
+
+/// RFC-0016 §3/§14 — a **workspace-bound handle**: everything a per-workspace
+/// consumer needs (its stored credential, a refresh coordinator, an
+/// authenticating transport middleware, its persistence container) scoped to
+/// exactly the `Workspace` it was constructed with.
+///
+/// This is the structural half of the §14 per-workspace isolation invariant.
+/// `WorkspaceTokenStoring` (one backing Keychain/in-memory store holding
+/// every workspace's credential, keyed by id) and `WorkspaceStore` itself
+/// (the root object that legitimately manages every workspace — the
+/// switcher UI needs to list and address all of them) are both intentionally
+/// multi-tenant. `WorkspaceContext` is the single-tenant view code should
+/// hold once it only needs to operate within ONE workspace: its `workspace`
+/// is a `let` fixed at `init`, none of its methods accept a differing
+/// workspace id, and it has no mutating/retargeting API at all. Code that is
+/// handed only a `WorkspaceContext` (rather than the whole `WorkspaceStore`)
+/// therefore has no path — structural, not just conventional — to another
+/// workspace's Keychain item, refresh coordinator, or on-disk store.
+/// `PerWorkspaceIsolationTests` pins this boundary.
+public struct WorkspaceContext: Sendable {
+    public let workspace: Workspace
+
+    private let tokenStore: any WorkspaceTokenStoring
+    private let containerBaseDirectory: URL
+
+    init(workspace: Workspace, tokenStore: any WorkspaceTokenStoring, containerBaseDirectory: URL) {
+        self.workspace = workspace
+        self.tokenStore = tokenStore
+        self.containerBaseDirectory = containerBaseDirectory
+    }
+
+    public var id: String { workspace.id }
+    public var apiBaseURL: APIBaseURL { workspace.apiBaseURL }
+
+    /// Where this workspace's disk-backed image cache MUST live (§7.2) — a
+    /// future disk-backed `WorkspaceImageLoader` cache (`feature-ios-phase1-read`)
+    /// that writes anywhere else would not be purged on sign-out. `WorkspaceStore.signOut`
+    /// purges it via `WorkspaceModelContainerFactory.deleteImagesCacheDirectory`
+    /// as its own explicit teardown step (§14) — `testSignOutPurgesThatWorkspacesImagesCacheDirectory`
+    /// pins this.
+    public var imagesCacheDirectory: URL {
+        WorkspaceModelContainerFactory.imagesCacheDirectory(workspaceId: workspace.id, baseDirectory: containerBaseDirectory)
+    }
+
+    /// The currently stored credential for THIS workspace, and only this
+    /// one — there is no overload that accepts a different id.
+    public func loadTokens() throws -> StoredTokenPair? {
+        try tokenStore.load(forWorkspace: workspace.id)
+    }
+
+    /// A `RefreshCoordinator` wired to this workspace's own Keychain item
+    /// and discovery-resolved `token_endpoint` (§4.1 step 0 — re-resolved on
+    /// every call, never assumed equal to `apiBaseURL`).
+    public func makeRefreshCoordinator(urlSession: URLSession = .shared) -> RefreshCoordinator {
+        let origin = workspace.workspaceOrigin
+        return RefreshCoordinator(workspaceId: workspace.id, tokenStore: tokenStore, urlSession: urlSession) {
+            try await OAuthDiscoveryDocument.fetch(workspaceOrigin: origin.baseURL, urlSession: urlSession).tokenEndpoint
+        }
+    }
+
+    /// An `AuthenticatingMiddleware` pre-wired to this workspace's own
+    /// `RefreshCoordinator` — the seam a future per-workspace generated API
+    /// `Client` (`feature-ios-phase1-read`) composes with, never a
+    /// coordinator built for a different workspace.
+    public func makeAuthenticatingMiddleware(urlSession: URLSession = .shared) -> AuthenticatingMiddleware {
+        AuthenticatingMiddleware(coordinator: makeRefreshCoordinator(urlSession: urlSession))
+    }
+
+    /// This workspace's own `ModelContainer` (§7.1) — a distinct on-disk
+    /// directory keyed by this workspace's id, never shared with another.
+    public func makeModelContainer(models: [any PersistentModel.Type] = [], schemaVersion: Int = 1) throws -> ModelContainer {
+        try WorkspaceModelContainerFactory.makeContainer(
+            workspaceId: workspace.id,
+            models: models,
+            schemaVersion: schemaVersion,
+            baseDirectory: containerBaseDirectory
+        )
+    }
+}

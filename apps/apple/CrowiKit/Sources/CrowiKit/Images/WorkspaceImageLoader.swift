@@ -22,7 +22,7 @@ import Foundation
 /// running local dev Crowi + a real attachment (AC-4; see that test file's
 /// `testLiveRealAttachmentThroughFilesRedirect`).
 public final class WorkspaceImageLoader: NSObject, Sendable {
-    private let workspaceOrigin: URLOrigin
+    private let workspaceOrigin: WorkspaceOrigin
     private let accessTokenProvider: @Sendable () -> String
     private let session: URLSession
 
@@ -38,7 +38,7 @@ public final class WorkspaceImageLoader: NSObject, Sendable {
         accessTokenProvider: @escaping @Sendable () -> String,
         sessionConfiguration: URLSessionConfiguration = .ephemeral
     ) {
-        self.workspaceOrigin = URLOrigin(workspaceOrigin)
+        self.workspaceOrigin = WorkspaceOrigin(workspaceOrigin)
         self.accessTokenProvider = accessTokenProvider
         // No session-level delegate: `fetch(_:)` passes a fresh
         // `RedirectStripDelegate` per call via `session.data(for:delegate:)`
@@ -62,14 +62,13 @@ public final class WorkspaceImageLoader: NSObject, Sendable {
             throw URLError(.badURL)
         }
         var request = URLRequest(url: resolved)
-        if URLOrigin(resolved) == workspaceOrigin {
+        if WorkspaceOrigin(resolved) == workspaceOrigin {
             request.setValue("Bearer \(accessTokenProvider())", forHTTPHeaderField: "Authorization")
         }
         let delegate = RedirectStripDelegate(workspaceOrigin: workspaceOrigin, accessTokenProvider: accessTokenProvider)
         let (data, response) = try await session.data(for: request, delegate: delegate)
-        guard let http = response as? HTTPURLResponse, 200..<300 ~= http.statusCode else {
-            let status = (response as? HTTPURLResponse)?.statusCode ?? -1
-            throw LoaderError.httpError(status: status)
+        guard response.isSuccessfulHTTPResponse else {
+            throw LoaderError.httpError(status: response.httpStatusCodeOrUnknown)
         }
         return data
     }
@@ -80,10 +79,10 @@ public final class WorkspaceImageLoader: NSObject, Sendable {
 /// so `WorkspaceImageLoaderTests` can exercise it directly against
 /// synthetic redirect chains without a real network round-trip.
 final class RedirectStripDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
-    private let workspaceOrigin: URLOrigin
+    private let workspaceOrigin: WorkspaceOrigin
     private let accessTokenProvider: @Sendable () -> String
 
-    init(workspaceOrigin: URLOrigin, accessTokenProvider: @escaping @Sendable () -> String) {
+    init(workspaceOrigin: WorkspaceOrigin, accessTokenProvider: @escaping @Sendable () -> String) {
         self.workspaceOrigin = workspaceOrigin
         self.accessTokenProvider = accessTokenProvider
     }
@@ -100,7 +99,7 @@ final class RedirectStripDelegate: NSObject, URLSessionTaskDelegate, @unchecked 
             return
         }
         var next = request
-        if URLOrigin(newURL) == workspaceOrigin {
+        if WorkspaceOrigin(newURL) == workspaceOrigin {
             // Same-origin redirect (e.g. the legacy `/files/<id>` →
             // `/api/v2/attachments/<id>` compat hop): PRESERVE the Bearer.
             next.setValue("Bearer \(accessTokenProvider())", forHTTPHeaderField: "Authorization")
@@ -109,46 +108,5 @@ final class RedirectStripDelegate: NSObject, URLSessionTaskDelegate, @unchecked 
             next.setValue(nil, forHTTPHeaderField: "Authorization")
         }
         completionHandler(next)
-    }
-}
-
-/// `scheme://host:port` equality, ignoring path/query/fragment — the exact
-/// comparison §6.1 specifies ("the resolved URL origin **exactly equals**
-/// the active workspace's base-URL origin"). `URL`'s own `==` compares the
-/// whole string, which is both too strict (a trailing slash difference)
-/// and too loose (it doesn't normalize a default port), so this is a
-/// dedicated, minimal value type rather than reusing `URL` equality.
-public struct URLOrigin: Equatable, Sendable {
-    let scheme: String
-    let host: String
-    /// Normalized: `nil` port is treated as the scheme's default so
-    /// `https://host` and `https://host:443` compare equal.
-    let port: Int
-
-    init(_ url: URL) {
-        self.scheme = (url.scheme ?? "").lowercased()
-        self.host = (url.host ?? "").lowercased()
-        self.port = url.port ?? URLOrigin.defaultPort(forScheme: scheme)
-    }
-
-    /// The `baseURL` other resolvers rebase relative paths against —
-    /// `scheme://host:port` with no path, matching `workspaceOrigin` (§3).
-    var baseURL: URL {
-        var components = URLComponents()
-        components.scheme = scheme
-        components.host = host
-        if port != URLOrigin.defaultPort(forScheme: scheme) {
-            components.port = port
-        }
-        // swiftlint:disable:next force_unwrapping — scheme+host is always a valid URL.
-        return components.url!
-    }
-
-    private static func defaultPort(forScheme scheme: String) -> Int {
-        switch scheme {
-        case "https": return 443
-        case "http": return 80
-        default: return 0
-        }
     }
 }
