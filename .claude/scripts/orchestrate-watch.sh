@@ -69,12 +69,11 @@ while true; do
     head="$(git -C "$wt" rev-parse HEAD 2>/dev/null)" || continue
     n="$(git -C "$wt" rev-list --count main..HEAD 2>/dev/null || echo 0)"
     [ "$n" -gt 0 ] || continue
-    sig="$(jq -r '.readyForMerge.headSha // empty' "$TASKS/$id.json" 2>/dev/null)"
+    IFS=$'\t' read -r long sig <<<"$(jq -r '[(.longLived // false), (.readyForMerge.headSha // "")] | @tsv' "$TASKS/$id.json" 2>/dev/null)"
     [ "$sig" = "$head" ] && continue                       # fresh signal → lane A's job
     # longLived task.json marker → use the extended threshold (default 14d)
     # instead of the normal one (default 3d). Absent/false/missing task file
     # all fall through to the normal threshold — fully backward compatible.
-    long="$(jq -r '.longLived // false' "$TASKS/$id.json" 2>/dev/null)"
     threshold="$STALL_DAYS"
     [ "$long" = "true" ] && threshold="$STALL_DAYS_LONG"
     last=$(git -C "$wt" log -1 --format=%ct 2>/dev/null || echo 0)

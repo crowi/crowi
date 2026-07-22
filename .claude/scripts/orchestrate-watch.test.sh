@@ -16,20 +16,22 @@ set -u
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPT="$HERE/orchestrate-watch.sh"
 
-for c in git jq date sed grep basename dirname sleep bash; do
+REQUIRED_TOOLS="git jq date sed grep basename dirname sleep"
+
+for c in $REQUIRED_TOOLS bash; do
   command -v "$c" >/dev/null 2>&1 || { echo "SKIP: required tool not found: $c"; exit 0; }
 done
 BASH_BIN="$(command -v bash)"
 
-# A minimal PATH that resolves git/jq/date/sed/grep/basename/dirname/sleep
-# but deliberately excludes `gh` even if it is on the real PATH: lanes D
-# (dependabot) and F (flaky-test issues) both fire unconditionally on pass 0
-# (0 % N == 0 for any N) whenever `gh` is reachable, which would make this
-# lane-E-only test hit the real GitHub API. `bash` itself is invoked via its
-# resolved full path (BASH_BIN, captured above) so it does not need to be
-# reachable through this restricted PATH.
+# A minimal PATH that resolves $REQUIRED_TOOLS but deliberately excludes `gh`
+# even if it is on the real PATH: lanes D (dependabot) and F (flaky-test
+# issues) both fire unconditionally on pass 0 (0 % N == 0 for any N) whenever
+# `gh` is reachable, which would make this lane-E-only test hit the real
+# GitHub API. `bash` itself is invoked via its resolved full path (BASH_BIN,
+# captured above) so it does not need to be reachable through this
+# restricted PATH.
 SAFE_PATH=""
-for c in git jq date sed grep basename dirname sleep; do
+for c in $REQUIRED_TOOLS; do
   d="$(dirname "$(command -v "$c")")"
   case ":$SAFE_PATH:" in *":$d:"*) ;; *) SAFE_PATH="$SAFE_PATH:$d" ;; esac
 done
@@ -76,22 +78,13 @@ make_worktree() {
 }
 
 # task_json <id> <true|false>
-# Writes a minimal fixture task.json with the given longLived value.
+# Writes a fixture task.json with the given longLived value. Only
+# `longLived` (and `readyForMerge.headSha`, absent here) are read by lane E
+# — no other fields are included since orchestrate-watch.sh never looks at
+# them.
 task_json() {
   local id="$1" long="$2"
-  cat >"$ROOT/.feature-state/tasks/$id.json" <<JSON
-{
-  "id": "$id",
-  "name": "fixture $id",
-  "status": "IN_PROGRESS",
-  "scope": "small",
-  "longLived": $long,
-  "context": {},
-  "openQuestions": [],
-  "history": [],
-  "phases": []
-}
-JSON
+  printf '{"longLived": %s}\n' "$long" >"$ROOT/.feature-state/tasks/$id.json"
 }
 
 # ---------------------------------------------------------------------------
@@ -111,29 +104,29 @@ OUT="$(PATH="$SAFE_PATH" ORCH_ROOT="$ROOT" ORCH_STALL_DAYS=3 ORCH_STALL_DAYS_LON
   "$BASH_BIN" "$SCRIPT" --once 2>&1)"
 echo "$OUT" | sed 's/^/  /'
 
-if echo "$OUT" | grep -q "^STALLED: legacy-stale ("; then
-  ok "no task file (legacy) still uses ORCH_STALL_DAYS (5d >= 3d -> STALLED)"
-else
-  fail "legacy-stale should have been reported STALLED"
-fi
+# assert_stalled <id> <yes|no> <ok-message> <fail-message>
+# Asserts whether `<id>` was (yes) or was not (no) reported STALLED in $OUT.
+assert_stalled() {
+  local id="$1" expect="$2" ok_msg="$3" fail_msg="$4" found=no
+  echo "$OUT" | grep -q "^STALLED: $id (" && found=yes
+  [ "$found" = "$expect" ] && ok "$ok_msg" || fail "$fail_msg"
+}
 
-if echo "$OUT" | grep -q "^STALLED: longlived-not-yet ("; then
-  fail "longlived-not-yet should NOT be reported (5d < ORCH_STALL_DAYS_LONG 14d)"
-else
-  ok "longLived task under the long threshold is not reported yet"
-fi
+assert_stalled legacy-stale yes \
+  "no task file (legacy) still uses ORCH_STALL_DAYS (5d >= 3d -> STALLED)" \
+  "legacy-stale should have been reported STALLED"
 
-if echo "$OUT" | grep -q "^STALLED: longlived-stalled ("; then
-  ok "longLived task past ORCH_STALL_DAYS_LONG (20d >= 14d) is reported STALLED"
-else
-  fail "longlived-stalled should have been reported STALLED"
-fi
+assert_stalled longlived-not-yet no \
+  "longLived task under the long threshold is not reported yet" \
+  "longlived-not-yet should NOT be reported (5d < ORCH_STALL_DAYS_LONG 14d)"
 
-if echo "$OUT" | grep -q "^STALLED: longlived-false-stale ("; then
-  ok "longLived: false explicitly still uses the normal ORCH_STALL_DAYS threshold"
-else
-  fail "longlived-false-stale should have been reported STALLED (normal threshold)"
-fi
+assert_stalled longlived-stalled yes \
+  "longLived task past ORCH_STALL_DAYS_LONG (20d >= 14d) is reported STALLED" \
+  "longlived-stalled should have been reported STALLED"
+
+assert_stalled longlived-false-stale yes \
+  "longLived: false explicitly still uses the normal ORCH_STALL_DAYS threshold" \
+  "longlived-false-stale should have been reported STALLED (normal threshold)"
 
 echo
 echo "== $PASS passed, $FAIL failed =="
