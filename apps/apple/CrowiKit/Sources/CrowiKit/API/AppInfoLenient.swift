@@ -49,6 +49,16 @@ public struct AppInfoLenient: Sendable, Equatable {
     /// of any control-flow decision (the app always just reads `capabilities`).
     public let capabilitiesAreBaselineFallback: Bool
 
+    /// `true` when this response looks like a real Crowi `/app/info` payload
+    /// — i.e. it carries a `version`. A non-Crowi host (some other JSON API,
+    /// or an error page's JSON body) typically has no `version` field at
+    /// all; `AddWorkspaceFlow` (§3 step 2) rejects such a host with a clear
+    /// "not a Crowi instance" error rather than treating it as a very old
+    /// Crowi (which is instead the `capabilities`-missing degrade path above).
+    public var looksLikeCrowiHost: Bool {
+        version != nil
+    }
+
     /// Decode leniently: unknown extra keys are ignored (`JSONSerialization`
     /// already does this benignly), missing optional keys become `nil`, and
     /// a missing/malformed `capabilities` degrades to the static baseline
@@ -71,5 +81,22 @@ public struct AppInfoLenient: Sendable, Equatable {
 
     public enum DecodeError: Error, Equatable {
         case notAnObject
+        /// The HTTP response itself was not a 2xx — a distinct case from
+        /// `notAnObject` so callers (the add-workspace flow) can tell
+        /// "host unreachable / errored" apart from "host responded but the
+        /// body isn't JSON we can read at all".
+        case httpError(status: Int)
+    }
+
+    /// Fetch + decode `GET {apiBaseURL}/app/info` (§3 add-flow step 2 / §5.2
+    /// refresh). Mirrors `OAuthDiscoveryDocument.fetch(workspaceOrigin:)`'s
+    /// shape — the two are the app's only two "probe an unauthenticated
+    /// endpoint before any per-workspace client exists" call sites.
+    public static func fetch(apiBaseURL: APIBaseURL, urlSession: URLSession = .shared) async throws -> AppInfoLenient {
+        let (data, response) = try await urlSession.data(from: apiBaseURL.appending("app/info"))
+        guard response.isSuccessfulHTTPResponse else {
+            throw DecodeError.httpError(status: response.httpStatusCodeOrUnknown)
+        }
+        return try decode(data)
     }
 }

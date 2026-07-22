@@ -77,6 +77,54 @@ final class AppInfoLenientTests: XCTestCase {
         }
     }
 
+    // MARK: - looksLikeCrowiHost (§3 add-flow "non-Crowi host" rejection)
+
+    func testLooksLikeCrowiHostIsTrueWhenVersionPresent() throws {
+        let data = """
+        { "version": "2.0.0", "apiVersion": "v2", "capabilities": ["oauth"] }
+        """.data(using: .utf8)!
+        XCTAssertTrue(try AppInfoLenient.decode(data).looksLikeCrowiHost)
+    }
+
+    /// The exact fixture `AddWorkspaceFlowTests` uses for "reject a
+    /// non-Crowi host": a JSON object with no `version` key at all (unlike
+    /// the missing-`capabilities` case above, which still degrades and
+    /// succeeds).
+    func testLooksLikeCrowiHostIsFalseWhenVersionMissing() throws {
+        let data = """
+        { "title": "Some Other JSON API", "capabilities": ["oauth"] }
+        """.data(using: .utf8)!
+        XCTAssertFalse(try AppInfoLenient.decode(data).looksLikeCrowiHost)
+    }
+
+    // MARK: - fetch(apiBaseURL:)
+
+    func testFetchDecodesA200Response() async throws {
+        let apiBaseURL = APIBaseURL(workspaceOrigin: WorkspaceOrigin(URL(string: "https://wiki.example.com")!))
+        MockURLProtocol.requestHandler = { request in
+            XCTAssertEqual(request.url?.absoluteString, "https://wiki.example.com/api/v2/app/info")
+            let body = """
+            { "version": "2.0.0", "apiVersion": "v2", "capabilities": ["oauth"] }
+            """.data(using: .utf8)!
+            return (HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
+        }
+        let info = try await AppInfoLenient.fetch(apiBaseURL: apiBaseURL, urlSession: MockURLProtocol.makeSession())
+        XCTAssertEqual(info.version, "2.0.0")
+    }
+
+    func testFetchThrowsOnNon2xxStatus() async throws {
+        let apiBaseURL = APIBaseURL(workspaceOrigin: WorkspaceOrigin(URL(string: "https://wiki.example.com")!))
+        MockURLProtocol.requestHandler = { request in
+            (HTTPURLResponse(url: request.url!, statusCode: 503, httpVersion: nil, headerFields: nil)!, Data())
+        }
+        do {
+            _ = try await AppInfoLenient.fetch(apiBaseURL: apiBaseURL, urlSession: MockURLProtocol.makeSession())
+            XCTFail("expected fetch to throw on a 503")
+        } catch AppInfoLenient.DecodeError.httpError(let status) {
+            XCTAssertEqual(status, 503)
+        }
+    }
+
     /// Opportunistic live check against this Phase 0 session's actual local
     /// dev Crowi. Skips (never fails) when unreachable — see
     /// `OAuthDiscoveryDocumentTests`'s twin for the same rationale.
