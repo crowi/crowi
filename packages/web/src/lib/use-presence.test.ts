@@ -88,6 +88,20 @@ function makeWrapper() {
 }
 
 /**
+ * Like {@link makeWrapper} but also exposes the client's
+ * `invalidateQueries` spy — the AC-6 4401 recovery tests assert the
+ * presence-token query is invalidated (the recovery path that used to be
+ * supplied by the now-removed `refetchInterval`). Mirrors
+ * `use-notifications-socket.test.tsx`'s `makeHarness`.
+ */
+function makeSpyWrapper() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+  const invalidateSpy = vi.spyOn(client, 'invalidateQueries');
+  const Wrapper = ({ children }: PropsWithChildren) => createElement(QueryClientProvider, { client }, children);
+  return { client, invalidateSpy, Wrapper };
+}
+
+/**
  * Drain pending microtasks (the token queryFn promise + react-query's
  * commit) under fake timers. `advanceTimersByTimeAsync(0)` yields to
  * the microtask queue while keeping the deterministic fake clock, so
@@ -420,11 +434,16 @@ describe('usePresence', () => {
     });
     expect(onAccessRevoked).not.toHaveBeenCalled();
 
-    // A fresh connection closed with 4403 fires it exactly once.
+    // A fresh connection closed with 4403 fires it exactly once. Look the
+    // page-2 socket up by URL rather than by "last instance": the page-1
+    // hook above is still mounted, and its 4401 now drives a token-recovery
+    // reconnect (OQ-1) that can append further page-1 sockets to the shared
+    // instances array around this point.
     getPresenceToken.mockResolvedValue(tokenOkResponse({ ...TOKEN_OK, token: 'jwt.presence.2' }));
     renderHook(() => usePresence('page-2', { onAccessRevoked }), { wrapper: makeWrapper() });
     await flush();
-    const ws2 = FakeWebSocket.instances[FakeWebSocket.instances.length - 1];
+    const ws2 = FakeWebSocket.instances.findLast((w) => w.url.includes('/presence/page-2'));
+    if (!ws2) throw new Error('expected a page-2 presence socket');
     act(() => {
       ws2.open();
       ws2.fail(4403);
@@ -518,23 +537,121 @@ describe('usePresence', () => {
     expect(result.current.status).toBe('error');
   });
 
-  it('stops reconnecting after a 4401 (expired token) close', async () => {
+  it('recovers from a 4401 (expired token) close: invalidates the presence-token query and reconnects immediately on the first occurrence (AC-6 / OQ-1: no longer stop)', async () => {
+    // The mock resolves the SAME token on every refetch, so the effect never
+    // actually re-runs — the reconnect below is entirely this primitive
+    // instance's own immediate 'reconnect' retry (AC-6), isolated from the
+    // effect-rerun path exercised by the consecutive-4401 backoff test below.
     getPresenceToken.mockResolvedValue(tokenOkResponse(TOKEN_OK));
+    const { invalidateSpy, Wrapper } = makeSpyWrapper();
 
-    renderHook(() => usePresence('page-1'), { wrapper: makeWrapper() });
+    renderHook(() => usePresence('page-1'), { wrapper: Wrapper });
     await flush();
     expect(FakeWebSocket.instances).toHaveLength(1);
+    invalidateSpy.mockClear();
 
-    // 4401 = the presence token is expired / invalid. Reconnecting with
-    // the same token just loops — the client must stop.
+    // 4401 = the presence token is expired / invalid. With the proactive
+    // `refetchInterval` gone, this close is the SOLE recovery trigger: it
+    // must invalidate the presence-token query immediately (no backoff on
+    // the first occurrence) so a fresh token gets refetched.
     act(() => {
       FakeWebSocket.instances[0].open();
       FakeWebSocket.instances[0].fail(4401);
     });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['presenceToken', 'page-1'] });
+
+    // AC-6: the first 4401 also routes through the primitive's own
+    // 'reconnect' policy — an immediate retry, no backoff delay.
+    await flush();
+    expect(FakeWebSocket.instances).toHaveLength(2);
+
+    // With no further close on the reconnected socket, nothing else happens
+    // even over a long stretch of wall time.
     await act(async () => {
       await vi.advanceTimersByTimeAsync(60_000);
     });
+    expect(FakeWebSocket.instances).toHaveLength(2);
+  });
+
+  it('AC-4: keeps the socket past the token TTL — no proactive refetch and no rebuild over 5 minutes while connected', async () => {
+    // A token that expires WITHIN the observed window. Under the old
+    // ~4.5-min `refetchInterval` this would re-mint (a new JWT string) and
+    // tear the socket down + re-handshake every TTL cycle, re-broadcasting
+    // the viewer list to every viewer of the page. With the interval removed
+    // and `staleTime: Infinity`, an established connection stays put even
+    // after `exp` — the presence server never re-verifies the token after
+    // the handshake, so a proactive refetch buys nothing.
+    getPresenceToken.mockResolvedValue(tokenOkResponse({ ...TOKEN_OK, expiresAt: new Date(Date.now() + 60_000).toISOString() }));
+
+    const { result } = renderHook(() => usePresence('page-1'), { wrapper: makeWrapper() });
+    await flush();
+    expect(getPresenceToken).toHaveBeenCalledTimes(1);
     expect(FakeWebSocket.instances).toHaveLength(1);
+
+    // Establish the connection (open + first viewers broadcast ⇒ connected).
+    act(() => {
+      FakeWebSocket.instances[0].open();
+      FakeWebSocket.instances[0].emit([viewer('me')]);
+    });
+    expect(result.current.status).toBe('connected');
+
+    // Five minutes pass — well past the 60s token TTL. The socket must NOT
+    // be rebuilt and the token must NOT be refetched.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5 * 60_000);
+    });
+    expect(getPresenceToken).toHaveBeenCalledTimes(1);
+    expect(FakeWebSocket.instances).toHaveLength(1);
+    expect(result.current.status).toBe('connected');
+  });
+
+  it('AC-6: backs off consecutive 4401 closes — the second stale-token close waits out the backoff before re-minting (mint/verify secret-mismatch storm guard)', async () => {
+    // Every mint yields a DIFFERENT token (a fresh `jti` guarantees this in
+    // production), so each 4401 actually flips the effect's `token` dep and a
+    // real reconnect follows — the shape of a mint/verify secret-mismatch
+    // storm where every attempt is doomed. The consecutive-4401 backoff must
+    // keep that from hammering the token endpoint.
+    let mintCount = 0;
+    getPresenceToken.mockImplementation(async () => {
+      mintCount += 1;
+      return tokenOkResponse({ ...TOKEN_OK, token: `jwt.presence.${mintCount}` });
+    });
+    const { Wrapper } = makeSpyWrapper();
+
+    renderHook(() => usePresence('page-1'), { wrapper: Wrapper });
+    await flush();
+    expect(FakeWebSocket.instances).toHaveLength(1);
+
+    // First 4401: invalidated immediately (no backoff); the token really
+    // changes, so a real reconnect follows and the freshest socket carries
+    // the newly minted token.
+    act(() => {
+      FakeWebSocket.instances[0].open();
+      FakeWebSocket.instances[0].fail(4401);
+    });
+    await flush();
+    expect(getPresenceToken).toHaveBeenCalledTimes(2);
+    const reconnectedSocket = FakeWebSocket.instances[FakeWebSocket.instances.length - 1];
+    expect(reconnectedSocket.url).toContain(`jwt.presence.${mintCount}`);
+
+    // Second, CONSECUTIVE 4401 on the freshly-reconnected socket — no healthy
+    // `viewers` frame in between to reset the counter. This routes through
+    // 'backoff-retry': it must NOT mint again immediately.
+    act(() => {
+      reconnectedSocket.open();
+      reconnectedSocket.fail(4401);
+    });
+    expect(getPresenceToken).toHaveBeenCalledTimes(2);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(999);
+    });
+    expect(getPresenceToken).toHaveBeenCalledTimes(2);
+
+    // Crossing the 1s backoff threshold lets the next mint through.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_000);
+    });
+    expect(getPresenceToken).toHaveBeenCalledTimes(3);
   });
 
   it('backs off across handshake-then-close cycles (no flat 1s reconnect loop)', async () => {
