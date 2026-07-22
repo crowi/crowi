@@ -80,8 +80,12 @@ function viewer(userId: string, overrides: Partial<PresenceViewer> = {}): Presen
   };
 }
 
+function createTestQueryClient() {
+  return new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+}
+
 function makeWrapper() {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+  const client = createTestQueryClient();
   return function Wrapper({ children }: PropsWithChildren) {
     return createElement(QueryClientProvider, { client }, children);
   };
@@ -95,7 +99,7 @@ function makeWrapper() {
  * `use-notifications-socket.test.tsx`'s `makeHarness`.
  */
 function makeSpyWrapper() {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+  const client = createTestQueryClient();
   const invalidateSpy = vi.spyOn(client, 'invalidateQueries');
   const Wrapper = ({ children }: PropsWithChildren) => createElement(QueryClientProvider, { client }, children);
   return { client, invalidateSpy, Wrapper };
