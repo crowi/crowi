@@ -104,6 +104,36 @@ through as long as they are present in `.env`.
 > Cloud Run / Cloudflare Containers). It does not run on edge/isolate
 > serverless platforms such as Cloudflare Workers.
 
+### Renderer plugin assets and CSP (Content-Security-Policy)
+
+Some renderer plugins — KaTeX, for example — serve static assets (CSS,
+fonts) from their own public route (`/api/v2/plugins/<plugin-name>/...`).
+The web app discovers which plugins are active from app-info's
+`rendererStylesheets` manifest and loads them as `<link rel="stylesheet">`
+tags pointed at the api origin — the web app never needs to know a
+plugin's name or CSS ahead of time.
+
+Deployments where web and api share the **same origin** (the recommended
+reverse-proxy setup above) need no extra configuration. The existing CORS
+policy (allowing `CLIENT_URL` as the origin — see the table above) already
+covers the cross-origin CSS/font responses, so no extra CORS configuration
+is needed either.
+
+Deployments that run web and api on **different origins** and enforce a
+Content-Security-Policy must allow the api's origin in both `style-src` and
+`font-src`. For example, with `CLIENT_URL=https://wiki.example.com` and the
+api running at `https://api.example.com`, the web app's CSP header needs
+roughly:
+
+```
+Content-Security-Policy: style-src 'self' https://api.example.com; font-src 'self' https://api.example.com; ...
+```
+
+Forgetting this allowance silently blocks the CSS/fonts in the browser even
+though the plugin is active and healthy — neither the api nor the web app
+logs an error, since nothing failed server-side. Check the browser console
+for a CSP violation report.
+
 ## crowi.config.json
 
 `crowi.config.json` is a JSON file placed at the **root of the runner

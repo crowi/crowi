@@ -103,6 +103,34 @@ API は起動時にこれらの環境変数をまとめて検証します。`POR
 > Containers)。Cloudflare Workers のような edge/isolate 系のサーバレス
 > 基盤では動作しません。
 
+### レンダラ plugin アセットと CSP (Content-Security-Policy)
+
+KaTeX のような一部のレンダラ plugin は、CSS / font などの静的アセットを
+自身の public route (`/api/v2/plugins/<plugin-name>/...`) から配信します。
+Web はどの plugin が有効かを app-info の `rendererStylesheets` manifest
+から取得し、api origin に対する `<link rel="stylesheet">` として読み込み
+ます — plugin 名や CSS の存在を Web 側が事前に知る必要はありません。
+
+Web と api が **同一オリジン** (推奨のリバースプロキシ構成、上記参照) の
+deployment では追加の設定は不要です。既存の CORS policy (`CLIENT_URL` を
+許可オリジンとする、上表参照) は CSS / font のクロスオリジンレスポンスにも
+そのまま適用されるため、CORS 側の追加設定も不要です。
+
+Web と api を **別オリジン** で運用し、かつ operator が
+Content-Security-Policy を付与している deployment では、`style-src` と
+`font-src` に api の origin を許可してください。例えば
+`CLIENT_URL=https://wiki.example.com`、api が `https://api.example.com`
+で動く構成では、Web が返す CSP ヘッダにおおよそ次のように追加します。
+
+```
+Content-Security-Policy: style-src 'self' https://api.example.com; font-src 'self' https://api.example.com; ...
+```
+
+許可を追加し忘れると、対象の plugin が有効でも CSS / font がブラウザに
+ブロックされ、スタイルが当たらない状態になります (plugin 自体は正常に
+動作しているため、api / Web のログにはエラーが出ません — ブラウザの
+コンソールで CSP violation を確認してください)。
+
 ## crowi.config.json
 
 `crowi.config.json` は **ランナープロジェクトのルート** に置く JSON
