@@ -25,6 +25,9 @@ alpha.0–.3 は published、alpha.4 / stable 向けに changeset 蓄積中（pr
 ### OAuth 2.0 (RFC-0010)
 - [ ] Phase 5: admin による任意 OAuth クライアント登録 UI（Phase 1-4 完了）
 
+### iOS ネイティブアプリ (RFC-0016)
+- [x] Phase 0 companion server 側変更: trusted first-party `crowi-ios` OAuth client の server seed + custom-scheme redirect 緩和 + consent-skip 配線 + `GET /oauth/client-info`（spec: `feature-ios-companion-server.md`）。Apple 側 (apps/apple scaffold + gate 判定) は worktree `feature-ios-app` で進行中
+
 ### 配布 / リリース（2.0.0 stable 時）
 - [ ] **無印 `crowi` パッケージの整理**（spec: `feature-crowi-quickstart-package.md`）
 - [ ] **slim image + 外部 operator 向け doc** — runner-project 方式。blocked-on `feature-plugin-search-mongo`
