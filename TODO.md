@@ -45,6 +45,7 @@ alpha.0–.3 は published、alpha.4 / stable 向けに changeset 蓄積中（pr
 - [x] **collab lifecycle epoch で rename/delete 後のライブエディタを無効化**（RFC-0017 Phase 1、cross-replica prompt fanout は Phase 2 対象外）。spec: `feature-collab-invalidate-on-rename-delete.md`
 - [x] **WS client reconnect primitive** — presence / notifications の WebSocket reconnect ロジックを共有 client primitive に抽出し、close code を一元化した（spec: `feature-ws-client-socket-primitive.md`）
 - [x] **WS server attach primitive** — collab / presence / notifications の WebSocket upgrade-attach-shutdown 骨格を共有 server primitive (`attachWsNamespace`) に抽出した（spec: `feature-ws-namespace-attach-primitive.md`）
+- [x] **presence の generic feed bus 化** — viewer-list/page-updated/comment-changed の手配線を generic subscribe/publish 抽象に統合し、Redis subscriber を2本→1本に集約した（spec: `feature-presence-generic-feed-bus.md`）
 
 ---
 

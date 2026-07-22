@@ -2,6 +2,7 @@ import { EventEmitter } from 'node:events';
 import type { PresenceCommentChangedMessage, PresenceViewer } from '@crowi/api-contract';
 import Debug from 'debug';
 import type Crowi from 'src/crowi';
+import type { PresenceFeed } from 'src/presence/attach';
 
 const debug = Debug('crowi:service:presence');
 
@@ -30,11 +31,13 @@ const debug = Debug('crowi:service:presence');
  *     `lastHeartbeatAt` and `listViewers` filters out entries whose
  *     last heartbeat is older than `VIEWER_TTL_MS`, sweeping the stale
  *     fields from the hash as a side effect.
- *   - Pub/sub: `crowi:presence:updates` carries `<pageId>` strings.
- *     When a viewer joins / leaves on api instance A, A publishes the
- *     pageId; every instance (including A) re-broadcasts the fresh
- *     viewer list to its locally-connected clients. Same
- *     Redis-as-shared-state pattern as RFC-0003.
+ *   - Pub/sub (feature-presence-generic-feed-bus): every read-side feed
+ *     (viewer-list / page-updated / comment-changed) rides ONE Redis
+ *     channel, `PRESENCE_FEED_CHANNEL`, as a JSON envelope
+ *     `{ feed, pageId, payload }`. When a viewer joins / leaves on api
+ *     instance A, A publishes the envelope; every instance (including
+ *     A) re-broadcasts the fresh viewer list to its locally-connected
+ *     clients. Same Redis-as-shared-state pattern as RFC-0003.
  *   - `isEditing`: NOT stored in the viewer hash. It is derived at
  *     `listViewers` time from a dedicated, short-lived *editing hash*
  *     `crowi:presence:editing:<pageId>` — one field per editor
@@ -58,27 +61,16 @@ const debug = Debug('crowi:service:presence');
 
 /** Redis key prefix for the per-page viewer hash. */
 const VIEWER_HASH_PREFIX = 'crowi:presence:viewers:';
-/** Redis pub/sub channel for cross-instance viewer-list invalidation. */
-const PRESENCE_UPDATES_CHANNEL = 'crowi:presence:updates';
 /**
- * Redis pub/sub channel for cross-instance page-updated fan-out
- * (feature-live-page-content-sync). Distinct from
- * `PRESENCE_UPDATES_CHANNEL`, which carries bare pageId strings for the
- * viewer-list — this one carries a JSON `PageUpdatedPayload` so mixing
- * them on one channel would corrupt the viewer-list subscriber's
- * `emitChange(message)` (it treats the payload as a pageId).
+ * Redis pub/sub channel every `PresenceFeed` rides
+ * (feature-presence-generic-feed-bus). Carries a JSON envelope
+ * `{ feed, pageId, payload }`; ONE dedicated subscriber connection
+ * multiplexes every feed (viewer-list, page-updated, comment-changed —
+ * and any future feed), replacing the pre-consolidation split between a
+ * bare-pageId-string channel (viewer-list) and a JSON channel
+ * (page-updated / comment-changed).
  */
-const PRESENCE_PAGE_UPDATED_CHANNEL = 'crowi:presence:page-updated';
-/**
- * Redis pub/sub channel for cross-instance comment-changed fan-out
- * (feature-live-page-comment-sync). A third distinct channel carrying a
- * JSON `CommentChangedPayload`. It does NOT open a third subscriber
- * client: `createRedisPresenceService` subscribes it on the *same* dup
- * that already owns `PRESENCE_PAGE_UPDATED_CHANNEL` (node-redis v4
- * multiplexes many channels on one subscriber connection), so the
- * connection count is unchanged.
- */
-const PRESENCE_COMMENT_CHANGED_CHANNEL = 'crowi:presence:comment-changed';
+const PRESENCE_FEED_CHANNEL = 'crowi:presence:feed';
 /**
  * Redis key prefix for the per-page *editing hash* — the presence-owned
  * short-lived editing signal that drives the `✏️` badge. One field per
@@ -176,6 +168,24 @@ export interface PageUpdatedPayload {
 export type CommentChangedPayload = Omit<PresenceCommentChangedMessage, 'type'>;
 
 /**
+ * The set of read-side realtime feeds presence multiplexes
+ * (feature-presence-generic-feed-bus). DERIVED, not hand-declared: the
+ * canonical definition is `keyof ReturnType<typeof createFeedHandlers>`
+ * in `presence/attach.ts` (that file's per-feed dispatch table is the
+ * single place every feed name is enumerated) — re-exported here so
+ * external consumers (e.g. `presence.test.ts`) keep importing it from
+ * this file, alongside this file's own `subscribe`/`publish` signatures.
+ * Adding a fourth feed therefore touches exactly two places: (1) a
+ * `publish(feed, ...)` call at the write site (this file), and (2) one
+ * new entry in `createFeedHandlers`'s returned object
+ * (`presence/attach.ts`) — which automatically extends this type, so
+ * there is no separate union-type edit, no new Redis channel, no new
+ * EventEmitter event name, and no new `PresenceService` method pair
+ * required.
+ */
+export type { PresenceFeed };
+
+/**
  * Minimum node-redis v4 surface the presence service leans on. Keeps
  * the test-mock surface narrow and documents exactly which commands a
  * fake must implement.
@@ -258,9 +268,8 @@ export interface PresenceService {
    * Broadcast that a new revision was saved for `pageId`
    * (feature-live-page-content-sync). Fans out to every connected
    * viewer socket (local + cross-instance) so the read-side
-   * soft-refresh can swap the body in place. Uses the `'page-updated'`
-   * local emitter event + the dedicated Redis channel — the viewer-list
-   * `'change'` path is untouched.
+   * soft-refresh can swap the body in place. Delegates to the generic
+   * `publish('page-updated', ...)` — the viewer-list feed is untouched.
    */
   publishPageUpdated(pageId: string, payload: PageUpdatedPayload): Promise<void>;
   /**
@@ -273,9 +282,9 @@ export interface PresenceService {
    * Broadcast that a comment was added to / removed from `pageId`
    * (feature-live-page-comment-sync). Fans out to every connected viewer
    * socket (local + cross-instance) so the reader's comment list can
-   * append / drop the entry in place. Uses the `'comment-changed'` local
-   * emitter event + a dedicated Redis channel — the viewer-list
-   * `'change'` and `'page-updated'` paths are untouched.
+   * append / drop the entry in place. Delegates to the generic
+   * `publish('comment-changed', ...)` — the viewer-list and page-updated
+   * feeds are untouched.
    */
   publishCommentChanged(pageId: string, payload: CommentChangedPayload): Promise<void>;
   /**
@@ -285,9 +294,78 @@ export interface PresenceService {
    * unsubscribe fn.
    */
   onCommentChanged(listener: (pageId: string, payload: CommentChangedPayload) => void): () => void;
+  /**
+   * Generic feed bus (feature-presence-generic-feed-bus) — subscribe to
+   * one `PresenceFeed`. `payload` is `undefined` for the `'viewers'`
+   * feed (callers re-read via `listViewers` instead); it carries the
+   * feed's full payload for `'page-updated'` / `'comment-changed'`.
+   * Every named `onXxx` method above is a thin, feed-filtered wrapper
+   * over this. Returns an unsubscribe fn.
+   */
+  subscribe(feed: PresenceFeed, listener: (pageId: string, payload: unknown) => void): () => void;
+  /**
+   * Generic feed bus (feature-presence-generic-feed-bus) — publish a
+   * message on one `PresenceFeed`. Every named `publishXxx` method
+   * above delegates to this. `payload` is omitted for the `'viewers'`
+   * feed.
+   */
+  publish(feed: PresenceFeed, pageId: string, payload?: unknown): Promise<void>;
   /** Tear down the dedicated pub/sub subscriber client(s). */
   shutdown(): Promise<void>;
 }
+
+/**
+ * Internal EventEmitter event name every `PresenceFeed` message rides
+ * (feature-presence-generic-feed-bus). Both the in-process and the
+ * Redis implementation emit every feed — viewer-list, page-updated,
+ * comment-changed — on this ONE event name, `(feed, pageId, payload)`;
+ * `subscribeFeed` / `emitFeed` below are the generic bus primitive every
+ * named method and the public `subscribe`/`publish` build on.
+ */
+const FEED_EVENT = 'feed';
+
+/**
+ * Register a `feed`-filtered listener on the shared feed bus. The
+ * primitive every named `onXxx` method (and the generic `subscribe`)
+ * wraps.
+ */
+const subscribeFeed = (emitter: EventEmitter, feed: PresenceFeed, listener: (pageId: string, payload: unknown) => void): (() => void) => {
+  const handler = (eventFeed: PresenceFeed, pageId: string, payload: unknown): void => {
+    if (eventFeed === feed) listener(pageId, payload);
+  };
+  emitter.on(FEED_EVENT, handler);
+  return () => emitter.off(FEED_EVENT, handler);
+};
+
+/**
+ * Emit a feed message on the shared bus. The primitive every named
+ * `publishXxx` method (and the generic `publish`) builds on.
+ */
+const emitFeed = (emitter: EventEmitter, feed: PresenceFeed, pageId: string, payload?: unknown): void => {
+  emitter.emit(FEED_EVENT, feed, pageId, payload);
+};
+
+/**
+ * The named `onXxx` listener registrations + the generic `subscribe` —
+ * identical `subscribeFeed(emitter, ...)` wiring in both the in-process
+ * and the Redis implementation, since both share the same feed-bus
+ * contract over their own `emitter`. Factored out once so the two
+ * factories below don't each type out the same four one-line wrappers.
+ */
+const createFeedSubscribers = (emitter: EventEmitter): Pick<PresenceService, 'onViewersChanged' | 'onPageUpdated' | 'onCommentChanged' | 'subscribe'> => ({
+  onViewersChanged(listener) {
+    return subscribeFeed(emitter, 'viewers', (pageId) => listener(pageId));
+  },
+  onPageUpdated(listener) {
+    return subscribeFeed(emitter, 'page-updated', (pageId, payload) => listener(pageId, payload as PageUpdatedPayload));
+  },
+  onCommentChanged(listener) {
+    return subscribeFeed(emitter, 'comment-changed', (pageId, payload) => listener(pageId, payload as CommentChangedPayload));
+  },
+  subscribe(feed, listener) {
+    return subscribeFeed(emitter, feed, listener);
+  },
+});
 
 /**
  * Build a presence service.
@@ -301,23 +379,19 @@ export interface PresenceService {
  * `/presence` handler never branches on Redis availability.
  */
 export async function createPresenceService(redis: PresenceRedisClient | null): Promise<PresenceService> {
-  // Local EventEmitter the `/presence` handler subscribes to. In Redis
-  // mode it is fed by the pub/sub subscriber + local publishes; in
-  // single-instance mode it is emitted directly.
+  // Local EventEmitter every PresenceFeed message rides on `FEED_EVENT`.
+  // In Redis mode it is fed by the pub/sub subscriber + local publishes;
+  // in single-instance mode it is emitted directly.
   const emitter = new EventEmitter();
   // EventEmitter's default 10-listener cap warns once per page with
   // many connected sockets; presence legitimately has one listener per
   // connected socket, so lift the cap.
   emitter.setMaxListeners(0);
 
-  const emitChange = (pageId: string): void => {
-    emitter.emit('change', pageId);
-  };
-
   if (redis === null) {
-    return createInProcessPresenceService(emitter, emitChange);
+    return createInProcessPresenceService(emitter);
   }
-  return createRedisPresenceService(redis, emitter, emitChange);
+  return createRedisPresenceService(redis, emitter);
 }
 
 /**
@@ -327,7 +401,7 @@ export async function createPresenceService(redis: PresenceRedisClient | null): 
  * → `lastSeenAt`, mirroring the Redis editing hash. `isEditing` is
  * therefore accurate in single-instance dev too.
  */
-function createInProcessPresenceService(emitter: EventEmitter, emitChange: (pageId: string) => void): PresenceService {
+function createInProcessPresenceService(emitter: EventEmitter): PresenceService {
   const pages = new Map<string, Map<string, StoredViewer>>();
   // pageId → (`<userId>:<socketId>` → lastSeenAt). Mirrors the Redis
   // editing hash for the no-Redis dev path.
@@ -384,7 +458,7 @@ function createInProcessPresenceService(emitter: EventEmitter, emitChange: (page
         joinedAt: existing?.joinedAt ?? now,
         lastHeartbeatAt: now,
       });
-      emitChange(pageId);
+      emitFeed(emitter, 'viewers', pageId);
     },
     async heartbeat(pageId, userId) {
       const entry = pages.get(pageId)?.get(userId);
@@ -394,7 +468,7 @@ function createInProcessPresenceService(emitter: EventEmitter, emitChange: (page
     },
     async leave(pageId, userId) {
       if (pages.get(pageId)?.delete(userId)) {
-        emitChange(pageId);
+        emitFeed(emitter, 'viewers', pageId);
       }
     },
     async listViewers(pageId) {
@@ -421,7 +495,7 @@ function createInProcessPresenceService(emitter: EventEmitter, emitChange: (page
     },
     async markEditing(pageId, userId, socketId) {
       editingMap(pageId).set(editingField(userId, socketId), Date.now());
-      emitChange(pageId);
+      emitFeed(emitter, 'viewers', pageId);
     },
     async refreshEditing(pageId, userId, socketId) {
       // Keep-alive only — no broadcast (the editing set is unchanged).
@@ -429,29 +503,21 @@ function createInProcessPresenceService(emitter: EventEmitter, emitChange: (page
     },
     async unmarkEditing(pageId, userId, socketId) {
       editing.get(pageId)?.delete(editingField(userId, socketId));
-      emitChange(pageId);
-    },
-    onViewersChanged(listener) {
-      emitter.on('change', listener);
-      return () => emitter.off('change', listener);
+      emitFeed(emitter, 'viewers', pageId);
     },
     async publishPageUpdated(pageId, payload) {
       // Single-instance: emit directly to the local subscribers. No
       // Redis, so there is no cross-instance leg and no double-delivery.
-      emitter.emit('page-updated', pageId, payload);
-    },
-    onPageUpdated(listener) {
-      emitter.on('page-updated', listener);
-      return () => emitter.off('page-updated', listener);
+      emitFeed(emitter, 'page-updated', pageId, payload);
     },
     async publishCommentChanged(pageId, payload) {
       // Single-instance: emit directly to the local subscribers. No
       // Redis, so there is no cross-instance leg and no double-delivery.
-      emitter.emit('comment-changed', pageId, payload);
+      emitFeed(emitter, 'comment-changed', pageId, payload);
     },
-    onCommentChanged(listener) {
-      emitter.on('comment-changed', listener);
-      return () => emitter.off('comment-changed', listener);
+    ...createFeedSubscribers(emitter),
+    async publish(feed, pageId, payload) {
+      emitFeed(emitter, feed, pageId, payload);
     },
     async shutdown() {
       emitter.removeAllListeners();
@@ -466,19 +532,46 @@ function createInProcessPresenceService(emitter: EventEmitter, emitChange: (page
  * `crowi.redis` — node-redis v4 puts a connection into subscriber mode
  * on `subscribe`, after which it can no longer issue regular commands,
  * so the hash writes must go through the original (non-subscriber)
- * client.
+ * client. Every `PresenceFeed` rides this ONE subscriber
+ * (feature-presence-generic-feed-bus consolidated the pre-existing
+ * viewer-list subscriber + the page-updated/comment-changed subscriber
+ * into a single connection subscribing a single channel).
  */
-async function createRedisPresenceService(redis: PresenceRedisClient, emitter: EventEmitter, emitChange: (pageId: string) => void): Promise<PresenceService> {
+/** Wire shape published on `PRESENCE_FEED_CHANNEL` (feature-presence-generic-feed-bus). */
+type FeedEnvelope = { feed: PresenceFeed; pageId: string; payload?: unknown };
+
+async function createRedisPresenceService(redis: PresenceRedisClient, emitter: EventEmitter): Promise<PresenceService> {
   let subscriber: PresenceRedisClient | null = null;
   try {
     const dup = redis.duplicate();
     await dup.connect();
-    await dup.subscribe(PRESENCE_UPDATES_CHANNEL, (message: string) => {
-      // The published message is the bare pageId.
-      if (message) emitChange(message);
-    });
     subscriber = dup;
-    debug('presence pub/sub subscriber connected on %s', PRESENCE_UPDATES_CHANNEL);
+    await dup.subscribe(PRESENCE_FEED_CHANNEL, (message: string) => {
+      let envelope: FeedEnvelope | null = null;
+      try {
+        const parsed = JSON.parse(message) as Partial<FeedEnvelope> | null;
+        if (parsed !== null && typeof parsed === 'object' && typeof parsed.feed === 'string' && typeof parsed.pageId === 'string') {
+          envelope = parsed as FeedEnvelope;
+        }
+      } catch {
+        // Not JSON — drop below.
+      }
+      if (!envelope) {
+        // `PRESENCE_FEED_CHANNEL` is a brand-new channel name
+        // (feature-presence-generic-feed-bus) the pre-consolidation code
+        // never published to, and Q3's default is a single-release
+        // cutover with no rolling-deploy grace period — so there is no
+        // "old process still on the legacy wire format" scenario to be
+        // compatible with here (an old process publishes bare pageIds
+        // on the OLD, now-unsubscribed channel, not this one). A
+        // non-envelope message on THIS channel can only be corrupt /
+        // unexpected data; drop it rather than guessing a feed for it.
+        debug('dropping unparseable presence feed message: %s', message);
+        return;
+      }
+      emitFeed(emitter, envelope.feed, envelope.pageId, envelope.payload);
+    });
+    debug('presence pub/sub subscriber connected on %s', PRESENCE_FEED_CHANNEL);
   } catch (err) {
     // A subscriber failure degrades presence to single-instance
     // behaviour for *this* process — local clients still work, but
@@ -486,71 +579,27 @@ async function createRedisPresenceService(redis: PresenceRedisClient, emitter: E
     console.warn('[crowi:presence] pub/sub subscriber setup failed — cross-instance fan-out disabled:', (err as Error).message);
   }
 
-  // SECOND subscriber, shared by the page-updated AND comment-changed
-  // channels. node-redis v4 puts a connection into subscriber mode on
-  // `subscribe` and it can then no longer issue regular commands — so
-  // this needs its own `duplicate()` distinct from both the primary
-  // (hash writes) and the viewer-list subscriber above. But a single
-  // subscriber connection multiplexes any number of channels, so the
-  // sibling comment-changed feed (feature-live-page-comment-sync) rides
-  // this same `dup` as a second channel rather than opening a third
-  // client — keeping the connection count at two subscribers. Its own
-  // failure is likewise non-fatal: cross-instance page-updated /
-  // comment-changed fan-out is lost for this process while local
-  // delivery keeps working.
-  let pageUpdatedSubscriber: PresenceRedisClient | null = null;
-  try {
-    const dup = redis.duplicate();
-    await dup.connect();
-    // Track the connected client BEFORE subscribing so `shutdown()` can
-    // still close it if a later `subscribe()` (there are two channels on
-    // this one client) rejects mid-setup — otherwise a connected
-    // subscriber would leak past shutdown.
-    pageUpdatedSubscriber = dup;
-    await dup.subscribe(PRESENCE_PAGE_UPDATED_CHANNEL, (message: string) => {
-      try {
-        const payload = JSON.parse(message) as PageUpdatedPayload;
-        if (payload && typeof payload.pageId === 'string' && typeof payload.revisionId === 'string') {
-          emitter.emit('page-updated', payload.pageId, payload);
-        }
-      } catch {
-        // Corrupt frame — ignore (same fail-soft posture as the corrupt
-        // viewer-hash field path).
-        debug('dropping unparseable page-updated frame on %s', PRESENCE_PAGE_UPDATED_CHANNEL);
-      }
-    });
-    // Second channel on the SAME subscriber — comment-changed fan-out.
-    await dup.subscribe(PRESENCE_COMMENT_CHANGED_CHANNEL, (message: string) => {
-      try {
-        const payload = JSON.parse(message) as CommentChangedPayload;
-        if (payload && typeof payload.pageId === 'string' && typeof payload.commentId === 'string') {
-          emitter.emit('comment-changed', payload.pageId, payload);
-        }
-      } catch {
-        // Corrupt frame — ignore (same fail-soft posture as page-updated).
-        debug('dropping unparseable comment-changed frame on %s', PRESENCE_COMMENT_CHANGED_CHANNEL);
-      }
-    });
-    debug('presence pub/sub subscriber connected on %s + %s', PRESENCE_PAGE_UPDATED_CHANNEL, PRESENCE_COMMENT_CHANGED_CHANNEL);
-  } catch (err) {
-    console.warn('[crowi:presence] page-updated / comment-changed subscriber setup failed — cross-instance fan-out disabled:', (err as Error).message);
-  }
-
   /**
-   * Publish a viewer-list change. Also emits locally so the publishing
-   * instance re-broadcasts without waiting for the pub/sub round-trip.
-   * The subscriber on *this* process will also see the published
-   * message and fire `change` again — harmless (the second broadcast
-   * sends an identical viewer list); emitting locally is the
-   * lower-latency path and the subscriber is what reaches the *other*
-   * instances.
+   * Publish a message on `feed` — the generic bus primitive every
+   * `publishXxx` method (and the public `publish`) delegates to. Emits
+   * locally first so the publishing instance's own listeners get the
+   * lowest-latency delivery, then publishes to Redis so the OTHER
+   * instances' subscriber picks it up. Redis loops the publish back to
+   * this instance's own subscriber too, so a local listener sees the
+   * message TWICE on the origin instance — harmless: the viewer-list
+   * re-broadcast sends an identical list, and page-updated /
+   * comment-changed are deduped client-side (debounce + a
+   * `revision.createdAt` monotonicity guard / idempotent re-fetch — see
+   * feature-live-page-content-sync / feature-live-page-comment-sync
+   * specs §"double-send"). Kept symmetric across every feed rather than
+   * optimised to a single leg.
    */
-  const publishChange = async (pageId: string): Promise<void> => {
-    emitChange(pageId);
+  const publish = async (feed: PresenceFeed, pageId: string, payload?: unknown): Promise<void> => {
+    emitFeed(emitter, feed, pageId, payload);
     try {
-      await redis.publish(PRESENCE_UPDATES_CHANNEL, pageId);
+      await redis.publish(PRESENCE_FEED_CHANNEL, JSON.stringify({ feed, pageId, payload }));
     } catch (err) {
-      console.warn(`[crowi:presence] publish failed for page ${pageId}:`, (err as Error).message);
+      console.warn(`[crowi:presence] publish failed for feed=${feed} page=${pageId}:`, (err as Error).message);
     }
   };
 
@@ -651,7 +700,7 @@ async function createRedisPresenceService(redis: PresenceRedisClient, emitter: E
       };
       await redis.hSet(key, viewer.userId, JSON.stringify(stored));
       await redis.expire(key, VIEWER_HASH_TTL_SECONDS);
-      await publishChange(pageId);
+      await publish('viewers', pageId);
     },
 
     async heartbeat(pageId, userId) {
@@ -675,7 +724,7 @@ async function createRedisPresenceService(redis: PresenceRedisClient, emitter: E
     async leave(pageId, userId) {
       const removed = await redis.hDel(viewerHashKey(pageId), userId);
       if (removed > 0) {
-        await publishChange(pageId);
+        await publish('viewers', pageId);
       }
     },
 
@@ -715,7 +764,7 @@ async function createRedisPresenceService(redis: PresenceRedisClient, emitter: E
       // hash, then publish so the editor immediately gets an `✏️` badge.
       await writeEditingField(pageId, userId, socketId);
       debug('markEditing page=%s user=%s socket=%s — publishing viewer-list change', pageId, userId, socketId);
-      await publishChange(pageId);
+      await publish('viewers', pageId);
     },
 
     async refreshEditing(pageId, userId, socketId) {
@@ -732,62 +781,20 @@ async function createRedisPresenceService(redis: PresenceRedisClient, emitter: E
         console.warn(`[crowi:presence] unmarkEditing delete failed for page ${pageId}:`, (err as Error).message);
       }
       debug('unmarkEditing page=%s user=%s socket=%s — publishing viewer-list change', pageId, userId, socketId);
-      await publishChange(pageId);
-    },
-
-    onViewersChanged(listener) {
-      emitter.on('change', listener);
-      return () => emitter.off('change', listener);
+      await publish('viewers', pageId);
     },
 
     async publishPageUpdated(pageId, payload) {
-      // Two-step, mirroring `publishChange`: emit locally so *this*
-      // instance's viewer sockets get the lowest-latency delivery, then
-      // publish so the OTHER instances' page-updated subscribers pick it
-      // up. Redis loops the publish back to this instance's own
-      // subscriber too, so `broadcastPageUpdated` runs twice on the
-      // origin and its local viewers receive the same frame twice —
-      // harmless because the client coalesces via debounce + a
-      // `revision.createdAt` monotonicity guard (see
-      // feature-live-page-content-sync spec §"double-send"). Kept
-      // symmetric with the viewer-list path rather than optimised to a
-      // single leg.
-      emitter.emit('page-updated', pageId, payload);
-      try {
-        await redis.publish(PRESENCE_PAGE_UPDATED_CHANNEL, JSON.stringify(payload));
-      } catch (err) {
-        console.warn(`[crowi:presence] page-updated publish failed for page ${pageId}:`, (err as Error).message);
-      }
-    },
-
-    onPageUpdated(listener) {
-      emitter.on('page-updated', listener);
-      return () => emitter.off('page-updated', listener);
+      await publish('page-updated', pageId, payload);
     },
 
     async publishCommentChanged(pageId, payload) {
-      // Two-step, mirroring `publishPageUpdated`: emit locally so *this*
-      // instance's viewer sockets get the lowest-latency delivery, then
-      // publish so the OTHER instances' comment-changed subscribers pick
-      // it up. Redis loops the publish back to this instance's own
-      // subscriber too, so `broadcastCommentChanged` runs twice on the
-      // origin and its local viewers receive the same frame twice —
-      // harmless because the client coalesces via an idempotent
-      // invalidate → re-fetch and a seen-set diff for the new-comment
-      // highlight (see feature-live-page-comment-sync spec §"double
-      // delivery"). Kept symmetric with the page-updated path.
-      emitter.emit('comment-changed', pageId, payload);
-      try {
-        await redis.publish(PRESENCE_COMMENT_CHANGED_CHANNEL, JSON.stringify(payload));
-      } catch (err) {
-        console.warn(`[crowi:presence] comment-changed publish failed for page ${pageId}:`, (err as Error).message);
-      }
+      await publish('comment-changed', pageId, payload);
     },
 
-    onCommentChanged(listener) {
-      emitter.on('comment-changed', listener);
-      return () => emitter.off('comment-changed', listener);
-    },
+    ...createFeedSubscribers(emitter),
+
+    publish,
 
     async shutdown() {
       emitter.removeAllListeners();
@@ -798,14 +805,6 @@ async function createRedisPresenceService(redis: PresenceRedisClient, emitter: E
           debug('subscriber disconnect failed: %s', (err as Error).message);
         }
         subscriber = null;
-      }
-      if (pageUpdatedSubscriber) {
-        try {
-          await pageUpdatedSubscriber.disconnect();
-        } catch (err) {
-          debug('page-updated subscriber disconnect failed: %s', (err as Error).message);
-        }
-        pageUpdatedSubscriber = null;
       }
     },
   };
@@ -933,13 +932,4 @@ export const _setPresenceServiceForTesting = (service: PresenceService | null): 
   cachedService = service == null ? null : Promise.resolve(service);
 };
 
-export {
-  EDITING_HASH_PREFIX,
-  EDITING_REFRESH_MS,
-  EDITING_TTL_MS,
-  PRESENCE_COMMENT_CHANGED_CHANNEL,
-  PRESENCE_PAGE_UPDATED_CHANNEL,
-  PRESENCE_UPDATES_CHANNEL,
-  VIEWER_HASH_PREFIX,
-  VIEWER_TTL_MS,
-};
+export { EDITING_HASH_PREFIX, EDITING_REFRESH_MS, EDITING_TTL_MS, PRESENCE_FEED_CHANNEL, VIEWER_HASH_PREFIX, VIEWER_TTL_MS };
