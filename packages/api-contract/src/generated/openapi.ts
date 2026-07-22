@@ -2154,6 +2154,64 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/oauth/client-info": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Look up non-secret metadata for a registered OAuth client (authorize/consent screen) */
+        get: {
+            parameters: {
+                query: {
+                    client_id: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Client metadata */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            clientId: string;
+                            name: string;
+                            firstParty: boolean;
+                            trusted: boolean;
+                        };
+                    };
+                };
+                /** @description No client registered with this client_id */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "NOT_FOUND";
+                                message: string;
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/user/{username}": {
         parameters: {
             query?: never;
@@ -13884,6 +13942,12 @@ export interface components {
         DeviceVerifyResponse: {
             /** @enum {string} */
             status: "approved" | "denied";
+        };
+        ClientInfoResponse: {
+            clientId: string;
+            name: string;
+            firstParty: boolean;
+            trusted: boolean;
         };
         UserPublic: {
             _id: string;
