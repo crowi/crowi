@@ -6,12 +6,15 @@ signs into and reads/edits multiple independent Crowi workspaces over
 `/api/v2`, the same HTTP surface `@crowi/cli` (RFC-0012) and MCP (RFC-0011)
 use.
 
-> Status: **Phase 0 (scaffold + gate spikes)**. This is not yet the real app —
-> see "## Gate 判定" in
-> [`.feature-state/specs/feature-ios-phase0-gates.md`](../../.feature-state/specs/feature-ios-phase0-gates.md)
-> for the decisions this scaffold exists to prove, and RFC-0016 for the full
-> design. Phase 1 (`feature-ios-phase1-workspace-auth`) builds the real
-> `WorkspaceStore` / auth / read UI on top of this.
+> Status: **Phase 1 (workspace + auth + persistence, `feature-ios-phase1-workspace-auth`)**.
+> Phase 0 (`.feature-state/specs/feature-ios-phase0-gates.md`) scaffolded the
+> repo layout and cleared the 3 GO/NO-GO gates (generator, redirect
+> transport, renderer image path). Phase 1 builds the real multi-workspace
+> shell on top of that: add-workspace (HTTPS gate → lenient `/app/info` probe
+> → minimum-version gate → OAuth sign-in), per-workspace Keychain + SwiftData
+> persistence, a single-flight refresh actor, and the Slack-style workspace
+> switcher UI. The read surface (page tree, render, search, images-in-context)
+> is `feature-ios-phase1-read`, next.
 
 ## Why this directory has no `package.json`
 
@@ -37,8 +40,10 @@ apps/apple/
 │   │                           #   apps/apple/, is what you open" below)
 │   ├── Package.swift           # the App manifest (`import AppleProductTypes`,
 │   │                           #   Xcode-only — see "Two packages" below)
-│   ├── Sources/CrowiApp/       # @main SwiftUI entry point (thin; Phase 1 builds
-│   │                           #   the real WorkspaceStore/shell here)
+│   ├── Sources/CrowiApp/       # @main entry point + the adaptive shell:
+│   │   │                       #   RootScene (NavigationSplitView ⇔
+│   │   │                       #   NavigationStack, §9) / WorkspaceSwitcherView
+│   │   │                       #   / AddWorkspaceView / EmptyWorkspaceHomeView
 │   └── Support/AdditionalInfo.plist  # merged into the app's Info.plist —
 │                               #   CFBundleURLTypes declares `crowi-ios`
 ├── CrowiKit/                   # plain SwiftPM library: client/auth/render
@@ -48,7 +53,23 @@ apps/apple/
 │   │   ├── openapi.json        # SYMLINK → ../../../../packages/api-contract/openapi.json
 │   │   │                       #   (in-tree, never a pinned copy — RFC-0016 §5.1/§10)
 │   │   ├── openapi-generator-config.yaml
-│   │   ├── Auth/                # gate A: PKCE S256 + RFC 8414 discovery
+│   │   ├── Workspace/           # WorkspaceOrigin/APIBaseURL newtypes (§3), the
+│   │   │                       #   non-secret WorkspaceIndexStore (UserDefaults,
+│   │   │                       #   OQ-2), WorkspaceStore (observable root),
+│   │   │                       #   WorkspaceContext (the workspace-bound handle,
+│   │   │                       #   §14 structural isolation), AddWorkspaceFlow
+│   │   │                       #   (HTTPS gate → lenient probe → version floor
+│   │   │                       #   → sign-in)
+│   │   ├── Config/              # MinimumVersionFloor — the single placeholder
+│   │   │                       #   floor constant (OQ-6)
+│   │   ├── Auth/                # OAuthSignInFlow (real ASWAS + PKCE + discovery
+│   │   │                       #   + token exchange, replacing the Phase 0
+│   │   │                       #   GateASpike), KeychainTokenStore,
+│   │   │                       #   RefreshCoordinator (single-flight actor),
+│   │   │                       #   AuthenticatingMiddleware (the §5.1 auth
+│   │   │                       #   transport wrapper), SignOutFlow
+│   │   ├── Persistence/         # WorkspaceModelContainerFactory + SchemaVersionMarker
+│   │   │                       #   — per-workspace SwiftData container, §7
 │   │   ├── API/                 # gate B: generated-client smoke + lenient /app/info decode
 │   │   └── Images/              # gate C: the §6.1 same-origin-Bearer + redirect-strip loader,
 │   │                             #   plus the swift-markdown-ui ImageProvider wired to it
@@ -133,31 +154,81 @@ execution isn't gated the same way Xcode's build system's is.
   (swift-openapi-generator / -runtime / -urlsession, swift-markdown-ui) —
   needs outbound access to GitHub once; subsequent builds are cached.
 
-## What's here today (Phase 0) vs. what Phase 1 adds
+## What's here today (Phase 1) vs. what Phase 1.5 (read) adds
 
-Phase 0 is a **scaffold + 3 gate spikes**, not the real app:
+Phase 0 (scaffold + 3 gate spikes) is unchanged and still lives under
+`CrowiKit/Sources/CrowiKit/API/` (gate B) and `Images/` (gate C); see that
+section's git history / the spec's Gate 判定 section for the gate rationale.
+Phase 1 adds the real multi-workspace shell on top:
 
-- `Sources/CrowiApp/` is a placeholder screen proving the App ⇄ CrowiKit
-  wiring builds and links — no `WorkspaceStore`, no real UI.
-- `CrowiKit/Sources/CrowiKit/Auth/` — PKCE S256 (byte-compatible with
-  `packages/api/src/util/pkce.ts`) + RFC 8414 discovery-document decoding
-  (gate A design pieces; the actual ASWAS end-to-end run is blocked on
-  `feature-ios-companion-server` landing — see the spec's Gate 判定 section).
-- `CrowiKit/Sources/CrowiKit/API/` — the swift-openapi-generator client
-  generated from the real, in-tree `openapi.json` (gate B), plus the
-  hand-written lenient `/app/info` decoder that pins where tolerant decoding
-  lives (the generated response types are intentionally NOT used for parsing
-  — see the doc comments on `AppInfoLenient` and `GeneratedClientSmoke`).
-- `CrowiKit/Sources/CrowiKit/Images/` — `WorkspaceImageLoader`, the §6.1
-  same-origin-Bearer + redirect-strip image loader (gate C), proven against a
-  **real** local dev Crowi attachment (see
-  `WorkspaceImageLoaderTests.testLiveRealAttachmentThroughFilesRedirectIfAvailable`,
-  self-skipping when no live target is configured so CI stays hermetic); plus
-  `WorkspaceMarkdownImageProvider`, the selected renderer's (swift-markdown-ui)
-  `ImageProvider` conformance wired to that same loader — also proven against
-  a real attachment (`WorkspaceMarkdownImageProviderTests`).
+- **`Workspace/`** — `WorkspaceOrigin` (the relocated/renamed Phase 0
+  `URLOrigin`) and `APIBaseURL`, the two distinct newtypes §3 requires (no
+  raw-URL passthrough between them); `WorkspaceIndexStore` (the non-secret
+  `{ id, workspaceOrigin, displayTitle }` list in standard `UserDefaults`,
+  OQ-2); `WorkspaceStore` (the observable root: ordered workspace list +
+  `activeWorkspaceId`, add/switch/sign-out orchestration — the only place an
+  arbitrary `Workspace` value is legitimately in scope); `WorkspaceContext`
+  (the §14 **workspace-bound handle** `WorkspaceStore.context(for:)` hands
+  out: its credential/refresh-coordinator/middleware/`ModelContainer`
+  accessors are all fixed to the one `Workspace` it was constructed with —
+  no method takes a differing id, so code holding only a `WorkspaceContext`
+  structurally cannot reach another workspace's Keychain item or store;
+  `PerWorkspaceIsolationTests` pins this). `context(for:)` itself
+  **canonicalizes against the store**: since `Workspace` is a public,
+  freely-constructible struct, it only trusts the argument's `id` — the
+  `Workspace` actually used to build the returned context is always looked
+  up fresh from `workspaces`, never the caller-supplied value's own
+  `workspaceOrigin`, so a caller cannot combine workspace B's id with
+  workspace A's origin and get back a context that leaks B's credential to
+  A's API (`nil` if the id isn't currently in the store); `AddWorkspaceFlow`
+  (URL normalize
+  → HTTPS gate → lenient `/app/info` probe → minimum-version gate → hands
+  off to `OAuthSignInFlow`).
+- **`Config/MinimumVersionFloor.swift`** — the single placeholder floor
+  constant (OQ-6 — the real value is a release-checklist decision) plus a
+  minimal semver-precedence comparator.
+- **`Auth/`** — `OAuthSignInFlow` (the real ASWAS + PKCE S256 + RFC 8414
+  discovery + form-encoded token exchange, **replacing** the deleted Phase 0
+  `GateASpike.swift`); `KeychainTokenStore` (`kSecClassGenericPassword`,
+  `service = bundle id`, `account = workspace id`, §4.3);
+  `RefreshCoordinator` (the single-flight refresh `actor`, OQ-3 — proactive
+  before `expiresAt` + reactive `401` backstop, both funneling through one
+  in-flight `Task` so concurrent callers never double-present the same
+  rotating refresh token; the reactive path also takes the caller's own
+  rejected access token and compares it against the currently-stored one, so
+  a **delayed** 401 — one whose caller only gets around to reacting after
+  another concurrent request's refresh has already completed — reuses the
+  already-refreshed token instead of presenting the refresh token a second
+  time); `AuthenticatingMiddleware` (the §5.1 auth-injecting
+  `ClientMiddleware` a per-workspace generated `Client` is composed with,
+  wired via `WorkspaceContext.makeAuthenticatingMiddleware()`); `SignOutFlow`
+  (`POST /oauth/revoke` + Keychain purge, best-effort like the CLI's
+  `revokeToken`). `WorkspaceStore.signOut` layers three more explicit
+  teardown steps on top of `SignOutFlow`: index-entry removal, that
+  workspace's image cache
+  (`WorkspaceModelContainerFactory.deleteImagesCacheDirectory`), and its
+  on-disk `ModelContainer` store (`deleteWorkspaceDirectory`) — each its own
+  named call, so the sign-out contract (revoke + Keychain + image cache +
+  ModelContainer, §3/§7.2/§14) stays legible at the call site rather than
+  relying only on the image cache directory happening to nest inside the
+  store directory.
+- **`Persistence/`** — `WorkspaceModelContainerFactory` (per-workspace
+  `ModelContainer` at `Application Support/workspaces/<id>/crowi.store`,
+  `isExcludedFromBackup` + `NSFileProtection` on iOS) and
+  `SchemaVersionMarker` (the §7.3 drop-and-rebuild reconciliation — Phase 1
+  passes an empty `@Model` schema; `feature-ios-phase1-read` adds real models
+  and bumps `schemaVersion`).
+- **`Crowi.swiftpm/Sources/CrowiApp/`** — `RootScene` (the §9 adaptive shell:
+  `NavigationSplitView` ⇔ `NavigationStack` by size class),
+  `WorkspaceSwitcherView` (Slack-style switcher: tap to switch instantly,
+  swipe to sign out), `AddWorkspaceView` (on a successful add, calls the same
+  `onSelectWorkspace` callback `RootScene` wires up for tapping an existing
+  row, so onboarding navigates straight to the new workspace's home instead
+  of leaving the user at the switcher — on both compact/iPhone and
+  regular/iPad width), `EmptyWorkspaceHomeView` (Phase 1's own read surface
+  is intentionally empty — `feature-ios-phase1-read` is next).
 
-None of this is wired into a real UI yet, and none of it is the final shape
-of the Phase 1 code — it exists to answer the three gate questions. See the
-spec's "## Gate 判定(Phase 0 実施結果)" section for the decisions and their
-rationale.
+None of the read/write surface (page tree, render, search, quick-edit) exists
+yet — Phase 1's own scope ends at "add a workspace, sign in with no consent
+screen, see an empty home, add a second workspace, switch instantly, sign out
+of one without touching the other."
