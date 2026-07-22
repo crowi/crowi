@@ -1,13 +1,5 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-/*
- * KaTeX styles for server-side rendered math (`$inline$` / `$$display$$`).
- * Required by `@crowi/plugin-renderer-katex`. Even when the plugin is
- * disabled, importing the stylesheet is cheap (~30KB minified) and
- * avoids a flash-of-unstyled-math when an operator turns the plugin on
- * later. KaTeX webfonts load lazily on first math render.
- */
-@import "katex/dist/katex.min.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -528,8 +520,8 @@ html[data-page-grant="2"] {
  * (feature-plugin-renderer-mermaid spec §9) so already-persisted
  * `renderedAst` from before a renderer plugin adopts the new contract
  * (Phase 2) keeps the same treatment with no migration. Neither selector
- * names a producer (PlantUML / Mermaid) — see `renderer-presentation.tsx`.
- * A renderer may emit an inline `<svg>` or an `<img>` (PNG / data-URL) root;
+ * names a producer plugin — see `renderer-presentation.tsx`. A renderer
+ * may emit an inline `<svg>` or an `<img>` (PNG / data-URL) root;
  * some SVGs bake the size into width/height *attributes and inline style*
  * with `preserveAspectRatio="none"`, so the inline `height` must be
  * overridden (`!important`) to `auto` for the SVG to scale down

@@ -59,11 +59,11 @@ export function pickRendererPresentationAttrs(rest: Record<string, unknown>): Re
  * contract's presentation attribute is entirely ABSENT: `className` carries
  * the shared `diagram-embed` marker AND no `*-error` suffix class. This is
  * the byte-identical predicate `isDiagramEmbed` used before the
- * generalisation — kept so already-persisted `renderedAst` (PlantUML /
- * Mermaid output cached before either renderer emits the new data-attribute
- * contract, Phase 2) keeps its zoom / width / dark-canvas behaviour with no
- * migration. The legacy branch intentionally never checks a producer name
- * (`plantuml` / `mermaid`) — only the shared generic marker class shape.
+ * generalisation — kept so already-persisted `renderedAst` (an optional
+ * renderer plugin's diagram output cached before it emits the new
+ * data-attribute contract, Phase 2) keeps its zoom / width / dark-canvas
+ * behaviour with no migration. The legacy branch intentionally never checks
+ * a specific producer's name — only the shared generic marker class shape.
  *
  * When the presentation attribute IS present but carries an unrecognised
  * value (only `"diagram"` is a real presentation kind today), that is
@@ -95,8 +95,9 @@ interface RendererPresentationProps {
 }
 
 /**
- * Wraps a server-rendered "diagram" presentation (PlantUML or Mermaid
- * today — this component itself has no producer-specific knowledge) so it
+ * Wraps a server-rendered "diagram" presentation (an optional renderer
+ * plugin's diagram output today — this component itself has no
+ * producer-specific knowledge) so it
  * (a) never overflows the article column — the inline diagram is capped to
  * the body width by the CSS rules in `globals.css` targeting both the new
  * `[data-crowi-renderer-presentation="diagram"][data-crowi-renderer-state=
@@ -107,10 +108,10 @@ interface RendererPresentationProps {
  *
  * The diagram body is reused verbatim inside the lightbox. Because the
  * lightbox renders outside `.crowi-prose`, the cap-to-width rules don't
- * apply there, so the SVG/PNG falls back to its intrinsic size. Both
- * PlantUML and Mermaid bake black strokes on a transparent canvas (see the
- * `.dark` CSS note in `globals.css`), so the lightbox sits on a white
- * surface in both themes to keep the diagram legible.
+ * apply there, so the SVG/PNG falls back to its intrinsic size. Diagram
+ * renderers bake black strokes on a transparent canvas (see the `.dark`
+ * CSS note in `globals.css`), so the lightbox sits on a white surface in
+ * both themes to keep the diagram legible.
  *
  * Memoized so that a markdown re-render (e.g. typing in the editor preview, a
  * route-level state change) does not unmount the dialog when it is open —
@@ -126,10 +127,11 @@ export const RendererPresentation = memo(function RendererPresentation({ childre
       <span className={cn(className, 'group/diagram relative inline-block max-w-full')} {...presentationAttrs}>
         {children}
         {/* The `+` corner button is the only enlarge trigger — we deliberately
-            do NOT wrap the diagram in a <button>, so any `<a href>` PlantUML
-            emits inside the SVG stays a working link (and we avoid nesting
-            interactive controls). Revealed on hover and on keyboard focus
-            (`focus-visible:opacity-100`), mirroring the code-copy button. */}
+            do NOT wrap the diagram in a <button>, so any `<a href>` a diagram
+            renderer emits inside the SVG stays a working link (and we avoid
+            nesting interactive controls). Revealed on hover and on keyboard
+            focus (`focus-visible:opacity-100`), mirroring the code-copy
+            button. */}
         <button
           type="button"
           onClick={() => setOpen(true)}

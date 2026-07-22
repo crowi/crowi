@@ -365,13 +365,13 @@ const components = {
     type === 'checkbox' ? <input type="checkbox" checked={Boolean(checked)} readOnly {...props} /> : <input type={type} {...props} />,
   img: ({ src, alt, className, style: rawStyle, ...rest }: { src?: string | Blob; alt?: string; className?: unknown; style?: React.CSSProperties }) => {
     const srcString = typeof src === 'string' ? src : undefined;
-    // Server-rendered "ready diagram" presentation — PlantUML's PNG
-    // fallback or Mermaid's success `<img>` (core reads only the generic
-    // `data-crowi-renderer-presentation="diagram"`/`data-crowi-renderer-
-    // state="ready"` contract, plus the legacy `.diagram-embed`/`*-error`
-    // dual-accept for already-persisted `renderedAst` — see
-    // `isDiagramPresentationReady`). Route it through the same
-    // cap-to-width + click-to-enlarge wrapper; the wrapper carries the
+    // Server-rendered "ready diagram" presentation — an optional renderer
+    // plugin's PNG-fallback or `<img>`-success output (core reads only the
+    // generic `data-crowi-renderer-presentation="diagram"`/`data-crowi-
+    // renderer-state="ready"` contract, plus the legacy
+    // `.diagram-embed`/`*-error` dual-accept for already-persisted
+    // `renderedAst` — see `isDiagramPresentationReady`). Route it through
+    // the same cap-to-width + click-to-enlarge wrapper; the wrapper carries the
     // real incoming `className` + data attributes (so both the legacy
     // `.diagram-embed` CSS and the new `[data-crowi-renderer-…]` selector
     // apply) while the inner <img> only needs the responsive sizing
@@ -449,12 +449,13 @@ const components = {
     );
   },
   // Server-rendered "ready diagram" presentation whose root is a `<div>` —
-  // PlantUML's inline SVG output (raw HTML parsed by `raw()`). Mermaid's
-  // success output is always an `<img>` (handled above) — its error
-  // placeholder is a `<div>` too, but `isDiagramPresentationReady` excludes
-  // it here (state="error" / legacy no-`diagram-embed`-marker) so it
-  // renders as a plain div instead. Every other raw-HTML <div> in a body
-  // renders plainly.
+  // an optional renderer plugin's inline-SVG success output (raw HTML
+  // parsed by `raw()`). A renderer whose success output is always an
+  // `<img>` instead is handled above; an error placeholder can also be a
+  // `<div>`, but `isDiagramPresentationReady` excludes it here
+  // (state="error" / legacy no-`diagram-embed`-marker) so it renders as a
+  // plain div instead. Every other raw-HTML <div> in a body renders
+  // plainly.
   div: ({ className, children, ...props }: ChildrenProps & { className?: unknown }) => {
     if (isDiagramPresentationReady(className, props)) {
       return (

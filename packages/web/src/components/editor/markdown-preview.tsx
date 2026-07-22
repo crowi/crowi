@@ -253,8 +253,8 @@ export const previewComponents = {
     type === 'checkbox' ? <input type="checkbox" checked={Boolean(checked)} readOnly {...props} /> : <input type={type} {...props} />,
   img: ({ src, alt, className, style: rawStyle, ...rest }: { src?: string | Blob; alt?: string; className?: unknown; style?: React.CSSProperties }) => {
     const srcString = typeof src === 'string' ? src : undefined;
-    // Server-rendered "ready diagram" presentation (PlantUML PNG fallback
-    // or Mermaid's `<img>` success output — the generic
+    // Server-rendered "ready diagram" presentation (an optional renderer
+    // plugin's PNG-fallback or `<img>`-success output — the generic
     // `data-crowi-renderer-presentation`/`-state` contract with legacy
     // `.diagram-embed` dual-accept, see `isDiagramPresentationReady`) —
     // wrap for cap-to-width + click-to-enlarge, matching the show page.
@@ -309,12 +309,12 @@ export const previewComponents = {
       </figure>
     );
   },
-  // "Ready diagram" presentation whose root is a `<div>` (PlantUML's
-  // inline SVG output) — same zoom wrapper as the show page. Mermaid's
-  // error placeholder is also a `<div>` but `isDiagramPresentationReady`
-  // excludes it (state="error" / legacy no-marker), so it falls through
-  // to the plain-div branch below; other raw-HTML <div>s render plainly
-  // too.
+  // "Ready diagram" presentation whose root is a `<div>` (an optional
+  // renderer plugin's inline-SVG output) — same zoom wrapper as the show
+  // page. An error placeholder can also be a `<div>` but
+  // `isDiagramPresentationReady` excludes it (state="error" / legacy
+  // no-marker), so it falls through to the plain-div branch below; other
+  // raw-HTML <div>s render plainly too.
   div: ({ className, children, ...props }: ChildrenProps & { className?: unknown }) => {
     if (isDiagramPresentationReady(className, props)) {
       return (
