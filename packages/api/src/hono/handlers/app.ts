@@ -16,14 +16,15 @@ import { API_SURFACE_VERSION, type AppInfoResponse, type Capability, DYNAMIC_CAP
 import type { OpenAPIHono } from '@hono/zod-openapi';
 
 import type Crowi from 'src/crowi';
+import { coerceBoolean, getCrowiConfigNamespace } from 'src/util/admin-config';
 
 import type { CrowiHonoBindings } from '../app';
 
 // Named refs into DYNAMIC_CAPABILITIES (`@crowi/api-contract`) so the tags
 // below are never re-typed as bare string literals in the handler. Positional
 // — must track DYNAMIC_CAPABILITIES's declared order (`search`, `collab`,
-// `collab:redis`) in app-capabilities.ts exactly.
-const [CAPABILITY_SEARCH, CAPABILITY_COLLAB, CAPABILITY_COLLAB_REDIS] = DYNAMIC_CAPABILITIES;
+// `collab:redis`, `link-card`) in app-capabilities.ts exactly.
+const [CAPABILITY_SEARCH, CAPABILITY_COLLAB, CAPABILITY_COLLAB_REDIS, CAPABILITY_LINK_CARD] = DYNAMIC_CAPABILITIES;
 
 /**
  * Build the coarse capability list advertised at `GET /app/info`. Static
@@ -33,7 +34,12 @@ const [CAPABILITY_SEARCH, CAPABILITY_COLLAB, CAPABILITY_COLLAB_REDIS] = DYNAMIC_
  *   - `collab` always (Hocuspocus is library-attached unconditionally);
  *     `collab:redis` additionally when `REDIS_URL` is set so multi-instance
  *     pub/sub is wired up.
- * No I/O — both probes read state already held on the Crowi instance. The
+ *   - `link-card` (feature-renderer-plugin-boundary Phase 3) when the
+ *     admin Security `security:linkCardEnabled` toggle reads true — same
+ *     `coerceBoolean(value, true)` default-on-missing/non-boolean read
+ *     used by the admin Security GET handler and the core `card` embed
+ *     renderer's live per-dispatch check.
+ * No I/O — all probes read state already held on the Crowi instance. The
  * `Capability[]` return type keeps this compiler-checked against
  * `@crowi/api-contract`'s vocabulary (a typo wouldn't be assignable to
  * `Capability`) — see `app-capabilities.ts` for the shared source of truth
@@ -47,6 +53,9 @@ const buildCapabilities = (crowi: Crowi): Capability[] => {
   capabilities.push(CAPABILITY_COLLAB);
   if (crowi.redis != null) {
     capabilities.push(CAPABILITY_COLLAB_REDIS);
+  }
+  if (coerceBoolean(getCrowiConfigNamespace(crowi)['security:linkCardEnabled'], true)) {
+    capabilities.push(CAPABILITY_LINK_CARD);
   }
   return capabilities;
 };
