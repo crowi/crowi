@@ -22,6 +22,29 @@ export interface ResolvedPlugins {
 }
 
 /**
+ * Plugin npm names absorbed into `@crowi/api` core
+ * (feature-renderer-plugin-boundary Phase 3 spec §7) — emoji (a
+ * hard-coded post-remarkBreaks pipeline transform,
+ * `packages/api/src/renderer/core/emoji.ts`) and link-card (a
+ * core-reserved `card` embed tag,
+ * `packages/api/src/renderer/core/link-card/`). An operator's
+ * `crowi.config.json` still naming one of these at the TOP LEVEL
+ * (`resolvePluginList()`'s output) is a stale-but-harmless config entry
+ * — the feature it used to provide is now unconditionally present in
+ * `@crowi/api` itself — so `resolvePlugins()` filters it out of the
+ * import queue (with a one-time-per-name warning) instead of hard-
+ * failing on `Failed to import plugin` the moment the package is
+ * removed from the workspace (a later, separate release — the package
+ * SOURCES stay in the workspace through this phase).
+ *
+ * Deliberately a `Set`, not exhaustively re-derivable from anywhere
+ * else — this IS the shim's whitelist. Kept for the 2.x line; removal
+ * is a major-upgrade / migration-notice concern, not tied to the
+ * package deletion itself.
+ */
+export const ABSORBED_CORE_PLUGIN_NAMES = new Set(['@crowi/plugin-renderer-emoji', '@crowi/plugin-renderer-link-card']);
+
+/**
  * Read `crowi.config.json` from `projectDir`, resolve the listed
  * plugin npm names (plus transitive `requires`) against that project's
  * `node_modules/`, and return the parsed config + the imported plugin
@@ -39,9 +62,39 @@ export async function resolvePlugins(projectDir: string = process.cwd()): Promis
   // inside the api package would search the wrong tree.
   const projectRequire = createRequire(path.join(projectDir, 'package.json'));
   const config = await loadCrowiConfigFile(projectDir);
-  const seedNames = resolvePluginList(config);
+  // `config` itself (the parsed `crowi.config.json`, including
+  // `config.plugins`) is never mutated by this filter — only the local
+  // `seedNames` array derived from it. An operator's stale config entry
+  // stays visible verbatim in `ResolvedPlugins.config` even though it
+  // never reaches `importWithTransitives`.
+  const seedNames = filterAbsorbedSeedNames(resolvePluginList(config));
   const plugins = importWithTransitives(seedNames, projectRequire);
   return { config, plugins };
+}
+
+/**
+ * Drop any TOP-LEVEL seed name that's now absorbed into `@crowi/api`
+ * core, warning once per absorbed name actually encountered. Operates
+ * ONLY on `resolvePluginList()`'s output — a plugin's own transitive
+ * `requires` (resolved separately inside `importWithTransitives`'s BFS
+ * queue) are NEVER filtered here, so a third-party plugin that still
+ * `requires` an absorbed package name keeps hard-failing via
+ * `importPlugin`'s existing throw: that is the plugin author's own
+ * incompatible dependency, not an operator's stale config, and silently
+ * activating around it would be wrong (spec §7).
+ */
+function filterAbsorbedSeedNames(seedNames: string[]): string[] {
+  const kept: string[] = [];
+  for (const name of seedNames) {
+    if (ABSORBED_CORE_PLUGIN_NAMES.has(name)) {
+      console.warn(
+        `[@crowi/runner] '${name}' is now built into @crowi/api core and no longer needs to be installed as a plugin — ignoring. Remove it from crowi.config.json's "plugins" array and your runner project's dependencies.`,
+      );
+      continue;
+    }
+    kept.push(name);
+  }
+  return kept;
 }
 
 // BFS the seed names and their transitive `requires`, deduplicated by
