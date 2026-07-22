@@ -1,0 +1,58 @@
+name: Apple CI
+
+# RFC-0016 §10 — apps/apple is a package.json-less tooling island (no
+# package.json, so pnpm/turbo never see it). This is a SEPARATE, path-gated
+# macOS job because it needs Xcode + the iOS Simulator, which the existing
+# Linux runners in ci.yml don't have — ci.yml's Node/turbo jobs are
+# completely unaffected by this file and vice versa.
+on:
+  push:
+    branches: [main, dev, dev2-2]
+    paths:
+      - 'apps/apple/**'
+      - '.github/workflows/apple-ci.yml'
+  pull_request:
+    branches: [main, dev, dev2-2]
+    paths:
+      - 'apps/apple/**'
+      - '.github/workflows/apple-ci.yml'
+
+jobs:
+  build-and-test:
+    name: xcodebuild + swift test
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      # `xcodebuild build` resolves + builds CrowiKit's SwiftPM dependencies
+      # (swift-openapi-generator/-runtime/-urlsession) AND runs the
+      # OpenAPIGenerator build-tool plugin against the in-tree
+      # packages/api-contract/openapi.json — a contract change that breaks
+      # generation fails this step (RFC-0016 §5.1/§10's CI requirement).
+      #
+      # `-skipPackagePluginValidation` is required once any target uses a
+      # SwiftPM build-tool plugin: Xcode's interactive "Trust and Enable"
+      # dialog has nothing to click on a CI runner, and the build fails with
+      # `Validate plug-in "OpenAPIGenerator" in package
+      # "swift-openapi-generator"` without this flag (verified directly
+      # during Phase 0 — see apps/apple/README.md's "Objective gate
+      # commands" section, which this step mirrors exactly).
+      - name: xcodebuild build (Crowi app, iOS Simulator)
+        working-directory: apps/apple
+        run: |
+          xcodebuild build \
+            -scheme Crowi \
+            -destination 'generic/platform=iOS Simulator' \
+            -skipPackagePluginValidation
+
+      # CrowiKit is the plain (non-AppleProductTypes) local package the App
+      # depends on — the shared client/auth/render logic lives here and is
+      # what `swift test` (the bare CLI, no Xcode project needed) exercises.
+      # This ALSO regenerates + compiles the swift-openapi-generator client,
+      # so a broken contract fails here too, independently of the app build
+      # above.
+      - name: swift test (CrowiKit)
+        working-directory: apps/apple/CrowiKit
+        run: swift test
