@@ -19,7 +19,7 @@ import { renderMdastToReactNode } from '@/components/editor/render-mdast';
 import { MentionLink } from '@/components/page-view/mention-link';
 import { extractAttachmentId, InlineAttachmentLink, InlineAttachmentProvider } from '@/components/page-view/inline-attachment-link';
 import { MarkdownTableFullscreen } from '@/components/page-view/markdown-table-fullscreen';
-import { DiagramEmbed, isDiagramEmbed } from '@/components/page-view/diagram-embed';
+import { RendererPresentation, isDiagramPresentationReady, pickRendererPresentationAttrs } from '@/components/page-view/renderer-presentation';
 
 interface PageContentProps {
   page: PageWithRevision;
@@ -365,19 +365,23 @@ const components = {
     type === 'checkbox' ? <input type="checkbox" checked={Boolean(checked)} readOnly {...props} /> : <input type={type} {...props} />,
   img: ({ src, alt, className, style: rawStyle, ...rest }: { src?: string | Blob; alt?: string; className?: unknown; style?: React.CSSProperties }) => {
     const srcString = typeof src === 'string' ? src : undefined;
-    // Server-rendered diagram embed — PlantUML's PNG fallback
-    // (`<img class="diagram-embed plantuml-embed">`) or Mermaid's success
-    // output (`<img class="diagram-embed mermaid-embed" alt="...">`).
-    // Route it through the same cap-to-width + click-to-enlarge wrapper;
-    // the wrapper carries the real incoming `className` (so
-    // `.crowi-prose .diagram-embed` CSS applies) while the inner <img>
-    // only needs the responsive sizing utilities.
-    if (isDiagramEmbed(className)) {
+    // Server-rendered "ready diagram" presentation — PlantUML's PNG
+    // fallback or Mermaid's success `<img>` (core reads only the generic
+    // `data-crowi-renderer-presentation="diagram"`/`data-crowi-renderer-
+    // state="ready"` contract, plus the legacy `.diagram-embed`/`*-error`
+    // dual-accept for already-persisted `renderedAst` — see
+    // `isDiagramPresentationReady`). Route it through the same
+    // cap-to-width + click-to-enlarge wrapper; the wrapper carries the
+    // real incoming `className` + data attributes (so both the legacy
+    // `.diagram-embed` CSS and the new `[data-crowi-renderer-…]` selector
+    // apply) while the inner <img> only needs the responsive sizing
+    // utilities.
+    if (isDiagramPresentationReady(className, rest)) {
       return (
-        <DiagramEmbed className={typeof className === 'string' ? className : undefined}>
+        <RendererPresentation className={typeof className === 'string' ? className : undefined} presentationAttrs={pickRendererPresentationAttrs(rest)}>
           {/* biome-ignore lint/performance/noImgElement: rich-text rendered as plain markdown */}
           <img src={srcString} alt={alt || ''} className="max-w-full h-auto" loading="lazy" />
-        </DiagramEmbed>
+        </RendererPresentation>
       );
     }
     // RFC-0015 image display attributes — img layer (width/height
@@ -444,16 +448,20 @@ const components = {
       </figure>
     );
   },
-  // Server-rendered PlantUML SVG arrives as `<div class="diagram-embed
-  // plantuml-embed">` (raw HTML parsed by `raw()`); route it through the
-  // zoom wrapper. Mermaid's success output is always an `<img>` (handled
-  // above) — its error placeholder is a `<div>` too, but deliberately
-  // lacks the `diagram-embed` marker (spec §9) so `isDiagramEmbed` excludes
-  // it here and it renders as a plain div instead. Every other raw-HTML
-  // <div> in a body renders plainly.
+  // Server-rendered "ready diagram" presentation whose root is a `<div>` —
+  // PlantUML's inline SVG output (raw HTML parsed by `raw()`). Mermaid's
+  // success output is always an `<img>` (handled above) — its error
+  // placeholder is a `<div>` too, but `isDiagramPresentationReady` excludes
+  // it here (state="error" / legacy no-`diagram-embed`-marker) so it
+  // renders as a plain div instead. Every other raw-HTML <div> in a body
+  // renders plainly.
   div: ({ className, children, ...props }: ChildrenProps & { className?: unknown }) => {
-    if (isDiagramEmbed(className)) {
-      return <DiagramEmbed className={typeof className === 'string' ? className : undefined}>{children}</DiagramEmbed>;
+    if (isDiagramPresentationReady(className, props)) {
+      return (
+        <RendererPresentation className={typeof className === 'string' ? className : undefined} presentationAttrs={pickRendererPresentationAttrs(props)}>
+          {children}
+        </RendererPresentation>
+      );
     }
     return (
       <div className={typeof className === 'string' ? className : undefined} {...props}>

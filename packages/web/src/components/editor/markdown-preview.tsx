@@ -12,7 +12,7 @@ import {
 } from './image-display';
 import { LI_CLASSNAME, mergeListClassName, OL_CLASSNAME, UL_CLASSNAME } from './list-classnames';
 import { renderMdastToReactNode } from './render-mdast';
-import { DiagramEmbed, isDiagramEmbed } from '@/components/page-view/diagram-embed';
+import { RendererPresentation, isDiagramPresentationReady, pickRendererPresentationAttrs } from '@/components/page-view/renderer-presentation';
 import { m } from '@paraglide/messages.js';
 import { replaceLinkCardPreviewPlaceholders } from './link-card-preview-placeholder';
 
@@ -253,15 +253,17 @@ export const previewComponents = {
     type === 'checkbox' ? <input type="checkbox" checked={Boolean(checked)} readOnly {...props} /> : <input type={type} {...props} />,
   img: ({ src, alt, className, style: rawStyle, ...rest }: { src?: string | Blob; alt?: string; className?: unknown; style?: React.CSSProperties }) => {
     const srcString = typeof src === 'string' ? src : undefined;
-    // Server-rendered diagram embed (PlantUML PNG fallback or Mermaid's
-    // `<img>` success output) — wrap for cap-to-width + click-to-enlarge,
-    // matching the show page.
-    if (isDiagramEmbed(className)) {
+    // Server-rendered "ready diagram" presentation (PlantUML PNG fallback
+    // or Mermaid's `<img>` success output — the generic
+    // `data-crowi-renderer-presentation`/`-state` contract with legacy
+    // `.diagram-embed` dual-accept, see `isDiagramPresentationReady`) —
+    // wrap for cap-to-width + click-to-enlarge, matching the show page.
+    if (isDiagramPresentationReady(className, rest)) {
       return (
-        <DiagramEmbed className={typeof className === 'string' ? className : undefined}>
+        <RendererPresentation className={typeof className === 'string' ? className : undefined} presentationAttrs={pickRendererPresentationAttrs(rest)}>
           {/* biome-ignore lint/performance/noImgElement: rich-text rendered as plain markdown */}
           <img src={srcString} alt={alt || ''} className="max-w-full h-auto" loading="lazy" />
-        </DiagramEmbed>
+        </RendererPresentation>
       );
     }
     // RFC-0015 image display attributes — same img-layer helper as the
@@ -307,14 +309,19 @@ export const previewComponents = {
       </figure>
     );
   },
-  // PlantUML SVG embed (`<div class="diagram-embed plantuml-embed">`) —
-  // same zoom wrapper as the show page. Mermaid's error placeholder is
-  // also a `<div>` but deliberately lacks the `diagram-embed` marker
-  // (spec §9), so it falls through to the plain-div branch below; other
-  // raw-HTML <div>s render plainly too.
+  // "Ready diagram" presentation whose root is a `<div>` (PlantUML's
+  // inline SVG output) — same zoom wrapper as the show page. Mermaid's
+  // error placeholder is also a `<div>` but `isDiagramPresentationReady`
+  // excludes it (state="error" / legacy no-marker), so it falls through
+  // to the plain-div branch below; other raw-HTML <div>s render plainly
+  // too.
   div: ({ className, children, ...props }: ChildrenProps & { className?: unknown }) => {
-    if (isDiagramEmbed(className)) {
-      return <DiagramEmbed className={typeof className === 'string' ? className : undefined}>{children}</DiagramEmbed>;
+    if (isDiagramPresentationReady(className, props)) {
+      return (
+        <RendererPresentation className={typeof className === 'string' ? className : undefined} presentationAttrs={pickRendererPresentationAttrs(props)}>
+          {children}
+        </RendererPresentation>
+      );
     }
     return (
       <div className={typeof className === 'string' ? className : undefined} {...props}>
