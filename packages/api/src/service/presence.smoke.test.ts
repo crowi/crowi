@@ -29,7 +29,7 @@ describeMaybe('presence smoke (real Redis 8)', () => {
     markRedisSmokeRan('presence');
   });
 
-  it('join / publishPageUpdated / publishCommentChanged on one PresenceService instance reach the onViewersChanged / onPageUpdated / onCommentChanged listeners of an independently-constructed second instance', async () => {
+  it('join / publishPageUpdated / publishCommentChanged on one PresenceService instance reach subscribe(feed, ...) listeners (viewers / page-updated / comment-changed) of an independently-constructed second instance', async () => {
     // Own real primary client per instance — mirrors two separate api
     // replicas each holding their own `crowi.redis`.
     const clientA = createClient({ url: REDIS_SMOKE_URLS.shared });
@@ -50,7 +50,7 @@ describeMaybe('presence smoke (real Redis 8)', () => {
 
       // --- viewer-list change (join) ---
       const receivedPageIds: string[] = [];
-      const unsubscribeViewers = serviceB.onViewersChanged((changedPageId) => {
+      const unsubscribeViewers = serviceB.subscribe('viewers', (changedPageId) => {
         if (changedPageId === pageId) receivedPageIds.push(changedPageId);
       });
       await serviceA.join(pageId, viewer);
@@ -60,8 +60,8 @@ describeMaybe('presence smoke (real Redis 8)', () => {
 
       // --- page-updated ---
       const pageUpdatedPayloads: PageUpdatedPayload[] = [];
-      const unsubscribePageUpdated = serviceB.onPageUpdated((changedPageId, payload) => {
-        if (changedPageId === pageId) pageUpdatedPayloads.push(payload);
+      const unsubscribePageUpdated = serviceB.subscribe('page-updated', (changedPageId, payload) => {
+        if (changedPageId === pageId) pageUpdatedPayloads.push(payload as PageUpdatedPayload);
       });
       const pageUpdatedPayload: PageUpdatedPayload = {
         pageId,
@@ -76,8 +76,8 @@ describeMaybe('presence smoke (real Redis 8)', () => {
 
       // --- comment-changed ---
       const commentChangedPayloads: CommentChangedPayload[] = [];
-      const unsubscribeCommentChanged = serviceB.onCommentChanged((changedPageId, payload) => {
-        if (changedPageId === pageId) commentChangedPayloads.push(payload);
+      const unsubscribeCommentChanged = serviceB.subscribe('comment-changed', (changedPageId, payload) => {
+        if (changedPageId === pageId) commentChangedPayloads.push(payload as CommentChangedPayload);
       });
       const commentPayload: CommentChangedPayload = { pageId, commentId: uniqueRedisSmokeId('comment'), changeType: 'added', actorUserId: viewer.userId };
       await serviceA.publishCommentChanged(pageId, commentPayload);

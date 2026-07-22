@@ -259,12 +259,6 @@ export interface PresenceService {
    */
   unmarkEditing(pageId: string, userId: string, socketId: string): Promise<void>;
   /**
-   * Subscribe to viewer-list change notifications. The listener is
-   * invoked with a `pageId` whenever that page's viewer list may have
-   * changed (local or cross-instance). Returns an unsubscribe fn.
-   */
-  onViewersChanged(listener: (pageId: string) => void): () => void;
-  /**
    * Broadcast that a new revision was saved for `pageId`
    * (feature-live-page-content-sync). Fans out to every connected
    * viewer socket (local + cross-instance) so the read-side
@@ -272,12 +266,6 @@ export interface PresenceService {
    * `publish('page-updated', ...)` — the viewer-list feed is untouched.
    */
   publishPageUpdated(pageId: string, payload: PageUpdatedPayload): Promise<void>;
-  /**
-   * Subscribe to page-updated signals. The listener is invoked with the
-   * `pageId` + full `PageUpdatedPayload` whenever a new revision was
-   * saved for a page (local or cross-instance). Returns an unsubscribe fn.
-   */
-  onPageUpdated(listener: (pageId: string, payload: PageUpdatedPayload) => void): () => void;
   /**
    * Broadcast that a comment was added to / removed from `pageId`
    * (feature-live-page-comment-sync). Fans out to every connected viewer
@@ -288,19 +276,13 @@ export interface PresenceService {
    */
   publishCommentChanged(pageId: string, payload: CommentChangedPayload): Promise<void>;
   /**
-   * Subscribe to comment-changed signals. The listener is invoked with
-   * the `pageId` + full `CommentChangedPayload` whenever a comment was
-   * added / removed on a page (local or cross-instance). Returns an
-   * unsubscribe fn.
-   */
-  onCommentChanged(listener: (pageId: string, payload: CommentChangedPayload) => void): () => void;
-  /**
    * Generic feed bus (feature-presence-generic-feed-bus) — subscribe to
    * one `PresenceFeed`. `payload` is `undefined` for the `'viewers'`
    * feed (callers re-read via `listViewers` instead); it carries the
    * feed's full payload for `'page-updated'` / `'comment-changed'`.
-   * Every named `onXxx` method above is a thin, feed-filtered wrapper
-   * over this. Returns an unsubscribe fn.
+   * `presence/attach.ts` is the sole caller — every feed's socket
+   * fan-out is registered through this one method. Returns an
+   * unsubscribe fn.
    */
   subscribe(feed: PresenceFeed, listener: (pageId: string, payload: unknown) => void): () => void;
   /**
@@ -315,57 +297,27 @@ export interface PresenceService {
 }
 
 /**
- * Internal EventEmitter event name every `PresenceFeed` message rides
- * (feature-presence-generic-feed-bus). Both the in-process and the
- * Redis implementation emit every feed — viewer-list, page-updated,
- * comment-changed — on this ONE event name, `(feed, pageId, payload)`;
- * `subscribeFeed` / `emitFeed` below are the generic bus primitive every
- * named method and the public `subscribe`/`publish` build on.
+ * The generic `subscribe` implementation (feature-presence-generic-feed-bus)
+ * — identical wiring in both the in-process and the Redis implementation,
+ * since both share the same feed-bus contract over their own `emitter`.
+ * Each `PresenceFeed` rides its OWN EventEmitter event name (the feed name
+ * itself), so `emitFeed` below only invokes that feed's listeners — no
+ * app-level filtering needed on top of what `EventEmitter` already does.
  */
-const FEED_EVENT = 'feed';
-
-/**
- * Register a `feed`-filtered listener on the shared feed bus. The
- * primitive every named `onXxx` method (and the generic `subscribe`)
- * wraps.
- */
-const subscribeFeed = (emitter: EventEmitter, feed: PresenceFeed, listener: (pageId: string, payload: unknown) => void): (() => void) => {
-  const handler = (eventFeed: PresenceFeed, pageId: string, payload: unknown): void => {
-    if (eventFeed === feed) listener(pageId, payload);
-  };
-  emitter.on(FEED_EVENT, handler);
-  return () => emitter.off(FEED_EVENT, handler);
-};
+const createFeedSubscribers = (emitter: EventEmitter): Pick<PresenceService, 'subscribe'> => ({
+  subscribe(feed, listener) {
+    emitter.on(feed, listener);
+    return () => emitter.off(feed, listener);
+  },
+});
 
 /**
  * Emit a feed message on the shared bus. The primitive every named
  * `publishXxx` method (and the generic `publish`) builds on.
  */
 const emitFeed = (emitter: EventEmitter, feed: PresenceFeed, pageId: string, payload?: unknown): void => {
-  emitter.emit(FEED_EVENT, feed, pageId, payload);
+  emitter.emit(feed, pageId, payload);
 };
-
-/**
- * The named `onXxx` listener registrations + the generic `subscribe` —
- * identical `subscribeFeed(emitter, ...)` wiring in both the in-process
- * and the Redis implementation, since both share the same feed-bus
- * contract over their own `emitter`. Factored out once so the two
- * factories below don't each type out the same four one-line wrappers.
- */
-const createFeedSubscribers = (emitter: EventEmitter): Pick<PresenceService, 'onViewersChanged' | 'onPageUpdated' | 'onCommentChanged' | 'subscribe'> => ({
-  onViewersChanged(listener) {
-    return subscribeFeed(emitter, 'viewers', (pageId) => listener(pageId));
-  },
-  onPageUpdated(listener) {
-    return subscribeFeed(emitter, 'page-updated', (pageId, payload) => listener(pageId, payload as PageUpdatedPayload));
-  },
-  onCommentChanged(listener) {
-    return subscribeFeed(emitter, 'comment-changed', (pageId, payload) => listener(pageId, payload as CommentChangedPayload));
-  },
-  subscribe(feed, listener) {
-    return subscribeFeed(emitter, feed, listener);
-  },
-});
 
 /**
  * Build a presence service.
@@ -379,8 +331,9 @@ const createFeedSubscribers = (emitter: EventEmitter): Pick<PresenceService, 'on
  * `/presence` handler never branches on Redis availability.
  */
 export async function createPresenceService(redis: PresenceRedisClient | null): Promise<PresenceService> {
-  // Local EventEmitter every PresenceFeed message rides on `FEED_EVENT`.
-  // In Redis mode it is fed by the pub/sub subscriber + local publishes;
+  // Local EventEmitter every PresenceFeed message rides on (one event
+  // name per feed — see createFeedSubscribers/emitFeed above). In Redis
+  // mode it is fed by the pub/sub subscriber + local publishes;
   // in single-instance mode it is emitted directly.
   const emitter = new EventEmitter();
   // EventEmitter's default 10-listener cap warns once per page with
@@ -540,6 +493,19 @@ function createInProcessPresenceService(emitter: EventEmitter): PresenceService 
 /** Wire shape published on `PRESENCE_FEED_CHANNEL` (feature-presence-generic-feed-bus). */
 type FeedEnvelope = { feed: PresenceFeed; pageId: string; payload?: unknown };
 
+/**
+ * Runtime whitelist of valid `PresenceFeed` values. `PresenceFeed` itself
+ * is a compile-time-only union derived in `presence/attach.ts` (`keyof
+ * ReturnType<typeof createFeedHandlers>`), so it disappears at runtime —
+ * an inbound Redis envelope's `feed` field is untrusted wire data and
+ * needs an explicit runtime check before it is used as an EventEmitter
+ * event name. Without this, a malformed/malicious envelope naming a
+ * Node.js special event (e.g. `"error"`) would reach `emitFeed` and throw
+ * on `emitter.emit('error', ...)` when no listener is registered for it.
+ * Keep in sync with `createFeedHandlers`'s keys in `presence/attach.ts`.
+ */
+const KNOWN_PRESENCE_FEEDS: ReadonlySet<string> = new Set<PresenceFeed>(['viewers', 'page-updated', 'comment-changed']);
+
 async function createRedisPresenceService(redis: PresenceRedisClient, emitter: EventEmitter): Promise<PresenceService> {
   let subscriber: PresenceRedisClient | null = null;
   try {
@@ -550,7 +516,13 @@ async function createRedisPresenceService(redis: PresenceRedisClient, emitter: E
       let envelope: FeedEnvelope | null = null;
       try {
         const parsed = JSON.parse(message) as Partial<FeedEnvelope> | null;
-        if (parsed !== null && typeof parsed === 'object' && typeof parsed.feed === 'string' && typeof parsed.pageId === 'string') {
+        if (
+          parsed !== null &&
+          typeof parsed === 'object' &&
+          typeof parsed.feed === 'string' &&
+          KNOWN_PRESENCE_FEEDS.has(parsed.feed) &&
+          typeof parsed.pageId === 'string'
+        ) {
           envelope = parsed as FeedEnvelope;
         }
       } catch {

@@ -42,21 +42,16 @@ describe('events/presence-broadcast (feature-live-page-content-sync)', () => {
     async markEditing() {},
     async refreshEditing() {},
     async unmarkEditing() {},
-    onViewersChanged() {
-      return () => {};
-    },
     async publishPageUpdated(pageId, payload) {
       published.push({ pageId, payload });
-    },
-    onPageUpdated() {
-      return () => {};
     },
     async publishCommentChanged(pageId, payload) {
       publishedComments.push({ pageId, payload });
     },
-    onCommentChanged() {
+    subscribe() {
       return () => {};
     },
+    async publish() {},
     async shutdown() {},
   });
 

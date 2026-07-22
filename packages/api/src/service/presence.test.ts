@@ -154,7 +154,7 @@ describe('presence service — Redis-backed (RFC-0005)', () => {
   it('removes a viewer on leave and re-broadcasts the change', async () => {
     const service = await createPresenceService(new FakeRedis());
     const changes: string[] = [];
-    service.onViewersChanged((pageId) => changes.push(pageId));
+    service.subscribe('viewers', (pageId) => changes.push(pageId));
 
     await service.join(PAGE_A, viewer('u1'));
     await service.leave(PAGE_A, 'u1');
@@ -308,7 +308,7 @@ describe('presence service — Redis-backed (RFC-0005)', () => {
     const publishSpy = jest.spyOn(redis, 'publish');
     const service = await createPresenceService(redis);
     const changes: string[] = [];
-    service.onViewersChanged((pageId) => changes.push(pageId));
+    service.subscribe('viewers', (pageId) => changes.push(pageId));
     const viewersEnvelope = JSON.stringify({ feed: 'viewers', pageId: PAGE_A });
 
     await service.markEditing(PAGE_A, 'u1', 'socket-1');
@@ -332,7 +332,7 @@ describe('presence service — Redis-backed (RFC-0005)', () => {
     const instanceB = await createPresenceService(sharedRedis);
 
     const seenByB: string[] = [];
-    instanceB.onViewersChanged((pageId) => seenByB.push(pageId));
+    instanceB.subscribe('viewers', (pageId) => seenByB.push(pageId));
 
     // A viewer joins on instance A.
     await instanceA.join(PAGE_A, viewer('u1'));
@@ -417,8 +417,8 @@ describe('presence service — generic feed bus (feature-presence-generic-feed-b
 
     const pageUpdatedSeen: PageUpdatedPayload[] = [];
     const commentChangedSeen: CommentChangedPayload[] = [];
-    service.onPageUpdated((_pageId, p) => pageUpdatedSeen.push(p));
-    service.onCommentChanged((_pageId, p) => commentChangedSeen.push(p));
+    service.subscribe('page-updated', (_pageId, p) => pageUpdatedSeen.push(p as PageUpdatedPayload));
+    service.subscribe('comment-changed', (_pageId, p) => commentChangedSeen.push(p as CommentChangedPayload));
 
     await service.publishPageUpdated(PAGE_A, { pageId: PAGE_A, revisionId: 'rev-x', editorUserId: 'u1', editorDisplayName: 'User One' });
     await service.publishCommentChanged(PAGE_A, { pageId: PAGE_A, changeType: 'added', commentId: 'comment-x', actorUserId: 'u1' });
@@ -468,8 +468,8 @@ describe('presence service — generic feed bus (feature-presence-generic-feed-b
     const instance = await createPresenceService(shared);
     const viewerChanges: string[] = [];
     const pageUpdated: Array<{ pageId: string; payload: unknown }> = [];
-    instance.onViewersChanged((pageId) => viewerChanges.push(pageId));
-    instance.onPageUpdated((pageId, payload) => pageUpdated.push({ pageId, payload }));
+    instance.subscribe('viewers', (pageId) => viewerChanges.push(pageId));
+    instance.subscribe('page-updated', (pageId, payload) => pageUpdated.push({ pageId, payload }));
 
     // `PRESENCE_FEED_CHANNEL` is a brand-new channel name — no
     // pre-consolidation process ever published to it, so there is no
@@ -481,6 +481,24 @@ describe('presence service — generic feed bus (feature-presence-generic-feed-b
 
     expect(viewerChanges).toEqual([]);
     expect(pageUpdated).toEqual([]);
+    await instance.shutdown();
+  });
+
+  it('drops an envelope whose `feed` is not a known PresenceFeed instead of using it as an EventEmitter event name', async () => {
+    // Regression guard: the generic bus's subscriber dispatches an
+    // inbound envelope's `feed` field directly to `emitter.emit(feed,
+    // ...)`. An unvalidated feed string naming a Node.js special event
+    // (e.g. 'error') would otherwise throw synchronously when no
+    // listener is registered for it — a wire-reachable crash. This must
+    // be dropped exactly like any other corrupt/unparseable message.
+    const shared = new FakeRedis();
+    const instance = await createPresenceService(shared);
+    const viewerChanges: string[] = [];
+    instance.subscribe('viewers', (pageId) => viewerChanges.push(pageId));
+
+    await expect(shared.publish(PRESENCE_FEED_CHANNEL, JSON.stringify({ feed: 'error', pageId: PAGE_A }))).resolves.not.toThrow();
+
+    expect(viewerChanges).toEqual([]);
     await instance.shutdown();
   });
 
@@ -531,7 +549,7 @@ describe('presence service — page-updated fan-out (feature-live-page-content-s
     const instanceB = await createPresenceService(shared);
 
     const seenByB: Array<{ pageId: string; payload: PageUpdatedPayload }> = [];
-    instanceB.onPageUpdated((pageId, p) => seenByB.push({ pageId, payload: p }));
+    instanceB.subscribe('page-updated', (pageId, p) => seenByB.push({ pageId, payload: p as PageUpdatedPayload }));
 
     const p = payload();
     await instanceA.publishPageUpdated(PAGE_A, p);
@@ -552,7 +570,7 @@ describe('presence service — page-updated fan-out (feature-live-page-content-s
     const shared = new FakeRedis();
     const origin = await createPresenceService(shared);
     const seen: PageUpdatedPayload[] = [];
-    origin.onPageUpdated((_pageId, p) => seen.push(p));
+    origin.subscribe('page-updated', (_pageId, p) => seen.push(p as PageUpdatedPayload));
 
     await origin.publishPageUpdated(PAGE_A, payload());
 
@@ -594,7 +612,7 @@ describe('presence service — comment-changed fan-out (feature-live-page-commen
     const instanceB = await createPresenceService(shared);
 
     const seenByB: Array<{ pageId: string; payload: CommentChangedPayload }> = [];
-    instanceB.onCommentChanged((pageId, p) => seenByB.push({ pageId, payload: p }));
+    instanceB.subscribe('comment-changed', (pageId, p) => seenByB.push({ pageId, payload: p as CommentChangedPayload }));
 
     const p = payload();
     await instanceA.publishCommentChanged(PAGE_A, p);
@@ -611,7 +629,7 @@ describe('presence service — comment-changed fan-out (feature-live-page-commen
     const instanceB = await createPresenceService(shared);
 
     const seenByB: CommentChangedPayload[] = [];
-    instanceB.onCommentChanged((_pageId, p) => seenByB.push(p));
+    instanceB.subscribe('comment-changed', (_pageId, p) => seenByB.push(p as CommentChangedPayload));
 
     const removed = payload({ changeType: 'removed', commentId: 'comment-9', actorUserId: undefined });
     await instanceA.publishCommentChanged(PAGE_A, removed);
@@ -629,7 +647,7 @@ describe('presence service — comment-changed fan-out (feature-live-page-commen
     const shared = new FakeRedis();
     const origin = await createPresenceService(shared);
     const seen: CommentChangedPayload[] = [];
-    origin.onCommentChanged((_pageId, p) => seen.push(p));
+    origin.subscribe('comment-changed', (_pageId, p) => seen.push(p as CommentChangedPayload));
 
     await origin.publishCommentChanged(PAGE_A, payload());
 
@@ -673,7 +691,7 @@ describe('presence service — in-process fallback (no Redis)', () => {
   it('refreshEditing in-process keeps the signal alive without emitting a change', async () => {
     const service = await createPresenceService(null);
     const changes: string[] = [];
-    service.onViewersChanged((pageId) => changes.push(pageId));
+    service.subscribe('viewers', (pageId) => changes.push(pageId));
 
     await service.join(PAGE_A, viewer('u1'));
     await service.markEditing(PAGE_A, 'u1', 'socket-1');
@@ -689,7 +707,7 @@ describe('presence service — in-process fallback (no Redis)', () => {
   it('emits change events for join / leave so the local handler re-broadcasts', async () => {
     const service = await createPresenceService(null);
     const changes: string[] = [];
-    service.onViewersChanged((pageId) => changes.push(pageId));
+    service.subscribe('viewers', (pageId) => changes.push(pageId));
 
     await service.join(PAGE_A, viewer('u1'));
     await service.leave(PAGE_A, 'u1');
@@ -698,10 +716,10 @@ describe('presence service — in-process fallback (no Redis)', () => {
     await service.shutdown();
   });
 
-  it('publishPageUpdated emits to local onPageUpdated listeners exactly once (no Redis loopback)', async () => {
+  it("publishPageUpdated emits to local subscribe('page-updated', ...) listeners exactly once (no Redis loopback)", async () => {
     const service = await createPresenceService(null);
     const seen: PageUpdatedPayload[] = [];
-    const unsubscribe = service.onPageUpdated((_pageId, payload) => seen.push(payload));
+    const unsubscribe = service.subscribe('page-updated', (_pageId, payload) => seen.push(payload as PageUpdatedPayload));
     const payload: PageUpdatedPayload = { pageId: PAGE_A, revisionId: 'rev-1', editorUserId: 'u1', editorDisplayName: 'User One' };
 
     await service.publishPageUpdated(PAGE_A, payload);
@@ -715,10 +733,10 @@ describe('presence service — in-process fallback (no Redis)', () => {
     await service.shutdown();
   });
 
-  it('publishCommentChanged emits to local onCommentChanged listeners exactly once (no Redis loopback)', async () => {
+  it("publishCommentChanged emits to local subscribe('comment-changed', ...) listeners exactly once (no Redis loopback)", async () => {
     const service = await createPresenceService(null);
     const seen: CommentChangedPayload[] = [];
-    const unsubscribe = service.onCommentChanged((_pageId, p) => seen.push(p));
+    const unsubscribe = service.subscribe('comment-changed', (_pageId, p) => seen.push(p as CommentChangedPayload));
     const payload: CommentChangedPayload = { pageId: PAGE_A, changeType: 'added', commentId: 'comment-1', actorUserId: 'u1' };
 
     await service.publishCommentChanged(PAGE_A, payload);
@@ -766,9 +784,12 @@ describe('createPresenceCollabDeps — editing-hash refresher', () => {
       async unmarkEditing(pageId, userId, socketId) {
         calls.push({ method: 'unmarkEditing', pageId, userId, socketId });
       },
-      onViewersChanged() {
+      async publishPageUpdated() {},
+      async publishCommentChanged() {},
+      subscribe() {
         return () => {};
       },
+      async publish() {},
       async shutdown() {},
     };
   };
