@@ -8,9 +8,8 @@ import {
   EDITING_REFRESH_MS,
   EDITING_TTL_MS,
   type PageUpdatedPayload,
-  PRESENCE_COMMENT_CHANGED_CHANNEL,
-  PRESENCE_PAGE_UPDATED_CHANNEL,
-  PRESENCE_UPDATES_CHANNEL,
+  PRESENCE_FEED_CHANNEL,
+  type PresenceFeed,
   type PresenceRedisClient,
   type PresenceService,
   VIEWER_HASH_PREFIX,
@@ -287,16 +286,17 @@ describe('presence service — Redis-backed (RFC-0005)', () => {
     const redis = new FakeRedis();
     const publishSpy = jest.spyOn(redis, 'publish');
     const service = await createPresenceService(redis);
+    const viewersEnvelope = JSON.stringify({ feed: 'viewers', pageId: PAGE_A });
 
     await service.markEditing(PAGE_A, 'u1', 'socket-1');
-    const afterMark = publishSpy.mock.calls.filter(([, msg]) => msg === PAGE_A).length;
+    const afterMark = publishSpy.mock.calls.filter(([, msg]) => msg === viewersEnvelope).length;
 
     await service.refreshEditing(PAGE_A, 'u1', 'socket-1');
     await service.refreshEditing(PAGE_A, 'u1', 'socket-1');
 
     // markEditing publishes once; refreshEditing publishes never.
     expect(afterMark).toBe(1);
-    expect(publishSpy.mock.calls.filter(([, msg]) => msg === PAGE_A)).toHaveLength(1);
+    expect(publishSpy.mock.calls.filter(([, msg]) => msg === viewersEnvelope)).toHaveLength(1);
     // The signal is still present after the refreshes.
     await service.join(PAGE_A, viewer('u1'));
     expect((await service.listViewers(PAGE_A))[0].isEditing).toBe(true);
@@ -309,16 +309,17 @@ describe('presence service — Redis-backed (RFC-0005)', () => {
     const service = await createPresenceService(redis);
     const changes: string[] = [];
     service.onViewersChanged((pageId) => changes.push(pageId));
+    const viewersEnvelope = JSON.stringify({ feed: 'viewers', pageId: PAGE_A });
 
     await service.markEditing(PAGE_A, 'u1', 'socket-1');
     await service.unmarkEditing(PAGE_A, 'u1', 'socket-1');
 
-    // Each call publishes the pageId on the updates channel exactly
-    // once. (The local handler also re-broadcasts via the pub/sub
-    // round-trip, so `changes` is observed more than twice — that
-    // redundant local broadcast sends an identical viewer list and is
-    // harmless; the publish *count* is the precise contract.)
-    expect(publishSpy.mock.calls.filter(([, msg]) => msg === PAGE_A)).toHaveLength(2);
+    // Each call publishes the viewers envelope on the generic feed
+    // channel exactly once. (The local handler also re-broadcasts via
+    // the pub/sub round-trip, so `changes` is observed more than twice
+    // — that redundant local broadcast sends an identical viewer list
+    // and is harmless; the publish *count* is the precise contract.)
+    expect(publishSpy.mock.calls.filter(([, msg]) => msg === viewersEnvelope)).toHaveLength(2);
     expect(changes.filter((p) => p === PAGE_A).length).toBeGreaterThanOrEqual(2);
     await service.shutdown();
   });
@@ -359,48 +360,28 @@ describe('presence service — Redis-backed (RFC-0005)', () => {
     await instanceB.shutdown();
   });
 
-  it('publishes joins on the documented pub/sub channel name', async () => {
+  it('publishes joins as a JSON envelope on the generic feed channel (feature-presence-generic-feed-bus)', async () => {
     const redis = new FakeRedis();
     const publishSpy = jest.spyOn(redis, 'publish');
     const service = await createPresenceService(redis);
 
     await service.join(PAGE_A, viewer('u1'));
 
-    expect(publishSpy).toHaveBeenCalledWith(PRESENCE_UPDATES_CHANNEL, PAGE_A);
+    expect(publishSpy).toHaveBeenCalledWith(PRESENCE_FEED_CHANNEL, JSON.stringify({ feed: 'viewers', pageId: PAGE_A }));
     await service.shutdown();
   });
 });
 
 /**
- * feature-live-page-content-sync — read-side soft-refresh fan-out.
- * `publishPageUpdated` rides a *dedicated* Redis channel (JSON payload)
- * distinct from the viewer-list channel (bare pageId), driven by a
- * second subscriber client so the two never cross-contaminate.
+ * feature-presence-generic-feed-bus — the generic bus every feed
+ * (viewer-list / page-updated / comment-changed) now rides. AC-1
+ * (generic `subscribe`/`publish`) and AC-2 (single Redis subscriber
+ * connection + JSON envelope, replacing the pre-consolidation
+ * bare-pageId-string subscriber + the page-updated/comment-changed
+ * JSON subscriber) live here.
  */
-describe('presence service — page-updated fan-out (feature-live-page-content-sync)', () => {
-  const payload = (overrides: Partial<PageUpdatedPayload> = {}): PageUpdatedPayload => ({
-    pageId: PAGE_A,
-    revisionId: 'rev-1',
-    editorUserId: 'u1',
-    editorDisplayName: 'User One',
-    ...overrides,
-  });
-
-  it('publishes page-updated on the dedicated JSON channel (not the viewer-list channel)', async () => {
-    const redis = new FakeRedis();
-    const publishSpy = jest.spyOn(redis, 'publish');
-    const service = await createPresenceService(redis);
-
-    const p = payload();
-    await service.publishPageUpdated(PAGE_A, p);
-
-    expect(publishSpy).toHaveBeenCalledWith(PRESENCE_PAGE_UPDATED_CHANNEL, JSON.stringify(p));
-    // The viewer-list channel is untouched by a page-updated publish.
-    expect(publishSpy.mock.calls.some(([ch]) => ch === PRESENCE_UPDATES_CHANNEL)).toBe(false);
-    await service.shutdown();
-  });
-
-  it('opens a second subscriber and disconnects BOTH subscribers on shutdown', async () => {
+describe('presence service — generic feed bus (feature-presence-generic-feed-bus)', () => {
+  it('opens exactly ONE Redis subscriber connection for every feed and disconnects it on shutdown (AC-2)', async () => {
     const primary = new FakeRedis();
     const dups: FakeRedis[] = [];
     const realDuplicate = FakeRedis.prototype.duplicate;
@@ -411,17 +392,140 @@ describe('presence service — page-updated fan-out (feature-live-page-content-s
     });
 
     const service = await createPresenceService(primary);
-    // One subscriber for the viewer-list channel, one for page-updated.
-    expect(dups).toHaveLength(2);
-    const disconnectSpies = dups.map((d) => jest.spyOn(d, 'disconnect'));
+    // Pre-consolidation this opened TWO duplicate() clients (a bare
+    // pageId-string subscriber for viewer-list + a JSON subscriber
+    // shared by page-updated/comment-changed). Now every feed rides one.
+    expect(dups).toHaveLength(1);
+    const disconnectSpy = jest.spyOn(dups[0], 'disconnect');
 
     await service.shutdown();
-    for (const spy of disconnectSpies) {
-      expect(spy).toHaveBeenCalled();
-    }
+    expect(disconnectSpy).toHaveBeenCalled();
   });
 
-  it('fans a page-updated signal out to a second instance via the dedicated channel', async () => {
+  it('page-updated and comment-changed publishes both reach listeners over that SAME single subscriber (AC-2)', async () => {
+    const primary = new FakeRedis();
+    const dups: FakeRedis[] = [];
+    const realDuplicate = FakeRedis.prototype.duplicate;
+    jest.spyOn(primary, 'duplicate').mockImplementation(function (this: FakeRedis) {
+      const d = realDuplicate.call(this) as FakeRedis;
+      dups.push(d);
+      return d;
+    });
+
+    const service = await createPresenceService(primary);
+    expect(dups).toHaveLength(1);
+
+    const pageUpdatedSeen: PageUpdatedPayload[] = [];
+    const commentChangedSeen: CommentChangedPayload[] = [];
+    service.onPageUpdated((_pageId, p) => pageUpdatedSeen.push(p));
+    service.onCommentChanged((_pageId, p) => commentChangedSeen.push(p));
+
+    await service.publishPageUpdated(PAGE_A, { pageId: PAGE_A, revisionId: 'rev-x', editorUserId: 'u1', editorDisplayName: 'User One' });
+    await service.publishCommentChanged(PAGE_A, { pageId: PAGE_A, changeType: 'added', commentId: 'comment-x', actorUserId: 'u1' });
+
+    expect(pageUpdatedSeen.length).toBeGreaterThanOrEqual(1);
+    expect(commentChangedSeen.length).toBeGreaterThanOrEqual(1);
+    // Still exactly one subscriber connection after both feeds fired.
+    expect(dups).toHaveLength(1);
+
+    await service.shutdown();
+  });
+
+  it('publishes every feed as a `{ feed, pageId, payload }` JSON envelope on the one generic channel (AC-1/AC-2)', async () => {
+    const redis = new FakeRedis();
+    const publishSpy = jest.spyOn(redis, 'publish');
+    const service = await createPresenceService(redis);
+
+    await service.publishPageUpdated(PAGE_A, { pageId: PAGE_A, revisionId: 'rev-1', editorUserId: 'u1', editorDisplayName: 'User One' });
+    await service.publishCommentChanged(PAGE_A, { pageId: PAGE_A, changeType: 'added', commentId: 'comment-1', actorUserId: 'u1' });
+
+    // Every publish targets the SAME channel — no more per-feed channels.
+    const channels = new Set(publishSpy.mock.calls.map(([ch]) => ch));
+    expect(channels).toEqual(new Set([PRESENCE_FEED_CHANNEL]));
+    const bodies = publishSpy.mock.calls.map(([, msg]) => JSON.parse(msg as string) as { feed: PresenceFeed; pageId: string });
+    expect(bodies.map((b) => b.feed).sort()).toEqual(['comment-changed', 'page-updated']);
+    await service.shutdown();
+  });
+
+  it('the generic subscribe/publish pair delivers exactly what the named onXxx/publishXxx wrappers deliver (AC-1)', async () => {
+    const redis = new FakeRedis();
+    const service = await createPresenceService(redis);
+
+    const viaGeneric: Array<{ pageId: string; payload: unknown }> = [];
+    const unsubscribe = service.subscribe('page-updated', (pageId, payload) => viaGeneric.push({ pageId, payload }));
+
+    const payload: PageUpdatedPayload = { pageId: PAGE_A, revisionId: 'rev-1', editorUserId: 'u1', editorDisplayName: 'User One' };
+    // Publish through the GENERIC api directly (not `publishPageUpdated`).
+    await service.publish('page-updated', PAGE_A, payload);
+
+    expect(viaGeneric).toContainEqual({ pageId: PAGE_A, payload });
+    unsubscribe();
+    await service.shutdown();
+  });
+
+  it('drops an unparseable / non-envelope message on the feed channel instead of guessing a feed for it', async () => {
+    const shared = new FakeRedis();
+    const instance = await createPresenceService(shared);
+    const viewerChanges: string[] = [];
+    const pageUpdated: Array<{ pageId: string; payload: unknown }> = [];
+    instance.onViewersChanged((pageId) => viewerChanges.push(pageId));
+    instance.onPageUpdated((pageId, payload) => pageUpdated.push({ pageId, payload }));
+
+    // `PRESENCE_FEED_CHANNEL` is a brand-new channel name — no
+    // pre-consolidation process ever published to it, so there is no
+    // rolling-deploy scenario where a real publisher sends a bare
+    // pageId (or any other non-envelope payload) here. Both must be
+    // dropped rather than misinterpreted as a viewer-list change.
+    await shared.publish(PRESENCE_FEED_CHANNEL, PAGE_A);
+    await shared.publish(PRESENCE_FEED_CHANNEL, JSON.stringify({ notAnEnvelope: true }));
+
+    expect(viewerChanges).toEqual([]);
+    expect(pageUpdated).toEqual([]);
+    await instance.shutdown();
+  });
+
+  it('the generic subscribe/publish pair also works for the in-process (no-Redis) implementation (AC-1)', async () => {
+    const service = await createPresenceService(null);
+    const seen: Array<{ pageId: string; payload: unknown }> = [];
+    const unsubscribe = service.subscribe('comment-changed', (pageId, payload) => seen.push({ pageId, payload }));
+
+    const payload: CommentChangedPayload = { pageId: PAGE_A, changeType: 'added', commentId: 'comment-1', actorUserId: 'u1' };
+    await service.publish('comment-changed', PAGE_A, payload);
+
+    expect(seen).toEqual([{ pageId: PAGE_A, payload }]);
+    unsubscribe();
+    await service.shutdown();
+  });
+});
+
+/**
+ * feature-live-page-content-sync — read-side soft-refresh fan-out.
+ * `publishPageUpdated` now rides the single generic feed channel
+ * (feature-presence-generic-feed-bus) as a JSON envelope, delegating to
+ * the generic `publish('page-updated', ...)`.
+ */
+describe('presence service — page-updated fan-out (feature-live-page-content-sync)', () => {
+  const payload = (overrides: Partial<PageUpdatedPayload> = {}): PageUpdatedPayload => ({
+    pageId: PAGE_A,
+    revisionId: 'rev-1',
+    editorUserId: 'u1',
+    editorDisplayName: 'User One',
+    ...overrides,
+  });
+
+  it('publishes page-updated as a JSON envelope on the generic feed channel', async () => {
+    const redis = new FakeRedis();
+    const publishSpy = jest.spyOn(redis, 'publish');
+    const service = await createPresenceService(redis);
+
+    const p = payload();
+    await service.publishPageUpdated(PAGE_A, p);
+
+    expect(publishSpy).toHaveBeenCalledWith(PRESENCE_FEED_CHANNEL, JSON.stringify({ feed: 'page-updated', pageId: PAGE_A, payload: p }));
+    await service.shutdown();
+  });
+
+  it('fans a page-updated signal out to a second instance via the generic feed channel', async () => {
     const shared = new FakeRedis();
     const instanceA = await createPresenceService(shared);
     const instanceB = await createPresenceService(shared);
@@ -432,7 +536,7 @@ describe('presence service — page-updated fan-out (feature-live-page-content-s
     const p = payload();
     await instanceA.publishPageUpdated(PAGE_A, p);
 
-    // B's dedicated subscriber parsed the JSON payload and re-emitted it.
+    // B's single subscriber parsed the envelope and re-emitted it.
     expect(seenByB).toContainEqual({ pageId: PAGE_A, payload: p });
 
     await instanceA.shutdown();
@@ -444,6 +548,7 @@ describe('presence service — page-updated fan-out (feature-live-page-content-s
     // gets the frame from its own local emit AND from the Redis loopback
     // to its own subscriber, so a viewer on the origin sees it twice. The
     // client's debounce + createdAt monotonicity guard collapse it.
+    // Regression guard: AC-4 requires this to be unchanged post-generic.
     const shared = new FakeRedis();
     const origin = await createPresenceService(shared);
     const seen: PageUpdatedPayload[] = [];
@@ -457,11 +562,10 @@ describe('presence service — page-updated fan-out (feature-live-page-content-s
 });
 
 /**
- * feature-live-page-comment-sync — live comment fan-out. `publishComment
- * Changed` rides a THIRD dedicated channel (JSON payload) but does NOT
- * open a third subscriber client: it piggybacks the page-updated
- * subscriber's `dup` as a second channel, so the two subscriber
- * connections stay at two.
+ * feature-live-page-comment-sync — live comment fan-out.
+ * `publishCommentChanged` now rides the same single generic feed
+ * channel as every other feed (feature-presence-generic-feed-bus),
+ * delegating to the generic `publish('comment-changed', ...)`.
  */
 describe('presence service — comment-changed fan-out (feature-live-page-comment-sync)', () => {
   const payload = (overrides: Partial<CommentChangedPayload> = {}): CommentChangedPayload => ({
@@ -472,7 +576,7 @@ describe('presence service — comment-changed fan-out (feature-live-page-commen
     ...overrides,
   });
 
-  it('publishes comment-changed on its own channel (not viewer-list, not page-updated)', async () => {
+  it('publishes comment-changed as a JSON envelope on the generic feed channel', async () => {
     const redis = new FakeRedis();
     const publishSpy = jest.spyOn(redis, 'publish');
     const service = await createPresenceService(redis);
@@ -480,37 +584,11 @@ describe('presence service — comment-changed fan-out (feature-live-page-commen
     const p = payload();
     await service.publishCommentChanged(PAGE_A, p);
 
-    expect(publishSpy).toHaveBeenCalledWith(PRESENCE_COMMENT_CHANGED_CHANNEL, JSON.stringify(p));
-    expect(publishSpy.mock.calls.some(([ch]) => ch === PRESENCE_UPDATES_CHANNEL)).toBe(false);
-    expect(publishSpy.mock.calls.some(([ch]) => ch === PRESENCE_PAGE_UPDATED_CHANNEL)).toBe(false);
+    expect(publishSpy).toHaveBeenCalledWith(PRESENCE_FEED_CHANNEL, JSON.stringify({ feed: 'comment-changed', pageId: PAGE_A, payload: p }));
     await service.shutdown();
   });
 
-  it('subscribes comment-changed WITHOUT opening a third subscriber client', async () => {
-    const primary = new FakeRedis();
-    const dups: FakeRedis[] = [];
-    const realDuplicate = FakeRedis.prototype.duplicate;
-    jest.spyOn(primary, 'duplicate').mockImplementation(function (this: FakeRedis) {
-      const d = realDuplicate.call(this) as FakeRedis;
-      dups.push(d);
-      return d;
-    });
-
-    const service = await createPresenceService(primary);
-    // Exactly two subscriber clients — viewer-list + the shared
-    // page-updated/comment-changed one. Piggybacking the comment-changed
-    // channel must NOT add a third connection.
-    expect(dups).toHaveLength(2);
-    // The comment-changed subscribe landed on one of those two dups, so a
-    // cross-instance publish still reaches a listener on this service.
-    const seen: CommentChangedPayload[] = [];
-    service.onCommentChanged((_pageId, p) => seen.push(p));
-    await service.publishCommentChanged(PAGE_A, payload());
-    expect(seen.length).toBeGreaterThanOrEqual(1);
-    await service.shutdown();
-  });
-
-  it('fans a comment-changed out to a second instance via the dedicated channel', async () => {
+  it('fans a comment-changed out to a second instance via the generic feed channel', async () => {
     const shared = new FakeRedis();
     const instanceA = await createPresenceService(shared);
     const instanceB = await createPresenceService(shared);
@@ -547,6 +625,7 @@ describe('presence service — comment-changed fan-out (feature-live-page-commen
   });
 
   it('double-delivers to the ORIGIN instance (local emit + Redis loopback)', async () => {
+    // Regression guard: AC-4 requires this to be unchanged post-generic.
     const shared = new FakeRedis();
     const origin = await createPresenceService(shared);
     const seen: CommentChangedPayload[] = [];
@@ -559,26 +638,6 @@ describe('presence service — comment-changed fan-out (feature-live-page-commen
     // delivery is harmless — but the transport DOES deliver twice.
     expect(seen).toHaveLength(2);
     await origin.shutdown();
-  });
-
-  it('disconnecting the shared second subscriber closes the comment-changed channel too', async () => {
-    const primary = new FakeRedis();
-    const dups: FakeRedis[] = [];
-    const realDuplicate = FakeRedis.prototype.duplicate;
-    jest.spyOn(primary, 'duplicate').mockImplementation(function (this: FakeRedis) {
-      const d = realDuplicate.call(this) as FakeRedis;
-      dups.push(d);
-      return d;
-    });
-
-    const service = await createPresenceService(primary);
-    expect(dups).toHaveLength(2);
-    const disconnectSpies = dups.map((d) => jest.spyOn(d, 'disconnect'));
-
-    await service.shutdown();
-    for (const spy of disconnectSpies) {
-      expect(spy).toHaveBeenCalled();
-    }
   });
 });
 

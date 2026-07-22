@@ -4,11 +4,12 @@
  * Real Redis 8, real production construction path (`createPresenceService`,
  * no new seam — `feature-presence-generic-feed-bus` owns that refactor).
  * Two independent `PresenceService` instances, each backed by its OWN real
- * `redis` v4 primary client (own 2 `duplicate()` subscribers internally),
- * exercise the cross-instance viewer-list / page-updated / comment-changed
- * pub/sub relay against the shared `redis` target (Phase 1). Isolation is
- * via a run-and-call-unique `pageId` — no new production seam per the
- * spec's "やらないこと".
+ * `redis` v4 primary client (own 1 `duplicate()` subscriber internally,
+ * multiplexing every feed on the single generic feed channel), exercise the
+ * cross-instance viewer-list / page-updated / comment-changed pub/sub relay
+ * against the shared `redis` target (Phase 1). Isolation is via a
+ * run-and-call-unique `pageId` — no new production seam per the spec's
+ * "やらないこと".
  */
 import { createClient } from 'redis';
 import {
@@ -96,7 +97,7 @@ describeMaybe('presence smoke (real Redis 8)', () => {
       await serviceA.leave(pageId, viewer.userId);
     } finally {
       // Ownership-aware teardown: each service's own `shutdown()` closes
-      // its 2 duplicate subscribers only; the primary clients this test
+      // its 1 duplicate subscriber only; the primary clients this test
       // itself `connect()`-ed are disconnected separately.
       await Promise.all([serviceA?.shutdown(), serviceB?.shutdown()].filter(Boolean));
       await Promise.all([clientA.disconnect(), clientB.disconnect()]);
