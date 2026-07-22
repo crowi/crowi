@@ -194,6 +194,30 @@ export interface EmbedRenderer {
    * turns out to be CPU-bound.
    */
   admissionControl?: AdmissionControlConfig;
+  /**
+   * Optional per-dispatch cache-bypass predicate
+   * (feature-renderer-plugin-boundary Phase 3). Checked by the generic
+   * embed-tag dispatcher (`packages/api/src/renderer/core/embed-tags.ts`)
+   * BEFORE it touches `CacheStorage` at all for this dispatch — no
+   * `get`, no `set`. When it returns `true`, the dispatcher calls
+   * `render()` directly (via the same `normalizeRenderResult` error
+   * normalisation the preview path uses) and never persists the
+   * result.
+   *
+   * This exists because a renderer whose behaviour is gated by a
+   * runtime policy toggle (e.g. link-card's admin
+   * `security:linkCardEnabled` switch) cannot enforce a literal
+   * zero-cache-access guarantee by checking the toggle only inside
+   * `render()` — a cache HIT from before the toggle flipped would
+   * short-circuit `render()` entirely and keep serving pre-toggle
+   * output (and, symmetrically, writing a toggled-off result to the
+   * cache would keep serving it for up to that entry's TTL after the
+   * toggle flips back). Declaring the check here instead makes the
+   * dispatcher skip the cache outright for that one call. Absent (the
+   * default) or returning `false` goes through the normal cached path
+   * unchanged.
+   */
+  shouldBypassCache?(input: EmbedInput): boolean;
   /** Render a single embed. */
   render(input: EmbedInput, ctx: RenderContext): RenderResult | Promise<RenderResult>;
   /**

@@ -61,6 +61,15 @@ function validateStylesheetPath(path: string, registeringPlugin: string): string
 }
 
 /**
+ * Reserved `EmbedRenderer` registrant identity for CORE-owned embed
+ * tags (feature-renderer-plugin-boundary Phase 3 — `addCoreEmbedTag`).
+ * Never a real plugin name (plugin names are npm package identifiers,
+ * which never start with `@crowi/core`), so it can't collide with an
+ * installed plugin's own identity.
+ */
+export const CORE_RENDERER_IDENTITY = '@crowi/core';
+
+/**
  * Registry implementation that backs the unified.js pipeline. The
  * runtime constructs **one** of these per Crowi instance:
  *   - the bundled core renderer registers its 5 transforms first;
@@ -84,6 +93,13 @@ function validateStylesheetPath(path: string, registeringPlugin: string): string
  *     after that SAME plugin's `registerRoutes` returns without
  *     throwing). `dropPendingStylesheets(plugin)` discards the whole
  *     pending set on a `registerRoutes` failure.
+ *
+ * feature-renderer-plugin-boundary Phase 3 adds:
+ *   - `addCoreEmbedTag` — core-internal-only seed for a reserved embed
+ *     tag (today: link-card's `card`), called once from
+ *     `createRenderer()` before any plugin activates. `addEmbedTag`
+ *     throws (never warn-and-override) when a plugin tries to register
+ *     over a core-reserved tag.
  */
 export class RendererRegistryImpl {
   private unifiedTransform: { plugin: unknown; registeringPlugin: string }[] = [];
@@ -153,13 +169,43 @@ export class RendererRegistryImpl {
    * last-wins over fail-on-collision because plugin install order is
    * resolved by topo sort and an operator's `crowi.config.json`
    * shouldn't have to be re-ordered to recover from a misnamed tag.
+   *
+   * feature-renderer-plugin-boundary Phase 3: a CORE-reserved tag
+   * (seeded via `addCoreEmbedTag`, `plugin === CORE_RENDERER_IDENTITY`)
+   * is the ONE exception — a third-party plugin trying to register over
+   * it throws instead of warn-and-override, so core features (e.g. the
+   * `card` link-card embed) can never be silently shadowed by an
+   * installed plugin.
    */
   addEmbedTag(name: string, renderer: EmbedRenderer, registeringPlugin: string, log: PluginLogger): void {
     const existing = this.embedTags.get(name);
+    if (existing?.plugin === CORE_RENDERER_IDENTITY) {
+      throw new Error(`Plugin '${registeringPlugin}' cannot register embed tag '${name}': it is reserved by ${CORE_RENDERER_IDENTITY}`);
+    }
     if (existing) {
       log.warn(`[renderer] embed-tag collision on '${name}': plugin '${existing.plugin}' is being overridden by '${registeringPlugin}' (last-wins)`);
     }
     this.embedTags.set(name, { plugin: registeringPlugin, renderer });
+  }
+
+  /**
+   * Seed a CORE-reserved embed tag — bypasses the per-plugin
+   * `makeRendererScope` closure entirely (this is core-internal, never
+   * exposed through `@crowi/plugin-api`'s public `RendererRegistry`
+   * interface) and stamps the registration with the reserved
+   * `CORE_RENDERER_IDENTITY` plugin identity. That identity flows
+   * unchanged through the existing per-registrant cache-scoping path
+   * (`scopeForPlugin(cache, registration.plugin)` /
+   * `cachedRender(cache, registration.plugin, …)`,
+   * `core/embed-tags.ts`), so a core embed tag gets its own cache
+   * namespace exactly like a plugin's would. Called once, at
+   * `createRenderer()` boot time, BEFORE `setupPlugins()` activates any
+   * plugin — this ordering is what makes a later cross-plugin
+   * `addEmbedTag` collision on the same name a hard boot-time throw
+   * (above) rather than a race.
+   */
+  addCoreEmbedTag(name: string, renderer: EmbedRenderer): void {
+    this.embedTags.set(name, { plugin: CORE_RENDERER_IDENTITY, renderer });
   }
 
   /**
