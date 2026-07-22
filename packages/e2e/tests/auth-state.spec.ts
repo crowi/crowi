@@ -83,11 +83,19 @@ test.describe('auth state propagation', () => {
     await expect(userAPage.getByRole('dialog')).toContainText('サーバーエラー');
     await expect(userAPage).not.toHaveURL(/\/login(?:\?.*)?$/);
 
-    // Recovery: once the server is healthy again, retrying restores the
-    // authenticated identity WITHOUT a re-login — proving the session was never
-    // cleared during the outage.
+    // Recovery: once the server is healthy again, the connection context's
+    // automatic retry (5s countdown — `RETRY_INTERVALS[0]` in
+    // connection-context.tsx) re-fetches `/auth/me` and restores the
+    // authenticated identity WITHOUT a re-login — proving the session was
+    // never cleared during the outage. Do not drive this via the "reconnect
+    // now" button: a manual click races the same auto-retry timer (both
+    // call the same registered retry callback), and can catch the button
+    // mid-unmount just as the auto-retry closes the error dialog, detaching
+    // the element under Playwright's click. The manual-retry wiring itself
+    // is covered by a unit test instead (auth-sync.test.tsx: "refetches the
+    // auth query via the single registered retry callback").
     await userAPage.unroute('**/api/v2/auth/me');
-    await userAPage.getByRole('button', { name: '今すぐ再接続' }).click();
+    await expect(userAPage.getByRole('dialog')).not.toBeVisible({ timeout: 15_000 });
     await expectUserMenuIdentity(userAPage, e2eUsers.userA);
   });
 });
