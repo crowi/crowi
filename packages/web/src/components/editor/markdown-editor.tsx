@@ -6,6 +6,7 @@ import { EditorView } from '@codemirror/view';
 import { useTheme } from 'next-themes';
 import { buildExtensions } from './build-extensions';
 import { editorThemeExtension } from './dark-theme';
+import { linkCardAffordanceExtension } from './link-card-affordance-extension';
 
 export interface MarkdownEditorProps {
   value: string;
@@ -70,6 +71,20 @@ export interface MarkdownEditorProps {
    * when the `readonly` prop flips. Omit for bare mounts.
    */
   dnd?: { pageId: string };
+  /**
+   * feature-renderer-plugin-boundary Phase 3 — gates the link-card
+   * conversion affordance (`linkCardAffordanceExtension()`). Unlike
+   * `paste` / `dnd` (page-scoped, immutable for the editor's session)
+   * this is a LIVE capability derived from `useAppInfo()` — an admin
+   * toggling `security:linkCardEnabled` invalidates that query, and an
+   * already-mounted editor must reflect the new value immediately
+   * rather than waiting for the next mount. So it is threaded through
+   * its own `Compartment` (same reconfigure-on-prop-change pattern as
+   * `readonly` below), not baked into the mount-time `buildExtensions`
+   * call. Omit for bare mounts / tests that don't care about the
+   * capability; defaults to enabled.
+   */
+  linkCardEnabled?: boolean;
 }
 
 export interface MarkdownEditorHandle {
@@ -144,7 +159,7 @@ export interface MarkdownEditorHandle {
  * re-fire for our own dispatches and produce a render loop.
  */
 export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(function MarkdownEditor(props, ref) {
-  const { value, getInitialDoc, onChange, readonly, extraExtensions, className, 'aria-label': ariaLabel, disableHistory, paste, dnd } = props;
+  const { value, getInitialDoc, onChange, readonly, extraExtensions, className, 'aria-label': ariaLabel, disableHistory, paste, dnd, linkCardEnabled } = props;
   const containerRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
 
@@ -201,10 +216,17 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
   //     changes (`useTheme()` `resolvedTheme`). Light is the baseline
   //     (`defaultHighlightStyle` from `buildExtensions`), so the dark
   //     compartment only layers the dark chrome + token style on top.
+  //   - `linkCard` (feature-renderer-plugin-boundary Phase 3) toggles
+  //     the link-card conversion affordance on/off as the app-info
+  //     `link-card` capability flips — see the `linkCardEnabled` prop
+  //     doc comment for why this needs live reconfiguration rather than
+  //     a mount-time read like `paste` / `dnd`.
   const extraCompartmentRef = useRef<Compartment>(new Compartment());
   const readonlyCompartmentRef = useRef<Compartment>(new Compartment());
   const themeCompartmentRef = useRef<Compartment>(new Compartment());
+  const linkCardCompartmentRef = useRef<Compartment>(new Compartment());
   const readonlyExtension = (on: boolean): Extension => (on ? EditorState.readOnly.of(true) : []);
+  const linkCardExtension = (on: boolean): Extension => (on ? linkCardAffordanceExtension() : []);
 
   // Mount the EditorView once. Initial doc comes from `value` at mount
   // time; subsequent external updates flow through the sync effect below.
@@ -222,16 +244,19 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
       doc: getInitialDocRef.current ? getInitialDocRef.current() : value,
       extensions: [
         buildExtensions({
-          // `readonly` is intentionally omitted here — the compartment
-          // below owns its lifecycle.
+          // `readonly` / `linkCardEnabled` are intentionally omitted (or
+          // forced off) here — their compartments below own the live
+          // value instead.
           disableHistory: disableHistoryRef.current,
           onChange: onChangeAtMount ? (next) => onChangeRef.current?.(next) : undefined,
           paste: pasteRef.current,
           dnd: dndRef.current,
+          linkCardEnabled: false,
         }),
         readonlyCompartmentRef.current.of(readonlyExtension(readonlyRef.current)),
         themeCompartmentRef.current.of(editorThemeExtension(resolvedThemeRef.current)),
         extraCompartmentRef.current.of(extraExtensions ?? []),
+        linkCardCompartmentRef.current.of(linkCardExtension(linkCardEnabled ?? true)),
       ],
     });
     const view = new EditorView({ state, parent });
@@ -266,6 +291,21 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
       effects: readonlyCompartmentRef.current.reconfigure(readonlyExtension(readonly ?? false)),
     });
   }, [readonly]);
+
+  // Reconfigure the link-card affordance slot when the app-info `link-
+  // card` capability flips (feature-renderer-plugin-boundary Phase 3).
+  // Unlike `paste` / `dnd`, this must stay live for an already-mounted
+  // editor: an admin disabling `security:linkCardEnabled` invalidates
+  // `appInfoKeys`, and once the refetch resolves the callers above
+  // re-render with a new `linkCardEnabled` value that has to reach a
+  // session that started before the toggle flipped.
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    view.dispatch({
+      effects: linkCardCompartmentRef.current.reconfigure(linkCardExtension(linkCardEnabled ?? true)),
+    });
+  }, [linkCardEnabled]);
 
   // Reconfigure the theme slot when the app theme flips (light ↔ dark,
   // including the system-follow transition). `Compartment.reconfigure`

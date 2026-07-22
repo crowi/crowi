@@ -21,3 +21,15 @@ export function useAppInfo() {
     refetchOnWindowFocus: false,
   });
 }
+
+/**
+ * Derives the `link-card` embed capability (feature-renderer-plugin-
+ * boundary Phase 3, admin Security `security:linkCardEnabled` toggle)
+ * from the shared app-info query. Defaults to `true` while the query
+ * is loading / errored — same optimistic default-on the toggle itself
+ * uses server-side — so every call site that gates the editor's
+ * link-card affordance sees identical behavior off one definition.
+ */
+export function useLinkCardEnabled(): boolean {
+  return useAppInfo().data?.capabilities.includes('link-card') ?? true;
+}

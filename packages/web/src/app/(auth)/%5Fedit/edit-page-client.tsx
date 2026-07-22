@@ -8,14 +8,13 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from '
 import { toast } from 'sonner';
 import type * as Y from 'yjs';
 import { CollabForceReloadDialog } from '@/components/editor/collab-force-reload-dialog';
-import { CollaborativeMarkdownEditor, type CollabSession, useCollabSession } from '@/components/editor/collaborative-markdown-editor';
 import { CollabPresenceAvatars } from '@/components/editor/collab-presence-avatars';
 import { CollabSameBlockWarning } from '@/components/editor/collab-same-block-warning';
-import { PageSettingsDrawer } from '@/components/editor/page-settings-drawer';
+import { CollaborativeMarkdownEditor, type CollabSession, useCollabSession } from '@/components/editor/collaborative-markdown-editor';
 import { MarkdownEditor, type MarkdownEditorHandle } from '@/components/editor/markdown-editor';
 import { MarkdownPreview } from '@/components/editor/markdown-preview';
+import { PageSettingsDrawer } from '@/components/editor/page-settings-drawer';
 import { SessionReauthModal } from '@/components/editor/session-reauth-modal';
-import { SessionReauthProvider } from '@/lib/session-reauth-context';
 import { UnsavedChangesDialog } from '@/components/editor/unsaved-changes-dialog';
 import { AttachmentInsertButton } from '@/components/page-edit/attachment-insert-button';
 import { DraftConflictAlert } from '@/components/page-edit/draft-conflict-alert';
@@ -28,10 +27,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { type CollabToastState, reduceCollabStatusToast } from '@/lib/collab-status-toast';
 import { observeYTextUntil } from '@/lib/observe-ytext-until';
 import { defaultDraftBody, pageDisplayName, pagePathToHref } from '@/lib/page-path';
+import { SessionReauthProvider } from '@/lib/session-reauth-context';
+import { useLinkCardEnabled } from '@/lib/use-app-info';
 import { useAuth } from '@/lib/use-auth';
 import type { CollabStatus } from '@/lib/use-collab-document';
-import { useCollabSave } from '@/lib/use-collab-save';
 import { useCollabRecoveryBuffer } from '@/lib/use-collab-recovery-buffer';
+import { useCollabSave } from '@/lib/use-collab-save';
 import { DraftPathConflictError, draftEditHref, useCreateDraft, useDrafts } from '@/lib/use-drafts';
 import { usePage } from '@/lib/use-page';
 import { invalidatePageContentQueries, PageRevisionConflictError, useSetPageGrant, useUpdatePage } from '@/lib/use-page-mutations';
@@ -874,6 +875,9 @@ const EditorPane = function EditorPane({
   // `MarkdownEditor`'s `<div>` wrapper.
   const editorClassName =
     'border-input bg-background focus-within:ring-ring h-full min-h-0 overflow-hidden rounded-md border font-mono text-sm focus-within:ring-1 [&_.cm-editor]:h-full [&_.cm-editor]:outline-none [&_.cm-focused]:outline-none [&_.cm-scroller]:scroll-auto [&_.cm-scroller]:p-3';
+  // feature-renderer-plugin-boundary Phase 3 — shares `useAppInfo()`'s
+  // query (already primed by the auth shell's `RendererStylesheets`).
+  const linkCardEnabled = useLinkCardEnabled();
 
   if (realtimePageId && session) {
     return (
@@ -896,6 +900,10 @@ const EditorPane = function EditorPane({
     );
   }
 
+  // Non-collab (create-flow) branch — `CollaborativeMarkdownEditor`
+  // reads the `link-card` capability itself; this bare `MarkdownEditor`
+  // mount needs it sourced explicitly (feature-renderer-plugin-boundary
+  // Phase 3).
   return (
     <MarkdownEditor
       ref={ref}
@@ -903,6 +911,7 @@ const EditorPane = function EditorPane({
       onChange={onChange}
       readonly={readonly}
       aria-label={ariaLabel}
+      linkCardEnabled={linkCardEnabled}
       // `[&_.cm-scroller]:scroll-auto` overrides `<html class="scroll-smooth">`
       // — required for scroll sync, otherwise programmatic scrolls
       // animate over several frames and re-emit `scroll` events past
@@ -927,11 +936,13 @@ function PreviewPane({
    */
   scrollRef?: React.Ref<HTMLDivElement>;
 }) {
+  // feature-renderer-plugin-boundary Phase 3 — see EditorPane's note.
+  const linkCardEnabled = useLinkCardEnabled();
   return (
     // `scroll-auto` overrides the global `<html class="scroll-smooth">`
     // for the same reason as the editor side — see the EditorPane note.
     <div ref={scrollRef} className="border-input bg-background h-full min-h-0 scroll-auto overflow-auto rounded-md border p-4">
-      <MarkdownPreview source={source} active={active} />
+      <MarkdownPreview source={source} active={active} linkCardEnabled={linkCardEnabled} />
     </div>
   );
 }

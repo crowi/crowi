@@ -28,6 +28,17 @@ interface MarkdownPreviewProps {
    * `true` (wide / always-visible case).
    */
   active?: boolean;
+  /**
+   * feature-renderer-plugin-boundary Phase 3 — gates the
+   * `@[card](url)` -> static-placeholder substitution below on the
+   * `link-card` app-info capability. An explicit caller-supplied prop
+   * (not an internal `useAppInfo()` call) so this component stays
+   * testable without a `QueryClientProvider` in scope, mirroring the
+   * rest of this component's plain-props shape. Defaults to `true`
+   * (the caller hasn't resolved the capability yet, or doesn't care) —
+   * same optimistic default-on the toggle itself uses.
+   */
+  linkCardEnabled?: boolean;
 }
 
 function isExternalHref(href: string | undefined): boolean {
@@ -51,7 +62,7 @@ function isExternalHref(href: string | undefined): boolean {
  * new request is in flight. Otherwise the pane would flash empty
  * between keystrokes.
  */
-export function MarkdownPreview({ source, className, active = true }: MarkdownPreviewProps) {
+export function MarkdownPreview({ source, className, active = true, linkCardEnabled = true }: MarkdownPreviewProps) {
   const previewMutation = usePreview();
   const [renderedAst, setRenderedAst] = useState<unknown>(null);
   const [errored, setErrored] = useState(false);
@@ -99,11 +110,18 @@ export function MarkdownPreview({ source, className, active = true }: MarkdownPr
   }, [source, active]);
 
   const renderedNode: ReactNode = useMemo(() => {
-    return renderMdastToReactNode(replaceLinkCardPreviewPlaceholders(renderedAst, m['edit.link_card_preview_pending']()), {
+    // feature-renderer-plugin-boundary Phase 3 — when the link-card
+    // capability is off, skip the placeholder substitution entirely so
+    // a disabled toggle also suppresses the editor-side `@[card](url)`
+    // -> static-placeholder conversion (spec §6.3); the raw
+    // `@[card](url)` markdown source renders through unchanged, same as
+    // any other unrecognised embed tag.
+    const astForRender = linkCardEnabled ? replaceLinkCardPreviewPlaceholders(renderedAst, m['edit.link_card_preview_pending']()) : renderedAst;
+    return renderMdastToReactNode(astForRender, {
       sectionWrap: false,
       components: previewComponents as unknown as Parameters<typeof renderMdastToReactNode>[1]['components'],
     });
-  }, [renderedAst]);
+  }, [renderedAst, linkCardEnabled]);
 
   if (source === '') {
     return <div className={className ?? 'text-muted-foreground'}>{m['edit.preview_placeholder']()}</div>;
