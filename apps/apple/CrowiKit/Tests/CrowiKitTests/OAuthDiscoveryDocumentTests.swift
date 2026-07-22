@@ -35,6 +35,7 @@ final class OAuthDiscoveryDocumentTests: XCTestCase {
         // fields resolved only from the discovery document.
         XCTAssertEqual(doc.authorizationEndpoint, URL(string: "http://localhost:4301/oauth/authorize"))
         XCTAssertEqual(doc.tokenEndpoint, URL(string: "http://localhost:4301/api/v2/oauth/token"))
+        XCTAssertEqual(doc.revocationEndpoint, URL(string: "http://localhost:4301/api/v2/oauth/revoke"))
         XCTAssertEqual(doc.deviceAuthorizationEndpoint, URL(string: "http://localhost:4301/api/v2/oauth/device/authorize"))
     }
 
@@ -50,7 +51,8 @@ final class OAuthDiscoveryDocumentTests: XCTestCase {
         {
           "issuer": "http://localhost:4301",
           "authorization_endpoint": "http://localhost:4301/oauth/authorize",
-          "token_endpoint": "http://localhost:4301/api/v2/oauth/token"
+          "token_endpoint": "http://localhost:4301/api/v2/oauth/token",
+          "revocation_endpoint": "http://localhost:4301/api/v2/oauth/revoke"
         }
         """.data(using: .utf8)!
         let doc = try OAuthDiscoveryDocument.decode(withoutDevice)
@@ -64,6 +66,23 @@ final class OAuthDiscoveryDocumentTests: XCTestCase {
         """.data(using: .utf8)!
         XCTAssertThrowsError(try OAuthDiscoveryDocument.decode(malformed)) { error in
             XCTAssertEqual(error as? OAuthDiscoveryDocument.DecodeError, .malformed(field: "authorization_endpoint"))
+        }
+    }
+
+    /// `revocation_endpoint` is resolved from discovery too (§4.2/§14's
+    /// SignOutFlow reuse target) — a response missing it fails the same way
+    /// a missing `token_endpoint` would, since `SignOutFlow` has no
+    /// hardcoded `apiBaseURL + "/oauth/revoke"` fallback to fall back to.
+    func testMissingRevocationEndpointThrows() {
+        let withoutRevoke = """
+        {
+          "issuer": "http://localhost:4301",
+          "authorization_endpoint": "http://localhost:4301/oauth/authorize",
+          "token_endpoint": "http://localhost:4301/api/v2/oauth/token"
+        }
+        """.data(using: .utf8)!
+        XCTAssertThrowsError(try OAuthDiscoveryDocument.decode(withoutRevoke)) { error in
+            XCTAssertEqual(error as? OAuthDiscoveryDocument.DecodeError, .malformed(field: "revocation_endpoint"))
         }
     }
 

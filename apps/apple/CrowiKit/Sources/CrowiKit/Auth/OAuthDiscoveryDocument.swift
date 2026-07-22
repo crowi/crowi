@@ -18,12 +18,19 @@ public struct OAuthDiscoveryDocument: Sendable, Equatable {
     public let issuer: URL
     public let authorizationEndpoint: URL
     public let tokenEndpoint: URL
+    /// RFC 7009 revocation endpoint — resolved from discovery, same as
+    /// `tokenEndpoint`, and for the same reason: `SignOutFlow` (§3/§4.2/§14)
+    /// MUST NOT hardcode `apiBaseURL + "/oauth/revoke"` either. The server
+    /// always emits this field (`oauth.ts` discovery handler), so it is
+    /// required here, mirroring `tokenEndpoint`'s requiredness.
+    public let revocationEndpoint: URL
     public let deviceAuthorizationEndpoint: URL?
 
-    public init(issuer: URL, authorizationEndpoint: URL, tokenEndpoint: URL, deviceAuthorizationEndpoint: URL?) {
+    public init(issuer: URL, authorizationEndpoint: URL, tokenEndpoint: URL, revocationEndpoint: URL, deviceAuthorizationEndpoint: URL?) {
         self.issuer = issuer
         self.authorizationEndpoint = authorizationEndpoint
         self.tokenEndpoint = tokenEndpoint
+        self.revocationEndpoint = revocationEndpoint
         self.deviceAuthorizationEndpoint = deviceAuthorizationEndpoint
     }
 
@@ -48,17 +55,24 @@ public struct OAuthDiscoveryDocument: Sendable, Equatable {
         let issuer = try url("issuer")
         let authorize = try url("authorization_endpoint")
         let token = try url("token_endpoint")
+        let revoke = try url("revocation_endpoint")
         // Optional: an older host predating device-grant advertisement
         // should not fail the whole decode (lenient-decode policy, §5.2).
         let device = (object["device_authorization_endpoint"] as? String).flatMap(URL.init(string:))
-        return OAuthDiscoveryDocument(issuer: issuer, authorizationEndpoint: authorize, tokenEndpoint: token, deviceAuthorizationEndpoint: device)
+        return OAuthDiscoveryDocument(
+            issuer: issuer,
+            authorizationEndpoint: authorize,
+            tokenEndpoint: token,
+            revocationEndpoint: revoke,
+            deviceAuthorizationEndpoint: device
+        )
     }
 
     /// Fetch + decode `GET {workspaceOrigin}/.well-known/oauth-authorization-server`.
     public static func fetch(workspaceOrigin: URL, urlSession: URLSession = .shared) async throws -> OAuthDiscoveryDocument {
         let url = workspaceOrigin.appendingPathComponent(".well-known/oauth-authorization-server")
         let (data, response) = try await urlSession.data(from: url)
-        guard let http = response as? HTTPURLResponse, 200..<300 ~= http.statusCode else {
+        guard response.isSuccessfulHTTPResponse else {
             throw DecodeError.malformed(field: "<http-status>")
         }
         return try decode(data)
