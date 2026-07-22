@@ -26,7 +26,7 @@ import type { OpenAPIHono } from '@hono/zod-openapi';
 import Debug from 'debug';
 
 import type Crowi from 'src/crowi';
-import { coerceBoolean, coerceStringArray, getCrowiConfigNamespace } from 'src/util/admin-config';
+import { coerceStringArray, getCrowiConfigNamespace, isLinkCardEnabled } from 'src/util/admin-config';
 
 import type { CrowiHonoBindings } from '../../app';
 import { createJwtAdminRequired } from '../../middleware/admin';
@@ -48,11 +48,10 @@ const readSecuritySettings = (crowi: Crowi): SecuritySettings => {
   return {
     registrationMode: toRegistrationMode(ns['security:registrationMode']),
     registrationWhiteList: coerceStringArray(ns['security:registrationWhiteList']),
-    // Missing row / hand-edited non-boolean value both collapse to
-    // enabled (default-on) — spec §6.2's exact rationale as
-    // `app.ts`'s capability probe and `renderer/index.ts`'s live
-    // per-dispatch read.
-    linkCardEnabled: coerceBoolean(ns['security:linkCardEnabled'], true),
+    // `isLinkCardEnabled` is the single source of truth for the
+    // default-on-missing/non-boolean fallback — shared with `app.ts`'s
+    // capability probe and `renderer/index.ts`'s live per-dispatch read.
+    linkCardEnabled: isLinkCardEnabled(crowi),
   };
 };
 

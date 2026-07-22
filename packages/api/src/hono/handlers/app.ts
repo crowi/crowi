@@ -16,7 +16,7 @@ import { API_SURFACE_VERSION, type AppInfoResponse, type Capability, DYNAMIC_CAP
 import type { OpenAPIHono } from '@hono/zod-openapi';
 
 import type Crowi from 'src/crowi';
-import { coerceBoolean, getCrowiConfigNamespace } from 'src/util/admin-config';
+import { isLinkCardEnabled } from 'src/util/admin-config';
 
 import type { CrowiHonoBindings } from '../app';
 
@@ -35,10 +35,11 @@ const [CAPABILITY_SEARCH, CAPABILITY_COLLAB, CAPABILITY_COLLAB_REDIS, CAPABILITY
  *     `collab:redis` additionally when `REDIS_URL` is set so multi-instance
  *     pub/sub is wired up.
  *   - `link-card` (feature-renderer-plugin-boundary Phase 3) when the
- *     admin Security `security:linkCardEnabled` toggle reads true — same
- *     `coerceBoolean(value, true)` default-on-missing/non-boolean read
- *     used by the admin Security GET handler and the core `card` embed
- *     renderer's live per-dispatch check.
+ *     admin Security `security:linkCardEnabled` toggle reads true —
+ *     `isLinkCardEnabled(crowi)` is the single source of truth for this
+ *     value and its default-on-missing/non-boolean fallback, also used by
+ *     the admin Security GET handler and the core `card` embed renderer's
+ *     live per-dispatch check.
  * No I/O — all probes read state already held on the Crowi instance. The
  * `Capability[]` return type keeps this compiler-checked against
  * `@crowi/api-contract`'s vocabulary (a typo wouldn't be assignable to
@@ -54,7 +55,7 @@ const buildCapabilities = (crowi: Crowi): Capability[] => {
   if (crowi.redis != null) {
     capabilities.push(CAPABILITY_COLLAB_REDIS);
   }
-  if (coerceBoolean(getCrowiConfigNamespace(crowi)['security:linkCardEnabled'], true)) {
+  if (isLinkCardEnabled(crowi)) {
     capabilities.push(CAPABILITY_LINK_CARD);
   }
   return capabilities;

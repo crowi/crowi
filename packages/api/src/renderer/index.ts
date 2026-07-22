@@ -2,7 +2,7 @@ import type { PluginLogger, RenderActor, RenderContext } from '@crowi/plugin-api
 import Debug from 'debug';
 import type Crowi from 'src/crowi';
 import type { UserModel } from 'src/models/user';
-import { coerceBoolean, getCrowiConfigNamespace } from 'src/util/admin-config';
+import { isLinkCardEnabled } from 'src/util/admin-config';
 import { createMongoCacheStorage, type MongoCacheStorage } from './cache';
 import { createLinkCardRenderer } from './core/link-card';
 import type { MentionUsernameResolver } from './core/mention-resolve';
@@ -102,7 +102,7 @@ export function createRenderer(crowi: Crowi): Renderer {
   registry.addCoreEmbedTag(
     'card',
     createLinkCardRenderer({
-      isLinkCardEnabled: () => coerceBoolean(getCrowiConfigNamespace(crowi)['security:linkCardEnabled'], true),
+      isLinkCardEnabled: () => isLinkCardEnabled(crowi),
     }),
   );
   // Per-instance ESM-deps loader. Sharing a module-level cache breaks
