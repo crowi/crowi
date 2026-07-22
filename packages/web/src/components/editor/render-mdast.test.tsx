@@ -122,6 +122,39 @@ describe('renderMdastToReactNode', () => {
     expect(html).toContain('<kbd>Ctrl</kbd>');
   });
 
+  // feature-renderer-plugin-boundary Phase 1, AC "raw HTML の data attribute
+  // が stripUnknownElements と JSX conversion を通過する test" — the new
+  // `data-crowi-renderer-presentation`/`data-crowi-renderer-state` contract
+  // (spec §3.1) is only useful to `page-content.tsx` / `markdown-preview.tsx`
+  // if it survives the real `toHast → raw() → stripUnknownElements →
+  // toJsxRuntime` pipeline unchanged, on both a `<div>` root (PlantUML's
+  // inline SVG shape) and an `<img>` root (PlantUML's PNG fallback / Mermaid's
+  // success shape) — `div`/`img` are already known tags (`known-tags.ts`), so
+  // `stripUnknownElements` never touches them, but this proves that end to
+  // end with literal HTML fixtures rather than trusting the reasoning.
+  it('a raw <div>/<img> carrying the new data-crowi-renderer-presentation/-state attributes survives toHast→raw→stripUnknownElements→toJsxRuntime unchanged', () => {
+    const mdast = {
+      type: 'root',
+      children: [
+        {
+          type: 'html',
+          value:
+            '<div data-crowi-renderer-presentation="diagram" data-crowi-renderer-state="ready"><svg></svg></div>' +
+            '<img data-crowi-renderer-presentation="diagram" data-crowi-renderer-state="ready" alt="diagram" src="data:image/svg+xml;base64,PHN2Zy8+">' +
+            '<div data-crowi-renderer-presentation="diagram" data-crowi-renderer-state="error">boom</div>',
+        },
+      ],
+    };
+    const node = renderMdastToReactNode(mdast, { sectionWrap: false, components: {} });
+    const html = renderToStaticMarkup(node);
+
+    expect(html).toContain('<div data-crowi-renderer-presentation="diagram" data-crowi-renderer-state="ready"><svg');
+    expect(html).toContain(
+      'data-crowi-renderer-presentation="diagram" data-crowi-renderer-state="ready" alt="diagram" src="data:image/svg+xml;base64,PHN2Zy8+"',
+    );
+    expect(html).toContain('<div data-crowi-renderer-presentation="diagram" data-crowi-renderer-state="error">boom</div>');
+  });
+
   // feature-plugin-renderer-mermaid Phase 1, AC "実際の hast-util-raw → JSX
   // 変換後のDOMに実行可能な形で残らないこと" — `hast-util-raw` (the actual
   // module that turns the plugin's `html` mdast node into hast, then

@@ -27,5 +27,6 @@ export const makeAppInfo = (overrides: Partial<AppInfoResponse> = {}): AppInfoRe
   apiVersion: 'v2',
   capabilities: [],
   canSelfRegister: true,
+  rendererStylesheets: [],
   ...overrides,
 });
