@@ -1,7 +1,6 @@
 {
   "plugins": [
     "@crowi/plugin-renderer-plantuml",
-    "@crowi/plugin-renderer-emoji",
     "@crowi/plugin-renderer-katex",
     "@crowi/plugin-renderer-mermaid"
   ],
