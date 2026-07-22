@@ -10,9 +10,9 @@ import {
 } from '@crowi/api-contract';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { RefObject } from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiClientV2 } from './api-client';
-import { type CloseCodePolicy, createReconnectingSocket } from './create-reconnecting-socket';
+import { backoffDelayMs, type CloseCodePolicy, createReconnectingSocket } from './create-reconnecting-socket';
 import { createAntiFlickerState, ingestBroadcast, refreshAdmissions, visibleViewers } from './presence-anti-flicker';
 import { resolveWsUrl } from './resolve-ws-url';
 import { subscribeTokenRefreshed } from './token-refresh-notifier';
@@ -57,9 +57,11 @@ const PRESENCE_HEARTBEAT_MS = 15_000;
  *     Reconnecting after this is futile — the server would re-check and
  *     reject again — so the client stops and leaves the row hidden.
  *   - `INVALID_TOKEN` (4401) — the presence token in hand is stale/expired.
- *     An immediate retry with the *same* token just loops — the client
- *     stops and waits for `usePresenceToken` to refetch a fresh one, which
- *     re-runs the connection effect.
+ *     Recovery is driven from the 4401 branch in `onCloseCode` below: it
+ *     invalidates the presence-token query so a fresh token is refetched
+ *     (which re-runs the connection effect), while a capped WS-level retry
+ *     keeps a socket in flight meanwhile. See that branch for the full
+ *     backoff scheme.
  */
 const { INVALID_TOKEN, FORBIDDEN: NO_ACCESS } = WS_CLOSE_CODES;
 
@@ -187,24 +189,71 @@ function sameViewers(a: PresenceViewer[], b: PresenceViewer[]): boolean {
 }
 
 /**
- * Fetch the short-lived presence token. Refetches ~30s before expiry
- * so the WebSocket can be reconnected with a fresh token before the
- * server would otherwise reject it (mirrors `use-yjs-token`).
+ * Options for {@link usePresenceToken}. `getConnectionStatus` lets the
+ * parent {@link usePresence} tell the hook whether the live presence
+ * WebSocket is currently CONNECTED — see the D1a note on the
+ * notifier-driven refetch below.
  */
-function usePresenceToken(pageId: string | null | undefined) {
+interface UsePresenceTokenOptions {
+  getConnectionStatus?: () => PresenceStatus;
+}
+
+/**
+ * Fetch the short-lived presence token that the WebSocket presents on
+ * connect.
+ *
+ * Lifecycle (D1, mirroring `useYjsToken`): the presence token authenticates
+ * the (re)connect HANDSHAKE only — the presence server verifies it once in
+ * `wireConnection` (`presence/attach.ts`) and never re-checks the JWT after
+ * upgrade (an established connection only re-validates the READ GRANT on
+ * each heartbeat, never the token). So an open socket stays valid past the
+ * token's `exp`, and we do NOT proactively refetch on a timer: the pre-fix
+ * ~4.5-min `refetchInterval` flipped the connection effect's `token` dep
+ * every TTL window, tearing the socket down + re-handshaking — and
+ * re-broadcasting the viewer list to every viewer of the page — for zero
+ * auth benefit (the "thundering herd" this fix removes).
+ *
+ * A fresh token is fetched ONLY when (re)connecting:
+ *   - on mount (the initial connect), via the query itself;
+ *   - on a 4401 close (a stale / expired token), driven by the token-
+ *     recovery invalidate in `usePresence`'s `onCloseCode` below;
+ *   - on a silent access-token refresh, but ONLY when the connection is NOT
+ *     currently established AND the cached token is actually (near-)expired
+ *     (the D1a-gated `subscribeTokenRefreshed` effect below).
+ */
+function usePresenceToken(pageId: string | null | undefined, options?: UsePresenceTokenOptions) {
   const queryClient = useQueryClient();
 
-  // §4 / H7 — re-fetch the presence token on a silent access-token refresh
-  // ONLY when the cached presence token is actually expired (or about to
-  // be), mirroring `useYjsToken`. Invalidating unconditionally rebuilt the
-  // presence WebSocket on every healthy access-token refresh; a presence
-  // token still well within its TTL is left in place so the live socket
-  // isn't churned. A presence WebSocket closed with 4401 (stale token)
-  // recovers as soon as this refetch hands `usePresence`'s connection
-  // effect a fresh token.
+  // Keep the connection-status getter in a ref so the subscriber effect
+  // doesn't re-subscribe when the parent passes a fresh closure each render.
+  const getConnectionStatusRef = useRef(options?.getConnectionStatus);
+  useEffect(() => {
+    getConnectionStatusRef.current = options?.getConnectionStatus;
+  }, [options?.getConnectionStatus]);
+
+  // §4 / H7 / D1a — re-fetch the presence token on a silent access-token
+  // refresh ONLY when the connection is NOT currently established AND the
+  // cached presence token is actually (near-)expired, mirroring `useYjsToken`.
+  // Two guards, both needed:
+  //   - D1a: while `connected`, the established socket stays authenticated
+  //     for its whole life regardless of the token's `exp` (the server never
+  //     re-verifies the JWT after upgrade), so refetching would only churn
+  //     the live socket for nothing — skip entirely, even past the TTL.
+  //   - H7: otherwise (connecting / error / not yet connected), a token still
+  //     well within its TTL is left in place so a healthy access-token
+  //     refresh doesn't needlessly rebuild the socket; only a (near-)expired
+  //     token is refetched.
+  // This is a SEPARATE trigger from both (a) the 4401 token-recovery
+  // invalidate in `usePresence`'s `onCloseCode` (which recovers an
+  // already-dead socket) and (b) `session-reauth-context`'s post-reauth
+  // `refetchTokens()`, which invalidates this query directly via queryClient
+  // and INTENTIONALLY bypasses the D1a gate to force a socket rebuild after
+  // re-authentication. This path only keeps a still-live socket's token from
+  // silently lapsing.
   useEffect(() => {
     if (!pageId) return;
     return subscribeTokenRefreshed(() => {
+      if (getConnectionStatusRef.current?.() === 'connected') return;
       const cached = queryClient.getQueryData<PresenceTokenResponse>(['presenceToken', pageId]);
       const expiresInMs = cached ? Date.parse(cached.expiresAt) - Date.now() : -1;
       if (expiresInMs > 30_000) return;
@@ -228,14 +277,18 @@ function usePresenceToken(pageId: string | null | undefined) {
       return response.json();
     },
     enabled: Boolean(pageId),
-    refetchInterval: (query) => {
-      const data = query.state.data;
-      if (!data) return false;
-      const msUntilRefresh = Date.parse(data.expiresAt) - Date.now() - 30_000;
-      return Math.max(30_000, msUntilRefresh);
-    },
+    // D1 — NO proactive `refetchInterval`. An established connection persists
+    // past the token's `exp` (the server never re-verifies the JWT after
+    // upgrade); refetching on a timer would only flip the connection effect's
+    // `token` dep and churn the live socket. Recovery refetches go through
+    // explicit `invalidateQueries` instead: the 4401 token-recovery path in
+    // `onCloseCode` below, the D1a-gated silent-refresh effect above, or
+    // `session-reauth-context`'s post-reauth `refetchTokens()`.
     refetchOnWindowFocus: false,
-    staleTime: 30_000,
+    // Long-lived from the query's perspective — a staleness-driven background
+    // refetch would rebuild the socket for nothing (same reasoning as the
+    // removed `refetchInterval`). Recovery is always explicit.
+    staleTime: Infinity,
     // §4 — presence is auxiliary UI, but a single failed token request
     // (e.g. a transient 401 that the next attempt's silent refresh
     // fixes) used to hide the row outright. Bumped 1 → 3 so a brief auth
@@ -246,10 +299,26 @@ function usePresenceToken(pageId: string | null | undefined) {
 }
 
 export function usePresence(pageId: string | null | undefined, options?: UsePresenceOptions): UsePresenceResult {
-  const { data: tokenData, isError: tokenError } = usePresenceToken(pageId);
+  const queryClient = useQueryClient();
 
   const [viewers, setViewers] = useState<PresenceViewer[]>([]);
   const [status, setStatus] = useState<PresenceStatus>('connecting');
+
+  // D1a — expose the LIVE connection status to `usePresenceToken` so its
+  // notifier-driven refetch can skip while we're `connected` (an established
+  // socket doesn't care that the token's TTL lapsed; refetching would only
+  // churn the live socket). `status` is `useState`, driven from the socket
+  // callbacks below; `applyStatus` mirrors every change into `statusRef`
+  // SYNCHRONOUSLY so the getter reads the current value without the one-render
+  // lag a `useEffect(() => { statusRef.current = status })` copy would add.
+  const statusRef = useRef<PresenceStatus>('connecting');
+  const applyStatus = useCallback((next: PresenceStatus) => {
+    statusRef.current = next;
+    setStatus(next);
+  }, []);
+  const getConnectionStatus = useCallback(() => statusRef.current, []);
+
+  const { data: tokenData, isError: tokenError } = usePresenceToken(pageId, { getConnectionStatus });
 
   // The anti-flicker state survives reconnects within the same page
   // session, so a viewer admitted before a blip stays admitted.
@@ -286,6 +355,18 @@ export function usePresence(pageId: string | null | undefined, options?: UsePres
   // spanning an `await` (see `UsePresenceResult.pageUpdatedSeq` above).
   const pageUpdatedSeqRef = useRef(0);
 
+  // Consecutive-4401 counter for the token-recovery backoff in `onCloseCode`
+  // below (mirrors `use-notifications-socket.ts`). A 4401 that genuinely
+  // resolves invalidates the presence-token query, which — once refetched
+  // with a WORKING token — changes `token` and re-runs the connection effect
+  // from scratch, so an effect-LOCAL counter would reset to 0 on every
+  // retry-driven re-run and never accumulate the "consecutive" failures it
+  // needs to back off. A ref survives across those re-runs; it is reset only
+  // on a genuine page change (tracked by `invalidTokenSessionRef`) or once a
+  // valid `viewers` frame proves the connection healthy (in `onMessage`).
+  const invalidTokenAttemptsRef = useRef(0);
+  const invalidTokenSessionRef = useRef<string | null | undefined>(undefined);
+
   const token = tokenData?.token ?? null;
   const selfUserId = tokenData?.selfUserId ?? null;
 
@@ -293,16 +374,27 @@ export function usePresence(pageId: string | null | undefined, options?: UsePres
   useEffect(() => {
     if (tokenError) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setStatus('error');
+      applyStatus('error');
     }
-  }, [tokenError]);
+  }, [tokenError, applyStatus]);
 
   useEffect(() => {
+    // Reset the consecutive-4401 backoff on a genuine page change (a new
+    // presence session), but NOT on our own token-recovery re-runs (same
+    // `pageId`, fresh `token`) — those must accumulate so a doomed-token
+    // storm keeps backing off. Tracked here rather than in the page-change
+    // effect below so it observes the change before the first close can fire.
+    if (invalidTokenSessionRef.current !== pageId) {
+      invalidTokenSessionRef.current = pageId;
+      invalidTokenAttemptsRef.current = 0;
+    }
+
     if (!pageId || !token) return;
 
     const flicker = flickerRef.current;
     let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
     let admissionTimer: ReturnType<typeof setTimeout> | null = null;
+    let invalidTokenTimer: ReturnType<typeof setTimeout> | null = null;
     let disposed = false;
 
     // feature-live-page-sync-reconcile — one connection "epoch" is one
@@ -342,11 +434,11 @@ export function usePresence(pageId: string | null | undefined, options?: UsePres
       // than leaving the row stuck on 'error' until (if ever) the retry
       // actually succeeds.
       onConnecting: () => {
-        setStatus('connecting');
+        applyStatus('connecting');
       },
 
       onOpen: () => {
-        setStatus('connected');
+        applyStatus('connected');
         hasFiredReconnectedThisEpoch = false;
         // Fire one heartbeat immediately, then on the 15s cadence.
         const beat = () => {
@@ -414,6 +506,10 @@ export function usePresence(pageId: string | null | undefined, options?: UsePres
           hasFiredReconnectedThisEpoch = true;
           onReconnectedRef.current?.();
         }
+        // A healthy connection also resets the consecutive-4401 counter, so a
+        // LATER stale-token close starts its recovery from an immediate
+        // invalidate again rather than inheriting an old backoff rung.
+        invalidTokenAttemptsRef.current = 0;
         const { dueAt } = ingestBroadcast(flicker, message.data.viewers, Date.now());
         project(dueAt);
         return 'reset-backoff';
@@ -424,12 +520,19 @@ export function usePresence(pageId: string | null | undefined, options?: UsePres
           clearInterval(heartbeatTimer);
           heartbeatTimer = null;
         }
-        // The row hides whenever the connection is down (`status: 'error'`).
-        setStatus('error');
-        // A revoked read grant (4403) or a stale token (4401) would just
-        // be rejected again on an immediate retry — stop reconnecting.
-        // A fresh token from `usePresenceToken`'s refetch re-runs this
-        // effect; a restored grant is picked up on that reconnect.
+        // The row hides whenever the connection is down (`status: 'error'`),
+        // so flip to 'error' up front — it applies to every close code, before
+        // we branch on which one. This does NOT gate the 4401 recovery below:
+        // that invalidate calls `queryClient.invalidateQueries` directly, which
+        // never runs the `subscribeTokenRefreshed` callback where the D1a
+        // `=== 'connected'` gate lives, so the refetch fires regardless of when
+        // `applyStatus('error')` runs. The flip is still correct here simply
+        // because the connection really is down.
+        applyStatus('error');
+        // A revoked read grant (4403) would just be rejected again on an
+        // immediate retry — stop reconnecting. The consumer is notified so it
+        // can re-validate; a restored grant is picked up on the next connect
+        // this effect makes when it re-runs for some other reason.
         if (code === NO_ACCESS) {
           // feature-live-page-sync-reconcile — verify-first (spec §10):
           // this close code also fires for a merely TRANSIENT permission-
@@ -438,7 +541,40 @@ export function usePresence(pageId: string | null | undefined, options?: UsePres
           onAccessRevokedRef.current?.();
           return 'stop';
         }
-        if (code === INVALID_TOKEN) return 'stop';
+        // 4401 (stale / expired token): without the removed `refetchInterval`
+        // nothing else re-mints the token, so this close is now the sole
+        // recovery trigger. Mirrors `use-notifications-socket.ts`: invalidate
+        // the presence-token query so a fresh token is refetched — once React
+        // re-renders with it, `token` flips, the effect re-runs, and a new
+        // handshake goes out (the REAL fix). Two backoffs run here on the same
+        // capped schedule, deliberately separate:
+        //   - the WS-level retry — `'reconnect'` on the first 4401 since the
+        //     last healthy frame, `'backoff-retry'` after that — reusing the
+        //     SAME still-stale token, a stopgap until the effect re-runs;
+        //   - the token-mint invalidate — immediate on the first 4401 (the
+        //     common expired-token case), then paced by `invalidTokenTimer`
+        //     via the primitive's exported `backoffDelayMs` so a mint/verify
+        //     secret mismatch (every retry doomed) can't hammer the endpoint.
+        // Aligning with notifications rather than the old `'stop'` also closes
+        // the byte-identical-JWT hole: had `'stop'` remained and the refetch
+        // returned a token whose `iat`/`exp` happened to match, `token` would
+        // not change, the effect would never re-run, and presence would die
+        // permanently — the WS-level retry keeps a live socket in flight
+        // meanwhile.
+        if (code === INVALID_TOKEN) {
+          const attempt = invalidTokenAttemptsRef.current;
+          invalidTokenAttemptsRef.current += 1;
+          const invalidateToken = () => {
+            if (disposed) return;
+            void queryClient.invalidateQueries({ queryKey: ['presenceToken', pageId] });
+          };
+          if (attempt === 0) {
+            invalidateToken();
+          } else {
+            invalidTokenTimer = setTimeout(invalidateToken, backoffDelayMs(attempt - 1));
+          }
+          return attempt === 0 ? 'reconnect' : 'backoff-retry';
+        }
         // Otherwise reconnect with capped exponential backoff.
         return 'backoff-retry';
       },
@@ -450,9 +586,10 @@ export function usePresence(pageId: string | null | undefined, options?: UsePres
       disposed = true;
       if (heartbeatTimer) clearInterval(heartbeatTimer);
       if (admissionTimer) clearTimeout(admissionTimer);
+      if (invalidTokenTimer) clearTimeout(invalidTokenTimer);
       socket.stop();
     };
-  }, [pageId, token, selfUserId]);
+  }, [pageId, token, selfUserId, applyStatus, queryClient]);
 
   // Clear the rendered list when navigating away from a page so a
   // stale stack never bleeds across page views.
