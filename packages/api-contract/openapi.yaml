@@ -4887,6 +4887,7 @@ components:
         - search
         - collab
         - collab:redis
+        - link-card
   parameters: {}
 paths:
   /app/info:
@@ -4920,6 +4921,10 @@ paths:
                       $ref: '#/components/schemas/Capability'
                   canSelfRegister:
                     type: boolean
+                  rendererStylesheets:
+                    type: array
+                    items:
+                      type: string
                 required:
                   - title
                   - confidential
@@ -4927,6 +4932,7 @@ paths:
                   - apiVersion
                   - capabilities
                   - canSelfRegister
+                  - rendererStylesheets
         '500':
           description: Internal server error
           content:
@@ -22542,9 +22548,12 @@ paths:
                     type: array
                     items:
                       type: string
+                  linkCardEnabled:
+                    type: boolean
                 required:
                   - registrationMode
                   - registrationWhiteList
+                  - linkCardEnabled
         '401':
           description: Authentication required
           content:
@@ -22640,9 +22649,12 @@ paths:
                   type: array
                   items:
                     type: string
+                linkCardEnabled:
+                  type: boolean
               required:
                 - registrationMode
                 - registrationWhiteList
+                - linkCardEnabled
       responses:
         '200':
           description: Updated settings (re-read from in-memory cache)
@@ -22661,9 +22673,12 @@ paths:
                     type: array
                     items:
                       type: string
+                  linkCardEnabled:
+                    type: boolean
                 required:
                   - registrationMode
                   - registrationWhiteList
+                  - linkCardEnabled
         '401':
           description: Authentication required
           content:

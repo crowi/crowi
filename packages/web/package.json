@@ -40,7 +40,6 @@
     "clsx": "^2.1.1",
     "hast-util-raw": "^9.1.0",
     "hast-util-to-jsx-runtime": "^2.3.6",
-    "katex": "^0.16.11",
     "lucide-react": "^0.562.0",
     "mdast-util-to-hast": "^13.2.1",
     "next": "16.2.6",
@@ -57,7 +56,6 @@
     "yjs": "^13.6.8"
   },
   "devDependencies": {
-    "@crowi/plugin-renderer-mermaid": "workspace:*",
     "@crowi/tsconfig": "workspace:*",
     "@tailwindcss/postcss": "^4",
     "@testing-library/dom": "^10.4.1",

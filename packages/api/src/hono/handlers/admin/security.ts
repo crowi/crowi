@@ -4,19 +4,29 @@
  * Replaces `packages/api/src/routes/ts-rest/admin/security.ts`. Two
  * admin-only endpoints:
  *
- *   GET /admin/security   — read the four `security:*` keys
+ *   GET /admin/security   — read the security:* keys
  *   PUT /admin/security   — persist them
  *
  * Auth:
  *   - Admin-only via broad `createJwtAdminRequired(crowi)` apply on
  *     `/admin/security/*` + the bare `/admin/security` path.
+ *
+ * feature-renderer-plugin-boundary Phase 3 adds `linkCardEnabled`
+ * (`security:linkCardEnabled`). Its PUT write is deliberately routed
+ * through a SEPARATE, fail-propagating persistence call
+ * (`ConfigService.saveConfigValueDurable`) rather than the existing
+ * best-effort batched `saveConfig('crowi', {...})` call that
+ * `registrationMode` / `registrationWhiteList` still use — see spec
+ * §6.2. The durable write runs FIRST: if it fails, the handler 500s
+ * immediately and the registration-settings batch write never runs
+ * either, so a single PUT never partially persists.
  */
 import { type RegistrationMode, type SecuritySettings, adminSecurityRoutes } from '@crowi/api-contract';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import Debug from 'debug';
 
 import type Crowi from 'src/crowi';
-import { coerceStringArray, getCrowiConfigNamespace } from 'src/util/admin-config';
+import { coerceBoolean, coerceStringArray, getCrowiConfigNamespace } from 'src/util/admin-config';
 
 import type { CrowiHonoBindings } from '../../app';
 import { createJwtAdminRequired } from '../../middleware/admin';
@@ -38,6 +48,11 @@ const readSecuritySettings = (crowi: Crowi): SecuritySettings => {
   return {
     registrationMode: toRegistrationMode(ns['security:registrationMode']),
     registrationWhiteList: coerceStringArray(ns['security:registrationWhiteList']),
+    // Missing row / hand-edited non-boolean value both collapse to
+    // enabled (default-on) — spec §6.2's exact rationale as
+    // `app.ts`'s capability probe and `renderer/index.ts`'s live
+    // per-dispatch read.
+    linkCardEnabled: coerceBoolean(ns['security:linkCardEnabled'], true),
   };
 };
 
@@ -57,8 +72,15 @@ export const registerAdminSecurityRoutes = <E extends OpenAPIHono<CrowiHonoBindi
     .openapi(adminSecurityRoutes.updateSecuritySettingsRoute, async (c) => {
       const body = c.req.valid('json');
       const configService = crowi.getConfigService();
-      const sanitizedWhiteList = sanitizeWhiteList(body.registrationWhiteList);
 
+      try {
+        await configService.saveConfigValueDurable('crowi', 'security:linkCardEnabled', body.linkCardEnabled);
+      } catch (err) {
+        debug('Error durably saving security:linkCardEnabled:', (err as Error).message);
+        return c.json(INTERNAL_ERROR_BODY, 500);
+      }
+
+      const sanitizedWhiteList = sanitizeWhiteList(body.registrationWhiteList);
       try {
         await configService.saveConfig('crowi', {
           'security:registrationMode': body.registrationMode,

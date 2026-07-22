@@ -71,6 +71,8 @@ describe('@crowi/plugin-renderer-mermaid — success path (8 diagram types)', ()
       expect(result.error).toBeUndefined();
       expect(result.html).toContain('<img');
       expect(result.html).toContain('class="diagram-embed mermaid-embed"');
+      expect(result.html).toContain('data-crowi-renderer-presentation="diagram"');
+      expect(result.html).toContain('data-crowi-renderer-state="ready"');
       expect(result.html).toContain('src="data:image/svg+xml;base64,');
       // alt must be present and non-empty (spec §2 layer 3 — never empty, never omitted).
       const altMatch = /alt="([^"]*)"/.exec(result.html);
@@ -97,7 +99,7 @@ describe('@crowi/plugin-renderer-mermaid — success path (8 diagram types)', ()
   });
 
   it('declares admissionControl / previewPolicy / cacheVersion / reservation per spec §6/§7', () => {
-    expect(renderer.cacheVersion).toBe(1);
+    expect(renderer.cacheVersion).toBe(2);
     expect(renderer.admissionControl).toEqual({ maxConcurrentGlobal: 4, maxConcurrentPerUser: 2, queueDepth: 200 });
     expect(renderer.previewPolicy).toBe('server-render');
     expect(renderer.reservation).toEqual({ variant: 'aspect', aspectRatio: 16 / 9 });
@@ -112,7 +114,9 @@ describe('@crowi/plugin-renderer-mermaid — classification A: notation errors',
     expect(result.error).toBeUndefined();
     expect(result.html).toContain('class="mermaid-embed mermaid-error"');
     expect(result.html).toContain('role="status"');
-    expect(result.html).not.toContain('diagram-embed'); // spec §9 — error placeholder deliberately excluded from the click-to-enlarge / white-canvas class
+    expect(result.html).not.toContain('diagram-embed'); // spec §9 — error placeholder deliberately excluded from the click-to-enlarge / white-canvas class (legacy dual-accept path)
+    expect(result.html).toContain('data-crowi-renderer-presentation="diagram"');
+    expect(result.html).toContain('data-crowi-renderer-state="error"'); // new contract path — state="error" (not "ready") is what excludes it, spec §3.1
     expect(result.ttlSec).toBe(5 * 60);
   });
 
@@ -123,6 +127,7 @@ describe('@crowi/plugin-renderer-mermaid — classification A: notation errors',
       expect(result.error).toBeUndefined();
       expect(result.html).toContain('class="mermaid-embed mermaid-error"');
       expect(result.html).not.toContain('diagram-embed');
+      expect(result.html).toContain('data-crowi-renderer-state="error"');
       expect(result.ttlSec).toBe(5 * 60);
     },
     30_000,
@@ -244,6 +249,7 @@ describe('@crowi/plugin-renderer-mermaid — classification A: output size excee
     const result = await render(renderer, 'flowchart TD\n  A --> B');
     expect(result.error).toBeUndefined();
     expect(result.html).toContain('class="mermaid-embed mermaid-error"');
+    expect(result.html).toContain('data-crowi-renderer-state="error"');
     expect(result.ttlSec).toBe(5 * 60);
   }, 30_000);
 
@@ -255,6 +261,7 @@ describe('@crowi/plugin-renderer-mermaid — classification A: output size excee
       expect(result.error).toBeUndefined();
       expect(result.html).toContain('class="mermaid-embed mermaid-error"');
       expect(result.html).not.toContain('diagram-embed');
+      expect(result.html).toContain('data-crowi-renderer-state="error"');
       expect(result.ttlSec).toBe(5 * 60);
     },
     30_000,

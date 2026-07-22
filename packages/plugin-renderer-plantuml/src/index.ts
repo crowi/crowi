@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod/v3';
-import type { CodeBlockInfo, CodeBlockRenderer, CrowiPlugin, RenderError, RenderResult } from '@crowi/plugin-api';
+import type { CodeBlockInfo, CodeBlockRenderer, CrowiPlugin, RenderError, RendererRegistry, RenderResult } from '@crowi/plugin-api';
 import { encode as encodePlantUml } from './encoder';
 import { sanitizeSvg } from './sanitize';
 
@@ -56,13 +56,20 @@ export function createPlantUmlRenderer(config: PlantUmlConfig): CodeBlockRendere
     // 2 when the sanitizer switched from the regex-based implementation
     // to the shared `@crowi/plugin-renderer-svg-sanitize` package and the
     // output class changed from `plantuml-embed` to `diagram-embed
-    // plantuml-embed`. This only invalidates `PluginRenderCache` lookups
-    // (an operational escape hatch, `mongodb-cache.ts`'s
-    // `pluginCacheVersion` mismatch = miss) — it does NOT bump
-    // `RENDERER_PIPELINE_VERSION`, so already-saved `Revision.renderedAst`
-    // blobs (written with the old sanitizer/class) keep serving verbatim
-    // until their page is next saved (spec §9 "next-save-only").
-    cacheVersion: 2,
+    // plantuml-embed`. feature-renderer-plugin-boundary Phase 2 (§3.1)
+    // bumps 2 → 3: success output additionally carries the generic
+    // `data-crowi-renderer-presentation="diagram"
+    // data-crowi-renderer-state="ready"` contract Web's
+    // `renderer-presentation.tsx` reads (the `diagram-embed`/
+    // `plantuml-embed` classes stay, unchanged, for plugin-owned CSS /
+    // downstream compatibility). Each bump only invalidates
+    // `PluginRenderCache` lookups (an operational escape hatch,
+    // `mongodb-cache.ts`'s `pluginCacheVersion` mismatch = miss) — it
+    // does NOT bump `RENDERER_PIPELINE_VERSION`, so already-saved
+    // `Revision.renderedAst` blobs (written with the old shape) keep
+    // serving verbatim, dual-accepted by the legacy `.diagram-embed`
+    // branch, until their page is next saved (spec §9 "next-save-only").
+    cacheVersion: 3,
     reservation: { variant: 'aspect', aspectRatio: 16 / 9 },
     computeEmbedKey: (info: CodeBlockInfo) => {
       // Hash the diagram source only — operator changing serverUrl /
@@ -113,11 +120,14 @@ export function createPlantUmlRenderer(config: PlantUmlConfig): CodeBlockRendere
           };
         }
         return {
-          // `diagram-embed` (spec §9) is the shared marker `DiagramEmbed`
-          // (`packages/web/src/components/page-view/diagram-embed.tsx`)
-          // matches on for the click-to-enlarge / dark-mode-neutral-face
-          // treatment; `plantuml-embed` stays for renderer-specific CSS.
-          html: `<div class="diagram-embed plantuml-embed">${sanitized.svg}</div>`,
+          // `data-crowi-renderer-presentation="diagram"
+          // data-crowi-renderer-state="ready"` (feature-renderer-plugin-
+          // boundary Phase 2 §3.1) is the producer-agnostic contract
+          // Web's `renderer-presentation.tsx` reads for the
+          // click-to-enlarge / dark-mode-neutral-face treatment;
+          // `diagram-embed plantuml-embed` stay alongside it, unchanged,
+          // for legacy-AST dual-accept + renderer-specific CSS.
+          html: `<div class="diagram-embed plantuml-embed" data-crowi-renderer-presentation="diagram" data-crowi-renderer-state="ready">${sanitized.svg}</div>`,
           ttlSec: CACHE_TTL_SEC,
         };
       }
@@ -129,12 +139,23 @@ export function createPlantUmlRenderer(config: PlantUmlConfig): CodeBlockRendere
       const buf = Buffer.from(await response.arrayBuffer());
       const b64 = buf.toString('base64');
       return {
-        html: `<img class="diagram-embed plantuml-embed" alt="" src="data:image/png;base64,${b64}">`,
+        html: `<img class="diagram-embed plantuml-embed" data-crowi-renderer-presentation="diagram" data-crowi-renderer-state="ready" alt="" src="data:image/png;base64,${b64}">`,
         ttlSec: CACHE_TTL_SEC,
       };
     },
   };
 }
+
+/**
+ * Captured at `registerRenderer` time so `reconfigure` can re-register
+ * against the SAME live registry without `PluginContext` needing to
+ * expose it (by design — `PluginContext` is deliberately a thin,
+ * registry-free conduit, `packages/plugin-api/src/context.ts`'s own doc
+ * comment). Module-level is safe here: one Crowi process loads one
+ * instance of this plugin module (require-cache singleton), matching the
+ * same pattern KaTeX/emoji already use for their own lazy-load caches.
+ */
+let liveRegistry: RendererRegistry | undefined;
 
 const plugin: CrowiPlugin = {
   name: '@crowi/plugin-renderer-plantuml',
@@ -157,19 +178,25 @@ const plugin: CrowiPlugin = {
   registerRenderer: (registry, ctx) => {
     // PluginContext.config<T>() parses the configSchema-typed config
     // row and returns it. The plantuml plugin closes over the config
-    // here; admin edits trigger `reconfigure(ctx)` (Phase 4 base plugin
-    // hook) which we use to refresh the cached renderer.
+    // here; admin edits trigger `reconfigure(ctx)` (below) which
+    // re-registers against `liveRegistry` to refresh the cached renderer.
+    liveRegistry = registry;
     const config = ctx.config<PlantUmlConfig>();
     registry.addCodeBlockRenderer('plantuml', createPlantUmlRenderer(config));
     ctx.log.debug(`registered PlantUML code-block renderer (serverUrl=${config.serverUrl}, format=${config.outputFormat})`);
   },
   // When admin saves new config, re-register so the renderer closure
-  // picks up the new serverUrl / outputFormat. Phase 4's registry
-  // last-wins + boot warn applies here too — re-registering for the
-  // same lang produces a warn each time. We accept that noise because
-  // operator-driven reconfig is rare and the warn is informational.
-  // NOTE: a richer reconfigure surface (replace-in-place without warn)
-  // is Phase 7+ work.
+  // picks up the new serverUrl / outputFormat. The registry's last-wins
+  // collision warning only fires on a cross-plugin conflict (a
+  // DIFFERENT plugin overwriting this entry) — a plugin re-registering
+  // over its own prior entry, as this reconfigure path does every time,
+  // is silent.
+  reconfigure: (ctx) => {
+    if (!liveRegistry) return; // reconfigure fired before registerRenderer ever ran — nothing to refresh yet.
+    const config = ctx.config<PlantUmlConfig>();
+    liveRegistry.addCodeBlockRenderer('plantuml', createPlantUmlRenderer(config));
+    ctx.log.debug(`reconfigured PlantUML code-block renderer (serverUrl=${config.serverUrl}, format=${config.outputFormat})`);
+  },
 };
 
 export default plugin;

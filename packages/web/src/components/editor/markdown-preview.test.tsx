@@ -73,45 +73,45 @@ describe('MarkdownPreview — stale-guard on a superseded (aborted) preview requ
  * feature-plugin-renderer-mermaid Phase 3 (spec §9) — the editor preview
  * pane reuses the exact same `isDiagramEmbed`/`DiagramEmbed` wrapper as
  * the show page (`page-content.test.tsx` covers the page-view side of
- * this same invariant), so a `previewPolicy:'server-render'` Mermaid
- * fence gets click-to-enlarge parity while still being edited.
+ * this same invariant), so a `previewPolicy:'server-render'` diagram
+ * code-fence gets click-to-enlarge parity while still being edited.
  */
-describe('MarkdownPreview — Mermaid diagram embed gets the same DiagramEmbed wrapper as the show page', () => {
-  it('wraps a Mermaid success <img> (class="diagram-embed mermaid-embed") with the click-to-enlarge affordance', async () => {
+describe('MarkdownPreview — diagram embed gets the same DiagramEmbed wrapper as the show page', () => {
+  it('wraps a diagram success <img> (class="diagram-embed fake-diagram-embed") with the click-to-enlarge affordance', async () => {
     const ast = {
       type: 'root',
       children: [
         {
           type: 'html',
           value:
-            '<div data-source-line="1"><img class="diagram-embed mermaid-embed" alt="Mermaid diagram (flowchart)" src="data:image/svg+xml;base64,PHN2Zy8+"></div>',
+            '<div data-source-line="1"><img class="diagram-embed fake-diagram-embed" alt="Diagram (flowchart)" src="data:image/svg+xml;base64,PHN2Zy8+"></div>',
         },
       ],
     };
     mutateAsync.mockResolvedValueOnce(ast);
 
-    render(<MarkdownPreview source="```mermaid\nflowchart TD\n  A --> B\n```" />);
+    render(<MarkdownPreview source="```diagram\nflowchart TD\n  A --> B\n```" />);
     await act(async () => {
       await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
     });
 
-    expect(screen.getByRole('img', { name: 'Mermaid diagram (flowchart)' })).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'Diagram (flowchart)' })).toBeTruthy();
     expect(screen.getByRole('button', { name: m['page.diagram_zoom']() })).toBeTruthy();
   });
 
-  it('does NOT wrap the Mermaid error placeholder (no diagram-embed marker) — renders the status text with no zoom button', async () => {
+  it('does NOT wrap a diagram error placeholder (no diagram-embed marker) — renders the status text with no zoom button', async () => {
     const ast = {
       type: 'root',
-      children: [{ type: 'html', value: '<div class="mermaid-embed mermaid-error" role="status"><span>Mermaid diagram could not be rendered</span></div>' }],
+      children: [{ type: 'html', value: '<div class="fake-diagram-embed fake-diagram-error" role="status"><span>Diagram could not be rendered</span></div>' }],
     };
     mutateAsync.mockResolvedValueOnce(ast);
 
-    render(<MarkdownPreview source="```mermaid\nnot a real diagram\n```" />);
+    render(<MarkdownPreview source="```diagram\nnot a real diagram\n```" />);
     await act(async () => {
       await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
     });
 
-    expect(screen.getByRole('status').textContent).toContain('Mermaid diagram could not be rendered');
+    expect(screen.getByRole('status').textContent).toContain('Diagram could not be rendered');
     expect(screen.queryByRole('button', { name: m['page.diagram_zoom']() })).toBeNull();
   });
 });
@@ -224,5 +224,57 @@ describe('MarkdownPreview — link-card placeholder', () => {
     expect(screen.getByText(url)).toBeTruthy();
     expect(screen.queryByRole('link')).toBeNull();
     expect(document.querySelector('.crowi-link-card-preview-surface')).toBeTruthy();
+  });
+});
+
+describe('MarkdownPreview — linkCardEnabled=false gates the placeholder substitution (feature-renderer-plugin-boundary Phase 3 spec §6.3)', () => {
+  it('defaults to enabled: an omitted linkCardEnabled prop still converts the card tag to the placeholder', async () => {
+    const url = 'https://example.com/doc';
+    mutateAsync.mockResolvedValueOnce({
+      type: 'root',
+      children: [
+        {
+          type: 'paragraph',
+          children: [
+            { type: 'text', value: '@' },
+            { type: 'link', url, children: [{ type: 'text', value: 'card' }] },
+          ],
+        },
+      ],
+    });
+
+    render(<MarkdownPreview source={`@[card](${url})`} />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+    });
+
+    expect(document.querySelector('.crowi-link-card-preview-surface')).toBeTruthy();
+  });
+
+  it('disabled: the card tag is NOT converted to the static placeholder — it renders as an ordinary clickable link, same as any other unrecognised embed tag', async () => {
+    const url = 'https://example.com/doc';
+    mutateAsync.mockResolvedValueOnce({
+      type: 'root',
+      children: [
+        {
+          type: 'paragraph',
+          children: [
+            { type: 'text', value: '@' },
+            { type: 'link', url, children: [{ type: 'text', value: 'card' }] },
+          ],
+        },
+      ],
+    });
+
+    render(<MarkdownPreview source={`@[card](${url})`} linkCardEnabled={false} />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+    });
+
+    expect(document.querySelector('.crowi-link-card-preview-surface')).toBeNull();
+    expect(screen.queryByText(m['edit.link_card_preview_pending']())).toBeNull();
+    // The `@` prefix + a real anchor to the card's url survive unconverted.
+    const link = screen.getByRole('link', { name: 'card' });
+    expect(link.getAttribute('href')).toBe(url);
   });
 });

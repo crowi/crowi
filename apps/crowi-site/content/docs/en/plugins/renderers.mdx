@@ -1,6 +1,6 @@
 ---
 title: Renderer plugins
-description: Plugins that extend Markdown rendering — emoji / KaTeX / PlantUML and more
+description: Plugins that extend Markdown rendering (KaTeX / PlantUML / Mermaid and more), plus the core-integrated emoji and link-card features
 ---
 
 Renderer plugins add parse, transform, and render behaviour to Crowi's
@@ -56,35 +56,85 @@ card or diagram with an error placeholder.
 authorization failure, takes effect on the next re-render. The old rendering is
 not retained.
 
-**Failure display** — plugins can provide their own failure rendering, such as
-the link card's error card that remains a working link. Otherwise, Crowi shows
-a generic placeholder.
+**Failure display** — a feature that provides an embed can supply its own
+failure rendering, such as the built-in link-card feature's fallback card that
+remains a working link. Otherwise, Crowi shows a generic placeholder.
+
+## Markdown features built into core
+
+Emoji shortcodes and link cards used to ship as two separate renderer plugins
+(`@crowi/plugin-renderer-emoji` / `@crowi/plugin-renderer-link-card`). Both are
+now absorbed into Crowi core (`@crowi/api`) as always-on Markdown features that
+require no installation. They work regardless of any plugin's install state
+and never appear in `crowi.config.json`'s `plugins` array.
+
+### Emoji shortcodes
+
+Shortcodes like `:smile:` and `:rocket:` are converted to Unicode emoji via
+`remark-emoji`. It does no I/O and no caching. Code blocks and inline code are
+intentionally skipped, and unknown shortcodes (`:not-emoji:`) pass through
+verbatim. An `accessible` mode that wraps emoji in
+`<span role="img" aria-label="smile">` for screen readers is on by default.
+See [Markdown syntax](../guide/markdown) for the syntax itself.
+
+### Link cards `@[card](url)`
+
+`@[card](url)` is a built-in embed that reserves the `card` name on the
+embed-tag registration seam, `registry.addEmbedTag(name, renderer)`, for Crowi
+core itself — a third-party plugin cannot override the `card` tag. It fetches
+the target page's OGP meta tags (`og:title` / `og:description` / `og:image` /
+`og:site_name`) and renders a link-preview card with a title, description,
+domain, and (if available) a thumbnail image. For the syntax itself, see the
+"Link cards" section of [Markdown syntax](../guide/markdown).
+
+- **On by default**: like GitHub, Slack, and Notion, link-card rendering
+  defaults to on (`security:linkCardEnabled` defaults to `true`). Operators who
+  want to stop outbound OGP fetches can disable it from the admin UI under
+  Security → "Allow link cards for external URLs". Once disabled, no new
+  render performs any DNS resolution or HTTP request from that point on.
+- **Unified fallback card**: whether the admin setting is off, the OGP fetch
+  failed, or the host is unreachable (e.g. an air-gapped deployment), Crowi
+  shows the exact same fallback card — no OGP title / description / image, just
+  the URL itself as the title, with no error-red styling. This is deliberately
+  the same visual contract as the editor's live-preview placeholder card.
+  Unlike the editor placeholder, though, the fallback card rendered on a saved
+  page is a real link with `href` / `target="_blank"` /
+  `rel="noopener noreferrer"` (the earlier dedicated error card labelled
+  "Preview unavailable" no longer exists).
+- **Images are direct links**: `og:image` is embedded as a direct link to the
+  source site — there is no image proxying or caching.
+- **SSRF guard**: the target hostname's resolved DNS address is rejected if it
+  is private / loopback / link-local / unique-local / a metadata address (e.g.
+  `169.254.169.254`), whether specified as a literal IP, resolved via DNS, or
+  reached via a redirect (redirects are not followed automatically — up to 3
+  hops are followed manually, re-validating on every hop). Any scheme other
+  than `http(s)` is rejected immediately. The fetch times out after 5 seconds
+  and reads at most the first 512KB of the response.
+- Display consistency for saved pages: flipping the toggle from true to false
+  does not remove an already-rendered, displayable card — it just stops new
+  fetches. Flipping it back from false to true does not retroactively
+  materialize cards on existing pages either; a card only (re)appears the next
+  time the page is saved or explicitly re-rendered.
+- **No allowlist/denylist UI** — if you need to block specific domains from
+  being embedded, wait for a future admin setting or fork the code to add your
+  own guard.
+
+> **Note**: This is a different thing from `@crowi/plugin-renderer-github-embed`
+> (GitHub PR / Issue cards, planned in RFC-0002 but not yet shipped as of
+> Phase 7). The `card` tag is a generic, service-agnostic OGP link card; the
+> planned github-embed is a GitHub-PR/Issue-specific rich card with a
+> different purpose and implementation.
 
 ## First-party renderer plugins
 
-The Crowi repository ships the following six renderer plugins.
+The Crowi repository ships the following four renderer plugins.
 
 | Plugin | Role | External dependency | Status |
 | ------ | ---- | ------------------- | ------ |
-| `@crowi/plugin-renderer-emoji` | Converts shortcodes like `:smile:` to Unicode emoji | None | Landed (Phase 6) |
 | `@crowi/plugin-renderer-katex` | Renders `$inline$` / `$$display$$` LaTeX math to HTML server-side via KaTeX | None | Landed (Phase 6) |
 | `@crowi/plugin-renderer-plantuml` | Renders ` ```plantuml ` blocks via a PlantUML server and embeds SVG/PNG | PlantUML server | Landed (Phase 6) |
 | `@crowi/plugin-renderer-mermaid` | Renders ` ```mermaid ` blocks server-side (browserless) and embeds a sanitized SVG | None (self-contained, server-side) | Landed (Phase 6.1) |
 | `@crowi/plugin-renderer-crowi-legacy` | Reproduces Crowi v1 syntax quirks (e.g. `##hoge` heading without a space) | None | Landed (Phase 6), default-off |
-| `@crowi/plugin-renderer-link-card` | Embeds the `@[card](url)` target page as an OGP link-preview card | None (fetches the target site directly) | Landed |
-
-> **Tip**: `@crowi/plugin-renderer-github-embed` (GitHub PR / Issue
-> cards) is planned in RFC-0002, but it is in progress as Phase 7 and
-> has not shipped yet.
-
-### emoji
-
-`@crowi/plugin-renderer-emoji` replaces shortcodes like `:smile:` with
-Unicode emoji via `remark-emoji`. It does no I/O and no caching. Code
-blocks and inline code are intentionally skipped, and unknown shortcodes
-(`:not-emoji:`) pass through verbatim. An `accessible` mode that wraps
-emoji in `<span role="img" aria-label="smile">` for screen readers is on
-by default.
 
 ### KaTeX
 
@@ -170,42 +220,6 @@ admin UI.
 Note that the v1 behaviour of turning a single newline into `<br>` was
 in this plugin in an earlier development stage, but it has since moved
 into the core pipeline as a Crowi-wide default.
-
-### Link card
-
-`@crowi/plugin-renderer-link-card` is the first renderer plugin to
-actually use the embed-tag registration seam,
-`registry.addEmbedTag(name, renderer)`. Writing `@[card](url)` fetches the
-target page's OGP meta tags (`og:title` / `og:description` / `og:image` /
-`og:site_name`) and renders a link-preview card with a title, description,
-domain, and (if available) a thumbnail image. For the syntax itself, see
-the "Link cards" section of [Markdown syntax](../guide/markdown).
-
-- **Images are direct links**: `og:image` is embedded as a direct link to
-  the source site — there is no image proxying or caching (a deliberate
-  v1 scope decision).
-- **SSRF guard**: the target hostname's resolved DNS address is rejected
-  if it is private / loopback / link-local / unique-local / a metadata
-  address (e.g. `169.254.169.254`), whether specified as a literal IP,
-  resolved via DNS, or reached via a redirect (redirects are not followed
-  automatically — up to 3 hops are followed manually, re-validating on
-  every hop). Any scheme other than `http(s)` is rejected immediately.
-  The fetch times out after 5 seconds and reads at most the first 512KB
-  of the response. See the plugin's README for a known residual risk
-  around DNS rebinding.
-- **No allowlist/denylist UI in v1** — if you need to block specific
-  domains from being embedded, wait for a future admin setting or fork
-  the plugin to add your own guard.
-- **On failure** (timeout, 4xx/5xx, non-HTML content, etc.), it degrades to a
-  minimal error card that is still a working link to the URL. If the card
-  rendered before, transient failures keep showing the last good card; see
-  [Caching and failure behaviour](#caching-and-failure-behaviour) above.
-
-> **Note**: This is a different thing from
-> `@crowi/plugin-renderer-github-embed` mentioned above (planned, not yet
-> shipped). Link-card is a generic, service-agnostic OGP link card; the
-> planned github-embed is a GitHub-PR/Issue-specific rich card with a
-> different purpose and implementation.
 
 ## Related pages
 

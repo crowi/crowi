@@ -7188,7 +7188,8 @@
           "notifications",
           "search",
           "collab",
-          "collab:redis"
+          "collab:redis",
+          "link-card"
         ]
       }
     },
@@ -7235,6 +7236,12 @@
                     },
                     "canSelfRegister": {
                       "type": "boolean"
+                    },
+                    "rendererStylesheets": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   },
                   "required": [
@@ -7243,7 +7250,8 @@
                     "version",
                     "apiVersion",
                     "capabilities",
-                    "canSelfRegister"
+                    "canSelfRegister",
+                    "rendererStylesheets"
                   ]
                 }
               }
@@ -34206,11 +34214,15 @@
                       "items": {
                         "type": "string"
                       }
+                    },
+                    "linkCardEnabled": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
                     "registrationMode",
-                    "registrationWhiteList"
+                    "registrationWhiteList",
+                    "linkCardEnabled"
                   ]
                 }
               }
@@ -34361,11 +34373,15 @@
                     "items": {
                       "type": "string"
                     }
+                  },
+                  "linkCardEnabled": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
                   "registrationMode",
-                  "registrationWhiteList"
+                  "registrationWhiteList",
+                  "linkCardEnabled"
                 ]
               }
             }
@@ -34392,11 +34408,15 @@
                       "items": {
                         "type": "string"
                       }
+                    },
+                    "linkCardEnabled": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
                     "registrationMode",
-                    "registrationWhiteList"
+                    "registrationWhiteList",
+                    "linkCardEnabled"
                   ]
                 }
               }

@@ -37,6 +37,7 @@ export interface paths {
                             apiVersion: string;
                             capabilities: components["schemas"]["Capability"][];
                             canSelfRegister: boolean;
+                            rendererStylesheets: string[];
                         };
                     };
                 };
@@ -10411,6 +10412,7 @@ export interface paths {
                             /** @enum {string} */
                             registrationMode: "Open" | "Resricted" | "Closed";
                             registrationWhiteList: string[];
+                            linkCardEnabled: boolean;
                         };
                     };
                 };
@@ -10480,6 +10482,7 @@ export interface paths {
                         /** @enum {string} */
                         registrationMode: "Open" | "Resricted" | "Closed";
                         registrationWhiteList: string[];
+                        linkCardEnabled: boolean;
                     };
                 };
             };
@@ -10494,6 +10497,7 @@ export interface paths {
                             /** @enum {string} */
                             registrationMode: "Open" | "Resricted" | "Closed";
                             registrationWhiteList: string[];
+                            linkCardEnabled: boolean;
                         };
                     };
                 };
@@ -15495,7 +15499,7 @@ export interface components {
             };
         };
         /** @enum {string} */
-        Capability: "oauth" | "oauth:auth-code" | "oauth:device" | "oauth:pkce" | "pat" | "pages" | "comments" | "bookmarks" | "attachments" | "notifications" | "search" | "collab" | "collab:redis";
+        Capability: "oauth" | "oauth:auth-code" | "oauth:device" | "oauth:pkce" | "pat" | "pages" | "comments" | "bookmarks" | "attachments" | "notifications" | "search" | "collab" | "collab:redis" | "link-card";
     };
     responses: never;
     parameters: never;

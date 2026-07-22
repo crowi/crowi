@@ -47,8 +47,20 @@ const CLASS_A_ERROR_TTL_SEC = 5 * 60;
 /** Success TTL — Mermaid output is deterministic per source (same source ⇒ same SVG), so a longer freshness window (mirrors PlantUML's 1h) avoids needless re-renders without risking staleness. */
 const SUCCESS_TTL_SEC = 60 * 60;
 
-/** spec §5 classification A — fixed, accessible error markup. No `diagram-embed` marker (spec §9 — keeps it out of the click-to-enlarge / white-canvas dialog treatment). No parse-error detail or raw source ever included. */
-const ERROR_HTML = '<div class="mermaid-embed mermaid-error" role="status"><span>Mermaid diagram could not be rendered</span></div>';
+/**
+ * spec §5 classification A — fixed, accessible error markup. No
+ * `diagram-embed` marker (spec §9 — keeps it out of the
+ * click-to-enlarge / white-canvas dialog treatment). No parse-error
+ * detail or raw source ever included. feature-renderer-plugin-boundary
+ * Phase 2 (§3.1) adds `data-crowi-renderer-presentation="diagram"
+ * data-crowi-renderer-state="error"` alongside the existing classes —
+ * core's `renderer-presentation.tsx` reads the new attribute pair as
+ * authoritative once present, so `state="error"` (not `"ready"`) is what
+ * keeps this excluded from the zoom-dialog treatment on the new
+ * contract, mirroring the legacy no-`diagram-embed`-class exclusion.
+ */
+const ERROR_HTML =
+  '<div class="mermaid-embed mermaid-error" data-crowi-renderer-presentation="diagram" data-crowi-renderer-state="error" role="status"><span>Mermaid diagram could not be rendered</span></div>';
 
 function classAErrorResult(): RenderResult {
   return { html: ERROR_HTML, ttlSec: CLASS_A_ERROR_TTL_SEC };
@@ -62,7 +74,19 @@ function classAErrorResult(): RenderResult {
  */
 export function createMermaidRenderer(): CodeBlockRenderer {
   return {
-    cacheVersion: 1,
+    // feature-renderer-plugin-boundary Phase 2 (§3.1) — bumped from 1 to
+    // 2: success + error output now additionally carry
+    // `data-crowi-renderer-presentation="diagram"
+    // data-crowi-renderer-state="ready"|"error"` (the `diagram-embed`/
+    // `mermaid-embed`/`mermaid-error` classes stay, unchanged, for
+    // plugin-owned CSS / downstream compatibility). Only invalidates
+    // `PluginRenderCache` lookups (`mongodb-cache.ts`'s
+    // `pluginCacheVersion` mismatch = miss) — does NOT bump
+    // `RENDERER_PIPELINE_VERSION`, so already-saved `Revision.renderedAst`
+    // blobs (written with the old shape) keep serving verbatim, dual-
+    // accepted by the legacy `.diagram-embed`/no-marker branch, until
+    // their page is next saved.
+    cacheVersion: 2,
     reservation: { variant: 'aspect', aspectRatio: 16 / 9 },
     // spec §6 — sized to the fixed 4-worker child-process pool
     // (`render-engine.ts`); §7's preview dispatch is the only other
@@ -100,7 +124,7 @@ export function createMermaidRenderer(): CodeBlockRenderer {
 
       const alt = buildAltText(info.source);
       return {
-        html: `<img class="diagram-embed mermaid-embed" alt="${escapeHtml(alt)}" src="${encoded.dataUrl}">`,
+        html: `<img class="diagram-embed mermaid-embed" data-crowi-renderer-presentation="diagram" data-crowi-renderer-state="ready" alt="${escapeHtml(alt)}" src="${encoded.dataUrl}">`,
         ttlSec: SUCCESS_TTL_SEC,
       };
     },

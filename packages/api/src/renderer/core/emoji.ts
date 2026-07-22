@@ -1,8 +1,8 @@
 import { createJiti } from 'jiti';
-import type { CrowiPlugin } from '@crowi/plugin-api';
 
 /**
- * @crowi/plugin-renderer-emoji
+ * Emoji shortcode transform — core Markdown feature
+ * (feature-renderer-plugin-boundary Phase 3).
  *
  * Replaces `:smile:` and other known shortcodes with Unicode emoji via
  * `remark-emoji`. No I/O, no cache. Code blocks (` ``` `) and inline
@@ -12,16 +12,22 @@ import type { CrowiPlugin } from '@crowi/plugin-api';
  * Unknown shortcodes (`:not-emoji:`) are passed through verbatim, so
  * an author who writes `:typo:` won't see surprise corruption.
  *
- * `remark-emoji` is ESM-only (depends on unified@^11), so the plugin
- * loads it through `jiti` on the first `registerRenderer` call —
- * mirroring the Phase 5 `@crowi/plugin-renderer-crowi-legacy` pattern.
+ * Moved verbatim from the previous standalone emoji renderer plugin
+ * (deleted from the workspace in Phase 4 — see spec §4/§5): emoji is
+ * no longer a registry-registered plugin transform, it is a
+ * hard-coded `pipeline.ts` `.use()` call inserted directly between
+ * `remarkBreaks` and the registry's external transform loop.
+ * `remark-emoji` is ESM-only (depends on unified@^11), so this module
+ * still loads it through `jiti` on first use — `createJiti(__filename,
+ * …)` keeps working unchanged since it re-resolves relative to THIS
+ * file's own location.
  */
 
 /**
- * Options passed to `remark-emoji`. Phase 6 bakes the defaults in at
- * registration time:
+ * Options passed to `remark-emoji`. Baked in — Crowi does not expose
+ * these as admin-configurable:
  *   - `accessible: true` wraps the emoji in `<span role="img" aria-label="smile">`,
- *     for screen-reader UX. Spec OQ recommended ON.
+ *     for screen-reader UX.
  *   - `emoticon: false` skips the legacy ASCII (`:)`, `:D`) → emoji
  *     pass — Crowi authors tend to type Unicode directly when they
  *     want a smiley, and turning emoticon on can swallow code-like
@@ -52,35 +58,16 @@ export function loadRemarkEmoji(): RemarkEmojiFn {
 }
 
 /**
- * The unified-plugin factory we hand to `registry.addUnifiedPlugin`.
+ * The unified-plugin factory `pipeline.ts` hands to `processor.use(...)`.
  * unified's `.use(plugin, opts)` calls `plugin.call(processor, opts)`,
  * so the plugin must be invoked with the unified processor as `this`.
  * We pass the loaded `remark-emoji` reference through with our baked-
- * in options instead of the metadata that the api passes — `.apply()`
- * preserves the `this` binding so remark-emoji's internal
+ * in options instead of whatever the caller passed (the pipeline always
+ * passes `PipelineMetadata`, which this transform has no use for)
+ * — `.apply()` preserves the `this` binding so remark-emoji's internal
  * `this.parser` access works.
- *
- * The api's `addUnifiedPlugin` path passes `PipelineMetadata` as the
- * second argument; we ignore it and substitute our REMARK_EMOJI_OPTIONS
- * instead.
  */
-function emojiUnifiedPlugin(this: unknown, _passedOptions?: unknown): unknown {
+export function emojiUnifiedPlugin(this: unknown, _passedOptions?: unknown): unknown {
   const remarkEmoji = loadRemarkEmoji();
   return (remarkEmoji as (...args: unknown[]) => unknown).apply(this, [REMARK_EMOJI_OPTIONS]);
 }
-
-const plugin: CrowiPlugin = {
-  name: '@crowi/plugin-renderer-emoji',
-  version: '0.1.0-dev',
-  adminPlacement: {
-    section: 'renderer',
-    label: 'Emoji shortcodes',
-    icon: 'smile',
-  },
-  registerRenderer: (registry, ctx) => {
-    registry.addUnifiedPlugin(emojiUnifiedPlugin, { phase: 'transform' });
-    ctx.log.debug('registered remark-emoji on the transform phase (`:smile:` → 😀)');
-  },
-};
-
-export default plugin;

@@ -8,7 +8,8 @@ import { isSuppressedContext } from './autocomplete-extension';
 /**
  * Link-card editor affordance — a hover/focus tooltip that lets the
  * author convert a bare `http(s)://` URL to `@[card](url)` (the OGP
- * link-card embed tag — `@crowi/plugin-renderer-link-card`) and back.
+ * link-card embed tag, a core Markdown feature — see
+ * `packages/api/src/renderer/core/link-card/index.ts`) and back.
  * Modelled directly on `image-affordance-extension.ts`'s CodeMirror
  * hover/cursor tooltip pattern (`cursorTooltipField` + `hoverTooltip`,
  * the same same-span dedup technique from the duplicate-tooltip-fix,

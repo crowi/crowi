@@ -33,11 +33,11 @@ const describeMaybe = redisSmokeReachable.config ? describe : describe.skip;
  * `postUpdate()`. Same narrow-fixture pattern `crowi/index.test.ts` already
  * uses for `ConfigService`.
  */
-function fakeCrowi(loadAllConfig: jest.Mock, setupMailer: jest.Mock): unknown {
+function fakeCrowi(loadAllConfig: jest.Mock, setupMailer: jest.Mock, updateByParams: jest.Mock = jest.fn(async () => undefined)): unknown {
   return {
     redisOpts: buildRedisOpts(REDIS_SMOKE_URLS.config, true),
     redis: {}, // truthy — setupPubSub only null-checks this field
-    model: () => ({ loadAllConfig }),
+    model: () => ({ loadAllConfig, updateByParams }),
     setupMailer,
   };
 }
@@ -82,6 +82,88 @@ describeMaybe('Config pub/sub smoke (real Redis 8, dedicated crowi-test-redis in
       // ConfigService has no teardown API of its own (per the spec) — the
       // test disconnects the publisher/subscriber clients it opened
       // directly.
+      await Promise.all(
+        [
+          serviceA.pubSub.publisher?.disconnect(),
+          serviceA.pubSub.subscriber?.disconnect(),
+          serviceB.pubSub.publisher?.disconnect(),
+          serviceB.pubSub.subscriber?.disconnect(),
+        ].filter(Boolean),
+      );
+    }
+  }, 20000);
+
+  /**
+   * feature-renderer-plugin-boundary Phase 3 spec §6.2/AC5 — the
+   * `security:linkCardEnabled` toggle's durable write path
+   * (`ConfigService.saveConfigValueDurable`), exercised cross-replica
+   * for real over the dedicated `crowi-test-redis` pub/sub channel:
+   * a successful durable write on instance A updates A's own memory
+   * immediately (before any publish round-trip) and drives instance B's
+   * subscriber to reload + reflect the same value once its `load()`
+   * fires — same "handling replica updates first, remote replica
+   * catches up after pub/sub reload" contract the AC requires.
+   */
+  it("instance A's successful saveConfigValueDurable() flips A's own memory immediately and drives instance B to the same value after pub/sub reload", async () => {
+    const updateByParamsA = jest.fn(async () => undefined);
+    const loadAllConfigA = jest.fn(async () => ({ crowi: {} }));
+    const setupMailerA = jest.fn(async () => undefined);
+    const loadAllConfigB = jest.fn(async () => ({ crowi: { 'security:linkCardEnabled': false } }));
+    const setupMailerB = jest.fn(async () => undefined);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const serviceA = new ConfigService(fakeCrowi(loadAllConfigA, setupMailerA, updateByParamsA) as any);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const serviceB = new ConfigService(fakeCrowi(loadAllConfigB, setupMailerB) as any);
+
+    try {
+      await Promise.all([serviceA.setupPubSub(), serviceB.setupPubSub()]);
+
+      await serviceA.saveConfigValueDurable('crowi', 'security:linkCardEnabled', false);
+      expect(updateByParamsA).toHaveBeenCalledWith('crowi', 'security:linkCardEnabled', false);
+      // Handling replica's own memory flips synchronously, before any
+      // remote round-trip.
+      expect(serviceA.config.crowi?.['security:linkCardEnabled']).toBe(false);
+
+      await waitUntil(() => loadAllConfigB.mock.calls.length >= 1);
+      expect(serviceB.config.crowi?.['security:linkCardEnabled']).toBe(false);
+    } finally {
+      await Promise.all(
+        [
+          serviceA.pubSub.publisher?.disconnect(),
+          serviceA.pubSub.subscriber?.disconnect(),
+          serviceB.pubSub.publisher?.disconnect(),
+          serviceB.pubSub.subscriber?.disconnect(),
+        ].filter(Boolean),
+      );
+    }
+  }, 20000);
+
+  it('a rejected Mongo write propagates, leaves memory unmutated, and never reaches instance B (zero publish on failure)', async () => {
+    const updateByParamsA = jest.fn(async () => {
+      throw new Error('mongo down');
+    });
+    const loadAllConfigA = jest.fn(async () => ({ crowi: {} }));
+    const setupMailerA = jest.fn(async () => undefined);
+    const loadAllConfigB = jest.fn(async () => ({ crowi: {} }));
+    const setupMailerB = jest.fn(async () => undefined);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const serviceA = new ConfigService(fakeCrowi(loadAllConfigA, setupMailerA, updateByParamsA) as any);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const serviceB = new ConfigService(fakeCrowi(loadAllConfigB, setupMailerB) as any);
+
+    try {
+      await Promise.all([serviceA.setupPubSub(), serviceB.setupPubSub()]);
+
+      await expect(serviceA.saveConfigValueDurable('crowi', 'security:linkCardEnabled', false)).rejects.toThrow('mongo down');
+      expect(serviceA.config.crowi).toBeUndefined();
+
+      // Give any (incorrect) publish a moment to arrive at B before
+      // asserting it never did.
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      expect(loadAllConfigB).not.toHaveBeenCalled();
+    } finally {
       await Promise.all(
         [
           serviceA.pubSub.publisher?.disconnect(),

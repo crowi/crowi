@@ -22,15 +22,28 @@ export type RegistrationMode = z.infer<typeof RegistrationModeSchema>;
  * namespace:
  *   - security:registrationMode       -> registrationMode
  *   - security:registrationWhiteList  -> registrationWhiteList
+ *   - security:linkCardEnabled        -> linkCardEnabled
  *
  * NOTE: the legacy site-wide HTTP Basic auth (`security:basicName` /
  * `security:basicSecret`) was removed (breaking change). In the split
  * Next.js + Hono architecture, gate the site at a reverse proxy instead.
  * The old config keys, if present in the DB, are simply ignored.
+ *
+ * `linkCardEnabled` (feature-renderer-plugin-boundary Phase 3) controls
+ * whether the core `@[card](url)` link-card embed is allowed to fetch
+ * OGP metadata from external URLs. Missing / non-boolean stored values
+ * read as `true` (default ON) — see
+ * `packages/api/src/util/admin-config.ts`'s `coerceBoolean(value, true)`
+ * call at every read site. Writing this field goes through a dedicated
+ * fail-propagating persistence path
+ * (`ConfigService.saveConfigValueDurable`), NOT the same best-effort
+ * batch write as `registrationMode` / `registrationWhiteList` — see
+ * `packages/api/src/hono/handlers/admin/security.ts`.
  */
 export const SecuritySettingsSchema = z.object({
   registrationMode: RegistrationModeSchema,
   registrationWhiteList: z.array(z.string()),
+  linkCardEnabled: z.boolean(),
 });
 export type SecuritySettings = z.infer<typeof SecuritySettingsSchema>;
 

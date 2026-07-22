@@ -6,7 +6,6 @@
 "@crowi/plugin-storage-local": minor
 "@crowi/plugin-storage-aws-s3": minor
 "@crowi/plugin-search-elasticsearch": minor
-"@crowi/plugin-renderer-emoji": minor
 "@crowi/plugin-renderer-katex": minor
 "@crowi/plugin-renderer-plantuml": minor
 "@crowi/plugin-renderer-crowi-legacy": minor

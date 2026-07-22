@@ -21,7 +21,17 @@ export class InstallerPage {
       this.page.locator('form button[type="submit"]').click(),
     ]);
 
+    await expect(this.page).toHaveURL(/\/admin\?welcome=installed$/, { timeout: 30_000 });
+
+    // The post-install destination opens a one-shot welcome dialog on top of
+    // the admin dashboard. It makes the background user menu inert, so drive
+    // the dialog through its real flow before asserting the authenticated UI.
+    const welcomeDialog = this.page.getByRole('dialog', { name: 'Setup complete 🎉' });
+    await expect(welcomeDialog).toBeVisible({ timeout: 30_000 });
+    await welcomeDialog.getByRole('button', { name: 'Get started' }).click();
+    await expect(welcomeDialog).not.toBeVisible();
+    await expect(this.page).toHaveURL(/\/admin$/);
+
     await expect(this.page.getByRole('button', { name: new RegExp(credentials.name) })).toBeVisible({ timeout: 30_000 });
-    await expect(this.page).not.toHaveURL(/\/installer$/);
   }
 }

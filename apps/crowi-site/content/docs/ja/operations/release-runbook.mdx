@@ -36,9 +36,9 @@ Docker / Elasticsearch image の出し方をまとめます。
 
 以下は CI からは実行できません。**初回リリース前に 1 回だけ** 手作業で設定します。
 
-### 1. npm Trusted Publisher（公開 19 パッケージ）
+### 1. npm Trusted Publisher（公開 18 パッケージ）
 
-npmjs.com で **公開 19 パッケージそれぞれ** に Trusted Publisher を登録します
+npmjs.com で **公開 18 パッケージそれぞれ** に Trusted Publisher を登録します
 （repo `crowi/crowi` + workflow `release.yml`、必要なら environment）。これにより
 長期 `NPM_TOKEN` 不要・provenance 付きの OIDC publish が成立します。対象:
 
@@ -53,7 +53,6 @@ npmjs.com で **公開 19 パッケージそれぞれ** に Trusted Publisher �
 @crowi/plugin-mail-resend
 @crowi/plugin-mail-smtp
 @crowi/plugin-renderer-crowi-legacy
-@crowi/plugin-renderer-emoji
 @crowi/plugin-renderer-katex
 @crowi/plugin-renderer-plantuml
 @crowi/plugin-search-elasticsearch

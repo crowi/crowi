@@ -64,6 +64,12 @@
         "@crowi/runner-app#build"
       ]
     },
+    "@crowi/plugin-renderer-katex#test": {
+      "dependsOn": [
+        "build",
+        "^build"
+      ]
+    },
     "@crowi/runner-app#build": {
       "dependsOn": [
         "^build"

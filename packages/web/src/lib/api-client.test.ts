@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const envMock = vi.fn<(key: string) => string | undefined>();
 vi.mock('./runtime-env', () => ({ env: (key: string) => envMock(key) }));
 
-import { apiOrigin, apiV2BaseUrl } from './api-client';
+import { apiOrigin, apiV2BaseUrl, resolveApiUrl } from './api-client';
 
 describe('api base resolution', () => {
   beforeEach(() => {
@@ -36,5 +36,31 @@ describe('api base resolution', () => {
     envMock.mockReturnValue('https://api.example.com/');
     expect(apiOrigin()).toBe('https://api.example.com');
     expect(apiV2BaseUrl()).toBe('https://api.example.com/api/v2');
+  });
+});
+
+/**
+ * `resolveApiUrl` — shared by `apiV2Fetch` (request URLs) and
+ * `RendererStylesheets` (`<link href>` values, feature-renderer-plugin-
+ * boundary Phase 1). Same call-time-read + relative-when-empty-origin rule
+ * as `apiOrigin`/`apiV2BaseUrl` above, exercised directly here instead of
+ * only indirectly through a fetch call.
+ */
+describe('resolveApiUrl', () => {
+  beforeEach(() => {
+    envMock.mockReset();
+  });
+
+  it('returns the path unchanged (relative) when NEXT_PUBLIC_API_URL is unset', () => {
+    envMock.mockReturnValue(undefined);
+    expect(resolveApiUrl('/api/v2/plugins/@crowi/plugin-renderer-katex/katex.css')).toBe('/api/v2/plugins/@crowi/plugin-renderer-katex/katex.css');
+  });
+
+  it('prepends the runtime API origin, read at call time', () => {
+    envMock.mockReturnValue(undefined);
+    expect(resolveApiUrl('/api/v2/app/info')).toBe('/api/v2/app/info');
+
+    envMock.mockReturnValue('https://api.example.com');
+    expect(resolveApiUrl('/api/v2/app/info')).toBe('https://api.example.com/api/v2/app/info');
   });
 });

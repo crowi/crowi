@@ -1,4 +1,4 @@
-import { renderCard, renderErrorCard } from './render-card';
+import { renderCard, renderFallbackCard } from './render-card';
 
 /**
  * `stripUnknownElements` structural-preservation fixture (spec
@@ -6,7 +6,7 @@ import { renderCard, renderErrorCard } from './render-card';
  * (`packages/web/src/components/editor/render-mdast.ts:stripUnknownElements`)
  * unwraps (drops the wrapper, keeps children) any element whose tag
  * name isn't in `known-tags.ts`'s allow-list. Rather than pulling the
- * web app's mdast/hast toolchain into this api-side package (wrong
+ * web app's mdast/hast toolchain into this api-side module (wrong
  * dependency direction), this scans the raw HTML for every opening tag
  * and asserts each one is a member of the exact allow-listed subset
  * this renderer is documented to use (`figure` / `a` / `div` / `img` /
@@ -21,7 +21,7 @@ import { renderCard, renderErrorCard } from './render-card';
  * this output, in
  * `packages/web/src/components/editor/render-mdast.test.tsx`'s "link-card
  * embed HTML" describe block — see that file if the two ever need to
- * be kept in sync after a `renderCard`/`renderErrorCard` shape change.
+ * be kept in sync after a `renderCard`/`renderFallbackCard` shape change.
  */
 const KNOWN_TAGS = new Set(['figure', 'a', 'div', 'img', 'span']);
 const OPEN_TAG_RE = /<([a-zA-Z][a-zA-Z0-9-]*)\b/g;
@@ -30,7 +30,7 @@ function tagNamesIn(html: string): string[] {
   return [...html.matchAll(OPEN_TAG_RE)].map((m) => m[1]);
 }
 
-describe('renderCard / renderErrorCard — every emitted tag is known-tags-allow-listed', () => {
+describe('renderCard / renderFallbackCard — every emitted tag is known-tags-allow-listed', () => {
   it('a full card (title/description/domain/site-name/image) uses only known tags', () => {
     const html = renderCard('https://example.test/page', {
       title: 'Title',
@@ -50,9 +50,10 @@ describe('renderCard / renderErrorCard — every emitted tag is known-tags-allow
     expect(tags).toContain('figure');
   });
 
-  it('an error card uses only known tags', () => {
-    const tags = tagNamesIn(renderErrorCard('https://example.test/page'));
-    expect(tags).toEqual(['figure', 'a', 'div', 'div', 'span']);
+  it('a fallback card uses only known tags', () => {
+    const tags = tagNamesIn(renderFallbackCard('https://example.test/page'));
+    // figure > a > div(body) > div(title)
+    expect(tags).toEqual(['figure', 'a', 'div', 'div']);
     expect(tags.every((t) => KNOWN_TAGS.has(t))).toBe(true);
   });
 
@@ -150,16 +151,54 @@ describe('renderCard — content shape', () => {
   });
 });
 
-describe('renderErrorCard', () => {
+describe('renderFallbackCard — unified fallback contract (spec §6.1/§6.2)', () => {
   it('renders a working link to the original URL', () => {
-    const html = renderErrorCard('https://example.test/unreachable');
+    const html = renderFallbackCard('https://example.test/unreachable');
     expect(html).toContain('href="https://example.test/unreachable"');
-    expect(html).toContain('example.test');
-    expect(html).toContain('crowi-link-card-error');
+    expect(html).toContain('target="_blank"');
+    expect(html).toContain('rel="noopener noreferrer"');
   });
 
-  it('never emits the raw url when it is a non-http(s) scheme', () => {
-    const html = renderErrorCard('javascript:alert(1)');
+  it('shows the URL itself (not the domain) as the title — matches the editor live-preview placeholder contract', () => {
+    const html = renderFallbackCard('https://example.test/some/deep/page?x=1');
+    expect(html).toContain('<div class="crowi-link-card-title">https://example.test/some/deep/page?x=1</div>');
+  });
+
+  it('carries the crowi-link-card class vocabulary shared with renderCard()', () => {
+    const html = renderFallbackCard('https://example.test/x');
+    expect(html).toContain('class="crowi-link-card"');
+    expect(html).toContain('class="crowi-link-card-body"');
+    expect(html).toContain('class="crowi-link-card-title"');
+  });
+
+  it('never emits an error-specific class or label — the old crowi-link-card-error / "Preview unavailable" variant is retired', () => {
+    const html = renderFallbackCard('https://example.test/x');
+    expect(html).not.toContain('crowi-link-card-error');
+    expect(html).not.toMatch(/Preview unavailable/i);
+  });
+
+  it('never emits OGP fields (no description, no image, no site-name)', () => {
+    const html = renderFallbackCard('https://example.test/x');
+    expect(html).not.toContain('crowi-link-card-description');
+    expect(html).not.toContain('crowi-link-card-image');
+    expect(html).not.toContain('crowi-link-card-site-name');
+    expect(html).not.toContain('crowi-link-card-domain');
+    expect(html).not.toContain('<img');
+  });
+
+  it('never emits the raw url as href when it is a non-http(s) scheme', () => {
+    const html = renderFallbackCard('javascript:alert(1)');
     expect(html).not.toMatch(/href="javascript:/);
+    expect(html).toContain('href="#"');
+  });
+
+  it('escapes an XSS attempt embedded in the url itself (title = escaped url)', () => {
+    const html = renderFallbackCard('https://example.test/page?q="><script>alert(1)</script>');
+    expect(html).not.toMatch(/<script/i);
+  });
+
+  it('is byte-identical for the same url across repeated calls (fetch-failure path and toggle-off path share this exact builder)', () => {
+    const url = 'https://example.test/same-url';
+    expect(renderFallbackCard(url)).toBe(renderFallbackCard(url));
   });
 });
