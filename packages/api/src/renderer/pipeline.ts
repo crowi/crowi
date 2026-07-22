@@ -3,6 +3,7 @@ import type { Root } from 'mdast';
 import type { TocEntryResponse, WikiLinkResponse, MentionResponse } from '@crowi/api-contract';
 import type { MongoCacheStorage } from './cache';
 import { buildCorePlugins, buildPluginDispatchPlugins, makePreviewCodeBlockDispatch } from './core';
+import { emojiUnifiedPlugin } from './core/emoji';
 import { makeMentionResolve, type MentionUsernameResolver } from './core/mention-resolve';
 import { RendererRegistryImpl } from './registry';
 
@@ -308,6 +309,18 @@ export async function runPipeline(
   // heading text; runs before registry plugins so external transforms
   // see the post-breaks tree.
   processor = processor.use(remarkBreaks as never);
+
+  // Emoji shortcode transform (feature-renderer-plugin-boundary Phase 3
+  // — moved from a registry-registered plugin to a hard-coded core
+  // transform). Deliberately NOT a `buildCorePlugins()` entry: that
+  // list's factories are all `(metadata) => (tree) => void`, bound to
+  // this run's `PipelineMetadata` bag, and emoji needs no metadata —
+  // `emojiUnifiedPlugin` is unified's own `(this, opts) => Transformer`
+  // shape instead. Runs after `remarkBreaks` (same position external
+  // plugin transforms occupied when emoji was still plugin-registered)
+  // and before the registry's external transforms, so it is applied
+  // unconditionally — no plugin install / registration required.
+  processor = processor.use(emojiUnifiedPlugin as never);
 
   for (const plugin of registry.getTransformPlugins()) {
     // External plugins can be either factory `(opts) => Transformer`
