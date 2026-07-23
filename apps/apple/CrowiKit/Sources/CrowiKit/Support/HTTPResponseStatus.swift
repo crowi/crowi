@@ -10,7 +10,7 @@ import Foundation
 extension URLResponse {
     /// `true` only for an `HTTPURLResponse` whose `statusCode` is in `200..<300`.
     var isSuccessfulHTTPResponse: Bool {
-        (self as? HTTPURLResponse).map { 200..<300 ~= $0.statusCode } ?? false
+        httpStatusCodeOrUnknown.isSuccessfulHTTPStatus
     }
 
     /// The HTTP status code, or `-1` if this isn't an `HTTPURLResponse` at all
@@ -19,5 +19,18 @@ extension URLResponse {
     /// response).
     var httpStatusCodeOrUnknown: Int {
         (self as? HTTPURLResponse)?.statusCode ?? -1
+    }
+}
+
+/// `feature-ios-phase1-read` — `AuthenticatedAPIClient` (built on
+/// `HTTPTypes.HTTPResponse`/`OpenAPIRuntime.ClientTransport`, not
+/// `Foundation.URLResponse`) only ever has the bare status code by the time
+/// its caller needs to branch on 2xx vs. everything else, so the shared
+/// `200..<300` range lives here too rather than being re-declared per lenient
+/// decoder call site.
+extension Int {
+    /// `true` when this is a 2xx HTTP status code.
+    var isSuccessfulHTTPStatus: Bool {
+        200..<300 ~= self
     }
 }
