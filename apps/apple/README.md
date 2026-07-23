@@ -440,3 +440,55 @@ always prefers a fresh network read when online (§7.2).
 
 Bounded write (create page, quick-edit with `revision_id` optimistic locking,
 post a comment, toggle engagement) is `feature-ios-phase2-write`, next.
+
+## Image viewer (`feature-ios-image-viewer`)
+
+Tapping a successfully-rendered body image opens a fullscreen zoom viewer
+(`fullScreenCover` on iOS; the macOS build of CrowiKit degrades to a sheet):
+pinch to zoom, drag to pan while zoomed, double-tap to toggle zoom, swipe
+down (or the close button) to dismiss — standard SwiftUI gestures only.
+Client-side only; the server needed zero changes.
+
+- **Body = display derivative, viewer = original.** The server's
+  image-derivative optimization makes the canonical attachment URL
+  (`/api/v2/attachments/<id>`) serve a downscaled display derivative, with
+  the original bytes behind an explicit `${url}/original` path. The body
+  embed deliberately stays on the canonical URL (bandwidth; the width-capped
+  block render fits it anyway), while the viewer — whose whole point is
+  pinch-zooming — resolves and fetches the ORIGINAL. A body embed carries no
+  attachment object, only a URL, so
+  `Images/OriginalImageResolver.swift` recognizes the exact canonical
+  embedded shape (`<origin>/api/v2/attachments/<24-hex id>`), asks
+  `GET /attachments/<id>/meta` (tolerantly decoded by
+  `API/AttachmentMetaLenient.swift`, the same hand-written lenient pattern
+  as every other response model) and rebases the returned `originalUrl`
+  against the workspace origin. EVERY failure mode — legacy `/files/<id>`
+  embeds, external allowlisted images, a `/meta` 404 / missing `originalUrl`
+  (a workspace predating the derivative contract), an off-origin
+  `originalUrl` — falls back to the canonical URL, so the viewer never
+  renders worse than the body did.
+- **Same image seam, no second fetch path.** The viewer fetches through the
+  SAME `WorkspaceImageFetching` conformer (the per-workspace disk cache
+  wrapping the §6.1 same-origin-Bearer + redirect-strip loader) the body
+  render used; the `/original` URL is naturally its own cache entry (the
+  cache is URL-keyed). Raster decode only, as everywhere else — SVG bytes
+  are never handed to a `WKWebView`/SVG-DOM context.
+- **Tap only where a real image rendered.** The tap gesture is attached in
+  `WorkspaceMarkdownImageView`'s decoded-image branch exclusively
+  (`WorkspaceMarkdownImageTapPolicy`), so an inert image (disallowed scheme,
+  fetch/decode failure — a zero-size placeholder) structurally cannot be
+  tapped. Block-path images only: the inline path's `InlineImageProvider`
+  contract returns a bare `Image` concatenated into `Text`, which cannot
+  carry a gesture — and `ImageAttributeBlockPreprocessor.strip` already
+  restores attribute-annotated images to the block path.
+- **Confidential banner re-applied inside the cover.** A `fullScreenCover`
+  draws ABOVE `WorkspaceHomeView`'s chrome-root `.confidentialBanner`, so
+  `Rendering/ImageViewerView.swift` re-applies the notice inside its own
+  content — "always on top, on every screen" stays true while an image is
+  fullscreen. No save/share affordance, deliberately: a future confidential
+  export suppression (Phase 3+) would have to gate exactly that surface.
+- The wiring lives where the image providers already compose:
+  `WorkspacePageMarkdownView` gains an opt-in `imageViewer:` configuration
+  (resolver + confidential notice) and owns the presentation state;
+  `PageReaderView` opts in, the read-only revision-history sheet stays
+  viewer-less by default.
