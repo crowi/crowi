@@ -5995,6 +5995,17 @@ export interface paths {
                                 isPage: boolean;
                                 hasPortal: boolean;
                                 count: number;
+                                lastUpdatedAt?: string | null;
+                                updater?: {
+                                    _id: string;
+                                    id?: string;
+                                    username: string;
+                                    name: string;
+                                    /** Format: email */
+                                    email: string;
+                                    image?: string | null;
+                                    createdAt: string;
+                                } | null;
                             }[];
                         };
                     };

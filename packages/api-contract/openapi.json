@@ -23334,6 +23334,52 @@
                           },
                           "count": {
                             "type": "number"
+                          },
+                          "lastUpdatedAt": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "updater": {
+                            "type": [
+                              "object",
+                              "null"
+                            ],
+                            "properties": {
+                              "_id": {
+                                "type": "string"
+                              },
+                              "id": {
+                                "type": "string"
+                              },
+                              "username": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "email": {
+                                "type": "string",
+                                "format": "email"
+                              },
+                              "image": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "createdAt": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "_id",
+                              "username",
+                              "name",
+                              "email",
+                              "createdAt"
+                            ]
                           }
                         },
                         "required": [
