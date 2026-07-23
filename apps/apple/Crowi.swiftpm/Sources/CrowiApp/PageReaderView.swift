@@ -28,6 +28,7 @@ struct PageReaderView: View {
                     WorkspacePageMarkdownView(
                         rawBody: body,
                         imageLoader: session.imageCache,
+                        imageBaseURL: session.context.workspace.workspaceOrigin.baseURL,
                         onNavigateToWikiLink: { target in onSelectDestination(.page(path: target)) },
                         onNavigateToMention: { username in onSelectDestination(.profile(username: username)) },
                         onNavigateToRelativePath: { target in onSelectDestination(.page(path: target)) }

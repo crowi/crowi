@@ -47,6 +47,7 @@ struct RevisionHistoryView: View {
                         WorkspacePageMarkdownView(
                             rawBody: selectedRevisionBody,
                             imageLoader: session.imageCache,
+                            imageBaseURL: session.context.workspace.workspaceOrigin.baseURL,
                             onNavigateToWikiLink: { _ in },
                             onNavigateToMention: { _ in },
                             onNavigateToRelativePath: { _ in }

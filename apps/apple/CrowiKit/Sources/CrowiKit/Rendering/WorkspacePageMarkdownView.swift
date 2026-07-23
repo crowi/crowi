@@ -3,9 +3,27 @@ import SwiftUI
 
 /// RFC-0016 §6/§6.2/§15 — composes `Markdown(body)` (gate C's selected
 /// renderer) with:
-///   - `WorkspaceMarkdownImageProvider` — the proven §6.1 same-origin-Bearer
-///     + redirect-strip authenticated image loader seam (Phase 0/1, reused
-///     verbatim);
+///   - `WorkspaceMarkdownImageProvider` / `WorkspaceMarkdownInlineImageProvider`
+///     — the proven §6.1 same-origin-Bearer + redirect-strip authenticated
+///     image loader seam (Phase 0/1, reused verbatim), wired to BOTH of
+///     swift-markdown-ui's image environment keys. Which key a given image
+///     node uses depends on cmark-gfm's parse shape, not on anything this
+///     view controls: an image alone on its own paragraph line renders via
+///     `\.imageProvider` (`ImageView`), but an image sharing a line with any
+///     other inline content — including crowi's own image-attribute markdown
+///     `![alt](url){width=500px}`, which cmark-gfm parses as an image inline
+///     node followed by a literal text node — renders via
+///     `\.inlineImageProvider` (`InlineText`) instead. Wiring only the first
+///     (as Phase 0 gate C did) leaves every attribute-annotated image, and
+///     any other image not alone on its line, falling through to
+///     swift-markdown-ui's unauthenticated `DefaultInlineImageProvider`;
+///   - `imageBaseURL:` on `Markdown(...)` — resolves crowi's relative
+///     attachment URLs (`/api/v2/attachments/<id>`) against the workspace
+///     origin at the point swift-markdown-ui builds each image node's `URL`,
+///     which `InlineText` needs (it has no other rebasing step). The block
+///     path already rebases independently inside `WorkspaceImageLoader.fetch`,
+///     so passing this does not change its behavior — confirmed the final
+///     resolved URL is identical either way;
 ///   - `WikiLinkMentionPreprocessor.preprocess(_:)` — rewrites raw
 ///     `[[wikilinks]]` / `@mentions` into ordinary CommonMark links against
 ///     private pseudo-schemes BEFORE the renderer ever sees the body (§6 —
@@ -20,6 +38,10 @@ import SwiftUI
 public struct WorkspacePageMarkdownView: View {
     let rawBody: String
     let imageLoader: any WorkspaceImageFetching
+    /// The active workspace's origin (scheme+host+port, §3) — passed through
+    /// to `Markdown(...)`'s `imageBaseURL:` so relative image URLs resolve
+    /// the same way for both the block and inline image paths.
+    let imageBaseURL: URL
     let onNavigateToWikiLink: (String) -> Void
     let onNavigateToMention: (String) -> Void
     /// An ordinary (non-wikilink, non-mention) workspace-relative Markdown
@@ -32,20 +54,23 @@ public struct WorkspacePageMarkdownView: View {
     public init(
         rawBody: String,
         imageLoader: any WorkspaceImageFetching,
+        imageBaseURL: URL,
         onNavigateToWikiLink: @escaping (String) -> Void,
         onNavigateToMention: @escaping (String) -> Void,
         onNavigateToRelativePath: @escaping (String) -> Void
     ) {
         self.rawBody = rawBody
         self.imageLoader = imageLoader
+        self.imageBaseURL = imageBaseURL
         self.onNavigateToWikiLink = onNavigateToWikiLink
         self.onNavigateToMention = onNavigateToMention
         self.onNavigateToRelativePath = onNavigateToRelativePath
     }
 
     public var body: some View {
-        Markdown(WikiLinkMentionPreprocessor.preprocess(rawBody))
+        Markdown(WikiLinkMentionPreprocessor.preprocess(rawBody), imageBaseURL: imageBaseURL)
             .markdownImageProvider(WorkspaceMarkdownImageProvider(loader: imageLoader))
+            .markdownInlineImageProvider(WorkspaceMarkdownInlineImageProvider(loader: imageLoader))
             .environment(
                 \.openURL,
                 OpenURLAction { url in
