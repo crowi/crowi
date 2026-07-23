@@ -1,5 +1,3 @@
-import { createJiti } from 'jiti';
-
 /**
  * Emoji shortcode transform — core Markdown feature
  * (feature-renderer-plugin-boundary Phase 3).
@@ -17,10 +15,15 @@ import { createJiti } from 'jiti';
  * no longer a registry-registered plugin transform, it is a
  * hard-coded `pipeline.ts` `.use()` call inserted directly between
  * `remarkBreaks` and the registry's external transform loop.
- * `remark-emoji` is ESM-only (depends on unified@^11), so this module
- * still loads it through `jiti` on first use — `createJiti(__filename,
- * …)` keeps working unchanged since it re-resolves relative to THIS
- * file's own location.
+ * `remark-emoji` is ESM-only (depends on unified@^11); its resolution
+ * lives in `PipelineEsmDeps` / `createPipelineEsmDepsLoader()`
+ * (`../pipeline.ts`) alongside the pipeline's other ESM-only deps, so
+ * it is cached per-`Renderer`-instance instead of by a module-level
+ * singleton in this file (feature-renderer-core-util-dedup — a
+ * module-level cache here would reintroduce the exact anti-pattern
+ * `createPipelineEsmDepsLoader`'s own doc comment warns against: a
+ * cache shared across Crowi instances breaks under jest, where each
+ * test file boots a fresh `Crowi`).
  */
 
 /**
@@ -41,33 +44,24 @@ const REMARK_EMOJI_OPTIONS = {
   padSpaceAfter: false,
 } as const;
 
-/**
- * Cached factory closure. The first call jiti-loads `remark-emoji` and
- * the cached body is reused for every subsequent boot of the same
- * process. Test-only export.
- */
-type RemarkEmojiFn = (...args: unknown[]) => (...inner: unknown[]) => void;
-let remarkEmojiCache: RemarkEmojiFn | null = null;
-
-export function loadRemarkEmoji(): RemarkEmojiFn {
-  if (remarkEmojiCache !== null) return remarkEmojiCache;
-  const jiti = createJiti(__filename, { interopDefault: true });
-  const mod = jiti('remark-emoji') as { default: RemarkEmojiFn };
-  remarkEmojiCache = mod.default;
-  return remarkEmojiCache;
-}
+/** Shape of `remark-emoji`'s default export, as `PipelineEsmDeps` resolves it via jiti. */
+export type RemarkEmojiFn = (...args: unknown[]) => (...inner: unknown[]) => void;
 
 /**
- * The unified-plugin factory `pipeline.ts` hands to `processor.use(...)`.
- * unified's `.use(plugin, opts)` calls `plugin.call(processor, opts)`,
- * so the plugin must be invoked with the unified processor as `this`.
- * We pass the loaded `remark-emoji` reference through with our baked-
- * in options instead of whatever the caller passed (the pipeline always
- * passes `PipelineMetadata`, which this transform has no use for)
- * — `.apply()` preserves the `this` binding so remark-emoji's internal
+ * Build the unified-plugin factory `pipeline.ts` hands to
+ * `processor.use(...)`, bound to an already-resolved `remark-emoji`
+ * (`deps.remarkEmoji`, per-`Renderer`-instance — see the module doc
+ * comment above). unified's `.use(plugin, opts)` calls
+ * `plugin.call(processor, opts)`, so the returned function must be
+ * invoked with the unified processor as `this`. We pass the loaded
+ * `remark-emoji` reference through with our baked-in options instead
+ * of whatever the caller passed (the pipeline always passes
+ * `PipelineMetadata`, which this transform has no use for) —
+ * `.apply()` preserves the `this` binding so remark-emoji's internal
  * `this.parser` access works.
  */
-export function emojiUnifiedPlugin(this: unknown, _passedOptions?: unknown): unknown {
-  const remarkEmoji = loadRemarkEmoji();
-  return (remarkEmoji as (...args: unknown[]) => unknown).apply(this, [REMARK_EMOJI_OPTIONS]);
+export function makeEmojiUnifiedPlugin(remarkEmoji: RemarkEmojiFn): (this: unknown, _passedOptions?: unknown) => unknown {
+  return function emojiUnifiedPlugin(this: unknown, _passedOptions?: unknown): unknown {
+    return (remarkEmoji as (...args: unknown[]) => unknown).apply(this, [REMARK_EMOJI_OPTIONS]);
+  };
 }
