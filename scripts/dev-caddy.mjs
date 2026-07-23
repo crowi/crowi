@@ -55,14 +55,22 @@ export function generateCaddyfile({ apiPort, webPort, proxyPort, listenHost = '0
 # Regenerated on every \`pnpm dev\`. Per-worktree same-origin dev proxy, mirrors
 # the routing table in the repo-root Caddyfile (prod \`app\` profile).
 #
-# The explicit http:// scheme is load-bearing: a schemeless site address on a
-# non-:80 port makes Caddy serve it with automatic HTTPS (local-CA TLS), which
-# silently breaks every plain-HTTP dev client with "Client sent an HTTP
-# request to an HTTPS server." The node fallback proxy is plain HTTP, so
-# without the scheme the two proxies disagree the moment a \`caddy\` binary
-# appears on PATH (latent until 2026-07-23, when installing caddy for an
-# unrelated smoke test broke this worktree's running dev proxy mid-session).
-http://${listenHost}:${proxyPort} {
+# Both halves of the site address are load-bearing (parity with the node
+# fallback proxy, which binds \`listenHost\` and serves ANY Host — latent on
+# any machine without a \`caddy\` binary until one appears on PATH, which is
+# exactly what happened on 2026-07-23 and broke a running dev proxy):
+#
+# - The explicit http:// scheme: a schemeless non-:80 site address gets
+#   Caddy's automatic HTTPS (local-CA TLS), and every plain-HTTP dev client
+#   dies with 400 "Client sent an HTTP request to an HTTPS server."
+# - The EMPTY host (\`http://:port\`, not \`http://0.0.0.0:port\`): Caddy
+#   treats the address's host part as a Host-header MATCHER, not a bind
+#   address — \`0.0.0.0:4323\` only serves requests whose Host header is
+#   literally "0.0.0.0:4323" and answers everything else (localhost, LAN
+#   IPs, tailscale) with its empty-200 default. An empty host matches any
+#   Host; the \`bind\` directive below is what actually picks the interface.
+http://:${proxyPort} {
+	bind ${listenHost}
 	# HTTP API + attachments (+ OAuth discovery) → api
 	@api path ${apiPathList}
 	reverse_proxy @api localhost:${apiPort}
