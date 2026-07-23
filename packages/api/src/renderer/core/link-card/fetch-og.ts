@@ -1,3 +1,4 @@
+import { Semaphore } from 'src/util/semaphore';
 import { checkHostnameSsrf, type DnsLookupFn, type SsrfCheckResult } from './ssrf-guard';
 
 /**
@@ -79,81 +80,13 @@ const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 export const FETCH_QUEUE_LIMIT = 50;
 export const FETCH_QUEUE_WAIT_MS = 2 * FETCH_TIMEOUT_MS;
 
-/** What `Semaphore.acquire()` resolves to — either a granted slot (with its release callback) or a rejection (queue-length cap hit, or the wait deadline elapsed). Callers never distinguish the two rejection causes — both map to the same `busy` outcome. */
-export type SemaphoreAcquireResult = { ok: true; release: () => void } | { ok: false };
-
-/**
- * Minimal async semaphore — no `p-limit`-style shared util exists in
- * this repo (spec §"newDeps"), and the cap is small/internal enough
- * that a hand-rolled queue is simpler than adding a dependency.
- *
- * Bounded on two axes (see `FETCH_QUEUE_LIMIT` / `FETCH_QUEUE_WAIT_MS`
- * above — this class is deliberately parameterized rather than
- * hardcoding those production constants, so tests can exercise the
- * same cap/timeout behavior at a smaller, fast scale): `queueLimit`
- * caps how many callers may ever sit in `queue` at once — beyond it,
- * `acquire()` fails synchronously with `{ ok: false }` without ever
- * constructing a `Promise` that would sit unresolved; `waitMs` caps how
- * long an accepted waiter may sit in `queue` before giving up the same
- * way.
- */
-export class Semaphore {
-  private active = 0;
-  private readonly queue: Array<() => void> = [];
-
-  constructor(
-    private readonly max: number,
-    private readonly queueLimit: number = FETCH_QUEUE_LIMIT,
-    private readonly waitMs: number = FETCH_QUEUE_WAIT_MS,
-  ) {}
-
-  async acquire(): Promise<SemaphoreAcquireResult> {
-    if (this.active < this.max) {
-      this.active++;
-      return this.grantSlot();
-    }
-    if (this.queue.length >= this.queueLimit) {
-      // Queue-length cap reached — the core DoS fix. Fail synchronously
-      // without ever pushing a new entry onto `queue`, so the total
-      // count of outstanding acquisitions (active + queued) never
-      // exceeds `max + queueLimit`, a constant, regardless of how many
-      // callers pile on in one dispatch.
-      return { ok: false };
-    }
-    return new Promise<SemaphoreAcquireResult>((resolve) => {
-      // No separate "settled" flag needed: `grant` can only run once,
-      // from one of two mutually-exclusive places — `release()`'s
-      // `queue.shift()` (which physically removes this entry from
-      // `queue` first) or the timer below (cleared by `grant` the
-      // instant it runs). The timer's own `indexOf` check against
-      // `queue` already tells it whether `release()` won the race.
-      const grant = (): void => {
-        clearTimeout(timer);
-        this.active++;
-        resolve(this.grantSlot());
-      };
-      const timer = setTimeout(() => {
-        const idx = this.queue.indexOf(grant);
-        if (idx === -1) return; // already granted via release()
-        this.queue.splice(idx, 1);
-        resolve({ ok: false });
-      }, this.waitMs);
-      this.queue.push(grant);
-    });
-  }
-
-  private grantSlot(): SemaphoreAcquireResult {
-    return { ok: true, release: () => this.release() };
-  }
-
-  private release(): void {
-    this.active--;
-    const next = this.queue.shift();
-    if (next) next();
-  }
-}
-
-const sharedSemaphore = new Semaphore(FETCH_CONCURRENCY_LIMIT);
+// `Semaphore` is the repo's one shared bounded-concurrency implementation
+// (`src/util/semaphore.ts`, feature-renderer-core-util-dedup — consolidated
+// with the image display-derivative upload admission's own semaphore).
+// `acquire()` never distinguishes its two rejection causes (queue-length
+// cap hit vs. wait deadline elapsed) — both map to the same `busy` outcome
+// below.
+const sharedSemaphore = new Semaphore(FETCH_CONCURRENCY_LIMIT, FETCH_QUEUE_LIMIT, FETCH_QUEUE_WAIT_MS);
 
 export interface FetchOgDeps {
   /** Test seam — defaults to `globalThis.fetch`. */
