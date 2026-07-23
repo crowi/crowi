@@ -62,6 +62,7 @@ public enum WorkspaceModelContainerFactory {
         models: [any PersistentModel.Type] = [],
         schemaVersion: Int,
         baseDirectory: URL = defaultBaseDirectory(),
+        confidential: Bool = false,
         fileManager: FileManager = .default
     ) throws -> ModelContainer {
         let directory = storeDirectory(workspaceId: workspaceId, baseDirectory: baseDirectory)
@@ -75,7 +76,7 @@ public enum WorkspaceModelContainerFactory {
             deleteStoreFiles(at: storeURL(workspaceId: workspaceId, baseDirectory: baseDirectory), fileManager: fileManager)
         }
 
-        applyRestStateProtections(directory: directory)
+        applyRestStateProtections(directory: directory, confidential: confidential)
 
         let configuration = ModelConfiguration(url: storeURL(workspaceId: workspaceId, baseDirectory: baseDirectory))
         do {
@@ -123,18 +124,22 @@ public enum WorkspaceModelContainerFactory {
     /// always; `NSFileProtection` is iOS/tvOS/watchOS-only (absent from the
     /// macOS SDK entirely), so it is isolated behind `#if os(iOS)` — the §9
     /// platform-conditional idiom-delta rule, applied here rather than
-    /// bolted on later.
-    private static func applyRestStateProtections(directory: URL) {
+    /// bolted on later. `confidential` escalates the baseline
+    /// `completeUntilFirstUserAuthentication` to `.complete` (§6.3/§7.2) —
+    /// unreadable while the device is locked at all, not just before first
+    /// unlock since boot. `public` (not just for the SwiftData store
+    /// directory anymore, `feature-ios-phase1-read`) so
+    /// `WorkspaceImageDiskCache`'s on-disk cache directory can apply the
+    /// SAME protection policy rather than re-implementing it.
+    public static func applyRestStateProtections(directory: URL, confidential: Bool = false) {
         var directoryURL = directory
         var values = URLResourceValues()
         values.isExcludedFromBackup = true
         try? directoryURL.setResourceValues(values)
 
         #if os(iOS)
-        try? FileManager.default.setAttributes(
-            [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
-            ofItemAtPath: directory.path
-        )
+        let protection: FileProtectionType = confidential ? .complete : .completeUntilFirstUserAuthentication
+        try? FileManager.default.setAttributes([.protectionKey: protection], ofItemAtPath: directory.path)
         #endif
     }
 }
