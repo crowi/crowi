@@ -110,7 +110,7 @@ export class Semaphore {
   async acquire(): Promise<SemaphoreAcquireResult> {
     if (this.active < this.max) {
       this.active++;
-      return { ok: true, release: () => this.release() };
+      return this.grantSlot();
     }
     if (this.queue.length >= this.queueLimit) {
       // Queue-length cap reached — the core DoS fix. Fail synchronously
@@ -121,23 +121,29 @@ export class Semaphore {
       return { ok: false };
     }
     return new Promise<SemaphoreAcquireResult>((resolve) => {
-      let settled = false;
+      // No separate "settled" flag needed: `grant` can only run once,
+      // from one of two mutually-exclusive places — `release()`'s
+      // `queue.shift()` (which physically removes this entry from
+      // `queue` first) or the timer below (cleared by `grant` the
+      // instant it runs). The timer's own `indexOf` check against
+      // `queue` already tells it whether `release()` won the race.
       const grant = (): void => {
-        if (settled) return;
-        settled = true;
         clearTimeout(timer);
         this.active++;
-        resolve({ ok: true, release: () => this.release() });
+        resolve(this.grantSlot());
       };
       const timer = setTimeout(() => {
-        if (settled) return;
-        settled = true;
         const idx = this.queue.indexOf(grant);
-        if (idx !== -1) this.queue.splice(idx, 1);
+        if (idx === -1) return; // already granted via release()
+        this.queue.splice(idx, 1);
         resolve({ ok: false });
       }, this.waitMs);
       this.queue.push(grant);
     });
+  }
+
+  private grantSlot(): SemaphoreAcquireResult {
+    return { ok: true, release: () => this.release() };
   }
 
   private release(): void {
