@@ -20,8 +20,10 @@ struct RootScene: View {
                     compactPath = [workspace.id]
                 }
                 .navigationDestination(for: String.self) { workspaceId in
-                    if let workspace = workspaceStore.workspaces.first(where: { $0.id == workspaceId }) {
-                        EmptyWorkspaceHomeView(workspace: workspace)
+                    if let workspace = workspaceStore.workspaces.first(where: { $0.id == workspaceId }),
+                        let context = workspaceStore.context(for: workspace)
+                    {
+                        WorkspaceHomeView(workspace: workspace, context: context)
                     }
                 }
             }
@@ -31,8 +33,8 @@ struct RootScene: View {
                     workspaceStore.switchTo(workspace.id)
                 }
             } detail: {
-                if let workspace = activeWorkspace {
-                    EmptyWorkspaceHomeView(workspace: workspace)
+                if let workspace = activeWorkspace, let context = workspaceStore.context(for: workspace) {
+                    WorkspaceHomeView(workspace: workspace, context: context)
                 } else {
                     ContentUnavailableView("No workspace selected", systemImage: "server.rack")
                 }
