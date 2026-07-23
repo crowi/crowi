@@ -1,8 +1,8 @@
-import { sanitizeSvg as sharedSanitizeSvg } from '@crowi/plugin-renderer-svg-sanitize';
+import { sanitizeSvg as sharedSanitizeSvg } from '@crowi/svg-sanitize';
 
 /**
- * Thin adapter over `@crowi/plugin-renderer-svg-sanitize` (spec §1 / §9)
- * — no sanitization logic of its own. Mermaid's policy is strict:
+ * Thin adapter over `@crowi/svg-sanitize` (spec §1 / §9) — no
+ * sanitization logic of its own. Mermaid's policy is strict:
  * `allowSafeHref: false` unconditionally strips every `href` /
  * `xlink:href` except local fragment references (`#id`), consistent
  * with §1 layer 1 already disabling Mermaid's own click callbacks —
