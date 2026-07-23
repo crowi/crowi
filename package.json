@@ -68,6 +68,7 @@
     "check:packages": "node scripts/check-package-publishable.mjs",
     "check:filenames": "node scripts/check-kebab-filenames.mjs",
     "check:openapi": "node scripts/check-openapi-fresh.mjs",
+    "smoke:oauth-well-known": "node scripts/smoke-oauth-well-known-proxy.mjs",
     "clean": "turbo run clean",
     "e2e": "pnpm --filter @crowi/e2e e2e",
     "e2e:report": "pnpm --filter @crowi/e2e exec playwright show-report"
