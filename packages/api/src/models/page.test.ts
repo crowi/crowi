@@ -1,3 +1,4 @@
+import { Types } from 'mongoose';
 import { STATUS_DELETED, visiblePageGrantOr } from 'src/models/page';
 import { crowi, Fixture } from 'src/test/setup';
 
@@ -585,6 +586,356 @@ describe('Page', () => {
         expect(errors['/unlink-check/restricted-by-granted-users']).toEqual([]);
         expect(errors['/unlink-check/restricted-not-granted']).toContain('rename_tree.error.already_exists');
       });
+    });
+  });
+
+  // feature-child-segments-metadata: `lastUpdatedAt` / `updater` on each
+  // `PageChildSegment` — additive contract fields derived within
+  // `findChildSegments`'s existing scan (no extra per-segment query).
+  describe('.findChildSegments (feature-child-segments-metadata)', () => {
+    let author;
+    let other;
+    let UserModel;
+
+    beforeAll(() => {
+      author = createdUsers[0];
+      other = createdUsers[1];
+      UserModel = crowi.model('User');
+    });
+
+    beforeEach(async () => {
+      await Page.deleteMany({});
+    });
+
+    afterEach(async () => {
+      await Page.deleteMany({});
+    });
+
+    test('isPage:true segment returns its own updatedAt/updater, even when a descendant is newer', async () => {
+      const ownTime = new Date('2020-01-01T00:00:00Z');
+      const descendantNewerTime = new Date('2024-01-01T00:00:00Z');
+      await Fixture.generate('Page', [
+        { path: '/tree/leaf', grant: Page.GRANT_PUBLIC, creator: author, status: 'published', updatedAt: ownTime, lastUpdateUser: author },
+        {
+          path: '/tree/leaf/child',
+          grant: Page.GRANT_PUBLIC,
+          creator: other,
+          status: 'published',
+          updatedAt: descendantNewerTime,
+          lastUpdateUser: other,
+        },
+      ]);
+
+      const segments = await Page.findChildSegments('/tree', author);
+      const leaf = segments.find((s) => s.segment === 'leaf');
+      expect(leaf?.isPage).toBe(true);
+      expect(leaf?.lastUpdatedAt).toBe(ownTime.toISOString());
+      expect(leaf?.updater?.username).toBe(author.username);
+    });
+
+    test('isPage:false segment returns the most-recently-updated descendant, not the (older) portal doc', async () => {
+      const portalTime = new Date('2020-01-01T00:00:00Z');
+      const olderChildTime = new Date('2021-01-01T00:00:00Z');
+      const newestChildTime = new Date('2024-01-01T00:00:00Z');
+      await Fixture.generate('Page', [
+        { path: '/tree/portal/', grant: Page.GRANT_PUBLIC, creator: author, status: 'published', updatedAt: portalTime, lastUpdateUser: author },
+        {
+          path: '/tree/portal/child-a',
+          grant: Page.GRANT_PUBLIC,
+          creator: author,
+          status: 'published',
+          updatedAt: olderChildTime,
+          lastUpdateUser: author,
+        },
+        {
+          path: '/tree/portal/child-b',
+          grant: Page.GRANT_PUBLIC,
+          creator: other,
+          status: 'published',
+          updatedAt: newestChildTime,
+          lastUpdateUser: other,
+        },
+      ]);
+
+      const segments = await Page.findChildSegments('/tree', author);
+      const portal = segments.find((s) => s.segment === 'portal');
+      expect(portal?.isPage).toBe(false);
+      expect(portal?.hasPortal).toBe(true);
+      expect(portal?.count).toBe(2);
+      expect(portal?.lastUpdatedAt).toBe(newestChildTime.toISOString());
+      expect(portal?.updater?.username).toBe(other.username);
+    });
+
+    // openQuestions #1: hasPortal-only, zero descendants — `maxOtherMeta`
+    // collapses to the portal doc's own metadata (fixed by this test).
+    test('hasPortal-only segment with zero descendants uses the portal doc itself as representative', async () => {
+      const portalTime = new Date('2022-06-01T00:00:00Z');
+      await Fixture.generate('Page', [
+        { path: '/tree/onlyportal/', grant: Page.GRANT_PUBLIC, creator: author, status: 'published', updatedAt: portalTime, lastUpdateUser: author },
+      ]);
+
+      const segments = await Page.findChildSegments('/tree', author);
+      const seg = segments.find((s) => s.segment === 'onlyportal');
+      expect(seg?.isPage).toBe(false);
+      expect(seg?.hasPortal).toBe(true);
+      expect(seg?.count).toBe(0);
+      expect(seg?.lastUpdatedAt).toBe(portalTime.toISOString());
+      expect(seg?.updater?.username).toBe(author.username);
+    });
+
+    test('existence concealment: a restricted descendant not granted to the viewer never wins representative-page selection, and is not counted', async () => {
+      const visibleTime = new Date('2021-01-01T00:00:00Z');
+      const hiddenNewerTime = new Date('2030-01-01T00:00:00Z');
+      await Fixture.generate('Page', [
+        { path: '/tree/secure/', grant: Page.GRANT_PUBLIC, creator: author, status: 'published', updatedAt: visibleTime, lastUpdateUser: author },
+        {
+          path: '/tree/secure/hidden',
+          grant: Page.GRANT_RESTRICTED,
+          grantedUsers: [other],
+          creator: other,
+          status: 'published',
+          updatedAt: hiddenNewerTime,
+          lastUpdateUser: other,
+        },
+      ]);
+
+      // `author` is neither the creator nor in `grantedUsers` of the
+      // restricted descendant, so it must be invisible to them.
+      const segments = await Page.findChildSegments('/tree', author);
+      const seg = segments.find((s) => s.segment === 'secure');
+      expect(seg?.count).toBe(0); // the hidden descendant isn't even counted
+      expect(seg?.lastUpdatedAt).toBe(visibleTime.toISOString());
+      expect(seg?.updater?.username).toBe(author.username);
+    });
+
+    test("existence concealment: another user's newer draft descendant never wins representative-page selection", async () => {
+      const publishedTime = new Date('2021-06-01T00:00:00Z');
+      const draftNewerTime = new Date('2030-01-01T00:00:00Z');
+      await Fixture.generate('Page', [
+        { path: '/tree/mix/', grant: Page.GRANT_PUBLIC, creator: author, status: 'published', updatedAt: publishedTime, lastUpdateUser: author },
+        {
+          path: '/tree/mix/draft-by-other',
+          grant: Page.GRANT_PUBLIC,
+          creator: other,
+          status: 'draft',
+          updatedAt: draftNewerTime,
+          lastUpdateUser: other,
+        },
+      ]);
+
+      const segments = await Page.findChildSegments('/tree', author);
+      const seg = segments.find((s) => s.segment === 'mix');
+      expect(seg?.count).toBe(0);
+      expect(seg?.lastUpdatedAt).toBe(publishedTime.toISOString());
+      expect(seg?.updater?.username).toBe(author.username);
+    });
+
+    // Same concealment invariant as the test above, but for a PORTAL doc
+    // (trailing-slash path) rather than a plain descendant page — the
+    // reviewer flagged that the portal-shaped path wasn't covered
+    // separately. Doubly non-visible to `author`: the draft-status clause
+    // only admits `other`'s own drafts, AND the restricted grant only
+    // admits `other` (creator) — either filter alone would already exclude
+    // it. It must never win representative selection nor flip `hasPortal`,
+    // even though its `updatedAt` is the newest in the subtree.
+    test("existence concealment: another user's newer draft portal doc (trailing-slash path) never wins representative-page selection", async () => {
+      const publishedChildTime = new Date('2021-06-01T00:00:00Z');
+      const hiddenPortalNewerTime = new Date('2030-01-01T00:00:00Z');
+      await Fixture.generate('Page', [
+        {
+          path: '/tree/hiddenportal/',
+          grant: Page.GRANT_RESTRICTED,
+          grantedUsers: [other],
+          creator: other,
+          status: 'draft',
+          updatedAt: hiddenPortalNewerTime,
+          lastUpdateUser: other,
+        },
+        {
+          path: '/tree/hiddenportal/child',
+          grant: Page.GRANT_PUBLIC,
+          creator: author,
+          status: 'published',
+          updatedAt: publishedChildTime,
+          lastUpdateUser: author,
+        },
+      ]);
+
+      const segments = await Page.findChildSegments('/tree', author);
+      const seg = segments.find((s) => s.segment === 'hiddenportal');
+      expect(seg?.hasPortal).toBe(false); // the hidden draft portal doc never sets this
+      expect(seg?.count).toBe(1); // only the visible child is counted
+      expect(seg?.lastUpdatedAt).toBe(publishedChildTime.toISOString());
+      expect(seg?.updater?.username).toBe(author.username);
+    });
+
+    // Not an existence-concealment case: unlike the two tests above (a
+    // draft belonging to ANOTHER user, invisible to the viewer), the
+    // viewer's OWN draft portal doc is legitimately visible to them (the
+    // `visiblePageStatusOr` draft clause), so it is a valid `maxOtherMeta`
+    // candidate — it can win representative selection when it is the
+    // newest doc in the subtree, even though `status !== STATUS_DRAFT`
+    // keeps `hasPortal` false (a draft portal is not yet "a real portal").
+    test("viewer's own visible draft portal doc can win representative selection when it is the newest doc", async () => {
+      const draftPortalNewestTime = new Date('2030-01-01T00:00:00Z');
+      const childOlderTime = new Date('2021-01-01T00:00:00Z');
+      await Fixture.generate('Page', [
+        {
+          path: '/tree/viewerdraft/',
+          grant: Page.GRANT_PUBLIC,
+          creator: author,
+          status: 'draft',
+          updatedAt: draftPortalNewestTime,
+          lastUpdateUser: author,
+        },
+        {
+          path: '/tree/viewerdraft/child',
+          grant: Page.GRANT_PUBLIC,
+          creator: author,
+          status: 'published',
+          updatedAt: childOlderTime,
+          lastUpdateUser: author,
+        },
+      ]);
+
+      const segments = await Page.findChildSegments('/tree', author);
+      const seg = segments.find((s) => s.segment === 'viewerdraft');
+      expect(seg?.isPage).toBe(false);
+      expect(seg?.hasPortal).toBe(false); // a draft portal never sets hasPortal
+      expect(seg?.count).toBe(1);
+      expect(seg?.lastUpdatedAt).toBe(draftPortalNewestTime.toISOString());
+      expect(seg?.updater?.username).toBe(author.username);
+    });
+
+    // Same setup, but the published descendant is newer than the viewer's
+    // own draft portal doc — the descendant wins, confirming the draft
+    // portal doc is just an ordinary `maxOtherMeta` candidate (not
+    // special-cased to always win or always lose).
+    test('a published descendant newer than the viewer own draft portal doc wins representative selection', async () => {
+      const draftPortalOlderTime = new Date('2021-01-01T00:00:00Z');
+      const childNewestTime = new Date('2030-01-01T00:00:00Z');
+      await Fixture.generate('Page', [
+        {
+          path: '/tree/viewerdraft2/',
+          grant: Page.GRANT_PUBLIC,
+          creator: author,
+          status: 'draft',
+          updatedAt: draftPortalOlderTime,
+          lastUpdateUser: author,
+        },
+        {
+          path: '/tree/viewerdraft2/child',
+          grant: Page.GRANT_PUBLIC,
+          creator: other,
+          status: 'published',
+          updatedAt: childNewestTime,
+          lastUpdateUser: other,
+        },
+      ]);
+
+      const segments = await Page.findChildSegments('/tree', author);
+      const seg = segments.find((s) => s.segment === 'viewerdraft2');
+      expect(seg?.isPage).toBe(false);
+      expect(seg?.hasPortal).toBe(false);
+      expect(seg?.count).toBe(1);
+      expect(seg?.lastUpdatedAt).toBe(childNewestTime.toISOString());
+      expect(seg?.updater?.username).toBe(other.username);
+    });
+
+    test('updater is null (no throw) when lastUpdateUser references a hard-deleted user id', async () => {
+      const ghostUserId = new Types.ObjectId();
+      await Fixture.generate('Page', [
+        {
+          path: '/tree/orphan',
+          grant: Page.GRANT_PUBLIC,
+          creator: author,
+          status: 'published',
+          updatedAt: new Date('2023-01-01T00:00:00Z'),
+          lastUpdateUser: ghostUserId,
+        },
+      ]);
+
+      const segments = await Page.findChildSegments('/tree', author);
+      const seg = segments.find((s) => s.segment === 'orphan');
+      expect(seg?.isPage).toBe(true);
+      expect(seg?.updater).toBeNull();
+      expect(seg?.lastUpdatedAt).toBe('2023-01-01T00:00:00.000Z');
+    });
+
+    test('updater is null (no throw) when lastUpdateUser was never set (legacy row)', async () => {
+      await Fixture.generate('Page', [
+        { path: '/tree/legacy', grant: Page.GRANT_PUBLIC, creator: author, status: 'published', updatedAt: new Date('2019-01-01T00:00:00Z') },
+      ]);
+
+      const segments = await Page.findChildSegments('/tree', author);
+      const seg = segments.find((s) => s.segment === 'legacy');
+      expect(seg?.updater).toBeNull();
+      expect(seg?.lastUpdatedAt).toBe('2019-01-01T00:00:00.000Z');
+    });
+
+    // openQuestions #3: `updatedAt` itself is absent (the `page` schema has
+    // no `timestamps: true` and no default on this field — see the schema
+    // definition — so a row saved without an explicit value truly has no
+    // `updatedAt`, unlike the `lastUpdateUser`-only-missing case above).
+    // `toISOStringOrNull` must fall back to `null` rather than throwing or
+    // emitting `"Invalid Date"`.
+    test('lastUpdatedAt is null (no throw) when the representative page has no updatedAt (legacy row predating the field)', async () => {
+      await Fixture.generate('Page', [{ path: '/tree/notimestamp', grant: Page.GRANT_PUBLIC, creator: author, status: 'published', lastUpdateUser: author }]);
+
+      const segments = await Page.findChildSegments('/tree', author);
+      const seg = segments.find((s) => s.segment === 'notimestamp');
+      expect(seg?.isPage).toBe(true);
+      expect(seg?.lastUpdatedAt).toBeNull();
+      expect(seg?.updater?.username).toBe(author.username);
+    });
+
+    test('does not add a per-row query: Page.find / User.find call counts stay flat as the tree grows (no N+1)', async () => {
+      const pageFindSpy = jest.spyOn(Page, 'find');
+      const userFindSpy = jest.spyOn(UserModel, 'find');
+
+      await Fixture.generate('Page', [
+        {
+          path: '/scale/small/a',
+          grant: Page.GRANT_PUBLIC,
+          creator: author,
+          status: 'published',
+          updatedAt: new Date(),
+          lastUpdateUser: author,
+        },
+      ]);
+      await Page.findChildSegments('/scale', author);
+      const smallPageCalls = pageFindSpy.mock.calls.length;
+      const smallUserCalls = userFindSpy.mock.calls.length;
+
+      pageFindSpy.mockClear();
+      userFindSpy.mockClear();
+      await Page.deleteMany({});
+
+      await Fixture.generate(
+        'Page',
+        Array.from({ length: 20 }, (_, i) => ({
+          path: `/scale/big/child-${i}`,
+          grant: Page.GRANT_PUBLIC,
+          creator: author,
+          status: 'published',
+          updatedAt: new Date(),
+          lastUpdateUser: i % 2 === 0 ? author : other,
+        })),
+      );
+      await Page.findChildSegments('/scale', author);
+      const bigPageCalls = pageFindSpy.mock.calls.length;
+      const bigUserCalls = userFindSpy.mock.calls.length;
+
+      pageFindSpy.mockRestore();
+      userFindSpy.mockRestore();
+
+      // Exactly one `Page.find` (the existing scan) + one batched
+      // `User.find` (the added `lastUpdateUser` batch lookup), regardless
+      // of how many pages/segments were scanned.
+      expect(smallPageCalls).toBe(1);
+      expect(smallUserCalls).toBe(1);
+      expect(bigPageCalls).toBe(smallPageCalls);
+      expect(bigUserCalls).toBe(smallUserCalls);
     });
   });
 
