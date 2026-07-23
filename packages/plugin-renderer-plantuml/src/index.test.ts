@@ -171,7 +171,7 @@ describe('encoder', () => {
 
 /**
  * `sanitizeSvg` (`./sanitize.ts`) is now a thin adapter over the shared
- * `@crowi/plugin-renderer-svg-sanitize` package (feature-plugin-renderer-mermaid
+ * `@crowi/svg-sanitize` package (feature-plugin-renderer-mermaid
  * spec §9, Phase 3) — that package's own `sanitize.test.ts` is the
  * exhaustive vector suite (script / foreignObject / on* / javascript: /
  * data: / protocol-relative / CSS @import & url() / xmlns tricks /
@@ -183,7 +183,7 @@ describe('encoder', () => {
  * correctly (right policy, right return shape) and that PlantUML's own
  * "preserves href to a safe URL" contract survived the swap.
  */
-describe('SVG sanitization (sanitizeSvg — adapter over @crowi/plugin-renderer-svg-sanitize)', () => {
+describe('SVG sanitization (sanitizeSvg — adapter over @crowi/svg-sanitize)', () => {
   const SVG_NS = 'xmlns="http://www.w3.org/2000/svg"';
 
   it('preserves a benign svg + path + text element', () => {

@@ -111,6 +111,7 @@ alpha.0–.3 は published、alpha.4 / stable 向けに changeset 蓄積中（pr
 - **URL カード埋め込み `@[card](url)`** — `addEmbedTag` registry の最初の利用者として `@crowi/plugin-renderer-link-card`（SSRF ガード付き OGP fetch）を実装 + editor に裸 URL ⇔ `@[card](url)` 変換 affordance を追加。後に `@crowi/api` core へ統合され plugin package は削除済み（下記「Renderer plugin 境界の確立」参照。spec: `feature-link-card-embed.md`）
 - **Revision に不変の page ObjectId 参照を追加(DC-5)** — `path` 文字列の逆引きに依存していた rename 後の履歴解決 / 削除 / 著者集計を、`prepareRevision` で一度だけ刻む不変の `revision.page` id 参照へ切り替え。path 再利用による誤った grant 解決の latent bug を是正し、boot migration `revision-page-ref-backfill` で既存データをバックフィル（spec: `feature-revision-page-ref.md`）
 - **Renderer plugin 境界の確立 + emoji/link-card の core 統合** — presentation/asset contract の一般化 + KaTeX 自己配信 + emoji・link-card の `@crowi/api` core 統合(admin egress toggle 付き) + 旧 plugin package 削除（spec: `feature-renderer-plugin-boundary.md`）
+- **svg-sanitize を非公開の内部共有 lib 化** — `@crowi/plugin-renderer-svg-sanitize` を private 化して `@crowi/svg-sanitize` にリネームし、plugin 名前空間から外して mermaid/plantuml に bundle する方式へ変更（spec: `feature-svg-sanitize-private-bundled.md`）
 
 ---
 

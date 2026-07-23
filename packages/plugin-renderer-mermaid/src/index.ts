@@ -29,8 +29,8 @@ export { _shutdownSingletonForTest } from './render-engine';
  * Mermaid JS ever ships to the browser. Layered defense (spec §2):
  * layer 1 host-forced Mermaid config (`render-worker.ts`), layer 2
  * shared DOM-based SVG sanitizer (`sanitize-svg.ts`, delegating to
- * `@crowi/plugin-renderer-svg-sanitize`), layer 3 base64 `data:` URL
- * `<img>` embedding (`encode-svg.ts`) so no raw Mermaid SVG DOM ever
+ * `@crowi/svg-sanitize`), layer 3 base64 `data:` URL `<img>` embedding
+ * (`encode-svg.ts`) so no raw Mermaid SVG DOM ever
  * reaches the page. `reject-patterns.ts` closes the 4th, input-side gap
  * (spec §3/§背景): flowchart image-shape constructs reach for a network
  * image mid-render, before any SVG exists to sanitize.

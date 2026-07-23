@@ -45,10 +45,9 @@ function decodeSvgDataUrl(html: string): string {
  * namespace — not merely that `src="data:image/svg+xml;base64,"` is
  * present as a substring (the pre-existing per-type test above already
  * checks that, but never parses the payload). Uses `@xmldom/xmldom` — the
- * exact same parser `@crowi/plugin-renderer-svg-sanitize` uses internally
- * — rather than a second, independent parser implementation, so this
- * assertion reasons about namespace/prefix resolution identically to the
- * sanitizer itself.
+ * exact same parser `@crowi/svg-sanitize` uses internally — rather than a
+ * second, independent parser implementation, so this assertion reasons about
+ * namespace/prefix resolution identically to the sanitizer itself.
  */
 function expectWellFormedUnprefixedSvgRoot(svg: string): void {
   const doc = new DOMParser({ onError: () => undefined }).parseFromString(svg, 'image/svg+xml');

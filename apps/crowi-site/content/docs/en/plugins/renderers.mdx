@@ -176,9 +176,9 @@ class, state, ER, journey, pie, and git-graph.
 **Security**: diagrams are rendered not in the browser but inside a
 `fork()`ed, isolated child process, by a strictly-configured Mermaid
 instance that never loads external resources. The generated SVG is run
-through an independent, DOM-based sanitizer
-(`@crowi/plugin-renderer-svg-sanitize`, shared with PlantUML) that
-strips `script` tags, event handlers, `javascript:` URLs, and similar
+through an independent, DOM-based sanitizer (`@crowi/svg-sanitize`,
+shared with PlantUML) that strips `script` tags, event handlers,
+`javascript:` URLs, and similar
 constructs before being embedded in an `<img>` as a base64 `data:`
 URL. Diagram directives that override configuration and syntax that
 references external resources are rejected at the input stage, scanning

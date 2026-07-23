@@ -189,8 +189,8 @@ describe('renderMdastToReactNode', () => {
   });
 
   // feature-renderer-plugin-boundary Phase 2 (§1/§4) — this suite
-  // previously fed a REAL `@crowi/plugin-renderer-mermaid` render()
-  // output (real mermaid + jsdom + `@crowi/plugin-renderer-svg-sanitize`,
+  // previously fed a REAL `@crowi/plugin-renderer-mermaid` render() output
+  // (real mermaid + jsdom + the svg sanitizer, now `@crowi/svg-sanitize`,
   // forked child-process worker) through the pipeline here, to prove the
   // sanitizer's real output survives `hast-util-raw`/JSX unchanged. That
   // real-plugin production seam moved to the plugin's own test suite
