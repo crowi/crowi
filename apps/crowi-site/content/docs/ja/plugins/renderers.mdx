@@ -189,7 +189,7 @@ journey / pie / git-graph など、Mermaid が対応する主要な図の種類�
 **セキュリティ**: 図はブラウザではなく、`fork()` された隔離子プロセス
 内で、外部リソースを一切ロードしない strict 設定の Mermaid によって
 描画されます。生成された SVG は独立した DOM ベースのサニタイザ
-(`@crowi/plugin-renderer-svg-sanitize`、PlantUML と共有) で `script` /
+(`@crowi/svg-sanitize`、PlantUML と共有) で `script` /
 イベントハンドラ / `javascript:` などを除去したうえで、base64 の
 `data:` URL として `<img>` に埋め込まれます。図の設定を上書きする
 ディレクティブや外部リソースを参照する構文は、ソース全体を対象に
