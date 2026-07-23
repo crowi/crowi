@@ -573,7 +573,13 @@ let sharedUploadAdmission: Semaphore | null = null;
 
 /** Lazily-initialised process-wide singleton, mirroring `collab-cap.ts`'s `cachedCounter` pattern. */
 function getUploadAdmission(): Semaphore {
-  if (!sharedUploadAdmission) sharedUploadAdmission = new Semaphore(resolveAdmissionConcurrency(), ADMISSION_QUEUE_LIMIT, resolveAdmissionTimeoutMs());
+  // `defaultWaitMs` (3rd arg) is a required constructor param but is inert
+  // for this singleton: its one caller (`generateDisplayDerivativeForUpload`
+  // below) always supplies a fresh `resolveAdmissionTimeoutMs()` override on
+  // every `acquire()` call, which per `Semaphore.acquire`'s own logic always
+  // wins over `defaultWaitMs`. Passing 0 here (rather than re-resolving the
+  // same env var just to have it go unused) makes that explicit.
+  if (!sharedUploadAdmission) sharedUploadAdmission = new Semaphore(resolveAdmissionConcurrency(), ADMISSION_QUEUE_LIMIT, 0);
   return sharedUploadAdmission;
 }
 
