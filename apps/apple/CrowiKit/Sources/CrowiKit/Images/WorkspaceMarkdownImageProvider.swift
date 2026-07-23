@@ -66,9 +66,20 @@ struct WorkspaceMarkdownImageView: View {
     var body: some View {
         Group {
             if let image {
+                // `.resizable().scaledToFit()` alone constrains the image to
+                // whatever width its ancestor actually PROPOSES, but
+                // swift-markdown-ui's own `image` block style is a bare
+                // passthrough (`Theme.image = { $0.label }` — no frame at
+                // all), so nothing upstream of this provider guarantees a
+                // bounded proposal ever reaches it. `.frame(maxWidth:
+                // .infinity)` makes that bound explicit and unconditional
+                // here, at the one place every block-path image renders,
+                // instead of depending on every future call site composing
+                // this view inside a width-constrained container.
                 Image(platformImage: image)
                     .resizable()
                     .scaledToFit()
+                    .frame(maxWidth: .infinity)
             } else {
                 // Zero-size placeholder while loading/on failure — matches
                 // swift-markdown-ui's own `DefaultImageProvider` failure

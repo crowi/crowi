@@ -24,6 +24,13 @@ import SwiftUI
 ///     path already rebases independently inside `WorkspaceImageLoader.fetch`,
 ///     so passing this does not change its behavior — confirmed the final
 ///     resolved URL is identical either way;
+///   - `ImageAttributeBlockPreprocessor.strip(_:)` — removes RFC-0015 image
+///     attribute blocks (`![alt](url){width=500px}`) BEFORE the wikilink/
+///     mention rewrite and before the renderer ever sees the body, so they
+///     never surface as literal garbled text next to the image. This is a
+///     strip-only degrade (no attribute value is ever applied) that also
+///     restores the paragraph to "image alone", which routes it through the
+///     width-capped block image path instead of the inline one;
 ///   - `WikiLinkMentionPreprocessor.preprocess(_:)` — rewrites raw
 ///     `[[wikilinks]]` / `@mentions` into ordinary CommonMark links against
 ///     private pseudo-schemes BEFORE the renderer ever sees the body (§6 —
@@ -68,7 +75,7 @@ public struct WorkspacePageMarkdownView: View {
     }
 
     public var body: some View {
-        Markdown(WikiLinkMentionPreprocessor.preprocess(rawBody), imageBaseURL: imageBaseURL)
+        Markdown(WikiLinkMentionPreprocessor.preprocess(ImageAttributeBlockPreprocessor.strip(rawBody)), imageBaseURL: imageBaseURL)
             .markdownImageProvider(WorkspaceMarkdownImageProvider(loader: imageLoader))
             .markdownInlineImageProvider(WorkspaceMarkdownInlineImageProvider(loader: imageLoader))
             .environment(
