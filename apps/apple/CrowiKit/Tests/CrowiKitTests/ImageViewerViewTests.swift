@@ -245,10 +245,19 @@ private final class RecordingLoader: WorkspaceImageFetching, @unchecked Sendable
     }
 
     func fetch(_ urlString: String) async throws -> Data {
-        lock.lock()
-        _fetched.append(urlString)
-        lock.unlock()
+        record(urlString)
         return try handler(urlString)
+    }
+
+    // `NSLock.lock()`/`.unlock()` are `noasync`-annotated (Swift 6 language
+    // mode makes calling them directly inside an `async` function body an
+    // error) — routing the mutation through this plain synchronous method,
+    // same shape as `RequestRecorder.record(_:)`, keeps `fetch` itself free
+    // of a direct lock call while the append is still fully serialized.
+    private func record(_ urlString: String) {
+        lock.lock()
+        defer { lock.unlock() }
+        _fetched.append(urlString)
     }
 
     var fetched: [String] {
