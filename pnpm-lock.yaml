@@ -41,24 +41,9 @@ overrides:
   fast-xml-parser: 5.7.3
   minimatch@9.0.3: 9.0.9
   postcss@<8.5.13: 8.5.15
-  follow-redirects@<1.16.0: 1.16.0
-  brace-expansion@>=1.0.0 <1.1.16: 1.1.16
-  brace-expansion@>=2.0.0 <2.1.2: 2.1.2
-  brace-expansion@>=3.0.0 <5.0.7: 5.0.7
-  body-parser@>=2.0.0 <2.3.0: 2.3.0
-  js-yaml@>=3.0.0 <3.15.0: 3.15.0
   js-yaml@>=4.0.0 <4.3.0: 4.3.0
   '@hono/node-server@<2.0.11': 2.0.11
   sharp@<0.35.3: 0.35.3
-  svgo@<4.0.2: 4.0.2
-  fast-uri@<3.1.4: 3.1.4
-  picomatch@>=2.0.0 <2.3.2: 2.3.2
-  yaml@>=1.0.0 <1.10.3: 1.10.3
-  yauzl@3.2.0: 3.2.1
-  ajv@>=6.0.0 <6.14.0: 6.14.0
-  undici@6: ^6.27.0
-  undici@7: ^7.28.0
-  socks: ^2.8.7
 
 importers:
 
@@ -7284,7 +7269,7 @@ packages:
       purgecss: ^8.0.0
       relateurl: ^0.2.7
       srcset: ^5.0.1
-      svgo: 4.0.2
+      svgo: ^4.0.0
       terser: ^5.21.0
       uncss: ^0.17.3
     peerDependenciesMeta:
@@ -8628,7 +8613,7 @@ packages:
       kerberos: ^2.0.1
       mongodb-client-encryption: '>=6.0.0 <7'
       snappy: ^7.3.2
-      socks: ^2.8.7
+      socks: ^2.7.1
     peerDependenciesMeta:
       '@aws-sdk/credential-providers':
         optional: true
@@ -8655,7 +8640,7 @@ packages:
       kerberos: ^7.0.0
       mongodb-client-encryption: '>=7.0.0 <7.1.0'
       snappy: ^7.3.2
-      socks: ^2.8.7
+      socks: ^2.8.6
     peerDependenciesMeta:
       '@aws-sdk/credential-providers':
         optional: true
@@ -8682,7 +8667,7 @@ packages:
       kerberos: ^7.0.0
       mongodb-client-encryption: '>=7.0.0 <7.1.0'
       snappy: ^7.3.2
-      socks: ^2.8.7
+      socks: ^2.8.6
     peerDependenciesMeta:
       '@aws-sdk/credential-providers':
         optional: true
