@@ -8,8 +8,16 @@
 #
 # Caddy forwards the WebSocket `Upgrade` automatically — no extra config needed.
 :80 {
-	# HTTP API + attachments → api
-	@api path /api/* /files/*
+	# HTTP API + attachments + OAuth/well-known metadata → api. `/.well-known/*`
+	# is intentionally broad (not just oauth-authorization-server) so future
+	# OAuth metadata (e.g. RFC 9728 oauth-protected-resource) is covered
+	# without another Caddyfile edit — see packages/web/next.config.ts's
+	# rewrites() comment for why this route MUST stay same-origin-to-api and
+	# never fall back to the web app. ACME challenges (`/.well-known/acme-
+	# challenge/*`) are unaffected: Caddy's TLS automation handles those in an
+	# internal handler that runs before reverse_proxy, so this matcher never
+	# sees them.
+	@api path /api/* /files/* /.well-known/*
 	reverse_proxy @api api:3000
 
 	# Realtime WebSocket namespaces → api. The browser dials the bare namespace

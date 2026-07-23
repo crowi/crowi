@@ -204,8 +204,11 @@ automatically):
 
 ```
 wiki.example.com {
-	# HTTP API + attachments → api
-	@api path /api/* /files/*
+	# HTTP API + attachments + OAuth/well-known metadata → api
+	# Without `/.well-known/*` here, OAuth discovery falls through to web,
+	# which cannot bake an absolute URL into a standalone build and 500s
+	# (see operations/deployment for the full explanation).
+	@api path /api/* /files/* /.well-known/*
 	reverse_proxy @api api:3000
 
 	# realtime WebSocket → api (Caddy forwards Upgrade automatically)

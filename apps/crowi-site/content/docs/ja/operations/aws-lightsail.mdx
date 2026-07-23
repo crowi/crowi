@@ -196,8 +196,10 @@ services:
 
 ```
 wiki.example.com {
-	# HTTP API + 添付 → api
-	@api path /api/* /files/*
+	# HTTP API + 添付 + OAuth/well-known メタデータ → api
+	# `/.well-known/*` を含めないと OAuth discovery が web にフォールし、standalone
+	# build の web は絶対 URL を焼き込めないため 500 になる(詳細は operations/deployment)。
+	@api path /api/* /files/* /.well-known/*
 	reverse_proxy @api api:3000
 
 	# realtime WebSocket → api (Upgrade は Caddy が自動透過)
