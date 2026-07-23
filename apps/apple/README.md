@@ -6,15 +6,22 @@ signs into and reads/edits multiple independent Crowi workspaces over
 `/api/v2`, the same HTTP surface `@crowi/cli` (RFC-0012) and MCP (RFC-0011)
 use.
 
-> Status: **Phase 1 (workspace + auth + persistence, `feature-ios-phase1-workspace-auth`)**.
+> Status: **Phase 1 read surface (`feature-ios-phase1-read`)**.
 > Phase 0 (`.feature-state/specs/feature-ios-phase0-gates.md`) scaffolded the
 > repo layout and cleared the 3 GO/NO-GO gates (generator, redirect
-> transport, renderer image path). Phase 1 builds the real multi-workspace
-> shell on top of that: add-workspace (HTTPS gate → lenient `/app/info` probe
-> → minimum-version gate → OAuth sign-in), per-workspace Keychain + SwiftData
-> persistence, a single-flight refresh actor, and the Slack-style workspace
-> switcher UI. The read surface (page tree, render, search, images-in-context)
-> is `feature-ios-phase1-read`, next.
+> transport, renderer image path). Phase 1 workspace/auth
+> (`feature-ios-phase1-workspace-auth`) built the multi-workspace shell:
+> add-workspace (HTTPS gate → lenient `/app/info` probe → minimum-version gate
+> → OAuth sign-in), per-workspace Keychain + SwiftData persistence, a
+> single-flight refresh actor, and the Slack-style workspace switcher UI. This
+> phase (`feature-ios-phase1-read`) fills in the actual read surface on top:
+> native Markdown rendering (incl. `[[wikilinks]]`/`@mentions` in-app
+> navigation), the §6.1 authenticated image loader wrapped in a per-workspace
+> disk cache, the §6.2 scheme allowlist, the §6.3 confidential banner, a
+> refreshed `/app/info` capability/confidentiality cache, per-workspace
+> SwiftData read caches, and the adaptive page-tree/reader/search/history/
+> profile UI. Bounded write (create/quick-edit/comment/engagement) is
+> `feature-ios-phase2-write`, next.
 
 ## Why this directory has no `package.json`
 
@@ -40,10 +47,14 @@ apps/apple/
 │   │                           #   apps/apple/, is what you open" below)
 │   ├── Package.swift           # the App manifest (`import AppleProductTypes`,
 │   │                           #   Xcode-only — see "Two packages" below)
-│   ├── Sources/CrowiApp/       # @main entry point + the adaptive shell:
-│   │   │                       #   RootScene (NavigationSplitView ⇔
-│   │   │                       #   NavigationStack, §9) / WorkspaceSwitcherView
-│   │   │                       #   / AddWorkspaceView / EmptyWorkspaceHomeView
+│   ├── Sources/CrowiApp/       # @main entry point + the adaptive shells:
+│   │   │                       #   RootScene (workspace switcher ⇔ workspace,
+│   │   │                       #   §9) / WorkspaceSwitcherView / AddWorkspaceView
+│   │   │                       #   / WorkspaceHomeView (the read-surface's OWN
+│   │   │                       #   NavigationSplitView ⇔ NavigationStack, nested
+│   │   │                       #   one level in) / PageTreeView / PageReaderView
+│   │   │                       #   / SearchView / RevisionHistoryView / ProfileView
+│   │   │                       #   / RecentlyViewedView / ReadDestination
 │   └── Support/AdditionalInfo.plist  # merged into the app's Info.plist —
 │                               #   CFBundleURLTypes declares `crowi-ios`
 ├── CrowiKit/                   # plain SwiftPM library: client/auth/render
@@ -57,9 +68,14 @@ apps/apple/
 │   │   │                       #   non-secret WorkspaceIndexStore (UserDefaults,
 │   │   │                       #   OQ-2), WorkspaceStore (observable root),
 │   │   │                       #   WorkspaceContext (the workspace-bound handle,
-│   │   │                       #   §14 structural isolation), AddWorkspaceFlow
-│   │   │                       #   (HTTPS gate → lenient probe → version floor
-│   │   │                       #   → sign-in)
+│   │   │                       #   §14 structural isolation — now also the
+│   │   │                       #   factory for AppInfoCache/AuthenticatedAPIClient/
+│   │   │                       #   WorkspaceImageLoader/WorkspaceImageDiskCache),
+│   │   │                       #   AddWorkspaceFlow (HTTPS gate → lenient probe
+│   │   │                       #   → version floor → sign-in), WorkspaceSession
+│   │   │                       #   (bundles a WorkspaceContext's dependencies +
+│   │   │                       #   the refreshed capability/confidential state
+│   │   │                       #   behind one object for the read UI)
 │   │   ├── Config/              # MinimumVersionFloor — the single placeholder
 │   │   │                       #   floor constant (OQ-6)
 │   │   ├── Auth/                # OAuthSignInFlow (real ASWAS + PKCE + discovery
@@ -67,12 +83,58 @@ apps/apple/
 │   │   │                       #   GateASpike), KeychainTokenStore,
 │   │   │                       #   RefreshCoordinator (single-flight actor),
 │   │   │                       #   AuthenticatingMiddleware (the §5.1 auth
-│   │   │                       #   transport wrapper), SignOutFlow
+│   │   │                       #   transport wrapper — this phase's first real
+│   │   │                       #   consumer, via AuthenticatedAPIClient),
+│   │   │                       #   SignOutFlow
 │   │   ├── Persistence/         # WorkspaceModelContainerFactory + SchemaVersionMarker
-│   │   │                       #   — per-workspace SwiftData container, §7
-│   │   ├── API/                 # gate B: generated-client smoke + lenient /app/info decode
-│   │   └── Images/              # gate C: the §6.1 same-origin-Bearer + redirect-strip loader,
-│   │                             #   plus the swift-markdown-ui ImageProvider wired to it
+│   │   │                       #   (per-workspace SwiftData container, §7;
+│   │   │                       #   `applyRestStateProtections` now takes a
+│   │   │                       #   `confidential` param, §6.3/§7.2 escalation),
+│   │   │                       #   WorkspaceReadCacheSchema (the @Model list +
+│   │   │                       #   bumped schemaVersion, §7.3), and the six
+│   │   │                       #   @Model read-cache types (CachedPage,
+│   │   │                       #   CachedPageChildren, CachedBacklink,
+│   │   │                       #   CachedComment, CachedRevisionSummary,
+│   │   │                       #   CachedSearchResult)
+│   │   ├── API/                 # gate B smoke + AppInfoLenient/StaticCapabilities
+│   │   │                       #   (Phase 0/1) + AppInfoCache (the §5.2 refreshed
+│   │   │                       #   cache) + AuthenticatedAPIClient (the §5.1
+│   │   │                       #   auth-injected raw-fetch primitive every
+│   │   │                       #   *Lenient decoder is built on) + one hand-
+│   │   │                       #   written lenient decoder per read screen
+│   │   │                       #   (Page/Search/Comments/BookmarkLike/
+│   │   │                       #   Backlinks/Revisions/Profile)
+│   │   ├── Images/              # gate C: WorkspaceImageLoader (the §6.1
+│   │   │                       #   same-origin-Bearer + redirect-strip loader) +
+│   │   │                       #   WorkspaceImageDiskCache (the §7.2 per-workspace
+│   │   │                       #   disk-cache WRAPPER around it, implementing
+│   │   │                       #   the 200-real/200-placeholder/500 (embedded) vs
+│   │   │                       #   200-real/404/500 (avatar) trichotomies) +
+│   │   │                       #   WorkspaceMarkdownImageProvider (the
+│   │   │                       #   swift-markdown-ui ImageProvider, generalized
+│   │   │                       #   over `WorkspaceImageFetching` so either the
+│   │   │                       #   loader or the disk cache can back it)
+│   │   └── Rendering/           # SchemeAllowlist (§6.2, the ONE shared allow-
+│   │                             #   list entry point — consumed by BOTH the
+│   │                             #   openURL link interceptor and
+│   │                             #   WorkspaceImageLoader.fetch's own URL-rebase
+│   │                             #   step, so a custom-scheme image is inerted
+│   │                             #   before any network I/O too) +
+│   │                             #   WikiLinkMentionPreprocessor (mirrors
+│   │                             #   WIKILINK_RE/MENTION_RE, raw-body → private-
+│   │                             #   pseudo-scheme CommonMark links, skipping an
+│   │                             #   `@mention`/`[[wikilink]]`-shaped substring
+│   │                             #   already inside an existing Markdown link's
+│   │                             #   own label/destination) + WorkspacePageMarkdownView
+│   │                             #   (composes both + the image provider via the
+│   │                             #   renderer's own `\.openURL` seam) +
+│   │                             #   ConfidentialBannerOverlay (§6.3 — non-
+│   │                             #   scrolling, always-on, non-dismissible; the
+│   │                             #   honest, banner-only v1 scope) +
+│   │                             #   WorkspaceAvatarView (a small circular avatar,
+│   │                             #   fetched through the SAME `WorkspaceImageFetching`
+│   │                             #   conformer as every other embedded image —
+│   │                             #   never a bare unauthenticated `AsyncImage`)
 │   └── Tests/CrowiKitTests/
 └── .gitignore                  # excludes .build/ (incl. the generated Swift
                                  #   client — build-time only, never committed)
@@ -154,7 +216,7 @@ execution isn't gated the same way Xcode's build system's is.
   (swift-openapi-generator / -runtime / -urlsession, swift-markdown-ui) —
   needs outbound access to GitHub once; subsequent builds are cached.
 
-## What's here today (Phase 1) vs. what Phase 1.5 (read) adds
+## What Phase 1 workspace/auth built (`feature-ios-phase1-workspace-auth`)
 
 Phase 0 (scaffold + 3 gate spikes) is unchanged and still lives under
 `CrowiKit/Sources/CrowiKit/API/` (gate B) and `Images/` (gate C); see that
@@ -225,10 +287,153 @@ Phase 1 adds the real multi-workspace shell on top:
   `onSelectWorkspace` callback `RootScene` wires up for tapping an existing
   row, so onboarding navigates straight to the new workspace's home instead
   of leaving the user at the switcher — on both compact/iPhone and
-  regular/iPad width), `EmptyWorkspaceHomeView` (Phase 1's own read surface
-  is intentionally empty — `feature-ios-phase1-read` is next).
+  regular/iPad width).
 
-None of the read/write surface (page tree, render, search, quick-edit) exists
-yet — Phase 1's own scope ends at "add a workspace, sign in with no consent
+Phase 1's own scope ended at "add a workspace, sign in with no consent
 screen, see an empty home, add a second workspace, switch instantly, sign out
-of one without touching the other."
+of one without touching the other" — no read/write surface existed yet.
+
+## What this phase (`feature-ios-phase1-read`) adds
+
+The full **read** surface, entirely client-side — the server needed zero
+changes (every endpoint this phase reads already existed and is stable).
+
+- **`API/AppInfoCache.swift`** — the ONE refreshed per-workspace `/app/info`
+  cache (§5.2): both the `search` capability gate and the §6.3 confidential
+  banner read this SAME `actor`, never two independent fetch paths. Forces a
+  fetch on workspace `activated()` and app `foregrounded()`; any other read
+  (`current()`) serves the cache within a 10-minute TTL. Concurrent callers
+  right after a workspace switch single-flight onto one in-flight fetch —
+  the same actor-coalescing shape `RefreshCoordinator` (Phase 1) established.
+- **`API/AuthenticatedAPIClient.swift`** — the ONE per-workspace
+  authenticated-fetch primitive: composes `AuthenticatingMiddleware` (Phase
+  1's proactive+reactive single-flight refresh) directly with
+  `OpenAPIURLSession.URLSessionTransport` — the SAME `ClientTransport`
+  swift-openapi-generator's own generated `Client` uses — WITHOUT going
+  through the generated `Client`'s per-operation methods (those decode
+  through the strict generated `Output`, the exact seam §5.2 rejects for
+  responses). Every hand-written `*Lenient` decoder below is built on this
+  one primitive, so `AuthenticatingMiddleware` gets its first real production
+  caller here.
+- **`API/{Page,Search,Comments,BookmarkLike,Backlinks,Revisions,Profile}Lenient.swift`**
+  — one hand-written lenient decoder per read screen, the exact
+  `AppInfoLenient` pattern (optionals-first, `JSONSerialization`-based,
+  degrade rather than throw). `PageLenient`/`PageRevisionLenient` pin §8's
+  `PageSchema.revision` `string | Revision` union: a list/children/portal row
+  may carry a bare revision-id string with no `body` at all
+  (`needsDetailFetchForBody`), so every read screen that opens a page from
+  such a row issues the single-page detail `GET` first.
+  `SearchHitLenient.plainSnippet(_:)` strips the driver's unescaped `<mark>`
+  highlight tokens — the app must never render them as markup (no HTML/DOM
+  render context exists to safely interpret them in).
+- **`Images/WorkspaceImageDiskCache.swift`** — a per-workspace disk cache
+  WRAPPING `WorkspaceImageLoader` (never forking it): implements the
+  200-real/200-placeholder/500-error trichotomy for an embedded
+  `/attachments/<id>` URL (placeholder detected by byte-identity against the
+  bundled reference `file-not-found.png`, NEVER cached permanently — the next
+  fetch always re-hits the network) and the DIFFERENT
+  200-real/404-missing/500-error trichotomy for a by-key avatar URL. A `401`
+  triggers exactly one reactive refresh through the SAME `RefreshCoordinator`
+  a JSON API call would use, then one retry. `WorkspaceMarkdownImageProvider`
+  is generalized over a new `WorkspaceImageFetching` protocol so it can be
+  backed by either the bare loader (Phase 0 spike/tests) or this real cache
+  (production), with zero change to the already-proven renderer integration.
+- **`Rendering/SchemeAllowlist.swift`** — the ONE shared §6.2 allowlist:
+  `http`/`https`/workspace-relative only; every custom scheme is inerted
+  unconditionally, including the app's own `crowi-ios://` OAuth callback.
+  `WorkspaceImageLoader.fetch(_:)`'s own URL-rebase step consumes this SAME
+  allowlist (not a second, drifted check) — a custom-scheme image URL is
+  rejected with `LoaderError.disallowedScheme` before any network I/O, the
+  same belt-and-suspenders guarantee the `openURL` link interceptor gives
+  taps.
+- **`Rendering/WikiLinkMentionPreprocessor.swift`** — mirrors `WIKILINK_RE`/
+  `MENTION_RE` (`packages/api/src/renderer/core/{wikilinks,mentions}.ts`)
+  byte-for-byte on the raw `revision.body`, rewriting `[[target]]`/
+  `[[target|display]]`/`@username` into ordinary CommonMark links against two
+  private pseudo-schemes (`crowi-wikilink:`/`crowi-mention:`) BEFORE handing
+  the body to swift-markdown-ui — native rendering never consumes
+  `renderedAst` (§6). A non-absolute wikilink target (§6's `isValidTarget`
+  rule) is left as fully untouched plain text rather than a link. Fenced code
+  blocks, inline code spans, AND an existing CommonMark inline link/image's
+  own label+destination (`[label](destination)` / `![alt](destination)`) are
+  all protected from rewriting — mirroring `mentions.ts`'s `insideLink` skip,
+  so e.g. a GitHub-style `[the repo](https://github.com/@bob/crowi)` never has
+  its own destination corrupted into a nested mention link.
+- **`Rendering/WorkspacePageMarkdownView.swift`** — composes `Markdown(body)`
+  + `WorkspaceMarkdownImageProvider` + an `.environment(\.openURL, ...)`
+  interceptor (the renderer's own already-exposed link-tap seam) that
+  resolves the pseudo-scheme links to in-app navigation and applies
+  `SchemeAllowlist` to everything else — the ONE place both concerns meet, so
+  neither the allowlist nor the wikilink/mention router is duplicated per
+  call site.
+- **`Rendering/ConfidentialBannerOverlay.swift`** — §6.3's non-scrolling,
+  always-on-top, non-dismissible banner (OQ-11 resolved: v1 ships the banner
+  only, no export suppression), applied ONCE at `WorkspaceHomeView`'s chrome
+  root, driven by the refreshed `AppInfoCache.confidential`. The SAME
+  confidential detection also re-escalates rest-state protection on BOTH the
+  image cache (`WorkspaceImageDiskCache.applyConfidentialProtection`) AND the
+  SwiftData store directory (`WorkspaceContext.applyConfidentialStorageProtection`,
+  new) every refresh — `WorkspaceSession.refreshAppInfo` calls both, not only
+  the image cache.
+- **`Rendering/SearchCapabilityToolbarButton.swift`** (new) — the ONE
+  `search`-capability-gated toolbar entry point. Extracted out of
+  `WorkspaceHomeView`'s toolbar closure into CrowiKit specifically so it can
+  be rendered/inspected directly from `CrowiKitTests`
+  (`SearchCapabilityToolbarButtonTests`, via `ImageRenderer` — proving the
+  actual SwiftUI paint output differs when `search` is present vs. absent,
+  not only that an upstream `[String]` changed): the App target itself
+  cannot be imported into CrowiKit's test target (its package manifest
+  depends on `AppleProductTypes`, Xcode-only). `WorkspaceHomeView` places
+  this EXACT type inside its `ToolbarItemGroup` rather than re-deriving
+  `capabilities.contains("search")` inline, so the tested gate can never
+  drift from the shipped one.
+- **`Rendering/WorkspaceAvatarView.swift`** (new) — a small circular avatar
+  view shared by `ProfileView` (own/public profile) and `PageReaderView`'s
+  comments section; fetches through the same `WorkspaceImageFetching`
+  conformer (`session.imageCache`) every other embedded image goes through
+  (avatar URLs are Bearer-gated `by-key/user/<username>` paths, §6.1), never
+  a bare unauthenticated image view.
+- **`Persistence/{CachedPage,CachedPageChildren,CachedBacklink,CachedComment,CachedRevisionSummary,CachedSearchResult}.swift`**
+  — the six read-cache `@Model` types (§7.2), and
+  **`WorkspaceReadCacheSchema.swift`** bumping `schemaVersion` to `2` — Phase
+  1 deliberately shipped an EMPTY schema at version 1 specifically so this is
+  the first real schema change any installed build ever sees (§7.3
+  drop-and-rebuild, never a migration plan).
+- **`Workspace/WorkspaceSession.swift`** (new) — bundles one workspace's
+  `AppInfoCache`/`AuthenticatedAPIClient`/`WorkspaceImageDiskCache`/
+  `ModelContainer` behind one `@MainActor` `ObservableObject`, built through
+  `WorkspaceContext`'s factories (`makeAppInfoCache()`/`makeAPIClient()`/
+  `makeImageCache()`/`makeModelContainer()`) — never constructed ad hoc from
+  a bare `Workspace` value in a view.
+- **`Crowi.swiftpm/Sources/CrowiApp/`** — `WorkspaceHomeView` (new; fills in
+  `RootScene`'s previously-empty per-workspace slot with the read surface's
+  OWN adaptive shell: `NavigationSplitView` sidebar=`PageTreeView`/
+  detail=reader on iPad, `NavigationStack` on iPhone — a nested, DIFFERENT
+  size-class branch point from `RootScene`'s own outer workspace-switcher
+  split); `PageTreeView` (hierarchy sidebar, drills into sub-directories by
+  pushing another `PageTreeView`); `PageReaderView` (always opens via the
+  detail `GET`, native render, like/bookmark/seen-count display, comments,
+  backlinks, revision-history entry point — read-only, no write actions this
+  phase); `SearchView` (capability-gated, hides/re-shows live as `search`
+  flips); `RevisionHistoryView` (list + read-only past-revision sheet);
+  `ProfileView` (own `/me` and public `/user/{username}` — a tapped
+  `@mention` navigates here unconditionally, per §6/§15, and lets this
+  screen's own `404` surface an unknown user; shows the profile's own avatar
+  via `WorkspaceAvatarView`); `RecentlyViewedView`;
+  `ReadDestination` (the one navigation-target enum shared by both size
+  classes).
+
+`PageTreeView` additionally carries its own toolbar action ("View Portal
+Page") whenever the path it lists children FOR is itself a real saved portal
+document (`PageChildSegment.hasPortal`) — a segment can be both a portal page
+AND a directory of further pages at once, so drilling into its children must
+never be the ONLY way to reach that segment's own body.
+
+Every new per-workspace API call goes through `AuthenticatedAPIClient` (never
+a bare unauthenticated `URLSession`), every image fetch goes through
+`WorkspaceImageDiskCache` (never a bare `WorkspaceImageLoader` constructed ad
+hoc), and the SwiftData read caches are best-effort fast-paths only — the app
+always prefers a fresh network read when online (§7.2).
+
+Bounded write (create page, quick-edit with `revision_id` optimistic locking,
+post a comment, toggle engagement) is `feature-ios-phase2-write`, next.
