@@ -54,9 +54,10 @@ export function createPlantUmlRenderer(config: PlantUmlConfig): CodeBlockRendere
   return {
     // Phase 3 (feature-plugin-renderer-mermaid spec §9): bumped from 1 to
     // 2 when the sanitizer switched from the regex-based implementation
-    // to the shared `@crowi/plugin-renderer-svg-sanitize` package and the
-    // output class changed from `plantuml-embed` to `diagram-embed
-    // plantuml-embed`. feature-renderer-plugin-boundary Phase 2 (§3.1)
+    // to the shared svg-sanitize package (bundled into this dist, not a
+    // runtime dependency — see `sanitize.ts`) and the output class changed
+    // from `plantuml-embed` to `diagram-embed plantuml-embed`.
+    // feature-renderer-plugin-boundary Phase 2 (§3.1)
     // bumps 2 → 3: success output additionally carries the generic
     // `data-crowi-renderer-presentation="diagram"
     // data-crowi-renderer-state="ready"` contract Web's
