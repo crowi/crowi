@@ -48,8 +48,15 @@ public final class WorkspaceImageLoader: NSObject, Sendable {
         super.init()
     }
 
-    public enum LoaderError: Error {
+    public enum LoaderError: Error, Equatable {
         case httpError(status: Int)
+        /// The rebased URL's scheme is not on §6.2's `SchemeAllowlist` (e.g.
+        /// a page body containing an `<img src="crowi-ios://...">` or
+        /// `javascript:`) — rejected here, at the SAME shared allowlist the
+        /// `openURL` link interceptor consumes, so a custom scheme is
+        /// inerted for images exactly as it is for taps, never a second,
+        /// drifted check.
+        case disallowedScheme
     }
 
     /// Rebase `relativeOrAbsolute` against `workspaceOrigin` (§6.1 step 1),
@@ -60,6 +67,16 @@ public final class WorkspaceImageLoader: NSObject, Sendable {
     public func fetch(_ relativeOrAbsolute: String) async throws -> Data {
         guard let resolved = URL(string: relativeOrAbsolute, relativeTo: workspaceOrigin.baseURL) else {
             throw URLError(.badURL)
+        }
+        // §6.2 — the SAME shared allowlist `WorkspacePageMarkdownView`'s
+        // `openURL` interceptor consumes: an image whose (rebased) URL
+        // carries a custom scheme (`crowi-ios://`, `javascript:`, …) is
+        // rejected here, before any network I/O, rather than left to fail
+        // implicitly (a non-`http(s)` URL handed to `URLSession` would
+        // simply error out anyway, but that is an accident of `URLSession`'s
+        // own behavior, not an explicit, testable guarantee).
+        guard SchemeAllowlist.isAllowed(resolved) else {
+            throw LoaderError.disallowedScheme
         }
         var request = URLRequest(url: resolved)
         if WorkspaceOrigin(resolved) == workspaceOrigin {
