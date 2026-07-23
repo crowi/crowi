@@ -266,6 +266,17 @@ export const PageChildSegmentSchema = z.object({
   // (excludes the segment's own page / portal docs). A rough "how much
   // lives here" hint; > 0 means the segment is an expandable directory.
   count: z.number(),
+  // ISO8601 timestamp of the segment's representative page: the segment's
+  // own page when `isPage` is true, otherwise the most-recently-updated
+  // descendant (including the portal doc itself). `null` when no
+  // representative page's timestamp could be derived. Optional so
+  // existing clients (web SidebarTree) that don't read it keep working
+  // unchanged — additive contract extension, feature-child-segments-metadata.
+  lastUpdatedAt: z.string().nullable().optional(),
+  // The representative page's last updater (same page as `lastUpdatedAt`
+  // above). `null` when the updater can't be resolved (e.g. a deleted
+  // user, or legacy rows predating `lastUpdateUser`).
+  updater: PageUserSchema.nullable().optional(),
 });
 export type PageChildSegment = z.infer<typeof PageChildSegmentSchema>;
 
