@@ -40,13 +40,25 @@ extension WorkspaceImageLoader: WorkspaceImageFetching {}
 /// ```
 public struct WorkspaceMarkdownImageProvider: ImageProvider {
     private let loader: any WorkspaceImageFetching
+    private let onImageTap: ((URL, PlatformImage) -> Void)?
 
-    public init(loader: any WorkspaceImageFetching) {
+    /// - Parameter onImageTap: `feature-ios-image-viewer` — invoked with the
+    ///   image's (already-rebased) URL and its decoded bitmap when the user
+    ///   taps a successfully-rendered block image. `nil` (the default) keeps
+    ///   every image non-tappable. Only the BLOCK path carries this: the
+    ///   inline path's `InlineImageProvider` contract returns a bare
+    ///   `Image` value concatenated into `Text`, which cannot carry a
+    ///   gesture — and `ImageAttributeBlockPreprocessor.strip` already
+    ///   restores attribute-annotated images to the block path, so a
+    ///   genuinely-inline image (sharing a line with real text) staying
+    ///   non-tappable is the accepted degrade.
+    public init(loader: any WorkspaceImageFetching, onImageTap: ((URL, PlatformImage) -> Void)? = nil) {
         self.loader = loader
+        self.onImageTap = onImageTap
     }
 
     public func makeImage(url: URL?) -> some View {
-        WorkspaceMarkdownImageView(url: url, loader: loader)
+        WorkspaceMarkdownImageView(url: url, loader: loader, onImageTap: onImageTap)
     }
 }
 
@@ -59,6 +71,7 @@ public struct WorkspaceMarkdownImageProvider: ImageProvider {
 struct WorkspaceMarkdownImageView: View {
     let url: URL?
     let loader: any WorkspaceImageFetching
+    let onImageTap: ((URL, PlatformImage) -> Void)?
 
     @State private var image: PlatformImage?
     @State private var failed = false
@@ -76,10 +89,24 @@ struct WorkspaceMarkdownImageView: View {
                 // here, at the one place every block-path image renders,
                 // instead of depending on every future call site composing
                 // this view inside a width-constrained container.
-                Image(platformImage: image)
+                let rendered = Image(platformImage: image)
                     .resizable()
                     .scaledToFit()
                     .frame(maxWidth: .infinity)
+                // `feature-ios-image-viewer` — the tap gesture exists ONLY on
+                // this branch (a successfully-decoded raster image): an inert
+                // image (disallowed scheme / fetch or decode failure) renders
+                // the zero-size placeholder below, which structurally cannot
+                // carry the gesture — "inert images are not tappable" holds
+                // by construction, not by a runtime check.
+                if WorkspaceMarkdownImageTapPolicy.isTapEnabled(decodedImage: image, url: url, hasTapHandler: onImageTap != nil),
+                    let url, let onImageTap {
+                    rendered
+                        .onTapGesture { onImageTap(url, image) }
+                        .accessibilityAddTraits(.isButton)
+                } else {
+                    rendered
+                }
             } else {
                 // Zero-size placeholder while loading/on failure — matches
                 // swift-markdown-ui's own `DefaultImageProvider` failure
@@ -94,6 +121,18 @@ struct WorkspaceMarkdownImageView: View {
             image = await WorkspaceMarkdownImageLoading.loadImage(url: url, using: loader)
             failed = image == nil
         }
+    }
+}
+
+/// `feature-ios-image-viewer` — the tap-activation rule
+/// `WorkspaceMarkdownImageView` consumes, free-standing (mirroring
+/// `WorkspaceMarkdownImageLoading`) so it is unit-testable without a SwiftUI
+/// host: a tap is active only for a successfully-decoded image with a real
+/// URL AND a configured handler — never for a loading/failed/inert image,
+/// and never when the hosting screen didn't opt into the viewer.
+enum WorkspaceMarkdownImageTapPolicy {
+    static func isTapEnabled(decodedImage: PlatformImage?, url: URL?, hasTapHandler: Bool) -> Bool {
+        decodedImage != nil && url != nil && hasTapHandler
     }
 }
 

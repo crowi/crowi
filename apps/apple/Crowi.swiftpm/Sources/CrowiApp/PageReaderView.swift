@@ -31,7 +31,20 @@ struct PageReaderView: View {
                         imageBaseURL: session.context.workspace.workspaceOrigin.baseURL,
                         onNavigateToWikiLink: { target in onSelectDestination(.page(path: target)) },
                         onNavigateToMention: { username in onSelectDestination(.profile(username: username)) },
-                        onNavigateToRelativePath: { target in onSelectDestination(.page(path: target)) }
+                        onNavigateToRelativePath: { target in onSelectDestination(.page(path: target)) },
+                        // feature-ios-image-viewer — tapping a body image
+                        // opens the fullscreen zoom viewer, which fetches the
+                        // ORIGINAL bytes (resolved via /attachments/<id>/meta,
+                        // canonical fallback) through the same per-workspace
+                        // image cache the body render used; the body embed
+                        // itself stays on the canonical display derivative.
+                        imageViewer: ImageViewerConfiguration(
+                            resolver: OriginalImageResolver(
+                                workspaceOrigin: session.context.workspace.workspaceOrigin,
+                                apiClient: session.apiClient
+                            ),
+                            confidentialNotice: session.confidential
+                        )
                     )
                     engagementBar(for: page)
                     if !backlinks.isEmpty {
