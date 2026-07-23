@@ -16,6 +16,10 @@ import SwiftUI
 /// workspace activation (`.task`) and app foreground (`scenePhase`), per §5.2.
 struct WorkspaceHomeView: View {
     let workspace: Workspace
+    /// Opens the modal workspace switcher (`RootScene` owns the sheet) —
+    /// the home cannot be PUSHED from a switcher stack, so the switcher
+    /// comes to it instead (see `RootScene`'s doc comment for why).
+    let onShowSwitcher: () -> Void
 
     @StateObject private var holder: WorkspaceSessionHolder
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -23,8 +27,9 @@ struct WorkspaceHomeView: View {
     @State private var compactPath = NavigationPath()
     @State private var selectedDestination: ReadDestination?
 
-    init(workspace: Workspace, context: WorkspaceContext) {
+    init(workspace: Workspace, context: WorkspaceContext, onShowSwitcher: @escaping () -> Void) {
         self.workspace = workspace
+        self.onShowSwitcher = onShowSwitcher
         _holder = StateObject(wrappedValue: WorkspaceSessionHolder(context: context))
     }
 
@@ -99,6 +104,17 @@ struct WorkspaceHomeView: View {
 
     @ToolbarContentBuilder
     private func toolbarItems(session: WorkspaceSession, onSelect: @escaping (ReadDestination) -> Void) -> some ToolbarContent {
+        // Leading, before the read actions: the way OUT of this workspace.
+        // `.navigation` places it top-leading on iOS and in the leading
+        // toolbar area on macOS; the tree root has no back button to
+        // collide with (this toolbar is attached to the stack/sidebar root).
+        ToolbarItem(placement: .navigation) {
+            Button {
+                onShowSwitcher()
+            } label: {
+                Label("Workspaces", systemImage: "square.grid.2x2")
+            }
+        }
         ToolbarItemGroup(placement: .primaryAction) {
             // §5.2 capability gate: `SearchCapabilityToolbarButton` (CrowiKit)
             // IS the search toolbar entry point, not a re-derived

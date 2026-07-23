@@ -280,14 +280,17 @@ Phase 1 adds the real multi-workspace shell on top:
   `SchemaVersionMarker` (the §7.3 drop-and-rebuild reconciliation — Phase 1
   passes an empty `@Model` schema; `feature-ios-phase1-read` adds real models
   and bumps `schemaVersion`).
-- **`Crowi.swiftpm/Sources/CrowiApp/`** — `RootScene` (the §9 adaptive shell:
-  `NavigationSplitView` ⇔ `NavigationStack` by size class),
-  `WorkspaceSwitcherView` (Slack-style switcher: tap to switch instantly,
-  swipe to sign out), `AddWorkspaceView` (on a successful add, calls the same
-  `onSelectWorkspace` callback `RootScene` wires up for tapping an existing
-  row, so onboarding navigates straight to the new workspace's home instead
-  of leaving the user at the switcher — on both compact/iPhone and
-  regular/iPad width).
+- **`Crowi.swiftpm/Sources/CrowiApp/`** — `RootScene` (shows the ACTIVE
+  workspace's home directly and presents the workspace switcher as a modal
+  sheet — NOT a root-level `NavigationStack`/`NavigationSplitView`: SwiftUI
+  does not support nesting `WorkspaceHomeView`'s own stack/split-view inside
+  a pushed destination or split-view detail of an outer one; the push is
+  popped immediately without writing back to the path binding, verified live
+  during Phase 2. See `RootScene`'s doc comment), `WorkspaceSwitcherView`
+  (Slack-style switcher: tap to switch instantly, swipe to sign out),
+  `AddWorkspaceView` (on a successful add, calls the same
+  `onSelectWorkspace` callback, so onboarding switches straight to the new
+  workspace's home).
 
 Phase 1's own scope ended at "add a workspace, sign in with no consent
 screen, see an empty home, add a second workspace, switch instantly, sign out
@@ -406,11 +409,11 @@ changes (every endpoint this phase reads already existed and is stable).
   `makeImageCache()`/`makeModelContainer()`) — never constructed ad hoc from
   a bare `Workspace` value in a view.
 - **`Crowi.swiftpm/Sources/CrowiApp/`** — `WorkspaceHomeView` (new; fills in
-  `RootScene`'s previously-empty per-workspace slot with the read surface's
-  OWN adaptive shell: `NavigationSplitView` sidebar=`PageTreeView`/
-  detail=reader on iPad, `NavigationStack` on iPhone — a nested, DIFFERENT
-  size-class branch point from `RootScene`'s own outer workspace-switcher
-  split); `PageTreeView` (hierarchy sidebar, drills into sub-directories by
+  `RootScene`'s per-workspace slot with the read surface's OWN adaptive
+  shell: `NavigationSplitView` sidebar=`PageTreeView`/detail=reader on iPad,
+  `NavigationStack` on iPhone — the app's ONLY navigation container, since
+  `RootScene` hosts it directly and presents the workspace switcher
+  modally); `PageTreeView` (hierarchy sidebar, drills into sub-directories by
   pushing another `PageTreeView`); `PageReaderView` (always opens via the
   detail `GET`, native render, like/bookmark/seen-count display, comments,
   backlinks, revision-history entry point — read-only, no write actions this
