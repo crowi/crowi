@@ -70,12 +70,78 @@ public struct WorkspaceContext: Sendable {
 
     /// This workspace's own `ModelContainer` (§7.1) — a distinct on-disk
     /// directory keyed by this workspace's id, never shared with another.
-    public func makeModelContainer(models: [any PersistentModel.Type] = [], schemaVersion: Int = 1) throws -> ModelContainer {
+    public func makeModelContainer(models: [any PersistentModel.Type] = [], schemaVersion: Int = 1, confidential: Bool = false) throws
+        -> ModelContainer
+    {
         try WorkspaceModelContainerFactory.makeContainer(
             workspaceId: workspace.id,
             models: models,
             schemaVersion: schemaVersion,
-            baseDirectory: containerBaseDirectory
+            baseDirectory: containerBaseDirectory,
+            confidential: confidential
+        )
+    }
+
+    /// Re-applies the §6.3/§7.2 rest-state protection to this workspace's
+    /// SwiftData store DIRECTORY — call whenever `AppInfoCache.confidential`
+    /// changes (`WorkspaceSession.refreshAppInfo`), mirroring the exact same
+    /// call already made for the image cache (`WorkspaceImageDiskCache.
+    /// applyConfidentialProtection`). `makeModelContainer`'s own
+    /// `confidential` parameter only sets the INITIAL protection at
+    /// construction time — a workspace that becomes confidential mid-session
+    /// (or stops being one) needs this re-applied on the SAME already-open
+    /// store directory too, not only on the next cold launch.
+    public func applyConfidentialStorageProtection(_ confidential: Bool) {
+        let directory = WorkspaceModelContainerFactory.storeDirectory(workspaceId: workspace.id, baseDirectory: containerBaseDirectory)
+        WorkspaceModelContainerFactory.applyRestStateProtections(directory: directory, confidential: confidential)
+    }
+
+    /// `feature-ios-phase1-read` — the ONE refreshed `/app/info` cache for
+    /// this workspace (§5.2): both the search-capability gate and the §6.3
+    /// confidential banner read this SAME instance.
+    public func makeAppInfoCache(urlSession: URLSession = .shared) -> AppInfoCache {
+        AppInfoCache(apiBaseURL: workspace.apiBaseURL, urlSession: urlSession)
+    }
+
+    /// An `AuthenticatedAPIClient` pre-wired to this workspace's own
+    /// `AuthenticatingMiddleware` (never a coordinator/middleware built for a
+    /// different workspace) — the ONE per-workspace authenticated-fetch
+    /// primitive every hand-written `*Lenient` decoder in
+    /// `feature-ios-phase1-read` is built on.
+    public func makeAPIClient(urlSession: URLSession = .shared) -> AuthenticatedAPIClient {
+        AuthenticatedAPIClient(apiBaseURL: apiBaseURL, middleware: makeAuthenticatingMiddleware(urlSession: urlSession))
+    }
+
+    /// This workspace's own `WorkspaceImageLoader` (§6.1) — reads the
+    /// CURRENT Keychain-stored access token lazily and synchronously on
+    /// every fetch (never captured once), so a token rotated by a JSON API
+    /// call elsewhere in the app is picked up on the very next image fetch
+    /// with no extra wiring.
+    public func makeImageLoader(sessionConfiguration: URLSessionConfiguration = .ephemeral) -> WorkspaceImageLoader {
+        WorkspaceImageLoader(
+            workspaceOrigin: workspace.workspaceOrigin.baseURL,
+            accessTokenProvider: { [tokenStore, workspaceId = workspace.id] in
+                (try? tokenStore.load(forWorkspace: workspaceId))?.accessToken ?? ""
+            },
+            sessionConfiguration: sessionConfiguration
+        )
+    }
+
+    /// This workspace's own `WorkspaceImageDiskCache` (§7.2) — wraps
+    /// `makeImageLoader()` with this workspace's own on-disk cache directory
+    /// (`imagesCacheDirectory`, purged on sign-out by
+    /// `WorkspaceModelContainerFactory.deleteImagesCacheDirectory`) and this
+    /// workspace's own `RefreshCoordinator` for the reactive-401 retry.
+    public func makeImageCache(
+        urlSession: URLSession = .shared,
+        imageSessionConfiguration: URLSessionConfiguration = .ephemeral,
+        confidential: Bool = false
+    ) -> WorkspaceImageDiskCache {
+        WorkspaceImageDiskCache(
+            loader: makeImageLoader(sessionConfiguration: imageSessionConfiguration),
+            coordinator: makeRefreshCoordinator(urlSession: urlSession),
+            cacheDirectory: imagesCacheDirectory,
+            confidential: confidential
         )
     }
 }
