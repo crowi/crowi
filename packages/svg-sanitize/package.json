@@ -1,12 +1,8 @@
 {
-  "name": "@crowi/plugin-renderer-svg-sanitize",
+  "name": "@crowi/svg-sanitize",
   "version": "0.1.0-alpha.1",
-  "description": "Shared DOM-based SVG sanitizer for Crowi 2.x renderer plugins (@crowi/plugin-renderer-mermaid, @crowi/plugin-renderer-plantuml). Not a renderer plugin itself — a policy-parameterised sanitize function + test vectors, consumed as a workspace dependency.",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/crowi/crowi.git",
-    "directory": "packages/plugin-renderer-svg-sanitize"
-  },
+  "description": "Private, internal DOM-based SVG sanitizer shared by @crowi/plugin-renderer-mermaid and @crowi/plugin-renderer-plantuml. Not a renderer plugin — a policy-parameterised sanitize function + test vectors, bundled into each consumer's dist via tsup `noExternal` (never published itself; see README.md).",
+  "private": true,
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
@@ -21,9 +17,6 @@
     "dist",
     "README.md"
   ],
-  "publishConfig": {
-    "access": "public"
-  },
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch --no-clean",
