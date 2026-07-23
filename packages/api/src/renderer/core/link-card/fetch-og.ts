@@ -17,7 +17,7 @@ export interface OgMeta {
   siteName?: string;
 }
 
-export type FetchOgErrorCode = 'blocked' | 'bad-scheme' | 'timeout' | 'too-large' | 'http-error' | 'unsupported-content-type' | 'network' | 'unknown';
+export type FetchOgErrorCode = 'blocked' | 'bad-scheme' | 'timeout' | 'too-large' | 'http-error' | 'unsupported-content-type' | 'network' | 'unknown' | 'busy';
 
 export type FetchOgResult =
   | { kind: 'ok'; meta: OgMeta }
@@ -39,26 +39,104 @@ const HTML_CONTENT_TYPE_RE = /^(text\/html|application\/xhtml\+xml)\b/i;
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 
 /**
+ * Bounds on the shared `Semaphore`'s WAIT QUEUE — distinct from
+ * `FETCH_CONCURRENCY_LIMIT` above, which caps concurrent ACTIVE fetches
+ * and is unchanged. Without these, one page embedding `@[card]` links
+ * to many unique, slow/unresponsive hosts dispatches its whole
+ * `Promise.all` batch (`../embed-tags.ts`) straight at the shared
+ * 5-slot semaphore at once — every request past the 5th sat in
+ * `Semaphore`'s queue as an unresolved Promise with no cap and no
+ * deadline, so both the count of outstanding Promises and the time
+ * before any of them settled were unbounded (crowi-review
+ * CROWI-REVIEW-002, high severity DoS).
+ *
+ * - `FETCH_QUEUE_LIMIT`: once `active + queued` requests already equal
+ *   `FETCH_CONCURRENCY_LIMIT + FETCH_QUEUE_LIMIT`, a further `acquire()`
+ *   fails immediately with `busy` — no `Promise` is ever pushed onto
+ *   the queue past this point, so the total number of outstanding
+ *   acquisitions is capped at a constant no matter how many callers
+ *   pile on in one dispatch. A real wiki page realistically embeds at
+ *   most a handful to a few dozen distinct link cards — a page that is
+ *   nothing but `@[card]` embeds is already an edge case — so 50 keeps
+ *   generous headroom for that while landing on the same order of
+ *   magnitude as the existing per-page code-block admission-dispatch
+ *   cap (`MAX_ADMISSION_DISPATCH_COUNT = 50` in
+ *   `../code-block-dispatch.ts`), even though link-card has no
+ *   dedicated per-page embed-count cap of its own to reconcile
+ *   against.
+ * - `FETCH_QUEUE_WAIT_MS`: a request that DID get a queue slot still
+ *   gives up (`busy`) if it hasn't been granted an active slot within
+ *   this deadline — a separate, PRE-acquisition deadline from
+ *   `FETCH_TIMEOUT_MS` above (which only starts ticking once a slot is
+ *   already held). An active slot is always released within
+ *   `FETCH_TIMEOUT_MS` (its fetch either completes or its
+ *   `AbortController` fires), so under normal load a queued waiter
+ *   should reach the front within roughly one such cycle; doubling it
+ *   to `2 * FETCH_TIMEOUT_MS` absorbs a second cycle's worth of jitter
+ *   before concluding the queue is genuinely stuck rather than merely
+ *   busy.
+ */
+export const FETCH_QUEUE_LIMIT = 50;
+export const FETCH_QUEUE_WAIT_MS = 2 * FETCH_TIMEOUT_MS;
+
+/** What `Semaphore.acquire()` resolves to — either a granted slot (with its release callback) or a rejection (queue-length cap hit, or the wait deadline elapsed). Callers never distinguish the two rejection causes — both map to the same `busy` outcome. */
+export type SemaphoreAcquireResult = { ok: true; release: () => void } | { ok: false };
+
+/**
  * Minimal async semaphore — no `p-limit`-style shared util exists in
  * this repo (spec §"newDeps"), and the cap is small/internal enough
  * that a hand-rolled queue is simpler than adding a dependency.
+ *
+ * Bounded on two axes (see `FETCH_QUEUE_LIMIT` / `FETCH_QUEUE_WAIT_MS`
+ * above — this class is deliberately parameterized rather than
+ * hardcoding those production constants, so tests can exercise the
+ * same cap/timeout behavior at a smaller, fast scale): `queueLimit`
+ * caps how many callers may ever sit in `queue` at once — beyond it,
+ * `acquire()` fails synchronously with `{ ok: false }` without ever
+ * constructing a `Promise` that would sit unresolved; `waitMs` caps how
+ * long an accepted waiter may sit in `queue` before giving up the same
+ * way.
  */
 export class Semaphore {
   private active = 0;
   private readonly queue: Array<() => void> = [];
 
-  constructor(private readonly max: number) {}
+  constructor(
+    private readonly max: number,
+    private readonly queueLimit: number = FETCH_QUEUE_LIMIT,
+    private readonly waitMs: number = FETCH_QUEUE_WAIT_MS,
+  ) {}
 
-  async acquire(): Promise<() => void> {
+  async acquire(): Promise<SemaphoreAcquireResult> {
     if (this.active < this.max) {
       this.active++;
-      return () => this.release();
+      return { ok: true, release: () => this.release() };
     }
-    return new Promise<() => void>((resolve) => {
-      this.queue.push(() => {
+    if (this.queue.length >= this.queueLimit) {
+      // Queue-length cap reached — the core DoS fix. Fail synchronously
+      // without ever pushing a new entry onto `queue`, so the total
+      // count of outstanding acquisitions (active + queued) never
+      // exceeds `max + queueLimit`, a constant, regardless of how many
+      // callers pile on in one dispatch.
+      return { ok: false };
+    }
+    return new Promise<SemaphoreAcquireResult>((resolve) => {
+      let settled = false;
+      const grant = (): void => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
         this.active++;
-        resolve(() => this.release());
-      });
+        resolve({ ok: true, release: () => this.release() });
+      };
+      const timer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        const idx = this.queue.indexOf(grant);
+        if (idx !== -1) this.queue.splice(idx, 1);
+        resolve({ ok: false });
+      }, this.waitMs);
+      this.queue.push(grant);
     });
   }
 
@@ -82,11 +160,17 @@ export interface FetchOgDeps {
 
 export async function fetchOg(inputUrl: string, deps: FetchOgDeps = {}): Promise<FetchOgResult> {
   const semaphore = deps.semaphore ?? sharedSemaphore;
-  const release = await semaphore.acquire();
+  const acquired = await semaphore.acquire();
+  if (!acquired.ok) {
+    // Queue-length cap hit, or the pre-acquisition wait deadline
+    // elapsed — either way this request never reached (and never will
+    // reach) the actual fetch. See `FETCH_QUEUE_LIMIT` / `FETCH_QUEUE_WAIT_MS`.
+    return { kind: 'error', code: 'busy' };
+  }
   try {
     return await fetchOgLocked(inputUrl, deps);
   } finally {
-    release();
+    acquired.release();
   }
 }
 

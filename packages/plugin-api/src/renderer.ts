@@ -300,10 +300,14 @@ export interface RenderResult {
  * concrete numbers. `blocked` is a policy-level permanent rejection
  * (SSRF block, disallowed scheme, disallowed content-type) — distinct
  * from `not_found` semantically but sharing its 1h persistent-failure
- * TTL.
+ * TTL. `busy` is a transient renderer-admission rejection (e.g. a
+ * shared fetch/render concurrency semaphore's wait queue was full, or a
+ * queued request's wait deadline elapsed) — never a property of the
+ * embed's target, so it shares a short transient TTL with
+ * `network`/`timeout` rather than `blocked`'s persistent one.
  */
 export interface RenderError {
-  code: 'auth' | 'rate_limit' | 'not_found' | 'network' | 'timeout' | 'unknown' | 'blocked';
+  code: 'auth' | 'rate_limit' | 'not_found' | 'network' | 'timeout' | 'unknown' | 'blocked' | 'busy';
   /** Free-form text for log/debug — NOT inlined into the user-facing placeholder. */
   message?: string;
   /**

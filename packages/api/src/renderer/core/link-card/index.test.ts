@@ -2,11 +2,45 @@ import { Types } from 'mongoose';
 import type { PluginLogger, RenderContext } from '@crowi/plugin-api';
 import type { PluginRenderCacheModel } from 'src/models/plugin-render-cache';
 import { crowi } from 'src/test/setup';
-import { createMongoCacheStorage, scopeForPlugin } from '../../cache';
+import { createMongoCacheStorage, RENDER_ERROR_TTL, scopeForPlugin } from '../../cache';
 import { createPipelineEsmDepsLoader, runPipeline } from '../../pipeline';
 import { CORE_RENDERER_IDENTITY, RendererRegistryImpl, createAuthContextStub } from '../../registry';
 import * as fetchOgModule from './fetch-og';
 import { createLinkCardRenderer, LINK_CARD_CACHE_VERSION } from './index';
+
+/**
+ * Minimal mdast-shaped node — enough structural surface for
+ * `collectHtmlNodeValues` below to recurse without pulling in `mdast`'s
+ * full `Node`/`Parent` union.
+ */
+interface MdastNodeLike {
+  type: string;
+  value?: string;
+  children?: MdastNodeLike[];
+}
+
+/** Recursively collect every `html` node's `value` across an ENTIRE tree (not just its first top-level child, unlike `findHtmlNode` below) — used by the many-embeds DoS-repro test, whose body has one `@[card]` per top-level paragraph. */
+function collectHtmlNodeValues(tree: MdastNodeLike): string[] {
+  const out: string[] = [];
+  const visit = (node: MdastNodeLike): void => {
+    if (node.type === 'html' && typeof node.value === 'string') out.push(node.value);
+    if (Array.isArray(node.children)) {
+      for (const child of node.children) visit(child);
+    }
+  };
+  visit(tree);
+  return out;
+}
+
+/** Poll `predicate` once per event-loop tick until it's true or `maxTicks` elapses — mirrors `stale-while-revalidate.test.ts`'s `waitFor`, needed here because the many-embeds test's fan-out settles across real (unmocked) Mongo I/O, not a fixed number of microtask flushes. */
+async function waitForCondition(predicate: () => boolean, maxTicks = 2000): Promise<void> {
+  for (let i = 0; i < maxTicks && !predicate(); i += 1) {
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+}
+
+/** Yield one event-loop tick — lets a just-released `Promise` (and whatever real async work it triggers) progress before the next assertion. Same helper `fetch-og.test.ts` uses under the same name for its own drain loop. */
+const flush = () => new Promise<void>((resolve) => setImmediate(resolve));
 
 const silentLogger: PluginLogger = {
   debug: () => undefined,
@@ -119,6 +153,19 @@ describe('createLinkCardRenderer — EmbedRenderer contract', () => {
     jest.spyOn(fetchOgModule, 'fetchOg').mockResolvedValueOnce({ kind: 'error', code: 'network' });
     const network = await renderer.render({ tag: 'card', url: 'https://example.test/unreachable', pageId: 'p1' }, stubCtx);
     expect(network.error).toEqual({ code: 'network', message: 'network' });
+  });
+
+  it('maps a busy fetch-og code straight through to RenderError code "busy" via the same unified fallback (feature-link-card-fetch-queue-bound)', async () => {
+    jest.spyOn(fetchOgModule, 'fetchOg').mockResolvedValueOnce({ kind: 'error', code: 'busy' });
+    const renderer = createLinkCardRenderer();
+    const result = await renderer.render({ tag: 'card', url: 'https://example.test/congested', pageId: 'p1' }, stubCtx);
+    expect(result.error).toEqual({ code: 'busy', message: 'busy' });
+    expect(result.html).toBe('');
+    // Same unified fallback card as every other fetch-og failure — busy
+    // is never visually distinguished (AC5).
+    expect(result.errorHtml).toContain('crowi-link-card');
+    expect(result.errorHtml).not.toContain('crowi-link-card-error');
+    expect(result.errorHtml).toContain('href="https://example.test/congested"');
   });
 
   it('maps too-large / unknown fetch-og codes to RenderError code "unknown"', async () => {
@@ -392,5 +439,148 @@ describe('e2e: core `card` embed tag through the real registry/pipeline/cache', 
     expect(() => reg.addEmbedTag('card', createLinkCardRenderer(), 'some-plugin', silentLogger)).toThrow(/reserved/);
     // The core registration survives the attempted collision.
     expect(reg.getEmbedTag('card')?.plugin).toBe(CORE_RENDERER_IDENTITY);
+  });
+
+  describe('feature-link-card-fetch-queue-bound', () => {
+    it('DoS repro through the REAL page-embed dispatch path: a page body with far more unique-host @[card] embeds than the shared ' +
+      'semaphore can hold still bounds outstanding fetch-og acquisitions, resolves every embed to either a real card or the unified ' +
+      'busy fallback, and leaves the process able to serve a later dispatch normally (AC3 — the pure-semaphore equivalent in ' +
+      'fetch-og.test.ts drives fetchOg() directly with fake timers + hanging hosts; this drives the SAME bound through markdown ' +
+      "parse -> embed-tags.ts's Promise.all fan-out -> cachedRender -> the real production shared semaphore, with real timers, " +
+      'proving the wiring end-to-end rather than the semaphore in isolation)', async () => {
+      const EXTRA_OVER_CAP = 20;
+      const ACCEPTED = fetchOgModule.FETCH_CONCURRENCY_LIMIT + fetchOgModule.FETCH_QUEUE_LIMIT; // 55, production bound
+      const TOTAL = ACCEPTED + EXTRA_OVER_CAP;
+
+      // Pass-through spy — real `fetchOg` (and therefore the real shared
+      // semaphore) still runs; this only lets us count exactly how many
+      // times it was ever invoked (AC3(a): must equal TOTAL — one call
+      // per candidate, never a second unresolved call for the overflow).
+      const realFetchOg = fetchOgModule.fetchOg;
+      const fetchOgSpy = jest.spyOn(fetchOgModule, 'fetchOg').mockImplementation((url, deps) => realFetchOg(url, deps));
+
+      // A hanging fetch (manually released below) — nothing accepted
+      // into an active/queued slot resolves on its own, so by the time
+      // every one of the TOTAL candidates has reached its own fetchOg()
+      // call, the accepted/overflow split is final and can never shift,
+      // regardless of how the underlying Mongo reads happened to
+      // interleave.
+      const releasers: Array<() => void> = [];
+      let concurrentFetch = 0;
+      let maxConcurrentFetch = 0;
+      fetchMock.mockImplementation(
+        () =>
+          new Promise<Response>((resolve) => {
+            concurrentFetch++;
+            maxConcurrentFetch = Math.max(maxConcurrentFetch, concurrentFetch);
+            releasers.push(() => {
+              concurrentFetch--;
+              resolve(htmlResponse('<html><head><meta property="og:title" content="OK"></head></html>'));
+            });
+          }),
+      );
+
+      const { reg, storage, ctx } = buildRegistryAndCtx();
+      // Distinct IP-literal hosts — `checkHostnameSsrf`'s literal-address
+      // fast path recognises these without a real DNS lookup (same
+      // rationale as `TARGET_URL` above). One `@[card]` per paragraph —
+      // a page that is nothing but link-card embeds is exactly the
+      // attack shape from crowi-review CROWI-REVIEW-002.
+      const body = Array.from({ length: TOTAL }, (_, i) => `@[card](http://93.184.216.${(i % 250) + 1}/dos-${i})`).join('\n\n');
+
+      const runPromise = runPipeline(body, reg, ctx, loadDeps, { cache: storage, pageId });
+
+      await waitForCondition(() => fetchOgSpy.mock.calls.length === TOTAL);
+
+      // No accepted fetch has been released yet — any concurrency
+      // observed here is real, not an artifact of an early release.
+      expect(maxConcurrentFetch).toBeLessThanOrEqual(fetchOgModule.FETCH_CONCURRENCY_LIMIT);
+
+      // Drain: release whatever is in flight so the next queued waiter
+      // takes the freed slot, until every accepted request has reached
+      // `fetchMock` at least once (mirrors fetch-og.test.ts's own
+      // concurrency-cap drain loop).
+      while (fetchMock.mock.calls.length < ACCEPTED || releasers.length > 0) {
+        const release = releasers.shift();
+        release?.();
+        await flush();
+        expect(maxConcurrentFetch).toBeLessThanOrEqual(fetchOgModule.FETCH_CONCURRENCY_LIMIT);
+      }
+
+      const result = await runPromise;
+
+      // AC3(b): every embed resolved and was rewritten in place — none
+      // left as a dangling `@[card](...)` — to either a real card
+      // (accepted) or the unified busy fallback (overflow).
+      const htmlNodes = collectHtmlNodeValues(result.tree as unknown as MdastNodeLike);
+      expect(htmlNodes).toHaveLength(TOTAL);
+      const successCount = htmlNodes.filter((html) => html.includes('>OK<')).length;
+      const fallbackNodes = htmlNodes.filter((html) => html.includes('crowi-link-card') && !html.includes('>OK<'));
+      expect(successCount).toBe(ACCEPTED);
+      expect(fallbackNodes).toHaveLength(EXTRA_OVER_CAP);
+      // AC5: the busy fallback is the SAME unified, clickable-link card
+      // as every other fetch failure — never a distinct "busy" variant.
+      expect(fallbackNodes[0]).toContain('href="http://93.184.216.');
+      expect(fallbackNodes[0]).not.toContain('crowi-link-card-error');
+
+      // AC3(a): fetchOg was invoked exactly once per candidate — the
+      // overflow was rejected synchronously inside that one call, never
+      // by spawning a second unresolved Promise.
+      expect(fetchOgSpy).toHaveBeenCalledTimes(TOTAL);
+
+      // AC3(c): the process is not wedged by the DoS attempt — a fresh,
+      // ordinary dispatch against the SAME (now fully-drained)
+      // production shared semaphore succeeds normally right after.
+      fetchMock.mockReset();
+      fetchMock.mockResolvedValueOnce(htmlResponse('<html><head><meta property="og:title" content="After"></head></html>'));
+      const { reg: freshReg, storage: freshStorage, ctx: freshCtx } = buildRegistryAndCtx();
+      const freshPageId = new Types.ObjectId().toHexString();
+      const fresh = await runPipeline('@[card](http://93.184.216.99/after)', freshReg, freshCtx, loadDeps, { cache: freshStorage, pageId: freshPageId });
+      expect(collectHtmlNodeValues(fresh.tree as unknown as MdastNodeLike)[0]).toContain('After');
+    }, 20_000);
+
+    it('busy renders via the unified fallback with a transient (short) cache TTL, and once the queue frees + that TTL elapses the next dispatch retries the fetch and can succeed (AC6)', async () => {
+      const fetchOgSpy = jest.spyOn(fetchOgModule, 'fetchOg');
+      fetchOgSpy.mockResolvedValueOnce({ kind: 'error', code: 'busy' });
+
+      const { reg, storage, ctx } = buildRegistryAndCtx();
+      const body = `@[card](${TARGET_URL})`;
+
+      const busy = await runPipeline(body, reg, ctx, loadDeps, { cache: storage, pageId });
+      expect(fetchOgSpy).toHaveBeenCalledTimes(1);
+      const busyHtml = findHtmlNode(busy.tree);
+      expect(busyHtml?.value).toContain('crowi-link-card');
+      expect(busyHtml?.value).not.toContain('crowi-link-card-error');
+      expect(busyHtml?.value).toContain(`href="${TARGET_URL}"`);
+
+      // The cached entry used busy's transient TTL (RENDER_ERROR_TTL.busy
+      // = 5min), never blocked/not_found's 1h persistent bucket.
+      const PluginRenderCache = crowi.model('PluginRenderCache') as unknown as PluginRenderCacheModel;
+      const cached = await PluginRenderCache.findOne({ pluginName: CORE_RENDERER_IDENTITY, pageId: new Types.ObjectId(pageId) })
+        .lean()
+        .exec();
+      expect(cached).not.toBeNull();
+      const ttlSec = Math.round((cached!.expiresAt.getTime() - cached!.fetchedAt.getTime()) / 1000);
+      expect(ttlSec).toBe(RENDER_ERROR_TTL.busy);
+      expect(RENDER_ERROR_TTL.busy).toBeLessThan(RENDER_ERROR_TTL.blocked);
+
+      // Simulate the queue draining and busy's transient TTL fully
+      // elapsing — push the cached doc's clock into the past with a small
+      // ttlMs so `classifyFreshness` sees it well beyond the stale window
+      // (same pattern as `stale-while-revalidate.test.ts`; `cachedRender`
+      // re-derives freshness from the doc's own fetchedAt/expiresAt, not
+      // from `RENDER_ERROR_TTL` directly, so this holds regardless of
+      // busy's actual TTL value).
+      const past = new Date(Date.now() - 10_000);
+      await PluginRenderCache.updateOne(
+        { pluginName: CORE_RENDERER_IDENTITY, pageId: new Types.ObjectId(pageId) },
+        { $set: { expiresAt: past, fetchedAt: new Date(past.getTime() - 1_000) } },
+      ).exec();
+
+      fetchOgSpy.mockResolvedValueOnce({ kind: 'ok', meta: { title: 'Recovered' } });
+      const retried = await runPipeline(body, reg, ctx, loadDeps, { cache: storage, pageId });
+      expect(fetchOgSpy).toHaveBeenCalledTimes(2); // retried — busy was never permanent
+      expect(findHtmlNode(retried.tree)?.value).toContain('Recovered');
+    });
   });
 });

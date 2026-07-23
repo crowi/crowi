@@ -35,7 +35,12 @@ export const DEFAULT_STALE_MULTIPLIER = 4;
  * `rate_limit` is overridable per-call via `RenderError.retryAfterSec`.
  * `blocked` (a policy-level permanent rejection — SSRF block,
  * disallowed scheme, disallowed content-type) shares `not_found`'s 1h
- * persistent-failure TTL.
+ * persistent-failure TTL. `busy` (renderer-admission congestion — e.g.
+ * link-card's OGP-fetch wait-queue cap/timeout, spec
+ * feature-link-card-fetch-queue-bound) is transient like
+ * `network`/`timeout`, NOT the 1h persistent bucket — congestion is a
+ * property of the server at this moment, not of the embed's target, so
+ * the next revalidation should retry promptly once the queue drains.
  */
 export const RENDER_ERROR_TTL: Readonly<Record<RenderError['code'], number>> = {
   auth: 60,
@@ -45,6 +50,7 @@ export const RENDER_ERROR_TTL: Readonly<Record<RenderError['code'], number>> = {
   timeout: 5 * 60,
   unknown: 5 * 60,
   blocked: 60 * 60,
+  busy: 5 * 60,
 };
 
 /**
@@ -66,8 +72,12 @@ export const STALE_IF_ERROR_MAX_AGE_SEC = 24 * 60 * 60; // 24h
  * content past a permanent policy rejection would contradict what those
  * codes mean. `not_found` retains: the 24h grace is exactly the
  * "dead URL shouldn't flip the page instantly" case described above.
+ * `busy` retains too — renderer-admission congestion is transient by
+ * definition (the same class of failure as `network`/`timeout`), so a
+ * momentarily-full wait queue must not immediately drop a working
+ * card/diagram either.
  */
-export const STALE_IF_ERROR_RETAINABLE_CODES: ReadonlySet<RenderError['code']> = new Set(['network', 'timeout', 'rate_limit', 'not_found', 'unknown']);
+export const STALE_IF_ERROR_RETAINABLE_CODES: ReadonlySet<RenderError['code']> = new Set(['network', 'timeout', 'rate_limit', 'not_found', 'unknown', 'busy']);
 
 /**
  * Upper bound for any plugin/upstream-supplied TTL (`RenderResult.ttlSec`,

@@ -104,7 +104,11 @@ function toRenderResult(url: string, result: FetchOgResult): RenderResult {
  *   - `http-error` anything else — 3xx (redirect-exhausted), 5xx, or no
  *     `httpStatus` at all (the unreachable-in-practice loop-exhaustion
  *     fallback) → `network` (transient 5min).
- *   - `timeout` → `timeout`, `network` → `network` (as-is, transient).
+ *   - `timeout` → `timeout`, `network` → `network`, `busy` → `busy`
+ *     (as-is, all transient — `busy` is the shared OGP-fetch
+ *     wait-queue's cap/timeout rejection, spec
+ *     feature-link-card-fetch-queue-bound, never a property of the
+ *     target url).
  *   - `too-large` / `unknown` → `unknown` (transient).
  *
  * The original `fetch-og.ts` code + httpStatus are preserved in
@@ -128,7 +132,7 @@ function toRenderError(result: Extract<FetchOgResult, { kind: 'error' }>): Rende
     // 3xx (redirect-exhausted), 5xx, or no httpStatus — transient.
     return { code: 'network', message };
   }
-  if (code === 'timeout' || code === 'network') return { code, message };
+  if (code === 'timeout' || code === 'network' || code === 'busy') return { code, message };
   // 'too-large' | 'unknown'
   return { code: 'unknown', message };
 }
