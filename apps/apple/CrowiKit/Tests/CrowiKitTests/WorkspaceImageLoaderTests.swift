@@ -94,6 +94,36 @@ final class WorkspaceImageLoaderTests: XCTestCase {
         _ = try await loader.fetch("https://attacker.example/x.png")
     }
 
+    // MARK: - §6.2 scheme allowlist (shared with the openURL interceptor)
+
+    /// The exact §6.2 belt-and-suspenders case: a page body's `<img>` (or
+    /// `![alt](…)`) pointing at the app's own `crowi-ios://` OAuth-callback
+    /// scheme, or any other custom scheme, must never even reach the
+    /// network — rejected at the SAME `SchemeAllowlist` the link interceptor
+    /// consumes, not merely left to fail as an accident of `URLSession`'s
+    /// own unknown-scheme handling.
+    func testDisallowedCustomSchemeThrowsBeforeAnyNetworkRequest() async {
+        let recorder = RequestRecorder()
+        MockURLProtocol.requestHandler = { request in
+            recorder.record(request)
+            return (HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Data())
+        }
+        let loader = makeLoaderWithMockTransport()
+
+        await XCTAssertThrowsErrorAsync(try await loader.fetch("crowi-ios://callback?code=abc")) { error in
+            XCTAssertEqual(error as? WorkspaceImageLoader.LoaderError, .disallowedScheme)
+        }
+        XCTAssertTrue(recorder.requests.isEmpty, "a disallowed scheme must never reach the network layer")
+    }
+
+    func testJavascriptSchemeIsAlsoDisallowed() async {
+        let loader = makeLoaderWithMockTransport()
+
+        await XCTAssertThrowsErrorAsync(try await loader.fetch("javascript:alert(1)")) { error in
+            XCTAssertEqual(error as? WorkspaceImageLoader.LoaderError, .disallowedScheme)
+        }
+    }
+
     private func makeLoaderWithMockTransport() -> WorkspaceImageLoader {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [MockURLProtocol.self]

@@ -174,4 +174,31 @@ final class WorkspaceModelContainerFactoryTests: XCTestCase {
         let directory2 = WorkspaceModelContainerFactory.storeDirectory(workspaceId: "workspace-2", baseDirectory: baseDirectory)
         XCTAssertTrue(FileManager.default.fileExists(atPath: directory2.path))
     }
+
+    /// `feature-ios-phase1-read` — `WorkspaceContext.applyConfidentialStorageProtection`
+    /// (§6.3/§7.2: the SwiftData store directory must be re-escalated the
+    /// moment confidentiality is (re)detected, exactly like
+    /// `WorkspaceImageDiskCache.applyConfidentialProtection` already does for
+    /// the image cache — previously ONLY the image cache got this,
+    /// `WorkspaceSession.refreshAppInfo` never touched the SwiftData store)
+    /// must target the SAME on-disk directory `makeModelContainer` itself
+    /// opened, never a different/stale one. `isExcludedFromBackup` is the
+    /// one rest-state-protection side effect observable cross-platform
+    /// (`NSFileProtection`'s actual value is iOS-only, gated `#if os(iOS)`
+    /// and unavailable in the macOS `swift test` environment this suite runs
+    /// in — no test anywhere in this suite asserts that attribute directly),
+    /// so it stands in as the portable "did this actually reach a real, open
+    /// directory" signal: a wrong path would silently no-op (`try?`) and
+    /// leave the flag unset.
+    func testWorkspaceContextAppliesConfidentialStorageProtectionToTheSameDirectoryTheContainerOpened() throws {
+        let workspace = Workspace(id: "workspace-1", workspaceOrigin: WorkspaceOrigin(URL(string: "https://wiki.example.com")!), displayTitle: "wiki")
+        let context = WorkspaceContext(workspace: workspace, tokenStore: InMemoryTokenStore(), containerBaseDirectory: baseDirectory)
+        _ = try context.makeModelContainer(models: [FixtureRecord.self], schemaVersion: 1)
+
+        context.applyConfidentialStorageProtection(true)
+
+        let directory = WorkspaceModelContainerFactory.storeDirectory(workspaceId: "workspace-1", baseDirectory: baseDirectory)
+        let values = try directory.resourceValues(forKeys: [.isExcludedFromBackupKey])
+        XCTAssertEqual(values.isExcludedFromBackup, true, "must apply the rest-state protection to the SAME directory makeModelContainer opened, not a stale/wrong one")
+    }
 }
