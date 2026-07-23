@@ -48,6 +48,24 @@ final class KeychainTokenStoreTests: XCTestCase {
         }
     }
 
+    private func loadOrSkip(forWorkspace workspaceId: String) throws -> StoredTokenPair? {
+        do {
+            return try store.load(forWorkspace: workspaceId)
+        } catch {
+            try skipIfKeychainUnavailable(error)
+            throw error
+        }
+    }
+
+    private func deleteOrSkip(forWorkspace workspaceId: String) throws {
+        do {
+            try store.delete(forWorkspace: workspaceId)
+        } catch {
+            try skipIfKeychainUnavailable(error)
+            throw error
+        }
+    }
+
     func testSaveThenLoadRoundTrips() throws {
         let id = "workspace-\(UUID().uuidString)"
         writtenWorkspaceIds.append(id)
@@ -55,7 +73,7 @@ final class KeychainTokenStoreTests: XCTestCase {
 
         try saveOrSkip(tokens, forWorkspace: id)
 
-        let loaded = try store.load(forWorkspace: id)
+        let loaded = try loadOrSkip(forWorkspace: id)
         XCTAssertEqual(loaded, tokens)
     }
 
@@ -68,11 +86,12 @@ final class KeychainTokenStoreTests: XCTestCase {
         try saveOrSkip(first, forWorkspace: id)
         try saveOrSkip(second, forWorkspace: id)
 
-        XCTAssertEqual(try store.load(forWorkspace: id), second)
+        XCTAssertEqual(try loadOrSkip(forWorkspace: id), second)
     }
 
     func testLoadForUnknownWorkspaceReturnsNil() throws {
-        XCTAssertNil(try store.load(forWorkspace: "never-saved-\(UUID().uuidString)"))
+        let loaded = try loadOrSkip(forWorkspace: "never-saved-\(UUID().uuidString)")
+        XCTAssertNil(loaded)
     }
 
     func testDeleteRemovesOnlyItsOwnItem() throws {
@@ -85,14 +104,14 @@ final class KeychainTokenStoreTests: XCTestCase {
         try saveOrSkip(tokensA, forWorkspace: idA)
         try saveOrSkip(tokensB, forWorkspace: idB)
 
-        try store.delete(forWorkspace: idA)
+        try deleteOrSkip(forWorkspace: idA)
 
-        XCTAssertNil(try store.load(forWorkspace: idA))
-        XCTAssertEqual(try store.load(forWorkspace: idB), tokensB)
+        XCTAssertNil(try loadOrSkip(forWorkspace: idA))
+        XCTAssertEqual(try loadOrSkip(forWorkspace: idB), tokensB)
     }
 
-    func testDeleteOfNonExistentWorkspaceDoesNotThrow() {
-        XCTAssertNoThrow(try store.delete(forWorkspace: "never-existed-\(UUID().uuidString)"))
+    func testDeleteOfNonExistentWorkspaceDoesNotThrow() throws {
+        try deleteOrSkip(forWorkspace: "never-existed-\(UUID().uuidString)")
     }
 
     // MARK: - §14 CI-fixed invariant: no secret ever lands in UserDefaults

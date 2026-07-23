@@ -8,7 +8,7 @@ import XCTest
 /// the minimum-version gate's `tooOld` refusal and the HTTPS gate's
 /// short-circuit (never probes an insecure origin at all).
 final class AddWorkspaceFlowTests: XCTestCase {
-    private func neverCalledPresentSession(_ authorizeURL: URL) async throws -> URL {
+    private static let neverCalledPresentSession: @Sendable (URL) async throws -> URL = { _ in
         XCTFail("presentSession should not be reached")
         throw URLError(.unknown)
     }
@@ -44,7 +44,7 @@ final class AddWorkspaceFlowTests: XCTestCase {
             _ = try await AddWorkspaceFlow.addWorkspace(
                 userInput: "https://not-a-crowi.example.com",
                 probe: { _ in try AppInfoLenient.decode(fixture) },
-                presentSession: neverCalledPresentSession
+                presentSession: Self.neverCalledPresentSession
             )
             XCTFail("expected notACrowiHost")
         } catch AddWorkspaceFlow.AddWorkspaceError.notACrowiHost {
@@ -63,7 +63,7 @@ final class AddWorkspaceFlowTests: XCTestCase {
             _ = try await AddWorkspaceFlow.addWorkspace(
                 userInput: "https://ancient.example.com",
                 probe: { _ in try AppInfoLenient.decode(fixture) },
-                presentSession: neverCalledPresentSession,
+                presentSession: Self.neverCalledPresentSession,
                 floor: "2.0.0"
             )
             XCTFail("expected tooOld")
@@ -85,7 +85,7 @@ final class AddWorkspaceFlowTests: XCTestCase {
                     XCTFail("probe should not be reached for an insecure origin")
                     throw URLError(.unknown)
                 },
-                presentSession: neverCalledPresentSession
+                presentSession: Self.neverCalledPresentSession
             )
             XCTFail("expected insecureOrigin")
         } catch AddWorkspaceFlow.AddWorkspaceError.insecureOrigin {
@@ -100,7 +100,7 @@ final class AddWorkspaceFlowTests: XCTestCase {
             _ = try await AddWorkspaceFlow.addWorkspace(
                 userInput: "https://wiki.example.com",
                 probe: { _ in throw URLError(.cannotConnectToHost) },
-                presentSession: neverCalledPresentSession
+                presentSession: Self.neverCalledPresentSession
             )
             XCTFail("expected hostUnreachable")
         } catch AddWorkspaceFlow.AddWorkspaceError.hostUnreachable {
@@ -112,7 +112,7 @@ final class AddWorkspaceFlowTests: XCTestCase {
 
     func testInvalidURLInputIsRejected() async {
         do {
-            _ = try await AddWorkspaceFlow.addWorkspace(userInput: "   ", presentSession: neverCalledPresentSession)
+            _ = try await AddWorkspaceFlow.addWorkspace(userInput: "   ", presentSession: Self.neverCalledPresentSession)
             XCTFail("expected invalidURL")
         } catch AddWorkspaceFlow.AddWorkspaceError.invalidURL {
             // expected

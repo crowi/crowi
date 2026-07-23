@@ -8,6 +8,18 @@ import XCTest
 /// form-encoded token exchange (gate B's finding that the generated client
 /// has no usable `Input` for `/oauth/token`).
 final class OAuthSignInFlowTests: XCTestCase {
+    private actor URLCapture {
+        private(set) var value: URL?
+
+        func set(_ url: URL) {
+            value = url
+        }
+
+        func get() -> URL? {
+            value
+        }
+    }
+
     private let discovery = OAuthDiscoveryDocument(
         issuer: URL(string: "https://wiki.example.com")!,
         authorizationEndpoint: URL(string: "https://wiki.example.com/oauth/authorize")!,
@@ -73,11 +85,11 @@ final class OAuthSignInFlowTests: XCTestCase {
             return (HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, responseBody)
         }
 
-        var capturedAuthorizeURL: URL?
+        let capturedAuthorizeURL = URLCapture()
         let tokens = try await OAuthSignInFlow.signIn(
             discovery: discovery,
             presentSession: { authorizeURL in
-                capturedAuthorizeURL = authorizeURL
+                await capturedAuthorizeURL.set(authorizeURL)
                 let state = URLComponents(url: authorizeURL, resolvingAgainstBaseURL: false)!
                     .queryItems!.first(where: { $0.name == "state" })!.value!
                 return URL(string: "crowi-ios://callback?code=the-code&state=\(state)")!
@@ -85,7 +97,8 @@ final class OAuthSignInFlowTests: XCTestCase {
             urlSession: MockURLProtocol.makeSession()
         )
 
-        XCTAssertNotNil(capturedAuthorizeURL)
+        let captured = await capturedAuthorizeURL.get()
+        XCTAssertNotNil(captured)
         XCTAssertEqual(tokens.accessToken, "at-1")
         XCTAssertEqual(tokens.refreshToken, "crowi_rt_1")
         XCTAssertGreaterThan(tokens.expiresAt, Date())

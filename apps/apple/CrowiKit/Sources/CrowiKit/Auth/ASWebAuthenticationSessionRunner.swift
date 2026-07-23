@@ -44,7 +44,10 @@ public final class ASWebAuthenticationSessionRunner: NSObject, @unchecked Sendab
             let session = ASWebAuthenticationSession(
                 url: authorizeURL,
                 callbackURLScheme: OAuthSignInFlow.callbackURLScheme
-            ) { url, error in
+            ) { [weak self] url, error in
+                Task { @MainActor in
+                    self?.activeSession = nil
+                }
                 if let error {
                     continuation.resume(throwing: error)
                 } else if let url {
@@ -64,11 +67,12 @@ public final class ASWebAuthenticationSessionRunner: NSObject, @unchecked Sendab
 extension ASWebAuthenticationSessionRunner: ASWebAuthenticationPresentationContextProviding {
     public func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
         #if canImport(UIKit)
-        return UIApplication.shared.connectedScenes
-            .compactMap { ($0 as? UIWindowScene)?.keyWindow }
-            .first ?? ASPresentationAnchor()
+        let windowScenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        return windowScenes.filter { $0.activationState == .foregroundActive }.compactMap(\.keyWindow).first
+            ?? windowScenes.compactMap(\.keyWindow).first
+            ?? ASPresentationAnchor()
         #elseif canImport(AppKit)
-        return NSApplication.shared.windows.first ?? ASPresentationAnchor()
+        return NSApplication.shared.keyWindow ?? NSApplication.shared.mainWindow ?? NSApplication.shared.windows.first ?? ASPresentationAnchor()
         #else
         return ASPresentationAnchor()
         #endif

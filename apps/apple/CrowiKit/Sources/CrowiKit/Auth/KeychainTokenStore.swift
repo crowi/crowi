@@ -28,11 +28,19 @@ struct KeychainTokenStore: WorkspaceTokenStoring {
     }
 
     private func query(forWorkspace workspaceId: String) -> [CFString: Any] {
-        [
+        var query: [CFString: Any] = [
             kSecClass: kSecClassGenericPassword,
             kSecAttrService: service,
             kSecAttrAccount: workspaceId,
         ]
+        #if os(macOS)
+        // CrowiKit is shared with the future Mac app. On macOS, opt into the
+        // data-protection Keychain so this iOS-first generic-password storage
+        // keeps the same accessibility semantics instead of falling back to
+        // the older file-based Keychain behavior.
+        query[kSecUseDataProtectionKeychain] = true
+        #endif
+        return query
     }
 
     func save(_ tokens: StoredTokenPair, forWorkspace workspaceId: String) throws {
