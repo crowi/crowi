@@ -18,7 +18,16 @@ describe('generateCaddyfile', () => {
   const config = generateCaddyfile({ apiPort: 4310, webPort: 4311, proxyPort: 4313 })
 
   it('listens on 0.0.0.0:proxyPort by default (Model B — reachable via LAN/tailscale IP)', () => {
-    assert.match(config, /^0\.0\.0\.0:4313 \{/m)
+    assert.match(config, /^http:\/\/0\.0\.0\.0:4313 \{/m)
+  })
+
+  it('pins the explicit http:// scheme (schemeless non-:80 addresses get Caddy auto-HTTPS)', () => {
+    // Regression pin for 2026-07-23: without the scheme, Caddy serves the
+    // site with automatic HTTPS (local-CA TLS) the moment a real `caddy`
+    // binary is on PATH, and every plain-HTTP dev client gets 400 "Client
+    // sent an HTTP request to an HTTPS server". The node fallback proxy is
+    // plain HTTP, so the two proxy paths silently disagreed until then.
+    assert.match(config, /^http:\/\//m)
   })
 
   it('routes /api and /files (bare + wildcard) to the api port', () => {
@@ -45,7 +54,7 @@ describe('generateCaddyfile', () => {
 
   it('honors a custom listenHost (loopback still overridable)', () => {
     const custom = generateCaddyfile({ apiPort: 1, webPort: 2, proxyPort: 3, listenHost: '127.0.0.1' })
-    assert.match(custom, /^127\.0\.0\.1:3 \{/m)
+    assert.match(custom, /^http:\/\/127\.0\.0\.1:3 \{/m)
   })
 })
 
