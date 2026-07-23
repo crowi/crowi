@@ -1404,25 +1404,15 @@ export default (crowi: Crowi) => {
    *   descendant. A hasPortal-only segment with zero descendants
    *   collapses to the portal doc's own metadata (openQuestions #1).
    *
-   * `lastUpdateUser` is resolved with ONE extra batched query — a
+   * `lastUpdateUser` is resolved with one extra batched
    * `User.find({ _id: { $in: [...] } })` over only the *representative*
-   * ids (one per returned segment, deduped), run AFTER the per-segment
-   * representative doc is chosen — alongside the existing single
-   * `Page.find`, so the N+1 budget stays flat regardless of scan size
-   * (bounded by segment count, not subtree size; a `.populate()` on the
-   * raw scan would instead fetch a user per *docs* row, i.e. proportional
-   * to subtree size, and every field on the User model rather than the
-   * small subset `PageUser` needs). `lastUpdateUser` can be legitimately
-   * null (pre-existing rows from before the field existed, or a
-   * hard-deleted user id the batched lookup can't resolve), which
-   * surfaces as `updater: null` rather than throwing.
-   *
-   * N+1 interpretation (acceptance criterion, spec §実現可能性): one
-   * additional user batch-fetch is unavoidable (different collection) but
-   * per-row query count remains zero — this batched lookup runs at most
-   * once per `findChildSegments` call (skipped entirely when no
-   * representative has an updater to resolve), independent of doc/segment
-   * count.
+   * ids (one per returned segment, deduped), run once after representative
+   * selection — so the N+1 budget stays flat regardless of scan size
+   * (spec §実現可能性: bounded by segment count, not subtree size, and
+   * skipped entirely when no representative has an updater to resolve).
+   * `lastUpdateUser` can be legitimately null (pre-existing rows from
+   * before the field existed, or a hard-deleted user id the lookup can't
+   * resolve), which surfaces as `updater: null` rather than throwing.
    */
   pageSchema.statics.findChildSegments = async function (path, userData) {
     const prefix = addTrailingSlash(path);
@@ -1512,14 +1502,8 @@ export default (crowi: Crowi) => {
       .sort((a, b) => a.segment.localeCompare(b.segment))
       .map((e) => ({ entry: e, meta: e.isPage ? e.selfMeta : e.maxOtherMeta }));
 
-    // Resolve `updater` with a single batched lookup over the DISTINCT
-    // representative `lastUpdateUser` ids only (bounded by the number of
-    // returned segments, not by subtree size) — see doc comment above.
-    // N+1 budget (acceptance criterion, spec §実現可能性): one additional
-    // user batch-fetch is unavoidable (different collection) but per-row
-    // query count remains zero — this `User.find({ _id: { $in: [...] } })`
-    // runs at most once (skipped when `updaterIds` is empty) regardless of
-    // how many docs the scan above touched.
+    // Resolve `updater` with the single batched lookup described in the
+    // doc comment above, over the distinct representative ids only.
     const updaterIds = new Set<string>();
     for (const { meta } of representatives) {
       if (meta?.lastUpdateUser) updaterIds.add(toStringId(meta.lastUpdateUser));

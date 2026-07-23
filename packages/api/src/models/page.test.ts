@@ -595,12 +595,10 @@ describe('Page', () => {
   describe('.findChildSegments (feature-child-segments-metadata)', () => {
     let author;
     let other;
-    let UserModel;
 
     beforeAll(() => {
       author = createdUsers[0];
       other = createdUsers[1];
-      UserModel = crowi.model('User');
     });
 
     beforeEach(async () => {
@@ -891,7 +889,7 @@ describe('Page', () => {
 
     test('does not add a per-row query: Page.find / User.find call counts stay flat as the tree grows (no N+1)', async () => {
       const pageFindSpy = jest.spyOn(Page, 'find');
-      const userFindSpy = jest.spyOn(UserModel, 'find');
+      const userFindSpy = jest.spyOn(User, 'find');
 
       await Fixture.generate('Page', [
         {
