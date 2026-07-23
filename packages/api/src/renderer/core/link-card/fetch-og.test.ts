@@ -1,4 +1,4 @@
-import { extractOgMeta, FETCH_CONCURRENCY_LIMIT, fetchOg, Semaphore } from './fetch-og';
+import { extractOgMeta, FETCH_CONCURRENCY_LIMIT, FETCH_QUEUE_LIMIT, FETCH_QUEUE_WAIT_MS, fetchOg, Semaphore } from './fetch-og';
 import { type DnsLookupResult } from './ssrf-guard';
 
 const PUBLIC_ADDRESS: DnsLookupResult = { address: '93.184.216.34', family: 4 };
@@ -354,6 +354,189 @@ describe('fetchOg — concurrency cap', () => {
     expect(fetchImpl).toHaveBeenCalledTimes(TOTAL);
     expect(maxConcurrent).toBe(FETCH_CONCURRENCY_LIMIT);
   });
+});
+
+/**
+ * `fetchImpl` stand-in for a host that never responds on its own — the
+ * only way it ever settles is via `fetch-og.ts`'s own client-side
+ * `AbortController` firing after `FETCH_TIMEOUT_MS` (mirroring the
+ * "abort" test above), matching a real unresponsive/slow attacker host.
+ */
+function hangingFetchImpl(onCall?: () => void, onAbort?: () => void): jest.Mock {
+  return jest.fn((_url: string, init?: RequestInit) => {
+    onCall?.();
+    return new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener('abort', () => {
+        onAbort?.();
+        const err = new Error('This operation was aborted');
+        err.name = 'AbortError';
+        reject(err);
+      });
+    });
+  });
+}
+
+describe('fetchOg — bounded wait queue (busy) — feature-link-card-fetch-queue-bound / crowi-review CROWI-REVIEW-002', () => {
+  it('rejects busy synchronously (no timer needed) once active+queued reaches the cap — the overflow is never queued as a new unresolved Promise (AC1)', async () => {
+    jest.useFakeTimers();
+    try {
+      const semaphore = new Semaphore(2, 3, 10_000); // max 2 active, queue cap 3 → total cap 5
+      const dnsLookup = allowLookup();
+      const fetchImpl = hangingFetchImpl();
+
+      let settledCount = 0;
+      const pending = Array.from({ length: 5 }, (_, i) => {
+        const p = fetchOg(`https://93.184.216.${i + 1}/pending`, { fetchImpl, dnsLookup, semaphore });
+        p.then(() => {
+          settledCount++;
+        });
+        return p;
+      });
+
+      // Drain the dns-lookup microtasks (no clock movement) so the 5
+      // within-cap calls have settled into "2 active + 3 queued".
+      await jest.advanceTimersByTimeAsync(0);
+
+      // The 6th request exceeds active(2)+queueLimit(3)=5 and must
+      // resolve to busy immediately — proving it was never pushed onto
+      // the wait queue as a pending Promise at all.
+      const overflow = await fetchOg('https://93.184.216.6/overflow', { fetchImpl, dnsLookup, semaphore });
+      expect(overflow).toEqual({ kind: 'error', code: 'busy' });
+      expect(settledCount).toBe(0); // none of the within-cap 5 have settled yet
+
+      // Drain everything so no fake timers dangle into a later test.
+      await jest.advanceTimersByTimeAsync(20_000);
+      await Promise.all(pending);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('a queued request fails with busy once its own wait deadline elapses — independent of the post-acquisition fetch timeout (AC2)', async () => {
+    jest.useFakeTimers();
+    try {
+      const semaphore = new Semaphore(1, 1, 1_000); // 1 active slot, 1 queue slot, 1s wait timeout
+      const dnsLookup = allowLookup();
+      const fetchImpl = hangingFetchImpl();
+
+      const active = fetchOg('https://93.184.216.10/active', { fetchImpl, dnsLookup, semaphore });
+      await jest.advanceTimersByTimeAsync(0); // let the active acquisition's dns lookup settle
+      const queued = fetchOg('https://93.184.216.11/queued', { fetchImpl, dnsLookup, semaphore });
+
+      // Cross the 1s wait deadline — the queued request must fail with
+      // busy even though the active holder's own 5s fetch timeout
+      // hasn't fired yet (it's still occupying the only slot).
+      await jest.advanceTimersByTimeAsync(1_000);
+      await expect(queued).resolves.toEqual({ kind: 'error', code: 'busy' });
+
+      // The active holder only frees up via its own (unrelated) 5s
+      // post-acquisition fetch timeout.
+      await jest.advanceTimersByTimeAsync(5_000);
+      await expect(active).resolves.toEqual({ kind: 'error', code: 'timeout' });
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('once a slot frees up, a fresh request is retried and can succeed — busy is never permanent (AC6)', async () => {
+    const semaphore = new Semaphore(1, 1, 5_000);
+    const dnsLookup = allowLookup();
+
+    let releaseFirst: (() => void) | undefined;
+    const firstFetchImpl = jest.fn(
+      () =>
+        new Promise<Response>((resolve) => {
+          releaseFirst = () => resolve(htmlResponse('<html></html>'));
+        }),
+    );
+    const first = fetchOg('https://93.184.216.20/first', { fetchImpl: firstFetchImpl, dnsLookup, semaphore });
+    await flush();
+    expect(firstFetchImpl).toHaveBeenCalledTimes(1);
+
+    const secondFetchImpl = jest.fn().mockResolvedValue(htmlResponse('<html><head><meta property="og:title" content="Second"></head></html>'));
+    const second = fetchOg('https://93.184.216.21/second', { fetchImpl: secondFetchImpl, dnsLookup, semaphore });
+    await flush();
+    expect(secondFetchImpl).not.toHaveBeenCalled(); // still queued — the only slot is held by `first`
+
+    releaseFirst?.();
+    const [firstResult, secondResult] = await Promise.all([first, second]);
+    expect(firstResult.kind).toBe('ok');
+    expect(secondResult.kind).toBe('ok');
+    expect(secondFetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it(
+    'DoS repro: a page dispatching many more unique slow-host @[card] fetches than the semaphore can hold ' +
+      'still bounds concurrent fetches + total queued Promises and resolves the whole batch in bounded time (AC3)',
+    async () => {
+      jest.useFakeTimers();
+      try {
+        // The actual production bounds — proves the DoS is closed with
+        // the real configured numbers, not just contrived small ones.
+        const semaphore = new Semaphore(FETCH_CONCURRENCY_LIMIT, FETCH_QUEUE_LIMIT, FETCH_QUEUE_WAIT_MS);
+        const dnsLookup = allowLookup();
+
+        let concurrent = 0;
+        let maxConcurrent = 0;
+        const fetchImpl = hangingFetchImpl(
+          () => {
+            concurrent++;
+            maxConcurrent = Math.max(maxConcurrent, concurrent);
+          },
+          () => {
+            concurrent--;
+          },
+        );
+
+        // 20 MORE unique-host embeds than the semaphore can ever admit
+        // at once (FETCH_CONCURRENCY_LIMIT + FETCH_QUEUE_LIMIT = 55) —
+        // simulates one malicious page's `Promise.all` embed dispatch
+        // (`../embed-tags.ts`) across many unique, unresponsive hosts.
+        const EXTRA_OVER_CAP = 20;
+        const TOTAL = FETCH_CONCURRENCY_LIMIT + FETCH_QUEUE_LIMIT + EXTRA_OVER_CAP;
+
+        let settledCount = 0;
+        const calls = Array.from({ length: TOTAL }, (_, i) => {
+          const p = fetchOg(`https://93.184.216.${(i % 250) + 1}/page-${i}`, { fetchImpl, dnsLookup, semaphore });
+          p.then(() => {
+            settledCount++;
+          });
+          return p;
+        });
+
+        // Let every dispatch's synchronous accept/queue/reject decision
+        // run to completion before any clock advance — the queue-length
+        // cap must reject the overflow WITHOUT any timer ever firing.
+        await jest.advanceTimersByTimeAsync(0);
+
+        // AC3(a): only the over-cap overflow has settled (busy) so far —
+        // the count of still-unresolved dispatches from this one page
+        // never exceeded FETCH_CONCURRENCY_LIMIT + FETCH_QUEUE_LIMIT.
+        expect(settledCount).toBe(EXTRA_OVER_CAP);
+        expect(TOTAL - settledCount).toBe(FETCH_CONCURRENCY_LIMIT + FETCH_QUEUE_LIMIT);
+        expect(maxConcurrent).toBeLessThanOrEqual(FETCH_CONCURRENCY_LIMIT);
+
+        // AC3(b): advance far enough for every accepted (active +
+        // queued) request to resolve one way or another (fetch timeout
+        // or queue-wait timeout) — bounded time, not indefinite.
+        await jest.advanceTimersByTimeAsync(120_000);
+
+        const results = await Promise.all(calls);
+        expect(settledCount).toBe(TOTAL); // every dispatch settled
+        expect(results.every((r) => r.kind === 'error')).toBe(true); // every unresponsive host degrades to an error, never hangs
+        expect(maxConcurrent).toBeLessThanOrEqual(FETCH_CONCURRENCY_LIMIT); // still holds after the full drain
+
+        // AC3(c): the process/module is not wedged by the DoS attempt —
+        // a fresh, fast request against the SAME (now-drained) shared
+        // semaphore succeeds normally right after.
+        const freshFetchImpl = jest.fn().mockResolvedValue(htmlResponse('<html><head><meta property="og:title" content="ok"></head></html>'));
+        const fresh = await fetchOg('https://93.184.216.99/after', { fetchImpl: freshFetchImpl, dnsLookup, semaphore });
+        expect(fresh.kind).toBe('ok');
+      } finally {
+        jest.useRealTimers();
+      }
+    },
+  );
 });
 
 describe('extractOgMeta', () => {
