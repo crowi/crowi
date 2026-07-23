@@ -49,21 +49,38 @@ struct KeychainTokenStore: WorkspaceTokenStoring {
         }
         var addQuery = query(forWorkspace: workspaceId)
         addQuery[kSecValueData] = data
-        // iOS 17 / macOS 14 floor — no locked-device access needed for a
-        // foreground-only sign-in/refresh flow (§7.2's file-protection
-        // baseline is the analogous rest-state guard for SwiftData; this is
-        // the Keychain equivalent).
-        addQuery[kSecAttrAccessible] = kSecAttrAccessibleAfterFirstUnlock
+        // This app is foreground-only — there is no background sync that
+        // would need to read the token while the device is locked (e.g.
+        // right after boot, before the user's first unlock). `.whenUnlocked`
+        // is therefore the *correct*, most restrictive class rather than a
+        // gratuitous tightening: the token is only ever read/written from a
+        // user-driven sign-in/refresh, which already requires an unlocked
+        // device. If a background-sync feature is ever added, that is the
+        // moment to deliberately relax this to `.afterFirstUnlock` (readable
+        // before first unlock) — do that decision here, not at the call site.
+        addQuery[kSecAttrAccessible] = kSecAttrAccessibleWhenUnlocked
 
         let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
         if addStatus == errSecSuccess { return }
         guard addStatus == errSecDuplicateItem else {
             throw StoreError.unhandledStatus(addStatus)
         }
-        // Already exists (e.g. a token refresh) — update in place.
+        // Already exists (e.g. a token refresh) — update in place. Also
+        // re-assert `kSecAttrAccessible`: `SecItemUpdate` does not implicitly
+        // carry forward an accessibility-class change made by a newer app
+        // version, so without this line an item created under the previous
+        // `.afterFirstUnlock` default would stay on that looser class
+        // forever. Passing it here means every existing signed-in user's
+        // next ordinary token refresh silently migrates their stored item to
+        // `.whenUnlocked` in place — no separate migration step, and no
+        // window where an existing user's token becomes unreadable (the
+        // value itself is untouched; only the accessibility class updates).
         let updateStatus = SecItemUpdate(
             query(forWorkspace: workspaceId) as CFDictionary,
-            [kSecValueData: data] as CFDictionary
+            [
+                kSecValueData: data,
+                kSecAttrAccessible: kSecAttrAccessibleWhenUnlocked,
+            ] as CFDictionary
         )
         guard updateStatus == errSecSuccess else {
             throw StoreError.unhandledStatus(updateStatus)

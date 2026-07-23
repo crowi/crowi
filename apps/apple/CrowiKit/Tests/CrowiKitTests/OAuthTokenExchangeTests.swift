@@ -28,4 +28,20 @@ final class OAuthTokenExchangeTests: XCTestCase {
 
         XCTAssertEqual(encoded, "weird%26key=value")
     }
+
+    /// external review (ios-review) finding — the encoder must stick to RFC
+    /// 3986 unreserved characters only, not `CharacterSet.urlQueryAllowed`
+    /// (which passes non-ASCII text like this through unescaped, since
+    /// `urlQueryAllowed` is meant for whole URLs, not a single
+    /// `application/x-www-form-urlencoded` field).
+    func testFormEncodeEscapesNonASCIICharactersInValues() {
+        let encoded = String(
+            data: OAuthTokenExchange.formEncode([
+                ("note", "café☕")
+            ]),
+            encoding: .utf8
+        )
+
+        XCTAssertEqual(encoded, "note=caf%C3%A9%E2%98%95")
+    }
 }
