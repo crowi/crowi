@@ -1,4 +1,5 @@
-import { extractOgMeta, FETCH_CONCURRENCY_LIMIT, FETCH_QUEUE_LIMIT, FETCH_QUEUE_WAIT_MS, fetchOg, Semaphore } from './fetch-og';
+import { Semaphore } from 'src/util/semaphore';
+import { extractOgMeta, FETCH_CONCURRENCY_LIMIT, FETCH_QUEUE_LIMIT, FETCH_QUEUE_WAIT_MS, fetchOg } from './fetch-og';
 import { type DnsLookupResult } from './ssrf-guard';
 
 const PUBLIC_ADDRESS: DnsLookupResult = { address: '93.184.216.34', family: 4 };
@@ -317,7 +318,7 @@ describe('fetchOg — scheme / timeout / network / HTTP-error / size-cap failure
 
 describe('fetchOg — concurrency cap', () => {
   it(`never runs more than ${FETCH_CONCURRENCY_LIMIT} fetches at once`, async () => {
-    const semaphore = new Semaphore(FETCH_CONCURRENCY_LIMIT);
+    const semaphore = new Semaphore(FETCH_CONCURRENCY_LIMIT, FETCH_QUEUE_LIMIT, FETCH_QUEUE_WAIT_MS);
     let concurrent = 0;
     let maxConcurrent = 0;
     const releasers: Array<() => void> = [];
