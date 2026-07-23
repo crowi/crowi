@@ -43,14 +43,14 @@
 // processes/ports, so it is intentionally NOT named `*.test.mjs` (that glob
 // is picked up by `pnpm test:scripts`).
 
-import { execFileSync, spawn } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import fs from 'node:fs'
 import http from 'node:http'
 import net from 'node:net'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { startCaddyProcess, writeCaddyConfig } from './dev-caddy.mjs'
+import { isCaddyAvailable, startCaddyProcess, writeCaddyConfig } from './dev-caddy.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.join(__dirname, '..')
@@ -94,15 +94,6 @@ async function waitForHttp(url, { timeoutMs = 15000, intervalMs = 150 } = {}) {
   throw new Error(`timed out waiting for ${url}: ${lastError}`)
 }
 
-function isCaddyAvailable() {
-  try {
-    execFileSync('caddy', ['version'], { stdio: 'ignore' })
-    return true
-  } catch {
-    return false
-  }
-}
-
 async function main() {
   console.log('--- 1. manifest check (defect A / AC2): built production routes-manifest.json must not carry the .well-known rewrite ---')
   for (const [label, manifestPath] of [
@@ -133,9 +124,7 @@ async function main() {
     return
   }
 
-  const apiPort = await getFreePort()
-  const webPort = await getFreePort()
-  const proxyPort = await getFreePort()
+  const [apiPort, webPort, proxyPort] = await Promise.all([getFreePort(), getFreePort(), getFreePort()])
 
   // Mirrors the real api's discoveryRoute (packages/api/src/hono/handlers/
   // oauth.ts), which derives every URL from the trusted request origin
@@ -242,11 +231,11 @@ async function main() {
 
     console.log('\n--- 7. negative control: re-run step 6 against the PRE-FIX @api matcher (no /.well-known/*) ---')
     console.log('(this proves the smoke test above actually exercises the Caddyfile fix, not something incidental)')
-    const preFixRendered = rendered.replace('@api path /api/* /files/* /.well-known/*', '@api path /api/* /files/*')
-    const preFixConfigPath = writeCaddyConfig('smoke-oauth-well-known-proxy-prefix-control', preFixRendered)
     const preFixProxyPort = await getFreePort()
-    const preFixConfigWithPort = fs.readFileSync(preFixConfigPath, 'utf8').replace(`127.0.0.1:${proxyPort} {`, `127.0.0.1:${preFixProxyPort} {`)
-    fs.writeFileSync(preFixConfigPath, preFixConfigWithPort)
+    const preFixRendered = rendered
+      .replace('@api path /api/* /files/* /.well-known/*', '@api path /api/* /files/*')
+      .replace(`127.0.0.1:${proxyPort} {`, `127.0.0.1:${preFixProxyPort} {`)
+    const preFixConfigPath = writeCaddyConfig('smoke-oauth-well-known-proxy-prefix-control', preFixRendered)
     const preFixCaddy = startCaddyProcess(preFixConfigPath)
     try {
       const preFixRes = await waitForHttp(`http://127.0.0.1:${preFixProxyPort}${WELL_KNOWN_PATH}`)

@@ -27,10 +27,14 @@ import path from 'node:path'
 
 export const DEFAULT_CADDY_CONFIG_DIR = path.join(os.homedir(), '.crowi-dev-caddy')
 
-// Paths routed to the api (HTTP). `/.well-known/oauth-authorization-server` is
-// included per the spec's open-question default: cheap to add, and it lets
-// `@crowi/cli`'s OAuth discovery work against the proxy origin.
-export const API_HTTP_PATHS = ['/api', '/files', '/.well-known/oauth-authorization-server']
+// Paths routed to the api (HTTP). `/.well-known` (the whole space, bare +
+// wildcard like `/api` and `/files` below) mirrors the prod Caddyfile's `@api`
+// matcher (broadened in feature-oauth-discovery-proxy-fix from the single
+// `/.well-known/oauth-authorization-server` literal so a future OAuth
+// metadata route, e.g. RFC 9728's `/.well-known/oauth-protected-resource`,
+// needs no further edit here OR there) — see this file's header doc comment
+// on why this table must stay in lockstep with the repo-root Caddyfile.
+export const API_HTTP_PATHS = ['/api', '/files', '/.well-known']
 // Realtime namespaces routed to the api (WS). Each must be matched BOTH bare
 // and with a `/*` suffix — Caddy's `path /collab/*` does NOT match a bare
 // `/collab`, and the browser dials the bare namespace (Hocuspocus / presence /

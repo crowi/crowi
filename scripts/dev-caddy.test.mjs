@@ -45,8 +45,15 @@ describe('generateCaddyfile', () => {
     assert.match(config, /@api[\s\S]*?reverse_proxy @api localhost:4310/)
   })
 
-  it('routes the OAuth discovery well-known path to the api port', () => {
-    assert.match(config, /\/\.well-known\/oauth-authorization-server/)
+  it('routes the whole /.well-known/* space (bare + wildcard) to the api port, mirroring the prod Caddyfile matcher', () => {
+    // The prod Caddyfile's @api matcher was broadened from the single
+    // /.well-known/oauth-authorization-server path to a /.well-known/*
+    // wildcard (feature-oauth-discovery-proxy-fix) specifically so a future
+    // OAuth metadata route (e.g. RFC 9728's /.well-known/oauth-protected-
+    // resource) needs no further Caddyfile edit. This dev-proxy routing
+    // table claims to mirror that Caddyfile (see the module doc comment
+    // above) but was left on the old single-path form — pin the parity.
+    assert.match(config, /@api path[^\n]*\/\.well-known(?!\/\*)[^\n]*\/\.well-known\/\*/)
   })
 
   it('routes all three WS namespaces, bare AND /* form, to the api port', () => {
