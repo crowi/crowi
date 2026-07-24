@@ -53,10 +53,52 @@ public struct AuthenticatedAPIClient: Sendable {
     /// transport failure (no network, DNS, etc).
     public func get(_ path: String, query: [URLQueryItem] = []) async throws -> (data: Data, status: Int) {
         let request = HTTPRequest(method: .get, scheme: nil, authority: nil, path: Self.encodedPathAndQuery(path: path, query: query))
+        return try await perform(request, body: nil)
+    }
+
+    /// `POST {apiBaseURL}/<path>` with a JSON body — `feature-ios-phase2-write`'s
+    /// bounded-write extension of this SAME primitive (never a second client
+    /// or a bare-`URLSession` write path): the request rides the identical
+    /// `AuthenticatingMiddleware` + `ClientTransport` composition `get` uses,
+    /// so proactive/reactive single-flight refresh applies to writes with no
+    /// extra wiring. Same non-throwing-on-non-2xx contract as `get` — the
+    /// write flows (`PageCreateFlow` / `PageEditSession` / `EngagementActions`)
+    /// each branch on the status + the shared `{ error: { code, message } }`
+    /// envelope (`APIErrorEnvelopeLenient`) themselves.
+    public func post(_ path: String, json: some Encodable & Sendable) async throws -> (data: Data, status: Int) {
+        try await send(method: .post, path: path, json: json)
+    }
+
+    /// `PUT {apiBaseURL}/<path>` with a JSON body — see `post`.
+    public func put(_ path: String, json: some Encodable & Sendable) async throws -> (data: Data, status: Int) {
+        try await send(method: .put, path: path, json: json)
+    }
+
+    /// `DELETE {apiBaseURL}/<path>` with a JSON body (the server's
+    /// `DELETE /bookmarks` / `DELETE /comments` take their target as a JSON
+    /// body, not a query) — see `post`.
+    public func delete(_ path: String, json: some Encodable & Sendable) async throws -> (data: Data, status: Int) {
+        try await send(method: .delete, path: path, json: json)
+    }
+
+    private func send(method: HTTPRequest.Method, path: String, json: some Encodable & Sendable) async throws -> (data: Data, status: Int) {
+        var request = HTTPRequest(method: method, scheme: nil, authority: nil, path: Self.encodedPathAndQuery(path: path, query: []))
+        request.headerFields[.contentType] = "application/json"
+        // `HTTPBody(Data)` is a fully-buffered, REPLAYABLE body
+        // (`iterationBehavior: .multiple`) — required here because
+        // `AuthenticatingMiddleware` re-sends the same body once after a
+        // reactive `401` refresh; a single-shot streaming body would fail
+        // that retry.
+        let body = HTTPBody(try JSONEncoder().encode(json))
+        return try await perform(request, body: body)
+    }
+
+    private func perform(_ request: HTTPRequest, body: HTTPBody?) async throws -> (data: Data, status: Int) {
+        let operationID = request.path ?? ""
         let (response, responseBody) = try await middleware.intercept(
-            request, body: nil, baseURL: apiBaseURL.url, operationID: path
+            request, body: body, baseURL: apiBaseURL.url, operationID: operationID
         ) { request, body, baseURL in
-            try await transport.send(request, body: body, baseURL: baseURL, operationID: path)
+            try await transport.send(request, body: body, baseURL: baseURL, operationID: operationID)
         }
         guard let responseBody else {
             return (Data(), response.status.code)
