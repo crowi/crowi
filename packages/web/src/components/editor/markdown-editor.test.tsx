@@ -267,3 +267,53 @@ describe('MarkdownEditor', () => {
     expect(stateWithExtra.readOnly).toBe(true);
   });
 });
+
+/**
+ * feature-renderer-plugin-boundary Phase 3 AC6 (reviewer-flagged gap,
+ * attempt 2) — `linkCardEnabled` must stay LIVE for an already-mounted
+ * editor, unlike `paste` / `dnd` which are read once at mount. Verified
+ * end-to-end through the real component (not `buildExtensions` alone,
+ * which cannot exercise `MarkdownEditor`'s own compartment wiring):
+ * mount with the affordance on, flip the prop off via `rerender` without
+ * unmounting, and confirm the SAME session's tooltip panel disappears —
+ * then flip it back on and confirm it reappears. Same real-EditorView +
+ * DOM-tooltip-panel-count technique as
+ * `link-card-affordance-extension.test.ts`'s "rendered panel count"
+ * block; `settle()` gives CodeMirror's tooltip panel plugin + syntax
+ * tree work a tick to catch up, same margin that block uses.
+ */
+describe('MarkdownEditor — link-card affordance reconfigures live on an already-mounted session (feature-renderer-plugin-boundary Phase 3 AC6)', () => {
+  const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 30));
+  const panelCount = () => document.querySelectorAll('.cm-link-card-affordance').length;
+
+  it('drops the affordance when the prop flips to false, and restores it when it flips back to true', async () => {
+    const onChange = vi.fn();
+    const ref = createRef<MarkdownEditorHandle>();
+    const doc = 'see https://example.test';
+    const { rerender } = render(<MarkdownEditor ref={ref} value={doc} onChange={onChange} linkCardEnabled />);
+
+    act(() => {
+      ref.current?.focusEnd(); // caret lands right after the bare URL
+    });
+    await act(async () => {
+      await settle();
+    });
+    expect(panelCount()).toBe(1);
+
+    act(() => {
+      rerender(<MarkdownEditor ref={ref} value={doc} onChange={onChange} linkCardEnabled={false} />);
+    });
+    await act(async () => {
+      await settle();
+    });
+    expect(panelCount()).toBe(0);
+
+    act(() => {
+      rerender(<MarkdownEditor ref={ref} value={doc} onChange={onChange} linkCardEnabled />);
+    });
+    await act(async () => {
+      await settle();
+    });
+    expect(panelCount()).toBe(1);
+  });
+});

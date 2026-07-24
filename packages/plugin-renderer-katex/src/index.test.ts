@@ -1,7 +1,10 @@
-import type { NodeRenderer, PluginLogger, RenderContext, RendererRegistry, RenderPhase } from '@crowi/plugin-api';
+import fs from 'node:fs';
+
+import type { NodeRenderer, PluginLogger, PluginRouterScope, RenderContext, RendererRegistry, RenderPhase } from '@crowi/plugin-api';
+import { Hono } from 'hono';
 import { createJiti } from 'jiti';
 import type { Root } from 'mdast';
-import katexPlugin, { _renderers, loadRemarkMath } from './index';
+import katexPlugin, { _internal, _renderers, loadRemarkMath } from './index';
 
 /**
  * Minimal RendererRegistry capture stub. Captures unified-plugin
@@ -17,9 +20,15 @@ interface CapturedNodeRenderer {
   renderer: NodeRenderer;
 }
 
-function makeRegistry(): { scope: RendererRegistry; unifiedCaptured: CapturedUnified[]; nodeCaptured: CapturedNodeRenderer[] } {
+function makeRegistry(): {
+  scope: RendererRegistry;
+  unifiedCaptured: CapturedUnified[];
+  nodeCaptured: CapturedNodeRenderer[];
+  stylesheetCaptured: string[];
+} {
   const unifiedCaptured: CapturedUnified[] = [];
   const nodeCaptured: CapturedNodeRenderer[] = [];
+  const stylesheetCaptured: string[] = [];
   const scope: RendererRegistry = {
     addUnifiedPlugin: (plugin, options) => {
       unifiedCaptured.push({ plugin, phase: options?.phase ?? 'transform' });
@@ -30,8 +39,11 @@ function makeRegistry(): { scope: RendererRegistry; unifiedCaptured: CapturedUni
     addCodeBlockRenderer: () => undefined,
     addEmbedTag: () => undefined,
     addUrlInlineExpander: () => undefined,
+    addStylesheet: (path) => {
+      stylesheetCaptured.push(path);
+    },
   };
-  return { scope, unifiedCaptured, nodeCaptured };
+  return { scope, unifiedCaptured, nodeCaptured, stylesheetCaptured };
 }
 
 const silentLogger: PluginLogger = {
@@ -178,5 +190,113 @@ describe('@crowi/plugin-renderer-katex', () => {
     // assert the function returns undefined explicitly so the
     // mutation contract is the only effect channel.
     expect(result).toBeUndefined();
+  });
+});
+
+/**
+ * feature-renderer-plugin-boundary Phase 2 (§2.1, §9 "KaTeX" bullet) —
+ * `registerRenderer` stages the CSS path via `addStylesheet`, and
+ * `registerRoutes` self-serves it + the referenced fonts. Publishing to
+ * the public app-info manifest only after `registerRoutes` succeeds is
+ * `RendererRegistryImpl.commitStylesheets` / `mountPluginRoutes`'s job
+ * (`packages/api/src/renderer/registry.ts`, `packages/api/src/hono/index.ts`)
+ * — already covered generically by `registry.test.ts`'s isolation test;
+ * this file only proves KaTeX's own two halves of that contract.
+ */
+describe('registerRenderer — addStylesheet', () => {
+  it("stages exactly the CSS route path, confined to this plugin's own /api/v2/plugins/ namespace", () => {
+    const { scope, stylesheetCaptured } = makeRegistry();
+    katexPlugin.registerRenderer?.(scope, { log: silentLogger } as never);
+
+    expect(stylesheetCaptured).toEqual([_internal.STYLESHEET_MANIFEST_PATH]);
+    expect(_internal.STYLESHEET_MANIFEST_PATH).toBe('/api/v2/plugins/@crowi/plugin-renderer-katex/katex.min.css');
+  });
+});
+
+/** A live `Hono` app + a `PluginRouterScope` that mounts straight onto it — same technique `@crowi/plugin-slack`'s `index.test.ts` uses to drive a plugin's routes end-to-end without the full API harness. */
+function makeRoutesScope(): { app: Hono; scope: PluginRouterScope } {
+  const app = new Hono();
+  const scope: PluginRouterScope = {
+    route: (method, routePath, handler) => {
+      app.on(method, routePath, handler);
+    },
+  };
+  return { app, scope };
+}
+
+function buildRoutesApp(): Hono {
+  const { app, scope } = makeRoutesScope();
+  katexPlugin.registerRoutes?.(scope, { log: silentLogger } as never);
+  return app;
+}
+
+describe('registerRoutes — CSS / font asset routes', () => {
+  it('serves katex.min.css with a text/css content-type + cache header', async () => {
+    const app = buildRoutesApp();
+    const res = await app.request(_internal.CSS_ROUTE_PATH);
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toBe('text/css; charset=utf-8');
+    expect(res.headers.get('cache-control')).toBe('public, max-age=86400');
+    const body = await res.text();
+    expect(body).toContain('.katex{');
+  });
+
+  it('serves an allowlisted font file with its matching content-type', async () => {
+    const app = buildRoutesApp();
+    const woff2 = await app.request('/fonts/KaTeX_Main-Regular.woff2');
+    expect(woff2.status).toBe(200);
+    expect(woff2.headers.get('content-type')).toBe('font/woff2');
+    expect(woff2.headers.get('cache-control')).toBe('public, max-age=86400');
+
+    const woff = await app.request('/fonts/KaTeX_Main-Regular.woff');
+    expect(woff.headers.get('content-type')).toBe('font/woff');
+
+    const ttf = await app.request('/fonts/KaTeX_Main-Regular.ttf');
+    expect(ttf.headers.get('content-type')).toBe('font/ttf');
+  });
+
+  it('404s an unknown font filename (not on the allowlist)', async () => {
+    const app = buildRoutesApp();
+    const res = await app.request('/fonts/does-not-exist.woff2');
+    expect(res.status).toBe(404);
+  });
+
+  it('404s a traversal attempt instead of resolving outside the assets dir — the handler does an exact-match lookup, never builds a filesystem path from the request', async () => {
+    const app = buildRoutesApp();
+    const res = await app.request('/fonts/..%2F..%2F..%2Fetc%2Fpasswd');
+    expect(res.status).toBe(404);
+  });
+
+  it('every font URL the served CSS references resolves to a filename on the allowlist (same plugin namespace, no dangling reference)', () => {
+    const assets = _internal.loadKatexAssets();
+    const css = assets.css.body.toString('utf8');
+    const fontUrls = [...css.matchAll(/url\((fonts\/[^)]+)\)/g)].map((m) => m[1]);
+    expect(fontUrls.length).toBeGreaterThan(0);
+    for (const url of fontUrls) {
+      const filename = url.replace(/^fonts\//, '');
+      expect(assets.fontsByFilename.has(filename)).toBe(true);
+    }
+  });
+});
+
+describe('registerRoutes — missing assets fails the whole route mount', () => {
+  it('resolveAssetsDir throws a descriptive error when neither candidate directory has katex.min.css', () => {
+    const spy = jest.spyOn(fs, 'existsSync').mockReturnValue(false);
+    try {
+      expect(() => _internal.resolveAssetsDir()).toThrow(/KaTeX CSS\/font assets not found/);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('registerRoutes propagates the failure synchronously — mountPluginRoutes (packages/api/src/hono/index.ts) relies on this to drop the pending stylesheet and skip mounting any route for this plugin', () => {
+    const spy = jest.spyOn(fs, 'existsSync').mockReturnValue(false);
+    try {
+      const { scope } = makeRoutesScope();
+      expect(() => katexPlugin.registerRoutes?.(scope, { log: silentLogger } as never)).toThrow(/KaTeX CSS\/font assets not found/);
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

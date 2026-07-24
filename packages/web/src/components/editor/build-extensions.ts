@@ -61,6 +61,16 @@ export interface BuildExtensionsProps {
    * mounts / tests with no page context.
    */
   dnd?: { pageId: string };
+  /**
+   * feature-renderer-plugin-boundary Phase 3 — gate the link-card
+   * conversion affordance on the `link-card` app-info capability
+   * (`useAppInfo().data?.capabilities.includes('link-card')`, admin
+   * Security `security:linkCardEnabled` toggle, default-on). `undefined`
+   * / omitted behaves like `true` (the caller hasn't resolved the
+   * capability yet, or doesn't care) — same optimistic-default-on
+   * pattern the toggle itself uses server-side.
+   */
+  linkCardEnabled?: boolean;
 }
 
 /**
@@ -112,12 +122,15 @@ export interface BuildExtensionsProps {
  *    conversion tooltip. Same built-in / always-on / self-gating-on-
  *    readonly pattern as `imageAffordanceExtension()` immediately
  *    above; ordering between the two is immaterial (they never target
- *    overlapping syntax spans).
+ *    overlapping syntax spans). feature-renderer-plugin-boundary
+ *    Phase 3 — gated on `linkCardEnabled` (default `true`) so a
+ *    disabled `security:linkCardEnabled` admin toggle also suppresses
+ *    the editor's own `@[card](url)` conversion affordance.
  *  - `extraExtensions` last so caller-supplied extensions win on
  *    precedence ties (CodeMirror layers later extensions on top).
  */
 export function buildExtensions(props: BuildExtensionsProps): Extension[] {
-  const { readonly = false, extraExtensions, onChange, disableHistory = false, autocomplete = true, paste, dnd } = props;
+  const { readonly = false, extraExtensions, onChange, disableHistory = false, autocomplete = true, paste, dnd, linkCardEnabled = true } = props;
   return [
     // `addKeymap: false` opts out of the upstream `markdownKeymap`
     // (Backspace → `deleteMarkupBackward`, `Prec.high` Enter →
@@ -154,8 +167,9 @@ export function buildExtensions(props: BuildExtensionsProps): Extension[] {
     imageAffordanceExtension(),
     // Link-card conversion affordance (bare URL <-> `@[card](url)`) —
     // same "always on, read-only-aware on its own" pattern as
-    // `imageAffordanceExtension()` immediately above.
-    linkCardAffordanceExtension(),
+    // `imageAffordanceExtension()` immediately above, now gated on the
+    // `link-card` capability (feature-renderer-plugin-boundary Phase 3).
+    linkCardEnabled ? linkCardAffordanceExtension() : [],
     // RFC-0003 Phase 7: skip the built-in undo stack + its keymap when
     // a Yjs `UndoManager` is taking over via `extraExtensions`. The
     // `defaultKeymap` is kept (it carries cursor / selection / line

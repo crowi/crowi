@@ -11,11 +11,9 @@ import sharp from 'sharp';
 
 import { crowi } from 'src/test/setup';
 import { createPageViaApi, createTestUser } from 'src/test/test-helpers';
-
 import {
-  type AdmissionSemaphore,
+  ADMISSION_QUEUE_LIMIT,
   buildDisplayDerivativeKey,
-  createAdmissionSemaphore,
   DISPLAY_DERIVATIVE_MIME_TYPES,
   DISPLAY_DERIVATIVE_RECIPE_VERSION,
   displayDerivativeKeyCandidates,
@@ -28,6 +26,7 @@ import {
   resolveMaxInputPixels,
   TARGET_MAX_WIDTH,
 } from 'src/util/image-display-derivative';
+import { Semaphore } from 'src/util/semaphore';
 
 // ---------------------------------------------------------------------------
 // Fixture builders
@@ -922,34 +921,41 @@ describe('Attachment.derivatives.display schema validation', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Admission semaphore (spec §8) — upload paths only
+// Admission semaphore (spec §8) — upload paths only. Now the shared
+// `Semaphore` (`src/util/semaphore.ts`, feature-renderer-core-util-dedup) —
+// generic queue-cap + wait-timeout coverage lives in `fetch-og.test.ts`;
+// the tests below focus on THIS module's own wiring/config knobs plus the
+// queue-length cap this consolidation newly adds to the upload admission
+// path (it previously had none — an unbounded-wait-queue defect).
 // ---------------------------------------------------------------------------
 
-describe('createAdmissionSemaphore', () => {
+describe('upload admission semaphore', () => {
   it('grants immediately while capacity remains', async () => {
-    const sem = createAdmissionSemaphore(2);
-    await expect(sem.acquire(1000)).resolves.toBe(true);
-    await expect(sem.acquire(1000)).resolves.toBe(true);
+    const sem = new Semaphore(2, 10, 1000);
+    await expect(sem.acquire()).resolves.toMatchObject({ ok: true });
+    await expect(sem.acquire()).resolves.toMatchObject({ ok: true });
   });
 
   it('queues past capacity and grants once a slot is released', async () => {
-    const sem = createAdmissionSemaphore(1);
-    expect(await sem.acquire(1000)).toBe(true);
+    const sem = new Semaphore(1, 10, 2000);
+    const first = await sem.acquire();
+    expect(first.ok).toBe(true);
 
-    const pending = sem.acquire(2000);
+    const pending = sem.acquire();
     // Give the pending acquire a couple of ticks to actually queue.
     await new Promise((resolve) => setImmediate(resolve));
-    sem.release();
+    if (first.ok) first.release();
 
-    await expect(pending).resolves.toBe(true);
+    await expect(pending).resolves.toMatchObject({ ok: true });
   });
 
-  it('resolves false once the timeout elapses without a free slot', async () => {
-    const sem = createAdmissionSemaphore(1);
-    expect(await sem.acquire(1000)).toBe(true);
+  it('resolves { ok: false } once the wait deadline elapses without a free slot', async () => {
+    const sem = new Semaphore(1, 10, 1000);
+    const first = await sem.acquire();
+    expect(first.ok).toBe(true);
 
     const result = await sem.acquire(30);
-    expect(result).toBe(false);
+    expect(result).toEqual({ ok: false });
   });
 
   it('resolveAdmissionConcurrency / resolveAdmissionTimeoutMs default and are overridable', () => {
@@ -970,6 +976,53 @@ describe('createAdmissionSemaphore', () => {
       else process.env.IMAGE_DERIVATIVE_ADMISSION_CONCURRENCY = prevC;
       if (prevT === undefined) delete process.env.IMAGE_DERIVATIVE_ADMISSION_TIMEOUT_MS;
       else process.env.IMAGE_DERIVATIVE_ADMISSION_TIMEOUT_MS = prevT;
+    }
+  });
+
+  it(`caps the wait queue at ADMISSION_QUEUE_LIMIT (${ADMISSION_QUEUE_LIMIT}) — the pre-existing unbounded-queue defect this consolidation fixes`, async () => {
+    jest.useFakeTimers();
+    try {
+      // The actual production capacity — proves the cap holds with the
+      // real configured concurrency, not just a contrived small one.
+      const capacity = resolveAdmissionConcurrency();
+      const sem = new Semaphore(capacity, ADMISSION_QUEUE_LIMIT, 10_000);
+
+      // 5 more than the semaphore can ever admit at once (active + queued).
+      const EXTRA_OVER_CAP = 5;
+      const TOTAL = capacity + ADMISSION_QUEUE_LIMIT + EXTRA_OVER_CAP;
+
+      let settledCount = 0;
+      const calls = Array.from({ length: TOTAL }, () => {
+        const p = sem.acquire();
+        p.then(() => {
+          settledCount++;
+        });
+        return p;
+      });
+
+      // Let every dispatch's synchronous accept/queue/reject decision run
+      // to completion before any clock advance — the queue-length cap
+      // must reject the overflow WITHOUT any timer ever firing.
+      await jest.advanceTimersByTimeAsync(0);
+
+      // Only the `capacity` active grants + the over-cap overflow have
+      // settled so far — the `ADMISSION_QUEUE_LIMIT` queued acquisitions
+      // are still genuinely pending (never rejected as unbounded pile-up,
+      // but also not yet granted since nothing has released a slot).
+      expect(settledCount).toBe(capacity + EXTRA_OVER_CAP);
+
+      // Advance past the wait deadline so every queued acquisition times
+      // out too (nothing ever releases the `capacity` active slots here).
+      await jest.advanceTimersByTimeAsync(10_000);
+
+      const results = await Promise.all(calls);
+      expect(settledCount).toBe(TOTAL);
+      const granted = results.filter((r) => r.ok);
+      const rejected = results.filter((r) => !r.ok);
+      expect(granted).toHaveLength(capacity);
+      expect(rejected).toHaveLength(ADMISSION_QUEUE_LIMIT + EXTRA_OVER_CAP);
+    } finally {
+      jest.useRealTimers();
     }
   });
 });
@@ -1015,9 +1068,8 @@ describe('generateDisplayDerivativeForUpload', () => {
     const { page, attachment } = await makeAttachment('admission-timeout');
     const src = await writeFixture(await rasterBuffer(2000, 1000, 'jpeg'), 'jpg');
 
-    const deniedAdmission: AdmissionSemaphore = {
-      acquire: async () => false,
-      release: () => {},
+    const deniedAdmission: Pick<Semaphore, 'acquire'> = {
+      acquire: async () => ({ ok: false }),
     };
 
     const { derivative, published } = await generateDisplayDerivativeForUpload(
@@ -1047,7 +1099,7 @@ describe('generateDisplayDerivativeForUpload', () => {
     const { page, attachment } = await makeAttachment('admission-ok');
     const src = await writeFixture(await rasterBuffer(2000, 1000, 'jpeg'), 'jpg');
 
-    const sem = createAdmissionSemaphore(1);
+    const sem = new Semaphore(1, 10, 1000);
     const { derivative, published } = await generateDisplayDerivativeForUpload(
       { crowi, attachmentId: attachment._id, pageId: new Types.ObjectId(page._id), sourcePath: src, oldFilePath: undefined },
       sem,
@@ -1056,7 +1108,7 @@ describe('generateDisplayDerivativeForUpload', () => {
     expect(published).toBe(true);
     expect(derivative.mode).toBe('resized');
     // The slot was released — a second acquire should succeed immediately.
-    await expect(sem.acquire(10)).resolves.toBe(true);
+    await expect(sem.acquire(10)).resolves.toMatchObject({ ok: true });
   });
 
   it('never rejects even when the source path does not exist, and persists a failed classification', async () => {
@@ -1081,9 +1133,8 @@ describe('generateDisplayDerivativeForUpload', () => {
     const { page, attachment } = await makeAttachment('admission-timeout-fast');
     const src = await writeFixture(await rasterBuffer(2000, 1000, 'jpeg'), 'jpg');
 
-    const deniedAdmission: AdmissionSemaphore = {
-      acquire: async () => false,
-      release: () => {},
+    const deniedAdmission: Pick<Semaphore, 'acquire'> = {
+      acquire: async () => ({ ok: false }),
     };
 
     const start = Date.now();

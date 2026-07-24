@@ -87,8 +87,17 @@ Caddy forwards the WebSocket `Upgrade` automatically and provisions TLS for you:
 
 ```
 wiki.example.com {
-	# HTTP API + attachments → api
-	@api path /api/* /files/*
+	# HTTP API + attachments + OAuth/well-known metadata → api
+	# `/.well-known/*` is deliberately broad (not scoped to just
+	# `oauth-authorization-server`) so future OAuth metadata (e.g. RFC 9728
+	# oauth-protected-resource) is covered without another Caddyfile edit.
+	# web CANNOT proxy this itself in a standalone production build
+	# (rewrites() is frozen at build time), so the front proxy routing it
+	# to api directly is required. ACME challenges
+	# (`/.well-known/acme-challenge/*`) are unaffected — Caddy's TLS
+	# automation handles those in an internal handler that runs before
+	# reverse_proxy.
+	@api path /api/* /files/* /.well-known/*
 	reverse_proxy @api api:3000
 
 	# Realtime WebSocket namespaces → api (Upgrade passed through automatically)
@@ -104,8 +113,9 @@ wiki.example.com {
 ### nginx (Upgrade headers are manual)
 
 ```nginx
-location /api/   { proxy_pass http://api:3000; }
-location /files/ { proxy_pass http://api:3000; }
+location /api/         { proxy_pass http://api:3000; }
+location /files/       { proxy_pass http://api:3000; }
+location /.well-known/ { proxy_pass http://api:3000; }  # OAuth discovery, etc.
 
 # Realtime WebSocket namespaces — Upgrade-header passthrough is required
 # The trailing (/|$) also catches the bare `/collab` (no segment)

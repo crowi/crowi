@@ -195,6 +195,10 @@ describe('error caching', () => {
     { code: 'timeout' as const, expectedTtlSec: RENDER_ERROR_TTL.timeout },
     { code: 'unknown' as const, expectedTtlSec: RENDER_ERROR_TTL.unknown },
     { code: 'blocked' as const, expectedTtlSec: RENDER_ERROR_TTL.blocked },
+    // feature-link-card-fetch-queue-bound (AC6): busy must land on the
+    // same short transient TTL as network/timeout, NOT blocked's 1h
+    // persistent bucket — a congested wait queue should be retried soon.
+    { code: 'busy' as const, expectedTtlSec: RENDER_ERROR_TTL.busy },
   ];
 
   it.each(errCases)('caches %s errors with the per-code default TTL', async ({ code, expectedTtlSec }) => {
@@ -214,6 +218,13 @@ describe('error caching', () => {
     const ttlSec = Math.round((doc!.expiresAt.getTime() - before) / 1000);
     expect(ttlSec).toBeGreaterThanOrEqual(expectedTtlSec - 1);
     expect(ttlSec).toBeLessThanOrEqual(expectedTtlSec + 1);
+  });
+
+  it("busy has a short transient TTL, matching network/timeout — it never lands on blocked/not_found's 1h persistent bucket (feature-link-card-fetch-queue-bound AC6)", () => {
+    expect(RENDER_ERROR_TTL.busy).toBe(RENDER_ERROR_TTL.network);
+    expect(RENDER_ERROR_TTL.busy).toBe(RENDER_ERROR_TTL.timeout);
+    expect(RENDER_ERROR_TTL.busy).toBeLessThan(RENDER_ERROR_TTL.blocked);
+    expect(RENDER_ERROR_TTL.busy).toBeLessThan(RENDER_ERROR_TTL.not_found);
   });
 
   it('rate_limit error with retryAfterSec overrides the default TTL', async () => {
@@ -525,6 +536,39 @@ describe('stale-if-error (last-good retention)', () => {
     const after = await findDoc(i.pageId);
     expect(after?.html).toBe('<a href="https://example.test">blocked link</a>');
     expect(after?.lastGoodFetchedAt).toBeUndefined();
+  });
+
+  it('(g) a busy failure (renderer-admission congestion) DOES retain the last-good html — transient, like network/timeout (feature-link-card-fetch-queue-bound)', async () => {
+    const storage = buildStorage();
+    const ctx = buildCtx(storage, PLUGIN);
+    const renderer = buildRenderer({ html: '<good/>', ttlSec: 1 });
+    const i = input();
+
+    await cachedRender(storage, PLUGIN, renderer, i, ctx);
+
+    // Past the stale window entirely (ttlSec=1 -> window=4s) -> blocking path.
+    const PluginRenderCache = crowi.model('PluginRenderCache') as unknown as PluginRenderCacheModel;
+    const past = new Date(Date.now() - 10_000);
+    const pushedFetchedAt = new Date(past.getTime() - 1_000);
+    await PluginRenderCache.updateOne(
+      { pluginName: PLUGIN, pageId: new Types.ObjectId(i.pageId) },
+      { $set: { expiresAt: past, fetchedAt: pushedFetchedAt } },
+    ).exec();
+
+    // The shared wait-queue was momentarily full/timed-out — `busy` is
+    // in STALE_IF_ERROR_RETAINABLE_CODES, so the previously-fetched html
+    // must stay on screen instead of degrading immediately.
+    (renderer as { render: jest.Mock }).render.mockImplementationOnce(async () => {
+      (renderer as unknown as { calls: number }).calls++;
+      return { html: '', error: { code: 'busy' } };
+    });
+
+    const result = await cachedRender(storage, PLUGIN, renderer, i, ctx);
+    expect(result.html).toBe('<good/>'); // kept, NOT degraded to a placeholder
+
+    const after = await findDoc(i.pageId);
+    expect(after?.html).toBe('<good/>');
+    expect(after?.lastGoodFetchedAt?.getTime()).toBe(pushedFetchedAt.getTime());
   });
 
   it('clamps an untrusted plugin-supplied TTL (huge retryAfterSec / huge ttlSec) to MAX_TTL_SEC at the core boundary', async () => {

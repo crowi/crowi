@@ -22,10 +22,9 @@ The plugin:
 1. Deflate+base64-encodes the diagram source via `plantuml-encoder`.
 2. Fetches `${serverUrl}/${outputFormat}/${encoded}` from the
    configured server.
-3. For SVG, runs the shared DOM-based sanitizer
-   (`@crowi/plugin-renderer-svg-sanitize`, PlantUML's `allowSafeHref:
-   true` policy) and wraps the result in `<div class="diagram-embed
-   plantuml-embed">`.
+3. For SVG, runs the shared DOM-based sanitizer (`@crowi/svg-sanitize`,
+   PlantUML's `allowSafeHref: true` policy) and wraps the result in `<div
+   class="diagram-embed plantuml-embed">`.
 4. For PNG, base64-encodes the body and emits an `<img class="diagram-embed
    plantuml-embed">` data URL.
 5. Caches the result in Crowi's `PluginRenderCache` with a 1h fresh
@@ -96,8 +95,8 @@ The env variable is no longer consulted by the plugin.
 ## SVG sanitization
 
 SVG output is sanitized by the shared, DOM-based
-[`@crowi/plugin-renderer-svg-sanitize`](../plugin-renderer-svg-sanitize)
-package — the same sanitizer `@crowi/plugin-renderer-mermaid` uses,
+[`@crowi/svg-sanitize`](../svg-sanitize) package — the same sanitizer
+`@crowi/plugin-renderer-mermaid` uses,
 parameterized per renderer (this plugin passes `allowSafeHref: true`,
 so a benign `https:` `href` — e.g. a PlantUML `[[https://... label]]`
 link — survives; `javascript:`, `data:`, and protocol-relative URLs
@@ -106,6 +105,11 @@ an explicit allowlist (`<script>`, `<foreignObject>`, `<iframe>`, SMIL
 animation elements, ...), `on*=` event-handler attributes, the `style`
 attribute, unsafe `href`/`url()` references, and non-essential XML
 namespace declarations.
+
+`@crowi/svg-sanitize` is a private, internal-only package: this plugin
+bundles its compiled output directly into `dist` at build time (rather
+than depending on it at runtime), so a sanitizer change requires
+re-publishing this plugin — see `packages/svg-sanitize/README.md`.
 
 This is defence-in-depth — the PlantUML server is operator-owned, so
 the trust model is "trusted upstream" rather than "user-uploaded

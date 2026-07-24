@@ -15,7 +15,6 @@
     "@crowi/plugin-mail-resend": "0.1.0-dev",
     "@crowi/plugin-mail-smtp": "0.1.0-dev",
     "@crowi/plugin-renderer-crowi-legacy": "0.1.0-dev",
-    "@crowi/plugin-renderer-emoji": "0.1.0-dev",
     "@crowi/plugin-renderer-katex": "0.1.0-dev",
     "@crowi/plugin-renderer-plantuml": "0.1.0-dev",
     "@crowi/plugin-search-elasticsearch": "0.1.0-dev",

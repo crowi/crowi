@@ -43,6 +43,7 @@
     "@types/katex": "^0.16.7",
     "@types/mdast": "^4.0.4",
     "@types/node": "catalog:",
+    "hono": "^4.12.25",
     "jest": "catalog:",
     "remark-parse": "^11.0.0",
     "ts-jest": "catalog:",

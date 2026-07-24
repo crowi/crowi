@@ -47,13 +47,15 @@ export const STATIC_CAPABILITIES = [
 /**
  * Capabilities the handler (`packages/api/src/hono/handlers/app.ts`) detects
  * at runtime from live server state — `search` only when a search driver is
- * active, `collab` unconditionally (Hocuspocus is library-attached), and
- * `collab:redis` additionally when `REDIS_URL` is set. Listed here (rather
- * than left as bare string literals in the handler) so both the wire schema
- * and the handler's return type are compiler-checked against the same
- * vocabulary.
+ * active, `collab` unconditionally (Hocuspocus is library-attached),
+ * `collab:redis` additionally when `REDIS_URL` is set, and `link-card`
+ * when the admin Security `security:linkCardEnabled` toggle (default ON,
+ * feature-renderer-plugin-boundary Phase 3) reads true. Listed here
+ * (rather than left as bare string literals in the handler) so both the
+ * wire schema and the handler's return type are compiler-checked against
+ * the same vocabulary.
  */
-export const DYNAMIC_CAPABILITIES = ['search', 'collab', 'collab:redis'] as const;
+export const DYNAMIC_CAPABILITIES = ['search', 'collab', 'collab:redis', 'link-card'] as const;
 
 /**
  * The full known capability vocabulary: everything `GET /app/info.capabilities`

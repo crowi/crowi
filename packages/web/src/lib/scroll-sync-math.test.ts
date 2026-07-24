@@ -1,11 +1,12 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
-  SLIDING_REFERENCE_EPSILON,
   computeDensityCompensatedReferenceTarget,
   computeScrollProgress,
   computeSlidingReferenceTarget,
   isProgressNearEnd,
   isProgressNearStart,
+  SLIDING_REFERENCE_EPSILON,
+  type SlidingReferenceTargetInput,
 } from './scroll-sync-math';
 
 describe('computeScrollProgress', () => {
@@ -199,6 +200,126 @@ describe('computeSlidingReferenceTarget', () => {
     }
     expect(sawIncrease).toBe(true);
     expect(prev).toBe(targetMaxScroll);
+  });
+});
+
+describe('computeSlidingReferenceTarget equivalence with its pre-refactor formula', () => {
+  // `computeSlidingReferenceTarget` now delegates to
+  // `computeDensityCompensatedReferenceTarget` with
+  // `topReferenceY = bottomReferenceY = referenceY` (see
+  // `.feature-state/specs/feature-scroll-sync-math-dedup.md`). This is the
+  // exact formula it used to compute directly, kept here only as a
+  // reference implementation so a regression in the delegation (or a future
+  // divergence between the two functions' endpoint-pin/clamp shells) shows
+  // up as a mismatch instead of silently changing behaviour.
+  function referenceComputeSlidingReferenceTarget({
+    sourceProgress,
+    referenceY,
+    targetViewportHeight,
+    targetMaxScroll,
+  }: SlidingReferenceTargetInput): number | null {
+    if (isProgressNearStart(sourceProgress)) return 0;
+    if (isProgressNearEnd(sourceProgress)) return targetMaxScroll;
+    if (referenceY === null) return null;
+    const raw = referenceY - sourceProgress * targetViewportHeight;
+    return Math.max(0, Math.min(targetMaxScroll, raw));
+  }
+
+  // sourceProgress: interior values, the pin thresholds themselves, values
+  // just inside/outside each threshold, and the hard 0/1 endpoints.
+  const sourceProgresses = [
+    0,
+    SLIDING_REFERENCE_EPSILON / 2,
+    SLIDING_REFERENCE_EPSILON,
+    SLIDING_REFERENCE_EPSILON * 1.5,
+    0.01,
+    0.25,
+    0.5,
+    0.73,
+    0.99,
+    1 - SLIDING_REFERENCE_EPSILON * 1.5,
+    1 - SLIDING_REFERENCE_EPSILON,
+    1 - SLIDING_REFERENCE_EPSILON / 2,
+    1,
+  ];
+  // referenceY: positive / negative / zero, plus null (the unresolved-anchor
+  // case — this is what pins down the null-guard equivalence).
+  const referenceYs: Array<number | null> = [-500, -1, 0, 1, 250, 1200, 10000, null];
+  // Representative target-pane dimensions, including the targetMaxScroll = 0
+  // degenerate case (a target pane that cannot scroll at all).
+  const dims = [
+    { targetViewportHeight: 800, targetMaxScroll: 4000 },
+    { targetViewportHeight: 800, targetMaxScroll: 0 },
+    { targetViewportHeight: 500, targetMaxScroll: 100 },
+    { targetViewportHeight: 300, targetMaxScroll: 5000 },
+  ];
+
+  it('matches the pre-refactor formula exactly across sourceProgress x referenceY x target-dimension combinations, including the null-referenceY guard at interior progress', () => {
+    for (const sourceProgress of sourceProgresses) {
+      for (const referenceY of referenceYs) {
+        for (const { targetViewportHeight, targetMaxScroll } of dims) {
+          const input = { sourceProgress, referenceY, targetViewportHeight, targetMaxScroll };
+          expect(computeSlidingReferenceTarget(input)).toBe(referenceComputeSlidingReferenceTarget(input));
+        }
+      }
+    }
+  });
+
+  it('returns exactly null (never a number) when referenceY is null at an interior progress', () => {
+    // Standalone assertion for the null-guard equivalence beyond the
+    // combinatorial loop above: sliding's `referenceY === null` guard and
+    // density-compensated's `topReferenceY === null || bottomReferenceY ===
+    // null` guard collapse to the same branch once both edges receive the
+    // same value.
+    expect(computeSlidingReferenceTarget({ sourceProgress: 0.42, referenceY: null, targetViewportHeight: 800, targetMaxScroll: 4000 })).toBeNull();
+  });
+
+  it('matches the pre-refactor formula exactly for a non-round-number input that previously exposed floating-point interpolation drift', () => {
+    // Regression for a case caught by review: with topReferenceY ===
+    // bottomReferenceY === referenceY, the density-compensated delegate used
+    // to recompute `referenceY` via `(1 - p) * Y + p * Y`, which does not
+    // always round-trip back to exactly `Y` in IEEE 754 arithmetic. That
+    // diverged from the pre-refactor formula (which used `referenceY`
+    // directly, no interpolation) by an ULP-scale amount for some inputs —
+    // undetectable via the round-number grid above, but real.
+    const input = {
+      sourceProgress: 0.38415338408277877,
+      referenceY: 3696.330127969984,
+      targetViewportHeight: 1081.9123146890065,
+      targetMaxScroll: 20000,
+    };
+    expect(computeSlidingReferenceTarget(input)).toBe(referenceComputeSlidingReferenceTarget(input));
+    expect(computeSlidingReferenceTarget(input)).toBe(3280.7098510013698);
+  });
+
+  it('matches the pre-refactor formula exactly across a large sample of pseudo-random non-round-number inputs', () => {
+    // Deterministic PRNG (mulberry32) so a failure is reproducible without
+    // relying on a fixed grid of round numbers, which is exactly the kind of
+    // input the regression above slipped through on.
+    function mulberry32(seed: number): () => number {
+      let state = seed;
+      return () => {
+        state = (state + 0x6d2b79f5) | 0;
+        let t = state;
+        t = Math.imul(t ^ (t >>> 15), t | 1);
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    }
+
+    const random = mulberry32(0x5c001a1);
+    const SAMPLE_COUNT = 2000;
+    for (let i = 0; i < SAMPLE_COUNT; i++) {
+      // Bias roughly a quarter of samples into the pin zones so both the
+      // interior formula and the endpoint pins get non-round-number coverage.
+      const sourceProgress = random() < 0.25 ? random() * SLIDING_REFERENCE_EPSILON * 3 : random();
+      const referenceY = (random() - 0.5) * 20000;
+      const targetViewportHeight = random() * 2000 + 1;
+      // Occasionally exercise the targetMaxScroll = 0 degenerate case.
+      const targetMaxScroll = random() < 0.1 ? 0 : random() * 20000;
+      const input = { sourceProgress, referenceY, targetViewportHeight, targetMaxScroll };
+      expect(computeSlidingReferenceTarget(input)).toBe(referenceComputeSlidingReferenceTarget(input));
+    }
   });
 });
 

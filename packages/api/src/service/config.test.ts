@@ -1,5 +1,31 @@
 import ConfigService, { type ConfigChangeListener, deriveChangedNamespaces } from './config';
 
+/** Shared by `ConfigService listener API` + `ConfigService.saveConfigValueDurable` below. */
+function makeService(overrides: { updateByParams?: jest.Mock } = {}): ConfigService {
+  const writes: Array<{ ns: string; config: Record<string, unknown> }> = [];
+  const updateConfigByNamespace = jest.fn(async (ns: string, config: Record<string, unknown>) => {
+    writes.push({ ns, config });
+  });
+  const updateConfig = jest.fn(async (_ns: string, _key: string, _value: unknown) => undefined);
+  const updateByParams = overrides.updateByParams ?? jest.fn(async (_ns: string, _key: string, _value: unknown) => undefined);
+  const deleteConfig = jest.fn(async (_ns: string, _key: string) => undefined);
+  const fakeCrowi = {
+    model: () => ({ updateConfigByNamespace, updateConfig, updateByParams, deleteConfig }),
+    event: () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const e: any = {
+        on: jest.fn(),
+        emit: jest.fn(),
+      };
+      return e;
+    },
+    setupMailer: jest.fn(async () => undefined),
+    redisOpts: null,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } as any;
+  return new ConfigService(fakeCrowi);
+}
+
 describe('deriveChangedNamespaces', () => {
   it('maps plugin keys to plugin:<name> namespaces', () => {
     expect(deriveChangedNamespaces('crowi', ['plugin:@crowi/plugin-aws:region', 'plugin:@crowi/plugin-aws:accessKeyId'])).toEqual(['plugin:@crowi/plugin-aws']);
@@ -24,28 +50,6 @@ describe('deriveChangedNamespaces', () => {
 });
 
 describe('ConfigService listener API', () => {
-  function makeService(): ConfigService {
-    const writes: Array<{ ns: string; config: Record<string, unknown> }> = [];
-    const updateConfigByNamespace = jest.fn(async (ns: string, config: Record<string, unknown>) => {
-      writes.push({ ns, config });
-    });
-    const updateConfig = jest.fn(async (_ns: string, _key: string, _value: unknown) => undefined);
-    const deleteConfig = jest.fn(async (_ns: string, _key: string) => undefined);
-    const fakeCrowi = {
-      model: () => ({ updateConfigByNamespace, updateConfig, deleteConfig }),
-      event: () => {
-        const e: any = {
-          on: jest.fn(),
-          emit: jest.fn(),
-        };
-        return e;
-      },
-      setupMailer: jest.fn(async () => undefined),
-      redisOpts: null,
-    } as any;
-    return new ConfigService(fakeCrowi);
-  }
-
   it('calls onConfigChange listener after saveConfig with derived plugin namespaces', async () => {
     const svc = makeService();
     const calls: Array<{ ns: string[]; source: string }> = [];
@@ -100,5 +104,61 @@ describe('ConfigService listener API', () => {
     await svc.saveConfig('crowi', { 'plugin:foo:bar': 'baz' });
 
     expect(calls).toEqual(['first', 'second']);
+  });
+});
+
+/**
+ * feature-renderer-plugin-boundary Phase 3 spec §6.2 — the fail-
+ * propagating durable write path used ONLY for `security:linkCardEnabled`.
+ * Unlike `saveConfigValue`/`saveConfig` (whose underlying model statics
+ * catch-and-log write errors, so they never throw), `saveConfigValueDurable`
+ * calls `configModel.updateByParams` directly — the one static that
+ * propagates. These are unit-level (mocked model), so they run
+ * everywhere (unlike `config.smoke.test.ts`'s real-Redis cross-replica
+ * variant, which is gated behind `crowi-test-redis` availability).
+ */
+describe('ConfigService.saveConfigValueDurable', () => {
+  it('success: calls updateByParams, updates local memory, and notifies listeners', async () => {
+    const svc = makeService();
+    const calls: Array<{ ns: string[]; source: string }> = [];
+    svc.onConfigChange((ns, source) => {
+      calls.push({ ns, source });
+    });
+
+    await svc.saveConfigValueDurable('crowi', 'security:linkCardEnabled', false);
+
+    expect(svc.config.crowi?.['security:linkCardEnabled']).toBe(false);
+    expect(calls).toEqual([{ ns: ['crowi'], source: 'local' }]);
+  });
+
+  it('failure: propagates the rejection, leaves local memory unmutated, and never notifies listeners', async () => {
+    const updateByParams = jest.fn(async () => {
+      throw new Error('mongo write failed');
+    });
+    const svc = makeService({ updateByParams });
+    const calls: unknown[] = [];
+    svc.onConfigChange((ns, source) => {
+      calls.push({ ns, source });
+    });
+
+    await expect(svc.saveConfigValueDurable('crowi', 'security:linkCardEnabled', false)).rejects.toThrow('mongo write failed');
+
+    expect(updateByParams).toHaveBeenCalledWith('crowi', 'security:linkCardEnabled', false);
+    // Zero local memory mutation — the namespace was never populated.
+    expect(svc.config.crowi).toBeUndefined();
+    // Zero notification/publish.
+    expect(calls).toEqual([]);
+  });
+
+  it('failure leaves a PRE-EXISTING value in local memory untouched (not just absent)', async () => {
+    const updateByParams = jest.fn(async () => {
+      throw new Error('mongo write failed');
+    });
+    const svc = makeService({ updateByParams });
+    svc.config.crowi = { 'security:linkCardEnabled': true };
+
+    await expect(svc.saveConfigValueDurable('crowi', 'security:linkCardEnabled', false)).rejects.toThrow('mongo write failed');
+
+    expect(svc.config.crowi['security:linkCardEnabled']).toBe(true);
   });
 });

@@ -58,7 +58,7 @@ import { Steps, Step } from 'fumadocs-ui/components/steps';
 ### プロジェクトディレクトリと `package.json`
 
 任意の場所にディレクトリを作り、`@crowi/api` と **使いたいプラグイン** を依存に
-宣言します。下記は S3 ストレージ + Elasticsearch 検索 + PlantUML/KaTeX/emoji
+宣言します。下記は S3 ストレージ + Elasticsearch 検索 + PlantUML/KaTeX
 レンダラを使う例です。
 
 ```json title="package.json"
@@ -74,8 +74,7 @@ import { Steps, Step } from 'fumadocs-ui/components/steps';
     "@crowi/plugin-storage-aws-s3": "2.0.0-alpha.0",
     "@crowi/plugin-search-elasticsearch": "2.0.0-alpha.0",
     "@crowi/plugin-renderer-plantuml": "2.0.0-alpha.0",
-    "@crowi/plugin-renderer-katex": "2.0.0-alpha.0",
-    "@crowi/plugin-renderer-emoji": "2.0.0-alpha.0"
+    "@crowi/plugin-renderer-katex": "2.0.0-alpha.0"
   }
 }
 ```
@@ -107,8 +106,7 @@ import { Steps, Step } from 'fumadocs-ui/components/steps';
     "@crowi/plugin-storage-aws-s3",
     "@crowi/plugin-search-elasticsearch",
     "@crowi/plugin-renderer-plantuml",
-    "@crowi/plugin-renderer-katex",
-    "@crowi/plugin-renderer-emoji"
+    "@crowi/plugin-renderer-katex"
   ],
   "storage": { "driver": "s3" },
   "search": { "driver": "elasticsearch" }

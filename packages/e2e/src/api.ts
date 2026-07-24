@@ -99,6 +99,73 @@ export async function inviteUsersViaApi(context: BrowserContext, emails: string[
   }
 }
 
+/** List currently-loaded plugin names via the admin API (`GET /api/v2/admin/plugins`). */
+export async function listLoadedPluginNamesViaApi(context: BrowserContext): Promise<string[]> {
+  const accessToken = await accessTokenFromContext(context);
+  const response = await fetch(`${E2E_API_URL}/api/v2/admin/plugins`, {
+    headers: { authorization: `Bearer ${accessToken}` },
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to list E2E plugins: HTTP ${response.status} ${await response.text()}`);
+  }
+  const body = (await response.json()) as { plugins?: Array<{ name?: string }> };
+  return (body.plugins ?? []).map((p) => p.name).filter((n): n is string => typeof n === 'string');
+}
+
+/**
+ * Update a plugin's config via the admin API
+ * (`PUT /api/v2/admin/plugins/config?name=<name>`) — merges `values` into
+ * the plugin's existing config and, for a plugin that declares a
+ * `reconfigure` hook, live-applies it (no restart needed) before this
+ * resolves. feature-renderer-plugin-boundary Phase 2 — `renderer-plugins.
+ * spec.ts` uses this to point the PlantUML plugin's `serverUrl` at the
+ * compose-published `http://localhost:8080` server (spec §9); the same
+ * generic endpoint `admin-mail-page.ts`'s UI-driven SMTP config flow PUTs
+ * to, called directly here since the config FORM itself isn't what this
+ * spec tests.
+ */
+export async function updatePluginConfigViaApi(context: BrowserContext, input: { pluginName: string; values: Record<string, unknown> }): Promise<void> {
+  const accessToken = await accessTokenFromContext(context);
+  const response = await fetch(`${E2E_API_URL}/api/v2/admin/plugins/config?name=${encodeURIComponent(input.pluginName)}`, {
+    method: 'PUT',
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({ values: input.values }),
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to update E2E plugin config for ${input.pluginName}: HTTP ${response.status} ${await response.text()}`);
+  }
+  const body = (await response.json()) as { hotReloaded?: boolean; reconfigureFailed?: boolean };
+  if (!body.hotReloaded) {
+    throw new Error(
+      `Update E2E plugin config for ${input.pluginName} did not hot-reload (reconfigureFailed=${body.reconfigureFailed}) — the api process may need a restart to see the new value.`,
+    );
+  }
+}
+
+/**
+ * Read a page's current (latest) revision's `renderedAst` (the transformed
+ * mdast the web client renders without re-parsing, RFC-0002 Phase 3) via
+ * the API. feature-renderer-plugin-boundary Phase 2 — used to assert the
+ * serialized AST carries real optional-renderer output (spec §9).
+ */
+export async function getPageRenderedAst(context: BrowserContext, pageId: string): Promise<unknown> {
+  const accessToken = await accessTokenFromContext(context);
+  const response = await fetch(`${E2E_API_URL}/api/v2/pages?page_id=${encodeURIComponent(pageId)}`, {
+    headers: { authorization: `Bearer ${accessToken}` },
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to read E2E page ${pageId}: HTTP ${response.status} ${await response.text()}`);
+  }
+  const body = (await response.json()) as { page?: { revision?: { renderedAst?: unknown } | string } };
+  const revision = body.page?.revision;
+  const renderedAst = typeof revision === 'string' ? undefined : revision?.renderedAst;
+  if (renderedAst === undefined) throw new Error(`Get page response did not include renderedAst: ${JSON.stringify(body)}`);
+  return renderedAst;
+}
+
 /**
  * Read a page's current (latest) revision id via the API. Needed to post
  * a comment, which references the revision it was written against.

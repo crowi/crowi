@@ -1,6 +1,6 @@
 ---
 title: レンダラプラグイン
-description: emoji / KaTeX / PlantUML など Markdown 描画を拡張するプラグイン
+description: KaTeX / PlantUML / Mermaid など Markdown 描画を拡張するプラグインと、コアに統合された emoji / リンクカード機能
 ---
 
 レンダラプラグインは、Crowi のサーバサイド Markdown パイプラインに
@@ -64,35 +64,90 @@ URL や認可の失敗は、次の再レンダリングで即座に反映され�
 失敗としてキャッシュされる代わりに「未レンダリング」マークが保存され、
 次にそのページが表示されたときに自動で再試行されます。
 
-**失敗時の表示** — プラグインは独自の失敗表示を返せます(リンクカードの
-「リンクとして機能するエラーカード」など)。無い場合は汎用のプレース
-ホルダが表示されます。
+**失敗時の表示** — embed を提供する機能は独自の失敗表示を返せます
+(組み込みのリンクカード機能が返す、リンクとして機能するフォールバック
+カードなど)。無い場合は汎用のプレースホルダが表示されます。
+
+## コアに組み込まれた Markdown 機能
+
+絵文字ショートコードとリンクカードは、以前はそれぞれ独立したレンダラ
+プラグイン (`@crowi/plugin-renderer-emoji` / `@crowi/plugin-renderer-link-card`)
+として提供されていましたが、現在は Crowi 本体 (`@crowi/api`) に統合
+された、インストール不要で常時有効な Markdown 機能です。プラグインの
+有効・無効に関わらず動作し、`crowi.config.json` の `plugins` にも
+現れません。
+
+### 絵文字ショートコード
+
+`:smile:` `:rocket:` のようなショートコードを `remark-emoji` で
+Unicode 絵文字に変換します。I/O もキャッシュもありません。コード
+ブロックとインラインコードは意図的にスキップされ、未知のショートコード
+(`:not-emoji:`) はそのまま素通しされます。スクリーンリーダー向けに
+`<span role="img" aria-label="smile">` でラップする `accessible` モード
+が既定で有効です。記法の詳細は [Markdown 記法](../guide/markdown) を
+参照してください。
+
+### リンクカード `@[card](url)`
+
+`@[card](url)` は、埋め込みタグの登録口 `registry.addEmbedTag(name, renderer)`
+のうち `card` という名前を Crowi コア自身が予約して使う、組み込みの
+埋め込み機能です。第三者プラグインが `card` タグを上書きすることは
+できません。URL 先ページの OGP メタタグ (`og:title` / `og:description` /
+`og:image` / `og:site_name`) を取得し、タイトル・説明文・ドメイン・
+(あれば) サムネイル画像を含むリンクカードを描画します。記法そのものの
+使い方は [Markdown 記法](../guide/markdown) の「リンクカード」節を
+参照してください。
+
+- **既定で有効**: GitHub / Slack / Notion 等と同様、リンクカード化は
+  既定でオン (`security:linkCardEnabled` の既定値 `true`) です。外部
+  サイトへの OGP 取得を止めたい運用者は、管理画面の
+  「セキュリティ」→「外部リンクのカード化を許可する」で無効化できます。
+  無効化すると、その時点以降のすべての新規レンダリングで DNS 解決も
+  HTTP リクエストも一切発生しなくなります。
+- **統一フォールバックカード**: 管理設定でオフのとき・OGP 取得に失敗
+  したとき・air-gapped 環境などで外部到達できないときのいずれも、
+  同じ 1 種類のフォールバックカードが表示されます。OGP のタイトル・
+  説明文・画像は含まず、URL 自体をタイトルとして表示するだけの、
+  エラーを示す赤い装飾のないカードです。これは編集画面のライブ
+  プレビューが表示する非活性プレースホルダーカードと意図的に同じ
+  見た目です。ただし保存後にレンダリングされるページ側のフォール
+  バックカードは `href` / `target="_blank"` / `rel="noopener noreferrer"`
+  を持つ実際のリンクとして機能します(以前の「Preview unavailable」
+  というラベルを持つ専用のエラーカード表示は廃止されました)。
+- **画像は直リンク**: `og:image` は取得元サイトへの直リンクとして
+  埋め込まれ、プロキシやキャッシュ配信は行いません。
+- **SSRF ガード**: 取得先ホストの DNS 解決結果が private / loopback /
+  link-local / unique-local / メタデータ用アドレス(`169.254.169.254` 等)
+  である場合は拒否します。IP リテラル指定・DNS 経由・redirect 誘導の
+  いずれの経路でも同じ検証を行います(redirect は自動追従せず、最大 3 hop
+  まで手動でたどり、各 hop ごとに再検証します)。`http(s)` 以外の scheme
+  も即座に拒否します。取得は 5 秒でタイムアウトし、応答は先頭 512KB まで
+  しか読みません。
+- 保存済みページの表示整合性: トグルを true→false にしても、既に保存
+  済みで表示可能な状態のカードはそのまま表示され続けます(新しい取得は
+  行われません)。false→true に戻しても、既存ページのカードは自動では
+  再生成されず、次にページを保存するかレンダリングし直したときに
+  初めて反映されます。
+- **allowlist / denylist 設定 UI はありません**。特定ドメインの埋め込み
+  だけを禁止したい場合は、今後の管理設定機能を待つか、フォークして
+  独自にガードを追加してください。
+
+> **Note**: GitHub の PR / Issue をカード表示する
+> `@crowi/plugin-renderer-github-embed`(計画中、未出荷)とは別物です。
+> `card` タグは特定のサービスに限定しない汎用の OGP リンクカードで、
+> github-embed が計画している GitHub PR/Issue 専用のリッチカード化とは
+> 目的も実装も異なります。
 
 ## ファーストパーティのレンダラプラグイン
 
-Crowi のリポジトリには、次の 6 つのレンダラプラグインが同梱されています。
+Crowi のリポジトリには、次の 4 つのレンダラプラグインが同梱されています。
 
 | プラグイン | 役割 | 外部依存 | 状態 |
 | ---------- | ---- | -------- | ---- |
-| `@crowi/plugin-renderer-emoji` | `:smile:` などのショートコードを Unicode 絵文字へ変換 | なし | 実装済み (Phase 6) |
 | `@crowi/plugin-renderer-katex` | `$inline$` / `$$display$$` の LaTeX 数式を KaTeX でサーバ側 HTML 化 | なし | 実装済み (Phase 6) |
 | `@crowi/plugin-renderer-plantuml` | ` ```plantuml ` ブロックを PlantUML サーバで描画して SVG/PNG を埋め込む | PlantUML サーバ | 実装済み (Phase 6) |
 | `@crowi/plugin-renderer-mermaid` | ` ```mermaid ` ブロックをサーバ内で browserless レンダリングし、サニタイズ済み SVG を埋め込む | なし (サーバ内で完結) | 実装済み (Phase 6.1) |
 | `@crowi/plugin-renderer-crowi-legacy` | Crowi v1 由来の記法のクセ (例: `##hoge` の空白なし見出し) を再現 | なし | 実装済み (Phase 6)・既定オフ |
-| `@crowi/plugin-renderer-link-card` | `@[card](url)` の URL 先ページを OGP リンクカードとして埋め込み | なし(取得先の外部サイトへ直接 fetch) | 実装済み |
-
-> **Tip**: GitHub の PR / Issue をカード表示する `@crowi/plugin-renderer-github-embed`
-> は RFC-0002 で計画されていますが、Phase 7 として進行中であり、まだ出荷
-> されていません。
-
-### emoji
-
-`@crowi/plugin-renderer-emoji` は `:smile:` などのショートコードを
-`remark-emoji` で Unicode 絵文字に置き換えます。I/O もキャッシュも
-ありません。コードブロックとインラインコードは意図的にスキップされ、
-未知のショートコード (`:not-emoji:`) はそのまま素通しされます。
-スクリーンリーダー向けに `<span role="img" aria-label="smile">` で
-ラップする `accessible` モードが既定で有効です。
 
 ### KaTeX
 
@@ -134,7 +189,7 @@ journey / pie / git-graph など、Mermaid が対応する主要な図の種類�
 **セキュリティ**: 図はブラウザではなく、`fork()` された隔離子プロセス
 内で、外部リソースを一切ロードしない strict 設定の Mermaid によって
 描画されます。生成された SVG は独立した DOM ベースのサニタイザ
-(`@crowi/plugin-renderer-svg-sanitize`、PlantUML と共有) で `script` /
+(`@crowi/svg-sanitize`、PlantUML と共有) で `script` /
 イベントハンドラ / `javascript:` などを除去したうえで、base64 の
 `data:` URL として `<img>` に埋め込まれます。図の設定を上書きする
 ディレクティブや外部リソースを参照する構文は、ソース全体を対象に
@@ -173,40 +228,6 @@ journey / pie / git-graph など、Mermaid が対応する主要な図の種類�
 なお、v1 にあった「単一改行を `<br>` にする」挙動は、以前の開発段階では
 このプラグインに入っていましたが、現在は Crowi 全体の既定の挙動として
 コアパイプラインに移動しています。
-
-### Link card
-
-`@crowi/plugin-renderer-link-card` は、埋め込みタグの登録口
-`registry.addEmbedTag(name, renderer)` を実際に使う最初のレンダラプラグイン
-です。`@[card](url)` という記法で URL 先ページの OGP メタタグ
-(`og:title` / `og:description` / `og:image` / `og:site_name`) を取得し、
-タイトル・説明文・ドメイン・(あれば)サムネイル画像を含むリンクカードを
-描画します。記法そのものの使い方は [Markdown 記法](../guide/markdown)
-の「リンクカード」節を参照してください。
-
-- **画像は直リンク**: `og:image` は取得元サイトへの直リンクとして埋め込まれ、
-  プロキシやキャッシュ配信は行いません(v1 の仕様上の決定)。
-- **SSRF ガード**: 取得先ホストの DNS 解決結果が private / loopback /
-  link-local / unique-local / メタデータ用アドレス(`169.254.169.254` 等)
-  である場合は拒否します。IP リテラル指定・DNS 経由・redirect 誘導の
-  いずれの経路でも同じ検証を行います(redirect は自動追従せず、最大 3 hop
-  まで手動でたどり、各 hop ごとに再検証します)。`http(s)` 以外の scheme
-  も即座に拒否します。取得は 5 秒でタイムアウトし、応答は先頭 512KB まで
-  しか読みません。DNS rebinding に対する既知の残余リスクについては、
-  プラグインの README を参照してください。
-- **v1 では allowlist / denylist 設定 UI はありません**。特定ドメインの
-  埋め込みを禁止したい場合は、今後の管理設定機能を待つか、フォークして
-  独自にガードを追加してください。
-- **取得に失敗した場合**(タイムアウト・4xx/5xx・非 HTML コンテンツなど)は、
-  URL へのリンクとして機能する最小限のエラーカードに落ちます。過去に
-  カードの表示に成功していれば、一時的な失敗では直前のカードが表示され
-  続けます(上記 [キャッシュと失敗時の挙動](#キャッシュと失敗時の挙動)
-  を参照)。
-
-> **Note**: 上記の `@crowi/plugin-renderer-github-embed`(計画中、未出荷)
-> とは別物です。link-card は特定のサービスに限定しない汎用の OGP
-> リンクカードで、github-embed が計画している GitHub PR/Issue 専用の
-> リッチカード化とは目的も実装も異なります。
 
 ## 関連ページ
 

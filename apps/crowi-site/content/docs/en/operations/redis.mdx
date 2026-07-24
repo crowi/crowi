@@ -195,7 +195,7 @@ a clean "unsupported feature" failure:
 | --- | --- | --- |
 | Collab pub/sub | `SUBSCRIBE`, `UNSUBSCRIBE`, `PUBLISH` | `crowi:collab:<documentName>` — a single channel per document; Y.Doc sync and awareness updates are both multiplexed over it (there is no separate `:awareness:` / `:y-update:` sub-key) |
 | Editor-cap counter | `SADD`, `SCARD`, `SREM`, `EXPIRE` | `crowi:collab:editors:<pageId>` |
-| Presence | `HSET`, `HGET`, `HGETALL`, `HDEL`, `EXPIRE`, `PUBLISH`, `SUBSCRIBE` | `crowi:presence:viewers:<pageId>`, `crowi:presence:editing:<pageId>`, `crowi:presence:updates`, `crowi:presence:page-updated`, `crowi:presence:comment-changed` |
+| Presence | `HSET`, `HGET`, `HGETALL`, `HDEL`, `EXPIRE`, `PUBLISH`, `SUBSCRIBE` | `crowi:presence:viewers:<pageId>`, `crowi:presence:editing:<pageId>`, `crowi:presence:feed` |
 | Notification invalidation | `PUBLISH`, `SUBSCRIBE`, `UNSUBSCRIBE` | `crowi:notifications:user:<userId>` |
 | Config sync | `PUBLISH`, `SUBSCRIBE` | fixed channel `config` |
 | Rate limiting | `INCR`, `PEXPIRE` | `crowi:ratelimit:<name>:<userId>:<window>` |
@@ -291,21 +291,21 @@ operator reference, not a guarantee, and re-verify it after upgrading
 The number of connections per api instance depends on the instance's
 lifecycle stage, not a fixed count:
 
-- **Right after boot** (before any collab session has started): **6**
+- **Right after boot** (before any collab session has started): **5**
   connections — 1 shared client (the editor-cap counter, LRU, rate
   limiting, presence hash writes, and notification publish all share
-  it), 2 presence subscriber connections, 1 notification subscriber
+  it), 1 presence subscriber connection, 1 notification subscriber
   connection, and 2 Config publisher/subscriber connections.
 - **After the first realtime-collab session starts on that instance**:
-  **8** connections — the 6 above plus the 2 dedicated `ioredis`
+  **7** connections — the 5 above plus the 2 dedicated `ioredis`
   pub + sub connections `@hocuspocus/extension-redis` opens
   (`lazyConnect: true`, so they don't open until the first document
   load).
 
 Example: 10 api replicas + 1 web replica
 
-- Right after boot: 10 × 6 = 60 connections.
-- Once every replica has hosted at least one collab session: 10 × 8 = 80 connections.
+- Right after boot: 10 × 5 = 50 connections.
+- Once every replica has hosted at least one collab session: 10 × 7 = 70 connections.
 - Direct connections from web: none (proxied via the api).
 
 Comfortably fits within the default `maxclients=10000`, but plan

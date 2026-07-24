@@ -87,12 +87,13 @@ export interface DensityCompensatedReferenceTargetInput {
  * switch. `computeDensityCompensatedReferenceTarget` applies the same
  * baseline while reserving additional trailing room for denser previews.
  *
- * The two ends are pinned exactly (bypassing `referenceY` entirely, see
- * `SLIDING_REFERENCE_EPSILON`) so a document with anchors sparse near an
- * edge still reaches the true top/bottom instead of depending on
- * interpolation precision. Interior results are clamped into
- * `[0, targetMaxScroll]` as a safety net against anchor snapshots that
- * momentarily disagree with the target pane's actual scrollable range.
+ * This is a special case of `computeDensityCompensatedReferenceTarget` with
+ * `topReferenceY = bottomReferenceY = referenceY` — when the source
+ * viewport's mapped top and bottom coincide, `sourceSpanInTarget` is `0`, so
+ * the density compensation term collapses back to the plain proportional
+ * placement below. Delegating here keeps the endpoint-pin (see
+ * `SLIDING_REFERENCE_EPSILON`) and `[0, targetMaxScroll]` clamp logic in one
+ * place instead of duplicated across both functions (see `.feature-state/specs/feature-scroll-sync-math-dedup.md`).
  */
 export function computeSlidingReferenceTarget({
   sourceProgress,
@@ -100,11 +101,13 @@ export function computeSlidingReferenceTarget({
   targetViewportHeight,
   targetMaxScroll,
 }: SlidingReferenceTargetInput): number | null {
-  if (isProgressNearStart(sourceProgress)) return 0;
-  if (isProgressNearEnd(sourceProgress)) return targetMaxScroll;
-  if (referenceY === null) return null;
-  const raw = referenceY - sourceProgress * targetViewportHeight;
-  return Math.max(0, Math.min(targetMaxScroll, raw));
+  return computeDensityCompensatedReferenceTarget({
+    sourceProgress,
+    topReferenceY: referenceY,
+    bottomReferenceY: referenceY,
+    targetViewportHeight,
+    targetMaxScroll,
+  });
 }
 
 /**
@@ -126,7 +129,13 @@ export function computeDensityCompensatedReferenceTarget({
   if (topReferenceY === null || bottomReferenceY === null) return null;
 
   const sourceSpanInTarget = bottomReferenceY - topReferenceY;
-  const referenceY = (1 - sourceProgress) * topReferenceY + sourceProgress * bottomReferenceY;
+  // When the mapped top and bottom coincide (`sourceSpanInTarget === 0` — the
+  // sliding-reference delegation's `topReferenceY = bottomReferenceY`, or any
+  // caller passing equal edges), skip the two-term interpolation: floating-point
+  // rounding in `(1 - p) * Y + p * Y` does not always collapse back to exactly
+  // `Y`, which would silently diverge from the plain sliding formula this case
+  // is meant to match bit-for-bit (see `.feature-state/specs/feature-scroll-sync-math-dedup.md`).
+  const referenceY = sourceSpanInTarget === 0 ? topReferenceY : (1 - sourceProgress) * topReferenceY + sourceProgress * bottomReferenceY;
   const compensatedViewportFraction = Math.max(0, Math.min(sourceProgress, 1 - (sourceSpanInTarget / targetViewportHeight) * (1 - sourceProgress)));
   const raw = referenceY - compensatedViewportFraction * targetViewportHeight;
   return Math.max(0, Math.min(targetMaxScroll, raw));

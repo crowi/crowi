@@ -1,8 +1,8 @@
 import Debug from 'debug';
-import { v4 } from 'uuid';
 import { createClient } from 'redis';
 import Crowi from 'src/crowi';
 import { formatPluginNamespace, parsePluginConfigKey } from 'src/plugin/plugin-namespace';
+import { v4 } from 'uuid';
 
 const debug = Debug('crowi:service:config');
 
@@ -137,6 +137,38 @@ export default class ConfigService {
   async saveConfigValue(ns: string, key: string, value: any) {
     debug('Save config value', ns, key, value);
     await this.configModel.updateConfig(ns, key, value);
+    await this.applyLocalValueUpdate(ns, key, value);
+  }
+
+  /**
+   * Fail-propagating sibling of `saveConfigValue` (feature-renderer-
+   * plugin-boundary Phase 3 spec §6.2) for config fields whose write
+   * MUST NOT silently swallow a Mongo failure — today, only
+   * `security:linkCardEnabled`.
+   *
+   * `saveConfigValue`/`saveConfig` go through `configModel.updateConfig`
+   * / `updateConfigByNamespace`, which THEMSELVES catch-and-debug-log
+   * write errors (`models/config.ts`) — a Mongo outage there silently
+   * leaves the DB unwritten while the caller still proceeds as if it had
+   * succeeded. This method instead calls `configModel.updateByParams`
+   * directly — the ONE model static that does NOT catch — so a write
+   * failure throws straight through to the caller (the admin PUT
+   * handler's own try/catch → 500) BEFORE any of the following runs:
+   * local in-memory `this.config` mutation, `notifyListeners`, or the
+   * Redis publish (`update()` → `notifyUpdated()`). Zero memory
+   * mutation, zero publish, zero effect on any other replica on
+   * failure. On success, behaves exactly like `saveConfigValue` (local
+   * memory update + notify, response-before-remote-replica-reload
+   * semantics unchanged).
+   */
+  async saveConfigValueDurable(ns: string, key: string, value: any) {
+    debug('Save config value (durable)', ns, key, value);
+    await this.configModel.updateByParams(ns, key, value);
+    await this.applyLocalValueUpdate(ns, key, value);
+  }
+
+  /** Shared local-memory-update + notify tail of `saveConfigValue` / `saveConfigValueDurable` — see each for the write-path difference that precedes this call. */
+  private async applyLocalValueUpdate(ns: string, key: string, value: any) {
     const changed = deriveChangedNamespaces(ns, [key]);
     await this.update({ ...this.config, [ns]: { ...this.config[ns], [key]: value } }, changed);
   }

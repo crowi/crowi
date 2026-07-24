@@ -1,8 +1,8 @@
 /**
  * `sanitize-svg.ts` is a thin adapter with no sanitization logic of its
- * own (spec §1) — `@crowi/plugin-renderer-svg-sanitize`'s own test suite
- * (`packages/plugin-renderer-svg-sanitize/src/sanitize.test.ts`) is where
- * the sanitizer's *rules* are exhaustively covered. This file's job is
+ * own (spec §1) — `@crowi/svg-sanitize`'s own test suite
+ * (`packages/svg-sanitize/src/sanitize.test.ts`) is where the
+ * sanitizer's *rules* are exhaustively covered. This file's job is
  * narrower but still load-bearing: prove the Mermaid package's own wiring
  * — `sanitizeMermaidSvg` calling the shared sanitizer with the strict
  * (`allowSafeHref: false`) policy — actually rejects the malicious

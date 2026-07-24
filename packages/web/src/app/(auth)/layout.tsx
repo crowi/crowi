@@ -20,6 +20,7 @@ import { UserDropdownIdentity } from '@/components/user-dropdown-identity';
 import { SiteBrand } from '@/components/site-brand';
 import { LocaleSync } from '@/components/locale-sync';
 import { ThemeSync } from '@/components/theme-sync';
+import { RendererStylesheets } from '@/components/renderer-stylesheets';
 import { buildLoginRedirectUrl } from '@/lib/login-redirect';
 import { ConfidentialNotice } from '@/components/confidential-notice';
 import { SearchFocusProvider } from '@/lib/search-focus-context';
@@ -118,6 +119,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
     <div className="min-h-screen bg-background overflow-x-clip">
       <LocaleSync />
       <ThemeSync />
+      <RendererStylesheets />
       {/* 接続エラーバナー */}
       <ConnectionBanner />
 

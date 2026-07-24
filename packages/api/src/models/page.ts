@@ -1,8 +1,10 @@
+import type { PageUser } from '@crowi/api-contract';
 import type { InvalidateReason } from '@crowi/collab';
 import Debug from 'debug';
 import { Document, Model, model, Schema, Types } from 'mongoose';
 import Crowi from 'src/crowi';
 import { escapeRegExp } from 'src/util/regex';
+import { type PopulatedUser, toISOStringOrNull, toPageUser, toStringId } from 'src/util/ts-rest-helpers';
 import { RevisionDocument } from './revision';
 import { UserDocument } from './user';
 
@@ -287,7 +289,20 @@ export interface PageModel extends Model<PageDocument> {
     viewerId: Types.ObjectId,
     options: { limit: number; offset: number },
   ): Promise<{ rawPages: PageDocument[]; total: number }>;
-  findChildSegments(path, userData): Promise<Array<{ segment: string; path: string; isPage: boolean; hasPortal: boolean; count: number }>>;
+  findChildSegments(
+    path,
+    userData,
+  ): Promise<
+    Array<{
+      segment: string;
+      path: string;
+      isPage: boolean;
+      hasPortal: boolean;
+      count: number;
+      lastUpdatedAt: string | null;
+      updater: PageUser | null;
+    }>
+  >;
   findUnfurlablePages(type, array, grants?: number[]): any;
   findUnfurlablePagesByIds(ids): any;
   findUnfurlablePagesByPaths(paths): any;
@@ -1363,15 +1378,41 @@ export default (crowi: Crowi) => {
    * Aggregate the immediate child "directories" (next path segment)
    * directly under a portal `path`, for the sidebar tree. Returns one
    * entry per distinct first segment beneath `path`, with whether a
-   * real portal page is saved there (`hasPortal` → compass icon) and a
-   * descendant count.
+   * real portal page is saved there (`hasPortal` → compass icon), a
+   * descendant count, and the segment's representative update metadata
+   * (feature-child-segments-metadata).
    *
    * Implemented as a lean `path`-only scan + in-process grouping rather
    * than a `$group` aggregation: extracting "the segment after the
    * prefix" is awkward in MongoDB's expression language, and a portal's
    * subtree is bounded. Visibility (grant + draft status) is enforced
    * with the same `$or` predicates as the listing endpoints so the
-   * sidebar never leaks a page the viewer can't open.
+   * sidebar never leaks a page the viewer can't open — the
+   * representative-page / updater derivation below only ever looks at
+   * `docs`, i.e. pages already filtered through that same visibility
+   * predicate, so a non-visible page can never win representative-page
+   * selection (existence concealment).
+   *
+   * `lastUpdatedAt` / `updater` definitions (two representative-page
+   * flavours, asymmetric on purpose):
+   * - `isPage: true` segments (a real page at the segment path itself):
+   *   that page's own `updatedAt` / `lastUpdateUser` — the *only* doc
+   *   with `slashIdx === -1` for the segment — even if a descendant is
+   *   newer.
+   * - `isPage: false` segments: the most-recently-updated doc among the
+   *   segment's portal doc (`rest === segment+'/'`) and every deeper
+   *   descendant. A hasPortal-only segment with zero descendants
+   *   collapses to the portal doc's own metadata (openQuestions #1).
+   *
+   * `lastUpdateUser` is resolved with one extra batched
+   * `User.find({ _id: { $in: [...] } })` over only the *representative*
+   * ids (one per returned segment, deduped), run once after representative
+   * selection — so the N+1 budget stays flat regardless of scan size
+   * (spec §実現可能性: bounded by segment count, not subtree size, and
+   * skipped entirely when no representative has an updater to resolve).
+   * `lastUpdateUser` can be legitimately null (pre-existing rows from
+   * before the field existed, or a hard-deleted user id the lookup can't
+   * resolve), which surfaces as `updater: null` rather than throwing.
    */
   pageSchema.statics.findChildSegments = async function (path, userData) {
     const prefix = addTrailingSlash(path);
@@ -1383,9 +1424,44 @@ export default (crowi: Crowi) => {
       path: new RegExp(`^${escaped}`),
       $and: [{ $or: visiblePageGrantOr(userData._id) }, { $or: visiblePageStatusOr(userData._id) }],
     };
-    const docs: Array<{ path: string; status?: string | null }> = await Page.find(query, { path: 1, status: 1 }).lean().exec();
+    // Raw `lastUpdateUser` id only — resolving it to a `PageUser` happens
+    // once, below, over just the representative ids (see doc comment).
+    const docs: Array<{
+      path: string;
+      status?: string | null;
+      updatedAt?: Date;
+      lastUpdateUser?: Types.ObjectId | null;
+    }> = await Page.find(query, { path: 1, status: 1, updatedAt: 1, lastUpdateUser: 1 }).lean().exec();
 
-    const map = new Map<string, { segment: string; path: string; isPage: boolean; hasPortal: boolean; count: number }>();
+    type SegmentMeta = { updatedAt?: Date; lastUpdateUser?: Types.ObjectId | null };
+    type SegmentEntry = {
+      segment: string;
+      path: string;
+      isPage: boolean;
+      hasPortal: boolean;
+      count: number;
+      // The segment's own leaf page metadata (set at most once — there is
+      // exactly one doc with `slashIdx === -1` per segment).
+      selfMeta: SegmentMeta | null;
+      // The most-recently-updated metadata among the portal doc and
+      // descendants seen so far.
+      maxOtherMeta: SegmentMeta | null;
+    };
+
+    // Keeps `entry.maxOtherMeta` as the doc with the greatest `updatedAt`
+    // among the portal doc and every deeper descendant. Ties (or missing
+    // timestamps) keep the latest-seen doc, which is an arbitrary but
+    // deterministic tie-break — the acceptance criteria only fix the
+    // *definition* (max updatedAt), not tie-break order.
+    const considerOtherMeta = (entry: SegmentEntry, meta: SegmentMeta): void => {
+      const currentTime = entry.maxOtherMeta?.updatedAt?.getTime() ?? -Infinity;
+      const nextTime = meta.updatedAt?.getTime() ?? -Infinity;
+      if (nextTime >= currentTime) {
+        entry.maxOtherMeta = meta;
+      }
+    };
+
+    const map = new Map<string, SegmentEntry>();
     for (const doc of docs) {
       // Skip the portal page for `path` itself (e.g. `/crowi/` when
       // querying `/crowi/`) — it is the parent, not a child.
@@ -1396,31 +1472,66 @@ export default (crowi: Crowi) => {
       if (!segment) continue;
       let entry = map.get(segment);
       if (!entry) {
-        entry = { segment, path: `${prefix}${segment}/`, isPage: false, hasPortal: false, count: 0 };
+        entry = { segment, path: `${prefix}${segment}/`, isPage: false, hasPortal: false, count: 0, selfMeta: null, maxOtherMeta: null };
         map.set(segment, entry);
       }
+      const meta: SegmentMeta = { updatedAt: doc.updatedAt, lastUpdateUser: doc.lastUpdateUser ?? null };
       if (slashIdx === -1) {
         // doc.path === `${prefix}${segment}` — the segment is a real page.
         entry.isPage = true;
+        entry.selfMeta = meta;
       } else if (rest === `${segment}/`) {
         // doc.path === `${prefix}${segment}/` — a portal page. Only a
         // *published* portal earns the sidebar portal marker; a draft
         // portal (creator-visible via the status filter above) is not yet
         // a real portal, so it must not flag the node.
         entry.hasPortal = doc.status !== STATUS_DRAFT;
+        considerOtherMeta(entry, meta);
       } else {
         // A deeper descendant (`${prefix}${segment}/...`).
         entry.count += 1;
+        considerOtherMeta(entry, meta);
       }
     }
-    return (
-      Array.from(map.values())
-        // Drop phantom nodes that exist only because of a draft portal
-        // (no real page, no published portal, no descendants) so a draft
-        // portal never surfaces in the sidebar.
-        .filter((e) => e.isPage || e.hasPortal || e.count > 0)
-        .sort((a, b) => a.segment.localeCompare(b.segment))
-    );
+
+    const representatives = Array.from(map.values())
+      // Drop phantom nodes that exist only because of a draft portal
+      // (no real page, no published portal, no descendants) so a draft
+      // portal never surfaces in the sidebar.
+      .filter((e) => e.isPage || e.hasPortal || e.count > 0)
+      .sort((a, b) => a.segment.localeCompare(b.segment))
+      .map((e) => ({ entry: e, meta: e.isPage ? e.selfMeta : e.maxOtherMeta }));
+
+    // Resolve `updater` with the single batched lookup described in the
+    // doc comment above, over the distinct representative ids only.
+    const updaterIds = new Set<string>();
+    for (const { meta } of representatives) {
+      if (meta?.lastUpdateUser) updaterIds.add(toStringId(meta.lastUpdateUser));
+    }
+    const userMap = new Map<string, PopulatedUser>();
+    if (updaterIds.size > 0) {
+      const User = crowi.model('User');
+      const users: PopulatedUser[] = await User.find({ _id: { $in: Array.from(updaterIds).map((id) => new Types.ObjectId(id)) } })
+        .select('username name email image createdAt')
+        .lean()
+        .exec();
+      for (const u of users) {
+        userMap.set(toStringId(u._id), u);
+      }
+    }
+
+    return representatives.map(({ entry: e, meta }) => {
+      const updaterDoc = meta?.lastUpdateUser ? userMap.get(toStringId(meta.lastUpdateUser)) : undefined;
+      return {
+        segment: e.segment,
+        path: e.path,
+        isPage: e.isPage,
+        hasPortal: e.hasPortal,
+        count: e.count,
+        lastUpdatedAt: toISOStringOrNull(meta?.updatedAt),
+        updater: updaterDoc ? toPageUser(updaterDoc) : null,
+      };
+    });
   };
 
   pageSchema.statics.findUnfurlablePages = async function (type, array, grants = [GRANT_PUBLIC, GRANT_RESTRICTED]) {

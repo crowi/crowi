@@ -4,11 +4,12 @@
  * Real Redis 8, real production construction path (`createPresenceService`,
  * no new seam — `feature-presence-generic-feed-bus` owns that refactor).
  * Two independent `PresenceService` instances, each backed by its OWN real
- * `redis` v4 primary client (own 2 `duplicate()` subscribers internally),
- * exercise the cross-instance viewer-list / page-updated / comment-changed
- * pub/sub relay against the shared `redis` target (Phase 1). Isolation is
- * via a run-and-call-unique `pageId` — no new production seam per the
- * spec's "やらないこと".
+ * `redis` v4 primary client (own 1 `duplicate()` subscriber internally,
+ * multiplexing every feed on the single generic feed channel), exercise the
+ * cross-instance viewer-list / page-updated / comment-changed pub/sub relay
+ * against the shared `redis` target (Phase 1). Isolation is via a
+ * run-and-call-unique `pageId` — no new production seam per the spec's
+ * "やらないこと".
  */
 import { createClient } from 'redis';
 import {
@@ -28,7 +29,7 @@ describeMaybe('presence smoke (real Redis 8)', () => {
     markRedisSmokeRan('presence');
   });
 
-  it('join / publishPageUpdated / publishCommentChanged on one PresenceService instance reach the onViewersChanged / onPageUpdated / onCommentChanged listeners of an independently-constructed second instance', async () => {
+  it('join / publishPageUpdated / publishCommentChanged on one PresenceService instance reach subscribe(feed, ...) listeners (viewers / page-updated / comment-changed) of an independently-constructed second instance', async () => {
     // Own real primary client per instance — mirrors two separate api
     // replicas each holding their own `crowi.redis`.
     const clientA = createClient({ url: REDIS_SMOKE_URLS.shared });
@@ -49,7 +50,7 @@ describeMaybe('presence smoke (real Redis 8)', () => {
 
       // --- viewer-list change (join) ---
       const receivedPageIds: string[] = [];
-      const unsubscribeViewers = serviceB.onViewersChanged((changedPageId) => {
+      const unsubscribeViewers = serviceB.subscribe('viewers', (changedPageId) => {
         if (changedPageId === pageId) receivedPageIds.push(changedPageId);
       });
       await serviceA.join(pageId, viewer);
@@ -59,8 +60,8 @@ describeMaybe('presence smoke (real Redis 8)', () => {
 
       // --- page-updated ---
       const pageUpdatedPayloads: PageUpdatedPayload[] = [];
-      const unsubscribePageUpdated = serviceB.onPageUpdated((changedPageId, payload) => {
-        if (changedPageId === pageId) pageUpdatedPayloads.push(payload);
+      const unsubscribePageUpdated = serviceB.subscribe('page-updated', (changedPageId, payload) => {
+        if (changedPageId === pageId) pageUpdatedPayloads.push(payload as PageUpdatedPayload);
       });
       const pageUpdatedPayload: PageUpdatedPayload = {
         pageId,
@@ -75,8 +76,8 @@ describeMaybe('presence smoke (real Redis 8)', () => {
 
       // --- comment-changed ---
       const commentChangedPayloads: CommentChangedPayload[] = [];
-      const unsubscribeCommentChanged = serviceB.onCommentChanged((changedPageId, payload) => {
-        if (changedPageId === pageId) commentChangedPayloads.push(payload);
+      const unsubscribeCommentChanged = serviceB.subscribe('comment-changed', (changedPageId, payload) => {
+        if (changedPageId === pageId) commentChangedPayloads.push(payload as CommentChangedPayload);
       });
       const commentPayload: CommentChangedPayload = { pageId, commentId: uniqueRedisSmokeId('comment'), changeType: 'added', actorUserId: viewer.userId };
       await serviceA.publishCommentChanged(pageId, commentPayload);
@@ -96,7 +97,7 @@ describeMaybe('presence smoke (real Redis 8)', () => {
       await serviceA.leave(pageId, viewer.userId);
     } finally {
       // Ownership-aware teardown: each service's own `shutdown()` closes
-      // its 2 duplicate subscribers only; the primary clients this test
+      // its 1 duplicate subscriber only; the primary clients this test
       // itself `connect()`-ed are disconnected separately.
       await Promise.all([serviceA?.shutdown(), serviceB?.shutdown()].filter(Boolean));
       await Promise.all([clientA.disconnect(), clientB.disconnect()]);

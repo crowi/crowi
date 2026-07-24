@@ -37,9 +37,9 @@ images.
 The following cannot be done from CI. Set them up by hand **once before the first
 release**.
 
-### 1. npm Trusted Publisher (19 published packages)
+### 1. npm Trusted Publisher (18 published packages)
 
-On npmjs.com, register a Trusted Publisher for **each of the 19 published
+On npmjs.com, register a Trusted Publisher for **each of the 18 published
 packages** (repo `crowi/crowi` + workflow `release.yml`, and an environment if you
 use one). This enables OIDC publishing with no long-lived `NPM_TOKEN` and with
 provenance. The packages:
@@ -55,7 +55,6 @@ provenance. The packages:
 @crowi/plugin-mail-resend
 @crowi/plugin-mail-smtp
 @crowi/plugin-renderer-crowi-legacy
-@crowi/plugin-renderer-emoji
 @crowi/plugin-renderer-katex
 @crowi/plugin-renderer-plantuml
 @crowi/plugin-search-elasticsearch
@@ -282,6 +281,17 @@ an `es-v*` tag push (auxiliary).
 - **Docker (api) build fails with `ERR_PNPM_DEPLOY_NONINJECTED_WORKSPACE`**: pnpm 10
   changed `pnpm deploy` to refuse non-injected workspaces; `packages/api/Dockerfile`
   passes `pnpm deploy --legacy` to keep the pre-v10 behaviour.
+- **`.changeset/*.md` files pile up instead of being deleted after each version bump
+  (not a bug)**: while in prerelease (`pre` mode), `@changesets/cli`'s `version`
+  command only appends the consumed changeset ids to `.changeset/pre.json`'s
+  `changesets` array on every run — it does not delete the corresponding `.md`
+  files. That's upstream, intentional behavior (the deletion code path only runs
+  when `preState.mode === "exit"`). The files get consumed and deleted in one
+  batch, along with `pre.json` itself, the moment "beta → stable" runs
+  `changeset pre exit` followed by `changeset version` for the 2.0.0 release. Do
+  not delete them by hand during the alpha period — the stable release's
+  aggregated CHANGELOG generation and version computation re-consumes every
+  on-disk `.md` file at that point, so removing them early would leave gaps.
 
 ## Related
 

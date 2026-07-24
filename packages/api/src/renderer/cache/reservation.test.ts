@@ -45,7 +45,7 @@ describe('renderReservation', () => {
 });
 
 describe('errorPlaceholder', () => {
-  const codes = ['auth', 'rate_limit', 'not_found', 'network', 'timeout', 'unknown', 'blocked'] as const;
+  const codes = ['auth', 'rate_limit', 'not_found', 'network', 'timeout', 'unknown', 'blocked', 'busy'] as const;
 
   it.each(codes)('renders %s error with the canonical class and label', (code) => {
     const html = errorPlaceholder(code, undefined);

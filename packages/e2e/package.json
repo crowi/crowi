@@ -4,7 +4,7 @@
   "private": true,
   "description": "Playwright end-to-end tests for Crowi",
   "scripts": {
-    "build:runtime": "pnpm --workspace-root turbo run build --filter=@crowi/api --filter=@crowi/api-contract --filter=@crowi/collab --filter=@crowi/runner --filter=@crowi/plugin-storage-local --filter=@crowi/plugin-search-mongo --filter=@crowi/plugin-mail-smtp --filter=@crowi/plugin-renderer-emoji --filter=@crowi/plugin-renderer-katex --filter=@crowi/plugin-renderer-plantuml",
+    "build:runtime": "pnpm --workspace-root turbo run build --filter=@crowi/api --filter=@crowi/api-contract --filter=@crowi/collab --filter=@crowi/runner --filter=@crowi/plugin-storage-local --filter=@crowi/plugin-search-mongo --filter=@crowi/plugin-mail-smtp --filter=@crowi/plugin-renderer-katex --filter=@crowi/plugin-renderer-plantuml --filter=@crowi/plugin-renderer-mermaid",
     "e2e": "pnpm build:runtime && tsx src/global-setup.ts && playwright test",
     "e2e:headed": "pnpm build:runtime && tsx src/global-setup.ts && playwright test --headed",
     "e2e:debug": "pnpm build:runtime && tsx src/global-setup.ts && playwright test --debug",

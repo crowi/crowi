@@ -42,6 +42,7 @@ description: crowi の manager ロールでセッションを起動/再起動し
 - **web type-check は hermetic**: `next typegen && tsc`(dev サーバ生成の stale `.next/types` を読まない)。
 - **確認すべき state ファイル**: `.feature-state/tasks/*.json`(status)/ `main-write.lock` / `kickoff-chain.json` / `orchestrate-state.json`(`lastReviewedMainSha` = C レーン review の基点)。
 - **自分の作っていない working-tree の WIP / untracked は温存**する(別セッション由来。上書き・削除しない — CLAUDE.md)。
+- **「flaky test 検知」の agmsg を受けても自分で root-cause を追わない**: worktree セッションからの flaky 報告(crowi-complete-feature の「テスト系ゲート (6・9・10) が flaky で落ちたら」手順由来)に対し、manager がその場で flake の原因を推論・修正するのは禁止(CLAUDE.md の flake/CI-infra rule)。Agent tool で適切な model を割り当てた subagent(診断は Codex `--tier sol`、または Fable model の Agent)を dispatch し、`/crowi-fix`(または `/dev-fix`)を repro → root cause → fix → gates → commit まで end-to-end で走らせる。manager 自身の仕事は triage(優先度・今対応するかの判断)と dispatch のみで、hands-on の修正はしない。
 
 ## 終了/引き継ぎ
 

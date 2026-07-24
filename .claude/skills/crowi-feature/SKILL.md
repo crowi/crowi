@@ -53,7 +53,7 @@ globs:
 各 phase の責務:
 
 - **planner**: spec を読み、コードベースを grep して再利用候補 (hooks / components / utils / 既存契約) を context に充填、AC を spec から起こす。**利用者/運用者に見える変化なら、影響する `apps/crowi-site/` ドキュメントを特定して `context.docsTargets` に充填する** (→「crowi-site ドキュメント更新」節)。**クリティカルフローに触れるなら `context.e2eTargets` も判定・充填する** (フロー表は feature-planner.md が正本)
-- **implementer**: 実装 + テスト + **crowi-site ドキュメント更新 (ja/en)** + **e2eTargets があれば `packages/e2e/` の Playwright spec 追加/拡張**、必須チェック (type-check / test / lint / format、e2e を触ったら変更 spec の選択実行) を全部走らせる、commitPlan を埋める
+- **implementer**: 実装 + テスト + **crowi-site ドキュメント更新 (ja/en)** + **e2eTargets があれば `packages/e2e/` の Playwright spec 追加/拡張**、必須チェック (type-check / test / lint / format、e2e を触ったら変更 spec の選択実行) を全部走らせる、commitPlan を埋める。テスト失敗が並列実行由来の flaky と疑われる場合は crowi-complete-feature/SKILL.md の「テスト系ゲート (6・9・10) が flaky で落ちたら」節の手順に従う (推測で直さない)
 - **simplify**: `simplify` skill を呼び、reuse / quality / efficiency を整える
 - **reviewer**: AC 達成 / 契約整合 / セキュリティ / トランザクション境界を確認。**docsTargets がある場合はドキュメント反映、e2eTargets が critical-flow の場合は e2e spec の有無も確認**
 - **committer**: task.commitPlan に従って **複数 commit** を作る (feat 本体 / test / docs 分割。crowi-site の更新は `docs(site)`、e2e spec は `test(e2e)` commit に分ける)

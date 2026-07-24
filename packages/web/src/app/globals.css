@@ -1,13 +1,5 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-/*
- * KaTeX styles for server-side rendered math (`$inline$` / `$$display$$`).
- * Required by `@crowi/plugin-renderer-katex`. Even when the plugin is
- * disabled, importing the stylesheet is cheap (~30KB minified) and
- * avoids a flash-of-unstyled-math when an operator turns the plugin on
- * later. KaTeX webfonts load lazily on first math render.
- */
-@import "katex/dist/katex.min.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -519,24 +511,31 @@ html[data-page-grant="2"] {
   color: var(--shiki-dark);
 }
 
-/* Cap server-rendered diagrams to the article width in both themes, so a
- * wide diagram can't push the column (and the header strip) past the
- * viewport. Both diagram renderer plugins share the `diagram-embed` marker
- * class (feature-plugin-renderer-mermaid spec §9): PlantUML emits
- * `<div class="diagram-embed plantuml-embed">…</div>` with an inline `<svg>`
- * (or `<img class="diagram-embed plantuml-embed">` for its PNG fallback),
- * Mermaid emits `<img class="diagram-embed mermaid-embed" alt="...">`. Some
- * PlantUML SVGs bake the size into `<svg>` as width/height *attributes and
- * inline style* with `preserveAspectRatio="none"`, so the inline `height`
- * must be overridden (`!important`) to `auto` for the SVG to scale down
+/* Cap server-rendered "diagram" presentation embeds to the article width in
+ * both themes, so a wide diagram can't push the column (and the header
+ * strip) past the viewport. Core only interprets the generic
+ * `data-crowi-renderer-presentation="diagram"`/`data-crowi-renderer-
+ * state="ready"` contract (feature-renderer-plugin-boundary spec §3.1) —
+ * dual-accepted here with the legacy `.diagram-embed` marker class
+ * (feature-plugin-renderer-mermaid spec §9) so already-persisted
+ * `renderedAst` from before a renderer plugin adopts the new contract
+ * (Phase 2) keeps the same treatment with no migration. Neither selector
+ * names a producer plugin — see `renderer-presentation.tsx`. A renderer
+ * may emit an inline `<svg>` or an `<img>` (PNG / data-URL) root;
+ * some SVGs bake the size into width/height *attributes and inline style*
+ * with `preserveAspectRatio="none"`, so the inline `height` must be
+ * overridden (`!important`) to `auto` for the SVG to scale down
  * proportionally instead of squishing. The click-to-enlarge lightbox
- * (`DiagramEmbed`) renders the diagram outside `.crowi-prose`, so it keeps
- * its natural size there. */
-.crowi-prose .diagram-embed {
+ * (`RendererPresentation`) renders the diagram outside `.crowi-prose`, so
+ * it keeps its natural size there. */
+.crowi-prose .diagram-embed,
+.crowi-prose [data-crowi-renderer-presentation="diagram"][data-crowi-renderer-state="ready"] {
   max-width: 100%;
 }
 .crowi-prose .diagram-embed svg,
-.crowi-prose .diagram-embed img {
+.crowi-prose .diagram-embed img,
+.crowi-prose [data-crowi-renderer-presentation="diagram"][data-crowi-renderer-state="ready"] svg,
+.crowi-prose [data-crowi-renderer-presentation="diagram"][data-crowi-renderer-state="ready"] img {
   max-width: 100% !important;
   height: auto !important;
 }
@@ -546,9 +545,11 @@ html[data-page-grant="2"] {
  * scope (the markup is produced server-side and cached), so under `.dark` we
  * wrap each diagram in a neutral white background with padding + rounded
  * corners so it stays legible instead of black-on-near-black. Light mode is
- * unchanged (transparent on the page background). Applies to both PlantUML
- * and Mermaid via the shared `diagram-embed` marker. */
-.dark .crowi-prose .diagram-embed {
+ * unchanged (transparent on the page background). Applies to both the new
+ * data-attribute contract and the legacy `.diagram-embed` marker (see
+ * above). */
+.dark .crowi-prose .diagram-embed,
+.dark .crowi-prose [data-crowi-renderer-presentation="diagram"][data-crowi-renderer-state="ready"] {
   background-color: #fff;
   border-radius: var(--radius);
   padding: 0.75rem;
@@ -557,13 +558,20 @@ html[data-page-grant="2"] {
 }
 
 /*
- * Link-card embed (`@[card](url)`, `@crowi/plugin-renderer-link-card` —
- * RFC-0002 §"Phase 4", the first `registry.addEmbedTag` consumer). The
- * renderer emits `figure.crowi-link-card > a.crowi-link-card-link >
+ * Link-card embed (`@[card](url)` — RFC-0002 §"Phase 4", the first
+ * `registry.addEmbedTag` consumer; core-reserved since
+ * feature-renderer-plugin-boundary Phase 3,
+ * `packages/api/src/renderer/core/link-card/`). A successful render
+ * emits `figure.crowi-link-card > a.crowi-link-card-link >
  * (div.crowi-link-card-body[> div.title, div.description?,
  * div.meta[> span.site-name?, span.domain]] + img.crowi-link-card-image?)`
  * using only known-tags-allow-listed elements, so `stripUnknownElements`
- * never touches this structure — see `render-card.ts`.
+ * never touches this structure — see `render-card.ts`'s `renderCard()`.
+ * The UNIFIED FALLBACK CARD (toggle off / fetch failure — spec §6.1/§6.2,
+ * `render-card.ts`'s `renderFallbackCard()`) reuses this SAME rule set —
+ * `figure.crowi-link-card > a > div.crowi-link-card-body > div.title`,
+ * with no `.crowi-link-card-description` / `.crowi-link-card-meta` /
+ * `.crowi-link-card-image` children and no error-specific styling.
  *
  * Written unlayered (like every other rule in this section), so it
  * beats the `utilities`-layer classes the generic `<img>`/`<figure>`
@@ -687,15 +695,6 @@ html[data-page-grant="2"] {
   .crowi-prose .crowi-link-card-image {
     display: none;
   }
-}
-
-.crowi-prose .crowi-link-card-error > a {
-  border-style: dashed;
-}
-
-.crowi-prose .crowi-link-card-error-label {
-  font-size: 0.75rem;
-  color: var(--muted-foreground);
 }
 
 /* RFC-0015 image display attributes — fixed, renderer-owned layout

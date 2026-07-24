@@ -1,16 +1,17 @@
 'use client';
 
-import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Extension } from '@codemirror/state';
 import { keymap } from '@codemirror/view';
+import { CollabForceReloadMessageSchema } from '@crowi/api-contract';
+import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { yCollab } from 'y-codemirror.next';
 import type * as Y from 'yjs';
-import { CollabForceReloadMessageSchema } from '@crowi/api-contract';
 import { userColor } from '@/lib/collab-user-color';
-import type { CollabAwareness, StatelessListener } from '@/lib/use-collab-document';
+import { useLinkCardEnabled } from '@/lib/use-app-info';
 import { useAuth } from '@/lib/use-auth';
+import type { CollabAwareness, StatelessListener } from '@/lib/use-collab-document';
+import { type CollabStatus, useCollabDocument } from '@/lib/use-collab-document';
 import { useYjsToken } from '@/lib/use-yjs-token';
-import { useCollabDocument, type CollabStatus } from '@/lib/use-collab-document';
 import { MarkdownEditor, type MarkdownEditorHandle } from './markdown-editor';
 
 /**
@@ -365,6 +366,15 @@ export function useCollabSession(pageId: string | null | undefined): CollabSessi
 export const CollaborativeMarkdownEditor = forwardRef<MarkdownEditorHandle, CollaborativeMarkdownEditorProps>(function CollaborativeMarkdownEditor(props, ref) {
   const { pageId, session, className, 'aria-label': ariaLabel, onYTextChange, onStatusChange, onReadonlyChange, onForceReload, uploadPageId } = props;
 
+  // feature-renderer-plugin-boundary Phase 3 — gate the inner editor's
+  // link-card conversion affordance on the `link-card` app-info
+  // capability. `useAppInfo()` shares the SAME query the auth shell's
+  // `RendererStylesheets` already primes on mount, so this is normally
+  // a cache hit, not a new fetch. Defaults to enabled (`true`) while the
+  // query is loading — same optimistic default-on the toggle itself
+  // uses.
+  const linkCardEnabled = useLinkCardEnabled();
+
   // Upload page id for the paste (Phase 6) + drag-and-drop (Phase 7)
   // handlers: an explicit `uploadPageId` wins; otherwise fall back to
   // the `pageId` prop when the wrapper owns the connection. Both
@@ -546,6 +556,7 @@ export const CollaborativeMarkdownEditor = forwardRef<MarkdownEditorHandle, Coll
       extraExtensions={extraExtensions}
       paste={uploadConfig}
       dnd={uploadConfig}
+      linkCardEnabled={linkCardEnabled}
       className={className}
       aria-label={ariaLabel}
     />

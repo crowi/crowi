@@ -12,7 +12,7 @@ import {
 } from './image-display';
 import { LI_CLASSNAME, mergeListClassName, OL_CLASSNAME, UL_CLASSNAME } from './list-classnames';
 import { renderMdastToReactNode } from './render-mdast';
-import { DiagramEmbed, isDiagramEmbed } from '@/components/page-view/diagram-embed';
+import { RendererPresentation, isDiagramPresentationReady, pickRendererPresentationAttrs } from '@/components/page-view/renderer-presentation';
 import { m } from '@paraglide/messages.js';
 import { replaceLinkCardPreviewPlaceholders } from './link-card-preview-placeholder';
 
@@ -28,6 +28,17 @@ interface MarkdownPreviewProps {
    * `true` (wide / always-visible case).
    */
   active?: boolean;
+  /**
+   * feature-renderer-plugin-boundary Phase 3 — gates the
+   * `@[card](url)` -> static-placeholder substitution below on the
+   * `link-card` app-info capability. An explicit caller-supplied prop
+   * (not an internal `useAppInfo()` call) so this component stays
+   * testable without a `QueryClientProvider` in scope, mirroring the
+   * rest of this component's plain-props shape. Defaults to `true`
+   * (the caller hasn't resolved the capability yet, or doesn't care) —
+   * same optimistic default-on the toggle itself uses.
+   */
+  linkCardEnabled?: boolean;
 }
 
 function isExternalHref(href: string | undefined): boolean {
@@ -51,7 +62,7 @@ function isExternalHref(href: string | undefined): boolean {
  * new request is in flight. Otherwise the pane would flash empty
  * between keystrokes.
  */
-export function MarkdownPreview({ source, className, active = true }: MarkdownPreviewProps) {
+export function MarkdownPreview({ source, className, active = true, linkCardEnabled = true }: MarkdownPreviewProps) {
   const previewMutation = usePreview();
   const [renderedAst, setRenderedAst] = useState<unknown>(null);
   const [errored, setErrored] = useState(false);
@@ -99,11 +110,18 @@ export function MarkdownPreview({ source, className, active = true }: MarkdownPr
   }, [source, active]);
 
   const renderedNode: ReactNode = useMemo(() => {
-    return renderMdastToReactNode(replaceLinkCardPreviewPlaceholders(renderedAst, m['edit.link_card_preview_pending']()), {
+    // feature-renderer-plugin-boundary Phase 3 — when the link-card
+    // capability is off, skip the placeholder substitution entirely so
+    // a disabled toggle also suppresses the editor-side `@[card](url)`
+    // -> static-placeholder conversion (spec §6.3); the raw
+    // `@[card](url)` markdown source renders through unchanged, same as
+    // any other unrecognised embed tag.
+    const astForRender = linkCardEnabled ? replaceLinkCardPreviewPlaceholders(renderedAst, m['edit.link_card_preview_pending']()) : renderedAst;
+    return renderMdastToReactNode(astForRender, {
       sectionWrap: false,
       components: previewComponents as unknown as Parameters<typeof renderMdastToReactNode>[1]['components'],
     });
-  }, [renderedAst]);
+  }, [renderedAst, linkCardEnabled]);
 
   if (source === '') {
     return <div className={className ?? 'text-muted-foreground'}>{m['edit.preview_placeholder']()}</div>;
@@ -253,15 +271,17 @@ export const previewComponents = {
     type === 'checkbox' ? <input type="checkbox" checked={Boolean(checked)} readOnly {...props} /> : <input type={type} {...props} />,
   img: ({ src, alt, className, style: rawStyle, ...rest }: { src?: string | Blob; alt?: string; className?: unknown; style?: React.CSSProperties }) => {
     const srcString = typeof src === 'string' ? src : undefined;
-    // Server-rendered diagram embed (PlantUML PNG fallback or Mermaid's
-    // `<img>` success output) — wrap for cap-to-width + click-to-enlarge,
-    // matching the show page.
-    if (isDiagramEmbed(className)) {
+    // Server-rendered "ready diagram" presentation (an optional renderer
+    // plugin's PNG-fallback or `<img>`-success output — the generic
+    // `data-crowi-renderer-presentation`/`-state` contract with legacy
+    // `.diagram-embed` dual-accept, see `isDiagramPresentationReady`) —
+    // wrap for cap-to-width + click-to-enlarge, matching the show page.
+    if (isDiagramPresentationReady(className, rest)) {
       return (
-        <DiagramEmbed className={typeof className === 'string' ? className : undefined}>
+        <RendererPresentation className={typeof className === 'string' ? className : undefined} presentationAttrs={pickRendererPresentationAttrs(rest)}>
           {/* biome-ignore lint/performance/noImgElement: rich-text rendered as plain markdown */}
           <img src={srcString} alt={alt || ''} className="max-w-full h-auto" loading="lazy" />
-        </DiagramEmbed>
+        </RendererPresentation>
       );
     }
     // RFC-0015 image display attributes — same img-layer helper as the
@@ -307,14 +327,19 @@ export const previewComponents = {
       </figure>
     );
   },
-  // PlantUML SVG embed (`<div class="diagram-embed plantuml-embed">`) —
-  // same zoom wrapper as the show page. Mermaid's error placeholder is
-  // also a `<div>` but deliberately lacks the `diagram-embed` marker
-  // (spec §9), so it falls through to the plain-div branch below; other
+  // "Ready diagram" presentation whose root is a `<div>` (an optional
+  // renderer plugin's inline-SVG output) — same zoom wrapper as the show
+  // page. An error placeholder can also be a `<div>` but
+  // `isDiagramPresentationReady` excludes it (state="error" / legacy
+  // no-marker), so it falls through to the plain-div branch below; other
   // raw-HTML <div>s render plainly too.
   div: ({ className, children, ...props }: ChildrenProps & { className?: unknown }) => {
-    if (isDiagramEmbed(className)) {
-      return <DiagramEmbed className={typeof className === 'string' ? className : undefined}>{children}</DiagramEmbed>;
+    if (isDiagramPresentationReady(className, props)) {
+      return (
+        <RendererPresentation className={typeof className === 'string' ? className : undefined} presentationAttrs={pickRendererPresentationAttrs(props)}>
+          {children}
+        </RendererPresentation>
+      );
     }
     return (
       <div className={typeof className === 'string' ? className : undefined} {...props}>

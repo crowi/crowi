@@ -142,3 +142,71 @@ describe('core/embed-tags @[tag](url) parser', () => {
     expect(metadata.mentions).toEqual([{ username: 'alice' }]);
   });
 });
+
+describe('core/embed-tags — EmbedRenderer.shouldBypassCache (feature-renderer-plugin-boundary Phase 3, AC5/AC7)', () => {
+  let pageId: string;
+  beforeEach(async () => {
+    pageId = new Types.ObjectId().toHexString();
+    const PluginRenderCache = crowi.model('PluginRenderCache') as unknown as PluginRenderCacheModel;
+    await PluginRenderCache.deleteMany({}).exec();
+  });
+
+  it('shouldBypassCache=true skips CacheStorage entirely — no get, no set — and calls render() directly for every dispatch', async () => {
+    const renderSpy = jest.fn(async (input: { url: string }) => ({ html: `<div class="fresh">${input.url}</div>` }));
+    const bypassRenderer: EmbedRenderer = { cacheVersion: 1, shouldBypassCache: () => true, render: renderSpy };
+
+    const storage = createMongoCacheStorage(crowi);
+    const getSpy = jest.spyOn(storage, 'get');
+    const setOrRejectSpy = jest.spyOn(storage, 'setOrReject');
+    const reg = new RendererRegistryImpl();
+    makeRendererScope(reg, '@crowi/plugin-bypass', silentLogger).addEmbedTag('bypass', bypassRenderer);
+    const ctx = buildCtx(storage, '@crowi/plugin-bypass');
+
+    // Same tag/url dispatched twice — a cached renderer would collapse
+    // this to one `render()` call on the second occurrence; a bypassed
+    // one must call `render()` fresh both times.
+    const { tree } = await runPipeline('@[bypass](same) and @[bypass](same)', reg, ctx, loadDeps, { cache: storage, pageId });
+
+    expect(renderSpy).toHaveBeenCalledTimes(2);
+    expect(getSpy).not.toHaveBeenCalled();
+    expect(setOrRejectSpy).not.toHaveBeenCalled();
+    const para = tree.children[0] as { children: Array<{ type: string; value?: string }> };
+    const htmlNodes = para.children.filter((c) => c.type === 'html');
+    expect(htmlNodes).toHaveLength(2);
+    expect(htmlNodes[0].value).toContain('<div class="fresh">same</div>');
+  });
+
+  it('shouldBypassCache=false (or absent) goes through the normal cached path unchanged', async () => {
+    const renderer = buildEchoRenderer();
+    const renderSpy = jest.spyOn(renderer, 'render');
+    const storage = createMongoCacheStorage(crowi);
+    const getSpy = jest.spyOn(storage, 'get');
+    const reg = new RendererRegistryImpl();
+    makeRendererScope(reg, '@crowi/plugin-echo', silentLogger).addEmbedTag('echo', renderer);
+    const ctx = buildCtx(storage, '@crowi/plugin-echo');
+
+    await runPipeline('@[echo](cached)', reg, ctx, loadDeps, { cache: storage, pageId });
+
+    expect(renderSpy).toHaveBeenCalledTimes(1);
+    expect(getSpy).toHaveBeenCalledTimes(1); // cache WAS consulted (a real miss, then stored)
+  });
+
+  it('a thrown render() still normalises to the shared error placeholder when bypassing the cache', async () => {
+    const throwingRenderer: EmbedRenderer = {
+      cacheVersion: 1,
+      shouldBypassCache: () => true,
+      render: async () => {
+        throw new Error('boom');
+      },
+    };
+    const storage = createMongoCacheStorage(crowi);
+    const reg = new RendererRegistryImpl();
+    makeRendererScope(reg, '@crowi/plugin-throws', silentLogger).addEmbedTag('throws', throwingRenderer);
+    const ctx = buildCtx(storage, '@crowi/plugin-throws');
+
+    const { tree } = await runPipeline('@[throws](x)', reg, ctx, loadDeps, { cache: storage, pageId });
+    const para = tree.children[0] as { children: Array<{ type: string; value?: string }> };
+    const html = para.children.find((c) => c.type === 'html') as { value: string } | undefined;
+    expect(html?.value).toContain('crowi-embed-placeholder');
+  });
+});

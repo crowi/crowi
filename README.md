@@ -69,7 +69,6 @@ crowi/
     ├── plugin-mail-smtp/              # SMTP mail transport
     ├── plugin-mail-resend/            # Resend mail transport
     ├── plugin-mail-aws-ses/           # AWS SES mail transport
-    ├── plugin-renderer-emoji/         # `:emoji:` → 🎉 renderer
     ├── plugin-renderer-katex/         # KaTeX math renderer
     ├── plugin-renderer-plantuml/      # PlantUML diagram renderer
     └── plugin-renderer-crowi-legacy/  # v1-era wikilinks / strikethrough / etc.
@@ -196,7 +195,7 @@ first-party plugins live under `packages/plugin-*/`:
 - **Storage**: `plugin-storage-local` (default), `plugin-storage-aws-s3`
 - **Search**: `plugin-search-elasticsearch`, `plugin-search-opensearch`, `plugin-search-mongo` (no external service)
 - **Mail**: `plugin-mail-smtp`, `plugin-mail-resend`, `plugin-mail-aws-ses`
-- **Renderers**: `plugin-renderer-emoji`, `plugin-renderer-katex`, `plugin-renderer-plantuml`, `plugin-renderer-crowi-legacy`
+- **Renderers**: `plugin-renderer-katex`, `plugin-renderer-plantuml`, `plugin-renderer-crowi-legacy`
 
 Write your own by depending on `@crowi/plugin-api`, exporting a default
 `CrowiPlugin`, and adding the package name to your runner's

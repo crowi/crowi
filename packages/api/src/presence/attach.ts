@@ -78,6 +78,103 @@ interface PresenceConnection {
 }
 
 /**
+ * Build the single dispatch table over the generic feed bus
+ * (feature-presence-generic-feed-bus): one function per `PresenceFeed`,
+ * each framing + fanning that feed's payload out to this instance's
+ * connected sockets, written INLINE (no separate named `broadcastXxx`
+ * function, no bridging `deps` object) — this object literal is the
+ * sole place any feed's name AND its framing logic exist. Module-scoped
+ * (rather than declared inline inside `attachPresenceServer`) for
+ * exactly one reason: so `PresenceFeed` below can be DERIVED from its
+ * keys (`keyof ReturnType<typeof createFeedHandlers>`) instead of
+ * hand-declared as a separate union. `ctx` carries only the primitives
+ * every feed shares (the live connections map, `sendJson`, and a way to
+ * read the current viewer list) — never a per-feed name — so it does
+ * not grow when a feed is added.
+ *
+ * Net effect for AC-3: adding a fourth feed touches exactly two places —
+ * a `publish(feed, ...)` call in `presence.ts`, and one new key (with
+ * its own inline framing body) in the object this function returns. No
+ * separate union-type edit, no separate `broadcastXxx` declaration, no
+ * factory-argument change: `PresenceFeed` is derived, not maintained by
+ * hand, and `ctx` is fixed.
+ */
+const createFeedHandlers = (ctx: {
+  connections: Map<WsWebSocket, PresenceConnection>;
+  sendJson: (ws: WsWebSocket, payload: unknown) => void;
+  listViewers: (pageId: string) => Promise<PresenceViewer[]>;
+}) => ({
+  // Every entry shares the same `(pageId, payload)` shape (`payload`
+  // unused where the feed doesn't carry one) so indexing this object by
+  // a `PresenceFeed` union — `feedHandlers[feed]` below — always yields
+  // one uniform function type instead of a per-key union.
+  viewers: async (pageId: string, _payload: unknown): Promise<void> => {
+    // Collect the local sockets watching this page before the await so
+    // a concurrent close doesn't matter — `sendJson` no-ops on a
+    // non-OPEN socket.
+    const targets: WsWebSocket[] = [];
+    for (const conn of ctx.connections.values()) {
+      if (conn.pageId === pageId) targets.push(conn.ws);
+    }
+    if (targets.length === 0) return;
+    let viewers: PresenceViewer[];
+    try {
+      viewers = await ctx.listViewers(pageId);
+    } catch (err) {
+      console.warn(`[crowi:presence] listViewers failed for page ${pageId}:`, (err as Error).message);
+      return;
+    }
+    const message = { type: 'viewers' as const, viewers };
+    for (const ws of targets) {
+      ctx.sendJson(ws, message);
+    }
+  },
+  // Push a page-updated signal to every locally-connected client for
+  // `pageId` (feature-live-page-content-sync). No presence re-read — the
+  // payload arrives complete from the publisher.
+  'page-updated': (pageId: string, payload: unknown): void => {
+    const p = payload as PageUpdatedPayload;
+    const message = {
+      type: 'page-updated' as const,
+      pageId: p.pageId,
+      revisionId: p.revisionId,
+      editorUserId: p.editorUserId,
+      editorDisplayName: p.editorDisplayName,
+    };
+    for (const conn of ctx.connections.values()) {
+      if (conn.pageId === pageId) ctx.sendJson(conn.ws, message);
+    }
+  },
+  // Push a comment-changed signal to every locally-connected client for
+  // `pageId` (feature-live-page-comment-sync). Identity-only payload, no
+  // presence re-read. The client re-fetches the comment list from the
+  // permission-checked `GET /comments?page_id=` — the body never rides
+  // this frame.
+  'comment-changed': (pageId: string, payload: unknown): void => {
+    const p = payload as CommentChangedPayload;
+    const message = {
+      type: 'comment-changed' as const,
+      pageId: p.pageId,
+      changeType: p.changeType,
+      commentId: p.commentId,
+      ...(p.actorUserId !== undefined ? { actorUserId: p.actorUserId } : {}),
+    };
+    for (const conn of ctx.connections.values()) {
+      if (conn.pageId === pageId) ctx.sendJson(conn.ws, message);
+    }
+  },
+});
+
+/**
+ * Every read-side feed presence dispatches to a connected client
+ * (feature-presence-generic-feed-bus). Derived from `createFeedHandlers`
+ * above rather than hand-declared, so this union can never drift from
+ * the actual dispatch table; `presence.ts` re-exports this same type for
+ * its `PresenceService.subscribe`/`publish` signatures.
+ */
+export type PresenceFeed = keyof ReturnType<typeof createFeedHandlers>;
+
+/**
  * Wire the RFC-0005 `/presence` WebSocket into the api's existing
  * Express http.Server, using the `ws` library's `noServer` mode — same
  * process, same event loop, same Mongoose connection, same Redis
@@ -126,92 +223,23 @@ export async function attachPresenceServer(httpServer: HttpServer, crowi: Crowi)
     }
   };
 
-  /**
-   * Broadcast the current viewer list of `pageId` to every locally-
-   * connected client for that page. Triggered by `presence`'s change
-   * events (local writes + cross-instance pub/sub).
-   */
-  const broadcastViewers = async (pageId: string): Promise<void> => {
-    // Collect the local sockets watching this page before the await so
-    // a concurrent close doesn't matter — `sendJson` no-ops on a
-    // non-OPEN socket.
-    const targets: WsWebSocket[] = [];
-    for (const conn of connections.values()) {
-      if (conn.pageId === pageId) targets.push(conn.ws);
-    }
-    if (targets.length === 0) return;
-    let viewers: PresenceViewer[];
-    try {
-      viewers = await presence.listViewers(pageId);
-    } catch (err) {
-      console.warn(`[crowi:presence] listViewers failed for page ${pageId}:`, (err as Error).message);
-      return;
-    }
-    const message = { type: 'viewers' as const, viewers };
-    for (const ws of targets) {
-      sendJson(ws, message);
-    }
-  };
-
-  /**
-   * Push a page-updated signal to every locally-connected client for
-   * `pageId` (feature-live-page-content-sync). Mirrors `broadcastViewers`
-   * but needs no presence re-read — the payload arrives complete from
-   * the publisher. `sendJson` no-ops on a non-OPEN socket, so collecting
-   * the targets synchronously is safe.
-   */
-  const broadcastPageUpdated = (pageId: string, payload: PageUpdatedPayload): void => {
-    const message = {
-      type: 'page-updated' as const,
-      pageId: payload.pageId,
-      revisionId: payload.revisionId,
-      editorUserId: payload.editorUserId,
-      editorDisplayName: payload.editorDisplayName,
-    };
-    for (const conn of connections.values()) {
-      if (conn.pageId === pageId) sendJson(conn.ws, message);
-    }
-  };
-
-  /**
-   * Push a comment-changed signal to every locally-connected client for
-   * `pageId` (feature-live-page-comment-sync). The sibling of
-   * `broadcastPageUpdated`: identity-only payload, no presence re-read,
-   * so collecting the targets synchronously is safe. The client
-   * re-fetches the comment list from the permission-checked
-   * `GET /comments?page_id=` — the body never rides this frame.
-   */
-  const broadcastCommentChanged = (pageId: string, payload: CommentChangedPayload): void => {
-    const message = {
-      type: 'comment-changed' as const,
-      pageId: payload.pageId,
-      changeType: payload.changeType,
-      commentId: payload.commentId,
-      ...(payload.actorUserId !== undefined ? { actorUserId: payload.actorUserId } : {}),
-    };
-    for (const conn of connections.values()) {
-      if (conn.pageId === pageId) sendJson(conn.ws, message);
-    }
-  };
-
-  // Subscribe to viewer-list changes (local + cross-instance). The
-  // unsubscribe fn is invoked on shutdown.
-  const unsubscribe = presence.onViewersChanged((pageId: string) => {
-    void broadcastViewers(pageId);
+  // Single dispatch table over the generic feed bus
+  // (feature-presence-generic-feed-bus), built by the module-scoped
+  // `createFeedHandlers` (see its doc comment for why it is factored out
+  // — in short, so `PresenceFeed` can be derived from its keys instead
+  // of hand-maintained, and each feed's framing lives inline in its own
+  // entry). `shutdown()` tears every subscription down in one loop
+  // instead of three named `unsubscribeX` variables.
+  const feedHandlers = createFeedHandlers({
+    connections,
+    sendJson,
+    listViewers: (pageId) => presence.listViewers(pageId),
   });
 
-  // Subscribe to page-updated signals (local + cross-instance) and fan
-  // them out to this instance's viewer sockets. Unsubscribed on shutdown.
-  const unsubscribePageUpdated = presence.onPageUpdated((pageId: string, payload: PageUpdatedPayload) => {
-    broadcastPageUpdated(pageId, payload);
-  });
-
-  // Subscribe to comment-changed signals (local + cross-instance) and
-  // fan them out to this instance's viewer sockets. Unsubscribed on
+  // Subscribe to every feed (local + cross-instance) and fan each out
+  // to this instance's viewer sockets. Unsubscribed as a batch on
   // shutdown.
-  const unsubscribeCommentChanged = presence.onCommentChanged((pageId: string, payload: CommentChangedPayload) => {
-    broadcastCommentChanged(pageId, payload);
-  });
+  const feedUnsubscribers: Array<() => void> = (Object.keys(feedHandlers) as PresenceFeed[]).map((feed) => presence.subscribe(feed, feedHandlers[feed]));
 
   /**
    * Re-verify that `userId` still has read grant on `pageId`. Returns
@@ -377,8 +405,9 @@ export async function attachPresenceServer(httpServer: HttpServer, crowi: Crowi)
     });
 
     // Register the viewer. `join` publishes a viewer-list change, which
-    // flows back through `onViewersChanged` → `broadcastViewers`, so
-    // this socket (and every other on the page) gets the fresh list.
+    // flows back through the generic `subscribe('viewers', ...)` handler
+    // in `feedHandlers`, so this socket (and every other on the page)
+    // gets the fresh list.
     try {
       await presence.join(conn.pageId, conn.identity);
     } catch (err) {
@@ -421,20 +450,12 @@ export async function attachPresenceServer(httpServer: HttpServer, crowi: Crowi)
 
       // Stop reacting to viewer-list + page-updated + comment-changed
       // changes BEFORE the drain sequence starts closing sockets.
-      try {
-        unsubscribe();
-      } catch {
-        // best-effort
-      }
-      try {
-        unsubscribePageUpdated();
-      } catch {
-        // best-effort
-      }
-      try {
-        unsubscribeCommentChanged();
-      } catch {
-        // best-effort
+      for (const unsubscribeFeed of feedUnsubscribers) {
+        try {
+          unsubscribeFeed();
+        } catch {
+          // best-effort
+        }
       }
 
       // off upgrade → politely close every live socket → drain wait →

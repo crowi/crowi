@@ -80,8 +80,14 @@ Caddy は WebSocket の `Upgrade` を自動で通し、TLS も自動取得しま
 
 ```
 wiki.example.com {
-	# HTTP API + 添付 → api
-	@api path /api/* /files/*
+	# HTTP API + 添付 + OAuth/well-known メタデータ → api
+	# `/.well-known/*` は OAuth discovery(`oauth-authorization-server`)専用に
+	# 絞らず広く振っている。web は standalone build 時にこのパスを絶対 URL で
+	# rewrite できない(rewrites() が build 時に固定される)ため、前段 proxy が
+	# api に直送する必要がある。ACME challenge(`/.well-known/acme-challenge/*`)
+	# は Caddy の TLS 自動化が reverse_proxy より前の内部ハンドラで処理するため
+	# 衝突しない。
+	@api path /api/* /files/* /.well-known/*
 	reverse_proxy @api api:3000
 
 	# realtime WebSocket → api(Upgrade は自動で透過)
@@ -97,8 +103,9 @@ wiki.example.com {
 ### nginx(Upgrade ヘッダは手動)
 
 ```nginx
-location /api/   { proxy_pass http://api:3000; }
-location /files/ { proxy_pass http://api:3000; }
+location /api/         { proxy_pass http://api:3000; }
+location /files/       { proxy_pass http://api:3000; }
+location /.well-known/ { proxy_pass http://api:3000; }  # OAuth discovery 等
 
 # realtime WebSocket — Upgrade ヘッダの透過が必須
 # 末尾の (/|$) で素の `/collab`(セグメントなし)も拾う
