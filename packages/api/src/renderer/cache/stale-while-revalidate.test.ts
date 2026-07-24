@@ -62,12 +62,36 @@ const input = (overrides: Partial<EmbedInput> = {}): EmbedInput => ({
  * revalidation. Poll a predicate over any async value until it's
  * satisfied, with a safety bound — mirrors `backlink.test.ts`'s
  * `waitForBacklinks`.
+ *
+ * The bound is real wall-clock time, not an event-loop tick count: with
+ * nothing else scheduled, dozens of `setImmediate` round-trips fly by in
+ * a few milliseconds — nowhere near enough real time for the Mongo I/O
+ * this predicate waits on to land under CI host contention. Throws
+ * (rather than silently returning the not-yet-satisfied value) on
+ * timeout, so a caller that goes on to assert on that value gets a clear
+ * diagnostic instead of a confusing, unrelated assertion failure. Each
+ * `check()` call is itself raced against the remaining deadline — an
+ * unbounded `await check()` would let a genuinely stuck query burn past
+ * `timeoutMs` before this loop ever gets control back to notice.
  */
-const waitFor = async <T>(check: () => Promise<T>, predicate: (value: T) => boolean, maxTicks = 50): Promise<T> => {
-  let value = await check();
-  for (let i = 0; i < maxTicks && !predicate(value); i += 1) {
-    await new Promise((resolve) => setImmediate(resolve));
-    value = await check();
+const waitFor = async <T>(check: () => Promise<T>, predicate: (value: T) => boolean, timeoutMs = 10_000): Promise<T> => {
+  const deadline = Date.now() + timeoutMs;
+  const timeoutError = () => new Error(`waitFor: predicate still unsatisfied after ${timeoutMs}ms`);
+  const checkWithDeadline = (): Promise<T> => {
+    let timer: ReturnType<typeof setTimeout>;
+    const timeout = new Promise<T>((_, reject) => {
+      timer = setTimeout(() => reject(timeoutError()), Math.max(deadline - Date.now(), 0));
+    });
+    const checkPromise = Promise.resolve().then(check);
+    return Promise.race([checkPromise, timeout]).finally(() => clearTimeout(timer));
+  };
+  let value = await checkWithDeadline();
+  while (!predicate(value)) {
+    if (Date.now() >= deadline) {
+      throw timeoutError();
+    }
+    await new Promise((resolve) => setTimeout(resolve, 2));
+    value = await checkWithDeadline();
   }
   return value;
 };
@@ -76,11 +100,11 @@ const waitFor = async <T>(check: () => Promise<T>, predicate: (value: T) => bool
 // (real Mongo I/O) produce a variable number of microtasks / event-loop turns
 // before `renderer.calls` increments. A fixed `setImmediate` tick count was
 // flaky under parallel load (the I/O round-trip can spill past two ticks).
-const waitForCalls = async (renderer: { calls: number }, expectedCalls: number, maxTicks = 50): Promise<void> => {
+const waitForCalls = async (renderer: { calls: number }, expectedCalls: number, timeoutMs = 10_000): Promise<void> => {
   await waitFor(
     async () => renderer.calls,
     (calls) => calls === expectedCalls,
-    maxTicks,
+    timeoutMs,
   );
 };
 
