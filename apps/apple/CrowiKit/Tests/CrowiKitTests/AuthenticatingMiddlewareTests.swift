@@ -127,26 +127,4 @@ final class AuthenticatingMiddlewareTests: XCTestCase {
         XCTAssertEqual(invocationCount, 1, "the delayed second 401 must reuse the already-refreshed token, not refresh again")
         XCTAssertEqual(requestRecorder.requests.count, 1, "the token endpoint must receive exactly one refresh submission over the wire, even with a delayed second 401")
     }
-
-    /// A minimal ordering primitive for the test above: lets the "first"
-    /// closure force the "second" closure's 401 to be observed only after
-    /// the first request's whole retry cycle is done, without resorting to
-    /// a flaky `Task.sleep`-based race.
-    private actor Gate {
-        private var isOpen = false
-        private var waiters: [CheckedContinuation<Void, Never>] = []
-
-        func open() {
-            isOpen = true
-            for waiter in waiters { waiter.resume() }
-            waiters.removeAll()
-        }
-
-        func wait() async {
-            if isOpen { return }
-            await withCheckedContinuation { continuation in
-                waiters.append(continuation)
-            }
-        }
-    }
 }

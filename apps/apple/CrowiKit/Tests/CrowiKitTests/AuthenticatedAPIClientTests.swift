@@ -1,5 +1,3 @@
-import HTTPTypes
-import OpenAPIRuntime
 import XCTest
 
 @testable import CrowiKit
@@ -12,53 +10,24 @@ import XCTest
 /// never `URLSessionTransport`) so a regression in the composition itself —
 /// not just in a single screen's decoder — is caught here.
 final class AuthenticatedAPIClientTests: XCTestCase {
-    private struct MockTransport: ClientTransport {
-        let handler: @Sendable (HTTPRequest, HTTPBody?, URL, String) async throws -> (HTTPResponse, HTTPBody?)
-
-        func send(_ request: HTTPRequest, body: HTTPBody?, baseURL: URL, operationID: String) async throws -> (HTTPResponse, HTTPBody?) {
-            try await handler(request, body, baseURL, operationID)
-        }
-    }
-
-    private func makeClient(handler: @escaping @Sendable (HTTPRequest) -> (Int, Data)) -> AuthenticatedAPIClient {
-        let tokenStore = InMemoryTokenStore(seed: [
-            "workspace-a": StoredTokenPair(accessToken: "the-token", refreshToken: "rt-1", expiresAt: Date().addingTimeInterval(3600))
-        ])
-        let coordinator = RefreshCoordinator(workspaceId: "workspace-a", tokenStore: tokenStore, urlSession: .shared) {
-            URL(string: "https://wiki.example.com/api/v2/oauth/token")!
-        }
-        let transport = MockTransport { request, _, _, _ in
-            let (status, data) = handler(request)
-            return (HTTPResponse(status: .init(code: status)), HTTPBody(data))
-        }
-        return AuthenticatedAPIClient(
-            apiBaseURL: APIBaseURL(workspaceOrigin: WorkspaceOrigin(URL(string: "https://wiki.example.com")!)),
-            middleware: AuthenticatingMiddleware(coordinator: coordinator),
-            transport: transport
-        )
-    }
-
     func testGetAttachesBearerAndReturnsTheRawBodyAndStatus() async throws {
-        let recorder = CapturedRequestRecorder()
-        let client = makeClient { request in
-            recorder.capture(request)
-            return (200, Data("""
-                { "ok": true }
-                """.utf8))
-        }
+        let recorder = WireRecorder()
+        let client = makeWireRecordedClient(recorder: recorder) { _ in (200, Data("""
+            { "ok": true }
+            """.utf8)) }
 
         let (data, status) = try await client.get("pages", query: [URLQueryItem(name: "path", value: "/team/eng")])
 
         XCTAssertEqual(status, 200)
         XCTAssertEqual(String(data: data, encoding: .utf8), "{ \"ok\": true }")
-        XCTAssertEqual(recorder.authorization, "Bearer the-token")
+        XCTAssertEqual(recorder.requests.first?.authorization, "Bearer the-token")
         // `/` is a legal, non-percent-encoded character in a URL query
         // component (RFC 3986) — `URLComponents` correctly leaves it as-is.
-        XCTAssertEqual(recorder.path, "/pages?path=/team/eng")
+        XCTAssertEqual(recorder.requests.first?.path, "/pages?path=/team/eng")
     }
 
     func testGetReturnsANon2xxStatusWithoutThrowing() async throws {
-        let client = makeClient { _ in (503, Data("""
+        let client = makeWireRecordedClient(recorder: WireRecorder()) { _ in (503, Data("""
             { "error": { "code": "SERVICE_UNAVAILABLE" } }
             """.utf8)) }
 
@@ -69,42 +38,57 @@ final class AuthenticatedAPIClientTests: XCTestCase {
     }
 
     func testGetWithNoQueryBuildsABarePath() async throws {
-        let recorder = CapturedRequestRecorder()
-        let client = makeClient { request in
-            recorder.capture(request)
-            return (200, Data())
-        }
+        let recorder = WireRecorder()
+        let client = makeWireRecordedClient(recorder: recorder) { _ in (200, Data()) }
 
         _ = try await client.get("me")
 
-        XCTAssertEqual(recorder.path, "/me")
-    }
-}
-
-/// A minimal, lock-protected capture for a request's `path`/`Authorization`
-/// header, driven strictly sequentially by these tests (never concurrently)
-/// — `@unchecked Sendable` for the same reason `AuthenticatingMiddlewareTests.Recorder` is.
-private final class CapturedRequestRecorder: @unchecked Sendable {
-    private let lock = NSLock()
-    private var _path: String?
-    private var _authorization: String?
-
-    func capture(_ request: HTTPRequest) {
-        lock.lock()
-        defer { lock.unlock() }
-        _path = request.path
-        _authorization = request.headerFields[.authorization]
+        XCTAssertEqual(recorder.requests.first?.path, "/me")
     }
 
-    var path: String? {
-        lock.lock()
-        defer { lock.unlock() }
-        return _path
+    // MARK: - JSON-body writes (`feature-ios-phase2-write`)
+
+    private struct ProbeBody: Encodable {
+        let pageId: String
+
+        enum CodingKeys: String, CodingKey {
+            case pageId = "page_id"
+        }
     }
 
-    var authorization: String? {
-        lock.lock()
-        defer { lock.unlock() }
-        return _authorization
+    func testPostSendsAJSONBodyWithContentTypeAndBearerOnTheSameMiddlewarePath() async throws {
+        let recorder = WireRecorder()
+        let client = makeWireRecordedClient(recorder: recorder) { _ in (200, Data("{ \"ok\": true }".utf8)) }
+
+        let (data, status) = try await client.post("pages/like", json: ProbeBody(pageId: "p1"))
+
+        XCTAssertEqual(status, 200)
+        XCTAssertEqual(String(data: data, encoding: .utf8), "{ \"ok\": true }")
+        let request = try XCTUnwrap(recorder.requests.first)
+        XCTAssertEqual(request.method, .post)
+        XCTAssertEqual(request.path, "/pages/like")
+        XCTAssertEqual(request.contentType, "application/json")
+        XCTAssertEqual(request.authorization, "Bearer the-token", "writes get the identical AuthenticatingMiddleware auth injection as reads")
+        XCTAssertEqual(request.jsonObject?["page_id"] as? String, "p1")
+    }
+
+    func testPutAndDeleteRideTheSameCompositionAndReturnNon2xxWithoutThrowing() async throws {
+        let recorder = WireRecorder()
+        let errorBody = Data("{ \"error\": { \"code\": \"PAGE_REVISION_ERROR\", \"message\": \"Revision error.\" } }".utf8)
+        let client = makeWireRecordedClient(recorder: recorder) { request in
+            request.method == .put ? (409, errorBody) : (200, Data("{ \"ok\": true }".utf8))
+        }
+
+        let (putData, putStatus) = try await client.put("pages", json: ProbeBody(pageId: "p1"))
+        let (_, deleteStatus) = try await client.delete("bookmarks", json: ProbeBody(pageId: "p1"))
+
+        XCTAssertEqual(putStatus, 409, "non-2xx statuses are RETURNED (the write flows branch on them), never thrown")
+        XCTAssertFalse(putData.isEmpty, "the caller needs the raw error envelope bytes")
+        XCTAssertEqual(deleteStatus, 200)
+        XCTAssertEqual(recorder.requests.map(\.method), [.put, .delete])
+        for request in recorder.requests {
+            XCTAssertEqual(request.authorization, "Bearer the-token")
+            XCTAssertEqual(request.contentType, "application/json")
+        }
     }
 }
