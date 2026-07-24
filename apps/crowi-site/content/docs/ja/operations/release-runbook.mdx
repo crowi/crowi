@@ -258,6 +258,14 @@ pnpm changeset pre exit
 - **Docker(api) ビルドが `ERR_PNPM_DEPLOY_NONINJECTED_WORKSPACE` で落ちる**: pnpm 10 で
   `pnpm deploy` が injected workspace を要求するようになったためです。`packages/api/Dockerfile`
   は `pnpm deploy --legacy` で v10 以前の挙動を維持しています。
+- **`.changeset/*.md` が消費済みなのに残り続けている（バグではない）**: `@changesets/cli` は
+  prerelease（`pre` mode）中、`version` 実行のたびに `.changeset/pre.json` の `changesets`
+  配列へ消費済み id を追記するだけで、対応する `.md` ファイル自体は削除しません
+  （upstream の仕様 — 削除は `preState.mode === "exit"` のときのみ実行されるコードパス）。
+  ファイルは stable（2.0.0）リリースに向けて「beta → stable」の `changeset pre exit` →
+  `changeset version` を実行した瞬間に、`pre.json` ごと一括で消費・削除されます。alpha 期間中に
+  溜まっていくのは正常な挙動なので、手動で消さないでください（stable の集約 CHANGELOG 生成と
+  version 計算がこの時点で全 `.md` を再利用するため、先に消すと欠落します）。
 
 ## 関連
 
