@@ -36,6 +36,9 @@
  * parsing stays where it is.
  */
 
+import { redactUserinfo } from './redact-userinfo';
+import { parseRedisDatabase } from './redis-database';
+import { SLUG_PATTERN as REDIS_KEY_PREFIX_PATTERN, resolveClientUrlSlug } from './redis-keyspace';
 import { isKnownSignedTokenSecretPlaceholder } from './signed-token-factory';
 
 /** A single env var's shape: canonical name, legacy aliases, and an optional content check. */
@@ -78,20 +81,6 @@ export interface EnvVarDescriptor {
   readonly warnWhenUnset?: string;
 }
 
-/**
- * Strips a `user:pass@` (or bare `user@`) userinfo segment before a raw URI
- * is echoed into a boot-abort error message. A malformed-scheme
- * `MONGO_URI`/`REDIS_URL` (wrong scheme, typo'd host, ...) can still embed
- * real credentials, and this message reaches an *uncaught* top-level
- * exception (the constructor throws before `app.ts`'s error handler is even
- * installed), so it can end up printed unredacted to stdout/stderr —
- * unlike the pre-existing mongoose driver's own connect-time parse error,
- * which never includes the raw connection string at all.
- */
-function redactUserinfo(raw: string): string {
-  return raw.replace(/^([a-zA-Z][a-zA-Z0-9+.-]*:\/\/)[^/@]*@/, '$1***@');
-}
-
 function validatePort(raw: string): string | null {
   const trimmed = raw.trim();
   const parsed = Number.parseInt(trimmed, 10);
@@ -108,9 +97,47 @@ function validateMongoUri(raw: string): string | null {
   return null;
 }
 
+/**
+ * Also validates the pathname (feature-redis-key-prefix §3) via the shared
+ * `parseRedisDatabase()` — the SAME parser `util/redis-opts.ts` and
+ * `collab/extension-redis.ts` use to pick the node-redis `database` /
+ * ioredis `db` option, so a malformed pathname (`/foo`, `/-1`, `/1/extra`,
+ * ...) boot-aborts here instead of each client silently picking its own
+ * fallback (which historically was "ignore the pathname entirely and
+ * connect to DB 0").
+ */
 function validateRedisUrl(raw: string): string | null {
-  if (!/^rediss?:\/\//.test(raw.trim())) {
+  const trimmed = raw.trim();
+  if (!/^rediss?:\/\//.test(trimmed)) {
     return `must start with "redis://" or "rediss://" (got ${JSON.stringify(redactUserinfo(raw))})`;
+  }
+  const parsedDb = parseRedisDatabase(trimmed);
+  if ('error' in parsedDb) {
+    return parsedDb.error;
+  }
+  return null;
+}
+
+/**
+ * `REDIS_KEY_PREFIX` becomes the instance slug `util/redis-keyspace.ts`
+ * builds every Redis key/channel from (`crowi:<slug>:<suffix>`) — see that
+ * module's doc comment. Reuses that module's own `SLUG_PATTERN` (imported
+ * above as `REDIS_KEY_PREFIX_PATTERN`) rather than redeclaring an equivalent
+ * regex literal, so the boot-time check here and the runtime check in
+ * `resolveRedisKeyspace()` can never drift apart. A colon would silently
+ * merge/split keyspace segments, and anything outside `[A-Za-z0-9._-]` risks
+ * characters Redis ACL glob patterns (`~crowi:<slug>:*`) don't handle
+ * predictably, so both are rejected outright rather than sanitised.
+ */
+function validateRedisKeyPrefix(raw: string): string | null {
+  if (raw === '') {
+    return 'must not be blank/whitespace-only — it becomes the Redis instance keyspace slug (e.g. "crowi:<value>:...")';
+  }
+  if (raw.includes(':')) {
+    return `must not contain ":" (got ${JSON.stringify(raw)}) — colons separate Redis keyspace segments`;
+  }
+  if (!REDIS_KEY_PREFIX_PATTERN.test(raw)) {
+    return `must match ${REDIS_KEY_PREFIX_PATTERN} (got ${JSON.stringify(raw)})`;
   }
   return null;
 }
@@ -227,6 +254,19 @@ const REDIS_URL_DESCRIPTOR: EnvVarDescriptor = {
   name: 'REDIS_URL',
   aliases: ['REDISTOGO_URL', 'REDIS_TLS_URL'],
   check: { severity: 'fail', validate: validateRedisUrl },
+};
+
+/**
+ * feature-redis-key-prefix §1 — explicit override for the Redis instance
+ * keyspace slug `util/redis-keyspace.ts` resolves (else derived from
+ * `CLIENT_URL`'s hostname — see {@link detectUnresolvableRedisKeyspace}).
+ * Independent of whether `REDIS_URL` is set at all: like every other
+ * descriptor here, a malformed value fails regardless of whether the
+ * variable is actually load-bearing yet.
+ */
+const REDIS_KEY_PREFIX_DESCRIPTOR: EnvVarDescriptor = {
+  name: 'REDIS_KEY_PREFIX',
+  check: { severity: 'fail', validate: validateRedisKeyPrefix },
 };
 
 const CROWI_ENCRYPTION_KEY_DESCRIPTOR: EnvVarDescriptor = {
@@ -357,6 +397,7 @@ export const ENV_VAR_DESCRIPTORS: readonly EnvVarDescriptor[] = [
   PORT_DESCRIPTOR,
   MONGO_URI_DESCRIPTOR,
   REDIS_URL_DESCRIPTOR,
+  REDIS_KEY_PREFIX_DESCRIPTOR,
   CROWI_ENCRYPTION_KEY_DESCRIPTOR,
   CLIENT_URL_DESCRIPTOR,
   CROWI_MULTI_INSTANCE_DESCRIPTOR,
@@ -441,6 +482,62 @@ function detectTypoWarnings(env: NodeJS.ProcessEnv): string[] {
   }
 
   return warnings;
+}
+
+/**
+ * Cross-field invariant (feature-redis-key-prefix §1): whenever `REDIS_URL`
+ * is set, `util/redis-keyspace.ts` MUST be able to resolve an instance
+ * keyspace slug at runtime — either an explicit `REDIS_KEY_PREFIX` override
+ * (format-validated independently above, whenever it's set at all) or a
+ * valid absolute `CLIENT_URL` whose HOSTNAME also satisfies the same slug
+ * format `util/redis-keyspace.ts` requires, to derive one from. Neither
+ * present is a boot-abort, not a silent `crowi:default` fallback — that
+ * fallback is exactly the silent cross-talk this feature exists to prevent.
+ *
+ * This spans THREE independently-resolved descriptors (`REDIS_URL`,
+ * `REDIS_KEY_PREFIX`, `CLIENT_URL`), so it can't be expressed as a single
+ * descriptor's `check.validate(raw)` — structurally the same kind of
+ * post-loop, multi-value pass {@link detectTypoWarnings} already does,
+ * except this one can push into `failMessages` instead of only ever
+ * warning.
+ *
+ * When `REDIS_KEY_PREFIX` IS set but fails its own format check, that
+ * failure is already reported by {@link REDIS_KEY_PREFIX_DESCRIPTOR}'s
+ * `check` in the main loop — this function only re-raises when the
+ * variable is unresolved, never re-flags an already-invalid override.
+ *
+ * Uses the SAME `resolveClientUrlSlug()` `util/redis-keyspace.ts` itself
+ * calls at runtime (not a re-implemented `validateAbsoluteUrl()`-only check)
+ * — a `CLIENT_URL` that is absolute per {@link validateAbsoluteUrl} but whose
+ * hostname doesn't fit the slug pattern (an IPv6 literal like `https://[::1]`)
+ * must fail HERE at boot, otherwise `validateEnv()`
+ * would pass while `resolveRedisKeyspace()` throws the very first time a
+ * fully-booted process tries to build a Redis key — the exact boot-time /
+ * runtime divergence this cross-field check exists to rule out.
+ *
+ * When `CLIENT_URL` IS absolute but its hostname specifically fails the slug
+ * check, the failure message includes `resolveClientUrlSlug()`'s own
+ * `.error` (e.g. naming the offending hostname) instead of only the generic
+ * "neither ... is available" wording — an operator staring at an IPv6-literal
+ * `CLIENT_URL` needs to see THAT it's the hostname shape at fault, not just
+ * be told to set `REDIS_KEY_PREFIX` with no further explanation.
+ */
+function detectUnresolvableRedisKeyspace(resolvedByDescriptor: ReadonlyMap<EnvVarDescriptor, ReturnType<typeof resolveRaw>>): string | null {
+  if (!resolvedByDescriptor.get(REDIS_URL_DESCRIPTOR)) return null; // Redis unused — no keyspace to resolve.
+  if (resolvedByDescriptor.get(REDIS_KEY_PREFIX_DESCRIPTOR)) return null; // Explicit override present.
+
+  const REDIS_KEY_PREFIX_INSTRUCTION =
+    'set REDIS_KEY_PREFIX explicitly (e.g. REDIS_KEY_PREFIX=my-instance) so multiple Crowi instances sharing this ' +
+    'Redis do not cross-talk on the same keys/channels.';
+
+  const clientUrl = resolvedByDescriptor.get(CLIENT_URL_DESCRIPTOR);
+  if (clientUrl && validateAbsoluteUrl(clientUrl.raw) == null) {
+    const slugResult = resolveClientUrlSlug(clientUrl.raw);
+    if (!('error' in slugResult)) return null; // CLIENT_URL derives a slug.
+    return `REDIS_URL is set, REDIS_KEY_PREFIX is unset, and ${slugResult.error} — ${REDIS_KEY_PREFIX_INSTRUCTION}`;
+  }
+
+  return `REDIS_URL is set but neither REDIS_KEY_PREFIX nor a valid CLIENT_URL is available to derive a Redis instance keyspace slug from — ${REDIS_KEY_PREFIX_INSTRUCTION}`;
 }
 
 /**
@@ -543,6 +640,9 @@ export function validateEnv(env: NodeJS.ProcessEnv): EnvValidationResult {
       warnMessages.push(message);
     }
   }
+
+  const keyspaceFailure = detectUnresolvableRedisKeyspace(resolvedByDescriptor);
+  if (keyspaceFailure) failMessages.push(keyspaceFailure);
 
   warnMessages.push(...detectTypoWarnings(env));
 
