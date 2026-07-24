@@ -86,13 +86,24 @@ async function main(): Promise<void> {
     throw new Error('redis-smoke-harness: CROWI_REDIS_SMOKE_REDIS_URL env var is required');
   }
 
-  // Minimal Crowi-shaped stub. `buildCollabRedisExtension` only reads
-  // `.redis` (a null-check gate — never calls a method on it, the extension
-  // opens its OWN ioredis pub/sub clients via its `createClient` callback)
-  // and `.redisUrl` (parsed into ioredis connect options). Same
+  // Minimal Crowi-shaped stub. `buildCollabRedisExtension` reads `.redis` (a
+  // null-check gate — never calls a method on it, the extension opens its
+  // OWN ioredis pub/sub clients via its `createClient` callback), `.redisUrl`
+  // (parsed into ioredis connect options), and now also `.getBaseUrl()` /
+  // `.getEnv()` (feature-redis-key-prefix §1/§2 — `resolveRedisKeyspace()`
+  // resolves the extension's `prefix` from these). A fixed `CLIENT_URL`
+  // is enough here: every harness process spawned by
+  // `redis-smoke-harness-client.ts` for a given test shares it, matching
+  // "replicas of the same site" (the multi-process smoke tests assert that
+  // two such harnesses DO relay pub/sub to each other). Same
   // cast-through-`unknown` pattern `extension-redis.test.ts` / `attach.test.ts`
   // use for a narrow Crowi-shaped fixture.
-  const fakeCrowi = { redis: {}, redisUrl } as unknown as Crowi;
+  const fakeCrowi = {
+    redis: {},
+    redisUrl,
+    getBaseUrl: () => 'https://collab-redis-smoke.example.com',
+    getEnv: () => ({}) as NodeJS.ProcessEnv,
+  } as unknown as Crowi;
   const redisExtension = buildCollabRedisExtension(fakeCrowi);
   if (!redisExtension) {
     // Unreachable in practice (redisUrl is always provided above), but fail

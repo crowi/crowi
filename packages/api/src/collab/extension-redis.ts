@@ -2,19 +2,25 @@ import url from 'node:url';
 import Debug from 'debug';
 import type { Extension } from '@hocuspocus/server';
 import type Crowi from 'src/crowi';
+import { parseRedisDatabaseOrThrow } from 'src/util/redis-database';
+import { resolveRedisKeyspace } from 'src/util/redis-keyspace';
 
 const debug = Debug('crowi:collab:extension-redis');
 
 /**
  * Namespace for the Redis keys + pub/sub channels owned by
- * `@hocuspocus/extension-redis`. The extension's own prefix is
- * concatenated with sub-keys like `:awareness:<docname>` / `:y-update:<docname>`,
- * so this prefix is **disjoint** from the Phase 6 editor cap
- * counter's keyspace (`crowi:collab:editors:<pageId>` — `editors`
- * segment is the discriminator). Documenting the carve-up here so a
- * future operator-side prefix override doesn't accidentally collide.
+ * `@hocuspocus/extension-redis`, resolved through the shared instance
+ * keyspace (feature-redis-key-prefix §1/§2 — `crowi:<instance-slug>:collab`).
+ * The extension's own prefix is concatenated with sub-keys like
+ * `:awareness:<docname>` / `:y-update:<docname>`, so this prefix is
+ * **disjoint** from the editor cap counter's keyspace
+ * (`crowi:<instance-slug>:collab:editors:<pageId>` — the `editors` segment
+ * is the discriminator). Documenting the carve-up here so a future
+ * operator-side prefix override doesn't accidentally collide.
  */
-const COLLAB_REDIS_PREFIX = 'crowi:collab';
+function collabRedisPrefix(crowi: Crowi): string {
+  return resolveRedisKeyspace(crowi).prefix('collab');
+}
 
 /**
  * Build the `@hocuspocus/extension-redis` instance the api injects into
@@ -65,6 +71,7 @@ export function buildCollabRedisExtension(crowi: Crowi): Extension | null {
   // consistent across runtimes.
   const identifier = `${process.env.HOSTNAME ?? 'crowi'}-${process.pid}`;
   const ioredisOptions = parseRedisUrlForIoredis(crowi.redisUrl);
+  const prefix = collabRedisPrefix(crowi);
 
   // Lazy `require()` so this module's TS surface doesn't pull
   // `@hocuspocus/extension-redis` into Jest's CJS loader at test
@@ -81,11 +88,11 @@ export function buildCollabRedisExtension(crowi: Crowi): Extension | null {
   // whichever the loader handed us.
   const IORedisCtor: new (opts: unknown) => unknown = IORedisModule.default ?? IORedisModule.Redis ?? IORedisModule;
 
-  debug('attaching extension-redis (identifier=%s, prefix=%s)', identifier, COLLAB_REDIS_PREFIX);
+  debug('attaching extension-redis (identifier=%s, prefix=%s)', identifier, prefix);
 
   return new RedisExtension({
     identifier,
-    prefix: COLLAB_REDIS_PREFIX,
+    prefix,
     // The extension wants two long-lived ioredis connections (one for
     // PUB, one for SUB). The `createClient` callback is invoked twice
     // internally and we hand back a fresh ioredis client each time
@@ -111,14 +118,22 @@ export function buildCollabRedisExtension(crowi: Crowi): Extension | null {
  * Parse a `redis://` / `rediss://` URL into the option shape ioredis
  * accepts via its constructor.  Mirrors the field-level translation
  * `src/util/redis-opts.ts` does for node-redis v4, with ioredis-native
- * keys: `host`, `port`, `username`, `password`, `tls`. ioredis also
+ * keys: `host`, `port`, `username`, `password`, `tls`, `db`. ioredis also
  * accepts a URL string directly but going through this parse lets us
  * apply the same `REDIS_REJECT_UNAUTHORIZED` env override the api's
  * primary client respects.
+ *
+ * `db` (feature-redis-key-prefix §3) is `redisUrl`'s pathname, parsed by
+ * the shared `parseRedisDatabaseOrThrow()` so this and `util/redis-opts.ts`'s
+ * `buildRedisOpts()` can never independently pick a different DB for the
+ * same `REDIS_URL`. Exported (rather than kept module-private) so it can
+ * be unit-tested directly instead of only indirectly through
+ * `buildCollabRedisExtension()`'s `createClient` callback.
  */
-function parseRedisUrlForIoredis(redisUrl: string): {
+export function parseRedisUrlForIoredis(redisUrl: string): {
   host: string;
   port: number;
+  db: number;
   username?: string;
   password?: string;
   tls?: { rejectUnauthorized: boolean };
@@ -130,7 +145,8 @@ function parseRedisUrlForIoredis(redisUrl: string): {
   const u = new URL(redisUrl);
   const host = u.hostname ? u.hostname.replace(/^\[|\]$/g, '') : '127.0.0.1';
   const portNumber = u.port ? Number.parseInt(u.port, 10) : 6379;
-  const opts: ReturnType<typeof parseRedisUrlForIoredis> = { host, port: portNumber };
+
+  const opts: ReturnType<typeof parseRedisUrlForIoredis> = { host, port: portNumber, db: parseRedisDatabaseOrThrow(redisUrl) };
   if (u.username) opts.username = decodeURIComponent(u.username);
   if (u.password) opts.password = decodeURIComponent(u.password);
   if (u.protocol === 'rediss:') {
