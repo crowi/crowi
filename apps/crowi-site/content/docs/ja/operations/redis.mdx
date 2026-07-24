@@ -118,18 +118,19 @@ pub/sub・編集者上限カウンタ・プレゼンス・通知 invalidation・
   前提を置かないでください。
 - **ロールバック時は再接続前に stale なコーディネーション state を
   クリアします**。編集者上限カウンタのキー
-  (`crowi:collab:editors:<pageId>`、24 時間 TTL) やプレゼンスの
-  ハッシュ (`crowi:presence:viewers:<pageId>` /
-  `crowi:presence:editing:<pageId>`) は、切替前のインスタンスに
-  残存することがあります。これをクリアせず全レプリカを再接続すると、
-  stale なソケット ID が新しい接続と混在し、編集者上限カウンタが
-  実際より高い数値を報告して editor が意図せず read-only になったり、
-  プレゼンスに短命な幽霊 viewer が表示されたりし得ます。標準手順:
+  (`crowi:<instance-slug>:collab:editors:<pageId>`、24 時間 TTL) や
+  プレゼンスのハッシュ (`crowi:<instance-slug>:presence:viewers:<pageId>` /
+  `crowi:<instance-slug>:presence:editing:<pageId>`) は、切替前の
+  インスタンスに残存することがあります。これをクリアせず全レプリカを
+  再接続すると、stale なソケット ID が新しい接続と混在し、編集者上限
+  カウンタが実際より高い数値を報告して editor が意図せず read-only に
+  なったり、プレゼンスに短命な幽霊 viewer が表示されたりし得ます。
+  標準手順:
   1. 全レプリカが旧エンドポイントから drain 済み (既存 WebSocket
      接続が閉じ、新規接続が旧エンドポイントを向いていない) である
      ことを確認する。
-  2. ロールバック先を**新規に立てた、または `crowi:` prefix の
-     キーをクリアした**空の Redis インスタンスにする。
+  2. ロールバック先を**新規に立てた、または `crowi:<instance-slug>:`
+     prefix のキーをクリアした**空の Redis インスタンスにする。
   3. 切替後、編集者上限カウンタの `peek()` とプレゼンスの viewer
      リストが実際の接続数と一致することを確認してから、運用
      トラフィックを戻す。
@@ -190,15 +191,22 @@ pub/sub・編集者上限カウンタ・プレゼンス・通知 invalidation・
 な失敗ではなく、共同編集の保存などが permission エラーで失敗し
 始めます:
 
+以下のキー/チャンネルはすべて、インスタンス単位の `<instance-slug>`
+セグメント (`crowi:<instance-slug>:<suffix>` — 詳細は
+[`REDIS_KEY_PREFIX`](./realtime-collab#関連環境変数) 参照) でさらに
+スコープされます。共有 Redis に対する ACL 権限付与は、ここに示す
+`<instance-slug>` というプレースホルダそのものではなく、実際に解決
+された slug を対象にしてください。
+
 | 消費経路 | コマンド | キー / チャンネル |
 | --- | --- | --- |
-| 共同編集 pub/sub | `SUBSCRIBE`, `UNSUBSCRIBE`, `PUBLISH` | `crowi:collab:<documentName>` — ドキュメントごとの単一チャンネル。Y.Doc の同期と awareness の更新はいずれもこの1チャンネル上に多重化される (`:awareness:` / `:y-update:` のような個別サブキーはない) |
-| 編集者上限カウンタ | `SADD`, `SCARD`, `SREM`, `EXPIRE` | `crowi:collab:editors:<pageId>` |
-| プレゼンス | `HSET`, `HGET`, `HGETALL`, `HDEL`, `EXPIRE`, `PUBLISH`, `SUBSCRIBE` | `crowi:presence:viewers:<pageId>`, `crowi:presence:editing:<pageId>`, `crowi:presence:feed` |
-| 通知 invalidation | `PUBLISH`, `SUBSCRIBE`, `UNSUBSCRIBE` | `crowi:notifications:user:<userId>` |
-| 設定同期 (Config) | `PUBLISH`, `SUBSCRIBE` | 固定チャンネル `config` |
-| rate limiting | `INCR`, `PEXPIRE` | `crowi:ratelimit:<name>:<userId>:<window>` |
-| LRU (最近見たページ) | `ZREMRANGEBYRANK`, `ZADD`, `ZRANGE`, `MULTI`, `EXEC` (書き込み 2 コマンドは `MULTI`/`EXEC` トランザクション内で発行 — この 2 つを欠く ACL では LRU の書き込みが失敗する) | 運用者が選ぶ namespace キー (固定の `crowi:` prefix なし) |
+| 共同編集 pub/sub | `SUBSCRIBE`, `UNSUBSCRIBE`, `PUBLISH` | `crowi:<instance-slug>:collab:<documentName>` — ドキュメントごとの単一チャンネル。Y.Doc の同期と awareness の更新はいずれもこの1チャンネル上に多重化される (`:awareness:` / `:y-update:` のような個別サブキーはない) |
+| 編集者上限カウンタ | `SADD`, `SCARD`, `SREM`, `EXPIRE` | `crowi:<instance-slug>:collab:editors:<pageId>` |
+| プレゼンス | `HSET`, `HGET`, `HGETALL`, `HDEL`, `EXPIRE`, `PUBLISH`, `SUBSCRIBE` | `crowi:<instance-slug>:presence:viewers:<pageId>`, `crowi:<instance-slug>:presence:editing:<pageId>`, `crowi:<instance-slug>:presence:feed` |
+| 通知 invalidation | `PUBLISH`, `SUBSCRIBE`, `UNSUBSCRIBE` | `crowi:<instance-slug>:notifications:user:<userId>` |
+| 設定同期 (Config) | `PUBLISH`, `SUBSCRIBE` | `crowi:<instance-slug>:config` |
+| rate limiting | `INCR`, `PEXPIRE` | `crowi:<instance-slug>:ratelimit:<name>:<userId>:<window>` |
+| LRU (最近見たページ) | `ZREMRANGEBYRANK`, `ZADD`, `ZRANGE`, `MULTI`, `EXEC` (書き込み 2 コマンドは `MULTI`/`EXEC` トランザクション内で発行 — この 2 つを欠く ACL では LRU の書き込みが失敗する) | `crowi:<instance-slug>:lru:<namespace>` (`<namespace>` は引き続き運用者/呼び出し元が選ぶ値、例: user id) |
 | boot 接続 | 接続確立コマンドのみ | なし |
 
 見落としやすい、もう2種類のコマンド発行元があります (いずれも
@@ -223,7 +231,7 @@ Crowi 自身のコードが直接発行するものではありません):
   スクリプト**内部**から呼ばれるコマンドにもユーザー権限を要求する
   ため、ACL には `EVAL`/`EVALSHA` に加えて、スクリプト内部の
   `SELECT` (`pcall` 保護)・`EXISTS`・`SET`・`GET`・`DEL` (`pcall`
-  保護) を対象キー `crowi:collab:<documentName>:lock` に対して
+  保護) を対象キー `crowi:<instance-slug>:collab:<documentName>:lock` に対して
   許可する必要があります。**この行列を欠いた ACL は、Redis が
   有効な本番環境で共同編集の保存のたびに permission エラーを発生
   させます** — 保存は Crowi 自身の Mongo compare-and-set チェック
@@ -258,16 +266,33 @@ limiter が必要とする ACL の権限が漏れていると、Redis 障害時�
 まったく同じ「サイレントに検知されない無効化」が起きます — ACL を
 絞る際は注意してください。
 
-**key/channel の分離**: 8経路はそれぞれ独立した prefix を使います:
-`crowi:collab` (共同編集 pub/sub、ドキュメント単位のサブキー)、
-`crowi:collab:editors:<pageId>` (編集者上限)、`crowi:presence:*`
-(プレゼンスのハッシュ/チャンネル)、`crowi:notifications:user:<userId>`
-(通知)、固定チャンネル `config` (設定同期 — `crowi:` prefix では
-ない)、`crowi:ratelimit:*` (rate limiting)。LRU だけは固定 prefix
-のない、運用者が選ぶ namespace キーを使います。**worktree や
-クラスタの分離に Redis URL のデータベース番号セグメントを頼らない
-でください** — ここで説明したどの仕組みもデータベース番号には
-依存しておらず、上記の prefix の代わりにはなりません。
+**key/channel の分離**: boot 接続そのものを除く7つの Redis 消費経路は、
+いずれもインスタンス単位の keyspace `crowi:<instance-slug>:...`
+(詳細は [`REDIS_KEY_PREFIX`](./realtime-collab#関連環境変数) 参照 —
+slug のデフォルトは `CLIENT_URL` のホスト名、または明示 override) で
+さらにスコープされており、これにより複数の Crowi インスタンスが
+cross-talk なしに1つの Redis を安全に共有できます:
+`crowi:<instance-slug>:collab` (共同編集 pub/sub、ドキュメント単位の
+サブキー)、`crowi:<instance-slug>:collab:editors:<pageId>` (編集者
+上限)、`crowi:<instance-slug>:presence:*` (プレゼンスのハッシュ/
+チャンネル)、`crowi:<instance-slug>:notifications:user:<userId>`
+(通知)、`crowi:<instance-slug>:config` (設定同期 — もはや全インスタ
+ンス共通の固定チャンネルではない)、`crowi:<instance-slug>:ratelimit:*`
+(rate limiting)、`crowi:<instance-slug>:lru:<namespace>` (最近見た
+ページ。`<namespace>` は引き続き運用者/呼び出し元が選ぶ値)。同一
+Crowi インスタンスの2レプリカは同じ `<instance-slug>` に解決されます
+(同じ `CLIENT_URL`、または同じ明示 `REDIS_KEY_PREFIX` override) —
+これが意図したレプリカ間 fan-out を維持する条件です。この Redis を
+共有する**別の**インスタンスは異なる実効 prefix に解決される必要が
+あります (異なる `CLIENT_URL` ホスト名によるものでも、明示的な
+`REDIS_KEY_PREFIX` override によるものでも構いません)。そうしないと
+これらのキー/チャンネルすべてで cross-talk します。**Redis URL の
+データベース番号セグメント (例: `/1`) は
+尊重されます** (node-redis・ioredis のいずれもその DB を選択します)
+**が、これは補助的な、純粋に数値だけの分離軸であり、上記 prefix の
+代わりにはなりません** — Redis の pub/sub は DB にスコープされない
+ため、DB 番号だけが異なる2インスタンスは共有するすべてのチャンネル
+で cross-talk したままです。
 
 **代替エンジンの開示**: 前述の「Valkey」参照 — テスト済みサポート・
 best-effort なプロトコル互換・非サポート構成は3つの異なる階層です。
