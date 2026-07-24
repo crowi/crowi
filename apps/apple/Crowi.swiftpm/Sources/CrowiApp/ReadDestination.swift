@@ -13,4 +13,9 @@ enum ReadDestination: Hashable {
     /// `nil` username = the signed-in user's own profile (`GET /me`).
     case profile(username: String?)
     case recentlyViewed
+    /// `feature-ios-phase2-write` — the create-page form. `originPath` is
+    /// the location the user was at when they tapped "New Page" (the home's
+    /// `/`, or the page tree's current directory path), used to seed the
+    /// path input with a relative starting point.
+    case createPage(originPath: String)
 }

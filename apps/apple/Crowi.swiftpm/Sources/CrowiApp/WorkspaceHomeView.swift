@@ -104,6 +104,8 @@ struct WorkspaceHomeView: View {
             ProfileView(session: session, username: username)
         case .recentlyViewed:
             RecentlyViewedView(session: session, onSelectDestination: onSelect)
+        case .createPage(let originPath):
+            PageCreateView(session: session, originPath: originPath, onSelectDestination: onSelect)
         }
     }
 
@@ -133,6 +135,14 @@ struct WorkspaceHomeView: View {
             // into CrowiKit's test target.
             SearchCapabilityToolbarButton(capabilities: session.capabilities) {
                 onSelect(.search)
+            }
+            // feature-ios-phase2-write — create from the home starts at the
+            // root; `PageTreeView` carries its own New Page action seeded
+            // with the directory being browsed.
+            Button {
+                onSelect(.createPage(originPath: "/"))
+            } label: {
+                Label("New Page", systemImage: "square.and.pencil")
             }
             Button {
                 onSelect(.recentlyViewed)

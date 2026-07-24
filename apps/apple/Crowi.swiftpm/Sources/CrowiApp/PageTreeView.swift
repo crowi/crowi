@@ -91,6 +91,15 @@ struct PageTreeView: View {
         }
         .navigationTitle(path == "/" ? "Pages" : path)
         .toolbar {
+            // feature-ios-phase2-write — the tree's current directory is the
+            // natural relative origin for a new page's path input.
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    onSelect(.createPage(originPath: path))
+                } label: {
+                    Label("New Page", systemImage: "square.and.pencil")
+                }
+            }
             if hasPortal {
                 ToolbarItem(placement: .primaryAction) {
                     Button {
