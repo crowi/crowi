@@ -56,6 +56,13 @@ public struct PageLenient: Sendable, Equatable {
     /// to render "liked by me" state; there is no dedicated "did I like this"
     /// endpoint.
     public let liker: [String]?
+    /// `lastUpdateUser` (`PageSchema.lastUpdateUser`, a `string | PageUser`
+    /// union like `revision`) flattened to the two fields the row-metadata
+    /// label actually renders (the `CommentLenient` creator pattern —
+    /// feature-ios-design-language (3)). A bare id string, `null`, or a
+    /// missing field degrades both to `nil`.
+    public let lastUpdateUserName: String?
+    public let lastUpdateUserImage: String?
 
     /// `true` when this row's `revision` is either absent or a bare id with
     /// no `body` — the §8 signal that a detail `GET` is required before the
@@ -64,7 +71,8 @@ public struct PageLenient: Sendable, Equatable {
 
     /// Explicit `public` memberwise init — same reason as
     /// `PageRevisionLenient.init` above (App-target reconstruction from a
-    /// `CachedPage` row).
+    /// `CachedPage` row). The updater fields default to `nil` since the read
+    /// cache doesn't persist them (the recency home is network-only).
     public init(
         id: String,
         path: String,
@@ -74,7 +82,9 @@ public struct PageLenient: Sendable, Equatable {
         likerCount: Int?,
         seenUsersCount: Int?,
         updatedAt: String?,
-        liker: [String]?
+        liker: [String]?,
+        lastUpdateUserName: String? = nil,
+        lastUpdateUserImage: String? = nil
     ) {
         self.id = id
         self.path = path
@@ -85,10 +95,13 @@ public struct PageLenient: Sendable, Equatable {
         self.seenUsersCount = seenUsersCount
         self.updatedAt = updatedAt
         self.liker = liker
+        self.lastUpdateUserName = lastUpdateUserName
+        self.lastUpdateUserImage = lastUpdateUserImage
     }
 
     static func decode(_ object: [String: Any]) -> PageLenient? {
         guard let id = object["_id"] as? String, let path = object["path"] as? String else { return nil }
+        let lastUpdateUser = object["lastUpdateUser"] as? [String: Any]
         return PageLenient(
             id: id,
             path: path,
@@ -98,7 +111,9 @@ public struct PageLenient: Sendable, Equatable {
             likerCount: object["likerCount"] as? Int,
             seenUsersCount: object["seenUsersCount"] as? Int,
             updatedAt: object["updatedAt"] as? String,
-            liker: object["liker"] as? [String]
+            liker: object["liker"] as? [String],
+            lastUpdateUserName: lastUpdateUser?["name"] as? String,
+            lastUpdateUserImage: lastUpdateUser?["image"] as? String
         )
     }
 }
@@ -148,8 +163,17 @@ public struct ListPagesResponseLenient: Sendable, Equatable {
         return ListPagesResponseLenient(pages: rawPages.compactMap(PageLenient.decode), portalPage: portalPage)
     }
 
-    public static func fetch(path: String, using client: AuthenticatedAPIClient) async throws -> ListPagesResponseLenient {
-        let (data, status) = try await client.get("pages/list", query: [URLQueryItem(name: "path", value: path)])
+    /// - Parameter limit: forwarded as the `limit` query when non-nil (the
+    ///   server default is 50, `ListPagesRequestSchema` — the recency home
+    ///   asks for fewer). Sort deliberately stays the server default,
+    ///   `updatedAt` desc — the exact "recently updated" order
+    ///   (feature-ios-design-language (3)).
+    public static func fetch(path: String, limit: Int? = nil, using client: AuthenticatedAPIClient) async throws -> ListPagesResponseLenient {
+        var query = [URLQueryItem(name: "path", value: path)]
+        if let limit {
+            query.append(URLQueryItem(name: "limit", value: String(limit)))
+        }
+        let (data, status) = try await client.get("pages/list", query: query)
         guard status.isSuccessfulHTTPStatus else { throw PageLenientDecodeError.httpError(status: status) }
         return try decode(data)
     }
@@ -163,6 +187,18 @@ public struct PageChildSegmentLenient: Sendable, Equatable, Codable {
     public let isPage: Bool
     public let hasPortal: Bool
     public let count: Int
+    /// `PageChildSegmentSchema.lastUpdatedAt` — feature-child-segments-metadata's
+    /// additive contract extension, consumed by feature-ios-design-language (1).
+    /// Optional so BOTH a pre-extension server's response AND an old
+    /// `CachedPageChildren` JSON blob (persisted before these fields existed)
+    /// keep decoding unchanged — synthesized `Codable` uses `decodeIfPresent`
+    /// for optionals, so no `WorkspaceReadCacheSchema.schemaVersion` bump.
+    public let lastUpdatedAt: String?
+    /// `updater.name` / `updater.image` flattened (the `CommentLenient`
+    /// creator pattern) — `nil` when the server can't resolve the updater
+    /// (deleted user, legacy rows) or predates the extension.
+    public let updaterName: String?
+    public let updaterImage: String?
 }
 
 public struct ListPageChildrenResponseLenient: Sendable, Equatable {
@@ -175,12 +211,16 @@ public struct ListPageChildrenResponseLenient: Sendable, Equatable {
         let rawChildren = object["children"] as? [[String: Any]] ?? []
         let children = rawChildren.compactMap { dict -> PageChildSegmentLenient? in
             guard let segment = dict["segment"] as? String, let path = dict["path"] as? String else { return nil }
+            let updater = dict["updater"] as? [String: Any]
             return PageChildSegmentLenient(
                 segment: segment,
                 path: path,
                 isPage: dict["isPage"] as? Bool ?? false,
                 hasPortal: dict["hasPortal"] as? Bool ?? false,
-                count: dict["count"] as? Int ?? 0
+                count: dict["count"] as? Int ?? 0,
+                lastUpdatedAt: dict["lastUpdatedAt"] as? String,
+                updaterName: updater?["name"] as? String,
+                updaterImage: updater?["image"] as? String
             )
         }
         return ListPageChildrenResponseLenient(children: children)
