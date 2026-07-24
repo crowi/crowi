@@ -94,4 +94,23 @@ extension CachedPage {
         let descriptor = FetchDescriptor<CachedPage>(predicate: #Predicate { $0.path == path })
         return try? context.fetch(descriptor).first
     }
+
+    /// The inverse of `upsert(from:)`, for the cold-open fast-path paint:
+    /// rebuilds the lenient page value a reader screen renders from this
+    /// cached row. Fields the cache doesn't persist (`liker`, the updater
+    /// pair) come back `nil` — the fresh network fetch that always follows
+    /// replaces the whole value anyway.
+    public var asPageLenient: PageLenient {
+        PageLenient(
+            id: pageId,
+            path: path,
+            revision: body.map { PageRevisionLenient(id: revisionId, body: $0, createdAt: nil) },
+            status: status,
+            commentCount: commentCount,
+            likerCount: likerCount,
+            seenUsersCount: seenUsersCount,
+            updatedAt: updatedAt,
+            liker: nil
+        )
+    }
 }

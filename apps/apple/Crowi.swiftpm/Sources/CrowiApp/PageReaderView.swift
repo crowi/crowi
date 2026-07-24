@@ -137,17 +137,7 @@ struct PageReaderView: View {
         isLoading = true
         defer { isLoading = false }
         if let cached = CachedPage.cached(path: path, in: session.modelContext), page == nil {
-            page = PageLenient(
-                id: cached.pageId,
-                path: cached.path,
-                revision: cached.body.map { PageRevisionLenient(id: cached.revisionId, body: $0, createdAt: nil) },
-                status: cached.status,
-                commentCount: cached.commentCount,
-                likerCount: cached.likerCount,
-                seenUsersCount: cached.seenUsersCount,
-                updatedAt: cached.updatedAt,
-                liker: nil
-            )
+            page = cached.asPageLenient
         }
         do {
             let response = try await GetPageResponseLenient.fetch(path: path, using: session.apiClient)
