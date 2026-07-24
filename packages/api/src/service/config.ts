@@ -2,6 +2,7 @@ import Debug from 'debug';
 import { createClient } from 'redis';
 import Crowi from 'src/crowi';
 import { formatPluginNamespace, parsePluginConfigKey } from 'src/plugin/plugin-namespace';
+import { resolveRedisKeyspace } from 'src/util/redis-keyspace';
 import { v4 } from 'uuid';
 
 const debug = Debug('crowi:service:config');
@@ -40,6 +41,9 @@ export default class ConfigService {
       id: v4(),
       publisher: null,
       subscriber: null,
+      // Placeholder — never actually published/subscribed on before
+      // `setupPubSub()` re-resolves this to the instance-scoped
+      // `crowi:<slug>:config` channel (feature-redis-key-prefix §1/§2).
       channel: 'config',
     };
 
@@ -201,6 +205,14 @@ export default class ConfigService {
     // unreachable), connecting two more clients here would hit the same
     // unbounded retry loop and hang boot.
     if (redisOpts && redis) {
+      // Instance-scoped (feature-redis-key-prefix §1/§2) — resolved once,
+      // here, replacing the constructor's placeholder `'config'` literal.
+      // `resolveRedisKeyspace` (not the `-IfEnabled` variant) is
+      // appropriate: this branch only runs once Redis is actually in
+      // play, at which point a keyspace is always resolvable (env
+      // validation guarantees it at boot), so there is no legitimate
+      // "Redis enabled but no keyspace" case to degrade for here.
+      this.pubSub.channel = resolveRedisKeyspace(this.crowi).key('config');
       try {
         this.pubSub.publisher = createClient(redisOpts);
         this.pubSub.subscriber = createClient(redisOpts);
