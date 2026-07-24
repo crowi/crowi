@@ -96,11 +96,13 @@ class FakeRedis implements NotificationsRedisClient {
  * Build a minimal crowi-shaped object. `redis` is read directly by the
  * attach; `getBaseUrl` / `getEnv` back `resolveRedisKeyspace()`
  * (feature-redis-key-prefix §1/§2 — the channel is now instance-scoped
- * whenever `redis` is non-null), pinned to a fixed `CLIENT_URL` so every
- * test in this file resolves the same deterministic slug.
+ * whenever `redis` is non-null). Defaults `clientUrl` to a fixed value so
+ * every pre-existing call site in this file resolves the same
+ * deterministic slug; the distinct-instance-keyspace describe block below
+ * passes a distinct `clientUrl` per instance instead.
  */
-const fakeCrowi = (redis: NotificationsRedisClient | null): Crowi =>
-  ({ redis, getBaseUrl: () => 'https://notifications-test.example.com', getEnv: () => ({}) as NodeJS.ProcessEnv }) as unknown as Crowi;
+const fakeCrowi = (redis: NotificationsRedisClient | null, clientUrl = 'https://notifications-test.example.com'): Crowi =>
+  ({ redis, getBaseUrl: () => clientUrl, getEnv: () => ({}) as NodeJS.ProcessEnv }) as unknown as Crowi;
 
 /**
  * `channelForUser`, pinned to this file's fixed `fakeCrowi` fixture's
@@ -403,6 +405,64 @@ describe('attachNotificationsServer — Redis-backed', () => {
       ws.close();
     });
   });
+});
+
+describe('attachNotificationsServer — distinct instance keyspace (feature-redis-key-prefix §1/§2)', () => {
+  it(
+    'two Crowi instances with distinct CLIENT_URLs sharing the same Redis do not cross-talk on the SAME userId ' +
+      '(channelForUser is keyed by userId, not instance — the instance keyspace is what actually isolates them)',
+    async () => {
+      const shared = new FakeRedis();
+      const userId = 'user-cross-instance';
+
+      // Unlike this file's other tests (which rely on `fakeCrowi`'s
+      // default, fixed `CLIENT_URL`), the whole point here is a distinct
+      // `CLIENT_URL` per instance.
+      const crowiA = fakeCrowi(shared, 'https://notifications-iso-a.example.com');
+      const crowiB = fakeCrowi(shared, 'https://notifications-iso-b.example.com');
+      const channelA = channelForUserImpl(userId, resolveRedisKeyspace(crowiA));
+      const channelB = channelForUserImpl(userId, resolveRedisKeyspace(crowiB));
+      // Sanity check before proving no cross-talk: same userId, distinct channel names.
+      expect(channelA).not.toBe(channelB);
+
+      const httpServerB = http.createServer();
+      const attachmentB = await attachNotificationsServer(httpServerB, crowiB);
+      await new Promise<void>((resolve) => httpServerB.listen(0, '127.0.0.1', resolve));
+      const portB = (httpServerB.address() as AddressInfo).port;
+
+      const token = validTokenFor(userId);
+      const messages: string[] = [];
+      const ws = new WebSocket(`ws://127.0.0.1:${portB}/notifications/${userId}?token=${token}`);
+      ws.on('message', (data: Buffer | string) => {
+        messages.push(typeof data === 'string' ? data : data.toString('utf8'));
+      });
+
+      try {
+        await new Promise<void>((resolve) => ws.on('open', () => resolve()));
+        await waitUntil(() => shared.events.some((e) => e.kind === 'subscribe' && e.channel === channelB));
+
+        // Simulate instance A's model layer publishing on ITS OWN
+        // instance-scoped channel for the SAME userId — B's socket must
+        // remain quiet even though the userId matches exactly.
+        await shared.publish(channelA, JSON.stringify({ type: 'changed' }));
+        // Then publish a sentinel on B's OWN channel, which is genuinely
+        // delivered. Same "sentinel arrives after any erroneous cross-talk
+        // frame would have" ordering argument as the "does NOT forward a
+        // publish on another user channel" test above — no fixed sleep
+        // needed.
+        await shared.publish(channelB, JSON.stringify({ type: 'changed' }));
+        await waitUntil(() => messages.length >= 1);
+        expect(messages).toHaveLength(1);
+        expect(JSON.parse(messages[0])).toEqual({ type: 'changed' });
+      } finally {
+        await new Promise<void>((resolve) => {
+          ws.on('close', () => resolve());
+          ws.close();
+        });
+        await stopNotificationsHttpServer(httpServerB, attachmentB);
+      }
+    },
+  );
 });
 
 describe('attachNotificationsServer — drain shutdown', () => {

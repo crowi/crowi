@@ -49,14 +49,19 @@ const SMOKE_REDIS_KEY_PREFIX = 'config-smoke';
  * channel through these). Same narrow-fixture pattern `crowi/index.test.ts`
  * already uses for `ConfigService`.
  */
-function fakeCrowi(loadAllConfig: jest.Mock, setupMailer: jest.Mock, updateByParams: jest.Mock = jest.fn(async () => undefined)): unknown {
+function fakeCrowi(
+  loadAllConfig: jest.Mock,
+  setupMailer: jest.Mock,
+  updateByParams: jest.Mock = jest.fn(async () => undefined),
+  instanceSlug: string = SMOKE_REDIS_KEY_PREFIX,
+): unknown {
   return {
     redisOpts: buildRedisOpts(REDIS_SMOKE_URLS.config, true),
     redis: {}, // truthy — setupPubSub only null-checks this field
     model: () => ({ loadAllConfig, updateByParams }),
     setupMailer,
     getBaseUrl: () => null,
-    getEnv: () => ({ REDIS_KEY_PREFIX: SMOKE_REDIS_KEY_PREFIX }) as unknown as NodeJS.ProcessEnv,
+    getEnv: () => ({ REDIS_KEY_PREFIX: instanceSlug }) as unknown as NodeJS.ProcessEnv,
   };
 }
 
@@ -64,6 +69,15 @@ describeMaybe('Config pub/sub smoke (real Redis 8, dedicated crowi-test-redis in
   beforeAll(() => {
     markRedisSmokeRan('config');
   });
+
+  /**
+   * Shared teardown for the `serviceA` / `serviceB` pairs below —
+   * `ConfigService` has no teardown API of its own (per the spec), so each
+   * test disconnects the publisher/subscriber clients it opened directly.
+   */
+  const disconnectPubSub = async (...services: ConfigService[]): Promise<void> => {
+    await Promise.all(services.flatMap((s) => [s.pubSub.publisher?.disconnect(), s.pubSub.subscriber?.disconnect()]).filter(Boolean));
+  };
 
   it("instance A's notifyUpdated() drives instance B's subscriber to run load() + postUpdate() (setupMailer + registered listener)", async () => {
     const loadAllConfigA = jest.fn(async () => ({}));
@@ -102,17 +116,49 @@ describeMaybe('Config pub/sub smoke (real Redis 8, dedicated crowi-test-redis in
       // two-instance relay, not a same-process echo.
       expect(setupMailerA).toHaveBeenCalled();
     } finally {
-      // ConfigService has no teardown API of its own (per the spec) — the
-      // test disconnects the publisher/subscriber clients it opened
-      // directly.
-      await Promise.all(
-        [
-          serviceA.pubSub.publisher?.disconnect(),
-          serviceA.pubSub.subscriber?.disconnect(),
-          serviceB.pubSub.publisher?.disconnect(),
-          serviceB.pubSub.subscriber?.disconnect(),
-        ].filter(Boolean),
-      );
+      await disconnectPubSub(serviceA, serviceB);
+    }
+  }, 20000);
+
+  /**
+   * feature-redis-key-prefix §1/§2 Phase 2 — the negative isolation half of
+   * the AC5 test above: two instances that do NOT share a `REDIS_KEY_PREFIX`
+   * must not relay Config updates to each other on the same Redis, even
+   * though the pre-feature channel name (`'config'`) was global and would
+   * have. Same shape as `presence.test.ts`'s "two instances with distinct
+   * keyspaces sharing the same Redis do not cross-talk on the feed channel"
+   * / `rate-limit.test.ts`'s "two distinct instance slugs ... do not share a
+   * rate-limit budget".
+   */
+  it('two instances with DIFFERENT REDIS_KEY_PREFIX values sharing the same Redis do not cross-talk on the Config sync channel', async () => {
+    const loadAllConfigA = jest.fn(async () => ({}));
+    const setupMailerA = jest.fn(async () => undefined);
+    const loadAllConfigB = jest.fn(async () => ({}));
+    const setupMailerB = jest.fn(async () => undefined);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const serviceA = new ConfigService(fakeCrowi(loadAllConfigA, setupMailerA, undefined, 'config-smoke-iso-a') as any);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const serviceB = new ConfigService(fakeCrowi(loadAllConfigB, setupMailerB, undefined, 'config-smoke-iso-b') as any);
+
+    try {
+      await Promise.all([serviceA.setupPubSub(), serviceB.setupPubSub()]);
+      // Sanity check before proving no cross-talk: each instance resolved
+      // its OWN instance-scoped channel, not a shared one.
+      expect(serviceA.pubSub.channel).toBe('crowi:config-smoke-iso-a:config');
+      expect(serviceB.pubSub.channel).toBe('crowi:config-smoke-iso-b:config');
+      expect(serviceA.pubSub.channel).not.toBe(serviceB.pubSub.channel);
+
+      await serviceA.notifyUpdated(['app']);
+
+      // Give any (incorrect) publish a moment to arrive at B before
+      // asserting it never did — same idiom as the "rejected Mongo write"
+      // test below.
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      expect(loadAllConfigB).not.toHaveBeenCalled();
+      expect(setupMailerB).not.toHaveBeenCalled();
+    } finally {
+      await disconnectPubSub(serviceA, serviceB);
     }
   }, 20000);
 
@@ -151,14 +197,7 @@ describeMaybe('Config pub/sub smoke (real Redis 8, dedicated crowi-test-redis in
       await waitUntil(() => loadAllConfigB.mock.calls.length >= 1);
       expect(serviceB.config.crowi?.['security:linkCardEnabled']).toBe(false);
     } finally {
-      await Promise.all(
-        [
-          serviceA.pubSub.publisher?.disconnect(),
-          serviceA.pubSub.subscriber?.disconnect(),
-          serviceB.pubSub.publisher?.disconnect(),
-          serviceB.pubSub.subscriber?.disconnect(),
-        ].filter(Boolean),
-      );
+      await disconnectPubSub(serviceA, serviceB);
     }
   }, 20000);
 
@@ -187,14 +226,7 @@ describeMaybe('Config pub/sub smoke (real Redis 8, dedicated crowi-test-redis in
       await new Promise((resolve) => setTimeout(resolve, 250));
       expect(loadAllConfigB).not.toHaveBeenCalled();
     } finally {
-      await Promise.all(
-        [
-          serviceA.pubSub.publisher?.disconnect(),
-          serviceA.pubSub.subscriber?.disconnect(),
-          serviceB.pubSub.publisher?.disconnect(),
-          serviceB.pubSub.subscriber?.disconnect(),
-        ].filter(Boolean),
-      );
+      await disconnectPubSub(serviceA, serviceB);
     }
   }, 20000);
 });
