@@ -6,22 +6,25 @@ signs into and reads/edits multiple independent Crowi workspaces over
 `/api/v2`, the same HTTP surface `@crowi/cli` (RFC-0012) and MCP (RFC-0011)
 use.
 
-> Status: **Phase 1 read surface (`feature-ios-phase1-read`)**.
+> Status: **Phase 2 bounded write (`feature-ios-phase2-write`)**.
 > Phase 0 (`.feature-state/specs/feature-ios-phase0-gates.md`) scaffolded the
 > repo layout and cleared the 3 GO/NO-GO gates (generator, redirect
 > transport, renderer image path). Phase 1 workspace/auth
 > (`feature-ios-phase1-workspace-auth`) built the multi-workspace shell:
 > add-workspace (HTTPS gate → lenient `/app/info` probe → minimum-version gate
 > → OAuth sign-in), per-workspace Keychain + SwiftData persistence, a
-> single-flight refresh actor, and the Slack-style workspace switcher UI. This
-> phase (`feature-ios-phase1-read`) fills in the actual read surface on top:
+> single-flight refresh actor, and the Slack-style workspace switcher UI.
+> Phase 1 read (`feature-ios-phase1-read`) filled in the read surface:
 > native Markdown rendering (incl. `[[wikilinks]]`/`@mentions` in-app
 > navigation), the §6.1 authenticated image loader wrapped in a per-workspace
 > disk cache, the §6.2 scheme allowlist, the §6.3 confidential banner, a
 > refreshed `/app/info` capability/confidentiality cache, per-workspace
 > SwiftData read caches, and the adaptive page-tree/reader/search/history/
-> profile UI. Bounded write (create/quick-edit/comment/engagement) is
-> `feature-ios-phase2-write`, next.
+> profile UI. This phase adds the bounded WRITE surface on top: page create
+> (the 4-branch `400` UX), quick-edit with a client-enforced `revision_id`
+> optimistic lock + explicit conflict resolution, comment posting, and the
+> like/seen/watch/bookmark engagement toggles. Notifications + extensions
+> are `feature-ios-phase3-notifications-extensions`, next.
 
 ## Why this directory has no `package.json`
 
@@ -100,10 +103,22 @@ apps/apple/
 │   │   │                       #   (Phase 0/1) + AppInfoCache (the §5.2 refreshed
 │   │   │                       #   cache) + AuthenticatedAPIClient (the §5.1
 │   │   │                       #   auth-injected raw-fetch primitive every
-│   │   │                       #   *Lenient decoder is built on) + one hand-
-│   │   │                       #   written lenient decoder per read screen
-│   │   │                       #   (Page/Search/Comments/BookmarkLike/
-│   │   │                       #   Backlinks/Revisions/Profile)
+│   │   │                       #   *Lenient decoder is built on; phase 2 adds
+│   │   │                       #   JSON-body post/put/delete on the same
+│   │   │                       #   middleware path) + one hand-written lenient
+│   │   │                       #   decoder per read screen (Page/Search/
+│   │   │                       #   Comments/BookmarkLike/Backlinks/Revisions/
+│   │   │                       #   Profile) + APIErrorEnvelopeLenient (the
+│   │   │                       #   shared write-error envelope decode)
+│   │   ├── Editing/             # feature-ios-phase2-write: PageCreateFlow
+│   │   │                       #   (the 4-branch create UX state machine),
+│   │   │                       #   PageEditSession (the client-enforced
+│   │   │                       #   revision_id optimistic lock — the app's
+│   │   │                       #   SOLE PUT /pages construction path),
+│   │   │                       #   PageGrantOption (structurally-valid grant
+│   │   │                       #   picker values), EngagementActions +
+│   │   │                       #   PageEngagementModel (single-shot toggles,
+│   │   │                       #   optimistic update + revert on failure)
 │   │   ├── Images/              # gate C: WorkspaceImageLoader (the §6.1
 │   │   │                       #   same-origin-Bearer + redirect-strip loader) +
 │   │   │                       #   WorkspaceImageDiskCache (the §7.2 per-workspace
@@ -492,3 +507,81 @@ Client-side only; the server needed zero changes.
   (resolver + confidential notice) and owns the presentation state;
   `PageReaderView` opts in, the read-only revision-history sheet stays
   viewer-less by default.
+
+## What this phase (`feature-ios-phase2-write`) adds
+
+The **bounded write** surface (RFC-0016 §8) — create, quick-edit, comment,
+engagement toggles. Entirely client-side again: every endpoint already
+existed, and the Phase 1 OAuth scope set already requested `pages:write` /
+`comments:write` / `bookmarks:write`, so existing signed-in workspaces need
+no re-consent. Rename / delete / grant changes stay out of scope (not part
+of RFC-0016's bounded write), as do collab/presence and any offline edit
+queue (§7.4 — a connectivity failure fails fast with a manual retry, keeping
+the in-memory editor/form state).
+
+- **`API/AuthenticatedAPIClient.swift`** — gains `post`/`put`/`delete` with
+  a JSON body on the SAME `AuthenticatingMiddleware` + `ClientTransport`
+  composition `get` uses (never a second client or a bare-`URLSession` write
+  path), so proactive/reactive single-flight refresh covers writes with no
+  extra wiring. The body is a fully-buffered, replayable `HTTPBody` because
+  the middleware re-sends it once after a reactive `401` refresh. Same
+  non-throwing-on-non-2xx contract as `get`: the write flows branch on the
+  status plus **`API/APIErrorEnvelopeLenient.swift`** (new), the lenient
+  decode of the server's shared `{ error: { code, message } }` envelope —
+  status first, code second, unknown codes degrade to a generic failure.
+- **`Editing/PageCreateFlow.swift`** — `POST /pages` typed into the 4
+  distinct `400` UX states: `PAGE_EXISTS` (grant-collapse-aware — an
+  immediate follow-up open probes whether the existing page is really
+  openable, and a 404/denied probe degrades to "that path is taken" without
+  ever promising openability), `PAGE_TWIN_EXISTS` (the twin path is derived
+  client-side by toggling the attempted path's trailing slash — the response
+  only carries it inside prose), `NON_EXISTENT_USER_PAGE` (its own
+  explanation), `INVALID_GRANT` (structurally prevented by
+  **`Editing/PageGrantOption.swift`**'s closed enum — public/restricted/
+  owner-only; SPECIFIED is deliberately absent since the create request
+  carries no `grantedUsers` — with a one-shot default-grant retry as the
+  defensive fallback), plus the residual generic failure.
+- **`Editing/PageEditSession.swift`** — the CLIENT-enforced optimistic lock
+  (the server's `revision_id` is optional and omission silently overwrites,
+  so the discipline lives here): constructible ONLY from a detail `GET`
+  whose revision is the full object variant with `body`; its `save()` is the
+  app's sole `PUT /pages` construction path and the private body struct's
+  `revision_id` is non-optional — a `revision_id`-less PUT is
+  unconstructible by type (§10 CI-fixed invariant). `grant` is never sent
+  (omission preserves the current grant). A `409` (`PAGE_REVISION_ERROR`)
+  re-fetches the current revision and forces an explicit choice: **discard
+  (the default)** or re-apply — swap the lock base to the re-fetched
+  revision, keep the edited text, save again explicitly. Never a silent
+  overwrite, never an automatic merge (the `crowi edit` CLI stance). A
+  TRANSPORT failure during that re-fetch is not absorbed into a
+  discard-only conflict: `save` throws (§7.4 fail-fast) and a manual retry
+  replays the whole attempt; only an ANSWERED-but-unusable re-fetch (HTTP
+  denial / undecodable body) degrades to `latest: nil`.
+- **`Editing/EngagementActions.swift`** — the single-shot writes
+  (like/unlike `POST` with the echoed `{ page }`, idempotent seen, watch
+  `PUT { watching }`, bookmark `POST`/`DELETE`, comment `POST` with
+  `{ page_id, revision_id, comment }` and NEVER an anchor field — RFC-0018
+  is web-only) plus `PageEngagementModel`, the optimistic-toggle + revert-
+  on-failure state machine the reader's engagement bar drives (kept in
+  CrowiKit so the revert discipline is testable from `CrowiKitTests`).
+  Every toggle carries a per-toggle in-flight guard (exposed as
+  `isToggling*`, which the engagement bar's buttons disable off): a rapid
+  double-tap no-ops instead of racing a parallel like/unlike whose response
+  order would diverge the client and server state.
+- **`Crowi.swiftpm/Sources/CrowiApp/`** — `PageCreateView` (path input
+  seeded from where "New Page" was tapped — the home's `/` or the page
+  tree's current directory — grant picker, plain body editor, one alert per
+  create outcome); `PageEditorView` (a sheet that ALWAYS runs its own fresh
+  detail `GET` to seed the lock, then Save / conflict alert with
+  discard-as-default); `CommentComposerView` (plain-body input that
+  refreshes through the reader's existing `fetchAndCacheComments` path);
+  `PageReaderView` wires the interactive engagement bar, marks a page seen
+  on open (idempotent, like the web viewer), shows the comments section
+  even when empty (the composer must be reachable), and gains the Edit
+  toolbar entry; `ReadDestination.createPage(originPath:)` routes create on
+  both size classes.
+
+After a successful create/save the returned `{ page }` updates the visible
+state and `CachedPage` directly — no refetch. All write flows run through
+`session.apiClient` (the workspace-bound handle), so the Phase 1 structural
+per-workspace isolation invariant covers writes too.
