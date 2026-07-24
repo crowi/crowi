@@ -27,6 +27,7 @@ alpha.0–.3 は published、alpha.4 / stable 向けに changeset 蓄積中（pr
 
 ### iOS ネイティブアプリ (RFC-0016)
 - [x] Phase 0 companion server 側変更: trusted first-party `crowi-ios` OAuth client の server seed + custom-scheme redirect 緩和 + consent-skip 配線 + `GET /oauth/client-info`（spec: `feature-ios-companion-server.md`）。Apple 側 (apps/apple scaffold + gate 判定) は worktree `feature-ios-app` で進行中
+- [x] デザイン言語 polish（`feature-ios-design-language`）: ページ一覧行に `lastUpdatedAt`/updater アバター（child-segments-metadata 消費）、ポータルドリルダウン先で本文 + 子一覧、home の recency-first 化（既存 `GET /pages/list?path=/` のみ・サーバ変更なし）
 
 ### 配布 / リリース（2.0.0 stable 時）
 - [ ] **無印 `crowi` パッケージの整理**（spec: `feature-crowi-quickstart-package.md`）
