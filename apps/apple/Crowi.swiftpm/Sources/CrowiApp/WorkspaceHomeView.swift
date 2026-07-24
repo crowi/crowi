@@ -2,9 +2,9 @@ import CrowiKit
 import SwiftUI
 
 /// RFC-0016 §9 read-surface adaptive shell for ONE active workspace: a
-/// `NavigationSplitView` (page-tree sidebar + reader/search/history/profile
-/// detail) on iPad/regular width, collapsing to a `NavigationStack`
-/// (tree first, push everything else) on iPhone/compact width. This is a
+/// `NavigationSplitView` (recency-first home sidebar + reader/search/history/
+/// profile detail) on iPad/regular width, collapsing to a `NavigationStack`
+/// (home first, push everything else) on iPhone/compact width. This is a
 /// DIFFERENT navigation level from `RootScene`'s own outer workspace-switcher
 /// split (§3 — which workspace); `RootScene` still owns ALL size-class
 /// branching for THAT level, this view owns it for the read surface within
@@ -53,11 +53,16 @@ struct WorkspaceHomeView: View {
         .id(workspace.id)
     }
 
+    // feature-ios-design-language (3): the root content of BOTH size-class
+    // shells is the recency-first home (`RecentlyUpdatedHomeView`) — the page
+    // tree is one entry point inside it, pushed the same way `PageTreeView`
+    // already pushes its own sub-trees. The stack/split shell, toolbar, and
+    // switcher-sheet wiring are unchanged.
     @ViewBuilder
     private func content(session: WorkspaceSession) -> some View {
         if horizontalSizeClass == .compact {
             NavigationStack(path: $compactPath) {
-                PageTreeView(session: session, path: "/", onSelect: { compactPath.append($0) })
+                RecentlyUpdatedHomeView(session: session, onSelect: { compactPath.append($0) })
                     .toolbar { toolbarItems(session: session, onSelect: { compactPath.append($0) }) }
                     .navigationDestination(for: ReadDestination.self) { destination in
                         destinationView(destination, session: session, onSelect: { compactPath.append($0) })
@@ -65,7 +70,7 @@ struct WorkspaceHomeView: View {
             }
         } else {
             NavigationSplitView {
-                PageTreeView(session: session, path: "/", onSelect: { selectedDestination = $0 })
+                RecentlyUpdatedHomeView(session: session, onSelect: { selectedDestination = $0 })
                     .toolbar { toolbarItems(session: session, onSelect: { selectedDestination = $0 }) }
             } detail: {
                 // NOTE: deliberately not `if let selectedDestination` — that
