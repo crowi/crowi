@@ -39,6 +39,20 @@ describe('resolveRedisKeyspace', () => {
     ])('an invalid override (%s) throws instead of silently falling back — this should already have been rejected at boot', (_label, invalid) => {
       expect(() => resolveRedisKeyspace(fakeCrowi('https://wiki.example.com', { REDIS_KEY_PREFIX: invalid }))).toThrow(/REDIS_KEY_PREFIX/);
     });
+
+    test('AC6, literal wording: two instances whose CLIENT_URL differs but share the SAME explicit REDIS_KEY_PREFIX resolve the identical keyspace, while a DIFFERENT REDIS_KEY_PREFIX isolates them even from an instance with the SAME CLIENT_URL', () => {
+      const instanceA = resolveRedisKeyspace(fakeCrowi('https://wiki.example-a.com', { REDIS_KEY_PREFIX: 'krswd' }));
+      const instanceBSameOverride = resolveRedisKeyspace(fakeCrowi('https://wiki.example-b.com', { REDIS_KEY_PREFIX: 'krswd' }));
+      const instanceCDifferentOverride = resolveRedisKeyspace(fakeCrowi('https://wiki.example-b.com', { REDIS_KEY_PREFIX: 'other' }));
+
+      // Same explicit override -> shared slug/key, despite CLIENT_URL differing between A and B.
+      expect(instanceBSameOverride.slug).toBe(instanceA.slug);
+      expect(instanceBSameOverride.key('presence', 'feed')).toBe(instanceA.key('presence', 'feed'));
+
+      // Different explicit override -> isolated slug/key, even though C shares B's CLIENT_URL.
+      expect(instanceCDifferentOverride.slug).not.toBe(instanceBSameOverride.slug);
+      expect(instanceCDifferentOverride.key('presence', 'feed')).not.toBe(instanceBSameOverride.key('presence', 'feed'));
+    });
   });
 
   describe('default: derived from CLIENT_URL hostname', () => {
