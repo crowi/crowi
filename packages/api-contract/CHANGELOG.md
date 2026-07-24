@@ -1,5 +1,70 @@
 # @crowi/api-contract
 
+## 2.0.0-alpha.8
+
+### Major Changes
+
+- f1bcd2b: The canonical attachment URL (`/api/v2/attachments/:id`) now serves a display-optimized derivative (resized to at most 1728px wide, metadata stripped) for JPEG/PNG/WebP images whenever one is available, falling back transparently to the original for every other case (SVG/GIF/animated images, images already within the target width, or a missing/failed derivative). This is a real response-content contract change on an existing, unversioned endpoint: clients that relied on this URL always returning byte-identical originals (e.g. right-click "Save image as…" on an embedded image) now get the optimized bytes instead. `AttachmentSchema` gains a new `originalUrl` field (propagating to `AttachmentMetaSchema`/`AddAttachmentResponseSchema`) pointing at the new `GET /api/v2/attachments/:id/original` endpoint, which always serves the unmodified original and requires the `attachments:read` scope. The attachment detail modal's preview/download links were updated to use `originalUrl`. Operators can backfill/repair/reclaim derivatives for existing attachments with the new `crowi-admin rebuild attachment-display-derivatives` command (`--dry-run`/`--force`/`--repair-missing`/`--gc`).
+
+### Minor Changes
+
+- d9eb1c0: `GET /pages/children` now optionally returns `lastUpdatedAt` and `updater` on each `PageChildSegment`: for a segment that is itself a page, its own last-updated timestamp and updater; for a portal-style segment, the most-recently-updated page in its subtree and that page's updater. Both fields are additive and optional, so existing clients (the web sidebar tree) keep working unchanged; the iOS page list is the first consumer.
+- 29b3679: Seed a trusted first-party `crowi-ios` OAuth client (RFC-0016 Phase 0) alongside the existing `crowi-cli` one. The redirect-uri validator now accepts an exact-match custom URI scheme (`crowi-ios://callback`) only for clients that are both `trusted` and first-party — every other client, including `crowi-cli`, keeps the existing http(s)/loopback-only behavior unchanged. A new public `GET /oauth/client-info` endpoint exposes a client's non-secret metadata (`clientId` / `name` / `firstParty` / `trusted`), and the web `/oauth/authorize` consent screen uses it to auto-approve trusted clients (skipping the consent card) while leaving the flow for every other client, including `crowi-cli`, exactly as it was.
+- a32204f: Absorb the emoji shortcode transform and the `@[card](url)` link-card embed directly into `@crowi/api` core — both are now always-on Markdown features and no longer need to be installed as separate renderer plugins. The `@crowi/plugin-renderer-emoji` and `@crowi/plugin-renderer-link-card` packages have been removed from the workspace entirely; they are no longer published.
+
+  Link-card OGP fetching is controlled by a new admin Security setting, "Allow link cards for external URLs" (default ON, matching the previous plugin-installed behaviour and GitHub/Slack/Notion-style link unfurling). Disabling it stops all new outbound OGP requests immediately — including bypassing the render cache entirely, so a card fetched while enabled is never served stale after a disable, and a disable never leaves a cached fallback behind after a re-enable — and every render that cannot show a real preview (a disabled toggle, a fetch failure, a blocked/air-gapped host) now shows the exact same non-error-styled fallback card (a plain link to the original URL) instead of the old dedicated error-card variant.
+
+  Operators upgrading with `@crowi/plugin-renderer-emoji` or `@crowi/plugin-renderer-link-card` still listed in `crowi.config.json` (or their npm packages still listed as a runner dependency) see a one-time boot warning instead of a hard failure — remove the two entries (and the matching `dependencies`) once convenient; they no longer do anything, and the packages no longer exist to install.
+
+  `@crowi/plugin-api`'s `EmbedRenderer` gains an optional `shouldBypassCache(input)` hook — a renderer whose output depends on a runtime policy toggle (like link-card's) can use it to skip the render cache entirely for a given dispatch instead of only checking the toggle inside `render()`, which would otherwise let a stale cache hit serve pre-toggle output.
+
+- 3b27a67: Add a "Subpages" tab to the user page.
+
+  `/user/<username>` now has a third footer tab, "Subpages", listing every page that actually exists under `/user/<username>/` (recursively, across all depths), regardless of who created it — distinct from the existing "Pages" tab, which lists pages this user created regardless of path. The preview shows up to 10 rows plus the total count, with a "View all" link to `/user/<username>/pages` for the full, paginated listing (30 per page). Visibility follows the same grant/status rules as every other page listing.
+
+  Also hardens draft creation (`POST /pages/drafts`): if the seed revision fails to save after the draft `Page` document was created, the orphaned `Page` is now compensating-deleted so it can no longer resurface as a permanently broken row in listings such as the new Subpages tab.
+
+### Patch Changes
+
+- a899fdd: Fix a correctness hole where a live collaborative editor open before a page was renamed, soft-deleted, or reverted could still save its content afterwards, silently clobbering the renamed/deleted state instead of being rejected.
+  The fix introduces a monotonic collab lifecycle epoch (`Page.collabLifecycleVersion`) that advances atomically with every rename/delete/revert/body-replace and is enforced at four boundaries — wsToken mint, WebSocket authentication, document load, and the atomic save compare-and-set — so a stale editor session is refused rather than allowed to overwrite the page, including across multiple api replicas.
+  Rename/delete now also opens the existing reload-prompt dialog on any live editor for that page, and soft/hard delete purge the page's collaborative editing state (Yjs snapshot and pending updates) as defense-in-depth.
+- b0e2c76: Bump dependencies to clear Dependabot security advisories (alerts #622/#623/#626-#637).
+
+  - `sharp` 0.34.5 → 0.35.3, direct in `@crowi/api` (GHSA sharp <0.35.0). Also
+    overridden repo-wide (`sharp@<0.35.3` → `0.35.3`) since Next.js pins an
+    optional `sharp: ^0.34.5` dependency of its own that a Next.js version bump
+    can't escape.
+  - `@hono/node-server` 2.0.3 → 2.0.11, direct in `@crowi/api` (GHSA-frvp-7c67-39w9
+    path traversal / GHSA-9mqv-5hh9-4cgg WS handshake DoS). Also overridden
+    (`@hono/node-server@<2.0.11` → `2.0.11`) for the transitive 1.19.14
+    resolution pulled in by `@modelcontextprotocol/sdk`'s own `dependencies` —
+    verified crowi never imports the SDK module that requires it
+    (`@hono/mcp`'s `StreamableHTTPTransport` mounts into our own existing Hono
+    app/server instead), so this resolution was unreachable dead code, but the
+    override closes the alert cleanly regardless.
+  - `hono` bumped to 4.12.31 (within the existing `^4.12.25` range) across
+    `@crowi/api` / `@crowi/api-contract` / `@crowi/plugin-api` / `@crowi/plugin-slack`.
+  - `js-yaml` overridden to `3.15.0` / `4.3.0` per major line
+    (`js-yaml@>=3.0.0 <3.15.0` / `js-yaml@>=4.0.0 <4.3.0`) — covers every
+    transitive consumer (jest/istanbul's 3.x chain, eslint 8/9, changesets,
+    the mjml/htmlnano chain, fumadocs, `@redocly/openapi-core`) plus
+    `@crowi/api-contract`'s own direct `js-yaml` dependency, bumped to `^4.3.0`.
+  - `svgo` and `fast-uri` overridden to `4.0.2` / `3.1.4` — their parents
+    (`htmlnano`, `ajv`) already declare wide-enough ranges to permit the
+    patched versions but pnpm won't re-resolve a pure-transitive package
+    within an already-satisfied range without a forcing mechanism.
+
+  The sharp 0.35 bump changed its TypeScript declarations from the old
+  namespace-merged `sharp.Sharp`/`sharp.Metadata`/`sharp.OutputInfo` pattern to
+  named exports; `image-display-derivative.ts` updated its type imports
+  accordingly (no behavior change). It also surfaced a latent bug in this
+  package's own test fixture (an ancillary PNG chunk type `padA` with a
+  lowercase reserved-bit byte, which is not PNG-spec-conformant — sharp 0.34's
+  bundled `spng` PNG decoder tolerated it, 0.35's `libpng`-backed decoder
+  correctly rejects it); the fixture was corrected to `paDA`, no production
+  code changed.
+
 ## 2.0.0-alpha.7
 
 ### Minor Changes

@@ -1,5 +1,17 @@
 # @crowi/plugin-renderer-plantuml
 
+## 0.1.0-alpha.3
+
+### Patch Changes
+
+- 1825a1a: The shared SVG sanitizer moved from the published `@crowi/plugin-renderer-svg-sanitize` package to a private, internal-only `@crowi/svg-sanitize` package that is now bundled directly into each renderer's `dist` at build time instead of being installed as a runtime dependency. Sanitization behaviour is unchanged; only the dependency graph of the published package changed (the workspace dependency moved to `devDependencies`, and `@xmldom/xmldom` is now declared directly as a `dependencies` entry of each renderer instead of being resolved transitively).
+- Updated dependencies [df1ce77]
+- Updated dependencies [05648c0]
+- Updated dependencies [d680c0c]
+- Updated dependencies [a32204f]
+- Updated dependencies [b0e2c76]
+  - @crowi/plugin-api@1.0.0-alpha.4
+
 ## 0.1.0-alpha.2
 
 ### Patch Changes
