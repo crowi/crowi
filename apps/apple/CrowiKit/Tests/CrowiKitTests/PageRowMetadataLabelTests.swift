@@ -51,6 +51,29 @@ final class PageRowMetadataLabelTests: XCTestCase {
         XCTAssertFalse(text.isEmpty)
     }
 
+    /// `relativeTimeText` shares one cached `RelativeDateTimeFormatter`
+    /// across every call (perf fix: formatter init used to happen twice per
+    /// row, per render). Pin that the shared instance produces the SAME
+    /// output for the same inputs across repeated/interleaved calls with
+    /// DIFFERENT `relativeTo` reference dates — a caching bug (e.g. stale
+    /// `unitsStyle`/`dateTimeStyle` configuration, or state leaking between
+    /// calls) would surface as drift here even though each call's output
+    /// alone still looks plausible.
+    func testCachedFormatterProducesStableOutputAcrossRepeatedCalls() throws {
+        let now = try XCTUnwrap(PageRowMetadataLabel.date(fromISO8601: "2026-07-23T00:00:00Z"))
+        let otherNow = try XCTUnwrap(PageRowMetadataLabel.date(fromISO8601: "2026-08-01T00:00:00Z"))
+
+        let first = try XCTUnwrap(PageRowMetadataLabel.relativeTimeText(from: "2026-07-20T10:00:00.000Z", relativeTo: now))
+        // Interleave a call with a different reference date, as a
+        // multi-row render (each row = a different `lastUpdatedAt`, but ALL
+        // sharing today as `now`) would exercise the same cached instance
+        // back-to-back.
+        _ = PageRowMetadataLabel.relativeTimeText(from: "2026-07-15T10:00:00.000Z", relativeTo: otherNow)
+        let second = try XCTUnwrap(PageRowMetadataLabel.relativeTimeText(from: "2026-07-20T10:00:00.000Z", relativeTo: now))
+
+        XCTAssertEqual(first, second, "the shared formatter must not carry state between calls")
+    }
+
     // MARK: - AC-(1) fallback ladder
 
     func testFullMetadataShowsUpdaterAndTime() {

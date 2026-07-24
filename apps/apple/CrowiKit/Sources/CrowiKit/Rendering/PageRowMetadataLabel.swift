@@ -37,19 +37,32 @@ public struct PageRowMetadataLabel: View {
     /// The relative representation of `lastUpdatedAt` ("3 days ago" /
     /// 「3日前」, device locale) — `nil` when missing or unparseable, which
     /// drops the time from the label rather than showing a raw/garbled value.
+    ///
+    /// Each call formats via the cached `relativeDateTimeFormatter` below, so
+    /// calling this more than once (as the public `hasMetadata`/
+    /// `metadataText` accessors below each do, for callers that use them
+    /// standalone) no longer re-creates a formatter — only `body` needs to
+    /// avoid the redundant *call*, which it does by deriving both from one
+    /// local value.
     public var relativeTimeText: String? { Self.relativeTimeText(from: lastUpdatedAt) }
 
     /// Whether this label renders anything at all — `false` degrades the row
     /// to its plain pre-extension look (segment/path title only, no empty gap).
-    public var hasMetadata: Bool { hasUpdater || relativeTimeText != nil }
+    public var hasMetadata: Bool { Self.hasMetadata(hasUpdater: hasUpdater, relativeTime: relativeTimeText) }
 
     public var body: some View {
-        if hasMetadata {
+        // Derive once per render and reuse for both the gate and the text —
+        // `hasMetadata`/`metadataText` above each independently recompute
+        // `relativeTimeText`, which used to mean two formatter *creations*
+        // per row (one per accessor) before the formatter was cached below;
+        // `body` avoids even the redundant call by deriving locally.
+        let relativeTime = relativeTimeText
+        if Self.hasMetadata(hasUpdater: hasUpdater, relativeTime: relativeTime) {
             HStack(spacing: 5) {
                 if hasUpdater {
                     WorkspaceAvatarView(imageURLString: updaterImage, loader: loader, size: 14)
                 }
-                if let text = metadataText {
+                if let text = Self.metadataText(updaterName: updaterName, relativeTime: relativeTime) {
                     Text(text)
                 }
             }
@@ -62,8 +75,14 @@ public struct PageRowMetadataLabel: View {
     /// The caption line ("Sotaro · 3 days ago" / name only / time only) —
     /// `nil` when neither part is available (an image-only updater then
     /// still shows just the avatar).
-    public var metadataText: String? {
-        let parts = [updaterName, relativeTimeText].compactMap { $0 }
+    public var metadataText: String? { Self.metadataText(updaterName: updaterName, relativeTime: relativeTimeText) }
+
+    private static func hasMetadata(hasUpdater: Bool, relativeTime: String?) -> Bool {
+        hasUpdater || relativeTime != nil
+    }
+
+    private static func metadataText(updaterName: String?, relativeTime: String?) -> String? {
+        let parts = [updaterName, relativeTime].compactMap { $0 }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
@@ -80,13 +99,31 @@ public struct PageRowMetadataLabel: View {
         return (try? fractional.parse(string)) ?? (try? plain.parse(string))
     }
 
+    /// Cached instead of built per call. `RelativeDateTimeFormatter` init is
+    /// comparatively expensive (locale/calendar setup); before this cache,
+    /// every row created one from `hasMetadata` AND another from
+    /// `metadataText` (`body` read both), so a 20-row re-render — e.g. the
+    /// `RecentlyUpdatedHomeView` list re-appearing after popping back from a
+    /// page — allocated up to 40 formatters, the dominant cost behind the
+    /// pop-to-home stutter.
+    ///
+    /// `RelativeDateTimeFormatter` is a class and Apple does not document it
+    /// as thread-safe, so sharing this one instance is only correct because
+    /// every call site runs on the main thread: production callers are all
+    /// SwiftUI `View.body` evaluations (implicitly main-thread), and the
+    /// direct unit-test call below runs on XCTest's default main thread. Do
+    /// not call `relativeTimeText`/this formatter from a background thread.
+    private static let relativeDateTimeFormatter: RelativeDateTimeFormatter = {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .short
+        formatter.dateTimeStyle = .named
+        return formatter
+    }()
+
     /// - Parameter now: injectable for tests only — production callers use
     ///   the default.
     public static func relativeTimeText(from isoString: String?, relativeTo now: Date = Date()) -> String? {
         guard let date = date(fromISO8601: isoString) else { return nil }
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .short
-        formatter.dateTimeStyle = .named
-        return formatter.localizedString(for: date, relativeTo: now)
+        return relativeDateTimeFormatter.localizedString(for: date, relativeTo: now)
     }
 }

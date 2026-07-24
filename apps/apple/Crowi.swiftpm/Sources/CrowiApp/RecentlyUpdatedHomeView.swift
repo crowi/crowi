@@ -98,11 +98,26 @@ struct RecentlyUpdatedHomeView: View {
     }
 
     private func load() async {
-        isLoading = true
-        defer { isLoading = false }
+        // `.task` re-fires every time this view becomes the top of the
+        // `NavigationStack` again — e.g. popping back from a page onto home
+        // — which is SwiftUI's documented behavior, not a bug. That makes
+        // this a background refresh far more often than an initial load, so
+        // only flip `isLoading` (and show the spinner) when there is nothing
+        // on screen yet; toggling it unconditionally forces a body
+        // re-evaluation for a refetch that should be invisible when it
+        // changes nothing.
+        let isInitialLoad = pages.isEmpty
+        if isInitialLoad { isLoading = true }
+        defer { if isInitialLoad { isLoading = false } }
         do {
             let response = try await ListPagesResponseLenient.fetch(path: "/", limit: Self.listLimit, using: session.apiClient)
-            pages = response.pages
+            // Skip the assignment when the refetch is a no-op (`PageLenient`
+            // is `Equatable`) — reassigning an identical array still forces
+            // SwiftUI to re-diff and re-render every row in the `ForEach`,
+            // which is the other half of the pop-to-home stutter.
+            if response.pages != pages {
+                pages = response.pages
+            }
             loadErrorMessage = nil
         } catch {
             loadErrorMessage = pages.isEmpty ? "Couldn't load recently updated pages." : nil
