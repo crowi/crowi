@@ -11,10 +11,18 @@
  * boundary mid-burst).
  */
 
+import type Crowi from 'src/crowi';
 import { markRedisSmokeRan, REDIS_SMOKE_URLS, redisSmokeReachable, uniqueRedisSmokeId, withRedisClient } from 'src/test/redis-smoke';
 import { createRateLimiter, type RateLimitRedisClient } from 'src/util/rate-limit';
+import { resolveRedisKeyspace } from 'src/util/redis-keyspace';
 
 const describeMaybe = redisSmokeReachable.shared ? describe : describe.skip;
+
+/** `createRateLimiter`'s Redis-backed path now REQUIRES a keyspace (feature-redis-key-prefix §1/§2 review round 3). */
+const SMOKE_KEYSPACE = resolveRedisKeyspace({
+  getBaseUrl: () => null,
+  getEnv: () => ({ REDIS_KEY_PREFIX: 'ratelimit-smoke' }) as unknown as NodeJS.ProcessEnv,
+} as unknown as Crowi);
 
 describeMaybe('rate limiting smoke (real Redis 8)', () => {
   beforeAll(() => {
@@ -26,14 +34,14 @@ describeMaybe('rate limiting smoke (real Redis 8)', () => {
       const name = uniqueRedisSmokeId('ratelimit-bucket');
       const userId = uniqueRedisSmokeId('ratelimit-user');
       const windowMs = 400;
-      const limiter = createRateLimiter({ name, limit: 2, windowMs, redisClient: client as unknown as RateLimitRedisClient });
+      const limiter = createRateLimiter({ name, limit: 2, windowMs, redisClient: client as unknown as RateLimitRedisClient, keyspace: SMOKE_KEYSPACE });
 
       // Pin the clock mid-window: the burst below can then never straddle
       // a window boundary, and the derived key is exact by construction.
       const base = Math.floor(Date.now() / windowMs) * windowMs + 50;
       const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(base);
       const window1 = Math.floor(base / windowMs);
-      const key = `crowi:ratelimit:${name}:${userId}:${window1}`;
+      const key = SMOKE_KEYSPACE.key('ratelimit', name, userId, String(window1));
       try {
         const r1 = await limiter.hit(userId);
         const r2 = await limiter.hit(userId);
@@ -54,7 +62,7 @@ describeMaybe('rate limiting smoke (real Redis 8)', () => {
         // boundary race; a fresh window resets the count.
         nowSpy.mockReturnValue(base + windowMs);
         const window2 = window1 + 1;
-        const secondKey = `crowi:ratelimit:${name}:${userId}:${window2}`;
+        const secondKey = SMOKE_KEYSPACE.key('ratelimit', name, userId, String(window2));
         const r4 = await limiter.hit(userId);
         expect(r4).toMatchObject({ allowed: true, count: 1, limit: 2 });
 

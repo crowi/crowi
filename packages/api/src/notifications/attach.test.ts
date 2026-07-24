@@ -9,9 +9,10 @@ import { AddressInfo } from 'node:net';
 import type Crowi from 'src/crowi';
 import { stopNotificationsHttpServer } from 'src/test/notifications-test-server';
 import { createNotificationsTokenUtil } from 'src/util/notifications-token';
+import { resolveRedisKeyspace } from 'src/util/redis-keyspace';
 import WebSocket from 'ws';
 
-import { type AttachedNotifications, attachNotificationsServer, channelForUser, type NotificationsRedisClient } from './attach';
+import { type AttachedNotifications, attachNotificationsServer, channelForUser as channelForUserImpl, type NotificationsRedisClient } from './attach';
 
 /**
  * Tests for `attachNotificationsServer` — the third `ws noServer`
@@ -91,8 +92,24 @@ class FakeRedis implements NotificationsRedisClient {
   }
 }
 
-/** Build a minimal crowi-shaped object: only `redis` is read by the attach. */
-const fakeCrowi = (redis: NotificationsRedisClient | null): Crowi => ({ redis }) as unknown as Crowi;
+/**
+ * Build a minimal crowi-shaped object. `redis` is read directly by the
+ * attach; `getBaseUrl` / `getEnv` back `resolveRedisKeyspace()`
+ * (feature-redis-key-prefix §1/§2 — the channel is now instance-scoped
+ * whenever `redis` is non-null), pinned to a fixed `CLIENT_URL` so every
+ * test in this file resolves the same deterministic slug.
+ */
+const fakeCrowi = (redis: NotificationsRedisClient | null): Crowi =>
+  ({ redis, getBaseUrl: () => 'https://notifications-test.example.com', getEnv: () => ({}) as NodeJS.ProcessEnv }) as unknown as Crowi;
+
+/**
+ * `channelForUser`, pinned to this file's fixed `fakeCrowi` fixture's
+ * resolved keyspace. Shadows the plain `channelForUser` import so every
+ * pre-existing single-argument call site (`channelForUser(userId)`) keeps
+ * asserting against the actual channel `attachNotificationsServer` derives
+ * for `fakeCrowi`, without hand-threading a keyspace through each one.
+ */
+const channelForUser = (userId: string): string => channelForUserImpl(userId, resolveRedisKeyspace(fakeCrowi(null)));
 
 interface TestServer {
   server: http.Server;

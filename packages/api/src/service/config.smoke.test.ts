@@ -3,13 +3,18 @@
  * #5, required).
  *
  * Runs ONLY against the dedicated `crowi-test-redis` instance (Phase 1),
- * NEVER the shared `redis` service — `ConfigService.setupPubSub()`'s
- * `'config'` channel is fixed and global: a `PUBLISH` there makes EVERY
- * process sharing that Redis instance unconditionally run
- * `load()`/`postUpdate()`/`setupMailer()`, including an unrelated worktree's
- * running dev api on the shared instance (see the spec's "Config 設定同期の
- * pub/sub" background). `crowi-test-redis` is guaranteed to have no other
- * subscriber, so this smoke is safe there and nowhere else.
+ * NEVER the shared `redis` service. Historically this was because
+ * `ConfigService.setupPubSub()`'s `'config'` channel was fixed and global —
+ * feature-redis-key-prefix §1/§2 scopes it to `crowi:<slug>:config` instead,
+ * but this file's `fakeCrowi` fixtures all resolve the SAME instance slug
+ * (`SMOKE_REDIS_KEY_PREFIX`, matching "replicas of one instance" so the
+ * cross-replica relay this smoke asserts still happens), so a `PUBLISH`
+ * here would still reach EVERY process sharing that same slug on that
+ * Redis instance, including an unrelated worktree's running dev api on the
+ * shared instance if it happened to resolve the same slug (see the spec's
+ * "Config 設定同期の pub/sub" background). `crowi-test-redis` is
+ * guaranteed to have no other subscriber, so this smoke is safe there and
+ * nowhere else.
  *
  * Builds two independent `ConfigService` instances (real `setupPubSub()`,
  * unmodified production code) against a minimal fake `Crowi` — same
@@ -27,11 +32,22 @@ import { buildRedisOpts } from 'src/util/redis-opts';
 const describeMaybe = redisSmokeReachable.config ? describe : describe.skip;
 
 /**
+ * Every `fakeCrowi` fixture in this file shares this `REDIS_KEY_PREFIX`
+ * (feature-redis-key-prefix §1/§2) so instance A and B resolve the SAME
+ * `crowi:config-smoke:config` pub/sub channel — matching "two replicas of
+ * the same Crowi instance", which is exactly the cross-replica relay this
+ * smoke test asserts.
+ */
+const SMOKE_REDIS_KEY_PREFIX = 'config-smoke';
+
+/**
  * Minimal fake `Crowi` — only the fields `ConfigService`'s constructor +
  * `setupPubSub()` + `postUpdate()` read. `model()` backs `this.configModel`
  * (constructor) and the subscriber's `load()` call; `setupMailer` backs
- * `postUpdate()`. Same narrow-fixture pattern `crowi/index.test.ts` already
- * uses for `ConfigService`.
+ * `postUpdate()`; `getBaseUrl`/`getEnv` back `resolveRedisKeyspace()`
+ * (feature-redis-key-prefix §1/§2 — `setupPubSub()` resolves the pub/sub
+ * channel through these). Same narrow-fixture pattern `crowi/index.test.ts`
+ * already uses for `ConfigService`.
  */
 function fakeCrowi(loadAllConfig: jest.Mock, setupMailer: jest.Mock, updateByParams: jest.Mock = jest.fn(async () => undefined)): unknown {
   return {
@@ -39,6 +55,8 @@ function fakeCrowi(loadAllConfig: jest.Mock, setupMailer: jest.Mock, updateByPar
     redis: {}, // truthy — setupPubSub only null-checks this field
     model: () => ({ loadAllConfig, updateByParams }),
     setupMailer,
+    getBaseUrl: () => null,
+    getEnv: () => ({ REDIS_KEY_PREFIX: SMOKE_REDIS_KEY_PREFIX }) as unknown as NodeJS.ProcessEnv,
   };
 }
 
@@ -62,6 +80,11 @@ describeMaybe('Config pub/sub smoke (real Redis 8, dedicated crowi-test-redis in
       await Promise.all([serviceA.setupPubSub(), serviceB.setupPubSub()]);
       expect(serviceA.pubSub.publisher).not.toBeNull();
       expect(serviceB.pubSub.subscriber).not.toBeNull();
+      // Instance-scoped (feature-redis-key-prefix §1/§2), not the legacy
+      // global `'config'` literal — both replicas resolve the same channel
+      // because they share `SMOKE_REDIS_KEY_PREFIX`.
+      expect(serviceA.pubSub.channel).toBe(`crowi:${SMOKE_REDIS_KEY_PREFIX}:config`);
+      expect(serviceB.pubSub.channel).toBe(`crowi:${SMOKE_REDIS_KEY_PREFIX}:config`);
 
       const changedListenerB = jest.fn();
       serviceB.onConfigChange(changedListenerB);
