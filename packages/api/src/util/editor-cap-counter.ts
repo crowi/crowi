@@ -14,9 +14,9 @@ const debug = Debug('crowi:util:editor-cap-counter');
  * Wire-level design:
  *
  *   - Key:   `crowi:<instance-slug>:collab:editors:<pageId>`
- *     (feature-redis-key-prefix §1/§2 — see {@link keyFor}'s doc comment for
- *     the legacy non-scoped fallback this file still supports when no
- *     keyspace is supplied)
+ *     (feature-redis-key-prefix §1/§2 — `keyspace` is mandatory, see
+ *     {@link keyFor}'s doc comment; there is no legacy non-scoped
+ *     fallback left)
  *   - Value: a **Set** of `<userId>:<socketId>` entries (one entry
  *            per active WebSocket connection).
  *   - TTL:   `EXPIRE 86400` (24 h) is re-applied on every successful
