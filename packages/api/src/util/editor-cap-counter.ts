@@ -1,4 +1,5 @@
 import Debug from 'debug';
+import type { RedisKeyspace } from './redis-keyspace';
 
 const debug = Debug('crowi:util:editor-cap-counter');
 
@@ -12,7 +13,10 @@ const debug = Debug('crowi:util:editor-cap-counter');
  *
  * Wire-level design:
  *
- *   - Key:   `crowi:collab:editors:<pageId>`
+ *   - Key:   `crowi:<instance-slug>:collab:editors:<pageId>`
+ *     (feature-redis-key-prefix §1/§2 — see {@link keyFor}'s doc comment for
+ *     the legacy non-scoped fallback this file still supports when no
+ *     keyspace is supplied)
  *   - Value: a **Set** of `<userId>:<socketId>` entries (one entry
  *            per active WebSocket connection).
  *   - TTL:   `EXPIRE 86400` (24 h) is re-applied on every successful
@@ -55,12 +59,19 @@ const debug = Debug('crowi:util:editor-cap-counter');
  * client 共有".
  */
 
-const KEY_PREFIX = 'crowi:collab:editors:';
 /** Default editor cap when `COLLAB_MAX_EDITORS_PER_PAGE` is unset / invalid. */
 export const DEFAULT_MAX_EDITORS = 20;
 const TTL_SECONDS = 86400; // 24h sliding window via re-EXPIRE on SADD
 
-const keyFor = (pageId: string): string => `${KEY_PREFIX}${pageId}`;
+/**
+ * Per-page editor-set key, instance-scoped (`crowi:<slug>:collab:editors:
+ * <pageId>`, feature-redis-key-prefix §1/§2). `keyspace` is mandatory —
+ * `wrapClient` (the only caller) only ever runs once a real Redis client is
+ * in play, at which point `getEditorCapCounter` (`util/collab-cap.ts`, the
+ * production entry point) always resolves one; there is no legacy
+ * non-scoped literal left to fall back to.
+ */
+const keyFor = (pageId: string, keyspace: RedisKeyspace): string => keyspace.key('collab', 'editors', pageId);
 const entryFor = (userId: string, socketId: string): string => `${userId}:${socketId}`;
 
 /**
@@ -132,6 +143,15 @@ export interface CreateEditorCapCounterOptions {
    * this seam).
    */
   __clientForTest?: MinimalRedisClient;
+  /**
+   * Resolved instance keyspace (feature-redis-key-prefix §1/§2) — see
+   * {@link keyFor}'s doc comment. MANDATORY whenever `redisClient` OR
+   * `__clientForTest` is supplied: `createEditorCapCounter` throws
+   * immediately (at construction, not at a later Redis call) if a client is
+   * supplied without one. `getEditorCapCounter` (`util/collab-cap.ts`)
+   * always resolves and passes one whenever `redisClient` is non-null.
+   */
+  keyspace?: RedisKeyspace;
 }
 
 /**
@@ -173,26 +193,35 @@ const makeNoopCounter = (maxEditorsPerPage: number): EditorCapCounter => ({
  */
 export async function createEditorCapCounter(opts: CreateEditorCapCounterOptions = {}): Promise<EditorCapCounter> {
   const maxEditorsPerPage = opts.maxEditorsPerPage ?? DEFAULT_MAX_EDITORS;
+  const client = opts.__clientForTest ?? opts.redisClient;
 
-  if (opts.__clientForTest) {
-    return wrapClient(opts.__clientForTest, maxEditorsPerPage);
-  }
-
-  if (!opts.redisClient) {
+  if (!client) {
     debug('redis client not provided — editor cap counter disabled (fail-open)');
     return makeNoopCounter(maxEditorsPerPage);
   }
 
-  debug('editor cap counter ready (max=%d, key prefix=%s)', maxEditorsPerPage, KEY_PREFIX);
-  return wrapClient(opts.redisClient, maxEditorsPerPage);
+  if (!opts.keyspace) {
+    // A programmer error (a Redis-backed call site that forgot to resolve
+    // a keyspace), not a Redis-availability concern — throw immediately at
+    // construction rather than falling back to an unscoped key at a later
+    // SADD/SCARD call, which would silently reintroduce cross-instance
+    // cross-talk on the editor-cap set.
+    throw new Error(
+      'createEditorCapCounter: `keyspace` is required whenever a Redis client is supplied (feature-redis-key-prefix §1/§2) — ' +
+        'resolve one via resolveRedisKeyspaceIfEnabled(crowi) before constructing the counter.',
+    );
+  }
+
+  debug('editor cap counter ready (max=%d, key prefix=%s)', maxEditorsPerPage, opts.keyspace.prefix('collab', 'editors'));
+  return wrapClient(client, maxEditorsPerPage, opts.keyspace);
 }
 
-function wrapClient(client: MinimalRedisClient, maxEditorsPerPage: number): EditorCapCounter {
+function wrapClient(client: MinimalRedisClient, maxEditorsPerPage: number, keyspace: RedisKeyspace): EditorCapCounter {
   return {
     maxEditorsPerPage,
     async peek(pageId) {
       try {
-        const count = await client.sCard(keyFor(pageId));
+        const count = await client.sCard(keyFor(pageId, keyspace));
         return { count, cap: maxEditorsPerPage };
       } catch (err) {
         console.warn(`[crowi:editor-cap-counter] peek failed for ${pageId} — treating as 0:`, (err as Error).message);
@@ -200,7 +229,7 @@ function wrapClient(client: MinimalRedisClient, maxEditorsPerPage: number): Edit
       }
     },
     async tryAcquire(pageId, userId, socketId) {
-      const key = keyFor(pageId);
+      const key = keyFor(pageId, keyspace);
       const entry = entryFor(userId, socketId);
       let preCount: number;
       try {
@@ -230,7 +259,7 @@ function wrapClient(client: MinimalRedisClient, maxEditorsPerPage: number): Edit
     },
     async release(pageId, userId, socketId) {
       try {
-        await client.sRem(keyFor(pageId), entryFor(userId, socketId));
+        await client.sRem(keyFor(pageId, keyspace), entryFor(userId, socketId));
         debug('released page=%s user=%s socket=%s', pageId, userId, socketId);
       } catch (err) {
         console.warn(`[crowi:editor-cap-counter] release failed for ${pageId}:`, (err as Error).message);

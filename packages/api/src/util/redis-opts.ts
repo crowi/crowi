@@ -1,3 +1,5 @@
+import { parseRedisDatabaseOrThrow } from './redis-database';
+
 /**
  * Translate a Crowi-style `REDIS_URL` (`redis://` or `rediss://` with
  * optional `user:password@host:port`) into a node-redis v4
@@ -13,6 +15,14 @@
  * Lives in `packages/api/src/util/` (not `service/`) so the collab
  * package can pull it through `api-dist.ts` without dragging in any
  * Crowi-class context.
+ *
+ * The top-level `database` field (feature-redis-key-prefix §3) is the
+ * pathname of `redisUrl`, parsed by the shared `parseRedisDatabaseOrThrow()`
+ * so this and `collab/extension-redis.ts`'s `parseRedisUrlForIoredis()` can
+ * never independently pick a different DB for the same `REDIS_URL`. It is
+ * a secondary, purely numeric isolation axis — NOT a substitute for
+ * `util/redis-keyspace.ts`'s instance-scoped key/channel prefix, since
+ * Redis pub/sub ignores the selected DB.
  */
 export function buildRedisOpts(redisUrl: string | null, rejectUnauthorized: boolean): Record<string, unknown> | null {
   if (!redisUrl) return null;
@@ -39,12 +49,14 @@ export function buildRedisOpts(redisUrl: string | null, rejectUnauthorized: bool
   // (`RedisTlsSocketOptions`). A nested `tls: {...}` object fails that
   // strict check and silently downgrades rediss:// to a plaintext socket.
   const tlsOpts = u.protocol === 'rediss:' ? { tls: true as const, requestCert: true, rejectUnauthorized } : null;
+
   return {
     socket: {
       host,
       port: portNumber,
       ...tlsOpts,
     },
+    database: parseRedisDatabaseOrThrow(redisUrl),
     ...credentials,
   };
 }

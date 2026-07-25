@@ -12,6 +12,7 @@
  * "やらないこと".
  */
 import { createClient } from 'redis';
+import type Crowi from 'src/crowi';
 import {
   type CommentChangedPayload,
   createPresenceService,
@@ -21,8 +22,21 @@ import {
   type ViewerIdentity,
 } from 'src/service/presence';
 import { markRedisSmokeRan, REDIS_SMOKE_URLS, redisSmokeReachable, uniqueRedisSmokeId, waitUntil } from 'src/test/redis-smoke';
+import { resolveRedisKeyspace } from 'src/util/redis-keyspace';
 
 const describeMaybe = redisSmokeReachable.shared ? describe : describe.skip;
+
+/**
+ * `createPresenceService`'s Redis-backed overload now REQUIRES a
+ * `RedisKeyspace` (feature-redis-key-prefix §1/§2 review round 3) — instance
+ * A and B share this fixed `REDIS_KEY_PREFIX` so they resolve the SAME
+ * keyspace, matching "two replicas of the same Crowi instance" (they are
+ * expected to share pub/sub, which is exactly what this smoke test asserts).
+ */
+const SMOKE_KEYSPACE = resolveRedisKeyspace({
+  getBaseUrl: () => null,
+  getEnv: () => ({ REDIS_KEY_PREFIX: 'presence-smoke' }) as unknown as NodeJS.ProcessEnv,
+} as unknown as Crowi);
 
 describeMaybe('presence smoke (real Redis 8)', () => {
   beforeAll(() => {
@@ -42,8 +56,8 @@ describeMaybe('presence smoke (real Redis 8)', () => {
       // `createPresenceService` types its param as the structural
       // `PresenceRedisClient`; the real node-redis v4 client satisfies it
       // (duplicate/connect/disconnect/hSet/hGet/hGetAll/hDel/expire/publish/subscribe).
-      serviceA = await createPresenceService(clientA as unknown as PresenceRedisClient);
-      serviceB = await createPresenceService(clientB as unknown as PresenceRedisClient);
+      serviceA = await createPresenceService(clientA as unknown as PresenceRedisClient, SMOKE_KEYSPACE);
+      serviceB = await createPresenceService(clientB as unknown as PresenceRedisClient, SMOKE_KEYSPACE);
 
       const pageId = uniqueRedisSmokeId('presence-page');
       const viewer: ViewerIdentity = { userId: uniqueRedisSmokeId('user'), username: 'smoke-user', displayName: 'Smoke User', avatarUrl: null };
@@ -89,7 +103,7 @@ describeMaybe('presence smoke (real Redis 8)', () => {
       const viewers = await serviceA.listViewers(pageId);
       expect(viewers.map((v) => v.userId)).toContain(viewer.userId);
 
-      // Explicit cleanup of the crowi:presence:viewers:<pageId> hash this
+      // Explicit cleanup of the crowi:presence-smoke:presence:viewers:<pageId> hash this
       // test created: leave() HDELs this viewer's field via the real
       // production code path (Redis removes the hash key once its last
       // field is gone), rather than leaving it for VIEWER_HASH_TTL_SECONDS

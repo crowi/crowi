@@ -1,6 +1,16 @@
 import mongoose from 'mongoose';
 import { crowi } from 'src/test/setup';
-import { NOTIFICATIONS_CHANNEL_PREFIX } from 'src/notifications/channel';
+import { channelForUser } from 'src/notifications/channel';
+import { resolveRedisKeyspace } from 'src/util/redis-keyspace';
+
+/**
+ * Expected instance-scoped channel for `recipient` (feature-redis-key-prefix
+ * §1/§2) — computed through the SAME `resolveRedisKeyspace(crowi)` the
+ * production `publishNotificationsChange` uses, rather than a hardcoded
+ * slug, so this test doesn't have to know/guess what the shared test
+ * harness's `CLIENT_URL` resolves to.
+ */
+const channelFor = (userId: string): string => channelForUser(userId, resolveRedisKeyspace(crowi));
 
 describe('Notification', function () {
   let Notification;
@@ -156,7 +166,7 @@ describe('Notification', function () {
       await Notification.upsertByActivity(recipient, activity);
       await flushMicrotasks();
 
-      const matching = publishSpy.mock.calls.filter(([channel]) => channel === `${NOTIFICATIONS_CHANNEL_PREFIX}${recipient.toString()}`);
+      const matching = publishSpy.mock.calls.filter(([channel]) => channel === channelFor(recipient.toString()));
       expect(matching.length).toBeGreaterThanOrEqual(1);
       expect(JSON.parse(matching[0][1])).toEqual({ type: 'changed' });
     });
@@ -172,7 +182,7 @@ describe('Notification', function () {
       await Notification.read({ _id: recipient });
       await flushMicrotasks();
 
-      const matching = publishSpy.mock.calls.filter(([channel]) => channel === `${NOTIFICATIONS_CHANNEL_PREFIX}${recipient.toString()}`);
+      const matching = publishSpy.mock.calls.filter(([channel]) => channel === channelFor(recipient.toString()));
       expect(matching.length).toBeGreaterThanOrEqual(1);
       expect(JSON.parse(matching[0][1])).toEqual({ type: 'changed' });
     });
@@ -186,7 +196,7 @@ describe('Notification', function () {
       await Notification.open({ _id: recipient }, created._id);
       await flushMicrotasks();
 
-      const matching = publishSpy.mock.calls.filter(([channel]) => channel === `${NOTIFICATIONS_CHANNEL_PREFIX}${recipient.toString()}`);
+      const matching = publishSpy.mock.calls.filter(([channel]) => channel === channelFor(recipient.toString()));
       expect(matching.length).toBeGreaterThanOrEqual(1);
     });
 
@@ -228,11 +238,9 @@ describe('Notification', function () {
       // The publish targets must include both recipients exactly once
       // (Set dedupe in the implementation).
       const channels = publishSpy.mock.calls.map(([channel]) => channel);
-      expect(channels).toEqual(
-        expect.arrayContaining([`${NOTIFICATIONS_CHANNEL_PREFIX}${recipientA.toString()}`, `${NOTIFICATIONS_CHANNEL_PREFIX}${recipientB.toString()}`]),
-      );
-      const channelsForA = channels.filter((c) => c === `${NOTIFICATIONS_CHANNEL_PREFIX}${recipientA.toString()}`);
-      const channelsForB = channels.filter((c) => c === `${NOTIFICATIONS_CHANNEL_PREFIX}${recipientB.toString()}`);
+      expect(channels).toEqual(expect.arrayContaining([channelFor(recipientA.toString()), channelFor(recipientB.toString())]));
+      const channelsForA = channels.filter((c) => c === channelFor(recipientA.toString()));
+      const channelsForB = channels.filter((c) => c === channelFor(recipientB.toString()));
       expect(channelsForA).toHaveLength(1);
       expect(channelsForB).toHaveLength(1);
     });

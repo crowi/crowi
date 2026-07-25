@@ -53,6 +53,7 @@ import type { UserDocument } from 'src/models/user';
 import { computeRevisionRenderArtifactsAsync, isPopulatedRevision, pageToResponse } from 'src/util/page-response';
 import { indexPageInSearchById } from 'src/util/page-search-index';
 import { createRateLimiter } from 'src/util/rate-limit';
+import { resolveRedisKeyspaceIfEnabled } from 'src/util/redis-keyspace';
 import { actorFromUser, isValidObjectId, loadGrantedPage, toUserPublic } from 'src/util/ts-rest-helpers';
 
 import type { CrowiHonoBindings } from '../app';
@@ -226,6 +227,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
     limit: 30,
     windowMs: 60_000,
     redisClient: crowi.redis ?? null,
+    keyspace: resolveRedisKeyspaceIfEnabled(crowi),
   });
   const linkAccessRateLimitMiddleware = withRateLimit({
     limiter: linkAccessRateLimiter,

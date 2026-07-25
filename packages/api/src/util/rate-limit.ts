@@ -1,4 +1,5 @@
 import Debug from 'debug';
+import type { RedisKeyspace } from './redis-keyspace';
 
 const debug = Debug('crowi:util:rate-limit');
 
@@ -44,6 +45,22 @@ export interface RateLimitOptions {
   windowMs: number;
   /** Shared Redis client; omit / pass `null` to use the in-memory fallback. */
   redisClient?: RateLimitRedisClient | null;
+  /**
+   * Resolved instance keyspace (feature-redis-key-prefix §1/§2) — scopes the
+   * Redis key to `crowi:<slug>:ratelimit:<name>:<userId>:<window>` instead
+   * of a global, non-instance-scoped key, so multiple Crowi instances
+   * sharing one Redis do not share rate-limit budgets.
+   *
+   * MANDATORY whenever `redisClient` is supplied: `createRateLimiter` throws
+   * immediately (at construction, not at `hit()` time — a fail-open Redis
+   * blip and a programmer forgetting to resolve a keyspace are different
+   * failure modes) if `redisClient` is set without one. There is no legacy
+   * non-scoped fallback left to silently assemble instead — every
+   * production call site resolves this via `resolveRedisKeyspaceIfEnabled(
+   * crowi)`, which is non-undefined exactly when `crowi.redis` (and
+   * therefore `redisClient`) is.
+   */
+  keyspace?: RedisKeyspace;
 }
 
 export interface RateLimitResult {
@@ -68,8 +85,6 @@ export interface RateLimiter {
    */
   hit(userId: string): Promise<RateLimitResult>;
 }
-
-const KEY_PREFIX = 'crowi:ratelimit';
 
 /** Current fixed-window index for `now`. */
 const windowIndex = (now: number, windowMs: number): number => Math.floor(now / windowMs);
@@ -116,7 +131,17 @@ class InMemoryWindowStore {
  * in-memory, so callers never branch.
  */
 export function createRateLimiter(options: RateLimitOptions): RateLimiter {
-  const { name, limit, windowMs, redisClient } = options;
+  const { name, limit, windowMs, redisClient, keyspace } = options;
+  if (redisClient && !keyspace) {
+    // A programmer error (a Redis-backed call site that forgot to resolve
+    // a keyspace), not a Redis-availability concern — throw immediately at
+    // construction rather than falling back to an unscoped key at `hit()`
+    // time, which would silently reintroduce cross-instance cross-talk.
+    throw new Error(
+      'createRateLimiter: `keyspace` is required whenever `redisClient` is supplied (feature-redis-key-prefix §1/§2) — ' +
+        'resolve one via resolveRedisKeyspaceIfEnabled(crowi) before constructing the limiter.',
+    );
+  }
   const memory = new InMemoryWindowStore();
 
   const evaluate = (count: number, now: number): RateLimitResult => ({
@@ -132,7 +157,9 @@ export function createRateLimiter(options: RateLimitOptions): RateLimiter {
       const window = windowIndex(now, windowMs);
 
       if (redisClient) {
-        const key = `${KEY_PREFIX}:${name}:${userId}:${window}`;
+        // The constructor-time check above guarantees `keyspace` is set
+        // whenever `redisClient` is.
+        const key = keyspace!.key('ratelimit', name, userId, String(window));
         try {
           const count = await redisClient.incr(key);
           // Set the TTL once, when the window is first opened. A small

@@ -23,8 +23,22 @@ import type Crowi from 'src/crowi';
 import { stopNotificationsHttpServer } from 'src/test/notifications-test-server';
 import { markRedisSmokeRan, REDIS_SMOKE_URLS, redisSmokeReachable, uniqueRedisSmokeId, waitUntil } from 'src/test/redis-smoke';
 import { createNotificationsTokenUtil } from 'src/util/notifications-token';
+import { resolveRedisKeyspace } from 'src/util/redis-keyspace';
 import WebSocket from 'ws';
-import { type AttachedNotifications, attachNotificationsServer, channelForUser } from './attach';
+import { type AttachedNotifications, attachNotificationsServer, channelForUser as channelForUserImpl } from './attach';
+
+/**
+ * Fixed `CLIENT_URL` every `crowiLike` fixture in this file resolves its
+ * instance keyspace from (feature-redis-key-prefix §1/§2) — instance A and
+ * B intentionally share it, matching "two replicas of the same public site"
+ * (they are expected to share pub/sub, which is exactly what this smoke
+ * test asserts).
+ */
+const SMOKE_CLIENT_URL = 'https://notifications-smoke.example.com';
+
+/** `channelForUser`, pinned to {@link SMOKE_CLIENT_URL}'s resolved keyspace — see `notifications/attach.test.ts`'s identical pattern. */
+const channelForUser = (userId: string): string =>
+  channelForUserImpl(userId, resolveRedisKeyspace({ getBaseUrl: () => SMOKE_CLIENT_URL, getEnv: () => ({}) as NodeJS.ProcessEnv } as unknown as Crowi));
 
 const describeMaybe = redisSmokeReachable.shared ? describe : describe.skip;
 
@@ -41,7 +55,7 @@ async function startRealServer(redisUrl: string): Promise<RealServer> {
   const redisClient = createClient({ url: redisUrl });
   await redisClient.connect();
   const httpServer = http.createServer();
-  const crowiLike = { redis: redisClient } as unknown as Crowi;
+  const crowiLike = { redis: redisClient, getBaseUrl: () => SMOKE_CLIENT_URL, getEnv: () => ({}) as NodeJS.ProcessEnv } as unknown as Crowi;
   const attachment = await attachNotificationsServer(httpServer, crowiLike);
   await new Promise<void>((resolve) => httpServer.listen(0, '127.0.0.1', resolve));
   const port = (httpServer.address() as AddressInfo).port;

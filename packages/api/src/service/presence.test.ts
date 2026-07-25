@@ -1,20 +1,43 @@
 import type Crowi from 'src/crowi';
+import { resolveRedisKeyspace } from 'src/util/redis-keyspace';
 import {
   _setPresenceServiceForTesting,
   type CommentChangedPayload,
   createPresenceCollabDeps,
   createPresenceService,
-  EDITING_HASH_PREFIX,
   EDITING_REFRESH_MS,
   EDITING_TTL_MS,
   type PageUpdatedPayload,
-  PRESENCE_FEED_CHANNEL,
   type PresenceFeed,
   type PresenceRedisClient,
   type PresenceService,
-  VIEWER_HASH_PREFIX,
   VIEWER_TTL_MS,
 } from './presence';
+
+/**
+ * Smallest fixture `resolveRedisKeyspace` reads from a `Crowi` — an
+ * explicit `REDIS_KEY_PREFIX` override (mirrors `util/redis-keyspace.test.ts`'s
+ * `fakeCrowi`), so these tests don't depend on `CLIENT_URL` derivation.
+ */
+function fakeKeyspaceCrowi(instanceSlug: string): Crowi {
+  return {
+    getBaseUrl: () => null,
+    getEnv: () => ({ REDIS_KEY_PREFIX: instanceSlug }) as unknown as NodeJS.ProcessEnv,
+  } as unknown as Crowi;
+}
+
+/**
+ * The instance keyspace every "Redis-backed (RFC-0005)" / "generic feed
+ * bus" / "page-updated" / "comment-changed" test below resolves through —
+ * `createPresenceService`'s Redis-backed overload now REQUIRES a
+ * {@link RedisKeyspace} (feature-redis-key-prefix §1/§2 review round 3:
+ * there is no legacy non-scoped fallback left in `service/presence.ts` to
+ * omit this in favour of), so every test exercising that path needs an
+ * explicit one — this is that shared default. Tests specifically about
+ * cross-instance keyspace isolation use their own `keyspaceA`/`keyspaceB`
+ * below instead.
+ */
+const TEST_KEYSPACE = resolveRedisKeyspace(fakeKeyspaceCrowi('test'));
 
 /**
  * RFC-0005 — presence service tests.
@@ -141,7 +164,7 @@ const viewer = (userId: string, overrides: Partial<{ username: string; displayNa
 
 describe('presence service — Redis-backed (RFC-0005)', () => {
   it('registers a viewer on join and surfaces it in listViewers', async () => {
-    const service = await createPresenceService(new FakeRedis());
+    const service = await createPresenceService(new FakeRedis(), TEST_KEYSPACE);
     await service.join(PAGE_A, viewer('u1'));
 
     const viewers = await service.listViewers(PAGE_A);
@@ -152,7 +175,7 @@ describe('presence service — Redis-backed (RFC-0005)', () => {
   });
 
   it('removes a viewer on leave and re-broadcasts the change', async () => {
-    const service = await createPresenceService(new FakeRedis());
+    const service = await createPresenceService(new FakeRedis(), TEST_KEYSPACE);
     const changes: string[] = [];
     service.subscribe('viewers', (pageId) => changes.push(pageId));
 
@@ -166,7 +189,7 @@ describe('presence service — Redis-backed (RFC-0005)', () => {
   });
 
   it('dedupes the same user across multiple tabs to a single viewer entry', async () => {
-    const service = await createPresenceService(new FakeRedis());
+    const service = await createPresenceService(new FakeRedis(), TEST_KEYSPACE);
     // Three "tabs" = three joins for the same userId.
     await service.join(PAGE_A, viewer('u1'));
     await service.join(PAGE_A, viewer('u1'));
@@ -184,7 +207,7 @@ describe('presence service — Redis-backed (RFC-0005)', () => {
     // be observable, without depending on wall-clock timing.
     jest.useFakeTimers();
     try {
-      const service = await createPresenceService(new FakeRedis());
+      const service = await createPresenceService(new FakeRedis(), TEST_KEYSPACE);
       await service.join(PAGE_A, viewer('u1'));
       const firstJoinedAt = (await service.listViewers(PAGE_A))[0].joinedAt;
 
@@ -200,7 +223,7 @@ describe('presence service — Redis-backed (RFC-0005)', () => {
   });
 
   it('heartbeat refreshes a present viewer and reports false for an absent one', async () => {
-    const service = await createPresenceService(new FakeRedis());
+    const service = await createPresenceService(new FakeRedis(), TEST_KEYSPACE);
     await service.join(PAGE_A, viewer('u1'));
 
     expect(await service.heartbeat(PAGE_A, 'u1')).toBe(true);
@@ -210,11 +233,11 @@ describe('presence service — Redis-backed (RFC-0005)', () => {
 
   it('filters out and sweeps viewers whose last heartbeat is past the TTL', async () => {
     const redis = new FakeRedis();
-    const service = await createPresenceService(redis);
+    const service = await createPresenceService(redis, TEST_KEYSPACE);
     await service.join(PAGE_A, viewer('u1'));
 
     // Rewrite the stored field with a stale lastHeartbeatAt directly.
-    const key = `${VIEWER_HASH_PREFIX}${PAGE_A}`;
+    const key = TEST_KEYSPACE.key('presence', 'viewers', PAGE_A);
     const raw = await redis.hGet(key, 'u1');
     const stale = JSON.parse(raw as string);
     stale.lastHeartbeatAt = Date.now() - VIEWER_TTL_MS - 1_000;
@@ -228,7 +251,7 @@ describe('presence service — Redis-backed (RFC-0005)', () => {
 
   it('markEditing writes the editing hash so a viewing editor gets isEditing=true', async () => {
     const redis = new FakeRedis();
-    const service = await createPresenceService(redis);
+    const service = await createPresenceService(redis, TEST_KEYSPACE);
 
     await service.join(PAGE_A, viewer('u1'));
     await service.join(PAGE_A, viewer('u2'));
@@ -243,7 +266,7 @@ describe('presence service — Redis-backed (RFC-0005)', () => {
 
   it('dedupes a user with two editor tabs to a single isEditing viewer', async () => {
     const redis = new FakeRedis();
-    const service = await createPresenceService(redis);
+    const service = await createPresenceService(redis, TEST_KEYSPACE);
 
     await service.join(PAGE_A, viewer('u1'));
     await service.markEditing(PAGE_A, 'u1', 'socket-1');
@@ -268,24 +291,24 @@ describe('presence service — Redis-backed (RFC-0005)', () => {
     // Seed the editing hash with a field whose lastSeenAt is well past
     // the TTL — the failure mode the bug fix targets (a never-cleaned
     // editing signal from a crashed api process).
-    redis.seedEditingHash(`${EDITING_HASH_PREFIX}${PAGE_A}`, {
+    redis.seedEditingHash(TEST_KEYSPACE.key('presence', 'editing', PAGE_A), {
       'u1:dead-socket': Date.now() - EDITING_TTL_MS - 5_000,
     });
-    const service = await createPresenceService(redis);
+    const service = await createPresenceService(redis, TEST_KEYSPACE);
 
     await service.join(PAGE_A, viewer('u1'));
 
     const viewers = await service.listViewers(PAGE_A);
     expect(viewers[0].isEditing).toBe(false);
     // The stale field is swept from the editing hash as a side effect.
-    expect(await redis.hGet(`${EDITING_HASH_PREFIX}${PAGE_A}`, 'u1:dead-socket')).toBeNull();
+    expect(await redis.hGet(TEST_KEYSPACE.key('presence', 'editing', PAGE_A), 'u1:dead-socket')).toBeNull();
     await service.shutdown();
   });
 
   it('refreshEditing keeps a signal fresh but does NOT publish a viewer-list change', async () => {
     const redis = new FakeRedis();
     const publishSpy = jest.spyOn(redis, 'publish');
-    const service = await createPresenceService(redis);
+    const service = await createPresenceService(redis, TEST_KEYSPACE);
     const viewersEnvelope = JSON.stringify({ feed: 'viewers', pageId: PAGE_A });
 
     await service.markEditing(PAGE_A, 'u1', 'socket-1');
@@ -306,7 +329,7 @@ describe('presence service — Redis-backed (RFC-0005)', () => {
   it('markEditing / unmarkEditing publish a viewer-list change for the badge', async () => {
     const redis = new FakeRedis();
     const publishSpy = jest.spyOn(redis, 'publish');
-    const service = await createPresenceService(redis);
+    const service = await createPresenceService(redis, TEST_KEYSPACE);
     const changes: string[] = [];
     service.subscribe('viewers', (pageId) => changes.push(pageId));
     const viewersEnvelope = JSON.stringify({ feed: 'viewers', pageId: PAGE_A });
@@ -328,8 +351,8 @@ describe('presence service — Redis-backed (RFC-0005)', () => {
     // Two services backed by the *same* shared Redis store = two api
     // instances behind a load balancer.
     const sharedRedis = new FakeRedis();
-    const instanceA = await createPresenceService(sharedRedis);
-    const instanceB = await createPresenceService(sharedRedis);
+    const instanceA = await createPresenceService(sharedRedis, TEST_KEYSPACE);
+    const instanceB = await createPresenceService(sharedRedis, TEST_KEYSPACE);
 
     const seenByB: string[] = [];
     instanceB.subscribe('viewers', (pageId) => seenByB.push(pageId));
@@ -348,8 +371,8 @@ describe('presence service — Redis-backed (RFC-0005)', () => {
 
   it('an editing signal written on one instance is visible on another', async () => {
     const sharedRedis = new FakeRedis();
-    const instanceA = await createPresenceService(sharedRedis);
-    const instanceB = await createPresenceService(sharedRedis);
+    const instanceA = await createPresenceService(sharedRedis, TEST_KEYSPACE);
+    const instanceB = await createPresenceService(sharedRedis, TEST_KEYSPACE);
 
     await instanceA.join(PAGE_A, viewer('u1'));
     await instanceA.markEditing(PAGE_A, 'u1', 'socket-1');
@@ -363,12 +386,81 @@ describe('presence service — Redis-backed (RFC-0005)', () => {
   it('publishes joins as a JSON envelope on the generic feed channel (feature-presence-generic-feed-bus)', async () => {
     const redis = new FakeRedis();
     const publishSpy = jest.spyOn(redis, 'publish');
-    const service = await createPresenceService(redis);
+    const service = await createPresenceService(redis, TEST_KEYSPACE);
 
     await service.join(PAGE_A, viewer('u1'));
 
-    expect(publishSpy).toHaveBeenCalledWith(PRESENCE_FEED_CHANNEL, JSON.stringify({ feed: 'viewers', pageId: PAGE_A }));
+    expect(publishSpy).toHaveBeenCalledWith(TEST_KEYSPACE.key('presence', 'feed'), JSON.stringify({ feed: 'viewers', pageId: PAGE_A }));
     await service.shutdown();
+  });
+});
+
+/**
+ * feature-redis-key-prefix §1/§2 — when a resolved {@link RedisKeyspace} is
+ * supplied, every Redis key/channel this service touches is instance-scoped
+ * (`crowi:<slug>:presence:...`) instead of the legacy, non-scoped literal.
+ * `getPresenceService` (the real production entry point, exercised
+ * separately below) always resolves and passes one whenever `crowi.redis`
+ * is set; these tests exercise `createPresenceService` directly with an
+ * explicit keyspace to pin the exact key/channel shape.
+ */
+describe('presence service — instance keyspace (feature-redis-key-prefix §1/§2)', () => {
+  const keyspaceA = resolveRedisKeyspace(fakeKeyspaceCrowi('krswd-a'));
+  const keyspaceB = resolveRedisKeyspace(fakeKeyspaceCrowi('krswd-b'));
+
+  it('scopes the viewer hash key to the instance slug', async () => {
+    const redis = new FakeRedis();
+    const service = await createPresenceService(redis, keyspaceA);
+    await service.join(PAGE_A, viewer('u1'));
+
+    expect(await redis.hGetAll(`crowi:krswd-a:presence:viewers:${PAGE_A}`)).not.toEqual({});
+    // The pre-feature (non-instance-scoped) literal is never written —
+    // `service/presence.ts` no longer has any code path that could produce
+    // it (there is no legacy fallback left to regress into), but this pins
+    // the exact legacy shape as a name-collision guard.
+    expect(await redis.hGetAll(`crowi:presence:viewers:${PAGE_A}`)).toEqual({});
+    await service.shutdown();
+  });
+
+  it('scopes the editing hash key to the instance slug', async () => {
+    const redis = new FakeRedis();
+    const service = await createPresenceService(redis, keyspaceA);
+    await service.markEditing(PAGE_A, 'u1', 'socket-1');
+
+    expect(await redis.hGetAll(`crowi:krswd-a:presence:editing:${PAGE_A}`)).not.toEqual({});
+    expect(await redis.hGetAll(`crowi:presence:editing:${PAGE_A}`)).toEqual({});
+    await service.shutdown();
+  });
+
+  it('publishes on the instance-scoped feed channel, not the legacy literal', async () => {
+    const redis = new FakeRedis();
+    const publishSpy = jest.spyOn(redis, 'publish');
+    const service = await createPresenceService(redis, keyspaceA);
+
+    await service.join(PAGE_A, viewer('u1'));
+
+    expect(publishSpy).toHaveBeenCalledWith('crowi:krswd-a:presence:feed', JSON.stringify({ feed: 'viewers', pageId: PAGE_A }));
+    expect(publishSpy).not.toHaveBeenCalledWith('crowi:presence:feed', expect.anything());
+    await service.shutdown();
+  });
+
+  it('two instances with distinct keyspaces sharing the same Redis do not cross-talk on the feed channel', async () => {
+    const shared = new FakeRedis();
+    const instanceA = await createPresenceService(shared, keyspaceA);
+    const instanceB = await createPresenceService(shared, keyspaceB);
+
+    const seenByB: string[] = [];
+    instanceB.subscribe('viewers', (pageId) => seenByB.push(pageId));
+
+    await instanceA.join(PAGE_A, viewer('u1'));
+
+    // B never observes A's join — distinct keyspaces subscribe to distinct
+    // channels even though both share the same underlying Redis.
+    expect(seenByB).toEqual([]);
+    expect(await instanceB.listViewers(PAGE_A)).toEqual([]);
+
+    await instanceA.shutdown();
+    await instanceB.shutdown();
   });
 });
 
@@ -391,7 +483,7 @@ describe('presence service — generic feed bus (feature-presence-generic-feed-b
       return d;
     });
 
-    const service = await createPresenceService(primary);
+    const service = await createPresenceService(primary, TEST_KEYSPACE);
     // Pre-consolidation this opened TWO duplicate() clients (a bare
     // pageId-string subscriber for viewer-list + a JSON subscriber
     // shared by page-updated/comment-changed). Now every feed rides one.
@@ -412,7 +504,7 @@ describe('presence service — generic feed bus (feature-presence-generic-feed-b
       return d;
     });
 
-    const service = await createPresenceService(primary);
+    const service = await createPresenceService(primary, TEST_KEYSPACE);
     expect(dups).toHaveLength(1);
 
     const pageUpdatedSeen: PageUpdatedPayload[] = [];
@@ -434,14 +526,14 @@ describe('presence service — generic feed bus (feature-presence-generic-feed-b
   it('publishes every feed as a `{ feed, pageId, payload }` JSON envelope on the one generic channel (AC-1/AC-2)', async () => {
     const redis = new FakeRedis();
     const publishSpy = jest.spyOn(redis, 'publish');
-    const service = await createPresenceService(redis);
+    const service = await createPresenceService(redis, TEST_KEYSPACE);
 
     await service.publishPageUpdated(PAGE_A, { pageId: PAGE_A, revisionId: 'rev-1', editorUserId: 'u1', editorDisplayName: 'User One' });
     await service.publishCommentChanged(PAGE_A, { pageId: PAGE_A, changeType: 'added', commentId: 'comment-1', actorUserId: 'u1' });
 
     // Every publish targets the SAME channel — no more per-feed channels.
     const channels = new Set(publishSpy.mock.calls.map(([ch]) => ch));
-    expect(channels).toEqual(new Set([PRESENCE_FEED_CHANNEL]));
+    expect(channels).toEqual(new Set([TEST_KEYSPACE.key('presence', 'feed')]));
     const bodies = publishSpy.mock.calls.map(([, msg]) => JSON.parse(msg as string) as { feed: PresenceFeed; pageId: string });
     expect(bodies.map((b) => b.feed).sort()).toEqual(['comment-changed', 'page-updated']);
     await service.shutdown();
@@ -449,7 +541,7 @@ describe('presence service — generic feed bus (feature-presence-generic-feed-b
 
   it('the generic subscribe/publish pair delivers exactly what the named onXxx/publishXxx wrappers deliver (AC-1)', async () => {
     const redis = new FakeRedis();
-    const service = await createPresenceService(redis);
+    const service = await createPresenceService(redis, TEST_KEYSPACE);
 
     const viaGeneric: Array<{ pageId: string; payload: unknown }> = [];
     const unsubscribe = service.subscribe('page-updated', (pageId, payload) => viaGeneric.push({ pageId, payload }));
@@ -465,19 +557,19 @@ describe('presence service — generic feed bus (feature-presence-generic-feed-b
 
   it('drops an unparseable / non-envelope message on the feed channel instead of guessing a feed for it', async () => {
     const shared = new FakeRedis();
-    const instance = await createPresenceService(shared);
+    const instance = await createPresenceService(shared, TEST_KEYSPACE);
     const viewerChanges: string[] = [];
     const pageUpdated: Array<{ pageId: string; payload: unknown }> = [];
     instance.subscribe('viewers', (pageId) => viewerChanges.push(pageId));
     instance.subscribe('page-updated', (pageId, payload) => pageUpdated.push({ pageId, payload }));
 
-    // `PRESENCE_FEED_CHANNEL` is a brand-new channel name — no
+    // The presence feed channel is a brand-new channel name — no
     // pre-consolidation process ever published to it, so there is no
     // rolling-deploy scenario where a real publisher sends a bare
     // pageId (or any other non-envelope payload) here. Both must be
     // dropped rather than misinterpreted as a viewer-list change.
-    await shared.publish(PRESENCE_FEED_CHANNEL, PAGE_A);
-    await shared.publish(PRESENCE_FEED_CHANNEL, JSON.stringify({ notAnEnvelope: true }));
+    await shared.publish(TEST_KEYSPACE.key('presence', 'feed'), PAGE_A);
+    await shared.publish(TEST_KEYSPACE.key('presence', 'feed'), JSON.stringify({ notAnEnvelope: true }));
 
     expect(viewerChanges).toEqual([]);
     expect(pageUpdated).toEqual([]);
@@ -492,11 +584,11 @@ describe('presence service — generic feed bus (feature-presence-generic-feed-b
     // listener is registered for it — a wire-reachable crash. This must
     // be dropped exactly like any other corrupt/unparseable message.
     const shared = new FakeRedis();
-    const instance = await createPresenceService(shared);
+    const instance = await createPresenceService(shared, TEST_KEYSPACE);
     const viewerChanges: string[] = [];
     instance.subscribe('viewers', (pageId) => viewerChanges.push(pageId));
 
-    await expect(shared.publish(PRESENCE_FEED_CHANNEL, JSON.stringify({ feed: 'error', pageId: PAGE_A }))).resolves.not.toThrow();
+    await expect(shared.publish(TEST_KEYSPACE.key('presence', 'feed'), JSON.stringify({ feed: 'error', pageId: PAGE_A }))).resolves.not.toThrow();
 
     expect(viewerChanges).toEqual([]);
     await instance.shutdown();
@@ -534,19 +626,19 @@ describe('presence service — page-updated fan-out (feature-live-page-content-s
   it('publishes page-updated as a JSON envelope on the generic feed channel', async () => {
     const redis = new FakeRedis();
     const publishSpy = jest.spyOn(redis, 'publish');
-    const service = await createPresenceService(redis);
+    const service = await createPresenceService(redis, TEST_KEYSPACE);
 
     const p = payload();
     await service.publishPageUpdated(PAGE_A, p);
 
-    expect(publishSpy).toHaveBeenCalledWith(PRESENCE_FEED_CHANNEL, JSON.stringify({ feed: 'page-updated', pageId: PAGE_A, payload: p }));
+    expect(publishSpy).toHaveBeenCalledWith(TEST_KEYSPACE.key('presence', 'feed'), JSON.stringify({ feed: 'page-updated', pageId: PAGE_A, payload: p }));
     await service.shutdown();
   });
 
   it('fans a page-updated signal out to a second instance via the generic feed channel', async () => {
     const shared = new FakeRedis();
-    const instanceA = await createPresenceService(shared);
-    const instanceB = await createPresenceService(shared);
+    const instanceA = await createPresenceService(shared, TEST_KEYSPACE);
+    const instanceB = await createPresenceService(shared, TEST_KEYSPACE);
 
     const seenByB: Array<{ pageId: string; payload: PageUpdatedPayload }> = [];
     instanceB.subscribe('page-updated', (pageId, p) => seenByB.push({ pageId, payload: p as PageUpdatedPayload }));
@@ -568,7 +660,7 @@ describe('presence service — page-updated fan-out (feature-live-page-content-s
     // client's debounce + createdAt monotonicity guard collapse it.
     // Regression guard: AC-4 requires this to be unchanged post-generic.
     const shared = new FakeRedis();
-    const origin = await createPresenceService(shared);
+    const origin = await createPresenceService(shared, TEST_KEYSPACE);
     const seen: PageUpdatedPayload[] = [];
     origin.subscribe('page-updated', (_pageId, p) => seen.push(p as PageUpdatedPayload));
 
@@ -597,19 +689,19 @@ describe('presence service — comment-changed fan-out (feature-live-page-commen
   it('publishes comment-changed as a JSON envelope on the generic feed channel', async () => {
     const redis = new FakeRedis();
     const publishSpy = jest.spyOn(redis, 'publish');
-    const service = await createPresenceService(redis);
+    const service = await createPresenceService(redis, TEST_KEYSPACE);
 
     const p = payload();
     await service.publishCommentChanged(PAGE_A, p);
 
-    expect(publishSpy).toHaveBeenCalledWith(PRESENCE_FEED_CHANNEL, JSON.stringify({ feed: 'comment-changed', pageId: PAGE_A, payload: p }));
+    expect(publishSpy).toHaveBeenCalledWith(TEST_KEYSPACE.key('presence', 'feed'), JSON.stringify({ feed: 'comment-changed', pageId: PAGE_A, payload: p }));
     await service.shutdown();
   });
 
   it('fans a comment-changed out to a second instance via the generic feed channel', async () => {
     const shared = new FakeRedis();
-    const instanceA = await createPresenceService(shared);
-    const instanceB = await createPresenceService(shared);
+    const instanceA = await createPresenceService(shared, TEST_KEYSPACE);
+    const instanceB = await createPresenceService(shared, TEST_KEYSPACE);
 
     const seenByB: Array<{ pageId: string; payload: CommentChangedPayload }> = [];
     instanceB.subscribe('comment-changed', (pageId, p) => seenByB.push({ pageId, payload: p as CommentChangedPayload }));
@@ -625,8 +717,8 @@ describe('presence service — comment-changed fan-out (feature-live-page-commen
 
   it('carries a removed frame with no actorUserId across instances', async () => {
     const shared = new FakeRedis();
-    const instanceA = await createPresenceService(shared);
-    const instanceB = await createPresenceService(shared);
+    const instanceA = await createPresenceService(shared, TEST_KEYSPACE);
+    const instanceB = await createPresenceService(shared, TEST_KEYSPACE);
 
     const seenByB: CommentChangedPayload[] = [];
     instanceB.subscribe('comment-changed', (_pageId, p) => seenByB.push(p as CommentChangedPayload));
@@ -645,7 +737,7 @@ describe('presence service — comment-changed fan-out (feature-live-page-commen
   it('double-delivers to the ORIGIN instance (local emit + Redis loopback)', async () => {
     // Regression guard: AC-4 requires this to be unchanged post-generic.
     const shared = new FakeRedis();
-    const origin = await createPresenceService(shared);
+    const origin = await createPresenceService(shared, TEST_KEYSPACE);
     const seen: CommentChangedPayload[] = [];
     origin.subscribe('comment-changed', (_pageId, p) => seen.push(p as CommentChangedPayload));
 
