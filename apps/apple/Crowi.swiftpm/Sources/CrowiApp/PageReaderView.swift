@@ -32,6 +32,13 @@ struct PageReaderView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 if let page, let body = page.revision?.body {
+                    // A refresh that FAILED must not look like one that
+                    // confirmed server truth — see `load()`'s catch.
+                    if let loadErrorMessage {
+                        Label(loadErrorMessage, systemImage: "exclamationmark.triangle")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
                     WorkspacePageMarkdownView(
                         rawBody: body,
                         imageLoader: session.imageCache,
@@ -90,11 +97,18 @@ struct PageReaderView: View {
                 .disabled(page == nil)
             }
         }
-        .sheet(isPresented: $showEditor) {
+        .sheet(isPresented: $showEditor, onDismiss: {
+            // Backstop for every editor exit that resolves to nothing (Cancel,
+            // or a conflict whose re-fetch was unusable so there was no newer
+            // revision to hand back): re-sync with the server instead of
+            // trusting what is on screen. Deliberately an unstructured `Task`
+            // — it must outlive the sheet's own teardown.
+            Task { await load() }
+        }) {
             // The editor runs its OWN fresh detail GET (§8 — never seeded
             // from this view's possibly-cache-painted state).
-            PageEditorView(session: session, pagePath: page?.path ?? path) { saved in
-                page = saved
+            PageEditorView(session: session, pagePath: page?.path ?? path) { latest in
+                page = latest
             }
         }
         .task(id: path) { await load() }
@@ -247,7 +261,20 @@ struct PageReaderView: View {
             engagementModel.applySeenMarkResult(await seenMarkResult)
             engagement = engagementModel
         } catch {
-            loadErrorMessage = page == nil ? "Couldn't load this page." : nil
+            // A cancelled load is not a failure: the view went away, or the
+            // pull-to-refresh control tore its task down. Report nothing and
+            // leave whatever is on screen alone.
+            if error is CancellationError || (error as? URLError)?.code == .cancelled {
+                return
+            }
+            // Otherwise SAY SO, even when content is already on screen. This
+            // branch used to clear the message whenever `page != nil`, which
+            // made a failed pull-to-refresh indistinguishable from one that
+            // confirmed server truth — the reader silently kept stale content
+            // and looked freshly loaded (reported 2026-07-25).
+            loadErrorMessage = page == nil
+                ? "Couldn't load this page."
+                : "Couldn't refresh — showing the last version that loaded."
         }
     }
 
