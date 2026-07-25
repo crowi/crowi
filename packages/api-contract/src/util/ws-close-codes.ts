@@ -21,9 +21,16 @@
  *   - `SHUTDOWN` (1001) — the standard "going away" code, sent when the
  *     server process is shutting down and asks connected clients to leave
  *     politely.
+ *   - `INTERNAL_ERROR` (1011) — the standard "unexpected condition" code,
+ *     sent when a handler-side operation the connection depends on fails
+ *     (e.g. presence's `presence.join()` throwing — feature-presence-
+ *     consistency-fixes defect 4: closing here, rather than leaving the
+ *     socket open with a never-registered viewer, hands recovery to the
+ *     client's existing reconnect logic instead of staying silently stale
+ *     forever).
  *
  * 4401 / 4403 sit in the 4000-4999 WebSocket close-code range reserved for
- * private/application use (RFC 6455 §7.4.2); 1001 is a standard code.
+ * private/application use (RFC 6455 §7.4.2); 1001 / 1011 are standard codes.
  *
  * The two application-private codes are given channel-agnostic names here;
  * each caller re-exposes a locally meaningful alias where the generic name
@@ -35,6 +42,7 @@ export const WS_CLOSE_CODES = {
   INVALID_TOKEN: 4401,
   FORBIDDEN: 4403,
   SHUTDOWN: 1001,
+  INTERNAL_ERROR: 1011,
 } as const;
 
 export type WsCloseCode = (typeof WS_CLOSE_CODES)[keyof typeof WS_CLOSE_CODES];
