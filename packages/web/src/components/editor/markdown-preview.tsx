@@ -269,7 +269,19 @@ export const previewComponents = {
   // `page-content.tsx` for the React warning this resolves.
   input: ({ type, checked, ...props }: { type?: string; checked?: unknown; [key: string]: unknown }) =>
     type === 'checkbox' ? <input type="checkbox" checked={Boolean(checked)} readOnly {...props} /> : <input type={type} {...props} />,
-  img: ({ src, alt, className, style: rawStyle, ...rest }: { src?: string | Blob; alt?: string; className?: unknown; style?: React.CSSProperties }) => {
+  img: ({
+    src,
+    alt,
+    className,
+    style: rawStyle,
+    ...rest
+  }: {
+    src?: string | Blob;
+    alt?: string;
+    className?: unknown;
+    style?: React.CSSProperties;
+    [key: string]: unknown;
+  }) => {
     const srcString = typeof src === 'string' ? src : undefined;
     // Server-rendered "ready diagram" presentation (an optional renderer
     // plugin's PNG-fallback or `<img>`-success output — the generic
@@ -277,10 +289,16 @@ export const previewComponents = {
     // `.diagram-embed` dual-accept, see `isDiagramPresentationReady`) —
     // wrap for cap-to-width + click-to-enlarge, matching the show page.
     if (isDiagramPresentationReady(className, rest)) {
+      // Forward a renderer-declared intrinsic `width`/`height` (never
+      // dropped by the destructure above — it lands in `rest`) — mirrors
+      // `page-content.tsx`'s `img:` override so the editor preview and
+      // the saved page don't diverge on the same 0×0-collapse fix.
+      const width = typeof rest.width === 'string' || typeof rest.width === 'number' ? rest.width : undefined;
+      const height = typeof rest.height === 'string' || typeof rest.height === 'number' ? rest.height : undefined;
       return (
         <RendererPresentation className={typeof className === 'string' ? className : undefined} presentationAttrs={pickRendererPresentationAttrs(rest)}>
           {/* biome-ignore lint/performance/noImgElement: rich-text rendered as plain markdown */}
-          <img src={srcString} alt={alt || ''} className="max-w-full h-auto" loading="lazy" />
+          <img src={srcString} alt={alt || ''} className="max-w-full h-auto" loading="lazy" width={width} height={height} />
         </RendererPresentation>
       );
     }

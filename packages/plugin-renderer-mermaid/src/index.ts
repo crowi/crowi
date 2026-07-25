@@ -5,6 +5,7 @@ import { encodeSvgToDataUrl } from './encode-svg';
 import { detectRejectedSource } from './reject-patterns';
 import { MermaidSyntaxError, renderMermaidSvg } from './render-engine';
 import { sanitizeMermaidSvg } from './sanitize-svg';
+import { extractSvgDimensions } from './svg-dimensions';
 
 /**
  * Test-only escape hatch, re-exported at the package's public entry so
@@ -86,7 +87,14 @@ export function createMermaidRenderer(): CodeBlockRenderer {
     // blobs (written with the old shape) keep serving verbatim, dual-
     // accepted by the legacy `.diagram-embed`/no-marker branch, until
     // their page is next saved.
-    cacheVersion: 2,
+    //
+    // Bumped 2 to 3: success output now also carries `width`/`height`
+    // attributes (0-height <img> regression fix, see `svg-dimensions.ts`).
+    // Same caveat as above — an already-saved page's `Revision.renderedAst`
+    // still serves the old, size-less markup until it is next saved; only
+    // this plugin's own `PluginRenderCache` entry (keyed on diagram
+    // source, independent of any one page) is invalidated immediately.
+    cacheVersion: 3,
     reservation: { variant: 'aspect', aspectRatio: 16 / 9 },
     // spec §6 — sized to the fixed 4-worker child-process pool
     // (`render-engine.ts`); §7's preview dispatch is the only other
@@ -123,8 +131,18 @@ export function createMermaidRenderer(): CodeBlockRenderer {
       if (!encoded.ok) return classAErrorResult();
 
       const alt = buildAltText(info.source);
+      // Mermaid's SVG declares `width="100%"` with no absolute height, so
+      // a bare `<img>` has no resolvable intrinsic size once base64-
+      // embedded — inside `RendererPresentation`'s `inline-block` wrapper
+      // (whose own width is itself `auto`, sized from its content) the
+      // two collapse to 0×0 in the browser. `width`/`height` attributes,
+      // derived from the sanitized SVG's own `viewBox`, give the browser
+      // an intrinsic size independent of the `data:` payload; CSS
+      // `max-width: 100%; height: auto` then scales it proportionally.
+      const dims = extractSvgDimensions(sanitized.svg);
+      const sizeAttrs = dims ? ` width="${dims.width}" height="${dims.height}"` : '';
       return {
-        html: `<img class="diagram-embed mermaid-embed" data-crowi-renderer-presentation="diagram" data-crowi-renderer-state="ready" alt="${escapeHtml(alt)}" src="${encoded.dataUrl}">`,
+        html: `<img class="diagram-embed mermaid-embed" data-crowi-renderer-presentation="diagram" data-crowi-renderer-state="ready" alt="${escapeHtml(alt)}" src="${encoded.dataUrl}"${sizeAttrs}>`,
         ttlSec: SUCCESS_TTL_SEC,
       };
     },

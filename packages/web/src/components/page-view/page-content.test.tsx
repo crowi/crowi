@@ -737,6 +737,23 @@ describe('PageContent — diagram embeds reuse the shared DiagramEmbed wrapper (
     expect(dialog.querySelector('img[alt="Diagram (flowchart)"]')).not.toBeNull();
   });
 
+  it("forwards a diagram success <img>'s explicit width/height attributes (regression: a renderer-declared intrinsic size — e.g. Mermaid's SVG has a percentage width with no absolute height — was silently dropped here, collapsing the image to 0×0 inside the inline-block wrapper even though the server-emitted HTML carried it correctly)", () => {
+    const renderedAst = {
+      type: 'root',
+      children: [
+        {
+          type: 'html',
+          value: '<img class="diagram-embed fake-diagram-embed" alt="Diagram (flowchart)" src="data:image/svg+xml;base64,PHN2Zy8+" width="141" height="245">',
+        },
+      ],
+    };
+    renderPage(pageWithAst(renderedAst));
+
+    const img = screen.getByRole('img', { name: 'Diagram (flowchart)' }) as HTMLImageElement;
+    expect(img.getAttribute('width')).toBe('141');
+    expect(img.getAttribute('height')).toBe('245');
+  });
+
   it('does NOT wrap a diagram error placeholder (class="fake-diagram-embed fake-diagram-error", no diagram-embed marker) — no zoom button, no dialog', () => {
     const renderedAst = {
       type: 'root',
