@@ -118,10 +118,16 @@ final class PageEditSessionTests: XCTestCase {
         XCTAssertEqual(blocked, .failed(message: nil))
         XCTAssertEqual(recorder.requests.count, 2, "the refused save must not touch the wire")
 
-        // Abort is the DEFAULT resolution: terminal, nothing written.
-        session.discardConflict()
+        // Abort is the DEFAULT resolution: terminal, nothing written. It must
+        // still hand back the OTHER person's revision — discarding chose
+        // their version, so the reader has to end up showing THEIR body
+        // instead of the pre-edit one it painted before the sheet opened.
+        let adopted = session.discardConflict()
+        XCTAssertEqual(adopted?.revision?.id, "rev-9")
+        XCTAssertEqual(adopted?.revision?.body, "someone else's newer body")
         XCTAssertEqual(session.state, .discarded)
-        XCTAssertEqual(recorder.requests.count, 2)
+        XCTAssertEqual(recorder.requests.count, 2, "adopting their revision must reuse the conflict re-fetch, never spend another GET")
+        XCTAssertNil(session.discardConflict(), "terminal: a second discard has no conflict left to resolve")
     }
 
     @MainActor
@@ -178,7 +184,7 @@ final class PageEditSessionTests: XCTestCase {
         XCTAssertEqual(outcome, .conflict(latest: nil))
         XCTAssertFalse(session.reapplyOnLatest(), "no usable latest revision — discard is the only resolution")
         XCTAssertEqual(session.state, .conflict(latest: nil))
-        session.discardConflict()
+        XCTAssertNil(session.discardConflict(), "the re-fetch was unusable, so there is no newer revision for the reader to adopt")
         XCTAssertEqual(session.state, .discarded)
     }
 

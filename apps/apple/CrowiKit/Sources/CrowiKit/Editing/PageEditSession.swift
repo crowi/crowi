@@ -159,8 +159,20 @@ public final class PageEditSession {
 
     /// Conflict resolution DEFAULT: abandon the edit. Terminal — nothing
     /// was (or will be) written.
-    public func discardConflict() {
-        guard case .conflict = state else { return }
+    ///
+    /// Returns the conflict's already-re-fetched `latest` detail — the OTHER
+    /// person's newer revision, body included — so the caller can ADOPT it.
+    /// Discarding means their version wins, so a reader that keeps showing
+    /// the pre-edit body it painted before the edit is simply wrong (reported
+    /// 2026-07-25: after Discard the reader still showed the old content).
+    /// The conflict path already paid for this GET (`save`'s 409 branch), so
+    /// adopting it costs no extra request. `nil` when there is nothing to
+    /// adopt: the re-fetch was answered but unusable, or the state was not a
+    /// conflict at all.
+    @discardableResult
+    public func discardConflict() -> PageLenient? {
+        guard case .conflict(let latest) = state else { return nil }
         state = .discarded
+        return latest
     }
 }

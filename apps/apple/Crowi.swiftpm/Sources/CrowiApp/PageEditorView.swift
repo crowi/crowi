@@ -16,10 +16,14 @@ import SwiftUI
 struct PageEditorView: View {
     let session: WorkspaceSession
     let pagePath: String
-    /// Called with the saved page (the returned `{ page }` — already
-    /// upserted into the read cache here) so the reader updates its
-    /// on-screen state without a refetch.
-    let onSaved: (PageLenient) -> Void
+    /// Called with the page the reader should show from now on — already
+    /// upserted into the read cache here, so the reader needs no refetch.
+    /// That is the saved page after a successful save, and after DISCARDING
+    /// a conflict it is the other person's newer revision (whose version the
+    /// discard just chose). Not called when the editor closes with nothing
+    /// resolved (Cancel, or a conflict whose re-fetch was unusable) — the
+    /// reader's `onDismiss` re-sync covers those.
+    let onLatestPage: (PageLenient) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var editSession: PageEditSession?
@@ -85,7 +89,15 @@ struct PageEditorView: View {
             // CLI's abort-by-default conflict stance. No cancel button: the
             // conflict must be resolved explicitly, one way or the other.
             Button("Discard My Changes", role: .destructive) {
-                editSession?.discardConflict()
+                // Discarding chose THEIR version, so hand it to the reader.
+                // `discardConflict()` returns the revision the 409 branch
+                // already re-fetched, so this is free — and without it the
+                // reader would sit on the stale pre-edit body it painted
+                // before the sheet opened.
+                if let latest = editSession?.discardConflict() {
+                    CachedPage.upsert(from: latest, in: session.modelContext)
+                    onLatestPage(latest)
+                }
                 dismiss()
             }
             .keyboardShortcut(.defaultAction)
@@ -142,7 +154,7 @@ struct PageEditorView: View {
             switch outcome {
             case .saved(let page):
                 CachedPage.upsert(from: page, in: session.modelContext)
-                onSaved(page)
+                onLatestPage(page)
                 dismiss()
             case .conflict(let latest):
                 conflictLatest = latest
