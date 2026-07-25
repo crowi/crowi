@@ -15,10 +15,18 @@ struct RecentlyViewedView: View {
                 onSelectDestination(.page(path: page.path))
             } label: {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(page.path).font(.headline)
-                    if let updatedAt = page.updatedAt {
-                        Text(updatedAt).font(.caption).foregroundStyle(.secondary)
-                    }
+                    // `GET /me/recently-viewed-pages` does not populate
+                    // `lastUpdateUser`, so the metadata footer's fallback
+                    // ladder shows the relative time only (which is what this
+                    // row printed as a raw ISO string before), with no
+                    // placeholder avatar.
+                    PageRowTitleLabel(path: page.path)
+                    PageRowMetadataLabel(
+                        lastUpdatedAt: page.updatedAt,
+                        updaterName: page.lastUpdateUserName,
+                        updaterImage: page.lastUpdateUserImage,
+                        loader: session.imageCache
+                    )
                 }
             }
             .buttonStyle(.plain)

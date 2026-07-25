@@ -24,7 +24,10 @@ struct SearchView: View {
                 onSelectDestination(.page(path: hit.path))
             } label: {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(hit.path).font(.headline)
+                    // No metadata footer here: `CachedSearchHitPayload` carries
+                    // no `updatedAt`/updater, so a hit row is title + parent +
+                    // snippet (extending the payload is out of scope).
+                    PageRowTitleLabel(path: hit.path)
                     if let rawSnippet = hit.rawSnippet, !rawSnippet.isEmpty {
                         Text(SearchHitLenient.plainSnippet(rawSnippet))
                             .font(.caption)

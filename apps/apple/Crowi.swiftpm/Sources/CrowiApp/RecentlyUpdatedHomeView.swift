@@ -86,8 +86,7 @@ struct RecentlyUpdatedHomeView: View {
 
     private func row(for page: PageLenient) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(page.path)
-                .font(.headline)
+            PageRowTitleLabel(path: page.path)
             PageRowMetadataLabel(
                 lastUpdatedAt: page.updatedAt,
                 updaterName: page.lastUpdateUserName,
