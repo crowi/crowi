@@ -301,7 +301,22 @@ function usePresenceToken(pageId: string | null | undefined, options?: UsePresen
 export function usePresence(pageId: string | null | undefined, options?: UsePresenceOptions): UsePresenceResult {
   const queryClient = useQueryClient();
 
-  const [viewers, setViewers] = useState<PresenceViewer[]>([]);
+  // feature-presence-consistency-fixes defect 3 — the rendered viewer list
+  // is tagged with the `pageId` it was computed for, and the RETURN value
+  // below (not an effect) re-derives it against the CURRENT `pageId`
+  // argument on every render. A bare `useState<PresenceViewer[]>` used to
+  // rely on a `useEffect(() => setViewers([]), [pageId])` to clear stale
+  // state on navigation — but an effect only runs AFTER a render commits,
+  // so the very FIRST render with the new `pageId` (P2) still returned the
+  // OLD page's (P1's) viewer list, and — since P2's presence token has not
+  // resolved yet at that point — `selfUserId` was often `null`, which could
+  // make one of P1's viewers appear to satisfy an "not me" check on P2's
+  // screen. Deriving synchronously from a tagged tuple closes that window:
+  // a mismatched tag renders `[]` immediately, with no effect-flush lag.
+  const [viewersState, setViewersState] = useState<{ pageId: string | null | undefined; viewers: PresenceViewer[] }>({
+    pageId,
+    viewers: [],
+  });
   const [status, setStatus] = useState<PresenceStatus>('connecting');
 
   // D1a — expose the LIVE connection status to `usePresenceToken` so its
@@ -404,11 +419,26 @@ export function usePresence(pageId: string | null | undefined, options?: UsePres
     // has already run exactly once for that attempt.
     let hasFiredReconnectedThisEpoch = false;
 
+    // feature-presence-consistency-fixes defect 2 — the highest `viewers`
+    // frame `generation` applied so far THIS epoch (reset in `onOpen`,
+    // exactly like `hasFiredReconnectedThisEpoch`). A frame whose
+    // `generation` is not higher than this is a stale, out-of-order
+    // broadcast (the server's own `listViewers` read completed later than
+    // a broadcast it raced but was DISPATCHED before) and must be
+    // discarded instead of overwriting the anti-flicker state with older
+    // data than what is already showing.
+    let lastAppliedGeneration = 0;
+
     // Recompute the rendered list from the anti-flicker state and
-    // schedule the next admission re-check at the earliest `dueAt`.
+    // schedule the next admission re-check at the earliest `dueAt`. Tags
+    // the written state with THIS effect's own `pageId` (defect 3) so a
+    // write that lands after `pageId` has already changed (a message in
+    // flight when navigation starts) is rendered as `[]` rather than
+    // bleeding into the new page — see the `viewersState`-derivation at
+    // the bottom of the hook.
     const project = (dueAt: number | null) => {
       const next = visibleViewers(flicker, selfUserId);
-      setViewers((prev) => (sameViewers(prev, next) ? prev : next));
+      setViewersState((prev) => (prev.pageId === pageId && sameViewers(prev.viewers, next) ? prev : { pageId, viewers: next }));
       if (admissionTimer) {
         clearTimeout(admissionTimer);
         admissionTimer = null;
@@ -440,6 +470,9 @@ export function usePresence(pageId: string | null | undefined, options?: UsePres
       onOpen: () => {
         applyStatus('connected');
         hasFiredReconnectedThisEpoch = false;
+        // A new epoch starts its own generation lineage — see
+        // `lastAppliedGeneration`'s doc comment above.
+        lastAppliedGeneration = 0;
         // Fire one heartbeat immediately, then on the 15s cadence.
         const beat = () => {
           socket.send(JSON.stringify({ type: 'heartbeat' }));
@@ -510,6 +543,21 @@ export function usePresence(pageId: string | null | undefined, options?: UsePres
         // LATER stale-token close starts its recovery from an immediate
         // invalidate again rather than inheriting an old backoff rung.
         invalidTokenAttemptsRef.current = 0;
+
+        // feature-presence-consistency-fixes defect 2 — discard a frame
+        // whose `generation` does not advance past the highest one already
+        // applied this epoch: the server assigns `generation` at DISPATCH
+        // time, but the underlying `listViewers` read can resolve out of
+        // order, so a lower (or equal) generation arriving now is
+        // necessarily a stale broadcast that raced ahead of a NEWER one
+        // already rendered. The connection itself is still healthy — the
+        // barrier / backoff-reset above already accounted for that — only
+        // the viewer-list STATE UPDATE is skipped.
+        if (message.data.generation <= lastAppliedGeneration) {
+          return 'reset-backoff';
+        }
+        lastAppliedGeneration = message.data.generation;
+
         const { dueAt } = ingestBroadcast(flicker, message.data.viewers, Date.now());
         project(dueAt);
         return 'reset-backoff';
@@ -592,12 +640,33 @@ export function usePresence(pageId: string | null | undefined, options?: UsePres
   }, [pageId, token, selfUserId, applyStatus, queryClient]);
 
   // Clear the rendered list when navigating away from a page so a
-  // stale stack never bleeds across page views.
+  // stale stack never bleeds across page views. This still matters even
+  // though the RETURN below already gates synchronously (see there): this
+  // effect is what actually advances `viewersState`'s tag to the new
+  // `pageId` (with an empty list) once the navigation commits, closing
+  // the mismatch window the gate covers in the meantime.
   useEffect(() => {
     flickerRef.current = createAntiFlickerState();
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setViewers([]);
+    setViewersState({ pageId, viewers: [] });
   }, [pageId]);
 
-  return { viewers, selfUserId, status, pageUpdatedSeq: pageUpdatedSeqRef };
+  // feature-presence-consistency-fixes defect 3 — re-derive the RETURNED
+  // viewers/selfUserId synchronously at render time against the CURRENT
+  // `pageId` argument, rather than trusting `viewersState` to already have
+  // caught up. `viewersState.pageId` only advances once either the
+  // pageId-change effect above or the connection effect's own `project()`
+  // runs — both AFTER the render commits — so on the very first render
+  // following a `pageId` change, this comparison is what actually prevents
+  // the previous page's viewer list (and its viewers' identities) from
+  // rendering, even for that one render. `selfUserId` is gated the same
+  // way: it does not itself carry stale data (its query key is scoped by
+  // `pageId`), but gating it in lockstep with `viewers` means a consumer
+  // never observes a "self" id paired with a viewer list that is not
+  // actually this page's.
+  const pageIdMatchesRenderedViewers = viewersState.pageId === pageId;
+  const activeViewers = pageIdMatchesRenderedViewers ? viewersState.viewers : [];
+  const activeSelfUserId = pageIdMatchesRenderedViewers ? selfUserId : null;
+
+  return { viewers: activeViewers, selfUserId: activeSelfUserId, status, pageUpdatedSeq: pageUpdatedSeqRef };
 }
