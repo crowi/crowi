@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import displayNameFixture from './__fixtures__/page-display-name.json';
 import {
   decodePagePathFromUrl,
   defaultDraftBody,
@@ -108,6 +109,36 @@ describe('pageDisplayParent', () => {
   it('pairs with pageDisplayName to reconstruct the (trimmed) path', () => {
     const path = '/user/foo/日報/2026/05/23';
     expect(pageDisplayParent(path) + pageDisplayName(path)).toBe(path);
+  });
+});
+
+/**
+ * The shared expectation table — the SAME JSON file the iOS port's tests read
+ * (`apps/apple/CrowiKit/Tests/CrowiKitTests/PageRowTitleLabelTests.swift`).
+ * These two helpers are implemented twice (TypeScript here, Swift there), so
+ * the table is the tripwire: change the rule on one side only and one of the
+ * two suites goes red. Keep new cases in the JSON, not inline here.
+ */
+describe('pageDisplayName / pageDisplayParent — shared cross-language fixture table', () => {
+  for (const { path, displayName, displayParent, why } of displayNameFixture.cases) {
+    it(`${JSON.stringify(path)} → ${JSON.stringify(displayName)} under ${JSON.stringify(displayParent)} (${why})`, () => {
+      expect(pageDisplayName(path)).toBe(displayName);
+      expect(pageDisplayParent(path)).toBe(displayParent);
+    });
+  }
+
+  // The pairing property, over the whole table. Skipped exactly where the
+  // table's own `roundTripRule` says it cannot hold: the top page (no display
+  // name) and a path with an empty segment (`/a//b`, normalised away by both
+  // implementations).
+  it('reconstructs every (non-degenerate) path from parent + name', () => {
+    const isRoundTrippable = (path: string) => pageDisplayName(path) !== '' && !path.includes('//');
+    const roundTripped = displayNameFixture.cases.map(({ path }) => path).filter(isRoundTrippable);
+
+    expect(roundTripped.length).toBeGreaterThan(10);
+    for (const path of roundTripped) {
+      expect(pageDisplayParent(path) + pageDisplayName(path)).toBe(path.replace(/\/+$/, ''));
+    }
   });
 });
 

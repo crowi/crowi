@@ -1,0 +1,143 @@
+{
+  "rule": "packages/web/src/lib/page-path.ts:96-134 — pageDisplayName / pageDisplayParent",
+  "why": "The wiki page display name (basename, with a trailing all-digit run collapsed into it) plus its parent directory is rendered by BOTH the web page list and the iOS flat lists, from two independent implementations (Swift cannot call the TypeScript util, and the server deliberately does not derive the name — `path` is all a client needs). This table is the single expectation set both test suites read, so changing the rule on one side without the other fails loudly.",
+  "consumers": [
+    "packages/web/src/lib/page-path.test.ts",
+    "apps/apple/CrowiKit/Tests/CrowiKitTests/PageRowTitleLabelTests.swift"
+  ],
+  "roundTripRule": "displayParent + displayName === path with trailing slashes stripped, for every case whose displayName is non-empty and whose path holds no empty segment ('//'). Both suites derive those two skips from the data instead of flagging cases.",
+  "cases": [
+    {
+      "path": "/user/foo/日報/2026/05/23",
+      "displayName": "2026/05/23",
+      "displayParent": "/user/foo/日報/",
+      "why": "a trailing date hierarchy collapses into one title — the whole point of the rule"
+    },
+    {
+      "path": "/user/foo/日報/2026/05/",
+      "displayName": "2026/05",
+      "displayParent": "/user/foo/日報/",
+      "why": "partial date hierarchy on a portal path (trailing slash ignored)"
+    },
+    {
+      "path": "/user/foo/日報/2026/",
+      "displayName": "2026",
+      "displayParent": "/user/foo/日報/",
+      "why": "a run of one numeric segment is still a run"
+    },
+    {
+      "path": "/user/sotarok/memo/2026/06/08",
+      "displayName": "2026/06/08",
+      "displayParent": "/user/sotarok/memo/",
+      "why": "the daily-note idiom under a user page"
+    },
+    {
+      "path": "/2026/05/23",
+      "displayName": "2026/05/23",
+      "displayParent": "/",
+      "why": "the whole path is the date run — parent falls back to root (the UI then hides the parent line)"
+    },
+    {
+      "path": "/2026/05/",
+      "displayName": "2026/05",
+      "displayParent": "/",
+      "why": "root-level partial-date portal: the run absorbs the whole path, so the parent is root here too"
+    },
+    {
+      "path": "/2026/",
+      "displayName": "2026",
+      "displayParent": "/",
+      "why": "root-level year portal — a one-segment run at the root, the shortest form of the previous case"
+    },
+    {
+      "path": "/foo/2026/05/notes",
+      "displayName": "notes",
+      "displayParent": "/foo/2026/05/",
+      "why": "only a TRAILING run collapses; a date run in the middle stays in the parent"
+    },
+    {
+      "path": "/crowi/qa/2026/06/08/rfc-0011-mcp",
+      "displayName": "rfc-0011-mcp",
+      "displayParent": "/crowi/qa/2026/06/08/",
+      "why": "same boundary with a realistic dated-namespace page"
+    },
+    {
+      "path": "/crowi/issues/123",
+      "displayName": "123",
+      "displayParent": "/crowi/issues/",
+      "why": "a bare trailing number is a one-segment run, not the notebook-keeping pageDefaultTitle rule"
+    },
+    {
+      "path": "/crowi/rfc/0001-plugin-architecture",
+      "displayName": "0001-plugin-architecture",
+      "displayParent": "/crowi/rfc/",
+      "why": "digits inside a segment do not make it numeric — only an ALL-digit segment counts"
+    },
+    {
+      "path": "/crowi/rfc/0001-plugin",
+      "displayName": "0001-plugin",
+      "displayParent": "/crowi/rfc/",
+      "why": "the digit-prefixed example spelled out verbatim in page-path.ts's own doc comment (:105)"
+    },
+    {
+      "path": "/foo/bar/page",
+      "displayName": "page",
+      "displayParent": "/foo/bar/",
+      "why": "the plain three-segment case from pageDisplayParent's doc comment (:125) and page-path.test.ts — no run to collapse, so it is pageDirname semantics"
+    },
+    {
+      "path": "/日報/２０２６",
+      "displayName": "２０２６",
+      "displayParent": "/日報/",
+      "why": "full-width digits are NOT ASCII digits: JS /^\\d+$/ rejects them, so a Swift port must not use the locale-aware Character.isNumber / decimalDigits (which accept them) or it would collapse this path"
+    },
+    {
+      "path": "/日報/２０２６/05",
+      "displayName": "05",
+      "displayParent": "/日報/２０２６/",
+      "why": "same trap one level deeper — the run must stop at the full-width segment instead of absorbing it"
+    },
+    {
+      "path": "/user/sotarok",
+      "displayName": "sotarok",
+      "displayParent": "/user/",
+      "why": "a user home page is an ordinary two-segment path"
+    },
+    {
+      "path": "/foo/bar/",
+      "displayName": "bar",
+      "displayParent": "/foo/",
+      "why": "nested portal page — the trailing slash never becomes an empty leaf"
+    },
+    {
+      "path": "/foo",
+      "displayName": "foo",
+      "displayParent": "/",
+      "why": "single segment — parent is root, so the UI hides the parent line"
+    },
+    {
+      "path": "/foo/",
+      "displayName": "foo",
+      "displayParent": "/",
+      "why": "single-segment portal page"
+    },
+    {
+      "path": "/Weall/dev/mysql connect to production db",
+      "displayName": "mysql connect to production db",
+      "displayParent": "/Weall/dev/",
+      "why": "paths may contain spaces; neither helper touches them (URL encoding happens elsewhere)"
+    },
+    {
+      "path": "/a//b",
+      "displayName": "b",
+      "displayParent": "/a/",
+      "why": "empty segments are dropped by both implementations (JS filter(Boolean) / Swift omittingEmptySubsequences) — the only case where parent+name does not reproduce the input verbatim"
+    },
+    {
+      "path": "/",
+      "displayName": "",
+      "displayParent": "/",
+      "why": "the top page has no display name at all — callers fall back to showing the raw path"
+    }
+  ]
+}
