@@ -34,10 +34,27 @@ struct PageEditorView: View {
         NavigationStack {
             Group {
                 if editSession != nil {
-                    TextEditor(text: $bodyText)
-                        .font(.body.monospaced())
-                        .autocorrectionDisabled()
-                        .padding(.horizontal, 8)
+                    // The `TextEditor` MUST sit inside a scrollable container
+                    // (here a `Form`) with an explicit `minHeight`, exactly
+                    // like `PageCreateView`'s body field. A bare `TextEditor`
+                    // as the direct child of this `Group` expands to fill the
+                    // sheet, and the keyboard's safe-area shrink does not
+                    // reach it — so with the keyboard up its bottom sits
+                    // BEHIND the keyboard, and because a short body leaves
+                    // the editor's own scroll extent at zero, trying to
+                    // scroll down there only bounces back (reported
+                    // 2026-07-24: 「editor の最下部が画面外に行ってしまう」).
+                    // The `Form`'s collection view adjusts its content inset
+                    // for the keyboard, which is what makes the bottom of the
+                    // editor reachable at all.
+                    Form {
+                        Section {
+                            TextEditor(text: $bodyText)
+                                .font(.body.monospaced())
+                                .autocorrectionDisabled()
+                                .frame(minHeight: 420)
+                        }
+                    }
                 } else if isLoading {
                     ProgressView()
                 } else {
