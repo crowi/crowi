@@ -1,5 +1,80 @@
 # @crowi/web
 
+## 2.0.0-alpha.8
+
+### Minor Changes
+
+- 708c0d5: Add `@[card](url)` link-card embeds with editor affordance.
+
+  New core `@[card](url)` embed tag (`registry.addEmbedTag(name, renderer)` embed-tag registration seam, RFC-0002; a later release folded the original `@crowi/plugin-renderer-link-card` plugin implementation directly into `@crowi/api` as a core-reserved embed tag and removed the plugin package, see the emoji/link-card core-absorption changeset). Writing `@[card](url)` fetches the target page's OGP meta tags (`og:title` / `og:description` / `og:image` / `og:site_name`) and renders a title / description / domain / image preview card. A page with no `og:image` renders as a text-only card; a fetch failure (timeout, non-2xx, blocked, bad scheme, oversized response) degrades to the unified fallback card (see the emoji/link-card core-absorption changeset) — a plain link to the original URL, with no OGP fields and no error-red styling. The fetch is SSRF-guarded (rejects private / loopback / link-local / unique-local / metadata addresses, whether specified directly, via DNS resolution, or via a redirect target — each of up to 3 manual redirect hops is re-validated), time-capped at 5s, size-capped at 512KB, and concurrency-capped at 5 simultaneous fetches. `og:image` is always linked directly to the source site (no proxying or caching).
+
+  The web editor gains a hover/focus affordance that converts a bare `http(s)://` URL to `@[card](url)` and back, leaving an already-labelled `[label](url)` link untouched.
+
+- d680c0c: Add server-side Mermaid diagram rendering (RFC-0002 Phase 6.1).
+
+  New `@crowi/plugin-renderer-mermaid` plugin: ` ```mermaid ` fenced code blocks are rendered entirely server-side in an isolated, network-denied child process (no client-side Mermaid JS ever ships to the browser) and embedded as a sanitized, base64-encoded SVG `<img>`. Supports flowchart, sequence, class, state, ER, journey, pie, and git-graph diagrams, with a shared, independently-tested DOM-based SVG sanitizer (new, private `@crowi/svg-sanitize` package) that also replaces `@crowi/plugin-renderer-plantuml`'s previous regex-only sanitizer. No operator configuration is required, and existing pages keep rendering their `mermaid` fences as plain code blocks until the author explicitly re-saves them.
+
+  The editor's live preview now renders Mermaid diagrams as you type, not just after saving: a new `previewPolicy` opt-in on `CodeBlockRenderer` lets a renderer participate in non-persistent preview rendering (page-less, no cache writes), gated by the same per-user admission-control concurrency limits and priority scheduling used for saved-page rendering, plus a per-user rate limit on the preview endpoint and proper request cancellation when a newer keystroke supersedes an in-flight preview.
+
+  The page-view diagram wrapper (click-to-enlarge, cap-to-width, dark-mode-neutral surface) is generalized from PlantUML-only to any diagram renderer, so Mermaid diagrams get the same affordance PlantUML diagrams already had.
+
+- a32204f: Absorb the emoji shortcode transform and the `@[card](url)` link-card embed directly into `@crowi/api` core — both are now always-on Markdown features and no longer need to be installed as separate renderer plugins. The `@crowi/plugin-renderer-emoji` and `@crowi/plugin-renderer-link-card` packages have been removed from the workspace entirely; they are no longer published.
+
+  Link-card OGP fetching is controlled by a new admin Security setting, "Allow link cards for external URLs" (default ON, matching the previous plugin-installed behaviour and GitHub/Slack/Notion-style link unfurling). Disabling it stops all new outbound OGP requests immediately — including bypassing the render cache entirely, so a card fetched while enabled is never served stale after a disable, and a disable never leaves a cached fallback behind after a re-enable — and every render that cannot show a real preview (a disabled toggle, a fetch failure, a blocked/air-gapped host) now shows the exact same non-error-styled fallback card (a plain link to the original URL) instead of the old dedicated error-card variant.
+
+  Operators upgrading with `@crowi/plugin-renderer-emoji` or `@crowi/plugin-renderer-link-card` still listed in `crowi.config.json` (or their npm packages still listed as a runner dependency) see a one-time boot warning instead of a hard failure — remove the two entries (and the matching `dependencies`) once convenient; they no longer do anything, and the packages no longer exist to install.
+
+  `@crowi/plugin-api`'s `EmbedRenderer` gains an optional `shouldBypassCache(input)` hook — a renderer whose output depends on a runtime policy toggle (like link-card's) can use it to skip the render cache entirely for a given dispatch instead of only checking the toggle inside `render()`, which would otherwise let a stale cache hit serve pre-toggle output.
+
+- 3b27a67: Add a "Subpages" tab to the user page.
+
+  `/user/<username>` now has a third footer tab, "Subpages", listing every page that actually exists under `/user/<username>/` (recursively, across all depths), regardless of who created it — distinct from the existing "Pages" tab, which lists pages this user created regardless of path. The preview shows up to 10 rows plus the total count, with a "View all" link to `/user/<username>/pages` for the full, paginated listing (30 per page). Visibility follows the same grant/status rules as every other page listing.
+
+  Also hardens draft creation (`POST /pages/drafts`): if the seed revision fails to save after the draft `Page` document was created, the orphaned `Page` is now compensating-deleted so it can no longer resurface as a permanently broken row in listings such as the new Subpages tab.
+
+### Patch Changes
+
+- 284bb9a: Keep preview content visible near the end of documents when editor and preview line heights differ.
+- 5ff7a04: Fold unchanged lines by default in the page history revision diff, GitHub-style: only the changed lines (with 3 lines of surrounding context) render, and unchanged regions collapse behind a click-to-expand indicator. A new toggle next to the existing split/unified view button switches to showing every line, including unchanged context, and back. Comparing two identical revisions now shows a plain "no changes" message instead of a diff container.
+- a775598: Fix the editor image display-attribute affordance showing two stacked panels over the same image. When the caret sat inside an image's Markdown while the mouse also hovered it (e.g. right after clicking the markup to edit it), the hover trigger and the cursor trigger each rendered their own identical panel. The hover trigger now yields to the (stable) cursor trigger on the same image span, and if a hover panel is already open when the caret enters that span it closes so only one panel remains. A hover panel for a different image is left untouched.
+- 91537b4: Editor image display-attribute affordance: the `align` / `float` controls now show icons instead of the text labels `align: left` … `float: right`. The `align` icons depict where the image box sits within the frame; the `float` icons depict an image box with text wrapping around it, so the effect is recognisable at a glance. The former text label is preserved as each button's hover tooltip and accessible name (`aria-label`), and the selected-state highlight is unchanged. Separately, floated images now always clear at the next section heading (`#`–`######`) in both page view and the editor preview, so a heading no longer wraps alongside a preceding floated image.
+- a207caa: Fix the mobile page-actions menu's share item, which was mislabeled "Title + URL" while silently copying just the bare URL with no confirmation or way to grab the title/Markdown variants.
+
+  It's now labeled "Copy URL" and opens the same share panel as the desktop link-share popover in a modal: the id URL is still auto-copied the instant it opens (with the "URL Copied!" confirmation), and the panel also offers "Title + URL" and Markdown rows with their own copy buttons — matching the desktop experience exactly, since both surfaces now share one panel component.
+
+- c447269: Bump `next` 16.2.6 → 16.2.11 to clear 9 Dependabot security advisories
+  (alerts #638-#664, 3 manifest locations × 9 advisories: `packages/web/package.json`,
+  `apps/crowi-site/package.json`, `pnpm-lock.yaml`), all patched in 16.2.11 per
+  GitHub's advisory data (vulnerable range `>=16.0.0, <16.2.11` for each):
+
+  - Denial of Service in App Router using Server Actions
+  - Middleware / Proxy bypass in App Router applications using Turbopack and single locale
+  - Unauthenticated disclosure of internal Server Function endpoints
+  - Denial of Service in the Image Optimization API using SVGs
+  - Server-Side Request Forgery in rewrites via attacker-controlled destination hostname
+  - Unbounded Server Action payload in Edge runtime
+  - Cache confusion of response bodies for requests with bodies containing invalid UTF-8 byte sequences
+  - Cache confusion of response bodies for requests with bodies
+  - Server-Side Request Forgery in Server Actions on custom servers
+
+  Direct dependency bump in both consumers (`@crowi/web`, `@crowi/site`), no
+  override needed. No code changes required; type-check/test/build green for
+  both packages.
+
+- b953a17: Fixed `GET /.well-known/oauth-authorization-server` returning a 500 in self-hosted production. `next.config.ts`'s `rewrites()` used to proxy that path to an absolute API URL that gets frozen into `routes-manifest.json` at `next build` time for `output: 'standalone'` builds; since the Docker image never sets that build-time URL, it always baked in the dev fallback (`http://localhost:4301`), and nothing listens on that port inside the production web container. `next.config.ts` is now exported as a phase-gated function so this rewrite is only included for `next dev` (where the destination is evaluated fresh from the environment each time the dev server starts, so it always stays correct); production builds no longer carry it at all, so web never attempts to proxy this path itself.
+- 1a4d883: Stop the presence WebSocket from reconnecting every ~4.5 minutes. The presence token is a handshake-only credential — the server never re-verifies it once a connection is established — so the old proactive `refetchInterval` that re-minted it before every expiry only tore the live socket down and re-broadcast the viewer list to every viewer of the page, for no auth benefit. The token query now holds a single token for the connection's whole life (matching the collab editor's token hook), and recovery from a genuinely expired token (a 4401 close) goes through an explicit token invalidate with capped exponential backoff instead of the removed timer.
+- 785f0bd: Improve link-card editing with a single conversion action near the active editor position and a clear, static preview card before metadata is fetched on save.
+- 7819e03: The editor/preview scroll sync now uses a "sliding reference" alignment instead of always pinning the matched line at the viewport top. As you scroll toward the end of the document (the common state while appending text), the alignment point slides down toward the viewport bottom, so the freshly-rendered end of a taller preview stays visible instead of being pushed off-screen. Scrolling to the very top still aligns both panes' tops exactly as before, and the transition in between is continuous — no sudden jump at any point while scrolling either pane.
+- b6feef8: Fix editor↔preview scroll sync jumping backwards and then snapping at the end of a document. Source-line anchors are only injected on top-level block starts, so every line after the last anchor (a trailing list's remaining items, a trailing paragraph's continuation lines, and the editor's bottom padding) collapsed onto that anchor's position. The sliding-reference alignment then moved the preview UP as the editor scrolled DOWN, and the endpoint pin closed the accumulated gap as one visible jump. The line-to-position mapping now extends to the true document edges, so the preview tracks the editor monotonically and reaches the bottom continuously.
+- Updated dependencies [d9eb1c0]
+- Updated dependencies [a899fdd]
+- Updated dependencies [f1bcd2b]
+- Updated dependencies [29b3679]
+- Updated dependencies [a32204f]
+- Updated dependencies [b0e2c76]
+- Updated dependencies [3b27a67]
+  - @crowi/api-contract@2.0.0-alpha.8
+
 ## 2.0.0-alpha.7
 
 ### Minor Changes

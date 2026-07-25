@@ -1,5 +1,115 @@
 # @crowi/api
 
+## 2.0.0-alpha.8
+
+### Minor Changes
+
+- df1ce77: Give renderer plugins a first-class way to show a working fallback UI on render failure, and make the plugin-render cache keep the last-good output on screen through a transient failure.
+
+  `@crowi/plugin-api`'s `RenderResult` gains an optional `errorHtml` field, paired with `error`: when set, `@crowi/api` shows `errorHtml` instead of the generic link-less placeholder, and a new `RenderError.code: 'blocked'` covers policy-level permanent rejections (SSRF block, disallowed scheme, disallowed content-type) with the same 1h TTL as `not_found`. `@crowi/api`'s plugin-render cache also adds a stale-if-error policy: when a previously-successful embed or code-block render's background/blocking revalidation fails, the last-good output stays on screen (retried at the failure's own TTL cadence) for up to 24h before degrading to `errorHtml` or the placeholder — this applies uniformly to every renderer plugin, not just link cards, so e.g. a PlantUML diagram no longer drops to a placeholder while the PlantUML server briefly restarts.
+
+  Crowi's `@[card](url)` link-card embed (originally shipped as the separate `@crowi/plugin-renderer-link-card` plugin, since folded directly into `@crowi/api` core — see the emoji/link-card core-absorption changeset) migrates its failure path onto this real contract instead of disguising every OGP-fetch failure as a successful render with a plugin-local shortened TTL: per-failure-class TTL (persistent 1h for blocked/not-found sources, transient 5min for network/timeout, `Retry-After`-aware rate-limit handling) is now expressed through the shared `error` + `errorHtml` mechanism, so admin telemetry sees the real failure instead of a fake success. The `errorHtml` a link-card render shows today is the unified fallback card described in the emoji/link-card core-absorption changeset — a plain link to the original URL with no error-red styling, not a dedicated error card.
+
+- 708c0d5: Add `@[card](url)` link-card embeds with editor affordance.
+
+  New core `@[card](url)` embed tag (`registry.addEmbedTag(name, renderer)` embed-tag registration seam, RFC-0002; a later release folded the original `@crowi/plugin-renderer-link-card` plugin implementation directly into `@crowi/api` as a core-reserved embed tag and removed the plugin package, see the emoji/link-card core-absorption changeset). Writing `@[card](url)` fetches the target page's OGP meta tags (`og:title` / `og:description` / `og:image` / `og:site_name`) and renders a title / description / domain / image preview card. A page with no `og:image` renders as a text-only card; a fetch failure (timeout, non-2xx, blocked, bad scheme, oversized response) degrades to the unified fallback card (see the emoji/link-card core-absorption changeset) — a plain link to the original URL, with no OGP fields and no error-red styling. The fetch is SSRF-guarded (rejects private / loopback / link-local / unique-local / metadata addresses, whether specified directly, via DNS resolution, or via a redirect target — each of up to 3 manual redirect hops is re-validated), time-capped at 5s, size-capped at 512KB, and concurrency-capped at 5 simultaneous fetches. `og:image` is always linked directly to the source site (no proxying or caching).
+
+  The web editor gains a hover/focus affordance that converts a bare `http(s)://` URL to `@[card](url)` and back, leaving an already-labelled `[label](url)` link untouched.
+
+- d680c0c: Add server-side Mermaid diagram rendering (RFC-0002 Phase 6.1).
+
+  New `@crowi/plugin-renderer-mermaid` plugin: ` ```mermaid ` fenced code blocks are rendered entirely server-side in an isolated, network-denied child process (no client-side Mermaid JS ever ships to the browser) and embedded as a sanitized, base64-encoded SVG `<img>`. Supports flowchart, sequence, class, state, ER, journey, pie, and git-graph diagrams, with a shared, independently-tested DOM-based SVG sanitizer (new, private `@crowi/svg-sanitize` package) that also replaces `@crowi/plugin-renderer-plantuml`'s previous regex-only sanitizer. No operator configuration is required, and existing pages keep rendering their `mermaid` fences as plain code blocks until the author explicitly re-saves them.
+
+  The editor's live preview now renders Mermaid diagrams as you type, not just after saving: a new `previewPolicy` opt-in on `CodeBlockRenderer` lets a renderer participate in non-persistent preview rendering (page-less, no cache writes), gated by the same per-user admission-control concurrency limits and priority scheduling used for saved-page rendering, plus a per-user rate limit on the preview endpoint and proper request cancellation when a newer keystroke supersedes an in-flight preview.
+
+  The page-view diagram wrapper (click-to-enlarge, cap-to-width, dark-mode-neutral surface) is generalized from PlantUML-only to any diagram renderer, so Mermaid diagrams get the same affordance PlantUML diagrams already had.
+
+- 09d7b9c: Redis 8.x is now the reference version Crowi tests and supports (previously Redis 7.x). `docker-compose.yml`'s `redis` service moved off the moving `redis:7` tag to a reviewed, digest-pinned Redis 8.x patch tag, and CI now runs the same pinned tag as a service in the `test` and `flake-report` jobs, plus a dedicated `crowi-test-redis` instance so a Config pub/sub smoke test can safely publish to the fixed, global `'config'` channel without waking up any other process sharing the Redis instance. A TLS-only fixture (`crowi-test-redis-tls` locally, an equivalent post-checkout `docker run` step in CI) reuses the existing self-signed test certs to exercise `rediss://` connectivity.
+
+  This is a documentation/test-support policy change only: no code rejects Redis 7.x connections, and existing self-hosted Redis 7 deployments keep working unchanged. CI and `docker compose up -d` now exercise exactly one pinned Redis 8.x patch tag — this is not a claim that every version in the `>=8.0 <9` range has been individually verified.
+
+- a32204f: Absorb the emoji shortcode transform and the `@[card](url)` link-card embed directly into `@crowi/api` core — both are now always-on Markdown features and no longer need to be installed as separate renderer plugins. The `@crowi/plugin-renderer-emoji` and `@crowi/plugin-renderer-link-card` packages have been removed from the workspace entirely; they are no longer published.
+
+  Link-card OGP fetching is controlled by a new admin Security setting, "Allow link cards for external URLs" (default ON, matching the previous plugin-installed behaviour and GitHub/Slack/Notion-style link unfurling). Disabling it stops all new outbound OGP requests immediately — including bypassing the render cache entirely, so a card fetched while enabled is never served stale after a disable, and a disable never leaves a cached fallback behind after a re-enable — and every render that cannot show a real preview (a disabled toggle, a fetch failure, a blocked/air-gapped host) now shows the exact same non-error-styled fallback card (a plain link to the original URL) instead of the old dedicated error-card variant.
+
+  Operators upgrading with `@crowi/plugin-renderer-emoji` or `@crowi/plugin-renderer-link-card` still listed in `crowi.config.json` (or their npm packages still listed as a runner dependency) see a one-time boot warning instead of a hard failure — remove the two entries (and the matching `dependencies`) once convenient; they no longer do anything, and the packages no longer exist to install.
+
+  `@crowi/plugin-api`'s `EmbedRenderer` gains an optional `shouldBypassCache(input)` hook — a renderer whose output depends on a runtime policy toggle (like link-card's) can use it to skip the render cache entirely for a given dispatch instead of only checking the toggle inside `render()`, which would otherwise let a stale cache hit serve pre-toggle output.
+
+- 3b27a67: Add a "Subpages" tab to the user page.
+
+  `/user/<username>` now has a third footer tab, "Subpages", listing every page that actually exists under `/user/<username>/` (recursively, across all depths), regardless of who created it — distinct from the existing "Pages" tab, which lists pages this user created regardless of path. The preview shows up to 10 rows plus the total count, with a "View all" link to `/user/<username>/pages` for the full, paginated listing (30 per page). Visibility follows the same grant/status rules as every other page listing.
+
+  Also hardens draft creation (`POST /pages/drafts`): if the seed revision fails to save after the draft `Page` document was created, the orphaned `Page` is now compensating-deleted so it can no longer resurface as a permanently broken row in listings such as the new Subpages tab.
+
+### Patch Changes
+
+- abe7ca5: Bump the transitive `body-parser` dependency to close a DoS advisory (silently disabled size-limit enforcement on an invalid `limit` value).
+- 04cbd85: Bump the transitive `brace-expansion` dependency to close a ReDoS vulnerability (GHSA-3jxr-9vmj-r5cp / CVE-2026-13149).
+- a899fdd: Fix a correctness hole where a live collaborative editor open before a page was renamed, soft-deleted, or reverted could still save its content afterwards, silently clobbering the renamed/deleted state instead of being rejected.
+  The fix introduces a monotonic collab lifecycle epoch (`Page.collabLifecycleVersion`) that advances atomically with every rename/delete/revert/body-replace and is enforced at four boundaries — wsToken mint, WebSocket authentication, document load, and the atomic save compare-and-set — so a stale editor session is refused rather than allowed to overwrite the page, including across multiple api replicas.
+  Rename/delete now also opens the existing reload-prompt dialog on any live editor for that page, and soft/hard delete purge the page's collaborative editing state (Yjs snapshot and pending updates) as defense-in-depth.
+- 9122c85: Stop the JWT auth middleware from masking infrastructure and handler errors as a spurious `401 AUTHENTICATION_REQUIRED`. `jwtAuth` previously wrapped the principal lookup (`User.findById`), scope application (a PAT's best-effort last-used write), and the downstream handler call in a `try/catch` that turned any thrown error into a 401. A transient database failure during authentication therefore reached the client as "authentication required" (prompting a pointless re-login) and disappeared from server error logs. Such throws now propagate to the app error handler and surface as `500 INTERNAL_ERROR`; genuine authentication failures (missing/invalid/expired token, unknown user, inactive account) still return `401`/`403` unchanged, and the boundary stays fail-closed (a throw short-circuits before the handler runs). The admin-route composition (`createJwtAdminRequired`) preserves its short-circuit forwarding.
+- 05648c0: Bound the link-card OGP-fetch semaphore's wait queue to close a DoS where a page embedding `@[card]` links to many unique, slow/unresponsive hosts could pile up an unbounded number of unresolved fetches (crowi-review CROWI-REVIEW-002, high severity).
+
+  The shared fetch semaphore (`FETCH_CONCURRENCY_LIMIT = 5`, unchanged) now caps its wait queue at a fixed length and gives queued requests a wait deadline distinct from the post-acquisition fetch timeout. A request that arrives once the queue is already full is rejected synchronously with a new `busy` outcome, never queuing another unresolved Promise; a request that was accepted into the queue but times out before a slot opens up is rejected the same way once its deadline elapses. `@crowi/plugin-api`'s `RenderError.code` union gains `'busy'`, mapped to the same unified link-card fallback card every other OGP-fetch failure uses (no new UI variant) and cached with a short transient TTL so a subsequent render retries once the queue drains.
+
+- 0d21b52: Fixed a bug where the collaborative-editing Redis extension (`buildCollabRedisExtension`, only active when `REDIS_URL` is set) failed to load `ioredis` at runtime, because `ioredis` was never declared as a direct dependency of `@crowi/api` — it was only reachable through pnpm's isolated `node_modules` layout as a transitive dependency of `@hocuspocus/extension-redis`, which `require('ioredis')` from `@crowi/api`'s own source cannot resolve. This broke every multi-instance deployment with `REDIS_URL` configured: the process would throw `Cannot find module 'ioredis'` the first time a collaborative-editing WebSocket connection was authenticated. `ioredis` is now declared directly, matching the version already resolved elsewhere in the workspace. Discovered while adding real-Redis-8 smoke test coverage for this exact code path (feature-redis-8-upgrade Phase 2); unrelated to the Redis 7→8 version change itself.
+- fee9c9a: Fix `rediss://` URLs silently connecting in plaintext: the Redis socket options passed a nested `tls: {...}` object, but node-redis v4 selects the TLS transport only on the literal `tls: true` with the TLS options flattened into the socket object — so TLS (and `REDIS_REJECT_UNAUTHORIZED`) was silently ignored. Also fix boot hanging forever when Redis is configured but unreachable: the initial boot connection is now bounded (~10 attempts) and degrades to "Continuing without Redis" as documented, config pub/sub setup skips connecting when the boot connection degraded, and the pub/sub clients gained error listeners so a steady-state Redis outage no longer crashes the process. Steady-state reconnect behaviour after an established connection is unchanged.
+- 4ec60a6: Forward the ACL username from `REDIS_URL` (`redis://user:pass@host`): it was silently dropped, so the api's Redis clients authenticated as the `default` user while the realtime-collab path authenticated as the URL's ACL user. Both URL parsers also moved to the WHATWG URL API so percent-encoded credentials decode exactly once and passwords containing `:` or `@` keep their username/password boundary (the legacy parser pre-decoded the userinfo and could corrupt such credentials).
+- 7e1c54e: Add an immutable `Revision.page` (`Page` ObjectId ref) alongside the existing `path` string, and switch revision/comment/attachment-usage/page-body history lookups (`GET /pages/revisions/:id`, `GET /pages/revisions?ids=...`, `GET /comments?revision_id=...`, `GET /pages/:pageId/attachments/usage`, `GET /pages?path=...&revision_id=...`, `POST /pages/revert-to-revision`) to resolve/verify the owning page by that immutable id instead of reverse-looking-up or comparing `path`. Fixes a latent grant leak where deleting a page and later reusing its `path` for an unrelated page could let that new page's grant expose the old page's private revision body / comments / attachment metadata, or let a caller with edit access to the new page revert it to the old page's private body. A boot migration backfills `page` onto existing revisions.
+- cb3d16c: Fix an authorization bypass where PAT / OAuth token scope guards were silently skipped on every parameterized route (e.g. `GET /user/{username}`, `GET /user/{username}/pages`, `GET /user/{username}/bookmarks`). `applyScope` registered the guard on the OpenAPI path form (`{username}`), which Hono's router treats as a literal segment that never matches a real request, so the required-scope check never ran and a narrowly-scoped token could reach those handlers. It now attaches the guard on the route's Hono routing path (`:username`) — the same path the handler is registered on — so the scope check runs. Non-parameterized routes (e.g. `/me`) were unaffected.
+- b0e2c76: Bump dependencies to clear Dependabot security advisories (alerts #622/#623/#626-#637).
+
+  - `sharp` 0.34.5 → 0.35.3, direct in `@crowi/api` (GHSA sharp <0.35.0). Also
+    overridden repo-wide (`sharp@<0.35.3` → `0.35.3`) since Next.js pins an
+    optional `sharp: ^0.34.5` dependency of its own that a Next.js version bump
+    can't escape.
+  - `@hono/node-server` 2.0.3 → 2.0.11, direct in `@crowi/api` (GHSA-frvp-7c67-39w9
+    path traversal / GHSA-9mqv-5hh9-4cgg WS handshake DoS). Also overridden
+    (`@hono/node-server@<2.0.11` → `2.0.11`) for the transitive 1.19.14
+    resolution pulled in by `@modelcontextprotocol/sdk`'s own `dependencies` —
+    verified crowi never imports the SDK module that requires it
+    (`@hono/mcp`'s `StreamableHTTPTransport` mounts into our own existing Hono
+    app/server instead), so this resolution was unreachable dead code, but the
+    override closes the alert cleanly regardless.
+  - `hono` bumped to 4.12.31 (within the existing `^4.12.25` range) across
+    `@crowi/api` / `@crowi/api-contract` / `@crowi/plugin-api` / `@crowi/plugin-slack`.
+  - `js-yaml` overridden to `3.15.0` / `4.3.0` per major line
+    (`js-yaml@>=3.0.0 <3.15.0` / `js-yaml@>=4.0.0 <4.3.0`) — covers every
+    transitive consumer (jest/istanbul's 3.x chain, eslint 8/9, changesets,
+    the mjml/htmlnano chain, fumadocs, `@redocly/openapi-core`) plus
+    `@crowi/api-contract`'s own direct `js-yaml` dependency, bumped to `^4.3.0`.
+  - `svgo` and `fast-uri` overridden to `4.0.2` / `3.1.4` — their parents
+    (`htmlnano`, `ajv`) already declare wide-enough ranges to permit the
+    patched versions but pnpm won't re-resolve a pure-transitive package
+    within an already-satisfied range without a forcing mechanism.
+
+  The sharp 0.35 bump changed its TypeScript declarations from the old
+  namespace-merged `sharp.Sharp`/`sharp.Metadata`/`sharp.OutputInfo` pattern to
+  named exports; `image-display-derivative.ts` updated its type imports
+  accordingly (no behavior change). It also surfaced a latent bug in this
+  package's own test fixture (an ancillary PNG chunk type `padA` with a
+  lowercase reserved-bit byte, which is not PNG-spec-conformant — sharp 0.34's
+  bundled `spng` PNG decoder tolerated it, 0.35's `libpng`-backed decoder
+  correctly rejects it); the fixture was corrected to `paDA`, no production
+  code changed.
+
+- Updated dependencies [d9eb1c0]
+- Updated dependencies [a899fdd]
+- Updated dependencies [df1ce77]
+- Updated dependencies [f1bcd2b]
+- Updated dependencies [29b3679]
+- Updated dependencies [05648c0]
+- Updated dependencies [d680c0c]
+- Updated dependencies [a32204f]
+- Updated dependencies [b0e2c76]
+- Updated dependencies [3b27a67]
+  - @crowi/api-contract@2.0.0-alpha.8
+  - @crowi/collab@0.1.0-alpha.3
+  - @crowi/plugin-api@1.0.0-alpha.4
+  - @crowi/runner@0.1.0-alpha.2
+
 ## 2.0.0-alpha.7
 
 ### Minor Changes

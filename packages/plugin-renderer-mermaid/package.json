@@ -1,6 +1,6 @@
 {
   "name": "@crowi/plugin-renderer-mermaid",
-  "version": "0.1.0-alpha.1",
+  "version": "0.1.0-alpha.2",
   "description": "Mermaid diagram renderer for Crowi 2.x. Renders ```mermaid fenced blocks server-side (browserless, child-process isolated) to a sanitized, base64-encoded SVG <img>. Registered in apps/crowi-runner's crowi.config.json (spec §10).",
   "repository": {
     "type": "git",
