@@ -389,6 +389,37 @@ export async function attachPresenceServer(httpServer: HttpServer, crowi: Crowi)
   };
 
   /**
+   * `presence.join()` wrapped with the defect-4 failure contract: a
+   * connection whose join never succeeded must not stay open but
+   * unregistered — no future heartbeat/leave call can compensate, so the
+   * viewer list would never include it no matter how long it stays
+   * connected. Shared by BOTH `presence.join()` call sites — the initial
+   * connect (`openConnection`) and the heartbeat-triggered re-join
+   * (`handleClientMessage`, when `presence.heartbeat()` reports the entry
+   * was swept) — since the same failure mode can occur at either one.
+   * Closes the socket and returns `false` on failure; returns `true` on
+   * success.
+   */
+  const joinOrClose = async (ws: WsWebSocket, pageId: string, identity: ViewerIdentity, connectionId: string): Promise<boolean> => {
+    try {
+      await presence.join(pageId, identity, connectionId);
+      return true;
+    } catch (err) {
+      console.warn(`[crowi:presence] join failed for page ${pageId}:`, (err as Error).message);
+      // The client's existing reconnect logic (`onCloseCode`'s default
+      // 'backoff-retry' for any code outside 4401/4403) retries instead
+      // of the connection staying open unregistered. The eventual
+      // `close` event runs `handleClose` via `attachWsNamespace`'s own
+      // listener (or, for the heartbeat re-join path, the caller's own
+      // close-triggered cleanup), which cleans up `connections` and
+      // calls `presence.leave` — a harmless no-op since `join` never
+      // wrote an entry for this connection.
+      ws.close(JOIN_FAILED, 'presence registration failed');
+      return false;
+    }
+  };
+
+  /**
    * Handle a client → server frame. The only valid message is
    * `{ type: 'heartbeat' }`; anything else is ignored (forward-compat).
    */
@@ -422,9 +453,23 @@ export async function attachPresenceServer(httpServer: HttpServer, crowi: Crowi)
     try {
       const present = await presence.heartbeat(conn.pageId, conn.userId, conn.connectionId);
       if (!present) {
-        // Swept while the socket was briefly idle — re-register.
+        // Swept while the socket was briefly idle — re-register via the
+        // same fail-closed helper the initial connect uses (defect 4):
+        // a re-join failure here is the identical "stays open but never
+        // registered" trap, just reached through a different call site.
         const identity = await loadViewerIdentity(conn.userId);
-        if (identity) await presence.join(conn.pageId, identity, conn.connectionId);
+        if (identity) {
+          const joined = await joinOrClose(conn.ws, conn.pageId, identity, conn.connectionId);
+          // Mirror `openConnection`'s own post-join reconciliation: two
+          // concurrent `message` events can each start their own
+          // `handleClientMessage` (the primitive's `ws.on('message', ...)`
+          // never serializes them), so the socket's own `close` listener
+          // may have already run `handleClose` — removing this
+          // connection's entry — WHILE this re-join was still in flight.
+          // Re-check and reconcile so a re-join that raced a close never
+          // leaves a ghost entry with no corresponding open socket.
+          if (joined && conn.ws.readyState !== conn.ws.OPEN) void handleClose(conn);
+        }
       }
     } catch (err) {
       debug('heartbeat failed for page %s: %s', conn.pageId, (err as Error).message);
@@ -473,25 +518,10 @@ export async function attachPresenceServer(httpServer: HttpServer, crowi: Crowi)
     // Register the viewer. `join` publishes a viewer-list change, which
     // flows back through the generic `subscribe('viewers', ...)` handler
     // in `feedHandlers`, so this socket (and every other on the page)
-    // gets the fresh list.
-    try {
-      await presence.join(conn.pageId, conn.identity, conn.connectionId);
-    } catch (err) {
-      console.warn(`[crowi:presence] join failed for page ${conn.pageId}:`, (err as Error).message);
-      // feature-presence-consistency-fixes defect 4 — a socket whose
-      // `join` never succeeded would otherwise stay open but never
-      // registered: no future heartbeat/leave call can compensate, so
-      // the viewer list would never include this connection no matter
-      // how long it stays connected. Close it so the client's existing
-      // reconnect logic (`onCloseCode`'s default `'backoff-retry'` for
-      // any code outside 4401/4403) retries instead. The eventual
-      // `close` event runs `handleClose` via `attachWsNamespace`'s own
-      // listener, which cleans up `connections` and calls
-      // `presence.leave` — a harmless no-op since `join` never wrote an
-      // entry for this connection.
-      ws.close(JOIN_FAILED, 'presence registration failed');
-      return;
-    }
+    // gets the fresh list. feature-presence-consistency-fixes defect 4 —
+    // see `joinOrClose`'s doc comment for the failure contract.
+    const joined = await joinOrClose(ws, conn.pageId, conn.identity, conn.connectionId);
+    if (!joined) return;
 
     // The socket closed while `join` was in flight. The primitive's own
     // close listener (registered right before this `onOpen` call) will

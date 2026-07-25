@@ -491,5 +491,71 @@ describe('attachPresenceServer (feature-presence-consistency-fixes)', () => {
         await stopTestServer(testServer);
       }
     });
+
+    it('also closes the connection when the HEARTBEAT-triggered re-join fails (the socket is not left open unregistered forever)', async () => {
+      // `handleClientMessage`'s heartbeat branch re-joins when
+      // `presence.heartbeat()` reports the entry was swept. That
+      // re-join is a second, independent `presence.join()` call site
+      // from the initial-connect one covered by the test above — this
+      // pins that it fails closed the same way, not silently (the
+      // regression this test would have caught: the heartbeat branch's
+      // `catch` only logged via `debug()` and returned, leaving the
+      // socket open with no viewers frame ever arriving and no future
+      // heartbeat able to recover it).
+      // Mirrors the "controllable stand-in" pattern from the defect-2
+      // describe block above: a real `EventEmitter` behind `subscribe`/
+      // `publish` so a successful `join()` can actually drive a `viewers`
+      // frame back to the client (the earlier, always-throws defect-4
+      // test never needs this — it never reaches a successful join).
+      const emitter = new EventEmitter();
+      let joinCalls = 0;
+      const sweptThenFailingService: PresenceService = {
+        async join(pageIdArg) {
+          joinCalls += 1;
+          if (joinCalls === 1) {
+            emitter.emit('viewers', pageIdArg); // initial connect succeeds and broadcasts
+            return;
+          }
+          throw new Error('boom — simulated Redis outage on re-join');
+        },
+        async heartbeat() {
+          return false; // pretend the entry was swept — forces the re-join branch
+        },
+        async leave() {},
+        async listViewers() {
+          return [];
+        },
+        async markEditing() {},
+        async refreshEditing() {},
+        async unmarkEditing() {},
+        async publishPageUpdated() {},
+        async publishCommentChanged() {},
+        subscribe(feed, listener) {
+          emitter.on(feed, listener);
+          return () => emitter.off(feed, listener);
+        },
+        async publish(feed, publishedPageId, payload) {
+          emitter.emit(feed, publishedPageId, payload);
+        },
+        async shutdown() {},
+      };
+      _setPresenceServiceForTesting(sweptThenFailingService);
+      const testServer = await startTestServer();
+
+      try {
+        const token = mintPresenceToken();
+        const tab = connectWs(`ws://127.0.0.1:${testServer.port}/presence/${encodeURIComponent(pageId)}?token=${encodeURIComponent(token)}`);
+        await waitForOpen(tab.ws);
+        await waitUntil(() => tab.messages.some((m) => m.type === 'viewers'));
+
+        tab.ws.send(JSON.stringify({ type: 'heartbeat' }));
+        await waitUntil(() => tab.closeCode !== null);
+
+        expect(tab.closeCode).toBe(WS_CLOSE_CODES.INTERNAL_ERROR);
+        expect(joinCalls).toBe(2);
+      } finally {
+        await stopTestServer(testServer);
+      }
+    });
   });
 });
