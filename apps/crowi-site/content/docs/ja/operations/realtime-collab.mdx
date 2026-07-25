@@ -72,8 +72,9 @@ services:
     できません。
   - LRU (最近見たページ) にはフォールバックがなく、`REDIS_URL` 未設定
     ではシングルインスタンスかどうかに関わらずこの機能自体が使えません。
-- ブラウザは `NEXT_PUBLIC_API_URL` から `/collab/` への WebSocket URL を
-  自動導出するため、`NEXT_PUBLIC_COLLAB_URL` の指定は不要です。
+- ブラウザは `NEXT_PUBLIC_API_URL` から末尾スラッシュ無しの bare `/collab`
+  への WebSocket URL を自動導出するため、`NEXT_PUBLIC_COLLAB_URL` の指定は
+  不要です。
 - `WS_TOKEN_SECRET` はシングルインスタンスでは省略可です — 未設定のまま
   でもプロセスごとにランダム鍵が生成され (起動時に警告ログ)、1 レプリカなら
   無害です。api ノードを 2 台以上に増やすときにのみ `CROWI_MULTI_INSTANCE`
@@ -140,6 +141,7 @@ services:
     environment:
       MONGO_URI: mongodb://mongo:27017/crowi
       REDIS_URL: redis://redis:6379           # マルチ構成では必須
+      CROWI_MULTI_INSTANCE: "2"               # マルチ構成を宣言(WS_TOKEN_SECRET 起動ガードを有効化)
       WS_TOKEN_SECRET: ${WS_TOKEN_SECRET}     # 全レプリカで揃える
       CROWI_ENCRYPTION_KEY: ${CROWI_ENCRYPTION_KEY}
 ```
@@ -232,9 +234,9 @@ labels:
 | 変数名 | 必須 | 用途 |
 | ------ | ---- | ---- |
 | `WS_TOKEN_SECRET` | マルチでは必須 (全レプリカで揃える) | wsToken (短命 JWT) の HMAC 署名鍵。マルチインスタンス構成では全レプリカで**同じ値**を指定する必要があります。`CROWI_MULTI_INSTANCE` が設定されているのに `WS_TOKEN_SECRET` が未設定 (または既知のプレースホルダ) の場合、api は**起動を中止**します (プロセスごとのランダム鍵では他レプリカが検証できないため)。シングルインスタンス (`CROWI_MULTI_INSTANCE` 未設定) では未設定でも起動でき、プロセス起動ごとにランダム生成され警告ログが出ます。同梱の `.env.example` は意図的に空にしています (世界中で既知の鍵をテンプレートに入れないため)。設定する場合は**最低 32 文字**必要です — 32 文字未満の値は `NODE_ENV=production` (未設定時のデフォルトも production 扱い) では起動時エラーで停止し、それ以外の `NODE_ENV` では起動ログの警告レポートに含まれます (既知のプレースホルダ値は対象外)。`openssl rand -base64 32` で生成してください。 |
-| `CROWI_MULTI_INSTANCE` | いいえ (既定はシングル) | マルチインスタンス構成を宣言します (`1` / `true`、またはレプリカ数 `>= 2`)。`WS_TOKEN_SECRET` 起動ガードはこの値を基準に判定します (`REDIS_URL` の有無ではありません)。そのため Redis を rate limiting や編集者上限カウンタなどの用途のみに使う 1 レプリカ構成は共有鍵なしで起動できます。api ノードを 2 台以上に増やすときに全レプリカへ設定してください。 |
+| `CROWI_MULTI_INSTANCE` | いいえ (既定はシングル) | マルチインスタンス構成を宣言します (`1` / `true`、またはレプリカ数 `>= 2`。`0` / `false` / 未設定はシングルインスタンス)。`WS_TOKEN_SECRET` 起動ガードはこの値を基準に判定します (`REDIS_URL` の有無ではありません)。そのため Redis を rate limiting や編集者上限カウンタなどの用途のみに使う 1 レプリカ構成は共有鍵なしで起動できます。**`1`/`0`/`true`/`false`/整数のいずれでもない値も、現状は有効な宣言として扱われます**(起動時は警告ログのみで拒否はされません)— typo でも意図せず `WS_TOKEN_SECRET` が必須になるので注意してください。api ノードを 2 台以上に増やすときに明示的に全レプリカへ設定してください。 |
 | `COLLAB_MAX_EDITORS_PER_PAGE` | いいえ (デフォルト `20`) | ページごとの同時編集者上限。21 人目以降は read-only でリアルタイム表示は受けられますが編集できません。 |
-| `NEXT_PUBLIC_COLLAB_URL` | いいえ | ブラウザが WebSocket 接続する URL。未指定時は `window.location.host` + `NEXT_PUBLIC_API_URL` から `/collab/` を derive します。リバースプロキシで `/collab/*` を api 同居ホストに向けているなら設定不要。 |
+| `NEXT_PUBLIC_COLLAB_URL` | いいえ | ブラウザが WebSocket 接続する URL。未指定時は `window.location.host` + `NEXT_PUBLIC_API_URL` から末尾スラッシュ無しの bare `/collab` を derive します。リバースプロキシで `/collab` と `/collab/*` の**両方**を api 同居ホストに向けているなら設定不要 — `/collab/*` のワイルドカードだけでは、ブラウザが実際にダイヤルする bare path にマッチしません(下記のリバースプロキシ例を参照)。 |
 | `REDIS_URL` | マルチでは必須 | 共同編集の pub/sub・編集者上限カウンタ・プレゼンス・通知 invalidation・設定同期・rate limiting・LRU (最近見たページ) のための連携用途。未設定時の挙動は次節参照。 |
 | `REDIS_KEY_PREFIX` | いいえ — ただし同じ Redis を共有する Crowi インスタンスごとに異なる実効値が必要 | 上記 7 つの `REDIS_URL` 消費経路すべてのキー/チャンネルが組み立てられるインスタンス単位の namespace (`crowi:<slug>:<suffix>`)。消費経路ごとの詳細な行列は [Redis 運用ポリシー](./redis#セキュリティ運用ガイド) 参照。未設定時は `CLIENT_URL` のホスト名 (例: `wiki.example.com`) をデフォルトとして使い、明示的に上書きする場合は `REDIS_KEY_PREFIX=krswd` のように設定します。同一インスタンスの全レプリカは同じ実効 prefix (同じ `CLIENT_URL`、または同じ明示 override) に解決される必要があります — これが意図したレプリカ間 pub/sub を維持する条件です。同じ Redis を共有する**別の** Crowi インスタンスは**異なる** prefix に解決される必要があり、そうしないとプレゼンス feed・通知・共同編集・設定同期が cross-talk します。`REDIS_URL` が設定されているのに override も有効な `CLIENT_URL` も無い場合は、暗黙にデフォルトへフォールバックせず**起動を中止**します。**`REDIS_URL` 自体のデータベース番号パスセグメント (例: `/1`) はこの代わりにはなりません** — Redis の `SUBSCRIBE`/`PUBLISH` は DB にスコープされないため、DB 番号だけが異なる2インスタンスは全チャンネルで cross-talk したままです (DB 番号は別の、純粋に数値だけの仕組みです。[Redis 運用ポリシー](./redis#セキュリティ運用ガイド) 参照)。 |
 | `CROWI_ENCRYPTION_KEY` | 推奨 | 機密 Config (OAuth secret 等) を AES-256-GCM で暗号化。共同編集には直接影響しませんが、`pnpm --filter @crowi/api crypto:gen-key` で生成して全レプリカで揃えてください。 |
@@ -343,7 +345,7 @@ docker compose logs api | grep extension-redis
   既知のリスクです。サーバドキュメント保存ロックと desync ガードで緩和されますが
   完全には防げず、シングルインスタンス運用を推奨します。
 - **WebSocket Upgrade 失敗**: リバースプロキシで `Upgrade` ヘッダが
-  落とされていると `/collab/` 接続が 400/426 で失敗します。`nginx` 設定で
+  落とされていると `/collab` 接続が 400/426 で失敗します。`nginx` 設定で
   `proxy_set_header Upgrade $http_upgrade` を確認してください。
 - **ライブ編集セッション中の外部編集**: 共同編集セッションが開いている
   ページに対して、REST API・MCP の `crowi_update_page`・プロセス内の
@@ -415,23 +417,13 @@ ACL・接続数の見積もり)は [Redis 運用ポリシー](./redis) に移動
   経験則的な目安で、awareness の cursor 描画コストが大きくなる前の
   上限です。これを大きく上げる場合は、editor 側の同時 awareness 配信に
   対する描画負荷も検証してください。
-- Y.Doc の差分は `debounce: 2000` ms で `onChange` に流れます。これは
-  Hocuspocus のデフォルトを継承していて、変更が小さいうちは無駄な
-  `PageYjsUpdate` 書き込みを抑えます。
+- `onChange` は Yjs の更新ごとに **debounce なし**で発火し、更新のたびに
+  `PageYjsUpdate` を 1 行 append します — この append-only ログが実際の
+  差分単位の永続化保証であり、周期的な save ではありません。
+  `debounce: 2000` ms / max `10000` ms (Hocuspocus のデフォルトを継承) は
+  別の仕組みである `onStoreDocument`(`Page.yjsState` への周期的な
+  checkpoint。前述のマルチインスタンス Redlock の注記も参照)を
+  制御しています。
 - `PageYjsUpdate` は TTL 1 時間で自動 expire し、ベースラインの
   `Page.yjsState` への compaction も定期的に走ります。1 ページに対して
   延々と編集が続いても DB は線形には肥大化しません。
-
-## Save の SLO
-
-- 保存処理は通常 100-500ms で完了します。
-- サーバ側には 5 秒のタイムアウトがあり、5 秒を超えると 408 相当の
-  エラーをクライアントへ返します。
-- ただし**タイムアウトしても実際には保存が成功している可能性**が
-  あります (DB は書き込み済みで応答が遅延しただけのケース)。
-  クライアント側は自動リトライしません。ページを reload して最新
-  revision を確認するのが正しい対処です。
-- 5 秒タイムアウトはあくまで extreme slow への安全網であり、通常の
-  ネットワーク条件では十分余裕があります。タイムアウトが恒常的に
-  発生する場合は MongoDB のレイテンシ / renderer 処理時間 / 接続
-  プールサイズを疑ってください。
