@@ -61,13 +61,16 @@ describeMaybe('presence smoke (real Redis 8)', () => {
 
       const pageId = uniqueRedisSmokeId('presence-page');
       const viewer: ViewerIdentity = { userId: uniqueRedisSmokeId('user'), username: 'smoke-user', displayName: 'Smoke User', avatarUrl: null };
+      // Single simulated connection for this smoke test (feature-presence-
+      // consistency-fixes defect 1 added a mandatory `connectionId` param).
+      const connectionId = uniqueRedisSmokeId('conn');
 
       // --- viewer-list change (join) ---
       const receivedPageIds: string[] = [];
       const unsubscribeViewers = serviceB.subscribe('viewers', (changedPageId) => {
         if (changedPageId === pageId) receivedPageIds.push(changedPageId);
       });
-      await serviceA.join(pageId, viewer);
+      await serviceA.join(pageId, viewer, connectionId);
       await waitUntil(() => receivedPageIds.length >= 1);
       expect(receivedPageIds).toContain(pageId);
       unsubscribeViewers();
@@ -108,7 +111,7 @@ describeMaybe('presence smoke (real Redis 8)', () => {
       // production code path (Redis removes the hash key once its last
       // field is gone), rather than leaving it for VIEWER_HASH_TTL_SECONDS
       // (60s) to expire it.
-      await serviceA.leave(pageId, viewer.userId);
+      await serviceA.leave(pageId, viewer.userId, connectionId);
     } finally {
       // Ownership-aware teardown: each service's own `shutdown()` closes
       // its 1 duplicate subscriber only; the primary clients this test

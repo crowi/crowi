@@ -162,10 +162,20 @@ const viewer = (userId: string, overrides: Partial<{ username: string; displayNa
   avatarUrl: overrides.avatarUrl ?? null,
 });
 
+/**
+ * Connection ids (feature-presence-consistency-fixes defect 1) — one per
+ * simulated browser tab. Most tests below have exactly one connection per
+ * user, so `CONN_1` suffices; the multi-tab / cross-instance tests use
+ * `CONN_2` / `CONN_3` for additional tabs of the SAME user.
+ */
+const CONN_1 = 'conn-1';
+const CONN_2 = 'conn-2';
+const CONN_3 = 'conn-3';
+
 describe('presence service — Redis-backed (RFC-0005)', () => {
   it('registers a viewer on join and surfaces it in listViewers', async () => {
     const service = await createPresenceService(new FakeRedis(), TEST_KEYSPACE);
-    await service.join(PAGE_A, viewer('u1'));
+    await service.join(PAGE_A, viewer('u1'), CONN_1);
 
     const viewers = await service.listViewers(PAGE_A);
     expect(viewers).toHaveLength(1);
@@ -179,8 +189,8 @@ describe('presence service — Redis-backed (RFC-0005)', () => {
     const changes: string[] = [];
     service.subscribe('viewers', (pageId) => changes.push(pageId));
 
-    await service.join(PAGE_A, viewer('u1'));
-    await service.leave(PAGE_A, 'u1');
+    await service.join(PAGE_A, viewer('u1'), CONN_1);
+    await service.leave(PAGE_A, 'u1', CONN_1);
 
     expect(await service.listViewers(PAGE_A)).toHaveLength(0);
     // join + leave each publish a viewer-list change.
@@ -188,16 +198,32 @@ describe('presence service — Redis-backed (RFC-0005)', () => {
     await service.shutdown();
   });
 
-  it('dedupes the same user across multiple tabs to a single viewer entry', async () => {
+  it('dedupes the same user across multiple tabs (distinct connectionIds) to a single viewer entry', async () => {
     const service = await createPresenceService(new FakeRedis(), TEST_KEYSPACE);
-    // Three "tabs" = three joins for the same userId.
-    await service.join(PAGE_A, viewer('u1'));
-    await service.join(PAGE_A, viewer('u1'));
-    await service.join(PAGE_A, viewer('u1'));
+    // Three "tabs" = three joins for the same userId, each its own connectionId.
+    await service.join(PAGE_A, viewer('u1'), CONN_1);
+    await service.join(PAGE_A, viewer('u1'), CONN_2);
+    await service.join(PAGE_A, viewer('u1'), CONN_3);
 
     const viewers = await service.listViewers(PAGE_A);
     expect(viewers).toHaveLength(1);
     expect(viewers[0].userId).toBe('u1');
+    await service.shutdown();
+  });
+
+  it('keeps a multi-tab viewer present until the LAST connection leaves (same instance)', async () => {
+    // feature-presence-consistency-fixes defect 1 — same-instance version
+    // of the cross-replica bug: `leave` must remove only the closing
+    // connection's own field, never a sibling tab's.
+    const service = await createPresenceService(new FakeRedis(), TEST_KEYSPACE);
+    await service.join(PAGE_A, viewer('u1'), CONN_1);
+    await service.join(PAGE_A, viewer('u1'), CONN_2);
+
+    await service.leave(PAGE_A, 'u1', CONN_1);
+    expect(await service.listViewers(PAGE_A)).toHaveLength(1);
+
+    await service.leave(PAGE_A, 'u1', CONN_2);
+    expect(await service.listViewers(PAGE_A)).toHaveLength(0);
     await service.shutdown();
   });
 
@@ -208,11 +234,11 @@ describe('presence service — Redis-backed (RFC-0005)', () => {
     jest.useFakeTimers();
     try {
       const service = await createPresenceService(new FakeRedis(), TEST_KEYSPACE);
-      await service.join(PAGE_A, viewer('u1'));
+      await service.join(PAGE_A, viewer('u1'), CONN_1);
       const firstJoinedAt = (await service.listViewers(PAGE_A))[0].joinedAt;
 
       jest.advanceTimersByTime(1_000);
-      await service.join(PAGE_A, viewer('u1'));
+      await service.join(PAGE_A, viewer('u1'), CONN_1);
       const secondJoinedAt = (await service.listViewers(PAGE_A))[0].joinedAt;
 
       expect(secondJoinedAt).toBe(firstJoinedAt);
@@ -224,28 +250,31 @@ describe('presence service — Redis-backed (RFC-0005)', () => {
 
   it('heartbeat refreshes a present viewer and reports false for an absent one', async () => {
     const service = await createPresenceService(new FakeRedis(), TEST_KEYSPACE);
-    await service.join(PAGE_A, viewer('u1'));
+    await service.join(PAGE_A, viewer('u1'), CONN_1);
 
-    expect(await service.heartbeat(PAGE_A, 'u1')).toBe(true);
-    expect(await service.heartbeat(PAGE_A, 'ghost')).toBe(false);
+    expect(await service.heartbeat(PAGE_A, 'u1', CONN_1)).toBe(true);
+    expect(await service.heartbeat(PAGE_A, 'ghost', CONN_1)).toBe(false);
     await service.shutdown();
   });
 
   it('filters out and sweeps viewers whose last heartbeat is past the TTL', async () => {
     const redis = new FakeRedis();
     const service = await createPresenceService(redis, TEST_KEYSPACE);
-    await service.join(PAGE_A, viewer('u1'));
+    await service.join(PAGE_A, viewer('u1'), CONN_1);
 
-    // Rewrite the stored field with a stale lastHeartbeatAt directly.
+    // Rewrite the stored field with a stale lastHeartbeatAt directly. The
+    // field key is the composite `<userId>:<connectionId>` shape
+    // (feature-presence-consistency-fixes defect 1), not a bare userId.
     const key = TEST_KEYSPACE.key('presence', 'viewers', PAGE_A);
-    const raw = await redis.hGet(key, 'u1');
+    const field = `u1:${CONN_1}`;
+    const raw = await redis.hGet(key, field);
     const stale = JSON.parse(raw as string);
     stale.lastHeartbeatAt = Date.now() - VIEWER_TTL_MS - 1_000;
-    await redis.hSet(key, 'u1', JSON.stringify(stale));
+    await redis.hSet(key, field, JSON.stringify(stale));
 
     expect(await service.listViewers(PAGE_A)).toHaveLength(0);
     // The stale field is swept from the hash as a side effect.
-    expect(await redis.hGet(key, 'u1')).toBeNull();
+    expect(await redis.hGet(key, field)).toBeNull();
     await service.shutdown();
   });
 
@@ -253,8 +282,8 @@ describe('presence service — Redis-backed (RFC-0005)', () => {
     const redis = new FakeRedis();
     const service = await createPresenceService(redis, TEST_KEYSPACE);
 
-    await service.join(PAGE_A, viewer('u1'));
-    await service.join(PAGE_A, viewer('u2'));
+    await service.join(PAGE_A, viewer('u1'), CONN_1);
+    await service.join(PAGE_A, viewer('u2'), CONN_1);
     await service.markEditing(PAGE_A, 'u1', 'socket-1');
 
     const viewers = await service.listViewers(PAGE_A);
@@ -268,7 +297,7 @@ describe('presence service — Redis-backed (RFC-0005)', () => {
     const redis = new FakeRedis();
     const service = await createPresenceService(redis, TEST_KEYSPACE);
 
-    await service.join(PAGE_A, viewer('u1'));
+    await service.join(PAGE_A, viewer('u1'), CONN_1);
     await service.markEditing(PAGE_A, 'u1', 'socket-1');
     await service.markEditing(PAGE_A, 'u1', 'socket-2');
 
@@ -296,7 +325,7 @@ describe('presence service — Redis-backed (RFC-0005)', () => {
     });
     const service = await createPresenceService(redis, TEST_KEYSPACE);
 
-    await service.join(PAGE_A, viewer('u1'));
+    await service.join(PAGE_A, viewer('u1'), CONN_1);
 
     const viewers = await service.listViewers(PAGE_A);
     expect(viewers[0].isEditing).toBe(false);
@@ -321,7 +350,7 @@ describe('presence service — Redis-backed (RFC-0005)', () => {
     expect(afterMark).toBe(1);
     expect(publishSpy.mock.calls.filter(([, msg]) => msg === viewersEnvelope)).toHaveLength(1);
     // The signal is still present after the refreshes.
-    await service.join(PAGE_A, viewer('u1'));
+    await service.join(PAGE_A, viewer('u1'), CONN_1);
     expect((await service.listViewers(PAGE_A))[0].isEditing).toBe(true);
     await service.shutdown();
   });
@@ -358,7 +387,7 @@ describe('presence service — Redis-backed (RFC-0005)', () => {
     instanceB.subscribe('viewers', (pageId) => seenByB.push(pageId));
 
     // A viewer joins on instance A.
-    await instanceA.join(PAGE_A, viewer('u1'));
+    await instanceA.join(PAGE_A, viewer('u1'), CONN_1);
 
     // Instance B's subscriber received the pub/sub notification.
     expect(seenByB).toContain(PAGE_A);
@@ -369,12 +398,43 @@ describe('presence service — Redis-backed (RFC-0005)', () => {
     await instanceB.shutdown();
   });
 
+  it('keeps a viewer present when their tab on one replica closes while a sibling tab on ANOTHER replica stays open (feature-presence-consistency-fixes defect 1)', async () => {
+    // The exact bug scenario: user U opens a tab on replica A and a tab on
+    // replica B (same shared Redis). Closing the tab on A must NOT make U
+    // vanish from the viewer list while B's tab is still connected — only
+    // once BOTH close does U actually leave.
+    const sharedRedis = new FakeRedis();
+    const instanceA = await createPresenceService(sharedRedis, TEST_KEYSPACE);
+    const instanceB = await createPresenceService(sharedRedis, TEST_KEYSPACE);
+
+    await instanceA.join(PAGE_A, viewer('u1'), CONN_1);
+    await instanceB.join(PAGE_A, viewer('u1'), CONN_2);
+    expect(await instanceA.listViewers(PAGE_A)).toHaveLength(1);
+
+    // The tab on replica A closes.
+    await instanceA.leave(PAGE_A, 'u1', CONN_1);
+
+    // U is still present — read from EITHER instance, since both share the
+    // same underlying Redis viewer hash.
+    expect(await instanceA.listViewers(PAGE_A)).toHaveLength(1);
+    expect(await instanceB.listViewers(PAGE_A)).toHaveLength(1);
+
+    // The last remaining tab (on replica B) closes.
+    await instanceB.leave(PAGE_A, 'u1', CONN_2);
+
+    expect(await instanceA.listViewers(PAGE_A)).toHaveLength(0);
+    expect(await instanceB.listViewers(PAGE_A)).toHaveLength(0);
+
+    await instanceA.shutdown();
+    await instanceB.shutdown();
+  });
+
   it('an editing signal written on one instance is visible on another', async () => {
     const sharedRedis = new FakeRedis();
     const instanceA = await createPresenceService(sharedRedis, TEST_KEYSPACE);
     const instanceB = await createPresenceService(sharedRedis, TEST_KEYSPACE);
 
-    await instanceA.join(PAGE_A, viewer('u1'));
+    await instanceA.join(PAGE_A, viewer('u1'), CONN_1);
     await instanceA.markEditing(PAGE_A, 'u1', 'socket-1');
 
     expect((await instanceB.listViewers(PAGE_A))[0].isEditing).toBe(true);
@@ -388,7 +448,7 @@ describe('presence service — Redis-backed (RFC-0005)', () => {
     const publishSpy = jest.spyOn(redis, 'publish');
     const service = await createPresenceService(redis, TEST_KEYSPACE);
 
-    await service.join(PAGE_A, viewer('u1'));
+    await service.join(PAGE_A, viewer('u1'), CONN_1);
 
     expect(publishSpy).toHaveBeenCalledWith(TEST_KEYSPACE.key('presence', 'feed'), JSON.stringify({ feed: 'viewers', pageId: PAGE_A }));
     await service.shutdown();
@@ -411,7 +471,7 @@ describe('presence service — instance keyspace (feature-redis-key-prefix §1/�
   it('scopes the viewer hash key to the instance slug', async () => {
     const redis = new FakeRedis();
     const service = await createPresenceService(redis, keyspaceA);
-    await service.join(PAGE_A, viewer('u1'));
+    await service.join(PAGE_A, viewer('u1'), CONN_1);
 
     expect(await redis.hGetAll(`crowi:krswd-a:presence:viewers:${PAGE_A}`)).not.toEqual({});
     // The pre-feature (non-instance-scoped) literal is never written —
@@ -437,7 +497,7 @@ describe('presence service — instance keyspace (feature-redis-key-prefix §1/�
     const publishSpy = jest.spyOn(redis, 'publish');
     const service = await createPresenceService(redis, keyspaceA);
 
-    await service.join(PAGE_A, viewer('u1'));
+    await service.join(PAGE_A, viewer('u1'), CONN_1);
 
     expect(publishSpy).toHaveBeenCalledWith('crowi:krswd-a:presence:feed', JSON.stringify({ feed: 'viewers', pageId: PAGE_A }));
     expect(publishSpy).not.toHaveBeenCalledWith('crowi:presence:feed', expect.anything());
@@ -452,7 +512,7 @@ describe('presence service — instance keyspace (feature-redis-key-prefix §1/�
     const seenByB: string[] = [];
     instanceB.subscribe('viewers', (pageId) => seenByB.push(pageId));
 
-    await instanceA.join(PAGE_A, viewer('u1'));
+    await instanceA.join(PAGE_A, viewer('u1'), CONN_1);
 
     // B never observes A's join — distinct keyspaces subscribe to distinct
     // channels even though both share the same underlying Redis.
@@ -754,21 +814,28 @@ describe('presence service — comment-changed fan-out (feature-live-page-commen
 describe('presence service — in-process fallback (no Redis)', () => {
   it('tracks viewers without Redis and dedupes multi-tab', async () => {
     const service = await createPresenceService(null);
-    await service.join(PAGE_A, viewer('u1'));
-    await service.join(PAGE_A, viewer('u1'));
-    await service.join(PAGE_A, viewer('u2'));
+    await service.join(PAGE_A, viewer('u1'), CONN_1);
+    await service.join(PAGE_A, viewer('u1'), CONN_2);
+    await service.join(PAGE_A, viewer('u2'), CONN_1);
 
     const viewers = await service.listViewers(PAGE_A);
     expect(viewers.map((v) => v.userId).sort()).toEqual(['u1', 'u2']);
     // No editing signal yet.
     expect(viewers.every((v) => v.isEditing === false)).toBe(true);
+
+    // feature-presence-consistency-fixes defect 1 — closing one of u1's two
+    // tabs must not remove them; closing the last one does.
+    await service.leave(PAGE_A, 'u1', CONN_1);
+    expect((await service.listViewers(PAGE_A)).map((v) => v.userId).sort()).toEqual(['u1', 'u2']);
+    await service.leave(PAGE_A, 'u1', CONN_2);
+    expect((await service.listViewers(PAGE_A)).map((v) => v.userId).sort()).toEqual(['u2']);
     await service.shutdown();
   });
 
   it('tracks an editing signal in-process so isEditing is accurate without Redis', async () => {
     const service = await createPresenceService(null);
-    await service.join(PAGE_A, viewer('u1'));
-    await service.join(PAGE_A, viewer('u2'));
+    await service.join(PAGE_A, viewer('u1'), CONN_1);
+    await service.join(PAGE_A, viewer('u2'), CONN_1);
     await service.markEditing(PAGE_A, 'u1', 'socket-1');
 
     const byId = Object.fromEntries((await service.listViewers(PAGE_A)).map((v) => [v.userId, v.isEditing]));
@@ -785,7 +852,7 @@ describe('presence service — in-process fallback (no Redis)', () => {
     const changes: string[] = [];
     service.subscribe('viewers', (pageId) => changes.push(pageId));
 
-    await service.join(PAGE_A, viewer('u1'));
+    await service.join(PAGE_A, viewer('u1'), CONN_1);
     await service.markEditing(PAGE_A, 'u1', 'socket-1');
     const afterMark = changes.length;
 
@@ -801,8 +868,8 @@ describe('presence service — in-process fallback (no Redis)', () => {
     const changes: string[] = [];
     service.subscribe('viewers', (pageId) => changes.push(pageId));
 
-    await service.join(PAGE_A, viewer('u1'));
-    await service.leave(PAGE_A, 'u1');
+    await service.join(PAGE_A, viewer('u1'), CONN_1);
+    await service.leave(PAGE_A, 'u1', CONN_1);
 
     expect(changes).toEqual([PAGE_A, PAGE_A]);
     await service.shutdown();
