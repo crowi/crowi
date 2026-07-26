@@ -374,7 +374,13 @@ const URL_FUNC_PATTERN = /url\(\s*(['"]?)([^'")]*)\1\s*\)/gi;
  * `href`).
  */
 function isUrlFuncIriSafe(rawValue: string): boolean {
-  const matches = Array.from(rawValue.matchAll(URL_FUNC_PATTERN));
+  // Decode CSS escapes first — same rationale as `sanitizeStyleText`'s
+  // `cssUnescape` call: a browser's CSS value parser (which is what actually
+  // interprets a `<FuncIRI>`-valued presentation attribute) decodes `\72` to
+  // "r" before matching the `url(` function name, so `u\72l(` and `url(` are
+  // the same token to it even though they're different substrings to a naive
+  // regex on the raw attribute text.
+  const matches = Array.from(cssUnescape(rawValue).matchAll(URL_FUNC_PATTERN));
   if (matches.length === 0) return true;
   return matches.every(([, , target]) => target.trim().startsWith('#'));
 }
