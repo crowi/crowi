@@ -76,6 +76,78 @@ describe('useStickyHeader', () => {
     expect(remove).toHaveBeenCalledWith('scroll', expect.any(Function));
     remove.mockRestore();
   });
+
+  // ---------------------------------------------------------------------
+  // resize-driven H race (feature-mobile-presence-card) — the scroll/resize
+  // listeners used to be torn down and re-added every time `H` changed
+  // (deps: [expandedHeight]), which meant a native `resize` event racing a
+  // ResizeObserver-driven `H` update could fire against a listener whose
+  // closure still captured the OLD `H`. The fix reads `H` from a ref that is
+  // written in a layout effect (synchronously after commit, before the
+  // browser can dispatch another event), and keeps ONE stable listener for
+  // the hook's whole lifetime.
+  // ---------------------------------------------------------------------
+  it('keeps a single stable resize/scroll listener across H changes (no add/remove churn that could race a resize event mid-swap)', () => {
+    const add = vi.spyOn(window, 'addEventListener');
+    const remove = vi.spyOn(window, 'removeEventListener');
+    const { rerender } = renderHook(({ h }: { h: number }) => useStickyHeader(h), { initialProps: { h: 300 } });
+    expect(add.mock.calls.filter(([type]) => type === 'resize')).toHaveLength(1);
+
+    rerender({ h: 200 });
+    rerender({ h: 150 });
+
+    // No teardown/re-add churn — the SAME listener stays registered across
+    // H changes, closing the window where a native `resize` event could
+    // fire against a stale, about-to-be-replaced listener.
+    expect(add.mock.calls.filter(([type]) => type === 'resize')).toHaveLength(1);
+    expect(remove.mock.calls.filter(([type]) => type === 'resize')).toHaveLength(0);
+    add.mockRestore();
+    remove.mockRestore();
+  });
+
+  it('a resize event evaluates compact using the H current when it fires, not a value captured when the listener was registered', () => {
+    Object.defineProperty(window, 'scrollY', { value: 250, configurable: true, writable: true });
+    const { result, rerender } = renderHook(({ h }: { h: number }) => useStickyHeader(h), { initialProps: { h: 300 } });
+    expect(result.current.compact).toBe(false);
+
+    rerender({ h: 200 });
+    act(() => {
+      window.dispatchEvent(new Event('resize'));
+    });
+    expect(result.current.compact).toBe(true);
+  });
+
+  // ---------------------------------------------------------------------
+  // transition freeze (feature-mobile-presence-card) — the mobile presence
+  // card's self-only collapse animation reflows `H` mid-transition; while
+  // frozen the threshold stays pinned to the `H` at freeze-start so the
+  // animation itself cannot flip `compact`.
+  // ---------------------------------------------------------------------
+  describe('frozen', () => {
+    it('pins the threshold to the H at freeze-start and ignores H changes while frozen', () => {
+      Object.defineProperty(window, 'scrollY', { value: 150, configurable: true, writable: true });
+      const { result, rerender } = renderHook(({ h, frozen }: { h: number; frozen: boolean }) => useStickyHeader(h, frozen), {
+        initialProps: { h: 200, frozen: false },
+      });
+      expect(result.current.compact).toBe(false); // 150 < 200
+
+      // Freeze at H=200, then H shrinks to 100 — would flip compact true
+      // unfrozen (150 >= 100), but stays pinned while frozen.
+      rerender({ h: 200, frozen: true });
+      rerender({ h: 100, frozen: true });
+      expect(result.current.compact).toBe(false);
+
+      // Unfreezing re-evaluates once against the NOW-current H and scrollY.
+      rerender({ h: 100, frozen: false });
+      expect(result.current.compact).toBe(true);
+    });
+
+    it('does not affect the compact state when never frozen', () => {
+      const { result } = renderHook(() => useStickyHeader(200, false));
+      scrollTo(300);
+      expect(result.current.compact).toBe(true);
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -1,12 +1,11 @@
 'use client';
 
-import { useState } from 'react';
 import { Eye, Pencil } from 'lucide-react';
 import type { PresenceViewer } from '@crowi/api-contract';
 import { UserAvatar } from '@/components/user-avatar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useForceCloseable } from '@/lib/use-force-closeable';
 import type { UsePresenceResult } from '@/lib/use-presence';
 import { cn } from '@/lib/utils';
 import { m } from '@paraglide/messages.js';
@@ -15,21 +14,26 @@ import { m } from '@paraglide/messages.js';
  * RFC-0005 §"Live presence row" — the avatar strip above the page
  * title showing who is *currently* viewing the page.
  *
- * Behaviour:
+ * `md`+ (desktop) behaviour, unchanged by feature-mobile-presence-card:
  *   - up to {@link MAX_VISIBLE_AVATARS} avatars inline, surplus folds
  *     into a `[+N]` button that opens a popover with every viewer;
  *   - viewers who also have the editor open get a ✏️ corner badge;
  *   - the current user appears in their own stack (Google Docs model)
- *     and is labelled "(you)" in the popover / sheet;
+ *     and is labelled "(you)" in the popover;
  *   - the row *content* is hidden when the only viewer is the current
  *     user — no value in showing yourself alone (RFC open question 2);
- *   - on narrow viewports (< 768px) the row collapses to a single
- *     `[👁 N]` chip that taps open a sheet listing all viewers;
  *   - if the presence WebSocket never connects the row content is
  *     hidden (graceful fallback — `usePresence` reports `status:
  *     'error'`);
  *   - the row reserves a fixed height even when its content is hidden,
  *     so a viewer joining / leaving never shifts the page layout.
+ *
+ * Below `md` this row renders NOTHING (`hidden md:flex`) — the mobile
+ * live-presence UI moved to its own `MobilePresenceCard` (default
+ * variant placed after `MetaChipRow`, compact variant inside the sticky
+ * bar), which needed a different DOM position and a richer state model
+ * (self-only collapse, reconnect semantics) than this row's fixed-height
+ * reservation model supports. See `mobile-presence-card.tsx`.
  */
 
 /** Inline avatars before overflow folds into `[+N]`. */
@@ -54,40 +58,48 @@ interface LivePresenceRowProps {
    * sizes — only the reserved height differs.
    */
   size?: 'default' | 'compact';
+  /**
+   * feature-mobile-presence-card — force-closes the desktop overflow
+   * `[+N]` popover while `true`; see `useForceCloseable` for why a
+   * Portal-rendered overlay needs this even though its trigger's ancestor
+   * already goes `inert`. `PageHeader` sets it from its own `compact`
+   * sticky state for the row instance inside the EXPANDED subtree, and
+   * omits it for the row's OTHER instance — the one mounted fresh inside
+   * the compact bar itself, which (re)mounts every time the bar appears
+   * and so never carries stale open state.
+   */
+  forceClose?: boolean;
 }
 
-export function LivePresenceRow({ presence, size = 'default' }: LivePresenceRowProps) {
+export function LivePresenceRow({ presence, size = 'default', forceClose = false }: LivePresenceRowProps) {
   const { viewers, selfUserId, status } = presence;
   const isCompact = size === 'compact';
 
   // Show content only when the presence channel is up and someone
   // besides the current user is here (no value in showing yourself
   // alone; an errored WS degrades gracefully). The wrapper below always
-  // renders with a fixed min-height, so reserving the row's vertical
-  // space is independent of whether there is content to show — content
-  // appearing or disappearing never shifts the page layout.
+  // renders with a fixed min-height (on `md`+, where this row is
+  // actually laid out — see `hidden md:flex` on the root), so reserving
+  // the row's vertical space is independent of whether there is content
+  // to show — content appearing or disappearing never shifts the page
+  // layout.
   const hasOthers = status !== 'error' && viewers.some((v) => v.userId !== selfUserId);
 
   return (
-    <div className={cn('flex items-center gap-2', isCompact ? 'min-h-6 md:min-h-5' : 'min-h-7 md:min-h-6')} data-testid="live-presence-row" data-size={size}>
+    <div
+      className={cn('hidden md:flex items-center gap-2', isCompact ? 'min-h-6 md:min-h-5' : 'min-h-7 md:min-h-6')}
+      data-testid="live-presence-row"
+      data-size={size}
+    >
       {hasOthers && (
         <>
-          {/* Desktop / wide: label + avatar stack. The "閲覧中" label is
-              dropped in compact mode to keep the sticky header tight. */}
-          <div className="hidden md:flex items-center gap-2">
-            {!isCompact && (
-              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                <Eye className="h-3.5 w-3.5" aria-hidden="true" />
-                {m['page.presence_label']()}
-              </span>
-            )}
-            <PresenceAvatarStack viewers={viewers} selfUserId={selfUserId} />
-          </div>
-
-          {/* Narrow: collapsed [👁 N] chip → sheet. */}
-          <div className="md:hidden">
-            <PresenceMobileChip viewers={viewers} selfUserId={selfUserId} />
-          </div>
+          {!isCompact && (
+            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+              <Eye className="h-3.5 w-3.5" aria-hidden="true" />
+              {m['page.presence_label']()}
+            </span>
+          )}
+          <PresenceAvatarStack viewers={viewers} selfUserId={selfUserId} forceClose={forceClose} />
         </>
       )}
     </div>
@@ -100,8 +112,8 @@ interface ViewerListProps {
 }
 
 /** Wide-viewport avatar stack with `[+N]` overflow popover. */
-function PresenceAvatarStack({ viewers, selfUserId }: ViewerListProps) {
-  const [open, setOpen] = useState(false);
+function PresenceAvatarStack({ viewers, selfUserId, forceClose }: ViewerListProps & { forceClose: boolean }) {
+  const [open, setOpen] = useForceCloseable(forceClose);
   const visible = viewers.slice(0, MAX_VISIBLE_AVATARS);
   const overflowCount = viewers.length - visible.length;
 
@@ -131,28 +143,28 @@ function PresenceAvatarStack({ viewers, selfUserId }: ViewerListProps) {
   );
 }
 
-/** Narrow-viewport `[👁 N]` chip that taps open a viewer-list sheet. */
-function PresenceMobileChip({ viewers, selfUserId }: ViewerListProps) {
+/**
+ * Avatar + optional ✏️ editing corner badge, visual only (no tooltip, no
+ * accessible name of its own). Shared by the desktop interactive
+ * `PresenceAvatar` below (which wraps this in a `Tooltip`) and
+ * `MobilePresenceCard`'s non-interactive, `aria-hidden` avatar stack
+ * (`mobile-presence-card.tsx`) — extracted so the mobile card reuses the
+ * exact same avatar rendering instead of re-implementing it.
+ */
+export function PresenceAvatarVisual({ viewer }: { viewer: PresenceViewer }) {
   return (
-    <Sheet>
-      <SheetTrigger
-        className="inline-flex h-7 items-center gap-1.5 rounded-full bg-muted px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/70"
-        aria-label={m['page.presence_count']({ count: viewers.length })}
-      >
-        <Eye className="h-3.5 w-3.5" aria-hidden="true" />
-        {viewers.length}
-      </SheetTrigger>
-      {/* No SheetDescription — the title alone names the sheet; opt out
-          of Radix's describedby warning explicitly. */}
-      <SheetContent side="bottom" aria-describedby={undefined}>
-        <SheetHeader>
-          <SheetTitle>{m['page.presence_sheet_title']()}</SheetTitle>
-        </SheetHeader>
-        <div className="max-h-[60vh] overflow-y-auto">
-          <PresenceViewerList viewers={viewers} selfUserId={selfUserId} />
-        </div>
-      </SheetContent>
-    </Sheet>
+    <span className="relative inline-block">
+      <UserAvatar user={{ name: viewer.displayName, username: viewer.username, image: viewer.avatarUrl }} size="sm" />
+      {viewer.isEditing && (
+        <span
+          role="img"
+          className="absolute -bottom-0.5 -right-0.5 flex h-3 w-3 items-center justify-center rounded-full bg-primary ring-1 ring-background"
+          aria-label={m['page.presence_editing_badge']({ name: viewer.displayName || viewer.username })}
+        >
+          <Pencil className="h-2 w-2 text-primary-foreground" aria-hidden="true" />
+        </span>
+      )}
+    </span>
   );
 }
 
@@ -164,26 +176,20 @@ function PresenceAvatar({ viewer, isSelf }: { viewer: PresenceViewer; isSelf: bo
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span className="relative inline-block">
-          <UserAvatar user={{ name: viewer.displayName, username: viewer.username, image: viewer.avatarUrl }} size="sm" />
-          {viewer.isEditing && (
-            <span
-              role="img"
-              className="absolute -bottom-0.5 -right-0.5 flex h-3 w-3 items-center justify-center rounded-full bg-primary ring-1 ring-background"
-              aria-label={m['page.presence_editing_badge']({ name: displayName })}
-            >
-              <Pencil className="h-2 w-2 text-primary-foreground" aria-hidden="true" />
-            </span>
-          )}
-        </span>
+        <PresenceAvatarVisual viewer={viewer} />
       </TooltipTrigger>
       <TooltipContent>{viewer.isEditing ? `${tooltip} · ${m['page.presence_editing']()}` : tooltip}</TooltipContent>
     </Tooltip>
   );
 }
 
-/** Full viewer list rendered inside the popover and the mobile sheet. */
-function PresenceViewerList({ viewers, selfUserId, titleId }: ViewerListProps & { titleId?: string }) {
+/**
+ * Full viewer list rendered inside the desktop popover and
+ * `MobilePresenceCard`'s viewer sheet (`mobile-presence-card.tsx`).
+ * Exported for the latter — the mobile card reuses this verbatim rather
+ * than re-implementing viewer-row rendering.
+ */
+export function PresenceViewerList({ viewers, selfUserId, titleId }: ViewerListProps & { titleId?: string }) {
   const capped = viewers.slice(0, VIEWER_LIST_CAP);
   const overflowCount = viewers.length - capped.length;
 

@@ -65,6 +65,37 @@ export function useAuthMockModule(useAuthFn: Mock) {
 }
 
 // ---------------------------------------------------------------------------
+// window.matchMedia
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a `window.matchMedia` implementation whose `matches` is decided by
+ * `isMatch`.
+ *
+ * The global jsdom stub in `vitest.setup.ts` reports "no match" for every
+ * query; a test that needs a specific query to match spies over it with
+ * this instead of hand-rolling the `MediaQueryList` literal:
+ *
+ *   vi.spyOn(window, 'matchMedia').mockImplementation(
+ *     matchMediaImpl((query) => query === WIDE_VIEWPORT_QUERY),
+ *   );
+ *
+ * (The `vi.spyOn` itself stays in the test file so this module keeps its
+ * vitest import type-only.)
+ */
+export function matchMediaImpl(isMatch: (query: string) => boolean): (query: string) => MediaQueryList {
+  return (query: string) =>
+    ({
+      matches: isMatch(query),
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    }) as unknown as MediaQueryList;
+}
+
+// ---------------------------------------------------------------------------
 // API response helper
 // ---------------------------------------------------------------------------
 

@@ -4,7 +4,7 @@ import { m } from '@paraglide/messages.js';
 import { useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, Loader2, Save, X } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import type * as Y from 'yjs';
 import { CollabForceReloadDialog } from '@/components/editor/collab-force-reload-dialog';
@@ -39,6 +39,7 @@ import { invalidatePageContentQueries, PageRevisionConflictError, useSetPageGran
 import { usePageTitle } from '@/lib/use-page-title';
 import { usePresence } from '@/lib/use-presence';
 import { useScrollSync } from '@/lib/use-scroll-sync';
+import { useWideViewport } from '@/lib/use-wide-viewport';
 
 type Feedback = { kind: 'conflict' | 'error'; message: string };
 
@@ -58,25 +59,6 @@ function resolveMode(pageId: string | null, path: string | null): EditMode {
   if (pageId) return { kind: 'update', pageId };
   if (path) return { kind: 'create', path };
   return { kind: 'invalid' };
-}
-
-// `useSyncExternalStore` adapters for the `md`-breakpoint media query.
-// File-scope so React can refer to stable function identities across
-// renders (the hook re-subscribes if `subscribe` changes identity).
-// Mirrors Tailwind's `md` token (768px) — see `tailwind.config`.
-const WIDE_QUERY = '(min-width: 768px)';
-function subscribeWideQuery(callback: () => void): () => void {
-  const mql = window.matchMedia(WIDE_QUERY);
-  mql.addEventListener('change', callback);
-  return () => mql.removeEventListener('change', callback);
-}
-function getWideQuerySnapshot(): boolean {
-  return window.matchMedia(WIDE_QUERY).matches;
-}
-function getWideQueryServerSnapshot(): boolean {
-  // SSR default: render the narrow layout. The client effect promotes
-  // to wide on hydration if the viewport is large.
-  return false;
 }
 
 export function EditPageClient() {
@@ -601,11 +583,11 @@ function EditorShell({
   // ignore this and always render both panes side-by-side.
   const [narrowTab, setNarrowTab] = useState<'editor' | 'preview'>('editor');
   // Track whether the wide layout is active so scroll sync only binds
-  // when both panes are on screen. `useSyncExternalStore` keeps SSR
-  // safe (server snapshot returns the narrow default) and avoids the
-  // "setState in effect" cascading-render lint warning. Mirrors the
-  // pattern `page-content.tsx` uses to subscribe to the URL hash.
-  const isWide = useSyncExternalStore(subscribeWideQuery, getWideQuerySnapshot, getWideQueryServerSnapshot);
+  // when both panes are on screen. `useWideViewport` is a
+  // `useSyncExternalStore` subscription, which keeps SSR safe (server
+  // snapshot returns the narrow default) and avoids the "setState in
+  // effect" cascading-render lint warning.
+  const isWide = useWideViewport();
 
   // editor→preview survives the collab editor's view recreation because
   // `useScrollSync` listens on `document` (capture phase) and matches the
