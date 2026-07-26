@@ -48,6 +48,7 @@ alpha.0–.3 は published、alpha.4 / stable 向けに changeset 蓄積中（pr
 - [x] **presence の generic feed bus 化** — viewer-list/page-updated/comment-changed の手配線を generic subscribe/publish 抽象に統合し、Redis subscriber を2本→1本に集約した（spec: `feature-presence-generic-feed-bus.md`）
 - [x] **presence token の proactive refetch churn 修正** — `usePresenceToken` の ~4.5 分ごとの無条件 `refetchInterval` を撤去し、`useYjsToken` の D1a パターン（`staleTime: Infinity` + 接続確立中はリフェッチしない）へ揃え、撤去で失われる 4401 リカバリを capped backoff 付き token invalidate で補った（spec: `feature-presence-token-churn-fix.md`）
 - [x] **presence の一貫性欠陥4件修正** — マルチレプリカでの multi-tab 誤削除・viewers フレーム順序崩れ・ページ遷移時の前ページ viewer 混入・join 失敗時の永久 stale の4件を修正した（spec: `feature-presence-consistency-fixes.md`）
+- [x] **モバイルページヘッダの live presence 専用カード化** — モバイルの `[👁 N]` チップを統計チップ直下の専用カード（重なりアバター+自然言語カウント+文字でも分かる接続状態）へ置き換え、`usePresence` に自動再試行中と terminal error の区別を追加した（spec: `feature-mobile-presence-card.md`）
 
 ---
 
