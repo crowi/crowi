@@ -5,12 +5,12 @@ import { PageStatusEnum } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 import { Bell, BellOff, Bookmark, ClipboardCopy, Compass, History, Link2, MoreHorizontal, MoveRight, ThumbsUp, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { notify } from '@/lib/notify';
 import { isUserHomePath } from '@/lib/page-path';
 import { useToggleBookmark } from '@/lib/use-bookmark';
+import { useForceCloseable } from '@/lib/use-force-closeable';
 import { useToggleLike } from '@/lib/use-like';
 import { useToggleWatch } from '@/lib/use-watch';
 import { DeletePageDialog } from './delete-page-dialog';
@@ -37,14 +37,33 @@ interface PageActionsMenuProps {
   foldSocial?: boolean;
   /** Current like state, used only by the `foldSocial` like menu item. */
   isLiked?: boolean;
+  /**
+   * feature-mobile-presence-card — force-closes the dotmenu while `true`.
+   * `PageHeader` sets it from its own `compact` sticky state for the
+   * instances rendered inside the EXPANDED subtree; see `useForceCloseable`
+   * for why a Portal-rendered overlay needs this even though its trigger's
+   * ancestor already goes `inert`.
+   */
+  forceClose?: boolean;
 }
 
-export function PageActionsMenu({ page, compact = false, isAuthenticated = false, foldSocial = false, isLiked = false }: PageActionsMenuProps) {
+export function PageActionsMenu({
+  page,
+  compact = false,
+  isAuthenticated = false,
+  foldSocial = false,
+  isLiked = false,
+  forceClose = false,
+}: PageActionsMenuProps) {
   const router = useRouter();
-  const [isRenameOpen, setIsRenameOpen] = useState(false);
-  const [isPortalizeOpen, setIsPortalizeOpen] = useState(false);
-  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
-  const [isShareOpen, setIsShareOpen] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useForceCloseable(forceClose);
+  // These four Dialogs are opened FROM the dotmenu above but are their own
+  // separate Portal-rendered overlays, so closing the dotmenu on
+  // `forceClose` does not close them too — each needs the same contract.
+  const [isRenameOpen, setIsRenameOpen] = useForceCloseable(forceClose);
+  const [isPortalizeOpen, setIsPortalizeOpen] = useForceCloseable(forceClose);
+  const [isDeleteOpen, setIsDeleteOpen] = useForceCloseable(forceClose);
+  const [isShareOpen, setIsShareOpen] = useForceCloseable(forceClose);
   // Drafts hide the social affordances (watch / bookmark / copy-link)
   // that the compact dropdown otherwise folds in. The page-level
   // history / rename / delete actions still apply to the draft.
@@ -77,7 +96,7 @@ export function PageActionsMenu({ page, compact = false, isAuthenticated = false
           closed — making the whole page unclickable (Radix #1241). A non-modal
           menu doesn't touch body pointer-events, so only the dialog manages it
           and it is cleaned up correctly on close. */}
-      <DropdownMenu modal={false}>
+      <DropdownMenu modal={false} open={isMenuOpen} onOpenChange={setIsMenuOpen}>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="icon-sm" aria-label={m['page.action_more']()} className="text-muted-foreground hover:text-foreground">
             <MoreHorizontal className="h-4 w-4" />

@@ -228,6 +228,7 @@ signal を受けたら orchestrate A と同じ裏取り(clean / headSha 一致 /
 | gw start 失敗(同名 branch 残骸等) | gw のエラーを提示して中止。`-f` 系は使わずユーザーに委ねる |
 | claude 起動待ち timeout | 手動手順を表示(worktree は残す) |
 | send-keys 後に反応が無い | 追いパンチしない。報告に「投入したが未確認」と書き、ユーザーに window 確認を促す |
+| spec が umbrella(他 spec をフェーズとして参照する形式) | kickoff の手順自体は変わらない(通常どおり `/crowi-feature <id>` を投入)。ただし worktree 側で feature-planner が計画するとき、各 phase の `context` に対応する sub-spec のパスを記載し、`extraGates` / `longLived` を umbrella の運用契約(spec に明記)どおり task.json に設定する(詳細: feature-planner.md)。 |
 
 ## crowi-feature / complete-feature との関係
 

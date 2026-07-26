@@ -1,7 +1,7 @@
-import { sanitizeSvg as sharedSanitizeSvg } from '@crowi/plugin-renderer-svg-sanitize';
+import { sanitizeSvg as sharedSanitizeSvg } from '@crowi/svg-sanitize';
 
 /**
- * Thin adapter over `@crowi/plugin-renderer-svg-sanitize` (spec §9,
+ * Thin adapter over `@crowi/svg-sanitize` (spec §9,
  * feature-plugin-renderer-mermaid Phase 3) — no sanitization logic of its
  * own. The previous implementation here was a from-scratch regex pass,
  * explicitly documented (in the version this replaces) as "not a

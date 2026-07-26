@@ -21,6 +21,8 @@ import { createJwtUtil } from 'src/util/jwt';
  *  - scope outside the client's allowed set rejected
  *  - revoke: refresh + PAT revoked (then 401 / invalid_grant), unknown → 200
  *  - discovery shape
+ *  - RFC-0016 Phase 0: GET /oauth/client-info (200 / 404), crowi-ios trusted
+ *    first-party custom-scheme authorize → token end-to-end
  */
 
 const seedActiveUser = async (info: { name: string; username: string; email: string; password: string }) => {
@@ -552,6 +554,90 @@ describe('Routes /api/v2/oauth (Hono)', () => {
       } finally {
         env.CLIENT_URL = prev;
       }
+    });
+  });
+
+  describe('GET /oauth/client-info (RFC-0016 §4.4)', () => {
+    it('returns non-secret metadata for a seeded client', async () => {
+      const res = await request(app).get('/api/v2/oauth/client-info').query({ client_id: 'crowi-cli' });
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ clientId: 'crowi-cli', name: 'Crowi CLI', firstParty: true, trusted: false });
+      // Never exposes redirectUris / allowedScopes — non-secret lookup only.
+      expect(res.body.redirectUris).toBeUndefined();
+      expect(res.body.allowedScopes).toBeUndefined();
+    });
+
+    it('returns the trusted crowi-ios client metadata', async () => {
+      const res = await request(app).get('/api/v2/oauth/client-info').query({ client_id: 'crowi-ios' });
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ clientId: 'crowi-ios', name: 'Crowi for iOS', firstParty: true, trusted: true });
+    });
+
+    it('404s for an unknown client_id', async () => {
+      const res = await request(app).get('/api/v2/oauth/client-info').query({ client_id: 'no-such-client' });
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('NOT_FOUND');
+    });
+  });
+
+  describe('crowi-ios trusted first-party client (RFC-0016 Phase 0)', () => {
+    const IOS_REDIRECT = 'crowi-ios://callback';
+
+    const authorizeIos = (overrides: Record<string, unknown> = {}) =>
+      authorize({
+        client_id: 'crowi-ios',
+        redirect_uri: IOS_REDIRECT,
+        scope: 'pages:read pages:write',
+        ...overrides,
+      });
+
+    it('issues an authorization code for the exact-match custom-scheme redirect_uri, with state round-tripped', async () => {
+      const { challenge } = pkce();
+      const res = await authorizeIos({ code_challenge: challenge, code_challenge_method: 'S256', state: 'ios-state' });
+      expect(res.status).toBe(200);
+      const url = new URL(res.body.redirectUri);
+      expect(url.protocol).toBe('crowi-ios:');
+      expect(url.searchParams.get('code')).toBeTruthy();
+      expect(url.searchParams.get('state')).toBe('ios-state');
+    });
+
+    it('rejects a redirect_uri that only partially matches the registered custom scheme (400 invalid_request)', async () => {
+      const { challenge } = pkce();
+      const res = await authorizeIos({ redirect_uri: `${IOS_REDIRECT}/extra`, code_challenge: challenge, code_challenge_method: 'S256' });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('invalid_request');
+    });
+
+    it('end-to-end: authorize -> token exchange succeeds with PKCE S256 for the crowi-ios custom scheme', async () => {
+      const { verifier, challenge } = pkce();
+      const auth = await authorizeIos({ code_challenge: challenge, code_challenge_method: 'S256', state: 'roundtrip' });
+      expect(auth.status).toBe(200);
+      const url = new URL(auth.body.redirectUri);
+      expect(url.searchParams.get('state')).toBe('roundtrip');
+      const code = url.searchParams.get('code') as string;
+      expect(code).toBeTruthy();
+
+      const tokenRes = await request(app)
+        .post('/api/v2/oauth/token')
+        .send({ grant_type: 'authorization_code', code, code_verifier: verifier, redirect_uri: IOS_REDIRECT, client_id: 'crowi-ios' });
+      expect(tokenRes.status).toBe(200);
+      expect(tokenRes.body.token_type).toBe('Bearer');
+      expect(tokenRes.body.access_token).toEqual(expect.any(String));
+      expect(tokenRes.body.refresh_token.startsWith('crowi_rt_')).toBe(true);
+      expect(tokenRes.body.scope).toBe('pages:read pages:write');
+    });
+
+    it('rejects a wrong PKCE verifier for the crowi-ios exchange (400 invalid_grant) — scheme ownership is not the code defense', async () => {
+      const { challenge } = pkce();
+      const auth = await authorizeIos({ code_challenge: challenge, code_challenge_method: 'S256' });
+      const url = new URL(auth.body.redirectUri);
+      const code = url.searchParams.get('code') as string;
+
+      const tokenRes = await request(app)
+        .post('/api/v2/oauth/token')
+        .send({ grant_type: 'authorization_code', code, code_verifier: 'totally-wrong', redirect_uri: IOS_REDIRECT, client_id: 'crowi-ios' });
+      expect(tokenRes.status).toBe(400);
+      expect(tokenRes.body.error).toBe('invalid_grant');
     });
   });
 });

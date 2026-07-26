@@ -51,13 +51,22 @@ class FakeWebSocket {
     this.sent.push(payload);
   }
 
+  // Auto-incrementing per-instance generation counter, mirroring the
+  // server's per-page monotonic counter (feature-presence-consistency-
+  // fixes defect 2) — every `emit()` call without an explicit `generation`
+  // gets the next value, so the vast majority of tests (which never care
+  // about frame ordering) keep working unchanged. Tests exercising defect
+  // 2 pass an explicit `generation` to simulate an out-of-order arrival.
+  private nextGeneration = 1;
+
   // Test helpers.
   open() {
     this.readyState = FakeWebSocket.OPEN;
     this.onopen?.();
   }
-  emit(viewers: PresenceViewer[]) {
-    this.onmessage?.({ data: JSON.stringify({ type: 'viewers', viewers }) });
+  emit(viewers: PresenceViewer[], generation?: number) {
+    const resolvedGeneration = generation ?? this.nextGeneration++;
+    this.onmessage?.({ data: JSON.stringify({ type: 'viewers', viewers, generation: resolvedGeneration }) });
   }
   emitRaw(data: unknown) {
     this.onmessage?.({ data });
@@ -80,11 +89,29 @@ function viewer(userId: string, overrides: Partial<PresenceViewer> = {}): Presen
   };
 }
 
+function createTestQueryClient() {
+  return new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+}
+
 function makeWrapper() {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+  const client = createTestQueryClient();
   return function Wrapper({ children }: PropsWithChildren) {
     return createElement(QueryClientProvider, { client }, children);
   };
+}
+
+/**
+ * Like {@link makeWrapper} but also exposes the client's
+ * `invalidateQueries` spy — the AC-6 4401 recovery tests assert the
+ * presence-token query is invalidated (the recovery path that used to be
+ * supplied by the now-removed `refetchInterval`). Mirrors
+ * `use-notifications-socket.test.tsx`'s `makeHarness`.
+ */
+function makeSpyWrapper() {
+  const client = createTestQueryClient();
+  const invalidateSpy = vi.spyOn(client, 'invalidateQueries');
+  const Wrapper = ({ children }: PropsWithChildren) => createElement(QueryClientProvider, { client }, children);
+  return { client, invalidateSpy, Wrapper };
 }
 
 /**
@@ -171,7 +198,7 @@ describe('usePresence', () => {
     expect(ws.sent).toHaveLength(2);
   });
 
-  it('reports connecting -> connected -> error -> connecting -> connected across an unclean-close reconnect', async () => {
+  it('reports connecting -> connected -> reconnecting -> connecting -> connected across an unclean-close reconnect (feature-mobile-presence-card: a scheduled retry is "reconnecting", not terminal "error")', async () => {
     getPresenceToken.mockResolvedValue(tokenOkResponse(TOKEN_OK));
 
     const { result } = renderHook(() => usePresence('page-1'), { wrapper: makeWrapper() });
@@ -188,21 +215,23 @@ describe('usePresence', () => {
     });
     expect(result.current.status).toBe('connected');
 
-    // An unclean close flips to 'error' immediately...
+    // An ordinary unclean close (1006) always schedules a backoff retry —
+    // it flips to 'reconnecting', NOT the terminal 'error' (only a 'stop'
+    // policy close, e.g. 4403, produces that — see the dedicated test
+    // below).
     act(() => {
       ws.fail(1006);
     });
-    expect(result.current.status).toBe('error');
+    expect(result.current.status).toBe('reconnecting');
 
-    // ...and back to 'connecting' as soon as the backoff-scheduled retry
-    // actually opens a new connection attempt — NOT stuck on 'error' for
-    // the whole backoff window, and not skipping straight to 'connected'
-    // without visiting 'connecting' first.
+    // ...and to 'connecting' as soon as the backoff-scheduled retry
+    // actually opens a new connection attempt — not skipping straight to
+    // 'connected' without visiting 'connecting' first.
     await act(async () => {
       await vi.advanceTimersByTimeAsync(999);
     });
     expect(FakeWebSocket.instances).toHaveLength(1);
-    expect(result.current.status).toBe('error');
+    expect(result.current.status).toBe('reconnecting');
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1);
     });
@@ -213,6 +242,163 @@ describe('usePresence', () => {
       FakeWebSocket.instances[1].open();
     });
     expect(result.current.status).toBe('connected');
+  });
+
+  it('AC (feature-mobile-presence-card): pins close -> reconnecting (scheduled backoff) -> connecting (retry attempt) -> connected (open) -> Live-eligible (first viewers frame this epoch)', async () => {
+    getPresenceToken.mockResolvedValue(tokenOkResponse(TOKEN_OK));
+
+    const { result } = renderHook(() => usePresence('page-1'), { wrapper: makeWrapper() });
+    await flush();
+    const ws = FakeWebSocket.instances[0];
+
+    act(() => {
+      ws.open();
+      ws.emit([viewer('me')]);
+    });
+    expect(result.current.status).toBe('connected');
+    expect(result.current.hasViewersForConnection).toBe(true);
+
+    // close -> a retry is scheduled -> 'reconnecting'. `hasViewersForConnection`
+    // is reset on `onOpen` (spec §"接続状態と可視性"), NOT on close — it is
+    // still `true` here (the LAST epoch did see a frame), but the derived
+    // `Live` indicator (`status === 'connected' && hasViewersForConnection`)
+    // is already non-Live purely because `status` left `'connected'`.
+    act(() => {
+      ws.fail(1006);
+    });
+    expect(result.current.status).toBe('reconnecting');
+    expect(result.current.hasViewersForConnection).toBe(true);
+
+    // retry attempt -> 'connecting', still not Live-eligible.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000);
+    });
+    expect(FakeWebSocket.instances).toHaveLength(2);
+    expect(result.current.status).toBe('connecting');
+
+    // open -> 'connected', but the NEW epoch resets the flag on `onOpen` —
+    // not Live-eligible again until THIS epoch's first viewers frame.
+    act(() => {
+      FakeWebSocket.instances[1].open();
+    });
+    expect(result.current.status).toBe('connected');
+    expect(result.current.hasViewersForConnection).toBe(false);
+
+    act(() => {
+      FakeWebSocket.instances[1].emit([viewer('me')]);
+    });
+    expect(result.current.status).toBe('connected');
+    expect(result.current.hasViewersForConnection).toBe(true);
+  });
+
+  it('AC (feature-mobile-presence-card): a `stop` policy close (4403) is terminal `error`, never `reconnecting`', async () => {
+    getPresenceToken.mockResolvedValue(tokenOkResponse(TOKEN_OK));
+
+    const { result } = renderHook(() => usePresence('page-1'), { wrapper: makeWrapper() });
+    await flush();
+    const ws = FakeWebSocket.instances[0];
+
+    act(() => {
+      ws.open();
+      ws.emit([viewer('me')]);
+      ws.fail(4403);
+    });
+    expect(result.current.status).toBe('error');
+    // `status !== 'connected'` already makes the derived `Live` indicator
+    // false regardless of this flag's raw value (unaffected by close,
+    // reset only on `onOpen` — see the pinned-transitions test above).
+
+    // No retry is ever scheduled for a 'stop' policy close.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+    expect(FakeWebSocket.instances).toHaveLength(1);
+    expect(result.current.status).toBe('error');
+  });
+
+  it('AC (feature-mobile-presence-card): a 4401 (stale token) close retries immediately (0ms) and reports reconnecting, not terminal error', async () => {
+    getPresenceToken.mockResolvedValue(tokenOkResponse(TOKEN_OK));
+
+    const { result } = renderHook(() => usePresence('page-1'), { wrapper: makeWrapper() });
+    await flush();
+    const ws = FakeWebSocket.instances[0];
+
+    act(() => {
+      ws.open();
+      ws.fail(4401);
+    });
+    expect(result.current.status).toBe('reconnecting');
+
+    // AC-6's 'reconnect' policy for the first 4401 — 0ms, no backoff wait.
+    await flush();
+    expect(FakeWebSocket.instances).toHaveLength(2);
+  });
+
+  it('AC (feature-mobile-presence-card): an old admission timer scheduled before a close does not promote the NEW connection to Live', async () => {
+    getPresenceToken.mockResolvedValue(tokenOkResponse(TOKEN_OK));
+
+    const { result } = renderHook(() => usePresence('page-1'), { wrapper: makeWrapper() });
+    await flush();
+    const ws = FakeWebSocket.instances[0];
+
+    // `alice` is seen but not yet admitted (3s anti-flicker grace period);
+    // her admission timer is still pending when the connection drops.
+    act(() => {
+      ws.open();
+      ws.emit([viewer('me'), viewer('alice')]);
+    });
+    expect(result.current.hasViewersForConnection).toBe(true);
+
+    act(() => {
+      ws.fail(1006);
+    });
+    expect(result.current.status).toBe('reconnecting');
+
+    // The NEW connection opens (a new epoch), but the server has not sent
+    // its own viewers frame yet — `hasViewersForConnection` must be false.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000);
+    });
+    act(() => {
+      FakeWebSocket.instances[1].open();
+    });
+    expect(result.current.hasViewersForConnection).toBe(false);
+
+    // Advancing past alice's original 3s admission window must NOT flip
+    // `hasViewersForConnection` to true for the new connection — that old
+    // timer was cleared on close (this epoch's own first viewers frame,
+    // not a leftover admission timer, is the only thing allowed to do
+    // that).
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3_000);
+    });
+    expect(result.current.hasViewersForConnection).toBe(false);
+    expect(result.current.status).toBe('connected');
+  });
+
+  it("AC (feature-mobile-presence-card): a presence.join() failure that never sends a viewers frame stays 'connected' but non-Live (neutral)", async () => {
+    getPresenceToken.mockResolvedValue(tokenOkResponse(TOKEN_OK));
+
+    const { result } = renderHook(() => usePresence('page-1'), { wrapper: makeWrapper() });
+    await flush();
+    const ws = FakeWebSocket.instances[0];
+
+    // The transport opens, but the server's presence.join() failed
+    // internally and never sends a `viewers` frame (see
+    // `use-presence.test.ts`'s "join failure" describe block below for
+    // the full server-close variant) — here the socket simply stays open
+    // with nothing received.
+    act(() => {
+      ws.open();
+    });
+    expect(result.current.status).toBe('connected');
+    expect(result.current.hasViewersForConnection).toBe(false);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30_000);
+    });
+    expect(result.current.status).toBe('connected');
+    expect(result.current.hasViewersForConnection).toBe(false);
   });
 
   it('surfaces viewers from a broadcast after the anti-flicker delay', async () => {
@@ -379,7 +565,15 @@ describe('usePresence', () => {
     expect(onReconnected).toHaveBeenCalledTimes(2);
   });
 
-  it('never fires onReconnected when the connection never receives a viewers broadcast (presence.join() failure, spec §11 barrier is best-effort)', async () => {
+  it('never fires onReconnected for an epoch the server closed after a presence.join() failure, and falls back to the default backoff-retry reconnect (defect 4, feature-presence-consistency-fixes: server now closes rather than staying silently open)', async () => {
+    // Superseded policy note: this test used to pin "the socket stays open
+    // forever with no viewers frame ever arriving" as the then-current
+    // behaviour (spec §11's "best-effort" framing). feature-presence-
+    // consistency-fixes' defect 4 replaced that with a server-side close
+    // (`attach.ts`'s `openConnection` now closes with the shared
+    // internal-error code, 1011, when `presence.join()` throws) so a join
+    // failure recovers via the client's EXISTING reconnect logic instead
+    // of leaving a connection open that can never receive a viewers frame.
     getPresenceToken.mockResolvedValue(tokenOkResponse(TOKEN_OK));
     const onReconnected = vi.fn();
 
@@ -388,22 +582,37 @@ describe('usePresence', () => {
     const ws = FakeWebSocket.instances[0];
 
     // The transport handshake completes (`onopen`) — this alone must never
-    // fire the barrier (asserted by the sibling test above). Here the
-    // server-side `presence.join()` call itself is assumed to have failed
-    // (e.g. Redis hSet down): no `viewers` broadcast for THIS connection
-    // ever arrives, however long the tab stays connected — heartbeats keep
-    // firing (the socket looks alive from the client's perspective) but
-    // `onReconnected` must never fire for this epoch. The periodic
-    // 3-minute backstop (page-view.tsx, not this hook) is the fallback
-    // that recovers this gap — see page-view-reconcile.test.tsx's
-    // "reconnect barrier missing -> periodic backstop recovers" test.
+    // fire the barrier (asserted by the sibling test above).
     act(() => {
       ws.open();
     });
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(5 * 60_000); // several heartbeat cycles, still nothing
+    expect(onReconnected).not.toHaveBeenCalled();
+
+    // The server's `presence.join()` call failed (e.g. Redis hSet down):
+    // it closes THIS connection immediately with 1011 rather than leaving
+    // it open with no viewers frame ever arriving. No viewers frame for
+    // this epoch means the barrier must never fire for it.
+    act(() => {
+      ws.fail(1011);
     });
     expect(onReconnected).not.toHaveBeenCalled();
+
+    // 1011 is outside the special 4401/4403 codes, so `onCloseCode`'s
+    // existing default applies unchanged — `'backoff-retry'` — no new
+    // client-side branch was needed for this fix. A fresh connection
+    // attempt follows after the ~1s backoff floor.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000);
+    });
+    expect(FakeWebSocket.instances).toHaveLength(2);
+
+    // The barrier fires normally once the RECONNECTED epoch's own viewers
+    // broadcast arrives — the join failure is not a permanent condition.
+    act(() => {
+      FakeWebSocket.instances[1].open();
+      FakeWebSocket.instances[1].emit([viewer('me')]);
+    });
+    expect(onReconnected).toHaveBeenCalledTimes(1);
   });
 
   it('fires onAccessRevoked only for a 4403 close, not 4401', async () => {
@@ -420,11 +629,16 @@ describe('usePresence', () => {
     });
     expect(onAccessRevoked).not.toHaveBeenCalled();
 
-    // A fresh connection closed with 4403 fires it exactly once.
+    // A fresh connection closed with 4403 fires it exactly once. Look the
+    // page-2 socket up by URL rather than by "last instance": the page-1
+    // hook above is still mounted, and its 4401 now drives a token-recovery
+    // reconnect (OQ-1) that can append further page-1 sockets to the shared
+    // instances array around this point.
     getPresenceToken.mockResolvedValue(tokenOkResponse({ ...TOKEN_OK, token: 'jwt.presence.2' }));
     renderHook(() => usePresence('page-2', { onAccessRevoked }), { wrapper: makeWrapper() });
     await flush();
-    const ws2 = FakeWebSocket.instances[FakeWebSocket.instances.length - 1];
+    const ws2 = FakeWebSocket.instances.findLast((w) => w.url.includes('/presence/page-2'));
+    if (!ws2) throw new Error('expected a page-2 presence socket');
     act(() => {
       ws2.open();
       ws2.fail(4403);
@@ -474,7 +688,7 @@ describe('usePresence', () => {
     expect(onCommentChanged).toHaveBeenCalledWith({ type: 'comment-changed', pageId: 'page-1', changeType: 'removed', commentId: 'c-1' });
   });
 
-  it('reports error status when the WebSocket closes uncleanly', async () => {
+  it('reports reconnecting status when the WebSocket closes uncleanly (a retry is scheduled — see the terminal-error/`stop` test for the 4403 case)', async () => {
     getPresenceToken.mockResolvedValue(tokenOkResponse(TOKEN_OK));
 
     const { result } = renderHook(() => usePresence('page-1'), { wrapper: makeWrapper() });
@@ -486,7 +700,7 @@ describe('usePresence', () => {
       ws.open();
       ws.fail();
     });
-    expect(result.current.status).toBe('error');
+    expect(result.current.status).toBe('reconnecting');
   });
 
   it('reconnects after an unclean close but not after a 4403 (permission revoked)', async () => {
@@ -518,23 +732,121 @@ describe('usePresence', () => {
     expect(result.current.status).toBe('error');
   });
 
-  it('stops reconnecting after a 4401 (expired token) close', async () => {
+  it('recovers from a 4401 (expired token) close: invalidates the presence-token query and reconnects immediately on the first occurrence (AC-6 / OQ-1: no longer stop)', async () => {
+    // The mock resolves the SAME token on every refetch, so the effect never
+    // actually re-runs — the reconnect below is entirely this primitive
+    // instance's own immediate 'reconnect' retry (AC-6), isolated from the
+    // effect-rerun path exercised by the consecutive-4401 backoff test below.
     getPresenceToken.mockResolvedValue(tokenOkResponse(TOKEN_OK));
+    const { invalidateSpy, Wrapper } = makeSpyWrapper();
 
-    renderHook(() => usePresence('page-1'), { wrapper: makeWrapper() });
+    renderHook(() => usePresence('page-1'), { wrapper: Wrapper });
     await flush();
     expect(FakeWebSocket.instances).toHaveLength(1);
+    invalidateSpy.mockClear();
 
-    // 4401 = the presence token is expired / invalid. Reconnecting with
-    // the same token just loops — the client must stop.
+    // 4401 = the presence token is expired / invalid. With the proactive
+    // `refetchInterval` gone, this close is the SOLE recovery trigger: it
+    // must invalidate the presence-token query immediately (no backoff on
+    // the first occurrence) so a fresh token gets refetched.
     act(() => {
       FakeWebSocket.instances[0].open();
       FakeWebSocket.instances[0].fail(4401);
     });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['presenceToken', 'page-1'] });
+
+    // AC-6: the first 4401 also routes through the primitive's own
+    // 'reconnect' policy — an immediate retry, no backoff delay.
+    await flush();
+    expect(FakeWebSocket.instances).toHaveLength(2);
+
+    // With no further close on the reconnected socket, nothing else happens
+    // even over a long stretch of wall time.
     await act(async () => {
       await vi.advanceTimersByTimeAsync(60_000);
     });
+    expect(FakeWebSocket.instances).toHaveLength(2);
+  });
+
+  it('AC-4: keeps the socket past the token TTL — no proactive refetch and no rebuild over 5 minutes while connected', async () => {
+    // A token that expires WITHIN the observed window. Under the old
+    // ~4.5-min `refetchInterval` this would re-mint (a new JWT string) and
+    // tear the socket down + re-handshake every TTL cycle, re-broadcasting
+    // the viewer list to every viewer of the page. With the interval removed
+    // and `staleTime: Infinity`, an established connection stays put even
+    // after `exp` — the presence server never re-verifies the token after
+    // the handshake, so a proactive refetch buys nothing.
+    getPresenceToken.mockResolvedValue(tokenOkResponse({ ...TOKEN_OK, expiresAt: new Date(Date.now() + 60_000).toISOString() }));
+
+    const { result } = renderHook(() => usePresence('page-1'), { wrapper: makeWrapper() });
+    await flush();
+    expect(getPresenceToken).toHaveBeenCalledTimes(1);
     expect(FakeWebSocket.instances).toHaveLength(1);
+
+    // Establish the connection (open + first viewers broadcast ⇒ connected).
+    act(() => {
+      FakeWebSocket.instances[0].open();
+      FakeWebSocket.instances[0].emit([viewer('me')]);
+    });
+    expect(result.current.status).toBe('connected');
+
+    // Five minutes pass — well past the 60s token TTL. The socket must NOT
+    // be rebuilt and the token must NOT be refetched.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5 * 60_000);
+    });
+    expect(getPresenceToken).toHaveBeenCalledTimes(1);
+    expect(FakeWebSocket.instances).toHaveLength(1);
+    expect(result.current.status).toBe('connected');
+  });
+
+  it('AC-6: backs off consecutive 4401 closes — the second stale-token close waits out the backoff before re-minting (mint/verify secret-mismatch storm guard)', async () => {
+    // Every mint yields a DIFFERENT token (a fresh `jti` guarantees this in
+    // production), so each 4401 actually flips the effect's `token` dep and a
+    // real reconnect follows — the shape of a mint/verify secret-mismatch
+    // storm where every attempt is doomed. The consecutive-4401 backoff must
+    // keep that from hammering the token endpoint.
+    let mintCount = 0;
+    getPresenceToken.mockImplementation(async () => {
+      mintCount += 1;
+      return tokenOkResponse({ ...TOKEN_OK, token: `jwt.presence.${mintCount}` });
+    });
+    const { Wrapper } = makeSpyWrapper();
+
+    renderHook(() => usePresence('page-1'), { wrapper: Wrapper });
+    await flush();
+    expect(FakeWebSocket.instances).toHaveLength(1);
+
+    // First 4401: invalidated immediately (no backoff); the token really
+    // changes, so a real reconnect follows and the freshest socket carries
+    // the newly minted token.
+    act(() => {
+      FakeWebSocket.instances[0].open();
+      FakeWebSocket.instances[0].fail(4401);
+    });
+    await flush();
+    expect(getPresenceToken).toHaveBeenCalledTimes(2);
+    const reconnectedSocket = FakeWebSocket.instances[FakeWebSocket.instances.length - 1];
+    expect(reconnectedSocket.url).toContain(`jwt.presence.${mintCount}`);
+
+    // Second, CONSECUTIVE 4401 on the freshly-reconnected socket — no healthy
+    // `viewers` frame in between to reset the counter. This routes through
+    // 'backoff-retry': it must NOT mint again immediately.
+    act(() => {
+      reconnectedSocket.open();
+      reconnectedSocket.fail(4401);
+    });
+    expect(getPresenceToken).toHaveBeenCalledTimes(2);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(999);
+    });
+    expect(getPresenceToken).toHaveBeenCalledTimes(2);
+
+    // Crossing the 1s backoff threshold lets the next mint through.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_000);
+    });
+    expect(getPresenceToken).toHaveBeenCalledTimes(3);
   });
 
   it('backs off across handshake-then-close cycles (no flat 1s reconnect loop)', async () => {
@@ -584,5 +896,133 @@ describe('usePresence', () => {
     });
     expect(result.current.status).toBe('error');
     expect(FakeWebSocket.instances).toHaveLength(0);
+  });
+
+  describe('discards an out-of-order viewers frame by generation (defect 2, feature-presence-consistency-fixes)', () => {
+    it('ignores a viewers frame whose generation is not higher than the highest one already applied this epoch', async () => {
+      getPresenceToken.mockResolvedValue(tokenOkResponse(TOKEN_OK));
+
+      const { result } = renderHook(() => usePresence('page-1'), { wrapper: makeWrapper() });
+      await flush();
+      const ws = FakeWebSocket.instances[0];
+
+      act(() => {
+        ws.open();
+        // generation 1: only `me`.
+        ws.emit([viewer('me')], 1);
+      });
+
+      act(() => {
+        // generation 3 arrives NEXT (out of order relative to a generation-2
+        // frame still in flight, per the spec's motivating race: a join's
+        // read stalls while a later leave's read resolves first) — `alice`
+        // is now present. Admit her past the 3s anti-flicker delay.
+        ws.emit([viewer('me'), viewer('alice')], 3);
+        vi.advanceTimersByTime(3_000);
+      });
+      expect(result.current.viewers.map((v) => v.userId).sort()).toEqual(['alice', 'me']);
+
+      act(() => {
+        // The STALE generation-2 snapshot (dispatched before generation 3,
+        // but arriving after it) must be discarded — applying it would
+        // regress the visible list back to a snapshot older than what is
+        // already showing.
+        ws.emit([viewer('me')], 2);
+      });
+      expect(result.current.viewers.map((v) => v.userId).sort()).toEqual(['alice', 'me']);
+
+      act(() => {
+        // A genuinely NEWER generation (4) is still accepted normally.
+        ws.emit([viewer('me')], 4);
+      });
+      expect(result.current.viewers.map((v) => v.userId)).toEqual(['me']);
+    });
+
+    it('resets the generation baseline on each new connection epoch (reconnect)', async () => {
+      getPresenceToken.mockResolvedValue(tokenOkResponse(TOKEN_OK));
+
+      const { result } = renderHook(() => usePresence('page-1'), { wrapper: makeWrapper() });
+      await flush();
+      const ws = FakeWebSocket.instances[0];
+
+      act(() => {
+        ws.open();
+        ws.emit([viewer('me')], 5);
+      });
+      expect(result.current.viewers.map((v) => v.userId)).toEqual(['me']);
+
+      // Reconnect — a new epoch. The NEW socket's own generation counter
+      // restarts from 1 (a fresh server-side connection, not necessarily
+      // page-local generation continuity) — this must not be mistaken for
+      // "generation 1 <= previously-applied generation 5" and discarded.
+      act(() => {
+        ws.fail(1006);
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1_000);
+      });
+      const ws2 = FakeWebSocket.instances[1];
+      act(() => {
+        ws2.open();
+        ws2.emit([viewer('me'), viewer('alice')], 1);
+        vi.advanceTimersByTime(3_000);
+      });
+      expect(result.current.viewers.map((v) => v.userId).sort()).toEqual(['alice', 'me']);
+    });
+  });
+
+  describe('page navigation never shows the previous page viewers (defect 3, feature-presence-consistency-fixes)', () => {
+    it('renders an EMPTY viewer list on the very first render after pageId changes, before the pageId-clearing effect or any new frame has landed', async () => {
+      getPresenceToken.mockResolvedValue(tokenOkResponse(TOKEN_OK));
+
+      // Capture EVERY render's returned value (pushed synchronously during
+      // the render phase, before that render's effects run) — this is
+      // what lets the test observe the exact "P2's first render" moment
+      // the spec describes, distinct from the fully-settled state RTL's
+      // `act()`-wrapped `rerender()` leaves behind once effects flush.
+      const renders: ReturnType<typeof usePresence>[] = [];
+      const { rerender } = renderHook(
+        ({ pageId }: { pageId: string }) => {
+          const value = usePresence(pageId);
+          renders.push(value);
+          return value;
+        },
+        { wrapper: makeWrapper(), initialProps: { pageId: 'page-1' } },
+      );
+
+      await flush();
+      const ws1 = FakeWebSocket.instances[0];
+      act(() => {
+        ws1.open();
+        ws1.emit([viewer('me'), viewer('alice')]);
+      });
+      act(() => {
+        vi.advanceTimersByTime(3_000);
+      });
+      // Sanity: page-1 shows both viewers before navigating away.
+      expect(
+        renders
+          .at(-1)
+          ?.viewers.map((v) => v.userId)
+          .sort(),
+      ).toEqual(['alice', 'me']);
+
+      const renderCountBeforeNav = renders.length;
+
+      // Navigate to a different (private) page — the catch-all route
+      // reuses `PageView` without a `key`, so this hook re-renders with a
+      // new `pageId` argument rather than remounting.
+      rerender({ pageId: 'page-2' });
+
+      const firstRenderAfterNav = renders[renderCountBeforeNav];
+      expect(firstRenderAfterNav).toBeDefined();
+      expect(firstRenderAfterNav.viewers).toEqual([]);
+      expect(firstRenderAfterNav.selfUserId).toBeNull();
+
+      // And the fully-settled state (after the clearing effect ran) is
+      // consistent too — no P1 viewer ever reappears once P2's own
+      // connection eventually reports its own (empty, in this test) list.
+      expect(renders.at(-1)?.viewers).toEqual([]);
+    });
   });
 });

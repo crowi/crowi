@@ -62,12 +62,36 @@ const input = (overrides: Partial<EmbedInput> = {}): EmbedInput => ({
  * revalidation. Poll a predicate over any async value until it's
  * satisfied, with a safety bound — mirrors `backlink.test.ts`'s
  * `waitForBacklinks`.
+ *
+ * The bound is real wall-clock time, not an event-loop tick count: with
+ * nothing else scheduled, dozens of `setImmediate` round-trips fly by in
+ * a few milliseconds — nowhere near enough real time for the Mongo I/O
+ * this predicate waits on to land under CI host contention. Throws
+ * (rather than silently returning the not-yet-satisfied value) on
+ * timeout, so a caller that goes on to assert on that value gets a clear
+ * diagnostic instead of a confusing, unrelated assertion failure. Each
+ * `check()` call is itself raced against the remaining deadline — an
+ * unbounded `await check()` would let a genuinely stuck query burn past
+ * `timeoutMs` before this loop ever gets control back to notice.
  */
-const waitFor = async <T>(check: () => Promise<T>, predicate: (value: T) => boolean, maxTicks = 50): Promise<T> => {
-  let value = await check();
-  for (let i = 0; i < maxTicks && !predicate(value); i += 1) {
-    await new Promise((resolve) => setImmediate(resolve));
-    value = await check();
+const waitFor = async <T>(check: () => Promise<T>, predicate: (value: T) => boolean, timeoutMs = 10_000): Promise<T> => {
+  const deadline = Date.now() + timeoutMs;
+  const timeoutError = () => new Error(`waitFor: predicate still unsatisfied after ${timeoutMs}ms`);
+  const checkWithDeadline = (): Promise<T> => {
+    let timer: ReturnType<typeof setTimeout>;
+    const timeout = new Promise<T>((_, reject) => {
+      timer = setTimeout(() => reject(timeoutError()), Math.max(deadline - Date.now(), 0));
+    });
+    const checkPromise = Promise.resolve().then(check);
+    return Promise.race([checkPromise, timeout]).finally(() => clearTimeout(timer));
+  };
+  let value = await checkWithDeadline();
+  while (!predicate(value)) {
+    if (Date.now() >= deadline) {
+      throw timeoutError();
+    }
+    await new Promise((resolve) => setTimeout(resolve, 2));
+    value = await checkWithDeadline();
   }
   return value;
 };
@@ -76,11 +100,11 @@ const waitFor = async <T>(check: () => Promise<T>, predicate: (value: T) => bool
 // (real Mongo I/O) produce a variable number of microtasks / event-loop turns
 // before `renderer.calls` increments. A fixed `setImmediate` tick count was
 // flaky under parallel load (the I/O round-trip can spill past two ticks).
-const waitForCalls = async (renderer: { calls: number }, expectedCalls: number, maxTicks = 50): Promise<void> => {
+const waitForCalls = async (renderer: { calls: number }, expectedCalls: number, timeoutMs = 10_000): Promise<void> => {
   await waitFor(
     async () => renderer.calls,
     (calls) => calls === expectedCalls,
-    maxTicks,
+    timeoutMs,
   );
 };
 
@@ -195,6 +219,10 @@ describe('error caching', () => {
     { code: 'timeout' as const, expectedTtlSec: RENDER_ERROR_TTL.timeout },
     { code: 'unknown' as const, expectedTtlSec: RENDER_ERROR_TTL.unknown },
     { code: 'blocked' as const, expectedTtlSec: RENDER_ERROR_TTL.blocked },
+    // feature-link-card-fetch-queue-bound (AC6): busy must land on the
+    // same short transient TTL as network/timeout, NOT blocked's 1h
+    // persistent bucket — a congested wait queue should be retried soon.
+    { code: 'busy' as const, expectedTtlSec: RENDER_ERROR_TTL.busy },
   ];
 
   it.each(errCases)('caches %s errors with the per-code default TTL', async ({ code, expectedTtlSec }) => {
@@ -214,6 +242,13 @@ describe('error caching', () => {
     const ttlSec = Math.round((doc!.expiresAt.getTime() - before) / 1000);
     expect(ttlSec).toBeGreaterThanOrEqual(expectedTtlSec - 1);
     expect(ttlSec).toBeLessThanOrEqual(expectedTtlSec + 1);
+  });
+
+  it("busy has a short transient TTL, matching network/timeout — it never lands on blocked/not_found's 1h persistent bucket (feature-link-card-fetch-queue-bound AC6)", () => {
+    expect(RENDER_ERROR_TTL.busy).toBe(RENDER_ERROR_TTL.network);
+    expect(RENDER_ERROR_TTL.busy).toBe(RENDER_ERROR_TTL.timeout);
+    expect(RENDER_ERROR_TTL.busy).toBeLessThan(RENDER_ERROR_TTL.blocked);
+    expect(RENDER_ERROR_TTL.busy).toBeLessThan(RENDER_ERROR_TTL.not_found);
   });
 
   it('rate_limit error with retryAfterSec overrides the default TTL', async () => {
@@ -525,6 +560,39 @@ describe('stale-if-error (last-good retention)', () => {
     const after = await findDoc(i.pageId);
     expect(after?.html).toBe('<a href="https://example.test">blocked link</a>');
     expect(after?.lastGoodFetchedAt).toBeUndefined();
+  });
+
+  it('(g) a busy failure (renderer-admission congestion) DOES retain the last-good html — transient, like network/timeout (feature-link-card-fetch-queue-bound)', async () => {
+    const storage = buildStorage();
+    const ctx = buildCtx(storage, PLUGIN);
+    const renderer = buildRenderer({ html: '<good/>', ttlSec: 1 });
+    const i = input();
+
+    await cachedRender(storage, PLUGIN, renderer, i, ctx);
+
+    // Past the stale window entirely (ttlSec=1 -> window=4s) -> blocking path.
+    const PluginRenderCache = crowi.model('PluginRenderCache') as unknown as PluginRenderCacheModel;
+    const past = new Date(Date.now() - 10_000);
+    const pushedFetchedAt = new Date(past.getTime() - 1_000);
+    await PluginRenderCache.updateOne(
+      { pluginName: PLUGIN, pageId: new Types.ObjectId(i.pageId) },
+      { $set: { expiresAt: past, fetchedAt: pushedFetchedAt } },
+    ).exec();
+
+    // The shared wait-queue was momentarily full/timed-out — `busy` is
+    // in STALE_IF_ERROR_RETAINABLE_CODES, so the previously-fetched html
+    // must stay on screen instead of degrading immediately.
+    (renderer as { render: jest.Mock }).render.mockImplementationOnce(async () => {
+      (renderer as unknown as { calls: number }).calls++;
+      return { html: '', error: { code: 'busy' } };
+    });
+
+    const result = await cachedRender(storage, PLUGIN, renderer, i, ctx);
+    expect(result.html).toBe('<good/>'); // kept, NOT degraded to a placeholder
+
+    const after = await findDoc(i.pageId);
+    expect(after?.html).toBe('<good/>');
+    expect(after?.lastGoodFetchedAt?.getTime()).toBe(pushedFetchedAt.getTime());
   });
 
   it('clamps an untrusted plugin-supplied TTL (huge retryAfterSec / huge ttlSec) to MAX_TTL_SEC at the core boundary', async () => {

@@ -194,6 +194,30 @@ export interface EmbedRenderer {
    * turns out to be CPU-bound.
    */
   admissionControl?: AdmissionControlConfig;
+  /**
+   * Optional per-dispatch cache-bypass predicate
+   * (feature-renderer-plugin-boundary Phase 3). Checked by the generic
+   * embed-tag dispatcher (`packages/api/src/renderer/core/embed-tags.ts`)
+   * BEFORE it touches `CacheStorage` at all for this dispatch — no
+   * `get`, no `set`. When it returns `true`, the dispatcher calls
+   * `render()` directly (via the same `normalizeRenderResult` error
+   * normalisation the preview path uses) and never persists the
+   * result.
+   *
+   * This exists because a renderer whose behaviour is gated by a
+   * runtime policy toggle (e.g. link-card's admin
+   * `security:linkCardEnabled` switch) cannot enforce a literal
+   * zero-cache-access guarantee by checking the toggle only inside
+   * `render()` — a cache HIT from before the toggle flipped would
+   * short-circuit `render()` entirely and keep serving pre-toggle
+   * output (and, symmetrically, writing a toggled-off result to the
+   * cache would keep serving it for up to that entry's TTL after the
+   * toggle flips back). Declaring the check here instead makes the
+   * dispatcher skip the cache outright for that one call. Absent (the
+   * default) or returning `false` goes through the normal cached path
+   * unchanged.
+   */
+  shouldBypassCache?(input: EmbedInput): boolean;
   /** Render a single embed. */
   render(input: EmbedInput, ctx: RenderContext): RenderResult | Promise<RenderResult>;
   /**
@@ -276,10 +300,14 @@ export interface RenderResult {
  * concrete numbers. `blocked` is a policy-level permanent rejection
  * (SSRF block, disallowed scheme, disallowed content-type) — distinct
  * from `not_found` semantically but sharing its 1h persistent-failure
- * TTL.
+ * TTL. `busy` is a transient renderer-admission rejection (e.g. a
+ * shared fetch/render concurrency semaphore's wait queue was full, or a
+ * queued request's wait deadline elapsed) — never a property of the
+ * embed's target, so it shares a short transient TTL with
+ * `network`/`timeout` rather than `blocked`'s persistent one.
  */
 export interface RenderError {
-  code: 'auth' | 'rate_limit' | 'not_found' | 'network' | 'timeout' | 'unknown' | 'blocked';
+  code: 'auth' | 'rate_limit' | 'not_found' | 'network' | 'timeout' | 'unknown' | 'blocked' | 'busy';
   /** Free-form text for log/debug — NOT inlined into the user-facing placeholder. */
   message?: string;
   /**
@@ -506,6 +534,10 @@ export interface RenderContext {
  *
  * Phase 4 stubs (warn-noop):
  *   - `addCodeBlockRenderer` (Phase 6 lights this up)
+ *
+ * feature-renderer-plugin-boundary Phase 1 adds `addStylesheet(path)` —
+ * the boot-time CSS-manifest extension point (see that method's own doc
+ * comment).
  */
 export interface RendererRegistry {
   /**
@@ -546,4 +578,29 @@ export interface RendererRegistry {
    * preserved; the first match that returns `'replaced'` wins.
    */
   addUrlInlineExpander(rule: UrlInlineExpansionRule): void;
+
+  /**
+   * Declare a static CSS asset the plugin needs the browser to load
+   * (e.g. KaTeX's ~30KB math stylesheet). `path` MUST be an
+   * API-relative absolute path confined to the plugin's own
+   * `registerRoutes` namespace — `/api/v2/plugins/<this plugin's
+   * name>/<…>` — the same prefix `PluginRouterScope.route(...)` mounts
+   * that plugin's HTTP routes under. A URL scheme, protocol-relative
+   * `//host`, backslash, `..` traversal segment, or a path outside the
+   * plugin's own namespace all throw synchronously (boot-time reject —
+   * this is not an operator-configurable external URL; see spec
+   * §2.1's "不採用案").
+   *
+   * The call only stages the path in a per-plugin pending set: it is
+   * published to the public `GET /api/v2/app/info` `rendererStylesheets`
+   * manifest ONLY after this plugin's OWN `registerRoutes(scope, ctx)`
+   * completes without throwing (so the manifest never advertises a path
+   * whose route failed to mount). A plugin with no `registerRoutes` at
+   * all, or whose `registerRoutes` throws, never gets its pending
+   * stylesheets committed — dropped wholesale, not partially. Query /
+   * fragment are allowed; duplicate calls with the same path are a
+   * no-op. Call this from `registerRenderer`, not `registerRoutes` —
+   * commit timing depends on this method having already run.
+   */
+  addStylesheet(path: string): void;
 }

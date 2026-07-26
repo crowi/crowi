@@ -1,6 +1,6 @@
 {
   "name": "@crowi/api",
-  "version": "2.0.0-alpha.7",
+  "version": "2.0.0-alpha.9",
   "main": "dist/app.js",
   "types": "dist/app.d.ts",
   "bin": {
@@ -57,7 +57,7 @@
     "@hocuspocus/extension-redis": "^4.0.0",
     "@hocuspocus/server": "^4.0.0",
     "@hono/mcp": "catalog:",
-    "@hono/node-server": "^2.0.3",
+    "@hono/node-server": "^2.0.11",
     "@hono/zod-openapi": "^1.4.0",
     "@modelcontextprotocol/sdk": "catalog:",
     "@scalar/hono-api-reference": "^0.10.16",
@@ -68,7 +68,7 @@
     "debug": "^4.4.3",
     "dotenv": "^16.5.0",
     "github-slugger": "^2.0.0",
-    "hono": "^4.12.25",
+    "hono": "^4.12.31",
     "hono-rate-limiter": "catalog:",
     "ioredis": "^5.6.1",
     "jiti": "^2.7.0",
@@ -79,9 +79,10 @@
     "mongoose-paginate-v2": "^1.9.1",
     "redis": "^4.7.1",
     "remark-breaks": "^4.0.0",
+    "remark-emoji": "^5.0.1",
     "remark-gfm": "^4.0.1",
     "remark-parse": "^11.0.0",
-    "sharp": "^0.34.5",
+    "sharp": "^0.35.3",
     "shiki": "^4.0.2",
     "unified": "^11.0.5",
     "uuid": "^11.1.1",
@@ -89,7 +90,6 @@
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@crowi/plugin-renderer-mermaid": "workspace:*",
     "@crowi/plugin-slack": "workspace:*",
     "@crowi/tsconfig": "workspace:*",
     "@hocuspocus/provider": "^4.0.0",

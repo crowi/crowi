@@ -16,14 +16,15 @@ import { API_SURFACE_VERSION, type AppInfoResponse, type Capability, DYNAMIC_CAP
 import type { OpenAPIHono } from '@hono/zod-openapi';
 
 import type Crowi from 'src/crowi';
+import { isLinkCardEnabled } from 'src/util/admin-config';
 
 import type { CrowiHonoBindings } from '../app';
 
 // Named refs into DYNAMIC_CAPABILITIES (`@crowi/api-contract`) so the tags
 // below are never re-typed as bare string literals in the handler. Positional
 // — must track DYNAMIC_CAPABILITIES's declared order (`search`, `collab`,
-// `collab:redis`) in app-capabilities.ts exactly.
-const [CAPABILITY_SEARCH, CAPABILITY_COLLAB, CAPABILITY_COLLAB_REDIS] = DYNAMIC_CAPABILITIES;
+// `collab:redis`, `link-card`) in app-capabilities.ts exactly.
+const [CAPABILITY_SEARCH, CAPABILITY_COLLAB, CAPABILITY_COLLAB_REDIS, CAPABILITY_LINK_CARD] = DYNAMIC_CAPABILITIES;
 
 /**
  * Build the coarse capability list advertised at `GET /app/info`. Static
@@ -33,7 +34,13 @@ const [CAPABILITY_SEARCH, CAPABILITY_COLLAB, CAPABILITY_COLLAB_REDIS] = DYNAMIC_
  *   - `collab` always (Hocuspocus is library-attached unconditionally);
  *     `collab:redis` additionally when `REDIS_URL` is set so multi-instance
  *     pub/sub is wired up.
- * No I/O — both probes read state already held on the Crowi instance. The
+ *   - `link-card` (feature-renderer-plugin-boundary Phase 3) when the
+ *     admin Security `security:linkCardEnabled` toggle reads true —
+ *     `isLinkCardEnabled(crowi)` is the single source of truth for this
+ *     value and its default-on-missing/non-boolean fallback, also used by
+ *     the admin Security GET handler and the core `card` embed renderer's
+ *     live per-dispatch check.
+ * No I/O — all probes read state already held on the Crowi instance. The
  * `Capability[]` return type keeps this compiler-checked against
  * `@crowi/api-contract`'s vocabulary (a typo wouldn't be assignable to
  * `Capability`) — see `app-capabilities.ts` for the shared source of truth
@@ -47,6 +54,9 @@ const buildCapabilities = (crowi: Crowi): Capability[] => {
   capabilities.push(CAPABILITY_COLLAB);
   if (crowi.redis != null) {
     capabilities.push(CAPABILITY_COLLAB_REDIS);
+  }
+  if (isLinkCardEnabled(crowi)) {
+    capabilities.push(CAPABILITY_LINK_CARD);
   }
   return capabilities;
 };
@@ -77,6 +87,14 @@ export const registerAppRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app:
     // Version-skew / feature-detection signal for the @crowi/cli end-user
     // CLI (and any other client). `crowi.version` is the @crowi/api
     // package.json version read at boot.
+    // feature-renderer-plugin-boundary Phase 1 — the committed renderer
+    // stylesheet manifest (`RendererRegistryImpl.getStylesheets()`, see its
+    // doc comment for the pending→commit-on-route-success rule). `crowi.
+    // renderer` is always set by request time (`setupRenderer` runs during
+    // `Crowi.init()`, well before `buildHonoApp` mounts this route), but the
+    // optional-chain keeps this handler from throwing in a minimal test
+    // harness that skips renderer setup.
+    const rendererStylesheets = [...(crowi.renderer?.registry.getStylesheets() ?? [])];
     return c.json(
       {
         title,
@@ -85,6 +103,7 @@ export const registerAppRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app:
         apiVersion: API_SURFACE_VERSION,
         capabilities: buildCapabilities(crowi),
         canSelfRegister,
+        rendererStylesheets,
       } satisfies AppInfoResponse,
       200,
     );

@@ -35,6 +35,34 @@ crowi-orchestrate の D 系統からも fix の本体としてこの skill を�
 
 ## 手順
 
+### 0. 既存 override の棚卸し(bump で不要になった override を剥がす)
+
+`pnpm.overrides` は追加され続ける一方で、後から親パッケージ自身が自然に patched 版を
+引くようになっても自動では外れない(override が残り続けると、なぜ入れたか分からない
+エントリが積み重なる)。**新規 alert の処理を始める前に**、root `package.json` の
+`pnpm.overrides` に列挙された各エントリ(`"<pkg>@<range>": "<version>"`)が今も
+必要か、1 件ずつ機械的に確認する:
+
+```bash
+# 各エントリについて 1 件ずつ:
+# 1. そのエントリだけ一時的に削除(他のエントリは触らない)
+# 2. pnpm install
+# 3. pnpm why -r <pkg> で解決結果を確認
+#    — 全ての解決版が override の <version> 以上のままなら、親側が override なしでも
+#      既に patched 版を引くようになっている = override は不要 → 削除を確定
+#    — 1 つでも <version> 未満に戻るなら、override はまだ必須 → 元に戻す
+```
+
+- **1 エントリずつ確認する**(まとめて全部外して確認すると、どれが不要でどれが必須か
+  切り分けられない)。
+- 不要と確定したものは削除し、commit メッセージに「override `<pkg>` を削除(親
+  `<parent>` が override なしで `<version>` 以上を解決するようになったため)」と
+  1 行残す。
+- 全件確認しても不要なものが無ければ「棚卸し: 変更なし(全 override 継続要)」と
+  報告するだけでよい(commit 不要)。
+- この棚卸しは新規 alert が 0 件のときも独立して価値がある(`/crowi-deps` を alert
+  無しで単発起動しても棚卸しだけは走らせてよい)。
+
 ### 1. 取得
 
 ```bash

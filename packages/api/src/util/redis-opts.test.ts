@@ -20,9 +20,11 @@ describe('buildRedisOpts', () => {
     // pins against.
     expect(buildRedisOpts('rediss://localhost:6380', true)).toStrictEqual({
       socket: { host: 'localhost', port: 6380, tls: true, requestCert: true, rejectUnauthorized: true },
+      database: 0,
     });
     expect(buildRedisOpts('rediss://localhost:6380', false)).toStrictEqual({
       socket: { host: 'localhost', port: 6380, tls: true, requestCert: true, rejectUnauthorized: false },
+      database: 0,
     });
   });
 
@@ -33,6 +35,7 @@ describe('buildRedisOpts', () => {
     // parser (extension-redis.ts) passed both — same URL, divergent auth.
     expect(buildRedisOpts('redis://app%40svc:p%40ss@localhost:6379', false)).toStrictEqual({
       socket: { host: 'localhost', port: 6379 },
+      database: 0,
       username: 'app@svc',
       password: 'p@ss',
     });
@@ -41,10 +44,12 @@ describe('buildRedisOpts', () => {
   it('redis://:pass@host (empty username) stays password-only; redis://user@host (no colon) is username-only', () => {
     expect(buildRedisOpts('redis://:secret@localhost:6379', false)).toStrictEqual({
       socket: { host: 'localhost', port: 6379 },
+      database: 0,
       password: 'secret',
     });
     expect(buildRedisOpts('redis://onlyuser@localhost:6379', false)).toStrictEqual({
       socket: { host: 'localhost', port: 6379 },
+      database: 0,
       username: 'onlyuser',
     });
   });
@@ -54,11 +59,13 @@ describe('buildRedisOpts', () => {
     // double decode), and an encoded ':' must stay inside the password.
     expect(buildRedisOpts('redis://acl:p%2540ss@localhost:6379', false)).toStrictEqual({
       socket: { host: 'localhost', port: 6379 },
+      database: 0,
       username: 'acl',
       password: 'p%40ss',
     });
     expect(buildRedisOpts('redis://acl:pa%3Ass@localhost:6379', false)).toStrictEqual({
       socket: { host: 'localhost', port: 6379 },
+      database: 0,
       username: 'acl',
       password: 'pa:ss',
     });
@@ -67,13 +74,38 @@ describe('buildRedisOpts', () => {
   it('IPv6 literal hosts lose the WHATWG brackets (net/tls connect want the bare address)', () => {
     expect(buildRedisOpts('redis://[::1]:6379', false)).toStrictEqual({
       socket: { host: '::1', port: 6379 },
+      database: 0,
     });
   });
 
   it('redis:// carries no tls key at all', () => {
     expect(buildRedisOpts('redis://localhost:6379', true)).toStrictEqual({
       socket: { host: 'localhost', port: 6379 },
+      database: 0,
     });
+  });
+
+  it('a REDIS_URL database pathname (feature-redis-key-prefix §3) is parsed into the top-level `database` field', () => {
+    expect(buildRedisOpts('redis://localhost:6379/0', true)).toStrictEqual({
+      socket: { host: 'localhost', port: 6379 },
+      database: 0,
+    });
+    expect(buildRedisOpts('redis://localhost:6379/1', true)).toStrictEqual({
+      socket: { host: 'localhost', port: 6379 },
+      database: 1,
+    });
+    expect(buildRedisOpts('rediss://ACL-user:password@host/1', true)).toStrictEqual({
+      socket: { host: 'host', port: 6379, tls: true, requestCert: true, rejectUnauthorized: true },
+      database: 1,
+      username: 'ACL-user',
+      password: 'password',
+    });
+  });
+
+  it('an invalid REDIS_URL database pathname throws instead of silently connecting to DB 0 (mirrors collab parseRedisUrlForIoredis)', () => {
+    expect(() => buildRedisOpts('redis://localhost:6379/foo', true)).toThrow(/database pathname/);
+    expect(() => buildRedisOpts('redis://localhost:6379/-1', true)).toThrow(/database pathname/);
+    expect(() => buildRedisOpts('redis://localhost:6379/1/extra', true)).toThrow(/database pathname/);
   });
 
   it('rediss:// performs an ACTUAL TLS handshake against the server (repro: the object-shaped `tls` selected a plaintext socket)', async () => {

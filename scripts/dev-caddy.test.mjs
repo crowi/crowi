@@ -17,8 +17,27 @@ import { API_HTTP_PATHS, generateCaddyfile, pickProxyTarget, startNodeProxyFallb
 describe('generateCaddyfile', () => {
   const config = generateCaddyfile({ apiPort: 4310, webPort: 4311, proxyPort: 4313 })
 
-  it('listens on 0.0.0.0:proxyPort by default (Model B — reachable via LAN/tailscale IP)', () => {
-    assert.match(config, /^0\.0\.0\.0:4313 \{/m)
+  it('binds 0.0.0.0 by default via the bind directive (Model B — reachable via LAN/tailscale IP)', () => {
+    assert.match(config, /\n\tbind 0\.0\.0\.0\n/)
+  })
+
+  it('pins the explicit http:// scheme (schemeless non-:80 addresses get Caddy auto-HTTPS)', () => {
+    // Regression pin for 2026-07-23: without the scheme, Caddy serves the
+    // site with automatic HTTPS (local-CA TLS) the moment a real `caddy`
+    // binary is on PATH, and every plain-HTTP dev client gets 400 "Client
+    // sent an HTTP request to an HTTPS server". The node fallback proxy is
+    // plain HTTP, so the two proxy paths silently disagreed until then.
+    assert.match(config, /^http:\/\//m)
+  })
+
+  it('pins the EMPTY host in the site address (a host there is a Host MATCHER, not a bind address)', () => {
+    // Second half of the same 2026-07-23 regression: `http://0.0.0.0:4313`
+    // makes Caddy serve ONLY requests whose Host header is literally
+    // "0.0.0.0:4313" and answer everything else (localhost, LAN IPs,
+    // tailscale MagicDNS) with its empty-200 default — which reads as
+    // "200 OK with an empty body" and slips straight past status-code-only
+    // health checks. The interface restriction belongs to `bind` above.
+    assert.match(config, /^http:\/\/:4313 \{/m)
   })
 
   it('routes /api and /files (bare + wildcard) to the api port', () => {
@@ -26,8 +45,15 @@ describe('generateCaddyfile', () => {
     assert.match(config, /@api[\s\S]*?reverse_proxy @api localhost:4310/)
   })
 
-  it('routes the OAuth discovery well-known path to the api port', () => {
-    assert.match(config, /\/\.well-known\/oauth-authorization-server/)
+  it('routes the whole /.well-known/* space (bare + wildcard) to the api port, mirroring the prod Caddyfile matcher', () => {
+    // The prod Caddyfile's @api matcher was broadened from the single
+    // /.well-known/oauth-authorization-server path to a /.well-known/*
+    // wildcard (feature-oauth-discovery-proxy-fix) specifically so a future
+    // OAuth metadata route (e.g. RFC 9728's /.well-known/oauth-protected-
+    // resource) needs no further Caddyfile edit. This dev-proxy routing
+    // table claims to mirror that Caddyfile (see the module doc comment
+    // above) but was left on the old single-path form — pin the parity.
+    assert.match(config, /@api path[^\n]*\/\.well-known(?!\/\*)[^\n]*\/\.well-known\/\*/)
   })
 
   it('routes all three WS namespaces, bare AND /* form, to the api port', () => {
@@ -45,7 +71,8 @@ describe('generateCaddyfile', () => {
 
   it('honors a custom listenHost (loopback still overridable)', () => {
     const custom = generateCaddyfile({ apiPort: 1, webPort: 2, proxyPort: 3, listenHost: '127.0.0.1' })
-    assert.match(custom, /^127\.0\.0\.1:3 \{/m)
+    assert.match(custom, /^http:\/\/:3 \{/m)
+    assert.match(custom, /\n\tbind 127\.0\.0\.1\n/)
   })
 })
 

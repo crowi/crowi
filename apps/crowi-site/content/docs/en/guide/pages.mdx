@@ -170,31 +170,94 @@ Starting with Crowi 2.0, the page-view header has been restructured. Two
 rows sit above and below the title, visually separating "who is on this
 page right now" from "who has been involved with this page over time".
 
-### Live presence row (above the title)
+Note that **narrow viewports (below 768px) use a different order**. There,
+live presence is not above the title: it is a dedicated card placed below
+the statistics chips. See
+[Mobile live presence card](#mobile-live-presence-card) below.
+
+### Live presence row (above the title, wide viewports)
 
 Just above the page title, the avatars of **users who currently have the
 page open** appear in real time.
 
-- Opening a page automatically connects you to the presence channel, and
-  other viewers' avatars appear within a few seconds. When someone leaves,
-  their avatar disappears.
+- **This applies only to an authenticated user viewing a normal live
+  page** — not a draft and not a stale revision. Opening the page under
+  those conditions automatically connects you to the presence channel, and
+  other viewers' avatars appear within a few seconds; an unauthenticated
+  view, a draft, or a stale-revision view never connects at all. When
+  someone leaves, their avatar disappears.
 - A user who is **also editing** gets a small `✏️` badge in the corner of
   their avatar. This indicates that they have the
   [realtime collaborative editing](./realtime-editing) editor open.
 - Up to 5 avatars are shown; beyond that they collapse into `[+N]`.
-  Clicking `[+N]` opens a popover listing all current viewers (your own
-  entry is labelled "(you)").
-- **If you are the only person present, this row is not shown at all.**
-  Your browser tab already tells you that you are here, so a row with just
-  your own avatar adds no value.
-- On narrow viewports (mobile, etc.), the row collapses into a `[👁 N]`
-  chip; tapping it opens a sheet with the viewer list.
-- If the realtime presence connection fails, this row simply hides itself.
-  The rest of the page (body, meta row, comments) keeps working normally.
+  Clicking `[+N]` opens a popover with the viewer list (your own entry is
+  labelled "(you)"). The list shows up to 20 viewers; beyond that it shows
+  how many more there are instead of listing every one.
+- **If you are the only person present, this row's visible content is not
+  shown** (the row itself keeps its reserved layout height). Your browser
+  tab already tells you that you are here, so a row with just your own
+  avatar adds no value.
+- This row appears on viewports **768px and wider**. Narrower viewports get
+  the [Mobile live presence card](#mobile-live-presence-card) instead.
+- If the realtime presence connection fails, the visible content simply
+  hides itself. The rest of the page (body, meta row, comments) keeps
+  working normally.
 
 > **Note**: Live presence is the "who is here now" signal. The list of
 > people who have viewed the page in the past is available from the
 > "Seen" chip in the meta row below.
+
+### Mobile live presence card
+
+On viewports **below 768px**, live presence is not shown above the title.
+It appears as a **dedicated card** directly below the statistics chips.
+The mobile header order is:
+
+```
+Title
+Author / updated
+[👍 N] [👁 N] [💬 N] [🔗 N]         ← statistics chips
+┌───────────────────────────────────────────┐
+│ (A)(B)(C)+2      5 viewing now     ● Live │   ← presence card
+└───────────────────────────────────────────┘
+───────────────────────────────────────────    ← divider
+Body
+```
+
+The card shows:
+
+- **Overlapping avatars (up to 3)** plus `+N` for the rest. As on wide
+  viewports, anyone who is also editing gets a `✏️` badge.
+- **A plain-language count** such as "5 viewing now". The count includes
+  you.
+- **A connection indicator.** A green dot and `Live` only while connected
+  and having actually received viewer updates on this connection; every
+  other state — including establishing the connection and an automatic
+  reconnect — shows a grey dot and the neutral "Reconnecting…" label. The
+  state is readable from the text, not colour alone.
+
+The whole card is a single tap target. Tapping it opens a sheet with a
+viewer list (the current viewers, your own "(you)" label, and who is
+editing) — up to 20 entries, with an overflow count beyond that; this is
+the same list component the wide-viewport popover uses.
+
+- **When you are the only one present, the card and its divider collapse
+  away.** When someone joins, the slot — including its spacing — expands
+  smoothly. Your scroll position is compensated as it does so, so the body
+  text never jumps under you while reading. (If your OS has "reduce
+  motion" enabled, this skips straight to the end state instead — no
+  animation and no scroll compensation.)
+- **A brief connection drop does not remove the card.** While an automatic
+  reconnect is being retried, the card stays in its neutral state and
+  keeps showing the viewers it last knew about. It disappears only once
+  the connection has failed for good.
+- When you scroll down and the header shrinks to its 60px compact form, the
+  card is replaced by a small trigger. It shows `Live · N` while Live;
+  otherwise it shows the same neutral (non-Live) state as the card. Tapping
+  it opens the same viewer sheet.
+
+> **Note**: `Live` means "viewer updates are arriving on this connection".
+> Joins and leaves can still take a few seconds to be reflected.
 
 ### Meta chip row (below the title)
 
@@ -221,6 +284,9 @@ following:
   the page's state.
 - When you press the like button, the like chip's count updates
   immediately.
+- On narrow viewports the author/updated information and the four chips
+  stack as two separate groups. The chips themselves — their contents and
+  their click actions — are unchanged.
 
 > **Tip**: The Comments and Backlinks chips are shortcuts for jumping to
 > the relevant section on long pages. After scrolling, focus moves to the
@@ -236,9 +302,10 @@ Its role has been replaced by the **"Seen" chip + modal** in the meta chip
 row. Clicking the Seen chip opens a modal with the list of users who have
 opened this page.
 
-This is a deliberate simplification. The new **live presence row** above
-the title became the primary "who is around" signal, so "who has viewed
-this in the past" is consolidated into a compact chip — avoiding two
+This is a deliberate simplification. The new **live presence** display —
+the row above the title on wide viewports, the card below the chips on
+mobile — became the primary "who is around" signal, so "who has viewed
+this in the past" is consolidated into a compact chip, avoiding two
 confusingly similar avatar rows.
 
 See [RFC-0005](../reference/rfcs) for the design details.

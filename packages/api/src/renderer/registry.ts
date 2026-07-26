@@ -10,6 +10,66 @@ import type {
 } from '@crowi/plugin-api';
 
 /**
+ * Boot-time validation for `addStylesheet(path)` (feature-renderer-
+ * plugin-boundary spec §2.1). `path` must be an API-relative absolute
+ * path confined to the registering plugin's own route namespace —
+ * `/api/v2/plugins/<registeringPlugin>/…`, the exact prefix
+ * `makePluginRouterScope` mounts that plugin's HTTP routes under
+ * (`packages/api/src/plugin/registries.ts`). Query / fragment are
+ * allowed (e.g. a cache-busting `?v=…`); a URL scheme, protocol-relative
+ * `//host`, backslash, `..` path segment, or a path outside the
+ * plugin's own namespace all throw synchronously — a misbehaving
+ * plugin's `registerRenderer` fails at boot instead of silently
+ * publishing an unreachable / cross-plugin / off-origin manifest entry.
+ *
+ * The `..`-segment and namespace-prefix checks run on BOTH the raw
+ * pathname AND its percent-decoded form (defense in depth) — checking
+ * only the raw form would let a path like
+ * `/api/v2/plugins/my-plugin/%2e%2e/other-plugin/style.css` through: it
+ * has no literal `..` segment and satisfies the raw prefix check, but a
+ * consumer that percent-decodes the path (as browsers / HTTP servers
+ * routinely do) resolves it to `/api/v2/plugins/other-plugin/style.css`,
+ * escaping the registering plugin's own namespace. Malformed percent-
+ * encoding (a decode that throws) is rejected outright rather than
+ * silently falling back to the raw form.
+ */
+function validateStylesheetPath(path: string, registeringPlugin: string): string {
+  if (path.includes('\\')) {
+    throw new Error(`Plugin '${registeringPlugin}' registered an invalid stylesheet path (contains a backslash): '${path}'`);
+  }
+  if (path.startsWith('//')) {
+    throw new Error(`Plugin '${registeringPlugin}' registered a protocol-relative stylesheet path (must be API-relative): '${path}'`);
+  }
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(path)) {
+    throw new Error(`Plugin '${registeringPlugin}' registered a stylesheet path with a URL scheme (must be API-relative): '${path}'`);
+  }
+  const [pathname] = path.split(/[?#]/, 1);
+  let decodedPathname: string;
+  try {
+    decodedPathname = decodeURIComponent(pathname);
+  } catch {
+    throw new Error(`Plugin '${registeringPlugin}' registered a stylesheet path with malformed percent-encoding: '${path}'`);
+  }
+  if (pathname.split('/').includes('..') || decodedPathname.split('/').includes('..')) {
+    throw new Error(`Plugin '${registeringPlugin}' registered a stylesheet path with a '..' traversal segment: '${path}'`);
+  }
+  const requiredPrefix = `/api/v2/plugins/${registeringPlugin}/`;
+  if (!pathname.startsWith(requiredPrefix) || !decodedPathname.startsWith(requiredPrefix)) {
+    throw new Error(`Plugin '${registeringPlugin}' registered a stylesheet path outside its own route namespace ('${requiredPrefix}'): '${path}'`);
+  }
+  return path;
+}
+
+/**
+ * Reserved `EmbedRenderer` registrant identity for CORE-owned embed
+ * tags (feature-renderer-plugin-boundary Phase 3 — `addCoreEmbedTag`).
+ * Never a real plugin name (plugin names are npm package identifiers,
+ * which never start with `@crowi/core`), so it can't collide with an
+ * installed plugin's own identity.
+ */
+export const CORE_RENDERER_IDENTITY = '@crowi/core';
+
+/**
  * Registry implementation that backs the unified.js pipeline. The
  * runtime constructs **one** of these per Crowi instance:
  *   - the bundled core renderer registers its 5 transforms first;
@@ -24,6 +84,22 @@ import type {
  *   - `addUrlInlineExpander` (registration-order list)
  *   - `addCodeBlockRenderer` (last-wins + boot warn on collision —
  *     Phase 6 lit this up alongside the bundled PlantUML plugin)
+ *
+ * feature-renderer-plugin-boundary Phase 1 adds:
+ *   - `addStylesheet` — staged in a per-plugin pending set at
+ *     `registerRenderer` time, published to `getStylesheets()` only
+ *     once `commitStylesheets(plugin)` runs (called from
+ *     `mountPluginRoutes`, `packages/api/src/hono/index.ts`, right
+ *     after that SAME plugin's `registerRoutes` returns without
+ *     throwing). `dropPendingStylesheets(plugin)` discards the whole
+ *     pending set on a `registerRoutes` failure.
+ *
+ * feature-renderer-plugin-boundary Phase 3 adds:
+ *   - `addCoreEmbedTag` — core-internal-only seed for a reserved embed
+ *     tag (today: link-card's `card`), called once from
+ *     `createRenderer()` before any plugin activates. `addEmbedTag`
+ *     throws (never warn-and-override) when a plugin tries to register
+ *     over a core-reserved tag.
  */
 export class RendererRegistryImpl {
   private unifiedTransform: { plugin: unknown; registeringPlugin: string }[] = [];
@@ -31,6 +107,10 @@ export class RendererRegistryImpl {
   private embedTags = new Map<string, { plugin: string; renderer: EmbedRenderer }>();
   private codeBlockRenderers = new Map<string, { plugin: string; renderer: CodeBlockRenderer }>();
   private urlExpanders: { plugin: string; rule: UrlInlineExpansionRule }[] = [];
+  /** Per-plugin staged stylesheet paths, not yet published — see the class doc comment. */
+  private pendingStylesheets = new Map<string, string[]>();
+  /** Published stylesheet manifest, in commit order, deduped. Read by `GET /api/v2/app/info`. */
+  private stylesheets: string[] = [];
 
   /** Snapshot of registered transform-phase unified plugins, in registration order. */
   getTransformPlugins(): readonly unknown[] {
@@ -89,9 +169,19 @@ export class RendererRegistryImpl {
    * last-wins over fail-on-collision because plugin install order is
    * resolved by topo sort and an operator's `crowi.config.json`
    * shouldn't have to be re-ordered to recover from a misnamed tag.
+   *
+   * feature-renderer-plugin-boundary Phase 3: a CORE-reserved tag
+   * (seeded via `addCoreEmbedTag`, `plugin === CORE_RENDERER_IDENTITY`)
+   * is the ONE exception — a third-party plugin trying to register over
+   * it throws instead of warn-and-override, so core features (e.g. the
+   * `card` link-card embed) can never be silently shadowed by an
+   * installed plugin.
    */
   addEmbedTag(name: string, renderer: EmbedRenderer, registeringPlugin: string, log: PluginLogger): void {
     const existing = this.embedTags.get(name);
+    if (existing?.plugin === CORE_RENDERER_IDENTITY) {
+      throw new Error(`Plugin '${registeringPlugin}' cannot register embed tag '${name}': it is reserved by ${CORE_RENDERER_IDENTITY}`);
+    }
     if (existing) {
       log.warn(`[renderer] embed-tag collision on '${name}': plugin '${existing.plugin}' is being overridden by '${registeringPlugin}' (last-wins)`);
     }
@@ -99,13 +189,40 @@ export class RendererRegistryImpl {
   }
 
   /**
+   * Seed a CORE-reserved embed tag — bypasses the per-plugin
+   * `makeRendererScope` closure entirely (this is core-internal, never
+   * exposed through `@crowi/plugin-api`'s public `RendererRegistry`
+   * interface) and stamps the registration with the reserved
+   * `CORE_RENDERER_IDENTITY` plugin identity. That identity flows
+   * unchanged through the existing per-registrant cache-scoping path
+   * (`scopeForPlugin(cache, registration.plugin)` /
+   * `cachedRender(cache, registration.plugin, …)`,
+   * `core/embed-tags.ts`), so a core embed tag gets its own cache
+   * namespace exactly like a plugin's would. Called once, at
+   * `createRenderer()` boot time, BEFORE `setupPlugins()` activates any
+   * plugin — this ordering is what makes a later cross-plugin
+   * `addEmbedTag` collision on the same name a hard boot-time throw
+   * (above) rather than a race.
+   */
+  addCoreEmbedTag(name: string, renderer: EmbedRenderer): void {
+    this.embedTags.set(name, { plugin: CORE_RENDERER_IDENTITY, renderer });
+  }
+
+  /**
    * Phase 6: last-wins on collision, mirror of `addEmbedTag`. The boot
    * warn surfaces the conflict so an operator can either fix the
-   * misnamed lang or accept the override.
+   * misnamed lang or accept the override — but only for a genuine
+   * CROSS-plugin collision (`existing.plugin !== registeringPlugin`). A
+   * plugin re-registering over its OWN prior registration (e.g.
+   * PlantUML's `reconfigure()` hook re-calling `addCodeBlockRenderer` for
+   * the same lang after an admin config save,
+   * feature-renderer-plugin-boundary Phase 2) is an intentional
+   * self-update, not a conflict — every admin-initiated config save would
+   * otherwise log a spurious "collision" warning.
    */
   addCodeBlockRenderer(lang: string, renderer: CodeBlockRenderer, registeringPlugin: string, log: PluginLogger): void {
     const existing = this.codeBlockRenderers.get(lang);
-    if (existing) {
+    if (existing && existing.plugin !== registeringPlugin) {
       log.warn(`[renderer] code-block-renderer collision on '${lang}': plugin '${existing.plugin}' is being overridden by '${registeringPlugin}' (last-wins)`);
     }
     this.codeBlockRenderers.set(lang, { plugin: registeringPlugin, renderer });
@@ -113,6 +230,58 @@ export class RendererRegistryImpl {
 
   addUrlInlineExpander(rule: UrlInlineExpansionRule, registeringPlugin: string): void {
     this.urlExpanders.push({ plugin: registeringPlugin, rule });
+  }
+
+  /**
+   * Stage a stylesheet path in `registeringPlugin`'s pending set (see
+   * class doc comment). Validates + throws synchronously
+   * (`validateStylesheetPath`) rather than warn-and-discard: an invalid
+   * path is a plugin bug, not an operator-recoverable condition, so it
+   * should fail the plugin's `registerRenderer` call the same way a
+   * malformed `configSchema` fails `activate()`. Duplicate paths (same
+   * plugin, same string) are a silent no-op.
+   */
+  addStylesheet(path: string, registeringPlugin: string): void {
+    const validated = validateStylesheetPath(path, registeringPlugin);
+    const pending = this.pendingStylesheets.get(registeringPlugin) ?? [];
+    if (!pending.includes(validated)) {
+      pending.push(validated);
+    }
+    this.pendingStylesheets.set(registeringPlugin, pending);
+  }
+
+  /**
+   * Publish `registeringPlugin`'s pending stylesheets to the public
+   * manifest. Called from `mountPluginRoutes` immediately after that
+   * plugin's OWN `registerRoutes(scope, ctx)` call returns without
+   * throwing — see the class doc comment for why commit is gated on
+   * that specific signal. A plugin with nothing pending (never called
+   * `addStylesheet`, or already committed) is a no-op.
+   */
+  commitStylesheets(registeringPlugin: string): void {
+    const pending = this.pendingStylesheets.get(registeringPlugin);
+    if (!pending) return;
+    for (const path of pending) {
+      if (!this.stylesheets.includes(path)) {
+        this.stylesheets.push(path);
+      }
+    }
+    this.pendingStylesheets.delete(registeringPlugin);
+  }
+
+  /**
+   * Discard `registeringPlugin`'s ENTIRE pending set (never a partial
+   * commit) — called from `mountPluginRoutes` when that plugin's
+   * `registerRoutes` throws, so the public manifest never advertises a
+   * path whose route failed to mount.
+   */
+  dropPendingStylesheets(registeringPlugin: string): void {
+    this.pendingStylesheets.delete(registeringPlugin);
+  }
+
+  /** Published stylesheet manifest, in commit order, deduped — read by `GET /api/v2/app/info`. */
+  getStylesheets(): readonly string[] {
+    return this.stylesheets;
   }
 }
 
@@ -149,4 +318,8 @@ export const makeRendererScope = (registry: RendererRegistryImpl, plugin: string
   addEmbedTag: (name: string, renderer: EmbedRenderer) => registry.addEmbedTag(name, renderer, plugin, log),
 
   addUrlInlineExpander: (rule: UrlInlineExpansionRule) => registry.addUrlInlineExpander(rule, plugin),
+
+  // feature-renderer-plugin-boundary Phase 1 — staged only; committed by
+  // `mountPluginRoutes` once this SAME plugin's `registerRoutes` succeeds.
+  addStylesheet: (path: string) => registry.addStylesheet(path, plugin),
 });

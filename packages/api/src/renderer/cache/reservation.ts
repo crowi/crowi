@@ -123,6 +123,7 @@ const ERROR_LABELS: Record<RenderError['code'], string> = {
   timeout: 'Embed render timed out.',
   unknown: 'Embed could not be rendered.',
   blocked: 'Embed source is not allowed.',
+  busy: 'Embed renderer is busy — try again shortly.',
 };
 
 function clampDimension(n: number): number {

@@ -25,6 +25,9 @@ alpha.0–.3 は published、alpha.4 / stable 向けに changeset 蓄積中（pr
 ### OAuth 2.0 (RFC-0010)
 - [ ] Phase 5: admin による任意 OAuth クライアント登録 UI（Phase 1-4 完了）
 
+### iOS ネイティブアプリ (RFC-0016)
+- [x] Phase 0 companion server 側変更: trusted first-party `crowi-ios` OAuth client の server seed + custom-scheme redirect 緩和 + consent-skip 配線 + `GET /oauth/client-info`（spec: `feature-ios-companion-server.md`）。Apple 側 (apps/apple scaffold + gate 判定) は worktree `feature-ios-app` で進行中
+
 ### 配布 / リリース（2.0.0 stable 時）
 - [ ] **無印 `crowi` パッケージの整理**（spec: `feature-crowi-quickstart-package.md`）
 - [ ] **slim image + 外部 operator 向け doc** — runner-project 方式。blocked-on `feature-plugin-search-mongo`
@@ -42,6 +45,10 @@ alpha.0–.3 は published、alpha.4 / stable 向けに changeset 蓄積中（pr
 - [x] **collab lifecycle epoch で rename/delete 後のライブエディタを無効化**（RFC-0017 Phase 1、cross-replica prompt fanout は Phase 2 対象外）。spec: `feature-collab-invalidate-on-rename-delete.md`
 - [x] **WS client reconnect primitive** — presence / notifications の WebSocket reconnect ロジックを共有 client primitive に抽出し、close code を一元化した（spec: `feature-ws-client-socket-primitive.md`）
 - [x] **WS server attach primitive** — collab / presence / notifications の WebSocket upgrade-attach-shutdown 骨格を共有 server primitive (`attachWsNamespace`) に抽出した（spec: `feature-ws-namespace-attach-primitive.md`）
+- [x] **presence の generic feed bus 化** — viewer-list/page-updated/comment-changed の手配線を generic subscribe/publish 抽象に統合し、Redis subscriber を2本→1本に集約した（spec: `feature-presence-generic-feed-bus.md`）
+- [x] **presence token の proactive refetch churn 修正** — `usePresenceToken` の ~4.5 分ごとの無条件 `refetchInterval` を撤去し、`useYjsToken` の D1a パターン（`staleTime: Infinity` + 接続確立中はリフェッチしない）へ揃え、撤去で失われる 4401 リカバリを capped backoff 付き token invalidate で補った（spec: `feature-presence-token-churn-fix.md`）
+- [x] **presence の一貫性欠陥4件修正** — マルチレプリカでの multi-tab 誤削除・viewers フレーム順序崩れ・ページ遷移時の前ページ viewer 混入・join 失敗時の永久 stale の4件を修正した（spec: `feature-presence-consistency-fixes.md`）
+- [x] **モバイルページヘッダの live presence 専用カード化** — モバイルの `[👁 N]` チップを統計チップ直下の専用カード（重なりアバター+自然言語カウント+文字でも分かる接続状態）へ置き換え、`usePresence` に自動再試行中と terminal error の区別を追加した（spec: `feature-mobile-presence-card.md`）
 
 ---
 
@@ -54,7 +61,7 @@ alpha.0–.3 は published、alpha.4 / stable 向けに changeset 蓄積中（pr
 - [ ] **monorepo restructure follow-ups**（catalog 化、compose healthcheck、dev/prod parity ほか）
 - [ ] **crypto Phase 3**（KeyProvider pluggable 化、lookup-key secret の hash 化）
 - [ ] **RFC-0008 follow-ups**（`rebuild renderer`/`backlink` 本実装、watcher backfill 統一、RFC 追従）
-- [ ] **eslint 8 → 9 major up**（`packages/api` / `packages/collab` の direct eslint 8.57.1。flat config 統一含む。GHSA `js-yaml` advisory が transitive 経由で残るのは eslint 8 chain が `@eslint/eslintrc → js-yaml@4.1.1` を要求するため）
+- [ ] **eslint 8 → 9 major up**（`packages/api` / `packages/collab` の direct eslint 8.57.1。flat config 統一が主目的 — GHSA `js-yaml` advisory は eslint version と無関係に root `pnpm.overrides` の `js-yaml@>=3.0.0 <3.15.0` / `js-yaml@>=4.0.0 <4.3.0` で解消済み）
 - [x] **mongoose 8 → 9 major up**（`packages/api` / `packages/collab` / `packages/plugin-search-mongo`。mongodb 6→7・mms 10→11 同伴。GHSA `ip-address` chain は mongoose major とは直交し、root `pnpm.overrides` の `"socks": "^2.8.7"` で解消）
 
 ---
@@ -103,8 +110,11 @@ alpha.0–.3 は published、alpha.4 / stable 向けに changeset 蓄積中（pr
 - **boot 手順の宣言的ステップ定義への統一** — `runInitLayers`/`initForCli` の二重手書きステップ列挙を `boot-steps.ts` の `ALL_BOOT_STEPS` + `resolveBootOrder()`（`topoSortPlugins` の DFS を踏襲）に統一し、CLI 省略対象を `CLI_SKIP_STEPS` 一箇所に集約（spec: `feature-boot-sequence-declarative.md`）
 - **モバイル共有メニューの URL コピー修正** — page-actions-menu の「URLをコピー」項目を PC と共通の `SharePanelContent` 共有ダイアログに統一し、auto-copy + タイトル/Markdown 行を提供（spec: `feature-mobile-share-menu-fix.md`）
 - **ユーザーページに「配下ページ (Subpages)」タブを追加** — `/user/<username>/` 配下を path 起点で全階層再帰的に一覧表示する専用 endpoint + static + UI を新設（既存の creator 起点「作成したページ」タブとは別次元）。付随して draft 作成失敗時の孤児 Page hardening を同梱（spec: `feature-user-page-subpages-tab.md`）
-- **URL カード埋め込み `@[card](url)`** — `addEmbedTag` registry の最初の利用者として新規 `@crowi/plugin-renderer-link-card`（SSRF ガード付き OGP fetch）を実装 + editor に裸 URL ⇔ `@[card](url)` 変換 affordance を追加（spec: `feature-link-card-embed.md`）
+- **URL カード埋め込み `@[card](url)`** — `addEmbedTag` registry の最初の利用者として `@crowi/plugin-renderer-link-card`（SSRF ガード付き OGP fetch）を実装 + editor に裸 URL ⇔ `@[card](url)` 変換 affordance を追加。後に `@crowi/api` core へ統合され plugin package は削除済み（下記「Renderer plugin 境界の確立」参照。spec: `feature-link-card-embed.md`）
 - **Revision に不変の page ObjectId 参照を追加(DC-5)** — `path` 文字列の逆引きに依存していた rename 後の履歴解決 / 削除 / 著者集計を、`prepareRevision` で一度だけ刻む不変の `revision.page` id 参照へ切り替え。path 再利用による誤った grant 解決の latent bug を是正し、boot migration `revision-page-ref-backfill` で既存データをバックフィル（spec: `feature-revision-page-ref.md`）
+- **Renderer plugin 境界の確立 + emoji/link-card の core 統合** — presentation/asset contract の一般化 + KaTeX 自己配信 + emoji・link-card の `@crowi/api` core 統合(admin egress toggle 付き) + 旧 plugin package 削除（spec: `feature-renderer-plugin-boundary.md`）
+- **svg-sanitize を非公開の内部共有 lib 化** — `@crowi/plugin-renderer-svg-sanitize` を private 化して `@crowi/svg-sanitize` にリネームし、plugin 名前空間から外して mermaid/plantuml に bundle する方式へ変更（spec: `feature-svg-sanitize-private-bundled.md`）
+- **`/pages/children` にセグメントの更新メタデータを追加** — `PageChildSegment` に `lastUpdatedAt`/`updater` を additive 追加し、`findChildSegments` の既存走査内で代表ページ（`isPage` ならページ自身、それ以外は配下最新更新ページ）を導出。grant/status 可視性の内側のみで選定し N+1 も増やさない（iOS 側 UI は別 spec で消費。spec: `feature-child-segments-metadata.md`）
 
 ---
 

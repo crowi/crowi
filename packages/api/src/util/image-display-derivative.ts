@@ -33,10 +33,11 @@ import { Readable } from 'node:stream';
 
 import Debug from 'debug';
 import type { Types } from 'mongoose';
-import sharp from 'sharp';
+import sharp, { type Metadata, type OutputInfo, type Sharp } from 'sharp';
 
 import type Crowi from 'src/crowi';
 import FileUploader from 'src/util/file-uploader';
+import { Semaphore } from 'src/util/semaphore';
 
 const debug = Debug('crowi:util:image-display-derivative');
 
@@ -180,7 +181,7 @@ function isSupportedSharpFormat(format: string): format is SupportedSharpFormat 
   return format === 'jpeg' || format === 'png' || format === 'webp';
 }
 
-function applyEncodeOptions(pipeline: sharp.Sharp, format: SupportedSharpFormat): sharp.Sharp {
+function applyEncodeOptions(pipeline: Sharp, format: SupportedSharpFormat): Sharp {
   switch (format) {
     case 'jpeg':
       return pipeline.jpeg(JPEG_ENCODE_OPTIONS);
@@ -228,8 +229,8 @@ const PNG_CHUNK_SCAN_LIMIT = 10_000;
 /**
  * Detect an APNG's `acTL` chunk without decoding pixels.
  *
- * The sharp/libvips build this package ships against (spng-backed PNG
- * loader) does NOT expose multi-frame `pages` for PNG the way it does for
+ * The sharp/libvips build this package ships against does NOT expose
+ * multi-frame `pages` for PNG the way it does for
  * GIF/WebP/TIFF/HEIF — verified empirically: a hand-built, spec-conformant
  * 2-frame APNG (`acTL` + per-frame `fcTL`/`fdAT`) round-tripped through
  * `sharp(...).metadata()` (with and without `{ pages: -1 }` / `{ animated:
@@ -330,7 +331,7 @@ export async function generateDisplayDerivativeBuffer(sourcePath: string, opts: 
     return { mode: 'failed', reason: 'unknown-error' };
   }
 
-  let metadata: sharp.Metadata;
+  let metadata: Metadata;
   try {
     metadata = await sharp(sourcePath, { limitInputPixels: maxInputPixels }).metadata();
   } catch (err) {
@@ -354,7 +355,7 @@ export async function generateDisplayDerivativeBuffer(sourcePath: string, opts: 
     return { mode: 'passthrough', reason: 'within-target-width' };
   }
 
-  let encoded: { data: Buffer; info: sharp.OutputInfo };
+  let encoded: { data: Buffer; info: OutputInfo };
   try {
     const pipeline = sharp(sourcePath, { limitInputPixels: maxInputPixels })
       .rotate()
@@ -535,60 +536,50 @@ export async function generateAndPublishDisplayDerivative(params: GenerateAndPub
 // Admission semaphore (spec §8) — upload paths ONLY. The generator itself
 // (above) does not rate-limit; rebuild bounds concurrency via its own
 // worker pool instead (spec §11) to avoid double-throttling.
+//
+// Shared with the link-card OGP fetcher's concurrency cap
+// (`renderer/core/link-card/fetch-og.ts`) — `Semaphore` (`src/util/
+// semaphore.ts`) is the repo's one bounded-concurrency implementation
+// (feature-renderer-core-util-dedup consolidated what used to be two
+// independently hand-rolled semaphores with different interface shapes,
+// only one of which had a queue-length cap). Adopting it here gives the
+// upload admission path a queue-length cap it previously lacked — this
+// admission had no bound on how many callers could pile up in `waiters`,
+// an existing defect now fixed the same way link-card's own DoS fix
+// (`FETCH_QUEUE_LIMIT`, commit 2a9c55e5) bounds it: past
+// `ADMISSION_QUEUE_LIMIT` queued uploads, a further `acquire()` fails
+// immediately instead of piling up an unbounded number of pending
+// Promises.
 // ---------------------------------------------------------------------------
 
-export interface AdmissionSemaphore {
-  /** Resolves `true` once a slot is acquired, `false` if `timeoutMs` elapses first. */
-  acquire(timeoutMs: number): Promise<boolean>;
-  release(): void;
-}
+/**
+ * Queue-length cap for the upload admission semaphore — new in
+ * feature-renderer-core-util-dedup (this admission had no cap on its wait
+ * queue at all before this consolidation). Sized proportionally to
+ * `DEFAULT_ADMISSION_CONCURRENCY` (2) at the SAME 10x ratio link-card's
+ * `FETCH_QUEUE_LIMIT` (50) uses over its own `FETCH_CONCURRENCY_LIMIT`
+ * (5) — deliberately NOT link-card's literal 50, which is sized for a
+ * very different workload (one page's `Promise.all` OGP-fetch fan-out
+ * across many unique embedded links). This admission instead gates
+ * single-attachment upload requests (footer add / editor paste-D&D) from
+ * many concurrent editor sessions — a CPU-bound sharp encode with a much
+ * smaller concurrency budget to begin with. 20 keeps the same generous
+ * 10x headroom over the encode concurrency cap while still bounding the
+ * number of outstanding upload requests under a burst.
+ */
+export const ADMISSION_QUEUE_LIMIT = 20;
 
-interface Waiter {
-  settle: (ok: boolean) => void;
-  timer: ReturnType<typeof setTimeout>;
-}
-
-export function createAdmissionSemaphore(capacity: number): AdmissionSemaphore {
-  let available = capacity;
-  const waiters: Waiter[] = [];
-
-  return {
-    acquire(timeoutMs: number): Promise<boolean> {
-      if (available > 0) {
-        available -= 1;
-        return Promise.resolve(true);
-      }
-      return new Promise<boolean>((resolve) => {
-        const waiter: Waiter = {
-          settle: resolve,
-          timer: setTimeout(() => {
-            const idx = waiters.indexOf(waiter);
-            if (idx !== -1) {
-              waiters.splice(idx, 1);
-              resolve(false);
-            }
-          }, timeoutMs),
-        };
-        waiters.push(waiter);
-      });
-    },
-    release(): void {
-      const next = waiters.shift();
-      if (next) {
-        clearTimeout(next.timer);
-        next.settle(true);
-        return;
-      }
-      available += 1;
-    },
-  };
-}
-
-let sharedUploadAdmission: AdmissionSemaphore | null = null;
+let sharedUploadAdmission: Semaphore | null = null;
 
 /** Lazily-initialised process-wide singleton, mirroring `collab-cap.ts`'s `cachedCounter` pattern. */
-function getUploadAdmission(): AdmissionSemaphore {
-  if (!sharedUploadAdmission) sharedUploadAdmission = createAdmissionSemaphore(resolveAdmissionConcurrency());
+function getUploadAdmission(): Semaphore {
+  // `defaultWaitMs` (3rd arg) is a required constructor param but is inert
+  // for this singleton: its one caller (`generateDisplayDerivativeForUpload`
+  // below) always supplies a fresh `resolveAdmissionTimeoutMs()` override on
+  // every `acquire()` call, which per `Semaphore.acquire`'s own logic always
+  // wins over `defaultWaitMs`. Passing 0 here (rather than re-resolving the
+  // same env var just to have it go unused) makes that explicit.
+  if (!sharedUploadAdmission) sharedUploadAdmission = new Semaphore(resolveAdmissionConcurrency(), ADMISSION_QUEUE_LIMIT, 0);
   return sharedUploadAdmission;
 }
 
@@ -600,14 +591,16 @@ function getUploadAdmission(): AdmissionSemaphore {
  * the upload response must always succeed (spec §8).
  *
  * `admission` is overridable for tests; production call sites omit it and
- * get the shared process-wide semaphore.
+ * get the shared process-wide semaphore. Typed as `Pick<Semaphore,
+ * 'acquire'>` (not the concrete `Semaphore` class) so a test can pass a
+ * plain object literal instead of constructing a real one.
  */
 export async function generateDisplayDerivativeForUpload(
   params: GenerateAndPublishParams,
-  admission: AdmissionSemaphore = getUploadAdmission(),
+  admission: Pick<Semaphore, 'acquire'> = getUploadAdmission(),
 ): Promise<GenerateAndPublishResult> {
   const acquired = await admission.acquire(resolveAdmissionTimeoutMs());
-  if (!acquired) {
+  if (!acquired.ok) {
     debug('admission semaphore timed out for attachment %s', String(params.attachmentId));
     return publishFailureOnly(params.crowi, params.attachmentId, params.oldFilePath, 'admission-timeout');
   }
@@ -618,6 +611,6 @@ export async function generateDisplayDerivativeForUpload(
     debug('unexpected error generating display derivative for attachment %s: %s', String(params.attachmentId), errorMessage(err));
     return publishFailureOnly(params.crowi, params.attachmentId, params.oldFilePath, 'unknown-error');
   } finally {
-    admission.release();
+    acquired.release();
   }
 }

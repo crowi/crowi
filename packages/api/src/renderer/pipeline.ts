@@ -1,9 +1,10 @@
+import type { MentionResponse, TocEntryResponse, WikiLinkResponse } from '@crowi/api-contract';
 import type { RenderContext } from '@crowi/plugin-api';
 import type { Root } from 'mdast';
-import type { TocEntryResponse, WikiLinkResponse, MentionResponse } from '@crowi/api-contract';
 import type { MongoCacheStorage } from './cache';
 import { buildCorePlugins, buildPluginDispatchPlugins, makePreviewCodeBlockDispatch } from './core';
-import { makeMentionResolve, type MentionUsernameResolver } from './core/mention-resolve';
+import { makeEmojiUnifiedPlugin, type RemarkEmojiFn } from './core/emoji';
+import { type MentionUsernameResolver, makeMentionResolve } from './core/mention-resolve';
 import { RendererRegistryImpl } from './registry';
 
 /**
@@ -47,6 +48,15 @@ export interface PipelineEsmDeps {
    * nodes — anchors stay byte-identical to the GFM-only build.
    */
   remarkBreaks: unknown;
+  /**
+   * `remark-emoji`'s default export (feature-renderer-core-util-dedup —
+   * moved here from a module-level cache inside `core/emoji.ts`, which
+   * was the exact anti-pattern this interface's own cross-instance
+   * caching warning below is about). `core/emoji.ts`'s
+   * `makeEmojiUnifiedPlugin` wraps this with the pipeline's baked-in
+   * options.
+   */
+  remarkEmoji: RemarkEmojiFn;
   GithubSlugger: new () => { slug(text: string): string };
   /**
    * `mdast-util-to-string`'s `toString`. Called with no options (default
@@ -187,6 +197,10 @@ export function createPipelineEsmDepsLoader(): LoadPipelineEsmDeps {
     // package doesn't carry the `__esModule` marker jiti needs for
     // its `interopDefault` unwrap.
     const remarkBreaksMod = jiti('remark-breaks') as { default: unknown };
+    // remark-emoji is ESM-only too (feature-renderer-core-util-dedup —
+    // resolved here, per-Renderer-instance, instead of the module-level
+    // cache `core/emoji.ts` used to keep on its own).
+    const remarkEmojiMod = jiti('remark-emoji') as { default: RemarkEmojiFn };
     const sluggerMod = jiti('github-slugger') as { default: new () => { slug(text: string): string } };
     const mdastToStringMod = jiti('mdast-util-to-string') as {
       toString: (node: unknown) => string;
@@ -222,6 +236,7 @@ export function createPipelineEsmDepsLoader(): LoadPipelineEsmDeps {
       remarkParse: remarkParseMod.default,
       remarkGfm: remarkGfmMod.default,
       remarkBreaks: remarkBreaksMod.default,
+      remarkEmoji: remarkEmojiMod.default,
       GithubSlugger: sluggerMod.default,
       mdastToString: mdastToStringMod.toString,
       shikiHighlighter,
@@ -288,7 +303,7 @@ export async function runPipeline(
   }
 
   const deps = await loadDeps();
-  const { unified, remarkParse, remarkGfm, remarkBreaks } = deps;
+  const { unified, remarkParse, remarkGfm, remarkBreaks, remarkEmoji } = deps;
 
   // Build the processor with parser + GFM tweaks first, then layer
   // the core 4 transform plugins (headings → wikilinks → mentions →
@@ -308,6 +323,20 @@ export async function runPipeline(
   // heading text; runs before registry plugins so external transforms
   // see the post-breaks tree.
   processor = processor.use(remarkBreaks as never);
+
+  // Emoji shortcode transform (feature-renderer-plugin-boundary Phase 3
+  // — moved from a registry-registered plugin to a hard-coded core
+  // transform). Deliberately NOT a `buildCorePlugins()` entry: that
+  // list's factories are all `(metadata) => (tree) => void`, bound to
+  // this run's `PipelineMetadata` bag, and emoji needs no metadata —
+  // `makeEmojiUnifiedPlugin` returns unified's own `(this, opts) =>
+  // Transformer` shape instead, bound to this loader's per-instance-
+  // cached `remarkEmoji` (feature-renderer-core-util-dedup). Runs after
+  // `remarkBreaks` (same position external plugin transforms occupied
+  // when emoji was still plugin-registered) and before the registry's
+  // external transforms, so it is applied unconditionally — no plugin
+  // install / registration required.
+  processor = processor.use(makeEmojiUnifiedPlugin(remarkEmoji) as never);
 
   for (const plugin of registry.getTransformPlugins()) {
     // External plugins can be either factory `(opts) => Transformer`

@@ -29,7 +29,7 @@ crowi/
     ├── plugin-storage-{local,aws-s3}/
     ├── plugin-search-{mongo,elasticsearch,opensearch}/
     ├── plugin-mail-{smtp,aws-ses,resend}/
-    ├── plugin-renderer-{emoji,katex,plantuml,crowi-legacy}/
+    ├── plugin-renderer-{katex,plantuml,mermaid,crowi-legacy}/
     ├── admin-cli/           # `crowi-admin` CLI
     └── tsconfig/            # 共有 tsconfig プリセット
 ```
@@ -76,7 +76,7 @@ api は **plugin-free** です。`@crowi/api` は SDK (`@crowi/plugin-api`)
 6. `setupConfig` — Config コレクションを読み込み
 7. `migrateConfig` — 設定の移行
 8. `runAwsConfigMigration` — v1 の AWS 設定を移行 (プラグインより前)
-9. `setupRenderer` — レンダラのコアパイプライン (TOC / wikilink / メンション / コードブロック) を登録
+9. `setupRenderer` — レンダラのコアパイプライン (TOC / wikilink / メンション / コードブロック / 絵文字ショートコード / link card) を登録
 10. `setupPlugins` — `@crowi/runner` が解決したプラグインを起動
 11. `setupMailer` / `setupSlack` — メール / Slack
 12. `setupDNSCache` / `setupLRU`
@@ -85,6 +85,13 @@ api は **plugin-free** です。`@crowi/api` は SDK (`@crowi/plugin-api`)
 レンダラは **プラグインより先に** 起動します。これにより、プラグインへ
 渡すレジストリにはコアの登録が済んだ状態になり、レンダラプラグインは
 その上に追記できます。
+
+絵文字ショートコードと link card (`@[card](url)`) はレンダラプラグイン
+としてではなく、このコアパイプラインに組み込まれています — インストール
+も `crowi.config.json` への記載も不要です。KaTeX / PlantUML / Mermaid /
+crowi-legacy は他の `@crowi/plugin-*` パッケージと同様に解決される、
+引き続きオプションのレンダラプラグインです。core / optional の境界の
+詳細は [レンダラプラグイン](../plugins/renderers) を参照してください。
 
 ### ルーティング
 

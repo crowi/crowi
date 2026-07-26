@@ -124,6 +124,7 @@ import type {
 import type { AccessTokenSchema, CreateAccessTokenResponseSchema, ListAccessTokensResponseSchema } from './schemas/access-token';
 import type {
   AuthorizeResponseSchema,
+  ClientInfoResponseSchema,
   DeviceAuthorizeResponseSchema,
   DeviceInfoResponseSchema,
   DeviceVerifyResponseSchema,
@@ -204,6 +205,7 @@ type DiscoveryResponse = z.infer<typeof DiscoveryResponseSchema>;
 type DeviceAuthorizeResponse = z.infer<typeof DeviceAuthorizeResponseSchema>;
 type DeviceInfoResponse = z.infer<typeof DeviceInfoResponseSchema>;
 type DeviceVerifyResponse = z.infer<typeof DeviceVerifyResponseSchema>;
+type ClientInfoResponse = z.infer<typeof ClientInfoResponseSchema>;
 type RecentlyViewedPagesResponse = z.infer<typeof RecentlyViewedPagesResponseSchema>;
 type UserPageResponse = z.infer<typeof UserPageResponseSchema>;
 type UserBookmarksResponse = z.infer<typeof UserBookmarksResponseSchema>;
@@ -353,6 +355,8 @@ const stubDeviceAuthorize: DeviceAuthorizeResponse = {
 };
 const stubDeviceInfo: DeviceInfoResponse = { client_id: '', scopes: [] };
 const stubDeviceVerify: DeviceVerifyResponse = { status: 'approved' };
+// OAuth client-info stub (RFC-0016 Phase 0).
+const stubClientInfo: ClientInfoResponse = { clientId: '', name: '', firstParty: false, trusted: false };
 
 const stubUserPublic = {
   _id: '',
@@ -532,6 +536,7 @@ const stubAuthSettings: GetAuthSettingsResponse = { requireThirdPartyAuth: false
 const stubSecuritySettings: GetSecuritySettingsResponse = {
   registrationMode: 'Open',
   registrationWhiteList: [],
+  linkCardEnabled: true,
 };
 const stubMailSettings: GetMailSettingsResponse = {
   from: '',
@@ -570,7 +575,18 @@ const stubClearRenderCache: ClearRenderCacheResponse = { ok: true, clearedAt: ''
 // nominally different from `stubUser` (no `status` field).
 const appAuthMeUserChain = new OpenAPIHono()
   .openapi(appRoutes.getAppInfoRoute, (c) =>
-    c.json({ title: null, confidential: null, version: '', apiVersion: 'v2', capabilities: [], canSelfRegister: true } satisfies AppInfoResponse, 200),
+    c.json(
+      {
+        title: null,
+        confidential: null,
+        version: '',
+        apiVersion: 'v2',
+        capabilities: [],
+        canSelfRegister: true,
+        rendererStylesheets: [],
+      } satisfies AppInfoResponse,
+      200,
+    ),
   )
   .openapi(installerRoutes.getInstallerStatusRoute, (c) => c.json({ status: 'installer_required' } satisfies InstallerStatusResponse, 200))
   .openapi(installerRoutes.createAdminRoute, (c) => c.json({ status: 'ok' } satisfies CreateAdminResponse, 200))
@@ -789,7 +805,8 @@ const oauthContractApp = new OpenAPIHono()
   .openapi(oauthRoutes.discoveryRoute, (c) => c.json(stubDiscovery, 200))
   .openapi(oauthRoutes.deviceAuthorizeRoute, (c) => c.json(stubDeviceAuthorize, 200))
   .openapi(oauthRoutes.deviceInfoRoute, (c) => c.json(stubDeviceInfo, 200))
-  .openapi(oauthRoutes.deviceVerifyRoute, (c) => c.json(stubDeviceVerify, 200));
+  .openapi(oauthRoutes.deviceVerifyRoute, (c) => c.json(stubDeviceVerify, 200))
+  .openapi(oauthRoutes.clientInfoRoute, (c) => c.json(stubClientInfo, 200));
 
 /**
  * Per-chain type aliases. These are **exported** so the dts bundler

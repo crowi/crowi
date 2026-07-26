@@ -5,12 +5,14 @@ import { PageGrantEnum, PageStatusEnum } from '@crowi/api-contract';
 import { isLinkOnlyGrant, isPrivateGrant } from '@/lib/page-grant';
 import { m } from '@paraglide/messages.js';
 import { ArrowUp, Edit2, Link2, Lock } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { Breadcrumb } from '@/components/breadcrumb';
 import { Button } from '@/components/ui/button';
 import { pageDisplayName } from '@/lib/page-path';
 import { useAuth } from '@/lib/use-auth';
 import type { UsePresenceResult } from '@/lib/use-presence';
 import { useMeasuredHeight, useStickyHeader } from '@/lib/use-sticky-header';
+import { useWideViewport } from '@/lib/use-wide-viewport';
 import { cn } from '@/lib/utils';
 import type { LucideIcon } from 'lucide-react';
 import { BookmarkButton } from './bookmark-button';
@@ -18,6 +20,7 @@ import { LikeButton } from './like-button';
 import { LinkSharePopover } from './link-share-popover';
 import { LivePresenceRow } from './live-presence-row';
 import { MetaChipRow } from './meta-chip-row';
+import { MobilePresenceCard } from './mobile-presence-card';
 import { PageActionsMenu } from './page-actions-menu';
 import { PageTocMenu } from './page-toc-menu';
 import { WatchButton } from './watch-button';
@@ -131,6 +134,20 @@ export function PageHeader({
 }: PageHeaderProps) {
   const { user, isAuthenticated } = useAuth();
 
+  // feature-mobile-presence-card — the header's mobile and desktop
+  // presence surfaces are DIFFERENT DOM (not one tree styled two ways),
+  // and RFC-0005 round 3 requires the pre-title row to be absent — not
+  // merely `display: none` — below 768px. So the split is a real
+  // conditional render keyed off a live `md`-breakpoint subscription.
+  const isWide = useWideViewport();
+
+  // feature-mobile-presence-card — `true` while the mobile presence
+  // card's self-only collapse animation is in flight. Freezes
+  // `useStickyHeader`'s compact threshold to the transition-start `H`
+  // (below) so the animating slot's own reflow can't flip `compact`
+  // mid-animation.
+  const [cardTransitioning, setCardTransitioning] = useState(false);
+
   // ── Sticky-header machinery ───────────────────────────────────────────
   // `H` — the expanded header's flow height — is measured off the
   // expanded layout wrapper below. It is the ONE number that keeps
@@ -147,13 +164,37 @@ export function PageHeader({
   // every state, so the ResizeObserver measures the same `H` whether or
   // not the page is compacted — the toggle never disturbs `H`.
   const { ref: measureRef, height: expandedHeight } = useMeasuredHeight();
-  const { compact: scrolled } = useStickyHeader(expandedHeight);
+  const { compact: scrolled } = useStickyHeader(expandedHeight, cardTransitioning);
   const compact = sticky && scrolled;
+
+  // feature-mobile-presence-card — forceClose/focus-handoff contract:
+  // when the header compacts, the (still-mounted, now `inert`) expanded
+  // subtree's portaled overlays (LinkSharePopover, PageActionsMenu's
+  // dotmenu AND its rename/portalize/delete/share Dialogs, MetaChipRow's
+  // likers/seen-by Dialogs, LivePresenceRow's desktop popover, expanded
+  // PageTocMenu, the mobile card's own viewer Sheet) all force-close, and
+  // — if focus was inside
+  // that subtree — it moves to the compact bar's scroll-to-top button
+  // (the one control guaranteed to exist whenever `compact` is true)
+  // BEFORE the placeholder's `inert` strands it. `inert` on an ancestor
+  // does not itself relocate focus (only blurs it), so this is required,
+  // not cosmetic.
+  const scrollTopButtonRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!compact) return;
+    const active = typeof document !== 'undefined' ? document.activeElement : null;
+    if (active instanceof HTMLElement && measureRef.current?.contains(active)) {
+      scrollTopButtonRef.current?.focus();
+    }
+    // Both refs are `useRef` objects with a stable identity, so `compact`
+    // is the only dependency that can actually re-run this.
+  }, [compact, measureRef]);
 
   // `presence` is supplied by the PageView (single hoisted `usePresence`
   // call → one shared `/presence` WebSocket for the expanded + compact
   // rows). Hosts that don't show presence (deleted page / user cover)
-  // omit it; the `LivePresenceRow` gates below narrow it before use.
+  // omit it; the `LivePresenceRow` / `MobilePresenceCard` gates below
+  // narrow it before use.
 
   const isLiked = isAuthenticated && !!user && (page.liker ?? []).includes(user.id);
   // Separate "link-only" (RESTRICTED — anyone with the URL can view)
@@ -203,14 +244,20 @@ export function PageHeader({
   // (< 1280px). `compact` shrinks the trigger to fit the sticky bar's
   // 60px presence row. `PageTocMenu` itself no-ops for a sub-2-entry
   // TOC, but we gate here too so the wrapper span isn't emitted for
-  // heading-light pages.
-  const renderTocMenu = (compact: boolean) =>
+  // heading-light pages. `forceCloseMenu` force-closes an EXPANDED-subtree
+  // instance when the header compacts (see the forceClose contract note
+  // above) — omitted for the compact-bar instance, which remounts fresh
+  // every time it appears and so never carries stale open state.
+  const renderTocMenu = (compactSize: boolean, forceCloseMenu = false) =>
     toc.length >= 2 && (
       <span className="min-[1280px]:hidden">
-        <PageTocMenu toc={toc} activeId={activeTocId} compact={compact} />
+        <PageTocMenu toc={toc} activeId={activeTocId} compact={compactSize} forceClose={forceCloseMenu} />
       </span>
     );
-  const tocMenu = renderTocMenu(false);
+  // One expanded-subtree instance (its own `open` state) — it lands in
+  // EITHER the wide presence+TOC row or the narrow TOC-only row, never
+  // both: those two are mutually exclusive by `isWide` below, not by CSS.
+  const tocMenuExpanded = renderTocMenu(false, compact);
   const tocMenuCompact = renderTocMenu(true);
 
   // The expanded layout. Rendered inside the measurement wrapper, which
@@ -248,29 +295,55 @@ export function PageHeader({
           )}
           {!isDraft && (
             <span className="hidden md:inline-flex">
-              <LinkSharePopover page={page} />
+              <LinkSharePopover page={page} forceClose={compact} />
             </span>
           )}
           {editButton && <span className="md:hidden">{editButton}</span>}
           {showActions && (
             <>
               <span className="md:hidden">
-                <PageActionsMenu page={page} compact isAuthenticated={isAuthenticated} />
+                <PageActionsMenu page={page} compact isAuthenticated={isAuthenticated} forceClose={compact} />
               </span>
               <span className="hidden md:inline-flex">
-                <PageActionsMenu page={page} isAuthenticated={isAuthenticated} />
+                <PageActionsMenu page={page} isAuthenticated={isAuthenticated} forceClose={compact} />
               </span>
             </>
           )}
         </div>
       </div>
 
-      {((showPresence && isAuthenticated) || tocMenu) && (
-        <div className="flex items-center gap-2">
-          <div className="min-w-0 flex-1">{showPresence && isAuthenticated && presence && <LivePresenceRow presence={presence} />}</div>
-          {tocMenu}
-        </div>
-      )}
+      {/* feature-mobile-presence-card — the pre-title presence/TOC row is
+          now DESKTOP-ONLY, and gated in JS (`isWide`) rather than by
+          `display`. RFC-0005 round 3 requires it to not be RENDERED below
+          768px: the pre-fix code kept the row mounted on every viewport
+          whenever `showPresence && isAuthenticated` and hid only its
+          `LivePresenceRow` grandchild, so mobile still paid the row's
+          reserved height + `space-y-5` rhythm margin with nobody else
+          present. `hidden md:flex` would fix the pixels, but the row (and
+          a `LivePresenceRow` that mobile never shows) would still mount,
+          run effects and hold state — so the gate is a real conditional
+          render, with the responsive classes kept as belt-and-braces for
+          the single pre-hydration commit where `isWide` is still the SSR
+          default. Mobile's live presence lives in `MobilePresenceCard`
+          after `MetaChipRow` below; this row keeps ONLY the unchanged
+          desktop avatar-strip + TOC pairing. */}
+      {isWide
+        ? ((showPresence && isAuthenticated) || tocMenuExpanded) && (
+            <div className="hidden md:flex items-center gap-2" data-testid="presence-toc-row-desktop">
+              <div className="min-w-0 flex-1">
+                {showPresence && isAuthenticated && presence && <LivePresenceRow presence={presence} forceClose={compact} />}
+              </div>
+              {tocMenuExpanded}
+            </div>
+          )
+        : /* Narrow viewports: no presence here at all. When the TOC menu
+             is needed at this width it gets a row of its own, in the same
+             "before the title" position. */
+          tocMenuExpanded && (
+            <div className="flex items-center justify-end md:hidden" data-testid="presence-toc-row-mobile">
+              {tocMenuExpanded}
+            </div>
+          )}
 
       {showTitle ? (
         // Mobile stacks the chip + edit button onto their own row below
@@ -294,7 +367,21 @@ export function PageHeader({
         )
       )}
 
-      {showMeta && <MetaChipRow page={page} />}
+      {showMeta && <MetaChipRow page={page} forceClose={compact} />}
+
+      {/* feature-mobile-presence-card — mobile-only live presence card,
+          the mirror image of the `isWide` gate above: rendered only on
+          narrow viewports, so its collapse animation / scroll
+          compensation / sticky-threshold freeze never run on desktop
+          (where the desktop strip owns presence and the AC requires the
+          expanded header to be untouched). DOM order here is what the AC
+          pins: title → author/updated → statistics chips → presence card
+          → divider (rendered by the card itself, part of its own animated
+          slot) → body content (owned by `PageView`, outside this
+          component). */}
+      {!isWide && showPresence && isAuthenticated && presence && (
+        <MobilePresenceCard presence={presence} forceClose={compact} onTransitionStateChange={setCardTransitioning} />
+      )}
     </div>
   );
 
@@ -323,8 +410,19 @@ export function PageHeader({
         Because the wrapper is never detached and never resized by the
         toggle, `scrollY` is constant across it — and the `scrollY >= H`
         trigger in `useStickyHeader` therefore cannot oscillate.
+
+        `inert` (feature-mobile-presence-card) removes the whole subtree
+        from focus / tab order / hit-testing once compact — it coexists
+        with the pre-existing `aria-hidden`, which only covers the
+        accessibility tree (a sighted keyboard user could otherwise still
+        Tab into an invisible expanded control without `inert`). It does
+        NOT by itself close a still-open Portal-rendered overlay owned by
+        this subtree (LinkSharePopover / PageActionsMenu / LivePresenceRow
+        popover / expanded PageTocMenu / the mobile card's viewer Sheet all
+        portal to `document.body`, outside this subtree) — that is what
+        each owner's own `forceClose={compact}` prop above handles.
       */}
-      <div ref={measureRef} data-testid="sticky-header-placeholder" aria-hidden={compact} className={cn(compact && 'invisible')}>
+      <div ref={measureRef} data-testid="sticky-header-placeholder" aria-hidden={compact} inert={compact} className={cn(compact && 'invisible')}>
         {expandedHeader}
       </div>
 
@@ -356,6 +454,7 @@ export function PageHeader({
               {/* Scroll-to-top — sits to the left of the title, hanging
                   out past the content gutter (`-ml-9`). */}
               <button
+                ref={scrollTopButtonRef}
                 type="button"
                 onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
                 aria-label={m['page.scroll_to_top']()}
@@ -372,7 +471,17 @@ export function PageHeader({
             </div>
             {((showPresence && isAuthenticated) || tocMenuCompact) && (
               <div className="flex items-center gap-2">
-                <div className="min-w-0 flex-1">{showPresence && isAuthenticated && presence && <LivePresenceRow presence={presence} size="compact" />}</div>
+                <div className="flex min-w-0 flex-1 items-center gap-2">
+                  {/* One presence surface per viewport, same `isWide` gate
+                      as the expanded header: desktop keeps the unchanged
+                      compact avatar strip, mobile gets the short `Live · N`
+                      / neutral trigger. Never both — the AC forbids
+                      double-showing presence in the 60px bar. */}
+                  {showPresence &&
+                    isAuthenticated &&
+                    presence &&
+                    (isWide ? <LivePresenceRow presence={presence} size="compact" /> : <MobilePresenceCard presence={presence} variant="compact" />)}
+                </div>
                 {tocMenuCompact}
               </div>
             )}

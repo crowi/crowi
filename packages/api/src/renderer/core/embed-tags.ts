@@ -1,6 +1,6 @@
 import type { Html, Link, PhrasingContent, Root, Text } from 'mdast';
 import type { EmbedInput, RenderContext } from '@crowi/plugin-api';
-import { cachedRender, type MongoCacheStorage, scopeForPlugin } from '../cache';
+import { cachedRender, type MongoCacheStorage, normalizeRenderResult, scopeForPlugin } from '../cache';
 import { createAuthContextStub, type RendererRegistryImpl } from '../registry';
 import { type ParentChildren, groupByParent, walkPhrasingTree } from './_mdast-walk';
 
@@ -78,6 +78,16 @@ export const makeEmbedTagDispatch =
           url: candidate.url,
           pageId: deps.pageId,
         };
+        if (registration.renderer.shouldBypassCache?.(input)) {
+          // Skip `CacheStorage` entirely for this dispatch — no `get`,
+          // no `set` — per `EmbedRenderer.shouldBypassCache`'s contract
+          // (a renderer-declared runtime-policy toggle, e.g. link-card's
+          // `security:linkCardEnabled`, needs a literal zero-cache-access
+          // guarantee, not just zero I/O inside `render()`).
+          const { html } = await normalizeRenderResult(() => registration.renderer.render(input, scopedCtx), registration.renderer.reservation);
+          candidate.replacementHtml = html;
+          return;
+        }
         const rendered = await cachedRender(deps.cache, registration.plugin, registration.renderer, input, scopedCtx);
         candidate.replacementHtml = rendered.html;
       }),

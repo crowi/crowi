@@ -227,7 +227,15 @@ orchestrate A は READY_TO_INTEGRATE **signal を待つだけ**なので、compl
 打ち忘れた worktree は永遠に不可視になる (過去の実害: editor-preview-reliability
 39 commit・ci-automation 12 commit の長期滞留)。E はこれを検知して**報告だけ**する watcher。
 
-閾値: `STALL_THRESHOLD_DAYS = 3` (仮置き。運用で調整)。
+閾値: `STALL_THRESHOLD_DAYS = 3` (仮置き。運用で調整)。ただし対応する
+`.feature-state/tasks/<id>.json` の `longLived` が `true` の worktree は
+`ORCH_STALL_DAYS_LONG`(既定 14。`orchestrate-watch.sh` の env)が閾値になる —
+release ready まで数フェーズを跨ぐような長期 worktree(例: umbrella spec の実装)を
+通常閾値で誤検知しないための marker。event 名・報告形式は不変(閾値だけが変わる —
+完全放置はこれまでどおり検知される)。longLived の `STALLED` は「統合漏れ」より
+「作業中断」の可能性が高い読み筋になる — ただし E 自身の行動原則(下記「行動しない」)
+は longLived でも変わらない。integrate を急がず、状況確認は報告を受けた側の判断で
+行う(E が能動的に agmsg で割り込むわけではない)。
 
 ### 検知ロジック
 
@@ -266,9 +274,13 @@ dirty な worktree は「セッション作業中の可能性が高い」ので�
 ### 行動しない
 
 E は**報告のみ**。integrate しない・worktree セッションに agmsg で割り込まない・
-complete-feature を代行しない。報告文面の例:
+complete-feature を代行しない(`longLived` task でも同じ — 上記の「作業中断の可能性
+が高い」という読み筋は判断材料であって、E 自身の行動を変えるものではない)。報告
+文面の例:
 「`<id>` が停滞候補 (N commits ahead, 最終 commit M 日前, signal 無し)。worktree
 セッションで `/crowi-complete-feature` か `/crowi-handoff` の実行を検討してください」。
+`longLived` task の場合は「(longLived task — 統合漏れというより作業中断の可能性が
+高い。状況確認は worktree セッション/impl への agmsg で)」を文面に添えてよい。
 
 ## F. flaky-test issue watcher (検知系)
 

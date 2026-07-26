@@ -94,11 +94,24 @@ export function createAffordanceTooltip(
   const hover = hoverTooltip(hoverSource, { hoverTime });
 
   const closeHoverWhenCursorTakesOver = EditorView.updateListener.of((update) => {
-    const prev = update.startState.field(cursorField).tooltip;
-    const next = update.state.field(cursorField).tooltip;
+    // `require: false` on every `.field()` read below: this listener is
+    // itself part of the extension that owns `cursorField` / `hover`, but
+    // feature-renderer-plugin-boundary Phase 3 made that whole extension
+    // toggleable via a `Compartment` (`link-card-affordance-extension.ts`
+    // via `markdown-editor.tsx`'s live `linkCardEnabled` reconfigure) — the
+    // reconfigure transaction that adds OR removes the extension still
+    // runs this listener once (CodeMirror resolves `updateListener`s from
+    // the transaction's effective config, which already includes the
+    // change), so `startState` (on an add) or `state` (on a remove) may
+    // legitimately lack the field. A strict `.field()` read would throw
+    // `RangeError: Field is not present in this state` there — silently
+    // swallowed by CodeMirror's own listener try/catch, but still noisy
+    // and skips the close-hover behavior for that transaction.
+    const prev = update.startState.field(cursorField, false)?.tooltip ?? null;
+    const next = update.state.field(cursorField, false)?.tooltip ?? null;
     if (!next) return;
     if (prev && sameSpan(prev, next)) return; // caret still on the same span — nothing newly appeared.
-    const hoverOverlaps = update.state.field(hover.active).some((t) => sameSpan(t, next));
+    const hoverOverlaps = update.state.field(hover.active, false)?.some((t) => sameSpan(t, next)) ?? false;
     if (!hoverOverlaps) return;
     queueMicrotask(() => update.view.dispatch({ effects: closeHoverTooltips }));
   });

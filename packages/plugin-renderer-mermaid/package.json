@@ -1,6 +1,6 @@
 {
   "name": "@crowi/plugin-renderer-mermaid",
-  "version": "0.1.0-alpha.1",
+  "version": "0.1.0-alpha.3",
   "description": "Mermaid diagram renderer for Crowi 2.x. Renders ```mermaid fenced blocks server-side (browserless, child-process isolated) to a sanitized, base64-encoded SVG <img>. Registered in apps/crowi-runner's crowi.config.json (spec §10).",
   "repository": {
     "type": "git",
@@ -35,17 +35,17 @@
   },
   "dependencies": {
     "@crowi/plugin-api": "workspace:^",
-    "@crowi/plugin-renderer-svg-sanitize": "workspace:^",
+    "@xmldom/xmldom": "^0.9.10",
     "jsdom": "^29.1.1",
     "mermaid": "^11.16.0"
   },
   "devDependencies": {
     "@crowi/plugin-api": "workspace:*",
+    "@crowi/svg-sanitize": "workspace:*",
     "@crowi/tsconfig": "workspace:*",
     "@types/jest": "catalog:",
     "@types/jsdom": "^28.0.3",
     "@types/node": "catalog:",
-    "@xmldom/xmldom": "^0.9.10",
     "jest": "catalog:",
     "ts-jest": "catalog:",
     "tsup": "catalog:",

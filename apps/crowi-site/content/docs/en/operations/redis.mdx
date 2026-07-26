@@ -119,17 +119,17 @@ same bar Redis 8 itself had to clear.
   versa.
 - **Rollback: clear stale coordination state before reconnecting.**
   Coordination keys such as the editor-cap counter
-  (`crowi:collab:editors:<pageId>`, 24h TTL) and the presence hashes
-  (`crowi:presence:viewers:<pageId>` / `crowi:presence:editing:<pageId>`)
-  can linger on the pre-switch instance. Reconnecting every replica
-  without clearing them first can mix stale socket ids in with live
-  ones — the editor cap can over-report and push an editor into
-  read-only unintentionally, and presence can show short-lived ghost
-  viewers. Standard procedure:
+  (`crowi:<instance-slug>:collab:editors:<pageId>`, 24h TTL) and the
+  presence hashes (`crowi:<instance-slug>:presence:viewers:<pageId>` /
+  `crowi:<instance-slug>:presence:editing:<pageId>`) can linger on the
+  pre-switch instance. Reconnecting every replica without clearing them
+  first can mix stale socket ids in with live ones — the editor cap can
+  over-report and push an editor into read-only unintentionally, and
+  presence can show short-lived ghost viewers. Standard procedure:
   1. Confirm every replica has drained from the old endpoint (existing
      WebSocket connections closed, no new connections dialing it).
   2. Point the rollback target at a **fresh, or
-     `crowi:`-prefix-cleared,** Redis instance.
+     `crowi:<instance-slug>:`-prefix-cleared,** Redis instance.
   3. After cutover, verify the editor-cap counter's `peek()` and the
      presence viewer list match the actual connection count before
      resuming traffic.
@@ -191,15 +191,21 @@ user? Every one of these needs to be granted, or collab saves and
 other operations will start failing with permission errors instead of
 a clean "unsupported feature" failure:
 
+Every key/channel below is additionally scoped by an instance-specific
+`<instance-slug>` segment (`crowi:<instance-slug>:<suffix>` — see
+[`REDIS_KEY_PREFIX`](./realtime-collab#environment-variables)), so an ACL
+grant against a shared Redis should target the actual resolved slug, not the
+literal `<instance-slug>` placeholder shown here.
+
 | Consumer | Commands | Keys / channels |
 | --- | --- | --- |
-| Collab pub/sub | `SUBSCRIBE`, `UNSUBSCRIBE`, `PUBLISH` | `crowi:collab:<documentName>` — a single channel per document; Y.Doc sync and awareness updates are both multiplexed over it (there is no separate `:awareness:` / `:y-update:` sub-key) |
-| Editor-cap counter | `SADD`, `SCARD`, `SREM`, `EXPIRE` | `crowi:collab:editors:<pageId>` |
-| Presence | `HSET`, `HGET`, `HGETALL`, `HDEL`, `EXPIRE`, `PUBLISH`, `SUBSCRIBE` | `crowi:presence:viewers:<pageId>`, `crowi:presence:editing:<pageId>`, `crowi:presence:updates`, `crowi:presence:page-updated`, `crowi:presence:comment-changed` |
-| Notification invalidation | `PUBLISH`, `SUBSCRIBE`, `UNSUBSCRIBE` | `crowi:notifications:user:<userId>` |
-| Config sync | `PUBLISH`, `SUBSCRIBE` | fixed channel `config` |
-| Rate limiting | `INCR`, `PEXPIRE` | `crowi:ratelimit:<name>:<userId>:<window>` |
-| LRU (recently-viewed pages) | `ZREMRANGEBYRANK`, `ZADD`, `ZRANGE`, `MULTI`, `EXEC` (the write pair is pipelined inside a `MULTI`/`EXEC` transaction — an ACL missing those two breaks LRU writes) | an operator-chosen namespace key (no fixed `crowi:` prefix) |
+| Collab pub/sub | `SUBSCRIBE`, `UNSUBSCRIBE`, `PUBLISH` | `crowi:<instance-slug>:collab:<documentName>` — a single channel per document; Y.Doc sync and awareness updates are both multiplexed over it (there is no separate `:awareness:` / `:y-update:` sub-key) |
+| Editor-cap counter | `SADD`, `SCARD`, `SREM`, `EXPIRE` | `crowi:<instance-slug>:collab:editors:<pageId>` |
+| Presence | `HSET`, `HGET`, `HGETALL`, `HDEL`, `EXPIRE`, `PUBLISH`, `SUBSCRIBE` | `crowi:<instance-slug>:presence:viewers:<pageId>`, `crowi:<instance-slug>:presence:editing:<pageId>`, `crowi:<instance-slug>:presence:feed` |
+| Notification invalidation | `PUBLISH`, `SUBSCRIBE`, `UNSUBSCRIBE` | `crowi:<instance-slug>:notifications:user:<userId>` |
+| Config sync | `PUBLISH`, `SUBSCRIBE` | `crowi:<instance-slug>:config` |
+| Rate limiting | `INCR`, `PEXPIRE` | `crowi:<instance-slug>:ratelimit:<name>:<userId>:<window>` |
+| LRU (recently-viewed pages) | `ZREMRANGEBYRANK`, `ZADD`, `ZRANGE`, `MULTI`, `EXEC` (the write pair is pipelined inside a `MULTI`/`EXEC` transaction — an ACL missing those two breaks LRU writes) | `crowi:<instance-slug>:lru:<namespace>` (`<namespace>` is still operator/caller-chosen, e.g. a user id) |
 | Boot connection | connection handshake only | n/a |
 
 Two more command sources are easy to miss because Crowi's own code
@@ -222,8 +228,9 @@ never issues them directly:
   Redis ACLs authorize commands called from *inside* a Lua script too,
   so the ACL must also allow the script's own `SELECT`
   (pcall-protected), `EXISTS`, `SET`, `GET`, and `DEL`
-  (pcall-protected) against `crowi:collab:<documentName>:lock`. **An
-  ACL that omits this matrix makes every collaborative save fail with
+  (pcall-protected) against
+  `crowi:<instance-slug>:collab:<documentName>:lock`. **An ACL that
+  omits this matrix makes every collaborative save fail with
   a permission error in a Redis-enabled production deployment** — the
   save never reaches Crowi's Mongo compare-and-set checkpoint, so the
   edit stays stuck in memory (retried on the next debounce cycle)
@@ -256,16 +263,32 @@ rate limiter needs produces the same silent, undetected disabling of
 the limit that a Redis outage would — watch for it when narrowing an
 ACL.
 
-**Key / channel separation.** The 8 consumers use disjoint prefixes:
-`crowi:collab` (collab pub/sub, sub-keyed per document),
-`crowi:collab:editors:<pageId>` (editor cap), `crowi:presence:*`
-(presence hashes and channels), `crowi:notifications:user:<userId>`
-(notifications), the fixed channel `config` (Config sync — not
-`crowi:`-prefixed), and `crowi:ratelimit:*` (rate limiting); LRU uses
-an operator-chosen namespace key with no fixed prefix. **Don't rely on
-the Redis URL's database-number segment for worktree or cluster
-isolation** — nothing here uses it, and it is not a substitute for the
-prefixes above.
+**Key / channel separation.** The 7 Redis-backed consumers (everything
+except the boot connection itself) are additionally scoped by an
+instance-specific keyspace `crowi:<instance-slug>:...`
+(see [`REDIS_KEY_PREFIX`](./realtime-collab#environment-variables) — the
+slug defaults to the `CLIENT_URL` hostname, or an explicit override), so
+multiple Crowi instances can safely share one Redis without cross-talk:
+`crowi:<instance-slug>:collab` (collab pub/sub, sub-keyed per document),
+`crowi:<instance-slug>:collab:editors:<pageId>` (editor cap),
+`crowi:<instance-slug>:presence:*` (presence hashes and channels),
+`crowi:<instance-slug>:notifications:user:<userId>` (notifications),
+`crowi:<instance-slug>:config` (Config sync — no longer a bare fixed
+channel shared across every instance), `crowi:<instance-slug>:ratelimit:*`
+(rate limiting), and `crowi:<instance-slug>:lru:<namespace>`
+(recently-viewed pages; `<namespace>` is still operator/caller-chosen).
+Two replicas of the SAME Crowi instance resolve the SAME `<instance-slug>`
+(same `CLIENT_URL`, or the same explicit `REDIS_KEY_PREFIX` override), which
+is what keeps intended cross-replica fan-out working; two DIFFERENT
+instances sharing this Redis MUST resolve to different effective
+prefixes — via distinct `CLIENT_URL` hostnames, an explicit
+`REDIS_KEY_PREFIX` override on one or both, or both — or they cross-talk
+on every one of these keys/channels. **The Redis URL's
+database-number path segment (e.g. `/1`) IS respected** — both node-redis
+and ioredis select that DB — **but it is a secondary, purely numeric
+isolation axis, not a substitute for the prefix above**: Redis pub/sub is
+not scoped to a DB, so two instances that only differ by DB number still
+cross-talk on every shared channel.
 
 **Alternative engines.** See "Valkey" above: tested support,
 best-effort protocol compatibility, and unsupported configurations are
@@ -291,21 +314,21 @@ operator reference, not a guarantee, and re-verify it after upgrading
 The number of connections per api instance depends on the instance's
 lifecycle stage, not a fixed count:
 
-- **Right after boot** (before any collab session has started): **6**
+- **Right after boot** (before any collab session has started): **5**
   connections — 1 shared client (the editor-cap counter, LRU, rate
   limiting, presence hash writes, and notification publish all share
-  it), 2 presence subscriber connections, 1 notification subscriber
+  it), 1 presence subscriber connection, 1 notification subscriber
   connection, and 2 Config publisher/subscriber connections.
 - **After the first realtime-collab session starts on that instance**:
-  **8** connections — the 6 above plus the 2 dedicated `ioredis`
+  **7** connections — the 5 above plus the 2 dedicated `ioredis`
   pub + sub connections `@hocuspocus/extension-redis` opens
   (`lazyConnect: true`, so they don't open until the first document
   load).
 
 Example: 10 api replicas + 1 web replica
 
-- Right after boot: 10 × 6 = 60 connections.
-- Once every replica has hosted at least one collab session: 10 × 8 = 80 connections.
+- Right after boot: 10 × 5 = 50 connections.
+- Once every replica has hosted at least one collab session: 10 × 7 = 70 connections.
 - Direct connections from web: none (proxied via the api).
 
 Comfortably fits within the default `maxclients=10000`, but plan

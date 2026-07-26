@@ -5,6 +5,7 @@ import { encodeSvgToDataUrl } from './encode-svg';
 import { detectRejectedSource } from './reject-patterns';
 import { MermaidSyntaxError, renderMermaidSvg } from './render-engine';
 import { sanitizeMermaidSvg } from './sanitize-svg';
+import { extractSvgDimensions } from './svg-dimensions';
 
 /**
  * Test-only escape hatch, re-exported at the package's public entry so
@@ -29,8 +30,8 @@ export { _shutdownSingletonForTest } from './render-engine';
  * Mermaid JS ever ships to the browser. Layered defense (spec §2):
  * layer 1 host-forced Mermaid config (`render-worker.ts`), layer 2
  * shared DOM-based SVG sanitizer (`sanitize-svg.ts`, delegating to
- * `@crowi/plugin-renderer-svg-sanitize`), layer 3 base64 `data:` URL
- * `<img>` embedding (`encode-svg.ts`) so no raw Mermaid SVG DOM ever
+ * `@crowi/svg-sanitize`), layer 3 base64 `data:` URL `<img>` embedding
+ * (`encode-svg.ts`) so no raw Mermaid SVG DOM ever
  * reaches the page. `reject-patterns.ts` closes the 4th, input-side gap
  * (spec §3/§背景): flowchart image-shape constructs reach for a network
  * image mid-render, before any SVG exists to sanitize.
@@ -47,8 +48,20 @@ const CLASS_A_ERROR_TTL_SEC = 5 * 60;
 /** Success TTL — Mermaid output is deterministic per source (same source ⇒ same SVG), so a longer freshness window (mirrors PlantUML's 1h) avoids needless re-renders without risking staleness. */
 const SUCCESS_TTL_SEC = 60 * 60;
 
-/** spec §5 classification A — fixed, accessible error markup. No `diagram-embed` marker (spec §9 — keeps it out of the click-to-enlarge / white-canvas dialog treatment). No parse-error detail or raw source ever included. */
-const ERROR_HTML = '<div class="mermaid-embed mermaid-error" role="status"><span>Mermaid diagram could not be rendered</span></div>';
+/**
+ * spec §5 classification A — fixed, accessible error markup. No
+ * `diagram-embed` marker (spec §9 — keeps it out of the
+ * click-to-enlarge / white-canvas dialog treatment). No parse-error
+ * detail or raw source ever included. feature-renderer-plugin-boundary
+ * Phase 2 (§3.1) adds `data-crowi-renderer-presentation="diagram"
+ * data-crowi-renderer-state="error"` alongside the existing classes —
+ * core's `renderer-presentation.tsx` reads the new attribute pair as
+ * authoritative once present, so `state="error"` (not `"ready"`) is what
+ * keeps this excluded from the zoom-dialog treatment on the new
+ * contract, mirroring the legacy no-`diagram-embed`-class exclusion.
+ */
+const ERROR_HTML =
+  '<div class="mermaid-embed mermaid-error" data-crowi-renderer-presentation="diagram" data-crowi-renderer-state="error" role="status"><span>Mermaid diagram could not be rendered</span></div>';
 
 function classAErrorResult(): RenderResult {
   return { html: ERROR_HTML, ttlSec: CLASS_A_ERROR_TTL_SEC };
@@ -62,7 +75,26 @@ function classAErrorResult(): RenderResult {
  */
 export function createMermaidRenderer(): CodeBlockRenderer {
   return {
-    cacheVersion: 1,
+    // feature-renderer-plugin-boundary Phase 2 (§3.1) — bumped from 1 to
+    // 2: success + error output now additionally carry
+    // `data-crowi-renderer-presentation="diagram"
+    // data-crowi-renderer-state="ready"|"error"` (the `diagram-embed`/
+    // `mermaid-embed`/`mermaid-error` classes stay, unchanged, for
+    // plugin-owned CSS / downstream compatibility). Only invalidates
+    // `PluginRenderCache` lookups (`mongodb-cache.ts`'s
+    // `pluginCacheVersion` mismatch = miss) — does NOT bump
+    // `RENDERER_PIPELINE_VERSION`, so already-saved `Revision.renderedAst`
+    // blobs (written with the old shape) keep serving verbatim, dual-
+    // accepted by the legacy `.diagram-embed`/no-marker branch, until
+    // their page is next saved.
+    //
+    // Bumped 2 to 3: success output now also carries `width`/`height`
+    // attributes (0-height <img> regression fix, see `svg-dimensions.ts`).
+    // Same caveat as above — an already-saved page's `Revision.renderedAst`
+    // still serves the old, size-less markup until it is next saved; only
+    // this plugin's own `PluginRenderCache` entry (keyed on diagram
+    // source, independent of any one page) is invalidated immediately.
+    cacheVersion: 3,
     reservation: { variant: 'aspect', aspectRatio: 16 / 9 },
     // spec §6 — sized to the fixed 4-worker child-process pool
     // (`render-engine.ts`); §7's preview dispatch is the only other
@@ -99,8 +131,18 @@ export function createMermaidRenderer(): CodeBlockRenderer {
       if (!encoded.ok) return classAErrorResult();
 
       const alt = buildAltText(info.source);
+      // Mermaid's SVG declares `width="100%"` with no absolute height, so
+      // a bare `<img>` has no resolvable intrinsic size once base64-
+      // embedded — inside `RendererPresentation`'s `inline-block` wrapper
+      // (whose own width is itself `auto`, sized from its content) the
+      // two collapse to 0×0 in the browser. `width`/`height` attributes,
+      // derived from the sanitized SVG's own `viewBox`, give the browser
+      // an intrinsic size independent of the `data:` payload; CSS
+      // `max-width: 100%; height: auto` then scales it proportionally.
+      const dims = extractSvgDimensions(sanitized.svg);
+      const sizeAttrs = dims ? ` width="${dims.width}" height="${dims.height}"` : '';
       return {
-        html: `<img class="diagram-embed mermaid-embed" alt="${escapeHtml(alt)}" src="${encoded.dataUrl}">`,
+        html: `<img class="diagram-embed mermaid-embed" data-crowi-renderer-presentation="diagram" data-crowi-renderer-state="ready" alt="${escapeHtml(alt)}" src="${encoded.dataUrl}"${sizeAttrs}>`,
         ttlSec: SUCCESS_TTL_SEC,
       };
     },

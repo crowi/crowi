@@ -1,4 +1,4 @@
-import type { RenderContext, RenderResult } from '@crowi/plugin-api';
+import type { CodeBlockRenderer, PluginContext, RenderContext, RendererRegistry, RenderResult } from '@crowi/plugin-api';
 import plantumlPlugin, { createPlantUmlRenderer, plantumlConfigSchema } from './index';
 import { encode } from './encoder';
 import { sanitizeSvg } from './sanitize';
@@ -66,6 +66,90 @@ describe('@crowi/plugin-renderer-plantuml plugin contract', () => {
   });
 });
 
+/**
+ * feature-renderer-plugin-boundary Phase 2 — `reconfigure` completes the
+ * "admin edits trigger reconfigure(ctx) which re-registers so the
+ * renderer closure picks up the new serverUrl/outputFormat" behaviour
+ * the plugin's own `registerRenderer` doc comment already described, by
+ * capturing the live registry `registerRenderer` receives
+ * (`liveRegistry`, module-level) so `reconfigure(ctx)` — which only gets
+ * `ctx`, no registry, per `PluginContext`'s deliberately thin surface —
+ * can re-register against it. Needed so an admin-API `serverUrl` change
+ * takes effect without an api process restart (e.g.
+ * `packages/e2e/tests/renderer-plugins.spec.ts` pointing PlantUML at a
+ * locally-reachable server).
+ */
+describe('reconfigure — re-registers the live "plantuml" code-block renderer with fresh config', () => {
+  function captureRegistry(): { registry: RendererRegistry; registered: { lang: string; renderer: CodeBlockRenderer }[] } {
+    const registered: { lang: string; renderer: CodeBlockRenderer }[] = [];
+    const registry: RendererRegistry = {
+      addUnifiedPlugin: () => undefined,
+      addNodeRenderer: () => undefined,
+      addCodeBlockRenderer: (lang, renderer) => {
+        registered.push({ lang, renderer: renderer as CodeBlockRenderer });
+      },
+      addEmbedTag: () => undefined,
+      addUrlInlineExpander: () => undefined,
+      addStylesheet: () => undefined,
+    };
+    return { registry, registered };
+  }
+
+  function buildPluginCtx(config: ReturnType<typeof plantumlConfigSchema.parse>): PluginContext {
+    return {
+      config: <T>() => config as T,
+      dependencyConfig: () => {
+        throw new Error('not used by this test');
+      },
+      setConfig: async () => undefined,
+      pageMetadata: { get: async () => null, set: async () => undefined, remove: async () => undefined },
+      model: () => undefined,
+      log: stubCtx.log,
+      actor: { kind: 'system' },
+    } as unknown as PluginContext;
+  }
+
+  it('registerRenderer registers exactly one "plantuml" CodeBlockRenderer built from the initial config', () => {
+    const { registry, registered } = captureRegistry();
+    plantumlPlugin.registerRenderer?.(registry, buildPluginCtx(plantumlConfigSchema.parse({ serverUrl: 'http://plantuml:8080' })));
+
+    expect(registered).toHaveLength(1);
+    expect(registered[0].lang).toBe('plantuml');
+  });
+
+  it('reconfigure re-registers "plantuml" a second time, and the NEW renderer instance actually fetches against the NEW serverUrl', async () => {
+    const { registry, registered } = captureRegistry();
+    plantumlPlugin.registerRenderer?.(registry, buildPluginCtx(plantumlConfigSchema.parse({ serverUrl: 'http://plantuml:8080' })));
+    expect(registered).toHaveLength(1);
+
+    plantumlPlugin.reconfigure?.(buildPluginCtx(plantumlConfigSchema.parse({ serverUrl: 'http://localhost:8080' })));
+    expect(registered).toHaveLength(2);
+    expect(registered[1].lang).toBe('plantuml');
+
+    // Prove it's not just A re-registration event but a GENUINELY
+    // different renderer bound to the new config: drive the SECOND
+    // registration's render() and assert the fetch target reflects the
+    // reconfigured serverUrl, not the original one.
+    fetchMock.mockResolvedValueOnce(new Response(FAKE_SVG, { status: 200 }));
+    await registered[1].renderer.render({ lang: 'plantuml', source: 'A -> B' }, stubCtx);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [calledUrl] = fetchMock.mock.calls[0];
+    expect(calledUrl).toMatch(/^http:\/\/localhost:8080\/svg\//);
+  });
+
+  it('reconfigure before registerRenderer ever ran is a no-op (nothing to refresh yet, no throw)', () => {
+    jest.isolateModules(() => {
+      // Re-require the module fresh so its module-level `liveRegistry`
+      // starts undefined — the file-scope `plantumlPlugin` import above
+      // was already `registerRenderer`-ed by the two tests before this
+      // one, so it can't demonstrate the "never registered" branch.
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const freshModule = require('./index') as typeof import('./index');
+      expect(() => freshModule.default.reconfigure?.(buildPluginCtx(plantumlConfigSchema.parse({})))).not.toThrow();
+    });
+  });
+});
+
 describe('encoder', () => {
   it('round-trips a known diagram into the expected encoded prefix', () => {
     const encoded = encode('@startuml\nA -> B\n@enduml');
@@ -87,7 +171,7 @@ describe('encoder', () => {
 
 /**
  * `sanitizeSvg` (`./sanitize.ts`) is now a thin adapter over the shared
- * `@crowi/plugin-renderer-svg-sanitize` package (feature-plugin-renderer-mermaid
+ * `@crowi/svg-sanitize` package (feature-plugin-renderer-mermaid
  * spec §9, Phase 3) — that package's own `sanitize.test.ts` is the
  * exhaustive vector suite (script / foreignObject / on* / javascript: /
  * data: / protocol-relative / CSS @import & url() / xmlns tricks /
@@ -99,7 +183,7 @@ describe('encoder', () => {
  * correctly (right policy, right return shape) and that PlantUML's own
  * "preserves href to a safe URL" contract survived the swap.
  */
-describe('SVG sanitization (sanitizeSvg — adapter over @crowi/plugin-renderer-svg-sanitize)', () => {
+describe('SVG sanitization (sanitizeSvg — adapter over @crowi/svg-sanitize)', () => {
   const SVG_NS = 'xmlns="http://www.w3.org/2000/svg"';
 
   it('preserves a benign svg + path + text element', () => {
@@ -166,7 +250,7 @@ describe('render path (success)', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [calledUrl] = fetchMock.mock.calls[0];
     expect(calledUrl).toMatch(/^http:\/\/plantuml:8080\/svg\//);
-    expect(result.html).toContain('<div class="diagram-embed plantuml-embed">');
+    expect(result.html).toContain('<div class="diagram-embed plantuml-embed" data-crowi-renderer-presentation="diagram" data-crowi-renderer-state="ready">');
     expect(result.html).toContain('<svg');
     expect(result.ttlSec).toBe(60 * 60);
     expect(result.error).toBeUndefined();
@@ -195,7 +279,7 @@ describe('render path (success)', () => {
     fetchMock.mockResolvedValueOnce(new Response(png, { status: 200 }));
     const renderer = createPlantUmlRenderer({ ...DEFAULT_CONFIG, outputFormat: 'png' });
     const result = (await renderer.render({ lang: 'plantuml', source: 'x' }, stubCtx)) as RenderResult;
-    expect(result.html).toContain('<img class="diagram-embed plantuml-embed"');
+    expect(result.html).toContain('<img class="diagram-embed plantuml-embed" data-crowi-renderer-presentation="diagram" data-crowi-renderer-state="ready"');
     expect(result.html).toContain('data:image/png;base64,');
     expect(result.html).toContain(png.toString('base64'));
   });
@@ -210,9 +294,9 @@ describe('render path (success)', () => {
     expect(k1).toBe(k2);
   });
 
-  it('declares cacheVersion=2 (bumped from 1 — spec §9, PluginRenderCache-only invalidation) and aspect-ratio reservation', () => {
+  it('declares cacheVersion=3 (bumped from 2 — feature-renderer-plugin-boundary Phase 2 §3.1, the new data-crowi-renderer-* contract, PluginRenderCache-only invalidation) and aspect-ratio reservation', () => {
     const renderer = createPlantUmlRenderer(DEFAULT_CONFIG);
-    expect(renderer.cacheVersion).toBe(2);
+    expect(renderer.cacheVersion).toBe(3);
     expect(renderer.reservation).toEqual({ variant: 'aspect', aspectRatio: 16 / 9 });
   });
 

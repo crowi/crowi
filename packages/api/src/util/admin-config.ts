@@ -73,6 +73,14 @@ export const coerceNumber = (value: unknown, fallback = 0): number => {
 };
 
 /**
+ * Read the `security:linkCardEnabled` toggle (feature-renderer-plugin-boundary
+ * Phase 2), default `true`. The single source of truth for both the value
+ * and its fallback policy — call this instead of re-reading the raw config
+ * key, so a future change to either can't silently drift between call sites.
+ */
+export const isLinkCardEnabled = (crowi: Crowi): boolean => coerceBoolean(getCrowiConfigNamespace(crowi)['security:linkCardEnabled'], true);
+
+/**
  * Coerce an unknown config value to a string[]. Array → filter to strings,
  * single newline-separated string (legacy textarea storage) → split on '\n',
  * anything else → [].

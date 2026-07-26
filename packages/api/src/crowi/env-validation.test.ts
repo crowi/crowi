@@ -22,6 +22,11 @@ describe('Crowi constructor env validation wiring', () => {
       NODE_ENV: 'development',
       PORT: '4301',
       REDIS_URL: 'redis://localhost:6379',
+      // feature-redis-key-prefix §1: REDIS_URL being set requires a
+      // resolvable Redis instance keyspace slug — an explicit override here
+      // since this test's BASE_URL is a distinct var from CLIENT_URL (the
+      // one `getBaseUrl()`/`redis-keyspace.ts` actually read).
+      REDIS_KEY_PREFIX: 'test-instance',
       MONGO_URI: 'mongodb://localhost/crowi_test',
     } as unknown as NodeJS.ProcessEnv);
 

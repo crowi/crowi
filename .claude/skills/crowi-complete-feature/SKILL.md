@@ -75,6 +75,53 @@ watcher) が次の tick で拾い、裏取りした上で `integrate-worktree` �
    `tests/*.spec.ts` に変更があればその spec のみ、src/ 等の共有部のみの変更なら全 spec。
    **infra (docker の mongo/redis) が落ちていて実行できない場合は fail 扱いではなく
    「blocked: e2e infra down」として signal を立てず報告**(infra を上げて再実行を促す)
+10. task.json に `extraGates` (`[{ "name": "<表示名>", "cmd": "<シェルコマンド>", "cwd":
+    "<worktree 相対パス。省略時は worktree root>" }]`) があれば、**各エントリを順に**
+    `cwd` で `cmd` を bash 実行する。iOS 島の `xcodebuild` / `swift test` のような、標準
+    ゲート (1-9) に含まれない tooling island 固有の客観ゲートを task 側から持ち込むための
+    フックで、cmd はそのまま実行される(task.json は planner/人が書く信頼済みファイル
+    という既存の信頼モデルのまま — 新たな面は増えない)。**1 つでも exit 0 以外なら
+    fail** — 標準ゲート同様、status は変えず**どの `name` が落ちたか**を報告して終了。
+    `extraGates` が無い task はこの項目を丸ごとスキップする(完全後方互換)。
+
+#### テスト系ゲート (6・9・10) が flaky で落ちたら
+
+テスト系ゲート — 6 (`pnpm --filter @crowi/api test`) / 9 (e2e) / 10 のテスト系
+`extraGates` エントリ — が失敗したときは、即 fail と断定せず以下で flakiness を
+切り分ける:
+
+1. まず**落ちたテストファイルだけを並列度を落として単独再実行**する (jest は
+   `--maxWorkers=1` で対象ファイルのみ、e2e は落ちた spec ファイル 1 本のみ)。
+2. **単独再実行も fail** → flaky ではない (または深い flake)。**既存動作のまま**:
+   Step 2 冒頭の規則どおり status を変えず、何が落ちたかを報告して終了。agmsg も
+   特別扱いも無し (これが通常ケース)。
+3. **単独再実行が pass** (並列負荷起因の flaky 疑い) → 以下 a / b を**両方**実行:
+   a. **元のゲートコマンド全体をもう 1 回フル再実行**する (1 ファイルだけでなく
+      suite 全体が clean かを見る)。
+   b. a の結果に**かかわらず** manager へ agmsg 報告を送る (目的は gate を通す
+      ことでなく manager への可視化なので、フル再実行の pass/fail どちらでも必ず
+      送る)。`crowi-handoff/SKILL.md` の慣例どおり先に join 確認し、未 join /
+      manager 不在 / スクリプト不在なら skip する (agmsg 未設定を理由に gate を
+      block・fail させない):
+
+      ```bash
+      ~/.agents/skills/agmsg/scripts/whoami.sh "$(pwd)" claude-code   # 未 join / manager 不在ならこの節は skip
+      ~/.agents/skills/agmsg/scripts/send.sh crowi <own-role> manager \
+        "flaky test 検知: <id> の gate で <落ちたテストファイル> が失敗。単独再実行では pass、
+         フル再実行は <pass/fail>。失敗シグネチャ: <1 行要約>。根本修正はこのセッションでは
+         行いません — CLAUDE.md の flake/CI-infra diagnosis rule に従って Codex sol/Fable への
+         委譲をお願いします。"
+      ```
+   c. a のフル再実行が **green** → このゲート項目は pass 扱いとし、Step 2 の次の
+      項目へ進む (flaky 失敗はこの run を block しない — ただし b の agmsg は
+      送信済みなので、握り潰しにはならない)。
+   d. a のフル再実行が**まだ fail** → Step 2 の既存規則どおり本物の失敗として扱う
+      (status を変えず報告して終了)。単一ファイルレベルで flaky でも、suite
+      レベルで失敗が持続するならそちらが優先。
+4. **根本修正をこのセッションで推測・着手することは絶対にしない** (「一度確認して
+   後で pass した」flaky でも同じ)。root-cause 対応は常に agmsg を受けた側に委ねる
+   (CLAUDE.md「Flaky test / CI-infra root cause」規則。manager 側の反応手順は
+   `crowi-role-manager/SKILL.md` 参照)。
 
 ### Step 3: signal を立てる (全 green のときだけ)
 
@@ -92,10 +139,16 @@ Write/Edit は PreToolUse hook が拒否するため、**`.claude/scripts/task-s
   "at": "<ISO8601>",
   "branch": "<git rev-parse --abbrev-ref HEAD>",
   "headSha": "<git rev-parse HEAD>",
-  "checks": { "typeCheck": true, "test": true, "lint": true, "openapi": true, "e2e": true },
+  "checks": {
+    "typeCheck": true, "test": true, "lint": true, "openapi": true, "e2e": true,
+    "extra": { "<name>": true }
+  },
   "notes": "<走らせたゲートの結果サマリ。N/A だったもの (例: 契約未変更で openapi N/A) も明記>"
 }
 ```
+
+`checks.extra` は task.json に `extraGates` があるときだけ付ける(既存 checks フィールドの
+拡張。`extraGates` が無い task では従来どおり `extra` キー自体を書かない)。
 
 #### Step 3a: 既存 task を更新
 

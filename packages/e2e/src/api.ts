@@ -99,6 +99,73 @@ export async function inviteUsersViaApi(context: BrowserContext, emails: string[
   }
 }
 
+/** List currently-loaded plugin names via the admin API (`GET /api/v2/admin/plugins`). */
+export async function listLoadedPluginNamesViaApi(context: BrowserContext): Promise<string[]> {
+  const accessToken = await accessTokenFromContext(context);
+  const response = await fetch(`${E2E_API_URL}/api/v2/admin/plugins`, {
+    headers: { authorization: `Bearer ${accessToken}` },
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to list E2E plugins: HTTP ${response.status} ${await response.text()}`);
+  }
+  const body = (await response.json()) as { plugins?: Array<{ name?: string }> };
+  return (body.plugins ?? []).map((p) => p.name).filter((n): n is string => typeof n === 'string');
+}
+
+/**
+ * Update a plugin's config via the admin API
+ * (`PUT /api/v2/admin/plugins/config?name=<name>`) — merges `values` into
+ * the plugin's existing config and, for a plugin that declares a
+ * `reconfigure` hook, live-applies it (no restart needed) before this
+ * resolves. feature-renderer-plugin-boundary Phase 2 — `renderer-plugins.
+ * spec.ts` uses this to point the PlantUML plugin's `serverUrl` at the
+ * compose-published `http://localhost:8080` server (spec §9); the same
+ * generic endpoint `admin-mail-page.ts`'s UI-driven SMTP config flow PUTs
+ * to, called directly here since the config FORM itself isn't what this
+ * spec tests.
+ */
+export async function updatePluginConfigViaApi(context: BrowserContext, input: { pluginName: string; values: Record<string, unknown> }): Promise<void> {
+  const accessToken = await accessTokenFromContext(context);
+  const response = await fetch(`${E2E_API_URL}/api/v2/admin/plugins/config?name=${encodeURIComponent(input.pluginName)}`, {
+    method: 'PUT',
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({ values: input.values }),
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to update E2E plugin config for ${input.pluginName}: HTTP ${response.status} ${await response.text()}`);
+  }
+  const body = (await response.json()) as { hotReloaded?: boolean; reconfigureFailed?: boolean };
+  if (!body.hotReloaded) {
+    throw new Error(
+      `Update E2E plugin config for ${input.pluginName} did not hot-reload (reconfigureFailed=${body.reconfigureFailed}) — the api process may need a restart to see the new value.`,
+    );
+  }
+}
+
+/**
+ * Read a page's current (latest) revision's `renderedAst` (the transformed
+ * mdast the web client renders without re-parsing, RFC-0002 Phase 3) via
+ * the API. feature-renderer-plugin-boundary Phase 2 — used to assert the
+ * serialized AST carries real optional-renderer output (spec §9).
+ */
+export async function getPageRenderedAst(context: BrowserContext, pageId: string): Promise<unknown> {
+  const accessToken = await accessTokenFromContext(context);
+  const response = await fetch(`${E2E_API_URL}/api/v2/pages?page_id=${encodeURIComponent(pageId)}`, {
+    headers: { authorization: `Bearer ${accessToken}` },
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to read E2E page ${pageId}: HTTP ${response.status} ${await response.text()}`);
+  }
+  const body = (await response.json()) as { page?: { revision?: { renderedAst?: unknown } | string } };
+  const revision = body.page?.revision;
+  const renderedAst = typeof revision === 'string' ? undefined : revision?.renderedAst;
+  if (renderedAst === undefined) throw new Error(`Get page response did not include renderedAst: ${JSON.stringify(body)}`);
+  return renderedAst;
+}
+
 /**
  * Read a page's current (latest) revision id via the API. Needed to post
  * a comment, which references the revision it was written against.
@@ -245,6 +312,31 @@ export async function deleteCommentViaApi(context: BrowserContext, input: { page
   if (!response.ok) {
     throw new Error(`Failed to delete E2E comment ${input.commentId}: HTTP ${response.status} ${await response.text()}`);
   }
+}
+
+/**
+ * Read `GET /api/v2/installer` — the API's LIVE installed-state oracle
+ * (`isAppInstalled` counts `{ ns: 'crowi' }` Config docs on every call, so
+ * the answer can never be a boot-cache artifact of a reused webServer).
+ *
+ * Used by `onboarding.setup.ts` as a precondition check: the suite's
+ * MongoDB reset runs in the `e2e` package script BEFORE `playwright test`
+ * (see `playwright.config.ts`'s note on why it can't be a config-level
+ * `globalSetup`), and a run is left INSTALLED when it finishes — so an
+ * invocation that skips that reset step, or one that races another e2e
+ * process over the shared ports/database, silently starts against an
+ * already-installed instance.
+ */
+export async function getInstallerStatus(): Promise<'installer_required' | 'already_installed'> {
+  const response = await fetch(`${E2E_API_URL}/api/v2/installer`);
+  if (!response.ok) {
+    throw new Error(`Failed to read E2E installer status: HTTP ${response.status} ${await response.text()}`);
+  }
+  const body = (await response.json()) as { status?: unknown };
+  if (body.status !== 'installer_required' && body.status !== 'already_installed') {
+    throw new Error(`Unexpected E2E installer status payload: ${JSON.stringify(body)}`);
+  }
+  return body.status;
 }
 
 export async function loginViaApi(credentials: E2eUserCredentials): Promise<{ accessToken: string; refreshToken: string; expiresIn: number }> {

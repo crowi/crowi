@@ -22,6 +22,7 @@ import { ForbiddenErrorSchema, InternalServerErrorSchema, NotFoundErrorSchema } 
 import {
   AuthorizeRequestSchema,
   AuthorizeResponseSchema,
+  ClientInfoResponseSchema,
   DeviceAuthorizeRequestSchema,
   DeviceAuthorizeResponseSchema,
   DeviceInfoResponseSchema,
@@ -214,6 +215,31 @@ export const deviceVerifyRoute = createRoute({
   },
 });
 
+export const clientInfoRoute = createRoute({
+  method: 'get',
+  path: '/oauth/client-info',
+  tags: ['oauth'],
+  summary: 'Look up non-secret metadata for a registered OAuth client (authorize/consent screen)',
+  // Public + minimal (RFC-0016 §4.4): the web authorize page reads this
+  // before rendering to decide whether to show ConsentCard or auto-approve
+  // (`trusted: true`). Only clientId/name/firstParty/trusted are returned —
+  // no redirectUris/allowedScopes — mirroring deviceInfoRoute's own
+  // non-secret-lookup shape. Unknown client_id → 404.
+  request: {
+    query: z.object({ client_id: z.string().min(1) }),
+  },
+  responses: {
+    200: {
+      description: 'Client metadata',
+      content: { 'application/json': { schema: ClientInfoResponseSchema } },
+    },
+    404: {
+      description: 'No client registered with this client_id',
+      content: { 'application/json': { schema: NotFoundErrorSchema } },
+    },
+  },
+});
+
 export const oauthRoutes = {
   authorizeRoute,
   tokenRoute,
@@ -222,4 +248,5 @@ export const oauthRoutes = {
   deviceAuthorizeRoute,
   deviceInfoRoute,
   deviceVerifyRoute,
+  clientInfoRoute,
 };

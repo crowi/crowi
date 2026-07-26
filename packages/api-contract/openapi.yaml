@@ -566,6 +566,22 @@ components:
             - denied
       required:
         - status
+    ClientInfoResponse:
+      type: object
+      properties:
+        clientId:
+          type: string
+        name:
+          type: string
+        firstParty:
+          type: boolean
+        trusted:
+          type: boolean
+      required:
+        - clientId
+        - name
+        - firstParty
+        - trusted
     UserPublic:
       type: object
       properties:
@@ -4871,6 +4887,7 @@ components:
         - search
         - collab
         - collab:redis
+        - link-card
   parameters: {}
 paths:
   /app/info:
@@ -4904,6 +4921,10 @@ paths:
                       $ref: '#/components/schemas/Capability'
                   canSelfRegister:
                     type: boolean
+                  rendererStylesheets:
+                    type: array
+                    items:
+                      type: string
                 required:
                   - title
                   - confidential
@@ -4911,6 +4932,7 @@ paths:
                   - apiVersion
                   - capabilities
                   - canSelfRegister
+                  - rendererStylesheets
         '500':
           description: Internal server error
           content:
@@ -7557,6 +7579,62 @@ paths:
                         type: string
                         enum:
                           - Internal server error
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+  /oauth/client-info:
+    get:
+      tags:
+        - oauth
+      summary: >-
+        Look up non-secret metadata for a registered OAuth client
+        (authorize/consent screen)
+      parameters:
+        - schema:
+            type: string
+            minLength: 1
+          required: true
+          name: client_id
+          in: query
+      responses:
+        '200':
+          description: Client metadata
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  clientId:
+                    type: string
+                  name:
+                    type: string
+                  firstParty:
+                    type: boolean
+                  trusted:
+                    type: boolean
+                required:
+                  - clientId
+                  - name
+                  - firstParty
+                  - trusted
+        '404':
+          description: No client registered with this client_id
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - NOT_FOUND
+                      message:
+                        type: string
                     required:
                       - code
                       - message
@@ -15347,6 +15425,38 @@ paths:
                           type: boolean
                         count:
                           type: number
+                        lastUpdatedAt:
+                          type:
+                            - string
+                            - 'null'
+                        updater:
+                          type:
+                            - object
+                            - 'null'
+                          properties:
+                            _id:
+                              type: string
+                            id:
+                              type: string
+                            username:
+                              type: string
+                            name:
+                              type: string
+                            email:
+                              type: string
+                              format: email
+                            image:
+                              type:
+                                - string
+                                - 'null'
+                            createdAt:
+                              type: string
+                          required:
+                            - _id
+                            - username
+                            - name
+                            - email
+                            - createdAt
                       required:
                         - segment
                         - path
@@ -22470,9 +22580,12 @@ paths:
                     type: array
                     items:
                       type: string
+                  linkCardEnabled:
+                    type: boolean
                 required:
                   - registrationMode
                   - registrationWhiteList
+                  - linkCardEnabled
         '401':
           description: Authentication required
           content:
@@ -22568,9 +22681,12 @@ paths:
                   type: array
                   items:
                     type: string
+                linkCardEnabled:
+                  type: boolean
               required:
                 - registrationMode
                 - registrationWhiteList
+                - linkCardEnabled
       responses:
         '200':
           description: Updated settings (re-read from in-memory cache)
@@ -22589,9 +22705,12 @@ paths:
                     type: array
                     items:
                       type: string
+                  linkCardEnabled:
+                    type: boolean
                 required:
                   - registrationMode
                   - registrationWhiteList
+                  - linkCardEnabled
         '401':
           description: Authentication required
           content:

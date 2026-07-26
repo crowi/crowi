@@ -48,6 +48,20 @@ import { CapabilitySchema } from './app-capabilities';
  * surfaced. The API still enforces the real guard (403
  * `REGISTRATION_CLOSED` on `POST /auth/register`); this flag is a UX hint
  * the front-end may fail-open on.
+ *
+ * `rendererStylesheets` (feature-renderer-plugin-boundary Phase 1) is the
+ * boot-time CSS-asset manifest: API-relative absolute paths
+ * (`/api/v2/plugins/<plugin-name>/…`) that renderer plugins registered via
+ * `RendererRegistry.addStylesheet(path)` AND whose `registerRoutes` mounted
+ * successfully (see `RendererRegistryImpl.commitStylesheets`,
+ * `packages/api/src/renderer/registry.ts`) — a plugin whose route mount
+ * failed, or that never registered routes at all, never appears here. The
+ * web `RendererStylesheets` component resolves each path through the same
+ * runtime API-origin resolver as every other API call
+ * (`resolveApiUrl`, `packages/web/src/lib/api-client.ts`) and injects a
+ * `<link rel="stylesheet">` per entry. Order is commit order (plugin
+ * activation order); entries are deduped. Empty when no loaded plugin
+ * registered a stylesheet.
  */
 export const AppInfoResponseSchema = z.object({
   title: z.string().nullable(),
@@ -56,5 +70,6 @@ export const AppInfoResponseSchema = z.object({
   apiVersion: z.string(),
   capabilities: z.array(CapabilitySchema),
   canSelfRegister: z.boolean(),
+  rendererStylesheets: z.array(z.string()),
 });
 export type AppInfoResponse = z.infer<typeof AppInfoResponseSchema>;

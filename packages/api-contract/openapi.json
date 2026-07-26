@@ -816,6 +816,29 @@
           "status"
         ]
       },
+      "ClientInfoResponse": {
+        "type": "object",
+        "properties": {
+          "clientId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "firstParty": {
+            "type": "boolean"
+          },
+          "trusted": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "clientId",
+          "name",
+          "firstParty",
+          "trusted"
+        ]
+      },
       "UserPublic": {
         "type": "object",
         "properties": {
@@ -7165,7 +7188,8 @@
           "notifications",
           "search",
           "collab",
-          "collab:redis"
+          "collab:redis",
+          "link-card"
         ]
       }
     },
@@ -7212,6 +7236,12 @@
                     },
                     "canSelfRegister": {
                       "type": "boolean"
+                    },
+                    "rendererStylesheets": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   },
                   "required": [
@@ -7220,7 +7250,8 @@
                     "version",
                     "apiVersion",
                     "capabilities",
-                    "canSelfRegister"
+                    "canSelfRegister",
+                    "rendererStylesheets"
                   ]
                 }
               }
@@ -11291,6 +11322,90 @@
                           "enum": [
                             "Internal server error"
                           ]
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/oauth/client-info": {
+      "get": {
+        "tags": [
+          "oauth"
+        ],
+        "summary": "Look up non-secret metadata for a registered OAuth client (authorize/consent screen)",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "client_id",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Client metadata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "clientId": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "firstParty": {
+                      "type": "boolean"
+                    },
+                    "trusted": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "clientId",
+                    "name",
+                    "firstParty",
+                    "trusted"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No client registered with this client_id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "NOT_FOUND"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
                         }
                       },
                       "required": [
@@ -23219,6 +23334,52 @@
                           },
                           "count": {
                             "type": "number"
+                          },
+                          "lastUpdatedAt": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "updater": {
+                            "type": [
+                              "object",
+                              "null"
+                            ],
+                            "properties": {
+                              "_id": {
+                                "type": "string"
+                              },
+                              "id": {
+                                "type": "string"
+                              },
+                              "username": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "email": {
+                                "type": "string",
+                                "format": "email"
+                              },
+                              "image": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "createdAt": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "_id",
+                              "username",
+                              "name",
+                              "email",
+                              "createdAt"
+                            ]
                           }
                         },
                         "required": [
@@ -34099,11 +34260,15 @@
                       "items": {
                         "type": "string"
                       }
+                    },
+                    "linkCardEnabled": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
                     "registrationMode",
-                    "registrationWhiteList"
+                    "registrationWhiteList",
+                    "linkCardEnabled"
                   ]
                 }
               }
@@ -34254,11 +34419,15 @@
                     "items": {
                       "type": "string"
                     }
+                  },
+                  "linkCardEnabled": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
                   "registrationMode",
-                  "registrationWhiteList"
+                  "registrationWhiteList",
+                  "linkCardEnabled"
                 ]
               }
             }
@@ -34285,11 +34454,15 @@
                       "items": {
                         "type": "string"
                       }
+                    },
+                    "linkCardEnabled": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
                     "registrationMode",
-                    "registrationWhiteList"
+                    "registrationWhiteList",
+                    "linkCardEnabled"
                   ]
                 }
               }

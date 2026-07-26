@@ -37,6 +37,7 @@ export interface paths {
                             apiVersion: string;
                             capabilities: components["schemas"]["Capability"][];
                             canSelfRegister: boolean;
+                            rendererStylesheets: string[];
                         };
                     };
                 };
@@ -2148,6 +2149,64 @@ export interface paths {
                 };
             };
         };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/oauth/client-info": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Look up non-secret metadata for a registered OAuth client (authorize/consent screen) */
+        get: {
+            parameters: {
+                query: {
+                    client_id: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Client metadata */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            clientId: string;
+                            name: string;
+                            firstParty: boolean;
+                            trusted: boolean;
+                        };
+                    };
+                };
+                /** @description No client registered with this client_id */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "NOT_FOUND";
+                                message: string;
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -5936,6 +5995,17 @@ export interface paths {
                                 isPage: boolean;
                                 hasPortal: boolean;
                                 count: number;
+                                lastUpdatedAt?: string | null;
+                                updater?: {
+                                    _id: string;
+                                    id?: string;
+                                    username: string;
+                                    name: string;
+                                    /** Format: email */
+                                    email: string;
+                                    image?: string | null;
+                                    createdAt: string;
+                                } | null;
                             }[];
                         };
                     };
@@ -10353,6 +10423,7 @@ export interface paths {
                             /** @enum {string} */
                             registrationMode: "Open" | "Resricted" | "Closed";
                             registrationWhiteList: string[];
+                            linkCardEnabled: boolean;
                         };
                     };
                 };
@@ -10422,6 +10493,7 @@ export interface paths {
                         /** @enum {string} */
                         registrationMode: "Open" | "Resricted" | "Closed";
                         registrationWhiteList: string[];
+                        linkCardEnabled: boolean;
                     };
                 };
             };
@@ -10436,6 +10508,7 @@ export interface paths {
                             /** @enum {string} */
                             registrationMode: "Open" | "Resricted" | "Closed";
                             registrationWhiteList: string[];
+                            linkCardEnabled: boolean;
                         };
                     };
                 };
@@ -13885,6 +13958,12 @@ export interface components {
             /** @enum {string} */
             status: "approved" | "denied";
         };
+        ClientInfoResponse: {
+            clientId: string;
+            name: string;
+            firstParty: boolean;
+            trusted: boolean;
+        };
         UserPublic: {
             _id: string;
             id?: string;
@@ -15431,7 +15510,7 @@ export interface components {
             };
         };
         /** @enum {string} */
-        Capability: "oauth" | "oauth:auth-code" | "oauth:device" | "oauth:pkce" | "pat" | "pages" | "comments" | "bookmarks" | "attachments" | "notifications" | "search" | "collab" | "collab:redis";
+        Capability: "oauth" | "oauth:auth-code" | "oauth:device" | "oauth:pkce" | "pat" | "pages" | "comments" | "bookmarks" | "attachments" | "notifications" | "search" | "collab" | "collab:redis" | "link-card";
     };
     responses: never;
     parameters: never;

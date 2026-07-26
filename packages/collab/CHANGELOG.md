@@ -1,5 +1,21 @@
 # @crowi/collab
 
+## 0.1.0-alpha.3
+
+### Patch Changes
+
+- a899fdd: Fix a correctness hole where a live collaborative editor open before a page was renamed, soft-deleted, or reverted could still save its content afterwards, silently clobbering the renamed/deleted state instead of being rejected.
+  The fix introduces a monotonic collab lifecycle epoch (`Page.collabLifecycleVersion`) that advances atomically with every rename/delete/revert/body-replace and is enforced at four boundaries — wsToken mint, WebSocket authentication, document load, and the atomic save compare-and-set — so a stale editor session is refused rather than allowed to overwrite the page, including across multiple api replicas.
+  Rename/delete now also opens the existing reload-prompt dialog on any live editor for that page, and soft/hard delete purge the page's collaborative editing state (Yjs snapshot and pending updates) as defense-in-depth.
+- Updated dependencies [d9eb1c0]
+- Updated dependencies [a899fdd]
+- Updated dependencies [f1bcd2b]
+- Updated dependencies [29b3679]
+- Updated dependencies [a32204f]
+- Updated dependencies [b0e2c76]
+- Updated dependencies [3b27a67]
+  - @crowi/api-contract@2.0.0-alpha.8
+
 ## 0.1.0-alpha.2
 
 ### Minor Changes

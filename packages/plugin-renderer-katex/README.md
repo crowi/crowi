@@ -28,14 +28,35 @@ generated HTML.
 ### KaTeX CSS
 
 KaTeX's HTML output references `class="katex"` rules that ship in
-`katex/dist/katex.min.css`. The web side imports the CSS at the top
-of `packages/web/src/app/globals.css`:
+`katex/dist/katex.min.css`. The plugin self-serves this CSS (and the
+webfonts it references) instead of requiring `@crowi/web` to carry a
+`katex` dependency or a global CSS import:
 
-```css
-@import 'katex/dist/katex.min.css';
-```
+- At build time, `scripts/copy-katex-assets.mjs` (a `tsup` `onSuccess`
+  hook) copies `katex/dist/katex.min.css` and its referenced font
+  files from the installed `katex` package into this plugin's own
+  `dist/assets/`.
+- `registerRoutes` mounts `GET /api/v2/plugins/@crowi/plugin-renderer-katex/katex.min.css`
+  and a `fonts/:filename` route for each font, both public
+  (unauthenticated), serving directly from the in-memory copy of
+  those built-in assets — no filesystem path is built from the
+  request, so there is no path-traversal surface.
+- `registerRenderer` advertises the CSS path via
+  `registry.addStylesheet(...)`. The API publishes it in
+  `GET /api/v2/app/info`'s `rendererStylesheets` array once (and only
+  once) `registerRoutes` above has succeeded, so the manifest never
+  advertises an unreachable path.
+- The web app's `RendererStylesheets` component reads that manifest
+  and injects a `<link rel="stylesheet">` resolved against the
+  runtime API origin (`resolveApiUrl`), the same origin resolver the
+  rest of the API client uses. No web-side build step or dependency
+  is required.
 
-KaTeX webfonts download lazily on first math render.
+If the API and Web apps are deployed on different origins, make sure
+the API's CORS policy allows the Web origin (`CLIENT_URL`, already
+the default) and that any deployment CSP on the Web app allows the
+API origin in `style-src` and `font-src` — see
+`apps/crowi-site/content/docs/{ja,en}/operations/configuration.mdx`.
 
 ### Strict mode
 
@@ -61,13 +82,9 @@ pnpm --filter @crowi/api add -D @crowi/plugin-renderer-katex
 npm install @crowi/plugin-renderer-katex
 ```
 
-The web side also needs `katex` (for the CSS asset):
-
-```bash
-pnpm --filter @crowi/web add katex
-```
-
-(In the Crowi monorepo dev path this is already wired in `packages/web`.)
+No web-side install step is required — the plugin self-serves its
+CSS/font assets from its own public route (see "KaTeX CSS" above),
+so `@crowi/web` never needs a `katex` dependency.
 
 ## Configure
 

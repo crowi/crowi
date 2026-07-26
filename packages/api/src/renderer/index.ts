@@ -2,7 +2,9 @@ import type { PluginLogger, RenderActor, RenderContext } from '@crowi/plugin-api
 import Debug from 'debug';
 import type Crowi from 'src/crowi';
 import type { UserModel } from 'src/models/user';
+import { isLinkCardEnabled } from 'src/util/admin-config';
 import { createMongoCacheStorage, type MongoCacheStorage } from './cache';
+import { createLinkCardRenderer } from './core/link-card';
 import type { MentionUsernameResolver } from './core/mention-resolve';
 import { createPipelineEsmDepsLoader, type LoadPipelineEsmDeps, type PipelineMetadata, type PipelineResult, runPipeline } from './pipeline';
 import { RendererRegistryImpl } from './registry';
@@ -85,6 +87,24 @@ export const coreLogger: PluginLogger = {
  */
 export function createRenderer(crowi: Crowi): Renderer {
   const registry = new RendererRegistryImpl();
+  // feature-renderer-plugin-boundary Phase 3 — seed the core-reserved
+  // `card` embed tag BEFORE any plugin's `registerRenderer(scope, ctx)`
+  // runs (`setupRenderer()` — this function's caller — runs strictly
+  // before `setupPlugins()` activates plugins, `crowi/index.ts`), so a
+  // third-party plugin that later calls `addEmbedTag('card', …)` hits
+  // `registry.ts`'s collision-throw guard instead of racing this
+  // registration. `isLinkCardEnabled` reads the LIVE in-memory Config on
+  // every dispatch (never captured here at boot) via the same
+  // `coerceBoolean(value, true)` default-true pattern used by the
+  // admin Security GET handler and `app.ts`'s capability probe — missing
+  // Config row or a hand-edited non-boolean value both collapse to
+  // enabled.
+  registry.addCoreEmbedTag(
+    'card',
+    createLinkCardRenderer({
+      isLinkCardEnabled: () => isLinkCardEnabled(crowi),
+    }),
+  );
   // Per-instance ESM-deps loader. Sharing a module-level cache breaks
   // under jest where each test file boots a fresh `Crowi` and a torn
   // down test environment leaves cached ESM modules pointing at a

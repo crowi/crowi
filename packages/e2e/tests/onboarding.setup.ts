@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
-import { createPageViaApi } from '../src/api';
-import { E2E_SHARED_PAGE_PATH, e2eUsers, storageStatePath } from '../src/config';
+import { createPageViaApi, getInstallerStatus } from '../src/api';
+import { E2E_API_PORT, E2E_API_URL, E2E_DB_NAME, E2E_SHARED_PAGE_PATH, E2E_WEB_PORT, e2eUsers, storageStatePath } from '../src/config';
 import { extractInviteLink, waitForLatestMessageTo } from '../src/mailpit';
 import { AdminMailPage } from '../src/pages/admin-mail-page';
 import { AdminUsersPage } from '../src/pages/admin-users-page';
@@ -9,6 +9,28 @@ import { InviteAcceptPage } from '../src/pages/invite-accept-page';
 import { writeSharedState } from '../src/shared-state';
 
 test('onboarding: install admin, configure mailpit SMTP, invite users, and accept invites', async ({ page, browser }) => {
+  // Precondition, checked against the API rather than the UI: this setup
+  // installs a FRESH instance, so an already-installed one is a harness
+  // problem, not a product failure. Without this check the first UI
+  // assertion below just times out on `/login` (an installed instance
+  // sends an anonymous visitor there instead of `/installer`), which says
+  // nothing about the actual cause. The two causes it names are the only
+  // ones that can put an installed instance here — the database is left
+  // populated when a run finishes and is only reset by the package
+  // script's `tsx src/global-setup.ts` step, and the servers/database are
+  // shared, fixed resources that a second concurrent run silently reuses
+  // (`reuseExistingServer` in `playwright.config.ts`).
+  const installerStatus = await getInstallerStatus();
+  if (installerStatus !== 'installer_required') {
+    throw new Error(
+      [
+        `The E2E instance at ${E2E_API_URL} is already installed (status: ${installerStatus}); onboarding setup needs a fresh one.`,
+        `Run the suite via 'pnpm --filter @crowi/e2e e2e [<spec>]' — a bare 'playwright test' skips 'tsx src/global-setup.ts', which is what resets the '${E2E_DB_NAME}' database.`,
+        `If that reset did run, another e2e process is sharing ports ${E2E_API_PORT}/${E2E_WEB_PORT} or the '${E2E_DB_NAME}' database; wait for it to finish and re-run.`,
+      ].join('\n'),
+    );
+  }
+
   await page.goto('/');
   const installer = new InstallerPage(page);
   await installer.expectVisible();

@@ -1309,10 +1309,20 @@ describe('attachmentDisplayDerivativesRebuild (dispatcher) + RebuildRunner', () 
 // wiring rather than spawning the built `crowi-admin` binary).
 // ---------------------------------------------------------------------------
 
-/** Absolute path to the `tsx` CLI entry — same helper every other `tsx`-spawned harness in this package defines locally (`storage-local.test.ts`, `collab/redis-smoke-harness-client.ts`). */
-function resolveTsxCliForSigintHarness(): string {
+/**
+ * Absolute path to the `tsx` loader (its package root export, used with
+ * Node's `--import`). Deliberately NOT `tsx/cli` like the other harnesses in
+ * this package (`storage-local.test.ts`, `collab/redis-smoke-harness-client.ts`)
+ * — the CLI spawns a second, grandchild process and relays signals to it over
+ * IPC with a fixed ~30ms acknowledgement window; under CI's parallel test
+ * load that window can be missed, causing the CLI to SIGKILL the grandchild
+ * before it prints its graceful-shutdown summary (this test asserts on that
+ * summary, so it needs the SIGINT delivered straight to the process that
+ * handles it, not relayed through a supervisor).
+ */
+function resolveTsxLoaderForSigintHarness(): string {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
-  return require.resolve('tsx/cli');
+  return require.resolve('tsx');
 }
 
 interface SigintHarnessResult {
@@ -1334,7 +1344,7 @@ interface SigintHarnessResult {
 function runSigintHarnessKillingOnFirstItem(env: Record<string, string>): Promise<SigintHarnessResult> {
   return new Promise((resolve, reject) => {
     const harnessPath = path.join(__dirname, 'rebuild-attachment-display-derivatives-sigint-harness.ts');
-    const child: ChildProcessByStdio<null, Readable, Readable> = spawn(resolveTsxCliForSigintHarness(), [harnessPath], {
+    const child: ChildProcessByStdio<null, Readable, Readable> = spawn(process.execPath, ['--import', resolveTsxLoaderForSigintHarness(), harnessPath], {
       env: { ...process.env, ...env },
       stdio: ['ignore', 'pipe', 'pipe'],
     });

@@ -26,6 +26,24 @@ export function apiV2BaseUrl(): string {
   return `${apiOrigin()}/api/v2`;
 }
 
+/**
+ * Resolve an API-relative absolute path (e.g. the `rendererStylesheets`
+ * manifest entries from `GET /api/v2/app/info`, already including the
+ * `/api/v2` prefix — see `AppInfoResponseSchema`) to a browser-usable URL.
+ * Reads {@link apiOrigin} at call time, same as `apiV2Fetch` below — an
+ * empty origin (same-origin deployment) returns `path` unchanged
+ * (relative), so a `<link href>` built from this helper works the same
+ * whether the API is same-origin or cross-origin. Not just for fetch
+ * bodies: `RendererStylesheets` (`packages/web/src/components/
+ * renderer-stylesheets.tsx`) uses this for `<link rel="stylesheet">` href
+ * values, which is why this is a standalone export rather than folded
+ * into `apiV2Fetch`.
+ */
+export function resolveApiUrl(path: string): string {
+  const origin = apiOrigin();
+  return origin ? `${origin}${path}` : path;
+}
+
 let refreshPromise: Promise<string | null> | null = null;
 
 /**
@@ -107,13 +125,12 @@ async function refreshAccessToken(): Promise<string | null> {
 const REFRESH_PATH = '/auth/refresh';
 
 const apiV2Fetch: typeof fetch = async (input, init) => {
-  // `apiClientV2` is created with a RELATIVE base (`/api/v2`). Prepend the
-  // runtime origin here — at call time, after the root layout's inline env
-  // script has set `window.__ENV` — so a cross-origin `NEXT_PUBLIC_API_URL`
-  // takes effect with no rebuild. An empty origin leaves URLs relative
-  // (same-origin image).
-  const origin = apiOrigin();
-  const target = origin && typeof input === 'string' && input.startsWith('/') ? `${origin}${input}` : input;
+  // `apiClientV2` is created with a RELATIVE base (`/api/v2`). Resolve
+  // through `resolveApiUrl` here — at call time, after the root layout's
+  // inline env script has set `window.__ENV` — so a cross-origin
+  // `NEXT_PUBLIC_API_URL` takes effect with no rebuild. An empty origin
+  // leaves URLs relative (same-origin image).
+  const target = typeof input === 'string' && input.startsWith('/') ? resolveApiUrl(input) : input;
 
   const headers = new Headers(init?.headers);
   const accessToken = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;

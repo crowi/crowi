@@ -67,6 +67,7 @@ import type { PageDocument } from 'src/models/page';
 import FileUploader from 'src/util/file-uploader';
 import { generateDisplayDerivativeForUpload } from 'src/util/image-display-derivative';
 import { createRateLimiter } from 'src/util/rate-limit';
+import { resolveRedisKeyspaceIfEnabled } from 'src/util/redis-keyspace';
 import {
   isPopulatedUser,
   isValidObjectId,
@@ -293,6 +294,7 @@ export const registerAttachmentRoutes = <E extends OpenAPIHono<CrowiHonoBindings
     limit: UPLOAD_RATE_LIMIT,
     windowMs: UPLOAD_RATE_WINDOW_MS,
     redisClient: crowi.redis ?? null,
+    keyspace: resolveRedisKeyspaceIfEnabled(crowi),
   });
 
   const uploadRateLimitMiddleware = withRateLimit({

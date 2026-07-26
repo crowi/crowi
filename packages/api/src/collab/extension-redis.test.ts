@@ -45,7 +45,7 @@ jest.mock('ioredis', () => {
 });
 
 import type Crowi from 'src/crowi';
-import { buildCollabRedisExtension } from './extension-redis';
+import { buildCollabRedisExtension, parseRedisUrlForIoredis } from './extension-redis';
 
 beforeEach(() => {
   lastExtensionConfig = null;
@@ -57,9 +57,16 @@ beforeEach(() => {
  * Build the smallest fixture that `buildCollabRedisExtension` reads
  * from a `Crowi`. Casting through `unknown` is the established pattern
  * in api unit tests for narrow Crowi-shaped fixtures.
+ *
+ * `getBaseUrl` / `getEnv` back `resolveRedisKeyspace()`
+ * (feature-redis-key-prefix §1/§2 — the extension's `prefix` is now
+ * instance-scoped instead of the literal `crowi:collab`); `clientUrl`
+ * defaults to a fixed origin so every pre-existing call site (which only
+ * ever passed `redis`/`redisUrl`) keeps resolving the same deterministic
+ * slug without having to be updated individually.
  */
-function fakeCrowi(redis: unknown, redisUrl: string | null): Crowi {
-  return { redis, redisUrl } as unknown as Crowi;
+function fakeCrowi(redis: unknown, redisUrl: string | null, clientUrl: string | null = 'https://wiki.example.com'): Crowi {
+  return { redis, redisUrl, getBaseUrl: () => clientUrl, getEnv: () => ({}) as NodeJS.ProcessEnv } as unknown as Crowi;
 }
 
 describe('buildCollabRedisExtension', () => {
@@ -77,17 +84,34 @@ describe('buildCollabRedisExtension', () => {
     expect(lastExtensionConfig).toBeNull();
   });
 
-  it('builds the extension with prefix=crowi:collab and identifier derived from HOSTNAME or pid', () => {
+  it('builds the extension with the instance-scoped prefix (feature-redis-key-prefix §1/§2) and identifier derived from HOSTNAME or pid', () => {
     const fakeClient = { connected: true };
     const ext = buildCollabRedisExtension(fakeCrowi(fakeClient, 'redis://localhost:6379'));
     expect(ext).not.toBeNull();
     expect(lastExtensionConfig).not.toBeNull();
-    expect(lastExtensionConfig?.prefix).toBe('crowi:collab');
+    expect(lastExtensionConfig?.prefix).toBe('crowi:wiki.example.com:collab');
     // identifier must be present and non-empty regardless of HOSTNAME
     // being set — pid fallback keeps single-host multi-process dev
     // working too.
     expect(typeof lastExtensionConfig?.identifier).toBe('string');
     expect((lastExtensionConfig?.identifier ?? '').length).toBeGreaterThan(0);
+  });
+
+  it('an explicit REDIS_KEY_PREFIX overrides the CLIENT_URL-derived slug in the prefix', () => {
+    const fakeClient = { connected: true };
+    const crowi = {
+      redis: fakeClient,
+      redisUrl: 'redis://localhost:6379',
+      getBaseUrl: () => 'https://wiki.example.com',
+      getEnv: () => ({ REDIS_KEY_PREFIX: 'krswd' }) as unknown as NodeJS.ProcessEnv,
+    } as unknown as Crowi;
+    buildCollabRedisExtension(crowi);
+    expect(lastExtensionConfig?.prefix).toBe('crowi:krswd:collab');
+  });
+
+  it('two instances with distinct CLIENT_URLs get distinct prefixes (no cross-instance collab collision)', () => {
+    buildCollabRedisExtension(fakeCrowi({ connected: true }, 'redis://localhost:6379', 'https://wiki.krswd.family'));
+    expect(lastExtensionConfig?.prefix).toBe('crowi:wiki.krswd.family:collab');
   });
 
   it('includes HOSTNAME and pid in identifier so bare-metal multi-process setups dedupe correctly', () => {
@@ -155,5 +179,45 @@ describe('buildCollabRedisExtension', () => {
         process.env.REDIS_REJECT_UNAUTHORIZED = original;
       }
     }
+  });
+
+  it('createClient carries the REDIS_URL database pathname (feature-redis-key-prefix §3) into ioredis db', () => {
+    buildCollabRedisExtension(fakeCrowi({ connected: true }, 'redis://redis.example:6379/1'));
+    lastExtensionConfig?.createClient?.();
+    expect(ioredisConstructorCalls[0]).toMatchObject({ db: 1 });
+  });
+});
+
+describe('parseRedisUrlForIoredis', () => {
+  it('an absent pathname resolves db to 0, matching node-redis buildRedisOpts default', () => {
+    expect(parseRedisUrlForIoredis('redis://localhost:6379')).toStrictEqual({ host: 'localhost', port: 6379, db: 0 });
+  });
+
+  it('"/0" and "/1" resolve db to the parsed integer', () => {
+    expect(parseRedisUrlForIoredis('redis://localhost:6379/0')).toStrictEqual({ host: 'localhost', port: 6379, db: 0 });
+    expect(parseRedisUrlForIoredis('redis://localhost:6379/1')).toStrictEqual({ host: 'localhost', port: 6379, db: 1 });
+  });
+
+  it('rediss:// with ACL userinfo + "/1" resolves credentials, tls, AND db together', () => {
+    const original = process.env.REDIS_REJECT_UNAUTHORIZED;
+    delete process.env.REDIS_REJECT_UNAUTHORIZED;
+    try {
+      expect(parseRedisUrlForIoredis('rediss://ACL-user:password@host/1')).toStrictEqual({
+        host: 'host',
+        port: 6379,
+        db: 1,
+        username: 'ACL-user',
+        password: 'password',
+        tls: { rejectUnauthorized: true },
+      });
+    } finally {
+      if (original !== undefined) process.env.REDIS_REJECT_UNAUTHORIZED = original;
+    }
+  });
+
+  it('an invalid database pathname throws instead of silently connecting to DB 0 — same error class buildRedisOpts throws for the same REDIS_URL', () => {
+    expect(() => parseRedisUrlForIoredis('redis://localhost:6379/foo')).toThrow(/database pathname/);
+    expect(() => parseRedisUrlForIoredis('redis://localhost:6379/-1')).toThrow(/database pathname/);
+    expect(() => parseRedisUrlForIoredis('redis://localhost:6379/1/extra')).toThrow(/database pathname/);
   });
 });

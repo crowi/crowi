@@ -80,19 +80,33 @@ export type { CrowiHonoBindings } from './app';
  * registrations are live), only its HTTP routes fail to mount — so it is
  * *not* recorded in `PluginManager.getFailedPlugins()` and stays in
  * `getLoadedPlugins()`.
+ *
+ * feature-renderer-plugin-boundary Phase 1 — this loop is also where a
+ * plugin's staged `addStylesheet(...)` paths (registered earlier,
+ * during `registerRenderer` at `PluginManager.activate()` time) get
+ * published to the public `rendererStylesheets` manifest: a successful
+ * `registerRoutes` commits that SAME plugin's pending stylesheets
+ * (`RendererRegistryImpl.commitStylesheets`), a throw drops them
+ * wholesale (`dropPendingStylesheets`). A plugin with no `registerRoutes`
+ * at all never reaches either call (the `continue` above), so its
+ * pending stylesheets are never published — the manifest never
+ * advertises a path with no mounted route to serve it.
  */
 const mountPluginRoutes = (app: ReturnType<typeof createHonoApp>, crowi: Crowi): void => {
   const manager = crowi.pluginManager;
   if (!manager) return;
+  const rendererRegistry = crowi.renderer?.registry;
   for (const plugin of manager.getLoadedPlugins()) {
     if (!plugin.registerRoutes) continue;
     try {
       const scope = makePluginRouterScope(app, crowi, plugin.name);
       const ctx = createPluginContext(plugin, crowi, manager);
       plugin.registerRoutes(scope, ctx);
+      rendererRegistry?.commitStylesheets(plugin.name);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       console.error(`[crowi:plugin:${plugin.name}] registerRoutes failed; this plugin's HTTP routes are not mounted: ${message}`);
+      rendererRegistry?.dropPendingStylesheets(plugin.name);
     }
   }
 };

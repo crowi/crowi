@@ -45,10 +45,9 @@ function decodeSvgDataUrl(html: string): string {
  * namespace — not merely that `src="data:image/svg+xml;base64,"` is
  * present as a substring (the pre-existing per-type test above already
  * checks that, but never parses the payload). Uses `@xmldom/xmldom` — the
- * exact same parser `@crowi/plugin-renderer-svg-sanitize` uses internally
- * — rather than a second, independent parser implementation, so this
- * assertion reasons about namespace/prefix resolution identically to the
- * sanitizer itself.
+ * exact same parser `@crowi/svg-sanitize` uses internally — rather than a
+ * second, independent parser implementation, so this assertion reasons about
+ * namespace/prefix resolution identically to the sanitizer itself.
  */
 function expectWellFormedUnprefixedSvgRoot(svg: string): void {
   const doc = new DOMParser({ onError: () => undefined }).parseFromString(svg, 'image/svg+xml');
@@ -71,6 +70,8 @@ describe('@crowi/plugin-renderer-mermaid — success path (8 diagram types)', ()
       expect(result.error).toBeUndefined();
       expect(result.html).toContain('<img');
       expect(result.html).toContain('class="diagram-embed mermaid-embed"');
+      expect(result.html).toContain('data-crowi-renderer-presentation="diagram"');
+      expect(result.html).toContain('data-crowi-renderer-state="ready"');
       expect(result.html).toContain('src="data:image/svg+xml;base64,');
       // alt must be present and non-empty (spec §2 layer 3 — never empty, never omitted).
       const altMatch = /alt="([^"]*)"/.exec(result.html);
@@ -81,7 +82,23 @@ describe('@crowi/plugin-renderer-mermaid — success path (8 diagram types)', ()
       // own structural invariant (single, unprefixed SVG-namespace root)
       // holds all the way through the real plugin pipeline, not just at
       // the sanitizer's own unit-test level.
-      expectWellFormedUnprefixedSvgRoot(decodeSvgDataUrl(result.html));
+      const decodedSvg = decodeSvgDataUrl(result.html);
+      expectWellFormedUnprefixedSvgRoot(decodedSvg);
+      // Regression: Mermaid's SVG declares `width="100%"` with no
+      // absolute height, so a bare `<img src="data:...">` has no
+      // resolvable intrinsic size inside RendererPresentation's
+      // `inline-block` wrapper (whose own width is itself `auto`) — the
+      // two collapse to 0×0 in the browser (confirmed via a live DOM
+      // inspection: `naturalWidth`/`naturalHeight` decode fine, but
+      // `offsetHeight` is 0). The `<img>` tag must carry explicit
+      // `width`/`height` attributes, independently of the `data:`
+      // payload, matching the decoded SVG's own `viewBox` dimensions.
+      const dimsMatch = /\bviewBox\s*=\s*["']\s*[-\d.]+[\s,]+[-\d.]+[\s,]+([-\d.]+)[\s,]+([-\d.]+)\s*["']/.exec(decodedSvg);
+      expect(dimsMatch).toBeTruthy();
+      const expectedWidth = Math.round(Number(dimsMatch?.[1]));
+      const expectedHeight = Math.round(Number(dimsMatch?.[2]));
+      expect(result.html).toContain(`width="${expectedWidth}"`);
+      expect(result.html).toContain(`height="${expectedHeight}"`);
     },
     30_000,
   );
@@ -97,11 +114,44 @@ describe('@crowi/plugin-renderer-mermaid — success path (8 diagram types)', ()
   });
 
   it('declares admissionControl / previewPolicy / cacheVersion / reservation per spec §6/§7', () => {
-    expect(renderer.cacheVersion).toBe(1);
+    expect(renderer.cacheVersion).toBe(3);
     expect(renderer.admissionControl).toEqual({ maxConcurrentGlobal: 4, maxConcurrentPerUser: 2, queueDepth: 200 });
     expect(renderer.previewPolicy).toBe('server-render');
     expect(renderer.reservation).toEqual({ variant: 'aspect', aspectRatio: 16 / 9 });
   });
+});
+
+describe('@crowi/plugin-renderer-mermaid — gantt charts (regression: jsdom offsetWidth always 0, not undefined)', () => {
+  const renderer = createMermaidRenderer();
+
+  it("renders a gantt chart with a positive, non-degenerate viewBox width (not the 0-width/negative-bar layout jsdom's unpolyfilled offsetWidth used to produce)", async () => {
+    const source = [
+      'gantt',
+      '  title Release schedule',
+      '  dateFormat YYYY-MM-DD',
+      '  section Phase1',
+      '  Design :a1, 2026-07-01, 5d',
+      '  Build  :a2, after a1, 10d',
+    ].join('\n');
+    const result = await render(renderer, source);
+    expect(result.error).toBeUndefined();
+    expect(result.html).toContain('<img');
+
+    const decodedSvg = decodeSvgDataUrl(result.html);
+    expectWellFormedUnprefixedSvgRoot(decodedSvg);
+    const viewBoxMatch = /\bviewBox\s*=\s*["']\s*[-\d.]+[\s,]+[-\d.]+[\s,]+([-\d.]+)[\s,]+([-\d.]+)\s*["']/.exec(decodedSvg);
+    expect(viewBoxMatch).toBeTruthy();
+    const viewBoxWidth = Number(viewBoxMatch?.[1]);
+    expect(viewBoxWidth).toBeGreaterThan(0);
+
+    // The regression's signature wasn't limited to the viewBox — every
+    // bar/section `<rect>` mermaid emits also carried a negative `width`
+    // attribute (the same 0px layout budget propagated through the whole
+    // chart), so a plain substring check pins that too.
+    expect(decodedSvg).not.toMatch(/\bwidth="-/);
+
+    expect(result.html).toContain(`width="${Math.round(viewBoxWidth)}"`);
+  }, 30_000);
 });
 
 describe('@crowi/plugin-renderer-mermaid — classification A: notation errors', () => {
@@ -112,7 +162,9 @@ describe('@crowi/plugin-renderer-mermaid — classification A: notation errors',
     expect(result.error).toBeUndefined();
     expect(result.html).toContain('class="mermaid-embed mermaid-error"');
     expect(result.html).toContain('role="status"');
-    expect(result.html).not.toContain('diagram-embed'); // spec §9 — error placeholder deliberately excluded from the click-to-enlarge / white-canvas class
+    expect(result.html).not.toContain('diagram-embed'); // spec §9 — error placeholder deliberately excluded from the click-to-enlarge / white-canvas class (legacy dual-accept path)
+    expect(result.html).toContain('data-crowi-renderer-presentation="diagram"');
+    expect(result.html).toContain('data-crowi-renderer-state="error"'); // new contract path — state="error" (not "ready") is what excludes it, spec §3.1
     expect(result.ttlSec).toBe(5 * 60);
   });
 
@@ -123,6 +175,7 @@ describe('@crowi/plugin-renderer-mermaid — classification A: notation errors',
       expect(result.error).toBeUndefined();
       expect(result.html).toContain('class="mermaid-embed mermaid-error"');
       expect(result.html).not.toContain('diagram-embed');
+      expect(result.html).toContain('data-crowi-renderer-state="error"');
       expect(result.ttlSec).toBe(5 * 60);
     },
     30_000,
@@ -244,6 +297,7 @@ describe('@crowi/plugin-renderer-mermaid — classification A: output size excee
     const result = await render(renderer, 'flowchart TD\n  A --> B');
     expect(result.error).toBeUndefined();
     expect(result.html).toContain('class="mermaid-embed mermaid-error"');
+    expect(result.html).toContain('data-crowi-renderer-state="error"');
     expect(result.ttlSec).toBe(5 * 60);
   }, 30_000);
 
@@ -255,6 +309,7 @@ describe('@crowi/plugin-renderer-mermaid — classification A: output size excee
       expect(result.error).toBeUndefined();
       expect(result.html).toContain('class="mermaid-embed mermaid-error"');
       expect(result.html).not.toContain('diagram-embed');
+      expect(result.html).toContain('data-crowi-renderer-state="error"');
       expect(result.ttlSec).toBe(5 * 60);
     },
     30_000,

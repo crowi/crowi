@@ -1,3 +1,4 @@
+import { createServer, type Server } from 'node:http';
 import request from 'supertest';
 import { app, crowi } from 'src/test/setup';
 import { authHeaders, createTestUser } from 'src/test/test-helpers';
@@ -196,17 +197,40 @@ describe('Routes /api/v2/{users,pages}/autocomplete (Hono autocomplete)', () => 
       // concurrently instead — the burst spans at most two windows, so
       // by pigeonhole one window receives >60 hits and returns 429,
       // wherever the boundary falls.
-      const responses = await Promise.all(
-        Array.from({ length: 121 }, () => request(app).get('/api/v2/users/autocomplete').set(authHeaders(accessToken)).query({ q: 'ac' })),
-      );
-      expect(responses.every((res) => res.status === 200 || res.status === 429)).toBe(true);
+      //
+      // `app` is a bare RequestListener (`src/test/setup.ts`), so
+      // `request(app)` with no shared server opens its own throwaway
+      // `.listen(0)` server per call — firing 121 of those fully
+      // concurrently under this suite's 5-worker parallel run produced
+      // a real `connect ETIMEDOUT` flake (121 simultaneous fresh
+      // listen/connect/close cycles). page-preview.test.ts's rate-limit
+      // test hit the identical failure mode at a larger scale and fixed
+      // it with one shared server + size-50 concurrent batches — same
+      // fix here (each supertest call still opens its own connection
+      // against the one shared server; superagent doesn't pool/keep-
+      // alive — so this bounds concurrent sockets, not total requests).
+      const TOTAL_REQUESTS = 121;
+      const BATCH_SIZE = 50;
+      const server: Server = createServer(app).listen(0);
+      try {
+        const fire = () => request(server).get('/api/v2/users/autocomplete').set(authHeaders(accessToken)).query({ q: 'ac' });
+        const responses: Awaited<ReturnType<typeof fire>>[] = [];
+        for (let i = 0; i < TOTAL_REQUESTS; i += BATCH_SIZE) {
+          const batchSize = Math.min(BATCH_SIZE, TOTAL_REQUESTS - i);
+          const batch = await Promise.all(Array.from({ length: batchSize }, fire));
+          responses.push(...batch);
+        }
+        expect(responses.every((res) => res.status === 200 || res.status === 429)).toBe(true);
 
-      const limited = responses.find((res) => res.status === 429);
-      expect(limited).toBeDefined();
-      expect(limited?.body.error).toBe('rate_limited');
-      expect(typeof limited?.body.retryAfterSeconds).toBe('number');
-      expect(limited?.headers['retry-after']).toBeDefined();
-    });
+        const limited = responses.find((res) => res.status === 429);
+        expect(limited).toBeDefined();
+        expect(limited?.body.error).toBe('rate_limited');
+        expect(typeof limited?.body.retryAfterSeconds).toBe('number');
+        expect(limited?.headers['retry-after']).toBeDefined();
+      } finally {
+        await new Promise<void>((resolve) => server.close(() => resolve()));
+      }
+    }, 15_000);
 
     it('counts the budget per-user (a second user is unaffected)', async () => {
       // aliceId is referenced to keep the per-user nature explicit.

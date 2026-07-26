@@ -33,8 +33,7 @@ can be activated from `crowi.config.json` without a rebuild:
 - storage: `storage-local`, `storage-aws-s3`
 - search: `search-mongo`, `search-elasticsearch`, `search-opensearch`
 - mail: `mail-smtp`, `mail-resend`, `mail-aws-ses`
-- renderer: `renderer-plantuml`, `renderer-emoji`, `renderer-katex`,
-  `renderer-crowi-legacy`
+- renderer: `renderer-plantuml`, `renderer-katex`, `renderer-crowi-legacy`
 
 `@crowi/api` itself is plugin-free: it depends only on the SDK
 (`@crowi/plugin-api`) and the runner resolution library (`@crowi/runner`).

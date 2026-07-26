@@ -23,10 +23,17 @@
  *   - 0.7.x  dark mode (shiki dual-theme CSS-variable output)
  *   - 0.8.x  RFC-0015 image display attributes (`remarkImageAttrs`
  *     core transform — bundled plugin addition, minor bump)
+ *   - 0.9.x  feature-renderer-plugin-boundary Phase 3 — emoji becomes
+ *     a hard-coded post-remarkBreaks core transform and link-card
+ *     becomes a core-reserved `card` embed tag (both were previously
+ *     registry-registered plugins); new-bundled-transform minor bump
+ *     per this constant's own policy above. (Phase 2's KaTeX/PlantUML/
+ *     Mermaid data-contract + cacheVersion work deliberately did NOT
+ *     bump this — see `page-response.test.ts`'s pinned assertion.)
  *
  * Until `renderer:rebuild` ships (deferred to RFC-0008), version
  * mismatch is informational only — the read path's parse-on-read
  * fallback handles missing or stale `renderedAst` transparently at
  * a per-request CPU cost.
  */
-export const RENDERER_PIPELINE_VERSION = '0.8.0';
+export const RENDERER_PIPELINE_VERSION = '0.9.0';

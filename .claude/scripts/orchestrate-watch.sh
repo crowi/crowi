@@ -21,16 +21,25 @@
 # re-verifies before acting).
 #
 # Usage: orchestrate-watch.sh [--once]     (--once: single pass for testing)
-# Env:   ORCH_WATCH_INTERVAL (default 60s), ORCH_STALL_DAYS (default 3),
+# Env:   ORCH_ROOT (override the repo root; test-only, see
+#        orchestrate-watch.test.sh — unset in normal agent use),
+#        ORCH_WATCH_INTERVAL (default 60s), ORCH_STALL_DAYS (default 3),
+#        ORCH_STALL_DAYS_LONG (default 14 — used instead of ORCH_STALL_DAYS
+#        for worktrees whose task.json has "longLived": true, e.g. multi-phase
+#        umbrella features that legitimately span longer than the normal
+#        stall threshold),
 #        ORCH_DEP_EVERY (dependabot check every Nth pass, default 30),
 #        ORCH_FLAKE_EVERY (flaky-test issue check every Nth pass, default 30)
 set -u
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# Resolves to the real repo root (two dirs up from this script) unless
+# ORCH_ROOT overrides it — see the "Env:" block above for what sets it.
+ROOT="${ORCH_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 TASKS="$ROOT/.feature-state/tasks"
 STATE="$ROOT/.feature-state/orchestrate-state.json"
 INTERVAL="${ORCH_WATCH_INTERVAL:-60}"
 STALL_DAYS="${ORCH_STALL_DAYS:-3}"
+STALL_DAYS_LONG="${ORCH_STALL_DAYS_LONG:-14}"
 DEP_EVERY="${ORCH_DEP_EVERY:-30}"
 FLAKE_EVERY="${ORCH_FLAKE_EVERY:-30}"
 ONCE=0; [ "${1:-}" = "--once" ] && ONCE=1
@@ -60,11 +69,16 @@ while true; do
     head="$(git -C "$wt" rev-parse HEAD 2>/dev/null)" || continue
     n="$(git -C "$wt" rev-list --count main..HEAD 2>/dev/null || echo 0)"
     [ "$n" -gt 0 ] || continue
-    sig="$(jq -r '.readyForMerge.headSha // empty' "$TASKS/$id.json" 2>/dev/null)"
+    IFS=$'\t' read -r long sig <<<"$(jq -r '[(.longLived // false), (.readyForMerge.headSha // "")] | @tsv' "$TASKS/$id.json" 2>/dev/null)"
     [ "$sig" = "$head" ] && continue                       # fresh signal → lane A's job
+    # longLived task.json marker → use the extended threshold (default 14d)
+    # instead of the normal one (default 3d). Absent/false/missing task file
+    # all fall through to the normal threshold — fully backward compatible.
+    threshold="$STALL_DAYS"
+    [ "$long" = "true" ] && threshold="$STALL_DAYS_LONG"
     last=$(git -C "$wt" log -1 --format=%ct 2>/dev/null || echo 0)
     age_d=$(( ($(date +%s) - last) / 86400 ))
-    [ "$age_d" -ge "$STALL_DAYS" ] || continue
+    [ "$age_d" -ge "$threshold" ] || continue
     key="$id:$head"
     has "$key" "$seen_stall" || { echo "STALLED: $id ($n ahead, last commit ${age_d}d ago, no fresh signal)"; seen_stall="$seen_stall $key"; }
   done <<EOF
