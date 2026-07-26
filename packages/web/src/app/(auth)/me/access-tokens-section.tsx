@@ -40,9 +40,9 @@ function expiresAtFromPreset(value: string): string | null {
 
 /**
  * A scope is read-only if it is the umbrella `read` or any `*:read` resource
- * scope. We recommend (and pre-select) these for MCP / agent use so the
- * default token cannot be turned into a destructive one by a prompt-injection
- * attack; `*:write` stays an explicit opt-in (RFC-0011 §10.7).
+ * scope. These are pre-selected so the default token cannot be turned into a
+ * destructive one by a prompt-injection attack; `*:write` stays an explicit
+ * opt-in (RFC-0011 §10.7).
  */
 const isReadOnlyScope = (scope: string): boolean => scope === 'read' || scope.endsWith(':read');
 
@@ -196,11 +196,9 @@ export function AccessTokensSection() {
                         onChange={() => toggleScope(scope)}
                       />
                       <span className="font-mono">{scope}</span>
-                      {isReadOnlyScope(scope) && <span className="text-xs text-muted-foreground">{m['me.access_tokens.scope_recommended']()}</span>}
                     </label>
                   ))}
                 </div>
-                <p className="text-xs text-muted-foreground">{m['me.access_tokens.scope_readonly_hint']()}</p>
               </div>
 
               <div className="space-y-2">
