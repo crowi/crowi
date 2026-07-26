@@ -98,6 +98,21 @@ export interface ReconnectingSocketOptions {
    * channel-specific setup (heartbeats, catch-up invalidation) hangs off
    * this. */
   onOpen?: () => void;
+  /**
+   * Fires synchronously right after a retry has been SCHEDULED — i.e.
+   * right after `reconnectTimer` is set, for both the immediate
+   * `'reconnect'` retry (`delayMs: 0`) and a capped `'backoff-retry'`
+   * one. Does NOT fire for `'stop'` (no retry is ever scheduled for that
+   * close). Optional — a caller with a `connecting | reconnecting |
+   * connected | error`-shaped status derives `'reconnecting'` from this:
+   * "the socket is down, but a retry attempt IS scheduled", as opposed
+   * to a `'stop'` close, which the caller treats as terminal `'error'`.
+   * Kept here (rather than re-derived from `onCloseCode`'s own return
+   * value at each call site) because this primitive already owns
+   * `reconnectTimer` and is the single source of truth for whether a
+   * retry was actually scheduled.
+   */
+  onScheduledRetry?: (delayMs: number) => void;
   /** Backoff floor in ms. Default 1000 (1s). */
   backoffBaseMs?: number;
   /** Backoff ceiling in ms. Default 15000 (15s). */
@@ -178,6 +193,7 @@ export function createReconnectingSocket(options: ReconnectingSocketOptions): Re
       if (policy === 'reconnect') {
         reconnectAttempts = 0;
         reconnectTimer = setTimeout(connect, 0);
+        options.onScheduledRetry?.(0);
         return;
       }
       // 'backoff-retry' — capped exponential backoff, same formula every
@@ -185,6 +201,7 @@ export function createReconnectingSocket(options: ReconnectingSocketOptions): Re
       const delay = backoffDelayMs(reconnectAttempts, backoffBaseMs, backoffMaxMs);
       reconnectAttempts += 1;
       reconnectTimer = setTimeout(connect, delay);
+      options.onScheduledRetry?.(delay);
     };
   };
 
