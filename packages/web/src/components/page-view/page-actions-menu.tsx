@@ -11,6 +11,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { notify } from '@/lib/notify';
 import { isUserHomePath } from '@/lib/page-path';
 import { useToggleBookmark } from '@/lib/use-bookmark';
+import { useForceCloseable } from '@/lib/use-force-closeable';
 import { useToggleLike } from '@/lib/use-like';
 import { useToggleWatch } from '@/lib/use-watch';
 import { DeletePageDialog } from './delete-page-dialog';
@@ -37,10 +38,26 @@ interface PageActionsMenuProps {
   foldSocial?: boolean;
   /** Current like state, used only by the `foldSocial` like menu item. */
   isLiked?: boolean;
+  /**
+   * feature-mobile-presence-card — force-closes the dotmenu while `true`.
+   * `PageHeader` sets it from its own `compact` sticky state for the
+   * instances rendered inside the EXPANDED subtree; see `useForceCloseable`
+   * for why a Portal-rendered overlay needs this even though its trigger's
+   * ancestor already goes `inert`.
+   */
+  forceClose?: boolean;
 }
 
-export function PageActionsMenu({ page, compact = false, isAuthenticated = false, foldSocial = false, isLiked = false }: PageActionsMenuProps) {
+export function PageActionsMenu({
+  page,
+  compact = false,
+  isAuthenticated = false,
+  foldSocial = false,
+  isLiked = false,
+  forceClose = false,
+}: PageActionsMenuProps) {
   const router = useRouter();
+  const [isMenuOpen, setIsMenuOpen] = useForceCloseable(forceClose);
   const [isRenameOpen, setIsRenameOpen] = useState(false);
   const [isPortalizeOpen, setIsPortalizeOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
@@ -77,7 +94,7 @@ export function PageActionsMenu({ page, compact = false, isAuthenticated = false
           closed — making the whole page unclickable (Radix #1241). A non-modal
           menu doesn't touch body pointer-events, so only the dialog manages it
           and it is cleaned up correctly on close. */}
-      <DropdownMenu modal={false}>
+      <DropdownMenu modal={false} open={isMenuOpen} onOpenChange={setIsMenuOpen}>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="icon-sm" aria-label={m['page.action_more']()} className="text-muted-foreground hover:text-foreground">
             <MoreHorizontal className="h-4 w-4" />
