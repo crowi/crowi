@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import Link from 'next/link';
 import { Clock, Link2, MessageSquare, ThumbsUp, Eye } from 'lucide-react';
 import type { PageWithRevision } from '@crowi/api-contract';
@@ -9,6 +8,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { formatAbsoluteDateTime, formatDistanceToNow } from '@/lib/date-utils';
 import { resolveDisplayUser } from '@/lib/page-display-user';
 import { useBacklinks } from '@/lib/use-backlinks';
+import { useForceCloseable } from '@/lib/use-force-closeable';
 import { SCROLL_TARGETS, scrollToSection } from '@/lib/scroll-to-section';
 import { m } from '@paraglide/messages.js';
 import { MetaChip } from './meta-chip';
@@ -22,6 +22,14 @@ const BACKLINK_COUNT_LIMIT = 50;
 
 interface MetaChipRowProps {
   page: PageWithRevision;
+  /**
+   * feature-mobile-presence-card — force-closes the likers/seen-by
+   * Dialogs while `true`. `PageHeader` sets it from its own `compact`
+   * sticky state; see `useForceCloseable` for why a Portal-rendered
+   * overlay needs this even though its trigger's ancestor already goes
+   * `inert`.
+   */
+  forceClose?: boolean;
 }
 
 /**
@@ -45,9 +53,9 @@ interface MetaChipRowProps {
  * row with the same six direct flex items — `MetaChip` itself and the 4
  * chips' data / dialog / scroll / zero-count behaviour are untouched.
  */
-export function MetaChipRow({ page }: MetaChipRowProps) {
-  const [likersOpen, setLikersOpen] = useState(false);
-  const [seenOpen, setSeenOpen] = useState(false);
+export function MetaChipRow({ page, forceClose = false }: MetaChipRowProps) {
+  const [likersOpen, setLikersOpen] = useForceCloseable(forceClose);
+  const [seenOpen, setSeenOpen] = useForceCloseable(forceClose);
 
   const displayUser = resolveDisplayUser(page);
 

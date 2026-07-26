@@ -181,6 +181,17 @@ export interface UsePresenceResult {
 }
 
 /**
+ * feature-mobile-presence-card — whether any OTHER viewer (not self) is
+ * currently present. `status === 'error'` (terminal) always resolves to
+ * `false` regardless of `viewers` — the desktop `LivePresenceRow` and the
+ * mobile `MobilePresenceCard` both hide/collapse on terminal error rather
+ * than trusting a possibly-stale last-known viewer list.
+ */
+export function hasOtherViewers({ status, viewers, selfUserId }: Pick<UsePresenceResult, 'status' | 'viewers' | 'selfUserId'>): boolean {
+  return status !== 'error' && viewers.some((v) => v.userId !== selfUserId);
+}
+
+/**
  * Resolve the `/presence` WebSocket base URL. Delegates to the shared
  * `resolveWsUrl` so `/presence`, `/collab` and `/notifications` share one
  * resolution order (explicit override → `NEXT_PUBLIC_API_URL` → window.location

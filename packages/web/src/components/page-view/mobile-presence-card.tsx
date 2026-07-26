@@ -8,7 +8,7 @@ import { applyVisibility, completeExit, createExitLifecycleState, type ExitLifec
 import { applyScrollCompensation, computeScrollCompensation, measureSlot, shouldCompensate, type SlotMeasurement } from '@/lib/preserve-scroll-anchor';
 import { useForceCloseable } from '@/lib/use-force-closeable';
 import { useMediaQuery } from '@/lib/use-media-query';
-import type { UsePresenceResult } from '@/lib/use-presence';
+import { hasOtherViewers, type UsePresenceResult } from '@/lib/use-presence';
 import { cn } from '@/lib/utils';
 import { PresenceAvatarVisual, PresenceViewerList } from './live-presence-row';
 
@@ -90,7 +90,7 @@ export function MobilePresenceCard({ presence, variant = 'default', forceClose =
   // when the connection has terminally errored — an auto-retry in
   // progress (`'connecting'` / `'reconnecting'`) keeps showing the last
   // known viewers in a neutral state instead (spec §"接続状態と可視性").
-  const hasOthers = status !== 'error' && viewers.some((v) => v.userId !== selfUserId);
+  const hasOthers = hasOtherViewers({ status, viewers, selfUserId });
   // `connected` alone only proves the transport handshake finished — the
   // green `Live` state also needs a viewers frame on THIS connection.
   const isLive = status === 'connected' && hasViewersForConnection;
@@ -162,6 +162,15 @@ export function MobilePresenceCard({ presence, variant = 'default', forceClose =
     }
   }, []);
 
+  // The two things that must happen exactly once at the end of every
+  // transition path (fallback timer, enter timer, and the real
+  // `transitionend`) — settle the scroll compensation and tell the
+  // consumer the transition is over.
+  const settleTransition = useCallback(() => {
+    settleScrollCompensation();
+    notifyTransitioning(false);
+  }, [settleScrollCompensation, notifyTransitioning]);
+
   const clearPendingTimers = useCallback(() => {
     if (fallbackTimerRef.current !== null) {
       clearTimeout(fallbackTimerRef.current);
@@ -179,12 +188,6 @@ export function MobilePresenceCard({ presence, variant = 'default', forceClose =
     if (prevHasOthersRef.current === hasOthers) return;
     prevHasOthersRef.current = hasOthers;
 
-    if (trackRef.current) {
-      // t=0 of this transition — before any animation frame has run, so
-      // this equals the pre-transition (settled) height. See
-      // `preserve-scroll-anchor.ts`'s module doc.
-      beforeMeasurementRef.current = measureSlot(trackRef.current);
-    }
     clearPendingTimers();
 
     const { state, scheduleFallback } = applyVisibility(lifecycleRef.current, hasOthers, reducedMotion);
@@ -193,12 +196,18 @@ export function MobilePresenceCard({ presence, variant = 'default', forceClose =
     if (reducedMotion) {
       // Synchronous — no CSS transition plays, nothing to settle later,
       // and no scroll compensation (spec explicitly excludes reduced
-      // motion from the compensation path).
-      beforeMeasurementRef.current = null;
+      // motion from the compensation path) — skip the measurement below
+      // entirely rather than taking it and immediately discarding it.
       notifyTransitioning(false);
       return;
     }
 
+    if (trackRef.current) {
+      // t=0 of this transition — before any animation frame has run, so
+      // this equals the pre-transition (settled) height. See
+      // `preserve-scroll-anchor.ts`'s module doc.
+      beforeMeasurementRef.current = measureSlot(trackRef.current);
+    }
     notifyTransitioning(true);
     if (scheduleFallback !== null) {
       // Exiting — generation-tagged fallback, the safety net behind the
@@ -207,8 +216,7 @@ export function MobilePresenceCard({ presence, variant = 'default', forceClose =
       fallbackTimerRef.current = setTimeout(() => {
         fallbackTimerRef.current = null;
         setLifecycle(completeExit(lifecycleRef.current, generation));
-        settleScrollCompensation();
-        notifyTransitioning(false);
+        settleTransition();
       }, EXIT_FALLBACK_MS);
     } else {
       // Entering — no unmount risk, so no generation guard is needed; a
@@ -216,11 +224,10 @@ export function MobilePresenceCard({ presence, variant = 'default', forceClose =
       // enough to settle the scroll compensation and clear the freeze.
       enterTimerRef.current = setTimeout(() => {
         enterTimerRef.current = null;
-        settleScrollCompensation();
-        notifyTransitioning(false);
+        settleTransition();
       }, EXIT_FALLBACK_MS);
     }
-  }, [hasOthers, reducedMotion, clearPendingTimers, notifyTransitioning, settleScrollCompensation, setLifecycle]);
+  }, [hasOthers, reducedMotion, clearPendingTimers, notifyTransitioning, settleTransition, setLifecycle]);
 
   // Unmount (page navigation) — cancel any pending timer; never settles
   // scroll compensation from here (spec: unmount is not compensated).
@@ -241,10 +248,9 @@ export function MobilePresenceCard({ presence, variant = 'default', forceClose =
       if (wasExiting) {
         setLifecycle(completeExit(lifecycleRef.current, lifecycleRef.current.generation));
       }
-      settleScrollCompensation();
-      notifyTransitioning(false);
+      settleTransition();
     },
-    [clearPendingTimers, settleScrollCompensation, notifyTransitioning, setLifecycle],
+    [clearPendingTimers, settleTransition, setLifecycle],
   );
 
   if (variant === 'compact') {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useSyncExternalStore } from 'react';
+import { useCallback, useRef, useSyncExternalStore } from 'react';
 
 /**
  * Live CSS media-query test, as a `useSyncExternalStore` subscription over
@@ -23,15 +23,31 @@ function getServerSnapshot(): boolean {
 }
 
 export function useMediaQuery(query: string): boolean {
+  // `getSnapshot` runs on every render of the consuming component (not
+  // just on actual media-query changes — that's the `useSyncExternalStore`
+  // contract), so a fresh `window.matchMedia(query)` call there would
+  // construct a new `MediaQueryList` far more often than the query
+  // actually changes. Cache one per distinct `query` in a ref instead;
+  // `subscribe` (called from an effect) reads the same cached instance.
+  const mqlRef = useRef<{ query: string; mql: MediaQueryList } | null>(null);
+  const getMql = useCallback(() => {
+    if (typeof window === 'undefined') return null;
+    if (mqlRef.current === null || mqlRef.current.query !== query) {
+      mqlRef.current = { query, mql: window.matchMedia(query) };
+    }
+    return mqlRef.current.mql;
+  }, [query]);
+
   const subscribe = useCallback(
     (callback: () => void) => {
-      const mql = window.matchMedia(query);
+      const mql = getMql();
+      if (!mql) return () => {};
       mql.addEventListener('change', callback);
       return () => mql.removeEventListener('change', callback);
     },
-    [query],
+    [getMql],
   );
-  const getSnapshot = useCallback(() => window.matchMedia(query).matches, [query]);
+  const getSnapshot = useCallback(() => getMql()?.matches ?? false, [getMql]);
 
   return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 }

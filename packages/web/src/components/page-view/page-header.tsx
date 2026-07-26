@@ -169,9 +169,11 @@ export function PageHeader({
 
   // feature-mobile-presence-card — forceClose/focus-handoff contract:
   // when the header compacts, the (still-mounted, now `inert`) expanded
-  // subtree's portaled overlays (LinkSharePopover, PageActionsMenu,
-  // LivePresenceRow's desktop popover, expanded PageTocMenu, the mobile
-  // card's own viewer Sheet) all force-close, and — if focus was inside
+  // subtree's portaled overlays (LinkSharePopover, PageActionsMenu's
+  // dotmenu AND its rename/portalize/delete/share Dialogs, MetaChipRow's
+  // likers/seen-by Dialogs, LivePresenceRow's desktop popover, expanded
+  // PageTocMenu, the mobile card's own viewer Sheet) all force-close, and
+  // — if focus was inside
   // that subtree — it moves to the compact bar's scroll-to-top button
   // (the one control guaranteed to exist whenever `compact` is true)
   // BEFORE the placeholder's `inert` strands it. `inert` on an ancestor
@@ -365,7 +367,7 @@ export function PageHeader({
         )
       )}
 
-      {showMeta && <MetaChipRow page={page} />}
+      {showMeta && <MetaChipRow page={page} forceClose={compact} />}
 
       {/* feature-mobile-presence-card — mobile-only live presence card,
           the mirror image of the `isWide` gate above: rendered only on

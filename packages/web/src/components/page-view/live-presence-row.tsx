@@ -6,7 +6,7 @@ import { UserAvatar } from '@/components/user-avatar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useForceCloseable } from '@/lib/use-force-closeable';
-import type { UsePresenceResult } from '@/lib/use-presence';
+import { hasOtherViewers, type UsePresenceResult } from '@/lib/use-presence';
 import { cn } from '@/lib/utils';
 import { m } from '@paraglide/messages.js';
 
@@ -83,7 +83,7 @@ export function LivePresenceRow({ presence, size = 'default', forceClose = false
   // the row's vertical space is independent of whether there is content
   // to show — content appearing or disappearing never shifts the page
   // layout.
-  const hasOthers = status !== 'error' && viewers.some((v) => v.userId !== selfUserId);
+  const hasOthers = hasOtherViewers({ status, viewers, selfUserId });
 
   return (
     <div

@@ -26,7 +26,10 @@ vi.mock('@/lib/use-like', () => ({ useToggleLike }));
 vi.mock('@/lib/use-watch', () => ({ useWatchStatus, useToggleWatch }));
 vi.mock('@/lib/use-bookmark', () => ({ useToggleBookmark }));
 vi.mock('@/lib/use-app-info', () => ({ useAppInfo }));
-vi.mock('@/lib/use-presence', () => ({ usePresence }));
+vi.mock('@/lib/use-presence', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/use-presence')>();
+  return { ...actual, usePresence };
+});
 vi.mock('@/lib/use-backlinks', () => ({ useBacklinks }));
 vi.mock('@/lib/use-likers', () => ({ useLikers, likersKeys: { pagePrefix: (id: string) => ['likers', id] } }));
 vi.mock('@/lib/use-seen', () => ({ useSeenUsers }));
@@ -527,6 +530,31 @@ describe('PageHeader — compact-transition forceClose + focus handoff', () => {
 
     useStickyHeader.mockReturnValue({ compact: true });
     rerender(<PageHeader page={makePage()} sticky showActions showPresence presence={presenceTwoViewers} />);
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('force-closes PageActionsMenu-owned dialogs (e.g. rename) when the header compacts, not just the dotmenu itself', () => {
+    useStickyHeader.mockReturnValue({ compact: false });
+    const { rerender } = renderHeader(<PageHeader page={makePage()} sticky showActions />);
+    const triggers = screen.getAllByLabelText('その他のアクション');
+    openDropdown(triggers[0]);
+    fireEvent.click(screen.getByText('リネーム'));
+    expect(screen.getByRole('dialog')).toBeTruthy();
+
+    useStickyHeader.mockReturnValue({ compact: true });
+    rerender(<PageHeader page={makePage()} sticky showActions />);
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('force-closes MetaChipRow-owned dialogs (e.g. likers) when the header compacts', () => {
+    useStickyHeader.mockReturnValue({ compact: false });
+    const page = makePage({ likerCount: 1 });
+    const { rerender } = renderHeader(<PageHeader page={page} sticky showActions />);
+    fireEvent.click(screen.getByLabelText('1 件のいいね — いいねした人を表示'));
+    expect(screen.getByRole('dialog')).toBeTruthy();
+
+    useStickyHeader.mockReturnValue({ compact: true });
+    rerender(<PageHeader page={page} sticky showActions />);
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 });

@@ -5,7 +5,6 @@ import { PageStatusEnum } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 import { Bell, BellOff, Bookmark, ClipboardCopy, Compass, History, Link2, MoreHorizontal, MoveRight, ThumbsUp, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { notify } from '@/lib/notify';
@@ -58,10 +57,13 @@ export function PageActionsMenu({
 }: PageActionsMenuProps) {
   const router = useRouter();
   const [isMenuOpen, setIsMenuOpen] = useForceCloseable(forceClose);
-  const [isRenameOpen, setIsRenameOpen] = useState(false);
-  const [isPortalizeOpen, setIsPortalizeOpen] = useState(false);
-  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
-  const [isShareOpen, setIsShareOpen] = useState(false);
+  // These four Dialogs are opened FROM the dotmenu above but are their own
+  // separate Portal-rendered overlays, so closing the dotmenu on
+  // `forceClose` does not close them too — each needs the same contract.
+  const [isRenameOpen, setIsRenameOpen] = useForceCloseable(forceClose);
+  const [isPortalizeOpen, setIsPortalizeOpen] = useForceCloseable(forceClose);
+  const [isDeleteOpen, setIsDeleteOpen] = useForceCloseable(forceClose);
+  const [isShareOpen, setIsShareOpen] = useForceCloseable(forceClose);
   // Drafts hide the social affordances (watch / bookmark / copy-link)
   // that the compact dropdown otherwise folds in. The page-level
   // history / rename / delete actions still apply to the draft.
