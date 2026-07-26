@@ -528,6 +528,58 @@ describe('createReconnectingSocket', () => {
     });
   });
 
+  describe('onScheduledRetry', () => {
+    it('fires with delayMs 0 right after an immediate reconnect() policy is scheduled', () => {
+      const calls: number[] = [];
+      const rs = createReconnectingSocket({
+        buildUrl: () => 'ws://example.test/socket',
+        onMessage: () => undefined,
+        onCloseCode: () => 'reconnect',
+        onScheduledRetry: (delayMs) => calls.push(delayMs),
+      });
+      rs.start();
+      FakeWebSocket.instances[0].open();
+      expect(calls).toEqual([]);
+      FakeWebSocket.instances[0].fail(4401);
+      expect(calls).toEqual([0]);
+    });
+
+    it('fires with the computed backoff delay right after a backoff-retry policy is scheduled', () => {
+      const calls: number[] = [];
+      const rs = createReconnectingSocket({
+        buildUrl: () => 'ws://example.test/socket',
+        onMessage: () => undefined,
+        onCloseCode: () => 'backoff-retry',
+        backoffBaseMs: 1_000,
+        backoffMaxMs: 15_000,
+        onScheduledRetry: (delayMs) => calls.push(delayMs),
+      });
+      rs.start();
+      FakeWebSocket.instances[0].open();
+      FakeWebSocket.instances[0].fail(1006);
+      expect(calls).toEqual([1_000]);
+
+      vi.advanceTimersByTime(1_000);
+      FakeWebSocket.instances[1].open();
+      FakeWebSocket.instances[1].fail(1006);
+      expect(calls).toEqual([1_000, 2_000]);
+    });
+
+    it('does not fire for a stop() policy close', () => {
+      const calls: number[] = [];
+      const rs = createReconnectingSocket({
+        buildUrl: () => 'ws://example.test/socket',
+        onMessage: () => undefined,
+        onCloseCode: () => 'stop',
+        onScheduledRetry: (delayMs) => calls.push(delayMs),
+      });
+      rs.start();
+      FakeWebSocket.instances[0].open();
+      FakeWebSocket.instances[0].fail(4403);
+      expect(calls).toEqual([]);
+    });
+  });
+
   it('uses the default 1s / 15s backoff bounds when not overridden', () => {
     const rs = createReconnectingSocket({
       buildUrl: () => 'ws://example.test/socket',
