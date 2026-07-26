@@ -6,6 +6,7 @@ import { SettingsLayout } from './settings-layout';
 import { ProfileForm } from './profile-form';
 import { ProfilePicture } from './profile-picture';
 import { PasswordForm } from './password-form';
+import { McpSetupSection } from './mcp-setup-section';
 import { AccessTokensSection } from './access-tokens-section';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -98,6 +99,16 @@ export default function SettingsPage() {
             </CardHeader>
             <CardContent>
               <PasswordForm profile={profile} />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>{m['me.mcp.heading']()}</CardTitle>
+              <CardDescription>{m['me.mcp.lead']()}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <McpSetupSection />
             </CardContent>
           </Card>
 
