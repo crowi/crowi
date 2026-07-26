@@ -180,22 +180,28 @@ the statistics chips. See
 Just above the page title, the avatars of **users who currently have the
 page open** appear in real time.
 
-- Opening a page automatically connects you to the presence channel, and
-  other viewers' avatars appear within a few seconds. When someone leaves,
-  their avatar disappears.
+- **This applies only to an authenticated user viewing a normal live
+  page** — not a draft and not a stale revision. Opening the page under
+  those conditions automatically connects you to the presence channel, and
+  other viewers' avatars appear within a few seconds; an unauthenticated
+  view, a draft, or a stale-revision view never connects at all. When
+  someone leaves, their avatar disappears.
 - A user who is **also editing** gets a small `✏️` badge in the corner of
   their avatar. This indicates that they have the
   [realtime collaborative editing](./realtime-editing) editor open.
 - Up to 5 avatars are shown; beyond that they collapse into `[+N]`.
-  Clicking `[+N]` opens a popover listing all current viewers (your own
-  entry is labelled "(you)").
-- **If you are the only person present, this row is not shown at all.**
-  Your browser tab already tells you that you are here, so a row with just
-  your own avatar adds no value.
+  Clicking `[+N]` opens a popover with the viewer list (your own entry is
+  labelled "(you)"). The list shows up to 20 viewers; beyond that it shows
+  how many more there are instead of listing every one.
+- **If you are the only person present, this row's visible content is not
+  shown** (the row itself keeps its reserved layout height). Your browser
+  tab already tells you that you are here, so a row with just your own
+  avatar adds no value.
 - This row appears on viewports **768px and wider**. Narrower viewports get
   the [Mobile live presence card](#mobile-live-presence-card) instead.
-- If the realtime presence connection fails, this row simply hides itself.
-  The rest of the page (body, meta row, comments) keeps working normally.
+- If the realtime presence connection fails, the visible content simply
+  hides itself. The rest of the page (body, meta row, comments) keeps
+  working normally.
 
 > **Note**: Live presence is the "who is here now" signal. The list of
 > people who have viewed the page in the past is available from the
@@ -224,26 +230,31 @@ The card shows:
   viewports, anyone who is also editing gets a `✏️` badge.
 - **A plain-language count** such as "5 viewing now". The count includes
   you.
-- **A connection indicator.** A green dot and `Live` while connected and
-  receiving viewer updates; a grey dot and "Reconnecting…" while an
-  automatic reconnect is pending. The state is readable from the text, not
-  colour alone.
+- **A connection indicator.** A green dot and `Live` only while connected
+  and having actually received viewer updates on this connection; every
+  other state — including establishing the connection and an automatic
+  reconnect — shows a grey dot and the neutral "Reconnecting…" label. The
+  state is readable from the text, not colour alone.
 
-The whole card is a single tap target. Tapping it opens a sheet with the
-same content as the wide-viewport popover: the current viewer list, your
-own "(you)" label, and who is editing.
+The whole card is a single tap target. Tapping it opens a sheet with a
+viewer list (the current viewers, your own "(you)" label, and who is
+editing) — up to 20 entries, with an overflow count beyond that; this is
+the same list component the wide-viewport popover uses.
 
 - **When you are the only one present, the card and its divider collapse
   away.** When someone joins, the slot — including its spacing — expands
   smoothly. Your scroll position is compensated as it does so, so the body
-  text never jumps under you while reading.
+  text never jumps under you while reading. (If your OS has "reduce
+  motion" enabled, this skips straight to the end state instead — no
+  animation and no scroll compensation.)
 - **A brief connection drop does not remove the card.** While an automatic
-  reconnect is being retried, the card stays in its neutral "Reconnecting…"
-  state and keeps showing the viewers it last knew about. It disappears
-  only once the connection has failed for good.
+  reconnect is being retried, the card stays in its neutral state and
+  keeps showing the viewers it last knew about. It disappears only once
+  the connection has failed for good.
 - When you scroll down and the header shrinks to its 60px compact form, the
-  card is replaced by a small `Live · N` trigger. Tapping it opens the same
-  viewer sheet.
+  card is replaced by a small trigger. It shows `Live · N` while Live;
+  otherwise it shows the same neutral (non-Live) state as the card. Tapping
+  it opens the same viewer sheet.
 
 > **Note**: `Live` means "viewer updates are arriving on this connection".
 > Joins and leaves can still take a few seconds to be reflected.
