@@ -134,6 +134,18 @@ public struct WorkspacePageMarkdownView: View {
 
     private var markdownContent: some View {
         Markdown(WikiLinkMentionPreprocessor.preprocess(ImageAttributeBlockPreprocessor.strip(rawBody)), imageBaseURL: imageBaseURL)
+            // Crowi renders a single newline as a line break — that is a CORE
+            // pipeline default, not an opt-in plugin: RFC-0002 Phase 5 promoted
+            // `remark-breaks` out of `@crowi/plugin-renderer-crowi-legacy` into
+            // the core pipeline (`packages/api/src/renderer/pipeline.ts`)
+            // because GitHub/GitLab/Slack all behave that way and CommonMark's
+            // bare soft break surprises authors more than it helps.
+            //
+            // MarkdownUI defaults to `.space` (CommonMark's other blessed
+            // choice — the spec explicitly permits either, and offers this very
+            // knob), so without this the app silently disagreed with the web on
+            // plain paragraph text, not just on Crowi extensions.
+            .markdownSoftBreakMode(.lineBreak)
             .markdownImageProvider(WorkspaceMarkdownImageProvider(loader: imageLoader, onImageTap: imageTapHandler))
             .markdownInlineImageProvider(WorkspaceMarkdownInlineImageProvider(loader: imageLoader))
             .environment(
