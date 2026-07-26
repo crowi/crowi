@@ -64,7 +64,18 @@ export function parseRedisDatabase(redisUrl: string): ParsedRedisDatabase {
     };
   }
 
-  return { database: Number.parseInt(match[1], 10) };
+  // `DB_PATHNAME_PATTERN`'s `\d+` has no length cap, so an absurdly long
+  // digit string parses to `Infinity` or an imprecise value rather than
+  // throwing — reject it explicitly instead of letting it reach
+  // node-redis/ioredis as a bogus `database` option.
+  const database = Number.parseInt(match[1], 10);
+  if (!Number.isSafeInteger(database)) {
+    return {
+      error: `database index is too large to represent safely — got ${JSON.stringify(pathname)}`,
+    };
+  }
+
+  return { database };
 }
 
 /** Narrows {@link ParsedRedisDatabase} to its success shape. */

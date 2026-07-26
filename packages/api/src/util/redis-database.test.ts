@@ -31,6 +31,12 @@ describe('parseRedisDatabase', () => {
     expect('error' in parsed && parsed.error).toEqual(expect.stringContaining(JSON.stringify(pathname)));
   });
 
+  test('a digit sequence too large to represent as a safe integer is rejected, not silently coerced (would otherwise reach node-redis/ioredis as Infinity or an imprecise value)', () => {
+    const hugeDigits = '9'.repeat(40);
+    const parsed = parseRedisDatabase(`redis://localhost:6379/${hugeDigits}`);
+    expect(isValidRedisDatabase(parsed)).toBe(false);
+  });
+
   describe('a value that starts with "redis://"/"rediss://" but is not a syntactically valid URL', () => {
     test.each([
       'redis://[::g]:6379/0',
