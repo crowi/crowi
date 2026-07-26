@@ -127,6 +127,10 @@ export function computeDensityCompensatedReferenceTarget({
   if (isProgressNearStart(sourceProgress)) return 0;
   if (isProgressNearEnd(sourceProgress)) return targetMaxScroll;
   if (topReferenceY === null || bottomReferenceY === null) return null;
+  // A momentarily zero/negative-height target viewport (mid layout
+  // transition) would otherwise divide-by-zero into NaN below — leave the
+  // scroll position untouched, same as the unresolved-reference case above.
+  if (!(targetViewportHeight > 0)) return null;
 
   const sourceSpanInTarget = bottomReferenceY - topReferenceY;
   // When the mapped top and bottom coincide (`sourceSpanInTarget === 0` — the

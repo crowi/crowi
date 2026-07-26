@@ -147,6 +147,16 @@ describe('computeSlidingReferenceTarget', () => {
     expect(target).toBe(targetMaxScroll);
   });
 
+  it('does not return NaN when the target viewport is momentarily zero-height (e.g. mid layout transition)', () => {
+    const target = computeSlidingReferenceTarget({
+      sourceProgress: 0.5,
+      referenceY: 100,
+      targetViewportHeight: 0,
+      targetMaxScroll: 1000,
+    });
+    expect(target).not.toBeNaN();
+  });
+
   it('produces a monotonic, bounded-delta sequence as sourceProgress sweeps 0 -> 1 (no discontinuous jump)', () => {
     // Simulate a plausible document: the reference point's content-space y
     // grows linearly with progress (a reasonable approximation for a long,
