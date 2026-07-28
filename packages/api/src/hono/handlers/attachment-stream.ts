@@ -76,6 +76,74 @@ const guessMimeFromKey = (key: string): string => {
   return KEY_EXT_TO_MIME[m[1].toLowerCase()] || 'application/octet-stream';
 };
 
+/**
+ * MIME types that may be delivered with `Content-Disposition: inline`.
+ *
+ * An attachment's `fileFormat` is the multipart client's SELF-DECLARED
+ * `file.type` (`handlers/attachment.ts`'s `persistUploadToTmp`), and the MIME
+ * allowlist there only covers the editor's paste / dnd intents — the general
+ * page-attachment upload path stores whatever the client claimed. Echoing that
+ * value back as `Content-Type` with `inline` therefore let any user with edit
+ * rights execute HTML on the wiki's own origin (the recommended topology
+ * rewrites `/api/v2/*` onto the web origin) and read the JWT out of
+ * localStorage. So delivery pins the type instead of trusting it, and anything
+ * off this list degrades to `application/octet-stream` + `attachment`.
+ *
+ * The rule for membership is "cannot execute script in this origin when
+ * rendered under `X-Content-Type-Options: nosniff`": raster images and PDF
+ * render in their own non-DOM viewers, and `text/*` entries here are displayed
+ * as literal text (never parsed as HTML). Note this is a delivery-side
+ * decision, NOT an upload-side one — containment has to reach attachments that
+ * were already stored with a hostile `fileFormat` before it existed, which
+ * tightening the upload allowlist alone would not do.
+ *
+ * `image/svg+xml` is deliberately ABSENT even though it is allowlisted on the
+ * validated editor paste path (`IMAGE_UPLOAD_MIME`). SVG is not a raster
+ * format but a document that can carry `<script>`, and uploaded SVG never
+ * passes through `@crowi/svg-sanitize` (that package guards renderer-generated
+ * diagrams, not attachments). Typing it `image/svg+xml` and relying on
+ * `Content-Disposition: attachment` to stop execution is not sufficient: the
+ * page renderer retains raw `<object>` / `<embed>` (`known-tags.ts`), which —
+ * unlike `<img>` — load an SVG into a real browsing context, and honouring
+ * `Content-Disposition` there is browser behaviour rather than a guarantee
+ * (Firefox's CVE-2025-6430 is exactly that failure). So SVG degrades to
+ * `application/octet-stream` like any other non-inline type. The cost is that
+ * an uploaded SVG no longer renders through `<img>`; restoring that needs
+ * sanitize-on-delivery (or a delivery-scoped CSP sandbox), which is a separate
+ * design decision, not something to assume here.
+ */
+const INLINE_SAFE_MIME = new Set<string>([
+  'image/png',
+  'image/jpeg',
+  'image/gif',
+  'image/webp',
+  'image/bmp',
+  'image/avif',
+  'image/apng',
+  'image/x-icon',
+  'image/vnd.microsoft.icon',
+  'application/pdf',
+  'text/plain',
+  'text/markdown',
+  'text/csv',
+]);
+
+/** Bare lowercase type, parameters (`; charset=...`) dropped, so allowlist lookups can't be evaded by decorating the value. */
+const bareMime = (raw: string): string => (raw || '').split(';')[0].trim().toLowerCase();
+
+/**
+ * The single place that decides what a delivered attachment is typed as and
+ * whether it may render inline. `filenameParam` is the `filename*=...` clause
+ * to append when the caller has an originating name (the by-key profile-picture
+ * route serves straight off a storage key and has none).
+ */
+const resolveDelivery = (rawMime: string, filenameParam?: string): { contentType: string; disposition: string } => {
+  const suffix = filenameParam ? `; ${filenameParam}` : '';
+  const mime = bareMime(rawMime);
+  if (INLINE_SAFE_MIME.has(mime)) return { contentType: mime, disposition: `inline${suffix}` };
+  return { contentType: 'application/octet-stream', disposition: `attachment${suffix}` };
+};
+
 type StreamErrorCode = 'FILE_MISSING' | 'FORBIDDEN_FOR_DELETE' | 'ATTACHMENT_NOT_FOUND' | 'INVALID_ATTACHMENT_ID' | 'UPLOAD_FAILED';
 
 const errorBody = (code: StreamErrorCode, message: string) => ({
@@ -168,9 +236,9 @@ export const registerAttachmentStreamRoutes = (app: OpenAPIHono<CrowiHonoBinding
     return { ok: true, attachment };
   };
 
-  /** `Content-Disposition: inline` with `originalName` — identical for the display AND original branches (§9). */
-  const buildInlineDisposition = (attachment: AttachmentDocument): string =>
-    `inline; filename*=UTF-8''${encodeURIComponent(attachment.originalName || attachment.fileName)}`;
+  /** `Content-Type` + `Content-Disposition` for `rawMime` — identical for the display AND original branches (§9). */
+  const buildDeliveryHeaders = (attachment: AttachmentDocument, rawMime: string): { contentType: string; disposition: string } =>
+    resolveDelivery(rawMime, `filename*=UTF-8''${encodeURIComponent(attachment.originalName || attachment.fileName)}`);
 
   /**
    * Resolve + stream the ORIGINAL file for an already-authorized attachment.
@@ -195,7 +263,8 @@ export const registerAttachmentStreamRoutes = (app: OpenAPIHono<CrowiHonoBinding
       return c.json(errorBody('UPLOAD_FAILED', 'Failed to deliver file'), 500);
     }
 
-    return streamResponse(stream, attachment.fileFormat, buildInlineDisposition(attachment));
+    const { contentType, disposition } = buildDeliveryHeaders(attachment, attachment.fileFormat);
+    return streamResponse(stream, contentType, disposition);
   };
 
   // Install jwtAuth on both literal paths. `/attachments/*` is OUTSIDE
@@ -250,7 +319,11 @@ export const registerAttachmentStreamRoutes = (app: OpenAPIHono<CrowiHonoBinding
       return c.json(errorBody('UPLOAD_FAILED', 'Failed to deliver file'), 500);
     }
 
-    return streamResponse(stream, guessMimeFromKey(key));
+    // Profile pictures are delivered straight off the storage key, so the type
+    // comes from the extension rather than a stored `fileFormat` — but `.svg`
+    // is reachable here too, so the same policy applies.
+    const { contentType, disposition } = resolveDelivery(guessMimeFromKey(key));
+    return streamResponse(stream, contentType, disposition);
   });
 
   // --------------------------------------------------------------
@@ -287,7 +360,11 @@ export const registerAttachmentStreamRoutes = (app: OpenAPIHono<CrowiHonoBinding
     if (display?.mode === 'resized' && display.filePath && display.format) {
       try {
         const stream = await fileUploader.findDeliveryFile(attachment._id, display.filePath);
-        return streamResponse(stream, display.format, buildInlineDisposition(attachment));
+        // `display.format` is generator-produced rather than client-declared,
+        // but it goes through the same policy so there is exactly one place
+        // that decides what may render inline.
+        const { contentType, disposition } = buildDeliveryHeaders(attachment, display.format);
+        return streamResponse(stream, contentType, disposition);
       } catch (err) {
         // §9 step 4 — a missing derivative key is a plain cache miss; fall
         // through to original below. Any other storage error is a genuine
