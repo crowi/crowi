@@ -216,3 +216,20 @@ export function pagePathToHref(path: string): string {
 export function decodePagePathFromUrl(urlPath: string): string {
   return decodeURIComponent(urlPath).replace(/\+/g, ' ');
 }
+
+/**
+ * Next.js catch-all route param → real page path segment. `params.slug[]`
+ * segments from a `[[...slug]]` dynamic route come out of Next's route
+ * matcher already `decodeURIComponent`d, unlike `usePathname()` (used by the
+ * catch-all page above), which stays percent-encoded. Running
+ * `decodePagePathFromUrl` (which calls `decodeURIComponent` again) on an
+ * already-decoded route-param segment double-decodes it. This helper covers
+ * only the `+`-as-space half of the contract — no percent-decoding, since
+ * the route matcher already did that.
+ *
+ *   'a+b'   → 'a b'   (same `+`-as-space rule as decodePagePathFromUrl)
+ *   'a%20b' → 'a%20b' (NOT decoded again — already decoded upstream)
+ */
+export function decodeRouteParamSegment(segment: string): string {
+  return segment.replace(/\+/g, ' ');
+}

@@ -27,6 +27,14 @@ const runCore = async (body: string) => {
   return runPipeline(body, reg, { mode: 'save', log: silentLogger, actor: { kind: 'system' } }, loadDeps);
 };
 
+// Shared by the "ordinary Markdown link destinations" and "raw-space link
+// recovery" describe blocks below — both assert against the single `link`
+// node (if any) in the first paragraph.
+const findLink = (tree: Root) => {
+  const paragraph = tree.children[0] as unknown as { type: string; children: Array<{ type: string; url?: string; data?: unknown }> };
+  return paragraph.children.find((c) => c.type === 'link') as { type: string; url?: string; data?: unknown } | undefined;
+};
+
 describe('pipeline + core renderers', () => {
   describe('TOC (heading anchors via github-slugger)', () => {
     it('returns empty toc for empty body', async () => {
@@ -184,6 +192,118 @@ describe('pipeline + core renderers', () => {
       const md = 'See [[/a]] and [[/b]] and [[Page|Display]].';
       const { metadata } = await runCore(md);
       expect(metadata.wikiLinks).toHaveLength(3);
+    });
+  });
+
+  describe('ordinary Markdown link destinations (%20 / + / <...>) — feature-page-link-space-paths Phase 1', () => {
+    // `processor.parse(body)` (pipeline.ts:320) is the only step that turns
+    // Markdown link syntax into an mdast `link` node for these 3 forms —
+    // none of the core transforms in `buildCorePlugins` (headings/
+    // raw-space-links/image-attrs/wikilinks/mentions/code-blocks/
+    // syntax-highlight) touch an ordinary link's `url`. These tests pin
+    // down remark-parse's own (CommonMark-standard) behaviour so the
+    // renderer's "no space resolution happens here" claim can't silently
+    // regress on a future remark-parse bump. Real-space resolution for `+`
+    // happens later, outside the renderer, in the web's route-boundary
+    // decode (`decodePagePathFromUrl` — see page-path.test.ts). The 4th
+    // form this block used to pin — a RAW-space destination staying
+    // literal text — is now Phase 2's `raw-space-links.ts` transform's
+    // job to change; see the "raw-space link recovery" describe block
+    // below for its (now positive) coverage.
+
+    it('keeps a literal "+" destination as-is — the renderer does not resolve it to a space', async () => {
+      const { tree } = await runCore('[label](/a+b)');
+      expect(findLink(tree)).toMatchObject({ type: 'link', url: '/a+b' });
+    });
+
+    it('parses an angle-bracket destination with a real space', async () => {
+      const { tree } = await runCore('[label](</a b>)');
+      expect(findLink(tree)).toMatchObject({ type: 'link', url: '/a b' });
+    });
+
+    it('parses a %20-encoded destination as-is (no decode at parse time)', async () => {
+      const { tree } = await runCore('[label](/a%20b)');
+      expect(findLink(tree)).toMatchObject({ type: 'link', url: '/a%20b' });
+    });
+  });
+
+  describe('raw-space link recovery — feature-page-link-space-paths Phase 2 (intentional CommonMark deviation)', () => {
+    // `remarkParse` rejects a raw-space destination for the exact CommonMark
+    // reason pinned above (the previous describe block), so it stays literal
+    // `text` straight out of `processor.parse`. The new `raw-space-links.ts`
+    // core transform (`buildCorePlugins`) is a post-parse mdast rewrite —
+    // like `remarkWikiLinks` — that turns that literal text back into a
+    // clickable internal `link` node. This is a deliberate, narrow deviation
+    // from CommonMark, not a parser fix; see the spec's "設計の主な判断"/
+    // Phase 2 for the full rationale (image/escape disambiguation, backlink
+    // extraction via `renderedAst` marker instead of a new regex pattern).
+
+    it('recovers a raw-space absolute-path destination into an internal link node, marked for Phase 2 backlink extraction', async () => {
+      const { tree } = await runCore('[label](/absolute path with spaces)');
+      const link = findLink(tree);
+      expect(link).toMatchObject({ type: 'link', url: '/absolute path with spaces' });
+      expect((link as { data?: { rawSpaceRecovered?: boolean } }).data).toMatchObject({ rawSpaceRecovered: true });
+    });
+
+    it('does NOT recover image syntax — `![alt](/a b)` stays literal text', async () => {
+      // Image destination-without-angle-brackets fails to parse for the
+      // exact same CommonMark reason as a link (raw unescaped space), so
+      // `![alt](/a b)` is ALSO literal text (not an `image` mdast node) —
+      // the grammar's `!`-precedes-`[` guard keeps this text unrecovered
+      // rather than mistakenly turning an intended image into a link.
+      const { tree } = await runCore('![alt](/a b)');
+      const paragraph = tree.children[0] as unknown as { type: string; children: Array<{ type: string; value?: string }> };
+      expect(paragraph.children.some((c) => c.type === 'link' || c.type === 'image')).toBe(false);
+      expect(paragraph.children[0]).toMatchObject({ type: 'text', value: '![alt](/a b)' });
+    });
+
+    it('does NOT recover an escaped `\\[label\\](/a b)` — stays literal text', async () => {
+      // remark-parse de-escapes `\[`/`\]` at parse time, so the merged
+      // text node's `.value` is byte-identical to the unescaped input
+      // (`'[label](/a b)'`) — recovery is suppressed by re-matching the
+      // RAW body slice (via the text node's `position`), not `.value`,
+      // and checking whether a literal `\` directly precedes the match.
+      // This heuristic only catches a DIRECT leading escape; it does not
+      // resolve double-escaping (`\\[label\\]`) or other compound
+      // CommonMark escape interactions (see spec's "やらないこと").
+      const { tree } = await runCore('\\[label\\](/a b)');
+      const paragraph = tree.children[0] as unknown as { type: string; children: Array<{ type: string; value?: string }> };
+      expect(paragraph.children.some((c) => c.type === 'link')).toBe(false);
+      expect(paragraph.children[0]).toMatchObject({ type: 'text', value: '[label](/a b)' });
+    });
+
+    it('does not recover a raw-space token inside a fenced code block or inline code', async () => {
+      // Same walker guard as `remarkWikiLinks` — never descends into
+      // `code`/`inlineCode` — so these tokens never become marker-carrying
+      // `link` nodes for `Backlink.createBySavedPage`'s renderedAst walk to
+      // pick up (see `backlink.test.ts`'s matching negative test).
+      const md = ['Before para', '', '```', '[x](/a b)', '```', '', 'Inline `[y](/c d)` skipped.'].join('\n');
+      const { tree } = await runCore(md);
+      const hasLink = (node: unknown): boolean => {
+        if (!node || typeof node !== 'object') return false;
+        const n = node as { type?: string; children?: unknown[] };
+        if (n.type === 'link') return true;
+        return Array.isArray(n.children) ? n.children.some(hasLink) : false;
+      };
+      expect(hasLink(tree)).toBe(false);
+    });
+
+    it('does not recover a raw-space fragment nested inside an existing link label — outer link structure stays intact', async () => {
+      // CommonMark disallows nested links, so `[x](/a b)` survives as
+      // literal text *inside* the outer link's label. Without the
+      // walker's `link`/`linkReference`-descendant guard, this transform
+      // would recover the inner fragment into a `link` nested inside a
+      // `link` — structurally invalid mdast.
+      const { tree } = await runCore('[outer [x](/a b)](/dest)');
+      const paragraph = tree.children[0] as unknown as {
+        type: string;
+        children: Array<{ type: string; url?: string; children?: Array<{ type: string; value?: string }> }>;
+      };
+      expect(paragraph.children).toHaveLength(1);
+      const outer = paragraph.children[0];
+      expect(outer).toMatchObject({ type: 'link', url: '/dest' });
+      expect(outer.children).toHaveLength(1);
+      expect(outer.children?.[0]).toMatchObject({ type: 'text', value: 'outer [x](/a b)' });
     });
   });
 

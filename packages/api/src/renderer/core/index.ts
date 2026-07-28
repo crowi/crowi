@@ -9,6 +9,7 @@ import { makeEmbedTagDispatch } from './embed-tags';
 import { makeRemarkHeadings, type UnifiedTransformPlugin } from './headings';
 import { remarkImageAttrs } from './image-attrs';
 import { remarkMentions } from './mentions';
+import { makeRawSpaceLinkRecovery } from './raw-space-links';
 import { makeRemarkSyntaxHighlight } from './syntax-highlight';
 import { makeUrlInlineExpandDispatch } from './url-inline-expand';
 import { remarkWikiLinks } from './wikilinks';
@@ -36,19 +37,34 @@ export { makeUrlInlineExpandDispatch } from './url-inline-expand';
 
 /**
  * Build the bundled core renderer transform plugins, in their fixed
- * order (headings → image-attrs → wikilinks → mentions → code-blocks →
- * syntax-highlight). The pipeline prepends these to the registry's
- * external plugins on every run.
+ * order (headings → raw-space-links → image-attrs → wikilinks →
+ * mentions → code-blocks → syntax-highlight). The pipeline prepends
+ * these to the registry's external plugins on every run.
  *
  * Order rationale:
  *   - headings runs first so the slugger sees pristine heading text
  *     before any text rewrite (wikilinks / mentions inside headings
  *     would otherwise change the visible label).
+ *   - raw-space-links (feature-page-link-space-paths Phase 2) runs
+ *     right after headings, BEFORE every other content-rewriting
+ *     transform, so it always sees pristine `text` nodes straight from
+ *     `processor.parse(body)` with accurate, untouched `position`
+ *     offsets — it needs those to slice the raw `body` for its escape
+ *     check (see `raw-space-links.ts`). Running it any later risks a
+ *     text node whose `.value` a prior transform already mutated
+ *     in-place without updating `.position` (e.g. `remarkImageAttrs`
+ *     trims a leading attribute block from a text node's `.value` but
+ *     keeps its original `.position`), which would desync the raw
+ *     slice from the de-escaped value.
  *   - image-attrs (RFC-0015) runs next, BEFORE wikilinks/mentions, so
  *     the `{...}` attribute-block text immediately following an image
  *     is still an intact, unsplit text node when it scans for the
  *     block — wikilinks/mentions rewrite text nodes on their own
- *     patterns and would otherwise fragment it first.
+ *     patterns and would otherwise fragment it first. raw-space-links
+ *     running before this is safe: it only ever splits a text node
+ *     AROUND a matched `[label](/a b)` run, always leaving any
+ *     unmatched leading text (including a `{...}` block) intact as its
+ *     own untouched sibling.
  *   - wikilinks + mentions next, both walking text nodes and skipping
  *     inside code / inlineCode.
  *   - code-blocks (the lang aggregator) runs BEFORE syntax-highlight
@@ -61,10 +77,20 @@ export { makeUrlInlineExpandDispatch } from './url-inline-expand';
  * Bound to the loaded ESM deps because `headings` needs
  * `GithubSlugger` + `mdast-util-to-string`'s `toString` and
  * `syntax-highlight` needs `shiki`; neither can be statically
- * imported from CJS.
+ * imported from CJS. `body` is threaded through separately (not part
+ * of `PipelineEsmDeps`, which is process-wide-cacheable — `body` is
+ * per-run) so `raw-space-links.ts` can bind it via its own factory.
  */
-export function buildCorePlugins(deps: PipelineEsmDeps): UnifiedTransformPlugin[] {
-  return [makeRemarkHeadings(deps), remarkImageAttrs, remarkWikiLinks, remarkMentions, remarkCodeBlockLanguages, makeRemarkSyntaxHighlight(deps)];
+export function buildCorePlugins(deps: PipelineEsmDeps, body: string): UnifiedTransformPlugin[] {
+  return [
+    makeRemarkHeadings(deps),
+    makeRawSpaceLinkRecovery(body),
+    remarkImageAttrs,
+    remarkWikiLinks,
+    remarkMentions,
+    remarkCodeBlockLanguages,
+    makeRemarkSyntaxHighlight(deps),
+  ];
 }
 
 /**
@@ -75,8 +101,8 @@ export function buildCorePlugins(deps: PipelineEsmDeps): UnifiedTransformPlugin[
  *
  * Production code path is `runPipeline` in pipeline.ts.
  */
-export function runCorePluginsDirectly(deps: PipelineEsmDeps, tree: unknown, metadata: PipelineMetadata): void {
-  for (const plugin of buildCorePlugins(deps)) {
+export function runCorePluginsDirectly(deps: PipelineEsmDeps, tree: unknown, metadata: PipelineMetadata, body: string): void {
+  for (const plugin of buildCorePlugins(deps, body)) {
     const transformer = plugin(metadata);
     transformer(tree as Parameters<ReturnType<UnifiedTransformPlugin>>[0]);
   }

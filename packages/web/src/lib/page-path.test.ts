@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   decodePagePathFromUrl,
+  decodeRouteParamSegment,
   defaultDraftBody,
   isReservedPagePath,
   isUserHomePath,
@@ -221,5 +222,41 @@ describe('pagePathToHref / decodePagePathFromUrl', () => {
 
   it('decodes percent-encoded non-ASCII segments', () => {
     expect(decodePagePathFromUrl('/%E6%97%A5%E5%A0%B1/2026')).toBe('/日報/2026');
+  });
+
+  // feature-page-link-space-paths Phase 1 — pin the existing `+` contract
+  // down explicitly: `+` always decodes to a space (this is a fixed
+  // semantic this spec does NOT change), which is also why the API-side
+  // create/rename `Page.isCreatableName` check rejects a literal '+' in a
+  // path — under this contract, `%2B` (percent-encoded '+') can never
+  // survive as a literal '+' either; it decodes to a space just like a bare
+  // '+' does.
+  it('resolves a literal "+" to a real space (unchanged contract)', () => {
+    expect(decodePagePathFromUrl('/a+b')).toBe('/a b');
+  });
+
+  it('resolves %2B (percent-encoded "+") to a space too — literal "+" cannot survive this decode', () => {
+    expect(decodePagePathFromUrl('/a%2Bb')).toBe('/a b');
+  });
+});
+
+describe('decodeRouteParamSegment', () => {
+  // feature-page-link-space-paths Phase 1 — Next.js catch-all route params
+  // (`params.slug[]`) are already `decodeURIComponent`d by Next's own route
+  // matcher before user code sees them, unlike `usePathname()` (which stays
+  // percent-encoded). Running `decodePagePathFromUrl` a second time on an
+  // already-decoded segment double-decodes it — this helper instead applies
+  // only the `+`-as-space half of the contract, with NO percent-decoding.
+
+  it('reads a literal "+" as a space, same as decodePagePathFromUrl', () => {
+    expect(decodeRouteParamSegment('a+b')).toBe('a b');
+  });
+
+  it('does NOT percent-decode — a %20 segment (already decoded upstream, if it were encoded) stays a literal %20', () => {
+    expect(decodeRouteParamSegment('a%20b')).toBe('a%20b');
+  });
+
+  it('leaves a plain segment untouched', () => {
+    expect(decodeRouteParamSegment('foo')).toBe('foo');
   });
 });

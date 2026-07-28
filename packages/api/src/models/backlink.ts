@@ -1,7 +1,7 @@
 import Crowi from 'src/crowi';
 import { Types, Document, Model, Schema, model } from 'mongoose';
 import Debug from 'debug';
-import LinkDetector from 'src/util/link-detector';
+import LinkDetector, { decodeLinkPath, stripFragmentAndQuery } from 'src/util/link-detector';
 import { PageDocument } from './page';
 
 export interface BacklinkDocument extends Document {
@@ -19,6 +19,57 @@ export interface BacklinkModel extends Model<BacklinkDocument> {
   createByParameters(parameters: any): Promise<BacklinkDocument>;
   createBySavedPage(savedPage: any): Promise<BacklinkDocument[]>;
   createByAllPages(): Promise<BacklinkDocument[][]>;
+}
+
+/** Loose shape sufficient to walk a JSON-serialised (`serializeMdast`) mdast tree — mirrors `pipeline.ts`'s `MdastLikeNode` stack-walk precedent. */
+interface MdastLikeNode {
+  type?: string;
+  url?: string;
+  data?: { rawSpaceRecovered?: boolean };
+  children?: MdastLikeNode[];
+}
+
+/**
+ * feature-page-link-space-paths Phase 2 — walk a saved page's
+ * `revision.renderedAst` (the JSON-serialised mdast tree
+ * `Revision.prepareRevision` persists at save time) and collect the
+ * decoded `url` of every `link` node the raw-space recovery transform
+ * (`renderer/core/raw-space-links.ts`) marked with
+ * `data.rawSpaceRecovered === true`.
+ *
+ * This is deliberately the ONLY extraction path for these links — no
+ * new `linkDetector.getPathRegexps()` pattern is added. The recovery
+ * transform never descends into `code`/`inlineCode`, so a raw-space
+ * token inside a code fence never becomes a marker-carrying `link`
+ * node here; a raw-body regex would not have that guarantee (it would
+ * match the code-fence token too), which would drift from what
+ * actually renders. See spec §"設計の主な判断"/Phase 2.
+ *
+ * `url` on a recovered link node is NOT guaranteed to be real-space —
+ * the recovery grammar keeps the destination verbatim, so it can carry
+ * a literal `+` or `%XX` alongside the raw space (e.g. `/a+b c`).
+ * Decode with the exact same semantics as the regex-based extraction
+ * path (`stripFragmentAndQuery` → `decodeURIComponent` → `+` → space,
+ * via `decodeLinkPath`), per-link try/catch (via `decodeLinkPath`'s
+ * own null-on-throw contract) so one malformed recovered link doesn't
+ * take down the rest — same hardening as the Phase 1 regex path.
+ */
+function extractRawSpaceRecoveredPaths(renderedAst: unknown): string[] {
+  const paths: string[] = [];
+  const stack: unknown[] = [renderedAst];
+  while (stack.length > 0) {
+    const node = stack.pop();
+    if (!node || typeof node !== 'object') continue;
+    const typed = node as MdastLikeNode;
+    if (typed.type === 'link' && typed.data?.rawSpaceRecovered === true && typeof typed.url === 'string') {
+      const decoded = decodeLinkPath(stripFragmentAndQuery(typed.url));
+      if (decoded !== null) paths.push(decoded);
+    }
+    if (Array.isArray(typed.children)) {
+      for (const child of typed.children) stack.push(child);
+    }
+  }
+  return paths;
 }
 
 export default (crowi: Crowi) => {
@@ -121,10 +172,30 @@ export default (crowi: Crowi) => {
 
     const body = savedPage.revision.body;
 
-    await Backlink.removeBySavedPage(savedPage);
-
+    // Extract-before-delete: run `linkDetector.search` / `convertLinksToPageIds`
+    // (which can throw on malformed input, e.g. a stray `/a%`) before
+    // touching any existing Backlink docs. Previously `removeBySavedPage`
+    // ran first, so a single malformed link would wipe out this page's
+    // backlinks with nothing to replace them — the caller
+    // (events/page.ts's registerBacklinks) only logs the exception, it
+    // doesn't restore what was deleted. This guarantees exactly one thing:
+    // a throw here leaves pre-existing Backlink docs untouched. It does
+    // NOT make the delete+insert pair itself atomic — an `insertMany`
+    // failure after a successful `removeBySavedPage`, or a concurrent save
+    // racing this one, can still leave stale/missing backlinks (pre-existing,
+    // out of scope — see spec's non-goals).
     const links = linkDetector.search(body);
-    const ids = await convertLinksToPageIds(savedPage, links);
+    // Phase 2 (feature-page-link-space-paths): merge in raw-space
+    // recovered links extracted from `renderedAst` — a second,
+    // AST-based extraction step, not a new regex pattern (see
+    // `extractRawSpaceRecoveredPaths`'s doc comment above). Runs
+    // before `removeBySavedPage` too, same extract-before-delete
+    // guarantee.
+    const rawSpaceRecoveredPaths = extractRawSpaceRecoveredPaths(savedPage.revision.renderedAst);
+    const paths = rawSpaceRecoveredPaths.length === 0 ? links.paths : Array.from(new Set([...links.paths, ...rawSpaceRecoveredPaths]));
+    const ids = await convertLinksToPageIds(savedPage, { paths, objectIds: links.objectIds });
+
+    await Backlink.removeBySavedPage(savedPage);
 
     if (ids.length === 0) {
       debug('No backlinks to save');

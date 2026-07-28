@@ -260,10 +260,14 @@ describe('computeRevisionRenderArtifactsAsync — renderPending marker scan on t
   // link-card becoming a core-reserved embed tag are exactly the
   // "new bundled transform/plugin" category `version.ts`'s policy
   // comment defines as a minor bump — no carve-out applies to them.
+  // feature-page-link-space-paths Phase 2 bumps it again (0.9.0 ->
+  // 0.10.0): the new raw-space-link recovery transform
+  // (`renderer/core/raw-space-links.ts`) is likewise a new bundled
+  // transform added to `buildCorePlugins`.
   // Pinned here so an accidental future bump/no-bump alongside an
   // unrelated change is caught immediately.
-  it('RENDERER_PIPELINE_VERSION is 0.9.0 (feature-renderer-plugin-boundary Phase 3 — emoji + link-card core absorption is a new-bundled-transform minor bump)', () => {
-    expect(RENDERER_PIPELINE_VERSION).toBe('0.9.0');
+  it('RENDERER_PIPELINE_VERSION is 0.10.0 (feature-page-link-space-paths Phase 2 — raw-space-link recovery is a new-bundled-transform minor bump)', () => {
+    expect(RENDERER_PIPELINE_VERSION).toBe('0.10.0');
   });
 
   // Registers a diagram-shaped CodeBlockRenderer (feature-renderer-plugin-

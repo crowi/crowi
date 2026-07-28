@@ -5352,7 +5352,7 @@ export interface paths {
                         };
                     };
                 };
-                /** @description Invalid request (PAGE_EXISTS / NON_EXISTENT_USER_PAGE / PAGE_CREATE_FAILED / INVALID_GRANT) */
+                /** @description Invalid request (PAGE_INVALID_NAME / PAGE_EXISTS / NON_EXISTENT_USER_PAGE / PAGE_CREATE_FAILED / INVALID_GRANT) */
                 400: {
                     headers: {
                         [name: string]: unknown;
