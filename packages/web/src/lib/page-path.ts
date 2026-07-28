@@ -214,7 +214,11 @@ export function pagePathToHref(path: string): string {
  *   /a%20b/c → /a b/c
  */
 export function decodePagePathFromUrl(urlPath: string): string {
-  return decodeURIComponent(urlPath).replace(/\+/g, ' ');
+  // Percent-decode first, then hand off to `decodeRouteParamSegment` for the
+  // `+`-as-space half — so that rule is written once and the two helpers'
+  // relationship is structural rather than a comment asking you to keep them
+  // in step.
+  return decodeRouteParamSegment(decodeURIComponent(urlPath));
 }
 
 /**

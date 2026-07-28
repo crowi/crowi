@@ -124,14 +124,22 @@ export default (crowi: Crowi) => {
     const pathRegexps = linkDetector.getPathRegexps();
     pathRegexps.forEach((pathRegexp, index) => {
       while (pathRegexp.exec(text)) {
-        // Only the angle-bracket pattern ([0]) swallows a trailing
-        // `#fragment`/`?query` into its capture. The bare-bracket ([1])
-        // and ordinary Markdown ([2]) patterns are deliberately left
-        // alone: [2] already fails to match a `#`-suffixed destination at
-        // all (pre-existing, not a bug this spec fixes), and widening its
-        // capture class to swallow `#`/`?` would start matching link-like
-        // text inside code fences/inline code that isn't a real link
-        // today (rejected during design review — see spec §"設計の主な判断").
+        // Only [0] (angle-bracket) is stripped, and the other two are left
+        // alone for DIFFERENT reasons — don't read this as "the others are
+        // suffix-safe":
+        //   [0] `<...>`   class `[^>]+`    — swallows both `#` and `?`. Fixed here.
+        //   [1] `[/path]` class `[^\]]+`   — also swallows both; `[/a b#frag]`
+        //       captures `/a b#frag`. Untouched only because it is outside
+        //       this spec's scope.
+        //   [2] `[x](...)` class `[^)\s#]+` — excludes `#`, so it cannot match
+        //       a `#`-suffixed destination at all; but `?` IS admitted, so
+        //       `[x](/a?q=1)` captures `/a?q=1`. Also untouched.
+        // For [1] and [2] the effect is an unresolvable path CANDIDATE, not a
+        // wrong backlink: `convertLinksToPageIds` only materialises a backlink
+        // for a path that an existing page actually has, and page creation
+        // rejects `#`/`?` in a path. Admitting `#` into [2]'s class to "fix"
+        // it was rejected during design review — it would start matching
+        // link-like text that is not a real link today (spec §"設計の主な判断").
         const raw = index === 0 ? stripFragmentAndQuery(RegExp.$1) : RegExp.$1;
         const path = decodeLinkPath(raw);
         if (path !== null) paths.push(path);

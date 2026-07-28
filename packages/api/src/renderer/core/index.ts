@@ -1,7 +1,7 @@
 import type { RenderContext } from '@crowi/plugin-api';
 import type { Root } from 'mdast';
 import type { MongoCacheStorage } from '../cache';
-import type { PipelineEsmDeps, PipelineMetadata } from '../pipeline';
+import type { PipelineEsmDeps } from '../pipeline';
 import type { RendererRegistryImpl } from '../registry';
 import { makeCodeBlockDispatch } from './code-block-dispatch';
 import { remarkCodeBlockLanguages } from './code-blocks';
@@ -91,21 +91,6 @@ export function buildCorePlugins(deps: PipelineEsmDeps, body: string): UnifiedTr
     remarkCodeBlockLanguages,
     makeRemarkSyntaxHighlight(deps),
   ];
-}
-
-/**
- * Test-only convenience: bind the core plugins to the deps and run
- * each one in order against a fresh `metadata` bag. Bypasses the
- * unified processor, which is useful for unit tests that don't want
- * to wait on dynamic imports of unified.
- *
- * Production code path is `runPipeline` in pipeline.ts.
- */
-export function runCorePluginsDirectly(deps: PipelineEsmDeps, tree: unknown, metadata: PipelineMetadata, body: string): void {
-  for (const plugin of buildCorePlugins(deps, body)) {
-    const transformer = plugin(metadata);
-    transformer(tree as Parameters<ReturnType<UnifiedTransformPlugin>>[0]);
-  }
 }
 
 /**
