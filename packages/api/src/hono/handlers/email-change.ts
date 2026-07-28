@@ -37,6 +37,24 @@ export const registerEmailChangeRoutes = <E extends OpenAPIHono<CrowiHonoBinding
       if (!payload) {
         return c.json(INVALID_TOKEN_BODY, 401);
       }
+      // Apply the same bindings the POST does. A well-signed link is not the
+      // same thing as a usable one: it stays signature-valid for its whole 24h
+      // TTL even after the address moved on or the requesting session was
+      // revoked. Answering 200 there would show the confirmation page (and the
+      // target address) for a link that the POST then refuses, making the
+      // security transition look like a bug. The POST's conditional update
+      // stays the authoritative, race-safe check — this is a precheck, and it
+      // is fail-closed for the same reason the reset flow's is.
+      const user = await User.findById(payload.userId);
+      if (!user) {
+        return c.json(INVALID_TOKEN_BODY, 401);
+      }
+      if (payload.fromEmail && payload.fromEmail !== user.email) {
+        return c.json(INVALID_TOKEN_BODY, 401);
+      }
+      if (payload.authVersion === undefined || payload.authVersion !== (user.authVersion ?? 0)) {
+        return c.json(INVALID_TOKEN_BODY, 401);
+      }
       return c.json({ ok: true as const, email: payload.email }, 200);
     })
     .openapi(emailChangeRoutes.confirmEmailChangeRoute, async (c) => {

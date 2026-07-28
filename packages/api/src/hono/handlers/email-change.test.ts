@@ -3,6 +3,7 @@ process.env.WS_TOKEN_SECRET = process.env.WS_TOKEN_SECRET ?? 'test-ws-token-secr
 import request from 'supertest';
 import { app, crowi, Fixture } from 'src/test/setup';
 import type { UserDocument } from 'src/models/user';
+import { createJwtUtil } from 'src/util/jwt';
 import { createMailTokenUtil } from 'src/util/mail-token';
 
 const jsonHeaders = { 'Content-Type': 'application/json' };
@@ -80,28 +81,71 @@ describe('Routes /api/v2/auth/confirm-email-change (Hono)', () => {
     it('dies with the session that requested it (a revocation event kills a pending change)', async () => {
       // The worst case this closes: an attacker holding a stolen session
       // requests a change to an address they control, keeps the 24h link,
-      // and waits. An admin then resets the password *because* the account
-      // is compromised — which strands the attacker's session but leaves
+      // and waits. The password is then reset *because* the account is
+      // compromised — which strands the attacker's session but leaves
       // `email` untouched, so `fromEmail` still matches. Without a binding
       // to `authVersion` the attacker can still confirm afterwards and take
       // the recovery address, undoing the recovery itself.
+      //
+      // Driven end-to-end on purpose: the token comes from the real issuer
+      // (PUT /me, captured off the mailer) and the revocation from a real
+      // password change, not a hand-minted claim and a hand-rolled $inc.
+      // Otherwise this would only test the confirm handler, and would still
+      // pass if the issuer stopped binding the token or the password change
+      // stopped advancing the version — the two halves that make it work.
       const User = crowi.model('User');
-      const user = await createActiveUser('evict-pending@example.com');
-      const pending = changeTokenFor(user, 'attacker@example.com');
+      const OWNER = 'evict-pending@example.com';
+      const username = `ec_evict_${Date.now()}`;
+      await User.deleteMany({ $or: [{ email: OWNER }, { username }] });
+      const { user, accessToken } = await new Promise<{ user: UserDocument; accessToken: string }>((resolve, reject) => {
+        User.createUserByEmailAndPassword('EC Evict', username, OWNER, 'Password!1', 'en', async (err: Error | null, created: UserDocument) => {
+          if (err) return reject(err);
+          created.status = User.STATUS_ACTIVE;
+          await created.save();
+          resolve({ user: created, accessToken: createJwtUtil(crowi).generateTokens(created).accessToken });
+        });
+      });
 
-      // The link is live until the revocation event.
-      const before = await request(app).get('/api/v2/auth/confirm-email-change').query({ token: pending });
-      expect(before.status).toBe(200);
+      let confirmUrl = '';
+      const sendSpy = jest.spyOn(crowi.getMailer(), 'send').mockImplementation(async (opts: { vars?: Record<string, unknown> }) => {
+        if (typeof opts?.vars?.confirmUrl === 'string') confirmUrl = opts.vars.confirmUrl;
+      });
 
-      // Any session-revoking action: admin reset, or the owner changing
-      // their own password. Both land as an `authVersion` bump.
-      await User.updateOne({ _id: user._id }, { $inc: { authVersion: 1 } });
+      try {
+        const requested = await request(app)
+          .put('/api/v2/me')
+          .set('Authorization', `Bearer ${accessToken}`)
+          .send({ userForm: { name: 'EC Evict', email: 'attacker@example.com', lang: 'en' } });
+        expect(requested.status).toBe(200);
+        expect(requested.body.emailChangePending).toBe(true);
 
-      const after = await request(app).post('/api/v2/auth/confirm-email-change').set(jsonHeaders).send({ token: pending });
-      expect(after.status).toBe(401);
+        // The mail send is fire-and-forget, so poll for the spy rather than
+        // assuming it already ran.
+        for (let i = 0; i < 50 && confirmUrl === ''; i++) await new Promise((r) => setImmediate(r));
+        const pending = new URL(confirmUrl).searchParams.get('token') as string;
+        expect(pending).toBeTruthy();
 
-      const reloaded = await User.findById(user._id);
-      expect(reloaded?.email).toBe('evict-pending@example.com');
+        // The link is live right up until the revocation event.
+        const before = await request(app).get('/api/v2/auth/confirm-email-change').query({ token: pending });
+        expect(before.status).toBe(200);
+
+        const changed = await request(app)
+          .put('/api/v2/me/password')
+          .set('Authorization', `Bearer ${accessToken}`)
+          .send({ oldPassword: 'Password!1', newPassword: 'NewPwd!2', newPasswordConfirm: 'NewPwd!2' });
+        expect(changed.status).toBe(200);
+
+        // Both the preflight and the apply now refuse it.
+        const afterGet = await request(app).get('/api/v2/auth/confirm-email-change').query({ token: pending });
+        expect(afterGet.status).toBe(401);
+        const afterPost = await request(app).post('/api/v2/auth/confirm-email-change').set(jsonHeaders).send({ token: pending });
+        expect(afterPost.status).toBe(401);
+
+        const reloaded = await User.findById(user._id);
+        expect(reloaded?.email).toBe(OWNER);
+      } finally {
+        sendSpy.mockRestore();
+      }
     });
 
     it('is single-use: a token bound to the old email is rejected after the address changes (no revert replay)', async () => {

@@ -805,14 +805,12 @@ export default (crowi: Crowi) => {
     // same way they do for the self-service paths; they are separate
     // credentials revoked through their own records.
     //
-    // NOT yet covered, and not a deliberate carve-out: a pending email-change
-    // confirmation link also survives. `handlers/email-change.ts` binds that
-    // token only with `fromEmail === user.email`, and a reset leaves `email`
-    // untouched, so an attacker who requested a change before losing their
-    // session can still confirm it afterwards and take over the recovery
-    // address. Closing that needs the email-change token bound to a
-    // revocation generation too — tracked with the rest of the credential
-    // versioning work, not fixable by adding another `$inc` here.
+    // A pending email-change confirmation link is covered too, via the same
+    // `authVersion` bump: `handlers/email-change.ts` binds that token to the
+    // version at issue time, so a change requested by a now-evicted session
+    // can no longer be confirmed afterwards. That mattered more than the rest
+    // — without it an attacker could take the recovery address immediately
+    // after this reset and undo the recovery itself.
     //
     // Hashing goes through the model's `setPassword` on the in-memory doc;
     // only the resulting hash reaches the update, so the write and both
