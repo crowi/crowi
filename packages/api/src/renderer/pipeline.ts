@@ -314,7 +314,7 @@ export async function runPipeline(
   // Each transform plugin is `(metadata) => (tree) => void`. unified's
   // `use(plugin, options)` invokes the plugin once with `options` and
   // gets back the actual transformer.
-  for (const plugin of buildCorePlugins(deps)) {
+  for (const plugin of buildCorePlugins(deps, body)) {
     processor = processor.use(plugin as never, metadata);
   }
 
