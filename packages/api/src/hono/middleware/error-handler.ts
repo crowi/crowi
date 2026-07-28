@@ -22,5 +22,11 @@ const INTERNAL_ERROR_BODY: InternalServerError = {
 
 export const honoOnError = (err: Error, c: Context): Response => {
   debug('Unhandled error in Hono handler:', err);
-  return c.json(INTERNAL_ERROR_BODY, 500);
+  const res = c.json(INTERNAL_ERROR_BODY, 500);
+  // `createSecurityHeaders` sets this after `await next()`, which a throw skips
+  // — and it cannot be recovered with a `finally` there either, because this
+  // error response is only constructed after that middleware has unwound. So
+  // the error path sets it itself, keeping the header genuinely app-wide.
+  res.headers.set('X-Content-Type-Options', 'nosniff');
+  return res;
 };

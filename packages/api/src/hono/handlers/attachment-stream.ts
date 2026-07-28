@@ -89,28 +89,15 @@ const guessMimeFromKey = (key: string): string => {
  * localStorage. So delivery pins the type instead of trusting it, and anything
  * off this list degrades to `application/octet-stream` + `attachment`.
  *
- * The rule for membership is "cannot execute script in this origin when
- * rendered under `X-Content-Type-Options: nosniff`": raster images and PDF
- * render in their own non-DOM viewers, and `text/*` entries here are displayed
- * as literal text (never parsed as HTML). Note this is a delivery-side
- * decision, NOT an upload-side one — containment has to reach attachments that
- * were already stored with a hostile `fileFormat` before it existed, which
- * tightening the upload allowlist alone would not do.
- *
- * `image/svg+xml` is deliberately ABSENT even though it is allowlisted on the
- * validated editor paste path (`IMAGE_UPLOAD_MIME`). SVG is not a raster
- * format but a document that can carry `<script>`, and uploaded SVG never
- * passes through `@crowi/svg-sanitize` (that package guards renderer-generated
- * diagrams, not attachments). Typing it `image/svg+xml` and relying on
- * `Content-Disposition: attachment` to stop execution is not sufficient: the
- * page renderer retains raw `<object>` / `<embed>` (`known-tags.ts`), which —
- * unlike `<img>` — load an SVG into a real browsing context, and honouring
- * `Content-Disposition` there is browser behaviour rather than a guarantee
- * (Firefox's CVE-2025-6430 is exactly that failure). So SVG degrades to
- * `application/octet-stream` like any other non-inline type. The cost is that
- * an uploaded SVG no longer renders through `<img>`; restoring that needs
- * sanitize-on-delivery (or a delivery-scoped CSP sandbox), which is a separate
- * design decision, not something to assume here.
+ * The rule for membership is "cannot reach this origin's DOM when rendered
+ * under `X-Content-Type-Options: nosniff` and {@link SANDBOX_CSP}": raster
+ * images and PDF render in their own non-DOM viewers, `text/*` entries are
+ * displayed as literal text (never parsed as HTML), and `image/svg+xml` —
+ * which IS a scriptable document — is admitted only because the sandbox
+ * below denies it an origin to attack. Note this is a delivery-side decision,
+ * NOT an upload-side one: containment has to reach attachments already stored
+ * with a hostile `fileFormat`, which tightening the upload allowlist would not
+ * do.
  */
 const INLINE_SAFE_MIME = new Set<string>([
   'image/png',
@@ -122,14 +109,60 @@ const INLINE_SAFE_MIME = new Set<string>([
   'image/apng',
   'image/x-icon',
   'image/vnd.microsoft.icon',
+  'image/svg+xml',
   'application/pdf',
   'text/plain',
   'text/markdown',
   'text/csv',
 ]);
 
-/** Bare lowercase type, parameters (`; charset=...`) dropped, so allowlist lookups can't be evaded by decorating the value. */
-const bareMime = (raw: string): string => (raw || '').split(';')[0].trim().toLowerCase();
+/**
+ * Sent with every inline delivery except PDF, and the reason `image/svg+xml`
+ * can stay on the list above.
+ *
+ * SVG is not a raster format but a document that can carry `<script>`, and
+ * uploaded SVG never passes through `@crowi/svg-sanitize` (that package guards
+ * renderer-generated diagrams, not attachments). Typing it `image/svg+xml` and
+ * relying on `Content-Disposition: attachment` to stop execution does NOT work:
+ * the page renderer keeps raw `<object>` / `<embed>` (`known-tags.ts`), which —
+ * unlike `<img>` — load an SVG into a real browsing context, and whether they
+ * honour `Content-Disposition` is browser behaviour rather than a guarantee
+ * (Firefox's CVE-2025-6430 is exactly that failure).
+ *
+ * A bare `sandbox` (no `allow-*` tokens) makes any document created from this
+ * response scriptless AND puts it in an opaque origin, so even a hypothetical
+ * script bypass has no wiki origin to read `localStorage` from. That is a
+ * structural boundary rather than a filter, which is the point: a sanitizer is
+ * a denylist that leaks (this repo's own `svg-sanitize` had a CSS-escape bypass
+ * that shipped for weeks), whereas an opaque origin has nothing to bypass.
+ *
+ * Crucially this does NOT cost us SVG rendering, but the reason is narrower
+ * than "CSP does not apply to subresources" — it does apply to documents even
+ * when they are framed or embedded. The distinction is that an SVG fetched by
+ * `<img>` is processed as an IMAGE, not as a Document, so this document-scoped
+ * `sandbox` directive never comes into play; SVG-as-image also never runs
+ * script in the first place. `<object>` / `<embed>` / `<iframe>` and top-level
+ * navigation DO create documents, and those are exactly the contexts that
+ * receive and enforce the sandbox. Keep that distinction in mind before
+ * extending this policy to another directive or another embedding mechanism.
+ *
+ * Deliberately NOT sent on the download branch: Chrome blocks downloads from a
+ * sandbox without `allow-downloads`, so adding it there would break every
+ * non-inline attachment. And deliberately not on `application/pdf`, whose
+ * built-in viewers have a history of interacting badly with sandboxing — PDF
+ * script runs in the viewer, not in this origin, so it is not a token-theft
+ * path in the first place.
+ */
+const SANDBOX_CSP = 'sandbox';
+
+/**
+ * Bare lowercase type, parameters (`; charset=...`) dropped, so allowlist
+ * lookups can't be evaded by decorating the value. Takes `unknown` because the
+ * input is persisted data: a row written by a raw Mongo import or an old
+ * migration can hold a non-string `fileFormat`, and calling `.split` on it
+ * would 500 the request rather than falling through to the safe branch.
+ */
+const bareMime = (raw: unknown): string => (typeof raw === 'string' ? raw.split(';')[0].trim().toLowerCase() : '');
 
 /**
  * The single place that decides what a delivered attachment is typed as and
@@ -137,10 +170,12 @@ const bareMime = (raw: string): string => (raw || '').split(';')[0].trim().toLow
  * to append when the caller has an originating name (the by-key profile-picture
  * route serves straight off a storage key and has none).
  */
-const resolveDelivery = (rawMime: string, filenameParam?: string): { contentType: string; disposition: string } => {
+const resolveDelivery = (rawMime: string, filenameParam?: string): Delivery => {
   const suffix = filenameParam ? `; ${filenameParam}` : '';
   const mime = bareMime(rawMime);
-  if (INLINE_SAFE_MIME.has(mime)) return { contentType: mime, disposition: `inline${suffix}` };
+  if (INLINE_SAFE_MIME.has(mime)) {
+    return { contentType: mime, disposition: `inline${suffix}`, csp: mime === 'application/pdf' ? undefined : SANDBOX_CSP };
+  }
   return { contentType: 'application/octet-stream', disposition: `attachment${suffix}` };
 };
 
@@ -162,12 +197,16 @@ const toWebStream = (stream: Readable): ReadableStream => {
   return Readable.toWeb(stream) as ReadableStream;
 };
 
-/** Build a `200` streaming `Response`, optionally with `Content-Disposition`. Shared by every delivery branch below. */
-const streamResponse = (stream: Readable, contentType: string, disposition?: string): Response =>
-  new Response(toWebStream(stream), {
-    status: 200,
-    headers: disposition ? { 'Content-Type': contentType, 'Content-Disposition': disposition } : { 'Content-Type': contentType },
-  });
+/** The response headers a delivery decision produces — see {@link resolveDelivery}. */
+type Delivery = { contentType: string; disposition?: string; csp?: string };
+
+/** Build a `200` streaming `Response` from a {@link Delivery}. Shared by every delivery branch below. */
+const streamResponse = (stream: Readable, delivery: Delivery): Response => {
+  const headers: Record<string, string> = { 'Content-Type': delivery.contentType };
+  if (delivery.disposition) headers['Content-Disposition'] = delivery.disposition;
+  if (delivery.csp) headers['Content-Security-Policy'] = delivery.csp;
+  return new Response(toWebStream(stream), { status: 200, headers });
+};
 
 export const registerAttachmentStreamRoutes = (app: OpenAPIHono<CrowiHonoBindings>, crowi: Crowi) => {
   const Attachment = crowi.model('Attachment');
@@ -186,7 +225,7 @@ export const registerAttachmentStreamRoutes = (app: OpenAPIHono<CrowiHonoBinding
    */
   const buildPlaceholderResponse = (): Response => {
     const stream = fs.createReadStream(FILE_NOT_FOUND_IMAGE);
-    return streamResponse(stream, 'image/png');
+    return streamResponse(stream, { contentType: 'image/png' });
   };
 
   /**
@@ -236,8 +275,8 @@ export const registerAttachmentStreamRoutes = (app: OpenAPIHono<CrowiHonoBinding
     return { ok: true, attachment };
   };
 
-  /** `Content-Type` + `Content-Disposition` for `rawMime` — identical for the display AND original branches (§9). */
-  const buildDeliveryHeaders = (attachment: AttachmentDocument, rawMime: string): { contentType: string; disposition: string } =>
+  /** {@link resolveDelivery} for a stored attachment — identical for the display AND original branches (§9). */
+  const buildDeliveryHeaders = (attachment: AttachmentDocument, rawMime: string): Delivery =>
     resolveDelivery(rawMime, `filename*=UTF-8''${encodeURIComponent(attachment.originalName || attachment.fileName)}`);
 
   /**
@@ -263,8 +302,7 @@ export const registerAttachmentStreamRoutes = (app: OpenAPIHono<CrowiHonoBinding
       return c.json(errorBody('UPLOAD_FAILED', 'Failed to deliver file'), 500);
     }
 
-    const { contentType, disposition } = buildDeliveryHeaders(attachment, attachment.fileFormat);
-    return streamResponse(stream, contentType, disposition);
+    return streamResponse(stream, buildDeliveryHeaders(attachment, attachment.fileFormat));
   };
 
   // Install jwtAuth on both literal paths. `/attachments/*` is OUTSIDE
@@ -322,8 +360,7 @@ export const registerAttachmentStreamRoutes = (app: OpenAPIHono<CrowiHonoBinding
     // Profile pictures are delivered straight off the storage key, so the type
     // comes from the extension rather than a stored `fileFormat` — but `.svg`
     // is reachable here too, so the same policy applies.
-    const { contentType, disposition } = resolveDelivery(guessMimeFromKey(key));
-    return streamResponse(stream, contentType, disposition);
+    return streamResponse(stream, resolveDelivery(guessMimeFromKey(key)));
   });
 
   // --------------------------------------------------------------
@@ -363,8 +400,7 @@ export const registerAttachmentStreamRoutes = (app: OpenAPIHono<CrowiHonoBinding
         // `display.format` is generator-produced rather than client-declared,
         // but it goes through the same policy so there is exactly one place
         // that decides what may render inline.
-        const { contentType, disposition } = buildDeliveryHeaders(attachment, display.format);
-        return streamResponse(stream, contentType, disposition);
+        return streamResponse(stream, buildDeliveryHeaders(attachment, display.format));
       } catch (err) {
         // §9 step 4 — a missing derivative key is a plain cache miss; fall
         // through to original below. Any other storage error is a genuine

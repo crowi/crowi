@@ -959,25 +959,61 @@ describe('Routes /api/v2 attachments (Hono)', () => {
       expect(res.headers['x-content-type-options']).toBe('nosniff');
     });
 
-    it('does not serve an SVG attachment as image/svg+xml at all', async () => {
-      // `image/svg+xml` is allowlisted even on the VALIDATED editor paste path
-      // (`IMAGE_UPLOAD_MIME`), and uploaded SVG is never run through
-      // `@crowi/svg-sanitize` — so an SVG served with its real type is the same
-      // origin-executing payload as the HTML case above. Keeping the type and
-      // relying on `Content-Disposition: attachment` alone is NOT enough: the
-      // renderer retains raw `<object>`/`<embed>` (`known-tags.ts`), which load
-      // an SVG into a real browsing context, and whether they honour
-      // `Content-Disposition` is browser behaviour (cf. Firefox CVE-2025-6430)
-      // rather than a guarantee. So the type itself must not survive delivery.
-      const svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(document.domain)</script></svg>');
-      const id = await uploadDeclaring(`xss-svg-${Date.now()}`, svg, 'payload.svg', 'image/svg+xml');
+    it('does not 500 on a corrupt non-string fileFormat (falls through to the safe branch)', async () => {
+      // `fileFormat` is persisted data — a raw Mongo import or an old migration
+      // can leave a non-string there, and the delivery policy must degrade
+      // rather than throw (a 500 here would also be the one response shape that
+      // most easily escapes the header middleware).
+      const id = await uploadDeclaring(`xss-corrupt-${Date.now()}`, pngBuffer, 'pixel.png', 'image/png');
+      const Attachment = crowi.model('Attachment');
+      await Attachment.collection.updateOne({ _id: new Types.ObjectId(id) }, { $set: { fileFormat: 12345 } });
 
       const res = await request(app).get(`/api/v2/attachments/${id}`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
 
       expect(res.status).toBe(200);
       expect(res.headers['content-type']).toBe('application/octet-stream');
       expect(res.headers['content-disposition']).toMatch(/^attachment;/);
+    });
+
+    // NOTE on scope: these assert the HTTP contract this handler controls — the
+    // headers it emits. They do NOT execute the response in a browser, so the
+    // downstream claim that a bare `sandbox` actually denies script and origin
+    // access to an SVG loaded via `<object>`/`<embed>`/`<iframe>`/navigation is
+    // NOT verified here. Proving that needs same-origin browser coverage in
+    // `packages/e2e`, which is currently blocked on the dev-server distDir
+    // isolation work; treat this as a known coverage gap, not as proven.
+    it('sandboxes an SVG attachment instead of stripping its type (keeps <img> embeds working)', async () => {
+      // `image/svg+xml` is allowlisted even on the VALIDATED editor paste path
+      // (`IMAGE_UPLOAD_MIME`), and uploaded SVG is never run through
+      // `@crowi/svg-sanitize` — so an SVG IS a scriptable document here.
+      // `Content-Disposition: attachment` alone would NOT contain it: the
+      // renderer keeps raw `<object>`/`<embed>` (`known-tags.ts`), which load
+      // an SVG into a real browsing context, and whether they honour
+      // `Content-Disposition` is browser behaviour (cf. Firefox CVE-2025-6430)
+      // rather than a guarantee. The bare `sandbox` CSP is the containment:
+      // any document made from this response is scriptless and origin-opaque,
+      // so there is no wiki origin left to read localStorage from. The type
+      // survives because CSP is ignored on subresource loads, which is exactly
+      // how uploaded SVGs are used (`<img src=...>` in a page body).
+      const svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(document.domain)</script></svg>');
+      const id = await uploadDeclaring(`xss-svg-${Date.now()}`, svg, 'payload.svg', 'image/svg+xml');
+
+      const res = await request(app).get(`/api/v2/attachments/${id}`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
+
+      expect(res.status).toBe(200);
+      expect(res.headers['content-type']).toBe('image/svg+xml');
+      expect(res.headers['content-security-policy']).toBe('sandbox');
       expect(res.headers['x-content-type-options']).toBe('nosniff');
+    });
+
+    it('never sandboxes the download branch (a sandbox without allow-downloads blocks the download itself)', async () => {
+      const id = await uploadDeclaring(`xss-dl-${Date.now()}`, Buffer.from('PKzip'), 'a.zip', 'application/zip');
+
+      const res = await request(app).get(`/api/v2/attachments/${id}`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
+
+      expect(res.headers['content-type']).toBe('application/octet-stream');
+      expect(res.headers['content-disposition']).toMatch(/^attachment;/);
+      expect(res.headers['content-security-policy']).toBeUndefined();
     });
 
     it('cannot be pushed back onto the inline branch by decorating the declared type', async () => {
@@ -1005,6 +1041,12 @@ describe('Routes /api/v2 attachments (Hono)', () => {
       expect(res.headers['content-disposition']).toMatch(/^inline;/);
       expect(res.headers['x-content-type-options']).toBe('nosniff');
       expect((res.body as Buffer).equals(pngBuffer)).toBe(true);
+    });
+
+    it('sets nosniff on a CORS preflight too (the header middleware has to run outside CORS, which answers OPTIONS without calling next())', async () => {
+      const res = await request(app).options('/api/v2/attachments/000000000000000000000000').set('Origin', 'http://localhost:3000');
+
+      expect(res.headers['x-content-type-options']).toBe('nosniff');
     });
 
     it('contains an attachment already stored with a hostile fileFormat (retroactive, not upload-time-only)', async () => {
