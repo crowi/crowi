@@ -58,6 +58,26 @@ function nextConfig(phase: PHASE_TYPE): NextConfig {
   return {
     ...(ALLOWED_DEV_ORIGINS?.length ? { allowedDevOrigins: ALLOWED_DEV_ORIGINS } : {}),
 
+    // `distDir` defaults to `.next` — this MUST stay the default for every
+    // path that isn't a throwaway e2e dev server. `next dev` rewrites
+    // whatever `distDir` resolves to into `<distDir>/dev` at startup
+    // (`next/dist/server/config.js`) and takes an exclusive lockfile there
+    // (`setup-dev-bundler.js`'s `Lockfile.acquireWithRetriesOrExit`), so two
+    // `next dev` processes pointed at the same distDir (e.g. the main `pnpm
+    // dev` server and `packages/e2e`'s `start:web`, both running against this
+    // same `packages/web` directory) collide and the second one gets killed.
+    // `NEXT_DIST_DIR=.next-e2e` (set only by `packages/e2e/package.json`'s
+    // `start:web`) gives the e2e dev server its own distDir — and therefore
+    // its own lock + build manifest + server output — so it can run
+    // alongside a live `pnpm dev` without contention (feature-e2e-dev-server-
+    // isolation). `next build` (Docker / Vercel) never sets this env, so
+    // `output: 'standalone'` production artifacts keep landing at the
+    // well-known `.next/standalone` / `.next/routes-manifest.json` paths
+    // that `Dockerfile`, `turbo.json`'s build `outputs`, and
+    // `scripts/smoke-oauth-well-known-proxy.mjs` all hardcode — do not widen
+    // this env's reach to those paths.
+    distDir: process.env.NEXT_DIST_DIR || '.next',
+
     // Produce a self-contained `.next/standalone/` build that bundles only the
     // files traced by Next's module dependency walker (server.js + minimal
     // node_modules + workspace deps). The output is what the Docker runtime
