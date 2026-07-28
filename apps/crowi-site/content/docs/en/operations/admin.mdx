@@ -107,31 +107,40 @@ New-user registration settings. Maps to `GET/PUT /admin/security`.
 
 ## Authentication
 
-Switches the authentication method itself, and configures the OAuth
-providers used for sign-in. Maps to `GET/PUT /admin/auth`.
+Settings related to the authentication method. Maps to
+`GET/PUT /admin/auth`.
 
-- **requireThirdPartyAuth**: Makes third-party auth (OAuth) mandatory.
-- **disablePasswordAuth**: Disables password-based login.
-- **Google / GitHub OAuth**: Enter the provider's clientId and client
-  secret. The secret is treated as sensitive (masked on input,
-  auto-encrypted at rest when `CROWI_ENCRYPTION_KEY` is set).
+**As of 2.0.0-alpha this screen is an explanatory, read-only notice.**
+Third-party (Google / GitHub) sign-in was removed from core, and the two
+settings that depend on it cannot be edited.
 
-> **Caution**: If you disable password auth while no OAuth provider is
-> fully configured, nobody can log in. Crowi rejects a settings change
-> that would lock you out with a 422 error, but it is safest to make
-> this change while keeping a logged-in session open in a separate
-> browser.
+- **requireThirdPartyAuth** (make third-party auth mandatory) and
+  **disablePasswordAuth** (disable password login) would leave every
+  account with no way to sign in, so **the toggles are not rendered** and
+  the API rejects any request that tries to enable them with
+  `400 THIRD_PARTY_AUTH_UNAVAILABLE`.
+- The config keys and schema are kept, inert, for a future auth-provider
+  plugin. If a previously-enabled value is still in the database, the
+  screen shows a warning.
+
+> **Note**: The fields for entering Google / GitHub clientId and client
+> secret are gone from this screen too. Third-party sign-in is planned to
+> return as an auth-provider plugin.
 
 ## Mail
 
-Mail delivery (SMTP / AWS SES) settings. Maps to `GET/PUT /admin/mail`
-and `POST /admin/mail/test`.
+Mail delivery settings. Maps to `GET/PUT /admin/mail` and
+`POST /admin/mail/test`.
 
-- Configure the sender address and SMTP host / port / user / password, or
-  AWS SES credentials.
-- Sensitive values such as passwords are masked on input.
+- The only field editable on this screen is the **sender address
+  (`from`)**.
+- The name of the currently active mail driver is shown read-only,
+  together with a link to the plugin settings screen where its connection
+  details are edited. The SMTP host / auth, the Resend API key and the AWS
+  credentials for SES live under `/admin/plugins`.
 - The **test send** button sends a test mail to the logged-in admin's
-  registered email address so you can verify the configuration.
+  registered email address so you can verify the configuration (it uses
+  the saved settings).
 
 See [Mail settings](./mail) for details.
 
@@ -174,6 +183,15 @@ failure surfaces an inline error).
 > only at that moment. After a reset, deliver it to the user promptly over
 > a secure channel and have them change it themselves after their first
 > login.
+
+> **Caution**: An admin-initiated password reset **does not end that
+> user's existing login sessions**. If you suspect an account has been
+> taken over, set its status to **SUSPENDED** first — a suspended user's
+> requests are refused even when they still hold a valid token. When the
+> user changes their own password from their settings screen, or resets it
+> themselves through a reset-mail link, every other session is signed out
+> at that moment (see
+> [User pages and profile](../guide/profile)).
 
 ### User approval
 
