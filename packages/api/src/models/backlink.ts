@@ -121,10 +121,22 @@ export default (crowi: Crowi) => {
 
     const body = savedPage.revision.body;
 
-    await Backlink.removeBySavedPage(savedPage);
-
+    // Extract-before-delete: run `linkDetector.search` / `convertLinksToPageIds`
+    // (which can throw on malformed input, e.g. a stray `/a%`) before
+    // touching any existing Backlink docs. Previously `removeBySavedPage`
+    // ran first, so a single malformed link would wipe out this page's
+    // backlinks with nothing to replace them — the caller
+    // (events/page.ts's registerBacklinks) only logs the exception, it
+    // doesn't restore what was deleted. This guarantees exactly one thing:
+    // a throw here leaves pre-existing Backlink docs untouched. It does
+    // NOT make the delete+insert pair itself atomic — an `insertMany`
+    // failure after a successful `removeBySavedPage`, or a concurrent save
+    // racing this one, can still leave stale/missing backlinks (pre-existing,
+    // out of scope — see spec's non-goals).
     const links = linkDetector.search(body);
     const ids = await convertLinksToPageIds(savedPage, links);
+
+    await Backlink.removeBySavedPage(savedPage);
 
     if (ids.length === 0) {
       debug('No backlinks to save');
