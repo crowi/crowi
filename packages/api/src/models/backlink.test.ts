@@ -222,5 +222,66 @@ describe('Backlink', () => {
         removeSpy.mockRestore();
       }
     });
+
+    // --- feature-page-link-space-paths Phase 2 ---------------------------
+
+    test('a raw-space recovered link creates a backlink extracted from renderedAst — fragment-stripped, +-mixed decode, and malformed-percent-tolerant, all in one save', async () => {
+      // `Backlink.createBySavedPage` extracts these from
+      // `savedPage.revision.renderedAst`'s `data.rawSpaceRecovered === true`
+      // marker `link` nodes (`extractRawSpaceRecoveredPaths`), NOT from a
+      // new `linkDetector` regex pattern (link-detector.test.ts's matching
+      // test pins that `linkDetector.search` itself stays unchanged).
+      const target1Path = `${PREFIX}raw space target`;
+      const target3Path = `${PREFIX}a b c`;
+      const sourcePath = `${PREFIX}source-rawspace`;
+
+      const target1 = await Page.createPage(target1Path, '# t1', user, {});
+      const target3 = await Page.createPage(target3Path, '# t3', user, {});
+
+      const body = [
+        // Plain raw-space recovery -> backlink to target1.
+        `[t1](${target1Path})`,
+        // Same target, but with a `#frag` suffix on the recovered `url` —
+        // the Phase 1 `stripFragmentAndQuery` helper is reused on this
+        // path too, so this must resolve to the SAME target1 (and dedup
+        // into a single backlink, not two).
+        `[t1frag](${target1Path}#frag)`,
+        // `+` mixed with a raw space in the same recovered destination —
+        // decoded via the same `stripFragmentAndQuery -> decodeURIComponent
+        // -> +->space` pipeline as the regex path, landing on target3's
+        // real path (`/a b c`), matching the click-through navigation
+        // target exactly.
+        `[t3](${PREFIX}a+b c)`,
+        // Malformed percent-encoding in a recovered link: `decodeLinkPath`
+        // returns null instead of throwing, so this is silently skipped —
+        // and must NOT take the other two recovered backlinks down with it.
+        `[bad](${PREFIX}a% b)`,
+      ].join('\n\n');
+      const source = await Page.createPage(sourcePath, body, user, {});
+
+      const backlinks = await waitForBacklinks(Backlink, { fromPage: source._id }, 2);
+      expect(backlinks).toHaveLength(2);
+      const targetIds = backlinks.map((b) => b.page.toString()).sort();
+      expect(targetIds).toEqual([target1._id.toString(), target3._id.toString()].sort());
+    });
+
+    test('a raw-space token inside a fenced code block or inline code does not create a false backlink', async () => {
+      // `raw-space-links.ts` never descends into `code`/`inlineCode`, so
+      // these tokens never become `data.rawSpaceRecovered === true` link
+      // nodes in `renderedAst` for `Backlink.createBySavedPage` to pick up
+      // — the render/backlink pair stays consistent (neither renders nor
+      // backlinks it), unlike the pre-existing regex-detector limitation
+      // Phase 1 explicitly declined to fix for the OTHER 3 link forms.
+      const targetPath = `${PREFIX}target codefence raw space`;
+      const sourcePath = `${PREFIX}source-codefence-rawspace`;
+
+      await Page.createPage(targetPath, '# target', user, {});
+      const body = ['```', `[x](${targetPath})`, '```', '', `Inline ${'`'}[y](${targetPath})${'`'} skipped.`].join('\n');
+      const source = await Page.createPage(sourcePath, body, user, {});
+
+      await crowi.drainSideEffects();
+      const backlinks = await Backlink.find({ fromPage: source._id });
+      expect(backlinks).toHaveLength(0);
+    });
   });
 });
