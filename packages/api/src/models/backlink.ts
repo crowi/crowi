@@ -169,6 +169,20 @@ export default (crowi: Crowi) => {
     // extraction step, not a new regex pattern (see
     // `decodeRawSpaceLinkPaths`'s doc comment above). Runs before
     // `removeBySavedPage` too, same extract-before-delete guarantee.
+    //
+    // One asymmetry worth knowing before trusting "behaviour unchanged":
+    // this does NOT always run against a freshly built revision. A body save
+    // does, so `meta.rawSpaceLinks` is always present there. Other emitters
+    // of `update` (rename among them) re-run it against the page's existing
+    // revision, and a revision written before `meta.rawSpaceLinks` existed
+    // contributes nothing here — so for those a re-registration can lose the
+    // page's raw-space backlinks until its body is next saved. Exactly which
+    // of those callers hand over a populated revision differs per call site,
+    // so treat this as "not guaranteed" rather than a characterised set.
+    //
+    // Nothing is backfilled, and nothing needs to be: only the marker-era
+    // build could have written such revisions, and it lived a few hours and
+    // never shipped in a release.
     const rawSpaceRecoveredPaths = decodeRawSpaceLinkPaths(savedPage.revision.meta?.rawSpaceLinks);
     const paths = rawSpaceRecoveredPaths.length === 0 ? links.paths : Array.from(new Set([...links.paths, ...rawSpaceRecoveredPaths]));
     const ids = await convertLinksToPageIds(savedPage, { paths, objectIds: links.objectIds });

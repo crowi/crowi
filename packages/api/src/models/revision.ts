@@ -464,9 +464,9 @@ interface PipelineMetadataLike {
 }
 
 /**
- * Persist the 5 sub-fields verbatim (including empty arrays). The
+ * Persist every sub-field verbatim (including empty arrays). The
  * presence of `wikiLinks` / `mentions` / `codeBlockLanguages` is what
- * `computeRevisionMetaAsync` uses to skip the on-the-fly pipeline run
+ * `computeRevisionRenderArtifactsAsync` uses to skip the on-the-fly run
  * for revisions written under Phase 2 — collapsing empty arrays to
  * `undefined` would defeat that fast-path on every "no mentions, no
  * embeds" page. `rawSpaceLinks` (feature-backlink-raw-space-metadata)

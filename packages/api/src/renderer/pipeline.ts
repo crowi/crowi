@@ -35,6 +35,26 @@ export interface PipelineMetadata {
 }
 
 /**
+ * A fresh, all-empty `PipelineMetadata` — a new object every call, so callers
+ * never share arrays.
+ *
+ * Use this instead of writing the object literal out. `packages/api`'s
+ * tsconfig excludes test files from `tsc`, and the shared base sets
+ * `isolatedModules`, so ts-jest runs transpile-only: a test that hand-writes
+ * the literal and misses a field does NOT fail to compile — it fails at
+ * runtime, the day some transform starts pushing into that field. Routing
+ * every construction through here means adding a field cannot leave a stale
+ * literal behind.
+ */
+export const createEmptyPipelineMetadata = (): PipelineMetadata => ({
+  toc: [],
+  wikiLinks: [],
+  mentions: [],
+  codeBlockLanguages: [],
+  rawSpaceLinks: [],
+});
+
+/**
  * Lazily-resolved ESM-only handles needed by the pipeline + core
  * plugins. unified, remark-parse, remark-gfm, github-slugger,
  * mdast-util-to-string, and shiki are all ESM-only; they are loaded
@@ -300,13 +320,7 @@ export async function runPipeline(
   loadDeps: LoadPipelineEsmDeps,
   dispatch?: PipelinePluginDispatch,
 ): Promise<PipelineResult> {
-  const metadata: PipelineMetadata = {
-    toc: [],
-    wikiLinks: [],
-    mentions: [],
-    codeBlockLanguages: [],
-    rawSpaceLinks: [],
-  };
+  const metadata: PipelineMetadata = createEmptyPipelineMetadata();
 
   if (!body) {
     return { tree: emptyRoot(), metadata };

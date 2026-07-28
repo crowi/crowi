@@ -156,12 +156,16 @@ export const computeRevisionRenderArtifactsAsync = async (
   pageId?: string,
 ): Promise<{ meta?: RevisionMetaShape; renderedAst?: unknown }> => {
   const fromStored = storedMeta ? pickStoredMeta(storedMeta) : {};
-  // Phase 2-written revisions persist all 4 meta fields (even empty
-  // arrays); the presence of these 3 is the marker that no fallback
-  // is needed for meta. `rawSpaceLinks` (feature-backlink-raw-space-
-  // metadata, additive) is deliberately NOT part of this gate — every
-  // revision written before that field existed would otherwise count
-  // as "incomplete" and force an on-the-fly recompute on its next read.
+  // Phase 2-written revisions persist every meta sub-field (even empty
+  // arrays); the presence of these 3 is the marker that no fallback is
+  // needed for meta. `rawSpaceLinks` (feature-backlink-raw-space-metadata,
+  // additive) is deliberately NOT part of this gate: including it would
+  // mark every revision written before that field existed as incomplete.
+  // Two cohorts are spared by the omission — those with NO `rendererVersion`
+  // at all (which `astIsFresh` below also treats as trustworthy), and
+  // marker-era revisions that already carry the CURRENT `rendererVersion`
+  // and so are not caught by the staleness gate either. Revisions whose
+  // `rendererVersion` is merely older recompute regardless of this line.
   const metaIsComplete = fromStored.wikiLinks !== undefined && fromStored.mentions !== undefined && fromStored.codeBlockLanguages !== undefined;
   const astIsStored = storedAst !== undefined;
   // RFC-0002 round 3.1: a stored `rendererVersion` that does NOT match

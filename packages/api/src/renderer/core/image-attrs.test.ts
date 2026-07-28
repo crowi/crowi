@@ -1,15 +1,13 @@
 import type { Image, PhrasingContent, Root, RootContent, Text } from 'mdast';
 import type { Position } from 'unist';
 import { createJiti } from 'jiti';
-import type { PipelineMetadata } from '../pipeline';
+import { createEmptyPipelineMetadata } from '../pipeline';
 import { remarkImageAttrs, type ImageFigureNode } from './image-attrs';
 import { remarkMentions } from './mentions';
 import { remarkWikiLinks } from './wikilinks';
 
 /** Fresh, empty `PipelineMetadata` — this transform doesn't aggregate into it, but the plugin factory signature requires one. */
-function emptyMetadata(): PipelineMetadata {
-  return { toc: [], wikiLinks: [], mentions: [], codeBlockLanguages: [] };
-}
+const emptyMetadata = createEmptyPipelineMetadata;
 
 function image(url: string, alt: string | null = null): Image {
   return { type: 'image', url, alt, title: null };
