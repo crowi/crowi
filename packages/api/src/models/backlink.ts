@@ -21,53 +21,31 @@ export interface BacklinkModel extends Model<BacklinkDocument> {
   createByAllPages(): Promise<BacklinkDocument[][]>;
 }
 
-/** Loose shape sufficient to walk a JSON-serialised (`serializeMdast`) mdast tree — mirrors `pipeline.ts`'s `MdastLikeNode` stack-walk precedent. */
-interface MdastLikeNode {
-  type?: string;
-  url?: string;
-  data?: { rawSpaceRecovered?: boolean };
-  children?: MdastLikeNode[];
-}
-
 /**
- * feature-page-link-space-paths Phase 2 — walk a saved page's
- * `revision.renderedAst` (the JSON-serialised mdast tree
- * `Revision.prepareRevision` persists at save time) and collect the
- * decoded `url` of every `link` node the raw-space recovery transform
- * (`renderer/core/raw-space-links.ts`) marked with
- * `data.rawSpaceRecovered === true`.
+ * feature-backlink-raw-space-metadata — decode the raw-space link
+ * destinations `renderer/core/raw-space-links.ts` pushed onto
+ * `revision.meta.rawSpaceLinks` at save time (see that transform's doc
+ * comment). Replaces the earlier `extractRawSpaceRecoveredPaths` DFS
+ * over the full `renderedAst`, which walked every page's whole AST on
+ * every save looking for a `data.rawSpaceRecovered === true` marker —
+ * almost always a wasted full-tree scan, since only pages that actually
+ * contain a raw-space link have anything to find.
  *
- * This is deliberately the ONLY extraction path for these links — no
- * new `linkDetector.getPathRegexps()` pattern is added. The recovery
- * transform never descends into `code`/`inlineCode`, so a raw-space
- * token inside a code fence never becomes a marker-carrying `link`
- * node here; a raw-body regex would not have that guarantee (it would
- * match the code-fence token too), which would drift from what
- * actually renders. See spec §"設計の主な判断"/Phase 2.
- *
- * `url` on a recovered link node is NOT guaranteed to be real-space —
- * the recovery grammar keeps the destination verbatim, so it can carry
- * a literal `+` or `%XX` alongside the raw space (e.g. `/a+b c`).
+ * `rawSpaceLinks` entries are NOT guaranteed to be real-space — the
+ * recovery grammar keeps the destination verbatim, so an entry can
+ * carry a literal `+` or `%XX` alongside the raw space (e.g. `/a+b c`).
  * Decode with the exact same semantics as the regex-based extraction
  * path (`stripFragmentAndQuery` → `decodeURIComponent` → `+` → space,
  * via `decodeLinkPath`), per-link try/catch (via `decodeLinkPath`'s
  * own null-on-throw contract) so one malformed recovered link doesn't
  * take down the rest — same hardening as the Phase 1 regex path.
  */
-function extractRawSpaceRecoveredPaths(renderedAst: unknown): string[] {
+function decodeRawSpaceLinkPaths(rawSpaceLinks: string[] | undefined): string[] {
+  if (!rawSpaceLinks) return [];
   const paths: string[] = [];
-  const stack: unknown[] = [renderedAst];
-  while (stack.length > 0) {
-    const node = stack.pop();
-    if (!node || typeof node !== 'object') continue;
-    const typed = node as MdastLikeNode;
-    if (typed.type === 'link' && typed.data?.rawSpaceRecovered === true && typeof typed.url === 'string') {
-      const decoded = decodeLinkPath(stripFragmentAndQuery(typed.url));
-      if (decoded !== null) paths.push(decoded);
-    }
-    if (Array.isArray(typed.children)) {
-      for (const child of typed.children) stack.push(child);
-    }
+  for (const url of rawSpaceLinks) {
+    const decoded = decodeLinkPath(stripFragmentAndQuery(url));
+    if (decoded !== null) paths.push(decoded);
   }
   return paths;
 }
@@ -185,13 +163,13 @@ export default (crowi: Crowi) => {
     // racing this one, can still leave stale/missing backlinks (pre-existing,
     // out of scope — see spec's non-goals).
     const links = linkDetector.search(body);
-    // Phase 2 (feature-page-link-space-paths): merge in raw-space
-    // recovered links extracted from `renderedAst` — a second,
-    // AST-based extraction step, not a new regex pattern (see
-    // `extractRawSpaceRecoveredPaths`'s doc comment above). Runs
-    // before `removeBySavedPage` too, same extract-before-delete
-    // guarantee.
-    const rawSpaceRecoveredPaths = extractRawSpaceRecoveredPaths(savedPage.revision.renderedAst);
+    // Phase 2 (feature-page-link-space-paths), metadata channel added by
+    // feature-backlink-raw-space-metadata: merge in raw-space recovered
+    // links carried on `revision.meta.rawSpaceLinks` — a second
+    // extraction step, not a new regex pattern (see
+    // `decodeRawSpaceLinkPaths`'s doc comment above). Runs before
+    // `removeBySavedPage` too, same extract-before-delete guarantee.
+    const rawSpaceRecoveredPaths = decodeRawSpaceLinkPaths(savedPage.revision.meta?.rawSpaceLinks);
     const paths = rawSpaceRecoveredPaths.length === 0 ? links.paths : Array.from(new Set([...links.paths, ...rawSpaceRecoveredPaths]));
     const ids = await convertLinksToPageIds(savedPage, { paths, objectIds: links.objectIds });
 
@@ -217,6 +195,19 @@ export default (crowi: Crowi) => {
     return backlinks;
   };
 
+  // feature-backlink-raw-space-metadata: this rebuild path queries
+  // `Revision.find(...)` directly (a projection of `_id`/`body` only,
+  // never `.meta`) and matches candidates with `linkDetector`'s regexps
+  // — it never called the old `extractRawSpaceRecoveredPaths` DFS over
+  // `renderedAst` either, before this change. So raw-space recovered
+  // links have NEVER been included in a `createByAllPages()` rebuild,
+  // and that stays true unchanged here: revisions this queries can
+  // predate `meta.rawSpaceLinks` (or lack `meta` entirely — this path
+  // doesn't even select the field), and this deliberately does not
+  // special-case that (no DFS-over-renderedAst fallback re-added here —
+  // see the spec's "移行の考え方"). A rebuild that also wants raw-space
+  // backlinks would need to re-run pages through the renderer, which is
+  // out of scope for this refactor (see spec's "やらないこと").
   backlinkSchema.statics.createByAllPages = async function () {
     const Page = crowi.model('Page');
     const Revision = crowi.model('Revision');
