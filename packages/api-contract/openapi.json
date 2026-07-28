@@ -1069,6 +1069,12 @@
                         "items": {
                           "type": "string"
                         }
+                      },
+                      "rawSpaceLinks": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
                       }
                     }
                   },
@@ -1510,6 +1516,12 @@
                     "items": {
                       "type": "string"
                     }
+                  },
+                  "rawSpaceLinks": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
                   }
                 }
               },
@@ -1927,6 +1939,12 @@
                 "items": {
                   "type": "string"
                 }
+              },
+              "rawSpaceLinks": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
               }
             }
           },
@@ -2123,6 +2141,12 @@
             }
           },
           "codeBlockLanguages": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "rawSpaceLinks": {
             "type": "array",
             "items": {
               "type": "string"
@@ -2398,6 +2422,12 @@
                               }
                             },
                             "codeBlockLanguages": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            "rawSpaceLinks": {
                               "type": "array",
                               "items": {
                                 "type": "string"
@@ -2877,6 +2907,12 @@
                             "items": {
                               "type": "string"
                             }
+                          },
+                          "rawSpaceLinks": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
                           }
                         }
                       },
@@ -3322,6 +3358,12 @@
                             }
                           },
                           "codeBlockLanguages": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "rawSpaceLinks": {
                             "type": "array",
                             "items": {
                               "type": "string"
@@ -3772,6 +3814,12 @@
                         }
                       },
                       "codeBlockLanguages": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "rawSpaceLinks": {
                         "type": "array",
                         "items": {
                           "type": "string"
@@ -4401,6 +4449,12 @@
                               }
                             },
                             "codeBlockLanguages": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            "rawSpaceLinks": {
                               "type": "array",
                               "items": {
                                 "type": "string"
@@ -9466,6 +9520,12 @@
                                         "items": {
                                           "type": "string"
                                         }
+                                      },
+                                      "rawSpaceLinks": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "string"
+                                        }
                                       }
                                     }
                                   },
@@ -11666,6 +11726,12 @@
                                         "items": {
                                           "type": "string"
                                         }
+                                      },
+                                      "rawSpaceLinks": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "string"
+                                        }
                                       }
                                     }
                                   },
@@ -12117,6 +12183,12 @@
                                             }
                                           },
                                           "codeBlockLanguages": {
+                                            "type": "array",
+                                            "items": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "rawSpaceLinks": {
                                             "type": "array",
                                             "items": {
                                               "type": "string"
@@ -12820,6 +12892,12 @@
                                             }
                                           },
                                           "codeBlockLanguages": {
+                                            "type": "array",
+                                            "items": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "rawSpaceLinks": {
                                             "type": "array",
                                             "items": {
                                               "type": "string"
@@ -13549,6 +13627,12 @@
                                         "items": {
                                           "type": "string"
                                         }
+                                      },
+                                      "rawSpaceLinks": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "string"
+                                        }
                                       }
                                     }
                                   },
@@ -14199,6 +14283,12 @@
                                         }
                                       },
                                       "codeBlockLanguages": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "rawSpaceLinks": {
                                         "type": "array",
                                         "items": {
                                           "type": "string"
@@ -15138,6 +15228,12 @@
                                           "items": {
                                             "type": "string"
                                           }
+                                        },
+                                        "rawSpaceLinks": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "string"
+                                          }
                                         }
                                       }
                                     },
@@ -15813,6 +15909,12 @@
                                           }
                                         },
                                         "codeBlockLanguages": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "string"
+                                          }
+                                        },
+                                        "rawSpaceLinks": {
                                           "type": "array",
                                           "items": {
                                             "type": "string"
@@ -16661,6 +16763,12 @@
                                             }
                                           },
                                           "codeBlockLanguages": {
+                                            "type": "array",
+                                            "items": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "rawSpaceLinks": {
                                             "type": "array",
                                             "items": {
                                               "type": "string"
@@ -18637,6 +18745,12 @@
                                 "items": {
                                   "type": "string"
                                 }
+                              },
+                              "rawSpaceLinks": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
                               }
                             }
                           },
@@ -19041,6 +19155,12 @@
                               }
                             },
                             "codeBlockLanguages": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            "rawSpaceLinks": {
                               "type": "array",
                               "items": {
                                 "type": "string"
@@ -19473,6 +19593,12 @@
                                   }
                                 },
                                 "codeBlockLanguages": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
+                                "rawSpaceLinks": {
                                   "type": "array",
                                   "items": {
                                     "type": "string"
@@ -20107,6 +20233,12 @@
                                       "items": {
                                         "type": "string"
                                       }
+                                    },
+                                    "rawSpaceLinks": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
                                     }
                                   }
                                 },
@@ -20673,6 +20805,12 @@
                                       }
                                     },
                                     "codeBlockLanguages": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "rawSpaceLinks": {
                                       "type": "array",
                                       "items": {
                                         "type": "string"
@@ -21308,6 +21446,12 @@
                                       }
                                     },
                                     "codeBlockLanguages": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "rawSpaceLinks": {
                                       "type": "array",
                                       "items": {
                                         "type": "string"
@@ -22017,6 +22161,12 @@
                                         "items": {
                                           "type": "string"
                                         }
+                                      },
+                                      "rawSpaceLinks": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "string"
+                                        }
                                       }
                                     }
                                   },
@@ -22492,6 +22642,12 @@
                                       "items": {
                                         "type": "string"
                                       }
+                                    },
+                                    "rawSpaceLinks": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
                                     }
                                   }
                                 },
@@ -22937,6 +23093,12 @@
                                       }
                                     },
                                     "codeBlockLanguages": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "rawSpaceLinks": {
                                       "type": "array",
                                       "items": {
                                         "type": "string"
@@ -23629,6 +23791,12 @@
                                       }
                                     },
                                     "codeBlockLanguages": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "rawSpaceLinks": {
                                       "type": "array",
                                       "items": {
                                         "type": "string"
@@ -24663,6 +24831,12 @@
                                       "items": {
                                         "type": "string"
                                       }
+                                    },
+                                    "rawSpaceLinks": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
                                     }
                                   }
                                 },
@@ -25264,6 +25438,12 @@
                                       "items": {
                                         "type": "string"
                                       }
+                                    },
+                                    "rawSpaceLinks": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
                                     }
                                   }
                                 },
@@ -25856,6 +26036,12 @@
                                   }
                                 },
                                 "codeBlockLanguages": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
+                                "rawSpaceLinks": {
                                   "type": "array",
                                   "items": {
                                     "type": "string"
@@ -26867,6 +27053,12 @@
                                       "items": {
                                         "type": "string"
                                       }
+                                    },
+                                    "rawSpaceLinks": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
                                     }
                                   }
                                 },
@@ -27465,6 +27657,12 @@
                                       }
                                     },
                                     "codeBlockLanguages": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "rawSpaceLinks": {
                                       "type": "array",
                                       "items": {
                                         "type": "string"
@@ -28076,6 +28274,12 @@
                                       }
                                     },
                                     "codeBlockLanguages": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "rawSpaceLinks": {
                                       "type": "array",
                                       "items": {
                                         "type": "string"
@@ -32678,6 +32882,12 @@
                                             }
                                           },
                                           "codeBlockLanguages": {
+                                            "type": "array",
+                                            "items": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "rawSpaceLinks": {
                                             "type": "array",
                                             "items": {
                                               "type": "string"
