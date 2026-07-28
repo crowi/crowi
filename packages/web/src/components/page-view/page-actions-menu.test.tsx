@@ -11,10 +11,14 @@ const { useDeletePage } = vi.hoisted(() => ({ useDeletePage: vi.fn() }));
 // mock it like `page-header.test.tsx` does so opening the share Dialog
 // doesn't need a real `QueryClientProvider`.
 const { useAppInfo } = vi.hoisted(() => ({ useAppInfo: vi.fn() }));
+// "Copy Markdown" audit test (below) only needs to observe the clipboard
+// call, not a real toast render — stub `notify` like `use-like.test.ts` does.
+const { notifyInfo, notifyError } = vi.hoisted(() => ({ notifyInfo: vi.fn(), notifyError: vi.fn() }));
 
 vi.mock('@/lib/use-bookmark', () => ({ useToggleBookmark }));
 vi.mock('@/lib/use-watch', () => ({ useToggleWatch, useWatchStatus: vi.fn() }));
 vi.mock('@/lib/use-app-info', () => ({ useAppInfo }));
+vi.mock('@/lib/notify', () => ({ notify: { info: notifyInfo, error: notifyError } }));
 // `DeletePageDialog` is always mounted (not gated by its own `open` prop —
 // only its Radix Dialog content is) and calls `useDeletePage()` unconditionally;
 // keep every other export real (`useRenamePage` / `useRenameSubtree` are only
@@ -140,5 +144,23 @@ describe('PageActionsMenu — share menu item (compact dotmenu)', () => {
     // the silent auto-copy attempt failed — no "copied" confirmation appears.
     expect(await screen.findByText(m['page.share.link_label']())).toBeInTheDocument();
     expect(screen.queryByText(m['page.share.url_copied']())).not.toBeInTheDocument();
+  });
+});
+
+describe('PageActionsMenu — "Copy Markdown" action (feature-page-link-space-paths Phase 1 audit note, AC 13)', () => {
+  it("copies page.revision.body byte-for-byte, including a literal un-re-encoded space-link destination — `handleCopyMarkdown` clipboard-writes the stored body string as-is; it never re-renders or re-parses it, so it is structurally unaffected by this feature's renderer/link-detector/page-path changes", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+
+    const body = '# Title\n\nSee [space link](/a b), [percent link](/a%20b) and [plus link](/a+b).';
+    const page = makePage({
+      revision: { _id: 'rev-1', path: '/docs/guide/example', body, format: 'markdown', createdAt: '2026-05-01T00:00:00.000Z' },
+    });
+    openCompactMenu(page);
+    fireEvent.click(screen.getByRole('menuitem', { name: m['page.action_copy_markdown']() }));
+
+    await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith(body));
+    // Not just "contains" — the exact same string, unencoded/unmodified.
+    expect(writeText.mock.calls[0][0]).toBe(body);
   });
 });
