@@ -119,6 +119,44 @@ describe('User', () => {
     });
   });
 
+  describe('Session revocation counters', () => {
+    // `authVersion` / `passwordResetGeneration` are bumped with `$inc` from
+    // one request while other requests may be holding a doc hydrated
+    // beforehand. They therefore must NOT carry a mongoose `default`:
+    // a default applied at hydration is persisted on the next save() (it
+    // rides along in the delta even though isModified() reports false),
+    // which would write the counter back to 0 and resurrect exactly the
+    // sessions a password change had just revoked.
+    test('a save from a stale doc cannot roll a bumped counter back', async () => {
+      const user = new User();
+      user.email = `revocation-counter-${Date.now().toString(36)}@example.com`;
+      user.setPassword('hogefuga11');
+      user.status = User.STATUS_ACTIVE;
+      await user.save();
+
+      // Make it a genuine pre-migration row: both paths ABSENT, not stored
+      // as 0. This is the whole point of the test — a schema `default` only
+      // gets applied (and then persisted by the next save) when the path is
+      // missing at hydration, so a fixture that already stores 0 would pass
+      // whether or not somebody re-added the default, proving nothing.
+      await User.collection.updateOne({ _id: user._id }, { $unset: { authVersion: '', passwordResetGeneration: '' } });
+
+      // A request that loaded the user before the password change.
+      const stale = await User.findById(user._id);
+
+      // The password change, from another request.
+      await User.updateOne({ _id: user._id }, { $inc: { authVersion: 1, passwordResetGeneration: 1 } });
+
+      // The in-flight request finishes and writes its own (unrelated) edit.
+      stale.name = 'Renamed after the change';
+      await stale.save();
+
+      const reloaded = await User.findById(user._id);
+      expect(reloaded.authVersion).toBe(1);
+      expect(reloaded.passwordResetGeneration).toBe(1);
+    });
+  });
+
   describe('User Utilities', () => {
     describe('Get username from path', () => {
       test('found', () => {

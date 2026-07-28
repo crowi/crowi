@@ -9196,7 +9196,7 @@
         },
         "responses": {
           "200": {
-            "description": "Password updated",
+            "description": "Password updated; earlier sessions revoked and a fresh token pair issued",
             "content": {
               "application/json": {
                 "schema": {
@@ -9210,11 +9210,23 @@
                     },
                     "message": {
                       "type": "string"
+                    },
+                    "accessToken": {
+                      "type": "string"
+                    },
+                    "refreshToken": {
+                      "type": "string"
+                    },
+                    "expiresIn": {
+                      "type": "number"
                     }
                   },
                   "required": [
                     "status",
-                    "message"
+                    "message",
+                    "accessToken",
+                    "refreshToken",
+                    "expiresIn"
                   ]
                 }
               }

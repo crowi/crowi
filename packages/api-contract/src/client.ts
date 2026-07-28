@@ -624,7 +624,9 @@ const appAuthMeUserChain = new OpenAPIHono()
   .openapi(meRoutes.updateThemeRoute, (c) => c.json({ status: 'ok' as const, theme: 'system' as const }, 200))
   .openapi(meRoutes.uploadPictureRoute, (c) => c.json({ status: true } satisfies PictureUploadResponse, 200))
   .openapi(meRoutes.deletePictureRoute, (c) => c.json({ status: 'ok' } satisfies SuccessResponse, 200))
-  .openapi(meRoutes.updatePasswordRoute, (c) => c.json({ status: 'ok', message: '' } satisfies PasswordUpdateSuccess, 200))
+  .openapi(meRoutes.updatePasswordRoute, (c) =>
+    c.json({ status: 'ok', message: '', accessToken: '', refreshToken: '', expiresIn: 0 } satisfies PasswordUpdateSuccess, 200),
+  )
   .openapi(meRoutes.recentlyViewedPagesRoute, (c) => c.json({ pages: [] } satisfies RecentlyViewedPagesResponse, 200))
   .openapi(accessTokenRoutes.listAccessTokensRoute, (c) => c.json({ accessTokens: [] } satisfies ListAccessTokensResponse, 200))
   .openapi(accessTokenRoutes.createAccessTokenRoute, (c) => c.json(stubCreateAccessToken, 201))

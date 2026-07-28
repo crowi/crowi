@@ -192,7 +192,12 @@ describe('Routes /api/v2/me (Hono)', () => {
         .set('Authorization', `Bearer ${accessToken}`)
         .send({ oldPassword: 'Password!1', newPassword: 'NewPwd!2', newPasswordConfirm: 'NewPwd!2' });
       expect(res.status).toBe(200);
-      expect(res.body).toEqual({ status: 'ok', message: 'Password updated' });
+      expect(res.body).toMatchObject({ status: 'ok', message: 'Password updated' });
+      // The change revoked every earlier session, this one included, so
+      // carry on with the replacement pair the response handed back (the
+      // web client does the same via `storeTokens`).
+      expect(res.body.accessToken).toBeTruthy();
+      accessToken = res.body.accessToken;
     });
 
     it('returns 400 status=error when oldPassword is wrong', async () => {
@@ -204,6 +209,32 @@ describe('Routes /api/v2/me (Hono)', () => {
         .send({ oldPassword: 'Password!1', newPassword: 'AnotherPwd!3', newPasswordConfirm: 'AnotherPwd!3' });
       expect(res.status).toBe(400);
       expect(res.body).toMatchObject({ status: 'error', errors: ['Wrong current password'] });
+    });
+
+    it('revokes sessions minted before the change and returns a fresh pair', async () => {
+      const REVOKE_EMAIL = 'me-password-revoke@example.com';
+      const seeded = await seedActiveUser({ name: 'Me Pwd Revoke', username: 'me-pwd-revoke', email: REVOKE_EMAIL, password: 'Password!1' });
+      const staleToken = seeded.accessToken;
+
+      const res = await request(app)
+        .put('/api/v2/me/password')
+        .set('Authorization', `Bearer ${staleToken}`)
+        .send({ oldPassword: 'Password!1', newPassword: 'NewPwd!2', newPasswordConfirm: 'NewPwd!2' });
+      expect(res.status).toBe(200);
+
+      // The whole point of changing a password: a session an attacker
+      // already holds must stop working.
+      const stale = await request(app).get('/api/v2/me').set('Authorization', `Bearer ${staleToken}`);
+      expect(stale.status).toBe(401);
+
+      // ...but the caller's own tab keeps working, on the pair the
+      // response just handed back.
+      expect(res.body.accessToken).toBeTruthy();
+      expect(res.body.refreshToken).toBeTruthy();
+      const fresh = await request(app).get('/api/v2/me').set('Authorization', `Bearer ${res.body.accessToken}`);
+      expect(fresh.status).toBe(200);
+
+      await User().deleteMany({ email: REVOKE_EMAIL });
     });
   });
 

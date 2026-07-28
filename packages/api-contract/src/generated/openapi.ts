@@ -1118,7 +1118,7 @@ export interface paths {
                 };
             };
             responses: {
-                /** @description Password updated */
+                /** @description Password updated; earlier sessions revoked and a fresh token pair issued */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -1128,6 +1128,9 @@ export interface paths {
                             /** @enum {string} */
                             status: "ok";
                             message: string;
+                            accessToken: string;
+                            refreshToken: string;
+                            expiresIn: number;
                         };
                     };
                 };

@@ -19,7 +19,7 @@ import type { z } from 'zod';
 
 import type Crowi from 'src/crowi';
 import type { UserDocument } from 'src/models/user';
-import { createJwtUtil } from 'src/util/jwt';
+import { createJwtUtil, isCurrentAuthVersion } from 'src/util/jwt';
 
 type AuthenticationRequiredError = z.infer<typeof AuthenticationRequiredErrorSchema>;
 type UserStatusError = z.infer<typeof UserStatusErrorSchema>;
@@ -91,7 +91,13 @@ export const createJwtAuth = (crowi: Crowi) => {
     //   - JWT `oauth_access` (Bearer only) → OAuth token, claim scopes.
     // `resolved` carries the user plus a deferred scope/context applier so
     // the shared status check below runs once for every credential shape.
-    let resolved: { userId: string; apply: () => Promise<void> } | null = null;
+    //
+    // `sessionAuthVersion` is the web-session revocation claim: `false`
+    // means "not a web session" (PAT / OAuth — revoked through their own
+    // records, so the generation check must not apply to them), otherwise
+    // it is the token's `av` claim, `undefined` for tokens minted before
+    // the claim existed.
+    let resolved: { userId: string; sessionAuthVersion: number | undefined | false; apply: () => Promise<void> } | null = null;
 
     const isPat = !fromCookie && token.startsWith(PersonalAccessToken.TOKEN_PREFIX);
 
@@ -105,6 +111,7 @@ export const createJwtAuth = (crowi: Crowi) => {
       const tokenId = record._id.toString();
       resolved = {
         userId: record.userId.toString(),
+        sessionAuthVersion: false,
         apply: async () => {
           const scopes = new Set<Scope>();
           for (const s of record.scopes) {
@@ -125,6 +132,9 @@ export const createJwtAuth = (crowi: Crowi) => {
       }
       resolved = {
         userId: payload.userId,
+        // OAuth access tokens are not web sessions; only `access` (Bearer
+        // or the cookie fallback) carries the session generation.
+        sessionAuthVersion: payload.type === 'oauth_access' ? false : payload.av,
         apply: async () => {
           // Web sessions (`access`, or the cookie fallback) get every scope
           // so `requireScope` always passes and UI behaviour is unchanged.
@@ -153,6 +163,15 @@ export const createJwtAuth = (crowi: Crowi) => {
     // unauthenticated request never reaches the handler.
     const user = await User.findById(resolved.userId);
     if (!user) {
+      return c.json(AUTH_REQUIRED_BODY, 401);
+    }
+
+    // Web-session revocation. Piggybacks on the `findById` above, so it
+    // costs no extra query. A password change bumps `user.authVersion`,
+    // which strands every token minted before it — including one an
+    // attacker already holds. PAT / OAuth credentials skip this
+    // (`sessionAuthVersion === false`); they have their own revocation.
+    if (resolved.sessionAuthVersion !== false && !isCurrentAuthVersion(resolved.sessionAuthVersion, user)) {
       return c.json(AUTH_REQUIRED_BODY, 401);
     }
 

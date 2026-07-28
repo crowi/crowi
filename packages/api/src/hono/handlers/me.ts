@@ -50,6 +50,7 @@ import type Crowi from 'src/crowi';
 import type { PageDocument } from 'src/models/page';
 import type { UserDocument } from 'src/models/user';
 import FileUploader from 'src/util/file-uploader';
+import { createJwtUtil } from 'src/util/jwt';
 import { mapDuplicateKeyError } from 'src/util/map-duplicate-key-error';
 import { createMailTokenUtil } from 'src/util/mail-token';
 import { pageToResponse } from 'src/util/page-response';
@@ -135,6 +136,7 @@ const cleanupTmp = (tmpPath: string): void => {
 export const registerMeRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app: E, crowi: Crowi) => {
   const User = crowi.model('User');
   const Page = crowi.model('Page');
+  const jwtUtil = createJwtUtil(crowi);
 
   // Every `/me/*` endpoint requires auth. Install the middleware before
   // `.openapi(...)` so the path matcher sees the route (consistent with
@@ -406,22 +408,48 @@ export const registerMeRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app: 
         }
       }
 
-      return new Promise((resolve) => {
-        userWithSecrets.updatePassword(newPassword, (err: Error | null) => {
-          if (err) {
-            debug('Error updating password:', err);
-            const errors = extractMongooseErrors(err, 'Failed to update password');
-            resolve(c.json({ status: 'error' as const, message: errors[0] || 'Failed to update password', errors }, 400));
-            return;
-          }
-          // Security notification — best-effort, never fails the change.
-          void crowi
-            .getMailer()
-            .sendPasswordChangedNotice(user.email, user.lang)
-            .catch((mailErr) => debug('failed to send password-changed notice:', mailErr));
-          resolve(c.json({ status: 'ok' as const, message: 'Password updated' }, 200));
-        });
-      });
+      // Changing your password ends every other session. In ONE update we
+      // store the new hash and bump both revocation counters:
+      //
+      //  - `authVersion` strands every web-session token minted earlier —
+      //    including the one an attacker may already hold. Without this a
+      //    password change protected nothing for up to the refresh token's
+      //    30 days.
+      //  - `passwordResetGeneration` kills any password-reset link still
+      //    in flight, which would otherwise let a stale mail link undo the
+      //    change.
+      //
+      // Personal access tokens and OAuth grants deliberately survive: they
+      // are separate credentials with their own revocation UI, and killing
+      // them here would silently break integrations on a routine password
+      // rotation.
+      try {
+        userWithSecrets.setPassword(newPassword);
+        const updated = await User.findByIdAndUpdate(
+          user._id,
+          { $set: { password: userWithSecrets.password }, $inc: { authVersion: 1, passwordResetGeneration: 1 } },
+          { returnDocument: 'after' },
+        );
+        if (!updated) {
+          return c.json({ status: 'error' as const, message: 'Failed to update password', errors: ['Failed to update password'] }, 400);
+        }
+
+        // Security notification — best-effort, never fails the change.
+        void crowi
+          .getMailer()
+          .sendPasswordChangedNotice(updated.email, updated.lang)
+          .catch((mailErr) => debug('failed to send password-changed notice:', mailErr));
+
+        // The revocation above also invalidated the caller's own token, so
+        // hand back a pair minted under the new generation — otherwise the
+        // tab that just changed the password would be signed out.
+        const tokens = jwtUtil.generateTokens(updated);
+        return c.json({ status: 'ok' as const, message: 'Password updated', ...tokens }, 200);
+      } catch (err) {
+        debug('Error updating password:', err);
+        const errors = extractMongooseErrors(err, 'Failed to update password');
+        return c.json({ status: 'error' as const, message: errors[0] || 'Failed to update password', errors }, 400);
+      }
     })
     .openapi(recentlyViewedPagesRoute, async (c) => {
       const user = c.get('user');

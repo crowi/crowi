@@ -6188,7 +6188,9 @@ paths:
                 - newPasswordConfirm
       responses:
         '200':
-          description: Password updated
+          description: >-
+            Password updated; earlier sessions revoked and a fresh token pair
+            issued
           content:
             application/json:
               schema:
@@ -6200,9 +6202,18 @@ paths:
                       - ok
                   message:
                     type: string
+                  accessToken:
+                    type: string
+                  refreshToken:
+                    type: string
+                  expiresIn:
+                    type: number
                 required:
                   - status
                   - message
+                  - accessToken
+                  - refreshToken
+                  - expiresIn
         '400':
           description: Password update failed
           content:

@@ -31,7 +31,7 @@ import Debug from 'debug';
 
 import type Crowi from 'src/crowi';
 import type { UserDocument } from 'src/models/user';
-import { createJwtUtil } from 'src/util/jwt';
+import { createJwtUtil, isCurrentAuthVersion } from 'src/util/jwt';
 import { createMailTokenUtil } from 'src/util/mail-token';
 import { mapDuplicateKeyError } from 'src/util/map-duplicate-key-error';
 
@@ -235,6 +235,13 @@ export const registerTokenAuthRoutes = <E extends OpenAPIHono<CrowiHonoBindings>
 
         const user = await User.findById(payload.userId);
         if (!user || user.status !== User.STATUS_ACTIVE) {
+          return c.json(AUTH_REQUIRED_BODY, 401);
+        }
+
+        // A refresh token from a revoked session must not be tradeable for
+        // a live access token — otherwise the password-change revocation
+        // would only cost the holder one silent refresh round-trip.
+        if (!isCurrentAuthVersion(payload.av, user)) {
           return c.json(AUTH_REQUIRED_BODY, 401);
         }
 

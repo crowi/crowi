@@ -1,0 +1,5 @@
+---
+"@crowi/api": patch
+---
+
+Close three ways an account could be taken over without knowing its password: an account-activation link no longer signs anyone in once the account is already active (previously a second click on a 24-hour-old link handed out a full session), a password-reset link now works exactly once instead of staying usable for its whole hour, and both changing and resetting your password now sign out every other session — so if someone was already logged in as you, they are kicked out. Two consequences when you upgrade: everyone is signed out once and has to log in again (sessions issued by the previous version cannot be checked against the new revocation rule, so they are refused rather than trusted), and any password-reset emails sent before the upgrade stop working — recipients who still need one can simply request a new link, and since reset links only live an hour this affects at most the last hour of mail. Personal access tokens and OAuth-connected apps keep working throughout, including across a password change; revoke those from their own settings pages when you need to.

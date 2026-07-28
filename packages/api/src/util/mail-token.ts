@@ -39,6 +39,8 @@ export interface MailTokenClaims {
   email: string;
   /** email-change only: the account's email at issue time (single-use binding). */
   fromEmail?: string;
+  /** reset only: the account's `passwordResetGeneration` at issue time (single-use binding). */
+  resetGeneration?: number;
 }
 
 export interface SignMailTokenResult {

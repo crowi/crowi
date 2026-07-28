@@ -178,7 +178,7 @@ export const updatePasswordRoute = createRoute({
   },
   responses: {
     200: {
-      description: 'Password updated',
+      description: 'Password updated; earlier sessions revoked and a fresh token pair issued',
       content: { 'application/json': { schema: PasswordUpdateSuccessSchema } },
     },
     400: {

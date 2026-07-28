@@ -17,6 +17,15 @@ export type TokenPayload =
       userId: string;
       email: string;
       type: 'access' | 'refresh';
+      /**
+       * Session generation (`User.authVersion`) at issue time. The auth
+       * middleware rejects the token once the user's current value moves
+       * past it, which is how a password change signs every other session
+       * out. Optional because tokens minted before this claim existed
+       * carry none — those are treated as invalid (one-time sign-out),
+       * never as "no generation to check".
+       */
+      av?: number;
     }
   | {
       userId: string;
@@ -41,6 +50,25 @@ export type VerifiableTokenType = TokenPayload['type'];
 const ACCESS_TOKEN_TTL_SEC = Number(process.env.JWT_ACCESS_TOKEN_TTL_SECONDS) || 60 * 60; // 1 hour
 const REFRESH_TOKEN_TTL_SEC = Number(process.env.JWT_REFRESH_TOKEN_TTL_SECONDS) || 30 * 24 * 60 * 60; // 30 days
 
+/**
+ * Whether a web-session token's `av` claim still names the user's current
+ * session generation. Shared by the auth middleware and every path that
+ * trades a token for a new one, so the rule is stated exactly once:
+ *
+ *  - a token whose `av` is behind `user.authVersion` was minted before a
+ *    password change and is dead;
+ *  - a token carrying **no** `av` (minted before the claim existed) is
+ *    equally dead — "no claim" must never read as "nothing to check",
+ *    or the whole mechanism would be opt-out by simply omitting it.
+ *
+ * `?? 0` on the user side covers rows written before the field existed.
+ * Only web-session (`access` / `refresh`) credentials go through here;
+ * PATs and OAuth access tokens carry their own revocation records.
+ */
+export function isCurrentAuthVersion(tokenAuthVersion: number | undefined, user: { authVersion?: number | null }): boolean {
+  return tokenAuthVersion === (user.authVersion ?? 0);
+}
+
 export function createJwtUtil(crowi: Crowi) {
   const config = crowi.getConfig();
   const secret = config.crowi['app:secret'] || config.crowi['SECRET_TOKEN'] || 'your-secret-key';
@@ -52,6 +80,10 @@ export function createJwtUtil(crowi: Crowi) {
     const payload = {
       userId: user._id.toString(),
       email: user.email,
+      // Bind the pair to the user's session generation: bumping
+      // `authVersion` (password change) invalidates every token minted
+      // before it. `?? 0` covers rows written before the field existed.
+      av: user.authVersion ?? 0,
     };
 
     const accessToken = jwt.sign({ ...payload, type: 'access' }, secret, {
@@ -158,6 +190,13 @@ export function createJwtUtil(crowi: Crowi) {
     const user = await User.findById(payload.userId);
 
     if (!user || user.status !== User.STATUS_ACTIVE) {
+      return null;
+    }
+
+    // Same session-generation gate the auth middleware applies: a refresh
+    // token from a revoked session must not be tradeable for a live access
+    // token, otherwise a password change would not end the session at all.
+    if (!isCurrentAuthVersion(payload.av, user)) {
       return null;
     }
 
