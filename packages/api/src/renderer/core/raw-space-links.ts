@@ -1,4 +1,5 @@
 import type { Link, PhrasingContent, Text } from 'mdast';
+import type { PipelineMetadata } from '../pipeline';
 import type { UnifiedTransformPlugin } from './headings';
 
 /**
@@ -33,14 +34,24 @@ import type { UnifiedTransformPlugin } from './headings';
  *   - a directly-preceding backslash (`\[label\](/a b)`) disqualifies
  *     the match — see the escape-detection note below
  *
- * Recovered `link` nodes carry `data.rawSpaceRecovered = true`.
+ * Every recovered link's verbatim `url` (destination) is pushed onto
+ * `metadata.rawSpaceLinks` (feature-backlink-raw-space-metadata) — the
+ * exact same "core transform pushes into the run's `PipelineMetadata`
+ * bag" shape `wikilinks.ts`'s `remarkWikiLinks` uses for
+ * `metadata.wikiLinks`. That bag is persisted verbatim onto
+ * `revision.meta` (`models/revision.ts`'s `metadataToRevisionMeta`).
  * `Backlink.createBySavedPage` (`packages/api/src/models/backlink.ts`)
- * walks the saved `renderedAst` for this marker to extract backlinks
- * from these links — deliberately NOT a new `linkDetector` regex
- * pattern, which would match raw-space tokens inside code fences too
- * (this transform never descends into `code`/`inlineCode`, so those
- * never become `link` nodes here in the first place — see the walker
- * note below).
+ * reads `savedPage.revision.meta.rawSpaceLinks` directly — deliberately
+ * NOT a new `linkDetector` regex pattern, which would match raw-space
+ * tokens inside code fences too (this transform never descends into
+ * `code`/`inlineCode`, so those never contribute a `rawSpaceLinks` entry
+ * in the first place — see the walker note below). An earlier revision
+ * of this transform stamped a `data.rawSpaceRecovered = true` marker on
+ * the recovered `link` node instead, and `Backlink.createBySavedPage`
+ * found it by walking the whole saved `renderedAst` on every save; the
+ * metadata channel above replaces that (see
+ * `.feature-state/specs/feature-backlink-raw-space-metadata.md`) — no
+ * `data` marker is stamped on the link node anymore.
  *
  * Walker: mirrors `wikilinks.ts`'s walk-and-expand pattern (never
  * descends into `code`/`inlineCode`), with one addition — it also
@@ -130,17 +141,15 @@ function rawSliceFor(node: Text, body: string): string | undefined {
 }
 
 function toRecoveredLinkNode(match: GrammarMatch): Link {
-  const data: { rawSpaceRecovered: true } = { rawSpaceRecovered: true };
   return {
     type: 'link',
     url: match.destination,
     title: null,
     children: [{ type: 'text', value: match.label }],
-    data,
   };
 }
 
-function expandText(textNode: Text, body: string): PhrasingContent[] {
+function expandText(textNode: Text, body: string, metadata: PipelineMetadata): PhrasingContent[] {
   const value = textNode.value;
   if (!value || !value.includes('](/')) return [textNode];
 
@@ -172,7 +181,17 @@ function expandText(textNode: Text, body: string): PhrasingContent[] {
     if (match.start > lastIndex) {
       out.push({ type: 'text', value: value.slice(lastIndex, match.start) });
     }
-    out.push(decisions[i] ? toRecoveredLinkNode(match) : { type: 'text', value: value.slice(match.start, match.end) });
+    if (decisions[i]) {
+      // Same "push into the run's metadata bag" step `remarkWikiLinks`
+      // does for `metadata.wikiLinks` — the verbatim (not yet decoded)
+      // destination, so `Backlink.createBySavedPage` can apply the exact
+      // same `stripFragmentAndQuery` -> `decodeLinkPath` pipeline the
+      // regex-based extraction path uses.
+      metadata.rawSpaceLinks.push(match.destination);
+      out.push(toRecoveredLinkNode(match));
+    } else {
+      out.push({ type: 'text', value: value.slice(match.start, match.end) });
+    }
     lastIndex = match.end;
   });
   if (lastIndex < value.length) {
@@ -195,7 +214,7 @@ function expandText(textNode: Text, body: string): PhrasingContent[] {
  */
 export const makeRawSpaceLinkRecovery =
   (body: string): UnifiedTransformPlugin =>
-  (_metadata) =>
+  (metadata) =>
   (tree) => {
     walk(tree);
 
@@ -218,7 +237,7 @@ export const makeRawSpaceLinkRecovery =
           out.push(child);
           continue;
         }
-        out.push(...expandText(child as Text, body));
+        out.push(...expandText(child as Text, body, metadata));
       }
       return out;
     }

@@ -118,6 +118,48 @@ describe('computeRevisionRenderArtifactsAsync — toc tracks the AST it is serve
   });
 });
 
+// feature-backlink-raw-space-metadata — the spec explicitly calls out that
+// the "meta を持たない古い revision" on-the-fly fallback (revision.ts's
+// `meta?: RevisionMetaContent`) must also populate the new field, not just
+// the save-time path already covered in revision.test.ts.
+describe('computeRevisionRenderArtifactsAsync — rawSpaceLinks on the fully-legacy fallback path (feature-backlink-raw-space-metadata)', () => {
+  it('a revision with NO stored meta at all still gets rawSpaceLinks filled in via the on-the-fly recompute', async () => {
+    const result = await computeRevisionRenderArtifactsAsync(
+      crowi,
+      undefined, // pre-Phase-2 revision: no stored meta whatsoever
+      undefined, // and no stored renderedAst either
+      '[label](/legacy raw space doc)',
+      TEST_ACTOR,
+    );
+    expect(result.meta?.rawSpaceLinks).toEqual(['/legacy raw space doc']);
+  });
+
+  it('stored meta that predates this field (no rawSpaceLinks key) still counts as "complete" — no forced recompute', async () => {
+    // `metaIsComplete` intentionally does NOT gate on `rawSpaceLinks` (see
+    // that constant's comment in page-response.ts) — otherwise every
+    // pre-existing revision would be forced through an on-the-fly
+    // recompute on its very next read.
+    const preExistingMeta: RevisionMetaContent = { toc: [], wikiLinks: [], mentions: [], codeBlockLanguages: [] };
+    const freshAst = { type: 'root', children: [] };
+    const runRenderSpy = jest.spyOn(crowi.getRenderer(), 'runRender');
+    try {
+      const result = await computeRevisionRenderArtifactsAsync(
+        crowi,
+        preExistingMeta,
+        freshAst,
+        '[label](/should not be recomputed)',
+        TEST_ACTOR,
+        RENDERER_PIPELINE_VERSION,
+      );
+      expect(runRenderSpy).not.toHaveBeenCalled();
+      expect(result.renderedAst).toBe(freshAst);
+      expect(result.meta?.rawSpaceLinks).toBeUndefined();
+    } finally {
+      runRenderSpy.mockRestore();
+    }
+  });
+});
+
 describe('computeRevisionRenderArtifactsAsync — renderPending marker scan on the astIsFresh path (feature-plugin-renderer-mermaid spec §5)', () => {
   const COMPLETE_META: RevisionMetaContent = { toc: [], wikiLinks: [], mentions: [], codeBlockLanguages: [] };
   const PLUGIN = '@crowi/plugin-fixture-pending-scan';

@@ -229,6 +229,14 @@ export default (crowi: Crowi) => {
             type: [String],
             default: undefined,
           },
+          // feature-backlink-raw-space-metadata: verbatim destinations
+          // recovered by `renderer/core/raw-space-links.ts`. Additive —
+          // absent on every revision written before this field existed
+          // (no migration/backfill; see that spec's "移行の考え方").
+          rawSpaceLinks: {
+            type: [String],
+            default: undefined,
+          },
         },
         { _id: false },
       ),
@@ -451,15 +459,22 @@ interface PipelineMetadataLike {
   wikiLinks?: RevisionWikiLink[];
   mentions?: RevisionMention[];
   codeBlockLanguages?: string[];
+  /** feature-backlink-raw-space-metadata — see `PipelineMetadata.rawSpaceLinks`. */
+  rawSpaceLinks?: string[];
 }
 
 /**
- * Persist the 4 sub-fields verbatim (including empty arrays). The
+ * Persist the 5 sub-fields verbatim (including empty arrays). The
  * presence of `wikiLinks` / `mentions` / `codeBlockLanguages` is what
  * `computeRevisionMetaAsync` uses to skip the on-the-fly pipeline run
  * for revisions written under Phase 2 — collapsing empty arrays to
  * `undefined` would defeat that fast-path on every "no mentions, no
- * embeds" page.
+ * embeds" page. `rawSpaceLinks` (feature-backlink-raw-space-metadata)
+ * is additive and deliberately NOT part of that fast-path gate (see
+ * `pickStoredMeta`/`computeRevisionRenderArtifactsAsync` in
+ * `util/page-response.ts`) — revisions written before this field
+ * existed still count as "complete" so they don't all get forced
+ * through an on-the-fly recompute on next read.
  */
 export function metadataToRevisionMeta(metadata: PipelineMetadataLike): RevisionMetaContent {
   return {
@@ -467,5 +482,6 @@ export function metadataToRevisionMeta(metadata: PipelineMetadataLike): Revision
     wikiLinks: metadata.wikiLinks ?? [],
     mentions: metadata.mentions ?? [],
     codeBlockLanguages: metadata.codeBlockLanguages ?? [],
+    rawSpaceLinks: metadata.rawSpaceLinks ?? [],
   };
 }

@@ -23,6 +23,15 @@ export interface PipelineMetadata {
   wikiLinks: WikiLinkResponse[];
   mentions: MentionResponse[];
   codeBlockLanguages: string[];
+  /**
+   * feature-backlink-raw-space-metadata: verbatim `url` destinations of
+   * every raw-space link `raw-space-links.ts` recovers, in the same
+   * "core transform pushes into this bag" shape `wikiLinks` above uses
+   * (see that transform's own doc comment). Replaces the old
+   * `data.rawSpaceRecovered` AST marker that `Backlink.createBySavedPage`
+   * used to find by walking the whole `renderedAst` on every save.
+   */
+  rawSpaceLinks: string[];
 }
 
 /**
@@ -296,6 +305,7 @@ export async function runPipeline(
     wikiLinks: [],
     mentions: [],
     codeBlockLanguages: [],
+    rawSpaceLinks: [],
   };
 
   if (!body) {

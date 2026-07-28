@@ -8,8 +8,9 @@ import { escapeRegExp } from './regex';
  * this: its capture (`<(/[^>]+)>`) swallows everything up to the closing
  * `>`, so `</a b#frag>` / `</a b?x=1>` capture `/a b#frag` / `/a b?x=1`
  * whole — looking that up as a page path never finds the real
- * `/a b` page. Exported so `Backlink`/renderedAst-based extraction (Phase 2)
- * can reuse the same fragment/query contract instead of re-deriving it.
+ * `/a b` page. Exported so `Backlink`'s `revision.meta.rawSpaceLinks`-based
+ * extraction (Phase 2) can reuse the same fragment/query contract instead
+ * of re-deriving it.
  */
 export const stripFragmentAndQuery = (path: string): string => {
   const idx = path.search(/[?#]/);
@@ -22,9 +23,9 @@ export const stripFragmentAndQuery = (path: string): string => {
  * both extraction loops below so a single malformed link never aborts
  * extraction for the rest of the body — `Backlink.createBySavedPage`
  * relies on this to keep a page's other, well-formed backlinks alive.
- * Exported so the Phase 2 `renderedAst`-based extraction (raw-space
- * recovered links, `Backlink.createBySavedPage`) can decode with the
- * exact same semantics — including the same malformed-percent
+ * Exported so the Phase 2 `revision.meta.rawSpaceLinks`-based extraction
+ * (raw-space recovered links, `Backlink.createBySavedPage`) can decode
+ * with the exact same semantics — including the same malformed-percent
  * tolerance — instead of duplicating this one-liner.
  */
 export const decodeLinkPath = (raw: string): string | null => {

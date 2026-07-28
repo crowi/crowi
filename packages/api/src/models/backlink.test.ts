@@ -225,11 +225,11 @@ describe('Backlink', () => {
 
     // --- feature-page-link-space-paths Phase 2 ---------------------------
 
-    test('a raw-space recovered link creates a backlink extracted from renderedAst — fragment-stripped, +-mixed decode, and malformed-percent-tolerant, all in one save', async () => {
+    test('a raw-space recovered link creates a backlink extracted from revision.meta.rawSpaceLinks — fragment-stripped, +-mixed decode, and malformed-percent-tolerant, all in one save', async () => {
       // `Backlink.createBySavedPage` extracts these from
-      // `savedPage.revision.renderedAst`'s `data.rawSpaceRecovered === true`
-      // marker `link` nodes (`extractRawSpaceRecoveredPaths`), NOT from a
-      // new `linkDetector` regex pattern (link-detector.test.ts's matching
+      // `savedPage.revision.meta.rawSpaceLinks` (feature-backlink-raw-
+      // space-metadata — `decodeRawSpaceLinkPaths`), NOT from a new
+      // `linkDetector` regex pattern (link-detector.test.ts's matching
       // test pins that `linkDetector.search` itself stays unchanged).
       const target1Path = `${PREFIX}raw space target`;
       const target3Path = `${PREFIX}a b c`;
@@ -267,9 +267,9 @@ describe('Backlink', () => {
 
     test('a raw-space token inside a fenced code block or inline code does not create a false backlink', async () => {
       // `raw-space-links.ts` never descends into `code`/`inlineCode`, so
-      // these tokens never become `data.rawSpaceRecovered === true` link
-      // nodes in `renderedAst` for `Backlink.createBySavedPage` to pick up
-      // — the render/backlink pair stays consistent (neither renders nor
+      // these tokens never contribute a `revision.meta.rawSpaceLinks`
+      // entry for `Backlink.createBySavedPage` to pick up — the
+      // render/backlink pair stays consistent (neither renders nor
       // backlinks it), unlike the pre-existing regex-detector limitation
       // Phase 1 explicitly declined to fix for the OTHER 3 link forms.
       const targetPath = `${PREFIX}target codefence raw space`;

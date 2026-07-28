@@ -201,10 +201,10 @@ describe('Url test', () => {
     // so widening the class here would create false backlinks the
     // renderer itself never turns into links. Phase 2's raw-space
     // recovery (`renderer/core/raw-space-links.ts`) still gets its
-    // links backlinked, but via a SEPARATE, AST-based extraction step
-    // in `Backlink.createBySavedPage` (walking `revision.renderedAst`
-    // for `data.rawSpaceRecovered === true` marker nodes) — see
-    // `backlink.test.ts`'s "raw-space recovered links" coverage.
+    // links backlinked, but via a SEPARATE extraction step in
+    // `Backlink.createBySavedPage` that reads
+    // `revision.meta.rawSpaceLinks` (feature-backlink-raw-space-metadata)
+    // — see `backlink.test.ts`'s "raw-space recovered links" coverage.
     const linkDetector = LinkDetector(crowi);
     const results = linkDetector.search('[a](/a b)');
 
