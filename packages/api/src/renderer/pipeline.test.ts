@@ -235,14 +235,25 @@ describe('pipeline + core renderers', () => {
     // like `remarkWikiLinks` — that turns that literal text back into a
     // clickable internal `link` node. This is a deliberate, narrow deviation
     // from CommonMark, not a parser fix; see the spec's "設計の主な判断"/
-    // Phase 2 for the full rationale (image/escape disambiguation, backlink
-    // extraction via `renderedAst` marker instead of a new regex pattern).
+    // Phase 2 for the full rationale (image/escape disambiguation). Backlink
+    // extraction reads `metadata.rawSpaceLinks` (feature-backlink-raw-space-
+    // metadata), NOT an AST marker — see the "combined run" / metadata
+    // assertions below.
 
-    it('recovers a raw-space absolute-path destination into an internal link node, marked for Phase 2 backlink extraction', async () => {
-      const { tree } = await runCore('[label](/absolute path with spaces)');
+    it('recovers a raw-space absolute-path destination into an internal link node, with no AST marker stamped', async () => {
+      const { tree, metadata } = await runCore('[label](/absolute path with spaces)');
       const link = findLink(tree);
       expect(link).toMatchObject({ type: 'link', url: '/absolute path with spaces' });
-      expect((link as { data?: { rawSpaceRecovered?: boolean } }).data).toMatchObject({ rawSpaceRecovered: true });
+      // feature-backlink-raw-space-metadata: no `data.rawSpaceRecovered`
+      // marker anymore — the destination instead goes onto the metadata
+      // channel below (mirrors `remarkWikiLinks`'s `metadata.wikiLinks`).
+      expect((link as { data?: unknown }).data).toBeUndefined();
+      expect(metadata.rawSpaceLinks).toEqual(['/absolute path with spaces']);
+    });
+
+    it('does not push anything onto metadata.rawSpaceLinks when nothing is recovered', async () => {
+      const { metadata } = await runCore('plain text, no raw-space links here.');
+      expect(metadata.rawSpaceLinks).toEqual([]);
     });
 
     it('does NOT recover image syntax — `![alt](/a b)` stays literal text', async () => {
@@ -274,11 +285,12 @@ describe('pipeline + core renderers', () => {
 
     it('does not recover a raw-space token inside a fenced code block or inline code', async () => {
       // Same walker guard as `remarkWikiLinks` — never descends into
-      // `code`/`inlineCode` — so these tokens never become marker-carrying
-      // `link` nodes for `Backlink.createBySavedPage`'s renderedAst walk to
-      // pick up (see `backlink.test.ts`'s matching negative test).
+      // `code`/`inlineCode` — so these tokens never become `link` nodes
+      // nor contribute a `metadata.rawSpaceLinks` entry for
+      // `Backlink.createBySavedPage` to pick up (see `backlink.test.ts`'s
+      // matching negative test).
       const md = ['Before para', '', '```', '[x](/a b)', '```', '', 'Inline `[y](/c d)` skipped.'].join('\n');
-      const { tree } = await runCore(md);
+      const { tree, metadata } = await runCore(md);
       const hasLink = (node: unknown): boolean => {
         if (!node || typeof node !== 'object') return false;
         const n = node as { type?: string; children?: unknown[] };
@@ -286,6 +298,7 @@ describe('pipeline + core renderers', () => {
         return Array.isArray(n.children) ? n.children.some(hasLink) : false;
       };
       expect(hasLink(tree)).toBe(false);
+      expect(metadata.rawSpaceLinks).toEqual([]);
     });
 
     it('does not recover a raw-space fragment nested inside an existing link label — outer link structure stays intact', async () => {
@@ -366,13 +379,24 @@ describe('pipeline + core renderers', () => {
   });
 
   describe('combined run', () => {
-    it('populates all 4 metadata fields in one parse', async () => {
-      const md = ['# Welcome', '', '## Setup', '', 'See [[/install]] and ping @alice.', '', '```ts', 'const x = 1;', '```'].join('\n');
+    it('populates all 5 metadata fields in one parse', async () => {
+      const md = [
+        '# Welcome',
+        '',
+        '## Setup',
+        '',
+        'See [[/install]], [a raw space link](/raw space doc), and ping @alice.',
+        '',
+        '```ts',
+        'const x = 1;',
+        '```',
+      ].join('\n');
       const { metadata } = await runCore(md);
       expect(metadata.toc.map((e) => e.text)).toEqual(['Welcome', 'Setup']);
       expect(metadata.wikiLinks.map((w) => w.target)).toEqual(['/install']);
       expect(metadata.mentions.map((m) => m.username)).toEqual(['alice']);
       expect(metadata.codeBlockLanguages).toEqual(['ts']);
+      expect(metadata.rawSpaceLinks).toEqual(['/raw space doc']);
     });
   });
 
