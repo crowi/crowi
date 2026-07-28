@@ -92,7 +92,11 @@ export const registerPasswordResetRoutes = <E extends OpenAPIHono<CrowiHonoBindi
         return c.json(INVALID_TOKEN_BODY, 401);
       }
       const user = await User.findById(payload.userId);
-      if (!user || (user.passwordResetGeneration ?? 0) !== tokenGeneration) {
+      // The address binding is checked here too, for the same reason the
+      // generation is: the POST would reject this link anyway, and there is
+      // no point presenting the form first. See the POST for why the token's
+      // own `email` claim is the binding.
+      if (!user || (user.passwordResetGeneration ?? 0) !== tokenGeneration || payload.email !== user.email) {
         return c.json(INVALID_TOKEN_BODY, 401);
       }
       return c.json({ ok: true as const }, 200);
@@ -114,6 +118,21 @@ export const registerPasswordResetRoutes = <E extends OpenAPIHono<CrowiHonoBindi
         // suspended after the link was minted. login enforces this gate,
         // so the reset endpoint (which also signs the user in) must too.
         if (user.status !== User.STATUS_ACTIVE) {
+          return c.json(INVALID_TOKEN_BODY, 401);
+        }
+
+        // Bind the link to the address it was actually delivered to. Without
+        // this, an account that changes its email inside the token's 1h TTL
+        // can still be taken over by whoever controls the *old* mailbox.
+        // The check reads the token's own `email` claim rather than relying
+        // on some future email-change path remembering to bump the
+        // generation, so it is structurally fail-closed: a new way to change
+        // an address cannot forget to invalidate outstanding links.
+        //
+        // The deliberate consequence is that "request a reset, then
+        // legitimately change your email, then use the old link" fails; the
+        // user requests a fresh link.
+        if (payload.email !== user.email) {
           return c.json(INVALID_TOKEN_BODY, 401);
         }
 

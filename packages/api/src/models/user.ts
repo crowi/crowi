@@ -791,11 +791,44 @@ export default (crowi: Crowi) => {
       throw new Error('User not found');
     }
 
-    // is updatable check
-    // if (userData.isUp
+    // An admin reset is most often performed *because* the account is
+    // believed compromised, so it has to revoke as much as a self-service
+    // reset does — otherwise the one action taken in response to a takeover
+    // is the one that leaves the attacker's session alive:
+    //
+    //  - `authVersion` strands every web-session token minted earlier.
+    //  - `passwordResetGeneration` kills any reset link still in flight,
+    //    which would otherwise let a stale mail link (possibly sitting in a
+    //    mailbox the attacker controls) undo the reset.
+    //
+    // Personal access tokens and OAuth grants deliberately survive here, the
+    // same way they do for the self-service paths; they are separate
+    // credentials revoked through their own records.
+    //
+    // NOT yet covered, and not a deliberate carve-out: a pending email-change
+    // confirmation link also survives. `handlers/email-change.ts` binds that
+    // token only with `fromEmail === user.email`, and a reset leaves `email`
+    // untouched, so an attacker who requested a change before losing their
+    // session can still confirm it afterwards and take over the recovery
+    // address. Closing that needs the email-change token bound to a
+    // revocation generation too — tracked with the rest of the credential
+    // versioning work, not fixable by adding another `$inc` here.
+    //
+    // Hashing goes through the model's `setPassword` on the in-memory doc;
+    // only the resulting hash reaches the update, so the write and both
+    // counter bumps land in ONE atomic operation and no second write can
+    // roll a concurrently-bumped counter back.
     const newPassword = generateRandomTempPassword();
     userData.setPassword(newPassword);
-    const user = await userData.save();
+    const user = await User.findOneAndUpdate(
+      { _id: userData._id },
+      { $set: { password: userData.password }, $inc: { authVersion: 1, passwordResetGeneration: 1 } },
+      { returnDocument: 'after' },
+    );
+    if (!user) {
+      // Raced with a delete between the lookup above and this update.
+      throw new Error('User not found');
+    }
 
     return { user, newPassword };
   };

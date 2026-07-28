@@ -184,15 +184,6 @@ failure surfaces an inline error).
 > a secure channel and have them change it themselves after their first
 > login.
 
-> **Caution**: An admin-initiated password reset **does not end that
-> user's existing login sessions**. If you suspect an account has been
-> taken over, set its status to **SUSPENDED** first — a suspended user's
-> requests are refused even when they still hold a valid token. When the
-> user changes their own password from their settings screen, or resets it
-> themselves through a reset-mail link, every other session is signed out
-> at that moment (see
-> [User pages and profile](../guide/profile)).
-
 ### User approval
 
 When one or more **pending (REGISTERED) users** created by `Restricted` mode

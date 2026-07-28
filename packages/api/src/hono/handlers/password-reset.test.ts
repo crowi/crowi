@@ -60,6 +60,20 @@ describe('Routes /api/v2/auth password reset (Hono)', () => {
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe('INVALID_RESET_TOKEN');
     });
+
+    it('rejects a token minted for an address the account no longer uses', async () => {
+      // Mirrors the POST's binding check so the reset form is not shown for
+      // a link the POST would only reject after a password has been typed.
+      const user = await createActiveUser('validate-old@example.com');
+      const token = resetTokenFor(user, 'validate-old@example.com');
+
+      user.email = 'validate-new@example.com';
+      await user.save();
+
+      const res = await request(app).get('/api/v2/auth/reset-password').query({ token });
+      expect(res.status).toBe(401);
+      expect(res.body.error.code).toBe('INVALID_RESET_TOKEN');
+    });
   });
 
   describe('POST /api/v2/auth/reset-password', () => {
@@ -131,6 +145,27 @@ describe('Routes /api/v2/auth password reset (Hono)', () => {
         .get('/api/v2/me')
         .set({ Authorization: `Bearer ${reset.body.accessToken}` });
       expect(fresh.status).toBe(200);
+    });
+
+    it('rejects a token minted for an address the account no longer uses', async () => {
+      // The link was delivered to old@; the account then moved to new@
+      // inside the link's 1h TTL. Whoever still controls the old mailbox
+      // must not be able to set the password of an account that has moved
+      // on.
+      const user = await createActiveUser('old-mailbox@example.com');
+      const token = resetTokenFor(user, 'old-mailbox@example.com');
+
+      user.email = 'new-mailbox@example.com';
+      await user.save();
+
+      const res = await request(app).post('/api/v2/auth/reset-password').set(jsonHeaders).send({ token, password: 'stale-mailbox-pw' });
+      expect(res.status).toBe(401);
+      expect(res.body.error.code).toBe('INVALID_RESET_TOKEN');
+
+      const User = crowi.model('User');
+      const reloaded = await User.findById(user._id).select('+password');
+      expect(reloaded?.isPasswordValid('stale-mailbox-pw')).toBe(false);
+      expect(reloaded?.isPasswordValid('original-password')).toBe(true);
     });
 
     it('rejects a token of the wrong purpose (invite token) with 401', async () => {
