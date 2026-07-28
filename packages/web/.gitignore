@@ -17,6 +17,11 @@
 /.next/
 /out/
 
+# packages/e2e's dedicated dev-server distDir (NEXT_DIST_DIR), kept separate
+# from `/.next/` above so it never collides with turbo's `.next/**` build
+# outputs glob (see next.config.ts).
+/.next-e2e/
+
 # production
 /build
 
