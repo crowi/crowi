@@ -62,11 +62,20 @@ const docFor = async (pluginName: string, pageId: string) => {
 };
 
 /** Poll the event loop until `predicate()` is true or `maxTicks` is exhausted — mirrors `stale-while-revalidate.test.ts`'s `waitForCalls`. */
-const waitUntil = async (predicate: () => boolean, maxTicks = 200): Promise<void> => {
-  for (let i = 0; i < maxTicks; i += 1) {
+/**
+ * Poll until `predicate()` is true, THROWING if it never becomes true. Same
+ * contract (and the same reasons) as the copy in
+ * `renderer/core/code-block-dispatch.test.ts` — a silent give-up lets a test
+ * proceed from a state it never reached and fail later somewhere misleading,
+ * and a tick budget bounds nothing when the awaited work is real Mongo I/O.
+ */
+const waitUntil = async (predicate: () => boolean, timeoutMs = 5000): Promise<void> => {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
     if (predicate()) return;
     await new Promise((resolve) => setImmediate(resolve));
   }
+  throw new Error(`waitUntil: predicate did not become true within ${timeoutMs}ms`);
 };
 
 describe('cachedRenderOrPending', () => {
