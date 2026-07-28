@@ -194,7 +194,17 @@ describe('Url test', () => {
     });
   });
 
-  test('a raw-space absolute path destination is not detected as a backlink in Phase 1 (Phase 2 changes this)', () => {
+  test('a raw-space absolute path destination is not detected as a backlink via the regex-based `linkDetector.search` path (unchanged by Phase 2)', () => {
+    // `getPathRegexps()[2]` deliberately never grows a raw-space-tolerant
+    // pattern (see this file's/backlink.ts's Phase 2 comments) — a regex
+    // can't distinguish a code-fenced raw-space token from a real one,
+    // so widening the class here would create false backlinks the
+    // renderer itself never turns into links. Phase 2's raw-space
+    // recovery (`renderer/core/raw-space-links.ts`) still gets its
+    // links backlinked, but via a SEPARATE, AST-based extraction step
+    // in `Backlink.createBySavedPage` (walking `revision.renderedAst`
+    // for `data.rawSpaceRecovered === true` marker nodes) — see
+    // `backlink.test.ts`'s "raw-space recovered links" coverage.
     const linkDetector = LinkDetector(crowi);
     const results = linkDetector.search('[a](/a b)');
 

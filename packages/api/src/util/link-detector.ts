@@ -22,8 +22,12 @@ export const stripFragmentAndQuery = (path: string): string => {
  * both extraction loops below so a single malformed link never aborts
  * extraction for the rest of the body — `Backlink.createBySavedPage`
  * relies on this to keep a page's other, well-formed backlinks alive.
+ * Exported so the Phase 2 `renderedAst`-based extraction (raw-space
+ * recovered links, `Backlink.createBySavedPage`) can decode with the
+ * exact same semantics — including the same malformed-percent
+ * tolerance — instead of duplicating this one-liner.
  */
-const decodeLinkPath = (raw: string): string | null => {
+export const decodeLinkPath = (raw: string): string | null => {
   try {
     return decodeSpace(decodeURIComponent(raw));
   } catch {
