@@ -85,8 +85,20 @@ a space, use one of the following notations.
 | `<...>` (angle-bracket) | `[label](</foo bar>)` | The CommonMark-standard angle-bracket destination form — a raw space can be written as-is |
 
 A raw space written directly in the destination, as in `[label](/foo bar)`,
-does not become a link — it is displayed as the literal text you typed (this
-is standard CommonMark behavior).
+does not become a link under CommonMark's standard interpretation. Crowi,
+however, leniently recovers it into a clickable internal link to the actual
+`/foo bar` page (**this is an intentional deviation from CommonMark**). Only
+an ordinary link with an absolute-path (starting with `/`) destination is
+recovered; the following stay literal text as typed:
+
+- Image syntax (`![alt](/foo bar)`)
+- An escaped form, e.g. `\[label\](/foo bar)`
+- Inside a fenced code block or inline code
+- Nested inside an existing link's label (e.g. `[outer [x](/foo bar) part](/dest)`)
+
+If interoperability with other CommonMark-compliant tooling matters, prefer
+one of the explicit `%20` / `+` / `<...>` notations above instead of relying
+on a raw space.
 
 ### Mentions `@username`
 
