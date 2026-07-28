@@ -33,6 +33,18 @@ export const MailTokenPayloadSchema = z.object({
    * before the claim existed simply no longer match).
    */
   resetGeneration: z.number().int().nonnegative().optional(),
+  /**
+   * For `email-change`: the account's `authVersion` at issue time. The
+   * confirm endpoint requires it to still match, so a pending address change
+   * dies with the session that requested it — otherwise an attacker who
+   * requested one before being evicted (admin reset, the owner changing
+   * their password) could still confirm it afterwards and take over the
+   * account's recovery address, undoing the very recovery action that
+   * evicted them. `authVersion` rather than a dedicated counter because the
+   * semantics wanted are exactly "the session that asked for this is gone",
+   * and that is what every bump of it already means.
+   */
+  authVersion: z.number().int().nonnegative().optional(),
   // iat / exp are injected and verified by the JWT layer.
   iat: z.number().optional(),
   exp: z.number().optional(),

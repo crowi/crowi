@@ -61,6 +61,21 @@ export const registerEmailChangeRoutes = <E extends OpenAPIHono<CrowiHonoBinding
           return c.json(INVALID_TOKEN_BODY, 401);
         }
 
+        // A pending change must not outlive the session that requested it.
+        // `fromEmail` alone does not achieve that: neither a password change
+        // nor an admin reset touches `email`, so it still matches afterwards
+        // — meaning an attacker who requested a change to their own address
+        // before being evicted could confirm it after the eviction and take
+        // the account's recovery address, undoing the recovery. Binding to
+        // `authVersion` is exactly the semantics wanted ("the session that
+        // asked for this is gone"), and every revocation event already moves
+        // it. Links minted before this claim existed carry no `authVersion`
+        // and are rejected outright rather than trusted.
+        const tokenAuthVersion = payload.authVersion;
+        if (tokenAuthVersion === undefined || tokenAuthVersion !== (user.authVersion ?? 0)) {
+          return c.json(INVALID_TOKEN_BODY, 401);
+        }
+
         // The new address may have been claimed by someone else between
         // the request and the confirmation.
         const clash = await User.findOne({ email: payload.email });
@@ -68,10 +83,28 @@ export const registerEmailChangeRoutes = <E extends OpenAPIHono<CrowiHonoBinding
           return c.json({ error: { code: 'EMAIL_TAKEN' as const, message: 'That email address is already in use' } }, 409);
         }
 
-        user.email = payload.email;
-        await user.save();
+        // Apply conditionally rather than with `save()`: the checks above are
+        // a read, and between them and the write the account can be reset,
+        // have its address changed by another link, or be raced by a second
+        // submission of this same one. Re-stating both bindings in the filter
+        // makes the confirmation atomic with them — no match means something
+        // moved underneath, which is the same 401 the checks would have given.
+        const applied = await User.findOneAndUpdate(
+          {
+            _id: user._id,
+            ...(payload.fromEmail ? { email: payload.fromEmail } : {}),
+            // Legacy rows carry no `authVersion`; `null` matches those as
+            // well as an explicit 0, which is what their links are bound to.
+            authVersion: tokenAuthVersion === 0 ? { $in: [0, null] } : tokenAuthVersion,
+          },
+          { $set: { email: payload.email } },
+          { returnDocument: 'after' },
+        );
+        if (!applied) {
+          return c.json(INVALID_TOKEN_BODY, 401);
+        }
 
-        return c.json({ ok: true as const, email: user.email }, 200);
+        return c.json({ ok: true as const, email: applied.email }, 200);
       } catch (error) {
         // The email findOne pre-check can be raced; the unique index is the
         // final defence. Map its E11000 to the same 409 the pre-check returns.

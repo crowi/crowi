@@ -207,7 +207,15 @@ export const registerMeRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app: 
           // Bind the token to the CURRENT email so it is single-use: once
           // the address changes, a stale token (whose fromEmail no longer
           // matches) is rejected and cannot revert the address later.
-          const { token } = createMailTokenUtil().signMailToken({ purpose: 'email-change', userId: user._id.toString(), email, fromEmail: user.email });
+          const { token } = createMailTokenUtil().signMailToken({
+            purpose: 'email-change',
+            userId: user._id.toString(),
+            email,
+            fromEmail: user.email,
+            // Bind the pending change to the session generation that asked
+            // for it, so it cannot outlive that session's revocation.
+            authVersion: user.authVersion ?? 0,
+          });
           const confirmUrl = `${baseUrl}/confirm-email?token=${token}`;
           // Fire-and-forget: do not block the profile response on SMTP.
           void mailer
