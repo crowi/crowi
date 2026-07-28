@@ -165,5 +165,62 @@ describe('Backlink', () => {
       const after = await Backlink.find({ fromPage: source._id });
       expect(after).toHaveLength(1);
     });
+
+    // --- feature-page-link-space-paths Phase 1 --------------------------
+
+    test('a malformed %-encoded link mixed into the body does not wipe out backlinks from the other, well-formed links', async () => {
+      // `linkDetector.search` (link-detector.ts) now wraps each link's
+      // decode in a per-link try/catch, so a malformed `%` (e.g. `/a%`,
+      // which makes `decodeURIComponent` throw) is skipped without
+      // aborting extraction for the rest of the body. Before this fix,
+      // `createBySavedPage` ran `removeBySavedPage` BEFORE `linkDetector.search`,
+      // so a throw here would have wiped this page's backlinks with
+      // nothing to replace them.
+      const targetPath = `${PREFIX}target-malformed`;
+      const sourcePath = `${PREFIX}source-malformed`;
+
+      const target = await Page.createPage(targetPath, '# target', user, {});
+      const source = await Page.createPage(sourcePath, `bad link [bad](/a%) and good link <${targetPath}>`, user, {});
+
+      const backlinks = await waitForBacklinks(Backlink, { page: target._id }, 1);
+      expect(backlinks).toHaveLength(1);
+      expect(backlinks[0].fromPage.toString()).toBe(source._id.toString());
+    });
+
+    test('createBySavedPage does not delete existing backlinks when extraction throws (extract-before-delete ordering)', async () => {
+      // Directly pins down the ordering fix: `linkDetector.search` /
+      // `convertLinksToPageIds` (extraction) now run BEFORE
+      // `Backlink.removeBySavedPage` (deletion). Simulating an extraction
+      // failure via a `Page.find` throw (used inside `convertLinksToPageIds`)
+      // proves the pre-existing backlinks survive an exception thrown
+      // during extraction — before this fix, `removeBySavedPage` ran first
+      // unconditionally and would already have deleted them.
+      const targetPath = `${PREFIX}target-order`;
+      const sourcePath = `${PREFIX}source-order`;
+
+      const target = await Page.createPage(targetPath, '# target', user, {});
+      const source = await Page.createPage(sourcePath, `<${targetPath}>`, user, {});
+
+      const before = await waitForBacklinks(Backlink, { fromPage: source._id }, 1);
+      expect(before).toHaveLength(1);
+
+      const removeSpy = jest.spyOn(Backlink, 'removeBySavedPage');
+      const findSpy = jest.spyOn(Page, 'find').mockImplementationOnce(() => {
+        throw new Error('simulated extraction failure');
+      });
+
+      try {
+        const reloaded = await Page.findById(source._id).populate('revision');
+        await expect(Backlink.createBySavedPage(reloaded)).rejects.toThrow('simulated extraction failure');
+
+        expect(removeSpy).not.toHaveBeenCalled();
+        const after = await Backlink.find({ fromPage: source._id });
+        expect(after).toHaveLength(1);
+        expect(after[0].page.toString()).toBe(target._id.toString());
+      } finally {
+        findSpy.mockRestore();
+        removeSpy.mockRestore();
+      }
+    });
   });
 });

@@ -60,6 +60,26 @@ describe('Routes /api/v2/pages/preview (Hono previewPage)', () => {
     expect(heading.data?.hProperties?.id).toBe('some-section');
   });
 
+  // feature-page-link-space-paths Phase 1 — narrow parity claim: `processor.parse(body)`
+  // (pipeline.ts:320) is a single mode-independent step run for both preview
+  // (`mode: 'view'`, no pageId) and save (`mode: 'save'`, pageId set) — see
+  // page-preview.ts vs `Revision.prepareRevision`. None of the core
+  // transforms (`buildCorePlugins`) rewrite an ordinary link's `url`, so the
+  // parsed `link` node is identical either way for `%20` / `+` / `<...>`
+  // destinations. This does NOT claim the full rendered output (or backlink
+  // detection) is identical between preview and save — plugin dispatch,
+  // mention resolution, and `<a>` vs Next `<Link>` rendering all differ by
+  // mode (see the spec's "設計の主な判断" note).
+  it('parses %20 / + / <...> link destinations to the same mdast `url` the save path would produce (link-node parse-stage parity only)', async () => {
+    const body = '[a](/a%20b) [b](/a+b) [c](</a c>)';
+    const res = await request(app).post('/api/v2/pages/preview').set(authHeaders(accessToken)).send({ body });
+
+    expect(res.status).toBe(200);
+    const ast = res.body.renderedAst as { children: Array<{ children: Array<{ type: string; url?: string }> }> };
+    const links = ast.children[0].children.filter((c) => c.type === 'link');
+    expect(links.map((l) => l.url)).toEqual(['/a%20b', '/a+b', '/a c']);
+  });
+
   it('strips parser `position` metadata so the response payload stays compact', async () => {
     const res = await request(app).post('/api/v2/pages/preview').set(authHeaders(accessToken)).send({ body: '# Heading\n\nparagraph' });
 

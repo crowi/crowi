@@ -187,6 +187,45 @@ describe('pipeline + core renderers', () => {
     });
   });
 
+  describe('ordinary Markdown link destinations (%20 / + / <...>) — feature-page-link-space-paths Phase 1', () => {
+    // `processor.parse(body)` (pipeline.ts:320) is the only step that turns
+    // Markdown link syntax into an mdast `link` node — none of the core
+    // transforms in `buildCorePlugins` (headings/image-attrs/wikilinks/
+    // mentions/code-blocks/syntax-highlight) touch an ordinary link's
+    // `url`. These tests pin down remark-parse's own (CommonMark-standard)
+    // behaviour so the renderer's "no space resolution happens here" claim
+    // can't silently regress on a future remark-parse bump. Real-space
+    // resolution for `+` happens later, outside the renderer, in the web's
+    // route-boundary decode (`decodePagePathFromUrl` — see page-path.test.ts).
+
+    const findLink = (tree: Root) => {
+      const paragraph = tree.children[0] as unknown as { type: string; children: Array<{ type: string; url?: string }> };
+      return paragraph.children.find((c) => c.type === 'link') as { type: string; url?: string } | undefined;
+    };
+
+    it('keeps a literal "+" destination as-is — the renderer does not resolve it to a space', async () => {
+      const { tree } = await runCore('[label](/a+b)');
+      expect(findLink(tree)).toMatchObject({ type: 'link', url: '/a+b' });
+    });
+
+    it('parses an angle-bracket destination with a real space', async () => {
+      const { tree } = await runCore('[label](</a b>)');
+      expect(findLink(tree)).toMatchObject({ type: 'link', url: '/a b' });
+    });
+
+    it('parses a %20-encoded destination as-is (no decode at parse time)', async () => {
+      const { tree } = await runCore('[label](/a%20b)');
+      expect(findLink(tree)).toMatchObject({ type: 'link', url: '/a%20b' });
+    });
+
+    it('does NOT parse a raw-space destination as a link — it stays literal text (Phase 2 changes this)', async () => {
+      const { tree } = await runCore('[label](/a b)');
+      const paragraph = tree.children[0] as unknown as { type: string; children: Array<{ type: string; value?: string }> };
+      expect(paragraph.children.some((c) => c.type === 'link')).toBe(false);
+      expect(paragraph.children[0]).toMatchObject({ type: 'text', value: '[label](/a b)' });
+    });
+  });
+
   describe('mentions', () => {
     it('extracts standalone @username', async () => {
       const md = 'Hi @alice and @bob_dev-1.';
