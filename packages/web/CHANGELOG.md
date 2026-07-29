@@ -1,5 +1,29 @@
 # @crowi/web
 
+## 2.0.0-alpha.10
+
+### Minor Changes
+
+- ec999f5: Add an MCP setup guide to the user settings page, and rename the tab that holds it from "Security" to "Password / API tokens / MCP" so its contents are discoverable from the tab strip.
+
+  The new "MCP setup" card sits between the password form and the personal access tokens list, mirroring the order a user actually follows: issue a PAT (noting that a write scope is what lets the AI create and edit pages), then register the server. It shows the instance's own `/api/v2/mcp` endpoint (resolved from `NEXT_PUBLIC_API_URL` or the browser origin, so it is correct for both same-origin and split-host deployments) and copy-pasteable registration snippets for both Claude Code (`claude mcp add --transport http …`) and the Codex CLI (`codex mcp add … --bearer-token-env-var`, plus the equivalent `~/.codex/config.toml` block), each with its own verification step and a link to the MCP operations documentation.
+
+- c771334: Rework live presence on narrow screens into a dedicated card, and stop treating a brief reconnect as "presence is gone".
+
+  Below 768px, "who is viewing this page right now" used to be a `[👁 N]` chip above the title — which sat awkwardly close to the historical `[👁 N] Seen` chip below the title, two different facts wearing the same icon and number. It is now a dedicated card placed directly under the statistics chips, so the mobile header reads title → author/updated → statistics → live presence → body. The card shows up to three overlapping avatars plus `+N`, a plain-language count that includes you ("5 viewing now" / 「5 人が現在閲覧中」), and a connection indicator that is readable from its text rather than colour alone. The whole card is one tap target opening the same viewer sheet as before, and the 60px compact header keeps a short `Live · N` trigger. Wide-viewport headers are unchanged.
+
+  The card also collapses away entirely when you are the only person present and expands smoothly when someone joins, compensating your scroll position so the body text never jumps while you are reading. On the connection side, the client now distinguishes an automatic reconnect that is still being retried from a connection that has terminally failed: during a retry the card stays put in a neutral "Reconnecting…" state showing the viewers it last knew about, instead of vanishing on every momentary network blip, and the green `Live` indicator only appears once viewer updates have actually arrived on the current connection.
+
+### Patch Changes
+
+- 0af3af0: Fixed the trash page list (`/trash/...`) double-decoding legacy `+`-joined path segments, which could mangle deleted pages whose name used the `+`-as-space URL convention.
+- 8a5433c: Fix four presence (live "who's viewing this page") consistency bugs.
+
+  Viewer membership is now refcounted per WebSocket connection instead of per user, so closing one tab of a multi-tab/multi-replica session no longer makes the user vanish from the viewer list while a sibling tab is still open — only the last connection leaving actually removes them. Viewer-list broadcasts now carry a monotonically increasing per-page generation number (a backward-compatible additive field on the `viewers` WebSocket message) so an old, out-of-order snapshot can never overwrite a newer one on the client. Navigating between pages no longer flashes the previous page's viewer list (including their identities) on the next page's first render. Finally, when the server fails to register a viewer (e.g. a transient Redis error) it now closes the WebSocket so the client's existing reconnect logic recovers, instead of leaving the connection open with a permanently stale viewer list.
+
+- Updated dependencies [8a5433c]
+  - @crowi/api-contract@2.0.0-alpha.10
+
 ## 2.0.0-alpha.9
 
 ### Patch Changes
