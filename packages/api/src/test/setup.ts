@@ -2,10 +2,11 @@
  * RFC-0006 Phase 6 Sub-batch D — test harness for the Hono-only api.
  *
  * Express has been removed; the api now boots Hono via
- * `@hono/node-server`'s `createAdaptorServer`. Supertest accepts any
- * Node `RequestListener` `(req, res) => void`, so we expose one by
- * piping through `getRequestListener(honoApp.fetch)` from
- * `@hono/node-server`.
+ * `@hono/node-server`'s `createAdaptorServer`. Supertest accepts either a
+ * bare Node `RequestListener` `(req, res) => void` OR an already-listening
+ * `http.Server` — we build the former with `getRequestListener(fetchFn)`
+ * from `@hono/node-server`, then wrap it in the latter (see `app`'s doc
+ * comment below for why: feature-test-harness-shared-server).
  *
  * Path rewrite: the OpenAPI contracts register every route at its
  * **unprefixed** path (`/app/info`, `/pages/:id`, ...), and the
@@ -15,8 +16,9 @@
  * — it keeps every existing supertest call site working without
  * change.
  */
+
+import { createServer, type Server } from 'node:http';
 import { getRequestListener } from '@hono/node-server';
-import type { IncomingMessage, ServerResponse } from 'node:http';
 import Crowi from 'src/crowi';
 import { buildHonoApp } from 'src/hono';
 import { stripApiV2Prefix } from 'src/hono/path-rewrite';
@@ -57,12 +59,35 @@ import { recordDispatchEnd, recordDispatchStart } from './op-ring-buffer';
 
 export let crowi: Crowi;
 /**
- * Node `RequestListener` (`(req, res) => void`) backed by the Hono
- * app. Acceptable input to `supertest(app)` — every existing
- * `request(app).get('/api/v2/...')` call works as before because the
- * `/api/v2` prefix is stripped inline before Hono dispatches.
+ * Shared `http.Server` for this test FILE, already listening
+ * (`beforeAll` awaits `listen(0, '127.0.0.1')` once) by the time any test
+ * in the file runs. Backed by the Hono app via `getRequestListener(fetchFn)`
+ * wrapped in `createServer(...)` (see `beforeAll` below).
+ *
+ * feature-test-harness-shared-server: supertest treats a bare
+ * `RequestListener` and an already-listening `Server` differently.
+ * `Test#serverAddress()` (`supertest/lib/test.js`) checks `app.address()`
+ * and, if it's falsy (a plain `RequestListener` has no `.address()` at
+ * all — supertest first wraps it in its OWN `http.Server` via
+ * `http.createServer(...)`), calls `.listen(0)` itself — a THROWAWAY
+ * server + ephemeral port, once per `request(app)` CALL. An
+ * already-listening `Server`'s `.address()` is truthy, so that branch is
+ * skipped entirely and `.listen()` is never called again. Exporting `app`
+ * as the latter turns "one server per request" into "one server per
+ * file", with zero call-site changes — `request(app).get('/api/v2/...')`
+ * keeps working unmodified everywhere, because supertest accepts both
+ * shapes as `app`.
+ *
+ * This is not a hypothetical: `src/hono/handlers/autocomplete.test.ts` and
+ * `page-preview.test.ts` used to each stand up their OWN local
+ * `http.Server`, via `createServer(...)` + `.listen(0)`, specifically to
+ * route around the per-request-listen behavior above — high-concurrency
+ * bursts against it produced a real `connect ETIMEDOUT` flake (see git
+ * history for those files). Both local workarounds were removed once
+ * `app` here became a shared listening server itself, since standing up a
+ * second one on top would just be redundant.
  */
-export let app: (req: IncomingMessage, res: ServerResponse) => void;
+export let app: Server;
 
 /**
  * Response barrier (test harness only).
@@ -158,6 +183,22 @@ beforeAll(async () => {
         BASE_URL: 'http://localhost:13001',
         // Public origin (used by getBaseUrl() for CORS + mail links).
         CLIENT_URL: 'http://localhost:13001',
+        // feature-test-harness-shared-server (RC3): without an explicit
+        // REDIS_KEY_PREFIX, `util/redis-keyspace.ts` derives the Redis
+        // instance slug from CLIENT_URL's hostname alone (`localhost`
+        // above) — every parallel jest worker/file would then share the
+        // same `crowi:localhost:*` Redis keyspace even though each
+        // already gets its own scratch Mongo DB (`MONGO_DB_NAME`, set by
+        // `crowi-environment.js`). Reusing that same per-file DB name as
+        // the Redis prefix gives Redis the same per-file isolation
+        // granularity as Mongo already has, with no new naming scheme: it
+        // is already unique per file (worker id + random suffix) and
+        // already satisfies the slug format `resolveRedisKeyspace()`
+        // requires (`redis-keyspace.ts`'s `SLUG_PATTERN` — alphanumerics
+        // plus `._-` only, no `:`). Harmless when `REDIS_URL` is unset
+        // (e.g. a dev machine without Redis running): `getEnv()` just
+        // never resolves a keyspace from it in that case.
+        REDIS_KEY_PREFIX: MONGO_DB_NAME,
       }),
     testFilePath,
     // Assign the module-level `crowi` binding on EVERY attempt, before
@@ -229,7 +270,15 @@ beforeAll(async () => {
       throw err;
     }
   };
-  app = getRequestListener(fetchFn);
+  const requestListener = getRequestListener(fetchFn);
+  // feature-test-harness-shared-server: wrap the RequestListener in an
+  // actually-listening `Server` (see `app`'s doc comment above for why).
+  // `listen(0, '127.0.0.1')` picks an OS-assigned ephemeral port — the same
+  // thing supertest's own throwaway server used to do per request — just
+  // once for this whole FILE instead of once per request.
+  const server = createServer(requestListener);
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  app = server;
 }, 90000);
 
 // Between tests, drain any in-flight fire-and-forget side effects (event
@@ -243,14 +292,72 @@ afterEach(async () => {
   await crowi.drainSideEffects();
 });
 
+/**
+ * Bound for `afterAll`'s `server.close()` wait, below. superagent — the
+ * HTTP client every `request(app)` call resolves through — never keeps
+ * connections alive (see `app`'s doc comment / the removed
+ * `autocomplete.test.ts` / `page-preview.test.ts` workarounds this file's
+ * own doc comments reference), so in practice `close()` settles near-
+ * instantly once the last in-flight request finishes. A close that
+ * genuinely hangs is the worst failure mode here — it would stall the
+ * WHOLE suite, not just this file — so this bound is deliberately short
+ * relative to `afterAll`'s own 60000ms hook timeout below: hitting it just
+ * warns and lets teardown continue, instead of risking the hook itself
+ * timing out (jest's timeout failure is far noisier to diagnose than a
+ * `console.warn`).
+ */
+const SERVER_CLOSE_TIMEOUT_MS = 5000;
+
+/**
+ * Awaits `server.close()`, bounded by {@link SERVER_CLOSE_TIMEOUT_MS}.
+ * Never rejects: a timeout, or an error the `close()` callback reports
+ * (e.g. the server was already stopped), only logs a warning — the
+ * `afterAll` below always runs `crowi.teardownForCli()` next regardless
+ * (nested `finally`), so throwing here would only add noise, not signal,
+ * to that guarantee.
+ */
+function closeSharedServer(server: Server): Promise<void> {
+  return new Promise<void>((resolve) => {
+    const timer = setTimeout(() => {
+      console.warn(`[test-harness] setup.ts: shared server.close() did not settle within ${SERVER_CLOSE_TIMEOUT_MS}ms — continuing teardown anyway.`);
+      resolve();
+    }, SERVER_CLOSE_TIMEOUT_MS);
+    // Let jest's own process exit even if this timer is still pending.
+    timer.unref();
+    server.close((err) => {
+      clearTimeout(timer);
+      if (err) {
+        console.warn(`[test-harness] setup.ts: shared server.close() reported an error — continuing teardown anyway (${err.message}).`);
+      }
+      resolve();
+    });
+  });
+}
+
 afterAll(async () => {
   // Drain BEFORE closing the connection so settling writes (render-cache
   // invalidation, backlink/watch/Activity fan-out, notification publish,
   // user-page creation) do not hit a half-closed Mongo/redis client.
   await crowi.drainSideEffects();
-  // `teardownForCli` quits redis (the suites leak one live socket each
-  // otherwise → parallel handle pressure) then disconnects Mongo.
-  await crowi.teardownForCli();
+  try {
+    // `app` is only unset here if `beforeAll` itself failed before reaching
+    // the `createServer(...)`/`listen()` step above (e.g. `crowi.init()`
+    // threw) — guard so that partial-boot failure surfaces as ITSELF in the
+    // test report, not masked by an unrelated "server.close is not a
+    // function" thrown from this hook (mirrors why `beforeAll` above
+    // assigns the module-level `crowi` binding on every attempt: a
+    // teardown-time crash must never hide the real boot failure).
+    if (app) {
+      await closeSharedServer(app);
+    }
+  } finally {
+    // `teardownForCli` quits redis (the suites leak one live socket each
+    // otherwise → parallel handle pressure) then disconnects Mongo. Runs
+    // regardless of whether the close above succeeded, warned, or was
+    // skipped — see this block's structure and `closeSharedServer`'s doc
+    // comment.
+    await crowi.teardownForCli();
+  }
 }, 60000);
 
 export const Fixture = {
