@@ -1,7 +1,7 @@
-import { createServer, type Server } from 'node:http';
-import request from 'supertest';
+import { Server } from 'node:http';
 import { app, crowi } from 'src/test/setup';
 import { authHeaders, createTestUser } from 'src/test/test-helpers';
+import request from 'supertest';
 
 /**
  * RFC-0004 Phase 5 — autocomplete endpoints
@@ -198,38 +198,35 @@ describe('Routes /api/v2/{users,pages}/autocomplete (Hono autocomplete)', () => 
       // by pigeonhole one window receives >60 hits and returns 429,
       // wherever the boundary falls.
       //
-      // `app` is a bare RequestListener (`src/test/setup.ts`), so
-      // `request(app)` with no shared server opens its own throwaway
-      // `.listen(0)` server per call — firing 121 of those fully
-      // concurrently under this suite's 5-worker parallel run produced
-      // a real `connect ETIMEDOUT` flake (121 simultaneous fresh
-      // listen/connect/close cycles). page-preview.test.ts's rate-limit
-      // test hit the identical failure mode at a larger scale and fixed
-      // it with one shared server + size-50 concurrent batches — same
-      // fix here (each supertest call still opens its own connection
-      // against the one shared server; superagent doesn't pool/keep-
-      // alive — so this bounds concurrent sockets, not total requests).
+      // Batching (size 50, not all 121 at once) is a SEPARATE concern from
+      // `app` being a shared listening server (`src/test/setup.ts` —
+      // feature-test-harness-shared-server): even against one shared
+      // server, each `request(app)` call still opens its OWN TCP
+      // connection (superagent doesn't pool/keep-alive), so firing all 121
+      // fully concurrently would still open 121 simultaneous sockets
+      // against that one server. The batch size bounds CONCURRENT sockets,
+      // independent of whether there's one server or many — it stays even
+      // though this test no longer stands up its own local `http.Server`
+      // (via `createServer(...)` + `.listen(0)`) the way this file used to,
+      // specifically to route around the per-request-listen behavior a
+      // bare `RequestListener` triggers — see `app`'s doc comment in
+      // `src/test/setup.ts` for why that workaround is no longer needed.
       const TOTAL_REQUESTS = 121;
       const BATCH_SIZE = 50;
-      const server: Server = createServer(app).listen(0);
-      try {
-        const fire = () => request(server).get('/api/v2/users/autocomplete').set(authHeaders(accessToken)).query({ q: 'ac' });
-        const responses: Awaited<ReturnType<typeof fire>>[] = [];
-        for (let i = 0; i < TOTAL_REQUESTS; i += BATCH_SIZE) {
-          const batchSize = Math.min(BATCH_SIZE, TOTAL_REQUESTS - i);
-          const batch = await Promise.all(Array.from({ length: batchSize }, fire));
-          responses.push(...batch);
-        }
-        expect(responses.every((res) => res.status === 200 || res.status === 429)).toBe(true);
-
-        const limited = responses.find((res) => res.status === 429);
-        expect(limited).toBeDefined();
-        expect(limited?.body.error).toBe('rate_limited');
-        expect(typeof limited?.body.retryAfterSeconds).toBe('number');
-        expect(limited?.headers['retry-after']).toBeDefined();
-      } finally {
-        await new Promise<void>((resolve) => server.close(() => resolve()));
+      const fire = () => request(app).get('/api/v2/users/autocomplete').set(authHeaders(accessToken)).query({ q: 'ac' });
+      const responses: Awaited<ReturnType<typeof fire>>[] = [];
+      for (let i = 0; i < TOTAL_REQUESTS; i += BATCH_SIZE) {
+        const batchSize = Math.min(BATCH_SIZE, TOTAL_REQUESTS - i);
+        const batch = await Promise.all(Array.from({ length: batchSize }, fire));
+        responses.push(...batch);
       }
+      expect(responses.every((res) => res.status === 200 || res.status === 429)).toBe(true);
+
+      const limited = responses.find((res) => res.status === 429);
+      expect(limited).toBeDefined();
+      expect(limited?.body.error).toBe('rate_limited');
+      expect(typeof limited?.body.retryAfterSeconds).toBe('number');
+      expect(limited?.headers['retry-after']).toBeDefined();
     }, 15_000);
 
     it('counts the budget per-user (a second user is unaffected)', async () => {
@@ -237,6 +234,39 @@ describe('Routes /api/v2/{users,pages}/autocomplete (Hono autocomplete)', () => 
       expect(typeof aliceId).toBe('string');
       const res = await request(app).get('/api/v2/users/autocomplete').set(authHeaders(bobToken)).query({ q: 'ac' });
       expect(res.status).toBe(200);
+    });
+  });
+
+  describe('shared listening server (feature-test-harness-shared-server)', () => {
+    it('never calls Server.prototype.listen for a request — src/test/setup.ts already listens once in beforeAll', async () => {
+      const listenSpy = jest.spyOn(Server.prototype, 'listen');
+
+      try {
+        const first = await request(app).get('/api/v2/users/autocomplete').set(authHeaders(aliceToken)).query({ q: 'ac' });
+        const second = await request(app).get('/api/v2/users/autocomplete').set(authHeaders(aliceToken)).query({ q: 'ac' });
+
+        expect(first.status).toBe(200);
+        expect(second.status).toBe(200);
+        // Deterministic proof this fix is actually in effect (crowi-fix
+        // discipline — written and run BEFORE the fix too, see the spec's
+        // "検証設計" section, to prove the assertion itself is load-bearing):
+        // when `src/test/setup.ts` exported `app` as a bare RequestListener,
+        // supertest's `Test#serverAddress()` wrapped it in its own
+        // `http.Server` and called `.listen(0)` once per `request(app)` call
+        // (no shared listening Server to reuse) — 2 calls were observed for
+        // the 2 requests above pre-fix (see the `feature-test-harness-shared-server`
+        // commit message for the pre-fix/post-fix observation record). Now that
+        // `setup.ts` exports `app` as an already-listening `http.Server`
+        // (`beforeAll` awaits `listen(0, '127.0.0.1')` once for the whole
+        // file), supertest's `app.address()` check short-circuits and
+        // `.listen()` is never called again for a request — 0 calls here.
+        expect(listenSpy).not.toHaveBeenCalled();
+      } finally {
+        // Restore even if a request/assertion above throws, so a failure in
+        // this test can never leave the spy installed for later tests in
+        // this file (they share the module-level `Server.prototype`).
+        listenSpy.mockRestore();
+      }
     });
   });
 });
