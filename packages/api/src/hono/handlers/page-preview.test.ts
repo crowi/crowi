@@ -1,10 +1,9 @@
-import { createServer, type Server } from 'node:http';
-import request from 'supertest';
 import { PreviewPageRequestSchema } from '@crowi/api-contract';
 import type { CodeBlockRenderer, PluginLogger } from '@crowi/plugin-api';
+import type { PluginRenderCacheModel } from 'src/models/plugin-render-cache';
 import { app, crowi } from 'src/test/setup';
 import { authHeaders, createTestUser } from 'src/test/test-helpers';
-import type { PluginRenderCacheModel } from 'src/models/plugin-render-cache';
+import request from 'supertest';
 
 describe('Routes /api/v2/pages/preview (Hono previewPage)', () => {
   let accessToken: string;
@@ -303,42 +302,44 @@ describe('Routes /api/v2/pages/preview (Hono previewPage)', () => {
       // dodges this by firing 2*budget+1 (121) requests fully CONCURRENTLY:
       // by pigeonhole, a burst that spans at most two windows must land
       // >budget hits in one of them, wherever the boundary falls, regardless
-      // of timing. Preview's budget is 10x larger (600), and firing 1200+
-      // fully concurrent supertest connections previously produced real
-      // `connect ETIMEDOUT` flakes (many simultaneous fresh listen/connect/
-      // close cycles under a 5-worker parallel run) — so this fires the same
-      // 2*budget+1 total in size-50 concurrent batches instead (each
-      // supertest call opens its own connection regardless — superagent
-      // doesn't pool/keep-alive against a shared server — so this bounds
-      // CONCURRENT sockets, not total connection count): comfortably below
-      // typical OS ephemeral-port/backlog limits (well under the ~1200 that
-      // caused the prior ETIMEDOUT flake), while keeping total wall-clock
-      // time low enough that the whole 1201-request burst — bounded by this
-      // test's own 30s timeout below — cannot span more than 2 windows
-      // (spanning 3 would need >60s), so the pigeonhole guarantee above
-      // holds unconditionally, not just probabilistically.
+      // of timing. Preview's budget is 10x larger (600), so this fires the
+      // same 2*budget+1 total, in size-50 concurrent batches.
+      //
+      // Batching is a SEPARATE concern from `app` being a shared listening
+      // server (`src/test/setup.ts` — feature-test-harness-shared-server):
+      // even against one shared server, each `request(app)` call still
+      // opens its OWN TCP connection (superagent doesn't pool/keep-alive),
+      // so firing all 1201 fully concurrently would still open 1201
+      // simultaneous sockets against that one server — comfortably above
+      // typical OS ephemeral-port/backlog limits, and the exact shape of
+      // the `connect ETIMEDOUT` flake this test used to hit (many
+      // simultaneous fresh listen/connect/close cycles under a 5-worker
+      // parallel run, back when this file also stood up its own local
+      // `http.Server`, via `createServer(...)` + `.listen(0)` — see `app`'s
+      // doc comment in `src/test/setup.ts` for why a second, redundant
+      // server is no longer needed here). The batch size bounds CONCURRENT sockets,
+      // independent of whether there's one server or many, while keeping
+      // total wall-clock time low enough that the whole 1201-request burst
+      // — bounded by this test's own 30s timeout below — cannot span more
+      // than 2 windows (spanning 3 would need >60s), so the pigeonhole
+      // guarantee above holds unconditionally, not just probabilistically.
       const PREVIEW_RATE_LIMIT = 600;
       const TOTAL_REQUESTS = 2 * PREVIEW_RATE_LIMIT + 1;
       const BATCH_SIZE = 50;
-      const server: Server = createServer(app).listen(0);
-      try {
-        const fire = () => request(server).post('/api/v2/pages/preview').set(authHeaders(rateLimitedToken)).send({ body: '# hello' });
-        const responses: Awaited<ReturnType<typeof fire>>[] = [];
-        for (let i = 0; i < TOTAL_REQUESTS; i += BATCH_SIZE) {
-          const batchSize = Math.min(BATCH_SIZE, TOTAL_REQUESTS - i);
-          const batch = await Promise.all(Array.from({ length: batchSize }, fire));
-          responses.push(...batch);
-        }
-        expect(responses.every((res) => res.status === 200 || res.status === 429)).toBe(true);
-
-        const limited = responses.find((res) => res.status === 429);
-        expect(limited).toBeDefined();
-        expect(limited?.body.error).toBe('rate_limited');
-        expect(typeof limited?.body.retryAfterSeconds).toBe('number');
-        expect(limited?.headers['retry-after']).toBeDefined();
-      } finally {
-        await new Promise<void>((resolve) => server.close(() => resolve()));
+      const fire = () => request(app).post('/api/v2/pages/preview').set(authHeaders(rateLimitedToken)).send({ body: '# hello' });
+      const responses: Awaited<ReturnType<typeof fire>>[] = [];
+      for (let i = 0; i < TOTAL_REQUESTS; i += BATCH_SIZE) {
+        const batchSize = Math.min(BATCH_SIZE, TOTAL_REQUESTS - i);
+        const batch = await Promise.all(Array.from({ length: batchSize }, fire));
+        responses.push(...batch);
       }
+      expect(responses.every((res) => res.status === 200 || res.status === 429)).toBe(true);
+
+      const limited = responses.find((res) => res.status === 429);
+      expect(limited).toBeDefined();
+      expect(limited?.body.error).toBe('rate_limited');
+      expect(typeof limited?.body.retryAfterSeconds).toBe('number');
+      expect(limited?.headers['retry-after']).toBeDefined();
     }, 30_000);
   });
 
