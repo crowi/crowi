@@ -251,7 +251,12 @@ async function runReview(doc, attempt) {
   // (attempt === MAX — the one that flips APPROVED vs NEEDS_WORK) runs on the
   // frontier tier (sol). So a doc that terra keeps bouncing gets one strongest
   // judgment before we give up, without paying sol on every round.
-  const reviewTier = attempt === MAX ? 'sol' : 'terra'
+  // `args.reviewTier` forces a tier for EVERY round, overriding the escalation
+  // above. Use it when the caller already knows the doc needs frontier-tier
+  // judgment — e.g. a /crowi-spec-review re-run after a structural rewrite,
+  // where round 1 IS the decisive round and waiting for attempt === MAX would
+  // just burn terra rounds on a doc that has already been through one pass.
+  const reviewTier = A.reviewTier || (attempt === MAX ? 'sol' : 'terra')
   const jobs = lenses.map((l) => () =>
     codexStage({
       label: `review_${l.key}_${attempt}`,
