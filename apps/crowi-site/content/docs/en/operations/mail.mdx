@@ -182,8 +182,8 @@ after the link has been used.
 | ------------ | --------- | -------------------- |
 | Invitation | 7 days | A link belonging to a user who already accepted returns `409`; the invitation cannot be accepted twice. Resending issues a new link, and there is no need to explicitly invalidate the old one |
 | Account activation | 24 hours | Invalid as soon as the account becomes active. Opening the link for an already-active account does not sign anyone in — it lands on the "link no longer valid" screen |
-| Password reset | 1 hour | **Works exactly once.** All links already sent also stop working once the user changes their password |
-| Email change | 24 hours | Invalid as soon as the change has been applied. An old link can never revert the address |
+| Password reset | 1 hour | **Works exactly once.** All links already sent also stop working once the user changes their password, or an administrator resets it from the admin screen. A link is additionally bound to the address it was sent to, so it stops working if the account's email address changed after it was mailed |
+| Email change | 24 hours | Invalid as soon as the change has been applied (an old link can never revert the address). Also invalid once the session that requested it is gone — the owner changing their password, completing a password reset, or an administrator resetting the password all cancel a change that is still pending |
 
 The lifetime is embedded in the signed token itself and is not stored in
 the database. A link that meets one of the conditions above is invalid
@@ -192,8 +192,9 @@ even while it is still within its lifetime.
 > **Note**: **Requesting** a password reset (submitting the "forgot your
 > password" form) does not by itself invalidate existing links. That is
 > deliberate: otherwise anyone who knows an address could destroy that
-> person's valid links. Invalidation only happens when a link is actually
-> used, or when the owner changes their password.
+> person's valid links. Invalidation happens when a link is actually used,
+> when the password is changed or reset (by the owner or by an
+> administrator), or when the account's email address changes.
 
 ## Troubleshooting
 

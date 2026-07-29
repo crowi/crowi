@@ -184,6 +184,19 @@ failure surfaces an inline error).
 > a secure channel and have them change it themselves after their first
 > login.
 
+> **Note**: An admin-initiated password reset **signs that account out of
+> every existing login session**, so when you suspect an account has been
+> taken over the reset is itself what evicts the intruder. It also kills
+> everything still in flight for the account: password-reset links already
+> mailed to the user, and an email-address change they requested but have
+> not confirmed yet (they can simply request it again after signing in with
+> the new password). **Personal access tokens and OAuth-connected apps are
+> not affected** — they are separate credentials, revoked by their owner
+> from their own settings screen (see
+> [User pages and profile](../guide/profile)). If you need those cut off
+> too, set the account's status to **SUSPENDED**: a suspended user's
+> requests are refused whatever credential they present.
+
 ### User approval
 
 When one or more **pending (REGISTERED) users** created by `Restricted` mode

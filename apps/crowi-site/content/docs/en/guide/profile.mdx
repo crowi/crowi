@@ -58,6 +58,11 @@ applied once you open that link. The confirmation link is valid for
 **24 hours**, and once the change has been applied the same link no
 longer works (an old link can never revert the address).
 
+A change you have not confirmed yet is also **cancelled the moment the
+account is signed out everywhere** — when you change your own password,
+when you complete a password reset, or when an administrator resets your
+password. Nothing is lost: request the change again if you still want it.
+
 ### Profile picture
 
 You can upload or delete your profile picture (avatar). An uploaded image
@@ -82,12 +87,23 @@ password is itself the way to evict them.
   affected.** They are separate credentials, revoked individually from
   their own screens.
 - Any password-reset emails already sent stop working at the same moment.
+- A pending email-address change, if there is one, is cancelled as well
+  (request it again if you still want it).
 
 If you have forgotten your password, the password-reset link on the login
 screen mails you a reset link. A reset link is valid for **1 hour** and
 **works exactly once** (reopening the same link no longer shows the reset
 form). Completing a reset also signs out every other session, just as
 changing the password does.
+
+A reset link is additionally **bound to the address it was sent to**. If
+the account's email address changes after the link was mailed — whether
+you confirmed the change yourself or an administrator edited it — the old
+link stops working, and you request a fresh one from the new address.
+
+The same holds when an **administrator** resets your password from the
+admin screen: every login session on the account is signed out, and any
+reset link still in flight is invalidated.
 
 ### API tokens
 
