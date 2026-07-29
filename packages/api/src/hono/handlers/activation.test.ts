@@ -55,6 +55,24 @@ describe('Routes /api/v2/auth/activate (Hono)', () => {
       expect(res.status).toBe(401);
     });
 
+    it('never signs in an already-active account (the link is not a login credential)', async () => {
+      const { user, token } = await createUnconfirmedUser('activate-already-active@example.com');
+      const User = crowi.model('User');
+      // The first click already activated the account; the link stays
+      // signature-valid for its full 24h TTL.
+      user.status = User.STATUS_ACTIVE;
+      user.emailConfirmedAt = new Date();
+      await user.save();
+
+      const res = await request(app).post('/api/v2/auth/activate').set(jsonHeaders).send({ token });
+
+      // A 24h-valid mail link must not mint a session for an account that
+      // is already active — that would be a first-factor bypass.
+      expect(res.status).toBe(401);
+      expect(res.body.accessToken).toBeUndefined();
+      expect(res.body.refreshToken).toBeUndefined();
+    });
+
     it('rejects a token of the wrong purpose (reset token) with 401', async () => {
       const { user } = await createUnconfirmedUser('wrongpurpose-activate@example.com');
       const resetToken = createMailTokenUtil().signMailToken({

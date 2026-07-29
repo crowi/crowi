@@ -51,6 +51,13 @@ You can change your display name, email address, and display language.
 | Email | The destination for notifications. If an administrator has configured a domain restriction for email addresses, an address that does not match the allow list cannot be saved |
 | Language (lang) | The display language of the UI (Japanese / English) |
 
+Name and language take effect the moment you save. **The email address is
+the exception — saving alone does not change it.** A message containing a
+confirmation link is sent to the new address, and the change is only
+applied once you open that link. The confirmation link is valid for
+**24 hours**, and once the change has been applied the same link no
+longer works (an old link can never revert the address).
+
 ### Profile picture
 
 You can upload or delete your profile picture (avatar). An uploaded image
@@ -60,16 +67,48 @@ your display name.
 
 ### Password
 
-You can change your login password. Users who only sign in via OAuth
-(Google / GitHub) may not have a password set.
+You can change your login password. For an account that does not have a
+password set yet, the current-password field is not shown and you simply
+set a new one.
 
-### API token
+Changing your password **signs out every other session on the account**.
+If you suspect someone else has taken over a session, changing your
+password is itself the way to evict them.
 
-You can view and regenerate the API token used to access the Crowi API
-from outside. Regenerating it invalidates the previous token.
+- The tab you made the change in stays signed in (a fresh token pair is
+  issued along with the change). Other browsers, other devices, and other
+  tabs are sent back to the login screen on their next request.
+- **Personal access tokens (PATs) and OAuth-connected apps are not
+  affected.** They are separate credentials, revoked individually from
+  their own screens.
+- Any password-reset emails already sent stop working at the same moment.
 
-> **Warning**: An API token is a secret as strong as your password. If you
-> suspect it may have leaked, regenerate it promptly.
+If you have forgotten your password, the password-reset link on the login
+screen mails you a reset link. A reset link is valid for **1 hour** and
+**works exactly once** (reopening the same link no longer shows the reset
+form). Completing a reset also signs out every other session, just as
+changing the password does.
+
+### API tokens
+
+You can issue and manage **personal access tokens (PATs)** for using the
+Crowi API from outside.
+
+- You can hold **several tokens at once**. Each one gets its own name,
+  scopes (the operations it may perform), and expiry (30 days / 90 days /
+  365 days / never).
+- The plaintext token (`crowi_pat_…`) is shown **once, at creation time**.
+  The server stores only a hash, so it can never be shown again — copy it
+  before dismissing the dialog.
+- The list shows each token's scopes, expiry, and last-used time, so you
+  can spot unused tokens and revoke them individually. Revoking one does
+  not affect the others.
+- Admin-only scopes (`admin:*`) cannot be granted to a PAT.
+
+> **Warning**: A PAT is a secret as strong as your password. If you
+> suspect one has leaked, revoke that token and issue a new one.
+> **Changing your password does not revoke your PATs** (and, conversely,
+> revoking a PAT does not affect your login sessions).
 
 ## Related pages
 

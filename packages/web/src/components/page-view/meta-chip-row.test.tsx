@@ -126,6 +126,41 @@ describe('MetaChipRow', () => {
     expect(tooltips.length).toBeGreaterThan(0);
   });
 
+  // feature-mobile-presence-card stacks the row on mobile by wrapping its
+  // children in two groups. jsdom cannot compute Tailwind layout, so the
+  // honest assertion is the class contract: at `md`+ both wrappers become
+  // `display: contents`, which makes their children direct flex items of
+  // the outer row again — i.e. the md+ row is the pre-split six-item
+  // wrapping flex row by construction, not by visual approximation. If this
+  // ever regresses to two nested flex groups, the md+ wrap points (and with
+  // them the header height / sticky threshold / TOC alignment) drift.
+  describe('mobile stacking without changing the md+ row', () => {
+    it('renders the two mobile groups', () => {
+      render(<MetaChipRow page={makePage({ likerCount: 1 })} />);
+      expect(screen.getByTestId('meta-chip-group-meta')).toBeTruthy();
+      expect(screen.getByTestId('meta-chip-group-stats')).toBeTruthy();
+    });
+
+    it('collapses both groups to display:contents at md+ so the row keeps its original direct children', () => {
+      render(<MetaChipRow page={makePage({ likerCount: 1 })} />);
+      for (const testId of ['meta-chip-group-meta', 'meta-chip-group-stats']) {
+        expect(screen.getByTestId(testId).className.split(/\s+/)).toContain('md:contents');
+      }
+    });
+
+    it('keeps the outer row on the pre-split md+ flex classes', () => {
+      render(<MetaChipRow page={makePage({ likerCount: 1 })} />);
+      const row = screen.getByTestId('meta-chip-group-meta').parentElement;
+      expect(row).not.toBeNull();
+      const classes = row?.className.split(/\s+/) ?? [];
+      // The md+ computed container == the original
+      // `flex flex-wrap items-center gap-x-3 gap-y-2`.
+      for (const cls of ['md:flex-row', 'md:flex-wrap', 'md:items-center', 'gap-x-3', 'gap-y-2']) {
+        expect(classes).toContain(cls);
+      }
+    });
+  });
+
   it('scrolls to the comments heading when the comment chip is clicked', () => {
     const heading = document.createElement('h2');
     heading.id = 'comments-heading';

@@ -12,6 +12,14 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // packages/e2e's dedicated dev-server distDir (NEXT_DIST_DIR, see
+    // next.config.ts) — same generated Next.js build output as `.next/**`
+    // above, just under a different directory name so it doesn't collide
+    // with a concurrently running `pnpm dev`. Without this, linting this
+    // package after running `pnpm --filter @crowi/e2e e2e` locally floods
+    // the report with thousands of false positives from minified vendor
+    // bundle chunks.
+    ".next-e2e/**",
     // Paraglide JS generated output. Each emitted file starts with
     // `/* eslint-disable */`, but our config raises every rule it would
     // disable to "off" by default, leaving ~320 "Unused eslint-disable

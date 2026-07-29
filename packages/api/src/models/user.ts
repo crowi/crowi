@@ -86,6 +86,30 @@ export interface UserDocument extends Document {
    * this field, so existing ACTIVE users are unaffected.
    */
   emailConfirmedAt: Date | null;
+  /**
+   * Session generation. Every web-session JWT (`access` / `refresh`)
+   * carries the value it was minted under as its `av` claim, and the auth
+   * middleware rejects a token whose `av` no longer matches. Bumping this
+   * therefore signs the account out everywhere at once — which is what a
+   * self-service password change does (`hono/handlers/me.ts`).
+   *
+   * Personal access tokens and OAuth access tokens are deliberately NOT
+   * affected: they are revoked through their own records.
+   *
+   * Optional: rows written before the field existed carry no value, which
+   * every reader normalises to 0 (see the schema note on why there is no
+   * mongoose `default` here).
+   */
+  authVersion?: number;
+  /**
+   * Password-reset link generation. A reset mail token carries the value
+   * as of issue time; `POST /auth/reset-password` requires it to still
+   * match and increments it as it consumes the token, which is what makes
+   * a reset link single-use instead of replayable for its full 1h TTL.
+   *
+   * Optional for the same reason as `authVersion` above.
+   */
+  passwordResetGeneration?: number;
 
   isPasswordSet(): boolean;
   isPasswordValid(password: string): boolean;
@@ -190,6 +214,20 @@ export default (crowi: Crowi) => {
     createdAt: { type: Date, default: Date.now },
     admin: { type: Boolean, default: false, index: true },
     emailConfirmedAt: { type: Date, default: null },
+    // Deliberately declared WITHOUT `default: 0`, unlike every other field
+    // here. A schema default is applied when a document that lacks the
+    // path is hydrated, and mongoose persists init-applied defaults on the
+    // next `save()` (they ride along in the delta even though
+    // `isModified()` reports false — verified against this schema). For a
+    // counter that is bumped with `$inc` from another request that is a
+    // lost update: a request holding a doc hydrated *before* a password
+    // change would write the counter back to 0 when it saves, quietly
+    // resurrecting the sessions that change had just revoked. Rows written
+    // before these fields existed simply carry no value, and every reader
+    // normalises with `?? 0`; `$inc` treats a missing field as 0 too, so
+    // "absent" and "0" stay interchangeable everywhere.
+    authVersion: { type: Number },
+    passwordResetGeneration: { type: Number },
   });
   applyPaginatePlugin(userSchema);
 
@@ -753,11 +791,42 @@ export default (crowi: Crowi) => {
       throw new Error('User not found');
     }
 
-    // is updatable check
-    // if (userData.isUp
+    // An admin reset is most often performed *because* the account is
+    // believed compromised, so it has to revoke as much as a self-service
+    // reset does — otherwise the one action taken in response to a takeover
+    // is the one that leaves the attacker's session alive:
+    //
+    //  - `authVersion` strands every web-session token minted earlier.
+    //  - `passwordResetGeneration` kills any reset link still in flight,
+    //    which would otherwise let a stale mail link (possibly sitting in a
+    //    mailbox the attacker controls) undo the reset.
+    //
+    // Personal access tokens and OAuth grants deliberately survive here, the
+    // same way they do for the self-service paths; they are separate
+    // credentials revoked through their own records.
+    //
+    // A pending email-change confirmation link is covered too, via the same
+    // `authVersion` bump: `handlers/email-change.ts` binds that token to the
+    // version at issue time, so a change requested by a now-evicted session
+    // can no longer be confirmed afterwards. That mattered more than the rest
+    // — without it an attacker could take the recovery address immediately
+    // after this reset and undo the recovery itself.
+    //
+    // Hashing goes through the model's `setPassword` on the in-memory doc;
+    // only the resulting hash reaches the update, so the write and both
+    // counter bumps land in ONE atomic operation and no second write can
+    // roll a concurrently-bumped counter back.
     const newPassword = generateRandomTempPassword();
     userData.setPassword(newPassword);
-    const user = await userData.save();
+    const user = await User.findOneAndUpdate(
+      { _id: userData._id },
+      { $set: { password: userData.password }, $inc: { authVersion: 1, passwordResetGeneration: 1 } },
+      { returnDocument: 'after' },
+    );
+    if (!user) {
+      // Raced with a delete between the lookup above and this update.
+      throw new Error('User not found');
+    }
 
     return { user, newPassword };
   };

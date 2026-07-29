@@ -38,13 +38,56 @@ const buildCtx = (storage: ReturnType<typeof createMongoCacheStorage>, pluginNam
   auth: createAuthContextStub(),
 });
 
-/** Poll the event loop until `predicate()` is true or `maxTicks` is exhausted. */
-const waitUntil = async (predicate: () => boolean, maxTicks = 200): Promise<void> => {
-  for (let i = 0; i < maxTicks; i += 1) {
+/**
+ * Poll until `predicate()` is true, THROWING if it never becomes true.
+ *
+ * Two things here are deliberate, and both were flake sources:
+ *
+ * Throwing rather than returning. The previous version returned silently once
+ * its budget ran out, so a test that had not actually reached the state it was
+ * waiting for carried on regardless and failed later on an unrelated
+ * assertion. That is exactly how the admission-priority test below produced
+ * `['preview','save']`: it gave up waiting for the save candidate to enter the
+ * queue, released the occupier with only `preview` queued, and the resulting
+ * failure looked like an admission-priority bug rather than a timeout. Same
+ * defect the shared helpers were fixed for in 50aae91f; this local copy was
+ * missed.
+ *
+ * Budgeting in TIME, not event-loop ticks. `setImmediate` does not wait for
+ * I/O, so a tick budget is no budget at all when the thing being waited on is
+ * a real Mongo round trip (the save path goes through
+ * `createMongoCacheStorage`): 200 ticks can burn in a millisecond while the
+ * query is still in flight. Under 5 jest workers sharing one mongod that is
+ * routine, which is why this only ever failed in a full parallel run.
+ */
+const waitUntil = async (predicate: () => boolean, timeoutMs = 5000): Promise<void> => {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
     if (predicate()) return;
     await new Promise((resolve) => setImmediate(resolve));
   }
+  throw new Error(`waitUntil: predicate did not become true within ${timeoutMs}ms`);
 };
+
+describe("waitUntil (this file's own helper)", () => {
+  // Guards the property the rest of this file depends on. Without it the
+  // helper can silently give up, and every test below then asserts against a
+  // state it never actually reached — which is precisely how the admission
+  // ordering test used to fail as `['preview','save']` instead of as a
+  // timeout. If someone reverts this to a tick budget that returns on
+  // exhaustion, this is what fails.
+  it('rejects when the predicate never becomes true, rather than resolving', async () => {
+    await expect(waitUntil(() => false, 20)).rejects.toThrow(/did not become true/);
+  });
+
+  it('resolves as soon as the predicate is true', async () => {
+    let flipped = false;
+    setImmediate(() => {
+      flipped = true;
+    });
+    await expect(waitUntil(() => flipped, 5000)).resolves.toBeUndefined();
+  });
+});
 
 describe('core/code-block-dispatch', () => {
   let pageId: string;

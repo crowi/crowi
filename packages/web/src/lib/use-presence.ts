@@ -65,7 +65,21 @@ const PRESENCE_HEARTBEAT_MS = 15_000;
  */
 const { INVALID_TOKEN, FORBIDDEN: NO_ACCESS } = WS_CLOSE_CODES;
 
-export type PresenceStatus = 'connecting' | 'connected' | 'error';
+/**
+ * `'connecting'` — an attempt (initial or retry) is in flight, no
+ *   transport yet.
+ * `'reconnecting'` — the transport is down and a retry IS scheduled
+ *   (feature-mobile-presence-card): derived from
+ *   `create-reconnecting-socket.ts`'s `onScheduledRetry`, never tracked
+ *   with a second timer here. The UI should show a neutral, non-`Live`
+ *   state — not the same as `'error'`, which is terminal.
+ * `'connected'` — the transport is open. Does NOT by itself mean a
+ *   `viewers` frame has been received yet for this connection — see
+ *   `hasViewersForConnection` below.
+ * `'error'` — terminal: no further retry will be attempted (e.g. a
+ *   revoked read grant, or the token request itself failing outright).
+ */
+export type PresenceStatus = 'connecting' | 'reconnecting' | 'connected' | 'error';
 
 /**
  * Options for {@link usePresence}. `onPageUpdated` is the
@@ -150,6 +164,31 @@ export interface UsePresenceResult {
    * detected (see spec §3, the same closure trap as `bannerStateRef`).
    */
   pageUpdatedSeq: RefObject<number>;
+  /**
+   * feature-mobile-presence-card — epoch-scoped flag: `false` from the
+   * moment the transport opens (`onOpen`) until this SAME connection has
+   * received its first `viewers` frame, then `true` for the rest of that
+   * connection's life. A fresh connection (initial mount OR any
+   * reconnect) resets it to `false` again. The `Live` indicator is
+   * `status === 'connected' && hasViewersForConnection` — `connected`
+   * alone only proves the transport handshake finished, not that the
+   * server has actually registered this socket and broadcast a snapshot
+   * (see the module doc's `hasFiredReconnectedThisEpoch` barrier, which
+   * this flag mirrors). Not a freshness guarantee beyond "at least one
+   * frame this epoch" — see spec §"接続状態と可視性".
+   */
+  hasViewersForConnection: boolean;
+}
+
+/**
+ * feature-mobile-presence-card — whether any OTHER viewer (not self) is
+ * currently present. `status === 'error'` (terminal) always resolves to
+ * `false` regardless of `viewers` — the desktop `LivePresenceRow` and the
+ * mobile `MobilePresenceCard` both hide/collapse on terminal error rather
+ * than trusting a possibly-stale last-known viewer list.
+ */
+export function hasOtherViewers({ status, viewers, selfUserId }: Pick<UsePresenceResult, 'status' | 'viewers' | 'selfUserId'>): boolean {
+  return status !== 'error' && viewers.some((v) => v.userId !== selfUserId);
 }
 
 /**
@@ -301,8 +340,31 @@ function usePresenceToken(pageId: string | null | undefined, options?: UsePresen
 export function usePresence(pageId: string | null | undefined, options?: UsePresenceOptions): UsePresenceResult {
   const queryClient = useQueryClient();
 
-  const [viewers, setViewers] = useState<PresenceViewer[]>([]);
+  // feature-presence-consistency-fixes defect 3 — the rendered viewer list
+  // is tagged with the `pageId` it was computed for, and the RETURN value
+  // below (not an effect) re-derives it against the CURRENT `pageId`
+  // argument on every render. A bare `useState<PresenceViewer[]>` used to
+  // rely on a `useEffect(() => setViewers([]), [pageId])` to clear stale
+  // state on navigation — but an effect only runs AFTER a render commits,
+  // so the very FIRST render with the new `pageId` (P2) still returned the
+  // OLD page's (P1's) viewer list, and — since P2's presence token has not
+  // resolved yet at that point — `selfUserId` was often `null`, which could
+  // make one of P1's viewers appear to satisfy an "not me" check on P2's
+  // screen. Deriving synchronously from a tagged tuple closes that window:
+  // a mismatched tag renders `[]` immediately, with no effect-flush lag.
+  const [viewersState, setViewersState] = useState<{ pageId: string | null | undefined; viewers: PresenceViewer[] }>({
+    pageId,
+    viewers: [],
+  });
   const [status, setStatus] = useState<PresenceStatus>('connecting');
+
+  // feature-mobile-presence-card — epoch-scoped "at least one viewers
+  // frame received on THIS connection" flag. Reset to `false` in `onOpen`
+  // (every attempt, including reconnects) and flipped to `true` the first
+  // time `onMessage` parses a `viewers` frame this epoch — mirrors
+  // `hasFiredReconnectedThisEpoch`'s epoch-scoping below, just exposed to
+  // the caller instead of staying a private effect-local flag.
+  const [hasViewersForConnection, setHasViewersForConnection] = useState(false);
 
   // D1a — expose the LIVE connection status to `usePresenceToken` so its
   // notifier-driven refetch can skip while we're `connected` (an established
@@ -404,11 +466,26 @@ export function usePresence(pageId: string | null | undefined, options?: UsePres
     // has already run exactly once for that attempt.
     let hasFiredReconnectedThisEpoch = false;
 
+    // feature-presence-consistency-fixes defect 2 — the highest `viewers`
+    // frame `generation` applied so far THIS epoch (reset in `onOpen`,
+    // exactly like `hasFiredReconnectedThisEpoch`). A frame whose
+    // `generation` is not higher than this is a stale, out-of-order
+    // broadcast (the server's own `listViewers` read completed later than
+    // a broadcast it raced but was DISPATCHED before) and must be
+    // discarded instead of overwriting the anti-flicker state with older
+    // data than what is already showing.
+    let lastAppliedGeneration = 0;
+
     // Recompute the rendered list from the anti-flicker state and
-    // schedule the next admission re-check at the earliest `dueAt`.
+    // schedule the next admission re-check at the earliest `dueAt`. Tags
+    // the written state with THIS effect's own `pageId` (defect 3) so a
+    // write that lands after `pageId` has already changed (a message in
+    // flight when navigation starts) is rendered as `[]` rather than
+    // bleeding into the new page — see the `viewersState`-derivation at
+    // the bottom of the hook.
     const project = (dueAt: number | null) => {
       const next = visibleViewers(flicker, selfUserId);
-      setViewers((prev) => (sameViewers(prev, next) ? prev : next));
+      setViewersState((prev) => (prev.pageId === pageId && sameViewers(prev.viewers, next) ? prev : { pageId, viewers: next }));
       if (admissionTimer) {
         clearTimeout(admissionTimer);
         admissionTimer = null;
@@ -440,6 +517,13 @@ export function usePresence(pageId: string | null | undefined, options?: UsePres
       onOpen: () => {
         applyStatus('connected');
         hasFiredReconnectedThisEpoch = false;
+        // A new epoch starts its own generation lineage — see
+        // `lastAppliedGeneration`'s doc comment above.
+        lastAppliedGeneration = 0;
+        // feature-mobile-presence-card — every fresh attempt starts its
+        // own "have we seen a viewers frame yet" epoch, mirroring
+        // `hasFiredReconnectedThisEpoch` above.
+        setHasViewersForConnection(false);
         // Fire one heartbeat immediately, then on the 15s cadence.
         const beat = () => {
           socket.send(JSON.stringify({ type: 'heartbeat' }));
@@ -506,10 +590,32 @@ export function usePresence(pageId: string | null | undefined, options?: UsePres
           hasFiredReconnectedThisEpoch = true;
           onReconnectedRef.current?.();
         }
+        // feature-mobile-presence-card — ANY viewers frame this epoch
+        // (including one about to be discarded as stale by the
+        // generation check below) proves the connection has delivered at
+        // least one snapshot; the `Live` indicator gates on this rather
+        // than on `status === 'connected'` alone (see the flag's doc
+        // comment on `UsePresenceResult`).
+        setHasViewersForConnection(true);
         // A healthy connection also resets the consecutive-4401 counter, so a
         // LATER stale-token close starts its recovery from an immediate
         // invalidate again rather than inheriting an old backoff rung.
         invalidTokenAttemptsRef.current = 0;
+
+        // feature-presence-consistency-fixes defect 2 — discard a frame
+        // whose `generation` does not advance past the highest one already
+        // applied this epoch: the server assigns `generation` at DISPATCH
+        // time, but the underlying `listViewers` read can resolve out of
+        // order, so a lower (or equal) generation arriving now is
+        // necessarily a stale broadcast that raced ahead of a NEWER one
+        // already rendered. The connection itself is still healthy — the
+        // barrier / backoff-reset above already accounted for that — only
+        // the viewer-list STATE UPDATE is skipped.
+        if (message.data.generation <= lastAppliedGeneration) {
+          return 'reset-backoff';
+        }
+        lastAppliedGeneration = message.data.generation;
+
         const { dueAt } = ingestBroadcast(flicker, message.data.viewers, Date.now());
         project(dueAt);
         return 'reset-backoff';
@@ -520,14 +626,28 @@ export function usePresence(pageId: string | null | undefined, options?: UsePres
           clearInterval(heartbeatTimer);
           heartbeatTimer = null;
         }
-        // The row hides whenever the connection is down (`status: 'error'`),
-        // so flip to 'error' up front — it applies to every close code, before
-        // we branch on which one. This does NOT gate the 4401 recovery below:
-        // that invalidate calls `queryClient.invalidateQueries` directly, which
-        // never runs the `subscribeTokenRefreshed` callback where the D1a
-        // `=== 'connected'` gate lives, so the refetch fires regardless of when
-        // `applyStatus('error')` runs. The flip is still correct here simply
-        // because the connection really is down.
+        // feature-mobile-presence-card — clear any pending admission
+        // promotion on close too. The anti-flicker STATE (`flicker`)
+        // intentionally survives a reconnect (so the last known avatars
+        // stay put through a blip), but a promotion that was scheduled
+        // for a NOW-dead connection must not silently fire once the next
+        // connection is up — the new epoch's own first `viewers` frame
+        // (via `ingestBroadcast`) re-schedules admission from scratch, so
+        // nothing is lost, only the stale in-flight timer is dropped.
+        if (admissionTimer) {
+          clearTimeout(admissionTimer);
+          admissionTimer = null;
+        }
+        // Default to terminal 'error' up front — it applies to every close
+        // code, before we branch on which one. This does NOT gate the 4401
+        // recovery below: that invalidate calls `queryClient.invalidateQueries`
+        // directly, which never runs the `subscribeTokenRefreshed` callback
+        // where the D1a `=== 'connected'` gate lives, so the refetch fires
+        // regardless of when `applyStatus('error')` runs. For every
+        // non-'stop' policy below, the primitive calls `onScheduledRetry`
+        // synchronously right after this function returns (same tick, same
+        // React batch), which flips this to 'reconnecting' — so 'error' is
+        // only ever the value actually observed after a 'stop' close.
         applyStatus('error');
         // A revoked read grant (4403) would just be rejected again on an
         // immediate retry — stop reconnecting. The consumer is notified so it
@@ -578,6 +698,15 @@ export function usePresence(pageId: string | null | undefined, options?: UsePres
         // Otherwise reconnect with capped exponential backoff.
         return 'backoff-retry';
       },
+
+      // feature-mobile-presence-card — fires right after `onCloseCode`
+      // above for every policy EXCEPT 'stop', i.e. exactly when a retry
+      // has actually been scheduled. See `PresenceStatus`'s doc comment:
+      // 'reconnecting' is derived from "a retry is scheduled", not
+      // tracked with an independent timer here.
+      onScheduledRetry: () => {
+        applyStatus('reconnecting');
+      },
     });
 
     socket.start();
@@ -592,12 +721,44 @@ export function usePresence(pageId: string | null | undefined, options?: UsePres
   }, [pageId, token, selfUserId, applyStatus, queryClient]);
 
   // Clear the rendered list when navigating away from a page so a
-  // stale stack never bleeds across page views.
+  // stale stack never bleeds across page views. This still matters even
+  // though the RETURN below already gates synchronously (see there): this
+  // effect is what actually advances `viewersState`'s tag to the new
+  // `pageId` (with an empty list) once the navigation commits, closing
+  // the mismatch window the gate covers in the meantime.
   useEffect(() => {
     flickerRef.current = createAntiFlickerState();
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setViewers([]);
+    setViewersState({ pageId, viewers: [] });
+    // A brand new page session has no confirmed viewers frame yet either
+    // — the connect effect's own `onOpen` will also reset this once its
+    // (possibly still-in-flight) connection opens, but resetting here too
+    // closes the same navigation-window `viewersState` handles above.
+    setHasViewersForConnection(false);
   }, [pageId]);
 
-  return { viewers, selfUserId, status, pageUpdatedSeq: pageUpdatedSeqRef };
+  // feature-presence-consistency-fixes defect 3 — re-derive the RETURNED
+  // viewers/selfUserId synchronously at render time against the CURRENT
+  // `pageId` argument, rather than trusting `viewersState` to already have
+  // caught up. `viewersState.pageId` only advances once either the
+  // pageId-change effect above or the connection effect's own `project()`
+  // runs — both AFTER the render commits — so on the very first render
+  // following a `pageId` change, this comparison is what actually prevents
+  // the previous page's viewer list (and its viewers' identities) from
+  // rendering, even for that one render. `selfUserId` is gated the same
+  // way: it does not itself carry stale data (its query key is scoped by
+  // `pageId`), but gating it in lockstep with `viewers` means a consumer
+  // never observes a "self" id paired with a viewer list that is not
+  // actually this page's.
+  const pageIdMatchesRenderedViewers = viewersState.pageId === pageId;
+  const activeViewers = pageIdMatchesRenderedViewers ? viewersState.viewers : [];
+  const activeSelfUserId = pageIdMatchesRenderedViewers ? selfUserId : null;
+
+  return {
+    viewers: activeViewers,
+    selfUserId: activeSelfUserId,
+    status,
+    pageUpdatedSeq: pageUpdatedSeqRef,
+    hasViewersForConnection,
+  };
 }

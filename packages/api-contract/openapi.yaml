@@ -744,6 +744,10 @@ components:
                       type: array
                       items:
                         type: string
+                    rawSpaceLinks:
+                      type: array
+                      items:
+                        type: string
                 renderedAst: {}
                 rendererVersion:
                   type: string
@@ -1035,6 +1039,10 @@ components:
                   type: array
                   items:
                     type: string
+                rawSpaceLinks:
+                  type: array
+                  items:
+                    type: string
             renderedAst: {}
             rendererVersion:
               type: string
@@ -1318,6 +1326,10 @@ components:
               type: array
               items:
                 type: string
+            rawSpaceLinks:
+              type: array
+              items:
+                type: string
         renderedAst: {}
         rendererVersion:
           type: string
@@ -1446,6 +1458,10 @@ components:
             required:
               - username
         codeBlockLanguages:
+          type: array
+          items:
+            type: string
+        rawSpaceLinks:
           type: array
           items:
             type: string
@@ -1637,6 +1653,10 @@ components:
                               required:
                                 - username
                           codeBlockLanguages:
+                            type: array
+                            items:
+                              type: string
+                          rawSpaceLinks:
                             type: array
                             items:
                               type: string
@@ -1952,6 +1972,10 @@ components:
                           type: array
                           items:
                             type: string
+                        rawSpaceLinks:
+                          type: array
+                          items:
+                            type: string
                     renderedAst: {}
                     rendererVersion:
                       type: string
@@ -2244,6 +2268,10 @@ components:
                             required:
                               - username
                         codeBlockLanguages:
+                          type: array
+                          items:
+                            type: string
+                        rawSpaceLinks:
                           type: array
                           items:
                             type: string
@@ -2541,6 +2569,10 @@ components:
                         required:
                           - username
                     codeBlockLanguages:
+                      type: array
+                      items:
+                        type: string
+                    rawSpaceLinks:
                       type: array
                       items:
                         type: string
@@ -2967,6 +2999,10 @@ components:
                               required:
                                 - username
                           codeBlockLanguages:
+                            type: array
+                            items:
+                              type: string
+                          rawSpaceLinks:
                             type: array
                             items:
                               type: string
@@ -6188,7 +6224,9 @@ paths:
                 - newPasswordConfirm
       responses:
         '200':
-          description: Password updated
+          description: >-
+            Password updated; earlier sessions revoked and a fresh token pair
+            issued
           content:
             application/json:
               schema:
@@ -6200,9 +6238,18 @@ paths:
                       - ok
                   message:
                     type: string
+                  accessToken:
+                    type: string
+                  refreshToken:
+                    type: string
+                  expiresIn:
+                    type: number
                 required:
                   - status
                   - message
+                  - accessToken
+                  - refreshToken
+                  - expiresIn
         '400':
           description: Password update failed
           content:
@@ -6360,6 +6407,10 @@ paths:
                                         required:
                                           - username
                                     codeBlockLanguages:
+                                      type: array
+                                      items:
+                                        type: string
+                                    rawSpaceLinks:
                                       type: array
                                       items:
                                         type: string
@@ -7803,6 +7854,10 @@ paths:
                                       type: array
                                       items:
                                         type: string
+                                    rawSpaceLinks:
+                                      type: array
+                                      items:
+                                        type: string
                                 renderedAst: {}
                                 rendererVersion:
                                   type: string
@@ -8100,6 +8155,10 @@ paths:
                                             required:
                                               - username
                                         codeBlockLanguages:
+                                          type: array
+                                          items:
+                                            type: string
+                                        rawSpaceLinks:
                                           type: array
                                           items:
                                             type: string
@@ -8559,6 +8618,10 @@ paths:
                                             required:
                                               - username
                                         codeBlockLanguages:
+                                          type: array
+                                          items:
+                                            type: string
+                                        rawSpaceLinks:
                                           type: array
                                           items:
                                             type: string
@@ -9035,6 +9098,10 @@ paths:
                                       type: array
                                       items:
                                         type: string
+                                    rawSpaceLinks:
+                                      type: array
+                                      items:
+                                        type: string
                                 renderedAst: {}
                                 rendererVersion:
                                   type: string
@@ -9461,6 +9528,10 @@ paths:
                                         required:
                                           - username
                                     codeBlockLanguages:
+                                      type: array
+                                      items:
+                                        type: string
+                                    rawSpaceLinks:
                                       type: array
                                       items:
                                         type: string
@@ -10072,6 +10143,10 @@ paths:
                                         type: array
                                         items:
                                           type: string
+                                      rawSpaceLinks:
+                                        type: array
+                                        items:
+                                          type: string
                                   renderedAst: {}
                                   rendererVersion:
                                     type: string
@@ -10511,6 +10586,10 @@ paths:
                                           required:
                                             - username
                                       codeBlockLanguages:
+                                        type: array
+                                        items:
+                                          type: string
+                                      rawSpaceLinks:
                                         type: array
                                         items:
                                           type: string
@@ -11060,6 +11139,10 @@ paths:
                                             required:
                                               - username
                                         codeBlockLanguages:
+                                          type: array
+                                          items:
+                                            type: string
+                                        rawSpaceLinks:
                                           type: array
                                           items:
                                             type: string
@@ -12351,6 +12434,10 @@ paths:
                               type: array
                               items:
                                 type: string
+                            rawSpaceLinks:
+                              type: array
+                              items:
+                                type: string
                         renderedAst: {}
                         rendererVersion:
                           type: string
@@ -12613,6 +12700,10 @@ paths:
                               required:
                                 - username
                           codeBlockLanguages:
+                            type: array
+                            items:
+                              type: string
+                          rawSpaceLinks:
                             type: array
                             items:
                               type: string
@@ -12895,6 +12986,10 @@ paths:
                                   required:
                                     - username
                               codeBlockLanguages:
+                                type: array
+                                items:
+                                  type: string
+                              rawSpaceLinks:
                                 type: array
                                 items:
                                   type: string
@@ -13315,6 +13410,10 @@ paths:
                                     type: array
                                     items:
                                       type: string
+                                  rawSpaceLinks:
+                                    type: array
+                                    items:
+                                      type: string
                               renderedAst: {}
                               rendererVersion:
                                 type: string
@@ -13514,8 +13613,8 @@ paths:
                   - page
         '400':
           description: >-
-            Invalid request (PAGE_EXISTS / NON_EXISTENT_USER_PAGE /
-            PAGE_CREATE_FAILED / INVALID_GRANT)
+            Invalid request (PAGE_INVALID_NAME / PAGE_EXISTS /
+            NON_EXISTENT_USER_PAGE / PAGE_CREATE_FAILED / INVALID_GRANT)
           content:
             application/json:
               schema:
@@ -13684,6 +13783,10 @@ paths:
                                       required:
                                         - username
                                   codeBlockLanguages:
+                                    type: array
+                                    items:
+                                      type: string
+                                  rawSpaceLinks:
                                     type: array
                                     items:
                                       type: string
@@ -14097,6 +14200,10 @@ paths:
                                       required:
                                         - username
                                   codeBlockLanguages:
+                                    type: array
+                                    items:
+                                      type: string
+                                  rawSpaceLinks:
                                     type: array
                                     items:
                                       type: string
@@ -14559,6 +14666,10 @@ paths:
                                       type: array
                                       items:
                                         type: string
+                                    rawSpaceLinks:
+                                      type: array
+                                      items:
+                                        type: string
                                 renderedAst: {}
                                 rendererVersion:
                                   type: string
@@ -14871,6 +14982,10 @@ paths:
                                     type: array
                                     items:
                                       type: string
+                                  rawSpaceLinks:
+                                    type: array
+                                    items:
+                                      type: string
                               renderedAst: {}
                               rendererVersion:
                                 type: string
@@ -15163,6 +15278,10 @@ paths:
                                       required:
                                         - username
                                   codeBlockLanguages:
+                                    type: array
+                                    items:
+                                      type: string
+                                  rawSpaceLinks:
                                     type: array
                                     items:
                                       type: string
@@ -15613,6 +15732,10 @@ paths:
                                       required:
                                         - username
                                   codeBlockLanguages:
+                                    type: array
+                                    items:
+                                      type: string
+                                  rawSpaceLinks:
                                     type: array
                                     items:
                                       type: string
@@ -16283,6 +16406,10 @@ paths:
                                     type: array
                                     items:
                                       type: string
+                                  rawSpaceLinks:
+                                    type: array
+                                    items:
+                                      type: string
                               renderedAst: {}
                               rendererVersion:
                                 type: string
@@ -16669,6 +16796,10 @@ paths:
                                       required:
                                         - username
                                   codeBlockLanguages:
+                                    type: array
+                                    items:
+                                      type: string
+                                  rawSpaceLinks:
                                     type: array
                                     items:
                                       type: string
@@ -17060,6 +17191,10 @@ paths:
                                   required:
                                     - username
                               codeBlockLanguages:
+                                type: array
+                                items:
+                                  type: string
+                              rawSpaceLinks:
                                 type: array
                                 items:
                                   type: string
@@ -17719,6 +17854,10 @@ paths:
                                     type: array
                                     items:
                                       type: string
+                                  rawSpaceLinks:
+                                    type: array
+                                    items:
+                                      type: string
                               renderedAst: {}
                               rendererVersion:
                                 type: string
@@ -18108,6 +18247,10 @@ paths:
                                       required:
                                         - username
                                   codeBlockLanguages:
+                                    type: array
+                                    items:
+                                      type: string
+                                  rawSpaceLinks:
                                     type: array
                                     items:
                                       type: string
@@ -18506,6 +18649,10 @@ paths:
                                       required:
                                         - username
                                   codeBlockLanguages:
+                                    type: array
+                                    items:
+                                      type: string
+                                  rawSpaceLinks:
                                     type: array
                                     items:
                                       type: string
@@ -21564,6 +21711,10 @@ paths:
                                             required:
                                               - username
                                         codeBlockLanguages:
+                                          type: array
+                                          items:
+                                            type: string
+                                        rawSpaceLinks:
                                           type: array
                                           items:
                                             type: string

@@ -123,6 +123,25 @@ describe('Routes /api/v2/pages (Hono createPage)', () => {
       expect(second.status).toBe(400);
       expect(second.body.error.code).toBe('PAGE_EXISTS');
     });
+
+    // feature-page-link-space-paths Phase 1: `Page.isCreatableName`
+    // forbids a literal '+' (models/page.ts:884) because the web's
+    // `+`-as-encoded-space contract (`pagePathToHref` /
+    // `decodePagePathFromUrl`, page-path.ts:198-218) means a page whose
+    // `path` contains a literal '+' is unreachable by URL for anyone but
+    // its creator. Draft creation (draft.test.ts:98-104, `invalid_path`
+    // error shape) and rename (below, `PAGE_INVALID_NAME`) already gate on
+    // this same check — createPage was the one path missing it.
+    it('returns 400 PAGE_INVALID_NAME when the path contains a literal "+"', async () => {
+      const path = `${PATH_PREFIX}a+b`;
+      const res = await request(app).post('/api/v2/pages').set(authHeaders(accessToken)).send({ path, body: '# plus' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('PAGE_INVALID_NAME');
+
+      const created = await Page.findOne({ path });
+      expect(created).toBeNull();
+    });
   });
 });
 

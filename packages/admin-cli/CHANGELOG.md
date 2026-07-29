@@ -1,5 +1,29 @@
 # @crowi/admin-cli
 
+## 0.1.0-alpha.3
+
+### Patch Changes
+
+- 0467a05: Clean up `crowi-admin`'s output (affects `migrate` / `rebuild` / `replace` / `watcher-backfill`, and the `pnpm migrate` wrapper). The `[crowi] Loaded N plugin(s)` boot line no longer prints to stdout: in development it moves to stderr (so `crowi-admin migrate plan --json | jq` keeps working), and in production (`NODE_ENV=production`) it is suppressed entirely. Node's own `DeprecationWarning`s (e.g. `DEP0169` from a transitive dependency's `url.parse()` call) are now suppressed on every `crowi-admin` invocation, dev and prod alike. Server boot output (`pnpm dev` / the production server) is unaffected.
+- Updated dependencies [abe7ca5]
+- Updated dependencies [04cbd85]
+- Updated dependencies [a899fdd]
+- Updated dependencies [df1ce77]
+- Updated dependencies [9122c85]
+- Updated dependencies [708c0d5]
+- Updated dependencies [05648c0]
+- Updated dependencies [d680c0c]
+- Updated dependencies [0d21b52]
+- Updated dependencies [09d7b9c]
+- Updated dependencies [fee9c9a]
+- Updated dependencies [4ec60a6]
+- Updated dependencies [a32204f]
+- Updated dependencies [7e1c54e]
+- Updated dependencies [cb3d16c]
+- Updated dependencies [b0e2c76]
+- Updated dependencies [3b27a67]
+  - @crowi/api@2.0.0-alpha.8
+
 ## 0.1.0-alpha.2
 
 ### Minor Changes

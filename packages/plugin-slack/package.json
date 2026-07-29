@@ -1,6 +1,6 @@
 {
   "name": "@crowi/plugin-slack",
-  "version": "0.1.0-alpha.1",
+  "version": "0.1.0-alpha.2",
   "description": "Slack integration for Crowi 2.0: unfurls Crowi page links shared in Slack into rich previews. Generates the Slack App manifest and verifies inbound Events API requests.",
   "repository": {
     "type": "git",

@@ -363,7 +363,19 @@ const components = {
   // non-interactive checkbox. Any other `<input>` passes through.
   input: ({ type, checked, ...props }: { type?: string; checked?: unknown; [key: string]: unknown }) =>
     type === 'checkbox' ? <input type="checkbox" checked={Boolean(checked)} readOnly {...props} /> : <input type={type} {...props} />,
-  img: ({ src, alt, className, style: rawStyle, ...rest }: { src?: string | Blob; alt?: string; className?: unknown; style?: React.CSSProperties }) => {
+  img: ({
+    src,
+    alt,
+    className,
+    style: rawStyle,
+    ...rest
+  }: {
+    src?: string | Blob;
+    alt?: string;
+    className?: unknown;
+    style?: React.CSSProperties;
+    [key: string]: unknown;
+  }) => {
     const srcString = typeof src === 'string' ? src : undefined;
     // Server-rendered "ready diagram" presentation — an optional renderer
     // plugin's PNG-fallback or `<img>`-success output (core reads only the
@@ -377,10 +389,21 @@ const components = {
     // apply) while the inner <img> only needs the responsive sizing
     // utilities.
     if (isDiagramPresentationReady(className, rest)) {
+      // A renderer plugin (e.g. Mermaid) may embed intrinsic `width`/
+      // `height` on the source `<img>` — its own SVG payload can declare
+      // a percentage width with no absolute height, which otherwise
+      // leaves the browser nothing to size the element by inside this
+      // `inline-block` wrapper (whose own width is itself `auto`, sized
+      // from its content): the two collapse to 0×0. Forward them
+      // (never dropped by the destructure above — they land in `rest`)
+      // so `h-auto` has an aspect ratio to scale from; a renderer that
+      // doesn't declare them leaves the element exactly as before.
+      const width = typeof rest.width === 'string' || typeof rest.width === 'number' ? rest.width : undefined;
+      const height = typeof rest.height === 'string' || typeof rest.height === 'number' ? rest.height : undefined;
       return (
         <RendererPresentation className={typeof className === 'string' ? className : undefined} presentationAttrs={pickRendererPresentationAttrs(rest)}>
           {/* biome-ignore lint/performance/noImgElement: rich-text rendered as plain markdown */}
-          <img src={srcString} alt={alt || ''} className="max-w-full h-auto" loading="lazy" />
+          <img src={srcString} alt={alt || ''} className="max-w-full h-auto" loading="lazy" width={width} height={height} />
         </RendererPresentation>
       );
     }

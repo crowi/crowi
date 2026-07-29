@@ -196,7 +196,7 @@ export const createPageRoute = createRoute({
       content: { 'application/json': { schema: PageResponseSchema } },
     },
     400: {
-      description: 'Invalid request (PAGE_EXISTS / NON_EXISTENT_USER_PAGE / PAGE_CREATE_FAILED / INVALID_GRANT)',
+      description: 'Invalid request (PAGE_INVALID_NAME / PAGE_EXISTS / NON_EXISTENT_USER_PAGE / PAGE_CREATE_FAILED / INVALID_GRANT)',
       content: { 'application/json': { schema: PageBadRequestErrorSchema } },
     },
     401: {

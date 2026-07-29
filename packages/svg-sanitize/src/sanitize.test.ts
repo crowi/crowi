@@ -113,6 +113,12 @@ describe('sanitizeSvg — malicious vectors', () => {
     expect(out).not.toMatch(/evil\.example/i);
   });
 
+  it('neutralises a CSS-escape-obfuscated url() in a presentation attribute (real CSS tokenizers decode `\\72` to "r" before matching function names)', () => {
+    const out = expectOk(`<svg ${SVG_NS_ATTRS}><rect fill="u\\72l(https://evil.example/a)" x="0" y="0" width="1" height="1"/></svg>`);
+    expect(out).not.toMatch(/evil\.example/i);
+    expect(out).not.toMatch(/url\(\s*https:/i);
+  });
+
   it('preserves local-fragment url(#id) references in presentation attributes', () => {
     const out = expectOk(
       `<svg ${SVG_NS_ATTRS}><defs><linearGradient id="grad"/><marker id="arrow"/></defs><rect fill="url(#grad)" x="0" y="0" width="1" height="1"/><path marker-end="url(#arrow)" d="M0 0"/></svg>`,

@@ -4,12 +4,28 @@
  * first automated coverage, real Redis 8 (shared instance), exercising
  * `add()`'s `multi()`-pipelined `ZREMRANGEBYRANK` + `ZADD`, `range()`'s
  * `ZRANGE ... REV`, and `removeByRange()`'s `ZREMRANGEBYRANK`.
+ *
+ * feature-redis-key-prefix §1/§2 — `LRU` now scopes every key it touches to
+ * `crowi:<instance-slug>:lru:<namespace>`; `fakeCrowi` below supplies
+ * `getBaseUrl`/`getEnv` so `resolveRedisKeyspace()` (called from `LRU`'s
+ * constructor) can resolve one, and the raw `client.zRange`/`client.del`
+ * calls that bypass the `LRU` abstraction (to assert directly against
+ * Redis) use the SAME scoped key `LRU` itself computes, via
+ * `resolveRedisKeyspace(fakeCrowi).key('lru', namespace)`.
  */
 import type Crowi from 'src/crowi';
 import LRU from 'src/service/lru';
 import { markRedisSmokeRan, REDIS_SMOKE_URLS, redisSmokeReachable, uniqueRedisSmokeId, withRedisClient } from 'src/test/redis-smoke';
+import { resolveRedisKeyspace } from 'src/util/redis-keyspace';
 
 const describeMaybe = redisSmokeReachable.shared ? describe : describe.skip;
+
+const fakeCrowi = (client: unknown): Crowi =>
+  ({
+    redis: client,
+    getBaseUrl: () => null,
+    getEnv: () => ({ REDIS_KEY_PREFIX: 'lru-smoke' }) as unknown as NodeJS.ProcessEnv,
+  }) as unknown as Crowi;
 
 describeMaybe('LRU smoke (real Redis 8)', () => {
   beforeAll(() => {
@@ -19,8 +35,12 @@ describeMaybe('LRU smoke (real Redis 8)', () => {
   it('add() pipelines ZREMRANGEBYRANK+ZADD and keeps only the `max` most recent entries; range() returns most-recent-first', async () => {
     await withRedisClient(REDIS_SMOKE_URLS.shared, async (client) => {
       const namespace = uniqueRedisSmokeId('lru-user');
-      const lru = new LRU({ redis: client } as unknown as Crowi);
+      const crowiLike = fakeCrowi(client);
+      const lru = new LRU(crowiLike);
       expect(lru.max).toBe(10);
+      // The instance-scoped key LRU actually reads/writes — used below to
+      // assert directly against Redis, bypassing the LRU abstraction.
+      const zsetKey = resolveRedisKeyspace(crowiLike).key('lru', namespace);
 
       // Insert 12 entries (> max=10) with strictly increasing scores.
       // `add()` reads `Date.now()` for the ZADD score — a monotonic mocked
@@ -66,14 +86,18 @@ describeMaybe('LRU smoke (real Redis 8)', () => {
       expect(rangeThree).toHaveLength(3);
       expect(rangeThree).toEqual(rangeAll.slice(0, 3));
 
+      // The bare (non-instance-scoped) namespace was never written to —
+      // everything landed on the scoped key instead.
+      expect(await client.zRange(namespace, 0, -1)).toEqual([]);
+
       // removeByRange — drop everything but the single most recent entry.
       await lru.removeByRange(namespace, -2);
-      const afterRemove = await client.zRange(namespace, 0, -1);
+      const afterRemove = await client.zRange(zsetKey, 0, -1);
       expect(afterRemove).toHaveLength(1);
       expect(afterRemove[0]).toBe(pageIds[pageIds.length - 1]);
 
       // Clean up the key this test created.
-      await client.del(namespace);
+      await client.del(zsetKey);
     });
   }, 20000);
 });

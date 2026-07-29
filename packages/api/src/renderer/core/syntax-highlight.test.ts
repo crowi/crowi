@@ -1,6 +1,7 @@
 import type { Code, Html, Root } from 'mdast';
 import type { PipelineEsmDeps, ShikiHighlighter } from '../pipeline';
 import { makeRemarkSyntaxHighlight } from './syntax-highlight';
+import { createEmptyPipelineMetadata } from '../pipeline';
 
 // Minimal stub deps: only `shikiHighlighter` is read by the plugin
 // itself. The rest of `PipelineEsmDeps` is irrelevant here.
@@ -29,7 +30,7 @@ const fakeHighlighter: ShikiHighlighter = {
 const runPlugin = (tree: Root): Root => {
   const deps = makeStubDeps(fakeHighlighter);
   const plugin = makeRemarkSyntaxHighlight(deps);
-  const transformer = plugin({ toc: [], wikiLinks: [], mentions: [], codeBlockLanguages: [] });
+  const transformer = plugin(createEmptyPipelineMetadata());
   transformer(tree);
   return tree;
 };
@@ -87,7 +88,7 @@ describe('makeRemarkSyntaxHighlight', () => {
     const tree: Root = { type: 'root', children: [codeNode] };
     const deps = makeStubDeps(throwingHighlighter);
     const plugin = makeRemarkSyntaxHighlight(deps);
-    plugin({ toc: [], wikiLinks: [], mentions: [], codeBlockLanguages: [] })(tree);
+    plugin(createEmptyPipelineMetadata())(tree);
     expect(tree.children[0].type).toBe('code');
   });
 

@@ -314,6 +314,31 @@ export async function deleteCommentViaApi(context: BrowserContext, input: { page
   }
 }
 
+/**
+ * Read `GET /api/v2/installer` — the API's LIVE installed-state oracle
+ * (`isAppInstalled` counts `{ ns: 'crowi' }` Config docs on every call, so
+ * the answer can never be a boot-cache artifact of a reused webServer).
+ *
+ * Used by `onboarding.setup.ts` as a precondition check: the suite's
+ * MongoDB reset runs in the `e2e` package script BEFORE `playwright test`
+ * (see `playwright.config.ts`'s note on why it can't be a config-level
+ * `globalSetup`), and a run is left INSTALLED when it finishes — so an
+ * invocation that skips that reset step, or one that races another e2e
+ * process over the shared ports/database, silently starts against an
+ * already-installed instance.
+ */
+export async function getInstallerStatus(): Promise<'installer_required' | 'already_installed'> {
+  const response = await fetch(`${E2E_API_URL}/api/v2/installer`);
+  if (!response.ok) {
+    throw new Error(`Failed to read E2E installer status: HTTP ${response.status} ${await response.text()}`);
+  }
+  const body = (await response.json()) as { status?: unknown };
+  if (body.status !== 'installer_required' && body.status !== 'already_installed') {
+    throw new Error(`Unexpected E2E installer status payload: ${JSON.stringify(body)}`);
+  }
+  return body.status;
+}
+
 export async function loginViaApi(credentials: E2eUserCredentials): Promise<{ accessToken: string; refreshToken: string; expiresIn: number }> {
   const response = await fetch(`${E2E_API_URL}/api/v2/auth/login`, {
     method: 'POST',

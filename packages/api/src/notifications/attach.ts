@@ -3,6 +3,7 @@ import { NotificationsServerMessageSchema, WS_CLOSE_CODES } from '@crowi/api-con
 import Debug from 'debug';
 import type Crowi from 'src/crowi';
 import { createNotificationsTokenUtil } from 'src/util/notifications-token';
+import { resolveRedisKeyspaceIfEnabled } from 'src/util/redis-keyspace';
 import { attachWsNamespace, politeCloseWithReason, splitUrl } from 'src/ws/attach-namespace';
 import type { WebSocket as WsWebSocket } from 'ws';
 import { channelForUser } from './channel';
@@ -101,6 +102,12 @@ export async function attachNotificationsServer(httpServer: HttpServer, crowi: C
   // structural client surface (or null) the handler expects. When
   // Redis is unavailable the handler runs in degraded mode (no pub/sub).
   const primaryRedis = (crowi.redis as NotificationsRedisClient | null) ?? null;
+
+  // Instance-scoped channel naming (feature-redis-key-prefix §1/§2), matching
+  // `models/notification.ts`'s `publishNotificationsChange` (both sides must
+  // agree on the same `crowi:<slug>:notifications:user:<userId>` channel for
+  // a given `crowi`).
+  const keyspace = resolveRedisKeyspaceIfEnabled(crowi);
 
   // Dedicated subscriber client — node-redis v4 puts a connection into
   // subscriber mode on `subscribe`, after which it can no longer issue
@@ -226,7 +233,12 @@ export async function attachNotificationsServer(httpServer: HttpServer, crowi: C
     if (subscriber === null) return Promise.resolve();
     return chainChannelOp(userId, async () => {
       try {
-        await subscriber!.subscribe(channelForUser(userId), (message: string) => {
+        // `keyspace` is mandatory on `channelForUser` (feature-redis-key-prefix
+        // §1/§2) — `subscriber` is only ever non-null when `primaryRedis` was
+        // non-null above, which is exactly the condition under which
+        // `resolveRedisKeyspaceIfEnabled` resolved a real keyspace instead of
+        // `undefined`, so this assertion reflects an invariant, not a guess.
+        await subscriber!.subscribe(channelForUser(userId, keyspace!), (message: string) => {
           handleRedisMessage(userId, message);
         });
         debug('subscribed user %s channel', userId);
@@ -247,7 +259,8 @@ export async function attachNotificationsServer(httpServer: HttpServer, crowi: C
     if (subscriber === null) return Promise.resolve();
     return chainChannelOp(userId, async () => {
       try {
-        await subscriber!.unsubscribe(channelForUser(userId));
+        // See `ensureSubscribed`'s comment — same invariant applies here.
+        await subscriber!.unsubscribe(channelForUser(userId, keyspace!));
         debug('unsubscribed user %s channel', userId);
       } catch (err) {
         debug('unsubscribe failed for user %s: %s', userId, (err as Error).message);
@@ -397,4 +410,4 @@ export async function attachNotificationsServer(httpServer: HttpServer, crowi: C
   };
 }
 
-export { channelForUser, NOTIFICATIONS_CHANNEL_PREFIX } from './channel';
+export { channelForUser } from './channel';

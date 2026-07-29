@@ -30,10 +30,14 @@
  *     per this constant's own policy above. (Phase 2's KaTeX/PlantUML/
  *     Mermaid data-contract + cacheVersion work deliberately did NOT
  *     bump this — see `page-response.test.ts`'s pinned assertion.)
+ *   - 0.10.x feature-page-link-space-paths Phase 2 — raw-space link
+ *     recovery (`renderer/core/raw-space-links.ts`) added as a new
+ *     bundled transform (`buildCorePlugins`); new-bundled-transform
+ *     minor bump per this constant's own policy above.
  *
  * Until `renderer:rebuild` ships (deferred to RFC-0008), version
  * mismatch is informational only — the read path's parse-on-read
  * fallback handles missing or stale `renderedAst` transparently at
  * a per-request CPU cost.
  */
-export const RENDERER_PIPELINE_VERSION = '0.9.0';
+export const RENDERER_PIPELINE_VERSION = '0.10.0';

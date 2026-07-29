@@ -22,6 +22,7 @@ import { attachMcp } from '../mcp/attach';
 import { createPluginContext } from '../plugin/plugin-context';
 import { makePluginRouterScope } from '../plugin/registries';
 import { createCors } from './middleware/cors';
+import { createSecurityHeaders } from './middleware/security-headers';
 import { registerAdminCryptoRoutes } from './handlers/admin-crypto';
 import { registerAdminAppRoutes } from './handlers/admin/app';
 import { registerAdminAuthRoutes } from './handlers/admin/auth';
@@ -134,6 +135,11 @@ export const buildHonoApp = (crowi: Crowi) => {
   // `app.use('*', ...)` mutates the underlying Hono instance — it
   // doesn't extend the typed openapi chain — so we install before
   // any `register*Routes(...)` calls.
+  // Registered BEFORE CORS on purpose: Hono's cors middleware answers an
+  // OPTIONS preflight by returning its own 204 without calling `next()`, so a
+  // security-header middleware installed after it would never run for
+  // preflights. Outside-in, this one still sets its header on the way back out.
+  base.use('*', createSecurityHeaders());
   base.use('*', createCors(crowi));
   // RFC-0013 Phase 0 — mount plugin-contributed HTTP routes. Each loaded
   // plugin's `registerRoutes(scope, ctx)` is called here (NOT at boot-time

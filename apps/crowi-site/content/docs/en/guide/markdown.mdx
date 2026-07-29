@@ -71,6 +71,35 @@ Absolute paths starting with `/` become regular links. Targets that do not
 start with `/`, and external URLs such as `http(s)://`, are currently shown
 dimmed as a "broken wiki link" (a `wikilink-broken` class is applied).
 
+### Ordinary links to a page whose path has a space
+
+A Crowi page path can contain spaces, but under CommonMark's rules the
+destination (inside the parentheses) of an ordinary Markdown link
+`[label](url)` cannot contain a raw space. To link to a page whose path has
+a space, use one of the following notations.
+
+| Notation | Example | Notes |
+| -------- | ------- | ----- |
+| `%20` (recommended) | `[AI report](/survey/AI%20report%20draft)` | Explicitly valid under RFC 3986 and the most interoperable with external Markdown tooling (Pandoc, other CommonMark implementations) |
+| `+` | `[Weekly report](/crowi/weekly+report+2026+07)` | Matches Crowi's own URL convention of representing a space as `+`. Still supported |
+| `<...>` (angle-bracket) | `[label](</foo bar>)` | The CommonMark-standard angle-bracket destination form — a raw space can be written as-is |
+
+A raw space written directly in the destination, as in `[label](/foo bar)`,
+does not become a link under CommonMark's standard interpretation. Crowi,
+however, leniently recovers it into a clickable internal link to the actual
+`/foo bar` page (**this is an intentional deviation from CommonMark**). Only
+an ordinary link with an absolute-path (starting with `/`) destination is
+recovered; the following stay literal text as typed:
+
+- Image syntax (`![alt](/foo bar)`)
+- An escaped form, e.g. `\[label\](/foo bar)`
+- Inside a fenced code block or inline code
+- Nested inside an existing link's label (e.g. `[outer [x](/foo bar) part](/dest)`)
+
+If interoperability with other CommonMark-compliant tooling matters, prefer
+one of the explicit `%20` / `+` / `<...>` notations above instead of relying
+on a raw space.
+
 ### Mentions `@username`
 
 A `@username` in the body is automatically converted into a link to that

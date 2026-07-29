@@ -187,6 +187,23 @@ describe('Revision (RFC-0003 collab fields)', () => {
       expect(rev.meta?.toc?.[0]?.text).toBe('Heading');
     });
 
+    // feature-backlink-raw-space-metadata AC#2 — `PipelineMetadata.rawSpaceLinks`
+    // (populated by `renderer/core/raw-space-links.ts`) must survive the full
+    // `runRender` -> `metadataToRevisionMeta` -> `revision.meta` persistence
+    // round-trip. This is what `Backlink.createBySavedPage` reads directly
+    // off the just-saved revision (see backlink.test.ts's matching coverage).
+    test('a raw-space recovered link destination is persisted onto revision.meta.rawSpaceLinks, verbatim (not decoded)', async () => {
+      const page = await seedPage('raw-space-meta');
+      const rev = await Revision.prepareRevision(page, '[label](/raw space+doc#frag)', user);
+      expect(rev.meta?.rawSpaceLinks).toEqual(['/raw space+doc#frag']);
+    });
+
+    test('a body with no raw-space link persists an empty rawSpaceLinks array (not undefined)', async () => {
+      const page = await seedPage('raw-space-meta-empty');
+      const rev = await Revision.prepareRevision(page, 'plain body, no raw-space links.', user);
+      expect(rev.meta?.rawSpaceLinks).toEqual([]);
+    });
+
     // feature-plugin-renderer-mermaid spec §6 — `Renderer.runRender`'s
     // `options.actor` is now required (admission control needs an
     // end-to-end actor identity). `prepareRevision` builds it from the

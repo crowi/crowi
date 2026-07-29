@@ -50,8 +50,50 @@ filename (for PDFs, zips, text, and other non-image files).
   dedicated listing (see below).
 
 Each attachment is assigned a URL of the form `/api/v2/attachments/<id>`.
-Hitting that URL delivers the actual file; non-image files are downloaded
-under their original filename.
+Hitting that URL delivers the actual file.
+
+### Content types on delivery
+
+An attachment's MIME type is recorded from what the browser declared at
+upload time. Delivery therefore does not trust that declaration: the
+outgoing `Content-Type` is **pinned to a server-side allow-list**.
+
+| Type as delivered | Behaviour |
+| ----------------- | --------- |
+| PNG / JPEG / GIF / WebP / BMP / AVIF / APNG / ICO | Displayed inline in the browser |
+| SVG (`image/svg+xml`) | Displayed inline (with the sandbox described below) |
+| PDF (`application/pdf`) | Displayed inline in the browser's PDF viewer |
+| `text/plain` / `text/markdown` / `text/csv` | Displayed inline as plain text |
+| Everything else | Replaced with `application/octet-stream` and downloaded (`Content-Disposition: attachment`) |
+
+A type that is not on the allow-list is downloaded regardless of what was
+declared when it was uploaded. Attaching an HTML file and opening its
+URL, for example, never renders as HTML in the browser. The decision is
+made **on every delivery**, so the same rule applies to attachments that
+are already stored.
+
+Two response headers go with this:
+
+- `X-Content-Type-Options: nosniff` — set on every API response. It stops
+  a browser from disregarding the declared `Content-Type` and guessing
+  the type from the bytes (MIME sniffing), which would otherwise route
+  around the pinned type.
+- `Content-Security-Policy: sandbox` — set on attachment deliveries that
+  the table above renders inline, PDF excepted. It ensures that even a
+  document format that can carry script, such as SVG, is only ever
+  rendered without script execution and without an origin.
+
+> **Note**: Embedding an SVG through image syntax in the body or an
+> `<img>` tag looks exactly as before (the sandbox does not apply on the
+> path where it is processed as an image). What changes is opening an SVG
+> directly, or loading it through `<object>` / `<embed>` / `<iframe>`.
+> Mermaid and PlantUML diagrams are unaffected: their SVG is embedded
+> straight into the body and never goes through attachment delivery.
+
+> **Note**: If you run behind a reverse proxy, do not rewrite or strip
+> these headers (`Content-Type` / `Content-Disposition` /
+> `X-Content-Type-Options` / `Content-Security-Policy`). Attachment
+> delivery relies on them reaching the browser intact.
 
 ### Display-optimized images
 
@@ -177,8 +219,9 @@ starts the upload at the cursor position.
 - The per-file limit is **50 MB**, and a single drop can carry at most
   **5 files**. Exceeding either limit shows a toast notification.
 
-The default allow-list of file types accepted by drag-and-drop is (an
-operator can change this — see [Storage driver](../operations/storage)):
+The allow-list of file types accepted by drag-and-drop is below. In the
+current release this list is fixed — there is no per-instance setting for
+it:
 
 | Category | Accepted |
 | -------- | -------- |
@@ -189,6 +232,12 @@ operator can change this — see [Storage driver](../operations/storage)):
 Dropping a type not on the allow-list shows a toast naming the rejected
 type.
 
+> **Note**: Some operating systems report no MIME type at all (or
+> `application/octet-stream`), so the client additionally accepts `.md` /
+> `.markdown` / `.txt` / `.csv` by extension. The authoritative check is
+> the server's, which goes by MIME type — so a file that got through that
+> fallback can still be rejected with a `415` on upload.
+
 > **Note**: When the edit screen is in **read-only mode** (the
 > simultaneous-editor cap was reached, or you lack edit permission —
 > see [Realtime collaborative editing](./realtime-editing)),
@@ -196,12 +245,10 @@ type.
 
 ### When an upload fails
 
-If an upload fails (e.g. a network disconnect), the placeholder is
-replaced with a static error marker: `![Upload failed:
-<filename>](#)` (or `[Upload failed: …](#)` for non-images).
-
-The error marker stays in the body as-is — there is no retry button.
-Delete the marker by hand, then paste / drop again.
+If an upload fails (a network disconnect, a permission error), the
+progress placeholder is **removed from the body** and the reason is shown
+in a toast notification. No broken Markdown is left behind, so you can
+simply paste / drop again.
 
 ## Removing an attachment
 
@@ -210,16 +257,13 @@ delete button on each tile. Click an attachment to open its modal, then
 remove it from there. Removing an attachment deletes both the
 `Attachment` document and the actual file in storage.
 
-Only users matching one of the following can remove an attachment:
+**Any user who can view the owning page** can remove an attachment. Like
+the page body, attachments are treated as collectively editable by the
+team — removal is not restricted to the uploader or to administrators.
 
-| Condition | Description |
-| --------- | ----------- |
-| Attachment creator | The user who uploaded the file |
-| Administrator | A user with the `admin` role |
-| Granted user of the page | A user listed in the page's `grantedUsers` |
-
-> **Note**: In Crowi 1.x anyone could delete an attachment; in v2
-> permission is restricted as shown above.
+The page's grant check still applies, so you cannot remove an attachment
+on a page you are not allowed to view (a 404 is returned to hide its
+existence).
 
 ## Compatibility with legacy URLs
 

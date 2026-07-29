@@ -51,11 +51,15 @@ async function main(): Promise<void> {
   // Mirrors the §2 layer-1 host-forced settings this candidate would run
   // under in Phase 1 (strict security, no HTML labels, fixed theme) — the
   // spike validates the config Crowi actually intends to ship.
+  // `gantt.useWidth`: see `render-worker.ts`'s `MERMAID_INIT_CONFIG` doc
+  // comment — jsdom's `offsetWidth` always reads `0` (not `undefined`),
+  // so the Gantt renderer's own `w === void 0` fallback never fires.
   mermaid.initialize({
     startOnLoad: false,
     securityLevel: 'strict',
     htmlLabels: false,
     flowchart: { htmlLabels: false },
+    gantt: { useWidth: 1200 },
     theme: 'base',
   });
 

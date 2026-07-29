@@ -79,6 +79,14 @@ export const RevisionMetaSchemaShape = z.object({
   wikiLinks: z.array(WikiLinkSchema).optional(),
   mentions: z.array(MentionSchema).optional(),
   codeBlockLanguages: z.array(z.string()).optional(),
+  // feature-backlink-raw-space-metadata: raw destinations recovered by
+  // `renderer/core/raw-space-links.ts` (`[label](/a b)` — a raw-space
+  // absolute path CommonMark itself rejects as a link). Verbatim, NOT
+  // decoded — `Backlink.createBySavedPage` runs the same
+  // `stripFragmentAndQuery` -> `decodeLinkPath` pipeline the regex-based
+  // extraction path uses. Mirrors `wikiLinks` above: pushed by the core
+  // transform into `PipelineMetadata`, persisted verbatim on `revision.meta`.
+  rawSpaceLinks: z.array(z.string()).optional(),
 });
 export type RevisionMetaShape = z.infer<typeof RevisionMetaSchemaShape>;
 

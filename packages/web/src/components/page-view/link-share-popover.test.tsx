@@ -98,6 +98,25 @@ describe('LinkSharePopover — PC/wide share popover (SharePanelContent regressi
     expect(writeText).toHaveBeenCalledWith(`[${page.path}](${idUrl})`);
   });
 
+  it('feature-page-link-space-paths Phase 1 audit note (AC 13): the auto-copied id URL stays `${origin}/<page._id>` unchanged for a space-containing page path — the share panel destination is ObjectId-based via buildPageShareUrl(page._id), never the path, so it has no `+`/`%20`/`<...>` encoding to get right or wrong in the first place', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+
+    const page = makePage({ path: '/docs/guide/a b', _id: 'page-share-space-1' });
+    openPopover(page);
+
+    expect(await screen.findByText(m['page.share.url_copied']())).toBeInTheDocument();
+    const idUrl = buildPageShareUrl(page._id);
+    // Same shape as the no-space case above: id-only, no reference to `page.path`.
+    expect(idUrl).not.toContain(' ');
+    expect(writeText).toHaveBeenCalledWith(idUrl);
+    // The "title + URL" / Markdown rows still embed the raw `page.path` verbatim
+    // (a real space, not `%20`/`+`) — display-only strings meant for humans to
+    // read and paste, not the internal link resolver this feature hardens.
+    expect(screen.getByDisplayValue(`Crowi ${page.path} ${idUrl}`)).toBeInTheDocument();
+    expect(screen.getByDisplayValue(`[${page.path}](${idUrl})`)).toBeInTheDocument();
+  });
+
   it('re-fires the auto-copy on every reopen (not just the first open)', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.assign(navigator, { clipboard: { writeText } });

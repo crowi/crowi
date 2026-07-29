@@ -1,9 +1,9 @@
 # RFC-0005: Page Presence & Header UI
 
-- **Status**: Draft (round 2 — implementation feedback integrated, scope expanded to page header)
+- **Status**: Draft (round 3 — mobile presence card + reconnect semantics)
 - **Target**: Crowi 2.2 release (alongside RFC-0004)
 - **Owner**: TBD
-- **Last updated**: 2026-05-17
+- **Last updated**: 2026-07-26
 - **Depends on**: RFC-0003 (Real-time Collaborative Editing), RFC-0004 (Editor UX Enhancement)
 - **Implementation notes**: collab transport layer (ws noServer attach to api http.Server) and editor-side presence (CollabPresenceAvatars, CollabSameBlockWarning) are already implemented as part of RFC-0003 / RFC-0004 work. This RFC defines only the page-view-side presence and the header restructure.
 
@@ -67,6 +67,13 @@ reverse proxy at `/presence/*`. That assumption is wrong now:
   with the editor-cap counter from RFC-0003.
 - **Lightweight client cost**. Page viewers (not editors) do not load
   Yjs; presence is its own much smaller WebSocket channel.
+- **Mobile-specific presentation** (round 3): below `768px` the "now"
+  and "historically" areas physically re-order — live presence moves
+  to a dedicated card directly under the historical meta chips instead
+  of sharing the pre-title row with desktop — and the client
+  distinguishes "reconnecting" (transport down, an automatic retry is
+  scheduled) from a terminal connection failure, so a brief network
+  blip no longer reads as "nobody is here" on mobile.
 
 ## Non-goals (this RFC)
 
@@ -112,9 +119,11 @@ The page header gets two new rows above the existing structure:
 └───────────────────────────────────────────────────────────────┘
 ```
 
-Two distinct rows:
+Two distinct rows. **The layout above is the `md`+ (≥768px) layout**;
+round 3 gives narrow viewports a different physical order — see
+[Mobile](#mobile).
 
-### Live presence row (NEW, above title)
+### Live presence row (NEW, above title — desktop only since round 3)
 
 ```
 [👁 閲覧者]  [avatar][avatar][avatar][+N]
@@ -128,6 +137,15 @@ Two distinct rows:
   editing status.
 - This row hides itself entirely if only the current user is present
   (no value in displaying yourself alone).
+- **Round 3**: this row — including the row element that carries it, not
+  just its contents — is not rendered below `768px` at all. Rendering
+  the row and hiding only the avatars still reserved its outer spacing on
+  mobile, and `display: none` on the row would still mount a presence
+  strip that width never shows; the two viewports are therefore split by
+  a real conditional render keyed off a live `(min-width: 768px)`
+  subscription, not by CSS. Mobile's live presence is the dedicated card
+  described under [Mobile](#mobile); when a mobile TOC menu is needed it
+  gets a row of its own in the same pre-title position.
 
 ### Meta chip row (RESTRUCTURED, below title)
 
@@ -155,6 +173,21 @@ remain as static elements at the start of the row.
 **The historical "seen users" avatar stack from v1.x is removed**
 in favour of the compact `[👁 N] 閲覧` chip. This avoids visual
 ambiguity with the new live presence row above.
+
+**Round 3 — two DOM groups.** The row splits into an author/updated
+meta group and a group holding the four statistics chips. Below `768px`
+they stack vertically, and the mobile presence card is inserted directly
+after the statistics group. On `md`+ both group wrappers are
+`display: contents`, so they generate no box and their children are
+again the six direct flex items of the outer row — the `md`+ layout is
+therefore the pre-split row by construction, down to where it wraps
+(which matters because the expanded header's height feeds the sticky
+threshold and the TOC alignment). Nesting the groups as real flex
+containers at `md`+ would have changed those wrap points. The chips'
+data, click actions (modal / scroll), and zero-count styling are
+unchanged — this is a grouping change only, made so that mobile gets
+`author/updated → statistics → live presence` as its real reading
+order.
 
 ## Live presence
 
@@ -184,6 +217,39 @@ ambiguity with the new live presence row above.
 The `/presence` ws handler lives in the same Node.js process as
 `/collab` and the HTTP API. No separate process, no reverse proxy
 configuration.
+
+### Client connection state (round 3)
+
+The client's presence hook exposes four transport states, not three.
+Round 2 collapsed every close into a single terminal `error`, which
+made a one-second network blip indistinguishable from "presence is
+gone" — unacceptable once mobile shows an explicit status word.
+
+| State | Meaning |
+|---|---|
+| `connecting` | A connection attempt is in flight (initial, or a scheduled retry that has just fired). |
+| `connected` | The transport is open. |
+| `reconnecting` | The transport closed and an automatic retry is **scheduled** (0ms for an auth-refresh close, 1–15s backoff otherwise). |
+| `error` | Terminal. No retry is scheduled — the client gave up, or presence was stopped. |
+
+`reconnecting` is *derived* from "a retry is scheduled" — the
+reconnecting socket primitive already owns that timer, and the hook
+reads it rather than running a second timer of its own.
+
+Separately, `connected` alone does not mean the viewer list has
+arrived: the socket can be open while the server's `join` failed and no
+viewer frame ever follows (see [Failure modes](#failure-modes)). So the
+client also tracks a **connection-scoped** "have I received a viewers
+frame on *this* connection" flag — reset on every `open`, set by that
+connection's first `viewers` frame. Only `connected && that flag`
+renders as live/green; every other state renders neutral. The flag is
+an arrival signal, not a freshness one — out-of-order snapshots are
+rejected separately, by the per-page generation carried on the
+`viewers` frame (whose lineage also restarts per epoch).
+
+Anti-flicker state survives reconnects within the same page session, so
+during `connecting` / `reconnecting` the last known avatars and count
+stay on screen in the neutral state instead of emptying out.
 
 ### Editing-flag integration
 
@@ -304,9 +370,109 @@ payload, which presence computes by checking the editor-cap Set
 
 ### Mobile
 
-On narrow viewports (< 768px), the live presence row collapses to a
-single icon with a count: `[👁 N]`. Tapping expands a sheet listing
-all current viewers with their editing status.
+Round 2 collapsed the pre-title live presence row into a single
+`[👁 N]` chip on narrow viewports (< 768px). That put an eye icon with
+a number above the title *and* another eye icon with a number (the
+historical `[👁 N] 閲覧` chip) below it — the same visual language for
+two different facts, split across the title. Round 3 replaces it with a
+dedicated card.
+
+**Physical order below 768px** (which is a real DOM order, not a
+`display` trick):
+
+```
+title
+author / updated
+[👍 N] [👁 N] [💬 N] [🔗 N]        ← statistics chips
+┌───────────────────────────────────────────┐
+│ (A)(B)(C)+2   5 人が現在閲覧中     ● Live │   ← presence card
+└───────────────────────────────────────────┘
+───────────────────────────────────────────    ← divider
+body
+```
+
+The card is one tap target (≥48px), and the **only** interactive
+element in it — no nested tooltip or overflow button. It carries:
+
+- Up to **3** overlapping avatars (fewer than desktop's 5; this is a
+  compact card, not a wide strip) plus a non-interactive `+N`. The
+  avatar group is decorative (`aria-hidden`); the button's accessible
+  name carries the count, the status, and the action.
+- A **self-inclusive natural-language count** — `{count} viewing now` /
+  `{count} 人が現在閲覧中`. English is phrased to avoid a plural branch.
+- A **status indicator that is never colour-only**: green dot + `Live`
+  when connected *and* a viewers frame has arrived on this connection;
+  otherwise a neutral dot + `Reconnecting…` / `再接続中…` while an
+  automatic retry is pending. No `aria-live` — presence churn is not
+  worth interrupting a screen reader for.
+
+Tapping opens the same bottom sheet as before, listing every current
+viewer with the `(you)` label and editing status. Terminal `error` (and
+only terminal `error`) removes the card; an in-flight retry keeps it on
+screen in the neutral state.
+
+**Self-only collapse.** When nobody else is present the whole slot —
+card, divider, *and* the vertical rhythm margin that would otherwise
+sit between it and the chips — collapses away, and re-expands when
+someone joins. Because the margin is moved inside the animated track
+(`grid-template-rows: 0fr → 1fr` over a `min-height: 0; overflow:
+hidden` cell), the entire height change animates continuously; nothing
+snaps in as a sudden 20px step. Two constraints fall out of this:
+
+- **Reading position must not jump.** The collapse is not user-
+  initiated, and browser scroll anchoring cannot carry this: WebKit
+  (iOS Safari) does not implement it, while Blink and Gecko do. The
+  correction is therefore made in JS, but measured so that it is *also*
+  correct where the engine already anchored: the slot's viewport-relative
+  **trailing edge** — the flow position of the body that follows it — is
+  measured before and after the transition, and the difference is applied
+  with `window.scrollBy`. On WebKit that difference is the full height
+  change; on Blink/Gecko the engine has already absorbed it and the
+  difference is zero, so nothing is double-compensated. What is protected
+  is the reader's position in the *body*, which is always below the slot,
+  so the correction applies whenever any on-screen content sits below the
+  slot's top edge — including while the card itself is (partly or fully)
+  visible, since a reader can be on the paragraph under a card they can
+  also see. The price is a shift of what is *above* the slot (breadcrumb
+  / title / chips), which nobody is reading while the body is on screen.
+  Only a slot starting below the fold — where nothing visible moves at
+  all — is skipped, along with the never-compensated cases:
+  user-initiated scrolling, compact toggling, unmount, and reduced
+  motion. Keeping the body pinned also keeps `scrollY - H` constant, so
+  the collapse can never flip the sticky header between expanded and
+  compact by itself.
+- **The exit needs a generation guard.** A viewer leaving and
+  re-joining inside the ~200ms exit window must not unmount a card
+  that is on screen again. The lifecycle keeps a generation counter;
+  `transitionend` is filtered to the track element *and* the
+  `grid-template-rows` property (a bubbled descendant transition must
+  not drive it), and the fallback timer that backs it up is tagged with
+  the generation that scheduled it. `prefers-reduced-motion: reduce` is
+  read in JS and takes a synchronous-unmount path with no timer and no
+  transition listener — a `motion-reduce:` CSS utility alone would
+  suppress the animation while leaving the lifecycle waiting for a
+  `transitionend` that never fires.
+
+**Compact sticky bar.** The 60px sticky bar is unchanged in height and
+keeps a short `Live · N` (or neutral) trigger opening the same sheet.
+The card itself is never duplicated there.
+
+**Portaled overlays on compact.** The expanded header stays mounted
+inside an `inert` placeholder when the header compacts, but `inert`
+does not reach Portal-rendered content. Every expanded-subtree overlay
+owner therefore takes an explicit force-close signal on compaction —
+the link-share popover, the actions menu, the desktop presence popover,
+the expanded TOC menu, and this card's own viewer sheet — and focus is
+handed to the compact bar before the placeholder goes `inert`, since
+`inert` only blurs focus rather than relocating it.
+
+**Sticky threshold during the collapse.** The animating slot is part of
+the expanded header's flow height, so the compact threshold is frozen
+at the transition-start height for the duration of the animation and
+re-evaluated once when it settles. Ordinary reflow tracking (font
+loads, resizes) is unaffected — the height used for re-evaluation is
+read at evaluation time so a window resize cannot race a pending
+ResizeObserver callback into using a stale height.
 
 ## Meta chip row
 
@@ -467,6 +633,32 @@ the page view falls back gracefully: the live presence row hides
 itself if the WebSocket connection fails. The meta chip row continues
 to function (HTTP-only).
 
+### Transport drops mid-session (round 3)
+
+A closed socket is not by itself a failure: the client schedules a
+retry (0ms for an auth-refresh close, 1–15s backoff otherwise). While
+that retry is pending the state is `reconnecting`, the mobile card
+stays on screen showing the last known viewers in the neutral
+`Reconnecting…` state, and nothing is removed. Only a terminal `error`
+— no retry scheduled, or presence explicitly stopped — takes the card
+away. This keeps a brief network blip from reading as "everyone left".
+
+### `join` succeeds at the transport but not at the server
+
+An open socket does not by itself mean the server registered the
+viewer. Server-side recovery for this — closing the socket when
+`presence.join()` fails so the client's normal reconnect path takes
+over, rather than leaving it open and permanently silent — is owned
+outside this RFC and already in place.
+
+The client independently refuses to claim liveness it does not have:
+the connection-scoped viewers-frame flag stays false until a viewers
+frame actually lands on the current connection, so a socket that is
+open but silent renders neutral, never `Live`. The client does not add
+a timeout of its own to tear such a transport down — that is the
+server's decision to make, and duplicating it here would only add a
+second, differently-tuned teardown path.
+
 ### Permission revocation mid-session
 
 The next heartbeat detects revocation (presence handler caches read
@@ -515,9 +707,19 @@ In scope:
 - `presence.markEditing` / `unmarkEditing` integration (called
   in-process by collab).
 - isEditing computed at broadcast time from editor-cap Set.
-- Live presence row above page title, with editing badge.
+- Live presence row above page title (desktop), with editing badge.
 - Anti-flicker delay (3 seconds).
-- Mobile collapse + expanded sheet.
+- Mobile presence card below the statistics chips: overlapping avatars
+  (max 3 + `+N`), self-inclusive natural-language count, non-colour-only
+  Live / Reconnecting indicator, tap-to-open viewer sheet.
+- Self-only collapse of the whole mobile card slot, with
+  scroll-position compensation, a generation-guarded exit lifecycle, and
+  a JS-detected reduced-motion path.
+- Client connection states `connecting` / `reconnecting` / `connected` /
+  `error`, plus the connection-scoped viewers-frame flag gating the
+  `Live` indicator.
+- Force-close + focus handoff for portaled overlays owned by the
+  expanded header when it compacts; `inert` placeholder.
 - Self in the stack with "(you)" label in popover.
 - Page header meta-row restructure into chips.
 - Removal of v1.x seen-users avatar stack.
@@ -561,8 +763,28 @@ Out of scope (deferred):
    no new modals.
 10. **Zero-count chips**: rendered greyed and non-interactive, not
     hidden.
-11. **Mobile**: collapse to `[👁 N]` chip + tap-to-expand sheet for
-    presence row. Meta chips remain inline but may wrap.
+11. **Mobile** (revised in round 3): live presence gets a dedicated
+    card placed *after* the statistics chips, not a `[👁 N]` chip above
+    the title — the round-2 chip duplicated the historical `[👁 N] 閲覧`
+    chip's visual language on the other side of the title. The card
+    holds overlapping avatars (max 3 + `+N`), a self-inclusive
+    natural-language count, and a Live / Reconnecting indicator that is
+    readable without colour, all as one ≥48px tap target opening the
+    existing viewer sheet. The pre-title row is not rendered at all
+    below 768px; a mobile TOC menu, when needed, gets its own row there.
+    Meta chips split into an author/updated group and a statistics
+    group, stacked on mobile and — via `display: contents` on both group
+    wrappers at `md`+ — structurally the same six-item wrapping row as
+    before on `md`+, wrap points included.
+12. **Reconnect vs terminal failure** (round 3): the client distinguishes
+    a scheduled automatic retry (`reconnecting`, card stays, neutral)
+    from a terminal `error` (card exits), and gates the `Live`
+    indicator on having received a viewers frame on the current
+    connection rather than on the socket merely being open.
+13. **Self-only collapse** (round 3): animate the whole slot — card,
+    divider and its outer rhythm margin — and compensate the reading
+    position with `window.scrollBy` rather than depending on browser
+    scroll anchoring.
 
 ## Open questions
 
@@ -622,8 +844,20 @@ Out of scope (deferred):
    user-page.
 8. **Anti-flicker delay**: client-side 3s wait before adding new
    avatars.
-9. **Live presence row component**: above the page title, with
-   editing badge + mobile collapse.
+9. **Live presence row component**: above the page title (desktop),
+   with editing badge. Round 3 adds, as a separate mobile-only
+   component and a set of client-side changes around it:
+   - **Mobile presence card**: dedicated card after the statistics
+     chips, plus the short trigger in the compact bar.
+   - **Client connection-state model**: `reconnecting` vs terminal
+     `error`, and the connection-scoped viewers-frame flag gating the
+     `Live` indicator.
+   - **Self-only collapse**: animated slot, `window.scrollBy`
+     compensation, generation-guarded exit lifecycle, JS-detected
+     reduced-motion synchronous unmount.
+   - **Compact-transition wiring**: force-close for portaled overlays,
+     focus handoff, `inert` placeholder, and freezing the sticky
+     threshold for the duration of the collapse.
 10. **`GET /api/v2/pages/<id>/likers`** endpoint.
 11. **"Liked by" modal** component, mirroring existing "Seen by"
     modal.

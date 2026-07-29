@@ -9,13 +9,21 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSepar
 import { Input } from '@/components/ui/input';
 import { buildPageShareUrl } from '@/lib/build-page-share-url';
 import { useAppInfo } from '@/lib/use-app-info';
+import { useForceCloseable } from '@/lib/use-force-closeable';
 
 interface LinkSharePopoverProps {
   page: PageWithRevision;
+  /**
+   * feature-mobile-presence-card — force-closes the dropdown while `true`.
+   * `PageHeader` sets it from its own `compact` sticky state; see
+   * `useForceCloseable` for why a Portal-rendered overlay needs this even
+   * though its trigger's ancestor already goes `inert`.
+   */
+  forceClose?: boolean;
 }
 
-export function LinkSharePopover({ page }: LinkSharePopoverProps) {
-  const [open, setOpen] = useState(false);
+export function LinkSharePopover({ page, forceClose = false }: LinkSharePopoverProps) {
+  const [open, setOpen] = useForceCloseable(forceClose);
 
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>

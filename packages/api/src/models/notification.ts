@@ -5,7 +5,8 @@ import { subDays } from 'date-fns';
 import type { NotificationPayload } from '@crowi/plugin-api';
 import { NotificationsChangedMessageSchema } from '@crowi/api-contract';
 import ActivityDefine from 'src/util/activity-define';
-import { NOTIFICATIONS_CHANNEL_PREFIX } from 'src/notifications/channel';
+import { channelForUser } from 'src/notifications/channel';
+import { resolveRedisKeyspace } from 'src/util/redis-keyspace';
 import { ActivityDocument } from './activity';
 import { UserDocument } from './user';
 
@@ -284,7 +285,10 @@ function userIdOf(user: unknown): string | null {
 function publishNotificationsChange(crowi: Crowi, userId: string): void {
   const redis = crowi.redis as { publish?: (channel: string, message: string) => Promise<number> } | null | undefined;
   if (!redis || typeof redis.publish !== 'function') return;
-  const channel = `${NOTIFICATIONS_CHANNEL_PREFIX}${userId}`;
+  // Instance-scoped (feature-redis-key-prefix §1/§2) — `resolveRedisKeyspace`
+  // only reads `crowi.getBaseUrl()`/`crowi.getEnv()`, both already resolvable
+  // here since `crowi.redis` is non-null.
+  const channel = channelForUser(userId, resolveRedisKeyspace(crowi));
   // Build the payload through the shared schema rather than as a hand-
   // rolled literal so a future evolution of the message contract is
   // caught at compile / parse time on both the publisher and the

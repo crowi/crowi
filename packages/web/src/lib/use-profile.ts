@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getLocale, setLocale, locales, type Locale } from '@paraglide/runtime.js';
 import type { Theme, UpdatePasswordRequest, UpdateProfileRequest } from '@crowi/api-contract';
 import { apiClientV2 } from './api-client';
+import { storeTokens } from './auth-token';
 
 function profileLangToLocale(lang: string | undefined | null): Locale | null {
   if (!lang) return null;
@@ -141,7 +142,13 @@ export function useUpdatePassword() {
     mutationFn: async (data: UpdatePasswordRequest) => {
       const response = await apiClientV2.me.password.$put({ json: data });
       if (response.status === 200) {
-        return response.json();
+        const body = await response.json();
+        // Changing the password revokes every token minted before it,
+        // this tab's included. The response carries a replacement pair —
+        // store it right away or the next request 401s and the user is
+        // bounced to the login screen for changing their own password.
+        storeTokens(body, body.expiresIn);
+        return body;
       }
       // 400 surfaces a structured `{ errors: string[], message? }` shape
       // so we can join multiple validation messages.

@@ -33,6 +33,7 @@ import type Crowi from 'src/crowi';
 import { visiblePageGrantOr, visiblePageStatusOr } from 'src/models/page';
 import { scoreCandidate } from 'src/util/autocomplete-match';
 import { createRateLimiter } from 'src/util/rate-limit';
+import { resolveRedisKeyspaceIfEnabled } from 'src/util/redis-keyspace';
 import { escapeRegExp } from 'src/util/regex';
 import { toISOStringOrNull } from 'src/util/ts-rest-helpers';
 
@@ -78,6 +79,7 @@ export const registerAutocompleteRoutes = <E extends OpenAPIHono<CrowiHonoBindin
     limit: RATE_LIMIT,
     windowMs: RATE_WINDOW_MS,
     redisClient: crowi.redis ?? null,
+    keyspace: resolveRedisKeyspaceIfEnabled(crowi),
   });
 
   const rateLimitMiddleware = withRateLimit({

@@ -7,7 +7,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node .claude/scripts/validate-bash.js"
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/scripts/validate-bash.js\""
           }
         ]
       },
@@ -16,7 +16,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node .claude/scripts/validate-task-state-write.js"
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/scripts/validate-task-state-write.js\""
           }
         ]
       }

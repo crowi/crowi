@@ -25,6 +25,7 @@ import { HTTPException } from 'hono/http-exception';
 
 import type Crowi from 'src/crowi';
 import { createRateLimiter } from 'src/util/rate-limit';
+import { resolveRedisKeyspaceIfEnabled } from 'src/util/redis-keyspace';
 
 import type { CrowiHonoBindings } from '../hono/app';
 import { createJwtAuth } from '../hono/middleware/auth';
@@ -59,6 +60,7 @@ export const attachMcp = (app: OpenAPIHono<CrowiHonoBindings>, crowi: Crowi): vo
     limit: RATE_LIMIT,
     windowMs: RATE_WINDOW_MS,
     redisClient: crowi.redis ?? null,
+    keyspace: resolveRedisKeyspaceIfEnabled(crowi),
   });
 
   // Auth gate: a valid PAT / OAuth token is required to reach the

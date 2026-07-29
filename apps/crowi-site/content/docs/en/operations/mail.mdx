@@ -7,9 +7,13 @@ Crowi can send notification mail such as password resets and
 invitations. Like storage and search, mail delivery goes through a
 **mail driver** selected in the runner project's `crowi.config.json`
 (`mail.driver`), with the driver implementation provided by a
-`@crowi/plugin-mail-*` plugin. The per-driver credentials (SMTP password,
-SES / Resend keys, sender address) are entered from the mail settings
-screen in the admin UI (`/admin/mail`).
+`@crowi/plugin-mail-*` plugin.
+
+The settings live in two places. **The sender address (`from`) is the
+only core setting**, edited from the mail settings screen in the admin UI
+(`/admin/mail`). **Each driver's connection details and credentials (SMTP
+host / auth, the Resend API key, the AWS credentials for SES) are plugin
+settings**, edited under `/admin/plugins`.
 
 | `mail.driver` | Provided by | Delivery method |
 | ------------- | ----------- | --------------- |
@@ -21,95 +25,113 @@ Because `@crowi/plugin-mail-smtp` is an implicit-default plugin, the
 `smtp` driver is available out of the box; to use SES or Resend, add the
 matching plugin to the runner project and set `mail.driver` accordingly.
 
-> **Note**: Mail configuration is not required. Until the active driver
-> has a sender address and credentials configured, the mailer stays
-> uninitialized, and operations that involve sending mail fail with a
-> "mailer not configured" error.
+> **Note**: Mail configuration is not required. Until a sender address and
+> the active driver's connection details are both in place, operations
+> that involve sending mail fail.
 
 ## Mailer selection logic
 
 The **delivery method is chosen by `mail.driver`** in `crowi.config.json`
 (default `smtp`), and the matching `@crowi/plugin-mail-*` plugin registers
-that driver at boot. The admin mail settings then supply the credentials
-the active driver needs.
+that driver at boot. At send time, the currently active driver is resolved
+from the plugin registry.
 
-At boot (and when settings are saved), the API initializes the active
-mail driver only when it has enough configuration to send:
+Two things are needed to send:
 
-- The sender address (`mail:from`) is **required for every driver**. While
-  it is unset, the mailer stays uninitialized (mail feature off).
+- The sender address (`mail:from`) is **required for every driver**. Set
+  it at `/admin/mail`.
 - The active driver additionally needs its own settings — e.g. the SMTP
-  driver needs an SMTP host and port; the SES driver needs an AWS region
-  and credentials. If those are missing, the mailer stays uninitialized.
+  driver needs an SMTP host; the SES driver needs an AWS region and
+  credentials. Those are entered in the relevant plugin's settings under
+  `/admin/plugins`.
+
+Neither requires **restarting the server** after a change. Saving `from`
+rebuilds the mail service, and saving a plugin's settings calls that
+plugin's `reconfigure` so the new connection details take effect.
+
+> **Note**: The links inside invitation / activation / password-reset /
+> email-change messages have to be absolute URLs, so they do not work
+> unless `CLIENT_URL` is set. See [Configuration](./configuration).
 
 ## Configuring mail in the admin UI
 
-Opening `/admin/mail` shows the current mail settings. Internally,
-`GET /api/v2/admin/mail` retrieves the following values.
+Opening `/admin/mail` shows the sender address and which driver is
+currently active. Internally, `GET /api/v2/admin/mail` retrieves the
+following values.
 
 | Setting | Description |
 | ------- | ----------- |
-| `from` | Sender mail address (e.g. `crowi@example.com`) |
-| `smtpHost` | Hostname of the SMTP server |
-| `smtpPort` | Port number of the SMTP server |
-| `smtpUser` | Username for SMTP authentication |
-| `smtpPassword` | Password for SMTP authentication (sensitive) |
-| `aws.region` | The SES region |
-| `aws.accessKeyId` | AWS access key ID for SES |
-| `aws.secretAccessKey` | AWS secret access key for SES (sensitive) |
+| `from` | Sender mail address (e.g. `crowi@example.com`). The only field editable on this screen |
+| `activeDriver` | The name of the currently active mail driver (e.g. `smtp`). Read-only |
+| `activePlugin` | The npm name of the plugin that registered that driver. Read-only |
 
-Saving the settings calls `PUT /api/v2/admin/mail`, after which
-`setupMailer()` is re-run. As a result, the new mail settings take
-effect immediately **without restarting the server**.
+`activePlugin` is rendered as a link to the plugin settings page where the
+connection details belong. **The SMTP host / auth, the Resend API key and
+the AWS credentials for SES do not appear on this screen** — they live in
+their respective plugin settings.
+
+Saving calls `PUT /api/v2/admin/mail`, which updates `from`.
 
 ### Handling of sensitive values
 
-`smtpPassword` and `aws.secretAccessKey` are treated as sensitive
-settings.
+Sensitive values such as the SMTP password and the Resend API key are
+declared `@sensitive` in the plugin's own config schema, and the plugin
+settings screen masks them on input.
 
-- On retrieval (`GET`), the actual value is not returned — only whether
-  a value is set (`hasValue`).
-- On save, fields submitted with an empty input are treated as
-  **unchanged**, and the existing value is kept. Explicitly sending an
-  empty string clears the value.
 - When `CROWI_ENCRYPTION_KEY` is set, these values are automatically
-  encrypted when stored in MongoDB. See
-  [Encrypting sensitive config](./encryption) for details.
+  encrypted when stored in MongoDB. **When it is not set, they are stored
+  as plaintext.**
+- For how that works, see the "`@sensitive` marker" section of
+  [Managing plugins](../plugins/managing) and
+  [Encrypting sensitive config](./encryption).
 
 ## Sending via SMTP
 
-An example configuration for using a general SMTP server (Gmail,
-Mailgun, an in-house mail server, etc.).
+To use a general SMTP server (Gmail, Mailgun, an in-house mail server,
+etc.), enter the connection details in `@crowi/plugin-mail-smtp`'s
+settings (`/admin/plugins`). That plugin is an implicit default, so
+nothing needs to be installed.
 
 | Setting | Example value |
 | ------- | ------------- |
-| Sender (`from`) | `crowi@example.com` |
-| SMTP host | `smtp.example.com` |
-| SMTP port | `587` (STARTTLS) or `465` (SSL/TLS) |
-| SMTP user | `crowi@example.com` |
-| SMTP password | (a password issued on the SMTP server side) |
+| Sender (`from`) | `crowi@example.com` (on the `/admin/mail` side) |
+| `host` | `smtp.example.com` |
+| `port` | `587` (STARTTLS) or `465` (SSL/TLS). Defaults to `587` |
+| `user` | `crowi@example.com` |
+| `password` | (a password issued on the SMTP server side; sensitive) |
+| `secure` | Whether to connect with TLS from the start. Defaults to `false` |
 
 Behaviour related to the port:
 
-- Specifying **port `465`** makes the connection automatically `secure:
-  true` (SSL/TLS).
-- For other ports (e.g. `587`), a STARTTLS upgrade is attempted.
+- Specifying **port `465`** connects with implicit TLS regardless of the
+  `secure` setting.
+- For other ports (e.g. `587`), `secure` stays `false` and a STARTTLS
+  upgrade is attempted.
+- While `host` is empty this driver cannot send.
 - SMTP authentication (AUTH) is enabled only when both the SMTP user and
   password are set. If only one of them is set, the connection is made
   without authentication.
 
 ## Sending via AWS SES
 
-To use AWS SES, add `@crowi/plugin-mail-aws-ses` to the runner project,
-set `mail.driver` to `ses` in `crowi.config.json`, and configure the SES
-region and credentials in the admin UI.
+To use AWS SES, add `@crowi/plugin-mail-aws-ses` to the runner project and
+set `mail.driver` to `ses` in `crowi.config.json`. **The SES credentials
+are read from `@crowi/plugin-aws`** (the "Shared services" group in the
+admin sidebar) rather than from the SES plugin itself, so the region and
+access key go there.
 
 | Setting | Example value |
 | ------- | ------------- |
-| Sender (`from`) | `crowi@example.com` (an address verified in SES) |
-| AWS region | `us-east-1` |
-| Access key ID | (the key of an IAM user with SES send permission) |
-| Secret access key | (same as above) |
+| Sender (`from`) | `crowi@example.com` (an address verified in SES; on the `/admin/mail` side) |
+| `region` on `@crowi/plugin-aws` | `us-east-1` |
+| `accessKeyId` on `@crowi/plugin-aws` | (the key of an IAM user with SES send permission) |
+| `secretAccessKey` on `@crowi/plugin-aws` | (same as above; sensitive) |
+
+> **Tip**: Leaving **both** `accessKeyId` and `secretAccessKey` empty falls
+> back to the AWS SDK's default credential chain (IAM role / environment
+> variables / shared credentials file). If you run on EC2 / ECS with an
+> instance role attached, you can leave the keys blank and let that
+> chain resolve them.
 
 > **Tip**: While SES is in the sandbox state, it can only send to
 > verified addresses. For production, request sandbox removal from AWS.
@@ -124,36 +146,64 @@ region and credentials in the admin UI.
 > created in your own account**. For the end-to-end procedure on Lightsail,
 > see [Running on AWS Lightsail](./aws-lightsail).
 
+## Sending via Resend
+
+To use Resend, add `@crowi/plugin-mail-resend` to the runner project, set
+`mail.driver` to `resend`, and enter your Resend API key (sensitive) as
+the plugin's `apiKey` setting.
+
 ## Sending a test mail
 
 You can verify that mail settings are correct with the **test send**
 feature in the admin UI. It calls `POST /api/v2/admin/mail/test` and
 sends a test mail **to the operating administrator's own mail address**.
 
-- The test send uses the saved settings, or the SMTP settings being
-  entered on the screen.
-- If the SMTP host / port is not configured, it fails with a `502`
-  error.
-- Network errors and authentication failures are also returned as `502`
-  (`MAIL_TEST_FAILED`) with a message. Use the error message as a clue
-  to review the configuration.
-- The test mail's subject and body are fixed ASCII text. It is designed
-  to reach the recipient's inbox even when the character-encoding
-  settings are wrong.
+- The test send uses **only the saved settings**. Values typed on the
+  screen but not yet saved are not used, so save first, then run it.
+- If sending fails, network errors and authentication failures alike come
+  back as `502` (`MAIL_TEST_FAILED`) with a message. Use that message as a
+  clue to review the configuration.
+- The test mail is sent with the same branded HTML template as the other
+  notification mails, so you see exactly how real notifications will
+  arrive.
 
 > **Note**: The test mail's recipient is fixed as "the operating
 > administrator's mail address". You cannot specify an arbitrary
 > recipient. The administrator account performing the test must have a
 > valid mail address registered.
 
+## Mail link lifetimes and single use
+
+Of the mail Crowi sends, the four kinds that are completed by opening a
+link each have their own lifetime and their own rule for what happens
+after the link has been used.
+
+| Kind of mail | Valid for | Single-use behaviour |
+| ------------ | --------- | -------------------- |
+| Invitation | 7 days | A link belonging to a user who already accepted returns `409`; the invitation cannot be accepted twice. Resending issues a new link, and there is no need to explicitly invalidate the old one |
+| Account activation | 24 hours | Invalid as soon as the account becomes active. Opening the link for an already-active account does not sign anyone in — it lands on the "link no longer valid" screen |
+| Password reset | 1 hour | **Works exactly once.** All links already sent also stop working once the user changes their password |
+| Email change | 24 hours | Invalid as soon as the change has been applied. An old link can never revert the address |
+
+The lifetime is embedded in the signed token itself and is not stored in
+the database. A link that meets one of the conditions above is invalid
+even while it is still within its lifetime.
+
+> **Note**: **Requesting** a password reset (submitting the "forgot your
+> password" form) does not by itself invalidate existing links. That is
+> deliberate: otherwise anyone who knows an address could destroy that
+> person's valid links. Invalidation only happens when a link is actually
+> used, or when the owner changes their password.
+
 ## Troubleshooting
 
 | Symptom | What to check |
 | ------- | ------------- |
-| No mail is sent at all | Whether `mail:from` is set. Whether either SMTP or SES is fully configured |
+| No mail is sent at all | Whether `from` is set at `/admin/mail`. Whether `activeDriver` is the driver you expect. Whether that plugin's connection details are filled in |
 | Test send returns `502` | Whether the SMTP host / port is correct. Whether the credentials are correct. Whether a firewall is blocking the send port |
 | Authentication error | Whether both the SMTP user and password are entered. Whether the password was saved empty and is now unset |
-| Settings changes are not reflected | `setupMailer()` runs after saving, so changes are normally applied immediately. If they still are not, restart the API |
+| Settings changes are not reflected | Changes are applied on save, so normally they are immediate. If they still are not, restart the API |
+| Links inside the mail are broken | Whether `CLIENT_URL` is set to the public URL |
 
 ## Next steps
 

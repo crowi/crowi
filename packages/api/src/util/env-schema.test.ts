@@ -87,9 +87,13 @@ describe('util/env-schema validateEnv', () => {
   });
 
   describe('REDIS_URL (fail, with aliases)', () => {
-    test('accepts redis:// and rediss://', () => {
-      expect(validateEnv(makeEnv({ REDIS_URL: 'redis://localhost:6379' })).values.redisUrl).toBe('redis://localhost:6379');
-      expect(validateEnv(makeEnv({ REDIS_URL: 'rediss://localhost:6379' })).values.redisUrl).toBe('rediss://localhost:6379');
+    test('accepts redis:// and rediss:// (CLIENT_URL set so the feature-redis-key-prefix keyspace-resolvability invariant, covered separately below, does not also fire)', () => {
+      expect(validateEnv(makeEnv({ REDIS_URL: 'redis://localhost:6379', CLIENT_URL: 'https://wiki.example.com' })).values.redisUrl).toBe(
+        'redis://localhost:6379',
+      );
+      expect(validateEnv(makeEnv({ REDIS_URL: 'rediss://localhost:6379', CLIENT_URL: 'https://wiki.example.com' })).values.redisUrl).toBe(
+        'rediss://localhost:6379',
+      );
     });
 
     test('rejects a value with the wrong scheme', () => {
@@ -109,7 +113,9 @@ describe('util/env-schema validateEnv', () => {
     });
 
     test('REDISTOGO_URL takes precedence over REDIS_URL (legacy ordering)', () => {
-      const result = validateEnv(makeEnv({ REDISTOGO_URL: 'redis://legacy:6379', REDIS_URL: 'redis://canonical:6379' }));
+      const result = validateEnv(
+        makeEnv({ REDISTOGO_URL: 'redis://legacy:6379', REDIS_URL: 'redis://canonical:6379', CLIENT_URL: 'https://wiki.example.com' }),
+      );
       expect(result.values.redisUrl).toBe('redis://legacy:6379');
     });
 
@@ -118,12 +124,125 @@ describe('util/env-schema validateEnv', () => {
     });
 
     test('a value padded with whitespace both validates AND is used trimmed (no stale untrimmed value reaches setupRedisClient())', () => {
-      const result = validateEnv(makeEnv({ REDIS_URL: '  redis://localhost:6379  ' }));
+      const result = validateEnv(makeEnv({ REDIS_URL: '  redis://localhost:6379  ', CLIENT_URL: 'https://wiki.example.com' }));
       expect(result.values.redisUrl).toBe('redis://localhost:6379');
     });
 
     test('a whitespace-only value is NOT treated as unset — Redis being optional only applies when the var is truly absent', () => {
       expect(() => validateEnv(makeEnv({ REDIS_URL: '   ' }))).toThrow(/REDIS_URL/);
+    });
+
+    describe('feature-redis-key-prefix §3: the database pathname', () => {
+      test.each([
+        'redis://localhost:6379',
+        'redis://localhost:6379/',
+        'redis://localhost:6379/0',
+        'redis://localhost:6379/1',
+      ])('%s (root/absent, or a non-negative integer) validates', (raw) => {
+        expect(() => validateEnv(makeEnv({ REDIS_URL: raw, CLIENT_URL: 'https://wiki.example.com' }))).not.toThrow();
+      });
+
+      test('an ACL rediss:// URL with a database pathname validates', () => {
+        expect(() => validateEnv(makeEnv({ REDIS_URL: 'rediss://ACL-user:password@host/1', CLIENT_URL: 'https://wiki.example.com' }))).not.toThrow();
+      });
+
+      test.each([
+        'redis://localhost:6379/foo',
+        'redis://localhost:6379/-1',
+        'redis://localhost:6379/1/extra',
+      ])('%s (invalid pathname) fails boot instead of silently connecting to DB 0', (raw) => {
+        expect(() => validateEnv(makeEnv({ REDIS_URL: raw, CLIENT_URL: 'https://wiki.example.com' }))).toThrow(/REDIS_URL/);
+      });
+
+      test.each([
+        'redis://[::g]:6379/0',
+        'redis://host with space:6379/0',
+      ])('a value with the correct "redis://" scheme prefix but not a syntactically valid URL (%s) is aggregated into the boot-abort message rather than throwing an unrelated TypeError out of `new URL()`', (raw) => {
+        expect(() => validateEnv(makeEnv({ REDIS_URL: raw, CLIENT_URL: 'https://wiki.example.com' }))).toThrow(/REDIS_URL/);
+      });
+    });
+  });
+
+  describe('REDIS_KEY_PREFIX (fail) — feature-redis-key-prefix §1', () => {
+    test.each(['krswd', 'krswd-wiki', 'krswd.wiki', 'krswd_wiki', 'a', 'A1'])('%s validates', (raw) => {
+      expect(() => validateEnv(makeEnv({ REDIS_KEY_PREFIX: raw }))).not.toThrow();
+    });
+
+    test('an unset REDIS_KEY_PREFIX (with no REDIS_URL) does not fail', () => {
+      expect(() => validateEnv(makeEnv({}))).not.toThrow();
+    });
+
+    test('a whitespace-only value fails (blank slug)', () => {
+      expect(() => validateEnv(makeEnv({ REDIS_KEY_PREFIX: '   ' }))).toThrow(/REDIS_KEY_PREFIX/);
+    });
+
+    test('a value containing ":" fails (colon is the keyspace segment separator)', () => {
+      expect(() => validateEnv(makeEnv({ REDIS_KEY_PREFIX: 'krswd:wiki' }))).toThrow(/REDIS_KEY_PREFIX/);
+    });
+
+    test.each(['-krswd', 'krs wd', 'krswd/wiki', 'krswd@wiki'])('%s (does not match the allowed character set) fails', (raw) => {
+      expect(() => validateEnv(makeEnv({ REDIS_KEY_PREFIX: raw }))).toThrow(/REDIS_KEY_PREFIX/);
+    });
+  });
+
+  describe('feature-redis-key-prefix §1: REDIS_URL + REDIS_KEY_PREFIX + CLIENT_URL cross-field keyspace-resolvability invariant', () => {
+    test('REDIS_URL unset never fails regardless of REDIS_KEY_PREFIX/CLIENT_URL', () => {
+      expect(() => validateEnv(makeEnv({}))).not.toThrow();
+      expect(() => validateEnv(makeEnv({ CLIENT_URL: 'not-absolute' }))).not.toThrow();
+    });
+
+    test('REDIS_URL set with an explicit REDIS_KEY_PREFIX override validates even without CLIENT_URL', () => {
+      expect(() => validateEnv(makeEnv({ REDIS_URL: 'redis://localhost:6379', REDIS_KEY_PREFIX: 'krswd' }))).not.toThrow();
+    });
+
+    test('REDIS_URL set with a valid CLIENT_URL validates even without REDIS_KEY_PREFIX', () => {
+      expect(() => validateEnv(makeEnv({ REDIS_URL: 'redis://localhost:6379', CLIENT_URL: 'https://wiki.example.com' }))).not.toThrow();
+    });
+
+    test('REDIS_URL set with BOTH a valid REDIS_KEY_PREFIX and CLIENT_URL validates', () => {
+      expect(() =>
+        validateEnv(makeEnv({ REDIS_URL: 'redis://localhost:6379', REDIS_KEY_PREFIX: 'krswd', CLIENT_URL: 'https://wiki.example.com' })),
+      ).not.toThrow();
+    });
+
+    test('REDIS_URL set with NEITHER REDIS_KEY_PREFIX nor CLIENT_URL fails boot instead of silently falling back to an ambiguous default', () => {
+      expect(() => validateEnv(makeEnv({ REDIS_URL: 'redis://localhost:6379' }))).toThrow(/REDIS_KEY_PREFIX/);
+    });
+
+    test('REDIS_URL set with an unset REDIS_KEY_PREFIX and a non-absolute CLIENT_URL fails (CLIENT_URL must itself be valid, not merely present)', () => {
+      expect(() => validateEnv(makeEnv({ REDIS_URL: 'redis://localhost:6379', CLIENT_URL: 'not-absolute' }))).toThrow(/REDIS_KEY_PREFIX/);
+    });
+
+    test.each([
+      'http://[::1]:3000',
+      'http://[2001:db8::1]',
+    ])('REDIS_URL set with an unset REDIS_KEY_PREFIX and an IPv6-literal CLIENT_URL (%s) fails — absolute per validateAbsoluteUrl but its hostname does not fit the slug format, so util/redis-keyspace.ts could not actually resolve a slug from it at runtime', (clientUrl) => {
+      let thrown: Error | null = null;
+      try {
+        validateEnv(makeEnv({ REDIS_URL: 'redis://localhost:6379', CLIENT_URL: clientUrl }));
+      } catch (err) {
+        thrown = err as Error;
+      }
+      expect(thrown).not.toBeNull();
+      // Not just the generic "neither ... is available" wording — the
+      // message must name the SPECIFIC problem (the CLIENT_URL hostname
+      // doesn't fit the slug format), via resolveClientUrlSlug()'s own
+      // `.error`, while still instructing to set REDIS_KEY_PREFIX.
+      expect(thrown?.message).toMatch(/CLIENT_URL's hostname/);
+      expect(thrown?.message).toMatch(/does not match/);
+      expect(thrown?.message).toMatch(/REDIS_KEY_PREFIX/);
+    });
+
+    test('REDIS_URL set with an invalid REDIS_KEY_PREFIX override still fails, but ONLY reports the format problem, not the cross-field one (the format check already covers it)', () => {
+      let thrown: Error | null = null;
+      try {
+        validateEnv(makeEnv({ REDIS_URL: 'redis://localhost:6379', REDIS_KEY_PREFIX: 'bad:prefix' }));
+      } catch (err) {
+        thrown = err as Error;
+      }
+      expect(thrown).not.toBeNull();
+      const matches = (thrown?.message.match(/REDIS_KEY_PREFIX/g) ?? []).length;
+      expect(matches).toBe(1);
     });
   });
 
@@ -387,6 +506,7 @@ describe('util/env-schema validateEnv', () => {
           'PORT',
           'MONGO_URI',
           'REDIS_URL',
+          'REDIS_KEY_PREFIX',
           'CROWI_ENCRYPTION_KEY',
           'CLIENT_URL',
           'CROWI_MULTI_INSTANCE',

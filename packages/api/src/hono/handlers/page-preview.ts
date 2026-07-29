@@ -47,6 +47,7 @@ import type { Root, RootContent } from 'mdast';
 import type Crowi from 'src/crowi';
 import { serializeMdast } from 'src/renderer';
 import { createRateLimiter } from 'src/util/rate-limit';
+import { resolveRedisKeyspaceIfEnabled } from 'src/util/redis-keyspace';
 import { actorFromUser } from 'src/util/ts-rest-helpers';
 
 import type { CrowiHonoBindings } from '../app';
@@ -97,6 +98,7 @@ export const registerPagePreviewRoutes = <E extends OpenAPIHono<CrowiHonoBinding
     limit: PREVIEW_RATE_LIMIT,
     windowMs: PREVIEW_RATE_WINDOW_MS,
     redisClient: crowi.redis ?? null,
+    keyspace: resolveRedisKeyspaceIfEnabled(crowi),
   });
   app.use(
     '/pages/preview',

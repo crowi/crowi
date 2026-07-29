@@ -114,6 +114,29 @@ describe('MarkdownPreview — diagram embed gets the same DiagramEmbed wrapper a
     expect(screen.getByRole('status').textContent).toContain('Diagram could not be rendered');
     expect(screen.queryByRole('button', { name: m['page.diagram_zoom']() })).toBeNull();
   });
+
+  it("forwards a diagram success <img>'s explicit width/height attributes (regression: dropped here even after page-content.tsx's parallel fix, causing a preview/page-render 0×0 divergence)", async () => {
+    const ast = {
+      type: 'root',
+      children: [
+        {
+          type: 'html',
+          value:
+            '<div data-source-line="1"><img class="diagram-embed fake-diagram-embed" alt="Diagram (flowchart)" src="data:image/svg+xml;base64,PHN2Zy8+" width="141" height="245"></div>',
+        },
+      ],
+    };
+    mutateAsync.mockResolvedValueOnce(ast);
+
+    render(<MarkdownPreview source="```diagram\nflowchart TD\n  A --> B\n```" />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+    });
+
+    const img = screen.getByRole('img', { name: 'Diagram (flowchart)' }) as HTMLImageElement;
+    expect(img.getAttribute('width')).toBe('141');
+    expect(img.getAttribute('height')).toBe('245');
+  });
 });
 
 describe('MarkdownPreview — link-card placeholder', () => {

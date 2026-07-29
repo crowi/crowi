@@ -1,4 +1,12 @@
+import type Crowi from 'src/crowi';
+import { resolveRedisKeyspace } from './redis-keyspace';
 import { createRateLimiter, type RateLimitRedisClient } from './rate-limit';
+
+/** Fixture `resolveRedisKeyspace` reads for the "Redis-backed" tests below. */
+const TEST_KEYSPACE = resolveRedisKeyspace({
+  getBaseUrl: () => null,
+  getEnv: () => ({ REDIS_KEY_PREFIX: 'test' }) as unknown as NodeJS.ProcessEnv,
+} as unknown as Crowi);
 
 /**
  * RFC-0004 Phase 5 — unit tests for the generic per-user rate limiter.
@@ -75,7 +83,7 @@ describe('createRateLimiter', () => {
 
     it('shares the counter across calls and sets TTL exactly once', async () => {
       const { client, expires } = makeFakeRedis();
-      const limiter = createRateLimiter({ name: 'test', limit: 2, windowMs: 60_000, redisClient: client });
+      const limiter = createRateLimiter({ name: 'test', limit: 2, windowMs: 60_000, redisClient: client, keyspace: TEST_KEYSPACE });
 
       const r1 = await limiter.hit('alice');
       const r2 = await limiter.hit('alice');
@@ -97,7 +105,7 @@ describe('createRateLimiter', () => {
           /* unreachable */
         },
       };
-      const limiter = createRateLimiter({ name: 'test', limit: 1, windowMs: 60_000, redisClient: client });
+      const limiter = createRateLimiter({ name: 'test', limit: 1, windowMs: 60_000, redisClient: client, keyspace: TEST_KEYSPACE });
 
       const r1 = await limiter.hit('alice');
       const r2 = await limiter.hit('alice');
@@ -105,6 +113,80 @@ describe('createRateLimiter', () => {
       // Both allowed — a Redis blip must not take the feature down.
       expect(r1.allowed).toBe(true);
       expect(r2.allowed).toBe(true);
+    });
+
+    it('throws at construction (not at hit() time) when redisClient is supplied without a keyspace — a programmer error, not a fail-open Redis concern', () => {
+      const { client } = makeFakeRedis();
+      expect(() => createRateLimiter({ name: 'test', limit: 1, windowMs: 60_000, redisClient: client })).toThrow(/keyspace.*required/i);
+    });
+  });
+
+  describe('instance keyspace (feature-redis-key-prefix §1/§2)', () => {
+    const fakeCrowi = (instanceSlug: string): Crowi =>
+      ({ getBaseUrl: () => null, getEnv: () => ({ REDIS_KEY_PREFIX: instanceSlug }) as unknown as NodeJS.ProcessEnv }) as unknown as Crowi;
+
+    it('scopes the Redis key to the instance slug instead of the legacy crowi:ratelimit prefix', async () => {
+      const store = new Map<string, number>();
+      const client: RateLimitRedisClient = {
+        async incr(key) {
+          const next = (store.get(key) ?? 0) + 1;
+          store.set(key, next);
+          return next;
+        },
+        async pExpire() {
+          /* noop */
+        },
+      };
+      jest.useFakeTimers();
+      try {
+        jest.setSystemTime(0);
+        const limiter = createRateLimiter({
+          name: 'autocomplete',
+          limit: 5,
+          windowMs: 60_000,
+          redisClient: client,
+          keyspace: resolveRedisKeyspace(fakeCrowi('krswd')),
+        });
+        await limiter.hit('alice');
+        expect(store.has('crowi:krswd:ratelimit:autocomplete:alice:0')).toBe(true);
+        expect(store.has('crowi:ratelimit:autocomplete:alice:0')).toBe(false);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('two distinct instance slugs sharing the same Redis do not share a rate-limit budget', async () => {
+      const store = new Map<string, number>();
+      const makeClient = (): RateLimitRedisClient => ({
+        async incr(key) {
+          const next = (store.get(key) ?? 0) + 1;
+          store.set(key, next);
+          return next;
+        },
+        async pExpire() {
+          /* noop */
+        },
+      });
+
+      const limiterA = createRateLimiter({
+        name: 'autocomplete',
+        limit: 1,
+        windowMs: 60_000,
+        redisClient: makeClient(),
+        keyspace: resolveRedisKeyspace(fakeCrowi('instance-a')),
+      });
+      const limiterB = createRateLimiter({
+        name: 'autocomplete',
+        limit: 1,
+        windowMs: 60_000,
+        redisClient: makeClient(),
+        keyspace: resolveRedisKeyspace(fakeCrowi('instance-b')),
+      });
+
+      expect((await limiterA.hit('alice')).allowed).toBe(true);
+      // instance-b has never seen `alice` before — its own budget is fresh
+      // despite sharing the same Redis backing store.
+      expect((await limiterB.hit('alice')).allowed).toBe(true);
     });
   });
 });

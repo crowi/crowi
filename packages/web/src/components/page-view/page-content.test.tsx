@@ -110,6 +110,68 @@ describe('PageContent — attachment render interception', () => {
   });
 });
 
+describe('PageContent — internal <Link> routing for %20/+/<...> space-page destinations (feature-page-link-space-paths Phase 1)', () => {
+  // `toInternalHref` (page-content.tsx) only checks `href.startsWith('/')` —
+  // it never inspects/rewrites the string, so any of the three supported
+  // notations for a space-containing destination (`%20`-encoded, the v1 `+`
+  // convention, or an already-real-space destination as remark-parse
+  // resolves `<...>` angle-bracket links to) route through the same
+  // internal-<Link> branch as an ordinary page link. This pins that down so
+  // a future refactor of `toInternalHref` can't silently special-case one
+  // notation and leave another falling through to the external/full-reload
+  // `<a>` branch (which stamps `target="_blank"`/`rel=noopener` — used here
+  // as the observable difference between the two branches).
+  it.each([
+    ['%20-encoded', '/survey/a%20b', '/survey/a%20b'],
+    ['+-joined (v1 legacy convention)', '/survey/a+b', '/survey/a+b'],
+    // Next's `<Link>` percent-encodes the href it's given before writing the
+    // DOM `<a href>` attribute (`resolveHref`) — a raw space becomes `%20`
+    // in the rendered anchor even though `toInternalHref` passed the mdast
+    // `url` through untouched. `%20`/`+` above are already valid URL
+    // characters, so this re-encoding is a no-op for them.
+    ['already-resolved real-space (angle-bracket)', '/survey/a b', '/survey/a%20b'],
+  ])('renders a %s destination as an internal Next <Link>, not an external/full-reload anchor', (_label, href, expectedRenderedHref) => {
+    renderPage(pageWithLink(href, 'survey'));
+    const link = screen.getByRole('link', { name: 'survey' });
+    expect(link.getAttribute('href')).toBe(expectedRenderedHref);
+    expect(link.getAttribute('target')).toBeNull();
+    expect(link.getAttribute('rel')).toBeNull();
+  });
+});
+
+describe('PageContent — fragment/query stay separated from the internal href for every notation (feature-page-link-space-paths Phase 1)', () => {
+  // No code change here: `toInternalHref` and Next's `<Link>` pass the
+  // mdast link node's `url` straight through as the rendered anchor's
+  // `href` attribute, untouched. What actually separates the pathname from
+  // a `#fragment`/`?query` suffix on click is the browser's own URL
+  // parsing (reproduced here via `new URL(...)`, exactly what the browser
+  // does when resolving an `<a href>` on navigation) — this holds
+  // regardless of notation, and regardless of whether `linkDetector.search`
+  // manages to find a matching backlink for that same destination (see
+  // link-detector.test.ts's separate, sometimes-negative fragment/query
+  // contract for backlinks — an orthogonal concern from this navigation
+  // invariant).
+  it.each([
+    ['%20-encoded, #fragment', '/survey/a%20b#section', '/survey/a%20b#section', '/survey/a%20b', '#section', ''],
+    ['+-joined, #fragment', '/survey/a+b#section', '/survey/a+b#section', '/survey/a+b', '#section', ''],
+    // Next's `<Link>` percent-encodes a raw space in the href it renders
+    // (see the sibling describe block above) — the DOM anchor's href gets
+    // `%20`, but pathname/hash still split out correctly.
+    ['already-resolved real-space, #fragment', '/survey/a b#section', '/survey/a%20b#section', '/survey/a%20b', '#section', ''],
+    ['+-joined, ?query', '/survey/a+b?x=1', '/survey/a+b?x=1', '/survey/a+b', '', '?x=1'],
+    ['%20-encoded, ?query', '/survey/a%20b?x=1', '/survey/a%20b?x=1', '/survey/a%20b', '', '?x=1'],
+  ])('splits a %s destination into the correct pathname/hash/search on click-through navigation', (_label, href, expectedRenderedHref, expectedPathname, expectedHash, expectedSearch) => {
+    renderPage(pageWithLink(href, 'survey'));
+    const link = screen.getByRole('link', { name: 'survey' });
+    const renderedHref = link.getAttribute('href');
+    expect(renderedHref).toBe(expectedRenderedHref);
+    const parsed = new URL(renderedHref!, 'http://localhost');
+    expect(parsed.pathname).toBe(expectedPathname);
+    expect(parsed.hash).toBe(expectedHash);
+    expect(parsed.search).toBe(expectedSearch);
+  });
+});
+
 /** Build a page whose revision's `renderedAst` is exactly `renderedAst`. `body` is a non-empty placeholder — `PageContent` renders from `renderedAst` but gates the empty-body message on `body` itself. `id` defaults to a fixed value; pass a distinct one to simulate a new revision landing (see the revision-identity-reset tests below). */
 function pageWithAst(renderedAst: unknown, id = 'rev-3'): PageWithRevision {
   return {
@@ -735,6 +797,23 @@ describe('PageContent — diagram embeds reuse the shared DiagramEmbed wrapper (
     fireEvent.click(screen.getByRole('button', { name: zoomLabel }));
     const dialog = screen.getByRole('dialog');
     expect(dialog.querySelector('img[alt="Diagram (flowchart)"]')).not.toBeNull();
+  });
+
+  it("forwards a diagram success <img>'s explicit width/height attributes (regression: a renderer-declared intrinsic size — e.g. Mermaid's SVG has a percentage width with no absolute height — was silently dropped here, collapsing the image to 0×0 inside the inline-block wrapper even though the server-emitted HTML carried it correctly)", () => {
+    const renderedAst = {
+      type: 'root',
+      children: [
+        {
+          type: 'html',
+          value: '<img class="diagram-embed fake-diagram-embed" alt="Diagram (flowchart)" src="data:image/svg+xml;base64,PHN2Zy8+" width="141" height="245">',
+        },
+      ],
+    };
+    renderPage(pageWithAst(renderedAst));
+
+    const img = screen.getByRole('img', { name: 'Diagram (flowchart)' }) as HTMLImageElement;
+    expect(img.getAttribute('width')).toBe('141');
+    expect(img.getAttribute('height')).toBe('245');
   });
 
   it('does NOT wrap a diagram error placeholder (class="fake-diagram-embed fake-diagram-error", no diagram-embed marker) — no zoom button, no dialog', () => {

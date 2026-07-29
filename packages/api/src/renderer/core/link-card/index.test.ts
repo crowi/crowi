@@ -32,10 +32,27 @@ function collectHtmlNodeValues(tree: MdastNodeLike): string[] {
   return out;
 }
 
-/** Poll `predicate` once per event-loop tick until it's true or `maxTicks` elapses — mirrors `stale-while-revalidate.test.ts`'s `waitFor`, needed here because the many-embeds test's fan-out settles across real (unmocked) Mongo I/O, not a fixed number of microtask flushes. */
-async function waitForCondition(predicate: () => boolean, maxTicks = 2000): Promise<void> {
-  for (let i = 0; i < maxTicks && !predicate(); i += 1) {
-    await new Promise<void>((resolve) => setImmediate(resolve));
+/**
+ * Poll `predicate` until it's true or `timeoutMs` of real wall-clock time
+ * elapses — mirrors `stale-while-revalidate.test.ts`'s `waitFor`, needed
+ * here because the many-embeds test's fan-out settles across real
+ * (unmocked) Mongo I/O, not a fixed number of microtask flushes. A tick
+ * COUNT (the previous design) is the wrong ceiling for this: with nothing
+ * else scheduled, thousands of `setImmediate` round-trips fly by in a few
+ * milliseconds — nowhere near enough real time for concurrent Mongo reads
+ * to land under CI host contention — so a busy CI runner could exhaust the
+ * tick budget while I/O was still genuinely in flight. Throws (rather than
+ * silently returning) on timeout: a caller that proceeds to assert on
+ * state the predicate never confirmed gets a confusing, unrelated
+ * assertion failure instead of a clear signal that the wait itself failed.
+ */
+async function waitForCondition(predicate: () => boolean, timeoutMs = 15_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!predicate()) {
+    if (Date.now() >= deadline) {
+      throw new Error(`waitForCondition: predicate still false after ${timeoutMs}ms`);
+    }
+    await new Promise<void>((resolve) => setTimeout(resolve, 2));
   }
 }
 
@@ -581,6 +598,10 @@ describe('e2e: core `card` embed tag through the real registry/pipeline/cache', 
       const retried = await runPipeline(body, reg, ctx, loadDeps, { cache: storage, pageId });
       expect(fetchOgSpy).toHaveBeenCalledTimes(2); // retried — busy was never permanent
       expect(findHtmlNode(retried.tree)?.value).toContain('Recovered');
+    });
+
+    it('waitForCondition throws with a diagnostic instead of silently giving up when the predicate never becomes true (regression: a silent give-up here previously let the DoS repro test above start draining before every candidate had reached fetchOg under CI contention, undercounting the accepted total)', async () => {
+      await expect(waitForCondition(() => false, 20)).rejects.toThrow(/waitForCondition/);
     });
   });
 });

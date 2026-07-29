@@ -24,6 +24,27 @@ export const MailTokenPayloadSchema = z.object({
    * single-use (a stale token cannot revert a later change).
    */
   fromEmail: z.string().email().optional(),
+  /**
+   * For `reset`: the account's `passwordResetGeneration` at issue time.
+   * Consuming the link increments that counter, so the token only matches
+   * once — without it a reset JWT stays usable for its entire 1h TTL and
+   * can be replayed by anyone who later reaches the link. Optional in the
+   * schema because the other purposes don't carry it (and links minted
+   * before the claim existed simply no longer match).
+   */
+  resetGeneration: z.number().int().nonnegative().optional(),
+  /**
+   * For `email-change`: the account's `authVersion` at issue time. The
+   * confirm endpoint requires it to still match, so a pending address change
+   * dies with the session that requested it — otherwise an attacker who
+   * requested one before being evicted (admin reset, the owner changing
+   * their password) could still confirm it afterwards and take over the
+   * account's recovery address, undoing the very recovery action that
+   * evicted them. `authVersion` rather than a dedicated counter because the
+   * semantics wanted are exactly "the session that asked for this is gone",
+   * and that is what every bump of it already means.
+   */
+  authVersion: z.number().int().nonnegative().optional(),
   // iat / exp are injected and verified by the JWT layer.
   iat: z.number().optional(),
   exp: z.number().optional(),

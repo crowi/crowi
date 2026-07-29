@@ -2,6 +2,7 @@ import request from 'supertest';
 import { app, crowi, Fixture } from 'src/test/setup';
 import { authHeaders } from 'src/test/test-helpers';
 import { createJwtUtil } from 'src/util/jwt';
+import { createMailTokenUtil } from 'src/util/mail-token';
 import type { UserDocument } from 'src/models/user';
 
 interface CreateTestUserInput {
@@ -502,6 +503,62 @@ describe('Routes /api/v2/admin/users (Hono)', () => {
       it('returns 404 for a non-existent id', async () => {
         const res = await request(app).post('/api/v2/admin/users/0123456789abcdef01234567/reset-password').set(authHeaders(adminToken)).send({});
         expect(res.status).toBe(404);
+      });
+
+      it("evicts the target's existing sessions", async () => {
+        // An admin reset is the action taken *because* an account is
+        // suspected compromised, so it has to strand whoever else is
+        // holding a session — otherwise the admin hands the owner a new
+        // password while the attacker keeps their access.
+        const victimToken = createJwtUtil(crowi).generateTokens(target).accessToken;
+
+        const before = await request(app).get('/api/v2/me').set(authHeaders(victimToken));
+        expect(before.status).toBe(200);
+
+        const res = await request(app).post(`/api/v2/admin/users/${target._id}/reset-password`).set(authHeaders(adminToken)).send({});
+        expect(res.status).toBe(200);
+
+        const after = await request(app).get('/api/v2/me').set(authHeaders(victimToken));
+        expect(after.status).toBe(401);
+      });
+
+      it('invalidates password-reset links issued before the reset', async () => {
+        // Same hole from the mail side: a reset link already in the
+        // target's (possibly attacker-controlled) inbox must not survive
+        // an admin reset. Asserted end-to-end against the real reset routes
+        // rather than by watching the counter move — a counter assertion
+        // would still pass if the reset verifier stopped consulting it, or
+        // if the admin path bumped a field nothing checks.
+        const User = crowi.model('User');
+        const before = await User.findById(target._id);
+        const staleLink = createMailTokenUtil().signMailToken({
+          purpose: 'reset',
+          userId: target._id.toString(),
+          email: before.email,
+          resetGeneration: before.passwordResetGeneration ?? 0,
+        }).token;
+
+        // The link is live right up until the admin resets.
+        const validBefore = await request(app).get('/api/v2/auth/reset-password').query({ token: staleLink });
+        expect(validBefore.status).toBe(200);
+
+        const res = await request(app).post(`/api/v2/admin/users/${target._id}/reset-password`).set(authHeaders(adminToken)).send({});
+        expect(res.status).toBe(200);
+
+        const validAfter = await request(app).get('/api/v2/auth/reset-password').query({ token: staleLink });
+        expect(validAfter.status).toBe(401);
+        expect(validAfter.body.error.code).toBe('INVALID_RESET_TOKEN');
+
+        const consumed = await request(app)
+          .post('/api/v2/auth/reset-password')
+          .set({ 'Content-Type': 'application/json' })
+          .send({ token: staleLink, password: 'attacker-chosen-pw' });
+        expect(consumed.status).toBe(401);
+
+        // ...and the admin-issued password is what actually stands.
+        const reloaded = await User.findById(target._id).select('+password');
+        expect(reloaded?.isPasswordValid('attacker-chosen-pw')).toBe(false);
+        expect(reloaded?.isPasswordValid(res.body.newPassword)).toBe(true);
       });
     });
 

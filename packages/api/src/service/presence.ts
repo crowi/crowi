@@ -3,6 +3,7 @@ import type { PresenceCommentChangedMessage, PresenceViewer } from '@crowi/api-c
 import Debug from 'debug';
 import type Crowi from 'src/crowi';
 import type { PresenceFeed } from 'src/presence/attach';
+import { resolveRedisKeyspace, type RedisKeyspace } from 'src/util/redis-keyspace';
 
 const debug = Debug('crowi:service:presence');
 
@@ -19,11 +20,32 @@ const debug = Debug('crowi:service:presence');
  * dependency-injected adapter (`createPresenceCollabDeps` below) so
  * `@crowi/collab` never imports `@crowi/api`.
  *
- * Wire-level design:
+ * Wire-level design (keys/channel shown instance-scoped,
+ * `crowi:<instance-slug>:...` — feature-redis-key-prefix §1/§2. A
+ * {@link RedisKeyspace} is a MANDATORY argument on the Redis-backed path
+ * (`createPresenceService`'s overload requires it whenever a Redis client
+ * is supplied) — there is no legacy non-scoped fallback left to reach,
+ * closing the "literal `crowi:` fallback still compiled into a production
+ * module" gap the feature-redis-key-prefix Phase 1 review round 3 flagged):
  *
- *   - Viewer hash: `crowi:presence:viewers:<pageId>` — a Redis hash,
- *     one field per viewing `userId`, value a JSON blob with the
- *     viewer's denormalised identity + `joinedAt` + `lastHeartbeatAt`.
+ *   - Viewer hash: `crowi:<instance-slug>:presence:viewers:<pageId>` — a
+ *     Redis hash, one field per live *connection* (`<userId>:<connectionId>`,
+ *     the same composite-field shape as the editing hash below), value a
+ *     JSON blob with the viewer's denormalised identity + `joinedAt` +
+ *     `lastHeartbeatAt`. Multiple fields can share a `userId` (multi-tab,
+ *     and — the point of this shape — multiple REPLICAS each holding one of
+ *     that user's tabs): `listViewers` groups fields by `userId` and emits
+ *     one `PresenceViewer` per user as long as at least one of their
+ *     connections is live, with `joinedAt` taken as the MINIMUM across the
+ *     group (the earliest tab's join time), so opening/closing extra tabs
+ *     never reshuffles the user's position in the ordered list. Before this
+ *     shape the hash had one field per `userId` and `leave` unconditionally
+ *     deleted it — closing ONE of a user's tabs made them vanish from every
+ *     replica's viewer list even while a sibling tab on ANOTHER replica was
+ *     still connected (feature-presence-consistency-fixes defect 1); a
+ *     per-connection field makes `leave` naturally correct: it removes only
+ *     the closing connection's own field, and the user disappears only once
+ *     every field sharing their `userId` is gone.
  *   - TTL: the hash carries a *key-level* `EXPIRE` (re-applied on every
  *     write) so an idle page's hash evaporates. Per-*field* TTL would
  *     need `HEXPIRE` (Redis 7.4 / node-redis v5) which this codebase's
@@ -33,15 +55,17 @@ const debug = Debug('crowi:service:presence');
  *     fields from the hash as a side effect.
  *   - Pub/sub (feature-presence-generic-feed-bus): every read-side feed
  *     (viewer-list / page-updated / comment-changed) rides ONE Redis
- *     channel, `PRESENCE_FEED_CHANNEL`, as a JSON envelope
+ *     channel, `crowi:<instance-slug>:presence:feed`, as a JSON envelope
  *     `{ feed, pageId, payload }`. When a viewer joins / leaves on api
- *     instance A, A publishes the envelope; every instance (including
- *     A) re-broadcasts the fresh viewer list to its locally-connected
- *     clients. Same Redis-as-shared-state pattern as RFC-0003.
+ *     instance A, A publishes the envelope; every instance sharing the same
+ *     instance slug (including A itself) re-broadcasts the fresh viewer
+ *     list to its locally-connected clients — a DIFFERENT instance slug
+ *     never sees the publish at all, even on the same Redis. Same
+ *     Redis-as-shared-state pattern as RFC-0003.
  *   - `isEditing`: NOT stored in the viewer hash. It is derived at
  *     `listViewers` time from a dedicated, short-lived *editing hash*
- *     `crowi:presence:editing:<pageId>` — one field per editor
- *     connection (`<userId>:<socketId>`), value `lastSeenAt`
+ *     `crowi:<instance-slug>:presence:editing:<pageId>` — one field per
+ *     editor connection (`<userId>:<socketId>`), value `lastSeenAt`
  *     (epoch-ms). The collab process refreshes its own fields every
  *     `EDITING_REFRESH_MS`; a field older than `EDITING_TTL_MS` is
  *     considered stale and swept. This replaces the earlier design
@@ -59,24 +83,16 @@ const debug = Debug('crowi:service:presence');
  * for viewers connected to the same process.
  */
 
-/** Redis key prefix for the per-page viewer hash. */
-const VIEWER_HASH_PREFIX = 'crowi:presence:viewers:';
 /**
  * Redis pub/sub channel every `PresenceFeed` rides
- * (feature-presence-generic-feed-bus). Carries a JSON envelope
- * `{ feed, pageId, payload }`; ONE dedicated subscriber connection
+ * (feature-presence-generic-feed-bus), scoped to the caller's
+ * {@link RedisKeyspace} — see {@link presenceFeedChannel}. Carries a JSON
+ * envelope `{ feed, pageId, payload }`; ONE dedicated subscriber connection
  * multiplexes every feed (viewer-list, page-updated, comment-changed —
  * and any future feed), replacing the pre-consolidation split between a
  * bare-pageId-string channel (viewer-list) and a JSON channel
  * (page-updated / comment-changed).
  */
-const PRESENCE_FEED_CHANNEL = 'crowi:presence:feed';
-/**
- * Redis key prefix for the per-page *editing hash* — the presence-owned
- * short-lived editing signal that drives the `✏️` badge. One field per
- * editor connection (`<userId>:<socketId>`), value `lastSeenAt`.
- */
-const EDITING_HASH_PREFIX = 'crowi:presence:editing:';
 
 /**
  * A viewer entry is considered live for 30s after its last heartbeat.
@@ -114,11 +130,31 @@ const EDITING_HASH_TTL_SECONDS = 60;
  */
 const EDITING_REFRESH_MS = 10_000;
 
-const viewerHashKey = (pageId: string): string => `${VIEWER_HASH_PREFIX}${pageId}`;
-const editingHashKey = (pageId: string): string => `${EDITING_HASH_PREFIX}${pageId}`;
-const editingField = (userId: string, socketId: string): string => `${userId}:${socketId}`;
-/** Inverse of `editingField` — the `userId` portion of a `<userId>:<socketId>` field. */
-const editingFieldUserId = (field: string): string => {
+/**
+ * Per-page viewer hash key, instance-scoped (`crowi:<slug>:presence:
+ * viewers:<pageId>`). `keyspace` is mandatory — the Redis-backed
+ * implementation (`createRedisPresenceService`) only ever runs once a
+ * real Redis client is present, at which point a {@link RedisKeyspace} is
+ * always resolvable (feature-redis-key-prefix §1's env validation
+ * guarantees this at boot), so there is no legitimate caller that needs a
+ * legacy non-scoped literal.
+ */
+const viewerHashKey = (pageId: string, keyspace: RedisKeyspace): string => keyspace.key('presence', 'viewers', pageId);
+/** Per-page editing hash key — see {@link viewerHashKey}. */
+const editingHashKey = (pageId: string, keyspace: RedisKeyspace): string => keyspace.key('presence', 'editing', pageId);
+/** The `PresenceFeed` pub/sub channel — see {@link viewerHashKey}. */
+const presenceFeedChannel = (keyspace: RedisKeyspace): string => keyspace.key('presence', 'feed');
+/**
+ * Build a composite `<userId>:<connectionId>` Redis hash field — the shape
+ * shared by both the editing hash (one field per live editor connection)
+ * and, since feature-presence-consistency-fixes defect 1, the viewer hash
+ * (one field per live viewer connection, refcounting a user's tabs/replicas
+ * instead of a single field a `leave` from any one of them could delete
+ * out from under the others).
+ */
+const compositeField = (userId: string, connectionId: string): string => `${userId}:${connectionId}`;
+/** Inverse of `compositeField` — the `userId` portion of a `<userId>:<connectionId>` field. */
+const compositeFieldUserId = (field: string): string => {
   const sep = field.indexOf(':');
   return sep < 0 ? field : field.slice(0, sep);
 };
@@ -212,24 +248,34 @@ export interface PresenceRedisClient {
  */
 export interface PresenceService {
   /**
-   * Register (or refresh) a viewer for a page. Idempotent — re-calling
-   * for the same `userId` updates `lastHeartbeatAt` and dedupes
-   * multiple tabs to a single hash field. Publishes a viewer-list
+   * Register (or refresh) one viewer CONNECTION for a page. Idempotent
+   * per `(userId, connectionId)` pair. `connectionId` (feature-presence-
+   * consistency-fixes defect 1) identifies one WebSocket connection —
+   * one browser tab, on one replica — distinctly from every other
+   * connection the same `userId` may hold concurrently (other tabs,
+   * other replicas): `listViewers` groups by `userId` and reports the
+   * user as present as long as ANY of their connections is live, so
+   * closing one tab never affects a sibling. Publishes a viewer-list
    * change so every instance re-broadcasts.
    */
-  join(pageId: string, viewer: ViewerIdentity): Promise<void>;
+  join(pageId: string, viewer: ViewerIdentity, connectionId: string): Promise<void>;
   /**
-   * Refresh a viewer's `lastHeartbeatAt` (and the hash key TTL). Called
-   * on every client heartbeat. Returns `false` when the viewer was not
-   * present (e.g. swept while the socket was briefly idle) so the
-   * handler can re-`join`.
+   * Refresh one connection's `lastHeartbeatAt` (and the hash key TTL).
+   * Called on every client heartbeat. Returns `false` when the
+   * connection was not present (e.g. swept while the socket was
+   * briefly idle) so the handler can re-`join`.
    */
-  heartbeat(pageId: string, userId: string): Promise<boolean>;
+  heartbeat(pageId: string, userId: string, connectionId: string): Promise<boolean>;
   /**
-   * Remove a viewer from a page. Idempotent. Publishes a viewer-list
-   * change. The handler calls this on WebSocket close.
+   * Remove one viewer CONNECTION from a page. Idempotent. Publishes a
+   * viewer-list change. The handler calls this on WebSocket close —
+   * unconditionally, for every close, since `connectionId` scoping
+   * means removing THIS connection can never affect a sibling
+   * connection's field (feature-presence-consistency-fixes defect 1;
+   * the caller no longer needs to first check whether the user has
+   * another live connection before deciding to call this).
    */
-  leave(pageId: string, userId: string): Promise<void>;
+  leave(pageId: string, userId: string, connectionId: string): Promise<void>;
   /**
    * Current live viewer list for a page, with `isEditing` derived from
    * the short-lived editing hash. Stale entries (heartbeat older than
@@ -329,8 +375,18 @@ const emitFeed = (emitter: EventEmitter, feed: PresenceFeed, pageId: string, pay
  *
  * The two modes share the same `PresenceService` surface so the
  * `/presence` handler never branches on Redis availability.
+ *
+ * `keyspace` (feature-redis-key-prefix §1/§2) scopes every Redis key/
+ * channel this service touches to `crowi:<instance-slug>:presence:...` so
+ * multiple Crowi instances sharing one Redis do not cross-talk on viewer
+ * lists / editing badges / the feed channel. Mandatory whenever `redis` is
+ * non-null (see the overload signatures) — `getPresenceService` (the real
+ * production entry point) always resolves and passes one; there is no
+ * legacy non-scoped fallback to omit it in favour of.
  */
-export async function createPresenceService(redis: PresenceRedisClient | null): Promise<PresenceService> {
+export async function createPresenceService(redis: null): Promise<PresenceService>;
+export async function createPresenceService(redis: PresenceRedisClient, keyspace: RedisKeyspace): Promise<PresenceService>;
+export async function createPresenceService(redis: PresenceRedisClient | null, keyspace?: RedisKeyspace): Promise<PresenceService> {
   // Local EventEmitter every PresenceFeed message rides on (one event
   // name per feed — see createFeedSubscribers/emitFeed above). In Redis
   // mode it is fed by the pub/sub subscriber + local publishes;
@@ -344,23 +400,32 @@ export async function createPresenceService(redis: PresenceRedisClient | null): 
   if (redis === null) {
     return createInProcessPresenceService(emitter);
   }
-  return createRedisPresenceService(redis, emitter);
+  // The overload above guarantees `keyspace` is supplied whenever `redis`
+  // is non-null — this non-null assertion reflects that invariant, not a
+  // guess.
+  return createRedisPresenceService(redis, emitter, keyspace!);
 }
 
 /**
  * Single-instance (no Redis) implementation. Viewer state lives in a
- * process-local Map; the editing signal is tracked in a parallel
- * process-local Map (`editing`), keyed `<pageId>` → `<userId>:<socketId>`
- * → `lastSeenAt`, mirroring the Redis editing hash. `isEditing` is
- * therefore accurate in single-instance dev too.
+ * process-local Map, keyed `pageId` → `userId` → `connectionId` →
+ * `StoredViewer` — mirroring the Redis viewer hash's per-connection
+ * field shape (feature-presence-consistency-fixes defect 1) so a
+ * single process with several tabs open for the same user behaves
+ * identically to the multi-replica Redis path: `leave` drops only the
+ * closing connection, and the user disappears from `listViewers` only
+ * once every one of their connections is gone. The editing signal is
+ * tracked in a parallel process-local Map (`editing`), keyed `<pageId>`
+ * → `<userId>:<socketId>` → `lastSeenAt`, mirroring the Redis editing
+ * hash. `isEditing` is therefore accurate in single-instance dev too.
  */
 function createInProcessPresenceService(emitter: EventEmitter): PresenceService {
-  const pages = new Map<string, Map<string, StoredViewer>>();
+  const pages = new Map<string, Map<string, Map<string, StoredViewer>>>();
   // pageId → (`<userId>:<socketId>` → lastSeenAt). Mirrors the Redis
   // editing hash for the no-Redis dev path.
   const editing = new Map<string, Map<string, number>>();
 
-  const pageMap = (pageId: string): Map<string, StoredViewer> => {
+  const pageConnections = (pageId: string): Map<string, Map<string, StoredViewer>> => {
     let m = pages.get(pageId);
     if (!m) {
       m = new Map();
@@ -393,17 +458,22 @@ function createInProcessPresenceService(emitter: EventEmitter): PresenceService 
         m.delete(field);
         continue;
       }
-      ids.add(editingFieldUserId(field));
+      ids.add(compositeFieldUserId(field));
     }
     return ids;
   };
 
   return {
-    async join(pageId, viewer) {
+    async join(pageId, viewer, connectionId) {
       const now = Date.now();
-      const m = pageMap(pageId);
-      const existing = m.get(viewer.userId);
-      m.set(viewer.userId, {
+      const connections = pageConnections(pageId);
+      let byConnection = connections.get(viewer.userId);
+      if (!byConnection) {
+        byConnection = new Map();
+        connections.set(viewer.userId, byConnection);
+      }
+      const existing = byConnection.get(connectionId);
+      byConnection.set(connectionId, {
         userId: viewer.userId,
         username: viewer.username,
         displayName: viewer.displayName,
@@ -413,49 +483,61 @@ function createInProcessPresenceService(emitter: EventEmitter): PresenceService 
       });
       emitFeed(emitter, 'viewers', pageId);
     },
-    async heartbeat(pageId, userId) {
-      const entry = pages.get(pageId)?.get(userId);
+    async heartbeat(pageId, userId, connectionId) {
+      const entry = pages.get(pageId)?.get(userId)?.get(connectionId);
       if (!entry) return false;
       entry.lastHeartbeatAt = Date.now();
       return true;
     },
-    async leave(pageId, userId) {
-      if (pages.get(pageId)?.delete(userId)) {
-        emitFeed(emitter, 'viewers', pageId);
+    async leave(pageId, userId, connectionId) {
+      const byConnection = pages.get(pageId)?.get(userId);
+      if (!byConnection?.delete(connectionId)) return;
+      if (byConnection.size === 0) {
+        pages.get(pageId)?.delete(userId);
       }
+      emitFeed(emitter, 'viewers', pageId);
     },
     async listViewers(pageId) {
-      const m = pages.get(pageId);
-      if (!m) return [];
+      const connections = pages.get(pageId);
+      if (!connections) return [];
       const cutoff = Date.now() - VIEWER_TTL_MS;
       const editingIds = editingUserIds(pageId);
       const out: PresenceViewer[] = [];
-      for (const [userId, entry] of m) {
-        if (entry.lastHeartbeatAt < cutoff) {
-          m.delete(userId);
+      for (const [userId, byConnection] of connections) {
+        let canonical: StoredViewer | null = null;
+        for (const [connectionId, entry] of byConnection) {
+          if (entry.lastHeartbeatAt < cutoff) {
+            byConnection.delete(connectionId);
+            continue;
+          }
+          if (canonical === null || entry.joinedAt < canonical.joinedAt) canonical = entry;
+        }
+        if (byConnection.size === 0) {
+          connections.delete(userId);
           continue;
         }
+        if (canonical === null) continue;
         out.push({
-          userId: entry.userId,
-          username: entry.username,
-          displayName: entry.displayName,
-          avatarUrl: entry.avatarUrl,
-          isEditing: editingIds.has(entry.userId),
-          joinedAt: entry.joinedAt,
+          userId,
+          username: canonical.username,
+          displayName: canonical.displayName,
+          avatarUrl: canonical.avatarUrl,
+          isEditing: editingIds.has(userId),
+          joinedAt: canonical.joinedAt,
         });
       }
       return out.sort((a, b) => a.joinedAt - b.joinedAt);
     },
     async markEditing(pageId, userId, socketId) {
-      editingMap(pageId).set(editingField(userId, socketId), Date.now());
+      editingMap(pageId).set(compositeField(userId, socketId), Date.now());
       emitFeed(emitter, 'viewers', pageId);
     },
     async refreshEditing(pageId, userId, socketId) {
       // Keep-alive only — no broadcast (the editing set is unchanged).
-      editingMap(pageId).set(editingField(userId, socketId), Date.now());
+      editingMap(pageId).set(compositeField(userId, socketId), Date.now());
     },
     async unmarkEditing(pageId, userId, socketId) {
-      editing.get(pageId)?.delete(editingField(userId, socketId));
+      editing.get(pageId)?.delete(compositeField(userId, socketId));
       emitFeed(emitter, 'viewers', pageId);
     },
     async publishPageUpdated(pageId, payload) {
@@ -490,7 +572,7 @@ function createInProcessPresenceService(emitter: EventEmitter): PresenceService 
  * viewer-list subscriber + the page-updated/comment-changed subscriber
  * into a single connection subscribing a single channel).
  */
-/** Wire shape published on `PRESENCE_FEED_CHANNEL` (feature-presence-generic-feed-bus). */
+/** Wire shape published on the {@link presenceFeedChannel} (feature-presence-generic-feed-bus). */
 type FeedEnvelope = { feed: PresenceFeed; pageId: string; payload?: unknown };
 
 /**
@@ -506,13 +588,14 @@ type FeedEnvelope = { feed: PresenceFeed; pageId: string; payload?: unknown };
  */
 const KNOWN_PRESENCE_FEEDS: ReadonlySet<string> = new Set<PresenceFeed>(['viewers', 'page-updated', 'comment-changed']);
 
-async function createRedisPresenceService(redis: PresenceRedisClient, emitter: EventEmitter): Promise<PresenceService> {
+async function createRedisPresenceService(redis: PresenceRedisClient, emitter: EventEmitter, keyspace: RedisKeyspace): Promise<PresenceService> {
+  const feedChannel = presenceFeedChannel(keyspace);
   let subscriber: PresenceRedisClient | null = null;
   try {
     const dup = redis.duplicate();
     await dup.connect();
     subscriber = dup;
-    await dup.subscribe(PRESENCE_FEED_CHANNEL, (message: string) => {
+    await dup.subscribe(feedChannel, (message: string) => {
       let envelope: FeedEnvelope | null = null;
       try {
         const parsed = JSON.parse(message) as Partial<FeedEnvelope> | null;
@@ -529,7 +612,7 @@ async function createRedisPresenceService(redis: PresenceRedisClient, emitter: E
         // Not JSON — drop below.
       }
       if (!envelope) {
-        // `PRESENCE_FEED_CHANNEL` is a brand-new channel name
+        // The presence feed channel is a brand-new channel name
         // (feature-presence-generic-feed-bus) the pre-consolidation code
         // never published to, and Q3's default is a single-release
         // cutover with no rolling-deploy grace period — so there is no
@@ -543,7 +626,7 @@ async function createRedisPresenceService(redis: PresenceRedisClient, emitter: E
       }
       emitFeed(emitter, envelope.feed, envelope.pageId, envelope.payload);
     });
-    debug('presence pub/sub subscriber connected on %s', PRESENCE_FEED_CHANNEL);
+    debug('presence pub/sub subscriber connected on %s', feedChannel);
   } catch (err) {
     // A subscriber failure degrades presence to single-instance
     // behaviour for *this* process — local clients still work, but
@@ -569,25 +652,30 @@ async function createRedisPresenceService(redis: PresenceRedisClient, emitter: E
   const publish = async (feed: PresenceFeed, pageId: string, payload?: unknown): Promise<void> => {
     emitFeed(emitter, feed, pageId, payload);
     try {
-      await redis.publish(PRESENCE_FEED_CHANNEL, JSON.stringify({ feed, pageId, payload }));
+      await redis.publish(feedChannel, JSON.stringify({ feed, pageId, payload }));
     } catch (err) {
       console.warn(`[crowi:presence] publish failed for feed=${feed} page=${pageId}:`, (err as Error).message);
     }
   };
 
-  /** Read + parse the viewer hash, dropping fields that fail to parse. */
+  /**
+   * Read + parse the viewer hash, dropping fields that fail to parse.
+   * Keyed by the raw `<userId>:<connectionId>` FIELD (feature-presence-
+   * consistency-fixes defect 1) — one entry per live connection, not
+   * per user; `listViewers` groups these by `compositeFieldUserId`.
+   */
   const readHash = async (pageId: string): Promise<Map<string, StoredViewer>> => {
-    const raw = await redis.hGetAll(viewerHashKey(pageId));
+    const raw = await redis.hGetAll(viewerHashKey(pageId, keyspace));
     const out = new Map<string, StoredViewer>();
-    for (const [userId, json] of Object.entries(raw ?? {})) {
+    for (const [field, json] of Object.entries(raw ?? {})) {
       try {
         const parsed = JSON.parse(json) as StoredViewer;
         if (parsed && typeof parsed.lastHeartbeatAt === 'number') {
-          out.set(userId, parsed);
+          out.set(field, parsed);
         }
       } catch {
         // Corrupt field — ignore; it expires with the hash TTL.
-        debug('dropping unparseable viewer field user=%s page=%s', userId, pageId);
+        debug('dropping unparseable viewer field=%s page=%s', field, pageId);
       }
     }
     return out;
@@ -603,7 +691,7 @@ async function createRedisPresenceService(redis: PresenceRedisClient, emitter: E
    */
   const editingUserIds = async (pageId: string): Promise<Set<string>> => {
     try {
-      const raw = await redis.hGetAll(editingHashKey(pageId));
+      const raw = await redis.hGetAll(editingHashKey(pageId, keyspace));
       const ids = new Set<string>();
       const stale: string[] = [];
       const cutoff = Date.now() - EDITING_TTL_MS;
@@ -613,11 +701,11 @@ async function createRedisPresenceService(redis: PresenceRedisClient, emitter: E
           stale.push(field);
           continue;
         }
-        ids.add(editingFieldUserId(field));
+        ids.add(compositeFieldUserId(field));
       }
       if (stale.length > 0) {
         try {
-          await redis.hDel(editingHashKey(pageId), stale);
+          await redis.hDel(editingHashKey(pageId, keyspace), stale);
         } catch (err) {
           debug('stale editing-field sweep failed for page %s: %s', pageId, (err as Error).message);
         }
@@ -637,9 +725,9 @@ async function createRedisPresenceService(redis: PresenceRedisClient, emitter: E
    * `✏️` badge).
    */
   const writeEditingField = async (pageId: string, userId: string, socketId: string): Promise<void> => {
-    const key = editingHashKey(pageId);
+    const key = editingHashKey(pageId, keyspace);
     try {
-      await redis.hSet(key, editingField(userId, socketId), String(Date.now()));
+      await redis.hSet(key, compositeField(userId, socketId), String(Date.now()));
       await redis.expire(key, EDITING_HASH_TTL_SECONDS);
     } catch (err) {
       console.warn(`[crowi:presence] editing-hash write failed for page ${pageId}:`, (err as Error).message);
@@ -647,14 +735,19 @@ async function createRedisPresenceService(redis: PresenceRedisClient, emitter: E
   };
 
   return {
-    async join(pageId, viewer) {
-      const key = viewerHashKey(pageId);
+    async join(pageId, viewer, connectionId) {
+      const key = viewerHashKey(pageId, keyspace);
+      const field = compositeField(viewer.userId, connectionId);
       const now = Date.now();
-      // Preserve the original joinedAt across re-joins / extra tabs so
-      // avatar ordering stays stable.
+      // Preserve this CONNECTION's original joinedAt across re-joins
+      // (e.g. the heartbeat-triggered re-join below) so its ordering
+      // contribution stays stable; a genuinely NEW connection (a new
+      // tab) gets its own fresh `joinedAt` — `listViewers` takes the
+      // MINIMUM across a user's connections, so the user's rendered
+      // position is governed by their earliest tab regardless.
       let joinedAt = now;
       try {
-        const existingRaw = await redis.hGet(key, viewer.userId);
+        const existingRaw = await redis.hGet(key, field);
         if (existingRaw) {
           const existing = JSON.parse(existingRaw) as StoredViewer;
           if (typeof existing.joinedAt === 'number') joinedAt = existing.joinedAt;
@@ -670,14 +763,15 @@ async function createRedisPresenceService(redis: PresenceRedisClient, emitter: E
         joinedAt,
         lastHeartbeatAt: now,
       };
-      await redis.hSet(key, viewer.userId, JSON.stringify(stored));
+      await redis.hSet(key, field, JSON.stringify(stored));
       await redis.expire(key, VIEWER_HASH_TTL_SECONDS);
       await publish('viewers', pageId);
     },
 
-    async heartbeat(pageId, userId) {
-      const key = viewerHashKey(pageId);
-      const existingRaw = await redis.hGet(key, userId);
+    async heartbeat(pageId, userId, connectionId) {
+      const key = viewerHashKey(pageId, keyspace);
+      const field = compositeField(userId, connectionId);
+      const existingRaw = await redis.hGet(key, field);
       if (!existingRaw) return false;
       let existing: StoredViewer;
       try {
@@ -686,15 +780,19 @@ async function createRedisPresenceService(redis: PresenceRedisClient, emitter: E
         return false;
       }
       existing.lastHeartbeatAt = Date.now();
-      await redis.hSet(key, userId, JSON.stringify(existing));
+      await redis.hSet(key, field, JSON.stringify(existing));
       await redis.expire(key, VIEWER_HASH_TTL_SECONDS);
       // A heartbeat doesn't change *who* is here, so no broadcast — it
       // only refreshes the TTL.
       return true;
     },
 
-    async leave(pageId, userId) {
-      const removed = await redis.hDel(viewerHashKey(pageId), userId);
+    async leave(pageId, userId, connectionId) {
+      // Removes only THIS connection's field — a sibling connection for
+      // the same userId (another tab, or the same tab on another
+      // replica sharing this Redis) is untouched (feature-presence-
+      // consistency-fixes defect 1).
+      const removed = await redis.hDel(viewerHashKey(pageId, keyspace), compositeField(userId, connectionId));
       if (removed > 0) {
         await publish('viewers', pageId);
       }
@@ -704,26 +802,43 @@ async function createRedisPresenceService(redis: PresenceRedisClient, emitter: E
       const [hash, editing] = await Promise.all([readHash(pageId), editingUserIds(pageId)]);
       const cutoff = Date.now() - VIEWER_TTL_MS;
       const stale: string[] = [];
-      const out: PresenceViewer[] = [];
-      for (const [userId, entry] of hash) {
+      // Group live connection fields by userId — one PresenceViewer per
+      // user, present as long as ANY of their connections is fresh
+      // (feature-presence-consistency-fixes defect 1).
+      const byUser = new Map<string, StoredViewer[]>();
+      for (const [field, entry] of hash) {
         if (entry.lastHeartbeatAt < cutoff) {
-          stale.push(userId);
+          stale.push(field);
           continue;
         }
+        const userId = compositeFieldUserId(field);
+        const group = byUser.get(userId);
+        if (group) {
+          group.push(entry);
+        } else {
+          byUser.set(userId, [entry]);
+        }
+      }
+      const out: PresenceViewer[] = [];
+      for (const [userId, entries] of byUser) {
+        // The MINIMUM joinedAt across the group is the user's earliest
+        // tab — keeps ordering stable regardless of which connection
+        // opened/closed most recently.
+        const canonical = entries.reduce((min, e) => (e.joinedAt < min.joinedAt ? e : min));
         out.push({
-          userId: entry.userId,
-          username: entry.username,
-          displayName: entry.displayName,
-          avatarUrl: entry.avatarUrl,
-          isEditing: editing.has(entry.userId),
-          joinedAt: entry.joinedAt,
+          userId,
+          username: canonical.username,
+          displayName: canonical.displayName,
+          avatarUrl: canonical.avatarUrl,
+          isEditing: editing.has(userId),
+          joinedAt: canonical.joinedAt,
         });
       }
       // Sweep stale fields so an abandoned page eventually empties its
       // hash even with HEXPIRE unavailable.
       if (stale.length > 0) {
         try {
-          await redis.hDel(viewerHashKey(pageId), stale);
+          await redis.hDel(viewerHashKey(pageId, keyspace), stale);
         } catch (err) {
           debug('stale-field sweep failed for page %s: %s', pageId, (err as Error).message);
         }
@@ -748,7 +863,7 @@ async function createRedisPresenceService(redis: PresenceRedisClient, emitter: E
 
     async unmarkEditing(pageId, userId, socketId) {
       try {
-        await redis.hDel(editingHashKey(pageId), editingField(userId, socketId));
+        await redis.hDel(editingHashKey(pageId, keyspace), compositeField(userId, socketId));
       } catch (err) {
         console.warn(`[crowi:presence] unmarkEditing delete failed for page ${pageId}:`, (err as Error).message);
       }
@@ -798,7 +913,12 @@ export function getPresenceService(crowi: Crowi): Promise<PresenceService> {
   // `crowi.redis` is typed `any` on the Crowi class; narrow it to the
   // structural client surface (or null) the service expects.
   const redis = (crowi.redis as PresenceRedisClient | null) ?? null;
-  cachedService = createPresenceService(redis);
+  // `createPresenceService`'s overloads require a `RedisKeyspace` whenever
+  // `redis` is non-null — narrowing `redis` here (rather than passing
+  // `resolveRedisKeyspaceIfEnabled(crowi)` alongside a possibly-null
+  // `redis`) is what lets the overload actually enforce that at the
+  // call site instead of via a runtime assertion.
+  cachedService = redis === null ? createPresenceService(null) : createPresenceService(redis, resolveRedisKeyspace(crowi));
   return cachedService;
 }
 
@@ -904,4 +1024,4 @@ export const _setPresenceServiceForTesting = (service: PresenceService | null): 
   cachedService = service == null ? null : Promise.resolve(service);
 };
 
-export { EDITING_HASH_PREFIX, EDITING_REFRESH_MS, EDITING_TTL_MS, PRESENCE_FEED_CHANNEL, VIEWER_HASH_PREFIX, VIEWER_TTL_MS };
+export { EDITING_REFRESH_MS, EDITING_TTL_MS, VIEWER_TTL_MS };

@@ -3,6 +3,7 @@ import request from 'supertest';
 import { Fixture, app, crowi } from 'src/test/setup';
 import { type ConfigRow, restoreCrowiConfig, snapshotCrowiConfig } from 'src/test/config-snapshot';
 import type { UserDocument } from 'src/models/user';
+import { createTestUser } from 'src/test/test-helpers';
 import { createJwtUtil } from 'src/util/jwt';
 
 /**
@@ -189,7 +190,22 @@ describe('Routes /api/v2/user (Hono)', () => {
     let subpagesOwner: UserDocument;
 
     beforeAll(async () => {
-      const owner = await seedActiveUser({ name: 'Subpages Owner', username: SUBPAGES_USERNAME, email: SUBPAGES_EMAIL, password: 'Password!1' });
+      // Deliberately NOT `seedActiveUser`. That goes through
+      // `User.createUserByEmailAndPassword`, which emits `activated` and then
+      // calls back immediately without awaiting the handler — and
+      // `events/user.ts`'s `onActivated` creates `/user/<username>`, exactly
+      // the path this block's first fixture creates for itself. The two
+      // writers race on the `path` unique index: the fixture usually wins, but
+      // when the auto-creation lands first the fixture dies with E11000, which
+      // is the intermittent failure this file kept producing under load. (And
+      // when the fixture wins, `onActivated` renames it away to `/tmp/...`
+      // instead — silently, so the failure looks like a missing page.)
+      //
+      // `createTestUser` seeds the document directly, so there is no
+      // activation event and only one writer for the home page: this block's
+      // own fixture, which is what it wants to assert on. No password is
+      // needed — nothing here authenticates as the owner.
+      const owner = await createTestUser({ name: 'Subpages Owner', username: SUBPAGES_USERNAME, email: SUBPAGES_EMAIL });
       subpagesOwner = owner.user;
     });
 

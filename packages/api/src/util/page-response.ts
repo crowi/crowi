@@ -121,6 +121,10 @@ function pickStoredMeta(stored: RevisionMetaContent): RevisionMetaShape {
   if (stored.wikiLinks !== undefined) out.wikiLinks = stored.wikiLinks;
   if (stored.mentions !== undefined) out.mentions = stored.mentions;
   if (stored.codeBlockLanguages !== undefined) out.codeBlockLanguages = stored.codeBlockLanguages;
+  // feature-backlink-raw-space-metadata: additive field, picked the same
+  // way as the other 3 — but deliberately NOT part of `metaIsComplete`
+  // below (see that constant's comment).
+  if (stored.rawSpaceLinks !== undefined) out.rawSpaceLinks = stored.rawSpaceLinks;
   return out;
 }
 
@@ -152,9 +156,16 @@ export const computeRevisionRenderArtifactsAsync = async (
   pageId?: string,
 ): Promise<{ meta?: RevisionMetaShape; renderedAst?: unknown }> => {
   const fromStored = storedMeta ? pickStoredMeta(storedMeta) : {};
-  // Phase 2-written revisions persist all 4 meta fields (even empty
-  // arrays); the presence of these 3 is the marker that no fallback
-  // is needed for meta.
+  // Phase 2-written revisions persist every meta sub-field (even empty
+  // arrays); the presence of these 3 is the marker that no fallback is
+  // needed for meta. `rawSpaceLinks` (feature-backlink-raw-space-metadata,
+  // additive) is deliberately NOT part of this gate: including it would
+  // mark every revision written before that field existed as incomplete.
+  // Two cohorts are spared by the omission — those with NO `rendererVersion`
+  // at all (which `astIsFresh` below also treats as trustworthy), and
+  // marker-era revisions that already carry the CURRENT `rendererVersion`
+  // and so are not caught by the staleness gate either. Revisions whose
+  // `rendererVersion` is merely older recompute regardless of this line.
   const metaIsComplete = fromStored.wikiLinks !== undefined && fromStored.mentions !== undefined && fromStored.codeBlockLanguages !== undefined;
   const astIsStored = storedAst !== undefined;
   // RFC-0002 round 3.1: a stored `rendererVersion` that does NOT match

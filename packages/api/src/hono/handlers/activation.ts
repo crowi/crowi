@@ -55,7 +55,24 @@ export const registerActivationRoutes = <E extends OpenAPIHono<CrowiHonoBindings
           return c.json({ error: { code: 'USER_NOT_FOUND' as const, message: 'User no longer exists' } }, 404);
         }
 
-        // Idempotent: a second click on a still-valid link just signs in.
+        // An activation link is an email-confirmation credential, NOT a
+        // login credential. It is only good for the REGISTERED → ACTIVE
+        // transition it was minted for; once the account has left that
+        // state the link stops being honoured, even though its signature
+        // stays valid for the rest of its 24h TTL.
+        //
+        // This used to fall through to `save()` + `generateTokens()` in the
+        // name of idempotency ("a second click just signs in"), which meant
+        // a 24h-old mail link minted a full session for an already-ACTIVE
+        // account with no password and no second factor — a first-factor
+        // bypass for anyone who reached the inbox, the mail transport, or a
+        // forwarded copy of the URL. Deliberate behaviour change: a second
+        // click now lands on the "link no longer valid" screen, whose only
+        // affordance is to sign in normally.
+        if (user.status !== User.STATUS_REGISTERED) {
+          return c.json(INVALID_TOKEN_BODY, 401);
+        }
+
         if (user.emailConfirmedAt == null) {
           user.emailConfirmedAt = new Date();
         }
@@ -64,14 +81,9 @@ export const registerActivationRoutes = <E extends OpenAPIHono<CrowiHonoBindings
         // event fires and the user's wiki page is created at confirmation
         // time (the same hook admin approval uses). A plain save() would
         // skip it, leaving confirmed users without a user page.
-        let saved: UserDocument;
-        if (user.status === User.STATUS_REGISTERED) {
-          saved = await new Promise<UserDocument>((resolve, reject) => {
-            user.statusActivate((err: Error | null, userData: UserDocument) => (err ? reject(err) : resolve(userData)));
-          });
-        } else {
-          saved = await user.save();
-        }
+        const saved: UserDocument = await new Promise<UserDocument>((resolve, reject) => {
+          user.statusActivate((err: Error | null, userData: UserDocument) => (err ? reject(err) : resolve(userData)));
+        });
 
         const tokens = jwtUtil.generateTokens(saved);
         return c.json({ ...tokens, user: toAuthUser(saved) }, 200);

@@ -1,7 +1,7 @@
 import Crowi from 'src/crowi';
 import { Types, Document, Model, Schema, model } from 'mongoose';
 import Debug from 'debug';
-import LinkDetector from 'src/util/link-detector';
+import LinkDetector, { decodeLinkPath, stripFragmentAndQuery } from 'src/util/link-detector';
 import { PageDocument } from './page';
 
 export interface BacklinkDocument extends Document {
@@ -19,6 +19,35 @@ export interface BacklinkModel extends Model<BacklinkDocument> {
   createByParameters(parameters: any): Promise<BacklinkDocument>;
   createBySavedPage(savedPage: any): Promise<BacklinkDocument[]>;
   createByAllPages(): Promise<BacklinkDocument[][]>;
+}
+
+/**
+ * feature-backlink-raw-space-metadata — decode the raw-space link
+ * destinations `renderer/core/raw-space-links.ts` pushed onto
+ * `revision.meta.rawSpaceLinks` at save time (see that transform's doc
+ * comment). Replaces the earlier `extractRawSpaceRecoveredPaths` DFS
+ * over the full `renderedAst`, which walked every page's whole AST on
+ * every save looking for a `data.rawSpaceRecovered === true` marker —
+ * almost always a wasted full-tree scan, since only pages that actually
+ * contain a raw-space link have anything to find.
+ *
+ * `rawSpaceLinks` entries are NOT guaranteed to be real-space — the
+ * recovery grammar keeps the destination verbatim, so an entry can
+ * carry a literal `+` or `%XX` alongside the raw space (e.g. `/a+b c`).
+ * Decode with the exact same semantics as the regex-based extraction
+ * path (`stripFragmentAndQuery` → `decodeURIComponent` → `+` → space,
+ * via `decodeLinkPath`), per-link try/catch (via `decodeLinkPath`'s
+ * own null-on-throw contract) so one malformed recovered link doesn't
+ * take down the rest — same hardening as the Phase 1 regex path.
+ */
+function decodeRawSpaceLinkPaths(rawSpaceLinks: string[] | undefined): string[] {
+  if (!rawSpaceLinks) return [];
+  const paths: string[] = [];
+  for (const url of rawSpaceLinks) {
+    const decoded = decodeLinkPath(stripFragmentAndQuery(url));
+    if (decoded !== null) paths.push(decoded);
+  }
+  return paths;
 }
 
 export default (crowi: Crowi) => {
@@ -121,10 +150,44 @@ export default (crowi: Crowi) => {
 
     const body = savedPage.revision.body;
 
-    await Backlink.removeBySavedPage(savedPage);
-
+    // Extract-before-delete: run `linkDetector.search` / `convertLinksToPageIds`
+    // (which can throw on malformed input, e.g. a stray `/a%`) before
+    // touching any existing Backlink docs. Previously `removeBySavedPage`
+    // ran first, so a single malformed link would wipe out this page's
+    // backlinks with nothing to replace them — the caller
+    // (events/page.ts's registerBacklinks) only logs the exception, it
+    // doesn't restore what was deleted. This guarantees exactly one thing:
+    // a throw here leaves pre-existing Backlink docs untouched. It does
+    // NOT make the delete+insert pair itself atomic — an `insertMany`
+    // failure after a successful `removeBySavedPage`, or a concurrent save
+    // racing this one, can still leave stale/missing backlinks (pre-existing,
+    // out of scope — see spec's non-goals).
     const links = linkDetector.search(body);
-    const ids = await convertLinksToPageIds(savedPage, links);
+    // Phase 2 (feature-page-link-space-paths), metadata channel added by
+    // feature-backlink-raw-space-metadata: merge in raw-space recovered
+    // links carried on `revision.meta.rawSpaceLinks` — a second
+    // extraction step, not a new regex pattern (see
+    // `decodeRawSpaceLinkPaths`'s doc comment above). Runs before
+    // `removeBySavedPage` too, same extract-before-delete guarantee.
+    //
+    // One asymmetry worth knowing before trusting "behaviour unchanged":
+    // this does NOT always run against a freshly built revision. A body save
+    // does, so `meta.rawSpaceLinks` is always present there. Other emitters
+    // of `update` (rename among them) re-run it against the page's existing
+    // revision, and a revision written before `meta.rawSpaceLinks` existed
+    // contributes nothing here — so for those a re-registration can lose the
+    // page's raw-space backlinks until its body is next saved. Exactly which
+    // of those callers hand over a populated revision differs per call site,
+    // so treat this as "not guaranteed" rather than a characterised set.
+    //
+    // Nothing is backfilled, and nothing needs to be: only the marker-era
+    // build could have written such revisions, and it lived a few hours and
+    // never shipped in a release.
+    const rawSpaceRecoveredPaths = decodeRawSpaceLinkPaths(savedPage.revision.meta?.rawSpaceLinks);
+    const paths = rawSpaceRecoveredPaths.length === 0 ? links.paths : Array.from(new Set([...links.paths, ...rawSpaceRecoveredPaths]));
+    const ids = await convertLinksToPageIds(savedPage, { paths, objectIds: links.objectIds });
+
+    await Backlink.removeBySavedPage(savedPage);
 
     if (ids.length === 0) {
       debug('No backlinks to save');
@@ -146,6 +209,19 @@ export default (crowi: Crowi) => {
     return backlinks;
   };
 
+  // feature-backlink-raw-space-metadata: this rebuild path queries
+  // `Revision.find(...)` directly (a projection of `_id`/`body` only,
+  // never `.meta`) and matches candidates with `linkDetector`'s regexps
+  // — it never called the old `extractRawSpaceRecoveredPaths` DFS over
+  // `renderedAst` either, before this change. So raw-space recovered
+  // links have NEVER been included in a `createByAllPages()` rebuild,
+  // and that stays true unchanged here: revisions this queries can
+  // predate `meta.rawSpaceLinks` (or lack `meta` entirely — this path
+  // doesn't even select the field), and this deliberately does not
+  // special-case that (no DFS-over-renderedAst fallback re-added here —
+  // see the spec's "移行の考え方"). A rebuild that also wants raw-space
+  // backlinks would need to re-run pages through the renderer, which is
+  // out of scope for this refactor (see spec's "やらないこと").
   backlinkSchema.statics.createByAllPages = async function () {
     const Page = crowi.model('Page');
     const Revision = crowi.model('Revision');

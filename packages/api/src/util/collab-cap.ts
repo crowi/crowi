@@ -1,5 +1,6 @@
 import type Crowi from 'src/crowi';
 import { createEditorCapCounter, parseCapEnv, type EditorCapCounter } from './editor-cap-counter';
+import { resolveRedisKeyspaceIfEnabled } from './redis-keyspace';
 
 /**
  * Editor cap check used by the wsToken issuance endpoint
@@ -57,6 +58,10 @@ export function getEditorCapCounter(crowi: Crowi): Promise<EditorCapCounter> {
   cachedCounter = createEditorCapCounter({
     redisClient: crowi.redis ?? null,
     maxEditorsPerPage: parseCapEnv(process.env.COLLAB_MAX_EDITORS_PER_PAGE),
+    // Instance-scoped (feature-redis-key-prefix §1/§2), matching
+    // `service/presence.ts`'s `getPresenceService` / `util/rate-limit.ts`'s
+    // call sites.
+    keyspace: resolveRedisKeyspaceIfEnabled(crowi),
   });
   return cachedCounter;
 }

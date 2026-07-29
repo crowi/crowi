@@ -53,6 +53,7 @@ import type { UserDocument } from 'src/models/user';
 import { computeRevisionRenderArtifactsAsync, isPopulatedRevision, pageToResponse } from 'src/util/page-response';
 import { indexPageInSearchById } from 'src/util/page-search-index';
 import { createRateLimiter } from 'src/util/rate-limit';
+import { resolveRedisKeyspaceIfEnabled } from 'src/util/redis-keyspace';
 import { actorFromUser, isValidObjectId, loadGrantedPage, toUserPublic } from 'src/util/ts-rest-helpers';
 
 import type { CrowiHonoBindings } from '../app';
@@ -226,6 +227,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
     limit: 30,
     windowMs: 60_000,
     redisClient: crowi.redis ?? null,
+    keyspace: resolveRedisKeyspaceIfEnabled(crowi),
   });
   const linkAccessRateLimitMiddleware = withRateLimit({
     limiter: linkAccessRateLimiter,
@@ -565,6 +567,18 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
           return c.json(INVALID_GRANT_BODY, 400);
         }
 
+        // Draft creation (draft.ts:91) and rename (:1028) both reject a
+        // path containing a literal '+' via `Page.isCreatableName` before
+        // touching the DB. This route was missing that check, so a page
+        // with a literal '+' in its path could be created even though the
+        // web's `+`-as-encoded-space contract (`pagePathToHref` /
+        // `decodePagePathFromUrl`) means such a page is unreachable by
+        // URL for anyone but its creator.
+        const normalizedCreatePath = Page.normalizePath(path);
+        if (!Page.isCreatableName(normalizedCreatePath)) {
+          return c.json(pageBadRequestBody('PAGE_INVALID_NAME', `Cannot create a page at this path (${normalizedCreatePath})`), 400);
+        }
+
         try {
           const existing = await Page.findPage(path, user, null, /* ignoreNotFound */ true);
           if (existing !== null) {
@@ -575,7 +589,6 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
           // page whose trailing-slash twin already exists as a real page.
           // Use `normalizePath` so the twin check sees the same path the
           // creation will use.
-          const normalizedCreatePath = Page.normalizePath(path);
           const twin = await Page.findExistingTwin(normalizedCreatePath);
           if (twin) {
             return c.json(pageTwinExistsBody(twin.path), 400);

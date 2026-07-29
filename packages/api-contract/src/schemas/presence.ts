@@ -89,10 +89,21 @@ export type PresenceClientMessage = z.infer<typeof PresenceClientMessageSchema>;
  * server pushes the complete list on every change (join / leave /
  * isEditing toggle); for typical sizes (< 50 viewers) full broadcasts
  * are cheaper than diffs and avoid state-sync bugs.
+ *
+ * `generation` (feature-presence-consistency-fixes defect 2) is a
+ * per-page, per-instance monotonically increasing counter the server
+ * stamps at DISPATCH time (before it asynchronously re-reads the
+ * viewer list) — the two are the same value pre-fix, but the async
+ * read can now complete out of order (a `join`'s read stalls while a
+ * later `leave`'s read finishes first). The client discards any frame
+ * whose `generation` is lower than the highest one it has already
+ * applied this connection epoch, instead of blindly rendering whatever
+ * arrives last.
  */
 export const PresenceViewersMessageSchema = z.object({
   type: z.literal('viewers'),
   viewers: z.array(PresenceViewerSchema),
+  generation: z.number().int(),
 });
 export type PresenceViewersMessage = z.infer<typeof PresenceViewersMessageSchema>;
 

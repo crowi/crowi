@@ -1118,7 +1118,7 @@ export interface paths {
                 };
             };
             responses: {
-                /** @description Password updated */
+                /** @description Password updated; earlier sessions revoked and a fresh token pair issued */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -1128,6 +1128,9 @@ export interface paths {
                             /** @enum {string} */
                             status: "ok";
                             message: string;
+                            accessToken: string;
+                            refreshToken: string;
+                            expiresIn: number;
                         };
                     };
                 };
@@ -1230,6 +1233,7 @@ export interface paths {
                                             username: string;
                                         }[];
                                         codeBlockLanguages?: string[];
+                                        rawSpaceLinks?: string[];
                                     };
                                     renderedAst?: unknown;
                                     rendererVersion?: string;
@@ -2290,6 +2294,7 @@ export interface paths {
                                             username: string;
                                         }[];
                                         codeBlockLanguages?: string[];
+                                        rawSpaceLinks?: string[];
                                     };
                                     renderedAst?: unknown;
                                     rendererVersion?: string;
@@ -2396,6 +2401,7 @@ export interface paths {
                                                 username: string;
                                             }[];
                                             codeBlockLanguages?: string[];
+                                            rawSpaceLinks?: string[];
                                         };
                                         renderedAst?: unknown;
                                         rendererVersion?: string;
@@ -2609,6 +2615,7 @@ export interface paths {
                                                 username: string;
                                             }[];
                                             codeBlockLanguages?: string[];
+                                            rawSpaceLinks?: string[];
                                         };
                                         renderedAst?: unknown;
                                         rendererVersion?: string;
@@ -2826,6 +2833,7 @@ export interface paths {
                                             username: string;
                                         }[];
                                         codeBlockLanguages?: string[];
+                                        rawSpaceLinks?: string[];
                                     };
                                     renderedAst?: unknown;
                                     rendererVersion?: string;
@@ -3027,6 +3035,7 @@ export interface paths {
                                             username: string;
                                         }[];
                                         codeBlockLanguages?: string[];
+                                        rawSpaceLinks?: string[];
                                     };
                                     renderedAst?: unknown;
                                     rendererVersion?: string;
@@ -3352,6 +3361,7 @@ export interface paths {
                                                 username: string;
                                             }[];
                                             codeBlockLanguages?: string[];
+                                            rawSpaceLinks?: string[];
                                         };
                                         renderedAst?: unknown;
                                         rendererVersion?: string;
@@ -3551,6 +3561,7 @@ export interface paths {
                                                 username: string;
                                             }[];
                                             codeBlockLanguages?: string[];
+                                            rawSpaceLinks?: string[];
                                         };
                                         renderedAst?: unknown;
                                         rendererVersion?: string;
@@ -3836,6 +3847,7 @@ export interface paths {
                                                 username: string;
                                             }[];
                                             codeBlockLanguages?: string[];
+                                            rawSpaceLinks?: string[];
                                         };
                                         renderedAst?: unknown;
                                         rendererVersion?: string;
@@ -4578,6 +4590,7 @@ export interface paths {
                                         username: string;
                                     }[];
                                     codeBlockLanguages?: string[];
+                                    rawSpaceLinks?: string[];
                                 };
                                 renderedAst?: unknown;
                                 rendererVersion?: string;
@@ -4727,6 +4740,7 @@ export interface paths {
                                         username: string;
                                     }[];
                                     codeBlockLanguages?: string[];
+                                    rawSpaceLinks?: string[];
                                 };
                                 renderedAst?: unknown;
                                 rendererVersion?: string;
@@ -4881,6 +4895,7 @@ export interface paths {
                                             username: string;
                                         }[];
                                         codeBlockLanguages?: string[];
+                                        rawSpaceLinks?: string[];
                                     };
                                     renderedAst?: unknown;
                                     rendererVersion?: string;
@@ -5081,6 +5096,7 @@ export interface paths {
                                             username: string;
                                         }[];
                                         codeBlockLanguages?: string[];
+                                        rawSpaceLinks?: string[];
                                     };
                                     renderedAst?: unknown;
                                     rendererVersion?: string;
@@ -5277,6 +5293,7 @@ export interface paths {
                                             username: string;
                                         }[];
                                         codeBlockLanguages?: string[];
+                                        rawSpaceLinks?: string[];
                                     };
                                     renderedAst?: unknown;
                                     rendererVersion?: string;
@@ -5349,7 +5366,7 @@ export interface paths {
                         };
                     };
                 };
-                /** @description Invalid request (PAGE_EXISTS / NON_EXISTENT_USER_PAGE / PAGE_CREATE_FAILED / INVALID_GRANT) */
+                /** @description Invalid request (PAGE_INVALID_NAME / PAGE_EXISTS / NON_EXISTENT_USER_PAGE / PAGE_CREATE_FAILED / INVALID_GRANT) */
                 400: {
                     headers: {
                         [name: string]: unknown;
@@ -5442,6 +5459,7 @@ export interface paths {
                                             username: string;
                                         }[];
                                         codeBlockLanguages?: string[];
+                                        rawSpaceLinks?: string[];
                                     };
                                     renderedAst?: unknown;
                                     rendererVersion?: string;
@@ -5651,6 +5669,7 @@ export interface paths {
                                             username: string;
                                         }[];
                                         codeBlockLanguages?: string[];
+                                        rawSpaceLinks?: string[];
                                     };
                                     renderedAst?: unknown;
                                     rendererVersion?: string;
@@ -5760,6 +5779,7 @@ export interface paths {
                                             username: string;
                                         }[];
                                         codeBlockLanguages?: string[];
+                                        rawSpaceLinks?: string[];
                                     };
                                     renderedAst?: unknown;
                                     rendererVersion?: string;
@@ -5864,6 +5884,7 @@ export interface paths {
                                             username: string;
                                         }[];
                                         codeBlockLanguages?: string[];
+                                        rawSpaceLinks?: string[];
                                     };
                                     renderedAst?: unknown;
                                     rendererVersion?: string;
@@ -6104,6 +6125,7 @@ export interface paths {
                                             username: string;
                                         }[];
                                         codeBlockLanguages?: string[];
+                                        rawSpaceLinks?: string[];
                                     };
                                     renderedAst?: unknown;
                                     rendererVersion?: string;
@@ -6508,6 +6530,7 @@ export interface paths {
                                             username: string;
                                         }[];
                                         codeBlockLanguages?: string[];
+                                        rawSpaceLinks?: string[];
                                     };
                                     renderedAst?: unknown;
                                     rendererVersion?: string;
@@ -6703,6 +6726,7 @@ export interface paths {
                                             username: string;
                                         }[];
                                         codeBlockLanguages?: string[];
+                                        rawSpaceLinks?: string[];
                                     };
                                     renderedAst?: unknown;
                                     rendererVersion?: string;
@@ -6898,6 +6922,7 @@ export interface paths {
                                             username: string;
                                         }[];
                                         codeBlockLanguages?: string[];
+                                        rawSpaceLinks?: string[];
                                     };
                                     renderedAst?: unknown;
                                     rendererVersion?: string;
@@ -7298,6 +7323,7 @@ export interface paths {
                                             username: string;
                                         }[];
                                         codeBlockLanguages?: string[];
+                                        rawSpaceLinks?: string[];
                                     };
                                     renderedAst?: unknown;
                                     rendererVersion?: string;
@@ -7493,6 +7519,7 @@ export interface paths {
                                             username: string;
                                         }[];
                                         codeBlockLanguages?: string[];
+                                        rawSpaceLinks?: string[];
                                     };
                                     renderedAst?: unknown;
                                     rendererVersion?: string;
@@ -7691,6 +7718,7 @@ export interface paths {
                                             username: string;
                                         }[];
                                         codeBlockLanguages?: string[];
+                                        rawSpaceLinks?: string[];
                                     };
                                     renderedAst?: unknown;
                                     rendererVersion?: string;
@@ -9694,6 +9722,7 @@ export interface paths {
                                                 username: string;
                                             }[];
                                             codeBlockLanguages?: string[];
+                                            rawSpaceLinks?: string[];
                                         };
                                         renderedAst?: unknown;
                                         rendererVersion?: string;
@@ -14023,6 +14052,7 @@ export interface components {
                         username: string;
                     }[];
                     codeBlockLanguages?: string[];
+                    rawSpaceLinks?: string[];
                 };
                 renderedAst?: unknown;
                 rendererVersion?: string;
@@ -14127,6 +14157,7 @@ export interface components {
                         username: string;
                     }[];
                     codeBlockLanguages?: string[];
+                    rawSpaceLinks?: string[];
                 };
                 renderedAst?: unknown;
                 rendererVersion?: string;
@@ -14228,6 +14259,7 @@ export interface components {
                     username: string;
                 }[];
                 codeBlockLanguages?: string[];
+                rawSpaceLinks?: string[];
             };
             renderedAst?: unknown;
             rendererVersion?: string;
@@ -14273,6 +14305,7 @@ export interface components {
                 username: string;
             }[];
             codeBlockLanguages?: string[];
+            rawSpaceLinks?: string[];
         };
         TocEntry: {
             level: number;
@@ -14349,6 +14382,7 @@ export interface components {
                             username: string;
                         }[];
                         codeBlockLanguages?: string[];
+                        rawSpaceLinks?: string[];
                     };
                     renderedAst?: unknown;
                     rendererVersion?: string;
@@ -14458,6 +14492,7 @@ export interface components {
                             username: string;
                         }[];
                         codeBlockLanguages?: string[];
+                        rawSpaceLinks?: string[];
                     };
                     renderedAst?: unknown;
                     rendererVersion?: string;
@@ -14562,6 +14597,7 @@ export interface components {
                             username: string;
                         }[];
                         codeBlockLanguages?: string[];
+                        rawSpaceLinks?: string[];
                     };
                     renderedAst?: unknown;
                     rendererVersion?: string;
@@ -14668,6 +14704,7 @@ export interface components {
                             username: string;
                         }[];
                         codeBlockLanguages?: string[];
+                        rawSpaceLinks?: string[];
                     };
                     renderedAst?: unknown;
                     rendererVersion?: string;
@@ -14824,6 +14861,7 @@ export interface components {
                             username: string;
                         }[];
                         codeBlockLanguages?: string[];
+                        rawSpaceLinks?: string[];
                     };
                     renderedAst?: unknown;
                     rendererVersion?: string;

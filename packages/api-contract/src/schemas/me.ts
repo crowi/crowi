@@ -106,10 +106,20 @@ export const UpdatePasswordRequestSchema = z
   });
 export type UpdatePasswordRequest = z.infer<typeof UpdatePasswordRequestSchema>;
 
-// Password update success response schema
+// Password update success response schema.
+//
+// Changing the password revokes every session token minted before it, so
+// the response carries a freshly minted pair: the client stores it and the
+// tab that made the change stays signed in. Same shape as the login /
+// refresh pair (`TokenAuthResponseSchema`) minus the user object, which
+// the caller already has.
 export const PasswordUpdateSuccessSchema = z.object({
   status: z.literal('ok'),
   message: z.string(),
+  accessToken: z.string(),
+  refreshToken: z.string(),
+  /** Access-token lifetime in seconds. */
+  expiresIn: z.number(),
 });
 export type PasswordUpdateSuccess = z.infer<typeof PasswordUpdateSuccessSchema>;
 

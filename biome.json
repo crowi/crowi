@@ -11,6 +11,7 @@
       "packages/**/*.{ts,tsx,js,jsx}",
       "!**/dist/**",
       "!**/.next/**",
+      "!**/.next-e2e/**",
       "!**/.turbo/**",
       "!**/node_modules/**",
       "!**/coverage/**",

@@ -1,11 +1,11 @@
 'use client';
 
-import { useState } from 'react';
 import type { TocEntryResponse } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 import { ChevronDown, List } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { useForceCloseable } from '@/lib/use-force-closeable';
 import { cn } from '@/lib/utils';
 import { TocList } from './page-toc';
 
@@ -19,6 +19,14 @@ interface PageTocMenuProps {
    * row. Defaults to the roomier expanded-header size.
    */
   compact?: boolean;
+  /**
+   * feature-mobile-presence-card — force-closes the popover while `true`.
+   * `PageHeader` sets it from its own `compact` sticky state for the
+   * instance rendered inside the EXPANDED subtree; see `useForceCloseable`
+   * for why a Portal-rendered overlay needs this even though its trigger's
+   * ancestor already goes `inert`.
+   */
+  forceClose?: boolean;
 }
 
 /**
@@ -28,8 +36,9 @@ interface PageTocMenuProps {
  * mobile so the table of contents stays reachable at every width below
  * the rail breakpoint. Returns null below 2 entries (nothing to show).
  */
-export function PageTocMenu({ toc, activeId, compact = false }: PageTocMenuProps) {
-  const [open, setOpen] = useState(false);
+export function PageTocMenu({ toc, activeId, compact = false, forceClose = false }: PageTocMenuProps) {
+  const [open, setOpen] = useForceCloseable(forceClose);
+
   if (toc.length < 2) return null;
 
   return (

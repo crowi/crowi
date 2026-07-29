@@ -23,7 +23,36 @@ export interface PipelineMetadata {
   wikiLinks: WikiLinkResponse[];
   mentions: MentionResponse[];
   codeBlockLanguages: string[];
+  /**
+   * feature-backlink-raw-space-metadata: verbatim `url` destinations of
+   * every raw-space link `raw-space-links.ts` recovers, in the same
+   * "core transform pushes into this bag" shape `wikiLinks` above uses
+   * (see that transform's own doc comment). Replaces the old
+   * `data.rawSpaceRecovered` AST marker that `Backlink.createBySavedPage`
+   * used to find by walking the whole `renderedAst` on every save.
+   */
+  rawSpaceLinks: string[];
 }
+
+/**
+ * A fresh, all-empty `PipelineMetadata` — a new object every call, so callers
+ * never share arrays.
+ *
+ * Use this instead of writing the object literal out. `packages/api`'s
+ * tsconfig excludes test files from `tsc`, and the shared base sets
+ * `isolatedModules`, so ts-jest runs transpile-only: a test that hand-writes
+ * the literal and misses a field does NOT fail to compile — it fails at
+ * runtime, the day some transform starts pushing into that field. Routing
+ * every construction through here means adding a field cannot leave a stale
+ * literal behind.
+ */
+export const createEmptyPipelineMetadata = (): PipelineMetadata => ({
+  toc: [],
+  wikiLinks: [],
+  mentions: [],
+  codeBlockLanguages: [],
+  rawSpaceLinks: [],
+});
 
 /**
  * Lazily-resolved ESM-only handles needed by the pipeline + core
@@ -291,12 +320,7 @@ export async function runPipeline(
   loadDeps: LoadPipelineEsmDeps,
   dispatch?: PipelinePluginDispatch,
 ): Promise<PipelineResult> {
-  const metadata: PipelineMetadata = {
-    toc: [],
-    wikiLinks: [],
-    mentions: [],
-    codeBlockLanguages: [],
-  };
+  const metadata: PipelineMetadata = createEmptyPipelineMetadata();
 
   if (!body) {
     return { tree: emptyRoot(), metadata };
@@ -314,7 +338,7 @@ export async function runPipeline(
   // Each transform plugin is `(metadata) => (tree) => void`. unified's
   // `use(plugin, options)` invokes the plugin once with `options` and
   // gets back the actual transformer.
-  for (const plugin of buildCorePlugins(deps)) {
+  for (const plugin of buildCorePlugins(deps, body)) {
     processor = processor.use(plugin as never, metadata);
   }
 
