@@ -10,8 +10,8 @@ final class GeneratedClientSmokeTests: XCTestCase {
     func testClientConstructsAgainstApiBaseURL() {
         // §3's load-bearing distinction: `apiBaseURL`, NOT bare
         // `workspaceOrigin` — the spec's `servers` entry already carries
-        // `/api/v2` while operation paths are bare.
-        let apiBaseURL = URL(string: "https://wiki.example.com/api/v2")!
+        // `/api` while operation paths are bare.
+        let apiBaseURL = URL(string: "https://wiki.example.com/api")!
         _ = GeneratedClientSmoke.makeClient(apiBaseURL: apiBaseURL)
         // No throw / no crash constructing the client is the assertion —
         // there is nothing else observable at construction time.

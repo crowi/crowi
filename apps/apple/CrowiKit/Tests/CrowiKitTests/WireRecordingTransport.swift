@@ -83,7 +83,7 @@ func makeWireRecordedClient(
         "workspace-a": StoredTokenPair(accessToken: "the-token", refreshToken: "rt-1", expiresAt: Date().addingTimeInterval(3600))
     ])
     let coordinator = RefreshCoordinator(workspaceId: "workspace-a", tokenStore: tokenStore, urlSession: .shared) {
-        URL(string: "https://wiki.example.com/api/v2/oauth/token")!
+        URL(string: "https://wiki.example.com/api/oauth/token")!
     }
     return AuthenticatedAPIClient(
         apiBaseURL: APIBaseURL(workspaceOrigin: WorkspaceOrigin(URL(string: "https://wiki.example.com")!)),

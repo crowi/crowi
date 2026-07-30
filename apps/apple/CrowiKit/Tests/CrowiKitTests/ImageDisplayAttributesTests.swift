@@ -114,17 +114,17 @@ final class ImageDisplayAttributesTests: XCTestCase {
     }
 
     func testExtractDetachesTheCarriedFragmentAndYieldsTheByteIdenticalPreCarryURL() throws {
-        let carried = try XCTUnwrap(URL(string: "https://wiki.example.com/api/v2/attachments/abc#crowi-image-attrs:width=60pct;align=center"))
+        let carried = try XCTUnwrap(URL(string: "https://wiki.example.com/api/attachments/abc#crowi-image-attrs:width=60pct;align=center"))
 
         let extraction = ImageDisplayAttributes.extract(from: carried)
 
-        XCTAssertEqual(extraction.url.absoluteString, "https://wiki.example.com/api/v2/attachments/abc", "the detached URL — what reaches fetch/allowlist/cache — must be byte-identical to the pre-carry one")
+        XCTAssertEqual(extraction.url.absoluteString, "https://wiki.example.com/api/attachments/abc", "the detached URL — what reaches fetch/allowlist/cache — must be byte-identical to the pre-carry one")
         XCTAssertEqual(extraction.attributes?.width?.raw, "60%")
         XCTAssertEqual(extraction.attributes?.align, .center)
     }
 
     func testExtractLeavesAURLWithoutTheMarkerCompletelyUntouched() throws {
-        let plain = try XCTUnwrap(URL(string: "https://wiki.example.com/api/v2/attachments/abc"))
+        let plain = try XCTUnwrap(URL(string: "https://wiki.example.com/api/attachments/abc"))
         let ordinaryFragment = try XCTUnwrap(URL(string: "https://example.com/page#section-2"))
 
         XCTAssertEqual(ImageDisplayAttributes.extract(from: plain).url, plain)
@@ -138,13 +138,13 @@ final class ImageDisplayAttributesTests: XCTestCase {
     /// value drops exactly like `{width=99999px}` would (the RFC-0023 §11
     /// client-side re-validation stance).
     func testExtractRevalidatesForgedFragmentValuesWithTheDropRule() throws {
-        let forged = try XCTUnwrap(URL(string: "https://wiki.example.com/api/v2/attachments/abc#crowi-image-attrs:width=99999px;align=center"))
+        let forged = try XCTUnwrap(URL(string: "https://wiki.example.com/api/attachments/abc#crowi-image-attrs:width=99999px;align=center"))
 
         let extraction = ImageDisplayAttributes.extract(from: forged)
 
         XCTAssertNil(extraction.attributes?.width, "a forged out-of-range width must DROP on re-validation")
         XCTAssertEqual(extraction.attributes?.align, .center)
-        XCTAssertEqual(extraction.url.absoluteString, "https://wiki.example.com/api/v2/attachments/abc", "the marker fragment is detached even when its payload was junk")
+        XCTAssertEqual(extraction.url.absoluteString, "https://wiki.example.com/api/attachments/abc", "the marker fragment is detached even when its payload was junk")
     }
 
     // MARK: - Block-path sizing policy (pure rule)

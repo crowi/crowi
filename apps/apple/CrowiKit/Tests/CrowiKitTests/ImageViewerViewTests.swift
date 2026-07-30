@@ -26,8 +26,8 @@ final class ImageViewerViewTests: XCTestCase {
         base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
     )!
 
-    private static let canonical = URL(string: "https://wiki.example.com/api/v2/attachments/665f1c2b8a9d3e4f5a6b7c8d")!
-    private static let originalURLString = "https://wiki.example.com/api/v2/attachments/665f1c2b8a9d3e4f5a6b7c8d/original"
+    private static let canonical = URL(string: "https://wiki.example.com/api/attachments/665f1c2b8a9d3e4f5a6b7c8d")!
+    private static let originalURLString = "https://wiki.example.com/api/attachments/665f1c2b8a9d3e4f5a6b7c8d/original"
 
     // MARK: - ImageViewerLoading (original + canonical fallback, one seam)
 

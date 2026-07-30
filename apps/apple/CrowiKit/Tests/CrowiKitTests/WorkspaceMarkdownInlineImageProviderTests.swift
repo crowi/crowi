@@ -40,7 +40,7 @@ final class WorkspaceMarkdownInlineImageProviderTests: XCTestCase {
         let provider = WorkspaceMarkdownInlineImageProvider(loader: loader)
 
         // Must not throw — a successful fetch+decode returns an `Image`.
-        _ = try await provider.image(with: workspaceOrigin.appendingPathComponent("api/v2/attachments/abc"), label: "alt text")
+        _ = try await provider.image(with: workspaceOrigin.appendingPathComponent("api/attachments/abc"), label: "alt text")
     }
 
     func testImageWithThrowsForNonImageBytes() async {
@@ -50,7 +50,7 @@ final class WorkspaceMarkdownInlineImageProviderTests: XCTestCase {
         let provider = WorkspaceMarkdownInlineImageProvider(loader: loader)
 
         do {
-            _ = try await provider.image(with: workspaceOrigin.appendingPathComponent("api/v2/attachments/broken"), label: "alt text")
+            _ = try await provider.image(with: workspaceOrigin.appendingPathComponent("api/attachments/broken"), label: "alt text")
             XCTFail("expected image(with:label:) to throw for undecodable bytes")
         } catch {
             // `InlineImageProvider`'s contract is `async throws` — this is
@@ -66,7 +66,7 @@ final class WorkspaceMarkdownInlineImageProviderTests: XCTestCase {
         let provider = WorkspaceMarkdownInlineImageProvider(loader: loader)
 
         do {
-            _ = try await provider.image(with: workspaceOrigin.appendingPathComponent("api/v2/attachments/missing"), label: "alt text")
+            _ = try await provider.image(with: workspaceOrigin.appendingPathComponent("api/attachments/missing"), label: "alt text")
             XCTFail("expected image(with:label:) to throw for a 404")
         } catch {
             // Expected.
@@ -85,7 +85,7 @@ final class WorkspaceMarkdownInlineImageProviderTests: XCTestCase {
         }
         let provider = WorkspaceMarkdownInlineImageProvider(loader: loader)
 
-        _ = try await provider.image(with: workspaceOrigin.appendingPathComponent("api/v2/attachments/abc"), label: "alt text")
+        _ = try await provider.image(with: workspaceOrigin.appendingPathComponent("api/attachments/abc"), label: "alt text")
 
         XCTAssertEqual(capturedAuthorization, "Bearer the-token")
     }
@@ -130,10 +130,10 @@ final class WorkspaceMarkdownInlineImageProviderTests: XCTestCase {
         }
         let provider = WorkspaceMarkdownInlineImageProvider(loader: loader)
 
-        let carried = URL(string: "https://wiki.example.com/api/v2/attachments/abc#crowi-image-attrs:width=100px")!
+        let carried = URL(string: "https://wiki.example.com/api/attachments/abc#crowi-image-attrs:width=100px")!
         _ = try await provider.image(with: carried, label: "alt text")
 
-        XCTAssertEqual(capturedURL?.absoluteString, "https://wiki.example.com/api/v2/attachments/abc")
+        XCTAssertEqual(capturedURL?.absoluteString, "https://wiki.example.com/api/attachments/abc")
     }
 
     // MARK: - RFC-0015 width application, rendered through the provider
@@ -194,7 +194,7 @@ final class WorkspaceMarkdownInlineImageProviderTests: XCTestCase {
         containerWidth.width = 300
         let provider = WorkspaceMarkdownInlineImageProvider(loader: loader, containerWidth: containerWidth)
 
-        let carried = URL(string: "https://wiki.example.com/api/v2/attachments/abc#crowi-image-attrs:width=50pct")!
+        let carried = URL(string: "https://wiki.example.com/api/attachments/abc#crowi-image-attrs:width=50pct")!
         let image = try await provider.image(with: carried, label: "alt text")
 
         let rendered = try renderedSize(of: image)
@@ -214,7 +214,7 @@ final class WorkspaceMarkdownInlineImageProviderTests: XCTestCase {
         containerWidth.width = 300
         let provider = WorkspaceMarkdownInlineImageProvider(loader: loader, containerWidth: containerWidth)
 
-        let carried = URL(string: "https://wiki.example.com/api/v2/attachments/abc#crowi-image-attrs:width=100px")!
+        let carried = URL(string: "https://wiki.example.com/api/attachments/abc#crowi-image-attrs:width=100px")!
         let image = try await provider.image(with: carried, label: "alt text")
 
         let rendered = try renderedSize(of: image)
@@ -232,7 +232,7 @@ final class WorkspaceMarkdownInlineImageProviderTests: XCTestCase {
         }
         let provider = WorkspaceMarkdownInlineImageProvider(loader: loader)
 
-        let carried = URL(string: "https://wiki.example.com/api/v2/attachments/abc#crowi-image-attrs:width=50pct")!
+        let carried = URL(string: "https://wiki.example.com/api/attachments/abc#crowi-image-attrs:width=50pct")!
         let image = try await provider.image(with: carried, label: "alt text")
 
         let rendered = try renderedSize(of: image)

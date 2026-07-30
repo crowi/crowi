@@ -42,7 +42,7 @@ final class WorkspaceImageDiskCacheTests: XCTestCase {
             sessionConfiguration: configuration
         )
         let coordinator = RefreshCoordinator(workspaceId: "workspace-a", tokenStore: tokenStore, urlSession: MockURLProtocol.makeSession()) {
-            URL(string: "https://wiki.example.com/api/v2/oauth/token")!
+            URL(string: "https://wiki.example.com/api/oauth/token")!
         }
         let cache = WorkspaceImageDiskCache(loader: loader, coordinator: coordinator, cacheDirectory: scratchDirectory, confidential: confidential)
         return (cache, recorder)
@@ -62,8 +62,8 @@ final class WorkspaceImageDiskCacheTests: XCTestCase {
             (HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "image/png"])!, self.realPNGBytes)
         }
 
-        let first = try await cache.fetchResult("/api/v2/attachments/abc")
-        let second = try await cache.fetchResult("/api/v2/attachments/abc")
+        let first = try await cache.fetchResult("/api/attachments/abc")
+        let second = try await cache.fetchResult("/api/attachments/abc")
 
         XCTAssertEqual(first, .real(realPNGBytes))
         XCTAssertEqual(second, .real(realPNGBytes))
@@ -78,8 +78,8 @@ final class WorkspaceImageDiskCacheTests: XCTestCase {
             )
         }
 
-        let first = try await cache.fetchResult("/api/v2/attachments/missing")
-        let second = try await cache.fetchResult("/api/v2/attachments/missing")
+        let first = try await cache.fetchResult("/api/attachments/missing")
+        let second = try await cache.fetchResult("/api/attachments/missing")
 
         XCTAssertEqual(first, .placeholder(WorkspaceImageDiskCache.bundledPlaceholderReferenceData))
         XCTAssertEqual(second, .placeholder(WorkspaceImageDiskCache.bundledPlaceholderReferenceData))
@@ -91,7 +91,7 @@ final class WorkspaceImageDiskCacheTests: XCTestCase {
             (HTTPURLResponse(url: request.url!, statusCode: 500, httpVersion: nil, headerFields: nil)!, Data())
         }
 
-        await XCTAssertThrowsErrorAsync(try await cache.fetchResult("/api/v2/attachments/broken")) { error in
+        await XCTAssertThrowsErrorAsync(try await cache.fetchResult("/api/attachments/broken")) { error in
             XCTAssertEqual(error as? WorkspaceImageDiskCache.FetchError, .serverError(status: 500))
         }
     }
@@ -103,8 +103,8 @@ final class WorkspaceImageDiskCacheTests: XCTestCase {
             (HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "image/png"])!, self.realPNGBytes)
         }
 
-        _ = try await cache.fetchResult("/api/v2/attachments/by-key/user/abc.png")
-        _ = try await cache.fetchResult("/api/v2/attachments/by-key/user/abc.png")
+        _ = try await cache.fetchResult("/api/attachments/by-key/user/abc.png")
+        _ = try await cache.fetchResult("/api/attachments/by-key/user/abc.png")
 
         XCTAssertEqual(recorder.requests.count, 1)
     }
@@ -121,7 +121,7 @@ final class WorkspaceImageDiskCacheTests: XCTestCase {
             )
         }
 
-        let result = try await cache.fetchResult("/api/v2/attachments/by-key/user/abc.png")
+        let result = try await cache.fetchResult("/api/attachments/by-key/user/abc.png")
 
         XCTAssertEqual(result, .real(WorkspaceImageDiskCache.bundledPlaceholderReferenceData))
     }
@@ -131,7 +131,7 @@ final class WorkspaceImageDiskCacheTests: XCTestCase {
             (HTTPURLResponse(url: request.url!, statusCode: 404, httpVersion: nil, headerFields: nil)!, Data())
         }
 
-        let result = try await cache.fetchResult("/api/v2/attachments/by-key/user/missing.png")
+        let result = try await cache.fetchResult("/api/attachments/by-key/user/missing.png")
 
         XCTAssertEqual(result, .notFound)
     }
@@ -141,7 +141,7 @@ final class WorkspaceImageDiskCacheTests: XCTestCase {
             (HTTPURLResponse(url: request.url!, statusCode: 500, httpVersion: nil, headerFields: nil)!, Data())
         }
 
-        await XCTAssertThrowsErrorAsync(try await cache.fetchResult("/api/v2/attachments/by-key/user/broken.png")) { error in
+        await XCTAssertThrowsErrorAsync(try await cache.fetchResult("/api/attachments/by-key/user/broken.png")) { error in
             XCTAssertEqual(error as? WorkspaceImageDiskCache.FetchError, .serverError(status: 500))
         }
     }
@@ -155,7 +155,7 @@ final class WorkspaceImageDiskCacheTests: XCTestCase {
             return (HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "image/png"])!, self.realPNGBytes)
         }
 
-        _ = try await cache.fetchResult("/api/v2/attachments/abc")
+        _ = try await cache.fetchResult("/api/attachments/abc")
 
         XCTAssertEqual(capturedAuthorization, "Bearer the-token")
     }
@@ -192,7 +192,7 @@ final class WorkspaceImageDiskCacheTests: XCTestCase {
             return (HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "image/png"])!, self.realPNGBytes)
         }
 
-        let result = try await cache.fetchResult("/api/v2/attachments/abc")
+        let result = try await cache.fetchResult("/api/attachments/abc")
 
         XCTAssertEqual(result, .real(realPNGBytes))
         let imageRequests = recorder.requests.filter { !$0.url!.absoluteString.contains("oauth/token") }
@@ -209,7 +209,7 @@ final class WorkspaceImageDiskCacheTests: XCTestCase {
         }
 
         let fetching: any WorkspaceImageFetching = cache
-        await XCTAssertThrowsErrorAsync(try await fetching.fetch("/api/v2/attachments/by-key/user/x.png")) { error in
+        await XCTAssertThrowsErrorAsync(try await fetching.fetch("/api/attachments/by-key/user/x.png")) { error in
             XCTAssertTrue(error is WorkspaceImageDiskCache.NotFoundError)
         }
     }

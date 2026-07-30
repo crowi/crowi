@@ -97,13 +97,13 @@ final class PageLenientTests: XCTestCase {
 
     func testChildSegmentsDecodeLastUpdatedAtAndUpdater() throws {
         let json = """
-        { "children": [ { "segment": "eng", "path": "/team/eng/", "isPage": false, "hasPortal": true, "count": 3, "lastUpdatedAt": "2026-07-20T10:00:00.000Z", "updater": { "_id": "u1", "username": "sotarok", "name": "Sotaro", "email": "s@example.com", "image": "/api/v2/attachments/by-key/user/sotarok.png", "createdAt": "2026-01-01" } } ] }
+        { "children": [ { "segment": "eng", "path": "/team/eng/", "isPage": false, "hasPortal": true, "count": 3, "lastUpdatedAt": "2026-07-20T10:00:00.000Z", "updater": { "_id": "u1", "username": "sotarok", "name": "Sotaro", "email": "s@example.com", "image": "/api/attachments/by-key/user/sotarok.png", "createdAt": "2026-01-01" } } ] }
         """
         let child = try XCTUnwrap(ListPageChildrenResponseLenient.decode(Data(json.utf8)).children.first)
 
         XCTAssertEqual(child.lastUpdatedAt, "2026-07-20T10:00:00.000Z")
         XCTAssertEqual(child.updaterName, "Sotaro")
-        XCTAssertEqual(child.updaterImage, "/api/v2/attachments/by-key/user/sotarok.png")
+        XCTAssertEqual(child.updaterImage, "/api/attachments/by-key/user/sotarok.png")
     }
 
     /// A pre-extension server (no `lastUpdatedAt`/`updater` at all) — the
@@ -167,12 +167,12 @@ final class PageLenientTests: XCTestCase {
 
     func testListRowDecodesLastUpdateUserNameAndImage() throws {
         let json = """
-        { "pages": [ { "_id": "p1", "path": "/team/eng", "revision": "r1", "updatedAt": "2026-07-20T10:00:00.000Z", "lastUpdateUser": { "_id": "u1", "username": "sotarok", "name": "Sotaro", "email": "s@example.com", "image": "/api/v2/attachments/by-key/user/sotarok.png", "createdAt": "2026-01-01" } } ], "pager": { "prev": null, "next": null, "offset": 0 } }
+        { "pages": [ { "_id": "p1", "path": "/team/eng", "revision": "r1", "updatedAt": "2026-07-20T10:00:00.000Z", "lastUpdateUser": { "_id": "u1", "username": "sotarok", "name": "Sotaro", "email": "s@example.com", "image": "/api/attachments/by-key/user/sotarok.png", "createdAt": "2026-01-01" } } ], "pager": { "prev": null, "next": null, "offset": 0 } }
         """
         let page = try XCTUnwrap(ListPagesResponseLenient.decode(Data(json.utf8)).pages.first)
 
         XCTAssertEqual(page.lastUpdateUserName, "Sotaro")
-        XCTAssertEqual(page.lastUpdateUserImage, "/api/v2/attachments/by-key/user/sotarok.png")
+        XCTAssertEqual(page.lastUpdateUserImage, "/api/attachments/by-key/user/sotarok.png")
     }
 
     /// `lastUpdateUser` is a `string | PageUser` union (like `revision`) — a
@@ -234,7 +234,7 @@ final class PageLenientTests: XCTestCase {
             "workspace-a": StoredTokenPair(accessToken: "the-token", refreshToken: "rt-1", expiresAt: Date().addingTimeInterval(3600))
         ])
         let coordinator = RefreshCoordinator(workspaceId: "workspace-a", tokenStore: tokenStore, urlSession: .shared) {
-            URL(string: "https://wiki.example.com/api/v2/oauth/token")!
+            URL(string: "https://wiki.example.com/api/oauth/token")!
         }
         return AuthenticatedAPIClient(
             apiBaseURL: APIBaseURL(workspaceOrigin: WorkspaceOrigin(URL(string: "https://wiki.example.com")!)),

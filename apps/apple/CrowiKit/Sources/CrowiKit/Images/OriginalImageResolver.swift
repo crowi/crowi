@@ -16,7 +16,7 @@ public protocol ViewerImageURLResolving: Sendable {
 /// derivative / viewer = original" decision in one place.
 ///
 /// `feature-image-derivative-optimization` made the canonical attachment URL
-/// (`/api/v2/attachments/<id>`) serve a display derivative, with the
+/// (`/api/attachments/<id>`) serve a display derivative, with the
 /// original bytes behind an explicit `${url}/original` path
 /// (`AttachmentMetaSchema.originalUrl`). The page body deliberately keeps
 /// embedding the canonical URL (bandwidth — this resolver never rewrites
@@ -71,7 +71,7 @@ public struct OriginalImageResolver: ViewerImageURLResolving {
     }
 
     /// Extracts the attachment id ONLY from the exact canonical embedded
-    /// shape: `<workspace origin>/api/v2/attachments/<24-hex ObjectId>` —
+    /// shape: `<workspace origin>/api/attachments/<24-hex ObjectId>` —
     /// nothing else. Not `by-key/<key>` (one extra path segment), not an
     /// already-suffixed `/meta`/`/original` (ditto), not legacy
     /// `/files/<id>`, never a cross-origin URL. The 24-hex-character check
@@ -84,10 +84,10 @@ public struct OriginalImageResolver: ViewerImageURLResolving {
         guard let resolved = URL(string: url.absoluteString, relativeTo: workspaceOrigin.baseURL) else { return nil }
         guard WorkspaceOrigin(resolved) == workspaceOrigin else { return nil }
         let components = resolved.absoluteURL.pathComponents
-        guard components.count == 5, components[1] == "api", components[2] == "v2", components[3] == "attachments" else {
+        guard components.count == 4, components[1] == "api", components[2] == "attachments" else {
             return nil
         }
-        let id = components[4]
+        let id = components[3]
         guard id.count == 24, id.allSatisfy(\.isHexDigit) else { return nil }
         return id
     }

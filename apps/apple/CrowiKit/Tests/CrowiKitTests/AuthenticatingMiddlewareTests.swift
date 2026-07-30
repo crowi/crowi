@@ -18,7 +18,7 @@ final class AuthenticatingMiddlewareTests: XCTestCase {
     }
 
     private func makeRequest() -> HTTPRequest {
-        HTTPRequest(method: .get, scheme: "https", authority: "wiki.example.com", path: "/api/v2/pages")
+        HTTPRequest(method: .get, scheme: "https", authority: "wiki.example.com", path: "/api/pages")
     }
 
     func testAttachesBearerTokenToTheRequest() async throws {
@@ -27,12 +27,12 @@ final class AuthenticatingMiddlewareTests: XCTestCase {
         ])
         let (urlSession, requestRecorder) = MockURLProtocol.makeRefreshingSession()
         let coordinator = RefreshCoordinator(workspaceId: "workspace-a", tokenStore: tokenStore, urlSession: urlSession) {
-            URL(string: "https://wiki.example.com/api/v2/oauth/token")!
+            URL(string: "https://wiki.example.com/api/oauth/token")!
         }
         let middleware = AuthenticatingMiddleware(coordinator: coordinator)
         let recorder = Recorder()
 
-        let (response, _) = try await middleware.intercept(makeRequest(), body: nil, baseURL: URL(string: "https://wiki.example.com/api/v2")!, operationID: "listPages") { request, body, baseURL in
+        let (response, _) = try await middleware.intercept(makeRequest(), body: nil, baseURL: URL(string: "https://wiki.example.com/api")!, operationID: "listPages") { request, body, baseURL in
             recorder.authorizationHeaders.append(request.headerFields[.authorization])
             return (HTTPResponse(status: .ok), nil)
         }
@@ -50,12 +50,12 @@ final class AuthenticatingMiddlewareTests: XCTestCase {
         ])
         let (urlSession, requestRecorder) = MockURLProtocol.makeRefreshingSession()
         let coordinator = RefreshCoordinator(workspaceId: "workspace-a", tokenStore: tokenStore, urlSession: urlSession) {
-            URL(string: "https://wiki.example.com/api/v2/oauth/token")!
+            URL(string: "https://wiki.example.com/api/oauth/token")!
         }
         let middleware = AuthenticatingMiddleware(coordinator: coordinator)
         let recorder = Recorder()
 
-        let (response, _) = try await middleware.intercept(makeRequest(), body: nil, baseURL: URL(string: "https://wiki.example.com/api/v2")!, operationID: "listPages") { request, body, baseURL in
+        let (response, _) = try await middleware.intercept(makeRequest(), body: nil, baseURL: URL(string: "https://wiki.example.com/api")!, operationID: "listPages") { request, body, baseURL in
             let header = request.headerFields[.authorization]
             recorder.authorizationHeaders.append(header)
             if header == "Bearer original-token" {
@@ -88,13 +88,13 @@ final class AuthenticatingMiddlewareTests: XCTestCase {
         ])
         let (urlSession, requestRecorder) = MockURLProtocol.makeRefreshingSession()
         let coordinator = RefreshCoordinator(workspaceId: "workspace-a", tokenStore: tokenStore, urlSession: urlSession) {
-            URL(string: "https://wiki.example.com/api/v2/oauth/token")!
+            URL(string: "https://wiki.example.com/api/oauth/token")!
         }
         let middleware = AuthenticatingMiddleware(coordinator: coordinator)
         let secondCallerGate = Gate()
 
         async let first: (HTTPResponse, HTTPBody?) = middleware.intercept(
-            makeRequest(), body: nil, baseURL: URL(string: "https://wiki.example.com/api/v2")!, operationID: "listPages"
+            makeRequest(), body: nil, baseURL: URL(string: "https://wiki.example.com/api")!, operationID: "listPages"
         ) { request, _, _ in
             let header = request.headerFields[.authorization]
             if header == "Bearer original-token" {
@@ -108,7 +108,7 @@ final class AuthenticatingMiddlewareTests: XCTestCase {
         }
 
         async let second: (HTTPResponse, HTTPBody?) = middleware.intercept(
-            makeRequest(), body: nil, baseURL: URL(string: "https://wiki.example.com/api/v2")!, operationID: "listPages"
+            makeRequest(), body: nil, baseURL: URL(string: "https://wiki.example.com/api")!, operationID: "listPages"
         ) { request, _, _ in
             let header = request.headerFields[.authorization]
             if header == "Bearer original-token" {

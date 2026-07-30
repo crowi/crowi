@@ -34,11 +34,11 @@ final class RemainingLenientDecodersTests: XCTestCase {
     /// `WorkspaceAvatarView` renders in the reader's comments section.
     func testListCommentsDecodesCreatorImage() throws {
         let json = """
-        { "comments": [ { "_id": "c1", "creator": { "username": "sotarok", "name": "Sotaro", "image": "/api/v2/attachments/by-key/user/sotarok.png" }, "comment": "nice page" } ] }
+        { "comments": [ { "_id": "c1", "creator": { "username": "sotarok", "name": "Sotaro", "image": "/api/attachments/by-key/user/sotarok.png" }, "comment": "nice page" } ] }
         """
         let response = try ListCommentsResponseLenient.decode(Data(json.utf8))
 
-        XCTAssertEqual(response.comments.first?.creatorImage, "/api/v2/attachments/by-key/user/sotarok.png")
+        XCTAssertEqual(response.comments.first?.creatorImage, "/api/attachments/by-key/user/sotarok.png")
     }
 
     // MARK: - Bookmark
@@ -108,22 +108,22 @@ final class RemainingLenientDecodersTests: XCTestCase {
     /// `image` — the avatar URL `ProfileView` renders via `WorkspaceAvatarView`.
     func testProfileDecodesImageWhenPresent() throws {
         let json = """
-        { "id": "u1", "username": "sotarok", "name": "Sotaro", "email": "s@example.com", "image": "/api/v2/attachments/by-key/user/sotarok.png", "createdAt": "2026-01-01" }
+        { "id": "u1", "username": "sotarok", "name": "Sotaro", "email": "s@example.com", "image": "/api/attachments/by-key/user/sotarok.png", "createdAt": "2026-01-01" }
         """
         let profile = try ProfileLenient.decode(Data(json.utf8))
 
-        XCTAssertEqual(profile.image, "/api/v2/attachments/by-key/user/sotarok.png")
+        XCTAssertEqual(profile.image, "/api/attachments/by-key/user/sotarok.png")
     }
 
     func testUserPageResponseDecodesNestedUserAndCounts() throws {
         let json = """
-        { "user": { "_id": "u1", "username": "sotarok", "name": "Sotaro", "email": "s@example.com", "image": "/api/v2/attachments/by-key/user/sotarok.png", "createdAt": "2026-01-01" }, "createdPagesCount": 5, "bookmarksCount": 2 }
+        { "user": { "_id": "u1", "username": "sotarok", "name": "Sotaro", "email": "s@example.com", "image": "/api/attachments/by-key/user/sotarok.png", "createdAt": "2026-01-01" }, "createdPagesCount": 5, "bookmarksCount": 2 }
         """
         let response = try UserPageResponseLenient.decode(Data(json.utf8))
 
         XCTAssertEqual(response.username, "sotarok")
         XCTAssertEqual(response.createdPagesCount, 5)
-        XCTAssertEqual(response.image, "/api/v2/attachments/by-key/user/sotarok.png")
+        XCTAssertEqual(response.image, "/api/attachments/by-key/user/sotarok.png")
     }
 
     func testRecentlyViewedPagesDecodesPageArray() throws {

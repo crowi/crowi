@@ -29,7 +29,7 @@ final class OriginalImageResolverTests: XCTestCase {
             "workspace-a": StoredTokenPair(accessToken: "the-token", refreshToken: "rt-1", expiresAt: Date().addingTimeInterval(3600))
         ])
         let coordinator = RefreshCoordinator(workspaceId: "workspace-a", tokenStore: tokenStore, urlSession: .shared) {
-            URL(string: "https://wiki.example.com/api/v2/oauth/token")!
+            URL(string: "https://wiki.example.com/api/oauth/token")!
         }
         let client = AuthenticatedAPIClient(
             apiBaseURL: APIBaseURL(workspaceOrigin: workspaceOrigin),
@@ -42,7 +42,7 @@ final class OriginalImageResolverTests: XCTestCase {
     // MARK: - embeddedAttachmentID (the shape gate)
 
     func testExtractsTheIdFromTheExactCanonicalEmbeddedShape() {
-        let url = URL(string: "https://wiki.example.com/api/v2/attachments/\(attachmentId)")!
+        let url = URL(string: "https://wiki.example.com/api/attachments/\(attachmentId)")!
         XCTAssertEqual(OriginalImageResolver.embeddedAttachmentID(of: url, workspaceOrigin: workspaceOrigin), attachmentId)
     }
 
@@ -50,18 +50,18 @@ final class OriginalImageResolverTests: XCTestCase {
     /// URL, but a workspace-relative one must judge identically (the same
     /// rebase rule `WorkspaceImageLoader.fetch` applies).
     func testExtractsTheIdFromAWorkspaceRelativeURL() {
-        let url = URL(string: "/api/v2/attachments/\(attachmentId)")!
+        let url = URL(string: "/api/attachments/\(attachmentId)")!
         XCTAssertEqual(OriginalImageResolver.embeddedAttachmentID(of: url, workspaceOrigin: workspaceOrigin), attachmentId)
     }
 
     func testRejectsAByKeyAvatarURL() {
-        let url = URL(string: "https://wiki.example.com/api/v2/attachments/by-key/user/bob")!
+        let url = URL(string: "https://wiki.example.com/api/attachments/by-key/user/bob")!
         XCTAssertNil(OriginalImageResolver.embeddedAttachmentID(of: url, workspaceOrigin: workspaceOrigin))
     }
 
     func testRejectsAnAlreadySuffixedOriginalOrMetaURL() {
         for suffix in ["original", "meta"] {
-            let url = URL(string: "https://wiki.example.com/api/v2/attachments/\(attachmentId)/\(suffix)")!
+            let url = URL(string: "https://wiki.example.com/api/attachments/\(attachmentId)/\(suffix)")!
             XCTAssertNil(OriginalImageResolver.embeddedAttachmentID(of: url, workspaceOrigin: workspaceOrigin), "\(suffix) must not re-resolve")
         }
     }
@@ -75,7 +75,7 @@ final class OriginalImageResolverTests: XCTestCase {
     }
 
     func testRejectsACrossOriginAttachmentShapedURL() {
-        let url = URL(string: "https://evil.example.net/api/v2/attachments/\(attachmentId)")!
+        let url = URL(string: "https://evil.example.net/api/attachments/\(attachmentId)")!
         XCTAssertNil(OriginalImageResolver.embeddedAttachmentID(of: url, workspaceOrigin: workspaceOrigin))
     }
 
@@ -84,7 +84,7 @@ final class OriginalImageResolverTests: XCTestCase {
     /// `/meta` request path.
     func testRejectsANonObjectIdSegment() {
         for bad in ["not-an-object-id", "665f1c2b8a9d3e4f5a6b7c", "665f1c2b8a9d3e4f5a6b7c8dZZ"] {
-            let url = URL(string: "https://wiki.example.com/api/v2/attachments/\(bad)")!
+            let url = URL(string: "https://wiki.example.com/api/attachments/\(bad)")!
             XCTAssertNil(OriginalImageResolver.embeddedAttachmentID(of: url, workspaceOrigin: workspaceOrigin), "\(bad) must be rejected")
         }
     }
@@ -94,19 +94,19 @@ final class OriginalImageResolverTests: XCTestCase {
     func testResolvesTheOriginalURLRebasedAgainstTheWorkspaceOrigin() async {
         let resolver = makeResolver { _ in
             (200, Data("""
-                { "_id": "665f1c2b8a9d3e4f5a6b7c8d", "originalUrl": "/api/v2/attachments/665f1c2b8a9d3e4f5a6b7c8d/original" }
+                { "_id": "665f1c2b8a9d3e4f5a6b7c8d", "originalUrl": "/api/attachments/665f1c2b8a9d3e4f5a6b7c8d/original" }
                 """.utf8))
         }
-        let canonical = URL(string: "https://wiki.example.com/api/v2/attachments/\(attachmentId)")!
+        let canonical = URL(string: "https://wiki.example.com/api/attachments/\(attachmentId)")!
 
         let resolved = await resolver.viewerImageURLString(for: canonical)
 
-        XCTAssertEqual(resolved, "https://wiki.example.com/api/v2/attachments/\(attachmentId)/original")
+        XCTAssertEqual(resolved, "https://wiki.example.com/api/attachments/\(attachmentId)/original")
     }
 
     func testFallsBackToCanonicalWhenMetaAnswers404() async {
         let resolver = makeResolver { _ in (404, Data("{}".utf8)) }
-        let canonical = URL(string: "https://wiki.example.com/api/v2/attachments/\(attachmentId)")!
+        let canonical = URL(string: "https://wiki.example.com/api/attachments/\(attachmentId)")!
 
         let resolved = await resolver.viewerImageURLString(for: canonical)
 
@@ -118,7 +118,7 @@ final class OriginalImageResolverTests: XCTestCase {
     /// the canonical fallback, never break the viewer.
     func testFallsBackToCanonicalWhenMetaBodyIsMalformedJSON() async {
         let resolver = makeResolver { _ in (200, Data("<html><body>502 Bad Gateway</body></html>".utf8)) }
-        let canonical = URL(string: "https://wiki.example.com/api/v2/attachments/\(attachmentId)")!
+        let canonical = URL(string: "https://wiki.example.com/api/attachments/\(attachmentId)")!
 
         let resolved = await resolver.viewerImageURLString(for: canonical)
 
@@ -131,7 +131,7 @@ final class OriginalImageResolverTests: XCTestCase {
     /// so offline viewing keeps working.)
     func testFallsBackToCanonicalWhenTheTransportFails() async {
         let resolver = makeResolver { _ in throw URLError(.notConnectedToInternet) }
-        let canonical = URL(string: "https://wiki.example.com/api/v2/attachments/\(attachmentId)")!
+        let canonical = URL(string: "https://wiki.example.com/api/attachments/\(attachmentId)")!
 
         let resolved = await resolver.viewerImageURLString(for: canonical)
 
@@ -143,10 +143,10 @@ final class OriginalImageResolverTests: XCTestCase {
     func testFallsBackToCanonicalWhenMetaOmitsOriginalUrl() async {
         let resolver = makeResolver { _ in
             (200, Data("""
-                { "_id": "665f1c2b8a9d3e4f5a6b7c8d", "url": "/api/v2/attachments/665f1c2b8a9d3e4f5a6b7c8d" }
+                { "_id": "665f1c2b8a9d3e4f5a6b7c8d", "url": "/api/attachments/665f1c2b8a9d3e4f5a6b7c8d" }
                 """.utf8))
         }
-        let canonical = URL(string: "https://wiki.example.com/api/v2/attachments/\(attachmentId)")!
+        let canonical = URL(string: "https://wiki.example.com/api/attachments/\(attachmentId)")!
 
         let resolved = await resolver.viewerImageURLString(for: canonical)
 
@@ -158,10 +158,10 @@ final class OriginalImageResolverTests: XCTestCase {
     func testFallsBackToCanonicalWhenOriginalUrlRebasesOffOrigin() async {
         let resolver = makeResolver { _ in
             (200, Data("""
-                { "originalUrl": "https://evil.example.net/api/v2/attachments/665f1c2b8a9d3e4f5a6b7c8d/original" }
+                { "originalUrl": "https://evil.example.net/api/attachments/665f1c2b8a9d3e4f5a6b7c8d/original" }
                 """.utf8))
         }
-        let canonical = URL(string: "https://wiki.example.com/api/v2/attachments/\(attachmentId)")!
+        let canonical = URL(string: "https://wiki.example.com/api/attachments/\(attachmentId)")!
 
         let resolved = await resolver.viewerImageURLString(for: canonical)
 

@@ -134,8 +134,8 @@ final class AddWorkspaceFlowTests: XCTestCase {
                 {
                   "issuer": "https://wiki.example.com",
                   "authorization_endpoint": "https://wiki.example.com/oauth/authorize",
-                  "token_endpoint": "https://wiki.example.com/api/v2/oauth/token",
-                  "revocation_endpoint": "https://wiki.example.com/api/v2/oauth/revoke"
+                  "token_endpoint": "https://wiki.example.com/api/oauth/token",
+                  "revocation_endpoint": "https://wiki.example.com/api/oauth/revoke"
                 }
                 """.data(using: .utf8)!
             } else {

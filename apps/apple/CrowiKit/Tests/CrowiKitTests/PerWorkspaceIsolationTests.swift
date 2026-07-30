@@ -110,8 +110,8 @@ final class PerWorkspaceIsolationTests: XCTestCase {
                 {
                   "issuer": "https://a.example.com",
                   "authorization_endpoint": "https://a.example.com/oauth/authorize",
-                  "token_endpoint": "https://a.example.com/api/v2/oauth/token",
-                  "revocation_endpoint": "https://a.example.com/api/v2/oauth/revoke"
+                  "token_endpoint": "https://a.example.com/api/oauth/token",
+                  "revocation_endpoint": "https://a.example.com/api/oauth/revoke"
                 }
                 """.data(using: .utf8)!
             } else {

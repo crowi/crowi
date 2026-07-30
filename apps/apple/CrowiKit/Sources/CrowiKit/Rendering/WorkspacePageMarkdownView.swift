@@ -18,7 +18,7 @@ import SwiftUI
 ///     any other image not alone on its line, falling through to
 ///     swift-markdown-ui's unauthenticated `DefaultInlineImageProvider`;
 ///   - `imageBaseURL:` on `Markdown(...)` — resolves crowi's relative
-///     attachment URLs (`/api/v2/attachments/<id>`) against the workspace
+///     attachment URLs (`/api/attachments/<id>`) against the workspace
 ///     origin at the point swift-markdown-ui builds each image node's `URL`,
 ///     which `InlineText` needs (it has no other rebasing step). The block
 ///     path already rebases independently inside `WorkspaceImageLoader.fetch`,

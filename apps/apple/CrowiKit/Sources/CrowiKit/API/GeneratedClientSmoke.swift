@@ -14,8 +14,8 @@ import OpenAPIURLSession
 /// `Input` / resolve the path — it never decodes a response through the
 /// generated `Output` (see `AppInfoLenient` for why: the lenient-decode seam
 /// is pinned at hand-written response models, not the generated strict
-/// types). `workspaceOrigin + "/api/v2"` is `apiBaseURL` (RFC-0016 §3): the
-/// committed spec's `servers` entry already carries `/api/v2`, so passing
+/// types). `workspaceOrigin + "/api"` is `apiBaseURL` (RFC-0016 §3): the
+/// committed spec's `servers` entry already carries `/api`, so passing
 /// `workspaceOrigin` alone here would send every call to the wrong path.
 public enum GeneratedClientSmoke {
     /// Build a generated `Client` pinned to one workspace's `apiBaseURL`.

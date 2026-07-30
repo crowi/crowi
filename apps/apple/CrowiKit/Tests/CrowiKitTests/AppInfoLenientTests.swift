@@ -102,7 +102,7 @@ final class AppInfoLenientTests: XCTestCase {
     func testFetchDecodesA200Response() async throws {
         let apiBaseURL = APIBaseURL(workspaceOrigin: WorkspaceOrigin(URL(string: "https://wiki.example.com")!))
         MockURLProtocol.requestHandler = { request in
-            XCTAssertEqual(request.url?.absoluteString, "https://wiki.example.com/api/v2/app/info")
+            XCTAssertEqual(request.url?.absoluteString, "https://wiki.example.com/api/app/info")
             let body = """
             { "version": "2.0.0", "apiVersion": "v2", "capabilities": ["oauth"] }
             """.data(using: .utf8)!
@@ -129,7 +129,7 @@ final class AppInfoLenientTests: XCTestCase {
     /// dev Crowi. Skips (never fails) when unreachable — see
     /// `OAuthDiscoveryDocumentTests`'s twin for the same rationale.
     func testLiveAppInfoAgainstLocalDevIfAvailable() async throws {
-        let url = URL(string: "http://localhost:4301/api/v2/app/info")!
+        let url = URL(string: "http://localhost:4301/api/app/info")!
         let (data, response): (Data, URLResponse)
         do {
             (data, response) = try await URLSession.shared.data(from: url)

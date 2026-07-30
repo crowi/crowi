@@ -8,7 +8,7 @@ import XCTest
 /// network) and the initial-request decision (`fetch(_:)`'s same-origin
 /// gate, tested via a `URLProtocol` stub). Both run unconditionally in
 /// `swift test` / CI. AC-4 itself (a real authenticated attachment from
-/// local dev, through the real `/files/<id>` → `/api/v2/attachments/<id>`
+/// local dev, through the real `/files/<id>` → `/api/attachments/<id>`
 /// compat redirect) was proven live once against this loader during Phase 0
 /// — see `feature-ios-phase0-gates.md`'s "Gate 判定" section for that
 /// evidence; it is not re-run as a permanently environment-gated test here
@@ -43,9 +43,9 @@ final class WorkspaceImageLoaderTests: XCTestCase {
     func testPreservesAuthorizationOnSameOriginRedirect() {
         let delegate = RedirectStripDelegate(workspaceOrigin: WorkspaceOrigin(workspaceOrigin), accessTokenProvider: { "the-token" })
         // The exact real-world case: legacy `/files/<id>` (server root) →
-        // `/api/v2/attachments/<id>`, both under wiki.example.com.
+        // `/api/attachments/<id>`, both under wiki.example.com.
         let response = HTTPURLResponse(url: workspaceOrigin.appendingPathComponent("files/abc"), statusCode: 302, httpVersion: nil, headerFields: nil)!
-        let newRequest = URLRequest(url: workspaceOrigin.appendingPathComponent("api/v2/attachments/abc"))
+        let newRequest = URLRequest(url: workspaceOrigin.appendingPathComponent("api/attachments/abc"))
 
         let redirected = redirectDecision(delegate, response: response, newRequest: newRequest)
 
@@ -82,7 +82,7 @@ final class WorkspaceImageLoaderTests: XCTestCase {
             return (HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "image/png"])!, Data([0x89, 0x50, 0x4E, 0x47]))
         }
         let loader = makeLoaderWithMockTransport()
-        _ = try await loader.fetch("/api/v2/attachments/abc")
+        _ = try await loader.fetch("/api/attachments/abc")
     }
 
     func testDoesNotAttachAuthorizationForCrossOriginAbsoluteURL() async throws {

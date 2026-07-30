@@ -23,8 +23,8 @@ final class OAuthSignInFlowTests: XCTestCase {
     private let discovery = OAuthDiscoveryDocument(
         issuer: URL(string: "https://wiki.example.com")!,
         authorizationEndpoint: URL(string: "https://wiki.example.com/oauth/authorize")!,
-        tokenEndpoint: URL(string: "https://wiki.example.com/api/v2/oauth/token")!,
-        revocationEndpoint: URL(string: "https://wiki.example.com/api/v2/oauth/revoke")!,
+        tokenEndpoint: URL(string: "https://wiki.example.com/api/oauth/token")!,
+        revocationEndpoint: URL(string: "https://wiki.example.com/api/oauth/revoke")!,
         deviceAuthorizationEndpoint: nil
     )
 

@@ -25,7 +25,7 @@ final class AttachmentMetaLenientTests: XCTestCase {
             "workspace-a": StoredTokenPair(accessToken: "the-token", refreshToken: "rt-1", expiresAt: Date().addingTimeInterval(3600))
         ])
         let coordinator = RefreshCoordinator(workspaceId: "workspace-a", tokenStore: tokenStore, urlSession: .shared) {
-            URL(string: "https://wiki.example.com/api/v2/oauth/token")!
+            URL(string: "https://wiki.example.com/api/oauth/token")!
         }
         return AuthenticatedAPIClient(
             apiBaseURL: APIBaseURL(workspaceOrigin: WorkspaceOrigin(URL(string: "https://wiki.example.com")!)),
@@ -42,16 +42,16 @@ final class AttachmentMetaLenientTests: XCTestCase {
               "_id": "665f1c2b8a9d3e4f5a6b7c8d",
               "page": "abc",
               "fileName": "x.png",
-              "url": "/api/v2/attachments/665f1c2b8a9d3e4f5a6b7c8d",
-              "originalUrl": "/api/v2/attachments/665f1c2b8a9d3e4f5a6b7c8d/original"
+              "url": "/api/attachments/665f1c2b8a9d3e4f5a6b7c8d",
+              "originalUrl": "/api/attachments/665f1c2b8a9d3e4f5a6b7c8d/original"
             }
             """.utf8)
 
         let meta = try AttachmentMetaLenient.decode(data)
 
         XCTAssertEqual(meta.id, "665f1c2b8a9d3e4f5a6b7c8d")
-        XCTAssertEqual(meta.url, "/api/v2/attachments/665f1c2b8a9d3e4f5a6b7c8d")
-        XCTAssertEqual(meta.originalUrl, "/api/v2/attachments/665f1c2b8a9d3e4f5a6b7c8d/original")
+        XCTAssertEqual(meta.url, "/api/attachments/665f1c2b8a9d3e4f5a6b7c8d")
+        XCTAssertEqual(meta.originalUrl, "/api/attachments/665f1c2b8a9d3e4f5a6b7c8d/original")
     }
 
     /// A host predating the display-derivative contract (or any host that
@@ -60,13 +60,13 @@ final class AttachmentMetaLenientTests: XCTestCase {
     /// fallback.
     func testDecodeDegradesAMissingOriginalUrlToNil() throws {
         let data = Data("""
-            { "_id": "665f1c2b8a9d3e4f5a6b7c8d", "url": "/api/v2/attachments/665f1c2b8a9d3e4f5a6b7c8d" }
+            { "_id": "665f1c2b8a9d3e4f5a6b7c8d", "url": "/api/attachments/665f1c2b8a9d3e4f5a6b7c8d" }
             """.utf8)
 
         let meta = try AttachmentMetaLenient.decode(data)
 
         XCTAssertNil(meta.originalUrl)
-        XCTAssertEqual(meta.url, "/api/v2/attachments/665f1c2b8a9d3e4f5a6b7c8d")
+        XCTAssertEqual(meta.url, "/api/attachments/665f1c2b8a9d3e4f5a6b7c8d")
     }
 
     func testDecodeThrowsForANonObjectBody() {
@@ -91,7 +91,7 @@ final class AttachmentMetaLenientTests: XCTestCase {
         let client = makeClient { request in
             recorder.capture(request)
             return (200, Data("""
-                { "_id": "665f1c2b8a9d3e4f5a6b7c8d", "originalUrl": "/api/v2/attachments/665f1c2b8a9d3e4f5a6b7c8d/original" }
+                { "_id": "665f1c2b8a9d3e4f5a6b7c8d", "originalUrl": "/api/attachments/665f1c2b8a9d3e4f5a6b7c8d/original" }
                 """.utf8))
         }
 
@@ -99,7 +99,7 @@ final class AttachmentMetaLenientTests: XCTestCase {
 
         XCTAssertEqual(recorder.path, "/attachments/665f1c2b8a9d3e4f5a6b7c8d/meta")
         XCTAssertEqual(recorder.authorization, "Bearer the-token", "the meta endpoint is grant-checked — the fetch must ride the authenticated primitive")
-        XCTAssertEqual(meta.originalUrl, "/api/v2/attachments/665f1c2b8a9d3e4f5a6b7c8d/original")
+        XCTAssertEqual(meta.originalUrl, "/api/attachments/665f1c2b8a9d3e4f5a6b7c8d/original")
     }
 
     /// A pre-display-contract Crowi has no `/meta` route at all — its `404`

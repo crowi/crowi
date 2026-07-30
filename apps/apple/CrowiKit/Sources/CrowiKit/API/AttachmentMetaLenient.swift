@@ -1,7 +1,7 @@
 import Foundation
 
 /// `feature-ios-image-viewer` — the tolerant decode of
-/// `GET /api/v2/attachments/{id}/meta` (`AttachmentMetaSchema`,
+/// `GET /api/attachments/{id}/meta` (`AttachmentMetaSchema`,
 /// `packages/api-contract/src/schemas/attachment.ts`), following the Phase
 /// 0-pinned lenient pattern (`AppInfoLenient`/`PageLenient`) exactly:
 /// hand-written, `JSONSerialization`-based, optionals-first, degrade rather
@@ -18,7 +18,7 @@ import Foundation
 public struct AttachmentMetaLenient: Sendable, Equatable {
     public let id: String?
     /// The canonical (display-derivative-serving) relative URL —
-    /// `/api/v2/attachments/<id>`, the same URL the page body embeds.
+    /// `/api/attachments/<id>`, the same URL the page body embeds.
     public let url: String?
     /// The explicit original-bytes relative URL — `${url}/original`. `nil`
     /// when the host predates the display-derivative contract.

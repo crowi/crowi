@@ -33,7 +33,7 @@ final class WorkspaceMarkdownImageProviderTests: XCTestCase {
         }
 
         let image = await WorkspaceMarkdownImageLoading.loadImage(
-            url: workspaceOrigin.appendingPathComponent("api/v2/attachments/abc"),
+            url: workspaceOrigin.appendingPathComponent("api/attachments/abc"),
             using: loader
         )
 
@@ -55,7 +55,7 @@ final class WorkspaceMarkdownImageProviderTests: XCTestCase {
         }
 
         _ = await WorkspaceMarkdownImageLoading.loadImage(
-            url: workspaceOrigin.appendingPathComponent("api/v2/attachments/abc"),
+            url: workspaceOrigin.appendingPathComponent("api/attachments/abc"),
             using: loader
         )
 
@@ -70,7 +70,7 @@ final class WorkspaceMarkdownImageProviderTests: XCTestCase {
         }
 
         let image = await WorkspaceMarkdownImageLoading.loadImage(
-            url: workspaceOrigin.appendingPathComponent("api/v2/attachments/broken"),
+            url: workspaceOrigin.appendingPathComponent("api/attachments/broken"),
             using: loader
         )
 
@@ -103,18 +103,18 @@ final class WorkspaceMarkdownImageProviderTests: XCTestCase {
     /// attributes travel separately to the render layer.
     func testMakeImageViewDetachesTheAttributeFragmentFromTheFetchURL() throws {
         let loader = WorkspaceImageLoader(workspaceOrigin: workspaceOrigin, accessTokenProvider: { "t" })
-        let carried = try XCTUnwrap(URL(string: "https://wiki.example.com/api/v2/attachments/abc#crowi-image-attrs:width=60pct;align=right"))
+        let carried = try XCTUnwrap(URL(string: "https://wiki.example.com/api/attachments/abc#crowi-image-attrs:width=60pct;align=right"))
 
         let view = WorkspaceMarkdownImageProvider.makeImageView(url: carried, loader: loader, onImageTap: nil)
 
-        XCTAssertEqual(view.url?.absoluteString, "https://wiki.example.com/api/v2/attachments/abc")
+        XCTAssertEqual(view.url?.absoluteString, "https://wiki.example.com/api/attachments/abc")
         XCTAssertEqual(view.attributes?.width?.raw, "60%")
         XCTAssertEqual(view.attributes?.align, .right)
     }
 
     func testMakeImageViewPassesAPlainURLThroughUntouched() throws {
         let loader = WorkspaceImageLoader(workspaceOrigin: workspaceOrigin, accessTokenProvider: { "t" })
-        let plain = try XCTUnwrap(URL(string: "https://wiki.example.com/api/v2/attachments/abc"))
+        let plain = try XCTUnwrap(URL(string: "https://wiki.example.com/api/attachments/abc"))
 
         let view = WorkspaceMarkdownImageProvider.makeImageView(url: plain, loader: loader, onImageTap: nil)
 

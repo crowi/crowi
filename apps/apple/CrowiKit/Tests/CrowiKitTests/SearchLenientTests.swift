@@ -64,7 +64,7 @@ final class SearchLenientTests: XCTestCase {
             "workspace-a": StoredTokenPair(accessToken: "token", refreshToken: "rt", expiresAt: Date().addingTimeInterval(3600))
         ])
         return RefreshCoordinator(workspaceId: "workspace-a", tokenStore: tokenStore, urlSession: .shared) {
-            URL(string: "https://wiki.example.com/api/v2/oauth/token")!
+            URL(string: "https://wiki.example.com/api/oauth/token")!
         }
     }
 }

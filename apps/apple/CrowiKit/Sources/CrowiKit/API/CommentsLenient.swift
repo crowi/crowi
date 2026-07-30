@@ -13,7 +13,7 @@ public struct CommentLenient: Sendable, Equatable, Codable, Identifiable {
     public let creatorUsername: String?
     public let creatorName: String?
     /// `creator.image` (`PageUserSchema.image`) — a same-origin, Bearer-gated
-    /// attachment path (`/api/v2/attachments/by-key/user/...`), never
+    /// attachment path (`/api/attachments/by-key/user/...`), never
     /// displayed via a bare unauthenticated image view (`WorkspaceAvatarView`
     /// routes it through the workspace's own `WorkspaceImageFetching`
     /// conformer, §6.1).

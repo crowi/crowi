@@ -6,8 +6,8 @@ import Foundation
 /// only the fields the app actually uses are required; everything else is
 /// ignored. Reuse target: `packages/api/src/hono/handlers/oauth.ts:385-404`
 /// is the server's discovery handler — `authorization_endpoint` is a
-/// **web-origin** page (`${issuer}/oauth/authorize`, no `/api/v2`) while
-/// `token_endpoint` is under `/api/v2` (`${issuer}/api/v2/oauth/token`).
+/// **web-origin** page (`${issuer}/oauth/authorize`, no `/api`) while
+/// `token_endpoint` is under `/api` (`${issuer}/api/oauth/token`).
 /// They are same-origin only "in the default deployment" (oauth.ts comment),
 /// so the app MUST resolve both from this document and MUST NOT hardcode
 /// `apiBaseURL + "/oauth/..."` — mirroring

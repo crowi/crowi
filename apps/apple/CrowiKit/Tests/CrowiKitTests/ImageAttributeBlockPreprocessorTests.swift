@@ -17,9 +17,9 @@ final class ImageAttributeBlockPreprocessorTests: XCTestCase {
     }
 
     func testAttributeBlockWithMultipleKeysIsStripped() {
-        let result = ImageAttributeBlockPreprocessor.strip("![Screenshot](/api/v2/attachments/def){width=320px float=right}")
+        let result = ImageAttributeBlockPreprocessor.strip("![Screenshot](/api/attachments/def){width=320px float=right}")
 
-        XCTAssertEqual(result, "![Screenshot](/api/v2/attachments/def)")
+        XCTAssertEqual(result, "![Screenshot](/api/attachments/def)")
     }
 
     /// RFC-0015 §5 also permits a single space (or more) before `{`.
@@ -148,9 +148,9 @@ final class ImageAttributeBlockPreprocessorTests: XCTestCase {
     // MARK: - stripAndCarry (feature-ios-phase3 — the RFC-0015 value carry)
 
     func testStripAndCarryRewritesTheDestinationWithTheValidatedFragment() {
-        let result = ImageAttributeBlockPreprocessor.stripAndCarry("![alt](/api/v2/attachments/abc){width=500px}")
+        let result = ImageAttributeBlockPreprocessor.stripAndCarry("![alt](/api/attachments/abc){width=500px}")
 
-        XCTAssertEqual(result, "![alt](/api/v2/attachments/abc#crowi-image-attrs:width=500px)")
+        XCTAssertEqual(result, "![alt](/api/attachments/abc#crowi-image-attrs:width=500px)")
     }
 
     func testStripAndCarryCarriesEveryValidKeyInCanonicalOrder() {

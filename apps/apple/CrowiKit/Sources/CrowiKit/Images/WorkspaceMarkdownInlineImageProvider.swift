@@ -26,7 +26,7 @@ import AppKit
 /// swift-markdown-ui's OWN default (`DefaultInlineImageProvider`, backed by
 /// `NetworkImage`): an unauthenticated fetch that also never receives the
 /// workspace's Bearer token and, without `imageBaseURL` wired on `Markdown(...)`,
-/// cannot even resolve crowi's relative attachment URLs (`/api/v2/attachments/<id>`)
+/// cannot even resolve crowi's relative attachment URLs (`/api/attachments/<id>`)
 /// to begin with. Net effect: every inline-shaped image silently rendered
 /// nothing.
 ///

@@ -17,7 +17,7 @@ final class RefreshCoordinatorSingleFlightTests: XCTestCase {
             workspaceId: workspaceId,
             tokenStore: tokenStore,
             urlSession: urlSession,
-            tokenEndpointProvider: { URL(string: "https://wiki.example.com/api/v2/oauth/token")! }
+            tokenEndpointProvider: { URL(string: "https://wiki.example.com/api/oauth/token")! }
         )
     }
 

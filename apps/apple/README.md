@@ -3,7 +3,7 @@
 Native Apple client for [Crowi 2.0](https://crowi.wiki) — [RFC-0016](../../docs/rfcs/0016-ios-native-app.md).
 A universal iPhone + iPad SwiftUI app (macOS-ready, not yet shipped) that
 signs into and reads/edits multiple independent Crowi workspaces over
-`/api/v2`, the same HTTP surface `@crowi/cli` (RFC-0012) and MCP (RFC-0011)
+`/api`, the same HTTP surface `@crowi/cli` (RFC-0012) and MCP (RFC-0011)
 use.
 
 > Status: **Phase 2 bounded write (`feature-ios-phase2-write`)**.
@@ -478,14 +478,14 @@ Client-side only; the server needed zero changes.
 
 - **Body = display derivative, viewer = original.** The server's
   image-derivative optimization makes the canonical attachment URL
-  (`/api/v2/attachments/<id>`) serve a downscaled display derivative, with
+  (`/api/attachments/<id>`) serve a downscaled display derivative, with
   the original bytes behind an explicit `${url}/original` path. The body
   embed deliberately stays on the canonical URL (bandwidth; the width-capped
   block render fits it anyway), while the viewer — whose whole point is
   pinch-zooming — resolves and fetches the ORIGINAL. A body embed carries no
   attachment object, only a URL, so
   `Images/OriginalImageResolver.swift` recognizes the exact canonical
-  embedded shape (`<origin>/api/v2/attachments/<24-hex id>`), asks
+  embedded shape (`<origin>/api/attachments/<24-hex id>`), asks
   `GET /attachments/<id>/meta` (tolerantly decoded by
   `API/AttachmentMetaLenient.swift`, the same hand-written lenient pattern
   as every other response model) and rebases the returned `originalUrl`

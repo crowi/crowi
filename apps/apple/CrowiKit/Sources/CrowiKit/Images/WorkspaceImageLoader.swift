@@ -3,13 +3,13 @@ import Foundation
 /// RFC-0016 §6.1 / Phase 0 gate C — the per-workspace image loader.
 ///
 /// Guards two `attachment-stream.ts`-shaped auth-gated URL forms
-/// (`/api/v2/attachments/<id>` embedded images, grant-checked; and
-/// `/api/v2/attachments/by-key/<key>` avatars, Bearer + prefix only) with
+/// (`/api/attachments/<id>` embedded images, grant-checked; and
+/// `/api/attachments/by-key/<key>` avatars, Bearer + prefix only) with
 /// the §6.1 "hard rule": `Authorization: Bearer <token>` is attached **only**
 /// when the (post-rebase) request origin exactly equals the workspace's
 /// origin, and on a redirect the header is **stripped when the target
 /// origin differs** and **preserved when it doesn't** — the same-origin
-/// legacy `GET /files/<id>` → `/api/v2/attachments/<id>` 302 hop
+/// legacy `GET /files/<id>` → `/api/attachments/<id>` 302 hop
 /// (`attachment-stream.ts:250-252`) must keep working, while an
 /// attacker-controlled absolute external image URL in an unsanitized page
 /// body must never receive the workspace's Bearer.
@@ -118,7 +118,7 @@ final class RedirectStripDelegate: NSObject, URLSessionTaskDelegate, @unchecked 
         var next = request
         if WorkspaceOrigin(newURL) == workspaceOrigin {
             // Same-origin redirect (e.g. the legacy `/files/<id>` →
-            // `/api/v2/attachments/<id>` compat hop): PRESERVE the Bearer.
+            // `/api/attachments/<id>` compat hop): PRESERVE the Bearer.
             next.setValue("Bearer \(accessTokenProvider())", forHTTPHeaderField: "Authorization")
         } else {
             // Origin changed: STRIP it — the token-exfiltration guard.

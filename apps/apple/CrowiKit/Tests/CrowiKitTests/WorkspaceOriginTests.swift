@@ -6,7 +6,7 @@ import XCTest
 /// and `APIBaseURL`, the two distinct newtypes §3 requires. `WorkspaceImageLoaderTests`
 /// already covers the origin-equality behavior these two types share with
 /// the Phase 0 spike; this file covers the Phase 1 additions: user-input
-/// normalization and the `apiBaseURL = workspaceOrigin + "/api/v2"` derivation.
+/// normalization and the `apiBaseURL = workspaceOrigin + "/api"` derivation.
 final class WorkspaceOriginTests: XCTestCase {
     func testNormalizeAddsHTTPSSchemeWhenNoneGiven() {
         let origin = WorkspaceOrigin.normalize(userInput: "wiki.example.com")
@@ -46,18 +46,18 @@ final class WorkspaceOriginTests: XCTestCase {
     func testAPIBaseURLAppendsAPIV2ToOrigin() {
         let origin = WorkspaceOrigin(URL(string: "https://wiki.example.com")!)
         let apiBaseURL = APIBaseURL(workspaceOrigin: origin)
-        XCTAssertEqual(apiBaseURL.url.absoluteString, "https://wiki.example.com/api/v2")
+        XCTAssertEqual(apiBaseURL.url.absoluteString, "https://wiki.example.com/api")
     }
 
     func testAPIBaseURLAppendingBuildsFullPath() {
         let origin = WorkspaceOrigin(URL(string: "https://wiki.example.com")!)
         let apiBaseURL = APIBaseURL(workspaceOrigin: origin)
-        XCTAssertEqual(apiBaseURL.appending("app/info").absoluteString, "https://wiki.example.com/api/v2/app/info")
+        XCTAssertEqual(apiBaseURL.appending("app/info").absoluteString, "https://wiki.example.com/api/app/info")
     }
 
     func testAPIBaseURLDropsNonDefaultPortOnlyWhenPresent() {
         let origin = WorkspaceOrigin(URL(string: "http://localhost:4301")!)
         let apiBaseURL = APIBaseURL(workspaceOrigin: origin)
-        XCTAssertEqual(apiBaseURL.url.absoluteString, "http://localhost:4301/api/v2")
+        XCTAssertEqual(apiBaseURL.url.absoluteString, "http://localhost:4301/api")
     }
 }

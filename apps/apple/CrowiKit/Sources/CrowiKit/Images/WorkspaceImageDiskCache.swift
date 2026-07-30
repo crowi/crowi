@@ -9,10 +9,10 @@ import Foundation
 ///
 /// **The two auth-gated URL shapes have DIFFERENT trichotomies** and this
 /// type does not conflate them (§6.1 / `attachment-stream.ts`):
-///   - embedded `/api/v2/attachments/<id>`: `200` real bytes OR `200`
+///   - embedded `/api/attachments/<id>`: `200` real bytes OR `200`
 ///     `file-not-found.png` PLACEHOLDER (never cached permanently — the real
 ///     file may appear on a later fetch) OR `500 UPLOAD_FAILED` (retryable).
-///   - avatar `/api/v2/attachments/by-key/<key>`: `200` real bytes OR `404`
+///   - avatar `/api/attachments/by-key/<key>`: `200` real bytes OR `404`
 ///     ATTACHMENT_NOT_FOUND (a genuine "nothing here", never a placeholder)
 ///     OR `500 UPLOAD_FAILED`.
 ///
