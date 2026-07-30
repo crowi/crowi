@@ -88,7 +88,7 @@ describe('bookmark add — no capability pre-flight, scope-mapped 403', () => {
 
     // No app/info round-trip anywhere.
     expect(requestedUrls().some((u) => u.includes('/app/info'))).toBe(false);
-    expect(requestedUrls()).toEqual(['https://wiki.example.com/api/v2/pages?path=%2Fa', 'https://wiki.example.com/api/v2/bookmarks']);
+    expect(requestedUrls()).toEqual(['https://wiki.example.com/api/pages?path=%2Fa', 'https://wiki.example.com/api/bookmarks']);
   });
 });
 

@@ -49,14 +49,14 @@ afterEach(() => {
 });
 
 describe('apiUrl', () => {
-  it('prefixes /api/v2 and normalises a missing leading slash', () => {
-    expect(apiUrl('https://x.example', 'app/info')).toBe('https://x.example/api/v2/app/info');
-    expect(apiUrl('https://x.example/', '/app/info')).toBe('https://x.example/api/v2/app/info');
+  it('prefixes /api and normalises a missing leading slash', () => {
+    expect(apiUrl('https://x.example', 'app/info')).toBe('https://x.example/api/app/info');
+    expect(apiUrl('https://x.example/', '/app/info')).toBe('https://x.example/api/app/info');
   });
 
   it('appends defined query params and skips undefined ones', () => {
     const url = apiUrl('https://x.example', '/search', { q: 'hi', limit: 50, type: undefined });
-    expect(url).toBe('https://x.example/api/v2/search?q=hi&limit=50');
+    expect(url).toBe('https://x.example/api/search?q=hi&limit=50');
   });
 });
 
