@@ -2,7 +2,7 @@
  * RFC-0006 Phase 3+ — Hono application bootstrap.
  *
  * `buildHonoApp(crowi)` returns the runtime `OpenAPIHono` chain that
- * serves `/api/v2/*` requests. Each migrated resource adds its handlers
+ * serves `/api/*` requests. Each migrated resource adds its handlers
  * by calling `registerXRoutes(...)` against the running chain.
  *
  * **Client type placement**: the typed client's public type
@@ -252,8 +252,8 @@ export const buildHonoApp = (crowi: Crowi) => {
   attachMcp(withNotification, crowi);
 
   // RFC-0006 Phase 6 — expose the runtime OpenAPI 3.1 document at
-  // `/api/v2/openapi.json` and the Scalar API Reference UI at
-  // `/api/v2/docs`. The doc is built from the handlers actually
+  // `/api/openapi.json` and the Scalar API Reference UI at
+  // `/api/docs`. The doc is built from the handlers actually
   // registered above (vs. the bare scaffold in
   // `packages/api-contract/scripts/generate-openapi.ts` which emits the
   // commit-tracked artefact), so admins always see the live shape.
@@ -269,7 +269,7 @@ export const buildHonoApp = (crowi: Crowi) => {
   // dynamic-import it from a lazy wrapper middleware so test files
   // that boot the api process don't trip a transform error. The
   // handler is registered eagerly; the import only runs on the first
-  // `GET /api/v2/docs` request.
+  // `GET /api/docs` request.
   withNotification.doc31('/openapi.json', {
     openapi: '3.1.0',
     info: {
@@ -288,7 +288,7 @@ export const buildHonoApp = (crowi: Crowi) => {
   withNotification.get('/docs', async (c, next) => {
     if (scalarHandler == null) {
       const { Scalar } = await import('@scalar/hono-api-reference');
-      scalarHandler = Scalar({ url: '/api/v2/openapi.json' }) as unknown as LooseMiddleware;
+      scalarHandler = Scalar({ url: '/api/openapi.json' }) as unknown as LooseMiddleware;
     }
     return scalarHandler(c as Context, next);
   });
