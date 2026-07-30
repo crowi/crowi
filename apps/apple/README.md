@@ -57,7 +57,8 @@ apps/apple/
 │   │   │                       #   NavigationSplitView ⇔ NavigationStack, nested
 │   │   │                       #   one level in) / PageTreeView / PageReaderView
 │   │   │                       #   / SearchView / RevisionHistoryView / ProfileView
-│   │   │                       #   / RecentlyViewedView / ReadDestination
+│   │   │                       #   / RecentlyViewedView / NotificationsView
+│   │   │                       #   / ReadDestination
 │   └── Support/AdditionalInfo.plist  # merged into the app's Info.plist —
 │                               #   CFBundleURLTypes declares `crowi-ios`
 ├── CrowiKit/                   # plain SwiftPM library: client/auth/render
@@ -109,7 +110,9 @@ apps/apple/
 │   │   │                       #   decoder per read screen (Page/Search/
 │   │   │                       #   Comments/BookmarkLike/Backlinks/Revisions/
 │   │   │                       #   Profile) + APIErrorEnvelopeLenient (the
-│   │   │                       #   shared write-error envelope decode)
+│   │   │                       #   shared write-error envelope decode) +
+│   │   │                       #   NotificationsLenient/NotificationsPoller
+│   │   │                       #   (§11 — phase 3's foreground poll)
 │   │   ├── Editing/             # feature-ios-phase2-write: PageCreateFlow
 │   │   │                       #   (the 4-branch create UX state machine),
 │   │   │                       #   PageEditSession (the client-enforced
@@ -149,7 +152,10 @@ apps/apple/
 │   │                             #   WorkspaceAvatarView (a small circular avatar,
 │   │                             #   fetched through the SAME `WorkspaceImageFetching`
 │   │                             #   conformer as every other embedded image —
-│   │                             #   never a bare unauthenticated `AsyncImage`)
+│   │                             #   never a bare unauthenticated `AsyncImage`) +
+│   │                             #   ImageDisplayAttributes (phase 3 — the
+│   │                             #   RFC-0015 parse/validate/carry/apply seam) +
+│   │                             #   NotificationBellToolbarButton (§11 bell+badge)
 │   └── Tests/CrowiKitTests/
 └── .gitignore                  # excludes .build/ (incl. the generated Swift
                                  #   client — build-time only, never committed)
@@ -267,7 +273,13 @@ Phase 1 adds the real multi-workspace shell on top:
 - **`Auth/`** — `OAuthSignInFlow` (the real ASWAS + PKCE S256 + RFC 8414
   discovery + form-encoded token exchange, **replacing** the deleted Phase 0
   `GateASpike.swift`); `KeychainTokenStore` (`kSecClassGenericPassword`,
-  `service = bundle id`, `account = workspace id`, §4.3);
+  `service = bundle id`, `account = workspace id`, §4.3 — its `SecItem*`
+  calls go through the injectable `KeychainItemClient` seam, `.live` in
+  production, so `KeychainTokenStoreTests` runs deterministically against an
+  in-memory generic-password emulation: `swift test`'s unsigned macOS
+  process cannot use the data-protection keychain at all,
+  `errSecMissingEntitlement`/-34018, which used to permanently self-skip the
+  whole suite in exactly the environments the objective gate runs);
   `RefreshCoordinator` (the single-flight refresh `actor`, OQ-3 — proactive
   before `expiresAt` + reactive `401` backstop, both funneling through one
   in-flight `Task` so concurrent callers never double-present the same
@@ -585,3 +597,103 @@ After a successful create/save the returned `{ page }` updates the visible
 state and `CachedPage` directly — no refetch. All write flows run through
 `session.apiClient` (the workspace-bound handle), so the Phase 1 structural
 per-workspace isolation invariant covers writes too.
+
+## What this phase (`feature-ios-phase3-notifications-extensions`) adds
+
+**Notifications (RFC-0016 §11)** and the **RFC-0015 image display attribute
+application** — again entirely client-side (all four notification endpoints
+already existed, and Phase 1's OAuth scope set already requested
+`notifications`, so existing signed-in workspaces need no re-consent).
+
+### Notifications — v1 is foreground REST polling, deliberately
+
+The RFC pins the WebSocket "refetch nudge" as an optional stretch whose
+60-second-TTL token demands a proactive re-mint loop; an implementation
+without that loop dies silently after a minute, so v1 polls (the sub-spec's
+explicit recommendation). APNs is out of scope entirely.
+
+- **`API/NotificationsLenient.swift`** — lenient decode + fetch/post helpers
+  for `GET /notifications` (list + `pager.next`), `GET /notifications/status`
+  (unread count = UNREAD rows), `POST /notifications/read` (bulk
+  UNREAD→UNOPENED: the badge zeroes, rows keep their unopened highlight —
+  web parity) and `POST /notifications/{id}/open` (the tap path). Degrade
+  rules: a row with a missing/degenerate target or an unknown action stays
+  LISTED but non-navigable — never dropped; only `_id` is required. The one
+  deliberate non-degrade: a missing `status.count` THROWS (defaulting to 0
+  would silently clear a real badge).
+- **`API/NotificationsPoller.swift`** — the foreground fixed-interval poll
+  `actor` (default 30s — the web's old pre-WebSocket polling interval),
+  following the `AppInfoCache` activation/foreground + single-in-flight
+  pattern. The loop runs inside `WorkspaceHomeView`'s `.task`, so a
+  workspace switch/sign-out cancels it STRUCTURALLY (§14 per-workspace
+  isolation applied to polling — a non-active workspace's poller can never
+  keep running); backgrounding suspends it (no network), foregrounding
+  resumes + immediately re-polls.
+- **`WorkspaceSession`** — gains the poller (built on the session's OWN
+  `apiClient`, so notification polls share the one `RefreshCoordinator`
+  behind every JSON call), the `@Published unreadNotificationCount` badge,
+  `backgrounded()`, and the `markAllNotificationsRead()`/
+  `openNotification(id:)` helpers (single-shot loose writes, the
+  `EngagementActions` discipline — an open failure never blocks navigation).
+  `WorkspaceContext.makeAPIClient` now threads its `urlSession` into the
+  transport too (previously refresh-only), which is what lets
+  `WorkspaceSessionTests` pin the badge behavior against a mocked wire.
+- **`Rendering/NotificationBellToolbarButton.swift`** — the bell + badge
+  (`99+` cap, web parity), CrowiKit-side for the
+  `SearchCapabilityToolbarButton` reason: the render-pinned test subject and
+  the production toolbar view must be the same type.
+- **`Crowi.swiftpm/Sources/CrowiApp/NotificationsView.swift`** — the list:
+  COMMENT/LIKE/MENTION/UPDATE rows (avatar through the authenticated image
+  cache, shared message line, relative time, unopened dot), tap = optimistic
+  row open + `POST open` + `ReadDestination.page(path:)` navigation,
+  mark-all-read, an explicit "Load more" pager, and a same-cadence list
+  refetch while visible (skipped once the user pages deeper, so a refresh
+  never yanks a scrolled list — new arrivals still reach the badge).
+
+### RFC-0015 image display attributes — the value application
+
+Phase 2's `ImageAttributeBlockPreprocessor` stripped `{width=60% align=center}`
+blocks and threw the values away; this phase is the "future phase" its doc
+comment deferred to:
+
+- **`Rendering/ImageDisplayAttributes.swift`** — the parsed, validated
+  domain type. Validation is byte-for-byte the server's DROP rule
+  (`core/image-attrs.ts`, kept in lockstep exactly like the web's own
+  duplicate in `image-display.ts`): `%` in `1..100`, `px` in `1..4096`, both
+  closed intervals, out-of-range DROPS (never clamps); `align` ∈
+  left/center/right, `float` ∈ left/right; unknown keys ignored;
+  last-valid-wins. `height` validates but stays parse-only (AC covers
+  width/align/float; `%` height has no reference box natively).
+- **The carry seam** — swift-markdown-ui's image providers receive only a
+  URL, so `stripAndCarry` (the new preprocessor entry
+  `WorkspacePageMarkdownView` calls) rewrites the image destination with a
+  `#crowi-image-attrs:...` fragment that BOTH providers detach before
+  anything else sees the URL. Invariant: the detached URL — what reaches
+  `WorkspaceImageLoader.fetch`, the `SchemeAllowlist` check, the same-origin
+  Bearer decision and the disk-cache key — is byte-identical to the
+  pre-phase URL (a fragment is only attached to a destination that had
+  none). A hand-forged fragment re-validates through the same DROP rules on
+  extraction (the RFC-0023 §11 stance), so it is no more powerful than
+  writing the attribute block itself. A block whose every value fails
+  validation is still STRIPPED — only the application is skipped.
+- **Block path** (`WorkspaceMarkdownImageView` →
+  `ImageDisplayAttributedBlockFrame`): `width` re-proposes the image's width
+  (`%` against the proposed text column, `px` composed with the existing
+  hard cap by "smaller wins"); `align`/`float` steer the placement inside
+  the same full-width frame (`float` wins over `align`, CSS-style; no
+  text-wrap natively — a floated image degrades to edge alignment).
+- **Inline path** (an image genuinely sharing a line with text): applies
+  width by resizing the bitmap (the only lever inside `Text`-embedded
+  images), capped at the inline safety bound ("smaller wins") — `px`
+  directly, `%` against the markdown column width
+  `WorkspacePageMarkdownView` measures and shares through
+  `InlineImageContainerWidthReference` (the same reference box the web's
+  CSS `%` and the block path resolve against; without a measurement yet the
+  bitmap passes through untouched — degrade, never guess). `align`/`float`
+  are discarded inline — mirroring the server's own inline branch.
+
+**Footnotes and PlantUML stay plain-text degrades** — excluded from this
+phase and handed to RFC-0023 (PlantUML has no client-fetchable render URL;
+MarkdownUI 2.4.1 has no footnote support and forking is banned).
+`UnsupportedExtensionDegradeTests` regression-pins both degrades so neither
+can get half-enabled silently.
