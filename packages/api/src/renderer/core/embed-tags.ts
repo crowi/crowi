@@ -1,8 +1,9 @@
-import type { Html, Link, PhrasingContent, Root, Text } from 'mdast';
-import type { EmbedInput, RenderContext } from '@crowi/plugin-api';
-import { cachedRender, type MongoCacheStorage, normalizeRenderResult, scopeForPlugin } from '../cache';
+import type { Link, PhrasingContent, Root, Text } from 'mdast';
+import type { EmbedInput, RenderContext, StructuredRenderPayload } from '@crowi/plugin-api';
+import { cachedRender, type MongoCacheStorage, normalizeRenderResult, scopeForPlugin, structuredForNormalized } from '../cache';
 import { createAuthContextStub, type RendererRegistryImpl } from '../registry';
 import { type ParentChildren, groupByParent, walkPhrasingTree } from './_mdast-walk';
+import { buildDispatchHtmlNode } from './structured-sidecar';
 
 /**
  * Phase 4 plugin-dispatch transform — async post-processor that
@@ -84,12 +85,18 @@ export const makeEmbedTagDispatch =
           // (a renderer-declared runtime-policy toggle, e.g. link-card's
           // `security:linkCardEnabled`, needs a literal zero-cache-access
           // guarantee, not just zero I/O inside `render()`).
-          const { html } = await normalizeRenderResult(() => registration.renderer.render(input, scopedCtx), registration.renderer.reservation);
-          candidate.replacementHtml = html;
+          //
+          // RFC-0023 §10 — the bypass path carries the WHOLE effective
+          // result, not just html: dropping `structured` here would make
+          // link-card's toggle-off the one dispatch without a sidecar,
+          // breaking the "fetch-failed and toggle-off are structurally
+          // indistinguishable" contract on the v1 side.
+          const { html, result } = await normalizeRenderResult(() => registration.renderer.render(input, scopedCtx), registration.renderer.reservation);
+          candidate.replacement = { html, structured: structuredForNormalized(result, registration.renderer.reservation) };
           return;
         }
         const rendered = await cachedRender(deps.cache, registration.plugin, registration.renderer, input, scopedCtx);
-        candidate.replacementHtml = rendered.html;
+        candidate.replacement = { html: rendered.html, structured: rendered.structured };
       }),
     );
 
@@ -109,8 +116,8 @@ interface Candidate {
   linkIndex: number;
   tag: string;
   url: string;
-  /** Filled in after the async render resolves. */
-  replacementHtml?: string;
+  /** Filled in after the async render resolves. RFC-0023 §10 — the whole effective result (html + paired structured). */
+  replacement?: { html: string; structured?: StructuredRenderPayload };
 }
 
 function collectCandidates(tree: Root, registry: RendererRegistryImpl): Candidate[] {
@@ -167,7 +174,9 @@ function rewriteChildren(children: PhrasingContent[], matches: Candidate[]): Phr
       if (stripped) {
         out.push({ type: 'text', value: stripped });
       }
-      const html: Html = { type: 'html', value: matchOnNext.replacementHtml ?? '' };
+      // RFC-0023 §10 — the shared mapper stamps the (schema-validated)
+      // sidecar; the html string itself is byte-identical to before.
+      const html = buildDispatchHtmlNode(matchOnNext.replacement?.html ?? '', matchOnNext.replacement?.structured);
       out.push(html as unknown as PhrasingContent);
       i += 2;
       continue;

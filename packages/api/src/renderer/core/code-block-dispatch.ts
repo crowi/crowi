@@ -1,6 +1,15 @@
 import { createHash } from 'node:crypto';
-import type { CodeBlockInfo, CodeBlockRenderer, EmbedFragment, EmbedInput, EmbedRenderer, RenderContext, RenderResult } from '@crowi/plugin-api';
-import type { Code, Html, Root, RootContent } from 'mdast';
+import type {
+  CodeBlockInfo,
+  CodeBlockRenderer,
+  EmbedFragment,
+  EmbedInput,
+  EmbedRenderer,
+  RenderContext,
+  RenderResult,
+  StructuredRenderPayload,
+} from '@crowi/plugin-api';
+import type { Code, Root, RootContent } from 'mdast';
 import {
   cachedRender,
   cachedRenderOrPending,
@@ -9,9 +18,11 @@ import {
   type MongoCacheStorage,
   normalizeRenderResult,
   scopeForPlugin,
+  structuredDispatchLimitPlaceholder,
 } from '../cache';
 import { createAuthContextStub, type RendererRegistryImpl } from '../registry';
 import { acquireRenderSlot, type RenderSlotTicket } from './render-admission';
+import { buildDispatchHtmlNode } from './structured-sidecar';
 
 /**
  * feature-plugin-renderer-mermaid spec §5 classification C / §6 — max
@@ -70,7 +81,10 @@ export const makeCodeBlockDispatch =
           // source can succeed at position 10 and hit this limit at
           // position 60 within the same page, without the two competing
           // over a single cache slot.
-          candidate.replacementHtml = dispatchLimitPlaceholder(MAX_ADMISSION_DISPATCH_COUNT, registration.renderer.reservation);
+          candidate.replacement = {
+            html: dispatchLimitPlaceholder(MAX_ADMISSION_DISPATCH_COUNT, registration.renderer.reservation),
+            structured: structuredDispatchLimitPlaceholder(MAX_ADMISSION_DISPATCH_COUNT, registration.renderer.reservation),
+          };
           return;
         }
         const { scopedCtx, adaptor, input } = buildDispatchContext(registration, candidate, ctx, deps);
@@ -82,7 +96,7 @@ export const makeCodeBlockDispatch =
         if (registration.renderer.admissionControl) {
           const outcome = await cachedRenderOrPending(deps.cache, registration.plugin, adaptor, input, scopedCtx, { priority: 'high' });
           if (outcome.kind === 'pending') {
-            // Deliberately do NOT set `candidate.replacementHtml` —
+            // Deliberately do NOT set `candidate.replacement` —
             // `groupByParent` drops candidates without one, so
             // `rewriteChildren` leaves the original `code` node in
             // place. Mark it so the read path (`redispatchPendingCode
@@ -91,11 +105,13 @@ export const makeCodeBlockDispatch =
             candidate.markPending = true;
             return;
           }
-          candidate.replacementHtml = outcome.html;
+          // RFC-0023 §10 — html and structured travel together from the
+          // SAME cache/render outcome (never recombined downstream).
+          candidate.replacement = { html: outcome.html, structured: outcome.structured };
           return;
         }
         const rendered = await cachedRender(deps.cache, registration.plugin, adaptor, input, scopedCtx);
-        candidate.replacementHtml = rendered.html;
+        candidate.replacement = { html: rendered.html, structured: rendered.structured };
       }),
     );
 
@@ -136,6 +152,14 @@ export type PreviewCodeBlockDispatchDeps = Pick<CodeBlockDispatchDeps, 'cache'>;
  * for preview content, and no `pending`-marker bookkeeping applies
  * (nothing here is ever retried on a later read — every preview call is
  * a fresh one-shot render of the caller's current draft).
+ *
+ * RFC-0023 §10 explicit scope: the preview dispatch stays **html-only**
+ * — `renderCodeBlockForPreview` returns a bare string and no sidecar is
+ * ever stamped here, so under `X-Crowi-Ast-Version: 1` a
+ * `previewPolicy: 'server-render'` fence (today: Mermaid) remains an
+ * `html` node in the preview envelope (a visible placeholder on
+ * declared clients). Structured propagation into preview is a future
+ * extension tied to a native editor, not part of this design.
  */
 export const makePreviewCodeBlockDispatch =
   (registry: RendererRegistryImpl, ctx: RenderContext, deps: PreviewCodeBlockDispatchDeps) =>
@@ -153,18 +177,23 @@ export const makePreviewCodeBlockDispatch =
         if (candidate.overDispatchLimit) {
           // Classification C (spec §5/§6) — same fixed placeholder, and
           // the same "never touches render()/acquireRenderSlot" guarantee,
-          // as the save path's over-limit candidates.
-          candidate.replacementHtml = dispatchLimitPlaceholder(MAX_ADMISSION_DISPATCH_COUNT, registration.renderer.reservation);
+          // as the save path's over-limit candidates. No structured
+          // payload: the preview dispatch is html-only by explicit
+          // RFC-0023 §10 scope (see the makePreviewCodeBlockDispatch doc
+          // comment).
+          candidate.replacement = { html: dispatchLimitPlaceholder(MAX_ADMISSION_DISPATCH_COUNT, registration.renderer.reservation) };
           return;
         }
         const scopedCtx = scopedRenderContext(ctx, deps.cache, registration.plugin);
-        candidate.replacementHtml = await renderCodeBlockForPreview(
-          registration.renderer,
-          { lang: candidate.lang, source: candidate.source },
-          scopedCtx,
-          candidate.startLine,
-          registration.plugin,
-        );
+        candidate.replacement = {
+          html: await renderCodeBlockForPreview(
+            registration.renderer,
+            { lang: candidate.lang, source: candidate.source },
+            scopedCtx,
+            candidate.startLine,
+            registration.plugin,
+          ),
+        };
       }),
     );
 
@@ -275,8 +304,13 @@ interface Candidate {
    * HTML string, see `renderCodeBlockForPreview`'s doc comment for why).
    */
   startLine?: number;
-  /** Filled in after the async render. */
-  replacementHtml?: string;
+  /**
+   * Filled in after the async render. RFC-0023 §10 — the candidate
+   * carries the whole effective result (`html` + its paired
+   * `structured`), never a bare string: the splice must stamp the
+   * sidecar from the SAME selection the html came from.
+   */
+  replacement?: { html: string; structured?: StructuredRenderPayload };
   /** feature-plugin-renderer-mermaid §5 — set when `cachedRenderOrPending` returned `{ kind: 'pending' }`. */
   markPending?: boolean;
   /** feature-plugin-renderer-mermaid §5 classification C — the Nth+1 (N=`MAX_ADMISSION_DISPATCH_COUNT`) admission-gated candidate in this pipeline run. */
@@ -440,12 +474,12 @@ function defaultCodeBlockEmbedKey(info: CodeBlockInfo): string {
 /**
  * Group matched candidates by reference-identical parent and sort each
  * group by child index so the splice walks left-to-right. Drops
- * candidates the dispatch did not fill in (`replacementHtml` missing).
+ * candidates the dispatch did not fill in (`replacement` missing).
  */
 function groupByParent(candidates: Candidate[]): Array<{ parent: Candidate['parent']; matches: Candidate[] }> {
   const groups = new Map<Candidate['parent'], Candidate[]>();
   for (const c of candidates) {
-    if (!c.replacementHtml) continue;
+    if (!c.replacement) continue;
     const list = groups.get(c.parent) ?? [];
     list.push(c);
     groups.set(c.parent, list);
@@ -465,8 +499,9 @@ function rewriteChildren(children: RootContent[], matches: Candidate[]): RootCon
       out.push(children[i]);
       continue;
     }
-    const html: Html = { type: 'html', value: match.replacementHtml ?? '' };
-    out.push(html);
+    // RFC-0023 §10 — the shared mapper stamps the (schema-validated)
+    // sidecar; the html string itself is byte-identical to before.
+    out.push(buildDispatchHtmlNode(match.replacement?.html ?? '', match.replacement?.structured));
   }
   return out;
 }
@@ -555,8 +590,12 @@ export async function redispatchPendingCodeBlocks(
       const { scopedCtx, adaptor, input } = buildDispatchContext(registration, candidate, ctx, deps);
       const outcome = await cachedRenderOrPending(deps.cache, registration.plugin, adaptor, input, scopedCtx, { priority: 'high' });
       if (outcome.kind === 'pending') return; // still failing — node (and its marker) stays untouched
-      const html: Html = { type: 'html', value: outcome.html };
-      candidate.parent.children[candidate.codeIndex] = html;
+      // RFC-0023 §10 splice path 3 — the retry splice stamps the sidecar
+      // through the same shared mapper as the save-path splices. Losing
+      // it here would make exactly the "recovered from a transient
+      // failure" reads structured-less for declared clients until the
+      // next save/backfill (the retry result is never persisted).
+      candidate.parent.children[candidate.codeIndex] = buildDispatchHtmlNode(outcome.html, outcome.structured);
       changed = true;
     }),
   );

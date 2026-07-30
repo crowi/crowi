@@ -2,6 +2,7 @@ import type { MentionResponse, RevisionMetaShape, RevisionType, TocEntryResponse
 import { Document, Model, model, Schema, Types } from 'mongoose';
 import Crowi from 'src/crowi';
 import { RENDERER_PIPELINE_VERSION } from 'src/renderer/version';
+import { applyRevisionAstBudget } from 'src/util/revision-size-guard';
 import { actorFromUser } from 'src/util/ts-rest-helpers';
 import { PageDocument } from './page';
 // import Debug from 'debug'
@@ -402,7 +403,22 @@ export default (crowi: Crowi) => {
       actor: actorFromUser(user),
     });
     newRevision.meta = metadataToRevisionMeta(metadata);
-    newRevision.renderedAst = renderedAst;
+    // RFC-0023 §10 — whole-document BSON budget. Sidecars ride
+    // alongside the html they describe, so the AST can grow ~2x; this
+    // guard (measured against body + meta + yjsUpdate + AST + fixed
+    // headroom, NOT the AST alone) strips sidecars largest-first when
+    // the document nears the 16MB cap. Placed at THIS chokepoint
+    // because every revision-creation path (HTTP save / collab save /
+    // draft / migration rewritePageBody) runs through prepareRevision —
+    // same rationale as the `page` ref stamp above. `yjsUpdate` is
+    // assigned by callers after prepareRevision returns when at all
+    // (no shipped writer today) — the fixed headroom covers typical
+    // deltas; the backfill path passes its target's real value.
+    const guarded = applyRevisionAstBudget(
+      { renderedAst, body: body || '', meta: newRevision.meta, yjsUpdateBytes: newRevision.yjsUpdate?.byteLength },
+      (message) => console.warn(`${message} (path=${pageData.path})`),
+    );
+    newRevision.renderedAst = guarded.renderedAst;
     newRevision.rendererVersion = RENDERER_PIPELINE_VERSION;
 
     // RFC-0003 Phase 5 collab-save options. Only assign when the caller
