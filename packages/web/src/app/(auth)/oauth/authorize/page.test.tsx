@@ -20,7 +20,7 @@ const { searchParamsGet, clientInfoGet, authorizePost } = vi.hoisted(() => ({
 
 vi.mock('next/navigation', () => nextNavigationMockModule({ push: vi.fn(), searchParamsGet }));
 vi.mock('@/lib/api-client', () => ({
-  apiClientV2: {
+  apiClient: {
     oauth: {
       'client-info': { $get: clientInfoGet },
       authorize: { $post: authorizePost },

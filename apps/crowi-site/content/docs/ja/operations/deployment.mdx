@@ -32,7 +32,7 @@ cookie で使えます。本当に private なのは api の内部直アドレ�
 配布される `crowi/crowi-web` イメージは絶対 API URL を **一切焼き込みません**。
 3 つの URL を分けて考えます:
 
-- **ブラウザ → api(HTTP)**: 既定でブラウザは **相対** パス(`/api/v2/...`・`/files/...`)を
+- **ブラウザ → api(HTTP)**: 既定でブラウザは **相対** パス(`/api/...`・`/files/...`)を
   **自身のオリジン** に投げ、前段 proxy が api へ振ります。(前段 proxy を置かず Next
   サーバを直接公開する場合、その `rewrites()` でも `/api`・`/files` を proxy できますが、
   これは dev か宛先が焼かれている場合のみ有効。下記 (D) と Vercel の注記参照。)
@@ -157,7 +157,7 @@ CLIENT_URL=https://wiki.example.com              # CORS allow-origin(完全一�
 
 <Callout type="warn">
   **インライン画像・アバター・ファイル DL はクロスオリジンで動きません。** これらは
-  **相対** URL(`/api/v2/attachments/by-key/…`・`/files/…`)で出力され、ブラウザは *web*
+  **相対** URL(`/api/attachments/by-key/…`・`/files/…`)で出力され、ブラウザは *web*
   オリジンから読もうとします(api ではない)。さらに by-key 画像配信は first-party の
   `crowi.accessToken` cookie で認証されますが、別オリジンの `<img>` はその cookie を
   送れません。よって別オリジン構成ではアプリと HTTP データは表示されても **添付画像 /
@@ -209,7 +209,7 @@ api は別所(VM / コンテナ基盤)の公開オリジンに置き、web を V
 Caddy、無ければ依存ゼロの node フォールバック。ルーティング表は本番の
 前段 proxy と同一)。**`:4304` が dev の正式な入口です**:
 
-- **HTTP**: ブラウザは `:4304` に対して相対 `/api/v2/...` を叩き、proxy が
+- **HTTP**: ブラウザは `:4304` に対して相対 `/api/...` を叩き、proxy が
   api パスを `:4301` へ、それ以外を web へ振り分けます。
 - **WebSocket**: `/collab`・`/presence`・`/notifications` も同じ `:4304`
   オリジンを upgrade します — resolver は既定で `window.location` から URL を

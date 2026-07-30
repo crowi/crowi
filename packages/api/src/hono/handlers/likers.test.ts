@@ -3,13 +3,13 @@ import { app, crowi } from 'src/test/setup';
 import { authHeaders, createTestUser } from 'src/test/test-helpers';
 
 /**
- * RFC-0005 Phase 3 — `GET /api/v2/pages/:id/likers`.
+ * RFC-0005 Phase 3 — `GET /api/pages/:id/likers`.
  *
  * Covers the three required perspectives: a normal liker list (with
  * pagination + `likedAt` enrichment), the empty case, and the
  * permission gate (malformed id / missing / not-granted).
  */
-describe('Routes /api/v2/pages/:id/likers (Hono getLikers)', () => {
+describe('Routes /api/pages/:id/likers (Hono getLikers)', () => {
   const PATH_PREFIX = '/hono-likers/';
   let owner: Awaited<ReturnType<typeof createTestUser>>;
   let liker1: Awaited<ReturnType<typeof createTestUser>>;
@@ -35,7 +35,7 @@ describe('Routes /api/v2/pages/:id/likers (Hono getLikers)', () => {
   const createPage = async (suffix: string, opts: { grant?: number } = {}) => {
     const path = `${PATH_PREFIX}${suffix}`;
     const res = await request(app)
-      .post('/api/v2/pages')
+      .post('/api/pages')
       .set(authHeaders(owner.accessToken))
       .send({ path, body: '# likers', ...(opts.grant ? { grant: opts.grant } : {}) });
     expect(res.status).toBe(200);
@@ -43,26 +43,26 @@ describe('Routes /api/v2/pages/:id/likers (Hono getLikers)', () => {
   };
 
   const likePage = async (pageId: string, token: string) => {
-    const res = await request(app).post('/api/v2/pages/like').set(authHeaders(token)).send({ page_id: pageId });
+    const res = await request(app).post('/api/pages/like').set(authHeaders(token)).send({ page_id: pageId });
     expect(res.status).toBe(200);
   };
 
   it('returns 401 when no Authorization header is provided', async () => {
-    const res = await request(app).get('/api/v2/pages/000000000000000000000000/likers').set('Content-Type', 'application/json');
+    const res = await request(app).get('/api/pages/000000000000000000000000/likers').set('Content-Type', 'application/json');
 
     expect(res.status).toBe(401);
     expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
   });
 
   it('returns 400 INVALID_PAGE_ID when :id is not a 24-char hex string', async () => {
-    const res = await request(app).get('/api/v2/pages/not-a-valid-id/likers').set(authHeaders(owner.accessToken));
+    const res = await request(app).get('/api/pages/not-a-valid-id/likers').set(authHeaders(owner.accessToken));
 
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe('INVALID_PAGE_ID');
   });
 
   it('returns 404 PAGE_NOT_FOUND for a well-formed but nonexistent page id', async () => {
-    const res = await request(app).get('/api/v2/pages/000000000000000000000000/likers').set(authHeaders(owner.accessToken));
+    const res = await request(app).get('/api/pages/000000000000000000000000/likers').set(authHeaders(owner.accessToken));
 
     expect(res.status).toBe(404);
     expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
@@ -71,7 +71,7 @@ describe('Routes /api/v2/pages/:id/likers (Hono getLikers)', () => {
   it('returns 404 PAGE_NOT_FOUND when the caller lacks read permission (does not leak existence)', async () => {
     const pageId = await createPage('private', { grant: 4 });
 
-    const res = await request(app).get(`/api/v2/pages/${pageId}/likers`).set(authHeaders(outsider.accessToken));
+    const res = await request(app).get(`/api/pages/${pageId}/likers`).set(authHeaders(outsider.accessToken));
 
     expect(res.status).toBe(404);
     expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
@@ -80,7 +80,7 @@ describe('Routes /api/v2/pages/:id/likers (Hono getLikers)', () => {
   it('returns an empty list with totalCount 0 when nobody has liked the page', async () => {
     const pageId = await createPage('empty');
 
-    const res = await request(app).get(`/api/v2/pages/${pageId}/likers`).set(authHeaders(owner.accessToken));
+    const res = await request(app).get(`/api/pages/${pageId}/likers`).set(authHeaders(owner.accessToken));
 
     expect(res.status).toBe(200);
     expect(res.body.users).toEqual([]);
@@ -91,7 +91,7 @@ describe('Routes /api/v2/pages/:id/likers (Hono getLikers)', () => {
     const pageId = await createPage('liked');
     await likePage(pageId, liker1.accessToken);
 
-    const res = await request(app).get(`/api/v2/pages/${pageId}/likers`).set(authHeaders(owner.accessToken));
+    const res = await request(app).get(`/api/pages/${pageId}/likers`).set(authHeaders(owner.accessToken));
 
     expect(res.status).toBe(200);
     expect(res.body.totalCount).toBe(1);
@@ -112,7 +112,7 @@ describe('Routes /api/v2/pages/:id/likers (Hono getLikers)', () => {
     await likePage(pageId, liker1.accessToken);
     await likePage(pageId, liker2.accessToken);
 
-    const res = await request(app).get(`/api/v2/pages/${pageId}/likers`).query({ limit: 1 }).set(authHeaders(owner.accessToken));
+    const res = await request(app).get(`/api/pages/${pageId}/likers`).query({ limit: 1 }).set(authHeaders(owner.accessToken));
 
     expect(res.status).toBe(200);
     expect(res.body.totalCount).toBe(2);
@@ -123,7 +123,7 @@ describe('Routes /api/v2/pages/:id/likers (Hono getLikers)', () => {
     const pageId = await createPage('public-readable');
     await likePage(pageId, liker1.accessToken);
 
-    const res = await request(app).get(`/api/v2/pages/${pageId}/likers`).set(authHeaders(liker2.accessToken));
+    const res = await request(app).get(`/api/pages/${pageId}/likers`).set(authHeaders(liker2.accessToken));
 
     expect(res.status).toBe(200);
     expect(res.body.totalCount).toBe(1);

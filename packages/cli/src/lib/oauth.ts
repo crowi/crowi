@@ -430,18 +430,29 @@ export async function refreshTokens(tokenEndpoint: string, refreshToken: string)
 }
 
 /**
- * Revoke a token (RFC 7009). Always resolves — revocation is best-effort and
- * the server returns 200 even for unknown tokens — so `crowi logout` never
- * fails just because the network is down or the token was already invalid.
+ * Revoke a token (RFC 7009). Always RESOLVES — never throws — so `crowi
+ * logout` can always proceed to remove the local profile even when
+ * revocation fails; the caller must still check the returned status,
+ * though. The server returns 200 even for an already-invalid/unknown token,
+ * so a `true` result does not distinguish "revoked" from "was already
+ * gone" — both mean the server no longer honors it, which is all `logout`
+ * needs to know.
+ *
+ * Status-aware since the `/api` prefix cutover: a profile whose cached
+ * `revokeEndpoint` still points at a pre-cutover path (or any other
+ * non-2xx / network failure) must NOT be reported as a successful revoke —
+ * see `commands/logout.ts`, which warns the user instead of silently
+ * treating this as success.
  */
-export async function revokeToken(revokeEndpoint: string, token: string): Promise<void> {
+export async function revokeToken(revokeEndpoint: string, token: string): Promise<boolean> {
   try {
-    await fetch(revokeEndpoint, {
+    const response = await fetch(revokeEndpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
       body: formBody({ token, client_id: CLIENT_ID }),
     });
+    return response.ok;
   } catch {
-    // best-effort
+    return false;
   }
 }

@@ -4,11 +4,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { PropsWithChildren } from 'react';
 import { createElement } from 'react';
 
-// Mock `apiClientV2` so the hook reads our fake `pages[':id']['yjs-token']
+// Mock `apiClient` so the hook reads our fake `pages[':id']['yjs-token']
 // .$get`. Vitest hoists `vi.mock` above imports; `vi.hoisted` makes the
 // shared stub accessible from both the factory and the test bodies
 // without a TDZ violation. RFC-0006 Batch 5 switched the hook from
-// ts-rest's `apiClient.pageCollab.getYjsToken` to `apiClientV2`'s
+// ts-rest's `apiClient.pageCollab.getYjsToken` to `apiClient`'s
 // Response-shaped fetch call.
 const { getYjsToken, tokenRefreshListeners, emitTokenRefreshed } = vi.hoisted(() => {
   const listeners = new Set<() => void>();
@@ -21,7 +21,7 @@ const { getYjsToken, tokenRefreshListeners, emitTokenRefreshed } = vi.hoisted(()
   };
 });
 vi.mock('./api-client', () => ({
-  apiClientV2: {
+  apiClient: {
     pages: {
       ':id': {
         'yjs-token': { $get: getYjsToken },

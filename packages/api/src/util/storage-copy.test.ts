@@ -124,7 +124,7 @@ describe('util/storage-copy', () => {
     // forms so either URL shape that fileUploader.generateUrl produces
     // for a saved profile picture is captured.
     const [user] = await Fixture.generate('User', [
-      { name: 'Pic User', username: 'picuser', email: 'pic@example.com', image: '/api/v2/attachments/by-key/user%2Fabc.png' },
+      { name: 'Pic User', username: 'picuser', email: 'pic@example.com', image: '/api/attachments/by-key/user%2Fabc.png' },
     ]);
     expect(user.image).toContain('user%2Fabc.png');
 
@@ -132,6 +132,24 @@ describe('util/storage-copy', () => {
 
     expect(summary.ok).toBe(1);
     expect(readAt(dstRoot, 'user/abc.png')).toBe('profile-data');
+  });
+
+  test('copies a profile picture whose User.image still carries the legacy (pre-cutover) /api/v2/attachments/by-key/ prefix', async () => {
+    // Regression: extractUserPictureKey() must recognise this legacy
+    // by-key form regardless of the /api vs /api/v2 leading segment (the
+    // encoded `user%2F...` key never matches the plain `user/<id>.<ext>`
+    // fallback regex, so a producer-only prefix flip without this fix would
+    // silently stop copying/discovering these rows).
+    writeAt(srcRoot, 'user/legacy.png', 'legacy-profile-data');
+    const [user] = await Fixture.generate('User', [
+      { name: 'Legacy Pic User', username: 'legacypicuser', email: 'legacy-pic@example.com', image: '/api/v2/attachments/by-key/user%2Flegacy.png' },
+    ]);
+    expect(user.image).toContain('user%2Flegacy.png');
+
+    const summary = await runStorageCopy(crowi, { from: SRC_NAME, to: DST_NAME, dryRun: false });
+
+    expect(summary.ok).toBe(1);
+    expect(readAt(dstRoot, 'user/legacy.png')).toBe('legacy-profile-data');
   });
 
   test('progress events fire for ok / failed / skipped', async () => {
@@ -152,7 +170,11 @@ describe('util/storage-copy', () => {
 });
 
 describe('util/storage-copy / extractUserPictureKey', () => {
-  test('handles by-key proxy URLs', () => {
+  test('handles current by-key proxy URLs', () => {
+    expect(extractUserPictureKey('/api/attachments/by-key/user%2Fabc.png')).toBe('user/abc.png');
+  });
+
+  test('handles legacy (pre-cutover) /api/v2/attachments/by-key/ proxy URLs', () => {
     expect(extractUserPictureKey('/api/v2/attachments/by-key/user%2Fabc.png')).toBe('user/abc.png');
   });
 

@@ -41,7 +41,7 @@ export interface PluginRouteOptions {
 /**
  * Scope passed to `registerRoutes(scope, ctx)`. Lets a plugin contribute
  * HTTP routes that the runtime mounts at
- * `/api/v2/plugins/<plugin-name>/<path>` — the `<plugin-name>` path
+ * `/api/plugins/<plugin-name>/<path>` — the `<plugin-name>` path
  * segment guarantees that core endpoints and other plugins cannot
  * collide (RFC-0013 §4).
  *
@@ -52,9 +52,9 @@ export interface PluginRouteOptions {
 export interface PluginRouterScope {
   /**
    * Mount `handler` for `method` at `<path>` under this plugin's
-   * namespace. `path` is relative to `/api/v2/plugins/<plugin-name>` and
+   * namespace. `path` is relative to `/api/plugins/<plugin-name>` and
    * should start with `/` (e.g. `route('POST', '/events', handler, {
-   * auth: 'public' })` → `POST /api/v2/plugins/<name>/events`).
+   * auth: 'public' })` → `POST /api/plugins/<name>/events`).
    *
    * Pass `{ auth: 'public' }` to bypass Crowi auth entirely for self-
    * authenticating inbound webhooks, `{ auth: 'admin' }` to require

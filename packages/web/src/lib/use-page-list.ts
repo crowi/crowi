@@ -2,12 +2,12 @@
 
 import type { ListPagesRequest } from '@crowi/api-contract';
 import { useQuery } from '@tanstack/react-query';
-import { apiClientV2 } from './api-client';
+import { apiClient } from './api-client';
 import { pageListKeys } from './page-query-keys';
 
 /**
  * RFC-0006 Phase 4 Batch 4 — switched from `apiClient.page.listPages`
- * (ts-rest) to `apiClientV2.pages.list.$get` (`createClient`). Query
+ * (ts-rest) to `apiClient.pages.list.$get` (`createClient`). Query
  * params are coerced to strings on the wire because hc's typed query
  * forwards verbatim; Zod's `z.coerce.number()` / `z.coerce.boolean()`
  * on the server side handles the conversion.
@@ -30,7 +30,7 @@ export function usePageList(params: UsePageListParams, options: UsePageListOptio
     queryKey: pageListKeys.detail(params),
     enabled: options.enabled ?? true,
     queryFn: async () => {
-      const response = await apiClientV2.pages.list.$get({
+      const response = await apiClient.pages.list.$get({
         query: {
           path: params.path,
           user: params.user,

@@ -13,8 +13,15 @@ const expandTableLabel = m['page.table_fullscreen_open']();
 
 // The inline modal's `useAttachment` fetch should never need to fire in
 // these render-interception tests, but mock the client defensively.
+// `apiOrigin` is also stubbed: `canonicalizeLegacyAttachmentUrl()`
+// (attachment-url.ts, applied ahead of attachment detection in
+// `page-content.tsx`) reads it via `selfOrigin()` for its self-host-absolute
+// branch — an empty string here means only `window.location.origin` (jsdom's
+// default) is treated as self-host, same as production with no
+// NEXT_PUBLIC_API_URL configured.
 vi.mock('@/lib/api-client', () => ({
   apiClient: { attachment: { getAttachmentMeta: vi.fn() } },
+  apiOrigin: () => '',
 }));
 
 const HEX = 'b'.repeat(24);
@@ -64,9 +71,9 @@ afterEach(() => {
 
 describe('PageContent — attachment render interception', () => {
   it('renders an attachment link so a plain left-click is intercepted (no full-page navigation)', () => {
-    renderPage(pageWithLink(`/api/v2/attachments/${HEX}`, 'spec'));
+    renderPage(pageWithLink(`/api/attachments/${HEX}`, 'spec'));
     const link = screen.getByRole('link', { name: 'spec' });
-    expect(link.getAttribute('href')).toBe(`/api/v2/attachments/${HEX}`);
+    expect(link.getAttribute('href')).toBe(`/api/attachments/${HEX}`);
     // The interception attaches an onClick that calls preventDefault for a
     // plain left-click — observable via the cancelled event.
     const clickEvent = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 });
@@ -93,9 +100,9 @@ describe('PageContent — attachment render interception', () => {
   });
 
   it('intercepts an embedded attachment image while still rendering the <img>', () => {
-    renderPage(pageWithImage(`/api/v2/attachments/${HEX}`, 'a chart'));
+    renderPage(pageWithImage(`/api/attachments/${HEX}`, 'a chart'));
     const img = screen.getByRole('img', { name: 'a chart' });
-    expect(img.getAttribute('src')).toBe(`/api/v2/attachments/${HEX}`);
+    expect(img.getAttribute('src')).toBe(`/api/attachments/${HEX}`);
     const clickEvent = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 });
     img.dispatchEvent(clickEvent);
     expect(clickEvent.defaultPrevented).toBe(true);
@@ -107,6 +114,48 @@ describe('PageContent — attachment render interception', () => {
     const clickEvent = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 });
     img.dispatchEvent(clickEvent);
     expect(clickEvent.defaultPrevented).toBe(false);
+  });
+});
+
+// feature-api-v2-path-removal Phase 3 §5.3 — canonicalizeLegacyAttachmentUrl()
+// is applied ahead of extractAttachmentId() in both the `a:` and `img:`
+// overrides, so a persisted legacy `/api/v2/attachments/...` reference
+// renders as the canonical `/api/attachments/...` in EVERY branch —
+// including the by-key fallback `<img src>` branch that extractAttachmentId()
+// itself can never detect.
+describe('PageContent — legacy attachment URL canonicalization (feature-api-v2-path-removal Phase 3)', () => {
+  it('renders a legacy /api/v2/attachments/<id> link as the canonical /api/attachments/<id> href, still intercepted', () => {
+    renderPage(pageWithLink(`/api/v2/attachments/${HEX}`, 'legacy link'));
+    const link = screen.getByRole('link', { name: 'legacy link' });
+    expect(link.getAttribute('href')).toBe(`/api/attachments/${HEX}`);
+    const clickEvent = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 });
+    link.dispatchEvent(clickEvent);
+    expect(clickEvent.defaultPrevented).toBe(true);
+  });
+
+  it('renders a legacy /api/v2/attachments/<id>/original image src as canonical, preserving the /original suffix', () => {
+    renderPage(pageWithImage(`/api/v2/attachments/${HEX}/original`, 'legacy original'));
+    const img = screen.getByRole('img', { name: 'legacy original' });
+    expect(img.getAttribute('src')).toBe(`/api/attachments/${HEX}/original`);
+  });
+
+  it('canonicalizes a legacy by-key image src in the fallback <img> branch (extractAttachmentId cannot detect a by-key URL)', () => {
+    renderPage(pageWithImage('/api/v2/attachments/by-key/user%2Favatar.png', 'by-key pic'));
+    const img = screen.getByRole('img', { name: 'by-key pic' });
+    expect(img.getAttribute('src')).toBe('/api/attachments/by-key/user%2Favatar.png');
+  });
+
+  it('leaves a v1 /files/<id> image src unchanged (permanent redirect resolves it, out of scope for the helper)', () => {
+    renderPage(pageWithImage(`/files/${HEX}`, 'v1 legacy'));
+    const img = screen.getByRole('img', { name: 'v1 legacy' });
+    expect(img.getAttribute('src')).toBe(`/files/${HEX}`);
+  });
+
+  it('leaves an other-host absolute legacy URL unchanged (negative test)', () => {
+    const url = `https://other-crowi.example/api/v2/attachments/${HEX}`;
+    renderPage(pageWithImage(url, 'other host'));
+    const img = screen.getByRole('img', { name: 'other host' });
+    expect(img.getAttribute('src')).toBe(url);
   });
 });
 
@@ -285,7 +334,7 @@ describe('PageContent — standalone attachment figure: layer split, no double-a
           children: [
             {
               type: 'image',
-              url: `/api/v2/attachments/${HEX}`,
+              url: `/api/attachments/${HEX}`,
               alt: 'a chart',
               data: { hProperties: { 'data-crowi-image-width': '40%' } },
             },
@@ -301,7 +350,7 @@ describe('PageContent — standalone attachment figure: layer split, no double-a
     expect(figure.getAttribute('data-crowi-image-width')).toBeNull();
 
     const img = screen.getByRole('img', { name: 'a chart' }) as HTMLImageElement;
-    expect(img.getAttribute('src')).toBe(`/api/v2/attachments/${HEX}`);
+    expect(img.getAttribute('src')).toBe(`/api/attachments/${HEX}`);
     expect(img.style.width).toBe('40%');
     // Width never leaks onto the figure, float never leaks onto the img —
     // each display prop is applied by exactly one layer.

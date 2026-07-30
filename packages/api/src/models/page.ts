@@ -20,7 +20,7 @@ export const STATUS_DELETED = 'deleted';
 export const STATUS_DEPRECATED = 'deprecated';
 /**
  * RFC-0004: first-class draft state. A page created via `POST
- * /api/v2/pages/drafts` (Phase 3) starts as `draft` and transitions to
+ * /api/pages/drafts` (Phase 3) starts as `draft` and transitions to
  * `published` exactly once when the author first saves. The transition
  * is one-way — there is no path back to `draft`. Draft pages are
  * visible only to their author: listing / search / backlink queries
@@ -510,7 +510,7 @@ export default (crowi: Crowi) => {
     },
   );
 
-  // RFC-0004: backs `GET /api/v2/pages/drafts` — `find({ creator, status })`
+  // RFC-0004: backs `GET /api/pages/drafts` — `find({ creator, status })`
   // sorted by `createdAt` desc. Without it the listing scans a single-field
   // index then sorts in memory.
   pageSchema.index({ creator: 1, status: 1, createdAt: -1 });

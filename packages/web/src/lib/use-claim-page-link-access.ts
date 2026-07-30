@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
-import { apiClientV2 } from './api-client';
+import { apiClient } from './api-client';
 import type { PageWithRevision } from '@crowi/api-contract';
 import { isLinkOnlyGrant } from './page-grant';
 import { pageChildrenKeys } from './page-query-keys';
@@ -48,7 +48,7 @@ export function useClaimPageLinkAccess(pageId: string): PageState {
   const query = useQuery({
     queryKey: ['page-link-access', pageId],
     queryFn: async () => {
-      const response = await apiClientV2.pages['link-access'].$post({
+      const response = await apiClient.pages['link-access'].$post({
         json: { page_id: pageId },
       });
 

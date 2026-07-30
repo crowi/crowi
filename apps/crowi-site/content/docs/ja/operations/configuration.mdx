@@ -78,7 +78,7 @@ API は起動時にこれらの環境変数をまとめて検証します。`POR
 | `WS_TOKEN_SECRET` | マルチで必須 | WebSocket 接続認証に使う短命 JWT (wsToken) の HMAC 署名鍵 (presence・通知・メールトークンとも共用)。マルチインスタンスでは全レプリカで**同じ値**にする。未設定時はプロセスごとにランダム生成され、警告ログが出る。**設定する場合は 32 文字以上必須** — 32 文字未満だと `NODE_ENV=production` (デフォルト) では起動失敗、それ以外は警告 (既知のプレースホルダ値は対象外)。`openssl rand -base64 32` で生成 |
 | `COLLAB_MAX_EDITORS_PER_PAGE` | いいえ (デフォルト `20`) | 1 ページあたりの同時編集者上限。超過したクライアントは read-only で接続する |
 | `NEXT_PUBLIC_COLLAB_URL` | いいえ | ブラウザが接続する WebSocket URL。**実行時**(`window.__ENV`)に読まれる。未指定時の解決順: `NEXT_PUBLIC_API_URL` → `window.location`(dev では `:4304` 同一オリジン proxy)。api/web が **別ホスト** のとき、または Vercel(edge が WS を proxy できない)で設定 |
-| `NEXT_PUBLIC_API_URL` | いいえ(クロスオリジン時のみ) | ブラウザから見た api の絶対オリジン。**実行時**(`window.__ENV`、再ビルド不要)に読まれる。推奨の同一オリジン + リバースプロキシ構成では **未設定**(ブラウザは相対 `/api/v2` を使う)。クロスオリジン構成でのみ設定 — [デプロイ構成](./deployment) 参照 |
+| `NEXT_PUBLIC_API_URL` | いいえ(クロスオリジン時のみ) | ブラウザから見た api の絶対オリジン。**実行時**(`window.__ENV`、再ビルド不要)に読まれる。推奨の同一オリジン + リバースプロキシ構成では **未設定**(ブラウザは相対 `/api` を使う)。クロスオリジン構成でのみ設定 — [デプロイ構成](./deployment) 参照 |
 | `CROWI_API_URL` | いいえ | Next **サーバ** が `rewrites()` proxy に使う api URL。`output: 'standalone'` では build 時に焼かれるため、`pnpm dev` / Vercel edge でのみ有効。self-host 本番は前段リバースプロキシを使う |
 
 > **Tip**: `WS_TOKEN_SECRET` と `CROWI_ENCRYPTION_KEY` はどちらも
@@ -106,7 +106,7 @@ API は起動時にこれらの環境変数をまとめて検証します。`POR
 ### レンダラ plugin アセットと CSP (Content-Security-Policy)
 
 KaTeX のような一部のレンダラ plugin は、CSS / font などの静的アセットを
-自身の public route (`/api/v2/plugins/<plugin-name>/...`) から配信します。
+自身の public route (`/api/plugins/<plugin-name>/...`) から配信します。
 Web はどの plugin が有効かを app-info の `rendererStylesheets` manifest
 から取得し、api origin に対する `<link rel="stylesheet">` として読み込み
 ます — plugin 名や CSS の存在を Web 側が事前に知る必要はありません。

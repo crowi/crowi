@@ -13,7 +13,7 @@ import type {
  * Boot-time validation for `addStylesheet(path)` (feature-renderer-
  * plugin-boundary spec §2.1). `path` must be an API-relative absolute
  * path confined to the registering plugin's own route namespace —
- * `/api/v2/plugins/<registeringPlugin>/…`, the exact prefix
+ * `/api/plugins/<registeringPlugin>/…`, the exact prefix
  * `makePluginRouterScope` mounts that plugin's HTTP routes under
  * (`packages/api/src/plugin/registries.ts`). Query / fragment are
  * allowed (e.g. a cache-busting `?v=…`); a URL scheme, protocol-relative
@@ -25,13 +25,29 @@ import type {
  * The `..`-segment and namespace-prefix checks run on BOTH the raw
  * pathname AND its percent-decoded form (defense in depth) — checking
  * only the raw form would let a path like
- * `/api/v2/plugins/my-plugin/%2e%2e/other-plugin/style.css` through: it
+ * `/api/plugins/my-plugin/%2e%2e/other-plugin/style.css` through: it
  * has no literal `..` segment and satisfies the raw prefix check, but a
  * consumer that percent-decodes the path (as browsers / HTTP servers
- * routinely do) resolves it to `/api/v2/plugins/other-plugin/style.css`,
+ * routinely do) resolves it to `/api/plugins/other-plugin/style.css`,
  * escaping the registering plugin's own namespace. Malformed percent-
  * encoding (a decode that throws) is rejected outright rather than
  * silently falling back to the raw form.
+ *
+ * feature-api-v2-path-removal §6: the namespace check *dual-accepts*
+ * both the canonical `/api/plugins/<registeringPlugin>/` prefix and the
+ * legacy `/api/v2/plugins/<registeringPlugin>/` one a not-yet-bumped
+ * plugin package may still be passing in. When the legacy prefix
+ * matches, the returned path has that prefix substring rewritten to
+ * canonical BEFORE it ever enters the pending/published stylesheet
+ * manifest — the manifest (served by `GET /api/app/info` and rendered
+ * verbatim into `<link href>` by `RendererStylesheets`, which does no
+ * normalization of its own) must never carry a `/api/v2/...` entry once
+ * the listener stops accepting that prefix. This dual-accept is a
+ * migration-period allowance ONLY — unlike the attachment URL reader's
+ * permanent dual-accept regexes, it exists solely to decouple an
+ * installed plugin's own bump timing from the listener cutover, and may
+ * be narrowed back to canonical-only once installed plugins have caught
+ * up.
  */
 function validateStylesheetPath(path: string, registeringPlugin: string): string {
   if (path.includes('\\')) {
@@ -53,9 +69,18 @@ function validateStylesheetPath(path: string, registeringPlugin: string): string
   if (pathname.split('/').includes('..') || decodedPathname.split('/').includes('..')) {
     throw new Error(`Plugin '${registeringPlugin}' registered a stylesheet path with a '..' traversal segment: '${path}'`);
   }
-  const requiredPrefix = `/api/v2/plugins/${registeringPlugin}/`;
-  if (!pathname.startsWith(requiredPrefix) || !decodedPathname.startsWith(requiredPrefix)) {
-    throw new Error(`Plugin '${registeringPlugin}' registered a stylesheet path outside its own route namespace ('${requiredPrefix}'): '${path}'`);
+  const canonicalPrefix = `/api/plugins/${registeringPlugin}/`;
+  const legacyPrefix = `/api/v2/plugins/${registeringPlugin}/`;
+  const matchesCanonical = pathname.startsWith(canonicalPrefix) && decodedPathname.startsWith(canonicalPrefix);
+  const matchesLegacy = pathname.startsWith(legacyPrefix) && decodedPathname.startsWith(legacyPrefix);
+  if (!matchesCanonical && !matchesLegacy) {
+    throw new Error(`Plugin '${registeringPlugin}' registered a stylesheet path outside its own route namespace ('${canonicalPrefix}'): '${path}'`);
+  }
+  if (matchesLegacy) {
+    // Migration-period normalization (see the doc comment above) — never
+    // let the legacy-prefixed string itself reach the pending/published
+    // manifest.
+    return canonicalPrefix + path.slice(legacyPrefix.length);
   }
   return path;
 }
@@ -109,7 +134,7 @@ export class RendererRegistryImpl {
   private urlExpanders: { plugin: string; rule: UrlInlineExpansionRule }[] = [];
   /** Per-plugin staged stylesheet paths, not yet published — see the class doc comment. */
   private pendingStylesheets = new Map<string, string[]>();
-  /** Published stylesheet manifest, in commit order, deduped. Read by `GET /api/v2/app/info`. */
+  /** Published stylesheet manifest, in commit order, deduped. Read by `GET /api/app/info`. */
   private stylesheets: string[] = [];
 
   /** Snapshot of registered transform-phase unified plugins, in registration order. */
@@ -279,7 +304,7 @@ export class RendererRegistryImpl {
     this.pendingStylesheets.delete(registeringPlugin);
   }
 
-  /** Published stylesheet manifest, in commit order, deduped — read by `GET /api/v2/app/info`. */
+  /** Published stylesheet manifest, in commit order, deduped — read by `GET /api/app/info`. */
   getStylesheets(): readonly string[] {
     return this.stylesheets;
   }

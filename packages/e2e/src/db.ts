@@ -72,7 +72,7 @@ export async function getPluginRenderCacheFetchedAt(pageId: string, pluginName: 
  * (`packages/api/src/renderer/version.ts`).
  *
  * feature-renderer-plugin-boundary Phase 2 — forces the next
- * `GET /api/v2/pages` to treat the stored `renderedAst` as stale and fall
+ * `GET /api/pages` to treat the stored `renderedAst` as stale and fall
  * back to an on-the-fly `runRender(mode: 'read', pageId, ...)`
  * (`computeRevisionRenderArtifactsAsync`,
  * `packages/api/src/util/page-response.ts`) — the SAME

@@ -56,7 +56,7 @@ plugin's `reconfigure` so the new connection details take effect.
 ## Configuring mail in the admin UI
 
 Opening `/admin/mail` shows the sender address and which driver is
-currently active. Internally, `GET /api/v2/admin/mail` retrieves the
+currently active. Internally, `GET /api/admin/mail` retrieves the
 following values.
 
 | Setting | Description |
@@ -70,7 +70,7 @@ connection details belong. **The SMTP host / auth, the Resend API key and
 the AWS credentials for SES do not appear on this screen** — they live in
 their respective plugin settings.
 
-Saving calls `PUT /api/v2/admin/mail`, which updates `from`.
+Saving calls `PUT /api/admin/mail`, which updates `from`.
 
 ### Handling of sensitive values
 
@@ -155,7 +155,7 @@ the plugin's `apiKey` setting.
 ## Sending a test mail
 
 You can verify that mail settings are correct with the **test send**
-feature in the admin UI. It calls `POST /api/v2/admin/mail/test` and
+feature in the admin UI. It calls `POST /api/admin/mail/test` and
 sends a test mail **to the operating administrator's own mail address**.
 
 - The test send uses **only the saved settings**. Values typed on the

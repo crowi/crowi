@@ -18,7 +18,7 @@ import { bodyHasRewritableFilesUrl, filesUrlToAttachments, rewriteFilesUrls } fr
  *      CLIENT_URL-unset (`[]`) cases are both covered without env juggling.
  *   2. The framework wiring (`isPending` / `detect` / stage), reusing the live
  *      `crowi` whose `CLIENT_URL` is `http://localhost:13001` (test/setup.ts).
- *   3. The runtime `/files/:id` → 302 `/api/v2/attachments/:id` redirect.
+ *   3. The runtime `/files/:id` → 302 `/api/attachments/:id` redirect.
  */
 
 const MigrationApplication = () => crowi.model('MigrationApplication') as MigrationApplicationModel;
@@ -42,19 +42,19 @@ describe('migration/files-url-to-attachments — rewriteFilesUrls (pure)', () =>
 
   it('rewrites a relative /files/<id> in a Markdown image', () => {
     const result = rewriteFilesUrls(`![pic](/files/${ID_A})`, origins);
-    expect(result.body).toBe(`![pic](/api/v2/attachments/${ID_A})`);
+    expect(result.body).toBe(`![pic](/api/attachments/${ID_A})`);
     expect(result.counts.relative).toBe(1);
   });
 
   it('rewrites a relative /files/<id> in a Markdown link', () => {
     const result = rewriteFilesUrls(`see [the file](/files/${ID_A}) here`, origins);
-    expect(result.body).toBe(`see [the file](/api/v2/attachments/${ID_A}) here`);
+    expect(result.body).toBe(`see [the file](/api/attachments/${ID_A}) here`);
     expect(result.counts.relative).toBe(1);
   });
 
   it('relativises a self-host absolute URL (drops the host)', () => {
     const result = rewriteFilesUrls(`![pic](https://wiki.example.com/files/${ID_A})`, origins);
-    expect(result.body).toBe(`![pic](/api/v2/attachments/${ID_A})`);
+    expect(result.body).toBe(`![pic](/api/attachments/${ID_A})`);
     expect(result.counts.selfHostAbsolute).toBe(1);
     expect(result.counts.relative).toBe(0);
   });
@@ -68,14 +68,24 @@ describe('migration/files-url-to-attachments — rewriteFilesUrls (pure)', () =>
     expect(result.counts.selfHostAbsolute).toBe(0);
   });
 
-  it('does NOT touch an already-v2 /api/v2/attachments/<id> URL', () => {
+  it('does NOT touch an already-rewritten /api/attachments/<id> URL', () => {
+    const body = `![pic](/api/attachments/${ID_A})`;
+    expect(rewriteFilesUrls(body, origins).body).toBe(body);
+  });
+
+  it('does NOT touch a body already carrying the legacy (pre-cutover) /api/v2/attachments/<id> form', () => {
+    // A body rewritten by a copy of this migration that ran before the
+    // /api/v2 -> /api cutover doesn't match the /files/ prefilter, so it is
+    // never re-visited here. That legacy form is permanently handled by the
+    // reader dual-accept (`ATTACHMENT_URI_RE`) and the web canonicalization
+    // helper (`attachment-url.ts`), not by re-running this migration.
     const body = `![pic](/api/v2/attachments/${ID_A})`;
     expect(rewriteFilesUrls(body, origins).body).toBe(body);
   });
 
   it('is idempotent — a second pass over the rewritten body is a no-op', () => {
     const once = rewriteFilesUrls(`![a](/files/${ID_A}) and [b](https://wiki.example.com/files/${ID_B})`, origins);
-    expect(once.body).toBe(`![a](/api/v2/attachments/${ID_A}) and [b](/api/v2/attachments/${ID_B})`);
+    expect(once.body).toBe(`![a](/api/attachments/${ID_A}) and [b](/api/attachments/${ID_B})`);
     const twice = rewriteFilesUrls(once.body, origins);
     expect(twice.body).toBe(once.body);
     expect(twice.counts).toEqual({ relative: 0, selfHostAbsolute: 0, externalSkipped: 0 });
@@ -84,15 +94,13 @@ describe('migration/files-url-to-attachments — rewriteFilesUrls (pure)', () =>
   it('handles relative + self-host + external in one body', () => {
     const body = `![rel](/files/${ID_A})\n` + `![self](https://wiki.example.com/files/${ID_B})\n` + `![ext](https://other.example.org/files/${ID_A})`;
     const result = rewriteFilesUrls(body, origins);
-    expect(result.body).toBe(
-      `![rel](/api/v2/attachments/${ID_A})\n` + `![self](/api/v2/attachments/${ID_B})\n` + `![ext](https://other.example.org/files/${ID_A})`,
-    );
+    expect(result.body).toBe(`![rel](/api/attachments/${ID_A})\n` + `![self](/api/attachments/${ID_B})\n` + `![ext](https://other.example.org/files/${ID_A})`);
     expect(result.counts).toEqual({ relative: 1, selfHostAbsolute: 1, externalSkipped: 1 });
   });
 
   it('preserves a trailing query/fragment after the id', () => {
     const result = rewriteFilesUrls(`![pic](/files/${ID_A}?w=200#frag)`, origins);
-    expect(result.body).toBe(`![pic](/api/v2/attachments/${ID_A}?w=200#frag)`);
+    expect(result.body).toBe(`![pic](/api/attachments/${ID_A}?w=200#frag)`);
   });
 
   it('does not match a 24-hex that is not under /files/', () => {
@@ -106,7 +114,7 @@ describe('migration/files-url-to-attachments — rewriteFilesUrls (pure)', () =>
       const result = rewriteFilesUrls(body, []);
       // The absolute URL can't be classified as self without an origin list, so
       // it falls through to the external (untouched) branch.
-      expect(result.body).toBe(`![rel](/api/v2/attachments/${ID_A}) and ![abs](https://wiki.example.com/files/${ID_B})`);
+      expect(result.body).toBe(`![rel](/api/attachments/${ID_A}) and ![abs](https://wiki.example.com/files/${ID_B})`);
       expect(result.counts.relative).toBe(1);
       expect(result.counts.selfHostAbsolute).toBe(0);
       expect(result.counts.externalSkipped).toBe(1);
@@ -132,7 +140,7 @@ describe('migration/files-url-to-attachments — rewriteFilesUrls (pure)', () =>
       const fence = '```md\n![ex](/files/' + ID_B + ')\n```';
       const body = `![real](/files/${ID_A})\n${fence}\n`;
       const result = rewriteFilesUrls(body, origins);
-      expect(result.body).toBe(`![real](/api/v2/attachments/${ID_A})\n${fence}\n`);
+      expect(result.body).toBe(`![real](/api/attachments/${ID_A})\n${fence}\n`);
       // The fenced URL is untouched; only the genuine one is counted.
       expect(result.counts.relative).toBe(1);
       // The code region survives verbatim.
@@ -145,7 +153,7 @@ describe('migration/files-url-to-attachments — rewriteFilesUrls (pure)', () =>
       const fence = '```\n![doc](/files/' + ID_B + ')\n```';
       const body = `${inline} then ![real](/files/${ID_A}) then\n${fence}\n`;
       const result = rewriteFilesUrls(body, origins);
-      expect(result.body).toBe(`${inline} then ![real](/api/v2/attachments/${ID_A}) then\n${fence}\n`);
+      expect(result.body).toBe(`${inline} then ![real](/api/attachments/${ID_A}) then\n${fence}\n`);
       expect(result.body).toContain(inline);
       expect(result.body).toContain(fence);
     });
@@ -189,7 +197,7 @@ describe('migration/files-url-to-attachments — bodyHasRewritableFilesUrl (pure
 
   it('is false when there is no /files/ substring at all', () => {
     expect(bodyHasRewritableFilesUrl('plain text', origins)).toBe(false);
-    expect(bodyHasRewritableFilesUrl(`![v2](/api/v2/attachments/${ID_A})`, origins)).toBe(false);
+    expect(bodyHasRewritableFilesUrl(`![v2](/api/attachments/${ID_A})`, origins)).toBe(false);
   });
 
   it('is false when the only /files/ URL is external (would not be rewritten)', () => {
@@ -279,8 +287,8 @@ describe('migration/files-url-to-attachments — framework wiring', () => {
     expect(outcome.stats['rewrite-files-url']).toBeUndefined();
   });
 
-  it('isPending is false for a page already in v2 form', async () => {
-    await Page.createPage(`${PATH_PREFIX}/v2`, `![pic](/api/v2/attachments/${ID_A})`, admin, {});
+  it('isPending is false for a page already in the current /api/attachments/<id> form', async () => {
+    await Page.createPage(`${PATH_PREFIX}/v2`, `![pic](/api/attachments/${ID_A})`, admin, {});
     const runner = new MigrationRunner(crowi);
     expect(await runner.isPending(filesUrlToAttachments)).toBe(false);
   });
@@ -316,7 +324,7 @@ describe('migration/files-url-to-attachments — framework wiring', () => {
 
     const page = await Page.findById(pageId).populate('revision');
     expect(page.revision.body).toBe(
-      `![rel](/api/v2/attachments/${ID_A}) and ![self](/api/v2/attachments/${ID_B}) and ![ext](https://other.example.org/files/${ID_A})`,
+      `![rel](/api/attachments/${ID_A}) and ![self](/api/attachments/${ID_B}) and ![ext](https://other.example.org/files/${ID_A})`,
     );
 
     const recorded = await MigrationApplication().latestFor('files-url-to-attachments');
@@ -331,14 +339,14 @@ describe('migration/files-url-to-attachments — framework wiring', () => {
     const runner = new MigrationRunner(crowi);
     await runner.apply(filesUrlToAttachments);
     const after1 = await Page.findById(pageId).populate('revision');
-    expect(after1.revision.body).toBe(`![pic](/api/v2/attachments/${ID_A})`);
+    expect(after1.revision.body).toBe(`![pic](/api/attachments/${ID_A})`);
 
     // Re-applying must not double-rewrite: the verdict is now false, so the
     // stage never runs and the body is byte-identical.
     expect(await runner.isPending(filesUrlToAttachments)).toBe(false);
     await runner.apply(filesUrlToAttachments);
     const after2 = await Page.findById(pageId).populate('revision');
-    expect(after2.revision.body).toBe(`![pic](/api/v2/attachments/${ID_A})`);
+    expect(after2.revision.body).toBe(`![pic](/api/attachments/${ID_A})`);
   });
 
   it('nulls yjsState / yjsCheckpointAt on the rewritten page (Yjs invalidation)', async () => {
@@ -412,7 +420,7 @@ describe('migration/files-url-to-attachments — framework wiring', () => {
       await runner.apply(filesUrlToAttachments);
 
       const page = await Page.findById(created._id).populate('revision');
-      expect(page.revision.body).toBe(`![real](/api/v2/attachments/${ID_A})\n${fence}\nand ${inline} inline`);
+      expect(page.revision.body).toBe(`![real](/api/attachments/${ID_A})\n${fence}\nand ${inline} inline`);
       // The code regions survive the apply byte-for-byte.
       expect(page.revision.body).toContain(fence);
       expect(page.revision.body).toContain(inline);
@@ -420,11 +428,11 @@ describe('migration/files-url-to-attachments — framework wiring', () => {
   });
 });
 
-describe('GET /files/:id — 302 redirect to /api/v2/attachments/:id (safety net)', () => {
-  it('redirects a relative /files/<24hex> GET to /api/v2/attachments/<24hex> with 302', async () => {
+describe('GET /files/:id — 302 redirect to /api/attachments/:id (safety net)', () => {
+  it('redirects a relative /files/<24hex> GET to /api/attachments/<24hex> with 302', async () => {
     const res = await request(app).get(`/files/${ID_A}`).redirects(0); // don't follow — assert the 302 itself
     expect(res.status).toBe(302);
-    expect(res.headers.location).toBe(`/api/v2/attachments/${ID_A}`);
+    expect(res.headers.location).toBe(`/api/attachments/${ID_A}`);
   });
 
   it('does not require auth for the redirect itself (auth is deferred to the target)', async () => {
@@ -432,7 +440,7 @@ describe('GET /files/:id — 302 redirect to /api/v2/attachments/:id (safety net
     // enforces JWT, not this redirect).
     const res = await request(app).get(`/files/${ID_B}`).redirects(0);
     expect(res.status).toBe(302);
-    expect(res.headers.location).toBe(`/api/v2/attachments/${ID_B}`);
+    expect(res.headers.location).toBe(`/api/attachments/${ID_B}`);
   });
 
   it('does not match a non-24-hex /files/ path', async () => {

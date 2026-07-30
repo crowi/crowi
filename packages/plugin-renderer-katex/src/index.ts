@@ -127,16 +127,16 @@ const renderMathInline: NodeRenderer = (node, _ctx) => {
 };
 
 const PLUGIN_NAME = '@crowi/plugin-renderer-katex';
-/** Route sub-paths, relative to `/api/v2/plugins/${PLUGIN_NAME}` (`PluginRouterScope.route`'s `path`). */
+/** Route sub-paths, relative to `/api/plugins/${PLUGIN_NAME}` (`PluginRouterScope.route`'s `path`). */
 const CSS_ROUTE_PATH = '/katex.min.css';
 const FONTS_ROUTE_PATH = '/fonts/:filename';
 /**
  * The API-relative absolute path handed to `registry.addStylesheet(...)`
  * in `registerRenderer` — must match `CSS_ROUTE_PATH`'s mounted location
  * exactly (`makePluginRouterScope` mounts every `registerRoutes` path
- * under `/api/v2/plugins/${PLUGIN_NAME}/...`).
+ * under `/api/plugins/${PLUGIN_NAME}/...`).
  */
-const STYLESHEET_MANIFEST_PATH = `/api/v2/plugins/${PLUGIN_NAME}${CSS_ROUTE_PATH}`;
+const STYLESHEET_MANIFEST_PATH = `/api/plugins/${PLUGIN_NAME}${CSS_ROUTE_PATH}`;
 
 const FONT_CONTENT_TYPES: Record<string, string> = {
   '.woff2': 'font/woff2',
@@ -224,7 +224,7 @@ const buildAssetResponse = (asset: ServableAsset): Response =>
   });
 
 /**
- * `GET /api/v2/plugins/${PLUGIN_NAME}/fonts/:filename` handler. Looks
+ * `GET /api/plugins/${PLUGIN_NAME}/fonts/:filename` handler. Looks
  * `filename` up in the exact-match `fontsByFilename` map built from
  * what's actually on disk (`loadKatexAssets`) — there is no
  * filesystem path built from the request at all, so a `../` /

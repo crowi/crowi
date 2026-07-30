@@ -38,7 +38,7 @@ const PageIdPathParamsSchema = z.object({
 });
 
 /**
- * GET /api/v2/pages/:id/yjs-token (RFC-0003 Phase 2)
+ * GET /api/pages/:id/yjs-token (RFC-0003 Phase 2)
  *
  * Mints the short-lived JWT (`wsToken`) the Hocuspocus client
  * (`HocuspocusProvider`) presents on connect. Phase 3 wires

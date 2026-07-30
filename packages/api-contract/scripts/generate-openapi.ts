@@ -394,11 +394,11 @@ const doc = app.getOpenAPI31Document({
   },
   servers: [
     {
-      url: 'http://localhost:3000/api/v2',
+      url: 'http://localhost:3000/api',
       description: 'Local development server',
     },
     {
-      url: 'https://your-crowi-instance.com/api/v2',
+      url: 'https://your-crowi-instance.com/api',
       description: 'Production server',
     },
   ],

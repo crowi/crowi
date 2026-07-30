@@ -2,17 +2,17 @@
 
 import type { DraftConflictOwner, DraftSummary, ListDraftsResponse } from '@crowi/api-contract';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiClientV2 } from './api-client';
+import { apiClient } from './api-client';
 import { invalidateUserSubpagesQueries, PAGE_LIST_FAMILY_ROOT } from './page-query-keys';
 
 /**
  * RFC-0004 — react-query bindings for the drafts API
- * (`/api/v2/pages/drafts`), consumed by the `/me/creating-pages` view.
+ * (`/api/pages/drafts`), consumed by the `/me/creating-pages` view.
  * Drafts are a single flat user-scoped collection, so the key factory
  * has just `all`.
  *
  * RFC-0006 Phase 4 Batch 6 — switched from `apiClient.draft.*` (ts-rest)
- * to `apiClientV2.pages.drafts.*.$method` (`createClient`). Wire payload is
+ * to `apiClient.pages.drafts.*.$method` (`createClient`). Wire payload is
  * unchanged; the only call-site difference is `response.ok` /
  * `response.json()` instead of ts-rest's `result.status` + `result.body`.
  */
@@ -42,7 +42,7 @@ export function useDrafts() {
   return useQuery({
     queryKey: draftsKeys.all,
     queryFn: async (): Promise<ListDraftsResponse> => {
-      const response = await apiClientV2.pages.drafts.$get();
+      const response = await apiClient.pages.drafts.$get();
       if (response.status === 401) return EMPTY_DRAFTS;
       if (response.ok) {
         return (await response.json()) as ListDraftsResponse;
@@ -85,7 +85,7 @@ export function useCreateDraft() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (input: { path: string; initialBody?: string }): Promise<{ pageId: string }> => {
-      const response = await apiClientV2.pages.drafts.$post({ json: input });
+      const response = await apiClient.pages.drafts.$post({ json: input });
       if (response.status === 201) {
         return (await response.json()) as { pageId: string };
       }
@@ -127,7 +127,7 @@ export function useCancelDraft() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (pageId: string): Promise<void> => {
-      const response = await apiClientV2.pages.drafts[':id'].$delete({ param: { id: pageId } });
+      const response = await apiClient.pages.drafts[':id'].$delete({ param: { id: pageId } });
       if (!response.ok) {
         throw new Error('Failed to cancel draft');
       }

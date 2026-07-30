@@ -144,7 +144,7 @@ export const openNotificationRoute = createRoute({
 });
 
 /**
- * GET /api/v2/notifications/token
+ * GET /api/notifications/token
  *
  * Mints the short-lived JWT a browser presents on the
  * `/notifications/<userId>` WebSocket handshake. The notifications

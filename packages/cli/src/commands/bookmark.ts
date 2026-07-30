@@ -34,7 +34,7 @@ async function resolvePageId(profile: Parameters<typeof fetchCurrentPage>[0], pa
 
 /**
  * `crowi bookmark add <path-or-id>` — bookmark a page
- * (`POST /api/v2/bookmarks`, needs `bookmarks:write`).
+ * (`POST /api/bookmarks`, needs `bookmarks:write`).
  */
 async function runAdd(pathOrId: string, command: Command): Promise<void> {
   const { profile, globals } = requireProfile(command);
@@ -62,7 +62,7 @@ async function runAdd(pathOrId: string, command: Command): Promise<void> {
 
 /**
  * `crowi bookmark remove <path-or-id>` — remove a bookmark (idempotent)
- * (`DELETE /api/v2/bookmarks`, needs `bookmarks:write`).
+ * (`DELETE /api/bookmarks`, needs `bookmarks:write`).
  */
 async function runRemove(pathOrId: string, command: Command): Promise<void> {
   const { profile, globals } = requireProfile(command);
@@ -84,7 +84,7 @@ async function runRemove(pathOrId: string, command: Command): Promise<void> {
 
 /**
  * `crowi bookmark list` — list the signed-in user's bookmarks
- * (`GET /api/v2/bookmarks/me`, needs `bookmarks:read`).
+ * (`GET /api/bookmarks/me`, needs `bookmarks:read`).
  */
 async function runList(options: { limit?: string; offset?: string }, command: Command): Promise<void> {
   const { profile, globals } = requireProfile(command);

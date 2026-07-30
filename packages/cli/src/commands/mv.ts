@@ -7,20 +7,20 @@ import { isObjectId, normalisePath } from '../lib/page-ref';
 import { fetchCurrentPage } from '../lib/page-write';
 import { requireProfile, rethrowNewerEndpointHint } from './_shared';
 
-/** Lenient `POST /api/v2/pages/rename` response (RenamePageResponseSchema). */
+/** Lenient `POST /api/pages/rename` response (RenamePageResponseSchema). */
 interface RenamePageResponse {
   page?: { _id?: string; path?: string };
   renamed_count?: number;
 }
 
-/** Lenient `POST /api/v2/pages/rename-subtree` response. */
+/** Lenient `POST /api/pages/rename-subtree` response. */
 interface RenameSubtreeResponse {
   renamed_count?: number;
 }
 
 /**
  * `crowi mv <old> <new>` — move/rename a page (and optionally its subtree)
- * via `POST /api/v2/pages/rename` (`pages:write`).
+ * via `POST /api/pages/rename` (`pages:write`).
  *
  * The source may be a `<path-or-id>`. When it resolves to a real page
  * document the single-page rename endpoint is used (with `--recursive` to

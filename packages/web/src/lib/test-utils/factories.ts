@@ -26,8 +26,8 @@ export function makeAttachment(overrides: Partial<Attachment> = {}): Attachment 
     fileFormat: 'image/png',
     fileSize: 2048,
     createdAt: '2026-05-01T09:30:00.000Z',
-    url: '/api/v2/attachments/att-1',
-    originalUrl: '/api/v2/attachments/att-1/original',
+    url: '/api/attachments/att-1',
+    originalUrl: '/api/attachments/att-1/original',
     inUse: true,
     ...overrides,
   };

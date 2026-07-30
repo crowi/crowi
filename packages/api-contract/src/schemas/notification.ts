@@ -106,7 +106,7 @@ export const NotificationNotFoundErrorSchema = z.object({
 export type NotificationNotFoundError = z.infer<typeof NotificationNotFoundErrorSchema>;
 
 /**
- * Response body of `GET /api/v2/notifications/token`.
+ * Response body of `GET /api/notifications/token`.
  *
  * Used by the browser to authenticate the `/notifications/<userId>` WebSocket
  * handshake that fans out per-user notification invalidation signals

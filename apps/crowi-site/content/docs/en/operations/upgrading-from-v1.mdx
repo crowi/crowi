@@ -152,7 +152,7 @@ The migrations registered as of the v2 alpha are:
 | `wikilink-format` | preflight | cosmetic | Convert wikilink syntax |
 | `user-unique-prepare` | preflight | **blocking** | Deduplicate users (prepare for the unique index) |
 | `relocate-reserved-api-paths` | preflight | cosmetic | Move v1 pages out of the reserved `/api` namespace |
-| `files-url-to-attachments` | preflight | cosmetic | Rewrite v1 file URLs (`/files/<id>`) in page bodies to the v2 form (`/api/v2/attachments/<id>`) |
+| `files-url-to-attachments` | preflight | cosmetic | Rewrite v1 file URLs (`/files/<id>`) in page bodies to the `/api/attachments/<id>` form |
 | `wikilink-html-recover` | preflight | cosmetic | Recover HTML close tags (`</font>` etc.) corrupted into wikilinks |
 
 (Severity applies only to `preflight` migrations — `boot` migrations are
@@ -252,9 +252,9 @@ effect.
 
 v1 served its API under `/_api/*`, so `/api/*` (no underscore) was an
 ordinary wiki page path. v2 reserves `/api` for the reverse-proxied backend
-(`/api/v2/*`), so any v1 page still living under `/api/*` would be stranded
-— the web app 404s the reserved namespace, and pages that happened to sit at
-`/api/v2/*` are shadowed by the proxy entirely.
+(`/api/*`), so any v1 page still living under `/api/*` would be stranded
+— the web app 404s the reserved namespace, and those same paths are shadowed
+by the proxy entirely.
 
 The `relocate-reserved-api-paths` preflight migration moves every such page
 to `/api-legacy/*` (preserving the rest of the path; a pre-existing target
@@ -381,9 +381,9 @@ internal links).
 v1 referenced attachments / images in page bodies with **v1 file URLs** (the
 relative form `![shot.png](/files/<id>)`, or the absolute form
 `![shot.png](https://wiki.example/files/<id>)` when the editor pasted a full
-URL). v2 serves attachments from a dedicated stream endpoint at
-`/api/v2/attachments/<id>` and the legacy `/files/<id>` compat route was
-removed, so **v1-form URLs now 404 in v2 — those images are broken**. The id is
+URL). Crowi 2.0 serves attachments from a dedicated stream endpoint at
+`/api/attachments/<id>` and the legacy `/files/<id>` compat route was
+removed, so **v1-form URLs now 404 — those images are broken**. The id is
 the same 24-hex `Attachment._id` in both v1 and v2, so the fix is **just a URL
 rewrite** (no id remap).
 
@@ -392,10 +392,10 @@ body of every published page (plus legacy `null` status) and rewrites the URL of
 Markdown images `![alt](url)` / links `[text](url)` by these rules (raw HTML
 `<img>` / `<a>` is out of scope):
 
-- **relative `/files/<id>`** → `/api/v2/attachments/<id>` (unconditional — a
+- **relative `/files/<id>`** → `/api/attachments/<id>` (unconditional — a
   root-relative path is always this site).
 - **self-host absolute `https://<CLIENT_URL host>/files/<id>`** →
-  `/api/v2/attachments/<id>` (relativised by dropping the host, so the URL
+  `/api/attachments/<id>` (relativised by dropping the host, so the URL
   becomes host-independent). Self-host is decided by matching the `CLIENT_URL` /
   `BASE_URL` origins only.
 - **external-host absolute URLs** → **left untouched** (so an unrelated
@@ -409,7 +409,7 @@ crowi-admin migrate plan
 crowi-admin migrate apply --id files-url-to-attachments
 ```
 
-The migration is idempotent: the rewritten `/api/v2/attachments/<id>` is never
+The migration is idempotent: the rewritten `/api/attachments/<id>` is never
 double-converted on a re-apply. It needs an admin user to attribute the rewrites
 to — set `CROWI_MIGRATE_USER=<email>` if none is resolvable.
 
@@ -421,8 +421,8 @@ to — set `CROWI_MIGRATE_USER=<email>` if none is resolvable.
 > left alone.
 
 > **Note**: As a safety net for migration misses and un-rewritten bodies, the
-> api restores a `/files/<id>` → `302` `/api/v2/attachments/<id>` redirect. A
-> runtime request to a relative `/files/<id>` is forwarded to the v2 form, so an
+> api restores a `/files/<id>` → `302` `/api/attachments/<id>` redirect. A
+> runtime request to a relative `/files/<id>` is forwarded to the canonical form, so an
 > image is not left broken even if the body rewrite has not run yet (absolute
 > URLs pointing at an external host cannot be saved by the redirect, which is why
 > the body rewrite is the primary fix).

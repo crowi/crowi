@@ -17,7 +17,7 @@ export class InstallerPage {
     await this.page.locator('#password').fill(credentials.password);
 
     await Promise.all([
-      this.page.waitForResponse((response) => response.url().endsWith('/api/v2/auth/login') && response.request().method() === 'POST' && response.ok()),
+      this.page.waitForResponse((response) => response.url().endsWith('/api/auth/login') && response.request().method() === 'POST' && response.ok()),
       this.page.locator('form button[type="submit"]').click(),
     ]);
 

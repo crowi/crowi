@@ -9,7 +9,7 @@ import { normalisePath } from '../lib/page-ref';
 import { requireProfile } from './_shared';
 
 /**
- * The `POST /api/v2/pages` response (PageResponseSchema). Parsed leniently —
+ * The `POST /api/pages` response (PageResponseSchema). Parsed leniently —
  * only the fields the CLI reports back are declared.
  */
 interface CreatePageResponse {
@@ -31,7 +31,7 @@ function parseGrant(raw: string | undefined): number | undefined {
 }
 
 /**
- * `crowi create <path>` — create a new page via `POST /api/v2/pages`
+ * `crowi create <path>` — create a new page via `POST /api/pages`
  * (`pages:write`, in the default login scope). The body comes from
  * `--message` / `--file` / `--stdin`, or from `$EDITOR` when none is given
  * (an empty editor buffer aborts so an accidental run never creates a blank

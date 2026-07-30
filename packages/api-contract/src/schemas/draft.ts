@@ -2,7 +2,7 @@ import { z } from '@hono/zod-openapi';
 
 /**
  * RFC-0004 Phase 3 — schemas for the drafts endpoints
- * (`POST` / `GET` / `DELETE` under `/api/v2/pages/drafts`).
+ * (`POST` / `GET` / `DELETE` under `/api/pages/drafts`).
  *
  * A *draft* is a `Page` with `status === 'draft'`: a brand-new page in
  * progress, visible only to its author until the first save promotes it
@@ -11,7 +11,7 @@ import { z } from '@hono/zod-openapi';
  */
 
 /**
- * Request body for `POST /api/v2/pages/drafts`.
+ * Request body for `POST /api/pages/drafts`.
  * `path` is the canonical wiki path the new page will occupy.
  * `initialBody` seeds the draft's first revision; defaults to empty.
  */
@@ -22,7 +22,7 @@ export const CreateDraftRequestSchema = z.object({
 export type CreateDraftRequest = z.infer<typeof CreateDraftRequestSchema>;
 
 /**
- * Success body for `POST /api/v2/pages/drafts` (201). Only the new
+ * Success body for `POST /api/pages/drafts` (201). Only the new
  * `pageId` is returned — the client navigates to `/pages/<id>/edit`
  * and the collab session loads the rest.
  */
@@ -45,7 +45,7 @@ export const DraftConflictOwnerSchema = z.object({
 export type DraftConflictOwner = z.infer<typeof DraftConflictOwnerSchema>;
 
 /**
- * 409 body for `POST /api/v2/pages/drafts` when another user already
+ * 409 body for `POST /api/pages/drafts` when another user already
  * holds a draft at the requested path. `error` is a stable machine
  * code; `owner` lets the UI show the contact-the-owner message;
  * `message` is a human-readable fallback.
@@ -58,7 +58,7 @@ export const DraftPathConflictErrorSchema = z.object({
 export type DraftPathConflictError = z.infer<typeof DraftPathConflictErrorSchema>;
 
 /**
- * Generic 400 for `POST /api/v2/pages/drafts` — an uncreatable path,
+ * Generic 400 for `POST /api/pages/drafts` — an uncreatable path,
  * or a path already occupied by a *published* page (not another
  * user's draft, which is the 409 case above).
  */
@@ -69,7 +69,7 @@ export const DraftBadRequestErrorSchema = z.object({
 export type DraftBadRequestError = z.infer<typeof DraftBadRequestErrorSchema>;
 
 /**
- * 403 / 404 body for `DELETE /api/v2/pages/drafts/:id` — the id is not
+ * 403 / 404 body for `DELETE /api/pages/drafts/:id` — the id is not
  * a draft the caller owns. The same generic shape covers both "no such
  * draft" and "not your draft" so draft existence is never leaked.
  */
@@ -80,7 +80,7 @@ export const DraftNotFoundErrorSchema = z.object({
 export type DraftNotFoundError = z.infer<typeof DraftNotFoundErrorSchema>;
 
 /**
- * A single row in `GET /api/v2/pages/drafts` — enough for the
+ * A single row in `GET /api/pages/drafts` — enough for the
  * `Creating pages` view: identifiers (`pageId`, `path`), and the two
  * timestamps that frame "did I make progress recently or is this stale"
  * (`createdAt`, `updatedAt`).
@@ -103,7 +103,7 @@ export const DraftSummarySchema = z.object({
 export type DraftSummary = z.infer<typeof DraftSummarySchema>;
 
 /**
- * Success body for `GET /api/v2/pages/drafts`. Lists only the calling
+ * Success body for `GET /api/pages/drafts`. Lists only the calling
  * user's own drafts, newest first.
  */
 export const ListDraftsResponseSchema = z.object({

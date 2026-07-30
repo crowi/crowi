@@ -10,7 +10,7 @@ import { relocateReservedApiPaths, relocatedApiPath } from './relocate-reserved-
  *
  * Covers:
  *   - pages under the reserved `/api` namespace (bare `/api`, nested, and
- *     `/api/v2/*`) move to `/api-legacy/*`, with their revisions following
+ *     deeply-nested) move to `/api-legacy/*`, with their revisions following
  *   - paths that merely start with `api` (`/apiary`) and unrelated pages are
  *     left untouched
  *   - a pre-existing relocation target is avoided with a `-N` suffix
@@ -61,13 +61,13 @@ describe('migration/relocate-reserved-api-paths', () => {
     expect(relocatedApiPath('/api')).toBe('/api-legacy');
     expect(relocatedApiPath('/api/')).toBe('/api-legacy/');
     expect(relocatedApiPath('/api/docs')).toBe('/api-legacy/docs');
-    expect(relocatedApiPath('/api/v2/notes')).toBe('/api-legacy/v2/notes');
+    expect(relocatedApiPath('/api/proxied/notes')).toBe('/api-legacy/proxied/notes');
   });
 
   it('relocates pages under /api and follows the move on their revisions', async () => {
     const bare = await seedPage('/api');
     const nested = await seedPage('/api/docs');
-    const proxied = await seedPage('/api/v2/notes');
+    const proxied = await seedPage('/api/proxied/notes');
     const apiary = await seedPage('/apiary'); // not reserved — must stay
     const other = await seedPage('/crowi/api'); // `api` not at the top — must stay
 
@@ -75,7 +75,7 @@ describe('migration/relocate-reserved-api-paths', () => {
 
     expect(await pathOf(bare)).toBe('/api-legacy');
     expect(await pathOf(nested)).toBe('/api-legacy/docs');
-    expect(await pathOf(proxied)).toBe('/api-legacy/v2/notes');
+    expect(await pathOf(proxied)).toBe('/api-legacy/proxied/notes');
     expect(await pathOf(apiary)).toBe('/apiary');
     expect(await pathOf(other)).toBe('/crowi/api');
 

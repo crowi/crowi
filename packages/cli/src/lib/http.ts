@@ -131,9 +131,9 @@ export function setRefreshHook(hook: RefreshHook | undefined): void {
   refreshHook = hook;
 }
 
-/** Build a `<base>/api/v2<path>` URL with optional query params. */
+/** Build a `<base>/api<path>` URL with optional query params. */
 export function apiUrl(endpoint: string, path: string, query?: AuthedFetchOptions['query']): string {
-  const base = `${stripTrailingSlash(endpoint)}/api/v2`;
+  const base = `${stripTrailingSlash(endpoint)}/api`;
   const normalisedPath = path.startsWith('/') ? path : `/${path}`;
   const url = new URL(`${base}${normalisedPath}`);
   if (query) {
@@ -169,7 +169,7 @@ function buildBody(opts: AuthedFetchOptions): FetchBody | undefined {
 }
 
 /**
- * Authenticated fetch against `<endpoint>/api/v2<path>`. Injects the
+ * Authenticated fetch against `<endpoint>/api<path>`. Injects the
  * profile's bearer token, parses responses LENIENTLY (returns the parsed
  * JSON as `unknown` — callers narrow / validate), and maps the Crowi error
  * envelope `{ error: { code, message } }` to a thrown {@link CliError} with

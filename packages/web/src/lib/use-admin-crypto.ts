@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiClientV2 } from './api-client';
+import { apiClient } from './api-client';
 import type { CryptoStatusResponse, ReencryptResponse } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 
@@ -11,7 +11,7 @@ export const adminCryptoKeys = {
 
 /**
  * RFC-0006 Phase 4 Batch 8 — switched from `apiClient.adminCrypto.*`
- * (ts-rest) to `apiClientV2.admin.crypto.*.$method` (`createClient`). Wire
+ * (ts-rest) to `apiClient.admin.crypto.*.$method` (`createClient`). Wire
  * payload unchanged. Non-200 responses (401 / 403 from regressions —
  * the admin layout is responsible for gating) collapse to `null` so
  * the card hides itself instead of throwing.
@@ -20,7 +20,7 @@ export function useCryptoStatus(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: adminCryptoKeys.status,
     queryFn: async (): Promise<CryptoStatusResponse | null> => {
-      const response = await apiClientV2.admin.crypto.status.$get();
+      const response = await apiClient.admin.crypto.status.$get();
       if (response.status !== 200) {
         return null;
       }
@@ -38,7 +38,7 @@ export function useReencryptSensitive() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (): Promise<ReencryptResponse> => {
-      const response = await apiClientV2.admin.crypto.reencrypt.$post({
+      const response = await apiClient.admin.crypto.reencrypt.$post({
         // Body is empty in practice; the contract declares it as
         // `z.unknown()` so an empty object satisfies validation.
         json: {},

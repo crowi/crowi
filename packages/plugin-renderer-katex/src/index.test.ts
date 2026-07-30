@@ -204,12 +204,12 @@ describe('@crowi/plugin-renderer-katex', () => {
  * this file only proves KaTeX's own two halves of that contract.
  */
 describe('registerRenderer — addStylesheet', () => {
-  it("stages exactly the CSS route path, confined to this plugin's own /api/v2/plugins/ namespace", () => {
+  it("stages exactly the CSS route path, confined to this plugin's own /api/plugins/ namespace", () => {
     const { scope, stylesheetCaptured } = makeRegistry();
     katexPlugin.registerRenderer?.(scope, { log: silentLogger } as never);
 
     expect(stylesheetCaptured).toEqual([_internal.STYLESHEET_MANIFEST_PATH]);
-    expect(_internal.STYLESHEET_MANIFEST_PATH).toBe('/api/v2/plugins/@crowi/plugin-renderer-katex/katex.min.css');
+    expect(_internal.STYLESHEET_MANIFEST_PATH).toBe('/api/plugins/@crowi/plugin-renderer-katex/katex.min.css');
   });
 });
 

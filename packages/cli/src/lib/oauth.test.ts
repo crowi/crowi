@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 
 import { CliError } from './http';
-import { loginAuthCode, loginDevice, validateScope } from './oauth';
+import { loginAuthCode, loginDevice, revokeToken, validateScope } from './oauth';
 
 // Stub the browser launcher so no real window opens during the flow tests.
 jest.mock('./browser', () => ({ openBrowser: jest.fn().mockResolvedValue(false) }));
@@ -60,7 +60,7 @@ describe('loginAuthCode — browser timeout (FIX 3)', () => {
   it('rejects with an UNAUTHENTICATED CliError when no redirect arrives in time', async () => {
     const endpoints = {
       authorizeEndpoint: 'https://web.example.com/oauth/authorize',
-      tokenEndpoint: 'https://wiki.example.com/api/v2/oauth/token',
+      tokenEndpoint: 'https://wiki.example.com/api/oauth/token',
     };
     // No request will hit the loopback server, so waitForCode never settles;
     // the 20ms timeout wins the race.
@@ -103,8 +103,8 @@ describe('loginDevice — interval / expires_in clamping (FIX 7)', () => {
   });
 
   const endpoints = {
-    deviceEndpoint: 'https://wiki.example.com/api/v2/oauth/device',
-    tokenEndpoint: 'https://wiki.example.com/api/v2/oauth/token',
+    deviceEndpoint: 'https://wiki.example.com/api/oauth/device',
+    tokenEndpoint: 'https://wiki.example.com/api/oauth/token',
   };
 
   it('clamps an absurd poll interval to the 60s ceiling', async () => {
@@ -151,5 +151,41 @@ describe('loginDevice — interval / expires_in clamping (FIX 7)', () => {
     await jest.advanceTimersByTimeAsync(1_000);
     const tokens = await promise;
     expect(tokens.accessToken).toBe('b');
+  });
+});
+
+/**
+ * Status-aware `revokeToken()` — the `/api` prefix cutover regression this
+ * guards: a cached `revokeEndpoint` that no longer resolves (e.g. still
+ * pointing at a pre-cutover path) must surface as `false`, not be silently
+ * treated as a successful revoke. `commands/logout.ts` relies on this
+ * return value to decide whether to warn the user.
+ */
+describe('revokeToken — status-aware (feature-api-v2-path-removal)', () => {
+  let fetchMock: jest.Mock<Promise<Response>, [string, RequestInit]>;
+  const originalFetch = global.fetch;
+
+  beforeEach(() => {
+    fetchMock = jest.fn();
+    global.fetch = fetchMock as unknown as typeof fetch;
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
+
+  it('resolves true on a 2xx response', async () => {
+    fetchMock.mockResolvedValueOnce({ ok: true, status: 200 } as Response);
+    await expect(revokeToken('https://wiki.example.com/api/oauth/revoke', 'refresh-1')).resolves.toBe(true);
+  });
+
+  it('resolves false on a non-2xx response (e.g. a stale pre-cutover endpoint 404ing)', async () => {
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 404 } as Response);
+    await expect(revokeToken('https://wiki.example.com/api/v2/oauth/revoke', 'refresh-1')).resolves.toBe(false);
+  });
+
+  it('resolves false (never rejects) on a network error', async () => {
+    fetchMock.mockRejectedValueOnce(new TypeError('fetch failed'));
+    await expect(revokeToken('https://wiki.example.com/api/oauth/revoke', 'refresh-1')).resolves.toBe(false);
   });
 });

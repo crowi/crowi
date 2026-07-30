@@ -16,28 +16,28 @@ import { notifyTokenRefreshed } from './token-refresh-notifier';
  * returns the correct value, covering dev (`pnpm dev`) and Vercel too.
  */
 export function apiOrigin(): string {
-  // Strip trailing slash(es) so `apiV2BaseUrl()` never yields `…//api/v2`
+  // Strip trailing slash(es) so `apiBaseUrl()` never yields `…//api`
   // (a value like `https://api.example.com/` would otherwise double the slash).
   return (env('NEXT_PUBLIC_API_URL') || '').replace(/\/+$/, '');
 }
 
-/** Runtime-resolved `<origin>/api/v2` base. Read at call time (see {@link apiOrigin}). */
-export function apiV2BaseUrl(): string {
-  return `${apiOrigin()}/api/v2`;
+/** Runtime-resolved `<origin>/api` base. Read at call time (see {@link apiOrigin}). */
+export function apiBaseUrl(): string {
+  return `${apiOrigin()}/api`;
 }
 
 /**
  * Resolve an API-relative absolute path (e.g. the `rendererStylesheets`
- * manifest entries from `GET /api/v2/app/info`, already including the
- * `/api/v2` prefix — see `AppInfoResponseSchema`) to a browser-usable URL.
- * Reads {@link apiOrigin} at call time, same as `apiV2Fetch` below — an
+ * manifest entries from `GET /api/app/info`, already including the
+ * `/api` prefix — see `AppInfoResponseSchema`) to a browser-usable URL.
+ * Reads {@link apiOrigin} at call time, same as `apiFetch` below — an
  * empty origin (same-origin deployment) returns `path` unchanged
  * (relative), so a `<link href>` built from this helper works the same
  * whether the API is same-origin or cross-origin. Not just for fetch
  * bodies: `RendererStylesheets` (`packages/web/src/components/
  * renderer-stylesheets.tsx`) uses this for `<link rel="stylesheet">` href
  * values, which is why this is a standalone export rather than folded
- * into `apiV2Fetch`.
+ * into `apiFetch`.
  */
 export function resolveApiUrl(path: string): string {
   const origin = apiOrigin();
@@ -72,7 +72,7 @@ async function refreshAccessToken(): Promise<string | null> {
 
   try {
     const response = await fetchWithTimeout(
-      `${apiV2BaseUrl()}/auth/refresh`,
+      `${apiBaseUrl()}/auth/refresh`,
       {
         method: 'POST',
         headers: {
@@ -105,27 +105,25 @@ async function refreshAccessToken(): Promise<string | null> {
 }
 
 /**
- * RFC-0006 Phase 4 Batch 9 / Phase 6 — the legacy `apiClient`
- * (ts-rest `initClient(apiContract)`) is gone. The `apiContract`
- * aggregator was emptied in Batch 9 when the 9 admin sub-contracts
- * moved to Hono; Phase 6 then dropped the framework package itself.
- * All resources now go through `apiClientV2` (built by `createClient`,
- * see `@crowi/api-contract`'s `CrowiApiClient`).
+ * RFC-0006 Phase 4 Batch 9 / Phase 6 — the legacy ts-rest `apiClient`
+ * (`initClient(apiContract)`) is gone. The `apiContract` aggregator was
+ * emptied in Batch 9 when the 9 admin sub-contracts moved to Hono; Phase 6
+ * then dropped the framework package itself. All resources now go through
+ * the `apiClient` below (built by `createClient`, see `@crowi/api-contract`'s
+ * `CrowiApiClient`).
  */
 
 /**
  * RFC-0006 Phase 3 — typed `createClient` client for Hono-served resources.
  *
- * Wraps the global `fetch` with the same access-token / refresh-token
- * dance as the ts-rest `apiClient` above so call sites can flip from
- * `apiClient.<resource>.<endpoint>` to `apiClientV2.<resource>.<endpoint>.
- * $get(...)` resource-by-resource as Phase 4 progresses. Phase 6
- * deletes the legacy `apiClient` once all resources have moved.
+ * Wraps the global `fetch` with the same access-token / refresh-token dance
+ * the legacy ts-rest client had, so every call site now goes through
+ * `apiClient.<resource>.<endpoint>.$get(...)` etc.
  */
 const REFRESH_PATH = '/auth/refresh';
 
-const apiV2Fetch: typeof fetch = async (input, init) => {
-  // `apiClientV2` is created with a RELATIVE base (`/api/v2`). Resolve
+const apiFetch: typeof fetch = async (input, init) => {
+  // `apiClient` is created with a RELATIVE base (`/api`). Resolve
   // through `resolveApiUrl` here — at call time, after the root layout's
   // inline env script has set `window.__ENV` — so a cross-origin
   // `NEXT_PUBLIC_API_URL` takes effect with no rebuild. An empty origin
@@ -161,9 +159,9 @@ const apiV2Fetch: typeof fetch = async (input, init) => {
   return response;
 };
 
-// Relative base; `apiV2Fetch` prepends the runtime origin at call time so the
+// Relative base; `apiFetch` prepends the runtime origin at call time so the
 // cross-origin `NEXT_PUBLIC_API_URL` is honored without freezing it at module
 // load (see `apiOrigin`).
-export const apiClientV2 = createClient('/api/v2', {
-  fetch: apiV2Fetch,
+export const apiClient = createClient('/api', {
+  fetch: apiFetch,
 });

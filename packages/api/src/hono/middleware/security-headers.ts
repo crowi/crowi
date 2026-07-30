@@ -6,7 +6,7 @@ import type { MiddlewareHandler } from 'hono';
  * Currently just `X-Content-Type-Options: nosniff`. It matters most for the
  * attachment delivery routes (`handlers/attachment-stream.ts`), which stream
  * user-uploaded bytes back from the same origin the wiki is served from on the
- * recommended topology (`packages/web/next.config.ts` rewrites `/api/v2/*` onto
+ * recommended topology (`packages/web/next.config.ts` rewrites `/api/*` onto
  * the web origin). Without `nosniff` a browser may disregard the declared
  * `Content-Type` and sniff the body as HTML, which would re-open the
  * origin-executing payload path that `buildDeliveryHeaders` closes by pinning

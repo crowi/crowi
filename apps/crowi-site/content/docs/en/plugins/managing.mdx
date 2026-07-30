@@ -129,7 +129,7 @@ z.string().describe('@action "Test connection" POST /test')
 
 The format is `@action "<label>" <method> <path>`. Pressing the button
 calls the endpoint the plugin provides via `registerRoutes` (a path
-relative to `/api/v2/plugins/<name>/...`). Operations like "Test
+relative to `/api/plugins/<name>/...`). Operations like "Test
 connection" or "Authorise with Google" can be offered without the
 plugin writing a dedicated UI.
 
@@ -154,7 +154,7 @@ boot, other plugins still load and the server still starts.
   row; hover the badge to see the failure reason.
 - **When `registerRoutes` fails**: the plugin itself activated
   successfully, so it appears in the list as usual, but none of the
-  endpoints it would have mounted under `/api/v2/plugins/<name>/...` are
+  endpoints it would have mounted under `/api/plugins/<name>/...` are
   registered. The log gets a line reading `[crowi:plugin:<name>]
   registerRoutes failed; this plugin's HTTP routes are not mounted:
   <error message>`.

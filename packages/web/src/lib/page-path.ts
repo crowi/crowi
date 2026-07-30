@@ -47,7 +47,7 @@ const RESERVED_TOP_LEVEL_PATH = /^\/(installer|register|login|logout|admin|me|fi
  * The match is segment-bounded (mirroring the server), so a real page such
  * as `/apiary` or `/meeting` stays a normal wiki page.
  *
- *   /api, /api/v2/x, /paste, /admin/x → true
+ *   /api, /api/x, /paste, /admin/x → true
  *   /apiary, /meeting, /crowi/api     → false
  */
 export function isReservedPagePath(path: string): boolean {

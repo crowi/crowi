@@ -13,7 +13,7 @@
  *   - No other handler owns `/search`, so there is no risk of double-apply.
  *
  * Rate limiting:
- *   - None. The legacy `/api/v2/search` had no `withRateLimit` wrapping —
+ *   - None. The legacy `/api/search` had no `withRateLimit` wrapping —
  *     driver latency (Elasticsearch / Mongo regex) naturally throttles
  *     bursts and the RFC does not require an explicit budget here.
  *

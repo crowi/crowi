@@ -3,7 +3,7 @@
  * `packages/api/src/middlewares/jwtAuth.ts`:
  *
  *   - Bearer token first, `crowi.accessToken` cookie fallback (for
- *     `<img src="/api/v2/...">`-style requests that cannot carry an
+ *     `<img src="/api/...">`-style requests that cannot carry an
  *     Authorization header).
  *   - 401 `AUTHENTICATION_REQUIRED` on missing / invalid / expired token
  *     or unknown user. Body shape matches `AuthenticationRequiredErrorSchema`.

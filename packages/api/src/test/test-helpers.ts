@@ -82,7 +82,7 @@ export const createTestUser = async (info: CreateTestUserInfo): Promise<{ user: 
 // ---------------------------------------------------------------------------
 
 /**
- * Seed a page via the API (POST /api/v2/pages) and return its id + path.
+ * Seed a page via the API (POST /api/pages) and return its id + path.
  *
  * All parameters after `body` are optional:
  *   - `grant`: numeric grant value (omit to use the server default)
@@ -96,7 +96,7 @@ export const createTestUser = async (info: CreateTestUserInfo): Promise<{ user: 
 export const createPageViaApi = async (accessToken: string, path: string, body: string, grant?: number): Promise<{ _id: string; path: string }> => {
   const payload: Record<string, unknown> = { path, body };
   if (grant !== undefined) payload.grant = grant;
-  const res = await request(app).post('/api/v2/pages').set(authHeaders(accessToken)).send(payload);
+  const res = await request(app).post('/api/pages').set(authHeaders(accessToken)).send(payload);
   if (res.status !== 200) {
     throw new Error(`Failed to seed page (${path}): ${res.status} ${JSON.stringify(res.body)}`);
   }

@@ -202,7 +202,7 @@ services:
   web:
     profiles: ["app"]
     # Render-only Next.js server. The image bakes NO absolute API URL: the
-    # browser uses relative `/api/v2`,`/files` paths and derives WS URLs from
+    # browser uses relative `/api`,`/files` paths and derives WS URLs from
     # `window.location`. It is NOT exposed directly — the `caddy` front proxy
     # below serves it as one same-origin host so relative HTTP, inline attachment
     # images, the first-party auth cookie and the realtime WebSockets all work.

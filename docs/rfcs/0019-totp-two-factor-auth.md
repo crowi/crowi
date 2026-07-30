@@ -59,7 +59,7 @@ identity in the response body gives each client its own token while the
 per-browser binding stays where script cannot read it. No separate CSRF nonce
 is needed, because the body token already is a value a cross-site page cannot
 obtain. This RFC supports only the same-origin
-topology in which Next proxies `/api/v2/*` (`packages/web/next.config.ts:84-105`).
+topology in which Next proxies `/api/*` (`packages/web/next.config.ts`).
 Split web/API origins are unsupported until a separately reviewed transport
 change makes the shared client and direct refresh request credentialed and
 proves Set-Cookie plus cookie-backed verification in a real browser. CORS
@@ -254,7 +254,7 @@ the former; RFC-0010 through RFC-0012 cover the latter.
 | Web refresh | Refresh loads the User and issues a pair (`token-auth.ts:223-242`). | MUST NOT prompt for TOTP. It MUST require matching `authVersion` and preserve `amr` and `authTime`. |
 | PAT request authentication | `createJwtAuth` loads a PAT by hash (`auth.ts:87-118`). | MUST NOT request live TOTP per API request. |
 | PAT management | `/me/access-tokens` is web-session-only and returns plaintext once. | MUST require a final web session. Phase 2 adds recent-authentication assurance for issuance. |
-| MCP | `/api/v2/mcp` accepts PAT/OAuth Bearer authentication and has no independent login (`packages/api/src/mcp/attach.ts:1-20,55-69`). | MUST NOT prompt for TOTP. |
+| MCP | `/api/mcp` accepts PAT/OAuth Bearer authentication and has no independent login (`packages/api/src/mcp/attach.ts:1-20,55-69`). | MUST NOT prompt for TOTP. |
 | CLI authorization-code + PKCE | The CLI opens a browser and exchanges a code (`packages/cli/src/lib/oauth.ts:217-287`). | The browser completes local TOTP first. Code exchange MUST NOT prompt again. |
 | CLI device flow | The CLI opens a verification URL and polls (`packages/cli/src/lib/oauth.ts:317-345`). | Browser approval completes local TOTP first. Poll and exchange MUST NOT prompt again. |
 | OAuth refresh | OAuth refresh is a non-interactive credential lifecycle defined by RFC-0010. | MUST NOT prompt for TOTP; it follows `apiCredentialVersion`. |

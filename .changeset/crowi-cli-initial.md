@@ -21,7 +21,7 @@ aborts by default and only overwrites with `--force`), and, behind their own
 OAuth scopes, `comment`, `attach`, `bookmark`, `watch`, and `open`. Outgoing
 arguments are validated against the shared request contracts before any call
 leaves the machine, while responses are parsed leniently so the CLI tolerates
-version drift across self-hosted instances; it reads the `GET /api/v2/app/info`
+version drift across self-hosted instances; it reads the `GET /api/app/info`
 version / capability signal to warn (never refuse) on skew and to pre-empt
 disabled features. `--json` and `--template` output make commands scriptable,
 `crowi completion <bash|zsh|fish>` emits shell completions, and

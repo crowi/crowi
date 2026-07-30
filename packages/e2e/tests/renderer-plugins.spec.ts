@@ -206,7 +206,7 @@ test('KaTeX / PlantUML / Mermaid: real activation → save render → cache → 
     await expect(linkLocator).toHaveCount(1);
     const href = await linkLocator.getAttribute('href');
     if (!href) throw new Error('renderer stylesheet <link> has no href');
-    expect(href.startsWith(`${E2E_API_URL}/api/v2/plugins/${KATEX_PLUGIN}/`)).toBe(true);
+    expect(href.startsWith(`${E2E_API_URL}/api/plugins/${KATEX_PLUGIN}/`)).toBe(true);
 
     const cssResponse = await fetch(href, { headers: { Origin: E2E_WEB_URL } });
     expect(cssResponse.status).toBe(200);
@@ -217,7 +217,7 @@ test('KaTeX / PlantUML / Mermaid: real activation → save render → cache → 
     const fontMatch = cssText.match(/url\((fonts\/[^)]+\.woff2)\)/);
     if (!fontMatch) throw new Error('KaTeX CSS did not reference a .woff2 font — cannot verify the font route');
     const fontUrl = new URL(fontMatch[1], href).toString();
-    expect(fontUrl.startsWith(`${E2E_API_URL}/api/v2/plugins/${KATEX_PLUGIN}/fonts/`)).toBe(true);
+    expect(fontUrl.startsWith(`${E2E_API_URL}/api/plugins/${KATEX_PLUGIN}/fonts/`)).toBe(true);
 
     const fontResponse = await fetch(fontUrl, { headers: { Origin: E2E_WEB_URL } });
     expect(fontResponse.status).toBe(200);

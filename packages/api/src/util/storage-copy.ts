@@ -1,7 +1,7 @@
 import { Readable } from 'node:stream';
 import type { StorageDriver } from '@crowi/plugin-api';
 import type Crowi from 'src/crowi';
-import { BY_KEY_URL_PREFIX, getStorageDriverByName } from 'src/util/file-uploader';
+import { getStorageDriverByName } from 'src/util/file-uploader';
 
 export interface StorageCopyProgress {
   current: number;
@@ -70,8 +70,9 @@ export async function runStorageCopy(crowi: Crowi, opts: StorageCopyOptions): Pr
   // don't fetch every user just to skip non-storage URLs (Google avatars
   // etc. captured at OAuth login). Both URL shapes that
   // `fileUploader.generateUrl()` can produce — the by-key proxy form
-  // (`/api/v2/attachments/by-key/user%2F<id>.<ext>`) and any signed URL
-  // containing the raw `user/<id>.<ext>` segment — match this filter.
+  // (`/api/attachments/by-key/user%2F<id>.<ext>`, or the legacy pre-cutover
+  // `/api/v2/attachments/by-key/...`) and any signed URL containing the raw
+  // `user/<id>.<ext>` segment — match this filter.
   const userCursor = User.find({ image: { $regex: 'user(%2F|/)', $options: 'i' } }, { image: 1 }).cursor();
   for await (const user of userCursor) {
     const key = extractUserPictureKey(user.image);
@@ -127,11 +128,22 @@ async function copyOne(
  *   1. Local driver: `<BY_KEY_URL_PREFIX>user%2F<id>.<ext>`
  *   2. S3 signed URL with the raw `user/<id>.<ext>` segment in the path.
  * Returns null for external URLs (e.g. OAuth-captured Google avatars).
+ *
+ * The by-key detection matches the `/attachments/by-key/` suffix rather than
+ * the exact current `BY_KEY_URL_PREFIX` value, so a legacy (pre-`/api/v2` ->
+ * `/api` cutover) `/api/v2/attachments/by-key/user%2F<id>.<ext>` persisted in
+ * `User.image` is still recognised. Coupling this to the literal constant
+ * would break once the constant's leading segment changed: the encoded
+ * `user%2F...` form never matches the `raw` fallback below (which expects an
+ * unencoded `user/`), so an un-migrated legacy row would silently stop
+ * yielding a key (returning `null`) instead of being detected as a by-key
+ * URL — see `ATTACHMENT_URI_RE` in `hono/handlers/attachment.ts` for the
+ * same reasoning applied to body-embedded attachment references.
  */
 export function extractUserPictureKey(image: string | null | undefined): string | null {
   if (!image) return null;
 
-  if (image.includes(BY_KEY_URL_PREFIX)) {
+  if (image.includes('/attachments/by-key/')) {
     const encoded = image.match(/user%2F([\w.-]+)/i);
     if (encoded) return `user/${encoded[1]}`;
   }

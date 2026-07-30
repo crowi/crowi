@@ -60,7 +60,7 @@ export interface FileUploader {
   /**
    * Stable, non-expiring URL for a `user/`-prefixed key, suitable for
    * storing in the DB (`user.image`). Always the `by-key` streaming
-   * proxy (`/api/v2/attachments/by-key/:key`), never a time-limited
+   * proxy (`/api/attachments/by-key/:key`), never a time-limited
    * signed URL — regardless of the active driver. The proxy streams
    * from whichever driver is active (local or S3) and is reachable from
    * an `<img src>` via the access-token cookie, so avatars survive past
@@ -91,11 +91,11 @@ export default (crowi: Crowi): FileUploader => ({
     if (driver.signedUrl) {
       return driver.signedUrl(filePath, expiresInSec);
     }
-    // Drivers without signedUrl (e.g. local) fall back to the ts-rest
-    // streaming endpoint mounted at `/api/v2/attachments/by-key/:key`.
+    // Drivers without signedUrl (e.g. local) fall back to the Hono
+    // streaming endpoint mounted at `/api/attachments/by-key/:key`.
     // The `by-key` route only accepts keys under the `user/` prefix
     // (profile pictures); attachment-row-backed files use the
-    // `/api/v2/attachments/:id` route via `Attachment.fileUrl`.
+    // `/api/attachments/:id` route via `Attachment.fileUrl`.
     return `${BY_KEY_URL_PREFIX}${encodeURIComponent(filePath)}`;
   },
 
@@ -112,7 +112,7 @@ export default (crowi: Crowi): FileUploader => ({
  * when extracting keys from `User.image` URLs without re-encoding the
  * route knowledge in two places.
  */
-export const BY_KEY_URL_PREFIX = '/api/v2/attachments/by-key/';
+export const BY_KEY_URL_PREFIX = '/api/attachments/by-key/';
 
 /**
  * Whether a storage-driver `get()`/`delete()` rejection means the object is

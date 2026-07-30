@@ -7,7 +7,7 @@ Crowi は **MCP (Model Context Protocol) サーバー** を組み込みで提供
 MCP 対応の AI クライアント (Claude Desktop / Claude Code など) に対し、wiki を
 **ツール** (ページの検索 / 読み取り / 作成 / 更新 / リネーム / 削除) として
 公開します。これは `@crowi/api` プロセス**内部**にホストされる
-Streamable-HTTP エンドポイント (`/api/v2/mcp`) で、別プロセスや別ポートを起動する
+Streamable-HTTP エンドポイント (`/api/mcp`) で、別プロセスや別ポートを起動する
 必要はありません。
 
 設計の背景は
@@ -16,10 +16,10 @@ Streamable-HTTP エンドポイント (`/api/v2/mcp`) で、別プロセスや�
 
 ## 概要
 
-- エンドポイントは `https://<crowi-host>/api/v2/mcp` です。`<crowi-host>` は
+- エンドポイントは `https://<crowi-host>/api/mcp` です。`<crowi-host>` は
   ブラウザで wiki を開いている origin (web アプリ / フロントのリバースプロキシ)
   であり、**api 自身のホスト/ポートではありません**。api は直接公開せず、web
-  アプリを配信するのと同じフロントプロキシが `/api/v2/*` (`/api/v2/mcp` を含む)
+  アプリを配信するのと同じフロントプロキシが `/api/*` (`/api/mcp` を含む)
   を api へ転送するため、MCP クライアントは web の origin に接続します。既存の
   コンテナ以外に追加でデプロイするものはありません。
 - Crowi 既存の認証で保護されます。すべてのリクエストは
@@ -33,7 +33,7 @@ Streamable-HTTP エンドポイント (`/api/v2/mcp`) で、別プロセスや�
 
 ## 有効化
 
-`/api/v2/mcp` エンドポイントは常に利用可能で、フィーチャーフラグはありません。
+`/api/mcp` エンドポイントは常に利用可能で、フィーチャーフラグはありません。
 本番で安全に使うために以下を設定してください。
 
 - **`REDIS_URL`** (複数インスタンス時のみ) — 設定すると per-user の
@@ -61,7 +61,7 @@ PAT には発行できないため、管理操作は MCP からは到達不能�
 静的ヘッダをサポートするクライアント (例: Claude Code) の場合:
 
 ```sh
-claude mcp add --transport http crowi https://<crowi-host>/api/v2/mcp \
+claude mcp add --transport http crowi https://<crowi-host>/api/mcp \
   --header "Authorization: Bearer crowi_pat_<your-token>"
 ```
 
@@ -108,9 +108,9 @@ write ツール (`pages:write` が必要):
 - **スコープはツールごとに enforce されます。** 読み取り専用トークンで write
   ツールを呼ぶと、帯域外のエラーではなくツール内エラー
   (`INSUFFICIENT_SCOPE`) が返るため、モデルは適切にリカバリできます。
-- **レートリミット。** `/api/v2/mcp` は per-user でレート制限されます (全ツール呼び出しで
+- **レートリミット。** `/api/mcp` は per-user でレート制限されます (全ツール呼び出しで
   単一の予算)。暴走したエージェントが wiki を叩き続けることを防ぎます。
-- **認証が主たるゲートです。** `/api/v2/mcp` は有効な Bearer トークン (PAT / OAuth)
+- **認証が主たるゲートです。** `/api/mcp` は有効な Bearer トークン (PAT / OAuth)
   必須で、DNS rebinding 対策 (`Host` ヘッダ固定) は意図的に無効化しています。
   rebinding はブラウザの ambient-authority 攻撃向けの防御で、Bearer 必須かつ
   主クライアントが非ブラウザ (Claude Code 等) の本エンドポイントでは冗長であり、

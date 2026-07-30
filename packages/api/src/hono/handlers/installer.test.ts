@@ -4,7 +4,7 @@ import { type ConfigRow, restoreCrowiConfig, snapshotCrowiConfig } from 'src/tes
 
 /**
  * RFC-0006 Phase 4 Batch 1 — integration tests for the migrated
- * `installer` resource (`GET /api/v2/installer`, `POST /api/v2/installer/
+ * `installer` resource (`GET /api/installer`, `POST /api/installer/
  * createAdmin`).
  *
  * Wire-format parity with the ts-rest era is the explicit AC: the
@@ -18,7 +18,7 @@ import { type ConfigRow, restoreCrowiConfig, snapshotCrowiConfig } from 'src/tes
  * can flip the install-flag locally without leaking state into
  * neighbours.
  */
-describe('GET /api/v2/installer (Hono)', () => {
+describe('GET /api/installer (Hono)', () => {
   let Config: ReturnType<typeof crowi.model<'Config'>>;
   let User: ReturnType<typeof crowi.model<'User'>>;
   let configSnapshot: ConfigRow[];
@@ -53,7 +53,7 @@ describe('GET /api/v2/installer (Hono)', () => {
       await Config.applicationInstall();
       await crowi.getConfigService().load();
 
-      const res = await request(app).get('/api/v2/installer');
+      const res = await request(app).get('/api/installer');
       expect(res.status).toBe(200);
       expect(res.headers['content-type']).toMatch(/application\/json/);
       expect(res.body).toEqual({ status: 'already_installed' });
@@ -61,7 +61,7 @@ describe('GET /api/v2/installer (Hono)', () => {
 
     it('returns installer_required when no crowi config rows exist', async () => {
       await Config.deleteMany({ ns: 'crowi' });
-      const res = await request(app).get('/api/v2/installer');
+      const res = await request(app).get('/api/installer');
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ status: 'installer_required' });
     });
@@ -69,7 +69,7 @@ describe('GET /api/v2/installer (Hono)', () => {
     it('does not require authentication (public route)', async () => {
       // No Authorization header set — would be 401 if the Hono mount
       // accidentally fell through to ts-rest's authenticatedRouter.
-      const res = await request(app).get('/api/v2/installer');
+      const res = await request(app).get('/api/installer');
       expect(res.status).toBe(200);
     });
   });
@@ -85,7 +85,7 @@ describe('GET /api/v2/installer (Hono)', () => {
       await crowi.getConfigService().load();
 
       const res = await request(app)
-        .post('/api/v2/installer/createAdmin')
+        .post('/api/installer/createAdmin')
         .send({
           registerForm: {
             name: 'Already Installed',
@@ -104,7 +104,7 @@ describe('GET /api/v2/installer (Hono)', () => {
       await User.deleteMany({ email: 'installer-happy@example.com' });
 
       const res = await request(app)
-        .post('/api/v2/installer/createAdmin')
+        .post('/api/installer/createAdmin')
         .send({
           registerForm: {
             name: 'Installer Happy',
@@ -123,7 +123,7 @@ describe('GET /api/v2/installer (Hono)', () => {
 
       // Calling `/installer` again must now report `already_installed`
       // — the handler refreshes ConfigService after writing.
-      const status = await request(app).get('/api/v2/installer');
+      const status = await request(app).get('/api/installer');
       expect(status.body).toEqual({ status: 'already_installed' });
 
       await User.deleteMany({ email: 'installer-happy@example.com' });
@@ -136,7 +136,7 @@ describe('GET /api/v2/installer (Hono)', () => {
       // trips zod's validation and the OpenAPIHono defaultHook turns it
       // into a 400 `VALIDATION_ERROR` envelope.
       const res = await request(app)
-        .post('/api/v2/installer/createAdmin')
+        .post('/api/installer/createAdmin')
         .send({
           registerForm: {
             name: 'Bad Form',

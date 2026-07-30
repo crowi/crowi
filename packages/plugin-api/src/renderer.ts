@@ -583,16 +583,21 @@ export interface RendererRegistry {
    * Declare a static CSS asset the plugin needs the browser to load
    * (e.g. KaTeX's ~30KB math stylesheet). `path` MUST be an
    * API-relative absolute path confined to the plugin's own
-   * `registerRoutes` namespace — `/api/v2/plugins/<this plugin's
+   * `registerRoutes` namespace — `/api/plugins/<this plugin's
    * name>/<…>` — the same prefix `PluginRouterScope.route(...)` mounts
    * that plugin's HTTP routes under. A URL scheme, protocol-relative
    * `//host`, backslash, `..` traversal segment, or a path outside the
    * plugin's own namespace all throw synchronously (boot-time reject —
    * this is not an operator-configurable external URL; see spec
-   * §2.1's "不採用案").
+   * §2.1's "不採用案"). During the `feature-api-v2-path-removal`
+   * migration period the legacy `/api/v2/plugins/<name>/<…>` prefix is
+   * also accepted and silently normalised to the canonical `/api/plugins/`
+   * form before publication — a plugin package that hasn't bumped its own
+   * `addStylesheet(...)` call site yet still gets a working manifest
+   * entry; this dual-accept is transitional, not a permanent alias.
    *
    * The call only stages the path in a per-plugin pending set: it is
-   * published to the public `GET /api/v2/app/info` `rendererStylesheets`
+   * published to the public `GET /api/app/info` `rendererStylesheets`
    * manifest ONLY after this plugin's OWN `registerRoutes(scope, ctx)`
    * completes without throwing (so the manifest never advertises a path
    * whose route failed to mount). A plugin with no `registerRoutes` at

@@ -4,7 +4,7 @@ import { resolveRedisKeyspaceIfEnabled } from './redis-keyspace';
 
 /**
  * Editor cap check used by the wsToken issuance endpoint
- * (`GET /api/v2/pages/:id/yjs-token`, Phase 2). RFC-0003 Phase 6
+ * (`GET /api/pages/:id/yjs-token`, Phase 2). RFC-0003 Phase 6
  * promotes the Phase 2 stub to a Redis-backed check via the shared
  * `editor-cap-counter` util.
  *

@@ -123,7 +123,7 @@ describe('dropHandler DOM behaviour', () => {
     // — the test drains them to assert serial ordering.
     class FakeXHR {
       status = 200;
-      responseText = JSON.stringify({ url: '/api/v2/attachments/x', filename: 'f', mimeType: 'image/png', sizeBytes: 1 });
+      responseText = JSON.stringify({ url: '/api/attachments/x', filename: 'f', mimeType: 'image/png', sizeBytes: 1 });
       upload = { onprogress: null as ((e: ProgressEvent) => void) | null };
       onload: (() => void) | null = null;
       onerror: (() => void) | null = null;

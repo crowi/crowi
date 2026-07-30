@@ -24,7 +24,7 @@ Use the Attachments section in the page footer to pick a file and upload
 it. Once the upload finishes, the file is added to the list right away,
 along with a record of who uploaded it and when.
 
-Internally, an attachment is sent to `POST /api/v2/pages/:pageId/attachments`
+Internally, an attachment is sent to `POST /api/pages/:pageId/attachments`
 as `multipart/form-data`. The uploaded file is stored via the configured
 storage driver (local disk / S3, depending on the operator's setup) and a
 single `Attachment` document is created.
@@ -49,7 +49,7 @@ filename (for PDFs, zips, text, and other non-image files).
   revision**. A "view all attachments" link at the bottom routes to a
   dedicated listing (see below).
 
-Each attachment is assigned a URL of the form `/api/v2/attachments/<id>`.
+Each attachment is assigned a URL of the form `/api/attachments/<id>`.
 Hitting that URL delivers the actual file.
 
 ### Content types on delivery
@@ -100,7 +100,7 @@ Two response headers go with this:
 When you upload a still JPEG/PNG/WebP image, a display-optimized
 derivative (capped at 1728px wide, with metadata stripped) is generated
 on a best-effort basis right after the original is saved.
-**`/api/v2/attachments/<id>` prefers this optimized derivative whenever
+**`/api/attachments/<id>` prefers this optimized derivative whenever
 one is available** — embedded images in the page body, thumbnails in the
 attachment grid, and the editor preview all reference the same URL, so
 they automatically receive the lighter-weight derivative with no code
@@ -119,7 +119,7 @@ changes on their side.
 Right-clicking an image embedded in a page body and choosing "Save
 image as…" saves this optimized derivative, not the original. To get an
 unmodified original, use the "Open original" link in the attachment
-detail modal, or open `/api/v2/attachments/<id>/original` directly.
+detail modal, or open `/api/attachments/<id>/original` directly.
 
 > **Tip**: Attachment delivery enforces the page's view permission. Even
 > if someone knows an attachment's URL, the file is not delivered to a
@@ -149,7 +149,7 @@ To display an image inside the Markdown body, reference the attachment's
 URL with image syntax.
 
 ```markdown
-![Screenshot](/api/v2/attachments/64f0a1b2c3d4e5f6a7b8c9d0)
+![Screenshot](/api/attachments/64f0a1b2c3d4e5f6a7b8c9d0)
 ```
 
 Besides typing the URL by hand, uploading directly into the editor via
@@ -187,7 +187,7 @@ automatically.
   live. Other members editing the same page collaboratively see this
   progress too.
 - Once the upload finishes, the placeholder is replaced with
-  `![pasted-1717891234.png](/api/v2/attachments/...)`.
+  `![pasted-1717891234.png](/api/attachments/...)`.
 - Pasting the same image twice creates two separate attachments (there
   is no client-side de-duplication). Delete the extra one from the
   attachment list if you don't need it.
@@ -268,7 +268,7 @@ existence).
 ## Compatibility with legacy URLs
 
 Crowi 1.x URLs of the form `/files/:id` are 302-redirected to the new
-delivery endpoint `/api/v2/attachments/:id`. Attachment URLs embedded into
+delivery endpoint `/api/attachments/:id`. Attachment URLs embedded into
 page bodies before the migration keep working, so there is no need to
 rewrite older pages.
 

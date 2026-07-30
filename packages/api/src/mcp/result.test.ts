@@ -1,7 +1,7 @@
 /**
  * RFC-0011 §10.7 — prompt-injection mitigation, pure-function coverage.
  *
- * The end-to-end `/mcp` smoke (`mcp.test.ts`) asserts the wrap is wired
+ * The end-to-end `/api/mcp` smoke (`mcp.test.ts`) asserts the wrap is wired
  * through the live dispatch path. Here we pin the wrapping helpers directly
  * (no DB): the nonce-fenced framing of `okResultWithBody`, the raw +
  * `trust: 'untrusted'` `structuredContent`, per-response nonce freshness,

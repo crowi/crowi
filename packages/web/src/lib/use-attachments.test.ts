@@ -4,12 +4,12 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createElement, type PropsWithChildren } from 'react';
 import type { AttachmentMeta } from '@crowi/api-contract';
 
-// Mock `apiClientV2` (`createClient`) so `getAttachmentMeta` hits our fake.
-// The hook calls `apiClientV2.attachments[':id'].meta.$get(...)` and
+// Mock `apiClient` (`createClient`) so `getAttachmentMeta` hits our fake.
+// The hook calls `apiClient.attachments[':id'].meta.$get(...)` and
 // expects a Response-shaped object (`ok` / `status` / `json`).
 const { metaGet } = vi.hoisted(() => ({ metaGet: vi.fn() }));
 vi.mock('./api-client', () => ({
-  apiClientV2: {
+  apiClient: {
     attachments: {
       ':id': {
         meta: { $get: metaGet },
@@ -38,8 +38,8 @@ function makeMeta(overrides: Partial<AttachmentMeta> = {}): AttachmentMeta {
     fileFormat: 'image/png',
     fileSize: 2048,
     createdAt: '2026-05-01T09:30:00.000Z',
-    url: '/api/v2/attachments/att-1',
-    originalUrl: '/api/v2/attachments/att-1/original',
+    url: '/api/attachments/att-1',
+    originalUrl: '/api/attachments/att-1/original',
     ...overrides,
   };
 }

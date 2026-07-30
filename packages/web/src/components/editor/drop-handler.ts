@@ -8,7 +8,7 @@ import { runUpload } from './upload-placeholder';
  * RFC-0004 Phase 7 — CodeMirror 6 drag-and-drop upload handler.
  *
  * Wires `dragenter` / `dragover` / `drop` on the editor DOM so dropping
- * one or more files uploads them to `/api/v2/attachments/upload` and
+ * one or more files uploads them to `/api/attachments/upload` and
  * splices a progress placeholder at the drop position (the same
  * lifecycle the paste handler uses — see `upload-placeholder.ts`). The
  * `drop` handler `preventDefault`s the event, which suppresses

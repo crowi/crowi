@@ -1,7 +1,7 @@
 /**
  * RFC-0011 — in-repo smoke test for the built-in MCP server.
  *
- * Drives the live `/mcp` route through the same Hono app the production
+ * Drives the live `/api/mcp` route through the same Hono app the production
  * server serves (`buildHonoApp(crowi)` via the shared test harness), so
  * the JSON-RPC envelope, `createJwtAuth`, per-tool scope enforcement, and
  * in-process dispatch are all exercised end-to-end. Covers:
@@ -10,7 +10,7 @@
  *   (b) `crowi_get_page` returns a real page's body.
  *   (c) a read-only (`pages:read`) token calling a write tool gets the
  *       dispatched route's 403 INSUFFICIENT_SCOPE mapped to `isError`.
- *   (d) a missing token is rejected by the `/mcp` auth gate (401).
+ *   (d) a missing token is rejected by the `/api/mcp` auth gate (401).
  */
 import { app, crowi, Fixture } from 'src/test/setup';
 import type { UserDocument } from 'src/models/user';
@@ -18,7 +18,7 @@ import { createJwtUtil } from 'src/util/jwt';
 import request from 'supertest';
 
 /**
- * Send a JSON-RPC request to `/mcp`. The `@hono/mcp` transport replies
+ * Send a JSON-RPC request to `/api/mcp`. The `@hono/mcp` transport replies
  * either as `application/json` or as a single SSE `data:` frame
  * (`text/event-stream`) depending on the client `Accept`; we request
  * both and parse whichever comes back.
@@ -26,7 +26,7 @@ import request from 'supertest';
 const callMcp = async (token: string | null, payload: unknown) => {
   // No `Host` pin needed: DNS-rebinding protection is off (the endpoint is
   // Bearer-gated), so supertest's own Host header is accepted.
-  let req = request(app).post('/api/v2/mcp').set('Content-Type', 'application/json').set('Accept', 'application/json, text/event-stream');
+  let req = request(app).post('/api/mcp').set('Content-Type', 'application/json').set('Accept', 'application/json, text/event-stream');
   if (token) req = req.set('Authorization', `Bearer ${token}`);
   const res = await req.send(payload as object);
   return res;
@@ -52,7 +52,7 @@ const createTestUser = async (info: { name: string; username: string; email: str
   return user as UserDocument;
 };
 
-describe('MCP server (/mcp)', () => {
+describe('MCP server (/api/mcp)', () => {
   const PATH_PREFIX = '/mcp-smoke-test/';
   let user: UserDocument;
   let webToken: string;

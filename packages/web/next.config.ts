@@ -101,11 +101,11 @@ function nextConfig(phase: PHASE_TYPE): NextConfig {
     // - Without trailing slash: page itself
     skipTrailingSlashRedirect: true,
 
-    // Proxy `/api/v2/*` to the Crowi API server (`CROWI_API_URL`). In dev the
+    // Proxy `/api/*` to the Crowi API server (`CROWI_API_URL`). In dev the
     // API runs on a different port (4301) than the web app (4302), so relative
     // URLs in markdown / `<img src>` would otherwise fail with cross-origin
     // 404. In the recommended same-origin self-host setup the browser hits
-    // `/api/v2/...` on its own origin and this rewrite forwards to the api
+    // `/api/...` on its own origin and this rewrite forwards to the api
     // container (`CROWI_API_URL=http://api:3000`).
     //
     // Collab WebSocket (`/collab/:pageId`) is intentionally NOT
@@ -122,20 +122,20 @@ function nextConfig(phase: PHASE_TYPE): NextConfig {
     // and prod do.
     async rewrites() {
       const rewrites = [
-        { source: '/api/v2/:path*', destination: `${API_URL}/api/v2/:path*` },
+        { source: '/api/:path*', destination: `${API_URL}/api/:path*` },
         // Legacy attachment redirects (Crowi 1.x `/files/<id>` URLs embedded
         // in old page bodies) — forwarded to the api, which responds with a
-        // 302 to `/api/v2/attachments/<id>` (the `/files/:id` redirect in
+        // 302 to `/api/attachments/<id>` (the `/files/:id` redirect in
         // `attachment-stream.ts`, restored by feature-migration-files-url-
         // rewrite §3 as a safety net for bodies the body migration hasn't
         // rewritten). The browser then resolves the redirect target through
-        // the `/api/v2/:path*` rewrite above.
+        // the `/api/:path*` rewrite above.
         { source: '/files/:id', destination: `${API_URL}/files/:id` },
       ];
 
       // OAuth Authorization-Server Metadata (RFC 8414). The discovery
       // document is served by the api at the server root (NOT under
-      // `/api/v2`), but its `issuer` is `CLIENT_URL` (this web origin).
+      // `/api`), but its `issuer` is `CLIENT_URL` (this web origin).
       // External clients (e.g. `@crowi/cli`) fetch discovery from the
       // issuer origin and require `issuer === <the URL they dialed>`
       // (metadata mix-up defense), so the issuer origin must serve the

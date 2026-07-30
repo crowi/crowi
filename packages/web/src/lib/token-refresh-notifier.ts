@@ -10,7 +10,7 @@
  * reauth modal). The realtime layer also needs the opposite signal — a
  * refresh SUCCEEDED — so the short-lived collab / presence tokens, which
  * are independent of the access token but whose HTTP fetch rides the same
- * `apiClientV2` 401 dance, get re-fetched promptly. Without this, a
+ * `apiClient` 401 dance, get re-fetched promptly. Without this, a
  * collab WebSocket that hit `auth-failed` (its wsToken expired around the
  * same time the access token did) would sit idle until use-yjs-token's
  * own ~5-min refetch interval, even though credentials are already fresh.

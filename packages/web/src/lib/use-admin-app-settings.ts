@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiClientV2 } from './api-client';
+import { apiClient } from './api-client';
 import type { GetAppSettingsResponse, UpdateAppSettingsRequest, UpdateAppSettingsResponse } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 
@@ -11,7 +11,7 @@ export const adminAppSettingsKeys = {
 
 /**
  * RFC-0006 Phase 4 Batch 9 — switched from `apiClient.admin.app.*`
- * (ts-rest) to `apiClientV2.admin.app.$method` (`createClient`). Wire
+ * (ts-rest) to `apiClient.admin.app.$method` (`createClient`). Wire
  * payload unchanged. 401 / 403 collapse to `null` so the admin layout
  * gates the redirect.
  */
@@ -19,7 +19,7 @@ export function useAppSettings(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: adminAppSettingsKeys.settings,
     queryFn: async (): Promise<GetAppSettingsResponse | null> => {
-      const response = await apiClientV2.admin.app.$get();
+      const response = await apiClient.admin.app.$get();
       if (response.status !== 200) return null;
       return (await response.json()) as GetAppSettingsResponse;
     },
@@ -52,7 +52,7 @@ export function useUpdateAppSettings() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (body: UpdateAppSettingsRequest): Promise<UpdateAppSettingsResponse> => {
-      const response = await apiClientV2.admin.app.$put({ json: body });
+      const response = await apiClient.admin.app.$put({ json: body });
       if (response.status === 200) return (await response.json()) as UpdateAppSettingsResponse;
       if (response.status === 400) {
         const parsed = (await response.json().catch(() => null)) as AppSettingsValidationBody | null;

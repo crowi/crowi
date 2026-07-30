@@ -69,7 +69,7 @@ export type ToolKind = 'query' | 'body';
 
 /**
  * A single tool definition. The dispatched route is `method path` (bare,
- * no `/api/v2`); the route enforces scope, so the `scope` field here is
+ * no `/api`); the route enforces scope, so the `scope` field here is
  * documentation only (it is never re-checked in the MCP layer).
  */
 export interface ToolDescriptor {

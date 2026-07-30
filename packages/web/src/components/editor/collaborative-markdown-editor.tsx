@@ -110,7 +110,7 @@ interface CollaborativeMarkdownEditorCommonProps {
   /**
    * RFC-0004 Phase 6/7 — enables the editor's paste handler (URL
    * smart-link + image-blob upload) and drag-and-drop upload handler.
-   * Required because both upload to `/api/v2/attachments/upload`, which
+   * Required because both upload to `/api/attachments/upload`, which
    * is keyed by the owning page id. When the wrapper is driven by the
    * `pageId` prop this is the same id; the `session`-driven variant must
    * pass it explicitly. Omit to disable paste / D&D interception (bare
@@ -378,7 +378,7 @@ export const CollaborativeMarkdownEditor = forwardRef<MarkdownEditorHandle, Coll
   // Upload page id for the paste (Phase 6) + drag-and-drop (Phase 7)
   // handlers: an explicit `uploadPageId` wins; otherwise fall back to
   // the `pageId` prop when the wrapper owns the connection. Both
-  // handlers upload to the same `/api/v2/attachments/upload` keyed by
+  // handlers upload to the same `/api/attachments/upload` keyed by
   // the page, so they share this config object.
   const uploadConfig = useMemo<{ pageId: string } | undefined>(() => {
     const id = uploadPageId ?? pageId;

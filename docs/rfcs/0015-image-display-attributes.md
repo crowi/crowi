@@ -35,8 +35,8 @@ Crowi should support a small, explicit Markdown extension for controlling image
 display attributes:
 
 ```markdown
-![Architecture diagram](/api/v2/attachments/abc){width=60% align=center}
-![Screenshot](/api/v2/attachments/def){width=320px float=right}
+![Architecture diagram](/api/attachments/abc){width=60% align=center}
+![Screenshot](/api/attachments/def){width=320px float=right}
 ```
 
 The v1 syntax is a Pandoc-style attribute block immediately following a Markdown
@@ -545,7 +545,7 @@ The shared helper is the one place that normalizes display props. It:
 
 This parity is scoped to image-attribute interpretation, not to every image
 interaction. Page view intentionally routes attachment image URLs such as
-`/api/v2/attachments/<id>` through `InlineAttachmentLink` so a plain click opens
+`/api/attachments/<id>` through `InlineAttachmentLink` so a plain click opens
 the attachment modal (`packages/web/src/components/page-view/page-content.tsx:377-379`,
 `packages/web/src/components/page-view/inline-attachment-link.tsx:101-114`).
 Preview intentionally renders a plain image and does not open that modal. This
@@ -593,7 +593,7 @@ shared helper), but the two axes apply on different elements:
   rule in §6.3 (inline and raw imgs never receive align/float).
 
 **Standalone attachment image → figure.** When a *standalone attachment* image
-(e.g. `![alt](/api/v2/attachments/<id>){width=70% float=right}` alone in its
+(e.g. `![alt](/api/attachments/<id>){width=70% float=right}` alone in its
 paragraph) is synthesized into a `<figure>`, the figure's inner `<img>` still
 carries the attachment URL, so on page view it flows through the `img` override
 and `extractAttachmentId` re-wraps it as an `InlineAttachmentLink`
@@ -883,7 +883,7 @@ it.
   page-view attachment test with display attributes; and a parity assertion that
   the attachment path and the preview path yield the same final `style` /
   `className` for the same input (aside from the page-view-only cursor/modal).
-- Ensure preview via `POST /api/v2/pages/preview` and saved page rendering match
+- Ensure preview via `POST /api/pages/preview` and saved page rendering match
   for image-attribute interpretation, including attachment image URLs.
 - Bump `RENDERER_PIPELINE_VERSION` from `0.7.0` to `0.8.0` in this same change
   (§6.1/§10) — required, not optional. Without it, saved `0.7.0` revisions keep

@@ -8,10 +8,10 @@
  *
  * Two boundary facts make this safe and simple:
  *  - Routes are registered on the Hono app at **root** (`/pages`,
- *    `/search`, …). The `/api/v2` prefix is a boundary concern stripped
- *    by `stripApiV2Prefix` before `honoApp.fetch` (`hono/path-rewrite.ts`,
+ *    `/search`, …). The `/api` prefix is a boundary concern stripped
+ *    by `stripApiPrefix` before `honoApp.fetch` (`hono/path-rewrite.ts`,
  *    `crowi/index.ts`). So internal dispatch uses the **bare** route path
- *    (`/pages`), never `/api/v2/pages`.
+ *    (`/pages`), never `/api/pages`.
  *  - We forward the caller's `Authorization` header verbatim, so the
  *    dispatched route re-runs `createJwtAuth` + `requireScope` for the
  *    same principal (RFC-0011 §10.4 "forward-the-header"; the optional

@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getLocale, setLocale, locales, type Locale } from '@paraglide/runtime.js';
 import type { Theme, UpdatePasswordRequest, UpdateProfileRequest } from '@crowi/api-contract';
-import { apiClientV2 } from './api-client';
+import { apiClient } from './api-client';
 import { storeTokens } from './auth-token';
 
 function profileLangToLocale(lang: string | undefined | null): Locale | null {
@@ -16,7 +16,7 @@ function profileLangToLocale(lang: string | undefined | null): Locale | null {
 
 /**
  * RFC-0006 Phase 4 Batch 2 — switched all `me` hooks from
- * `apiClient.me.*` (ts-rest) to `apiClientV2.me.*.$method` (`createClient`).
+ * `apiClient.me.*` (ts-rest) to `apiClient.me.*.$method` (`createClient`).
  * Wire payload is unchanged; the only difference at the call site is
  * `response.ok` / `response.json()` instead of ts-rest's `result.status` +
  * `result.body`. The `unwrapResult` helper isn't reused here because the
@@ -27,7 +27,7 @@ export function useProfile() {
   return useQuery({
     queryKey: ['profile'],
     queryFn: async () => {
-      const response = await apiClientV2.me.$get();
+      const response = await apiClient.me.$get();
       if (!response.ok) {
         throw new Error('Failed to fetch profile');
       }
@@ -41,7 +41,7 @@ export function useUpdateProfile() {
 
   return useMutation({
     mutationFn: async (data: UpdateProfileRequest) => {
-      const response = await apiClientV2.me.$put({ json: data });
+      const response = await apiClient.me.$put({ json: data });
       if (response.status === 200) {
         return response.json();
       }
@@ -79,7 +79,7 @@ export function useUpdateTheme() {
 
   return useMutation({
     mutationFn: async (theme: Theme) => {
-      const response = await apiClientV2.me.theme.$patch({ json: { theme } });
+      const response = await apiClient.me.theme.$patch({ json: { theme } });
       if (response.status === 200) {
         return response.json();
       }
@@ -96,9 +96,9 @@ export function useUploadPicture() {
 
   return useMutation({
     mutationFn: async (file: File) => {
-      // `apiClientV2`'s `$post` for multipart/form-data takes the field
+      // `apiClient`'s `$post` for multipart/form-data takes the field
       // map as `form` (mirrors Hono's `c.req.parseBody()` field shape).
-      const response = await apiClientV2.me.picture.$post({
+      const response = await apiClient.me.picture.$post({
         form: { file },
       });
       if (response.status === 200) {
@@ -121,7 +121,7 @@ export function useDeletePicture() {
 
   return useMutation({
     mutationFn: async () => {
-      const response = await apiClientV2.me.picture.$delete();
+      const response = await apiClient.me.picture.$delete();
       if (response.status === 200) {
         return response.json();
       }
@@ -140,7 +140,7 @@ export function useDeletePicture() {
 export function useUpdatePassword() {
   return useMutation({
     mutationFn: async (data: UpdatePasswordRequest) => {
-      const response = await apiClientV2.me.password.$put({ json: data });
+      const response = await apiClient.me.password.$put({ json: data });
       if (response.status === 200) {
         const body = await response.json();
         // Changing the password revokes every token minted before it,

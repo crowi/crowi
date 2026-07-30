@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { usePreview } from '@/lib/use-preview';
+import { canonicalizeLegacyAttachmentUrl } from '@/lib/attachment-url';
 import {
   getFigureLayoutClassName,
   getImageDisplayStyle,
@@ -47,7 +48,7 @@ function isExternalHref(href: string | undefined): boolean {
 
 /**
  * Live preview pane fed by the same renderer pipeline as the show
- * page — `POST /api/v2/pages/preview` returns mdast that we run
+ * page — `POST /api/pages/preview` returns mdast that we run
  * through `renderMdastToReactNode` with `sectionWrap: false` (no URL
  * hash / no copy-link affordance for preview).
  *
@@ -178,7 +179,11 @@ export const previewComponents = {
   h4: makePreviewHeading('h4'),
   h5: makePreviewHeading('h5'),
   h6: makePreviewHeading('h6'),
-  a: ({ href, children, ...props }: { href?: string; children?: React.ReactNode }) => {
+  a: ({ href: rawHref, children, ...props }: { href?: string; children?: React.ReactNode }) => {
+    // Canonicalize a persisted legacy `/api/v2/attachments/...` href before
+    // it reaches the DOM (spec §5.3, view/preview parity with
+    // `page-content.tsx`'s `a:` override) — a no-op for every other href.
+    const href = canonicalizeLegacyAttachmentUrl(rawHref);
     const external = isExternalHref(href);
     return (
       <a
@@ -282,7 +287,11 @@ export const previewComponents = {
     style?: React.CSSProperties;
     [key: string]: unknown;
   }) => {
-    const srcString = typeof src === 'string' ? src : undefined;
+    const rawSrcString = typeof src === 'string' ? src : undefined;
+    // Canonicalize a persisted legacy `/api/v2/attachments/...` src before it
+    // reaches the DOM (spec §5.3, view/preview parity with
+    // `page-content.tsx`'s `img:` override) — a no-op for every other src.
+    const srcString = canonicalizeLegacyAttachmentUrl(rawSrcString);
     // Server-rendered "ready diagram" presentation (an optional renderer
     // plugin's PNG-fallback or `<img>`-success output — the generic
     // `data-crowi-renderer-presentation`/`-state` contract with legacy

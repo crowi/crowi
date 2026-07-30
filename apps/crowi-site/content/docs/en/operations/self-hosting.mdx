@@ -203,7 +203,7 @@ image** — pass them via container env or `env_file` at deploy time.
 
 The web app builds from `packages/web/Dockerfile`. The built `crowi/crowi-web`
 image is a **render-only** Next.js server that bakes **no** absolute API URL:
-the browser hits relative `/api/v2` / `/files` paths on its own origin and
+the browser hits relative `/api` / `/files` paths on its own origin and
 derives WebSocket URLs from `window.location`. So one image works against any
 api host — but it needs a **front reverse proxy** to route those paths to the
 api.
@@ -240,7 +240,7 @@ api. See [Upgrading from v1](./upgrading-from-v1).
 
 <Step>
 ### Start api, then web
-Start the api and confirm `/api/v2/app/info` returns 200, then start the web app.
+Start the api and confirm `/api/app/info` returns 200, then start the web app.
 </Step>
 
 </Steps>
@@ -251,6 +251,57 @@ Start the api and confirm `/api/v2/app/info` returns 200, then start the web app
   **required**, and `WS_TOKEN_SECRET` must be identical across all api replicas.
   See [Realtime collaboration](./realtime-collab).
 </Callout>
+
+## `/api` prefix cutover
+
+Starting from the release that removes the `v2` path segment, the api's
+public HTTP prefix is `/api` instead of `/api/v2`. This is a listener-
+boundary rename, not a versioned rollout: the api does **not** serve a
+runtime alias or redirect for the old prefix. Once a given api replica is
+running the new version, every request to `/api/v2/*` against that replica
+is a plain 404 — and symmetrically, a replica still running the previous
+version does not understand unprefixed `/api/*` requests from an
+already-upgraded web / CLI / MCP client. The two listener generations
+cannot interpret each other's prefix, so this upgrade cannot be rolled out
+gradually.
+
+### Coordinated drain/restart — no one-at-a-time rolling restart
+
+<Callout type="warn">
+  **Do not roll this release out one replica at a time.** A normal rolling
+  restart — replacing api replicas one by one behind a load balancer with no
+  sticky sessions (see [Realtime collaboration](./realtime-collab)) — puts
+  old-prefix and new-prefix replicas in the same pool at the same time.
+  Whichever prefix a given request happens to use, roughly half the fleet
+  will 404 it. Instead, stop **every** api replica together, deploy the new
+  version to all of them, and restart them together — or stand up a fresh
+  fleet on the new version and cut traffic over to it all at once
+  (blue/green). Single-instance deployments, including local dev, are not
+  affected: with only one replica, old-prefix / new-prefix mixing cannot
+  happen.
+</Callout>
+
+### Preflight check
+
+Before opening the gate to real traffic, confirm every replica has actually
+switched — don't rely on the deploy tool's "finished" signal alone. Hit each
+replica **individually** (not through the load balancer, which would only
+ever sample one replica per request):
+
+- `GET /api/openapi.json` must return **200** on every replica.
+- `GET /api/v2/openapi.json` must return **404** on every replica.
+
+If any replica fails either check, it is still on the old prefix (or was
+never restarted) — do not route production traffic to the fleet yet.
+
+### Rollback
+
+Rolling back runs the same check in reverse. Before sending traffic back to
+a rolled-back replica, confirm it returns **404** for `/api/openapi.json`
+and **200** for `/api/v2/openapi.json`. As with the upgrade direction, roll
+back every replica together — a fleet with a mix of rolled-back and
+not-yet-rolled-back replicas has the same split-prefix problem as a partial
+upgrade.
 
 ## Next steps
 

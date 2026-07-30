@@ -25,7 +25,7 @@ import { AttachmentUsageView } from './attachment-usage-view';
 
 function makePastUsage(overrides: Partial<PastAttachmentUsage> = {}): PastAttachmentUsage {
   return {
-    attachment: makeAttachment({ _id: 'att-past', originalName: 'old.png', url: '/api/v2/attachments/att-past', inUse: false }),
+    attachment: makeAttachment({ _id: 'att-past', originalName: 'old.png', url: '/api/attachments/att-past', inUse: false }),
     referencingRevisions: [
       {
         revisionId: 'rev-9',
@@ -70,7 +70,7 @@ describe('AttachmentUsageView', () => {
   });
 
   it('renders a latest-revision attachment in the top section', () => {
-    mockUsage({ latest: [makeAttachment({ originalName: 'latest.png', url: '/api/v2/attachments/att-1' })] });
+    mockUsage({ latest: [makeAttachment({ originalName: 'latest.png', url: '/api/attachments/att-1' })] });
     render(<AttachmentUsageView pageId="page-1" />);
     expect(screen.getByRole('img', { name: 'latest.png' })).toBeTruthy();
   });
@@ -89,7 +89,7 @@ describe('AttachmentUsageView', () => {
 
   it('renders both sections at once (latest + past)', () => {
     mockUsage({
-      latest: [makeAttachment({ _id: 'att-l', originalName: 'current.png', url: '/api/v2/attachments/att-l' })],
+      latest: [makeAttachment({ _id: 'att-l', originalName: 'current.png', url: '/api/attachments/att-l' })],
       past: [makePastUsage()],
     });
     render(<AttachmentUsageView pageId="page-1" />);

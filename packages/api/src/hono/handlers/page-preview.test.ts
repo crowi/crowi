@@ -5,7 +5,7 @@ import { app, crowi } from 'src/test/setup';
 import { authHeaders, createTestUser } from 'src/test/test-helpers';
 import request from 'supertest';
 
-describe('Routes /api/v2/pages/preview (Hono previewPage)', () => {
+describe('Routes /api/pages/preview (Hono previewPage)', () => {
   let accessToken: string;
   let accessTokenUserId: string;
 
@@ -16,14 +16,14 @@ describe('Routes /api/v2/pages/preview (Hono previewPage)', () => {
   });
 
   it('returns 401 when no Authorization header is provided', async () => {
-    const res = await request(app).post('/api/v2/pages/preview').send({ body: '# hello' }).set('Content-Type', 'application/json');
+    const res = await request(app).post('/api/pages/preview').send({ body: '# hello' }).set('Content-Type', 'application/json');
 
     expect(res.status).toBe(401);
     expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
   });
 
   it('renders an empty body to an empty mdast root', async () => {
-    const res = await request(app).post('/api/v2/pages/preview').set(authHeaders(accessToken)).send({ body: '' });
+    const res = await request(app).post('/api/pages/preview').set(authHeaders(accessToken)).send({ body: '' });
 
     expect(res.status).toBe(200);
     expect(res.body.renderedAst).toBeDefined();
@@ -33,7 +33,7 @@ describe('Routes /api/v2/pages/preview (Hono previewPage)', () => {
   });
 
   it('renders a heading to a heading mdast node', async () => {
-    const res = await request(app).post('/api/v2/pages/preview').set(authHeaders(accessToken)).send({ body: '# Hello world' });
+    const res = await request(app).post('/api/pages/preview').set(authHeaders(accessToken)).send({ body: '# Hello world' });
 
     expect(res.status).toBe(200);
     const ast = res.body.renderedAst as { children: Array<{ type: string; depth?: number; children?: Array<{ value?: string }> }> };
@@ -46,7 +46,7 @@ describe('Routes /api/v2/pages/preview (Hono previewPage)', () => {
   });
 
   it('runs the same pipeline plugins as the save path (heading anchor stamping)', async () => {
-    const res = await request(app).post('/api/v2/pages/preview').set(authHeaders(accessToken)).send({ body: '## Some Section' });
+    const res = await request(app).post('/api/pages/preview').set(authHeaders(accessToken)).send({ body: '## Some Section' });
 
     expect(res.status).toBe(200);
     const ast = res.body.renderedAst as { children: Array<{ type: string; data?: { hProperties?: { id?: string } } }> };
@@ -71,7 +71,7 @@ describe('Routes /api/v2/pages/preview (Hono previewPage)', () => {
   // mode (see the spec's "設計の主な判断" note).
   it('parses %20 / + / <...> link destinations to the same mdast `url` the save path would produce (link-node parse-stage parity only)', async () => {
     const body = '[a](/a%20b) [b](/a+b) [c](</a c>)';
-    const res = await request(app).post('/api/v2/pages/preview').set(authHeaders(accessToken)).send({ body });
+    const res = await request(app).post('/api/pages/preview').set(authHeaders(accessToken)).send({ body });
 
     expect(res.status).toBe(200);
     const ast = res.body.renderedAst as { children: Array<{ children: Array<{ type: string; url?: string }> }> };
@@ -80,7 +80,7 @@ describe('Routes /api/v2/pages/preview (Hono previewPage)', () => {
   });
 
   it('strips parser `position` metadata so the response payload stays compact', async () => {
-    const res = await request(app).post('/api/v2/pages/preview').set(authHeaders(accessToken)).send({ body: '# Heading\n\nparagraph' });
+    const res = await request(app).post('/api/pages/preview').set(authHeaders(accessToken)).send({ body: '# Heading\n\nparagraph' });
 
     expect(res.status).toBe(200);
     const ast = res.body.renderedAst as { children: Array<Record<string, unknown>> };
@@ -95,7 +95,7 @@ describe('Routes /api/v2/pages/preview (Hono previewPage)', () => {
     // these `data-source-line` attrs off the rendered preview DOM —
     // they have to ride the serialised mdast across the wire.
     const body = '# H1\n\nparagraph\n\n```\ncode\n```\n';
-    const res = await request(app).post('/api/v2/pages/preview').set(authHeaders(accessToken)).send({ body });
+    const res = await request(app).post('/api/pages/preview').set(authHeaders(accessToken)).send({ body });
 
     expect(res.status).toBe(200);
     const ast = res.body.renderedAst as {
@@ -120,7 +120,7 @@ describe('Routes /api/v2/pages/preview (Hono previewPage)', () => {
     const renderer = crowi.getRenderer();
     const spy = jest.spyOn(renderer, 'run');
     try {
-      const res = await request(app).post('/api/v2/pages/preview').set(authHeaders(accessToken)).send({ body: '# hello' });
+      const res = await request(app).post('/api/pages/preview').set(authHeaders(accessToken)).send({ body: '# hello' });
 
       expect(res.status).toBe(200);
       expect(spy).toHaveBeenCalled();
@@ -154,7 +154,7 @@ describe('Routes /api/v2/pages/preview (Hono previewPage)', () => {
       const before = await PluginRenderCache.countDocuments({}).exec();
 
       const body = ['```preview-server-render-fixture', 'flowchart TD', '  A --> B', '```'].join('\n');
-      const res = await request(app).post('/api/v2/pages/preview').set(authHeaders(accessToken)).send({ body });
+      const res = await request(app).post('/api/pages/preview').set(authHeaders(accessToken)).send({ body });
 
       expect(res.status).toBe(200);
       const ast = res.body.renderedAst as { children: Array<{ type: string; value?: string }> };
@@ -175,7 +175,7 @@ describe('Routes /api/v2/pages/preview (Hono previewPage)', () => {
       crowi.getRenderer().registry.addCodeBlockRenderer('preview-default-policy-fixture', renderer, PLUGIN, silentLogger);
 
       const body = ['```preview-default-policy-fixture', '@startuml', 'A -> B', '@enduml', '```'].join('\n');
-      const res = await request(app).post('/api/v2/pages/preview').set(authHeaders(accessToken)).send({ body });
+      const res = await request(app).post('/api/pages/preview').set(authHeaders(accessToken)).send({ body });
 
       expect(res.status).toBe(200);
       const ast = res.body.renderedAst as { children: Array<{ type: string; lang?: string }> };
@@ -200,7 +200,7 @@ describe('Routes /api/v2/pages/preview (Hono previewPage)', () => {
       );
 
       const body = ['@[preview-embed-fixture](http://example.com)', '', 'https://example.com'].join('\n');
-      const res = await request(app).post('/api/v2/pages/preview').set(authHeaders(accessToken)).send({ body });
+      const res = await request(app).post('/api/pages/preview').set(authHeaders(accessToken)).send({ body });
 
       expect(res.status).toBe(200);
       expect(embedSpy).not.toHaveBeenCalled();
@@ -221,7 +221,7 @@ describe('Routes /api/v2/pages/preview (Hono previewPage)', () => {
       const body = Array.from({ length: 50 }, () => oneDiagram).join('\n');
 
       const start = Date.now();
-      const res = await request(app).post('/api/v2/pages/preview').set(authHeaders(accessToken)).send({ body });
+      const res = await request(app).post('/api/pages/preview').set(authHeaders(accessToken)).send({ body });
       const elapsedMs = Date.now() - start;
       const payloadBytes = Buffer.byteLength(JSON.stringify(res.body), 'utf8');
 
@@ -279,7 +279,7 @@ describe('Routes /api/v2/pages/preview (Hono previewPage)', () => {
       const body = paragraph.repeat(600); // ~3.2MB
       expect(Buffer.byteLength(body, 'utf8')).toBeGreaterThan(3 * 1024 * 1024);
 
-      const res = await request(app).post('/api/v2/pages/preview').set(authHeaders(accessToken)).send({ body });
+      const res = await request(app).post('/api/pages/preview').set(authHeaders(accessToken)).send({ body });
 
       expect(res.status).toBe(200);
       const ast = res.body.renderedAst as { children: unknown[] };
@@ -326,7 +326,7 @@ describe('Routes /api/v2/pages/preview (Hono previewPage)', () => {
       const PREVIEW_RATE_LIMIT = 600;
       const TOTAL_REQUESTS = 2 * PREVIEW_RATE_LIMIT + 1;
       const BATCH_SIZE = 50;
-      const fire = () => request(app).post('/api/v2/pages/preview').set(authHeaders(rateLimitedToken)).send({ body: '# hello' });
+      const fire = () => request(app).post('/api/pages/preview').set(authHeaders(rateLimitedToken)).send({ body: '# hello' });
       const responses: Awaited<ReturnType<typeof fire>>[] = [];
       for (let i = 0; i < TOTAL_REQUESTS; i += BATCH_SIZE) {
         const batchSize = Math.min(BATCH_SIZE, TOTAL_REQUESTS - i);
@@ -391,7 +391,7 @@ describe('Routes /api/v2/pages/preview (Hono previewPage)', () => {
       const before = await PluginRenderCache.countDocuments({}).exec();
 
       const body = ['```mermaid', 'flowchart TD', '  A --> B', '```'].join('\n');
-      const res = await request(app).post('/api/v2/pages/preview').set(authHeaders(accessToken)).send({ body });
+      const res = await request(app).post('/api/pages/preview').set(authHeaders(accessToken)).send({ body });
 
       expect(res.status).toBe(200);
       const ast = res.body.renderedAst as { children: Array<{ type: string; value?: string }> };
@@ -412,7 +412,7 @@ describe('Routes /api/v2/pages/preview (Hono previewPage)', () => {
 
     it('a "plantuml" fence and a bare URL both stay untouched with no pageId — the default-policy renderer never calls render() (AC 10)', async () => {
       const body = ['```plantuml', '@startuml', 'A -> B', '@enduml', '```', '', 'https://example.com'].join('\n');
-      const res = await request(app).post('/api/v2/pages/preview').set(authHeaders(accessToken)).send({ body });
+      const res = await request(app).post('/api/pages/preview').set(authHeaders(accessToken)).send({ body });
 
       expect(res.status).toBe(200);
       const ast = res.body.renderedAst as { children: Array<{ type: string; lang?: string }> };

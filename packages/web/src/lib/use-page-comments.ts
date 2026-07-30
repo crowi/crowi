@@ -1,13 +1,13 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiClientV2 } from './api-client';
+import { apiClient } from './api-client';
 import type { Comment } from '@crowi/api-contract';
 import { watchKeys } from './use-watch';
 
 /**
  * RFC-0006 Phase 4 Batch 3 — switched from `apiClient.comment.*`
- * (ts-rest) to `apiClientV2.comments.$method` (`createClient`). The wire
+ * (ts-rest) to `apiClient.comments.$method` (`createClient`). The wire
  * payload (`{ comments }`, `{ comment }`, `{ ok: true }`) is preserved.
  * Error envelopes (`{ error: { code, message } }`) are mapped through
  * `extractErrorMessage` so users see the server's intended message
@@ -46,7 +46,7 @@ export function usePageCommentsList(pageId: string | null | undefined) {
     queryKey: pageId ? commentKeys.detail(pageId) : commentKeys.all,
     queryFn: async () => {
       if (!pageId) return [] as Comment[];
-      const response = await apiClientV2.comments.$get({ query: { page_id: pageId } });
+      const response = await apiClient.comments.$get({ query: { page_id: pageId } });
       if (response.ok) {
         const body = await response.json();
         return body.comments;
@@ -80,7 +80,7 @@ export function useAddComment(pageId: string | null | undefined) {
   const mutation = useMutation({
     mutationFn: async (input: { revisionId: string; comment: string; commentPosition?: number }) => {
       if (!pageId) throw new Error('pageId is required');
-      const response = await apiClientV2.comments.$post({
+      const response = await apiClient.comments.$post({
         json: {
           page_id: pageId,
           revision_id: input.revisionId,
@@ -122,7 +122,7 @@ export function useDeleteComment(pageId: string | null | undefined) {
   const mutation = useMutation({
     mutationFn: async (commentId: string) => {
       if (!pageId) throw new Error('pageId is required');
-      const response = await apiClientV2.comments.$delete({
+      const response = await apiClient.comments.$delete({
         json: { comment_id: commentId, page_id: pageId },
       });
       if (response.ok) return true;

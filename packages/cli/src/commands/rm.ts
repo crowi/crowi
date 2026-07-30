@@ -6,13 +6,13 @@ import { normalisePath } from '../lib/page-ref';
 import { fetchCurrentPage, isRevisionConflict } from '../lib/page-write';
 import { requireProfile } from './_shared';
 
-/** Lenient `DELETE /api/v2/pages` response — the deleted/trashed page. */
+/** Lenient `DELETE /api/pages` response — the deleted/trashed page. */
 interface DeletePageResponse {
   page?: { _id?: string; path?: string };
 }
 
 /**
- * The `DELETE /api/v2/pages` request body (DeletePageRequestSchema, inline in
+ * The `DELETE /api/pages` request body (DeletePageRequestSchema, inline in
  * contracts/page.ts and therefore not exported). The shape is trivial and
  * `page_id` is sourced from a just-fetched page, so it is built directly here
  * rather than pulling zod into the CLI just to re-validate a server-sourced
@@ -25,7 +25,7 @@ interface DeletePageBody {
 }
 
 /**
- * `crowi rm <path>` — delete a page via `DELETE /api/v2/pages`
+ * `crowi rm <path>` — delete a page via `DELETE /api/pages`
  * (`pages:write`). Soft-deletes to the trash by default (recoverable with
  * `crowi` restore); `--completely` hard-deletes irreversibly.
  *

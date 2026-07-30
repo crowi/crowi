@@ -13,7 +13,7 @@ import type { EditorCapCounter } from 'src/util/editor-cap-counter';
 import { createWsTokenUtil } from 'src/util/ws-token';
 import request from 'supertest';
 
-describe('Routes /api/v2/pages/:id/yjs-token (Hono getYjsToken)', () => {
+describe('Routes /api/pages/:id/yjs-token (Hono getYjsToken)', () => {
   const PATH_PREFIX = '/hono-collab-token/';
   let accessToken: string;
   let userId: string;
@@ -73,7 +73,7 @@ describe('Routes /api/v2/pages/:id/yjs-token (Hono getYjsToken)', () => {
   const createPage = async (suffix: string, opts: { grant?: number } = {}) => {
     const path = `${PATH_PREFIX}${suffix}`;
     const res = await request(app)
-      .post('/api/v2/pages')
+      .post('/api/pages')
       .set(authHeaders(accessToken))
       .send({ path, body: '# collab', ...(opts.grant ? { grant: opts.grant } : {}) });
     expect(res.status).toBe(200);
@@ -81,21 +81,21 @@ describe('Routes /api/v2/pages/:id/yjs-token (Hono getYjsToken)', () => {
   };
 
   it('returns 401 when no Authorization header is provided', async () => {
-    const res = await request(app).get('/api/v2/pages/000000000000000000000000/yjs-token').set('Content-Type', 'application/json');
+    const res = await request(app).get('/api/pages/000000000000000000000000/yjs-token').set('Content-Type', 'application/json');
 
     expect(res.status).toBe(401);
     expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
   });
 
   it('returns 400 INVALID_PAGE_ID when :id is not a 24-char hex string', async () => {
-    const res = await request(app).get('/api/v2/pages/not-a-valid-id/yjs-token').set(authHeaders(accessToken));
+    const res = await request(app).get('/api/pages/not-a-valid-id/yjs-token').set(authHeaders(accessToken));
 
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe('INVALID_PAGE_ID');
   });
 
   it('returns 404 PAGE_NOT_FOUND for a well-formed but nonexistent page id', async () => {
-    const res = await request(app).get('/api/v2/pages/000000000000000000000000/yjs-token').set(authHeaders(accessToken));
+    const res = await request(app).get('/api/pages/000000000000000000000000/yjs-token').set(authHeaders(accessToken));
 
     expect(res.status).toBe(404);
     expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
@@ -105,7 +105,7 @@ describe('Routes /api/v2/pages/:id/yjs-token (Hono getYjsToken)', () => {
     // grant: 4 = OWNER-only, so otherAccessToken cannot reach it.
     const pageId = await createPage('private', { grant: 4 });
 
-    const res = await request(app).get(`/api/v2/pages/${pageId}/yjs-token`).set(authHeaders(otherAccessToken));
+    const res = await request(app).get(`/api/pages/${pageId}/yjs-token`).set(authHeaders(otherAccessToken));
 
     expect(res.status).toBe(404);
     expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
@@ -114,7 +114,7 @@ describe('Routes /api/v2/pages/:id/yjs-token (Hono getYjsToken)', () => {
   it('returns 200 with a signed wsToken, mirroring pageId / readonly=false / ISO expiresAt', async () => {
     const pageId = await createPage('basic');
 
-    const res = await request(app).get(`/api/v2/pages/${pageId}/yjs-token`).set(authHeaders(accessToken));
+    const res = await request(app).get(`/api/pages/${pageId}/yjs-token`).set(authHeaders(accessToken));
 
     expect(res.status).toBe(200);
     expect(res.body.pageId).toBe(pageId);
@@ -139,7 +139,7 @@ describe('Routes /api/v2/pages/:id/yjs-token (Hono getYjsToken)', () => {
   it('encodes the expected userId / pageId / readonly / issuer claims in the JWT payload', async () => {
     const pageId = await createPage('verify');
 
-    const res = await request(app).get(`/api/v2/pages/${pageId}/yjs-token`).set(authHeaders(accessToken));
+    const res = await request(app).get(`/api/pages/${pageId}/yjs-token`).set(authHeaders(accessToken));
     expect(res.status).toBe(200);
 
     // Structural decode: we assert the JWT *payload* shape independently
@@ -167,7 +167,7 @@ describe('Routes /api/v2/pages/:id/yjs-token (Hono getYjsToken)', () => {
     const Page = crowi.model('Page');
     await Page.updateOne({ _id: pageId }, { $set: { status: 'deleted' } });
 
-    const res = await request(app).get(`/api/v2/pages/${pageId}/yjs-token`).set(authHeaders(accessToken));
+    const res = await request(app).get(`/api/pages/${pageId}/yjs-token`).set(authHeaders(accessToken));
 
     expect(res.status).toBe(404);
     expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
@@ -180,7 +180,7 @@ describe('Routes /api/v2/pages/:id/yjs-token (Hono getYjsToken)', () => {
     const Page = crowi.model('Page');
     await Page.updateOne({ _id: pageId }, { $set: { collabLifecycleVersion: 4 } });
 
-    const res = await request(app).get(`/api/v2/pages/${pageId}/yjs-token`).set(authHeaders(accessToken));
+    const res = await request(app).get(`/api/pages/${pageId}/yjs-token`).set(authHeaders(accessToken));
     expect(res.status).toBe(200);
 
     const [, payloadB64] = (res.body.wsToken as string).split('.');
@@ -195,7 +195,7 @@ describe('Routes /api/v2/pages/:id/yjs-token (Hono getYjsToken)', () => {
     _setEditorCapCounterForTesting(makeCappedCounter(20, 20));
     const pageId = await createPage('cap-reached');
 
-    const res = await request(app).get(`/api/v2/pages/${pageId}/yjs-token`).set(authHeaders(accessToken));
+    const res = await request(app).get(`/api/pages/${pageId}/yjs-token`).set(authHeaders(accessToken));
 
     expect(res.status).toBe(200);
     expect(res.body.pageId).toBe(pageId);
@@ -225,7 +225,7 @@ describe('Routes /api/v2/pages/:id/yjs-token (Hono getYjsToken)', () => {
     it('issues a wsToken to the draft author', async () => {
       const pageId = await createDraftPage('draft-owner');
 
-      const res = await request(app).get(`/api/v2/pages/${pageId}/yjs-token`).set(authHeaders(accessToken));
+      const res = await request(app).get(`/api/pages/${pageId}/yjs-token`).set(authHeaders(accessToken));
 
       expect(res.status).toBe(200);
       expect(res.body.pageId).toBe(pageId);
@@ -235,7 +235,7 @@ describe('Routes /api/v2/pages/:id/yjs-token (Hono getYjsToken)', () => {
     it('returns 404 PAGE_NOT_FOUND for a non-author on a draft page (does not leak existence)', async () => {
       const pageId = await createDraftPage('draft-foreign');
 
-      const res = await request(app).get(`/api/v2/pages/${pageId}/yjs-token`).set(authHeaders(otherAccessToken));
+      const res = await request(app).get(`/api/pages/${pageId}/yjs-token`).set(authHeaders(otherAccessToken));
 
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('PAGE_NOT_FOUND');

@@ -301,3 +301,46 @@ describe('MarkdownPreview — linkCardEnabled=false gates the placeholder substi
     expect(link.getAttribute('href')).toBe(url);
   });
 });
+
+// feature-api-v2-path-removal Phase 3 §5.3 — the `img:`/`a:` overrides pass
+// `src`/`href` through `canonicalizeLegacyAttachmentUrl()` before handing it
+// to the DOM. Without this, a page whose body still embeds a legacy
+// `/api/v2/attachments/<id>` reference would show a broken image ONLY in
+// split preview (page-content.test.tsx's parallel describe block covers the
+// show-page side) — this is what AC calls view/preview parity.
+describe('MarkdownPreview — legacy attachment URL canonicalization (feature-api-v2-path-removal Phase 3, view/preview parity)', () => {
+  const HEX = 'c'.repeat(24);
+
+  it('renders a legacy /api/v2/attachments/<id> image src as the canonical /api/attachments/<id>', async () => {
+    mutateAsync.mockResolvedValueOnce({
+      type: 'root',
+      children: [{ type: 'paragraph', children: [{ type: 'image', url: `/api/v2/attachments/${HEX}`, alt: 'legacy pic' }] }],
+    });
+
+    render(<MarkdownPreview source={`![legacy pic](/api/v2/attachments/${HEX})`} />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+    });
+
+    const img = screen.getByRole('img', { name: 'legacy pic' });
+    // Same canonical value `page-content.tsx` renders for the identical
+    // input (page-content.test.tsx's "legacy attachment URL
+    // canonicalization" describe block) — view/preview parity.
+    expect(img.getAttribute('src')).toBe(`/api/attachments/${HEX}`);
+  });
+
+  it('renders a legacy /api/v2/attachments/<id> link href as the canonical /api/attachments/<id>', async () => {
+    mutateAsync.mockResolvedValueOnce({
+      type: 'root',
+      children: [{ type: 'paragraph', children: [{ type: 'link', url: `/api/v2/attachments/${HEX}`, children: [{ type: 'text', value: 'legacy link' }] }] }],
+    });
+
+    render(<MarkdownPreview source={`[legacy link](/api/v2/attachments/${HEX})`} />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+    });
+
+    const link = screen.getByRole('link', { name: 'legacy link' });
+    expect(link.getAttribute('href')).toBe(`/api/attachments/${HEX}`);
+  });
+});

@@ -7,7 +7,7 @@ import { UserPublicSchema } from './user-public';
  * the actual ts-rest contracts and Hocuspocus message handlers in
  * later phases:
  *
- *   - Phase 2 (`GET /api/v2/pages/:id/yjs-token`) consumes
+ *   - Phase 2 (`GET /api/pages/:id/yjs-token`) consumes
  *     `WsTokenResponseSchema`.
  *   - Phase 5 (Hocuspocus custom message handler) consumes
  *     `CollabSaveMessageSchema` and `CollabSaveErrorSchema`.
@@ -43,7 +43,7 @@ export type RevisionType = z.infer<typeof RevisionTypeSchema>;
 
 /**
  * Response body of the Phase 2 wsToken endpoint
- * (`GET /api/v2/pages/:id/yjs-token`). The Hocuspocus client
+ * (`GET /api/pages/:id/yjs-token`). The Hocuspocus client
  * (`HocuspocusProvider`) takes the `wsToken` and presents it on
  * connect; the server validates it via `onAuthenticate`.
  *

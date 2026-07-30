@@ -39,7 +39,7 @@ describe('uniqueness E11000 mapping (Hono write paths)', () => {
     }).save();
 
     const res = await request(app)
-      .post('/api/v2/auth/register')
+      .post('/api/auth/register')
       // Same address, different case — misses the case-sensitive pre-check,
       // hits the case-insensitive unique index.
       .send({ name: 'New', username: 'e11000test-new', email: 'Lower-e11000test@example.com', password: 'Password!1' });
@@ -57,7 +57,7 @@ describe('uniqueness E11000 mapping (Hono write paths)', () => {
     }).save();
 
     const res = await request(app)
-      .post('/api/v2/auth/register')
+      .post('/api/auth/register')
       .send({ name: 'New', username: 'e11000test-name', email: 'name-new-e11000test@example.com', password: 'Password!1' });
 
     expect(res.status).toBe(409);

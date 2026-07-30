@@ -3,10 +3,10 @@ import { renderHook, waitFor, act } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createElement, type PropsWithChildren } from 'react';
 
-// Mock `apiClientV2` so the claim call hits our fake instead of the network.
+// Mock `apiClient` so the claim call hits our fake instead of the network.
 const { claimLinkAccess } = vi.hoisted(() => ({ claimLinkAccess: vi.fn() }));
 vi.mock('./api-client', () => ({
-  apiClientV2: { pages: { 'link-access': { $post: claimLinkAccess } } },
+  apiClient: { pages: { 'link-access': { $post: claimLinkAccess } } },
 }));
 
 import { useClaimPageLinkAccess } from './use-claim-page-link-access';

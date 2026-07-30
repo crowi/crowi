@@ -2,7 +2,7 @@
 
 import type { ListPageChildrenResponse } from '@crowi/api-contract';
 import { useQueries, useQuery } from '@tanstack/react-query';
-import { apiClientV2 } from './api-client';
+import { apiClient } from './api-client';
 import { pageChildrenKeys } from './page-query-keys';
 
 /**
@@ -19,7 +19,7 @@ import { pageChildrenKeys } from './page-query-keys';
  */
 
 async function fetchPageChildren(path: string): Promise<ListPageChildrenResponse> {
-  const response = await apiClientV2.pages.children.$get({ query: { path } });
+  const response = await apiClient.pages.children.$get({ query: { path } });
   if (!response.ok) {
     throw new Error('Failed to fetch page children');
   }

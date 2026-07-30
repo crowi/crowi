@@ -57,7 +57,7 @@ function release(href: string): void {
 /**
  * Renders nothing. Side-effect-only client component (same pattern as
  * `ThemeSync` / `LocaleSync`) that keeps `document.head` in sync with the
- * `rendererStylesheets` manifest from `GET /api/v2/app/info` — the
+ * `rendererStylesheets` manifest from `GET /api/app/info` — the
  * boot-time CSS assets renderer plugins registered via
  * `RendererRegistry.addStylesheet(path)` (feature-renderer-plugin-boundary
  * Phase 1, `packages/api/src/renderer/registry.ts`).

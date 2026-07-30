@@ -21,29 +21,29 @@ const createInvitedUser = async (email: string): Promise<{ user: UserDocument; t
   return { user, token };
 };
 
-describe('Routes /api/v2/invite/accept (Hono)', () => {
-  describe('GET /api/v2/invite/accept', () => {
+describe('Routes /api/invite/accept (Hono)', () => {
+  describe('GET /api/invite/accept', () => {
     it('returns the invited email for a valid token', async () => {
       const { token } = await createInvitedUser('preview@example.com');
-      const res = await request(app).get('/api/v2/invite/accept').query({ token });
+      const res = await request(app).get('/api/invite/accept').query({ token });
       expect(res.status).toBe(200);
       expect(res.body.email).toBe('preview@example.com');
     });
 
     it('returns 401 for an invalid token', async () => {
-      const res = await request(app).get('/api/v2/invite/accept').query({ token: 'not-a-token' });
+      const res = await request(app).get('/api/invite/accept').query({ token: 'not-a-token' });
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe('INVALID_INVITE_TOKEN');
     });
   });
 
-  describe('POST /api/v2/invite/accept', () => {
+  describe('POST /api/invite/accept', () => {
     it('activates the account, signs in, and flips status to ACTIVE', async () => {
       const { user, token } = await createInvitedUser('accept@example.com');
       const User = crowi.model('User');
 
       const res = await request(app)
-        .post('/api/v2/invite/accept')
+        .post('/api/invite/accept')
         .set(jsonHeaders)
         .send({ token, username: 'accepted_user', name: 'Accepted User', password: 'secret123' });
 
@@ -60,7 +60,7 @@ describe('Routes /api/v2/invite/accept (Hono)', () => {
     });
 
     it('rejects an invalid / expired token with 401', async () => {
-      const res = await request(app).post('/api/v2/invite/accept').set(jsonHeaders).send({ token: 'bogus', username: 'x', name: 'X', password: 'secret123' });
+      const res = await request(app).post('/api/invite/accept').set(jsonHeaders).send({ token: 'bogus', username: 'x', name: 'X', password: 'secret123' });
       expect(res.status).toBe(401);
     });
 
@@ -71,7 +71,7 @@ describe('Routes /api/v2/invite/accept (Hono)', () => {
       await user.save();
 
       const res = await request(app)
-        .post('/api/v2/invite/accept')
+        .post('/api/invite/accept')
         .set(jsonHeaders)
         .send({ token, username: 'already_user', name: 'Already', password: 'secret123' });
       expect(res.status).toBe(409);
@@ -85,10 +85,7 @@ describe('Routes /api/v2/invite/accept (Hono)', () => {
       await existing.save();
 
       const { token } = await createInvitedUser('wantstaken@example.com');
-      const res = await request(app)
-        .post('/api/v2/invite/accept')
-        .set(jsonHeaders)
-        .send({ token, username: 'taken_name', name: 'Wants', password: 'secret123' });
+      const res = await request(app).post('/api/invite/accept').set(jsonHeaders).send({ token, username: 'taken_name', name: 'Wants', password: 'secret123' });
       expect(res.status).toBe(409);
       expect(res.body.error.code).toBe('USERNAME_TAKEN');
     });

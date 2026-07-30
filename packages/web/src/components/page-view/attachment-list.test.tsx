@@ -75,7 +75,7 @@ describe('AttachmentList', () => {
             fileName: 'att-2.pdf',
             originalName: 'spec.pdf',
             fileFormat: 'application/pdf',
-            url: '/api/v2/attachments/att-2',
+            url: '/api/attachments/att-2',
           }),
         ],
       },
@@ -121,8 +121,8 @@ describe('AttachmentList', () => {
     useAttachmentList.mockReturnValue({
       data: {
         attachments: [
-          makeAttachment({ _id: 'att-used', originalName: 'used.png', url: '/api/v2/attachments/att-used', inUse: true }),
-          makeAttachment({ _id: 'att-stale', originalName: 'stale.png', url: '/api/v2/attachments/att-stale', inUse: false }),
+          makeAttachment({ _id: 'att-used', originalName: 'used.png', url: '/api/attachments/att-used', inUse: true }),
+          makeAttachment({ _id: 'att-stale', originalName: 'stale.png', url: '/api/attachments/att-stale', inUse: false }),
         ],
       },
       isLoading: false,

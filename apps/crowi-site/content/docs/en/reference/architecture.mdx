@@ -166,10 +166,10 @@ live in `src/lib/use-*.ts`. Shared UI consists of
 
 All API contracts and Zod schemas are consolidated here, built by tsup
 into CJS + ESM + `.d.ts`. Contracts are `@hono/zod-openapi`
-`createRoute(...)` route definitions, mounted under `/api/v2`, grouped
+`createRoute(...)` route definitions, mounted under `/api`, grouped
 by top-level namespace (`page`, `user`, `bookmark`, `notification`,
 `admin`, `adminCrypto`, …). The Scalar API Reference is exposed at
-`/api/v2/docs`.
+`/api/docs`.
 
 Defining contracts in one place keeps the API implementation and the
 Web client calls aligned against the same types. After editing

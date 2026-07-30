@@ -2,7 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import type { GetStorageStatusResponse } from '@crowi/api-contract';
-import { apiClientV2 } from './api-client';
+import { apiClient } from './api-client';
 
 /**
  * Query key factory for the /admin/storage endpoint.
@@ -19,13 +19,13 @@ export const adminStorageKeys = {
  * write. See `.feature-state/specs/feature-admin-storage.md`.
  *
  * RFC-0006 Phase 4 Batch 9 — switched from `apiClient.admin.storage.*`
- * to `apiClientV2.admin.storage.$get` (`createClient`).
+ * to `apiClient.admin.storage.$get` (`createClient`).
  */
 export function useAdminStorage() {
   return useQuery<GetStorageStatusResponse, Error>({
     queryKey: adminStorageKeys.status(),
     queryFn: async () => {
-      const response = await apiClientV2.admin.storage.$get();
+      const response = await apiClient.admin.storage.$get();
       if (response.status === 200) {
         return (await response.json()) as GetStorageStatusResponse;
       }

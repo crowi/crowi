@@ -123,7 +123,7 @@ alpha.0–.3 は published、alpha.4 / stable 向けに changeset 蓄積中（pr
 
 - main 直コミット（`commitStrategy: main-direct`）。push / PR は明示指示待ち
 - 並行作業は `gw start <name>` → 完了後 `/integrate-worktree <name>`
-- API は Hono、`/api/v2` prefix。contract 編集後は `pnpm --filter @crowi/api-contract build`
+- API は Hono、`/api` prefix。contract 編集後は `pnpm --filter @crowi/api-contract build`
 - state: `.feature-state/`（root、gitignore 済）
 - format/lint: pre-commit で biome format、pre-push で `pnpm lint` + `check:openapi`
 

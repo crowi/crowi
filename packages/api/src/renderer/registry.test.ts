@@ -22,7 +22,7 @@ import request from 'supertest';
 
 import { crowi } from 'src/test/setup';
 import { buildHonoApp } from 'src/hono';
-import { stripApiV2Prefix } from 'src/hono/path-rewrite';
+import { stripApiPrefix } from 'src/hono/path-rewrite';
 import { CORE_RENDERER_IDENTITY, makeRendererScope, RendererRegistryImpl } from './registry';
 
 const silentLogger: PluginLogger = {
@@ -150,93 +150,133 @@ describe('RendererRegistryImpl', () => {
   describe('addStylesheet — API-relative namespace validation', () => {
     it("accepts a path within the registering plugin's own namespace", () => {
       const reg = new RendererRegistryImpl();
-      expect(() => reg.addStylesheet('/api/v2/plugins/@crowi/plugin-renderer-katex/katex.css', '@crowi/plugin-renderer-katex')).not.toThrow();
+      expect(() => reg.addStylesheet('/api/plugins/@crowi/plugin-renderer-katex/katex.css', '@crowi/plugin-renderer-katex')).not.toThrow();
     });
 
     it('accepts a query string / fragment on an otherwise-valid path', () => {
       const reg = new RendererRegistryImpl();
-      expect(() => reg.addStylesheet('/api/v2/plugins/my-plugin/style.css?v=2', 'my-plugin')).not.toThrow();
-      expect(() => reg.addStylesheet('/api/v2/plugins/my-plugin/style.css#section', 'my-plugin')).not.toThrow();
+      expect(() => reg.addStylesheet('/api/plugins/my-plugin/style.css?v=2', 'my-plugin')).not.toThrow();
+      expect(() => reg.addStylesheet('/api/plugins/my-plugin/style.css#section', 'my-plugin')).not.toThrow();
     });
 
     it('rejects an absolute-origin URL (has a scheme)', () => {
       const reg = new RendererRegistryImpl();
-      expect(() => reg.addStylesheet('https://cdn.example.com/api/v2/plugins/my-plugin/style.css', 'my-plugin')).toThrow(/URL scheme/);
+      expect(() => reg.addStylesheet('https://cdn.example.com/api/plugins/my-plugin/style.css', 'my-plugin')).toThrow(/URL scheme/);
     });
 
     it('rejects a protocol-relative URL (//host)', () => {
       const reg = new RendererRegistryImpl();
-      expect(() => reg.addStylesheet('//evil.example.com/api/v2/plugins/my-plugin/style.css', 'my-plugin')).toThrow(/protocol-relative/);
+      expect(() => reg.addStylesheet('//evil.example.com/api/plugins/my-plugin/style.css', 'my-plugin')).toThrow(/protocol-relative/);
     });
 
     it('rejects a path containing a backslash', () => {
       const reg = new RendererRegistryImpl();
-      expect(() => reg.addStylesheet('/api/v2/plugins/my-plugin/..\\style.css', 'my-plugin')).toThrow(/backslash/);
+      expect(() => reg.addStylesheet('/api/plugins/my-plugin/..\\style.css', 'my-plugin')).toThrow(/backslash/);
     });
 
     it("rejects a path with a '..' traversal segment", () => {
       const reg = new RendererRegistryImpl();
-      expect(() => reg.addStylesheet('/api/v2/plugins/my-plugin/../other-plugin/style.css', 'my-plugin')).toThrow(/traversal/);
+      expect(() => reg.addStylesheet('/api/plugins/my-plugin/../other-plugin/style.css', 'my-plugin')).toThrow(/traversal/);
     });
 
     it("rejects a percent-encoded '..' traversal segment (lowercase %2e%2e) that would escape the namespace once decoded", () => {
       const reg = new RendererRegistryImpl();
-      expect(() => reg.addStylesheet('/api/v2/plugins/my-plugin/%2e%2e/other-plugin/style.css', 'my-plugin')).toThrow(/traversal/);
+      expect(() => reg.addStylesheet('/api/plugins/my-plugin/%2e%2e/other-plugin/style.css', 'my-plugin')).toThrow(/traversal/);
     });
 
     it("rejects a percent-encoded '..' traversal segment (uppercase %2E%2E)", () => {
       const reg = new RendererRegistryImpl();
-      expect(() => reg.addStylesheet('/api/v2/plugins/my-plugin/%2E%2E/other-plugin/style.css', 'my-plugin')).toThrow(/traversal/);
+      expect(() => reg.addStylesheet('/api/plugins/my-plugin/%2E%2E/other-plugin/style.css', 'my-plugin')).toThrow(/traversal/);
     });
 
     it('rejects malformed percent-encoding rather than silently falling back to the raw path', () => {
       const reg = new RendererRegistryImpl();
-      expect(() => reg.addStylesheet('/api/v2/plugins/my-plugin/%E0%A4%A/style.css', 'my-plugin')).toThrow(/percent-encoding/);
+      expect(() => reg.addStylesheet('/api/plugins/my-plugin/%E0%A4%A/style.css', 'my-plugin')).toThrow(/percent-encoding/);
     });
 
     it("rejects a path outside the registering plugin's own namespace (a different plugin name)", () => {
       const reg = new RendererRegistryImpl();
+      expect(() => reg.addStylesheet('/api/plugins/other-plugin/style.css', 'my-plugin')).toThrow(/own route namespace/);
+    });
+
+    it('rejects a bare relative path with no /api/plugins/<plugin>/ prefix at all', () => {
+      const reg = new RendererRegistryImpl();
+      expect(() => reg.addStylesheet('style.css', 'my-plugin')).toThrow(/own route namespace/);
+    });
+  });
+
+  describe('addStylesheet — legacy /api/v2/plugins/ prefix dual-accept-with-normalization (feature-api-v2-path-removal §6)', () => {
+    it('accepts a path under the legacy /api/v2/plugins/<plugin>/ prefix without throwing', () => {
+      const reg = new RendererRegistryImpl();
+      expect(() => reg.addStylesheet('/api/v2/plugins/my-plugin/style.css', 'my-plugin')).not.toThrow();
+    });
+
+    it('normalizes a legacy-prefixed path to canonical before it reaches the published manifest', () => {
+      const reg = new RendererRegistryImpl();
+      reg.addStylesheet('/api/v2/plugins/my-plugin/style.css', 'my-plugin');
+      reg.commitStylesheets('my-plugin');
+      expect(reg.getStylesheets()).toEqual(['/api/plugins/my-plugin/style.css']);
+    });
+
+    it('preserves a query string / fragment on a legacy-prefixed path across normalization', () => {
+      const reg = new RendererRegistryImpl();
+      reg.addStylesheet('/api/v2/plugins/my-plugin/style.css?v=2', 'my-plugin');
+      reg.addStylesheet('/api/v2/plugins/my-plugin/other.css#section', 'my-plugin');
+      reg.commitStylesheets('my-plugin');
+      expect(reg.getStylesheets()).toEqual(['/api/plugins/my-plugin/style.css?v=2', '/api/plugins/my-plugin/other.css#section']);
+    });
+
+    it('a legacy-prefixed and a canonical-prefixed call for the SAME logical path dedupe to a single canonical manifest entry', () => {
+      const reg = new RendererRegistryImpl();
+      reg.addStylesheet('/api/v2/plugins/my-plugin/style.css', 'my-plugin');
+      reg.addStylesheet('/api/plugins/my-plugin/style.css', 'my-plugin');
+      reg.commitStylesheets('my-plugin');
+      expect(reg.getStylesheets()).toEqual(['/api/plugins/my-plugin/style.css']);
+    });
+
+    it("still rejects a legacy-prefixed path outside the registering plugin's own namespace", () => {
+      const reg = new RendererRegistryImpl();
       expect(() => reg.addStylesheet('/api/v2/plugins/other-plugin/style.css', 'my-plugin')).toThrow(/own route namespace/);
     });
 
-    it('rejects a bare relative path with no /api/v2/plugins/<plugin>/ prefix at all', () => {
+    it('still rejects a legacy-prefixed traversal segment (defense in depth is unaffected by dual-accept)', () => {
       const reg = new RendererRegistryImpl();
-      expect(() => reg.addStylesheet('style.css', 'my-plugin')).toThrow(/own route namespace/);
+      expect(() => reg.addStylesheet('/api/v2/plugins/my-plugin/../other-plugin/style.css', 'my-plugin')).toThrow(/traversal/);
     });
   });
 
   describe('addStylesheet — dedupe + pending→commit snapshot', () => {
     it('dedupes duplicate addStylesheet calls with the exact same path (same plugin)', () => {
       const reg = new RendererRegistryImpl();
-      reg.addStylesheet('/api/v2/plugins/my-plugin/style.css', 'my-plugin');
-      reg.addStylesheet('/api/v2/plugins/my-plugin/style.css', 'my-plugin');
+      reg.addStylesheet('/api/plugins/my-plugin/style.css', 'my-plugin');
+      reg.addStylesheet('/api/plugins/my-plugin/style.css', 'my-plugin');
       reg.commitStylesheets('my-plugin');
-      expect(reg.getStylesheets()).toEqual(['/api/v2/plugins/my-plugin/style.css']);
+      expect(reg.getStylesheets()).toEqual(['/api/plugins/my-plugin/style.css']);
     });
 
     it('getStylesheets() is empty until commitStylesheets runs', () => {
       const reg = new RendererRegistryImpl();
-      reg.addStylesheet('/api/v2/plugins/my-plugin/style.css', 'my-plugin');
+      reg.addStylesheet('/api/plugins/my-plugin/style.css', 'my-plugin');
       expect(reg.getStylesheets()).toEqual([]);
     });
 
     it("commitStylesheets publishes only the named plugin's pending set, in registration order", () => {
       const reg = new RendererRegistryImpl();
-      reg.addStylesheet('/api/v2/plugins/plugin-a/one.css', 'plugin-a');
-      reg.addStylesheet('/api/v2/plugins/plugin-a/two.css', 'plugin-a');
-      reg.addStylesheet('/api/v2/plugins/plugin-b/only.css', 'plugin-b');
+      reg.addStylesheet('/api/plugins/plugin-a/one.css', 'plugin-a');
+      reg.addStylesheet('/api/plugins/plugin-a/two.css', 'plugin-a');
+      reg.addStylesheet('/api/plugins/plugin-b/only.css', 'plugin-b');
 
       reg.commitStylesheets('plugin-a');
-      expect(reg.getStylesheets()).toEqual(['/api/v2/plugins/plugin-a/one.css', '/api/v2/plugins/plugin-a/two.css']);
+      expect(reg.getStylesheets()).toEqual(['/api/plugins/plugin-a/one.css', '/api/plugins/plugin-a/two.css']);
 
       reg.commitStylesheets('plugin-b');
-      expect(reg.getStylesheets()).toEqual(['/api/v2/plugins/plugin-a/one.css', '/api/v2/plugins/plugin-a/two.css', '/api/v2/plugins/plugin-b/only.css']);
+      expect(reg.getStylesheets()).toEqual(['/api/plugins/plugin-a/one.css', '/api/plugins/plugin-a/two.css', '/api/plugins/plugin-b/only.css']);
     });
 
     it('dropPendingStylesheets discards the whole pending set — a later commitStylesheets call is then a no-op', () => {
       const reg = new RendererRegistryImpl();
-      reg.addStylesheet('/api/v2/plugins/my-plugin/one.css', 'my-plugin');
-      reg.addStylesheet('/api/v2/plugins/my-plugin/two.css', 'my-plugin');
+      reg.addStylesheet('/api/plugins/my-plugin/one.css', 'my-plugin');
+      reg.addStylesheet('/api/plugins/my-plugin/two.css', 'my-plugin');
 
       reg.dropPendingStylesheets('my-plugin');
       reg.commitStylesheets('my-plugin');
@@ -253,10 +293,10 @@ describe('RendererRegistryImpl', () => {
 
     it('committing twice for the same plugin does not duplicate entries (pending is consumed on first commit)', () => {
       const reg = new RendererRegistryImpl();
-      reg.addStylesheet('/api/v2/plugins/my-plugin/style.css', 'my-plugin');
+      reg.addStylesheet('/api/plugins/my-plugin/style.css', 'my-plugin');
       reg.commitStylesheets('my-plugin');
       reg.commitStylesheets('my-plugin');
-      expect(reg.getStylesheets()).toEqual(['/api/v2/plugins/my-plugin/style.css']);
+      expect(reg.getStylesheets()).toEqual(['/api/plugins/my-plugin/style.css']);
     });
   });
 
@@ -264,15 +304,15 @@ describe('RendererRegistryImpl', () => {
     it("registers under the scope's own plugin name and validates against it", () => {
       const reg = new RendererRegistryImpl();
       const scope = makeRendererScope(reg, '@crowi/plugin-renderer-katex', silentLogger);
-      scope.addStylesheet('/api/v2/plugins/@crowi/plugin-renderer-katex/katex.css');
+      scope.addStylesheet('/api/plugins/@crowi/plugin-renderer-katex/katex.css');
       reg.commitStylesheets('@crowi/plugin-renderer-katex');
-      expect(reg.getStylesheets()).toEqual(['/api/v2/plugins/@crowi/plugin-renderer-katex/katex.css']);
+      expect(reg.getStylesheets()).toEqual(['/api/plugins/@crowi/plugin-renderer-katex/katex.css']);
     });
 
     it("a path outside the scope's own namespace still throws (scope does not widen the check)", () => {
       const reg = new RendererRegistryImpl();
       const scope = makeRendererScope(reg, 'plugin-a', silentLogger);
-      expect(() => scope.addStylesheet('/api/v2/plugins/plugin-b/style.css')).toThrow(/own route namespace/);
+      expect(() => scope.addStylesheet('/api/plugins/plugin-b/style.css')).toThrow(/own route namespace/);
     });
   });
 
@@ -296,7 +336,7 @@ describe('RendererRegistryImpl', () => {
       const spy = jest.spyOn(manager, 'getLoadedPlugins').mockReturnValue(plugins);
       try {
         const honoApp = buildHonoApp(crowi);
-        return getRequestListener((req: Request) => honoApp.fetch(stripApiV2Prefix(req)));
+        return getRequestListener((req: Request) => honoApp.fetch(stripApiPrefix(req)));
       } finally {
         spy.mockRestore();
       }
@@ -308,8 +348,8 @@ describe('RendererRegistryImpl', () => {
 
       const okName = '@crowi/plugin-stylesheet-isolation-ok';
       const brokenName = '@crowi/plugin-stylesheet-isolation-broken';
-      const okPath = `/api/v2/plugins/${okName}/style.css`;
-      const brokenPath = `/api/v2/plugins/${brokenName}/style.css`;
+      const okPath = `/api/plugins/${okName}/style.css`;
+      const brokenPath = `/api/plugins/${brokenName}/style.css`;
 
       // Simulates what `PluginManager.activate()` does at `registerRenderer`
       // time — stage the stylesheet BEFORE `buildHonoApp` (and therefore
@@ -336,13 +376,13 @@ describe('RendererRegistryImpl', () => {
       const app = buildAppFromPlugins([okPlugin, brokenPlugin]);
 
       // The healthy plugin's route still mounts...
-      const styleRes = await request(app).get(`/api/v2/plugins/${okName}/style.css`);
+      const styleRes = await request(app).get(`/api/plugins/${okName}/style.css`);
       expect(styleRes.status).toBe(200);
 
       // ...and the manifest carries its stylesheet but not the broken
       // plugin's — proving the drop is scoped to the ONE plugin whose
       // registerRoutes threw, not a blanket rollback.
-      const infoRes = await request(app).get('/api/v2/app/info');
+      const infoRes = await request(app).get('/api/app/info');
       expect(infoRes.status).toBe(200);
       expect(infoRes.body.rendererStylesheets).toContain(okPath);
       expect(infoRes.body.rendererStylesheets).not.toContain(brokenPath);
@@ -355,13 +395,13 @@ describe('RendererRegistryImpl', () => {
     it('a plugin with no registerRoutes at all never gets its pending stylesheet published', async () => {
       const registry = crowi.getRenderer().registry;
       const name = '@crowi/plugin-stylesheet-no-routes';
-      const path = `/api/v2/plugins/${name}/style.css`;
+      const path = `/api/plugins/${name}/style.css`;
       makeRendererScope(registry, name, silentLogger).addStylesheet(path);
 
       const plugin: CrowiPlugin = { name, version: '0.0.0' };
       const app = buildAppFromPlugins([plugin]);
 
-      const infoRes = await request(app).get('/api/v2/app/info');
+      const infoRes = await request(app).get('/api/app/info');
       expect(infoRes.status).toBe(200);
       expect(infoRes.body.rendererStylesheets).not.toContain(path);
     });

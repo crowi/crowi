@@ -5,7 +5,7 @@ import { authedFetch, CliError, EXIT } from './http';
 import { toPageQuery } from './page-ref';
 
 /**
- * Minimal lenient view of `GET /api/v2/pages` used by the write commands:
+ * Minimal lenient view of `GET /api/pages` used by the write commands:
  * the markdown body (`page.revision.body`) plus the optimistic-lock token
  * (`page.revision._id`) that must be echoed back on `PUT`.
  */
@@ -73,7 +73,7 @@ export async function fetchCurrentPage(profile: Profile, pathOrId: string): Prom
 }
 
 /**
- * Update an existing page via `PUT /api/v2/pages` with an optimistic-lock
+ * Update an existing page via `PUT /api/pages` with an optimistic-lock
  * `revision_id`. A stale revision yields a 409 PageRevisionError; callers
  * decide whether to ABORT (default) or re-fetch + retry (`--force`).
  */
@@ -93,7 +93,7 @@ export async function putPage(profile: Profile, args: { pageId: string; body: st
 }
 
 /**
- * Create a new page via `POST /api/v2/pages` (used when an `edit` target did
+ * Create a new page via `POST /api/pages` (used when an `edit` target did
  * not exist yet).
  */
 export async function postPage(profile: Profile, args: { path: string; body: string; grant?: number }): Promise<SaveResult> {

@@ -6,6 +6,7 @@ import type { PageWithRevision } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 import Link from 'next/link';
 import { useCopyFeedback } from '@/lib/use-copy-feedback';
+import { canonicalizeLegacyAttachmentUrl } from '@/lib/attachment-url';
 import {
   getFigureLayoutClassName,
   getImageDisplayStyle,
@@ -226,7 +227,12 @@ const components = {
   h4: makeHeading('h4'),
   h5: makeHeading('h5'),
   h6: makeHeading('h6'),
-  a: ({ href, children, className, ...props }: { href?: string; children?: React.ReactNode; className?: string }) => {
+  a: ({ href: rawHref, children, className, ...props }: { href?: string; children?: React.ReactNode; className?: string }) => {
+    // Canonicalize a persisted legacy `/api/v2/attachments/...` href BEFORE
+    // any detection/use below (spec §5.3) — every subsequent branch
+    // (attachment link, internal router link, plain external `<a>`) reads
+    // the canonical value. A no-op for every other href shape.
+    const href = canonicalizeLegacyAttachmentUrl(rawHref);
     const isExternal = href?.startsWith('http://') || href?.startsWith('https://');
     // Wikilinks / mentions stamp `className` server-side via
     // `data.hProperties.className`; mdast-util-to-hast forwards that
@@ -245,7 +251,7 @@ const components = {
       : isMention
         ? 'text-primary font-medium decoration-primary/40 hover:decoration-primary/70 underline underline-offset-[3px] transition-colors'
         : 'text-primary decoration-primary/30 hover:decoration-primary/70 underline underline-offset-[3px] transition-colors';
-    // Attachment references (`/api/v2/attachments/<id>` or legacy
+    // Attachment references (`/api/attachments/<id>` or legacy
     // `/files/<id>`) open the detail modal on left-click instead of
     // full-page-navigating to the raw file — see `InlineAttachmentLink`.
     const attachmentId = extractAttachmentId(href);
@@ -376,7 +382,15 @@ const components = {
     style?: React.CSSProperties;
     [key: string]: unknown;
   }) => {
-    const srcString = typeof src === 'string' ? src : undefined;
+    const rawSrcString = typeof src === 'string' ? src : undefined;
+    // Canonicalize a persisted legacy `/api/v2/attachments/...` src BEFORE
+    // the by-key-aware `extractAttachmentId()` detection below (spec §5.3):
+    // a by-key src (`/api/v2/attachments/by-key/user%2F<id>.<ext>`) never
+    // matches the 24-hex-id detection regex, so detecting first would leave
+    // it un-canonicalized in the plain `<img>` fallback branch and 404.
+    // Canonicalizing first fixes both the `InlineAttachmentLink` branch and
+    // the fallback branch with the same call.
+    const srcString = canonicalizeLegacyAttachmentUrl(rawSrcString);
     // Server-rendered "ready diagram" presentation — an optional renderer
     // plugin's PNG-fallback or `<img>`-success output (core reads only the
     // generic `data-crowi-renderer-presentation="diagram"`/`data-crowi-

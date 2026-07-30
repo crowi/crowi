@@ -148,7 +148,7 @@ v2 alpha 時点で登録されている移行は以下のとおりです。
 | `wikilink-format` | preflight | cosmetic | wikilink 記法の変換 |
 | `user-unique-prepare` | preflight | **blocking** | ユーザーの重複排除 (一意インデックスの準備) |
 | `relocate-reserved-api-paths` | preflight | cosmetic | `/api` 予約名前空間からの v1 ページ退避 |
-| `files-url-to-attachments` | preflight | cosmetic | 本文の v1 ファイル URL (`/files/<id>`) を v2 形式 (`/api/v2/attachments/<id>`) へ書き換え |
+| `files-url-to-attachments` | preflight | cosmetic | 本文の v1 ファイル URL (`/files/<id>`) を `/api/attachments/<id>` 形式へ書き換え |
 | `wikilink-html-recover` | preflight | cosmetic | 誤変換された HTML 終了タグ (`</font>` など) の復旧 |
 
 (severity は `preflight` 移行にのみ適用されます。`boot` 移行は自動適用され
@@ -244,9 +244,9 @@ crowi-admin migrate apply --id wikilink-html-recover
 
 v1 は API を `/_api/*`(アンダースコア付き)で提供していたため、`/api/*`
 (アンダースコアなし)は通常の wiki ページパスでした。v2 は `/api` を
-リバースプロキシ先のバックエンド(`/api/v2/*`)用に予約するので、v1 で
+リバースプロキシ先のバックエンド(`/api/*`)用に予約するので、v1 で
 `/api/*` 配下に残っているページは行き場を失います — web アプリは予約名前
-空間を 404 にし、`/api/v2/*` にあったページはプロキシに完全に隠れます。
+空間を 404 にし、同じパスはプロキシに完全に隠れます。
 
 `relocate-reserved-api-paths` preflight 移行は、該当する全ページを
 `/api-legacy/*` へ移します(残りのパスは保持。移設先が既に存在する場合は
@@ -371,9 +371,9 @@ crowi-admin replace url --from https://old.example --to https://new.example
 
 v1 はページ本文の添付ファイル / 画像を **v1 のファイル URL** で参照していました
 (`![shot.png](/files/<id>)` の相対形、またはエディタがフル URL を貼り付けた
-`![shot.png](https://wiki.example/files/<id>)` の絶対形)。v2 は添付を専用の
-ストリームエンドポイント `/api/v2/attachments/<id>` で配信し、レガシーの
-`/files/<id>` 互換ルートは削除されたため、**v1 形式の URL は v2 では 404 =
+`![shot.png](https://wiki.example/files/<id>)` の絶対形)。Crowi 2.0 は添付を
+専用のストリームエンドポイント `/api/attachments/<id>` で配信し、レガシーの
+`/files/<id>` 互換ルートは削除されたため、**v1 形式の URL は 404 =
 画像が壊れます**。id は v1 / v2 で同一の 24-hex `Attachment._id` なので、必要なのは
 **URL の書き換えだけ** (id の振り直しは不要) です。
 
@@ -382,10 +382,10 @@ v1 はページ本文の添付ファイル / 画像を **v1 のファイル URL*
 `[text](url)` の URL を次のルールで書き換えます (生 HTML の `<img>` / `<a>` は
 対象外)。
 
-- **相対 `/files/<id>`** → `/api/v2/attachments/<id>` (無条件。ルート相対パスは
+- **相対 `/files/<id>`** → `/api/attachments/<id>` (無条件。ルート相対パスは
   常に自サイト)。
 - **自サイトの絶対 URL `https://<CLIENT_URL のホスト>/files/<id>`** →
-  `/api/v2/attachments/<id>` (ホストを落として相対化し、ホスト非依存にする)。
+  `/api/attachments/<id>` (ホストを落として相対化し、ホスト非依存にする)。
   自サイト判定は `CLIENT_URL` / `BASE_URL` のオリジンとの一致のみです。
 - **外部ホストの絶対 URL** → **触りません** (無関係な第三者の `/files/<id>`
   画像を誤って書き換えないため)。
@@ -398,7 +398,7 @@ crowi-admin migrate plan
 crowi-admin migrate apply --id files-url-to-attachments
 ```
 
-この移行は冪等で、書き換え後の `/api/v2/attachments/<id>` は再適用しても二重に
+この移行は冪等で、書き換え後の `/api/attachments/<id>` は再適用しても二重に
 変換されません。書き換えの帰属先となる管理者ユーザーを必要とするため、解決
 できない場合は `CROWI_MIGRATE_USER=<email>` を設定してください。
 
@@ -408,8 +408,8 @@ crowi-admin migrate apply --id files-url-to-attachments
 > できます。逆順だと旧ホストの絶対 URL が「外部」と判定され書き換えられません。
 
 > **Note**: 移行漏れや未変換の本文への保険として、API には
-> `/files/<id>` → `302` `/api/v2/attachments/<id>` のリダイレクトが復活して
-> います。実行時に相対 `/files/<id>` へアクセスがあっても v2 形式へ転送される
+> `/files/<id>` → `302` `/api/attachments/<id>` のリダイレクトが復活して
+> います。実行時に相対 `/files/<id>` へアクセスがあっても正規の形式へ転送される
 > ため、本文の書き換えが間に合わなくても画像が壊れたままにはなりません
 > (ただし外部ホストを指す絶対 URL はリダイレクトでは救えないため、本文の
 > 書き換えが本筋です)。

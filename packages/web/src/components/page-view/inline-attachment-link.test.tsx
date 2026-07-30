@@ -6,12 +6,12 @@ import { createElement } from 'react';
 import type { AttachmentMeta } from '@crowi/api-contract';
 import { extractAttachmentId, InlineAttachmentLink, InlineAttachmentProvider } from './inline-attachment-link';
 
-// Mock `apiClientV2` so the modal's `useAttachment` fetch hits our
-// fake. The hook calls `apiClientV2.attachments[':id'].meta.$get(...)`
+// Mock `apiClient` so the modal's `useAttachment` fetch hits our
+// fake. The hook calls `apiClient.attachments[':id'].meta.$get(...)`
 // and expects a Response-shaped object (`ok` / `status` / `json`).
 const { metaGet } = vi.hoisted(() => ({ metaGet: vi.fn() }));
 vi.mock('@/lib/api-client', () => ({
-  apiClientV2: {
+  apiClient: {
     attachments: {
       ':id': {
         meta: { $get: metaGet },
@@ -40,8 +40,8 @@ function makeMeta(): AttachmentMeta {
     fileFormat: 'image/png',
     fileSize: 2048,
     createdAt: '2026-05-01T09:30:00.000Z',
-    url: `/api/v2/attachments/${HEX}`,
-    originalUrl: `/api/v2/attachments/${HEX}/original`,
+    url: `/api/attachments/${HEX}`,
+    originalUrl: `/api/attachments/${HEX}/original`,
   };
 }
 
@@ -57,21 +57,42 @@ afterEach(() => {
 });
 
 describe('extractAttachmentId', () => {
-  it('extracts the id from a /api/v2/attachments/<id> URL', () => {
-    expect(extractAttachmentId(`/api/v2/attachments/${HEX}`)).toBe(HEX);
+  it('extracts the id from a /api/attachments/<id> URL', () => {
+    expect(extractAttachmentId(`/api/attachments/${HEX}`)).toBe(HEX);
   });
 
   it('extracts the id from a legacy /files/<id> URL', () => {
     expect(extractAttachmentId(`/files/${HEX}`)).toBe(HEX);
   });
 
+  // Regression (spec §5.2): a body persisted before the /api/v2 -> /api
+  // cutover still carries this form — dropping it from ATTACHMENT_URL_RE
+  // would leave `InlineAttachmentLink`/the click-to-open modal permanently
+  // unreachable for un-migrated existing content.
+  it('extracts the id from a legacy (pre-cutover) /api/v2/attachments/<id> URL', () => {
+    expect(extractAttachmentId(`/api/v2/attachments/${HEX}`)).toBe(HEX);
+  });
+
+  it('extracts the id from a legacy /api/v2/attachments/<id>/original URL', () => {
+    expect(extractAttachmentId(`/api/v2/attachments/${HEX}/original`)).toBe(HEX);
+  });
+
+  it('extracts the id from a current /api/attachments/<id>/original URL', () => {
+    expect(extractAttachmentId(`/api/attachments/${HEX}/original`)).toBe(HEX);
+  });
+
+  it('tolerates a trailing query string or hash after the /original suffix', () => {
+    expect(extractAttachmentId(`/api/attachments/${HEX}/original?dl=1`)).toBe(HEX);
+    expect(extractAttachmentId(`/api/v2/attachments/${HEX}/original#frag`)).toBe(HEX);
+  });
+
   it('tolerates a trailing query string or hash', () => {
-    expect(extractAttachmentId(`/api/v2/attachments/${HEX}?dl=1`)).toBe(HEX);
-    expect(extractAttachmentId(`/api/v2/attachments/${HEX}#frag`)).toBe(HEX);
+    expect(extractAttachmentId(`/api/attachments/${HEX}?dl=1`)).toBe(HEX);
+    expect(extractAttachmentId(`/api/attachments/${HEX}#frag`)).toBe(HEX);
   });
 
   it('lower-cases the extracted id', () => {
-    expect(extractAttachmentId(`/api/v2/attachments/${'A'.repeat(24)}`)).toBe(HEX);
+    expect(extractAttachmentId(`/api/attachments/${'A'.repeat(24)}`)).toBe(HEX);
   });
 
   it('returns null for a normal internal page link', () => {
@@ -83,11 +104,11 @@ describe('extractAttachmentId', () => {
   });
 
   it('returns null when there is an extra path segment after the id', () => {
-    expect(extractAttachmentId(`/api/v2/attachments/${HEX}/extra`)).toBeNull();
+    expect(extractAttachmentId(`/api/attachments/${HEX}/extra`)).toBeNull();
   });
 
   it('returns null for a malformed (non-24-hex) id', () => {
-    expect(extractAttachmentId('/api/v2/attachments/not-hex')).toBeNull();
+    expect(extractAttachmentId('/api/attachments/not-hex')).toBeNull();
   });
 
   it('returns null for undefined', () => {
@@ -99,20 +120,20 @@ describe('InlineAttachmentLink — link variant', () => {
   it('renders an <a> keeping the link text and the raw-file href', () => {
     withQuery(
       <InlineAttachmentProvider>
-        <InlineAttachmentLink attachmentId={HEX} variant="link" href={`/api/v2/attachments/${HEX}`}>
+        <InlineAttachmentLink attachmentId={HEX} variant="link" href={`/api/attachments/${HEX}`}>
           my file
         </InlineAttachmentLink>
       </InlineAttachmentProvider>,
     );
     const link = screen.getByRole('link', { name: 'my file' });
-    expect(link.getAttribute('href')).toBe(`/api/v2/attachments/${HEX}`);
+    expect(link.getAttribute('href')).toBe(`/api/attachments/${HEX}`);
   });
 
   it('opens the detail modal on a plain left-click instead of navigating', async () => {
     metaGet.mockResolvedValue(makeResponse(200, makeMeta()));
     withQuery(
       <InlineAttachmentProvider>
-        <InlineAttachmentLink attachmentId={HEX} variant="link" href={`/api/v2/attachments/${HEX}`}>
+        <InlineAttachmentLink attachmentId={HEX} variant="link" href={`/api/attachments/${HEX}`}>
           my file
         </InlineAttachmentLink>
       </InlineAttachmentProvider>,
@@ -132,7 +153,7 @@ describe('InlineAttachmentLink — link variant', () => {
   it('does not intercept a modifier (meta-key) click — native open-in-new-tab still works', () => {
     withQuery(
       <InlineAttachmentProvider>
-        <InlineAttachmentLink attachmentId={HEX} variant="link" href={`/api/v2/attachments/${HEX}`}>
+        <InlineAttachmentLink attachmentId={HEX} variant="link" href={`/api/attachments/${HEX}`}>
           my file
         </InlineAttachmentLink>
       </InlineAttachmentProvider>,
@@ -148,18 +169,18 @@ describe('InlineAttachmentLink — image variant', () => {
   it('renders an <img> keeping the src and alt', () => {
     withQuery(
       <InlineAttachmentProvider>
-        <InlineAttachmentLink attachmentId={HEX} variant="image" href={`/api/v2/attachments/${HEX}`} alt="a diagram" />
+        <InlineAttachmentLink attachmentId={HEX} variant="image" href={`/api/attachments/${HEX}`} alt="a diagram" />
       </InlineAttachmentProvider>,
     );
     const img = screen.getByRole('img', { name: 'a diagram' });
-    expect(img.getAttribute('src')).toBe(`/api/v2/attachments/${HEX}`);
+    expect(img.getAttribute('src')).toBe(`/api/attachments/${HEX}`);
   });
 
   it('opens the modal on a plain left-click', async () => {
     metaGet.mockResolvedValue(makeResponse(200, makeMeta()));
     withQuery(
       <InlineAttachmentProvider>
-        <InlineAttachmentLink attachmentId={HEX} variant="image" href={`/api/v2/attachments/${HEX}`} alt="a diagram" />
+        <InlineAttachmentLink attachmentId={HEX} variant="image" href={`/api/attachments/${HEX}`} alt="a diagram" />
       </InlineAttachmentProvider>,
     );
     fireEvent.click(screen.getByRole('img', { name: 'a diagram' }));
@@ -169,7 +190,7 @@ describe('InlineAttachmentLink — image variant', () => {
   it('does not intercept a right-click (button !== 0) — save-image stays available', () => {
     withQuery(
       <InlineAttachmentProvider>
-        <InlineAttachmentLink attachmentId={HEX} variant="image" href={`/api/v2/attachments/${HEX}`} alt="a diagram" />
+        <InlineAttachmentLink attachmentId={HEX} variant="image" href={`/api/attachments/${HEX}`} alt="a diagram" />
       </InlineAttachmentProvider>,
     );
     const img = screen.getByRole('img', { name: 'a diagram' });
@@ -181,7 +202,7 @@ describe('InlineAttachmentLink — image variant', () => {
   it('merges a caller-supplied display style (width/height) with cursor: zoom-in, never replacing it (RFC-0015 §D11 merge contract)', () => {
     withQuery(
       <InlineAttachmentProvider>
-        <InlineAttachmentLink attachmentId={HEX} variant="image" href={`/api/v2/attachments/${HEX}`} alt="a diagram" style={{ width: '60%' }} />
+        <InlineAttachmentLink attachmentId={HEX} variant="image" href={`/api/attachments/${HEX}`} alt="a diagram" style={{ width: '60%' }} />
       </InlineAttachmentProvider>,
     );
     const img = screen.getByRole('img', { name: 'a diagram' }) as HTMLImageElement;
@@ -192,7 +213,7 @@ describe('InlineAttachmentLink — image variant', () => {
   it('keeps cursor: zoom-in as the sole style when no display style is supplied', () => {
     withQuery(
       <InlineAttachmentProvider>
-        <InlineAttachmentLink attachmentId={HEX} variant="image" href={`/api/v2/attachments/${HEX}`} alt="a diagram" />
+        <InlineAttachmentLink attachmentId={HEX} variant="image" href={`/api/attachments/${HEX}`} alt="a diagram" />
       </InlineAttachmentProvider>,
     );
     const img = screen.getByRole('img', { name: 'a diagram' }) as HTMLImageElement;

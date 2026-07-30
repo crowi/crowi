@@ -1,7 +1,7 @@
 /**
  * RFC-0006 Phase 6 Sub-batch C — Hono port of the Express `cors`
  * middleware. The Express bridge will be retired in Sub-batch D, after
- * which this is the only CORS layer on `/api/v2/*` (and on every other
+ * which this is the only CORS layer on `/api/*` (and on every other
  * Hono-owned path, since Hono will then be the sole HTTP host).
  *
  * Allow-origin policy (mirrors `packages/api/src/crowi/express-init.ts`

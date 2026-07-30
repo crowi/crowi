@@ -117,7 +117,7 @@ describe('classNameForRecord', () => {
   it('names http-status-mismatch:expected-X-received-Y from the assertion message — the old JWT-timing-401 shape — instead of misattributing the ring buffer\'s last (unrelated) op status', () => {
     // Exactly the real shape observed in a multi-request test: the ring
     // buffer's last recorded op was a DIFFERENT, successful 200 request
-    // (e.g. an earlier `POST /api/v2/pages` in the same test), but the
+    // (e.g. an earlier `POST /api/pages` in the same test), but the
     // actual failing assertion checked a later request that got a 401.
     const record = {
       hasExecError: false,
