@@ -34,10 +34,17 @@
  *     recovery (`renderer/core/raw-space-links.ts`) added as a new
  *     bundled transform (`buildCorePlugins`); new-bundled-transform
  *     minor bump per this constant's own policy above.
- *
- * Until `renderer:rebuild` ships (deferred to RFC-0008), version
- * mismatch is informational only — the read path's parse-on-read
- * fallback handles missing or stale `renderedAst` transparently at
- * a per-request CPU cost.
+ *   - 1.0.0  RFC-0023 (client-agnostic renderedAst) — producers stamp
+ *     typed sidecars (`data.crowiCode` / `crowiMath` / `crowiDiagram` /
+ *     `crowiLinkCard` / `crowiPlaceholder`) onto their `html` nodes.
+ *     The html bytes and node types are unchanged, but pre-1.0 ASTs
+ *     lack the sidecars the `X-Crowi-Ast-Version: 1` projection needs,
+ *     so they must be invalidated wholesale: MAJOR bump. Alongside this
+ *     bump the read path's missing-`rendererVersion` freshness special
+ *     case is removed (`util/page-response.ts`) — every stale/legacy
+ *     revision recomputes per read until `rebuild rendered-ast`
+ *     (`util/rebuild-rendered-ast.ts`) backfills it, so the rollout
+ *     procedure REQUIRES running that rebuild (real-write mode)
+ *     immediately after deploying this version.
  */
-export const RENDERER_PIPELINE_VERSION = '0.10.0';
+export const RENDERER_PIPELINE_VERSION = '1.0.0';
