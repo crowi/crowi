@@ -246,6 +246,30 @@ SMTP などのメール設定が必要で、**メール送信が未設定の場�
 > 再構築画面は廃止されました。バックリンクの再構築は
 > `crowi-admin backlink rebuild` 系の CLI 操作で行います。
 
+## rendered AST の再構築 (rebuild rendered-ast)
+
+`crowi-admin rebuild rendered-ast` は、各ページの**現在のリビジョン**に保存されているレンダリング済み AST (`Revision.renderedAst`) を、稼働中のレンダラーパイプラインで再生成して埋め直す CLI コマンドです ([RFC-0023](https://github.com/crowi/crowi/blob/main/docs/rfcs/0023-client-agnostic-rendered-ast.md))。`rebuild search` / `rebuild storage copy` と同じ rebuild ファミリーに属し、何度実行しても安全 (冪等) です。
+
+```bash
+# 事前検証 (書き込みなし) — 対象リビジョン数の確認だけを行う
+crowi-admin rebuild rendered-ast --dry-run
+
+# 実書き込み (バージョン bump をデプロイした直後に実行する)
+crowi-admin rebuild rendered-ast
+
+# 並列度の調整 (既定 4)
+crowi-admin rebuild rendered-ast --concurrency 8
+```
+
+**いつ実行するか (ロールアウト手順)**: レンダラーパイプラインのメジャーバージョンが上がるリリース (直近では RFC-0023 の 1.0.0) をデプロイしたら、**その直後に実書き込みモードで必ず実行してください**。バージョン bump 以降、古い AST を持つページは読み取りのたびにフルの再レンダリングが走ります (結果は永続化されません)。この read 増幅は backfill が完了するまでの**意図された一時コスト**で、`rebuild rendered-ast` の完走によって解消されます。逆に、**デプロイ前の実書き込み実行は避けてください** — 事前検証は `--dry-run` に限定します (bump 前でも `rendererVersion` を持たない古いリビジョンへの実書き込みが発生するため)。
+
+**完了の宣言**: 保存経路は各 api レプリカが自分のバイナリのバージョンを刻むため、旧バージョンのレプリカが 1 台でも残っていると、backfill 完了後にも旧バージョンのリビジョンが新規に生まれ続けます。完了と見なすのは次の 2 条件を満たしたときだけです:
+
+1. 全 api レプリカが新バージョンで稼働していることを確認する (旧 writer が存在しない)。
+2. 最後にもう一度 `rebuild rendered-ast` を実行し、対象 (eligible) 残数が 0 件であることを確認する。
+
+コマンドは冪等なので、最終再実行のコストは残数に比例するだけです。
+
 ## 進行中のセクション
 
 以下は v2 alpha 時点ではまだ完成していません。
