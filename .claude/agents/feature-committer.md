@@ -187,6 +187,10 @@ bash .claude/scripts/task-state.sh task append-history {id} '{"phase":"committer
 実装が完了したら spec ファイル (`.feature-state/specs/{id}.md`) を **削除する** のも
 committer の責務。実装済み spec が `specs/` に溜まり続けないようにするため。
 
+**削除は非可逆である。** spec は gitignore 配下なので git から復元できず、wiki への
+publish も依頼時のみの運用なので耐久コピーが存在しない前提で判断すること。**迷ったら
+残す**。
+
 **削除する条件 (すべて満たすときだけ)**:
 - task 全体の `status` が `COMMITTED` になった (= 全 commit が landed)。
 - **残タスク / 残 phase が無い**。具体的には:
@@ -195,9 +199,19 @@ committer の責務。実装済み spec が `specs/` に溜まり続けないよ
     PLANNED / NEEDS_WORK / gated (autoContinue=false 未通過) phase が残っていれば
     **削除しない** (後続 phase が spec を読むため)。
   - status が PARTIALLY_COMMITTED → **削除しない**。
+- **task の phase 集合が spec の全 phase を覆っている**。task が COMMITTED でも、
+  それは「task に計画された phase が終わった」ことしか意味しない — spec 側にそれより
+  多くの phase があれば未実施分が残っている。spec の `## Phase 分割` / `## 受け入れ基準`
+  の phase 見出しを数え、task の `phases` がその全部に対応していなければ **削除しない**。
+  kickoff がスコープを絞った task (例: 「Phase 1-3 限定で実行、Phase 4-5 は別ブランチ」)
+  が該当し、この場合 spec は後続の実行主体が読む正本として生き続ける。
 
 **削除しない場合**は spec をそのまま残し、報告にその旨 (「残 phase あり / 部分コミットの
-ため spec は保持」) を明記する。
+ため spec は保持」「task が spec の phase 1-3 のみを覆うため spec は保持」) を明記する。
+
+> この条件が無かったために、`feature-ios-rendered-ast-rendering` (spec は 5 phase、
+> task は kickoff により Phase 1-3 のみ) の spec が実際に失われた (2026-07-30)。task
+> 側から見れば全 phase COMMITTED で条件を満たしていた。
 
 削除は `.feature-state/specs/{id}.md` のみ。**task ファイル (`tasks/{id}.json`) は
 履歴・commitInfo を持つので削除しない** (queue から currentTask を外すのは
