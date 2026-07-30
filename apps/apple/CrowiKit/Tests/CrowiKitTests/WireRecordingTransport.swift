@@ -12,9 +12,13 @@ import OpenAPIRuntime
 struct RecordedWireRequest: Sendable {
     let method: HTTPRequest.Method
     let path: String?
-    let contentType: String?
-    let authorization: String?
     let body: Data?
+    /// Every header field as sent (e.g. RFC-0023's `X-Crowi-Ast-Version`
+    /// declaration) — the accessors below are conveniences over this.
+    let headerFields: HTTPFields
+
+    var contentType: String? { headerFields[.contentType] }
+    var authorization: String? { headerFields[.authorization] }
 
     /// The request body parsed as a JSON object (`nil` when absent or not
     /// an object) — for asserting key presence/absence (e.g. "`grant` is
@@ -62,9 +66,8 @@ struct WireRecordingTransport: ClientTransport {
         let recorded = RecordedWireRequest(
             method: request.method,
             path: request.path,
-            contentType: request.headerFields[.contentType],
-            authorization: request.headerFields[.authorization],
-            body: bodyData
+            body: bodyData,
+            headerFields: request.headerFields
         )
         recorder.record(recorded)
         let (status, data) = try await handler(recorded)
