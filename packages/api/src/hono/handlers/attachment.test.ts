@@ -132,10 +132,10 @@ describe('Routes /api attachments (Hono)', () => {
       return res.body.attachments as Array<{ _id: string; inUse: boolean }>;
     };
 
-    it('marks an attachment inUse when the latest revision body references its /api/v2/attachments/<id> URI', async () => {
+    it('marks an attachment inUse when the latest revision body references its current /api/attachments/<id> URI', async () => {
       const page = await createPageViaApi(accessToken, `${PATH_PREFIX}inuse-new-uri`, '# placeholder');
       const id = await uploadTo(page._id);
-      await setBody(page._id, `# doc\n\n![pixel](/api/v2/attachments/${id})\n`);
+      await setBody(page._id, `# doc\n\n![pixel](/api/attachments/${id})\n`);
 
       const attachments = await listOf(page._id);
       const target = attachments.find((a) => a._id === id);
@@ -156,6 +156,36 @@ describe('Routes /api attachments (Hono)', () => {
       const page = await createPageViaApi(accessToken, `${PATH_PREFIX}inuse-legacy-uri`, '# placeholder');
       const id = await uploadTo(page._id);
       await setBody(page._id, `# doc\n\n![legacy](/files/${id})\n`);
+
+      const attachments = await listOf(page._id);
+      const target = attachments.find((a) => a._id === id);
+      expect(target?.inUse).toBe(true);
+    });
+
+    // Regression (dual-accept, spec §5.2): a body persisted before the
+    // /api/v2 -> /api cutover still carries the OLD /api/v2/attachments/<id>
+    // form. Dropping this alternative from ATTACHMENT_URI_RE would flip such
+    // an attachment to inUse: false, hiding it from the footer list and
+    // exposing a delete affordance for something still referenced by the
+    // current revision.
+    it('marks an attachment inUse when referenced via the legacy (pre-cutover) /api/v2/attachments/<id> URI', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}inuse-legacy-v2-uri`, '# placeholder');
+      const id = await uploadTo(page._id);
+      await setBody(page._id, `# doc\n\n![pixel](/api/v2/attachments/${id})\n`);
+
+      const attachments = await listOf(page._id);
+      const target = attachments.find((a) => a._id === id);
+      expect(target?.inUse).toBe(true);
+    });
+
+    // Regression: the `/original` suffix API responses embed (`originalUrl`,
+    // `${fileUrl}/original`) may be copy-pasted into a body verbatim.
+    // ATTACHMENT_URI_RE has no trailing anchor, so it still matches the id
+    // regardless of what (if anything) follows it.
+    it('marks an attachment inUse when referenced via the legacy .../original suffix form', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}inuse-legacy-original`, '# placeholder');
+      const id = await uploadTo(page._id);
+      await setBody(page._id, `# doc\n\n![pixel](/api/v2/attachments/${id}/original)\n`);
 
       const attachments = await listOf(page._id);
       const target = attachments.find((a) => a._id === id);
@@ -385,7 +415,7 @@ describe('Routes /api attachments (Hono)', () => {
       expect(res.body.attachment.fileFormat).toBe('image/png');
       expect(res.body.attachment.originalName).toBe('pixel.png');
       expect(res.body.attachment.creator._id).toBe(userId);
-      expect(res.body.attachment.url).toBe(`/api/v2/attachments/${res.body.attachment._id}`);
+      expect(res.body.attachment.url).toBe(`/api/attachments/${res.body.attachment._id}`);
       expect(res.body.url).toBe(res.body.attachment.url);
 
       // The Attachment row exists in the DB.
@@ -920,13 +950,31 @@ describe('Routes /api attachments (Hono)', () => {
     });
   });
 
+  // RFC-0006 Phase 6 Sub-batch D restored this v1 `/files/<id>` compat
+  // redirect on Hono (attachment-stream.ts). feature-api-v2-path-removal
+  // Phase 3 flipped its target from `/api/v2/attachments/:id` to
+  // `/api/attachments/:id`; this covers that redirect target directly.
+  describe('GET /files/:id (legacy v1 compat redirect)', () => {
+    it('redirects to /api/attachments/:id without requiring auth', async () => {
+      const id = '000000000000000000000000';
+      const res = await request(app).get(`/files/${id}`);
+      expect(res.status).toBe(302);
+      expect(res.headers.location).toBe(`/api/attachments/${id}`);
+    });
+
+    it('does not match a non-24-hex id', async () => {
+      const res = await request(app).get('/files/not-an-object-id');
+      expect(res.status).toBe(404);
+    });
+  });
+
   describe('attachment delivery — stored-XSS containment', () => {
     // The general page-attachment upload path records the multipart client's
     // SELF-DECLARED `file.type` as `fileFormat` with no allowlist (the MIME
     // allowlist only covers the editor paste/dnd intents), and delivery used to
     // echo that value straight back as `Content-Type` with
     // `Content-Disposition: inline`. On the recommended same-origin topology
-    // (web rewrites `/api/v2/*` to the api) that let any user with edit rights
+    // (web rewrites `/api/*` to the api) that let any user with edit rights
     // execute HTML on the wiki's own origin and read the JWT out of
     // localStorage. Containment therefore has to live on the DELIVERY side, so
     // that attachments already stored with a hostile `fileFormat` are covered
@@ -1120,7 +1168,7 @@ describe('Routes /api attachments (Hono)', () => {
       expect(res.body.fileFormat).toBe('image/png');
       expect(res.body.originalName).toBe('pixel.png');
       expect(res.body.creator._id).toBe(userId);
-      expect(res.body.url).toBe(`/api/v2/attachments/${id}`);
+      expect(res.body.url).toBe(`/api/attachments/${id}`);
       // `inUse` is a page-scoped flag and is intentionally omitted from the
       // meta projection (a bare-id lookup has no page context).
       expect(res.body.inUse).toBeUndefined();
@@ -1233,8 +1281,4 @@ describe('Routes /api attachments (Hono)', () => {
       await expect(driver.get(derivativeKey)).rejects.toBeDefined();
     });
   });
-
-  // RFC-0006 Phase 6 Sub-batch D: `/files/:id` legacy compat redirect was
-  // deleted with the Express host. Frontend has been redirecting clients at
-  // `/api/v2/attachments/:id` directly since Phase 4 Batch 6; no more cover.
 });

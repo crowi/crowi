@@ -60,7 +60,7 @@ describe('Routes POST /api/attachments/upload (Hono editor upload)', () => {
     expect(res.body.mimeType).toBe('image/png');
     expect(res.body.sizeBytes).toBe(pngBuffer.length);
     expect(typeof res.body.url).toBe('string');
-    expect(res.body.url).toMatch(/^\/api\/v2\/attachments\//);
+    expect(res.body.url).toMatch(/^\/api\/attachments\//);
 
     // The Attachment row was persisted.
     const Attachment = crowi.model('Attachment');
