@@ -54,6 +54,13 @@ public struct ListRevisionsResponseLenient: Sendable, Equatable {
 
 /// `GET /pages/revisions/{id}` — the only revision endpoint that carries
 /// `body`, needed to render a past revision (read-only in this phase).
+///
+/// RFC-0023 Phase 5 — this fetch declares `X-Crowi-Ast-Version: 1` like the
+/// page detail GET does (`getRevision` returns `renderedAst`, wire-contract
+/// design §16's deliberate Phase 5 promotion), and the shared
+/// `PageRevisionLenient` decode already carries the strict envelope
+/// outcome. Body-only responses (old servers, never-rendered revisions)
+/// keep falling back to the raw-body path.
 public struct GetRevisionResponseLenient: Sendable, Equatable {
     public let revision: PageRevisionLenient
 
@@ -68,7 +75,10 @@ public struct GetRevisionResponseLenient: Sendable, Equatable {
     }
 
     public static func fetch(revisionId: String, using client: AuthenticatedAPIClient) async throws -> GetRevisionResponseLenient {
-        let (data, status) = try await client.get("pages/revisions/\(revisionId)")
+        let (data, status) = try await client.get(
+            "pages/revisions/\(revisionId)",
+            headers: GetPageResponseLenient.astNegotiationHeaders
+        )
         guard status.isSuccessfulHTTPStatus else { throw RevisionsLenientDecodeError.httpError(status: status) }
         return try decode(data)
     }

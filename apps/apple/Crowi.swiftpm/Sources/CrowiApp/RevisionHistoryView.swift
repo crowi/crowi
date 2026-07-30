@@ -6,18 +6,28 @@ import SwiftUI
 /// carries `body` (§8's detail-endpoint-only rule, mirrored the same way as
 /// the page resource itself); the list endpoint is meta-only.
 ///
-/// RFC-0023 note: this view deliberately stays on **body-only decode + the
-/// raw-body MarkdownUI path** through Phase 4 (wire-contract design §16 —
-/// history display is low-frequency and the raw-body fallback fully covers
-/// it). `getRevision` already returns `renderedAst`, so promoting history
-/// to the typed-AST path is a Phase 5 revisit with no server-side work.
+/// RFC-0023 Phase 5 — history renders through the SAME `PageBodyView`
+/// branch as the reader (design §16's deliberate Phase 4 deferral,
+/// resolved here): the revision detail GET declares `X-Crowi-Ast-Version`
+/// and a returned v1 envelope takes the typed-AST path; anything else
+/// (old server, never-rendered revision, decode-limit failure) keeps the
+/// raw-body MarkdownUI fallback. Nothing new is persisted — the outcome
+/// lives only in this view's state (the AST stays online-only, §16).
 struct RevisionHistoryView: View {
     let session: WorkspaceSession
     let pageId: String
     let pagePath: String
 
+    /// The loaded past-revision content: the raw body (always present —
+    /// it IS the fallback) plus the decoded `renderedAst` outcome.
+    struct SelectedRevision: Identifiable {
+        let id: String
+        let body: String
+        let renderedAst: RenderedAstDecodeOutcome?
+    }
+
     @State private var revisions: [RevisionMetaLenient] = []
-    @State private var selectedRevisionBody: String?
+    @State private var selectedRevision: SelectedRevision?
     @State private var errorMessage: String?
 
     var body: some View {
@@ -42,29 +52,25 @@ struct RevisionHistoryView: View {
         .navigationTitle("History")
         .task { await load() }
         .refreshable { await load() }
-        .sheet(isPresented: Binding(get: { selectedRevisionBody != nil }, set: { if !$0 { selectedRevisionBody = nil } })) {
-            if let selectedRevisionBody {
-                NavigationStack {
-                    ScrollView {
-                        // Past revisions are read-only display: wikilink/
-                        // mention taps have nowhere useful to navigate from
-                        // inside a modal, so they are inert here (`{ _ in }`)
-                        // rather than dismissing the sheet unexpectedly.
-                        WorkspacePageMarkdownView(
-                            rawBody: selectedRevisionBody,
-                            imageLoader: session.imageCache,
-                            imageBaseURL: session.context.workspace.workspaceOrigin.baseURL,
-                            onNavigateToWikiLink: { _ in },
-                            onNavigateToMention: { _ in },
-                            onNavigateToRelativePath: { _ in }
-                        )
-                        .padding()
-                    }
-                    .navigationTitle(pagePath)
-                    #if canImport(UIKit)
-                    .navigationBarTitleDisplayMode(.inline)
-                    #endif
+        .sheet(item: $selectedRevision) { revision in
+            NavigationStack {
+                ScrollView {
+                    // Past revisions are read-only display: wikilink/
+                    // mention taps have nowhere useful to navigate from
+                    // inside a modal, so they are inert here (`{ _ in }`)
+                    // rather than dismissing the sheet unexpectedly.
+                    PageBodyView(
+                        session: session,
+                        renderedAst: revision.renderedAst,
+                        rawBody: revision.body,
+                        onSelectDestination: { _ in }
+                    )
+                    .padding()
                 }
+                .navigationTitle(pagePath)
+                #if canImport(UIKit)
+                .navigationBarTitleDisplayMode(.inline)
+                #endif
             }
         }
     }
@@ -84,7 +90,11 @@ struct RevisionHistoryView: View {
     private func loadRevisionBody(_ revisionId: String) async {
         do {
             let response = try await GetRevisionResponseLenient.fetch(revisionId: revisionId, using: session.apiClient)
-            selectedRevisionBody = response.revision.body ?? ""
+            selectedRevision = SelectedRevision(
+                id: revisionId,
+                body: response.revision.body ?? "",
+                renderedAst: response.revision.renderedAst
+            )
         } catch {
             errorMessage = "Couldn't load this revision."
         }

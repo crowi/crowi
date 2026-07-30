@@ -208,13 +208,20 @@ struct RenderedAstBlockView: View {
             // Parent spec §4: html is a single, uniform rule — always a
             // visible placeholder, whether author- or plugin-produced.
             RenderedAstPlaceholderView(label: RenderedAstPlaceholderCopy.htmlBlock)
-        case .math, .crowiDiagram, .crowiLinkCard:
-            // Typed extension nodes: decoded strictly (they are union
-            // members) but rendered as generic placeholders until Phase 5
-            // promotes them to native views.
-            RenderedAstPlaceholderView(label: RenderedAstPlaceholderCopy.blockUnavailable)
-        case .crowiPlaceholder(_, let label, let reservation):
-            RenderedAstPlaceholderView(label: label, heightHint: reservationHeight(reservation))
+        case .math(let value, _):
+            // Phase 5 — synchronous native TeX typesetting (degrades to a
+            // visible monospaced TeX box, never a drop).
+            RenderedAstMathBlockView(tex: value)
+        case .crowiDiagram(_, _, let alt, let image):
+            // Phase 5 — area reserved from the intrinsic dimensions BEFORE
+            // the payload decodes (no layout shift on swap-in).
+            RenderedAstDiagramView(alt: alt, image: image)
+        case .crowiLinkCard(let payload):
+            // Phase 5 — structured OGP card (url-only cards are first-class
+            // by contract: fetch failure and toggle-off are the same shape).
+            RenderedAstLinkCardView(payload: payload)
+        case .crowiPlaceholder(let kind, let label, let reservation):
+            RenderedAstPlaceholderView(kind: kind, serverLabel: label, reservation: reservation)
         case .crowiOpaque:
             RenderedAstPlaceholderView(label: RenderedAstPlaceholderCopy.blockUnavailable)
         default:
@@ -223,11 +230,6 @@ struct RenderedAstBlockView: View {
             // render it as a one-node paragraph instead of dropping it.
             RenderedAstParagraphView(children: [node], context: context)
         }
-    }
-
-    private func reservationHeight(_ reservation: RenderedAstReservation) -> CGFloat? {
-        if case .fixed(_, let heightPx) = reservation { return CGFloat(heightPx) }
-        return nil
     }
 
     @ViewBuilder
@@ -319,13 +321,32 @@ struct RenderedAstInlineTextView: View {
     let nodes: [RenderedAstNode]
     let context: RenderedAstRenderContext
 
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
-        let result = RenderedAstInlineRenderer(definitions: context.definitions).render(nodes)
+        let result = RenderedAstInlineRenderer(
+            definitions: context.definitions,
+            mathIsDark: colorScheme == .dark
+        ).render(nodes)
         if let label = result.accessibilityLabel {
-            Text(result.attributed)
+            Self.composedText(result)
                 .accessibilityLabel(Text(label))
         } else {
-            Text(result.attributed)
+            Self.composedText(result)
+        }
+    }
+
+    /// Concatenates the pieces into ONE `Text`: attributed runs plus
+    /// baseline-aligned inline-math images (Phase 5) — keeping line
+    /// wrapping/selection semantics of a single text run.
+    static func composedText(_ result: RenderedAstInlineResult) -> Text {
+        result.pieces.reduce(Text(verbatim: "")) { composed, piece in
+            switch piece {
+            case .attributed(let run):
+                return composed + Text(run)
+            case .math(let run):
+                return composed + Text(Image(platformImage: run.image)).baselineOffset(run.baselineOffset)
+            }
         }
     }
 }
