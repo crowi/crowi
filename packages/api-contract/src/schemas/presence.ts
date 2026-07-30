@@ -6,7 +6,7 @@ import { z } from '@hono/zod-openapi';
  *
  * Two surfaces are described here:
  *
- *   - the HTTP `GET /api/v2/pages/:id/presence-token` response
+ *   - the HTTP `GET /api/pages/:id/presence-token` response
  *     (`PresenceTokenResponseSchema` / `PresenceTokenPayloadSchema`),
  *   - the WebSocket `/presence/:pageId` message envelope
  *     (`PresenceClientMessageSchema` / `PresenceServerMessageSchema`).
@@ -19,7 +19,7 @@ import { z } from '@hono/zod-openapi';
  */
 
 /**
- * Response body of `GET /api/v2/pages/:id/presence-token`.
+ * Response body of `GET /api/pages/:id/presence-token`.
  *
  *   - `token`      — short-lived JWT (5 min) the browser presents on
  *                    the `/presence/:pageId?token=` WebSocket connect.
@@ -186,7 +186,7 @@ export const PresenceServerMessageSchema = z.discriminatedUnion('type', [
 export type PresenceServerMessage = z.infer<typeof PresenceServerMessageSchema>;
 
 /**
- * RFC-0005 Phase 3 — `GET /api/v2/pages/:id/likers`.
+ * RFC-0005 Phase 3 — `GET /api/pages/:id/likers`.
  *
  * A single entry in the "liked by" list. Sourced from the page's
  * `liker` ObjectId array (the authoritative set of who liked the
@@ -205,7 +205,7 @@ export const LikerSchema = z.object({
 export type Liker = z.infer<typeof LikerSchema>;
 
 /**
- * Response body of `GET /api/v2/pages/:id/likers`.
+ * Response body of `GET /api/pages/:id/likers`.
  *
  *   - `users`      — the liker list, newest-liked first when `likedAt`
  *                    is known (entries without a timestamp sort last).
@@ -218,7 +218,7 @@ export const LikersResponseSchema = z.object({
 });
 export type LikersResponse = z.infer<typeof LikersResponseSchema>;
 
-/** Query schema of `GET /api/v2/pages/:id/likers`. */
+/** Query schema of `GET /api/pages/:id/likers`. */
 export const GetLikersRequestSchema = z.object({
   // Optional cap on returned `users`. `totalCount` always reflects the
   // full count regardless of `limit`. Omit for the full list.

@@ -16,7 +16,7 @@ export const SearchPageTypeSchema = z.enum(['portal', 'public', 'user']);
 export type SearchPageType = z.infer<typeof SearchPageTypeSchema>;
 
 /**
- * Request schema for `GET /api/v2/search`.
+ * Request schema for `GET /api/search`.
  *
  * - `q` is required and must be non-empty (legacy parity with
  *   `controllers/search.ts:!keyword`).
@@ -53,7 +53,7 @@ export const SearchHitSchema = z.object({
 export type SearchHit = z.infer<typeof SearchHitSchema>;
 
 /**
- * Response schema for `GET /api/v2/search`.
+ * Response schema for `GET /api/search`.
  *
  * - `meta.total` is the total number of matches across all pages (driver-reported).
  * - `meta.results` is the count in this response page (= `data.length`).
