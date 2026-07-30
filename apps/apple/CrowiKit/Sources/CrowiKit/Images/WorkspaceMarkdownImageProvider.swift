@@ -58,7 +58,27 @@ public struct WorkspaceMarkdownImageProvider: ImageProvider {
     }
 
     public func makeImage(url: URL?) -> some View {
-        WorkspaceMarkdownImageView(url: url, loader: loader, onImageTap: onImageTap)
+        Self.makeImageView(url: url, loader: loader, onImageTap: onImageTap)
+    }
+
+    /// The concrete view behind `makeImage` — the ONE place the block path
+    /// detaches the RFC-0015 `#crowi-image-attrs:` side-channel
+    /// (`ImageDisplayAttributes.extract(from:)`): everything downstream
+    /// (fetch, disk-cache key, scheme allowlist, tap/viewer canonical URL)
+    /// sees the byte-identical pre-carry URL, and only the render layer sees
+    /// the attributes. Internal (not folded into `makeImage`) so
+    /// `WorkspaceMarkdownImageProviderTests` can pin the detach wiring
+    /// without inspecting an opaque `some View`.
+    static func makeImageView(url: URL?, loader: any WorkspaceImageFetching, onImageTap: ((URL, PlatformImage) -> Void)?)
+        -> WorkspaceMarkdownImageView
+    {
+        let extraction = url.map(ImageDisplayAttributes.extract(from:))
+        return WorkspaceMarkdownImageView(
+            url: extraction?.url ?? url,
+            attributes: extraction?.attributes,
+            loader: loader,
+            onImageTap: onImageTap
+        )
     }
 }
 
@@ -69,7 +89,11 @@ public struct WorkspaceMarkdownImageProvider: ImageProvider {
 /// loader → decode pipeline directly, without rendering or inspecting a live
 /// SwiftUI view tree.
 struct WorkspaceMarkdownImageView: View {
+    /// Always the CLEANED URL (`ImageDisplayAttributes.extract` already ran
+    /// in `makeImageView`) — byte-identical to what this view received
+    /// before the RFC-0015 carry existed.
     let url: URL?
+    let attributes: ImageDisplayAttributes?
     let loader: any WorkspaceImageFetching
     let onImageTap: ((URL, PlatformImage) -> Void)?
 
@@ -84,28 +108,35 @@ struct WorkspaceMarkdownImageView: View {
                 // swift-markdown-ui's own `image` block style is a bare
                 // passthrough (`Theme.image = { $0.label }` — no frame at
                 // all), so nothing upstream of this provider guarantees a
-                // bounded proposal ever reaches it. `.frame(maxWidth:
-                // .infinity)` makes that bound explicit and unconditional
-                // here, at the one place every block-path image renders,
-                // instead of depending on every future call site composing
-                // this view inside a width-constrained container.
-                let rendered = Image(platformImage: image)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(maxWidth: .infinity)
-                // `feature-ios-image-viewer` — the tap gesture exists ONLY on
-                // this branch (a successfully-decoded raster image): an inert
-                // image (disallowed scheme / fetch or decode failure) renders
-                // the zero-size placeholder below, which structurally cannot
-                // carry the gesture — "inert images are not tappable" holds
-                // by construction, not by a runtime check.
-                if WorkspaceMarkdownImageTapPolicy.isTapEnabled(decodedImage: image, url: url, hasTapHandler: onImageTap != nil),
-                    let url, let onImageTap {
-                    rendered
-                        .onTapGesture { onImageTap(url, image) }
-                        .accessibilityAddTraits(.isButton)
-                } else {
-                    rendered
+                // bounded proposal ever reaches it.
+                // `ImageDisplayAttributedBlockFrame` makes that bound
+                // explicit and unconditional here, at the one place every
+                // block-path image renders — with `attributes == nil` it IS
+                // the previous `.frame(maxWidth: .infinity)`, and with
+                // attributes it additionally applies the RFC-0015
+                // width/align/float (server-identical DROP validation
+                // already happened at parse/extract time).
+                ImageDisplayAttributedBlockFrame(attributes: attributes) {
+                    let rendered = Image(platformImage: image)
+                        .resizable()
+                        .scaledToFit()
+                    // `feature-ios-image-viewer` — the tap gesture exists
+                    // ONLY on this branch (a successfully-decoded raster
+                    // image): an inert image (disallowed scheme / fetch or
+                    // decode failure) renders the zero-size placeholder
+                    // below, which structurally cannot carry the gesture —
+                    // "inert images are not tappable" holds by construction,
+                    // not by a runtime check. The gesture sits on the image
+                    // itself, inside the alignment frame, so the empty
+                    // margin an aligned/sized image leaves is not tappable.
+                    if WorkspaceMarkdownImageTapPolicy.isTapEnabled(decodedImage: image, url: url, hasTapHandler: onImageTap != nil),
+                        let url, let onImageTap {
+                        rendered
+                            .onTapGesture { onImageTap(url, image) }
+                            .accessibilityAddTraits(.isButton)
+                    } else {
+                        rendered
+                    }
                 }
             } else {
                 // Zero-size placeholder while loading/on failure — matches

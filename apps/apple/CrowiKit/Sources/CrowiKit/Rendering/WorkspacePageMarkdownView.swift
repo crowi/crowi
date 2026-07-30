@@ -24,13 +24,18 @@ import SwiftUI
 ///     path already rebases independently inside `WorkspaceImageLoader.fetch`,
 ///     so passing this does not change its behavior — confirmed the final
 ///     resolved URL is identical either way;
-///   - `ImageAttributeBlockPreprocessor.strip(_:)` — removes RFC-0015 image
-///     attribute blocks (`![alt](url){width=500px}`) BEFORE the wikilink/
-///     mention rewrite and before the renderer ever sees the body, so they
-///     never surface as literal garbled text next to the image. This is a
-///     strip-only degrade (no attribute value is ever applied) that also
-///     restores the paragraph to "image alone", which routes it through the
-///     width-capped block image path instead of the inline one;
+///   - `ImageAttributeBlockPreprocessor.stripAndCarry(_:)` — removes RFC-0015
+///     image attribute blocks (`![alt](url){width=500px}`) BEFORE the
+///     wikilink/mention rewrite and before the renderer ever sees the body,
+///     so they never surface as literal garbled text next to the image —
+///     AND (`feature-ios-phase3-notifications-extensions`) carries the
+///     server-identically-validated width/align/float values to both image
+///     providers via the `#crowi-image-attrs:` URL-fragment side-channel
+///     (`ImageDisplayAttributes`), which each provider detaches before the
+///     URL reaches the fetch/cache/allowlist layers. The strip also restores
+///     the paragraph to "image alone", which routes it through the
+///     width-capped block image path (where the attributes actually apply)
+///     instead of the inline one;
 ///   - `WikiLinkMentionPreprocessor.preprocess(_:)` — rewrites raw
 ///     `[[wikilinks]]` / `@mentions` into ordinary CommonMark links against
 ///     private pseudo-schemes BEFORE the renderer ever sees the body (§6 —
@@ -70,6 +75,13 @@ public struct WorkspacePageMarkdownView: View {
     let imageViewer: ImageViewerConfiguration?
 
     @State private var viewerItem: ImageViewerItem?
+
+    /// The measured markdown-column width the INLINE image path resolves
+    /// `width=<n>%` against (review round 1 — see
+    /// `InlineImageContainerWidthReference`). `@State` keeps the reference
+    /// stable across re-renders; measurement writes go through a plain
+    /// property on the class, so they never re-invalidate this view.
+    @State private var inlineImageContainerWidth = InlineImageContainerWidthReference()
 
     public init(
         rawBody: String,
@@ -133,7 +145,7 @@ public struct WorkspacePageMarkdownView: View {
     }
 
     private var markdownContent: some View {
-        Markdown(WikiLinkMentionPreprocessor.preprocess(ImageAttributeBlockPreprocessor.strip(rawBody)), imageBaseURL: imageBaseURL)
+        Markdown(WikiLinkMentionPreprocessor.preprocess(ImageAttributeBlockPreprocessor.stripAndCarry(rawBody)), imageBaseURL: imageBaseURL)
             // Crowi renders a single newline as a line break — that is a CORE
             // pipeline default, not an opt-in plugin: RFC-0002 Phase 5 promoted
             // `remark-breaks` out of `@crowi/plugin-renderer-crowi-legacy` into
@@ -147,7 +159,20 @@ public struct WorkspacePageMarkdownView: View {
             // plain paragraph text, not just on Crowi extensions.
             .markdownSoftBreakMode(.lineBreak)
             .markdownImageProvider(WorkspaceMarkdownImageProvider(loader: imageLoader, onImageTap: imageTapHandler))
-            .markdownInlineImageProvider(WorkspaceMarkdownInlineImageProvider(loader: imageLoader))
+            .markdownInlineImageProvider(WorkspaceMarkdownInlineImageProvider(loader: imageLoader, containerWidth: inlineImageContainerWidth))
+            // Measures the rendered markdown column's width for the inline
+            // image path's `%` resolution — a background `GeometryReader` is
+            // size-transparent (it adopts this view's size, never proposes
+            // one), so the measurement cannot feed back into layout.
+            .background(
+                GeometryReader { proxy in
+                    Color.clear
+                        .onAppear { inlineImageContainerWidth.width = proxy.size.width }
+                        .onChange(of: proxy.size.width) { _, newWidth in
+                            inlineImageContainerWidth.width = newWidth
+                        }
+                }
+            )
             .environment(
                 \.openURL,
                 OpenURLAction { url in
