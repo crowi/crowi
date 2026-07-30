@@ -3,6 +3,37 @@ import Foundation
 import Security
 #endif
 
+/// The four `SecItem*` calls `KeychainTokenStore` makes, as an injectable
+/// value — `.live` (the real Security-framework functions) is the production
+/// default and the only conformer the app ever runs.
+///
+/// This seam exists for ONE reason: determinism of the CI-fixed tests
+/// (`feature-ios-phase3` review round 1). `swift test`'s macOS test process
+/// is unsigned, and the data-protection keychain (the
+/// `kSecUseDataProtectionKeychain` branch below) hard-requires a
+/// code-signing identity — every real-keychain call fails with
+/// `errSecMissingEntitlement` (OSStatus -34018) in exactly the contexts the
+/// Apple-island objective gate runs, so tests insisting on the real keychain
+/// never actually executed there: they self-skipped, forever, on CI and dev
+/// Macs alike. `KeychainTokenStoreTests` instead substitutes an in-memory
+/// generic-password emulation at this boundary (same query dictionaries,
+/// same OSStatus contract), which keeps every store-level behavior —
+/// add-then-update, accessibility migration, per-workspace isolation —
+/// deterministically exercised on every `swift test` run.
+struct KeychainItemClient: Sendable {
+    var add: @Sendable (_ attributes: CFDictionary, _ result: UnsafeMutablePointer<CFTypeRef?>?) -> OSStatus
+    var update: @Sendable (_ query: CFDictionary, _ attributesToUpdate: CFDictionary) -> OSStatus
+    var copyMatching: @Sendable (_ query: CFDictionary, _ result: UnsafeMutablePointer<CFTypeRef?>?) -> OSStatus
+    var delete: @Sendable (_ query: CFDictionary) -> OSStatus
+
+    static let live = KeychainItemClient(
+        add: { SecItemAdd($0, $1) },
+        update: { SecItemUpdate($0, $1) },
+        copyMatching: { SecItemCopyMatching($0, $1) },
+        delete: { SecItemDelete($0) }
+    )
+}
+
 /// RFC-0016 §3/§4.3/§14 — `kSecClassGenericPassword`, `service = bundle
 /// identifier`, `account = workspace id`. One Keychain item per workspace;
 /// deleting one item never touches another workspace's (§4.3) — the
@@ -12,13 +43,18 @@ import Security
 /// `WorkspaceContext`, never by constructing this type directly.
 struct KeychainTokenStore: WorkspaceTokenStoring {
     private let service: String
+    private let client: KeychainItemClient
 
     /// - Parameter service: the Keychain `kSecAttrService` value — production
     ///   code passes the bundle identifier (§4.3); tests pass a dedicated,
     ///   disposable service string so test runs never touch (or collide
     ///   with) a real app's stored credentials.
-    init(service: String) {
+    /// - Parameter client: the `SecItem*` boundary — production always uses
+    ///   the default `.live`; tests substitute the in-memory emulation (see
+    ///   `KeychainItemClient`'s doc comment for why).
+    init(service: String, client: KeychainItemClient = .live) {
         self.service = service
+        self.client = client
     }
 
     enum StoreError: Error, Equatable {
@@ -60,7 +96,7 @@ struct KeychainTokenStore: WorkspaceTokenStoring {
         // before first unlock) — do that decision here, not at the call site.
         addQuery[kSecAttrAccessible] = kSecAttrAccessibleWhenUnlocked
 
-        let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
+        let addStatus = client.add(addQuery as CFDictionary, nil)
         if addStatus == errSecSuccess { return }
         guard addStatus == errSecDuplicateItem else {
             throw StoreError.unhandledStatus(addStatus)
@@ -75,7 +111,7 @@ struct KeychainTokenStore: WorkspaceTokenStoring {
         // `.whenUnlocked` in place — no separate migration step, and no
         // window where an existing user's token becomes unreadable (the
         // value itself is untouched; only the accessibility class updates).
-        let updateStatus = SecItemUpdate(
+        let updateStatus = client.update(
             query(forWorkspace: workspaceId) as CFDictionary,
             [
                 kSecValueData: data,
@@ -93,7 +129,7 @@ struct KeychainTokenStore: WorkspaceTokenStoring {
         readQuery[kSecMatchLimit] = kSecMatchLimitOne
 
         var result: AnyObject?
-        let status = SecItemCopyMatching(readQuery as CFDictionary, &result)
+        let status = client.copyMatching(readQuery as CFDictionary, &result)
         if status == errSecItemNotFound { return nil }
         guard status == errSecSuccess else {
             throw StoreError.unhandledStatus(status)
@@ -108,7 +144,7 @@ struct KeychainTokenStore: WorkspaceTokenStoring {
     }
 
     func delete(forWorkspace workspaceId: String) throws {
-        let status = SecItemDelete(query(forWorkspace: workspaceId) as CFDictionary)
+        let status = client.delete(query(forWorkspace: workspaceId) as CFDictionary)
         guard status == errSecSuccess || status == errSecItemNotFound else {
             throw StoreError.unhandledStatus(status)
         }
