@@ -52,20 +52,18 @@ struct PageTreeView: View {
         List {
             if let portalBody {
                 Section {
-                    WorkspacePageMarkdownView(
+                    // RFC-0023 Phase 4 — the portal body takes the same
+                    // AST-first / raw-body-fallback branch as the reader
+                    // (fetched through the same `GetPageResponseLenient`
+                    // negotiation). Fragment links are inert inside the list
+                    // section (no scroll target of its own); the "View
+                    // Portal Page" affordance opens the full reader where
+                    // anchors work.
+                    PageBodyView(
+                        session: session,
+                        renderedAst: portalPage?.revision?.renderedAst,
                         rawBody: portalBody,
-                        imageLoader: session.imageCache,
-                        imageBaseURL: session.context.workspace.workspaceOrigin.baseURL,
-                        onNavigateToWikiLink: { target in onSelect(.page(path: target)) },
-                        onNavigateToMention: { username in onSelect(.profile(username: username)) },
-                        onNavigateToRelativePath: { target in onSelect(.page(path: target)) },
-                        imageViewer: ImageViewerConfiguration(
-                            resolver: OriginalImageResolver(
-                                workspaceOrigin: session.context.workspace.workspaceOrigin,
-                                apiClient: session.apiClient
-                            ),
-                            confidentialNotice: session.confidential
-                        )
+                        onSelectDestination: onSelect
                     )
                 }
             }

@@ -5,6 +5,12 @@ import SwiftUI
 /// view. Only the single-revision detail endpoint (`GET /pages/revisions/{id}`)
 /// carries `body` (§8's detail-endpoint-only rule, mirrored the same way as
 /// the page resource itself); the list endpoint is meta-only.
+///
+/// RFC-0023 note: this view deliberately stays on **body-only decode + the
+/// raw-body MarkdownUI path** through Phase 4 (wire-contract design §16 —
+/// history display is low-frequency and the raw-body fallback fully covers
+/// it). `getRevision` already returns `renderedAst`, so promoting history
+/// to the typed-AST path is a Phase 5 revisit with no server-side work.
 struct RevisionHistoryView: View {
     let session: WorkspaceSession
     let pageId: String

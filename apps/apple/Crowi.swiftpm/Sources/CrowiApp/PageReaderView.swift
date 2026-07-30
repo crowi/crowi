@@ -29,51 +29,47 @@ struct PageReaderView: View {
     @State private var showEditor = false
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                if let page, let body = page.revision?.body {
-                    // A refresh that FAILED must not look like one that
-                    // confirmed server truth — see `load()`'s catch.
-                    if let loadErrorMessage {
-                        Label(loadErrorMessage, systemImage: "exclamationmark.triangle")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-                    WorkspacePageMarkdownView(
-                        rawBody: body,
-                        imageLoader: session.imageCache,
-                        imageBaseURL: session.context.workspace.workspaceOrigin.baseURL,
-                        onNavigateToWikiLink: { target in onSelectDestination(.page(path: target)) },
-                        onNavigateToMention: { username in onSelectDestination(.profile(username: username)) },
-                        onNavigateToRelativePath: { target in onSelectDestination(.page(path: target)) },
-                        // feature-ios-image-viewer — tapping a body image
-                        // opens the fullscreen zoom viewer, which fetches the
-                        // ORIGINAL bytes (resolved via /attachments/<id>/meta,
-                        // canonical fallback) through the same per-workspace
-                        // image cache the body render used; the body embed
-                        // itself stays on the canonical display derivative.
-                        imageViewer: ImageViewerConfiguration(
-                            resolver: OriginalImageResolver(
-                                workspaceOrigin: session.context.workspace.workspaceOrigin,
-                                apiClient: session.apiClient
-                            ),
-                            confidentialNotice: session.confidential
+        // The reader wraps the scroll container so rendered-AST heading
+        // anchors (`RenderedAstView.anchorID`) are reachable from in-page
+        // `#fragment` links (RFC-0023 Phase 4 — the server-issued heading
+        // ids are the anchors, never a client-local slugger).
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    if let page, let body = page.revision?.body {
+                        // A refresh that FAILED must not look like one that
+                        // confirmed server truth — see `load()`'s catch.
+                        if let loadErrorMessage {
+                            Label(loadErrorMessage, systemImage: "exclamationmark.triangle")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                        PageBodyView(
+                            session: session,
+                            renderedAst: page.revision?.renderedAst,
+                            rawBody: body,
+                            onSelectDestination: onSelectDestination,
+                            onNavigateToFragment: { fragment in
+                                withAnimation {
+                                    proxy.scrollTo(RenderedAstView.anchorID(fragment), anchor: .top)
+                                }
+                            }
                         )
-                    )
-                    engagementBar(for: page)
-                    if !backlinks.isEmpty {
-                        backlinksSection
+                        engagementBar(for: page)
+                        if !backlinks.isEmpty {
+                            backlinksSection
+                        }
+                        commentsSection(for: page)
+                    } else if isLoading {
+                        ProgressView()
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, 40)
+                    } else if let loadErrorMessage {
+                        ContentUnavailableView(loadErrorMessage, systemImage: "exclamationmark.triangle")
                     }
-                    commentsSection(for: page)
-                } else if isLoading {
-                    ProgressView()
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, 40)
-                } else if let loadErrorMessage {
-                    ContentUnavailableView(loadErrorMessage, systemImage: "exclamationmark.triangle")
                 }
+                .padding()
             }
-            .padding()
         }
         .navigationTitle(page?.path ?? path)
         #if canImport(UIKit)
