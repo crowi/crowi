@@ -1,7 +1,7 @@
 # Minimal same-origin front proxy for the docker-compose `app` profile.
 #
 # The browser talks only to this one origin (Caddy); Caddy routes by path so
-# the web app stays same-origin — relative `/api/v2`, `/files`, inline
+# the web app stays same-origin — relative `/api`, `/files`, inline
 # attachment images, the first-party auth cookie and the realtime WebSockets
 # all work without baking any api URL into the web image. This mirrors the
 # recommended self-host topology (A) in operations/deployment.
