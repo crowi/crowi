@@ -21,7 +21,7 @@ export interface ProfileTokens {
  * Resolved OAuth endpoint URLs for a profile. Discovery
  * (`/.well-known/oauth-authorization-server`) returns these already
  * carrying the correct path prefix (token/revoke/device already include
- * `/api/v2`; authorize is a web page on the issuer origin), so they are
+ * `/api`; authorize is a web page on the issuer origin), so they are
  * cached verbatim and dialled as-is — never reconstructed from `endpoint`.
  */
 export interface ProfileEndpoints {
@@ -35,7 +35,7 @@ export interface ProfileEndpoints {
 /**
  * One named profile (a.k.a. "context"): a server + the account/tokens used
  * to talk to it, plus cached capability/version signals from
- * `GET /api/v2/app/info`.
+ * `GET /api/app/info`.
  */
 export interface Profile {
   /** Profile alias, also the key in the `profiles` map. */
@@ -46,11 +46,11 @@ export interface Profile {
   account?: string;
   tokens?: ProfileTokens;
   oauth?: ProfileEndpoints;
-  /** Capabilities advertised by `GET /api/v2/app/info`. */
+  /** Capabilities advertised by `GET /api/app/info`. */
   capabilities?: string[];
-  /** Server api package version from `GET /api/v2/app/info`. */
+  /** Server api package version from `GET /api/app/info`. */
   version?: string;
-  /** Server API-surface version (e.g. `v2`) from `GET /api/v2/app/info`. */
+  /** Server API-surface version (e.g. `v2`) from `GET /api/app/info`. */
   apiVersion?: string;
   /** Epoch milliseconds when capabilities/version were last fetched. */
   capabilitiesFetchedAt?: number;
