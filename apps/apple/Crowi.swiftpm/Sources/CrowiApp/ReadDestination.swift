@@ -18,4 +18,8 @@ enum ReadDestination: Hashable {
     /// `/`, or the page tree's current directory path), used to seed the
     /// path input with a relative starting point.
     case createPage(originPath: String)
+    /// `feature-ios-phase3-notifications-extensions` — the notifications
+    /// list (RFC-0016 §11), opened from the toolbar bell; a row tap then
+    /// navigates onward via `.page(path:)`.
+    case notifications
 }

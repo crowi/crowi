@@ -39,9 +39,24 @@ struct WorkspaceHomeView: View {
                 content(session: session)
                     .confidentialBanner(session.confidential)
                     .task { await session.activated() }
+                    // §11 — the foreground notifications poll loop lives in a
+                    // `.task` of THIS view so it is structurally cancelled
+                    // the moment the workspace tears down (the `.id` below
+                    // forces exactly that on every switch): a non-active
+                    // workspace's poller can never keep running (§14).
+                    .task { await session.runNotificationsPolling() }
                     .onChange(of: scenePhase) { _, newPhase in
-                        guard newPhase == .active else { return }
-                        Task { await session.foregrounded() }
+                        switch newPhase {
+                        case .active:
+                            Task { await session.foregrounded() }
+                        case .background:
+                            // §11 — no notification polling while
+                            // backgrounded; `.inactive` (app switcher swipe,
+                            // system alert) is transient and left alone.
+                            Task { await session.backgrounded() }
+                        default:
+                            break
+                        }
                     }
             } else {
                 ContentUnavailableView("Couldn't open this workspace", systemImage: "exclamationmark.triangle")
@@ -106,6 +121,8 @@ struct WorkspaceHomeView: View {
             RecentlyViewedView(session: session, onSelectDestination: onSelect)
         case .createPage(let originPath):
             PageCreateView(session: session, originPath: originPath, onSelectDestination: onSelect)
+        case .notifications:
+            NotificationsView(session: session, onSelectDestination: onSelect)
         }
     }
 
@@ -136,6 +153,14 @@ struct WorkspaceHomeView: View {
             SearchCapabilityToolbarButton(capabilities: session.capabilities) {
                 onSelect(.search)
             }
+            // §11 — the notifications bell + unread badge.
+            // `NotificationBellToolbarButton` (CrowiKit) IS the rendered
+            // entry point (the `SearchCapabilityToolbarButton` precedent);
+            // the wrapper below observes the session so the badge
+            // re-renders on every poll.
+            SessionNotificationBell(session: session) {
+                onSelect(.notifications)
+            }
             // feature-ios-phase2-write — create from the home starts at the
             // root; `PageTreeView` carries its own New Page action seeded
             // with the directory being browsed.
@@ -155,6 +180,21 @@ struct WorkspaceHomeView: View {
                 Label("Profile", systemImage: "person.crop.circle")
             }
         }
+    }
+}
+
+/// The bell's live-badge seam: `WorkspaceHomeView` itself holds the session
+/// only through its holder (whose publisher fires when the session is
+/// REPLACED, not when the session's own `@Published` values change), so this
+/// wrapper `@ObservedObject`-observes the session and feeds the fresh
+/// `unreadNotificationCount` into the CrowiKit-testable
+/// `NotificationBellToolbarButton` on every poll tick.
+private struct SessionNotificationBell: View {
+    @ObservedObject var session: WorkspaceSession
+    let onOpen: () -> Void
+
+    var body: some View {
+        NotificationBellToolbarButton(unreadCount: session.unreadNotificationCount, action: onOpen)
     }
 }
 
