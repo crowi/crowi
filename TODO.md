@@ -31,7 +31,8 @@ alpha.0–.3 は published、alpha.4 / stable 向けに changeset 蓄積中（pr
 - [x] flat 一覧の表示名を web page-list と統一（`feature-ios-page-display-name`）: 最近更新 / 最近見たページ / 検索結果を basename + 親ディレクトリ muted の 2 段表示に（共有 `PageRowTitleLabel` 1 箇所・両言語が読む共有 fixture でドリフト固定・サーバ変更なし）
 - [x] renderedAst の client 非依存化 Phase 2 (RFC-0023 サーバ + web): sidecar プロデューサ + `X-Crowi-Ast-Version` negotiation + sanitizing walker + artifactKey + `rebuild rendered-ast` backfill。Phase 4-5 (iOS ネイティブ描画) は worktree `feature-ios-app` 側で消費
 - [x] renderedAst golden corpus Phase 3 (RFC-0023): 二者消費 (api jest + CrowiKit XCTest) 前提の自己記述 JSON corpus で renderer 出力を固定し、GFM 参照系の挙動も確定。Swift 側の実読込は Phase 4 (worktree `feature-ios-app`) で接続
-- [x] renderedAst iOS ネイティブ描画 Phase 4 (RFC-0023、spec: `feature-ios-rendered-ast-rendering.md`): strict envelope decoder + コアノードの SwiftUI ネイティブ描画 + raw-body フォールバック + golden corpus Swift 側接続。残: Phase 5 (拡張ノードのネイティブ昇格)
+- [x] renderedAst iOS ネイティブ描画 Phase 4 (RFC-0023、spec: `feature-ios-rendered-ast-rendering.md`): strict envelope decoder + コアノードの SwiftUI ネイティブ描画 + raw-body フォールバック + golden corpus Swift 側接続
+- [x] renderedAst iOS 型付き拡張ノード Phase 5 (RFC-0023 完結): 図表 (SVG=SwiftDraw seam・外部リソース非読込を回帰固定 / PNG) を内在寸法予約で描画、数式を SwiftMath 同期組版 (失敗は TeX ソース可視 degrade)、link-card を構造化 OGP + 固定スロット外部画像 (Bearer 非経由)、placeholder kind グループ化、履歴 view の AST 昇格、typed-nodes corpus + projection mirror 接続
 
 ### 配布 / リリース（2.0.0 stable 時）
 - [ ] **無印 `crowi` パッケージの整理**（spec: `feature-crowi-quickstart-package.md`）
