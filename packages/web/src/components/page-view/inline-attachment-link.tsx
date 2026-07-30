@@ -6,15 +6,21 @@ import { InlineAttachmentModal } from './inline-attachment-modal';
 /**
  * Extract an attachment ObjectId from an in-body reference URL.
  *
- * Two URI forms are recognised — the current `/api/attachments/<id>`
- * (the stream route / `fileUrl` virtual) and the legacy `/files/<id>` form
- * still present in bodies saved before the migration. The id must be the
- * whole final path segment (a 24-char hex ObjectId): `…/attachments/<id>`
- * matches, `…/attachments/<id>/extra` does not. A query string or hash is
- * tolerated. Returns the lower-cased id, or `null` when the URL is not an
- * attachment reference.
+ * Three URI forms are recognised — the current `/api/attachments/<id>`
+ * (the stream route / `fileUrl` virtual), the legacy (pre-`/api/v2` →
+ * `/api` cutover) `/api/v2/attachments/<id>` form, and the v1 `/files/<id>`
+ * form — all three still present in bodies saved before their respective
+ * migration/cutover. This dual-/triple-accept is additive and permanent,
+ * same reasoning as `ATTACHMENT_URI_RE` in `hono/handlers/attachment.ts`.
+ * The id must be the whole final path segment (a 24-char hex ObjectId),
+ * optionally followed by `/original` (the `originalUrl` API responses embed
+ * — `${fileUrl}/original` — which may be copy-pasted into a body verbatim):
+ * `…/attachments/<id>`, `…/attachments/<id>/original` both match;
+ * `…/attachments/<id>/extra` does not. A query string or hash is tolerated
+ * after either form. Returns the lower-cased id, or `null` when the URL is
+ * not an attachment reference.
  */
-const ATTACHMENT_URL_RE = /(?:\/api\/attachments\/|\/files\/)([0-9a-f]{24})(?:[?#].*)?$/i;
+const ATTACHMENT_URL_RE = /(?:\/api\/attachments\/|\/api\/v2\/attachments\/|\/files\/)([0-9a-f]{24})(?:\/original)?(?:[?#].*)?$/i;
 
 export function extractAttachmentId(url: string | undefined): string | null {
   if (!url) return null;
