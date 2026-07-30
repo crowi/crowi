@@ -9,14 +9,23 @@ import type {
   RenderError,
   RenderResult,
   ScopedCacheStorage,
+  StructuredRenderPayload,
 } from '@crowi/plugin-api';
 import { acquireRenderSlot, type RenderPriority } from '../core/render-admission';
 import { MongoCacheStorage } from './mongodb-cache';
-import { errorPlaceholder, sizeLimitPlaceholder } from './reservation';
+import { errorPlaceholder, sizeLimitPlaceholder, structuredErrorPlaceholder, structuredSizeLimitPlaceholder } from './reservation';
 
-export type { CacheSetReject } from './mongodb-cache';
+export type { CacheSetReject, CacheSetVerdict } from './mongodb-cache';
 export { createMongoCacheStorage, MongoCacheStorage } from './mongodb-cache';
-export { dispatchLimitPlaceholder, errorPlaceholder, renderReservation, sizeLimitPlaceholder } from './reservation';
+export {
+  dispatchLimitPlaceholder,
+  errorPlaceholder,
+  renderReservation,
+  sizeLimitPlaceholder,
+  structuredDispatchLimitPlaceholder,
+  structuredErrorPlaceholder,
+  structuredSizeLimitPlaceholder,
+} from './reservation';
 
 /**
  * Default fresh-TTL when `RenderResult.ttlSec` is unset. RFC §"Stale-
@@ -146,6 +155,13 @@ export function scopeForPlugin(storage: CacheStorage, pluginName: string): Scope
 /** What `cachedRender` may return — html plus a freshness hint for SSR layers. */
 export interface CachedRenderResult {
   html: string;
+  /**
+   * RFC-0023 — the structured payload of the SAME selection the `html`
+   * came from (design doc §10: html and sidecar must never come from
+   * two different outcomes). `undefined` for html-only producers /
+   * stripped-structured entries.
+   */
+  structured?: StructuredRenderPayload;
   /** 'fresh' | 'stale' so a caller can emit `data-stale="true"` if desired. */
   freshness: 'fresh' | 'stale';
   /** The full `RenderResult` (errors included) for downstream telemetry. */
@@ -202,7 +218,7 @@ export async function cachedRender(
     const { isFresh, isWithinStaleWindow } = classifyFreshness(cached, now);
 
     if (isFresh) {
-      return { html: cached.html, freshness: 'fresh', result: cached.result };
+      return { html: cached.html, structured: cached.result.structured, freshness: 'fresh', result: cached.result };
     }
     if (isWithinStaleWindow) {
       // Skip the background fire if a re-render is already in flight
@@ -219,7 +235,9 @@ export async function cachedRender(
           });
         });
       }
-      return { html: cached.html, freshness: 'stale', result: cached.result };
+      // Stale-serve: html and structured both come from the entry we
+      // are displaying (never from the in-flight refresh).
+      return { html: cached.html, structured: cached.result.structured, freshness: 'stale', result: cached.result };
     }
     // expired beyond stale window — block on re-render.
   }
@@ -228,7 +246,7 @@ export async function cachedRender(
   // for the same key — second viewer awaits the first viewer's render).
   const ks = cacheKeyString(key);
   const result = await dedupedRenderAndStore(ks, storage, key, renderer, input, ctx, cached);
-  return { html: result.html, freshness: 'fresh', result: result.result };
+  return { html: result.html, structured: result.structured, freshness: 'fresh', result: result.result };
 }
 
 function dedupedRenderAndStore(
@@ -251,6 +269,8 @@ function dedupedRenderAndStore(
 
 interface RenderAndStoreResult {
   html: string;
+  /** Effective structured payload — always from the same selection as `html` (RFC-0023 §10/§11). */
+  structured?: StructuredRenderPayload;
   result: RenderResult;
 }
 
@@ -263,7 +283,7 @@ async function renderAndStore(
   prevEntry: CacheEntry | null,
 ): Promise<RenderAndStoreResult> {
   const { result } = await normalizeRenderResult(() => renderer.render(input, ctx), renderer.reservation);
-  return persistRenderResult(storage, key, renderer, result, prevEntry);
+  return persistRenderResult(storage, key, renderer, result, prevEntry, ctx);
 }
 
 /**
@@ -300,6 +320,19 @@ export async function normalizeRenderResult(
 }
 
 /**
+ * RFC-0023 — the structured counterpart of `normalizeRenderResult`'s
+ * html pick, for non-persisting call sites (the `shouldBypassCache`
+ * dispatch path). Success → the plugin's own `structured` (this is
+ * what keeps link-card's toggle-off byte- AND sidecar-identical to
+ * fetch-failure); error → the generic structured error placeholder,
+ * mirroring the `errorPlaceholder` html the caller displays.
+ */
+export function structuredForNormalized(result: RenderResult, reservation: EmbedRenderer['reservation']): StructuredRenderPayload | undefined {
+  if (!result.error) return result.structured;
+  return structuredErrorPlaceholder(result.error.code, reservation);
+}
+
+/**
  * Shared tail of `renderAndStore` / `cachedRenderOrPending`'s admission-
  * gated render path: TTL computation, display resolution (`resolveDisplay`
  * — error → errorHtml/placeholder, or stale-if-error retention of
@@ -314,44 +347,81 @@ async function persistRenderResult(
   renderer: EmbedRenderer,
   result: RenderResult,
   prevEntry: CacheEntry | null,
+  ctx: RenderContext,
 ): Promise<RenderAndStoreResult> {
   const now = new Date();
   const ttlSec = pickTtl(result);
   const expiresAt = new Date(now.getTime() + ttlSec * 1000);
 
-  const { html, lastGoodFetchedAt } = resolveDisplay(result, renderer, prevEntry, now);
+  const { html, structured, lastGoodFetchedAt } = resolveDisplay(result, renderer, prevEntry, now);
   const cachedHtml: string = html;
+  // RFC-0023 §11 — non-throw normalisation boundary: third-party
+  // `structured` payloads can carry cycles / throwing `toJSON`; every
+  // stringify downstream of this point must only ever see a payload
+  // this measurement accepted. Oversize is left to `setOrReject`'s
+  // verdict (single owner of the budget decision).
+  const cachedStructured = normalizeStructuredPayload(structured, key, ctx);
 
   // `errorHtml` is display plumbing, not telemetry — when the entry is a
   // degraded error, `entry.html` already IS the errorHtml, and a later
   // degrade uses the fresh attempt's `errorHtml`, never this stored copy.
   // Persisting it would just re-ship a few hundred dead bytes per read.
-  const { errorHtml: _displayOnly, ...resultMeta } = result;
+  // `structured` is REPLACED with the resolveDisplay pick: on a
+  // stale-if-error retention the render attempt's own `structured` is
+  // undefined and the last-good's structured must carry forward with
+  // the last-good html it belongs to (§11).
+  const { errorHtml: _displayOnly, structured: _attemptStructured, ...resultMeta } = result;
   const cacheEntry: CacheEntry = {
     html: cachedHtml,
-    result: { ...resultMeta, html: cachedHtml },
+    result: { ...resultMeta, html: cachedHtml, ...(cachedStructured !== undefined ? { structured: cachedStructured } : {}) },
     fetchedAt: now,
     expiresAt,
     lastGoodFetchedAt,
   };
 
-  const rejection = await storage.setOrReject(key, cacheEntry);
-  if (rejection) {
+  const verdict = await storage.setOrReject(key, cacheEntry);
+  if (verdict.reject) {
     // Size-limit reject → fall back to a placeholder for THIS render
     // call. We don't write the placeholder to the cache (it would
     // pollute the slot if the plugin shrinks its output later); the
-    // next read just sees a miss and re-renders.
+    // next read just sees a miss and re-renders. html AND structured
+    // both become the size-limit placeholder — the effective result is
+    // one selection (§11: the web and declared clients degrade the
+    // same way).
     return {
-      html: sizeLimitPlaceholder(rejection, renderer.reservation),
+      html: sizeLimitPlaceholder(verdict.reject, renderer.reservation),
+      structured: structuredSizeLimitPlaceholder(verdict.reject, renderer.reservation),
       result: cacheEntry.result,
     };
   }
+  if (verdict.structuredStripped) {
+    // Structured-only strip: html is written and displayed unchanged;
+    // the effective structured is ABSENT (a plain `html` node for the
+    // dispatch — the correct degrade is a visible opaque html on
+    // declared clients, NOT a placeholder replacing a working web
+    // render, §11).
+    return { html: cachedHtml, structured: undefined, result: { ...cacheEntry.result, structured: undefined } };
+  }
 
-  return { html: cachedHtml, result: cacheEntry.result };
+  return { html: cachedHtml, structured: cachedStructured, result: cacheEntry.result };
+}
+
+/** §11's non-throw normalisation boundary (see `persistRenderResult`). */
+function normalizeStructuredPayload(structured: StructuredRenderPayload | undefined, key: CacheKey, ctx: RenderContext): StructuredRenderPayload | undefined {
+  if (structured === undefined) return undefined;
+  try {
+    JSON.stringify(structured);
+    return structured;
+  } catch {
+    ctx.log.warn(`[plugin-render-cache] structured payload not serialisable; dropping (html unaffected). pluginName=${key.pluginName} pageId=${key.pageId}`);
+    return undefined;
+  }
 }
 
 /** What `cachedRenderOrPending` returns — a rendered/cached result, or `pending` (nothing written to the cache). */
-export type CachedRenderOrPendingResult = { kind: 'rendered'; html: string; freshness: 'fresh' | 'stale'; result: RenderResult } | { kind: 'pending' };
+export type CachedRenderOrPendingResult =
+  | { kind: 'rendered'; html: string; structured?: StructuredRenderPayload; freshness: 'fresh' | 'stale'; result: RenderResult }
+  | { kind: 'pending' };
 
 // Separate from `inFlightRender` (above) even though both key by the
 // same `cacheKeyString` shape — a `pluginName` only ever goes through
@@ -399,7 +469,7 @@ export async function cachedRenderOrPending(
     const { isFresh, isWithinStaleWindow } = classifyFreshness(cached, now);
 
     if (isFresh) {
-      return { kind: 'rendered', html: cached.html, freshness: 'fresh', result: cached.result };
+      return { kind: 'rendered', html: cached.html, structured: cached.result.structured, freshness: 'fresh', result: cached.result };
     }
     if (isWithinStaleWindow) {
       // Cache-hit path (fresh or stale-serve) never touches admission —
@@ -416,7 +486,7 @@ export async function cachedRenderOrPending(
           });
         });
       }
-      return { kind: 'rendered', html: cached.html, freshness: 'stale', result: cached.result };
+      return { kind: 'rendered', html: cached.html, structured: cached.result.structured, freshness: 'stale', result: cached.result };
     }
     // expired beyond stale window — fall through to a blocking attempt.
   }
@@ -424,7 +494,7 @@ export async function cachedRenderOrPending(
   const ks = cacheKeyString(key);
   const outcome = await dedupedRenderOrSkip(ks, storage, key, renderer, input, ctx, admission, cached);
   if (outcome === null) return { kind: 'pending' };
-  return { kind: 'rendered', html: outcome.html, freshness: 'fresh', result: outcome.result };
+  return { kind: 'rendered', html: outcome.html, structured: outcome.structured, freshness: 'fresh', result: outcome.result };
 }
 
 function dedupedRenderOrSkip(
@@ -495,7 +565,7 @@ async function renderUnderAdmissionAndStore(
     ticket.release();
   }
 
-  return persistRenderResult(storage, key, renderer, result, prevEntry);
+  return persistRenderResult(storage, key, renderer, result, prevEntry, ctx);
 }
 
 /**
@@ -521,22 +591,36 @@ function resolveDisplay(
   renderer: EmbedRenderer,
   prevEntry: CacheEntry | null,
   now: Date,
-): { html: string; lastGoodFetchedAt: Date | undefined } {
+): { html: string; structured: StructuredRenderPayload | undefined; lastGoodFetchedAt: Date | undefined } {
   if (!result.error) {
     // `lastGoodFetchedAt` is deliberately NOT written on success entries —
     // it would always equal `fetchedAt`. Field present ⇔ stale-if-error
     // retained entry, one crisp invariant (readers fall back to
     // `fetchedAt` for success entries, see `resolvePrevGood`).
-    return { html: result.html, lastGoodFetchedAt: undefined };
+    return { html: result.html, structured: result.structured, lastGoodFetchedAt: undefined };
   }
   // Only transient/availability failures may keep the last-good display —
   // a policy-level rejection (`blocked`/`auth`) must take effect NOW, not
   // 24h later (see `STALE_IF_ERROR_RETAINABLE_CODES`).
   const prevGood = STALE_IF_ERROR_RETAINABLE_CODES.has(result.error.code) ? resolvePrevGood(prevEntry, now) : null;
   if (prevGood) {
-    return { html: prevGood.html, lastGoodFetchedAt: prevGood.lastGoodFetchedAt };
+    // RFC-0023 §11 — the retained structured travels WITH the retained
+    // html (same `lastGoodFetchedAt` marker, same selection).
+    return { html: prevGood.html, structured: prevGood.structured, lastGoodFetchedAt: prevGood.lastGoodFetchedAt };
   }
-  return { html: result.errorHtml ?? errorPlaceholder(result.error.code, renderer.reservation), lastGoodFetchedAt: undefined };
+  // Degraded error display. `structured` mirrors the html pick exactly
+  // (one selection, §10): when the plugin supplied `errorHtml` its own
+  // paired `structured` rides along (link-card's fallback card keeps
+  // its `{url}`-only sidecar — fetch-failure and toggle-off stay
+  // indistinguishable); otherwise the generic placeholder pair.
+  if (result.errorHtml !== undefined) {
+    return { html: result.errorHtml, structured: result.structured, lastGoodFetchedAt: undefined };
+  }
+  return {
+    html: errorPlaceholder(result.error.code, renderer.reservation),
+    structured: structuredErrorPlaceholder(result.error.code, renderer.reservation),
+    lastGoodFetchedAt: undefined,
+  };
 }
 
 /**
@@ -552,7 +636,10 @@ function resolveDisplay(
  * lets the kept display survive multiple consecutive failed retries
  * instead of degrading on the second failure.
  */
-function resolvePrevGood(prevEntry: CacheEntry | null, now: Date): { html: string; lastGoodFetchedAt: Date } | null {
+function resolvePrevGood(
+  prevEntry: CacheEntry | null,
+  now: Date,
+): { html: string; structured: StructuredRenderPayload | undefined; lastGoodFetchedAt: Date } | null {
   if (!prevEntry) return null;
   // Success entries never carry `lastGoodFetchedAt` (their `fetchedAt` IS
   // the last-good time — this also covers, value-identically, any entry
@@ -562,7 +649,9 @@ function resolvePrevGood(prevEntry: CacheEntry | null, now: Date): { html: strin
   if (!lastGoodFetchedAt) return null;
   const ageSec = (now.getTime() - lastGoodFetchedAt.getTime()) / 1000;
   if (ageSec > STALE_IF_ERROR_MAX_AGE_SEC) return null;
-  return { html: prevEntry.html, lastGoodFetchedAt };
+  // `CacheEntry.result` round-trips Mongo wholesale, so the last-good's
+  // `structured` is reliably present here when it was written (§11).
+  return { html: prevEntry.html, structured: prevEntry.result.structured, lastGoodFetchedAt };
 }
 
 /**
