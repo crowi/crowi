@@ -32,6 +32,7 @@
     "build": "tsup",
     "build:binary": "pnpm build && tsup --config tsup.sea.config.ts && node scripts/build-sea.mjs",
     "dev": "tsup --watch --no-clean",
+    "lint": "eslint src/ --ext .ts",
     "type-check": "tsc --noEmit",
     "test": "jest --passWithNoTests",
     "prepublishOnly": "chmod +x dist/bin.js"
@@ -45,6 +46,9 @@
     "@crowi/tsconfig": "workspace:*",
     "@types/jest": "catalog:",
     "@types/node": "catalog:",
+    "@typescript-eslint/eslint-plugin": "^6.21.0",
+    "@typescript-eslint/parser": "^6.21.0",
+    "eslint": "^8.57.1",
     "jest": "catalog:",
     "ts-jest": "catalog:",
     "tsup": "catalog:",
