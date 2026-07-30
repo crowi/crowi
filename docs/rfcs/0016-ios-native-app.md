@@ -19,7 +19,7 @@
     to auto-approve in **both** the API and the web authorize page, §4.4), which
     **ship together in the minimum Crowi version**, so there is no per-host
     operator action.
-  - The public, unauthenticated `GET /api/v2/app/info`
+  - The public, unauthenticated `GET /api/app/info`
     (`packages/api-contract/src/schemas/app.ts:39-46`) for "is this a Crowi
     server?" validation and per-host capability/version detection — including
     deciding whether a host meets the §4.4 minimum version.
@@ -125,7 +125,7 @@ consumed.
 - The plumbing a native client needs already exists and is stable:
   - the entire read + bounded-write REST surface under `/api/v2`
     (`packages/api-contract/src/contracts/*`), unchanged by this RFC;
-  - a public version/capability probe at `GET /api/v2/app/info`
+  - a public version/capability probe at `GET /api/app/info`
     (`packages/api-contract/src/schemas/app.ts:39-46`) that returns
     `{ title, confidential, version, apiVersion, capabilities[], canSelfRegister }`;
   - a committed OpenAPI 3.1.0 document (`packages/api-contract/openapi.json`,
@@ -241,7 +241,7 @@ App (SwiftUI @main)
     (`/auth/login`, `/pages`, …), so the generated client expects its
     `serverURL` to already include `/api/v2`. Passing **`workspaceOrigin` alone**
     to `Client(serverURL:)` would send every call to the wrong path (e.g.
-    `https://host/pages` instead of `https://host/api/v2/pages`) and 404. So:
+    `https://host/pages` instead of `https://host/api/pages`) and 404. So:
     rebase relative *content* URLs against `workspaceOrigin`; construct the API
     *client* against `apiBaseURL`.
   - **Keychain credentials** — `kSecClassGenericPassword`,
@@ -598,7 +598,7 @@ the generator's output before committing to it.
 **v1 GO/NO-GO — the renderer's image path must be controllable enough to carry
 the §6.1 auth + redirect guards.** Every embedded image is auth-gated with **no
 public/CDN fallback**: `AttachmentSchema.url` is the relative
-`/api/v2/attachments/<id>`, served only by the authenticated, page-grant-checked
+`/api/attachments/<id>`, served only by the authenticated, page-grant-checked
 byte stream (`packages/api/src/hono/handlers/attachment-stream.ts:173-228`)
 (avatars take the by-key path, §6.1). swift-markdown-ui / MarkdownUI renders
 `![](url)` through its **own** image-fetch pipeline, so v1 image rendering
@@ -652,7 +652,7 @@ hard-failing on drift — the same property that lets `@crowi/cli` (RFC-0012
   backward-compatible change within v2; a breaking change becomes `/api/v3`.
   The app targets v2 and degrades within it.
 - **Per-workspace capability/version detection — on a refreshed cache.**
-  `GET /api/v2/app/info` yields `{ version, apiVersion, capabilities[],
+  `GET /api/app/info` yields `{ version, apiVersion, capabilities[],
   confidential }`. The app caches this **per workspace**, but the cache is
   **not** a one-shot snapshot taken at add-time — both `confidential` and the
   runtime capabilities can change on the host *after* a workspace is added:
@@ -735,7 +735,7 @@ remains available if a server-rendered preview is ever wanted.
 ### §6.1 Attachments require a per-workspace Bearer image loader
 
 Embedded images resolve to **auth-gated, relative** URLs. `AttachmentSchema.url`
-is the relative path `/api/v2/attachments/<id>`
+is the relative path `/api/attachments/<id>`
 (`packages/api-contract/src/schemas/attachment.ts:10,32`), and that endpoint is
 Bearer-gated **and** page-grant-checked, streaming raw bytes only to an
 authorized caller (`packages/api/src/hono/handlers/attachment-stream.ts:173-228`:
@@ -755,9 +755,9 @@ are always fetched with the correct host + token. The browser-only
 `crowi.accessToken` cookie fallback is irrelevant to native.
 
 **There are *two* auth-gated image URL shapes, and the loader must cover both.**
-Besides embedded attachments at `/api/v2/attachments/<id>`, **user avatars**
+Besides embedded attachments at `/api/attachments/<id>`, **user avatars**
 come via `UserSchema.image` (`packages/api-contract/src/schemas/user.ts:41`),
-served by `GET /api/v2/attachments/by-key/<key>` — which, despite its
+served by `GET /api/attachments/by-key/<key>` — which, despite its
 "public-keyed delivery" file comment, is **Bearer-gated + prefix-restricted**
 (`createJwtAuth` on `/attachments/by-key/*`,
 `packages/api/src/hono/handlers/attachment-stream.ts:120`; only a `user/`-prefix
@@ -769,8 +769,8 @@ the page grant (`loadGrantedPage` at `:198`). This asymmetry is fine for avatars
 (profile images are not per-page-secret), but the loader must not assume by-key
 fetches are grant-scoped. Either way the same per-workspace
 rebase + same-origin-Bearer loader MUST handle **both**
-`/api/v2/attachments/<id>` (embedded images, grant-checked) **and**
-`/api/v2/attachments/by-key/<key>` (avatars, Bearer + prefix only); a loader that
+`/api/attachments/<id>` (embedded images, grant-checked) **and**
+`/api/attachments/by-key/<key>` (avatars, Bearer + prefix only); a loader that
 special-cases only the numeric-id shape will silently fail to render every
 avatar.
 
@@ -807,14 +807,14 @@ therefore:
   differs (off-origin exfiltration guard), keep it when the target is the same
   workspace origin. This is not hypothetical — Crowi exposes a **same-origin
   legacy compat redirect** the loader must follow: `GET /files/<id>` at the
-  **server root** (outside `/api/v2`) `302`s to `/api/v2/attachments/<id>` with
+  **server root** (outside `/api`) `302`s to `/api/attachments/<id>` with
   **no auth on the redirect itself** (`attachment-stream.ts:250-252`, comment
   `:244-249` — authorization is deferred to the redirect target, which *is*
   Bearer-gated). Un-migrated page bodies still contain bare `/files/<id>`
   references (the `files-url-to-attachments` body migration cannot rewrite them
   all — misses, un-migratable bodies, and bodies the web app forwards via its
   `/files/:id` rewrite — which is exactly why the runtime redirect exists). Since
-  that `/files/<id>` → `/api/v2/attachments/<id>` hop is **same-origin**, a
+  that `/files/<id>` → `/api/attachments/<id>` hop is **same-origin**, a
   blanket "strip on any redirect" rule would make every such image silently
   `401`; the origin-change-only rule keeps the Bearer on the target and the image
   loads.
@@ -997,7 +997,7 @@ durable offline-edit-replay engine is deliberate future work, not v1 scope
 v1 edits through the existing REST write endpoints, **never** through realtime
 collab:
 
-- **Create**: `POST /api/v2/pages` with `{ path, body }` (optional `grant`).
+- **Create**: `POST /api/pages` with `{ path, body }` (optional `grant`).
   Beyond success, the create handler
   (`packages/api/src/hono/handlers/page.ts:446-499`) returns **four distinct
   `400`s** the phone quick-create UX must each handle — it is *not* just
@@ -1028,7 +1028,7 @@ collab:
   (A residual `PAGE_CREATE_FAILED` `400` covers any other server-side failure
   message, `:495`.) None of these is the `revision_id` optimistic-lock conflict
   — that is a **quick-edit** concern only, below.
-- **Quick-edit**: `PUT /api/v2/pages` with `{ page_id, body, revision_id }` —
+- **Quick-edit**: `PUT /api/pages` with `{ page_id, body, revision_id }` —
   the `revision_id` captured when the page was opened is the **optimistic
   lock**. This creates a revision directly, bypassing the Y.Doc; a subsequent
   collab editor on the web diffs against the new body string. RFC-0010/RFC-0003
@@ -1065,7 +1065,7 @@ collab:
        would either spuriously `409` or (if it happened to match) defeat the
        check's intent. "The `revision_id` captured at open time" means precisely
        **the detail-GET revision id read when the editor was opened**.
-- **Comment**: `POST /api/v2/comments`.
+- **Comment**: `POST /api/comments`.
 - **Engagement**: `POST /pages/like` / `/pages/unlike`
   (`packages/api-contract/src/contracts/page.ts:322,353`), `POST /pages/seen`
   (`:262`), `PUT /pages/watch` (`:384`), `POST`/`DELETE /bookmarks`. These are
@@ -1663,7 +1663,7 @@ Resolved since an earlier draft:
 - Code (auth — §4):
   `packages/api/src/hono/handlers/oauth.ts:385-404` (RFC 8414 discovery —
   `authorization_endpoint` is a **web-origin** page, `token_endpoint` is under
-  `/api/v2`, same-origin only "in the default deployment" `:387-399`; the app
+  `/api`, same-origin only "in the default deployment" `:387-399`; the app
   resolves both from here, §4.1) + `packages/web/next.config.ts:85` (dev proxy of
   the discovery doc to the web origin) + `packages/cli/src/lib/oauth.ts:227-236`
   (the CLI resolving authorize/token from discovery — the model the app follows),
@@ -1735,7 +1735,7 @@ Resolved since an earlier draft:
   `packages/api-contract/src/contracts/me.ts:5-10` (`/me`,
   `/me/recently-viewed-pages`),
   `packages/api-contract/src/schemas/attachment.ts:10,32` (relative
-  `/api/v2/attachments/<id>` URL),
+  `/api/attachments/<id>` URL),
   `packages/api-contract/src/schemas/user.ts:41` (`UserSchema.image` — the
   avatar URL) served by `GET /attachments/by-key/<key>`, which is **Bearer-gated
   + `user/`-prefix-restricted but NOT page-grant-checked** (handler

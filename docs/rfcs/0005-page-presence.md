@@ -195,7 +195,7 @@ order.
 
 ```
 1. Browser opens /pages/<id>
-2. HTTP request: GET /api/v2/pages/<id>/presence-token
+2. HTTP request: GET /api/pages/<id>/presence-token
    - Verifies HTTP session
    - Checks user has READ permission on the page
    - Returns: { token, pageId, selfUserId, expiresAt }
@@ -506,7 +506,7 @@ page.
   like button).
 - Modal: new component, mirroring the existing "Seen by" modal in
   structure (avatar + name + link to profile).
-- Endpoint: new `GET /api/v2/pages/<id>/likers` returns the list with
+- Endpoint: new `GET /api/pages/<id>/likers` returns the list with
   pagination if needed.
 - Permission: read access to the page is sufficient. Like-list is
   not private.
@@ -520,7 +520,7 @@ this page.
 - Modal: the existing "+N more" dialog from v1.x is repurposed —
   same modal, now reachable via the chip rather than the avatar stack
   overflow.
-- Endpoint: existing `GET /api/v2/pages/<id>/seen-users` (or whatever
+- Endpoint: existing `GET /api/pages/<id>/seen-users` (or whatever
   the current endpoint is named).
 - Permission: read access.
 
@@ -561,7 +561,7 @@ compact chip.
 
 ## HTTP and WS APIs
 
-### `GET /api/v2/pages/<id>/presence-token`
+### `GET /api/pages/<id>/presence-token`
 
 Issues a short-lived presence token for the requesting user.
 
@@ -578,7 +578,7 @@ Errors:
   403 - no read permission
 ```
 
-### `GET /api/v2/pages/<id>/likers`
+### `GET /api/pages/<id>/likers`
 
 NEW. Returns users who have liked the page.
 
@@ -701,7 +701,7 @@ count and the footer are eventually consistent.
 In scope:
 
 - `/presence/<pageId>` ws noServer handler attached to api http.Server.
-- `GET /api/v2/pages/<id>/presence-token` endpoint.
+- `GET /api/pages/<id>/presence-token` endpoint.
 - Redis `presence:page:<pageId>:viewers` hash with TTL.
 - Redis pub/sub for multi-instance coordination.
 - `presence.markEditing` / `unmarkEditing` integration (called
@@ -724,7 +724,7 @@ In scope:
 - Page header meta-row restructure into chips.
 - Removal of v1.x seen-users avatar stack.
 - `[+1 N] いいね` chip with "Liked by" modal.
-- `GET /api/v2/pages/<id>/likers` endpoint.
+- `GET /api/pages/<id>/likers` endpoint.
 - `[👁 N] 閲覧` chip with reused "Seen by" modal.
 - `[💬 N] コメント` chip with scroll behaviour.
 - `[🔗 N] バックリンク` chip with scroll behaviour.
@@ -829,7 +829,7 @@ Out of scope (deferred):
 
 1. **`/presence` ws attach**: mirror `/collab`'s noServer handler
    in the api process. Authentication via token query param.
-2. **Token endpoint**: `GET /api/v2/pages/<id>/presence-token` with
+2. **Token endpoint**: `GET /api/pages/<id>/presence-token` with
    read-permission gate.
 3. **Redis presence hash**: viewer state with TTL + heartbeat
    refresh.
@@ -858,7 +858,7 @@ Out of scope (deferred):
    - **Compact-transition wiring**: force-close for portaled overlays,
      focus handoff, `inert` placeholder, and freezing the sticky
      threshold for the duration of the collapse.
-10. **`GET /api/v2/pages/<id>/likers`** endpoint.
+10. **`GET /api/pages/<id>/likers`** endpoint.
 11. **"Liked by" modal** component, mirroring existing "Seen by"
     modal.
 12. **Chip components**: `[icon][count][label]` uniform style,

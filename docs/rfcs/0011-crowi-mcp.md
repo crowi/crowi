@@ -120,7 +120,7 @@ MCP client (Claude Desktop / Code)
 │                                              │                                 │
 │   registerTool('crowi_get_page', …)          │ tool handler                    │
 │        └── crowi.honoApp.request(                                              │
-│              'GET /api/v2/pages?path=…',  { headers: { Authorization }} )       │
+│              'GET /api/pages?path=…',  { headers: { Authorization }} )          │
 │                     │  in-process dispatch (no network)                         │
 │                     ▼                                                           │
 │              existing page handler ── requireScope('pages:read') ── models      │
