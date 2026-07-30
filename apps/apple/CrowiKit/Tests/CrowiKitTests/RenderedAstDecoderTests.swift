@@ -462,7 +462,8 @@ final class RenderedAstDecoderTests: XCTestCase {
 
     /// Renders the degrade surface through real SwiftUI (the
     /// `PageRowTitleLabelTests` `ImageRenderer` seam): html, unknown-opaque
-    /// and validation placeholders must all occupy visible space.
+    /// and validation placeholders must all occupy visible space. (`math`
+    /// left this surface in Phase 5 — it typesets natively now.)
     @MainActor
     func testHtmlUnknownAndPlaceholderNodesRenderVisibly() throws {
         let document = RenderedAstDocument(children: [
@@ -473,7 +474,6 @@ final class RenderedAstDecoderTests: XCTestCase {
                 label: RenderedAstEnvelopeDecoder.validationFailedLabel,
                 reservation: .fixed(widthPx: nil, heightPx: 48)
             )),
-            RenderedAstNode(kind: .math(value: "x^2", meta: nil)),
         ])
         let view = RenderedAstView(
             document: document,
@@ -484,8 +484,8 @@ final class RenderedAstDecoderTests: XCTestCase {
             onNavigateToRelativePath: { _ in }
         )
         let size = try renderedSize(view, width: 390)
-        // 4 degraded blocks at ≥48pt each — far taller than one empty row.
-        XCTAssertGreaterThanOrEqual(size.height, 4 * 48, "every degraded node must occupy visible space")
+        // 3 degraded blocks at ≥48pt each — far taller than one empty row.
+        XCTAssertGreaterThanOrEqual(size.height, 3 * 48, "every degraded node must occupy visible space")
     }
 
     /// The core-node happy path renders through real SwiftUI too — the
@@ -546,6 +546,187 @@ final class RenderedAstDecoderTests: XCTestCase {
         )
         let size = try renderedSize(view, width: 390)
         XCTAssertGreaterThan(size.height, 100, "the core-node document must produce real layout")
+    }
+
+    // MARK: - Phase 5 projection mirror (§5 step 1b / §6 hoist), beyond the corpus pins
+
+    /// Walks a STORED bare `Root` (the server walker's input) through the
+    /// local mirror and returns the projected children.
+    private func mirroredChildren(_ children: [[String: Any]], file: StaticString = #filePath, line: UInt = #line) -> [RenderedAstNode] {
+        guard case .document(let document) = RenderedAstEnvelopeDecoder.sanitize(["type": "root", "children": children]) else {
+            XCTFail("expected the stored AST to walk", file: file, line: line)
+            return []
+        }
+        return document.children
+    }
+
+    private func htmlNode(sidecars: [String: Any], value: String = "<div>generated</div>") -> [String: Any] {
+        ["type": "html", "value": value, "data": sidecars]
+    }
+
+    func testCrowiCodeSidecarProjectsToATokenizedCodeNode() {
+        let children = mirroredChildren([
+            htmlNode(sidecars: [
+                "crowiCode": [
+                    "lang": "ts",
+                    "value": "const x = 1;",
+                    "tokens": [[["content": "const x = 1;", "light": ["color": "#0550AE"], "dark": ["color": "#79C0FF"]]]],
+                ]
+            ])
+        ])
+        guard case .code(let value, let lang, _) = children.first?.kind else {
+            return XCTFail("expected a projected code node, got \(String(describing: children.first?.kind))")
+        }
+        XCTAssertEqual(value, "const x = 1;")
+        XCTAssertEqual(lang, "ts")
+        XCTAssertEqual(children.first?.data?.tokens?.first?.first?.content, "const x = 1;")
+    }
+
+    /// Exactly ONE sidecar key projects — two is ambiguous and stays html
+    /// (§5 step 1b's "fail safe towards html").
+    func testTwoSidecarKeysStayHtml() {
+        let children = mirroredChildren([
+            htmlNode(sidecars: [
+                "crowiMath": ["tex": "x", "display": true],
+                "crowiPlaceholder": ["kind": "error-unknown", "label": "x", "reservation": ["variant": "fixed", "heightPx": 48]],
+            ])
+        ])
+        guard case .html = children.first?.kind else {
+            return XCTFail("an ambiguous multi-sidecar html node must stay html")
+        }
+        XCTAssertNil(children.first?.data, "the sidecar keys must not survive into v1 data")
+    }
+
+    /// `display` picks the node type AND constrains the position: display
+    /// math cannot live in phrasing position (and vice versa) — the html
+    /// node stays rather than projecting somewhere illegal.
+    func testDisplayMathInPhrasingPositionStaysHtml() {
+        let children = mirroredChildren([
+            [
+                "type": "paragraph",
+                "children": [htmlNode(sidecars: ["crowiMath": ["tex": "E", "display": true]])],
+            ]
+        ])
+        guard case .html = children.first?.children.first?.kind else {
+            return XCTFail("display math must not project into phrasing position")
+        }
+    }
+
+    /// The §6 hoist chain: a card in a paragraph (through phrasing
+    /// ancestors) hoists to block position, splitting the ancestor chain;
+    /// empty halves are never emitted.
+    func testLinkCardHoistSplitsThroughPhrasingAncestors() {
+        let card = htmlNode(sidecars: ["crowiLinkCard": ["url": "https://example.com/a"]])
+        let children = mirroredChildren([
+            [
+                "type": "paragraph",
+                "children": [
+                    ["type": "emphasis", "children": [
+                        ["type": "text", "value": "before"],
+                        card,
+                        ["type": "text", "value": "after"],
+                    ]]
+                ],
+            ]
+        ])
+        XCTAssertEqual(children.count, 3, "expected [paragraph(em(before)), card, paragraph(em(after))]")
+        guard case .paragraph = children[0].kind, case .emphasis = children[0].children.first?.kind,
+            case .crowiLinkCard = children[1].kind,
+            case .paragraph = children[2].kind
+        else {
+            return XCTFail("the ancestor chain must re-wrap around the hoisted card: \(children.map(\.kind))")
+        }
+    }
+
+    func testMultipleCardsInOneParagraphAllHoist() {
+        let cardA = htmlNode(sidecars: ["crowiLinkCard": ["url": "https://example.com/a"]])
+        let cardB = htmlNode(sidecars: ["crowiLinkCard": ["url": "https://example.com/b"]])
+        let children = mirroredChildren([
+            ["type": "paragraph", "children": [cardA, ["type": "text", "value": "mid"], cardB]]
+        ])
+        XCTAssertEqual(children.count, 3, "expected [cardA, paragraph(mid), cardB] — no empty paragraphs")
+        guard case .crowiLinkCard(let a) = children[0].kind, case .paragraph = children[1].kind,
+            case .crowiLinkCard(let b) = children[2].kind
+        else {
+            return XCTFail("both cards must hoist: \(children.map(\.kind))")
+        }
+        XCTAssertEqual(a.url, "https://example.com/a")
+        XCTAssertEqual(b.url, "https://example.com/b")
+    }
+
+    /// chain=false positions (`heading` / `tableCell`) cannot hoist — the
+    /// card sidecar does NOT project and the html node stays (a visible
+    /// placeholder on this client, the deliberate §6 asymmetry).
+    func testLinkCardInAHeadingStaysHtml() {
+        let card = htmlNode(sidecars: ["crowiLinkCard": ["url": "https://example.com/a"]])
+        let children = mirroredChildren([
+            ["type": "heading", "depth": 2, "children": [card]]
+        ])
+        guard case .html = children.first?.children.first?.kind else {
+            return XCTFail("a card in a heading must stay html (no hoist chain)")
+        }
+    }
+
+    /// The §10 deep validation applies to PROJECTED nodes too: a
+    /// schema-valid diagram sidecar with undecodable base64 degrades to the
+    /// visible validation-failed placeholder (not html, not a crash).
+    func testProjectedDiagramWithBadBase64BecomesAVisiblePlaceholder() {
+        let children = mirroredChildren([
+            htmlNode(sidecars: [
+                "crowiDiagram": [
+                    "kind": "mermaid",
+                    "alt": "broken",
+                    "image": ["mediaType": "image/svg+xml", "base64": "!!not-base64!!", "width": 20, "height": 10],
+                ]
+            ])
+        ])
+        guard case .crowiPlaceholder(let kind, _, _) = children.first?.kind else {
+            return XCTFail("a deep-validation failure must become a visible placeholder")
+        }
+        XCTAssertEqual(kind, .validationFailed)
+    }
+
+    /// The §8 card override applies at projection time too: a non-http(s)
+    /// sidecar image URL drops (image-less card), a non-http(s) card URL
+    /// degrades the whole card.
+    func testProjectedCardUrlsAreHttpOnly() {
+        let badImage = mirroredChildren([
+            htmlNode(sidecars: [
+                "crowiLinkCard": ["url": "https://example.com/a", "image": ["url": "javascript:alert(1)"]]
+            ])
+        ])
+        guard case .crowiLinkCard(let payload) = badImage.first?.kind else {
+            return XCTFail("the card must survive a bad image URL")
+        }
+        XCTAssertNil(payload.imageURL)
+
+        let badUrl = mirroredChildren([
+            htmlNode(sidecars: ["crowiLinkCard": ["url": "mailto:a@example.com"]])
+        ])
+        guard case .crowiPlaceholder(let kind, _, _) = badUrl.first?.kind else {
+            return XCTFail("a non-http(s) card URL must degrade the projected card")
+        }
+        XCTAssertEqual(kind, .validationFailed)
+    }
+
+    /// `data.hProperties` carries over to the projected node (load-bearing
+    /// for preview scroll-sync on display math, §10).
+    func testProjectionCarriesHProperties() {
+        let children = mirroredChildren([
+            [
+                "type": "html",
+                "value": "<span>…katex…</span>",
+                "data": [
+                    "crowiMath": ["tex": "E = mc^2", "display": true],
+                    "hProperties": ["data-source-line": 12],
+                ] as [String: Any],
+            ]
+        ])
+        guard case .math(let value, _) = children.first?.kind else {
+            return XCTFail("expected a projected math node")
+        }
+        XCTAssertEqual(value, "E = mc^2")
+        XCTAssertEqual(children.first?.data?.hProperties["data-source-line"], .number(12))
     }
 
     private struct StubImageFetcher: WorkspaceImageFetching {

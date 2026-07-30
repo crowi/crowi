@@ -126,19 +126,39 @@ final class RenderedAstFallbackTests: XCTestCase {
         }
     }
 
-    /// Revision history stays body-only through Phase 4 (design §16): its
-    /// fetches do NOT declare the header — promoting history to the typed
-    /// path is an explicit Phase 5 revisit.
-    func testRevisionHistoryFetchesDoNotDeclareTheHeader() async throws {
+    /// Phase 5 — revision history is promoted to the typed path (design
+    /// §16's deliberate Phase 4 deferral, resolved): its fetch declares the
+    /// header exactly like the page detail GET, and the shared revision
+    /// decode carries the strict envelope outcome.
+    func testRevisionHistoryFetchDeclaresTheHeaderAndDecodesTheEnvelope() async throws {
+        let recorder = WireRecorder()
+        let client = makeWireRecordedClient(recorder: recorder) { _ in
+            (200, Data("{ \"revision\": { \"_id\": \"r1\", \"body\": \"old\"\(self.envelopeJSON) } }".utf8))
+        }
+        let response = try await GetRevisionResponseLenient.fetch(revisionId: "r1", using: client)
+
+        let headerName = try XCTUnwrap(astVersionHeaderFieldName)
+        XCTAssertEqual(recorder.requests.count, 1)
+        XCTAssertEqual(recorder.requests[0].headerFields[headerName], "1", "the revision detail GET must declare the typed-AST capability")
+        guard case .envelope(let document)? = response.revision.renderedAst else {
+            return XCTFail("the revision response's envelope must decode into the typed path")
+        }
+        XCTAssertEqual(document.children.first?.kind, .heading(depth: 1))
+        // The raw body stays available regardless — it IS the fallback.
+        XCTAssertEqual(response.revision.body, "old")
+    }
+
+    /// A body-only revision response (old server / never-rendered revision)
+    /// keeps the raw-body fallback: nothing about the promotion makes the
+    /// typed path required.
+    func testBodyOnlyRevisionResponseFallsBackToTheRawBody() async throws {
         let recorder = WireRecorder()
         let client = makeWireRecordedClient(recorder: recorder) { _ in
             (200, Data(#"{ "revision": { "_id": "r1", "body": "old" } }"#.utf8))
         }
-        _ = try? await GetRevisionResponseLenient.fetch(revisionId: "r1", using: client)
-
-        let headerName = try XCTUnwrap(astVersionHeaderFieldName)
-        XCTAssertEqual(recorder.requests.count, 1)
-        XCTAssertNil(recorder.requests[0].headerFields[headerName])
+        let response = try await GetRevisionResponseLenient.fetch(revisionId: "r1", using: client)
+        XCTAssertNil(response.revision.renderedAst)
+        XCTAssertEqual(response.revision.body, "old")
     }
 
     private var astVersionHeaderFieldName: HTTPField.Name? {

@@ -45,9 +45,10 @@ final class RenderedAstGoldenCorpusTests: XCTestCase {
     private static let corpusDirectoryURL = repositoryRootURL
         .appendingPathComponent("packages/api/src/renderer/__fixtures__/golden-corpus")
 
-    /// The Phase 4 file set — core nodes. `typed-nodes.json` (projection /
-    /// typed extension rendering) is wired in Phase 5.
-    private static let phase4Files = ["core-blocks", "inline", "code", "image-attrs", "gfm-references"]
+    /// The full corpus file set: the Phase 4 core-node files plus
+    /// `typed-nodes.json` (the Phase 5 sidecar-projection cases the
+    /// decoder's `tryProject` mirror now walks).
+    private static let corpusFiles = ["core-blocks", "inline", "code", "image-attrs", "gfm-references", "typed-nodes"]
 
     private struct CorpusCase {
         let file: String
@@ -88,7 +89,7 @@ final class RenderedAstGoldenCorpusTests: XCTestCase {
     /// the `PageRowTitleLabelTests` count-floor pattern.
     func testCorpusFilesAreLoadableAndSubstantial() throws {
         var total = 0
-        for file in Self.phase4Files {
+        for file in Self.corpusFiles {
             let loaded = try loadFile(file)
             XCTAssertGreaterThanOrEqual(loaded.cases.count, 5, "\(file).json lost cases — check it against the api jest driver")
             XCTAssertTrue(
@@ -97,14 +98,14 @@ final class RenderedAstGoldenCorpusTests: XCTestCase {
             )
             total += loaded.cases.count
         }
-        XCTAssertGreaterThanOrEqual(total, 40, "the Phase 4 corpus shrank unexpectedly")
+        XCTAssertGreaterThanOrEqual(total, 40, "the corpus shrank unexpectedly")
     }
 
     /// Consumer contract 1: every `expectedEnvelope` decodes strictly, with
     /// zero envelope-level failures and zero information loss.
     func testEveryExpectedEnvelopeDecodesAndRoundTrips() throws {
         var asserted = 0
-        for file in Self.phase4Files {
+        for file in Self.corpusFiles {
             for corpusCase in try loadFile(file).cases {
                 guard let envelope = corpusCase.expectedEnvelope else { continue }
                 guard case .envelope(let document) = RenderedAstEnvelopeDecoder.decode(responseValue: envelope) else {
@@ -129,10 +130,20 @@ final class RenderedAstGoldenCorpusTests: XCTestCase {
     /// Consumer contract 2: the local sanitise-walker mirror over the stored
     /// bare `Root` reproduces the server walker's output — including the
     /// degrade cases (`invalid-shape` → `crowiOpaque`, `definition.url`
-    /// scheme violation → `'#'`).
+    /// scheme violation → `'#'`) and, since Phase 5, the sidecar → typed
+    /// node projection (`typed-nodes.json`).
+    ///
+    /// ONE documented normalization: the server re-sanitizes an SVG diagram
+    /// payload (`allowSafeHref: false`) and re-encodes the possibly
+    /// re-serialized bytes; the Swift mirror validates the payload but
+    /// keeps the bytes verbatim (see `RenderedAstEnvelopeDecoder`'s doc
+    /// comment). SVG `crowiDiagram.image.base64` is therefore compared as
+    /// "both sides carry a validated payload", not byte-for-byte — every
+    /// other field (dimensions, mediaType, kind, alt) and every PNG payload
+    /// stays exact.
     func testWalkerMirrorMatchesTheExpectedEnvelope() throws {
         var asserted = 0
-        for file in Self.phase4Files {
+        for file in Self.corpusFiles {
             for corpusCase in try loadFile(file).cases {
                 guard let stored = corpusCase.storedRoot, let envelope = corpusCase.expectedEnvelope else { continue }
                 guard case .document(let mirrored) = RenderedAstEnvelopeDecoder.sanitize(stored) else {
@@ -143,9 +154,9 @@ final class RenderedAstGoldenCorpusTests: XCTestCase {
                     XCTFail("\(file)/\(corpusCase.name): expectedEnvelope did not decode")
                     continue
                 }
-                XCTAssertEqual(
-                    mirrored,
-                    decoded,
+                assertDeepEqual(
+                    CorpusReencoder.normalizeSvgDiagramBytes(CorpusReencoder.encode(document: mirrored)),
+                    CorpusReencoder.normalizeSvgDiagramBytes(CorpusReencoder.encode(document: decoded)),
                     "\(file)/\(corpusCase.name): walking the stored AST diverged from the expected envelope"
                 )
                 asserted += 1
@@ -159,7 +170,7 @@ final class RenderedAstGoldenCorpusTests: XCTestCase {
     /// that opaque-ises valid GFM output over-rejects the contract.
     func testValidStoredAstsWalkWithoutDegrades() throws {
         var asserted = 0
-        for file in Self.phase4Files {
+        for file in Self.corpusFiles {
             for corpusCase in try loadFile(file).cases {
                 guard corpusCase.expectedEnvelope == nil, let stored = corpusCase.storedRoot else { continue }
                 guard case .document(let document) = RenderedAstEnvelopeDecoder.sanitize(stored) else {
@@ -357,6 +368,26 @@ enum CorpusReencoder {
         var out: [String: Any] = ["color": style.color]
         if let bgColor = style.bgColor { out["bgColor"] = bgColor }
         if let fontStyle = style.fontStyle { out["fontStyle"] = fontStyle.map(\.rawValue) }
+        return out
+    }
+
+    /// The walker-mirror comparison's ONE payload normalization (see
+    /// `testWalkerMirrorMatchesTheExpectedEnvelope`): a DECODABLE SVG
+    /// `crowiDiagram.image.base64` collapses to a fixed marker on both
+    /// sides — an undecodable one stays verbatim and fails the comparison.
+    static func normalizeSvgDiagramBytes(_ dict: [String: Any]) -> [String: Any] {
+        var out = dict
+        if out["type"] as? String == "crowiDiagram",
+            var image = out["image"] as? [String: Any],
+            image["mediaType"] as? String == "image/svg+xml",
+            let base64 = image["base64"] as? String,
+            Data(base64Encoded: base64) != nil {
+            image["base64"] = "<validated-svg-bytes>"
+            out["image"] = image
+        }
+        if let children = out["children"] as? [[String: Any]] {
+            out["children"] = children.map { normalizeSvgDiagramBytes($0) }
+        }
         return out
     }
 
