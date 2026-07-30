@@ -85,7 +85,7 @@ const guessMimeFromKey = (key: string): string => {
  * page-attachment upload path stores whatever the client claimed. Echoing that
  * value back as `Content-Type` with `inline` therefore let any user with edit
  * rights execute HTML on the wiki's own origin (the recommended topology
- * rewrites `/api/v2/*` onto the web origin) and read the JWT out of
+ * rewrites `/api/*` onto the web origin) and read the JWT out of
  * localStorage. So delivery pins the type instead of trusting it, and anything
  * off this list degrades to `application/octet-stream` + `attachment`.
  *
@@ -431,7 +431,7 @@ export const registerAttachmentStreamRoutes = (app: OpenAPIHono<CrowiHonoBinding
   });
 
   // --------------------------------------------------------------
-  // GET /files/:id  →  302 /api/v2/attachments/:id
+  // GET /files/:id  →  302 /api/attachments/:id
   // --------------------------------------------------------------
   // feature-migration-files-url-rewrite §3 — runtime safety net for v1
   // `/files/<id>` references the `files-url-to-attachments` body migration
@@ -439,19 +439,19 @@ export const registerAttachmentStreamRoutes = (app: OpenAPIHono<CrowiHonoBinding
   // bare relative `/files/<id>` requests that the web app forwards here via
   // `next.config.ts`'s `/files/:id` rewrite. The legacy `/files/:id` compat
   // redirect was removed with the Express host (RFC-0006 Phase 6 Sub-batch
-  // D); this restores it on Hono. NOTE the path is OUTSIDE the `/api/v2`
+  // D); this restores it on Hono. NOTE the path is OUTSIDE the `/api`
   // prefix (the prefix stripper in `path-rewrite.ts` only touches
-  // `/api/v2/*`), so the registered literal `/files/:id` is reachable at the
+  // `/api/*`), so the registered literal `/files/:id` is reachable at the
   // server root, matching the next.config rewrite target.
   //
   // No auth is installed on this literal (it is OUTSIDE every broad
   // jwtAuth apply — `/pages/*`, `/attachments/*` — so none catches it).
-  // The redirect just emits a 302 to `/api/v2/attachments/:id`, whose
+  // The redirect just emits a 302 to `/api/attachments/:id`, whose
   // own handler enforces JWT + the page grant; authorization is deferred to
   // the redirect target. The 24-hex constraint keeps this disjoint from any
   // other `/files/...` shape (there is none) and rejects malformed ids.
   app.get('/files/:id{[0-9a-fA-F]{24}}', (c) => {
-    return c.redirect(`/api/v2/attachments/${c.req.param('id')}`, 302);
+    return c.redirect(`/api/attachments/${c.req.param('id')}`, 302);
   });
 
   return app;

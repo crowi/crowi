@@ -112,10 +112,10 @@ export default (crowi: Crowi) => {
   );
 
   attachmentSchema.virtual('fileUrl').get(function (this: AttachmentDocument) {
-    // Streamed via the ts-rest router at `packages/api/src/routes/ts-rest/attachment.ts`.
+    // Streamed via the Hono handler at `packages/api/src/hono/handlers/attachment.ts`.
     // The legacy `/files/:id` route now 302-redirects here for back-compat
     // with body URLs persisted before the migration.
-    return `/api/v2/attachments/${this._id}`;
+    return `/api/attachments/${this._id}`;
   });
 
   attachmentSchema.statics.getListByPageId = function (id) {
@@ -170,7 +170,7 @@ export default (crowi: Crowi) => {
   // trusting the caller-supplied `attachment` argument, which may have
   // been read before that publish). Row delete stays FIRST and original
   // delete failure still surfaces as a thrown error afterwards — the
-  // `DELETE /api/v2/attachments/:id` contract (500 on original-delete
+  // `DELETE /api/attachments/:id` contract (500 on original-delete
   // failure) is unchanged.
   attachmentSchema.statics.removeAttachment = async function (attachment) {
     const deleted = (await Attachment.findOneAndDelete({ _id: attachment._id })) as AttachmentDocument | null;
