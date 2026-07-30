@@ -21,7 +21,7 @@ const cleanupPathPrefix = async (prefix: string) => {
   await Promise.all([Comment.deleteMany({ page: { $in: pageIds } }), Page.deleteMany(filter), Revision.deleteMany(filter)]);
 };
 
-describe('Routes /api/v2/comments (Hono)', () => {
+describe('Routes /api/comments (Hono)', () => {
   const PATH_PREFIX = '/hono-comment-test/';
   let Page: ReturnType<typeof crowi.model>;
   let Comment: ReturnType<typeof crowi.model>;
@@ -53,7 +53,7 @@ describe('Routes /api/v2/comments (Hono)', () => {
     const headers = authHeaders(accessToken);
     const payload: { path: string; body: string; grant?: number } = { path, body };
     if (grant !== undefined) payload.grant = grant;
-    const res = await request(app).post('/api/v2/pages').set(headers).send(payload);
+    const res = await request(app).post('/api/pages').set(headers).send(payload);
     expect(res.status).toBe(200);
     return {
       pageId: res.body.page._id as string,
@@ -62,23 +62,23 @@ describe('Routes /api/v2/comments (Hono)', () => {
     };
   };
 
-  describe('GET /api/v2/comments', () => {
+  describe('GET /api/comments', () => {
     it('returns 401 when no Authorization header is provided', async () => {
-      const res = await request(app).get('/api/v2/comments').query({ page_id: '000000000000000000000000' }).set('Content-Type', 'application/json');
+      const res = await request(app).get('/api/comments').query({ page_id: '000000000000000000000000' }).set('Content-Type', 'application/json');
 
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
     });
 
     it('returns 400 when neither page_id nor revision_id is provided', async () => {
-      const res = await request(app).get('/api/v2/comments').set(authHeaders(accessToken));
+      const res = await request(app).get('/api/comments').set(authHeaders(accessToken));
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('INVALID_REQUEST');
     });
 
     it('returns 200 with empty array for a page that has no comments', async () => {
       const { pageId } = await createTestPage(`${PATH_PREFIX}empty`);
-      const res = await request(app).get('/api/v2/comments').query({ page_id: pageId }).set(authHeaders(accessToken));
+      const res = await request(app).get('/api/comments').query({ page_id: pageId }).set(authHeaders(accessToken));
 
       expect(res.status).toBe(200);
       expect(res.body.comments).toEqual([]);
@@ -88,10 +88,10 @@ describe('Routes /api/v2/comments (Hono)', () => {
       const { pageId, revisionId } = await createTestPage(`${PATH_PREFIX}with-comments`);
       const headers = authHeaders(accessToken);
 
-      const addRes = await request(app).post('/api/v2/comments').set(headers).send({ page_id: pageId, revision_id: revisionId, comment: 'first comment' });
+      const addRes = await request(app).post('/api/comments').set(headers).send({ page_id: pageId, revision_id: revisionId, comment: 'first comment' });
       expect(addRes.status).toBe(200);
 
-      const listRes = await request(app).get('/api/v2/comments').query({ page_id: pageId }).set(headers);
+      const listRes = await request(app).get('/api/comments').query({ page_id: pageId }).set(headers);
       expect(listRes.status).toBe(200);
       expect(listRes.body.comments).toHaveLength(1);
       expect(listRes.body.comments[0].comment).toBe('first comment');
@@ -103,23 +103,23 @@ describe('Routes /api/v2/comments (Hono)', () => {
       // Owner-only page (grant 4) with a comment.
       const { pageId, revisionId } = await createTestPage(`${PATH_PREFIX}private-list`, '# private', 4);
       const addRes = await request(app)
-        .post('/api/v2/comments')
+        .post('/api/comments')
         .set(authHeaders(accessToken))
         .send({ page_id: pageId, revision_id: revisionId, comment: 'secret comment' });
       expect(addRes.status).toBe(200);
 
       // The owner can still read the comments.
-      const ownerRes = await request(app).get('/api/v2/comments').query({ page_id: pageId }).set(authHeaders(accessToken));
+      const ownerRes = await request(app).get('/api/comments').query({ page_id: pageId }).set(authHeaders(accessToken));
       expect(ownerRes.status).toBe(200);
       expect(ownerRes.body.comments).toHaveLength(1);
 
       // A non-granted user cannot — 404 hides existence (not 200 with bodies).
-      const otherRes = await request(app).get('/api/v2/comments').query({ page_id: pageId }).set(authHeaders(otherAccessToken));
+      const otherRes = await request(app).get('/api/comments').query({ page_id: pageId }).set(authHeaders(otherAccessToken));
       expect(otherRes.status).toBe(404);
       expect(otherRes.body.error.code).toBe('PAGE_NOT_FOUND');
 
       // Same boundary via revision_id.
-      const otherByRev = await request(app).get('/api/v2/comments').query({ revision_id: revisionId }).set(authHeaders(otherAccessToken));
+      const otherByRev = await request(app).get('/api/comments').query({ revision_id: revisionId }).set(authHeaders(otherAccessToken));
       expect(otherByRev.status).toBe(404);
       expect(otherByRev.body.error.code).toBe('PAGE_NOT_FOUND');
     });
@@ -131,7 +131,7 @@ describe('Routes /api/v2/comments (Hono)', () => {
       // `revision-page-ref-backfill`'s orphan handling.
       const { pageId: pageAId, revisionId: revisionAId, path } = await createTestPage(`${PATH_PREFIX}reuse-path`, '# private A', 4);
       const addRes = await request(app)
-        .post('/api/v2/comments')
+        .post('/api/comments')
         .set(authHeaders(accessToken))
         .send({ page_id: pageAId, revision_id: revisionAId, comment: 'secret comment on A' });
       expect(addRes.status).toBe(200);
@@ -144,8 +144,8 @@ describe('Routes /api/v2/comments (Hono)', () => {
       // through B's public grant.
       await createTestPage(path, '# public B');
 
-      const asOwner = await request(app).get('/api/v2/comments').query({ revision_id: revisionAId }).set(authHeaders(accessToken));
-      const asStranger = await request(app).get('/api/v2/comments').query({ revision_id: revisionAId }).set(authHeaders(otherAccessToken));
+      const asOwner = await request(app).get('/api/comments').query({ revision_id: revisionAId }).set(authHeaders(accessToken));
+      const asStranger = await request(app).get('/api/comments').query({ revision_id: revisionAId }).set(authHeaders(otherAccessToken));
 
       // Both fail closed — page A is gone, so `revision.page` resolves to
       // nothing. Neither caller can read A's comment through B's grant.
@@ -156,10 +156,10 @@ describe('Routes /api/v2/comments (Hono)', () => {
     });
   });
 
-  describe('POST /api/v2/comments', () => {
+  describe('POST /api/comments', () => {
     it('returns 401 when no Authorization header is provided', async () => {
       const res = await request(app)
-        .post('/api/v2/comments')
+        .post('/api/comments')
         .send({ page_id: '000000000000000000000000', revision_id: '000000000000000000000000', comment: 'x' })
         .set('Content-Type', 'application/json');
 
@@ -171,7 +171,7 @@ describe('Routes /api/v2/comments (Hono)', () => {
       const { pageId, revisionId } = await createTestPage(`${PATH_PREFIX}post-basic`);
       const headers = authHeaders(accessToken);
 
-      const res = await request(app).post('/api/v2/comments').set(headers).send({ page_id: pageId, revision_id: revisionId, comment: 'hello world' });
+      const res = await request(app).post('/api/comments').set(headers).send({ page_id: pageId, revision_id: revisionId, comment: 'hello world' });
 
       expect(res.status).toBe(200);
       expect(res.body.comment).toBeDefined();
@@ -194,7 +194,7 @@ describe('Routes /api/v2/comments (Hono)', () => {
       const { pageId, revisionId } = await createTestPage(`${PATH_PREFIX}private`, '# private', 4);
 
       const res = await request(app)
-        .post('/api/v2/comments')
+        .post('/api/comments')
         .set(authHeaders(otherAccessToken))
         .send({ page_id: pageId, revision_id: revisionId, comment: 'sneaky' });
 
@@ -205,7 +205,7 @@ describe('Routes /api/v2/comments (Hono)', () => {
 
     it('returns 400 INVALID_REQUEST when page_id is malformed', async () => {
       const res = await request(app)
-        .post('/api/v2/comments')
+        .post('/api/comments')
         .set(authHeaders(accessToken))
         .send({ page_id: 'not-an-objectid', revision_id: '000000000000000000000000', comment: 'x' });
 
@@ -216,12 +216,12 @@ describe('Routes /api/v2/comments (Hono)', () => {
 
   // feature-watch-autosubscribe — commenting auto-creates a WATCH watcher
   // row for the commenter, surfaced synchronously via `newlyWatching`.
-  describe('POST /api/v2/comments — auto-watch', () => {
+  describe('POST /api/comments — auto-watch', () => {
     it('sets newlyWatching=true and creates a WATCH row for a first-time commenter', async () => {
       const { pageId, revisionId } = await createTestPage(`${PATH_PREFIX}autowatch-new`);
 
       const res = await request(app)
-        .post('/api/v2/comments')
+        .post('/api/comments')
         .set(authHeaders(otherAccessToken))
         .send({ page_id: pageId, revision_id: revisionId, comment: 'first comment from other' });
 
@@ -237,10 +237,10 @@ describe('Routes /api/v2/comments (Hono)', () => {
       const { pageId, revisionId } = await createTestPage(`${PATH_PREFIX}autowatch-second`);
       const headers = authHeaders(otherAccessToken);
 
-      const first = await request(app).post('/api/v2/comments').set(headers).send({ page_id: pageId, revision_id: revisionId, comment: 'one' });
+      const first = await request(app).post('/api/comments').set(headers).send({ page_id: pageId, revision_id: revisionId, comment: 'one' });
       expect(first.body.newlyWatching).toBe(true);
 
-      const second = await request(app).post('/api/v2/comments').set(headers).send({ page_id: pageId, revision_id: revisionId, comment: 'two' });
+      const second = await request(app).post('/api/comments').set(headers).send({ page_id: pageId, revision_id: revisionId, comment: 'two' });
       expect(second.status).toBe(200);
       expect(second.body.newlyWatching).toBe(false);
 
@@ -253,7 +253,7 @@ describe('Routes /api/v2/comments (Hono)', () => {
       await Watcher.watchByPageId(otherUserId, new Types.ObjectId(pageId), Watcher.STATUS_IGNORE);
 
       const res = await request(app)
-        .post('/api/v2/comments')
+        .post('/api/comments')
         .set(authHeaders(otherAccessToken))
         .send({ page_id: pageId, revision_id: revisionId, comment: 'commenting while ignoring' });
 
@@ -265,10 +265,10 @@ describe('Routes /api/v2/comments (Hono)', () => {
     });
   });
 
-  describe('DELETE /api/v2/comments', () => {
+  describe('DELETE /api/comments', () => {
     it('returns 401 when no Authorization header is provided', async () => {
       const res = await request(app)
-        .delete('/api/v2/comments')
+        .delete('/api/comments')
         .send({ comment_id: '000000000000000000000000', page_id: '000000000000000000000000' })
         .set('Content-Type', 'application/json');
 
@@ -280,10 +280,10 @@ describe('Routes /api/v2/comments (Hono)', () => {
       const { pageId, revisionId } = await createTestPage(`${PATH_PREFIX}delete-basic`);
       const headers = authHeaders(accessToken);
 
-      const addRes = await request(app).post('/api/v2/comments').set(headers).send({ page_id: pageId, revision_id: revisionId, comment: 'will be removed' });
+      const addRes = await request(app).post('/api/comments').set(headers).send({ page_id: pageId, revision_id: revisionId, comment: 'will be removed' });
       const commentId = addRes.body.comment._id as string;
 
-      const delRes = await request(app).delete('/api/v2/comments').set(headers).send({ comment_id: commentId, page_id: pageId });
+      const delRes = await request(app).delete('/api/comments').set(headers).send({ comment_id: commentId, page_id: pageId });
 
       expect(delRes.status).toBe(200);
       expect(delRes.body.ok).toBe(true);
@@ -294,10 +294,10 @@ describe('Routes /api/v2/comments (Hono)', () => {
       const { pageId, revisionId } = await createTestPage(`${PATH_PREFIX}delete-grant`, '# private', 4);
       const headers = authHeaders(accessToken);
 
-      const addRes = await request(app).post('/api/v2/comments').set(headers).send({ page_id: pageId, revision_id: revisionId, comment: 'mine' });
+      const addRes = await request(app).post('/api/comments').set(headers).send({ page_id: pageId, revision_id: revisionId, comment: 'mine' });
       const commentId = addRes.body.comment._id as string;
 
-      const delRes = await request(app).delete('/api/v2/comments').set(authHeaders(otherAccessToken)).send({ comment_id: commentId, page_id: pageId });
+      const delRes = await request(app).delete('/api/comments').set(authHeaders(otherAccessToken)).send({ comment_id: commentId, page_id: pageId });
 
       expect(delRes.status).toBe(403);
       expect(delRes.body.error.code).toBe('PAGE_NOT_GRANTED');
@@ -308,7 +308,7 @@ describe('Routes /api/v2/comments (Hono)', () => {
       const { pageId } = await createTestPage(`${PATH_PREFIX}delete-missing`);
 
       const res = await request(app)
-        .delete('/api/v2/comments')
+        .delete('/api/comments')
         .set(authHeaders(accessToken))
         .send({ comment_id: new Types.ObjectId().toString(), page_id: pageId });
 
@@ -317,7 +317,7 @@ describe('Routes /api/v2/comments (Hono)', () => {
     });
 
     it('returns 400 INVALID_REQUEST when ids are malformed', async () => {
-      const res = await request(app).delete('/api/v2/comments').set(authHeaders(accessToken)).send({ comment_id: 'bad', page_id: 'also-bad' });
+      const res = await request(app).delete('/api/comments').set(authHeaders(accessToken)).send({ comment_id: 'bad', page_id: 'also-bad' });
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('INVALID_REQUEST');
@@ -328,7 +328,7 @@ describe('Routes /api/v2/comments (Hono)', () => {
       const pageB = await createTestPage(`${PATH_PREFIX}del-b`);
       // The comment lives on page B.
       const addRes = await request(app)
-        .post('/api/v2/comments')
+        .post('/api/comments')
         .set(authHeaders(accessToken))
         .send({ page_id: pageB.pageId, revision_id: pageB.revisionId, comment: 'lives on B' });
       expect(addRes.status).toBe(200);
@@ -336,7 +336,7 @@ describe('Routes /api/v2/comments (Hono)', () => {
 
       // Deleting via page_id = A (the caller is granted on A) must not reach a
       // comment that belongs to B — even though grant on A passes.
-      const delRes = await request(app).delete('/api/v2/comments').set(authHeaders(accessToken)).send({ comment_id: commentId, page_id: pageA.pageId });
+      const delRes = await request(app).delete('/api/comments').set(authHeaders(accessToken)).send({ comment_id: commentId, page_id: pageA.pageId });
       expect(delRes.status).toBe(404);
       expect(delRes.body.error.code).toBe('COMMENT_NOT_FOUND');
       // The comment still exists.

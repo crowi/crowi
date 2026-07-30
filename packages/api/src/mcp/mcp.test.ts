@@ -26,7 +26,7 @@ import request from 'supertest';
 const callMcp = async (token: string | null, payload: unknown) => {
   // No `Host` pin needed: DNS-rebinding protection is off (the endpoint is
   // Bearer-gated), so supertest's own Host header is accepted.
-  let req = request(app).post('/api/v2/mcp').set('Content-Type', 'application/json').set('Accept', 'application/json, text/event-stream');
+  let req = request(app).post('/api/mcp').set('Content-Type', 'application/json').set('Accept', 'application/json, text/event-stream');
   if (token) req = req.set('Authorization', `Bearer ${token}`);
   const res = await req.send(payload as object);
   return res;

@@ -20,7 +20,7 @@ const seedCacheEntry = async (overrides: Partial<{ pluginName: string; embedKey:
   });
 };
 
-describe('Routes /api/v2/admin/plugins (Hono) — Phase 4 cache clear endpoints', () => {
+describe('Routes /api/admin/plugins (Hono) — Phase 4 cache clear endpoints', () => {
   let adminToken: string;
   let userToken: string;
 
@@ -47,15 +47,15 @@ describe('Routes /api/v2/admin/plugins (Hono) — Phase 4 cache clear endpoints'
     await PluginRenderCache.deleteMany({}).exec();
   });
 
-  describe('POST /api/v2/admin/plugins/render-cache/clear-all', () => {
+  describe('POST /api/admin/plugins/render-cache/clear-all', () => {
     it('returns 401 without auth', async () => {
-      const res = await request(app).post('/api/v2/admin/plugins/render-cache/clear-all').send({});
+      const res = await request(app).post('/api/admin/plugins/render-cache/clear-all').send({});
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
     });
 
     it('returns 403 for a non-admin user', async () => {
-      const res = await request(app).post('/api/v2/admin/plugins/render-cache/clear-all').set(authHeaders(userToken)).send({});
+      const res = await request(app).post('/api/admin/plugins/render-cache/clear-all').set(authHeaders(userToken)).send({});
       expect(res.status).toBe(403);
       expect(res.body.error.code).toBe('ADMIN_REQUIRED');
     });
@@ -63,7 +63,7 @@ describe('Routes /api/v2/admin/plugins (Hono) — Phase 4 cache clear endpoints'
     it('clears every entry and reports the count', async () => {
       await seedCacheEntry({ pluginName: '@crowi/plugin-a', embedKey: 'k1' });
       await seedCacheEntry({ pluginName: '@crowi/plugin-b', embedKey: 'k2' });
-      const res = await request(app).post('/api/v2/admin/plugins/render-cache/clear-all').set(authHeaders(adminToken)).send({});
+      const res = await request(app).post('/api/admin/plugins/render-cache/clear-all').set(authHeaders(adminToken)).send({});
       expect(res.status).toBe(200);
       expect(res.body.ok).toBe(true);
       expect(res.body.removedCount).toBe(2);
@@ -75,26 +75,26 @@ describe('Routes /api/v2/admin/plugins (Hono) — Phase 4 cache clear endpoints'
     });
 
     it('reports 0 when nothing was cached', async () => {
-      const res = await request(app).post('/api/v2/admin/plugins/render-cache/clear-all').set(authHeaders(adminToken)).send({});
+      const res = await request(app).post('/api/admin/plugins/render-cache/clear-all').set(authHeaders(adminToken)).send({});
       expect(res.status).toBe(200);
       expect(res.body.removedCount).toBe(0);
     });
   });
 
-  describe('POST /api/v2/admin/plugins/render-cache/clear-plugin', () => {
+  describe('POST /api/admin/plugins/render-cache/clear-plugin', () => {
     it('returns 401 without auth', async () => {
-      const res = await request(app).post('/api/v2/admin/plugins/render-cache/clear-plugin?name=foo').send({});
+      const res = await request(app).post('/api/admin/plugins/render-cache/clear-plugin?name=foo').send({});
       expect(res.status).toBe(401);
     });
 
     it('returns 403 for a non-admin user', async () => {
-      const res = await request(app).post('/api/v2/admin/plugins/render-cache/clear-plugin?name=foo').set(authHeaders(userToken)).send({});
+      const res = await request(app).post('/api/admin/plugins/render-cache/clear-plugin?name=foo').set(authHeaders(userToken)).send({});
       expect(res.status).toBe(403);
     });
 
     it('returns 404 when the plugin is not loaded', async () => {
       const res = await request(app)
-        .post('/api/v2/admin/plugins/render-cache/clear-plugin?name=@crowi/plugin-not-installed')
+        .post('/api/admin/plugins/render-cache/clear-plugin?name=@crowi/plugin-not-installed')
         .set(authHeaders(adminToken))
         .send({});
       expect(res.status).toBe(404);
@@ -117,7 +117,7 @@ describe('Routes /api/v2/admin/plugins (Hono) — Phase 4 cache clear endpoints'
       await seedCacheEntry({ pluginName: '@crowi/plugin-other', embedKey: 'b' });
 
       const res = await request(app)
-        .post(`/api/v2/admin/plugins/render-cache/clear-plugin?name=${encodeURIComponent(targetName)}`)
+        .post(`/api/admin/plugins/render-cache/clear-plugin?name=${encodeURIComponent(targetName)}`)
         .set(authHeaders(adminToken))
         .send({});
 
@@ -132,7 +132,7 @@ describe('Routes /api/v2/admin/plugins (Hono) — Phase 4 cache clear endpoints'
   });
 });
 
-describe('GET /api/v2/admin/plugins — status/error fields (feature-plugin-registration-isolation AC-7)', () => {
+describe('GET /api/admin/plugins — status/error fields (feature-plugin-registration-isolation AC-7)', () => {
   let adminToken: string;
   let userToken: string;
 
@@ -159,13 +159,13 @@ describe('GET /api/v2/admin/plugins — status/error fields (feature-plugin-regi
   });
 
   it('returns 401 without auth', async () => {
-    const res = await request(app).get('/api/v2/admin/plugins');
+    const res = await request(app).get('/api/admin/plugins');
     expect(res.status).toBe(401);
     expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
   });
 
   it('returns 403 for a non-admin user', async () => {
-    const res = await request(app).get('/api/v2/admin/plugins').set(authHeaders(userToken));
+    const res = await request(app).get('/api/admin/plugins').set(authHeaders(userToken));
     expect(res.status).toBe(403);
     expect(res.body.error.code).toBe('ADMIN_REQUIRED');
   });
@@ -180,7 +180,7 @@ describe('GET /api/v2/admin/plugins — status/error fields (feature-plugin-regi
     // a synthetic case without touching the shared crowi instance.
     jest.spyOn(manager, 'getFailedPlugins').mockReturnValue([{ plugin: failedPlugin, error: 'activation exploded' }]);
 
-    const res = await request(app).get('/api/v2/admin/plugins').set(authHeaders(adminToken));
+    const res = await request(app).get('/api/admin/plugins').set(authHeaders(adminToken));
 
     expect(res.status).toBe(200);
     const failedEntry = (res.body.plugins as Array<{ name: string; status: string; error?: string }>).find((p) => p.name === '@crowi/plugin-boom');
@@ -197,7 +197,7 @@ describe('GET /api/v2/admin/plugins — status/error fields (feature-plugin-regi
   });
 
   it("surfaces a primary plugin's declared modelAccess allow-list (feature-plugin-capability-scoping)", async () => {
-    const res = await request(app).get('/api/v2/admin/plugins').set(authHeaders(adminToken));
+    const res = await request(app).get('/api/admin/plugins').set(authHeaders(adminToken));
 
     expect(res.status).toBe(200);
     const plugins = res.body.plugins as Array<{ name: string; modelAccess?: string[] }>;

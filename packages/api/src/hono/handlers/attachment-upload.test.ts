@@ -5,7 +5,7 @@ import * as imageDisplayDerivative from 'src/util/image-display-derivative';
 import request from 'supertest';
 
 /**
- * RFC-0004 Phase 6 — `POST /api/v2/attachments/upload`.
+ * RFC-0004 Phase 6 — `POST /api/attachments/upload`.
  *
  * Covers the editor paste / drag-and-drop upload endpoint: the success
  * (200) shape, the size / MIME / permission 4xx errors with the RFC's
@@ -13,7 +13,7 @@ import request from 'supertest';
  * per-user rate limit (429 + `Retry-After`).
  */
 
-describe('Routes POST /api/v2/attachments/upload (Hono editor upload)', () => {
+describe('Routes POST /api/attachments/upload (Hono editor upload)', () => {
   const PATH_PREFIX = '/hono-attachment-upload-test/';
   let ownerToken: string;
   let otherToken: string;
@@ -39,7 +39,7 @@ describe('Routes POST /api/v2/attachments/upload (Hono editor upload)', () => {
 
   it('returns 401 without auth', async () => {
     const res = await request(app)
-      .post('/api/v2/attachments/upload')
+      .post('/api/attachments/upload')
       .field('pageId', '000000000000000000000000')
       .field('intent', 'paste')
       .attach('file', pngBuffer, { filename: 'pasted-1.png', contentType: 'image/png' });
@@ -49,7 +49,7 @@ describe('Routes POST /api/v2/attachments/upload (Hono editor upload)', () => {
   it('uploads a pasted image and returns { url, filename, mimeType, sizeBytes }', async () => {
     const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}ok`, '# upload target');
     const res = await request(app)
-      .post('/api/v2/attachments/upload')
+      .post('/api/attachments/upload')
       .set(authHeaders(ownerToken))
       .field('pageId', page._id)
       .field('intent', 'paste')
@@ -71,7 +71,7 @@ describe('Routes POST /api/v2/attachments/upload (Hono editor upload)', () => {
   it('accepts the dnd intent as well', async () => {
     const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}dnd`, '# upload target');
     const res = await request(app)
-      .post('/api/v2/attachments/upload')
+      .post('/api/attachments/upload')
       .set(authHeaders(ownerToken))
       .field('pageId', page._id)
       .field('intent', 'dnd')
@@ -86,7 +86,7 @@ describe('Routes POST /api/v2/attachments/upload (Hono editor upload)', () => {
 
       const spy = jest.spyOn(imageDisplayDerivative, 'generateDisplayDerivativeForUpload');
       const res = await request(app)
-        .post('/api/v2/attachments/upload')
+        .post('/api/attachments/upload')
         .set(authHeaders(ownerToken))
         .field('pageId', page._id)
         .field('intent', 'dnd')
@@ -109,7 +109,7 @@ describe('Routes POST /api/v2/attachments/upload (Hono editor upload)', () => {
       const garbage = Buffer.from('this is not a real png, just garbage bytes for the upload test');
 
       const res = await request(app)
-        .post('/api/v2/attachments/upload')
+        .post('/api/attachments/upload')
         .set(authHeaders(ownerToken))
         .field('pageId', page._id)
         .field('intent', 'paste')
@@ -130,7 +130,7 @@ describe('Routes POST /api/v2/attachments/upload (Hono editor upload)', () => {
     it('accepts a PDF document for the dnd intent', async () => {
       const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}dnd-pdf`, '# upload target');
       const res = await request(app)
-        .post('/api/v2/attachments/upload')
+        .post('/api/attachments/upload')
         .set(authHeaders(ownerToken))
         .field('pageId', page._id)
         .field('intent', 'dnd')
@@ -142,7 +142,7 @@ describe('Routes POST /api/v2/attachments/upload (Hono editor upload)', () => {
     it('accepts a zip archive for the dnd intent', async () => {
       const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}dnd-zip`, '# upload target');
       const res = await request(app)
-        .post('/api/v2/attachments/upload')
+        .post('/api/attachments/upload')
         .set(authHeaders(ownerToken))
         .field('pageId', page._id)
         .field('intent', 'dnd')
@@ -153,7 +153,7 @@ describe('Routes POST /api/v2/attachments/upload (Hono editor upload)', () => {
     it('rejects a PDF for the paste intent — paste is images only', async () => {
       const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}paste-pdf`, '# upload target');
       const res = await request(app)
-        .post('/api/v2/attachments/upload')
+        .post('/api/attachments/upload')
         .set(authHeaders(ownerToken))
         .field('pageId', page._id)
         .field('intent', 'paste')
@@ -169,7 +169,7 @@ describe('Routes POST /api/v2/attachments/upload (Hono editor upload)', () => {
       // paste cap.
       const overPaste = Buffer.alloc(10 * 1024 * 1024 + 1, 0);
       const res = await request(app)
-        .post('/api/v2/attachments/upload')
+        .post('/api/attachments/upload')
         .set(authHeaders(ownerToken))
         .field('pageId', page._id)
         .field('intent', 'paste')
@@ -183,7 +183,7 @@ describe('Routes POST /api/v2/attachments/upload (Hono editor upload)', () => {
       const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}dnd-mid`, '# upload target');
       const overPaste = Buffer.alloc(10 * 1024 * 1024 + 1, 0);
       const res = await request(app)
-        .post('/api/v2/attachments/upload')
+        .post('/api/attachments/upload')
         .set(authHeaders(ownerToken))
         .field('pageId', page._id)
         .field('intent', 'dnd')
@@ -196,7 +196,7 @@ describe('Routes POST /api/v2/attachments/upload (Hono editor upload)', () => {
       // 50 MB + 1 byte — multer rejects during the multipart parse.
       const oversize = Buffer.alloc(50 * 1024 * 1024 + 1, 0);
       const res = await request(app)
-        .post('/api/v2/attachments/upload')
+        .post('/api/attachments/upload')
         .set(authHeaders(ownerToken))
         .field('pageId', page._id)
         .field('intent', 'dnd')
@@ -208,7 +208,7 @@ describe('Routes POST /api/v2/attachments/upload (Hono editor upload)', () => {
 
   it('returns 400 when the pageId is missing or malformed', async () => {
     const res = await request(app)
-      .post('/api/v2/attachments/upload')
+      .post('/api/attachments/upload')
       .set(authHeaders(ownerToken))
       .field('pageId', 'not-an-objectid')
       .field('intent', 'paste')
@@ -220,7 +220,7 @@ describe('Routes POST /api/v2/attachments/upload (Hono editor upload)', () => {
   it('returns 400 when intent is not paste/dnd', async () => {
     const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}badintent`, '# upload target');
     const res = await request(app)
-      .post('/api/v2/attachments/upload')
+      .post('/api/attachments/upload')
       .set(authHeaders(ownerToken))
       .field('pageId', page._id)
       .field('intent', 'bogus')
@@ -232,7 +232,7 @@ describe('Routes POST /api/v2/attachments/upload (Hono editor upload)', () => {
   it('returns 415 for a disallowed MIME type', async () => {
     const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}badtype`, '# upload target');
     const res = await request(app)
-      .post('/api/v2/attachments/upload')
+      .post('/api/attachments/upload')
       .set(authHeaders(ownerToken))
       .field('pageId', page._id)
       .field('intent', 'paste')
@@ -247,7 +247,7 @@ describe('Routes POST /api/v2/attachments/upload (Hono editor upload)', () => {
     // 10 MB + 1 byte of zeros; multer rejects during the multipart parse.
     const oversize = Buffer.alloc(10 * 1024 * 1024 + 1, 0);
     const res = await request(app)
-      .post('/api/v2/attachments/upload')
+      .post('/api/attachments/upload')
       .set(authHeaders(ownerToken))
       .field('pageId', page._id)
       .field('intent', 'paste')
@@ -261,7 +261,7 @@ describe('Routes POST /api/v2/attachments/upload (Hono editor upload)', () => {
     // Owner-granted page: the owner can attach, `other` cannot even see it.
     const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}private`, '# upload target', 4 /* GRANT_OWNER */);
     const res = await request(app)
-      .post('/api/v2/attachments/upload')
+      .post('/api/attachments/upload')
       .set(authHeaders(otherToken))
       .field('pageId', page._id)
       .field('intent', 'paste')
@@ -283,7 +283,7 @@ describe('Routes POST /api/v2/attachments/upload (Hono editor upload)', () => {
       // 21 hits exceeds the 20-req window.
       for (let i = 0; i < 21; i += 1) {
         const res = await request(app)
-          .post('/api/v2/attachments/upload')
+          .post('/api/attachments/upload')
           .set(authHeaders(accessToken))
           .field('pageId', page._id)
           .field('intent', 'paste')

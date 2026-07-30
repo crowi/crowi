@@ -28,7 +28,7 @@ const cleanupPathPrefix = async (prefix: string) => {
 const waitForBacklinkCount = async (pageId: string, expected: number, accessToken: string, maxTicks = 50) => {
   let last;
   for (let i = 0; i < maxTicks; i += 1) {
-    const res = await request(app).get('/api/v2/backlinks').set(authHeaders(accessToken)).query({ page_id: pageId, limit: 100 });
+    const res = await request(app).get('/api/backlinks').set(authHeaders(accessToken)).query({ page_id: pageId, limit: 100 });
     last = res;
     if (res.status === 200 && res.body.backlinks?.length === expected) return res;
     await new Promise((resolve) => setImmediate(resolve));
@@ -52,7 +52,7 @@ const waitForRawBacklinkCount = async (pageId: string, expected: number, maxTick
   }
 };
 
-describe('Routes /api/v2/backlinks (Hono)', () => {
+describe('Routes /api/backlinks (Hono)', () => {
   const PATH_PREFIX = '/hono-backlink-test/';
   let accessToken: string;
   let userId: string;
@@ -69,21 +69,21 @@ describe('Routes /api/v2/backlinks (Hono)', () => {
 
   afterEach(() => cleanupPathPrefix(PATH_PREFIX));
 
-  describe('GET /api/v2/backlinks', () => {
+  describe('GET /api/backlinks', () => {
     it('returns 401 without auth', async () => {
-      const res = await request(app).get('/api/v2/backlinks').query({ page_id: '000000000000000000000000' });
+      const res = await request(app).get('/api/backlinks').query({ page_id: '000000000000000000000000' });
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
     });
 
     it('returns 400 when page_id is not a valid ObjectId', async () => {
-      const res = await request(app).get('/api/v2/backlinks').set(authHeaders(accessToken)).query({ page_id: 'not-an-objectid' });
+      const res = await request(app).get('/api/backlinks').set(authHeaders(accessToken)).query({ page_id: 'not-an-objectid' });
       expect(res.status).toBe(400);
     });
 
     it('returns 404 for a non-existent page_id (SEC-BACKLINK-LEAK: target page must be granted to the caller)', async () => {
       const ghostId = new Types.ObjectId().toHexString();
-      const res = await request(app).get('/api/v2/backlinks').set(authHeaders(accessToken)).query({ page_id: ghostId });
+      const res = await request(app).get('/api/backlinks').set(authHeaders(accessToken)).query({ page_id: ghostId });
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
     });
@@ -120,7 +120,7 @@ describe('Routes /api/v2/backlinks (Hono)', () => {
       ]);
 
       await waitForBacklinkCount(target._id, 3, accessToken);
-      const res = await request(app).get('/api/v2/backlinks').set(authHeaders(accessToken)).query({ page_id: target._id, limit: 3 });
+      const res = await request(app).get('/api/backlinks').set(authHeaders(accessToken)).query({ page_id: target._id, limit: 3 });
 
       expect(res.status).toBe(200);
       expect(res.body.backlinks).toHaveLength(3);
@@ -137,7 +137,7 @@ describe('Routes /api/v2/backlinks (Hono)', () => {
       ]);
 
       await waitForBacklinkCount(target._id, 4, accessToken);
-      const res = await request(app).get('/api/v2/backlinks').set(authHeaders(accessToken)).query({ page_id: target._id, limit: 2 });
+      const res = await request(app).get('/api/backlinks').set(authHeaders(accessToken)).query({ page_id: target._id, limit: 2 });
 
       expect(res.status).toBe(200);
       expect(res.body.backlinks).toHaveLength(2);
@@ -149,7 +149,7 @@ describe('Routes /api/v2/backlinks (Hono)', () => {
    * SEC-BACKLINK-LEAK — grant enforcement on both the target `page_id`
    * and each `fromPage`. See `.feature-state/specs/feature-backlink-grant-enforcement.md`.
    */
-  describe('GET /api/v2/backlinks — grant enforcement (SEC-BACKLINK-LEAK)', () => {
+  describe('GET /api/backlinks — grant enforcement (SEC-BACKLINK-LEAK)', () => {
     let otherToken: string;
     let otherId: string;
 
@@ -166,7 +166,7 @@ describe('Routes /api/v2/backlinks (Hono)', () => {
     it('returns 404 (not 403) when the target page_id is not granted to the caller', async () => {
       const target = await createPageViaApi(otherToken, `${PATH_PREFIX}target-private`, '# secret', 4 /* GRANT_OWNER, granted to `other` only */);
 
-      const res = await request(app).get('/api/v2/backlinks').set(authHeaders(accessToken)).query({ page_id: target._id });
+      const res = await request(app).get('/api/backlinks').set(authHeaders(accessToken)).query({ page_id: target._id });
 
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
@@ -182,7 +182,7 @@ describe('Routes /api/v2/backlinks (Hono)', () => {
       // Wait for both raw backlink rows to land (not the API-visible count,
       // which is deliberately 1 lower once grant filtering applies).
       await waitForRawBacklinkCount(target._id, 2);
-      const res = await request(app).get('/api/v2/backlinks').set(authHeaders(accessToken)).query({ page_id: target._id, limit: 100 });
+      const res = await request(app).get('/api/backlinks').set(authHeaders(accessToken)).query({ page_id: target._id, limit: 100 });
 
       expect(res.status).toBe(200);
       const fromPageIds = (res.body.backlinks as Array<{ fromPage: { _id: string } }>).map((b) => b.fromPage._id);
@@ -193,7 +193,7 @@ describe('Routes /api/v2/backlinks (Hono)', () => {
       // Sanity check: `other` — who IS granted (creator + grantedUsers) —
       // still sees the same backlink, so this is a grant filter and not an
       // accidental blanket exclusion.
-      const otherRes = await request(app).get('/api/v2/backlinks').set(authHeaders(otherToken)).query({ page_id: target._id, limit: 100 });
+      const otherRes = await request(app).get('/api/backlinks').set(authHeaders(otherToken)).query({ page_id: target._id, limit: 100 });
       const otherFromPageIds = (otherRes.body.backlinks as Array<{ fromPage: { _id: string } }>).map((b) => b.fromPage._id);
       expect(otherFromPageIds).toContain(hiddenSource._id);
     });
@@ -214,7 +214,7 @@ describe('Routes /api/v2/backlinks (Hono)', () => {
         { $set: { status: 'draft', creator: new Types.ObjectId(otherId), grant: 4, grantedUsers: [new Types.ObjectId(otherId)] } },
       );
 
-      const res = await request(app).get('/api/v2/backlinks').set(authHeaders(accessToken)).query({ page_id: target._id, limit: 100 });
+      const res = await request(app).get('/api/backlinks').set(authHeaders(accessToken)).query({ page_id: target._id, limit: 100 });
 
       expect(res.status).toBe(200);
       expect(res.body.backlinks).toEqual([]);
@@ -222,7 +222,7 @@ describe('Routes /api/v2/backlinks (Hono)', () => {
 
       // The draft's author still sees it (draft filter passes for the
       // author) and is also grant-holder, so the backlink surfaces.
-      const otherRes = await request(app).get('/api/v2/backlinks').set(authHeaders(otherToken)).query({ page_id: target._id, limit: 100 });
+      const otherRes = await request(app).get('/api/backlinks').set(authHeaders(otherToken)).query({ page_id: target._id, limit: 100 });
       const otherFromPageIds = (otherRes.body.backlinks as Array<{ fromPage: { _id: string } }>).map((b) => b.fromPage._id);
       expect(otherFromPageIds).toContain(source._id);
     });

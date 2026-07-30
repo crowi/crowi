@@ -36,7 +36,7 @@ const seedActiveUser = async (info: { name: string; username: string; email: str
   });
 };
 
-describe('Routes /api/v2/auth (Hono)', () => {
+describe('Routes /api/auth (Hono)', () => {
   const Config = () => crowi.model('Config');
   const User = () => crowi.model('User');
   let configSnapshot: ConfigRow[];
@@ -70,7 +70,7 @@ describe('Routes /api/v2/auth (Hono)', () => {
     });
 
     it('returns access + refresh tokens on valid credentials', async () => {
-      const res = await request(app).post('/api/v2/auth/login').send({ email: LOGIN_EMAIL, password: 'Password!1' });
+      const res = await request(app).post('/api/auth/login').send({ email: LOGIN_EMAIL, password: 'Password!1' });
 
       expect(res.status).toBe(200);
       expect(res.body).toMatchObject({
@@ -86,19 +86,19 @@ describe('Routes /api/v2/auth (Hono)', () => {
     });
 
     it('returns 401 INVALID_CREDENTIALS on wrong password', async () => {
-      const res = await request(app).post('/api/v2/auth/login').send({ email: LOGIN_EMAIL, password: 'wrong-password!' });
+      const res = await request(app).post('/api/auth/login').send({ email: LOGIN_EMAIL, password: 'wrong-password!' });
       expect(res.status).toBe(401);
       expect(res.body).toEqual({ error: { code: 'INVALID_CREDENTIALS', message: 'Invalid email or password' } });
     });
 
     it('returns 401 INVALID_CREDENTIALS on unknown email', async () => {
-      const res = await request(app).post('/api/v2/auth/login').send({ email: 'nobody@example.com', password: 'Password!1' });
+      const res = await request(app).post('/api/auth/login').send({ email: 'nobody@example.com', password: 'Password!1' });
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe('INVALID_CREDENTIALS');
     });
 
     it('returns 400 VALIDATION_ERROR on malformed body (defaultHook envelope)', async () => {
-      const res = await request(app).post('/api/v2/auth/login').send({ email: 'not-an-email', password: 'x' });
+      const res = await request(app).post('/api/auth/login').send({ email: 'not-an-email', password: 'x' });
       expect(res.status).toBe(400);
       expect(res.body.error?.code).toBe('VALIDATION_ERROR');
     });
@@ -113,7 +113,7 @@ describe('Routes /api/v2/auth (Hono)', () => {
 
     it('creates a registered (email-unconfirmed) user pending confirmation, without auto-login', async () => {
       const res = await request(app)
-        .post('/api/v2/auth/register')
+        .post('/api/auth/register')
         .send({ username: 'register-tester', name: 'Register Tester', email: NEW_EMAIL, password: 'Password!1' });
 
       // No tokens: the account must confirm its email first.
@@ -127,9 +127,9 @@ describe('Routes /api/v2/auth (Hono)', () => {
     });
 
     it('blocks login with EMAIL_NOT_CONFIRMED until the account is activated', async () => {
-      await request(app).post('/api/v2/auth/register').send({ username: 'register-tester', name: 'Register Tester', email: NEW_EMAIL, password: 'Password!1' });
+      await request(app).post('/api/auth/register').send({ username: 'register-tester', name: 'Register Tester', email: NEW_EMAIL, password: 'Password!1' });
 
-      const res = await request(app).post('/api/v2/auth/login').send({ email: NEW_EMAIL, password: 'Password!1' });
+      const res = await request(app).post('/api/auth/login').send({ email: NEW_EMAIL, password: 'Password!1' });
       expect(res.status).toBe(403);
       expect(res.body.error.code).toBe('EMAIL_NOT_CONFIRMED');
     });
@@ -138,7 +138,7 @@ describe('Routes /api/v2/auth (Hono)', () => {
       await seedActiveUser({ name: 'Duplicate', username: 'duplicate-user', email: NEW_EMAIL, password: 'Password!1' });
 
       const res = await request(app)
-        .post('/api/v2/auth/register')
+        .post('/api/auth/register')
         .send({ username: 'a-different-username', name: 'Other', email: NEW_EMAIL, password: 'Password!1' });
 
       expect(res.status).toBe(409);
@@ -154,7 +154,7 @@ describe('Routes /api/v2/auth (Hono)', () => {
 
       try {
         const res = await request(app)
-          .post('/api/v2/auth/register')
+          .post('/api/auth/register')
           .send({ username: 'register-tester', name: 'Register Tester', email: NEW_EMAIL, password: 'Password!1' });
         expect(res.status).toBe(200);
         expect(res.body).toEqual({ status: 'approval_required' });
@@ -181,7 +181,7 @@ describe('Routes /api/v2/auth (Hono)', () => {
 
       try {
         const res = await request(app)
-          .post('/api/v2/auth/register')
+          .post('/api/auth/register')
           .send({ username: 'closed-mode-user', name: 'Closed Mode', email: 'closed-mode@example.com', password: 'Password!1' });
         expect(res.status).toBe(403);
         expect(res.body.error.code).toBe('REGISTRATION_CLOSED');
@@ -205,14 +205,14 @@ describe('Routes /api/v2/auth (Hono)', () => {
       try {
         // Open mode (default) + whitelist set: a non-matching address is rejected.
         const blocked = await request(app)
-          .post('/api/v2/auth/register')
+          .post('/api/auth/register')
           .send({ username: 'wl-blocked', name: 'WL Blocked', email: 'blocked@other.test', password: 'Password!1' });
         expect(blocked.status).toBe(403);
         expect(blocked.body.error.code).toBe('EMAIL_NOT_ALLOWED');
 
         // A matching address (subdomain of the whitelisted domain) registers.
         const allowed = await request(app)
-          .post('/api/v2/auth/register')
+          .post('/api/auth/register')
           .send({ username: 'wl-allowed', name: 'WL Allowed', email: 'ok@allowed.example.com', password: 'Password!1' });
         expect(allowed.status).toBe(200);
 
@@ -220,7 +220,7 @@ describe('Routes /api/v2/auth (Hono)', () => {
         // (ends with 'allowed.example.com') even though it is a different
         // domain. The hardened literal match must reject it.
         const overmatch = await request(app)
-          .post('/api/v2/auth/register')
+          .post('/api/auth/register')
           .send({ username: 'wl-overmatch', name: 'WL Overmatch', email: 'evil@notallowed.example.com', password: 'Password!1' });
         expect(overmatch.status).toBe(403);
         expect(overmatch.body.error.code).toBe('EMAIL_NOT_ALLOWED');
@@ -231,7 +231,7 @@ describe('Routes /api/v2/auth (Hono)', () => {
         // of `ok@allowed.example.com` would be rejected as USER_EXISTS (409)
         // rather than exercising the whitelist path.
         const mixedCase = await request(app)
-          .post('/api/v2/auth/register')
+          .post('/api/auth/register')
           .send({ username: 'wl-case', name: 'WL Case', email: 'Mixed@Allowed.Example.com', password: 'Password!1' });
         expect(mixedCase.status).toBe(200);
       } finally {
@@ -260,7 +260,7 @@ describe('Routes /api/v2/auth (Hono)', () => {
     });
 
     it('exchanges a valid refresh token for fresh access + refresh tokens', async () => {
-      const res = await request(app).post('/api/v2/auth/refresh').send({ refreshToken });
+      const res = await request(app).post('/api/auth/refresh').send({ refreshToken });
       expect(res.status).toBe(200);
       expect(res.body).toMatchObject({
         accessToken: expect.any(String),
@@ -270,13 +270,13 @@ describe('Routes /api/v2/auth (Hono)', () => {
     });
 
     it('returns 401 AUTHENTICATION_REQUIRED on a bogus refresh token', async () => {
-      const res = await request(app).post('/api/v2/auth/refresh').send({ refreshToken: 'not-a-jwt' });
+      const res = await request(app).post('/api/auth/refresh').send({ refreshToken: 'not-a-jwt' });
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
     });
 
     it('returns 400 VALIDATION_ERROR when the body omits refreshToken (zod required)', async () => {
-      const res = await request(app).post('/api/v2/auth/refresh').send({});
+      const res = await request(app).post('/api/auth/refresh').send({});
       expect(res.status).toBe(400);
       expect(res.body.error?.code).toBe('VALIDATION_ERROR');
     });
@@ -296,7 +296,7 @@ describe('Routes /api/v2/auth (Hono)', () => {
     });
 
     it('returns the current user when authenticated', async () => {
-      const res = await request(app).get('/api/v2/auth/me').set('Authorization', `Bearer ${accessToken}`);
+      const res = await request(app).get('/api/auth/me').set('Authorization', `Bearer ${accessToken}`);
       expect(res.status).toBe(200);
       expect(res.body.user).toMatchObject({
         email: ME_EMAIL,
@@ -309,13 +309,13 @@ describe('Routes /api/v2/auth (Hono)', () => {
     });
 
     it('returns 401 AUTHENTICATION_REQUIRED without a bearer token', async () => {
-      const res = await request(app).get('/api/v2/auth/me');
+      const res = await request(app).get('/api/auth/me');
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
     });
 
     it('returns 401 AUTHENTICATION_REQUIRED with a malformed bearer token', async () => {
-      const res = await request(app).get('/api/v2/auth/me').set('Authorization', 'Bearer not-a-jwt');
+      const res = await request(app).get('/api/auth/me').set('Authorization', 'Bearer not-a-jwt');
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
     });
@@ -338,13 +338,13 @@ describe('Routes /api/v2/auth (Hono)', () => {
     });
 
     it('returns 200 with the canned ACK when authenticated', async () => {
-      const res = await request(app).post('/api/v2/auth/logout').set('Authorization', `Bearer ${accessToken}`).send({ refreshToken });
+      const res = await request(app).post('/api/auth/logout').set('Authorization', `Bearer ${accessToken}`).send({ refreshToken });
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ message: 'Logged out successfully' });
     });
 
     it('returns 401 AUTHENTICATION_REQUIRED without an access token (middleware applies)', async () => {
-      const res = await request(app).post('/api/v2/auth/logout').send({ refreshToken });
+      const res = await request(app).post('/api/auth/logout').send({ refreshToken });
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
     });

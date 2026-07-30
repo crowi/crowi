@@ -31,7 +31,7 @@ const seedActiveUser = async (info: { name: string; username: string; email: str
   });
 };
 
-describe('Routes /api/v2/me (Hono)', () => {
+describe('Routes /api/me (Hono)', () => {
   const Config = () => crowi.model('Config');
   const User = () => crowi.model('User');
   let configSnapshot: ConfigRow[];
@@ -66,7 +66,7 @@ describe('Routes /api/v2/me (Hono)', () => {
     });
 
     it('returns the current user profile when authenticated', async () => {
-      const res = await request(app).get('/api/v2/me').set('Authorization', `Bearer ${accessToken}`);
+      const res = await request(app).get('/api/me').set('Authorization', `Bearer ${accessToken}`);
       expect(res.status).toBe(200);
       expect(res.body).toMatchObject({
         username: 'me-get',
@@ -81,7 +81,7 @@ describe('Routes /api/v2/me (Hono)', () => {
     });
 
     it('returns 401 AUTHENTICATION_REQUIRED without a bearer token', async () => {
-      const res = await request(app).get('/api/v2/me');
+      const res = await request(app).get('/api/me');
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
     });
@@ -103,7 +103,7 @@ describe('Routes /api/v2/me (Hono)', () => {
 
     it('updates name + lang and returns the updated profile', async () => {
       const res = await request(app)
-        .put('/api/v2/me')
+        .put('/api/me')
         .set('Authorization', `Bearer ${accessToken}`)
         .send({ userForm: { name: 'Me Put (renamed)', email: EMAIL, lang: 'ja' } });
       expect(res.status).toBe(200);
@@ -118,7 +118,7 @@ describe('Routes /api/v2/me (Hono)', () => {
       const other = await seedActiveUser({ name: 'Other', username: 'me-put-other', email: OTHER, password: 'Password!1' });
 
       const res = await request(app)
-        .put('/api/v2/me')
+        .put('/api/me')
         .set('Authorization', `Bearer ${accessToken}`)
         .send({ userForm: { name: 'Me Put', email: OTHER, lang: 'en' } });
 
@@ -147,7 +147,7 @@ describe('Routes /api/v2/me (Hono)', () => {
     });
 
     it('persists the theme and echoes it back', async () => {
-      const res = await request(app).patch('/api/v2/me/theme').set('Authorization', `Bearer ${accessToken}`).send({ theme: 'dark' });
+      const res = await request(app).patch('/api/me/theme').set('Authorization', `Bearer ${accessToken}`).send({ theme: 'dark' });
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ status: 'ok', theme: 'dark' });
 
@@ -156,19 +156,19 @@ describe('Routes /api/v2/me (Hono)', () => {
     });
 
     it('round-trips the new theme on GET /me', async () => {
-      await request(app).patch('/api/v2/me/theme').set('Authorization', `Bearer ${accessToken}`).send({ theme: 'light' });
-      const res = await request(app).get('/api/v2/me').set('Authorization', `Bearer ${accessToken}`);
+      await request(app).patch('/api/me/theme').set('Authorization', `Bearer ${accessToken}`).send({ theme: 'light' });
+      const res = await request(app).get('/api/me').set('Authorization', `Bearer ${accessToken}`);
       expect(res.status).toBe(200);
       expect(res.body.theme).toBe('light');
     });
 
     it('returns 400 on an invalid theme value', async () => {
-      const res = await request(app).patch('/api/v2/me/theme').set('Authorization', `Bearer ${accessToken}`).send({ theme: 'sepia' });
+      const res = await request(app).patch('/api/me/theme').set('Authorization', `Bearer ${accessToken}`).send({ theme: 'sepia' });
       expect(res.status).toBe(400);
     });
 
     it('returns 401 without a bearer token', async () => {
-      const res = await request(app).patch('/api/v2/me/theme').send({ theme: 'dark' });
+      const res = await request(app).patch('/api/me/theme').send({ theme: 'dark' });
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
     });
@@ -188,7 +188,7 @@ describe('Routes /api/v2/me (Hono)', () => {
 
     it('updates the password on valid old + new pair', async () => {
       const res = await request(app)
-        .put('/api/v2/me/password')
+        .put('/api/me/password')
         .set('Authorization', `Bearer ${accessToken}`)
         .send({ oldPassword: 'Password!1', newPassword: 'NewPwd!2', newPasswordConfirm: 'NewPwd!2' });
       expect(res.status).toBe(200);
@@ -204,7 +204,7 @@ describe('Routes /api/v2/me (Hono)', () => {
       // Password is already 'NewPwd!2' from the previous spec; use the
       // wrong old to trigger the guard.
       const res = await request(app)
-        .put('/api/v2/me/password')
+        .put('/api/me/password')
         .set('Authorization', `Bearer ${accessToken}`)
         .send({ oldPassword: 'Password!1', newPassword: 'AnotherPwd!3', newPasswordConfirm: 'AnotherPwd!3' });
       expect(res.status).toBe(400);
@@ -217,21 +217,21 @@ describe('Routes /api/v2/me (Hono)', () => {
       const staleToken = seeded.accessToken;
 
       const res = await request(app)
-        .put('/api/v2/me/password')
+        .put('/api/me/password')
         .set('Authorization', `Bearer ${staleToken}`)
         .send({ oldPassword: 'Password!1', newPassword: 'NewPwd!2', newPasswordConfirm: 'NewPwd!2' });
       expect(res.status).toBe(200);
 
       // The whole point of changing a password: a session an attacker
       // already holds must stop working.
-      const stale = await request(app).get('/api/v2/me').set('Authorization', `Bearer ${staleToken}`);
+      const stale = await request(app).get('/api/me').set('Authorization', `Bearer ${staleToken}`);
       expect(stale.status).toBe(401);
 
       // ...but the caller's own tab keeps working, on the pair the
       // response just handed back.
       expect(res.body.accessToken).toBeTruthy();
       expect(res.body.refreshToken).toBeTruthy();
-      const fresh = await request(app).get('/api/v2/me').set('Authorization', `Bearer ${res.body.accessToken}`);
+      const fresh = await request(app).get('/api/me').set('Authorization', `Bearer ${res.body.accessToken}`);
       expect(fresh.status).toBe(200);
 
       await User().deleteMany({ email: REVOKE_EMAIL });
@@ -254,7 +254,7 @@ describe('Routes /api/v2/me (Hono)', () => {
     });
 
     it('returns an empty list when lru has no entries', async () => {
-      const res = await request(app).get('/api/v2/me/recently-viewed-pages').set('Authorization', `Bearer ${accessToken}`);
+      const res = await request(app).get('/api/me/recently-viewed-pages').set('Authorization', `Bearer ${accessToken}`);
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ pages: [] });
     });
@@ -276,7 +276,7 @@ describe('Routes /api/v2/me (Hono)', () => {
 
     it('rejects non-image uploads with 400 status=error', async () => {
       const res = await request(app)
-        .post('/api/v2/me/picture')
+        .post('/api/me/picture')
         .set('Authorization', `Bearer ${accessToken}`)
         .attach('file', Buffer.from('not an image'), { filename: 'note.txt', contentType: 'text/plain' });
       expect(res.status).toBe(400);
@@ -290,7 +290,7 @@ describe('Routes /api/v2/me (Hono)', () => {
         'hex',
       );
       const res = await request(app)
-        .post('/api/v2/me/picture')
+        .post('/api/me/picture')
         .set('Authorization', `Bearer ${accessToken}`)
         .attach('file', png, { filename: 'pixel.png', contentType: 'image/png' });
       expect(res.status).toBe(200);
@@ -306,7 +306,7 @@ describe('Routes /api/v2/me (Hono)', () => {
     });
 
     it('clears the user image on DELETE /me/picture', async () => {
-      const res = await request(app).delete('/api/v2/me/picture').set('Authorization', `Bearer ${accessToken}`);
+      const res = await request(app).delete('/api/me/picture').set('Authorization', `Bearer ${accessToken}`);
       expect(res.status).toBe(200);
       expect(res.body).toMatchObject({ status: 'ok', message: 'Deleted profile picture' });
 
@@ -317,7 +317,7 @@ describe('Routes /api/v2/me (Hono)', () => {
 
   describe('auth boundary', () => {
     it('returns 401 AUTHENTICATION_REQUIRED for PUT /me/password without a bearer token', async () => {
-      const res = await request(app).put('/api/v2/me/password').send({ newPassword: 'NewPwd!2', newPasswordConfirm: 'NewPwd!2' });
+      const res = await request(app).put('/api/me/password').send({ newPassword: 'NewPwd!2', newPasswordConfirm: 'NewPwd!2' });
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
     });

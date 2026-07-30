@@ -5,7 +5,7 @@ import { app, crowi } from 'src/test/setup';
 /**
  * RFC-0006 Phase 3 — integration test for the migrated `app` resource.
  *
- * `GET /api/v2/app/info` is now served by Hono (see
+ * `GET /api/app/info` is now served by Hono (see
  * `packages/api/src/hono/handlers/app.ts`). The wire format is
  * `{ title: string | null, confidential: string | null, version: string,
  * apiVersion: string, capabilities: Capability[] }` where `title` is `null`
@@ -26,7 +26,7 @@ import { app, crowi } from 'src/test/setup';
  * future server advertises a different surface version, defeating the
  * warning it exists to produce.
  */
-describe('GET /api/v2/app/info (Hono)', () => {
+describe('GET /api/app/info (Hono)', () => {
   let Config: ReturnType<typeof crowi.model<'Config'>>;
   const APP_KEYS = ['app:title', 'app:confidential', 'security:registrationMode', 'security:linkCardEnabled'];
 
@@ -44,7 +44,7 @@ describe('GET /api/v2/app/info (Hono)', () => {
   });
 
   it('responds 200 without authentication (public route)', async () => {
-    const res = await request(app).get('/api/v2/app/info');
+    const res = await request(app).get('/api/app/info');
     expect(res.status).toBe(200);
     expect(res.headers['content-type']).toMatch(/application\/json/);
   });
@@ -53,13 +53,13 @@ describe('GET /api/v2/app/info (Hono)', () => {
     await Config.updateConfig('crowi', 'app:title', 'Crowi');
     await reloadConfigCache();
 
-    const res = await request(app).get('/api/v2/app/info');
+    const res = await request(app).get('/api/app/info');
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ title: null, confidential: null });
   });
 
   it('returns title=null when no app:title row exists', async () => {
-    const res = await request(app).get('/api/v2/app/info');
+    const res = await request(app).get('/api/app/info');
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ title: null, confidential: null });
   });
@@ -68,7 +68,7 @@ describe('GET /api/v2/app/info (Hono)', () => {
     await Config.updateConfig('crowi', 'app:title', 'My Wiki');
     await reloadConfigCache();
 
-    const res = await request(app).get('/api/v2/app/info');
+    const res = await request(app).get('/api/app/info');
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ title: 'My Wiki', confidential: null });
   });
@@ -77,7 +77,7 @@ describe('GET /api/v2/app/info (Hono)', () => {
     await Config.updateConfig('crowi', 'app:confidential', '');
     await reloadConfigCache();
 
-    const res = await request(app).get('/api/v2/app/info');
+    const res = await request(app).get('/api/app/info');
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ title: null, confidential: null });
   });
@@ -86,13 +86,13 @@ describe('GET /api/v2/app/info (Hono)', () => {
     await Config.updateConfig('crowi', 'app:confidential', 'For employees only');
     await reloadConfigCache();
 
-    const res = await request(app).get('/api/v2/app/info');
+    const res = await request(app).get('/api/app/info');
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ title: null, confidential: 'For employees only' });
   });
 
   it('reports the server version-skew / feature-detection signal', async () => {
-    const res = await request(app).get('/api/v2/app/info');
+    const res = await request(app).get('/api/app/info');
     expect(res.status).toBe(200);
 
     // `version` is the running @crowi/api package version (a non-empty
@@ -138,7 +138,7 @@ describe('GET /api/v2/app/info (Hono)', () => {
     });
 
     it('rejects a body with an unknown capability via the strict AppInfoResponseSchema parse', async () => {
-      const res = await request(app).get('/api/v2/app/info');
+      const res = await request(app).get('/api/app/info');
       expect(res.status).toBe(200);
 
       const bodyWithUnknownCapability = { ...res.body, capabilities: [...res.body.capabilities, 'not-a-real-capability'] };
@@ -157,7 +157,7 @@ describe('GET /api/v2/app/info (Hono)', () => {
       await Config.updateConfig('crowi', 'security:registrationMode', 'Open');
       await reloadConfigCache();
 
-      const res = await request(app).get('/api/v2/app/info');
+      const res = await request(app).get('/api/app/info');
       expect(res.status).toBe(200);
       expect(res.body.canSelfRegister).toBe(true);
     });
@@ -168,7 +168,7 @@ describe('GET /api/v2/app/info (Hono)', () => {
       await Config.updateConfig('crowi', 'security:registrationMode', 'Resricted');
       await reloadConfigCache();
 
-      const res = await request(app).get('/api/v2/app/info');
+      const res = await request(app).get('/api/app/info');
       expect(res.status).toBe(200);
       expect(res.body.canSelfRegister).toBe(true);
     });
@@ -177,7 +177,7 @@ describe('GET /api/v2/app/info (Hono)', () => {
       await Config.updateConfig('crowi', 'security:registrationMode', 'Closed');
       await reloadConfigCache();
 
-      const res = await request(app).get('/api/v2/app/info');
+      const res = await request(app).get('/api/app/info');
       expect(res.status).toBe(200);
       expect(res.body.canSelfRegister).toBe(false);
     });
@@ -188,7 +188,7 @@ describe('GET /api/v2/app/info (Hono)', () => {
   // pattern for the `security:linkCardEnabled` toggle.
   describe('link-card capability', () => {
     it('is present when no security:linkCardEnabled row exists (default-on)', async () => {
-      const res = await request(app).get('/api/v2/app/info');
+      const res = await request(app).get('/api/app/info');
       expect(res.status).toBe(200);
       expect(res.body.capabilities).toContain('link-card');
     });
@@ -197,7 +197,7 @@ describe('GET /api/v2/app/info (Hono)', () => {
       await Config.updateOne({ ns: 'crowi', key: 'security:linkCardEnabled' }, { $set: { value: '"on"' } }, { upsert: true }).exec();
       await reloadConfigCache();
 
-      const res = await request(app).get('/api/v2/app/info');
+      const res = await request(app).get('/api/app/info');
       expect(res.status).toBe(200);
       expect(res.body.capabilities).toContain('link-card');
     });
@@ -205,7 +205,7 @@ describe('GET /api/v2/app/info (Hono)', () => {
     it('is present when explicitly true', async () => {
       await crowi.getConfigService().saveConfigValueDurable('crowi', 'security:linkCardEnabled', true);
 
-      const res = await request(app).get('/api/v2/app/info');
+      const res = await request(app).get('/api/app/info');
       expect(res.status).toBe(200);
       expect(res.body.capabilities).toContain('link-card');
     });
@@ -213,7 +213,7 @@ describe('GET /api/v2/app/info (Hono)', () => {
     it('is absent when explicitly false', async () => {
       await crowi.getConfigService().saveConfigValueDurable('crowi', 'security:linkCardEnabled', false);
 
-      const res = await request(app).get('/api/v2/app/info');
+      const res = await request(app).get('/api/app/info');
       expect(res.status).toBe(200);
       expect(res.body.capabilities).not.toContain('link-card');
     });

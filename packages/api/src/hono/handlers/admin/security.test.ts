@@ -19,7 +19,7 @@ const resetSecurityConfig = async () => {
   await configService.saveConfigValueDurable('crowi', 'security:linkCardEnabled', true);
 };
 
-describe('Routes /api/v2/admin/security (Hono)', () => {
+describe('Routes /api/admin/security (Hono)', () => {
   let adminToken: string;
   let userToken: string;
   let configSnapshot: ConfigRow[];
@@ -57,21 +57,21 @@ describe('Routes /api/v2/admin/security (Hono)', () => {
     await resetSecurityConfig();
   });
 
-  describe('GET /api/v2/admin/security', () => {
+  describe('GET /api/admin/security', () => {
     it('returns 401 without auth', async () => {
-      const res = await request(app).get('/api/v2/admin/security');
+      const res = await request(app).get('/api/admin/security');
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
     });
 
     it('returns 403 for a non-admin user', async () => {
-      const res = await request(app).get('/api/v2/admin/security').set(authHeaders(userToken));
+      const res = await request(app).get('/api/admin/security').set(authHeaders(userToken));
       expect(res.status).toBe(403);
       expect(res.body.error.code).toBe('ADMIN_REQUIRED');
     });
 
     it('returns the current security:* settings for an admin', async () => {
-      const res = await request(app).get('/api/v2/admin/security').set(authHeaders(adminToken));
+      const res = await request(app).get('/api/admin/security').set(authHeaders(adminToken));
 
       expect(res.status).toBe(200);
       expect(res.body).toEqual({
@@ -87,7 +87,7 @@ describe('Routes /api/v2/admin/security (Hono)', () => {
         'security:registrationWhiteList': ['allowed@example.com', 'team@example.org'],
       });
 
-      const res = await request(app).get('/api/v2/admin/security').set(authHeaders(adminToken));
+      const res = await request(app).get('/api/admin/security').set(authHeaders(adminToken));
 
       expect(res.status).toBe(200);
       expect(res.body).toEqual({
@@ -102,7 +102,7 @@ describe('Routes /api/v2/admin/security (Hono)', () => {
         await crowi.model('Config').deleteMany({ ns: 'crowi', key: 'security:linkCardEnabled' }).exec();
         await crowi.getConfigService().load();
 
-        const res = await request(app).get('/api/v2/admin/security').set(authHeaders(adminToken));
+        const res = await request(app).get('/api/admin/security').set(authHeaders(adminToken));
         expect(res.status).toBe(200);
         expect(res.body.linkCardEnabled).toBe(true);
       });
@@ -114,7 +114,7 @@ describe('Routes /api/v2/admin/security (Hono)', () => {
           .exec();
         await crowi.getConfigService().load();
 
-        const res = await request(app).get('/api/v2/admin/security').set(authHeaders(adminToken));
+        const res = await request(app).get('/api/admin/security').set(authHeaders(adminToken));
         expect(res.status).toBe(200);
         expect(res.body.linkCardEnabled).toBe(true);
       });
@@ -122,14 +122,14 @@ describe('Routes /api/v2/admin/security (Hono)', () => {
       it('reflects an explicit false written via configService', async () => {
         await crowi.getConfigService().saveConfigValueDurable('crowi', 'security:linkCardEnabled', false);
 
-        const res = await request(app).get('/api/v2/admin/security').set(authHeaders(adminToken));
+        const res = await request(app).get('/api/admin/security').set(authHeaders(adminToken));
         expect(res.status).toBe(200);
         expect(res.body.linkCardEnabled).toBe(false);
       });
     });
   });
 
-  describe('PUT /api/v2/admin/security', () => {
+  describe('PUT /api/admin/security', () => {
     const validBody = {
       registrationMode: 'Closed' as const,
       registrationWhiteList: ['user@example.com'],
@@ -137,20 +137,20 @@ describe('Routes /api/v2/admin/security (Hono)', () => {
     };
 
     it('returns 401 without auth', async () => {
-      const res = await request(app).put('/api/v2/admin/security').send(validBody);
+      const res = await request(app).put('/api/admin/security').send(validBody);
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
     });
 
     it('returns 403 for a non-admin user', async () => {
-      const res = await request(app).put('/api/v2/admin/security').set(authHeaders(userToken)).send(validBody);
+      const res = await request(app).put('/api/admin/security').set(authHeaders(userToken)).send(validBody);
       expect(res.status).toBe(403);
       expect(res.body.error.code).toBe('ADMIN_REQUIRED');
     });
 
     it('returns 400 when registrationMode is outside the enum', async () => {
       const res = await request(app)
-        .put('/api/v2/admin/security')
+        .put('/api/admin/security')
         .set(authHeaders(adminToken))
         .send({
           ...validBody,
@@ -161,7 +161,7 @@ describe('Routes /api/v2/admin/security (Hono)', () => {
 
     it('returns 400 when registrationWhiteList is not an array', async () => {
       const res = await request(app)
-        .put('/api/v2/admin/security')
+        .put('/api/admin/security')
         .set(authHeaders(adminToken))
         .send({
           ...validBody,
@@ -172,13 +172,13 @@ describe('Routes /api/v2/admin/security (Hono)', () => {
 
     it('returns 400 when linkCardEnabled is missing', async () => {
       const { linkCardEnabled: _omit, ...bodyWithoutLinkCard } = validBody;
-      const res = await request(app).put('/api/v2/admin/security').set(authHeaders(adminToken)).send(bodyWithoutLinkCard);
+      const res = await request(app).put('/api/admin/security').set(authHeaders(adminToken)).send(bodyWithoutLinkCard);
       expect(res.status).toBe(400);
     });
 
     it('returns 400 when linkCardEnabled is not a boolean', async () => {
       const res = await request(app)
-        .put('/api/v2/admin/security')
+        .put('/api/admin/security')
         .set(authHeaders(adminToken))
         .send({ ...validBody, linkCardEnabled: 'true' });
       expect(res.status).toBe(400);
@@ -186,7 +186,7 @@ describe('Routes /api/v2/admin/security (Hono)', () => {
 
     it('persists the registration security:* keys and returns the updated settings', async () => {
       const res = await request(app)
-        .put('/api/v2/admin/security')
+        .put('/api/admin/security')
         .set(authHeaders(adminToken))
         .send({
           registrationMode: 'Resricted',
@@ -203,7 +203,7 @@ describe('Routes /api/v2/admin/security (Hono)', () => {
 
       // Round-trip via GET to verify the in-memory cache and the persisted
       // values are in sync.
-      const getRes = await request(app).get('/api/v2/admin/security').set(authHeaders(adminToken));
+      const getRes = await request(app).get('/api/admin/security').set(authHeaders(adminToken));
       expect(getRes.status).toBe(200);
       expect(getRes.body.registrationMode).toBe('Resricted');
       expect(getRes.body.registrationWhiteList).toEqual(['user@example.com']);
@@ -212,7 +212,7 @@ describe('Routes /api/v2/admin/security (Hono)', () => {
 
     it('trims whitespace and drops empty entries from registrationWhiteList', async () => {
       const res = await request(app)
-        .put('/api/v2/admin/security')
+        .put('/api/admin/security')
         .set(authHeaders(adminToken))
         .send({
           registrationMode: 'Resricted',
@@ -230,7 +230,7 @@ describe('Routes /api/v2/admin/security (Hono)', () => {
         'app:title': 'Custom Crowi Title',
       });
 
-      const res = await request(app).put('/api/v2/admin/security').set(authHeaders(adminToken)).send(validBody);
+      const res = await request(app).put('/api/admin/security').set(authHeaders(adminToken)).send(validBody);
       expect(res.status).toBe(200);
 
       const cfg = crowi.getConfig();
@@ -254,7 +254,7 @@ describe('Routes /api/v2/admin/security (Hono)', () => {
         const durableSpy = jest.spyOn(ConfigService.prototype, 'saveConfigValueDurable').mockRejectedValueOnce(new Error('mongo write failed'));
 
         const res = await request(app)
-          .put('/api/v2/admin/security')
+          .put('/api/admin/security')
           .set(authHeaders(adminToken))
           .send({
             registrationMode: 'Closed',
@@ -267,7 +267,7 @@ describe('Routes /api/v2/admin/security (Hono)', () => {
 
         // Nothing from this failed PUT was persisted — GET still shows
         // the pre-PUT (reset) defaults.
-        const getRes = await request(app).get('/api/v2/admin/security').set(authHeaders(adminToken));
+        const getRes = await request(app).get('/api/admin/security').set(authHeaders(adminToken));
         expect(getRes.status).toBe(200);
         expect(getRes.body).toEqual({
           registrationMode: 'Open',

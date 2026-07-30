@@ -20,7 +20,7 @@ const cleanupPathPrefix = (prefix: string) => {
   return Promise.all([Page.deleteMany(filter), Revision.deleteMany(filter)]);
 };
 
-describe('Routes /api/v2/pages/.../revisions (Hono)', () => {
+describe('Routes /api/pages/.../revisions (Hono)', () => {
   const PATH_PREFIX = '/hono-revision-test/';
   let accessToken: string;
   let accessTokenUserId: string;
@@ -42,7 +42,7 @@ describe('Routes /api/v2/pages/.../revisions (Hono)', () => {
     const headers = authHeaders(accessToken);
     const payload: { path: string; body: string; grant?: number } = { path, body };
     if (grant !== undefined) payload.grant = grant;
-    const res = await request(app).post('/api/v2/pages').set(headers).send(payload);
+    const res = await request(app).post('/api/pages').set(headers).send(payload);
     expect(res.status).toBe(200);
     return {
       pageId: res.body.page._id as string,
@@ -52,7 +52,7 @@ describe('Routes /api/v2/pages/.../revisions (Hono)', () => {
   };
 
   const updateTestPage = async (pageId: string, body: string) => {
-    const res = await request(app).put('/api/v2/pages').set(authHeaders(accessToken)).send({ page_id: pageId, body });
+    const res = await request(app).put('/api/pages').set(authHeaders(accessToken)).send({ page_id: pageId, body });
     expect(res.status).toBe(200);
     return res.body.page.revision._id as string;
   };
@@ -77,23 +77,23 @@ describe('Routes /api/v2/pages/.../revisions (Hono)', () => {
     }
   };
 
-  describe('GET /api/v2/pages/:page_id/revisions', () => {
+  describe('GET /api/pages/:page_id/revisions', () => {
     it('returns 401 when no Authorization header is provided', async () => {
-      const res = await request(app).get('/api/v2/pages/000000000000000000000000/revisions').set('Content-Type', 'application/json');
+      const res = await request(app).get('/api/pages/000000000000000000000000/revisions').set('Content-Type', 'application/json');
 
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
     });
 
     it('returns 400 INVALID_REQUEST when page_id is malformed', async () => {
-      const res = await request(app).get('/api/v2/pages/not-an-objectid/revisions').set(authHeaders(accessToken));
+      const res = await request(app).get('/api/pages/not-an-objectid/revisions').set(authHeaders(accessToken));
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('INVALID_REQUEST');
     });
 
     it('returns 404 PAGE_NOT_FOUND for a non-existent page_id', async () => {
-      const res = await request(app).get(`/api/v2/pages/${new Types.ObjectId().toString()}/revisions`).set(authHeaders(accessToken));
+      const res = await request(app).get(`/api/pages/${new Types.ObjectId().toString()}/revisions`).set(authHeaders(accessToken));
 
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
@@ -102,7 +102,7 @@ describe('Routes /api/v2/pages/.../revisions (Hono)', () => {
     it('returns 404 PAGE_NOT_FOUND when caller has no grant', async () => {
       const { pageId } = await createTestPage(`${PATH_PREFIX}private`, '# private', 4);
 
-      const res = await request(app).get(`/api/v2/pages/${pageId}/revisions`).set(authHeaders(otherAccessToken));
+      const res = await request(app).get(`/api/pages/${pageId}/revisions`).set(authHeaders(otherAccessToken));
 
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
@@ -113,7 +113,7 @@ describe('Routes /api/v2/pages/.../revisions (Hono)', () => {
       const secondRevisionId = await updateTestPage(pageId, '# v2');
       const thirdRevisionId = await updateTestPage(pageId, '# v3');
 
-      const res = await request(app).get(`/api/v2/pages/${pageId}/revisions`).set(authHeaders(accessToken));
+      const res = await request(app).get(`/api/pages/${pageId}/revisions`).set(authHeaders(accessToken));
 
       expect(res.status).toBe(200);
       expect(res.body.revisions).toHaveLength(3);
@@ -141,7 +141,7 @@ describe('Routes /api/v2/pages/.../revisions (Hono)', () => {
       // AC-4: `listRevisions` resolves by the immutable `page` id (the URL
       // param), never by `path` — the revision is found despite its
       // on-disk `path` still reading the pre-rename value.
-      const res = await request(app).get(`/api/v2/pages/${pageId}/revisions`).set(authHeaders(accessToken));
+      const res = await request(app).get(`/api/pages/${pageId}/revisions`).set(authHeaders(accessToken));
       expect(res.status).toBe(200);
       expect(res.body.revisions.map((r: { _id: string }) => r._id)).toEqual([revisionId]);
     });
@@ -151,13 +151,13 @@ describe('Routes /api/v2/pages/.../revisions (Hono)', () => {
       await updateTestPage(pageId, '# v2');
       await updateTestPage(pageId, '# v3');
 
-      const first = await request(app).get(`/api/v2/pages/${pageId}/revisions`).query({ limit: 2, offset: 0 }).set(authHeaders(accessToken));
+      const first = await request(app).get(`/api/pages/${pageId}/revisions`).query({ limit: 2, offset: 0 }).set(authHeaders(accessToken));
 
       expect(first.status).toBe(200);
       expect(first.body.revisions).toHaveLength(2);
       expect(first.body.pager).toEqual({ prev: null, next: 2, offset: 0 });
 
-      const second = await request(app).get(`/api/v2/pages/${pageId}/revisions`).query({ limit: 2, offset: 2 }).set(authHeaders(accessToken));
+      const second = await request(app).get(`/api/pages/${pageId}/revisions`).query({ limit: 2, offset: 2 }).set(authHeaders(accessToken));
 
       expect(second.status).toBe(200);
       expect(second.body.revisions).toHaveLength(1);
@@ -167,7 +167,7 @@ describe('Routes /api/v2/pages/.../revisions (Hono)', () => {
     it('omits savedBy/contributors for revisions without collab metadata (v1.x fallback)', async () => {
       const { pageId } = await createTestPage(`${PATH_PREFIX}v1x`, '# legacy');
 
-      const res = await request(app).get(`/api/v2/pages/${pageId}/revisions`).set(authHeaders(accessToken));
+      const res = await request(app).get(`/api/pages/${pageId}/revisions`).set(authHeaders(accessToken));
 
       expect(res.status).toBe(200);
       expect(res.body.revisions).toHaveLength(1);
@@ -205,7 +205,7 @@ describe('Routes /api/v2/pages/.../revisions (Hono)', () => {
         contributors: [peerUser._id],
       });
 
-      const res = await request(app).get(`/api/v2/pages/${pageId}/revisions`).set(authHeaders(accessToken));
+      const res = await request(app).get(`/api/pages/${pageId}/revisions`).set(authHeaders(accessToken));
 
       expect(res.status).toBe(200);
       expect(res.body.revisions.length).toBeGreaterThanOrEqual(2);
@@ -223,23 +223,23 @@ describe('Routes /api/v2/pages/.../revisions (Hono)', () => {
     });
   });
 
-  describe('GET /api/v2/pages/revisions/:id', () => {
+  describe('GET /api/pages/revisions/:id', () => {
     it('returns 401 when no Authorization header is provided', async () => {
-      const res = await request(app).get('/api/v2/pages/revisions/000000000000000000000000').set('Content-Type', 'application/json');
+      const res = await request(app).get('/api/pages/revisions/000000000000000000000000').set('Content-Type', 'application/json');
 
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
     });
 
     it('returns 400 INVALID_REQUEST for malformed id', async () => {
-      const res = await request(app).get('/api/v2/pages/revisions/bad-id').set(authHeaders(accessToken));
+      const res = await request(app).get('/api/pages/revisions/bad-id').set(authHeaders(accessToken));
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('INVALID_REQUEST');
     });
 
     it('returns 404 PAGE_NOT_FOUND for a non-existent id', async () => {
-      const res = await request(app).get(`/api/v2/pages/revisions/${new Types.ObjectId().toString()}`).set(authHeaders(accessToken));
+      const res = await request(app).get(`/api/pages/revisions/${new Types.ObjectId().toString()}`).set(authHeaders(accessToken));
 
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
@@ -248,7 +248,7 @@ describe('Routes /api/v2/pages/.../revisions (Hono)', () => {
     it('returns 200 with the revision body and populated author', async () => {
       const { revisionId, path } = await createTestPage(`${PATH_PREFIX}detail`, '# the body');
 
-      const res = await request(app).get(`/api/v2/pages/revisions/${revisionId}`).set(authHeaders(accessToken));
+      const res = await request(app).get(`/api/pages/revisions/${revisionId}`).set(authHeaders(accessToken));
 
       expect(res.status).toBe(200);
       expect(res.body.revision).toBeDefined();
@@ -261,7 +261,7 @@ describe('Routes /api/v2/pages/.../revisions (Hono)', () => {
     it('returns 404 PAGE_NOT_FOUND when caller has no grant on the revisions page', async () => {
       const { revisionId } = await createTestPage(`${PATH_PREFIX}detail-private`, '# private', 4);
 
-      const res = await request(app).get(`/api/v2/pages/revisions/${revisionId}`).set(authHeaders(otherAccessToken));
+      const res = await request(app).get(`/api/pages/revisions/${revisionId}`).set(authHeaders(otherAccessToken));
 
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
@@ -275,7 +275,7 @@ describe('Routes /api/v2/pages/.../revisions (Hono)', () => {
       const page = await Page.findById(pageId);
       await Page.rename(page, `${PATH_PREFIX}detail-rename-new`, user, {});
 
-      const res = await request(app).get(`/api/v2/pages/revisions/${revisionId}`).set(authHeaders(accessToken));
+      const res = await request(app).get(`/api/pages/revisions/${revisionId}`).set(authHeaders(accessToken));
       expect(res.status).toBe(200);
       expect(res.body.revision._id).toBe(revisionId);
       // The wire `path` field still mirrors the (synced) current path —
@@ -307,8 +307,8 @@ describe('Routes /api/v2/pages/.../revisions (Hono)', () => {
       const revisionA = await Revision.findById(revisionAId).lean();
       expect(revisionA.page?.toString()).toBe(pageAId);
 
-      const asOwner = await request(app).get(`/api/v2/pages/revisions/${revisionAId}`).set(authHeaders(accessToken));
-      const asStranger = await request(app).get(`/api/v2/pages/revisions/${revisionAId}`).set(authHeaders(otherAccessToken));
+      const asOwner = await request(app).get(`/api/pages/revisions/${revisionAId}`).set(authHeaders(accessToken));
+      const asStranger = await request(app).get(`/api/pages/revisions/${revisionAId}`).set(authHeaders(otherAccessToken));
 
       // Both fail closed — page A is gone, so `revision.page` resolves to
       // nothing. Neither caller can read A's revision through B's grant.
@@ -338,16 +338,12 @@ describe('Routes /api/v2/pages/.../revisions (Hono)', () => {
       // implementation would resolve the stale `revision.path` to THIS
       // page and grant access via its PUBLIC grant — precisely the
       // grant-leak this feature closes.
-      await request(app)
-        .post('/api/v2/pages')
-        .set(authHeaders(otherAccessToken))
-        .send({ path: oldPath, body: '# unrelated public body', grant: 1 })
-        .expect(200);
+      await request(app).post('/api/pages').set(authHeaders(otherAccessToken)).send({ path: oldPath, body: '# unrelated public body', grant: 1 }).expect(200);
 
       // Stranger: granted on the NEW public page occupying the reused
       // path, but never granted on the ORIGINAL (still owner-only) page —
       // must be denied.
-      const asStranger = await request(app).get(`/api/v2/pages/revisions/${revisionId}`).set(authHeaders(otherAccessToken));
+      const asStranger = await request(app).get(`/api/pages/revisions/${revisionId}`).set(authHeaders(otherAccessToken));
       expect(asStranger.status).toBe(404);
       expect(asStranger.body.error.code).toBe('PAGE_NOT_FOUND');
 
@@ -355,7 +351,7 @@ describe('Routes /api/v2/pages/.../revisions (Hono)', () => {
       // path) despite the failed path-sync — AC-5, history is never lost
       // even though the wire `path` field on this revision still reads
       // stale.
-      const asOwner = await request(app).get(`/api/v2/pages/revisions/${revisionId}`).set(authHeaders(accessToken));
+      const asOwner = await request(app).get(`/api/pages/revisions/${revisionId}`).set(authHeaders(accessToken));
       expect(asOwner.status).toBe(200);
       expect(asOwner.body.revision._id).toBe(revisionId);
       expect(asOwner.body.revision.body).toBe('# private body');
@@ -371,7 +367,7 @@ describe('Routes /api/v2/pages/.../revisions (Hono)', () => {
       const pageResponseModule = await import('src/util/page-response');
       const spy = jest.spyOn(pageResponseModule, 'computeRevisionRenderArtifactsAsync');
       try {
-        const res = await request(app).get(`/api/v2/pages/revisions/${revisionId}`).set(authHeaders(accessToken));
+        const res = await request(app).get(`/api/pages/revisions/${revisionId}`).set(authHeaders(accessToken));
 
         expect(res.status).toBe(200);
         expect(spy).toHaveBeenCalled();
@@ -384,16 +380,16 @@ describe('Routes /api/v2/pages/.../revisions (Hono)', () => {
     });
   });
 
-  describe('GET /api/v2/pages/revisions?ids=...', () => {
+  describe('GET /api/pages/revisions?ids=...', () => {
     it('returns 401 when no Authorization header is provided', async () => {
-      const res = await request(app).get('/api/v2/pages/revisions').query({ ids: '000000000000000000000000' }).set('Content-Type', 'application/json');
+      const res = await request(app).get('/api/pages/revisions').query({ ids: '000000000000000000000000' }).set('Content-Type', 'application/json');
 
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
     });
 
     it('returns 400 INVALID_REQUEST when an id is malformed', async () => {
-      const res = await request(app).get('/api/v2/pages/revisions').query({ ids: 'not-an-objectid' }).set(authHeaders(accessToken));
+      const res = await request(app).get('/api/pages/revisions').query({ ids: 'not-an-objectid' }).set(authHeaders(accessToken));
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('INVALID_REQUEST');
@@ -401,7 +397,7 @@ describe('Routes /api/v2/pages/.../revisions (Hono)', () => {
 
     it('returns 400 INVALID_REQUEST when more than 10 ids are given', async () => {
       const ids = Array.from({ length: 11 }, () => new Types.ObjectId().toString()).join(',');
-      const res = await request(app).get('/api/v2/pages/revisions').query({ ids }).set(authHeaders(accessToken));
+      const res = await request(app).get('/api/pages/revisions').query({ ids }).set(authHeaders(accessToken));
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('INVALID_REQUEST');
@@ -412,7 +408,7 @@ describe('Routes /api/v2/pages/.../revisions (Hono)', () => {
       const r2 = await updateTestPage(pageId, '# v2');
 
       const res = await request(app)
-        .get('/api/v2/pages/revisions')
+        .get('/api/pages/revisions')
         .query({ ids: `${r1},${r2}` })
         .set(authHeaders(accessToken));
 
@@ -427,7 +423,7 @@ describe('Routes /api/v2/pages/.../revisions (Hono)', () => {
       const { revisionId: r2 } = await createTestPage(`${PATH_PREFIX}mix-b`, '# b');
 
       const res = await request(app)
-        .get('/api/v2/pages/revisions')
+        .get('/api/pages/revisions')
         .query({ ids: `${r1},${r2}` })
         .set(authHeaders(accessToken));
 
@@ -440,7 +436,7 @@ describe('Routes /api/v2/pages/.../revisions (Hono)', () => {
       const r2 = await updateTestPage(pageId, '# v2');
 
       const res = await request(app)
-        .get('/api/v2/pages/revisions')
+        .get('/api/pages/revisions')
         .query({ ids: `${r1},${r2}` })
         .set(authHeaders(otherAccessToken));
 
@@ -458,7 +454,7 @@ describe('Routes /api/v2/pages/.../revisions (Hono)', () => {
       await Page.rename(page, `${PATH_PREFIX}pair-rename-new`, user, {});
 
       const res = await request(app)
-        .get('/api/v2/pages/revisions')
+        .get('/api/pages/revisions')
         .query({ ids: `${r1},${r2}` })
         .set(authHeaders(accessToken));
 
@@ -483,17 +479,13 @@ describe('Routes /api/v2/pages/.../revisions (Hono)', () => {
 
       // A different, unrelated PUBLIC page is created later by a different
       // user at the now-free stale `oldPath`.
-      await request(app)
-        .post('/api/v2/pages')
-        .set(authHeaders(otherAccessToken))
-        .send({ path: oldPath, body: '# unrelated public body', grant: 1 })
-        .expect(200);
+      await request(app).post('/api/pages').set(authHeaders(otherAccessToken)).send({ path: oldPath, body: '# unrelated public body', grant: 1 }).expect(200);
 
       // Stranger: granted on the NEW public page occupying the reused
       // path, but never granted on the ORIGINAL (still owner-only) page —
       // must be denied for the whole shared-ids request.
       const asStranger = await request(app)
-        .get('/api/v2/pages/revisions')
+        .get('/api/pages/revisions')
         .query({ ids: `${r1},${r2}` })
         .set(authHeaders(otherAccessToken));
       expect(asStranger.status).toBe(404);
@@ -503,7 +495,7 @@ describe('Routes /api/v2/pages/.../revisions (Hono)', () => {
       // path) despite the failed path-sync — AC-5, both revisions remain
       // visible via their immutable `page` id.
       const asOwner = await request(app)
-        .get('/api/v2/pages/revisions')
+        .get('/api/pages/revisions')
         .query({ ids: `${r1},${r2}` })
         .set(authHeaders(accessToken));
       expect(asOwner.status).toBe(200);

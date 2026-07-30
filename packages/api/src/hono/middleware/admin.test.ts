@@ -10,7 +10,7 @@ import { createJwtUtil } from 'src/util/jwt';
  * Admin API is a web-session-only surface: `admin:*` scopes are reserved
  * (excluded from `ISSUABLE_SCOPES`), so no PAT or OAuth access token should
  * ever reach `/admin/*`, even one issued by an admin user themself. This
- * suite exercises `GET /api/v2/admin/users` as the representative admin
+ * suite exercises `GET /api/admin/users` as the representative admin
  * route (broad-applied `createJwtAdminRequired`, so the same behaviour
  * covers every other `/admin/*` handler).
  */
@@ -50,7 +50,7 @@ describe('createJwtAdminRequired — authContext boundary (Hono)', () => {
   });
 
   it('(a) admin + web session -> 200', async () => {
-    const res = await request(app).get('/api/v2/admin/users').set(authHeaders(adminWebToken));
+    const res = await request(app).get('/api/admin/users').set(authHeaders(adminWebToken));
     expect(res.status).toBe(200);
   });
 
@@ -64,7 +64,7 @@ describe('createJwtAdminRequired — authContext boundary (Hono)', () => {
       scopes: ['read'],
     });
 
-    const res = await request(app).get('/api/v2/admin/users').set('Authorization', `Bearer ${token}`);
+    const res = await request(app).get('/api/admin/users').set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(403);
     expect(res.body.error.code).toBe('ADMIN_REQUIRED');
   });
@@ -73,13 +73,13 @@ describe('createJwtAdminRequired — authContext boundary (Hono)', () => {
     const jwtUtil = createJwtUtil(crowi);
     const oauthToken = jwtUtil.signOauthAccessToken({ user: adminUser, scopes: ['read'], clientId: 'crowi-cli' });
 
-    const res = await request(app).get('/api/v2/admin/users').set('Authorization', `Bearer ${oauthToken}`);
+    const res = await request(app).get('/api/admin/users').set('Authorization', `Bearer ${oauthToken}`);
     expect(res.status).toBe(403);
     expect(res.body.error.code).toBe('ADMIN_REQUIRED');
   });
 
   it('(d) non-admin + web session -> 403 ADMIN_REQUIRED (existing behaviour)', async () => {
-    const res = await request(app).get('/api/v2/admin/users').set(authHeaders(nonAdminWebToken));
+    const res = await request(app).get('/api/admin/users').set(authHeaders(nonAdminWebToken));
     expect(res.status).toBe(403);
     expect(res.body.error.code).toBe('ADMIN_REQUIRED');
   });

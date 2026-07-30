@@ -2,7 +2,7 @@ import request from 'supertest';
 import { app, crowi } from 'src/test/setup';
 import { authHeaders, createTestUser } from 'src/test/test-helpers';
 
-describe('Routes /api/v2/admin/search (Hono)', () => {
+describe('Routes /api/admin/search (Hono)', () => {
   let adminToken: string;
   let userToken: string;
 
@@ -24,21 +24,21 @@ describe('Routes /api/v2/admin/search (Hono)', () => {
     userToken = normal.accessToken;
   });
 
-  describe('GET /api/v2/admin/search', () => {
+  describe('GET /api/admin/search', () => {
     it('returns 401 without auth', async () => {
-      const res = await request(app).get('/api/v2/admin/search');
+      const res = await request(app).get('/api/admin/search');
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
     });
 
     it('returns 403 for a non-admin user', async () => {
-      const res = await request(app).get('/api/v2/admin/search').set(authHeaders(userToken));
+      const res = await request(app).get('/api/admin/search').set(authHeaders(userToken));
       expect(res.status).toBe(403);
       expect(res.body.error.code).toBe('ADMIN_REQUIRED');
     });
 
     it('returns 200 with the active driver and the registered driver list for an admin', async () => {
-      const res = await request(app).get('/api/v2/admin/search').set(authHeaders(adminToken));
+      const res = await request(app).get('/api/admin/search').set(authHeaders(adminToken));
 
       expect(res.status).toBe(200);
       // The exact list depends on which plugins the test boot loaded.

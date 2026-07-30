@@ -5,13 +5,13 @@ import request from 'supertest';
 
 /**
  * RFC-0004 Phase 5 — autocomplete endpoints
- * (`GET /api/v2/users/autocomplete`, `GET /api/v2/pages/autocomplete`).
+ * (`GET /api/users/autocomplete`, `GET /api/pages/autocomplete`).
  *
  * Covers: prefix > substring > fuzzy ranking, permission filtering
  * (other users' drafts and owner-granted pages excluded), and the
  * 60 req/min per-user rate limit (429 + `Retry-After`).
  */
-describe('Routes /api/v2/{users,pages}/autocomplete (Hono autocomplete)', () => {
+describe('Routes /api/{users,pages}/autocomplete (Hono autocomplete)', () => {
   const PATH_PREFIX = '/hono-autocomplete-test/';
   let aliceToken: string;
   let aliceId: string;
@@ -33,14 +33,14 @@ describe('Routes /api/v2/{users,pages}/autocomplete (Hono autocomplete)', () => 
     await Page.deleteMany({ path: { $regex: `^${PATH_PREFIX}` } });
   });
 
-  describe('GET /api/v2/users/autocomplete', () => {
+  describe('GET /api/users/autocomplete', () => {
     it('requires authentication', async () => {
-      const res = await request(app).get('/api/v2/users/autocomplete').query({ q: 'ac' });
+      const res = await request(app).get('/api/users/autocomplete').query({ q: 'ac' });
       expect(res.status).toBe(401);
     });
 
     it('returns username-prefix matches ranked above substring matches', async () => {
-      const res = await request(app).get('/api/v2/users/autocomplete').set(authHeaders(aliceToken)).query({ q: 'acAl' });
+      const res = await request(app).get('/api/users/autocomplete').set(authHeaders(aliceToken)).query({ q: 'acAl' });
 
       expect(res.status).toBe(200);
       const labels = res.body.results.map((r: { label: string }) => r.label);
@@ -56,7 +56,7 @@ describe('Routes /api/v2/{users,pages}/autocomplete (Hono autocomplete)', () => 
 
     it('matches display name and email-local-part, not just username', async () => {
       // "Alpha" matches the display name "Autocomplete Alpha".
-      const res = await request(app).get('/api/v2/users/autocomplete').set(authHeaders(aliceToken)).query({ q: 'Alpha' });
+      const res = await request(app).get('/api/users/autocomplete').set(authHeaders(aliceToken)).query({ q: 'Alpha' });
 
       expect(res.status).toBe(200);
       const labels = res.body.results.map((r: { label: string }) => r.label);
@@ -64,7 +64,7 @@ describe('Routes /api/v2/{users,pages}/autocomplete (Hono autocomplete)', () => 
     });
 
     it('returns the username as label and a display string with @username', async () => {
-      const res = await request(app).get('/api/v2/users/autocomplete').set(authHeaders(aliceToken)).query({ q: 'acAlpha' });
+      const res = await request(app).get('/api/users/autocomplete').set(authHeaders(aliceToken)).query({ q: 'acAlpha' });
 
       const hit = res.body.results.find((r: { label: string }) => r.label === 'acAlphaUser');
       expect(hit).toBeDefined();
@@ -73,22 +73,22 @@ describe('Routes /api/v2/{users,pages}/autocomplete (Hono autocomplete)', () => 
     });
 
     it('honours the limit parameter', async () => {
-      const res = await request(app).get('/api/v2/users/autocomplete').set(authHeaders(aliceToken)).query({ q: 'ac', limit: 1 });
+      const res = await request(app).get('/api/users/autocomplete').set(authHeaders(aliceToken)).query({ q: 'ac', limit: 1 });
 
       expect(res.status).toBe(200);
       expect(res.body.results).toHaveLength(1);
     });
 
     it('rejects an empty query with 400', async () => {
-      const res = await request(app).get('/api/v2/users/autocomplete').set(authHeaders(aliceToken)).query({ q: '' });
+      const res = await request(app).get('/api/users/autocomplete').set(authHeaders(aliceToken)).query({ q: '' });
       expect(res.status).toBe(400);
     });
   });
 
-  describe('GET /api/v2/pages/autocomplete', () => {
+  describe('GET /api/pages/autocomplete', () => {
     const createPage = async (token: string, suffix: string, grant = 1) => {
       const res = await request(app)
-        .post('/api/v2/pages')
+        .post('/api/pages')
         .set(authHeaders(token))
         .send({ path: `${PATH_PREFIX}${suffix}`, body: '# page', grant });
       expect(res.status).toBe(200);
@@ -97,7 +97,7 @@ describe('Routes /api/v2/{users,pages}/autocomplete (Hono autocomplete)', () => 
 
     it('returns published pages matching the path', async () => {
       await createPage(aliceToken, 'spec-alpha');
-      const res = await request(app).get('/api/v2/pages/autocomplete').set(authHeaders(aliceToken)).query({ q: 'spec-alpha' });
+      const res = await request(app).get('/api/pages/autocomplete').set(authHeaders(aliceToken)).query({ q: 'spec-alpha' });
 
       expect(res.status).toBe(200);
       const labels = res.body.results.map((r: { label: string }) => r.label);
@@ -107,7 +107,7 @@ describe('Routes /api/v2/{users,pages}/autocomplete (Hono autocomplete)', () => 
     it('ranks a path-prefix match above a substring match', async () => {
       await createPage(aliceToken, 'query-leads');
       await createPage(aliceToken, 'nested/has-query-inside');
-      const res = await request(app).get('/api/v2/pages/autocomplete').set(authHeaders(aliceToken)).query({ q: 'has-query' });
+      const res = await request(app).get('/api/pages/autocomplete').set(authHeaders(aliceToken)).query({ q: 'has-query' });
 
       expect(res.status).toBe(200);
       // `has-query-inside` leaf is a prefix match; ranked first.
@@ -117,7 +117,7 @@ describe('Routes /api/v2/{users,pages}/autocomplete (Hono autocomplete)', () => 
     it("excludes another user's owner-granted page", async () => {
       // grant 4 = GRANT_OWNER — only bob can read it.
       await createPage(bobToken, 'bob-private', 4);
-      const res = await request(app).get('/api/v2/pages/autocomplete').set(authHeaders(aliceToken)).query({ q: 'bob-private' });
+      const res = await request(app).get('/api/pages/autocomplete').set(authHeaders(aliceToken)).query({ q: 'bob-private' });
 
       expect(res.status).toBe(200);
       const labels = res.body.results.map((r: { label: string }) => r.label);
@@ -127,12 +127,12 @@ describe('Routes /api/v2/{users,pages}/autocomplete (Hono autocomplete)', () => 
     it("excludes another user's draft page", async () => {
       // Create a draft owned by bob via the drafts endpoint.
       const draftRes = await request(app)
-        .post('/api/v2/pages/drafts')
+        .post('/api/pages/drafts')
         .set(authHeaders(bobToken))
         .send({ path: `${PATH_PREFIX}bob-draft` });
       expect(draftRes.status).toBe(201);
 
-      const res = await request(app).get('/api/v2/pages/autocomplete').set(authHeaders(aliceToken)).query({ q: 'bob-draft' });
+      const res = await request(app).get('/api/pages/autocomplete').set(authHeaders(aliceToken)).query({ q: 'bob-draft' });
 
       expect(res.status).toBe(200);
       const labels = res.body.results.map((r: { label: string }) => r.label);
@@ -141,12 +141,12 @@ describe('Routes /api/v2/{users,pages}/autocomplete (Hono autocomplete)', () => 
 
     it("includes the caller's own draft page", async () => {
       const draftRes = await request(app)
-        .post('/api/v2/pages/drafts')
+        .post('/api/pages/drafts')
         .set(authHeaders(aliceToken))
         .send({ path: `${PATH_PREFIX}alice-draft` });
       expect(draftRes.status).toBe(201);
 
-      const res = await request(app).get('/api/v2/pages/autocomplete').set(authHeaders(aliceToken)).query({ q: 'alice-draft' });
+      const res = await request(app).get('/api/pages/autocomplete').set(authHeaders(aliceToken)).query({ q: 'alice-draft' });
 
       expect(res.status).toBe(200);
       const labels = res.body.results.map((r: { label: string }) => r.label);
@@ -155,7 +155,7 @@ describe('Routes /api/v2/{users,pages}/autocomplete (Hono autocomplete)', () => 
 
     it('returns the full path as label and modifiedAt for the page', async () => {
       await createPage(aliceToken, 'with-meta');
-      const res = await request(app).get('/api/v2/pages/autocomplete').set(authHeaders(aliceToken)).query({ q: 'with-meta' });
+      const res = await request(app).get('/api/pages/autocomplete').set(authHeaders(aliceToken)).query({ q: 'with-meta' });
 
       const hit = res.body.results.find((r: { label: string }) => r.label === `${PATH_PREFIX}with-meta`);
       expect(hit).toBeDefined();
@@ -168,7 +168,7 @@ describe('Routes /api/v2/{users,pages}/autocomplete (Hono autocomplete)', () => 
       await createPage(aliceToken, 'anchored-root');
       await createPage(aliceToken, 'nested/anchored-leaf');
       const res = await request(app)
-        .get('/api/v2/pages/autocomplete')
+        .get('/api/pages/autocomplete')
         .set(authHeaders(aliceToken))
         .query({ q: `${PATH_PREFIX}anchored`, anchor: 'prefix' });
 
@@ -213,7 +213,7 @@ describe('Routes /api/v2/{users,pages}/autocomplete (Hono autocomplete)', () => 
       // `src/test/setup.ts` for why that workaround is no longer needed.
       const TOTAL_REQUESTS = 121;
       const BATCH_SIZE = 50;
-      const fire = () => request(app).get('/api/v2/users/autocomplete').set(authHeaders(accessToken)).query({ q: 'ac' });
+      const fire = () => request(app).get('/api/users/autocomplete').set(authHeaders(accessToken)).query({ q: 'ac' });
       const responses: Awaited<ReturnType<typeof fire>>[] = [];
       for (let i = 0; i < TOTAL_REQUESTS; i += BATCH_SIZE) {
         const batchSize = Math.min(BATCH_SIZE, TOTAL_REQUESTS - i);
@@ -232,7 +232,7 @@ describe('Routes /api/v2/{users,pages}/autocomplete (Hono autocomplete)', () => 
     it('counts the budget per-user (a second user is unaffected)', async () => {
       // aliceId is referenced to keep the per-user nature explicit.
       expect(typeof aliceId).toBe('string');
-      const res = await request(app).get('/api/v2/users/autocomplete').set(authHeaders(bobToken)).query({ q: 'ac' });
+      const res = await request(app).get('/api/users/autocomplete').set(authHeaders(bobToken)).query({ q: 'ac' });
       expect(res.status).toBe(200);
     });
   });
@@ -242,8 +242,8 @@ describe('Routes /api/v2/{users,pages}/autocomplete (Hono autocomplete)', () => 
       const listenSpy = jest.spyOn(Server.prototype, 'listen');
 
       try {
-        const first = await request(app).get('/api/v2/users/autocomplete').set(authHeaders(aliceToken)).query({ q: 'ac' });
-        const second = await request(app).get('/api/v2/users/autocomplete').set(authHeaders(aliceToken)).query({ q: 'ac' });
+        const first = await request(app).get('/api/users/autocomplete').set(authHeaders(aliceToken)).query({ q: 'ac' });
+        const second = await request(app).get('/api/users/autocomplete').set(authHeaders(aliceToken)).query({ q: 'ac' });
 
         expect(first.status).toBe(200);
         expect(second.status).toBe(200);

@@ -10,7 +10,7 @@
  * Express stack and the redundancy goes away.
  *
  * `buildHonoApp` returns the unprefixed chain (handlers register at
- * `/app/info`, `/pages/:id`, ...). The `/api/v2` prefix is applied by
+ * `/app/info`, `/pages/:id`, ...). The `/api` prefix is applied by
  * `createAdaptorServer` in production via the Express bridge in
  * `routes/index.ts`. We dial the unprefixed paths here so requests
  * actually reach a handler.
