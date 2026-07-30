@@ -260,6 +260,105 @@ jobs:
             exit 1
           fi
 
+  e2e:
+    # feature-e2e-in-ci: runs the Playwright suite (packages/e2e) ONLY on a
+    # push to `main` — never on `pull_request`, and never on a `dev` /
+    # `dev2-2` push either, even though those share this workflow's `on.push`
+    # trigger (see `if:` below). Deliberately NOT a PR gate yet: unlike
+    # @crowi/api's jest suite, this suite has never been through a dedicated
+    # flake-hardening pass (that pass found and fixed 3 independent flake
+    # mechanisms in @crowi/api in a single day — see
+    # feature-test-harness-shared-server / feature-flake-report-detection-
+    # redesign). Gating PRs on an unvetted suite risks normalizing "just
+    # re-run it", which is hard to walk back once it takes hold. Running on
+    # main push first collects real flake-rate data without blocking PRs, and
+    # gives us the `test`/`flake-report` jobs' own history as a template for
+    # what a proper flake-hardening pass on this suite would look like.
+    #
+    # PROMOTION CRITERION (spec: feature-e2e-in-ci): once 20 CONSECUTIVE
+    # main-push runs of this job complete with zero non-regression failures
+    # (i.e. every failure observed in that window was a genuine regression
+    # that got fixed promptly — not an unexplained/flaky red), promote this
+    # job onto `pull_request` too (mirror the `test`/`lint` jobs' `on:`
+    # trigger above) and delete this comment. If the streak breaks on an
+    # unexplained or flaky failure, root-cause and fix the flake first (same
+    # discipline as the api jest suite got) before restarting the streak —
+    # do not promote on a partial or "probably fine" streak.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    services:
+      # Same pinned mongo/redis the `test` job uses (aliased, not redefined,
+      # so the two can't drift apart) — @crowi/e2e's dedicated api/web
+      # instances (started by playwright.config.ts's `webServer` entries)
+      # connect to these on their default host ports, matching
+      # packages/e2e/src/config.ts's hard-coded E2E_MONGO_URI / start:api's
+      # REDIS_URL.
+      mongo: *api-test-mongo-service
+      redis: *api-test-redis-service
+
+      # Mailpit: the only ADDITIONAL dependency @crowi/e2e's preflight
+      # (packages/e2e/src/preflight.ts) requires beyond mongo/redis — SMTP on
+      # 1025, HTTP API on 8025. Mirrors docker-compose.yml's `mailpit`
+      # service (used for local `pnpm e2e` runs) so local and CI can't drift
+      # apart. The image ships its own `HEALTHCHECK CMD ["/mailpit",
+      # "readyz"]`, so `--health-cmd` below just invokes that same binary's
+      # own readiness check rather than inventing a new one.
+      mailpit:
+        image: axllent/mailpit:latest
+        ports:
+          - 1025:1025
+          - 8025:8025
+        options: >-
+          --health-cmd "/mailpit readyz"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24.x
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: pnpm --filter @crowi/e2e exec playwright install --with-deps chromium
+
+      - name: Run e2e suite
+        # `time` prints wall-clock duration straight into the step's own log
+        # output (AC: "実行時間が job のログから分かる形で記録されている"),
+        # so it's visible without depending on the Actions UI's step-duration
+        # display. `pnpm e2e` builds the runtime deps it needs
+        # (build:runtime), resets the `crowi_e2e` database + Mailpit inbox
+        # (global-setup.ts), then runs `playwright test`, which starts its
+        # own dedicated api (:4290) / web (:4291) via `start:api`/`start:web`
+        # — no separate dev stack to stand up here.
+        run: time pnpm e2e
+
+      - name: Upload Playwright artifacts (trace / video / screenshot)
+        # Only on failure: with trace: on-first-retry / video:
+        # retain-on-failure / screenshot: only-on-failure (playwright.config.ts),
+        # a green run's outputDir is empty by design, so uploading
+        # unconditionally would just warn on every green run for nothing.
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-playwright-report-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            packages/e2e/test-results/
+            packages/e2e/playwright-report/
+          if-no-files-found: warn
+
   flake-report:
     # CONSUMER half of the producer/consumer flake-report redesign
     # (feature-flake-report-detection-redesign, superseding the old
