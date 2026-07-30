@@ -13,7 +13,7 @@ import type {
  * Boot-time validation for `addStylesheet(path)` (feature-renderer-
  * plugin-boundary spec §2.1). `path` must be an API-relative absolute
  * path confined to the registering plugin's own route namespace —
- * `/api/v2/plugins/<registeringPlugin>/…`, the exact prefix
+ * `/api/plugins/<registeringPlugin>/…`, the exact prefix
  * `makePluginRouterScope` mounts that plugin's HTTP routes under
  * (`packages/api/src/plugin/registries.ts`). Query / fragment are
  * allowed (e.g. a cache-busting `?v=…`); a URL scheme, protocol-relative
@@ -25,10 +25,10 @@ import type {
  * The `..`-segment and namespace-prefix checks run on BOTH the raw
  * pathname AND its percent-decoded form (defense in depth) — checking
  * only the raw form would let a path like
- * `/api/v2/plugins/my-plugin/%2e%2e/other-plugin/style.css` through: it
+ * `/api/plugins/my-plugin/%2e%2e/other-plugin/style.css` through: it
  * has no literal `..` segment and satisfies the raw prefix check, but a
  * consumer that percent-decodes the path (as browsers / HTTP servers
- * routinely do) resolves it to `/api/v2/plugins/other-plugin/style.css`,
+ * routinely do) resolves it to `/api/plugins/other-plugin/style.css`,
  * escaping the registering plugin's own namespace. Malformed percent-
  * encoding (a decode that throws) is rejected outright rather than
  * silently falling back to the raw form.
@@ -53,7 +53,7 @@ function validateStylesheetPath(path: string, registeringPlugin: string): string
   if (pathname.split('/').includes('..') || decodedPathname.split('/').includes('..')) {
     throw new Error(`Plugin '${registeringPlugin}' registered a stylesheet path with a '..' traversal segment: '${path}'`);
   }
-  const requiredPrefix = `/api/v2/plugins/${registeringPlugin}/`;
+  const requiredPrefix = `/api/plugins/${registeringPlugin}/`;
   if (!pathname.startsWith(requiredPrefix) || !decodedPathname.startsWith(requiredPrefix)) {
     throw new Error(`Plugin '${registeringPlugin}' registered a stylesheet path outside its own route namespace ('${requiredPrefix}'): '${path}'`);
   }
@@ -109,7 +109,7 @@ export class RendererRegistryImpl {
   private urlExpanders: { plugin: string; rule: UrlInlineExpansionRule }[] = [];
   /** Per-plugin staged stylesheet paths, not yet published — see the class doc comment. */
   private pendingStylesheets = new Map<string, string[]>();
-  /** Published stylesheet manifest, in commit order, deduped. Read by `GET /api/v2/app/info`. */
+  /** Published stylesheet manifest, in commit order, deduped. Read by `GET /api/app/info`. */
   private stylesheets: string[] = [];
 
   /** Snapshot of registered transform-phase unified plugins, in registration order. */
@@ -279,7 +279,7 @@ export class RendererRegistryImpl {
     this.pendingStylesheets.delete(registeringPlugin);
   }
 
-  /** Published stylesheet manifest, in commit order, deduped — read by `GET /api/v2/app/info`. */
+  /** Published stylesheet manifest, in commit order, deduped — read by `GET /api/app/info`. */
   getStylesheets(): readonly string[] {
     return this.stylesheets;
   }

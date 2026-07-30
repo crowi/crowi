@@ -17,7 +17,7 @@
  *
  * A literal string mention of a plugin's npm name — e.g. this repo's own
  * `registry.test.ts` asserting an `addStylesheet(...)` namespace-
- * validation path like `'/api/v2/plugins/@crowi/plugin-renderer-katex/
+ * validation path like `'/api/plugins/@crowi/plugin-renderer-katex/
  * katex.css'` — is NOT a violation; only an actual `import`/`require`
  * of the package is. `importsPackage` below matches only those forms.
  */
@@ -140,7 +140,7 @@ describe('dependency boundary — packages/api & packages/web carry no optional 
     it('does NOT match a plugin name appearing as an unrelated string-literal argument or comment', () => {
       const source = `
         // reads (\`@crowi/plugin-renderer-katex\`) for context only.
-        reg.addStylesheet('/api/v2/plugins/@crowi/plugin-renderer-katex/katex.css', '@crowi/plugin-renderer-katex');
+        reg.addStylesheet('/api/plugins/@crowi/plugin-renderer-katex/katex.css', '@crowi/plugin-renderer-katex');
       `;
       expect(importsPackage(source, '@crowi/plugin-renderer-katex')).toBe(false);
     });
