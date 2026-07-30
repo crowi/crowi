@@ -7,7 +7,7 @@ image can target any api without a rebuild — for both same-origin and
 cross-origin topologies.
 
 **Same-origin (reverse-proxy, default):** the browser always talks to relative
-paths (`/api/v2`, `/files/...`) on its own origin, and the Next server's
+paths (`/api`, `/files/...`) on its own origin, and the Next server's
 `rewrites()` proxy forwards them to the api at the runtime-injected
 `CROWI_API_URL` server env (read at boot, not baked into the client bundle).
 WebSocket endpoints (collab / presence / notifications) derive their URL from
