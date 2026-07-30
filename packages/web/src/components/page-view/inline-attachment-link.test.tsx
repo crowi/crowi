@@ -65,6 +65,27 @@ describe('extractAttachmentId', () => {
     expect(extractAttachmentId(`/files/${HEX}`)).toBe(HEX);
   });
 
+  // Regression (spec §5.2): a body persisted before the /api/v2 -> /api
+  // cutover still carries this form — dropping it from ATTACHMENT_URL_RE
+  // would leave `InlineAttachmentLink`/the click-to-open modal permanently
+  // unreachable for un-migrated existing content.
+  it('extracts the id from a legacy (pre-cutover) /api/v2/attachments/<id> URL', () => {
+    expect(extractAttachmentId(`/api/v2/attachments/${HEX}`)).toBe(HEX);
+  });
+
+  it('extracts the id from a legacy /api/v2/attachments/<id>/original URL', () => {
+    expect(extractAttachmentId(`/api/v2/attachments/${HEX}/original`)).toBe(HEX);
+  });
+
+  it('extracts the id from a current /api/attachments/<id>/original URL', () => {
+    expect(extractAttachmentId(`/api/attachments/${HEX}/original`)).toBe(HEX);
+  });
+
+  it('tolerates a trailing query string or hash after the /original suffix', () => {
+    expect(extractAttachmentId(`/api/attachments/${HEX}/original?dl=1`)).toBe(HEX);
+    expect(extractAttachmentId(`/api/v2/attachments/${HEX}/original#frag`)).toBe(HEX);
+  });
+
   it('tolerates a trailing query string or hash', () => {
     expect(extractAttachmentId(`/api/attachments/${HEX}?dl=1`)).toBe(HEX);
     expect(extractAttachmentId(`/api/attachments/${HEX}#frag`)).toBe(HEX);
