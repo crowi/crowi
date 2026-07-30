@@ -67,10 +67,10 @@ const BOT_SCOPES = ['links:read', 'links:write', 'chat:write'];
  */
 export const EVENTS_ROUTE_PATH = '/events';
 
-/** Full inbound URL Slack posts events to: `<base>/api/v2/plugins/<name>/events`. */
+/** Full inbound URL Slack posts events to: `<base>/api/plugins/<name>/events`. */
 export function eventsRequestUrl(baseUrl: string): string {
   const trimmed = baseUrl.replace(/\/+$/, '');
-  return `${trimmed}/api/v2/plugins/${PLUGIN_NAME}${EVENTS_ROUTE_PATH}`;
+  return `${trimmed}/api/plugins/${PLUGIN_NAME}${EVENTS_ROUTE_PATH}`;
 }
 
 /**
