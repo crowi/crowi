@@ -1,4 +1,5 @@
 import Foundation
+import OpenAPIURLSession
 import SwiftData
 
 /// RFC-0016 §3/§14 — a **workspace-bound handle**: everything a per-workspace
@@ -107,9 +108,19 @@ public struct WorkspaceContext: Sendable {
     /// `AuthenticatingMiddleware` (never a coordinator/middleware built for a
     /// different workspace) — the ONE per-workspace authenticated-fetch
     /// primitive every hand-written `*Lenient` decoder in
-    /// `feature-ios-phase1-read` is built on.
+    /// `feature-ios-phase1-read` is built on. `urlSession` feeds BOTH the
+    /// refresh coordinator AND the request transport itself — before
+    /// `feature-ios-phase3` the transport silently stayed on
+    /// `URLSession.shared` (`URLSessionTransport()`'s default), which was
+    /// invisible in production (the parameter defaults to `.shared` anyway)
+    /// but meant a test-injected mock session never saw the actual API
+    /// requests, only the token refreshes.
     public func makeAPIClient(urlSession: URLSession = .shared) -> AuthenticatedAPIClient {
-        AuthenticatedAPIClient(apiBaseURL: apiBaseURL, middleware: makeAuthenticatingMiddleware(urlSession: urlSession))
+        AuthenticatedAPIClient(
+            apiBaseURL: apiBaseURL,
+            middleware: makeAuthenticatingMiddleware(urlSession: urlSession),
+            transport: URLSessionTransport(configuration: .init(session: urlSession))
+        )
     }
 
     /// This workspace's own `WorkspaceImageLoader` (§6.1) — reads the
