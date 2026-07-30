@@ -27,9 +27,20 @@ id="${id#feature-}"
 
 name="${repo}:${id}"
 
+# Window name = branch without the "/impl" suffix. Every worktree branch ends in
+# "/impl", so the suffix carries no information while eating 5 columns of a tab
+# bar that already truncates long feature names. Branches without the suffix
+# (e.g. a plain `gw checkout`) keep their name as-is.
+#
+# Nothing keys off this name: crowi-kickoff locates the window by
+# pane_current_path, and integrate-worktree's Step 6.5 does the same. Renaming a
+# live window is therefore safe.
+winname="${br%/impl}"
+[ -z "$winname" ] && winname="$(basename "$wt")"
+
 if [ "${GW_TMUX_CLAUDE_DRYRUN:-0}" = "1" ]; then
-  printf 'tmux new-window -c %q -n %q -- claude --remote-control %q --name %q\n' "$wt" "$br" "$name" "$name"
+  printf 'tmux new-window -c %q -n %q -- claude --remote-control %q --name %q\n' "$wt" "$winname" "$name" "$name"
   exit 0
 fi
 
-exec tmux new-window -c "$wt" -n "$br" "claude --remote-control '$name' --name '$name'"
+exec tmux new-window -c "$wt" -n "$winname" "claude --remote-control '$name' --name '$name'"
