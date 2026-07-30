@@ -31,7 +31,7 @@ export const SENSITIVE_FIELD_MARKER = '@sensitive';
  *
  * The admin form renders a button with the given label that calls the
  * plugin's contributed endpoint at the given verb / path (relative to
- * `/api/v2/plugins/<name>/`). Useful for "Test connection",
+ * `/api/plugins/<name>/`). Useful for "Test connection",
  * "Authorise with Google", etc. without forcing every plugin to ship
  * its own React component.
  */
@@ -56,7 +56,7 @@ export interface ActionAnnotation {
   label: string;
   /** HTTP verb of the plugin endpoint to call. */
   method: PluginRouteMethod;
-  /** Path relative to `/api/v2/plugins/<name>/`, with leading slash. */
+  /** Path relative to `/api/plugins/<name>/`, with leading slash. */
   path: string;
 }
 
