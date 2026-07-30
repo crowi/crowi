@@ -294,10 +294,65 @@ describe('render path (success)', () => {
     expect(k1).toBe(k2);
   });
 
-  it('declares cacheVersion=3 (bumped from 2 — feature-renderer-plugin-boundary Phase 2 §3.1, the new data-crowi-renderer-* contract, PluginRenderCache-only invalidation) and aspect-ratio reservation', () => {
+  it('declares cacheVersion=4 (bumped from 3 — RFC-0023 §13, the structured sidecar addition invalidates pre-existing PluginRenderCache rows) and aspect-ratio reservation', () => {
     const renderer = createPlantUmlRenderer(DEFAULT_CONFIG);
-    expect(renderer.cacheVersion).toBe(3);
+    expect(renderer.cacheVersion).toBe(4);
     expect(renderer.reservation).toEqual({ variant: 'aspect', aspectRatio: 16 / 9 });
+  });
+
+  // RFC-0023 §1/§10 — the crowiDiagram structured sidecar.
+  describe('structured sidecar (RFC-0023)', () => {
+    it('SVG mode: emits structured with intrinsic viewBox dimensions and an INDEPENDENT allowSafeHref:false sanitisation pass', async () => {
+      const svgWithLink = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 50"><a href="https://safe.example/x"><path d="M0 0 L10 10"/></a></svg>';
+      fetchMock.mockResolvedValueOnce(new Response(svgWithLink, { status: 200 }));
+      const renderer = createPlantUmlRenderer(DEFAULT_CONFIG);
+      const result = await renderer.render({ lang: 'plantuml', source: 'A -> B' }, stubCtx);
+      // html branch keeps its allowSafeHref:true pass — the safe https
+      // link SURVIVES in the inline SVG the web reads (unchanged
+      // shipped contract)...
+      expect(result.html).toContain('https://safe.example/x');
+      // ...while the sidecar SVG went through the strict pass and the
+      // link is gone (declared clients never receive live links).
+      const structured = (result as { structured?: { node: { image: { base64: string; width: number; height: number; mediaType: string } } } }).structured;
+      expect(structured).toBeDefined();
+      const sidecarSvg = Buffer.from(structured!.node.image.base64, 'base64').toString('utf8');
+      expect(sidecarSvg).not.toContain('https://safe.example/x');
+      expect(structured!.node.image.mediaType).toBe('image/svg+xml');
+      expect(structured!.node.image.width).toBe(100);
+      expect(structured!.node.image.height).toBe(50);
+    });
+
+    it('SVG mode: an underivable viewBox falls back to html-only (no structured, html untouched)', async () => {
+      const noViewBox = '<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0 L10 10"/></svg>';
+      fetchMock.mockResolvedValueOnce(new Response(noViewBox, { status: 200 }));
+      const renderer = createPlantUmlRenderer(DEFAULT_CONFIG);
+      const result = await renderer.render({ lang: 'plantuml', source: 'A -> B' }, stubCtx);
+      expect(result.html).toContain('diagram-embed');
+      expect((result as { structured?: unknown }).structured).toBeUndefined();
+    });
+
+    it('PNG mode: derives dimensions from the IHDR chunk; a non-PNG body falls back to html-only', async () => {
+      // 20x10 IHDR (signature + first chunk framing only — enough for the parser).
+      const png = Buffer.concat([
+        Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+        Buffer.from([0, 0, 0, 13]),
+        Buffer.from('IHDR', 'latin1'),
+        Buffer.from([0, 0, 0, 20, 0, 0, 0, 10, 8, 6, 0, 0, 0]),
+      ]);
+      fetchMock.mockResolvedValueOnce(new Response(new Uint8Array(png), { status: 200 }));
+      const pngConfig = { ...DEFAULT_CONFIG, outputFormat: 'png' as const };
+      const renderer = createPlantUmlRenderer(pngConfig);
+      const result = await renderer.render({ lang: 'plantuml', source: 'A -> B' }, stubCtx);
+      const structured = (result as { structured?: { node: { image: { width: number; height: number; mediaType: string } } } }).structured;
+      expect(structured!.node.image.mediaType).toBe('image/png');
+      expect(structured!.node.image.width).toBe(20);
+      expect(structured!.node.image.height).toBe(10);
+
+      fetchMock.mockResolvedValueOnce(new Response(new Uint8Array(Buffer.from('not a png')), { status: 200 }));
+      const result2 = await renderer.render({ lang: 'plantuml', source: 'A -> C' }, stubCtx);
+      expect((result2 as { structured?: unknown }).structured).toBeUndefined();
+      expect(result2.html).toContain('data:image/png;base64,');
+    });
   });
 
   it('strips a trailing slash on serverUrl when building the request URL', async () => {
