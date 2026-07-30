@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { apiClientV2 } from './api-client';
+import { apiClient } from './api-client';
 
 /**
  * Candidate source for the "create page" modal. Drives the Tab-cycle
@@ -84,7 +84,7 @@ export function usePagePathCandidates(
     placeholderData: (prev) => prev,
     staleTime: 30_000,
     queryFn: async (): Promise<PagePathCandidates> => {
-      const response = await apiClientV2.pages.autocomplete.$get({
+      const response = await apiClient.pages.autocomplete.$get({
         query: { q: query, anchor: 'prefix', limit: String(CANDIDATE_LIMIT) },
       });
       if (!response.ok) {

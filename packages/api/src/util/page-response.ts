@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { Revision, RevisionMetaShape } from '@crowi/api-contract';
 import type { RenderActor, RenderContext } from '@crowi/plugin-api';
 import type { Root } from 'mdast';
@@ -103,7 +104,10 @@ export const toRevisionResponse = (revision: PopulatedRevision, options: Revisio
   // (getPage, getRevision) compose with `computeRevisionRenderArtifactsAsync`
   // afterwards to fold in the on-the-fly fallback for legacy revisions.
   meta: resolveRevisionMeta(revision.meta, options.withMeta),
-  ...(options.withRenderedAst ? { renderedAst: revision.renderedAst, rendererVersion: revision.rendererVersion } : {}),
+  // The stored value is a bare mdast Root (never an envelope) — the
+  // legacy member of the contract union. Cast at this boundary; the
+  // detail endpoints overwrite it via `pickRenderedAstShape` anyway.
+  ...(options.withRenderedAst ? { renderedAst: revision.renderedAst as Revision['renderedAst'], rendererVersion: revision.rendererVersion } : {}),
 });
 
 export const resolveRevisionMeta = (stored: RevisionMetaContent | undefined, emit: boolean | undefined): RevisionMetaShape | undefined => {
@@ -154,28 +158,24 @@ export const computeRevisionRenderArtifactsAsync = async (
   actor: RenderActor,
   storedRendererVersion?: string,
   pageId?: string,
-): Promise<{ meta?: RevisionMetaShape; renderedAst?: unknown }> => {
+): Promise<{ meta?: RevisionMetaShape; renderedAst?: unknown; renderedAstArtifactKey?: string }> => {
   const fromStored = storedMeta ? pickStoredMeta(storedMeta) : {};
   // Phase 2-written revisions persist every meta sub-field (even empty
   // arrays); the presence of these 3 is the marker that no fallback is
   // needed for meta. `rawSpaceLinks` (feature-backlink-raw-space-metadata,
   // additive) is deliberately NOT part of this gate: including it would
   // mark every revision written before that field existed as incomplete.
-  // Two cohorts are spared by the omission — those with NO `rendererVersion`
-  // at all (which `astIsFresh` below also treats as trustworthy), and
-  // marker-era revisions that already carry the CURRENT `rendererVersion`
-  // and so are not caught by the staleness gate either. Revisions whose
-  // `rendererVersion` is merely older recompute regardless of this line.
   const metaIsComplete = fromStored.wikiLinks !== undefined && fromStored.mentions !== undefined && fromStored.codeBlockLanguages !== undefined;
   const astIsStored = storedAst !== undefined;
-  // RFC-0002 round 3.1: a stored `rendererVersion` that does NOT match
-  // the running pipeline marks the AST as stale. A missing
-  // `rendererVersion` (revisions saved before this field landed) is
-  // treated as "trust the stored AST" — re-rendering every pre-existing
-  // revision on every read would be unaffordable, and the user-facing
-  // workaround (re-save the page) is already documented. Once
-  // `renderer:rebuild` lands (RFC-0008), operators can backfill.
-  const astIsFresh = astIsStored && (storedRendererVersion === undefined || storedRendererVersion === RENDERER_PIPELINE_VERSION);
+  // RFC-0002 round 3.1 / RFC-0023 §13: a stored `rendererVersion` that
+  // does NOT exactly match the running pipeline marks the AST as stale.
+  // The old missing-version special case ("undefined === trust the
+  // stored AST") is REMOVED: `rebuild rendered-ast` now exists to
+  // backfill every pre-existing revision, and the rollout procedure
+  // requires running it right after deploying a version bump — the
+  // per-read recompute below is the documented interim cost until that
+  // backfill completes.
+  const astIsFresh = astIsStored && storedRendererVersion === RENDERER_PIPELINE_VERSION;
 
   // feature-plugin-renderer-mermaid spec §5 — every return site below
   // that would otherwise serve `storedAst` verbatim (both branches that
@@ -185,18 +185,27 @@ export const computeRevisionRenderArtifactsAsync = async (
   // Computed once, up front, and reused by every `astIsFresh` branch —
   // never computed when `!astIsFresh` (that path recomputes the AST
   // fully via `runRender` below instead).
-  const freshStoredAst = astIsFresh ? await resolvePendingRenderNodes(crowi, storedAst, actor, pageId) : storedAst;
+  const pendingResolved = astIsFresh ? await resolvePendingRenderNodes(crowi, storedAst, actor, pageId) : { ast: storedAst, changed: false };
+  const freshStoredAst = pendingResolved.ast;
+  // RFC-0023 §14 — identity of the AST artifact THIS response serves.
+  // Verbatim stored AST → the stable `rendererVersion`; a tree the
+  // pending retry actually changed, or an on-the-fly recompute → a
+  // per-response nonce, so the web render memo re-runs exactly when the
+  // served tree can differ under the same `revisionId`.
+  const artifactKey = astIsFresh && !pendingResolved.changed ? RENDERER_PIPELINE_VERSION : randomUUID();
 
   if (metaIsComplete && astIsFresh) {
     return {
       meta: Object.keys(fromStored).length > 0 ? fromStored : undefined,
       renderedAst: freshStoredAst,
+      renderedAstArtifactKey: artifactKey,
     };
   }
   if (!body) {
     return {
       meta: metaIsComplete && Object.keys(fromStored).length > 0 ? fromStored : undefined,
       renderedAst: astIsFresh ? freshStoredAst : undefined,
+      ...(astIsFresh ? { renderedAstArtifactKey: artifactKey } : {}),
     };
   }
 
@@ -222,6 +231,9 @@ export const computeRevisionRenderArtifactsAsync = async (
   return {
     meta: Object.keys(mergedMeta).length > 0 ? mergedMeta : undefined,
     renderedAst: astIsFresh ? freshStoredAst : renderedAst,
+    // Stale path recomputed the whole tree on the fly (nothing is
+    // written back) — `artifactKey` is already a per-response nonce there.
+    renderedAstArtifactKey: artifactKey,
   };
 };
 
@@ -242,16 +254,21 @@ export const computeRevisionRenderArtifactsAsync = async (
  * a successful retry; the next read repeats this same scan against the
  * still-unmodified stored document.
  */
-async function resolvePendingRenderNodes(crowi: Crowi, storedAst: unknown, actor: RenderActor, pageId: string | undefined): Promise<unknown> {
-  if (!pageId) return storedAst; // no page identity to key a cache entry on — degrade to no-op, same as the rest of this file
-  if (!isMdastRootLike(storedAst)) return storedAst;
-  if (!hasPendingRenderMarker(storedAst)) return storedAst;
+async function resolvePendingRenderNodes(
+  crowi: Crowi,
+  storedAst: unknown,
+  actor: RenderActor,
+  pageId: string | undefined,
+): Promise<{ ast: unknown; changed: boolean }> {
+  if (!pageId) return { ast: storedAst, changed: false }; // no page identity to key a cache entry on — degrade to no-op, same as the rest of this file
+  if (!isMdastRootLike(storedAst)) return { ast: storedAst, changed: false };
+  if (!hasPendingRenderMarker(storedAst)) return { ast: storedAst, changed: false };
 
   const renderer = crowi.getRenderer();
   const workingTree = structuredClone(storedAst);
   const ctx: RenderContext = { mode: 'read', log: coreLogger, actor };
   const { changed } = await redispatchPendingCodeBlocks(workingTree, renderer.registry, ctx, { cache: renderer.cache, pageId });
-  return changed ? workingTree : storedAst;
+  return changed ? { ast: workingTree, changed: true } : { ast: storedAst, changed: false };
 }
 
 function isMdastRootLike(value: unknown): value is Root {

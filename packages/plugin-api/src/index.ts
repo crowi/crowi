@@ -52,6 +52,7 @@ export type {
   RenderResult,
   Reservation,
   ScopedCacheStorage,
+  StructuredRenderPayload,
   UrlInlineExpansionRule,
 } from './renderer';
 export type { PluginRouteHandler, PluginRouteMethod, PluginRouteOptions, PluginRouterScope } from './routes';

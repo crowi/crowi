@@ -24,7 +24,7 @@ export default defineConfig({
   webServer: [
     {
       command: 'pnpm --filter @crowi/e2e start:api',
-      url: `${E2E_API_URL}/api/v2/app/info`,
+      url: `${E2E_API_URL}/api/app/info`,
       timeout: 120_000,
       reuseExistingServer: !process.env.CI,
       stdout: 'pipe',

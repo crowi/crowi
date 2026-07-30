@@ -19,7 +19,7 @@ for the full design, and the operator setup guide at
   flow, pre-filled with this instance's inbound URL, the `link_shared`
   bot event, the wiki host as the unfurl domain, and least-privilege OAuth
   scopes (`links:read`, `links:write`, `chat:write`).
-- **Inbound webhook** `POST /api/v2/plugins/@crowi/plugin-slack/events`
+- **Inbound webhook** `POST /api/plugins/@crowi/plugin-slack/events`
   (public; authenticated by Slack's request signature, not a Crowi
   session): verifies the HMAC signature (with a ±5-minute replay guard),
   echoes the `url_verification` challenge, and unfurls `link_shared`
@@ -43,6 +43,27 @@ Slack cannot reach `localhost`. In development, run a tunnel
 origin (e.g. `https://abc123.ngrok.app`); the generated manifest's
 `request_url` is built from it. When unset, the manifest falls back to
 `CLIENT_URL`.
+
+### Upgrading past the `/api/v2` → `/api` prefix cutover
+
+If you already installed this plugin and registered a Slack App **before**
+your Crowi instance's coordinated `/api/v2` → `/api` cutover (see
+"api prefix cutover" in the self-hosting operations guide), the inbound
+webhook URL Slack has on file is now stale — after the cutover, `@crowi/api`
+no longer serves `/api/v2/*` at all, so events silently stop arriving
+(Slack's retries eventually fail and it may disable the Event Subscription).
+This is a manual, operator-side step; Crowi cannot update Slack's
+configuration for you. Once your runner has upgraded `@crowi/api` past the
+cutover, do one of the following:
+
+- Click **Generate Slack App manifest** again in the admin UI and paste the
+  regenerated JSON into your existing Slack App (App Manifest tab), or
+- Manually edit your Slack App's **Event Subscriptions → Request URL** to
+  `https://<your-host>/api/plugins/@crowi/plugin-slack/events` and re-verify
+  it (Slack re-sends the `url_verification` challenge on save).
+
+New installs created after the cutover already get the canonical
+`/api/plugins/...` URL from the generated manifest and need no follow-up.
 
 ## Scope
 

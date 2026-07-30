@@ -2,7 +2,7 @@ import { z } from '@hono/zod-openapi';
 
 /**
  * RFC-0004 Phase 5 — schemas for the autocomplete endpoints
- * (`GET /api/v2/users/autocomplete`, `GET /api/v2/pages/autocomplete`).
+ * (`GET /api/users/autocomplete`, `GET /api/pages/autocomplete`).
  *
  * Autocomplete powers the editor's `@username` / `[[page]]` dropdowns.
  * Both endpoints share one query shape and one result shape so the

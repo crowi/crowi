@@ -14,7 +14,7 @@
  *
  * Covers the Phase 0 acceptance criteria:
  *   (a) a trivial plugin route answers at
- *       `/api/v2/plugins/<name>/<path>` (200) and the `<name>` segment
+ *       `/api/plugins/<name>/<path>` (200) and the `<name>` segment
  *       isolates two plugins that mount the same sub-path.
  *   (b) an `auth: 'public'` route is reachable unauthenticated; a
  *       `'user'` (default) route is 401 without a JWT and 200 with one.
@@ -39,14 +39,14 @@ import request from 'supertest';
 import { crowi, Fixture } from 'src/test/setup';
 import { authHeaders, createTestUser } from 'src/test/test-helpers';
 import { buildHonoApp } from 'src/hono';
-import { stripApiV2Prefix } from 'src/hono/path-rewrite';
+import { stripApiPrefix } from 'src/hono/path-rewrite';
 import type { UserDocument } from 'src/models/user';
 import { createJwtUtil } from 'src/util/jwt';
 
 /**
  * Build a Node `RequestListener` over a Hono app assembled from
  * `plugins` (instead of the real loaded set). Mirrors the harness's own
- * `/api/v2` prefix strip so supertest can dial `/api/v2/...`.
+ * `/api` prefix strip so supertest can dial `/api/...`.
  */
 const buildAppFromPlugins = (plugins: CrowiPlugin[]): ((req: IncomingMessage, res: ServerResponse) => void) => {
   const manager = crowi.pluginManager;
@@ -54,7 +54,7 @@ const buildAppFromPlugins = (plugins: CrowiPlugin[]): ((req: IncomingMessage, re
   const spy = jest.spyOn(manager, 'getLoadedPlugins').mockReturnValue(plugins);
   try {
     const honoApp = buildHonoApp(crowi);
-    return getRequestListener((req: Request) => honoApp.fetch(stripApiV2Prefix(req)));
+    return getRequestListener((req: Request) => honoApp.fetch(stripApiPrefix(req)));
   } finally {
     // The plugins are already captured inside the built app's closures;
     // restoring the spy here keeps the shared `crowi` pristine.
@@ -89,7 +89,7 @@ describe('plugin HTTP routes (registerRoutes)', () => {
     });
   });
 
-  it('mounts a public route at /api/v2/plugins/<name>/<path> reachable unauthenticated', async () => {
+  it('mounts a public route at /api/plugins/<name>/<path> reachable unauthenticated', async () => {
     const plugin: CrowiPlugin = {
       name: '@crowi/plugin-smoke',
       version: '0.0.0',
@@ -99,7 +99,7 @@ describe('plugin HTTP routes (registerRoutes)', () => {
     };
     const app = buildAppFromPlugins([plugin]);
 
-    const res = await request(app).get('/api/v2/plugins/@crowi/plugin-smoke/ping');
+    const res = await request(app).get('/api/plugins/@crowi/plugin-smoke/ping');
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ pong: true });
   });
@@ -114,8 +114,8 @@ describe('plugin HTTP routes (registerRoutes)', () => {
     });
     const app = buildAppFromPlugins([makePlugin('@crowi/plugin-a', 'A'), makePlugin('@crowi/plugin-b', 'B')]);
 
-    const resA = await request(app).get('/api/v2/plugins/@crowi/plugin-a/who');
-    const resB = await request(app).get('/api/v2/plugins/@crowi/plugin-b/who');
+    const resA = await request(app).get('/api/plugins/@crowi/plugin-a/who');
+    const resB = await request(app).get('/api/plugins/@crowi/plugin-b/who');
     expect(resA.body).toEqual({ marker: 'A' });
     expect(resB.body).toEqual({ marker: 'B' });
   });
@@ -132,11 +132,11 @@ describe('plugin HTTP routes (registerRoutes)', () => {
     };
     const app = buildAppFromPlugins([plugin]);
 
-    const unauth = await request(app).get('/api/v2/plugins/@crowi/plugin-authed/secret');
+    const unauth = await request(app).get('/api/plugins/@crowi/plugin-authed/secret');
     expect(unauth.status).toBe(401);
     expect(unauth.body.error?.code).toBe('AUTHENTICATION_REQUIRED');
 
-    const authed = await request(app).get('/api/v2/plugins/@crowi/plugin-authed/secret').set('Authorization', `Bearer ${webToken}`);
+    const authed = await request(app).get('/api/plugins/@crowi/plugin-authed/secret').set('Authorization', `Bearer ${webToken}`);
     expect(authed.status).toBe(200);
     expect(authed.body.userId).toBe(user._id.toString());
   });
@@ -162,7 +162,7 @@ describe('plugin HTTP routes (registerRoutes)', () => {
     };
     const app = buildAppFromPlugins([plugin]);
 
-    const res = await request(app).post('/api/v2/plugins/@crowi/plugin-rawbody/events').set('Content-Type', 'application/json').send(rawBody);
+    const res = await request(app).post('/api/plugins/@crowi/plugin-rawbody/events').set('Content-Type', 'application/json').send(rawBody);
     expect(res.status).toBe(200);
     expect(res.body.received).toBe(rawBody);
     expect(res.body.length).toBe(rawBody.length);
@@ -190,15 +190,15 @@ describe('plugin HTTP routes (registerRoutes)', () => {
       admin: true,
     });
 
-    const unauth = await request(app).get('/api/v2/plugins/@crowi/plugin-adminonly/danger');
+    const unauth = await request(app).get('/api/plugins/@crowi/plugin-adminonly/danger');
     expect(unauth.status).toBe(401);
     expect(unauth.body.error?.code).toBe('AUTHENTICATION_REQUIRED');
 
-    const nonAdmin = await request(app).get('/api/v2/plugins/@crowi/plugin-adminonly/danger').set(authHeaders(nonAdminToken));
+    const nonAdmin = await request(app).get('/api/plugins/@crowi/plugin-adminonly/danger').set(authHeaders(nonAdminToken));
     expect(nonAdmin.status).toBe(403);
     expect(nonAdmin.body.error?.code).toBe('ADMIN_REQUIRED');
 
-    const admin = await request(app).get('/api/v2/plugins/@crowi/plugin-adminonly/danger').set(authHeaders(adminToken));
+    const admin = await request(app).get('/api/plugins/@crowi/plugin-adminonly/danger').set(authHeaders(adminToken));
     expect(admin.status).toBe(200);
     expect(admin.body.userId).toBe(adminUser._id.toString());
   });
@@ -229,14 +229,14 @@ describe('plugin HTTP routes (registerRoutes)', () => {
       // `buildHonoApp` and take the whole boot down with it).
       const app = buildAppFromPlugins([broken, healthy]);
 
-      const healthyRes = await request(app).get('/api/v2/plugins/@crowi/plugin-healthy-routes/ok');
+      const healthyRes = await request(app).get('/api/plugins/@crowi/plugin-healthy-routes/ok');
       expect(healthyRes.status).toBe(200);
       expect(healthyRes.body).toEqual({ ok: true });
 
       // A non-plugin route registered *after* `mountPluginRoutes` in
       // `buildHonoApp` still responds — proof the whole chain kept building
       // past the broken plugin.
-      const nonPluginRes = await request(app).get('/api/v2/app/info');
+      const nonPluginRes = await request(app).get('/api/app/info');
       expect(nonPluginRes.status).toBe(200);
 
       expect(consoleSpy).toHaveBeenCalledWith(
@@ -255,7 +255,7 @@ describe('plugin HTTP routes (registerRoutes)', () => {
         admin: false,
       });
 
-      const res = await request(app).post('/api/v2/plugins/@crowi/plugin-slack/manifest').set(authHeaders(nonAdminToken)).send({});
+      const res = await request(app).post('/api/plugins/@crowi/plugin-slack/manifest').set(authHeaders(nonAdminToken)).send({});
 
       expect(res.status).toBe(403);
       expect(res.body.error?.code).toBe('ADMIN_REQUIRED');
@@ -270,7 +270,7 @@ describe('plugin HTTP routes (registerRoutes)', () => {
         admin: true,
       });
 
-      const res = await request(app).post('/api/v2/plugins/@crowi/plugin-slack/manifest').set(authHeaders(adminToken)).send({});
+      const res = await request(app).post('/api/plugins/@crowi/plugin-slack/manifest').set(authHeaders(adminToken)).send({});
 
       expect(res.status).toBe(200);
       expect(typeof res.body.settings?.event_subscriptions?.request_url).toBe('string');

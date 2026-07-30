@@ -42,8 +42,8 @@ const { getYjsToken, FakeProvider, providerInstances } = vi.hoisted(() => {
 });
 
 vi.mock('@/lib/api-client', () => ({
-  apiClientV2: { pages: { ':id': { 'yjs-token': { $get: getYjsToken } } } },
-  apiV2BaseUrl: () => 'http://localhost:4301/api/v2',
+  apiClient: { pages: { ':id': { 'yjs-token': { $get: getYjsToken } } } },
+  apiBaseUrl: () => 'http://localhost:4301/api',
 }));
 
 vi.mock('@/lib/use-auth', () => ({

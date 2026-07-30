@@ -172,8 +172,8 @@ server {
     listen 443 ssl http2;
     server_name crowi.example.com;
 
-    # Send both /api/v2/* and /collab to the same upstream.
-    location /api/v2/ {
+    # Send both /api/* and /collab to the same upstream.
+    location /api/ {
         proxy_pass http://crowi_api;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
@@ -208,14 +208,14 @@ server {
 # Labels on the api service in docker-compose.yml
 labels:
   - "traefik.enable=true"
-  - "traefik.http.routers.crowi-api.rule=Host(`crowi.example.com`) && (PathPrefix(`/api/v2`) || PathPrefix(`/collab`))"
+  - "traefik.http.routers.crowi-api.rule=Host(`crowi.example.com`) && (PathPrefix(`/api`) || PathPrefix(`/collab`))"
   - "traefik.http.services.crowi-api.loadbalancer.server.port=3000"
   # Sticky sessions are disabled by default — leave them off.
 ```
 
 Key points:
 
-- `/api/v2/pages/:id/yjs-token` (HTTP) and `/collab` (WebSocket;
+- `/api/pages/:id/yjs-token` (HTTP) and `/collab` (WebSocket;
   HocuspocusProvider dials the bare `/collab` and sends the page id over
   the protocol) must both reach the api upstream.
 - Set a generous idle timeout on the WebSocket location (around an

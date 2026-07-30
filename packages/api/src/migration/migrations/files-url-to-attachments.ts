@@ -11,13 +11,13 @@ import { forEachPublishedCurrentRevision, STOP } from './published-current-revis
  *
  * v1 embedded attachment / image references in page bodies as the v1 file
  * URL `/files/<24hex>` (absolute `https://<host>/files/<id>` when the editor
- * pasted a full URL, or relative `/files/<id>`). v2 serves attachments from a
- * dedicated stream route at `/api/v2/attachments/<id>` and the legacy
- * `/files/<id>` compat redirect was removed with the Express host (RFC-0006
- * Phase 6 Sub-batch D), so those v1 URLs now 404 — every such image is
- * broken. The id is identical in both forms (the same 24-hex `Attachment._id`;
- * `attachment.ts` `ATTACHMENT_URI_RE` extracts the same id from either), so the
- * fix is a pure URL rewrite — no id mapping.
+ * pasted a full URL, or relative `/files/<id>`). The current API serves
+ * attachments from a dedicated stream route at `/api/attachments/<id>` and
+ * the legacy `/files/<id>` compat redirect was removed with the Express host
+ * (RFC-0006 Phase 6 Sub-batch D), so those v1 URLs now 404 — every such image
+ * is broken. The id is identical in both forms (the same 24-hex
+ * `Attachment._id`; `attachment.ts` `ATTACHMENT_URI_RE` extracts the same id
+ * from either), so the fix is a pure URL rewrite — no id mapping.
  *
  * Modelled on `wikilink-format.ts` (the sibling v1→v2 body-rewrite preflight):
  * walk published (+ legacy `null`) pages, rewrite each current-revision body
@@ -30,29 +30,39 @@ import { forEachPublishedCurrentRevision, STOP } from './published-current-revis
  * Rewrite rules (Markdown `![alt](url)` images and `[text](url)` links only —
  * raw HTML `<img src>` / `<a href>` is out of scope; v1 emitted Markdown):
  *
- *   1. relative `/files/<id>`                  → `/api/v2/attachments/<id>`
+ *   1. relative `/files/<id>`                  → `/api/attachments/<id>`
  *      (unconditional — a root-relative path is always this site).
  *   2. self-host absolute `https://<origin>/files/<id>`
- *                                              → `/api/v2/attachments/<id>`
+ *                                              → `/api/attachments/<id>`
  *      (relativised — drops the host so the URL is portable). `<origin>` must
  *      match `linkDetector.getAppOrigins()` (CLIENT_URL / BASE_URL).
  *   3. external absolute `https://other/files/<id>` → left untouched
  *      (we must not rewrite an unrelated third-party `/files/<id>` image).
  *
- * Host moves (v1 domain ≠ v2 domain) are out of scope: the separate `replace
- * url` admin-cli command rewrites the old host → new host first, after which
- * the self-host absolute URLs match CLIENT_URL and rule 2 relativises them.
+ * Host moves (v1 domain ≠ current domain) are out of scope: the separate
+ * `replace url` admin-cli command rewrites the old host → new host first,
+ * after which the self-host absolute URLs match CLIENT_URL and rule 2
+ * relativises them.
  *
- * Idempotent: the output `/api/v2/attachments/<id>` never matches the
- * `/files/` regex, so a re-apply is a no-op (no double rewrite).
+ * Idempotent: the output `/api/attachments/<id>` never matches the
+ * `/files/` regex, so a re-apply is a no-op (no double rewrite). Note this
+ * migration's output prefix targets the CURRENT (`/api/attachments/`) form
+ * directly — there is no reason to route a fresh rewrite through the
+ * intermediate, now-legacy `/api/v2/attachments/` shape first. A body already
+ * carrying that intermediate `/api/v2/attachments/<id>` form (rewritten by a
+ * copy of this migration that ran before the `/api/v2` → `/api` cutover) is
+ * NOT re-visited by this migration (it doesn't match the `/files/` prefilter)
+ * — display of that form is handled permanently by the reader dual-accept in
+ * `attachment.ts`'s `ATTACHMENT_URI_RE` and the web canonicalization helper
+ * (`attachment-url.ts`), not by re-running this migration.
  *
  * CLIENT_URL / BASE_URL unset: `getAppOrigins()` returns `[]`, so the
  * self-host alternation is empty and rule 2 is skipped — only relative
  * `/files/<id>` (rule 1) is rewritten and absolute URLs are left alone.
  */
 
-/** v2 attachment URL prefix the rewrite targets. */
-const V2_ATTACHMENT_PREFIX = '/api/v2/attachments/';
+/** Current attachment URL prefix the rewrite targets. */
+const ATTACHMENT_URL_PREFIX = '/api/attachments/';
 
 /**
  * Substring that necessarily precedes every rewritable v1 file URL: `/files/`.
@@ -87,7 +97,7 @@ const emptyCounts = (): FilesUrlRewriteCounts => ({ relative: 0, selfHostAbsolut
  *
  * The `![alt]` / `[text]` head and the trailing path/query/fragment after the
  * id are captured verbatim and re-emitted unchanged; only the host + `/files/`
- * → `/api/v2/attachments/` portion is rewritten. Self-host classification of
+ * → `/api/attachments/` portion is rewritten. Self-host classification of
  * absolute URLs is decided in the callback (not the regex) so external hosts
  * fall through untouched.
  *
@@ -141,12 +151,12 @@ export function rewriteFilesUrls(body: string, origins: readonly string[]): { bo
       if (schemeAndHost === undefined) {
         // Rule 1 — relative `/files/<id>` is unconditionally this site.
         counts.relative += 1;
-        return `${head}(${V2_ATTACHMENT_PREFIX}${id}${rest})`;
+        return `${head}(${ATTACHMENT_URL_PREFIX}${id}${rest})`;
       }
       if (isSelfHostOrigin(schemeAndHost, origins)) {
         // Rule 2 — self-host absolute URL; relativise (drop the host).
         counts.selfHostAbsolute += 1;
-        return `${head}(${V2_ATTACHMENT_PREFIX}${id}${rest})`;
+        return `${head}(${ATTACHMENT_URL_PREFIX}${id}${rest})`;
       }
       // Rule 3 — external host; leave untouched.
       counts.externalSkipped += 1;
@@ -240,7 +250,7 @@ export const filesUrlToAttachments = defineMigration({
   // even unapplied. `isPending` scans the live corpus → re-triggers on new
   // content. Cosmetic.
   severity: 'cosmetic',
-  description: 'Rewrite v1 /files/<id> attachment URLs to v2 /api/v2/attachments/<id>',
+  description: 'Rewrite v1 /files/<id> attachment URLs to /api/attachments/<id>',
 
   /**
    * Pending verdict = at least one published page whose **current** revision

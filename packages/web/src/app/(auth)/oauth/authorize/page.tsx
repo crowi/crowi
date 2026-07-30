@@ -4,7 +4,7 @@ import { Suspense, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { m } from '@paraglide/messages.js';
 import { ErrorAlert } from '@/components/ui/error-alert';
-import { apiClientV2 } from '@/lib/api-client';
+import { apiClient } from '@/lib/api-client';
 import { clientDisplayName } from '@/lib/oauth-clients';
 import { useOAuthClientInfo } from '@/lib/use-oauth-client-info';
 import { ConsentCard } from './consent-card';
@@ -57,7 +57,7 @@ function ConsentScreen() {
     setIsApproving(true);
     setError(null);
     try {
-      const response = await apiClientV2.oauth.authorize.$post({
+      const response = await apiClient.oauth.authorize.$post({
         json: {
           client_id: clientId,
           redirect_uri: redirectUri,

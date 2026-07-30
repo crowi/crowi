@@ -110,7 +110,8 @@ export const getPageRoute = createRoute({
   },
   responses: {
     200: {
-      description: 'The requested page with populated revision',
+      description:
+        'The requested page with populated revision. `revision.renderedAst` shape is content-negotiated via the `X-Crowi-Ast-Version` request header (RFC-0023): requests declaring `X-Crowi-Ast-Version: 1` receive the typed `{astVersion, root}` envelope; all other requests receive the stored bare mdast Root verbatim. The response varies on this header (`Vary: X-Crowi-Ast-Version`).',
       content: { 'application/json': { schema: GetPageResponseSchema } },
     },
     401: {
@@ -148,7 +149,8 @@ export const listPagesRoute = createRoute({
   },
   responses: {
     200: {
-      description: 'Page list (newest first) with optional portal page',
+      description:
+        'Page list (newest first) with optional portal page. The portal document is the only row carrying `revision.renderedAst`; its shape is content-negotiated via the `X-Crowi-Ast-Version` request header (RFC-0023, same semantics as GET /pages). The response varies on this header (`Vary: X-Crowi-Ast-Version`).',
       content: { 'application/json': { schema: ListPagesResponseSchema } },
     },
     401: {

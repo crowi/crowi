@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { CreateAccessTokenRequest } from '@crowi/api-contract';
-import { apiClientV2 } from './api-client';
+import { apiClient } from './api-client';
 
 /**
  * RFC-0010 Phase 2 — Personal Access Token (PAT) hooks. Replaces the
@@ -18,7 +18,7 @@ export function useAccessTokens() {
   return useQuery({
     queryKey: accessTokenKeys.all,
     queryFn: async () => {
-      const response = await apiClientV2.me['access-tokens'].$get();
+      const response = await apiClient.me['access-tokens'].$get();
       if (!response.ok) {
         throw new Error('Failed to fetch access tokens');
       }
@@ -32,7 +32,7 @@ export function useCreateAccessToken() {
 
   return useMutation({
     mutationFn: async (data: CreateAccessTokenRequest) => {
-      const response = await apiClientV2.me['access-tokens'].$post({ json: data });
+      const response = await apiClient.me['access-tokens'].$post({ json: data });
       if (response.status === 201) {
         return response.json();
       }
@@ -53,7 +53,7 @@ export function useDeleteAccessToken() {
 
   return useMutation({
     mutationFn: async (id: string) => {
-      const response = await apiClientV2.me['access-tokens'][':id'].$delete({ param: { id } });
+      const response = await apiClient.me['access-tokens'][':id'].$delete({ param: { id } });
       if (response.status === 200) {
         return response.json();
       }

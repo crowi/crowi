@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { FormErrorList } from '@/components/ui/form-error-list';
-import { apiClientV2 } from '@/lib/api-client';
+import { apiClient } from '@/lib/api-client';
 import { errorMessage } from '@/lib/error-message';
 import { storeTokens } from '@/lib/auth-token';
 import { defaultLandingPath } from '@/lib/login-redirect';
@@ -34,7 +34,7 @@ export function ResetPasswordForm() {
     }
     let active = true;
     (async () => {
-      const res = await apiClientV2.auth['reset-password'].$get({ query: { token } });
+      const res = await apiClient.auth['reset-password'].$get({ query: { token } });
       if (active && res.status !== 200) setTokenInvalid(true);
     })().catch(() => {
       if (active) setTokenInvalid(true);
@@ -50,7 +50,7 @@ export function ResetPasswordForm() {
     setIsSubmitting(true);
     setErrors([]);
     try {
-      const res = await apiClientV2.auth['reset-password'].$post({ json: { token, password } });
+      const res = await apiClient.auth['reset-password'].$post({ json: { token, password } });
       if (res.status === 200) {
         const body = await res.json();
         storeTokens(body, body.expiresIn);

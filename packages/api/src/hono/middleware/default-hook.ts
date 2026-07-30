@@ -7,7 +7,7 @@
  * uniformly.
  *
  * The two admin routes that expose a *different* envelope (`PUT
- * /api/v2/admin/app` and `PUT /api/v2/admin/mail` use
+ * /api/admin/app` and `PUT /api/admin/mail` use
  * `AppSettingsValidationError` / `MailSettingsValidationError` with
  * `{ bodyResult: { issues, name } }`) override this hook per-route via
  * `createRoute({ hook: ... })` at port time.

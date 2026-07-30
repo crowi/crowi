@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { canonicalizeLegacyAttachmentUrl } from '@/lib/attachment-url';
 import type { resolveDisplayUser } from '@/lib/page-display-user';
 
 type DisplayUser = NonNullable<ReturnType<typeof resolveDisplayUser>>;
@@ -16,7 +17,7 @@ export function PageDisplayUserBadge({ user }: { user: DisplayUser }) {
   return (
     <>
       <Avatar className="h-5 w-5">
-        <AvatarImage src={user.image || undefined} alt={user.name} />
+        <AvatarImage src={canonicalizeLegacyAttachmentUrl(user.image || undefined)} alt={user.name} />
         <AvatarFallback className="bg-primary/10 text-primary text-[10px]">{user.name.charAt(0).toUpperCase()}</AvatarFallback>
       </Avatar>
       {username ? (

@@ -13,10 +13,8 @@ beforeEach(() => {
 
 describe('recordDispatchStart / recordDispatchEnd', () => {
   it('pushes an in-flight entry (httpStatus: null, finishedAt: null) and finalizes it in place', () => {
-    const entry = recordDispatchStart('GET', '/api/v2/pages');
-    expect(snapshotRecentOps()).toEqual([
-      expect.objectContaining({ method: 'GET', path: '/api/v2/pages', dispatched: true, httpStatus: null, finishedAt: null }),
-    ]);
+    const entry = recordDispatchStart('GET', '/api/pages');
+    expect(snapshotRecentOps()).toEqual([expect.objectContaining({ method: 'GET', path: '/api/pages', dispatched: true, httpStatus: null, finishedAt: null })]);
 
     recordDispatchEnd(entry, 200);
     const snapshot = snapshotRecentOps();
@@ -26,7 +24,7 @@ describe('recordDispatchStart / recordDispatchEnd', () => {
   });
 
   it('records httpStatus: null when the caller finalizes with null (fetchFn threw before producing a Response)', () => {
-    const entry = recordDispatchStart('POST', '/api/v2/pages');
+    const entry = recordDispatchStart('POST', '/api/pages');
     recordDispatchEnd(entry, null);
     expect(snapshotRecentOps()[0]).toMatchObject({ dispatched: true, httpStatus: null });
     // still finalized (finishedAt set) — distinguishable from "still in flight".
@@ -34,12 +32,12 @@ describe('recordDispatchStart / recordDispatchEnd', () => {
   });
 
   it('tags each entry with expect.getState().currentTestName at push time', () => {
-    const entry = recordDispatchStart('GET', '/api/v2/pages');
+    const entry = recordDispatchStart('GET', '/api/pages');
     expect(entry.testFullName).toBe(expect.getState().currentTestName);
   });
 
   it('records multiple parallel requests within one test (autocomplete.test.ts-style burst)', () => {
-    const entries = Array.from({ length: 5 }, () => recordDispatchStart('GET', '/api/v2/users/autocomplete'));
+    const entries = Array.from({ length: 5 }, () => recordDispatchStart('GET', '/api/users/autocomplete'));
     entries.forEach((entry, i) => recordDispatchEnd(entry, i % 2 === 0 ? 200 : 429));
 
     const snapshot = snapshotRecentOps();
@@ -49,13 +47,13 @@ describe('recordDispatchStart / recordDispatchEnd', () => {
 
   it('caps the buffer at the most recent MAX_ENTRIES (20) — older entries are evicted', () => {
     for (let i = 0; i < 25; i++) {
-      recordDispatchEnd(recordDispatchStart('GET', `/api/v2/probe/${i}`), 200);
+      recordDispatchEnd(recordDispatchStart('GET', `/api/probe/${i}`), 200);
     }
     const snapshot = snapshotRecentOps();
     expect(snapshot).toHaveLength(20);
     // The oldest 5 (probe/0..4) were evicted — the window starts at probe/5.
-    expect(snapshot[0].path).toBe('/api/v2/probe/5');
-    expect(snapshot[snapshot.length - 1].path).toBe('/api/v2/probe/24');
+    expect(snapshot[0].path).toBe('/api/probe/5');
+    expect(snapshot[snapshot.length - 1].path).toBe('/api/probe/24');
   });
 });
 
@@ -65,7 +63,7 @@ describe('snapshotRecentOps', () => {
   });
 
   it('returns a copy, not a live reference — mutating the snapshot does not affect the buffer', () => {
-    recordDispatchStart('GET', '/api/v2/pages');
+    recordDispatchStart('GET', '/api/pages');
     const snapshot = snapshotRecentOps();
     snapshot.pop();
     expect(snapshotRecentOps()).toHaveLength(1);
@@ -74,7 +72,7 @@ describe('snapshotRecentOps', () => {
 
 describe('__resetRingBufferForTests', () => {
   it('clears every entry', () => {
-    recordDispatchStart('GET', '/api/v2/pages');
+    recordDispatchStart('GET', '/api/pages');
     expect(snapshotRecentOps()).toHaveLength(1);
     __resetRingBufferForTests();
     expect(snapshotRecentOps()).toEqual([]);

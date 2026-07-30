@@ -3,7 +3,7 @@
 import type { PageWithRevision, RenamePageRequest, RenameSubtreeRequest, SetPageGrantRequest, UpdatePageRequest } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 import { type QueryClient, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiClientV2 } from './api-client';
+import { apiClient } from './api-client';
 import { invalidateUserSubpagesQueries, PAGE_LIST_FAMILY_ROOT, pageKeys, revisionsKeys, userPageKeys } from './page-query-keys';
 import { draftsKeys } from './use-drafts';
 
@@ -38,7 +38,7 @@ export function invalidatePageContentQueries(queryClient: QueryClient): void {
 
 /**
  * RFC-0006 Phase 4 Batch 4 — switched from `apiClient.page.*` (ts-rest)
- * to `apiClientV2.pages.*.$method` (`createClient`). The legacy
+ * to `apiClient.pages.*.$method` (`createClient`). The legacy
  * `unwrapResult` helper is replaced with explicit `response.ok` /
  * `response.status` checks because hc returns a plain `Response`-shaped
  * object rather than ts-rest's `{ status, body }` discriminated union.
@@ -136,7 +136,7 @@ export function useUpdatePage() {
 
   return useMutation({
     mutationFn: async (data: UpdatePageRequest): Promise<PageWithRevision> => {
-      const response = await apiClientV2.pages.$put({ json: data });
+      const response = await apiClient.pages.$put({ json: data });
       if (response.ok) {
         const body = await response.json();
         return body.page as PageWithRevision;
@@ -179,7 +179,7 @@ export function useSetPageGrant() {
 
   return useMutation({
     mutationFn: async (data: SetPageGrantRequest): Promise<PageWithRevision> => {
-      const response = await apiClientV2.pages.grant.$put({ json: data });
+      const response = await apiClient.pages.grant.$put({ json: data });
       if (response.ok) {
         const body = await response.json();
         return body.page as PageWithRevision;
@@ -210,7 +210,7 @@ export function useDeletePage() {
 
   return useMutation({
     mutationFn: async (data: DeletePageRequest): Promise<PageWithRevision> => {
-      const response = await apiClientV2.pages.$delete({ json: data });
+      const response = await apiClient.pages.$delete({ json: data });
       if (response.ok) {
         const body = await response.json();
         return body.page as PageWithRevision;
@@ -250,7 +250,7 @@ export function useRevertDeletedPage() {
 
   return useMutation({
     mutationFn: async (data: RevertDeletedPageRequest): Promise<PageWithRevision> => {
-      const response = await apiClientV2.pages.revert.$post({ json: data });
+      const response = await apiClient.pages.revert.$post({ json: data });
       if (response.ok) {
         const body = await response.json();
         return body.page as PageWithRevision;
@@ -287,7 +287,7 @@ export function useRevertToRevision() {
 
   return useMutation({
     mutationFn: async (data: RevertToRevisionRequest): Promise<PageWithRevision> => {
-      const response = await apiClientV2.pages['revert-to-revision'].$post({ json: data });
+      const response = await apiClient.pages['revert-to-revision'].$post({ json: data });
       if (response.ok) {
         const body = await response.json();
         return body.page as PageWithRevision;
@@ -321,7 +321,7 @@ export function useRenamePage() {
 
   return useMutation({
     mutationFn: async (data: RenamePageRequest): Promise<RenamePageResult> => {
-      const response = await apiClientV2.pages.rename.$post({ json: data });
+      const response = await apiClient.pages.rename.$post({ json: data });
       if (response.ok) {
         const body = await response.json();
         return {
@@ -374,7 +374,7 @@ export function useRenameSubtree() {
 
   return useMutation({
     mutationFn: async (data: RenameSubtreeRequest): Promise<number> => {
-      const response = await apiClientV2.pages['rename-subtree'].$post({ json: data });
+      const response = await apiClient.pages['rename-subtree'].$post({ json: data });
       if (response.ok) {
         const body = await response.json();
         return body.renamed_count;

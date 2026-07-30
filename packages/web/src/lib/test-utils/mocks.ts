@@ -12,6 +12,7 @@
  *   factories below just enforce the uniform module shape.
  */
 
+import { type ComponentProps, createElement } from 'react';
 import type { Mock } from 'vitest';
 
 // ---------------------------------------------------------------------------
@@ -96,11 +97,40 @@ export function matchMediaImpl(isMatch: (query: string) => boolean): (query: str
 }
 
 // ---------------------------------------------------------------------------
+// @/components/ui/avatar
+// ---------------------------------------------------------------------------
+
+/**
+ * Module shape for `vi.mock('@/components/ui/avatar', ...)`, overriding only
+ * `AvatarImage` with a synchronous passthrough.
+ *
+ * Radix's AvatarImage defers rendering the <img> until a real image-load
+ * event fires (via an internal `new Image()`), which jsdom's default
+ * resource-loading-disabled config never resolves — irrelevant to tests that
+ * only care about the computed `src`. The passthrough mirrors Radix's own
+ * "no src -> render nothing" fallback (a falsy `src` resolves straight to
+ * loading status `error`, never `loaded`).
+ *
+ * Usage (the vi.mock declaration itself stays in each test file — Vitest
+ * hoists it):
+ *
+ *   vi.mock('@/components/ui/avatar', async (importOriginal) =>
+ *     avatarImageMockModule(await importOriginal<typeof import('@/components/ui/avatar')>()),
+ *   );
+ */
+export function avatarImageMockModule(actual: typeof import('@/components/ui/avatar')) {
+  return {
+    ...actual,
+    AvatarImage: (props: ComponentProps<'img'>) => (props.src ? createElement('img', props) : null),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // API response helper
 // ---------------------------------------------------------------------------
 
 /**
- * Build a `Response`-shaped object matching what `apiClientV2` (a
+ * Build a `Response`-shaped object matching what `apiClient` (a
  * `createClient` typed client) returns.
  *
  * This replaces the local `makeResponse` / `tokenOkResponse` / `okResponse` /

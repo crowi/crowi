@@ -229,7 +229,7 @@ export const GRANT_TYPES_SUPPORTED = ['authorization_code', 'refresh_token', DEV
  * `GET /.well-known/oauth-authorization-server` response (RFC 8414). Lets
  * CLIs / SDKs auto-discover endpoints. `authorization_endpoint` is the
  * **web** consent screen origin; `token_endpoint` / `revocation_endpoint`
- * are the `/api/v2/oauth/*` API (the two live on different base URLs —
+ * are the `/api/oauth/*` API (the two live on different base URLs —
  * RFC-0010, PHASE3-Q6). `device_authorization_endpoint` is optional so
  * Phase 4 can add it without a schema break.
  */

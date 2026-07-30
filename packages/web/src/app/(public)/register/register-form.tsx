@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { FormErrorList } from '@/components/ui/form-error-list';
-import { apiClientV2 } from '@/lib/api-client';
+import { apiClient } from '@/lib/api-client';
 import { errorMessage } from '@/lib/error-message';
 import { useAppInfo } from '@/lib/use-app-info';
 import { m } from '@paraglide/messages.js';
@@ -47,8 +47,8 @@ export function RegisterForm() {
     try {
       // RFC-0006 Phase 4 Batch 1 — switched from
       // `apiClient.tokenAuth.tokenRegister` to
-      // `apiClientV2.auth.register.$post`. Wire format unchanged.
-      const response = await apiClientV2.auth.register.$post({
+      // `apiClient.auth.register.$post`. Wire format unchanged.
+      const response = await apiClient.auth.register.$post({
         json: {
           username: formData.username,
           name: formData.name,

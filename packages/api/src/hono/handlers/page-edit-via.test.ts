@@ -29,7 +29,7 @@ const seedUser = (suffix: string) =>
   });
 
 const latestRevisionEditVia = async (token: string, pageId: string): Promise<string | undefined> => {
-  const res = await request(app).get(`/api/v2/pages/${pageId}/revisions`).set('Authorization', `Bearer ${token}`);
+  const res = await request(app).get(`/api/pages/${pageId}/revisions`).set('Authorization', `Bearer ${token}`);
   expect(res.status).toBe(200);
   return res.body.revisions[0]?.editVia;
 };
@@ -40,7 +40,7 @@ describe('RFC-0010 — revision editVia (history "app" chip)', () => {
     const jwt = createJwtUtil(crowi);
     const oauthToken = jwt.signOauthAccessToken({ user, scopes: ['pages:read', 'pages:write'], clientId: 'crowi-cli' });
 
-    const create = await request(app).post('/api/v2/pages').set('Authorization', `Bearer ${oauthToken}`).send({ path: '/via-oauth', body: '# via oauth' });
+    const create = await request(app).post('/api/pages').set('Authorization', `Bearer ${oauthToken}`).send({ path: '/via-oauth', body: '# via oauth' });
     expect(create.status).toBe(200);
     const pageId = create.body.page._id as string;
 
@@ -49,7 +49,7 @@ describe('RFC-0010 — revision editVia (history "app" chip)', () => {
     // A subsequent external edit on the same page also records oauth.
     const revisionId = create.body.page.revision._id as string;
     const update = await request(app)
-      .put('/api/v2/pages')
+      .put('/api/pages')
       .set('Authorization', `Bearer ${oauthToken}`)
       .send({ page_id: pageId, revision_id: revisionId, body: '# via oauth v2' });
     expect(update.status).toBe(200);
@@ -60,7 +60,7 @@ describe('RFC-0010 — revision editVia (history "app" chip)', () => {
     const user = await seedUser('web');
     const webToken = createJwtUtil(crowi).generateTokens(user).accessToken;
 
-    const create = await request(app).post('/api/v2/pages').set('Authorization', `Bearer ${webToken}`).send({ path: '/via-web', body: '# via web' });
+    const create = await request(app).post('/api/pages').set('Authorization', `Bearer ${webToken}`).send({ path: '/via-web', body: '# via web' });
     expect(create.status).toBe(200);
     const pageId = create.body.page._id as string;
 

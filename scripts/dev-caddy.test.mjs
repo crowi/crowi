@@ -104,7 +104,7 @@ describe('pickProxyTarget', () => {
   })
 
   it('strips the query string before matching', () => {
-    assert.equal(pickProxyTarget('/api/v2/page?path=/foo'), 'api')
+    assert.equal(pickProxyTarget('/api/page?path=/foo'), 'api')
     assert.equal(pickProxyTarget('/collab?token=abc'), 'api')
     assert.equal(pickProxyTarget('/?x=1'), 'web')
   })
@@ -179,13 +179,13 @@ describe('startNodeProxyFallback (zero-dep proxy, end-to-end against fake backen
 
   it('forwards an /api/* request to the api backend', async () => {
     const body = await new Promise((resolve, reject) => {
-      http.get(`http://127.0.0.1:${proxyPort}/api/v2/page`, (res) => {
+      http.get(`http://127.0.0.1:${proxyPort}/api/page`, (res) => {
         let data = ''
         res.on('data', (c) => (data += c))
         res.on('end', () => resolve(data))
       }).on('error', reject)
     })
-    assert.equal(body, 'api:/api/v2/page')
+    assert.equal(body, 'api:/api/page')
   })
 
   it('forwards a / request to the web backend', async () => {
@@ -202,7 +202,7 @@ describe('startNodeProxyFallback (zero-dep proxy, end-to-end against fake backen
   it('forwards the original Host header upstream', async () => {
     await new Promise((resolve, reject) => {
       const req = http.request(
-        { host: '127.0.0.1', port: proxyPort, path: '/api/v2/whoami', headers: { Host: 'my-worktree.tailnet.ts.net' } },
+        { host: '127.0.0.1', port: proxyPort, path: '/api/whoami', headers: { Host: 'my-worktree.tailnet.ts.net' } },
         (res) => {
           res.resume()
           res.on('end', resolve)

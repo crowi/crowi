@@ -20,27 +20,27 @@ const createUnconfirmedUser = async (email: string): Promise<{ user: UserDocumen
   return { user, token };
 };
 
-describe('Routes /api/v2/auth/activate (Hono)', () => {
-  describe('GET /api/v2/auth/activate', () => {
+describe('Routes /api/auth/activate (Hono)', () => {
+  describe('GET /api/auth/activate', () => {
     it('validates a good activation token', async () => {
       const { token } = await createUnconfirmedUser('activate-validate@example.com');
-      const res = await request(app).get('/api/v2/auth/activate').query({ token });
+      const res = await request(app).get('/api/auth/activate').query({ token });
       expect(res.status).toBe(200);
     });
 
     it('rejects a bad token with 401', async () => {
-      const res = await request(app).get('/api/v2/auth/activate').query({ token: 'nope' });
+      const res = await request(app).get('/api/auth/activate').query({ token: 'nope' });
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe('INVALID_ACTIVATION_TOKEN');
     });
   });
 
-  describe('POST /api/v2/auth/activate', () => {
+  describe('POST /api/auth/activate', () => {
     it('confirms email, activates the account, and signs in', async () => {
       const { user, token } = await createUnconfirmedUser('activate@example.com');
       const User = crowi.model('User');
 
-      const res = await request(app).post('/api/v2/auth/activate').set(jsonHeaders).send({ token });
+      const res = await request(app).post('/api/auth/activate').set(jsonHeaders).send({ token });
       expect(res.status).toBe(200);
       expect(res.body.accessToken).toBeTruthy();
       expect(res.body.refreshToken).toBeTruthy();
@@ -51,7 +51,7 @@ describe('Routes /api/v2/auth/activate (Hono)', () => {
     });
 
     it('rejects an invalid token with 401', async () => {
-      const res = await request(app).post('/api/v2/auth/activate').set(jsonHeaders).send({ token: 'bogus' });
+      const res = await request(app).post('/api/auth/activate').set(jsonHeaders).send({ token: 'bogus' });
       expect(res.status).toBe(401);
     });
 
@@ -64,7 +64,7 @@ describe('Routes /api/v2/auth/activate (Hono)', () => {
       user.emailConfirmedAt = new Date();
       await user.save();
 
-      const res = await request(app).post('/api/v2/auth/activate').set(jsonHeaders).send({ token });
+      const res = await request(app).post('/api/auth/activate').set(jsonHeaders).send({ token });
 
       // A 24h-valid mail link must not mint a session for an account that
       // is already active — that would be a first-factor bypass.
@@ -80,7 +80,7 @@ describe('Routes /api/v2/auth/activate (Hono)', () => {
         userId: user._id.toString(),
         email: 'wrongpurpose-activate@example.com',
       }).token;
-      const res = await request(app).post('/api/v2/auth/activate').set(jsonHeaders).send({ token: resetToken });
+      const res = await request(app).post('/api/auth/activate').set(jsonHeaders).send({ token: resetToken });
       expect(res.status).toBe(401);
     });
   });

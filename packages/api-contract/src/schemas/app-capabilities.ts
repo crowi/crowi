@@ -2,7 +2,7 @@ import { z } from '@hono/zod-openapi';
 
 /**
  * The static capability baseline + API surface version advertised at
- * `GET /api/v2/app/info` and consumed by the `@crowi/cli` end-user CLI for
+ * `GET /api/app/info` and consumed by the `@crowi/cli` end-user CLI for
  * feature detection / version-skew warnings.
  *
  * These two values are deliberately shared between the API handler

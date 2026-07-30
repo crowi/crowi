@@ -33,7 +33,7 @@ function creatorName(creator: CommentView['creator']): string {
 
 /**
  * `crowi comment list <path-or-id>` — list a page's comments
- * (`GET /api/v2/comments`, needs `comments:read`). Resolves the page to its
+ * (`GET /api/comments`, needs `comments:read`). Resolves the page to its
  * `page_id` first (via `GET /pages`) so the user can pass a path.
  */
 async function runList(pathOrId: string, command: Command): Promise<void> {
@@ -71,7 +71,7 @@ async function runList(pathOrId: string, command: Command): Promise<void> {
 
 /**
  * `crowi comment add <path-or-id>` — add a comment
- * (`POST /api/v2/comments`, needs `comments:write`). The comment text comes
+ * (`POST /api/comments`, needs `comments:write`). The comment text comes
  * from `--message`, `--file`, or stdin. The required `revision_id` is read
  * from the just-fetched page (`page.revision._id`).
  */

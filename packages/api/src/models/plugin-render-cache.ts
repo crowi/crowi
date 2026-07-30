@@ -35,6 +35,13 @@ export interface PluginRenderCacheDocument extends Document {
   expiresAt: Date;
   result: RenderResult;
   lastGoodFetchedAt?: Date;
+  /**
+   * RFC-0023 (design doc §11) — JSON byte length of `result.structured`
+   * (0 when absent), denormalised for the per-page structured-budget
+   * aggregate (mirrors `htmlBytes`). Pre-existing rows read as 0 via
+   * the schema default — full backward compatibility, no migration.
+   */
+  structuredBytes: number;
 }
 
 export interface PluginRenderCacheModel extends Model<PluginRenderCacheDocument> {
@@ -62,6 +69,8 @@ export default (_crowi: Crowi) => {
       result: { type: Schema.Types.Mixed, required: true },
       // Optional — see `PluginRenderCacheDocument.lastGoodFetchedAt`.
       lastGoodFetchedAt: { type: Date, required: false },
+      // RFC-0023 — see `PluginRenderCacheDocument.structuredBytes`.
+      structuredBytes: { type: Number, required: true, default: 0 },
     },
     {
       // No `createdAt` / `updatedAt` — `fetchedAt` already captures

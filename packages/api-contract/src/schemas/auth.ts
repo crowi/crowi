@@ -5,7 +5,7 @@
  * The legacy SSR-style schemas (`LoginRequestSchema`, `LoginResponseSchema`,
  * `RegisterRequestSchema`, `RegisterResponseSchema`, `ErrorResponseSchema`)
  * that backed the deleted `auth` contract were removed in RFC-0006 Phase 4
- * Batch 1 — the corresponding `/api/v2/login` / `/api/v2/register` paths
+ * Batch 1 — the corresponding `/api/login` / `/api/register` paths
  * had no production frontend consumer and were dropped wholesale.
  */
 import { z } from '@hono/zod-openapi';

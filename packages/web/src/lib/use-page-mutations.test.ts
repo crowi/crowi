@@ -3,7 +3,7 @@ import { renderHook, waitFor, act } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createElement, type PropsWithChildren } from 'react';
 
-// Mock `apiClientV2` so every mutation call hits our fake instead of the
+// Mock `apiClient` so every mutation call hits our fake instead of the
 // network. Each mutation owns its own dedicated fn so a test only needs to
 // configure the endpoint(s) it exercises.
 const { putPage, putGrant, deletePage, revertPage, renamePage, renameSubtree } = vi.hoisted(() => ({
@@ -15,7 +15,7 @@ const { putPage, putGrant, deletePage, revertPage, renamePage, renameSubtree } =
   renameSubtree: vi.fn(),
 }));
 vi.mock('./api-client', () => ({
-  apiClientV2: {
+  apiClient: {
     pages: {
       $put: putPage,
       $delete: deletePage,

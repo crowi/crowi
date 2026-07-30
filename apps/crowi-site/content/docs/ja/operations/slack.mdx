@@ -21,8 +21,8 @@ HTTP ルートを提供します。
 
 | ルート | 認証 | 用途 |
 | ------ | ---- | ---- |
-| `POST /api/v2/plugins/@crowi/plugin-slack/events` | Slack 署名のみ (公開) | Slack Events API の受信口。`link_shared` を受けて `chat.unfurl` を呼ぶ |
-| `POST /api/v2/plugins/@crowi/plugin-slack/manifest` | 管理者 (JWT) | Slack App manifest の生成 (管理画面のボタンから呼ばれる) |
+| `POST /api/plugins/@crowi/plugin-slack/events` | Slack 署名のみ (公開) | Slack Events API の受信口。`link_shared` を受けて `chat.unfurl` を呼ぶ |
+| `POST /api/plugins/@crowi/plugin-slack/manifest` | 管理者 (JWT) | Slack App manifest の生成 (管理画面のボタンから呼ばれる) |
 
 受信口は Crowi の認証に対しては公開ですが、**Slack のリクエスト署名**
 (HMAC-SHA256、±5 分のリプレイガード付き) で検証され、署名が一致しない
@@ -53,7 +53,7 @@ HTTP ルートを提供します。
 manifest には次の値が埋め込まれています。
 
 - アプリ名 / bot 名 = この wiki の名前 (`app:title`)
-- `event_subscriptions.request_url` = `{CLIENT_URL}/api/v2/plugins/@crowi/plugin-slack/events`
+- `event_subscriptions.request_url` = `{CLIENT_URL}/api/plugins/@crowi/plugin-slack/events`
 - 購読する bot イベント = `link_shared`
 - unfurl 対象ドメイン = この Crowi インスタンスのホスト
 - OAuth スコープ (最小権限) = `links:read` / `links:write` / `chat:write`

@@ -34,7 +34,7 @@ const seedActiveUser = async (info: { name: string; username: string; email: str
   });
 };
 
-describe('Routes /api/v2/me/access-tokens (Hono)', () => {
+describe('Routes /api/me/access-tokens (Hono)', () => {
   const Config = () => crowi.model('Config');
   const User = () => crowi.model('User');
   const PAT = () => crowi.model('PersonalAccessToken');
@@ -71,7 +71,7 @@ describe('Routes /api/v2/me/access-tokens (Hono)', () => {
 
   describe('POST /me/access-tokens', () => {
     it('issues a PAT and returns the plaintext exactly once', async () => {
-      const res = await web(request(app).post('/api/v2/me/access-tokens')).send({ name: 'cli', scopes: ['pages:read'] });
+      const res = await web(request(app).post('/api/me/access-tokens')).send({ name: 'cli', scopes: ['pages:read'] });
       expect(res.status).toBe(201);
       expect(res.body.name).toBe('cli');
       expect(res.body.scopes).toEqual(['pages:read']);
@@ -80,7 +80,7 @@ describe('Routes /api/v2/me/access-tokens (Hono)', () => {
       expect(res.body.expiresAt).toBeNull();
 
       // The list must not echo the secret back.
-      const list = await web(request(app).get('/api/v2/me/access-tokens'));
+      const list = await web(request(app).get('/api/me/access-tokens'));
       expect(list.status).toBe(200);
       expect(list.body.accessTokens).toHaveLength(1);
       expect(list.body.accessTokens[0]).not.toHaveProperty('token');
@@ -88,20 +88,20 @@ describe('Routes /api/v2/me/access-tokens (Hono)', () => {
     });
 
     it('rejects an admin:* scope with 400 INVALID_SCOPE', async () => {
-      const res = await web(request(app).post('/api/v2/me/access-tokens')).send({ name: 'bad', scopes: ['admin:read'] });
+      const res = await web(request(app).post('/api/me/access-tokens')).send({ name: 'bad', scopes: ['admin:read'] });
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('INVALID_SCOPE');
       expect(res.body.error.details.invalidScopes).toContain('admin:read');
     });
 
     it('rejects an unknown scope with 400 INVALID_SCOPE', async () => {
-      const res = await web(request(app).post('/api/v2/me/access-tokens')).send({ name: 'bad', scopes: ['pages:teleport'] });
+      const res = await web(request(app).post('/api/me/access-tokens')).send({ name: 'bad', scopes: ['pages:teleport'] });
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('INVALID_SCOPE');
     });
 
     it('accepts an umbrella scope', async () => {
-      const res = await web(request(app).post('/api/v2/me/access-tokens')).send({ name: 'umbrella', scopes: ['read'] });
+      const res = await web(request(app).post('/api/me/access-tokens')).send({ name: 'umbrella', scopes: ['read'] });
       expect(res.status).toBe(201);
       expect(res.body.scopes).toEqual(['read']);
     });
@@ -109,8 +109,8 @@ describe('Routes /api/v2/me/access-tokens (Hono)', () => {
 
   describe('GET /me/access-tokens', () => {
     it('lists the current user tokens (metadata only)', async () => {
-      await web(request(app).post('/api/v2/me/access-tokens')).send({ name: 'a', scopes: ['pages:read'] });
-      const res = await web(request(app).get('/api/v2/me/access-tokens'));
+      await web(request(app).post('/api/me/access-tokens')).send({ name: 'a', scopes: ['pages:read'] });
+      const res = await web(request(app).get('/api/me/access-tokens'));
       expect(res.status).toBe(200);
       expect(res.body.accessTokens).toHaveLength(1);
       expect(res.body.accessTokens[0].name).toBe('a');
@@ -119,25 +119,25 @@ describe('Routes /api/v2/me/access-tokens (Hono)', () => {
 
   describe('DELETE /me/access-tokens/:id', () => {
     it('revokes a token and a revoked PAT then 401s', async () => {
-      const created = await web(request(app).post('/api/v2/me/access-tokens')).send({ name: 'revoke-me', scopes: ['profile:read'] });
+      const created = await web(request(app).post('/api/me/access-tokens')).send({ name: 'revoke-me', scopes: ['profile:read'] });
       const plain = created.body.token as string;
       const id = created.body.id as string;
 
       // Works before revocation.
-      const ok = await request(app).get('/api/v2/me').set('Authorization', `Bearer ${plain}`);
+      const ok = await request(app).get('/api/me').set('Authorization', `Bearer ${plain}`);
       expect(ok.status).toBe(200);
 
-      const del = await web(request(app).delete(`/api/v2/me/access-tokens/${id}`));
+      const del = await web(request(app).delete(`/api/me/access-tokens/${id}`));
       expect(del.status).toBe(200);
 
       // 401 after revocation.
-      const after = await request(app).get('/api/v2/me').set('Authorization', `Bearer ${plain}`);
+      const after = await request(app).get('/api/me').set('Authorization', `Bearer ${plain}`);
       expect(after.status).toBe(401);
       expect(after.body.error.code).toBe('AUTHENTICATION_REQUIRED');
     });
 
     it('returns 404 for an unknown token id', async () => {
-      const res = await web(request(app).delete('/api/v2/me/access-tokens/507f1f77bcf86cd799439011'));
+      const res = await web(request(app).delete('/api/me/access-tokens/507f1f77bcf86cd799439011'));
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('NOT_FOUND');
     });
@@ -145,21 +145,21 @@ describe('Routes /api/v2/me/access-tokens (Hono)', () => {
 
   describe('createJwtAuth PAT acceptance', () => {
     it('authenticates a scoped route with a crowi_pat_ Bearer', async () => {
-      const created = await web(request(app).post('/api/v2/me/access-tokens')).send({ name: 'reader', scopes: ['profile:read'] });
+      const created = await web(request(app).post('/api/me/access-tokens')).send({ name: 'reader', scopes: ['profile:read'] });
       const plain = created.body.token as string;
 
-      const res = await request(app).get('/api/v2/me').set('Authorization', `Bearer ${plain}`);
+      const res = await request(app).get('/api/me').set('Authorization', `Bearer ${plain}`);
       expect(res.status).toBe(200);
       expect(res.body.email).toBe(EMAIL);
     });
 
     it('returns 403 INSUFFICIENT_SCOPE when the PAT lacks the route scope', async () => {
-      const created = await web(request(app).post('/api/v2/me/access-tokens')).send({ name: 'readonly', scopes: ['profile:read'] });
+      const created = await web(request(app).post('/api/me/access-tokens')).send({ name: 'readonly', scopes: ['profile:read'] });
       const plain = created.body.token as string;
 
       // PUT /me/password requires profile:write; a profile:read PAT is short.
       const res = await request(app)
-        .put('/api/v2/me/password')
+        .put('/api/me/password')
         .set('Authorization', `Bearer ${plain}`)
         .send({ newPassword: 'NewPwd!2', newPasswordConfirm: 'NewPwd!2' });
       expect(res.status).toBe(403);
@@ -178,24 +178,24 @@ describe('Routes /api/v2/me/access-tokens (Hono)', () => {
         expiresAt: new Date(Date.now() - 1_000),
       });
 
-      const res = await request(app).get('/api/v2/me').set('Authorization', `Bearer ${token}`);
+      const res = await request(app).get('/api/me').set('Authorization', `Bearer ${token}`);
       expect(res.status).toBe(401);
     });
   });
 
   describe('web-session only guard (RFC-0010 §Security)', () => {
     it('rejects PAT management from a PAT bearer with 403 FORBIDDEN', async () => {
-      const created = await web(request(app).post('/api/v2/me/access-tokens')).send({ name: 'self', scopes: ['profile:read', 'profile:write'] });
+      const created = await web(request(app).post('/api/me/access-tokens')).send({ name: 'self', scopes: ['profile:read', 'profile:write'] });
       const plain = created.body.token as string;
 
       // List from the PAT itself -> forbidden.
-      const list = await request(app).get('/api/v2/me/access-tokens').set('Authorization', `Bearer ${plain}`);
+      const list = await request(app).get('/api/me/access-tokens').set('Authorization', `Bearer ${plain}`);
       expect(list.status).toBe(403);
       expect(list.body.error.code).toBe('FORBIDDEN');
 
       // Create a new PAT from a PAT -> forbidden (no privilege escalation).
       const create = await request(app)
-        .post('/api/v2/me/access-tokens')
+        .post('/api/me/access-tokens')
         .set('Authorization', `Bearer ${plain}`)
         .send({ name: 'nested', scopes: ['profile:read'] });
       expect(create.status).toBe(403);
@@ -205,7 +205,7 @@ describe('Routes /api/v2/me/access-tokens (Hono)', () => {
 
   describe('auth boundary', () => {
     it('401s without a bearer token', async () => {
-      const res = await request(app).get('/api/v2/me/access-tokens');
+      const res = await request(app).get('/api/me/access-tokens');
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
     });

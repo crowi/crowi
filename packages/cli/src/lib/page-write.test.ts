@@ -72,7 +72,7 @@ describe('putPage validation (v2 floor)', () => {
     const result = await putPage(PROFILE, { pageId: 'p1', body: 'new', revisionId: 'rev1' });
     expect(result).toEqual({ pageId: 'p1', path: '/x', revisionId: 'rev2', created: false });
     const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe('https://wiki.example.com/api/v2/pages');
+    expect(url).toBe('https://wiki.example.com/api/pages');
     expect(init.method).toBe('PUT');
     expect(JSON.parse(init.body as string)).toMatchObject({ page_id: 'p1', body: 'new', revision_id: 'rev1' });
   });

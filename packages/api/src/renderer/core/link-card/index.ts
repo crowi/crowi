@@ -1,5 +1,5 @@
-import type { EmbedRenderer, RenderError, RenderResult } from '@crowi/plugin-api';
-import { type FetchOgResult, fetchOg } from './fetch-og';
+import type { EmbedRenderer, RenderError, RenderResult, StructuredRenderPayload } from '@crowi/plugin-api';
+import { type FetchOgResult, fetchOg, isHttpUrl, type OgMeta } from './fetch-og';
 import { renderCard, renderFallbackCard } from './render-card';
 
 /**
@@ -21,8 +21,14 @@ import { renderCard, renderFallbackCard } from './render-card';
  * instead on a collision with a core-reserved tag).
  */
 
-/** Bump whenever the rendered HTML shape changes (`renderCard` / `renderFallbackCard`). */
-export const LINK_CARD_CACHE_VERSION = 1;
+/**
+ * Bump whenever the rendered HTML shape changes (`renderCard` /
+ * `renderFallbackCard`). RFC-0023 §13 bumps 1 → 2: results now
+ * additionally carry `structured` (the `crowiLinkCard` sidecar — html
+ * unchanged byte-for-byte); without the bump, pre-RFC-0023 cache hits
+ * would keep serving sidecar-less results until natural TTL expiry.
+ */
+export const LINK_CARD_CACHE_VERSION = 2;
 
 /** Fresh TTL for a successful card — OGP metadata rarely changes. */
 const SUCCESS_TTL_SEC = 60 * 60; // 1h
@@ -65,7 +71,11 @@ export function createLinkCardRenderer(deps: LinkCardRendererDeps = { isLinkCard
         // fetch for this dispatch (spec §6.2's zero-egress contract).
         // Reachable directly (isolated `render()` unit tests) and via
         // the dispatcher's `shouldBypassCache`-gated direct call above.
-        return { html: renderFallbackCard(input.url) };
+        //
+        // RFC-0023 — the sidecar is the same `{url}`-only shape the
+        // fetch-failure path emits below: toggle-off and fetch-failure
+        // stay indistinguishable on the structured side too.
+        return { html: renderFallbackCard(input.url), structured: structuredFallbackCard(input.url) };
       }
       const result = await fetchOg(input.url);
       return toRenderResult(input.url, result);
@@ -76,18 +86,60 @@ export function createLinkCardRenderer(deps: LinkCardRendererDeps = { isLinkCard
 function toRenderResult(url: string, result: FetchOgResult): RenderResult {
   switch (result.kind) {
     case 'ok':
-      return { html: renderCard(url, result.meta), ttlSec: SUCCESS_TTL_SEC };
+      return { html: renderCard(url, result.meta), structured: structuredCard(url, result.meta), ttlSec: SUCCESS_TTL_SEC };
     case 'error':
       // Every OGP-fetch failure path renders the SAME unified fallback
       // card the toggle-off short-circuit above does (spec §6.1/§6.2) —
-      // byte-identical output for the same url.
-      return { html: '', errorHtml: renderFallbackCard(url), error: toRenderError(result) };
+      // byte-identical output for the same url. The paired `structured`
+      // rides with `errorHtml` (RFC-0023): `resolveDisplay` /
+      // `structuredForNormalized` surface it whenever the fallback-card
+      // html is displayed, so "fetch failed" and "toggle off" are also
+      // sidecar-identical (`{url}` only — no `kind: disabled` exists).
+      return { html: '', errorHtml: renderFallbackCard(url), structured: structuredFallbackCard(url), error: toRenderError(result) };
     default: {
       // Exhaustiveness guard — a new `FetchOgResult` kind must be handled above.
       const _unreachable: never = result;
       return _unreachable;
     }
   }
+}
+
+/** `url`'s hostname for the sidecar `domain` field (mirrors `render-card.ts`'s own defensive fallback). */
+function extractCardDomain(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return url;
+  }
+}
+
+const truncate = (value: string, max: number): string => (value.length > max ? value.slice(0, max) : value);
+
+/**
+ * RFC-0023 §10 — the success card's `crowiLinkCard` sidecar. Field caps
+ * mirror `CrowiLinkCardSidecarSchema` (over-long OGP strings truncate
+ * at the producer rather than invalidating the whole sidecar); the OGP
+ * image stays an external URL, dropped when non-http(s) — the same
+ * `safeImageSrc` degrade the html side applies.
+ */
+function structuredCard(url: string, meta: OgMeta = {}): StructuredRenderPayload {
+  const image = meta.image !== undefined && isHttpUrl(meta.image) ? { url: meta.image } : undefined;
+  return {
+    node: {
+      type: 'crowiLinkCard',
+      url,
+      ...(meta.title ? { title: truncate(meta.title, 512) } : {}),
+      ...(meta.description ? { description: truncate(meta.description, 2048) } : {}),
+      ...(image !== undefined ? { image } : {}),
+      ...(meta.siteName ? { siteName: truncate(meta.siteName, 256) } : {}),
+      domain: truncate(extractCardDomain(url), 256),
+    },
+  };
+}
+
+/** The unified fallback sidecar — `url` only, shared verbatim by toggle-off and every fetch failure. */
+function structuredFallbackCard(url: string): StructuredRenderPayload {
+  return { node: { type: 'crowiLinkCard', url } };
 }
 
 /**

@@ -404,10 +404,10 @@ export const registerOAuthRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(ap
       // Every URL derives from the trusted CLIENT_URL origin, never the
       // request Host. authorization_endpoint / device consent are *web*
       // pages on CLIENT_URL; token / revocation / device-authorize are the
-      // /api/v2 API (reverse-proxied to the same origin in the default
+      // /api API (reverse-proxied to the same origin in the default
       // deployment — RFC-0010, PHASE3-Q6).
       const issuer = clientBaseUrl();
-      const apiBase = `${issuer}/api/v2`;
+      const apiBase = `${issuer}/api`;
       return c.json(
         {
           issuer,

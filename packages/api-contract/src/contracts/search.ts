@@ -9,7 +9,7 @@
  *     `/pages/*` jwtAuth apply. The search handler installs
  *     `createJwtAuth(crowi)` on this exact path itself — same single-route
  *     install pattern as `autocomplete`'s `/users/autocomplete`.
- *   - No rate limit. The legacy `/api/v2/search` had no `withRateLimit`
+ *   - No rate limit. The legacy `/api/search` had no `withRateLimit`
  *     wrapping (search backend latency naturally throttles bursts) and the
  *     RFC does not require one for this resource.
  *

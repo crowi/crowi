@@ -133,7 +133,7 @@ follow-up RFC that wires plugin HTTP contribution onto Hono". This is it.
 - **Surface**: `registerRoutes(scope, ctx)` where
   ```ts
   interface PluginRouterScope {
-    // Mount a Hono handler at /api/v2/plugins/<plugin-name>/<path>.
+    // Mount a Hono handler at /api/plugins/<plugin-name>/<path>.
     route(method: 'GET'|'POST'|..., path: string,
           handler: (c: Context) => Response | Promise<Response>,
           opts?: { auth?: 'public' | 'user' | 'admin' }): void;
@@ -172,7 +172,7 @@ follow-up RFC that wires plugin HTTP contribution onto Hono". This is it.
   - (later) `clientId` / `clientSecret` for OAuth install + Sign in with Slack.
 - **`@action` "Generate Slack App manifest"** → returns a manifest JSON the
   operator pastes into Slack's "create app from manifest". It embeds:
-  - `event_subscriptions.request_url` = `{CLIENT_URL}/api/v2/plugins/@crowi/plugin-slack/events`
+  - `event_subscriptions.request_url` = `{CLIENT_URL}/api/plugins/@crowi/plugin-slack/events`
   - subscribed bot events: `link_shared` (Phase 1)
   - `unfurl domains` = the instance's wiki host (so Slack sends `link_shared`
     for Crowi links)

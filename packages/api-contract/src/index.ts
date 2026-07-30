@@ -35,6 +35,7 @@ export * from './schemas/page';
 export * from './schemas/page-preview';
 export * from './schemas/password-reset';
 export * from './schemas/presence';
+export * from './schemas/rendered-ast';
 export * from './schemas/revision';
 export * from './schemas/search';
 export * from './schemas/user';

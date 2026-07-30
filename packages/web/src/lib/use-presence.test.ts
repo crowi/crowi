@@ -5,13 +5,13 @@ import type { PropsWithChildren } from 'react';
 import { createElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Mock `apiClientV2` so the token query reads our fake `pages[':id']
+// Mock `apiClient` so the token query reads our fake `pages[':id']
 // ['presence-token'].$get`. RFC-0006 Batch 5 switched the hook from
-// ts-rest's `apiClient.presence.getPresenceToken` to `apiClientV2`'s
+// ts-rest's `apiClient.presence.getPresenceToken` to `apiClient`'s
 // Response-shaped fetch call.
 const { getPresenceToken } = vi.hoisted(() => ({ getPresenceToken: vi.fn() }));
 vi.mock('./api-client', () => ({
-  apiClientV2: {
+  apiClient: {
     pages: {
       ':id': {
         'presence-token': { $get: getPresenceToken },
@@ -134,7 +134,7 @@ const TOKEN_OK = {
 };
 
 /**
- * `Response`-shaped helpers for the `apiClientV2` mock. Batch 5 switched
+ * `Response`-shaped helpers for the `apiClient` mock. Batch 5 switched
  * the hook to read `response.ok` + `response.json()` directly (instead
  * of the ts-rest `{ status, body }` envelope), so every mock here
  * returns the shape the real `fetch` would return.

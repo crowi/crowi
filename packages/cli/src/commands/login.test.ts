@@ -10,7 +10,7 @@ import { fetchAccount, registerLogin } from './login';
 
 /**
  * After a successful login the CLI does a best-effort one-shot
- * `GET /api/v2/auth/me` to resolve `profile.account`, so `crowi profiles` can
+ * `GET /api/auth/me` to resolve `profile.account`, so `crowi profiles` can
  * show endpoint × user (spec §d). It must NEVER fail login: a flaky /auth/me
  * just leaves the account unset. `fetch` is mocked — no network.
  */
@@ -48,7 +48,7 @@ describe('fetchAccount (best-effort /auth/me)', () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(200, { user: { id: '1', username: 'alice' } }));
     await expect(fetchAccount(PROFILE)).resolves.toBe('alice');
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock.mock.calls[0][0]).toBe('https://wiki.example.com/api/v2/auth/me');
+    expect(fetchMock.mock.calls[0][0]).toBe('https://wiki.example.com/api/auth/me');
   });
 
   it('returns undefined (never throws) when /auth/me fails with an error status', async () => {

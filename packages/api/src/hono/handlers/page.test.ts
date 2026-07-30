@@ -51,7 +51,7 @@ const withMockSearchDriver = async (driver: SearchDriver, fn: () => Promise<void
   }
 };
 
-describe('Routes /api/v2/pages (Hono createPage)', () => {
+describe('Routes /api/pages (Hono createPage)', () => {
   const PATH_PREFIX = '/hono-page-create-test/';
   let Page;
   let Revision;
@@ -70,10 +70,10 @@ describe('Routes /api/v2/pages (Hono createPage)', () => {
 
   afterEach(() => cleanupPathPrefix(PATH_PREFIX));
 
-  describe('POST /api/v2/pages', () => {
+  describe('POST /api/pages', () => {
     it('returns 401 when no Authorization header is provided', async () => {
       const res = await request(app)
-        .post('/api/v2/pages')
+        .post('/api/pages')
         .send({ path: `${PATH_PREFIX}no-auth`, body: '# hello' })
         .set('Content-Type', 'application/json');
 
@@ -85,7 +85,7 @@ describe('Routes /api/v2/pages (Hono createPage)', () => {
       const path = `${PATH_PREFIX}basic`;
       const body = '# created via Hono';
 
-      const res = await request(app).post('/api/v2/pages').set(authHeaders(accessToken)).send({ path, body });
+      const res = await request(app).post('/api/pages').set(authHeaders(accessToken)).send({ path, body });
 
       expect(res.status).toBe(200);
       expect(res.body.page).toBeDefined();
@@ -116,10 +116,10 @@ describe('Routes /api/v2/pages (Hono createPage)', () => {
       const path = `${PATH_PREFIX}duplicate`;
       const headers = authHeaders(accessToken);
 
-      const first = await request(app).post('/api/v2/pages').set(headers).send({ path, body: '# first' });
+      const first = await request(app).post('/api/pages').set(headers).send({ path, body: '# first' });
       expect(first.status).toBe(200);
 
-      const second = await request(app).post('/api/v2/pages').set(headers).send({ path, body: '# second' });
+      const second = await request(app).post('/api/pages').set(headers).send({ path, body: '# second' });
       expect(second.status).toBe(400);
       expect(second.body.error.code).toBe('PAGE_EXISTS');
     });
@@ -134,7 +134,7 @@ describe('Routes /api/v2/pages (Hono createPage)', () => {
     // this same check — createPage was the one path missing it.
     it('returns 400 PAGE_INVALID_NAME when the path contains a literal "+"', async () => {
       const path = `${PATH_PREFIX}a+b`;
-      const res = await request(app).post('/api/v2/pages').set(authHeaders(accessToken)).send({ path, body: '# plus' });
+      const res = await request(app).post('/api/pages').set(authHeaders(accessToken)).send({ path, body: '# plus' });
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('PAGE_INVALID_NAME');
@@ -145,7 +145,7 @@ describe('Routes /api/v2/pages (Hono createPage)', () => {
   });
 });
 
-describe('Routes /api/v2/pages (Hono updatePage)', () => {
+describe('Routes /api/pages (Hono updatePage)', () => {
   const PATH_PREFIX = '/hono-page-update-test/';
   let Page;
   let Revision;
@@ -164,12 +164,9 @@ describe('Routes /api/v2/pages (Hono updatePage)', () => {
 
   afterEach(() => cleanupPathPrefix(PATH_PREFIX));
 
-  describe('PUT /api/v2/pages', () => {
+  describe('PUT /api/pages', () => {
     it('returns 401 when no Authorization header is provided', async () => {
-      const res = await request(app)
-        .put('/api/v2/pages')
-        .send({ page_id: '000000000000000000000000', body: '# updated' })
-        .set('Content-Type', 'application/json');
+      const res = await request(app).put('/api/pages').send({ page_id: '000000000000000000000000', body: '# updated' }).set('Content-Type', 'application/json');
 
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
@@ -179,17 +176,14 @@ describe('Routes /api/v2/pages (Hono updatePage)', () => {
       const path = `${PATH_PREFIX}basic`;
       const headers = authHeaders(accessToken);
 
-      const createRes = await request(app).post('/api/v2/pages').set(headers).send({ path, body: '# initial' });
+      const createRes = await request(app).post('/api/pages').set(headers).send({ path, body: '# initial' });
       expect(createRes.status).toBe(200);
 
       const createdPageId = createRes.body.page._id;
       const initialRevisionId = createRes.body.page.revision._id;
 
       const updatedBody = '# updated body';
-      const updateRes = await request(app)
-        .put('/api/v2/pages')
-        .set(headers)
-        .send({ page_id: createdPageId, body: updatedBody, revision_id: initialRevisionId });
+      const updateRes = await request(app).put('/api/pages').set(headers).send({ page_id: createdPageId, body: updatedBody, revision_id: initialRevisionId });
 
       expect(updateRes.status).toBe(200);
       expect(updateRes.body.page._id).toBe(createdPageId);
@@ -216,22 +210,22 @@ describe('Routes /api/v2/pages (Hono updatePage)', () => {
       const path = `${PATH_PREFIX}conflict`;
       const headers = authHeaders(accessToken);
 
-      const createRes = await request(app).post('/api/v2/pages').set(headers).send({ path, body: '# initial' });
+      const createRes = await request(app).post('/api/pages').set(headers).send({ path, body: '# initial' });
       expect(createRes.status).toBe(200);
       const pageId = createRes.body.page._id;
       const staleRevisionId = createRes.body.page.revision._id;
 
-      const firstUpdate = await request(app).put('/api/v2/pages').set(headers).send({ page_id: pageId, body: '# first update', revision_id: staleRevisionId });
+      const firstUpdate = await request(app).put('/api/pages').set(headers).send({ page_id: pageId, body: '# first update', revision_id: staleRevisionId });
       expect(firstUpdate.status).toBe(200);
 
-      const conflictRes = await request(app).put('/api/v2/pages').set(headers).send({ page_id: pageId, body: '# stale update', revision_id: staleRevisionId });
+      const conflictRes = await request(app).put('/api/pages').set(headers).send({ page_id: pageId, body: '# stale update', revision_id: staleRevisionId });
 
       expect(conflictRes.status).toBe(409);
       expect(conflictRes.body.error.code).toBe('PAGE_REVISION_ERROR');
     });
 
     it('returns 404 PAGE_NOT_FOUND for unknown page_id', async () => {
-      const res = await request(app).put('/api/v2/pages').set(authHeaders(accessToken)).send({ page_id: '000000000000000000000000', body: '# nope' });
+      const res = await request(app).put('/api/pages').set(authHeaders(accessToken)).send({ page_id: '000000000000000000000000', body: '# nope' });
 
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
@@ -243,11 +237,11 @@ describe('Routes /api/v2/pages (Hono updatePage)', () => {
       const otherHeaders = authHeaders(otherAccessToken);
 
       // OWNER-grant (4) page so other users cannot access it.
-      const createRes = await request(app).post('/api/v2/pages').set(ownerHeaders).send({ path, body: '# private', grant: 4 });
+      const createRes = await request(app).post('/api/pages').set(ownerHeaders).send({ path, body: '# private', grant: 4 });
       expect(createRes.status).toBe(200);
       const pageId = createRes.body.page._id;
 
-      const res = await request(app).put('/api/v2/pages').set(otherHeaders).send({ page_id: pageId, body: '# unauthorized update' });
+      const res = await request(app).put('/api/pages').set(otherHeaders).send({ page_id: pageId, body: '# unauthorized update' });
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
 
@@ -259,18 +253,18 @@ describe('Routes /api/v2/pages (Hono updatePage)', () => {
       const path = `${PATH_PREFIX}bad-grant`;
       const headers = authHeaders(accessToken);
 
-      const createRes = await request(app).post('/api/v2/pages').set(headers).send({ path, body: '# initial' });
+      const createRes = await request(app).post('/api/pages').set(headers).send({ path, body: '# initial' });
       expect(createRes.status).toBe(200);
       const pageId = createRes.body.page._id;
 
-      const res = await request(app).put('/api/v2/pages').set(headers).send({ page_id: pageId, body: '# updated', grant: 99 });
+      const res = await request(app).put('/api/pages').set(headers).send({ page_id: pageId, body: '# updated', grant: 99 });
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('INVALID_GRANT');
     });
   });
 });
 
-describe('Routes /api/v2/pages/grant (Hono setPageGrant)', () => {
+describe('Routes /api/pages/grant (Hono setPageGrant)', () => {
   const PATH_PREFIX = '/hono-page-grant-test/';
   let Page;
   let accessToken: string;
@@ -287,9 +281,9 @@ describe('Routes /api/v2/pages/grant (Hono setPageGrant)', () => {
 
   afterEach(() => cleanupPathPrefix(PATH_PREFIX));
 
-  describe('PUT /api/v2/pages/grant', () => {
+  describe('PUT /api/pages/grant', () => {
     it('returns 401 when no Authorization header is provided', async () => {
-      const res = await request(app).put('/api/v2/pages/grant').send({ page_id: '000000000000000000000000', grant: 4 }).set('Content-Type', 'application/json');
+      const res = await request(app).put('/api/pages/grant').send({ page_id: '000000000000000000000000', grant: 4 }).set('Content-Type', 'application/json');
 
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
@@ -299,13 +293,13 @@ describe('Routes /api/v2/pages/grant (Hono setPageGrant)', () => {
       const path = `${PATH_PREFIX}basic`;
       const headers = authHeaders(accessToken);
 
-      const createRes = await request(app).post('/api/v2/pages').set(headers).send({ path, body: '# initial' });
+      const createRes = await request(app).post('/api/pages').set(headers).send({ path, body: '# initial' });
       expect(createRes.status).toBe(200);
       const pageId = createRes.body.page._id;
       const revisionId = createRes.body.page.revision._id;
       expect(createRes.body.page.grant).toBe(1);
 
-      const res = await request(app).put('/api/v2/pages/grant').set(headers).send({ page_id: pageId, grant: 4 });
+      const res = await request(app).put('/api/pages/grant').set(headers).send({ page_id: pageId, grant: 4 });
       expect(res.status).toBe(200);
       expect(res.body.page._id).toBe(pageId);
       expect(res.body.page.grant).toBe(4);
@@ -320,17 +314,17 @@ describe('Routes /api/v2/pages/grant (Hono setPageGrant)', () => {
       const path = `${PATH_PREFIX}bad-grant`;
       const headers = authHeaders(accessToken);
 
-      const createRes = await request(app).post('/api/v2/pages').set(headers).send({ path, body: '# initial' });
+      const createRes = await request(app).post('/api/pages').set(headers).send({ path, body: '# initial' });
       expect(createRes.status).toBe(200);
       const pageId = createRes.body.page._id;
 
-      const res = await request(app).put('/api/v2/pages/grant').set(headers).send({ page_id: pageId, grant: 99 });
+      const res = await request(app).put('/api/pages/grant').set(headers).send({ page_id: pageId, grant: 99 });
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('INVALID_GRANT');
     });
 
     it('returns 404 PAGE_NOT_FOUND for unknown page_id', async () => {
-      const res = await request(app).put('/api/v2/pages/grant').set(authHeaders(accessToken)).send({ page_id: '000000000000000000000000', grant: 4 });
+      const res = await request(app).put('/api/pages/grant').set(authHeaders(accessToken)).send({ page_id: '000000000000000000000000', grant: 4 });
 
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
@@ -342,11 +336,11 @@ describe('Routes /api/v2/pages/grant (Hono setPageGrant)', () => {
       const otherHeaders = authHeaders(otherAccessToken);
 
       // OWNER-grant (4) page so other users cannot access it.
-      const createRes = await request(app).post('/api/v2/pages').set(ownerHeaders).send({ path, body: '# private', grant: 4 });
+      const createRes = await request(app).post('/api/pages').set(ownerHeaders).send({ path, body: '# private', grant: 4 });
       expect(createRes.status).toBe(200);
       const pageId = createRes.body.page._id;
 
-      const res = await request(app).put('/api/v2/pages/grant').set(otherHeaders).send({ page_id: pageId, grant: 1 });
+      const res = await request(app).put('/api/pages/grant').set(otherHeaders).send({ page_id: pageId, grant: 1 });
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
 
@@ -356,7 +350,7 @@ describe('Routes /api/v2/pages/grant (Hono setPageGrant)', () => {
   });
 });
 
-describe('Routes /api/v2/pages/rename (Hono renamePage)', () => {
+describe('Routes /api/pages/rename (Hono renamePage)', () => {
   const PATH_PREFIX = '/hono-page-rename-test/';
   let Page;
   let Revision;
@@ -375,10 +369,10 @@ describe('Routes /api/v2/pages/rename (Hono renamePage)', () => {
 
   afterEach(() => cleanupPathPrefix(PATH_PREFIX));
 
-  describe('POST /api/v2/pages/rename', () => {
+  describe('POST /api/pages/rename', () => {
     it('returns 401 when no Authorization header is provided', async () => {
       const res = await request(app)
-        .post('/api/v2/pages/rename')
+        .post('/api/pages/rename')
         .send({ page_id: '000000000000000000000000', new_path: `${PATH_PREFIX}target` })
         .set('Content-Type', 'application/json');
 
@@ -391,11 +385,11 @@ describe('Routes /api/v2/pages/rename (Hono renamePage)', () => {
       const toPath = `${PATH_PREFIX}to-basic`;
       const headers = authHeaders(accessToken);
 
-      const createRes = await request(app).post('/api/v2/pages').set(headers).send({ path: fromPath, body: '# initial' });
+      const createRes = await request(app).post('/api/pages').set(headers).send({ path: fromPath, body: '# initial' });
       expect(createRes.status).toBe(200);
       const pageId = createRes.body.page._id;
 
-      const res = await request(app).post('/api/v2/pages/rename').set(headers).send({ page_id: pageId, new_path: toPath });
+      const res = await request(app).post('/api/pages/rename').set(headers).send({ page_id: pageId, new_path: toPath });
 
       expect(res.status).toBe(200);
       expect(res.body.page._id).toBe(pageId);
@@ -415,12 +409,12 @@ describe('Routes /api/v2/pages/rename (Hono renamePage)', () => {
       const headers = authHeaders(accessToken);
       const homePath = '/user/renamePageTester';
 
-      const createRes = await request(app).post('/api/v2/pages').set(headers).send({ path: homePath, body: '# home' });
+      const createRes = await request(app).post('/api/pages').set(headers).send({ path: homePath, body: '# home' });
       expect(createRes.status).toBe(200);
       const pageId = createRes.body.page._id;
 
       const res = await request(app)
-        .post('/api/v2/pages/rename')
+        .post('/api/pages/rename')
         .set(headers)
         .send({ page_id: pageId, new_path: `${PATH_PREFIX}moved-home` });
 
@@ -436,11 +430,11 @@ describe('Routes /api/v2/pages/rename (Hono renamePage)', () => {
       const headers = authHeaders(accessToken);
       const fromPath = `${PATH_PREFIX}rename-onto-home`;
 
-      const createRes = await request(app).post('/api/v2/pages').set(headers).send({ path: fromPath, body: '# x' });
+      const createRes = await request(app).post('/api/pages').set(headers).send({ path: fromPath, body: '# x' });
       expect(createRes.status).toBe(200);
       const pageId = createRes.body.page._id;
 
-      const res = await request(app).post('/api/v2/pages/rename').set(headers).send({ page_id: pageId, new_path: '/user/renamePageTester' });
+      const res = await request(app).post('/api/pages/rename').set(headers).send({ page_id: pageId, new_path: '/user/renamePageTester' });
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('PAGE_INVALID_NAME');
@@ -455,11 +449,11 @@ describe('Routes /api/v2/pages/rename (Hono renamePage)', () => {
       const toPath = `${PATH_PREFIX}to-redirect`;
       const headers = authHeaders(accessToken);
 
-      const createRes = await request(app).post('/api/v2/pages').set(headers).send({ path: fromPath, body: '# initial' });
+      const createRes = await request(app).post('/api/pages').set(headers).send({ path: fromPath, body: '# initial' });
       expect(createRes.status).toBe(200);
       const pageId = createRes.body.page._id;
 
-      const res = await request(app).post('/api/v2/pages/rename').set(headers).send({ page_id: pageId, new_path: toPath, create_redirect: true });
+      const res = await request(app).post('/api/pages/rename').set(headers).send({ page_id: pageId, new_path: toPath, create_redirect: true });
 
       expect(res.status).toBe(200);
       expect(res.body.page.path).toBe(toPath);
@@ -474,11 +468,11 @@ describe('Routes /api/v2/pages/rename (Hono renamePage)', () => {
       const toPath = `${PATH_PREFIX}to-portal/`;
       const headers = authHeaders(accessToken);
 
-      const createRes = await request(app).post('/api/v2/pages').set(headers).send({ path: fromPath, body: '# initial' });
+      const createRes = await request(app).post('/api/pages').set(headers).send({ path: fromPath, body: '# initial' });
       expect(createRes.status).toBe(200);
       const pageId = createRes.body.page._id;
 
-      const res = await request(app).post('/api/v2/pages/rename').set(headers).send({ page_id: pageId, new_path: toPath, create_redirect: true });
+      const res = await request(app).post('/api/pages/rename').set(headers).send({ page_id: pageId, new_path: toPath, create_redirect: true });
 
       expect(res.status).toBe(200);
       expect(res.body.page.path).toBe(toPath);
@@ -492,7 +486,7 @@ describe('Routes /api/v2/pages/rename (Hono renamePage)', () => {
 
     it('returns 404 PAGE_NOT_FOUND for unknown page_id', async () => {
       const res = await request(app)
-        .post('/api/v2/pages/rename')
+        .post('/api/pages/rename')
         .set(authHeaders(accessToken))
         .send({ page_id: '000000000000000000000000', new_path: `${PATH_PREFIX}nope` });
 
@@ -507,11 +501,11 @@ describe('Routes /api/v2/pages/rename (Hono renamePage)', () => {
       const otherHeaders = authHeaders(otherAccessToken);
 
       // OWNER-grant (4) page so other users cannot access it.
-      const createRes = await request(app).post('/api/v2/pages').set(ownerHeaders).send({ path: fromPath, body: '# private', grant: 4 });
+      const createRes = await request(app).post('/api/pages').set(ownerHeaders).send({ path: fromPath, body: '# private', grant: 4 });
       expect(createRes.status).toBe(200);
       const pageId = createRes.body.page._id;
 
-      const res = await request(app).post('/api/v2/pages/rename').set(otherHeaders).send({ page_id: pageId, new_path: toPath });
+      const res = await request(app).post('/api/pages/rename').set(otherHeaders).send({ page_id: pageId, new_path: toPath });
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
 
@@ -524,11 +518,11 @@ describe('Routes /api/v2/pages/rename (Hono renamePage)', () => {
       const fromPath = `${PATH_PREFIX}from-forbidden`;
       const headers = authHeaders(accessToken);
 
-      const createRes = await request(app).post('/api/v2/pages').set(headers).send({ path: fromPath, body: '# initial' });
+      const createRes = await request(app).post('/api/pages').set(headers).send({ path: fromPath, body: '# initial' });
       expect(createRes.status).toBe(200);
       const pageId = createRes.body.page._id;
 
-      const res = await request(app).post('/api/v2/pages/rename').set(headers).send({ page_id: pageId, new_path: '/admin/foo' });
+      const res = await request(app).post('/api/pages/rename').set(headers).send({ page_id: pageId, new_path: '/admin/foo' });
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('PAGE_INVALID_NAME');
@@ -542,14 +536,14 @@ describe('Routes /api/v2/pages/rename (Hono renamePage)', () => {
       const occupiedPath = `${PATH_PREFIX}occupied`;
       const headers = authHeaders(accessToken);
 
-      const createSource = await request(app).post('/api/v2/pages').set(headers).send({ path: fromPath, body: '# source' });
+      const createSource = await request(app).post('/api/pages').set(headers).send({ path: fromPath, body: '# source' });
       expect(createSource.status).toBe(200);
       const pageId = createSource.body.page._id;
 
-      const createOccupied = await request(app).post('/api/v2/pages').set(headers).send({ path: occupiedPath, body: '# occupied' });
+      const createOccupied = await request(app).post('/api/pages').set(headers).send({ path: occupiedPath, body: '# occupied' });
       expect(createOccupied.status).toBe(200);
 
-      const res = await request(app).post('/api/v2/pages/rename').set(headers).send({ page_id: pageId, new_path: occupiedPath });
+      const res = await request(app).post('/api/pages/rename').set(headers).send({ page_id: pageId, new_path: occupiedPath });
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('PAGE_EXISTS');
@@ -566,22 +560,19 @@ describe('Routes /api/v2/pages/rename (Hono renamePage)', () => {
 
       // Create page A at stalePath, then rename to intermediatePath with
       // create_redirect=true: a redirect page is left at stalePath.
-      const createA = await request(app).post('/api/v2/pages').set(headers).send({ path: stalePath, body: '# A' });
+      const createA = await request(app).post('/api/pages').set(headers).send({ path: stalePath, body: '# A' });
       expect(createA.status).toBe(200);
       const pageAId = createA.body.page._id;
-      const renameA = await request(app)
-        .post('/api/v2/pages/rename')
-        .set(headers)
-        .send({ page_id: pageAId, new_path: intermediatePath, create_redirect: true });
+      const renameA = await request(app).post('/api/pages/rename').set(headers).send({ page_id: pageAId, new_path: intermediatePath, create_redirect: true });
       expect(renameA.status).toBe(200);
 
       // Create page B at finalPath, then rename to stalePath. The existing
       // redirect page at stalePath should be unlinked and the rename succeed.
-      const createB = await request(app).post('/api/v2/pages').set(headers).send({ path: finalPath, body: '# B' });
+      const createB = await request(app).post('/api/pages').set(headers).send({ path: finalPath, body: '# B' });
       expect(createB.status).toBe(200);
       const pageBId = createB.body.page._id;
 
-      const res = await request(app).post('/api/v2/pages/rename').set(headers).send({ page_id: pageBId, new_path: stalePath });
+      const res = await request(app).post('/api/pages/rename').set(headers).send({ page_id: pageBId, new_path: stalePath });
 
       expect(res.status).toBe(200);
       expect(res.body.page._id).toBe(pageBId);
@@ -599,16 +590,16 @@ describe('Routes /api/v2/pages/rename (Hono renamePage)', () => {
       const toPath = `${PATH_PREFIX}to-revision`;
       const headers = authHeaders(accessToken);
 
-      const createRes = await request(app).post('/api/v2/pages').set(headers).send({ path: fromPath, body: '# initial' });
+      const createRes = await request(app).post('/api/pages').set(headers).send({ path: fromPath, body: '# initial' });
       expect(createRes.status).toBe(200);
       const pageId = createRes.body.page._id;
       const staleRevisionId = createRes.body.page.revision._id;
 
       // Update the page so the original revision becomes stale.
-      const update = await request(app).put('/api/v2/pages').set(headers).send({ page_id: pageId, body: '# bumped', revision_id: staleRevisionId });
+      const update = await request(app).put('/api/pages').set(headers).send({ page_id: pageId, body: '# bumped', revision_id: staleRevisionId });
       expect(update.status).toBe(200);
 
-      const res = await request(app).post('/api/v2/pages/rename').set(headers).send({ page_id: pageId, new_path: toPath, revision_id: staleRevisionId });
+      const res = await request(app).post('/api/pages/rename').set(headers).send({ page_id: pageId, new_path: toPath, revision_id: staleRevisionId });
 
       expect(res.status).toBe(409);
       expect(res.body.error.code).toBe('PAGE_REVISION_ERROR');
@@ -622,38 +613,38 @@ describe('Routes /api/v2/pages/rename (Hono renamePage)', () => {
       const toPath = `${PATH_PREFIX}count-to`;
       const headers = authHeaders(accessToken);
 
-      const createRes = await request(app).post('/api/v2/pages').set(headers).send({ path: fromPath, body: '# c' });
+      const createRes = await request(app).post('/api/pages').set(headers).send({ path: fromPath, body: '# c' });
       const pageId = createRes.body.page._id;
 
-      const res = await request(app).post('/api/v2/pages/rename').set(headers).send({ page_id: pageId, new_path: toPath });
+      const res = await request(app).post('/api/pages/rename').set(headers).send({ page_id: pageId, new_path: toPath });
 
       expect(res.status).toBe(200);
       expect(res.body.renamed_count).toBe(1);
     });
   });
 
-  describe('POST /api/v2/pages/rename (include_descendants — renameTree)', () => {
+  describe('POST /api/pages/rename (include_descendants — renameTree)', () => {
     it('moves the root and all descendants to the new base path', async () => {
       const headers = authHeaders(accessToken);
       const rootFrom = `${PATH_PREFIX}tree-root`;
       const rootTo = `${PATH_PREFIX}tree-moved`;
 
-      const rootRes = await request(app).post('/api/v2/pages').set(headers).send({ path: rootFrom, body: '# root' });
+      const rootRes = await request(app).post('/api/pages').set(headers).send({ path: rootFrom, body: '# root' });
       const rootId = rootRes.body.page._id;
       await request(app)
-        .post('/api/v2/pages')
+        .post('/api/pages')
         .set(headers)
         .send({ path: `${rootFrom}/child-a`, body: '# a' });
       await request(app)
-        .post('/api/v2/pages')
+        .post('/api/pages')
         .set(headers)
         .send({ path: `${rootFrom}/child-a/grandchild`, body: '# gc' });
       await request(app)
-        .post('/api/v2/pages')
+        .post('/api/pages')
         .set(headers)
         .send({ path: `${rootFrom}/child-b`, body: '# b' });
 
-      const res = await request(app).post('/api/v2/pages/rename').set(headers).send({ page_id: rootId, new_path: rootTo, include_descendants: true });
+      const res = await request(app).post('/api/pages/rename').set(headers).send({ page_id: rootId, new_path: rootTo, include_descendants: true });
 
       expect(res.status).toBe(200);
       expect(res.body.page.path).toBe(rootTo);
@@ -675,10 +666,10 @@ describe('Routes /api/v2/pages/rename (Hono renamePage)', () => {
       const rootFrom = `${PATH_PREFIX}ts-root`;
       const rootTo = `${PATH_PREFIX}ts-moved`;
 
-      const rootRes = await request(app).post('/api/v2/pages').set(headers).send({ path: rootFrom, body: '# root' });
+      const rootRes = await request(app).post('/api/pages').set(headers).send({ path: rootFrom, body: '# root' });
       const rootId = rootRes.body.page._id;
       const childRes = await request(app)
-        .post('/api/v2/pages')
+        .post('/api/pages')
         .set(headers)
         .send({ path: `${rootFrom}/child`, body: '# c' });
       const childId = childRes.body.page._id;
@@ -686,7 +677,7 @@ describe('Routes /api/v2/pages/rename (Hono renamePage)', () => {
       const rootBefore = await Page.findById(rootId);
       const childBefore = await Page.findById(childId);
 
-      const res = await request(app).post('/api/v2/pages/rename').set(headers).send({ page_id: rootId, new_path: rootTo, include_descendants: true });
+      const res = await request(app).post('/api/pages/rename').set(headers).send({ page_id: rootId, new_path: rootTo, include_descendants: true });
       expect(res.status).toBe(200);
 
       const rootAfter = await Page.findOne({ path: rootTo });
@@ -700,15 +691,15 @@ describe('Routes /api/v2/pages/rename (Hono renamePage)', () => {
       const rootFrom = `${PATH_PREFIX}redir-root`;
       const rootTo = `${PATH_PREFIX}redir-moved`;
 
-      const rootRes = await request(app).post('/api/v2/pages').set(headers).send({ path: rootFrom, body: '# root' });
+      const rootRes = await request(app).post('/api/pages').set(headers).send({ path: rootFrom, body: '# root' });
       const rootId = rootRes.body.page._id;
       await request(app)
-        .post('/api/v2/pages')
+        .post('/api/pages')
         .set(headers)
         .send({ path: `${rootFrom}/child`, body: '# c' });
 
       const res = await request(app)
-        .post('/api/v2/pages/rename')
+        .post('/api/pages/rename')
         .set(headers)
         .send({ page_id: rootId, new_path: rootTo, include_descendants: true, create_redirect: true });
       expect(res.status).toBe(200);
@@ -726,15 +717,15 @@ describe('Routes /api/v2/pages/rename (Hono renamePage)', () => {
       const rootFrom = `${PATH_PREFIX}portal-root`;
       const rootTo = `${PATH_PREFIX}portal-moved/`;
 
-      const rootRes = await request(app).post('/api/v2/pages').set(headers).send({ path: rootFrom, body: '# root' });
+      const rootRes = await request(app).post('/api/pages').set(headers).send({ path: rootFrom, body: '# root' });
       const rootId = rootRes.body.page._id;
       await request(app)
-        .post('/api/v2/pages')
+        .post('/api/pages')
         .set(headers)
         .send({ path: `${rootFrom}/child`, body: '# c' });
 
       const res = await request(app)
-        .post('/api/v2/pages/rename')
+        .post('/api/pages/rename')
         .set(headers)
         .send({ page_id: rootId, new_path: rootTo, include_descendants: true, create_redirect: true });
       expect(res.status).toBe(200);
@@ -752,19 +743,19 @@ describe('Routes /api/v2/pages/rename (Hono renamePage)', () => {
       const rootFrom = `${PATH_PREFIX}clash-root`;
       const rootTo = `${PATH_PREFIX}clash-moved`;
 
-      const rootRes = await request(app).post('/api/v2/pages').set(headers).send({ path: rootFrom, body: '# root' });
+      const rootRes = await request(app).post('/api/pages').set(headers).send({ path: rootFrom, body: '# root' });
       const rootId = rootRes.body.page._id;
       await request(app)
-        .post('/api/v2/pages')
+        .post('/api/pages')
         .set(headers)
         .send({ path: `${rootFrom}/child`, body: '# c' });
 
       // A non-unlinkable page already sits where the child would land, owned
       // by another user with OWNER grant so the renamer cannot unlink it.
       const occupiedChildPath = `${rootTo}/child`;
-      await request(app).post('/api/v2/pages').set(authHeaders(otherAccessToken)).send({ path: occupiedChildPath, body: '# occupied', grant: 4 });
+      await request(app).post('/api/pages').set(authHeaders(otherAccessToken)).send({ path: occupiedChildPath, body: '# occupied', grant: 4 });
 
-      const res = await request(app).post('/api/v2/pages/rename').set(headers).send({ page_id: rootId, new_path: rootTo, include_descendants: true });
+      const res = await request(app).post('/api/pages/rename').set(headers).send({ page_id: rootId, new_path: rootTo, include_descendants: true });
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('PAGE_RENAME_TREE_FAILED');
@@ -787,18 +778,18 @@ describe('Routes /api/v2/pages/rename (Hono renamePage)', () => {
       // Public root + a public child, both created by `other` so the renamer
       // can move them; plus an OWNER-grant child owned by `accessToken` that
       // `other` cannot see.
-      const rootRes = await request(app).post('/api/v2/pages').set(otherHeaders).send({ path: rootFrom, body: '# root' });
+      const rootRes = await request(app).post('/api/pages').set(otherHeaders).send({ path: rootFrom, body: '# root' });
       const rootId = rootRes.body.page._id;
       await request(app)
-        .post('/api/v2/pages')
+        .post('/api/pages')
         .set(otherHeaders)
         .send({ path: `${rootFrom}/visible`, body: '# v' });
       await request(app)
-        .post('/api/v2/pages')
+        .post('/api/pages')
         .set(ownerHeaders)
         .send({ path: `${rootFrom}/hidden`, body: '# h', grant: 4 });
 
-      const res = await request(app).post('/api/v2/pages/rename').set(otherHeaders).send({ page_id: rootId, new_path: rootTo, include_descendants: true });
+      const res = await request(app).post('/api/pages/rename').set(otherHeaders).send({ page_id: rootId, new_path: rootTo, include_descendants: true });
 
       expect(res.status).toBe(200);
       // root + visible child only.
@@ -815,19 +806,19 @@ describe('Routes /api/v2/pages/rename (Hono renamePage)', () => {
       const rootFrom = `${PATH_PREFIX}stale-tree-root`;
       const rootTo = `${PATH_PREFIX}stale-tree-moved`;
 
-      const rootRes = await request(app).post('/api/v2/pages').set(headers).send({ path: rootFrom, body: '# root' });
+      const rootRes = await request(app).post('/api/pages').set(headers).send({ path: rootFrom, body: '# root' });
       const rootId = rootRes.body.page._id;
       const staleRevisionId = rootRes.body.page.revision._id;
       await request(app)
-        .post('/api/v2/pages')
+        .post('/api/pages')
         .set(headers)
         .send({ path: `${rootFrom}/child`, body: '# c' });
 
       // Bump the root revision so the captured id is stale.
-      await request(app).put('/api/v2/pages').set(headers).send({ page_id: rootId, body: '# bumped', revision_id: staleRevisionId });
+      await request(app).put('/api/pages').set(headers).send({ page_id: rootId, body: '# bumped', revision_id: staleRevisionId });
 
       const res = await request(app)
-        .post('/api/v2/pages/rename')
+        .post('/api/pages/rename')
         .set(headers)
         .send({ page_id: rootId, new_path: rootTo, include_descendants: true, revision_id: staleRevisionId });
 
@@ -842,14 +833,14 @@ describe('Routes /api/v2/pages/rename (Hono renamePage)', () => {
       const rootFrom = `${PATH_PREFIX}compat-root`;
       const rootTo = `${PATH_PREFIX}compat-moved`;
 
-      const rootRes = await request(app).post('/api/v2/pages').set(headers).send({ path: rootFrom, body: '# root' });
+      const rootRes = await request(app).post('/api/pages').set(headers).send({ path: rootFrom, body: '# root' });
       const rootId = rootRes.body.page._id;
       await request(app)
-        .post('/api/v2/pages')
+        .post('/api/pages')
         .set(headers)
         .send({ path: `${rootFrom}/child`, body: '# c' });
 
-      const res = await request(app).post('/api/v2/pages/rename').set(headers).send({ page_id: rootId, new_path: rootTo, include_descendants: false });
+      const res = await request(app).post('/api/pages/rename').set(headers).send({ page_id: rootId, new_path: rootTo, include_descendants: false });
 
       expect(res.status).toBe(200);
       expect(res.body.page.path).toBe(rootTo);
@@ -861,7 +852,7 @@ describe('Routes /api/v2/pages/rename (Hono renamePage)', () => {
   });
 });
 
-describe('Routes /api/v2/pages/rename-subtree (Hono renameSubtree — portal-less folder)', () => {
+describe('Routes /api/pages/rename-subtree (Hono renameSubtree — portal-less folder)', () => {
   const PATH_PREFIX = '/hono-page-rename-subtree-test/';
   let Page;
   let accessToken: string;
@@ -879,7 +870,7 @@ describe('Routes /api/v2/pages/rename-subtree (Hono renameSubtree — portal-les
 
   it('requires authentication', async () => {
     const res = await request(app)
-      .post('/api/v2/pages/rename-subtree')
+      .post('/api/pages/rename-subtree')
       .send({ old_path: `${PATH_PREFIX}folder/`, new_path: `${PATH_PREFIX}moved/` });
     expect(res.status).toBe(401);
   });
@@ -891,19 +882,19 @@ describe('Routes /api/v2/pages/rename-subtree (Hono renameSubtree — portal-les
 
     // No page exists AT `${PATH_PREFIX}folder` — only descendants under it.
     await request(app)
-      .post('/api/v2/pages')
+      .post('/api/pages')
       .set(headers)
       .send({ path: `${oldFolder}child-a`, body: '# a' });
     await request(app)
-      .post('/api/v2/pages')
+      .post('/api/pages')
       .set(headers)
       .send({ path: `${oldFolder}child-a/grandchild`, body: '# gc' });
     await request(app)
-      .post('/api/v2/pages')
+      .post('/api/pages')
       .set(headers)
       .send({ path: `${oldFolder}child-b`, body: '# b' });
 
-    const res = await request(app).post('/api/v2/pages/rename-subtree').set(headers).send({ old_path: oldFolder, new_path: newFolder });
+    const res = await request(app).post('/api/pages/rename-subtree').set(headers).send({ old_path: oldFolder, new_path: newFolder });
 
     expect(res.status).toBe(200);
     expect(res.body.renamed_count).toBe(3);
@@ -917,13 +908,13 @@ describe('Routes /api/v2/pages/rename-subtree (Hono renameSubtree — portal-les
   it('refuses to rename a subtree that sweeps in a user home page (/user/<name>)', async () => {
     const headers = authHeaders(accessToken);
     // The user's home page + a child under the `/user/` namespace.
-    await request(app).post('/api/v2/pages').set(headers).send({ path: '/user/renameSubtreeTester', body: '# home' });
-    await request(app).post('/api/v2/pages').set(headers).send({ path: '/user/renameSubtreeTester/note', body: '# note' });
+    await request(app).post('/api/pages').set(headers).send({ path: '/user/renameSubtreeTester', body: '# home' });
+    await request(app).post('/api/pages').set(headers).send({ path: '/user/renameSubtreeTester/note', body: '# note' });
 
     // Renaming the whole `/user/` subtree would move every user's home
     // page — bypassing the single-page rename guard. It must be refused.
     const res = await request(app)
-      .post('/api/v2/pages/rename-subtree')
+      .post('/api/pages/rename-subtree')
       .set(headers)
       .send({ old_path: '/user/', new_path: `${PATH_PREFIX}stolen/` });
 
@@ -944,16 +935,16 @@ describe('Routes /api/v2/pages/rename-subtree (Hono renameSubtree — portal-les
     const newFolder = `${PATH_PREFIX}grant-moved/`;
 
     await request(app)
-      .post('/api/v2/pages')
+      .post('/api/pages')
       .set(headers)
       .send({ path: `${oldFolder}visible`, body: '# v' });
     // A private page owned by the other user — invisible to the mover.
     await request(app)
-      .post('/api/v2/pages')
+      .post('/api/pages')
       .set(otherHeaders)
       .send({ path: `${oldFolder}hidden`, body: '# h', grant: 4 });
 
-    const res = await request(app).post('/api/v2/pages/rename-subtree').set(headers).send({ old_path: oldFolder, new_path: newFolder });
+    const res = await request(app).post('/api/pages/rename-subtree').set(headers).send({ old_path: oldFolder, new_path: newFolder });
 
     expect(res.status).toBe(200);
     expect(res.body.renamed_count).toBe(1);
@@ -969,16 +960,16 @@ describe('Routes /api/v2/pages/rename-subtree (Hono renameSubtree — portal-les
     const newFolder = `${PATH_PREFIX}conflict-moved/`;
 
     await request(app)
-      .post('/api/v2/pages')
+      .post('/api/pages')
       .set(headers)
       .send({ path: `${oldFolder}dup`, body: '# d' });
     // A page already sitting at the destination of `dup`.
     await request(app)
-      .post('/api/v2/pages')
+      .post('/api/pages')
       .set(headers)
       .send({ path: `${newFolder}dup`, body: '# existing' });
 
-    const res = await request(app).post('/api/v2/pages/rename-subtree').set(headers).send({ old_path: oldFolder, new_path: newFolder });
+    const res = await request(app).post('/api/pages/rename-subtree').set(headers).send({ old_path: oldFolder, new_path: newFolder });
 
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe('PAGE_RENAME_TREE_FAILED');
@@ -990,7 +981,7 @@ describe('Routes /api/v2/pages/rename-subtree (Hono renameSubtree — portal-les
   it('returns a 400 when there are no movable pages under the path', async () => {
     const headers = authHeaders(accessToken);
     const res = await request(app)
-      .post('/api/v2/pages/rename-subtree')
+      .post('/api/pages/rename-subtree')
       .set(headers)
       .send({ old_path: `${PATH_PREFIX}empty-folder/`, new_path: `${PATH_PREFIX}empty-moved/` });
 
@@ -999,7 +990,7 @@ describe('Routes /api/v2/pages/rename-subtree (Hono renameSubtree — portal-les
   });
 });
 
-describe('Routes /api/v2/pages (Hono deletePage)', () => {
+describe('Routes /api/pages (Hono deletePage)', () => {
   const PATH_PREFIX = '/hono-page-delete-test/';
   let Page;
   let Bookmark;
@@ -1023,9 +1014,9 @@ describe('Routes /api/v2/pages (Hono deletePage)', () => {
     await cleanupPathPrefix(`/trash${PATH_PREFIX}`);
   });
 
-  describe('DELETE /api/v2/pages', () => {
+  describe('DELETE /api/pages', () => {
     it('returns 401 when no Authorization header is provided', async () => {
-      const res = await request(app).delete('/api/v2/pages').send({ page_id: '000000000000000000000000' }).set('Content-Type', 'application/json');
+      const res = await request(app).delete('/api/pages').send({ page_id: '000000000000000000000000' }).set('Content-Type', 'application/json');
 
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
@@ -1035,11 +1026,11 @@ describe('Routes /api/v2/pages (Hono deletePage)', () => {
       const path = `${PATH_PREFIX}basic`;
       const headers = authHeaders(accessToken);
 
-      const createRes = await request(app).post('/api/v2/pages').set(headers).send({ path, body: '# initial' });
+      const createRes = await request(app).post('/api/pages').set(headers).send({ path, body: '# initial' });
       expect(createRes.status).toBe(200);
       const pageId = createRes.body.page._id;
 
-      const res = await request(app).delete('/api/v2/pages').set(headers).send({ page_id: pageId });
+      const res = await request(app).delete('/api/pages').set(headers).send({ page_id: pageId });
 
       expect(res.status).toBe(200);
       expect(res.body.page._id).toBe(pageId);
@@ -1061,7 +1052,7 @@ describe('Routes /api/v2/pages (Hono deletePage)', () => {
       const path = `${PATH_PREFIX}completely`;
       const headers = authHeaders(accessToken);
 
-      const createRes = await request(app).post('/api/v2/pages').set(headers).send({ path, body: '# delete me' });
+      const createRes = await request(app).post('/api/pages').set(headers).send({ path, body: '# delete me' });
       expect(createRes.status).toBe(200);
       const pageId = createRes.body.page._id;
 
@@ -1072,7 +1063,7 @@ describe('Routes /api/v2/pages (Hono deletePage)', () => {
       expect(await Bookmark.countDocuments({ page: pageId })).toBe(1);
       expect(await Comment.countDocuments({ page: pageId })).toBe(1);
 
-      const res = await request(app).delete('/api/v2/pages').set(headers).send({ page_id: pageId, completely: true });
+      const res = await request(app).delete('/api/pages').set(headers).send({ page_id: pageId, completely: true });
 
       expect(res.status).toBe(200);
       expect(res.body.page._id).toBe(pageId);
@@ -1087,16 +1078,16 @@ describe('Routes /api/v2/pages (Hono deletePage)', () => {
       const path = `${PATH_PREFIX}stale-revision`;
       const headers = authHeaders(accessToken);
 
-      const createRes = await request(app).post('/api/v2/pages').set(headers).send({ path, body: '# initial' });
+      const createRes = await request(app).post('/api/pages').set(headers).send({ path, body: '# initial' });
       expect(createRes.status).toBe(200);
       const pageId = createRes.body.page._id;
       const staleRevisionId = createRes.body.page.revision._id;
 
       // Bump the revision so the originally-issued revision_id becomes stale.
-      const update = await request(app).put('/api/v2/pages').set(headers).send({ page_id: pageId, body: '# updated', revision_id: staleRevisionId });
+      const update = await request(app).put('/api/pages').set(headers).send({ page_id: pageId, body: '# updated', revision_id: staleRevisionId });
       expect(update.status).toBe(200);
 
-      const res = await request(app).delete('/api/v2/pages').set(headers).send({ page_id: pageId, revision_id: staleRevisionId });
+      const res = await request(app).delete('/api/pages').set(headers).send({ page_id: pageId, revision_id: staleRevisionId });
 
       expect(res.status).toBe(409);
       expect(res.body.error.code).toBe('PAGE_REVISION_ERROR');
@@ -1107,7 +1098,7 @@ describe('Routes /api/v2/pages (Hono deletePage)', () => {
     });
 
     it('returns 404 PAGE_NOT_FOUND for unknown page_id', async () => {
-      const res = await request(app).delete('/api/v2/pages').set(authHeaders(accessToken)).send({ page_id: '000000000000000000000000' });
+      const res = await request(app).delete('/api/pages').set(authHeaders(accessToken)).send({ page_id: '000000000000000000000000' });
 
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
@@ -1129,7 +1120,7 @@ describe('Routes /api/v2/pages (Hono deletePage)', () => {
         grant: 1,
       });
 
-      const res = await request(app).delete('/api/v2/pages').set(headers).send({ page_id: userPage._id.toString() });
+      const res = await request(app).delete('/api/pages').set(headers).send({ page_id: userPage._id.toString() });
 
       // Cleanup the user portal page so it doesn't leak between tests.
       await Page.deleteOne({ _id: userPage._id });
@@ -1141,7 +1132,7 @@ describe('Routes /api/v2/pages (Hono deletePage)', () => {
   });
 });
 
-describe('Routes /api/v2/pages/revert (Hono revertDeletedPage)', () => {
+describe('Routes /api/pages/revert (Hono revertDeletedPage)', () => {
   const PATH_PREFIX = '/hono-page-revert-test/';
   let Page;
   let accessToken: string;
@@ -1161,9 +1152,9 @@ describe('Routes /api/v2/pages/revert (Hono revertDeletedPage)', () => {
     await cleanupPathPrefix(`/trash${PATH_PREFIX}`);
   });
 
-  describe('POST /api/v2/pages/revert', () => {
+  describe('POST /api/pages/revert', () => {
     it('returns 401 when no Authorization header is provided', async () => {
-      const res = await request(app).post('/api/v2/pages/revert').send({ page_id: '000000000000000000000000' }).set('Content-Type', 'application/json');
+      const res = await request(app).post('/api/pages/revert').send({ page_id: '000000000000000000000000' }).set('Content-Type', 'application/json');
 
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
@@ -1173,17 +1164,17 @@ describe('Routes /api/v2/pages/revert (Hono revertDeletedPage)', () => {
       const path = `${PATH_PREFIX}revert-basic`;
       const headers = authHeaders(accessToken);
 
-      const createRes = await request(app).post('/api/v2/pages').set(headers).send({ path, body: '# initial' });
+      const createRes = await request(app).post('/api/pages').set(headers).send({ path, body: '# initial' });
       expect(createRes.status).toBe(200);
       const pageId = createRes.body.page._id;
 
-      const deleteRes = await request(app).delete('/api/v2/pages').set(headers).send({ page_id: pageId });
+      const deleteRes = await request(app).delete('/api/pages').set(headers).send({ page_id: pageId });
       expect(deleteRes.status).toBe(200);
       expect(deleteRes.body.page.path).toBe(`/trash${path}`);
 
       // The redirect stub at the original path is the input the UI would consult,
       // but the revertDeletedPage contract takes the trashed page's id (per planner).
-      const res = await request(app).post('/api/v2/pages/revert').set(headers).send({ page_id: pageId });
+      const res = await request(app).post('/api/pages/revert').set(headers).send({ page_id: pageId });
 
       expect(res.status).toBe(200);
       expect(res.body.page._id).toBe(pageId);
@@ -1204,7 +1195,7 @@ describe('Routes /api/v2/pages/revert (Hono revertDeletedPage)', () => {
     });
 
     it('returns 404 PAGE_NOT_FOUND for unknown page_id', async () => {
-      const res = await request(app).post('/api/v2/pages/revert').set(authHeaders(accessToken)).send({ page_id: '000000000000000000000000' });
+      const res = await request(app).post('/api/pages/revert').set(authHeaders(accessToken)).send({ page_id: '000000000000000000000000' });
 
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
@@ -1212,7 +1203,7 @@ describe('Routes /api/v2/pages/revert (Hono revertDeletedPage)', () => {
   });
 });
 
-describe('Routes /api/v2/pages/seen + /pages/seen-users (Hono seen)', () => {
+describe('Routes /api/pages/seen + /pages/seen-users (Hono seen)', () => {
   const PATH_PREFIX = '/hono-page-seen-test/';
   let Page;
   let accessToken: string;
@@ -1233,23 +1224,23 @@ describe('Routes /api/v2/pages/seen + /pages/seen-users (Hono seen)', () => {
 
   afterEach(() => cleanupPathPrefix(PATH_PREFIX));
 
-  describe('POST /api/v2/pages/seen', () => {
+  describe('POST /api/pages/seen', () => {
     it('returns 401 when no Authorization header is provided', async () => {
-      const res = await request(app).post('/api/v2/pages/seen').send({ page_id: '000000000000000000000000' }).set('Content-Type', 'application/json');
+      const res = await request(app).post('/api/pages/seen').send({ page_id: '000000000000000000000000' }).set('Content-Type', 'application/json');
 
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
     });
 
     it('returns 400 INVALID_PAGE_ID when page_id is malformed', async () => {
-      const res = await request(app).post('/api/v2/pages/seen').set(authHeaders(accessToken)).send({ page_id: 'not-an-objectid' });
+      const res = await request(app).post('/api/pages/seen').set(authHeaders(accessToken)).send({ page_id: 'not-an-objectid' });
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('INVALID_PAGE_ID');
     });
 
     it('returns 404 PAGE_NOT_FOUND when page_id does not exist', async () => {
-      const res = await request(app).post('/api/v2/pages/seen').set(authHeaders(accessToken)).send({ page_id: '000000000000000000000000' });
+      const res = await request(app).post('/api/pages/seen').set(authHeaders(accessToken)).send({ page_id: '000000000000000000000000' });
 
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
@@ -1259,11 +1250,11 @@ describe('Routes /api/v2/pages/seen + /pages/seen-users (Hono seen)', () => {
       const path = `${PATH_PREFIX}basic`;
       const headers = authHeaders(accessToken);
 
-      const createRes = await request(app).post('/api/v2/pages').set(headers).send({ path, body: '# seen me' });
+      const createRes = await request(app).post('/api/pages').set(headers).send({ path, body: '# seen me' });
       expect(createRes.status).toBe(200);
       const pageId = createRes.body.page._id;
 
-      const res = await request(app).post('/api/v2/pages/seen').set(authHeaders(otherAccessToken)).send({ page_id: pageId });
+      const res = await request(app).post('/api/pages/seen').set(authHeaders(otherAccessToken)).send({ page_id: pageId });
 
       expect(res.status).toBe(200);
       expect(res.body.seenUsersCount).toBe(1);
@@ -1280,16 +1271,16 @@ describe('Routes /api/v2/pages/seen + /pages/seen-users (Hono seen)', () => {
       const path = `${PATH_PREFIX}idempotent`;
       const headers = authHeaders(accessToken);
 
-      const createRes = await request(app).post('/api/v2/pages').set(headers).send({ path, body: '# again' });
+      const createRes = await request(app).post('/api/pages').set(headers).send({ path, body: '# again' });
       expect(createRes.status).toBe(200);
       const pageId = createRes.body.page._id;
 
       const otherHeaders = authHeaders(otherAccessToken);
-      const first = await request(app).post('/api/v2/pages/seen').set(otherHeaders).send({ page_id: pageId });
+      const first = await request(app).post('/api/pages/seen').set(otherHeaders).send({ page_id: pageId });
       expect(first.status).toBe(200);
       expect(first.body.seenUsersCount).toBe(1);
 
-      const second = await request(app).post('/api/v2/pages/seen').set(otherHeaders).send({ page_id: pageId });
+      const second = await request(app).post('/api/pages/seen').set(otherHeaders).send({ page_id: pageId });
       expect(second.status).toBe(200);
       expect(second.body.seenUsersCount).toBe(1);
       expect(second.body.seenUsers).toHaveLength(1);
@@ -1305,11 +1296,11 @@ describe('Routes /api/v2/pages/seen + /pages/seen-users (Hono seen)', () => {
       const ownerHeaders = authHeaders(accessToken);
       const otherHeaders = authHeaders(otherAccessToken);
 
-      const createRes = await request(app).post('/api/v2/pages').set(ownerHeaders).send({ path, body: '# private', grant: 4 });
+      const createRes = await request(app).post('/api/pages').set(ownerHeaders).send({ path, body: '# private', grant: 4 });
       expect(createRes.status).toBe(200);
       const pageId = createRes.body.page._id;
 
-      const res = await request(app).post('/api/v2/pages/seen').set(otherHeaders).send({ page_id: pageId });
+      const res = await request(app).post('/api/pages/seen').set(otherHeaders).send({ page_id: pageId });
 
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
@@ -1321,26 +1312,26 @@ describe('Routes /api/v2/pages/seen + /pages/seen-users (Hono seen)', () => {
     });
   });
 
-  describe('GET /api/v2/pages/seen-users', () => {
+  describe('GET /api/pages/seen-users', () => {
     it('returns 401 when no Authorization header is provided', async () => {
-      const res = await request(app).get('/api/v2/pages/seen-users').query({ page_id: '000000000000000000000000' });
+      const res = await request(app).get('/api/pages/seen-users').query({ page_id: '000000000000000000000000' });
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
     });
 
     it('returns 400 INVALID_PAGE_ID when page_id is malformed', async () => {
-      const res = await request(app).get('/api/v2/pages/seen-users').set(authHeaders(accessToken)).query({ page_id: 'not-an-objectid' });
+      const res = await request(app).get('/api/pages/seen-users').set(authHeaders(accessToken)).query({ page_id: 'not-an-objectid' });
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('INVALID_PAGE_ID');
     });
 
     it('returns empty list when no users have seen the page', async () => {
       const path = `${PATH_PREFIX}empty`;
-      const createRes = await request(app).post('/api/v2/pages').set(authHeaders(accessToken)).send({ path, body: '# none' });
+      const createRes = await request(app).post('/api/pages').set(authHeaders(accessToken)).send({ path, body: '# none' });
       expect(createRes.status).toBe(200);
       const pageId = createRes.body.page._id;
 
-      const res = await request(app).get('/api/v2/pages/seen-users').set(authHeaders(accessToken)).query({ page_id: pageId });
+      const res = await request(app).get('/api/pages/seen-users').set(authHeaders(accessToken)).query({ page_id: pageId });
 
       expect(res.status).toBe(200);
       expect(res.body.seenUsers).toEqual([]);
@@ -1352,16 +1343,16 @@ describe('Routes /api/v2/pages/seen + /pages/seen-users (Hono seen)', () => {
       const ownerHeaders = authHeaders(accessToken);
       const otherHeaders = authHeaders(otherAccessToken);
 
-      const createRes = await request(app).post('/api/v2/pages').set(ownerHeaders).send({ path, body: '# look' });
+      const createRes = await request(app).post('/api/pages').set(ownerHeaders).send({ path, body: '# look' });
       expect(createRes.status).toBe(200);
       const pageId = createRes.body.page._id;
 
-      const seenRes = await request(app).post('/api/v2/pages/seen').set(otherHeaders).send({ page_id: pageId });
+      const seenRes = await request(app).post('/api/pages/seen').set(otherHeaders).send({ page_id: pageId });
       expect(seenRes.status).toBe(200);
 
       // GET as the page owner who has NOT marked it as seen — the list should
       // still include `otherUser` but the owner must not be added.
-      const res = await request(app).get('/api/v2/pages/seen-users').set(ownerHeaders).query({ page_id: pageId });
+      const res = await request(app).get('/api/pages/seen-users').set(ownerHeaders).query({ page_id: pageId });
 
       expect(res.status).toBe(200);
       expect(res.body.seenUsersCount).toBe(1);
@@ -1375,11 +1366,11 @@ describe('Routes /api/v2/pages/seen + /pages/seen-users (Hono seen)', () => {
 
     it('returns 404 PAGE_NOT_FOUND when caller is not granted access', async () => {
       const path = `${PATH_PREFIX}forbidden`;
-      const createRes = await request(app).post('/api/v2/pages').set(authHeaders(accessToken)).send({ path, body: '# private', grant: 4 });
+      const createRes = await request(app).post('/api/pages').set(authHeaders(accessToken)).send({ path, body: '# private', grant: 4 });
       expect(createRes.status).toBe(200);
       const pageId = createRes.body.page._id;
 
-      const res = await request(app).get('/api/v2/pages/seen-users').set(authHeaders(otherAccessToken)).query({ page_id: pageId });
+      const res = await request(app).get('/api/pages/seen-users').set(authHeaders(otherAccessToken)).query({ page_id: pageId });
 
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
@@ -1390,15 +1381,15 @@ describe('Routes /api/v2/pages/seen + /pages/seen-users (Hono seen)', () => {
       const ownerHeaders = authHeaders(accessToken);
       const otherHeaders = authHeaders(otherAccessToken);
 
-      const createRes = await request(app).post('/api/v2/pages').set(ownerHeaders).send({ path, body: '# limit' });
+      const createRes = await request(app).post('/api/pages').set(ownerHeaders).send({ path, body: '# limit' });
       expect(createRes.status).toBe(200);
       const pageId = createRes.body.page._id;
 
       // Two distinct readers leave seen receipts (owner + otherUser).
-      await request(app).post('/api/v2/pages/seen').set(ownerHeaders).send({ page_id: pageId });
-      await request(app).post('/api/v2/pages/seen').set(otherHeaders).send({ page_id: pageId });
+      await request(app).post('/api/pages/seen').set(ownerHeaders).send({ page_id: pageId });
+      await request(app).post('/api/pages/seen').set(otherHeaders).send({ page_id: pageId });
 
-      const res = await request(app).get('/api/v2/pages/seen-users').set(ownerHeaders).query({ page_id: pageId, limit: 1 });
+      const res = await request(app).get('/api/pages/seen-users').set(ownerHeaders).query({ page_id: pageId, limit: 1 });
 
       expect(res.status).toBe(200);
       expect(res.body.seenUsersCount).toBe(2);
@@ -1407,7 +1398,7 @@ describe('Routes /api/v2/pages/seen + /pages/seen-users (Hono seen)', () => {
   });
 });
 
-describe('Routes /api/v2/pages/like and /api/v2/pages/unlike (Hono)', () => {
+describe('Routes /api/pages/like and /api/pages/unlike (Hono)', () => {
   const PATH_PREFIX = '/hono-page-like-test/';
   let Page;
   let accessToken: string;
@@ -1435,21 +1426,21 @@ describe('Routes /api/v2/pages/like and /api/v2/pages/unlike (Hono)', () => {
 
   afterEach(() => cleanupPathPrefix(PATH_PREFIX));
 
-  describe('POST /api/v2/pages/like', () => {
+  describe('POST /api/pages/like', () => {
     it('returns 401 without auth', async () => {
-      const res = await request(app).post('/api/v2/pages/like').send({ page_id: '000000000000000000000000' });
+      const res = await request(app).post('/api/pages/like').send({ page_id: '000000000000000000000000' });
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
     });
 
     it('returns 400 INVALID_PAGE_ID when page_id is malformed', async () => {
-      const res = await request(app).post('/api/v2/pages/like').set(authHeaders(accessToken)).send({ page_id: 'not-an-objectid' });
+      const res = await request(app).post('/api/pages/like').set(authHeaders(accessToken)).send({ page_id: 'not-an-objectid' });
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('INVALID_PAGE_ID');
     });
 
     it('returns 404 PAGE_NOT_FOUND for unknown page_id', async () => {
-      const res = await request(app).post('/api/v2/pages/like').set(authHeaders(accessToken)).send({ page_id: '000000000000000000000000' });
+      const res = await request(app).post('/api/pages/like').set(authHeaders(accessToken)).send({ page_id: '000000000000000000000000' });
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
     });
@@ -1457,7 +1448,7 @@ describe('Routes /api/v2/pages/like and /api/v2/pages/unlike (Hono)', () => {
     it('returns 404 PAGE_NOT_FOUND when caller is not granted access', async () => {
       const page = await createPageViaApi(accessToken, `${PATH_PREFIX}private`, '# private', 4);
 
-      const res = await request(app).post('/api/v2/pages/like').set(authHeaders(otherAccessToken)).send({ page_id: page._id });
+      const res = await request(app).post('/api/pages/like').set(authHeaders(otherAccessToken)).send({ page_id: page._id });
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
 
@@ -1469,7 +1460,7 @@ describe('Routes /api/v2/pages/like and /api/v2/pages/unlike (Hono)', () => {
     it('adds the current user to liker on first call and returns the page', async () => {
       const page = await createPageViaApi(accessToken, `${PATH_PREFIX}like-once`, '# like');
 
-      const res = await request(app).post('/api/v2/pages/like').set(authHeaders(accessToken)).send({ page_id: page._id });
+      const res = await request(app).post('/api/pages/like').set(authHeaders(accessToken)).send({ page_id: page._id });
 
       expect(res.status).toBe(200);
       expect(res.body.page).toBeDefined();
@@ -1484,10 +1475,10 @@ describe('Routes /api/v2/pages/like and /api/v2/pages/unlike (Hono)', () => {
     it('is idempotent: liking twice keeps the user in liker exactly once', async () => {
       const page = await createPageViaApi(accessToken, `${PATH_PREFIX}like-twice`, '# like');
 
-      const first = await request(app).post('/api/v2/pages/like').set(authHeaders(accessToken)).send({ page_id: page._id });
+      const first = await request(app).post('/api/pages/like').set(authHeaders(accessToken)).send({ page_id: page._id });
       expect(first.status).toBe(200);
 
-      const second = await request(app).post('/api/v2/pages/like').set(authHeaders(accessToken)).send({ page_id: page._id });
+      const second = await request(app).post('/api/pages/like').set(authHeaders(accessToken)).send({ page_id: page._id });
       expect(second.status).toBe(200);
       expect(second.body.page.liker).toEqual([userId]);
       expect(second.body.page.likerCount).toBe(1);
@@ -1497,21 +1488,21 @@ describe('Routes /api/v2/pages/like and /api/v2/pages/unlike (Hono)', () => {
     });
   });
 
-  describe('POST /api/v2/pages/unlike', () => {
+  describe('POST /api/pages/unlike', () => {
     it('returns 401 without auth', async () => {
-      const res = await request(app).post('/api/v2/pages/unlike').send({ page_id: '000000000000000000000000' });
+      const res = await request(app).post('/api/pages/unlike').send({ page_id: '000000000000000000000000' });
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
     });
 
     it('returns 400 INVALID_PAGE_ID when page_id is malformed', async () => {
-      const res = await request(app).post('/api/v2/pages/unlike').set(authHeaders(accessToken)).send({ page_id: 'not-an-objectid' });
+      const res = await request(app).post('/api/pages/unlike').set(authHeaders(accessToken)).send({ page_id: 'not-an-objectid' });
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('INVALID_PAGE_ID');
     });
 
     it('returns 404 PAGE_NOT_FOUND for unknown page_id', async () => {
-      const res = await request(app).post('/api/v2/pages/unlike').set(authHeaders(accessToken)).send({ page_id: '000000000000000000000000' });
+      const res = await request(app).post('/api/pages/unlike').set(authHeaders(accessToken)).send({ page_id: '000000000000000000000000' });
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
     });
@@ -1519,7 +1510,7 @@ describe('Routes /api/v2/pages/like and /api/v2/pages/unlike (Hono)', () => {
     it('returns 404 PAGE_NOT_FOUND when caller is not granted access', async () => {
       const page = await createPageViaApi(accessToken, `${PATH_PREFIX}private-unlike`, '# private', 4);
 
-      const res = await request(app).post('/api/v2/pages/unlike').set(authHeaders(otherAccessToken)).send({ page_id: page._id });
+      const res = await request(app).post('/api/pages/unlike').set(authHeaders(otherAccessToken)).send({ page_id: page._id });
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
     });
@@ -1527,11 +1518,11 @@ describe('Routes /api/v2/pages/like and /api/v2/pages/unlike (Hono)', () => {
     it('removes the current user from liker after a like', async () => {
       const page = await createPageViaApi(accessToken, `${PATH_PREFIX}unlike-after-like`, '# u');
 
-      const likeRes = await request(app).post('/api/v2/pages/like').set(authHeaders(accessToken)).send({ page_id: page._id });
+      const likeRes = await request(app).post('/api/pages/like').set(authHeaders(accessToken)).send({ page_id: page._id });
       expect(likeRes.status).toBe(200);
       expect(likeRes.body.page.liker).toContain(userId);
 
-      const res = await request(app).post('/api/v2/pages/unlike').set(authHeaders(accessToken)).send({ page_id: page._id });
+      const res = await request(app).post('/api/pages/unlike').set(authHeaders(accessToken)).send({ page_id: page._id });
 
       expect(res.status).toBe(200);
       expect(res.body.page._id).toBe(page._id);
@@ -1545,7 +1536,7 @@ describe('Routes /api/v2/pages/like and /api/v2/pages/unlike (Hono)', () => {
     it('is idempotent: unliking a non-liked page returns the page unchanged', async () => {
       const page = await createPageViaApi(accessToken, `${PATH_PREFIX}unlike-noop`, '# u');
 
-      const res = await request(app).post('/api/v2/pages/unlike').set(authHeaders(accessToken)).send({ page_id: page._id });
+      const res = await request(app).post('/api/pages/unlike').set(authHeaders(accessToken)).send({ page_id: page._id });
 
       expect(res.status).toBe(200);
       expect(res.body.page._id).toBe(page._id);
@@ -1555,7 +1546,7 @@ describe('Routes /api/v2/pages/like and /api/v2/pages/unlike (Hono)', () => {
   });
 });
 
-describe('Routes /api/v2/pages/watch (Hono)', () => {
+describe('Routes /api/pages/watch (Hono)', () => {
   const PATH_PREFIX = '/hono-page-watch-test/';
   let Page;
   let Watcher;
@@ -1596,28 +1587,28 @@ describe('Routes /api/v2/pages/watch (Hono)', () => {
   // the event loop (shared `waitForModel`) instead of a fixed delay.
   const waitForWatcher = (uid: string, pageId: string) => waitForModel(Watcher, { user: uid, target: new Types.ObjectId(pageId) });
 
-  describe('GET /api/v2/pages/watch', () => {
+  describe('GET /api/pages/watch', () => {
     it('returns 401 without auth', async () => {
-      const res = await request(app).get('/api/v2/pages/watch').query({ page_id: '000000000000000000000000' });
+      const res = await request(app).get('/api/pages/watch').query({ page_id: '000000000000000000000000' });
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
     });
 
     it('returns 400 INVALID_PAGE_ID when page_id is malformed', async () => {
-      const res = await request(app).get('/api/v2/pages/watch').set(authHeaders(accessToken)).query({ page_id: 'not-an-objectid' });
+      const res = await request(app).get('/api/pages/watch').set(authHeaders(accessToken)).query({ page_id: 'not-an-objectid' });
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('INVALID_PAGE_ID');
     });
 
     it('returns 404 PAGE_NOT_FOUND for unknown page_id', async () => {
-      const res = await request(app).get('/api/v2/pages/watch').set(authHeaders(accessToken)).query({ page_id: '000000000000000000000000' });
+      const res = await request(app).get('/api/pages/watch').set(authHeaders(accessToken)).query({ page_id: '000000000000000000000000' });
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
     });
 
     it('returns 404 PAGE_NOT_FOUND when caller is not granted access', async () => {
       const page = await createPageViaApi(accessToken, `${PATH_PREFIX}private`, '# private', 4);
-      const res = await request(app).get('/api/v2/pages/watch').set(authHeaders(otherAccessToken)).query({ page_id: page._id });
+      const res = await request(app).get('/api/pages/watch').set(authHeaders(otherAccessToken)).query({ page_id: page._id });
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
     });
@@ -1632,7 +1623,7 @@ describe('Routes /api/v2/pages/watch (Hono)', () => {
       expect(watcher).not.toBeNull();
       expect(watcher.status).toBe(Watcher.STATUS_WATCH);
 
-      const res = await request(app).get('/api/v2/pages/watch').set(authHeaders(accessToken)).query({ page_id: page._id });
+      const res = await request(app).get('/api/pages/watch').set(authHeaders(accessToken)).query({ page_id: page._id });
 
       expect(res.status).toBe(200);
       expect(res.body.watching).toBe(true);
@@ -1641,7 +1632,7 @@ describe('Routes /api/v2/pages/watch (Hono)', () => {
     it('returns watching=false for an unrelated reader (no Watcher record)', async () => {
       const page = await createPageViaApi(accessToken, `${PATH_PREFIX}default-other`, '# hi');
 
-      const res = await request(app).get('/api/v2/pages/watch').set(authHeaders(otherAccessToken)).query({ page_id: page._id });
+      const res = await request(app).get('/api/pages/watch').set(authHeaders(otherAccessToken)).query({ page_id: page._id });
 
       expect(res.status).toBe(200);
       expect(res.body.watching).toBe(false);
@@ -1651,7 +1642,7 @@ describe('Routes /api/v2/pages/watch (Hono)', () => {
       const page = await createPageViaApi(accessToken, `${PATH_PREFIX}explicit-watch`, '# w');
       await Watcher.watchByPageId(new Types.ObjectId(otherUserId), new Types.ObjectId(page._id), Watcher.STATUS_WATCH);
 
-      const res = await request(app).get('/api/v2/pages/watch').set(authHeaders(otherAccessToken)).query({ page_id: page._id });
+      const res = await request(app).get('/api/pages/watch').set(authHeaders(otherAccessToken)).query({ page_id: page._id });
 
       expect(res.status).toBe(200);
       expect(res.body.watching).toBe(true);
@@ -1665,35 +1656,35 @@ describe('Routes /api/v2/pages/watch (Hono)', () => {
       await waitForWatcher(userId, page._id);
       await Watcher.watchByPageId(new Types.ObjectId(userId), new Types.ObjectId(page._id), Watcher.STATUS_IGNORE);
 
-      const res = await request(app).get('/api/v2/pages/watch').set(authHeaders(accessToken)).query({ page_id: page._id });
+      const res = await request(app).get('/api/pages/watch').set(authHeaders(accessToken)).query({ page_id: page._id });
 
       expect(res.status).toBe(200);
       expect(res.body.watching).toBe(false);
     });
   });
 
-  describe('PUT /api/v2/pages/watch', () => {
+  describe('PUT /api/pages/watch', () => {
     it('returns 401 without auth', async () => {
-      const res = await request(app).put('/api/v2/pages/watch').send({ page_id: '000000000000000000000000', watching: true });
+      const res = await request(app).put('/api/pages/watch').send({ page_id: '000000000000000000000000', watching: true });
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
     });
 
     it('returns 400 INVALID_PAGE_ID when page_id is malformed', async () => {
-      const res = await request(app).put('/api/v2/pages/watch').set(authHeaders(accessToken)).send({ page_id: 'not-an-objectid', watching: true });
+      const res = await request(app).put('/api/pages/watch').set(authHeaders(accessToken)).send({ page_id: 'not-an-objectid', watching: true });
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('INVALID_PAGE_ID');
     });
 
     it('returns 404 PAGE_NOT_FOUND for unknown page_id', async () => {
-      const res = await request(app).put('/api/v2/pages/watch').set(authHeaders(accessToken)).send({ page_id: '000000000000000000000000', watching: true });
+      const res = await request(app).put('/api/pages/watch').set(authHeaders(accessToken)).send({ page_id: '000000000000000000000000', watching: true });
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
     });
 
     it('returns 404 PAGE_NOT_FOUND when caller is not granted access', async () => {
       const page = await createPageViaApi(accessToken, `${PATH_PREFIX}private-put`, '# private', 4);
-      const res = await request(app).put('/api/v2/pages/watch').set(authHeaders(otherAccessToken)).send({ page_id: page._id, watching: true });
+      const res = await request(app).put('/api/pages/watch').set(authHeaders(otherAccessToken)).send({ page_id: page._id, watching: true });
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
     });
@@ -1701,7 +1692,7 @@ describe('Routes /api/v2/pages/watch (Hono)', () => {
     it('upserts a WATCH record when watching=true and returns the new state', async () => {
       const page = await createPageViaApi(accessToken, `${PATH_PREFIX}set-watch`, '# w');
 
-      const res = await request(app).put('/api/v2/pages/watch').set(authHeaders(otherAccessToken)).send({ page_id: page._id, watching: true });
+      const res = await request(app).put('/api/pages/watch').set(authHeaders(otherAccessToken)).send({ page_id: page._id, watching: true });
 
       expect(res.status).toBe(200);
       expect(res.body.watching).toBe(true);
@@ -1718,7 +1709,7 @@ describe('Routes /api/v2/pages/watch (Hono)', () => {
     it('upserts an IGNORE record when watching=false and returns the new state', async () => {
       const page = await createPageViaApi(accessToken, `${PATH_PREFIX}set-ignore`, '# i');
 
-      const res = await request(app).put('/api/v2/pages/watch').set(authHeaders(accessToken)).send({ page_id: page._id, watching: false });
+      const res = await request(app).put('/api/pages/watch').set(authHeaders(accessToken)).send({ page_id: page._id, watching: false });
 
       expect(res.status).toBe(200);
       expect(res.body.watching).toBe(false);
@@ -1731,10 +1722,10 @@ describe('Routes /api/v2/pages/watch (Hono)', () => {
     it('flips an existing WATCH record to IGNORE without creating a duplicate', async () => {
       const page = await createPageViaApi(accessToken, `${PATH_PREFIX}flip`, '# flip');
 
-      const first = await request(app).put('/api/v2/pages/watch').set(authHeaders(otherAccessToken)).send({ page_id: page._id, watching: true });
+      const first = await request(app).put('/api/pages/watch').set(authHeaders(otherAccessToken)).send({ page_id: page._id, watching: true });
       expect(first.status).toBe(200);
 
-      const second = await request(app).put('/api/v2/pages/watch').set(authHeaders(otherAccessToken)).send({ page_id: page._id, watching: false });
+      const second = await request(app).put('/api/pages/watch').set(authHeaders(otherAccessToken)).send({ page_id: page._id, watching: false });
       expect(second.status).toBe(200);
       expect(second.body.watching).toBe(false);
 
@@ -1745,7 +1736,7 @@ describe('Routes /api/v2/pages/watch (Hono)', () => {
   });
 });
 
-describe('Routes /api/v2/pages/list (Hono listPages — trash / include_deleted)', () => {
+describe('Routes /api/pages/list (Hono listPages — trash / include_deleted)', () => {
   const PATH_PREFIX = '/hono-page-trash-list-test/';
   let Page;
   let accessToken: string;
@@ -1767,7 +1758,7 @@ describe('Routes /api/v2/pages/list (Hono listPages — trash / include_deleted)
 
   // Soft-delete a page via the API so it ends up under /trash/<original> with status='deleted'.
   const softDeleteViaApi = async (pageId: string) => {
-    const res = await request(app).delete('/api/v2/pages').set(authHeaders(accessToken)).send({ page_id: pageId });
+    const res = await request(app).delete('/api/pages').set(authHeaders(accessToken)).send({ page_id: pageId });
     if (res.status !== 200) {
       throw new Error(`Failed to soft-delete page (${pageId}): ${res.status} ${JSON.stringify(res.body)}`);
     }
@@ -1778,7 +1769,7 @@ describe('Routes /api/v2/pages/list (Hono listPages — trash / include_deleted)
     const path = `${PATH_PREFIX}explicit`;
     const headers = authHeaders(accessToken);
 
-    const createRes = await request(app).post('/api/v2/pages').set(headers).send({ path, body: '# to be deleted' });
+    const createRes = await request(app).post('/api/pages').set(headers).send({ path, body: '# to be deleted' });
     expect(createRes.status).toBe(200);
     const pageId = createRes.body.page._id;
     const deleted = await softDeleteViaApi(pageId);
@@ -1787,7 +1778,7 @@ describe('Routes /api/v2/pages/list (Hono listPages — trash / include_deleted)
     // Without the flag — even though we query /trash<prefix>/, server still
     // forces include_deleted=true for /trash/* paths. Use a non-/trash prefix
     // to verify the flag itself works.
-    const withoutFlag = await request(app).get('/api/v2/pages/list').set(headers).query({ path: PATH_PREFIX });
+    const withoutFlag = await request(app).get('/api/pages/list').set(headers).query({ path: PATH_PREFIX });
     expect(withoutFlag.status).toBe(200);
     const visiblePathsWithoutFlag = (withoutFlag.body.pages as Array<{ path: string }>).map((p) => p.path);
     // The original path was rewritten to /trash/<...> on soft delete; only a redirect
@@ -1796,7 +1787,7 @@ describe('Routes /api/v2/pages/list (Hono listPages — trash / include_deleted)
 
     // With include_deleted=true on a /trash<prefix>/ query, the deleted page surfaces.
     const withFlag = await request(app)
-      .get('/api/v2/pages/list')
+      .get('/api/pages/list')
       .set(headers)
       .query({ path: `/trash${PATH_PREFIX}`, include_deleted: 'true' });
     expect(withFlag.status).toBe(200);
@@ -1808,13 +1799,13 @@ describe('Routes /api/v2/pages/list (Hono listPages — trash / include_deleted)
     const path = `${PATH_PREFIX}implicit`;
     const headers = authHeaders(accessToken);
 
-    const createRes = await request(app).post('/api/v2/pages').set(headers).send({ path, body: '# to be deleted' });
+    const createRes = await request(app).post('/api/pages').set(headers).send({ path, body: '# to be deleted' });
     expect(createRes.status).toBe(200);
     const pageId = createRes.body.page._id;
     await softDeleteViaApi(pageId);
 
     const res = await request(app)
-      .get('/api/v2/pages/list')
+      .get('/api/pages/list')
       .set(headers)
       .query({ path: `/trash${PATH_PREFIX}` });
     expect(res.status).toBe(200);
@@ -1830,13 +1821,13 @@ describe('Routes /api/v2/pages/list (Hono listPages — trash / include_deleted)
     const path = `${PATH_PREFIX}portal-suppressed`;
     const headers = authHeaders(accessToken);
 
-    const createRes = await request(app).post('/api/v2/pages').set(headers).send({ path, body: '# soon-to-be-trash' });
+    const createRes = await request(app).post('/api/pages').set(headers).send({ path, body: '# soon-to-be-trash' });
     expect(createRes.status).toBe(200);
     const pageId = createRes.body.page._id;
     await softDeleteViaApi(pageId);
 
     const res = await request(app)
-      .get('/api/v2/pages/list')
+      .get('/api/pages/list')
       .set(headers)
       .query({ path: `/trash${PATH_PREFIX}` });
     expect(res.status).toBe(200);
@@ -1852,10 +1843,10 @@ describe('Routes /api/v2/pages/list (Hono listPages — trash / include_deleted)
     const portalPath = `${PATH_PREFIX}portal-render/`;
     const headers = authHeaders(accessToken);
 
-    const createRes = await request(app).post('/api/v2/pages').set(headers).send({ path: portalPath, body: '# Portal heading' });
+    const createRes = await request(app).post('/api/pages').set(headers).send({ path: portalPath, body: '# Portal heading' });
     expect(createRes.status).toBe(200);
 
-    const res = await request(app).get('/api/v2/pages/list').set(headers).query({ path: portalPath });
+    const res = await request(app).get('/api/pages/list').set(headers).query({ path: portalPath });
     expect(res.status).toBe(200);
     expect(res.body.portalPage).not.toBeNull();
     expect(res.body.portalPage.revision.renderedAst).toBeTruthy();
@@ -1871,7 +1862,7 @@ describe('Routes /api/v2/pages/list (Hono listPages — trash / include_deleted)
  * the viewer's GRANT_OWNER / GRANT_SPECIFIED pages and leaked
  * GRANT_RESTRICTED pages to non-members. These tests pin the fix.
  */
-describe('Routes /api/v2/pages/list (Hono listPages — root branch grant visibility)', () => {
+describe('Routes /api/pages/list (Hono listPages — root branch grant visibility)', () => {
   const PATH_PREFIX = '/hono-page-root-grants-test/';
   let aliceHeaders: ReturnType<typeof authHeaders>;
   let bobHeaders: ReturnType<typeof authHeaders>;
@@ -1889,11 +1880,11 @@ describe('Routes /api/v2/pages/list (Hono listPages — root branch grant visibi
 
   it("surfaces the viewer's GRANT_OWNER pages in the root listing", async () => {
     const path = `${PATH_PREFIX}owner-only`;
-    const create = await request(app).post('/api/v2/pages').set(aliceHeaders).send({ path, body: '# private', grant: 4 });
+    const create = await request(app).post('/api/pages').set(aliceHeaders).send({ path, body: '# private', grant: 4 });
     expect(create.status).toBe(200);
     const pageId = create.body.page._id as string;
 
-    const list = await request(app).get('/api/v2/pages/list').set(aliceHeaders).query({ path: '/' });
+    const list = await request(app).get('/api/pages/list').set(aliceHeaders).query({ path: '/' });
     expect(list.status).toBe(200);
     const pageIds = (list.body.pages as Array<{ _id: string }>).map((p) => p._id);
     expect(pageIds).toContain(pageId);
@@ -1904,14 +1895,14 @@ describe('Routes /api/v2/pages/list (Hono listPages — root branch grant visibi
     // Restricted to Alice only (no grantedUsers carries the owner here,
     // POST endpoint seeds it for grant=4; for grant=2 we set grantedUsers
     // explicitly via setPageGrant to the owner alone).
-    const create = await request(app).post('/api/v2/pages').set(aliceHeaders).send({ path, body: '# secret', grant: 2 });
+    const create = await request(app).post('/api/pages').set(aliceHeaders).send({ path, body: '# secret', grant: 2 });
     expect(create.status).toBe(200);
     const pageId = create.body.page._id as string;
 
     // Bob is not in the grantedUsers list, so the root listing must
     // omit the page entirely. Previously the hard-coded
     // `grant: { $in: [1, 2] }` would have shown it to Bob.
-    const list = await request(app).get('/api/v2/pages/list').set(bobHeaders).query({ path: '/' });
+    const list = await request(app).get('/api/pages/list').set(bobHeaders).query({ path: '/' });
     expect(list.status).toBe(200);
     const pageIds = (list.body.pages as Array<{ _id: string }>).map((p) => p._id);
     expect(pageIds).not.toContain(pageId);
@@ -1919,11 +1910,11 @@ describe('Routes /api/v2/pages/list (Hono listPages — root branch grant visibi
 
   it("surfaces the viewer's own drafts in a path listing with status='draft'", async () => {
     const path = `${PATH_PREFIX}my-draft`;
-    const create = await request(app).post('/api/v2/pages/drafts').set(aliceHeaders).send({ path });
+    const create = await request(app).post('/api/pages/drafts').set(aliceHeaders).send({ path });
     expect(create.status).toBe(201);
     const pageId = create.body.pageId as string;
 
-    const list = await request(app).get('/api/v2/pages/list').set(aliceHeaders).query({ path: PATH_PREFIX });
+    const list = await request(app).get('/api/pages/list').set(aliceHeaders).query({ path: PATH_PREFIX });
     expect(list.status).toBe(200);
     const draftRow = (list.body.pages as Array<{ _id: string; status?: string }>).find((p) => p._id === pageId);
     expect(draftRow).toBeDefined();
@@ -1935,11 +1926,11 @@ describe('Routes /api/v2/pages/list (Hono listPages — root branch grant visibi
 
   it("keeps another user's draft out of the listing", async () => {
     const path = `${PATH_PREFIX}bobs-private-draft`;
-    const create = await request(app).post('/api/v2/pages/drafts').set(bobHeaders).send({ path });
+    const create = await request(app).post('/api/pages/drafts').set(bobHeaders).send({ path });
     expect(create.status).toBe(201);
     const pageId = create.body.pageId as string;
 
-    const list = await request(app).get('/api/v2/pages/list').set(aliceHeaders).query({ path: PATH_PREFIX });
+    const list = await request(app).get('/api/pages/list').set(aliceHeaders).query({ path: PATH_PREFIX });
     expect(list.status).toBe(200);
     const pageIds = (list.body.pages as Array<{ _id: string }>).map((p) => p._id);
     expect(pageIds).not.toContain(pageId);
@@ -1952,11 +1943,11 @@ describe('Routes /api/v2/pages/list (Hono listPages — root branch grant visibi
   // would still pass the suite.
   it("surfaces the viewer's own draft in the root listing with status='draft'", async () => {
     const path = `${PATH_PREFIX}root-my-draft`;
-    const create = await request(app).post('/api/v2/pages/drafts').set(aliceHeaders).send({ path });
+    const create = await request(app).post('/api/pages/drafts').set(aliceHeaders).send({ path });
     expect(create.status).toBe(201);
     const pageId = create.body.pageId as string;
 
-    const list = await request(app).get('/api/v2/pages/list').set(aliceHeaders).query({ path: '/' });
+    const list = await request(app).get('/api/pages/list').set(aliceHeaders).query({ path: '/' });
     expect(list.status).toBe(200);
     const draftRow = (list.body.pages as Array<{ _id: string; status?: string }>).find((p) => p._id === pageId);
     expect(draftRow).toBeDefined();
@@ -1965,11 +1956,11 @@ describe('Routes /api/v2/pages/list (Hono listPages — root branch grant visibi
 
   it("keeps another user's draft out of the root listing", async () => {
     const path = `${PATH_PREFIX}root-bobs-draft`;
-    const create = await request(app).post('/api/v2/pages/drafts').set(bobHeaders).send({ path });
+    const create = await request(app).post('/api/pages/drafts').set(bobHeaders).send({ path });
     expect(create.status).toBe(201);
     const pageId = create.body.pageId as string;
 
-    const list = await request(app).get('/api/v2/pages/list').set(aliceHeaders).query({ path: '/' });
+    const list = await request(app).get('/api/pages/list').set(aliceHeaders).query({ path: '/' });
     expect(list.status).toBe(200);
     const pageIds = (list.body.pages as Array<{ _id: string }>).map((p) => p._id);
     expect(pageIds).not.toContain(pageId);
@@ -1983,11 +1974,11 @@ describe('Routes /api/v2/pages/list (Hono listPages — root branch grant visibi
     // draft/status filter — leaking other users' drafts into the root
     // listing. Sending the literal string here pins that path.
     const path = `${PATH_PREFIX}root-bobs-draft-falsestr`;
-    const create = await request(app).post('/api/v2/pages/drafts').set(bobHeaders).send({ path });
+    const create = await request(app).post('/api/pages/drafts').set(bobHeaders).send({ path });
     expect(create.status).toBe(201);
     const pageId = create.body.pageId as string;
 
-    const list = await request(app).get('/api/v2/pages/list').set(aliceHeaders).query({ path: '/', include_deleted: 'false' });
+    const list = await request(app).get('/api/pages/list').set(aliceHeaders).query({ path: '/', include_deleted: 'false' });
     expect(list.status).toBe(200);
     const pageIds = (list.body.pages as Array<{ _id: string }>).map((p) => p._id);
     expect(pageIds).not.toContain(pageId);
@@ -2000,25 +1991,25 @@ describe('Routes /api/v2/pages/list (Hono listPages — root branch grant visibi
     // STATUS_DELETED), but now omits the status filter when the flag
     // is set, mirroring findListByStartWith.
     const path = `${PATH_PREFIX}include-deleted-root`;
-    const createRes = await request(app).post('/api/v2/pages').set(aliceHeaders).send({ path, body: '# soon-deleted' });
+    const createRes = await request(app).post('/api/pages').set(aliceHeaders).send({ path, body: '# soon-deleted' });
     expect(createRes.status).toBe(200);
     const pageId = createRes.body.page._id as string;
-    const delRes = await request(app).delete('/api/v2/pages').set(aliceHeaders).send({ page_id: pageId });
+    const delRes = await request(app).delete('/api/pages').set(aliceHeaders).send({ page_id: pageId });
     expect(delRes.status).toBe(200);
 
-    const withFlag = await request(app).get('/api/v2/pages/list').set(aliceHeaders).query({ path: '/', include_deleted: 'true' });
+    const withFlag = await request(app).get('/api/pages/list').set(aliceHeaders).query({ path: '/', include_deleted: 'true' });
     expect(withFlag.status).toBe(200);
     const withFlagPaths = (withFlag.body.pages as Array<{ path: string }>).map((p) => p.path);
     expect(withFlagPaths).toContain(`/trash${path}`);
 
-    const withoutFlag = await request(app).get('/api/v2/pages/list').set(aliceHeaders).query({ path: '/' });
+    const withoutFlag = await request(app).get('/api/pages/list').set(aliceHeaders).query({ path: '/' });
     expect(withoutFlag.status).toBe(200);
     const withoutFlagPaths = (withoutFlag.body.pages as Array<{ path: string }>).map((p) => p.path);
     expect(withoutFlagPaths).not.toContain(`/trash${path}`);
   });
 });
 
-describe('Routes /api/v2/pages/list (Hono listPages — sort / order)', () => {
+describe('Routes /api/pages/list (Hono listPages — sort / order)', () => {
   const PATH_PREFIX = '/hono-page-sort-test/';
   let headers: ReturnType<typeof authHeaders>;
 
@@ -2035,7 +2026,7 @@ describe('Routes /api/v2/pages/list (Hono listPages — sort / order)', () => {
   // call order, so createdAt follows the sequence of awaited calls.
   const createPage = async (name: string) => {
     const res = await request(app)
-      .post('/api/v2/pages')
+      .post('/api/pages')
       .set(headers)
       .send({ path: `${PATH_PREFIX}${name}`, body: `# ${name}` });
     expect(res.status).toBe(200);
@@ -2051,7 +2042,7 @@ describe('Routes /api/v2/pages/list (Hono listPages — sort / order)', () => {
     const alpha = await createPage('alpha');
     const mango = await createPage('mango');
 
-    const list = await request(app).get('/api/v2/pages/list').set(headers).query({ path: PATH_PREFIX, sort: 'path', order: 'asc' });
+    const list = await request(app).get('/api/pages/list').set(headers).query({ path: PATH_PREFIX, sort: 'path', order: 'asc' });
     expect(list.status).toBe(200);
     expect(orderedOurs(list.body, [zebra.id, alpha.id, mango.id])).toEqual([alpha.id, mango.id, zebra.id]);
   });
@@ -2061,7 +2052,7 @@ describe('Routes /api/v2/pages/list (Hono listPages — sort / order)', () => {
     const alpha = await createPage('alpha');
     const mango = await createPage('mango');
 
-    const list = await request(app).get('/api/v2/pages/list').set(headers).query({ path: PATH_PREFIX, sort: 'createdAt', order: 'desc' });
+    const list = await request(app).get('/api/pages/list').set(headers).query({ path: PATH_PREFIX, sort: 'createdAt', order: 'desc' });
     expect(list.status).toBe(200);
     expect(orderedOurs(list.body, [zebra.id, alpha.id, mango.id])).toEqual([mango.id, alpha.id, zebra.id]);
   });
@@ -2073,17 +2064,17 @@ describe('Routes /api/v2/pages/list (Hono listPages — sort / order)', () => {
 
     // Touch the oldest-created page so its updatedAt becomes the newest;
     // by createdAt it would sort last, by updatedAt it must now lead.
-    const upd = await request(app).put('/api/v2/pages').set(headers).send({ page_id: zebra.id, body: '# zebra v2', revision_id: zebra.revisionId });
+    const upd = await request(app).put('/api/pages').set(headers).send({ page_id: zebra.id, body: '# zebra v2', revision_id: zebra.revisionId });
     expect(upd.status).toBe(200);
 
-    const list = await request(app).get('/api/v2/pages/list').set(headers).query({ path: PATH_PREFIX, sort: 'updatedAt', order: 'desc' });
+    const list = await request(app).get('/api/pages/list').set(headers).query({ path: PATH_PREFIX, sort: 'updatedAt', order: 'desc' });
     expect(list.status).toBe(200);
     const ours = orderedOurs(list.body, [zebra.id, alpha.id]);
     expect(ours[0]).toBe(zebra.id);
   });
 });
 
-describe('Routes /api/v2/pages/revert-to-revision (Hono revertToRevision)', () => {
+describe('Routes /api/pages/revert-to-revision (Hono revertToRevision)', () => {
   const PATH_PREFIX = '/hono-page-revert-to-revision-test/';
   let Page;
   let Revision;
@@ -2108,22 +2099,22 @@ describe('Routes /api/v2/pages/revert-to-revision (Hono revertToRevision)', () =
     const path = `${PATH_PREFIX}${slug}`;
     const headers = authHeaders(accessToken);
 
-    const createRes = await request(app).post('/api/v2/pages').set(headers).send({ path, body: '# v1 body' });
+    const createRes = await request(app).post('/api/pages').set(headers).send({ path, body: '# v1 body' });
     expect(createRes.status).toBe(200);
     const pageId = createRes.body.page._id as string;
     const v1RevisionId = createRes.body.page.revision._id as string;
 
-    const updateRes = await request(app).put('/api/v2/pages').set(headers).send({ page_id: pageId, body: '# v2 body', revision_id: v1RevisionId });
+    const updateRes = await request(app).put('/api/pages').set(headers).send({ page_id: pageId, body: '# v2 body', revision_id: v1RevisionId });
     expect(updateRes.status).toBe(200);
     const v2RevisionId = updateRes.body.page.revision._id as string;
 
     return { path, pageId, v1RevisionId, v2RevisionId };
   };
 
-  describe('POST /api/v2/pages/revert-to-revision', () => {
+  describe('POST /api/pages/revert-to-revision', () => {
     it('returns 401 when no Authorization header is provided', async () => {
       const res = await request(app)
-        .post('/api/v2/pages/revert-to-revision')
+        .post('/api/pages/revert-to-revision')
         .send({ page_id: '000000000000000000000000', revision_id: '000000000000000000000000' })
         .set('Content-Type', 'application/json');
 
@@ -2134,10 +2125,7 @@ describe('Routes /api/v2/pages/revert-to-revision (Hono revertToRevision)', () =
     it('reverts to a past revision by stacking a new revision with the old body', async () => {
       const { path, pageId, v1RevisionId, v2RevisionId } = await seedWithHistory('basic');
 
-      const res = await request(app)
-        .post('/api/v2/pages/revert-to-revision')
-        .set(authHeaders(accessToken))
-        .send({ page_id: pageId, revision_id: v1RevisionId });
+      const res = await request(app).post('/api/pages/revert-to-revision').set(authHeaders(accessToken)).send({ page_id: pageId, revision_id: v1RevisionId });
 
       expect(res.status).toBe(200);
       expect(res.body.page._id).toBe(pageId);
@@ -2158,10 +2146,7 @@ describe('Routes /api/v2/pages/revert-to-revision (Hono revertToRevision)', () =
       const before = await Revision.countDocuments({ path });
       expect(before).toBe(2); // v1 + v2
 
-      const res = await request(app)
-        .post('/api/v2/pages/revert-to-revision')
-        .set(authHeaders(accessToken))
-        .send({ page_id: pageId, revision_id: v1RevisionId });
+      const res = await request(app).post('/api/pages/revert-to-revision').set(authHeaders(accessToken)).send({ page_id: pageId, revision_id: v1RevisionId });
       expect(res.status).toBe(200);
 
       const after = await Revision.countDocuments({ path });
@@ -2178,12 +2163,12 @@ describe('Routes /api/v2/pages/revert-to-revision (Hono revertToRevision)', () =
 
       // Someone updates the page again → v3 is now the latest. The caller is
       // still holding v1 as the version they are viewing.
-      const v3Update = await request(app).put('/api/v2/pages').set(headers).send({ page_id: pageId, body: '# v3 body' });
+      const v3Update = await request(app).put('/api/pages').set(headers).send({ page_id: pageId, body: '# v3 body' });
       expect(v3Update.status).toBe(200);
       const v3RevisionId = v3Update.body.page.revision._id as string;
 
       // Revert to v1 — no 409, it simply lands on top of v3.
-      const res = await request(app).post('/api/v2/pages/revert-to-revision').set(headers).send({ page_id: pageId, revision_id: v1RevisionId });
+      const res = await request(app).post('/api/pages/revert-to-revision').set(headers).send({ page_id: pageId, revision_id: v1RevisionId });
       expect(res.status).toBe(200);
       expect(res.body.page.revision.body).toBe('# v1 body');
       expect(res.body.page.revision._id).not.toBe(v3RevisionId);
@@ -2197,7 +2182,7 @@ describe('Routes /api/v2/pages/revert-to-revision (Hono revertToRevision)', () =
       const { v1RevisionId } = await seedWithHistory('unknown-page');
 
       const res = await request(app)
-        .post('/api/v2/pages/revert-to-revision')
+        .post('/api/pages/revert-to-revision')
         .set(authHeaders(accessToken))
         .send({ page_id: '000000000000000000000000', revision_id: v1RevisionId });
 
@@ -2211,15 +2196,15 @@ describe('Routes /api/v2/pages/revert-to-revision (Hono revertToRevision)', () =
       const otherHeaders = authHeaders(otherAccessToken);
 
       // OWNER-grant page seeded with two revisions by its owner.
-      const createRes = await request(app).post('/api/v2/pages').set(ownerHeaders).send({ path, body: '# private v1', grant: 4 });
+      const createRes = await request(app).post('/api/pages').set(ownerHeaders).send({ path, body: '# private v1', grant: 4 });
       expect(createRes.status).toBe(200);
       const pageId = createRes.body.page._id as string;
       const v1RevisionId = createRes.body.page.revision._id as string;
-      const updateRes = await request(app).put('/api/v2/pages').set(ownerHeaders).send({ page_id: pageId, body: '# private v2', revision_id: v1RevisionId });
+      const updateRes = await request(app).put('/api/pages').set(ownerHeaders).send({ page_id: pageId, body: '# private v2', revision_id: v1RevisionId });
       expect(updateRes.status).toBe(200);
 
       // A non-granted user is collapsed to 404, never reverts.
-      const res = await request(app).post('/api/v2/pages/revert-to-revision').set(otherHeaders).send({ page_id: pageId, revision_id: v1RevisionId });
+      const res = await request(app).post('/api/pages/revert-to-revision').set(otherHeaders).send({ page_id: pageId, revision_id: v1RevisionId });
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
 
@@ -2234,7 +2219,7 @@ describe('Routes /api/v2/pages/revert-to-revision (Hono revertToRevision)', () =
       const other = await seedWithHistory('source');
 
       const res = await request(app)
-        .post('/api/v2/pages/revert-to-revision')
+        .post('/api/pages/revert-to-revision')
         .set(authHeaders(accessToken))
         .send({ page_id: pageId, revision_id: other.v1RevisionId });
 
@@ -2246,7 +2231,7 @@ describe('Routes /api/v2/pages/revert-to-revision (Hono revertToRevision)', () =
       const { pageId } = await seedWithHistory('bad-rev');
 
       const res = await request(app)
-        .post('/api/v2/pages/revert-to-revision')
+        .post('/api/pages/revert-to-revision')
         .set(authHeaders(accessToken))
         .send({ page_id: pageId, revision_id: 'not-an-object-id' });
 
@@ -2259,7 +2244,7 @@ describe('Routes /api/v2/pages/revert-to-revision (Hono revertToRevision)', () =
       const ownerHeaders = authHeaders(accessToken);
 
       // Page A: owner-only, holds a private body.
-      const createA = await request(app).post('/api/v2/pages').set(ownerHeaders).send({ path, body: '# private A secret', grant: 4 });
+      const createA = await request(app).post('/api/pages').set(ownerHeaders).send({ path, body: '# private A secret', grant: 4 });
       expect(createA.status).toBe(200);
       const pageAId = createA.body.page._id as string;
       const revisionAId = createA.body.page.revision._id as string;
@@ -2270,7 +2255,7 @@ describe('Routes /api/v2/pages/revert-to-revision (Hono revertToRevision)', () =
       await Page.deleteOne({ _id: pageAId });
 
       // Page B: an unrelated PUBLIC page later created at the SAME path.
-      const createB = await request(app).post('/api/v2/pages').set(authHeaders(otherAccessToken)).send({ path, body: '# public B' });
+      const createB = await request(app).post('/api/pages').set(authHeaders(otherAccessToken)).send({ path, body: '# public B' });
       expect(createB.status).toBe(200);
       const pageBId = createB.body.page._id as string;
 
@@ -2280,7 +2265,7 @@ describe('Routes /api/v2/pages/revert-to-revision (Hono revertToRevision)', () =
       // private body, exposing that body in the response and overwriting
       // B's own content.
       const res = await request(app)
-        .post('/api/v2/pages/revert-to-revision')
+        .post('/api/pages/revert-to-revision')
         .set(authHeaders(otherAccessToken))
         .send({ page_id: pageBId, revision_id: revisionAId });
 
@@ -2294,7 +2279,7 @@ describe('Routes /api/v2/pages/revert-to-revision (Hono revertToRevision)', () =
   });
 });
 
-describe('Routes /api/v2/pages (Hono getPage — past revision / stale detection)', () => {
+describe('Routes /api/pages (Hono getPage — past revision / stale detection)', () => {
   const PATH_PREFIX = '/hono-page-get-revision-test/';
   let accessToken: string;
 
@@ -2308,21 +2293,21 @@ describe('Routes /api/v2/pages (Hono getPage — past revision / stale detection
   const seedWithHistory = async (slug: string) => {
     const path = `${PATH_PREFIX}${slug}`;
     const headers = authHeaders(accessToken);
-    const createRes = await request(app).post('/api/v2/pages').set(headers).send({ path, body: '# v1 body' });
+    const createRes = await request(app).post('/api/pages').set(headers).send({ path, body: '# v1 body' });
     expect(createRes.status).toBe(200);
     const pageId = createRes.body.page._id as string;
     const v1RevisionId = createRes.body.page.revision._id as string;
-    const updateRes = await request(app).put('/api/v2/pages').set(headers).send({ page_id: pageId, body: '# v2 body', revision_id: v1RevisionId });
+    const updateRes = await request(app).put('/api/pages').set(headers).send({ page_id: pageId, body: '# v2 body', revision_id: v1RevisionId });
     expect(updateRes.status).toBe(200);
     const v2RevisionId = updateRes.body.page.revision._id as string;
     return { path, pageId, v1RevisionId, v2RevisionId };
   };
 
-  describe('GET /api/v2/pages?revision_id=', () => {
+  describe('GET /api/pages?revision_id=', () => {
     it('serves the past revision body AND surfaces latestRevision so the client can flag it stale', async () => {
       const { path, v1RevisionId, v2RevisionId } = await seedWithHistory('stale');
 
-      const res = await request(app).get('/api/v2/pages').query({ path, revision_id: v1RevisionId }).set(authHeaders(accessToken));
+      const res = await request(app).get('/api/pages').query({ path, revision_id: v1RevisionId }).set(authHeaders(accessToken));
 
       expect(res.status).toBe(200);
       // The requested PAST revision's body is what gets served.
@@ -2340,7 +2325,7 @@ describe('Routes /api/v2/pages (Hono getPage — past revision / stale detection
     it('reports latestRevision === the viewed revision when opened at the latest (not stale)', async () => {
       const { path, v2RevisionId } = await seedWithHistory('latest');
 
-      const res = await request(app).get('/api/v2/pages').query({ path, revision_id: v2RevisionId }).set(authHeaders(accessToken));
+      const res = await request(app).get('/api/pages').query({ path, revision_id: v2RevisionId }).set(authHeaders(accessToken));
 
       expect(res.status).toBe(200);
       expect(res.body.page.revision._id).toBe(v2RevisionId);
@@ -2355,7 +2340,7 @@ describe('Routes /api/v2/pages (Hono getPage — past revision / stale detection
       const headers = authHeaders(accessToken);
 
       // Page A: owner-only, holds a private body.
-      const createA = await request(app).post('/api/v2/pages').set(headers).send({ path, body: '# private A secret', grant: 4 });
+      const createA = await request(app).post('/api/pages').set(headers).send({ path, body: '# private A secret', grant: 4 });
       expect(createA.status).toBe(200);
       const pageAId = createA.body.page._id as string;
       const revisionAId = createA.body.page.revision._id as string;
@@ -2366,7 +2351,7 @@ describe('Routes /api/v2/pages (Hono getPage — past revision / stale detection
       await Page.deleteOne({ _id: pageAId });
 
       // Page B: an unrelated PUBLIC page later created at the SAME path.
-      const createB = await request(app).post('/api/v2/pages').set(headers).send({ path, body: '# public B' });
+      const createB = await request(app).post('/api/pages').set(headers).send({ path, body: '# public B' });
       expect(createB.status).toBe(200);
 
       // Pre-fix, `Page.findPage` handed `revisionId` straight to
@@ -2374,7 +2359,7 @@ describe('Routes /api/v2/pages (Hono getPage — past revision / stale detection
       // ownership check — this would have served A's private body through
       // B's public grant (`path` matches both, but `revision.page` does
       // not match page B's `_id`).
-      const res = await request(app).get('/api/v2/pages').query({ path, revision_id: revisionAId }).set(headers);
+      const res = await request(app).get('/api/pages').query({ path, revision_id: revisionAId }).set(headers);
 
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
@@ -2409,7 +2394,7 @@ describe('Routes /api/v2/pages (Hono getPage — past revision / stale detection
         email: 'get-page-id-regression-stranger-web@example.com',
       });
 
-      const res = await request(app).get('/api/v2/pages').query({ page_id: page._id }).set(authHeaders(strangerToken));
+      const res = await request(app).get('/api/pages').query({ page_id: page._id }).set(authHeaders(strangerToken));
       expect(res.status).toBe(403);
       expect(res.body.error.code).toBe('PAGE_NOT_GRANTED');
 
@@ -2427,7 +2412,7 @@ describe('Routes /api/v2/pages (Hono getPage — past revision / stale detection
       });
       const oauthToken = createJwtUtil(crowi).signOauthAccessToken({ user: stranger, scopes: ['pages:read'], clientId: 'crowi-cli' });
 
-      const res = await request(app).get('/api/v2/pages').query({ page_id: page._id }).set(authHeaders(oauthToken));
+      const res = await request(app).get('/api/pages').query({ page_id: page._id }).set(authHeaders(oauthToken));
       expect(res.status).toBe(403);
 
       const Page = crowi.model('Page');
@@ -2446,7 +2431,7 @@ describe('Routes /api/v2/pages (Hono getPage — past revision / stale detection
       // `/_edit?page_id=` and `/_attachments?page_id=` both resolve through
       // `usePage({ page_id })` -> `GET /pages?page_id=`. Simulate opening
       // either screen: still 403, still no grantedUsers write.
-      const readRes = await request(app).get('/api/v2/pages').query({ page_id: page._id }).set(authHeaders(strangerToken));
+      const readRes = await request(app).get('/api/pages').query({ page_id: page._id }).set(authHeaders(strangerToken));
       expect(readRes.status).toBe(403);
 
       const Page = crowi.model('Page');
@@ -2456,7 +2441,7 @@ describe('Routes /api/v2/pages (Hono getPage — past revision / stale detection
       // Editor/save-adjacent operations (findPageByIdAndGrantedUser-backed)
       // must still be denied for the same non-granted user — reading the
       // page_id branch must not have silently upgraded their access.
-      const updateRes = await request(app).put('/api/v2/pages').set(authHeaders(strangerToken)).send({ page_id: page._id, body: '# hijacked' });
+      const updateRes = await request(app).put('/api/pages').set(authHeaders(strangerToken)).send({ page_id: page._id, body: '# hijacked' });
       expect([403, 404]).toContain(updateRes.status);
 
       const afterWrite = await Page.findById(page._id).select('grantedUsers').lean();
@@ -2474,7 +2459,7 @@ describe('Routes /api/v2/pages (Hono getPage — past revision / stale detection
 // render-artifact failure used to make a perfectly live page vanish for
 // every viewer reconciling their cache. This split routes anything other
 // than the genuine not-found/not-granted branches to 500 instead.
-describe('Routes /api/v2/pages (Hono getPage — unknown-error 500 split, feature-live-page-sync-reconcile)', () => {
+describe('Routes /api/pages (Hono getPage — unknown-error 500 split, feature-live-page-sync-reconcile)', () => {
   const PATH_PREFIX = '/hono-page-get-500-split-test/';
   let accessToken: string;
 
@@ -2492,7 +2477,7 @@ describe('Routes /api/v2/pages (Hono getPage — unknown-error 500 split, featur
     const spy = jest.spyOn(pageResponseModule, 'computeRevisionRenderArtifactsAsync').mockRejectedValueOnce(new Error('renderer boom'));
 
     try {
-      const res = await request(app).get('/api/v2/pages').query({ path }).set(authHeaders(accessToken));
+      const res = await request(app).get('/api/pages').query({ path }).set(authHeaders(accessToken));
 
       expect(res.status).toBe(500);
       expect(res.body.error.code).toBe('INTERNAL_ERROR');
@@ -2503,7 +2488,7 @@ describe('Routes /api/v2/pages (Hono getPage — unknown-error 500 split, featur
 
   it('still returns 404 PAGE_NOT_FOUND for a genuinely missing page (unaffected by the 500 split)', async () => {
     const res = await request(app)
-      .get('/api/v2/pages')
+      .get('/api/pages')
       .query({ path: `${PATH_PREFIX}does-not-exist` })
       .set(authHeaders(accessToken));
 
@@ -2520,7 +2505,7 @@ describe('Routes /api/v2/pages (Hono getPage — unknown-error 500 split, featur
 // actually reaching it is the authenticated caller, not e.g. a stray
 // `{ kind: 'system' }` — a spy on the real (imported) function, exercised
 // through the full HTTP path.
-describe('Routes /api/v2/pages (Hono getPage — actor wiring, feature-plugin-renderer-mermaid spec §6)', () => {
+describe('Routes /api/pages (Hono getPage — actor wiring, feature-plugin-renderer-mermaid spec §6)', () => {
   const PATH_PREFIX = '/hono-page-get-actor-wiring-test/';
   let accessToken: string;
   let userId: string;
@@ -2544,7 +2529,7 @@ describe('Routes /api/v2/pages (Hono getPage — actor wiring, feature-plugin-re
     const pageResponseModule = await import('src/util/page-response');
     const spy = jest.spyOn(pageResponseModule, 'computeRevisionRenderArtifactsAsync');
     try {
-      const res = await request(app).get('/api/v2/pages').query({ path }).set(authHeaders(accessToken));
+      const res = await request(app).get('/api/pages').query({ path }).set(authHeaders(accessToken));
 
       expect(res.status).toBe(200);
       expect(spy).toHaveBeenCalled();
@@ -2557,7 +2542,7 @@ describe('Routes /api/v2/pages (Hono getPage — actor wiring, feature-plugin-re
   });
 });
 
-describe('Routes /api/v2/pages/link-access (Hono claimPageLinkAccessRoute — grant-on-first-access, feature-restricted-grant-share-banner Phase 1)', () => {
+describe('Routes /api/pages/link-access (Hono claimPageLinkAccessRoute — grant-on-first-access, feature-restricted-grant-share-banner Phase 1)', () => {
   const PATH_PREFIX = '/hono-page-link-access-test/';
   const GRANT_PUBLIC = 1;
   const GRANT_RESTRICTED = 2;
@@ -2585,7 +2570,7 @@ describe('Routes /api/v2/pages/link-access (Hono claimPageLinkAccessRoute — gr
 
   afterEach(() => cleanupPathPrefix(PATH_PREFIX));
 
-  const claim = (token: string, pageId: string) => request(app).post('/api/v2/pages/link-access').set(authHeaders(token)).send({ page_id: pageId });
+  const claim = (token: string, pageId: string) => request(app).post('/api/pages/link-access').set(authHeaders(token)).send({ page_id: pageId });
 
   const grantedUsersOf = async (pageId: string): Promise<string[]> => {
     const Page = crowi.model('Page');
@@ -2605,7 +2590,7 @@ describe('Routes /api/v2/pages/link-access (Hono claimPageLinkAccessRoute — gr
 
       // Regression: IdRedirector -> PageView's post-redirect path read
       // actually succeeds now that the claim committed.
-      const pathRes = await request(app).get('/api/v2/pages').query({ path: page.path }).set(authHeaders(claimantToken));
+      const pathRes = await request(app).get('/api/pages').query({ path: page.path }).set(authHeaders(claimantToken));
       expect(pathRes.status).toBe(200);
     });
 
@@ -2617,7 +2602,7 @@ describe('Routes /api/v2/pages/link-access (Hono claimPageLinkAccessRoute — gr
         email: 'link-access-never-claimed@example.com',
       });
 
-      const pathRes = await request(app).get('/api/v2/pages').query({ path: page.path }).set(authHeaders(stranger.accessToken));
+      const pathRes = await request(app).get('/api/pages').query({ path: page.path }).set(authHeaders(stranger.accessToken));
       expect(pathRes.status).toBe(403);
       expect(pathRes.body.error.code).toBe('PAGE_NOT_GRANTED');
       expect(await grantedUsersOf(page._id)).not.toContain(stranger.user._id.toString());
@@ -2703,7 +2688,7 @@ describe('Routes /api/v2/pages/link-access (Hono claimPageLinkAccessRoute — gr
   describe('deleted / redirect-stub / rename interactions', () => {
     it('does not grant access to a deleted GRANT_RESTRICTED page', async () => {
       const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}deleted`, '# body', GRANT_RESTRICTED);
-      const delRes = await request(app).delete('/api/v2/pages').set(authHeaders(ownerToken)).send({ page_id: page._id });
+      const delRes = await request(app).delete('/api/pages').set(authHeaders(ownerToken)).send({ page_id: page._id });
       expect(delRes.status).toBe(200);
 
       const res = await claim(claimantToken, page._id);
@@ -2714,7 +2699,7 @@ describe('Routes /api/v2/pages/link-access (Hono claimPageLinkAccessRoute — gr
     it('a redirect stub left behind by a rename resolves as a public pass-through, not an invite target', async () => {
       const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}rename-source`, '# body', GRANT_RESTRICTED);
       const renameRes = await request(app)
-        .post('/api/v2/pages/rename')
+        .post('/api/pages/rename')
         .set(authHeaders(ownerToken))
         .send({ page_id: page._id, new_path: `${PATH_PREFIX}rename-dest`, create_redirect: true });
       expect(renameRes.status).toBe(200);
@@ -2732,7 +2717,7 @@ describe('Routes /api/v2/pages/link-access (Hono claimPageLinkAccessRoute — gr
     it('claiming the SAME _id after a plain rename (no redirect stub) still grants access — the shared link survives the rename', async () => {
       const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}renamed-source`, '# body', GRANT_RESTRICTED);
       const renameRes = await request(app)
-        .post('/api/v2/pages/rename')
+        .post('/api/pages/rename')
         .set(authHeaders(ownerToken))
         .send({ page_id: page._id, new_path: `${PATH_PREFIX}renamed-dest` });
       expect(renameRes.status).toBe(200);
@@ -2770,7 +2755,7 @@ describe('Routes /api/v2/pages/link-access (Hono claimPageLinkAccessRoute — gr
       const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}scope-pat-write`, '# body', GRANT_RESTRICTED);
       const scoped = await createTestUser({ name: 'Link Access Scope PAT', username: 'linkAccessScopePat', email: 'link-access-scope-pat@example.com' });
       const created = await request(app)
-        .post('/api/v2/me/access-tokens')
+        .post('/api/me/access-tokens')
         .set(authHeaders(scoped.accessToken))
         .send({ name: 'link-access-pat', scopes: ['pages:write'] });
       expect(created.status).toBe(201);
@@ -2926,14 +2911,14 @@ describe('Routes /api/v2/pages/link-access (Hono claimPageLinkAccessRoute — gr
         email: 'link-access-list-visibility@example.com',
       });
 
-      const before = await request(app).get('/api/v2/pages/list').query({ path: '/' }).set(authHeaders(viewer.accessToken));
+      const before = await request(app).get('/api/pages/list').query({ path: '/' }).set(authHeaders(viewer.accessToken));
       expect(before.status).toBe(200);
       expect((before.body.pages as { _id: string }[]).map((p) => p._id)).not.toContain(page._id);
 
       const claimRes = await claim(viewer.accessToken, page._id);
       expect(claimRes.status).toBe(200);
 
-      const after = await request(app).get('/api/v2/pages/list').query({ path: '/' }).set(authHeaders(viewer.accessToken));
+      const after = await request(app).get('/api/pages/list').query({ path: '/' }).set(authHeaders(viewer.accessToken));
       expect(after.status).toBe(200);
       expect((after.body.pages as { _id: string }[]).map((p) => p._id)).toContain(page._id);
     });
@@ -2947,7 +2932,7 @@ describe('Routes /api/v2/pages/link-access (Hono claimPageLinkAccessRoute — gr
 
       const driver = buildMockSearchDriver();
       await withMockSearchDriver(driver, async () => {
-        const res = await request(app).put('/api/v2/pages/grant').set(authHeaders(ownerToken)).send({ page_id: page._id, grant: GRANT_OWNER });
+        const res = await request(app).put('/api/pages/grant').set(authHeaders(ownerToken)).send({ page_id: page._id, grant: GRANT_OWNER });
         expect(res.status).toBe(200);
 
         // Drain the tracked fire-and-forget reindex while the mock driver
@@ -2969,7 +2954,7 @@ describe('Routes /api/v2/pages/link-access (Hono claimPageLinkAccessRoute — gr
       const driver = buildMockSearchDriver();
 
       await withMockSearchDriver(driver, async () => {
-        const res = await request(app).delete('/api/v2/pages').set(authHeaders(ownerToken)).send({ page_id: page._id });
+        const res = await request(app).delete('/api/pages').set(authHeaders(ownerToken)).send({ page_id: page._id });
         expect(res.status).toBe(200);
 
         // Drain the tracked fire-and-forget reindex while the mock driver

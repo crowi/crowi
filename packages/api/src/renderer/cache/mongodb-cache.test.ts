@@ -196,8 +196,8 @@ describe('MongoCacheStorage', () => {
       const cache = buildCache();
       const key = buildKey();
       const tooLarge = 'x'.repeat(SINGLE_ENTRY_REJECT_BYTES + 1);
-      const reject = await cache.setOrReject(key, buildEntry({ html: tooLarge }));
-      expect(reject).toBe('entry-too-large');
+      const verdict = await cache.setOrReject(key, buildEntry({ html: tooLarge }));
+      expect(verdict).toEqual({ reject: 'entry-too-large', structuredStripped: false });
 
       const got = await cache.get(key);
       expect(got).toBeNull();
@@ -209,8 +209,8 @@ describe('MongoCacheStorage', () => {
       const key = buildKey();
       // 60KB — between warn (50KB) and reject (100KB).
       const html = 'y'.repeat(60 * 1024);
-      const reject = await cache.setOrReject(key, buildEntry({ html }));
-      expect(reject).toBeNull();
+      const verdict = await cache.setOrReject(key, buildEntry({ html }));
+      expect(verdict).toEqual({ reject: null, structuredStripped: false });
       const got = await cache.get(key);
       expect(got?.html.length).toBe(html.length);
       expect(silentLog.warn).toHaveBeenCalled();
@@ -229,8 +229,8 @@ describe('MongoCacheStorage', () => {
 
       // Adding another 99KB entry now should push past the 10MB cap.
       const lastKey = buildKey({ pageId, embedKey: 'too-much' });
-      const reject = await cache.setOrReject(lastKey, buildEntry({ html: 'q'.repeat(99 * 1024) }));
-      expect(reject).toBe('page-quota-exceeded');
+      const verdict = await cache.setOrReject(lastKey, buildEntry({ html: 'q'.repeat(99 * 1024) }));
+      expect(verdict).toEqual({ reject: 'page-quota-exceeded', structuredStripped: false });
 
       const got = await cache.get(lastKey);
       expect(got).toBeNull();

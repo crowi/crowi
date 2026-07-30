@@ -18,7 +18,7 @@ const cleanupPathPrefix = (prefix: string) => {
 // ---------------------------------------------------------------------------
 // §4 — contentPage on a portal-path listing
 // ---------------------------------------------------------------------------
-describe('Routes /api/v2/pages/list (Hono listPages — §4 contentPage)', () => {
+describe('Routes /api/pages/list (Hono listPages — §4 contentPage)', () => {
   const PATH_PREFIX = '/hono-page-contentpage-test/';
   let accessToken: string;
   let otherAccessToken: string;
@@ -39,7 +39,7 @@ describe('Routes /api/v2/pages/list (Hono listPages — §4 contentPage)', () =>
 
     const created = await createPageViaApi(accessToken, contentPath, '# content here');
 
-    const res = await request(app).get('/api/v2/pages/list').set(headers).query({ path: portalPath });
+    const res = await request(app).get('/api/pages/list').set(headers).query({ path: portalPath });
     expect(res.status).toBe(200);
     expect(res.body.portalPage).toBeNull();
     expect(res.body.contentPage).not.toBeNull();
@@ -58,7 +58,7 @@ describe('Routes /api/v2/pages/list (Hono listPages — §4 contentPage)', () =>
 
     await createPageViaApi(accessToken, portalPath, '# Portal doc');
 
-    const res = await request(app).get('/api/v2/pages/list').set(headers).query({ path: portalPath });
+    const res = await request(app).get('/api/pages/list').set(headers).query({ path: portalPath });
     expect(res.status).toBe(200);
     expect(res.body.portalPage).not.toBeNull();
     expect(res.body.contentPage ?? null).toBeNull();
@@ -72,7 +72,7 @@ describe('Routes /api/v2/pages/list (Hono listPages — §4 contentPage)', () =>
     // content page and no `/x/` portal.
     await createPageViaApi(accessToken, `${portalPath}child`, '# child');
 
-    const res = await request(app).get('/api/v2/pages/list').set(headers).query({ path: portalPath });
+    const res = await request(app).get('/api/pages/list').set(headers).query({ path: portalPath });
     expect(res.status).toBe(200);
     expect(res.body.portalPage).toBeNull();
     expect(res.body.contentPage ?? null).toBeNull();
@@ -86,7 +86,7 @@ describe('Routes /api/v2/pages/list (Hono listPages — §4 contentPage)', () =>
     // it, so the /x/ listing must not leak it as contentPage.
     await createPageViaApi(otherAccessToken, contentPath, '# secret', 4 /* GRANT_OWNER */);
 
-    const res = await request(app).get('/api/v2/pages/list').set(authHeaders(accessToken)).query({ path: portalPath });
+    const res = await request(app).get('/api/pages/list').set(authHeaders(accessToken)).query({ path: portalPath });
     expect(res.status).toBe(200);
     expect(res.body.contentPage ?? null).toBeNull();
   });
@@ -95,7 +95,7 @@ describe('Routes /api/v2/pages/list (Hono listPages — §4 contentPage)', () =>
 // ---------------------------------------------------------------------------
 // §6 — /x ↔ /x/ twin guard
 // ---------------------------------------------------------------------------
-describe('Routes /api/v2/pages (Hono createPage — §6 twin guard)', () => {
+describe('Routes /api/pages (Hono createPage — §6 twin guard)', () => {
   const PATH_PREFIX = '/hono-page-twin-create-test/';
   let accessToken: string;
 
@@ -112,7 +112,7 @@ describe('Routes /api/v2/pages (Hono createPage — §6 twin guard)', () => {
 
     await createPageViaApi(accessToken, contentPath, '# content');
 
-    const res = await request(app).post('/api/v2/pages').set(headers).send({ path: portalPath, body: '# portal' });
+    const res = await request(app).post('/api/pages').set(headers).send({ path: portalPath, body: '# portal' });
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe('PAGE_TWIN_EXISTS');
 
@@ -128,20 +128,20 @@ describe('Routes /api/v2/pages (Hono createPage — §6 twin guard)', () => {
 
     await createPageViaApi(accessToken, portalPath, '# portal');
 
-    const res = await request(app).post('/api/v2/pages').set(headers).send({ path: contentPath, body: '# content' });
+    const res = await request(app).post('/api/pages').set(headers).send({ path: contentPath, body: '# content' });
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe('PAGE_TWIN_EXISTS');
   });
 
   it('allows creating /x when no twin exists', async () => {
     const contentPath = `${PATH_PREFIX}c`;
-    const res = await request(app).post('/api/v2/pages').set(authHeaders(accessToken)).send({ path: contentPath, body: '# fresh' });
+    const res = await request(app).post('/api/pages').set(authHeaders(accessToken)).send({ path: contentPath, body: '# fresh' });
     expect(res.status).toBe(200);
     expect(res.body.page.path).toBe(contentPath);
   });
 });
 
-describe('Routes /api/v2/pages/drafts (Hono createDraft — §6 twin guard)', () => {
+describe('Routes /api/pages/drafts (Hono createDraft — §6 twin guard)', () => {
   const PATH_PREFIX = '/hono-page-twin-draft-test/';
   let accessToken: string;
 
@@ -158,7 +158,7 @@ describe('Routes /api/v2/pages/drafts (Hono createDraft — §6 twin guard)', ()
 
     await createPageViaApi(accessToken, contentPath, '# content');
 
-    const res = await request(app).post('/api/v2/pages/drafts').set(headers).send({ path: portalPath });
+    const res = await request(app).post('/api/pages/drafts').set(headers).send({ path: portalPath });
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('invalid_path');
     // The message names the conflicting twin so the user can act on it.
@@ -172,20 +172,20 @@ describe('Routes /api/v2/pages/drafts (Hono createDraft — §6 twin guard)', ()
 
     await createPageViaApi(accessToken, portalPath, '# portal');
 
-    const res = await request(app).post('/api/v2/pages/drafts').set(headers).send({ path: contentPath });
+    const res = await request(app).post('/api/pages/drafts').set(headers).send({ path: contentPath });
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('invalid_path');
   });
 
   it('allows starting a draft at /x when no twin exists', async () => {
     const contentPath = `${PATH_PREFIX}c`;
-    const res = await request(app).post('/api/v2/pages/drafts').set(authHeaders(accessToken)).send({ path: contentPath });
+    const res = await request(app).post('/api/pages/drafts').set(authHeaders(accessToken)).send({ path: contentPath });
     expect(res.status).toBe(201);
     expect(res.body.pageId).toBeDefined();
   });
 });
 
-describe('Routes /api/v2/pages/rename (Hono renamePage — §6 twin guard)', () => {
+describe('Routes /api/pages/rename (Hono renamePage — §6 twin guard)', () => {
   const PATH_PREFIX = '/hono-page-twin-rename-test/';
   let Page;
   let accessToken: string;
@@ -206,7 +206,7 @@ describe('Routes /api/v2/pages/rename (Hono renamePage — §6 twin guard)', () 
     await createPageViaApi(accessToken, existingTwin, '# existing twin');
     const source = await createPageViaApi(accessToken, fromPath, '# source');
 
-    const res = await request(app).post('/api/v2/pages/rename').set(headers).send({ page_id: source._id, new_path: destPortal });
+    const res = await request(app).post('/api/pages/rename').set(headers).send({ page_id: source._id, new_path: destPortal });
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe('PAGE_TWIN_EXISTS');
 
@@ -222,7 +222,7 @@ describe('Routes /api/v2/pages/rename (Hono renamePage — §6 twin guard)', () 
 
     const page = await createPageViaApi(accessToken, contentPath, '# portalize me');
 
-    const res = await request(app).post('/api/v2/pages/rename').set(headers).send({ page_id: page._id, new_path: portalPath });
+    const res = await request(app).post('/api/pages/rename').set(headers).send({ page_id: page._id, new_path: portalPath });
     expect(res.status).toBe(200);
     expect(res.body.page.path).toBe(portalPath);
 
@@ -244,7 +244,7 @@ describe('Routes /api/v2/pages/rename (Hono renamePage — §6 twin guard)', () 
 
     // This is what PortalizeDialog sends — a portal destination MUST still
     // honour create_redirect (it used to be skipped for `/`-suffixed targets).
-    const res = await request(app).post('/api/v2/pages/rename').set(headers).send({ page_id: page._id, new_path: portalPath, create_redirect: true });
+    const res = await request(app).post('/api/pages/rename').set(headers).send({ page_id: page._id, new_path: portalPath, create_redirect: true });
     expect(res.status).toBe(200);
     expect(res.body.page.path).toBe(portalPath);
 

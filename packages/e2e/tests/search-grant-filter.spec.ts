@@ -20,7 +20,7 @@ import { expect, test } from '../src/fixtures';
 
 /** Navigate to `/_search?q=<token>` and return the parsed `GET /search` response body. */
 async function searchAndReadResponse(page: Page, token: string): Promise<{ meta: { results: number }; data: Array<{ pageId: string }> }> {
-  const responsePromise = page.waitForResponse((res: Response) => res.url().includes('/api/v2/search') && res.request().method() === 'GET');
+  const responsePromise = page.waitForResponse((res: Response) => res.url().includes('/api/search') && res.request().method() === 'GET');
   await page.goto(`/_search?q=${token}`);
   const response = await responsePromise;
   return response.json();

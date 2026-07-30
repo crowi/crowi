@@ -9,7 +9,7 @@ import type {
   UpdatePluginConfigResponse,
 } from '@crowi/api-contract';
 import { getLocale } from '@paraglide/runtime.js';
-import { apiClientV2 } from './api-client';
+import { apiClient } from './api-client';
 
 export const adminPluginsKeys = {
   all: ['admin', 'plugins'] as const,
@@ -42,7 +42,7 @@ const throwGenericError = async (response: Response, fallback: string, notFoundM
 
 /**
  * RFC-0006 Phase 4 Batch 9 — switched from `apiClient.admin.plugins.*`
- * (ts-rest) to `apiClientV2.admin.plugins.*.$method` (`createClient`).
+ * (ts-rest) to `apiClient.admin.plugins.*.$method` (`createClient`).
  * Wire payload byte-identical; 422 still surfaces
  * `PluginConfigValidationError`.
  */
@@ -50,7 +50,7 @@ export function useAdminPlugins() {
   return useQuery<ListPluginsResponse, Error>({
     queryKey: adminPluginsKeys.list(),
     queryFn: async () => {
-      const response = await apiClientV2.admin.plugins.$get();
+      const response = await apiClient.admin.plugins.$get();
       if (response.status === 200) return (await response.json()) as ListPluginsResponse;
       return throwGenericError(response, 'Failed to fetch plugins');
     },
@@ -60,7 +60,7 @@ export function useAdminPlugins() {
 }
 
 async function fetchPluginConfig(name: string, locale: string): Promise<PluginConfigResponse> {
-  const response = await apiClientV2.admin.plugins.config.$get({ query: { name, locale } });
+  const response = await apiClient.admin.plugins.config.$get({ query: { name, locale } });
   if (response.status === 200) return (await response.json()) as PluginConfigResponse;
   return throwGenericError(response, 'Failed to fetch plugin config', 'Plugin not found');
 }
@@ -117,7 +117,7 @@ export function useUpdateAdminPluginConfig(name: string) {
   const queryClient = useQueryClient();
   return useMutation<UpdatePluginConfigResponse, Error, UpdatePluginConfigRequest>({
     mutationFn: async (data) => {
-      const response = await apiClientV2.admin.plugins.config.$put({ query: { name }, json: data });
+      const response = await apiClient.admin.plugins.config.$put({ query: { name }, json: data });
       if (response.status === 200) return (await response.json()) as UpdatePluginConfigResponse;
       if (response.status === 422) {
         const body = (await response.json().catch(() => null)) as PluginConfigValidationBody | null;
@@ -139,7 +139,7 @@ export function useUpdateAdminPluginConfig(name: string) {
 export function useClearRenderCacheAll() {
   return useMutation<ClearRenderCacheResponse, Error, void>({
     mutationFn: async () => {
-      const response = await apiClientV2.admin.plugins['render-cache']['clear-all'].$post({ json: {} });
+      const response = await apiClient.admin.plugins['render-cache']['clear-all'].$post({ json: {} });
       if (response.status === 200) return (await response.json()) as ClearRenderCacheResponse;
       return throwGenericError(response, 'Failed to clear cache');
     },
@@ -152,7 +152,7 @@ export function useClearRenderCacheAll() {
 export function useClearRenderCachePlugin() {
   return useMutation<ClearRenderCacheResponse, Error, { name: string }>({
     mutationFn: async ({ name }) => {
-      const response = await apiClientV2.admin.plugins['render-cache']['clear-plugin'].$post({ query: { name }, json: {} });
+      const response = await apiClient.admin.plugins['render-cache']['clear-plugin'].$post({ query: { name }, json: {} });
       if (response.status === 200) return (await response.json()) as ClearRenderCacheResponse;
       return throwGenericError(response, 'Failed to clear cache', 'Plugin not loaded');
     },

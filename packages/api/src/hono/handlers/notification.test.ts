@@ -69,7 +69,7 @@ const seedNotification = async (params: {
   return notification;
 };
 
-describe('Routes /api/v2/notifications (Hono)', () => {
+describe('Routes /api/notifications (Hono)', () => {
   const PATH_PREFIX = '/hono-notification-test/';
   let recipient: { _id: Types.ObjectId };
   let actor: { _id: Types.ObjectId };
@@ -104,15 +104,15 @@ describe('Routes /api/v2/notifications (Hono)', () => {
     ]);
   });
 
-  describe('GET /api/v2/notifications', () => {
+  describe('GET /api/notifications', () => {
     it('returns 401 without auth', async () => {
-      const res = await request(app).get('/api/v2/notifications');
+      const res = await request(app).get('/api/notifications');
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
     });
 
     it('returns an empty list with default pager when there are no notifications', async () => {
-      const res = await request(app).get('/api/v2/notifications').set(authHeaders(recipientToken));
+      const res = await request(app).get('/api/notifications').set(authHeaders(recipientToken));
 
       expect(res.status).toBe(200);
       expect(res.body.notifications).toEqual([]);
@@ -129,7 +129,7 @@ describe('Routes /api/v2/notifications (Hono)', () => {
         action: 'COMMENT',
       });
 
-      const res = await request(app).get('/api/v2/notifications').set(authHeaders(recipientToken));
+      const res = await request(app).get('/api/notifications').set(authHeaders(recipientToken));
 
       expect(res.status).toBe(200);
       expect(Array.isArray(res.body.notifications)).toBe(true);
@@ -158,12 +158,12 @@ describe('Routes /api/v2/notifications (Hono)', () => {
         await seedNotification({ recipient: recipient._id, actor: actor._id, pageId: p._id });
       }
 
-      const first = await request(app).get('/api/v2/notifications').set(authHeaders(recipientToken)).query({ limit: 2, offset: 0 });
+      const first = await request(app).get('/api/notifications').set(authHeaders(recipientToken)).query({ limit: 2, offset: 0 });
       expect(first.status).toBe(200);
       expect(first.body.notifications).toHaveLength(2);
       expect(first.body.pager).toEqual({ prev: null, next: 2, offset: 0 });
 
-      const second = await request(app).get('/api/v2/notifications').set(authHeaders(recipientToken)).query({ limit: 2, offset: 2 });
+      const second = await request(app).get('/api/notifications').set(authHeaders(recipientToken)).query({ limit: 2, offset: 2 });
       expect(second.status).toBe(200);
       expect(second.body.notifications).toHaveLength(1);
       expect(second.body.pager).toEqual({ prev: 0, next: null, offset: 2 });
@@ -173,15 +173,15 @@ describe('Routes /api/v2/notifications (Hono)', () => {
       const page = await createPageViaApi(recipientToken, `${PATH_PREFIX}private`, '# secret');
       await seedNotification({ recipient: actor._id, actor: recipient._id, pageId: page._id });
 
-      const res = await request(app).get('/api/v2/notifications').set(authHeaders(recipientToken));
+      const res = await request(app).get('/api/notifications').set(authHeaders(recipientToken));
       expect(res.status).toBe(200);
       expect(res.body.notifications).toEqual([]);
     });
   });
 
-  describe('POST /api/v2/notifications/read', () => {
+  describe('POST /api/notifications/read', () => {
     it('returns 401 without auth', async () => {
-      const res = await request(app).post('/api/v2/notifications/read');
+      const res = await request(app).post('/api/notifications/read');
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
     });
@@ -193,7 +193,7 @@ describe('Routes /api/v2/notifications (Hono)', () => {
       await seedNotification({ recipient: recipient._id, actor: actor._id, pageId: page2._id, status: 'UNREAD' });
       await seedNotification({ recipient: actor._id, actor: recipient._id, pageId: page1._id, status: 'UNREAD' });
 
-      const res = await request(app).post('/api/v2/notifications/read').set(authHeaders(recipientToken));
+      const res = await request(app).post('/api/notifications/read').set(authHeaders(recipientToken));
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ ok: true });
 
@@ -208,21 +208,21 @@ describe('Routes /api/v2/notifications (Hono)', () => {
     });
   });
 
-  describe('POST /api/v2/notifications/:id/open', () => {
+  describe('POST /api/notifications/:id/open', () => {
     it('returns 401 without auth', async () => {
-      const res = await request(app).post(`/api/v2/notifications/${new Types.ObjectId().toString()}/open`);
+      const res = await request(app).post(`/api/notifications/${new Types.ObjectId().toString()}/open`);
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
     });
 
     it('returns 400 for a malformed id', async () => {
-      const res = await request(app).post('/api/v2/notifications/not-an-objectid/open').set(authHeaders(recipientToken));
+      const res = await request(app).post('/api/notifications/not-an-objectid/open').set(authHeaders(recipientToken));
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('INVALID_REQUEST');
     });
 
     it('returns 404 for a non-existent id', async () => {
-      const res = await request(app).post(`/api/v2/notifications/${new Types.ObjectId().toString()}/open`).set(authHeaders(recipientToken));
+      const res = await request(app).post(`/api/notifications/${new Types.ObjectId().toString()}/open`).set(authHeaders(recipientToken));
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('NOTIFICATION_NOT_FOUND');
     });
@@ -231,7 +231,7 @@ describe('Routes /api/v2/notifications (Hono)', () => {
       const page = await createPageViaApi(recipientToken, `${PATH_PREFIX}foreign`, '# foreign');
       const foreign = await seedNotification({ recipient: actor._id, actor: recipient._id, pageId: page._id });
 
-      const res = await request(app).post(`/api/v2/notifications/${foreign._id.toString()}/open`).set(authHeaders(recipientToken));
+      const res = await request(app).post(`/api/notifications/${foreign._id.toString()}/open`).set(authHeaders(recipientToken));
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('NOTIFICATION_NOT_FOUND');
 
@@ -244,7 +244,7 @@ describe('Routes /api/v2/notifications (Hono)', () => {
       const page = await createPageViaApi(recipientToken, `${PATH_PREFIX}open`, '# open');
       const seeded = await seedNotification({ recipient: recipient._id, actor: actor._id, pageId: page._id, status: 'UNOPENED' });
 
-      const res = await request(app).post(`/api/v2/notifications/${seeded._id.toString()}/open`).set(authHeaders(recipientToken));
+      const res = await request(app).post(`/api/notifications/${seeded._id.toString()}/open`).set(authHeaders(recipientToken));
       expect(res.status).toBe(200);
       expect(res.body.notification._id).toBe(seeded._id.toString());
       expect(res.body.notification.status).toBe('OPENED');
@@ -253,15 +253,15 @@ describe('Routes /api/v2/notifications (Hono)', () => {
     });
   });
 
-  describe('GET /api/v2/notifications/status', () => {
+  describe('GET /api/notifications/status', () => {
     it('returns 401 without auth', async () => {
-      const res = await request(app).get('/api/v2/notifications/status');
+      const res = await request(app).get('/api/notifications/status');
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
     });
 
     it('returns 0 when there are no unread notifications', async () => {
-      const res = await request(app).get('/api/v2/notifications/status').set(authHeaders(recipientToken));
+      const res = await request(app).get('/api/notifications/status').set(authHeaders(recipientToken));
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ count: 0 });
     });
@@ -275,11 +275,11 @@ describe('Routes /api/v2/notifications (Hono)', () => {
       await seedNotification({ recipient: recipient._id, actor: actor._id, pageId: page3._id, status: 'OPENED' });
       await seedNotification({ recipient: actor._id, actor: recipient._id, pageId: page1._id, status: 'UNREAD' });
 
-      const res = await request(app).get('/api/v2/notifications/status').set(authHeaders(recipientToken));
+      const res = await request(app).get('/api/notifications/status').set(authHeaders(recipientToken));
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ count: 1 });
 
-      const otherRes = await request(app).get('/api/v2/notifications/status').set(authHeaders(actorToken));
+      const otherRes = await request(app).get('/api/notifications/status').set(authHeaders(actorToken));
       expect(otherRes.status).toBe(200);
       expect(otherRes.body).toEqual({ count: 1 });
     });

@@ -1,7 +1,7 @@
 'use client';
 
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiClientV2 } from './api-client';
+import { apiClient } from './api-client';
 import type { Notification } from '@crowi/api-contract';
 
 /**
@@ -10,7 +10,7 @@ import type { Notification } from '@crowi/api-contract';
  * - ['notifications', 'list', { limit, offset }]: paginated notification list
  *
  * RFC-0006 Phase 4 Batch 3 — switched from `apiClient.notification.*`
- * (ts-rest) to `apiClientV2.notifications.*.$method` (`createClient`).
+ * (ts-rest) to `apiClient.notifications.*.$method` (`createClient`).
  * Wire payload is unchanged. 401 silently degrades to a zero-state so
  * signed-out pages don't surface noisy auth errors (matches the legacy
  * `unwrapResult` silent option).
@@ -74,7 +74,7 @@ export function useUnreadCount() {
   return useQuery({
     queryKey: notificationKeys.status(),
     queryFn: async () => {
-      const response = await apiClientV2.notifications.status.$get();
+      const response = await apiClient.notifications.status.$get();
       if (response.status === 401) return 0;
       if (!response.ok) throw new Error('Failed to fetch unread notification count');
       const body = await response.json();
@@ -104,7 +104,7 @@ export function useNotifications({ limit = 10, offset = 0, enabled = false }: Us
   return useQuery({
     queryKey: notificationKeys.list({ limit, offset }),
     queryFn: async () => {
-      const response = await apiClientV2.notifications.$get({
+      const response = await apiClient.notifications.$get({
         query: { limit: String(limit), offset: String(offset) },
       });
       if (response.status === 401) return EMPTY_LIST;
@@ -126,7 +126,7 @@ export function useNotificationsInfinite(limit: number = 20) {
   return useInfiniteQuery({
     queryKey: notificationKeys.infinite(limit),
     queryFn: async ({ pageParam = 0 }) => {
-      const response = await apiClientV2.notifications.$get({
+      const response = await apiClient.notifications.$get({
         query: { limit: String(limit), offset: String(pageParam) },
       });
       if (response.status === 401) throw new Error('Authentication required');
@@ -153,7 +153,7 @@ export function useMarkAllAsRead() {
 
   return useMutation({
     mutationFn: async () => {
-      const response = await apiClientV2.notifications.read.$post({ json: {} });
+      const response = await apiClient.notifications.read.$post({ json: {} });
       if (response.status === 401) throw new Error('Authentication required');
       if (!response.ok) throw new Error('Failed to mark notifications as read');
       return true;
@@ -174,7 +174,7 @@ export function useOpenNotification() {
 
   return useMutation({
     mutationFn: async (notificationId: string): Promise<Notification> => {
-      const response = await apiClientV2.notifications[':id'].open.$post({
+      const response = await apiClient.notifications[':id'].open.$post({
         param: { id: notificationId },
       });
       if (response.status === 401) throw new Error('Authentication required');

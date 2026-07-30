@@ -2,7 +2,7 @@
 '@crowi/api-contract': minor
 ---
 
-Extend the public `GET /api/v2/app/info` response with a version-skew /
+Extend the public `GET /api/app/info` response with a version-skew /
 feature-detection signal: `version` (the running server version), `apiVersion`
 (`"v2"`), and `capabilities` (a coarse list of exposed subsystems — the
 always-on set plus dynamically-detected ones such as `search` when a search

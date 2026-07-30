@@ -162,7 +162,7 @@ describe('@crowi/plugin-renderer-katex', () => {
     expect(node.value).not.toContain('katex-display');
   });
 
-  it('drops children + data from a node after mutating to html (clean shape downstream)', () => {
+  it('drops children and replaces data with the crowiMath sidecar (RFC-0023 — TeX source preserved for the v1 projection)', () => {
     const node: MathNode = {
       type: 'math',
       value: 'a',
@@ -171,8 +171,24 @@ describe('@crowi/plugin-renderer-katex', () => {
     };
     _renderers.renderMathBlock(node, stubCtx);
     expect(node.type).toBe('html');
-    expect(node.data).toBeUndefined();
+    // Prior data is still dropped (no `foo` leak) — replaced wholesale
+    // by the sidecar carrying the ORIGINAL TeX source.
+    expect(node.data).toEqual({ crowiMath: { tex: 'a', display: true } });
     expect(node.children).toBeUndefined();
+  });
+
+  it('renderMathInline stamps a display:false crowiMath sidecar with the original TeX source', () => {
+    const node: MathNode = { type: 'inlineMath', value: 'y_1' };
+    _renderers.renderMathInline(node, stubCtx);
+    expect(node.type).toBe('html');
+    expect(node.data).toEqual({ crowiMath: { tex: 'y_1', display: false } });
+  });
+
+  it('the html value is byte-identical to the pre-sidecar output (sidecar rides on data only — no katexHtml duplicate field)', () => {
+    const node: MathNode = { type: 'math', value: 'x^2' };
+    _renderers.renderMathBlock(node, stubCtx);
+    expect(node.value).toMatch(/^<div class="katex-block">/);
+    expect(JSON.stringify(node.data)).not.toContain('katexHtml');
   });
 
   it('malformed LaTeX does NOT throw — strict:ignore + throwOnError:false renders an error frame', () => {
@@ -204,12 +220,12 @@ describe('@crowi/plugin-renderer-katex', () => {
  * this file only proves KaTeX's own two halves of that contract.
  */
 describe('registerRenderer — addStylesheet', () => {
-  it("stages exactly the CSS route path, confined to this plugin's own /api/v2/plugins/ namespace", () => {
+  it("stages exactly the CSS route path, confined to this plugin's own /api/plugins/ namespace", () => {
     const { scope, stylesheetCaptured } = makeRegistry();
     katexPlugin.registerRenderer?.(scope, { log: silentLogger } as never);
 
     expect(stylesheetCaptured).toEqual([_internal.STYLESHEET_MANIFEST_PATH]);
-    expect(_internal.STYLESHEET_MANIFEST_PATH).toBe('/api/v2/plugins/@crowi/plugin-renderer-katex/katex.min.css');
+    expect(_internal.STYLESHEET_MANIFEST_PATH).toBe('/api/plugins/@crowi/plugin-renderer-katex/katex.min.css');
   });
 });
 

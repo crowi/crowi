@@ -18,7 +18,7 @@ vi.mock('next/navigation', () => nextNavigationMockModule({ push, replace, back 
 
 const { claimLinkAccess } = vi.hoisted(() => ({ claimLinkAccess: vi.fn() }));
 vi.mock('@/lib/api-client', () => ({
-  apiClientV2: { pages: { 'link-access': { $post: claimLinkAccess } } },
+  apiClient: { pages: { 'link-access': { $post: claimLinkAccess } } },
 }));
 
 import { IdRedirector } from './id-redirector';

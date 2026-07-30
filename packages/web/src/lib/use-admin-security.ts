@@ -1,6 +1,6 @@
 'use client';
 
-import { apiClientV2 } from './api-client';
+import { apiClient } from './api-client';
 import { createAdminSettingsHooks } from './admin-settings-factory';
 import { appInfoKeys } from './use-app-info';
 import type { SecuritySettings, UpdateSecuritySettingsRequest } from '@crowi/api-contract';
@@ -11,7 +11,7 @@ export const adminSecurityKeys = {
 
 /**
  * RFC-0006 Phase 4 Batch 9 — switched from `apiClient.admin.security.*`
- * (ts-rest) to `apiClientV2.admin.security.$method` (`createClient`). Wire
+ * (ts-rest) to `apiClient.admin.security.$method` (`createClient`). Wire
  * payload unchanged.
  *
  * feature-renderer-plugin-boundary Phase 3 — a successful PUT
@@ -22,8 +22,8 @@ export const adminSecurityKeys = {
  */
 const hooks = createAdminSettingsHooks<SecuritySettings, UpdateSecuritySettingsRequest>({
   queryKey: adminSecurityKeys.all,
-  fetch: () => apiClientV2.admin.security.$get(),
-  update: (body) => apiClientV2.admin.security.$put({ json: body }),
+  fetch: () => apiClient.admin.security.$get(),
+  update: (body) => apiClient.admin.security.$put({ json: body }),
   fetchErrorMessage: 'Failed to fetch security settings',
   updateErrorMessage: 'Failed to update security settings',
   onUpdateSuccess: (_data, queryClient) => {

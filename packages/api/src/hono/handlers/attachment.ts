@@ -150,11 +150,17 @@ const ADD_ATTACHMENT_MAX_BYTES = 100 * 1024 * 1024;
 
 /**
  * RFC-0004 Phase 7 — extract attachment ObjectId hex strings referenced
- * by a revision body. Matches the current `/api/v2/attachments/<id>`
- * (the `fileUrl` virtual / stream route) and the legacy `/files/<id>`
- * form still present in bodies saved before the migration.
+ * by a revision body. Matches the current `/api/attachments/<id>` (the
+ * `fileUrl` virtual / stream route), the legacy (pre-`/api/v2` → `/api`
+ * cutover) `/api/v2/attachments/<id>` form, and the v1 `/files/<id>` form —
+ * all three still present in bodies saved before their respective
+ * migration/cutover. This dual-/triple-accept is additive and permanent:
+ * removing an alternative would flip un-migrated existing references to
+ * `inUse: false`, hiding them from `attachment-list.tsx`'s footer and
+ * exposing a delete affordance for an attachment still referenced by the
+ * current revision.
  */
-const ATTACHMENT_URI_RE = /(?:\/api\/v2\/attachments\/|\/files\/)([0-9a-f]{24})/gi;
+const ATTACHMENT_URI_RE = /(?:\/api\/v2\/attachments\/|\/api\/attachments\/|\/files\/)([0-9a-f]{24})/gi;
 
 const collectReferencedAttachmentIds = (body: string): Set<string> => {
   const ids = new Set<string>();

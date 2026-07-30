@@ -26,18 +26,18 @@ const changeTokenFor = (user: UserDocument, newEmail: string): string =>
     authVersion: user.authVersion ?? 0,
   }).token;
 
-describe('Routes /api/v2/auth/confirm-email-change (Hono)', () => {
+describe('Routes /api/auth/confirm-email-change (Hono)', () => {
   describe('GET (preflight)', () => {
     it('returns the new email for a valid token', async () => {
       const user = await createActiveUser('ec-old@example.com');
       const token = changeTokenFor(user, 'ec-new@example.com');
-      const res = await request(app).get('/api/v2/auth/confirm-email-change').query({ token });
+      const res = await request(app).get('/api/auth/confirm-email-change').query({ token });
       expect(res.status).toBe(200);
       expect(res.body.email).toBe('ec-new@example.com');
     });
 
     it('rejects a bad token with 401', async () => {
-      const res = await request(app).get('/api/v2/auth/confirm-email-change').query({ token: 'nope' });
+      const res = await request(app).get('/api/auth/confirm-email-change').query({ token: 'nope' });
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe('INVALID_EMAIL_CHANGE_TOKEN');
     });
@@ -48,7 +48,7 @@ describe('Routes /api/v2/auth/confirm-email-change (Hono)', () => {
       const user = await createActiveUser('apply-old@example.com');
       const token = changeTokenFor(user, 'apply-new@example.com');
 
-      const res = await request(app).post('/api/v2/auth/confirm-email-change').set(jsonHeaders).send({ token });
+      const res = await request(app).post('/api/auth/confirm-email-change').set(jsonHeaders).send({ token });
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ ok: true, email: 'apply-new@example.com' });
 
@@ -61,20 +61,20 @@ describe('Routes /api/v2/auth/confirm-email-change (Hono)', () => {
       const user = await createActiveUser('wants-taken@example.com');
       const token = changeTokenFor(user, 'taken-target@example.com');
 
-      const res = await request(app).post('/api/v2/auth/confirm-email-change').set(jsonHeaders).send({ token });
+      const res = await request(app).post('/api/auth/confirm-email-change').set(jsonHeaders).send({ token });
       expect(res.status).toBe(409);
       expect(res.body.error.code).toBe('EMAIL_TAKEN');
     });
 
     it('rejects an invalid token with 401', async () => {
-      const res = await request(app).post('/api/v2/auth/confirm-email-change').set(jsonHeaders).send({ token: 'bogus' });
+      const res = await request(app).post('/api/auth/confirm-email-change').set(jsonHeaders).send({ token: 'bogus' });
       expect(res.status).toBe(401);
     });
 
     it('rejects a token of the wrong purpose (reset) with 401', async () => {
       const user = await createActiveUser('wrongpurpose-ec@example.com');
       const resetToken = createMailTokenUtil().signMailToken({ purpose: 'reset', userId: user._id.toString(), email: 'x@example.com' }).token;
-      const res = await request(app).post('/api/v2/auth/confirm-email-change').set(jsonHeaders).send({ token: resetToken });
+      const res = await request(app).post('/api/auth/confirm-email-change').set(jsonHeaders).send({ token: resetToken });
       expect(res.status).toBe(401);
     });
 
@@ -113,7 +113,7 @@ describe('Routes /api/v2/auth/confirm-email-change (Hono)', () => {
 
       try {
         const requested = await request(app)
-          .put('/api/v2/me')
+          .put('/api/me')
           .set('Authorization', `Bearer ${accessToken}`)
           .send({ userForm: { name: 'EC Evict', email: 'attacker@example.com', lang: 'en' } });
         expect(requested.status).toBe(200);
@@ -126,19 +126,19 @@ describe('Routes /api/v2/auth/confirm-email-change (Hono)', () => {
         expect(pending).toBeTruthy();
 
         // The link is live right up until the revocation event.
-        const before = await request(app).get('/api/v2/auth/confirm-email-change').query({ token: pending });
+        const before = await request(app).get('/api/auth/confirm-email-change').query({ token: pending });
         expect(before.status).toBe(200);
 
         const changed = await request(app)
-          .put('/api/v2/me/password')
+          .put('/api/me/password')
           .set('Authorization', `Bearer ${accessToken}`)
           .send({ oldPassword: 'Password!1', newPassword: 'NewPwd!2', newPasswordConfirm: 'NewPwd!2' });
         expect(changed.status).toBe(200);
 
         // Both the preflight and the apply now refuse it.
-        const afterGet = await request(app).get('/api/v2/auth/confirm-email-change').query({ token: pending });
+        const afterGet = await request(app).get('/api/auth/confirm-email-change').query({ token: pending });
         expect(afterGet.status).toBe(401);
-        const afterPost = await request(app).post('/api/v2/auth/confirm-email-change').set(jsonHeaders).send({ token: pending });
+        const afterPost = await request(app).post('/api/auth/confirm-email-change').set(jsonHeaders).send({ token: pending });
         expect(afterPost.status).toBe(401);
 
         const reloaded = await User.findById(user._id);
@@ -161,12 +161,12 @@ describe('Routes /api/v2/auth/confirm-email-change (Hono)', () => {
         authVersion: user.authVersion ?? 0,
       }).token;
       // Apply A -> B.
-      const apply = await request(app).post('/api/v2/auth/confirm-email-change').set(jsonHeaders).send({ token: tokenAtoB });
+      const apply = await request(app).post('/api/auth/confirm-email-change').set(jsonHeaders).send({ token: tokenAtoB });
       expect(apply.status).toBe(200);
 
       // Replaying the same (now stale) token must NOT revert B -> ... ;
       // fromEmail no longer matches the current address.
-      const replay = await request(app).post('/api/v2/auth/confirm-email-change').set(jsonHeaders).send({ token: tokenAtoB });
+      const replay = await request(app).post('/api/auth/confirm-email-change').set(jsonHeaders).send({ token: tokenAtoB });
       expect(replay.status).toBe(401);
 
       const reloaded = await crowi.model('User').findById(user._id);

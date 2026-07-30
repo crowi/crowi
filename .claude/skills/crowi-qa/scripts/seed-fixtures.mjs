@@ -2,7 +2,7 @@
 // HTTP-only QA fixture seeder for the `crowi-qa` skill's `api-fixture` setup
 // mode (`.claude/skills/crowi-qa/SKILL.md` §6.4, design in
 // `.feature-state/specs/feature-qa-fixture-seeding.md`). Talks only to the
-// QA-owned instance's `/api/v2` surface via the Node built-in `fetch` — no
+// QA-owned instance's `/api` surface via the Node built-in `fetch` — no
 // Mongo driver, no workspace package import (design judgement §4). Starting
 // the QA-owned instance, provisioning the installer admin, and dropping the
 // per-run DB afterwards are the calling skill's responsibility, not this
@@ -125,14 +125,14 @@ async function safeText(response) {
 }
 
 /**
- * `POST /api/v2/auth/login` — mirrors `packages/e2e/src/api.ts`'s
+ * `POST /api/auth/login` — mirrors `packages/e2e/src/api.ts`'s
  * `loginViaApi`. Returns only the access token; this script never writes
  * `refreshToken` anywhere (nothing needs a long-lived session).
  * @param {{ proxyUrl: string, email: string, password: string }} params
  * @returns {Promise<string>}
  */
 export async function login({ proxyUrl, email, password }) {
-  const response = await fetch(`${proxyUrl}/api/v2/auth/login`, {
+  const response = await fetch(`${proxyUrl}/api/auth/login`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ email, password }),
@@ -146,13 +146,13 @@ export async function login({ proxyUrl, email, password }) {
 }
 
 /**
- * `POST /api/v2/pages` — creates a fixture page and returns its id, path,
+ * `POST /api/pages` — creates a fixture page and returns its id, path,
  * and (populated) latest revision id.
  * @param {{ proxyUrl: string, accessToken: string, path: string, body: string }} params
  * @returns {Promise<{ pageId: string, path: string, revisionId: string | null }>}
  */
 export async function createPage({ proxyUrl, accessToken, path: pagePath, body }) {
-  const response = await fetch(`${proxyUrl}/api/v2/pages`, {
+  const response = await fetch(`${proxyUrl}/api/pages`, {
     method: 'POST',
     headers: { authorization: `Bearer ${accessToken}`, 'content-type': 'application/json' },
     body: JSON.stringify({ path: pagePath, body }),
@@ -169,14 +169,14 @@ export async function createPage({ proxyUrl, accessToken, path: pagePath, body }
 }
 
 /**
- * `GET /api/v2/pages?page_id=...` — fallback revision-id lookup for
+ * `GET /api/pages?page_id=...` — fallback revision-id lookup for
  * `createPage` responses whose `revision` isn't populated for some reason
  * (mirrors `getPageLatestRevisionId` in `packages/e2e/src/api.ts`).
  * @param {{ proxyUrl: string, accessToken: string, pageId: string }} params
  * @returns {Promise<string>}
  */
 export async function getPageLatestRevisionId({ proxyUrl, accessToken, pageId }) {
-  const response = await fetch(`${proxyUrl}/api/v2/pages?page_id=${encodeURIComponent(pageId)}`, {
+  const response = await fetch(`${proxyUrl}/api/pages?page_id=${encodeURIComponent(pageId)}`, {
     headers: { authorization: `Bearer ${accessToken}` },
   });
   if (!response.ok) {
@@ -190,13 +190,13 @@ export async function getPageLatestRevisionId({ proxyUrl, accessToken, pageId })
 }
 
 /**
- * `POST /api/v2/comments` — mirrors `addCommentViaApi` in
+ * `POST /api/comments` — mirrors `addCommentViaApi` in
  * `packages/e2e/src/api.ts`.
  * @param {{ proxyUrl: string, accessToken: string, pageId: string, revisionId: string, comment: string }} params
  * @returns {Promise<string>}
  */
 export async function addComment({ proxyUrl, accessToken, pageId, revisionId, comment }) {
-  const response = await fetch(`${proxyUrl}/api/v2/comments`, {
+  const response = await fetch(`${proxyUrl}/api/comments`, {
     method: 'POST',
     headers: { authorization: `Bearer ${accessToken}`, 'content-type': 'application/json' },
     body: JSON.stringify({ page_id: pageId, revision_id: revisionId, comment }),
@@ -215,7 +215,7 @@ function sleep(ms) {
 }
 
 /**
- * `GET /api/v2/backlinks?page_id=<target>` readiness polling (design
+ * `GET /api/backlinks?page_id=<target>` readiness polling (design
  * judgement §1.3): backlink registration is fire-and-forget from the source
  * page's save, so poll a finite number of times until the source page
  * shows up rather than trusting the create response.
@@ -224,7 +224,7 @@ function sleep(ms) {
  */
 export async function pollBacklinkObserved({ proxyUrl, accessToken, targetPageId, sourcePageId, intervalMs, maxAttempts }) {
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    const response = await fetch(`${proxyUrl}/api/v2/backlinks?page_id=${encodeURIComponent(targetPageId)}`, {
+    const response = await fetch(`${proxyUrl}/api/backlinks?page_id=${encodeURIComponent(targetPageId)}`, {
       headers: { authorization: `Bearer ${accessToken}` },
     });
     if (response.ok) {
@@ -238,7 +238,7 @@ export async function pollBacklinkObserved({ proxyUrl, accessToken, targetPageId
 }
 
 /**
- * `GET /api/v2/search?q=<token>` readiness polling (design judgement §1.3).
+ * `GET /api/search?q=<token>` readiness polling (design judgement §1.3).
  * A 503 (`SEARCH_UNAVAILABLE`) short-circuits immediately — a new per-run DB
  * has no search backend configured by default, so this is the expected path
  * there, not a transient "still indexing" state worth retrying.
@@ -247,7 +247,7 @@ export async function pollBacklinkObserved({ proxyUrl, accessToken, targetPageId
  */
 export async function pollSearchObserved({ proxyUrl, accessToken, query, pageId, intervalMs, maxAttempts }) {
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    const response = await fetch(`${proxyUrl}/api/v2/search?q=${encodeURIComponent(query)}`, {
+    const response = await fetch(`${proxyUrl}/api/search?q=${encodeURIComponent(query)}`, {
       headers: { authorization: `Bearer ${accessToken}` },
     });
     if (response.status === 503) {

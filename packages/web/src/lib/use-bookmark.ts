@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiClientV2 } from './api-client';
+import { apiClient } from './api-client';
 import { userPageKeys } from './page-query-keys';
 import type { Bookmark } from '@crowi/api-contract';
 
@@ -12,7 +12,7 @@ import type { Bookmark } from '@crowi/api-contract';
  *   (uses prefix matching via invalidateQueries)
  *
  * RFC-0006 Phase 4 Batch 3 — switched from `apiClient.bookmark.*` (ts-rest)
- * to `apiClientV2.bookmarks.*.$method` (`createClient`). Wire payload is
+ * to `apiClient.bookmarks.*.$method` (`createClient`). Wire payload is
  * unchanged; the only call-site difference is `response.ok` /
  * `response.json()` instead of ts-rest's `result.status` + `result.body`.
  * Errors come back with the same `{ error: { code, message } }` envelope
@@ -33,7 +33,7 @@ export function useBookmark(pageId: string | undefined) {
     queryKey: pageId ? bookmarkKeys.detail(pageId) : bookmarkKeys.all,
     queryFn: async () => {
       if (!pageId) return null as Bookmark | null;
-      const response = await apiClientV2.bookmarks.$get({ query: { page_id: pageId } });
+      const response = await apiClient.bookmarks.$get({ query: { page_id: pageId } });
       // 401 — treat as not bookmarked rather than throwing, to keep
       // page rendering quiet for signed-out users.
       if (response.status === 401) return null as Bookmark | null;
@@ -68,13 +68,13 @@ export function useToggleBookmark(pageId: string | undefined) {
       }
 
       if (isBookmarked) {
-        const response = await apiClientV2.bookmarks.$delete({ json: { page_id: pageId } });
+        const response = await apiClient.bookmarks.$delete({ json: { page_id: pageId } });
         if (response.status === 401) throw new Error('Authentication required');
         if (response.ok) return { bookmark: null };
         throw new Error('Failed to remove bookmark');
       }
 
-      const response = await apiClientV2.bookmarks.$post({ json: { page_id: pageId } });
+      const response = await apiClient.bookmarks.$post({ json: { page_id: pageId } });
       if (response.status === 401) throw new Error('Authentication required');
       if (response.ok) {
         const body = await response.json();

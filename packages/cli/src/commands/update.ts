@@ -9,7 +9,7 @@ import { requireProfile } from './_shared';
 
 /**
  * `crowi update <path>` — non-interactive, revision-locked body replace via
- * `PUT /api/v2/pages` (`pages:write`). The new body comes from one of
+ * `PUT /api/pages` (`pages:write`). The new body comes from one of
  * `--message` / `--file` / `--stdin` (exactly one required — there is no
  * editor fallback; use `crowi edit` for that). The page must already exist;
  * its current `revision_id` is fetched first and sent for the optimistic-lock

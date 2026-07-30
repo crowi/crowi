@@ -6,6 +6,7 @@ import { Upload, Trash2, User } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { canonicalizeLegacyAttachmentUrl } from '@/lib/attachment-url';
 import { useUploadPicture, useDeletePicture } from '@/lib/use-profile';
 import type { UserProfileResponse } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
@@ -93,7 +94,7 @@ export function ProfilePicture({ profile }: ProfilePictureProps) {
     <div className="space-y-4">
       <div className="flex items-center gap-4">
         <Avatar className="size-24">
-          {profile.image && <AvatarImage src={profile.image} alt={profile.name} />}
+          {profile.image && <AvatarImage src={canonicalizeLegacyAttachmentUrl(profile.image)} alt={profile.name} />}
           <AvatarFallback>
             <User className="size-12 text-muted-foreground" />
           </AvatarFallback>

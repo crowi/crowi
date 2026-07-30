@@ -9,7 +9,7 @@ import { type AppInfoQuery, makeAppInfo } from '@/lib/use-app-info.test-helpers'
 // copy matches production.
 const { useAppInfo } = vi.hoisted(() => ({ useAppInfo: vi.fn() }));
 vi.mock('@/lib/use-app-info', () => ({ useAppInfo }));
-vi.mock('@/lib/api-client', () => ({ apiClientV2: {} }));
+vi.mock('@/lib/api-client', () => ({ apiClient: {} }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn() }) }));
 
 import { RegisterForm } from './register-form';

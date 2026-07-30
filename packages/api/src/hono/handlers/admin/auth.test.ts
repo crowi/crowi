@@ -36,7 +36,7 @@ const disableThirdPartyOAuth = async () => {
   });
 };
 
-describe('Routes /api/v2/admin/auth (Hono)', () => {
+describe('Routes /api/admin/auth (Hono)', () => {
   let adminToken: string;
   let adminWithGoogleToken: string;
   let userToken: string;
@@ -73,21 +73,21 @@ describe('Routes /api/v2/admin/auth (Hono)', () => {
     await disableThirdPartyOAuth();
   });
 
-  describe('GET /api/v2/admin/auth', () => {
+  describe('GET /api/admin/auth', () => {
     it('returns 401 without auth', async () => {
-      const res = await request(app).get('/api/v2/admin/auth');
+      const res = await request(app).get('/api/admin/auth');
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
     });
 
     it('returns 403 for a non-admin user', async () => {
-      const res = await request(app).get('/api/v2/admin/auth').set(authHeaders(userToken));
+      const res = await request(app).get('/api/admin/auth').set(authHeaders(userToken));
       expect(res.status).toBe(403);
       expect(res.body.error.code).toBe('ADMIN_REQUIRED');
     });
 
     it('returns the current auth:* settings (defaults) for an admin', async () => {
-      const res = await request(app).get('/api/v2/admin/auth').set(authHeaders(adminToken));
+      const res = await request(app).get('/api/admin/auth').set(authHeaders(adminToken));
 
       expect(res.status).toBe(200);
       expect(res.body).toEqual({
@@ -102,7 +102,7 @@ describe('Routes /api/v2/admin/auth (Hono)', () => {
         'auth:disablePasswordAuth': false,
       });
 
-      const res = await request(app).get('/api/v2/admin/auth').set(authHeaders(adminToken));
+      const res = await request(app).get('/api/admin/auth').set(authHeaders(adminToken));
 
       expect(res.status).toBe(200);
       expect(res.body).toEqual({
@@ -112,7 +112,7 @@ describe('Routes /api/v2/admin/auth (Hono)', () => {
     });
   });
 
-  describe('PUT /api/v2/admin/auth', () => {
+  describe('PUT /api/admin/auth', () => {
     // The only body the endpoint now accepts: both third-party-dependent
     // settings off. Enabling either is rejected (400) because third-party
     // sign-in was removed from core.
@@ -122,20 +122,20 @@ describe('Routes /api/v2/admin/auth (Hono)', () => {
     };
 
     it('returns 401 without auth', async () => {
-      const res = await request(app).put('/api/v2/admin/auth').send(validBody);
+      const res = await request(app).put('/api/admin/auth').send(validBody);
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
     });
 
     it('returns 403 for a non-admin user', async () => {
-      const res = await request(app).put('/api/v2/admin/auth').set(authHeaders(userToken)).send(validBody);
+      const res = await request(app).put('/api/admin/auth').set(authHeaders(userToken)).send(validBody);
       expect(res.status).toBe(403);
       expect(res.body.error.code).toBe('ADMIN_REQUIRED');
     });
 
     it('returns 400 when requireThirdPartyAuth is not a boolean', async () => {
       const res = await request(app)
-        .put('/api/v2/admin/auth')
+        .put('/api/admin/auth')
         .set(authHeaders(adminToken))
         .send({
           ...validBody,
@@ -145,14 +145,14 @@ describe('Routes /api/v2/admin/auth (Hono)', () => {
     });
 
     it('returns 400 when disablePasswordAuth is missing', async () => {
-      const res = await request(app).put('/api/v2/admin/auth').set(authHeaders(adminToken)).send({
+      const res = await request(app).put('/api/admin/auth').set(authHeaders(adminToken)).send({
         requireThirdPartyAuth: true,
       });
       expect(res.status).toBe(400);
     });
 
     it('persists the two auth:* keys (both off) and returns the updated settings', async () => {
-      const res = await request(app).put('/api/v2/admin/auth').set(authHeaders(adminToken)).send({
+      const res = await request(app).put('/api/admin/auth').set(authHeaders(adminToken)).send({
         requireThirdPartyAuth: false,
         disablePasswordAuth: false,
       });
@@ -165,7 +165,7 @@ describe('Routes /api/v2/admin/auth (Hono)', () => {
 
       // Round-trip via GET to verify the in-memory cache and the persisted
       // values are in sync.
-      const getRes = await request(app).get('/api/v2/admin/auth').set(authHeaders(adminToken));
+      const getRes = await request(app).get('/api/admin/auth').set(authHeaders(adminToken));
       expect(getRes.status).toBe(200);
       expect(getRes.body.requireThirdPartyAuth).toBe(false);
       expect(getRes.body.disablePasswordAuth).toBe(false);
@@ -175,7 +175,7 @@ describe('Routes /api/v2/admin/auth (Hono)', () => {
       // Third-party (Google / GitHub) sign-in was removed from core, so
       // hasValidThirdPartyId() is permanently false. The endpoint hard-rejects
       // turning on either third-party-dependent setting to prevent a lockout.
-      const res = await request(app).put('/api/v2/admin/auth').set(authHeaders(adminToken)).send({
+      const res = await request(app).put('/api/admin/auth').set(authHeaders(adminToken)).send({
         requireThirdPartyAuth: false,
         disablePasswordAuth: true,
       });
@@ -191,7 +191,7 @@ describe('Routes /api/v2/admin/auth (Hono)', () => {
     });
 
     it('returns 400 when requireThirdPartyAuth is enabled (third-party sign-in removed from core)', async () => {
-      const res = await request(app).put('/api/v2/admin/auth').set(authHeaders(adminToken)).send({
+      const res = await request(app).put('/api/admin/auth').set(authHeaders(adminToken)).send({
         requireThirdPartyAuth: true,
         disablePasswordAuth: false,
       });
@@ -208,7 +208,7 @@ describe('Routes /api/v2/admin/auth (Hono)', () => {
       // admin's third-party connection, because third-party sign-in is gone.
       await enableGoogleOAuth();
 
-      const res = await request(app).put('/api/v2/admin/auth').set(authHeaders(adminWithGoogleToken)).send({
+      const res = await request(app).put('/api/admin/auth').set(authHeaders(adminWithGoogleToken)).send({
         requireThirdPartyAuth: true,
         disablePasswordAuth: true,
       });
@@ -223,7 +223,7 @@ describe('Routes /api/v2/admin/auth (Hono)', () => {
         'app:title': 'Custom Crowi Title',
       });
 
-      const res = await request(app).put('/api/v2/admin/auth').set(authHeaders(adminToken)).send(validBody);
+      const res = await request(app).put('/api/admin/auth').set(authHeaders(adminToken)).send(validBody);
       expect(res.status).toBe(200);
 
       const cfg = crowi.getConfig();

@@ -28,7 +28,7 @@ vi.mock('next/navigation', () => ({
 // --- api client ------------------------------------------------------
 const { meGet, logoutPost } = vi.hoisted(() => ({ meGet: vi.fn(), logoutPost: vi.fn() }));
 vi.mock('./api-client', () => ({
-  apiClientV2: { auth: { me: { $get: meGet }, logout: { $post: logoutPost } } },
+  apiClient: { auth: { me: { $get: meGet }, logout: { $post: logoutPost } } },
 }));
 
 import { useAuth } from './use-auth';

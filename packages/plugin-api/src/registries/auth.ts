@@ -34,8 +34,8 @@ export type AuthVerifyResult = { ok: true; profile: AuthProfile } | { ok: false;
  * Auth provider driver. The login screen asks core for the list of
  * registered drivers and renders one button per driver
  * (`Sign in with Google`). Clicking redirects through the plugin's
- * registered routes (`/api/v2/plugins/<name>/oauth/start`); the
- * provider redirects back to `/api/v2/plugins/<name>/oauth/callback`,
+ * registered routes (`/api/plugins/<name>/oauth/start`); the
+ * provider redirects back to `/api/plugins/<name>/oauth/callback`,
  * which the plugin's contract handles.
  *
  * `verify` is the bridge: given whatever the plugin pulled out of the

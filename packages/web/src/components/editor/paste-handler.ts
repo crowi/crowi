@@ -17,7 +17,7 @@ import { generatePastedFilename, runUpload } from './upload-placeholder';
  *     double-wrapping.
  *   - **Image blob** (screenshot / image copied from another app):
  *     auto-name it `pasted-{timestamp}.{ext}`, drop a progress
- *     placeholder, and upload via `/api/v2/attachments/upload`,
+ *     placeholder, and upload via `/api/attachments/upload`,
  *     replacing the placeholder with `![name](url)` on success.
  *
  * Plain text and rich clipboard content are NOT intercepted, so the

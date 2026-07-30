@@ -4,7 +4,7 @@
  * Each tool is a data-driven `ToolDescriptor`: its `schema` reuses the
  * `@crowi/api-contract` Zod schema's `.shape` for boundary validation
  * (RFC-0011 §6), `method` + `path` name the in-process route it
- * dispatches to (bare path, no `/api/v2`), and `resultMapper` turns the
+ * dispatches to (bare path, no `/api`), and `resultMapper` turns the
  * route's JSON envelope into an MCP tool result (RFC-0011 §9).
  *
  * Schema notes (architecturalNotes "ズレ表"):

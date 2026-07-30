@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
-import { apiClientV2 } from './api-client';
+import { apiClient } from './api-client';
 import type {
   AdminUserMutationResponse,
   DeleteAdminUserResponse,
@@ -77,7 +77,7 @@ const throwAdminUserEditError = async (response: Response, fallback: string): Pr
 
 /**
  * RFC-0006 Phase 4 Batch 9 — switched from `apiClient.admin.users.*`
- * (ts-rest) to `apiClientV2.admin.users.*.$method` (`createClient`). Wire
+ * (ts-rest) to `apiClient.admin.users.*.$method` (`createClient`). Wire
  * payload byte-identical; 409 still surfaces `EmailConflictError`.
  */
 export function useAdminUsers(params: UseAdminUsersParams) {
@@ -85,7 +85,7 @@ export function useAdminUsers(params: UseAdminUsersParams) {
     queryKey: adminUsersKeys.list(params),
     queryFn: async (): Promise<ListAdminUsersResponse> => {
       const toQ = (v: number | undefined) => (v === undefined ? undefined : String(v));
-      const response = await apiClientV2.admin.users.$get({
+      const response = await apiClient.admin.users.$get({
         query: {
           q: params.q,
           status: toQ(params.status),
@@ -106,7 +106,7 @@ export function useInviteAdminUsers() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (body: InviteUsersRequest): Promise<InviteUsersResponse> => {
-      const response = await apiClientV2.admin.users.invite.$post({ json: body });
+      const response = await apiClient.admin.users.invite.$post({ json: body });
       if (response.status === 200) return (await response.json()) as InviteUsersResponse;
       return throwAdminUserError(response, m['admin.users.action.invite_failed']());
     },
@@ -120,7 +120,7 @@ export function useEditAdminUser() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (params: { id: string; body: EditAdminUserRequest }): Promise<AdminUserMutationResponse> => {
-      const response = await apiClientV2.admin.users[':id'].$patch({
+      const response = await apiClient.admin.users[':id'].$patch({
         param: { id: params.id },
         json: params.body,
       });
@@ -138,8 +138,8 @@ export function useToggleAdminRole() {
   return useMutation({
     mutationFn: async (params: { id: string; nextAdmin: boolean }): Promise<AdminUserMutationResponse> => {
       const response = params.nextAdmin
-        ? await apiClientV2.admin.users[':id'].admin.$put({ param: { id: params.id } })
-        : await apiClientV2.admin.users[':id'].admin.$delete({ param: { id: params.id } });
+        ? await apiClient.admin.users[':id'].admin.$put({ param: { id: params.id } })
+        : await apiClient.admin.users[':id'].admin.$delete({ param: { id: params.id } });
       if (response.status === 200) return (await response.json()) as AdminUserMutationResponse;
       return throwAdminUserError(response, m['admin.users.action.role_failed']());
     },
@@ -155,8 +155,8 @@ export function useToggleAdminStatus() {
     mutationFn: async (params: { id: string; nextStatus: 'active' | 'suspended' }): Promise<AdminUserMutationResponse> => {
       const response =
         params.nextStatus === 'active'
-          ? await apiClientV2.admin.users[':id'].status.active.$put({ param: { id: params.id } })
-          : await apiClientV2.admin.users[':id'].status.suspended.$put({ param: { id: params.id } });
+          ? await apiClient.admin.users[':id'].status.active.$put({ param: { id: params.id } })
+          : await apiClient.admin.users[':id'].status.suspended.$put({ param: { id: params.id } });
       if (response.status === 200) return (await response.json()) as AdminUserMutationResponse;
       return throwAdminUserError(response, m['admin.users.action.status_failed']());
     },
@@ -173,7 +173,7 @@ export function useToggleAdminStatus() {
 export function useResetAdminUserPassword() {
   return useMutation({
     mutationFn: async (params: { id: string }): Promise<ResetPasswordResponse> => {
-      const response = await apiClientV2.admin.users[':id']['reset-password'].$post({
+      const response = await apiClient.admin.users[':id']['reset-password'].$post({
         param: { id: params.id },
       });
       if (response.status === 200) return (await response.json()) as ResetPasswordResponse;
@@ -194,7 +194,7 @@ export function useResetAdminUserPassword() {
 export function useResendAdminInvite() {
   return useMutation({
     mutationFn: async (params: { id: string }): Promise<AdminUserMutationResponse> => {
-      const response = await apiClientV2.admin.users[':id']['resend-invite'].$post({
+      const response = await apiClient.admin.users[':id']['resend-invite'].$post({
         param: { id: params.id },
       });
       if (response.status === 200) return (await response.json()) as AdminUserMutationResponse;
@@ -207,7 +207,7 @@ export function useUpdateAdminUserEmail() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (params: { id: string; body: UpdateAdminUserEmailRequest }): Promise<AdminUserMutationResponse> => {
-      const response = await apiClientV2.admin.users[':id'].email.$put({
+      const response = await apiClient.admin.users[':id'].email.$put({
         param: { id: params.id },
         json: params.body,
       });
@@ -228,7 +228,7 @@ export function useDeleteAdminUser() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (params: { id: string }): Promise<DeleteAdminUserResponse> => {
-      const response = await apiClientV2.admin.users[':id'].$delete({ param: { id: params.id } });
+      const response = await apiClient.admin.users[':id'].$delete({ param: { id: params.id } });
       if (response.status === 200) return (await response.json()) as DeleteAdminUserResponse;
       return throwAdminUserError(response, m['admin.users.action.delete_failed']());
     },
@@ -247,7 +247,7 @@ export function useAdminPendingUsersCount() {
   return useQuery({
     queryKey: adminUsersKeys.pendingCount(),
     queryFn: async (): Promise<PendingUsersCountResponse> => {
-      const response = await apiClientV2.admin.users['pending-count'].$get();
+      const response = await apiClient.admin.users['pending-count'].$get();
       if (response.status === 200) return (await response.json()) as PendingUsersCountResponse;
       return throwAdminUserError(response, 'Failed to fetch pending user count');
     },

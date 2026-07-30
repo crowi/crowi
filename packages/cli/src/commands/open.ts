@@ -10,7 +10,7 @@ import { requireProfile } from './_shared';
 /**
  * Build the web URL for a `<path-or-id>` against a server endpoint. A bare
  * 24-hex ObjectId resolves through the server's `/<page_id>` short link;
- * everything else is treated as a leading-slash page path. No `/api/v2`
+ * everything else is treated as a leading-slash page path. No `/api`
  * prefix — this is the human-facing web origin.
  */
 function pageUrl(endpoint: string, pathOrId: string): string {

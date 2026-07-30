@@ -6,14 +6,14 @@ import type { MigrationContext } from '../types';
  * v1 → v2.0 — `relocate-reserved-api-paths` (preflight layer).
  *
  * v2 reserves the `/api` namespace as the reverse-proxied backend route
- * surface: the front proxy forwards `/api/v2/*` to the api, and
+ * surface: the front proxy forwards `/api/*` to the api, and
  * `Page.isCreatableName` now refuses to create / rename a page under
  * `/api`. v1, however, served its API at `/_api/*` (note the leading
  * underscore — reserved by the `/_*` rule in `Page.isCreatableName`), so
  * `/api/*` was a perfectly ordinary wiki page path. An upgraded wiki may hold
  * legitimate v1 pages under `/api/*` that v2 would strand: the web app
- * 404s the reserved namespace, and any page that happened to live at
- * `/api/v2/*` is shadowed by the proxy entirely.
+ * 404s the reserved namespace, and any page that happened to live under
+ * `/api/*` is shadowed by the proxy entirely.
  *
  * This migration moves every surviving page out of `/api/*` into
  * `/api-legacy/*` (preserving the rest of the path) so nothing is lost.

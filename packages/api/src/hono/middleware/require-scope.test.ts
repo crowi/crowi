@@ -8,8 +8,8 @@ import { createJwtUtil } from 'src/util/jwt';
  * RFC-0010 Phase 1 — integration coverage for the scope-aware Bearer
  * auth + `requireScope` guard, exercised through real handlers:
  *
- *   - GET  /api/v2/me  → profile:read
- *   - PUT  /api/v2/me  → profile:write
+ *   - GET  /api/me  → profile:read
+ *   - PUT  /api/me  → profile:write
  *
  * We assert that:
  *   - a web-session access token (no scope claim = all scopes) passes
@@ -56,13 +56,13 @@ describe('requireScope (Hono scope-aware auth)', () => {
 
   describe('web-session token (all scopes)', () => {
     it('passes a profile:read route (GET /me)', async () => {
-      const res = await request(app).get('/api/v2/me').set('Authorization', `Bearer ${webToken}`);
+      const res = await request(app).get('/api/me').set('Authorization', `Bearer ${webToken}`);
       expect(res.status).toBe(200);
     });
 
     it('passes a profile:write route (PUT /me)', async () => {
       const res = await request(app)
-        .put('/api/v2/me')
+        .put('/api/me')
         .set('Authorization', `Bearer ${webToken}`)
         .send({ userForm: { name: 'Scope Test', email: EMAIL, lang: 'en' } });
       // Reaches the handler (200), not the scope guard (403).
@@ -73,14 +73,14 @@ describe('requireScope (Hono scope-aware auth)', () => {
   describe('OAuth token with sufficient scope', () => {
     it('profile:read passes GET /me', async () => {
       const res = await request(app)
-        .get('/api/v2/me')
+        .get('/api/me')
         .set('Authorization', `Bearer ${oauthToken(['profile:read'])}`);
       expect(res.status).toBe(200);
     });
 
     it('profile:write passes PUT /me', async () => {
       const res = await request(app)
-        .put('/api/v2/me')
+        .put('/api/me')
         .set('Authorization', `Bearer ${oauthToken(['profile:write'])}`)
         .send({ userForm: { name: 'Scope Test', email: EMAIL, lang: 'en' } });
       expect(res.status).toBe(200);
@@ -88,14 +88,14 @@ describe('requireScope (Hono scope-aware auth)', () => {
 
     it('profile:write also passes GET /me (write implies read)', async () => {
       const res = await request(app)
-        .get('/api/v2/me')
+        .get('/api/me')
         .set('Authorization', `Bearer ${oauthToken(['profile:write'])}`);
       expect(res.status).toBe(200);
     });
 
     it('umbrella read passes GET /me', async () => {
       const res = await request(app)
-        .get('/api/v2/me')
+        .get('/api/me')
         .set('Authorization', `Bearer ${oauthToken(['read'])}`);
       expect(res.status).toBe(200);
     });
@@ -104,7 +104,7 @@ describe('requireScope (Hono scope-aware auth)', () => {
   describe('OAuth token with insufficient scope', () => {
     it('rejects GET /me (profile:read) with only pages:read', async () => {
       const res = await request(app)
-        .get('/api/v2/me')
+        .get('/api/me')
         .set('Authorization', `Bearer ${oauthToken(['pages:read'])}`);
       expect(res.status).toBe(403);
       expect(res.body.error.code).toBe('INSUFFICIENT_SCOPE');
@@ -114,7 +114,7 @@ describe('requireScope (Hono scope-aware auth)', () => {
 
     it('rejects PUT /me (profile:write) with only profile:read', async () => {
       const res = await request(app)
-        .put('/api/v2/me')
+        .put('/api/me')
         .set('Authorization', `Bearer ${oauthToken(['profile:read'])}`)
         .send({ userForm: { name: 'Scope Test', email: EMAIL, lang: 'en' } });
       expect(res.status).toBe(403);
@@ -125,7 +125,7 @@ describe('requireScope (Hono scope-aware auth)', () => {
 
     it('rejects with an empty scope set', async () => {
       const res = await request(app)
-        .get('/api/v2/me')
+        .get('/api/me')
         .set('Authorization', `Bearer ${oauthToken([])}`);
       expect(res.status).toBe(403);
       expect(res.body.error.code).toBe('INSUFFICIENT_SCOPE');
@@ -134,7 +134,7 @@ describe('requireScope (Hono scope-aware auth)', () => {
 
   describe('auth boundary still enforced', () => {
     it('401s without a token', async () => {
-      const res = await request(app).get('/api/v2/me');
+      const res = await request(app).get('/api/me');
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
     });
@@ -149,7 +149,7 @@ describe('requireScope (Hono scope-aware auth)', () => {
   describe('parameterized-path route (RFC-0010 scope guard must still run)', () => {
     it('rejects GET /user/:username with a token lacking profile:read', async () => {
       const res = await request(app)
-        .get('/api/v2/user/scope-test')
+        .get('/api/user/scope-test')
         .set('Authorization', `Bearer ${oauthToken(['pages:read'])}`);
       expect(res.status).toBe(403);
       expect(res.body.error.code).toBe('INSUFFICIENT_SCOPE');
@@ -159,7 +159,7 @@ describe('requireScope (Hono scope-aware auth)', () => {
 
     it('passes GET /user/:username with profile:read (guard runs and allows)', async () => {
       const res = await request(app)
-        .get('/api/v2/user/scope-test')
+        .get('/api/user/scope-test')
         .set('Authorization', `Bearer ${oauthToken(['profile:read'])}`);
       expect(res.status).toBe(200);
     });

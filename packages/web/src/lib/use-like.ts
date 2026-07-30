@@ -2,7 +2,7 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { PageWithRevision } from '@crowi/api-contract';
-import { apiClientV2 } from './api-client';
+import { apiClient } from './api-client';
 import { likersKeys } from './use-likers';
 import { notify } from './notify';
 import { m } from '@paraglide/messages.js';
@@ -14,7 +14,7 @@ import { m } from '@paraglide/messages.js';
  * with the updated liker / likerCount.
  *
  * RFC-0006 Phase 4 Batch 4 — switched from `apiClient.page.{like,unlike}Page`
- * (ts-rest) to `apiClientV2.pages.{like,unlike}.$post` (`createClient`).
+ * (ts-rest) to `apiClient.pages.{like,unlike}.$post` (`createClient`).
  */
 export const likeKeys = {
   all: ['like'] as const,
@@ -79,8 +79,8 @@ export function useToggleLike(pageId: string | undefined, isLiked: boolean) {
       }
 
       const response = isLiked
-        ? await apiClientV2.pages.unlike.$post({ json: { page_id: pageId } })
-        : await apiClientV2.pages.like.$post({ json: { page_id: pageId } });
+        ? await apiClient.pages.unlike.$post({ json: { page_id: pageId } })
+        : await apiClient.pages.like.$post({ json: { page_id: pageId } });
 
       if (response.status === 401) throw new Error('Authentication required');
       if (response.ok) {

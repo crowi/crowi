@@ -39,7 +39,8 @@
  *    concurrency cap (spec §6), which bounds actual render CPU work
  *    regardless of request rate.
  */
-import { previewPageRoute } from '@crowi/api-contract';
+import { randomUUID } from 'node:crypto';
+import { type PreviewPageResponse, previewPageRoute } from '@crowi/api-contract';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import Debug from 'debug';
 import type { Root, RootContent } from 'mdast';
@@ -48,6 +49,7 @@ import type Crowi from 'src/crowi';
 import { serializeMdast } from 'src/renderer';
 import { createRateLimiter } from 'src/util/rate-limit';
 import { resolveRedisKeyspaceIfEnabled } from 'src/util/redis-keyspace';
+import { pickRenderedAstShape, varyOnAstVersion } from 'src/util/rendered-ast-negotiation';
 import { actorFromUser } from 'src/util/ts-rest-helpers';
 
 import type { CrowiHonoBindings } from '../app';
@@ -149,7 +151,21 @@ export const registerPagePreviewRoutes = <E extends OpenAPIHono<CrowiHonoBinding
         signal: c.req.raw.signal,
       });
       injectSourceLineAnchors(tree);
-      return c.json({ renderedAst: serializeMdast(tree) }, 200);
+      // RFC-0023 §9 — preview goes through the SAME negotiation
+      // chokepoint as the other 3 emitting endpoints (no special
+      // casing). Note the §10 explicit scope: `previewPolicy:
+      // 'server-render'` fences (Mermaid) carry no sidecar on the
+      // preview path, so under v1 they stay `html` nodes (a visible
+      // placeholder on declared clients). `renderedAstArtifactKey` is a
+      // per-response nonce — preview output is never a stored artifact.
+      varyOnAstVersion(c);
+      return c.json(
+        {
+          renderedAst: pickRenderedAstShape(c.get('astVersion'), serializeMdast(tree)) as PreviewPageResponse['renderedAst'],
+          renderedAstArtifactKey: randomUUID(),
+        },
+        200,
+      );
     } catch (err) {
       debug('preview pipeline failed:', (err as Error).message);
       return c.json(INTERNAL_ERROR_BODY, 500);

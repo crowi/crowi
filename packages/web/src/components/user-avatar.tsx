@@ -2,6 +2,7 @@
 
 import BoringAvatar from 'boring-avatars';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { canonicalizeLegacyAttachmentUrl } from '@/lib/attachment-url';
 import { cn } from '@/lib/utils';
 
 interface UserAvatarProps {
@@ -38,7 +39,7 @@ export function UserAvatar({ user, size = 'md', className }: UserAvatarProps) {
 
   return (
     <Avatar className={cn(sizeClasses[size], className)}>
-      {user.image ? <AvatarImage src={user.image} alt={displayName} /> : null}
+      {user.image ? <AvatarImage src={canonicalizeLegacyAttachmentUrl(user.image)} alt={displayName} /> : null}
       <AvatarFallback className="bg-transparent p-0" aria-label={displayName}>
         <BoringAvatar size={sizePx[size]} name={seed} variant="beam" colors={beamColors} />
       </AvatarFallback>

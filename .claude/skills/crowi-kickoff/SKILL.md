@@ -54,7 +54,7 @@ description: |
   1. `.gw/feature-state-link.sh` — worktree 側 `.feature-state/` を作成し
      specs/ tasks/ config.json を main store へ symlink、`queue.json` を
      `{ "currentTask": null }` で seed(worktree ローカル)
-  2. `.gw/tmux-claude.sh` で `tmux new-window -n <branch名>` に **claude セッションを自動起動**
+  2. `.gw/tmux-claude.sh` で `tmux new-window -n <window 名>` に **claude セッションを自動起動**
   を実行する。**したがって kickoff がセッションを spawn する必要はない** —
   gw が開いた window に指示を send-keys で投入するだけでよい
   (agmsg spawn で別セッションを立てると二重になる。やらない)。
@@ -76,7 +76,11 @@ description: |
   (`split-window -d` — dev-portal の anchor 自動採番で port 衝突しない。
   `GW_NO_DEV=1 gw start <id>` でスキップ可)。このため**指示の投入先は
   window ではなく claude の pane_id を明示指定**する(Step 5)。
-- worktree dir は `../crowi-<id>`、branch は `<id>/impl` 形式、window 名 = branch 名。
+- worktree dir は `../crowi-<id>`、branch は `<id>/impl` 形式、**window 名は branch から
+  `/impl` を落としたもの**(= `<id>`)。全 worktree branch が `/impl` で終わる以上この
+  suffix は情報量ゼロで、ただでさえ切り詰められる tab bar を 5 桁食うだけなので落とす。
+  **window 名に依存する処理は無い** — kickoff も integrate-worktree も
+  `pane_current_path` で window を引くので、名前は表示専用と考えてよい。
 
 ## ワークフロー
 
@@ -140,9 +144,17 @@ bash "$WT/.claude/scripts/task-state.sh" queue set-current "<id>"
 
 ### Step 5: 実装指示の投入(gw が開いた window へ send-keys)
 
-1. window を特定: `tmux list-windows -a -F '#{window_id}|#{window_name}'` から
-   window 名 = branch 名(`<id>/impl`)の行。見つからなければ
-   `pane_current_path` が worktree 配下の window を探す。
+1. window を特定: **`pane_current_path` が worktree 配下にある window** を探す
+   (window 名ではなくパスで引く — 名前は表示上の都合でいつでも変わりうるが、
+   パスは worktree の同一性そのもの。integrate-worktree Step 6.5 も同じ引き方):
+
+   ```bash
+   tmux list-panes -a -F '#{window_id}|#{pane_current_path}' \
+     | awk -F'|' -v p="<worktree-abs-path>" '$2 ~ "^"p"(/|$)" {print $1}' | sort -u
+   ```
+
+   補助的に window 名(= branch から `/impl` を除いたもの)でも引けるが、
+   一致しないことを理由に中止しない。
 2. **claude の pane を特定して起動完了を待つ**: hook 構成によっては window に
    dev pane(右・`pnpm dev`)が併設されるため、**window 宛(= アクティブ pane 宛)の
    send-keys は使わない**。`tmux list-panes -t <window> -F '#{pane_id}|#{pane_current_command}'`

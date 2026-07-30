@@ -5,7 +5,7 @@ import { renderRecords, resolveFormat } from '../lib/format';
 import { authedFetch, CliError, EXIT } from '../lib/http';
 import { requireProfile } from './_shared';
 
-/** One child segment in the `GET /api/v2/pages/children` response. */
+/** One child segment in the `GET /api/pages/children` response. */
 interface ChildSegment {
   segment?: string;
   path?: string;
@@ -15,7 +15,7 @@ interface ChildSegment {
 }
 
 /**
- * The `GET /api/v2/pages/children` response (ListPageChildrenResponseSchema).
+ * The `GET /api/pages/children` response (ListPageChildrenResponseSchema).
  * Parsed leniently — only the fields the CLI renders are declared.
  */
 interface ListChildrenResponse {
@@ -37,7 +37,7 @@ function childHumanLine(child: ChildSegment): string {
 
 /**
  * `crowi ls [path]` — list the immediate child pages/segments under a
- * portal path via `GET /api/v2/pages/children` (`pages:read`, in the
+ * portal path via `GET /api/pages/children` (`pages:read`, in the
  * default login scope). Defaults to `/` (top level). Prints one path per
  * row (trailing slash for directories/portals); `--json` emits the raw
  * response.

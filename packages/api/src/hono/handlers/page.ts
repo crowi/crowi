@@ -51,6 +51,7 @@ import type Crowi from 'src/crowi';
 import { type PageDocument, type PageModel, visiblePageGrantOr, visiblePageStatusOr } from 'src/models/page';
 import type { UserDocument } from 'src/models/user';
 import { computeRevisionRenderArtifactsAsync, isPopulatedRevision, pageToResponse } from 'src/util/page-response';
+import { pickRenderedAstShape, varyOnAstVersion } from 'src/util/rendered-ast-negotiation';
 import { indexPageInSearchById } from 'src/util/page-search-index';
 import { createRateLimiter } from 'src/util/rate-limit';
 import { resolveRedisKeyspaceIfEnabled } from 'src/util/redis-keyspace';
@@ -292,7 +293,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
           // On-the-fly fallback for legacy revisions — one pipeline run
           // produces both meta + renderedAst, stored values win on merge.
           if (pageResponse.revision && isPopulatedRevision(page.revision)) {
-            const { meta, renderedAst } = await computeRevisionRenderArtifactsAsync(
+            const { meta, renderedAst, renderedAstArtifactKey } = await computeRevisionRenderArtifactsAsync(
               crowi,
               page.revision.meta,
               page.revision.renderedAst,
@@ -302,8 +303,12 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
               page._id?.toString(),
             );
             pageResponse.revision.meta = meta;
-            pageResponse.revision.renderedAst = renderedAst;
+            // RFC-0023 §9 — envelope for `X-Crowi-Ast-Version: 1`
+            // declarants, verbatim bare Root for everyone else.
+            pageResponse.revision.renderedAst = pickRenderedAstShape(c.get('astVersion'), renderedAst);
+            pageResponse.revision.renderedAstArtifactKey = renderedAstArtifactKey;
           }
+          varyOnAstVersion(c);
 
           // Fire-and-forget recently-viewed touch — Redis hiccups must
           // not block the page read.
@@ -492,7 +497,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
           // (no renderedAst) as before.
           const portalPageResponse = portalPage ? pageToResponse(portalPage, { withMeta: true, withRenderedAst: true }) : null;
           if (portalPageResponse?.revision && portalPage && isPopulatedRevision(portalPage.revision)) {
-            const { meta, renderedAst } = await computeRevisionRenderArtifactsAsync(
+            const { meta, renderedAst, renderedAstArtifactKey } = await computeRevisionRenderArtifactsAsync(
               crowi,
               portalPage.revision.meta,
               portalPage.revision.renderedAst,
@@ -502,8 +507,11 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
               portalPage._id?.toString(),
             );
             portalPageResponse.revision.meta = meta;
-            portalPageResponse.revision.renderedAst = renderedAst;
+            // RFC-0023 §9 — same negotiation as the getPage detail path.
+            portalPageResponse.revision.renderedAst = pickRenderedAstShape(c.get('astVersion'), renderedAst);
+            portalPageResponse.revision.renderedAstArtifactKey = renderedAstArtifactKey;
           }
+          varyOnAstVersion(c);
 
           // §4 — content page emitted lean (no renderedAst): the client uses
           // it only to drive the portalize banner (id / path / revision id),

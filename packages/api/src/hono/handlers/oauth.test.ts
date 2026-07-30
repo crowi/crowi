@@ -45,7 +45,7 @@ const pkce = () => {
   return { verifier, challenge };
 };
 
-describe('Routes /api/v2/oauth (Hono)', () => {
+describe('Routes /api/oauth (Hono)', () => {
   const Config = () => crowi.model('Config');
   const User = () => crowi.model('User');
   const Code = () => crowi.model('OAuthAuthorizationCode');
@@ -87,7 +87,7 @@ describe('Routes /api/v2/oauth (Hono)', () => {
     await Device().deleteMany({ clientId: 'crowi-cli' });
   });
 
-  const authorize = (body: Record<string, unknown>) => request(app).post('/api/v2/oauth/authorize').set('Authorization', `Bearer ${webToken}`).send(body);
+  const authorize = (body: Record<string, unknown>) => request(app).post('/api/oauth/authorize').set('Authorization', `Bearer ${webToken}`).send(body);
 
   const authorizeOk = async (scope = 'pages:read pages:write') => {
     const { verifier, challenge } = pkce();
@@ -166,7 +166,7 @@ describe('Routes /api/v2/oauth (Hono)', () => {
     it('is web-session only — an OAuth bearer cannot mint codes (403)', async () => {
       const oauthToken = createJwtUtil(crowi).signOauthAccessToken({ user, scopes: ['pages:read'], clientId: 'crowi-cli' });
       const { challenge } = pkce();
-      const res = await request(app).post('/api/v2/oauth/authorize').set('Authorization', `Bearer ${oauthToken}`).send({
+      const res = await request(app).post('/api/oauth/authorize').set('Authorization', `Bearer ${oauthToken}`).send({
         client_id: 'crowi-cli',
         redirect_uri: REDIRECT,
         scope: 'pages:read',
@@ -179,7 +179,7 @@ describe('Routes /api/v2/oauth (Hono)', () => {
 
     it('requires authentication (401 without bearer)', async () => {
       const { challenge } = pkce();
-      const res = await request(app).post('/api/v2/oauth/authorize').send({
+      const res = await request(app).post('/api/oauth/authorize').send({
         client_id: 'crowi-cli',
         redirect_uri: REDIRECT,
         scope: 'pages:read',
@@ -191,7 +191,7 @@ describe('Routes /api/v2/oauth (Hono)', () => {
   });
 
   describe('POST /oauth/token (authorization_code)', () => {
-    const token = (body: Record<string, unknown>) => request(app).post('/api/v2/oauth/token').send(body);
+    const token = (body: Record<string, unknown>) => request(app).post('/api/oauth/token').send(body);
 
     it('exchanges a code (+ correct verifier) for an access + refresh token', async () => {
       const { code, verifier } = await authorizeOk();
@@ -213,7 +213,7 @@ describe('Routes /api/v2/oauth (Hono)', () => {
     it('accepts an application/x-www-form-urlencoded body', async () => {
       const { code, verifier } = await authorizeOk('pages:read');
       const res = await request(app)
-        .post('/api/v2/oauth/token')
+        .post('/api/oauth/token')
         .type('form')
         .send({ grant_type: 'authorization_code', code, code_verifier: verifier, redirect_uri: REDIRECT, client_id: 'crowi-cli' });
       expect(res.status).toBe(200);
@@ -225,7 +225,7 @@ describe('Routes /api/v2/oauth (Hono)', () => {
       const tokenRes = await token({ grant_type: 'authorization_code', code, code_verifier: verifier, redirect_uri: REDIRECT, client_id: 'crowi-cli' });
       const accessToken = tokenRes.body.access_token;
       // /me/recently-viewed-pages requires profile:read; the OAuth token holds it.
-      const apiRes = await request(app).get('/api/v2/me/recently-viewed-pages').set('Authorization', `Bearer ${accessToken}`);
+      const apiRes = await request(app).get('/api/me/recently-viewed-pages').set('Authorization', `Bearer ${accessToken}`);
       expect(apiRes.status).toBe(200);
       // A token lacking the scope is rejected with 403 INSUFFICIENT_SCOPE.
       const denied = await authorizeOk('pages:read');
@@ -236,7 +236,7 @@ describe('Routes /api/v2/oauth (Hono)', () => {
         redirect_uri: REDIRECT,
         client_id: 'crowi-cli',
       });
-      const deniedApi = await request(app).get('/api/v2/me/recently-viewed-pages').set('Authorization', `Bearer ${deniedTokenRes.body.access_token}`);
+      const deniedApi = await request(app).get('/api/me/recently-viewed-pages').set('Authorization', `Bearer ${deniedTokenRes.body.access_token}`);
       expect(deniedApi.status).toBe(403);
     });
 
@@ -289,7 +289,7 @@ describe('Routes /api/v2/oauth (Hono)', () => {
   });
 
   describe('POST /oauth/token (refresh_token)', () => {
-    const token = (body: Record<string, unknown>) => request(app).post('/api/v2/oauth/token').send(body);
+    const token = (body: Record<string, unknown>) => request(app).post('/api/oauth/token').send(body);
 
     const getInitialPair = async () => {
       const { code, verifier } = await authorizeOk();
@@ -331,14 +331,14 @@ describe('Routes /api/v2/oauth (Hono)', () => {
   });
 
   describe('POST /oauth/revoke', () => {
-    const token = (body: Record<string, unknown>) => request(app).post('/api/v2/oauth/token').send(body);
+    const token = (body: Record<string, unknown>) => request(app).post('/api/oauth/token').send(body);
 
     it('revokes a refresh token (then it cannot be used)', async () => {
       const { code, verifier } = await authorizeOk();
       const issued = await token({ grant_type: 'authorization_code', code, code_verifier: verifier, redirect_uri: REDIRECT, client_id: 'crowi-cli' });
       const refresh = issued.body.refresh_token;
 
-      const revoke = await request(app).post('/api/v2/oauth/revoke').send({ token: refresh });
+      const revoke = await request(app).post('/api/oauth/revoke').send({ token: refresh });
       expect(revoke.status).toBe(200);
 
       const afterRevoke = await token({ grant_type: 'refresh_token', refresh_token: refresh, client_id: 'crowi-cli' });
@@ -349,20 +349,20 @@ describe('Routes /api/v2/oauth (Hono)', () => {
       const { token: plain, tokenHash } = PAT().generateToken();
       await PAT().create({ tokenHash, userId: user._id, name: 'cli', scopes: ['profile:read'] });
       // PAT authenticates first.
-      const before = await request(app).get('/api/v2/me/recently-viewed-pages').set('Authorization', `Bearer ${plain}`);
+      const before = await request(app).get('/api/me/recently-viewed-pages').set('Authorization', `Bearer ${plain}`);
       expect(before.status).toBe(200);
 
-      const revoke = await request(app).post('/api/v2/oauth/revoke').send({ token: plain });
+      const revoke = await request(app).post('/api/oauth/revoke').send({ token: plain });
       expect(revoke.status).toBe(200);
 
-      const after = await request(app).get('/api/v2/me/recently-viewed-pages').set('Authorization', `Bearer ${plain}`);
+      const after = await request(app).get('/api/me/recently-viewed-pages').set('Authorization', `Bearer ${plain}`);
       expect(after.status).toBe(401);
     });
 
     it('returns 200 for an unknown token (RFC 7009)', async () => {
-      const res = await request(app).post('/api/v2/oauth/revoke').send({ token: 'crowi_rt_unknown' });
+      const res = await request(app).post('/api/oauth/revoke').send({ token: 'crowi_rt_unknown' });
       expect(res.status).toBe(200);
-      const noToken = await request(app).post('/api/v2/oauth/revoke').send({});
+      const noToken = await request(app).post('/api/oauth/revoke').send({});
       expect(noToken.status).toBe(200);
     });
   });
@@ -370,10 +370,10 @@ describe('Routes /api/v2/oauth (Hono)', () => {
   const DEVICE_GRANT = 'urn:ietf:params:oauth:grant-type:device_code';
 
   describe('Device Authorization Grant (RFC 8628)', () => {
-    const deviceAuthorize = (body: Record<string, unknown>) => request(app).post('/api/v2/oauth/device/authorize').send(body);
-    const token = (body: Record<string, unknown>) => request(app).post('/api/v2/oauth/token').send(body);
+    const deviceAuthorize = (body: Record<string, unknown>) => request(app).post('/api/oauth/device/authorize').send(body);
+    const token = (body: Record<string, unknown>) => request(app).post('/api/oauth/token').send(body);
     const deviceVerify = (body: Record<string, unknown>, bearer = webToken) =>
-      request(app).post('/api/v2/oauth/device/verify').set('Authorization', `Bearer ${bearer}`).send(body);
+      request(app).post('/api/oauth/device/verify').set('Authorization', `Bearer ${bearer}`).send(body);
 
     const startDevice = async (scope = 'pages:read pages:write') => {
       const res = await deviceAuthorize({ client_id: 'crowi-cli', scope });
@@ -419,7 +419,7 @@ describe('Routes /api/v2/oauth (Hono)', () => {
       expect(pending.body.error).toBe('authorization_pending');
 
       // GET /oauth/device surfaces the requesting client + scopes.
-      const info = await request(app).get('/api/v2/oauth/device').query({ user_code: dev.user_code });
+      const info = await request(app).get('/api/oauth/device').query({ user_code: dev.user_code });
       expect(info.status).toBe(200);
       expect(info.body.client_id).toBe('crowi-cli');
       expect(info.body.scopes).toEqual(['profile:read']);
@@ -439,7 +439,7 @@ describe('Routes /api/v2/oauth (Hono)', () => {
       expect(issued.body.scope).toBe('profile:read');
 
       // The issued access token reaches a profile:read-scoped API.
-      const api = await request(app).get('/api/v2/me/recently-viewed-pages').set('Authorization', `Bearer ${issued.body.access_token}`);
+      const api = await request(app).get('/api/me/recently-viewed-pages').set('Authorization', `Bearer ${issued.body.access_token}`);
       expect(api.status).toBe(200);
 
       // Single-use: a second exchange of the same (now consumed) device_code fails.
@@ -494,7 +494,7 @@ describe('Routes /api/v2/oauth (Hono)', () => {
     });
 
     it('GET /oauth/device 404s for an unknown user_code', async () => {
-      const res = await request(app).get('/api/v2/oauth/device').query({ user_code: 'ZZZZ-9999' });
+      const res = await request(app).get('/api/oauth/device').query({ user_code: 'ZZZZ-9999' });
       expect(res.status).toBe(404);
     });
 
@@ -508,20 +508,20 @@ describe('Routes /api/v2/oauth (Hono)', () => {
 
     it('device/verify requires authentication (401 without bearer)', async () => {
       const dev = await startDevice('pages:read');
-      const res = await request(app).post('/api/v2/oauth/device/verify').send({ user_code: dev.user_code, action: 'approve' });
+      const res = await request(app).post('/api/oauth/device/verify').send({ user_code: dev.user_code, action: 'approve' });
       expect(res.status).toBe(401);
     });
   });
 
   describe('GET /.well-known/oauth-authorization-server', () => {
     it('returns RFC 8414 discovery metadata (incl. device grant)', async () => {
-      const res = await request(app).get('/api/v2/.well-known/oauth-authorization-server');
+      const res = await request(app).get('/api/.well-known/oauth-authorization-server');
       expect(res.status).toBe(200);
       expect(res.body.issuer).toEqual(expect.any(String));
-      expect(res.body.token_endpoint).toContain('/api/v2/oauth/token');
-      expect(res.body.revocation_endpoint).toContain('/api/v2/oauth/revoke');
+      expect(res.body.token_endpoint).toContain('/api/oauth/token');
+      expect(res.body.revocation_endpoint).toContain('/api/oauth/revoke');
       expect(res.body.authorization_endpoint).toContain('/oauth/authorize');
-      expect(res.body.device_authorization_endpoint).toContain('/api/v2/oauth/device/authorize');
+      expect(res.body.device_authorization_endpoint).toContain('/api/oauth/device/authorize');
       expect(res.body.code_challenge_methods_supported).toEqual(['S256']);
       expect(res.body.grant_types_supported).toEqual(expect.arrayContaining(['authorization_code', 'refresh_token', DEVICE_GRANT]));
       expect(res.body.response_types_supported).toEqual(['code']);
@@ -540,7 +540,7 @@ describe('Routes /api/v2/oauth (Hono)', () => {
       env.CLIENT_URL = 'https://wiki.example.com/';
       try {
         const res = await request(app)
-          .get('/api/v2/.well-known/oauth-authorization-server')
+          .get('/api/.well-known/oauth-authorization-server')
           .set('Host', 'evil.example.com')
           .set('X-Forwarded-Host', 'evil.example.com')
           .set('X-Forwarded-Proto', 'https');
@@ -548,8 +548,8 @@ describe('Routes /api/v2/oauth (Hono)', () => {
         // Trailing slash trimmed; built from CLIENT_URL, not the Host header.
         expect(res.body.issuer).toBe('https://wiki.example.com');
         expect(res.body.authorization_endpoint).toBe('https://wiki.example.com/oauth/authorize');
-        expect(res.body.token_endpoint).toBe('https://wiki.example.com/api/v2/oauth/token');
-        expect(res.body.device_authorization_endpoint).toBe('https://wiki.example.com/api/v2/oauth/device/authorize');
+        expect(res.body.token_endpoint).toBe('https://wiki.example.com/api/oauth/token');
+        expect(res.body.device_authorization_endpoint).toBe('https://wiki.example.com/api/oauth/device/authorize');
         expect(JSON.stringify(res.body)).not.toContain('evil.example.com');
       } finally {
         env.CLIENT_URL = prev;
@@ -559,7 +559,7 @@ describe('Routes /api/v2/oauth (Hono)', () => {
 
   describe('GET /oauth/client-info (RFC-0016 §4.4)', () => {
     it('returns non-secret metadata for a seeded client', async () => {
-      const res = await request(app).get('/api/v2/oauth/client-info').query({ client_id: 'crowi-cli' });
+      const res = await request(app).get('/api/oauth/client-info').query({ client_id: 'crowi-cli' });
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ clientId: 'crowi-cli', name: 'Crowi CLI', firstParty: true, trusted: false });
       // Never exposes redirectUris / allowedScopes — non-secret lookup only.
@@ -568,13 +568,13 @@ describe('Routes /api/v2/oauth (Hono)', () => {
     });
 
     it('returns the trusted crowi-ios client metadata', async () => {
-      const res = await request(app).get('/api/v2/oauth/client-info').query({ client_id: 'crowi-ios' });
+      const res = await request(app).get('/api/oauth/client-info').query({ client_id: 'crowi-ios' });
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ clientId: 'crowi-ios', name: 'Crowi for iOS', firstParty: true, trusted: true });
     });
 
     it('404s for an unknown client_id', async () => {
-      const res = await request(app).get('/api/v2/oauth/client-info').query({ client_id: 'no-such-client' });
+      const res = await request(app).get('/api/oauth/client-info').query({ client_id: 'no-such-client' });
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('NOT_FOUND');
     });
@@ -618,7 +618,7 @@ describe('Routes /api/v2/oauth (Hono)', () => {
       expect(code).toBeTruthy();
 
       const tokenRes = await request(app)
-        .post('/api/v2/oauth/token')
+        .post('/api/oauth/token')
         .send({ grant_type: 'authorization_code', code, code_verifier: verifier, redirect_uri: IOS_REDIRECT, client_id: 'crowi-ios' });
       expect(tokenRes.status).toBe(200);
       expect(tokenRes.body.token_type).toBe('Bearer');
@@ -634,7 +634,7 @@ describe('Routes /api/v2/oauth (Hono)', () => {
       const code = url.searchParams.get('code') as string;
 
       const tokenRes = await request(app)
-        .post('/api/v2/oauth/token')
+        .post('/api/oauth/token')
         .send({ grant_type: 'authorization_code', code, code_verifier: 'totally-wrong', redirect_uri: IOS_REDIRECT, client_id: 'crowi-ios' });
       expect(tokenRes.status).toBe(400);
       expect(tokenRes.body.error).toBe('invalid_grant');

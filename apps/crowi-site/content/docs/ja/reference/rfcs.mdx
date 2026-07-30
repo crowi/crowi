@@ -76,11 +76,11 @@ RFC-0003 の最小限の CodeMirror 6 エディタの上に、4 つの編集生�
 
 ## RFC-0006: HTTP API — Express + ts-rest → Hono
 
-`/api/v2/*` HTTP レイヤーのフレームワークを Express + ts-rest から
+`/api/*` HTTP レイヤーのフレームワークを Express + ts-rest から
 Hono + `@hono/zod-openapi` へ置き換える提案です。`packages/api-contract/
 src/schemas/` 配下の Zod スキーマはほぼそのまま移行し、ts-rest の
 contract は `createRoute` のルート定義として書き直されます。api アプリ
-は `/api/v2/docs` で Scalar API リファレンスを公開します。レガシーの
+は `/api/docs` で Scalar API リファレンスを公開します。レガシーの
 `/api/*` Express マウントもあわせて廃止されます。2026-05-22 に実装
 完了しました。
 

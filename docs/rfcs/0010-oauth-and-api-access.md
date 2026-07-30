@@ -206,9 +206,9 @@ Every token secret is stored as a SHA-256 hash only (dropping the legacy
 - `(auth)/oauth/authorize` — consent screen. Reads the query (`client_id` /
   `scope` / `redirect_uri` / `code_challenge` / `state`), shows the client
   name and requested scopes as a read/write checklist → on approval
-  `POST /api/v2/oauth/authorize` → navigates to the returned redirect_uri.
+  `POST /api/oauth/authorize` → navigates to the returned redirect_uri.
 - `(auth)/oauth/device` — `user_code` entry → the same consent →
-  `POST /api/v2/oauth/device/verify`.
+  `POST /api/oauth/device/verify`.
 - Settings screen (`(auth)/me`, access-tokens section) — PAT issue / list /
   revoke UI.
 
@@ -232,8 +232,8 @@ crowi login --device
 ## External Markdown push (page editing)
 
 No new endpoint needed. A token holding `pages:write` calls the existing
-`PUT /api/v2/pages` (`Page.updatePage` → `Revision.prepareRevision` →
-`pushRevision`) / `POST /api/v2/pages`. This path creates a revision directly
+`PUT /api/pages` (`Page.updatePage` → `Revision.prepareRevision` →
+`pushRevision`) / `POST /api/pages`. This path creates a revision directly
 without going through collab (Y.Doc). Under RFC-0009's text-diff design an
 external/API edit needs no special handling either — the next save simply
 diffs against the previous body string (RFC-0009 OQ-F).
@@ -280,8 +280,8 @@ needed since this is not yet in production — consistent with project memory
   forged Host could poison the discovery document / `verification_uri` and
   steer a victim to an attacker origin. `app:url` is Host-derived and is no
   longer trusted (retired). API endpoints (`token`, etc.) assume the default
-  deployment reverse-proxies `/api/v2` on the same origin, i.e.
-  `{CLIENT_URL}/api/v2/...`.
+  deployment reverse-proxies `/api` on the same origin, i.e.
+  `{CLIENT_URL}/api/...`.
 
 ## Implementation phases
 

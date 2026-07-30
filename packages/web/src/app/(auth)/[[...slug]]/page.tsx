@@ -35,9 +35,9 @@ export default function CatchAllPage() {
 
   // Reserved system / backend routes (`/api/*`, `/paste`, `/comments`, …)
   // are not wiki pages. Most have their own Next route, but the ones without
-  // (and the reverse-proxied `/api/*`, of which only `/api/v2/*` is proxied)
-  // leak to this catch-all, where they must NOT render the "create this page"
-  // affordance for a path the server would refuse to create. 404 instead.
+  // (and the reverse-proxied `/api/*`) leak to this catch-all, where they
+  // must NOT render the "create this page" affordance for a path the server
+  // would refuse to create. 404 instead.
   // The server mirrors this in `Page.isCreatableName`.
   if (isReservedPagePath(path)) {
     notFound();

@@ -186,7 +186,7 @@ export interface CrowiPlugin {
 
   /**
    * HTTP routes the plugin contributes, mounted at
-   * `/api/v2/plugins/<name>/<path>` (the `<name>` path segment guarantees
+   * `/api/plugins/<name>/<path>` (the `<name>` path segment guarantees
    * that core endpoints and other plugins cannot collide). Used for
    * inbound webhooks (Slack events / slash / interactivity), "Test
    * connection" buttons, `@action` targets, OAuth callbacks, etc.

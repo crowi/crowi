@@ -108,8 +108,8 @@ async function main() {
     const afterFiles = manifest.rewrites?.afterFiles ?? (Array.isArray(manifest.rewrites) ? manifest.rewrites : [])
     const wellKnown = afterFiles.find((r) => r.source === WELL_KNOWN_PATH)
     record(`${label}: no baked .well-known rewrite`, !wellKnown, wellKnown ? `found destination=${wellKnown.destination}` : 'absent (expected)')
-    const apiRewrite = afterFiles.find((r) => r.source === '/api/v2/:path*')
-    record(`${label}: /api/v2 rewrite still present (unaffected by this fix)`, Boolean(apiRewrite), apiRewrite?.destination)
+    const apiRewrite = afterFiles.find((r) => r.source === '/api/:path*')
+    record(`${label}: /api rewrite still present (unaffected by this fix)`, Boolean(apiRewrite), apiRewrite?.destination)
   }
 
   if (!fs.existsSync(path.join(standaloneServerDir, 'server.js'))) {
@@ -139,7 +139,7 @@ async function main() {
   const buildDiscoveryDoc = (origin) => ({
     issuer: origin,
     authorization_endpoint: `${origin}/oauth/authorize`,
-    token_endpoint: `${origin}/api/v2/oauth/token`,
+    token_endpoint: `${origin}/api/oauth/token`,
     from: 'fake-api',
   })
 

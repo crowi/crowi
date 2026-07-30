@@ -31,8 +31,8 @@ describe('AttachmentDetailModal', () => {
     // `url` in the fixture (`/original` suffix) so this assertion actually
     // proves the modal reads the right field rather than passing by
     // coincidence.
-    expect(img.getAttribute('src')).toBe('/api/v2/attachments/att-1/original');
-    expect(img.getAttribute('src')).not.toBe('/api/v2/attachments/att-1');
+    expect(img.getAttribute('src')).toBe('/api/attachments/att-1/original');
+    expect(img.getAttribute('src')).not.toBe('/api/attachments/att-1');
     expect(img.className).toContain('object-contain');
   });
 
@@ -41,8 +41,8 @@ describe('AttachmentDetailModal', () => {
       fileName: 'spec.pdf',
       originalName: 'spec.pdf',
       fileFormat: 'application/pdf',
-      url: '/api/v2/attachments/att-2',
-      originalUrl: '/api/v2/attachments/att-2/original',
+      url: '/api/attachments/att-2',
+      originalUrl: '/api/attachments/att-2/original',
     });
     // The Dialog mounts into a portal on document.body, so query there.
     render(<AttachmentDetailModal attachment={pdf} open onOpenChange={() => {}} canDelete onDelete={noopDelete} isDeleting={false} />);
@@ -53,13 +53,13 @@ describe('AttachmentDetailModal', () => {
     // `iframe` has no ARIA role — querySelector is the only portable way to reach it.
     const iframe = document.body.querySelector('iframe');
     expect(iframe).not.toBeNull();
-    expect(iframe?.getAttribute('src')).toBe('/api/v2/attachments/att-2/original');
+    expect(iframe?.getAttribute('src')).toBe('/api/attachments/att-2/original');
     expect(iframe?.getAttribute('title')).toBe('spec.pdf');
     // The fallback `<a>` (rendered as the iframe's React children, present
     // in the DOM regardless of whether jsdom "loads" the iframe) also uses
     // `originalUrl`.
     const fallbackLink = iframe?.querySelector('a');
-    expect(fallbackLink?.getAttribute('href')).toBe('/api/v2/attachments/att-2/original');
+    expect(fallbackLink?.getAttribute('href')).toBe('/api/attachments/att-2/original');
   });
 
   it('shows a file-type icon and no preview for other file types', () => {
@@ -89,8 +89,8 @@ describe('AttachmentDetailModal', () => {
   it('renders a download link pointing at originalUrl (not the display-priority canonical url) with a download attribute', () => {
     render(<AttachmentDetailModal attachment={makeAttachment()} open onOpenChange={() => {}} canDelete onDelete={noopDelete} isDeleting={false} />);
     const link = screen.getByRole('link', { name: downloadLabel });
-    expect(link.getAttribute('href')).toBe('/api/v2/attachments/att-1/original');
-    expect(link.getAttribute('href')).not.toBe('/api/v2/attachments/att-1');
+    expect(link.getAttribute('href')).toBe('/api/attachments/att-1/original');
+    expect(link.getAttribute('href')).not.toBe('/api/attachments/att-1');
     expect(link.hasAttribute('download')).toBe(true);
   });
 

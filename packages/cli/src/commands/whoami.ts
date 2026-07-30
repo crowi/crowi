@@ -5,7 +5,7 @@ import { render, table } from '../lib/output';
 import { requireProfile } from './_shared';
 
 /**
- * The `GET /api/v2/auth/me` response (TokenMeResponseSchema). Parsed
+ * The `GET /api/auth/me` response (TokenMeResponseSchema). Parsed
  * leniently — the CLI accepts extra/missing fields for version-skew
  * tolerance, so this is a structural view, not a strict bind to the
  * generated `CrowiApiClient` type.
@@ -21,7 +21,7 @@ interface AuthMeResponse {
 }
 
 /**
- * `crowi whoami` — print the signed-in user. Uses `GET /api/v2/auth/me`
+ * `crowi whoami` — print the signed-in user. Uses `GET /api/auth/me`
  * (JWT-authenticated but NOT scope-guarded), so it works under the default
  * `pages:read pages:write` token without needing `profile:read`. Also shows
  * the active profile + granted scope from the local store.

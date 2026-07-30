@@ -72,7 +72,7 @@ Scripts live in root + per-package `package.json`. `pnpm <script>` filters with
 ## Architecture Overview
 
 ### API server (`packages/api`)
-- **Routing** (all Hono, mounted under `/api/v2`):
+- **Routing** (all Hono, mounted under `/api`):
   - Public routes (no auth)
   - Authenticated routes under `createJwtAuth(crowi)` (most page / user / comment / etc. endpoints)
   - Admin routes under `createJwtAdminRequired(crowi)` (= JWT + `user.admin === true`)

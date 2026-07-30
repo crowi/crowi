@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { CheckCircle2, XCircle } from 'lucide-react';
 import { m } from '@paraglide/messages.js';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { apiClientV2 } from '@/lib/api-client';
+import { apiClient } from '@/lib/api-client';
 import { clientDisplayName } from '@/lib/oauth-clients';
 import { ConsentCard } from '../authorize/consent-card';
 import { DeviceForm } from './device-form';
@@ -42,7 +42,7 @@ function DeviceScreen() {
     setIsBusy(true);
     setError(null);
     try {
-      const response = await apiClientV2.oauth.device.$get({ query: { user_code: trimmed } });
+      const response = await apiClient.oauth.device.$get({ query: { user_code: trimmed } });
       if (response.status === 200) {
         const body = await response.json();
         setStep({ kind: 'consent', userCode: trimmed, clientId: body.client_id, scopes: body.scopes });
@@ -60,7 +60,7 @@ function DeviceScreen() {
     setIsBusy(true);
     setError(null);
     try {
-      const response = await apiClientV2.oauth.device.verify.$post({ json: { user_code: userCode, action } });
+      const response = await apiClient.oauth.device.verify.$post({ json: { user_code: userCode, action } });
       if (response.status === 200) {
         const body = await response.json();
         setStep({ kind: 'done', result: body.status });

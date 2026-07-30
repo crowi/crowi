@@ -10,16 +10,16 @@ import { warn } from './output';
  *
  * The discovery document lives at the **server root**
  * (`<endpoint>/.well-known/oauth-authorization-server`) — NOT under
- * `/api/v2` — and returns the OAuth endpoint URLs already carrying their
+ * `/api` — and returns the OAuth endpoint URLs already carrying their
  * correct path prefix:
  *
  *   - `token_endpoint` / `revocation_endpoint` /
- *     `device_authorization_endpoint` already include `/api/v2/oauth/*`.
+ *     `device_authorization_endpoint` already include `/api/oauth/*`.
  *   - `authorization_endpoint` + the device `verification_uri` are **web
  *     pages** on the issuer (server `CLIENT_URL`) origin, NOT API routes.
  *
  * The CLI therefore caches these URLs verbatim into the profile and dials
- * them as-is — never reconstructing the `/api/v2` prefix — so split-origin
+ * them as-is — never reconstructing the `/api` prefix — so split-origin
  * / reverse-proxy deployments work. This is the single source of the
  * token/revoke/device/authorize URLs.
  */

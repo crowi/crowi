@@ -4,12 +4,12 @@ import { app, crowi } from 'src/test/setup';
 import { authHeaders, createTestUser, createPageViaApi } from 'src/test/test-helpers';
 
 /**
- * Compact wrapper for the `GET /api/v2/search` request shape used in every
+ * Compact wrapper for the `GET /api/search` request shape used in every
  * scenario below. Auth-less calls pass `null` for the token; query params
  * default to empty so 401 / validation tests can omit them.
  */
 const search = (token: string | null, query: Record<string, string | number> = {}) => {
-  const req = request(app).get('/api/v2/search');
+  const req = request(app).get('/api/search');
   if (token !== null) req.set(authHeaders(token));
   return req.query(query);
 };
@@ -56,7 +56,7 @@ const withMockDriver = async (driver: SearchDriver | null, fn: () => Promise<voi
   }
 };
 
-describe('Routes /api/v2/search (Hono)', () => {
+describe('Routes /api/search (Hono)', () => {
   const PATH_PREFIX = '/hono-search-test/';
   let accessToken: string;
   let userId: string;
@@ -182,7 +182,7 @@ describe('Routes /api/v2/search (Hono)', () => {
       const Bookmark = crowi.model('Bookmark');
       const page = await createPageViaApi(accessToken, `${PATH_PREFIX}hit-1`, '# hit');
       // Add a bookmark so the bulk count returns 1 for this page.
-      const addRes = await request(app).post('/api/v2/bookmarks').set(authHeaders(accessToken)).send({ page_id: page._id });
+      const addRes = await request(app).post('/api/bookmarks').set(authHeaders(accessToken)).send({ page_id: page._id });
       expect(addRes.status).toBe(200);
       const expectedCount = await Bookmark.countByPageId(page._id);
 

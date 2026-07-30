@@ -381,19 +381,19 @@ describe('classifyOpContext', () => {
     const result = classifyOpContext({
       errorMessages: ['expect(received).toBe(expected)'],
       recentOps: [
-        { method: 'GET', path: '/api/v2/pages', httpStatus: 200, testFullName: 'PageHandler returns 200' },
-        { method: 'GET', path: '/api/v2/pages/1', httpStatus: 404, testFullName: 'PageHandler returns 200' },
+        { method: 'GET', path: '/api/pages', httpStatus: 200, testFullName: 'PageHandler returns 200' },
+        { method: 'GET', path: '/api/pages/1', httpStatus: 404, testFullName: 'PageHandler returns 200' },
       ],
       testFullName: 'PageHandler returns 200',
       resolvedMongoUri,
     });
-    expect(result).toMatchObject({ operationKind: 'http', httpStatus: 404, httpMethod: 'GET', httpPath: '/api/v2/pages/1', dispatched: true });
+    expect(result).toMatchObject({ operationKind: 'http', httpStatus: 404, httpMethod: 'GET', httpPath: '/api/pages/1', dispatched: true });
   });
 
   it('ignores ring-buffer entries belonging to a DIFFERENT test (parallel-request isolation)', () => {
     const result = classifyOpContext({
       errorMessages: ['expect(received).toBe(expected)'],
-      recentOps: [{ method: 'GET', path: '/api/v2/pages', httpStatus: 200, testFullName: 'SomeOtherTest' }],
+      recentOps: [{ method: 'GET', path: '/api/pages', httpStatus: 200, testFullName: 'SomeOtherTest' }],
       testFullName: 'PageHandler returns 200',
       resolvedMongoUri,
     });
@@ -423,7 +423,7 @@ describe('classifyOpContext', () => {
   it('a dispatched-but-statusless ring buffer entry (app threw before responding) still reports httpStatus: null, but as "http" (dispatched), distinct from pre-dispatch', () => {
     const result = classifyOpContext({
       errorMessages: ['TypeError: Cannot read properties of undefined'],
-      recentOps: [{ method: 'POST', path: '/api/v2/pages', httpStatus: null, testFullName: 'PageHandler creates a page' }],
+      recentOps: [{ method: 'POST', path: '/api/pages', httpStatus: null, testFullName: 'PageHandler creates a page' }],
       testFullName: 'PageHandler creates a page',
       resolvedMongoUri,
     });

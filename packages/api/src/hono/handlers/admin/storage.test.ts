@@ -2,7 +2,7 @@ import request from 'supertest';
 import { app, crowi } from 'src/test/setup';
 import { authHeaders, createTestUser } from 'src/test/test-helpers';
 
-describe('Routes /api/v2/admin/storage (Hono)', () => {
+describe('Routes /api/admin/storage (Hono)', () => {
   let adminToken: string;
   let userToken: string;
 
@@ -24,21 +24,21 @@ describe('Routes /api/v2/admin/storage (Hono)', () => {
     userToken = normal.accessToken;
   });
 
-  describe('GET /api/v2/admin/storage', () => {
+  describe('GET /api/admin/storage', () => {
     it('returns 401 without auth', async () => {
-      const res = await request(app).get('/api/v2/admin/storage');
+      const res = await request(app).get('/api/admin/storage');
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
     });
 
     it('returns 403 for a non-admin user', async () => {
-      const res = await request(app).get('/api/v2/admin/storage').set(authHeaders(userToken));
+      const res = await request(app).get('/api/admin/storage').set(authHeaders(userToken));
       expect(res.status).toBe(403);
       expect(res.body.error.code).toBe('ADMIN_REQUIRED');
     });
 
     it('returns 200 with the active driver and the registered driver list for an admin', async () => {
-      const res = await request(app).get('/api/v2/admin/storage').set(authHeaders(adminToken));
+      const res = await request(app).get('/api/admin/storage').set(authHeaders(adminToken));
 
       expect(res.status).toBe(200);
       // The exact list depends on which plugins the test boot loaded
@@ -69,7 +69,7 @@ describe('Routes /api/v2/admin/storage (Hono)', () => {
     });
 
     it('includes the implicit-default local driver in the list', async () => {
-      const res = await request(app).get('/api/v2/admin/storage').set(authHeaders(adminToken));
+      const res = await request(app).get('/api/admin/storage').set(authHeaders(adminToken));
       expect(res.status).toBe(200);
       // `@crowi/plugin-storage-local` is in IMPLICIT_DEFAULT_PLUGINS so
       // it always registers at least the `local` driver.

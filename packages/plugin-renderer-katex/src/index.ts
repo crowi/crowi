@@ -108,35 +108,41 @@ interface MutableMathNode {
 
 const renderMathBlock: NodeRenderer = (node, _ctx) => {
   const mathNode = node as MutableMathNode;
-  const html = renderMathToHtml(mathNode.value ?? '', true);
+  const tex = mathNode.value ?? '';
+  const html = renderMathToHtml(tex, true);
   mathNode.type = 'html';
   mathNode.value = `<div class="katex-block">${html}</div>`;
-  // Drop any node-renderer-irrelevant fields so downstream serialisers
-  // see a clean `html` shape.
+  // Drop node-renderer-irrelevant children, but keep `data` alive as
+  // the RFC-0023 `crowiMath` sidecar carrier: the html node's `value`
+  // stays the one-and-only web representation (byte-identical to
+  // before), while `X-Crowi-Ast-Version: 1` responses project the
+  // sidecar back into a `math` node with the TeX source restored. No
+  // separate `katexHtml` field exists — the html IS the web HTML.
   delete mathNode.children;
-  delete mathNode.data;
+  mathNode.data = { crowiMath: { tex, display: true } };
 };
 
 const renderMathInline: NodeRenderer = (node, _ctx) => {
   const mathNode = node as MutableMathNode;
-  const html = renderMathToHtml(mathNode.value ?? '', false);
+  const tex = mathNode.value ?? '';
+  const html = renderMathToHtml(tex, false);
   mathNode.type = 'html';
   mathNode.value = `<span class="katex-inline">${html}</span>`;
   delete mathNode.children;
-  delete mathNode.data;
+  mathNode.data = { crowiMath: { tex, display: false } };
 };
 
 const PLUGIN_NAME = '@crowi/plugin-renderer-katex';
-/** Route sub-paths, relative to `/api/v2/plugins/${PLUGIN_NAME}` (`PluginRouterScope.route`'s `path`). */
+/** Route sub-paths, relative to `/api/plugins/${PLUGIN_NAME}` (`PluginRouterScope.route`'s `path`). */
 const CSS_ROUTE_PATH = '/katex.min.css';
 const FONTS_ROUTE_PATH = '/fonts/:filename';
 /**
  * The API-relative absolute path handed to `registry.addStylesheet(...)`
  * in `registerRenderer` — must match `CSS_ROUTE_PATH`'s mounted location
  * exactly (`makePluginRouterScope` mounts every `registerRoutes` path
- * under `/api/v2/plugins/${PLUGIN_NAME}/...`).
+ * under `/api/plugins/${PLUGIN_NAME}/...`).
  */
-const STYLESHEET_MANIFEST_PATH = `/api/v2/plugins/${PLUGIN_NAME}${CSS_ROUTE_PATH}`;
+const STYLESHEET_MANIFEST_PATH = `/api/plugins/${PLUGIN_NAME}${CSS_ROUTE_PATH}`;
 
 const FONT_CONTENT_TYPES: Record<string, string> = {
   '.woff2': 'font/woff2',
@@ -224,7 +230,7 @@ const buildAssetResponse = (asset: ServableAsset): Response =>
   });
 
 /**
- * `GET /api/v2/plugins/${PLUGIN_NAME}/fonts/:filename` handler. Looks
+ * `GET /api/plugins/${PLUGIN_NAME}/fonts/:filename` handler. Looks
  * `filename` up in the exact-match `fontsByFilename` map built from
  * what's actually on disk (`loadKatexAssets`) — there is no
  * filesystem path built from the request at all, so a `../` /

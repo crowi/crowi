@@ -51,7 +51,7 @@ import { CapabilitySchema } from './app-capabilities';
  *
  * `rendererStylesheets` (feature-renderer-plugin-boundary Phase 1) is the
  * boot-time CSS-asset manifest: API-relative absolute paths
- * (`/api/v2/plugins/<plugin-name>/…`) that renderer plugins registered via
+ * (`/api/plugins/<plugin-name>/…`) that renderer plugins registered via
  * `RendererRegistry.addStylesheet(path)` AND whose `registerRoutes` mounted
  * successfully (see `RendererRegistryImpl.commitStylesheets`,
  * `packages/api/src/renderer/registry.ts`) — a plugin whose route mount

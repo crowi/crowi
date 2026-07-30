@@ -40,7 +40,7 @@ const PageIdPathParamsSchema = z.object({
 });
 
 /**
- * GET /api/v2/pages/:id/presence-token (RFC-0005 Phase 1)
+ * GET /api/pages/:id/presence-token (RFC-0005 Phase 1)
  *
  * Mints the short-lived JWT a page viewer presents on the
  * `/presence/:pageId` WebSocket handshake. The presence handler
@@ -93,7 +93,7 @@ export const getPresenceTokenRoute = createRoute({
 });
 
 /**
- * GET /api/v2/pages/:id/likers (RFC-0005 Phase 3)
+ * GET /api/pages/:id/likers (RFC-0005 Phase 3)
  *
  * Returns the users who have liked the page, backing the "Liked by"
  * modal opened from the meta-chip row. Read access to the page is

@@ -8,7 +8,7 @@ export { STATIC_CAPABILITIES };
 
 /**
  * Capability detection + version-skew warning for the CLI, sourced from the
- * public `GET /api/v2/app/info` signal (extended in STAGE 1 with
+ * public `GET /api/app/info` signal (extended in STAGE 1 with
  * `version` / `apiVersion` / `capabilities`).
  *
  * Everything here is WARN-ONLY (LOCKED policy): the CLI never refuses a
@@ -21,7 +21,7 @@ export { STATIC_CAPABILITIES };
 /** How long a cached `app/info` snapshot is considered fresh (10 minutes). */
 const CAPABILITY_TTL_MS = 10 * 60 * 1000;
 
-/** Lenient view of the `GET /api/v2/app/info` response. */
+/** Lenient view of the `GET /api/app/info` response. */
 interface AppInfo {
   version?: string;
   apiVersion?: string;
@@ -38,7 +38,7 @@ function isCacheFresh(profile: Profile): boolean {
 }
 
 /**
- * Fetch `GET /api/v2/app/info` and cache `version` + `capabilities` onto the
+ * Fetch `GET /api/app/info` and cache `version` + `capabilities` onto the
  * profile (persisted to `contexts.json`). Returns the resolved info. Failures
  * (network / parse) are swallowed and treated as an old/unknown server: the
  * caller falls back to the static baseline. Skips the round-trip when the

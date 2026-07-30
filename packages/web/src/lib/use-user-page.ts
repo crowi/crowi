@@ -2,12 +2,12 @@
 
 import { useQuery, useInfiniteQuery } from '@tanstack/react-query';
 import type { PaginationRequest } from '@crowi/api-contract';
-import { apiClientV2 } from './api-client';
+import { apiClient } from './api-client';
 import { userPageKeys } from './page-query-keys';
 
 /**
  * RFC-0006 Phase 4 Batch 2 — migrated from `apiClient.user.*` (ts-rest)
- * to `apiClientV2.user[':username'].$get` (`createClient`). The path-param
+ * to `apiClient.user[':username'].$get` (`createClient`). The path-param
  * + pagination query shape is unchanged; the only call-site difference
  * is `response.ok` / `response.json()` vs ts-rest's `result.status`
  * narrowing. Both 401 and 404 surface a structured error envelope
@@ -33,7 +33,7 @@ export function useUserPage(username: string) {
   return useQuery({
     queryKey: userPageKeys.profile(username),
     queryFn: async () => {
-      const response = await apiClientV2.user[':username'].$get({ param: { username } });
+      const response = await apiClient.user[':username'].$get({ param: { username } });
       if (response.ok) {
         return response.json();
       }
@@ -58,7 +58,7 @@ export function useUserBookmarks(username: string, params: PaginationRequest = {
   return useQuery({
     queryKey: userPageKeys.bookmarksDetail(username, params),
     queryFn: async () => {
-      const response = await apiClientV2.user[':username'].bookmarks.$get({
+      const response = await apiClient.user[':username'].bookmarks.$get({
         param: { username },
         query: { limit: String(params.limit), offset: String(params.offset) },
       });
@@ -78,7 +78,7 @@ export function useUserPages(username: string, params: PaginationRequest = { lim
   return useQuery({
     queryKey: userPageKeys.pagesDetail(username, params),
     queryFn: async () => {
-      const response = await apiClientV2.user[':username'].pages.$get({
+      const response = await apiClient.user[':username'].pages.$get({
         param: { username },
         query: { limit: String(params.limit), offset: String(params.offset) },
       });
@@ -98,7 +98,7 @@ export function useUserBookmarksInfinite(username: string, limit: number = 10) {
   return useInfiniteQuery({
     queryKey: userPageKeys.bookmarksInfinite(username, limit),
     queryFn: async ({ pageParam = 0 }) => {
-      const response = await apiClientV2.user[':username'].bookmarks.$get({
+      const response = await apiClient.user[':username'].bookmarks.$get({
         param: { username },
         query: { limit: String(limit), offset: String(pageParam) },
       });
@@ -125,7 +125,7 @@ export function useUserPagesInfinite(username: string, limit: number = 10) {
   return useInfiniteQuery({
     queryKey: userPageKeys.pagesInfinite(username, limit),
     queryFn: async ({ pageParam = 0 }) => {
-      const response = await apiClientV2.user[':username'].pages.$get({
+      const response = await apiClient.user[':username'].pages.$get({
         param: { username },
         query: { limit: String(limit), offset: String(pageParam) },
       });
@@ -170,7 +170,7 @@ export function useUserSubpages(username: string, params: PaginationRequest = { 
   return useQuery({
     queryKey: userPageKeys.subpagesDetail(username, params),
     queryFn: async ({ signal }) => {
-      const response = await apiClientV2.user[':username'].subpages.$get(
+      const response = await apiClient.user[':username'].subpages.$get(
         { param: { username }, query: { limit: String(params.limit), offset: String(params.offset) } },
         { init: { signal } },
       );
@@ -192,7 +192,7 @@ export function useUserSubpagesInfinite(username: string, limit: number = 10) {
   return useInfiniteQuery({
     queryKey: userPageKeys.subpagesInfinite(username, limit),
     queryFn: async ({ pageParam = 0, signal }) => {
-      const response = await apiClientV2.user[':username'].subpages.$get(
+      const response = await apiClient.user[':username'].subpages.$get(
         { param: { username }, query: { limit: String(limit), offset: String(pageParam) } },
         { init: { signal } },
       );

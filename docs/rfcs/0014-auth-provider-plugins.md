@@ -232,11 +232,11 @@ not yet configured) hides the provider from `GET /providers` and 404s
 Core mounts **one** parameterised route family (public; not `registerRoutes`):
 
 ```
-GET  /api/v2/auth/providers                      → list enabled drivers for login UI
-GET  /api/v2/auth/providers/:name/start          → 302 to IdP
-GET  /api/v2/auth/providers/:name/callback       → IdP redirect target
-POST /api/v2/auth/handoff                        → one-time code → token pair (§5.3)
-POST /api/v2/auth/providers/:name/verify         → credential-kind submit  [DEFERRED]
+GET  /api/auth/providers                         → list enabled drivers for login UI
+GET  /api/auth/providers/:name/start             → 302 to IdP
+GET  /api/auth/providers/:name/callback          → IdP redirect target
+POST /api/auth/handoff                           → one-time code → token pair (§5.3)
+POST /api/auth/providers/:name/verify            → credential-kind submit  [DEFERRED]
 ```
 
 > **`/verify` and credential-kind form rendering are deferred** (see §3 /
@@ -257,7 +257,7 @@ callback → recover state → obtain AuthProfile           (driver kind decides
          → resolveOrProvisionUser(profile)              (core, common)
          → mint one-time handoff code                   (core, common — §5.3)
          → redirect to web /login/complete?code=…&continue=<validated>
-web JS   → POST /api/v2/auth/handoff { code }
+web JS   → POST /api/auth/handoff { code }
          ← { user, accessToken, refreshToken, expiresIn }   (same shape as /auth/login)
          → storeTokens(...) → navigate to continue url
 ```
@@ -291,7 +291,7 @@ State lives in a **signed, HttpOnly cookie** (spec option A), not session
 
 ```
 Set-Cookie: crowi.oauth_state=<HMAC-signed>;
-  HttpOnly; SameSite=Lax; Secure(prod); Path=/api/v2/auth/providers; Max-Age=300
+  HttpOnly; SameSite=Lax; Secure(prod); Path=/api/auth/providers; Max-Age=300
 payload = {
   state,              // CSRF token — matched against the `state` query param on callback
   oidcNonce?,         // oidc only — echoed into id_token; replay protection (§5, B-2)
@@ -370,7 +370,7 @@ So the callback ends with a **one-time handoff code**, not tokens:
   otherwise — same posture as other ephemerals; the code is consumed on the
   next request, so single-instance dev without Redis is fine), then 302s to
   the web app: `/login/complete?code=<code>&continue=<validated path>`.
-- The `/login/complete` page POSTs `{ code }` to `POST /api/v2/auth/handoff`,
+- The `/login/complete` page POSTs `{ code }` to `POST /api/auth/handoff`,
   which consumes the code and responds with the **exact `/auth/login` response
   shape** (`{ user, accessToken, refreshToken, expiresIn }`). The page calls
   the existing `storeTokens()` and navigates to `continue`.
@@ -495,13 +495,13 @@ seam and `verify` path are designed in, but no LDAP plugin is built here.
 
 `(public)/login` currently renders email+password only. In v1 it will:
 
-- `GET /api/v2/auth/providers` → render one `Sign in with X` button per
+- `GET /api/auth/providers` → render one `Sign in with X` button per
   **enabled** `oauth2`/`oidc` driver (unconfigured drivers are filtered out
   server-side, §4). Email/password remains as the built-in local path
   (existing `tokenAuth.ts`), hidden when `security:disablePasswordAuth` is set.
 - Buttons link to `…/providers/<name>/start?continue=<url>`.
 - New `(public)/login/complete` page: receives the one-time handoff code,
-  exchanges it via `POST /api/v2/auth/handoff`, stores tokens with the
+  exchanges it via `POST /api/auth/handoff`, stores tokens with the
   existing `storeTokens()`, and navigates to `continue` (§5.3).
 
 **Deferred (A-1):** rendering arbitrary `credential` drivers as their declared

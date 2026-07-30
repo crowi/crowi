@@ -1,5 +1,6 @@
 import { type AttachmentDisplayDerivativesTaskOptions, runAttachmentDisplayDerivativesRebuild } from 'src/util/rebuild-attachment-display-derivatives';
 import { runBacklinkRebuild } from 'src/util/rebuild-backlink';
+import { runRenderedAstRebuild } from 'src/util/rebuild-rendered-ast';
 import { runRendererRebuild } from 'src/util/rebuild-renderer';
 import { runSearchRebuild } from 'src/util/search-rebuild';
 import { runStorageCopy, type StorageCopyProgress } from 'src/util/storage-copy';
@@ -75,6 +76,25 @@ export const backlinkRebuild: RebuildTask = defineRebuild({
   description: 'Rebuild the backlink index across all pages. (not implemented)',
   async run(ctx) {
     const summary = await runBacklinkRebuild(ctx.crowi);
+    return { ...summary };
+  },
+});
+
+/**
+ * RFC-0023 §15 — `rebuild rendered-ast`. Backfills every page's current
+ * `Revision.renderedAst` (+ `rendererVersion` + `meta`) after a
+ * `RENDERER_PIPELINE_VERSION` bump. Idempotent (eligible count reaches
+ * 0), so it fits the rebuild family's "version-independent, runnable
+ * any time" contract; the rollout procedure (see the admin guide and
+ * `util/rebuild-rendered-ast.ts`'s doc comment) requires a real-write
+ * run right after deploying a version bump — pre-deploy verification is
+ * `--dry-run` only.
+ */
+export const renderedAstRebuild: RebuildTask = defineRebuild({
+  id: 'rendered-ast',
+  description: 'Backfill Revision.renderedAst (+ meta) for current revisions whose stored AST predates the running renderer pipeline.',
+  async run(ctx, runner) {
+    const summary = await runRenderedAstRebuild(ctx.crowi, ctx, runner);
     return { ...summary };
   },
 });

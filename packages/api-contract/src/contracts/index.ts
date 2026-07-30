@@ -30,11 +30,11 @@ export * from './admin';
 
 // `auth` (legacy SSR) sub-contract was deleted in RFC-0006 Phase 4 Batch 1:
 // frontend never called `apiClient.auth.*`, the actual login / register
-// flow goes through the `tokenAuth` resource (`POST /api/v2/auth/login`
+// flow goes through the `tokenAuth` resource (`POST /api/auth/login`
 // etc.), and the SSR pages at `/login` / `/register` are served by the
-// Express root routes — not under `/api/v2/`. The five legacy paths
-// (`GET /api/v2/login`, `POST /api/v2/login`, `GET /api/v2/register`,
-// `POST /api/v2/register`, `GET /api/v2/login/error/:reason`) carried no
+// Express root routes — not under `/api/`. The five legacy paths
+// (`GET /api/login`, `POST /api/login`, `GET /api/register`,
+// `POST /api/register`, `GET /api/login/error/:reason`) carried no
 // production traffic, so we drop them in this phase rather than porting
 // them.
 //

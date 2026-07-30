@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiClientV2 } from './api-client';
+import { apiClient } from './api-client';
 import type { GetMailSettingsResponse, SendTestMailResponse, UpdateMailSettingsRequest, UpdateMailSettingsResponse } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 
@@ -11,7 +11,7 @@ export const adminMailSettingsKeys = {
 
 /**
  * RFC-0006 Phase 4 Batch 9 — switched from `apiClient.admin.mail.*`
- * (ts-rest) to `apiClientV2.admin.mail.*.$method` (`createClient`). Wire
+ * (ts-rest) to `apiClient.admin.mail.*.$method` (`createClient`). Wire
  * payload unchanged. The 400 `MailSettingsValidationError` envelope
  * (`{ bodyResult: { issues } }`) is still produced by the contract's
  * per-route hook override.
@@ -20,7 +20,7 @@ export function useMailSettings(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: adminMailSettingsKeys.settings,
     queryFn: async (): Promise<GetMailSettingsResponse | null> => {
-      const response = await apiClientV2.admin.mail.$get();
+      const response = await apiClient.admin.mail.$get();
       if (response.status !== 200) return null;
       return (await response.json()) as GetMailSettingsResponse;
     },
@@ -48,7 +48,7 @@ export function useUpdateMailSettings() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (body: UpdateMailSettingsRequest): Promise<UpdateMailSettingsResponse> => {
-      const response = await apiClientV2.admin.mail.$put({ json: body });
+      const response = await apiClient.admin.mail.$put({ json: body });
       if (response.status === 200) return (await response.json()) as UpdateMailSettingsResponse;
       if (response.status === 400) {
         const parsed = (await response.json().catch(() => null)) as MailSettingsValidationBody | null;
@@ -74,7 +74,7 @@ export function useUpdateMailSettings() {
 export function useSendTestMail() {
   return useMutation({
     mutationFn: async (): Promise<SendTestMailResponse> => {
-      const response = await apiClientV2.admin.mail.test.$post({ json: {} });
+      const response = await apiClient.admin.mail.test.$post({ json: {} });
       if (response.status === 200) return (await response.json()) as SendTestMailResponse;
       if (response.status === 502) {
         const parsed = (await response.json().catch(() => null)) as { error?: { message?: string } } | null;

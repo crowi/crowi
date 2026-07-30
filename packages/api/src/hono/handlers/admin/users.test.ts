@@ -64,8 +64,8 @@ const clearUsers = async () => {
   ownedUserIds.clear();
 };
 
-describe('Routes /api/v2/admin/users (Hono)', () => {
-  describe('GET /api/v2/admin/users', () => {
+describe('Routes /api/admin/users (Hono)', () => {
+  describe('GET /api/admin/users', () => {
     let adminToken: string;
     let userToken: string;
 
@@ -95,19 +95,19 @@ describe('Routes /api/v2/admin/users (Hono)', () => {
     });
 
     it('returns 401 without auth', async () => {
-      const res = await request(app).get('/api/v2/admin/users');
+      const res = await request(app).get('/api/admin/users');
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
     });
 
     it('returns 403 for a non-admin user', async () => {
-      const res = await request(app).get('/api/v2/admin/users').set(authHeaders(userToken));
+      const res = await request(app).get('/api/admin/users').set(authHeaders(userToken));
       expect(res.status).toBe(403);
       expect(res.body.error.code).toBe('ADMIN_REQUIRED');
     });
 
     it('returns the full user list for an admin', async () => {
-      const res = await request(app).get('/api/v2/admin/users').set(authHeaders(adminToken));
+      const res = await request(app).get('/api/admin/users').set(authHeaders(adminToken));
 
       expect(res.status).toBe(200);
       expect(Array.isArray(res.body.users)).toBe(true);
@@ -129,7 +129,7 @@ describe('Routes /api/v2/admin/users (Hono)', () => {
       // pages→totalPages). The handler absorbs that rename into createPager, so
       // the client-facing pager must still expose the legacy AdminPager keys
       // and must NOT leak the raw paginate-v2 field names.
-      const res = await request(app).get('/api/v2/admin/users').set(authHeaders(adminToken));
+      const res = await request(app).get('/api/admin/users').set(authHeaders(adminToken));
 
       expect(res.status).toBe(200);
       expect(Object.keys(res.body.pager).sort()).toEqual(['next', 'nextDots', 'page', 'pages', 'pagesCount', 'previous', 'previousDots', 'total'].sort());
@@ -140,7 +140,7 @@ describe('Routes /api/v2/admin/users (Hono)', () => {
     });
 
     it('omits sensitive fields (password / apiToken / googleId / githubId)', async () => {
-      const res = await request(app).get('/api/v2/admin/users').set(authHeaders(adminToken));
+      const res = await request(app).get('/api/admin/users').set(authHeaders(adminToken));
 
       expect(res.status).toBe(200);
       for (const u of res.body.users) {
@@ -152,7 +152,7 @@ describe('Routes /api/v2/admin/users (Hono)', () => {
     });
 
     it('filters by free-text query (q) on username/name/email', async () => {
-      const res = await request(app).get('/api/v2/admin/users').query({ q: 'alice' }).set(authHeaders(adminToken));
+      const res = await request(app).get('/api/admin/users').query({ q: 'alice' }).set(authHeaders(adminToken));
 
       expect(res.status).toBe(200);
       expect(res.body.users.length).toBe(1);
@@ -163,7 +163,7 @@ describe('Routes /api/v2/admin/users (Hono)', () => {
     it("treats space in q as '|' for regex OR matching (legacy parity)", async () => {
       // 'alice bob' -> regex 'alice|bob' (only first space replaced) — both
       // alice@example.com and bob@sample.com should match.
-      const res = await request(app).get('/api/v2/admin/users').query({ q: 'alice bob' }).set(authHeaders(adminToken));
+      const res = await request(app).get('/api/admin/users').query({ q: 'alice bob' }).set(authHeaders(adminToken));
 
       expect(res.status).toBe(200);
       const usernames = (res.body.users as Array<{ username: string }>).map((u) => u.username).sort();
@@ -171,7 +171,7 @@ describe('Routes /api/v2/admin/users (Hono)', () => {
     });
 
     it('matches the email field, not just username/name', async () => {
-      const res = await request(app).get('/api/v2/admin/users').query({ q: 'sample.com' }).set(authHeaders(adminToken));
+      const res = await request(app).get('/api/admin/users').query({ q: 'sample.com' }).set(authHeaders(adminToken));
 
       expect(res.status).toBe(200);
       expect(res.body.users.length).toBe(1);
@@ -180,7 +180,7 @@ describe('Routes /api/v2/admin/users (Hono)', () => {
 
     it('respects the page query parameter', async () => {
       // limit=2 → 5 users → 3 pages → page 2 has indices 2..3
-      const res = await request(app).get('/api/v2/admin/users').query({ page: 2, limit: 2 }).set(authHeaders(adminToken));
+      const res = await request(app).get('/api/admin/users').query({ page: 2, limit: 2 }).set(authHeaders(adminToken));
 
       expect(res.status).toBe(200);
       expect(res.body.users.length).toBe(2);
@@ -194,7 +194,7 @@ describe('Routes /api/v2/admin/users (Hono)', () => {
     });
 
     it('returns an empty list when q matches nothing', async () => {
-      const res = await request(app).get('/api/v2/admin/users').query({ q: 'no-such-user-xyz' }).set(authHeaders(adminToken));
+      const res = await request(app).get('/api/admin/users').query({ q: 'no-such-user-xyz' }).set(authHeaders(adminToken));
 
       expect(res.status).toBe(200);
       expect(res.body.users).toEqual([]);
@@ -202,7 +202,7 @@ describe('Routes /api/v2/admin/users (Hono)', () => {
     });
   });
 
-  describe('GET /api/v2/admin/users/search', () => {
+  describe('GET /api/admin/users/search', () => {
     let adminToken: string;
     let userToken: string;
 
@@ -230,24 +230,24 @@ describe('Routes /api/v2/admin/users (Hono)', () => {
     });
 
     it('returns 401 without auth', async () => {
-      const res = await request(app).get('/api/v2/admin/users/search').query({ email: 'dave' });
+      const res = await request(app).get('/api/admin/users/search').query({ email: 'dave' });
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
     });
 
     it('returns 403 for a non-admin user', async () => {
-      const res = await request(app).get('/api/v2/admin/users/search').query({ email: 'dave' }).set(authHeaders(userToken));
+      const res = await request(app).get('/api/admin/users/search').query({ email: 'dave' }).set(authHeaders(userToken));
       expect(res.status).toBe(403);
       expect(res.body.error.code).toBe('ADMIN_REQUIRED');
     });
 
     it('returns 400 when email param is missing', async () => {
-      const res = await request(app).get('/api/v2/admin/users/search').set(authHeaders(adminToken));
+      const res = await request(app).get('/api/admin/users/search').set(authHeaders(adminToken));
       expect(res.status).toBe(400);
     });
 
     it('returns email-substring matches for an admin', async () => {
-      const res = await request(app).get('/api/v2/admin/users/search').query({ email: 'example.com' }).set(authHeaders(adminToken));
+      const res = await request(app).get('/api/admin/users/search').query({ email: 'example.com' }).set(authHeaders(adminToken));
 
       expect(res.status).toBe(200);
       const emails = (res.body.users as Array<{ email: string }>).map((u) => u.email).sort();
@@ -256,7 +256,7 @@ describe('Routes /api/v2/admin/users (Hono)', () => {
     });
 
     it('omits sensitive fields in the search response', async () => {
-      const res = await request(app).get('/api/v2/admin/users/search').query({ email: 'dave' }).set(authHeaders(adminToken));
+      const res = await request(app).get('/api/admin/users/search').query({ email: 'dave' }).set(authHeaders(adminToken));
 
       expect(res.status).toBe(200);
       for (const u of res.body.users) {
@@ -268,7 +268,7 @@ describe('Routes /api/v2/admin/users (Hono)', () => {
     });
   });
 
-  describe('POST /api/v2/admin/users/invite', () => {
+  describe('POST /api/admin/users/invite', () => {
     let adminToken: string;
     let userToken: string;
 
@@ -294,27 +294,27 @@ describe('Routes /api/v2/admin/users (Hono)', () => {
 
     it('returns 401 without auth', async () => {
       const res = await request(app)
-        .post('/api/v2/admin/users/invite')
+        .post('/api/admin/users/invite')
         .send({ emailList: ['x@example.com'] });
       expect(res.status).toBe(401);
     });
 
     it('returns 403 for a non-admin user', async () => {
       const res = await request(app)
-        .post('/api/v2/admin/users/invite')
+        .post('/api/admin/users/invite')
         .set(authHeaders(userToken))
         .send({ emailList: ['x@example.com'] });
       expect(res.status).toBe(403);
     });
 
     it('returns 400 when emailList is empty', async () => {
-      const res = await request(app).post('/api/v2/admin/users/invite').set(authHeaders(adminToken)).send({ emailList: [] });
+      const res = await request(app).post('/api/admin/users/invite').set(authHeaders(adminToken)).send({ emailList: [] });
       expect(res.status).toBe(400);
     });
 
     it('creates new users and reports per-email status', async () => {
       const res = await request(app)
-        .post('/api/v2/admin/users/invite')
+        .post('/api/admin/users/invite')
         .set(authHeaders(adminToken))
         .send({ emailList: ['newcomer1@example.com', 'newcomer2@example.com'], sendEmail: false });
 
@@ -333,7 +333,7 @@ describe('Routes /api/v2/admin/users (Hono)', () => {
       await createPlainUser({ name: 'Existing', username: 'existing', email: 'duplicate@example.com' });
 
       const res = await request(app)
-        .post('/api/v2/admin/users/invite')
+        .post('/api/admin/users/invite')
         .set(authHeaders(adminToken))
         .send({ emailList: ['duplicate@example.com', 'fresh@example.com'] });
 
@@ -371,20 +371,20 @@ describe('Routes /api/v2/admin/users (Hono)', () => {
       target = await createPlainUser({ name: 'Target', username: 'target', email: 'target@example.com' });
     });
 
-    describe('PATCH /api/v2/admin/users/:id', () => {
+    describe('PATCH /api/admin/users/:id', () => {
       it('returns 401 without auth', async () => {
-        const res = await request(app).patch(`/api/v2/admin/users/${target._id}`).send({ name: 'New', email: 'new@example.com' });
+        const res = await request(app).patch(`/api/admin/users/${target._id}`).send({ name: 'New', email: 'new@example.com' });
         expect(res.status).toBe(401);
       });
 
       it('returns 403 for a non-admin user', async () => {
-        const res = await request(app).patch(`/api/v2/admin/users/${target._id}`).set(authHeaders(userToken)).send({ name: 'New', email: 'new@example.com' });
+        const res = await request(app).patch(`/api/admin/users/${target._id}`).set(authHeaders(userToken)).send({ name: 'New', email: 'new@example.com' });
         expect(res.status).toBe(403);
       });
 
       it('updates name and email', async () => {
         const res = await request(app)
-          .patch(`/api/v2/admin/users/${target._id}`)
+          .patch(`/api/admin/users/${target._id}`)
           .set(authHeaders(adminToken))
           .send({ name: 'Renamed', email: 'renamed@example.com' });
 
@@ -398,71 +398,68 @@ describe('Routes /api/v2/admin/users (Hono)', () => {
       it('returns 404 for a non-existent id', async () => {
         // Random valid 24-char hex that does not match any user.
         const res = await request(app)
-          .patch('/api/v2/admin/users/0123456789abcdef01234567')
+          .patch('/api/admin/users/0123456789abcdef01234567')
           .set(authHeaders(adminToken))
           .send({ name: 'X', email: 'x@example.com' });
         expect(res.status).toBe(404);
       });
 
       it('returns 400 for an invalid id', async () => {
-        const res = await request(app).patch('/api/v2/admin/users/not-a-valid-id').set(authHeaders(adminToken)).send({ name: 'X', email: 'x@example.com' });
+        const res = await request(app).patch('/api/admin/users/not-a-valid-id').set(authHeaders(adminToken)).send({ name: 'X', email: 'x@example.com' });
         expect(res.status).toBe(400);
       });
 
       it('returns 409 when email collides with another user', async () => {
         const other = await createPlainUser({ name: 'Other', username: 'other', email: 'other@example.com' });
-        const res = await request(app).patch(`/api/v2/admin/users/${target._id}`).set(authHeaders(adminToken)).send({ name: 'Target', email: other.email });
+        const res = await request(app).patch(`/api/admin/users/${target._id}`).set(authHeaders(adminToken)).send({ name: 'Target', email: other.email });
         expect(res.status).toBe(409);
         expect(res.body.error.code).toBe('CONFLICT');
       });
 
       it('allows setting the same email back to its own user', async () => {
         // Idempotent edit: name change without an email collision against itself.
-        const res = await request(app)
-          .patch(`/api/v2/admin/users/${target._id}`)
-          .set(authHeaders(adminToken))
-          .send({ name: 'Renamed Only', email: target.email });
+        const res = await request(app).patch(`/api/admin/users/${target._id}`).set(authHeaders(adminToken)).send({ name: 'Renamed Only', email: target.email });
         expect(res.status).toBe(200);
         expect(res.body.user.name).toBe('Renamed Only');
       });
     });
 
-    describe('PUT /api/v2/admin/users/:id/admin', () => {
+    describe('PUT /api/admin/users/:id/admin', () => {
       it('grants admin permission', async () => {
-        const res = await request(app).put(`/api/v2/admin/users/${target._id}/admin`).set(authHeaders(adminToken)).send({});
+        const res = await request(app).put(`/api/admin/users/${target._id}/admin`).set(authHeaders(adminToken)).send({});
         expect(res.status).toBe(200);
         expect(res.body.user.admin).toBe(true);
       });
 
       it('returns 404 for a non-existent id', async () => {
-        const res = await request(app).put('/api/v2/admin/users/0123456789abcdef01234567/admin').set(authHeaders(adminToken)).send({});
+        const res = await request(app).put('/api/admin/users/0123456789abcdef01234567/admin').set(authHeaders(adminToken)).send({});
         expect(res.status).toBe(404);
       });
 
       it('returns 401 without auth', async () => {
-        const res = await request(app).put(`/api/v2/admin/users/${target._id}/admin`).send({});
+        const res = await request(app).put(`/api/admin/users/${target._id}/admin`).send({});
         expect(res.status).toBe(401);
       });
     });
 
-    describe('DELETE /api/v2/admin/users/:id/admin', () => {
+    describe('DELETE /api/admin/users/:id/admin', () => {
       it('revokes admin permission', async () => {
         // Make admin first so the demote actually flips the bit.
         target.admin = true;
         await target.save();
 
-        const res = await request(app).delete(`/api/v2/admin/users/${target._id}/admin`).set(authHeaders(adminToken));
+        const res = await request(app).delete(`/api/admin/users/${target._id}/admin`).set(authHeaders(adminToken));
         expect(res.status).toBe(200);
         expect(res.body.user.admin).toBe(false);
       });
 
       it('returns 403 for a non-admin user', async () => {
-        const res = await request(app).delete(`/api/v2/admin/users/${target._id}/admin`).set(authHeaders(userToken));
+        const res = await request(app).delete(`/api/admin/users/${target._id}/admin`).set(authHeaders(userToken));
         expect(res.status).toBe(403);
       });
     });
 
-    describe('PUT /api/v2/admin/users/:id/status/active', () => {
+    describe('PUT /api/admin/users/:id/status/active', () => {
       it('activates a suspended user and emits the userEvent', async () => {
         const User = crowi.model('User');
         target.status = User.STATUS_SUSPENDED;
@@ -472,7 +469,7 @@ describe('Routes /api/v2/admin/users (Hono)', () => {
         const onActivated = jest.fn();
         userEvent.on('activated', onActivated);
 
-        const res = await request(app).put(`/api/v2/admin/users/${target._id}/status/active`).set(authHeaders(adminToken)).send({});
+        const res = await request(app).put(`/api/admin/users/${target._id}/status/active`).set(authHeaders(adminToken)).send({});
         expect(res.status).toBe(200);
         expect(res.body.user.status).toBe(User.STATUS_ACTIVE);
         expect(onActivated).toHaveBeenCalled();
@@ -481,18 +478,18 @@ describe('Routes /api/v2/admin/users (Hono)', () => {
       });
     });
 
-    describe('PUT /api/v2/admin/users/:id/status/suspended', () => {
+    describe('PUT /api/admin/users/:id/status/suspended', () => {
       it('suspends an active user', async () => {
         const User = crowi.model('User');
-        const res = await request(app).put(`/api/v2/admin/users/${target._id}/status/suspended`).set(authHeaders(adminToken)).send({});
+        const res = await request(app).put(`/api/admin/users/${target._id}/status/suspended`).set(authHeaders(adminToken)).send({});
         expect(res.status).toBe(200);
         expect(res.body.user.status).toBe(User.STATUS_SUSPENDED);
       });
     });
 
-    describe('POST /api/v2/admin/users/:id/reset-password', () => {
+    describe('POST /api/admin/users/:id/reset-password', () => {
       it('returns the new plaintext password and updated user', async () => {
-        const res = await request(app).post(`/api/v2/admin/users/${target._id}/reset-password`).set(authHeaders(adminToken)).send({});
+        const res = await request(app).post(`/api/admin/users/${target._id}/reset-password`).set(authHeaders(adminToken)).send({});
         expect(res.status).toBe(200);
         expect(typeof res.body.newPassword).toBe('string');
         expect(res.body.newPassword.length).toBeGreaterThan(0);
@@ -501,7 +498,7 @@ describe('Routes /api/v2/admin/users (Hono)', () => {
       });
 
       it('returns 404 for a non-existent id', async () => {
-        const res = await request(app).post('/api/v2/admin/users/0123456789abcdef01234567/reset-password').set(authHeaders(adminToken)).send({});
+        const res = await request(app).post('/api/admin/users/0123456789abcdef01234567/reset-password').set(authHeaders(adminToken)).send({});
         expect(res.status).toBe(404);
       });
 
@@ -512,13 +509,13 @@ describe('Routes /api/v2/admin/users (Hono)', () => {
         // password while the attacker keeps their access.
         const victimToken = createJwtUtil(crowi).generateTokens(target).accessToken;
 
-        const before = await request(app).get('/api/v2/me').set(authHeaders(victimToken));
+        const before = await request(app).get('/api/me').set(authHeaders(victimToken));
         expect(before.status).toBe(200);
 
-        const res = await request(app).post(`/api/v2/admin/users/${target._id}/reset-password`).set(authHeaders(adminToken)).send({});
+        const res = await request(app).post(`/api/admin/users/${target._id}/reset-password`).set(authHeaders(adminToken)).send({});
         expect(res.status).toBe(200);
 
-        const after = await request(app).get('/api/v2/me').set(authHeaders(victimToken));
+        const after = await request(app).get('/api/me').set(authHeaders(victimToken));
         expect(after.status).toBe(401);
       });
 
@@ -539,18 +536,18 @@ describe('Routes /api/v2/admin/users (Hono)', () => {
         }).token;
 
         // The link is live right up until the admin resets.
-        const validBefore = await request(app).get('/api/v2/auth/reset-password').query({ token: staleLink });
+        const validBefore = await request(app).get('/api/auth/reset-password').query({ token: staleLink });
         expect(validBefore.status).toBe(200);
 
-        const res = await request(app).post(`/api/v2/admin/users/${target._id}/reset-password`).set(authHeaders(adminToken)).send({});
+        const res = await request(app).post(`/api/admin/users/${target._id}/reset-password`).set(authHeaders(adminToken)).send({});
         expect(res.status).toBe(200);
 
-        const validAfter = await request(app).get('/api/v2/auth/reset-password').query({ token: staleLink });
+        const validAfter = await request(app).get('/api/auth/reset-password').query({ token: staleLink });
         expect(validAfter.status).toBe(401);
         expect(validAfter.body.error.code).toBe('INVALID_RESET_TOKEN');
 
         const consumed = await request(app)
-          .post('/api/v2/auth/reset-password')
+          .post('/api/auth/reset-password')
           .set({ 'Content-Type': 'application/json' })
           .send({ token: staleLink, password: 'attacker-chosen-pw' });
         expect(consumed.status).toBe(401);
@@ -562,22 +559,22 @@ describe('Routes /api/v2/admin/users (Hono)', () => {
       });
     });
 
-    describe('PUT /api/v2/admin/users/:id/email', () => {
+    describe('PUT /api/admin/users/:id/email', () => {
       it('updates the email', async () => {
-        const res = await request(app).put(`/api/v2/admin/users/${target._id}/email`).set(authHeaders(adminToken)).send({ email: 'updated@example.com' });
+        const res = await request(app).put(`/api/admin/users/${target._id}/email`).set(authHeaders(adminToken)).send({ email: 'updated@example.com' });
         expect(res.status).toBe(200);
         expect(res.body.user.email).toBe('updated@example.com');
       });
 
       it('returns 409 when the email collides with another user', async () => {
         const other = await createPlainUser({ name: 'Other2', username: 'other2', email: 'other2@example.com' });
-        const res = await request(app).put(`/api/v2/admin/users/${target._id}/email`).set(authHeaders(adminToken)).send({ email: other.email });
+        const res = await request(app).put(`/api/admin/users/${target._id}/email`).set(authHeaders(adminToken)).send({ email: other.email });
         expect(res.status).toBe(409);
       });
 
       it('returns 404 for a non-existent id', async () => {
         const res = await request(app)
-          .put('/api/v2/admin/users/0123456789abcdef01234567/email')
+          .put('/api/admin/users/0123456789abcdef01234567/email')
           .set(authHeaders(adminToken))
           .send({ email: 'whatever@example.com' });
         expect(res.status).toBe(404);
@@ -585,7 +582,7 @@ describe('Routes /api/v2/admin/users (Hono)', () => {
     });
   });
 
-  describe('POST /api/v2/admin/users/:id/resend-invite', () => {
+  describe('POST /api/admin/users/:id/resend-invite', () => {
     let adminToken: string;
     let userToken: string;
     let invited: UserDocument;
@@ -613,17 +610,17 @@ describe('Routes /api/v2/admin/users (Hono)', () => {
     });
 
     it('returns 401 without auth', async () => {
-      const res = await request(app).post(`/api/v2/admin/users/${invited._id}/resend-invite`);
+      const res = await request(app).post(`/api/admin/users/${invited._id}/resend-invite`);
       expect(res.status).toBe(401);
     });
 
     it('returns 403 for a non-admin user', async () => {
-      const res = await request(app).post(`/api/v2/admin/users/${invited._id}/resend-invite`).set(authHeaders(userToken));
+      const res = await request(app).post(`/api/admin/users/${invited._id}/resend-invite`).set(authHeaders(userToken));
       expect(res.status).toBe(403);
     });
 
     it('re-issues an invite token and resends the invitation email', async () => {
-      const res = await request(app).post(`/api/v2/admin/users/${invited._id}/resend-invite`).set(authHeaders(adminToken));
+      const res = await request(app).post(`/api/admin/users/${invited._id}/resend-invite`).set(authHeaders(adminToken));
 
       expect(res.status).toBe(200);
       expect(res.body.user._id).toBe(invited._id.toString());
@@ -639,31 +636,31 @@ describe('Routes /api/v2/admin/users (Hono)', () => {
 
     it('returns 409 when the user is not INVITED (already accepted / never invited)', async () => {
       const active = await createPlainUser({ name: 'RI Active', username: 'riactive', email: 'ri-active@example.com' });
-      const res = await request(app).post(`/api/v2/admin/users/${active._id}/resend-invite`).set(authHeaders(adminToken));
+      const res = await request(app).post(`/api/admin/users/${active._id}/resend-invite`).set(authHeaders(adminToken));
       expect(res.status).toBe(409);
       expect(res.body.error.code).toBe('CONFLICT');
       expect(sendSpy).not.toHaveBeenCalled();
     });
 
     it('returns 404 for a non-existent id', async () => {
-      const res = await request(app).post('/api/v2/admin/users/0123456789abcdef01234567/resend-invite').set(authHeaders(adminToken));
+      const res = await request(app).post('/api/admin/users/0123456789abcdef01234567/resend-invite').set(authHeaders(adminToken));
       expect(res.status).toBe(404);
       expect(sendSpy).not.toHaveBeenCalled();
     });
 
     it('returns 400 for an invalid id', async () => {
-      const res = await request(app).post('/api/v2/admin/users/not-a-valid-id/resend-invite').set(authHeaders(adminToken));
+      const res = await request(app).post('/api/admin/users/not-a-valid-id/resend-invite').set(authHeaders(adminToken));
       expect(res.status).toBe(400);
     });
 
     it('returns 500 when the invitation email fails to send', async () => {
       sendSpy.mockRejectedValueOnce(new Error('smtp down'));
-      const res = await request(app).post(`/api/v2/admin/users/${invited._id}/resend-invite`).set(authHeaders(adminToken));
+      const res = await request(app).post(`/api/admin/users/${invited._id}/resend-invite`).set(authHeaders(adminToken));
       expect(res.status).toBe(500);
     });
   });
 
-  describe('GET /api/v2/admin/users/pending-count', () => {
+  describe('GET /api/admin/users/pending-count', () => {
     let adminToken: string;
 
     beforeEach(async () => {
@@ -684,18 +681,18 @@ describe('Routes /api/v2/admin/users (Hono)', () => {
 
     it('returns 403 for a non-admin user', async () => {
       const userToken = (await createTestUser({ name: 'PC User', username: 'pcuser', email: 'pc-user@example.com' })).accessToken;
-      const res = await request(app).get('/api/v2/admin/users/pending-count').set(authHeaders(userToken));
+      const res = await request(app).get('/api/admin/users/pending-count').set(authHeaders(userToken));
       expect(res.status).toBe(403);
     });
 
     it('counts only REGISTERED (awaiting-approval) users', async () => {
-      const res = await request(app).get('/api/v2/admin/users/pending-count').set(authHeaders(adminToken));
+      const res = await request(app).get('/api/admin/users/pending-count').set(authHeaders(adminToken));
       expect(res.status).toBe(200);
       expect(res.body.count).toBe(2);
     });
   });
 
-  describe('DELETE /api/v2/admin/users/:id', () => {
+  describe('DELETE /api/admin/users/:id', () => {
     let adminToken: string;
     let invited: UserDocument;
 
@@ -710,7 +707,7 @@ describe('Routes /api/v2/admin/users (Hono)', () => {
     });
 
     it('physically removes an INVITED user', async () => {
-      const res = await request(app).delete(`/api/v2/admin/users/${invited._id}`).set(authHeaders(adminToken));
+      const res = await request(app).delete(`/api/admin/users/${invited._id}`).set(authHeaders(adminToken));
       expect(res.status).toBe(200);
       expect(res.body.deletedId).toBe(invited._id.toString());
       const stillThere = await crowi.model('User').findById(invited._id);
@@ -719,12 +716,12 @@ describe('Routes /api/v2/admin/users (Hono)', () => {
 
     it('returns 409 when the user is not INVITED', async () => {
       const active = await createPlainUser({ name: 'Active U', username: 'activeu', email: 'active-u@example.com' });
-      const res = await request(app).delete(`/api/v2/admin/users/${active._id}`).set(authHeaders(adminToken));
+      const res = await request(app).delete(`/api/admin/users/${active._id}`).set(authHeaders(adminToken));
       expect(res.status).toBe(409);
     });
 
     it('returns 404 for a non-existent id', async () => {
-      const res = await request(app).delete('/api/v2/admin/users/0123456789abcdef01234567').set(authHeaders(adminToken));
+      const res = await request(app).delete('/api/admin/users/0123456789abcdef01234567').set(authHeaders(adminToken));
       expect(res.status).toBe(404);
     });
   });

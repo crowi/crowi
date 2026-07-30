@@ -12,7 +12,7 @@ import { registerMentionDispatch } from 'src/events/mention-dispatch';
 import { registerPresencePageBroadcast } from 'src/events/presence-broadcast';
 import { registerRenderCacheInvalidation } from 'src/events/render-cache';
 import { buildHonoApp } from 'src/hono';
-import { stripApiV2Prefix } from 'src/hono/path-rewrite';
+import { stripApiPrefix } from 'src/hono/path-rewrite';
 import models from 'src/models';
 import { type AttachedNotifications, attachNotificationsServer } from 'src/notifications/attach';
 import { PluginManager, type PluginRegistries } from 'src/plugin';
@@ -772,12 +772,12 @@ class Crowi {
 
     // RFC-0006 Phase 6 Sub-batch D — Hono is the sole HTTP host.
     //
-    // `buildHonoApp(crowi)` returns the `/api/v2/*` route surface.
+    // `buildHonoApp(crowi)` returns the `/api/*` route surface.
     // Routes are registered at their un-prefixed paths
     // (`/app/info`, `/pages/:id`, ...) to keep each inferred chain
     // type shallow for the `CrowiApiClient` typed client (see
-    // `packages/api-contract/src/client.ts`); the `/api/v2` prefix is
-    // stripped by `stripApiV2Prefix` on the boundary so production
+    // `packages/api-contract/src/client.ts`); the `/api` prefix is
+    // stripped by `stripApiPrefix` on the boundary so production
     // URLs match.
     //
     // We use `createAdaptorServer` instead of `serve` so the
@@ -794,7 +794,7 @@ class Crowi {
     reporter.beginLayer('server');
 
     const honoApp = buildHonoApp(this);
-    const fetchFn = (request: Request): Response | Promise<Response> => honoApp.fetch(stripApiV2Prefix(request));
+    const fetchFn = (request: Request): Response | Promise<Response> => honoApp.fetch(stripApiPrefix(request));
 
     const server = createAdaptorServer({
       fetch: fetchFn,

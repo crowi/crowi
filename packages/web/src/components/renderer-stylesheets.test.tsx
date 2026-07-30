@@ -58,18 +58,18 @@ describe('RendererStylesheets', () => {
   });
 
   it('inserts a <link rel="stylesheet"> per manifest entry, resolved through resolveApiUrl', () => {
-    mockAppInfo({ data: makeAppInfo({ rendererStylesheets: ['/api/v2/plugins/@crowi/plugin-renderer-katex/katex.css'] }) });
+    mockAppInfo({ data: makeAppInfo({ rendererStylesheets: ['/api/plugins/@crowi/plugin-renderer-katex/katex.css'] }) });
     render(<RendererStylesheets />);
 
     const links = mountedLinks();
     expect(links).toHaveLength(1);
     expect(links[0].rel).toBe('stylesheet');
-    expect(links[0].href).toBe('https://api.example.test/api/v2/plugins/@crowi/plugin-renderer-katex/katex.css');
-    expect(links[0].getAttribute('data-crowi-renderer-stylesheet')).toBe('/api/v2/plugins/@crowi/plugin-renderer-katex/katex.css');
+    expect(links[0].href).toBe('https://api.example.test/api/plugins/@crowi/plugin-renderer-katex/katex.css');
+    expect(links[0].getAttribute('data-crowi-renderer-stylesheet')).toBe('/api/plugins/@crowi/plugin-renderer-katex/katex.css');
   });
 
   it('does not gate on — and is unaffected by — a stylesheet <link> that never fires load or error (black-holed CSS)', () => {
-    mockAppInfo({ data: makeAppInfo({ rendererStylesheets: ['/api/v2/plugins/@crowi/plugin-renderer-katex/katex.css'] }) });
+    mockAppInfo({ data: makeAppInfo({ rendererStylesheets: ['/api/plugins/@crowi/plugin-renderer-katex/katex.css'] }) });
     render(
       <>
         <RendererStylesheets />
@@ -94,7 +94,7 @@ describe('RendererStylesheets', () => {
   });
 
   it('dedupes: two instances that resolve to the same href share one <link> (ref-counted)', () => {
-    mockAppInfo({ data: makeAppInfo({ rendererStylesheets: ['/api/v2/plugins/@crowi/plugin-renderer-katex/katex.css'] }) });
+    mockAppInfo({ data: makeAppInfo({ rendererStylesheets: ['/api/plugins/@crowi/plugin-renderer-katex/katex.css'] }) });
     render(
       <>
         <RendererStylesheets />
@@ -107,7 +107,7 @@ describe('RendererStylesheets', () => {
   it('diffs on manifest change: keeps an unchanged href, drops a removed one, adds a new one', () => {
     mockAppInfo({
       data: makeAppInfo({
-        rendererStylesheets: ['/api/v2/plugins/@crowi/plugin-a/a.css', '/api/v2/plugins/@crowi/plugin-b/b.css'],
+        rendererStylesheets: ['/api/plugins/@crowi/plugin-a/a.css', '/api/plugins/@crowi/plugin-b/b.css'],
       }),
     });
     const { rerender } = render(<RendererStylesheets />);
@@ -115,11 +115,11 @@ describe('RendererStylesheets', () => {
       mountedLinks()
         .map((l) => l.getAttribute('data-crowi-renderer-stylesheet'))
         .sort(),
-    ).toEqual(['/api/v2/plugins/@crowi/plugin-a/a.css', '/api/v2/plugins/@crowi/plugin-b/b.css']);
+    ).toEqual(['/api/plugins/@crowi/plugin-a/a.css', '/api/plugins/@crowi/plugin-b/b.css']);
 
     mockAppInfo({
       data: makeAppInfo({
-        rendererStylesheets: ['/api/v2/plugins/@crowi/plugin-a/a.css', '/api/v2/plugins/@crowi/plugin-c/c.css'],
+        rendererStylesheets: ['/api/plugins/@crowi/plugin-a/a.css', '/api/plugins/@crowi/plugin-c/c.css'],
       }),
     });
     rerender(<RendererStylesheets />);
@@ -127,11 +127,11 @@ describe('RendererStylesheets', () => {
     const hrefsAfter = mountedLinks()
       .map((l) => l.getAttribute('data-crowi-renderer-stylesheet'))
       .sort();
-    expect(hrefsAfter).toEqual(['/api/v2/plugins/@crowi/plugin-a/a.css', '/api/v2/plugins/@crowi/plugin-c/c.css']);
+    expect(hrefsAfter).toEqual(['/api/plugins/@crowi/plugin-a/a.css', '/api/plugins/@crowi/plugin-c/c.css']);
   });
 
   it('removes its <link>s on unmount', () => {
-    mockAppInfo({ data: makeAppInfo({ rendererStylesheets: ['/api/v2/plugins/@crowi/plugin-renderer-katex/katex.css'] }) });
+    mockAppInfo({ data: makeAppInfo({ rendererStylesheets: ['/api/plugins/@crowi/plugin-renderer-katex/katex.css'] }) });
     const { unmount } = render(<RendererStylesheets />);
     expect(mountedLinks()).toHaveLength(1);
 
@@ -140,14 +140,14 @@ describe('RendererStylesheets', () => {
   });
 
   it('a same-content refetch (new array reference, identical values) does not remove and reinsert the <link>', () => {
-    mockAppInfo({ data: makeAppInfo({ rendererStylesheets: ['/api/v2/plugins/@crowi/plugin-renderer-katex/katex.css'] }) });
+    mockAppInfo({ data: makeAppInfo({ rendererStylesheets: ['/api/plugins/@crowi/plugin-renderer-katex/katex.css'] }) });
     const { rerender } = render(<RendererStylesheets />);
     const [linkBefore] = mountedLinks();
 
     // A fresh array literal with the same single value — `useQuery` returns
     // a new reference on every successful fetch even when the JSON is
     // byte-identical.
-    mockAppInfo({ data: makeAppInfo({ rendererStylesheets: ['/api/v2/plugins/@crowi/plugin-renderer-katex/katex.css'] }) });
+    mockAppInfo({ data: makeAppInfo({ rendererStylesheets: ['/api/plugins/@crowi/plugin-renderer-katex/katex.css'] }) });
     rerender(<RendererStylesheets />);
 
     const [linkAfter] = mountedLinks();

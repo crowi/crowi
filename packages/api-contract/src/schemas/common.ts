@@ -117,7 +117,7 @@ export const ConflictErrorSchema = ApiErrorSchema.extend({
  * clients branch on which subsystem is missing without parsing `message`.
  *
  * Examples of `feature` values the API surfaces:
- *   - `'search'`  — `GET /api/v2/search` when no `@crowi/plugin-search-*`
+ *   - `'search'`  — `GET /api/search` when no `@crowi/plugin-search-*`
  *                    is installed in the runner project.
  *   - `'notifier'` (future) — when no slack / chat notifier driver is registered.
  *   - `'mailer'`  (future) — when SMTP transport is not configured.

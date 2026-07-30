@@ -162,10 +162,10 @@ Group に分けています。
 
 すべての API 契約と Zod スキーマがここに集約され、tsup で CJS + ESM +
 `.d.ts` がビルドされます。契約は `@hono/zod-openapi` の
-`createRoute(...)` ルート定義で、`/api/v2` 配下にマウントされ、`page`・
+`createRoute(...)` ルート定義で、`/api` 配下にマウントされ、`page`・
 `user`・`bookmark`・`notification`・`admin`・`adminCrypto` などのトップ
 レベル名前空間ごとにまとめられます。Scalar API リファレンスは
-`/api/v2/docs` で公開されます。
+`/api/docs` で公開されます。
 
 契約を 1 箇所で定義することで、API 実装と Web のクライアント呼び出しが
 同じ型に対して整合します。契約を編集したら

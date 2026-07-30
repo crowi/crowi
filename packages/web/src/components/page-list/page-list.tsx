@@ -1,6 +1,6 @@
 'use client';
 
-import { type ListPagesRequest, PageStatusEnum, type PageWithRevision, type TocEntryResponse } from '@crowi/api-contract';
+import { type ListPagesRequest, PageStatusEnum, type PageWithRevision, type TocEntryResponse, unwrapRenderedAst } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 import { Compass, Folder, HelpCircle, MoreHorizontal, MoveRight, Pencil, Plus } from 'lucide-react';
 import Link from 'next/link';
@@ -41,7 +41,11 @@ import { PortalHeader, PortalOverline } from './portal-header';
  * recognised — a raw-text regex would miss setext and reintroduce a
  * double title.
  */
-function leadsWithH1(renderedAst: unknown): boolean {
+function leadsWithH1(renderedAstValue: unknown): boolean {
+  // RFC-0023 §14 — every `renderedAst` read goes through the defensive
+  // `unwrapRenderedAst` normaliser (in normal operation this is the
+  // bare Root, byte-identical to before).
+  const renderedAst = unwrapRenderedAst(renderedAstValue);
   if (!renderedAst || typeof renderedAst !== 'object') return false;
   const children = (renderedAst as { children?: unknown }).children;
   if (!Array.isArray(children) || children.length === 0) return false;

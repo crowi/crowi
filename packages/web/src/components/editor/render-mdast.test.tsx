@@ -287,3 +287,33 @@ describe('link-card embed HTML survives the real render pipeline', () => {
     expect(html).toContain('class="crowi-link-card crowi-link-card-error"');
   });
 });
+
+/**
+ * RFC-0023 §1 — sidecar invisibility regression guard. Producers stamp
+ * typed sidecars (`data.crowiCode` / `crowiMath` / `crowiDiagram` /
+ * `crowiLinkCard` / `crowiPlaceholder`) onto their `html` nodes;
+ * `mdast-util-to-hast`'s `applyData` only ever reads `hName` /
+ * `hProperties` / `hChildren`, so the rendered output of a
+ * sidecar-carrying `html` node must be byte-identical to the same node
+ * without the sidecar — through the REAL
+ * `toHast → escapeUnknownRawHtml → raw() → toJsxRuntime` pipeline, with
+ * no per-type `handlers` registered.
+ */
+describe('sidecar data keys are invisible to the web render pipeline (RFC-0023)', () => {
+  const HTML_VALUE = '<pre class="shiki"><code><span style="--shiki-light:#111">const a = 1;</span></code></pre>';
+
+  const renderRoot = (children: unknown[]): string =>
+    renderToStaticMarkup(renderMdastToReactNode({ type: 'root', children }, { sectionWrap: false, components: {} }));
+
+  it.each([
+    ['crowiCode', { lang: 'ts', value: 'const a = 1;', tokens: [[{ content: 'const', light: { color: '#111' }, dark: { color: '#eee' } }]] }],
+    ['crowiMath', { tex: 'x^2', display: true }],
+    ['crowiDiagram', { kind: 'mermaid', alt: 'd', image: { mediaType: 'image/svg+xml', base64: 'aGk=', width: 10, height: 10 } }],
+    ['crowiLinkCard', { url: 'https://example.com' }],
+    ['crowiPlaceholder', { kind: 'error-network', label: 'x', reservation: { variant: 'fixed', heightPx: 48 } }],
+  ] as const)('an html node with a %s sidecar renders byte-identically to the same node without it', (key, payload) => {
+    const withSidecar = renderRoot([{ type: 'html', value: HTML_VALUE, data: { [key]: payload } }]);
+    const withoutSidecar = renderRoot([{ type: 'html', value: HTML_VALUE }]);
+    expect(withSidecar).toBe(withoutSidecar);
+  });
+});

@@ -39,17 +39,18 @@ export function walkPhrasingTree(root: PhrasingParent, visit: (node: PhrasingPar
 
 /**
  * Group rewrite candidates by reference-identical parent, drop entries
- * that the dispatch step did not fill in (`replacementHtml` missing),
- * and sort matches by their child index so the splice step can walk
- * the parent's children left-to-right without re-indexing.
+ * that the dispatch step did not fill in (neither `replacementHtml` nor
+ * the RFC-0023 effective-result `replacement` present), and sort
+ * matches by their child index so the splice step can walk the parent's
+ * children left-to-right without re-indexing.
  */
-export function groupByParent<C extends { parent: ParentChildren; replacementHtml?: string }>(
+export function groupByParent<C extends { parent: ParentChildren; replacementHtml?: string; replacement?: { html: string } }>(
   candidates: C[],
   indexOf: (c: C) => number,
 ): Array<{ parent: ParentChildren; matches: C[] }> {
   const groups = new Map<ParentChildren, C[]>();
   for (const c of candidates) {
-    if (!c.replacementHtml) continue;
+    if (!c.replacementHtml && !c.replacement) continue;
     const list = groups.get(c.parent) ?? [];
     list.push(c);
     groups.set(c.parent, list);

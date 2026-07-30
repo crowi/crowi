@@ -2,7 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import type { GetSearchStatusResponse } from '@crowi/api-contract';
-import { apiClientV2 } from './api-client';
+import { apiClient } from './api-client';
 
 /**
  * Query key factory for the /admin/search endpoint. Wrapped in the
@@ -23,13 +23,13 @@ export const adminSearchKeys = {
  * rebuild semantics are plugin-defined).
  *
  * RFC-0006 Phase 4 Batch 9 — switched from `apiClient.admin.search.*`
- * to `apiClientV2.admin.search.$get` (`createClient`).
+ * to `apiClient.admin.search.$get` (`createClient`).
  */
 export function useAdminSearch() {
   return useQuery<GetSearchStatusResponse, Error>({
     queryKey: adminSearchKeys.status(),
     queryFn: async () => {
-      const response = await apiClientV2.admin.search.$get();
+      const response = await apiClient.admin.search.$get();
       if (response.status === 200) {
         return (await response.json()) as GetSearchStatusResponse;
       }

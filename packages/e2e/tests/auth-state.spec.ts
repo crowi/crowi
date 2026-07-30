@@ -67,7 +67,7 @@ test.describe('auth state propagation', () => {
     // Emulate the API server being temporarily down for the auth check. This is
     // network-layer fault injection (Playwright route interception) — the app
     // is unmodified; only the `/auth/me` response is replaced with a 503.
-    await userAPage.route('**/api/v2/auth/me', async (route) => {
+    await userAPage.route('**/api/auth/me', async (route) => {
       await route.fulfill({
         status: 503,
         contentType: 'application/json',
@@ -94,7 +94,7 @@ test.describe('auth state propagation', () => {
     // the element under Playwright's click. The manual-retry wiring itself
     // is covered by a unit test instead (auth-sync.test.tsx: "refetches the
     // auth query via the single registered retry callback").
-    await userAPage.unroute('**/api/v2/auth/me');
+    await userAPage.unroute('**/api/auth/me');
     await expect(userAPage.getByRole('dialog')).not.toBeVisible({ timeout: 15_000 });
     await expectUserMenuIdentity(userAPage, e2eUsers.userA);
   });

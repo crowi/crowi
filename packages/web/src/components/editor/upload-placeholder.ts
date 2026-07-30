@@ -1,5 +1,5 @@
 import type { EditorView } from '@codemirror/view';
-import { apiV2BaseUrl } from '@/lib/api-client';
+import { apiBaseUrl } from '@/lib/api-client';
 import { getAccessToken } from '@/lib/auth-token';
 import { notify } from '@/lib/notify';
 
@@ -215,12 +215,12 @@ export function makeProgressUpdater(view: EditorView, uploadId: string, filename
 }
 
 /**
- * POST a file to `/api/v2/attachments/upload` with browser-side upload
- * progress. Neither ts-rest nor `apiClientV2`'s `$post` surfaces upload
+ * POST a file to `/api/attachments/upload` with browser-side upload
+ * progress. Neither ts-rest nor `apiClient`'s `$post` surfaces upload
  * progress, so this uses `XMLHttpRequest` directly — `xhr.upload.
  * onprogress` is the only cross-browser way to observe a multipart
  * upload streaming out. The endpoint, field names, and error envelope
- * all match the `apiClientV2.attachments.upload.$post` contract
+ * all match the `apiClient.attachments.upload.$post` contract
  * (RFC-0006 Phase 4 Batch 6 — `uploadAttachmentRoute`).
  *
  * Resolves with the `UploadOutcome` on 200; rejects with an `Error`
@@ -235,7 +235,7 @@ export function uploadAttachment(
   onProgress: (percent: number) => void,
 ): Promise<UploadOutcome> {
   return new Promise<UploadOutcome>((resolve, reject) => {
-    const url = `${apiV2BaseUrl()}/attachments/upload`;
+    const url = `${apiBaseUrl()}/attachments/upload`;
 
     const form = new FormData();
     form.append('file', file, filename);

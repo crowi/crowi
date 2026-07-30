@@ -3,7 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { WsTokenResponse } from '@crowi/api-contract';
-import { apiClientV2 } from './api-client';
+import { apiClient } from './api-client';
 import type { CollabStatus } from './use-collab-document';
 import { subscribeTokenRefreshed } from './token-refresh-notifier';
 
@@ -84,7 +84,7 @@ export function useYjsToken(pageId: string | null | undefined, options?: UseYjsT
     queryKey: ['yjsToken', pageId],
     queryFn: async (): Promise<WsTokenResponse> => {
       if (!pageId) throw new Error('pageId is required for useYjsToken');
-      const response = await apiClientV2.pages[':id']['yjs-token'].$get({ param: { id: pageId } });
+      const response = await apiClient.pages[':id']['yjs-token'].$get({ param: { id: pageId } });
       if (!response.ok) {
         const body = await response.json().catch(() => null);
         const message =

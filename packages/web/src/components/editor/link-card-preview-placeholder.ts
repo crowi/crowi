@@ -1,3 +1,4 @@
+import { unwrapRenderedAst } from '@crowi/api-contract';
 import { escapeHtml } from '@/lib/sanitise-snippet';
 
 interface MdastText {
@@ -130,7 +131,11 @@ function replaceCardTagsInChildren(children: unknown[], message: string, sourceL
  * does not invoke embed renderers, so this never fetches OGP metadata
  * or writes a render cache entry.
  */
-export function replaceLinkCardPreviewPlaceholders(renderedAst: unknown, message: string): unknown {
+export function replaceLinkCardPreviewPlaceholders(renderedAstValue: unknown, message: string): unknown {
+  // RFC-0023 §14 — route the read through the defensive
+  // `unwrapRenderedAst` normaliser (no-op for the bare Root the web
+  // receives in normal operation).
+  const renderedAst = unwrapRenderedAst(renderedAstValue);
   if (!isMdastRoot(renderedAst)) return renderedAst;
 
   let changed = false;

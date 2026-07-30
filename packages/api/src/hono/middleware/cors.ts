@@ -1,7 +1,7 @@
 /**
  * RFC-0006 Phase 6 Sub-batch C — Hono port of the Express `cors`
  * middleware. The Express bridge will be retired in Sub-batch D, after
- * which this is the only CORS layer on `/api/v2/*` (and on every other
+ * which this is the only CORS layer on `/api/*` (and on every other
  * Hono-owned path, since Hono will then be the sole HTTP host).
  *
  * Allow-origin policy (mirrors `packages/api/src/crowi/express-init.ts`
@@ -85,6 +85,10 @@ export const createCors = (crowi: Crowi): MiddlewareHandler => {
     origin: (origin) => resolveOrigin(origin),
     credentials: true,
     allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    // `X-Crowi-Ast-Version` (RFC-0023 §9): today only the iOS native
+    // app (not CORS-constrained) sends it, but allow-listing it now
+    // keeps future browser-based debug/admin callers from silently
+    // failing preflight.
+    allowHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Crowi-Ast-Version'],
   });
 };

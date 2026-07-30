@@ -40,11 +40,11 @@ describe('next.config rewrites() phase gating', () => {
     expect(sources).not.toContain('/.well-known/oauth-authorization-server');
   });
 
-  it('keeps the /api/v2 and /files rewrites in every phase (unaffected by this fix)', async () => {
+  it('keeps the /api and /files rewrites in every phase (unaffected by this fix)', async () => {
     const devSources = await rewriteSources(PHASE_DEVELOPMENT_SERVER);
     const prodSources = await rewriteSources(PHASE_PRODUCTION_BUILD);
     for (const sources of [devSources, prodSources]) {
-      expect(sources).toContain('/api/v2/:path*');
+      expect(sources).toContain('/api/:path*');
       expect(sources).toContain('/files/:id');
     }
   });

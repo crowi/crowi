@@ -114,7 +114,7 @@ CROWI_ENCRYPTION_KEY="生成された base64 文字列"
 ### 状態の確認
 
 `/admin/crypto` を開くと、暗号化の現在の状態が表示されます。内部的には
-`GET /api/v2/admin/crypto/status` が呼ばれ、次の情報が返ります。
+`GET /api/admin/crypto/status` が呼ばれ、次の情報が返ります。
 
 - `encryptionConfigured` — サーバに有効なマスターキーがあるか
 - `encryptedCount` — すでに暗号化済みの機密値の数
@@ -123,7 +123,7 @@ CROWI_ENCRYPTION_KEY="生成された base64 文字列"
 
 ### 再暗号化の実行
 
-画面から再暗号化を実行すると、`POST /api/v2/admin/crypto/reencrypt` が
+画面から再暗号化を実行すると、`POST /api/admin/crypto/reencrypt` が
 呼ばれます。
 
 - マスターキーが未設定の場合は `503` (`ENCRYPTION_NOT_CONFIGURED`) で

@@ -1,4 +1,4 @@
-import type { RenderError, Reservation } from '@crowi/plugin-api';
+import type { RenderError, Reservation, StructuredRenderPayload } from '@crowi/plugin-api';
 import type { CacheSetReject } from './mongodb-cache';
 
 /**
@@ -125,6 +125,44 @@ const ERROR_LABELS: Record<RenderError['code'], string> = {
   blocked: 'Embed source is not allowed.',
   busy: 'Embed renderer is busy — try again shortly.',
 };
+
+// ---------------------------------------------------------------------------
+// RFC-0023 (design doc §10/§11) — structured (`crowiPlaceholder`
+// sidecar) sisters of the HTML placeholder builders above. Same inputs,
+// same labels; the HTML builders themselves are untouched. Kind values
+// mirror `CrowiPlaceholderKindSchema` (`@crowi/api-contract`).
+// ---------------------------------------------------------------------------
+
+/** Placeholder reservation fallback when the renderer declared none — matches the client-side minimum block placeholder. */
+const DEFAULT_PLACEHOLDER_RESERVATION: Reservation = { variant: 'fixed', heightPx: 48 };
+
+function structuredPlaceholder(kind: string, label: string, reservation: Reservation | undefined): StructuredRenderPayload {
+  return {
+    node: {
+      type: 'crowiPlaceholder',
+      kind,
+      label,
+      reservation: reservation ?? DEFAULT_PLACEHOLDER_RESERVATION,
+    },
+  };
+}
+
+/** `errorPlaceholder`'s structured sister — `error-<code>` kind, same fixed label table. */
+export function structuredErrorPlaceholder(code: RenderError['code'], reservation: Reservation | undefined): StructuredRenderPayload {
+  return structuredPlaceholder(`error-${code.replace(/_/g, '-')}`, ERROR_LABELS[code], reservation);
+}
+
+/** `sizeLimitPlaceholder`'s structured sister. */
+export function structuredSizeLimitPlaceholder(reason: CacheSetReject, reservation: Reservation | undefined): StructuredRenderPayload {
+  const kind = reason === 'entry-too-large' ? 'size-limit-entry' : 'size-limit-page';
+  const label = reason === 'entry-too-large' ? 'Embed exceeded the per-entry size limit' : 'Page exceeded the cumulative embed-cache quota';
+  return structuredPlaceholder(kind, label, reservation);
+}
+
+/** `dispatchLimitPlaceholder`'s structured sister. */
+export function structuredDispatchLimitPlaceholder(limit: number, reservation: Reservation | undefined): StructuredRenderPayload {
+  return structuredPlaceholder('dispatch-limit', `Too many diagrams in this document (limit: ${limit}) — this one was not rendered.`, reservation);
+}
 
 function clampDimension(n: number): number {
   if (!Number.isFinite(n)) return 0;

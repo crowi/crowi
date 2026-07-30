@@ -1235,7 +1235,8 @@ export interface paths {
                                         codeBlockLanguages?: string[];
                                         rawSpaceLinks?: string[];
                                     };
-                                    renderedAst?: unknown;
+                                    renderedAst?: components["schemas"]["RenderedAstEnvelope"] | components["schemas"]["LegacyRenderedAstRoot"];
+                                    renderedAstArtifactKey?: string;
                                     rendererVersion?: string;
                                     parentRevisionId?: string | null;
                                     /** @enum {string} */
@@ -2296,7 +2297,8 @@ export interface paths {
                                         codeBlockLanguages?: string[];
                                         rawSpaceLinks?: string[];
                                     };
-                                    renderedAst?: unknown;
+                                    renderedAst?: components["schemas"]["RenderedAstEnvelope"] | components["schemas"]["LegacyRenderedAstRoot"];
+                                    renderedAstArtifactKey?: string;
                                     rendererVersion?: string;
                                     parentRevisionId?: string | null;
                                     /** @enum {string} */
@@ -2403,7 +2405,8 @@ export interface paths {
                                             codeBlockLanguages?: string[];
                                             rawSpaceLinks?: string[];
                                         };
-                                        renderedAst?: unknown;
+                                        renderedAst?: components["schemas"]["RenderedAstEnvelope"] | components["schemas"]["LegacyRenderedAstRoot"];
+                                        renderedAstArtifactKey?: string;
                                         rendererVersion?: string;
                                         parentRevisionId?: string | null;
                                         /** @enum {string} */
@@ -2617,7 +2620,8 @@ export interface paths {
                                             codeBlockLanguages?: string[];
                                             rawSpaceLinks?: string[];
                                         };
-                                        renderedAst?: unknown;
+                                        renderedAst?: components["schemas"]["RenderedAstEnvelope"] | components["schemas"]["LegacyRenderedAstRoot"];
+                                        renderedAstArtifactKey?: string;
                                         rendererVersion?: string;
                                         parentRevisionId?: string | null;
                                         /** @enum {string} */
@@ -2835,7 +2839,8 @@ export interface paths {
                                         codeBlockLanguages?: string[];
                                         rawSpaceLinks?: string[];
                                     };
-                                    renderedAst?: unknown;
+                                    renderedAst?: components["schemas"]["RenderedAstEnvelope"] | components["schemas"]["LegacyRenderedAstRoot"];
+                                    renderedAstArtifactKey?: string;
                                     rendererVersion?: string;
                                     parentRevisionId?: string | null;
                                     /** @enum {string} */
@@ -3037,7 +3042,8 @@ export interface paths {
                                         codeBlockLanguages?: string[];
                                         rawSpaceLinks?: string[];
                                     };
-                                    renderedAst?: unknown;
+                                    renderedAst?: components["schemas"]["RenderedAstEnvelope"] | components["schemas"]["LegacyRenderedAstRoot"];
+                                    renderedAstArtifactKey?: string;
                                     rendererVersion?: string;
                                     parentRevisionId?: string | null;
                                     /** @enum {string} */
@@ -3363,7 +3369,8 @@ export interface paths {
                                             codeBlockLanguages?: string[];
                                             rawSpaceLinks?: string[];
                                         };
-                                        renderedAst?: unknown;
+                                        renderedAst?: components["schemas"]["RenderedAstEnvelope"] | components["schemas"]["LegacyRenderedAstRoot"];
+                                        renderedAstArtifactKey?: string;
                                         rendererVersion?: string;
                                         parentRevisionId?: string | null;
                                         /** @enum {string} */
@@ -3563,7 +3570,8 @@ export interface paths {
                                             codeBlockLanguages?: string[];
                                             rawSpaceLinks?: string[];
                                         };
-                                        renderedAst?: unknown;
+                                        renderedAst?: components["schemas"]["RenderedAstEnvelope"] | components["schemas"]["LegacyRenderedAstRoot"];
+                                        renderedAstArtifactKey?: string;
                                         rendererVersion?: string;
                                         parentRevisionId?: string | null;
                                         /** @enum {string} */
@@ -3849,7 +3857,8 @@ export interface paths {
                                             codeBlockLanguages?: string[];
                                             rawSpaceLinks?: string[];
                                         };
-                                        renderedAst?: unknown;
+                                        renderedAst?: components["schemas"]["RenderedAstEnvelope"] | components["schemas"]["LegacyRenderedAstRoot"];
+                                        renderedAstArtifactKey?: string;
                                         rendererVersion?: string;
                                         parentRevisionId?: string | null;
                                         /** @enum {string} */
@@ -4592,7 +4601,8 @@ export interface paths {
                                     codeBlockLanguages?: string[];
                                     rawSpaceLinks?: string[];
                                 };
-                                renderedAst?: unknown;
+                                renderedAst?: components["schemas"]["RenderedAstEnvelope"] | components["schemas"]["LegacyRenderedAstRoot"];
+                                renderedAstArtifactKey?: string;
                                 rendererVersion?: string;
                                 parentRevisionId?: string | null;
                                 /** @enum {string} */
@@ -4701,7 +4711,7 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description Full revision document */
+                /** @description Full revision document. `renderedAst` shape is content-negotiated via the `X-Crowi-Ast-Version` request header (RFC-0023): requests declaring `X-Crowi-Ast-Version: 1` receive the typed `{astVersion, root}` envelope; all other requests receive the stored bare mdast Root verbatim. The response varies on this header (`Vary: X-Crowi-Ast-Version`). */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -4742,7 +4752,8 @@ export interface paths {
                                     codeBlockLanguages?: string[];
                                     rawSpaceLinks?: string[];
                                 };
-                                renderedAst?: unknown;
+                                renderedAst?: components["schemas"]["RenderedAstEnvelope"] | components["schemas"]["LegacyRenderedAstRoot"];
+                                renderedAstArtifactKey?: string;
                                 rendererVersion?: string;
                                 parentRevisionId?: string | null;
                                 /** @enum {string} */
@@ -4853,7 +4864,7 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description The requested page with populated revision */
+                /** @description The requested page with populated revision. `revision.renderedAst` shape is content-negotiated via the `X-Crowi-Ast-Version` request header (RFC-0023): requests declaring `X-Crowi-Ast-Version: 1` receive the typed `{astVersion, root}` envelope; all other requests receive the stored bare mdast Root verbatim. The response varies on this header (`Vary: X-Crowi-Ast-Version`). */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -4897,7 +4908,8 @@ export interface paths {
                                         codeBlockLanguages?: string[];
                                         rawSpaceLinks?: string[];
                                     };
-                                    renderedAst?: unknown;
+                                    renderedAst?: components["schemas"]["RenderedAstEnvelope"] | components["schemas"]["LegacyRenderedAstRoot"];
+                                    renderedAstArtifactKey?: string;
                                     rendererVersion?: string;
                                     parentRevisionId?: string | null;
                                     /** @enum {string} */
@@ -5098,7 +5110,8 @@ export interface paths {
                                         codeBlockLanguages?: string[];
                                         rawSpaceLinks?: string[];
                                     };
-                                    renderedAst?: unknown;
+                                    renderedAst?: components["schemas"]["RenderedAstEnvelope"] | components["schemas"]["LegacyRenderedAstRoot"];
+                                    renderedAstArtifactKey?: string;
                                     rendererVersion?: string;
                                     parentRevisionId?: string | null;
                                     /** @enum {string} */
@@ -5295,7 +5308,8 @@ export interface paths {
                                         codeBlockLanguages?: string[];
                                         rawSpaceLinks?: string[];
                                     };
-                                    renderedAst?: unknown;
+                                    renderedAst?: components["schemas"]["RenderedAstEnvelope"] | components["schemas"]["LegacyRenderedAstRoot"];
+                                    renderedAstArtifactKey?: string;
                                     rendererVersion?: string;
                                     parentRevisionId?: string | null;
                                     /** @enum {string} */
@@ -5461,7 +5475,8 @@ export interface paths {
                                         codeBlockLanguages?: string[];
                                         rawSpaceLinks?: string[];
                                     };
-                                    renderedAst?: unknown;
+                                    renderedAst?: components["schemas"]["RenderedAstEnvelope"] | components["schemas"]["LegacyRenderedAstRoot"];
+                                    renderedAstArtifactKey?: string;
                                     rendererVersion?: string;
                                     parentRevisionId?: string | null;
                                     /** @enum {string} */
@@ -5627,7 +5642,7 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description Page list (newest first) with optional portal page */
+                /** @description Page list (newest first) with optional portal page. The portal document is the only row carrying `revision.renderedAst`; its shape is content-negotiated via the `X-Crowi-Ast-Version` request header (RFC-0023, same semantics as GET /pages). The response varies on this header (`Vary: X-Crowi-Ast-Version`). */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -5671,7 +5686,8 @@ export interface paths {
                                         codeBlockLanguages?: string[];
                                         rawSpaceLinks?: string[];
                                     };
-                                    renderedAst?: unknown;
+                                    renderedAst?: components["schemas"]["RenderedAstEnvelope"] | components["schemas"]["LegacyRenderedAstRoot"];
+                                    renderedAstArtifactKey?: string;
                                     rendererVersion?: string;
                                     parentRevisionId?: string | null;
                                     /** @enum {string} */
@@ -5781,7 +5797,8 @@ export interface paths {
                                         codeBlockLanguages?: string[];
                                         rawSpaceLinks?: string[];
                                     };
-                                    renderedAst?: unknown;
+                                    renderedAst?: components["schemas"]["RenderedAstEnvelope"] | components["schemas"]["LegacyRenderedAstRoot"];
+                                    renderedAstArtifactKey?: string;
                                     rendererVersion?: string;
                                     parentRevisionId?: string | null;
                                     /** @enum {string} */
@@ -5886,7 +5903,8 @@ export interface paths {
                                         codeBlockLanguages?: string[];
                                         rawSpaceLinks?: string[];
                                     };
-                                    renderedAst?: unknown;
+                                    renderedAst?: components["schemas"]["RenderedAstEnvelope"] | components["schemas"]["LegacyRenderedAstRoot"];
+                                    renderedAstArtifactKey?: string;
                                     rendererVersion?: string;
                                     parentRevisionId?: string | null;
                                     /** @enum {string} */
@@ -6127,7 +6145,8 @@ export interface paths {
                                         codeBlockLanguages?: string[];
                                         rawSpaceLinks?: string[];
                                     };
-                                    renderedAst?: unknown;
+                                    renderedAst?: components["schemas"]["RenderedAstEnvelope"] | components["schemas"]["LegacyRenderedAstRoot"];
+                                    renderedAstArtifactKey?: string;
                                     rendererVersion?: string;
                                     parentRevisionId?: string | null;
                                     /** @enum {string} */
@@ -6532,7 +6551,8 @@ export interface paths {
                                         codeBlockLanguages?: string[];
                                         rawSpaceLinks?: string[];
                                     };
-                                    renderedAst?: unknown;
+                                    renderedAst?: components["schemas"]["RenderedAstEnvelope"] | components["schemas"]["LegacyRenderedAstRoot"];
+                                    renderedAstArtifactKey?: string;
                                     rendererVersion?: string;
                                     parentRevisionId?: string | null;
                                     /** @enum {string} */
@@ -6728,7 +6748,8 @@ export interface paths {
                                         codeBlockLanguages?: string[];
                                         rawSpaceLinks?: string[];
                                     };
-                                    renderedAst?: unknown;
+                                    renderedAst?: components["schemas"]["RenderedAstEnvelope"] | components["schemas"]["LegacyRenderedAstRoot"];
+                                    renderedAstArtifactKey?: string;
                                     rendererVersion?: string;
                                     parentRevisionId?: string | null;
                                     /** @enum {string} */
@@ -6924,7 +6945,8 @@ export interface paths {
                                         codeBlockLanguages?: string[];
                                         rawSpaceLinks?: string[];
                                     };
-                                    renderedAst?: unknown;
+                                    renderedAst?: components["schemas"]["RenderedAstEnvelope"] | components["schemas"]["LegacyRenderedAstRoot"];
+                                    renderedAstArtifactKey?: string;
                                     rendererVersion?: string;
                                     parentRevisionId?: string | null;
                                     /** @enum {string} */
@@ -7325,7 +7347,8 @@ export interface paths {
                                         codeBlockLanguages?: string[];
                                         rawSpaceLinks?: string[];
                                     };
-                                    renderedAst?: unknown;
+                                    renderedAst?: components["schemas"]["RenderedAstEnvelope"] | components["schemas"]["LegacyRenderedAstRoot"];
+                                    renderedAstArtifactKey?: string;
                                     rendererVersion?: string;
                                     parentRevisionId?: string | null;
                                     /** @enum {string} */
@@ -7521,7 +7544,8 @@ export interface paths {
                                         codeBlockLanguages?: string[];
                                         rawSpaceLinks?: string[];
                                     };
-                                    renderedAst?: unknown;
+                                    renderedAst?: components["schemas"]["RenderedAstEnvelope"] | components["schemas"]["LegacyRenderedAstRoot"];
+                                    renderedAstArtifactKey?: string;
                                     rendererVersion?: string;
                                     parentRevisionId?: string | null;
                                     /** @enum {string} */
@@ -7720,7 +7744,8 @@ export interface paths {
                                         codeBlockLanguages?: string[];
                                         rawSpaceLinks?: string[];
                                     };
-                                    renderedAst?: unknown;
+                                    renderedAst?: components["schemas"]["RenderedAstEnvelope"] | components["schemas"]["LegacyRenderedAstRoot"];
+                                    renderedAstArtifactKey?: string;
                                     rendererVersion?: string;
                                     parentRevisionId?: string | null;
                                     /** @enum {string} */
@@ -7986,14 +8011,15 @@ export interface paths {
                 };
             };
             responses: {
-                /** @description Rendered mdast tree (serialised — same shape as a persisted revision.renderedAst) */
+                /** @description Rendered mdast tree (serialised — same shape as a persisted revision.renderedAst). Content-negotiated via the `X-Crowi-Ast-Version` request header (RFC-0023): requests declaring `X-Crowi-Ast-Version: 1` receive the typed `{astVersion, root}` envelope; all other requests receive the bare mdast Root. The response varies on this header (`Vary: X-Crowi-Ast-Version`). */
                 200: {
                     headers: {
                         [name: string]: unknown;
                     };
                     content: {
                         "application/json": {
-                            renderedAst?: unknown;
+                            renderedAst?: components["schemas"]["RenderedAstEnvelope"] | components["schemas"]["LegacyRenderedAstRoot"];
+                            renderedAstArtifactKey?: string;
                         };
                     };
                 };
@@ -9724,7 +9750,8 @@ export interface paths {
                                             codeBlockLanguages?: string[];
                                             rawSpaceLinks?: string[];
                                         };
-                                        renderedAst?: unknown;
+                                        renderedAst?: components["schemas"]["RenderedAstEnvelope"] | components["schemas"]["LegacyRenderedAstRoot"];
+                                        renderedAstArtifactKey?: string;
                                         rendererVersion?: string;
                                         parentRevisionId?: string | null;
                                         /** @enum {string} */
@@ -14054,7 +14081,8 @@ export interface components {
                     codeBlockLanguages?: string[];
                     rawSpaceLinks?: string[];
                 };
-                renderedAst?: unknown;
+                renderedAst?: components["schemas"]["RenderedAstEnvelope"] | components["schemas"]["LegacyRenderedAstRoot"];
+                renderedAstArtifactKey?: string;
                 rendererVersion?: string;
                 parentRevisionId?: string | null;
                 /** @enum {string} */
@@ -14122,6 +14150,16 @@ export interface components {
             likerCount?: number;
             seenUsersCount?: number;
         };
+        RenderedAstEnvelope: {
+            /** @enum {number} */
+            astVersion: 1;
+            root?: unknown;
+        };
+        LegacyRenderedAstRoot: {
+            /** @enum {string} */
+            type: "root";
+            children: unknown[];
+        };
         PageWithRevision: {
             _id: string;
             path: string;
@@ -14159,7 +14197,8 @@ export interface components {
                     codeBlockLanguages?: string[];
                     rawSpaceLinks?: string[];
                 };
-                renderedAst?: unknown;
+                renderedAst?: components["schemas"]["RenderedAstEnvelope"] | components["schemas"]["LegacyRenderedAstRoot"];
+                renderedAstArtifactKey?: string;
                 rendererVersion?: string;
                 parentRevisionId?: string | null;
                 /** @enum {string} */
@@ -14261,7 +14300,8 @@ export interface components {
                 codeBlockLanguages?: string[];
                 rawSpaceLinks?: string[];
             };
-            renderedAst?: unknown;
+            renderedAst?: components["schemas"]["RenderedAstEnvelope"] | components["schemas"]["LegacyRenderedAstRoot"];
+            renderedAstArtifactKey?: string;
             rendererVersion?: string;
             parentRevisionId?: string | null;
             /** @enum {string} */
@@ -14384,7 +14424,8 @@ export interface components {
                         codeBlockLanguages?: string[];
                         rawSpaceLinks?: string[];
                     };
-                    renderedAst?: unknown;
+                    renderedAst?: components["schemas"]["RenderedAstEnvelope"] | components["schemas"]["LegacyRenderedAstRoot"];
+                    renderedAstArtifactKey?: string;
                     rendererVersion?: string;
                     parentRevisionId?: string | null;
                     /** @enum {string} */
@@ -14494,7 +14535,8 @@ export interface components {
                         codeBlockLanguages?: string[];
                         rawSpaceLinks?: string[];
                     };
-                    renderedAst?: unknown;
+                    renderedAst?: components["schemas"]["RenderedAstEnvelope"] | components["schemas"]["LegacyRenderedAstRoot"];
+                    renderedAstArtifactKey?: string;
                     rendererVersion?: string;
                     parentRevisionId?: string | null;
                     /** @enum {string} */
@@ -14599,7 +14641,8 @@ export interface components {
                         codeBlockLanguages?: string[];
                         rawSpaceLinks?: string[];
                     };
-                    renderedAst?: unknown;
+                    renderedAst?: components["schemas"]["RenderedAstEnvelope"] | components["schemas"]["LegacyRenderedAstRoot"];
+                    renderedAstArtifactKey?: string;
                     rendererVersion?: string;
                     parentRevisionId?: string | null;
                     /** @enum {string} */
@@ -14706,7 +14749,8 @@ export interface components {
                         codeBlockLanguages?: string[];
                         rawSpaceLinks?: string[];
                     };
-                    renderedAst?: unknown;
+                    renderedAst?: components["schemas"]["RenderedAstEnvelope"] | components["schemas"]["LegacyRenderedAstRoot"];
+                    renderedAstArtifactKey?: string;
                     rendererVersion?: string;
                     parentRevisionId?: string | null;
                     /** @enum {string} */
@@ -14863,7 +14907,8 @@ export interface components {
                         codeBlockLanguages?: string[];
                         rawSpaceLinks?: string[];
                     };
-                    renderedAst?: unknown;
+                    renderedAst?: components["schemas"]["RenderedAstEnvelope"] | components["schemas"]["LegacyRenderedAstRoot"];
+                    renderedAstArtifactKey?: string;
                     rendererVersion?: string;
                     parentRevisionId?: string | null;
                     /** @enum {string} */

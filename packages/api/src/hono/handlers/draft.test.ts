@@ -4,14 +4,14 @@ import request from 'supertest';
 
 /**
  * RFC-0004 Phase 3 — drafts endpoints
- * (`POST` / `GET` / `DELETE` under `/api/v2/pages/drafts`).
+ * (`POST` / `GET` / `DELETE` under `/api/pages/drafts`).
  *
  * Covers: create on a free path, create-conflict against a published
  * page (400) and against another user's draft (409 + owner), list
  * scoping to the caller, author-only cancel + path release, and the
  * by-path / by-id draft 404 for non-authors.
  */
-describe('Routes /api/v2/pages/drafts (Hono draft)', () => {
+describe('Routes /api/pages/drafts (Hono draft)', () => {
   const PATH_PREFIX = '/hono-draft-test/';
   let aliceToken: string;
   let aliceId: string;
@@ -37,17 +37,17 @@ describe('Routes /api/v2/pages/drafts (Hono draft)', () => {
   /** Create a *published* page through the public POST /pages endpoint. */
   const createPublishedPage = async (token: string, suffix: string) => {
     const res = await request(app)
-      .post('/api/v2/pages')
+      .post('/api/pages')
       .set(authHeaders(token))
       .send({ path: `${PATH_PREFIX}${suffix}`, body: '# published' });
     expect(res.status).toBe(200);
     return res.body.page._id as string;
   };
 
-  describe('POST /api/v2/pages/drafts', () => {
+  describe('POST /api/pages/drafts', () => {
     it('requires authentication', async () => {
       const res = await request(app)
-        .post('/api/v2/pages/drafts')
+        .post('/api/pages/drafts')
         .set('Content-Type', 'application/json')
         .send({ path: `${PATH_PREFIX}unauth` });
 
@@ -56,7 +56,7 @@ describe('Routes /api/v2/pages/drafts (Hono draft)', () => {
 
     it('creates a draft at a free path and returns the new pageId', async () => {
       const path = `${PATH_PREFIX}free-path`;
-      const res = await request(app).post('/api/v2/pages/drafts').set(authHeaders(aliceToken)).send({ path });
+      const res = await request(app).post('/api/pages/drafts').set(authHeaders(aliceToken)).send({ path });
 
       expect(res.status).toBe(201);
       expect(typeof res.body.pageId).toBe('string');
@@ -75,7 +75,7 @@ describe('Routes /api/v2/pages/drafts (Hono draft)', () => {
       // and the page is visible to others the instant publish-on-save
       // flips the status.
       const path = `${PATH_PREFIX}public-grant`;
-      const res = await request(app).post('/api/v2/pages/drafts').set(authHeaders(aliceToken)).send({ path });
+      const res = await request(app).post('/api/pages/drafts').set(authHeaders(aliceToken)).send({ path });
 
       expect(res.status).toBe(201);
       const Page = crowi.model('Page');
@@ -85,7 +85,7 @@ describe('Routes /api/v2/pages/drafts (Hono draft)', () => {
 
     it('seeds the draft with initialBody when provided', async () => {
       const path = `${PATH_PREFIX}with-body`;
-      const res = await request(app).post('/api/v2/pages/drafts').set(authHeaders(aliceToken)).send({ path, initialBody: '# seeded content' });
+      const res = await request(app).post('/api/pages/drafts').set(authHeaders(aliceToken)).send({ path, initialBody: '# seeded content' });
 
       expect(res.status).toBe(201);
       const Page = crowi.model('Page');
@@ -97,7 +97,7 @@ describe('Routes /api/v2/pages/drafts (Hono draft)', () => {
 
     it('rejects an uncreatable path with 400 invalid_path', async () => {
       // `/admin/*` is on the forbidden list in Page.isCreatableName.
-      const res = await request(app).post('/api/v2/pages/drafts').set(authHeaders(aliceToken)).send({ path: '/admin/secret' });
+      const res = await request(app).post('/api/pages/drafts').set(authHeaders(aliceToken)).send({ path: '/admin/secret' });
 
       expect(res.status).toBe(400);
       expect(res.body.error).toBe('invalid_path');
@@ -107,7 +107,7 @@ describe('Routes /api/v2/pages/drafts (Hono draft)', () => {
       const path = `${PATH_PREFIX}taken-by-published`;
       await createPublishedPage(aliceToken, 'taken-by-published');
 
-      const res = await request(app).post('/api/v2/pages/drafts').set(authHeaders(bobToken)).send({ path });
+      const res = await request(app).post('/api/pages/drafts').set(authHeaders(bobToken)).send({ path });
 
       expect(res.status).toBe(400);
       expect(res.body.error).toBe('path_taken');
@@ -115,10 +115,10 @@ describe('Routes /api/v2/pages/drafts (Hono draft)', () => {
 
     it("returns 409 path_taken_by_draft with owner info when another user's draft holds the path", async () => {
       const path = `${PATH_PREFIX}conflict`;
-      const aliceRes = await request(app).post('/api/v2/pages/drafts').set(authHeaders(aliceToken)).send({ path });
+      const aliceRes = await request(app).post('/api/pages/drafts').set(authHeaders(aliceToken)).send({ path });
       expect(aliceRes.status).toBe(201);
 
-      const bobRes = await request(app).post('/api/v2/pages/drafts').set(authHeaders(bobToken)).send({ path });
+      const bobRes = await request(app).post('/api/pages/drafts').set(authHeaders(bobToken)).send({ path });
 
       expect(bobRes.status).toBe(409);
       expect(bobRes.body.error).toBe('path_taken_by_draft');
@@ -130,8 +130,8 @@ describe('Routes /api/v2/pages/drafts (Hono draft)', () => {
 
     it('is idempotent for the same author on their own draft path', async () => {
       const path = `${PATH_PREFIX}idempotent`;
-      const first = await request(app).post('/api/v2/pages/drafts').set(authHeaders(aliceToken)).send({ path });
-      const second = await request(app).post('/api/v2/pages/drafts').set(authHeaders(aliceToken)).send({ path });
+      const first = await request(app).post('/api/pages/drafts').set(authHeaders(aliceToken)).send({ path });
+      const second = await request(app).post('/api/pages/drafts').set(authHeaders(aliceToken)).send({ path });
 
       expect(first.status).toBe(201);
       expect(second.status).toBe(201);
@@ -154,7 +154,7 @@ describe('Routes /api/v2/pages/drafts (Hono draft)', () => {
         const spy = jest.spyOn(Revision, 'prepareRevision').mockRejectedValueOnce(new Error('prepareRevision boom'));
 
         try {
-          const res = await request(app).post('/api/v2/pages/drafts').set(authHeaders(aliceToken)).send({ path });
+          const res = await request(app).post('/api/pages/drafts').set(authHeaders(aliceToken)).send({ path });
           expect(res.status).toBe(400);
           expect(res.body.error).toBe('invalid_path');
 
@@ -171,7 +171,7 @@ describe('Routes /api/v2/pages/drafts (Hono draft)', () => {
         const spy = jest.spyOn(Page, 'pushRevision').mockRejectedValueOnce(new Error('pushRevision boom'));
 
         try {
-          const res = await request(app).post('/api/v2/pages/drafts').set(authHeaders(aliceToken)).send({ path });
+          const res = await request(app).post('/api/pages/drafts').set(authHeaders(aliceToken)).send({ path });
           expect(res.status).toBe(400);
           expect(res.body.error).toBe('invalid_path');
 
@@ -183,27 +183,27 @@ describe('Routes /api/v2/pages/drafts (Hono draft)', () => {
     });
   });
 
-  describe('GET /api/v2/pages/drafts', () => {
+  describe('GET /api/pages/drafts', () => {
     it('requires authentication', async () => {
-      const res = await request(app).get('/api/v2/pages/drafts');
+      const res = await request(app).get('/api/pages/drafts');
       expect(res.status).toBe(401);
     });
 
     it('returns only the calling user own drafts, newest first', async () => {
       await request(app)
-        .post('/api/v2/pages/drafts')
+        .post('/api/pages/drafts')
         .set(authHeaders(aliceToken))
         .send({ path: `${PATH_PREFIX}list-a` });
       await request(app)
-        .post('/api/v2/pages/drafts')
+        .post('/api/pages/drafts')
         .set(authHeaders(aliceToken))
         .send({ path: `${PATH_PREFIX}list-b` });
       await request(app)
-        .post('/api/v2/pages/drafts')
+        .post('/api/pages/drafts')
         .set(authHeaders(bobToken))
         .send({ path: `${PATH_PREFIX}list-bob` });
 
-      const res = await request(app).get('/api/v2/pages/drafts').set(authHeaders(aliceToken));
+      const res = await request(app).get('/api/pages/drafts').set(authHeaders(aliceToken));
 
       expect(res.status).toBe(200);
       const paths = (res.body.drafts as Array<{ path: string }>).map((d) => d.path);
@@ -217,29 +217,29 @@ describe('Routes /api/v2/pages/drafts (Hono draft)', () => {
     });
   });
 
-  describe('DELETE /api/v2/pages/drafts/:id', () => {
+  describe('DELETE /api/pages/drafts/:id', () => {
     it('lets the author cancel their draft and releases the path', async () => {
       const path = `${PATH_PREFIX}cancel-me`;
-      const createRes = await request(app).post('/api/v2/pages/drafts').set(authHeaders(aliceToken)).send({ path });
+      const createRes = await request(app).post('/api/pages/drafts').set(authHeaders(aliceToken)).send({ path });
       const pageId = createRes.body.pageId as string;
 
-      const delRes = await request(app).delete(`/api/v2/pages/drafts/${pageId}`).set(authHeaders(aliceToken));
+      const delRes = await request(app).delete(`/api/pages/drafts/${pageId}`).set(authHeaders(aliceToken));
       expect(delRes.status).toBe(200);
 
       const Page = crowi.model('Page');
       expect(await Page.findById(pageId)).toBeNull();
 
       // Path is free: a fresh draft can be created at it again.
-      const recreate = await request(app).post('/api/v2/pages/drafts').set(authHeaders(bobToken)).send({ path });
+      const recreate = await request(app).post('/api/pages/drafts').set(authHeaders(bobToken)).send({ path });
       expect(recreate.status).toBe(201);
     });
 
     it("returns 404 draft_not_found when cancelling another user's draft", async () => {
       const path = `${PATH_PREFIX}not-yours`;
-      const createRes = await request(app).post('/api/v2/pages/drafts').set(authHeaders(aliceToken)).send({ path });
+      const createRes = await request(app).post('/api/pages/drafts').set(authHeaders(aliceToken)).send({ path });
       const pageId = createRes.body.pageId as string;
 
-      const delRes = await request(app).delete(`/api/v2/pages/drafts/${pageId}`).set(authHeaders(bobToken));
+      const delRes = await request(app).delete(`/api/pages/drafts/${pageId}`).set(authHeaders(bobToken));
 
       expect(delRes.status).toBe(404);
       expect(delRes.body.error).toBe('draft_not_found');
@@ -252,7 +252,7 @@ describe('Routes /api/v2/pages/drafts (Hono draft)', () => {
     it('returns 404 draft_not_found for a non-draft (published) page id', async () => {
       const publishedId = await createPublishedPage(aliceToken, 'cancel-published');
 
-      const delRes = await request(app).delete(`/api/v2/pages/drafts/${publishedId}`).set(authHeaders(aliceToken));
+      const delRes = await request(app).delete(`/api/pages/drafts/${publishedId}`).set(authHeaders(aliceToken));
 
       expect(delRes.status).toBe(404);
       expect(delRes.body.error).toBe('draft_not_found');
@@ -262,9 +262,9 @@ describe('Routes /api/v2/pages/drafts (Hono draft)', () => {
   describe('by-path / by-id draft visibility', () => {
     it('returns 404 on GET /pages?path for a non-author', async () => {
       const path = `${PATH_PREFIX}hidden`;
-      await request(app).post('/api/v2/pages/drafts').set(authHeaders(aliceToken)).send({ path });
+      await request(app).post('/api/pages/drafts').set(authHeaders(aliceToken)).send({ path });
 
-      const res = await request(app).get('/api/v2/pages').query({ path }).set(authHeaders(bobToken));
+      const res = await request(app).get('/api/pages').query({ path }).set(authHeaders(bobToken));
 
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
@@ -272,9 +272,9 @@ describe('Routes /api/v2/pages/drafts (Hono draft)', () => {
 
     it('lets the draft author read their own draft by path', async () => {
       const path = `${PATH_PREFIX}mine`;
-      await request(app).post('/api/v2/pages/drafts').set(authHeaders(aliceToken)).send({ path });
+      await request(app).post('/api/pages/drafts').set(authHeaders(aliceToken)).send({ path });
 
-      const res = await request(app).get('/api/v2/pages').query({ path }).set(authHeaders(aliceToken));
+      const res = await request(app).get('/api/pages').query({ path }).set(authHeaders(aliceToken));
 
       expect(res.status).toBe(200);
       expect(res.body.page.path).toBe(path);
@@ -282,10 +282,10 @@ describe('Routes /api/v2/pages/drafts (Hono draft)', () => {
 
     it('returns 404 on GET /pages?page_id for a non-author', async () => {
       const path = `${PATH_PREFIX}hidden-by-id`;
-      const createRes = await request(app).post('/api/v2/pages/drafts').set(authHeaders(aliceToken)).send({ path });
+      const createRes = await request(app).post('/api/pages/drafts').set(authHeaders(aliceToken)).send({ path });
       const pageId = createRes.body.pageId as string;
 
-      const res = await request(app).get('/api/v2/pages').query({ page_id: pageId }).set(authHeaders(bobToken));
+      const res = await request(app).get('/api/pages').query({ page_id: pageId }).set(authHeaders(bobToken));
 
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
@@ -297,17 +297,17 @@ describe('Routes /api/v2/pages/drafts (Hono draft)', () => {
       // non-author is `status: 'draft'`. Confirm a non-author still
       // gets a 404 on a public-grant draft.
       const path = `${PATH_PREFIX}public-grant-hidden`;
-      const createRes = await request(app).post('/api/v2/pages/drafts').set(authHeaders(aliceToken)).send({ path });
+      const createRes = await request(app).post('/api/pages/drafts').set(authHeaders(aliceToken)).send({ path });
       const pageId = createRes.body.pageId as string;
 
       const Page = crowi.model('Page');
       expect((await Page.findById(pageId))?.grant).toBe(Page.GRANT_PUBLIC);
 
-      const byPath = await request(app).get('/api/v2/pages').query({ path }).set(authHeaders(bobToken));
+      const byPath = await request(app).get('/api/pages').query({ path }).set(authHeaders(bobToken));
       expect(byPath.status).toBe(404);
       expect(byPath.body.error.code).toBe('PAGE_NOT_FOUND');
 
-      const byId = await request(app).get('/api/v2/pages').query({ page_id: pageId }).set(authHeaders(bobToken));
+      const byId = await request(app).get('/api/pages').query({ page_id: pageId }).set(authHeaders(bobToken));
       expect(byId.status).toBe(404);
       expect(byId.body.error.code).toBe('PAGE_NOT_FOUND');
     });
@@ -319,13 +319,13 @@ describe('Routes /api/v2/pages/drafts (Hono draft)', () => {
       // the page — which is only possible because the draft was
       // created with the public grant.
       const path = `${PATH_PREFIX}published-visible`;
-      const createRes = await request(app).post('/api/v2/pages/drafts').set(authHeaders(aliceToken)).send({ path });
+      const createRes = await request(app).post('/api/pages/drafts').set(authHeaders(aliceToken)).send({ path });
       const pageId = createRes.body.pageId as string;
 
       const Page = crowi.model('Page');
       await Page.updateOne({ _id: pageId, status: 'draft' }, { $set: { status: 'published' } });
 
-      const res = await request(app).get('/api/v2/pages').query({ path }).set(authHeaders(bobToken));
+      const res = await request(app).get('/api/pages').query({ path }).set(authHeaders(bobToken));
       expect(res.status).toBe(200);
       expect(res.body.page.path).toBe(path);
     });

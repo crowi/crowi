@@ -31,7 +31,7 @@ const reloadConfigCache = async () => {
  *   2. PUT with a stale client sending `upload` is rejected with 400.
  *   3. The remaining `app:*` keys still round-trip.
  */
-describe('Routes /api/v2/admin/app (Hono, post-storage-extraction)', () => {
+describe('Routes /api/admin/app (Hono, post-storage-extraction)', () => {
   let Config;
   let adminToken: string;
   let memberToken: string;
@@ -55,14 +55,14 @@ describe('Routes /api/v2/admin/app (Hono, post-storage-extraction)', () => {
     await reloadConfigCache();
   });
 
-  describe('GET /api/v2/admin/app', () => {
+  describe('GET /api/admin/app', () => {
     it('returns 401 without auth', async () => {
-      const res = await request(app).get('/api/v2/admin/app');
+      const res = await request(app).get('/api/admin/app');
       expect(res.status).toBe(401);
     });
 
     it('returns 403 for a non-admin user', async () => {
-      const res = await request(app).get('/api/v2/admin/app').set(authHeaders(memberToken));
+      const res = await request(app).get('/api/admin/app').set(authHeaders(memberToken));
       expect(res.status).toBe(403);
       expect(res.body.error.code).toBe('ADMIN_REQUIRED');
     });
@@ -72,7 +72,7 @@ describe('Routes /api/v2/admin/app (Hono, post-storage-extraction)', () => {
       await Config.updateConfig('crowi', 'app:confidential', 'For employees only');
       await reloadConfigCache();
 
-      const res = await request(app).get('/api/v2/admin/app').set(authHeaders(adminToken));
+      const res = await request(app).get('/api/admin/app').set(authHeaders(adminToken));
 
       expect(res.status).toBe(200);
       expect(res.body.app).toEqual({
@@ -89,17 +89,17 @@ describe('Routes /api/v2/admin/app (Hono, post-storage-extraction)', () => {
     });
   });
 
-  describe('PUT /api/v2/admin/app', () => {
+  describe('PUT /api/admin/app', () => {
     it('returns 401 without auth', async () => {
       const res = await request(app)
-        .put('/api/v2/admin/app')
+        .put('/api/admin/app')
         .send({ app: { title: 'x' } });
       expect(res.status).toBe(401);
     });
 
     it('returns 403 for non-admin user', async () => {
       const res = await request(app)
-        .put('/api/v2/admin/app')
+        .put('/api/admin/app')
         .set(authHeaders(memberToken))
         .send({ app: { title: 'x' } });
       expect(res.status).toBe(403);
@@ -108,32 +108,32 @@ describe('Routes /api/v2/admin/app (Hono, post-storage-extraction)', () => {
 
     it('persists app section and round-trips via GET', async () => {
       const res = await request(app)
-        .put('/api/v2/admin/app')
+        .put('/api/admin/app')
         .set(authHeaders(adminToken))
         .send({ app: { title: 'Round Trip Wiki', confidential: 'Internal' } });
 
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ ok: true });
 
-      const get = await request(app).get('/api/v2/admin/app').set(authHeaders(adminToken));
+      const get = await request(app).get('/api/admin/app').set(authHeaders(adminToken));
       expect(get.status).toBe(200);
       expect(get.body.app).toEqual(expect.objectContaining({ title: 'Round Trip Wiki', confidential: 'Internal' }));
     });
 
     it('persists setupChecklistDismissed on its own and round-trips via GET', async () => {
-      const res = await request(app).put('/api/v2/admin/app').set(authHeaders(adminToken)).send({ setupChecklistDismissed: true });
+      const res = await request(app).put('/api/admin/app').set(authHeaders(adminToken)).send({ setupChecklistDismissed: true });
 
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ ok: true });
 
-      const get = await request(app).get('/api/v2/admin/app').set(authHeaders(adminToken));
+      const get = await request(app).get('/api/admin/app').set(authHeaders(adminToken));
       expect(get.status).toBe(200);
       expect(get.body.setupChecklistDismissed).toBe(true);
     });
 
     it('rejects empty title with 400', async () => {
       const res = await request(app)
-        .put('/api/v2/admin/app')
+        .put('/api/admin/app')
         .set(authHeaders(adminToken))
         .send({ app: { title: '' } });
       expect(res.status).toBe(400);
@@ -141,7 +141,7 @@ describe('Routes /api/v2/admin/app (Hono, post-storage-extraction)', () => {
 
     it('rejects a stale client sending upload.aws.* with 400 (strict body schema)', async () => {
       const res = await request(app)
-        .put('/api/v2/admin/app')
+        .put('/api/admin/app')
         .set(authHeaders(adminToken))
         .send({ upload: { aws: { region: 'us-east-1', bucket: 'x' } } });
 
@@ -153,7 +153,7 @@ describe('Routes /api/v2/admin/app (Hono, post-storage-extraction)', () => {
 
     it('accepts an empty body and is a no-op', async () => {
       const before = await Config.countDocuments({ ns: 'crowi' }).exec();
-      const res = await request(app).put('/api/v2/admin/app').set(authHeaders(adminToken)).send({});
+      const res = await request(app).put('/api/admin/app').set(authHeaders(adminToken)).send({});
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ ok: true });
       const after = await Config.countDocuments({ ns: 'crowi' }).exec();

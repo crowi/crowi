@@ -8,7 +8,7 @@ export async function loginViaUI(page: Page, credentials: E2eUserCredentials): P
   await page.locator('#password').fill(credentials.password);
 
   await Promise.all([
-    page.waitForResponse((response) => response.url().endsWith('/api/v2/auth/login') && response.request().method() === 'POST' && response.ok()),
+    page.waitForResponse((response) => response.url().endsWith('/api/auth/login') && response.request().method() === 'POST' && response.ok()),
     page.locator('form button[type="submit"]').click(),
   ]);
 

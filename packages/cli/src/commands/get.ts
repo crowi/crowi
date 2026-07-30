@@ -9,7 +9,7 @@ import { toPageQuery } from '../lib/page-ref';
 import { requireProfile } from './_shared';
 
 /**
- * The `GET /api/v2/pages` response (GetPageResponseSchema). Parsed
+ * The `GET /api/pages` response (GetPageResponseSchema). Parsed
  * leniently — only the fields the CLI reads are declared. The markdown body
  * lives at `page.revision.body`; the current revision id (needed by `edit`)
  * at `page.revision._id`.
@@ -31,7 +31,7 @@ interface GetPageResponse {
 
 /**
  * Shared implementation for `get` and its `cat` alias. Fetches a page via
- * `GET /api/v2/pages` (`pages:read`) and, in human mode, writes the raw
+ * `GET /api/pages` (`pages:read`) and, in human mode, writes the raw
  * markdown body to stdout (pipe-friendly — no trailing chatter). `--json`
  * emits the page meta + body as structured JSON.
  */

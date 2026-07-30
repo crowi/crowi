@@ -3,7 +3,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useCallback, useSyncExternalStore } from 'react';
-import { apiClientV2 } from './api-client';
+import { apiClient } from './api-client';
 import { clearTokens, getRefreshToken } from './auth-token';
 import { useHasAccessToken } from './auth-token-store';
 import { getConnectionErrorHandlers } from './connection-error-ref';
@@ -62,7 +62,7 @@ async function fetchMe(): Promise<MeResponse> {
   // global QueryCache.onError already calls setNetworkError for network errors,
   // so doing it here too would double-fire it (and double-step the connection
   // retry counter). Let it propagate to onError.
-  const res = await apiClientV2.auth.me.$get();
+  const res = await apiClient.auth.me.$get();
 
   if (res.ok) {
     try {
@@ -144,7 +144,7 @@ export function useAuth() {
   const logout = useCallback(async () => {
     const refreshToken = getRefreshToken();
     try {
-      await apiClientV2.auth.logout.$post({ json: refreshToken ? { refreshToken } : {} });
+      await apiClient.auth.logout.$post({ json: refreshToken ? { refreshToken } : {} });
     } catch {
       // Non-fatal — local cleanup happens regardless.
     }

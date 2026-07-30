@@ -40,7 +40,7 @@ const seedActiveUser = async (info: { name: string; username: string; email: str
   });
 };
 
-describe('Routes /api/v2/user (Hono)', () => {
+describe('Routes /api/user (Hono)', () => {
   const Config = () => crowi.model('Config');
   const User = () => crowi.model('User');
   const Page = () => crowi.model('Page');
@@ -85,7 +85,7 @@ describe('Routes /api/v2/user (Hono)', () => {
 
   describe('GET /user/:username', () => {
     it('returns the target user profile with counts and recent activity', async () => {
-      const res = await request(app).get(`/api/v2/user/${TARGET_USERNAME}`).set('Authorization', `Bearer ${viewerToken}`);
+      const res = await request(app).get(`/api/user/${TARGET_USERNAME}`).set('Authorization', `Bearer ${viewerToken}`);
       expect(res.status).toBe(200);
       expect(res.body.user).toMatchObject({ username: TARGET_USERNAME, name: 'Target' });
       expect(res.body.createdPagesCount).toBeGreaterThanOrEqual(1);
@@ -95,7 +95,7 @@ describe('Routes /api/v2/user (Hono)', () => {
     });
 
     it('returns 404 USER_NOT_FOUND for an unknown username', async () => {
-      const res = await request(app).get('/api/v2/user/no-such-user').set('Authorization', `Bearer ${viewerToken}`);
+      const res = await request(app).get('/api/user/no-such-user').set('Authorization', `Bearer ${viewerToken}`);
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('USER_NOT_FOUND');
     });
@@ -107,7 +107,7 @@ describe('Routes /api/v2/user (Hono)', () => {
       targetUser.status = User().STATUS_SUSPENDED;
       await targetUser.save();
       try {
-        const res = await request(app).get(`/api/v2/user/${TARGET_USERNAME}`).set('Authorization', `Bearer ${viewerToken}`);
+        const res = await request(app).get(`/api/user/${TARGET_USERNAME}`).set('Authorization', `Bearer ${viewerToken}`);
         expect(res.status).toBe(200);
         expect(res.body.user).toMatchObject({ username: TARGET_USERNAME, name: 'Target' });
       } finally {
@@ -123,7 +123,7 @@ describe('Routes /api/v2/user (Hono)', () => {
       targetUser.status = User().STATUS_REGISTERED;
       await targetUser.save();
       try {
-        const res = await request(app).get(`/api/v2/user/${TARGET_USERNAME}`).set('Authorization', `Bearer ${viewerToken}`);
+        const res = await request(app).get(`/api/user/${TARGET_USERNAME}`).set('Authorization', `Bearer ${viewerToken}`);
         expect(res.status).toBe(404);
         expect(res.body.error.code).toBe('USER_NOT_FOUND');
       } finally {
@@ -133,7 +133,7 @@ describe('Routes /api/v2/user (Hono)', () => {
     });
 
     it('returns 401 AUTHENTICATION_REQUIRED without a bearer token', async () => {
-      const res = await request(app).get(`/api/v2/user/${TARGET_USERNAME}`);
+      const res = await request(app).get(`/api/user/${TARGET_USERNAME}`);
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
     });
@@ -142,7 +142,7 @@ describe('Routes /api/v2/user (Hono)', () => {
   describe('GET /user/:username/bookmarks', () => {
     it('returns paginated bookmarks with pager + total', async () => {
       const res = await request(app)
-        .get(`/api/v2/user/${TARGET_USERNAME}/bookmarks`)
+        .get(`/api/user/${TARGET_USERNAME}/bookmarks`)
         .query({ limit: 10, offset: 0 })
         .set('Authorization', `Bearer ${viewerToken}`);
       expect(res.status).toBe(200);
@@ -159,7 +159,7 @@ describe('Routes /api/v2/user (Hono)', () => {
     });
 
     it('returns 404 USER_NOT_FOUND for an unknown username', async () => {
-      const res = await request(app).get('/api/v2/user/no-such-user/bookmarks').set('Authorization', `Bearer ${viewerToken}`);
+      const res = await request(app).get('/api/user/no-such-user/bookmarks').set('Authorization', `Bearer ${viewerToken}`);
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('USER_NOT_FOUND');
     });
@@ -167,7 +167,7 @@ describe('Routes /api/v2/user (Hono)', () => {
 
   describe('GET /user/:username/pages', () => {
     it('returns paginated pages with pager + total', async () => {
-      const res = await request(app).get(`/api/v2/user/${TARGET_USERNAME}/pages`).query({ limit: 10, offset: 0 }).set('Authorization', `Bearer ${viewerToken}`);
+      const res = await request(app).get(`/api/user/${TARGET_USERNAME}/pages`).query({ limit: 10, offset: 0 }).set('Authorization', `Bearer ${viewerToken}`);
       expect(res.status).toBe(200);
       expect(res.body.total).toBeGreaterThanOrEqual(1);
       expect(res.body.pager).toEqual({ prev: null, next: null, offset: 0 });
@@ -176,7 +176,7 @@ describe('Routes /api/v2/user (Hono)', () => {
     });
 
     it('returns 401 AUTHENTICATION_REQUIRED without a bearer token', async () => {
-      const res = await request(app).get(`/api/v2/user/${TARGET_USERNAME}/pages`);
+      const res = await request(app).get(`/api/user/${TARGET_USERNAME}/pages`);
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
     });
@@ -231,7 +231,7 @@ describe('Routes /api/v2/user (Hono)', () => {
       ]);
 
       const res = await request(app)
-        .get(`/api/v2/user/${SUBPAGES_USERNAME}/subpages`)
+        .get(`/api/user/${SUBPAGES_USERNAME}/subpages`)
         .query({ limit: 10, offset: 0 })
         .set('Authorization', `Bearer ${viewerToken}`);
 
@@ -252,7 +252,7 @@ describe('Routes /api/v2/user (Hono)', () => {
       ]);
 
       const res = await request(app)
-        .get(`/api/v2/user/${SUBPAGES_USERNAME}/subpages`)
+        .get(`/api/user/${SUBPAGES_USERNAME}/subpages`)
         .query({ limit: 10, offset: 0 })
         .set('Authorization', `Bearer ${viewerToken}`);
 
@@ -271,7 +271,7 @@ describe('Routes /api/v2/user (Hono)', () => {
       ]);
 
       const res = await request(app)
-        .get(`/api/v2/user/${SUBPAGES_USERNAME}/subpages`)
+        .get(`/api/user/${SUBPAGES_USERNAME}/subpages`)
         .query({ limit: 10, offset: 0 })
         .set('Authorization', `Bearer ${viewerToken}`);
 
@@ -288,7 +288,7 @@ describe('Routes /api/v2/user (Hono)', () => {
       ]);
 
       const res = await request(app)
-        .get(`/api/v2/user/${SUBPAGES_USERNAME}/subpages`)
+        .get(`/api/user/${SUBPAGES_USERNAME}/subpages`)
         .query({ limit: 10, offset: 0 })
         .set('Authorization', `Bearer ${viewerToken}`);
 
@@ -301,7 +301,7 @@ describe('Routes /api/v2/user (Hono)', () => {
       await Fixture.generate('Page', [{ path: `${PREFIX}/draft-page`, grant: Page().GRANT_PUBLIC, creator: subpagesOwner, status: 'draft' }]);
 
       const asViewer = await request(app)
-        .get(`/api/v2/user/${SUBPAGES_USERNAME}/subpages`)
+        .get(`/api/user/${SUBPAGES_USERNAME}/subpages`)
         .query({ limit: 10, offset: 0 })
         .set('Authorization', `Bearer ${viewerToken}`);
       expect(asViewer.body.total).toBe(0);
@@ -309,7 +309,7 @@ describe('Routes /api/v2/user (Hono)', () => {
 
       const ownerToken = createJwtUtil(crowi).generateTokens(subpagesOwner).accessToken;
       const asOwner = await request(app)
-        .get(`/api/v2/user/${SUBPAGES_USERNAME}/subpages`)
+        .get(`/api/user/${SUBPAGES_USERNAME}/subpages`)
         .query({ limit: 10, offset: 0 })
         .set('Authorization', `Bearer ${ownerToken}`);
       expect(asOwner.body.total).toBe(1);
@@ -329,7 +329,7 @@ describe('Routes /api/v2/user (Hono)', () => {
       ]);
 
       const asViewer = await request(app)
-        .get(`/api/v2/user/${SUBPAGES_USERNAME}/subpages`)
+        .get(`/api/user/${SUBPAGES_USERNAME}/subpages`)
         .query({ limit: 10, offset: 0 })
         .set('Authorization', `Bearer ${viewerToken}`);
       expect(asViewer.status).toBe(200);
@@ -338,7 +338,7 @@ describe('Routes /api/v2/user (Hono)', () => {
 
       const ownerToken = createJwtUtil(crowi).generateTokens(subpagesOwner).accessToken;
       const asOwner = await request(app)
-        .get(`/api/v2/user/${SUBPAGES_USERNAME}/subpages`)
+        .get(`/api/user/${SUBPAGES_USERNAME}/subpages`)
         .query({ limit: 10, offset: 0 })
         .set('Authorization', `Bearer ${ownerToken}`);
       expect(asOwner.body.total).toBe(2);
@@ -348,7 +348,7 @@ describe('Routes /api/v2/user (Hono)', () => {
       await Fixture.generate('Page', [{ path: `${PREFIX}/lean-row`, grant: Page().GRANT_PUBLIC, creator: subpagesOwner, status: 'published' }]);
 
       const res = await request(app)
-        .get(`/api/v2/user/${SUBPAGES_USERNAME}/subpages`)
+        .get(`/api/user/${SUBPAGES_USERNAME}/subpages`)
         .query({ limit: 10, offset: 0 })
         .set('Authorization', `Bearer ${viewerToken}`);
 
@@ -369,15 +369,15 @@ describe('Routes /api/v2/user (Hono)', () => {
       );
 
       const page1 = await request(app)
-        .get(`/api/v2/user/${SUBPAGES_USERNAME}/subpages`)
+        .get(`/api/user/${SUBPAGES_USERNAME}/subpages`)
         .query({ limit: 2, offset: 0 })
         .set('Authorization', `Bearer ${viewerToken}`);
       const page2 = await request(app)
-        .get(`/api/v2/user/${SUBPAGES_USERNAME}/subpages`)
+        .get(`/api/user/${SUBPAGES_USERNAME}/subpages`)
         .query({ limit: 2, offset: 2 })
         .set('Authorization', `Bearer ${viewerToken}`);
       const page3 = await request(app)
-        .get(`/api/v2/user/${SUBPAGES_USERNAME}/subpages`)
+        .get(`/api/user/${SUBPAGES_USERNAME}/subpages`)
         .query({ limit: 2, offset: 4 })
         .set('Authorization', `Bearer ${viewerToken}`);
 
@@ -396,7 +396,7 @@ describe('Routes /api/v2/user (Hono)', () => {
       );
 
       const firstPage = await request(app)
-        .get(`/api/v2/user/${SUBPAGES_USERNAME}/subpages`)
+        .get(`/api/user/${SUBPAGES_USERNAME}/subpages`)
         .query({ limit: 2, offset: 0 })
         .set('Authorization', `Bearer ${viewerToken}`);
       expect(firstPage.status).toBe(200);
@@ -409,7 +409,7 @@ describe('Routes /api/v2/user (Hono)', () => {
       await Fixture.generate('Page', [{ path: `${PREFIX}/race-000-inserted`, grant: Page().GRANT_PUBLIC, creator: subpagesOwner, status: 'published' }]);
 
       const secondPage = await request(app)
-        .get(`/api/v2/user/${SUBPAGES_USERNAME}/subpages`)
+        .get(`/api/user/${SUBPAGES_USERNAME}/subpages`)
         .query({ limit: 2, offset: 2 })
         .set('Authorization', `Bearer ${viewerToken}`);
       // The response must not blow up even though the boundary shifted.
@@ -425,7 +425,7 @@ describe('Routes /api/v2/user (Hono)', () => {
       // A follow-up fetch from the top (the tab's `refetchOnMount:
       // 'always'` behaviour) always converges on the true, current set.
       const refetch = await request(app)
-        .get(`/api/v2/user/${SUBPAGES_USERNAME}/subpages`)
+        .get(`/api/user/${SUBPAGES_USERNAME}/subpages`)
         .query({ limit: 10, offset: 0 })
         .set('Authorization', `Bearer ${viewerToken}`);
       expect(refetch.status).toBe(200);
@@ -439,7 +439,7 @@ describe('Routes /api/v2/user (Hono)', () => {
     it('400 VALIDATION_ERROR for out-of-range or non-integer limit/offset', async () => {
       const cases = [{ limit: 0 }, { limit: 51 }, { offset: -1 }, { limit: 2.5 }];
       for (const query of cases) {
-        const res = await request(app).get(`/api/v2/user/${SUBPAGES_USERNAME}/subpages`).query(query).set('Authorization', `Bearer ${viewerToken}`);
+        const res = await request(app).get(`/api/user/${SUBPAGES_USERNAME}/subpages`).query(query).set('Authorization', `Bearer ${viewerToken}`);
         expect(res.status).toBe(400);
         expect(res.body.error.code).toBe('VALIDATION_ERROR');
       }
@@ -449,7 +449,7 @@ describe('Routes /api/v2/user (Hono)', () => {
       await Fixture.generate('Page', [{ path: `${PREFIX}/only-one`, grant: Page().GRANT_PUBLIC, creator: subpagesOwner, status: 'published' }]);
 
       const res = await request(app)
-        .get(`/api/v2/user/${SUBPAGES_USERNAME}/subpages`)
+        .get(`/api/user/${SUBPAGES_USERNAME}/subpages`)
         .query({ limit: 10, offset: 100000 })
         .set('Authorization', `Bearer ${viewerToken}`);
 
@@ -459,13 +459,13 @@ describe('Routes /api/v2/user (Hono)', () => {
     });
 
     it('returns 404 USER_NOT_FOUND for an unknown username', async () => {
-      const res = await request(app).get('/api/v2/user/no-such-user/subpages').set('Authorization', `Bearer ${viewerToken}`);
+      const res = await request(app).get('/api/user/no-such-user/subpages').set('Authorization', `Bearer ${viewerToken}`);
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('USER_NOT_FOUND');
     });
 
     it('returns 401 AUTHENTICATION_REQUIRED without a bearer token', async () => {
-      const res = await request(app).get(`/api/v2/user/${SUBPAGES_USERNAME}/subpages`);
+      const res = await request(app).get(`/api/user/${SUBPAGES_USERNAME}/subpages`);
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
     });
@@ -473,7 +473,7 @@ describe('Routes /api/v2/user (Hono)', () => {
     it('returns 500 INTERNAL_ERROR when the model layer throws unexpectedly (no fold-to-empty-200)', async () => {
       const spy = jest.spyOn(Page(), 'findSubpagesByUserNamespace').mockRejectedValueOnce(new Error('boom'));
       try {
-        const res = await request(app).get(`/api/v2/user/${SUBPAGES_USERNAME}/subpages`).set('Authorization', `Bearer ${viewerToken}`);
+        const res = await request(app).get(`/api/user/${SUBPAGES_USERNAME}/subpages`).set('Authorization', `Bearer ${viewerToken}`);
         expect(res.status).toBe(500);
         expect(res.body.error.code).toBe('INTERNAL_ERROR');
       } finally {
@@ -484,7 +484,7 @@ describe('Routes /api/v2/user (Hono)', () => {
     describe('scope boundary (RFC-0010) — profile:read AND pages:read, tested against the real expanded URL', () => {
       it('403 INSUFFICIENT_SCOPE with a profile:read-only token', async () => {
         const oauthToken = createJwtUtil(crowi).signOauthAccessToken({ user: subpagesOwner, scopes: ['profile:read'], clientId: 'crowi-cli' });
-        const res = await request(app).get(`/api/v2/user/${SUBPAGES_USERNAME}/subpages`).set('Authorization', `Bearer ${oauthToken}`);
+        const res = await request(app).get(`/api/user/${SUBPAGES_USERNAME}/subpages`).set('Authorization', `Bearer ${oauthToken}`);
         expect(res.status).toBe(403);
         expect(res.body.error.code).toBe('INSUFFICIENT_SCOPE');
         expect(res.headers['www-authenticate']).toContain('insufficient_scope');
@@ -492,7 +492,7 @@ describe('Routes /api/v2/user (Hono)', () => {
 
       it('403 INSUFFICIENT_SCOPE with a pages:read-only token', async () => {
         const oauthToken = createJwtUtil(crowi).signOauthAccessToken({ user: subpagesOwner, scopes: ['pages:read'], clientId: 'crowi-cli' });
-        const res = await request(app).get(`/api/v2/user/${SUBPAGES_USERNAME}/subpages`).set('Authorization', `Bearer ${oauthToken}`);
+        const res = await request(app).get(`/api/user/${SUBPAGES_USERNAME}/subpages`).set('Authorization', `Bearer ${oauthToken}`);
         expect(res.status).toBe(403);
         expect(res.body.error.code).toBe('INSUFFICIENT_SCOPE');
         expect(res.headers['www-authenticate']).toContain('insufficient_scope');
@@ -500,13 +500,13 @@ describe('Routes /api/v2/user (Hono)', () => {
 
       it('200 with a token holding both profile:read and pages:read', async () => {
         const oauthToken = createJwtUtil(crowi).signOauthAccessToken({ user: subpagesOwner, scopes: ['profile:read', 'pages:read'], clientId: 'crowi-cli' });
-        const res = await request(app).get(`/api/v2/user/${SUBPAGES_USERNAME}/subpages`).set('Authorization', `Bearer ${oauthToken}`);
+        const res = await request(app).get(`/api/user/${SUBPAGES_USERNAME}/subpages`).set('Authorization', `Bearer ${oauthToken}`);
         expect(res.status).toBe(200);
       });
 
       it('200 with the umbrella read scope (implies both profile:read and pages:read)', async () => {
         const oauthToken = createJwtUtil(crowi).signOauthAccessToken({ user: subpagesOwner, scopes: ['read'], clientId: 'crowi-cli' });
-        const res = await request(app).get(`/api/v2/user/${SUBPAGES_USERNAME}/subpages`).set('Authorization', `Bearer ${oauthToken}`);
+        const res = await request(app).get(`/api/user/${SUBPAGES_USERNAME}/subpages`).set('Authorization', `Bearer ${oauthToken}`);
         expect(res.status).toBe(200);
       });
     });
@@ -528,7 +528,7 @@ describe('Routes /api/v2/user (Hono)', () => {
     });
 
     it('lists active users name-ascending with pager + total, excluding non-active users', async () => {
-      const res = await request(app).get('/api/v2/users').query({ limit: 50, offset: 0 }).set('Authorization', `Bearer ${viewerToken}`);
+      const res = await request(app).get('/api/users').query({ limit: 50, offset: 0 }).set('Authorization', `Bearer ${viewerToken}`);
       expect(res.status).toBe(200);
       expect(res.body.pager).toMatchObject({ offset: 0 });
       const usernames = res.body.users.map((u: { username: string }) => u.username);
@@ -547,7 +547,7 @@ describe('Routes /api/v2/user (Hono)', () => {
     });
 
     it('filters by q against username/name (case-insensitive)', async () => {
-      const res = await request(app).get('/api/v2/users').query({ q: 'target' }).set('Authorization', `Bearer ${viewerToken}`);
+      const res = await request(app).get('/api/users').query({ q: 'target' }).set('Authorization', `Bearer ${viewerToken}`);
       expect(res.status).toBe(200);
       const usernames = res.body.users.map((u: { username: string }) => u.username);
       expect(usernames).toContain(TARGET_USERNAME);
@@ -555,7 +555,7 @@ describe('Routes /api/v2/user (Hono)', () => {
     });
 
     it('paginates via limit/offset and exposes a next cursor', async () => {
-      const res = await request(app).get('/api/v2/users').query({ limit: 1, offset: 0 }).set('Authorization', `Bearer ${viewerToken}`);
+      const res = await request(app).get('/api/users').query({ limit: 1, offset: 0 }).set('Authorization', `Bearer ${viewerToken}`);
       expect(res.status).toBe(200);
       expect(res.body.users.length).toBe(1);
       expect(res.body.total).toBeGreaterThanOrEqual(2);
@@ -564,7 +564,7 @@ describe('Routes /api/v2/user (Hono)', () => {
     });
 
     it('returns 401 AUTHENTICATION_REQUIRED without a bearer token', async () => {
-      const res = await request(app).get('/api/v2/users');
+      const res = await request(app).get('/api/users');
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
     });

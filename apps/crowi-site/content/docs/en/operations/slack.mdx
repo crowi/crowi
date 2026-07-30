@@ -21,8 +21,8 @@ HTTP routes:
 
 | Route | Auth | Purpose |
 | ----- | ---- | ------- |
-| `POST /api/v2/plugins/@crowi/plugin-slack/events` | Slack signature only (public) | Inbound Slack Events API endpoint. Receives `link_shared` and calls `chat.unfurl` |
-| `POST /api/v2/plugins/@crowi/plugin-slack/manifest` | Admin (JWT) | Generates the Slack App manifest (called from the admin button) |
+| `POST /api/plugins/@crowi/plugin-slack/events` | Slack signature only (public) | Inbound Slack Events API endpoint. Receives `link_shared` and calls `chat.unfurl` |
+| `POST /api/plugins/@crowi/plugin-slack/manifest` | Admin (JWT) | Generates the Slack App manifest (called from the admin button) |
 
 The inbound endpoint is public to Crowi's own auth, but every request is
 verified by **Slack's request signature** (HMAC-SHA256 with a ±5-minute
@@ -53,7 +53,7 @@ A link to the Slack app creation page
 button. The manifest embeds:
 
 - app & bot name = your wiki's name (`app:title`)
-- `event_subscriptions.request_url` = `{CLIENT_URL}/api/v2/plugins/@crowi/plugin-slack/events`
+- `event_subscriptions.request_url` = `{CLIENT_URL}/api/plugins/@crowi/plugin-slack/events`
 - subscribed bot events = `link_shared`
 - unfurl domains = this Crowi instance's host
 - OAuth scopes (least-privilege) = `links:read` / `links:write` / `chat:write`

@@ -10,11 +10,33 @@ import type { PluginRenderCacheDocument, PluginRenderCacheModel } from 'src/mode
 export const SINGLE_ENTRY_WARN_BYTES = 50 * 1024;
 /** Per-entry reject threshold. Above this we drop the write and let the caller fall back to a placeholder. */
 export const SINGLE_ENTRY_REJECT_BYTES = 100 * 1024;
-/** Per-page cumulative reject threshold. */
+/** Per-page cumulative reject threshold (html budget — unchanged from Phase 4). */
 export const PER_PAGE_REJECT_BYTES = 10 * 1024 * 1024;
+/**
+ * RFC-0023 (design doc §11) — per-page cumulative budget for
+ * `result.structured` bytes, INDEPENDENT of the html budget (the
+ * structured copy shares the same image bytes the html already embeds;
+ * summing the two would newly reject entries that pass today with the
+ * web output unchanged). Exceeding it strips `structured` from the
+ * write (html still lands) — it never rejects the entry.
+ */
+export const PER_PAGE_STRUCTURED_REJECT_BYTES = 10 * 1024 * 1024;
 
 /** Why a `set()` call rejected the entry. Surfaced to the SWR wrapper for placeholder fallback. */
 export type CacheSetReject = 'entry-too-large' | 'page-quota-exceeded';
+
+/**
+ * RFC-0023 (design doc §11) — non-destructive verdict returned by
+ * `setOrReject`. `reject` keeps the Phase 4 semantics (html-driven,
+ * entry not written); `structuredStripped` reports that the entry WAS
+ * written but with `result.structured` dropped (per-entry or per-page
+ * structured budget). The storage never mutates the passed entry —
+ * callers build the effective result from the verdict.
+ */
+export interface CacheSetVerdict {
+  reject: CacheSetReject | null;
+  structuredStripped: boolean;
+}
 
 export interface MongoCacheStorageDeps {
   PluginRenderCache: PluginRenderCacheModel;
@@ -91,11 +113,22 @@ export class MongoCacheStorage implements CacheStorage {
   }
 
   /**
-   * Like `set` but returns the rejection reason instead of silently
-   * dropping. Used by the SWR wrapper to fall back to a placeholder
-   * when an oversized payload would otherwise vanish from the cache.
+   * Like `set` but returns a verdict instead of silently dropping.
+   * Used by the SWR wrapper to fall back to a placeholder when an
+   * oversized payload would otherwise vanish from the cache, and (RFC-
+   * 0023 §11) to learn whether the structured payload was stripped.
+   *
+   * `html` and `structured` run through INDEPENDENT budgets:
+   *   - `htmlBytes` per-entry / per-page gates are byte-identical to
+   *     Phase 4 (a `structured`-carrying entry is never newly rejected
+   *     because of its structured copy — the web output is unchanged).
+   *   - `structuredBytes` exceeding `SINGLE_ENTRY_REJECT_BYTES` or the
+   *     page-cumulative `PER_PAGE_STRUCTURED_REJECT_BYTES` strips just
+   *     `result.structured` and writes an html-only entry.
+   *
+   * Never mutates `entry` (non-destructive contract, §11).
    */
-  async setOrReject(key: CacheKey, entry: CacheEntry): Promise<CacheSetReject | null> {
+  async setOrReject(key: CacheKey, entry: CacheEntry): Promise<CacheSetVerdict> {
     const html = entry.html;
     const htmlBytes = Buffer.byteLength(html, 'utf8');
 
@@ -103,7 +136,7 @@ export class MongoCacheStorage implements CacheStorage {
       this.deps.log.warn(
         `[plugin-render-cache] entry too large; refusing to write. pluginName=${key.pluginName} pageId=${key.pageId} bytes=${htmlBytes} (limit=${SINGLE_ENTRY_REJECT_BYTES})`,
       );
-      return 'entry-too-large';
+      return { reject: 'entry-too-large', structuredStripped: false };
     }
     if (htmlBytes > SINGLE_ENTRY_WARN_BYTES) {
       this.deps.log.warn(
@@ -111,45 +144,86 @@ export class MongoCacheStorage implements CacheStorage {
       );
     }
 
+    // Structured payload measurement. The `persistRenderResult` caller
+    // already normalises pathological payloads, but `setOrReject` is
+    // also reachable through the plugin-facing `set()` — so the
+    // stringify is guarded here too (throwing `toJSON` / cycles strip
+    // the payload rather than failing the write).
+    let structured = entry.result.structured;
+    let structuredBytes = 0;
+    let structuredStripped = false;
+    if (structured !== undefined) {
+      try {
+        structuredBytes = Buffer.byteLength(JSON.stringify(structured), 'utf8');
+      } catch {
+        this.deps.log.warn(`[plugin-render-cache] structured payload not serialisable; stripping. pluginName=${key.pluginName} pageId=${key.pageId}`);
+        structured = undefined;
+        structuredBytes = 0;
+        structuredStripped = true;
+      }
+      if (structuredBytes > SINGLE_ENTRY_REJECT_BYTES) {
+        this.deps.log.warn(
+          `[plugin-render-cache] structured payload too large; stripping (html still written). pluginName=${key.pluginName} pageId=${key.pageId} bytes=${structuredBytes} (limit=${SINGLE_ENTRY_REJECT_BYTES})`,
+        );
+        structured = undefined;
+        structuredBytes = 0;
+        structuredStripped = true;
+      }
+    }
+
     // Per-page cumulative check. One aggregate computes the page-wide
-    // total and the existing-entry-for-this-key bytes simultaneously,
-    // so the projected total after the upsert can be checked in one
-    // round-trip (plus the upsert itself). `htmlBytes` is denormalised
-    // on the doc so the sum is a cheap `$sum: '$htmlBytes'` rather
-    // than `$strLenBytes` over every cached HTML string.
+    // totals (html + structured, two independent budgets) and the
+    // existing-entry-for-this-key bytes simultaneously, so the
+    // projected totals after the upsert can be checked in one
+    // round-trip (plus the upsert itself). `htmlBytes` /
+    // `structuredBytes` are denormalised on the doc so the sums stay
+    // cheap `$sum`s.
     const pageId = new Types.ObjectId(key.pageId);
-    const cumulative = await this.deps.PluginRenderCache.aggregate<{ totalBytes: number; existingBytes: number }>([
+    const keyMatchesCond = {
+      $and: [{ $eq: ['$pluginName', key.pluginName] }, { $eq: ['$embedKey', key.embedKey] }, { $eq: ['$pluginCacheVersion', key.pluginCacheVersion] }],
+    };
+    const cumulative = await this.deps.PluginRenderCache.aggregate<{
+      totalBytes: number;
+      existingBytes: number;
+      totalStructuredBytes: number;
+      existingStructuredBytes: number;
+    }>([
       { $match: { pageId } },
       {
         $group: {
           _id: null,
           totalBytes: { $sum: '$htmlBytes' },
-          existingBytes: {
-            $sum: {
-              $cond: [
-                {
-                  $and: [
-                    { $eq: ['$pluginName', key.pluginName] },
-                    { $eq: ['$embedKey', key.embedKey] },
-                    { $eq: ['$pluginCacheVersion', key.pluginCacheVersion] },
-                  ],
-                },
-                '$htmlBytes',
-                0,
-              ],
-            },
-          },
+          existingBytes: { $sum: { $cond: [keyMatchesCond, '$htmlBytes', 0] } },
+          // Pre-RFC-0023 rows have no `structuredBytes` — `$ifNull` keeps the sum defined.
+          totalStructuredBytes: { $sum: { $ifNull: ['$structuredBytes', 0] } },
+          existingStructuredBytes: { $sum: { $cond: [keyMatchesCond, { $ifNull: ['$structuredBytes', 0] }, 0] } },
         },
       },
     ]).exec();
-    const { totalBytes = 0, existingBytes = 0 } = cumulative[0] ?? {};
+    const { totalBytes = 0, existingBytes = 0, totalStructuredBytes = 0, existingStructuredBytes = 0 } = cumulative[0] ?? {};
     const projected = totalBytes - existingBytes + htmlBytes;
     if (projected > PER_PAGE_REJECT_BYTES) {
       this.deps.log.warn(
         `[plugin-render-cache] page would exceed cumulative quota; refusing to write. pluginName=${key.pluginName} pageId=${key.pageId} projectedBytes=${projected} (limit=${PER_PAGE_REJECT_BYTES})`,
       );
-      return 'page-quota-exceeded';
+      return { reject: 'page-quota-exceeded', structuredStripped: false };
     }
+    if (structured !== undefined) {
+      const projectedStructured = totalStructuredBytes - existingStructuredBytes + structuredBytes;
+      if (projectedStructured > PER_PAGE_STRUCTURED_REJECT_BYTES) {
+        this.deps.log.warn(
+          `[plugin-render-cache] page would exceed structured quota; stripping structured (html still written). pluginName=${key.pluginName} pageId=${key.pageId} projectedBytes=${projectedStructured} (limit=${PER_PAGE_STRUCTURED_REJECT_BYTES})`,
+        );
+        structured = undefined;
+        structuredBytes = 0;
+        structuredStripped = true;
+      }
+    }
+
+    // Build the persisted `result` non-destructively: strip `structured`
+    // into a copy when the verdict says so.
+    const { structured: _rawStructured, ...resultRest } = entry.result;
+    const persistedResult: RenderResult = structured !== undefined ? { ...resultRest, structured } : { ...resultRest };
 
     // `lastGoodFetchedAt` is optional and, unlike every other field
     // here, can legitimately need to be CLEARED (a stale-if-error entry
@@ -165,9 +239,10 @@ export class MongoCacheStorage implements CacheStorage {
         pluginCacheVersion: key.pluginCacheVersion,
         html,
         htmlBytes,
+        structuredBytes,
         fetchedAt: entry.fetchedAt,
         expiresAt: entry.expiresAt,
-        result: entry.result satisfies RenderResult,
+        result: persistedResult satisfies RenderResult,
       },
     };
     if (entry.lastGoodFetchedAt) {
@@ -186,7 +261,7 @@ export class MongoCacheStorage implements CacheStorage {
       update,
       { upsert: true },
     ).exec();
-    return null;
+    return { reject: null, structuredStripped };
   }
 
   /** Drop every cached entry for a page. Returns the number of deleted rows. */

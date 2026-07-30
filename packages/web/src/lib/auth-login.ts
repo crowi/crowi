@@ -1,6 +1,6 @@
 'use client';
 
-import { apiClientV2 } from './api-client';
+import { apiClient } from './api-client';
 import { storeTokens } from './auth-token';
 import { errorMessage } from './error-message';
 import { m } from '@paraglide/messages.js';
@@ -20,7 +20,7 @@ export type LoginResult = { ok: true; username: string } | { ok: false; message:
 
 export async function loginWithPassword(email: string, password: string): Promise<LoginResult> {
   try {
-    const response = await apiClientV2.auth.login.$post({
+    const response = await apiClient.auth.login.$post({
       json: { email, password },
     });
 

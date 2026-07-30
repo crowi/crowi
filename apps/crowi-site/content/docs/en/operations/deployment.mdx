@@ -35,7 +35,7 @@ internal address (`http://api:3000`); external clients never use it.
 The distributed `crowi/crowi-web` image bakes **no** absolute API URL. Three
 URLs are at play — keep them separate:
 
-- **Browser → api (HTTP)**: the browser calls **relative** paths (`/api/v2/...`,
+- **Browser → api (HTTP)**: the browser calls **relative** paths (`/api/...`,
   `/files/...`) on its **own origin** by default. The front proxy routes them to
   the api. (If you expose the Next server directly without a front proxy, its
   `rewrites()` can also proxy `/api` + `/files` — but only in dev or when the
@@ -169,7 +169,7 @@ CLIENT_URL=https://wiki.example.com              # CORS allow-origin (exact matc
 
 <Callout type="warn">
   **Inline images, avatars and file downloads do not work cross-origin.** They
-  are emitted as **relative** URLs (`/api/v2/attachments/by-key/…`, `/files/…`)
+  are emitted as **relative** URLs (`/api/attachments/by-key/…`, `/files/…`)
   that the browser loads from the *web* origin, not the api — and the by-key
   image route is authenticated by the first-party `crowi.accessToken` cookie,
   which an `<img>` on a different origin cannot send. So a separate-origin
@@ -228,7 +228,7 @@ letting Vercel's edge be the proxy:
 zero-dependency Node fallback) using the same routing table as the production
 front proxy. **`:4304` is the canonical dev entry point**:
 
-- **HTTP**: the browser calls relative `/api/v2/...` against `:4304`; the
+- **HTTP**: the browser calls relative `/api/...` against `:4304`; the
   proxy routes api paths to `:4301` and everything else to the web server.
 - **WebSocket**: `/collab`, `/presence`, and `/notifications` upgrade through
   the same `:4304` origin — the resolver derives the URL from

@@ -6,7 +6,7 @@ import { authedFetch, CliError, EXIT } from '../lib/http';
 import { requireProfile } from './_shared';
 
 /**
- * The `GET /api/v2/search` response (SearchPagesResponseSchema). Parsed
+ * The `GET /api/search` response (SearchPagesResponseSchema). Parsed
  * leniently — only the fields the CLI renders are declared; extra/missing
  * fields are tolerated for version-skew across self-hosted servers.
  */
@@ -35,7 +35,7 @@ function flattenSnippet(snippet: string): string {
 }
 
 /**
- * `crowi search <query>` — full-text search via `GET /api/v2/search`
+ * `crowi search <query>` — full-text search via `GET /api/search`
  * (`pages:read`, in the default login scope). Prints one `path — snippet`
  * row per hit; `--json` emits the raw response. When the server has no
  * search plugin active the endpoint returns 503, surfaced as a clear

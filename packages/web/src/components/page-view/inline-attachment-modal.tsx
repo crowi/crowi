@@ -18,7 +18,7 @@ const noopDelete = () => Promise.resolve();
  * references.
  *
  * `AttachmentDetailModal` (Phase 6) was built for the page-footer list and
- * receives a fully-resolved `Attachment` object. A `/api/v2/attachments/<id>`
+ * receives a fully-resolved `Attachment` object. A `/api/attachments/<id>`
  * link / embed in a page body carries only the id, so this wrapper fetches
  * the metadata via `useAttachment(id)` (react-query, `attachmentsKeys.detail`
  * — repeated body references share one fetch) and hands the modal a resolved

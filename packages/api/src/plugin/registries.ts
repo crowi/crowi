@@ -95,8 +95,8 @@ export const makeMailScope = (registry: DriverRegistry<MailSender>, plugin: stri
  * driver scopes above (which only close over a name + a registry), this
  * one mutates the live Hono app: every `scope.route(...)` mounts a route
  * on `app`'s underlying instance at `/plugins/<plugin>/<path>` (the
- * `/api/v2` prefix is stripped at the listener boundary, so the route
- * answers at `/api/v2/plugins/<plugin>/<path>`).
+ * `/api` prefix is stripped at the listener boundary, so the route
+ * answers at `/api/plugins/<plugin>/<path>`).
  *
  * The `<plugin>` npm name becomes a path segment as-is — npm names allow
  * `/` (`@crowi/plugin-slack`) but Hono treats each `/`-delimited piece as

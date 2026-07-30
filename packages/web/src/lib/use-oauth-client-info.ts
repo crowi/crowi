@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { apiClientV2 } from './api-client';
+import { apiClient } from './api-client';
 
 /**
  * RFC-0016 §4.4 — `GET /oauth/client-info` lookup for the authorize page.
@@ -21,7 +21,7 @@ export function useOAuthClientInfo(clientId: string) {
   return useQuery({
     queryKey: oauthClientInfoKeys.detail(clientId),
     queryFn: async () => {
-      const response = await apiClientV2.oauth['client-info'].$get({ query: { client_id: clientId } });
+      const response = await apiClient.oauth['client-info'].$get({ query: { client_id: clientId } });
       if (response.status === 404) {
         return null;
       }

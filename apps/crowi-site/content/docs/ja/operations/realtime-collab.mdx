@@ -168,8 +168,8 @@ server {
     listen 443 ssl http2;
     server_name crowi.example.com;
 
-    # /api/v2/* と /collab を同じ upstream へ
-    location /api/v2/ {
+    # /api/* と /collab を同じ upstream へ
+    location /api/ {
         proxy_pass http://crowi_api;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
@@ -203,14 +203,14 @@ server {
 # docker-compose.yml の api service に
 labels:
   - "traefik.enable=true"
-  - "traefik.http.routers.crowi-api.rule=Host(`crowi.example.com`) && (PathPrefix(`/api/v2`) || PathPrefix(`/collab`))"
+  - "traefik.http.routers.crowi-api.rule=Host(`crowi.example.com`) && (PathPrefix(`/api`) || PathPrefix(`/collab`))"
   - "traefik.http.services.crowi-api.loadbalancer.server.port=3000"
   # スティッキーセッション無効 (デフォルト)
 ```
 
 ポイント:
 
-- `/api/v2/pages/:id/yjs-token` (HTTP) と `/collab` (WebSocket。HocuspocusProvider
+- `/api/pages/:id/yjs-token` (HTTP) と `/collab` (WebSocket。HocuspocusProvider
   が bare `/collab` で接続し、page id は protocol 経由で送る) を同じ api アップ
   ストリームに向ける必要があります。
 - WebSocket 接続のアイドルタイムアウトは長め (1 時間程度) に設定して

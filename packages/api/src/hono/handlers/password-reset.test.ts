@@ -31,32 +31,32 @@ const resetTokenFor = (user: UserDocument, email: string): string =>
     resetGeneration: user.passwordResetGeneration ?? 0,
   }).token;
 
-describe('Routes /api/v2/auth password reset (Hono)', () => {
-  describe('POST /api/v2/auth/forgot-password', () => {
+describe('Routes /api/auth password reset (Hono)', () => {
+  describe('POST /api/auth/forgot-password', () => {
     it('returns 200 for an existing account', async () => {
       await createActiveUser('exists@example.com');
-      const res = await request(app).post('/api/v2/auth/forgot-password').set(jsonHeaders).send({ email: 'exists@example.com' });
+      const res = await request(app).post('/api/auth/forgot-password').set(jsonHeaders).send({ email: 'exists@example.com' });
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ ok: true });
     });
 
     it('returns 200 for an unknown account (anti-enumeration)', async () => {
-      const res = await request(app).post('/api/v2/auth/forgot-password').set(jsonHeaders).send({ email: 'nobody@example.com' });
+      const res = await request(app).post('/api/auth/forgot-password').set(jsonHeaders).send({ email: 'nobody@example.com' });
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ ok: true });
     });
   });
 
-  describe('GET /api/v2/auth/reset-password', () => {
+  describe('GET /api/auth/reset-password', () => {
     it('validates a good token', async () => {
       const user = await createActiveUser('validate@example.com');
       const token = resetTokenFor(user, 'validate@example.com');
-      const res = await request(app).get('/api/v2/auth/reset-password').query({ token });
+      const res = await request(app).get('/api/auth/reset-password').query({ token });
       expect(res.status).toBe(200);
     });
 
     it('rejects a bad token with 401', async () => {
-      const res = await request(app).get('/api/v2/auth/reset-password').query({ token: 'nope' });
+      const res = await request(app).get('/api/auth/reset-password').query({ token: 'nope' });
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe('INVALID_RESET_TOKEN');
     });
@@ -70,18 +70,18 @@ describe('Routes /api/v2/auth password reset (Hono)', () => {
       user.email = 'validate-new@example.com';
       await user.save();
 
-      const res = await request(app).get('/api/v2/auth/reset-password').query({ token });
+      const res = await request(app).get('/api/auth/reset-password').query({ token });
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe('INVALID_RESET_TOKEN');
     });
   });
 
-  describe('POST /api/v2/auth/reset-password', () => {
+  describe('POST /api/auth/reset-password', () => {
     it('sets a new password and signs the user in', async () => {
       const user = await createActiveUser('reset@example.com');
       const token = resetTokenFor(user, 'reset@example.com');
 
-      const res = await request(app).post('/api/v2/auth/reset-password').set(jsonHeaders).send({ token, password: 'brand-new-pw' });
+      const res = await request(app).post('/api/auth/reset-password').set(jsonHeaders).send({ token, password: 'brand-new-pw' });
       expect(res.status).toBe(200);
       expect(res.body.accessToken).toBeTruthy();
       expect(res.body.refreshToken).toBeTruthy();
@@ -94,7 +94,7 @@ describe('Routes /api/v2/auth password reset (Hono)', () => {
     });
 
     it('rejects an invalid token with 401', async () => {
-      const res = await request(app).post('/api/v2/auth/reset-password').set(jsonHeaders).send({ token: 'bogus', password: 'whatever123' });
+      const res = await request(app).post('/api/auth/reset-password').set(jsonHeaders).send({ token: 'bogus', password: 'whatever123' });
       expect(res.status).toBe(401);
     });
 
@@ -102,12 +102,12 @@ describe('Routes /api/v2/auth password reset (Hono)', () => {
       const user = await createActiveUser('replay@example.com');
       const token = resetTokenFor(user, 'replay@example.com');
 
-      const first = await request(app).post('/api/v2/auth/reset-password').set(jsonHeaders).send({ token, password: 'owner-chosen-pw' });
+      const first = await request(app).post('/api/auth/reset-password').set(jsonHeaders).send({ token, password: 'owner-chosen-pw' });
       expect(first.status).toBe(200);
 
       // Same token, still inside its 1h TTL: whoever got hold of the link
       // afterwards must not be able to take the account over.
-      const second = await request(app).post('/api/v2/auth/reset-password').set(jsonHeaders).send({ token, password: 'attacker-pw' });
+      const second = await request(app).post('/api/auth/reset-password').set(jsonHeaders).send({ token, password: 'attacker-pw' });
       expect(second.status).toBe(401);
       expect(second.body.accessToken).toBeUndefined();
 
@@ -127,22 +127,22 @@ describe('Routes /api/v2/auth password reset (Hono)', () => {
 
       // The attacker's token works right up until the reset.
       const before = await request(app)
-        .get('/api/v2/me')
+        .get('/api/me')
         .set({ Authorization: `Bearer ${attackerToken}` });
       expect(before.status).toBe(200);
 
       const token = resetTokenFor(user, 'evict@example.com');
-      const reset = await request(app).post('/api/v2/auth/reset-password').set(jsonHeaders).send({ token, password: 'owner-regained-pw' });
+      const reset = await request(app).post('/api/auth/reset-password').set(jsonHeaders).send({ token, password: 'owner-regained-pw' });
       expect(reset.status).toBe(200);
 
       const after = await request(app)
-        .get('/api/v2/me')
+        .get('/api/me')
         .set({ Authorization: `Bearer ${attackerToken}` });
       expect(after.status).toBe(401);
 
       // ...while the pair minted by the reset itself is usable.
       const fresh = await request(app)
-        .get('/api/v2/me')
+        .get('/api/me')
         .set({ Authorization: `Bearer ${reset.body.accessToken}` });
       expect(fresh.status).toBe(200);
     });
@@ -158,7 +158,7 @@ describe('Routes /api/v2/auth password reset (Hono)', () => {
       user.email = 'new-mailbox@example.com';
       await user.save();
 
-      const res = await request(app).post('/api/v2/auth/reset-password').set(jsonHeaders).send({ token, password: 'stale-mailbox-pw' });
+      const res = await request(app).post('/api/auth/reset-password').set(jsonHeaders).send({ token, password: 'stale-mailbox-pw' });
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe('INVALID_RESET_TOKEN');
 
@@ -171,7 +171,7 @@ describe('Routes /api/v2/auth password reset (Hono)', () => {
     it('rejects a token of the wrong purpose (invite token) with 401', async () => {
       const user = await createActiveUser('wrongpurpose@example.com');
       const inviteToken = createMailTokenUtil().signMailToken({ purpose: 'invite', userId: user._id.toString(), email: 'wrongpurpose@example.com' }).token;
-      const res = await request(app).post('/api/v2/auth/reset-password').set(jsonHeaders).send({ token: inviteToken, password: 'whatever123' });
+      const res = await request(app).post('/api/auth/reset-password').set(jsonHeaders).send({ token: inviteToken, password: 'whatever123' });
       expect(res.status).toBe(401);
     });
   });

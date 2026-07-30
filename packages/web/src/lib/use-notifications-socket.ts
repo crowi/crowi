@@ -3,7 +3,7 @@
 import { NotificationsServerMessageSchema, type NotificationsTokenResponse, WS_CLOSE_CODES } from '@crowi/api-contract';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef } from 'react';
-import { apiClientV2 } from './api-client';
+import { apiClient } from './api-client';
 import { backoffDelayMs, type CloseCodePolicy, createReconnectingSocket } from './create-reconnecting-socket';
 import { resolveWsUrl } from './resolve-ws-url';
 import { useAuth } from './use-auth';
@@ -164,7 +164,7 @@ function useNotificationsToken(enabled: boolean, authedUserId: string | null) {
   return useQuery({
     queryKey: ['notificationsToken', authedUserId],
     queryFn: async (): Promise<NotificationsTokenResponse> => {
-      const response = await apiClientV2.notifications.token.$get();
+      const response = await apiClient.notifications.token.$get();
       if (!response.ok) {
         const body = await response.json().catch(() => null);
         const message =

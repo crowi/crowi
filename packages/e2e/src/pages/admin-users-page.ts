@@ -13,7 +13,7 @@ export class AdminUsersPage {
     await this.page.locator('input[type="checkbox"]').check();
 
     await Promise.all([
-      this.page.waitForResponse((response) => response.url().endsWith('/api/v2/admin/users/invite') && response.request().method() === 'POST' && response.ok()),
+      this.page.waitForResponse((response) => response.url().endsWith('/api/admin/users/invite') && response.request().method() === 'POST' && response.ok()),
       this.page.locator('form button[type="submit"]').click(),
     ]);
 

@@ -99,6 +99,20 @@ describe('@crowi/plugin-renderer-mermaid — success path (8 diagram types)', ()
       const expectedHeight = Math.round(Number(dimsMatch?.[2]));
       expect(result.html).toContain(`width="${expectedWidth}"`);
       expect(result.html).toContain(`height="${expectedHeight}"`);
+      // RFC-0023 §10 — the crowiDiagram structured sidecar: same
+      // sanitized SVG bytes as the html's data URL (Mermaid's sanitize
+      // is already the strict allowSafeHref:false policy — no second
+      // pass), REQUIRED intrinsic dimensions matching the html's.
+      const structured = (result as { structured?: { node: Record<string, unknown> } }).structured;
+      expect(structured).toBeDefined();
+      const node = structured?.node as { type: string; kind: string; alt: string; image: { mediaType: string; base64: string; width: number; height: number } };
+      expect(node.type).toBe('crowiDiagram');
+      expect(node.kind).toBe('mermaid');
+      expect(node.alt).toBe(altMatch?.[1]);
+      expect(node.image.mediaType).toBe('image/svg+xml');
+      expect(node.image.width).toBe(expectedWidth);
+      expect(node.image.height).toBe(expectedHeight);
+      expect(result.html).toContain(node.image.base64); // same bytes the html embeds
     },
     30_000,
   );
@@ -113,8 +127,8 @@ describe('@crowi/plugin-renderer-mermaid — success path (8 diagram types)', ()
     expect(a).toMatch(/^[0-9a-f]{64}$/);
   });
 
-  it('declares admissionControl / previewPolicy / cacheVersion / reservation per spec §6/§7', () => {
-    expect(renderer.cacheVersion).toBe(3);
+  it('declares admissionControl / previewPolicy / cacheVersion / reservation per spec §6/§7 (cacheVersion 4 — RFC-0023 §13 structured sidecar bump)', () => {
+    expect(renderer.cacheVersion).toBe(4);
     expect(renderer.admissionControl).toEqual({ maxConcurrentGlobal: 4, maxConcurrentPerUser: 2, queueDepth: 200 });
     expect(renderer.previewPolicy).toBe('server-render');
     expect(renderer.reservation).toEqual({ variant: 'aspect', aspectRatio: 16 / 9 });

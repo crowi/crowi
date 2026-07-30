@@ -27,7 +27,7 @@ import type { UsePresenceOptions } from '@/lib/use-presence';
  * in `use-presence.test.ts`) so tests can invoke `onPageUpdated` /
  * `onReconnected` / `onAccessRevoked` directly and control
  * `pageUpdatedSeq` deterministically. `usePage` is the REAL hook, wired
- * to a real `QueryClient` and a mocked `apiClientV2.pages.$get` — this is
+ * to a real `QueryClient` and a mocked `apiClient.pages.$get` — this is
  * what lets a reconcile cache write actually flow back into what
  * `usePage` (and therefore `PageView`) renders, exactly as in production.
  */
@@ -43,7 +43,7 @@ const { routerPush, routerReplace, routerBack } = vi.hoisted(() => ({ routerPush
 
 vi.mock('@/lib/use-presence', () => ({ usePresence }));
 vi.mock('@/lib/api-client', () => ({
-  apiClientV2: {
+  apiClient: {
     pages: {
       $get: getPage,
       revisions: { ':id': { $get: getRevision } },
@@ -679,7 +679,7 @@ describe('comment invalidate (AC21) + head-fetch failure (AC22)', () => {
   // status code. Paired with the server-side test that proves `GET /pages`
   // actually RETURNS 500 (not 404) when the render-artifact fallback
   // pipeline throws: `packages/api/src/hono/handlers/page.test.ts`
-  // ("Routes /api/v2/pages (Hono getPage — unknown-error 500 split, ...)"
+  // ("Routes /api/pages (Hono getPage — unknown-error 500 split, ...)"
   // > "returns 500 INTERNAL_ERROR (not 404) when the render-artifact
   // fallback pipeline throws"). Together the two tests cover both ends of
   // AC26: the server never collapses that failure into 404, and the client

@@ -406,7 +406,7 @@ tokens.
 
 ```
 1. Browser opens /pages/<id>/edit
-2. HTTP request: GET /api/v2/pages/<id>/yjs-token
+2. HTTP request: GET /api/pages/<id>/yjs-token
    - Verifies HTTP session
    - Checks user has edit permission on this page
    - Returns: { wsToken: "...", pageId, expiresAt }
@@ -571,7 +571,7 @@ The editor side of RFC-0002's `mode: 'edit'` semantic:
   client renders a **placeholder** based on the registered embed's
   `reservation` (RFC-0002). No fetch, no cache lookup.
 - If the user clicks the placeholder, the client fires a one-shot
-  HTTP `POST /api/v2/render/embed-preview` with the embed input. The
+  HTTP `POST /api/render/embed-preview` with the embed input. The
   server invokes the renderer with `mode: 'view'` (RFC-0002), which
   bypasses stale-while-revalidate. Result is shown in the editor
   in-place but does NOT modify the Y.Doc — it's purely a UI preview.
@@ -917,7 +917,7 @@ Out of scope (deferred):
    api process via `@crowi/collab` (Phase 8.5). The api's `http.Server`
    handles `/collab/*` WebSocket upgrades directly; no reverse-proxy
    hop or separate process is required.
-3. **wsToken endpoint**: implement `GET /api/v2/pages/:id/yjs-token`
+3. **wsToken endpoint**: implement `GET /api/pages/:id/yjs-token`
    with JWT signing.
 4. **Hocuspocus hooks**: `onAuthenticate`, `onConnect`, `onLoadDocument`,
    `onStoreDocument`.

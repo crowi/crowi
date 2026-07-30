@@ -149,7 +149,7 @@ Instead:
   - read the instance **version** (see *server prerequisite* below) → on an
     unsupported skew, **warn** ("CLI vX may not fully support instance vY") but
     still attempt;
-  - optionally fetch the instance's **live `GET /api/v2/openapi.json`** (already
+  - optionally fetch the instance's **live `GET /api/openapi.json`** (already
     served by every instance via `doc31('/openapi.json', …)`) to **feature-gate**
     commands — i.e. detect whether the target advertises an endpoint/param
     before offering it.
@@ -158,7 +158,7 @@ Instead:
   lacks), surface a clear *"your Crowi instance (vY) doesn't support `crowi
   <cmd>`; requires ≥ vZ"* rather than a raw error.
 - **Server prerequisite (companion change)**: there is currently **no reliable
-  instance-version signal** — `GET /api/v2/app/info` returns only `{ title }`
+  instance-version signal** — `GET /api/app/info` returns only `{ title }`
   and the OpenAPI `info.version` is hard-coded `'2.0.0'`
   (`packages/api/src/hono/index.ts:197`). Add one of: a `version` (and maybe
   `apiVersion`) field to `/app/info`, or make `openapi.json`'s `info.version`
@@ -286,7 +286,7 @@ scripting. Exit non-zero on error (mapped from the API error envelope's
 | HTTP transport | thin `authedFetch` (own) | bearer inject + 401→refresh; **lenient response parsing** (§3.3) |
 | Request shapes / arg validation | api-contract Zod **request** schemas | parse CLI args → `CreatePageRequestSchema` etc. before sending (the v2 floor) |
 | Endpoint set / paths | api-contract contracts | the routes the CLI knows; responses read leniently, not strictly typed |
-| Instance version / capabilities | live `GET /api/v2/openapi.json` + a version signal | per-profile cache; warn on skew, feature-gate (§3.4) |
+| Instance version / capabilities | live `GET /api/openapi.json` + a version signal | per-profile cache; warn on skew, feature-gate (§3.4) |
 | Auth (OAuth client, discovery, device, PAT, scopes) | RFC-0010 | the CLI is the `crowi-cli` client; nothing server-side to add |
 | 401→refresh→retry | `packages/web/src/lib/api-client.ts` (pattern) | same shape, OAuth refresh grant instead of session refresh |
 | Package/build template | `@crowi/admin-cli` | commander + tsup + `bin` + `publishConfig` (but no `@crowi/api` dep) |
@@ -340,7 +340,7 @@ scripting. Exit non-zero on error (mapped from the API error envelope's
 6. **renameTree** — `crowi mv` gains a `--recursive` once `feature-rename-tree`
    lands.
 7. **Instance version signal (companion server change, §3.4)** — add `version`
-   (+ maybe `apiVersion`) to `GET /api/v2/app/info`, or sync `openapi.json`'s
+   (+ maybe `apiVersion`) to `GET /api/app/info`, or sync `openapi.json`'s
    `info.version` to the package version (already an alpha1-RFC open question),
    or a dedicated `/version`. Decide which the CLI reads. **Blocking for skew
    warnings; non-blocking for lenient parsing.**
@@ -361,7 +361,7 @@ scripting. Exit non-zero on error (mapped from the API error envelope's
   `packages/api-contract/src/schemas/*` (arg schemas),
   `packages/web/src/lib/api-client.ts` (401→refresh pattern),
   `packages/admin-cli/*` (package/build template),
-  `packages/api/src/hono/index.ts:192-197` (live `/api/v2/openapi.json` +
+  `packages/api/src/hono/index.ts:192-197` (live `/api/openapi.json` +
   hard-coded `info.version`), `packages/api-contract/src/schemas/app.ts`
   (`AppInfoResponseSchema` — currently `{ title }` only, needs a `version`).
 - Prior art: `kubectl` (runtime API discovery + version skew tolerance),

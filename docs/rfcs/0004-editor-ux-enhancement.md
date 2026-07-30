@@ -98,8 +98,8 @@ editor from "usable" to "productive".
 ┌────────── CodeMirror 6 editor (from RFC-0003) ──────────┐
 │                                                         │
 │   ─ @codemirror/autocomplete extension                  │  
-│         ├─ user source        ◀──── /api/v2/users/...   │
-│         └─ page source        ◀──── /api/v2/pages/...   │
+│         ├─ user source        ◀──── /api/users/...      │
+│         └─ page source        ◀──── /api/pages/...      │
 │                                                         │
 │   ─ paste handler                                       │
 │         ├─ URL: insert autolink or Markdown link        │
@@ -114,12 +114,12 @@ editor from "usable" to "productive".
                        │ HTTP
                        ▼
 ┌──────── Crowi HTTP server ──────────────────────────────┐
-│   /api/v2/users/autocomplete?q=...                      │
-│   /api/v2/pages/autocomplete?q=...                      │
-│   /api/v2/attachments/upload (multipart)                │
-│   /api/v2/pages/drafts          (list user's drafts)    │
-│   /api/v2/pages/drafts (POST)   (create new draft)      │
-│   /api/v2/pages/drafts/:id (DELETE) (cancel draft)      │
+│   /api/users/autocomplete?q=...                         │
+│   /api/pages/autocomplete?q=...                         │
+│   /api/attachments/upload (multipart)                   │
+│   /api/pages/drafts          (list user's drafts)       │
+│   /api/pages/drafts (POST)   (create new draft)         │
+│   /api/pages/drafts/:id (DELETE) (cancel draft)         │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -231,8 +231,8 @@ without requiring background pub/sub or sub-second polling.
 ### HTTP API
 
 ```
-GET /api/v2/users/autocomplete?q=<prefix>&limit=10
-GET /api/v2/pages/autocomplete?q=<prefix>&limit=10
+GET /api/users/autocomplete?q=<prefix>&limit=10
+GET /api/pages/autocomplete?q=<prefix>&limit=10
 
 Response:
 {
@@ -303,7 +303,7 @@ another app):
    (e.g. `pasted-1717891234.png`).
 2. **Placeholder**: insert `![Uploading pasted-1717891234.png (0%)…](#)`
    at the cursor position.
-3. **Upload**: POST to `/api/v2/attachments/upload`, streaming
+3. **Upload**: POST to `/api/attachments/upload`, streaming
    progress.
 4. **Progress updates**: as upload progresses, edit the placeholder
    text in place (Yjs transaction) to update the percentage:
@@ -378,7 +378,7 @@ For each dropped file:
 2. Insert placeholder at cursor position:
    `![Uploading filename.png (0%)…](#)` or
    `[Uploading filename.pdf (0%)…](#)`.
-3. POST to `/api/v2/attachments/upload` with progress streaming.
+3. POST to `/api/attachments/upload` with progress streaming.
 4. Update placeholder text with percentage (same as paste).
 5. On success: replace with the final `![](url)` / `[](url)`.
 6. On failure: replace with `![Upload failed: filename.png](#)` /
@@ -417,7 +417,7 @@ The upload endpoint returns the canonical attachment URL.
 ## Attachment upload endpoint
 
 ```
-POST /api/v2/attachments/upload
+POST /api/attachments/upload
 Content-Type: multipart/form-data
 
 Fields:
@@ -476,7 +476,7 @@ Page {
 ```
 User clicks "New page" / "+ at path X"
   ↓
-HTTP: POST /api/v2/pages/drafts { path: "X" }
+HTTP: POST /api/pages/drafts { path: "X" }
   - Server checks: no other published page at X
   - Server checks: no other user's draft at X (else: conflict)
   - Server creates Page { path: X, status: 'draft', author: <user> }
@@ -513,7 +513,7 @@ If Alice creates a draft at `/docs/api`, and Bob tries to create a
 new page at the same path:
 
 ```
-Bob → POST /api/v2/pages/drafts { path: "/docs/api" }
+Bob → POST /api/pages/drafts { path: "/docs/api" }
    ← 409 Conflict {
        error: 'path_taken_by_draft',
        owner: { id, username, displayName },
@@ -554,14 +554,14 @@ operators visibility into stuck drafts if needed.
 ### Schema and API
 
 ```
-GET    /api/v2/pages/drafts            — list current user's drafts
-POST   /api/v2/pages/drafts            — create a new draft at a path
-                                          (body: { path, initialBody? })
-DELETE /api/v2/pages/drafts/<pageId>   — cancel a draft (author only)
+GET    /api/pages/drafts            — list current user's drafts
+POST   /api/pages/drafts            — create a new draft at a path
+                                       (body: { path, initialBody? })
+DELETE /api/pages/drafts/<pageId>   — cancel a draft (author only)
 ```
 
 The existing page CRUD APIs accept a `status` field and filter
-appropriately (a `GET /api/v2/pages/by-path/<path>` returns 404 for
+appropriately (a `GET /api/pages/by-path/<path>` returns 404 for
 drafts unless the requester is the author).
 
 ### No localStorage fallback
@@ -666,14 +666,14 @@ In scope:
 - Dropdown UI with display/insert text separation.
 - "Refresh results" affordance in dropdown.
 - Mobile suppression of autocomplete.
-- `GET /api/v2/users/autocomplete` endpoint.
-- `GET /api/v2/pages/autocomplete` endpoint.
+- `GET /api/users/autocomplete` endpoint.
+- `GET /api/pages/autocomplete` endpoint.
 - Paste handler (URL + image with progress).
 - Drag-and-drop handler with cursor-positioned drop.
 - Read-only mode D&D suppression.
-- `POST /api/v2/attachments/upload` endpoint with progress streaming.
+- `POST /api/attachments/upload` endpoint with progress streaming.
 - Draft page state: `Page.status: 'draft' | 'published'`.
-- `POST /api/v2/pages/drafts` (create), `GET` (list), `DELETE`
+- `POST /api/pages/drafts` (create), `GET` (list), `DELETE`
   (cancel).
 - Same-path draft conflict (409 with owner info).
 - Author-only access to drafts (Yjs and HTTP).
@@ -787,7 +787,7 @@ Out of scope (other RFCs or deferred):
 2. **Draft page state**: schema migration to add `Page.status`;
    existing pages default to `'published'`. Update relevant queries
    to filter drafts.
-3. **Draft endpoints**: `POST/GET/DELETE /api/v2/pages/drafts`.
+3. **Draft endpoints**: `POST/GET/DELETE /api/pages/drafts`.
 4. **Creating pages view**: frontend route + listing UI.
 5. **Same-path conflict response and UI**: 409 handling, owner
    info display.
@@ -800,7 +800,7 @@ Out of scope (other RFCs or deferred):
    filtering and rate limiting.
 9. **Paste handler**: URL detection, image blob detection with
    placeholder + progress updates.
-10. **`POST /api/v2/attachments/upload`**: wrap existing storage with
+10. **`POST /api/attachments/upload`**: wrap existing storage with
     progress streaming.
 11. **Drag-and-drop**: dragenter/dragover/drop handlers, file
     iteration, placeholder + progress updates.

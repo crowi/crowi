@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { apiClientV2 } from '@/lib/api-client';
+import { apiClient } from '@/lib/api-client';
 import { loginWithPassword } from '@/lib/auth-login';
 
 export function InstallerForm() {
@@ -32,11 +32,11 @@ export function InstallerForm() {
 
     try {
       // RFC-0006 Phase 4 Batch 1 — switched from `apiClient.installer.createAdmin`
-      // to `apiClientV2.installer.createAdmin.$post`. The Hono handler keeps the
+      // to `apiClient.installer.createAdmin.$post`. The Hono handler keeps the
       // legacy semantics: HTTP 200 with `status: 'ok' | 'error'` for the
       // create-user happy/sad path, and HTTP 400 when the app is already
       // installed (also carrying `status: 'error'`).
-      const response = await apiClientV2.installer.createAdmin.$post({
+      const response = await apiClient.installer.createAdmin.$post({
         json: {
           registerForm: formData,
         },

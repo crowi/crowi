@@ -7,7 +7,7 @@ import { UserPublicSchema } from './user-public';
  * - `creator` is populated server-side via `Attachment.getListByPageId`
  *   (or after `Attachment.create()` on the add path) so consumers always
  *   see the public user shape and never bare ObjectId strings.
- * - `url` is a relative URL (`/api/v2/attachments/:id`) computed by the
+ * - `url` is a relative URL (`/api/attachments/:id`) computed by the
  *   handler from the document's `fileUrl` virtual. Browsers fetch the
  *   stream endpoint via the same origin, so absolute URLs are not needed.
  *   feature-image-derivative-optimization Phase 2 — this URL now serves the
@@ -17,7 +17,7 @@ import { UserPublicSchema } from './user-public';
  *   `${url}/original` — always resolves to the original bytes regardless of
  *   `derivatives.display`. Derived, not stored (same as `url`).
  * - `inUse` (Phase 7) is `true` when the attachment is referenced by the
- *   page's latest revision body (a `/api/v2/attachments/<id>` or legacy
+ *   page's latest revision body (a `/api/attachments/<id>` or legacy
  *   `/files/<id>` URI). `listAttachments` computes it by scanning the
  *   latest revision body once; when the revision is missing or empty it
  *   falls back to `true` for every attachment so files are not hidden
@@ -42,7 +42,7 @@ export const AttachmentSchema = z.object({
 export type Attachment = z.infer<typeof AttachmentSchema>;
 
 /**
- * Attachment metadata as returned by `GET /api/v2/attachments/:id/meta`.
+ * Attachment metadata as returned by `GET /api/attachments/:id/meta`.
  *
  * Identical to `AttachmentSchema` minus `inUse`: the meta endpoint resolves
  * a bare attachment id (a body reference carries no page context) and
@@ -143,7 +143,7 @@ export const AttachmentErrorSchema = z.object({
 export type AttachmentError = z.infer<typeof AttachmentErrorSchema>;
 
 /**
- * RFC-0004 Phase 6 — `POST /api/v2/attachments/upload`.
+ * RFC-0004 Phase 6 — `POST /api/attachments/upload`.
  *
  * The editor's paste / drag-and-drop handlers upload a file directly
  * (multipart) and immediately splice the returned `url` into the
@@ -162,7 +162,7 @@ export const UploadAttachmentResponseSchema = z.object({
 export type UploadAttachmentResponse = z.infer<typeof UploadAttachmentResponseSchema>;
 
 /**
- * Error envelope for `POST /api/v2/attachments/upload`. The `error`
+ * Error envelope for `POST /api/attachments/upload`. The `error`
  * codes are lowercase + RFC-specified (distinct from the uppercase
  * `AttachmentErrorCodeSchema` used by the list / add / delete endpoints)
  * because the editor maps each code to a specific user-facing toast:
@@ -185,7 +185,7 @@ export const UploadAttachmentErrorSchema = z.object({
 export type UploadAttachmentError = z.infer<typeof UploadAttachmentErrorSchema>;
 
 /**
- * MIME allow-lists for `POST /api/v2/attachments/upload`, shared by the
+ * MIME allow-lists for `POST /api/attachments/upload`, shared by the
  * api handler (authoritative enforcement) and the web editor's paste /
  * drag-and-drop handlers (early client-side rejection). Kept here so the
  * two sides cannot drift — see `docs/rfcs/0004-editor-ux-enhancement.md`

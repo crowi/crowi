@@ -18,7 +18,7 @@ const reloadConfigCache = async () => {
   await crowi.getConfigService().load();
 };
 
-describe('Routes /api/v2/admin/mail (Hono)', () => {
+describe('Routes /api/admin/mail (Hono)', () => {
   let Config;
   let adminToken: string;
   let adminEmail: string;
@@ -38,15 +38,15 @@ describe('Routes /api/v2/admin/mail (Hono)', () => {
     await reloadConfigCache();
   });
 
-  describe('GET /api/v2/admin/mail', () => {
+  describe('GET /api/admin/mail', () => {
     it('returns 401 without auth', async () => {
-      const res = await request(app).get('/api/v2/admin/mail');
+      const res = await request(app).get('/api/admin/mail');
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
     });
 
     it('returns 403 for a non-admin user', async () => {
-      const res = await request(app).get('/api/v2/admin/mail').set(authHeaders(memberToken));
+      const res = await request(app).get('/api/admin/mail').set(authHeaders(memberToken));
       expect(res.status).toBe(403);
       expect(res.body.error.code).toBe('ADMIN_REQUIRED');
     });
@@ -55,7 +55,7 @@ describe('Routes /api/v2/admin/mail (Hono)', () => {
       await Config.updateConfig('crowi', 'mail:from', 'noreply@example.com');
       await reloadConfigCache();
 
-      const res = await request(app).get('/api/v2/admin/mail').set(authHeaders(adminToken));
+      const res = await request(app).get('/api/admin/mail').set(authHeaders(adminToken));
       expect(res.status).toBe(200);
       // The default-on @crowi/plugin-mail-smtp registers the 'smtp' driver,
       // selected by the default mail.driver. No crowi.config.json in tests.
@@ -63,36 +63,36 @@ describe('Routes /api/v2/admin/mail (Hono)', () => {
     });
 
     it('returns an empty from when unset', async () => {
-      const res = await request(app).get('/api/v2/admin/mail').set(authHeaders(adminToken));
+      const res = await request(app).get('/api/admin/mail').set(authHeaders(adminToken));
       expect(res.status).toBe(200);
       expect(res.body.from).toBe('');
     });
   });
 
-  describe('PUT /api/v2/admin/mail', () => {
+  describe('PUT /api/admin/mail', () => {
     it('returns 401 without auth', async () => {
-      const res = await request(app).put('/api/v2/admin/mail').send({ from: 'a@example.com' });
+      const res = await request(app).put('/api/admin/mail').send({ from: 'a@example.com' });
       expect(res.status).toBe(401);
     });
 
     it('returns 403 for a non-admin user', async () => {
-      const res = await request(app).put('/api/v2/admin/mail').set(authHeaders(memberToken)).send({ from: 'a@example.com' });
+      const res = await request(app).put('/api/admin/mail').set(authHeaders(memberToken)).send({ from: 'a@example.com' });
       expect(res.status).toBe(403);
     });
 
     it('persists the from address and round-trips via GET', async () => {
-      const res = await request(app).put('/api/v2/admin/mail').set(authHeaders(adminToken)).send({ from: 'noreply@example.com' });
+      const res = await request(app).put('/api/admin/mail').set(authHeaders(adminToken)).send({ from: 'noreply@example.com' });
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ ok: true });
 
-      const get = await request(app).get('/api/v2/admin/mail').set(authHeaders(adminToken));
+      const get = await request(app).get('/api/admin/mail').set(authHeaders(adminToken));
       expect(get.status).toBe(200);
       expect(get.body.from).toBe('noreply@example.com');
     });
 
     it('accepts an empty body and is a no-op', async () => {
       const before = await Config.countDocuments({ ns: 'crowi' }).exec();
-      const res = await request(app).put('/api/v2/admin/mail').set(authHeaders(adminToken)).send({});
+      const res = await request(app).put('/api/admin/mail').set(authHeaders(adminToken)).send({});
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ ok: true });
       const after = await Config.countDocuments({ ns: 'crowi' }).exec();
@@ -100,7 +100,7 @@ describe('Routes /api/v2/admin/mail (Hono)', () => {
     });
   });
 
-  describe('POST /api/v2/admin/mail/test', () => {
+  describe('POST /api/admin/mail/test', () => {
     let originalMail: MailSender | null;
 
     beforeEach(() => {
@@ -112,12 +112,12 @@ describe('Routes /api/v2/admin/mail (Hono)', () => {
     });
 
     it('returns 401 without auth', async () => {
-      const res = await request(app).post('/api/v2/admin/mail/test').send({});
+      const res = await request(app).post('/api/admin/mail/test').send({});
       expect(res.status).toBe(401);
     });
 
     it('returns 403 for a non-admin user', async () => {
-      const res = await request(app).post('/api/v2/admin/mail/test').set(authHeaders(memberToken)).send({});
+      const res = await request(app).post('/api/admin/mail/test').set(authHeaders(memberToken)).send({});
       expect(res.status).toBe(403);
     });
 
@@ -127,7 +127,7 @@ describe('Routes /api/v2/admin/mail (Hono)', () => {
       const sendSpy = jest.fn(async () => undefined);
       crowi.getPlugins().active.mail = { send: sendSpy };
 
-      const res = await request(app).post('/api/v2/admin/mail/test').set(authHeaders(adminToken)).send({});
+      const res = await request(app).post('/api/admin/mail/test').set(authHeaders(adminToken)).send({});
 
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ ok: true, to: adminEmail });
@@ -141,7 +141,7 @@ describe('Routes /api/v2/admin/mail (Hono)', () => {
       const sendSpy = jest.fn(async () => undefined);
       crowi.getPlugins().active.mail = { send: sendSpy };
 
-      const res = await request(app).post('/api/v2/admin/mail/test').set(authHeaders(adminToken)).send({});
+      const res = await request(app).post('/api/admin/mail/test').set(authHeaders(adminToken)).send({});
 
       expect(res.status).toBe(502);
       expect(res.body.error.code).toBe('MAIL_TEST_FAILED');
@@ -157,7 +157,7 @@ describe('Routes /api/v2/admin/mail (Hono)', () => {
         }),
       };
 
-      const res = await request(app).post('/api/v2/admin/mail/test').set(authHeaders(adminToken)).send({});
+      const res = await request(app).post('/api/admin/mail/test').set(authHeaders(adminToken)).send({});
 
       expect(res.status).toBe(502);
       expect(res.body.error).toEqual({ code: 'MAIL_TEST_FAILED', message: 'connect ECONNREFUSED' });

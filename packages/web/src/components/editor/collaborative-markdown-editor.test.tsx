@@ -48,13 +48,13 @@ const { getYjsToken, FakeProvider, providerInstances } = vi.hoisted(() => {
   return { getYjsToken: vi.fn(), FakeProvider, providerInstances: instances };
 });
 
-// RFC-0006 Batch 5 — `useYjsToken` reads `apiClientV2.pages[':id']
+// RFC-0006 Batch 5 — `useYjsToken` reads `apiClient.pages[':id']
 // ['yjs-token'].$get` (Response-shaped) instead of the ts-rest
 // `apiClient.pageCollab.getYjsToken` envelope. The mock surface
-// matches what `apiClientV2` (a `createClient` typed client) exposes
+// matches what `apiClient` (a `createClient` typed client) exposes
 // at runtime.
 vi.mock('@/lib/api-client', () => ({
-  apiClientV2: {
+  apiClient: {
     pages: {
       ':id': {
         'yjs-token': { $get: getYjsToken },
@@ -62,8 +62,8 @@ vi.mock('@/lib/api-client', () => ({
     },
   },
   // RFC-0004: the paste handler's upload-placeholder builds its URL from
-  // `apiV2BaseUrl()` (read at call time) — the editor imports it transitively.
-  apiV2BaseUrl: () => 'http://localhost:4301/api/v2',
+  // `apiBaseUrl()` (read at call time) — the editor imports it transitively.
+  apiBaseUrl: () => 'http://localhost:4301/api',
 }));
 
 // Phase 8: useCollabSession now reads `useAuth()` to publish the
@@ -131,7 +131,7 @@ const validTokenResponse = (overrides: { readonly?: boolean; pageId?: string } =
   readonly: overrides.readonly ?? false,
 });
 
-/** Build a `Response`-shaped mock matching what `apiClientV2`'s real fetch returns. */
+/** Build a `Response`-shaped mock matching what `apiClient`'s real fetch returns. */
 const tokenOkResponse = <T,>(body: T): { ok: true; status: number; json: () => Promise<T> } => ({
   ok: true,
   status: 200,

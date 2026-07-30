@@ -1,16 +1,16 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiClientV2, apiV2BaseUrl } from './api-client';
+import { apiClient, apiBaseUrl } from './api-client';
 import { getAccessToken } from './auth-token';
 import type { Attachment, AttachmentMeta, ListAttachmentsResponse } from '@crowi/api-contract';
 
 /**
  * RFC-0006 Phase 4 Batch 6 — switched from `apiClient.attachment.*`
- * (ts-rest) to `apiClientV2.pages[':pageId'].attachments.*` /
- * `apiClientV2.attachments[':id'].*` (`createClient`). Wire payload is
+ * (ts-rest) to `apiClient.pages[':pageId'].attachments.*` /
+ * `apiClient.attachments[':id'].*` (`createClient`). Wire payload is
  * unchanged. `useAddAttachment` continues to use a bare `fetch` for the
- * multipart upload because `apiClientV2`'s `$post` does not surface
+ * multipart upload because `apiClient`'s `$post` does not surface
  * `XMLHttpRequest`-style upload progress and the existing code path is
  * already a hand-rolled fetch.
  */
@@ -30,7 +30,7 @@ export function useAttachmentList(pageId: string | undefined) {
     queryKey: pageId ? attachmentsKeys.list(pageId) : attachmentsKeys.all,
     queryFn: async (): Promise<ListAttachmentsResponse> => {
       if (!pageId) return { attachments: [] };
-      const response = await apiClientV2.pages[':pageId'].attachments.$get({ param: { pageId } });
+      const response = await apiClient.pages[':pageId'].attachments.$get({ param: { pageId } });
       if (response.ok) {
         return (await response.json()) as ListAttachmentsResponse;
       }
@@ -45,7 +45,7 @@ export function useAttachmentList(pageId: string | undefined) {
 /**
  * Fetch metadata for a single attachment by id (`GET /attachments/:id/meta`).
  *
- * Backs the in-body attachment modal: a `/api/v2/attachments/<id>` link or
+ * Backs the in-body attachment modal: a `/api/attachments/<id>` link or
  * embed in a page body carries only the id. The `attachmentsKeys.detail(id)`
  * cache key dedupes repeated body references — a page that embeds the same
  * attachment twice fetches its metadata once. `staleTime` is generous
@@ -59,7 +59,7 @@ export function useAttachment(id: string | undefined) {
     queryKey: attachmentsKeys.detail(id ?? ''),
     queryFn: async (): Promise<AttachmentMeta> => {
       if (!id) throw new Error('attachment id is required');
-      const response = await apiClientV2.attachments[':id'].meta.$get({ param: { id } });
+      const response = await apiClient.attachments[':id'].meta.$get({ param: { id } });
       if (!response.ok) {
         const body = (await response.json().catch(() => null)) as { error?: { message?: string } } | null;
         throw new Error(body?.error?.message ?? 'Failed to load attachment');
@@ -74,7 +74,7 @@ export function useAttachment(id: string | undefined) {
 
 /**
  * Upload a file as an attachment of `pageId`. Hand-rolled `fetch` rather
- * than going through the typed client because `apiClientV2`'s `$post`
+ * than going through the typed client because `apiClient`'s `$post`
  * does not currently surface upload progress; this fetch keeps the auth /
  * refresh behaviour aligned with the rest of the app by reading the
  * access token from `auth-token`.
@@ -89,7 +89,7 @@ export function useAddAttachment(pageId: string | undefined) {
       formData.append('file', file);
 
       const accessToken = getAccessToken();
-      const response = await fetch(`${apiV2BaseUrl()}/pages/${encodeURIComponent(pageId)}/attachments`, {
+      const response = await fetch(`${apiBaseUrl()}/pages/${encodeURIComponent(pageId)}/attachments`, {
         method: 'POST',
         headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
         body: formData,
@@ -117,7 +117,7 @@ export function useRemoveAttachment(pageId: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (attachmentId: string): Promise<void> => {
-      const response = await apiClientV2.attachments[':id'].$delete({ param: { id: attachmentId } });
+      const response = await apiClient.attachments[':id'].$delete({ param: { id: attachmentId } });
       if (!response.ok) {
         const body = (await response.json().catch(() => null)) as { error?: { message?: string } } | null;
         throw new Error(body?.error?.message ?? 'Failed to remove attachment');

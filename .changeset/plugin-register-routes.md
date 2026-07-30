@@ -3,7 +3,7 @@
 ---
 
 Plugin SDK: `registerRoutes(scope, ctx)` now mounts plugin-contributed HTTP
-routes on Hono at `/api/v2/plugins/<name>/<path>`. The previous no-op stub is
+routes on Hono at `/api/plugins/<name>/<path>`. The previous no-op stub is
 replaced by a real surface: `scope.route(method, path, handler, opts?)` takes a
 plain Hono `Context` handler, with a `public` flag (bypass Crowi auth for
 self-authenticating webhooks) and a guaranteed raw-body access (no body-consuming

@@ -1,13 +1,13 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { apiClientV2 } from './api-client';
+import { apiClient } from './api-client';
 import { revisionsKeys } from './page-query-keys';
 import type { Pager, Revision, RevisionMeta } from '@crowi/api-contract';
 
 /**
  * RFC-0006 Phase 4 Batch 3 — switched from `apiClient.revision.*`
- * (ts-rest) to `apiClientV2.pages.*.$get` (`createClient`). Wire payload
+ * (ts-rest) to `apiClient.pages.*.$get` (`createClient`). Wire payload
  * is unchanged.
  */
 export interface UsePageRevisionsResult {
@@ -30,7 +30,7 @@ export function usePageRevisions(pageId: string | null | undefined, params: { li
       if (!pageId) {
         return { revisions: [] as RevisionMeta[], pager: null as Pager | null };
       }
-      const response = await apiClientV2.pages[':page_id'].revisions.$get({
+      const response = await apiClient.pages[':page_id'].revisions.$get({
         param: { page_id: pageId },
         query: {
           limit: String(params.limit ?? 50),
@@ -79,7 +79,7 @@ export function useRevisionPair(idA: string | null | undefined, idB: string | nu
     queryKey: revisionPairKey(idA ?? '', idB ?? ''),
     queryFn: async () => {
       if (!ids) return [] as Revision[];
-      const response = await apiClientV2.pages.revisions.$get({ query: { ids } });
+      const response = await apiClient.pages.revisions.$get({ query: { ids } });
       if (!response.ok) throw new Error('Failed to fetch revisions');
       const body = await response.json();
       return body.revisions;

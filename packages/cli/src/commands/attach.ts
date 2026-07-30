@@ -29,7 +29,7 @@ interface AddAttachmentResponse {
 
 /**
  * `crowi attach list <path-or-id>` — list a page's attachments
- * (`GET /api/v2/pages/{pageId}/attachments`, needs `attachments:read`).
+ * (`GET /api/pages/{pageId}/attachments`, needs `attachments:read`).
  */
 async function runList(pathOrId: string, command: Command): Promise<void> {
   const { profile, globals } = requireProfile(command);
@@ -60,7 +60,7 @@ async function runList(pathOrId: string, command: Command): Promise<void> {
 
 /**
  * `crowi attach add <path-or-id> <file>` — upload a local file to a page
- * (`POST /api/v2/pages/{pageId}/attachments`, multipart, needs
+ * (`POST /api/pages/{pageId}/attachments`, multipart, needs
  * `attachments:write`). Builds a `FormData` from the Node 18+ globals; the
  * boundary `Content-Type` is set by `fetch`, so we never set it ourselves.
  */

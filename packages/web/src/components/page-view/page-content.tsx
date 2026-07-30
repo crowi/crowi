@@ -2,10 +2,11 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import { Check, Copy, Link2, X } from 'lucide-react';
-import type { PageWithRevision } from '@crowi/api-contract';
+import { type PageWithRevision, unwrapRenderedAst } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 import Link from 'next/link';
 import { useCopyFeedback } from '@/lib/use-copy-feedback';
+import { canonicalizeLegacyAttachmentUrl } from '@/lib/attachment-url';
 import {
   getFigureLayoutClassName,
   getImageDisplayStyle,
@@ -226,7 +227,12 @@ const components = {
   h4: makeHeading('h4'),
   h5: makeHeading('h5'),
   h6: makeHeading('h6'),
-  a: ({ href, children, className, ...props }: { href?: string; children?: React.ReactNode; className?: string }) => {
+  a: ({ href: rawHref, children, className, ...props }: { href?: string; children?: React.ReactNode; className?: string }) => {
+    // Canonicalize a persisted legacy `/api/v2/attachments/...` href BEFORE
+    // any detection/use below (spec §5.3) — every subsequent branch
+    // (attachment link, internal router link, plain external `<a>`) reads
+    // the canonical value. A no-op for every other href shape.
+    const href = canonicalizeLegacyAttachmentUrl(rawHref);
     const isExternal = href?.startsWith('http://') || href?.startsWith('https://');
     // Wikilinks / mentions stamp `className` server-side via
     // `data.hProperties.className`; mdast-util-to-hast forwards that
@@ -245,7 +251,7 @@ const components = {
       : isMention
         ? 'text-primary font-medium decoration-primary/40 hover:decoration-primary/70 underline underline-offset-[3px] transition-colors'
         : 'text-primary decoration-primary/30 hover:decoration-primary/70 underline underline-offset-[3px] transition-colors';
-    // Attachment references (`/api/v2/attachments/<id>` or legacy
+    // Attachment references (`/api/attachments/<id>` or legacy
     // `/files/<id>`) open the detail modal on left-click instead of
     // full-page-navigating to the raw file — see `InlineAttachmentLink`.
     const attachmentId = extractAttachmentId(href);
@@ -376,7 +382,15 @@ const components = {
     style?: React.CSSProperties;
     [key: string]: unknown;
   }) => {
-    const srcString = typeof src === 'string' ? src : undefined;
+    const rawSrcString = typeof src === 'string' ? src : undefined;
+    // Canonicalize a persisted legacy `/api/v2/attachments/...` src BEFORE
+    // the by-key-aware `extractAttachmentId()` detection below (spec §5.3):
+    // a by-key src (`/api/v2/attachments/by-key/user%2F<id>.<ext>`) never
+    // matches the 24-hex-id detection regex, so detecting first would leave
+    // it un-canonicalized in the plain `<img>` fallback branch and 404.
+    // Canonicalizing first fixes both the `InlineAttachmentLink` branch and
+    // the fallback branch with the same call.
+    const srcString = canonicalizeLegacyAttachmentUrl(rawSrcString);
     // Server-rendered "ready diagram" presentation — an optional renderer
     // plugin's PNG-fallback or `<img>`-success output (core reads only the
     // generic `data-crowi-renderer-presentation="diagram"`/`data-crowi-
@@ -508,8 +522,13 @@ const components = {
 
 export function PageContent({ page }: PageContentProps) {
   const body = page.revision?.body || '';
-  const renderedAst = page.revision?.renderedAst;
+  // RFC-0023 §14 — every `renderedAst` read goes through the defensive
+  // `unwrapRenderedAst` normaliser (the web never receives the v1
+  // envelope in normal operation; this guards against a future
+  // header-emitting mistake / reverse-cache misconfiguration).
+  const renderedAst = unwrapRenderedAst(page.revision?.renderedAst);
   const revisionId = page.revision?._id;
+  const renderedAstArtifactKey = page.revision?.renderedAstArtifactKey;
 
   // URL hash is the single source of truth; `useSyncExternalStore`
   // re-renders on every `hashchange` (TOC click, anchor copy, browser
@@ -532,10 +551,17 @@ export function PageContent({ page }: PageContentProps) {
   // `renderMdastToReactNode` helper so the editor preview pane and
   // this show path stay byte-identical for the same input.
   //
-  // Memoized on `revisionId`, not `renderedAst`: react-query refetches
-  // (window focus, polling) hand back fresh-identity-but-same-content
-  // AST objects, and we don't want to redo the conversion on each one.
-  // A new revision means a new `_id`.
+  // Memoized on `[revisionId, renderedAstArtifactKey]` (RFC-0023 §14),
+  // not on `renderedAst` identity: react-query refetches (window
+  // focus, polling) hand back fresh-identity-but-same-content AST
+  // objects, and we don't want to redo the conversion on each one. But
+  // `revisionId` alone is NOT enough — the server can serve a
+  // DIFFERENT tree for the same revision (pending-marker retry
+  // resolving, freshness-mismatch recompute), and keying on the id
+  // alone kept showing the stale render. The server stamps
+  // `renderedAstArtifactKey` (stable for verbatim stored ASTs, a fresh
+  // nonce whenever the served tree may differ), so the memo re-runs
+  // exactly when the content can have changed.
   const renderedNode = useMemo(() => {
     return renderMdastToReactNode(renderedAst, {
       sectionWrap: true,
@@ -545,7 +571,7 @@ export function PageContent({ page }: PageContentProps) {
       components: components as unknown as Parameters<typeof renderMdastToReactNode>[1]['components'],
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [revisionId]);
+  }, [revisionId, renderedAstArtifactKey]);
 
   // Initial scroll. The browser's native anchor jump fires before
   // React commits, so the heading isn't there yet. Watch the document

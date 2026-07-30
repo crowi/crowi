@@ -59,6 +59,7 @@ interface RebuildCliApi {
   rebuildStorageCopy(opts: { from: string; to: string; dryRun?: boolean; progress?: RebuildProgress }): Promise<RebuildOutcome>;
   rebuildRenderer(opts?: { onlyStale?: boolean; dryRun?: boolean; progress?: RebuildProgress }): Promise<RebuildOutcome>;
   rebuildBacklink(opts?: { dryRun?: boolean; progress?: RebuildProgress }): Promise<RebuildOutcome>;
+  rebuildRenderedAst(opts?: { dryRun?: boolean; concurrency?: number; progress?: RebuildProgress }): Promise<RebuildOutcome>;
   rebuildAttachmentDisplayDerivatives(opts?: RebuildAttachmentDisplayDerivativesOptions): Promise<RebuildOutcome>;
 }
 
@@ -220,6 +221,24 @@ export function registerRebuild(program: Command): void {
       await withRebuildApi(async (api) => {
         const outcome = await api.rebuildBacklink({ dryRun: opts.dryRun, progress: liveProgress() });
         printOutcome('backlink', outcome);
+      });
+    });
+
+  rebuild
+    .command('rendered-ast')
+    .description(
+      'Backfill Revision.renderedAst (+ meta) for current revisions whose stored AST predates the running renderer pipeline (RFC-0023). Run with real writes right after deploying a RENDERER_PIPELINE_VERSION bump; use --dry-run for pre-deploy verification.',
+    )
+    .option('--dry-run', 'Count eligible revisions without writing.', false)
+    .option('--concurrency <n>', 'Bounded worker pool size for the re-render fan-out.', '4')
+    .action(async (opts: { dryRun: boolean; concurrency: string }) => {
+      await withRebuildApi(async (api) => {
+        const outcome = await api.rebuildRenderedAst({
+          dryRun: opts.dryRun,
+          concurrency: Number.parseInt(opts.concurrency, 10) || 4,
+          progress: liveProgress(),
+        });
+        printOutcome('rendered-ast', outcome);
       });
     });
 

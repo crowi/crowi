@@ -148,7 +148,7 @@ describe('buildManifest', () => {
   });
 
   it('points request_url at the namespaced /events route', () => {
-    expect(manifest.settings.event_subscriptions.request_url).toBe('https://wiki.example.com/api/v2/plugins/@crowi/plugin-slack/events');
+    expect(manifest.settings.event_subscriptions.request_url).toBe('https://wiki.example.com/api/plugins/@crowi/plugin-slack/events');
     expect(eventsRequestUrl(BASE_URL)).toBe(manifest.settings.event_subscriptions.request_url);
   });
 
@@ -175,7 +175,7 @@ describe('buildManifest', () => {
   });
 
   it('strips a trailing slash on the base URL', () => {
-    expect(eventsRequestUrl('https://wiki.example.com/')).toBe('https://wiki.example.com/api/v2/plugins/@crowi/plugin-slack/events');
+    expect(eventsRequestUrl('https://wiki.example.com/')).toBe('https://wiki.example.com/api/plugins/@crowi/plugin-slack/events');
   });
 });
 

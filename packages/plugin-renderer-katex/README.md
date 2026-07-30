@@ -36,14 +36,14 @@ webfonts it references) instead of requiring `@crowi/web` to carry a
   hook) copies `katex/dist/katex.min.css` and its referenced font
   files from the installed `katex` package into this plugin's own
   `dist/assets/`.
-- `registerRoutes` mounts `GET /api/v2/plugins/@crowi/plugin-renderer-katex/katex.min.css`
+- `registerRoutes` mounts `GET /api/plugins/@crowi/plugin-renderer-katex/katex.min.css`
   and a `fonts/:filename` route for each font, both public
   (unauthenticated), serving directly from the in-memory copy of
   those built-in assets — no filesystem path is built from the
   request, so there is no path-traversal surface.
 - `registerRenderer` advertises the CSS path via
   `registry.addStylesheet(...)`. The API publishes it in
-  `GET /api/v2/app/info`'s `rendererStylesheets` array once (and only
+  `GET /api/app/info`'s `rendererStylesheets` array once (and only
   once) `registerRoutes` above has succeeded, so the manifest never
   advertises an unreachable path.
 - The web app's `RendererStylesheets` component reads that manifest

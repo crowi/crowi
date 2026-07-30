@@ -46,7 +46,7 @@ test('search results pagination (numbered mode): page-number and Prev/Next click
 
   await test.step('clicking page "3" (skipping 2) issues a page=3 request and marks it active', async () => {
     const responsePromise = userAPage.waitForResponse(
-      (res: Response) => res.url().includes('/api/v2/search') && res.url().includes('page=3') && res.request().method() === 'GET',
+      (res: Response) => res.url().includes('/api/search') && res.url().includes('page=3') && res.request().method() === 'GET',
     );
     await userAPage.getByRole('button', { name: '3', exact: true }).click();
     await responsePromise;
@@ -57,7 +57,7 @@ test('search results pagination (numbered mode): page-number and Prev/Next click
     // Page 2 has not been fetched yet (we jumped from page 1 to page 3), so this
     // request is guaranteed to fire and will not be served from cache.
     const responsePromise = userAPage.waitForResponse(
-      (res: Response) => res.url().includes('/api/v2/search') && res.url().includes('page=2') && res.request().method() === 'GET',
+      (res: Response) => res.url().includes('/api/search') && res.url().includes('page=2') && res.request().method() === 'GET',
     );
     await userAPage.getByRole('button', { name: PREVIOUS_PATTERN }).click();
     await responsePromise;
@@ -91,7 +91,7 @@ test('admin users list pagination (numbered mode): clicking a page number fetche
 
   await test.step('clicking page "2" issues a page=2 request and marks it active', async () => {
     const responsePromise = adminPage.waitForResponse(
-      (res: Response) => res.url().includes('/api/v2/admin/users') && res.url().includes('page=2') && res.request().method() === 'GET',
+      (res: Response) => res.url().includes('/api/admin/users') && res.url().includes('page=2') && res.request().method() === 'GET',
     );
     await adminPage.getByRole('button', { name: '2', exact: true }).click();
     await responsePromise;
@@ -123,7 +123,7 @@ test('main page list pagination (prev-next mode): clicking Next/Previous updates
 
   await test.step('clicking Next issues an offset=100 request and shows "Page 2"', async () => {
     const responsePromise = userAPage.waitForResponse(
-      (res: Response) => res.url().includes('/api/v2/pages/list') && res.url().includes('offset=100') && res.request().method() === 'GET',
+      (res: Response) => res.url().includes('/api/pages/list') && res.url().includes('offset=100') && res.request().method() === 'GET',
     );
     await userAPage.getByRole('button', { name: NEXT_PATTERN }).click();
     await responsePromise;
