@@ -100,7 +100,7 @@ export function matchMediaImpl(isMatch: (query: string) => boolean): (query: str
 // ---------------------------------------------------------------------------
 
 /**
- * Build a `Response`-shaped object matching what `apiClientV2` (a
+ * Build a `Response`-shaped object matching what `apiClient` (a
  * `createClient` typed client) returns.
  *
  * This replaces the local `makeResponse` / `tokenOkResponse` / `okResponse` /

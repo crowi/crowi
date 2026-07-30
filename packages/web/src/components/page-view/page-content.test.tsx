@@ -64,9 +64,9 @@ afterEach(() => {
 
 describe('PageContent — attachment render interception', () => {
   it('renders an attachment link so a plain left-click is intercepted (no full-page navigation)', () => {
-    renderPage(pageWithLink(`/api/v2/attachments/${HEX}`, 'spec'));
+    renderPage(pageWithLink(`/api/attachments/${HEX}`, 'spec'));
     const link = screen.getByRole('link', { name: 'spec' });
-    expect(link.getAttribute('href')).toBe(`/api/v2/attachments/${HEX}`);
+    expect(link.getAttribute('href')).toBe(`/api/attachments/${HEX}`);
     // The interception attaches an onClick that calls preventDefault for a
     // plain left-click — observable via the cancelled event.
     const clickEvent = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 });
@@ -93,9 +93,9 @@ describe('PageContent — attachment render interception', () => {
   });
 
   it('intercepts an embedded attachment image while still rendering the <img>', () => {
-    renderPage(pageWithImage(`/api/v2/attachments/${HEX}`, 'a chart'));
+    renderPage(pageWithImage(`/api/attachments/${HEX}`, 'a chart'));
     const img = screen.getByRole('img', { name: 'a chart' });
-    expect(img.getAttribute('src')).toBe(`/api/v2/attachments/${HEX}`);
+    expect(img.getAttribute('src')).toBe(`/api/attachments/${HEX}`);
     const clickEvent = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 });
     img.dispatchEvent(clickEvent);
     expect(clickEvent.defaultPrevented).toBe(true);
@@ -285,7 +285,7 @@ describe('PageContent — standalone attachment figure: layer split, no double-a
           children: [
             {
               type: 'image',
-              url: `/api/v2/attachments/${HEX}`,
+              url: `/api/attachments/${HEX}`,
               alt: 'a chart',
               data: { hProperties: { 'data-crowi-image-width': '40%' } },
             },
@@ -301,7 +301,7 @@ describe('PageContent — standalone attachment figure: layer split, no double-a
     expect(figure.getAttribute('data-crowi-image-width')).toBeNull();
 
     const img = screen.getByRole('img', { name: 'a chart' }) as HTMLImageElement;
-    expect(img.getAttribute('src')).toBe(`/api/v2/attachments/${HEX}`);
+    expect(img.getAttribute('src')).toBe(`/api/attachments/${HEX}`);
     expect(img.style.width).toBe('40%');
     // Width never leaks onto the figure, float never leaks onto the img —
     // each display prop is applied by exactly one layer.

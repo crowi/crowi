@@ -4,13 +4,13 @@ import type { PropsWithChildren } from 'react';
 import { createElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Mock `apiClientV2` (`createClient`) at the module level, same pattern as
+// Mock `apiClient` (`createClient`) at the module level, same pattern as
 // `use-drafts.test.ts` — the hooks read our fake `user[':username'].subpages`
 // operation. `vi.hoisted` makes the shared stub reachable from both the
 // factory and the test bodies without a TDZ violation.
 const { subpagesGet } = vi.hoisted(() => ({ subpagesGet: vi.fn() }));
 vi.mock('./api-client', () => ({
-  apiClientV2: {
+  apiClient: {
     user: {
       ':username': {
         subpages: { $get: subpagesGet },

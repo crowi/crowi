@@ -4,13 +4,13 @@ import type { PropsWithChildren } from 'react';
 import { createElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Mock `apiClientV2` (`createClient`) at the module level so the hook
+// Mock `apiClient` (`createClient`) at the module level so the hook
 // reads our fake `pages.preview.$post`. Vitest hoists `vi.mock` above
 // imports; `vi.hoisted` makes the shared stub reachable from both the
 // factory and the test bodies without a TDZ violation.
 const { previewPost } = vi.hoisted(() => ({ previewPost: vi.fn() }));
 vi.mock('./api-client', () => ({
-  apiClientV2: { pages: { preview: { $post: previewPost } } },
+  apiClient: { pages: { preview: { $post: previewPost } } },
 }));
 
 import { usePreview } from './use-preview';

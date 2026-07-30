@@ -12,12 +12,12 @@ vi.mock('./runtime-env', () => ({
   env: (key: string) => process.env[key],
 }));
 
-// Mock `apiClientV2` so the token query reads our fake
-// `notifications.token.$get`. The hook calls `apiClientV2.notifications.token.$get()`
+// Mock `apiClient` so the token query reads our fake
+// `notifications.token.$get`. The hook calls `apiClient.notifications.token.$get()`
 // directly; we replace that single method.
 const { getNotificationsToken } = vi.hoisted(() => ({ getNotificationsToken: vi.fn() }));
 vi.mock('./api-client', () => ({
-  apiClientV2: {
+  apiClient: {
     notifications: {
       token: { $get: getNotificationsToken },
     },

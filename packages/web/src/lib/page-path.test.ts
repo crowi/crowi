@@ -131,7 +131,7 @@ describe('isReservedPagePath', () => {
   it('matches the backend namespace, bare or nested', () => {
     expect(isReservedPagePath('/api')).toBe(true);
     expect(isReservedPagePath('/api/')).toBe(true);
-    expect(isReservedPagePath('/api/v2/mcp')).toBe(true);
+    expect(isReservedPagePath('/api/mcp')).toBe(true);
     expect(isReservedPagePath('/api/anything')).toBe(true);
   });
 
