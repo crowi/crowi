@@ -11,8 +11,8 @@
  * Path rewrite: the OpenAPI contracts register every route at its
  * **unprefixed** path (`/app/info`, `/pages/:id`, ...), and the
  * production server reaches them via the URL rewriter in
- * `crowi/index.ts:start()` that strips a leading `/api/v2`. Tests
- * invariably dial `/api/v2/...`, so we install the same rewrite here
+ * `crowi/index.ts:start()` that strips a leading `/api`. Tests
+ * invariably dial `/api/...`, so we install the same rewrite here
  * — it keeps every existing supertest call site working without
  * change.
  */
@@ -21,7 +21,7 @@ import { createServer, type Server } from 'node:http';
 import { getRequestListener } from '@hono/node-server';
 import Crowi from 'src/crowi';
 import { buildHonoApp } from 'src/hono';
-import { stripApiV2Prefix } from 'src/hono/path-rewrite';
+import { stripApiPrefix } from 'src/hono/path-rewrite';
 
 import { bootCrowiWithRetry } from './db-connect-retry';
 import { recordDispatchEnd, recordDispatchStart } from './op-ring-buffer';
@@ -74,7 +74,7 @@ export let crowi: Crowi;
  * already-listening `Server`'s `.address()` is truthy, so that branch is
  * skipped entirely and `.listen()` is never called again. Exporting `app`
  * as the latter turns "one server per request" into "one server per
- * file", with zero call-site changes — `request(app).get('/api/v2/...')`
+ * file", with zero call-site changes — `request(app).get('/api/...')`
  * keeps working unmodified everywhere, because supertest accepts both
  * shapes as `app`.
  *
@@ -218,7 +218,7 @@ beforeAll(async () => {
   );
 
   const honoApp = buildHonoApp(crowi);
-  // Wrap `honoApp.fetch` so the `/api/v2` prefix in supertest URLs is
+  // Wrap `honoApp.fetch` so the `/api` prefix in supertest URLs is
   // stripped before Hono dispatches. Mirrors the rewrite that
   // `crowi/index.ts:start()` applies on the production listener.
   //
@@ -247,7 +247,7 @@ beforeAll(async () => {
       // fail-open — see this block's doc comment above.
     }
     try {
-      const res = await honoApp.fetch(stripApiV2Prefix(request));
+      const res = await honoApp.fetch(stripApiPrefix(request));
       if (opEntry) {
         try {
           recordDispatchEnd(opEntry, res.status);
