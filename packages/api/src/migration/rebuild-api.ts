@@ -2,7 +2,7 @@ import type Crowi from 'src/crowi';
 import type { AttachmentDisplayDerivativesTaskOptions } from 'src/util/rebuild-attachment-display-derivatives';
 
 import { type RebuildOutcome, RebuildRunner } from './rebuild-runner';
-import { attachmentDisplayDerivativesRebuild, backlinkRebuild, rendererRebuild, searchRebuild, storageCopyRebuild } from './rebuilds';
+import { attachmentDisplayDerivativesRebuild, backlinkRebuild, renderedAstRebuild, rendererRebuild, searchRebuild, storageCopyRebuild } from './rebuilds';
 
 /**
  * RFC-0008 §8.5 — the api-side surface the `@crowi/admin-cli` `rebuild`
@@ -40,6 +40,13 @@ export interface RebuildRendererOptions {
 }
 export interface RebuildBacklinkOptions {
   dryRun?: boolean;
+  progress?: RebuildProgress;
+}
+/** RFC-0023 §15 — `rebuild rendered-ast` (Revision.renderedAst backfill). */
+export interface RebuildRenderedAstOptions {
+  dryRun?: boolean;
+  /** Bounded worker pool size (defaults to the runner's own default). */
+  concurrency?: number;
   progress?: RebuildProgress;
 }
 
@@ -94,6 +101,10 @@ export class RebuildCliApi {
 
   rebuildBacklink(opts: RebuildBacklinkOptions = {}): Promise<RebuildOutcome> {
     return this.buildRunner(opts.dryRun, opts.progress).run(backlinkRebuild);
+  }
+
+  rebuildRenderedAst(opts: RebuildRenderedAstOptions = {}): Promise<RebuildOutcome> {
+    return this.buildRunner(opts.dryRun, opts.progress, opts.concurrency).run(renderedAstRebuild);
   }
 
   rebuildAttachmentDisplayDerivatives(opts: RebuildAttachmentDisplayDerivativesOptions = {}): Promise<RebuildOutcome> {
