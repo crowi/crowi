@@ -3,10 +3,10 @@ import { expect, test } from '../src/fixtures';
 
 /**
  * feature-image-derivative-optimization Phase 2 — the canonical
- * `/api/v2/attachments/:id` URL embedded in a page body now serves
+ * `/api/attachments/:id` URL embedded in a page body now serves
  * display-priority bytes (falling back to original when no derivative is
  * available), while the attachment detail modal always resolves the
- * explicit `/api/v2/attachments/:id/original` escape hatch for its preview
+ * explicit `/api/attachments/:id/original` escape hatch for its preview
  * and download action (spec §1/§4/§9). This is the first e2e coverage of
  * the attachment delivery flow at all (no prior spec touched it) and Phase
  * 2 rewrites the most load-bearing part of it — this spec covers, end to

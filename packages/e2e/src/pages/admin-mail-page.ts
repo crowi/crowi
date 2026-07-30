@@ -19,9 +19,7 @@ export class AdminMailPage {
     }
 
     await Promise.all([
-      this.page.waitForResponse(
-        (response) => response.url().includes('/api/v2/admin/plugins/config') && response.request().method() === 'PUT' && response.ok(),
-      ),
+      this.page.waitForResponse((response) => response.url().includes('/api/admin/plugins/config') && response.request().method() === 'PUT' && response.ok()),
       this.page.locator('form button[type="submit"]').click(),
     ]);
 
@@ -34,7 +32,7 @@ export class AdminMailPage {
     await this.page.locator('#mail-from').fill(e2eMail.from);
 
     await Promise.all([
-      this.page.waitForResponse((response) => response.url().endsWith('/api/v2/admin/mail') && response.request().method() === 'PUT' && response.ok()),
+      this.page.waitForResponse((response) => response.url().endsWith('/api/admin/mail') && response.request().method() === 'PUT' && response.ok()),
       this.page.locator('form button[type="submit"]').click(),
     ]);
 

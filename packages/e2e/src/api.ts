@@ -11,7 +11,7 @@ export async function accessTokenFromContext(context: BrowserContext): Promise<s
 
 export async function createPageViaApi(context: BrowserContext, input: { path: string; body: string; grant?: number }): Promise<string> {
   const accessToken = await accessTokenFromContext(context);
-  const response = await fetch(`${E2E_API_URL}/api/v2/pages`, {
+  const response = await fetch(`${E2E_API_URL}/api/pages`, {
     method: 'POST',
     headers: {
       authorization: `Bearer ${accessToken}`,
@@ -32,9 +32,9 @@ export async function createPageViaApi(context: BrowserContext, input: { path: s
 
 /**
  * Upload a file attachment to a page as the user backing `context`
- * (`POST /api/v2/pages/:pageId/attachments`, multipart). Returns the new
+ * (`POST /api/pages/:pageId/attachments`, multipart). Returns the new
  * attachment's id and its canonical `url`
- * (`/api/v2/attachments/<id>` — feature-image-derivative-optimization Phase 2:
+ * (`/api/attachments/<id>` — feature-image-derivative-optimization Phase 2:
  * this is the display-priority URL, NOT necessarily the original bytes).
  * Node 24's native `fetch`/`FormData`/`Blob` are used directly, the same way
  * `createPageViaApi` uses native `fetch` — no browser round-trip needed.
@@ -47,7 +47,7 @@ export async function uploadAttachmentViaApi(
   const form = new FormData();
   form.append('file', new Blob([new Uint8Array(input.data)], { type: input.contentType }), input.fileName);
 
-  const response = await fetch(`${E2E_API_URL}/api/v2/pages/${input.pageId}/attachments`, {
+  const response = await fetch(`${E2E_API_URL}/api/pages/${input.pageId}/attachments`, {
     method: 'POST',
     headers: { authorization: `Bearer ${accessToken}` },
     body: form,
@@ -78,14 +78,14 @@ export async function createPagesViaApi(context: BrowserContext, inputs: Array<{
 }
 
 /**
- * Invite a batch of users via `POST /api/v2/admin/users/invite` with
+ * Invite a batch of users via `POST /api/admin/users/invite` with
  * `sendEmail: false`, so a test can cheaply seed dozens of `REGISTERED`
  * users (no Mailpit round trip) purely to trigger a real 2nd page in the
  * admin users list.
  */
 export async function inviteUsersViaApi(context: BrowserContext, emails: string[]): Promise<void> {
   const accessToken = await accessTokenFromContext(context);
-  const response = await fetch(`${E2E_API_URL}/api/v2/admin/users/invite`, {
+  const response = await fetch(`${E2E_API_URL}/api/admin/users/invite`, {
     method: 'POST',
     headers: {
       authorization: `Bearer ${accessToken}`,
@@ -99,10 +99,10 @@ export async function inviteUsersViaApi(context: BrowserContext, emails: string[
   }
 }
 
-/** List currently-loaded plugin names via the admin API (`GET /api/v2/admin/plugins`). */
+/** List currently-loaded plugin names via the admin API (`GET /api/admin/plugins`). */
 export async function listLoadedPluginNamesViaApi(context: BrowserContext): Promise<string[]> {
   const accessToken = await accessTokenFromContext(context);
-  const response = await fetch(`${E2E_API_URL}/api/v2/admin/plugins`, {
+  const response = await fetch(`${E2E_API_URL}/api/admin/plugins`, {
     headers: { authorization: `Bearer ${accessToken}` },
   });
   if (!response.ok) {
@@ -114,7 +114,7 @@ export async function listLoadedPluginNamesViaApi(context: BrowserContext): Prom
 
 /**
  * Update a plugin's config via the admin API
- * (`PUT /api/v2/admin/plugins/config?name=<name>`) — merges `values` into
+ * (`PUT /api/admin/plugins/config?name=<name>`) — merges `values` into
  * the plugin's existing config and, for a plugin that declares a
  * `reconfigure` hook, live-applies it (no restart needed) before this
  * resolves. feature-renderer-plugin-boundary Phase 2 — `renderer-plugins.
@@ -126,7 +126,7 @@ export async function listLoadedPluginNamesViaApi(context: BrowserContext): Prom
  */
 export async function updatePluginConfigViaApi(context: BrowserContext, input: { pluginName: string; values: Record<string, unknown> }): Promise<void> {
   const accessToken = await accessTokenFromContext(context);
-  const response = await fetch(`${E2E_API_URL}/api/v2/admin/plugins/config?name=${encodeURIComponent(input.pluginName)}`, {
+  const response = await fetch(`${E2E_API_URL}/api/admin/plugins/config?name=${encodeURIComponent(input.pluginName)}`, {
     method: 'PUT',
     headers: {
       authorization: `Bearer ${accessToken}`,
@@ -153,7 +153,7 @@ export async function updatePluginConfigViaApi(context: BrowserContext, input: {
  */
 export async function getPageRenderedAst(context: BrowserContext, pageId: string): Promise<unknown> {
   const accessToken = await accessTokenFromContext(context);
-  const response = await fetch(`${E2E_API_URL}/api/v2/pages?page_id=${encodeURIComponent(pageId)}`, {
+  const response = await fetch(`${E2E_API_URL}/api/pages?page_id=${encodeURIComponent(pageId)}`, {
     headers: { authorization: `Bearer ${accessToken}` },
   });
   if (!response.ok) {
@@ -172,7 +172,7 @@ export async function getPageRenderedAst(context: BrowserContext, pageId: string
  */
 export async function getPageLatestRevisionId(context: BrowserContext, pageId: string): Promise<string> {
   const accessToken = await accessTokenFromContext(context);
-  const response = await fetch(`${E2E_API_URL}/api/v2/pages?page_id=${encodeURIComponent(pageId)}`, {
+  const response = await fetch(`${E2E_API_URL}/api/pages?page_id=${encodeURIComponent(pageId)}`, {
     headers: { authorization: `Bearer ${accessToken}` },
   });
   if (!response.ok) {
@@ -196,7 +196,7 @@ export async function getPageLatestRevisionId(context: BrowserContext, pageId: s
  */
 export async function getPageBody(context: BrowserContext, pageId: string): Promise<string> {
   const accessToken = await accessTokenFromContext(context);
-  const response = await fetch(`${E2E_API_URL}/api/v2/pages?page_id=${encodeURIComponent(pageId)}`, {
+  const response = await fetch(`${E2E_API_URL}/api/pages?page_id=${encodeURIComponent(pageId)}`, {
     headers: { authorization: `Bearer ${accessToken}` },
   });
   if (!response.ok) {
@@ -211,7 +211,7 @@ export async function getPageBody(context: BrowserContext, pageId: string): Prom
 
 /**
  * Update an existing page's body as the user backing `context`
- * (`PUT /api/v2/pages`). Looks up the current revision id itself so the
+ * (`PUT /api/pages`). Looks up the current revision id itself so the
  * caller doesn't have to (the update is rejected with 409 if `revision_id`
  * is stale — reading it immediately before the call keeps this race-free
  * for the single-writer-at-a-time way e2e specs use it).
@@ -219,7 +219,7 @@ export async function getPageBody(context: BrowserContext, pageId: string): Prom
 export async function updatePageViaApi(context: BrowserContext, input: { pageId: string; body: string }): Promise<void> {
   const accessToken = await accessTokenFromContext(context);
   const revisionId = await getPageLatestRevisionId(context, input.pageId);
-  const response = await fetch(`${E2E_API_URL}/api/v2/pages`, {
+  const response = await fetch(`${E2E_API_URL}/api/pages`, {
     method: 'PUT',
     headers: {
       authorization: `Bearer ${accessToken}`,
@@ -233,7 +233,7 @@ export async function updatePageViaApi(context: BrowserContext, input: { pageId:
 }
 
 /**
- * Rename a page as the user backing `context` (`POST /api/v2/pages/rename`).
+ * Rename a page as the user backing `context` (`POST /api/pages/rename`).
  * RFC-0017 Phase 1 — used to exercise the collab lifecycle epoch: a rename
  * must invalidate any live collab editor open on `pageId`, even though the
  * rename itself never touches `currentRevision`.
@@ -245,7 +245,7 @@ export async function updatePageViaApi(context: BrowserContext, input: { pageId:
  */
 export async function renamePageViaApi(context: BrowserContext, input: { pageId: string; newPath: string; includeDescendants?: boolean }): Promise<void> {
   const accessToken = await accessTokenFromContext(context);
-  const response = await fetch(`${E2E_API_URL}/api/v2/pages/rename`, {
+  const response = await fetch(`${E2E_API_URL}/api/pages/rename`, {
     method: 'POST',
     headers: {
       authorization: `Bearer ${accessToken}`,
@@ -259,13 +259,13 @@ export async function renamePageViaApi(context: BrowserContext, input: { pageId:
 }
 
 /**
- * Soft-delete a page as the user backing `context` (`DELETE /api/v2/pages`).
+ * Soft-delete a page as the user backing `context` (`DELETE /api/pages`).
  * RFC-0017 Phase 1 — used to exercise the collab lifecycle epoch: a delete
  * must invalidate any live collab editor open on `pageId`.
  */
 export async function deletePageViaApi(context: BrowserContext, input: { pageId: string }): Promise<void> {
   const accessToken = await accessTokenFromContext(context);
-  const response = await fetch(`${E2E_API_URL}/api/v2/pages`, {
+  const response = await fetch(`${E2E_API_URL}/api/pages`, {
     method: 'DELETE',
     headers: {
       authorization: `Bearer ${accessToken}`,
@@ -281,7 +281,7 @@ export async function deletePageViaApi(context: BrowserContext, input: { pageId:
 /** Post a comment as the user backing `context`. Returns the new comment id. */
 export async function addCommentViaApi(context: BrowserContext, input: { pageId: string; revisionId: string; comment: string }): Promise<string> {
   const accessToken = await accessTokenFromContext(context);
-  const response = await fetch(`${E2E_API_URL}/api/v2/comments`, {
+  const response = await fetch(`${E2E_API_URL}/api/comments`, {
     method: 'POST',
     headers: {
       authorization: `Bearer ${accessToken}`,
@@ -301,7 +301,7 @@ export async function addCommentViaApi(context: BrowserContext, input: { pageId:
 /** Delete a comment as the user backing `context`. */
 export async function deleteCommentViaApi(context: BrowserContext, input: { pageId: string; commentId: string }): Promise<void> {
   const accessToken = await accessTokenFromContext(context);
-  const response = await fetch(`${E2E_API_URL}/api/v2/comments`, {
+  const response = await fetch(`${E2E_API_URL}/api/comments`, {
     method: 'DELETE',
     headers: {
       authorization: `Bearer ${accessToken}`,
@@ -315,7 +315,7 @@ export async function deleteCommentViaApi(context: BrowserContext, input: { page
 }
 
 /**
- * Read `GET /api/v2/installer` — the API's LIVE installed-state oracle
+ * Read `GET /api/installer` — the API's LIVE installed-state oracle
  * (`isAppInstalled` counts `{ ns: 'crowi' }` Config docs on every call, so
  * the answer can never be a boot-cache artifact of a reused webServer).
  *
@@ -328,7 +328,7 @@ export async function deleteCommentViaApi(context: BrowserContext, input: { page
  * already-installed instance.
  */
 export async function getInstallerStatus(): Promise<'installer_required' | 'already_installed'> {
-  const response = await fetch(`${E2E_API_URL}/api/v2/installer`);
+  const response = await fetch(`${E2E_API_URL}/api/installer`);
   if (!response.ok) {
     throw new Error(`Failed to read E2E installer status: HTTP ${response.status} ${await response.text()}`);
   }
@@ -340,7 +340,7 @@ export async function getInstallerStatus(): Promise<'installer_required' | 'alre
 }
 
 export async function loginViaApi(credentials: E2eUserCredentials): Promise<{ accessToken: string; refreshToken: string; expiresIn: number }> {
-  const response = await fetch(`${E2E_API_URL}/api/v2/auth/login`, {
+  const response = await fetch(`${E2E_API_URL}/api/auth/login`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ email: credentials.email, password: credentials.password }),
