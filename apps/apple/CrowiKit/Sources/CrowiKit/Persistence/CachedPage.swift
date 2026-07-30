@@ -7,6 +7,19 @@ import SwiftData
 /// cross into another workspace's cache. Best-effort / fast-path only — the
 /// app always prefers a fresh network fetch when online (§7.2); this exists
 /// so `PageReaderView` can paint something instantly on a cold re-open.
+///
+/// **`renderedAst` is deliberately NOT persisted** (RFC-0023 /
+/// wire-contract design §16 — the AST is online-only, so this schema and
+/// `WorkspaceReadCacheSchema.schemaVersion` stay untouched by Phase 4):
+/// `data.renderPending` retries are never written back server-side, so the
+/// same `revisionId` can legitimately return a DIFFERENT AST on every read
+/// — persisting one snapshot would pin a possibly-still-pending render on
+/// offline readers indefinitely, which is worse than the raw-body fallback
+/// (current source text, less rich but never stale). A cache-painted page
+/// therefore always renders through the raw-body path
+/// (`asPageLenient` yields `renderedAst: nil`); the network refresh that
+/// follows swaps in the typed path when the server returns an envelope.
+/// `RenderedAstFallbackTests` pins this round-trip.
 @Model
 public final class CachedPage {
     @Attribute(.unique) public var pageId: String
@@ -98,13 +111,14 @@ extension CachedPage {
     /// The inverse of `upsert(from:)`, for the cold-open fast-path paint:
     /// rebuilds the lenient page value a reader screen renders from this
     /// cached row. Fields the cache doesn't persist (`liker`, the updater
-    /// pair) come back `nil` — the fresh network fetch that always follows
-    /// replaces the whole value anyway.
+    /// pair, and — deliberately, design §16 — `renderedAst`) come back
+    /// `nil` — the fresh network fetch that always follows replaces the
+    /// whole value anyway.
     public var asPageLenient: PageLenient {
         PageLenient(
             id: pageId,
             path: path,
-            revision: body.map { PageRevisionLenient(id: revisionId, body: $0, createdAt: nil) },
+            revision: body.map { PageRevisionLenient(id: revisionId, body: $0, createdAt: nil, renderedAst: nil) },
             status: status,
             commentCount: commentCount,
             likerCount: likerCount,

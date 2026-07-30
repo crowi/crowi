@@ -51,8 +51,17 @@ public struct AuthenticatedAPIClient: Sendable {
     /// the §5.2 `search` capability's `503 { feature: 'search' }`), so this
     /// method never throws on a non-2xx response itself — only on a genuine
     /// transport failure (no network, DNS, etc).
-    public func get(_ path: String, query: [URLQueryItem] = []) async throws -> (data: Data, status: Int) {
-        let request = HTTPRequest(method: .get, scheme: nil, authority: nil, path: Self.encodedPathAndQuery(path: path, query: query))
+    ///
+    /// - Parameter headers: extra request headers (RFC-0023's
+    ///   `X-Crowi-Ast-Version` content-negotiation declaration is the one
+    ///   consumer today). A key `HTTPField.Name` rejects is skipped rather
+    ///   than failing the request.
+    public func get(_ path: String, query: [URLQueryItem] = [], headers: [String: String] = [:]) async throws -> (data: Data, status: Int) {
+        var request = HTTPRequest(method: .get, scheme: nil, authority: nil, path: Self.encodedPathAndQuery(path: path, query: query))
+        for (key, value) in headers {
+            guard let name = HTTPField.Name(key) else { continue }
+            request.headerFields[name] = value
+        }
         return try await perform(request, body: nil)
     }
 

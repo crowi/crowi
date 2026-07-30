@@ -18,19 +18,35 @@ public struct PageRevisionLenient: Sendable, Equatable {
     public let id: String?
     /// `nil` on a list/children/portal row (§8 — "detail-GET-before-render"
     /// is a hard rule every read screen that opens such a row must honor,
-    /// since native rendering needs `body` and never reads `renderedAst`).
+    /// since native rendering needs `body` for the raw-body fallback path).
     public let body: String?
     public let createdAt: String?
+    /// RFC-0023 Phase 4 — the strict-decoded `renderedAst` outcome. The
+    /// response SHELL stays lenient (this decoder never throws); strict
+    /// validation applies only INSIDE the envelope value, and only when the
+    /// value independently proves to be a v1 envelope (`astVersion == 1` —
+    /// design doc §9's belt-and-suspenders: an old replica ignores the
+    /// request header and returns a bare `Root`, which reads as a fallback
+    /// decision here, never a decode failure). `nil` when the response had
+    /// no `renderedAst` field at all (list rows, cached reconstructions).
+    ///
+    /// `rendererVersion` is deliberately NOT decoded anywhere in this file:
+    /// it is a freshness diagnostic, never a rendering switch (parent spec
+    /// design judgment 1).
+    public let renderedAst: RenderedAstDecodeOutcome?
 
     /// Explicit `public` memberwise init: Swift's auto-synthesized one is
     /// `internal` even for an all-`public`-property struct, which would
     /// otherwise make this type unconstructible (only readable) from the App
     /// target — needed there to reconstruct a `PageLenient` from a
-    /// `CachedPage` SwiftData row for the cold-start fast-path display.
-    public init(id: String?, body: String?, createdAt: String?) {
+    /// `CachedPage` SwiftData row for the cold-start fast-path display
+    /// (which always passes `renderedAst: nil` — the AST is online-only,
+    /// wire-contract design §16).
+    public init(id: String?, body: String?, createdAt: String?, renderedAst: RenderedAstDecodeOutcome? = nil) {
         self.id = id
         self.body = body
         self.createdAt = createdAt
+        self.renderedAst = renderedAst
     }
 
     static func decode(_ object: Any?) -> PageRevisionLenient? {
@@ -38,7 +54,12 @@ public struct PageRevisionLenient: Sendable, Equatable {
             return PageRevisionLenient(id: idString, body: nil, createdAt: nil)
         }
         guard let dict = object as? [String: Any] else { return nil }
-        return PageRevisionLenient(id: dict["_id"] as? String, body: dict["body"] as? String, createdAt: dict["createdAt"] as? String)
+        return PageRevisionLenient(
+            id: dict["_id"] as? String,
+            body: dict["body"] as? String,
+            createdAt: dict["createdAt"] as? String,
+            renderedAst: dict["renderedAst"].map { RenderedAstEnvelopeDecoder.decode(responseValue: $0) }
+        )
     }
 }
 
@@ -132,10 +153,17 @@ public struct GetPageResponseLenient: Sendable, Equatable {
         return GetPageResponseLenient(page: page)
     }
 
+    /// RFC-0023 Phase 4 — the detail GET declares the typed-AST capability.
+    /// A server that understands it returns the v1 envelope; one that does
+    /// not silently ignores the header (bare `Root` → raw-body fallback).
+    static let astNegotiationHeaders: [String: String] = [
+        RenderedAstWireContract.headerName: String(RenderedAstWireContract.currentAstVersion)
+    ]
+
     /// Fetch the single-page detail by `path` — the only source of a
     /// `body`-carrying revision (§8).
     public static func fetch(path: String, using client: AuthenticatedAPIClient) async throws -> GetPageResponseLenient {
-        let (data, status) = try await client.get("pages", query: [URLQueryItem(name: "path", value: path)])
+        let (data, status) = try await client.get("pages", query: [URLQueryItem(name: "path", value: path)], headers: astNegotiationHeaders)
         guard status.isSuccessfulHTTPStatus else { throw PageLenientDecodeError.httpError(status: status) }
         return try decode(data)
     }
@@ -143,7 +171,7 @@ public struct GetPageResponseLenient: Sendable, Equatable {
     /// Fetch the single-page detail by `page_id` — used when re-opening a
     /// page from a cached/list row that only carries the id.
     public static func fetch(pageId: String, using client: AuthenticatedAPIClient) async throws -> GetPageResponseLenient {
-        let (data, status) = try await client.get("pages", query: [URLQueryItem(name: "page_id", value: pageId)])
+        let (data, status) = try await client.get("pages", query: [URLQueryItem(name: "page_id", value: pageId)], headers: astNegotiationHeaders)
         guard status.isSuccessfulHTTPStatus else { throw PageLenientDecodeError.httpError(status: status) }
         return try decode(data)
     }
