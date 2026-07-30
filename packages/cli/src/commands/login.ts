@@ -8,13 +8,13 @@ import { DEFAULT_SCOPE, loginAuthCode, loginDevice, validateScope } from '../lib
 import { info } from '../lib/output';
 import { markNoSkewProbe } from '../lib/skew';
 
-/** Lenient `GET /api/v2/auth/me` view — only the username is consumed here. */
+/** Lenient `GET /api/auth/me` view — only the username is consumed here. */
 interface AuthMeResponse {
   user?: { username?: string };
 }
 
 /**
- * Best-effort one-shot `GET /api/v2/auth/me` to resolve the signed-in
+ * Best-effort one-shot `GET /api/auth/me` to resolve the signed-in
  * username, so `crowi profiles` can show endpoint × user. Returns `undefined`
  * (never throws) when the call fails — a flaky /auth/me must NOT fail an
  * OAuth login (the tokens were just minted, so they are known-good).
@@ -29,7 +29,7 @@ export async function fetchAccount(profile: Profile): Promise<string | undefined
 }
 
 /**
- * Validating `GET /api/v2/auth/me` for the `--token` PAT path: a typo'd /
+ * Validating `GET /api/auth/me` for the `--token` PAT path: a typo'd /
  * invalid PAT must NOT be silently stored as "logged in". Unlike the
  * best-effort {@link fetchAccount}, this THROWS:
  *   - a 401/403 → the token was rejected by the server;

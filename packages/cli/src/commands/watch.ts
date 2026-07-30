@@ -25,7 +25,7 @@ async function resolvePageId(profile: Parameters<typeof fetchCurrentPage>[0], pa
 
 /**
  * `crowi watch status <path-or-id>` — show whether you watch a page
- * (`GET /api/v2/pages/watch`). Rides the default `pages:read` scope, so no
+ * (`GET /api/pages/watch`). Rides the default `pages:read` scope, so no
  * extra login scope is needed.
  */
 async function runStatus(pathOrId: string, command: Command): Promise<void> {
@@ -40,7 +40,7 @@ async function runStatus(pathOrId: string, command: Command): Promise<void> {
 }
 
 /**
- * Subscribe/unsubscribe a page (`PUT /api/v2/pages/watch`). Rides the default
+ * Subscribe/unsubscribe a page (`PUT /api/pages/watch`). Rides the default
  * `pages:write` scope.
  */
 async function runSet(pathOrId: string, watching: boolean, command: Command): Promise<void> {
