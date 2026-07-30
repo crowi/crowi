@@ -1,17 +1,51 @@
 import Foundation
 import SwiftUI
 
-/// RFC-0023 Phase 4 — phrasing-content composition: a validated phrasing
-/// node list → one `AttributedString` (plus the paragraph-level
-/// accessibility label the emoji a11y decoration feeds), pure and
-/// SwiftUI-host-free so every rule here is unit-testable.
+/// RFC-0023 Phase 4/5 — phrasing-content composition: a validated phrasing
+/// node list → a sequence of pieces (attributed-text runs interleaved with
+/// synchronously-typeset inline-math images, Phase 5) plus the
+/// paragraph-level accessibility label the emoji a11y decoration and math
+/// runs feed — pure and SwiftUI-host-free so every rule here is
+/// unit-testable.
 public struct RenderedAstInlineResult: Equatable {
-    public var attributed: AttributedString
-    /// Non-nil when at least one emoji run carried an `ariaLabel` — the
-    /// paragraph then exposes this as its accessibility label, mirroring the
-    /// web's `role="img"` + `aria-label` span (the emoji glyph is replaced
-    /// by its label for assistive tech).
+    public enum Piece: Equatable {
+        case attributed(AttributedString)
+        /// A successfully typeset `inlineMath` run — composed into the
+        /// surrounding `Text` as a baseline-aligned inline image. (A FAILED
+        /// typeset never produces this piece: it degrades to a monospaced
+        /// TeX chip inside an `.attributed` piece instead.)
+        case math(RenderedAstInlineMathRun)
+    }
+
+    public var pieces: [Piece]
+    /// Non-nil when at least one emoji run carried an `ariaLabel` or an
+    /// inline-math image rendered — the paragraph then exposes this as its
+    /// accessibility label (the emoji glyph / math image is replaced by its
+    /// label / TeX source for assistive tech), mirroring the web's
+    /// `role="img"` + `aria-label` span.
     public var accessibilityLabel: String?
+
+    /// The concatenation of the attributed pieces — the pre-Phase-5 shape,
+    /// still what every text-only rule asserts against.
+    public var attributed: AttributedString {
+        pieces.reduce(into: AttributedString()) { out, piece in
+            if case .attributed(let run) = piece { out += run }
+        }
+    }
+
+    /// The typeset inline-math runs, in order.
+    public var mathRuns: [RenderedAstInlineMathRun] {
+        pieces.compactMap { if case .math(let run) = $0 { return run } else { return nil } }
+    }
+}
+
+/// One typeset `inlineMath` run (Phase 5).
+public struct RenderedAstInlineMathRun: Equatable {
+    public let tex: String
+    public let image: PlatformImage
+    /// Negative shift (the typeset line's descent) so the math baseline
+    /// sits on the surrounding text's baseline.
+    public let baselineOffset: CGFloat
 }
 
 /// How a `link` node coming out of the server pipeline should behave —
@@ -31,9 +65,14 @@ public enum RenderedAstLinkKind: Equatable {
 
 public struct RenderedAstInlineRenderer {
     let definitions: [String: RenderedAstDefinition]
+    /// The active color scheme, resolved by the hosting view — inline math
+    /// rasterizes to a static image, so the glyph color must be picked
+    /// before typesetting (`RenderedAstMathTypesetter.textColor`).
+    let mathIsDark: Bool
 
-    public init(definitions: [String: RenderedAstDefinition] = [:]) {
+    public init(definitions: [String: RenderedAstDefinition] = [:], mathIsDark: Bool = false) {
         self.definitions = definitions
+        self.mathIsDark = mathIsDark
     }
 
     // MARK: - link classification (pure)
@@ -74,9 +113,10 @@ public struct RenderedAstInlineRenderer {
     public func render(_ nodes: [RenderedAstNode]) -> RenderedAstInlineResult {
         var builder = Builder()
         appendNodes(nodes, style: Style(), into: &builder)
+        builder.flushAttributed()
         return RenderedAstInlineResult(
-            attributed: builder.attributed,
-            accessibilityLabel: builder.hasEmojiA11y ? builder.labelParts.joined() : nil
+            pieces: builder.pieces,
+            accessibilityLabel: builder.needsAccessibilityLabel ? builder.labelParts.joined() : nil
         )
     }
 
@@ -88,9 +128,26 @@ public struct RenderedAstInlineRenderer {
     }
 
     private struct Builder {
+        var pieces: [RenderedAstInlineResult.Piece] = []
         var attributed = AttributedString()
         var labelParts: [String] = []
-        var hasEmojiA11y = false
+        /// Set by emoji a11y decorations AND typeset math images — both
+        /// replace visible content with something assistive tech cannot
+        /// read directly.
+        var needsAccessibilityLabel = false
+
+        mutating func flushAttributed() {
+            guard !attributed.characters.isEmpty else { return }
+            pieces.append(.attributed(attributed))
+            attributed = AttributedString()
+        }
+
+        mutating func appendMath(_ run: RenderedAstInlineMathRun) {
+            flushAttributed()
+            pieces.append(.math(run))
+            labelParts.append(run.tex)
+            needsAccessibilityLabel = true
+        }
     }
 
     private func appendNodes(_ nodes: [RenderedAstNode], style: Style, into builder: inout Builder) {
@@ -104,7 +161,7 @@ public struct RenderedAstInlineRenderer {
         case .text(let value):
             if let data = node.data, data.hName == "span", data.hPropertyString("role") == "img",
                 let ariaLabel = data.hPropertyString("ariaLabel") {
-                builder.hasEmojiA11y = true
+                builder.needsAccessibilityLabel = true
                 builder.labelParts.append(ariaLabel)
                 appendRun(value, style: style, into: &builder, labelAlreadyRecorded: true)
             } else {
@@ -154,10 +211,21 @@ public struct RenderedAstInlineRenderer {
             appendChip(alt.flatMap { $0.isEmpty ? nil : $0 } ?? "image", style: style, into: &builder)
         case .html:
             appendChip(RenderedAstPlaceholderCopy.inlineUnavailable, style: style, into: &builder)
-        case .inlineMath:
-            appendChip(RenderedAstPlaceholderCopy.inlineUnavailable, style: style, into: &builder)
-        case .crowiPlaceholder(_, let label, _):
-            appendChip(label, style: style, into: &builder)
+        case .inlineMath(let value, _):
+            // Phase 5 — synchronous typesetting from the TeX source; failure
+            // degrades to a monospaced chip OF THE TEX SOURCE (readable
+            // content, never a generic "unavailable" and never a drop).
+            if let rendering = RenderedAstMathTypesetter.typeset(tex: value, display: false, isDark: mathIsDark) {
+                builder.appendMath(RenderedAstInlineMathRun(
+                    tex: value,
+                    image: rendering.image,
+                    baselineOffset: -rendering.descent
+                ))
+            } else {
+                appendChip(value, style: style, into: &builder)
+            }
+        case .crowiPlaceholder(let kind, let label, _):
+            appendChip(RenderedAstPlaceholderCopy.placeholderLabel(kind: kind, serverLabel: label), style: style, into: &builder)
         case .crowiOpaque:
             appendChip(RenderedAstPlaceholderCopy.inlineUnavailable, style: style, into: &builder)
         default:
