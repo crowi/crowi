@@ -1,6 +1,7 @@
 import { OpenAPIHono } from '@hono/zod-openapi';
 
 import { createJwtAdminRequired } from './middleware/admin';
+import type { AstNegotiationVariables } from './middleware/ast-negotiation';
 import { type HonoAuthVariables, createJwtAuth } from './middleware/auth';
 import { createCors } from './middleware/cors';
 import { defaultHook } from './middleware/default-hook';
@@ -12,10 +13,11 @@ import { honoOnError } from './middleware/error-handler';
  * Kept in lock-step with `HonoAuthVariables` (middleware/auth.ts) — the
  * auth middleware sets `user` / `authScopes` / `authContext`, so the
  * binding must expose all three to every `register*Routes` handler and
- * the `requireScope` middleware.
+ * the `requireScope` middleware. `AstNegotiationVariables` (RFC-0023)
+ * adds the app-wide `astVersion` set by `createAstNegotiation`.
  */
 export interface CrowiHonoBindings {
-  Variables: HonoAuthVariables;
+  Variables: HonoAuthVariables & AstNegotiationVariables;
 }
 
 export const createHonoApp = (): OpenAPIHono<CrowiHonoBindings> => {

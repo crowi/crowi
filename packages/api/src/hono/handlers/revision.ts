@@ -33,6 +33,7 @@ import type { PageDocument } from 'src/models/page';
 import type { RevisionDocument, RevisionMetaContent } from 'src/models/revision';
 import type { UserDocument } from 'src/models/user';
 import { computeRevisionRenderArtifactsAsync, type PopulatedRevision, toRevisionResponse } from 'src/util/page-response';
+import { pickRenderedAstShape, varyOnAstVersion } from 'src/util/rendered-ast-negotiation';
 import { actorFromUser, isPopulatedUser, isValidObjectId, resolveGrantedRevisionOwner, toISOStringOrNull, toPageUser } from 'src/util/ts-rest-helpers';
 
 import type { CrowiHonoBindings } from '../app';
@@ -52,7 +53,8 @@ const MAX_REVISION_IDS = 10;
  */
 type FullRevisionResponse = ReturnType<typeof toRevisionResponse> & {
   meta?: ReturnType<typeof toRevisionResponse>['meta'];
-  renderedAst?: unknown;
+  renderedAst?: ReturnType<typeof toRevisionResponse>['renderedAst'];
+  renderedAstArtifactKey?: string;
 };
 
 const revisionToFullResponse = (revision: RevisionDocument, options: { withMeta?: boolean; withRenderedAst?: boolean } = {}): FullRevisionResponse =>
@@ -256,7 +258,7 @@ export const registerRevisionRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>
 
           const response = revisionToFullResponse(revision, { withMeta: false, withRenderedAst: false });
           const obj = revision.toObject() as { meta?: RevisionMetaContent; renderedAst?: unknown; rendererVersion?: string };
-          const { meta, renderedAst } = await computeRevisionRenderArtifactsAsync(
+          const { meta, renderedAst, renderedAstArtifactKey } = await computeRevisionRenderArtifactsAsync(
             crowi,
             obj.meta,
             obj.renderedAst,
@@ -266,7 +268,11 @@ export const registerRevisionRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>
             page._id?.toString(),
           );
           response.meta = meta;
-          response.renderedAst = renderedAst;
+          // RFC-0023 §9 — envelope for `X-Crowi-Ast-Version: 1`
+          // declarants, verbatim bare Root for everyone else.
+          response.renderedAst = pickRenderedAstShape(c.get('astVersion'), renderedAst) as FullRevisionResponse['renderedAst'];
+          response.renderedAstArtifactKey = renderedAstArtifactKey;
+          varyOnAstVersion(c);
           return c.json({ revision: response }, 200);
         } catch (err) {
           const error = err as Error;
