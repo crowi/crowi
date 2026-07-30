@@ -118,13 +118,13 @@ blocked: stale registry entry (worktree '<key>' not found in 'git worktree list'
 
 ### 1.3 疎通確認
 
-`GET <proxy>/api/v2/app/info` が 200 を返すことを健全性の最低条件にする
+`GET <proxy>/api/app/info` が 200 を返すことを健全性の最低条件にする
 (`packages/e2e/playwright.config.ts` の webServer readiness probe と同じ
 エンドポイント)。200 でなければ `blocked: proxy not responding at <proxy url>`。
 
 ### 1.4 proxy identity 検証 (mutation を伴う charter のみ必須)
 
-`/api/v2/app/info` (`packages/api/src/hono/handlers/app.ts`) は title /
+`/api/app/info` (`packages/api/src/hono/handlers/app.ts`) は title /
 version / capabilities のみを返し、worktree key・cwd・branch・git sha を
 含まない。`gw end` 後に別プロセスが同じ proxy ポートを再利用した、等の
 ポート再利用ケースを 200 応答だけでは検出できない。したがって
@@ -536,7 +536,7 @@ table・backlink・検索結果・コメント・grant 可視性のように、�
   guarantee isolation` として起動しない。起動後は接続先 DB 名をログで確認
   してから provisioning に進む。
 - **provisioning**: §14.4 と同一手順の dev 版。`GET
-  <一時 proxy>/api/v2/installer` で `installer_required` を確認し、`POST
+  <一時 proxy>/api/installer` で `installer_required` を確認し、`POST
   /installer/createAdmin` を run 専用の固定資格情報 (実運用の秘密情報では
   ない固定値。例 `crowi-qa-fixture@example.com` / 固定パスワード —
   `packages/e2e/src/config.ts` の `e2eUsers.admin` と同じ発想) で呼ぶ。
@@ -595,14 +595,14 @@ readiness polling が `blocked: ...` に分類されたことを示す — こ�
   へ解決される **markdown リンク** (`[target](/qa/<run-id>/backlink/
   target)`) を含める — 裸の `[[x]]` wikilink は予約済みで解決されないため
   使わない。この順序を逆にすると backlink 行は書かれず、後続のポーリングは
-  必ずタイムアウトする。両ページの保存後、`GET /api/v2/backlinks?page_id=
+  必ずタイムアウトする。両ページの保存後、`GET /api/backlinks?page_id=
   <target のページ id>` を有限回 (既定 300ms 間隔 × 最大 10 回) ポーリング
   し、`backlinks` に source ページが含まれることを確認する。タイムアウト
   時は `blocked: backlink side effect not observed within <timeout>` として
   このチャーターの api-fixture セットアップだけを打ち切る (browser 側で
   「backlink が表示されない」という偽陰性確認をさせない)。
 - **検索**: 対象ページ (`/qa/<run-id>/search/target`) を本文に一意な
-  トークンを含めて保存した後、`GET /api/v2/search?q=<token>` を同様に
+  トークンを含めて保存した後、`GET /api/search?q=<token>` を同様に
   有限回ポーリングする。**503 (SEARCH_UNAVAILABLE) を検知した時点で即座に**
   `blocked: search backend unreachable (503)` (既存 §1.6 と同一分類) として
   打ち切り、ポーリングを継続しない — 新規 per-run DB は search 未設定が
@@ -610,8 +610,8 @@ readiness polling が `blocked: ...` に分類されたことを示す — こ�
   現れない場合のみポーリングを続け、タイムアウト時は `blocked: search
   index side effect not observed within <timeout>` とする。
 - **コメント**: `/qa/<run-id>/comment/thread` にページを 1 枚作成し、
-  そのレスポンス (または `GET /api/v2/pages?page_id=...`) から revision id
-  を取得した上で `POST /api/v2/comments` を呼ぶ。**同一 run 内でこの
+  そのレスポンス (または `GET /api/pages?page_id=...`) から revision id
+  を取得した上で `POST /api/comments` を呼ぶ。**同一 run 内でこの
   スクリプトが新規作成した fixture ページ (manifest 上 `type: "page"`) に
   のみ**コメントを追加する。readiness polling は不要 (コメント作成は
   同期的)。
@@ -975,7 +975,7 @@ blocked: conflicting Mongo env var present (MONGOLAB_URI/MONGODB_URI/MONGOHQ_URL
 自動作成はしない」は共有 dev DB を汚さないための方針であり、この専有 DB
 には適用しない — 以下の手順で自己完結的に provisioning する:
 
-1. 起動後、`GET <一時 proxy>/api/v2/installer` で状態を確認する。新規の
+1. 起動後、`GET <一時 proxy>/api/installer` で状態を確認する。新規の
    per-run DB なので通常は常に `installer_required` になる。
 2. `installer_required` の場合: `POST /installer/createAdmin` を、この run
    専用の固定資格情報 (実運用の秘密情報ではない。`packages/e2e/src/
