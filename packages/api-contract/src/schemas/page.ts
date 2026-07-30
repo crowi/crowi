@@ -1,5 +1,6 @@
 import { z } from '@hono/zod-openapi';
 import { RevisionTypeSchema } from './collab';
+import { RenderedAstArtifactKeySchema, RenderedAstValueSchema } from './rendered-ast';
 import { UserPublicSchema } from './user-public';
 
 // Page grant enum - matches Page model constants
@@ -99,13 +100,21 @@ export const RevisionSchema = z.object({
   author: PageUserSchema.nullable().optional(),
   createdAt: z.string(),
   meta: RevisionMetaSchemaShape.optional(),
-  // RFC-0002 Phase 3: transformed mdast (parse + core plugins +
-  // shiki) for the web client to render without re-parsing the body.
-  // Typed as opaque `unknown` because mdast is too deep / external-
-  // spec to maintain a strict Zod schema for. Only single-page detail
-  // (`getPage`) and single-revision detail (`getRevision`) emit it;
-  // list endpoints skip it for payload weight.
-  renderedAst: z.unknown().optional(),
+  // RFC-0002 Phase 3 / RFC-0023: transformed mdast. Requests that
+  // declare `X-Crowi-Ast-Version: 1` receive the typed envelope
+  // (`{astVersion, root}`); everyone else (including the web,
+  // permanently) receives the stored bare mdast `Root` verbatim and
+  // unvalidated — see `schemas/rendered-ast.ts` for the full contract.
+  // Only single-page detail (`getPage`), the listPages portal document
+  // and single-revision detail (`getRevision`) emit it; list rows skip
+  // it for payload weight.
+  renderedAst: RenderedAstValueSchema.optional(),
+  // RFC-0023 (design doc §14): identity of the served AST artifact —
+  // `rendererVersion` for a verbatim stored AST, a per-response nonce
+  // when the served tree differs from the stored one (pending-marker
+  // retry / freshness-mismatch recompute). The web render memo keys on
+  // `[revisionId, renderedAstArtifactKey]`.
+  renderedAstArtifactKey: RenderedAstArtifactKeySchema.optional(),
   // RFC-0002 round 3.1: semver of the renderer pipeline that produced
   // `renderedAst`. The read path uses this to detect stale entries
   // (rebuilt by `renderer:rebuild` once RFC-0008 lands). Absent on

@@ -27,6 +27,8 @@ alpha.0–.3 は published、alpha.4 / stable 向けに changeset 蓄積中（pr
 
 ### iOS ネイティブアプリ (RFC-0016)
 - [x] Phase 0 companion server 側変更: trusted first-party `crowi-ios` OAuth client の server seed + custom-scheme redirect 緩和 + consent-skip 配線 + `GET /oauth/client-info`（spec: `feature-ios-companion-server.md`）。Apple 側 (apps/apple scaffold + gate 判定) は worktree `feature-ios-app` で進行中
+- [x] renderedAst の client 非依存化 Phase 2 (RFC-0023 サーバ + web): sidecar プロデューサ + `X-Crowi-Ast-Version` negotiation + sanitizing walker + artifactKey + `rebuild rendered-ast` backfill。Phase 4-5 (iOS ネイティブ描画) は worktree `feature-ios-app` 側で消費
+- [x] renderedAst golden corpus Phase 3 (RFC-0023): 二者消費 (api jest + CrowiKit XCTest) 前提の自己記述 JSON corpus で renderer 出力を固定し、GFM 参照系の挙動も確定。Swift 側の実読込は Phase 4 (worktree `feature-ios-app`) で接続
 
 ### 配布 / リリース（2.0.0 stable 時）
 - [ ] **無印 `crowi` パッケージの整理**（spec: `feature-crowi-quickstart-package.md`）

@@ -85,6 +85,10 @@ export const createCors = (crowi: Crowi): MiddlewareHandler => {
     origin: (origin) => resolveOrigin(origin),
     credentials: true,
     allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    // `X-Crowi-Ast-Version` (RFC-0023 §9): today only the iOS native
+    // app (not CORS-constrained) sends it, but allow-listing it now
+    // keeps future browser-based debug/admin callers from silently
+    // failing preflight.
+    allowHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Crowi-Ast-Version'],
   });
 };

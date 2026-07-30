@@ -474,7 +474,7 @@ const stubListPages: ListPagesResponse = { pages: [], pager: stubPager, portalPa
 const stubListPageChildren: ListPageChildrenResponse = { children: [] };
 const stubSeenUsers: SeenUsersResponse = { seenUsers: [], seenUsersCount: 0 };
 const stubWatchStatus: WatchStatusResponse = { watching: false };
-const stubPreview: PreviewPageResponse = { renderedAst: null };
+const stubPreview: PreviewPageResponse = {};
 const stubWsToken: WsTokenResponse = {
   wsToken: '',
   pageId: '',

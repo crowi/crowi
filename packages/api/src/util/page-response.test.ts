@@ -111,10 +111,12 @@ describe('computeRevisionRenderArtifactsAsync — toc tracks the AST it is serve
     expect(result.meta?.toc?.[0].anchorId).toBe('stale-legacy-raw-anchor');
   });
 
-  it('treats a missing rendererVersion as fresh (trust the stored AST + toc)', async () => {
+  it('treats a missing rendererVersion as STALE (RFC-0023 §13 — the missing-version special case is removed; rebuild rendered-ast backfills)', async () => {
     const result = await computeRevisionRenderArtifactsAsync(crowi, STORED_META, STALE_STORED_AST, BODY, TEST_ACTOR /* no version */);
-    expect(result.renderedAst).toBe(STALE_STORED_AST);
-    expect(result.meta?.toc).toBe(STORED_META.toc);
+    // Stale path: the AST is recomputed on the fly, NOT served verbatim.
+    expect(result.renderedAst).not.toBe(STALE_STORED_AST);
+    // ...and the toc comes from the recompute too (toc tracks the AST source).
+    expect(result.meta?.toc?.[0]?.anchorId).not.toBe('stale-legacy-raw-anchor');
   });
 });
 
@@ -306,10 +308,14 @@ describe('computeRevisionRenderArtifactsAsync — renderPending marker scan on t
   // 0.10.0): the new raw-space-link recovery transform
   // (`renderer/core/raw-space-links.ts`) is likewise a new bundled
   // transform added to `buildCorePlugins`.
+  // RFC-0023 bumps it to 1.0.0 (MAJOR): producers now stamp typed
+  // sidecars onto their `html` nodes, and pre-1.0 stored ASTs — which
+  // lack them — must be invalidated wholesale so `rebuild rendered-ast`
+  // (util/rebuild-rendered-ast.ts) re-renders every current revision.
   // Pinned here so an accidental future bump/no-bump alongside an
   // unrelated change is caught immediately.
-  it('RENDERER_PIPELINE_VERSION is 0.10.0 (feature-page-link-space-paths Phase 2 — raw-space-link recovery is a new-bundled-transform minor bump)', () => {
-    expect(RENDERER_PIPELINE_VERSION).toBe('0.10.0');
+  it('RENDERER_PIPELINE_VERSION is 1.0.0 (RFC-0023 — sidecar-stamped producers are a stored-AST-invalidating major bump)', () => {
+    expect(RENDERER_PIPELINE_VERSION).toBe('1.0.0');
   });
 
   // Registers a diagram-shaped CodeBlockRenderer (feature-renderer-plugin-
@@ -476,5 +482,63 @@ describe('link-card toggle does not affect the stored renderedAst display contra
     } finally {
       runRenderSpy.mockRestore();
     }
+  });
+});
+
+/**
+ * RFC-0023 §14 — `renderedAstArtifactKey`: the identity of the AST
+ * artifact a single response serves. Stable (`RENDERER_PIPELINE_VERSION`)
+ * for a verbatim stored AST; a per-response nonce whenever the served
+ * tree can differ from the stored one (pending-marker retry resolving,
+ * freshness-mismatch on-the-fly recompute). The web render memo keys on
+ * `[revisionId, renderedAstArtifactKey]`.
+ */
+describe('computeRevisionRenderArtifactsAsync — renderedAstArtifactKey (RFC-0023 §14)', () => {
+  const COMPLETE_META: RevisionMetaContent = { toc: [], wikiLinks: [], mentions: [], codeBlockLanguages: [] };
+
+  it('(a)(d) fresh verbatim: equals RENDERER_PIPELINE_VERSION and is stable across repeated reads (react-query refetches never re-render)', async () => {
+    const storedAst = { type: 'root', children: [{ type: 'paragraph', children: [{ type: 'text', value: 'stable' }] }] };
+    const first = await computeRevisionRenderArtifactsAsync(crowi, COMPLETE_META, storedAst, 'unused', TEST_ACTOR, RENDERER_PIPELINE_VERSION);
+    const second = await computeRevisionRenderArtifactsAsync(crowi, COMPLETE_META, storedAst, 'unused', TEST_ACTOR, RENDERER_PIPELINE_VERSION);
+    expect(first.renderedAstArtifactKey).toBe(RENDERER_PIPELINE_VERSION);
+    expect(second.renderedAstArtifactKey).toBe(RENDERER_PIPELINE_VERSION);
+  });
+
+  it('(b) a pending-marker retry that changes the tree yields a fresh nonce per response', async () => {
+    const pageId = new Types.ObjectId().toHexString();
+    const renderer: CodeBlockRenderer = {
+      cacheVersion: 1,
+      admissionControl: { maxConcurrentGlobal: 4, maxConcurrentPerUser: 2, queueDepth: 200 },
+      render: () => ({ html: '<div class="resolved-artifact"></div>', ttlSec: 3600 }),
+    };
+    crowi.getRenderer().registry.addCodeBlockRenderer('artifactlang', renderer, '@crowi/test-artifact-plugin', silentLogger);
+
+    const buildStored = () => ({
+      type: 'root',
+      children: [{ type: 'code', lang: 'artifactlang', value: 'x', data: { renderPending: true } }],
+    });
+    const first = await computeRevisionRenderArtifactsAsync(crowi, COMPLETE_META, buildStored(), 'unused', TEST_ACTOR, RENDERER_PIPELINE_VERSION, pageId);
+    // The retry succeeded (renderer registered + healthy) — the served
+    // tree differs from the stored one, so the key must be a nonce.
+    const servedHtml = (first.renderedAst as { children: Array<{ type: string }> }).children[0];
+    expect(servedHtml.type).toBe('html');
+    expect(first.renderedAstArtifactKey).not.toBe(RENDERER_PIPELINE_VERSION);
+    const second = await computeRevisionRenderArtifactsAsync(crowi, COMPLETE_META, buildStored(), 'unused', TEST_ACTOR, RENDERER_PIPELINE_VERSION, pageId);
+    expect(second.renderedAstArtifactKey).not.toBe(first.renderedAstArtifactKey);
+  });
+
+  it('(c) a freshness-mismatch recompute (no pending marker anywhere) yields a fresh nonce per response', async () => {
+    const staleAst = { type: 'root', children: [{ type: 'paragraph', children: [{ type: 'text', value: 'old' }] }] };
+    const first = await computeRevisionRenderArtifactsAsync(crowi, COMPLETE_META, staleAst, '# recompute me', TEST_ACTOR, '0.6.0');
+    const second = await computeRevisionRenderArtifactsAsync(crowi, COMPLETE_META, staleAst, '# recompute me', TEST_ACTOR, '0.6.0');
+    expect(first.renderedAstArtifactKey).toBeDefined();
+    expect(first.renderedAstArtifactKey).not.toBe(RENDERER_PIPELINE_VERSION);
+    expect(second.renderedAstArtifactKey).not.toBe(first.renderedAstArtifactKey);
+  });
+
+  it('no AST at all (empty body, nothing stored) → no key', async () => {
+    const result = await computeRevisionRenderArtifactsAsync(crowi, COMPLETE_META, undefined, '', TEST_ACTOR);
+    expect(result.renderedAst).toBeUndefined();
+    expect(result.renderedAstArtifactKey).toBeUndefined();
   });
 });

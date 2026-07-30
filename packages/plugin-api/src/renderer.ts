@@ -251,9 +251,37 @@ export interface EmbedInput {
  * background-refresh window (see
  * `packages/api/src/renderer/cache/index.ts:cachedRender`).
  */
+/**
+ * RFC-0023 (design doc §12) — the structured (typed) counterpart of a
+ * producer's `html` output. Additive and optional everywhere: a plugin
+ * that never sets it keeps today's behaviour byte-for-byte.
+ *
+ * `node` is the producer-shaped typed node (`type` selects the sidecar
+ * kind — `'crowiDiagram'` / `'crowiLinkCard'` / `'crowiPlaceholder'`).
+ * Deliberately loose (`Record<string, unknown>`) at this SDK layer:
+ * `@crowi/plugin-api` does not depend on `@crowi/api-contract`, so the
+ * authoritative shape lives in the api-contract sidecar schemas and the
+ * api-side dispatch mapper validates against them before stamping a
+ * sidecar onto the persisted AST (invalid payloads degrade to a plain
+ * `html` node, never poisoning what the web reads).
+ */
+export interface StructuredRenderPayload {
+  node: Record<string, unknown>;
+}
+
 export interface RenderResult {
-  /** Already-sanitised HTML the core will inline. */
+  /** Already-sanitised HTML the core will inline. Unchanged — the one and only web/legacy representation. */
   html: string;
+  /**
+   * RFC-0023 — optional structured payload paired with `html`. Both
+   * must describe the SAME render outcome: the dispatch layer stamps
+   * this (schema-validated) as a sidecar on the `html` node it splices,
+   * and the `X-Crowi-Ast-Version: 1` projection turns it into a typed
+   * node. On an `error` result, pair it with `errorHtml` when the
+   * error display carries real content (e.g. link-card's fallback
+   * card); leave it unset to get the generic structured placeholder.
+   */
+  structured?: StructuredRenderPayload;
   /**
    * Optional `<head>`-bound assets — Phase 4 records them on the
    * cache entry but the SSR layer does not yet inject them. Phase 7
@@ -363,6 +391,8 @@ export type InlineExpansion = { kind: 'unchanged' } | ({ kind: 'replaced' } & Re
 export interface EmbedFragment {
   /** Pre-sanitised HTML fragment to inline at the source position. */
   html: string;
+  /** RFC-0023 — optional structured payload paired with `html` (see `RenderResult.structured`). */
+  structured?: StructuredRenderPayload;
   /** Optional `<head>`-bound assets (CSS / JS) keyed by URL. */
   assets?: { css?: string[]; js?: string[] };
 }

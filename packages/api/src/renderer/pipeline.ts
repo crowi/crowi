@@ -109,6 +109,20 @@ export interface PipelineEsmDeps {
   shikiHighlighter: ShikiHighlighter;
 }
 
+/** RFC-0023 — one themed style variant of a shiki token (wire shape of `ShikiTokenStyleSchema`). */
+export interface CrowiShikiTokenStyle {
+  color: string;
+  bgColor?: string;
+  fontStyle?: Array<'italic' | 'bold' | 'underline' | 'strikethrough'>;
+}
+/** RFC-0023 — a single shiki token carrying both theme variants (wire shape of `ShikiTokenSchema`). */
+export interface CrowiShikiToken {
+  content: string;
+  light: CrowiShikiTokenStyle;
+  dark: CrowiShikiTokenStyle;
+}
+export type CrowiShikiTokenLine = CrowiShikiToken[];
+
 /**
  * Subset of shiki's `Highlighter` we actually use. Bound to a
  * single theme so callers don't have to re-pass it at every call.
@@ -116,6 +130,13 @@ export interface PipelineEsmDeps {
 export interface ShikiHighlighter {
   /** Synchronously render `code` to themed `<pre><code>...</code></pre>` HTML. */
   codeToHtml(code: string, lang: string): string;
+  /**
+   * RFC-0023 — themed token lines (light/dark variants) for the
+   * `data.crowiCode` sidecar. Same theme pair / language set as
+   * `codeToHtml`. Throws propagate to the caller (the sidecar producer
+   * treats a throw as "no tokens" — the html output is unaffected).
+   */
+  codeToTokens(code: string, lang: string): CrowiShikiTokenLine[];
   /** Best-effort check; cheap, does NOT throw on unknown langs. */
   hasLang(lang: string): boolean;
 }
@@ -193,6 +214,12 @@ const SHIKI_THEMES = {
   dark: 'github-dark',
 } as const;
 
+/** Raw token shape from shiki's `codeToTokensWithThemes` (per-theme variants keyed by our `light` / `dark`). */
+interface ShikiRawVariantToken {
+  content: string;
+  variants: Record<string, { color?: string; bgColor?: string; fontStyle?: number }>;
+}
+
 interface ShikiCreateHighlighter {
   (opts: {
     themes: string[];
@@ -206,8 +233,35 @@ interface ShikiCreateHighlighter {
         defaultColor: false;
       },
     ): string;
+    codeToTokensWithThemes(
+      code: string,
+      opts: {
+        lang: string;
+        themes: { light: string; dark: string };
+      },
+    ): ShikiRawVariantToken[][];
     getLoadedLanguages(): string[];
   }>;
+}
+
+/** shiki's `FontStyle` bitmask → the wire enum array (RFC-0023 §10). */
+function fontStyleToArray(fontStyle: number | undefined): Array<'italic' | 'bold' | 'underline' | 'strikethrough'> | undefined {
+  if (fontStyle === undefined || fontStyle <= 0) return undefined;
+  const out: Array<'italic' | 'bold' | 'underline' | 'strikethrough'> = [];
+  if (fontStyle & 1) out.push('italic');
+  if (fontStyle & 2) out.push('bold');
+  if (fontStyle & 4) out.push('underline');
+  if (fontStyle & 8) out.push('strikethrough');
+  return out.length > 0 ? out : undefined;
+}
+
+function toCrowiTokenStyle(variant: { color?: string; bgColor?: string; fontStyle?: number } | undefined): CrowiShikiTokenStyle {
+  const fontStyle = fontStyleToArray(variant?.fontStyle);
+  return {
+    color: variant?.color ?? '',
+    ...(variant?.bgColor !== undefined ? { bgColor: variant.bgColor } : {}),
+    ...(fontStyle !== undefined ? { fontStyle } : {}),
+  };
 }
 
 export function createPipelineEsmDepsLoader(): LoadPipelineEsmDeps {
@@ -255,6 +309,19 @@ export function createPipelineEsmDepsLoader(): LoadPipelineEsmDeps {
           themes: SHIKI_THEMES,
           defaultColor: false,
         });
+      },
+      codeToTokens(code, lang) {
+        // RFC-0023 §10 — the sidecar's themed token lines. Same theme
+        // pair as `codeToHtml`; `htmlStyle` / `htmlAttrs` are never
+        // emitted (Crowi uses no shiki transformers).
+        const lines = rawHighlighter.codeToTokensWithThemes(code, { lang, themes: SHIKI_THEMES });
+        return lines.map((line) =>
+          line.map((token) => ({
+            content: token.content,
+            light: toCrowiTokenStyle(token.variants.light),
+            dark: toCrowiTokenStyle(token.variants.dark),
+          })),
+        );
       },
       hasLang(lang) {
         return loadedLangs.has(lang);

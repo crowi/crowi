@@ -21,6 +21,7 @@ import { createHonoApp } from './app';
 import { attachMcp } from '../mcp/attach';
 import { createPluginContext } from '../plugin/plugin-context';
 import { makePluginRouterScope } from '../plugin/registries';
+import { createAstNegotiation } from './middleware/ast-negotiation';
 import { createCors } from './middleware/cors';
 import { createSecurityHeaders } from './middleware/security-headers';
 import { registerAdminCryptoRoutes } from './handlers/admin-crypto';
@@ -141,6 +142,11 @@ export const buildHonoApp = (crowi: Crowi) => {
   // preflights. Outside-in, this one still sets its header on the way back out.
   base.use('*', createSecurityHeaders());
   base.use('*', createCors(crowi));
+  // RFC-0023 §9 — read `X-Crowi-Ast-Version` once, app-wide, into a
+  // typed context variable. Installed right after CORS (not on a path
+  // prefix) so the 4 `renderedAst` emitting handlers all see it without
+  // any double-install-on-the-same-prefix hazard.
+  base.use('*', createAstNegotiation());
   // RFC-0013 Phase 0 — mount plugin-contributed HTTP routes. Each loaded
   // plugin's `registerRoutes(scope, ctx)` is called here (NOT at boot-time
   // activation, where the Hono app does not exist yet) with a per-plugin

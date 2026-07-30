@@ -252,6 +252,30 @@ See [Setting up the search backend](./search-setup) for details.
 > "Maintenance" group was removed. Backlink rebuilding is now a
 > `crowi-admin backlink rebuild`-style CLI operation.
 
+## Rebuilding rendered ASTs (rebuild rendered-ast)
+
+`crowi-admin rebuild rendered-ast` regenerates the pre-rendered AST stored on each page's **current revision** (`Revision.renderedAst`) with the running renderer pipeline ([RFC-0023](https://github.com/crowi/crowi/blob/main/docs/rfcs/0023-client-agnostic-rendered-ast.md)). It belongs to the same rebuild family as `rebuild search` / `rebuild storage copy` and is safe to run any number of times (idempotent).
+
+```bash
+# Pre-deployment verification (no writes) — only counts eligible revisions
+crowi-admin rebuild rendered-ast --dry-run
+
+# Real writes (run right after deploying a version bump)
+crowi-admin rebuild rendered-ast
+
+# Tune the worker pool (default 4)
+crowi-admin rebuild rendered-ast --concurrency 8
+```
+
+**When to run it (rollout procedure)**: after deploying a release that bumps the renderer pipeline's major version (most recently RFC-0023's 1.0.0), **run it with real writes immediately**. From the bump onward, every read of a page whose stored AST predates the new version triggers a full re-render on the fly (and the result is never persisted) — this read amplification is an **intended interim cost** that only goes away once the backfill completes. Conversely, **avoid real-write runs before that deployment** — pre-deploy verification must stay `--dry-run` only (even before the bump, a real-write run would rewrite legacy revisions that carry no `rendererVersion`).
+
+**Declaring completion**: the save path stamps each api replica's own binary version, so as long as even one old-version replica is still routable, new old-version revisions keep being minted after your backfill finished. Only declare the backfill complete once both of the following hold:
+
+1. You have confirmed every api replica runs the new version (no old writers remain).
+2. One final `rebuild rendered-ast` run reports 0 eligible revisions remaining.
+
+The command is idempotent, so the final re-run only costs time proportional to the residual count.
+
 ## Sections in progress
 
 The following are not yet complete as of the v2 alpha.

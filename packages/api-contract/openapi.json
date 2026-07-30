@@ -1078,7 +1078,20 @@
                       }
                     }
                   },
-                  "renderedAst": {},
+                  "renderedAst": {
+                    "anyOf": [
+                      {
+                        "$ref": "#/components/schemas/RenderedAstEnvelope"
+                      },
+                      {
+                        "$ref": "#/components/schemas/LegacyRenderedAstRoot"
+                      }
+                    ]
+                  },
+                  "renderedAstArtifactKey": {
+                    "type": "string",
+                    "maxLength": 64
+                  },
                   "rendererVersion": {
                     "type": "string"
                   },
@@ -1381,6 +1394,40 @@
           "createdAt"
         ]
       },
+      "RenderedAstEnvelope": {
+        "type": "object",
+        "properties": {
+          "astVersion": {
+            "type": "number",
+            "enum": [
+              1
+            ]
+          },
+          "root": {}
+        },
+        "required": [
+          "astVersion"
+        ]
+      },
+      "LegacyRenderedAstRoot": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "root"
+            ]
+          },
+          "children": {
+            "type": "array",
+            "items": {}
+          }
+        },
+        "required": [
+          "type",
+          "children"
+        ]
+      },
       "PageWithRevision": {
         "type": "object",
         "properties": {
@@ -1525,7 +1572,20 @@
                   }
                 }
               },
-              "renderedAst": {},
+              "renderedAst": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/RenderedAstEnvelope"
+                  },
+                  {
+                    "$ref": "#/components/schemas/LegacyRenderedAstRoot"
+                  }
+                ]
+              },
+              "renderedAstArtifactKey": {
+                "type": "string",
+                "maxLength": 64
+              },
               "rendererVersion": {
                 "type": "string"
               },
@@ -1948,7 +2008,20 @@
               }
             }
           },
-          "renderedAst": {},
+          "renderedAst": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RenderedAstEnvelope"
+              },
+              {
+                "$ref": "#/components/schemas/LegacyRenderedAstRoot"
+              }
+            ]
+          },
+          "renderedAstArtifactKey": {
+            "type": "string",
+            "maxLength": 64
+          },
           "rendererVersion": {
             "type": "string"
           },
@@ -2435,7 +2508,20 @@
                             }
                           }
                         },
-                        "renderedAst": {},
+                        "renderedAst": {
+                          "anyOf": [
+                            {
+                              "$ref": "#/components/schemas/RenderedAstEnvelope"
+                            },
+                            {
+                              "$ref": "#/components/schemas/LegacyRenderedAstRoot"
+                            }
+                          ]
+                        },
+                        "renderedAstArtifactKey": {
+                          "type": "string",
+                          "maxLength": 64
+                        },
                         "rendererVersion": {
                           "type": "string"
                         },
@@ -2916,7 +3002,20 @@
                           }
                         }
                       },
-                      "renderedAst": {},
+                      "renderedAst": {
+                        "anyOf": [
+                          {
+                            "$ref": "#/components/schemas/RenderedAstEnvelope"
+                          },
+                          {
+                            "$ref": "#/components/schemas/LegacyRenderedAstRoot"
+                          }
+                        ]
+                      },
+                      "renderedAstArtifactKey": {
+                        "type": "string",
+                        "maxLength": 64
+                      },
                       "rendererVersion": {
                         "type": "string"
                       },
@@ -3371,7 +3470,20 @@
                           }
                         }
                       },
-                      "renderedAst": {},
+                      "renderedAst": {
+                        "anyOf": [
+                          {
+                            "$ref": "#/components/schemas/RenderedAstEnvelope"
+                          },
+                          {
+                            "$ref": "#/components/schemas/LegacyRenderedAstRoot"
+                          }
+                        ]
+                      },
+                      "renderedAstArtifactKey": {
+                        "type": "string",
+                        "maxLength": 64
+                      },
                       "rendererVersion": {
                         "type": "string"
                       },
@@ -3827,7 +3939,20 @@
                       }
                     }
                   },
-                  "renderedAst": {},
+                  "renderedAst": {
+                    "anyOf": [
+                      {
+                        "$ref": "#/components/schemas/RenderedAstEnvelope"
+                      },
+                      {
+                        "$ref": "#/components/schemas/LegacyRenderedAstRoot"
+                      }
+                    ]
+                  },
+                  "renderedAstArtifactKey": {
+                    "type": "string",
+                    "maxLength": 64
+                  },
                   "rendererVersion": {
                     "type": "string"
                   },
@@ -4462,7 +4587,20 @@
                             }
                           }
                         },
-                        "renderedAst": {},
+                        "renderedAst": {
+                          "anyOf": [
+                            {
+                              "$ref": "#/components/schemas/RenderedAstEnvelope"
+                            },
+                            {
+                              "$ref": "#/components/schemas/LegacyRenderedAstRoot"
+                            }
+                          ]
+                        },
+                        "renderedAstArtifactKey": {
+                          "type": "string",
+                          "maxLength": 64
+                        },
                         "rendererVersion": {
                           "type": "string"
                         },
@@ -9529,7 +9667,20 @@
                                       }
                                     }
                                   },
-                                  "renderedAst": {},
+                                  "renderedAst": {
+                                    "anyOf": [
+                                      {
+                                        "$ref": "#/components/schemas/RenderedAstEnvelope"
+                                      },
+                                      {
+                                        "$ref": "#/components/schemas/LegacyRenderedAstRoot"
+                                      }
+                                    ]
+                                  },
+                                  "renderedAstArtifactKey": {
+                                    "type": "string",
+                                    "maxLength": 64
+                                  },
                                   "rendererVersion": {
                                     "type": "string"
                                   },
@@ -11735,7 +11886,20 @@
                                       }
                                     }
                                   },
-                                  "renderedAst": {},
+                                  "renderedAst": {
+                                    "anyOf": [
+                                      {
+                                        "$ref": "#/components/schemas/RenderedAstEnvelope"
+                                      },
+                                      {
+                                        "$ref": "#/components/schemas/LegacyRenderedAstRoot"
+                                      }
+                                    ]
+                                  },
+                                  "renderedAstArtifactKey": {
+                                    "type": "string",
+                                    "maxLength": 64
+                                  },
                                   "rendererVersion": {
                                     "type": "string"
                                   },
@@ -12196,7 +12360,20 @@
                                           }
                                         }
                                       },
-                                      "renderedAst": {},
+                                      "renderedAst": {
+                                        "anyOf": [
+                                          {
+                                            "$ref": "#/components/schemas/RenderedAstEnvelope"
+                                          },
+                                          {
+                                            "$ref": "#/components/schemas/LegacyRenderedAstRoot"
+                                          }
+                                        ]
+                                      },
+                                      "renderedAstArtifactKey": {
+                                        "type": "string",
+                                        "maxLength": 64
+                                      },
                                       "rendererVersion": {
                                         "type": "string"
                                       },
@@ -12905,7 +13082,20 @@
                                           }
                                         }
                                       },
-                                      "renderedAst": {},
+                                      "renderedAst": {
+                                        "anyOf": [
+                                          {
+                                            "$ref": "#/components/schemas/RenderedAstEnvelope"
+                                          },
+                                          {
+                                            "$ref": "#/components/schemas/LegacyRenderedAstRoot"
+                                          }
+                                        ]
+                                      },
+                                      "renderedAstArtifactKey": {
+                                        "type": "string",
+                                        "maxLength": 64
+                                      },
                                       "rendererVersion": {
                                         "type": "string"
                                       },
@@ -13636,7 +13826,20 @@
                                       }
                                     }
                                   },
-                                  "renderedAst": {},
+                                  "renderedAst": {
+                                    "anyOf": [
+                                      {
+                                        "$ref": "#/components/schemas/RenderedAstEnvelope"
+                                      },
+                                      {
+                                        "$ref": "#/components/schemas/LegacyRenderedAstRoot"
+                                      }
+                                    ]
+                                  },
+                                  "renderedAstArtifactKey": {
+                                    "type": "string",
+                                    "maxLength": 64
+                                  },
                                   "rendererVersion": {
                                     "type": "string"
                                   },
@@ -14296,7 +14499,20 @@
                                       }
                                     }
                                   },
-                                  "renderedAst": {},
+                                  "renderedAst": {
+                                    "anyOf": [
+                                      {
+                                        "$ref": "#/components/schemas/RenderedAstEnvelope"
+                                      },
+                                      {
+                                        "$ref": "#/components/schemas/LegacyRenderedAstRoot"
+                                      }
+                                    ]
+                                  },
+                                  "renderedAstArtifactKey": {
+                                    "type": "string",
+                                    "maxLength": 64
+                                  },
                                   "rendererVersion": {
                                     "type": "string"
                                   },
@@ -15237,7 +15453,20 @@
                                         }
                                       }
                                     },
-                                    "renderedAst": {},
+                                    "renderedAst": {
+                                      "anyOf": [
+                                        {
+                                          "$ref": "#/components/schemas/RenderedAstEnvelope"
+                                        },
+                                        {
+                                          "$ref": "#/components/schemas/LegacyRenderedAstRoot"
+                                        }
+                                      ]
+                                    },
+                                    "renderedAstArtifactKey": {
+                                      "type": "string",
+                                      "maxLength": 64
+                                    },
                                     "rendererVersion": {
                                       "type": "string"
                                     },
@@ -15922,7 +16151,20 @@
                                         }
                                       }
                                     },
-                                    "renderedAst": {},
+                                    "renderedAst": {
+                                      "anyOf": [
+                                        {
+                                          "$ref": "#/components/schemas/RenderedAstEnvelope"
+                                        },
+                                        {
+                                          "$ref": "#/components/schemas/LegacyRenderedAstRoot"
+                                        }
+                                      ]
+                                    },
+                                    "renderedAstArtifactKey": {
+                                      "type": "string",
+                                      "maxLength": 64
+                                    },
                                     "rendererVersion": {
                                       "type": "string"
                                     },
@@ -16776,7 +17018,20 @@
                                           }
                                         }
                                       },
-                                      "renderedAst": {},
+                                      "renderedAst": {
+                                        "anyOf": [
+                                          {
+                                            "$ref": "#/components/schemas/RenderedAstEnvelope"
+                                          },
+                                          {
+                                            "$ref": "#/components/schemas/LegacyRenderedAstRoot"
+                                          }
+                                        ]
+                                      },
+                                      "renderedAstArtifactKey": {
+                                        "type": "string",
+                                        "maxLength": 64
+                                      },
                                       "rendererVersion": {
                                         "type": "string"
                                       },
@@ -18754,7 +19009,20 @@
                               }
                             }
                           },
-                          "renderedAst": {},
+                          "renderedAst": {
+                            "anyOf": [
+                              {
+                                "$ref": "#/components/schemas/RenderedAstEnvelope"
+                              },
+                              {
+                                "$ref": "#/components/schemas/LegacyRenderedAstRoot"
+                              }
+                            ]
+                          },
+                          "renderedAstArtifactKey": {
+                            "type": "string",
+                            "maxLength": 64
+                          },
                           "rendererVersion": {
                             "type": "string"
                           },
@@ -19027,7 +19295,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Full revision document",
+            "description": "Full revision document. `renderedAst` shape is content-negotiated via the `X-Crowi-Ast-Version` request header (RFC-0023): requests declaring `X-Crowi-Ast-Version: 1` receive the typed `{astVersion, root}` envelope; all other requests receive the stored bare mdast Root verbatim. The response varies on this header (`Vary: X-Crowi-Ast-Version`).",
             "content": {
               "application/json": {
                 "schema": {
@@ -19168,7 +19436,20 @@
                             }
                           }
                         },
-                        "renderedAst": {},
+                        "renderedAst": {
+                          "anyOf": [
+                            {
+                              "$ref": "#/components/schemas/RenderedAstEnvelope"
+                            },
+                            {
+                              "$ref": "#/components/schemas/LegacyRenderedAstRoot"
+                            }
+                          ]
+                        },
+                        "renderedAstArtifactKey": {
+                          "type": "string",
+                          "maxLength": 64
+                        },
                         "rendererVersion": {
                           "type": "string"
                         },
@@ -19456,7 +19737,7 @@
         ],
         "responses": {
           "200": {
-            "description": "The requested page with populated revision",
+            "description": "The requested page with populated revision. `revision.renderedAst` shape is content-negotiated via the `X-Crowi-Ast-Version` request header (RFC-0023): requests declaring `X-Crowi-Ast-Version: 1` receive the typed `{astVersion, root}` envelope; all other requests receive the stored bare mdast Root verbatim. The response varies on this header (`Vary: X-Crowi-Ast-Version`).",
             "content": {
               "application/json": {
                 "schema": {
@@ -19606,7 +19887,20 @@
                                 }
                               }
                             },
-                            "renderedAst": {},
+                            "renderedAst": {
+                              "anyOf": [
+                                {
+                                  "$ref": "#/components/schemas/RenderedAstEnvelope"
+                                },
+                                {
+                                  "$ref": "#/components/schemas/LegacyRenderedAstRoot"
+                                }
+                              ]
+                            },
+                            "renderedAstArtifactKey": {
+                              "type": "string",
+                              "maxLength": 64
+                            },
                             "rendererVersion": {
                               "type": "string"
                             },
@@ -20242,7 +20536,20 @@
                                     }
                                   }
                                 },
-                                "renderedAst": {},
+                                "renderedAst": {
+                                  "anyOf": [
+                                    {
+                                      "$ref": "#/components/schemas/RenderedAstEnvelope"
+                                    },
+                                    {
+                                      "$ref": "#/components/schemas/LegacyRenderedAstRoot"
+                                    }
+                                  ]
+                                },
+                                "renderedAstArtifactKey": {
+                                  "type": "string",
+                                  "maxLength": 64
+                                },
                                 "rendererVersion": {
                                   "type": "string"
                                 },
@@ -20818,7 +21125,20 @@
                                     }
                                   }
                                 },
-                                "renderedAst": {},
+                                "renderedAst": {
+                                  "anyOf": [
+                                    {
+                                      "$ref": "#/components/schemas/RenderedAstEnvelope"
+                                    },
+                                    {
+                                      "$ref": "#/components/schemas/LegacyRenderedAstRoot"
+                                    }
+                                  ]
+                                },
+                                "renderedAstArtifactKey": {
+                                  "type": "string",
+                                  "maxLength": 64
+                                },
                                 "rendererVersion": {
                                   "type": "string"
                                 },
@@ -21459,7 +21779,20 @@
                                     }
                                   }
                                 },
-                                "renderedAst": {},
+                                "renderedAst": {
+                                  "anyOf": [
+                                    {
+                                      "$ref": "#/components/schemas/RenderedAstEnvelope"
+                                    },
+                                    {
+                                      "$ref": "#/components/schemas/LegacyRenderedAstRoot"
+                                    }
+                                  ]
+                                },
+                                "renderedAstArtifactKey": {
+                                  "type": "string",
+                                  "maxLength": 64
+                                },
                                 "rendererVersion": {
                                   "type": "string"
                                 },
@@ -22013,7 +22346,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Page list (newest first) with optional portal page",
+            "description": "Page list (newest first) with optional portal page. The portal document is the only row carrying `revision.renderedAst`; its shape is content-negotiated via the `X-Crowi-Ast-Version` request header (RFC-0023, same semantics as GET /pages). The response varies on this header (`Vary: X-Crowi-Ast-Version`).",
             "content": {
               "application/json": {
                 "schema": {
@@ -22170,7 +22503,20 @@
                                       }
                                     }
                                   },
-                                  "renderedAst": {},
+                                  "renderedAst": {
+                                    "anyOf": [
+                                      {
+                                        "$ref": "#/components/schemas/RenderedAstEnvelope"
+                                      },
+                                      {
+                                        "$ref": "#/components/schemas/LegacyRenderedAstRoot"
+                                      }
+                                    ]
+                                  },
+                                  "renderedAstArtifactKey": {
+                                    "type": "string",
+                                    "maxLength": 64
+                                  },
                                   "rendererVersion": {
                                     "type": "string"
                                   },
@@ -22651,7 +22997,20 @@
                                     }
                                   }
                                 },
-                                "renderedAst": {},
+                                "renderedAst": {
+                                  "anyOf": [
+                                    {
+                                      "$ref": "#/components/schemas/RenderedAstEnvelope"
+                                    },
+                                    {
+                                      "$ref": "#/components/schemas/LegacyRenderedAstRoot"
+                                    }
+                                  ]
+                                },
+                                "renderedAstArtifactKey": {
+                                  "type": "string",
+                                  "maxLength": 64
+                                },
                                 "rendererVersion": {
                                   "type": "string"
                                 },
@@ -23106,7 +23465,20 @@
                                     }
                                   }
                                 },
-                                "renderedAst": {},
+                                "renderedAst": {
+                                  "anyOf": [
+                                    {
+                                      "$ref": "#/components/schemas/RenderedAstEnvelope"
+                                    },
+                                    {
+                                      "$ref": "#/components/schemas/LegacyRenderedAstRoot"
+                                    }
+                                  ]
+                                },
+                                "renderedAstArtifactKey": {
+                                  "type": "string",
+                                  "maxLength": 64
+                                },
                                 "rendererVersion": {
                                   "type": "string"
                                 },
@@ -23804,7 +24176,20 @@
                                     }
                                   }
                                 },
-                                "renderedAst": {},
+                                "renderedAst": {
+                                  "anyOf": [
+                                    {
+                                      "$ref": "#/components/schemas/RenderedAstEnvelope"
+                                    },
+                                    {
+                                      "$ref": "#/components/schemas/LegacyRenderedAstRoot"
+                                    }
+                                  ]
+                                },
+                                "renderedAstArtifactKey": {
+                                  "type": "string",
+                                  "maxLength": 64
+                                },
                                 "rendererVersion": {
                                   "type": "string"
                                 },
@@ -24840,7 +25225,20 @@
                                     }
                                   }
                                 },
-                                "renderedAst": {},
+                                "renderedAst": {
+                                  "anyOf": [
+                                    {
+                                      "$ref": "#/components/schemas/RenderedAstEnvelope"
+                                    },
+                                    {
+                                      "$ref": "#/components/schemas/LegacyRenderedAstRoot"
+                                    }
+                                  ]
+                                },
+                                "renderedAstArtifactKey": {
+                                  "type": "string",
+                                  "maxLength": 64
+                                },
                                 "rendererVersion": {
                                   "type": "string"
                                 },
@@ -25447,7 +25845,20 @@
                                     }
                                   }
                                 },
-                                "renderedAst": {},
+                                "renderedAst": {
+                                  "anyOf": [
+                                    {
+                                      "$ref": "#/components/schemas/RenderedAstEnvelope"
+                                    },
+                                    {
+                                      "$ref": "#/components/schemas/LegacyRenderedAstRoot"
+                                    }
+                                  ]
+                                },
+                                "renderedAstArtifactKey": {
+                                  "type": "string",
+                                  "maxLength": 64
+                                },
                                 "rendererVersion": {
                                   "type": "string"
                                 },
@@ -26049,7 +26460,20 @@
                                 }
                               }
                             },
-                            "renderedAst": {},
+                            "renderedAst": {
+                              "anyOf": [
+                                {
+                                  "$ref": "#/components/schemas/RenderedAstEnvelope"
+                                },
+                                {
+                                  "$ref": "#/components/schemas/LegacyRenderedAstRoot"
+                                }
+                              ]
+                            },
+                            "renderedAstArtifactKey": {
+                              "type": "string",
+                              "maxLength": 64
+                            },
                             "rendererVersion": {
                               "type": "string"
                             },
@@ -27062,7 +27486,20 @@
                                     }
                                   }
                                 },
-                                "renderedAst": {},
+                                "renderedAst": {
+                                  "anyOf": [
+                                    {
+                                      "$ref": "#/components/schemas/RenderedAstEnvelope"
+                                    },
+                                    {
+                                      "$ref": "#/components/schemas/LegacyRenderedAstRoot"
+                                    }
+                                  ]
+                                },
+                                "renderedAstArtifactKey": {
+                                  "type": "string",
+                                  "maxLength": 64
+                                },
                                 "rendererVersion": {
                                   "type": "string"
                                 },
@@ -27670,7 +28107,20 @@
                                     }
                                   }
                                 },
-                                "renderedAst": {},
+                                "renderedAst": {
+                                  "anyOf": [
+                                    {
+                                      "$ref": "#/components/schemas/RenderedAstEnvelope"
+                                    },
+                                    {
+                                      "$ref": "#/components/schemas/LegacyRenderedAstRoot"
+                                    }
+                                  ]
+                                },
+                                "renderedAstArtifactKey": {
+                                  "type": "string",
+                                  "maxLength": 64
+                                },
                                 "rendererVersion": {
                                   "type": "string"
                                 },
@@ -28287,7 +28737,20 @@
                                     }
                                   }
                                 },
-                                "renderedAst": {},
+                                "renderedAst": {
+                                  "anyOf": [
+                                    {
+                                      "$ref": "#/components/schemas/RenderedAstEnvelope"
+                                    },
+                                    {
+                                      "$ref": "#/components/schemas/LegacyRenderedAstRoot"
+                                    }
+                                  ]
+                                },
+                                "renderedAstArtifactKey": {
+                                  "type": "string",
+                                  "maxLength": 64
+                                },
                                 "rendererVersion": {
                                   "type": "string"
                                 },
@@ -29009,13 +29472,26 @@
         },
         "responses": {
           "200": {
-            "description": "Rendered mdast tree (serialised — same shape as a persisted revision.renderedAst)",
+            "description": "Rendered mdast tree (serialised — same shape as a persisted revision.renderedAst). Content-negotiated via the `X-Crowi-Ast-Version` request header (RFC-0023): requests declaring `X-Crowi-Ast-Version: 1` receive the typed `{astVersion, root}` envelope; all other requests receive the bare mdast Root. The response varies on this header (`Vary: X-Crowi-Ast-Version`).",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "renderedAst": {}
+                    "renderedAst": {
+                      "anyOf": [
+                        {
+                          "$ref": "#/components/schemas/RenderedAstEnvelope"
+                        },
+                        {
+                          "$ref": "#/components/schemas/LegacyRenderedAstRoot"
+                        }
+                      ]
+                    },
+                    "renderedAstArtifactKey": {
+                      "type": "string",
+                      "maxLength": 64
+                    }
                   }
                 }
               }
@@ -32895,7 +33371,20 @@
                                           }
                                         }
                                       },
-                                      "renderedAst": {},
+                                      "renderedAst": {
+                                        "anyOf": [
+                                          {
+                                            "$ref": "#/components/schemas/RenderedAstEnvelope"
+                                          },
+                                          {
+                                            "$ref": "#/components/schemas/LegacyRenderedAstRoot"
+                                          }
+                                        ]
+                                      },
+                                      "renderedAstArtifactKey": {
+                                        "type": "string",
+                                        "maxLength": 64
+                                      },
                                       "rendererVersion": {
                                         "type": "string"
                                       },
