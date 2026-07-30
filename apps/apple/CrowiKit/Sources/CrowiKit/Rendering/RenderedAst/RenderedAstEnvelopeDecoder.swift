@@ -28,11 +28,18 @@ import Foundation
 /// limit (the pre-pass runs first, so the recursive walk is bounded by
 /// `maxTreeDepth`).
 ///
-/// Phase 5 note: the server-side sidecar → typed-node PROJECTION
-/// (`sanitize-ast.ts`'s `tryProject`) is deliberately NOT mirrored yet — the
-/// envelope this decoder consumes is already projected, and an `html` node
-/// that somehow still carries a sidecar renders as a visible placeholder
-/// (the safe default). Wiring `typed-nodes.json` in Phase 5 adds the mirror.
+/// Phase 5 — the walker also mirrors the server-side sidecar → typed-node
+/// PROJECTION (`sanitize-ast.ts`'s `tryProject` + the §6 `crowiLinkCard`
+/// hoist): the envelope a v1 server sends is already projected, but the
+/// mirror is what lets the golden corpus (`typed-nodes.json`) drive the
+/// SAME stored-AST inputs through both walkers and diff the outputs. ONE
+/// deliberate divergence: the server re-sanitizes an SVG diagram payload
+/// (`allowSafeHref: false`) and re-encodes the possibly-rewritten bytes;
+/// this mirror validates the payload (canonical base64 / ≤100KB) but keeps
+/// the bytes verbatim — byte-mirroring the server's HTML serializer is not
+/// worth a second SVG toolchain, and the client-side half of that defense
+/// is `RenderedAstSvgRenderer`'s no-external-resource guarantee instead.
+/// (`RenderedAstGoldenCorpusTests` normalizes exactly that one field.)
 public enum RenderedAstDecodeOutcome: Equatable, Sendable {
     case envelope(RenderedAstDocument)
     case fallbackToRawBody(RenderedAstFallbackReason)
@@ -109,7 +116,7 @@ public enum RenderedAstEnvelopeDecoder {
         if let reason = preflightDepth(root) { return .invalid(reason) }
 
         let rawChildren = root["children"] as? [Any] ?? []
-        let children = rawChildren.map { sanitizeNode($0, parentModel: .flow) }
+        let children = sanitizeNodes(rawChildren, parentModel: .flow, chain: false)
         return .document(RenderedAstDocument(data: sanitizeHastData(root["data"]), children: children))
     }
 
@@ -220,15 +227,40 @@ public enum RenderedAstEnvelopeDecoder {
         value.count > 64 ? String(value.prefix(64)) : value
     }
 
-    private static func sanitizeNode(_ raw: Any, parentModel: ChildModel) -> RenderedAstNode {
+    private static func sanitizeNodes(_ raw: [Any], parentModel: ChildModel, chain: Bool) -> [RenderedAstNode] {
+        raw.flatMap { sanitizeNode($0, parentModel: parentModel, chain: chain) }
+    }
+
+    /// `chain` tracks the §6 hoist precondition (mirror of the server
+    /// walker): true while every ancestor from the nearest flow node down
+    /// is `paragraph` → (`emphasis` | `strong` | `delete` | `link`)*. A
+    /// card sidecar in a `heading` / `tableCell` (chain=false) is NOT
+    /// projected — the html node stays (visible placeholder).
+    private static func childChain(parentType: String, currentChain: Bool) -> Bool {
+        if parentType == "paragraph" { return true }
+        if parentType == "emphasis" || parentType == "strong" || parentType == "delete" || parentType == "link" {
+            return currentChain
+        }
+        return false
+    }
+
+    private static func sanitizeNode(_ raw: Any, parentModel: ChildModel, chain: Bool) -> [RenderedAstNode] {
         guard let node = record(raw), let type = node["type"] as? String else {
-            return opaque(.invalidShape, originalType: nil)
+            return [opaque(.invalidShape, originalType: nil)]
         }
         // A nested `root` is never valid content.
-        if type == "root" { return opaque(.invalidPosition, originalType: "root") }
-        guard let def = registry[type] else { return opaque(.unknownType, originalType: truncate64(type)) }
+        if type == "root" { return [opaque(.invalidPosition, originalType: "root")] }
+        guard let def = registry[type] else { return [opaque(.unknownType, originalType: truncate64(type))] }
+
+        // §5 step 1b — sidecar → typed-node projection (the server mirror).
+        // No / invalid / ambiguous sidecar, or an incompatible position
+        // without a hoist: fall through and stay `html` (fail safe).
+        if type == "html", let projected = tryProject(node, parentModel: parentModel, chain: chain) {
+            return [projected]
+        }
+
         guard placementAllows(def.placement, in: parentModel) else {
-            return opaque(.invalidPosition, originalType: truncate64(type))
+            return [opaque(.invalidPosition, originalType: truncate64(type))]
         }
 
         // crowiFigure structural data requirement (image-attrs contract):
@@ -240,12 +272,12 @@ public enum RenderedAstEnvelopeDecoder {
                 (data["hName"] as? String) == "figure",
                 data["hProperties"] != nil,
                 let hProps = validatedHProperties(data["hProperties"])
-            else { return opaque(.invalidShape, originalType: "crowiFigure") }
+            else { return [opaque(.invalidShape, originalType: "crowiFigure")] }
             figureData = RenderedAstNodeData(hName: "figure", hProperties: hProps)
         }
 
         guard var kind = decodeKind(type: type, node: node) else {
-            return opaque(.invalidShape, originalType: truncate64(type))
+            return [opaque(.invalidShape, originalType: truncate64(type))]
         }
 
         // §8 URL allow-list + §10 per-type deep validation — the same
@@ -257,16 +289,12 @@ public enum RenderedAstEnvelopeDecoder {
         case .definition(let identifier, let url, let label, let title):
             if !isAllowedGeneralURL(url) { kind = .definition(identifier: identifier, url: "#", label: label, title: title) }
         case .image(let url, _, _):
-            if !isAllowedGeneralURL(url) { return validationFailedPlaceholder() }
+            if !isAllowedGeneralURL(url) { return [validationFailedPlaceholder()] }
         case .crowiDiagram(_, _, _, let image):
-            if !isValidImagePayload(image) { return validationFailedPlaceholder() }
-        case .crowiLinkCard(var payload):
-            guard isHTTPOnlyURL(payload.url) else { return validationFailedPlaceholder() }
-            if let imageURL = payload.imageURL, !isHTTPOnlyURL(imageURL) {
-                // Invalid card image → drop the field, image-less card.
-                payload.imageURL = nil
-            }
-            kind = .crowiLinkCard(payload)
+            if !isValidImagePayload(image) { return [validationFailedPlaceholder()] }
+        case .crowiLinkCard(let payload):
+            guard let validated = validatedCardPayload(payload) else { return [validationFailedPlaceholder()] }
+            kind = .crowiLinkCard(validated)
         default:
             break
         }
@@ -283,10 +311,174 @@ public enum RenderedAstEnvelopeDecoder {
         var children: [RenderedAstNode] = []
         if def.childModel != .none {
             let rawChildren = node["children"] as? [Any] ?? []
-            children = rawChildren.map { sanitizeNode($0, parentModel: def.childModel) }
+            children = sanitizeNodes(rawChildren, parentModel: def.childModel, chain: childChain(parentType: type, currentChain: chain))
         }
 
-        return RenderedAstNode(kind: kind, data: data, children: children)
+        let out = RenderedAstNode(kind: kind, data: data, children: children)
+
+        // §6 — hoist projected cards out of the paragraph subtree.
+        if type == "paragraph", subtreeHasCard(out) {
+            return splitParent(out)
+        }
+        return [out]
+    }
+
+    // MARK: - §6 crowiLinkCard hoist (mirror of `splitParent`)
+
+    private static func subtreeHasCard(_ node: RenderedAstNode) -> Bool {
+        var stack = [node]
+        while let current = stack.popLast() {
+            if case .crowiLinkCard = current.kind { return true }
+            stack.append(contentsOf: current.children)
+        }
+        return false
+    }
+
+    private static func isSplittableAncestor(_ node: RenderedAstNode) -> Bool {
+        switch node.kind {
+        case .paragraph, .emphasis, .strong, .delete, .link:
+            return true
+        default:
+            return false
+        }
+    }
+
+    /// Split `parent` around every `crowiLinkCard` descendant: phrasing
+    /// runs on either side re-wrap in a same-kinded copy of the ancestor
+    /// chain; empty copies (card at the start / end) are never emitted.
+    private static func splitParent(_ parent: RenderedAstNode) -> [RenderedAstNode] {
+        var out: [RenderedAstNode] = []
+        var acc: [RenderedAstNode] = []
+        func flush() {
+            if !acc.isEmpty {
+                out.append(RenderedAstNode(kind: parent.kind, data: parent.data, children: acc))
+                acc = []
+            }
+        }
+        for child in parent.children {
+            if case .crowiLinkCard = child.kind {
+                flush()
+                out.append(child)
+                continue
+            }
+            if isSplittableAncestor(child), subtreeHasCard(child) {
+                for part in splitParent(child) {
+                    if case .crowiLinkCard = part.kind {
+                        flush()
+                        out.append(part)
+                    } else {
+                        acc.append(part)
+                    }
+                }
+                continue
+            }
+            acc.append(child)
+        }
+        flush()
+        return out
+    }
+
+    // MARK: - §5 step 1b projection (mirror of `tryProject` + §10 sidecar schemas)
+
+    private static let sidecarKeys = ["crowiCode", "crowiMath", "crowiDiagram", "crowiLinkCard", "crowiPlaceholder"]
+
+    /// Projects an `html` node carrying EXACTLY ONE valid sidecar into its
+    /// typed node (the html `value` string never survives). Returns `nil`
+    /// when nothing projects (no/ambiguous/schema-invalid sidecar, or a
+    /// position the projection cannot legally occupy) — the html node then
+    /// stays as-is. A schema-VALID sidecar whose payload fails the §10 deep
+    /// validation degrades to `crowiPlaceholder{validation-failed}`.
+    private static func tryProject(_ node: [String: Any], parentModel: ChildModel, chain: Bool) -> RenderedAstNode? {
+        guard let data = record(node["data"]) else { return nil }
+        let present = sidecarKeys.filter { data[$0] != nil }
+        guard present.count == 1, let key = present.first, let payload = data[key] else { return nil }
+        // `data.hProperties` (etc.) carry over to the projected node —
+        // load-bearing for preview scroll-sync on display math (§10).
+        let carried = sanitizeHastData(node["data"])
+
+        switch key {
+        case "crowiCode":
+            guard
+                parentModel == .flow,
+                let sidecar = record(payload),
+                let value = requiredString(sidecar["value"], max: RenderedAstWireContract.maxValueChars),
+                let lang = optionalString(sidecar["lang"], max: 64),
+                let tokens = validatedTokenLines(sidecar["tokens"])
+            else { return nil }
+            var codeData = carried ?? RenderedAstNodeData()
+            codeData.tokens = tokens
+            return RenderedAstNode(kind: .code(value: value, lang: lang.value, meta: nil), data: codeData)
+        case "crowiMath":
+            guard
+                let sidecar = record(payload),
+                let tex = requiredString(sidecar["tex"], max: RenderedAstWireContract.maxValueChars),
+                let display = boolValue(sidecar["display"])
+            else { return nil }
+            if display, parentModel != .flow { return nil }
+            if !display, parentModel != .phrasing { return nil }
+            return RenderedAstNode(kind: display ? .math(value: tex, meta: nil) : .inlineMath(value: tex, meta: nil), data: carried)
+        case "crowiDiagram":
+            guard
+                parentModel == .flow,
+                let sidecar = record(payload),
+                let kindString = sidecar["kind"] as? String,
+                let diagramKind = RenderedAstNode.DiagramKind(rawValue: kindString),
+                let diagramType = optionalString(sidecar["diagramType"], max: 32),
+                let alt = requiredString(sidecar["alt"], max: 256),
+                let image = imagePayload(sidecar["image"])
+            else { return nil }
+            // Deep validation (schema-valid but bad payload) → visible
+            // placeholder, mirroring the server. NOTE: the server also
+            // re-sanitizes + possibly re-encodes an SVG payload here; this
+            // mirror keeps the bytes verbatim (see the type doc comment).
+            guard isValidImagePayload(image) else { return validationFailedPlaceholder() }
+            return RenderedAstNode(
+                kind: .crowiDiagram(kind: diagramKind, diagramType: diagramType.value, alt: alt, image: image),
+                data: carried
+            )
+        case "crowiLinkCard":
+            let positionOk = parentModel == .flow || (parentModel == .phrasing && chain)
+            guard
+                positionOk,
+                let sidecar = record(payload),
+                let url = requiredString(sidecar["url"], max: 4096),
+                let title = optionalString(sidecar["title"], max: 512),
+                let description = optionalString(sidecar["description"], max: 2048),
+                let siteName = optionalString(sidecar["siteName"], max: 256),
+                let domain = optionalString(sidecar["domain"], max: 256)
+            else { return nil }
+            var imageURL: String?
+            if let rawImage = sidecar["image"] {
+                guard let imageDict = record(rawImage), let candidate = requiredString(imageDict["url"], max: 4096) else {
+                    return nil
+                }
+                imageURL = candidate
+            }
+            let payload = RenderedAstLinkCardPayload(
+                url: url,
+                title: title.value,
+                description: description.value,
+                imageURL: imageURL,
+                siteName: siteName.value,
+                domain: domain.value
+            )
+            guard let validated = validatedCardPayload(payload) else { return validationFailedPlaceholder() }
+            return RenderedAstNode(kind: .crowiLinkCard(validated), data: carried)
+        case "crowiPlaceholder":
+            guard
+                let sidecar = record(payload),
+                let kindString = sidecar["kind"] as? String,
+                let placeholderKind = RenderedAstPlaceholderKind(rawValue: kindString),
+                let label = requiredString(sidecar["label"], max: 512),
+                let reservation = reservation(sidecar["reservation"])
+            else { return nil }
+            return RenderedAstNode(
+                kind: .crowiPlaceholder(kind: placeholderKind, label: label, reservation: reservation),
+                data: carried
+            )
+        default:
+            return nil
+        }
     }
 
     // MARK: - per-type field validation (mirror of the zod field schemas)
@@ -551,6 +743,18 @@ public enum RenderedAstEnvelopeDecoder {
     static func isHTTPOnlyURL(_ url: String) -> Bool {
         guard let scheme = leadingScheme(of: url) else { return false }
         return scheme == "http" || scheme == "https"
+    }
+
+    /// The §8 card override in ONE place (mirror of `validateCardFields`),
+    /// applied both to envelope-decoded card nodes and to sidecar
+    /// projections: a non-http(s) `url` degrades the whole card (`nil` →
+    /// validation-failed placeholder); a non-http(s) image URL just drops
+    /// the field (image-less card).
+    private static func validatedCardPayload(_ payload: RenderedAstLinkCardPayload) -> RenderedAstLinkCardPayload? {
+        guard isHTTPOnlyURL(payload.url) else { return nil }
+        var out = payload
+        if let imageURL = out.imageURL, !isHTTPOnlyURL(imageURL) { out.imageURL = nil }
+        return out
     }
 
     /// The `^([a-zA-Z][a-zA-Z0-9+.-]*):` prefix, lowercased — or nil.
