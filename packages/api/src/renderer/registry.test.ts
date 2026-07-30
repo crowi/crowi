@@ -205,6 +205,46 @@ describe('RendererRegistryImpl', () => {
     });
   });
 
+  describe('addStylesheet — legacy /api/v2/plugins/ prefix dual-accept-with-normalization (feature-api-v2-path-removal §6)', () => {
+    it('accepts a path under the legacy /api/v2/plugins/<plugin>/ prefix without throwing', () => {
+      const reg = new RendererRegistryImpl();
+      expect(() => reg.addStylesheet('/api/v2/plugins/my-plugin/style.css', 'my-plugin')).not.toThrow();
+    });
+
+    it('normalizes a legacy-prefixed path to canonical before it reaches the published manifest', () => {
+      const reg = new RendererRegistryImpl();
+      reg.addStylesheet('/api/v2/plugins/my-plugin/style.css', 'my-plugin');
+      reg.commitStylesheets('my-plugin');
+      expect(reg.getStylesheets()).toEqual(['/api/plugins/my-plugin/style.css']);
+    });
+
+    it('preserves a query string / fragment on a legacy-prefixed path across normalization', () => {
+      const reg = new RendererRegistryImpl();
+      reg.addStylesheet('/api/v2/plugins/my-plugin/style.css?v=2', 'my-plugin');
+      reg.addStylesheet('/api/v2/plugins/my-plugin/other.css#section', 'my-plugin');
+      reg.commitStylesheets('my-plugin');
+      expect(reg.getStylesheets()).toEqual(['/api/plugins/my-plugin/style.css?v=2', '/api/plugins/my-plugin/other.css#section']);
+    });
+
+    it('a legacy-prefixed and a canonical-prefixed call for the SAME logical path dedupe to a single canonical manifest entry', () => {
+      const reg = new RendererRegistryImpl();
+      reg.addStylesheet('/api/v2/plugins/my-plugin/style.css', 'my-plugin');
+      reg.addStylesheet('/api/plugins/my-plugin/style.css', 'my-plugin');
+      reg.commitStylesheets('my-plugin');
+      expect(reg.getStylesheets()).toEqual(['/api/plugins/my-plugin/style.css']);
+    });
+
+    it("still rejects a legacy-prefixed path outside the registering plugin's own namespace", () => {
+      const reg = new RendererRegistryImpl();
+      expect(() => reg.addStylesheet('/api/v2/plugins/other-plugin/style.css', 'my-plugin')).toThrow(/own route namespace/);
+    });
+
+    it('still rejects a legacy-prefixed traversal segment (defense in depth is unaffected by dual-accept)', () => {
+      const reg = new RendererRegistryImpl();
+      expect(() => reg.addStylesheet('/api/v2/plugins/my-plugin/../other-plugin/style.css', 'my-plugin')).toThrow(/traversal/);
+    });
+  });
+
   describe('addStylesheet — dedupe + pending→commit snapshot', () => {
     it('dedupes duplicate addStylesheet calls with the exact same path (same plugin)', () => {
       const reg = new RendererRegistryImpl();

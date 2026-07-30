@@ -32,6 +32,22 @@ import type {
  * escaping the registering plugin's own namespace. Malformed percent-
  * encoding (a decode that throws) is rejected outright rather than
  * silently falling back to the raw form.
+ *
+ * feature-api-v2-path-removal §6: the namespace check *dual-accepts*
+ * both the canonical `/api/plugins/<registeringPlugin>/` prefix and the
+ * legacy `/api/v2/plugins/<registeringPlugin>/` one a not-yet-bumped
+ * plugin package may still be passing in. When the legacy prefix
+ * matches, the returned path has that prefix substring rewritten to
+ * canonical BEFORE it ever enters the pending/published stylesheet
+ * manifest — the manifest (served by `GET /api/app/info` and rendered
+ * verbatim into `<link href>` by `RendererStylesheets`, which does no
+ * normalization of its own) must never carry a `/api/v2/...` entry once
+ * the listener stops accepting that prefix. This dual-accept is a
+ * migration-period allowance ONLY — unlike the attachment URL reader's
+ * permanent dual-accept regexes, it exists solely to decouple an
+ * installed plugin's own bump timing from the listener cutover, and may
+ * be narrowed back to canonical-only once installed plugins have caught
+ * up.
  */
 function validateStylesheetPath(path: string, registeringPlugin: string): string {
   if (path.includes('\\')) {
@@ -53,9 +69,18 @@ function validateStylesheetPath(path: string, registeringPlugin: string): string
   if (pathname.split('/').includes('..') || decodedPathname.split('/').includes('..')) {
     throw new Error(`Plugin '${registeringPlugin}' registered a stylesheet path with a '..' traversal segment: '${path}'`);
   }
-  const requiredPrefix = `/api/plugins/${registeringPlugin}/`;
-  if (!pathname.startsWith(requiredPrefix) || !decodedPathname.startsWith(requiredPrefix)) {
-    throw new Error(`Plugin '${registeringPlugin}' registered a stylesheet path outside its own route namespace ('${requiredPrefix}'): '${path}'`);
+  const canonicalPrefix = `/api/plugins/${registeringPlugin}/`;
+  const legacyPrefix = `/api/v2/plugins/${registeringPlugin}/`;
+  const matchesCanonical = pathname.startsWith(canonicalPrefix) && decodedPathname.startsWith(canonicalPrefix);
+  const matchesLegacy = pathname.startsWith(legacyPrefix) && decodedPathname.startsWith(legacyPrefix);
+  if (!matchesCanonical && !matchesLegacy) {
+    throw new Error(`Plugin '${registeringPlugin}' registered a stylesheet path outside its own route namespace ('${canonicalPrefix}'): '${path}'`);
+  }
+  if (matchesLegacy) {
+    // Migration-period normalization (see the doc comment above) — never
+    // let the legacy-prefixed string itself reach the pending/published
+    // manifest.
+    return canonicalPrefix + path.slice(legacyPrefix.length);
   }
   return path;
 }
