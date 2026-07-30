@@ -1,7 +1,9 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod/v3';
-import type { CodeBlockInfo, CodeBlockRenderer, CrowiPlugin, RenderError, RendererRegistry, RenderResult } from '@crowi/plugin-api';
+import type { CodeBlockInfo, CodeBlockRenderer, CrowiPlugin, RenderError, RendererRegistry, RenderResult, StructuredRenderPayload } from '@crowi/plugin-api';
+import { extractSvgDimensions, sanitizeSvg as sanitizeSvgShared } from '@crowi/svg-sanitize';
 import { encode as encodePlantUml } from './encoder';
+import { extractPngDimensions } from './png-dimensions';
 import { sanitizeSvg } from './sanitize';
 
 /**
@@ -70,7 +72,13 @@ export function createPlantUmlRenderer(config: PlantUmlConfig): CodeBlockRendere
     // `Revision.renderedAst` blobs (written with the old shape) keep
     // serving verbatim, dual-accepted by the legacy `.diagram-embed`
     // branch, until their page is next saved (spec §9 "next-save-only").
-    cacheVersion: 3,
+    //
+    // RFC-0023 §13 bumps 3 → 4: success results now additionally carry
+    // `structured` (the `crowiDiagram` sidecar payload — html output
+    // unchanged byte-for-byte). Without the bump, pre-RFC-0023 cache
+    // hits (no `structured`) would keep serving sidecar-less results
+    // until natural TTL expiry.
+    cacheVersion: 4,
     reservation: { variant: 'aspect', aspectRatio: 16 / 9 },
     computeEmbedKey: (info: CodeBlockInfo) => {
       // Hash the diagram source only — operator changing serverUrl /
@@ -130,6 +138,7 @@ export function createPlantUmlRenderer(config: PlantUmlConfig): CodeBlockRendere
           // for legacy-AST dual-accept + renderer-specific CSS.
           html: `<div class="diagram-embed plantuml-embed" data-crowi-renderer-presentation="diagram" data-crowi-renderer-state="ready">${sanitized.svg}</div>`,
           ttlSec: CACHE_TTL_SEC,
+          ...buildSvgStructured(svg),
         };
       }
 
@@ -142,9 +151,67 @@ export function createPlantUmlRenderer(config: PlantUmlConfig): CodeBlockRendere
       return {
         html: `<img class="diagram-embed plantuml-embed" data-crowi-renderer-presentation="diagram" data-crowi-renderer-state="ready" alt="" src="data:image/png;base64,${b64}">`,
         ttlSec: CACHE_TTL_SEC,
+        ...buildPngStructured(buf, b64),
       };
     },
   };
+}
+
+/** Fixed accessible alt for the sidecar — never derived from diagram source (same adversarial rule as Mermaid's alt). */
+const SIDECAR_ALT = 'PlantUML diagram';
+/** Wire-schema intrinsic dimension bounds (`CrowiDimensionSchema`, RFC-0023 §7). */
+const MAX_SIDECAR_DIMENSION = 16_384;
+
+/**
+ * RFC-0023 §1/§10 — the SVG branch's `crowiDiagram` sidecar. The
+ * sidecar SVG runs through an INDEPENDENT second sanitisation pass with
+ * `allowSafeHref: false` (unlike the html branch's `allowSafeHref:
+ * true` pass): declared clients render the typed node natively and must
+ * never receive live foreign links. The two passes fail independently —
+ * this helper failing (strict sanitize reject / underivable dimensions)
+ * only drops `structured` (html-only fallback), never the html; and it
+ * never reuses the html branch's sanitised output.
+ */
+function buildSvgStructured(rawSvg: string): { structured?: StructuredRenderPayload } {
+  const strict = sanitizeSvgShared(rawSvg, { allowSafeHref: false });
+  if (!strict.ok) return {};
+  const dims = extractSvgDimensions(strict.svg);
+  if (!dims || !dimsWithinWire(dims)) return {};
+  return {
+    structured: {
+      node: {
+        type: 'crowiDiagram',
+        kind: 'plantuml',
+        alt: SIDECAR_ALT,
+        image: {
+          mediaType: 'image/svg+xml',
+          base64: Buffer.from(strict.svg, 'utf8').toString('base64'),
+          width: dims.width,
+          height: dims.height,
+        },
+      },
+    },
+  };
+}
+
+/** RFC-0023 §10 — the PNG branch's sidecar; dimensions from the IHDR chunk, html-only fallback when underivable. */
+function buildPngStructured(png: Buffer, base64: string): { structured?: StructuredRenderPayload } {
+  const dims = extractPngDimensions(png);
+  if (!dims || !dimsWithinWire(dims)) return {};
+  return {
+    structured: {
+      node: {
+        type: 'crowiDiagram',
+        kind: 'plantuml',
+        alt: SIDECAR_ALT,
+        image: { mediaType: 'image/png', base64, width: dims.width, height: dims.height },
+      },
+    },
+  };
+}
+
+function dimsWithinWire(dims: { width: number; height: number }): boolean {
+  return dims.width >= 1 && dims.width <= MAX_SIDECAR_DIMENSION && dims.height >= 1 && dims.height <= MAX_SIDECAR_DIMENSION;
 }
 
 /**

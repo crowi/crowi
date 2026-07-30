@@ -94,7 +94,13 @@ export function createMermaidRenderer(): CodeBlockRenderer {
     // still serves the old, size-less markup until it is next saved; only
     // this plugin's own `PluginRenderCache` entry (keyed on diagram
     // source, independent of any one page) is invalidated immediately.
-    cacheVersion: 3,
+    //
+    // Bumped 3 to 4 (RFC-0023 §13): success results now additionally
+    // carry `structured` (the `crowiDiagram` sidecar payload — html
+    // output unchanged byte-for-byte). Without the bump, pre-RFC-0023
+    // cache hits (no `structured`) would keep serving sidecar-less
+    // results to the backfill / save paths until natural TTL expiry.
+    cacheVersion: 4,
     reservation: { variant: 'aspect', aspectRatio: 16 / 9 },
     // spec §6 — sized to the fixed 4-worker child-process pool
     // (`render-engine.ts`); §7's preview dispatch is the only other
@@ -141,13 +147,43 @@ export function createMermaidRenderer(): CodeBlockRenderer {
       // `max-width: 100%; height: auto` then scales it proportionally.
       const dims = extractSvgDimensions(sanitized.svg);
       const sizeAttrs = dims ? ` width="${dims.width}" height="${dims.height}"` : '';
+      // RFC-0023 §10 — the `crowiDiagram` structured payload: the SAME
+      // sanitized SVG (Mermaid's sanitizer is already the strict
+      // `allowSafeHref: false` policy, so no second pass is needed),
+      // base64 re-used from the data URL. Intrinsic dimensions are
+      // REQUIRED on the typed node — when the `viewBox` derivation
+      // fails or falls outside the wire schema's 1..16384 range, we
+      // fall back to html-only (no `structured`), never an undefined-
+      // dimension node.
+      const diagramType = detectDiagramType(info.source);
+      const structured =
+        dims && dims.width >= 1 && dims.width <= 16_384 && dims.height >= 1 && dims.height <= 16_384
+          ? {
+              node: {
+                type: 'crowiDiagram',
+                kind: 'mermaid',
+                ...(diagramType !== undefined ? { diagramType } : {}),
+                alt,
+                image: {
+                  mediaType: 'image/svg+xml',
+                  base64: encoded.dataUrl.slice(SVG_DATA_URL_PREFIX.length),
+                  width: dims.width,
+                  height: dims.height,
+                },
+              },
+            }
+          : undefined;
       return {
         html: `<img class="diagram-embed mermaid-embed" data-crowi-renderer-presentation="diagram" data-crowi-renderer-state="ready" alt="${escapeHtml(alt)}" src="${encoded.dataUrl}"${sizeAttrs}>`,
         ttlSec: SUCCESS_TTL_SEC,
+        ...(structured !== undefined ? { structured } : {}),
       };
     },
   };
 }
+
+/** Prefix `encodeSvgToDataUrl` always emits — sliced off to recover the raw base64 for the sidecar. */
+const SVG_DATA_URL_PREFIX = 'data:image/svg+xml;base64,';
 
 /**
  * spec §9 — closed-enum diagram-type keywords for the `alt` text. A
@@ -171,6 +207,17 @@ const DIAGRAM_TYPE_KEYWORDS: ReadonlyArray<{ re: RegExp; type: string }> = [
 ];
 
 /**
+ * The closed-enum diagram-type keyword for `source`, or undefined when
+ * the first line matches none. RFC-0023 — also feeds the
+ * `crowiDiagram.diagramType` sidecar field (same closed enum, never
+ * arbitrary source text).
+ */
+export function detectDiagramType(source: string): string | undefined {
+  const firstLine = (source.split('\n').find((l) => l.trim().length > 0) ?? '').trim();
+  return DIAGRAM_TYPE_KEYWORDS.find((k) => k.re.test(firstLine))?.type;
+}
+
+/**
  * `alt` text for the success `<img>`. `(a)` fixed `"Mermaid diagram"`,
  * or `(b)` `"Mermaid diagram (${type})"` where `type` is a member of the
  * closed enum above — never the source string itself (spec §9's
@@ -178,9 +225,8 @@ const DIAGRAM_TYPE_KEYWORDS: ReadonlyArray<{ re: RegExp; type: string }> = [
  * `alt="..."` attribute must never reach it).
  */
 export function buildAltText(source: string): string {
-  const firstLine = (source.split('\n').find((l) => l.trim().length > 0) ?? '').trim();
-  const match = DIAGRAM_TYPE_KEYWORDS.find((k) => k.re.test(firstLine));
-  return match ? `Mermaid diagram (${match.type})` : 'Mermaid diagram';
+  const type = detectDiagramType(source);
+  return type !== undefined ? `Mermaid diagram (${type})` : 'Mermaid diagram';
 }
 
 const plugin: CrowiPlugin = {
