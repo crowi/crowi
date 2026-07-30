@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import { Check, Copy, Link2, X } from 'lucide-react';
-import type { PageWithRevision } from '@crowi/api-contract';
+import { type PageWithRevision, unwrapRenderedAst } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 import Link from 'next/link';
 import { useCopyFeedback } from '@/lib/use-copy-feedback';
@@ -508,8 +508,13 @@ const components = {
 
 export function PageContent({ page }: PageContentProps) {
   const body = page.revision?.body || '';
-  const renderedAst = page.revision?.renderedAst;
+  // RFC-0023 §14 — every `renderedAst` read goes through the defensive
+  // `unwrapRenderedAst` normaliser (the web never receives the v1
+  // envelope in normal operation; this guards against a future
+  // header-emitting mistake / reverse-cache misconfiguration).
+  const renderedAst = unwrapRenderedAst(page.revision?.renderedAst);
   const revisionId = page.revision?._id;
+  const renderedAstArtifactKey = page.revision?.renderedAstArtifactKey;
 
   // URL hash is the single source of truth; `useSyncExternalStore`
   // re-renders on every `hashchange` (TOC click, anchor copy, browser
@@ -532,10 +537,17 @@ export function PageContent({ page }: PageContentProps) {
   // `renderMdastToReactNode` helper so the editor preview pane and
   // this show path stay byte-identical for the same input.
   //
-  // Memoized on `revisionId`, not `renderedAst`: react-query refetches
-  // (window focus, polling) hand back fresh-identity-but-same-content
-  // AST objects, and we don't want to redo the conversion on each one.
-  // A new revision means a new `_id`.
+  // Memoized on `[revisionId, renderedAstArtifactKey]` (RFC-0023 §14),
+  // not on `renderedAst` identity: react-query refetches (window
+  // focus, polling) hand back fresh-identity-but-same-content AST
+  // objects, and we don't want to redo the conversion on each one. But
+  // `revisionId` alone is NOT enough — the server can serve a
+  // DIFFERENT tree for the same revision (pending-marker retry
+  // resolving, freshness-mismatch recompute), and keying on the id
+  // alone kept showing the stale render. The server stamps
+  // `renderedAstArtifactKey` (stable for verbatim stored ASTs, a fresh
+  // nonce whenever the served tree may differ), so the memo re-runs
+  // exactly when the content can have changed.
   const renderedNode = useMemo(() => {
     return renderMdastToReactNode(renderedAst, {
       sectionWrap: true,
@@ -545,7 +557,7 @@ export function PageContent({ page }: PageContentProps) {
       components: components as unknown as Parameters<typeof renderMdastToReactNode>[1]['components'],
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [revisionId]);
+  }, [revisionId, renderedAstArtifactKey]);
 
   // Initial scroll. The browser's native anchor jump fires before
   // React commits, so the heading isn't there yet. Watch the document

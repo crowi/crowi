@@ -1,5 +1,6 @@
 'use client';
 
+import { unwrapRenderedAst } from '@crowi/api-contract';
 import { useMutation } from '@tanstack/react-query';
 import { useRef } from 'react';
 import { apiClientV2 } from './api-client';
@@ -53,7 +54,11 @@ export function usePreview() {
         throw new Error('Failed to render preview');
       }
       const data = await response.json();
-      return data.renderedAst;
+      // RFC-0023 §14 — route the read through the defensive
+      // `unwrapRenderedAst` normaliser (no-op for the bare Root the web
+      // receives in normal operation; `apiV2Fetch` never sends
+      // `X-Crowi-Ast-Version`).
+      return unwrapRenderedAst(data.renderedAst);
     },
   });
 }
