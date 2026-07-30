@@ -44,10 +44,7 @@ final class WorkspaceSessionTests: XCTestCase {
         )
         let context = try XCTUnwrap(store.context(for: workspace))
 
-        let responses = SequencedResponseBodies(bodies: appInfoBodies)
-        MockURLProtocol.requestHandler = { request in
-            (HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, responses.next())
-        }
+        installAppInfoOnlyHandler(appInfoBodies: appInfoBodies)
 
         let session = try WorkspaceSession(
             context: context,
@@ -56,6 +53,21 @@ final class WorkspaceSessionTests: XCTestCase {
             urlSession: MockURLProtocol.makeSession()
         )
         return (session, workspace.id, containerBaseDirectory)
+    }
+
+    /// Serves the sequenced app-info fixtures ONLY to `/app/info`:
+    /// `foregrounded()` also nudges the notifications poller
+    /// (`GET /notifications/status`) since feature-ios-phase3, and that
+    /// request must not consume an app-info body. The 404 is absorbed by
+    /// the poller's `try?` (badge keeps its last value).
+    private func installAppInfoOnlyHandler(appInfoBodies: [Data]) {
+        let responses = SequencedResponseBodies(bodies: appInfoBodies)
+        MockURLProtocol.requestHandler = { request in
+            guard request.url?.path.hasSuffix("/app/info") == true else {
+                return (HTTPURLResponse(url: request.url!, statusCode: 404, httpVersion: nil, headerFields: nil)!, Data())
+            }
+            return (HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, responses.next())
+        }
     }
 
     /// The exact scenario the spec's CI-fixed capability-gate test names:
@@ -131,6 +143,93 @@ final class WorkspaceSessionTests: XCTestCase {
             true,
             "activated() on a confidential workspace must re-apply the SwiftData store directory's rest-state protection, not only the image cache's"
         )
+    }
+
+    // MARK: - feature-ios-phase3: the unread badge on the session (§11)
+
+    /// A stateful notification "server" the badge tests route by path:
+    /// `/app/info` keeps answering a fixed fixture (so `foregrounded()`'s
+    /// app-info half keeps working), `/notifications/status` answers the
+    /// current unread count, and the two write endpoints mutate it.
+    private final class NotificationRoutes: @unchecked Sendable {
+        private let lock = NSLock()
+        private var unread: Int
+        private let appInfoBody: Data
+
+        init(unread: Int, appInfoBody: Data) {
+            self.unread = unread
+            self.appInfoBody = appInfoBody
+        }
+
+        func install() {
+            MockURLProtocol.requestHandler = { [self] request in
+                let path = request.url?.path ?? ""
+                let body: Data
+                if path.hasSuffix("/app/info") {
+                    body = appInfoBody
+                } else if path.hasSuffix("/notifications/status") {
+                    lock.lock()
+                    body = try! JSONSerialization.data(withJSONObject: ["count": unread])
+                    lock.unlock()
+                } else if path.hasSuffix("/notifications/read"), request.httpMethod == "POST" {
+                    lock.lock()
+                    unread = 0
+                    lock.unlock()
+                    body = try! JSONSerialization.data(withJSONObject: ["ok": true])
+                } else if path.hasSuffix("/open"), request.httpMethod == "POST" {
+                    lock.lock()
+                    unread = max(0, unread - 1)
+                    lock.unlock()
+                    body = try! JSONSerialization.data(withJSONObject: ["notification": ["_id": "n1", "status": "OPENED"]])
+                } else {
+                    return (HTTPURLResponse(url: request.url!, statusCode: 404, httpVersion: nil, headerFields: nil)!, Data())
+                }
+                return (HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
+            }
+        }
+    }
+
+    /// `unreadNotificationCount` is the EXACT `@Published` property the
+    /// toolbar bell renders (`NotificationBellToolbarButton` via the session
+    /// wrapper) — this pins that the poll nudge in `foregrounded()` and the
+    /// two write helpers actually move it, badge-decrement included.
+    func testUnreadNotificationBadgeFollowsForegroundNudgeAndMarkAllRead() async throws {
+        let (session, _, _) = try makeSession(appInfoBodies: [appInfoJSON(capabilities: ["pages"])])
+        NotificationRoutes(unread: 3, appInfoBody: appInfoJSON(capabilities: ["pages"])).install()
+
+        XCTAssertEqual(session.unreadNotificationCount, 0, "badge hidden until the first successful poll")
+
+        await session.foregrounded()
+        XCTAssertEqual(session.unreadNotificationCount, 3, "foregrounding must immediately re-poll the badge")
+
+        let acknowledged = await session.markAllNotificationsRead()
+        XCTAssertTrue(acknowledged)
+        XCTAssertEqual(session.unreadNotificationCount, 0, "mark-all-read must zero the badge on its follow-up poll")
+    }
+
+    func testOpeningANotificationDecrementsThePublishedBadge() async throws {
+        let (session, _, _) = try makeSession(appInfoBodies: [appInfoJSON(capabilities: ["pages"])])
+        NotificationRoutes(unread: 2, appInfoBody: appInfoJSON(capabilities: ["pages"])).install()
+
+        await session.refreshUnreadNotificationCount()
+        XCTAssertEqual(session.unreadNotificationCount, 2)
+
+        await session.openNotification(id: "n1")
+        XCTAssertEqual(session.unreadNotificationCount, 1, "opening one UNREAD notification must decrement the badge by exactly one")
+    }
+
+    func testAFailedBadgePollKeepsTheLastKnownValue() async throws {
+        let (session, _, _) = try makeSession(appInfoBodies: [appInfoJSON(capabilities: ["pages"])])
+        NotificationRoutes(unread: 4, appInfoBody: appInfoJSON(capabilities: ["pages"])).install()
+
+        await session.refreshUnreadNotificationCount()
+        XCTAssertEqual(session.unreadNotificationCount, 4)
+
+        // Back to the default handler shape: everything non-app-info 404s.
+        installAppInfoOnlyHandler(appInfoBodies: [appInfoJSON(capabilities: ["pages"])])
+
+        await session.foregrounded()
+        XCTAssertEqual(session.unreadNotificationCount, 4, "a failed status poll must keep the last known badge, never flicker to 0")
     }
 }
 

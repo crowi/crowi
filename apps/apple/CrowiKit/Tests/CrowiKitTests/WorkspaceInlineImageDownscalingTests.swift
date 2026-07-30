@@ -80,4 +80,96 @@ final class WorkspaceInlineImageDownscalingTests: XCTestCase {
         XCTAssertEqual(result.size.width, WorkspaceInlineImageDownscaling.defaultMaxDimension, accuracy: 0.5)
         XCTAssertEqual(result.size.height, WorkspaceInlineImageDownscaling.defaultMaxDimension, accuracy: 0.5)
     }
+
+    // MARK: - RFC-0015 inline width application (feature-ios-phase3)
+
+    private func width(_ value: String) -> ImageDisplayAttributes.Size? {
+        ImageDisplayAttributes.Size.validated(value)
+    }
+
+    func testAPixelWidthResizesTheBitmapPreservingAspectRatio() {
+        let original = makeImage(size: CGSize(width: 400, height: 200))
+
+        let result = WorkspaceInlineImageDownscaling.applyingInlineWidth(width("100px"), to: original)
+
+        XCTAssertEqual(result.size.width, 100, accuracy: 0.5)
+        XCTAssertEqual(result.size.height, 50, accuracy: 0.5)
+    }
+
+    /// CSS `width` scales both ways — a validated px width larger than the
+    /// bitmap upscales it (unlike the safety downscaler, which never does).
+    func testAPixelWidthUpscalesASmallBitmapLikeCSSWould() {
+        let original = makeImage(size: CGSize(width: 50, height: 25))
+
+        let result = WorkspaceInlineImageDownscaling.applyingInlineWidth(width("200px"), to: original)
+
+        XCTAssertEqual(result.size.width, 200, accuracy: 0.5)
+        XCTAssertEqual(result.size.height, 100, accuracy: 0.5)
+    }
+
+    /// "Smaller wins" composition with the inline safety cap: a huge (but
+    /// validated — 4096 is inside the closed interval) px width is capped at
+    /// `defaultMaxDimension`, never honored past it.
+    func testAPixelWidthComposesWithTheInlineCapBySmallerWins() {
+        let original = makeImage(size: CGSize(width: 400, height: 200))
+
+        let result = WorkspaceInlineImageDownscaling.applyingInlineWidth(width("4096px"), to: original)
+
+        XCTAssertEqual(result.size.width, WorkspaceInlineImageDownscaling.defaultMaxDimension, accuracy: 0.5)
+    }
+
+    /// review round 1 — a `%` width resolves against the MEASURED container
+    /// width (`InlineImageContainerWidthReference`, fed by
+    /// `WorkspacePageMarkdownView`), the same reference box the web's CSS
+    /// `width: <n>%` and the block path's `AttributeSizedLayout` use.
+    func testAPercentWidthResolvesAgainstTheContainerWidth() {
+        let original = makeImage(size: CGSize(width: 400, height: 200))
+
+        let result = WorkspaceInlineImageDownscaling.applyingInlineWidth(width("50%"), to: original, containerWidth: 300)
+
+        XCTAssertEqual(result.size.width, 150, accuracy: 0.5)
+        XCTAssertEqual(result.size.height, 75, accuracy: 0.5)
+    }
+
+    /// `100%` (the closed interval's upper bound) fills the container
+    /// exactly — and, like px, `%` scales both ways (a 100pt bitmap grows to
+    /// a 300pt column).
+    func testAHundredPercentWidthFillsTheContainerUpscalingIfNeeded() {
+        let original = makeImage(size: CGSize(width: 100, height: 50))
+
+        let result = WorkspaceInlineImageDownscaling.applyingInlineWidth(width("100%"), to: original, containerWidth: 300)
+
+        XCTAssertEqual(result.size.width, 300, accuracy: 0.5)
+        XCTAssertEqual(result.size.height, 150, accuracy: 0.5)
+    }
+
+    /// Degrade, never guess: without a usable container measurement (`nil`,
+    /// or a not-yet-laid-out zero) the bitmap passes through untouched.
+    func testAPercentWidthWithoutAMeasuredContainerLeavesTheBitmapUntouched() {
+        let original = makeImage(size: CGSize(width: 400, height: 200))
+
+        XCTAssertEqual(
+            WorkspaceInlineImageDownscaling.applyingInlineWidth(width("50%"), to: original).size.width, 400, accuracy: 0.5)
+        XCTAssertEqual(
+            WorkspaceInlineImageDownscaling.applyingInlineWidth(width("50%"), to: original, containerWidth: 0).size.width,
+            400, accuracy: 0.5)
+    }
+
+    /// "Smaller wins" holds for `%` too: 100% of a container wider than the
+    /// inline safety cap still stops at `defaultMaxDimension`.
+    func testAPercentWidthComposesWithTheInlineCapBySmallerWins() {
+        let original = makeImage(size: CGSize(width: 400, height: 200))
+
+        let result = WorkspaceInlineImageDownscaling.applyingInlineWidth(width("100%"), to: original, containerWidth: 2000)
+
+        XCTAssertEqual(result.size.width, WorkspaceInlineImageDownscaling.defaultMaxDimension, accuracy: 0.5)
+    }
+
+    func testNoWidthAttributeLeavesTheInlineBitmapUntouched() {
+        let original = makeImage(size: CGSize(width: 400, height: 200))
+
+        let result = WorkspaceInlineImageDownscaling.applyingInlineWidth(nil, to: original)
+
+        XCTAssertEqual(result.size.width, 400, accuracy: 0.5)
+    }
 }

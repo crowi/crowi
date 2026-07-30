@@ -97,6 +97,31 @@ final class WorkspaceMarkdownImageProviderTests: XCTestCase {
         XCTAssertTrue(acceptsImageProvider(WorkspaceMarkdownImageProvider(loader: loader)))
     }
 
+    /// `feature-ios-phase3` — the block path's RFC-0015 side-channel detach
+    /// happens in `makeImageView` (what `makeImage` returns): the view's
+    /// fetch URL is the byte-identical pre-carry URL, and the validated
+    /// attributes travel separately to the render layer.
+    func testMakeImageViewDetachesTheAttributeFragmentFromTheFetchURL() throws {
+        let loader = WorkspaceImageLoader(workspaceOrigin: workspaceOrigin, accessTokenProvider: { "t" })
+        let carried = try XCTUnwrap(URL(string: "https://wiki.example.com/api/v2/attachments/abc#crowi-image-attrs:width=60pct;align=right"))
+
+        let view = WorkspaceMarkdownImageProvider.makeImageView(url: carried, loader: loader, onImageTap: nil)
+
+        XCTAssertEqual(view.url?.absoluteString, "https://wiki.example.com/api/v2/attachments/abc")
+        XCTAssertEqual(view.attributes?.width?.raw, "60%")
+        XCTAssertEqual(view.attributes?.align, .right)
+    }
+
+    func testMakeImageViewPassesAPlainURLThroughUntouched() throws {
+        let loader = WorkspaceImageLoader(workspaceOrigin: workspaceOrigin, accessTokenProvider: { "t" })
+        let plain = try XCTUnwrap(URL(string: "https://wiki.example.com/api/v2/attachments/abc"))
+
+        let view = WorkspaceMarkdownImageProvider.makeImageView(url: plain, loader: loader, onImageTap: nil)
+
+        XCTAssertEqual(view.url, plain)
+        XCTAssertNil(view.attributes)
+    }
+
     // Renderer-integration proof against a REAL local dev Crowi + real
     // attachment (AC-4) was run live once through this exact
     // `WorkspaceMarkdownImageLoading.loadImage` entry point during Phase 1's

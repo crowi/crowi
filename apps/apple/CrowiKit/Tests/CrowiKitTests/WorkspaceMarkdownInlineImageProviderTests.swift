@@ -1,5 +1,12 @@
 import MarkdownUI
+import SwiftUI
 import XCTest
+
+#if canImport(UIKit)
+import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
 
 @testable import CrowiKit
 
@@ -107,5 +114,128 @@ final class WorkspaceMarkdownInlineImageProviderTests: XCTestCase {
         let loader = WorkspaceImageLoader(workspaceOrigin: workspaceOrigin, accessTokenProvider: { "t" })
         func acceptsInlineImageProvider(_ provider: some InlineImageProvider) -> Bool { true }
         XCTAssertTrue(acceptsInlineImageProvider(WorkspaceMarkdownInlineImageProvider(loader: loader)))
+    }
+
+    /// `feature-ios-phase3` byte-identity invariant, pinned at the WIRE
+    /// through the inline entry point: a URL carrying the RFC-0015
+    /// `#crowi-image-attrs:` side-channel must reach the transport with the
+    /// fragment already detached — the request URL is byte-identical to the
+    /// pre-carry one (same fetch, same allowlist decision, same cache key).
+    func testImageWithDetachesTheAttributeFragmentBeforeTheWire() async throws {
+        let pngData = try XCTUnwrap(Data(base64Encoded: Self.onePixelPNGBase64))
+        var capturedURL: URL?
+        let loader = makeLoader { request in
+            capturedURL = request.url
+            return (HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "image/png"])!, pngData)
+        }
+        let provider = WorkspaceMarkdownInlineImageProvider(loader: loader)
+
+        let carried = URL(string: "https://wiki.example.com/api/v2/attachments/abc#crowi-image-attrs:width=100px")!
+        _ = try await provider.image(with: carried, label: "alt text")
+
+        XCTAssertEqual(capturedURL?.absoluteString, "https://wiki.example.com/api/v2/attachments/abc")
+    }
+
+    // MARK: - RFC-0015 width application, rendered through the provider
+
+    /// A deterministic PNG at exactly `width`×`height` PIXELS with no DPI
+    /// scaling games, so the decoded `PlatformImage.size` (points) is the
+    /// same number — the fixture the two rendered-width tests below resize.
+    private func makePNGData(width: Int, height: Int) throws -> Data {
+        #if canImport(AppKit)
+        let rep = try XCTUnwrap(
+            NSBitmapImageRep(
+                bitmapDataPlanes: nil,
+                pixelsWide: width,
+                pixelsHigh: height,
+                bitsPerSample: 8,
+                samplesPerPixel: 4,
+                hasAlpha: true,
+                isPlanar: false,
+                colorSpaceName: .deviceRGB,
+                bytesPerRow: 0,
+                bitsPerPixel: 0
+            ))
+        return try XCTUnwrap(rep.representation(using: .png, properties: [:]))
+        #else
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: width, height: height), format: format)
+        return renderer.pngData { context in
+            UIColor.red.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        }
+        #endif
+    }
+
+    /// Renders the `Image` the provider returned — the exact value
+    /// swift-markdown-ui would embed into `Text` — and reports its pixel
+    /// size at scale 1 (= its intrinsic point size).
+    @MainActor
+    private func renderedSize(of image: Image) throws -> CGSize {
+        let renderer = ImageRenderer(content: image)
+        renderer.scale = 1
+        let cgImage = try XCTUnwrap(renderer.cgImage)
+        return CGSize(width: cgImage.width, height: cgImage.height)
+    }
+
+    /// review round 1 — the REQUIRED native inline `%` application, pinned
+    /// at the provider's own rendered output: a genuinely inline image
+    /// carrying `width=50pct` resolves against the container width
+    /// `WorkspacePageMarkdownView` measures (here 300pt), so the rendered
+    /// bitmap comes out 150×75 — not its native 400×200.
+    @MainActor
+    func testImageWithAppliesAPercentWidthAgainstTheMeasuredContainerWidth() async throws {
+        let pngData = try makePNGData(width: 400, height: 200)
+        let loader = makeLoader { request in
+            (HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "image/png"])!, pngData)
+        }
+        let containerWidth = InlineImageContainerWidthReference()
+        containerWidth.width = 300
+        let provider = WorkspaceMarkdownInlineImageProvider(loader: loader, containerWidth: containerWidth)
+
+        let carried = URL(string: "https://wiki.example.com/api/v2/attachments/abc#crowi-image-attrs:width=50pct")!
+        let image = try await provider.image(with: carried, label: "alt text")
+
+        let rendered = try renderedSize(of: image)
+        XCTAssertEqual(rendered.width, 150, accuracy: 1.5)
+        XCTAssertEqual(rendered.height, 75, accuracy: 1.5)
+    }
+
+    /// The same rendered pin for `px` (the pre-rework inline application),
+    /// proving the container reference did not disturb it.
+    @MainActor
+    func testImageWithAppliesAPixelWidthToTheRenderedBitmap() async throws {
+        let pngData = try makePNGData(width: 400, height: 200)
+        let loader = makeLoader { request in
+            (HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "image/png"])!, pngData)
+        }
+        let containerWidth = InlineImageContainerWidthReference()
+        containerWidth.width = 300
+        let provider = WorkspaceMarkdownInlineImageProvider(loader: loader, containerWidth: containerWidth)
+
+        let carried = URL(string: "https://wiki.example.com/api/v2/attachments/abc#crowi-image-attrs:width=100px")!
+        let image = try await provider.image(with: carried, label: "alt text")
+
+        let rendered = try renderedSize(of: image)
+        XCTAssertEqual(rendered.width, 100, accuracy: 1.5)
+        XCTAssertEqual(rendered.height, 50, accuracy: 1.5)
+    }
+
+    /// Degrade, never guess, visible at the rendered output too: a `%` width
+    /// with NO measured container leaves the bitmap at its native size.
+    @MainActor
+    func testImageWithLeavesAPercentWidthUnappliedWithoutAMeasuredContainer() async throws {
+        let pngData = try makePNGData(width: 400, height: 200)
+        let loader = makeLoader { request in
+            (HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "image/png"])!, pngData)
+        }
+        let provider = WorkspaceMarkdownInlineImageProvider(loader: loader)
+
+        let carried = URL(string: "https://wiki.example.com/api/v2/attachments/abc#crowi-image-attrs:width=50pct")!
+        let image = try await provider.image(with: carried, label: "alt text")
+
+        let rendered = try renderedSize(of: image)
+        XCTAssertEqual(rendered.width, 400, accuracy: 1.5)
     }
 }
