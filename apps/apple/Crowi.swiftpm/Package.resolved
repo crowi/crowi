@@ -1,5 +1,5 @@
 {
-  "originHash" : "60c4456752f7bac51ebc3ce861d75099a0a95dccc31743055ebca8daa48fbf29",
+  "originHash" : "e284b32dee6d600193fcd11ca471a685fce9a24d55c632660a940377fda7ad58",
   "pins" : [
     {
       "identity" : "networkimage",
@@ -107,6 +107,24 @@
       "state" : {
         "revision" : "08796d36c99ad2318929bfa1d1e40f82194b65cc",
         "version" : "1.3.1"
+      }
+    },
+    {
+      "identity" : "swiftdraw",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/swhitty/SwiftDraw",
+      "state" : {
+        "revision" : "82699f4bdf2f075793cfa0d392eb27c59b41a3fe",
+        "version" : "0.29.0"
+      }
+    },
+    {
+      "identity" : "swiftmath",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/mgriebling/SwiftMath",
+      "state" : {
+        "revision" : "fa8244ed032f4a1ade4cb0571bf87d2f1a9fd2d7",
+        "version" : "1.7.3"
       }
     },
     {
