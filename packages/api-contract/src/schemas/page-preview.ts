@@ -1,4 +1,5 @@
 import { z } from '@hono/zod-openapi';
+import { RenderedAstArtifactKeySchema, RenderedAstValueSchema } from './rendered-ast';
 
 /**
  * Request body for POST /pages/preview. Just the raw markdown body —
@@ -13,12 +14,15 @@ export type PreviewPageRequest = z.infer<typeof PreviewPageRequestSchema>;
 
 /**
  * Response shape mirrors the `renderedAst` carried on a populated
- * revision. We keep it as `z.unknown()` (same temperature as
- * `RevisionSchema.renderedAst`) because the persisted mdast shape is
- * external-spec / too deep to maintain a strict Zod schema for; the
- * client casts to `mdast.Root` at the boundary.
+ * revision (RFC-0023): the same envelope-or-bare-Root union as
+ * `RevisionSchema.renderedAst` — preview does NOT go through
+ * `RevisionSchema`, so it must carry the union independently or the
+ * declared-client (v1) preview response would never surface in the
+ * contract types. `renderedAstArtifactKey` is a per-response nonce
+ * here (preview output is never a stored artifact).
  */
 export const PreviewPageResponseSchema = z.object({
-  renderedAst: z.unknown(),
+  renderedAst: RenderedAstValueSchema.optional(),
+  renderedAstArtifactKey: RenderedAstArtifactKeySchema.optional(),
 });
 export type PreviewPageResponse = z.infer<typeof PreviewPageResponseSchema>;

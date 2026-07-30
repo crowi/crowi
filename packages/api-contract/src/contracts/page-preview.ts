@@ -33,7 +33,8 @@ export const previewPageRoute = createRoute({
   },
   responses: {
     200: {
-      description: 'Rendered mdast tree (serialised — same shape as a persisted revision.renderedAst)',
+      description:
+        'Rendered mdast tree (serialised — same shape as a persisted revision.renderedAst). Content-negotiated via the `X-Crowi-Ast-Version` request header (RFC-0023): requests declaring `X-Crowi-Ast-Version: 1` receive the typed `{astVersion, root}` envelope; all other requests receive the bare mdast Root. The response varies on this header (`Vary: X-Crowi-Ast-Version`).',
       content: { 'application/json': { schema: PreviewPageResponseSchema } },
     },
     401: {

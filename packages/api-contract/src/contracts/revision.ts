@@ -106,7 +106,8 @@ export const getRevisionRoute = createRoute({
   },
   responses: {
     200: {
-      description: 'Full revision document',
+      description:
+        'Full revision document. `renderedAst` shape is content-negotiated via the `X-Crowi-Ast-Version` request header (RFC-0023): requests declaring `X-Crowi-Ast-Version: 1` receive the typed `{astVersion, root}` envelope; all other requests receive the stored bare mdast Root verbatim. The response varies on this header (`Vary: X-Crowi-Ast-Version`).',
       content: { 'application/json': { schema: GetRevisionResponseSchema } },
     },
     400: {
