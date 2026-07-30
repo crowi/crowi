@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { apiClientV2 } from '@/lib/api-client';
+import { apiClient } from '@/lib/api-client';
 import { m } from '@paraglide/messages.js';
 
 export function ForgotPasswordForm() {
@@ -22,7 +22,7 @@ export function ForgotPasswordForm() {
     setIsSubmitting(true);
     setError(null);
     try {
-      const res = await apiClientV2.auth['forgot-password'].$post({ json: { email } });
+      const res = await apiClient.auth['forgot-password'].$post({ json: { email } });
       // Anti-enumeration: the API always returns 200; show the same
       // confirmation regardless of whether the email exists.
       if (res.status === 200) {

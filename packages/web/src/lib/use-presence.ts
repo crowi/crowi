@@ -11,7 +11,7 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { RefObject } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { apiClientV2 } from './api-client';
+import { apiClient } from './api-client';
 import { backoffDelayMs, type CloseCodePolicy, createReconnectingSocket } from './create-reconnecting-socket';
 import { createAntiFlickerState, ingestBroadcast, refreshAdmissions, visibleViewers } from './presence-anti-flicker';
 import { resolveWsUrl } from './resolve-ws-url';
@@ -304,7 +304,7 @@ function usePresenceToken(pageId: string | null | undefined, options?: UsePresen
     queryKey: ['presenceToken', pageId],
     queryFn: async (): Promise<PresenceTokenResponse> => {
       if (!pageId) throw new Error('pageId is required for usePresenceToken');
-      const response = await apiClientV2.pages[':id']['presence-token'].$get({ param: { id: pageId } });
+      const response = await apiClient.pages[':id']['presence-token'].$get({ param: { id: pageId } });
       if (!response.ok) {
         const body = await response.json().catch(() => null);
         const message =

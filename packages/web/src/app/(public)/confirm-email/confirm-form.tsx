@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { ArrowLeft, CheckCircle2, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { apiClientV2 } from '@/lib/api-client';
+import { apiClient } from '@/lib/api-client';
 import { m } from '@paraglide/messages.js';
 
 type Phase = 'confirming' | 'done' | 'error';
@@ -26,7 +26,7 @@ export function ConfirmEmailForm() {
     started.current = true;
 
     (async () => {
-      const res = await apiClientV2.auth['confirm-email-change'].$post({ json: { token } });
+      const res = await apiClient.auth['confirm-email-change'].$post({ json: { token } });
       if (res.status === 200) {
         const body = await res.json();
         setEmail(body.email);

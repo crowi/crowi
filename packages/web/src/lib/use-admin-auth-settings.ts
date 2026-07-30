@@ -2,7 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 
-import { apiClientV2 } from './api-client';
+import { apiClient } from './api-client';
 import type { AuthSettings } from '@crowi/api-contract';
 
 export const adminAuthKeys = {
@@ -22,7 +22,7 @@ export function useAdminAuthSettings() {
   return useQuery<AuthSettings, Error>({
     queryKey: adminAuthKeys.all,
     queryFn: async () => {
-      const response = await apiClientV2.admin.auth.$get();
+      const response = await apiClient.admin.auth.$get();
       if (response.status === 200) {
         return (await response.json()) as AuthSettings;
       }

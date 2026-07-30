@@ -13,7 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { SecretField } from '@/components/admin/secret-field';
 import { PluginConfigValidationError, useUpdateAdminPluginConfig } from '@/lib/use-admin-plugins';
-import { apiV2BaseUrl } from '@/lib/api-client';
+import { apiBaseUrl } from '@/lib/api-client';
 import { getAccessToken } from '@/lib/auth-token';
 import { m } from '@paraglide/messages.js';
 
@@ -282,9 +282,9 @@ interface PluginActionButtonProps {
 /**
  * Renders an `@action` button next to (in place of) a config field and
  * executes the plugin's contributed endpoint on click. Plugin routes are
- * NOT on the typed `apiClientV2` chain (they have no request/response
+ * NOT on the typed `apiClient` chain (they have no request/response
  * contract), so we fetch the namespaced path directly at
- * `/api/v2/plugins/<name>/<path>` with the admin's bearer token. The
+ * `/api/plugins/<name>/<path>` with the admin's bearer token. The
  * response body (e.g. the Slack App manifest JSON) is shown in a dialog
  * with a copy button — the "show + copy" UX the manifest flow needs.
  */
@@ -301,7 +301,7 @@ function PluginActionButton({ pluginName, action, description }: PluginActionBut
       const token = getAccessToken();
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (token) headers.authorization = `Bearer ${token}`;
-      const response = await fetch(`${apiV2BaseUrl()}/plugins/${pluginName}${action.path}`, {
+      const response = await fetch(`${apiBaseUrl()}/plugins/${pluginName}${action.path}`, {
         method: action.method,
         headers,
       });

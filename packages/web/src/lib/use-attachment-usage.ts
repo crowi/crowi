@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { apiClientV2 } from './api-client';
+import { apiClient } from './api-client';
 import { attachmentsKeys } from './use-attachments';
 import type { AttachmentUsageResponse } from '@crowi/api-contract';
 
@@ -14,7 +14,7 @@ import type { AttachmentUsageResponse } from '@crowi/api-contract';
  * should render an error rather than a deceptively empty view.
  *
  * RFC-0006 Phase 4 Batch 6 — switched from `apiClient.attachment.*`
- * (ts-rest) to `apiClientV2.pages[':pageId'].attachments.usage.$get`
+ * (ts-rest) to `apiClient.pages[':pageId'].attachments.usage.$get`
  * (`createClient`).
  */
 export function useAttachmentUsage(pageId: string | undefined) {
@@ -22,7 +22,7 @@ export function useAttachmentUsage(pageId: string | undefined) {
     queryKey: pageId ? attachmentsKeys.usage(pageId) : attachmentsKeys.all,
     queryFn: async (): Promise<AttachmentUsageResponse> => {
       if (!pageId) throw new Error('pageId is required');
-      const response = await apiClientV2.pages[':pageId'].attachments.usage.$get({ param: { pageId } });
+      const response = await apiClient.pages[':pageId'].attachments.usage.$get({ param: { pageId } });
       if (!response.ok) {
         const body = (await response.json().catch(() => null)) as { error?: { message?: string } } | null;
         throw new Error(body?.error?.message ?? 'Failed to load attachments');

@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { apiClientV2 } from '@/lib/api-client';
+import { apiClient } from '@/lib/api-client';
 import { storeTokens } from '@/lib/auth-token';
 import { defaultLandingPath } from '@/lib/login-redirect';
 import { m } from '@paraglide/messages.js';
@@ -30,7 +30,7 @@ export function ActivateForm() {
     started.current = true;
 
     (async () => {
-      const res = await apiClientV2.auth.activate.$post({ json: { token } });
+      const res = await apiClient.auth.activate.$post({ json: { token } });
       if (res.status === 200) {
         const body = await res.json();
         storeTokens(body, body.expiresIn);

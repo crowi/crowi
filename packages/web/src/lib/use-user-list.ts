@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { apiClientV2 } from './api-client';
+import { apiClient } from './api-client';
 
 /**
  * Member directory list hook — fetches active users (avatar + name +
@@ -26,7 +26,7 @@ export function useUserList(params: UseUserListParams = {}) {
   return useQuery({
     queryKey: userListKeys.list({ q, limit, offset }),
     queryFn: async () => {
-      const response = await apiClientV2.users.$get({
+      const response = await apiClient.users.$get({
         query: {
           ...(q ? { q } : {}),
           // Omit when unset so the contract's server-side defaults apply

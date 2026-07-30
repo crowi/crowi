@@ -1,13 +1,13 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { apiClientV2 } from './api-client';
+import { apiClient } from './api-client';
 import { pageKeys } from './page-query-keys';
 import type { GetPageRequest, PageWithRevision } from '@crowi/api-contract';
 
 /**
  * RFC-0006 Phase 4 Batch 4 — switched from `apiClient.page.getPage`
- * (ts-rest) to `apiClientV2.pages.$get` (`createClient`). Wire payload is
+ * (ts-rest) to `apiClient.pages.$get` (`createClient`). Wire payload is
  * unchanged.
  */
 export interface PageState {
@@ -25,7 +25,7 @@ export function usePage(params: GetPageRequest) {
   const query = useQuery({
     queryKey: pageKeys.detail(params),
     queryFn: async () => {
-      const response = await apiClientV2.pages.$get({
+      const response = await apiClient.pages.$get({
         query: {
           path: params.path,
           page_id: params.page_id,

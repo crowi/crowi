@@ -47,7 +47,7 @@ function isExternalHref(href: string | undefined): boolean {
 
 /**
  * Live preview pane fed by the same renderer pipeline as the show
- * page — `POST /api/v2/pages/preview` returns mdast that we run
+ * page — `POST /api/pages/preview` returns mdast that we run
  * through `renderMdastToReactNode` with `sectionWrap: false` (no URL
  * hash / no copy-link affordance for preview).
  *

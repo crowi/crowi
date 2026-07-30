@@ -2,10 +2,10 @@
 
 import { useMutation } from '@tanstack/react-query';
 import { useRef } from 'react';
-import { apiClientV2 } from './api-client';
+import { apiClient } from './api-client';
 
 /**
- * Render `body` to mdast via POST /api/v2/pages/preview.
+ * Render `body` to mdast via POST /api/pages/preview.
  *
  * Why a mutation, not a query: previewing is a write-shaped fire-and-
  * react event — the caller debounces `body` and triggers the call
@@ -16,17 +16,17 @@ import { apiClientV2 } from './api-client';
  *
  * The mutation throws on non-200 so the preview pane can fall back
  * to a "Preview failed" message; transient 401s self-recover via the
- * apiClientV2 fetch wrapper's refresh dance.
+ * apiClient fetch wrapper's refresh dance.
  *
  * RFC-0006 Phase 4 Batch 4 — switched from `apiClient.pagePreview.*`
- * (ts-rest) to `apiClientV2.pages.preview.$post` (`createClient`).
+ * (ts-rest) to `apiClient.pages.preview.$post` (`createClient`).
  *
  * feature-plugin-renderer-mermaid spec §7 item 8 — every call aborts
  * whichever previous call is still in flight before issuing its own
  * request, via a `useRef<AbortController | null>` that survives across
  * `mutationFn` invocations (a plain local variable would be re-created
  * per call and could never see the previous controller). The signal
- * rides `apiClientV2.pages.preview.$post`'s `ClientRequestOptions.init`
+ * rides `apiClient.pages.preview.$post`'s `ClientRequestOptions.init`
  * (`hono`'s `hc` client — see the doc comment on `fetchWithTimeout`,
  * which composes this signal with its own internal timeout signal via
  * `AbortSignal.any`, so `fetchWithTimeout` itself needs no change).
@@ -48,7 +48,7 @@ export function usePreview() {
       controllerRef.current?.abort();
       const controller = new AbortController();
       controllerRef.current = controller;
-      const response = await apiClientV2.pages.preview.$post({ json: { body } }, { init: { signal: controller.signal } });
+      const response = await apiClient.pages.preview.$post({ json: { body } }, { init: { signal: controller.signal } });
       if (!response.ok) {
         throw new Error('Failed to render preview');
       }

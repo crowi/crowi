@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { FormErrorList } from '@/components/ui/form-error-list';
-import { apiClientV2 } from '@/lib/api-client';
+import { apiClient } from '@/lib/api-client';
 import { errorMessage } from '@/lib/error-message';
 import { storeTokens } from '@/lib/auth-token';
 import { defaultLandingPath } from '@/lib/login-redirect';
@@ -34,7 +34,7 @@ export function AcceptInviteForm() {
     }
     let active = true;
     (async () => {
-      const res = await apiClientV2.invite.accept.$get({ query: { token } });
+      const res = await apiClient.invite.accept.$get({ query: { token } });
       if (!active) return;
       if (res.status === 200) {
         const body = await res.json();
@@ -62,7 +62,7 @@ export function AcceptInviteForm() {
     setErrors([]);
 
     try {
-      const response = await apiClientV2.invite.accept.$post({
+      const response = await apiClient.invite.accept.$post({
         json: { token, username: formData.username, name: formData.name, password: formData.password },
       });
 

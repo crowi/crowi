@@ -3,7 +3,7 @@ import { syntaxTree } from '@codemirror/language';
 import type { Extension } from '@codemirror/state';
 import type { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
-import { apiClientV2 } from '@/lib/api-client';
+import { apiClient } from '@/lib/api-client';
 import { AutocompleteCache, type AutocompleteKind } from '@/lib/autocomplete-cache';
 import type { AutocompleteResult } from '@crowi/api-contract';
 
@@ -167,7 +167,7 @@ async function fetchResults(kind: AutocompleteKind, query: string): Promise<Auto
 
   try {
     const queryArgs = { query: { q: query, limit: String(RESULT_LIMIT) } };
-    const response = kind === 'user' ? await apiClientV2.users.autocomplete.$get(queryArgs) : await apiClientV2.pages.autocomplete.$get(queryArgs);
+    const response = kind === 'user' ? await apiClient.users.autocomplete.$get(queryArgs) : await apiClient.pages.autocomplete.$get(queryArgs);
 
     if (!response.ok) {
       // 429 / 400 / 401 → behave as "zero results"; the dropdown

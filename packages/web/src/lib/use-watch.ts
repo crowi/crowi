@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiClientV2 } from './api-client';
+import { apiClient } from './api-client';
 
 /**
  * Query key factory for watch (notification subscription) queries.
@@ -23,7 +23,7 @@ const WATCH_STALE_TIME = 5 * 60 * 1000;
 
 /**
  * RFC-0006 Phase 4 Batch 4 — switched from `apiClient.page.{get,set}WatchStatus`
- * (ts-rest) to `apiClientV2.pages.watch.${get,put}` (`createClient`). Wire
+ * (ts-rest) to `apiClient.pages.watch.${get,put}` (`createClient`). Wire
  * payload is unchanged.
  */
 export function useWatchStatus(pageId: string | undefined, options?: { enabled?: boolean }) {
@@ -31,7 +31,7 @@ export function useWatchStatus(pageId: string | undefined, options?: { enabled?:
     queryKey: pageId ? watchKeys.detail(pageId) : watchKeys.all,
     queryFn: async (): Promise<{ watching: boolean }> => {
       if (!pageId) return { watching: false };
-      const response = await apiClientV2.pages.watch.$get({ query: { page_id: pageId } });
+      const response = await apiClient.pages.watch.$get({ query: { page_id: pageId } });
       // Not authenticated → surface as not watching (button hidden by caller).
       if (response.status === 401) return { watching: false };
       if (response.ok) {
@@ -62,7 +62,7 @@ export function useToggleWatch(pageId: string | undefined) {
       }
 
       const next = !watching;
-      const response = await apiClientV2.pages.watch.$put({ json: { page_id: pageId, watching: next } });
+      const response = await apiClient.pages.watch.$put({ json: { page_id: pageId, watching: next } });
       if (response.status === 401) throw new Error('Authentication required');
       if (response.ok) {
         return await response.json();

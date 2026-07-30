@@ -15,7 +15,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { ErrorAlert } from '@/components/ui/error-alert';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { NotFoundCard } from '@/components/ui/not-found-card';
-import { apiClientV2 } from '@/lib/api-client';
+import { apiClient } from '@/lib/api-client';
 import { isUserHomePath, pagePathToHref } from '@/lib/page-path';
 import { isStalePageRevision } from '@/lib/page-revision';
 import { useAuth } from '@/lib/use-auth';
@@ -226,7 +226,7 @@ export function PageView({ path, revisionId }: PageViewProps) {
 
     let fetchedRevision: PageWithRevision['revision'];
     try {
-      const response = await apiClientV2.pages.revisions[':id'].$get({ param: { id: targetRevisionId } });
+      const response = await apiClient.pages.revisions[':id'].$get({ param: { id: targetRevisionId } });
       if (!response.ok) return false;
       fetchedRevision = (await response.json()).revision;
     } catch {
@@ -378,7 +378,7 @@ export function PageView({ path, revisionId }: PageViewProps) {
     let status: number | null = null;
     let fetchedPage: PageWithRevision | null = null;
     try {
-      const response = await apiClientV2.pages.$get({ query: { path, page_id: undefined, revision_id: revisionId } });
+      const response = await apiClient.pages.$get({ query: { path, page_id: undefined, revision_id: revisionId } });
       status = response.status;
       // Narrow directly on `response.status` (not the copied `status`
       // local) so `response.json()` resolves to the 200 variant's body —
