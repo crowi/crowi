@@ -97,7 +97,7 @@ S3 のバケット名と AWS のクレデンシャルは、管理画面から設
 
 管理画面のストレージ画面 (`/admin/storage`) を開くと、登録されている
 ドライバの一覧と、現在アクティブなドライバが表示されます。内部的には
-`GET /api/v2/admin/storage` が呼ばれ、各ドライバについて以下が返ります。
+`GET /api/admin/storage` が呼ばれ、各ドライバについて以下が返ります。
 
 - `driverName` — ドライバ名 (`local` / `s3` など)
 - `pluginName` — そのドライバを登録したプラグイン名
@@ -278,7 +278,7 @@ crowi-admin rebuild attachment-display-derivatives --gc --confirm
 ### レート制限
 
 エディタからのアップロードは **1 ユーザーあたり 1 分間に 20 回** まで
-です。上限に達すると `POST /api/v2/attachments/upload` は HTTP 429 を
+です。上限に達すると `POST /api/attachments/upload` は HTTP 429 を
 `Retry-After` ヘッダ付きで返し、エディタ側には「アップロード上限に
 達しました。N 秒後に再試行してください」というトーストが表示されます。
 

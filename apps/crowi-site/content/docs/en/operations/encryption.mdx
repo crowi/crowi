@@ -119,7 +119,7 @@ settings screen in the admin UI (`/admin/crypto`).
 ### Checking the status
 
 Opening `/admin/crypto` shows the current encryption status. Internally
-it calls `GET /api/v2/admin/crypto/status`, which returns the following.
+it calls `GET /api/admin/crypto/status`, which returns the following.
 
 - `encryptionConfigured` — whether the server has a usable master key
 - `encryptedCount` — the number of already-encrypted sensitive values
@@ -129,7 +129,7 @@ it calls `GET /api/v2/admin/crypto/status`, which returns the following.
 ### Running re-encryption
 
 Running re-encryption from the screen calls
-`POST /api/v2/admin/crypto/reencrypt`.
+`POST /api/admin/crypto/reencrypt`.
 
 - If the master key is unset, it fails with `503`
   (`ENCRYPTION_NOT_CONFIGURED`). Set `CROWI_ENCRYPTION_KEY` first.

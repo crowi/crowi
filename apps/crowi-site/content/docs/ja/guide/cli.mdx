@@ -197,7 +197,7 @@ crowi completion fish > ~/.config/fish/completions/crowi.fish
 ## サーバ互換性 (バージョンスキュー / 能力検出)
 
 Crowi は self-hosted のため、`crowi` バイナリと接続先サーバのバージョンが
-異なり得ます。CLI は公開シグナル `GET /api/v2/app/info`
+異なり得ます。CLI は公開シグナル `GET /api/app/info`
 (`version` / `apiVersion` / `capabilities`) を読み、プロファイルに数分間
 キャッシュします。
 

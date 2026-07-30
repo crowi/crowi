@@ -129,7 +129,7 @@ z.string().describe('@action "Test connection" POST /test')
 
 書式は `@action "<ラベル>" <メソッド> <パス>` です。ボタンを押すと、
 プラグインが `registerRoutes` で提供したエンドポイント
-(`/api/v2/plugins/<name>/...` に対する相対パス) が呼び出されます。
+(`/api/plugins/<name>/...` に対する相対パス) が呼び出されます。
 「接続テスト」「Google で認証」といった操作を、プラグインが専用 UI を
 書かずに提供できます。
 
@@ -154,7 +154,7 @@ z.string().describe('@action "Test connection" POST /test')
   を合わせると失敗理由を確認できます。
 - **HTTP ルート登録 (`registerRoutes`) が失敗した場合**: プラグイン自体の
   活性化は成功しているため一覧には通常どおり表示されますが、そのプラグイン
-  が提供する `/api/v2/plugins/<name>/...` 配下のエンドポイントは登録され
+  が提供する `/api/plugins/<name>/...` 配下のエンドポイントは登録され
   ません。ログには `[crowi:plugin:<name>] registerRoutes failed; this
   plugin's HTTP routes are not mounted: <エラー内容>` という行が出力されます。
 

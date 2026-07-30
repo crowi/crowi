@@ -83,11 +83,11 @@ presence WebSocket attaches to the same api process as RFC-0003's
 ## RFC-0006: HTTP API — Express + ts-rest → Hono
 
 A proposal to replace the Express + ts-rest stack with Hono +
-`@hono/zod-openapi` as the framework backing the `/api/v2/*` HTTP
+`@hono/zod-openapi` as the framework backing the `/api/*` HTTP
 layer. Zod schemas under `packages/api-contract/src/schemas/` move
 over essentially unchanged; ts-rest contracts are rewritten as
 `createRoute` route definitions; the api app exposes a Scalar API
-Reference at `/api/v2/docs`. The legacy `/api/*` Express mount is
+Reference at `/api/docs`. The legacy `/api/*` Express mount is
 also retired as part of the cutover. Landed on 2026-05-22.
 
 → For the resulting architecture, see [Architecture](./architecture).
