@@ -15,7 +15,7 @@
 # Build context: repository root (`docker build -f packages/web/Dockerfile .`).
 #
 # RUNTIME-CONFIGURED API URL: this image bakes NO absolute API URL. The browser
-# hits `/api/v2/...`,`/files/...` on its own origin (relative paths — see
+# hits `/api/...`,`/files/...` on its own origin (relative paths — see
 # `src/lib/api-client.ts`) and derives WS URLs from `window.location`.
 # RECOMMENDED TOPOLOGY: put a front reverse proxy (Caddy / nginx) in front that
 # routes `/api`,`/files`,`/collab`,`/presence`,`/notifications` to the api and
@@ -51,7 +51,7 @@ COPY packages/ ./packages/
 RUN pnpm install --frozen-lockfile --filter @crowi/web...
 
 # No NEXT_PUBLIC_API_URL is baked here on purpose: the browser uses relative
-# `/api/v2` paths and WS URLs derived from `window.location`, so the API URL is
+# `/api` paths and WS URLs derived from `window.location`, so the API URL is
 # supplied at runtime via `CROWI_API_URL` (see the runtime stage below). This
 # keeps the image generic across deployments.
 

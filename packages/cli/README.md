@@ -138,7 +138,7 @@ crowi completion fish > ~/.config/fish/completions/crowi.fish
 ## Server compatibility (version skew & capabilities)
 
 Crowi is self-hosted, so the `crowi` binary and the server it talks to can be
-on different versions. The CLI reads the public `GET /api/v2/app/info` signal
+on different versions. The CLI reads the public `GET /api/app/info` signal
 (`version` / `apiVersion` / `capabilities`) and caches it on the profile for a
 few minutes.
 
