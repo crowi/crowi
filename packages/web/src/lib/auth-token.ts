@@ -5,7 +5,7 @@
  *
  *   - JS-driven API calls read the access token from localStorage and
  *     pass it via `Authorization: Bearer ...`.
- *   - `<img src="/api/v2/attachments/…">` requests (which the browser
+ *   - `<img src="/api/attachments/…">` requests (which the browser
  *     builds with no JS hook and therefore no Authorization header)
  *     fall back to the `crowi.accessToken` cookie. The api-side
  *     `jwtAuth` middleware reads from cookie when the header is absent.

@@ -245,7 +245,7 @@ const components = {
       : isMention
         ? 'text-primary font-medium decoration-primary/40 hover:decoration-primary/70 underline underline-offset-[3px] transition-colors'
         : 'text-primary decoration-primary/30 hover:decoration-primary/70 underline underline-offset-[3px] transition-colors';
-    // Attachment references (`/api/v2/attachments/<id>` or legacy
+    // Attachment references (`/api/attachments/<id>` or legacy
     // `/files/<id>`) open the detail modal on left-click instead of
     // full-page-navigating to the raw file — see `InlineAttachmentLink`.
     const attachmentId = extractAttachmentId(href);

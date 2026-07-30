@@ -6,7 +6,7 @@ import { InlineAttachmentModal } from './inline-attachment-modal';
 /**
  * Extract an attachment ObjectId from an in-body reference URL.
  *
- * Two URI forms are recognised — the current `/api/v2/attachments/<id>`
+ * Two URI forms are recognised — the current `/api/attachments/<id>`
  * (the stream route / `fileUrl` virtual) and the legacy `/files/<id>` form
  * still present in bodies saved before the migration. The id must be the
  * whole final path segment (a 24-char hex ObjectId): `…/attachments/<id>`
@@ -14,7 +14,7 @@ import { InlineAttachmentModal } from './inline-attachment-modal';
  * tolerated. Returns the lower-cased id, or `null` when the URL is not an
  * attachment reference.
  */
-const ATTACHMENT_URL_RE = /(?:\/api\/v2\/attachments\/|\/files\/)([0-9a-f]{24})(?:[?#].*)?$/i;
+const ATTACHMENT_URL_RE = /(?:\/api\/attachments\/|\/files\/)([0-9a-f]{24})(?:[?#].*)?$/i;
 
 export function extractAttachmentId(url: string | undefined): string | null {
   if (!url) return null;
@@ -32,7 +32,7 @@ const InlineAttachmentContext = createContext<InlineAttachmentContextValue | nul
 /**
  * Provides a single, shared attachment-detail modal for an entire page body.
  *
- * Each `/api/v2/attachments/<id>` reference in the body renders an
+ * Each `/api/attachments/<id>` reference in the body renders an
  * `InlineAttachmentLink`, but they all drive ONE modal instance held here —
  * keeping the open attachment id in this provider's state rather than
  * per-link state. Wrap the rendered page body in this provider.
