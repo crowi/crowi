@@ -1,6 +1,10 @@
 import CrowiKit
 import SwiftUI
 
+#if canImport(UIKit)
+import UIKit
+#endif
+
 /// RFC-0016 §8/§9/feature-ios-phase1-read — the page reader: always opens
 /// via the single-page detail `GET` (§8's "detail-GET-before-render" rule —
 /// a list/children-supplied row may carry no `body` at all), natively
@@ -14,6 +18,24 @@ import SwiftUI
 /// (refreshing through the existing `fetchAndCacheComments` path), opening
 /// a page marks it seen (idempotent, like the web viewer), and the toolbar
 /// gains the quick-edit entry point (`PageEditorView` as a sheet).
+///
+/// `feature-ios-visual-redesign` Phase 3 gives the screen the design's
+/// chrome, and in doing so SPLITS engagement in two:
+///   - the read-only counts (views / likes / comments) move up into
+///     `CrowiPageHeader`, beside the title, breadcrumb and byline;
+///   - the toggles move down into the floating pill (`CrowiPageActionBar`),
+///     which also carries Edit and the entry to the action sheet.
+/// The inline engagement bar that used to hold both is gone — nothing it did
+/// is: the seen count is the header's "views" stat, each toggle is still
+/// disabled while its OWN write is in flight, a failed toggle still reverts
+/// and still says so (`CrowiPageActionFailureNotice`, above the pill), and
+/// watch — which the design's pill has no slot for — is a row in the action
+/// sheet.
+///
+/// The pill is hosted as this screen's own `safeAreaInset(edge:.bottom)`,
+/// which is only free because the tab bar's inset collapses whenever the
+/// active tab has pushed something (`CrowiTabNavigation.isTabBarVisible`) and
+/// a page is always pushed; at regular width there is no tab bar at all.
 struct PageReaderView: View {
     let session: WorkspaceSession
     let path: String
@@ -27,12 +49,27 @@ struct PageReaderView: View {
     @State private var isLoading = false
     @State private var loadErrorMessage: String?
     @State private var showEditor = false
+    @State private var showActions = false
+    @State private var showTableOfContents = false
+    /// Derived ONCE per page (`apply(_:)`), not per render: extracting it is a
+    /// walk of the whole AST, and this view's body re-evaluates on every
+    /// engagement toggle and comment refresh.
+    @State private var tableOfContents: [RenderedAstHeading] = []
+    /// Held as an object, and deliberately NEVER read in this view's body:
+    /// only the 2pt bar and the TOC sheet's label observe it, so a scroll
+    /// frame does not re-evaluate the whole rendered page. See
+    /// `CrowiReadingProgressModel`.
+    @State private var readingProgress = CrowiReadingProgressModel()
+
+    /// The scroll target the pill's comment button jumps to.
+    private static let commentsAnchor = "crowi-reader-comments"
 
     var body: some View {
         // The reader wraps the scroll container so rendered-AST heading
         // anchors (`RenderedAstView.anchorID`) are reachable from in-page
-        // `#fragment` links (RFC-0023 Phase 4 — the server-issued heading
-        // ids are the anchors, never a client-local slugger).
+        // `#fragment` links AND from the table of contents (RFC-0023 Phase 4 —
+        // the server-issued heading ids are the anchors, never a client-local
+        // slugger).
         ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
@@ -44,18 +81,16 @@ struct PageReaderView: View {
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
                         }
+                        header(for: page)
                         PageBodyView(
                             session: session,
                             renderedAst: page.revision?.renderedAst,
                             rawBody: body,
                             onSelectDestination: onSelectDestination,
                             onNavigateToFragment: { fragment in
-                                withAnimation {
-                                    proxy.scrollTo(RenderedAstView.anchorID(fragment), anchor: .top)
-                                }
+                                scroll(to: RenderedAstView.anchorID(fragment), using: proxy)
                             }
                         )
-                        engagementBar(for: page)
                         if !backlinks.isEmpty {
                             backlinksSection
                         }
@@ -70,27 +105,64 @@ struct PageReaderView: View {
                 }
                 .padding()
             }
+            .crowiReadingProgress(readingProgress)
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if CrowiReadingProgress.isMeasurable {
+                    CrowiReadingProgressBar(progress: readingProgress)
+                }
+            }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                bottomBar(proxy: proxy)
+            }
+            .sheet(isPresented: $showTableOfContents) {
+                CrowiTableOfContentsSheet(
+                    headings: tableOfContents,
+                    progress: readingProgress,
+                    onSelect: { heading in
+                        showTableOfContents = false
+                        guard let anchor = heading.anchor else { return }
+                        scroll(to: RenderedAstView.anchorID(anchor), using: proxy)
+                    },
+                    onDone: { showTableOfContents = false }
+                )
+            }
         }
-        .navigationTitle(page?.path ?? path)
+        .navigationTitle(PageRowTitleLabel(path: page?.path ?? path).titleText)
         #if canImport(UIKit)
         .navigationBarTitleDisplayMode(.inline)
         #endif
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
-                Button {
-                    showEditor = true
-                } label: {
-                    Label("Edit", systemImage: "square.and.pencil")
-                }
-                .disabled(page == nil)
-                Button {
-                    if let pageId = page?.id {
-                        onSelectDestination(.revisionHistory(pageId: pageId, pagePath: path))
+                // The design's two nav-bar affordances. Everything the toolbar
+                // used to carry moved: Edit into the pill, History into the
+                // action sheet.
+                if !tableOfContents.isEmpty {
+                    // Absent — not disabled-and-empty — on the raw-body
+                    // fallback path, which has no AST and therefore no
+                    // anchors to jump to.
+                    Button {
+                        showTableOfContents = true
+                    } label: {
+                        Label("Contents", systemImage: "list.bullet")
                     }
+                }
+                Button {
+                    showActions = true
                 } label: {
-                    Label("History", systemImage: "clock.arrow.circlepath")
+                    Label("Actions", systemImage: "ellipsis.circle")
                 }
                 .disabled(page == nil)
+            }
+        }
+        .sheet(isPresented: $showActions) {
+            if let page, let shareURL = pageURL(for: page) {
+                CrowiPageActionSheet(
+                    shareURL: shareURL,
+                    isWatching: engagement?.isWatching ?? false,
+                    isTogglingWatch: engagement?.isTogglingWatch ?? false,
+                    onSelect: { action in perform(action, page: page, shareURL: shareURL) },
+                    onCancel: { showActions = false }
+                )
             }
         }
         .sheet(isPresented: $showEditor, onDismiss: {
@@ -104,75 +176,121 @@ struct PageReaderView: View {
             // The editor runs its OWN fresh detail GET (§8 — never seeded
             // from this view's possibly-cache-painted state).
             PageEditorView(session: session, pagePath: page?.path ?? path) { latest in
-                page = latest
+                apply(latest)
             }
         }
         .task(id: path) { await load() }
         .refreshable { await load() }
     }
 
+    // MARK: - Header
+
+    private func header(for page: PageLenient) -> some View {
+        CrowiPageHeader(
+            path: page.path,
+            updaterName: page.lastUpdateUserName,
+            updaterImage: page.lastUpdateUserImage,
+            updatedAt: page.updatedAt,
+            // The seen count the inline engagement bar used to show, with the
+            // same precedence: the engagement model's settled (post
+            // mark-seen) value once it exists, the pre-mark detail-GET value
+            // otherwise (cold-cache paint / model not yet built).
+            seenCount: engagement?.seenUsersCount ?? page.seenUsersCount ?? 0,
+            likeCount: likeCount(for: page),
+            commentCount: commentCount(for: page),
+            loader: session.imageCache
+        )
+    }
+
+    /// Prefers the interactive model's count so the header and the pill can
+    /// never disagree after a toggle.
+    private func likeCount(for page: PageLenient) -> Int {
+        engagement?.likerCount ?? page.likerCount ?? 0
+    }
+
+    /// Once comments have actually loaded they ARE the count — the page's own
+    /// `commentCount` is from the detail GET and goes stale the moment the
+    /// composer posts one. Before that (or after a failed comments fetch) the
+    /// server's number is all there is.
+    private func commentCount(for page: PageLenient) -> Int {
+        comments.isEmpty ? (page.commentCount ?? 0) : comments.count
+    }
+
+    // MARK: - Bottom bar (the design's floating pill)
+
     @ViewBuilder
-    private func engagementBar(for page: PageLenient) -> some View {
-        HStack(spacing: 16) {
-            if let engagement {
-                // Each button is disabled while ITS OWN write is in flight
+    private func bottomBar(proxy: ScrollViewProxy) -> some View {
+        VStack(spacing: 0) {
+            if engagement?.lastActionFailed == true {
+                // What the inline bar printed beside its toggles. The state is
+                // still `PageEngagementModel.lastActionFailed`, set after the
+                // optimistic value has already been reverted.
+                CrowiPageActionFailureNotice()
+            }
+            CrowiPageActionBar(
+                likeCount: page.map(likeCount(for:)) ?? 0,
+                isLiked: engagement?.likedByMe ?? false,
+                isBookmarked: engagement?.isBookmarked ?? false,
+                commentCount: page.map(commentCount(for:)) ?? 0,
+                // Each toggle stays disabled while ITS OWN write is in flight
                 // (the model's per-toggle guard is the backstop) — a rapid
                 // double-tap must never race two like/unlike requests.
-                Button {
-                    Task { await engagement.toggleLike() }
-                } label: {
-                    Label("\(engagement.likerCount)", systemImage: engagement.likedByMe ? "heart.fill" : "heart")
-                        .foregroundStyle(toggleTint(engagement.likedByMe, on: .red))
-                }
-                .disabled(engagement.isTogglingLike)
-                Button {
-                    Task { await engagement.toggleBookmark() }
-                } label: {
-                    Label("Bookmark", systemImage: engagement.isBookmarked ? "bookmark.fill" : "bookmark")
-                        .labelStyle(.iconOnly)
-                        .foregroundStyle(toggleTint(engagement.isBookmarked, on: .orange))
-                }
-                .disabled(engagement.isTogglingBookmark)
-                Button {
-                    Task { await engagement.toggleWatch() }
-                } label: {
-                    Label("Watch", systemImage: engagement.isWatching ? "bell.fill" : "bell")
-                        .labelStyle(.iconOnly)
-                        .foregroundStyle(toggleTint(engagement.isWatching, on: .tint))
-                }
-                .disabled(engagement.isTogglingWatch)
-            } else {
-                // Cold-cache fast-path paint before the network load settles
-                // the interactive model — read-only, same glyphs.
-                Label("\(page.likerCount ?? 0)", systemImage: "heart")
-                    .foregroundStyle(.secondary)
-            }
-            // Prefers the engagement model's settled count (post mark-seen)
-            // once it's loaded; falls back to the pre-mark detail-GET value
-            // otherwise (cold-cache paint / model not yet built).
-            Label("\(engagement?.seenUsersCount ?? page.seenUsersCount ?? 0)", systemImage: "eye")
-                .foregroundStyle(.secondary)
-            Label("\(page.commentCount ?? 0)", systemImage: "bubble.left")
-                .foregroundStyle(.secondary)
-            if engagement?.lastActionFailed == true {
-                Text("Couldn't update — try again")
-                    .foregroundStyle(.red)
-            }
+                isTogglingLike: engagement?.isTogglingLike ?? false,
+                isTogglingBookmark: engagement?.isTogglingBookmark ?? false,
+                // The cold-cache paint has counts but no model to write
+                // through yet — the old inline bar rendered read-only glyphs
+                // in that window, and the pill is inert in it for the same
+                // reason.
+                isEngagementReady: engagement != nil,
+                isEditable: page != nil,
+                onEdit: { showEditor = true },
+                onToggleBookmark: { Task { await engagement?.toggleBookmark() } },
+                onToggleLike: { Task { await engagement?.toggleLike() } },
+                onShowComments: { scroll(to: Self.commentsAnchor, using: proxy) },
+                onShowActions: { showActions = true }
+            )
         }
-        .buttonStyle(.plain)
-        .font(.footnote)
+        // The pill stays anchored to the screen's bottom rather than riding up
+        // on the keyboard when the comment composer is focused: it is chrome
+        // for the page, not an accessory for the field.
+        .ignoresSafeArea(.keyboard, edges: .bottom)
     }
 
-    /// The on/off tint of a toggle glyph — `AnyShapeStyle` erases the two
-    /// differently-typed sides of the ternary.
-    private func toggleTint(_ isOn: Bool, on: some ShapeStyle) -> AnyShapeStyle {
-        isOn ? AnyShapeStyle(on) : AnyShapeStyle(.secondary)
+    private func scroll(to anchor: String, using proxy: ScrollViewProxy) {
+        withAnimation {
+            proxy.scrollTo(anchor, anchor: .top)
+        }
     }
 
-    private func likedByMe(_ page: PageLenient) -> Bool {
-        guard let myProfileId, let liker = page.liker else { return false }
-        return liker.contains(myProfileId)
+    // MARK: - Action sheet
+
+    /// The page's browser url — what Share hands to the system sheet and what
+    /// Copy Link puts on the pasteboard.
+    private func pageURL(for page: PageLenient) -> URL? {
+        session.context.workspace.workspaceOrigin.pageURL(forPath: page.path)
     }
+
+    private func perform(_ action: CrowiPageAction, page: PageLenient, shareURL: URL) {
+        switch action {
+        case .share:
+            // Presented by the sheet's own `ShareLink`; nothing to do here.
+            break
+        case .copyLink:
+            #if canImport(UIKit)
+            UIPasteboard.general.string = shareURL.absoluteString
+            #endif
+            showActions = false
+        case .versionHistory:
+            showActions = false
+            onSelectDestination(.revisionHistory(pageId: page.id, pagePath: page.path))
+        case .watch:
+            // The one engagement toggle with no slot in the design's pill —
+            // same optimistic-write-plus-revert model as the other two.
+            Task { await engagement?.toggleWatch() }
+        }
+    }
+
+    // MARK: - Sections
 
     private var backlinksSection: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -211,17 +329,34 @@ struct PageReaderView: View {
                 }
             }
         }
+        // The pill's comment button scrolls here.
+        .id(Self.commentsAnchor)
+    }
+
+    /// The ONE place `page` is assigned, so the derived table of contents can
+    /// never be left describing the previous revision. `[]` on every path
+    /// without a decoded envelope (a cache-painted page, an old server's bare
+    /// `Root`, an envelope that failed a limit gate) — which is exactly when
+    /// the reader hides the Contents control.
+    private func apply(_ newPage: PageLenient) {
+        page = newPage
+        tableOfContents = RenderedAstTableOfContents.headings(in: newPage.revision?.renderedAst)
+    }
+
+    private func likedByMe(_ page: PageLenient) -> Bool {
+        guard let myProfileId, let liker = page.liker else { return false }
+        return liker.contains(myProfileId)
     }
 
     private func load() async {
         isLoading = true
         defer { isLoading = false }
         if let cached = CachedPage.cached(path: path, in: session.modelContext), page == nil {
-            page = cached.asPageLenient
+            apply(cached.asPageLenient)
         }
         do {
             let response = try await GetPageResponseLenient.fetch(path: path, using: session.apiClient)
-            page = response.page
+            apply(response.page)
             loadErrorMessage = nil
             CachedPage.upsert(from: response.page, in: session.modelContext)
             let actions = EngagementActions(client: session.apiClient)
