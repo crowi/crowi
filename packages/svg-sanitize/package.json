@@ -1,7 +1,7 @@
 {
   "name": "@crowi/svg-sanitize",
   "version": "0.1.0-alpha.1",
-  "description": "Private, internal DOM-based SVG sanitizer shared by @crowi/plugin-renderer-mermaid and @crowi/plugin-renderer-plantuml. Not a renderer plugin — a policy-parameterised sanitize function + test vectors, bundled into each consumer's dist via tsup `noExternal` (never published itself; see README.md).",
+  "description": "Private, internal DOM-based SVG sanitizer. Inlined into @crowi/plugin-api, which re-exports it; not published and not depended on directly by anything else.",
   "private": true,
   "main": "dist/index.js",
   "module": "dist/index.mjs",

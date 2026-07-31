@@ -1,4 +1,4 @@
-import { sanitizeSvg as sharedSanitizeSvg } from '@crowi/svg-sanitize';
+import { sanitizeSvg as sharedSanitizeSvg } from '@crowi/plugin-api';
 
 /**
  * Thin adapter over `@crowi/svg-sanitize` (spec §9,

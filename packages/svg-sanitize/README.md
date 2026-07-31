@@ -1,60 +1,66 @@
 # @crowi/svg-sanitize
 
-Private, internal DOM-based SVG sanitizer shared by
-`@crowi/plugin-renderer-mermaid` and `@crowi/plugin-renderer-plantuml`. Not a
-renderer plugin itself — a policy-parameterised `sanitizeSvg` function + test
-vectors, consumed as a workspace dependency.
+Private, internal DOM-based SVG sanitizer. Not a renderer plugin itself — a
+policy-parameterised `sanitizeSvg` function (+ `extractSvgDimensions`) and its
+test vectors.
 
-## This package is never published
+## This package is never published, and has exactly one consumer
 
-`private: true`, and listed in `.changeset/config.json`'s `ignore` array.
-It exists purely so the sanitizer implementation and its test vectors live
-in one place instead of being duplicated per renderer plugin — every
-consumer bundles the compiled output into its own `dist` at build time
-(`tsup`'s `noExternal: ['@crowi/svg-sanitize']`, set in each consumer's
-`tsup.config.ts`) rather than depending on it at runtime. A published
-package under `@crowi/` would otherwise sit in the plugin namespace
+`private: true`, and listed in `.changeset/config.json`'s `ignore` array. A
+published package under `@crowi/` would sit in the plugin namespace
 (`plugin-renderer-*`) despite not being something an operator can list in
 `crowi.config.json`'s `plugins` array, and would need its own npm release
-cadence for what is, in practice, an implementation detail of its two
-consumers.
+cadence for what is, in practice, an implementation detail.
 
-Because of this, the workspace dependency on `@crowi/svg-sanitize` lives in
-each consumer's `devDependencies`, never `dependencies` — the published
-tarball must not declare a runtime dependency on a package that does not
-exist on npm. `@xmldom/xmldom` (the one runtime dependency this package's
-`sanitize.ts` actually needs, for `DOMParser` / `XMLSerializer`) is
-deliberately **not** bundled the same way: each consumer declares its own
-`dependencies` entry on it, so an operator can address an `@xmldom/xmldom`
-CVE via their own lockfile/overrides without waiting on a Crowi release.
+**`@crowi/plugin-api` is the only package that may depend on this one.** It
+inlines the compiled output into its own `dist` at build time (`tsup`'s
+`noExternal`, see that package's `tsup.config.ts`) and re-exports `sanitizeSvg`
+/ `extractSvgDimensions` from `src/svg.ts`. Everything else — core
+(`@crowi/api`) and every renderer plugin — imports them from
+`@crowi/plugin-api`.
 
-## Bundling means duplication — and a two-package release obligation
+That indirection is not ceremony. Core builds with `tsc`, which does not bundle,
+so it cannot inline a private workspace package at all; a direct dependency
+would make the published `@crowi/api` declare a dependency that does not exist
+on npm, and `changeset` correctly refuses to release in that state. Routing
+through the SDK is also what the SDK is for: shared functionality the core
+provides for plugins to use, so a third-party plugin needs nothing but
+`@crowi/plugin-api` in its dependencies.
 
-This code is bundled into consumer dist. Changes require re-publishing all
-packages that bundle it.
+`@xmldom/xmldom` (the one runtime dependency `sanitize.ts` actually needs, for
+`DOMParser` / `XMLSerializer`) is deliberately **not** inlined: it is a declared
+`dependencies` entry of `@crowi/plugin-api`, so an operator can address a CVE in
+it via their own lockfile/overrides without waiting on a Crowi release.
 
-Because the compiled sanitizer is inlined into both
-`@crowi/plugin-renderer-mermaid`'s and `@crowi/plugin-renderer-plantuml`'s
-`dist`, **any change to this package's behaviour (a policy tweak, a bug
-fix, a new test vector that changes sanitized output) requires bumping and
-re-publishing both consumer packages**, not just this one. This duplication
-is an accepted tradeoff, not an oversight — do not "fix" it by making one
-consumer depend on the other's dist, or by re-introducing a runtime
-dependency on this package.
+## What to do when you change this package
 
-When you change anything under `src/`, add a changeset for both
-`@crowi/plugin-renderer-mermaid` and `@crowi/plugin-renderer-plantuml`
-(both packages already flow through the monorepo's normal changeset
-process, so bumping both together is the natural default, not extra work).
+The compiled sanitizer is inlined into `@crowi/plugin-api`'s `dist`, so **a
+behaviour change here (a policy tweak, a bug fix, a test vector that changes
+sanitized output) requires bumping and re-publishing `@crowi/plugin-api`** —
+consumers pick it up through their existing dependency on that package. Add a
+changeset for `@crowi/plugin-api` when you change anything under `src/`.
+
+Do not add a second inlining site. Earlier this package was inlined separately
+into each renderer plugin, which meant every consumer had to be re-published on
+every change and multiple copies were in circulation; consolidating on the SDK
+removed that. In particular, do not give any other package a `dependencies`
+entry on `@crowi/svg-sanitize`, and do not make one consumer depend on
+another's `dist`.
 
 ## Local development
 
 ```bash
 pnpm --filter @crowi/svg-sanitize test
-pnpm --filter @crowi/svg-sanitize build   # regenerates dist/ that consumers bundle
+pnpm --filter @crowi/svg-sanitize build   # regenerates the dist/ plugin-api inlines
 ```
 
-`pnpm build` at the repo root (or building `@crowi/plugin-renderer-mermaid`
-/ `@crowi/plugin-renderer-plantuml` directly) builds this package first via
-Turborepo's `^build` dependency graph, since both consumers still resolve
-it as a workspace package during their own `tsup` build.
+`pnpm build` at the repo root (or building `@crowi/plugin-api` directly)
+builds this package first via Turborepo's `^build` dependency graph, since
+`@crowi/plugin-api` resolves it as a workspace package during its own `tsup`
+build. Core and the renderer plugins do not resolve it at all — they build
+against `@crowi/plugin-api`'s output.
+
+Note that `tsup`'s `noExternal` inlines runtime JS only. `@crowi/plugin-api`
+also sets `dts: { resolve: ['@crowi/svg-sanitize'] }` so the emitted `.d.ts`
+inlines the types; without it the declaration file keeps an `export ... from
+'@crowi/svg-sanitize'` that no consumer of the published tarball can resolve.

@@ -7,11 +7,6 @@ export default defineConfig({
   splitting: false,
   sourcemap: true,
   clean: true,
-  // `@crowi/svg-sanitize` is private (never published) — inline it into
-  // this package's dist instead of leaving it an external `require`/
-  // `import` the published tarball's own dependencies don't declare
-  // (packages/svg-sanitize/README.md).
-  noExternal: ['@crowi/svg-sanitize'],
   // Keep the published `.map` files free of the bundled workspace
   // package's original source text (it otherwise embeds every inlined
   // file's pre-bundle source — including its own `import` line and doc

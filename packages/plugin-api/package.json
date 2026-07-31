@@ -35,6 +35,7 @@
     "zod": "^4"
   },
   "devDependencies": {
+    "@crowi/svg-sanitize": "workspace:*",
     "@crowi/tsconfig": "workspace:*",
     "@types/jest": "catalog:",
     "@types/node": "catalog:",
@@ -44,5 +45,8 @@
     "tsup": "catalog:",
     "typescript": "catalog:",
     "zod": "catalog:"
+  },
+  "dependencies": {
+    "@xmldom/xmldom": "^0.9.10"
   }
 }
