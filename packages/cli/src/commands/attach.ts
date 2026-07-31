@@ -4,6 +4,7 @@ import { basename } from 'node:path';
 import type { Command } from 'commander';
 
 import { authedFetch, CliError, EXIT } from '../lib/http';
+import { mediaTypeForFilename } from '../lib/media-type';
 import { render } from '../lib/output';
 import { fetchCurrentPage } from '../lib/page-write';
 import { requireProfile, rethrowScopeHint } from './_shared';
@@ -82,10 +83,15 @@ async function runAdd(pathOrId: string, file: string, command: Command): Promise
   }
 
   const form = new FormData();
-  // Node 18+ globals: Blob / File / FormData. A Blob with a filename via the
-  // 3rd FormData.append arg is sufficient for the multipart `file` field.
-  const blob = new Blob([bytes]);
-  form.append('file', blob, basename(file));
+  // Node 18+ globals: Blob / File / FormData. The declared `type` matters: the
+  // api stores it verbatim as the attachment's `fileFormat`, and delivery only
+  // serves an allow-listed type inline — a Blob built without one declares
+  // `application/octet-stream` and comes back as a download, image or not.
+  // A browser gets this from the file picker; in Node we derive it from the
+  // name.
+  const name = basename(file);
+  const blob = new Blob([bytes], { type: mediaTypeForFilename(name) });
+  form.append('file', blob, name);
 
   let body: AddAttachmentResponse;
   try {
