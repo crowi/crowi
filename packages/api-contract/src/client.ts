@@ -374,6 +374,8 @@ const stubUserPage: UserPageResponse = {
   user: stubUserPublic,
   createdPagesCount: 0,
   bookmarksCount: 0,
+  likesCount: 0,
+  commentsCount: 0,
 };
 
 const stubPager = { prev: null, next: null, offset: 0 } as const;
@@ -470,7 +472,7 @@ const stubPageWithRevision: GetPageResponse = {
 };
 
 const stubPageResponse = { page: stubPage };
-const stubListPages: ListPagesResponse = { pages: [], pager: stubPager, portalPage: null };
+const stubListPages: ListPagesResponse = { pages: [], pager: stubPager, portalPage: null, total: 0 };
 const stubListPageChildren: ListPageChildrenResponse = { children: [] };
 const stubSeenUsers: SeenUsersResponse = { seenUsers: [], seenUsersCount: 0 };
 const stubWatchStatus: WatchStatusResponse = { watching: false };

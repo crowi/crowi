@@ -48,7 +48,7 @@ import { createMiddleware } from 'hono/factory';
 import { Types } from 'mongoose';
 
 import type Crowi from 'src/crowi';
-import { type PageDocument, type PageModel, visiblePageGrantOr, visiblePageStatusOr } from 'src/models/page';
+import { type PageDocument, type PageModel, creatorPageListMatch, startWithPageListMatch, visiblePageGrantOr, visiblePageStatusOr } from 'src/models/page';
 import type { UserDocument } from 'src/models/user';
 import { computeRevisionRenderArtifactsAsync, isPopulatedRevision, pageToResponse } from 'src/util/page-response';
 import { pickRenderedAstShape, varyOnAstVersion } from 'src/util/rendered-ast-negotiation';
@@ -364,6 +364,12 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
           // this page" instead of "Create Portal". Mutually exclusive with
           // `portalPage`. Only ever set in the path branch below.
           let contentPage: PageDocument | null = null;
+          // feature-profile-stats-and-page-total — the exact count of
+          // `pages`' full (unpaginated) set, always set below regardless of
+          // which branch runs. Each branch's count query shares the SAME
+          // match conditions as its `find()`, so `total` never drifts from
+          // what the client can actually page through.
+          let total = 0;
 
           if (userParam) {
             // List pages by creator.
@@ -374,6 +380,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
                   pages: [],
                   pager: { prev: null, next: null, offset: 0 },
                   portalPage: null,
+                  total: 0,
                 },
                 200,
               );
@@ -382,19 +389,32 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             // The creator listing keeps its own createdAt-desc order
             // (the profile surface has no sort control); the `sort`/`order`
             // query only drives the path + root directory listings below.
-            const rawPages = await Page.findListByCreator(targetUser, { limit, offset }, user);
+            // `find` and `count` share `creatorPageListMatch` — the same
+            // match `findListByCreator` builds internally — and run in
+            // parallel (no id-exclusion dependency in this branch).
+            const creatorMatch = creatorPageListMatch(targetUser._id, user._id);
+            const [rawPages, creatorTotal] = await Promise.all([
+              Page.findListByCreator(targetUser, { limit, offset }, user),
+              Page.countDocuments(creatorMatch),
+            ]);
             pages = (await Page.populate(rawPages, [{ path: 'creator' }, { path: 'lastUpdateUser' }])) as unknown as PageDocument[];
+            total = creatorTotal;
           } else if (path && path !== '/') {
             // List pages by path. /trash subtrees skip findPortalPage to
             // mirror the legacy deletedPageListShow which always rendered
             // with page=null.
-            const portalPagePromise = isTrashPath ? Promise.resolve(null) : Page.findPortalPage(path, user, revision_id || null);
-            const listPromise = Page.findListByStartWith(path, user, { limit, offset, includeDeletedPage, sort, desc: sortDir });
-            const [rawPortalPage, rawPages] = await Promise.all([portalPagePromise, listPromise]);
-            [portalPage, pages] = (await Promise.all([
-              rawPortalPage ? Page.populate(rawPortalPage, [{ path: 'creator' }, { path: 'lastUpdateUser' }]) : null,
-              Page.populate(rawPages, [{ path: 'creator' }, { path: 'lastUpdateUser' }]),
-            ])) as [PageDocument | null, PageDocument[]];
+            //
+            // portalPage / contentPage must be resolved BEFORE the pages
+            // find+count below: their ids need to fold into the SAME match
+            // both queries share (via `excludeIds` — see
+            // `startWithPageListMatch`), or a to-be-dropped row would still
+            // count against `skip`/`limit`, silently shrinking
+            // `pages.length` below `limit` while more rows remain — which
+            // collapses `pager.next` to `null` one page too early even
+            // though `total` is still correct. `total` must equal the final
+            // `pages` set exactly, so the same ids are excluded from both.
+            const rawPortalPage = isTrashPath ? null : await Page.findPortalPage(path, user, revision_id || null);
+            portalPage = rawPortalPage ? ((await Page.populate(rawPortalPage, [{ path: 'creator' }, { path: 'lastUpdateUser' }])) as PageDocument) : null;
 
             // §4 — a portal path (`/foo/`) with no portal document but a
             // content page at the stripped path (`/foo`): resolve that
@@ -410,6 +430,20 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
                   : null;
               }
             }
+
+            // `find` and `count` now run in parallel and share the exact
+            // same match: `findListByStartWith` builds it internally via
+            // `startWithPageListMatch(path, user._id, { includeDeletedPage,
+            // excludeIds })` — the same call made here for `count` — the
+            // same precedent as the creator branch above sharing
+            // `creatorPageListMatch`.
+            const excludedIds = [portalPage?._id, contentPage?._id].filter((id): id is Types.ObjectId => id != null);
+            const [rawPages, pathTotal] = await Promise.all([
+              Page.findListByStartWith(path, user, { limit, offset, includeDeletedPage, sort, desc: sortDir, excludeIds: excludedIds }),
+              Page.countDocuments(startWithPageListMatch(path, user._id, { includeDeletedPage, excludeIds: excludedIds })),
+            ]);
+            pages = (await Page.populate(rawPages, [{ path: 'creator' }, { path: 'lastUpdateUser' }])) as unknown as PageDocument[];
+            total = pathTotal;
           } else {
             // List all pages the user can access (including path='/').
             //
@@ -437,51 +471,54 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             if (!includeDeletedPage) {
               andClauses.push({ $or: visiblePageStatusOr(user._id) });
             }
-            const conditions = {
+            const baseConditions = {
               redirectTo: null,
               $and: andClauses,
             };
 
+            // Same rationale as the path-prefix branch above: `portalPage`
+            // must be resolved before the pages find/count so its id can
+            // fold into the SAME match both share via `_id: $nin` —
+            // otherwise skip/limit would count the to-be-dropped portal row
+            // against `limit`, desyncing `pages.length` from
+            // `pager.next`/`total`. `path === '/'` is the only case in this
+            // branch that can resolve a `portalPage` (the path-omitted case
+            // leaves it `null`, so `conditions` below falls back to
+            // `baseConditions` unchanged).
             if (path === '/') {
-              [portalPage, pages] = await Promise.all([
-                Page.findPortalPage(path, user, revision_id || null),
-                Page.find(conditions)
-                  .sort({ [sort]: sortDir })
-                  .skip(offset)
-                  .limit(limit)
-                  .populate({ path: 'revision', populate: { path: 'author' } })
-                  .populate('creator')
-                  .populate('lastUpdateUser')
-                  .exec(),
-              ]);
-            } else {
-              pages = await Page.find(conditions)
+              const rawPortalPage = await Page.findPortalPage(path, user, revision_id || null);
+              portalPage = rawPortalPage ? ((await Page.populate(rawPortalPage, [{ path: 'creator' }, { path: 'lastUpdateUser' }])) as PageDocument) : null;
+            }
+
+            const conditions = portalPage ? { ...baseConditions, _id: { $nin: [portalPage._id] } } : baseConditions;
+            const [rawPages, rootTotal] = await Promise.all([
+              Page.find(conditions)
                 .sort({ [sort]: sortDir })
                 .skip(offset)
                 .limit(limit)
                 .populate({ path: 'revision', populate: { path: 'author' } })
                 .populate('creator')
                 .populate('lastUpdateUser')
-                .exec();
-            }
+                .exec(),
+              Page.countDocuments(conditions),
+            ]);
+            pages = rawPages;
+            total = rootTotal;
           }
 
           // The portal document of the listed path is surfaced separately
           // as `portalPage` (rendered as the portal card / fallback
-          // header), so drop it from the child rows. `findListByStartWith`
-          // matches `^{path}` which includes the `{path}` portal itself; a
-          // duplicate row is redundant and its link is a no-op (it's the
-          // page you're already on). Matches by id so a draft portal is
-          // dropped too.
+          // header) — it must not also appear as a child row (its link
+          // would be a no-op: it's the page you're already on). Both
+          // branches above now exclude `portalPage`/`contentPage` ids at
+          // the match level (`_id: $nin`, shared with `count`) precisely so
+          // this never has anything to remove; these filters stay only as a
+          // defence-in-depth belt-and-suspenders in case a future branch
+          // resolves either page without threading the exclusion through.
           if (portalPage) {
             const portalId = String(portalPage._id);
             pages = pages.filter((page) => String(page._id) !== portalId);
           }
-          // §4 — the content page surfaced separately as `contentPage` is
-          // also matched by `findListByStartWith` (the un-slashed twin of
-          // the portal path), so drop it from the child rows for the same
-          // reason as `portalPage`: it is rendered as the portalize banner,
-          // not as a child.
           if (contentPage) {
             const contentId = String(contentPage._id);
             pages = pages.filter((page) => String(page._id) !== contentId);
@@ -527,6 +564,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
               pager: { prev, next, offset },
               portalPage: portalPageResponse,
               contentPage: contentPageResponse,
+              total,
             },
             200,
           );
@@ -540,6 +578,7 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
               pager: { prev: null, next: null, offset: 0 },
               portalPage: null,
               contentPage: null,
+              total: 0,
             },
             200,
           );

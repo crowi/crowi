@@ -52,6 +52,7 @@ alpha.0–.3 は published、alpha.4 / stable 向けに changeset 蓄積中（pr
 - [x] **presence の一貫性欠陥4件修正** — マルチレプリカでの multi-tab 誤削除・viewers フレーム順序崩れ・ページ遷移時の前ページ viewer 混入・join 失敗時の永久 stale の4件を修正した（spec: `feature-presence-consistency-fixes.md`）
 - [x] **モバイルページヘッダの live presence 専用カード化** — モバイルの `[👁 N]` チップを統計チップ直下の専用カード（重なりアバター+自然言語カウント+文字でも分かる接続状態）へ置き換え、`usePresence` に自動再試行中と terminal error の区別を追加した（spec: `feature-mobile-presence-card.md`）
 - [x] **ページリンクのスペース処理を CommonMark 準拠 + 寛容復元に統一** — Phase 1: `+`/%2B 契約の統一強制・fragment/malformed-percent 堅牢化。Phase 2: 生スペース destination を内部リンクへ寛容復元、renderer 0.10.0（spec: `feature-page-link-space-paths.md`）
+- [x] **プロフィール統計 (likes/comments) とワークスペースページ総数 API** — `GET /user/{username}` に本人が行った `likesCount`/`commentsCount` を追加、`GET /pages/list` の全分岐に閲覧者可視ページの正確な `total` を追加（iOS デザイン刷新向け API 拡張。UI 変更なし）。spec: `feature-profile-stats-and-page-total.md`
 
 ---
 

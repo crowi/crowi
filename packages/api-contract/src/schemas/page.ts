@@ -256,6 +256,13 @@ export const ListPagesResponseSchema = z.object({
   // — only set when `portalPage` is null. Absent / null for ordinary
   // listings.
   contentPage: PageSchema.nullable().optional(),
+  // feature-profile-stats-and-page-total — the exact count of the viewer-
+  // visible set `pages` pages from (i.e. matching `pages`' visibility
+  // conditions, independent of `limit`/`offset`, and excluding whichever
+  // ids `portalPage`/`contentPage` already removed from `pages`). Not part
+  // of `PagerSchema` — mirrors `ListUsersResponseSchema.total`, a sibling
+  // top-level field alongside `pager`.
+  total: z.number(),
 });
 export type ListPagesResponse = z.infer<typeof ListPagesResponseSchema>;
 
