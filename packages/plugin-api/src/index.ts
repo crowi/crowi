@@ -57,3 +57,5 @@ export type {
 } from './renderer';
 export type { PluginRouteHandler, PluginRouteMethod, PluginRouteOptions, PluginRouterScope } from './routes';
 export { ACTION_FIELD_MARKER, getActionAnnotation, isSensitiveField, SENSITIVE_FIELD_MARKER } from './schema-markers';
+export { extractSvgDimensions, sanitizeSvg } from './svg';
+export type { SanitizeSvgPolicy, SanitizeSvgResult } from './svg';

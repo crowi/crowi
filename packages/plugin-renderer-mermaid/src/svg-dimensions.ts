@@ -5,4 +5,4 @@
  * Re-exported here so this package's internal imports (`index.ts`) and
  * its unit test keep their original module path.
  */
-export { extractSvgDimensions } from '@crowi/svg-sanitize';
+export { extractSvgDimensions } from '@crowi/plugin-api';

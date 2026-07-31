@@ -54,7 +54,6 @@
     "@crowi/collab": "workspace:^",
     "@crowi/plugin-api": "workspace:^",
     "@crowi/runner": "workspace:^",
-    "@crowi/svg-sanitize": "workspace:^",
     "@hocuspocus/extension-redis": "^4.0.0",
     "@hocuspocus/server": "^4.0.0",
     "@hono/mcp": "catalog:",

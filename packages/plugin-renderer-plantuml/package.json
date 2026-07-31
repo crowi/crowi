@@ -35,12 +35,10 @@
   },
   "dependencies": {
     "@crowi/plugin-api": "workspace:^",
-    "@xmldom/xmldom": "^0.9.10",
     "plantuml-encoder": "^1.4.0"
   },
   "devDependencies": {
     "@crowi/plugin-api": "workspace:*",
-    "@crowi/svg-sanitize": "workspace:*",
     "@crowi/tsconfig": "workspace:*",
     "@types/jest": "catalog:",
     "@types/node": "catalog:",

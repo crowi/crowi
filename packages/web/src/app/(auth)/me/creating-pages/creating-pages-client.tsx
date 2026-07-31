@@ -2,7 +2,7 @@
 
 import type { DraftSummary } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
-import { FileText, Loader2, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { FileText, Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
@@ -17,13 +17,11 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { DraftConflictAlert } from '@/components/page-edit/draft-conflict-alert';
+import { CreatePageDialog } from '@/components/create-page/create-page-dialog';
 import { ErrorAlert } from '@/components/ui/error-alert';
-import { Input } from '@/components/ui/input';
 import { formatDistanceToNow } from '@/lib/date-utils';
 import { notify } from '@/lib/notify';
-import { defaultDraftBody } from '@/lib/page-path';
-import { DraftPathConflictError, draftEditHref, useCancelDraft, useCreateDraft, useDrafts } from '@/lib/use-drafts';
+import { draftEditHref, useCancelDraft, useDrafts } from '@/lib/use-drafts';
 import { usePageTitle } from '@/lib/use-page-title';
 
 /**
@@ -33,16 +31,16 @@ import { usePageTitle } from '@/lib/use-page-title';
  * so each row leads with the path and the two timestamps that frame
  * progress, with compact icon actions on the right.
  *
- * The "new page" creation form is folded behind a header button that
- * expands inline — it's used a few times a year per user, so reserving
- * a permanent card for it would waste vertical space above the list.
+ * "New page" opens the shared create-page modal rather than a local
+ * path field: the modal completes against existing pages as you type,
+ * which is the behaviour a bare text input here cannot match. It routes
+ * to the create-mode editor, which reserves the draft — so the new page
+ * lands back in this list either way.
  */
 export function CreatingPagesClient() {
   usePageTitle(m['creating_pages.heading']());
   const { data, isLoading, isError } = useDrafts();
   const drafts = data?.drafts ?? [];
-
-  const [isFormOpen, setIsFormOpen] = useState(false);
 
   return (
     <div className="space-y-4">
@@ -54,87 +52,20 @@ export function CreatingPagesClient() {
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">{m['creating_pages.subheading']()}</p>
         </div>
-        <Button
-          variant={isFormOpen ? 'outline' : 'default'}
-          onClick={() => setIsFormOpen((open) => !open)}
-          aria-expanded={isFormOpen}
-          aria-label={isFormOpen ? m['creating_pages.new_page_button_close_aria']() : undefined}
-          className="shrink-0"
-        >
-          {isFormOpen ? <X className="mr-1 h-4 w-4" /> : <Plus className="mr-1 h-4 w-4" />}
-          {m['creating_pages.new_page_button']()}
-        </Button>
+        {/* Rooted at `/` like the header entry point: this page is a
+            global draft inbox, not a location within the tree. */}
+        <CreatePageDialog
+          defaultDir="/"
+          trigger={
+            <Button className="shrink-0">
+              <Plus className="mr-1 h-4 w-4" />
+              {m['creating_pages.new_page_button']()}
+            </Button>
+          }
+        />
       </div>
 
-      {isFormOpen && <NewDraftForm onCreated={() => setIsFormOpen(false)} />}
-
       <DraftsSection drafts={drafts} isLoading={isLoading} isError={isError} />
-    </div>
-  );
-}
-
-/** Mutually exclusive failure states surfaced by the New page form. */
-type NewPageError = { kind: 'conflict'; displayName: string; username: string } | { kind: 'message'; text: string };
-
-/**
- * Inline expandable form panel for creating a new draft. Lives directly
- * under the page header — no Card wrapper, no duplicated description —
- * because the heading + subtitle already explain what this page is for.
- */
-function NewDraftForm({ onCreated }: { onCreated?: () => void }) {
-  const router = useRouter();
-  const createDraft = useCreateDraft();
-  const [path, setPath] = useState('');
-  const [error, setError] = useState<NewPageError | null>(null);
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const trimmed = path.trim();
-    setError(null);
-    if (!trimmed) {
-      setError({ kind: 'message', text: m['creating_pages.new_path_required']() });
-      return;
-    }
-    createDraft.mutate(
-      // Seed the path-derived H1 so a page started from this form opens
-      // with the same default title as the `?path=` create flow.
-      { path: trimmed, initialBody: defaultDraftBody(trimmed) },
-      {
-        onSuccess: ({ pageId }) => {
-          onCreated?.();
-          router.push(draftEditHref(pageId));
-        },
-        onError: (err) => {
-          if (err instanceof DraftPathConflictError) {
-            setError({ kind: 'conflict', displayName: err.owner.displayName, username: err.owner.username });
-            return;
-          }
-          setError({ kind: 'message', text: err instanceof Error ? err.message : m['creating_pages.new_failed']() });
-        },
-      },
-    );
-  };
-
-  return (
-    <div className="space-y-2 rounded-lg border bg-muted/30 p-3">
-      <form onSubmit={handleSubmit} className="flex flex-col gap-2 sm:flex-row">
-        <Input
-          value={path}
-          onChange={(e) => setPath(e.target.value)}
-          placeholder={m['creating_pages.new_path_placeholder']()}
-          aria-label={m['creating_pages.new_page_button']()}
-          className="font-mono"
-          autoFocus
-          disabled={createDraft.isPending}
-        />
-        <Button type="submit" disabled={createDraft.isPending} className="shrink-0">
-          {createDraft.isPending ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Plus className="mr-1 h-4 w-4" />}
-          {createDraft.isPending ? m['creating_pages.new_submit_pending']() : m['creating_pages.new_submit']()}
-        </Button>
-      </form>
-
-      {error?.kind === 'conflict' && <DraftConflictAlert displayName={error.displayName} username={error.username} />}
-      {error?.kind === 'message' && <ErrorAlert message={error.text} />}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod/v3';
 import type { CodeBlockInfo, CodeBlockRenderer, CrowiPlugin, RenderError, RendererRegistry, RenderResult, StructuredRenderPayload } from '@crowi/plugin-api';
-import { extractSvgDimensions, sanitizeSvg as sanitizeSvgShared } from '@crowi/svg-sanitize';
+import { extractSvgDimensions, sanitizeSvg as sanitizeSvgShared } from '@crowi/plugin-api';
 import { encode as encodePlantUml } from './encoder';
 import { extractPngDimensions } from './png-dimensions';
 import { sanitizeSvg } from './sanitize';

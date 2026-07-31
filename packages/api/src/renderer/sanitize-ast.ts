@@ -22,7 +22,7 @@ import {
   RenderedAstEnvelopeSchema,
   SIDECAR_KEYS,
 } from '@crowi/api-contract';
-import { sanitizeSvg } from '@crowi/svg-sanitize';
+import { sanitizeSvg } from '@crowi/plugin-api';
 import { SINGLE_ENTRY_REJECT_BYTES } from './cache/mongodb-cache';
 
 /**

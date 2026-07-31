@@ -3,7 +3,6 @@
 '@crowi/api-contract': minor
 '@crowi/plugin-api': minor
 '@crowi/web': minor
-'@crowi/svg-sanitize': minor
 '@crowi/plugin-renderer-katex': minor
 '@crowi/plugin-renderer-mermaid': minor
 '@crowi/plugin-renderer-plantuml': minor
