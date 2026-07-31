@@ -45,19 +45,125 @@ public struct SearchHitLenient: Sendable, Equatable {
     /// Strips every `<...>` tag (in practice just the driver's `<mark>` /
     /// `</mark>` highlight wrapper) so the snippet is safe to place in a
     /// native `Text` view — never parsed/rendered as markup.
+    ///
+    /// Implemented on top of `snippetSegments(_:)` so the two can never
+    /// disagree about what a tag is: the plain string is by construction the
+    /// concatenation of the segmented one (pinned by `SearchLenientTests`).
     public static func plainSnippet(_ rawSnippet: String) -> String {
-        var result = ""
+        snippetSegments(rawSnippet).map(\.text).joined()
+    }
+
+    /// One run of snippet text, and whether the driver marked it as a query
+    /// hit.
+    public struct SnippetSegment: Sendable, Equatable {
+        /// Tag-free text, exactly as it appears in `plainSnippet`.
+        public let text: String
+        /// `true` inside a `<mark>…</mark>` span.
+        public let isHighlighted: Bool
+
+        public init(text: String, isHighlighted: Bool) {
+            self.text = text
+            self.isHighlighted = isHighlighted
+        }
+    }
+
+    /// Splits the driver's highlight string into hit / non-hit runs.
+    ///
+    /// The search backend really does supply hit positions: the Elasticsearch
+    /// driver configures `pre_tags:['<mark>'] / post_tags:['</mark>']`
+    /// (`packages/plugin-search-elasticsearch/src/query-builder.ts`) and the
+    /// handler passes the fragment through untouched, which is the same
+    /// signal the web renders as its yellow `[&_mark]` highlight
+    /// (`packages/web/src/components/search/search-hit-snippet.tsx`). So iOS
+    /// can highlight too — it just cannot do it the web's way.
+    ///
+    /// **This is a segmenter, not a parser.** The string is untrusted
+    /// (unescaped, driver-supplied, containing page body text), there is no
+    /// HTML/DOM render context on this side to interpret it in safely (§6.1's
+    /// raster-only-decode / never-a-web-context invariant), and none is
+    /// introduced here: the output is plain `String` runs plus a `Bool`. Every
+    /// tag that is not a bare `<mark>` / `</mark>` is DROPPED exactly as
+    /// `plainSnippet` always dropped it — deliberately not the web
+    /// sanitiser's "escape it so it shows up literally" rule, which would
+    /// change what existing hits render.
+    ///
+    /// Matching mirrors `packages/web/src/lib/sanitise-snippet.ts`:
+    /// case-insensitive, attributes on the open tag tolerated, a self-closing
+    /// `<mark/>` rejected, and an orphan `</mark>` dropped rather than
+    /// allowed to underflow the depth.
+    public static func snippetSegments(_ rawSnippet: String) -> [SnippetSegment] {
+        var segments: [SnippetSegment] = []
+        var buffer = ""
+        var depth = 0
         var insideTag = false
+        var tag = ""
+
+        // Coalesces into the previous run when the highlight state matches,
+        // so `</mark><mark>` (adjacent hits with nothing between them) yields
+        // ONE highlighted run rather than two — the output stays canonical,
+        // which is what makes it comparable in tests.
+        func flush() {
+            guard !buffer.isEmpty else { return }
+            let isHighlighted = depth > 0
+            if let last = segments.last, last.isHighlighted == isHighlighted {
+                segments[segments.count - 1] = SnippetSegment(text: last.text + buffer, isHighlighted: isHighlighted)
+            } else {
+                segments.append(SnippetSegment(text: buffer, isHighlighted: isHighlighted))
+            }
+            buffer = ""
+        }
+
         for character in rawSnippet {
             if character == "<" {
                 insideTag = true
+                tag = ""
             } else if character == ">" {
+                if insideTag {
+                    switch classifyTag(tag) {
+                    case .markOpen:
+                        flush()
+                        depth += 1
+                    case .markClose:
+                        flush()
+                        depth = max(0, depth - 1)
+                    case .other:
+                        break
+                    }
+                }
                 insideTag = false
-            } else if !insideTag {
-                result.append(character)
+            } else if insideTag {
+                tag.append(character)
+            } else {
+                buffer.append(character)
             }
         }
-        return result
+        flush()
+        return segments
+    }
+
+    private enum SnippetTagKind {
+        case markOpen
+        case markClose
+        case other
+    }
+
+    /// - Parameter tag: the text BETWEEN `<` and `>`, e.g. `mark`,
+    ///   `mark class="hit"`, `/mark`.
+    private static func classifyTag(_ tag: String) -> SnippetTagKind {
+        let lowercased = tag.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if lowercased.hasPrefix("/mark"), lowercased.dropFirst(5).allSatisfy(\.isWhitespace) {
+            return .markClose
+        }
+        // `<mark/>` opens nothing — matching the web sanitiser's
+        // self-closing rejection, so it cannot leave the depth stuck open.
+        guard !lowercased.hasSuffix("/") else { return .other }
+        if lowercased == "mark" {
+            return .markOpen
+        }
+        if lowercased.hasPrefix("mark"), let next = lowercased.dropFirst(4).first, next.isWhitespace {
+            return .markOpen
+        }
+        return .other
     }
 }
 
