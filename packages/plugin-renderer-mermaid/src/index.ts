@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import type { CodeBlockInfo, CodeBlockRenderer, CrowiPlugin, RenderResult } from '@crowi/plugin-api';
 import { escapeHtml } from '@crowi/plugin-api';
 import { encodeSvgToDataUrl } from './encode-svg';
+import { rasterizeSvgToPng, toLayoutUnits } from './rasterize-png';
 import { detectRejectedSource } from './reject-patterns';
 import { MermaidSyntaxError, renderMermaidSvg } from './render-engine';
 import { sanitizeMermaidSvg } from './sanitize-svg';
@@ -100,7 +101,17 @@ export function createMermaidRenderer(): CodeBlockRenderer {
     // output unchanged byte-for-byte). Without the bump, pre-RFC-0023
     // cache hits (no `structured`) would keep serving sidecar-less
     // results to the backfill / save paths until natural TTL expiry.
-    cacheVersion: 4,
+    //
+    // Bumped 4 to 5: the sidecar's image is now a server-rasterized PNG
+    // instead of the SVG bytes (`rasterize-png.ts` — native clients
+    // cannot render Mermaid's SVG). The html output is again unchanged.
+    // The producer-side bump is what invalidates already-cached entries
+    // with no operator action (`plugin-api/src/renderer.ts`'s
+    // `cacheVersion` contract): without it, every page whose Mermaid
+    // fence is already cached would keep serving the SVG sidecar — the
+    // exact payload the native client cannot draw — until its 1h TTL
+    // expired.
+    cacheVersion: 5,
     reservation: { variant: 'aspect', aspectRatio: 16 / 9 },
     // spec §6 — sized to the fixed 4-worker child-process pool
     // (`render-engine.ts`); §7's preview dispatch is the only other
@@ -147,32 +158,51 @@ export function createMermaidRenderer(): CodeBlockRenderer {
       // `max-width: 100%; height: auto` then scales it proportionally.
       const dims = extractSvgDimensions(sanitized.svg);
       const sizeAttrs = dims ? ` width="${dims.width}" height="${dims.height}"` : '';
-      // RFC-0023 §10 — the `crowiDiagram` structured payload: the SAME
-      // sanitized SVG (Mermaid's sanitizer is already the strict
-      // `allowSafeHref: false` policy, so no second pass is needed),
-      // base64 re-used from the data URL. Intrinsic dimensions are
-      // REQUIRED on the typed node — when the `viewBox` derivation
-      // fails or falls outside the wire schema's 1..16384 range, we
-      // fall back to html-only (no `structured`), never an undefined-
-      // dimension node.
+      // RFC-0023 §10 — the `crowiDiagram` structured payload: a PNG
+      // raster of the SAME sanitized SVG the html embeds (never the raw
+      // source, never a second render — `rasterize-png.ts` documents why
+      // native clients get a raster and the web keeps the SVG). The
+      // rasterizer owns the byte / dimension budget and the density
+      // ladder; anything it cannot fit falls back to html-only (no
+      // `structured`), the same degrade the other sidecar-derivation
+      // failures take — never an oversized or dimension-less node.
+      //
+      // The sidecar's `width`/`height` are the diagram's LAYOUT size (SVG
+      // user units), NOT the raster's pixel count. The raster is
+      // deliberately oversampled ~2x for retina and a client draws it
+      // scaled-to-fit into this box, so reporting pixels would lay the
+      // same diagram out twice as large natively as on the web — breaking
+      // RFC-0023's "iOS shows the same content as web" — and would make
+      // this field mean something different from PlantUML's PNG sidecar,
+      // whose raster arrives 1:1 from the PlantUML server.
+      //
+      // `dims` (the SVG's own `viewBox`) is the authority precisely
+      // BECAUSE it is what the html above hands the browser: same number,
+      // same layout, both clients. Recovering it from the raster instead
+      // would only approximate it — Mermaid declares `width="100%"`, so
+      // librsvg's pixel extent is not always an exact multiple of the
+      // viewBox (measured: a journey diagram rasterizes 2.09x, not 2x).
+      // The raster-derived value stays as the fallback for the case that
+      // motivated keeping the two independent: viewBox extraction failing
+      // must degrade the units, not drop an otherwise-good sidecar.
       const diagramType = detectDiagramType(info.source);
-      const structured =
-        dims && dims.width >= 1 && dims.width <= 16_384 && dims.height >= 1 && dims.height <= 16_384
-          ? {
-              node: {
-                type: 'crowiDiagram',
-                kind: 'mermaid',
-                ...(diagramType !== undefined ? { diagramType } : {}),
-                alt,
-                image: {
-                  mediaType: 'image/svg+xml',
-                  base64: encoded.dataUrl.slice(SVG_DATA_URL_PREFIX.length),
-                  width: dims.width,
-                  height: dims.height,
-                },
+      const raster = await rasterizeSvgToPng(sanitized.svg);
+      const structured = raster.ok
+        ? {
+            node: {
+              type: 'crowiDiagram',
+              kind: 'mermaid',
+              ...(diagramType !== undefined ? { diagramType } : {}),
+              alt,
+              image: {
+                mediaType: 'image/png',
+                base64: raster.png.toString('base64'),
+                width: dims?.width ?? toLayoutUnits(raster.width, raster.density),
+                height: dims?.height ?? toLayoutUnits(raster.height, raster.density),
               },
-            }
-          : undefined;
+            },
+          }
+        : undefined;
       return {
         html: `<img class="diagram-embed mermaid-embed" data-crowi-renderer-presentation="diagram" data-crowi-renderer-state="ready" alt="${escapeHtml(alt)}" src="${encoded.dataUrl}"${sizeAttrs}>`,
         ttlSec: SUCCESS_TTL_SEC,
@@ -181,9 +211,6 @@ export function createMermaidRenderer(): CodeBlockRenderer {
     },
   };
 }
-
-/** Prefix `encodeSvgToDataUrl` always emits — sliced off to recover the raw base64 for the sidecar. */
-const SVG_DATA_URL_PREFIX = 'data:image/svg+xml;base64,';
 
 /**
  * spec §9 — closed-enum diagram-type keywords for the `alt` text. A
