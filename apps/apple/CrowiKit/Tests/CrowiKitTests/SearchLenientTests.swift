@@ -48,6 +48,125 @@ final class SearchLenientTests: XCTestCase {
         XCTAssertEqual(SearchHitLenient.plainSnippet("<mark>a</mark> and <mark>b</mark>"), "a and b")
     }
 
+    // MARK: - snippetSegments (feature-ios-visual-redesign Phase 1)
+
+    /// The design highlights the query hit inside the snippet, and the
+    /// backend really does supply the positions
+    /// (`query-builder.ts`'s `pre_tags:['<mark>']`). This is the base case:
+    /// the hit run comes back flagged, everything around it does not.
+    func testSegmentsSplitTheDriverHighlightIntoHitAndNonHitRuns() {
+        XCTAssertEqual(
+            SearchHitLenient.snippetSegments("the <mark>eng</mark> team"),
+            [
+                .init(text: "the ", isHighlighted: false),
+                .init(text: "eng", isHighlighted: true),
+                .init(text: " team", isHighlighted: false),
+            ]
+        )
+        XCTAssertEqual(
+            SearchHitLenient.snippetSegments("no tags here"),
+            [.init(text: "no tags here", isHighlighted: false)]
+        )
+        XCTAssertEqual(SearchHitLenient.snippetSegments(""), [])
+    }
+
+    /// Adjacent hits with nothing between them coalesce into ONE run, so the
+    /// output has a single canonical form for a given rendered result (two
+    /// runs and one run paint identically — leaving both possible would make
+    /// every comparison here depend on how the driver happened to chunk it).
+    func testAdjacentHighlightsCoalesceIntoOneRun() {
+        XCTAssertEqual(
+            SearchHitLenient.snippetSegments("<mark>a</mark><mark>b</mark>"),
+            [.init(text: "ab", isHighlighted: true)]
+        )
+        XCTAssertEqual(
+            SearchHitLenient.snippetSegments("<mark>a</mark> <mark>b</mark>"),
+            [
+                .init(text: "a", isHighlighted: true),
+                .init(text: " ", isHighlighted: false),
+                .init(text: "b", isHighlighted: true),
+            ]
+        )
+    }
+
+    /// The snippet is untrusted page-body text: it can carry anything that
+    /// looks like a tag, in any state of brokenness. None of it may change
+    /// what gets highlighted, and none of it may leave the parser stuck
+    /// inside a highlight for the rest of the string.
+    ///
+    /// Mirrors `packages/web/src/lib/sanitise-snippet.ts`: attributes on the
+    /// open tag are tolerated, a self-closing `<mark/>` opens nothing, and an
+    /// orphan `</mark>` is dropped rather than underflowing the depth.
+    func testHostileAndMalformedTagsCannotStickTheHighlightOn() {
+        XCTAssertEqual(
+            SearchHitLenient.snippetSegments("<MARK class=\"hit\">Eng</MARK> team"),
+            [.init(text: "Eng", isHighlighted: true), .init(text: " team", isHighlighted: false)],
+            "case and attributes are tolerated on the open tag"
+        )
+        XCTAssertEqual(
+            SearchHitLenient.snippetSegments("<mark/>plain"),
+            [.init(text: "plain", isHighlighted: false)],
+            "a self-closing mark opens nothing"
+        )
+        XCTAssertEqual(
+            SearchHitLenient.snippetSegments("</mark>plain"),
+            [.init(text: "plain", isHighlighted: false)],
+            "an orphan close is dropped, not allowed to underflow into a negative depth"
+        )
+        XCTAssertEqual(
+            SearchHitLenient.snippetSegments("<mark>a<b>c</b>d</mark>e"),
+            [.init(text: "acd", isHighlighted: true), .init(text: "e", isHighlighted: false)],
+            "a non-mark tag inside a hit is dropped without breaking the run"
+        )
+        XCTAssertEqual(
+            SearchHitLenient.snippetSegments("<markup>a</markup>b"),
+            [.init(text: "ab", isHighlighted: false)],
+            "a tag that merely STARTS with 'mark' is not a mark"
+        )
+        XCTAssertEqual(
+            SearchHitLenient.snippetSegments("<mark>a</mark></mark>b"),
+            [.init(text: "a", isHighlighted: true), .init(text: "b", isHighlighted: false)],
+            "one extra close cannot make the next term un-highlightable"
+        )
+    }
+
+    /// `plainSnippet` is defined as the concatenation of the segments, so a
+    /// change to one can never silently diverge from the other — the
+    /// highlighted row and the plain row always show the same words. Includes
+    /// the pre-existing cases above plus the malformed ones, which is where a
+    /// re-implementation would drift first.
+    func testPlainSnippetIsExactlyTheConcatenationOfTheSegments() {
+        let cases = [
+            "<mark>eng</mark> team meeting",
+            "no tags here",
+            "<mark>a</mark> and <mark>b</mark>",
+            "<MARK class=\"hit\">Eng</MARK> team",
+            "<mark/>plain",
+            "</mark>plain",
+            "<mark>a<b>c</b>d</mark>e",
+            "unterminated <mark>tail",
+            "a > b",
+            "",
+        ]
+        for raw in cases {
+            XCTAssertEqual(
+                SearchHitLenient.snippetSegments(raw).map(\.text).joined(),
+                SearchHitLenient.plainSnippet(raw),
+                "segments must reconstruct the plain snippet for \(raw.debugDescription)"
+            )
+        }
+    }
+
+    /// Nothing that reaches the segmenter may come back out as markup: every
+    /// run is plain text with the angle brackets gone, so no downstream
+    /// renderer can be handed something to interpret.
+    func testNoSegmentEverCarriesMarkupThrough() {
+        for segment in SearchHitLenient.snippetSegments("<script>alert(1)</script><mark>hit</mark><img src=x onerror=y>") {
+            XCTAssertFalse(segment.text.contains("<"), "a run kept an opening angle bracket: \(segment.text)")
+            XCTAssertFalse(segment.text.contains(">"), "a run kept a closing angle bracket: \(segment.text)")
+        }
+    }
+
     func testFetchThrowsSearchCapabilityUnavailableWhenSearchIsAbsentFromCapabilities() async {
         let client = AuthenticatedAPIClient(
             apiBaseURL: APIBaseURL(workspaceOrigin: WorkspaceOrigin(URL(string: "https://wiki.example.com")!)),
