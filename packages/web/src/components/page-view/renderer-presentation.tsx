@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useState } from 'react';
+import { memo, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { Plus } from 'lucide-react';
 import { m } from '@paraglide/messages.js';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
@@ -103,12 +103,11 @@ interface RendererPresentationProps {
  * `[data-crowi-renderer-presentation="diagram"][data-crowi-renderer-state=
  * "ready"]` selector and the legacy `.diagram-embed` class — and (b) can be
  * enlarged: hovering reveals a `+` affordance and a click opens a
- * near-full-screen lightbox where the diagram renders at natural size with
- * scroll/pan, so a wide sequence diagram stays readable.
+ * near-full-screen lightbox, so a wide sequence diagram stays readable.
  *
  * The diagram body is reused verbatim inside the lightbox. Because the
  * lightbox renders outside `.crowi-prose`, the cap-to-width rules don't
- * apply there, so the SVG/PNG falls back to its intrinsic size. Diagram
+ * apply there, so the SVG/PNG starts from its intrinsic size. Diagram
  * renderers bake black strokes on a transparent canvas (see the `.dark`
  * CSS note in `globals.css`), so the lightbox sits on a white surface in
  * both themes to keep the diagram legible.
@@ -142,15 +141,81 @@ export const RendererPresentation = memo(function RendererPresentation({ childre
         </button>
       </span>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="flex w-full max-w-[calc(100vw-2rem)] max-h-[calc(100vh-4rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[calc(100vw-4rem)]">
+        {/* Fixed height, not height-to-content: the lightbox is a viewport to
+            fit the diagram into, so it has to claim the space before the
+            diagram can be scaled up into it. A content-hugging box would stay
+            exactly as tall as the inline diagram and only get wider. */}
+        <DialogContent className="flex h-[calc(100dvh-4rem)] w-full max-w-[calc(100vw-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[calc(100vw-4rem)]">
           <DialogTitle className="sr-only">{m['page.diagram_zoom']()}</DialogTitle>
-          {/* Natural-size diagram on a white canvas. Top-left aligned (not
-              flex-centered): a diagram wider/taller than the modal must
-              stay fully reachable by scrolling — centering would strand the
-              top-left edge of a large diagram out of scroll range. */}
-          <div className="min-h-0 flex-1 overflow-auto bg-white p-4">{children}</div>
+          {/* Remounted per open so the fit is measured against the current
+              viewport rather than whatever it was on a previous open. */}
+          {open && <DiagramLightboxBody>{children}</DiagramLightboxBody>}
         </DialogContent>
       </Dialog>
     </>
   );
 });
+
+/**
+ * The lightbox canvas: scales the diagram up to fill the modal, but never
+ * down.
+ *
+ * Grow-only is the whole point of the asymmetry. A diagram smaller than the
+ * modal — a narrow flowchart, most PlantUML activity diagrams — used to sit
+ * at intrinsic size in the top-left corner, so opening the lightbox produced
+ * a wider box containing the same small picture; that is the case this fixes.
+ * A diagram *larger* than the modal keeps its intrinsic size and scrolls,
+ * because shrinking a wide sequence diagram to fit would make the text
+ * unreadable, which is the opposite of what enlarging it is for.
+ *
+ * Scaling is a `transform`, so it applies equally to an inline `<svg>` and to
+ * an `<img>`, without either needing to cooperate. The outer element is sized
+ * to the scaled result so the scroll extent still matches what is drawn —
+ * `transform` alone does not affect layout. Top-left origin keeps the
+ * diagram's top-left edge reachable when it overflows.
+ */
+function DiagramLightboxBody({ children }: { children: ReactNode }) {
+  const boxRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [fit, setFit] = useState<{ scale: number; width: number; height: number } | null>(null);
+
+  useLayoutEffect(() => {
+    const box = boxRef.current;
+    const content = contentRef.current;
+    if (!box || !content) return;
+
+    const measure = () => {
+      // `offsetWidth/Height` report layout size, which `transform` does not
+      // affect — so these stay the intrinsic dimensions across re-measures
+      // and the scale never compounds.
+      const naturalWidth = content.offsetWidth;
+      const naturalHeight = content.offsetHeight;
+      // An `<img>` reports 0 until it decodes; the observer re-fires then.
+      if (naturalWidth === 0 || naturalHeight === 0) return;
+
+      const style = getComputedStyle(box);
+      const availableWidth = box.clientWidth - Number.parseFloat(style.paddingLeft) - Number.parseFloat(style.paddingRight);
+      const availableHeight = box.clientHeight - Number.parseFloat(style.paddingTop) - Number.parseFloat(style.paddingBottom);
+      if (availableWidth <= 0 || availableHeight <= 0) return;
+
+      const scale = Math.max(1, Math.min(availableWidth / naturalWidth, availableHeight / naturalHeight));
+      setFit({ scale, width: naturalWidth * scale, height: naturalHeight * scale });
+    };
+
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(box);
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div ref={boxRef} className="min-h-0 flex-1 overflow-auto bg-white p-4">
+      <div style={fit ? { width: fit.width, height: fit.height } : undefined}>
+        <div ref={contentRef} className="w-fit origin-top-left" style={fit ? { transform: `scale(${fit.scale})` } : undefined}>
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}

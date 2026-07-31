@@ -125,3 +125,22 @@ interface VirtualConsoleLike {
   removeAllListeners(event: 'jsdomError'): void;
   on(event: 'jsdomError', listener: JsdomErrorListener): void;
 }
+
+/**
+ * jsdom ships no `ResizeObserver`. Components that fit content to their
+ * container (the diagram lightbox) construct one during a layout effect, so
+ * without this the component throws on mount and the test fails for a reason
+ * that has nothing to do with what it asserts.
+ *
+ * The stub deliberately never fires. jsdom reports every box as 0x0, so a
+ * callback would only ever deliver measurements the component is already
+ * required to ignore. Tests that need to assert real fitting behaviour belong
+ * in the browser-driven suite, not here.
+ */
+if (typeof globalThis.ResizeObserver === 'undefined') {
+  globalThis.ResizeObserver = class {
+    observe(): void {}
+    unobserve(): void {}
+    disconnect(): void {}
+  };
+}
