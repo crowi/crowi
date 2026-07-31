@@ -96,6 +96,61 @@ public enum CrowiMetrics {
     /// Design: the 40px circular "New" FAB (glass variant — the standard
     /// variant's 52px raised button is not the one this app ships).
     public static let tabBarCreateButtonSize: CGFloat = 40
+
+    // MARK: - Page header (design: the reader's own title block)
+
+    /// Design: `gap:5px` between breadcrumb segments and their separators.
+    public static let pageHeaderBreadcrumbSpacing: CGFloat = 5
+    /// Design: `margin-bottom:8px` under the breadcrumb / the byline.
+    public static let pageHeaderSpacing: CGFloat = 8
+    /// Design: `margin:0 0 12px` under the `h1`.
+    public static let pageHeaderTitleSpacing: CGFloat = 12
+    /// Design: `gap:9px` between the author avatar and the byline text.
+    public static let pageHeaderBylineSpacing: CGFloat = 9
+    /// Design: `width:28px;height:28px` — the header's author avatar.
+    public static let pageHeaderAvatarSize: CGFloat = 28
+    /// Design: `gap:16px` between the read-only stat items.
+    public static let pageHeaderStatsSpacing: CGFloat = 16
+    /// Design: `margin-bottom:16px` under the stats row, then the hairline.
+    public static let pageHeaderBottomPadding: CGFloat = 16
+
+    // MARK: - Page action bar (the floating pill above the safe area)
+
+    /// Design: `bottom:34px` measured from the DEVICE edge — the tab bar's
+    /// `tabBarBottomInset` reasoning applies unchanged (the pill is anchored
+    /// to the bottom safe area, so this is the gap ABOVE it).
+    public static let pageActionBarBottomInset: CGFloat = 8
+    /// Design: `padding:6px 8px` inside the pill.
+    public static let pageActionBarInnerHorizontalPadding: CGFloat = 8
+    public static let pageActionBarInnerVerticalPadding: CGFloat = 6
+    /// Design: `gap:1px` between the pill's buttons.
+    public static let pageActionBarItemSpacing: CGFloat = 1
+    /// Design: 20/21px stroked SVGs — the `tabBarGlyphSize` note applies (an
+    /// SF Symbol's cap height sits a couple of points below the CSS number).
+    public static let pageActionBarGlyphSize: CGFloat = 19
+    /// Design: `padding:8px 11px` on an icon button, `8px 12px` + `gap:5px`
+    /// on the labelled Edit button.
+    public static let pageActionBarButtonHorizontalPadding: CGFloat = 11
+    public static let pageActionBarLabelSpacing: CGFloat = 5
+    /// Design: the `.5px × 22px` rule between Edit and the toggles.
+    public static let pageActionBarDividerHeight: CGFloat = 22
+
+    // MARK: - Bottom sheets (action list / table of contents)
+
+    /// Design: `padding:15px 18px;gap:14px` on an action-sheet row.
+    public static let sheetRowVerticalPadding: CGFloat = 15
+    public static let sheetRowHorizontalPadding: CGFloat = 18
+    public static let sheetRowContentSpacing: CGFloat = 14
+    /// Design: `padding:16px` on the sheet's Cancel/Done button.
+    public static let sheetButtonPadding: CGFloat = 16
+    /// Design: `padding:11px 16px` on a TOC row, `26px` leading when nested —
+    /// i.e. one indentation step is 10px.
+    public static let tocRowVerticalPadding: CGFloat = 11
+    public static let tocRowHorizontalPadding: CGFloat = 16
+    public static let tocRowIndentStep: CGFloat = 10
+    /// Design: the `2.5px` active-row rail, and the `gap:10px` beside it.
+    public static let tocRailWidth: CGFloat = 2.5
+    public static let tocRowContentSpacing: CGFloat = 10
 }
 
 /// The TYPE half of the design language.
@@ -133,6 +188,30 @@ public enum CrowiTypography {
     /// Design: 10.5px/500 — a tab's label under its glyph. `.caption2` is the
     /// smallest step in the scale, which is what a tab label is.
     public static let tabLabel = Font.system(.caption2, design: .default, weight: .medium)
+    /// Design: 27px/800, `letter-spacing:-.02em`, `line-height:1.24` — the
+    /// page reader's `h1`. `.title` is 28pt at the default size: the same step
+    /// of the scale, and unlike a literal 27pt it grows with Dynamic Type.
+    public static let pageTitle = Font.system(.title, design: .default, weight: .heavy)
+    /// Design: 14px — "Sotaro Karasawa · Updated 53m ago".
+    public static let pageByline = Font.system(.subheadline)
+    /// Design: 13px `var(--muted-foreground)` — the read-only views/likes/
+    /// comments row under the byline.
+    public static let pageStats = Font.system(.footnote)
+    /// Design: 15px/600 — the action pill's "Edit" label.
+    public static let pillLabel = Font.system(.subheadline, design: .default, weight: .semibold)
+    /// Design: 14px/600 — a count beside a pill glyph.
+    public static let pillCount = Font.system(.footnote, design: .default, weight: .semibold)
+    /// Design: 18px/700 — a bottom sheet's own title ("Contents").
+    public static let sheetTitle = Font.system(.headline, design: .default, weight: .bold)
+    /// Design: 17px — an action-sheet row's label.
+    public static let sheetRow = Font.system(.body)
+    /// Design: 16px/500 top level, 15.5px/400 nested — a TOC row.
+    public static let tocRow = Font.system(.body, design: .default, weight: .medium)
+    public static let tocNestedRow = Font.system(.body)
+
+    /// Design: `letter-spacing:-.02em` at 27px ≈ -0.54pt — the same optical
+    /// correction `screenTitleTracking` makes, at the reader's title size.
+    public static let pageTitleTracking: CGFloat = -0.54
 
     /// Design: `letter-spacing:-.02em` at 33px ≈ -0.66pt. Tracking is an
     /// absolute point value in SwiftUI (it does not scale with Dynamic Type),

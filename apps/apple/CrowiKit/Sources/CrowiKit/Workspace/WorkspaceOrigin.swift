@@ -42,6 +42,26 @@ public struct WorkspaceOrigin: Equatable, Sendable, Hashable {
         return components.url!
     }
 
+    /// The BROWSER url of a wiki page on this workspace — what the reader's
+    /// Share and Copy Link actions hand out (feature-ios-visual-redesign
+    /// Phase 3). Not an API url: `<origin>/<page path>` is what the web app
+    /// serves and what a colleague receiving the link expects to open.
+    ///
+    /// Built through `URLComponents` so the path is percent-encoded on the way
+    /// out, which is not optional in this product: Crowi paths are routinely
+    /// non-ASCII (`/user/sotarok/日報/2026/05/23`), and pasting a raw one into
+    /// `URL(string:)` yields `nil`.
+    public func pageURL(forPath path: String) -> URL? {
+        var components = URLComponents()
+        components.scheme = scheme
+        components.host = host
+        if port != WorkspaceOrigin.defaultPort(forScheme: scheme) {
+            components.port = port
+        }
+        components.path = path.hasPrefix("/") ? path : "/" + path
+        return components.url
+    }
+
     /// Is this origin's scheme `https`? The §14 / §3 HTTPS gate reads this.
     public var isHTTPS: Bool {
         scheme == "https"
