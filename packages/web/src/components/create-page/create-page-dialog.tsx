@@ -345,7 +345,7 @@ interface CreatePageDialogProps {
  * (`/_edit?path=…`). Reused from two entry points with different
  * pre-filled namespaces via `defaultDir`.
  */
-function CreatePageDialog({ defaultDir, trigger }: CreatePageDialogProps) {
+export function CreatePageDialog({ defaultDir, trigger }: CreatePageDialogProps) {
   const [open, setOpen] = useState(false);
 
   return (
