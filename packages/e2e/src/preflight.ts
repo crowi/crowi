@@ -48,11 +48,22 @@ async function assertMailpitHttp(): Promise<void> {
   }
 }
 
+/**
+ * Every service a spec in this suite actually reaches out to — keep it that
+ * way. This list is read as the suite's dependency contract (the CI job's
+ * `services:` block was built from it), so a dependency that is exercised but
+ * not asserted here fails far from its cause: PlantUML was missing, and the
+ * result was `expect(plantumlFragment).toBeDefined()` failing two minutes into
+ * a CI run rather than "PlantUML unreachable" at second zero.
+ *
+ * When a spec starts using a new service, add it here in the same change.
+ */
 export async function preflightDockerServices(): Promise<void> {
   await assertTcpPort('MongoDB', 27017);
   await assertTcpPort('Redis', 6379);
   await assertTcpPort('Mailpit SMTP', 1025);
   await assertTcpPort('Mailpit HTTP', 8025);
+  await assertTcpPort('PlantUML', 8080);
   await assertMongo();
   await assertMailpitHttp();
 }

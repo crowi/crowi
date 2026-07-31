@@ -297,13 +297,11 @@ jobs:
       mongo: *api-test-mongo-service
       redis: *api-test-redis-service
 
-      # Mailpit: the only ADDITIONAL dependency @crowi/e2e's preflight
-      # (packages/e2e/src/preflight.ts) requires beyond mongo/redis — SMTP on
-      # 1025, HTTP API on 8025. Mirrors docker-compose.yml's `mailpit`
-      # service (used for local `pnpm e2e` runs) so local and CI can't drift
-      # apart. The image ships its own `HEALTHCHECK CMD ["/mailpit",
-      # "readyz"]`, so `--health-cmd` below just invokes that same binary's
-      # own readiness check rather than inventing a new one.
+      # Mailpit — SMTP on 1025, HTTP API on 8025. Mirrors docker-compose.yml's
+      # `mailpit` service (used for local `pnpm e2e` runs) so local and CI
+      # can't drift apart. The image ships its own `HEALTHCHECK CMD
+      # ["/mailpit", "readyz"]`, so `--health-cmd` below just invokes that same
+      # binary's own readiness check rather than inventing a new one.
       mailpit:
         image: axllent/mailpit:latest
         ports:
@@ -314,6 +312,22 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 12
+
+      # PlantUML — renderer-plugins.spec.ts renders a real PlantUML diagram
+      # through this server and asserts the resulting fragment, so the suite
+      # does not pass without it. Mirrors docker-compose.yml's `plantuml`
+      # service on 8080.
+      #
+      # This was missing from the job's first version because the dependency
+      # list was taken from preflight.ts, which only asserts mongo/redis/
+      # mailpit — preflight is not a complete inventory of what the specs
+      # actually reach out to. preflight now asserts this port too, so the
+      # next such gap fails fast with a named dependency instead of an
+      # assertion two minutes into the run.
+      plantuml:
+        image: plantuml/plantuml-server:latest
+        ports:
+          - 8080:8080
 
     steps:
       - name: Checkout code
