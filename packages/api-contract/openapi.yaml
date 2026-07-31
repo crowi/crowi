@@ -2529,9 +2529,12 @@ components:
             - _id
             - path
             - createdAt
+        total:
+          type: number
       required:
         - pages
         - pager
+        - total
     GetPageResponse:
       type: object
       properties:
@@ -7784,7 +7787,10 @@ paths:
           in: path
       responses:
         '200':
-          description: User profile with statistics + recent activity
+          description: >-
+            User profile with statistics (createdPagesCount, bookmarksCount,
+            likesCount, commentsCount — the last two are the target user's OWN
+            likes/comments, not activity their pages received) + recent activity
           content:
             application/json:
               schema:
@@ -7831,6 +7837,10 @@ paths:
                   createdPagesCount:
                     type: number
                   bookmarksCount:
+                    type: number
+                  likesCount:
+                    type: number
+                  commentsCount:
                     type: number
                   recentPages:
                     type: array
@@ -8500,6 +8510,8 @@ paths:
                   - user
                   - createdPagesCount
                   - bookmarksCount
+                  - likesCount
+                  - commentsCount
         '401':
           description: Authentication required
           content:
@@ -14743,11 +14755,13 @@ paths:
       responses:
         '200':
           description: >-
-            Page list (newest first) with optional portal page. The portal
-            document is the only row carrying `revision.renderedAst`; its shape
-            is content-negotiated via the `X-Crowi-Ast-Version` request header
-            (RFC-0023, same semantics as GET /pages). The response varies on
-            this header (`Vary: X-Crowi-Ast-Version`).
+            Page list (newest first) with optional portal page and an accurate
+            `total` (the full, unpaginated count of the same viewer-visible set
+            `pages` is a page of). The portal document is the only row carrying
+            `revision.renderedAst`; its shape is content-negotiated via the
+            `X-Crowi-Ast-Version` request header (RFC-0023, same semantics as
+            GET /pages). The response varies on this header (`Vary:
+            X-Crowi-Ast-Version`).
           content:
             application/json:
               schema:
@@ -15686,9 +15700,12 @@ paths:
                       - _id
                       - path
                       - createdAt
+                  total:
+                    type: number
                 required:
                   - pages
                   - pager
+                  - total
         '401':
           description: Authentication required
           content:

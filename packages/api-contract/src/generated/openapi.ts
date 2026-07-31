@@ -2237,7 +2237,7 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description User profile with statistics + recent activity */
+                /** @description User profile with statistics (createdPagesCount, bookmarksCount, likesCount, commentsCount — the last two are the target user's OWN likes/comments, not activity their pages received) + recent activity */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -2260,6 +2260,8 @@ export interface paths {
                             };
                             createdPagesCount: number;
                             bookmarksCount: number;
+                            likesCount: number;
+                            commentsCount: number;
                             recentPages?: {
                                 _id: string;
                                 path: string;
@@ -5642,7 +5644,7 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description Page list (newest first) with optional portal page. The portal document is the only row carrying `revision.renderedAst`; its shape is content-negotiated via the `X-Crowi-Ast-Version` request header (RFC-0023, same semantics as GET /pages). The response varies on this header (`Vary: X-Crowi-Ast-Version`). */
+                /** @description Page list (newest first) with optional portal page and an accurate `total` (the full, unpaginated count of the same viewer-visible set `pages` is a page of). The portal document is the only row carrying `revision.renderedAst`; its shape is content-negotiated via the `X-Crowi-Ast-Version` request header (RFC-0023, same semantics as GET /pages). The response varies on this header (`Vary: X-Crowi-Ast-Version`). */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -5972,6 +5974,7 @@ export interface paths {
                                 likerCount?: number;
                                 seenUsersCount?: number;
                             } | null;
+                            total: number;
                         };
                     };
                 };
@@ -14710,6 +14713,7 @@ export interface components {
                 likerCount?: number;
                 seenUsersCount?: number;
             } | null;
+            total: number;
         };
         GetPageResponse: {
             page: {
