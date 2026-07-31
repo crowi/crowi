@@ -170,6 +170,7 @@ public struct WorkspacePageMarkdownView: View {
             // knob), so without this the app silently disagreed with the web on
             // plain paragraph text, not just on Crowi extensions.
             .markdownSoftBreakMode(.lineBreak)
+            .markdownTheme(Self.crowiTheme)
             .markdownImageProvider(WorkspaceMarkdownImageProvider(loader: imageLoader, onImageTap: imageTapHandler))
             .markdownInlineImageProvider(WorkspaceMarkdownInlineImageProvider(loader: imageLoader, containerWidth: inlineImageContainerWidth))
             // Measures the rendered markdown column's width for the inline
@@ -212,5 +213,42 @@ public struct WorkspacePageMarkdownView: View {
                     }
                 }
             )
+    }
+
+    /// MarkdownUI's `.basic` theme with ONE thing changed: the leading and the
+    /// block gaps, taken from `CrowiBodyMetrics` so this path — the cache-paint
+    /// / old-server fallback — reads like the AST path a live fetch takes,
+    /// rather than dropping back to `.basic`'s 0.15em on the same page.
+    ///
+    /// The two overridden block styles are `.basic`'s own, verbatim except for
+    /// the spacing numbers: nothing else about the fallback's look is being
+    /// redesigned here.
+    private static var crowiTheme: Theme {
+        Theme.basic
+            .paragraph { configuration in
+                configuration.label
+                    .fixedSize(horizontal: false, vertical: true)
+                    .relativeLineSpacing(.em(CrowiTypography.bodyLineSpacingRatio))
+                    .markdownMargin(top: .zero, bottom: .em(CrowiTypography.bodyBlockSpacingRatio))
+            }
+            .listItem { configuration in
+                // `.basic` gives a list item no margin at all, which under the
+                // new leading leaves bullets packed tighter than the lines
+                // inside one of them.
+                configuration.label
+                    .markdownMargin(top: .em(CrowiTypography.bodyRelatedItemSpacingRatio), bottom: .zero)
+            }
+            .tableCell { configuration in
+                configuration.label
+                    .markdownTextStyle {
+                        if configuration.row == 0 {
+                            FontWeight(.semibold)
+                        }
+                    }
+                    .fixedSize(horizontal: false, vertical: true)
+                    .relativeLineSpacing(.em(CrowiTypography.bodyLineSpacingRatio))
+                    .relativePadding(.horizontal, length: .em(0.72))
+                    .relativePadding(.vertical, length: .em(CrowiTypography.bodyRelatedItemSpacingRatio / 2))
+            }
     }
 }
