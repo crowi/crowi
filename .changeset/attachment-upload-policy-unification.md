@@ -1,0 +1,6 @@
+---
+'@crowi/api': minor
+'@crowi/web': minor
+---
+
+Unify the attachment upload allow-list across every upload path — the "Attach file" button, the editor's paste, and its drag-and-drop — so the same file always gets the same result. Previously the general page-attachment route had no MIME check at all while drag-and-drop enforced a narrow images-plus-a-few-documents list, which is why the same file (e.g. an HTML export) could upload from the button but be rejected by drag-and-drop. Common office documents (`.doc`/`.docx`, `.xls`/`.xlsx`, `.ppt`/`.pptx`) and a broader set of text/archive/audio/video types are now accepted everywhere; opening them directly still downloads them rather than rendering inline (unchanged, security-relevant delivery behavior). Pasting into the editor uploads non-image files too (it used to only react to images, leaving a pasted document unhandled), inserting them as a `[filename](url)` link just like drag-and-drop does. Rejected uploads now return the same error message no matter which route rejected them. The attachment grid also shows a file-type-specific icon for Word/PowerPoint documents (previously the generic file icon), falling back to the generic icon for any unrecognised type.
