@@ -20,6 +20,14 @@ public enum RenderedAstWireContract {
     /// `CURRENT_AST_VERSION` — single integer, not semver.
     public static let currentAstVersion = 1
     /// `AST_MAX_TREE_DEPTH` — iterative pre-pass limit, never left to recursion.
+    ///
+    /// This is a wire-DoS bound, NOT a layout budget: SwiftUI stack nesting
+    /// explodes ~×15 per level (a real 8-level bullet page once wedged the
+    /// main thread forever), so a 64-deep tree is far beyond what recursive
+    /// layout survives (~5 levels). Deep documents are still ACCEPTED here —
+    /// which is only safe because list rendering is FLAT
+    /// (`RenderedAstListFlattener` + `RenderedAstListView`, pinned by
+    /// `DeepListLayoutWallTimeTests`) and must stay flat.
     public static let maxTreeDepth = 64
     /// `AST_MAX_HAST_DEPTH` — `data.hChildren` subtree depth limit.
     public static let maxHastDepth = 16

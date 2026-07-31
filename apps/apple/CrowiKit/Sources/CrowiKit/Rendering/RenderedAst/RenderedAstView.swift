@@ -428,41 +428,73 @@ struct RenderedAstFigureView: View {
 
 // MARK: - list
 
+/// Renders a `list` subtree FLAT: `RenderedAstListFlattener` pre-order-walks
+/// the `list`/`listItem` tree into linear rows, and every row is one shallow
+/// `HStack(marker, blocks)` with depth-indexed leading padding.
+///
+/// DO NOT reintroduce per-level view recursion here (the pre-flattener
+/// renderer nested one `HStack(marker, RenderedAstBlockSequence)` per list
+/// level): SwiftUI's StackLayout sizing explodes ~×15 per nesting level
+/// (measured: depth 3 → 140ms, 4 → 906ms, 5 → 15.0s, 6+ → >25s), so a real
+/// page with 8-level bullets wedged the main thread forever on first paint.
+/// `DeepListLayoutWallTimeTests` pins this with a wall-time bound.
 struct RenderedAstListView: View {
     let ordered: Bool
     let start: Int?
     let items: [RenderedAstNode]
     let context: RenderedAstRenderContext
 
+    /// Leading indent per nesting depth — visually equivalent to the old
+    /// marker-column offset (~marker width + 8pt spacing).
+    private static let indentPerDepth: CGFloat = 20
+    /// The decoder admits up to ~31 list levels (`maxTreeDepth` 64 / 2 nodes
+    /// per level); cap the visual indent so pathological depth can't squeeze
+    /// the content column to nothing on a phone width.
+    private static let maxIndent: CGFloat = 240
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            ForEach(Array(items.enumerated()), id: \.offset) { index, item in
-                if case .listItem(let checked, _) = item.kind {
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        marker(index: index, checked: checked)
-                            .foregroundStyle(.secondary)
-                        RenderedAstBlockSequence(nodes: item.children, context: context)
-                    }
-                } else {
-                    // A degraded (crowiOpaque) child — visible, never dropped.
-                    RenderedAstBlockView(node: item, context: context)
-                }
+        let rows = RenderedAstListFlattener.flatten(ordered: ordered, start: start, items: items)
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                rowView(row)
+                    .padding(.top, CGFloat(row.topSpacing))
+                    .padding(.leading, min(CGFloat(row.depth) * Self.indentPerDepth, Self.maxIndent))
             }
         }
     }
 
     @ViewBuilder
-    private func marker(index: Int, checked: Bool?) -> some View {
-        if let checked {
+    private func rowView(_ row: RenderedAstListFlattener.Row) -> some View {
+        if let marker = row.marker {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                markerView(marker)
+                    .foregroundStyle(.secondary)
+                    // A continuation chunk (item content AFTER its nested
+                    // sub-list) reserves the marker column invisibly so it
+                    // aligns with the item's first-row content.
+                    .opacity(row.markerHidden ? 0 : 1)
+                    .accessibilityHidden(row.markerHidden)
+                RenderedAstBlockSequence(nodes: row.blocks, context: context)
+            }
+        } else {
+            // A degraded (crowiOpaque) child — visible, never dropped.
+            RenderedAstBlockSequence(nodes: row.blocks, context: context)
+        }
+    }
+
+    @ViewBuilder
+    private func markerView(_ marker: RenderedAstListFlattener.Marker) -> some View {
+        switch marker {
+        case .task(let checked):
             // Task-list item: checked is true/false; a PLAIN item in the
             // same list arrives as null (three-valued contract,
             // `golden-corpus/core-blocks.json`).
             Image(systemName: checked ? "checkmark.square.fill" : "square")
                 .accessibilityLabel(checked ? "completed" : "not completed")
-        } else if ordered {
-            Text("\((start ?? 1) + index).")
+        case .ordered(let number):
+            Text("\(number).")
                 .monospacedDigit()
-        } else {
+        case .bullet:
             Text("•")
         }
     }
