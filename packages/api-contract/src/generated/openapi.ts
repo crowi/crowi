@@ -9239,6 +9239,21 @@ export interface paths {
                         };
                     };
                 };
+                /** @description MIME type not in the unified upload allow-list (feature-attachment-upload-policy) */
+                415: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "INVALID_PAGE_ID" | "PAGE_NOT_FOUND" | "FILE_MISSING" | "FILE_TOO_LARGE" | "DISALLOWED_MIME" | "INVALID_ATTACHMENT_ID" | "ATTACHMENT_NOT_FOUND" | "FORBIDDEN_FOR_DELETE" | "UPLOAD_FAILED" | "REMOVE_FAILED";
+                                message: string;
+                            };
+                        };
+                    };
+                };
                 /** @description Upload / storage failure */
                 500: {
                     headers: {
@@ -9313,7 +9328,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             /** @enum {string} */
-                            error: "too_large" | "disallowed_type" | "rate_limited" | "no_permission";
+                            error: "too_large" | "disallowed_type" | "DISALLOWED_MIME" | "rate_limited" | "no_permission";
                             message: string;
                             details?: {
                                 [key: string]: unknown;
@@ -9346,7 +9361,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             /** @enum {string} */
-                            error: "too_large" | "disallowed_type" | "rate_limited" | "no_permission";
+                            error: "too_large" | "disallowed_type" | "DISALLOWED_MIME" | "rate_limited" | "no_permission";
                             message: string;
                             details?: {
                                 [key: string]: unknown;
@@ -9362,7 +9377,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             /** @enum {string} */
-                            error: "too_large" | "disallowed_type" | "rate_limited" | "no_permission";
+                            error: "too_large" | "disallowed_type" | "DISALLOWED_MIME" | "rate_limited" | "no_permission";
                             message: string;
                             details?: {
                                 [key: string]: unknown;
@@ -9370,7 +9385,7 @@ export interface paths {
                         };
                     };
                 };
-                /** @description MIME type not in the per-intent allow-list */
+                /** @description MIME type not in the unified upload allow-list (feature-attachment-upload-policy) */
                 415: {
                     headers: {
                         [name: string]: unknown;
@@ -9378,7 +9393,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             /** @enum {string} */
-                            error: "too_large" | "disallowed_type" | "rate_limited" | "no_permission";
+                            error: "too_large" | "disallowed_type" | "DISALLOWED_MIME" | "rate_limited" | "no_permission";
                             message: string;
                             details?: {
                                 [key: string]: unknown;
@@ -9394,7 +9409,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             /** @enum {string} */
-                            error: "too_large" | "disallowed_type" | "rate_limited" | "no_permission";
+                            error: "too_large" | "disallowed_type" | "DISALLOWED_MIME" | "rate_limited" | "no_permission";
                             message: string;
                             details?: {
                                 [key: string]: unknown;
@@ -15198,7 +15213,7 @@ export interface components {
         };
         UploadAttachmentError: {
             /** @enum {string} */
-            error: "too_large" | "disallowed_type" | "rate_limited" | "no_permission";
+            error: "too_large" | "disallowed_type" | "DISALLOWED_MIME" | "rate_limited" | "no_permission";
             message: string;
             details?: {
                 [key: string]: unknown;
