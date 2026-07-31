@@ -24,6 +24,21 @@ import SwiftUI
 /// Network-only, like `RecentlyViewedView` (which remains the separate
 /// "recently VIEWED by me" screen behind its toolbar button): no SwiftData
 /// cache model for this listing — the home always reflects a fresh fetch.
+///
+/// ## feature-ios-visual-redesign Phase 1
+///
+/// This screen IS the design's Home "Recently updated" card, so it is where
+/// the design language lands most literally: a large screen title, uppercase
+/// section headers, and `CrowiCard`-contained rows instead of `List`'s
+/// grouped chrome. It is also the one screen that owns its own title area —
+/// the navigation bar here carries actions only (there is no back button at
+/// the stack root), so the bar's title is suppressed and `CrowiScreenTitle`
+/// renders the workspace name at the design's weight rather than printing it
+/// twice.
+///
+/// The design's subtitle line ("Almoha Wiki · 128 pages") and its "Your
+/// drafts" card are NOT built: the app has no page-count total and no drafts
+/// concept, and inventing either would mean inventing the data behind it.
 struct RecentlyUpdatedHomeView: View {
     let session: WorkspaceSession
     let onSelect: (ReadDestination) -> Void
@@ -38,62 +53,75 @@ struct RecentlyUpdatedHomeView: View {
     private static let listLimit = 20
 
     var body: some View {
-        List {
-            // The tree entry point lives INSIDE the list (not the toolbar,
-            // which is owned by `WorkspaceHomeView` and already carries
-            // switcher/search/recently-viewed/profile — task openQuestion).
-            // It must stay reachable even when the recency fetch fails, so
-            // the empty/error states below render inside their own section
-            // rather than as a whole-view overlay covering this link.
-            Section {
-                NavigationLink {
-                    PageTreeView(session: session, path: "/", onSelect: onSelect)
-                } label: {
-                    Label("Browse Pages", systemImage: "folder")
-                }
-            }
-            Section("Recently Updated") {
-                if pages.isEmpty {
-                    if isLoading {
-                        HStack {
-                            Spacer()
-                            ProgressView()
-                            Spacer()
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                CrowiScreenTitle(session.context.workspace.displayTitle)
+
+                // The tree entry point stays ABOVE the recency list (not in
+                // the toolbar, which is owned by `WorkspaceHomeView` and
+                // already carries switcher/search/recently-viewed/profile —
+                // task openQuestion). It must stay reachable even when the
+                // recency fetch fails, so the empty/error state below renders
+                // as its own card rather than as a whole-view overlay
+                // covering this link.
+                CrowiSectionHeader("Browse")
+                CrowiCard {
+                    NavigationLink {
+                        PageTreeView(session: session, path: "/", onSelect: onSelect)
+                    } label: {
+                        CrowiRow {
+                            CrowiRowChip(systemImage: "folder")
+                        } content: {
+                            Text("Browse Pages")
+                                .font(CrowiTypography.rowTitle)
+                                .foregroundStyle(CrowiTheme.foreground)
                         }
-                    } else {
-                        Text(loadErrorMessage ?? "No pages here yet")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                CrowiSectionHeader("Recently updated")
+                if pages.isEmpty {
+                    CrowiCard {
+                        CrowiRow(showsChevron: false) {
+                            if isLoading {
+                                ProgressView()
+                                    .frame(maxWidth: .infinity, alignment: .center)
+                            } else {
+                                Text(loadErrorMessage ?? "No pages here yet")
+                                    .font(CrowiTypography.rowMeta)
+                                    .foregroundStyle(CrowiTheme.mutedForeground)
+                            }
+                        }
                     }
                 } else {
-                    ForEach(pages, id: \.id) { page in
+                    CrowiCardRows(pages, id: \.id) { page in
                         Button {
                             onSelect(.page(path: page.path))
                         } label: {
-                            row(for: page)
+                            CrowiPageRow(
+                                path: page.path,
+                                lastUpdatedAt: page.updatedAt,
+                                updaterName: page.lastUpdateUserName,
+                                updaterImage: page.lastUpdateUserImage,
+                                loader: session.imageCache
+                            )
                         }
                         .buttonStyle(.plain)
                     }
                 }
             }
+            .padding(.bottom, CrowiMetrics.screenBottomPadding)
         }
-        // The workspace's own name as the home title — the small brand/
-        // context cue the switcher sheet otherwise keeps hidden.
-        .navigationTitle(session.context.workspace.displayTitle)
+        .background(CrowiTheme.background)
+        // The workspace's own name is the home title — rendered in the
+        // content by `CrowiScreenTitle` above, so the bar shows only the
+        // toolbar actions. An `.inline` bar with a non-empty title here would
+        // print the workspace name a second time, 60pt higher.
+        .navigationTitle("")
+        .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
         .refreshable { await load() }
-    }
-
-    private func row(for page: PageLenient) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            PageRowTitleLabel(path: page.path)
-            PageRowMetadataLabel(
-                lastUpdatedAt: page.updatedAt,
-                updaterName: page.lastUpdateUserName,
-                updaterImage: page.lastUpdateUserImage,
-                loader: session.imageCache
-            )
-        }
     }
 
     private func load() async {

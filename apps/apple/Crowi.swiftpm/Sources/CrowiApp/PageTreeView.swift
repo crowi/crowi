@@ -16,11 +16,21 @@ import SwiftUI
 ///       feature-child-segments-metadata) with graceful nil-degrade for
 ///       pre-extension servers;
 ///   (2) when the drilled-into path itself has a portal document
-///       (`hasPortal`), its body renders as a `Section` ABOVE the children
+///       (`hasPortal`), its body renders as a section ABOVE the children
 ///       list — the web portal's mental model — via the same detail-GET +
 ///       `WorkspacePageMarkdownView` wiring `PageReaderView` uses. A missing
 ///       portal body (a portal-like path with no document, a 404, any fetch
 ///       failure) silently omits the section.
+///
+/// feature-ios-visual-redesign Phase 1 restyles the children into the shared
+/// `CrowiCard` + `CrowiRow` vocabulary (the folder/page glyph becomes the
+/// design's `var(--muted)` leading chip). The rows keep showing the RAW path
+/// segment — `feature-ios-page-display-name` deliberately left tree rows
+/// unlike flat lists, since a tree row's whole job is to name the one segment
+/// you are about to descend into. The portal body deliberately does NOT go
+/// inside a card: the design renders page bodies edge-to-edge at a 20pt inset
+/// (its "Page view"), and boxing long-form markdown at a further 15pt row
+/// inset would narrow the measure for no gain.
 struct PageTreeView: View {
     let session: WorkspaceSession
     let path: String
@@ -49,14 +59,14 @@ struct PageTreeView: View {
     private var portalBody: String? { portalPage?.revision?.body }
 
     var body: some View {
-        List {
-            if let portalBody {
-                Section {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                if let portalBody {
                     // RFC-0023 Phase 4 — the portal body takes the same
                     // AST-first / raw-body-fallback branch as the reader
                     // (fetched through the same `GetPageResponseLenient`
-                    // negotiation). Fragment links are inert inside the list
-                    // section (no scroll target of its own); the "View
+                    // negotiation). Fragment links are inert here (this
+                    // section has no scroll target of its own); the "View
                     // Portal Page" affordance opens the full reader where
                     // anchors work.
                     PageBodyView(
@@ -65,28 +75,24 @@ struct PageTreeView: View {
                         rawBody: portalBody,
                         onSelectDestination: onSelect
                     )
+                    .padding(.horizontal, CrowiMetrics.screenHorizontalMargin)
+                    .padding(.top, CrowiMetrics.sectionHeaderTopPadding)
+                }
+                if !children.isEmpty {
+                    CrowiSectionHeader("Pages")
+                    CrowiCardRows(children, id: \.path) { child in
+                        row(for: child)
+                    }
+                } else if portalBody == nil {
+                    // Only when nothing at all is on screen — a rendered
+                    // portal body with zero children is a legitimate state
+                    // (body-only portal), not an empty/error one.
+                    emptyStateView
                 }
             }
-            Section {
-                ForEach(children, id: \.path) { child in
-                    row(for: child)
-                }
-            }
+            .padding(.bottom, CrowiMetrics.screenBottomPadding)
         }
-        .overlay {
-            // Only when nothing at all is on screen — a rendered portal body
-            // with zero children is a legitimate state (body-only portal),
-            // not an empty/error one.
-            if children.isEmpty, portalBody == nil {
-                if isLoading {
-                    ProgressView()
-                } else if let loadErrorMessage {
-                    ContentUnavailableView(loadErrorMessage, systemImage: "exclamationmark.triangle")
-                } else {
-                    ContentUnavailableView("No pages here yet", systemImage: "doc.text")
-                }
-            }
-        }
+        .background(CrowiTheme.background)
         .navigationTitle(path == "/" ? "Pages" : path)
         .toolbar {
             // feature-ios-phase2-write — the tree's current directory is the
@@ -117,6 +123,20 @@ struct PageTreeView: View {
     }
 
     @ViewBuilder
+    private var emptyStateView: some View {
+        Group {
+            if isLoading {
+                ProgressView()
+            } else if let loadErrorMessage {
+                ContentUnavailableView(loadErrorMessage, systemImage: "exclamationmark.triangle")
+            } else {
+                ContentUnavailableView("No pages here yet", systemImage: "doc.text")
+            }
+        }
+        .frame(maxWidth: .infinity, minHeight: 280)
+    }
+
+    @ViewBuilder
     private func row(for child: PageChildSegmentLenient) -> some View {
         // A directory-like segment (a portal doc, or descendants exist)
         // drills further; a pure leaf page opens directly. A segment that
@@ -131,6 +151,7 @@ struct PageTreeView: View {
             } label: {
                 label(for: child, systemImage: child.hasPortal ? "folder.fill" : "folder")
             }
+            .buttonStyle(.plain)
         } else if child.isPage {
             Button {
                 onSelect(.page(path: String(child.path.dropLast())))
@@ -139,14 +160,24 @@ struct PageTreeView: View {
             }
             .buttonStyle(.plain)
         } else {
-            label(for: child, systemImage: "questionmark.folder")
+            // Neither a page nor a directory — nothing to open, so no
+            // chevron either: the affordance has to mean something.
+            label(for: child, systemImage: "questionmark.folder", showsChevron: false)
         }
     }
 
-    private func label(for child: PageChildSegmentLenient, systemImage: String) -> some View {
-        Label {
-            VStack(alignment: .leading, spacing: 2) {
+    private func label(for child: PageChildSegmentLenient, systemImage: String, showsChevron: Bool = true) -> some View {
+        CrowiRow(showsChevron: showsChevron) {
+            CrowiRowChip(systemImage: systemImage)
+        } content: {
+            VStack(alignment: .leading, spacing: CrowiMetrics.rowLineSpacing) {
+                // The RAW segment, not a display name — see this view's doc
+                // comment.
                 Text(child.segment)
+                    .font(CrowiTypography.rowTitle)
+                    .foregroundStyle(CrowiTheme.foreground)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
                 // (1) — renders nothing at all when the server predates
                 // feature-child-segments-metadata (both fields nil), so the
                 // row falls back to exactly its previous look.
@@ -157,8 +188,6 @@ struct PageTreeView: View {
                     loader: session.imageCache
                 )
             }
-        } icon: {
-            Image(systemName: systemImage)
         }
     }
 

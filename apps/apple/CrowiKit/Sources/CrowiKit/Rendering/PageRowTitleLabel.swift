@@ -64,7 +64,7 @@ public struct PageRowTitleLabel: View {
         // for standalone (test) callers, so reading both here would parse it
         // twice (the `PageRowMetadataLabel` precedent).
         let parent = parentText
-        VStack(alignment: .leading, spacing: 1) {
+        VStack(alignment: .leading, spacing: CrowiMetrics.rowLineSpacing) {
             // One line, truncated — the web list's title span is `truncate`
             // (`page-list-item.tsx:113-121`), i.e. a single ellipsised line.
             // SwiftUI would otherwise wrap a long basename across three or
@@ -74,16 +74,20 @@ public struct PageRowTitleLabel: View {
             // VoiceOver reads it untruncated (the counterpart of the web
             // span's `title={page.path}` tooltip).
             Text(titleText)
-                .font(.headline)
+                .font(CrowiTypography.rowTitle)
+                .foregroundStyle(CrowiTheme.foreground)
                 .lineLimit(1)
                 .truncationMode(.tail)
             if Self.showsParent(parent: parent) {
-                // Muted, one line, truncated — the web list's second-line
-                // treatment, minus its monospace face (nothing else in the
-                // app renders paths monospaced).
+                // Muted, MONOSPACE, one line, truncated. The monospace face
+                // is the design's (`font-family:ui-monospace…` on the row's
+                // path line) and now matches the web list's second line too
+                // — this label's earlier comment said nothing else in the app
+                // rendered paths monospaced, which the visual redesign
+                // changed: a path is machine text and reads as such.
                 Text(parent)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(CrowiTypography.rowPath)
+                    .foregroundStyle(CrowiTheme.mutedForeground)
                     .lineLimit(1)
                     .truncationMode(.tail)
             }

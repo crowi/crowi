@@ -16,17 +16,30 @@ import SwiftUI
 /// The avatar goes through `WorkspaceAvatarView` + the SAME
 /// `WorkspaceImageFetching` conformer (the per-workspace disk cache) every
 /// other avatar uses — never a new image-fetch path.
+///
+/// feature-ios-visual-redesign Phase 1: the label keeps its own inline 14pt
+/// avatar by default, but `CrowiPageRow` — which already shows the design's
+/// 34pt leading avatar for the same updater — passes `showsAvatar: false` so
+/// a row never prints the same face twice.
 public struct PageRowMetadataLabel: View {
     private let lastUpdatedAt: String?
     private let updaterName: String?
     private let updaterImage: String?
     private let loader: any WorkspaceImageFetching
+    private let showsAvatar: Bool
 
-    public init(lastUpdatedAt: String?, updaterName: String?, updaterImage: String?, loader: any WorkspaceImageFetching) {
+    public init(
+        lastUpdatedAt: String?,
+        updaterName: String?,
+        updaterImage: String?,
+        loader: any WorkspaceImageFetching,
+        showsAvatar: Bool = true
+    ) {
         self.lastUpdatedAt = lastUpdatedAt
         self.updaterName = updaterName
         self.updaterImage = updaterImage
         self.loader = loader
+        self.showsAvatar = showsAvatar
     }
 
     /// Whether an updater (name and/or image) is known — gates the avatar,
@@ -59,15 +72,15 @@ public struct PageRowMetadataLabel: View {
         let relativeTime = relativeTimeText
         if Self.hasMetadata(hasUpdater: hasUpdater, relativeTime: relativeTime) {
             HStack(spacing: 5) {
-                if hasUpdater {
-                    WorkspaceAvatarView(imageURLString: updaterImage, loader: loader, size: 14)
+                if showsAvatar, hasUpdater {
+                    WorkspaceAvatarView(imageURLString: updaterImage, loader: loader, size: 14, initialsSource: updaterName)
                 }
                 if let text = Self.metadataText(updaterName: updaterName, relativeTime: relativeTime) {
                     Text(text)
                 }
             }
-            .font(.caption)
-            .foregroundStyle(.secondary)
+            .font(CrowiTypography.rowMeta)
+            .foregroundStyle(CrowiTheme.mutedForeground)
             .lineLimit(1)
         }
     }
