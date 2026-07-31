@@ -113,6 +113,29 @@ RUN pnpm deploy --legacy --filter=${RUNNER_APP} --prod /deploy
 # -----------------------------------------------------------------------------
 FROM base AS runtime
 
+# System fonts for server-side diagram rasterization. The Mermaid renderer
+# plugin rasterizes its sanitized SVG to a PNG (sharp → librsvg) for the
+# `crowiDiagram` sidecar native clients render, and librsvg resolves the
+# SVG's font-family stack against the SYSTEM fonts — node:*-bookworm-slim
+# ships NONE, and the failure is silent rather than ugly: measured in this
+# exact image, Latin labels rasterize to ZERO ink pixels (the text simply
+# is not drawn) and CJK labels to tofu. fonts-dejavu-core (~2.5MB) is the
+# Latin fallback for Mermaid's "trebuchet ms, verdana, arial, sans-serif"
+# stack; fonts-noto-cjk (~89MB) covers Japanese/Chinese/Korean labels —
+# the base package only, NOT fonts-noto-cjk-extra, which is several times
+# larger and adds nothing for diagram labels. `fontconfig` itself is what
+# provides /etc/fonts/fonts.conf: without it every rasterization logs
+# "Fontconfig error: Cannot load default config file" and falls back to
+# an implementation-defined directory scan that happens to work today.
+# With it, `fc-match sans-serif` → DejaVu Sans and `sans-serif:lang=ja` →
+# Noto Sans CJK JP, deterministically.
+#
+# Runtime stage only — nothing rasterizes at build time. The web's SVG
+# output is unaffected either way: browsers use the reader's own fonts.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends fontconfig fonts-dejavu-core fonts-noto-cjk \
+  && rm -rf /var/lib/apt/lists/*
+
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
