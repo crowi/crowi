@@ -33,15 +33,23 @@ import SwiftUI
 /// grouped chrome. It is also the one screen that owns its own title area —
 /// the navigation bar here carries actions only (there is no back button at
 /// the stack root), so the bar's title is suppressed and `CrowiScreenTitle`
-/// renders the workspace name at the design's weight rather than printing it
-/// twice.
+/// renders it at the design's weight rather than printing it twice.
 ///
-/// The design's subtitle line ("Almoha Wiki · 128 pages") and its "Your
-/// drafts" card are NOT built: the app has no page-count total and no drafts
-/// concept, and inventing either would mean inventing the data behind it.
+/// ## feature-ios-visual-redesign Phase 2
+///
+/// The title is the design's "Home" (this screen is the Home TAB now), and
+/// the workspace name moves to the subtitle line the design puts it on —
+/// where it doubles as the app's ONE workspace-switcher affordance
+/// (`CrowiWorkspaceSwitcherButton`), replacing the "Workspaces" toolbar
+/// button. The page count the design pairs with it ("· 128 pages") is still
+/// not rendered: no endpoint reports a workspace-wide total. The "Your
+/// drafts" card is likewise not built — the app has no drafts concept, and
+/// inventing one would mean inventing the data behind it.
 struct RecentlyUpdatedHomeView: View {
     let session: WorkspaceSession
     let onSelect: (ReadDestination) -> Void
+    /// Presents `RootScene`'s workspace-switcher sheet.
+    let onShowSwitcher: () -> Void
 
     @State private var pages: [PageLenient] = []
     @State private var isLoading = false
@@ -55,7 +63,12 @@ struct RecentlyUpdatedHomeView: View {
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
-                CrowiScreenTitle(session.context.workspace.displayTitle)
+                CrowiScreenTitle("Home") {
+                    CrowiWorkspaceSwitcherButton(
+                        workspaceName: session.context.workspace.displayTitle,
+                        action: onShowSwitcher
+                    )
+                }
 
                 // The tree entry point stays ABOVE the recency list (not in
                 // the toolbar, which is owned by `WorkspaceHomeView` and
@@ -114,10 +127,9 @@ struct RecentlyUpdatedHomeView: View {
             .padding(.bottom, CrowiMetrics.screenBottomPadding)
         }
         .background(CrowiTheme.background)
-        // The workspace's own name is the home title — rendered in the
-        // content by `CrowiScreenTitle` above, so the bar shows only the
-        // toolbar actions. An `.inline` bar with a non-empty title here would
-        // print the workspace name a second time, 60pt higher.
+        // The title block is rendered in the CONTENT by `CrowiScreenTitle`
+        // above, so the bar shows only the toolbar actions. A non-empty bar
+        // title here would print the same words a second time, 60pt higher.
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }

@@ -3,13 +3,13 @@ import SwiftUI
 
 /// RFC-0016 §9 read-surface adaptive shell for ONE active workspace: a
 /// `NavigationSplitView` (recency-first home sidebar + reader/search/history/
-/// profile detail) on iPad/regular width, collapsing to a `NavigationStack`
-/// (home first, push everything else) on iPhone/compact width. This is a
-/// DIFFERENT navigation level from `RootScene`'s own outer workspace-switcher
-/// split (§3 — which workspace); `RootScene` still owns ALL size-class
-/// branching for THAT level, this view owns it for the read surface within
-/// one already-active workspace, per its own doc comment note that a later
-/// phase would populate this "currently-empty" slot.
+/// profile detail) on iPad/regular width, collapsing to the design's tab bar
+/// over four independent stacks (`WorkspaceTabsView`) on iPhone/compact
+/// width. This is a DIFFERENT navigation level from `RootScene`'s own outer
+/// workspace-switcher split (§3 — which workspace); `RootScene` still owns
+/// ALL size-class branching for THAT level, this view owns it for the read
+/// surface within one already-active workspace, per its own doc comment note
+/// that a later phase would populate this "currently-empty" slot.
 ///
 /// Also where the §6.3 confidential banner is applied — ONCE, at this
 /// workspace's chrome root — and where `AppInfoCache` is refreshed on
@@ -19,12 +19,18 @@ struct WorkspaceHomeView: View {
     /// Opens the modal workspace switcher (`RootScene` owns the sheet) —
     /// the home cannot be PUSHED from a switcher stack, so the switcher
     /// comes to it instead (see `RootScene`'s doc comment for why).
+    ///
+    /// feature-ios-visual-redesign Phase 2: the affordance that calls this is
+    /// no longer a toolbar button but the Home screen's own workspace
+    /// subtitle (`CrowiWorkspaceSwitcherButton`), which is the place the
+    /// design already shows the workspace name — one entry point, in both
+    /// size classes, since `RecentlyUpdatedHomeView` is the compact tab root
+    /// AND the regular-width sidebar.
     let onShowSwitcher: () -> Void
 
     @StateObject private var holder: WorkspaceSessionHolder
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.scenePhase) private var scenePhase
-    @State private var compactPath = NavigationPath()
     @State private var selectedDestination: ReadDestination?
 
     init(workspace: Workspace, context: WorkspaceContext, onShowSwitcher: @escaping () -> Void) {
@@ -71,22 +77,25 @@ struct WorkspaceHomeView: View {
     // feature-ios-design-language (3): the root content of BOTH size-class
     // shells is the recency-first home (`RecentlyUpdatedHomeView`) — the page
     // tree is one entry point inside it, pushed the same way `PageTreeView`
-    // already pushes its own sub-trees. The stack/split shell, toolbar, and
-    // switcher-sheet wiring are unchanged.
+    // already pushes its own sub-trees.
+    //
+    // feature-ios-visual-redesign Phase 2: compact width is now the design's
+    // tab bar (`WorkspaceTabsView` — four stacks, one per tab). Regular width
+    // keeps the split view unchanged: an iPad has room for a persistent
+    // sidebar, which IS its "tab bar", and a phone's floating pill on top of
+    // it would be two navigation models at once.
     @ViewBuilder
     private func content(session: WorkspaceSession) -> some View {
         if horizontalSizeClass == .compact {
-            NavigationStack(path: $compactPath) {
-                RecentlyUpdatedHomeView(session: session, onSelect: { compactPath.append($0) })
-                    .toolbar { toolbarItems(session: session, onSelect: { compactPath.append($0) }) }
-                    .navigationDestination(for: ReadDestination.self) { destination in
-                        destinationView(destination, session: session, onSelect: { compactPath.append($0) })
-                    }
-            }
+            WorkspaceTabsView(session: session, onShowSwitcher: onShowSwitcher)
         } else {
             NavigationSplitView {
-                RecentlyUpdatedHomeView(session: session, onSelect: { selectedDestination = $0 })
-                    .toolbar { toolbarItems(session: session, onSelect: { selectedDestination = $0 }) }
+                RecentlyUpdatedHomeView(
+                    session: session,
+                    onSelect: { selectedDestination = $0 },
+                    onShowSwitcher: onShowSwitcher
+                )
+                .toolbar { toolbarItems(session: session, onSelect: { selectedDestination = $0 }) }
             } detail: {
                 // NOTE: deliberately not `if let selectedDestination` — that
                 // shorthand shadows the `@State` property name with a local
@@ -94,7 +103,7 @@ struct WorkspaceHomeView: View {
                 // `onSelect` closure below assign to the (immutable) shadow
                 // instead of the real `@State` var.
                 if let destination = selectedDestination {
-                    destinationView(destination, session: session, onSelect: { selectedDestination = $0 })
+                    ReadDestinationView(destination: destination, session: session, onSelect: { selectedDestination = $0 })
                 } else {
                     ContentUnavailableView("Select a page", systemImage: "doc.text")
                 }
@@ -102,43 +111,13 @@ struct WorkspaceHomeView: View {
         }
     }
 
-    @ViewBuilder
-    private func destinationView(
-        _ destination: ReadDestination,
-        session: WorkspaceSession,
-        onSelect: @escaping (ReadDestination) -> Void
-    ) -> some View {
-        switch destination {
-        case .page(let path):
-            PageReaderView(session: session, path: path, onSelectDestination: onSelect)
-        case .search:
-            SearchView(session: session, onSelectDestination: onSelect)
-        case .revisionHistory(let pageId, let pagePath):
-            RevisionHistoryView(session: session, pageId: pageId, pagePath: pagePath)
-        case .profile(let username):
-            ProfileView(session: session, username: username)
-        case .recentlyViewed:
-            RecentlyViewedView(session: session, onSelectDestination: onSelect)
-        case .createPage(let originPath):
-            PageCreateView(session: session, originPath: originPath, onSelectDestination: onSelect)
-        case .notifications:
-            NotificationsView(session: session, onSelectDestination: onSelect)
-        }
-    }
-
+    /// Regular width only — the sidebar's actions. (The compact shell's
+    /// equivalents are the tab bar's slots; its Home toolbar keeps only
+    /// "Recently Viewed".) The former leading "Workspaces" button is gone
+    /// from both: the switcher is the home's workspace subtitle now, and a
+    /// second entry point would just be two ways to open the same sheet.
     @ToolbarContentBuilder
     private func toolbarItems(session: WorkspaceSession, onSelect: @escaping (ReadDestination) -> Void) -> some ToolbarContent {
-        // Leading, before the read actions: the way OUT of this workspace.
-        // `.navigation` places it top-leading on iOS and in the leading
-        // toolbar area on macOS; the tree root has no back button to
-        // collide with (this toolbar is attached to the stack/sidebar root).
-        ToolbarItem(placement: .navigation) {
-            Button {
-                onShowSwitcher()
-            } label: {
-                Label("Workspaces", systemImage: "square.grid.2x2")
-            }
-        }
         ToolbarItemGroup(placement: .primaryAction) {
             // §5.2 capability gate: `SearchCapabilityToolbarButton` (CrowiKit)
             // IS the search toolbar entry point, not a re-derived
