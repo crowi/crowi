@@ -36,6 +36,13 @@ import SwiftUI
 ///     the paragraph to "image alone", which routes it through the
 ///     width-capped block image path (where the attributes actually apply)
 ///     instead of the inline one;
+///   - `NestedListDepthClampPreprocessor.clamp(_:)` — FIRST in the chain:
+///     re-indents list items nested beyond depth 4 to depth-4 siblings,
+///     because MarkdownUI's nested-list layout explodes ~×15 per level
+///     (measured: depth 5 → 15s, 6+ → a permanent main-thread wedge) and
+///     this raw-body path runs on every cache re-open (`CachedPage` pins
+///     `renderedAst: nil`) and as the fallback. See the type's doc comment;
+///     the AST path needs no clamp (it renders lists flat);
 ///   - `WikiLinkMentionPreprocessor.preprocess(_:)` — rewrites raw
 ///     `[[wikilinks]]` / `@mentions` into ordinary CommonMark links against
 ///     private pseudo-schemes BEFORE the renderer ever sees the body (§6 —
@@ -145,7 +152,12 @@ public struct WorkspacePageMarkdownView: View {
     }
 
     private var markdownContent: some View {
-        Markdown(WikiLinkMentionPreprocessor.preprocess(ImageAttributeBlockPreprocessor.stripAndCarry(rawBody)), imageBaseURL: imageBaseURL)
+        Markdown(
+            WikiLinkMentionPreprocessor.preprocess(
+                ImageAttributeBlockPreprocessor.stripAndCarry(
+                    NestedListDepthClampPreprocessor.clamp(rawBody))),
+            imageBaseURL: imageBaseURL
+        )
             // Crowi renders a single newline as a line break — that is a CORE
             // pipeline default, not an opt-in plugin: RFC-0002 Phase 5 promoted
             // `remark-breaks` out of `@crowi/plugin-renderer-crowi-legacy` into
