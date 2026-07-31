@@ -1,5 +1,11 @@
 import SwiftUI
 
+#if canImport(UIKit)
+import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
+
 /// feature-ios-visual-redesign Phase 1 — the SPACING half of the design
 /// language, the counterpart to `CrowiTheme`'s color half.
 ///
@@ -162,9 +168,12 @@ public enum CrowiMetrics {
 /// height of each step. The comment on each line records the design's literal
 /// size so a future reader can check the mapping rather than guess at it.
 ///
-/// Deliberately NOT applied to `RenderedAstView` and the markdown body: that
-/// type scale was tuned in RFC-0023 against real wiki content and is not part
-/// of this design pass. Only the chrome AROUND a rendered body uses these.
+/// The entries in the first section are the CHROME's type scale — the header,
+/// rows, sheets and pills around a page. The rendered page BODY has its own
+/// scale at the bottom of this enum (`body*` + `CrowiBodyMetrics`), because a
+/// wiki body is a different typographic problem from a list row: it is running
+/// text, mostly Japanese, and its readability is decided by leading and by the
+/// gaps BETWEEN blocks rather than by font sizes.
 public enum CrowiTypography {
     /// Design: 33px/800, `letter-spacing:-.02em`. iOS's `.largeTitle` is 34pt
     /// at the default size — the same step, and it scales.
@@ -221,4 +230,169 @@ public enum CrowiTypography {
     /// Design: `letter-spacing:.04em` at 13px ≈ 0.52pt — what makes the
     /// uppercase section header read as a label rather than as shouting.
     public static let sectionHeaderTracking: CGFloat = 0.52
+
+    // MARK: - Rendered page body
+
+    /// The type size the OS currently resolves for `.body` — 17pt on iOS at
+    /// the default Dynamic Type setting, 53pt at the largest accessibility
+    /// one, 13pt on macOS (where `swift test` and the preview renders run).
+    ///
+    /// Everything in `CrowiBodyMetrics` is a RATIO of this rather than a fixed
+    /// point value, which is what keeps the body's vertical rhythm intact at
+    /// every text size: a leading of "8.5pt" that reads well against 17pt type
+    /// is cramped against 30pt type and absurd against 13pt type, whereas
+    /// "half the type size" is right at all three. Reading the resolved font
+    /// (rather than declaring an `@ScaledMetric` per view) also means the
+    /// pure-value metrics can be computed — and asserted — outside a view.
+    ///
+    /// Caveat: this follows the SYSTEM text size, not a `dynamicTypeSize`
+    /// override applied to a subtree (which nothing in the app does; it exists
+    /// for previews).
+    public static var resolvedBodyPointSize: CGFloat {
+        #if canImport(UIKit)
+        return UIFont.preferredFont(forTextStyle: .body).pointSize
+        #elseif canImport(AppKit)
+        return NSFont.preferredFont(forTextStyle: .body).pointSize
+        #else
+        return 17
+        #endif
+    }
+
+    /// Extra leading between the lines of one body paragraph, as a fraction of
+    /// the type size — SwiftUI's `lineSpacing`, which is ON TOP of the font's
+    /// own line height (≈1.19× the type size for SF).
+    ///
+    /// 0.55 puts a body line at ≈1.74× the type size (17 + 20.3 leading-inclusive
+    /// line height + 9.35 = 29.65pt at the default size). That is deliberately
+    /// looser than iOS's default, and the reason is the content: Crowi pages are
+    /// predominantly Japanese. CJK glyphs are full-width boxes of uniform height
+    /// with no ascenders or descenders, so none of the ragged top-and-bottom
+    /// whitespace that lets Latin text breathe at a given leading exists — at
+    /// SwiftUI's default (which is what this renderer shipped with) the lines
+    /// fuse into a grey slab. 1.7–2.0 is the range Japanese typography uses for
+    /// running text; Latin passages inside the same page read airy rather than
+    /// wrong inside it.
+    ///
+    /// Set from what the page looks like, not from the arithmetic: rendered at
+    /// 1.6 first, and the reader still called it tight.
+    public static let bodyLineSpacingRatio: CGFloat = 0.55
+
+    /// The gap between two BLOCKS (paragraph → paragraph, paragraph → list,
+    /// list → table …).
+    ///
+    /// The rule this number exists to satisfy is comparative, not absolute: a
+    /// block break must read as a bigger break than a line break, or a page
+    /// becomes one undifferentiated slab. At 1.3 the block gap is ≈2.4× the
+    /// line gap. The renderer previously used a flat 12pt against SwiftUI's
+    /// default (≈0) leading — the two gaps were then close enough together that
+    /// consecutive paragraphs ran into each other.
+    public static let bodyBlockSpacingRatio: CGFloat = 1.3
+
+    /// The middle tier of the rhythm: things that are MORE related to each
+    /// other than two paragraphs are, and LESS related than two lines of one
+    /// sentence — sibling list items, the text/image halves of a split
+    /// paragraph, table rows. All three answer the same question, so they share
+    /// one number (0.8 ≈ 1.45× the line gap, ≈0.6× the block gap) instead of
+    /// three that would drift apart.
+    ///
+    /// The list's previous flat 6pt was tuned against the old tight leading and
+    /// ended up BELOW a single line gap, which is why bullets read as tighter
+    /// than the paragraphs around them.
+    public static let bodyRelatedItemSpacingRatio: CGFloat = 0.8
+
+    /// A table's column gutter — horizontal, so it answers to legibility of
+    /// adjacent cells rather than to the vertical rhythm above.
+    public static let bodyTableColumnSpacingRatio: CGFloat = 0.95
+
+    /// The gutter between a blockquote's rule and its content.
+    public static let bodyBlockquoteGutterRatio: CGFloat = 0.6
+
+    /// Leading inside a fenced code block. Code is monospaced Latin with real
+    /// ascenders and descenders and no CJK, so the argument for generous
+    /// leading above does not apply — and at the body's leading a listing
+    /// stops reading as one unit.
+    public static let bodyCodeBlockLineSpacingRatio: CGFloat = 0.16
+
+    /// The air ABOVE a heading, on top of the block gap. Sections need a
+    /// bigger break before them than paragraphs do, and the padding goes only
+    /// on top so a heading sits with the text it introduces rather than
+    /// floating between two blocks.
+    public static let bodyMajorHeadingTopPaddingRatio: CGFloat = 0.7
+    public static let bodyMinorHeadingTopPaddingRatio: CGFloat = 0.35
+
+    /// An inline `code` run's type size relative to the text around it.
+    /// Monospaced Latin at the same nominal size as CJK reads a step too big
+    /// beside it (wider advances, taller x-height), so it is set slightly
+    /// smaller — enough to sit level with the surrounding line, not enough to
+    /// look like a footnote.
+    public static let bodyInlineCodeSizeRatio: CGFloat = 0.92
+}
+
+/// The rendered page BODY's vertical rhythm, resolved for one text size.
+///
+/// One input, every value derived from it: the relationships that decide
+/// whether a page is readable — a block gap out-reading a line gap, a list
+/// item gap sitting between the two — are then properties of the TYPE, true at
+/// every Dynamic Type size, instead of a set of hand-picked points that happen
+/// to work at 17pt. `CrowiBodyTypographyTests` asserts those relationships
+/// across the size range iOS actually resolves.
+public struct CrowiBodyMetrics: Equatable, Sendable {
+    /// The resolved `.body` type size these metrics are derived from.
+    public let bodyPointSize: CGFloat
+
+    public init(bodyPointSize: CGFloat = CrowiTypography.resolvedBodyPointSize) {
+        self.bodyPointSize = bodyPointSize
+    }
+
+    /// Extra leading between the lines of one paragraph (SwiftUI `lineSpacing`).
+    public var lineSpacing: CGFloat { bodyPointSize * CrowiTypography.bodyLineSpacingRatio }
+    /// The gap between two blocks.
+    public var blockSpacing: CGFloat { bodyPointSize * CrowiTypography.bodyBlockSpacingRatio }
+    /// The gap between two sibling list items.
+    public var listItemSpacing: CGFloat { relatedItemSpacing }
+    /// The gap between a paragraph's text run and a block-routed image.
+    public var paragraphSegmentSpacing: CGFloat { relatedItemSpacing }
+    /// The gap between two table rows.
+    public var tableRowSpacing: CGFloat { relatedItemSpacing }
+    /// A table's column gutter.
+    public var tableColumnSpacing: CGFloat { bodyPointSize * CrowiTypography.bodyTableColumnSpacingRatio }
+    /// The gutter between a blockquote's rule and its content.
+    public var blockquoteGutter: CGFloat { bodyPointSize * CrowiTypography.bodyBlockquoteGutterRatio }
+    /// Leading inside a fenced code block.
+    public var codeBlockLineSpacing: CGFloat { bodyPointSize * CrowiTypography.bodyCodeBlockLineSpacingRatio }
+    /// An inline `code` run's type size.
+    public var inlineCodeSize: CGFloat { bodyPointSize * CrowiTypography.bodyInlineCodeSizeRatio }
+
+    /// The shared middle tier `listItemSpacing` / `paragraphSegmentSpacing` /
+    /// `tableRowSpacing` are all instances of.
+    private var relatedItemSpacing: CGFloat { bodyPointSize * CrowiTypography.bodyRelatedItemSpacingRatio }
+
+    /// The air above a heading, on top of `blockSpacing`. `h1`/`h2` open a
+    /// section; `h3` and below subdivide one.
+    public func headingTopPadding(depth: Int) -> CGFloat {
+        let ratio = depth <= 2
+            ? CrowiTypography.bodyMajorHeadingTopPaddingRatio
+            : CrowiTypography.bodyMinorHeadingTopPaddingRatio
+        return bodyPointSize * ratio
+    }
+
+    /// How far the OS has stretched body text relative to the default size —
+    /// the multiplier the list renderer applies to the flattener's
+    /// default-size row gaps (the flattener is pure and emits points, not
+    /// ratios, because its spacing rules are asserted as exact values).
+    public var dynamicTypeScale: CGFloat {
+        bodyPointSize / CrowiBodyMetrics.defaultBodyPointSize
+    }
+
+    /// `.body` at the DEFAULT Dynamic Type setting on the platform — the size
+    /// the flattener's emitted point values are stated in.
+    static var defaultBodyPointSize: CGFloat {
+        #if canImport(UIKit)
+        return 17
+        #elseif canImport(AppKit)
+        return 13
+        #else
+        return 17
+        #endif
+    }
 }

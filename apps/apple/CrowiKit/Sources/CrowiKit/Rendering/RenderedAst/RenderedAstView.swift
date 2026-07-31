@@ -68,6 +68,11 @@ public struct RenderedAstView: View {
 
     public var body: some View {
         RenderedAstBlockSequence(nodes: document.children, context: renderContext)
+            // Set ONCE, at the root: `lineSpacing` is an environment value, so
+            // every `Text` in the body — paragraphs, headings, list rows, table
+            // cells, blockquotes — inherits the same leading, and the ONE place
+            // that opts out (`RenderedAstCodeBlockView`) says so explicitly.
+            .lineSpacing(CrowiBodyMetrics().lineSpacing)
             .environment(\.openURL, OpenURLAction { url in handleLink(url) })
             // Same viewer presentation split as `WorkspacePageMarkdownView`:
             // CrowiKit also builds for macOS (where `swift test` runs).
@@ -158,7 +163,7 @@ struct RenderedAstBlockSequence: View {
     let context: RenderedAstRenderContext
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: CrowiBodyMetrics().blockSpacing) {
             ForEach(Array(nodes.enumerated()), id: \.offset) { _, node in
                 RenderedAstBlockView(node: node, context: context)
             }
@@ -170,6 +175,8 @@ struct RenderedAstBlockView: View {
     let node: RenderedAstNode
     let context: RenderedAstRenderContext
 
+    private var metrics: CrowiBodyMetrics { CrowiBodyMetrics() }
+
     var body: some View {
         switch node.kind {
         case .paragraph:
@@ -177,7 +184,7 @@ struct RenderedAstBlockView: View {
         case .heading(let depth):
             headingView(depth: depth)
         case .blockquote:
-            HStack(alignment: .top, spacing: 10) {
+            HStack(alignment: .top, spacing: metrics.blockquoteGutter) {
                 RoundedRectangle(cornerRadius: 1.5)
                     .fill(Color.secondary.opacity(0.4))
                     .frame(width: 3)
@@ -234,9 +241,16 @@ struct RenderedAstBlockView: View {
 
     @ViewBuilder
     private func headingView(depth: Int) -> some View {
-        let text = RenderedAstInlineTextView(nodes: node.children, context: context)
-            .font(Self.headingFont(depth: depth))
-            .padding(.top, depth <= 2 ? 8 : 4)
+        let text = RenderedAstInlineTextView(
+            nodes: node.children,
+            context: context,
+            // Inline code in a heading keeps the HEADING's size and drops the
+            // chip fill: at 22–28pt the body's fill is a slab, and the heading
+            // weight plus monospace is already all the contrast it needs.
+            codeStyle: .heading
+        )
+        .font(Self.headingFont(depth: depth))
+        .padding(.top, metrics.headingTopPadding(depth: depth))
         if let anchor = node.data?.hPropertyString("id") {
             text.id(RenderedAstView.anchorID(anchor))
         } else {
@@ -304,7 +318,7 @@ struct RenderedAstParagraphView: View {
 
     var body: some View {
         let segments = Self.segments(of: children, definitions: context.definitions)
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: CrowiBodyMetrics().paragraphSegmentSpacing) {
             ForEach(Array(segments.enumerated()), id: \.offset) { _, segment in
                 switch segment {
                 case .inline(let nodes):
@@ -320,13 +334,17 @@ struct RenderedAstParagraphView: View {
 struct RenderedAstInlineTextView: View {
     let nodes: [RenderedAstNode]
     let context: RenderedAstRenderContext
+    /// How `inlineCode` runs are drawn here — body text and headings want
+    /// different answers (see `RenderedAstInlineCodeStyle`).
+    var codeStyle: RenderedAstInlineCodeStyle = .body
 
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         let result = RenderedAstInlineRenderer(
             definitions: context.definitions,
-            mathIsDark: colorScheme == .dark
+            mathIsDark: colorScheme == .dark,
+            codeStyle: codeStyle
         ).render(nodes)
         if let label = result.accessibilityLabel {
             Self.composedText(result)
@@ -454,10 +472,15 @@ struct RenderedAstListView: View {
 
     var body: some View {
         let rows = RenderedAstListFlattener.flatten(ordered: ordered, start: start, items: items)
+        let metrics = CrowiBodyMetrics()
         VStack(alignment: .leading, spacing: 0) {
             ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
                 rowView(row)
-                    .padding(.top, CGFloat(row.topSpacing))
+                    // The flattener is pure and emits its gaps in points at the
+                    // DEFAULT text size (its rules are asserted as exact
+                    // values); Dynamic Type is applied here, so a list keeps
+                    // the same rhythm as the paragraphs around it at every size.
+                    .padding(.top, CGFloat(row.topSpacing) * metrics.dynamicTypeScale)
                     .padding(.leading, min(CGFloat(row.depth) * Self.indentPerDepth, Self.maxIndent))
             }
         }
@@ -509,12 +532,20 @@ struct RenderedAstCodeBlockView: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
+        // Indicators ON (and flashed on appear) — a listing whose longest line
+        // runs past the screen edge otherwise looks TRUNCATED rather than
+        // scrollable, with nothing on screen saying there is more to the right.
+        ScrollView(.horizontal) {
             Text(attributed)
                 .font(.system(.callout, design: .monospaced))
+                // Code opts OUT of the body's Japanese leading: monospaced
+                // Latin has real ascenders and descenders, and at 0.5em a
+                // listing stops reading as one block.
+                .lineSpacing(CrowiBodyMetrics().codeBlockLineSpacing)
                 .textSelection(.enabled)
                 .padding(10)
         }
+        .scrollIndicatorsFlash(onAppear: true)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.05)))
     }
@@ -543,10 +574,22 @@ struct RenderedAstTableView: View {
         rows.filter { if case .tableRow = $0.kind { return false } else { return true } }
     }
 
+    private var metrics: CrowiBodyMetrics { CrowiBodyMetrics() }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                Grid(alignment: .topLeading, horizontalSpacing: 16, verticalSpacing: 6) {
+        VStack(alignment: .leading, spacing: metrics.paragraphSegmentSpacing) {
+            // A table wider than the phone was already scrollable, but with the
+            // indicators suppressed it just looked CUT OFF at the second
+            // column. Showing them — and flashing them as the table scrolls
+            // into view — is what says "there is more to the right".
+            ScrollView(.horizontal) {
+                Grid(
+                    alignment: .topLeading,
+                    horizontalSpacing: metrics.tableColumnSpacing,
+                    // Has to clear the line gap inside a cell, or a wrapped
+                    // cell reads as two rows.
+                    verticalSpacing: metrics.tableRowSpacing
+                ) {
                     ForEach(Array(tableRows.enumerated()), id: \.offset) { rowIndex, row in
                         GridRow {
                             ForEach(Array(row.children.enumerated()), id: \.offset) { columnIndex, cell in
@@ -559,6 +602,7 @@ struct RenderedAstTableView: View {
                     }
                 }
             }
+            .scrollIndicatorsFlash(onAppear: true)
             // Degraded non-row children stay visible (never silently dropped).
             ForEach(Array(degradedChildren.enumerated()), id: \.offset) { _, child in
                 RenderedAstBlockView(node: child, context: context)

@@ -31,17 +31,32 @@ import Foundation
 ///     blockquotes, …) stay in that item's rows at the item's indentation;
 ///     chunks separated by a nested list become continuation rows that
 ///     reserve — but hide — the marker column so content stays aligned;
-///   - the recursive layout ignored `spread` and used two fixed spacings
-///     (6pt between sibling items, 12pt between blocks inside one item);
-///     `Row.topSpacing` reproduces those exact gaps;
+///   - the recursive layout ignored `spread` and used two spacings — one
+///     between sibling items, one between the blocks inside one item;
+///     `Row.topSpacing` still emits exactly those two gaps, now taken from
+///     `CrowiBodyMetrics` so a list is spaced by the same rules as the
+///     paragraphs around it;
 ///   - degraded non-`listItem` children of a list render marker-less at the
 ///     list's own level — visible, never dropped.
 public enum RenderedAstListFlattener {
-    /// The list VStack's item spacing in the recursive layout.
-    public static let interItemSpacing: Double = 6
+    /// The gap between two SIBLING items — `CrowiBodyMetrics.listItemSpacing`,
+    /// which sits between the paragraph's line gap and its block gap. The flat
+    /// 6pt this replaces was tuned against the renderer's old (SwiftUI
+    /// default, i.e. ~0) leading and ended up TIGHTER than a single line gap,
+    /// which is why list items read as more cramped than the paragraphs
+    /// around them.
+    public static var interItemSpacing: Double { Double(defaultMetrics.listItemSpacing) }
     /// `RenderedAstBlockSequence`'s block spacing — the gap between blocks
     /// that belonged to the same item (and to its nested sub-list).
-    public static let intraItemSpacing: Double = 12
+    public static var intraItemSpacing: Double { Double(defaultMetrics.blockSpacing) }
+
+    /// Emitted in points at the DEFAULT text size; `RenderedAstListView`
+    /// applies Dynamic Type (`CrowiBodyMetrics.dynamicTypeScale`). Keeping the
+    /// flattener on fixed numbers is what lets its spacing rules be asserted
+    /// as exact values without a view host.
+    private static var defaultMetrics: CrowiBodyMetrics {
+        CrowiBodyMetrics(bodyPointSize: CrowiBodyMetrics.defaultBodyPointSize)
+    }
 
     public enum Marker: Equatable, Sendable {
         case bullet
