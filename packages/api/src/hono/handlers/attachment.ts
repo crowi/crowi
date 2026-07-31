@@ -47,12 +47,11 @@ import {
   type AttachmentMeta,
   type Attachment as AttachmentSchema,
   addAttachmentRoute,
-  DND_EXTRA_UPLOAD_MIME,
   getAttachmentMetaRoute,
   getAttachmentUsageRoute,
-  IMAGE_UPLOAD_MIME,
   listAttachmentsRoute,
   removeAttachmentRoute,
+  UPLOAD_ALLOWED_MIME,
   type UploadAttachmentErrorCode,
   type UserPublic,
   uploadAttachmentRoute,
@@ -88,25 +87,34 @@ import { INTERNAL_ERROR_BODY } from './_helpers/errors';
 const debug = Debug('crowi:hono:handlers:attachment');
 
 /**
- * RFC-0004 Phase 6/7 — intent-aware limits for the editor upload.
- *   - `paste`: 10 MB, images only (a clipboard blob is always an image).
- *   - `dnd`  : 50 MB, images + documents (`.pdf`, `.txt`, `.md`, `.csv`)
- *              + archives (`.zip`).
+ * RFC-0004 Phase 6/7 — intent-aware SIZE limits for the editor upload
+ * (unchanged by feature-attachment-upload-policy):
+ *   - `paste`: 10 MB.
+ *   - `dnd`  : 50 MB.
  *
  * The `Content-Length` precheck uses the larger ceiling (50 MB) so a
  * legitimate D&D upload is never 413'd before parse. The per-intent
  * cap (paste 10 MB) is then enforced post-parse against the actual
  * file size.
+ *
+ * feature-attachment-upload-policy — the MIME check itself is no longer
+ * intent-aware: `paste` / `dnd` / the general `addAttachment` route all
+ * check the same `UPLOAD_ALLOWED_MIME` allow-list (see that constant's
+ * doc comment in `@crowi/api-contract` for why). Only the size cap still
+ * varies by route/intent.
  */
 const PASTE_MAX_BYTES = 10 * 1024 * 1024;
 const DND_MAX_BYTES = 50 * 1024 * 1024;
 const UPLOAD_PARSE_MAX_BYTES = DND_MAX_BYTES;
 
-const PASTE_ALLOWED_MIME = new Set<string>(IMAGE_UPLOAD_MIME);
-const DND_ALLOWED_MIME = new Set<string>([...IMAGE_UPLOAD_MIME, ...DND_EXTRA_UPLOAD_MIME]);
+const maxBytesForIntent = (intent: 'paste' | 'dnd'): number => (intent === 'dnd' ? DND_MAX_BYTES : PASTE_MAX_BYTES);
 
-const limitsForIntent = (intent: 'paste' | 'dnd'): { maxBytes: number; allowedMime: Set<string> } =>
-  intent === 'dnd' ? { maxBytes: DND_MAX_BYTES, allowedMime: DND_ALLOWED_MIME } : { maxBytes: PASTE_MAX_BYTES, allowedMime: PASTE_ALLOWED_MIME };
+const UPLOAD_MIME_SET = new Set<string>(UPLOAD_ALLOWED_MIME);
+
+const isUploadAllowedMime = (mimeType: string): boolean => UPLOAD_MIME_SET.has(mimeType);
+
+/** Shared rejection wording — every route uses the exact same phrase (feature-attachment-upload-policy AC "拒否時のエラーコードと文言が全経路で統一されている"). */
+const disallowedMimeMessage = (mimeType: string): string => `Files of type ${mimeType} cannot be uploaded.`;
 
 /** Per-user budget for the editor upload endpoint — RFC §"Attachment upload endpoint". */
 const UPLOAD_RATE_LIMIT = 20;
@@ -504,6 +512,17 @@ export const registerAttachmentRoutes = <E extends OpenAPIHono<CrowiHonoBindings
           return c.json(errorBody('FILE_MISSING', 'No file provided'), 400);
         }
 
+        // feature-attachment-upload-policy — this route used to have NO
+        // MIME check at all (only the editor's paste/dnd upload did),
+        // which is exactly why the same file could upload here while
+        // being rejected via drag-and-drop. Apply the same
+        // `UPLOAD_ALLOWED_MIME` allow-list here so all three affordances
+        // (attach button / paste / dnd) agree.
+        const declaredType = file.type || 'application/octet-stream';
+        if (!isUploadAllowedMime(declaredType)) {
+          return c.json(errorBody('DISALLOWED_MIME', disallowedMimeMessage(declaredType)), 415);
+        }
+
         let tmpPath: string | null = null;
         try {
           const persisted = await persistUploadToTmp(file, crowi.tmpDir);
@@ -597,15 +616,24 @@ export const registerAttachmentRoutes = <E extends OpenAPIHono<CrowiHonoBindings
           return c.json(uploadErrorBody('disallowed_type', "The intent field must be 'paste' or 'dnd'."), 400);
         }
 
-        // Intent-aware size + MIME enforcement (paste is held to 10 MB
-        // even when the wire body fits the 50 MB D&D ceiling).
-        const { maxBytes, allowedMime } = limitsForIntent(intent);
+        // Intent-aware SIZE enforcement only (paste is held to 10 MB even
+        // when the wire body fits the 50 MB D&D ceiling). The MIME check
+        // below is shared with `addAttachment` — feature-attachment-upload-policy
+        // unifies "may this be uploaded at all" across every route; only
+        // the size cap still varies by intent.
+        const maxBytes = maxBytesForIntent(intent);
         if (file.size > maxBytes) {
           return c.json(uploadErrorBody('too_large', 'The file is too large to upload.', { maxBytes }), 413);
         }
         const fileType = file.type || 'application/octet-stream';
-        if (!allowedMime.has(fileType)) {
-          return c.json(uploadErrorBody('disallowed_type', `Files of type ${fileType} cannot be uploaded.`, { mimeType: fileType }), 415);
+        if (!isUploadAllowedMime(fileType)) {
+          // `DISALLOWED_MIME`, not the endpoint's usual lowercase
+          // `disallowed_type` — a MIME-type rejection is required to carry
+          // the SAME code and message as `addAttachment`'s 415 (cross-route
+          // parity, feature-attachment-upload-policy). See the schema's
+          // doc comment for why this one code intentionally breaks the
+          // endpoint's own lowercase convention.
+          return c.json(uploadErrorBody('DISALLOWED_MIME', disallowedMimeMessage(fileType), { mimeType: fileType }), 415);
         }
 
         // Permission: a caller who can view the page can attach to it
