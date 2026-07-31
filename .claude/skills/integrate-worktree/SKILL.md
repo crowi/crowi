@@ -411,6 +411,17 @@ TASK=$(ls .feature-state/tasks/*.json 2>/dev/null | grep -E "(^|/)(feature-)?${I
   (まだ `IN_PROGRESS` / `REVIEW` / `NEEDS_WORK` のままなら誤判定の可能性 →
   削除せず報告)。
 - 同名 worktree が **既に消滅**しているか (`git worktree list` に出ない)。
+- **task の phase 集合が spec の全 phase を覆っているか**。task の完了は「task に
+  計画された phase が終わった」ことしか意味しない — spec 側にそれより多くの phase が
+  あれば未実施分が残っており、その spec は後続の実行主体が読む正本として生き続ける。
+  kickoff がスコープを絞った場合 (例: 「Phase 1-3 限定、Phase 4-5 は別ブランチで」)
+  が該当する。覆っていなければ **spec は削除せず task ファイルのみ削除**し (統合
+  signal を止めるため)、報告に「spec は保持 (task は phase N-M のみを覆う)」と書く。
+- **削除対象の spec が実在することを、削除の直前に確認する**
+  (`ls .feature-state/specs/<id>.md`)。既に他の主体 (worktree 側 committer 等) が
+  消していた場合、確認しないまま「保持した」と報告すると事実と食い違う。
+  (実例 2026-07-30: 参照チェックの grep が自ファイル名を content で除外していたため
+  spec の不在に気づかず、「2 本とも残した」と誤報した。)
 - spec が **他の spec から参照**されていないか確認する。**参照チェックの grep と `rm`
   は絶対に同じ Bash 呼び出しに入れない**(`&&` / `;` / 改行で連ねない)。この分離は
   必須 — 散文の「読んでから消す」注意は 2026-07-08/10 に 2 回とも守られず、grep と rm を
