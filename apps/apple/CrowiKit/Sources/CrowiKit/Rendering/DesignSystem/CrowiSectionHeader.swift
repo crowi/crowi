@@ -43,7 +43,7 @@ extension CrowiSectionHeader where Action == EmptyView {
 }
 
 /// The design's large screen title: 33px/800, `letter-spacing:-.02em`,
-/// `margin:10px 20px 2px`, with an optional 15px muted subtitle.
+/// `margin:10px 20px 2px`, over an optional 15px muted subtitle line.
 ///
 /// Used where the screen owns its own title area instead of the navigation
 /// bar's — today that is the workspace home, whose bar carries only actions.
@@ -51,13 +51,19 @@ extension CrowiSectionHeader where Action == EmptyView {
 /// title is the platform's implementation of this exact element (same step in
 /// the scale, and it collapses on scroll the way the design's does), and
 /// stacking a second title under it would just print the same words twice.
-public struct CrowiScreenTitle: View {
+///
+/// The subtitle is a VIEW rather than a string because the design's own
+/// subtitle line ("Almoha Wiki · …") is where the workspace switcher lives
+/// (`CrowiWorkspaceSwitcherButton`) — a control, not a caption. The
+/// container still supplies the subtitle's type and colour, so a plain
+/// `Text` subtitle needs no styling of its own.
+public struct CrowiScreenTitle<Subtitle: View>: View {
     private let title: String
-    private let subtitle: String?
+    private let subtitle: Subtitle
 
-    public init(_ title: String, subtitle: String? = nil) {
+    public init(_ title: String, @ViewBuilder subtitle: () -> Subtitle) {
         self.title = title
-        self.subtitle = subtitle
+        self.subtitle = subtitle()
     }
 
     public var body: some View {
@@ -67,15 +73,21 @@ public struct CrowiScreenTitle: View {
                 .tracking(CrowiTypography.screenTitleTracking)
                 .foregroundStyle(CrowiTheme.foreground)
                 .accessibilityAddTraits(.isHeader)
-            if let subtitle {
-                Text(subtitle)
-                    .font(CrowiTypography.screenSubtitle)
-                    .foregroundStyle(CrowiTheme.mutedForeground)
-            }
+            subtitle
+                .font(CrowiTypography.screenSubtitle)
+                .foregroundStyle(CrowiTheme.mutedForeground)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, CrowiMetrics.screenHorizontalMargin)
         .padding(.top, CrowiMetrics.screenTitleTopPadding)
         .padding(.bottom, CrowiMetrics.screenTitleBottomPadding)
+    }
+}
+
+extension CrowiScreenTitle where Subtitle == EmptyView {
+    /// A title with no subtitle line at all — `EmptyView` contributes no
+    /// subview, so the `VStack` does not leave a phantom 2pt gap under it.
+    public init(_ title: String) {
+        self.init(title, subtitle: { EmptyView() })
     }
 }

@@ -25,26 +25,46 @@ public struct NotificationBellToolbarButton: View {
     /// The badge text `body` renders — `nil` (no badge at all) at zero, and
     /// capped at `99+` exactly like the web bell's `badgeLabel`
     /// (`notification-bell.tsx`).
-    public var badgeText: String? {
-        guard unreadCount > 0 else { return nil }
-        return unreadCount > 99 ? "99+" : String(unreadCount)
-    }
+    public var badgeText: String? { CrowiUnreadBadge.text(for: unreadCount) }
 
     public var body: some View {
         Button(action: action) {
             Label("Notifications", systemImage: "bell")
                 .overlay(alignment: .topTrailing) {
-                    if let badgeText {
-                        Text(badgeText)
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 4)
-                            .frame(minWidth: 15, minHeight: 15)
-                            .background(Capsule().fill(.red))
-                            .offset(x: 8, y: -6)
-                            .accessibilityLabel("\(unreadCount) unread notifications")
-                    }
+                    CrowiUnreadBadge(unreadCount: unreadCount)
+                        .offset(x: 8, y: -6)
                 }
+        }
+    }
+}
+
+/// The unread pill itself, extracted so the toolbar bell (regular width) and
+/// the tab bar's Notifications slot (compact) paint the SAME badge from the
+/// SAME rule. Two hand-maintained copies of "red capsule, 99+ cap" is
+/// exactly the drift `SearchCapabilityToolbarButton`'s doc comment warns
+/// about, one level down.
+public struct CrowiUnreadBadge: View {
+    private let unreadCount: Int
+
+    public init(unreadCount: Int) {
+        self.unreadCount = unreadCount
+    }
+
+    /// `nil` = no badge at all, not an empty one.
+    public static func text(for unreadCount: Int) -> String? {
+        guard unreadCount > 0 else { return nil }
+        return unreadCount > 99 ? "99+" : String(unreadCount)
+    }
+
+    public var body: some View {
+        if let text = Self.text(for: unreadCount) {
+            Text(text)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 4)
+                .frame(minWidth: 15, minHeight: 15)
+                .background(Capsule().fill(.red))
+                .accessibilityLabel("\(unreadCount) unread notifications")
         }
     }
 }

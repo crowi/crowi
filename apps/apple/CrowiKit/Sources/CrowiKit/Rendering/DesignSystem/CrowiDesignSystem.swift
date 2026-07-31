@@ -18,8 +18,12 @@ public enum CrowiMetrics {
     /// The gutter between a card's edge and the screen's (design: `margin:0 16px`).
     public static let cardHorizontalMargin: CGFloat = 16
     /// Air under the last card so the final row does not sit flush against
-    /// the home indicator (design: the screen's own `padding:… 0 104px`,
-    /// most of which is its floating tab bar — not part of this phase).
+    /// whatever is below it (design: the screen's own `padding:… 0 104px`).
+    /// This is ONLY the breathing room: the floating tab bar's own share of
+    /// those 104px is not added here but taken by the bar itself, as a
+    /// `safeAreaInset` — a screen inside a tab is inset by the real bar
+    /// height (which grows with Dynamic Type) instead of by a constant that
+    /// would have to be kept in sync with it.
     public static let screenBottomPadding: CGFloat = 24
 
     // MARK: - Row
@@ -66,6 +70,32 @@ public enum CrowiMetrics {
     public static let searchFieldVerticalPadding: CGFloat = 9
     public static let searchFieldHorizontalPadding: CGFloat = 12
     public static let searchFieldContentSpacing: CGFloat = 8
+
+    // MARK: - Tab bar (the design's "Liquid Glass" variant)
+
+    /// Design: the floating pill is inset `left:14px;right:14px`.
+    public static let tabBarHorizontalInset: CGFloat = 14
+    /// Design: `bottom:26px` — measured from the DEVICE edge, i.e. through
+    /// the home-indicator strip the design draws at `bottom:8px`. iOS states
+    /// that same clearance as the bottom safe area, which is where the bar is
+    /// anchored instead (`safeAreaInset(edge:.bottom)`), so this is the gap
+    /// ABOVE the safe area rather than above the glass. Keeping the literal
+    /// 26 would either collide with the home indicator on a notched phone or
+    /// sit flush against the screen edge on one without.
+    public static let tabBarBottomInset: CGFloat = 8
+    /// Design: `padding:7px 6px 8px` inside the pill.
+    public static let tabBarInnerHorizontalPadding: CGFloat = 6
+    public static let tabBarInnerTopPadding: CGFloat = 7
+    public static let tabBarInnerBottomPadding: CGFloat = 8
+    /// Design: `gap:3px` between a tab's glyph and its label.
+    public static let tabBarItemSpacing: CGFloat = 3
+    /// Design: a 26px stroked SVG. An SF Symbol at point size N has roughly
+    /// N of cap height inside a taller box, so the same optical weight lands
+    /// a couple of points lower than the CSS number.
+    public static let tabBarGlyphSize: CGFloat = 24
+    /// Design: the 40px circular "New" FAB (glass variant — the standard
+    /// variant's 52px raised button is not the one this app ships).
+    public static let tabBarCreateButtonSize: CGFloat = 40
 }
 
 /// The TYPE half of the design language.
@@ -100,6 +130,9 @@ public enum CrowiTypography {
     public static let snippet = Font.system(.footnote)
     /// Design: 16px — the search field's own input text.
     public static let searchInput = Font.system(.body)
+    /// Design: 10.5px/500 — a tab's label under its glyph. `.caption2` is the
+    /// smallest step in the scale, which is what a tab label is.
+    public static let tabLabel = Font.system(.caption2, design: .default, weight: .medium)
 
     /// Design: `letter-spacing:-.02em` at 33px ≈ -0.66pt. Tracking is an
     /// absolute point value in SwiftUI (it does not scale with Dynamic Type),
