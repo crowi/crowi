@@ -41,6 +41,38 @@ final class WorkspaceOriginTests: XCTestCase {
         XCTAssertFalse(WorkspaceOrigin(URL(string: "http://example.com")!).isExemptLocalHost)
     }
 
+    // MARK: - Page (browser) URLs — Share / Copy Link
+
+    /// The reader's Share and Copy Link hand out the page's BROWSER url —
+    /// `<origin>/<path>`, not an `/api/v2` one.
+    func testPageURLIsTheBrowserURLForThePath() {
+        let origin = WorkspaceOrigin(URL(string: "https://wiki.example.com")!)
+        XCTAssertEqual(
+            origin.pageURL(forPath: "/crowi/rfc/0023")?.absoluteString,
+            "https://wiki.example.com/crowi/rfc/0023"
+        )
+    }
+
+    /// Crowi paths are routinely non-ASCII. Pasting one straight into
+    /// `URL(string:)` returns `nil`, which would silently mean no share sheet
+    /// at all on exactly the pages this product is full of.
+    func testPageURLPercentEncodesANonASCIIPath() {
+        let origin = WorkspaceOrigin(URL(string: "https://wiki.example.com")!)
+        let url = origin.pageURL(forPath: "/user/sotarok/日報/2026/05/23")
+
+        XCTAssertEqual(url?.absoluteString, "https://wiki.example.com/user/sotarok/%E6%97%A5%E5%A0%B1/2026/05/23")
+        XCTAssertNotNil(url)
+    }
+
+    /// A non-default port belongs in the shared link (a dev/self-hosted
+    /// workspace on `:4301` is otherwise unreachable), and a path arriving
+    /// without its leading slash still resolves against the origin root
+    /// rather than being dropped.
+    func testPageURLKeepsANonDefaultPortAndTolerAtesAMissingLeadingSlash() {
+        let origin = WorkspaceOrigin(URL(string: "http://localhost:4301")!)
+        XCTAssertEqual(origin.pageURL(forPath: "notes/today")?.absoluteString, "http://localhost:4301/notes/today")
+    }
+
     // MARK: - APIBaseURL
 
     func testAPIBaseURLAppendsAPIV2ToOrigin() {
