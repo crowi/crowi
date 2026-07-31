@@ -63,16 +63,70 @@ public enum RenderedAstLinkKind: Equatable {
     case standard(url: String)
 }
 
+/// How an `inlineCode` run is drawn — resolved by the hosting view, because
+/// the right answer depends on the type it sits in.
+///
+/// ## Why there is no background box any more
+///
+/// A run's `backgroundColor` in an `AttributedString` fills the whole LINE BOX
+/// (full ascent to full descent) and cannot be inset or padded. On a Crowi page
+/// that is not an occasional accent: the content is Japanese prose carrying
+/// several code spans per line (`packages/web`, `revision.renderedAst`, path
+/// fragments), and a run of fills at line-box height against CJK glyphs — which
+/// have no ascenders or descenders and therefore sit well inside that box —
+/// turns a paragraph into horizontal stripes. Plain-Japanese paragraphs read
+/// visibly calmer than code-dense ones on the same screen for no reason other
+/// than this.
+///
+/// So body code is distinguished by TYPE instead of by fill: monospaced, and a
+/// touch smaller than the text around it so it sits level with the CJK rather
+/// than looming over it. It keeps the body's own colour on purpose — a
+/// `mutedForeground` variant was rendered and rejected, because on this content
+/// code IS the substance of the sentence and greying it out turned code-dense
+/// paragraphs into washed-out holes in the page.
+///
+/// The fill is what made the rhythm uneven, and dropping it also fixes the
+/// other half of the problem: a fill cannot look broken when a long token wraps
+/// across a line end if there is no fill (a wrapped `crowi.config.json` in a
+/// heading used to leave two separate half-boxes).
+public enum RenderedAstInlineCodeStyle: Equatable {
+    /// Inline code inside BODY text — explicitly sized at
+    /// `CrowiBodyMetrics.inlineCodeSize`, so it sits level with the Japanese
+    /// around it rather than a step above it.
+    case body
+    /// Inline code inside a HEADING — keeps the heading's own size. A
+    /// body-sized run inside a 28pt title reads as a mistake, and at heading
+    /// weight the monospace is already all the contrast it needs.
+    case heading
+
+    /// The explicit run font, or `nil` to inherit the surrounding text's size.
+    /// The `.code` presentation intent makes the run monospaced either way.
+    var font: Font? {
+        switch self {
+        case .body: return .system(size: CrowiBodyMetrics().inlineCodeSize, design: .monospaced)
+        case .heading: return nil
+        }
+    }
+}
+
 public struct RenderedAstInlineRenderer {
     let definitions: [String: RenderedAstDefinition]
     /// The active color scheme, resolved by the hosting view — inline math
     /// rasterizes to a static image, so the glyph color must be picked
     /// before typesetting (`RenderedAstMathTypesetter.textColor`).
     let mathIsDark: Bool
+    /// How `inlineCode` runs (and the `[…]` degrade chips, which are code-like
+    /// by the same rule) are drawn.
+    let codeStyle: RenderedAstInlineCodeStyle
 
-    public init(definitions: [String: RenderedAstDefinition] = [:], mathIsDark: Bool = false) {
+    public init(
+        definitions: [String: RenderedAstDefinition] = [:],
+        mathIsDark: Bool = false,
+        codeStyle: RenderedAstInlineCodeStyle = .body
+    ) {
         self.definitions = definitions
         self.mathIsDark = mathIsDark
+        self.codeStyle = codeStyle
     }
 
     // MARK: - link classification (pure)
@@ -258,9 +312,13 @@ public struct RenderedAstInlineRenderer {
         var chipStyle = style
         chipStyle.intents.insert(.code)
         var run = AttributedString("[\(text)]")
-        run.foregroundColor = .secondary
-        run.backgroundColor = Color.primary.opacity(0.06)
         applyDecorations(&run, style: chipStyle)
+        // A chip stands for content that could NOT be rendered (a placeholder,
+        // an html fragment, a failed typeset) — unlike ordinary inline code it
+        // has to be conspicuous, so it keeps its fill and its secondary colour
+        // AFTER the code styling above.
+        run.foregroundColor = .secondary
+        run.backgroundColor = CrowiTheme.muted
         builder.attributed += run
         builder.labelParts.append(text)
     }
@@ -278,8 +336,8 @@ public struct RenderedAstInlineRenderer {
         if !style.intents.isEmpty {
             run.inlinePresentationIntent = style.intents
         }
-        if style.intents.contains(.code) {
-            run.backgroundColor = Color.primary.opacity(0.06)
+        if style.intents.contains(.code), let font = codeStyle.font {
+            run.font = font
         }
         if let linkURL = style.linkURL {
             run.link = linkURL
