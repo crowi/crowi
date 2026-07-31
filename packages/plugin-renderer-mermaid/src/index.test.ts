@@ -1,5 +1,6 @@
 import type { CodeBlockRenderer, RenderResult } from '@crowi/plugin-api';
 import { DOMParser } from '@xmldom/xmldom';
+import sharp from 'sharp';
 import { DIAGNOSTIC_IMAGE_SHAPE_SOURCE, DIAGRAM_CORPUS } from './__fixtures__/diagram-corpus';
 import { silentCtx } from './__fixtures__/silent-ctx';
 // Imported as a namespace (not a destructured `{ encodeSvgToDataUrl }`)
@@ -15,6 +16,10 @@ import { silentCtx } from './__fixtures__/silent-ctx';
 // SVG payload).
 import * as encodeSvgModule from './encode-svg';
 import { buildAltText, createMermaidRenderer } from './index';
+// Same namespace-import rationale as `encodeSvgModule` above — the
+// "rasterization failed" describe block spies on this exact property.
+import * as rasterizePngModule from './rasterize-png';
+import { MAX_PNG_OUTPUT_BYTES } from './rasterize-png';
 import { _shutdownSingletonForTest } from './render-engine';
 
 // All `createMermaidRenderer()` instances in this file share the
@@ -60,6 +65,105 @@ function expectWellFormedUnprefixedSvgRoot(svg: string): void {
   expect(root.prefix).toBeNull();
 }
 
+/**
+ * The `crowiDiagram` sidecar's shape. Restated locally (not imported)
+ * because this package deliberately does not depend on
+ * `@crowi/api-contract` — the wire schema is a downstream consumer of
+ * what the plugin produces, not a build-time dependency of it.
+ */
+interface DiagramSidecarNode {
+  type: string;
+  kind: string;
+  diagramType?: string;
+  alt: string;
+  image: { mediaType: string; base64: string; width: number; height: number };
+}
+
+/**
+ * Wire / storage caps the sidecar must fit, restated from their
+ * authorities (same no-dependency reason as above):
+ *   - `AST_MAX_IMAGE_BASE64_CHARS` (`packages/api-contract/src/schemas/rendered-ast.ts`)
+ *     — a longer base64 string fails `CrowiImagePayloadSchema` outright.
+ *   - `SINGLE_ENTRY_REJECT_BYTES` (`packages/api/src/renderer/cache/mongodb-cache.ts`)
+ *     — applies TWICE and differently: to the DECODED image bytes in the
+ *       §10 deep validation (`sanitize-ast.ts`, mirrored by the iOS
+ *       decoder's `maxDecodedImageBytes`), and to the SERIALISED
+ *       structured payload in `setOrReject`, which silently strips the
+ *       sidecar (html still written) when it is exceeded. The second one
+ *       is the binding constraint — base64 inflates the PNG by 4/3, so
+ *       it is what `MAX_PNG_OUTPUT_BYTES` is derived from.
+ */
+const AST_MAX_IMAGE_BASE64_CHARS = 140_000;
+const SINGLE_ENTRY_REJECT_BYTES = 100 * 1024;
+const CANONICAL_BASE64_RE = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
+function sidecarNodeOf(result: RenderResult): DiagramSidecarNode | undefined {
+  return (result as { structured?: { node: DiagramSidecarNode } }).structured?.node;
+}
+
+/**
+ * The assertion that would have caught the shipped bug: the sidecar's
+ * bytes must be an image a native client can actually decode, at
+ * plausible dimensions, within every cap it has to survive on the way
+ * out. The golden corpus normalises diagram base64 to a placeholder, so
+ * NOTHING downstream ever exercised a real Mermaid payload — the SVG
+ * sidecar looked correct at every layer and still could not be drawn by
+ * the iOS rasterizer.
+ *
+ * `intrinsic` is the SVG `viewBox`'s own size: the PNG must be a raster
+ * OF THAT DIAGRAM, i.e. the same aspect ratio and never below 1:1.
+ */
+async function expectDecodablePngSidecar(node: DiagramSidecarNode | undefined, intrinsic: { width: number; height: number }): Promise<void> {
+  expect(node).toBeDefined();
+  if (!node) return;
+  expect(node.type).toBe('crowiDiagram');
+  expect(node.kind).toBe('mermaid');
+  expect(node.image.mediaType).toBe('image/png');
+
+  // Canonical base64 (the §10 deep validation rejects anything else) and
+  // within the schema's character cap.
+  expect(node.image.base64).toMatch(CANONICAL_BASE64_RE);
+  expect(node.image.base64.length).toBeLessThanOrEqual(AST_MAX_IMAGE_BASE64_CHARS);
+
+  const png = Buffer.from(node.image.base64, 'base64');
+  expect(png.subarray(0, PNG_SIGNATURE.byteLength).equals(PNG_SIGNATURE)).toBe(true);
+  expect(png.byteLength).toBeLessThanOrEqual(MAX_PNG_OUTPUT_BYTES);
+  expect(png.byteLength).toBeLessThanOrEqual(SINGLE_ENTRY_REJECT_BYTES); // §10 decoded-size cap / iOS maxDecodedImageBytes
+  // The serialised sidecar must also stay under the render cache's
+  // strip threshold — exceeding it costs native clients the payload
+  // silently, with the html write succeeding as if nothing happened.
+  expect(Buffer.byteLength(JSON.stringify({ node }), 'utf8')).toBeLessThan(SINGLE_ENTRY_REJECT_BYTES);
+
+  // Fully DECODE the payload (not just its header): a truncated or
+  // half-written PNG passes a signature/metadata check and still fails
+  // on the client. `channels × width × height` raw bytes coming back is
+  // proof every scanline was there.
+  const { data, info } = await sharp(png).raw().toBuffer({ resolveWithObject: true });
+  expect(data.byteLength).toBe(info.width * info.height * info.channels);
+
+  // The reported dimensions are the diagram's LAYOUT size (SVG user
+  // units), NOT the raster's pixel count — the same quantity the html's
+  // viewBox-derived `width`/`height` attributes carry, which is what
+  // keeps a native client laying the diagram out at web's size instead
+  // of at the oversampled raster's. `intrinsic` here IS the html's pair.
+  expect(node.image.width).toBe(intrinsic.width);
+  expect(node.image.height).toBe(intrinsic.height);
+
+  // ...and the raster behind it is oversampled, never downsampled: at
+  // the ladder's top step it is ~2x on each axis, at the 72-DPI floor
+  // exactly 1x. Both axes scale together, so the shape is preserved.
+  expect(info.width).toBeGreaterThanOrEqual(node.image.width);
+  expect(info.height).toBeGreaterThanOrEqual(node.image.height);
+  expect(info.width / info.height).toBeCloseTo(node.image.width / node.image.height, 1);
+
+  // Inside the wire schema's closed interval.
+  expect(node.image.width).toBeGreaterThanOrEqual(1);
+  expect(node.image.height).toBeGreaterThanOrEqual(1);
+  expect(node.image.width).toBeLessThanOrEqual(16_384);
+  expect(node.image.height).toBeLessThanOrEqual(16_384);
+}
+
 describe('@crowi/plugin-renderer-mermaid — success path (8 diagram types)', () => {
   const renderer = createMermaidRenderer();
 
@@ -99,20 +203,14 @@ describe('@crowi/plugin-renderer-mermaid — success path (8 diagram types)', ()
       const expectedHeight = Math.round(Number(dimsMatch?.[2]));
       expect(result.html).toContain(`width="${expectedWidth}"`);
       expect(result.html).toContain(`height="${expectedHeight}"`);
-      // RFC-0023 §10 — the crowiDiagram structured sidecar: same
-      // sanitized SVG bytes as the html's data URL (Mermaid's sanitize
-      // is already the strict allowSafeHref:false policy — no second
-      // pass), REQUIRED intrinsic dimensions matching the html's.
-      const structured = (result as { structured?: { node: Record<string, unknown> } }).structured;
-      expect(structured).toBeDefined();
-      const node = structured?.node as { type: string; kind: string; alt: string; image: { mediaType: string; base64: string; width: number; height: number } };
-      expect(node.type).toBe('crowiDiagram');
-      expect(node.kind).toBe('mermaid');
-      expect(node.alt).toBe(altMatch?.[1]);
-      expect(node.image.mediaType).toBe('image/svg+xml');
-      expect(node.image.width).toBe(expectedWidth);
-      expect(node.image.height).toBe(expectedHeight);
-      expect(result.html).toContain(node.image.base64); // same bytes the html embeds
+      // RFC-0023 §10 — the crowiDiagram structured sidecar: a PNG
+      // raster of the SAME sanitized SVG the html embeds. Native
+      // clients cannot draw Mermaid's SVG (`rasterize-png.ts` documents
+      // the per-diagram-type failures), so the sidecar carries pixels
+      // and the html above keeps the vector.
+      const node = sidecarNodeOf(result);
+      expect(node?.alt).toBe(altMatch?.[1]);
+      await expectDecodablePngSidecar(node, { width: expectedWidth, height: expectedHeight });
     },
     30_000,
   );
@@ -127,8 +225,8 @@ describe('@crowi/plugin-renderer-mermaid — success path (8 diagram types)', ()
     expect(a).toMatch(/^[0-9a-f]{64}$/);
   });
 
-  it('declares admissionControl / previewPolicy / cacheVersion / reservation per spec §6/§7 (cacheVersion 4 — RFC-0023 §13 structured sidecar bump)', () => {
-    expect(renderer.cacheVersion).toBe(4);
+  it('declares admissionControl / previewPolicy / cacheVersion / reservation per spec §6/§7 (cacheVersion 5 — PNG sidecar bump)', () => {
+    expect(renderer.cacheVersion).toBe(5);
     expect(renderer.admissionControl).toEqual({ maxConcurrentGlobal: 4, maxConcurrentPerUser: 2, queueDepth: 200 });
     expect(renderer.previewPolicy).toBe('server-render');
     expect(renderer.reservation).toEqual({ variant: 'aspect', aspectRatio: 16 / 9 });
@@ -165,6 +263,57 @@ describe('@crowi/plugin-renderer-mermaid — gantt charts (regression: jsdom off
     expect(decodedSvg).not.toMatch(/\bwidth="-/);
 
     expect(result.html).toContain(`width="${Math.round(viewBoxWidth)}"`);
+
+    // gantt is one of the types whose SVG the native rasterizer chokes
+    // on (d3's axis `<line y2="-111"/>` has no `x1`/`y1`), so it gets
+    // the same decodable-PNG sidecar guarantee as the 8 corpus types.
+    const viewBoxHeight = Number(viewBoxMatch?.[2]);
+    await expectDecodablePngSidecar(sidecarNodeOf(result), { width: Math.round(viewBoxWidth), height: Math.round(viewBoxHeight) });
+  }, 30_000);
+});
+
+describe('@crowi/plugin-renderer-mermaid — PNG sidecar: html non-regression + failure fallback', () => {
+  const renderer = createMermaidRenderer();
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it.each(DIAGRAM_CORPUS.map((entry) => [entry.name, entry.source] as const))(
+    '%s: the web-facing html still embeds the SVG data URL (the PNG lives ONLY in the sidecar)',
+    async (_name, source) => {
+      const result = await render(renderer, source);
+      expect(result.html).toContain('src="data:image/svg+xml;base64,');
+      expect(result.html).not.toContain('data:image/png');
+      // The two payloads are independent renderings of the same
+      // diagram: the html's base64 must decode back to SVG text, not to
+      // the sidecar's pixels.
+      expect(decodeSvgDataUrl(result.html).trimStart().startsWith('<svg')).toBe(true);
+      const node = sidecarNodeOf(result);
+      expect(node?.image.base64).toBeDefined();
+      expect(result.html).not.toContain(node?.image.base64 ?? ' ');
+    },
+    30_000,
+  );
+
+  it('a rasterization failure degrades to html-only (no structured) — never a broken sidecar, never a render error', async () => {
+    jest.spyOn(rasterizePngModule, 'rasterizeSvgToPng').mockResolvedValue({ ok: false });
+    const result = await render(renderer, 'flowchart TD\n  A --> B');
+    expect(result.error).toBeUndefined();
+    expect(result.html).toContain('src="data:image/svg+xml;base64,');
+    expect(result.html).toContain('data-crowi-renderer-state="ready"');
+    expect(result.ttlSec).toBe(60 * 60);
+    expect((result as { structured?: unknown }).structured).toBeUndefined();
+  }, 30_000);
+
+  it('a rasterizer that throws is NOT swallowed into a half-built sidecar — the rasterizer itself owns the never-throw contract', async () => {
+    // Guards the seam the other way round: `index.ts` deliberately does
+    // not wrap the call in its own try/catch, so if `rasterize-png.ts`
+    // ever stopped absorbing librsvg failures, the render would surface
+    // as a classification-B infra error (uncached, retried) rather than
+    // silently emitting a sidecar-less-but-successful result.
+    jest.spyOn(rasterizePngModule, 'rasterizeSvgToPng').mockRejectedValue(new Error('librsvg exploded'));
+    await expect(render(renderer, 'flowchart TD\n  A --> B')).rejects.toThrow('librsvg exploded');
   }, 30_000);
 });
 

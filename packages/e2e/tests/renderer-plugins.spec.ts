@@ -90,6 +90,35 @@ function collectHtmlValues(node: unknown, out: string[] = []): string[] {
   return out;
 }
 
+interface HtmlNodeWithData {
+  value: string;
+  data?: Record<string, unknown>;
+}
+
+/**
+ * Same walk, but keeping each `html` node's `data` — RFC-0023's
+ * structured sidecar (`data.crowiDiagram`) rides on the NODE, not
+ * inside the html string, so `collectHtmlValues` above cannot see it.
+ */
+function collectHtmlNodes(node: unknown, out: HtmlNodeWithData[] = []): HtmlNodeWithData[] {
+  if (!node || typeof node !== 'object') return out;
+  const record = node as { type?: unknown; value?: unknown; data?: unknown; children?: unknown[] };
+  if (record.type === 'html' && typeof record.value === 'string') {
+    out.push({ value: record.value, data: typeof record.data === 'object' && record.data !== null ? (record.data as Record<string, unknown>) : undefined });
+  }
+  if (Array.isArray(record.children)) {
+    for (const child of record.children) collectHtmlNodes(child, out);
+  }
+  return out;
+}
+
+/** `CrowiDiagramSidecar`'s runtime shape, restated for the assertions below. */
+interface DiagramSidecar {
+  kind: string;
+  alt: string;
+  image: { mediaType: string; base64: string; width: number; height: number };
+}
+
 test('KaTeX / PlantUML / Mermaid: real activation → save render → cache → serialized AST (API), stylesheet CORS + ready-diagram interaction (browser)', async ({
   adminPage,
   userAPage,
@@ -150,6 +179,26 @@ test('KaTeX / PlantUML / Mermaid: real activation → save render → cache → 
     expect(mermaidFragment).toContain('data-crowi-renderer-presentation="diagram"');
     expect(mermaidFragment).toContain('data-crowi-renderer-state="ready"');
     expect(mermaidFragment).toContain('src="data:image/svg+xml;base64,');
+
+    // RFC-0023 §10 — the structured sidecar native clients read, on the
+    // real save path (render → PluginRenderCache → stored AST). Mermaid's
+    // is a server-rasterized PNG: the iOS SVG rasterizer cannot draw
+    // Mermaid's own SVG output (`plugin-renderer-mermaid/src/rasterize-png.ts`).
+    // The cache STRIPS an oversized structured payload while still
+    // writing the html, so a regression here is silent everywhere except
+    // this assertion.
+    const mermaidNode = collectHtmlNodes(ast).find((n) => n.value.includes('mermaid-embed'));
+    const mermaidSidecar = mermaidNode?.data?.crowiDiagram as DiagramSidecar | undefined;
+    expect(mermaidSidecar?.kind).toBe('mermaid');
+    expect(mermaidSidecar?.image.mediaType).toBe('image/png');
+    expect(mermaidSidecar?.image.width).toBeGreaterThan(0);
+    expect(mermaidSidecar?.image.height).toBeGreaterThan(0);
+    // Real PNG bytes, not merely a declared mediaType.
+    expect(
+      Buffer.from(mermaidSidecar?.image.base64 ?? '', 'base64')
+        .subarray(0, 8)
+        .toString('hex'),
+    ).toBe('89504e470d0a1a0a');
   });
 
   const cacheFetchedAtAfterSave =
