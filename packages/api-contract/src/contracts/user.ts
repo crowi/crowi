@@ -42,7 +42,8 @@ export const getUserPageRoute = createRoute({
   },
   responses: {
     200: {
-      description: 'User profile with statistics + recent activity',
+      description:
+        "User profile with statistics (createdPagesCount, bookmarksCount, likesCount, commentsCount — the last two are the target user's OWN likes/comments, not activity their pages received) + recent activity",
       content: { 'application/json': { schema: UserPageResponseSchema } },
     },
     401: {
