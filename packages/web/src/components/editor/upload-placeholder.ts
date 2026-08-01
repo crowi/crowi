@@ -2,6 +2,7 @@ import type { EditorView } from '@codemirror/view';
 import { apiBaseUrl } from '@/lib/api-client';
 import { getAccessToken } from '@/lib/auth-token';
 import { notify } from '@/lib/notify';
+import { isImageFile } from './upload-policy';
 
 /**
  * RFC-0004 Phase 6/7 — progress-placeholder lifecycle shared by the
@@ -288,7 +289,7 @@ export function uploadAttachment(
  * the server verbatim — only the displayed token text is sanitised.
  */
 export async function runUpload(view: EditorView, file: File, filename: string, pos: number, pageId: string, intent: UploadIntent): Promise<void> {
-  const isImage = file.type.startsWith('image/');
+  const isImage = isImageFile(file);
   const uploadId = newUploadId();
   const displayName = sanitizeFilename(filename);
 

@@ -2,8 +2,9 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { setNotifyBackend, type NotifyPayload } from '@/lib/notify';
-import { classifyFiles, isImageFile, dropHandler, DND_ACTIVE_CLASS, DND_MAX_FILES, DND_MAX_FILE_BYTES } from './drop-handler';
+import { classifyFiles, dropHandler, DND_ACTIVE_CLASS, DND_MAX_FILES, DND_MAX_FILE_BYTES } from './drop-handler';
 import { sanitizeFilename } from './upload-placeholder';
+import { isImageFile } from './upload-policy';
 
 /**
  * RFC-0004 Phase 7 — unit tests for the drag-and-drop upload handler:
@@ -58,6 +59,23 @@ describe('classifyFiles', () => {
   it('accepts .md files reported with an empty / generic MIME type', () => {
     const result = classifyFiles([makeFile('notes.md', ''), makeFile('data.csv', 'application/octet-stream')]);
     expect(result.accepted).toHaveLength(2);
+    expect(result.rejected).toHaveLength(0);
+  });
+
+  it('feature-attachment-upload-policy: accepts ANY empty-`File.type` drop, mirroring the server’s exact normalization — regression for the attach-button-vs-D&D divergence found in review (a `.docx` reported with an empty MIME type used to pass the attach button, which normalizes empty types the same way, while being rejected here)', () => {
+    const result = classifyFiles([makeFile('report.docx', ''), makeFile('unknown-type-file', '')]);
+    expect(result.accepted).toHaveLength(2);
+    expect(result.rejected).toHaveLength(0);
+  });
+
+  it('feature-attachment-upload-policy: accepts business document types the old narrower D&D-only allow-list rejected (docx / pptx / html) — the same policy the attach button and paste share', () => {
+    const files = [
+      makeFile('report.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'),
+      makeFile('slides.pptx', 'application/vnd.openxmlformats-officedocument.presentationml.presentation'),
+      makeFile('page.html', 'text/html'),
+    ];
+    const result = classifyFiles(files);
+    expect(result.accepted).toHaveLength(3);
     expect(result.rejected).toHaveLength(0);
   });
 

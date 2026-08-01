@@ -167,14 +167,28 @@ export type UploadAttachmentResponse = z.infer<typeof UploadAttachmentResponseSc
  * `AttachmentErrorCodeSchema` used by the list / add / delete endpoints)
  * because the editor maps each code to a specific user-facing toast:
  *   - `too_large`      — file exceeds the size cap (413).
- *   - `disallowed_type`— MIME type not in the allow-list (415).
+ *   - `disallowed_type`— malformed request (bad multipart body, missing
+ *                        file, invalid `intent`); a generic 400 bucket
+ *                        predating feature-attachment-upload-policy, kept
+ *                        as-is for those unrelated failure modes.
+ *   - `DISALLOWED_MIME`— the file's MIME type is outside the unified
+ *                        upload allow-list (415). Deliberately spelled
+ *                        the SAME as `AttachmentErrorCodeSchema`'s
+ *                        `DISALLOWED_MIME` (not lowercased to
+ *                        `disallowed_mime`) — feature-attachment-upload-policy's
+ *                        cross-route parity requirement is that a MIME-type
+ *                        rejection carries an identical code AND message
+ *                        everywhere it happens (`addAttachment` and
+ *                        `uploadAttachment` alike), even though the two
+ *                        endpoints' envelopes otherwise keep their own
+ *                        established casing convention for unrelated codes.
  *   - `rate_limited`   — per-user upload budget exhausted (429); a
  *                        `Retry-After` header carries the cooldown.
  *   - `no_permission`  — caller cannot write attachments to `pageId` (403).
  * `details` is an open bag for code-specific context (e.g. the
  * offending MIME, the size limit) the client may surface verbatim.
  */
-export const UploadAttachmentErrorCodeSchema = z.enum(['too_large', 'disallowed_type', 'rate_limited', 'no_permission']);
+export const UploadAttachmentErrorCodeSchema = z.enum(['too_large', 'disallowed_type', 'DISALLOWED_MIME', 'rate_limited', 'no_permission']);
 export type UploadAttachmentErrorCode = z.infer<typeof UploadAttachmentErrorCodeSchema>;
 
 export const UploadAttachmentErrorSchema = z.object({
@@ -185,14 +199,69 @@ export const UploadAttachmentErrorSchema = z.object({
 export type UploadAttachmentError = z.infer<typeof UploadAttachmentErrorSchema>;
 
 /**
- * MIME allow-lists for `POST /api/attachments/upload`, shared by the
- * api handler (authoritative enforcement) and the web editor's paste /
- * drag-and-drop handlers (early client-side rejection). Kept here so the
- * two sides cannot drift — see `docs/rfcs/0004-editor-ux-enhancement.md`
- * §"Image paste limits" / §"D&D limits".
+ * feature-attachment-upload-policy — the single "may this be uploaded at
+ * all" allow-list, shared by every upload path: the general page
+ * attachment endpoint (`POST /pages/:pageId/attachments`) and the editor's
+ * paste / drag-and-drop endpoint (`POST /attachments/upload`, both
+ * intents). A file's fate no longer depends on which of the three
+ * affordances (attach button / paste / drag-and-drop) triggered the
+ * upload — see the feature spec's "3 つの独立した問い" design judgment 1.
+ * Per-route/per-intent SIZE caps (paste 10 MB / dnd 50 MB / add 100 MB)
+ * are unchanged and stay in the api handler, independent of this list.
  *
- * `paste` accepts images only (a clipboard blob is always an image);
- * `dnd` additionally accepts documents + archives.
+ * Deliberately independent of `INLINE_SAFE_MIME`
+ * (`attachment-stream.ts`) — that is a strict security boundary deciding
+ * what may render inline in the browser, updated rarely and separately.
+ * This list decides what may be STORED at all, and can be broad because
+ * everything not on `INLINE_SAFE_MIME` is delivered as a download
+ * regardless of whether it is accepted here.
+ *
+ * Covers: raster + vector images, common document / text formats, office
+ * documents (docx/xlsx/pptx and their legacy doc/xls/ppt forms), archives,
+ * and the audio/video/json/xml/html types `@crowi/cli`'s `attach add` can
+ * declare (`packages/cli/src/lib/media-type.ts`) — the general attach
+ * route had NO check before this feature, so anything CLI could already
+ * send must keep working. `application/octet-stream` (a client that sends
+ * no `Content-Type`, or an unrecognised extension) is intentionally
+ * included: an unknown type is not "clearly undesirable", it is simply
+ * unknown, and it already downloads instead of rendering inline.
  */
-export const IMAGE_UPLOAD_MIME = ['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/svg+xml'] as const;
-export const DND_EXTRA_UPLOAD_MIME = ['application/pdf', 'text/plain', 'text/markdown', 'text/csv', 'application/zip'] as const;
+export const UPLOAD_ALLOWED_MIME = [
+  // Raster + vector images.
+  'image/png',
+  'image/jpeg',
+  'image/gif',
+  'image/webp',
+  'image/svg+xml',
+  'image/bmp',
+  'image/avif',
+  'image/apng',
+  'image/x-icon',
+  // Documents / text.
+  'application/pdf',
+  'text/plain',
+  'text/markdown',
+  'text/csv',
+  'application/json',
+  'application/xml',
+  'text/html',
+  // Office documents.
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  // Archives.
+  'application/zip',
+  'application/gzip',
+  'application/x-tar',
+  // Audio / video.
+  'audio/mpeg',
+  'audio/wav',
+  'video/mp4',
+  'video/webm',
+  'video/quicktime',
+  // Unknown / unset — see the note above.
+  'application/octet-stream',
+] as const;

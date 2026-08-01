@@ -5797,6 +5797,7 @@
             "enum": [
               "too_large",
               "disallowed_type",
+              "DISALLOWED_MIME",
               "rate_limited",
               "no_permission"
             ]
@@ -32227,6 +32228,48 @@
               }
             }
           },
+          "415": {
+            "description": "MIME type not in the unified upload allow-list (feature-attachment-upload-policy)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "INVALID_PAGE_ID",
+                            "PAGE_NOT_FOUND",
+                            "FILE_MISSING",
+                            "FILE_TOO_LARGE",
+                            "DISALLOWED_MIME",
+                            "INVALID_ATTACHMENT_ID",
+                            "ATTACHMENT_NOT_FOUND",
+                            "FORBIDDEN_FOR_DELETE",
+                            "UPLOAD_FAILED",
+                            "REMOVE_FAILED"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
           "500": {
             "description": "Upload / storage failure",
             "content": {
@@ -32351,6 +32394,7 @@
                       "enum": [
                         "too_large",
                         "disallowed_type",
+                        "DISALLOWED_MIME",
                         "rate_limited",
                         "no_permission"
                       ]
@@ -32422,6 +32466,7 @@
                       "enum": [
                         "too_large",
                         "disallowed_type",
+                        "DISALLOWED_MIME",
                         "rate_limited",
                         "no_permission"
                       ]
@@ -32454,6 +32499,7 @@
                       "enum": [
                         "too_large",
                         "disallowed_type",
+                        "DISALLOWED_MIME",
                         "rate_limited",
                         "no_permission"
                       ]
@@ -32475,7 +32521,7 @@
             }
           },
           "415": {
-            "description": "MIME type not in the per-intent allow-list",
+            "description": "MIME type not in the unified upload allow-list (feature-attachment-upload-policy)",
             "content": {
               "application/json": {
                 "schema": {
@@ -32486,6 +32532,7 @@
                       "enum": [
                         "too_large",
                         "disallowed_type",
+                        "DISALLOWED_MIME",
                         "rate_limited",
                         "no_permission"
                       ]
@@ -32518,6 +32565,7 @@
                       "enum": [
                         "too_large",
                         "disallowed_type",
+                        "DISALLOWED_MIME",
                         "rate_limited",
                         "no_permission"
                       ]

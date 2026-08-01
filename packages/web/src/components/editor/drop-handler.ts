@@ -1,8 +1,8 @@
 import type { Extension } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
-import { DND_EXTRA_UPLOAD_MIME, IMAGE_UPLOAD_MIME } from '@crowi/api-contract';
 import { notify } from '@/lib/notify';
 import { runUpload } from './upload-placeholder';
+import { disallowedTypeMessage, isUploadAllowedType } from './upload-policy';
 
 /**
  * RFC-0004 Phase 7 — CodeMirror 6 drag-and-drop upload handler.
@@ -21,45 +21,25 @@ import { runUpload } from './upload-placeholder';
  *   1. **Visual feedback** — a subtle outline highlights the editor on
  *      `dragenter` and clears immediately on `drop` / `dragleave`.
  *   2. **D&D limits** (RFC §"D&D limits") — at most 5 files per drop,
- *      each ≤ 50 MB, and a file-type allow-list (images + documents +
- *      archives). A violated limit aborts the whole drop with a toast.
+ *      each ≤ 50 MB, and the unified upload MIME allow-list
+ *      (feature-attachment-upload-policy — the SAME allow-list the
+ *      attach button / paste share, so a file's fate no longer depends on
+ *      which affordance uploaded it). A violated limit aborts that one
+ *      file with a toast; other files in the same drop still upload.
  *   3. **Read-only suppression** (RFC §"Read-only mode") — when the
  *      editor is read-only (RFC-0003 20-editor cap reached, or no edit
  *      permission) drag-and-drop is fully disabled: no highlight, the
  *      drop is ignored, and a permission toast is shown.
  *
- * The pure helpers (`classifyFiles`, `isImageFile`) are exported so the
- * limit logic is unit-testable without a DOM / `EditorView`.
+ * The pure helper `classifyFiles` is exported so the limit logic is
+ * unit-testable without a DOM / `EditorView`; the type policy it applies
+ * lives in `upload-policy.ts`, shared with the paste handler.
  */
 
 /** Per-file size ceiling — RFC §"D&D limits". */
 export const DND_MAX_FILE_BYTES = 50 * 1024 * 1024;
 /** Per-drop file-count ceiling — RFC §"D&D limits". */
 export const DND_MAX_FILES = 5;
-
-/**
- * Default file-type allow-list (RFC §"D&D limits"). v2.0 ships this as a
- * single global list; the RFC leaves per-instance configuration as an
- * open question (deferred). The MIME set is sourced from
- * `@crowi/api-contract` so it cannot drift from the server's
- * authoritative check. Keyed by MIME type — the browser populates
- * `File.type` from the OS, falling back to `''` for unknown types,
- * which is therefore rejected.
- */
-export const DND_ALLOWED_MIME = new Set<string>([...IMAGE_UPLOAD_MIME, ...DND_EXTRA_UPLOAD_MIME]);
-
-/**
- * Some OSes report `.md` / `.csv` files with a generic or empty MIME
- * type. We accept those by extension as a fallback so a dropped
- * `notes.md` is not spuriously rejected. The server applies the
- * authoritative MIME allow-list as the final defence.
- */
-const EXT_ALLOWED = new Set<string>(['md', 'markdown', 'csv', 'txt']);
-
-/** True when `file` is an image (→ `![](url)` insertion, not `[](url)`). */
-export function isImageFile(file: File): boolean {
-  return file.type.startsWith('image/');
-}
 
 /** A file rejected by the allow-list / size cap, with the reason for the toast. */
 export interface RejectedFile {
@@ -77,22 +57,6 @@ export interface ClassifiedDrop {
   tooMany: boolean;
 }
 
-/** Lower-cased file extension (without the dot), or `''` when none. */
-function fileExtension(name: string): string {
-  const dot = name.lastIndexOf('.');
-  return dot >= 0 ? name.slice(dot + 1).toLowerCase() : '';
-}
-
-/** True when `file`'s MIME type (or extension fallback) is allowed. */
-function isAllowedType(file: File): boolean {
-  if (DND_ALLOWED_MIME.has(file.type)) return true;
-  // MIME-less / generic types: accept known plaintext-ish extensions.
-  if (file.type === '' || file.type === 'application/octet-stream') {
-    return EXT_ALLOWED.has(fileExtension(file.name));
-  }
-  return false;
-}
-
 /**
  * Validate a dropped `FileList` against the D&D limits. Pure: does no
  * uploading. The caller decides — on `tooMany` it aborts the whole drop
@@ -106,20 +70,13 @@ export function classifyFiles(files: File[]): ClassifiedDrop {
   for (const file of files) {
     if (file.size > DND_MAX_FILE_BYTES) {
       rejected.push({ file, reason: 'too_large' });
-    } else if (!isAllowedType(file)) {
+    } else if (!isUploadAllowedType(file)) {
       rejected.push({ file, reason: 'disallowed_type' });
     } else {
       accepted.push(file);
     }
   }
   return { accepted, rejected, tooMany };
-}
-
-/** Human label for a rejected file's type, for the disallowed-type toast. */
-function typeLabel(file: File): string {
-  if (file.type) return file.type;
-  const ext = fileExtension(file.name);
-  return ext ? `.${ext}` : 'unknown';
 }
 
 /** CSS class toggled on the editor root (`.cm-editor`) while a file drag is over it. */
@@ -243,7 +200,7 @@ function dndEventHandlers(pageId: string): Extension {
         if (reason === 'too_large') {
           notify.warn(`${file.name} is too large to upload (max 50 MB).`);
         } else {
-          notify.warn(`Files of type ${typeLabel(file)} cannot be uploaded.`);
+          notify.warn(disallowedTypeMessage(file));
         }
       }
 

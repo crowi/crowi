@@ -126,7 +126,7 @@ describe('Routes POST /api/attachments/upload (Hono editor upload)', () => {
     });
   });
 
-  describe('intent-aware MIME / size limits (RFC-0004 Phase 7)', () => {
+  describe('unified MIME policy + intent-aware size limits (RFC-0004 Phase 7, feature-attachment-upload-policy)', () => {
     it('accepts a PDF document for the dnd intent', async () => {
       const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}dnd-pdf`, '# upload target');
       const res = await request(app)
@@ -150,7 +150,7 @@ describe('Routes POST /api/attachments/upload (Hono editor upload)', () => {
       expect(res.status).toBe(200);
     });
 
-    it('rejects a PDF for the paste intent — paste is images only', async () => {
+    it('accepts a PDF for the paste intent too — paste and dnd now share the same MIME allow-list (feature-attachment-upload-policy design judgment 1: unify)', async () => {
       const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}paste-pdf`, '# upload target');
       const res = await request(app)
         .post('/api/attachments/upload')
@@ -158,9 +158,23 @@ describe('Routes POST /api/attachments/upload (Hono editor upload)', () => {
         .field('pageId', page._id)
         .field('intent', 'paste')
         .attach('file', Buffer.from('%PDF-1.4 minimal'), { filename: 'spec.pdf', contentType: 'application/pdf' });
-      expect(res.status).toBe(415);
-      expect(res.body.error).toBe('disallowed_type');
-      expect(res.body.details?.mimeType).toBe('application/pdf');
+      expect(res.status).toBe(200);
+      expect(res.body.mimeType).toBe('application/pdf');
+    });
+
+    it('accepts a non-image document for the paste intent in general (e.g. a .docx) — only the size cap still differs by intent, not the type allow-list', async () => {
+      const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}paste-docx`, '# upload target');
+      const res = await request(app)
+        .post('/api/attachments/upload')
+        .set(authHeaders(ownerToken))
+        .field('pageId', page._id)
+        .field('intent', 'paste')
+        .attach('file', Buffer.from('PK stub docx bytes'), {
+          filename: 'report.docx',
+          contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        });
+      expect(res.status).toBe(200);
+      expect(res.body.mimeType).toBe('application/vnd.openxmlformats-officedocument.wordprocessingml.document');
     });
 
     it('rejects a paste image above the 10 MB paste cap (under the 50 MB dnd cap)', async () => {
@@ -229,17 +243,26 @@ describe('Routes POST /api/attachments/upload (Hono editor upload)', () => {
     expect(res.body.error).toBe('disallowed_type');
   });
 
-  it('returns 415 for a disallowed MIME type', async () => {
+  it('returns 415 for a MIME type outside the unified upload allow-list', async () => {
+    // `text/plain` used to be paste-only-rejected here (paste accepted images
+    // only) — the unified allow-list (feature-attachment-upload-policy) now
+    // accepts it for every intent, so this needs a type genuinely outside the
+    // allow-list to still exercise the 415 path.
     const page = await createPageViaApi(ownerToken, `${PATH_PREFIX}badtype`, '# upload target');
     const res = await request(app)
       .post('/api/attachments/upload')
       .set(authHeaders(ownerToken))
       .field('pageId', page._id)
       .field('intent', 'paste')
-      .attach('file', Buffer.from('plain text body'), { filename: 'notes.txt', contentType: 'text/plain' });
+      .attach('file', Buffer.from('MZ stub executable bytes'), { filename: 'virus.exe', contentType: 'application/x-msdownload' });
     expect(res.status).toBe(415);
-    expect(res.body.error).toBe('disallowed_type');
-    expect(res.body.details?.mimeType).toBe('text/plain');
+    // `DISALLOWED_MIME`, not this endpoint's usual lowercase `disallowed_type`
+    // — cross-route parity requires the SAME code (and message, asserted
+    // below) as `addAttachment`'s 415 for the same reason
+    // (feature-attachment-upload-policy).
+    expect(res.body.error).toBe('DISALLOWED_MIME');
+    expect(res.body.details?.mimeType).toBe('application/x-msdownload');
+    expect(res.body.message).toBe('Files of type application/x-msdownload cannot be uploaded.');
   });
 
   it('returns 413 when the file exceeds the 10 MB cap', async () => {
@@ -298,6 +321,64 @@ describe('Routes POST /api/attachments/upload (Hono editor upload)', () => {
         expect(res.status).toBe(200);
       }
       expect(sawRateLimit).toBe(true);
+    });
+  });
+
+  describe('cross-route upload policy parity (feature-attachment-upload-policy)', () => {
+    // Regression coverage for the reported symptom itself: the SAME file
+    // type must upload successfully — or be rejected identically — no
+    // matter which of the three affordances (attach button / editor paste /
+    // editor drag-and-drop) triggered it. Runs on its own dedicated user so
+    // these `/api/attachments/upload` hits don't compete with the 20/min
+    // budget the tests above already spend against `ownerToken`.
+    let parityToken: string;
+
+    beforeAll(async () => {
+      const parityUser = await createTestUser({ name: 'Upload Parity', username: 'uplParity', email: 'upl-parity@example.com' });
+      parityToken = parityUser.accessToken;
+    });
+
+    const uploadVia = (route: 'add' | 'paste' | 'dnd', pageId: string, body: Buffer, filename: string, contentType: string) => {
+      if (route === 'add') {
+        return request(app).post(`/api/pages/${pageId}/attachments`).set(authHeaders(parityToken)).attach('file', body, { filename, contentType });
+      }
+      return request(app)
+        .post('/api/attachments/upload')
+        .set(authHeaders(parityToken))
+        .field('pageId', pageId)
+        .field('intent', route)
+        .attach('file', body, { filename, contentType });
+    };
+
+    it.each([
+      ['text-html', 'text/html', 'payload.html', Buffer.from('<p>hello</p>')],
+      ['docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'report.docx', Buffer.from('PK stub docx bytes')],
+    ] as const)('%s (%s) uploads successfully via the attach button, paste, and drag-and-drop alike — the reported symptom (button ok, dnd rejected) no longer reproduces', async (slug, contentType, filename, body) => {
+      const page = await createPageViaApi(parityToken, `${PATH_PREFIX}parity-${slug}`, '# parity');
+      for (const route of ['add', 'paste', 'dnd'] as const) {
+        const res = await uploadVia(route, page._id, body, filename, contentType);
+        expect(res.status).toBe(200);
+      }
+    });
+
+    it('rejects a disallowed type identically via the attach button, paste, and drag-and-drop, with the same error wording', async () => {
+      const page = await createPageViaApi(parityToken, `${PATH_PREFIX}parity-reject`, '# parity-reject');
+      const body = Buffer.from('MZ stub executable bytes');
+      const filename = 'virus.exe';
+      const contentType = 'application/x-msdownload';
+
+      const addRes = await uploadVia('add', page._id, body, filename, contentType);
+      const pasteRes = await uploadVia('paste', page._id, body, filename, contentType);
+      const dndRes = await uploadVia('dnd', page._id, body, filename, contentType);
+
+      expect(addRes.status).toBe(415);
+      expect(pasteRes.status).toBe(415);
+      expect(dndRes.status).toBe(415);
+
+      const MESSAGE = 'Files of type application/x-msdownload cannot be uploaded.';
+      expect(addRes.body.error.message).toBe(MESSAGE);
+      expect(pasteRes.body.message).toBe(MESSAGE);
+      expect(dndRes.body.message).toBe(MESSAGE);
     });
   });
 });

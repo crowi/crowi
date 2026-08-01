@@ -424,6 +424,107 @@ describe('Routes /api attachments (Hono)', () => {
       expect(stored).not.toBeNull();
     });
 
+    describe('feature-attachment-upload-policy — unified MIME policy applied to the general attach route', () => {
+      // Before this feature this route had NO MIME check at all (the
+      // allow-list only covered the editor's paste/dnd upload) — the
+      // symptom that motivated the feature was exactly this: the SAME
+      // file uploaded fine here while being rejected by drag-and-drop.
+
+      it('returns 415 DISALLOWED_MIME for a type outside the unified upload allow-list', async () => {
+        const page = await createPageViaApi(accessToken, `${PATH_PREFIX}bad-mime`, '# add');
+        const res = await request(app)
+          .post(`/api/pages/${page._id}/attachments`)
+          .set(authHeaders(accessToken))
+          .attach('file', Buffer.from('MZ stub executable bytes'), { filename: 'virus.exe', contentType: 'application/x-msdownload' });
+
+        expect(res.status).toBe(415);
+        expect(res.body.error.code).toBe('DISALLOWED_MIME');
+        // Same wording the editor upload endpoint (`/attachments/upload`)
+        // uses for the same reason — AC "拒否時のエラーコードと文言が全経路で統一されている".
+        expect(res.body.error.message).toBe('Files of type application/x-msdownload cannot be uploaded.');
+      });
+
+      it('accepts a .docx upload (a business document type the old narrow allow-lists rejected)', async () => {
+        const page = await createPageViaApi(accessToken, `${PATH_PREFIX}docx`, '# add');
+        const res = await request(app)
+          .post(`/api/pages/${page._id}/attachments`)
+          .set(authHeaders(accessToken))
+          .attach('file', Buffer.from('PK stub docx bytes'), {
+            filename: 'report.docx',
+            contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          });
+
+        expect(res.status).toBe(200);
+        expect(res.body.attachment.fileFormat).toBe('application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+      });
+
+      it('accepts a .xlsx upload', async () => {
+        const page = await createPageViaApi(accessToken, `${PATH_PREFIX}xlsx`, '# add');
+        const res = await request(app)
+          .post(`/api/pages/${page._id}/attachments`)
+          .set(authHeaders(accessToken))
+          .attach('file', Buffer.from('PK stub xlsx bytes'), {
+            filename: 'sheet.xlsx',
+            contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          });
+
+        expect(res.status).toBe(200);
+        expect(res.body.attachment.fileFormat).toBe('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      });
+
+      it('accepts every media type the CLI (`attach add`) can declare — this route had no MIME check before this feature, so any type CLI could already send must keep working', async () => {
+        // Literal copy of the unique MIME values in
+        // `packages/cli/src/lib/media-type.ts`'s `EXT_TO_MEDIA_TYPE` (not a
+        // cross-package import — `@crowi/api` does not depend on
+        // `@crowi/cli`). Keep in sync if that map changes.
+        const CLI_DECLARABLE_MIME = [
+          'image/png',
+          'image/jpeg',
+          'image/gif',
+          'image/webp',
+          'image/bmp',
+          'image/avif',
+          'image/apng',
+          'image/x-icon',
+          'image/svg+xml',
+          'application/pdf',
+          'text/plain',
+          'text/markdown',
+          'text/csv',
+          'application/json',
+          'application/xml',
+          'text/html',
+          'application/msword',
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          'application/vnd.ms-excel',
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          'application/vnd.ms-powerpoint',
+          'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+          'application/zip',
+          'application/gzip',
+          'application/x-tar',
+          'audio/mpeg',
+          'audio/wav',
+          'video/mp4',
+          'video/webm',
+          'video/quicktime',
+          // `DEFAULT_MEDIA_TYPE` — `mediaTypeForFilename` falls back to this for
+          // an unknown/absent extension, so the CLI can declare it too.
+          'application/octet-stream',
+        ];
+        const page = await createPageViaApi(accessToken, `${PATH_PREFIX}cli-types`, '# add');
+
+        for (const [i, mimeType] of CLI_DECLARABLE_MIME.entries()) {
+          const res = await request(app)
+            .post(`/api/pages/${page._id}/attachments`)
+            .set(authHeaders(accessToken))
+            .attach('file', Buffer.from('stub bytes'), { filename: `cli-declared-${i}.bin`, contentType: mimeType });
+          expect(res.status).toBe(200);
+          expect(res.body.attachment.fileFormat).toBe(mimeType);
+        }
+      });
+    });
+
     describe('feature-image-derivative-optimization Phase 1 — display derivative generation', () => {
       it('calls the shared generator exactly once and persists a resized derivative for a large image', async () => {
         const page = await createPageViaApi(accessToken, `${PATH_PREFIX}derivative-resized`, '# add');
@@ -1028,7 +1129,7 @@ describe('Routes /api attachments (Hono)', () => {
     // isolation work; treat this as a known coverage gap, not as proven.
     it('sandboxes an SVG attachment instead of stripping its type (keeps <img> embeds working)', async () => {
       // `image/svg+xml` is allowlisted even on the VALIDATED editor paste path
-      // (`IMAGE_UPLOAD_MIME`), and uploaded SVG is never run through
+      // (`UPLOAD_ALLOWED_MIME`), and uploaded SVG is never run through
       // `@crowi/svg-sanitize` — so an SVG IS a scriptable document here.
       // `Content-Disposition: attachment` alone would NOT contain it: the
       // renderer keeps raw `<object>`/`<embed>` (`known-tags.ts`), which load
@@ -1058,6 +1159,40 @@ describe('Routes /api attachments (Hono)', () => {
       expect(res.headers['content-type']).toBe('application/octet-stream');
       expect(res.headers['content-disposition']).toMatch(/^attachment;/);
       expect(res.headers['content-security-policy']).toBeUndefined();
+    });
+
+    // feature-attachment-upload-policy AC: ".docx / .xlsx がアップロードでき、直接
+    // 開くとダウンロードになる" — `INLINE_SAFE_MIME` is untouched by this feature
+    // (out of scope), so office documents fall through to the same download
+    // branch as any other non-allowlisted type, same as the `.zip` case above.
+    it('delivers a .docx attachment as a download, not inline (INLINE_SAFE_MIME is unchanged by this feature)', async () => {
+      const id = await uploadDeclaring(
+        `docx-dl-${Date.now()}`,
+        Buffer.from('PK stub docx bytes'),
+        'report.docx',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      );
+
+      const res = await request(app).get(`/api/attachments/${id}`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
+
+      expect(res.status).toBe(200);
+      expect(res.headers['content-type']).toBe('application/octet-stream');
+      expect(res.headers['content-disposition']).toMatch(/^attachment;/);
+    });
+
+    it('delivers a .xlsx attachment as a download, not inline', async () => {
+      const id = await uploadDeclaring(
+        `xlsx-dl-${Date.now()}`,
+        Buffer.from('PK stub xlsx bytes'),
+        'sheet.xlsx',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      );
+
+      const res = await request(app).get(`/api/attachments/${id}`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
+
+      expect(res.status).toBe(200);
+      expect(res.headers['content-type']).toBe('application/octet-stream');
+      expect(res.headers['content-disposition']).toMatch(/^attachment;/);
     });
 
     it('cannot be pushed back onto the inline branch by decorating the declared type', async () => {
