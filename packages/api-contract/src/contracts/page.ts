@@ -150,7 +150,7 @@ export const listPagesRoute = createRoute({
   responses: {
     200: {
       description:
-        'Page list (newest first) with optional portal page. The portal document is the only row carrying `revision.renderedAst`; its shape is content-negotiated via the `X-Crowi-Ast-Version` request header (RFC-0023, same semantics as GET /pages). The response varies on this header (`Vary: X-Crowi-Ast-Version`).',
+        'Page list (newest first) with optional portal page and an accurate `total` (the full, unpaginated count of the same viewer-visible set `pages` is a page of). The portal document is the only row carrying `revision.renderedAst`; its shape is content-negotiated via the `X-Crowi-Ast-Version` request header (RFC-0023, same semantics as GET /pages). The response varies on this header (`Vary: X-Crowi-Ast-Version`).',
       content: { 'application/json': { schema: ListPagesResponseSchema } },
     },
     401: {

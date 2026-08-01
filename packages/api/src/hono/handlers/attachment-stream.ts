@@ -80,14 +80,18 @@ const guessMimeFromKey = (key: string): string => {
  * MIME types that may be delivered with `Content-Disposition: inline`.
  *
  * An attachment's `fileFormat` is the multipart client's SELF-DECLARED
- * `file.type` (`handlers/attachment.ts`'s `persistUploadToTmp`), and the MIME
- * allowlist there only covers the editor's paste / dnd intents — the general
- * page-attachment upload path stores whatever the client claimed. Echoing that
- * value back as `Content-Type` with `inline` therefore let any user with edit
- * rights execute HTML on the wiki's own origin (the recommended topology
- * rewrites `/api/*` onto the web origin) and read the JWT out of
- * localStorage. So delivery pins the type instead of trusting it, and anything
- * off this list degrades to `application/octet-stream` + `attachment`.
+ * `file.type` (`handlers/attachment.ts`'s `persistUploadToTmp`). Since
+ * feature-attachment-upload-policy, `UPLOAD_ALLOWED_MIME` gates every upload
+ * route alike (the editor's paste / dnd intents AND the general
+ * page-attachment path) — but that allowlist only decides whether a type may
+ * be STORED at all; it is far broader than what may safely render `inline`
+ * (it includes e.g. `text/html` and office documents). Echoing a stored
+ * `fileFormat` back as `Content-Type` with `inline` without a SEPARATE,
+ * stricter check would let any user with edit rights execute HTML on the
+ * wiki's own origin (the recommended topology rewrites `/api/*` onto the web
+ * origin) and read the JWT out of localStorage. So delivery pins the type
+ * instead of trusting it, and anything off this list degrades to
+ * `application/octet-stream` + `attachment`.
  *
  * The rule for membership is "cannot reach this origin's DOM when rendered
  * under `X-Content-Type-Options: nosniff` and {@link SANDBOX_CSP}": raster

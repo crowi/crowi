@@ -81,6 +81,75 @@ export function visiblePageGrantOr(userId: Types.ObjectId | string): Array<Recor
   ];
 }
 
+/**
+ * Match conditions for "pages authored by `creatorId` that `viewerId` can
+ * see" — the profile "created pages" set. `findListByCreator` builds its
+ * `find()` from this; callers that need an accurate *count* of the same set
+ * (`GET /user/{username}` `createdPagesCount`, `GET /user/{username}/pages`
+ * `total`, `GET /pages/list?user=` `total` — feature-profile-stats-and-page-total)
+ * call it directly instead of re-deriving the conditions inline, so the two
+ * queries can never drift apart.
+ *
+ * Mirrors `findListByCreator`'s own rule: the creator's own drafts are
+ * visible only to themself (`visiblePageStatusOr`), and any other viewer is
+ * further restricted to `GRANT_PUBLIC` rows — the creator listing never
+ * exposes restricted/specified/owner pages to someone other than the
+ * creator, even if the viewer is in `grantedUsers`.
+ */
+export function creatorPageListMatch(creatorId: Types.ObjectId | string, viewerId: Types.ObjectId | string): Record<string, unknown> {
+  const match: Record<string, unknown> = {
+    creator: creatorId,
+    redirectTo: null,
+    $or: visiblePageStatusOr(viewerId, creatorId),
+  };
+  if (String(creatorId) !== String(viewerId)) {
+    match.grant = GRANT_PUBLIC;
+  }
+  return match;
+}
+
+/**
+ * Match conditions for "pages starting with `path`, visible to `viewerId`"
+ * — the portal/path-listing set. `findListByStartWith` builds its `find()`
+ * from this; `GET /pages/list`'s `total` for the same branch
+ * (feature-profile-stats-and-page-total) calls it directly so the listing
+ * and its count share one visibility rule.
+ *
+ * `path` is matched unescaped (`new RegExp('^' + path)`) — pre-existing
+ * `findListByStartWith` behaviour, not changed here.
+ *
+ * `opt.excludeIds` (feature-profile-stats-and-page-total) folds a
+ * `_id: $nin` clause into the SAME match `find` and `count` share, for the
+ * `portalPage` / `contentPage` ids `GET /pages/list` surfaces separately
+ * and drops from `pages`. Excluding them here — rather than filtering the
+ * `find()` results afterward — keeps `pages.length` accurate against
+ * `limit` at the skip/limit boundary, so `pager.next` and `total` never
+ * drift from what a client can actually page through.
+ */
+export function startWithPageListMatch(
+  path: string,
+  viewerId: Types.ObjectId | string,
+  opt: { includeDeletedPage?: boolean; excludeIds?: Types.ObjectId[] } = {},
+): Record<string, unknown> {
+  const pathCondition: Record<string, string | RegExp>[] = [{ path: new RegExp(`^${path}`) }];
+  if (path.match(/\/$/) && path.length > 1) {
+    pathCondition.push({ path: path.substring(0, path.length - 1) });
+  }
+  const andClauses: Record<string, unknown>[] = [{ $or: pathCondition }];
+  if (!opt.includeDeletedPage) {
+    andClauses.push({ $or: visiblePageStatusOr(viewerId) });
+  }
+  const match: Record<string, unknown> = {
+    redirectTo: null,
+    $or: visiblePageGrantOr(viewerId),
+    $and: andClauses,
+  };
+  if (opt.excludeIds && opt.excludeIds.length > 0) {
+    match._id = { $nin: opt.excludeIds };
+  }
+  return match;
+}
+
 /** Builds the `Crowi:Page:NotFound` error that callers map onto a 404. */
 function pageNotFoundError(): Error {
   const error = new Error('Page not found');
@@ -1215,15 +1284,7 @@ export default (crowi: Crowi) => {
   pageSchema.statics.findListByCreator = function (user, option, currentUser) {
     const limit = option.limit || 50;
     const offset = option.offset || 0;
-    const conditions: any = {
-      creator: user._id,
-      redirectTo: null,
-      $or: visiblePageStatusOr(currentUser._id, user._id),
-    };
-
-    if (!user.equals(currentUser._id)) {
-      conditions.grant = GRANT_PUBLIC;
-    }
+    const conditions = creatorPageListMatch(user._id, currentUser._id);
 
     return Page.find(conditions)
       .sort({ createdAt: -1 })
@@ -1261,8 +1322,14 @@ export default (crowi: Crowi) => {
    * e.g.
    */
   pageSchema.statics.findListByStartWith = function (path, userData, option) {
-    const pathCondition: Record<string, string | RegExp>[] = [];
     const includeDeletedPage = option.includeDeletedPage || false;
+    // feature-profile-stats-and-page-total — ids to fold into this call's
+    // match via `_id: $nin` (the `portalPage` / `contentPage` the caller
+    // already resolved and will surface/count separately). Threaded through
+    // to `startWithPageListMatch` so `find` stays behind the exact same
+    // match the caller's `Page.countDocuments(startWithPageListMatch(...))`
+    // uses for `total`.
+    const excludeIds: Types.ObjectId[] | undefined = option.excludeIds;
 
     if (!option) {
       option = { sort: 'updatedAt', desc: -1, offset: 0, limit: 50 };
@@ -1275,40 +1342,21 @@ export default (crowi: Crowi) => {
     };
     const sortOpt = {};
     sortOpt[opt.sort] = opt.desc;
-    const queryReg = new RegExp('^' + path);
-    // var sliceOption = option.revisionSlice || { $slice: 1 }
-
-    pathCondition.push({ path: queryReg });
-    if (path.match(/\/$/) && path.length > 1) {
-      debug('Page list by ending with /, so find also upper level page');
-      pathCondition.push({ path: path.substr(0, path.length - 1) });
-    }
 
     // FIXME: might be heavy
-    const query: any = {
-      redirectTo: null,
-      $or: visiblePageGrantOr(userData._id),
-    };
-    debug('findListByStartWith query:', JSON.stringify({ path, opt, pathCondition, userData: userData._id }));
-    const q = Page.find(query)
+    const query = startWithPageListMatch(path, userData._id, { includeDeletedPage, excludeIds });
+    debug('findListByStartWith query:', JSON.stringify({ path, opt, userData: userData._id }));
+
+    return Page.find(query)
       .populate({ path: 'revision', populate: { path: 'author', model: 'User' } })
-      .and({
-        $or: pathCondition,
-      } as any)
       .sort(sortOpt)
       .skip(opt.offset)
-      .limit(opt.limit);
-
-    if (!includeDeletedPage) {
-      q.and({
-        $or: visiblePageStatusOr(userData._id),
-      } as any);
-    }
-
-    return q.exec().then((results) => {
-      debug('findListByStartWith results count:', results.length);
-      return results;
-    });
+      .limit(opt.limit)
+      .exec()
+      .then((results) => {
+        debug('findListByStartWith results count:', results.length);
+        return results;
+      });
   };
 
   pageSchema.statics.findChildrenByPath = async function (path, userData, option) {

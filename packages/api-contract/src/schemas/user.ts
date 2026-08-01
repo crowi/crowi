@@ -83,6 +83,13 @@ export const UserPageResponseSchema = z.object({
   // Page statistics
   createdPagesCount: z.number(),
   bookmarksCount: z.number(),
+  // feature-profile-stats-and-page-total — the target user's OWN actions:
+  // pages they liked (`Page.liker` contains their id) and comments they
+  // wrote (`Comment.creator` is their id). NOT activity their own pages
+  // received from others, and not re-filtered by the viewer's grants —
+  // see the spec's "プロフィール統計の主語と API 契約" section.
+  likesCount: z.number(),
+  commentsCount: z.number(),
   // Optionally include recent items for initial display
   recentPages: z.array(PageSchema).optional(),
   recentBookmarks: z.array(BookmarkSchema).optional(),

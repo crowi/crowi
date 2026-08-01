@@ -144,6 +144,10 @@ export const addAttachmentRoute = createRoute({
       description: 'Request body exceeds the multipart envelope ceiling',
       content: { 'application/json': { schema: AttachmentErrorSchema } },
     },
+    415: {
+      description: 'MIME type not in the unified upload allow-list (feature-attachment-upload-policy)',
+      content: { 'application/json': { schema: AttachmentErrorSchema } },
+    },
     500: {
       description: 'Upload / storage failure',
       content: { 'application/json': { schema: AttachmentErrorSchema } },
@@ -250,7 +254,7 @@ export const uploadAttachmentRoute = createRoute({
       content: { 'application/json': { schema: UploadAttachmentErrorSchema } },
     },
     415: {
-      description: 'MIME type not in the per-intent allow-list',
+      description: 'MIME type not in the unified upload allow-list (feature-attachment-upload-policy)',
       content: { 'application/json': { schema: UploadAttachmentErrorSchema } },
     },
     429: {

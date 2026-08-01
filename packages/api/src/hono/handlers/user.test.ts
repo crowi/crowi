@@ -90,6 +90,11 @@ describe('Routes /api/user (Hono)', () => {
       expect(res.body.user).toMatchObject({ username: TARGET_USERNAME, name: 'Target' });
       expect(res.body.createdPagesCount).toBeGreaterThanOrEqual(1);
       expect(res.body.bookmarksCount).toBeGreaterThanOrEqual(1);
+      // feature-profile-stats-and-page-total — the fixture user in this
+      // outer describe block never likes/comments, so both are exactly 0
+      // here; the dedicated describe block below pins non-zero exact counts.
+      expect(res.body.likesCount).toBe(0);
+      expect(res.body.commentsCount).toBe(0);
       expect(Array.isArray(res.body.recentPages)).toBe(true);
       expect(Array.isArray(res.body.recentBookmarks)).toBe(true);
     });
@@ -136,6 +141,162 @@ describe('Routes /api/user (Hono)', () => {
       const res = await request(app).get(`/api/user/${TARGET_USERNAME}`);
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
+    });
+  });
+
+  /**
+   * feature-profile-stats-and-page-total — `likesCount` / `commentsCount`
+   * are the target user's OWN actions (pages they liked, comments they
+   * wrote), never activity their own pages received from others. A
+   * dedicated fixture set is used here (rather than the outer describe's
+   * shared `targetUser`) so the exact counts in the acceptance criteria
+   * (2 likes, 3 comments) are pinned without coupling to other tests'
+   * side effects on the shared fixture.
+   */
+  describe('GET /user/:username — likesCount / commentsCount (feature-profile-stats-and-page-total)', () => {
+    const PATH_PREFIX = '/hono-user-profile-stats-test/';
+    const STATS_USERNAME = 'profile-stats-user';
+    const STATS_EMAIL = 'profile-stats-user@example.com';
+    const OTHER_USERNAME = 'profile-stats-other';
+    const OTHER_EMAIL = 'profile-stats-other@example.com';
+
+    let statsUser: UserDocument;
+    let statsToken: string;
+    let otherToken: string;
+
+    beforeAll(async () => {
+      const stats = await seedActiveUser({ name: 'Stats User', username: STATS_USERNAME, email: STATS_EMAIL, password: 'Password!1' });
+      statsUser = stats.user;
+      statsToken = stats.accessToken;
+      const other = await seedActiveUser({ name: 'Stats Other', username: OTHER_USERNAME, email: OTHER_EMAIL, password: 'Password!1' });
+      otherToken = other.accessToken;
+    });
+
+    afterEach(async () => {
+      const pages = await Page()
+        .find({ path: { $regex: `^${PATH_PREFIX}` } })
+        .select('_id');
+      const pageIds = pages.map((p: { _id: unknown }) => p._id);
+      const Comment = crowi.model('Comment');
+      await Promise.all([Comment.deleteMany({ page: { $in: pageIds } }), Page().deleteMany({ path: { $regex: `^${PATH_PREFIX}` } })]);
+    });
+
+    afterAll(async () => {
+      await User().deleteMany({ $or: [{ email: STATS_EMAIL }, { email: OTHER_EMAIL }] });
+    });
+
+    // Seeds a page (owned by `otherToken`, GRANT_PUBLIC by default) and
+    // returns its id + latest revision id.
+    const createStatsPage = async (name: string) => {
+      const res = await request(app)
+        .post('/api/pages')
+        .set('Authorization', `Bearer ${otherToken}`)
+        .send({ path: `${PATH_PREFIX}${name}`, body: `# ${name}` });
+      expect(res.status).toBe(200);
+      return { id: res.body.page._id as string, revisionId: res.body.page.revision._id as string };
+    };
+
+    it("counts only the target user's own likes/comments: dedupes a repeat like, excludes an unliked page, and excludes another user's likes/comments", async () => {
+      const pageA = await createStatsPage('a');
+      const pageB = await createStatsPage('b');
+      const pageC = await createStatsPage('c'); // liked then unliked — must not count
+      const pageD = await createStatsPage('d'); // only `other` interacts with this one
+
+      const statsAuth = { Authorization: `Bearer ${statsToken}` };
+      const otherAuth = { Authorization: `Bearer ${otherToken}` };
+
+      // statsUser likes 2 distinct pages; a repeat like on pageA must not double-count.
+      await request(app).post('/api/pages/like').set(statsAuth).send({ page_id: pageA.id });
+      await request(app).post('/api/pages/like').set(statsAuth).send({ page_id: pageB.id });
+      await request(app).post('/api/pages/like').set(statsAuth).send({ page_id: pageA.id });
+
+      // statsUser likes pageC, then unlikes it — must not count.
+      const likeC = await request(app).post('/api/pages/like').set(statsAuth).send({ page_id: pageC.id });
+      expect(likeC.status).toBe(200);
+      const unlikeC = await request(app).post('/api/pages/unlike').set(statsAuth).send({ page_id: pageC.id });
+      expect(unlikeC.status).toBe(200);
+
+      // `other` likes pageD — must never count toward statsUser.
+      const otherLike = await request(app).post('/api/pages/like').set(otherAuth).send({ page_id: pageD.id });
+      expect(otherLike.status).toBe(200);
+
+      // statsUser writes 3 comments (one on each of pageA/B/C).
+      for (const page of [pageA, pageB, pageC]) {
+        const res = await request(app)
+          .post('/api/comments')
+          .set(statsAuth)
+          .send({ page_id: page.id, revision_id: page.revisionId, comment: `stats comment on ${page.id}` });
+        expect(res.status).toBe(200);
+      }
+      // `other` writes a comment on pageD — must never count toward statsUser.
+      const otherComment = await request(app)
+        .post('/api/comments')
+        .set(otherAuth)
+        .send({ page_id: pageD.id, revision_id: pageD.revisionId, comment: 'other comment' });
+      expect(otherComment.status).toBe(200);
+
+      const res = await request(app).get(`/api/user/${STATS_USERNAME}`).set(statsAuth);
+      expect(res.status).toBe(200);
+      expect(res.body.likesCount).toBe(2);
+      expect(res.body.commentsCount).toBe(3);
+      // Existing counts still return as before (shape parity).
+      expect(typeof res.body.createdPagesCount).toBe('number');
+      expect(typeof res.body.bookmarksCount).toBe('number');
+    });
+
+    it('computes likesCount/commentsCount via Page.countDocuments({ liker }) / Comment.countDocuments({ creator }) — DB-side counts on the indexed fields, never an app-side scan', async () => {
+      const pageCountSpy = jest.spyOn(Page(), 'countDocuments');
+      const Comment = crowi.model('Comment');
+      const commentCountSpy = jest.spyOn(Comment, 'countDocuments');
+      try {
+        const res = await request(app).get(`/api/user/${STATS_USERNAME}`).set('Authorization', `Bearer ${statsToken}`);
+        expect(res.status).toBe(200);
+
+        const likerCall = (pageCountSpy.mock.calls as Array<[Record<string, unknown> | undefined]>).find(([filter]) => filter?.liker !== undefined);
+        expect(likerCall).toBeDefined();
+        expect(String((likerCall as [Record<string, unknown>])[0].liker)).toBe(String(statsUser._id));
+
+        expect(commentCountSpy).toHaveBeenCalledWith({ creator: statsUser._id });
+      } finally {
+        pageCountSpy.mockRestore();
+        commentCountSpy.mockRestore();
+      }
+    });
+
+    it("counts a like/comment on a page the REQUESTING viewer cannot read — likesCount/commentsCount are the target user's own actions, never re-filtered by the current viewer's own grants", async () => {
+      const before = await request(app).get(`/api/user/${STATS_USERNAME}`).set('Authorization', `Bearer ${statsToken}`);
+      expect(before.status).toBe(200);
+      const likesBefore = before.body.likesCount as number;
+      const commentsBefore = before.body.commentsCount as number;
+
+      // Restricted to statsUser only — no third party (creator or
+      // grantedUsers) can read it via GET /pages(/list).
+      const [restrictedPage] = await Fixture.generate('Page', [
+        {
+          path: `${PATH_PREFIX}viewer-cannot-read`,
+          grant: Page().GRANT_RESTRICTED,
+          grantedUsers: [statsUser._id],
+          creator: statsUser._id,
+          status: 'published',
+          liker: [statsUser._id],
+        },
+      ]);
+      await Fixture.generate('Comment', [{ page: restrictedPage._id, creator: statsUser._id, comment: 'stats comment on a page the viewer cannot read' }]);
+
+      const stranger = await createTestUser({
+        name: 'Profile Stats Stranger',
+        username: 'profile-stats-stranger',
+        email: 'profile-stats-stranger@example.com',
+      });
+
+      // `stranger` is neither the creator nor in `grantedUsers` — the page
+      // above is invisible to them. likesCount/commentsCount must still
+      // include it: they describe statsUser's OWN actions, independent of
+      // who is asking (spec §プロフィール統計の主語).
+      const res = await request(app).get(`/api/user/${STATS_USERNAME}`).set('Authorization', `Bearer ${stranger.accessToken}`);
+      expect(res.status).toBe(200);
+      expect(res.body.likesCount).toBe(likesBefore + 1);
+      expect(res.body.commentsCount).toBe(commentsBefore + 1);
     });
   });
 

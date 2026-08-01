@@ -1,7 +1,9 @@
 import { syntaxTree } from '@codemirror/language';
 import type { EditorState, Extension } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
+import { notify } from '@/lib/notify';
 import { generatePastedFilename, runUpload } from './upload-placeholder';
+import { disallowedTypeMessage, isImageFile, isUploadAllowedType } from './upload-policy';
 
 /**
  * RFC-0004 Phase 6 — CodeMirror 6 paste handler for the editor.
@@ -15,15 +17,22 @@ import { generatePastedFilename, runUpload } from './upload-placeholder';
  *     at render time per RFC-0002) — unless the cursor already sits
  *     inside `[…](…)` link syntax, in which case insert plain to avoid
  *     double-wrapping.
- *   - **Image blob** (screenshot / image copied from another app):
- *     auto-name it `pasted-{timestamp}.{ext}`, drop a progress
- *     placeholder, and upload via `/api/attachments/upload`,
- *     replacing the placeholder with `![name](url)` on success.
+ *   - **File** (a screenshot / an image copied from another app / a file
+ *     copied from the OS file manager): drop a progress placeholder and
+ *     upload via `/api/attachments/upload`. Images are auto-named
+ *     `pasted-{timestamp}.{ext}` and land as `![name](url)`; any other
+ *     file keeps its own name and lands as `[name](url)`
+ *     (feature-attachment-upload-policy — see `upload-policy.ts` for why
+ *     "may it be uploaded" and "is it embedded as an image" are separate
+ *     questions, and why paste must answer the first one exactly like the
+ *     attach button and drag-and-drop do).
  *
  * Plain text and rich clipboard content are NOT intercepted, so the
  * built-in paste (and therefore CodeMirror's typing-only autocomplete
  * activation) is untouched — pasted `@`/`[[` never opens the dropdown
- * (RFC §"Paste vs autocomplete").
+ * (RFC §"Paste vs autocomplete"). Rich text carrying HTML arrives as
+ * `kind === 'string'` clipboard items, not files, so it never reaches the
+ * upload branch.
  *
  * The pure helpers (`extractSingleUrl`, `isInsideLinkSyntax`) are
  * exported so the URL detection is unit-testable without a DOM.
@@ -65,19 +74,26 @@ export function isInsideLinkSyntax(state: EditorState, pos: number): boolean {
   return false;
 }
 
-/** Extract the first image `File` from a clipboard payload, if any. */
-function firstImageFile(data: DataTransfer): File | null {
-  for (const item of Array.from(data.items)) {
-    if (item.kind === 'file' && item.type.startsWith('image/')) {
-      const file = item.getAsFile();
-      if (file) return file;
-    }
-  }
-  // Some browsers expose pasted images only via `files`.
-  for (const file of Array.from(data.files)) {
-    if (file.type.startsWith('image/')) return file;
-  }
-  return null;
+/** Every `File` a clipboard payload carries, in clipboard order. */
+function clipboardFiles(data: DataTransfer): File[] {
+  const fromItems = Array.from(data.items)
+    .filter((item) => item.kind === 'file')
+    .map((item) => item.getAsFile())
+    .filter((file): file is File => file !== null);
+  if (fromItems.length > 0) return fromItems;
+  // Some browsers expose pasted files only via `files`.
+  return Array.from(data.files);
+}
+
+/**
+ * The single `File` a paste uploads, or `null` when the clipboard carries
+ * none. Images win over other files: a rich-text copy that bundles both a
+ * screenshot and some other attachment-ish payload should still paste as
+ * the image the user sees.
+ */
+function firstPastedFile(data: DataTransfer): File | null {
+  const files = clipboardFiles(data);
+  return files.find(isImageFile) ?? files[0] ?? null;
 }
 
 /** Configuration for {@link pasteHandler}. */
@@ -103,15 +119,21 @@ export function pasteHandler(options: PasteHandlerOptions): Extension {
       const data = event.clipboardData;
       if (!data) return false;
 
-      // --- Image blob paste ---
-      const image = firstImageFile(data);
-      if (image) {
+      // --- File paste (image blob or any other clipboard file) ---
+      const file = firstPastedFile(data);
+      if (file) {
         event.preventDefault();
-        const filename = generatePastedFilename(image.type);
+        if (!isUploadAllowedType(file)) {
+          notify.warn(disallowedTypeMessage(file));
+          return true;
+        }
+        // A pasted image is a nameless blob, so it gets the generated
+        // `pasted-…` name; a file copied from the OS carries its own.
+        const filename = isImageFile(file) ? generatePastedFilename(file.type) : file.name;
         const pos = view.state.selection.main.from;
         // Fire-and-forget: `runUpload` owns the placeholder lifecycle
         // and never throws (failures land in a static error marker).
-        void runUpload(view, image, filename, pos, pageId, 'paste');
+        void runUpload(view, file, filename, pos, pageId, 'paste');
         return true;
       }
 

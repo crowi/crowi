@@ -1,6 +1,6 @@
 import { Types } from 'mongoose';
 import type { SearchDriver, SearchableDoc } from '@crowi/plugin-api';
-import { app, crowi } from 'src/test/setup';
+import { app, crowi, Fixture } from 'src/test/setup';
 import { waitForModel } from 'src/test/wait-for-model';
 import { authHeaders, createTestUser, createPageViaApi } from 'src/test/test-helpers';
 import { createJwtUtil } from 'src/util/jwt';
@@ -2006,6 +2006,220 @@ describe('Routes /api/pages/list (Hono listPages — root branch grant visibilit
     expect(withoutFlag.status).toBe(200);
     const withoutFlagPaths = (withoutFlag.body.pages as Array<{ path: string }>).map((p) => p.path);
     expect(withoutFlagPaths).not.toContain(`/trash${path}`);
+  });
+});
+
+/**
+ * feature-profile-stats-and-page-total — the new top-level `total` on
+ * `GET /pages/list`, across every branch (root path='/'/omitted, path
+ * prefix, `user=`, include_deleted/trash) and independent of pagination.
+ *
+ * The root-branch tests use a BEFORE/AFTER delta rather than an absolute
+ * expected number: `path=/` and path-omitted match against the whole
+ * per-file database (shared with every other describe block in this file),
+ * so asserting an absolute total would be coupled to unrelated fixtures'
+ * cleanup timing. A delta is exact and independent of that shared state.
+ * The path-prefix / user= / trash branches scope their match to this
+ * block's own `PATH_PREFIX` (or a specific creator id), so those assert
+ * absolute counts directly.
+ */
+describe('Routes /api/pages/list (Hono listPages — total, feature-profile-stats-and-page-total)', () => {
+  const PATH_PREFIX = '/hono-page-list-total-test/';
+  let Page: ReturnType<typeof crowi.model>;
+  let alice: Awaited<ReturnType<typeof createTestUser>>;
+  let bob: Awaited<ReturnType<typeof createTestUser>>;
+  let aliceHeaders: ReturnType<typeof authHeaders>;
+  let bobHeaders: ReturnType<typeof authHeaders>;
+
+  beforeAll(async () => {
+    Page = crowi.model('Page');
+    alice = await createTestUser({ name: 'Total Alice', username: 'totalListAlice', email: 'total-list-alice@example.com' });
+    bob = await createTestUser({ name: 'Total Bob', username: 'totalListBob', email: 'total-list-bob@example.com' });
+    aliceHeaders = authHeaders(alice.accessToken);
+    bobHeaders = authHeaders(bob.accessToken);
+  });
+
+  afterEach(async () => {
+    await cleanupPathPrefix(PATH_PREFIX);
+    await cleanupPathPrefix(`/trash${PATH_PREFIX}`);
+  });
+
+  it("path=/ — total grows by exactly the newly-visible rows: public + own draft + a page granted (not created) by the viewer; excludes another user's draft and a non-granted page", async () => {
+    const before = await request(app).get('/api/pages/list').set(aliceHeaders).query({ path: '/', limit: 1 });
+    expect(before.status).toBe(200);
+    const totalBefore = before.body.total as number;
+
+    // Visible to alice: public, her own draft, and a restricted page
+    // she is granted on (created by bob — exercises the `grantedUsers`
+    // branch of visiblePageGrantOr, not just the creator shortcut).
+    await request(app)
+      .post('/api/pages')
+      .set(aliceHeaders)
+      .send({ path: `${PATH_PREFIX}root-public`, body: '# public' });
+    await request(app)
+      .post('/api/pages/drafts')
+      .set(aliceHeaders)
+      .send({ path: `${PATH_PREFIX}root-my-draft` });
+    await Fixture.generate('Page', [
+      {
+        path: `${PATH_PREFIX}root-granted-to-alice`,
+        grant: Page.GRANT_RESTRICTED,
+        grantedUsers: [alice.user, bob.user],
+        creator: bob.user,
+        status: 'published',
+      },
+    ]);
+
+    // Hidden from alice:
+    await request(app)
+      .post('/api/pages/drafts')
+      .set(bobHeaders)
+      .send({ path: `${PATH_PREFIX}root-bobs-draft` });
+    await request(app)
+      .post('/api/pages')
+      .set(bobHeaders)
+      .send({ path: `${PATH_PREFIX}root-bobs-restricted`, body: '# secret', grant: 2 });
+
+    const after = await request(app).get('/api/pages/list').set(aliceHeaders).query({ path: '/', limit: 1 });
+    expect(after.status).toBe(200);
+    expect(after.body.total).toBe(totalBefore + 3);
+  });
+
+  it('path unspecified — total reflects the same viewer-visible delta as path=/', async () => {
+    const before = await request(app).get('/api/pages/list').set(aliceHeaders).query({ limit: 1 });
+    expect(before.status).toBe(200);
+    const totalBefore = before.body.total as number;
+
+    await request(app)
+      .post('/api/pages')
+      .set(aliceHeaders)
+      .send({ path: `${PATH_PREFIX}nopath-public`, body: '# public' });
+    await request(app)
+      .post('/api/pages')
+      .set(bobHeaders)
+      .send({ path: `${PATH_PREFIX}nopath-bobs-restricted`, body: '# secret', grant: 2 });
+
+    const after = await request(app).get('/api/pages/list').set(aliceHeaders).query({ limit: 1 });
+    expect(after.status).toBe(200);
+    expect(after.body.total).toBe(totalBefore + 1);
+  });
+
+  it('path prefix — total equals the visible row count under the prefix and excludes the portal document (dropped from `pages` too)', async () => {
+    const portalPath = `${PATH_PREFIX}portal-total/`;
+    await createPageViaApi(alice.accessToken, portalPath, '# portal doc');
+    await createPageViaApi(alice.accessToken, `${portalPath}child-a`, '# child a');
+    await createPageViaApi(alice.accessToken, `${portalPath}child-b`, '# child b');
+    // Not granted to alice — must not count.
+    await createPageViaApi(bob.accessToken, `${portalPath}bobs-secret`, '# secret', 2);
+
+    const res = await request(app).get('/api/pages/list').set(aliceHeaders).query({ path: portalPath });
+    expect(res.status).toBe(200);
+    expect(res.body.portalPage).not.toBeNull();
+    expect(res.body.pages.length).toBe(2);
+    expect(res.body.total).toBe(2);
+  });
+
+  it('path prefix pagination does not undercount a page when the portal document falls inside the first page (regression: portal/content exclusion must be baked into the shared find+count match BEFORE skip/limit, not filtered out of `pages` afterward)', async () => {
+    const portalPath = `${PATH_PREFIX}portal-pagination/`;
+    await createPageViaApi(alice.accessToken, portalPath, '# portal doc');
+    await createPageViaApi(alice.accessToken, `${portalPath}child-a`, '# child a');
+    await createPageViaApi(alice.accessToken, `${portalPath}child-b`, '# child b');
+    await createPageViaApi(alice.accessToken, `${portalPath}child-c`, '# child c');
+
+    // Sort ascending by path: the portal path is a strict prefix of every
+    // child path, so it sorts FIRST — landing inside the `limit: 2` page
+    // alongside child-a. If the portal id were dropped from `pages` only
+    // AFTER skip/limit (rather than excluded from the match `find`/`count`
+    // share), this response would come back with only 1 row and a `null`
+    // `pager.next` even though `limit` is 2 and 2 more children remain.
+    const page1 = await request(app).get('/api/pages/list').set(aliceHeaders).query({ path: portalPath, sort: 'path', order: 'asc', limit: 2, offset: 0 });
+    expect(page1.status).toBe(200);
+    expect(page1.body.portalPage).not.toBeNull();
+    expect(page1.body.total).toBe(3);
+    expect((page1.body.pages as Array<{ path: string }>).map((p) => p.path)).toEqual([`${portalPath}child-a`, `${portalPath}child-b`]);
+    expect(page1.body.pager).toEqual({ prev: null, next: 2, offset: 0 });
+
+    const page2 = await request(app).get('/api/pages/list').set(aliceHeaders).query({ path: portalPath, sort: 'path', order: 'asc', limit: 2, offset: 2 });
+    expect(page2.status).toBe(200);
+    expect(page2.body.total).toBe(3);
+    expect((page2.body.pages as Array<{ path: string }>).map((p) => p.path)).toEqual([`${portalPath}child-c`]);
+    expect(page2.body.pager).toEqual({ prev: 0, next: null, offset: 2 });
+  });
+
+  it('total is stable across offset/limit while pager.next/prev follow the standard next-page pattern', async () => {
+    await Promise.all(Array.from({ length: 5 }, (_, i) => createPageViaApi(alice.accessToken, `${PATH_PREFIX}paged-${i}`, `# paged ${i}`)));
+
+    const page1 = await request(app).get('/api/pages/list').set(aliceHeaders).query({ path: PATH_PREFIX, limit: 2, offset: 0 });
+    const page2 = await request(app).get('/api/pages/list').set(aliceHeaders).query({ path: PATH_PREFIX, limit: 2, offset: 2 });
+    const page3 = await request(app).get('/api/pages/list').set(aliceHeaders).query({ path: PATH_PREFIX, limit: 2, offset: 4 });
+
+    expect(page1.status).toBe(200);
+    expect(page1.body.total).toBe(5);
+    expect(page2.body.total).toBe(5);
+    expect(page3.body.total).toBe(5);
+    expect(page1.body.pager).toEqual({ prev: null, next: 2, offset: 0 });
+    expect(page2.body.pager).toEqual({ prev: 0, next: 4, offset: 2 });
+    expect(page3.body.pager).toEqual({ prev: 2, next: null, offset: 4 });
+  });
+
+  it('user=<creator id> — total matches the visible-by-that-creator count, hiding a non-public page from a different viewer', async () => {
+    const p1 = await createPageViaApi(bob.accessToken, `${PATH_PREFIX}by-bob-public-a`, '# a');
+    const p2 = await createPageViaApi(bob.accessToken, `${PATH_PREFIX}by-bob-public-b`, '# b');
+    // Owner-only — hidden from a non-creator viewer even though this is
+    // the creator listing's OWN visibility rule (not the root grant rule).
+    await createPageViaApi(bob.accessToken, `${PATH_PREFIX}by-bob-owner-only`, '# private', 4);
+
+    const asAlice = await request(app)
+      .get('/api/pages/list')
+      .set(aliceHeaders)
+      .query({ user: String(bob.user._id) });
+    expect(asAlice.status).toBe(200);
+    expect(asAlice.body.total).toBe(2);
+    const idsAsAlice = (asAlice.body.pages as Array<{ _id: string }>).map((p) => p._id).sort();
+    expect(idsAsAlice).toEqual([p1._id, p2._id].sort());
+
+    const asBob = await request(app)
+      .get('/api/pages/list')
+      .set(bobHeaders)
+      .query({ user: String(bob.user._id) });
+    expect(asBob.status).toBe(200);
+    expect(asBob.body.total).toBe(3);
+  });
+
+  it('user=<unknown id> — returns total: 0 with an empty pages array (contract-valid, not omitted)', async () => {
+    const res = await request(app).get('/api/pages/list').set(aliceHeaders).query({ user: '000000000000000000000000' });
+    expect(res.status).toBe(200);
+    expect(res.body.total).toBe(0);
+    expect(res.body.pages).toEqual([]);
+  });
+
+  it('include_deleted / /trash — total counts a soft-deleted page only via the trash view or include_deleted=true', async () => {
+    const created = await createPageViaApi(alice.accessToken, `${PATH_PREFIX}to-delete`, '# bye');
+    const del = await request(app).delete('/api/pages').set(aliceHeaders).send({ page_id: created._id });
+    expect(del.status).toBe(200);
+
+    // Soft-delete rewrites the path to /trash/<original> — only a
+    // redirect stub remains at the original prefix, and `redirectTo: null`
+    // excludes it regardless of include_deleted, so the original-prefix
+    // total stays 0 either way.
+    const withoutFlag = await request(app).get('/api/pages/list').set(aliceHeaders).query({ path: PATH_PREFIX });
+    expect(withoutFlag.status).toBe(200);
+    expect(withoutFlag.body.total).toBe(0);
+
+    // /trash/* forces include_deleted=true implicitly; passing it
+    // explicitly here mirrors the existing trash-branch precedent test.
+    const trashView = await request(app)
+      .get('/api/pages/list')
+      .set(aliceHeaders)
+      .query({ path: `/trash${PATH_PREFIX}`, include_deleted: 'true' });
+    expect(trashView.status).toBe(200);
+    expect(trashView.body.total).toBe(1);
+  });
+
+  it('returns 401 AUTHENTICATION_REQUIRED without a bearer token', async () => {
+    const res = await request(app).get('/api/pages/list').query({ path: PATH_PREFIX });
+    expect(res.status).toBe(401);
+    expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
   });
 });
 

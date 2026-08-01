@@ -3785,11 +3785,15 @@
               "path",
               "createdAt"
             ]
+          },
+          "total": {
+            "type": "number"
           }
         },
         "required": [
           "pages",
-          "pager"
+          "pager",
+          "total"
         ]
       },
       "GetPageResponse": {
@@ -5793,6 +5797,7 @@
             "enum": [
               "too_large",
               "disallowed_type",
+              "DISALLOWED_MIME",
               "rate_limited",
               "no_permission"
             ]
@@ -11670,7 +11675,7 @@
         ],
         "responses": {
           "200": {
-            "description": "User profile with statistics + recent activity",
+            "description": "User profile with statistics (createdPagesCount, bookmarksCount, likesCount, commentsCount — the last two are the target user's OWN likes/comments, not activity their pages received) + recent activity",
             "content": {
               "application/json": {
                 "schema": {
@@ -11733,6 +11738,12 @@
                       "type": "number"
                     },
                     "bookmarksCount": {
+                      "type": "number"
+                    },
+                    "likesCount": {
+                      "type": "number"
+                    },
+                    "commentsCount": {
                       "type": "number"
                     },
                     "recentPages": {
@@ -12752,7 +12763,9 @@
                   "required": [
                     "user",
                     "createdPagesCount",
-                    "bookmarksCount"
+                    "bookmarksCount",
+                    "likesCount",
+                    "commentsCount"
                   ]
                 }
               }
@@ -22346,7 +22359,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Page list (newest first) with optional portal page. The portal document is the only row carrying `revision.renderedAst`; its shape is content-negotiated via the `X-Crowi-Ast-Version` request header (RFC-0023, same semantics as GET /pages). The response varies on this header (`Vary: X-Crowi-Ast-Version`).",
+            "description": "Page list (newest first) with optional portal page and an accurate `total` (the full, unpaginated count of the same viewer-visible set `pages` is a page of). The portal document is the only row carrying `revision.renderedAst`; its shape is content-negotiated via the `X-Crowi-Ast-Version` request header (RFC-0023, same semantics as GET /pages). The response varies on this header (`Vary: X-Crowi-Ast-Version`).",
             "content": {
               "application/json": {
                 "schema": {
@@ -23780,11 +23793,15 @@
                         "path",
                         "createdAt"
                       ]
+                    },
+                    "total": {
+                      "type": "number"
                     }
                   },
                   "required": [
                     "pages",
-                    "pager"
+                    "pager",
+                    "total"
                   ]
                 }
               }
@@ -32211,6 +32228,48 @@
               }
             }
           },
+          "415": {
+            "description": "MIME type not in the unified upload allow-list (feature-attachment-upload-policy)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "INVALID_PAGE_ID",
+                            "PAGE_NOT_FOUND",
+                            "FILE_MISSING",
+                            "FILE_TOO_LARGE",
+                            "DISALLOWED_MIME",
+                            "INVALID_ATTACHMENT_ID",
+                            "ATTACHMENT_NOT_FOUND",
+                            "FORBIDDEN_FOR_DELETE",
+                            "UPLOAD_FAILED",
+                            "REMOVE_FAILED"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
           "500": {
             "description": "Upload / storage failure",
             "content": {
@@ -32335,6 +32394,7 @@
                       "enum": [
                         "too_large",
                         "disallowed_type",
+                        "DISALLOWED_MIME",
                         "rate_limited",
                         "no_permission"
                       ]
@@ -32406,6 +32466,7 @@
                       "enum": [
                         "too_large",
                         "disallowed_type",
+                        "DISALLOWED_MIME",
                         "rate_limited",
                         "no_permission"
                       ]
@@ -32438,6 +32499,7 @@
                       "enum": [
                         "too_large",
                         "disallowed_type",
+                        "DISALLOWED_MIME",
                         "rate_limited",
                         "no_permission"
                       ]
@@ -32459,7 +32521,7 @@
             }
           },
           "415": {
-            "description": "MIME type not in the per-intent allow-list",
+            "description": "MIME type not in the unified upload allow-list (feature-attachment-upload-policy)",
             "content": {
               "application/json": {
                 "schema": {
@@ -32470,6 +32532,7 @@
                       "enum": [
                         "too_large",
                         "disallowed_type",
+                        "DISALLOWED_MIME",
                         "rate_limited",
                         "no_permission"
                       ]
@@ -32502,6 +32565,7 @@
                       "enum": [
                         "too_large",
                         "disallowed_type",
+                        "DISALLOWED_MIME",
                         "rate_limited",
                         "no_permission"
                       ]

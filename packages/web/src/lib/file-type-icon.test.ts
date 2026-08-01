@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { File, FileArchive, FileAudio, FileCode, FileImage, FileSpreadsheet, FileText, FileVideo } from 'lucide-react';
+import { File, FileArchive, FileAudio, FileCode, FileImage, FileSpreadsheet, FileText, FileVideo, Presentation } from 'lucide-react';
 import { getFileTypeIcon } from './file-type-icon';
 
 describe('getFileTypeIcon', () => {
@@ -21,6 +21,16 @@ describe('getFileTypeIcon', () => {
 
   it('is case-insensitive and tolerates surrounding whitespace', () => {
     expect(getFileTypeIcon('  Application/PDF ')).toBe(FileText);
+  });
+
+  it('feature-attachment-upload-policy: maps office document types to a matching icon', () => {
+    expect(getFileTypeIcon('application/msword')).toBe(FileText);
+    expect(getFileTypeIcon('application/vnd.openxmlformats-officedocument.wordprocessingml.document')).toBe(FileText);
+    expect(getFileTypeIcon('application/vnd.ms-powerpoint')).toBe(Presentation);
+    expect(getFileTypeIcon('application/vnd.openxmlformats-officedocument.presentationml.presentation')).toBe(Presentation);
+    // Extension fallback for an empty / unknown MIME.
+    expect(getFileTypeIcon('', 'report.docx')).toBe(FileText);
+    expect(getFileTypeIcon('', 'slides.pptx')).toBe(Presentation);
   });
 
   it('falls back to the file extension when the MIME is empty / unknown', () => {

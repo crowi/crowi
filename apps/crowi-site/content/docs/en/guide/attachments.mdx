@@ -32,12 +32,51 @@ single `Attachment` document is created.
 For choosing a storage backend, see
 [Storage configuration](../operations/storage).
 
+### What file types can be uploaded
+
+Whichever of the following three ways you attach a file, the decision of
+whether to accept it uses **the same criteria**:
+
+- Uploading from the Attachments section in the page footer
+- **Pasting** into the editor
+- **Dragging and dropping** into the editor
+
+These used to be checked against separate, per-route allow-lists — for
+example, the same HTML file could upload fine from the Attachments button
+while being rejected by drag-and-drop. All three routes now consult the
+same allow-list, so whether a file is accepted no longer depends on which
+one you used.
+
+The main categories accepted:
+
+| Category | Examples |
+| -------- | -------- |
+| Images | PNG / JPEG / GIF / WebP / SVG / BMP / AVIF / APNG / ICO |
+| Documents / text | PDF, plain text, Markdown, CSV, JSON, XML, HTML |
+| Office documents | Word (`.doc` / `.docx`), Excel (`.xls` / `.xlsx`), PowerPoint (`.ppt` / `.pptx`) |
+| Archives | zip, gzip, tar |
+| Audio / video | MP3, WAV, MP4, WebM, QuickTime (`.mov`) |
+| Unknown type | Also accepted when the browser sends no `Content-Type` at all (`application/octet-stream`) |
+
+Uploading a type that is not on this allow-list is rejected with the same
+error every time: `Files of type <MIME type> cannot be uploaded.` — the
+criteria and the wording are identical across every route.
+
+> **Note**: This allow-list only decides "may this be saved at all".
+> Whether an attachment is displayed inline in the browser or downloaded
+> when opened directly is a separate decision — see "Content types on
+> delivery" below. Office documents and archives, the types newly
+> accepted here, are downloaded when opened directly.
+
 ## The attachment grid
 
 The Attachments section in the page footer renders attachments as a
 **uniform tile grid**. Each tile shows either the image thumbnail (for
 PNG / JPEG / GIF / WebP, etc.) or a file-type icon stacked above the
-filename (for PDFs, zips, text, and other non-image files).
+filename (for everything else). The icon **varies by file format** — PDF,
+zip, plain text, Word, Excel, PowerPoint, and more each get their own icon
+— and falls back to a generic icon for any MIME type not in that mapping,
+so the grid never breaks on an unrecognised type.
 
 - Clicking a tile opens a **modal preview** in-page — you do not
   navigate away from the page.
@@ -175,13 +214,16 @@ Markdown syntax is inserted automatically at the cursor.
 > from the Attachments section in the page footer still works as
 > described above.
 
-### Pasting an image
+### Pasting a file
 
-Pasting a screenshot or an image copied from another app uploads it
-automatically.
+Pasting a screenshot, an image copied from another app, or a file copied
+from your OS file manager uploads it automatically.
 
-- The filename is auto-generated as `pasted-<timestamp>.<ext>` (e.g.
-  `pasted-1717891234.png`).
+- Images are inserted as `![filename](url)`, other files as
+  `[filename](url)` — the same image-vs-link rule drag-and-drop follows.
+- A pasted image has no filename of its own, so one is auto-generated as
+  `pasted-<timestamp>.<ext>` (e.g. `pasted-1717891234.png`). A file
+  copied from the file manager keeps its own name.
 - While uploading, a placeholder `![Uploading pasted-1717891234.png
   (37%)…](#)` is inserted at the cursor, with the percentage updating
   live. Other members editing the same page collaboratively see this
@@ -191,20 +233,24 @@ automatically.
 - Pasting the same image twice creates two separate attachments (there
   is no client-side de-duplication). Delete the extra one from the
   attachment list if you don't need it.
+- The size cap for paste is **10 MB**.
 
-Pasted images are accepted up to **10 MB**, for these types:
+Which files paste accepts is the **same unified allow-list** described in
+"What file types can be uploaded" above — a `.docx` or an HTML file
+pasted from the file manager uploads exactly as it would through the
+Attachments button or drag-and-drop. Pasting a type not on the allow-list
+shows the same `Files of type <MIME type> cannot be uploaded.` toast the
+other routes show.
 
-| Type | MIME type |
-| ---- | --------- |
-| PNG | `image/png` |
-| JPEG | `image/jpeg` |
-| GIF | `image/gif` |
-| WebP | `image/webp` |
-| SVG | `image/svg+xml` |
+Whether the result is embedded as an image or linked is decided purely
+by the file's type, independently of that allow-list: only images become
+`![…](…)`.
 
-> **Tip**: For what happens when you paste non-image text or a bare
-> URL, see [Writing Markdown](./markdown) — pasting a URL is
-> automatically converted into link syntax.
+> **Tip**: Copied *text* — including rich text carrying HTML formatting —
+> is not a file, so it is pasted as text, not uploaded. For what happens
+> when you paste text or a bare URL, see
+> [Writing Markdown](./markdown) — pasting a URL is automatically
+> converted into link syntax.
 
 ### Dragging and dropping files
 
@@ -219,24 +265,24 @@ starts the upload at the cursor position.
 - The per-file limit is **50 MB**, and a single drop can carry at most
   **5 files**. Exceeding either limit shows a toast notification.
 
-The allow-list of file types accepted by drag-and-drop is below. In the
-current release this list is fixed — there is no per-instance setting for
-it:
+Drag-and-drop accepts the **same unified allow-list** described in "What
+file types can be uploaded" above (images / PDF and text formats / Word,
+Excel, PowerPoint and other office documents / archives / audio and
+video). Drag-and-drop used to have its own narrower allow-list — images
+plus PDF/txt/md/csv and zip — which rejected everyday business files like
+`.docx`; it now applies the exact same check as the Attachments button. In
+the current release this allow-list is fixed — there is no per-instance
+setting for it.
 
-| Category | Accepted |
-| -------- | -------- |
-| Images | Same as paste (PNG / JPEG / GIF / WebP / SVG) |
-| Documents | `.pdf` / `.txt` / `.md` / `.csv` |
-| Archives | `.zip` |
+Dropping a type not on the allow-list shows a toast: `Files of type <MIME
+type> cannot be uploaded.` — the same wording the server returns for the
+Attachments button and paste, so the message is identical no matter which
+route rejected the file.
 
-Dropping a type not on the allow-list shows a toast naming the rejected
-type.
-
-> **Note**: Some operating systems report no MIME type at all (or
-> `application/octet-stream`), so the client additionally accepts `.md` /
-> `.markdown` / `.txt` / `.csv` by extension. The authoritative check is
-> the server's, which goes by MIME type — so a file that got through that
-> fallback can still be rejected with a `415` on upload.
+> **Note**: `application/octet-stream` (unknown type) is on the allow-list
+> already, so it is accepted as-is. When the OS reports no MIME type at
+> all (an empty string), the file is treated as that unknown type — the
+> same normalisation the server applies — and therefore accepted too.
 
 > **Note**: When the edit screen is in **read-only mode** (the
 > simultaneous-editor cap was reached, or you lack edit permission —

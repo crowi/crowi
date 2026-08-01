@@ -32,7 +32,7 @@ import type { Types } from 'mongoose';
 
 import type Crowi from 'src/crowi';
 import type { BookmarkDocument } from 'src/models/bookmark';
-import { type PageDocument, visiblePageStatusOr } from 'src/models/page';
+import { creatorPageListMatch, type PageDocument } from 'src/models/page';
 import { type PageLike, pageToResponse } from 'src/util/page-response';
 import { escapeRegExp } from 'src/util/regex';
 import { type PopulatedUser, isPopulatedUser, toISOStringOrNull, toPageUser, toStringId, toUserPublic } from 'src/util/ts-rest-helpers';
@@ -76,6 +76,7 @@ export const registerUserRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
   const User = crowi.model('User');
   const Page = crowi.model('Page');
   const Bookmark = crowi.model('Bookmark');
+  const Comment = crowi.model('Comment');
 
   // A user page stays reachable for ACTIVE and SUSPENDED accounts. A suspended
   // user is gone, but the pages they authored remain visible (they show up in
@@ -124,18 +125,20 @@ export const registerUserRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
           return c.json(USER_NOT_FOUND_BODY, 404);
         }
 
-        const isViewingSelf = currentUser._id.equals(targetUser._id);
-        // Match `findListByCreator`'s visibility conditions.
-        const pageCountConditions: Record<string, unknown> = {
-          creator: targetUser._id,
-          redirectTo: null,
-          $or: visiblePageStatusOr(currentUser._id, targetUser._id),
-        };
-        if (!isViewingSelf) {
-          pageCountConditions.grant = Page.GRANT_PUBLIC;
-        }
-        const createdPagesCount = await Page.countDocuments(pageCountConditions);
-        const bookmarksCount = await Bookmark.countDocuments({ user: targetUser._id });
+        // Four independent counts, all resolved via DB-side countDocuments
+        // on an indexed field — run them in parallel (feature-profile-
+        // stats-and-page-total, matching the established
+        // findSubpagesByUserNamespace / ListUsersResponseSchema.total
+        // convention). `likesCount` / `commentsCount` are the target
+        // user's OWN actions (pages they liked, comments they wrote) —
+        // NOT activity their own pages received — so neither is filtered
+        // by the current viewer's grants (see spec §プロフィール統計の主語).
+        const [createdPagesCount, bookmarksCount, likesCount, commentsCount] = await Promise.all([
+          Page.countDocuments(creatorPageListMatch(targetUser._id, currentUser._id)),
+          Bookmark.countDocuments({ user: targetUser._id }),
+          Page.countDocuments({ liker: targetUser._id }),
+          Comment.countDocuments({ creator: targetUser._id }),
+        ]);
 
         const recentPagesRaw = await Page.findListByCreator(targetUser, { limit: 10, offset: 0 }, currentUser);
         const recentPages = (await Page.populate(recentPagesRaw, [{ path: 'creator' }, { path: 'lastUpdateUser' }])) as unknown as PageDocument[];
@@ -148,6 +151,8 @@ export const registerUserRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             user: toUserPublic(targetUser),
             createdPagesCount,
             bookmarksCount,
+            likesCount,
+            commentsCount,
             recentPages: recentPages.map((page) => pageToResponse(page)),
             recentBookmarks: recentBookmarks.filter((bookmark) => bookmark.page).map((bookmark) => bookmarkToResponse(bookmark)),
           },
@@ -206,18 +211,13 @@ export const registerUserRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
           return c.json(USER_NOT_FOUND_BODY, 404);
         }
 
-        const rawPages = await Page.findListByCreator(targetUser, { limit, offset }, currentUser);
+        // find + count share `creatorPageListMatch` and run in parallel —
+        // same convention as the creator branch in listPages (page.ts).
+        const [rawPages, total] = await Promise.all([
+          Page.findListByCreator(targetUser, { limit, offset }, currentUser),
+          Page.countDocuments(creatorPageListMatch(targetUser._id, currentUser._id)),
+        ]);
         const pages = (await Page.populate(rawPages, [{ path: 'creator' }, { path: 'lastUpdateUser' }])) as unknown as PageDocument[];
-
-        const pageCountConditions: Record<string, unknown> = {
-          creator: targetUser._id,
-          redirectTo: null,
-          $or: visiblePageStatusOr(currentUser._id, targetUser._id),
-        };
-        if (!currentUser._id.equals(targetUser._id)) {
-          pageCountConditions.grant = Page.GRANT_PUBLIC;
-        }
-        const total = await Page.countDocuments(pageCountConditions);
 
         const prev = offset > 0 ? Math.max(0, offset - limit) : null;
         const next = offset + limit < total ? offset + limit : null;

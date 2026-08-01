@@ -1,4 +1,4 @@
-import { File, FileArchive, FileAudio, FileCode, FileImage, FileSpreadsheet, FileText, FileVideo, type LucideIcon } from 'lucide-react';
+import { File, FileArchive, FileAudio, FileCode, FileImage, FileSpreadsheet, FileText, FileVideo, Presentation, type LucideIcon } from 'lucide-react';
 
 /**
  * Resolve a file to a `lucide-react` icon for the attachment list.
@@ -30,6 +30,14 @@ const MIME_EXACT: Record<string, LucideIcon> = {
   'text/xml': FileCode,
   'application/vnd.ms-excel': FileSpreadsheet,
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': FileSpreadsheet,
+  // feature-attachment-upload-policy — word processing / presentation
+  // documents, now that the upload policy accepts them. lucide has no
+  // dedicated Word icon (same rationale as PDF → `FileText`); it does
+  // have a `Presentation` icon for slide decks.
+  'application/msword': FileText,
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': FileText,
+  'application/vnd.ms-powerpoint': Presentation,
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation': Presentation,
 };
 
 const MIME_PREFIX: Array<[string, LucideIcon]> = [
@@ -50,6 +58,10 @@ const EXTENSION: Record<string, LucideIcon> = {
   csv: FileSpreadsheet,
   xls: FileSpreadsheet,
   xlsx: FileSpreadsheet,
+  doc: FileText,
+  docx: FileText,
+  ppt: Presentation,
+  pptx: Presentation,
   json: FileCode,
   xml: FileCode,
   html: FileCode,
