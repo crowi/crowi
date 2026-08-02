@@ -1,11 +1,12 @@
 export const meta = {
   name: 'crowi-design-review-document',
   description:
-    'Phase B of crowi-design: write the final RFC (English) or spec (Japanese) from the approved design brief + locked human decisions, then adversarially review it with 3 independent code-grounded lenses and revise until it passes (bounded). RFC writing, all review lenses, and RFC revision run on codex (through thin haiku glue + .claude/scripts/codex-run.sh) and fail open to the original Claude implementations; the spec writer stays on Claude sonnet. With critical=true a Claude red-team lens is added on top of the codex lenses. Returns the doc path + verdict + residual open questions + rebutted findings. With reviewOnly=true it skips writing and just reviews an existing doc.',
+    'Phase B of crowi-design: write the final RFC or an implementation-ready spec from the approved design brief + locked human decisions, then adversarially review it with independent code-grounded lenses and revise until it passes (bounded). RFC/spec writing, all codex review lenses, and revision run through .claude/scripts/codex-run.sh and fail open to Claude. Specs are finalized as implementation_ready only after review + deterministic validation pass. With critical=true a Claude red-team lens is added. With reviewOnly=true it skips writing and just reviews an existing doc.',
   phases: [
-    { title: 'Write', detail: 'writer turns the brief + decisions into the RFC (codex) or spec (sonnet)' },
-    { title: 'Review', detail: '3 parallel adversarial codex lenses (+1 Claude lens when critical), code-grounded' },
+    { title: 'Write', detail: 'sol writer turns the brief + locked decisions into the RFC or code-grounded spec v2' },
+    { title: 'Review', detail: 'parallel adversarial codex lenses (+1 Claude lens when critical), code-grounded' },
     { title: 'Revise', detail: 'writer fixes blocking issues in place (rebutting factually-wrong ones); loop bounded by maxReviewAttempts' },
+    { title: 'Finalize', detail: 'approved spec only: deterministic validator green, then mark implementation_ready' },
   ],
 }
 
@@ -47,11 +48,18 @@ const MAX = A.maxReviewAttempts ?? 2
 const REVIEW_ONLY = A.reviewOnly === true
 const CRITICAL = A.critical === true
 const isRfc = OUTPUT === 'rfc'
+const SPEC_CONTRACT = '.claude/skills/_shared/spec-contract.md'
+const SPEC_VALIDATOR = '.claude/skills/_shared/validate-implementation-spec.sh'
 
 // Fail fast BEFORE any agent runs or any file is written. Guards the dogfooding
 // failure: string-encoded args -> undefined slug -> the writer overwrote an
 // unrelated spec. The write path requires a real slug AND an explicit briefPath.
-if (REVIEW_ONLY) {
+if (!Number.isInteger(MAX) || MAX < 1) {
+  return {
+    status: 'FAILED',
+    reason: `crowi-design review-document: maxReviewAttempts must be an integer >= 1 (got: ${JSON.stringify(MAX)})`,
+  }
+} else if (REVIEW_ONLY) {
   if (!A.docPath) return { status: 'FAILED', reason: 'crowi-design review: reviewOnly requires docPath' }
 } else if (!SLUG || !A.briefPath) {
   return {
@@ -160,21 +168,38 @@ const WRITE_RESULT = {
     },
   },
 }
+const FINALIZE_RESULT = {
+  type: 'object',
+  required: ['ready', 'docPath', 'summary', 'blockedReason'],
+  additionalProperties: false,
+  properties: {
+    ready: { type: 'boolean' },
+    docPath: { type: 'string' },
+    summary: { type: 'string' },
+    blockedReason: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+  },
+}
 
 const writeInstructions = isRfc
   ? `Write an RFC in English to docs/rfcs/00NN-${SLUG}.md. First read the two most recent ` +
     `docs/rfcs/00*.md to match house style (status header, summary, motivation, design, security, ` +
     `alternatives considered, phased plan) and to pick the next free NN. Do NOT commit.`
-  : `Write a spec in Japanese to .feature-state/specs/feature-${SLUG}.md following the crowi-feature spec ` +
-    `schema EXACTLY: frontmatter (id: feature-${SLUG}, name, scope: ${SCOPE}), then the sections ` +
-    `"## 背景 / why", "## やること (ユーザー視点)", "## やらないこと (out of scope)", ` +
-    `"## 設計の主な判断", "## 受け入れ基準 (acceptance criteria)" (as a checklist), ` +
-    `"## 未確定事項 (open questions)". If the work is multi-phase, use ` +
-    `"### Phase N: <title> (即時 / 非衝突)" or "(要調整)" headers so crowi-feature can gate them. ` +
-    `The spec must be directly consumable by /crowi-feature.`
+  : `Write a spec in Japanese to .feature-state/specs/feature-${SLUG}.md. Read ${SPEC_CONTRACT} and ` +
+    `follow implementation-ready spec contract v2 EXACTLY. Set frontmatter spec_contract: 2, ` +
+    `status: draft, implementation_ready: false, scope: ${SCOPE}, and grounded_at to the current ` +
+    `git rev-parse HEAD used for code grounding. After applying the locked decision, RE-OPEN every ` +
+    `referenced implementation file and neighboring test/contract code: this is targeted ` +
+    `implementation planning, not a prose-only rendering of the brief. Name every changed/new repo-relative ` +
+    `path and symbol, exact reuse target, control/data flow, and contracts for public API/types, auth, validation, ` +
+    `errors, transaction/concurrency, backward compatibility/migration, and performance/resource limits, ` +
+    `stable AC IDs, AC-to-test-file/case/level mappings, and implementation order. Resolve every ` +
+    `implementation choice; use an explicit default only when the human left a non-blocking question open. ` +
+    `Do not write production function bodies; exact signatures and pseudocode for non-obvious algorithms are ` +
+    `allowed. If the work is multi-phase, use the contract's Phase markers so crowi-feature can gate it.`
 
 // Adversarial lenses — different per output type. Specs reuse crowi-spec-review's
-// three lenses; RFCs use a design-critique panel.
+// three correctness lenses plus implementation-readiness; RFCs use a
+// design-critique panel.
 const lenses = isRfc
   ? [
       {
@@ -224,6 +249,17 @@ const lenses = isRfc
           `chosen design right, or is a different architecture materially safer (trade-off with ` +
           `implementation evidence)? Flag over-scope (re-implementing existing code) and wrong ` +
           `scope / priority.`,
+      },
+      {
+        key: 'implementability',
+        task:
+          `Implementation readiness against ${SPEC_CONTRACT}: verify every implementation-map path and symbol ` +
+          `against the real code (new symbols must have an unambiguous neighboring pattern), every change says ` +
+          `exactly what to reuse/change without leaving an architectural choice to the implementer, contracts ` +
+          `cover API/types, auth, validation, error, transaction/concurrency, backward compatibility/migration, ` +
+          `and performance/resource limits or explicit n/a reasons, and every stable AC maps to a ` +
+          `concrete test file + case + level. The draft is expected to have status=draft and ` +
+          `implementation_ready=false until this review passes; do not flag those two draft markers.`,
       },
     ]
 
@@ -327,32 +363,26 @@ const writerBody =
   `(file:line) where relevant. Once written, return wrote=true with the doc path (+ rfcNumber for an ` +
   `RFC) and any residual open questions (rebutted=[]).`
 
-// RFC writer runs on codex (decision #1); the spec writer stays on Claude
-// sonnet (Japanese + strict schema — revisit after Phase 1 bedding-in).
-let draft = isRfc
-  ? await codexStage({
-      label: 'write',
-      phase: 'Write',
-      sandbox: 'workspace-write',
-      tier: 'sol', // authoring the authoritative RFC is a hardest-tier stage
-      schema: WRITE_RESULT,
-      docPathCheck: true,
-      prompt: writerBody + `\nReturn your final answer as JSON matching the output schema.`,
-      fallback: () =>
-        agent(writerBody, {
-          agentType: 'general-purpose',
-          label: `write:${SLUG}`,
-          phase: 'Write',
-          schema: WRITE_RESULT,
-        }),
-    })
-  : await agent(writerBody, {
+// The authoritative RFC/spec is a hardest-tier stage. For specs this is the
+// targeted, post-human-gate implementation plan; using a cheaper writer here
+// would discard the code-level detail that kickoff relies on.
+let draft = await codexStage({
+  label: 'write',
+  phase: 'Write',
+  sandbox: 'workspace-write',
+  tier: 'sol',
+  schema: WRITE_RESULT,
+  docPathCheck: true,
+  prompt: writerBody + `\nReturn your final answer as JSON matching the output schema.`,
+  fallback: () =>
+    agent(writerBody, {
       agentType: 'general-purpose',
-      model: 'sonnet',
+      effort: 'high',
       label: `write:${SLUG}`,
       phase: 'Write',
       schema: WRITE_RESULT,
-    })
+    }),
+})
 if (draft === null) return { status: 'FAILED', reason: 'writer did not complete', slug: SLUG, codexFallbacks: FALLBACKS }
 if (draft.wrote === false)
   return {
@@ -403,34 +433,70 @@ for (let attempt = 1; attempt <= MAX; attempt++) {
     `EXCEPTION — rebuttal: if a blocking finding is itself factually wrong, refute it against real ` +
     `code (file:line), do NOT apply it, and return it in rebutted[] with the evidence. Appeasing a ` +
     `wrong finding by adding caveats to the document is forbidden.\n` +
-    `Keep the document's format / schema intact. Return wrote=true, the (unchanged) doc path, any ` +
+    `Keep the document's format / schema intact.` +
+    (isRfc ? ` ` : ` Keep status: draft and implementation_ready: false; only the finalizer may mark it ready. `) +
+    `Return wrote=true, the (unchanged) doc path, any ` +
     `residual open questions, and rebutted[].`
-  const revised = isRfc
-    ? await codexStage({
-        label: `revise_${attempt}`,
-        phase: 'Revise',
-        sandbox: 'workspace-write',
-        schema: WRITE_RESULT,
-        docPathCheck: true,
-        prompt: reviseBody + `\nReturn your final answer as JSON matching the output schema.`,
-        fallback: () =>
-          agent(reviseBody, {
-            agentType: 'general-purpose',
-            label: `revise:${SLUG}#${attempt}`,
-            phase: 'Revise',
-            schema: WRITE_RESULT,
-          }),
-      })
-    : await agent(reviseBody, {
+  const revised = await codexStage({
+    label: `revise_${attempt}`,
+    phase: 'Revise',
+    sandbox: 'workspace-write',
+    schema: WRITE_RESULT,
+    docPathCheck: true,
+    prompt: reviseBody + `\nReturn your final answer as JSON matching the output schema.`,
+    fallback: () =>
+      agent(reviseBody, {
         agentType: 'general-purpose',
-        model: 'sonnet',
         label: `revise:${SLUG}#${attempt}`,
         phase: 'Revise',
         schema: WRITE_RESULT,
-      })
+      }),
+  })
   if (revised === null) return { status: 'FAILED', reason: 'revision did not complete', docPath: DOC, slug: SLUG, codexFallbacks: FALLBACKS }
   if (revised.residualOpenQuestions) draft.residualOpenQuestions = revised.residualOpenQuestions
   if (Array.isArray(revised.rebutted) && revised.rebutted.length) REBUTTED.push(...revised.rebutted)
+}
+
+if (verdict !== 'APPROVED') {
+  return {
+    status: 'FAILED',
+    reason: 'crowi-design review-document: review loop ended without an APPROVED verdict',
+    docPath: DOC,
+    slug: SLUG,
+    codexFallbacks: FALLBACKS,
+  }
+}
+
+if (!isRfc) {
+  phase('Finalize')
+  const finalize = await agent(
+    `You are a MECHANICAL FINALIZER for the approved spec at ${DOC}. Do not redesign or rewrite prose. ` +
+      `Change exactly these frontmatter fields: status: draft -> status: approved and ` +
+      `implementation_ready: false -> implementation_ready: true. Then run from the repository root: ` +
+      `bash "${SPEC_VALIDATOR}" "${DOC}". If it exits 0, return ready=true. If it fails, restore both fields ` +
+      `to draft/false and return ready=false with the validator output in blockedReason. Do not edit any ` +
+      `other file or field.`,
+    {
+      model: 'haiku',
+      effort: 'low',
+      label: `finalize:${SLUG}`,
+      phase: 'Finalize',
+      schema: FINALIZE_RESULT,
+    },
+  )
+  if (!finalize || !finalize.ready) {
+    const reason = finalize?.blockedReason || 'implementation-ready validator did not pass'
+    return {
+      status: 'NEEDS_WORK',
+      docPath: DOC,
+      outputType: OUTPUT,
+      residualOpenQuestions: draft.residualOpenQuestions || [],
+      rebutted: REBUTTED,
+      blocking: [reason],
+      reviewSummary: lastReviews.map((r) => ({ lens: r.lens, verdict: r.verdict, blocking: r.blocking })),
+      codexFallbacks: FALLBACKS,
+    }
+  }
 }
 
 return {

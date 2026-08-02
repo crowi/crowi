@@ -253,7 +253,9 @@ const architectBody =
   `   into the final document, so make it COMPLETE and self-contained: a digest of the grounded ` +
   `   findings (keep the file:line anchors), 2-3 candidate approaches each with how-it-works + ` +
   `   what-to-reuse + trade-offs + risk, the open questions, and — when the output is a spec — ` +
-  `   concrete reuse targets / new files / acceptance-criteria seeds; when an RFC — which existing ` +
+  `   candidate code anchors / likely reuse targets / acceptance-criteria seeds for each viable approach ` +
+  `   (do not fully implementation-plan every candidate; the chosen approach is detailed after the human ` +
+  `   gate); when an RFC — which existing ` +
   `   RFC(s) to mirror for house style and the security/alternatives angles to cover.\n` +
   `2) RETURN the structured FRAME summary (this is what the human decides on).\n\n` +
   `Recommend RFC vs spec: ` +

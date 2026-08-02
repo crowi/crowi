@@ -106,17 +106,27 @@ description: |
   (「kickoff は main セッションから」)。main が dirty でも kickoff 自体は可
   (worktree を切るだけで main を触らない)。
 
-### Step 2: ready 判定(orchestrate B と同一基準)
+### Step 2: implementation-ready 判定(orchestrate B と同一基準)
 
-spec を読み、以下すべてを確認。1 つでも欠けたら**欠落を列挙して中止**
-(勝手に補完・書き換えしない):
+`.claude/skills/_shared/spec-contract.md` が正本。repo root で validator を実行する:
 
-1. frontmatter に `scope` がある
-2. `## 受け入れ基準` セクションが存在し空でない
-3. `## 未確定事項 (open questions)` に**実装をブロックする未決**が無い。
-   「→ 既定: ...」形式で既定解が書いてある項目はブロックしない。
-   既定なしの設計判断が残っていればブロック。
-4. status(frontmatter or 本文)が NEEDS_WORK / draft を明示していない
+```bash
+bash .claude/skills/_shared/validate-implementation-spec.sh ".feature-state/specs/<id>.md"
+```
+
+exit 0 のときだけ続行する。validator は次をまとめて検証する:
+
+- contract v2 marker(`spec_contract: 2` / `status: approved` / `implementation_ready: true`)
+- `scope` / AC / blocking open question 無し
+- path + symbol 単位の実装マップ、処理フロー、契約・不変条件、実装順序
+- stable AC ID と test file/case/level の対応
+- `grounded_at` が有効で、参照 path が以後の commit / working tree で変化していない
+
+失敗時は validator の `ERROR:` を欠落・stale 理由として列挙して中止する。
+**kickoff 側で spec を補完・書き換えない。** legacy spec は直接 `/crowi-feature` の
+planner fallback で実装できるが、安価なモデルへ設計判断を残さない kickoff 経路には入れない。
+`/crowi-design spec <topic>` で v2 に作り直すか、既存 spec を強いモデルで v2 へ更新して
+再レビューする。
 
 ### Step 3: 重複ガード
 
@@ -237,10 +247,12 @@ signal を受けたら orchestrate A と同じ裏取り(clean / headSha 一致 /
 | ケース | 挙動 |
 |---|---|
 | spec が specs/ に無い | wiki `/crowi/spec/<id>` から pull を試みる(Step 1)。wiki にも無ければ中止 |
+| legacy / incomplete spec | validator の欠落を列挙して中止。`/crowi-design spec` で v2 化するか、直接 `/crowi-feature` の planner fallback を明示的に使う |
+| 参照コードが `grounded_at` 後に変化 | stale として中止。安価な planner で黙って再設計せず、spec を再 ground / review する |
 | gw start 失敗(同名 branch 残骸等) | gw のエラーを提示して中止。`-f` 系は使わずユーザーに委ねる |
 | claude 起動待ち timeout | 手動手順を表示(worktree は残す) |
 | send-keys 後に反応が無い | 追いパンチしない。報告に「投入したが未確認」と書き、ユーザーに window 確認を促す |
-| spec が umbrella(他 spec をフェーズとして参照する形式) | kickoff の手順自体は変わらない(通常どおり `/crowi-feature <id>` を投入)。ただし worktree 側で feature-planner が計画するとき、各 phase の `context` に対応する sub-spec のパスを記載し、`extraGates` / `longLived` を umbrella の運用契約(spec に明記)どおり task.json に設定する(詳細: feature-planner.md)。 |
+| spec が umbrella(他 spec をフェーズとして参照する形式) | kickoff の手順自体は変わらない(通常どおり `/crowi-feature <id>` を投入)。v2 は design 時点の実装順序に各 phase の sub-spec / `extraGates` / `longLived` 相当を確定し、implementer が task state へ seed する。legacy は feature-planner が従来どおり計画する。 |
 
 ## crowi-feature / complete-feature との関係
 

@@ -3,7 +3,7 @@ export const meta = {
   description:
     'Deterministic crowi-feature pipeline. Per phase: plan → implement → (simplify) → review-loop → commit. Multi-phase aware with autoContinue gating. Reuses the feature-{planner,implementer,reviewer,committer} agents via agentType; the control flow (sequencing, NEEDS_WORK retry, phase iteration, gates) is code, so the "narrate the next step then stop" failure mode is structurally impossible. With codexReviewer=true the review stage runs objective gates first (fail → NEEDS_WORK without spending any model tokens) and then a codex adversarial review through a thin haiku glue; feature-reviewer remains the fallback.',
   phases: [
-    { title: 'Plan', detail: 'feature-planner fills task context + AC + commitPlan (scope-gated)' },
+    { title: 'Plan', detail: 'legacy spec only: feature-planner discovers task context; ready v2 skips this phase' },
     { title: 'Build', detail: 'feature-implementer: code + tests + crowi-site docs, required checks must pass' },
     { title: 'Review', detail: 'simplify pass + reviewer (objective gates → codex, or feature-reviewer); loop back to Build on NEEDS_WORK' },
     { title: 'Commit', detail: 'feature-committer: split commits per commitPlan, main-direct, no push' },
@@ -18,7 +18,7 @@ export const meta = {
 //
 //   {
 //     id: 'feature-xxx',
-//     needsPlanner: boolean,                 // scope > config.minScopeSize
+//     needsPlanner: boolean,                 // false only for validator-green spec contract v2
 //     runSimplify: boolean,                  // config.runSimplify
 //     maxReviewAttempts: number,             // config.maxReviewAttempts (default 3)
 //     codexReviewer: boolean,                // config.codexReviewer (default false):
@@ -197,17 +197,21 @@ function codexReviewerPrompt(p, attempt) {
     `the command + the key error lines], advisories:[]} — go directly to STEP 4.\n\n` +
     `STEP 2 — build the review prompt (only when every gate passed):\n` +
     `  Read .feature-state/tasks/${ID}.json and extract: the acceptance criteria` +
-    `${isMulti(p) ? ` for phase ${p.id}` : ''}, context.docsTargets, context.e2eTargets, and the ` +
-    `most recent reviewFeedback if present. Also read the "## 設計の主な判断" section of ` +
-    `.feature-state/specs/${ID}.md if that file exists.\n` +
+    `${isMulti(p) ? ` for phase ${p.id}` : ''} and the most recent reviewFeedback if present. Also read the ` +
+    `entire .feature-state/specs/${ID}.md when it exists. For contract v2, derive docs and e2e obligations from the spec itself ` +
+    `(implementation map, test plan, and implementation order), even when task.context has no docsTargets or ` +
+    `e2eTargets; embed those exact obligations together with the implementation map, contracts/invariants, ` +
+    `AC-to-test mapping, and implementation order. For legacy specs, extract optional context.docsTargets and ` +
+    `context.e2eTargets from the task and embed at least "## 設計の主な判断".\n` +
     `  Write ${runDir}/prompt.md: instructions for an adversarial review of the UNCOMMITTED work — ` +
     `tell the reviewer to gather it itself with \`git status --porcelain\` + \`git diff HEAD\` and ` +
     `to read untracked files directly. It must verify every acceptance criterion (embed the AC ` +
-    `list verbatim), api-contract integrity, security, transaction boundaries, crowi-site docs ` +
-    `reflection when docsTargets is set (embed docsTargets + the design judgments verbatim), and — ` +
-    `when e2eTargets.assessment is "critical-flow" — that packages/e2e/ changes covering the listed ` +
-    `flows are present in the diff (missing e2e coverage is an advisory with autofix=true, not ` +
-    `blocking). Ask ` +
+    `list verbatim), api-contract integrity, security, transaction boundaries, and exact conformance ` +
+    `to the v2 spec. Missing any docs or e2e work explicitly required by a contract v2 spec is blocking ` +
+    `and must produce NEEDS_WORK, regardless of whether task.context repeats the requirement. For a legacy ` +
+    `spec only, check crowi-site docs when docsTargets is set (embed docsTargets + the design judgments ` +
+    `verbatim), and when e2eTargets.assessment is "critical-flow", check the listed flows; absent legacy e2e ` +
+    `coverage remains an advisory with autofix=true rather than blocking. Ask ` +
     `for verdict APPROVED (all AC met, quality bar passes) / NEEDS_WORK (fixable issues; list them ` +
     `in blocking[], each with file:line) / ESCALATE (only when a human design decision is genuinely ` +
     `required), plus advisories[] — non-blocking improvements each tagged autofix true ` +
@@ -253,7 +257,8 @@ async function runPhase(p) {
   if (NEEDS_PLANNER) {
     phase('Plan')
     const planned = await agent(
-      `crowi-feature PLANNER for task "${ID}"${t}. Read .feature-state/specs/${ID}.md and ` +
+      `crowi-feature LEGACY PLANNER for task "${ID}"${t}. This phase runs only because the spec is not ` +
+        `implementation-ready contract v2. Read .feature-state/specs/${ID}.md and ` +
         `.feature-state/tasks/${ID}.json (create it if missing). Grep the codebase for reuse ` +
         `candidates and fill context.reuseTargets / newFiles / models / docsTargets / ` +
         `acceptanceCriteria / commitPlan${isMulti(p) ? ` for ${p.id} only` : ''}, then set the ` +
@@ -267,9 +272,14 @@ async function runPhase(p) {
   for (let attempt = 1; attempt <= MAX_REVIEW; attempt++) {
     phase('Build')
     const impl = await agent(
-      `crowi-feature IMPLEMENTER for task "${ID}"${t} (attempt ${attempt}/${MAX_REVIEW}). Read ` +
-        `.feature-state/tasks/${ID}.json. Implement the code + tests + crowi-site docs (ja/en) per ` +
-        `the task. Run type-check / test / lint / format — they MUST all pass. Fill/refresh ` +
+      `crowi-feature IMPLEMENTER for task "${ID}"${t} (attempt ${attempt}/${MAX_REVIEW}). Read the entire ` +
+        `.feature-state/specs/${ID}.md and .feature-state/tasks/${ID}.json when present. For contract v2, ` +
+        `the spec's path/symbol implementation map is authoritative: if task state is missing, seed only ` +
+        `minimal runtime state from the spec without broad grep or architectural replanning. Read the referenced ` +
+        `files, then implement the code + tests + crowi-site docs/e2e named by the spec. If a referenced symbol or ` +
+        `grounded assumption no longer matches, set ready=false and escalate instead of redesigning silently. ` +
+        `For legacy specs, use the planner-created task context. Run type-check / test / lint / format — they MUST ` +
+        `all pass. Fill/refresh ` +
         `commitPlan and set status REVIEW. ` +
         (attempt > 1 ? 'Address the reviewer NEEDS_WORK feedback recorded on the task. ' : '') +
         `Set ready=false ONLY if a required check cannot be made to pass or the spec is too ` +
@@ -294,9 +304,12 @@ async function runPhase(p) {
     const claudeReview = () =>
       agent(
         `crowi-feature REVIEWER for task "${ID}"${t} (attempt ${attempt}/${MAX_REVIEW}). Read ` +
-          `.feature-state/tasks/${ID}.json + the uncommitted diff. Verify acceptance criteria` +
+          `.feature-state/tasks/${ID}.json + the full spec + the uncommitted diff. Verify acceptance criteria` +
           `${isMulti(p) ? ` for ${p.id}` : ''}, api-contract integrity, security, transaction ` +
-          `boundaries, and crowi-site docs reflection (when docsTargets is set). Record concrete ` +
+          `boundaries, and crowi-site docs reflection. For contract v2, independently derive docs/e2e obligations from the spec itself ` +
+          `(implementation map, test plan, and implementation order), not only task.context, and verify exact conformance to every ` +
+          `implementation-map path/symbol and AC-to-test mapping. Missing explicitly required v2 docs/e2e work or any other ` +
+          `unexplained deviation from the approved v2 plan is NEEDS_WORK. Record concrete ` +
           `NEEDS_WORK feedback on the task when not approving. Return your verdict: APPROVED when all AC ` +
           `are met and the quality bar passes; NEEDS_WORK when fixable issues remain; ESCALATE only when ` +
           `a human design decision is genuinely required. Also return advisories[] — non-blocking ` +

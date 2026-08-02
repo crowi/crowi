@@ -87,18 +87,20 @@ ready for merge な worktree を取り込む。
 
 `.feature-state/specs/*.md` を 1 つずつ評価する (read-only 中心)。
 
-各 spec を以下の観点で判定:
-- AC (受け入れ基準) が書かれているか
-- open question / 未決の設計判断が残っていないか
-- 依存 (他 spec / 他機能) が解決済みか
-- scope の記載があるか
+各 spec について、repo root で
+`bash .claude/skills/_shared/validate-implementation-spec.sh <spec>` を実行する。
+ready 条件の正本は `.claude/skills/_shared/spec-contract.md` + validator であり、
+lane B 独自の簡易判定を持たない。依存(他 spec / 他機能)の解決状況だけは machine-readable
+でない場合があるため、validator green 後に追加確認する。
 
 分類して報告:
 
-- **着手 ready**: 上記が全部揃っている → 「`<id>` は着手 ready」と報告。
-  必要なら「`gw start <id>` で worktree を切って feature-planner を起動できます」と
+- **着手 ready**: validator green かつ依存解決済み → 「`<id>` は implementation-ready」と報告。
+  必要なら「`/crowi-kickoff <id>` で worktree を切って実装に着手できます」と
   提案する (worktree 作成・実装着手は user 判断、ここでは提案まで)。
-- **not ready**: 何が欠けているか (AC 無し / open question 未決 等) を列挙。
+- **not ready**: validator の `ERROR:` と未解決依存を列挙する。legacy contract /
+  path-symbol map 欠落 / AC-test 対応欠落 / stale も not ready。
+  自動補完・安価なモデルでの再設計はしない。
 - **stale 削除候補 (提案のみ・自動削除しない)**: 対応機能が main に integrate 済みに
   見える spec。判定根拠の例: 同名 task が `COMMITTED` かつ worktree が既に無い、かつ
   機能コードが main に存在。→ 「`<id>` は削除候補 (根拠: …)」と提示し、**削除は

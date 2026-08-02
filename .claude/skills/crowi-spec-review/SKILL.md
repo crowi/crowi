@@ -35,7 +35,8 @@ globs:
 1. **実コード裏取り必須** — spec の各主張を「成立 / 過大 / 誤り」で判定し、**file:line を引く**。
    spec の言い分・記憶・推測で確定しない。必要なら依存ライブラリの実装 (`node_modules`) や実測まで。
 2. **独立レンズ** — レビューは並列・互いにブラインドの**異なるレンズ**で走らせる(同じ観点を
-   複数回ではなく、根本原因 / 修正の red-team / 網羅+アーキ)。redundancy では拾えない失敗を拾う。
+   複数回ではなく、根本原因 / 修正の red-team / 網羅+アーキ / implementation-ready)。
+   redundancy では拾えない失敗を拾う。
    レンズの定義・実行は **`review-document.workflow.js` が正本**(下記)— prose に複製しない。
 3. **結論で spec を是正** — 出力はコメント集ではない。**是正済み spec**(改訂注記を残さず、最初から
    そう書かれていたかのようにクリーンに書き直す。誤り→是正の二重記載は実装者を混乱させる)か、
@@ -45,12 +46,13 @@ globs:
 ## 手順(薄い入口 — レビュー本体は crowi-design Workflow B)
 
 この skill は入口で、レビューの実行系は **crowi-design の reviewOnly Workflow** に集約
-されている(レンズは Codex ×3 + Claude ×1。Codex 不可時は各レンズが Claude に fail-open)。
+されている(spec レンズは Codex ×4 + critical 固定の Claude ×1。
+Codex 不可時は各レンズが Claude に fail-open)。
 
 1. spec(`.feature-state/specs/<id>.md`)を読み、scope と criticality(消失/並行/認証 が
    絡むか)を掴む。これは main がやる。
 2. **reviewOnly Workflow を起動**。spec-review は本質的に correctness-critical 用途なので
-   **`critical: true` 固定**(= Codex 3 レンズ + Claude red-team レンズ 1 本):
+   **`critical: true` 固定**(= Codex 4 レンズ + Claude red-team レンズ 1 本):
    ```
    Workflow({ scriptPath: '.claude/skills/crowi-design/review-document.workflow.js',
               args: { reviewOnly: true, docPath: '.feature-state/specs/<id>.md',
@@ -60,9 +62,12 @@ globs:
 3. **統合(レビューのレビュー)**: blocking を main が判断する。レビュアーは過大主張も
    するので、**怪しい指摘は自分で実コードに当てて再確認**してから採用する。
 4. **是正**: 採用した blocking を反映して spec を**クリーンに書き直す**(改訂注記・
-   before/after は spec に残さない。「何を・なぜ」是正したかは会話側の報告で返す。
-   書き直しは sonnet subagent に任せてよい — spec writer の方針と同じ)。問題なければ
-   status に「検証済み」を足す。ユーザーへ verdict を報告し、`codexFallbacks` が非空なら
+   before/after は spec に残さない。「何を・なぜ」是正したかは会話側の報告で返す)。
+   v2 spec を編集するときは先に `status: draft` / `implementation_ready: false` へ戻す。
+   是正後、provisional に approved/true へ変更して
+   `.claude/skills/_shared/validate-implementation-spec.sh` を実行する。green なら確定し、
+   red なら draft/false へ戻す。問題なければ現状 marker を維持する。ユーザーへ verdict を報告し、
+   `codexFallbacks` が非空なら
    「レンズ X は Claude fallback で実行」も明記する。
 
 ## 観点(定義の正本は `review-document.workflow.js` の spec 用 lenses)
@@ -72,6 +77,7 @@ globs:
 | root-cause | Codex | spec の各根本原因主張を実コードで confirm/refute。誤診断を暴く。 |
 | red-team | Codex | 提案 fix をすり抜けてバグ/消失が残る経路を、並行・stale・race・認証境界の具体イベント列で探す。 |
 | coverage | Codex | 抜けた failure mode 列挙 + アーキ妥当性 + 過剰スコープ指摘。 |
+| implementability | Codex | `.claude/skills/_shared/spec-contract.md` に対し path/symbol・契約・AC→test mapping を実コードで検証。 |
 | claude-red-team | Claude | critical=true の追加レンズ。Codex の盲点を単一障害点にしないための保険。 |
 
 ## よくある失敗
