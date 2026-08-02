@@ -15,6 +15,62 @@ import AppKit
 /// does not add one — nothing below asserts that a color equals itself.
 @MainActor
 final class CrowiDesignSystemTests: XCTestCase {
+    // MARK: - Card contexts
+
+    /// A card on a SCREEN is outlined and inset 16pt; the same card in a
+    /// SHEET is neither. The sheet variant exists because the outline —
+    /// which is what gives a card an edge against `--background` — reads as
+    /// a box inside a box once the card is on a panel over a dimmed
+    /// backdrop, which is exactly how the action sheet looked before.
+    func testAListCardAndASheetCardAreDrawnDifferently() throws {
+        let list = try renderCardPNG(.list)
+        let sheet = try renderCardPNG(.sheet)
+
+        XCTAssertNotEqual(list, sheet, "the sheet context must drop the outline and the wider gutter")
+    }
+
+    /// The panel is already floating clear of the screen's edges, so its
+    /// cards take HALF the gutter a screen's do (design: `padding:0 8px` on
+    /// the panel vs `margin:0 16px` on a screen's card). Pinned as the
+    /// relationship rather than as two numbers, which is what must not
+    /// invert.
+    func testASheetsGutterIsNarrowerThanAScreensCardGutter() {
+        XCTAssertLessThan(CrowiMetrics.sheetHorizontalMargin, CrowiMetrics.cardHorizontalMargin)
+    }
+
+    /// A content-sized sheet's floor only applies before the first
+    /// measurement lands. It has to be small enough that it never becomes
+    /// the slack it exists to avoid — a floor taller than a real sheet would
+    /// reintroduce the dead, tap-swallowing region under Cancel.
+    func testTheSheetHeightFloorIsSmallerThanARealSheet() {
+        XCTAssertGreaterThan(CrowiSheetLayout.minimumHeight, 0, "a zero-height detent is not a legal presentation")
+        XCTAssertLessThan(CrowiSheetLayout.minimumHeight, 200)
+    }
+
+    private func renderCardPNG(_ context: CrowiCardContext) throws -> Data {
+        #if canImport(AppKit)
+        let card = CrowiCard(context) {
+            Text("Share")
+                .padding(.horizontal, CrowiMetrics.sheetRowHorizontalPadding)
+                .padding(.vertical, CrowiMetrics.sheetRowVerticalPadding)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        let renderer = ImageRenderer(content: card.frame(width: 390))
+        renderer.scale = 1
+        guard
+            let nsImage = renderer.nsImage,
+            let tiff = nsImage.tiffRepresentation,
+            let bitmap = NSBitmapImageRep(data: tiff),
+            let png = bitmap.representation(using: .png, properties: [:])
+        else {
+            throw DesignSystemRenderingUnavailable()
+        }
+        return png
+        #else
+        throw DesignSystemRenderingUnavailable()
+        #endif
+    }
+
     // MARK: - Profile stat strip
 
     /// The strip renders exactly the stats it is handed. A caller that could

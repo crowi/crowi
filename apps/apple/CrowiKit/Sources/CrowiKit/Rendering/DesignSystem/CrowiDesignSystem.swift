@@ -158,6 +158,13 @@ public enum CrowiMetrics {
     public static let sheetRowContentSpacing: CGFloat = 14
     /// Design: `padding:16px` on the sheet's Cancel/Done button.
     public static let sheetButtonPadding: CGFloat = 16
+    /// Design: the sheet panel's `padding:0 8px 12px` — a HALF gutter compared
+    /// to a screen's cards, because the panel is already floating free of the
+    /// screen's edges.
+    public static let sheetHorizontalMargin: CGFloat = 8
+    public static let sheetPanelBottomPadding: CGFloat = 12
+    /// Design: `margin-bottom:8px` between the sheet's stacked cards.
+    public static let sheetCardSpacing: CGFloat = 8
     /// Design: `padding:11px 16px` on a TOC row, `26px` leading when nested —
     /// i.e. one indentation step is 10px.
     public static let tocRowVerticalPadding: CGFloat = 11

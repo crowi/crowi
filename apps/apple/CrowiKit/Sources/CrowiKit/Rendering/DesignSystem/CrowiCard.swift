@@ -16,9 +16,11 @@ import SwiftUI
 /// of it clipped away) — a hairline drawn the other way loses half its
 /// already-sub-pixel width and disappears on some scales.
 public struct CrowiCard<Content: View>: View {
+    private let context: CrowiCardContext
     private let content: Content
 
-    public init(@ViewBuilder content: () -> Content) {
+    public init(_ context: CrowiCardContext = .list, @ViewBuilder content: () -> Content) {
+        self.context = context
         self.content = content()
     }
 
@@ -27,13 +29,54 @@ public struct CrowiCard<Content: View>: View {
             content
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(CrowiTheme.card)
+        .background(context.background)
         .clipShape(RoundedRectangle(cornerRadius: CrowiTheme.cardCornerRadius, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: CrowiTheme.cardCornerRadius, style: .continuous)
-                .strokeBorder(CrowiTheme.border, lineWidth: CrowiTheme.hairline)
+            if context.showsBorder {
+                RoundedRectangle(cornerRadius: CrowiTheme.cardCornerRadius, style: .continuous)
+                    .strokeBorder(CrowiTheme.border, lineWidth: CrowiTheme.hairline)
+            }
         }
-        .padding(.horizontal, CrowiMetrics.cardHorizontalMargin)
+        .padding(.horizontal, context.horizontalMargin)
+    }
+}
+
+/// Where a `CrowiCard` is being drawn — which is what decides its surface,
+/// its gutter and whether it is outlined at all.
+///
+/// The design draws the same rounded container in two places with genuinely
+/// different values, and the difference is not decoration: on a SCREEN a card
+/// sits on `--background` and needs a hairline to have an edge at all (in
+/// light mode both are white). In a SHEET it sits on `--popover` over a dimmed
+/// backdrop, where the edge is already unambiguous — there the same hairline
+/// reads as a box drawn inside a box, which is exactly how the sheet looked
+/// before this existed.
+public enum CrowiCardContext: Sendable {
+    /// On a screen: `margin:0 16px`, `--card`, hairline outline.
+    case list
+    /// In a bottom sheet: `padding:0 8px` on the panel, `--popover`, no
+    /// outline.
+    case sheet
+
+    var horizontalMargin: CGFloat {
+        switch self {
+        case .list: return CrowiMetrics.cardHorizontalMargin
+        case .sheet: return CrowiMetrics.sheetHorizontalMargin
+        }
+    }
+
+    var background: Color {
+        switch self {
+        case .list: return CrowiTheme.card
+        case .sheet: return CrowiTheme.popover
+        }
+    }
+
+    var showsBorder: Bool {
+        switch self {
+        case .list: return true
+        case .sheet: return false
+        }
     }
 }
 
