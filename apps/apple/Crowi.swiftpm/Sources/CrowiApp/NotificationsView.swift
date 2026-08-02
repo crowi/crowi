@@ -2,14 +2,14 @@ import CrowiKit
 import SwiftUI
 
 /// RFC-0016 §11 (`feature-ios-phase3-notifications-extensions`) — the
-/// notifications list, opened from the toolbar bell:
+/// notifications tab:
 ///
 ///   - rows for all four wired actions (COMMENT / LIKE / MENTION / UPDATE) —
 ///     first action-user avatar (through the workspace's authenticated image
-///     cache, §6.1), the shared message line (`NotificationLenient.messageText`),
-///     relative time, and the unopened dot (`UNREAD`/`UNOPENED` — web parity:
-///     mark-all-read zeroes the BADGE but keeps the row highlight, which only
-///     opening clears);
+///     cache, §6.1), the actor / verb / page hierarchy, relative time, and
+///     the unopened dot (`UNREAD`/`UNOPENED` — web parity: mark-all-read
+///     zeroes the BADGE but keeps the row highlight, which only opening
+///     clears);
 ///   - tap = TWO actions (the §11 design): fire the single-shot open POST
 ///     (optimistic row update; a failure never blocks — the
 ///     `EngagementActions` loose-write discipline via
@@ -17,7 +17,10 @@ import SwiftUI
 ///     the existing `ReadDestination.page(path:)`. A row whose target is
 ///     missing is listed but non-navigable — the phase's degrade pin (an
 ///     unknown action degrades only the message wording, never navigation);
-///   - mark-all-read in the toolbar (UNREAD → UNOPENED in bulk);
+///   - swipe a row to mark it read WITHOUT opening it — the same single-shot
+///     POST, which is what makes a list of things you have already seen
+///     elsewhere clearable;
+///   - mark-all-read in the title row (UNREAD → UNOPENED in bulk);
 ///   - offset pager as an explicit "Load more" row (`pager.next` from the
 ///     wire; the web uses an infinite query — a visible button is the
 ///     simpler native equivalent and an accepted implementation judgment);
@@ -26,6 +29,21 @@ import SwiftUI
 ///     再取得") — but only while the user hasn't paged deeper, so a refresh
 ///     never yanks a scrolled-back list out from under them (new arrivals
 ///     still reach the badge either way).
+///
+/// ## The design language, arriving late
+///
+/// This screen was outside the Phase 1 restyle and kept the stock `List`. Two
+/// things came with the catch-up beyond the card container:
+///
+///   - a READ row is no longer drawn `.secondary` in full. Dimming the whole
+///     row made a fully-read list look like a disabled control — the design
+///     distinguishes read from unread with the leading dot ALONE, and every
+///     row keeps the same text colours;
+///   - the message is a HIERARCHY, not one sentence: bold actor + verb on the
+///     first line, page on a muted second, time trailing. The one-sentence
+///     form (`NotificationLenient.messageText`) stays as the row's
+///     accessibility label — VoiceOver wants the sentence, the eye wants the
+///     structure.
 struct NotificationsView: View {
     let session: WorkspaceSession
     let onSelectDestination: (ReadDestination) -> Void
@@ -39,83 +57,157 @@ struct NotificationsView: View {
     private static let pageSize = 20
 
     var body: some View {
-        List {
-            ForEach(notifications) { notification in
-                row(notification)
-            }
-            if let nextOffset {
-                Button {
-                    Task { await loadMore(from: nextOffset) }
-                } label: {
-                    Text("Load more")
-                        .font(.callout)
-                        .frame(maxWidth: .infinity)
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                CrowiScreenTitle("Notifications") {
+                    Button("Mark all read") {
+                        Task { await markAllRead() }
+                    }
+                    .disabled(isMarkingAllRead || !notifications.contains(where: \.isUnopened))
+                } subtitle: {
+                    Text(NotificationsSummary.subtitle(unopenedCount: notifications.filter(\.isUnopened).count))
+                }
+
+                if notifications.isEmpty {
+                    emptyCard
+                } else {
+                    // Grouped from each row's own `createdAt`, in the order
+                    // the server already sorted them (newest first).
+                    ForEach(CrowiDayGroup.runs(of: notifications, by: { PageRowMetadataLabel.date(fromISO8601: $0.createdAt) })) { run in
+                        CrowiSectionHeader(run.group.title)
+                        CrowiCardRows(run.items, id: \.notificationId) { notification in
+                            row(notification)
+                        }
+                    }
+                    if let nextOffset {
+                        loadMore(from: nextOffset)
+                    }
                 }
             }
+            .padding(.bottom, CrowiMetrics.screenBottomPadding)
         }
-        .overlay {
-            if notifications.isEmpty, let errorMessage {
-                ContentUnavailableView(errorMessage, systemImage: "bell.slash")
-            } else if notifications.isEmpty, hasLoaded {
-                ContentUnavailableView("No notifications yet", systemImage: "bell")
-            }
-        }
-        .navigationTitle("Notifications")
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button("Mark All Read") {
-                    Task { await markAllRead() }
-                }
-                .disabled(isMarkingAllRead)
-            }
-        }
+        .background(CrowiTheme.background)
+        // The title block is rendered in the CONTENT by `CrowiScreenTitle`,
+        // exactly as on Home — a bar title here would print the same word a
+        // second time, 60pt higher.
+        .navigationTitle("")
+        .navigationBarTitleDisplayMode(.inline)
         .task { await pollWhileVisible() }
         .refreshable { await reload() }
     }
 
-    private func row(_ notification: NotificationLenient) -> some View {
-        Button {
-            open(notification)
-        } label: {
-            HStack(alignment: .top, spacing: 10) {
-                WorkspaceAvatarView(
-                    imageURLString: notification.actionUsers.first?.image,
-                    loader: session.imageCache,
-                    size: 32
-                )
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(notification.messageText)
-                        .font(.subheadline)
-                        .foregroundStyle(notification.isUnopened ? .primary : .secondary)
-                    if let time = PageRowMetadataLabel.relativeTimeText(from: notification.createdAt) {
-                        Text(time)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                if notification.isUnopened {
-                    Circle()
-                        .fill(.red)
-                        .frame(width: 8, height: 8)
-                        .padding(.top, 6)
-                        .accessibilityLabel("Unopened")
-                }
+    private var emptyCard: some View {
+        CrowiCard {
+            CrowiRow(showsChevron: false) {
+                Text(errorMessage ?? (hasLoaded ? "No notifications yet" : " "))
+                    .font(CrowiTypography.rowMeta)
+                    .foregroundStyle(CrowiTheme.mutedForeground)
             }
         }
+    }
+
+    private func loadMore(from offset: Int) -> some View {
+        Button {
+            Task { await loadMore(startingAt: offset) }
+        } label: {
+            Text("Load more")
+                .font(CrowiTypography.sectionAction)
+                .foregroundStyle(CrowiTheme.primary)
+                .frame(maxWidth: .infinity, minHeight: CrowiMetrics.minimumTapTarget)
+        }
         .buttonStyle(.plain)
-        .disabled(!notification.isNavigable)
+        .padding(.top, CrowiMetrics.sectionHeaderTopPadding)
+    }
+
+    private func row(_ notification: NotificationLenient) -> some View {
+        CrowiSwipeActionRow(
+            actionLabel: "Read",
+            actionSystemImage: "checkmark",
+            // Nothing to mark on a row that is already opened — a swipe there
+            // would animate a panel that does nothing.
+            isActionAvailable: notification.isUnopened,
+            action: { markRead(notification) }
+        ) {
+            Button {
+                open(notification)
+            } label: {
+                rowContent(notification)
+            }
+            .buttonStyle(.plain)
+            .disabled(!notification.isNavigable)
+        }
+    }
+
+    private func rowContent(_ notification: NotificationLenient) -> some View {
+        HStack(alignment: .top, spacing: CrowiMetrics.rowContentSpacing) {
+            // The dot's column is always present, so the avatars of read and
+            // unread rows line up instead of stepping 8pt sideways.
+            Circle()
+                .fill(notification.isUnopened ? AnyShapeStyle(CrowiTheme.primary) : AnyShapeStyle(.clear))
+                .frame(width: 8, height: 8)
+                .padding(.top, 6)
+            WorkspaceAvatarView(
+                imageURLString: notification.actionUsers.first?.image,
+                loader: session.imageCache,
+                size: CrowiMetrics.leadingChipSize,
+                initialsSource: notification.actionUsers.first?.displayName
+            )
+            VStack(alignment: .leading, spacing: CrowiMetrics.rowLineSpacing) {
+                (
+                    Text(notification.actorText).fontWeight(.bold)
+                        + Text(" \(notification.actionText)")
+                )
+                .font(CrowiTypography.rowMeta)
+                .foregroundStyle(CrowiTheme.foreground)
+                .multilineTextAlignment(.leading)
+                Text(notification.pageText)
+                    .font(CrowiTypography.rowMeta)
+                    .foregroundStyle(CrowiTheme.mutedForeground)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            if let time = PageRowMetadataLabel.relativeTimeText(from: notification.createdAt) {
+                Text(time)
+                    .font(CrowiTypography.rowMeta)
+                    .foregroundStyle(CrowiTheme.mutedForeground)
+                    .lineLimit(1)
+            }
+        }
+        .padding(.vertical, CrowiMetrics.rowVerticalPadding)
+        .padding(.horizontal, CrowiMetrics.rowHorizontalPadding)
+        .frame(minHeight: CrowiMetrics.minimumTapTarget)
+        .contentShape(Rectangle())
+        // The drawn hierarchy is three separate strings; the spoken row is
+        // the one sentence it was built from.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityLabel(for: notification))
+    }
+
+    private func accessibilityLabel(for notification: NotificationLenient) -> String {
+        [
+            notification.isUnopened ? "Unopened" : nil,
+            notification.messageText,
+            PageRowMetadataLabel.relativeTimeText(from: notification.createdAt),
+        ]
+        .compactMap { $0 }
+        .joined(separator: ", ")
     }
 
     private func open(_ notification: NotificationLenient) {
         guard let path = notification.targetPath else { return }
-        // Optimistic row update first, then the loose open POST (which also
-        // re-polls the badge) — navigation is never gated on the POST.
+        markRead(notification)
+        onSelectDestination(.page(path: path))
+    }
+
+    /// The optimistic row update + the loose open POST, with no navigation —
+    /// the swipe's whole behavior, and the half of a tap that is not the
+    /// push. Navigation is never gated on the POST.
+    private func markRead(_ notification: NotificationLenient) {
         if let index = notifications.firstIndex(where: { $0.notificationId == notification.notificationId }) {
             notifications[index] = notification.opened()
         }
         Task { await session.openNotification(id: notification.notificationId) }
-        onSelectDestination(.page(path: path))
     }
 
     private func markAllRead() async {
@@ -152,7 +244,7 @@ struct NotificationsView: View {
         hasLoaded = true
     }
 
-    private func loadMore(from offset: Int) async {
+    private func loadMore(startingAt offset: Int) async {
         do {
             let response = try await NotificationsAPI.fetchList(limit: Self.pageSize, offset: offset, using: session.apiClient)
             let known = Set(notifications.map(\.notificationId))

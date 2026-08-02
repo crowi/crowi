@@ -129,28 +129,44 @@ public struct NotificationLenient: Sendable, Equatable, Identifiable {
         )
     }
 
-    /// The row's human-readable line — the web's `buildNotificationMessage`
-    /// templates, in this app's (currently English-only) UI voice, with the
-    /// same page-short-name treatment (`PageRowTitleLabel.displayName`, the
-    /// web's `pageDisplayName(target.path) || target.path`). Unknown actions
-    /// get the generic verb; a missing target reads "a page".
-    public var messageText: String {
+    /// WHO — "Bob", "Bob and 2 more", or "Someone" when the server sent no
+    /// action users at all. Set in bold on its own, ahead of the verb, by the
+    /// design's row.
+    public var actorText: String {
         let user = actionUsers.first?.displayName ?? "Someone"
-        let subject = actionUsers.count > 1 ? "\(user) and \(actionUsers.count - 1) more" : user
-        let pageName: String
-        if let targetPath {
-            let display = PageRowTitleLabel.displayName(for: targetPath)
-            pageName = "“\(display.isEmpty ? targetPath : display)”"
-        } else {
-            pageName = "a page"
-        }
+        return actionUsers.count > 1 ? "\(user) and \(actionUsers.count - 1) more" : user
+    }
+
+    /// WHAT — the web's `buildNotificationMessage` verbs, in this app's
+    /// (currently English-only) UI voice. An action this build doesn't know
+    /// gets the generic verb; the vocabulary is exactly the server's four
+    /// types, never the richer set the design mocks.
+    public var actionText: String {
         switch action {
-        case "COMMENT": return "\(subject) commented on \(pageName)"
-        case "LIKE": return "\(subject) liked \(pageName)"
-        case "MENTION": return "\(subject) mentioned you on \(pageName)"
-        case "UPDATE": return "\(subject) updated \(pageName)"
-        default: return "\(subject) acted on \(pageName)"
+        case "COMMENT": return "commented on"
+        case "LIKE": return "liked"
+        case "MENTION": return "mentioned you on"
+        case "UPDATE": return "updated"
+        default: return "acted on"
         }
+    }
+
+    /// WHERE — the page's short name (`PageRowTitleLabel.displayName`, the
+    /// web's `pageDisplayName(target.path) || target.path`), or "a page" when
+    /// the target is missing.
+    public var pageText: String {
+        guard let targetPath else { return "a page" }
+        let display = PageRowTitleLabel.displayName(for: targetPath)
+        return display.isEmpty ? targetPath : display
+    }
+
+    /// The three parts as ONE sentence — the pre-design row's whole content,
+    /// kept because the design's three-part row is a VISUAL hierarchy and
+    /// VoiceOver still needs the sentence. Composed from the parts above so
+    /// the spoken row can never drift from the drawn one.
+    public var messageText: String {
+        let page = targetPath == nil ? pageText : "“\(pageText)”"
+        return "\(actorText) \(actionText) \(page)"
     }
 }
 
@@ -171,6 +187,26 @@ public struct ListNotificationsResponseLenient: Sendable, Equatable {
             notifications: rawNotifications.compactMap(NotificationLenient.decode),
             nextOffset: pager?["next"] as? Int
         )
+    }
+}
+
+/// The notifications screen's subtitle line — the design's
+/// "{{ unreadLabel }} · swipe a row to mark read".
+///
+/// In CrowiKit rather than in the screen so the wording (and its plural) can
+/// be asserted; the App target's manifest imports `AppleProductTypes`, which
+/// the bare `swift` CLI running the tests cannot parse.
+public enum NotificationsSummary {
+    /// - Parameter unopenedCount: rows still showing a dot — deliberately the
+    ///   UNOPENED count the list itself paints, not the badge's UNREAD count,
+    ///   which mark-all-read zeroes while the dots stay.
+    public static func subtitle(unopenedCount: Int) -> String {
+        guard unopenedCount > 0 else {
+            // The swipe hint goes with it: there is nothing left to swipe.
+            return "You're all caught up"
+        }
+        let unit = unopenedCount == 1 ? "notification" : "notifications"
+        return "\(unopenedCount) unread \(unit) · swipe a row to mark read"
     }
 }
 

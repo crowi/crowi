@@ -170,6 +170,38 @@ final class NotificationsLenientTests: XCTestCase {
         XCTAssertEqual(row.messageText, "Bob commented on “2026/05/23”")
     }
 
+    /// The design's row draws the three parts separately (bold actor, verb,
+    /// muted page on its own line) while VoiceOver still reads the sentence.
+    /// `messageText` is COMPOSED from the parts, so the two can never drift —
+    /// pinned here by rebuilding the sentence from them.
+    func testTheRowsPartsComposeTheSpokenSentence() {
+        let row = NotificationLenient.decode(
+            notificationJSON(action: "MENTION", actionUsers: [["name": "Bob"], ["name": "Carol"]])
+        )!
+
+        XCTAssertEqual(row.actorText, "Bob and 1 more")
+        XCTAssertEqual(row.actionText, "mentioned you on")
+        XCTAssertEqual(row.pageText, "handbook", "the drawn page line carries no quotation marks")
+        XCTAssertEqual(row.messageText, "\(row.actorText) \(row.actionText) “\(row.pageText)”")
+    }
+
+    /// A missing target degrades the page part to prose, which must NOT then
+    /// be quoted as if it were a page name.
+    func testTheMissingTargetPlaceholderIsNotQuoted() {
+        let row = NotificationLenient.decode(notificationJSON(target: nil))!
+
+        XCTAssertEqual(row.pageText, "a page")
+        XCTAssertEqual(row.messageText, "Bob commented on a page")
+    }
+
+    // MARK: - The list's subtitle line
+
+    func testTheSubtitleCountsUnopenedRowsAndDropsTheHintWhenThereAreNone() {
+        XCTAssertEqual(NotificationsSummary.subtitle(unopenedCount: 0), "You're all caught up")
+        XCTAssertEqual(NotificationsSummary.subtitle(unopenedCount: 1), "1 unread notification · swipe a row to mark read")
+        XCTAssertEqual(NotificationsSummary.subtitle(unopenedCount: 7), "7 unread notifications · swipe a row to mark read")
+    }
+
     func testDisplayNameFallsBackThroughEmptyNameToUsernameLikeTheWebsOrOperator() {
         XCTAssertEqual(NotificationActionUserLenient(username: "bob", name: "", image: nil).displayName, "bob")
         XCTAssertEqual(NotificationActionUserLenient(username: "bob", name: "Bob", image: nil).displayName, "Bob")
