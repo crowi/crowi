@@ -50,6 +50,12 @@ public struct UserPageResponseLenient: Sendable, Equatable {
     public let introduction: String?
     public let createdPagesCount: Int?
     public let bookmarksCount: Int?
+    /// feature-profile-stats-and-page-total — the target user's OWN actions:
+    /// pages THEY liked and comments THEY wrote, not activity their pages
+    /// received. Optional like every other count here, so a server predating
+    /// the extension drops the stat instead of printing a confident zero.
+    public let likesCount: Int?
+    public let commentsCount: Int?
 
     public static func decode(_ data: Data) throws -> UserPageResponseLenient {
         guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
@@ -62,7 +68,9 @@ public struct UserPageResponseLenient: Sendable, Equatable {
             image: user["image"] as? String,
             introduction: user["introduction"] as? String,
             createdPagesCount: object["createdPagesCount"] as? Int,
-            bookmarksCount: object["bookmarksCount"] as? Int
+            bookmarksCount: object["bookmarksCount"] as? Int,
+            likesCount: object["likesCount"] as? Int,
+            commentsCount: object["commentsCount"] as? Int
         )
     }
 

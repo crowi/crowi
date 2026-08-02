@@ -70,6 +70,15 @@ public enum CrowiMetrics {
     public static let screenTitleTopPadding: CGFloat = 10
     public static let screenTitleBottomPadding: CGFloat = 2
 
+    // MARK: - Profile
+
+    /// Design: `padding:14px 0` on a stat column.
+    public static let statColumnVerticalPadding: CGFloat = 14
+    /// Design: the profile header's `width:64px;height:64px` avatar, and the
+    /// `gap:14px` between it and the name block.
+    public static let profileAvatarSize: CGFloat = 64
+    public static let profileHeaderSpacing: CGFloat = 14
+
     // MARK: - Search field
 
     /// Design: `padding:9px 12px;gap:8px` inside the `--muted` pill.
@@ -192,6 +201,12 @@ public enum CrowiTypography {
     public static let rowMeta = Font.system(.caption)
     /// Design: 13.5px, `line-height:1.55` — a search hit's snippet.
     public static let snippet = Font.system(.footnote)
+    /// Design: 21px/700 — the profile header's display name.
+    public static let profileName = Font.system(.title3, design: .default, weight: .bold)
+    /// Design: 20px/700 — a profile stat's number.
+    public static let statValue = Font.system(.title3, design: .default, weight: .bold)
+    /// Design: 12.5px `var(--muted-foreground)` — a stat's noun.
+    public static let statLabel = Font.system(.caption)
     /// Design: 16px — the search field's own input text.
     public static let searchInput = Font.system(.body)
     /// Design: 10.5px/500 — a tab's label under its glyph. `.caption2` is the

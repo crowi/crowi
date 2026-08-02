@@ -126,6 +126,31 @@ final class RemainingLenientDecodersTests: XCTestCase {
         XCTAssertEqual(response.image, "/api/attachments/by-key/user/sotarok.png")
     }
 
+    /// feature-profile-stats-and-page-total — the two counts the profile's
+    /// stat strip added.
+    func testUserPageResponseDecodesTheLikeAndCommentCounts() throws {
+        let json = """
+        { "user": { "_id": "u1", "username": "sotarok" }, "createdPagesCount": 5, "bookmarksCount": 2, "likesCount": 342, "commentsCount": 89 }
+        """
+        let response = try UserPageResponseLenient.decode(Data(json.utf8))
+
+        XCTAssertEqual(response.likesCount, 342)
+        XCTAssertEqual(response.commentsCount, 89)
+    }
+
+    /// A server predating the extension sends neither count. They must decode
+    /// to `nil` — the strip drops a missing stat, and a `0` default would
+    /// have it print "0 Likes" as though that were measured.
+    func testAPreExtensionServerLeavesTheNewCountsNilRatherThanZero() throws {
+        let json = """
+        { "user": { "_id": "u1", "username": "sotarok" }, "createdPagesCount": 5, "bookmarksCount": 2 }
+        """
+        let response = try UserPageResponseLenient.decode(Data(json.utf8))
+
+        XCTAssertNil(response.likesCount)
+        XCTAssertNil(response.commentsCount)
+    }
+
     func testRecentlyViewedPagesDecodesPageArray() throws {
         let json = """
         { "pages": [ { "_id": "p1", "path": "/x" } ] }

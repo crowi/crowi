@@ -15,6 +15,70 @@ import AppKit
 /// does not add one — nothing below asserts that a color equals itself.
 @MainActor
 final class CrowiDesignSystemTests: XCTestCase {
+    // MARK: - Profile stat strip
+
+    /// The strip renders exactly the stats it is handed. A caller that could
+    /// not report one drops it, so a two-stat strip has to be a legal shape —
+    /// and has to look different from the three-stat one, or the drop is
+    /// invisible and a stat could go missing unnoticed.
+    func testTheStatStripRendersFewerColumnsRatherThanInventingOne() throws {
+        let three = try renderStripPNG([
+            CrowiStat(value: 128, label: "Pages"),
+            CrowiStat(value: 342, label: "Likes"),
+            CrowiStat(value: 89, label: "Comments"),
+        ])
+        let two = try renderStripPNG([
+            CrowiStat(value: 128, label: "Pages"),
+            CrowiStat(value: 342, label: "Likes"),
+        ])
+
+        XCTAssertNotEqual(three, two)
+    }
+
+    /// An empty strip draws nothing at all — not an empty card, which would
+    /// read as a section that failed to load. The one-stat render first, so a
+    /// host that cannot render at all fails loudly instead of passing the
+    /// "nothing was drawn" assertion for the wrong reason.
+    func testAStripWithNoStatsDrawsNothing() throws {
+        let oneStat = try renderedSize(CrowiStatStrip([CrowiStat(value: 1, label: "Pages")]), width: 390)
+        XCTAssertGreaterThan(oneStat.height, 0)
+
+        XCTAssertEqual(renderedHeightIfDrawn(CrowiStatStrip([]), width: 390), 0, "an empty strip must not draw a card")
+    }
+
+    /// The height of a view that may legitimately render to nothing —
+    /// `ImageRenderer` returns no image at all for an empty one, which the
+    /// throwing `renderedSize` above cannot express.
+    private func renderedHeightIfDrawn(_ view: some View, width: CGFloat) -> CGFloat {
+        #if canImport(AppKit)
+        let renderer = ImageRenderer(content: view.frame(width: width))
+        renderer.scale = 1
+        return renderer.nsImage?.size.height ?? 0
+        #else
+        return 0
+        #endif
+    }
+
+    /// The strip's own render, at a width a three-column card actually needs
+    /// (the shared `renderToPNGData` helper below frames a single row).
+    private func renderStripPNG(_ stats: [CrowiStat]) throws -> Data {
+        #if canImport(AppKit)
+        let renderer = ImageRenderer(content: CrowiStatStrip(stats).frame(width: 390))
+        renderer.scale = 1
+        guard
+            let nsImage = renderer.nsImage,
+            let tiff = nsImage.tiffRepresentation,
+            let bitmap = NSBitmapImageRep(data: tiff),
+            let png = bitmap.representation(using: .png, properties: [:])
+        else {
+            throw DesignSystemRenderingUnavailable()
+        }
+        return png
+        #else
+        throw DesignSystemRenderingUnavailable()
+        #endif
+    }
+
     private struct StubImageFetcher: WorkspaceImageFetching {
         func fetch(_ urlString: String) async throws -> Data { Data() }
     }
