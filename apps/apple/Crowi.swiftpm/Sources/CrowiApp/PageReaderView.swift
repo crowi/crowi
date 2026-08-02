@@ -56,9 +56,9 @@ struct PageReaderView: View {
     /// engagement toggle and comment refresh.
     @State private var tableOfContents: [RenderedAstHeading] = []
     /// Held as an object, and deliberately NEVER read in this view's body:
-    /// only the 2pt bar and the TOC sheet's label observe it, so a scroll
-    /// frame does not re-evaluate the whole rendered page. See
-    /// `CrowiReadingProgressModel`.
+    /// only the 2pt bar, the TOC sheet's label and the navigation bar's
+    /// background modifier observe it, so a scroll frame does not
+    /// re-evaluate the whole rendered page. See `CrowiReadingProgressModel`.
     @State private var readingProgress = CrowiReadingProgressModel()
 
     /// The scroll target the pill's comment button jumps to.
@@ -131,6 +131,10 @@ struct PageReaderView: View {
         #if canImport(UIKit)
         .navigationBarTitleDisplayMode(.inline)
         #endif
+        // The design's transparent-at-the-top bar. Driven explicitly because
+        // the progress rule's `safeAreaInset` above breaks the bar's own
+        // scroll tracking — see `CrowiScrolledToolbarBackground`.
+        .crowiScrolledToolbarBackground(readingProgress)
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 // The design's two nav-bar affordances. Everything the toolbar

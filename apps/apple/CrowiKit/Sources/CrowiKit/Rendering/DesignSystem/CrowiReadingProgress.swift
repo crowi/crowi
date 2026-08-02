@@ -59,6 +59,25 @@ public enum CrowiReadingProgress {
         let clamped = fraction.isFinite ? min(max(fraction, 0), 1) : 0
         return "\(Int((clamped * 100).rounded()))% read"
     }
+
+    /// How far the content must have travelled before the navigation bar
+    /// stops being transparent. Small enough that the bar reacts to a real
+    /// scroll immediately, large enough that a rubber-band settle or a
+    /// one-pixel layout jitter at rest does not flicker it.
+    public static let scrolledThreshold: CGFloat = 8
+
+    /// Whether the page has scrolled out from under the navigation bar — the
+    /// design's "transparent at the top, material once you are reading".
+    ///
+    /// Derived from the raw OFFSET rather than from `fraction`: a page
+    /// shorter than the screen has `fraction == 1` from the first frame (it
+    /// is all visible, so it is all read), and a bar permanently opaque over
+    /// a page that cannot scroll is the same bug in the other direction. An
+    /// overscroll above the top reads as not-scrolled.
+    public static func isScrolled(scrollOffset: CGFloat) -> Bool {
+        guard scrollOffset.isFinite else { return false }
+        return scrollOffset > scrolledThreshold
+    }
 }
 
 /// The live scroll position of ONE page reader, held as a reference type on
@@ -76,6 +95,12 @@ public enum CrowiReadingProgress {
 @Observable
 public final class CrowiReadingProgressModel {
     public private(set) var fraction: Double = 0
+    /// Whether the content has scrolled under the navigation bar. A SEPARATE
+    /// property from `fraction`, not a derivation of it, so the view that
+    /// swaps the bar's background is invalidated twice per page (in, out)
+    /// instead of on every scroll frame — `@Observable` tracks the individual
+    /// properties a body reads.
+    public private(set) var isScrolled = false
 
     public init() {}
 
@@ -89,6 +114,10 @@ public final class CrowiReadingProgressModel {
         // not move the needle must not invalidate the views watching this.
         if next != fraction {
             fraction = next
+        }
+        let nextIsScrolled = CrowiReadingProgress.isScrolled(scrollOffset: scrollOffset)
+        if nextIsScrolled != isScrolled {
+            isScrolled = nextIsScrolled
         }
     }
 }
@@ -139,10 +168,51 @@ public struct CrowiReadingProgressTracker: ViewModifier {
     }
 }
 
+/// The design's scroll-reactive navigation bar: transparent while the reader
+/// is at the top of a page, the system's material once the text has started
+/// moving under it.
+///
+/// iOS does this automatically for a plain `ScrollView` in a
+/// `NavigationStack`, and the reader lost it: the reading-progress rule is a
+/// `safeAreaInset(edge:.top)`, which interposes a view between the bar and the
+/// scroll view, and the bar then never sees the scroll it tracks — it stayed
+/// in its scroll-edge (transparent) appearance forever, over any content.
+/// Rather than give up the rule's placement, the bar is driven EXPLICITLY from
+/// the same measurement the rule already takes.
+///
+/// Reads `isScrolled` in the MODIFIER's own body, not in the reader's: the
+/// reader's body renders the whole page, and re-evaluating it to change a bar
+/// background would be the expensive half of `CrowiReadingProgressModel`'s
+/// reason for existing.
+public struct CrowiScrolledToolbarBackground: ViewModifier {
+    private let progress: CrowiReadingProgressModel
+
+    public init(progress: CrowiReadingProgressModel) {
+        self.progress = progress
+    }
+
+    @ViewBuilder
+    public func body(content: Content) -> some View {
+        #if canImport(UIKit)
+        // `ToolbarPlacement.navigationBar` is UIKit-only; AppKit's bar is a
+        // window toolbar with its own appearance model, and `swift test`
+        // renders these views on macOS.
+        content.toolbarBackground(progress.isScrolled ? .visible : .hidden, for: .navigationBar)
+        #else
+        content
+        #endif
+    }
+}
+
 extension View {
     /// Sugar for `.modifier(CrowiReadingProgressTracker(progress:))`.
     public func crowiReadingProgress(_ progress: CrowiReadingProgressModel) -> some View {
         modifier(CrowiReadingProgressTracker(progress: progress))
+    }
+
+    /// Sugar for `.modifier(CrowiScrolledToolbarBackground(progress:))`.
+    public func crowiScrolledToolbarBackground(_ progress: CrowiReadingProgressModel) -> some View {
+        modifier(CrowiScrolledToolbarBackground(progress: progress))
     }
 }
 

@@ -164,6 +164,46 @@ final class CrowiPageChromeTests: XCTestCase {
         XCTAssertEqual(model.fraction, 0, "an unmeasured frame resets to the start rather than holding a stale number")
     }
 
+    // MARK: - Navigation bar background
+
+    /// The bar goes opaque on the OFFSET, not on the fraction. A page shorter
+    /// than the screen is "100% read" from its first frame, and reading the
+    /// fraction here would leave its bar permanently material over content
+    /// that never moves — the same bug the transparent-forever bar had, in
+    /// the other direction.
+    func testAShortPageKeepsItsTransparentBar() {
+        let model = CrowiReadingProgressModel()
+        model.report(scrollOffset: 0, contentHeight: 500, viewportHeight: 800)
+
+        XCTAssertEqual(model.fraction, 1, "a page that fits on screen is fully read")
+        XCTAssertFalse(model.isScrolled, "…but nothing has scrolled under the bar")
+    }
+
+    /// Resting at the top — including the rubber band above it — is not
+    /// scrolled; a real scroll is.
+    func testTheBarTurnsOpaqueOnlyOnceTheContentHasActuallyMoved() {
+        XCTAssertFalse(CrowiReadingProgress.isScrolled(scrollOffset: 0))
+        XCTAssertFalse(CrowiReadingProgress.isScrolled(scrollOffset: -140), "a rubber-band overscroll is not a scroll")
+        XCTAssertFalse(
+            CrowiReadingProgress.isScrolled(scrollOffset: CrowiReadingProgress.scrolledThreshold),
+            "the threshold is what a settle jitter must not cross"
+        )
+        XCTAssertTrue(CrowiReadingProgress.isScrolled(scrollOffset: CrowiReadingProgress.scrolledThreshold + 1))
+        XCTAssertFalse(CrowiReadingProgress.isScrolled(scrollOffset: .nan), "an unmeasured frame is never scrolled")
+    }
+
+    /// Both directions: the bar has to come BACK when the reader scrolls to
+    /// the top again, not latch on the first scroll.
+    func testTheBarGoesBackToTransparentAtTheTop() {
+        let model = CrowiReadingProgressModel()
+
+        model.report(scrollOffset: 900, contentHeight: 2000, viewportHeight: 800)
+        XCTAssertTrue(model.isScrolled)
+
+        model.report(scrollOffset: 0, contentHeight: 2000, viewportHeight: 800)
+        XCTAssertFalse(model.isScrolled)
+    }
+
     // MARK: - Tap targets
 
     /// Every slot in the pill is a control, so the pill clears 44pt — at the
