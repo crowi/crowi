@@ -181,15 +181,36 @@ final class CrowiTabBarTests: XCTestCase {
     }
 
     /// The workspace switcher is a control too, and the one most at risk of
-    /// being left as a caption: it is a 15px subtitle line by design.
+    /// being left under the floor: its mark is a 28pt disc in a navigation
+    /// bar, which gives a custom item only the room its content asks for.
     func testTheWorkspaceSwitcherClearsThe44ptMinimumTapTarget() throws {
-        let height = try renderedSize(
-            CrowiWorkspaceSwitcherButton(workspaceName: "Almoha Wiki", action: {})
+        let size = try renderedSize(
+            CrowiWorkspaceIconButton(workspaceName: "Almoha Wiki", action: {})
                 .dynamicTypeSize(.xSmall),
             width: 350
-        ).height
+        )
 
-        XCTAssertGreaterThanOrEqual(height, CrowiMetrics.minimumTapTarget)
+        XCTAssertGreaterThanOrEqual(size.height, CrowiMetrics.minimumTapTarget)
+    }
+
+    /// The mark itself must carry the workspace's identity: two different
+    /// workspaces cannot paint the same icon, or the one control that says
+    /// which workspace you are in says nothing.
+    func testTheWorkspaceIconPaintsTheWorkspacesOwnInitials() throws {
+        let almoha = try renderToPNGData(CrowiWorkspaceIconButton(workspaceName: "Almoha Wiki", action: {}))
+        let crowi = try renderToPNGData(CrowiWorkspaceIconButton(workspaceName: "Crowi Dev", action: {}))
+
+        XCTAssertNotEqual(almoha, crowi, "two workspaces must not share one mark")
+    }
+
+    /// A workspace whose title is empty (or whitespace-only) has no initial
+    /// to draw — it falls back to a glyph rather than painting a blank disc
+    /// the user cannot tell from a loading state.
+    func testAnUntitledWorkspaceStillPaintsAMark() throws {
+        let untitled = try renderToPNGData(CrowiWorkspaceIconButton(workspaceName: "   ", action: {}))
+        let empty = try renderToPNGData(Color.clear.frame(width: 44, height: 44))
+
+        XCTAssertNotEqual(untitled, empty, "an untitled workspace must still paint something")
     }
 
     // MARK: - Helpers

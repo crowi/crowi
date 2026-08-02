@@ -38,18 +38,15 @@ import SwiftUI
 /// ## feature-ios-visual-redesign Phase 2
 ///
 /// The title is the design's "Home" (this screen is the Home TAB now), and
-/// the workspace name moves to the subtitle line the design puts it on —
-/// where it doubles as the app's ONE workspace-switcher affordance
-/// (`CrowiWorkspaceSwitcherButton`), replacing the "Workspaces" toolbar
-/// button. The page count the design pairs with it ("· 128 pages") is still
-/// not rendered: no endpoint reports a workspace-wide total. The "Your
-/// drafts" card is likewise not built — the app has no drafts concept, and
+/// the workspace name moves to the subtitle line the design puts it on. That
+/// line is a LABEL, as the design draws it: the workspace switcher it briefly
+/// doubled as is now the leading toolbar icon (`CrowiWorkspaceIconButton`),
+/// reachable from every tab rather than from this screen alone. The "Your
+/// drafts" card is still not built — the app has no drafts concept, and
 /// inventing one would mean inventing the data behind it.
 struct RecentlyUpdatedHomeView: View {
     let session: WorkspaceSession
     let onSelect: (ReadDestination) -> Void
-    /// Presents `RootScene`'s workspace-switcher sheet.
-    let onShowSwitcher: () -> Void
 
     @State private var pages: [PageLenient] = []
     @State private var isLoading = false
@@ -64,10 +61,8 @@ struct RecentlyUpdatedHomeView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
                 CrowiScreenTitle("Home") {
-                    CrowiWorkspaceSwitcherButton(
-                        workspaceName: session.context.workspace.displayTitle,
-                        action: onShowSwitcher
-                    )
+                    Text(session.context.workspace.displayTitle)
+                        .lineLimit(1)
                 }
 
                 // The tree entry point stays ABOVE the recency list (not in

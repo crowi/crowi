@@ -20,12 +20,10 @@ struct WorkspaceHomeView: View {
     /// the home cannot be PUSHED from a switcher stack, so the switcher
     /// comes to it instead (see `RootScene`'s doc comment for why).
     ///
-    /// feature-ios-visual-redesign Phase 2: the affordance that calls this is
-    /// no longer a toolbar button but the Home screen's own workspace
-    /// subtitle (`CrowiWorkspaceSwitcherButton`), which is the place the
-    /// design already shows the workspace name — one entry point, in both
-    /// size classes, since `RecentlyUpdatedHomeView` is the compact tab root
-    /// AND the regular-width sidebar.
+    /// The affordance that calls this is the leading navigation-bar icon
+    /// (`CrowiWorkspaceIconButton`) — on the sidebar here, and on every tab
+    /// root in the compact shell. It briefly lived on the Home screen's
+    /// workspace subtitle, which put it out of reach from every other tab.
     let onShowSwitcher: () -> Void
 
     @StateObject private var holder: WorkspaceSessionHolder
@@ -92,8 +90,7 @@ struct WorkspaceHomeView: View {
             NavigationSplitView {
                 RecentlyUpdatedHomeView(
                     session: session,
-                    onSelect: { selectedDestination = $0 },
-                    onShowSwitcher: onShowSwitcher
+                    onSelect: { selectedDestination = $0 }
                 )
                 .toolbar { toolbarItems(session: session, onSelect: { selectedDestination = $0 }) }
             } detail: {
@@ -113,11 +110,18 @@ struct WorkspaceHomeView: View {
 
     /// Regular width only — the sidebar's actions. (The compact shell's
     /// equivalents are the tab bar's slots; its Home toolbar keeps only
-    /// "Recently Viewed".) The former leading "Workspaces" button is gone
-    /// from both: the switcher is the home's workspace subtitle now, and a
-    /// second entry point would just be two ways to open the same sheet.
+    /// "Recently Viewed".) The leading slot is the workspace switcher in BOTH
+    /// size classes — here on the sidebar, and on every tab root in
+    /// `WorkspaceTabsView` — since the sidebar is this shell's "always
+    /// visible" surface exactly as the tab bar is the other's.
     @ToolbarContentBuilder
     private func toolbarItems(session: WorkspaceSession, onSelect: @escaping (ReadDestination) -> Void) -> some ToolbarContent {
+        ToolbarItem(placement: .topBarLeading) {
+            CrowiWorkspaceIconButton(
+                workspaceName: session.context.workspace.displayTitle,
+                action: onShowSwitcher
+            )
+        }
         ToolbarItemGroup(placement: .primaryAction) {
             // §5.2 capability gate: `SearchCapabilityToolbarButton` (CrowiKit)
             // IS the search toolbar entry point, not a re-derived

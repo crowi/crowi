@@ -106,6 +106,20 @@ struct WorkspaceTabsView: View {
     private func stack(for tab: CrowiTab) -> some View {
         NavigationStack(path: path(for: tab)) {
             root(for: tab)
+                // Applied to every tab's ROOT (not to the stack), so the
+                // switcher is one tap away wherever the user is — and
+                // disappears on a pushed screen, where the leading slot is
+                // the back button's. Hanging it off Home alone, as the
+                // subtitle control did, meant a workspace could not be
+                // changed while reading notifications.
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        CrowiWorkspaceIconButton(
+                            workspaceName: session.context.workspace.displayTitle,
+                            action: onShowSwitcher
+                        )
+                    }
+                }
                 .navigationDestination(for: ReadDestination.self) { destination in
                     ReadDestinationView(destination: destination, session: session, onSelect: { open($0, in: tab) })
                 }
@@ -119,15 +133,14 @@ struct WorkspaceTabsView: View {
         case .home:
             RecentlyUpdatedHomeView(
                 session: session,
-                onSelect: { open($0, in: .home) },
-                onShowSwitcher: onShowSwitcher
+                onSelect: { open($0, in: .home) }
             )
             .toolbar {
                 // Everything else this toolbar used to carry is now a tab
                 // (search / notifications / profile), the FAB (new page) or
-                // the home's own subtitle (the workspace switcher).
-                // "Recently viewed" has no slot in the design's bar and no
-                // home section of its own, so it stays here.
+                // the leading workspace icon (the switcher). "Recently
+                // viewed" has no slot in the design's bar and no home
+                // section of its own, so it stays here.
                 ToolbarItem(placement: .primaryAction) {
                     Button {
                         open(.recentlyViewed, in: .home)
