@@ -33,6 +33,54 @@ final class PageLenientTests: XCTestCase {
         XCTAssertTrue(page.needsDetailFetchForBody, "a list row's bare-string revision must signal 'detail GET required' (§8)")
     }
 
+    // MARK: - The listing's `total` (the home subtitle's page count)
+
+    /// The count is the size of the whole viewer-visible set, NOT of the
+    /// returned slice — the two differ for any workspace bigger than one
+    /// screenful, which is exactly when the subtitle matters.
+    func testTheListingsTotalIsIndependentOfTheReturnedSlice() throws {
+        let json = """
+        { "pages": [ { "_id": "p1", "path": "/a" }, { "_id": "p2", "path": "/b" } ], "pager": { "prev": null, "next": 20, "offset": 0 }, "total": 128 }
+        """
+        let response = try ListPagesResponseLenient.decode(Data(json.utf8))
+
+        XCTAssertEqual(response.pages.count, 2)
+        XCTAssertEqual(response.total, 128)
+    }
+
+    /// A server predating the field must leave it `nil`, so the subtitle
+    /// drops the count instead of printing the slice's length as though it
+    /// were the workspace's size.
+    func testAPreExtensionListingHasNoTotalRatherThanTheSliceLength() throws {
+        let json = """
+        { "pages": [ { "_id": "p1", "path": "/a" } ], "pager": { "prev": null, "next": null, "offset": 0 } }
+        """
+        let response = try ListPagesResponseLenient.decode(Data(json.utf8))
+
+        XCTAssertNil(response.total)
+    }
+
+    func testTheHomeSubtitleNamesTheWorkspaceAndCountsItsPages() {
+        XCTAssertEqual(
+            WorkspaceSubtitleLabel.text(workspaceName: "Almoha Wiki", totalPages: 128),
+            "Almoha Wiki · 128 pages"
+        )
+        XCTAssertEqual(
+            WorkspaceSubtitleLabel.text(workspaceName: "Almoha Wiki", totalPages: 1),
+            "Almoha Wiki · 1 page"
+        )
+        XCTAssertEqual(
+            WorkspaceSubtitleLabel.text(workspaceName: "Almoha Wiki", totalPages: 0),
+            "Almoha Wiki · 0 pages",
+            "an empty workspace states its emptiness rather than hiding the count"
+        )
+        XCTAssertEqual(
+            WorkspaceSubtitleLabel.text(workspaceName: "Almoha Wiki", totalPages: nil),
+            "Almoha Wiki",
+            "an unreported count leaves the name alone rather than guessing one"
+        )
+    }
+
     func testRowWithNoRevisionAtAllAlsoNeedsDetailFetch() throws {
         let json = """
         { "pages": [ { "_id": "p1", "path": "/no/revision" } ], "pager": { "prev": null, "next": null, "offset": 0 } }

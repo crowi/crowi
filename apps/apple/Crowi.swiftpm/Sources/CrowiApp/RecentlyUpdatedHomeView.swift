@@ -41,7 +41,10 @@ import SwiftUI
 /// the workspace name moves to the subtitle line the design puts it on. That
 /// line is a LABEL, as the design draws it: the workspace switcher it briefly
 /// doubled as is now the leading toolbar icon (`CrowiWorkspaceIconButton`),
-/// reachable from every tab rather than from this screen alone. The "Your
+/// reachable from every tab rather than from this screen alone. The page
+/// count the design pairs with the name ("· 128 pages") is the SAME
+/// `/pages/list` response's `total` — the root listing is every visible page
+/// in the workspace, so the number costs no second request. The "Your
 /// drafts" card is still not built — the app has no drafts concept, and
 /// inventing one would mean inventing the data behind it.
 struct RecentlyUpdatedHomeView: View {
@@ -49,6 +52,12 @@ struct RecentlyUpdatedHomeView: View {
     let onSelect: (ReadDestination) -> Void
 
     @State private var pages: [PageLenient] = []
+    /// The workspace-wide visible page count the subtitle prints — the SAME
+    /// `/pages/list` response the recency list comes from, so the design's
+    /// "· 128 pages" costs no extra request. `nil` until the first load lands
+    /// (or on a server that does not report it), which prints the workspace
+    /// name alone rather than a placeholder count.
+    @State private var totalPages: Int?
     @State private var isLoading = false
     @State private var loadErrorMessage: String?
 
@@ -61,8 +70,13 @@ struct RecentlyUpdatedHomeView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
                 CrowiScreenTitle("Home") {
-                    Text(session.context.workspace.displayTitle)
-                        .lineLimit(1)
+                    Text(
+                        WorkspaceSubtitleLabel.text(
+                            workspaceName: session.context.workspace.displayTitle,
+                            totalPages: totalPages
+                        )
+                    )
+                    .lineLimit(1)
                 }
 
                 // The tree entry point stays ABOVE the recency list (not in
@@ -152,6 +166,7 @@ struct RecentlyUpdatedHomeView: View {
             if response.pages != pages {
                 pages = response.pages
             }
+            totalPages = response.total
             loadErrorMessage = nil
         } catch {
             loadErrorMessage = pages.isEmpty ? "Couldn't load recently updated pages." : nil

@@ -177,10 +177,19 @@ public struct GetPageResponseLenient: Sendable, Equatable {
     }
 }
 
-/// `GET /pages/list` — `{ pages: [Page], pager, portalPage? }`.
+/// `GET /pages/list` — `{ pages: [Page], pager, total, portalPage? }`.
 public struct ListPagesResponseLenient: Sendable, Equatable {
     public let pages: [PageLenient]
     public let portalPage: PageLenient?
+    /// feature-profile-stats-and-page-total — the exact size of the
+    /// viewer-visible set `pages` is a page OF, independent of `limit`. On
+    /// the root listing (`path=/`, which is every visible page in the
+    /// workspace) that is the number the home's subtitle prints.
+    ///
+    /// Optional: a server predating the field leaves the count off the
+    /// subtitle rather than printing the page COUNT of the current slice,
+    /// which would say "20 pages" for any workspace larger than a screenful.
+    public let total: Int?
 
     public static func decode(_ data: Data) throws -> ListPagesResponseLenient {
         guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
@@ -188,7 +197,11 @@ public struct ListPagesResponseLenient: Sendable, Equatable {
         }
         let rawPages = object["pages"] as? [[String: Any]] ?? []
         let portalPage = (object["portalPage"] as? [String: Any]).flatMap(PageLenient.decode)
-        return ListPagesResponseLenient(pages: rawPages.compactMap(PageLenient.decode), portalPage: portalPage)
+        return ListPagesResponseLenient(
+            pages: rawPages.compactMap(PageLenient.decode),
+            portalPage: portalPage,
+            total: object["total"] as? Int
+        )
     }
 
     /// - Parameter limit: forwarded as the `limit` query when non-nil (the
@@ -204,6 +217,23 @@ public struct ListPagesResponseLenient: Sendable, Equatable {
         let (data, status) = try await client.get("pages/list", query: query)
         guard status.isSuccessfulHTTPStatus else { throw PageLenientDecodeError.httpError(status: status) }
         return try decode(data)
+    }
+}
+
+/// The home screen's subtitle — the design's "Almoha Wiki · 128 pages".
+///
+/// In CrowiKit so the wording, the plural and the missing-count degrade can
+/// be asserted; the App target's manifest imports `AppleProductTypes`, which
+/// the bare `swift` CLI running the tests cannot parse.
+public enum WorkspaceSubtitleLabel {
+    /// - Parameter totalPages: `ListPagesResponseLenient.total` for the ROOT
+    ///   listing. `nil` (a server that does not report it) prints the
+    ///   workspace name alone — the design's line without its count is still
+    ///   the design's line, whereas a guessed number is not.
+    public static func text(workspaceName: String, totalPages: Int?) -> String {
+        guard let totalPages else { return workspaceName }
+        let unit = totalPages == 1 ? "page" : "pages"
+        return "\(workspaceName) · \(totalPages.formatted(.number)) \(unit)"
     }
 }
 
