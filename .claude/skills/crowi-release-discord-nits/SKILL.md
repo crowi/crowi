@@ -1,3 +1,12 @@
+---
+name: crowi-release-discord-nits
+description: |
+  リリース後、CI が Discord に自動投稿する告知に添える一言コメント(カテゴリ別・
+  1 行ずつの簡潔な箇条書き)を、CHANGELOG 差分から生成する skill。投稿はしない
+  (テキスト生成まで — 貼り付けは人間が行う)。
+  キーワード: discord, リリース告知, 一言コメント, release notes, changelog
+---
+
 # Crowi Release Discord Nits (リリース後の一言コメント生成)
 
 CI がリリースごとに Discord へ自動投稿する告知(`Crowi Releases` bot — release notes
@@ -33,12 +42,23 @@ CI がリリースごとに Discord へ自動投稿する告知(`Crowi Releases`
 単位でまとまっている。
 
 ```bash
-git diff <比較起点>..<対象 tag> -- 'packages/*/CHANGELOG.md' 'apps/*/CHANGELOG.md' \
-  | grep '^+- ' | grep -v '^+- Updated dependencies'
+git diff <比較起点>..<対象 tag> -- 'packages/*/CHANGELOG.md' 'apps/*/CHANGELOG.md'
 ```
 
-`Updated dependencies [...]` 行(内部の workspace 依存バンプに伴う自動生成エントリ)は
-ユーザー向けの実質情報を持たないので除外する。
+**フィルタなしの生の diff をそのまま読むこと** — `grep '^+- '` のような 1 行抽出は
+使わない。各エントリは `+- <hash>: ...` で始まるが、元の changeset 本文が手動改行を
+含んでいると **後続行が `+- ` を伴わず折り返して続く**(実測: `ce69b4a` の BREAKING
+エントリが `v2 never` で切れて次行に続いていた — 先頭行だけ拾うと文が壊れる)。
+1 エントリの終わりは次の `+- <hash>: ` 行・次の `+### ` 見出し・空行のいずれかで判断し、
+全文を読んでから要約する。
+
+`+- Updated dependencies [<hash>]` 行(内部の workspace 依存バンプに伴う自動生成
+エントリ)はユーザー向けの実質情報を持たないので無視する。
+
+**同一 changeset は複数パッケージの CHANGELOG に重複して現れる**(1 つの changeset が
+`api` と `api-contract` の両方を bump すれば、ほぼ同じ文面が両方の CHANGELOG.md に
+1 エントリずつ載る)。`<hash>:` の値でユニーク化し、同じ hash は 1 件として扱う
+(実測: 直近リリースで最大 8 回まで重複した changeset があった)。
 
 ### Step 3: カテゴリ分けして 1 行に凝縮
 
