@@ -1,5 +1,71 @@
 # @crowi/web
 
+## 2.0.0-alpha.11
+
+### Major Changes
+
+- ce69b4a: BREAKING: the public API namespace moves from `/api/v2` to `/api`. `v2` never
+  carried real version-negotiation meaning (contracts are root-relative, the
+  segment was stripped verbatim at the listener boundary), and Crowi 2.0 has no
+  production deployments and no parallel API generations left to protect — see
+  `docs/rfcs/0006-hono-integration.md` for the framework migration that made the
+  old `/api/v2/*` HTTP shape a fixed point in the first place. There is no
+  server-side alias or redirect for `/api/v2/*`: after upgrading, every request
+  to the old prefix returns a plain 404.
+
+  **MCP clients** (Claude Desktop, Codex CLI, or any other client with a Crowi
+  MCP server URL configured directly — including anyone who followed the
+  "MCP setup" card on the user settings page before this release) must update
+  the endpoint from `<host>/api/v2/mcp` to `<host>/api/mcp`. Existing PAT /
+  OAuth credentials are unaffected — only the connection URL changes.
+
+  **`@crowi/cli` users** must upgrade to this release (or later) in the same
+  deploy as the api. An un-upgraded CLI will 404 against the new listener; on
+  `crowi logout`, the CLI now also warns (rather than silently succeeding) when
+  the cached OAuth revoke endpoint returns a non-2xx status, since local
+  credentials are removed regardless — re-run `crowi login` or ask an
+  administrator to revoke the stale token server-side.
+
+  **Operators running multiple api replicas** must treat this as a coordinated
+  fleet cutover, not a normal one-at-a-time rolling restart: the old and new
+  listeners cannot interpret each other's prefix, so any deploy topology that
+  lets old and new api replicas serve traffic at the same time causes 404s for
+  whichever client hits the "wrong" generation. Stop all api replicas and start
+  them back up together on the new version (or cut a blue/green fleet over as a
+  single step), and use the preflight check (`GET /api/openapi.json` returns
+  200, `GET /api/v2/openapi.json` returns 404 on every replica before accepting
+  traffic) documented in the new "api prefix cutover" section of
+  `operations/self-hosting`. Single-instance deployments (including local dev)
+  are unaffected by this requirement — there is only one replica, so old/new
+  never coexist.
+
+  Everything else about the HTTP surface is unchanged: route paths, request/
+  response shapes, auth, and scopes are identical under the new prefix. Browser
+  users see no visible change (the web app talks in same-origin relative paths
+  and picks up the new base URL on next build), except that a tab left open
+  since before the cutover will 404 on API calls until reloaded. Attachment /
+  avatar URLs already embedded in page bodies keep resolving via permanent
+  canonicalization on both the server (attachment lookup) and the web client
+  (display-time URL rewrite) — no database migration is required or performed.
+
+### Minor Changes
+
+- 8ca7a9b: Unify the attachment upload allow-list across every upload path — the "Attach file" button, the editor's paste, and its drag-and-drop — so the same file always gets the same result. Previously the general page-attachment route had no MIME check at all while drag-and-drop enforced a narrow images-plus-a-few-documents list, which is why the same file (e.g. an HTML export) could upload from the button but be rejected by drag-and-drop. Common office documents (`.doc`/`.docx`, `.xls`/`.xlsx`, `.ppt`/`.pptx`) and a broader set of text/archive/audio/video types are now accepted everywhere; opening them directly still downloads them rather than rendering inline (unchanged, security-relevant delivery behavior). Pasting into the editor uploads non-image files too (it used to only react to images, leaving a pasted document unhandled), inserting them as a `[filename](url)` link just like drag-and-drop does. Rejected uploads now return the same error message no matter which route rejected them. The attachment grid also shows a file-type-specific icon for Word/PowerPoint documents (previously the generic file icon), falling back to the generic icon for any unrecognised type.
+- 4736e06: `GET /user/{username}` now returns `likesCount` and `commentsCount` alongside the existing `createdPagesCount` / `bookmarksCount` — the number of pages the target user has liked and the number of comments they have written, computed via `countDocuments` on the indexed `Page.liker` / `Comment.creator` fields. These are the target user's own actions, not activity their pages received from others, and are not re-filtered by the viewer's grants.
+
+  `GET /pages/list` now returns a top-level `total`: the exact, viewer-visible count of the full (unpaginated) listing, computed with the same match conditions as the page rows themselves and shared across every branch (root, path prefix, `user=`, `/trash`/`include_deleted`). `total` excludes whatever `portalPage` / `contentPage` already excludes from `pages`, so the two never disagree, and stays constant across `offset`/`limit`. `PagerSchema` is unchanged — `total` is a new sibling field, mirroring `ListUsersResponseSchema.total`.
+
+- 7a7394f: Make `renderedAst` a client-agnostic typed contract (RFC-0023). Renderer producers (shiki, KaTeX, Mermaid, PlantUML, link cards, placeholders) now stamp typed sidecar data onto the byte-identical `html` nodes they already emit, and clients that declare `X-Crowi-Ast-Version: 1` receive a validated `{astVersion, root}` envelope in which those nodes are projected into typed nodes (`code` with themed tokens, `math`/`inlineMath` with TeX source, `crowiDiagram` with intrinsic dimensions, `crowiLinkCard`, `crowiPlaceholder`) — the foundation for native (non-HTML) rendering such as the iOS app. Requests without the header — including the web, permanently — keep receiving the stored bare mdast Root verbatim, so existing clients and open tabs are unaffected. Responses now also carry `renderedAstArtifactKey`, which fixes a web bug where a pending diagram that finished rendering (or a freshness-mismatch recompute) was not re-drawn on refetch because the render memo only keyed on the revision id. Operators: this release bumps the renderer pipeline to 1.0.0 and removes the missing-version freshness special case — run the new `crowi-admin rebuild rendered-ast` (real writes) immediately after deploying, and use `--dry-run` only before that; see the admin guide's "rebuild rendered-ast" section for the rollout and completion procedure.
+
+### Patch Changes
+
+- 5d9c379: The "New page" button on the drafts page now opens the shared create-page modal instead of expanding a bare path field. The modal completes the path against existing pages as you type, which the plain input could not do, so the two entry points no longer offer different levels of help for the same task.
+- 5ee250d: Enlarging a diagram (PlantUML, Mermaid) now scales it up to fill the lightbox instead of showing the same-sized picture in a wider box. Diagrams larger than the lightbox still open at full size and scroll, so wide sequence diagrams stay readable.
+- Updated dependencies [ce69b4a]
+- Updated dependencies [4736e06]
+- Updated dependencies [7a7394f]
+  - @crowi/api-contract@2.0.0-alpha.11
+
 ## 2.0.0-alpha.10
 
 ### Minor Changes
