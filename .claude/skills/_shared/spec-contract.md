@@ -66,7 +66,8 @@ grounded_at: <git commit SHA>
 
 ## 契約・不変条件
 
-少なくとも以下を、該当しない場合も `n/a — <理由>` つきで明示する。
+少なくとも以下を、該当しない場合も `n/a — <理由>`（英語では `n/a - <reason>` も可）
+の形で明示する。
 
 - 公開型・関数・API request/response
 - Authentication/authorization

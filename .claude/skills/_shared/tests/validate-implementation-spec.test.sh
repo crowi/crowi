@@ -173,6 +173,27 @@ status="$(run_validator "$REPO" "$NO_STATUS_SPEC" "$OUTPUT")"
 assert_status 1 "$status" "spec without approved status must be rejected"
 grep -qi 'status' "$OUTPUT" || fail "status failure must name the missing approved status"
 
+NO_ID_SPEC="$REPO/specs/no-id.md"
+cp "$READY_SPEC" "$NO_ID_SPEC"
+sed -i.bak '/^id: /d' "$NO_ID_SPEC"
+status="$(run_validator "$REPO" "$NO_ID_SPEC" "$OUTPUT")"
+assert_status 1 "$status" "spec without id must be rejected"
+grep -qi 'id' "$OUTPUT" || fail "id failure must name the missing id"
+
+INVALID_ID_SPEC="$REPO/specs/invalid-id.md"
+cp "$READY_SPEC" "$INVALID_ID_SPEC"
+sed -i.bak 's/^id: feature-fast-export$/id: fast-export/' "$INVALID_ID_SPEC"
+status="$(run_validator "$REPO" "$INVALID_ID_SPEC" "$OUTPUT")"
+assert_status 1 "$status" "spec id without the feature- prefix must be rejected"
+grep -qi 'id' "$OUTPUT" || fail "invalid-id failure must name id"
+
+NO_NAME_SPEC="$REPO/specs/no-name.md"
+cp "$READY_SPEC" "$NO_NAME_SPEC"
+sed -i.bak '/^name: /d' "$NO_NAME_SPEC"
+status="$(run_validator "$REPO" "$NO_NAME_SPEC" "$OUTPUT")"
+assert_status 1 "$status" "spec without name must be rejected"
+grep -qi 'name' "$OUTPUT" || fail "name failure must name the missing name"
+
 NO_SYMBOL_SPEC="$REPO/specs/no-symbol.md"
 cp "$READY_SPEC" "$NO_SYMBOL_SPEC"
 sed -i.bak '/^- symbols:/d' "$NO_SYMBOL_SPEC"
@@ -202,6 +223,24 @@ sed -i.bak '/^| AC-1 |/d' "$NO_TEST_MAP_SPEC"
 status="$(run_validator "$REPO" "$NO_TEST_MAP_SPEC" "$OUTPUT")"
 assert_status 1 "$status" "AC without a test mapping must be rejected"
 grep -qi 'AC-1' "$OUTPUT" || fail "test-plan failure must name the unmapped AC"
+
+DUPLICATE_AC_SPEC="$REPO/specs/duplicate-ac.md"
+cp "$READY_SPEC" "$DUPLICATE_AC_SPEC"
+sed -i.bak '/^- \[ \] AC-1:/a\
+- [ ] AC-1: 同じ ID を再利用してはならない。' "$DUPLICATE_AC_SPEC"
+status="$(run_validator "$REPO" "$DUPLICATE_AC_SPEC" "$OUTPUT")"
+assert_status 1 "$status" "duplicate acceptance-criterion IDs must be rejected"
+grep -qi 'duplicate.*AC-1' "$OUTPUT" || fail "duplicate-AC failure must name the duplicated ID"
+
+UNKNOWN_TEST_AC_SPEC="$REPO/specs/unknown-test-ac.md"
+cp "$READY_SPEC" "$UNKNOWN_TEST_AC_SPEC"
+# Backticks are literal markdown delimiters in the fixture.
+# shellcheck disable=SC2016
+sed -i.bak '/^| AC-1 |/a\
+| AC-BOGUS | `src/export/export.test.ts` | 宣言されていない AC のテスト | unit |' "$UNKNOWN_TEST_AC_SPEC"
+status="$(run_validator "$REPO" "$UNKNOWN_TEST_AC_SPEC" "$OUTPUT")"
+assert_status 1 "$status" "test-plan rows for undeclared AC IDs must be rejected"
+grep -qi 'AC-BOGUS' "$OUTPUT" || fail "unknown-test-AC failure must name the undeclared ID"
 
 EMPTY_TEST_FILE_SPEC="$REPO/specs/empty-test-file.md"
 cp "$READY_SPEC" "$EMPTY_TEST_FILE_SPEC"
@@ -239,6 +278,13 @@ sed -i.bak 's#^- Validation:.*#- Validation: n/a#' "$UNEXPLAINED_NA_SPEC"
 status="$(run_validator "$REPO" "$UNEXPLAINED_NA_SPEC" "$OUTPUT")"
 assert_status 1 "$status" "n/a contract facets must include a reason"
 grep -qi 'n/a' "$OUTPUT" || fail "unexplained n/a failure must request a reason"
+
+MALFORMED_NA_SPEC="$REPO/specs/malformed-na.md"
+cp "$READY_SPEC" "$MALFORMED_NA_SPEC"
+sed -i.bak 's#^- Validation:.*#- Validation: n/a because this is internal-only#' "$MALFORMED_NA_SPEC"
+status="$(run_validator "$REPO" "$MALFORMED_NA_SPEC" "$OUTPUT")"
+assert_status 1 "$status" "n/a contract facets must use the documented delimiter before the reason"
+grep -qi 'n/a' "$OUTPUT" || fail "malformed n/a failure must identify the required form"
 
 PROSE_QUESTION_SPEC="$REPO/specs/prose-question.md"
 cp "$READY_SPEC" "$PROSE_QUESTION_SPEC"

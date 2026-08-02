@@ -65,12 +65,17 @@ require_section() {
 SPEC_CONTRACT="$(frontmatter_value spec_contract)"
 IMPLEMENTATION_READY="$(frontmatter_value implementation_ready)"
 GROUNDED_AT="$(frontmatter_value grounded_at)"
+ID="$(frontmatter_value id)"
+NAME="$(frontmatter_value name)"
 SCOPE="$(frontmatter_value scope)"
 STATUS="$(frontmatter_value status)"
 
 [[ "$SPEC_CONTRACT" == "2" ]] || add_error "frontmatter spec_contract must be 2"
 [[ "$IMPLEMENTATION_READY" == "true" ]] || add_error "frontmatter implementation_ready must be true"
 [[ "$STATUS" == "approved" ]] || add_error "frontmatter status must be approved"
+[[ "$ID" =~ ^feature-[a-z0-9]+(-[a-z0-9]+)*$ ]] ||
+  add_error "frontmatter id must match feature-<kebab-slug>"
+[[ -n "$NAME" ]] || add_error "frontmatter name must be non-empty"
 case "$SCOPE" in
   trivial|small|medium|large) ;;
   *) add_error "frontmatter scope must be one of: trivial, small, medium, large" ;;
@@ -237,8 +242,9 @@ CONTRACT_ERRORS="$(awk '
     value = line
     sub(/^[^:]+:[[:space:]]*/, "", value)
     value = tolower(value)
-    if (value ~ /^(n\/a|not applicable)[[:space:]]*([—-][[:space:]]*)?$/) {
-      print "contracts / invariants " label " uses n/a without a reason"
+    if (value ~ /^(n\/a|not applicable)/ &&
+        value !~ /^(n\/a|not applicable)[[:space:]]*[—-][[:space:]]*[^[:space:]]/) {
+      print "contracts / invariants " label " must use n/a — <reason> (or n/a - <reason>)"
     }
   }
   /^## / {
@@ -297,6 +303,13 @@ if [[ -n "$CONTRACT_ERRORS" ]]; then
 fi
 
 AC_IDS="$(sed -n 's/^- \[[ xX]\] \(AC-[A-Za-z0-9._-]*\):.*/\1/p' "$SPEC_PATH")"
+DUPLICATE_AC_IDS="$(printf '%s\n' "$AC_IDS" | sed '/^$/d' | sort | uniq -d)"
+if [[ -n "$DUPLICATE_AC_IDS" ]]; then
+  while IFS= read -r ac_id; do
+    [[ -n "$ac_id" ]] && add_error "duplicate acceptance criterion ID: $ac_id"
+  done <<<"$DUPLICATE_AC_IDS"
+fi
+
 TEST_AC_IDS=""
 TEST_ROW_ERRORS=""
 while IFS=$'\034' read -r ac_id test_file test_case test_level; do
@@ -362,6 +375,13 @@ else
     fi
   done <<<"$AC_IDS"
 fi
+
+while IFS= read -r test_ac_id; do
+  [[ -z "$test_ac_id" ]] && continue
+  if ! grep -Fqx -- "$test_ac_id" <<<"$AC_IDS"; then
+    add_error "test plan references an undeclared acceptance criterion: $test_ac_id"
+  fi
+done <<<"$TEST_AC_IDS"
 
 OPEN_QUESTION_ERRORS="$(awk '
   /^## / {
