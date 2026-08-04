@@ -211,11 +211,29 @@ export function removeProfile(alias: string): boolean {
   return true;
 }
 
+/**
+ * Thrown by {@link setCurrentProfile} when `alias` is not a registered
+ * profile. A distinct class (rather than a plain `Error`) so callers can
+ * distinguish "no such profile" from every other failure `setCurrentProfile`
+ * can raise (config parse error, atomic-write I/O failure, ...) — those must
+ * keep surfacing as the CLI's general error (exit 1), not as a not-found.
+ */
+export class ProfileNotFoundError extends Error {
+  constructor(alias: string) {
+    super(`no such profile: ${alias}`);
+    this.name = 'ProfileNotFoundError';
+  }
+}
+
 /** Set the current/default profile pointer. */
 export function setCurrentProfile(alias: string): void {
   const config = loadConfig();
-  if (!(alias in config.profiles)) {
-    throw new Error(`no such profile: ${alias}`);
+  // `hasOwnProperty` rather than `in`: `config.profiles` is a plain object
+  // parsed from JSON, so `in` would also match inherited `Object.prototype`
+  // keys (e.g. alias `"toString"`) and let an unregistered alias become the
+  // current profile instead of failing.
+  if (!Object.prototype.hasOwnProperty.call(config.profiles, alias)) {
+    throw new ProfileNotFoundError(alias);
   }
   config.currentProfile = alias;
   saveConfig(config);
