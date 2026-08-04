@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events';
 import type Crowi from 'src/crowi';
 import { resolveRedisKeyspace } from 'src/util/redis-keyspace';
 import {
@@ -61,8 +62,18 @@ const TEST_KEYSPACE = resolveRedisKeyspace(fakeKeyspaceCrowi('test'));
  * Minimal in-memory node-redis v4 stand-in. One backing store is
  * shared by every `duplicate()`-d client so a subscriber sees what the
  * primary publishes — the fixture for the multi-instance test.
+ *
+ * Extends `EventEmitter` (feature-redis-subscriber-crash-fix) rather than
+ * hand-rolling `on()`/emit bookkeeping: Node's real `EventEmitter` THROWS
+ * synchronously when `.emit('error', ...)` runs with no `'error'` listener
+ * registered — the exact hazard `duplicateWithErrorHandler` (`src/util/
+ * redis-opts.ts`) exists to prevent. Basing the fake on the real
+ * `EventEmitter` means a regression (`presence.ts` reverting to a raw
+ * `redis.duplicate()` with no listener) makes the "subscriber outage
+ * survives" test below actually throw, instead of a hand-rolled emit
+ * silently no-op-ing regardless of whether a listener was attached.
  */
-class FakeRedis implements PresenceRedisClient {
+class FakeRedis extends EventEmitter implements PresenceRedisClient {
   isOpen = true;
   private readonly hashes: Map<string, Map<string, string>>;
   private readonly subscribers: Map<string, Array<(message: string) => void>>;
@@ -71,6 +82,7 @@ class FakeRedis implements PresenceRedisClient {
     hashes: Map<string, Map<string, string>>;
     subscribers: Map<string, Array<(message: string) => void>>;
   }) {
+    super();
     this.hashes = shared?.hashes ?? new Map();
     this.subscribers = shared?.subscribers ?? new Map();
   }
@@ -664,6 +676,93 @@ describe('presence service — generic feed bus (feature-presence-generic-feed-b
 
     expect(seen).toEqual([{ pageId: PAGE_A, payload }]);
     unsubscribe();
+    await service.shutdown();
+  });
+});
+
+/**
+ * feature-redis-subscriber-crash-fix — AC-3/AC-4. `createRedisPresenceService`
+ * now builds its dedicated feed subscriber via `duplicateWithErrorHandler`
+ * (`src/util/redis-opts.ts`) instead of a raw `redis.duplicate()`, so an
+ * `error` the subscriber emits once it is already connected (a Redis
+ * outage/restart) does not become an unhandled EventEmitter event and crash
+ * the api process (the 2026-07-27 almoha production Redis 7→8 restart).
+ */
+describe('presence service — subscriber outage survives (feature-redis-subscriber-crash-fix)', () => {
+  it('does not throw when the dedicated subscriber emits a post-connect error, and the subscriber itself (not a local echo) keeps relaying cross-instance feed messages afterward', async () => {
+    // Two services sharing one Redis = two api instances behind a load
+    // balancer (mirrors the "fans a join out to a second instance" test
+    // above). This is deliberately NOT a single-instance `service.join()` +
+    // "did my own subscribe callback fire" check: `publish` (see
+    // `createRedisPresenceService`) emits to the LOCAL EventEmitter first,
+    // before ever touching Redis, so a same-instance assertion would still
+    // pass even if the dedicated subscriber were completely dead — it
+    // proves nothing about the subscriber. Here, instanceA's join can only
+    // ever reach instanceB's local emitter (and therefore `seenByB`) via
+    // instanceB's OWN dedicated subscriber relaying the pub/sub message —
+    // there is no other path — so this genuinely exercises the post-error
+    // subscriber's relay, not a local echo.
+    const sharedRedis = new FakeRedis();
+    const dups: FakeRedis[] = [];
+    const realDuplicate = FakeRedis.prototype.duplicate;
+    jest.spyOn(sharedRedis, 'duplicate').mockImplementation(function (this: FakeRedis) {
+      const d = realDuplicate.call(this) as FakeRedis;
+      dups.push(d);
+      return d;
+    });
+
+    const instanceA = await createPresenceService(sharedRedis, TEST_KEYSPACE);
+    const instanceB = await createPresenceService(sharedRedis, TEST_KEYSPACE);
+    // dups[0] is instance A's dedicated subscriber, dups[1] is instance B's.
+    expect(dups).toHaveLength(2);
+
+    const seenByB: string[] = [];
+    instanceB.subscribe('viewers', (pageId) => seenByB.push(pageId));
+    jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    // Simulate the outage on B's dedicated subscriber. Node's real
+    // EventEmitter throws synchronously for an 'error' emit with no
+    // listener attached — this assertion would fail (throw) if
+    // `presence.ts` regressed to a raw `redis.duplicate()`.
+    expect(() => dups[1].emit('error', new Error('read ECONNRESET'))).not.toThrow();
+
+    // instanceA joins, publishing over the shared Redis. The ONLY way this
+    // reaches `seenByB` is instanceB's already-errored subscriber relaying
+    // the pub/sub message to instanceB's own local emitter.
+    await instanceA.join(PAGE_A, viewer('u1'), CONN_1);
+    expect(seenByB).toContain(PAGE_A);
+    expect(await instanceB.listViewers(PAGE_A)).toHaveLength(1);
+
+    await instanceA.shutdown();
+    await instanceB.shutdown();
+  });
+
+  it('does not log a recovery line for the subscriber on its INITIAL connect — only on a `ready` following an observed outage', async () => {
+    const primary = new FakeRedis();
+    const dups: FakeRedis[] = [];
+    const realDuplicate = FakeRedis.prototype.duplicate;
+    jest.spyOn(primary, 'duplicate').mockImplementation(function (this: FakeRedis) {
+      const d = realDuplicate.call(this) as FakeRedis;
+      dups.push(d);
+      return d;
+    });
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    const service = await createPresenceService(primary, TEST_KEYSPACE);
+    expect(dups).toHaveLength(1);
+
+    // A `ready` with no prior `error` (e.g. node-redis's own initial-connect
+    // ready, unrelated to the setup `connect()` above) must stay silent.
+    dups[0].emit('ready');
+    expect(warnSpy).not.toHaveBeenCalled();
+
+    // An outage followed by recovery DOES log — proving the listener is
+    // live, not merely absent of false positives.
+    dups[0].emit('error', new Error('read ECONNRESET'));
+    dups[0].emit('ready');
+    const warnMessages = warnSpy.mock.calls.map((args) => args.join(' '));
+    expect(warnMessages.some((m) => m.includes('presence pub/sub subscriber') && m.includes('recovered'))).toBe(true);
+
     await service.shutdown();
   });
 });

@@ -4,6 +4,7 @@ import Debug from 'debug';
 import type Crowi from 'src/crowi';
 import { createNotificationsTokenUtil } from 'src/util/notifications-token';
 import { resolveRedisKeyspaceIfEnabled } from 'src/util/redis-keyspace';
+import { duplicateWithErrorHandler } from 'src/util/redis-opts';
 import { attachWsNamespace, politeCloseWithReason, splitUrl } from 'src/ws/attach-namespace';
 import type { WebSocket as WsWebSocket } from 'ws';
 import { channelForUser } from './channel';
@@ -36,6 +37,14 @@ export interface NotificationsRedisClient {
   disconnect(): Promise<unknown>;
   subscribe(channel: string, listener: (message: string) => void): Promise<void>;
   unsubscribe(channel: string): Promise<void>;
+  /**
+   * `error` / `ready` listener registration — the surface
+   * `duplicateWithErrorHandler` (`src/util/redis-opts.ts`) needs on a
+   * duplicated subscriber so a Redis outage after `connect()` succeeds
+   * cannot raise an unhandled EventEmitter `error` and crash the process.
+   */
+  on(event: 'error', listener: (err: Error) => void): unknown;
+  on(event: 'ready', listener: () => void): unknown;
   isOpen?: boolean;
 }
 
@@ -116,7 +125,7 @@ export async function attachNotificationsServer(httpServer: HttpServer, crowi: C
   let subscriber: NotificationsRedisClient | null = null;
   if (primaryRedis !== null) {
     try {
-      const dup = primaryRedis.duplicate();
+      const dup = duplicateWithErrorHandler(primaryRedis, 'notifications pub/sub subscriber');
       await dup.connect();
       subscriber = dup;
       debug('notifications pub/sub subscriber connected');

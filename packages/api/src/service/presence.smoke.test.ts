@@ -10,6 +10,57 @@
  * against the shared `redis` target (Phase 1). Isolation is via a
  * run-and-call-unique `pageId` — no new production seam per the spec's
  * "やらないこと".
+ *
+ * feature-redis-subscriber-crash-fix — AC-5, opt-in Redis-restart check
+ * (NOT part of the automated test below, and NOT run in CI / normal
+ * `pnpm test`): `createRedisPresenceService`'s dedicated feed subscriber is
+ * now built via `duplicateWithErrorHandler` (`src/util/redis-opts.ts`),
+ * which attaches an `error` listener before the subscriber ever
+ * `connect()`s. The unit-level proof that this stops a process crash lives
+ * in `presence.test.ts` ("subscriber outage survives"); what only a REAL
+ * Redis restart can prove is that node-redis's OWN reconnect + native
+ * channel resubscribe (not something this change adds or owns — see the
+ * spec's "やらないこと": no self-managed generation/epoch/reconciliation)
+ * actually restores the SAME feed channel this file's `join` test above
+ * subscribes, so a live api process keeps receiving cross-instance
+ * `viewers` / `page-updated` / `comment-changed` messages after Redis comes
+ * back — not just that the process avoided crashing.
+ *
+ * This is deliberately NOT automated: the spec's "やらないこと" rules out
+ * an API-restart test seam, and this suite's shared Redis target
+ * (`REDIS_SMOKE_URLS.shared`) is used by 7 OTHER smoke categories plus
+ * dev / CI — restarting it here would break every concurrent consumer.
+ * Run it by hand, against a Redis instance YOU alone own (never the shared
+ * `crowi-redis` dev container, CI's Redis, or another engineer's
+ * container), whenever this helper or the presence subscriber wiring
+ * changes:
+ *
+ *   1. Start an isolated Redis + a Crowi api instance pointed at it (e.g.
+ *      `docker run --rm -p 16379:6379 redis:8` and
+ *      `REDIS_URL=redis://localhost:16379 pnpm --filter @crowi/api dev`,
+ *      or a disposable `docker compose` stack — anything not shared).
+ *   2. Open the `/presence` WebSocket for some page on that api instance
+ *      (or otherwise drive a `join`) so the process resolves
+ *      `createRedisPresenceService` and its subscriber is live.
+ *   3. Record the api process's identity before the restart: the OS PID
+ *      (`pgrep -f 'crowi.*api'` or the equivalent for however you started
+ *      it) if running bare, or `docker inspect --format
+ *      '{{.State.Pid}}' <api-container>` and `docker inspect --format
+ *      '{{.RestartCount}}' <api-container>` if containerized.
+ *   4. Restart ONLY the Redis instance from step 1 (`docker restart
+ *      <that-redis-container>` or equivalent) — never touch the api
+ *      process/container itself.
+ *   5. Immediately after Redis comes back, re-check the api process's PID
+ *      / `RestartCount` from step 3 — PASS requires BOTH to be UNCHANGED
+ *      (the api process never crashed or was restarted by its supervisor;
+ *      a differing PID/RestartCount is an automatic FAIL, independent of
+ *      step 6).
+ *   6. From a second client (or a second api instance sharing the same
+ *      Redis + instance slug), publish/join again and confirm the FIRST
+ *      api instance's `/presence` WebSocket still receives the
+ *      cross-instance feed update — proving node-redis's native
+ *      resubscribe restored the channel this file's automated test
+ *      exercises, not just that the process is still alive.
  */
 import { createClient } from 'redis';
 import type Crowi from 'src/crowi';
