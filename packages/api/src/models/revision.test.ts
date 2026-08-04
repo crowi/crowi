@@ -1,6 +1,6 @@
 import faker from 'faker';
 import mongoose from 'mongoose';
-import { crowi, Fixture } from 'src/test/setup';
+import { crowi, Fixture, randomUsername } from 'src/test/setup';
 
 describe('Revision (RFC-0003 collab fields)', () => {
   let Revision;
@@ -11,7 +11,7 @@ describe('Revision (RFC-0003 collab fields)', () => {
     Revision = crowi.model('Revision');
     Page = crowi.model('Page');
 
-    const users = await Fixture.generate('User', [{ name: faker.name.findName(), username: faker.internet.userName(), email: faker.internet.email() }]);
+    const users = await Fixture.generate('User', [{ name: faker.name.findName(), username: randomUsername(), email: faker.internet.email() }]);
     user = users[0];
   });
 
