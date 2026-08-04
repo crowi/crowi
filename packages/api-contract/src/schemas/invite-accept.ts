@@ -8,9 +8,11 @@
  */
 import { z } from '@hono/zod-openapi';
 
+import { UsernameSchema } from './username';
+
 export const InviteAcceptRequestSchema = z.object({
   token: z.string(),
-  username: z.string().min(1),
+  username: UsernameSchema,
   name: z.string().min(1),
   password: z.string().min(6),
 });

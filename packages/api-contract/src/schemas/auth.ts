@@ -10,6 +10,8 @@
  */
 import { z } from '@hono/zod-openapi';
 
+import { UsernameSchema } from './username';
+
 export const TokenAuthLoginRequestSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6),
@@ -34,7 +36,7 @@ export const RefreshTokenRequestSchema = z.object({
 });
 
 export const TokenAuthRegisterRequestSchema = z.object({
-  username: z.string(),
+  username: UsernameSchema,
   name: z.string(),
   email: z.string().email(),
   password: z.string().min(6),

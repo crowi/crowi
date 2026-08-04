@@ -1,15 +1,14 @@
 import { z } from '@hono/zod-openapi';
 
+import { UsernameSchema } from './username';
+
 export const InstallerStatusResponseSchema = z.object({
   status: z.enum(['installer_required', 'already_installed']),
 });
 
 export const CreateAdminRequestSchema = z.object({
   registerForm: z.object({
-    username: z
-      .string()
-      .min(1)
-      .regex(/^[\da-zA-Z\-_.]+$/, 'username may only contain letters, digits, hyphens, underscores, and dots'),
+    username: UsernameSchema,
     name: z.string().min(1),
     email: z.string().email(),
     password: z

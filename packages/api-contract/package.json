@@ -36,7 +36,7 @@
     "generate-openapi": "tsx scripts/generate-openapi.ts",
     "generate-openapi-types": "tsx scripts/generate-openapi-types.ts",
     "generate": "pnpm generate-openapi && pnpm generate-openapi-types",
-    "test": "tsx --test src/contracts/admin/index.test.ts src/util/html-elements.test.ts"
+    "test": "tsx --test src/contracts/admin/index.test.ts src/util/html-elements.test.ts src/schemas/username.test.ts"
   },
   "dependencies": {
     "@hono/zod-openapi": "^1.4.0",
