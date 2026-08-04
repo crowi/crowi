@@ -4,6 +4,7 @@
 // pinning it up front just keeps the value stable for the whole file.
 process.env.WS_TOKEN_SECRET = process.env.WS_TOKEN_SECRET ?? 'test-ws-token-secret-base64-32bytes-=';
 
+import { EventEmitter } from 'node:events';
 import http from 'node:http';
 import { AddressInfo } from 'node:net';
 import type Crowi from 'src/crowi';
@@ -37,7 +38,17 @@ import { type AttachedNotifications, attachNotificationsServer, channelForUser a
  * pattern as `service/presence.test.ts`.
  */
 
-class FakeRedis implements NotificationsRedisClient {
+/**
+ * Extends `EventEmitter` (feature-redis-subscriber-crash-fix) rather than
+ * hand-rolling `on()`/emit bookkeeping: Node's real `EventEmitter` THROWS
+ * synchronously when `.emit('error', ...)` runs with no `'error'` listener
+ * registered — the exact hazard `duplicateWithErrorHandler` (`src/util/
+ * redis-opts.ts`) exists to prevent. Basing the fake on the real
+ * `EventEmitter` means a regression (`attach.ts` reverting to a raw
+ * `primaryRedis.duplicate()` with no listener) makes the "subscriber
+ * outage survives" test below actually throw.
+ */
+class FakeRedis extends EventEmitter implements NotificationsRedisClient {
   isOpen = true;
   /** Shared subscriber registry — duplicated clients see the same set. */
   private readonly subscribers: Map<string, Array<(message: string) => void>>;
@@ -50,6 +61,7 @@ class FakeRedis implements NotificationsRedisClient {
     subscribers: Map<string, Array<(message: string) => void>>;
     events: Array<{ kind: 'subscribe' | 'unsubscribe' | 'publish'; channel: string }>;
   }) {
+    super();
     this.subscribers = shared?.subscribers ?? new Map();
     this.events = shared?.events ?? [];
     this.subscribedChannels = new Set();
@@ -664,5 +676,98 @@ describe('attachNotificationsServer — subscribe/unsubscribe race serialisation
       ws2.on('close', () => resolve());
       ws2.close();
     });
+  }, 15000);
+});
+
+/**
+ * feature-redis-subscriber-crash-fix — AC-3/AC-4. `attachNotificationsServer`
+ * now builds its dedicated pub/sub subscriber via `duplicateWithErrorHandler`
+ * (`src/util/redis-opts.ts`) instead of a raw `primaryRedis.duplicate()`, so
+ * an `error` the subscriber emits once it is already connected (a Redis
+ * outage/restart) does not become an unhandled EventEmitter event and crash
+ * the api process (the 2026-07-27 almoha production Redis 7→8 restart).
+ */
+describe('attachNotificationsServer — subscriber outage survives (feature-redis-subscriber-crash-fix)', () => {
+  it('does not throw when the dedicated subscriber emits a post-connect error, and the WebSocket subscribe/unsubscribe lifecycle keeps working for connections made AFTER the error', async () => {
+    const primary = new FakeRedis();
+    const dups: FakeRedis[] = [];
+    const realDuplicate = FakeRedis.prototype.duplicate;
+    jest.spyOn(primary, 'duplicate').mockImplementation(function (this: FakeRedis) {
+      const d = realDuplicate.call(this) as FakeRedis;
+      dups.push(d);
+      return d;
+    });
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    const server = http.createServer();
+    const crowi = fakeCrowi(primary);
+    const attachment = await attachNotificationsServer(server, crowi);
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const port = (server.address() as AddressInfo).port;
+    expect(dups).toHaveLength(1);
+
+    try {
+      const preOutageUserId = 'user-outage';
+      const preOutageChannel = channelForUser(preOutageUserId);
+      const token = validTokenFor(preOutageUserId);
+      const ws = new WebSocket(`ws://127.0.0.1:${port}/notifications/${preOutageUserId}?token=${token}`);
+      const messages: string[] = [];
+      ws.on('message', (data: Buffer | string) => {
+        messages.push(typeof data === 'string' ? data : data.toString('utf8'));
+      });
+      await new Promise<void>((resolve) => ws.on('open', () => resolve()));
+      await waitUntil(() => dups[0].subscribedChannels.has(preOutageChannel));
+
+      // Simulate the outage. Node's real EventEmitter throws synchronously
+      // for an 'error' emit with no listener attached — this assertion
+      // would fail (throw) if `attach.ts` regressed to a raw
+      // `primaryRedis.duplicate()`.
+      expect(() => dups[0].emit('error', new Error('read ECONNRESET'))).not.toThrow();
+      expect(warnSpy).toHaveBeenCalled();
+
+      // The PRE-existing subscription keeps relaying after the error — a
+      // publish on the already-subscribed channel still reaches the socket.
+      await primary.publish(preOutageChannel, JSON.stringify({ type: 'changed' }));
+      await waitUntil(() => messages.length >= 1);
+      expect(JSON.parse(messages[0])).toEqual({ type: 'changed' });
+
+      // A subscribe() issued for a DIFFERENT user's connection opened
+      // entirely AFTER the error also still reaches the dedicated
+      // subscriber — this is the part a pre-error-only subscription check
+      // cannot prove: `ensureSubscribed`'s `subscriber.subscribe(...)` call
+      // itself keeps working post-error, not merely a relay callback that
+      // was registered before the outage.
+      const postOutageUserId = 'user-post-outage';
+      const postOutageChannel = channelForUser(postOutageUserId);
+      const postOutageToken = validTokenFor(postOutageUserId);
+      const ws2 = new WebSocket(`ws://127.0.0.1:${port}/notifications/${postOutageUserId}?token=${postOutageToken}`);
+      await new Promise<void>((resolve) => ws2.on('open', () => resolve()));
+      await waitUntil(() => dups[0].subscribedChannels.has(postOutageChannel));
+
+      const postOutageMessages: string[] = [];
+      ws2.on('message', (data: Buffer | string) => {
+        postOutageMessages.push(typeof data === 'string' ? data : data.toString('utf8'));
+      });
+      await primary.publish(postOutageChannel, JSON.stringify({ type: 'changed' }));
+      await waitUntil(() => postOutageMessages.length >= 1);
+      expect(JSON.parse(postOutageMessages[0])).toEqual({ type: 'changed' });
+
+      // Closing that same post-outage socket issues a real unsubscribe()
+      // call on the post-error duplicate — explicitly awaited via the
+      // subscriber's own subscribed-channels bookkeeping (not merely the
+      // WS close event), proving `ensureUnsubscribed` also keeps working.
+      await new Promise<void>((resolve) => {
+        ws2.on('close', () => resolve());
+        ws2.close();
+      });
+      await waitUntil(() => !dups[0].subscribedChannels.has(postOutageChannel));
+
+      await new Promise<void>((resolve) => {
+        ws.on('close', () => resolve());
+        ws.close();
+      });
+    } finally {
+      await stopNotificationsHttpServer(server, attachment);
+    }
   }, 15000);
 });
