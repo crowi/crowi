@@ -108,6 +108,14 @@ const plugin: CrowiPlugin = {
     icon: 'search',
     // section omitted: derived from registerSearch -> 'search'
   },
+  // `url` defaults to '' (a valid Zod value) but `registerSearch` above
+  // skips registering a driver entirely until it's set — see
+  // feature-plugin-config-readiness.
+  readiness: {
+    registry: 'search',
+    driver: 'elasticsearch',
+    requiredConfigFields: ['url'],
+  },
 
   registerSearch: (registry, ctx) => {
     // Reset first — see the doc comment on `activatedAtBoot` above for
