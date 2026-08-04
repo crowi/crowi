@@ -106,16 +106,45 @@ crowi: your token lacks the required scope — re-login granting it: `crowi logi
 (`gh` / `kubectl` の context と同型)。トークンは **エンドポイント単位** で
 保存されます。
 
+`-p, --profile <alias>` はどのコマンドでも、コマンド名の **前後どちらにも**
+置けます。コマンド名より後ろに置く場合は、`<url>` のような引数の前後どちら
+でも構いません (`login` の position 引数とは独立な option なので)。両方に
+指定した場合はコマンド名以降 (コマンド側) の指定が優先されます:
+
 ```bash
+# コマンド名の後、引数の後ろ (自然な語順)
 crowi login https://wiki.almoha.net --profile almoha
 crowi login https://strk-wiki.example.com --profile p2b
 
+# コマンド名の後、引数の前でも同じ意味
+crowi login --profile almoha https://wiki.almoha.net
+
+# コマンド名の前 (従来の global option としての書き方)
 crowi --profile almoha search "release notes"
+
 crowi profiles            # 設定済みプロファイル一覧 (ローカル。通信なし)
+
+# 両方に指定した場合は new が使われる (コマンド側が優先)
+crowi --profile old login https://wiki.example.com --profile new
 ```
 
 有効なプロファイルは `--url` / `--token` → `--profile` / `$CROWI_PROFILE` →
 保存された current プロファイルの順で解決されます。
+
+### current プロファイルの切り替え
+
+`--profile` を毎回指定したくない場合は、`crowi profiles use <alias>` で
+current プロファイル (`--profile` 未指定時の既定) を切り替えられます:
+
+```bash
+crowi profiles use almoha
+crowi search "release notes"   # --profile なしで almoha に対して実行される
+```
+
+存在しない alias を指定すると、設定ファイルを変更せずに
+`crowi: no such profile: <alias>` を stderr へ出力し、終了コード `4` で
+終了します。`crowi profiles` の一覧表示では、切り替え方法のヒントが stderr
+に表示されます (`--quiet` で抑止可能。`--json` の出力形には影響しません)。
 
 ## コマンド一覧
 

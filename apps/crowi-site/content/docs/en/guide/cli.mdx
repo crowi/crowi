@@ -104,16 +104,47 @@ re-login.
 Use named profiles to work across several Crowi servers / accounts (the same
 model as `gh` / `kubectl` contexts). Tokens are stored **per endpoint**.
 
+`-p, --profile <alias>` can go **either before or after** the command name,
+on every command. Once it's after the command name, it can also go either
+before or after a positional argument like `<url>` (it's an independent
+option, not tied to `login`'s argument position). When given on both sides
+of the command name, the command-side value wins:
+
 ```bash
+# after the command name, after the argument (the natural reading order)
 crowi login https://wiki.almoha.net --profile almoha
 crowi login https://strk-wiki.example.com --profile p2b
 
+# after the command name, before the argument — same meaning
+crowi login --profile almoha https://wiki.almoha.net
+
+# before the command name (the classic global-option form)
 crowi --profile almoha search "release notes"
+
 crowi profiles            # list configured profiles (local; no network)
+
+# given on both sides: the command-side value ("new") wins
+crowi --profile old login https://wiki.example.com --profile new
 ```
 
 The active profile resolves from `--url` / `--token`, then `--profile` /
 `$CROWI_PROFILE`, then the stored current profile.
+
+### Switching the current profile
+
+If you don't want to pass `--profile` every time, `crowi profiles use
+<alias>` switches the current profile (the default used when `--profile` is
+omitted):
+
+```bash
+crowi profiles use almoha
+crowi search "release notes"   # runs against almoha, no --profile needed
+```
+
+An unknown alias leaves the config file untouched, prints `crowi: no such
+profile: <alias>` to stderr, and exits with code `4`. `crowi profiles`
+prints a hint on stderr showing how to switch (suppressed by `--quiet`; the
+`--json` output shape is unaffected either way).
 
 ## Commands
 
