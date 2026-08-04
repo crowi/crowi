@@ -26734,6 +26734,122 @@ paths:
                       - message
                 required:
                   - error
+  /admin/plugins/readiness:
+    get:
+      tags:
+        - admin.plugins
+      security:
+        - bearerAuth: []
+      summary: List active plugins missing required readiness config fields
+      responses:
+        '200':
+          description: >-
+            Readiness issues for active plugins (empty when everything is
+            configured)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  issues:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        adminPlacement:
+                          type: object
+                          properties:
+                            section:
+                              type: string
+                              enum:
+                                - settings
+                                - shared
+                                - storage
+                                - mail
+                                - notification
+                                - auth
+                                - search
+                                - renderer
+                                - platform
+                            label:
+                              type: string
+                            icon:
+                              type: string
+                          required:
+                            - section
+                            - label
+                        fields:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              name:
+                                type: string
+                              configured:
+                                type: boolean
+                                enum:
+                                  - false
+                            required:
+                              - name
+                              - configured
+                      required:
+                        - name
+                        - adminPlacement
+                        - fields
+                required:
+                  - issues
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - AUTHENTICATION_REQUIRED
+                      message:
+                        type: string
+                        enum:
+                          - Authentication is required
+                      redirectTo:
+                        type: string
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+        '403':
+          description: Admin permission required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - ADMIN_REQUIRED
+                      message:
+                        type: string
+                        enum:
+                          - Admin permission required
+                      redirectTo:
+                        type: string
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
   /admin/plugins/render-cache/clear-all:
     post:
       tags:
