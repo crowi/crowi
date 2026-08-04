@@ -41,169 +41,32 @@ export interface GlobalOptions {
 }
 
 /**
- * Commander records the exact argv it was given (`argv.slice()`, unfiltered)
- * on `rawArgs` when `parse`/`parseAsync` runs — but only on the `Command`
- * those were called on (the root program), and the field isn't part of the
- * published `.d.ts` even though it's a real, stable property of the JS
- * class. Narrowly typed here instead of reaching for `any`.
- */
-interface CommandWithRawArgs {
-  rawArgs: string[];
-}
-
-/** Walk `.parent` up to the root `Command` (the one `parseAsync` was called on). */
-function rootCommand(command: Command): Command {
-  let node = command;
-  while (node.parent) {
-    node = node.parent;
-  }
-  return node;
-}
-
-/** `rootCommand(command).rawArgs`, typed through {@link CommandWithRawArgs}. */
-function rootRawArgs(command: Command): string[] {
-  return (rootCommand(command) as unknown as CommandWithRawArgs).rawArgs;
-}
-
-/** A `-p`/`--profile` occurrence recognized in a raw argv token. */
-interface ProfileTokenMatch {
-  value: string;
-  /** how many additional tokens (beyond the flag token itself) this form consumes */
-  extraTokens: 0 | 1;
-}
-
-/**
- * Recognize a `-p`/`--profile` flag token in the same 4 forms Commander
- * itself accepts: `--profile value`, `--profile=value`, `-p value`,
- * `-pvalue`. `next` is the token immediately following `token` (used for the
- * two "value in the next token" forms).
- */
-function matchProfileToken(token: string, next: string | undefined): ProfileTokenMatch | undefined {
-  if (token === '-p' || token === '--profile') {
-    return next === undefined ? undefined : { value: next, extraTokens: 1 };
-  }
-  if (token.startsWith('--profile=')) {
-    return { value: token.slice('--profile='.length), extraTokens: 0 };
-  }
-  if (token.startsWith('-p') && token.length > 2) {
-    return { value: token.slice(2), extraTokens: 0 };
-  }
-  return undefined;
-}
-
-/** Root-level flags that take a value, other than `-p`/`--profile` itself. */
-const ROOT_VALUE_FLAGS = new Set(['--url', '--token']);
-/** Root-level boolean flags (no value token to skip). */
-const ROOT_BOOLEAN_FLAGS = new Set(['--json', '-q', '--quiet']);
-
-/**
- * Scan raw argv for a `-p`/`--profile` value given on the COMMAND side, i.e.
- * after the root-level (top-level) subcommand name — so
- * `crowi login <url> --profile x` and `crowi comment add <path> --profile x`
- * both count, regardless of how deep `add`/`list`/etc. are nested. Returns
- * the LAST such value (command-side repeats behave like Commander itself:
- * later wins), or `undefined` when none was given on the command side.
- *
- * This does not need to know whether `rawArgs` still carries a leading
- * node/script-path prefix (`parseAsync(process.argv)`, prefix present) or
- * not (`parseAsync(args, { from: 'user' })`, no prefix, as in tests): any
- * leading token that isn't a recognized root flag/value and isn't a
- * registered top-level command name is simply skipped while hunting for the
- * boundary, so a stray prefix can only push the detected boundary EARLIER
- * than the true one, never later. A too-early boundary just makes this
- * degrade to "last `-p`/`--profile` occurrence anywhere", which is exactly
- * what Commander's own `optsWithGlobals()` already returns in that case — so
- * the result is never wrong, only occasionally computed via the fallback
- * path it would have taken anyway.
- */
-function findCommandSideProfile(rawArgs: string[]): string | undefined {
-  let optionsEnabled = true;
-  let boundaryFound = false;
-  let lastValue: string | undefined;
-  let i = 0;
-  while (i < rawArgs.length) {
-    const token = rawArgs[i];
-
-    if (optionsEnabled && token === '--') {
-      optionsEnabled = false;
-      i += 1;
-      continue;
-    }
-
-    if (optionsEnabled) {
-      const match = matchProfileToken(token, rawArgs[i + 1]);
-      if (match) {
-        if (boundaryFound) {
-          lastValue = match.value;
-        }
-        i += 1 + match.extraTokens;
-        continue;
-      }
-      if (ROOT_VALUE_FLAGS.has(token)) {
-        // Skip the flag AND its value so a URL/token can never be
-        // mistaken for the top-level command name.
-        i += 2;
-        continue;
-      }
-      if (ROOT_BOOLEAN_FLAGS.has(token)) {
-        i += 1;
-        continue;
-      }
-    }
-
-    // First plain token is the root-level command-name boundary; anything
-    // else (subcommand args / options we don't otherwise recognize) just
-    // advances the scan.
-    boundaryFound = true;
-    i += 1;
-  }
-  return lastValue;
-}
-
-/**
  * Read the root program's global options from a subcommand's `Command`.
- * `url`/`token`/`json`/`quiet` come from Commander's own
- * `optsWithGlobals()` (parent options merged over child options); `profile`
- * does not, because once the same `-p, --profile <alias>` flag is declared
- * at multiple levels of the command tree (see {@link createProgram}) for
- * help visibility, `optsWithGlobals()` can no longer tell which level a
- * given value came from — it always attributes the final value to the
- * ancestor closest to root. `profile` is instead resolved by
- * {@link findCommandSideProfile}, which walks the root program's raw argv
- * directly: a value given after the top-level command name (the "command
- * side") always wins over a root-side value, matching the documented
- * `crowi --profile old login <url> --profile new` precedence. Falls back to
- * Commander's own aggregation when nothing was found on the command side.
+ *
+ * Every global is declared ONCE, on the root program. Commander's default
+ * (non-positional) parsing already accepts a root-declared option anywhere
+ * in argv — before or after the command name, at any nesting depth — and a
+ * later occurrence overwrites an earlier one, which is exactly the
+ * documented `crowi --profile old login <url> --profile new` precedence.
+ * `optsWithGlobals()` therefore needs no help: no raw-argv rescan, no
+ * per-command re-declaration.
+ *
+ * Do not re-declare a global on subcommands to make it show in their help —
+ * `createProgram` uses `configureHelp({ showGlobalOptions: true })` for
+ * that. Re-declaring puts the flag in the subcommand's own `options`, which
+ * both duplicates it in the generated shell completion and inverts the
+ * precedence above (commander's `optsWithGlobals` lets globals overwrite
+ * locals).
  */
 export function getGlobalOptions(command: Command): GlobalOptions {
   const opts = command.optsWithGlobals() as OptionValues;
-  const commandSideProfile = findCommandSideProfile(rootRawArgs(command));
   return {
-    profile: commandSideProfile ?? (typeof opts.profile === 'string' ? opts.profile : undefined),
+    profile: typeof opts.profile === 'string' ? opts.profile : undefined,
     url: typeof opts.url === 'string' ? opts.url : undefined,
     token: typeof opts.token === 'string' ? opts.token : undefined,
     json: opts.json === true,
     quiet: opts.quiet === true,
   };
-}
-
-/**
- * Depth-first walk of the registered command tree, declaring
- * `-p, --profile <alias>` on every DESCENDANT of `root` (root keeps its
- * original declaration). Commander's `--help` only lists a command's own
- * options, not ones inherited from an ancestor, so without this a
- * subcommand's help never mentions `--profile` even though the flag works
- * there (see {@link getGlobalOptions}). Applied once, after every
- * `registerXxx()` call in {@link createProgram}, so group commands
- * (`comment`, `attach`, `bookmark`, `watch`) and their leaves are covered
- * without each `registerXxx()` repeating the declaration, and any nested
- * command added later is covered automatically.
- */
-function addProfileOptionToDescendants(root: Command): void {
-  for (const sub of root.commands) {
-    sub.option('-p, --profile <alias>', 'use a stored profile by alias (overrides a root-level --profile)');
-    addProfileOptionToDescendants(sub);
-  }
 }
 
 /**
@@ -233,6 +96,20 @@ export function createProgram(): Command {
     .option('--token <accessToken>', 'use a bearer token directly (e.g. a PAT)')
     .option('--json', 'emit machine-readable JSON instead of human output')
     .option('-q, --quiet', 'suppress progress output on stderr');
+
+  // Commander's help only lists a command's OWN options, so a root-declared
+  // global (`--profile` / `--url` / `--token` / `--json` / `--quiet`) would
+  // never appear in `crowi login --help` even though it parses there.
+  // `showGlobalOptions` makes commander render them under a "Global Options"
+  // section instead. Set before any `.command()` call so it propagates to
+  // every subcommand via commander's `copyInheritedSettings`.
+  //
+  // Deliberately NOT done by re-declaring the flags on each subcommand: that
+  // puts them in the subcommand's own `options`, which (a) makes
+  // `lib/completion.ts` emit each one twice (it unions a command's own flags
+  // with the globals) and (b) makes `optsWithGlobals()` resolve the ROOT
+  // value over the command-side one, inverting the documented precedence.
+  program.configureHelp({ showGlobalOptions: true });
 
   // Per-invocation version-skew probe for the authenticated command surface.
   // Runs once, before the chosen subcommand's action, so the skew warning is
@@ -293,12 +170,6 @@ export function createProgram(): Command {
   // Phase 3 polish: shell-completion script generator (introspects the tree
   // above, so it must register after every other command).
   registerCompletion(program);
-
-  // Give every descendant its own `-p, --profile <alias>` declaration (help
-  // visibility only — see `getGlobalOptions` / `addProfileOptionToDescendants`
-  // for why parsing doesn't actually depend on it). Runs last, once the full
-  // tree is registered, so nested commands never need to repeat this.
-  addProfileOptionToDescendants(program);
 
   return program;
 }
