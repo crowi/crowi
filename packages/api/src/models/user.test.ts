@@ -157,6 +157,117 @@ describe('User', () => {
     });
   });
 
+  describe('Username validation (feature-username-validation-contract)', () => {
+    test('rejects a document save when username is set to a non-conforming value', async () => {
+      const user = new User();
+      user.email = `bad-username-${Date.now().toString(36)}@example.com`;
+      user.setPassword('hogefuga11');
+      user.username = 'bad name!';
+      await expect(user.save()).rejects.toThrow();
+    });
+
+    test('accepts 1-char and 64-char boundary usernames on save', async () => {
+      const shortUser = new User();
+      shortUser.email = `boundary-min-${Date.now().toString(36)}@example.com`;
+      shortUser.setPassword('hogefuga11');
+      shortUser.username = 'q';
+      await expect(shortUser.save()).resolves.toBeInstanceOf(User);
+
+      const longUsername = 'q'.repeat(64);
+      const longUser = new User();
+      longUser.email = `boundary-max-${Date.now().toString(36)}@example.com`;
+      longUser.setPassword('hogefuga11');
+      longUser.username = longUsername;
+      await expect(longUser.save()).resolves.toBeInstanceOf(User);
+
+      await User.deleteMany({ _id: { $in: [shortUser._id, longUser._id] } });
+    });
+
+    test('createUserByEmailAndPassword rejects a non-conforming username', async () => {
+      await new Promise<void>((resolve, reject) => {
+        User.createUserByEmailAndPassword('Bad User', 'bad name', `create-bad-${Date.now().toString(36)}@example.com`, 'hogefuga11', 'en', (err) => {
+          try {
+            expect(err).toBeInstanceOf(Error);
+            resolve();
+          } catch (e) {
+            reject(e);
+          }
+        });
+      });
+    });
+
+    test('isRegisterableUsername returns not-registerable for a non-conforming username without querying the DB', async () => {
+      const findOneSpy = jest.spyOn(User, 'findOne');
+      try {
+        await new Promise<void>((resolve) => {
+          User.isRegisterableUsername('bad name!', (registerable) => {
+            expect(registerable).toBe(false);
+            resolve();
+          });
+        });
+        expect(findOneSpy).not.toHaveBeenCalled();
+      } finally {
+        findOneSpy.mockRestore();
+      }
+    });
+
+    test('isRegisterable returns username: false for a non-conforming username without querying the DB for username or email', async () => {
+      const findOneSpy = jest.spyOn(User, 'findOne');
+      try {
+        await new Promise<void>((resolve) => {
+          User.isRegisterable(`isregisterable-${Date.now().toString(36)}@example.com`, 'bad name!', (registerable, detail) => {
+            expect(registerable).toBe(false);
+            expect(detail.username).toBe(false);
+            resolve();
+          });
+        });
+        expect(findOneSpy).not.toHaveBeenCalled();
+      } finally {
+        findOneSpy.mockRestore();
+      }
+    });
+  });
+
+  describe('Legacy / invited username rows are not retroactively invalidated (feature-username-validation-contract AC-4)', () => {
+    test('a STATUS_INVITED row with no username saves without error', async () => {
+      const invited = new User();
+      invited.email = `invited-no-username-${Date.now().toString(36)}@example.com`;
+      invited.setPassword('hogefuga11');
+      invited.status = User.STATUS_INVITED;
+      await expect(invited.save()).resolves.toBeInstanceOf(User);
+      expect(invited.username).toBeUndefined();
+
+      await User.deleteOne({ _id: invited._id });
+    });
+
+    test('saving an existing document with a legacy non-conforming username unchanged does not fail, and the username is not modified', async () => {
+      const user = new User();
+      user.email = `legacy-bad-username-${Date.now().toString(36)}@example.com`;
+      user.setPassword('hogefuga11');
+      await user.save();
+
+      // Write a legacy-shaped non-conforming username directly at the
+      // collection level, bypassing the Mongoose validator — simulating a
+      // pre-existing row that predates this contract.
+      await User.collection.updateOne({ _id: user._id }, { $set: { username: 'legacy bad name!' } });
+
+      const reloaded = await User.findById(user._id);
+      expect(reloaded?.username).toBe('legacy bad name!');
+
+      // A save that changes an unrelated field must succeed without being
+      // rejected on account of the still-non-conforming (but unchanged)
+      // username.
+      reloaded.name = 'Renamed Legacy User';
+      await expect(reloaded.save()).resolves.toBeInstanceOf(User);
+
+      const afterSave = await User.findById(user._id);
+      expect(afterSave?.username).toBe('legacy bad name!');
+      expect(afterSave?.name).toBe('Renamed Legacy User');
+
+      await User.deleteOne({ _id: user._id });
+    });
+  });
+
   describe('User Utilities', () => {
     describe('Get username from path', () => {
       test('found', () => {
