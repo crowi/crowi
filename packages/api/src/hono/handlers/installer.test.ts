@@ -132,9 +132,10 @@ describe('GET /api/installer (Hono)', () => {
     it('returns 400 (zod validation) when registerForm is missing required fields', async () => {
       await Config.deleteMany({ ns: 'crowi' });
 
-      // username must match the regex `[\da-zA-Z\-_.]+` — an asterisk
-      // trips zod's validation and the OpenAPIHono defaultHook turns it
-      // into a 400 `VALIDATION_ERROR` envelope.
+      // username must match the shared `UsernameSchema` pattern
+      // (`[A-Za-z0-9_-]{1,64}`) — an asterisk trips zod's validation and
+      // the OpenAPIHono defaultHook turns it into a 400 `VALIDATION_ERROR`
+      // envelope.
       const res = await request(app)
         .post('/api/installer/createAdmin')
         .send({
@@ -148,6 +149,77 @@ describe('GET /api/installer (Hono)', () => {
 
       expect(res.status).toBe(400);
       expect(res.body.error?.code).toBe('VALIDATION_ERROR');
+    });
+
+    // feature-username-validation-contract — the installer's `username`
+    // field now shares `UsernameSchema` with self-registration and invite
+    // acceptance. `.` was previously allowed here (a pre-existing
+    // inconsistency) and is now rejected like everywhere else.
+    describe('username validation (feature-username-validation-contract)', () => {
+      afterEach(async () => {
+        await Config.deleteMany({ ns: 'crowi' });
+        await crowi.getConfigService().load();
+      });
+
+      it.each([
+        ['empty string', ''],
+        ['whitespace only', '   '],
+        ['contains a dot (previously allowed by this route only)', 'bad.name'],
+        ['contains a slash', 'bad/name'],
+        ['contains a Unicode character', 'ソタロウ'],
+        ['65 characters (one over the boundary)', 'a'.repeat(65)],
+      ])('rejects a username that is %s with 400 VALIDATION_ERROR', async (_label, username) => {
+        await Config.deleteMany({ ns: 'crowi' });
+
+        const res = await request(app)
+          .post('/api/installer/createAdmin')
+          .send({
+            registerForm: {
+              name: 'Bad Username',
+              username,
+              email: `installer-bad-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}@example.com`,
+              password: 'Password!1',
+            },
+          });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error?.code).toBe('VALIDATION_ERROR');
+      });
+
+      it('accepts a 1-character username at the lower boundary', async () => {
+        await Config.deleteMany({ ns: 'crowi' });
+        const email = 'installer-min-username@example.com';
+        await User.deleteMany({ email });
+
+        const res = await request(app)
+          .post('/api/installer/createAdmin')
+          .send({ registerForm: { name: 'Min Username', username: 'q', email, password: 'Password!1' } });
+
+        expect(res.status).toBe(200);
+        expect(res.body).toEqual({ status: 'ok', message: 'Admin created successfully' });
+
+        const created = await User.findOne({ email });
+        expect(created?.username).toBe('q');
+        await User.deleteMany({ email });
+      });
+
+      it('accepts a 64-character username at the upper boundary', async () => {
+        await Config.deleteMany({ ns: 'crowi' });
+        const username = 'q'.repeat(64);
+        const email = 'installer-max-username@example.com';
+        await User.deleteMany({ $or: [{ email }, { username }] });
+
+        const res = await request(app)
+          .post('/api/installer/createAdmin')
+          .send({ registerForm: { name: 'Max Username', username, email, password: 'Password!1' } });
+
+        expect(res.status).toBe(200);
+        expect(res.body).toEqual({ status: 'ok', message: 'Admin created successfully' });
+
+        const created = await User.findOne({ email });
+        expect(created?.username).toBe(username);
+        await User.deleteMany({ $or: [{ email }, { username }] });
+      });
     });
   });
 });
