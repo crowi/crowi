@@ -111,19 +111,11 @@ interface DuplicatableRedisClient {
  * subscribe/unsubscribe business logic, shutdown teardown) stays entirely
  * with the caller, unchanged from before this helper existed.
  *
- * Log shape, scoped per duplicate instance via a closed-over
- * `outageWarned` boolean:
- *   - The FIRST `error` since the duplicate was created (or since it last
- *     recovered) logs one `console.warn` with `label` + the error message,
- *     and flips `outageWarned` to `true`.
- *   - Every subsequent `error` while `outageWarned` is already `true` (the
- *     same ongoing outage retrying) is logged at `debug` level only — a
- *     single Redis restart must not flood stdout with one warn per retry.
- *   - A `ready` event logs a recovery `console.warn` ONLY when
- *     `outageWarned` is `true` (i.e. an outage was actually observed),
- *     and flips it back to `false`. The very first, initial-connection
- *     `ready` therefore never logs anything — `outageWarned` starts
- *     `false` and no prior `error` set it.
+ * Logging is warn-once-per-outage, scoped per duplicate instance via a
+ * closed-over `outageWarned` boolean: further errors during the SAME outage
+ * only `debug`-log, so a flapping connection cannot flood stdout with one
+ * warn per node-redis retry. A consequence worth knowing: the recovery warn
+ * is gated on `outageWarned`, so the initial, error-free `ready` is silent.
  */
 export function duplicateWithErrorHandler<T extends DuplicatableRedisClient>(client: T, label: string): T {
   const duplicate = client.duplicate();
