@@ -5,6 +5,7 @@ import type {
   ClearRenderCacheResponse,
   ListPluginsResponse,
   PluginConfigResponse,
+  PluginReadinessResponse,
   UpdatePluginConfigRequest,
   UpdatePluginConfigResponse,
 } from '@crowi/api-contract';
@@ -17,6 +18,9 @@ export const adminPluginsKeys = {
   // Locale is part of the key so switching language refetches the localized
   // field labels/descriptions (plugin `configI18n` overlay).
   config: (name: string, locale: string) => ['admin', 'plugins', name, 'config', locale] as const,
+  // feature-plugin-config-readiness — not locale-scoped (readiness never
+  // renders localized text, only field/plugin names).
+  readiness: () => ['admin', 'plugins', 'readiness'] as const,
 };
 
 const readWireMessage = async (response: Response): Promise<string | undefined> => {
@@ -54,6 +58,27 @@ export function useAdminPlugins() {
       if (response.status === 200) return (await response.json()) as ListPluginsResponse;
       return throwGenericError(response, 'Failed to fetch plugins');
     },
+    staleTime: 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+}
+
+/**
+ * feature-plugin-config-readiness — active plugins missing config their
+ * own `readiness` declaration says is required. `enabled` gates the
+ * request: callers pass `user.admin === true` so the query (and thus
+ * the HTTP request) never fires for a non-admin or before auth resolves
+ * — see `PluginReadinessBanner`.
+ */
+export function useAdminPluginReadiness(enabled: boolean) {
+  return useQuery<PluginReadinessResponse, Error>({
+    queryKey: adminPluginsKeys.readiness(),
+    queryFn: async () => {
+      const response = await apiClient.admin.plugins.readiness.$get();
+      if (response.status === 200) return (await response.json()) as PluginReadinessResponse;
+      return throwGenericError(response, 'Failed to fetch plugin readiness');
+    },
+    enabled,
     staleTime: 60 * 1000,
     refetchOnWindowFocus: false,
   });
@@ -129,6 +154,11 @@ export function useUpdateAdminPluginConfig(name: string) {
       // Prefix match (no locale) so every cached locale variant is refreshed.
       queryClient.invalidateQueries({ queryKey: ['admin', 'plugins', name, 'config'] });
       queryClient.invalidateQueries({ queryKey: adminPluginsKeys.list() });
+      // feature-plugin-config-readiness — a save may have just resolved
+      // (or introduced) a readiness issue for this plugin; refetch so
+      // the banner/list/edit-page readiness UI reflects the new value
+      // immediately rather than the pre-save snapshot.
+      queryClient.invalidateQueries({ queryKey: adminPluginsKeys.readiness() });
     },
   });
 }

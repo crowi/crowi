@@ -2,12 +2,12 @@
 
 import Link from 'next/link';
 import { ChevronRight } from 'lucide-react';
-import type { PluginInfo } from '@crowi/api-contract';
+import type { PluginInfo, PluginReadinessIssue } from '@crowi/api-contract';
 import { ClearAllRenderCacheButton } from '@/components/admin/plugin-clear-cache-button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ErrorAlert } from '@/components/ui/error-alert';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
-import { useAdminPlugins } from '@/lib/use-admin-plugins';
+import { useAdminPluginReadiness, useAdminPlugins } from '@/lib/use-admin-plugins';
 import { m } from '@paraglide/messages.js';
 
 /**
@@ -23,6 +23,10 @@ import { m } from '@paraglide/messages.js';
  */
 export default function AdminPluginsPage() {
   const { data, isLoading, error } = useAdminPlugins();
+  // This page only renders inside the admin shell (AdminLayout already
+  // gated on user.admin), so the readiness query is always enabled here.
+  const { data: readinessData } = useAdminPluginReadiness(true);
+  const readinessByName = new Map((readinessData?.issues ?? []).map((issue) => [issue.name, issue]));
 
   return (
     <div className="space-y-6">
@@ -52,7 +56,7 @@ export default function AdminPluginsPage() {
             <ul className="divide-y">
               {data.plugins.map((plugin) => (
                 <li key={plugin.name}>
-                  <PluginRow plugin={plugin} />
+                  <PluginRow plugin={plugin} readinessIssue={readinessByName.get(plugin.name)} />
                 </li>
               ))}
             </ul>
@@ -65,9 +69,11 @@ export default function AdminPluginsPage() {
 
 interface PluginRowProps {
   plugin: PluginInfo;
+  /** Present only when this plugin (active, driver selected) has unset required config — feature-plugin-config-readiness. */
+  readinessIssue: PluginReadinessIssue | undefined;
 }
 
-function PluginRow({ plugin }: PluginRowProps) {
+function PluginRow({ plugin, readinessIssue }: PluginRowProps) {
   const isFailed = plugin.status === 'failed';
   // A failed plugin never made it into the loaded set (see
   // `PluginManager.getFailedPlugins()`), so its config form (which reads
@@ -86,8 +92,13 @@ function PluginRow({ plugin }: PluginRowProps) {
               {m['admin.plugins.status_failed_badge']()}
             </span>
           )}
+          {readinessIssue && (
+            <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-400">
+              {m['admin.plugins.readiness_badge']()}
+            </span>
+          )}
         </div>
-        <PluginRowMeta plugin={plugin} />
+        <PluginRowMeta plugin={plugin} readinessIssue={readinessIssue} />
       </div>
       {href && <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />}
     </div>
@@ -101,7 +112,7 @@ function PluginRow({ plugin }: PluginRowProps) {
   );
 }
 
-function PluginRowMeta({ plugin }: { plugin: PluginInfo }) {
+function PluginRowMeta({ plugin, readinessIssue }: { plugin: PluginInfo; readinessIssue: PluginReadinessIssue | undefined }) {
   const parts: string[] = [];
   parts.push(`${m['admin.plugins.column_section']()}: ${plugin.adminPlacement.section}`);
   if (plugin.registers.length > 0) parts.push(`${m['admin.plugins.column_registers']()}: ${plugin.registers.join(', ')}`);
@@ -109,5 +120,6 @@ function PluginRowMeta({ plugin }: { plugin: PluginInfo }) {
   if (plugin.modelAccess && plugin.modelAccess.length > 0) parts.push(`${m['admin.plugins.column_model_access']()}: ${plugin.modelAccess.join(', ')}`);
   if (!plugin.hasConfig) parts.push(m['admin.plugins.no_config']());
   if (plugin.status === 'failed' && plugin.error) parts.push(m['admin.plugins.status_failed_reason']({ message: plugin.error }));
+  if (readinessIssue) parts.push(m['admin.plugins.readiness_reason']({ fields: readinessIssue.fields.map((field) => field.name).join(' / ') }));
   return <p className="text-muted-foreground text-xs mt-0.5">{parts.join(' / ')}</p>;
 }
