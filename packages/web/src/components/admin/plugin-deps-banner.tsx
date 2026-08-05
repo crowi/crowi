@@ -5,6 +5,7 @@ import { AlertTriangle } from 'lucide-react';
 import type { ListPluginsResponse, PluginConfigResponse, PluginField } from '@crowi/api-contract';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { m } from '@paraglide/messages.js';
+import { PLUGIN_WARNING_ALERT_CLASS, PLUGIN_WARNING_ALERT_DESCRIPTION_CLASS } from './plugin-warning-alert-styles';
 
 interface PluginDepsBannerProps {
   requires: string[] | undefined;
@@ -24,9 +25,6 @@ interface IncompleteBanner {
 }
 
 type Banner = MissingBanner | IncompleteBanner;
-
-const ALERT_CLASS = 'border-amber-500 text-amber-700 dark:text-amber-400 [&>svg]:text-current';
-const DESCRIPTION_CLASS = 'text-amber-700/90 dark:text-amber-400/90';
 
 export function PluginDepsBanner({ requires, installedPlugins, depConfigs }: PluginDepsBannerProps) {
   if (!requires || requires.length === 0) return null;
@@ -63,10 +61,10 @@ function BannerRow({ banner }: { banner: Banner }) {
   const href = `/admin/plugins/edit?name=${encodeURIComponent(banner.depName)}`;
 
   return (
-    <Alert className={ALERT_CLASS}>
+    <Alert className={PLUGIN_WARNING_ALERT_CLASS}>
       <AlertTriangle className="h-4 w-4" />
       <AlertTitle>{titleFor(banner)}</AlertTitle>
-      <AlertDescription className={DESCRIPTION_CLASS}>
+      <AlertDescription className={PLUGIN_WARNING_ALERT_DESCRIPTION_CLASS}>
         {banner.kind === 'missing' ? (
           m['admin.plugins.deps_hint_missing_body']({ cmd: `crowi-admin plugin add ${banner.depName}` })
         ) : (

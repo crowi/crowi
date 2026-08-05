@@ -28,6 +28,16 @@ const plugin: CrowiPlugin = {
     icon: 'cloud',
     // section omitted: derived from registerStorage → 'storage'
   },
+  // `bucket` defaults to '' (a valid Zod value) but every StorageDriver
+  // method throws via `requireBucket()` below until it's set — see
+  // feature-plugin-config-readiness. AWS credentials are intentionally
+  // NOT declared here: an empty accessKeyId/secretAccessKey is a valid
+  // "use the SDK default credential chain" configuration.
+  readiness: {
+    registry: 'storage',
+    driver: 's3',
+    requiredConfigFields: ['bucket'],
+  },
 
   registerStorage: (registry, ctx) => {
     const cell = ctx.state<S3DriverState>(buildState(ctx));

@@ -1,6 +1,6 @@
 import faker from 'faker';
 import type { MigrationApplicationModel } from 'src/models/migration-application';
-import { crowi, Fixture } from 'src/test/setup';
+import { crowi, Fixture, randomUsername } from 'src/test/setup';
 
 import { MigrationRegistry } from '../registry';
 import { runBootMigrations } from '../run-boot-migrations';
@@ -30,7 +30,7 @@ describe('migration/revision-page-ref-backfill', () => {
     Page = crowi.model('Page');
     Revision = crowi.model('Revision');
 
-    const users = await Fixture.generate('User', [{ name: faker.name.findName(), username: faker.internet.userName(), email: faker.internet.email() }]);
+    const users = await Fixture.generate('User', [{ name: faker.name.findName(), username: randomUsername(), email: faker.internet.email() }]);
     user = users[0];
   });
 

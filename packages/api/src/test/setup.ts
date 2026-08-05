@@ -19,6 +19,7 @@
 
 import { createServer, type Server } from 'node:http';
 import { getRequestListener } from '@hono/node-server';
+import faker from 'faker';
 import Crowi from 'src/crowi';
 import { buildHonoApp } from 'src/hono';
 import { stripApiPrefix } from 'src/hono/path-rewrite';
@@ -370,3 +371,33 @@ export const Fixture = {
     return Promise.all(fixture.map((entity) => new Model(entity).save()));
   },
 };
+
+/**
+ * ASCII-only random username for `Fixture.generate('User', ...)` callers.
+ * `faker.internet.userName()` can emit a `.` separator, which the
+ * `UsernameSchema` model validator (feature-username-validation-contract)
+ * rejects — this generator only emits characters the schema allows.
+ */
+export const randomUsername = (): string => `user-${faker.random.alphaNumeric(10)}`;
+
+/**
+ * Usernames every write boundary must reject, as `[label, value]` rows for
+ * `it.each`. Shared by the three request-boundary suites (installer /
+ * invite-accept / token-auth register) so adding or removing a rejection
+ * case updates one place instead of three files that must be kept in
+ * lockstep — a drift that would silently leave one route's suite out of
+ * sync with the contract.
+ *
+ * These verify each route's 400 / `VALIDATION_ERROR` WIRING. The character
+ * classes themselves are exhaustively unit-tested against the schema in
+ * `packages/api-contract/src/schemas/username.test.ts`; this table exists
+ * so no boundary is left unwired, not to re-derive the regex per route.
+ */
+export const INVALID_USERNAME_CASES: ReadonlyArray<readonly [string, string]> = [
+  ['empty string', ''],
+  ['whitespace only', '   '],
+  ['contains a dot', 'bad.name'],
+  ['contains a slash', 'bad/name'],
+  ['contains a Unicode character', 'ソタロウ'],
+  ['65 characters (one over the boundary)', 'a'.repeat(65)],
+];

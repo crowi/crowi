@@ -4,6 +4,7 @@ import Debug from 'debug';
 import type Crowi from 'src/crowi';
 import type { PresenceFeed } from 'src/presence/attach';
 import { resolveRedisKeyspace, type RedisKeyspace } from 'src/util/redis-keyspace';
+import { duplicateWithErrorHandler } from 'src/util/redis-opts';
 
 const debug = Debug('crowi:service:presence');
 
@@ -237,6 +238,14 @@ export interface PresenceRedisClient {
   connect(): Promise<unknown>;
   disconnect(): Promise<unknown>;
   subscribe(channel: string, listener: (message: string) => void): Promise<void>;
+  /**
+   * `error` / `ready` listener registration — the surface
+   * `duplicateWithErrorHandler` (`src/util/redis-opts.ts`) needs on a
+   * duplicated subscriber so a Redis outage after `connect()` succeeds
+   * cannot raise an unhandled EventEmitter `error` and crash the process.
+   */
+  on(event: 'error', listener: (err: Error) => void): unknown;
+  on(event: 'ready', listener: () => void): unknown;
   isOpen?: boolean;
 }
 
@@ -592,7 +601,7 @@ async function createRedisPresenceService(redis: PresenceRedisClient, emitter: E
   const feedChannel = presenceFeedChannel(keyspace);
   let subscriber: PresenceRedisClient | null = null;
   try {
-    const dup = redis.duplicate();
+    const dup = duplicateWithErrorHandler(redis, 'presence pub/sub subscriber');
     await dup.connect();
     subscriber = dup;
     await dup.subscribe(feedChannel, (message: string) => {

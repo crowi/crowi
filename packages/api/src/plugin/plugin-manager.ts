@@ -1,6 +1,15 @@
 import Debug from 'debug';
 import { ACTION_FIELD_MARKER, getActionAnnotation } from '@crowi/plugin-api';
-import type { AuthDriver, CrowiPlugin, MailSender, NotifierDriver, SearchDriver, StateCell, StorageDriver } from '@crowi/plugin-api';
+import type {
+  AuthDriver,
+  CrowiPlugin,
+  MailSender,
+  NotifierDriver,
+  PluginReadinessDeclaration,
+  SearchDriver,
+  StateCell,
+  StorageDriver,
+} from '@crowi/plugin-api';
 import { type CrowiConfigFile, resolvePlugins } from '@crowi/runner';
 import type Crowi from 'src/crowi';
 import { registerSensitiveConfigKeys } from 'src/models/config-sensitive';
@@ -8,7 +17,7 @@ import type { ConfigChangeSource } from 'src/service/config';
 import { credentialVaultModelNamesList, isCredentialVaultModel } from './credential-vault-models';
 import { createPluginContext } from './plugin-context';
 import { isPluginInstalled, markPluginInstalled } from './plugin-install-tracker';
-import { formatPluginConfigKey, parsePluginNamespace } from './plugin-namespace';
+import { formatPluginConfigKey, parsePluginNamespace, readCrowiConfigNamespace } from './plugin-namespace';
 import { createStateCell } from './plugin-state-cell';
 import { makeRendererScope } from 'src/renderer';
 import { DriverRegistry, makeAuthScope, makeMailScope, makeNotifierScope, makeSearchScope, makeStorageScope } from './registries';
@@ -45,6 +54,34 @@ export interface PluginRegistries {
     /** Single active mail sender, selected by `mail.driver`. */
     mail: MailSender | null;
   };
+}
+
+/**
+ * The registries a plugin's `readiness` declaration can be scoped to
+ * (feature-plugin-config-readiness).
+ */
+type ReadinessRegistry = PluginReadinessDeclaration['registry'];
+
+/** One unset `requiredConfigFields` entry — never carries the actual value. */
+export interface PluginReadinessFieldResult {
+  name: string;
+  configured: false;
+}
+
+/**
+ * A loaded, active plugin with at least one unset readiness field.
+ *
+ * Deliberately NOT named `PluginReadinessIssue`: that name belongs to the
+ * WIRE shape in `@crowi/api-contract` (which carries `name` +
+ * `adminPlacement` instead of `pluginName`), and the hono handler converts
+ * this into that one. Sharing the identifier for two different shapes in
+ * two packages a reader can have open at once is how they get confused —
+ * same reason `getFailedPlugins()` returns its own internal shape rather
+ * than reusing the wire-level `PluginInfo` name.
+ */
+export interface ManagerReadinessIssue {
+  pluginName: string;
+  fields: PluginReadinessFieldResult[];
 }
 
 /**
@@ -90,6 +127,18 @@ export class PluginManager {
   /** plugin name → set of plugin names that `requires` it */
   private dependents = new Map<string, Set<string>>();
   /**
+   * The driver name selected per registry in `crowi.config.json`, kept
+   * regardless of whether a plugin actually registered that driver name
+   * (e.g. Elasticsearch/OpenSearch with an empty `url` — see
+   * `registerSearch`'s early return in those plugins). Populated by
+   * `bootstrap()`; `getReadinessIssues()` reads it to know which
+   * plugin's `readiness` declaration is "currently selected" without
+   * depending on registry registration state. Defaults mirror
+   * `CrowiConfigFileSchema`'s own defaults so a manager queried before
+   * `bootstrap()` (shouldn't happen in practice) still answers sanely.
+   */
+  private selectedDrivers: Record<ReadinessRegistry, string> = { storage: 'local', search: 'mongo', mail: 'smtp' };
+  /**
    * plugin name → its `PluginContext.state()` cell. Backs
    * `getOrCreateStateCell()` — one cell per plugin, shared across the
    * activation-time `ctx` and every later `reconfigure(ctx)` for that
@@ -111,6 +160,12 @@ export class PluginManager {
     // config/loader library with no Crowi-runtime coupling.
     const { config, plugins } = await resolvePlugins(projectDir);
     debug('loaded crowi.config.json from %s: plugins=%o', projectDir, config.plugins);
+
+    // Kept independent of driver *registration* — a plugin can select
+    // itself out of registering (e.g. Elasticsearch/OpenSearch with an
+    // empty `url`) without losing "this is the driver the operator
+    // picked" for `getReadinessIssues()`. See the field doc above.
+    this.selectedDrivers = { storage: config.storage.driver, search: config.search.driver, mail: config.mail.driver };
 
     const ordered = topoSortPlugins(plugins);
     this.loadedPlugins = ordered;
@@ -270,6 +325,59 @@ export class PluginManager {
    */
   getLoadedPlugins(): readonly CrowiPlugin[] {
     return this.loadedPlugins;
+  }
+
+  /**
+   * Evaluate every loaded plugin's `readiness` declaration (if any)
+   * against the driver selected in `crowi.config.json` (see
+   * `selectedDrivers`, set by `bootstrap()`) and the plugin's current
+   * config namespace (`crowi.getConfig().crowi`, the same in-memory
+   * cache `saveConfig`/`loadAllConfig` maintain). Not cached — each call
+   * re-reads the live config, so a save made moments earlier is already
+   * reflected.
+   *
+   * A plugin is a candidate only when it declares `readiness` AND that
+   * declaration's `registry`/`driver` matches the currently selected
+   * driver for that registry — independent of whether the driver
+   * actually got registered (Elasticsearch/OpenSearch with an empty
+   * `url` never call `registry.register(...)`, but are still the
+   * "selected" driver; see AC-3). A candidate is only returned when at
+   * least one of its `requiredConfigFields` is empty/null/undefined —
+   * plugins with everything configured, or with no readiness
+   * declaration, or that are not the selected driver, are omitted
+   * entirely.
+   *
+   * Returns ONLY field names + `configured: false` — never the actual
+   * config value (including secrets, e.g. `@sensitive`-marked URLs).
+   * `packages/api/src/hono/handlers/admin/plugins.ts`'s readiness GET
+   * handler maps this internal result onto the public response schema
+   * (adding each plugin's `adminPlacement`), so this method never needs
+   * to know about the HTTP layer.
+   */
+  getReadinessIssues(): ManagerReadinessIssue[] {
+    const configNamespace = this.getCrowiConfigNamespace();
+    const issues: ManagerReadinessIssue[] = [];
+    for (const plugin of this.loadedPlugins) {
+      const readiness = plugin.readiness;
+      if (!readiness || !readiness.driver) continue;
+      if (this.selectedDrivers[readiness.registry] !== readiness.driver) continue;
+
+      const unsetFields = readiness.requiredConfigFields.filter(
+        (field) => field.length > 0 && !isReadinessFieldConfigured(configNamespace[formatPluginConfigKey(plugin.name, field)]),
+      );
+      if (unsetFields.length === 0) continue;
+
+      issues.push({
+        pluginName: plugin.name,
+        fields: unsetFields.map((name) => ({ name, configured: false as const })),
+      });
+    }
+    return issues;
+  }
+
+  /** Defensive read of `crowi.getConfig().crowi` — see {@link readCrowiConfigNamespace}. */
+  private getCrowiConfigNamespace(): Record<string, unknown> {
+    return readCrowiConfigNamespace(this.crowi.getConfig());
   }
 
   /**
@@ -511,6 +619,25 @@ export class PluginManager {
     debug(`[warn] ${kind}.driver '${driverName}' not registered. Installed: ${installed}. Falling back to legacy in-core handling.`);
     return null;
   }
+}
+
+/**
+ * Whether a single readiness-declared config field counts as "set", per
+ * `getReadinessIssues()`. Mirrors `isFieldValueSet()`
+ * (`packages/web/src/components/admin/plugin-deps-banner.tsx`) for a
+ * plain (non-secret) value: `false`/`0` are valid configured values,
+ * only empty/null/undefined (and an empty array, for forward
+ * compatibility with a future array-typed readiness field) count as
+ * unset. There is no separate secret-object case here — unlike the
+ * admin config-form response, this reads the raw in-memory Config
+ * value directly (e.g. `@sensitive` URLs are stored as plain strings in
+ * `crowi.getConfig()`, only masked when serialised for the admin form).
+ */
+function isReadinessFieldConfigured(value: unknown): boolean {
+  if (value === null || value === undefined) return false;
+  if (typeof value === 'string' && value.length === 0) return false;
+  if (Array.isArray(value) && value.length === 0) return false;
+  return true;
 }
 
 /**

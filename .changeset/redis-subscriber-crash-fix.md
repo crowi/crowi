@@ -1,0 +1,5 @@
+---
+'@crowi/api': patch
+---
+
+Fix a crash where a Redis restart or brief network blip could bring down the entire api process instead of just degrading presence or notifications for a moment. The dedicated pub/sub subscriber clients used by page presence and realtime notifications are duplicated off the primary Redis connection, and node-redis does not carry event listeners over to a duplicate — a subscriber that lost its connection after it was already up had no `error` listener, and an unhandled Redis client error is fatal to the whole Node process. Every duplicate subscriber now gets an `error`/`ready` listener attached immediately, so a Redis outage logs one warning and a recovery line instead of crashing the api. Once node-redis reconnects, presence's single fixed feed subscription is automatically restored (node-redis native resubscribe); notifications' per-user subscriptions restore the same way for whichever channels were subscribed at the moment of the outage — a channel whose subscribe/unsubscribe request was still in flight when the outage hit is not covered by this fix.

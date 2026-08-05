@@ -1,5 +1,35 @@
 // For a detailed explanation regarding each configuration property, visit:
 // https://jestjs.io/docs/en/configuration.html
+//
+// ---------------------------------------------------------------------------
+// Why `package.json`'s `test` script runs `node --no-sparkplug
+// node_modules/jest/bin/jest.js` instead of plain `jest`
+// ---------------------------------------------------------------------------
+// Node 24.x carries a V8 (13.6) bug: when a stack-guard interrupt triggers a
+// Mark-Compact GC during a Sparkplug (baseline JIT) prologue, the
+// half-constructed frame is walked as a GC root and a garbage slot value is
+// dereferenced — SIGSEGV, `KERN_INVALID_ADDRESS at 0x6`, faulting in
+// `ClearStaleLeftTrimmedPointerVisitor::VisitRootPointers` <-
+// `InternalFrame::Iterate`. It surfaces here as a jest WORKER dying
+// (`A jest worker process was terminated ... signal=SIGSEGV`), which jest
+// then attributes to whichever test file that worker happened to be running
+// — an innocent bystander, not the trigger. Reproduced three times on this
+// codebase (crash reports under ~/Library/Logs/DiagnosticReports).
+//
+// Upstream: https://github.com/nodejs/node/issues/62393 — fixed in Node
+// 25.0.0+, NOT backported to 24.x as of 24.18.0. `--no-sparkplug` removes the
+// baseline-JIT stage the race lives in.
+//
+// The flag cannot go in NODE_OPTIONS (`--no-sparkplug is not allowed in
+// NODE_OPTIONS`), and `node_modules/.bin/jest` is a shell shim that swallows
+// node flags — hence invoking `jest.js` through node directly. jest-worker
+// forwards `process.execArgv` to its children, so all workers inherit it.
+//
+// REMOVE THIS once the fix reaches our Node floor (a 24.x backport, or
+// `engines` moving to >= 25). Verify with the flag dropped before deleting:
+// the bug is probabilistic, roughly 0.5 crashes/day under continuous
+// parallel use here.
+// ---------------------------------------------------------------------------
 
 module.exports = {
   // All imported modules in your tests should be mocked automatically

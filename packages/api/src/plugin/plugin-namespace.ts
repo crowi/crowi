@@ -12,6 +12,18 @@
 
 const PLUGIN_PREFIX = 'plugin:';
 
+/**
+ * Unwrap the `crowi` namespace out of `crowi.getConfig()`, which is typed
+ * loosely enough that every caller would otherwise repeat the same
+ * defensive cast + `?? {}` fallback. Lives here rather than in either
+ * caller because the unwrap is about config SHAPE, not about HTTP — so
+ * `plugin-manager.ts` can share it with `hono/handlers/admin/plugins.ts`
+ * without the manager taking a dependency on the hono layer.
+ */
+export function readCrowiConfigNamespace(config: unknown): Record<string, unknown> {
+  return (config && typeof config === 'object' ? (config as { crowi?: Record<string, unknown> }).crowi : undefined) ?? {};
+}
+
 export function formatPluginConfigKey(pluginName: string, field: string): string {
   return `${PLUGIN_PREFIX}${pluginName}:${field}`;
 }

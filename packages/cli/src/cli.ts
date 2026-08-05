@@ -42,8 +42,21 @@ export interface GlobalOptions {
 
 /**
  * Read the root program's global options from a subcommand's `Command`.
- * Commander stores parent options on the option-value chain via
- * `optsWithGlobals()`.
+ *
+ * Every global is declared ONCE, on the root program. Commander's default
+ * (non-positional) parsing already accepts a root-declared option anywhere
+ * in argv — before or after the command name, at any nesting depth — and a
+ * later occurrence overwrites an earlier one, which is exactly the
+ * documented `crowi --profile old login <url> --profile new` precedence.
+ * `optsWithGlobals()` therefore needs no help: no raw-argv rescan, no
+ * per-command re-declaration.
+ *
+ * Do not re-declare a global on subcommands to make it show in their help —
+ * `createProgram` uses `configureHelp({ showGlobalOptions: true })` for
+ * that. Re-declaring puts the flag in the subcommand's own `options`, which
+ * both duplicates it in the generated shell completion and inverts the
+ * precedence above (commander's `optsWithGlobals` lets globals overwrite
+ * locals).
  */
 export function getGlobalOptions(command: Command): GlobalOptions {
   const opts = command.optsWithGlobals() as OptionValues;
@@ -84,6 +97,20 @@ export function createProgram(): Command {
     .option('--json', 'emit machine-readable JSON instead of human output')
     .option('-q, --quiet', 'suppress progress output on stderr');
 
+  // Commander's help only lists a command's OWN options, so a root-declared
+  // global (`--profile` / `--url` / `--token` / `--json` / `--quiet`) would
+  // never appear in `crowi login --help` even though it parses there.
+  // `showGlobalOptions` makes commander render them under a "Global Options"
+  // section instead. Set before any `.command()` call so it propagates to
+  // every subcommand via commander's `copyInheritedSettings`.
+  //
+  // Deliberately NOT done by re-declaring the flags on each subcommand: that
+  // puts them in the subcommand's own `options`, which (a) makes
+  // `lib/completion.ts` emit each one twice (it unions a command's own flags
+  // with the globals) and (b) makes `optsWithGlobals()` resolve the ROOT
+  // value over the command-side one, inverting the documented precedence.
+  program.configureHelp({ showGlobalOptions: true });
+
   // Per-invocation version-skew probe for the authenticated command surface.
   // Runs once, before the chosen subcommand's action, so the skew warning is
   // live for the whole authenticated surface (search / get / cat / ls /
@@ -99,11 +126,15 @@ export function createProgram(): Command {
   // longer suppress the probe — their ensureCapability() pre-flight (which
   // also emitted the skew note) was removed, so the hook is now their single
   // source of the skew warning.
-  program.hook('preSubcommand', async (thisCommand, subcommand) => {
+  program.hook('preSubcommand', async (_thisCommand, subcommand) => {
     if (isNoSkewProbe(subcommand)) {
       return;
     }
-    const globals = getGlobalOptions(thisCommand);
+    // Read globals from the invoked `subcommand`, not the root — so the
+    // profile the skew probe checks is the SAME one `getGlobalOptions()`
+    // resolves for the command's own action (command-side `--profile`
+    // takes precedence over a root-side one; see `getGlobalOptions`).
+    const globals = getGlobalOptions(subcommand);
     await maybeWarnVersionSkew({ profile: globals.profile, url: globals.url, token: globals.token });
   });
 

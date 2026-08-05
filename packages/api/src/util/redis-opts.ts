@@ -1,4 +1,7 @@
+import Debug from 'debug';
 import { parseRedisDatabaseOrThrow } from './redis-database';
+
+const debug = Debug('crowi:util:redis-opts');
 
 /**
  * Translate a Crowi-style `REDIS_URL` (`redis://` or `rediss://` with
@@ -59,4 +62,80 @@ export function buildRedisOpts(redisUrl: string | null, rejectUnauthorized: bool
     database: parseRedisDatabaseOrThrow(redisUrl),
     ...credentials,
   };
+}
+
+/**
+ * Minimum node-redis v4 client surface {@link duplicateWithErrorHandler}
+ * needs: `duplicate()` (returning the same client shape) plus the two
+ * event names the helper attaches a listener to. Every module that owns a
+ * duplicate pub/sub subscriber (presence / notifications) already declares
+ * its own, richer structural client interface — those interfaces widen to
+ * include this shape rather than this file importing theirs, keeping this
+ * util free of any feature-specific dependency.
+ */
+interface DuplicatableRedisClient {
+  duplicate(): this;
+  on(event: 'error', listener: (err: Error) => void): unknown;
+  on(event: 'ready', listener: () => void): unknown;
+}
+
+/**
+ * feature-redis-subscriber-crash-fix — the ONLY place in this codebase
+ * (enforced by `.eslintrc.js`'s `no-restricted-syntax` guard) that may call
+ * `client.duplicate()` to create a dedicated pub/sub subscriber.
+ *
+ * node-redis v4 puts a duplicated client into its own connection with its
+ * own reconnect state machine, completely independent of the primary
+ * client's `error` / `ready` listeners (`duplicate()` copies connection
+ * OPTIONS, never event listeners). Without an `error` listener on the
+ * duplicate itself, a steady-state Redis outage AFTER `connect()` succeeds
+ * raises an unhandled EventEmitter `error` event and crashes the whole api
+ * process — exactly what happened during the 2026-07-27 almoha production
+ * Redis 7→8 restart, where `service/presence.ts` and
+ * `notifications/attach.ts` each `.duplicate()`d a subscriber with no
+ * `error` listener of its own.
+ *
+ * `client.duplicate()` is called with NO argument on purpose: node-redis
+ * extends the primary's already-resolved connection options with a shallow
+ * merge of the override object, so any top-level key the override sets
+ * (`socket`, for instance) REPLACES the primary's value for that key wholesale
+ * rather than merging into it — silently dropping whichever nested keys
+ * (host / port / TLS) the override's own nested object didn't repeat. The
+ * duplicate must inherit the primary's options unchanged.
+ *
+ * Both listeners are registered synchronously, on the object `duplicate()`
+ * just returned — before the caller ever calls `connect()` on it — so no
+ * `error` / `ready` event the duplicate emits can be missed. This helper
+ * does not call `connect()` / `subscribe()` / `unsubscribe()` /
+ * `disconnect()` itself: lifecycle ownership (initial connect, the
+ * subscribe/unsubscribe business logic, shutdown teardown) stays entirely
+ * with the caller, unchanged from before this helper existed.
+ *
+ * Logging is warn-once-per-outage, scoped per duplicate instance via a
+ * closed-over `outageWarned` boolean: further errors during the SAME outage
+ * only `debug`-log, so a flapping connection cannot flood stdout with one
+ * warn per node-redis retry. A consequence worth knowing: the recovery warn
+ * is gated on `outageWarned`, so the initial, error-free `ready` is silent.
+ */
+export function duplicateWithErrorHandler<T extends DuplicatableRedisClient>(client: T, label: string): T {
+  const duplicate = client.duplicate();
+  let outageWarned = false;
+
+  duplicate.on('error', (err: Error) => {
+    if (!outageWarned) {
+      outageWarned = true;
+      console.warn(`[crowi:redis] ${label} lost connection:`, err.message);
+    } else {
+      debug('%s retry error: %s', label, err.message);
+    }
+  });
+
+  duplicate.on('ready', () => {
+    if (outageWarned) {
+      outageWarned = false;
+      console.warn(`[crowi:redis] ${label} recovered`);
+    }
+  });
+
+  return duplicate;
 }

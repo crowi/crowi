@@ -56,6 +56,16 @@ this is **new construction**, not a migration. The motivating "remove
 express-session / passport / connect-redis" goal from the original spec is
 already done.
 
+Taken to its conclusion, that also means **v2 federated sign-in is not
+compatible with v1's, and deliberately makes no attempt to be** (§7). The v1
+`googleId` / `githubId` columns are never read; nothing is backfilled. Carrying
+v1's bindings forward would have put a migration path through the middle of the
+login flow — the one place where a compatibility branch is most expensive to
+own and least safe to get wrong. Instead the discontinuity is handled once, by
+the operator, as an upgrade procedure (§7.1), and the product surface that
+procedure needs — explicit account linking — is in v1 scope rather than
+deferred (§5.4).
+
 ## §1 Motivation
 
 - Today the only sign-in is email + password (`hono/handlers/tokenAuth.ts`).
@@ -233,7 +243,7 @@ Core mounts **one** parameterised route family (public; not `registerRoutes`):
 
 ```
 GET  /api/auth/providers                         → list enabled drivers for login UI
-GET  /api/auth/providers/:name/start             → 302 to IdP
+GET  /api/auth/providers/:name/start             → 302 to IdP  (?link=1 ⇒ jwtAuth, §5.4)
 GET  /api/auth/providers/:name/callback          → IdP redirect target
 POST /api/auth/handoff                           → one-time code → token pair (§5.3)
 POST /api/auth/providers/:name/verify            → credential-kind submit  [DEFERRED]
@@ -379,6 +389,49 @@ So the callback ends with a **one-time handoff code**, not tokens:
   refresh machinery is reused unchanged. Works in dev (web :4302 / api :4301)
   because the handoff is a fetch, not a cookie.
 
+### §5.4 Account linking (in v1)
+
+Linking attaches a provider identity to an **already authenticated** user. It
+reuses the skeleton above rather than adding a second flow: the same `start`,
+the same IdP round trip, the same state cookie, the same callback. Only the
+terminal action differs — insert a `UserIdentity` for the current user instead
+of resolving or provisioning one.
+
+- **`GET /api/auth/providers/:name/start?link=1` runs under `jwtAuth`.**
+  Without `link=1` the route stays public (it is the login entry point). With
+  it, an unauthenticated request is rejected rather than silently falling back
+  to the login flow — a link attempt that quietly becomes a sign-in is exactly
+  the confusion that makes linking dangerous.
+- **The state cookie carries `linkToUserId`** (§5.1), set from the
+  authenticated user, and inherits the state machinery's existing guarantees:
+  signed, one-time, expiring. The user id therefore comes from the cookie the
+  server minted, never from the callback's query string.
+- **The callback branches on `linkToUserId`'s presence.** When set, it skips
+  `resolveOrProvisionUser` entirely — no provisioning, no registration-mode
+  check, no email matching. It inserts
+  `UserIdentity { userId: linkToUserId, provider, providerUserId }` and
+  redirects back to the settings page that started the flow.
+- **A `(provider, providerUserId)` already bound to another user is refused.**
+  The unique index makes this a duplicate-key error; the callback maps it to a
+  redirect carrying "this <provider> account is already linked to another
+  Crowi user". It must **not** move the identity to the requesting user:
+  re-pointing an existing binding on the strength of an IdP round trip is an
+  account-takeover primitive. Unlinking from the owning account is that user's
+  own action.
+- **Re-linking the same identity to the same user is a no-op success** — the
+  insert conflicts on a row that already names this `userId`, which is the
+  desired end state, so it reports success rather than the error above.
+
+Auto-linking remains prohibited (§11, A-2). An *unauthenticated* callback whose
+email matches an existing local account still redirects to the login page with
+"sign in, then link" — the difference between that and this section is
+precisely that here the user has already proven who they are.
+
+Linking is in v1 scope because §7.1 depends on it: with no backfill, a v1
+federated user's only route back to their provider is to sign in with a
+password and link explicitly. Deferring linking would leave that upgrade path
+with no product surface to complete it.
+
 ## §6 Relationship to `registerRoutes` (RFC-0013)
 
 RFC-0013 implements the general `registerRoutes` on Hono (Slack needs inbound
@@ -451,16 +504,59 @@ one, governed by three rules:
 Resolution at login is two cheap reads: `UserIdentity.findOne({provider,
 providerUserId})` → `User.findById(userId)`.
 
-**Migration (v1-compatible, included in this RFC):**
+**The legacy `User.googleId` / `User.githubId` columns are dead fields.** v2
+has no code path that reads or writes them — not at login, not at link time,
+not at boot. They are not backfilled into `UserIdentity`, and there is no
+"identities OR legacy column" lookup. A v1 federated registration does not
+carry over; re-establishing it is an operator/user action, described in §7.1.
 
-- Boot-time idempotent backfill: each `User` with `googleId` gets a
-  `UserIdentity { provider: 'google', providerUserId: googleId }` upsert, same
-  for `githubId`. Also exposed as `crowi-admin migrate auth-identities`.
-- **No transition-window dual read.** The backfill is idempotent and runs at
-  boot before traffic, so runtime lookups read `UserIdentity` only — no
-  "identities OR legacy column" query path (per project policy: no fallback /
-  compat layers by default). The legacy `googleId` / `githubId` columns are
-  kept on the document for rollback safety but are **never read** by v2 code.
+This is the single decision that keeps §3–§7 free of migration branches. It is
+not a deferral: there is no later phase in which v2 starts reading those
+columns.
+
+### §7.1 Migration note (operator runbook — not runtime design)
+
+This section is an **upgrade procedure**, not a specification of behaviour.
+Nothing here may grow a branch or a fallback path in §3–§7. If a step below
+looks like it wants runtime support, the answer is that the operator performs
+it, not the server.
+
+**1. v2 Google / GitHub sign-in is not compatible with v1's.** A user who
+registered through v1's federated login has no `UserIdentity` after the
+upgrade, so that provider button will not recognise them. Their `User`
+document, pages, and every other relation are untouched — only the federated
+binding is gone.
+
+**2. Before upgrading to v2 — while still on v1 — give those users a password.**
+Enable password login and have each affected user set one using v1's own
+password reset / set flow.
+
+This step is the one with a deadline. A v1 user who registered through Google
+or GitHub may never have had a password, and **v1's reset flow is the only
+thing that can still identify them** — it mails the address that v1 holds. Skip
+this and, after the upgrade, such a user has no working credential of any kind:
+the provider no longer recognises them and they have no password to fall back
+to. Recovering from that state is an administrator's manual account operation.
+
+**3. After upgrading to v2 — sign in with the password, then re-link.** The
+user authenticates locally and explicitly links Google / GitHub through §5.4.
+This is the linking path's primary reason to exist in v1 (§11).
+
+**4. Only then close off password login.** If the deployment intends to run
+federated-only (disabling password auth, e.g. `security:disablePasswordAuth`),
+do it **after confirming re-links are complete**. Closing password login while
+a user still has no linked identity locks that user out, and the account they
+are locked out of is the one holding their pages.
+
+The ordering of 2 → 3 → 4 is the whole content of this note. Each step removes
+the credential the previous step depended on, so performing them out of order
+strands users between two authentication methods that both refuse them.
+
+Operators who want to size the work before starting can count the affected
+users directly (`googleId` / `githubId` present) against their v1 database.
+Crowi does not ship a command for this and v2 does not read those fields; it is
+a one-off query, mentioned here only because knowing the number changes how
+step 2 is communicated.
 
 ## §8 Config namespace
 
@@ -513,10 +609,6 @@ no dynamic field rendering is built yet.
 
 - **SAML / LDAP implementation** — forward-compat seams only (§9).
 - **MFA / TOTP**, **external user pools (Cognito)** — separate future work.
-- **Account linking UX** (attach Google to an existing logged-in user) —
-  *deferred to a follow-up*. The state cookie already reserves `linkToUserId`
-  (§5.1) so the `/providers/:name/start` route can later accept a `link=1`
-  param under `jwtAuth`; no schema rework needed.
 - **Implicit / email-match auto-linking is NOT done in v1** (A-2). When a
   federated profile's email matches an existing **local** account, the callback
   does **not** silently attach the identity to that account — doing so at
@@ -524,19 +616,24 @@ no dynamic field rendering is built yet.
   of linking (an account-takeover path that trusts the IdP's email). Instead
   the callback redirects to the login page with a "this email already has an
   account — sign in, then link it" message. All linking is explicit, via the
-  authenticated `linkToUserId` path above. This supersedes the earlier §13
+  authenticated `linkToUserId` path (§5.4). This supersedes the earlier §13
   "lean" toward `email_verified`-based auto-link.
 - **Crowi-as-provider** changes — that is RFC-0010 (§2).
+
+> **Account linking is *not* a non-goal.** It ships in v1 (§5.4). Dropping v1
+> compatibility (§7) made it load-bearing: without a backfill, explicit linking
+> is the only way a v1 federated user gets their provider back, so the upgrade
+> path in §7.1 would otherwise dead-end.
 
 ## §12 Phasing
 
 1. **SDK**: extend `AuthDriver` to the kind union; add `createOidcDriver` /
    `createOAuth2Driver` factories. (No `registerRoutes` work.)
-2. **`UserIdentity` collection** + boot backfill + `crowi-admin migrate
-   auth-identities`. **Ordered before the skeleton** (C-2): step 3's
-   `resolveOrProvisionUser` resolves users by `(provider, providerUserId)` —
-   the `UserIdentity` lookup — so the model must land first (or be merged
-   into step 3).
+2. **`UserIdentity` collection** + its indexes. **Ordered before the skeleton**
+   (C-2): step 3's `resolveOrProvisionUser` resolves users by
+   `(provider, providerUserId)` — the `UserIdentity` lookup — so the model must
+   land first (or be merged into step 3). No backfill and no migrate command:
+   the legacy columns are never read (§7).
 3. **Core flow skeleton**: `providers` / `start` / `callback` / `handoff`
    routes, signed HKDF-keyed state cookie (`state` + oidc `nonce`, one-time
    consumption), declarable PKCE, id_token validation (oidc), driver policy
@@ -545,17 +642,25 @@ no dynamic field rendering is built yet.
    registration-mode gated, error-redirect failure path), one-time handoff
    code issuance (§5.3), JWT bridge. Wire `registerAuth` collected drivers
    into the `providers` list (the "later step" in `plugin-manager.ts`).
-4. **`@crowi/plugin-google`** (OIDC factory) — the reference vendor plugin;
+4. **Linking branch** (§5.4): `jwtAuth` on `start?link=1`, `linkToUserId` in
+   the state cookie, the callback's link terminal, and the duplicate-identity
+   refusal. Placed immediately after the skeleton rather than inside it because
+   it adds no new route family — it is a branch on routes step 3 already
+   built — and keeping it separate keeps step 3 reviewable. Its settings-page
+   entry point lands with the web work in step 7.
+5. **`@crowi/plugin-google`** (OIDC factory) — the reference vendor plugin;
    proves the oidc path end-to-end.
-5. **`@crowi/plugin-github`** (OAuth2 factory) — proves the non-OIDC oauth2
+6. **`@crowi/plugin-github`** (OAuth2 factory) — proves the non-OIDC oauth2
    path with the *same* skeleton, incl. the org-gate as a `fetchProfile`
    rejection.
-6. **Web** login: dynamic provider buttons + `/login/complete` handoff page.
-7. **Config migration**: move `google:*`/`github:*` into plugin namespaces;
+7. **Web**: login page (dynamic provider buttons + `/login/complete` handoff
+   page) and the account-settings surface that starts and reports linking.
+8. **Config migration**: move `google:*`/`github:*` into plugin namespaces;
    drop the static `config-sensitive` entries.
 
-(`credential` `/verify` runtime, the `@crowi/plugin-auth-oidc` generic BYO-IdP
-plugin, and account-linking are fast-follows once 1–6 land.)
+(`credential` `/verify` runtime and the `@crowi/plugin-auth-oidc` generic
+BYO-IdP plugin are fast-follows once 1–7 land. Account linking is **not** among
+them any more — it is step 4.)
 
 ## §13 Open points
 
@@ -595,3 +700,21 @@ plugin, and account-linking are fast-follows once 1–6 land.)
 - **Identity storage** → separate `UserIdentity` collection, not an embedded
   `User.identities[]` array (§7): Postgres-portable join-table shape, plain
   compound unique index, no dual-read transition window.
+
+**Resolved (2026-08-03):**
+
+- **v1 Google / GitHub compatibility** → **not maintained** (§7). No boot
+  backfill, no `crowi-admin migrate auth-identities`, no reading of the legacy
+  `googleId` / `githubId` columns. The complexity of carrying v1 bindings
+  through the login flow is not worth what it buys; the discontinuity becomes
+  an operator upgrade procedure instead (§7.1). Two earlier open threads
+  disappear with it rather than being decided: whether legacy `googleId`
+  equals the OIDC `sub` claim (nothing compares them any more), and whether a
+  transition-window dual read is needed (there is no legacy read path to pair
+  with).
+- **Account linking** → **in v1, not deferred** (§5.4). This follows from the
+  decision above rather than standing on its own: with no backfill, a v1
+  federated user's only way back to their provider is to sign in with a
+  password and link explicitly, so the §7.1 upgrade path has no ending without
+  it. Auto-linking stays prohibited (A-2) — what ships is the authenticated,
+  user-initiated path only.

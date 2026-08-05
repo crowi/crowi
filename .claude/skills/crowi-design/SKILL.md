@@ -15,7 +15,9 @@ globs:
 # Crowi Design Skill (調査 → 設計 → 設計レビュー → ドキュメント化)
 
 設計アイデアを **RFC**(大きな設計判断・OSS 資産・commit する / 英語)か
-**spec**(実装可能な小タスク指示書・commit しない / 日本語)に落とすワークフロー。
+**spec**(コードレベルの判断まで完了した実装指示書・commit しない / 日本語)に落とすワークフロー。
+spec は `.claude/skills/_shared/spec-contract.md` の implementation-ready contract v2 に従い、
+実装時にアーキテクチャ・配置・契約・テスト観点を再発見させない。
 重い調査・設計・レビュー・執筆を **subagent に散らして main を軽く** 保つのが目的。
 実装は `crowi-feature`、その **設計版** がこれ。
 
@@ -36,7 +38,7 @@ crowi-feature と同じく **人間ゲートを Workflow の外** に置く。
 /crowi-design <topic>
   └ Workflow A (explore-frame): 調査 ×3 並列 → 設計案 + RFC/spec 判定 → brief 保存 + サマリ返却
   ── GATE (main + AskUserQuestion): 案 / 出力種別 / open Q を確定 ──
-  └ Workflow B (review-document): 執筆 → 敵対的レビュー ×3 → 是正ループ → doc + verdict 返却
+  └ Workflow B (review-document): 執筆 → 敵対的レビュー(spec ×4 / RFC ×3) → 是正ループ → ready 確定
   → main: doc + verdict + 次の一手を報告
 ```
 
@@ -61,10 +63,11 @@ effort(sol=high / terra=medium / luna=low)は wrapper に 1 箇所だけ持つ�
 | 設計案(architect・brief 執筆) | **Codex**(workspace-write) | **sol** | general-purpose(session / high) |
 | **収束(ゲート)** | **main**(session) | — | — |
 | 執筆 RFC | **Codex**(workspace-write) | **sol** | general-purpose(session) |
-| 執筆 spec | general-purpose sonnet | —(Claude) | —(Claude 固定・当面) |
-| 設計レビュー ×3(並列) | **Codex** ×3(read-only) | terra →(最終 attempt)**sol** | general-purpose(session / high) |
+| 執筆 spec(選択案のコードレベル詳細化) | **Codex**(workspace-write) | **sol** | general-purpose(session / high) |
+| 設計レビュー(spec ×4 / RFC ×3、並列) | **Codex**(read-only) | terra →(最終 attempt)**sol** | general-purpose(session / high) |
 | Claude lens(critical 時のみ +1) | general-purpose(session / high) | — | — |
-| 是正(revise) | RFC=**Codex** / spec=sonnet | terra | general-purpose |
+| 是正(revise) | **Codex** | terra | general-purpose |
+| spec ready 確定 | haiku/low(機械的 validator 実行) | — | — |
 
 **レビューのエスカレーション**: 設計レビューは早期ラウンドは terra、APPROVED/NEEDS_WORK を
 分ける**最終 attempt(`attempt === maxReviewAttempts`)だけ sol** に上げる — terra が弾き
@@ -73,7 +76,7 @@ effort(sol=high / terra=medium / luna=low)は wrapper に 1 箇所だけ持つ�
 ### critical フラグ(Claude lens の追加基準)
 
 topic / spec が **データ消失・認証認可・並行 race・migration・crypto** に絡むなら、
-main が Workflow B の args に `critical: true` を立てる。critical 時は Codex 3 lens に
+main が Workflow B の args に `critical: true` を立てる。critical 時は通常の Codex lens 群に
 **Claude lens(red-team 系)が 1 本追加**される — Codex の盲点を単一障害点にしない
 ための保険。通常時は Claude lens ゼロ。
 
@@ -108,6 +111,14 @@ Workflow の返り値 `codexFallbacks[]` に fallback 発動が記録される�
                       decisions: { approach, answers }, maxReviewAttempts: 2,
                       critical: <bool> } })   // critical フラグの基準は上記
    ```
+   spec の writer は、ゲートで選ばれた案だけを対象にコードを再度ピンポイントで読み、
+   `.claude/skills/_shared/spec-contract.md` の path/symbol 単位の実装マップ、処理フロー、
+   契約・不変条件、AC→test 対応、実装順序まで確定する。production code 全文は書かない。
+   レビュー中は `status: draft` / `implementation_ready: false`。全 lens APPROVED 後、
+   finalizer が provisional に `status: approved` / `implementation_ready: true` へ変更して
+   `.claude/skills/_shared/validate-implementation-spec.sh` を実行し、green なら確定、
+   red なら draft/false へ戻す。
+
    返り値 = `{ status, docPath, verdict, residualOpenQuestions, rebutted?, blocking?,
    reviewSummary, codexFallbacks }`。`rebutted[]` は「レビュー指摘自体が誤りだったので
    実コード反証つきで適用しなかった」もの — 最終報告に載せる。
@@ -166,11 +177,14 @@ correctness-critical 用なので `critical: true` 固定で本 Workflow を呼�
 ## crowi-spec-review / crowi-feature との関係
 
 - Workflow B のレビュー段は、**spec 向けに `crowi-spec-review` の 3 観点・実コード裏取りの
-  敵対的レンズ**(根本原因再検証 / 修正の red-team / 網羅+アーキ)を、**RFC 向けに設計批評
+  敵対的レンズ**(根本原因再検証 / 修正の red-team / 網羅+アーキ)に
+  **implementation-ready contract 検証 lens**を加え、**RFC 向けに設計批評
   パネル**(代替案の十分性 / 網羅性・セキュリティ / OSS 品質)を使う。
   `crowi-spec-review` スキルは「既存 spec の単体検証」の人間入口として残す。
-- 出力(spec)は **`crowi-feature` の spec スキーマ**(frontmatter `id`/`name`/`scope` +
-  規定セクション)に従うので、`/crowi-feature feature-<slug>` で直接実装に入れる。
+- 出力(spec)は **`.claude/skills/_shared/spec-contract.md` の implementation-ready contract v2**
+  に従う。frontmatter の `spec_contract: 2` / `grounded_at`、path+symbol 単位の実装マップ、
+  契約・不変条件、stable AC→test 対応を持つので、`/crowi-feature feature-<slug>` で
+  設計をやり直さず実装に入れる。
 
 ## state
 

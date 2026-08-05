@@ -50,13 +50,47 @@ const FIXTURE_PATH = path.join(API_ROOT, 'src', 'hono', 'handlers', '__eslint-db
 
 const eslint = new ESLint({ cwd: API_ROOT, useEslintrc: true });
 
-async function lint(code: string): Promise<LintMessage[]> {
-  const [result] = await eslint.lintText(code, { filePath: FIXTURE_PATH });
+async function lintAt(code: string, filePath: string): Promise<LintMessage[]> {
+  const [result] = await eslint.lintText(code, { filePath });
   return result.messages;
+}
+
+async function lint(code: string): Promise<LintMessage[]> {
+  return lintAt(code, FIXTURE_PATH);
 }
 
 function dbGuardMessages(messages: LintMessage[]): LintMessage[] {
   return messages.filter((m) => m.ruleId === 'no-restricted-imports' || m.ruleId === 'no-restricted-syntax');
+}
+
+/**
+ * feature-redis-subscriber-crash-fix — the sibling `no-restricted-syntax`
+ * override that blocks a direct `.duplicate()` call on a Redis client
+ * anywhere outside `src/util/redis-opts.ts` (see that file's
+ * `duplicateWithErrorHandler`) — production AND test files alike; AC-3
+ * draws no test-file exception ("a direct .duplicate() call outside
+ * src/util/redis-opts.ts is an ESLint error"), and no real test file needs
+ * the raw call (a `FakeRedis` DEFINES a `duplicate()` method, it never
+ * CALLS `.duplicate()` on something else). Unlike the DB guard above
+ * (scoped to `**\/*.test.ts` / `src/test/**`, which never sets
+ * `parserOptions.project`), this guard's `files: ['src/**\/*.ts']` glob
+ * OVERLAPS the override that DOES set `parserOptions.project` for
+ * non-`.test.ts` source outside `src/test/**` — a virtual, on-disk-
+ * nonexistent fixture path there throws a parser error ("TSConfig does not
+ * include this file") instead of running the rule. So the non-test fixture
+ * below points `filePath` at a REAL, already-tracked production file
+ * instead of a `__fixture__` name; `code` is still the arbitrary text under
+ * test (`lintText`'s `code` argument is independent of what's actually on
+ * disk at `filePath`) — a virtual `.test.ts` / `src/test/**` path is fine
+ * to keep using as a fixture for the test-file cases below, same as the DB
+ * guard above, since both are exempt from the `parserOptions.project`
+ * override regardless of this guard.
+ */
+const DUPLICATE_GUARD_FIXTURE_PATH = path.join(API_ROOT, 'src', 'util', 'redis-database.ts');
+const REDIS_OPTS_PATH = path.join(API_ROOT, 'src', 'util', 'redis-opts.ts');
+
+function duplicateGuardMessages(messages: LintMessage[]): LintMessage[] {
+  return messages.filter((m) => m.ruleId === 'no-restricted-syntax');
 }
 
 describe('B1 DB-bypass lint guard (packages/api/.eslintrc.js)', () => {
@@ -138,4 +172,51 @@ describe('B1 DB-bypass lint guard (packages/api/.eslintrc.js)', () => {
       expect(dbGuardMessages(result.messages)).toHaveLength(0);
     },
   );
+});
+
+describe('feature-redis-subscriber-crash-fix duplicate() guard (packages/api/.eslintrc.js)', () => {
+  it('flags a direct .duplicate() call on a production Redis client', async () => {
+    const messages = duplicateGuardMessages(await lintAt(`const dup = client.duplicate();\nvoid dup;\n`, DUPLICATE_GUARD_FIXTURE_PATH));
+    expect(messages).toHaveLength(1);
+    expect(messages[0].ruleId).toBe('no-restricted-syntax');
+    expect(messages[0].severity).toBe(2); // 'error'
+    expect(messages[0].message).toContain('duplicateWithErrorHandler');
+  });
+
+  it('does NOT flag a call through duplicateWithErrorHandler (control — proves the rule targets the raw call, not the helper)', async () => {
+    const messages = duplicateGuardMessages(
+      await lintAt(
+        `import { duplicateWithErrorHandler } from 'src/util/redis-opts';\nconst dup = duplicateWithErrorHandler(client, 'label');\nvoid dup;\n`,
+        DUPLICATE_GUARD_FIXTURE_PATH,
+      ),
+    );
+    expect(messages).toHaveLength(0);
+  });
+
+  it('does NOT flag a direct .duplicate() call inside src/util/redis-opts.ts itself — the one file the guard excludes', async () => {
+    const messages = duplicateGuardMessages(await lintAt(`const dup = client.duplicate();\nvoid dup;\n`, REDIS_OPTS_PATH));
+    expect(messages).toHaveLength(0);
+  });
+
+  it('flags a direct .duplicate() call in a *.test.ts file too — AC-3 draws no test-file exception, only src/util/redis-opts.ts is exempt', async () => {
+    const messages = duplicateGuardMessages(
+      await lintAt(
+        `const dup = client.duplicate();\nvoid dup;\n`,
+        path.join(API_ROOT, 'src', 'hono', 'handlers', '__eslint-duplicate-guard-fixture__.test.ts'),
+      ),
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].ruleId).toBe('no-restricted-syntax');
+    expect(messages[0].severity).toBe(2); // 'error'
+    expect(messages[0].message).toContain('duplicateWithErrorHandler');
+  });
+
+  it('flags a direct .duplicate() call under src/test/** too — same reasoning as the *.test.ts case above', async () => {
+    const messages = duplicateGuardMessages(
+      await lintAt(`const dup = client.duplicate();\nvoid dup;\n`, path.join(API_ROOT, 'src', 'test', '__eslint-duplicate-guard-fixture__.ts')),
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].ruleId).toBe('no-restricted-syntax');
+    expect(messages[0].severity).toBe(2); // 'error'
+  });
 });

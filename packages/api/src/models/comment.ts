@@ -64,32 +64,71 @@ export default (crowi: Crowi) => {
   };
 
   /**
+   * Tail of the in-flight recalc chain per page id. See
+   * {@link recalculateCommentCount} for why serialisation is required.
+   */
+  const recalcTails = new Map<string, Promise<unknown>>();
+
+  /**
    * Recompute Page.commentCount from the live Comment collection. Shared by
    * the post('save') hook (comment created) and the 'remove' event listener
    * (comment deleted) so both paths keep the count in sync the same way
    * (QA-5-01: deletion used to leave the count stale until the next create).
+   *
+   * Recalcs for the SAME page are serialised through a promise chain,
+   * because count-then-write is not atomic: two chains racing on one page
+   * can interleave as read(1) / read(2) / write(2) / write(1), leaving the
+   * stale 1 as the final value until the next create or delete. That is a
+   * real production lost update (concurrent comment posts on one page), not
+   * just the test flake it was first noticed as — `drainSideEffects()`
+   * waits for both chains to settle but cannot impose an order.
+   *
+   * Serialising is sound because each chain is enqueued AFTER its own
+   * mutation has committed: whichever recalc runs last therefore counts a
+   * collection that already includes every mutation enqueued before it, so
+   * the final write is always the true value. A full recount (rather than
+   * `$inc`) is kept deliberately — it self-heals if an event is ever missed,
+   * which is the drift QA-5-01 originally fixed.
+   *
+   * Process-local only. Two api replicas can still interleave; a shared lock
+   * would be disproportionate for a display counter that the next
+   * create/delete corrects anyway.
    */
   function recalculateCommentCount(pageId: CommentDocument['page']) {
     const Page = crowi.model('Page');
+    // `pageId` may be an ObjectId or a populated Page document (the
+    // post('save') hook passes `savedComment.page`, which is whatever the
+    // caller set). Key on `_id` — a bare String() on a document collapses
+    // to '[object Object]' and would serialise every page onto one chain.
+    const key = String((pageId as { _id?: unknown })?._id ?? pageId);
+    const previous = recalcTails.get(key) ?? Promise.resolve();
 
-    crowi.trackSideEffect(
-      Promise.resolve()
-        .then(function () {
-          // Skip the deferred commentCount recompute once the connection
-          // is no longer `connected` — it would only throw teardown-noise.
-          // Normal operation (readyState === 1) is unaffected.
-          if (!crowi.isMongoConnected()) return;
-          return Comment.countCommentByPageId(pageId).then(function (count) {
-            return Page.updateCommentCount(pageId, count);
-          });
-        })
-        .then(function (page) {
-          debug('CommentCount Updated', page);
-        })
-        .catch(function (err) {
-          debug('Failed to update commentCount', err);
-        }),
-    );
+    // `.catch` sits at the tail, so `previous` is always fulfilled and one
+    // failed recalc can never stall the chain for that page.
+    const run = previous
+      .then(function () {
+        // Skip the deferred commentCount recompute once the connection
+        // is no longer `connected` — it would only throw teardown-noise.
+        // Normal operation (readyState === 1) is unaffected.
+        if (!crowi.isMongoConnected()) return;
+        return Comment.countCommentByPageId(pageId).then(function (count) {
+          return Page.updateCommentCount(pageId, count);
+        });
+      })
+      .then(function (page) {
+        debug('CommentCount Updated', page);
+      })
+      .catch(function (err) {
+        debug('Failed to update commentCount', err);
+      })
+      .finally(function () {
+        // Drop the entry only while still the tail, so the map cannot grow
+        // without bound but a queued successor is never orphaned.
+        if (recalcTails.get(key) === run) recalcTails.delete(key);
+      });
+
+    recalcTails.set(key, run);
+    crowi.trackSideEffect(run);
   }
 
   // Capture creation-vs-update before mongoose flips `isNew` to false in

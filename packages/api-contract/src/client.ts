@@ -172,6 +172,7 @@ import type {
   ClearRenderCacheResponseSchema,
   ListPluginsResponseSchema,
   PluginConfigResponseSchema,
+  PluginReadinessResponseSchema,
   UpdatePluginConfigResponseSchema,
 } from './schemas/admin/plugins';
 import type { GetSearchStatusResponseSchema } from './schemas/admin/search';
@@ -270,6 +271,7 @@ type PendingUsersCountResponse = z.infer<typeof PendingUsersCountResponseSchema>
 type ListPluginsResponse = z.infer<typeof ListPluginsResponseSchema>;
 type PluginConfigResponse = z.infer<typeof PluginConfigResponseSchema>;
 type UpdatePluginConfigResponse = z.infer<typeof UpdatePluginConfigResponseSchema>;
+type PluginReadinessResponse = z.infer<typeof PluginReadinessResponseSchema>;
 type ClearRenderCacheResponse = z.infer<typeof ClearRenderCacheResponseSchema>;
 
 /**
@@ -569,6 +571,7 @@ const stubPendingUsersCount: PendingUsersCountResponse = { count: 0 };
 const stubListPlugins: ListPluginsResponse = { plugins: [] };
 const stubPluginConfig: PluginConfigResponse = { name: '', fields: [], values: {} };
 const stubUpdatePluginConfig: UpdatePluginConfigResponse = { ok: true, hotReloaded: false, reconfigureFailed: false };
+const stubPluginReadiness: PluginReadinessResponse = { issues: [] };
 const stubClearRenderCache: ClearRenderCacheResponse = { ok: true, clearedAt: '', removedCount: 0 };
 
 // app boot / token-auth / me / user — 20 routes. The `_id` user is
@@ -747,8 +750,8 @@ const lateContractApp = new OpenAPIHono()
  *
  * - `adminSettingsContractApp`: the 6 read+write settings sub-contracts
  *   (app / auth / security / mail / storage / search) = 11 routes.
- * - `adminUsersPluginsContractApp`: the larger users (10) + plugins (5)
- *   sub-contracts = 15 routes.
+ * - `adminUsersPluginsContractApp`: the larger users (10) + plugins (6)
+ *   sub-contracts = 16 routes.
  *
  * Phase 6 (TS2589 escape hatch removal) — these chains are no longer
  * concatenated onto a single `contractApp` via `.route('/', sub)`.
@@ -788,11 +791,12 @@ const adminUsersPluginsContractApp = new OpenAPIHono()
   .openapi(adminUsersRoutes.resendInviteRoute, (c) => c.json(stubAdminUserMutation, 200))
   .openapi(adminUsersRoutes.updateUserEmailRoute, (c) => c.json(stubAdminUserMutation, 200))
   .openapi(adminUsersRoutes.deleteUserRoute, (c) => c.json(stubDeleteAdminUser, 200))
-  // admin.plugins — 5 endpoints. `clear-all` and `clear-plugin` use
-  // different literal paths so no collision risk.
+  // admin.plugins — 6 endpoints. `readiness`, `clear-all` and
+  // `clear-plugin` use different literal paths so no collision risk.
   .openapi(adminPluginsRoutes.listPluginsRoute, (c) => c.json(stubListPlugins, 200))
   .openapi(adminPluginsRoutes.getPluginConfigRoute, (c) => c.json(stubPluginConfig, 200))
   .openapi(adminPluginsRoutes.updatePluginConfigRoute, (c) => c.json(stubUpdatePluginConfig, 200))
+  .openapi(adminPluginsRoutes.getPluginReadinessRoute, (c) => c.json(stubPluginReadiness, 200))
   .openapi(adminPluginsRoutes.clearRenderCacheAllRoute, (c) => c.json(stubClearRenderCache, 200))
   .openapi(adminPluginsRoutes.clearRenderCachePluginRoute, (c) => c.json(stubClearRenderCache, 200));
 

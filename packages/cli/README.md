@@ -86,6 +86,24 @@ Multiple servers / accounts are supported via named profiles. The active
 profile is resolved from `--url`/`--token`, then `--profile` /
 `$CROWI_PROFILE`, then the stored current profile.
 
+`-p, --profile <alias>` works either before or after the command name on
+every command (`crowi login <url> --profile work` and `crowi --profile work
+login <url>` both work); once it's after the command name it also works
+either before or after a positional argument like `<url>` (`crowi login
+--profile work <url>` too — `--profile` isn't tied to the argument
+position). When given on both sides of the command name, the command-side
+value wins. Switch the current profile (the default used when `--profile`
+is omitted) with `crowi profiles use <alias>`:
+
+```bash
+crowi login --profile work https://wiki.example.com
+crowi profiles use work
+crowi search "release notes"   # runs against work, no --profile needed
+```
+
+An unknown alias leaves the config untouched and exits `4` (`no such
+profile: <alias>`, see [Errors & exit codes](#errors--exit-codes)).
+
 ## Commands
 
 Auth / lifecycle: `login`, `logout`, `whoami`, `profiles`. Read: `search`,

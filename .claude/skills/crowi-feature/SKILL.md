@@ -1,7 +1,7 @@
 ---
 name: crowi-feature
 description: |
-  Crowi 2.0 の新機能開発ワークフロー。設計合意 (会話で詰めた spec) を起点に、
+  Crowi 2.0 の新機能開発ワークフロー。設計合意 (implementation-ready spec または legacy spec) を起点に、
   spec 承認 → Workflow (plan → implement → simplify → review-loop → commit) を決定的に駆動。
   制御フローは pipeline.workflow.js (コード)、各 phase は feature-* エージェント。
   キーワード: feature, 新機能, 開発, build, 設計, spec, workflow
@@ -36,7 +36,7 @@ globs:
    ↓
 [spec phase] ← 唯一の人間ゲート (spec.md 承認)
    ↓
-[skill] config 読込 + scope→needsPlanner 判定 + multi-phase 抽出 → args 組立
+[skill] config 読込 + spec contract 検証 + ready v2→planner skip / legacy→planner fallback + multi-phase 抽出
    ↓
 [Workflow: pipeline.workflow.js] ← 制御フローはコード (予告して止まる失敗が起きない)
    for each phase:
@@ -52,10 +52,10 @@ globs:
 
 各 phase の責務:
 
-- **planner**: spec を読み、コードベースを grep して再利用候補 (hooks / components / utils / 既存契約) を context に充填、AC を spec から起こす。**利用者/運用者に見える変化なら、影響する `apps/crowi-site/` ドキュメントを特定して `context.docsTargets` に充填する** (→「crowi-site ドキュメント更新」節)。**クリティカルフローに触れるなら `context.e2eTargets` も判定・充填する** (フロー表は feature-planner.md が正本)
-- **implementer**: 実装 + テスト + **crowi-site ドキュメント更新 (ja/en)** + **e2eTargets があれば `packages/e2e/` の Playwright spec 追加/拡張**、必須チェック (type-check / test / lint / format、e2e を触ったら変更 spec の選択実行) を全部走らせる、commitPlan を埋める。テスト失敗が並列実行由来の flaky と疑われる場合は crowi-complete-feature/SKILL.md の「テスト系ゲート (6・9・10) が flaky で落ちたら」節の手順に従う (推測で直さない)
+- **planner(legacy fallback のみ)**: contract v2 でない spec を読み、コードベースを grep して再利用候補・配置・契約・AC・docs/e2e 対象を task context に充填する。implementation-ready v2 では起動しない。
+- **implementer**: v2 spec では path/symbol 単位の実装マップを直接読み、task が無ければ spec から機械的に最小 task state を作る。legacy では planner の context を読む。実装 + テスト + **crowi-site ドキュメント更新 (ja/en)** + **e2e 対象があれば `packages/e2e/` の Playwright spec 追加/拡張**、必須チェック (type-check / test / lint / format、e2e を触ったら変更 spec の選択実行) を全部走らせる、commitPlan を埋める。テスト失敗が並列実行由来の flaky と疑われる場合は crowi-complete-feature/SKILL.md の「テスト系ゲート (6・9・10) が flaky で落ちたら」節の手順に従う (推測で直さない)
 - **simplify**: `simplify` skill を呼び、reuse / quality / efficiency を整える
-- **reviewer**: AC 達成 / 契約整合 / セキュリティ / トランザクション境界を確認。**docsTargets がある場合はドキュメント反映、e2eTargets が critical-flow の場合は e2e spec の有無も確認**
+- **reviewer**: AC 達成 / 契約整合 / セキュリティ / トランザクション境界を確認。v2 は spec 本文から docs/e2e 義務も直接導出し、明記された作業の欠落を NEEDS_WORK にする。legacy は **docsTargets がある場合はドキュメント反映、e2eTargets が critical-flow の場合は e2e spec の有無も確認**
 - **committer**: task.commitPlan に従って **複数 commit** を作る (feat 本体 / test / docs 分割。crowi-site の更新は `docs(site)`、e2e spec は `test(e2e)` commit に分ける)
 
 ## state 管理
@@ -69,7 +69,7 @@ gitignore 済み (`.gitkeep` のみ tracked)。
 ├── specs/
 │   └── {id}.md            # 設計仕様（SHARED, per-id）
 ├── tasks/
-│   └── {id}.json          # planner が埋めた context + AC + commitPlan + status（SHARED, per-id）
+│   └── {id}.json          # runtime state。legacy は planner、v2 は implementer が spec から seed（SHARED, per-id）
 └── queue.json              # currentTask 等（PER-WORKTREE, volatile）※共有しない
 ```
 
@@ -103,7 +103,6 @@ worktree ローカル**（共有しない）。理由:
   "commitStrategy": "main-direct",
   "maxReviewAttempts": 3,
   "runSimplify": true,
-  "minScopeSize": "small",
   "codexReviewer": false
 }
 ```
@@ -132,48 +131,33 @@ codex 不可・出力不正時は**従来の feature-reviewer agent に自動 fa
 }
 ```
 
-`minScopeSize`（config.json）: `trivial | small | medium | large`
-spec の `scope:` がこの閾値より大きい (`>`) ときだけ planner が起動する。
-デフォルト `small` (= medium 以上で planner、small / trivial は skip)。
-順序は `trivial < small < medium < large`。
+旧 config の `minScopeSize` は読み取ってもよいが、planner 判定には使わない。
+scope で決めると small/trivial の task context が未作成になり、medium 以上では design 時の
+コード調査を再実行するため。判定は contract だけで行う:
+
+- `spec_contract: 2` + validator green → planner skip
+- legacy spec(marker 無し / v1) → scope に関係なく planner fallback
+- contract v2 だが validator red(stale / incomplete) → planner へ落とさず停止。
+  強いモデルで spec を再 ground / review
 
 ### spec.md スキーマ
 
-```markdown
----
-id: feature-attachment-thumbnail
-name: 添付画像のサムネイル生成
-scope: medium
----
+implementation-ready spec の正本は `.claude/skills/_shared/spec-contract.md`。
+frontmatter `spec_contract: 2` / `status: approved` / `implementation_ready: true` /
+`grounded_at` と、path+symbol 単位の実装マップ、処理フロー、契約・不変条件、
+stable AC→test 対応、実装順序を持つ。
 
-## 背景 / why
-...
-
-## やること (ユーザー視点)
-...
-
-## やらないこと (out of scope)
-...
-
-## 設計の主な判断
-- どこに置くか (API / Web / 共通)
-- 依存ライブラリの追加可否
-- DB スキーマ変更の有無
-- パフォーマンス / セキュリティ上の制約
-
-## 受け入れ基準 (acceptance criteria)
-- [ ] ...
-- [ ] ...
-
-## 未確定事項 (open questions)
-- ...
-```
+`/crowi-design spec <topic>` で作った spec は validator 済みなのでそのまま
+`/crowi-feature <id>` に渡せる。会話から直接作った旧6セクション形式は
+**legacy spec** として引き続き実装可能だが、planner fallback がコード調査と task context
+作成を行う。legacy を `implementation_ready: true` と偽装しない。
 
 `scope` の目安:
 - **trivial**: 1 ファイル / 50 行未満 / 既存 helper 流用 / テスト不要レベル
 - **small**: 1〜2 ファイル + テスト / 既存契約を拡張するだけ
 - **medium**: 新契約 + API + UI / 複数 commit / 数百行
-- **large**: 新モデル or 新 schema or 外部サービス連携。**planner で task 分割を強く検討**
+- **large**: 新モデル or 新 schema or 外部サービス連携。v2 は design 時点で phase/task 分割を確定、
+  legacy は planner で task 分割を強く検討
 
 ### Multi-phase spec の扱い
 
@@ -195,6 +179,31 @@ phase 完了 = その phase に紐付くすべての commit が landed。spec �
 phase ごとに分けて書いてある場合、reviewer は **その phase の AC のみ** をチェックする。
 
 ### task ファイルスキーマ (`tasks/{id}.json`)
+
+contract v2 では spec が設計の正本なので、task は runtime state に絞る。
+implementer が無ければ次の最小形を atomic に seed し、実装後に `commitPlan` / history /
+reviewFeedback を足す:
+
+```json
+{
+  "id": "feature-attachment-thumbnail",
+  "name": "添付画像のサムネイル生成",
+  "status": "PLANNED",
+  "scope": "medium",
+  "context": {
+    "specPath": ".feature-state/specs/feature-attachment-thumbnail.md",
+    "specContract": 2,
+    "groundedAt": "<git sha>"
+  },
+  "acceptanceCriteria": ["AC-1: ..."],
+  "openQuestions": [],
+  "outOfScope": ["..."],
+  "history": [{"phase": "seed", "at": "ISO8601", "summary": "implementation-ready spec v2 から初期化"}],
+  "phases": []
+}
+```
+
+legacy spec では planner が従来の拡張 context を作る:
 
 ```json
 {
@@ -342,6 +351,8 @@ phase ごとの status:`PLANNED → IN_PROGRESS → REVIEW → (APPROVED → COM
 1.2. あれば: そのまま使う (人間レビュー済みとみなして次へ)
 1.3. なければ:
      - 直近会話を読み、spec の各セクションを埋めて .feature-state/specs/{name}.md を書き出す
+     - コードレベルの grounding をしていない会話由来 spec は legacy 扱い。
+       spec_contract: 2 / implementation_ready: true を付けない
      - scope は会話内容と編集規模見込みから自動判定
      - 「以下の spec で進めますか?」とユーザーに提示し、承認を待つ
      - ユーザーから修正指示があれば反映、再提示
@@ -359,10 +370,11 @@ reviewer,committer} エージェントを `agentType` でそのまま再利用�
 skill がやること (= Workflow の外側、人間ゲートを持つ層):
 
 ```
-2.1. config.json を読む: minScopeSize (既定 small) / maxReviewAttempts (既定 3) / runSimplify /
-     codexReviewer (既定 false)
-2.2. needsPlanner を決める: spec.scope > minScopeSize なら true
-     (順序 trivial<small<medium<large)
+2.1. config.json を読む: maxReviewAttempts (既定 3) / runSimplify / codexReviewer (既定 false)
+2.2. spec contract を判定:
+     - spec_contract: 2 → `bash .claude/skills/_shared/validate-implementation-spec.sh <spec>`
+       を実行。green なら needsPlanner=false。red なら stale/欠落を提示して中止
+     - marker 無し / v1 → legacy と明記し needsPlanner=true(scope に関係なく)
 2.3. multi-phase 判定: spec に `### Phase N:` が 2 本以上あれば phases[] を抽出。
      各 phase の autoContinue を末尾マーカーから判定 ((即時/非衝突)→true、
      (要調整)/(blocked)→false、無印→true)。task.json に phases[] を書く。
@@ -467,8 +479,9 @@ migration skill と同じパターン (migration 側も将来同様に Workflow 
 ## crowi-site ドキュメント更新
 
 実装が終わったら、**利用者 / 運用者に見える変化** はユーザー向けドキュメント
-(`apps/crowi-site/`) に反映する。これは実装と同じ流れの中で行い (planner が対象を
-特定 → implementer が更新 → reviewer が確認 → committer が `docs(site)` commit に分割)、
+(`apps/crowi-site/`) に反映する。これは実装と同じ流れの中で行い
+(v2 spec、または legacy planner が対象を特定 → implementer が更新 → reviewer が確認 →
+committer が `docs(site)` commit に分割)、
 コードと一緒に simplify / reviewer のレビュー対象に乗せる。
 
 ### ドキュメントの構成
@@ -493,10 +506,10 @@ apps/crowi-site/content/docs/
   `pages` 配列に **ja / en 両方とも** ファイル名 (拡張子なし) を追記して順序に組み込む。
   既存ページの編集だけなら meta.json は触らなくてよい。
 
-### 要否の判定 (planner が行う)
+### 要否の判定 (v2 は design writer、legacy は planner が行う)
 
-更新するのは **利用者 / 運用者に見える変化** のときだけ。`context.docsTargets.assessment`
-に判定を記録する:
+更新するのは **利用者 / 運用者に見える変化** のときだけ。v2 は spec の実装順序、
+legacy は `context.docsTargets.assessment` に判定を記録する:
 
 | assessment | 例 | docs 更新 |
 |---|---|---|
@@ -506,7 +519,7 @@ apps/crowi-site/content/docs/
 
 `internal-only` のときは docs 更新も `docs(site)` commit も作らない。
 
-### 対象ファイルの探し方 (planner)
+### 対象ファイルの探し方 (v2 は design writer、legacy は planner)
 
 1. spec の機能領域に対応する既存 `.mdx` を探す
    (`ls apps/crowi-site/content/docs/ja/{guide,operations,plugins}` + grep で関連語を検索)。

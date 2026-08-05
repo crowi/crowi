@@ -1,3 +1,16 @@
+// feature-redis-subscriber-crash-fix: shared by every `no-restricted-syntax`
+// override below that needs to flag a direct `.duplicate()` call (see the
+// override blocks for why this can't live in a single override — ESLint
+// REPLACES, not merges, a rule's config when two `overrides` entries with
+// overlapping `files` both set the same ruleId, so this same selector has to
+// be spread into each `no-restricted-syntax` array whose file scope would
+// otherwise collide with another override that also configures that rule).
+const DUPLICATE_GUARD_SELECTOR = {
+  selector: "CallExpression[callee.type='MemberExpression'][callee.property.name='duplicate']",
+  message:
+    'Do not call .duplicate() directly on a Redis client — use duplicateWithErrorHandler(client, label) from src/util/redis-opts.ts so the duplicate subscriber gets an error/ready listener before a Redis outage crashes the process.',
+};
+
 module.exports = {
   root: true,
   parser: '@typescript-eslint/parser',
@@ -109,7 +122,52 @@ module.exports = {
             message:
               'Do not destructure connect/createConnection off mongoose (e.g. `const { connect } = mongoose`) in a test file — the harness (test/setup.ts) already provides a connection.',
           },
+          // feature-redis-subscriber-crash-fix: spread in here (rather than
+          // a separate override with an overlapping `files` glob) because
+          // ESLint replaces — it does not merge — a rule's config when two
+          // `overrides` entries with overlapping `files` both set the same
+          // ruleId; a sibling override for `**/*.test.ts` would silently
+          // wipe out the three DB-guard selectors above for every ordinary
+          // test file. See `DUPLICATE_GUARD_SELECTOR`'s doc comment.
+          DUPLICATE_GUARD_SELECTOR,
         ],
+      },
+    },
+    // feature-redis-subscriber-crash-fix: a duplicated Redis client used as
+    // a dedicated pub/sub subscriber needs an `error` listener attached
+    // BEFORE it is `connect()`-ed, or a steady-state Redis outage after
+    // connect raises an unhandled EventEmitter 'error' and crashes the api
+    // process (the 2026-07-27 almoha Redis 7->8 restart incident).
+    // `duplicateWithErrorHandler` (src/util/redis-opts.ts) is the one
+    // helper that does this correctly and is the sole allowed place to call
+    // `.duplicate()` directly; EVERY other file — production or test — must
+    // go through it instead (AC-3 draws no test-file exception: "a direct
+    // .duplicate() call outside src/util/redis-opts.ts is an ESLint
+    // error"). No existing test file needs the raw call — a `FakeRedis`
+    // DEFINES a `duplicate()` method rather than calling `.duplicate()` on
+    // something, and calling `duplicateWithErrorHandler(...)` itself (as
+    // `redis-opts.test.ts` does) doesn't match this selector either — so
+    // covering test files too costs nothing.
+    //
+    // THREE blocks, not one, because a single `files: ['src/**/*.ts']`
+    // override would overlap the DB-guard block above (both configure
+    // `no-restricted-syntax`) and silently replace it for ordinary test
+    // files — see `DUPLICATE_GUARD_SELECTOR`'s doc comment. This block
+    // covers `src/test/**/*` (the DB guard's own `excludedFiles` carve-out,
+    // so no collision there) and ordinary production source; the ordinary
+    // `**/*.test.ts` case is covered by the selector spread into the
+    // DB-guard block above instead.
+    {
+      files: ['src/test/**/*'],
+      rules: {
+        'no-restricted-syntax': ['error', DUPLICATE_GUARD_SELECTOR],
+      },
+    },
+    {
+      files: ['src/**/*.ts'],
+      excludedFiles: ['**/*.test.ts', 'src/test/**/*', 'src/util/redis-opts.ts'],
+      rules: {
+        'no-restricted-syntax': ['error', DUPLICATE_GUARD_SELECTOR],
       },
     },
   ],

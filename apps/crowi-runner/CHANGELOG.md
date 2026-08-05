@@ -1,5 +1,25 @@
 # @crowi/runner-app
 
+## 2.0.0-alpha.3
+
+### Patch Changes
+
+- Updated dependencies [ce69b4a]
+- Updated dependencies [8ca7a9b]
+- Updated dependencies [c2d0e9c]
+- Updated dependencies [af906f7]
+- Updated dependencies [af906f7]
+- Updated dependencies [4736e06]
+- Updated dependencies [7a7394f]
+- Updated dependencies [7688188]
+  - @crowi/api@2.0.0-alpha.11
+  - @crowi/plugin-renderer-katex@1.0.0-alpha.2
+  - @crowi/plugin-slack@0.1.0-alpha.3
+  - @crowi/plugin-api@1.0.0-alpha.5
+  - @crowi/plugin-renderer-mermaid@0.1.0-alpha.4
+  - @crowi/plugin-renderer-plantuml@0.1.0-alpha.4
+  - @crowi/admin-cli@0.1.0-alpha.4
+
 ## 2.0.0-alpha.2
 
 ### Patch Changes

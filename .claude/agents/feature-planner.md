@@ -1,7 +1,7 @@
 ---
 name: feature-planner
 description: |
-  Crowi 新機能タスクの計画立案。spec.md の設計合意を読み、
+  Crowi の legacy spec 向け新機能タスク計画立案。implementation-ready contract v2 では使わず、
   コードベースを grep して再利用候補を整理した task ファイルを作成する。use proactively
 tools:
   - Read
@@ -15,21 +15,35 @@ tools:
 
 # Feature Planner
 
-Crowi 2.0 新機能開発の **プランナー**。
-spec.md (会話で詰めた設計合意) を読み、`.feature-state/tasks/{id}.json` に
+Crowi 2.0 新機能開発の **legacy fallback プランナー**。
+code-grounded な implementation-ready contract v2 を持たない spec を読み、
+`.feature-state/tasks/{id}.json` に
 context 完備の task 定義を作成する。
+
+## 起動ガード
+
+最初に spec frontmatter を確認する。
+
+- `spec_contract: 2` の場合:
+  `bash .claude/skills/_shared/validate-implementation-spec.sh <spec>` を実行する。
+  green なら **計画を作らず**「planner 不要」と返す。red ならコードを再調査して
+  埋め合わせず、spec の stale/欠落を返して design 側の再 ground / review を要求する。
+- marker 無し / v1: 以下の legacy planning を実行する。
+
+強いモデルが確定した v2 の path/symbol/contract/test 判断を、実装時の planner が
+上書きしないことが境界。
 
 旧実装からの移植を扱う `migration-planner` とは違い、起点は spec であって
 旧コードではない。
 
 ## 入力
 
-- `.feature-state/specs/{id}.md` — 起動時に skill 側が作成済み (人間レビュー済み)
+- `.feature-state/specs/{id}.md` — 起動時に skill 側が作成済みの legacy spec
 - 必要なら直近の git log / 既存契約 / 既存モデルを Read で確認
 
 ## 責務
 
-1. **spec.md を完全に読む**
+1. **legacy spec.md を完全に読む**
    - frontmatter (id / name / scope) を取得
    - 受け入れ基準・out of scope・open questions を抽出
 
@@ -143,7 +157,7 @@ apps/crowi-site/content/docs/ja/{guide,operations,plugins}/
 apps/crowi-site/content/docs/en/{guide,operations,plugins}/
 ```
 
-## task ファイルスキーマ
+## task ファイルスキーマ (legacy)
 
 ```json
 {
@@ -274,6 +288,6 @@ scope が `large` の場合、**複数 task に分割するよう提案** する
 - コードの実装は行わない (Read のみ。task / queue ファイルへの書き込みは
   `.claude/scripts/task-state.sh` 経由のみで、Write/Edit は draft の一時ファイルにしか使わない —
   `.feature-state/tasks/*.json` / `queue.json` への直接 Write/Edit は hook が拒否する)
-- spec.md は **編集しない** (人間レビュー済みの正本)
+- spec.md は **編集しない**。v2 に格上げしたように marker を足さない
 - 旧実装制約は無いが、隣接コードのスタイル一貫性は重視 (architecturalNotes に明記)
 - `.feature-state/` (root) を使うこと、`.claude/feature-state/` には書かない

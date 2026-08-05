@@ -1,7 +1,7 @@
 process.env.WS_TOKEN_SECRET = process.env.WS_TOKEN_SECRET ?? 'test-ws-token-secret-base64-32bytes-=';
 
 import request from 'supertest';
-import { app, crowi, Fixture } from 'src/test/setup';
+import { app, crowi, Fixture, INVALID_USERNAME_CASES } from 'src/test/setup';
 import type { UserDocument } from 'src/models/user';
 import { createMailTokenUtil } from 'src/util/mail-token';
 
@@ -88,6 +88,43 @@ describe('Routes /api/invite/accept (Hono)', () => {
       const res = await request(app).post('/api/invite/accept').set(jsonHeaders).send({ token, username: 'taken_name', name: 'Wants', password: 'secret123' });
       expect(res.status).toBe(409);
       expect(res.body.error.code).toBe('USERNAME_TAKEN');
+    });
+
+    // feature-username-validation-contract — the shared `UsernameSchema`
+    // rejects a non-conforming username at the OpenAPIHono request boundary
+    // (before the handler activates the invited user), and accepts the
+    // 1-char / 64-char legal boundary.
+    describe('username validation (feature-username-validation-contract)', () => {
+      it.each(
+        INVALID_USERNAME_CASES,
+      )('rejects a username that is %s with 400 VALIDATION_ERROR, leaving the invited user un-activated', async (_label, username) => {
+        const User = crowi.model('User');
+        const email = `invite-accept-bad-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}@example.com`;
+        const { user, token } = await createInvitedUser(email);
+
+        const res = await request(app).post('/api/invite/accept').set(jsonHeaders).send({ token, username, name: 'Bad Username', password: 'secret123' });
+        expect(res.status).toBe(400);
+        expect(res.body.error?.code).toBe('VALIDATION_ERROR');
+
+        const reloaded = await User.findById(user._id);
+        expect(reloaded?.status).toBe(User.STATUS_INVITED);
+        expect(reloaded?.username).toBeUndefined();
+      });
+
+      it('accepts a 1-character username at the lower boundary', async () => {
+        const { token } = await createInvitedUser('invite-accept-min-username@example.com');
+        const res = await request(app).post('/api/invite/accept').set(jsonHeaders).send({ token, username: 'q', name: 'Min Username', password: 'secret123' });
+        expect(res.status).toBe(200);
+        expect(res.body.user.username).toBe('q');
+      });
+
+      it('accepts a 64-character username at the upper boundary', async () => {
+        const username = 'q'.repeat(64);
+        const { token } = await createInvitedUser('invite-accept-max-username@example.com');
+        const res = await request(app).post('/api/invite/accept').set(jsonHeaders).send({ token, username, name: 'Max Username', password: 'secret123' });
+        expect(res.status).toBe(200);
+        expect(res.body.user.username).toBe(username);
+      });
     });
   });
 });

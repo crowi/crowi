@@ -1,9 +1,12 @@
 import { Types } from 'mongoose';
 import request from 'supertest';
 import type { CrowiPlugin } from '@crowi/plugin-api';
+import s3Plugin from '@crowi/plugin-storage-aws-s3';
+import openSearchPlugin from '@crowi/plugin-search-opensearch';
 import { app, crowi } from 'src/test/setup';
 import { authHeaders, createTestUser } from 'src/test/test-helpers';
 import type { PluginRenderCacheModel } from 'src/models/plugin-render-cache';
+import { formatPluginConfigKey } from 'src/plugin/plugin-namespace';
 
 const seedCacheEntry = async (overrides: Partial<{ pluginName: string; embedKey: string; pageId: string }> = {}) => {
   const PluginRenderCache = crowi.model('PluginRenderCache') as unknown as PluginRenderCacheModel;
@@ -214,5 +217,154 @@ describe('GET /api/admin/plugins — status/error fields (feature-plugin-registr
     // `CrowiPlugin` object in each package's own test suite, since they
     // are not part of this harness's implicit/no-config plugin set.
     expect(byName.get('@crowi/plugin-search-mongo')).toEqual(['Page', 'Revision']);
+  });
+});
+
+describe('GET /api/admin/plugins/readiness (feature-plugin-config-readiness)', () => {
+  let adminToken: string;
+  let userToken: string;
+
+  // The real `@crowi/plugin-storage-aws-s3` / `@crowi/plugin-search-opensearch`
+  // package exports (not hand-typed stand-ins) — a future rename of the
+  // declared `readiness.driver` / `requiredConfigFields` in either package
+  // breaks this test instead of silently drifting from what's actually
+  // shipped (reviewer advisory on feature-plugin-config-readiness).
+  const S3_PLUGIN: CrowiPlugin = s3Plugin;
+  const SEARCH_PLUGIN: CrowiPlugin = openSearchPlugin;
+
+  beforeAll(async () => {
+    const admin = await createTestUser({
+      name: 'Readiness Admin',
+      username: 'readinessAdmin',
+      email: 'readiness-admin@example.com',
+      admin: true,
+    });
+    adminToken = admin.accessToken;
+
+    const normal = await createTestUser({
+      name: 'Readiness Normal',
+      username: 'readinessNormal',
+      email: 'readiness-normal@example.com',
+      admin: false,
+    });
+    userToken = normal.accessToken;
+  });
+
+  // `getLoadedPlugins()`/`selectedDrivers` are exercised against the REAL
+  // bootstrapped `crowi.pluginManager` shared by this whole test file (no
+  // crowi.config.json in this harness selects `s3`/`opensearch` for
+  // real), so each test injects the real plugin objects above + a driver
+  // selection directly (private-field access, same pattern
+  // `plugins.test.ts`'s "surfaces a failed plugin" test above uses via
+  // `jest.spyOn(manager, 'getFailedPlugins')`) and restores both afterwards
+  // so later tests/describe blocks in this file see the original state.
+  let originalLoadedPlugins: readonly CrowiPlugin[];
+  // biome-ignore lint/suspicious/noExplicitAny: snapshot of a private field for restore
+  let originalSelectedDrivers: any;
+
+  beforeEach(() => {
+    const manager = crowi.pluginManager;
+    if (!manager) throw new Error('PluginManager not bootstrapped in harness');
+    originalLoadedPlugins = manager.getLoadedPlugins();
+    // biome-ignore lint/suspicious/noExplicitAny: snapshot of a private field for restore
+    originalSelectedDrivers = { ...(manager as any).selectedDrivers };
+  });
+
+  afterEach(async () => {
+    const manager = crowi.pluginManager;
+    if (!manager) return;
+    // biome-ignore lint/suspicious/noExplicitAny: test access to private fields
+    (manager as any).loadedPlugins = originalLoadedPlugins;
+    // biome-ignore lint/suspicious/noExplicitAny: test access to private fields
+    (manager as any).selectedDrivers = originalSelectedDrivers;
+    await crowi
+      .getConfigService()
+      .deleteConfig('crowi', formatPluginConfigKey(S3_PLUGIN.name, 'bucket'))
+      .catch(() => undefined);
+    await crowi
+      .getConfigService()
+      .deleteConfig('crowi', formatPluginConfigKey(SEARCH_PLUGIN.name, 'url'))
+      .catch(() => undefined);
+  });
+
+  const injectPlugin = (plugin: CrowiPlugin, drivers: Partial<Record<'storage' | 'search' | 'mail', string>>) => {
+    const manager = crowi.pluginManager;
+    if (!manager) throw new Error('PluginManager not bootstrapped in harness');
+    // biome-ignore lint/suspicious/noExplicitAny: test access to private fields
+    (manager as any).loadedPlugins = [...originalLoadedPlugins, plugin];
+    // biome-ignore lint/suspicious/noExplicitAny: test access to private fields
+    (manager as any).selectedDrivers = { ...originalSelectedDrivers, ...drivers };
+  };
+
+  it('returns 401 without auth', async () => {
+    const res = await request(app).get('/api/admin/plugins/readiness');
+    expect(res.status).toBe(401);
+    expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
+  });
+
+  it('returns 403 for a non-admin user', async () => {
+    const res = await request(app).get('/api/admin/plugins/readiness').set(authHeaders(userToken));
+    expect(res.status).toBe(403);
+    expect(res.body.error.code).toBe('ADMIN_REQUIRED');
+  });
+
+  it('returns { issues: [] } when nothing selected declares readiness (default harness state)', async () => {
+    const res = await request(app).get('/api/admin/plugins/readiness').set(authHeaders(adminToken));
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ issues: [] });
+  });
+
+  it('AC-2: includes the real S3 plugin bucket issue when unset, and clears it once bucket is saved — without ever echoing bucket/secret/url values', async () => {
+    injectPlugin(S3_PLUGIN, { storage: 's3' });
+
+    const before = await request(app).get('/api/admin/plugins/readiness').set(authHeaders(adminToken));
+    expect(before.status).toBe(200);
+    expect(before.body).toEqual({
+      issues: [
+        {
+          name: S3_PLUGIN.name,
+          // Derived from the real plugin's own declared `adminPlacement`
+          // (label/icon) + its `registerStorage` hook (section) — not a
+          // hardcoded stand-in, so this breaks if either drifts.
+          adminPlacement: { section: 'storage', label: 'AWS S3', icon: 'cloud' },
+          fields: [{ name: 'bucket', configured: false }],
+        },
+      ],
+    });
+    const beforeJson = JSON.stringify(before.body);
+    expect(beforeJson).not.toContain('secretAccessKey');
+    expect(beforeJson).not.toMatch(/"(value|url|bucket)":/);
+
+    await crowi.getConfigService().saveConfig('crowi', { [formatPluginConfigKey(S3_PLUGIN.name, 'bucket')]: 'my-real-bucket' });
+
+    const after = await request(app).get('/api/admin/plugins/readiness').set(authHeaders(adminToken));
+    expect(after.status).toBe(200);
+    expect(after.body).toEqual({ issues: [] });
+    expect(JSON.stringify(after.body)).not.toContain('my-real-bucket');
+  });
+
+  it('AC-3: reports the unset url for the real OpenSearch plugin when its driver is selected even though its own registry entry was never registered, and excludes it when a different driver is selected', async () => {
+    injectPlugin(SEARCH_PLUGIN, { search: 'opensearch' });
+
+    const selected = await request(app).get('/api/admin/plugins/readiness').set(authHeaders(adminToken));
+    expect(selected.status).toBe(200);
+    const selectedIssue = (selected.body.issues as Array<{ name: string; fields: { name: string; configured: boolean }[] }>).find(
+      (issue) => issue.name === SEARCH_PLUGIN.name,
+    );
+    expect(selectedIssue).toEqual({
+      name: SEARCH_PLUGIN.name,
+      // Derived the same way as the S3 case above: real `adminPlacement`
+      // (label/icon) + `registerSearch` hook (section).
+      adminPlacement: { section: 'search', label: 'OpenSearch', icon: 'search' },
+      fields: [{ name: 'url', configured: false }],
+    });
+    expect(JSON.stringify(selected.body)).not.toMatch(/"url":\s*"/);
+
+    // Same plugin, but a different search driver is selected — the issue
+    // must disappear even though the plugin's own url is still unset.
+    injectPlugin(SEARCH_PLUGIN, { search: 'elasticsearch' });
+    const unselected = await request(app).get('/api/admin/plugins/readiness').set(authHeaders(adminToken));
+    expect(unselected.status).toBe(200);
+    expect((unselected.body.issues as Array<{ name: string }>).some((issue) => issue.name === SEARCH_PLUGIN.name)).toBe(false);
   });
 });

@@ -10,6 +10,33 @@ import type { RendererRegistry } from './renderer';
 import type { PluginRouterScope } from './routes';
 
 /**
+ * Declares that, when a specific driver from a specific registry is
+ * selected (`crowi.config.json:<registry>.driver === driver`), this
+ * plugin's own config becomes required to actually work at runtime —
+ * even though the `configSchema` field itself is optional / defaults to
+ * `''` so `configSchema.parse()` alone can't detect "present but
+ * unusable" (see `@crowi/plugin-storage-aws-s3`'s `bucket` and
+ * `@crowi/plugin-search-elasticsearch` / `@crowi/plugin-search-opensearch`'s
+ * `url`, both `z.string().default('')`).
+ *
+ * This is metadata only — it never carries an actual config value.
+ * `registry` / `driver` / every name in `requiredConfigFields` must be
+ * non-empty. The runtime (`PluginManager.getReadinessIssues()`) reads
+ * this once per admin readiness check, cross-references it against the
+ * currently selected driver and the plugin's current config namespace,
+ * and reports which declared fields are still empty — never the values
+ * themselves. See RFC-none / feature-plugin-config-readiness.
+ */
+export interface PluginReadinessDeclaration {
+  /** Which driver registry this declaration is scoped to. */
+  registry: 'storage' | 'search' | 'mail';
+  /** The driver name (as registered via `registry.register(name, …)`) this declaration applies to. */
+  driver: string;
+  /** `configSchema` field names that must be non-empty for `driver` to actually work once selected. */
+  requiredConfigFields: string[];
+}
+
+/**
  * The contract every Crowi plugin satisfies. Plugins export their
  * `CrowiPlugin` object as the package's default export; the runtime
  * imports it via `await import('<plugin-name>')` at boot.
@@ -148,6 +175,15 @@ export interface CrowiPlugin {
    * }
    */
   configI18n?: Record<string, Record<string, { label?: string; description?: string }>>;
+
+  /**
+   * Declares which of this plugin's own `configSchema` fields must be
+   * non-empty for a specific driver selection to actually work at
+   * runtime (see {@link PluginReadinessDeclaration}). Optional — a
+   * plugin with no readiness declaration is never surfaced by the
+   * admin readiness check, same as before this field existed.
+   */
+  readiness?: PluginReadinessDeclaration;
 
   /** Storage driver registration. Called once at boot. */
   registerStorage?: (registry: StorageRegistry, ctx: PluginContext) => void;

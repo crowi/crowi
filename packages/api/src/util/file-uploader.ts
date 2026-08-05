@@ -1,7 +1,10 @@
 import { createReadStream } from 'node:fs';
 import { Readable } from 'node:stream';
 import type { StorageDriver } from '@crowi/plugin-api';
+import Debug from 'debug';
 import type Crowi from 'src/crowi';
+
+const debug = Debug('crowi:util:file-uploader');
 
 // Resolved per call (not cached at module init) because the
 // PluginManager bootstraps after this module is required.
@@ -71,9 +74,35 @@ export interface FileUploader {
 
 export default (crowi: Crowi): FileUploader => ({
   async uploadFile(filePath, type, fileStream, _options) {
-    const driver = activeDriver(crowi);
     const stream: Readable = typeof fileStream === 'string' ? createReadStream(fileStream) : fileStream;
-    return driver.put(filePath, stream, { contentType: type });
+    // A driver may reject before ever consuming `stream` — e.g.
+    // @crowi/plugin-storage-aws-s3's `requireBucket` throws synchronously
+    // when the bucket is unconfigured, before `client.send(...)`, and
+    // `activeDriver` below throws synchronously if no driver is
+    // registered at all. An fs.ReadStream with no `'error'` listener
+    // whose own (possibly delayed) internal `open()` later fails — e.g.
+    // because the caller's cleanup-on-error path already unlinked the
+    // backing tmp file — crashes the entire process: Node treats an
+    // unhandled stream `'error'` event as fatal, unlike a rejected
+    // promise. Attach a listener as the very first thing, before
+    // resolving the driver or handing the stream to it, so this can
+    // never happen regardless of which driver is active or how/when it
+    // fails. Harmless alongside drivers that do consume the stream (e.g.
+    // the local driver's `pipeline`, which attaches its own listener) —
+    // multiple `'error'` listeners on the same stream are fine, this one
+    // only logs.
+    stream.on('error', (err) => debug('upload stream error', err));
+    try {
+      const driver = activeDriver(crowi);
+      return await driver.put(filePath, stream, { contentType: type });
+    } catch (err) {
+      // Release the fd (or cancel a pending `open()`) when the driver
+      // never consumed the stream — otherwise it leaks until GC.
+      // Idempotent: a no-op if the driver's own consumption path (e.g.
+      // `pipeline`) already destroyed it on failure.
+      stream.destroy();
+      throw err;
+    }
   },
 
   async findDeliveryFile(_attachmentId, filePath) {

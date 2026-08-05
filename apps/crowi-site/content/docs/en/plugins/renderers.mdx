@@ -176,8 +176,8 @@ class, state, ER, journey, pie, and git-graph.
 **Security**: diagrams are rendered not in the browser but inside a
 `fork()`ed, isolated child process, by a strictly-configured Mermaid
 instance that never loads external resources. The generated SVG is run
-through an independent, DOM-based sanitizer (`@crowi/svg-sanitize`,
-shared with PlantUML) that strips `script` tags, event handlers,
+through a DOM-based sanitizer (exposed by the `@crowi/plugin-api` SDK as
+`sanitizeSvg`, shared with PlantUML) that strips `script` tags, event handlers,
 `javascript:` URLs, and similar
 constructs before being embedded in an `<img>` as a base64 `data:`
 URL. Diagram directives that override configuration and syntax that
@@ -190,6 +190,14 @@ even at a layer below sanitization.
 **Theme**: diagrams are always rendered in a single (light) theme. In
 dark mode, the area surrounding the diagram is shown as a neutral
 (white) surface.
+
+<Callout title="Handling SVG in your own renderer">
+This sanitizer is available from the SDK. `@crowi/plugin-api` exports
+`sanitizeSvg` (and `extractSvgDimensions` for reading an SVG's dimensions) —
+the same implementation the first-party PlantUML and Mermaid renderers use. If
+your renderer produces or relays SVG, use it rather than writing your own
+sanitizing pass; `@crowi/plugin-api` is the only dependency you need.
+</Callout>
 
 **Limits**: diagram source is capped at 20KB and the generated SVG at
 60KB. Up to 50 diagrams can be processed per page save or preview

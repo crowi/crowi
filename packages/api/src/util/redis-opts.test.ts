@@ -2,8 +2,9 @@ import { readFileSync } from 'node:fs';
 import type { AddressInfo } from 'node:net';
 import path from 'node:path';
 import tls from 'node:tls';
+import Debug from 'debug';
 import { createClient } from 'redis';
-import { buildRedisOpts } from './redis-opts';
+import { buildRedisOpts, duplicateWithErrorHandler } from './redis-opts';
 
 describe('buildRedisOpts', () => {
   it('returns null when no REDIS_URL is configured', () => {
@@ -167,5 +168,188 @@ describe('buildRedisOpts', () => {
         });
       });
     }
+  });
+});
+
+/**
+ * feature-redis-subscriber-crash-fix — a duplicate pub/sub subscriber with
+ * no `error` listener raises an unhandled EventEmitter `error` on a Redis
+ * outage and crashes the whole api process (the 2026-07-27 almoha
+ * production Redis 7→8 restart). `duplicateWithErrorHandler` is the single
+ * helper that attaches one; `.eslintrc.js`'s `no-restricted-syntax` guard
+ * (see `test/eslint-db-guard.test.ts`) makes it the only allowed call site
+ * for `.duplicate()` outside this file, in production AND test code alike.
+ */
+describe('duplicateWithErrorHandler', () => {
+  /**
+   * Minimal fake matching `duplicateWithErrorHandler`'s (unexported, purely
+   * structural) client requirement — `duplicate()` plus `on('error' | 'ready',
+   * ...)` — that records every lifecycle call the helper must NOT make
+   * (`connect`/`subscribe`/`unsubscribe`/`disconnect`) and every `on()`
+   * registration, and exposes `emitError` / `emitReady` to drive the
+   * listeners the helper attached — mirroring how node-redis itself would
+   * invoke them. Deliberately does not `implements` the (unexported) helper
+   * interface; TS structural typing is what lets this satisfy
+   * `duplicateWithErrorHandler<T extends ...>` without importing it.
+   */
+  class RecordingRedisClient {
+    duplicateCallCount = 0;
+    connectCallCount = 0;
+    subscribeCallCount = 0;
+    unsubscribeCallCount = 0;
+    disconnectCallCount = 0;
+    readonly listenerRegistrations: Array<'error' | 'ready'> = [];
+    private readonly errorListeners: Array<(err: Error) => void> = [];
+    private readonly readyListeners: Array<() => void> = [];
+
+    duplicate(): RecordingRedisClient {
+      this.duplicateCallCount += 1;
+      // A fresh instance — mirrors node-redis returning a distinct
+      // duplicate connection, never the primary itself.
+      return new RecordingRedisClient();
+    }
+
+    on(event: 'error', listener: (err: Error) => void): this;
+    on(event: 'ready', listener: () => void): this;
+    on(event: 'error' | 'ready', listener: ((err: Error) => void) | (() => void)): this {
+      this.listenerRegistrations.push(event);
+      if (event === 'error') {
+        this.errorListeners.push(listener as (err: Error) => void);
+      } else {
+        this.readyListeners.push(listener as () => void);
+      }
+      return this;
+    }
+
+    async connect(): Promise<unknown> {
+      this.connectCallCount += 1;
+      return undefined;
+    }
+
+    async subscribe(): Promise<void> {
+      this.subscribeCallCount += 1;
+    }
+
+    async unsubscribe(): Promise<void> {
+      this.unsubscribeCallCount += 1;
+    }
+
+    async disconnect(): Promise<unknown> {
+      this.disconnectCallCount += 1;
+      return undefined;
+    }
+
+    emitError(message: string): void {
+      for (const listener of this.errorListeners) listener(new Error(message));
+    }
+
+    emitReady(): void {
+      for (const listener of this.readyListeners) listener();
+    }
+  }
+
+  it('calls client.duplicate() exactly once with no option override, and returns that SAME duplicate instance', () => {
+    const client = new RecordingRedisClient();
+    const duplicateSpy = jest.spyOn(client, 'duplicate');
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    const returned = duplicateWithErrorHandler(client, 'test subscriber');
+
+    expect(client.duplicateCallCount).toBe(1);
+    expect(duplicateSpy).toHaveBeenCalledWith();
+    expect(duplicateSpy).toHaveReturnedWith(returned);
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  it('registers the error listener before the ready listener, on the duplicate, before connect() — and never calls connect/subscribe/unsubscribe/disconnect itself', () => {
+    const client = new RecordingRedisClient();
+
+    const duplicate = duplicateWithErrorHandler(client, 'test subscriber');
+
+    expect(duplicate.listenerRegistrations).toEqual(['error', 'ready']);
+    // The listeners are on the DUPLICATE, not the primary client.
+    expect(client.listenerRegistrations).toEqual([]);
+    // Lifecycle ownership stays entirely with the caller.
+    expect(duplicate.connectCallCount).toBe(0);
+    expect(duplicate.subscribeCallCount).toBe(0);
+    expect(duplicate.unsubscribeCallCount).toBe(0);
+    expect(duplicate.disconnectCallCount).toBe(0);
+  });
+
+  it('does not log anything on the initial connection ready (no prior error observed)', () => {
+    const client = new RecordingRedisClient();
+    const duplicate = duplicateWithErrorHandler(client, 'test subscriber');
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    duplicate.emitReady();
+
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  it('error→error→ready→error→ready: warns once per outage (2), demotes the retry error to debug (1), and logs recovery once per ready-after-outage (2)', () => {
+    const client = new RecordingRedisClient();
+    const duplicate = duplicateWithErrorHandler(client, 'test subscriber');
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const stderrSpy = jest.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    // `Debug()` instances resolve their `.enabled` state from a live getter
+    // that re-checks `namespaces` on every access (debug/src/common.js), so
+    // calling `enable()` here — AFTER `redis-opts.ts`'s own module-scoped
+    // debug instance was already created at import time — still takes
+    // effect for the calls this test triggers below. Restore whatever was
+    // enabled before so this doesn't leak debug output into other files.
+    const previousNamespaces = Debug.disable();
+    Debug.enable(previousNamespaces ? `${previousNamespaces},crowi:util:redis-opts` : 'crowi:util:redis-opts');
+
+    try {
+      duplicate.emitError('connection reset 1');
+      duplicate.emitError('connection reset 2');
+      duplicate.emitReady();
+      duplicate.emitError('connection reset 3');
+      duplicate.emitReady();
+
+      const warnMessages = warnSpy.mock.calls.map((args) => args.join(' '));
+      const outageWarnings = warnMessages.filter((m) => m.includes('test subscriber') && m.includes('lost connection'));
+      const recoveryWarnings = warnMessages.filter((m) => m.includes('test subscriber') && m.includes('recovered'));
+      expect(outageWarnings).toHaveLength(2);
+      expect(recoveryWarnings).toHaveLength(2);
+      expect(warnMessages).toHaveLength(4);
+      // The FIRST error of each outage carries the error message; the
+      // retried (2nd) error of the SAME outage does not reach warn at all.
+      expect(outageWarnings[0]).toContain('connection reset 1');
+      expect(outageWarnings[1]).toContain('connection reset 3');
+
+      // The retried error (connection reset 2) was demoted to `debug`
+      // instead of a second warn — exactly one debug line for this namespace.
+      const debugLines = stderrSpy.mock.calls.map((args) => String(args[0])).filter((line) => line.includes('crowi:util:redis-opts'));
+      expect(debugLines).toHaveLength(1);
+      expect(debugLines[0]).toContain('connection reset 2');
+    } finally {
+      Debug.enable(previousNamespaces);
+    }
+  });
+
+  it('a `ready` that follows an already-logged recovery (no new `error` in between) does not log a second recovery line', () => {
+    // AC-2's "recovery log once per ready-after-outage" — this pins the
+    // OTHER half of that "once": after `outageWarned` was already flipped
+    // back to `false` by a recovery `ready`, a FURTHER `ready` with no
+    // intervening `error` must stay silent, exactly like the very first,
+    // pre-outage `ready` (covered by the test above). Without this, a
+    // regression that logged recovery unconditionally on every `ready` —
+    // instead of gating on `outageWarned` — would slip through the
+    // error→error→ready→error→ready test above, since that test only
+    // asserts the total recovery COUNT (2) matches the number of `ready`s
+    // that follow an outage, not that a THIRD, outage-free `ready` stays
+    // silent.
+    const client = new RecordingRedisClient();
+    const duplicate = duplicateWithErrorHandler(client, 'test subscriber');
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    duplicate.emitError('connection reset');
+    duplicate.emitReady();
+    warnSpy.mockClear();
+
+    duplicate.emitReady();
+
+    expect(warnSpy).not.toHaveBeenCalled();
   });
 });

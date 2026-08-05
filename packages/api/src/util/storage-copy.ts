@@ -1,7 +1,10 @@
 import { Readable } from 'node:stream';
 import type { StorageDriver } from '@crowi/plugin-api';
+import Debug from 'debug';
 import type Crowi from 'src/crowi';
 import { getStorageDriverByName } from 'src/util/file-uploader';
+
+const debug = Debug('crowi:util:storage-copy');
 
 export interface StorageCopyProgress {
   current: number;
@@ -109,6 +112,13 @@ async function copyOne(
   let stream: Readable | null = null;
   try {
     stream = (await fromDriver.get(key)) as Readable;
+    // Same hazard `FileUploader.uploadFile` guards against (see its doc
+    // comment): `toDriver.put()` may reject before ever consuming
+    // `stream` (e.g. a misconfigured S3 destination), and a bare
+    // fs.ReadStream (local `get()`) with no `'error'` listener whose
+    // internal I/O fails later crashes the whole process instead of just
+    // this copy operation.
+    stream.on('error', (err) => debug('source stream error during copy', err));
     await toDriver.put(key, stream, { contentType });
     summary.ok += 1;
     opts.onProgress?.({ current: summary.total, total: null, key, stage: 'ok' });

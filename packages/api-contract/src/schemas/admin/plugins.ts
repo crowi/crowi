@@ -175,3 +175,38 @@ export const ClearRenderCacheResponseSchema = z.object({
   removedCount: z.number().int().min(0),
 });
 export type ClearRenderCacheResponse = z.infer<typeof ClearRenderCacheResponseSchema>;
+
+/**
+ * feature-plugin-config-readiness — one unset `requiredConfigFields`
+ * entry from a plugin's `readiness` declaration. Deliberately carries
+ * only the field name and a fixed `configured: false` (never the
+ * declared field's list of possible values, its actual value, or
+ * anything else that could echo secret config back to the client).
+ */
+export const PluginReadinessFieldSchema = z.object({
+  name: z.string(),
+  configured: z.literal(false),
+});
+export type PluginReadinessField = z.infer<typeof PluginReadinessFieldSchema>;
+
+/**
+ * A currently-active plugin (its `readiness.driver` matches the
+ * selected `crowi.config.json` driver for `readiness.registry`) with at
+ * least one unset required config field.
+ */
+export const PluginReadinessIssueSchema = z.object({
+  name: z.string(),
+  adminPlacement: PluginAdminPlacementSchema,
+  fields: z.array(PluginReadinessFieldSchema),
+});
+export type PluginReadinessIssue = z.infer<typeof PluginReadinessIssueSchema>;
+
+/**
+ * `GET /admin/plugins/readiness` response. Empty `issues` means every
+ * active plugin with a readiness declaration is fully configured (or no
+ * loaded plugin declares readiness at all).
+ */
+export const PluginReadinessResponseSchema = z.object({
+  issues: z.array(PluginReadinessIssueSchema),
+});
+export type PluginReadinessResponse = z.infer<typeof PluginReadinessResponseSchema>;

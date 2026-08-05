@@ -1,5 +1,5 @@
 import faker from 'faker';
-import { crowi, Fixture } from 'src/test/setup';
+import { crowi, Fixture, randomUsername } from 'src/test/setup';
 
 describe('Share', () => {
   let User;
@@ -21,7 +21,7 @@ describe('Share', () => {
     // NOT wipe the shared User/Page tables (that would delete other blocks'
     // seed users and trigger 401 flake on JWT re-auth elsewhere). Scope all
     // owned data and clean up only that.
-    const createdUsers = await Fixture.generate('User', [{ name: faker.name.findName(), username: faker.internet.userName(), email: faker.internet.email() }]);
+    const createdUsers = await Fixture.generate('User', [{ name: faker.name.findName(), username: randomUsername(), email: faker.internet.email() }]);
     user = createdUsers[0];
 
     createdPages = await Fixture.generate('Page', [
