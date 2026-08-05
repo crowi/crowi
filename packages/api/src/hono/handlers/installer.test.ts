@@ -1,5 +1,5 @@
 import request from 'supertest';
-import { app, crowi } from 'src/test/setup';
+import { app, crowi, INVALID_USERNAME_CASES } from 'src/test/setup';
 import { type ConfigRow, restoreCrowiConfig, snapshotCrowiConfig } from 'src/test/config-snapshot';
 
 /**
@@ -161,14 +161,7 @@ describe('GET /api/installer (Hono)', () => {
         await crowi.getConfigService().load();
       });
 
-      it.each([
-        ['empty string', ''],
-        ['whitespace only', '   '],
-        ['contains a dot (previously allowed by this route only)', 'bad.name'],
-        ['contains a slash', 'bad/name'],
-        ['contains a Unicode character', 'ソタロウ'],
-        ['65 characters (one over the boundary)', 'a'.repeat(65)],
-      ])('rejects a username that is %s with 400 VALIDATION_ERROR', async (_label, username) => {
+      it.each(INVALID_USERNAME_CASES)('rejects a username that is %s with 400 VALIDATION_ERROR', async (_label, username) => {
         await Config.deleteMany({ ns: 'crowi' });
 
         const res = await request(app)

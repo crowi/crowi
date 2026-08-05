@@ -1,7 +1,7 @@
 process.env.WS_TOKEN_SECRET = process.env.WS_TOKEN_SECRET ?? 'test-ws-token-secret-base64-32bytes-=';
 
 import request from 'supertest';
-import { app, crowi, Fixture } from 'src/test/setup';
+import { app, crowi, Fixture, INVALID_USERNAME_CASES } from 'src/test/setup';
 import type { UserDocument } from 'src/models/user';
 import { createMailTokenUtil } from 'src/util/mail-token';
 
@@ -95,14 +95,9 @@ describe('Routes /api/invite/accept (Hono)', () => {
     // (before the handler activates the invited user), and accepts the
     // 1-char / 64-char legal boundary.
     describe('username validation (feature-username-validation-contract)', () => {
-      it.each([
-        ['empty string', ''],
-        ['whitespace only', '   '],
-        ['contains a dot', 'bad.name'],
-        ['contains a slash', 'bad/name'],
-        ['contains a Unicode character', 'ソタロウ'],
-        ['65 characters (one over the boundary)', 'a'.repeat(65)],
-      ])('rejects a username that is %s with 400 VALIDATION_ERROR, leaving the invited user un-activated', async (_label, username) => {
+      it.each(
+        INVALID_USERNAME_CASES,
+      )('rejects a username that is %s with 400 VALIDATION_ERROR, leaving the invited user un-activated', async (_label, username) => {
         const User = crowi.model('User');
         const email = `invite-accept-bad-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}@example.com`;
         const { user, token } = await createInvitedUser(email);

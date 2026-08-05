@@ -1,5 +1,5 @@
 import request from 'supertest';
-import { app, crowi } from 'src/test/setup';
+import { app, crowi, INVALID_USERNAME_CASES } from 'src/test/setup';
 import { type ConfigRow, restoreCrowiConfig, snapshotCrowiConfig } from 'src/test/config-snapshot';
 import { createJwtUtil } from 'src/util/jwt';
 
@@ -257,14 +257,7 @@ describe('Routes /api/auth (Hono)', () => {
         await User().createIndexes();
       });
 
-      it.each([
-        ['empty string', ''],
-        ['whitespace only', '   '],
-        ['contains a dot', 'bad.name'],
-        ['contains a slash', 'bad/name'],
-        ['contains a Unicode character', 'ソタロウ'],
-        ['65 characters (one over the boundary)', 'a'.repeat(65)],
-      ])('rejects a username that is %s with 400 VALIDATION_ERROR before touching the DB', async (_label, username) => {
+      it.each(INVALID_USERNAME_CASES)('rejects a username that is %s with 400 VALIDATION_ERROR before touching the DB', async (_label, username) => {
         const email = `tokenauth-register-bad-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}@example.com`;
         const res = await request(app).post('/api/auth/register').send({ username, name: 'Bad Username', email, password: 'Password!1' });
 
