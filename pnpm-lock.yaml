@@ -330,6 +330,9 @@ importers:
       mongoose-paginate-v2:
         specifier: ^1.9.1
         version: 1.9.4(mongoose@9.7.3(@aws-sdk/credential-providers@3.826.0))
+      openid-client:
+        specifier: ^6.8.4
+        version: 6.8.4
       redis:
         specifier: ^4.7.1
         version: 4.7.1

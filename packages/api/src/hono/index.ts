@@ -53,6 +53,7 @@ import { registerPresenceRoutes } from './handlers/presence';
 import { registerRevisionRoutes } from './handlers/revision';
 import { registerSearchRoutes } from './handlers/search';
 import { registerTokenAuthRoutes } from './handlers/token-auth';
+import { registerFederatedAuthRoutes } from './handlers/federated-auth';
 import { registerInviteAcceptRoutes } from './handlers/invite-accept';
 import { registerPasswordResetRoutes } from './handlers/password-reset';
 import { registerActivationRoutes } from './handlers/activation';
@@ -160,9 +161,13 @@ export const buildHonoApp = (crowi: Crowi) => {
   const withApp = registerAppRoutes(base, crowi);
   const withInstaller = registerInstallerRoutes(withApp, crowi);
   const withTokenAuth = registerTokenAuthRoutes(withInstaller, crowi);
+  // RFC-0014 phase 1 — federated (OAuth2/OIDC) sign-in flow skeleton.
+  // Registered right after tokenAuth to mirror the contract client chain
+  // (`packages/api-contract/src/client.ts`).
+  const withFederatedAuth = registerFederatedAuthRoutes(withTokenAuth, crowi);
   // Public invite-acceptance (token is the credential) — register before
   // the auth-gated me/user routes.
-  const withInviteAccept = registerInviteAcceptRoutes(withTokenAuth, crowi);
+  const withInviteAccept = registerInviteAcceptRoutes(withFederatedAuth, crowi);
   // Public self-service password reset (token is the credential).
   const withPasswordReset = registerPasswordResetRoutes(withInviteAccept, crowi);
   // Public account activation (email confirmation; token is the credential).
