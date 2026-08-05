@@ -39,7 +39,7 @@
     "dev": "cd ../../apps/crowi-runner && NODE_ENV=development tsx watch --tsconfig ../../packages/api/tsconfig.json --clear-screen=false --env-file-if-exists=../../.env ../../packages/api/src/app.ts",
     "lint": "eslint src/ --ext .ts,.tsx",
     "lint:fix": "eslint src/ --ext .ts,.tsx --fix",
-    "test": "env -u DEBUG TZ=UTC jest --maxWorkers=5 ${CROWI_TEST_JSON_OUTPUT_FILE:+--json --outputFile=$CROWI_TEST_JSON_OUTPUT_FILE}",
+    "test": "env -u DEBUG TZ=UTC node --no-sparkplug node_modules/jest/bin/jest.js --maxWorkers=5 ${CROWI_TEST_JSON_OUTPUT_FILE:+--json --outputFile=$CROWI_TEST_JSON_OUTPUT_FILE}",
     "test:server": "env -u DEBUG jest lib --maxWorkers=5",
     "coverage": "npm test -- --coverage",
     "build": "tsc && tsc-alias",
@@ -90,6 +90,8 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@aws-sdk/client-s3": "^3.1060.0",
+    "@aws-sdk/s3-request-presigner": "^3.1060.0",
     "@crowi/plugin-slack": "workspace:*",
     "@crowi/tsconfig": "workspace:*",
     "@hocuspocus/provider": "^4.0.0",
@@ -110,8 +112,10 @@
     "faker": "^4.1.0",
     "form-data": "^4.0.6",
     "jest": "catalog:",
+    "jest-environment-node": "catalog:",
     "mdast-util-to-hast": "^13.2.1",
     "mongodb-memory-server": "^11.2.0",
+    "nodemailer": "^9.0.1",
     "regenerator-runtime": "^0.13.3",
     "supertest": "^7.2.2",
     "ts-jest": "catalog:",
