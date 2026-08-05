@@ -2,10 +2,11 @@
  * RFC-0006 Phase 4 Batch 9 — `admin.plugins` sub-contract ported to
  * `@hono/zod-openapi` route definitions.
  *
- * 5 endpoints:
+ * 6 endpoints:
  *   GET  /admin/plugins                              (listPlugins)
  *   GET  /admin/plugins/config?name=…                (getPluginConfig)
  *   PUT  /admin/plugins/config?name=…                (updatePluginConfig)
+ *   GET  /admin/plugins/readiness                    (getPluginReadiness — feature-plugin-config-readiness)
  *   POST /admin/plugins/render-cache/clear-all       (clearRenderCacheAll)
  *   POST /admin/plugins/render-cache/clear-plugin?name=…  (clearRenderCachePlugin)
  *
@@ -25,6 +26,7 @@ import {
   PluginConfigResponseSchema,
   PluginConfigValidationErrorSchema,
   PluginNotFoundErrorSchema,
+  PluginReadinessResponseSchema,
   UpdatePluginConfigRequestSchema,
   UpdatePluginConfigResponseSchema,
 } from '../../schemas/admin/plugins';
@@ -167,6 +169,34 @@ export const clearRenderCacheAllRoute = createRoute({
   },
 });
 
+/**
+ * feature-plugin-config-readiness — active plugins missing config that
+ * their own `readiness` declaration says is required for the currently
+ * selected driver. Never returns config values, secrets, or URLs — see
+ * `PluginReadinessResponseSchema`.
+ */
+export const getPluginReadinessRoute = createRoute({
+  method: 'get',
+  path: '/admin/plugins/readiness',
+  tags: ['admin.plugins'],
+  security: [{ bearerAuth: [] }],
+  summary: 'List active plugins missing required readiness config fields',
+  responses: {
+    200: {
+      description: 'Readiness issues for active plugins (empty when everything is configured)',
+      content: { 'application/json': { schema: PluginReadinessResponseSchema } },
+    },
+    401: {
+      description: 'Authentication required',
+      content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
+    },
+    403: {
+      description: 'Admin permission required',
+      content: { 'application/json': { schema: AdminRequiredErrorSchema } },
+    },
+  },
+});
+
 export const clearRenderCachePluginRoute = createRoute({
   method: 'post',
   path: '/admin/plugins/render-cache/clear-plugin',
@@ -207,6 +237,7 @@ export const adminPluginsRoutes = {
   listPluginsRoute,
   getPluginConfigRoute,
   updatePluginConfigRoute,
+  getPluginReadinessRoute,
   clearRenderCacheAllRoute,
   clearRenderCachePluginRoute,
 };
@@ -220,6 +251,9 @@ export type {
   PluginField,
   PluginInfo,
   PluginNotFoundError,
+  PluginReadinessField,
+  PluginReadinessIssue,
+  PluginReadinessResponse,
   UpdatePluginConfigRequest,
   UpdatePluginConfigResponse,
 } from '../../schemas/admin/plugins';

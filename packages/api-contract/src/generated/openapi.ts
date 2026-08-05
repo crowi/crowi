@@ -13173,6 +13173,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/plugins/readiness": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List active plugins missing required readiness config fields */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Readiness issues for active plugins (empty when everything is configured) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            issues: {
+                                name: string;
+                                adminPlacement: {
+                                    /** @enum {string} */
+                                    section: "settings" | "shared" | "storage" | "mail" | "notification" | "auth" | "search" | "renderer" | "platform";
+                                    label: string;
+                                    icon?: string;
+                                };
+                                fields: {
+                                    name: string;
+                                    /** @enum {boolean} */
+                                    configured: false;
+                                }[];
+                            }[];
+                        };
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "AUTHENTICATION_REQUIRED";
+                                /** @enum {string} */
+                                message: "Authentication is required";
+                                redirectTo?: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Admin permission required */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "ADMIN_REQUIRED";
+                                /** @enum {string} */
+                                message: "Admin permission required";
+                                redirectTo?: string;
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/plugins/render-cache/clear-all": {
         parameters: {
             query?: never;

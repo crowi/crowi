@@ -1,9 +1,10 @@
 /**
  * RFC-0006 Phase 4 Batch 9 — `admin.plugins` resource Hono port.
  *
- * Replaces `packages/api/src/routes/ts-rest/admin/plugins.ts`. 5
- * admin-only endpoints (list / get config / put config / clear all
- * cache / clear plugin cache).
+ * Replaces `packages/api/src/routes/ts-rest/admin/plugins.ts`. 6
+ * admin-only endpoints (list / get config / put config / readiness
+ * [feature-plugin-config-readiness] / clear all cache / clear plugin
+ * cache).
  *
  * Auth:
  *   - Admin-only via broad `createJwtAdminRequired(crowi)` apply on
@@ -165,6 +166,24 @@ export const registerAdminPluginsRoutes = <E extends OpenAPIHono<CrowiHonoBindin
         }
       }
       return c.json({ name: plugin.name, fields, values }, 200);
+    })
+    .openapi(adminPluginsRoutes.getPluginReadinessRoute, async (c) => {
+      const manager = crowi.pluginManager;
+      if (!manager) return c.json({ issues: [] }, 200);
+      // `getReadinessIssues()` already did the candidate filtering +
+      // config evaluation and returns only plugin name + unset field
+      // names (never a value) — this just adds each plugin's
+      // `adminPlacement` (same helper `listPlugins` uses) to match the
+      // public response schema.
+      const issues = manager
+        .getReadinessIssues()
+        .map((issue) => {
+          const plugin = manager.getLoadedPlugin(issue.pluginName);
+          if (!plugin) return null;
+          return { name: issue.pluginName, adminPlacement: resolvePlacement(plugin), fields: issue.fields };
+        })
+        .filter((issue): issue is NonNullable<typeof issue> => issue !== null);
+      return c.json({ issues }, 200);
     })
     .openapi(adminPluginsRoutes.updatePluginConfigRoute, async (c) => {
       const { name } = c.req.valid('query');

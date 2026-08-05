@@ -27,6 +27,7 @@ import { SearchFocusProvider } from '@/lib/search-focus-context';
 import { GlobalSearchInput } from '@/components/search/global-search-input';
 import { MobileSearch } from '@/components/search/mobile-search';
 import { PageSidebar } from '@/components/page-sidebar/page-sidebar';
+import { PluginReadinessBanner } from '@/components/admin/plugin-readiness-banner';
 import { decodePagePathFromUrl } from '@/lib/page-path';
 import { Toaster } from '@/components/ui/sonner';
 import { MAX_VISIBLE_TOASTS } from '@/lib/notify';
@@ -169,6 +170,11 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           </div>
         </header>
       </SearchFocusProvider>
+
+      {/* プラグイン設定準備状況バナー — 管理者が active driver の必須設定 (S3
+          bucket / 検索 driver の url 等) を未設定のまま使っている場合だけ、
+          ヘッダー直下・本文より上に表示する (feature-plugin-config-readiness)。 */}
+      <PluginReadinessBanner isAdmin={user?.admin === true} containerClassName="max-w-4xl mx-auto" />
 
       {/* 機密注意書き(モバイル) — 右クラスタに余地がない < sm では、ヘッダー
           直下の細い行で全文を表示し、どのビューポートでも機密マーカーが

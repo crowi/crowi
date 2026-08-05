@@ -20,6 +20,7 @@ import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { AccessDeniedCard } from '@/components/ui/access-denied-card';
 import { AdminSidebar } from '@/components/admin/admin-sidebar';
 import { AdminBreadcrumb } from '@/components/admin/admin-breadcrumb';
+import { PluginReadinessBanner } from '@/components/admin/plugin-readiness-banner';
 import { buildLoginRedirectUrl } from '@/lib/login-redirect';
 import { m } from '@paraglide/messages.js';
 import { UserMenuItems } from '@/components/user-menu-items';
@@ -143,6 +144,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </div>
         </div>
       </header>
+
+      {/* プラグイン設定準備状況バナー — feature-plugin-config-readiness。
+          ここに到達した時点で admin 判定 (user.admin) は既に通過済み。 */}
+      <PluginReadinessBanner isAdmin={user.admin === true} containerClassName="max-w-7xl mx-auto" />
 
       <div className="max-w-7xl mx-auto px-4 py-8 grid grid-cols-1 gap-8 lg:grid-cols-[16rem_1fr]">
         <aside className="lg:sticky lg:top-8 lg:self-start">

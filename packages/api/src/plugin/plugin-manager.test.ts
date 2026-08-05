@@ -56,6 +56,33 @@ function stubPlugin(overrides: Partial<CrowiPlugin> & Pick<CrowiPlugin, 'name'>)
   } as CrowiPlugin;
 }
 
+/**
+ * Variant of `makeFakeCrowi()` whose `getConfig()` returns a caller-supplied
+ * `crowi` namespace object (feature-plugin-config-readiness). Used by the
+ * `getReadinessIssues()` tests below, which read `plugin:<name>:<field>`
+ * keys directly rather than going through `ConfigService.saveConfig`.
+ */
+function makeFakeCrowiWithNamespace(namespace: Record<string, unknown>): any {
+  return {
+    getConfigService: () => ({ onConfigChange: jest.fn() }),
+    getConfig: () => ({ crowi: namespace }),
+    model: () => ({}),
+    models: { Page: {}, User: {}, Revision: {}, Bookmark: {} },
+  };
+}
+
+/**
+ * `selectedDrivers` is private and normally set by `bootstrap()` (which
+ * reads a real `crowi.config.json`) — bypass it directly, same rationale
+ * as `loadPluginsInto()` above. Unspecified registries default to the
+ * real `CrowiConfigFileSchema` defaults so a test only has to name the
+ * registry it cares about.
+ */
+function withSelectedDrivers(manager: PluginManager, drivers: Partial<Record<'storage' | 'search' | 'mail', string>>): void {
+  // biome-ignore lint/suspicious/noExplicitAny: test access to private field
+  (manager as any).selectedDrivers = { storage: 'local', search: 'mongo', mail: 'smtp', ...drivers };
+}
+
 function loadPluginsInto(manager: PluginManager, plugins: CrowiPlugin[]): void {
   // Bypass `bootstrap()` by populating internals directly. The
   // manager's reconfigure / dependents code paths only depend on
@@ -637,5 +664,97 @@ describe('PluginManager.activate — onInstall install-once idempotency (feature
 
     expect(fakeCrowi.getConfigService().saveConfigValue).not.toHaveBeenCalled();
     expect(getConfigSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('PluginManager.getReadinessIssues (feature-plugin-config-readiness)', () => {
+  it('AC-1: returns an issue only for the readiness-declaring plugin whose driver matches the selected one; unselected drivers, no-readiness plugins, and undeclared AWS credential fields are excluded', () => {
+    const namespace: Record<string, unknown> = {
+      'plugin:@crowi/plugin-storage-aws-s3:bucket': '',
+      // AWS credentials have no readiness declaration at all (empty is a
+      // legitimate "use the SDK default credential chain" config) — even
+      // though they're empty here too, they must never surface as an issue.
+      'plugin:@crowi/plugin-aws:accessKeyId': '',
+      'plugin:@crowi/plugin-aws:secretAccessKey': '',
+    };
+    const s3 = stubPlugin({
+      name: '@crowi/plugin-storage-aws-s3',
+      readiness: { registry: 'storage', driver: 's3', requiredConfigFields: ['bucket'] },
+    });
+    const aws = stubPlugin({ name: '@crowi/plugin-aws' });
+    const unselectedDriver = stubPlugin({
+      name: '@crowi/plugin-storage-other',
+      readiness: { registry: 'storage', driver: 'other', requiredConfigFields: ['token'] },
+    });
+    const noReadiness = stubPlugin({ name: '@crowi/plugin-no-readiness' });
+
+    const manager = new PluginManager(makeFakeCrowiWithNamespace(namespace));
+    loadPluginsInto(manager, [s3, aws, unselectedDriver, noReadiness]);
+    withSelectedDrivers(manager, { storage: 's3' });
+
+    expect(manager.getReadinessIssues()).toEqual([{ pluginName: '@crowi/plugin-storage-aws-s3', fields: [{ name: 'bucket', configured: false }] }]);
+  });
+
+  it('returns no issue once the required field has a non-empty value', () => {
+    const namespace: Record<string, unknown> = { 'plugin:@crowi/plugin-storage-aws-s3:bucket': 'my-real-bucket' };
+    const s3 = stubPlugin({
+      name: '@crowi/plugin-storage-aws-s3',
+      readiness: { registry: 'storage', driver: 's3', requiredConfigFields: ['bucket'] },
+    });
+    const manager = new PluginManager(makeFakeCrowiWithNamespace(namespace));
+    loadPluginsInto(manager, [s3]);
+    withSelectedDrivers(manager, { storage: 's3' });
+
+    expect(manager.getReadinessIssues()).toEqual([]);
+  });
+
+  it("AC-3: reports the selected search driver's unset url even though its own registerSearch skipped registry.register() at boot (empty url)", () => {
+    const namespace: Record<string, unknown> = { 'plugin:@crowi/plugin-search-elasticsearch:url': '' };
+    // The real elasticsearch/opensearch plugins stay in `loadedPlugins`
+    // (activate() succeeds) even when `registerSearch` returns early on an
+    // empty url — only `registry.register()` is skipped. `loadPluginsInto`
+    // mirrors that: the plugin is loaded regardless of registry state.
+    const es = stubPlugin({
+      name: '@crowi/plugin-search-elasticsearch',
+      readiness: { registry: 'search', driver: 'elasticsearch', requiredConfigFields: ['url'] },
+    });
+    const manager = new PluginManager(makeFakeCrowiWithNamespace(namespace));
+    loadPluginsInto(manager, [es]);
+    withSelectedDrivers(manager, { search: 'elasticsearch' });
+
+    expect(manager.getReadinessIssues()).toEqual([{ pluginName: '@crowi/plugin-search-elasticsearch', fields: [{ name: 'url', configured: false }] }]);
+  });
+
+  it('AC-3: excludes the issue when a different search driver is selected', () => {
+    const namespace: Record<string, unknown> = { 'plugin:@crowi/plugin-search-elasticsearch:url': '' };
+    const es = stubPlugin({
+      name: '@crowi/plugin-search-elasticsearch',
+      readiness: { registry: 'search', driver: 'elasticsearch', requiredConfigFields: ['url'] },
+    });
+    const manager = new PluginManager(makeFakeCrowiWithNamespace(namespace));
+    loadPluginsInto(manager, [es]);
+    withSelectedDrivers(manager, { search: 'opensearch' });
+
+    expect(manager.getReadinessIssues()).toEqual([]);
+  });
+
+  it('returns an empty array when no plugin is loaded', () => {
+    const manager = new PluginManager(makeFakeCrowi());
+    expect(manager.getReadinessIssues()).toEqual([]);
+  });
+
+  it('every field result carries only name + configured — never the actual value', () => {
+    const namespace: Record<string, unknown> = { 'plugin:@crowi/plugin-search-elasticsearch:url': '' };
+    const es = stubPlugin({
+      name: '@crowi/plugin-search-elasticsearch',
+      readiness: { registry: 'search', driver: 'elasticsearch', requiredConfigFields: ['url'] },
+    });
+    const manager = new PluginManager(makeFakeCrowiWithNamespace(namespace));
+    loadPluginsInto(manager, [es]);
+    withSelectedDrivers(manager, { search: 'elasticsearch' });
+
+    const [issue] = manager.getReadinessIssues();
+    expect(Object.keys(issue.fields[0])).toEqual(['name', 'configured']);
+    expect(issue.fields[0].configured).toBe(false);
   });
 });
