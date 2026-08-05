@@ -133,14 +133,7 @@ function RowActionMenu({ user, isSelf, onAction }: RowActionMenuProps) {
   // pending invite. Activation/admin toggles make no sense pre-acceptance.
   if (user.status === UserStatusEnum.INVITED) {
     return (
-      // `modal={false}`: every item here opens a dialog. A modal dropdown and a
-      // modal dialog each set `pointer-events: none` on <body> while open, and
-      // when the dialog opens as the menu closes their add/remove races leave
-      // the style stuck on <body> after the dialog is closed — making the whole
-      // page unclickable (Radix #1241). A non-modal menu doesn't touch body
-      // pointer-events, so only the dialog manages it and it is cleaned up
-      // correctly on close.
-      <DropdownMenu modal={false}>
+      <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button type="button" variant="ghost" size="sm" className="h-8 w-8 p-0" aria-label={m['admin.users.action.menu_open']()}>
             <MoreHorizontal className="h-4 w-4" />
@@ -158,10 +151,7 @@ function RowActionMenu({ user, isSelf, onAction }: RowActionMenuProps) {
   }
 
   return (
-    // `modal={false}` — see the note on the invited-user menu above. Every item
-    // here opens a dialog (or a confirmation dialog), so a modal menu would
-    // leave `pointer-events: none` stuck on <body> once that dialog is closed.
-    <DropdownMenu modal={false}>
+    <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button type="button" variant="ghost" size="sm" className="h-8 w-8 p-0" aria-label={m['admin.users.action.menu_open']()}>
           <MoreHorizontal className="h-4 w-4" />

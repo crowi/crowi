@@ -434,11 +434,7 @@ function FolderActionsMenu({ path }: { path: string }) {
   const folderPath = path.endsWith('/') ? path : `${path}/`;
   return (
     <>
-      {/* `modal={false}`: this menu opens the folder RenameDialog; a modal
-          dropdown + modal dialog race on <body> `pointer-events` and leave it
-          stuck after close, blocking all clicks (Radix #1241, see
-          page-actions-menu). */}
-      <DropdownMenu modal={false}>
+      <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="icon" aria-label={m['page.action_more']()} className="text-muted-foreground hover:text-foreground">
             <MoreHorizontal className="h-4 w-4" />
