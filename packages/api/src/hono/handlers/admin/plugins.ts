@@ -20,6 +20,7 @@ import type { CrowiPlugin } from '@crowi/plugin-api';
 import Debug from 'debug';
 
 import type Crowi from 'src/crowi';
+import { readCrowiConfigNamespace } from 'src/plugin/plugin-namespace';
 import { type SerializedPluginField, serializeConfigSchema } from 'src/plugin/schema-serializer';
 
 import type { CrowiHonoBindings } from '../../app';
@@ -114,8 +115,7 @@ const toPluginInfo = (plugin: CrowiPlugin, all: readonly CrowiPlugin[], failure?
 });
 
 const readPluginNamespace = (crowi: Crowi, pluginName: string): Record<string, unknown> => {
-  const all = crowi.getConfig();
-  const crowiNs = (all && typeof all === 'object' ? (all as { crowi?: Record<string, unknown> }).crowi : undefined) ?? {};
+  const crowiNs = readCrowiConfigNamespace(crowi.getConfig());
   const prefix = `plugin:${pluginName}:`;
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(crowiNs)) {

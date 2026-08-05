@@ -17,7 +17,7 @@ import type { ConfigChangeSource } from 'src/service/config';
 import { credentialVaultModelNamesList, isCredentialVaultModel } from './credential-vault-models';
 import { createPluginContext } from './plugin-context';
 import { isPluginInstalled, markPluginInstalled } from './plugin-install-tracker';
-import { formatPluginConfigKey, parsePluginNamespace } from './plugin-namespace';
+import { formatPluginConfigKey, parsePluginNamespace, readCrowiConfigNamespace } from './plugin-namespace';
 import { createStateCell } from './plugin-state-cell';
 import { makeRendererScope } from 'src/renderer';
 import { DriverRegistry, makeAuthScope, makeMailScope, makeNotifierScope, makeSearchScope, makeStorageScope } from './registries';
@@ -68,8 +68,18 @@ export interface PluginReadinessFieldResult {
   configured: false;
 }
 
-/** A loaded, active plugin with at least one unset readiness field. */
-export interface PluginReadinessIssue {
+/**
+ * A loaded, active plugin with at least one unset readiness field.
+ *
+ * Deliberately NOT named `PluginReadinessIssue`: that name belongs to the
+ * WIRE shape in `@crowi/api-contract` (which carries `name` +
+ * `adminPlacement` instead of `pluginName`), and the hono handler converts
+ * this into that one. Sharing the identifier for two different shapes in
+ * two packages a reader can have open at once is how they get confused —
+ * same reason `getFailedPlugins()` returns its own internal shape rather
+ * than reusing the wire-level `PluginInfo` name.
+ */
+export interface ManagerReadinessIssue {
   pluginName: string;
   fields: PluginReadinessFieldResult[];
 }
@@ -344,9 +354,9 @@ export class PluginManager {
    * (adding each plugin's `adminPlacement`), so this method never needs
    * to know about the HTTP layer.
    */
-  getReadinessIssues(): PluginReadinessIssue[] {
+  getReadinessIssues(): ManagerReadinessIssue[] {
     const configNamespace = this.getCrowiConfigNamespace();
-    const issues: PluginReadinessIssue[] = [];
+    const issues: ManagerReadinessIssue[] = [];
     for (const plugin of this.loadedPlugins) {
       const readiness = plugin.readiness;
       if (!readiness || !readiness.driver) continue;
@@ -365,15 +375,9 @@ export class PluginManager {
     return issues;
   }
 
-  /**
-   * Defensive read of `crowi.getConfig().crowi` — same shape/fallback
-   * `readPluginNamespace()` (`hono/handlers/admin/plugins.ts`) already
-   * relies on. Kept local (rather than imported from the hono handler
-   * layer) because `plugin-manager.ts` must not depend on `hono/`.
-   */
+  /** Defensive read of `crowi.getConfig().crowi` — see {@link readCrowiConfigNamespace}. */
   private getCrowiConfigNamespace(): Record<string, unknown> {
-    const all = this.crowi.getConfig();
-    return (all && typeof all === 'object' ? (all as { crowi?: Record<string, unknown> }).crowi : undefined) ?? {};
+    return readCrowiConfigNamespace(this.crowi.getConfig());
   }
 
   /**
