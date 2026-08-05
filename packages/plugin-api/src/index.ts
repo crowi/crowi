@@ -16,7 +16,22 @@ export type { EventBus, PluginEvents } from './events';
 export { escapeHtml } from './html';
 export type { CrowiPlugin, PluginReadinessDeclaration } from './plugin';
 
-export type { AuthDriver, AuthProfile, AuthRegistry, AuthVerifyResult } from './registries/auth';
+export type {
+  AuthDriver,
+  AuthDriverKind,
+  AuthProfile,
+  AuthRegistry,
+  AuthVerifyResult,
+  CreateOAuth2DriverOptions,
+  CreateOidcDriverOptions,
+  CredentialAuthDriver,
+  CredentialField,
+  OAuth2AuthDriver,
+  OAuthClientConfig,
+  OAuthTokens,
+  OidcAuthDriver,
+} from './registries/auth';
+export { createOAuth2Driver, createOidcDriver } from './registries/auth';
 export type { EmailMessage, MailSender, MailSenderRegistry } from './registries/mail';
 export type { NotificationPayload, NotifierDriver, NotifierRegistry } from './registries/notifier';
 export type {
