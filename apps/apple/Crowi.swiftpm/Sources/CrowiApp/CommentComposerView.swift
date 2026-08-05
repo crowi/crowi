@@ -7,10 +7,16 @@ import SwiftUI
 /// never an anchor field, RFC-0018 is web-only) and, on success, hands
 /// refresh back to the reader's existing `fetchAndCacheComments` path
 /// rather than splicing the returned comment in locally.
+///
+/// The row itself is `CrowiCommentComposer` (the design's avatar + `--muted`
+/// pill); this view owns only the posting, its in-flight flag and its error.
 struct CommentComposerView: View {
     let session: WorkspaceSession
     let pageId: String
     let revisionId: String
+    /// The signed-in user's avatar/name for the composer's leading disc.
+    let authorImageURLString: String?
+    let authorName: String?
     /// The reader's own comments refresh (`fetchAndCacheComments`).
     let onPosted: () async -> Void
 
@@ -20,29 +26,29 @@ struct CommentComposerView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            HStack(alignment: .bottom, spacing: 8) {
-                TextField("Add a comment", text: $text, axis: .vertical)
-                    .lineLimit(1...5)
-                    .textFieldStyle(.roundedBorder)
-                Button {
-                    Task { await post() }
-                } label: {
-                    Image(systemName: "paperplane.fill")
-                }
-                .buttonStyle(.borderless)
-                .disabled(isPosting || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            }
+            CrowiCommentComposer(
+                text: $text,
+                authorImageURLString: authorImageURLString,
+                authorName: authorName,
+                isPosting: isPosting,
+                loader: session.imageCache,
+                onSend: { Task { await post() } }
+            )
             if let errorMessage {
                 // §7.4 fail-fast: the text stays in the field, retry is the
                 // same send button.
                 Text(errorMessage)
-                    .font(.caption)
-                    .foregroundStyle(.red)
+                    .font(CrowiTypography.rowMeta)
+                    .foregroundStyle(CrowiTheme.destructive)
             }
         }
     }
 
     private func post() async {
+        // The button is disabled in the same state, but a send can also be
+        // reached by a stale tap landing after the text was cleared — the
+        // gate is the model's, not the view's.
+        guard CrowiCommentComposer.canSend(text: text, isPosting: isPosting) else { return }
         isPosting = true
         defer { isPosting = false }
         do {

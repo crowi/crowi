@@ -70,6 +70,26 @@ public enum CrowiMetrics {
     public static let screenTitleTopPadding: CGFloat = 10
     public static let screenTitleBottomPadding: CGFloat = 2
 
+    // MARK: - Comments
+
+    /// Design: `margin-bottom:16px` between comments, `gap:10px` between a
+    /// comment's avatar and its text.
+    public static let commentSpacing: CGFloat = 16
+    public static let commentContentSpacing: CGFloat = 10
+    /// Design: `margin-bottom:3px` between a comment's byline and its text.
+    public static let commentBylineSpacing: CGFloat = 3
+    /// The comment avatar — the same 34pt disc every other leading avatar
+    /// uses, so a face is one size throughout the app.
+    public static let commentAvatarSize: CGFloat = CrowiMetrics.leadingChipSize
+    /// Design: `gap:9px` in the composer row, and its 30px avatar — smaller
+    /// than a comment's, because the composer is an input and not a message.
+    public static let composerSpacing: CGFloat = 9
+    public static let composerAvatarSize: CGFloat = 30
+    /// Design: `padding:8px 14px;border-radius:18px` on the composer's pill.
+    public static let composerFieldVerticalPadding: CGFloat = 8
+    public static let composerFieldHorizontalPadding: CGFloat = 14
+    public static let composerFieldCornerRadius: CGFloat = 18
+
     // MARK: - Profile
 
     /// Design: `padding:14px 0` on a stat column.
@@ -208,6 +228,19 @@ public enum CrowiTypography {
     public static let rowMeta = Font.system(.caption)
     /// Design: 13.5px, `line-height:1.55` — a search hit's snippet.
     public static let snippet = Font.system(.footnote)
+    /// Design: 18px/700 — a heading INSIDE the page body's flow ("Comments ·
+    /// 2"), one step under the body's own `h2`.
+    public static let inPageSectionTitle = Font.system(.headline, design: .default, weight: .bold)
+    /// Design: 14px — a comment's "name · time" line.
+    public static let commentByline = Font.system(.subheadline)
+    /// Design: 15px, `line-height:1.6` — a comment's own text. A step under
+    /// the page body (17px) and a step over its byline, which is the
+    /// relationship the design sets; the exact points are the iOS scale's.
+    public static let commentBody = Font.system(.callout)
+    /// Comments run to a few lines, not to a page, so they take less leading
+    /// than the body's CJK-tuned `bodyLineSpacingRatio` (design: 1.6 against
+    /// the body's 1.72) — still generous enough for Japanese.
+    public static let commentLineSpacingRatio: CGFloat = 0.4
     /// Design: 21px/700 — the profile header's display name.
     public static let profileName = Font.system(.title3, design: .default, weight: .bold)
     /// Design: 20px/700 — a profile stat's number.

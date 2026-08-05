@@ -43,6 +43,11 @@ struct PageReaderView: View {
 
     @State private var page: PageLenient?
     @State private var myProfileId: String?
+    /// The signed-in user's own avatar and name — the composer's leading
+    /// disc. From the SAME `GET /me` the like state already needs, so this
+    /// costs no extra request.
+    @State private var myProfileImage: String?
+    @State private var myProfileName: String?
     @State private var engagement: PageEngagementModel?
     @State private var comments: [CommentLenient] = []
     @State private var backlinks: [BacklinkLenient] = []
@@ -316,25 +321,46 @@ struct PageReaderView: View {
     /// is required) — a detail-fetched page always carries it.
     @ViewBuilder
     private func commentsSection(for page: PageLenient) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Comments").font(.headline)
+        VStack(alignment: .leading, spacing: CrowiMetrics.commentSpacing) {
+            // The design's rule between the body and the discussion under it.
+            Rectangle()
+                .fill(CrowiTheme.border)
+                .frame(height: CrowiTheme.hairline)
+                .accessibilityHidden(true)
+            Text(commentsTitle)
+                .font(CrowiTypography.inPageSectionTitle)
+                .foregroundStyle(CrowiTheme.foreground)
+                .accessibilityAddTraits(.isHeader)
             ForEach(comments) { comment in
-                HStack(alignment: .top, spacing: 8) {
-                    WorkspaceAvatarView(imageURLString: comment.creatorImage, loader: session.imageCache, size: 28)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(comment.creatorName ?? comment.creatorUsername ?? "Unknown").font(.subheadline.bold())
-                        Text(comment.comment).font(.body)
-                    }
-                }
+                CrowiCommentRow(
+                    authorName: comment.creatorName ?? comment.creatorUsername ?? "Unknown",
+                    authorImageURLString: comment.creatorImage,
+                    relativeTime: PageRowMetadataLabel.relativeTimeText(from: comment.createdAt),
+                    text: comment.comment,
+                    loader: session.imageCache
+                )
             }
             if let revisionId = page.revision?.id {
-                CommentComposerView(session: session, pageId: page.id, revisionId: revisionId) {
+                CommentComposerView(
+                    session: session,
+                    pageId: page.id,
+                    revisionId: revisionId,
+                    authorImageURLString: myProfileImage,
+                    authorName: myProfileName
+                ) {
                     comments = (try? await fetchAndCacheComments(pageId: page.id)) ?? comments
                 }
             }
         }
         // The pill's comment button scrolls here.
         .id(Self.commentsAnchor)
+    }
+
+    /// The design's "Comments · 2". The count is dropped when there are none:
+    /// "Comments · 0" states a nothing, and the composer under the heading
+    /// already says what the section is for.
+    private var commentsTitle: String {
+        comments.isEmpty ? "Comments" : "Comments · \(comments.count)"
     }
 
     /// The ONE place `page` is assigned, so the derived table of contents can
@@ -379,7 +405,10 @@ struct PageReaderView: View {
             // `applySeenMarkResult`, which leaves the pre-mark count in
             // place instead of silently treating the failure as success.
             async let seenMarkResult: Int? = try? actions.markSeen(pageId: response.page.id)
-            myProfileId = (await profileFetch)?.id
+            let profile = await profileFetch
+            myProfileId = profile?.id
+            myProfileImage = profile?.image
+            myProfileName = profile?.name ?? profile?.username
             let isBookmarked = (await bookmarkFetch)?.isBookmarked ?? false
             let isWatching = (await watchFetch) ?? false
             comments = (await commentsFetch) ?? []

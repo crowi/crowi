@@ -17,21 +17,28 @@ public struct CrowiPageRow: View {
     private let lastUpdatedAt: String?
     private let updaterName: String?
     private let updaterImage: String?
+    private let likeCount: Int
+    private let commentCount: Int
     private let loader: any WorkspaceImageFetching
 
     @ScaledMetric(relativeTo: .headline) private var avatarSize: CGFloat = CrowiMetrics.leadingChipSize
+    @ScaledMetric(relativeTo: .caption) private var reactionGlyphSize: CGFloat = 12
 
     public init(
         path: String,
         lastUpdatedAt: String?,
         updaterName: String?,
         updaterImage: String?,
+        likeCount: Int = 0,
+        commentCount: Int = 0,
         loader: any WorkspaceImageFetching
     ) {
         self.path = path
         self.lastUpdatedAt = lastUpdatedAt
         self.updaterName = updaterName
         self.updaterImage = updaterImage
+        self.likeCount = likeCount
+        self.commentCount = commentCount
         self.loader = loader
     }
 
@@ -59,7 +66,13 @@ public struct CrowiPageRow: View {
             }
         } content: {
             VStack(alignment: .leading, spacing: CrowiMetrics.rowLineSpacing) {
-                PageRowTitleLabel(path: path)
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    PageRowTitleLabel(path: path)
+                    // Pinned to the title line and to the trailing edge, as
+                    // the web list draws them — a page's activity belongs
+                    // beside its name, not buried in the meta line under it.
+                    reactions
+                }
                 // `showsAvatar: false` — the 34pt avatar above already shows
                 // this updater; the label's own inline 14pt one would be the
                 // same face a second time, 3pt lower.
@@ -72,5 +85,35 @@ public struct CrowiPageRow: View {
                 )
             }
         }
+    }
+
+    /// The web's rule, unchanged (`page-list-item.tsx`): each count is shown
+    /// only when it is non-zero, so an untouched page carries no chrome at
+    /// all and a "0" never competes with a real number for attention.
+    @ViewBuilder
+    private var reactions: some View {
+        if likeCount > 0 || commentCount > 0 {
+            Spacer(minLength: 4)
+            HStack(spacing: 8) {
+                if likeCount > 0 {
+                    reaction(systemImage: "hand.thumbsup", count: likeCount, label: "likes")
+                }
+                if commentCount > 0 {
+                    reaction(systemImage: "bubble.left", count: commentCount, label: "comments")
+                }
+            }
+            .foregroundStyle(CrowiTheme.mutedForeground)
+        }
+    }
+
+    private func reaction(systemImage: String, count: Int, label: String) -> some View {
+        HStack(spacing: 3) {
+            Image(systemName: systemImage)
+                .font(.system(size: reactionGlyphSize))
+            Text(count, format: .number)
+                .font(CrowiTypography.rowMeta)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(count) \(label)")
     }
 }

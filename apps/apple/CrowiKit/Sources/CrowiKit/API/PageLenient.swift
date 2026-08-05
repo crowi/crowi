@@ -90,6 +90,21 @@ public struct PageLenient: Sendable, Equatable {
     /// page can be rendered.
     public var needsDetailFetchForBody: Bool { revision?.body == nil }
 
+    /// The like count a LIST ROW shows, by the web's own rule
+    /// (`page-list-item.tsx`): the server's aggregate when it sent one, else
+    /// the length of the `liker` array it did send, else zero.
+    ///
+    /// Both sources exist because different endpoints populate different
+    /// ones, and a row that read only `likerCount` would show nothing for a
+    /// liked page listed by an endpoint that returns the array instead. The
+    /// rule lives here so the row and the reader can never disagree about
+    /// what "3 likes" means.
+    public var displayLikeCount: Int { likerCount ?? liker?.count ?? 0 }
+
+    /// The comment count a list row shows. No array fallback — a listing
+    /// never carries the comments themselves.
+    public var displayCommentCount: Int { commentCount ?? 0 }
+
     /// Explicit `public` memberwise init — same reason as
     /// `PageRevisionLenient.init` above (App-target reconstruction from a
     /// `CachedPage` row). The updater fields default to `nil` since the read

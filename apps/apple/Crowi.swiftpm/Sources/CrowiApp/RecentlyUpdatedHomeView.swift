@@ -126,6 +126,8 @@ struct RecentlyUpdatedHomeView: View {
                                 lastUpdatedAt: page.updatedAt,
                                 updaterName: page.lastUpdateUserName,
                                 updaterImage: page.lastUpdateUserImage,
+                                likeCount: page.displayLikeCount,
+                                commentCount: page.displayCommentCount,
                                 loader: session.imageCache
                             )
                         }

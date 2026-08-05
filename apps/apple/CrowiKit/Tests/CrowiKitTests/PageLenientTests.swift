@@ -33,6 +33,29 @@ final class PageLenientTests: XCTestCase {
         XCTAssertTrue(page.needsDetailFetchForBody, "a list row's bare-string revision must signal 'detail GET required' (§8)")
     }
 
+    // MARK: - Row reaction counts
+
+    /// The web's rule (`page-list-item.tsx`): the server's aggregate when it
+    /// sent one, else the length of the `liker` array it did send. Both
+    /// sources exist because different endpoints populate different ones — a
+    /// row reading only `likerCount` shows nothing for a liked page listed by
+    /// the endpoint that returns the array.
+    func testTheRowsLikeCountFallsBackFromTheAggregateToTheLikerArray() throws {
+        func page(_ json: String) throws -> PageLenient {
+            try XCTUnwrap(ListPagesResponseLenient.decode(Data(json.utf8)).pages.first)
+        }
+
+        let aggregate = try page(#"{ "pages": [ { "_id": "p1", "path": "/a", "likerCount": 7, "liker": ["u1"] } ] }"#)
+        XCTAssertEqual(aggregate.displayLikeCount, 7, "the aggregate wins when both are present")
+
+        let arrayOnly = try page(#"{ "pages": [ { "_id": "p1", "path": "/a", "liker": ["u1", "u2"] } ] }"#)
+        XCTAssertEqual(arrayOnly.displayLikeCount, 2)
+
+        let neither = try page(#"{ "pages": [ { "_id": "p1", "path": "/a" } ] }"#)
+        XCTAssertEqual(neither.displayLikeCount, 0)
+        XCTAssertEqual(neither.displayCommentCount, 0, "a missing count is zero, never a hidden nil the row has to re-handle")
+    }
+
     // MARK: - The listing's `total` (the home subtitle's page count)
 
     /// The count is the size of the whole viewer-visible set, NOT of the

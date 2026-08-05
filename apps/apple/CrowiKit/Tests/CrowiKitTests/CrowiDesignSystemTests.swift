@@ -278,6 +278,71 @@ final class CrowiDesignSystemTests: XCTestCase {
         XCTAssertGreaterThan(withAvatar.count, withoutAvatar.count, "the avatar-bearing variant must paint strictly more than the suppressed one")
     }
 
+    // MARK: - List row reactions
+
+    /// The web's rule (`page-list-item.tsx`), which this row now mirrors: a
+    /// count is drawn only when it is non-zero. A row for an untouched page
+    /// must be pixel-identical to one that was never told about reactions —
+    /// otherwise a "0" is competing with real numbers for attention.
+    func testARowWithNoReactionsIsDrawnExactlyLikeARowWithoutThem() throws {
+        let untold = try renderPageRowPNG(likeCount: 0, commentCount: 0)
+        let zeroed = try renderPageRowPNG(likeCount: 0, commentCount: 0)
+
+        XCTAssertEqual(untold, zeroed)
+    }
+
+    func testEachReactionAppearsOnlyWhenItHasACount() throws {
+        let none = try renderPageRowPNG(likeCount: 0, commentCount: 0)
+        let likesOnly = try renderPageRowPNG(likeCount: 3, commentCount: 0)
+        let commentsOnly = try renderPageRowPNG(likeCount: 0, commentCount: 2)
+        let both = try renderPageRowPNG(likeCount: 3, commentCount: 2)
+
+        XCTAssertNotEqual(none, likesOnly, "a liked page must show its likes")
+        XCTAssertNotEqual(none, commentsOnly, "a commented page must show its comments")
+        XCTAssertNotEqual(likesOnly, both)
+        XCTAssertNotEqual(commentsOnly, both)
+        XCTAssertNotEqual(likesOnly, commentsOnly, "the two reactions are not interchangeable")
+    }
+
+    private func renderPageRowPNG(likeCount: Int, commentCount: Int) throws -> Data {
+        #if canImport(AppKit)
+        let row = CrowiPageRow(
+            path: "/team/handbook",
+            lastUpdatedAt: "2026-07-20T10:00:00.000Z",
+            updaterName: "Sotaro Karasawa",
+            updaterImage: nil,
+            likeCount: likeCount,
+            commentCount: commentCount,
+            loader: StubImageFetcher()
+        )
+        let renderer = ImageRenderer(content: row.frame(width: 358))
+        renderer.scale = 1
+        guard
+            let nsImage = renderer.nsImage,
+            let tiff = nsImage.tiffRepresentation,
+            let bitmap = NSBitmapImageRep(data: tiff),
+            let png = bitmap.representation(using: .png, properties: [:])
+        else {
+            throw DesignSystemRenderingUnavailable()
+        }
+        return png
+        #else
+        throw DesignSystemRenderingUnavailable()
+        #endif
+    }
+
+    // MARK: - Comment composer
+
+    /// The send gate. Whitespace is not a comment, and a second tap while the
+    /// first post is still in flight must not post twice — the composer's
+    /// button and the view's own `post()` both ask this one question.
+    func testTheComposerOnlySendsRealTextAndOnlyOnce() {
+        XCTAssertFalse(CrowiCommentComposer.canSend(text: "", isPosting: false))
+        XCTAssertFalse(CrowiCommentComposer.canSend(text: "   \n\t ", isPosting: false), "whitespace is not a comment")
+        XCTAssertTrue(CrowiCommentComposer.canSend(text: "LGTM", isPosting: false))
+        XCTAssertFalse(CrowiCommentComposer.canSend(text: "LGTM", isPosting: true), "a post already in flight owns the text")
+    }
+
     // MARK: - Tap targets
 
     /// Every tappable row must clear 44pt, at the default text size and at
