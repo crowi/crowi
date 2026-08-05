@@ -21,11 +21,13 @@ import ShareAccess from './share-access';
 import Tracking from './tracking';
 import UpdatePost from './update-post';
 import User from './user';
+import UserIdentity from './user-identity';
 import Watcher from './watcher';
 
 export default {
   Page,
   User,
+  UserIdentity,
   Revision,
   Backlink,
   Bookmark,
