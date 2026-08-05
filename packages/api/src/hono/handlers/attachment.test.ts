@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { Types } from 'mongoose';
 import { app, crowi } from 'src/test/setup';
-import { bearerAuthHeaders as authHeaders, createPageViaApi, createTestUser, createWideJpeg } from 'src/test/test-helpers';
+import { bearerAuthHeaders as authHeaders, cookieAuthHeaders as cookieHeaders, createPageViaApi, createTestUser, createWideJpeg } from 'src/test/test-helpers';
 import * as imageDisplayDerivative from 'src/util/image-display-derivative';
 import { createJwtUtil } from 'src/util/jwt';
 import request from 'supertest';
@@ -1414,6 +1414,197 @@ describe('Routes /api attachments (Hono)', () => {
       expect(await Attachment.findById(id)).toBeNull();
       // Derivative cleanup was still attempted despite the original delete failing.
       await expect(driver.get(derivativeKey)).rejects.toBeDefined();
+    });
+  });
+
+  /**
+   * feature-auth-cookie-fallback-scope AC-4 — `createAttachmentAuth`
+   * accepts the `crowi.accessToken` cookie ONLY on GET/HEAD for the three
+   * headerless delivery routes (by-id, by-id `/original`, by-key). Every
+   * other `/attachments/*` route (upload / meta / delete / add) and a
+   * malformed header on the delivery routes themselves stay header-only,
+   * same as `createJwtAuth`.
+   */
+  describe('feature-auth-cookie-fallback-scope — cookie fallback scope (AC-4)', () => {
+    it('GET /api/attachments/:id succeeds with a headerless cookie', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}cookie-by-id-get`, '# c1');
+      const upload = await request(app)
+        .post(`/api/pages/${page._id}/attachments`)
+        .set(authHeaders(accessToken))
+        .attach('file', pngBuffer, { filename: 'pixel.png', contentType: 'image/png' });
+      expect(upload.status).toBe(200);
+      const id = upload.body.attachment._id;
+
+      const res = await request(app).get(`/api/attachments/${id}`).set(cookieHeaders(accessToken)).buffer(true).parse(bufferParser);
+      expect(res.status).toBe(200);
+      expect((res.body as Buffer).equals(pngBuffer)).toBe(true);
+    });
+
+    it('HEAD /api/attachments/:id succeeds with a headerless cookie', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}cookie-by-id-head`, '# c2');
+      const upload = await request(app)
+        .post(`/api/pages/${page._id}/attachments`)
+        .set(authHeaders(accessToken))
+        .attach('file', pngBuffer, { filename: 'pixel.png', contentType: 'image/png' });
+      expect(upload.status).toBe(200);
+      const id = upload.body.attachment._id;
+
+      const res = await request(app).head(`/api/attachments/${id}`).set(cookieHeaders(accessToken));
+      expect(res.status).toBe(200);
+    });
+
+    it('GET /api/attachments/:id/original succeeds with a headerless cookie', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}cookie-original-get`, '# c3');
+      const upload = await request(app)
+        .post(`/api/pages/${page._id}/attachments`)
+        .set(authHeaders(accessToken))
+        .attach('file', pngBuffer, { filename: 'pixel.png', contentType: 'image/png' });
+      expect(upload.status).toBe(200);
+      const id = upload.body.attachment._id;
+
+      const res = await request(app).get(`/api/attachments/${id}/original`).set(cookieHeaders(accessToken)).buffer(true).parse(bufferParser);
+      expect(res.status).toBe(200);
+      expect((res.body as Buffer).equals(pngBuffer)).toBe(true);
+    });
+
+    it('HEAD /api/attachments/:id/original succeeds with a headerless cookie', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}cookie-original-head`, '# c4');
+      const upload = await request(app)
+        .post(`/api/pages/${page._id}/attachments`)
+        .set(authHeaders(accessToken))
+        .attach('file', pngBuffer, { filename: 'pixel.png', contentType: 'image/png' });
+      expect(upload.status).toBe(200);
+      const id = upload.body.attachment._id;
+
+      const res = await request(app).head(`/api/attachments/${id}/original`).set(cookieHeaders(accessToken));
+      expect(res.status).toBe(200);
+    });
+
+    it('GET /api/attachments/by-key/:key succeeds with a headerless cookie', async () => {
+      const driver = crowi.getPlugins().active.storage;
+      if (!driver) throw new Error('storage driver missing in test env');
+      const key = `user/${userId}-cookie-by-key-${Date.now()}.png`;
+      await driver.put(key, pngBuffer, { contentType: 'image/png' });
+      try {
+        const res = await request(app)
+          .get(`/api/attachments/by-key/${encodeURIComponent(key)}`)
+          .set(cookieHeaders(accessToken))
+          .buffer(true)
+          .parse(bufferParser);
+        expect(res.status).toBe(200);
+        expect((res.body as Buffer).equals(pngBuffer)).toBe(true);
+      } finally {
+        await driver.delete(key).catch(() => {});
+      }
+    });
+
+    it('HEAD /api/attachments/by-key/:key succeeds with a headerless cookie', async () => {
+      const driver = crowi.getPlugins().active.storage;
+      if (!driver) throw new Error('storage driver missing in test env');
+      const key = `user/${userId}-cookie-by-key-head-${Date.now()}.png`;
+      await driver.put(key, pngBuffer, { contentType: 'image/png' });
+      try {
+        const res = await request(app)
+          .head(`/api/attachments/by-key/${encodeURIComponent(key)}`)
+          .set(cookieHeaders(accessToken));
+        expect(res.status).toBe(200);
+      } finally {
+        await driver.delete(key).catch(() => {});
+      }
+    });
+
+    it('GET /files/:id redirects to /api/attachments/:id, and the redirect target still accepts a headerless cookie', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}cookie-files-redirect`, '# c5');
+      const upload = await request(app)
+        .post(`/api/pages/${page._id}/attachments`)
+        .set(authHeaders(accessToken))
+        .attach('file', pngBuffer, { filename: 'pixel.png', contentType: 'image/png' });
+      expect(upload.status).toBe(200);
+      const id = upload.body.attachment._id;
+
+      const redirect = await request(app).get(`/files/${id}`);
+      expect(redirect.status).toBe(302);
+      expect(redirect.headers.location).toBe(`/api/attachments/${id}`);
+
+      const delivered = await request(app).get(redirect.headers.location).set(cookieHeaders(accessToken)).buffer(true).parse(bufferParser);
+      expect(delivered.status).toBe(200);
+      expect((delivered.body as Buffer).equals(pngBuffer)).toBe(true);
+    });
+
+    it('non-delivery /attachments/* routes stay header-only: upload, meta, delete, add all 401 on a headerless cookie', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}cookie-non-delivery`, '# c6');
+      const upload = await request(app)
+        .post(`/api/pages/${page._id}/attachments`)
+        .set(authHeaders(accessToken))
+        .attach('file', pngBuffer, { filename: 'pixel.png', contentType: 'image/png' });
+      expect(upload.status).toBe(200);
+      const id = upload.body.attachment._id;
+
+      const addRes = await request(app)
+        .post(`/api/pages/${page._id}/attachments`)
+        .set(cookieHeaders(accessToken))
+        .attach('file', pngBuffer, { filename: 'pixel2.png', contentType: 'image/png' });
+      expect(addRes.status).toBe(401);
+
+      const uploadRes = await request(app)
+        .post('/api/attachments/upload')
+        .set(cookieHeaders(accessToken))
+        .field('pageId', page._id)
+        .field('intent', 'paste')
+        .attach('file', pngBuffer, { filename: 'pixel3.png', contentType: 'image/png' });
+      expect(uploadRes.status).toBe(401);
+
+      const metaRes = await request(app).get(`/api/attachments/${id}/meta`).set(cookieHeaders(accessToken));
+      expect(metaRes.status).toBe(401);
+
+      const deleteRes = await request(app).delete(`/api/attachments/${id}`).set(cookieHeaders(accessToken));
+      expect(deleteRes.status).toBe(401);
+    });
+
+    it('a malformed Authorization header on a delivery route is rejected even with a valid cookie present', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}cookie-malformed-header`, '# c7');
+      const upload = await request(app)
+        .post(`/api/pages/${page._id}/attachments`)
+        .set(authHeaders(accessToken))
+        .attach('file', pngBuffer, { filename: 'pixel.png', contentType: 'image/png' });
+      expect(upload.status).toBe(200);
+      const id = upload.body.attachment._id;
+
+      const res = await request(app).get(`/api/attachments/${id}`).set('Authorization', 'garbage').set(cookieHeaders(accessToken));
+      expect(res.status).toBe(401);
+    });
+
+    /**
+     * NEEDS_WORK round 2 — the broad `/attachments/*` wildcard
+     * (`handlers/attachment.ts`) and the by-id literal mount
+     * (`handlers/attachment-stream.ts`) both match `GET /attachments/:id`.
+     * Before the fix, `attachment-stream.ts` ALSO installed
+     * `createAttachmentAuth` on that literal path, so a single incoming
+     * request ran credential resolution TWICE (double PAT lookup, double
+     * `User.findById`, double `touchLastUsed()`). Assert exactly one
+     * `PersonalAccessToken.findActiveByHash` call per request.
+     */
+    it('runs credential resolution exactly once per request (no double auth across the broad wildcard + by-id literal mount)', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}cookie-single-pass`, '# c8');
+      const upload = await request(app)
+        .post(`/api/pages/${page._id}/attachments`)
+        .set(authHeaders(accessToken))
+        .attach('file', pngBuffer, { filename: 'pixel.png', contentType: 'image/png' });
+      expect(upload.status).toBe(200);
+      const id = upload.body.attachment._id;
+
+      const PersonalAccessToken = crowi.model('PersonalAccessToken');
+      const { token, tokenHash } = PersonalAccessToken.generateToken();
+      await PersonalAccessToken.create({ tokenHash, userId, name: 'attachment-single-pass-pat', scopes: ['attachments:read'] });
+
+      const spy = jest.spyOn(PersonalAccessToken, 'findActiveByHash');
+      try {
+        const res = await request(app).get(`/api/attachments/${id}`).set('Authorization', `Bearer ${token}`);
+        expect(res.status).toBe(200);
+        expect(spy).toHaveBeenCalledTimes(1);
+      } finally {
+        spy.mockRestore();
+      }
     });
   });
 });
