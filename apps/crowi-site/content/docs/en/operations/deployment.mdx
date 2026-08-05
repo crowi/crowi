@@ -20,15 +20,26 @@ on one origin:
 
 | Auth mode | Who | URL | Cross-origin? |
 | --- | --- | --- | --- |
-| **Bearer token** | CLI / MCP / OAuth clients | `https://wiki.example.com/api/...` with `Authorization: Bearer …` | **Yes** — tokens travel across origins |
-| **Cookie / relative** | the browser: page API, inline `<img>` attachments, file downloads, WebSocket | same origin as the page | **No** — relies on a first-party cookie |
+| **Bearer token** | CLI / MCP / OAuth clients, **and the browser itself** for the page API and JSON mutations (the access token lives in `localStorage` and is sent via `Authorization`) | `https://wiki.example.com/api/...` with `Authorization: Bearer …` | **Yes** — tokens travel across origins |
+| **WebSocket `wsToken`** | the browser, for the three realtime namespaces (`/collab`, `/presence`, `/notifications`) — a short-lived, single-purpose token minted over an authenticated Bearer call (e.g. `GET /api/pages/{id}/yjs-token`) and passed as a `?token=` query-string parameter when opening the WebSocket, because a browser cannot set an `Authorization` header on a WS handshake (see [Realtime collaboration](./realtime-collab) and RFC-0003) | `wss://wiki.example.com/collab?token=…` | **Yes** — the token travels in the URL, not a header |
+| **Cookie / relative** | the browser, ONLY for the three headerless attachment delivery routes (`GET /api/attachments/{id}[/original]`, `GET /api/attachments/by-key/*`) — an `<img src>` / direct-navigation request the browser builds with no JS hook and therefore no `Authorization` header | same origin as the page | **No** — relies on a first-party cookie |
 
-So there is **one public api surface** (`<origin>/api`, exposed by the proxy)
-and **two ways to authenticate**: Bearer from anywhere, cookie/relative from the
-browser same-origin. The proxy is what lets a CLI hit `wiki.example.com/api`
-with a Bearer token while the browser uses the very same origin with a
-first-party cookie. The only thing that stays private is the api's direct
-internal address (`http://api:3000`); external clients never use it.
+So there is **one public api surface** (`<origin>/api`, exposed by the proxy).
+The browser authenticates almost everything the same way any other client
+does — a Bearer token, read from `localStorage`, or, for the three realtime
+WebSocket namespaces, a short-lived `wsToken` minted over that same
+Bearer-authenticated connection and passed as a query-string parameter (a
+browser cannot set custom headers on a WS handshake). Only inline `<img>`
+attachments and file downloads, which the browser fetches itself with no
+opportunity to set a header, fall back to the first-party
+`crowi.accessToken` cookie — and, as of feature-auth-cookie-fallback-scope,
+that fallback is scoped to exactly those three delivery routes; every other
+route (including the rest of the attachment API — upload / meta / delete)
+requires the Bearer header, cookie or not. The proxy is what lets a CLI hit
+`wiki.example.com/api` with a Bearer token while the browser reaches the very
+same origin with its own Bearer token (plus the cookie for the three delivery
+routes). The only thing that stays private is the api's direct internal
+address (`http://api:3000`); external clients never use it.
 
 ## How the web image resolves the api URL
 
