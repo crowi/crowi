@@ -85,6 +85,77 @@ describe('Comment', () => {
       updated = await Page.findById(page._id);
       expect(updated.commentCount).toBe(1);
     });
+
+    /**
+     * QA-5-01 race — `recalculateCommentCount` counts, then writes, with no
+     * ordering between concurrent chains for the same page. Two comments
+     * posted back to back start two chains: the first reads 1 (its count is
+     * dispatched before the second insert), the second reads 2 and writes 2.
+     * If the first chain's count response lands after the second has already
+     * written, it writes its stale 1 over the 2 and the page is left wrong
+     * until the next create/delete. `drainSideEffects()` waits for both
+     * chains to settle but cannot impose an order, so the flake reproduced
+     * only under parallel-suite load.
+     *
+     * Delaying the FIRST count response makes that ordering deterministic.
+     * `maxActive` is the load-bearing assertion: it fails on the old code
+     * regardless of scheduling luck, because the two chains genuinely
+     * overlap there.
+     */
+    test('concurrent recalcs cannot lose the newer count (QA-5-01 race)', async () => {
+      const creator = await User.findUserByUsername('anonymous1');
+      const [page] = await Fixture.generate('Page', [{ path: '/grant/comment-count-race', grant: Page.GRANT_PUBLIC, grantedUsers: [creator], creator }]);
+
+      const realCount = Comment.countCommentByPageId.bind(Comment);
+      let announceFirstCount;
+      const firstCountObserved = new Promise((resolve) => {
+        announceFirstCount = resolve;
+      });
+      let sawFirst = false;
+      let active = 0;
+      let maxActive = 0;
+      const spy = jest.spyOn(Comment, 'countCommentByPageId').mockImplementation(async (pageId) => {
+        active += 1;
+        maxActive = Math.max(maxActive, active);
+        try {
+          const count = await realCount(pageId);
+          if (!sawFirst) {
+            sawFirst = true;
+            // Tell the test the first count has READ (so it can create the
+            // second comment knowing this chain already saw the old value),
+            // then hold this chain's response long enough for the second
+            // chain to overtake it on the unfixed code.
+            announceFirstCount(count);
+            await new Promise((resolve) => setTimeout(resolve, 300));
+          }
+          return count;
+        } finally {
+          active -= 1;
+        }
+      });
+
+      try {
+        await Comment.create({ page, creator, revision: undefined, comment: 'first', commentPosition: undefined });
+
+        // Gate on the first count having actually read 1. Without this the
+        // second insert could land before that count takes its snapshot, the
+        // first chain would read 2 as well, and writing 2 over 2 would hide
+        // the lost update — making the final-count assertion pass on the
+        // unfixed code by luck.
+        expect(await firstCountObserved).toBe(1);
+
+        await Comment.create({ page, creator, revision: undefined, comment: 'second', commentPosition: undefined });
+        await crowi.drainSideEffects();
+
+        const updated = await Page.findById(page._id);
+        // Unfixed: the held first chain wakes last and writes its stale 1.
+        expect(updated.commentCount).toBe(2);
+        // Unfixed: both chains are in flight at once, so this reaches 2.
+        expect(maxActive).toBe(1);
+      } finally {
+        spy.mockRestore();
+      }
+    });
   });
 
   // feature-live-page-comment-sync — the presence-broadcast listener keys
