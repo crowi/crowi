@@ -1,8 +1,10 @@
+import { createOAuth2Driver, createOidcDriver } from '@crowi/plugin-api';
 import type { CrowiPlugin } from '@crowi/plugin-api';
+import { CrowiConfigFileSchema } from '@crowi/runner';
 import { z } from 'zod/v3';
 import { z as zV4 } from 'zod';
 import { CREDENTIAL_VAULT_MODEL_NAMES } from './credential-vault-models';
-import { PluginManager } from './plugin-manager';
+import { PluginManager, type PluginRegistries } from './plugin-manager';
 import { isPluginInstalled } from './plugin-install-tracker';
 
 function makeFakeCrowi(): any {
@@ -101,6 +103,16 @@ function loadPluginsInto(manager: PluginManager, plugins: CrowiPlugin[]): void {
 function activate(manager: PluginManager, plugin: CrowiPlugin): Promise<void> {
   // biome-ignore lint/suspicious/noExplicitAny: test access to private fields
   return (manager as any).activate(plugin);
+}
+
+// `resolveActiveDrivers()` is private — the step `bootstrap()` runs after
+// `activateAll()` to build the `active.*` slots it returns. Invoke it
+// directly (same rationale as `activate()` above) against the real
+// `CrowiConfigFileSchema` defaults, since `feature-auth-google-phase0-sdk-identity`
+// AC-7 only cares about the `auth` slot.
+function resolveActiveDrivers(manager: PluginManager): PluginRegistries['active'] {
+  // biome-ignore lint/suspicious/noExplicitAny: test access to private fields
+  return (manager as any).resolveActiveDrivers(CrowiConfigFileSchema.parse({}));
 }
 
 // `activateAll()` is private — the loop `bootstrap()` calls to isolate each
@@ -756,5 +768,95 @@ describe('PluginManager.getReadinessIssues (feature-plugin-config-readiness)', (
     const [issue] = manager.getReadinessIssues();
     expect(Object.keys(issue.fields[0])).toEqual(['name', 'configured']);
     expect(issue.fields[0].configured).toBe(false);
+  });
+});
+
+describe('PluginManager.resolveActiveDrivers — auth stays unfiltered by config (feature-auth-google-phase0-sdk-identity AC-7)', () => {
+  it('keeps an unconfigured OAuth2 driver in active.auth and never calls getClientConfig() during bootstrap', async () => {
+    const getClientConfig = jest.fn(() => null);
+    const fetchProfile = jest.fn();
+    const plugin = stubPlugin({
+      name: '@crowi/plugin-example-oauth2',
+      registerAuth: (registry) => {
+        registry.register(
+          'example-oauth2',
+          createOAuth2Driver({
+            buttonLabel: 'Example',
+            authorizeUrl: 'https://idp.example.com/authorize',
+            tokenUrl: 'https://idp.example.com/token',
+            getClientConfig,
+            fetchProfile,
+          }),
+        );
+      },
+    });
+    const manager = new PluginManager(makeFakeCrowi());
+
+    await activate(manager, plugin);
+    const active = resolveActiveDrivers(manager);
+
+    expect(active.auth).toHaveLength(1);
+    expect(active.auth[0].kind).toBe('oauth2');
+    expect(getClientConfig).not.toHaveBeenCalled();
+    expect(fetchProfile).not.toHaveBeenCalled();
+  });
+
+  it('keeps an unconfigured OIDC driver in active.auth and never evaluates getClientConfig() or discovery during bootstrap', async () => {
+    const getClientConfig = jest.fn(() => null);
+    const plugin = stubPlugin({
+      name: '@crowi/plugin-example-oidc',
+      registerAuth: (registry) => {
+        registry.register(
+          'example-oidc',
+          createOidcDriver({
+            buttonLabel: 'Example',
+            discoveryUrl: 'https://idp.example.com/.well-known/openid-configuration',
+            getClientConfig,
+          }),
+        );
+      },
+    });
+    const manager = new PluginManager(makeFakeCrowi());
+
+    await activate(manager, plugin);
+    const active = resolveActiveDrivers(manager);
+
+    expect(active.auth).toHaveLength(1);
+    expect(active.auth[0].kind).toBe('oidc');
+    expect(getClientConfig).not.toHaveBeenCalled();
+  });
+
+  it('does not re-resolve or filter drivers on reconfigureAffected() — only the changed plugin is notified', async () => {
+    const getClientConfig = jest.fn(() => null);
+    const reconfigure = jest.fn();
+    const plugin = stubPlugin({
+      name: '@crowi/plugin-example-oauth2-reconfigure',
+      reconfigure,
+      registerAuth: (registry) => {
+        registry.register(
+          'example-oauth2-reconfigure',
+          createOAuth2Driver({
+            buttonLabel: 'Example',
+            authorizeUrl: 'https://idp.example.com/authorize',
+            tokenUrl: 'https://idp.example.com/token',
+            getClientConfig,
+            fetchProfile: async () => ({ ok: false, reason: 'unused' }),
+          }),
+        );
+      },
+    });
+    const manager = new PluginManager(makeFakeCrowi());
+    await activate(manager, plugin);
+    loadPluginsInto(manager, [plugin]);
+
+    const result = await manager.reconfigureAffected([`plugin:${plugin.name}`]);
+
+    expect(result).toEqual({ attempted: 1, succeeded: 1 });
+    expect(reconfigure).toHaveBeenCalledTimes(1);
+    expect(getClientConfig).not.toHaveBeenCalled();
+    // The driver registered at activate() time is still the one active.auth
+    // resolves to — reconfigureAffected() does not re-register or re-filter it.
+    const active = resolveActiveDrivers(manager);
+    expect(active.auth).toHaveLength(1);
   });
 });
