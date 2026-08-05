@@ -68,7 +68,7 @@
     "debug": "^4.4.3",
     "dotenv": "^16.5.0",
     "github-slugger": "^2.0.0",
-    "hono": "^4.12.31",
+    "hono": "^4.12.34",
     "hono-rate-limiter": "catalog:",
     "ioredis": "^5.6.1",
     "jiti": "^2.7.0",

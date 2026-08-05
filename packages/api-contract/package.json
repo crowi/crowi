@@ -40,7 +40,7 @@
   },
   "dependencies": {
     "@hono/zod-openapi": "^1.4.0",
-    "hono": "^4.12.31",
+    "hono": "^4.12.34",
     "zod": "catalog:"
   },
   "devDependencies": {
