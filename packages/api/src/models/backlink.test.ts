@@ -1,5 +1,5 @@
 import faker from 'faker';
-import { crowi, Fixture } from 'src/test/setup';
+import { crowi, Fixture, randomUsername } from 'src/test/setup';
 
 // pageEvent.on('create' | 'update') schedules Backlink.createBySavedPage
 // in a microtask; await a few event-loop turns so assertions read the
@@ -35,7 +35,7 @@ describe('Backlink', () => {
   });
 
   beforeAll(async () => {
-    const createdUsers = await Fixture.generate('User', [{ name: faker.name.findName(), username: faker.internet.userName(), email: faker.internet.email() }]);
+    const createdUsers = await Fixture.generate('User', [{ name: faker.name.findName(), username: randomUsername(), email: faker.internet.email() }]);
     user = createdUsers[0];
   });
 

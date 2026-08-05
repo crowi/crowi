@@ -244,6 +244,90 @@ describe('Routes /api/auth (Hono)', () => {
         await crowi.getConfigService().load();
       }
     });
+
+    // feature-username-validation-contract — the shared `UsernameSchema`
+    // rejects a non-conforming username at the OpenAPIHono request
+    // boundary (before the handler runs), and accepts the 1-char / 64-char
+    // legal boundary.
+    describe('username validation (feature-username-validation-contract)', () => {
+      beforeAll(async () => {
+        // Ensure the case-insensitive unique username index exists before the
+        // mixed-case duplicate test below relies on it (mirrors
+        // uniqueness-e11000.test.ts's precaution against a cold-DB race).
+        await User().createIndexes();
+      });
+
+      it.each([
+        ['empty string', ''],
+        ['whitespace only', '   '],
+        ['contains a dot', 'bad.name'],
+        ['contains a slash', 'bad/name'],
+        ['contains a Unicode character', 'ソタロウ'],
+        ['65 characters (one over the boundary)', 'a'.repeat(65)],
+      ])('rejects a username that is %s with 400 VALIDATION_ERROR before touching the DB', async (_label, username) => {
+        const email = `tokenauth-register-bad-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}@example.com`;
+        const res = await request(app).post('/api/auth/register').send({ username, name: 'Bad Username', email, password: 'Password!1' });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error?.code).toBe('VALIDATION_ERROR');
+
+        const created = await User().findOne({ email });
+        expect(created).toBeNull();
+      });
+
+      it('accepts a 1-character username at the lower boundary', async () => {
+        const email = 'tokenauth-register-min-username@example.com';
+        await User().deleteMany({ $or: [{ email }, { username: 'a' }] });
+
+        const res = await request(app).post('/api/auth/register').send({ username: 'a', name: 'Min Username', email, password: 'Password!1' });
+        expect(res.status).toBe(200);
+
+        const created = await User().findOne({ email });
+        expect(created?.username).toBe('a');
+        await User().deleteMany({ $or: [{ email }, { username: 'a' }] });
+      });
+
+      it('accepts a 64-character username at the upper boundary', async () => {
+        const username = 'a'.repeat(64);
+        const email = 'tokenauth-register-max-username@example.com';
+        await User().deleteMany({ $or: [{ email }, { username }] });
+
+        const res = await request(app).post('/api/auth/register').send({ username, name: 'Max Username', email, password: 'Password!1' });
+        expect(res.status).toBe(200);
+
+        const created = await User().findOne({ email });
+        expect(created?.username).toBe(username);
+        await User().deleteMany({ $or: [{ email }, { username }] });
+      });
+
+      it('stores a mixed-case username verbatim, and a case-only duplicate registration is rejected by the existing case-insensitive unique index', async () => {
+        const originalEmail = 'tokenauth-register-mixedcase@example.com';
+        const duplicateEmail = 'tokenauth-register-mixedcase-2@example.com';
+        await User().deleteMany({ $or: [{ email: originalEmail }, { email: duplicateEmail }, { username: 'MixedCase' }, { username: 'mixedcase' }] });
+
+        const first = await request(app)
+          .post('/api/auth/register')
+          .send({ username: 'MixedCase', name: 'Mixed Case', email: originalEmail, password: 'Password!1' });
+        expect(first.status).toBe(200);
+
+        const created = await User().findOne({ email: originalEmail });
+        // Verbatim storage: no case-fold / trim / normalization on save.
+        expect(created?.username).toBe('MixedCase');
+
+        // A case-only variant of an already-taken username collides via the
+        // existing USER_UNIQUE_COLLATION unique index (the pre-check
+        // `findOne` is case-sensitive so this specific pairing slips past it
+        // and is caught by the index itself — same mapping as
+        // uniqueness-e11000.test.ts). Semantics unchanged: still a 409.
+        const second = await request(app)
+          .post('/api/auth/register')
+          .send({ username: 'mixedcase', name: 'Mixed Case 2', email: duplicateEmail, password: 'Password!1' });
+        expect(second.status).toBe(409);
+        expect(second.body.error.code).toBe('USERNAME_TAKEN');
+
+        await User().deleteMany({ $or: [{ email: originalEmail }, { email: duplicateEmail }, { username: 'MixedCase' }, { username: 'mixedcase' }] });
+      });
+    });
   });
 
   describe('POST /auth/refresh', () => {

@@ -19,6 +19,7 @@
 
 import { createServer, type Server } from 'node:http';
 import { getRequestListener } from '@hono/node-server';
+import faker from 'faker';
 import Crowi from 'src/crowi';
 import { buildHonoApp } from 'src/hono';
 import { stripApiPrefix } from 'src/hono/path-rewrite';
@@ -370,3 +371,11 @@ export const Fixture = {
     return Promise.all(fixture.map((entity) => new Model(entity).save()));
   },
 };
+
+/**
+ * ASCII-only random username for `Fixture.generate('User', ...)` callers.
+ * `faker.internet.userName()` can emit a `.` separator, which the
+ * `UsernameSchema` model validator (feature-username-validation-contract)
+ * rejects — this generator only emits characters the schema allows.
+ */
+export const randomUsername = (): string => `user-${faker.random.alphaNumeric(10)}`;

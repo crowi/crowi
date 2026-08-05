@@ -52,6 +52,7 @@ import {
   commentRoutes,
   draftRoutes,
   installerRoutes,
+  inviteAcceptRoutes,
   meRoutes,
   accessTokenRoutes,
   oauthRoutes,
@@ -310,6 +311,10 @@ const routeGroups = [
   appRoutes,
   installerRoutes,
   tokenAuthRoutes,
+  // Public invite-acceptance (GET preview + POST accept). Registered
+  // right after tokenAuth to mirror the buildHonoApp chain
+  // (installer -> tokenAuth -> inviteAccept -> ... -> me).
+  inviteAcceptRoutes,
   meRoutes,
   // RFC-0010 Phase 2 — PAT management rides the `/me/*` apply; registered
   // right after meRoutes to mirror the buildHonoApp chain.

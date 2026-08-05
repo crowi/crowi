@@ -5,6 +5,7 @@ import Debug from 'debug';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import async from 'async';
+import { UsernameSchema } from '@crowi/api-contract';
 import { googleLoginEnabled, githubLoginEnabled, isDisabledPasswordAuth } from 'src/models/config';
 import { createMailTokenUtil } from 'src/util/mail-token';
 import { applyPaginatePlugin } from 'src/util/mongoose-paginate';
@@ -196,7 +197,34 @@ export default (crowi: Crowi) => {
     googleId: String,
     githubId: String,
     name: { type: String, index: true },
-    username: { type: String },
+    // feature-username-validation-contract — `UsernameSchema` (the same
+    // schema the request contracts import) is the persistence-boundary
+    // final defence for username syntax. `required` stays false: the
+    // email-only STATUS_INVITED row created by `createUsersByInvitation`
+    // legitimately has no username, and the sparse unique index already
+    // depends on that. The validator only runs `UsernameSchema.safeParse`
+    // when username is actually being set/changed on save
+    // (`isModified('username')`), so an existing document with a legacy
+    // non-conforming username can still be saved unchanged (e.g. a
+    // different field edit) without retroactively failing validation.
+    username: {
+      type: String,
+      validate: {
+        validator: function (value: string): boolean {
+          // `this` is typed as a document-or-query union because mongoose
+          // validators can also run in a query context (`runValidators` on
+          // an update). Only a document carries `isModified`; a bare query
+          // has no prior document state to compare against, so treat that
+          // case as "being set" and validate unconditionally.
+          const modified = 'isModified' in this ? this.isModified('username') : true;
+          if (!modified) {
+            return true;
+          }
+          return UsernameSchema.safeParse(value).success;
+        },
+        message: 'username may only contain letters, digits, hyphens, and underscores (1-64 characters)',
+      },
+    },
     email: { type: String, required: true },
     introduction: { type: String },
     password: { type: String, select: false },
@@ -729,6 +757,12 @@ export default (crowi: Crowi) => {
   };
 
   userSchema.statics.isRegisterableUsername = async function (username, callback) {
+    // Reject a syntactically non-conforming username as unusable without
+    // touching the DB (feature-username-validation-contract AC-3).
+    if (!UsernameSchema.safeParse(username).success) {
+      return callback(false);
+    }
+
     const userData = await User.findOne({ username });
     if (userData) {
       return callback(false);
@@ -738,19 +772,23 @@ export default (crowi: Crowi) => {
   };
 
   userSchema.statics.isRegisterable = async function (email, username, callback) {
+    // A syntactically non-conforming username makes the whole registration
+    // attempt unusable without any DB query — neither the username nor the
+    // email lookup runs (feature-username-validation-contract AC-3).
+    if (!UsernameSchema.safeParse(username).success) {
+      return callback(false, { username: false });
+    }
+
     let emailUsable = true;
     let usernameUsable = true;
-    let userData: UserDocument | null = null;
 
-    // username check
-    userData = await User.findOne({ username });
-    if (userData) {
+    const usernameUserData = await User.findOne({ username });
+    if (usernameUserData) {
       usernameUsable = false;
     }
 
-    // email check
-    userData = await User.findOne({ email });
-    if (userData) {
+    const emailUserData = await User.findOne({ email });
+    if (emailUserData) {
       emailUsable = false;
     }
 
