@@ -1101,6 +1101,8 @@
   "errors.invalid_credentials": "メールアドレスまたはパスワードが正しくありません。",
   "errors.refresh_token_required": "リフレッシュトークンが必要です。",
   "errors.registration_closed": "ユーザー登録は現在受け付けていません。",
+  "errors.federated_handoff_invalid": "このサインインリンクは無効か期限切れです。もう一度サインインしてください。",
+  "errors.federated_handoff_consumed": "このサインインリンクはすでに使用されています。もう一度サインインしてください。",
   "errors.mail_test_failed": "テストメールの送信に失敗しました。",
   "errors.plugin_not_found": "プラグインが見つかりませんでした。",
   "errors.plugin_config_validation_failed": "プラグインの設定が正しくありません。",

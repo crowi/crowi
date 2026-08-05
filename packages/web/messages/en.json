@@ -1101,6 +1101,8 @@
   "errors.invalid_credentials": "The email or password is incorrect.",
   "errors.refresh_token_required": "A refresh token is required.",
   "errors.registration_closed": "User registration is currently closed.",
+  "errors.federated_handoff_invalid": "This sign-in link is invalid or has expired. Please sign in again.",
+  "errors.federated_handoff_consumed": "This sign-in link has already been used. Please sign in again.",
   "errors.mail_test_failed": "Failed to send the test email.",
   "errors.plugin_not_found": "The plugin was not found.",
   "errors.plugin_config_validation_failed": "The plugin configuration is invalid.",
