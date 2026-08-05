@@ -43,6 +43,8 @@ export interface MailTokenClaims {
   resetGeneration?: number;
   /** email-change only: the account's `authVersion` at issue time, so a pending change dies with the session that requested it. */
   authVersion?: number;
+  /** email-change only: the account's `emailChangeGeneration` at issue time, so a newer request supersedes this link. */
+  emailChangeGeneration?: number;
 }
 
 export interface SignMailTokenResult {

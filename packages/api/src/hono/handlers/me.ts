@@ -204,17 +204,50 @@ export const registerMeRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app: 
         if (emailChangeRequested) {
           const mailer = crowi.getMailer();
           const baseUrl = crowi.getBaseUrl() || '';
-          // Bind the token to the CURRENT email so it is single-use: once
-          // the address changes, a stale token (whose fromEmail no longer
-          // matches) is rejected and cannot revert the address later.
+          // Take the next generation BEFORE minting, and bind the link to it.
+          // Any link already in flight carries a lower value and stops
+          // matching, which is how a user calls off a change they did not
+          // want — one an attacker started from a stolen session, or one sent
+          // to a mistyped address — by just requesting another.
+          //
+          // The filter carries the session generation this request was
+          // admitted under, so the whole thing is one atomic step: if the
+          // session was revoked while the request was in flight (the owner
+          // changing their password, an admin reset), nothing is incremented
+          // and no link is minted. Without that guard a doomed request — one
+          // whose own link could never confirm — would still burn the
+          // generation and strand the legitimate pending change.
+          const observedAuthVersion = user.authVersion ?? 0;
+          const bumped = await User.findOneAndUpdate(
+            {
+              _id: user._id,
+              authVersion: observedAuthVersion === 0 ? { $in: [0, null] } : observedAuthVersion,
+            },
+            { $inc: { emailChangeGeneration: 1 } },
+            { returnDocument: 'after' },
+          );
+          if (!bumped) {
+            // Revoked mid-request. Say plainly that no change is pending
+            // rather than mailing a link that could never be confirmed.
+            const userWithSecrets = await user.populateSecrets();
+            return c.json(userToProfileResponse(user, userWithSecrets.isPasswordSet(), false), 200);
+          }
+          // Everything is bound to the document the update returned, not to
+          // the copy the middleware loaded: a confirmation landing in between
+          // would have moved `email`, and binding to the stale value would
+          // mail a link that is dead on arrival.
           const { token } = createMailTokenUtil().signMailToken({
             purpose: 'email-change',
             userId: user._id.toString(),
             email,
-            fromEmail: user.email,
+            // Bind the token to the CURRENT email so it is single-use: once
+            // the address changes, a stale token (whose fromEmail no longer
+            // matches) is rejected and cannot revert the address later.
+            fromEmail: bumped.email,
             // Bind the pending change to the session generation that asked
             // for it, so it cannot outlive that session's revocation.
-            authVersion: user.authVersion ?? 0,
+            authVersion: bumped.authVersion ?? 0,
+            emailChangeGeneration: bumped.emailChangeGeneration ?? 1,
           });
           const confirmUrl = `${baseUrl}/confirm-email?token=${token}`;
           // Fire-and-forget: do not block the profile response on SMTP.

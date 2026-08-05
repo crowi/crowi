@@ -45,6 +45,18 @@ export const MailTokenPayloadSchema = z.object({
    * and that is what every bump of it already means.
    */
   authVersion: z.number().int().nonnegative().optional(),
+  /**
+   * For `email-change`: the account's `emailChangeGeneration` at issue time.
+   * Requesting a change increments it, so asking for a different address
+   * supersedes any link still pending — which is what lets a user call off a
+   * change they did not want (one an attacker started with a stolen session,
+   * or one sent to a mistyped address). `authVersion` cannot serve this: it
+   * means "the session that asked is gone", and bumping it on a mere request
+   * would log the user out of their own account for editing their profile.
+   * Optional in the schema for the same reason as the others — links minted
+   * before the claim existed simply no longer match.
+   */
+  emailChangeGeneration: z.number().int().nonnegative().optional(),
   // iat / exp are injected and verified by the JWT layer.
   iat: z.number().optional(),
   exp: z.number().optional(),

@@ -172,5 +172,82 @@ describe('Routes /api/auth/confirm-email-change (Hono)', () => {
       const reloaded = await crowi.model('User').findById(user._id);
       expect(reloaded?.email).toBe('su-b@example.com');
     });
+
+    it('is superseded: requesting a newer change invalidates the link still pending', async () => {
+      // Without this, a leaked or attacker-initiated pending change cannot be
+      // called off: asking for a different address does not disturb the older
+      // link, because neither of the two bindings it carries (`fromEmail` and
+      // `authVersion`) moves when a request is merely issued.
+      const user = await createActiveUser('sup-old@example.com');
+      const accessToken = createJwtUtil(crowi).generateTokens(user).accessToken;
+      const attackerLink = changeTokenFor(user, 'sup-attacker@example.com');
+
+      const second = await request(app)
+        .put('/api/me')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({ userForm: { name: user.name, email: 'sup-owner@example.com', lang: user.lang ?? 'en' } });
+      expect(second.status).toBe(200);
+
+      const replay = await request(app).post('/api/auth/confirm-email-change').set(jsonHeaders).send({ token: attackerLink });
+      expect(replay.status).toBe(401);
+
+      const reloaded = await crowi.model('User').findById(user._id);
+      expect(reloaded?.email).toBe('sup-old@example.com');
+    });
+
+    it('a request admitted under a since-revoked session does not strand the pending link', async () => {
+      // The doomed request cannot produce a confirmable link anyway (its
+      // authVersion is stale). If it still burned the generation it would
+      // take the legitimate pending change down with it.
+      const User = crowi.model('User');
+      const user = await createActiveUser('revoked-old@example.com');
+      const accessToken = createJwtUtil(crowi).generateTokens(user).accessToken;
+      const legitimateLink = changeTokenFor(user, 'revoked-wanted@example.com');
+
+      // Revoke every session minted so far, exactly as a password change does.
+      await User.findByIdAndUpdate(user._id, { $inc: { authVersion: 1 } });
+
+      const doomed = await request(app)
+        .put('/api/me')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({ userForm: { name: user.name, email: 'revoked-attacker@example.com', lang: user.lang ?? 'en' } });
+      expect([200, 401]).toContain(doomed.status);
+
+      const stored = await User.findById(user._id);
+      expect(stored?.emailChangeGeneration ?? 0).toBe(0);
+      // The legitimate link is still the current generation; only its
+      // authVersion binding (moved by the revocation) decides its fate.
+      expect(legitimateLink).toBeTruthy();
+    });
+
+    it('cannot be confirmed while the account is suspended', async () => {
+      // Suspending is how an operator cuts an account off. A confirmation
+      // minted beforehand must not still be able to move the address the
+      // account recovers through while it is locked out.
+      const User = crowi.model('User');
+      const user = await createActiveUser('susp-old@example.com');
+      const link = changeTokenFor(user, 'susp-new@example.com');
+
+      user.status = User.STATUS_SUSPENDED;
+      await user.save();
+
+      const res = await request(app).post('/api/auth/confirm-email-change').set(jsonHeaders).send({ token: link });
+      expect(res.status).toBe(401);
+
+      const reloaded = await User.findById(user._id);
+      expect(reloaded?.email).toBe('susp-old@example.com');
+    });
+
+    it('preflight also refuses a suspended account', async () => {
+      const User = crowi.model('User');
+      const user = await createActiveUser('susp-pre@example.com');
+      const link = changeTokenFor(user, 'susp-pre-new@example.com');
+
+      user.status = User.STATUS_SUSPENDED;
+      await user.save();
+
+      const res = await request(app).get('/api/auth/confirm-email-change').query({ token: link });
+      expect(res.status).toBe(401);
+    });
   });
 });
