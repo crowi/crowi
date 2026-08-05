@@ -163,7 +163,9 @@ struct PageReaderView: View {
                 .disabled(page == nil)
             }
         }
-        .sheet(isPresented: $showActions) {
+        // An overlay, not a `.sheet` — see `CrowiBottomSheet` for why the app
+        // draws this one itself.
+        .crowiBottomSheet(isPresented: $showActions) {
             if let page, let shareURL = pageURL(for: page) {
                 CrowiPageActionSheet(
                     shareURL: shareURL,

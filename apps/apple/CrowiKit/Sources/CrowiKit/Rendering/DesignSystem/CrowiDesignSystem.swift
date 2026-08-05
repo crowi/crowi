@@ -178,11 +178,22 @@ public enum CrowiMetrics {
     public static let sheetRowContentSpacing: CGFloat = 14
     /// Design: `padding:16px` on the sheet's Cancel/Done button.
     public static let sheetButtonPadding: CGFloat = 16
-    /// Design: the sheet panel's `padding:0 8px 12px` — a HALF gutter compared
-    /// to a screen's cards, because the panel is already floating free of the
-    /// screen's edges.
+    /// The sheet panel's `padding:0 8px` — a HALF gutter compared to a
+    /// screen's cards, since the cards inside a panel are already inset from
+    /// the screen by the panel itself.
     public static let sheetHorizontalMargin: CGFloat = 8
+    /// Air under the last card, above the home indicator's own clearance.
     public static let sheetPanelBottomPadding: CGFloat = 12
+    /// Air over the first card, under the grabber.
+    public static let sheetPanelTopPadding: CGFloat = 8
+    /// The panel's own top corners. Larger than a card's 16 so the cards
+    /// inside it do not repeat the same curve one inset in — the panel is a
+    /// bigger surface and reads as one.
+    public static let sheetPanelCornerRadius: CGFloat = 20
+    /// The drag affordance at the panel's top: the platform's 36×5 pill.
+    public static let sheetGrabberWidth: CGFloat = 36
+    public static let sheetGrabberHeight: CGFloat = 5
+    public static let sheetGrabberTopPadding: CGFloat = 8
     /// Design: `margin-bottom:8px` between the sheet's stacked cards.
     public static let sheetCardSpacing: CGFloat = 8
     /// Design: `padding:11px 16px` on a TOC row, `26px` leading when nested —
