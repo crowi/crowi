@@ -21,8 +21,9 @@ add_error() {
   ERRORS+=("$1")
 }
 
-frontmatter_value() {
-  local key="$1"
+frontmatter_value_of() {
+  local path="$1"
+  local key="$2"
   awk -v key="$key" '
     NR == 1 && $0 == "---" { in_frontmatter = 1; next }
     in_frontmatter && $0 == "---" { exit }
@@ -32,7 +33,11 @@ frontmatter_value() {
       print
       exit
     }
-  ' "$SPEC_PATH"
+  ' "$path"
+}
+
+frontmatter_value() {
+  frontmatter_value_of "$SPEC_PATH" "$1"
 }
 
 section_has_content() {
@@ -69,6 +74,107 @@ ID="$(frontmatter_value id)"
 NAME="$(frontmatter_value name)"
 SCOPE="$(frontmatter_value scope)"
 STATUS="$(frontmatter_value status)"
+KIND="$(frontmatter_value kind)"
+
+# ---------------------------------------------------------------------------
+# Umbrella specs (`kind: umbrella`)
+# ---------------------------------------------------------------------------
+# An umbrella carries only the operational contract (single worktree, one
+# integration at the end) and the phase table; the implementable substance
+# lives in the phase specs it lists. So it cannot satisfy the leaf checks
+# below — it has no AC, no implementation map, and no grounding of its own.
+#
+# The v2 strictness is DELEGATED, not dropped: every phase listed under
+# `phases:` must exist and pass this validator in full. That keeps the kickoff
+# guarantee ("no design decisions left to a cheap model") intact while letting
+# the umbrella stay what it is.
+#
+# Phases are read from frontmatter rather than the prose phase table on
+# purpose. Parsing the table would make the set of validated specs depend on
+# markdown formatting, and its failure mode is the worst kind: a reformatted
+# table silently yields zero phases and the umbrella passes having verified
+# nothing. The table stays as human-facing documentation.
+if [[ "$KIND" == "umbrella" ]]; then
+  [[ "$SPEC_CONTRACT" == "2" ]] || add_error "frontmatter spec_contract must be 2"
+  [[ "$STATUS" == "approved" ]] || add_error "frontmatter status must be approved"
+  [[ "$ID" =~ ^feature-[a-z0-9]+(-[a-z0-9]+)*$ ]] ||
+    add_error "frontmatter id must match feature-<kebab-slug>"
+
+  SPEC_DIR="$(cd "$(dirname "$SPEC_PATH")" && pwd)"
+  VALIDATOR="${BASH_SOURCE[0]}"
+
+  PHASES=()
+  while IFS= read -r phase; do
+    [[ -n "$phase" ]] && PHASES+=("$phase")
+  done < <(awk '
+    NR == 1 && $0 == "---" { in_frontmatter = 1; next }
+    in_frontmatter && $0 == "---" { exit }
+    in_frontmatter && $0 ~ /^phases:[[:space:]]*$/ { in_phases = 1; next }
+    in_phases && $0 ~ /^[[:space:]]+-[[:space:]]+[^[:space:]]/ {
+      item = $0
+      sub(/^[[:space:]]+-[[:space:]]+/, "", item)
+      gsub(/^["'\'']|["'\'']$/, "", item)
+      sub(/[[:space:]]+$/, "", item)
+      print item
+      next
+    }
+    in_phases { exit }
+  ' "$SPEC_PATH")
+
+  if [[ "${#PHASES[@]}" -eq 0 ]]; then
+    add_error "umbrella spec must list phases as a frontmatter block sequence (phases:\\n  - feature-...)"
+  else
+    SEEN_PHASES=""
+    VALIDATED_PHASES=0
+    for phase in "${PHASES[@]}"; do
+      # Phases are spec IDs, not paths. Requiring the ID form is what keeps an
+      # umbrella pointing at its own sibling specs: a value like
+      # `../elsewhere/unrelated` would otherwise resolve and let an umbrella
+      # claim delegation to a spec that is not one of its phases at all.
+      if [[ ! "$phase" =~ ^feature-[a-z0-9]+(-[a-z0-9]+)*$ ]]; then
+        add_error "umbrella phase must be a spec id matching feature-<kebab-slug>: $phase"
+        continue
+      fi
+      # A repeated phase would be validated twice and counted twice, so the
+      # summary would claim more distinct specs were verified than actually were.
+      case " $SEEN_PHASES " in
+        *" $phase "*)
+          add_error "umbrella phase listed more than once: $phase"
+          continue
+          ;;
+      esac
+      SEEN_PHASES="$SEEN_PHASES $phase"
+      phase_path="$SPEC_DIR/$phase.md"
+      if [[ ! -f "$phase_path" ]]; then
+        add_error "umbrella phase spec not found: $phase"
+        continue
+      fi
+      # Nested umbrellas are refused rather than recursed into: it keeps the
+      # delegation one level deep (so a cycle cannot exist) and no real spec
+      # has ever needed more.
+      if [[ "$(frontmatter_value_of "$phase_path" kind)" == "umbrella" ]]; then
+        add_error "umbrella phase must be an implementation spec, not another umbrella: $phase"
+        continue
+      fi
+      if ! phase_errors="$(bash "$VALIDATOR" "$phase_path" 2>&1 >/dev/null)"; then
+        while IFS= read -r line; do
+          [[ -n "$line" ]] && add_error "phase $phase: ${line#ERROR: }"
+        done <<<"$phase_errors"
+      else
+        VALIDATED_PHASES=$((VALIDATED_PHASES + 1))
+      fi
+    done
+  fi
+
+  if [[ "${#ERRORS[@]}" -gt 0 ]]; then
+    for error in "${ERRORS[@]}"; do
+      echo "ERROR: $error" >&2
+    done
+    exit 1
+  fi
+  echo "READY: umbrella spec v2 ($SPEC_PATH) — $VALIDATED_PHASES phase specs validated"
+  exit 0
+fi
 
 [[ "$SPEC_CONTRACT" == "2" ]] || add_error "frontmatter spec_contract must be 2"
 [[ "$IMPLEMENTATION_READY" == "true" ]] || add_error "frontmatter implementation_ready must be true"
@@ -136,6 +242,13 @@ is_repo_relative_path() {
   local path="$1"
   case "$path" in
     ""|/*|../*|*/../*|*/..)
+      return 1
+      ;;
+    # A leading ':' is git pathspec magic, not a filename. Left through, a path
+    # like ':(exclude)**' would be interpreted by git rather than matched
+    # literally, and an exclude-only pathspec makes the staleness diff cover
+    # nothing — the spec would pass having checked no files at all.
+    :*)
       return 1
       ;;
   esac
@@ -419,17 +532,41 @@ if [[ "$GROUNDED_AT" =~ ^[0-9a-fA-F]{7,64}$ ]]; then
   elif ! git merge-base --is-ancestor "$GROUNDED_AT" HEAD >/dev/null 2>&1; then
     add_error "spec is stale: grounded_at is not an ancestor of HEAD"
   elif [[ "${#REFERENCE_PATHS[@]}" -gt 0 ]]; then
+    # Generated artifacts are excluded from the staleness check. The check
+    # exists to detect "the code this spec reasoned about has moved"; a
+    # regenerated lockfile or OpenAPI document means someone else ran a build,
+    # not that any design premise became invalid. Left in, they make every
+    # spec that touches api-contract or dependencies go stale on unrelated
+    # work, and no amount of re-grounding fixes it — the next regeneration
+    # stales them again.
+    #
+    # Matching on path rather than on an author-declared marker is deliberate:
+    # whether a file is generated is an objective property of its path, so
+    # this applies retroactively to specs already written and cannot be
+    # forgotten by whoever writes the next one.
+    GENERATED_ARTIFACT_RE='(^|/)(pnpm-lock\.yaml|openapi\.(json|yaml))$|(^|/)generated/'
     UNIQUE_REFERENCE_PATHS=()
     while IFS= read -r path; do
       [[ -n "$path" ]] && UNIQUE_REFERENCE_PATHS+=("$path")
-    done < <(printf '%s\n' "${REFERENCE_PATHS[@]}" | awk '!seen[$0]++')
-    CHANGED_REFERENCES="$(git diff --name-only "$GROUNDED_AT"..HEAD -- "${UNIQUE_REFERENCE_PATHS[@]}")"
-    DIRTY_REFERENCES="$(git status --porcelain -- "${UNIQUE_REFERENCE_PATHS[@]}")"
-    if [[ -n "$CHANGED_REFERENCES" ]]; then
-      add_error "spec is stale: referenced paths changed after grounded_at: $(echo "$CHANGED_REFERENCES" | tr '\n' ' ')"
-    fi
-    if [[ -n "$DIRTY_REFERENCES" ]]; then
-      add_error "spec is stale: referenced paths have uncommitted changes"
+    done < <(printf '%s\n' "${REFERENCE_PATHS[@]}" | awk '!seen[$0]++' |
+      grep -Ev "$GENERATED_ARTIFACT_RE" || true)
+    # An empty pathspec would make git diff report the WHOLE tree, turning
+    # "every reference was a generated artifact" into a guaranteed false
+    # stale. Skip the check instead.
+    if [[ "${#UNIQUE_REFERENCE_PATHS[@]}" -gt 0 ]]; then
+      # git's exit status must be checked, not just its output: a pathspec it
+      # rejects makes it fail with empty stdout, which is indistinguishable
+      # from "nothing changed" and would pass the spec without checking it.
+      if ! CHANGED_REFERENCES="$(git diff --name-only "$GROUNDED_AT"..HEAD -- "${UNIQUE_REFERENCE_PATHS[@]}" 2>/dev/null)"; then
+        add_error "staleness check failed: git rejected the spec's reference paths"
+      elif [[ -n "$CHANGED_REFERENCES" ]]; then
+        add_error "spec is stale: referenced paths changed after grounded_at: $(echo "$CHANGED_REFERENCES" | tr '\n' ' ')"
+      fi
+      if ! DIRTY_REFERENCES="$(git status --porcelain -- "${UNIQUE_REFERENCE_PATHS[@]}" 2>/dev/null)"; then
+        add_error "staleness check failed: git rejected the spec's reference paths"
+      elif [[ -n "$DIRTY_REFERENCES" ]]; then
+        add_error "spec is stale: referenced paths have uncommitted changes"
+      fi
     fi
   fi
 fi
