@@ -1504,6 +1504,20 @@ advertised as external connector support.
   Bearer credentials.
 - Do not enable discovery until resource/audience enforcement exists.
 
+> **Update (feature-auth-cookie-fallback-scope)**: the credential-boundary
+> half of this bullet list landed early, ahead of the rest of §15 — `/mcp`
+> now runs a dedicated `createMcpAuth` (`packages/api/src/mcp/auth.ts`) that
+> rejects the `crowi.accessToken` cookie and a web-session Bearer, exactly as
+> asked above. It goes one step further than "PAT/OAuth-only", though:
+> `signOauthAccessToken` does not yet mint a resource/audience claim (the
+> binding this RFC's `§7`/`§6.2` require before MCP may accept an
+> `oauth_access` token at all), so an `oauth_access` Bearer is rejected too —
+> the boundary is **PAT-only** until a later phase adds that claim and
+> `createMcpAuth` can verify it. The metadata / discovery / DCR / consent
+> surface this section also lists (trusted issuer builders, Protected
+> Resource Metadata, the `401` `WWW-Authenticate` challenge) is unchanged —
+> none of it is implemented by this update.
+
 ### §15.2 Resolver, DCR, and administrator policy
 
 - Introduce `resolveOAuthClient` and migrate every OAuth lookup.
