@@ -1,5 +1,5 @@
 import type { EditorView } from '@codemirror/view';
-import { apiBaseUrl } from '@/lib/api-client';
+import { acquireRefreshedToken, apiBaseUrl } from '@/lib/api-client';
 import { getAccessToken } from '@/lib/auth-token';
 import { notify } from '@/lib/notify';
 import { isImageFile } from './upload-policy';
@@ -227,8 +227,44 @@ export function makeProgressUpdater(view: EditorView, uploadId: string, filename
  * Resolves with the `UploadOutcome` on 200; rejects with an `Error`
  * whose `.message` is the server-supplied (or generic) message on any
  * non-200, so the caller can surface it in a toast.
+ *
+ * feature-auth-cookie-fallback-scope — `POST /attachments/upload` is not a
+ * headerless delivery route (`createAttachmentAuth` only accepts the
+ * `crowi.accessToken` cookie for GET/HEAD by-id / original / by-key), so a
+ * token-missing upload must not fire the XHR headerless: it recovers a
+ * token through the same single-flight refresh `apiFetch` uses first, and
+ * only sends once a Bearer credential is available.
+ *
+ * Deliberately NOT an `async function`: when a token is already available
+ * (the common case), `sendUpload` below is called and returned directly,
+ * so the `XMLHttpRequest` is still opened synchronously within this same
+ * call — exactly the pre-existing timing `runUpload`'s callers depend on.
+ * Wrapping the whole body in `async` would add an extra microtask tick even
+ * on that hot path (an `async function` returning a `Promise` implicitly
+ * chains through one more `.then()`), which is only actually necessary on
+ * the token-recovery branch.
  */
 export function uploadAttachment(
+  file: File,
+  filename: string,
+  pageId: string,
+  intent: UploadIntent,
+  onProgress: (percent: number) => void,
+): Promise<UploadOutcome> {
+  const existingToken = getAccessToken();
+  if (existingToken) {
+    return sendUpload(existingToken, file, filename, pageId, intent, onProgress);
+  }
+  return acquireRefreshedToken().then((accessToken) => {
+    if (!accessToken) {
+      throw new Error('Authentication is required.');
+    }
+    return sendUpload(accessToken, file, filename, pageId, intent, onProgress);
+  });
+}
+
+function sendUpload(
+  accessToken: string,
   file: File,
   filename: string,
   pageId: string,
@@ -245,8 +281,7 @@ export function uploadAttachment(
 
     const xhr = new XMLHttpRequest();
     xhr.open('POST', url);
-    const accessToken = getAccessToken();
-    if (accessToken) xhr.setRequestHeader('Authorization', `Bearer ${accessToken}`);
+    xhr.setRequestHeader('Authorization', `Bearer ${accessToken}`);
 
     xhr.upload.onprogress = (event) => {
       if (event.lengthComputable) onProgress((event.loaded / event.total) * 100);

@@ -4,11 +4,24 @@
  * in lock-step so:
  *
  *   - JS-driven API calls read the access token from localStorage and
- *     pass it via `Authorization: Bearer ...`.
+ *     pass it via `Authorization: Bearer ...`. `apiFetch` (`api-client.ts`),
+ *     `useAddAttachment` (`use-attachments.ts`), and `uploadAttachment`
+ *     (`upload-placeholder.ts`) all fail closed instead of sending a
+ *     headerless request when this is unavailable (feature-auth-cookie-
+ *     fallback-scope).
  *   - `<img src="/api/attachments/…">` requests (which the browser
  *     builds with no JS hook and therefore no Authorization header)
- *     fall back to the `crowi.accessToken` cookie. The api-side
- *     `jwtAuth` middleware reads from cookie when the header is absent.
+ *     fall back to the `crowi.accessToken` cookie. As of
+ *     feature-auth-cookie-fallback-scope, the api-side `createJwtAuth`
+ *     boundary (used by everything except attachment delivery — admin,
+ *     `/pages/*`, `/auth/me`, plugin `auth: 'user'` routes, etc.) is
+ *     HEADER-ONLY: it never reads this cookie at all. Only the dedicated
+ *     `createAttachmentAuth` boundary reads it, and only for GET/HEAD on
+ *     the three headerless delivery routes (`/attachments/:id`,
+ *     `/attachments/:id/original`, `/attachments/by-key/*`) — exactly the
+ *     `<img src>` / direct-navigation shape this cookie exists for. Every
+ *     other attachment route (upload / meta / delete / add) requires the
+ *     header, same as everything else.
  *
  * The cookie path is `/`, SameSite=Lax, no Secure (dev), no HttpOnly
  * (so `clearAccessToken()` from JS can wipe it on logout). For

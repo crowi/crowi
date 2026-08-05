@@ -17,6 +17,13 @@ describe('apiFetch never sends X-Crowi-Ast-Version (RFC-0023 §9)', () => {
   beforeEach(() => {
     envMock.mockReturnValue(undefined);
     localStorage.clear();
+    // feature-auth-cookie-fallback-scope — `/pages` and `/pages/preview` are
+    // protected (not one of `apiFetch`'s pre-login public paths), so a
+    // token-missing call would now be short-circuited locally (a synthesized
+    // 401, no `fetch` call at all) rather than reaching the mock below. An
+    // access token keeps this test on the actual request path it means to
+    // exercise (the AST-version header, an orthogonal concern).
+    localStorage.setItem('accessToken', 'test-access-token');
   });
 
   it('a renderedAst-consuming call (getPage / preview) carries no AST version header', async () => {

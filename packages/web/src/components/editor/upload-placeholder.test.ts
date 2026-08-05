@@ -1,17 +1,18 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   buildPlaceholderText,
   buildSuccessText,
   findPlaceholderRange,
   generatePastedFilename,
-  newUploadId,
   insertPlaceholder,
-  replacePlaceholder,
-  removePlaceholder,
   makeProgressUpdater,
+  newUploadId,
   ownLinePadding,
+  removePlaceholder,
+  replacePlaceholder,
+  uploadAttachment,
 } from './upload-placeholder';
 
 /**
@@ -195,5 +196,90 @@ describe('makeProgressUpdater throttle', () => {
     const update = makeProgressUpdater(view, 'u1', 'a.png', true);
     update(100);
     expect(view.state.doc.toString()).toContain('(100%)');
+  });
+});
+
+/**
+ * feature-auth-cookie-fallback-scope AC-3 — `uploadAttachment`'s
+ * `XMLHttpRequest` upload must never fire when no access token is loaded:
+ * `POST /attachments/upload` is not one of the three headerless attachment
+ * delivery routes (`createAttachmentAuth` only accepts the
+ * `crowi.accessToken` cookie for GET/HEAD by-id / original / by-key), so it
+ * recovers a token through the same single-flight refresh `apiFetch` uses,
+ * and never constructs the `XMLHttpRequest` at all when that can't resolve
+ * one. Exercises the real `getAccessToken` / `acquireRefreshedToken` (no
+ * module mocking, matching `drop-handler.test.ts` / `paste-handler.test.ts`
+ * — only `fetch` and `XMLHttpRequest` are stubbed).
+ */
+describe('uploadAttachment — token-missing send-avoidance', () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+  let xhrInstances: number;
+
+  class FakeXHR {
+    status = 200;
+    responseText = JSON.stringify({ url: '/api/attachments/x', filename: 'a.png', mimeType: 'image/png', sizeBytes: 4 });
+    upload = { onprogress: null as ((e: ProgressEvent) => void) | null };
+    onload: (() => void) | null = null;
+    onerror: (() => void) | null = null;
+    onabort: (() => void) | null = null;
+    headers: Record<string, string> = {};
+    constructor() {
+      xhrInstances += 1;
+    }
+    open(): void {}
+    setRequestHeader(name: string, value: string): void {
+      this.headers[name] = value;
+    }
+    send(): void {
+      this.onload?.();
+    }
+  }
+
+  beforeEach(() => {
+    xhrInstances = 0;
+    fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('XMLHttpRequest', FakeXHR);
+    localStorage.clear();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    localStorage.clear();
+  });
+
+  const file = new File([new Uint8Array(4)], 'a.png', { type: 'image/png' });
+
+  it('fails closed — never constructs an XMLHttpRequest — when no access token and no refresh token', async () => {
+    await expect(uploadAttachment(file, 'a.png', 'page-1', 'dnd', () => {})).rejects.toThrow('Authentication is required.');
+    expect(xhrInstances).toBe(0);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('recovers the token through the existing refresh path before opening the XHR', async () => {
+    localStorage.setItem('refreshToken', 'refresh-1');
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ accessToken: 'fresh-access', refreshToken: 'refresh-2', expiresIn: 3600 }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+
+    const outcome = await uploadAttachment(file, 'a.png', 'page-1', 'dnd', () => {});
+
+    expect(outcome.url).toBe('/api/attachments/x');
+    expect(xhrInstances).toBe(1);
+    expect(fetchMock).toHaveBeenCalledTimes(1); // only the /auth/refresh call
+    expect(localStorage.getItem('accessToken')).toBe('fresh-access');
+  });
+
+  it('sends the request with the existing token directly when one is already loaded (unchanged behaviour)', async () => {
+    localStorage.setItem('accessToken', 'existing-access');
+
+    const outcome = await uploadAttachment(file, 'a.png', 'page-1', 'dnd', () => {});
+
+    expect(outcome.url).toBe('/api/attachments/x');
+    expect(xhrInstances).toBe(1);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
