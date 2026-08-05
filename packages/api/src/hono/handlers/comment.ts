@@ -28,7 +28,7 @@ import type Crowi from 'src/crowi';
 import type { CommentDocument } from 'src/models/comment';
 import type { PageDocument } from 'src/models/page';
 import { autoWatchPage } from 'src/util/auto-watch';
-import { isPopulatedUser, isValidObjectId, resolveGrantedRevisionOwner, toISOStringOrNull, toPageUser } from 'src/util/ts-rest-helpers';
+import { isDraftHiddenFrom, isPopulatedUser, isValidObjectId, resolveGrantedRevisionOwner, toISOStringOrNull, toPageUser } from 'src/util/ts-rest-helpers';
 
 import type { CrowiHonoBindings } from '../app';
 import { createJwtAuth } from '../middleware/auth';
@@ -125,9 +125,12 @@ export const registerCommentRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(
           if (!isValidObjectId(page_id!)) {
             return c.json(invalidRequestBody('Invalid page_id'), 400);
           }
-          // Same grant boundary keyed on page_id.
+          // Same boundary keyed on page_id: grant, plus the draft rule the
+          // grant cannot express (a draft is GRANT_PUBLIC — see
+          // `isDraftHiddenFrom`). Both collapse to 404 so a draft's existence
+          // is not leaked.
           const page = (await Page.findPageById(page_id!)) as PageDocument | null;
-          if (!page || !page.isGrantedFor(user)) {
+          if (!page || !page.isGrantedFor(user) || isDraftHiddenFrom(page, user)) {
             return c.json(PAGE_NOT_FOUND_BODY, 404);
           }
           comments = await Comment.getCommentsByPageId(new Types.ObjectId(page_id!));
@@ -206,6 +209,11 @@ export const registerCommentRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(
       try {
         const pageData = (await Page.findPageById(page_id)) as PageDocument | null;
         if (!pageData) {
+          return c.json(COMMENT_NOT_FOUND_BODY, 404);
+        }
+        // A draft answers 404, not 403: to a non-author the page does not
+        // exist, and a "not granted" reply would confirm that it does.
+        if (isDraftHiddenFrom(pageData, user)) {
           return c.json(COMMENT_NOT_FOUND_BODY, 404);
         }
         if (!pageData.isGrantedFor(user)) {

@@ -164,6 +164,26 @@ interface PageFindByIdLike {
 }
 
 /**
+ * RFC-0004: a draft page is visible only to its author.
+ *
+ * This is a SECOND gate that has to run alongside the grant check, not a
+ * refinement of it. A draft is created with `GRANT_PUBLIC`
+ * (`handlers/draft.ts`), so `isGrantedFor` says yes to every authenticated
+ * caller and this rule is the only thing keeping an unpublished body private.
+ * Any route that resolves a page for reading — by id, or by the revision's
+ * page ref — has to apply both, or it hands out drafts.
+ *
+ * Fails closed on a page with no `creator` (legacy / imported rows): an
+ * unattributable draft is hidden from everyone rather than shown to anyone,
+ * and `isCreator` would throw on the missing ref anyway.
+ */
+export const isDraftHiddenFrom = (page: PageDocument, user: UserDocument | null | undefined): boolean => {
+  if (!page.isDraft()) return false;
+  if (!user || !page.creator) return true;
+  return !page.isCreator(user);
+};
+
+/**
  * DC-5 (`feature-revision-page-ref`): resolve the page that OWNS a revision
  * via the revision's immutable `page` id ref, gated on the caller's grant.
  * `null` covers "no page ref" (orphaned pre-migration revision — fail
@@ -172,10 +192,11 @@ interface PageFindByIdLike {
  * by-revision listing so this security boundary's fail-closed semantics has
  * exactly one implementation.
  *
- * Deliberately uses raw `isGrantedFor` (NOT `findPageByIdAndGrantedUser`) to
- * preserve these routes' pre-DC-5 behaviour — the RFC-0004 draft-hiding rule
- * has never applied to them, and folding it in is a behaviour change for the
- * central-page-authorization work to decide, not this helper.
+ * The grant check alone is not sufficient for drafts — see
+ * `isDraftHiddenFrom` below, which this applies as well. It stays on raw
+ * `isGrantedFor` rather than delegating to `findPageByIdAndGrantedUser`
+ * because that one throws a not-found error where these callers want the
+ * uniform `null` above.
  */
 export const resolveGrantedRevisionOwner = async (
   Page: PageFindByIdLike,
@@ -185,5 +206,6 @@ export const resolveGrantedRevisionOwner = async (
   if (!pageId) return null;
   const page = (await Page.findById(pageId).exec()) as PageDocument | null;
   if (!page || !page.isGrantedFor(user)) return null;
+  if (isDraftHiddenFrom(page, user)) return null;
   return page;
 };

@@ -62,6 +62,60 @@ describe('Routes /api/comments (Hono)', () => {
     };
   };
 
+  /** Create a draft owned by `accessToken`'s user, with one comment on it. */
+  const createDraftWithComment = async (slug: string) => {
+    const headers = authHeaders(accessToken);
+    const created = await request(app)
+      .post('/api/pages/drafts')
+      .set(headers)
+      .send({ path: `${PATH_PREFIX}${slug}`, initialBody: '# unpublished' });
+    expect(created.status).toBe(201);
+    const pageId = created.body.pageId as string;
+    const draft = await Page.findById(pageId);
+    expect(draft?.isDraft()).toBe(true);
+    const revisionId = draft?.revision?.toString() as string;
+    const added = await request(app).post('/api/comments').set(headers).send({ page_id: pageId, revision_id: revisionId, comment: 'private note' });
+    expect(added.status).toBe(200);
+    return { pageId, revisionId, commentId: added.body.comment._id as string };
+  };
+
+  describe('draft comments are author-only (RFC-0004)', () => {
+    // A draft carries GRANT_PUBLIC, so the grant check passes for everyone —
+    // these routes have to apply the draft rule separately or they hand out
+    // (and let anyone delete) comments on an unpublished page.
+    it('does not list a draft’s comments for another user, by page_id', async () => {
+      const { pageId } = await createDraftWithComment('draft-list-by-page');
+
+      const mine = await request(app).get('/api/comments').query({ page_id: pageId }).set(authHeaders(accessToken));
+      expect(mine.status).toBe(200);
+      expect(mine.body.comments).toHaveLength(1);
+
+      const theirs = await request(app).get('/api/comments').query({ page_id: pageId }).set(authHeaders(otherAccessToken));
+      expect(theirs.status).toBe(404);
+      expect(theirs.body.error.code).toBe('PAGE_NOT_FOUND');
+    });
+
+    it('does not list a draft’s comments for another user, by revision_id', async () => {
+      const { revisionId } = await createDraftWithComment('draft-list-by-revision');
+
+      const theirs = await request(app).get('/api/comments').query({ revision_id: revisionId }).set(authHeaders(otherAccessToken));
+      expect(theirs.status).toBe(404);
+    });
+
+    it('does not let another user delete a comment on a draft', async () => {
+      const { pageId, commentId } = await createDraftWithComment('draft-delete');
+
+      const theirs = await request(app).delete('/api/comments').set(authHeaders(otherAccessToken)).send({ comment_id: commentId, page_id: pageId });
+      expect(theirs.status).toBe(404);
+      expect(await Comment.countDocuments({ _id: new Types.ObjectId(commentId) })).toBe(1);
+
+      // The author can still delete their own.
+      const mine = await request(app).delete('/api/comments').set(authHeaders(accessToken)).send({ comment_id: commentId, page_id: pageId });
+      expect(mine.status).toBe(200);
+      expect(await Comment.countDocuments({ _id: new Types.ObjectId(commentId) })).toBe(0);
+    });
+  });
+
   describe('GET /api/comments', () => {
     it('returns 401 when no Authorization header is provided', async () => {
       const res = await request(app).get('/api/comments').query({ page_id: '000000000000000000000000' }).set('Content-Type', 'application/json');
