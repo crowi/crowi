@@ -13,6 +13,19 @@ import SwiftUI
 /// (old server, never-rendered revision, decode-limit failure) keeps the
 /// raw-body MarkdownUI fallback. Nothing new is persisted — the outcome
 /// lives only in this view's state (the AST stays online-only, §16).
+///
+/// ## The design language, arriving last
+///
+/// This was the final screen still on a stock `List` printing a bold name
+/// over a RAW ISO timestamp. It now carries the design's history screen:
+/// day-grouped cards (the same `CrowiDayGroup` runs the notifications list
+/// uses), an avatar, relative time, and the two status chips.
+///
+/// The design's version chip (`v15`), change summary, `+142 / -38` diff stat,
+/// range label, multi-select comparison, diff view and restore are all
+/// ABSENT, on purpose: `RevisionMetaSchema` carries the two users, `editVia`
+/// and `createdAt` and nothing else, and the app has no diff or restore
+/// surface. See `CrowiRevisionRow` for the full ruling.
 struct RevisionHistoryView: View {
     let session: WorkspaceSession
     let pageId: String
@@ -31,25 +44,46 @@ struct RevisionHistoryView: View {
     @State private var errorMessage: String?
 
     var body: some View {
-        List(revisions) { revision in
-            Button {
-                Task { await loadRevisionBody(revision.revisionId) }
-            } label: {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(revision.authorName ?? revision.authorUsername ?? "Unknown").font(.subheadline.bold())
-                    if let createdAt = revision.createdAt {
-                        Text(createdAt).font(.caption).foregroundStyle(.secondary)
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                subtitle
+                if revisions.isEmpty {
+                    emptyCard
+                } else {
+                    // The server sorts `createdAt: -1`, so the runs come out
+                    // newest-first and the first row of the first run is the
+                    // page's current revision.
+                    ForEach(CrowiDayGroup.runs(of: revisions, by: { PageRowMetadataLabel.date(fromISO8601: $0.createdAt) })) { run in
+                        CrowiSectionHeader(run.group.title)
+                        CrowiCardRows(run.items, id: \.revisionId) { revision in
+                            Button {
+                                Task { await loadRevisionBody(revision.revisionId) }
+                            } label: {
+                                CrowiRevisionRow(
+                                    name: revision.displayName ?? "Unknown",
+                                    imageURLString: revision.authorImage,
+                                    relativeTime: PageRowMetadataLabel.relativeTimeText(from: revision.createdAt),
+                                    isCurrent: revision.revisionId == revisions.first?.revisionId,
+                                    isAPIEdit: revision.isAPIEdit,
+                                    loader: session.imageCache
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        }
                     }
                 }
             }
-            .buttonStyle(.plain)
+            .padding(.bottom, CrowiMetrics.screenBottomPadding)
         }
-        .overlay {
-            if revisions.isEmpty, let errorMessage {
-                ContentUnavailableView(errorMessage, systemImage: "clock.arrow.circlepath")
-            }
-        }
-        .navigationTitle("History")
+        .background(CrowiTheme.background)
+        // A PUSHED screen keeps the navigation bar's own title — iOS's large
+        // title IS the platform's implementation of the design's 28pt
+        // heading, and it collapses on scroll the way the design's does.
+        // Only the count line below it has to be rendered in content.
+        .navigationTitle("Version history")
+        #if canImport(UIKit)
+        .navigationBarTitleDisplayMode(.large)
+        #endif
         .task { await load() }
         .refreshable { await load() }
         .sheet(item: $selectedRevision) { revision in
@@ -73,6 +107,32 @@ struct RevisionHistoryView: View {
                 #endif
             }
         }
+    }
+
+    /// The design's "15 revisions · <page>" line. The count is what the
+    /// screen actually loaded, not a server total — there is no total on the
+    /// wire, and `50` would be a lie the moment a page has more.
+    @ViewBuilder
+    private var subtitle: some View {
+        if !revisions.isEmpty {
+            Text("\(revisions.count) revisions · \(PageRowTitleLabel(path: pagePath).titleText)")
+                .font(CrowiTypography.screenSubtitle)
+                .foregroundStyle(CrowiTheme.mutedForeground)
+                .lineLimit(2)
+                .padding(.horizontal, CrowiMetrics.screenHorizontalMargin)
+                .padding(.bottom, CrowiMetrics.sectionHeaderBottomPadding)
+        }
+    }
+
+    private var emptyCard: some View {
+        CrowiCard {
+            CrowiRow(showsChevron: false) {
+                Text(errorMessage ?? "No revisions yet")
+                    .font(CrowiTypography.rowMeta)
+                    .foregroundStyle(CrowiTheme.mutedForeground)
+            }
+        }
+        .padding(.top, CrowiMetrics.sectionHeaderTopPadding)
     }
 
     private func load() async {

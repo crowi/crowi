@@ -70,6 +70,15 @@ public enum CrowiMetrics {
     public static let screenTitleTopPadding: CGFloat = 10
     public static let screenTitleBottomPadding: CGFloat = 2
 
+    // MARK: - Row chips (the design's `v15` / `Current` pills)
+
+    /// Design: `padding:2px 5px` neutral, `2px 6px` accent, `border-radius:5px`.
+    /// One padding for both — a 1px difference the design's two colours make
+    /// invisible, and two constants would only invite them to drift.
+    public static let rowChipHorizontalPadding: CGFloat = 6
+    public static let rowChipVerticalPadding: CGFloat = 2
+    public static let rowChipCornerRadius: CGFloat = 5
+
     // MARK: - Comments
 
     /// Design: `margin-bottom:16px` between comments, `gap:10px` between a
@@ -239,6 +248,16 @@ public enum CrowiTypography {
     public static let rowMeta = Font.system(.caption)
     /// Design: 13.5px, `line-height:1.55` — a search hit's snippet.
     public static let snippet = Font.system(.footnote)
+    /// Design: 15.5px/600 — a revision row's author name. Between a page
+    /// row's 16px title and a comment's 14px byline, which is where the
+    /// design puts it.
+    public static let revisionAuthor = Font.system(.subheadline, design: .default, weight: .semibold)
+    /// Design: 11px/700 — a row chip's label. `.caption2` is the smallest
+    /// step in the scale, which is what a pill beside a name is.
+    public static let rowChip = Font.system(.caption2, design: .default, weight: .bold)
+    /// The same step, monospaced — the design sets its `v15` chip in
+    /// `ui-monospace` because it is an identifier, not a word.
+    public static let rowChipMono = Font.system(.caption2, design: .monospaced, weight: .bold)
     /// Design: 18px/700 — a heading INSIDE the page body's flow ("Comments ·
     /// 2"), one step under the body's own `h2`.
     public static let inPageSectionTitle = Font.system(.headline, design: .default, weight: .bold)
