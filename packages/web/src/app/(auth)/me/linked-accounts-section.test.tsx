@@ -152,3 +152,21 @@ describe('LinkedAccountsSection', () => {
     expect(screen.queryByText('アカウントを連携しました。')).not.toBeInTheDocument();
   });
 });
+
+describe('LinkedAccountsSection link outcome styling', () => {
+  // A confirmed success rendered in the same neutral card as everything
+  // else read as chrome — the user reported missing it entirely.
+  it('shows a successful link in the success style, not the neutral one', () => {
+    searchParams.current = new URLSearchParams('provider=google&link=linked');
+    render(<LinkedAccountsSection />);
+
+    expect(screen.getByText('アカウントを連携しました。').closest('[role="alert"]')).toHaveClass('text-crowi-success');
+  });
+
+  it.each(['federated_identity_in_use', 'link_failed'])('keeps a failed link destructive (?link=%s)', (result) => {
+    searchParams.current = new URLSearchParams(`provider=google&link=${result}`);
+    render(<LinkedAccountsSection />);
+
+    expect(screen.getByRole('alert')).toHaveClass('text-destructive');
+  });
+});

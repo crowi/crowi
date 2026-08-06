@@ -76,7 +76,7 @@ export function LinkedAccountsSection() {
       </CardHeader>
       <CardContent className="space-y-4">
         {linkResultMessage && (
-          <Alert variant={linkResult === 'linked' ? 'default' : 'destructive'}>
+          <Alert variant={linkResult === 'linked' ? 'success' : 'destructive'}>
             <AlertDescription>{linkResultMessage}</AlertDescription>
           </Alert>
         )}
