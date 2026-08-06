@@ -1,0 +1,84 @@
+---
+title: Signing in with an external account
+description: Setting up sign-in through an OAuth2 / OIDC provider such as Google
+---
+
+Crowi takes authentication providers as plugins. Enabling `@crowi/plugin-google` puts a "Sign in with Google" button on the sign-in screen and lets people sign in to Crowi with their Google account. See [RFC-0014](https://github.com/crowi/crowi/blob/main/docs/rfcs/0014-auth-provider-plugins.md) for the design.
+
+Google is not special-cased. Everything protocol-shaped — OIDC discovery, state / PKCE / nonce, the token exchange, ID token verification — lives in Crowi itself, and the plugin supplies only three Google-specific things: where to discover, which scopes to ask for, and what to call the button. A plugin for any other OIDC provider works the same way.
+
+## Required environment variables
+
+The redirect URI for external sign-in is built from a **configured public URL, never from the request's `Host` header**. So one of these is required:
+
+| Variable | Default | Purpose |
+| -------- | ------- | ------- |
+| `AUTH_PUBLIC_WEB_URL` | `CLIENT_URL` | The public origin of Crowi as the browser sees it |
+| `AUTH_PUBLIC_API_URL` | the resolved web URL | The public origin of the API. Leave unset when it shares an origin with the web app |
+
+Both must be origin-only (no path, query, or fragment) — including one fails boot. **When both are unset, external sign-in is silently disabled**: boot succeeds, the provider list comes back empty, and `/api/auth/providers/<name>/start` returns 404. This is the first thing to check when no button appears.
+
+Setting up [config encryption](./encryption) (`CROWI_ENCRYPTION_KEY`) is also strongly recommended so the client secret is stored encrypted. It works without one, but the secret is then stored in the database as plaintext.
+
+## Setup
+
+### 1. Enable the plugin
+
+Add `@crowi/plugin-google` to your runner project's `package.json` dependencies and list it in the `plugins` array of `crowi.config.json`.
+
+```json
+{
+  "plugins": ["@crowi/plugin-google"]
+}
+```
+
+### 2. Create an OAuth client in Google Cloud
+
+In the [Google Cloud Console](https://console.cloud.google.com/apis/credentials), create an "OAuth 2.0 Client ID" of type **Web application** and register this as an **Authorized redirect URI**:
+
+```
+<AUTH_PUBLIC_API_URL>/api/auth/providers/google/callback
+```
+
+With `AUTH_PUBLIC_API_URL="https://wiki.example.com"`, for instance, that is `https://wiki.example.com/api/auth/providers/google/callback`. A single character of difference produces a `redirect_uri_mismatch` on Google's side.
+
+### 3. Enter the credentials in the admin screen
+
+Open the Google plugin under **Plugins** in the admin screen, enter the Client ID and Client secret, and save. No restart is needed — the button appears on the sign-in screen as soon as the save succeeds.
+
+The Client ID and secret are stored as **one setting in a single document**. A state where only one of them was saved cannot arise, and entering just one leaves the provider "not configured", so **a button that could only fail is never shown on the sign-in screen**.
+
+## What happens at sign-in
+
+How a first-time Google sign-in is handled follows the **registration mode (registrationMode)** setting in the [admin screen](./admin).
+
+| Registration mode | An unregistered user signing in with Google |
+| ----------------- | ------------------------------------------- |
+| Open | Picks a username, the account is created and becomes active immediately |
+| Restricted | Picks a username, the account is created and **waits for administrator approval** |
+| Closed | Sign-in is refused and the sign-in screen explains that registration is closed |
+
+A few constraints matter:
+
+- The email address is used **only when Google asserts it is verified**. An unverified address is not accepted.
+- **An address matching an existing local account is not linked automatically.** That sign-in fails instead. Sign in with the password first, then link the account explicitly from the settings screen. This is deliberate: matching email addresses alone must never hand over control of an existing account.
+
+## Linking and unlinking accounts
+
+A signed-in user can attach or detach external providers from **Settings → Password / API tokens / Linked accounts**.
+
+Unlinking is allowed only when it cannot lock the account out. It is refused when either of these holds:
+
+- The user has no password set (unlinking would leave no way to sign in)
+- Password sign-in is disabled instance-wide
+
+## Troubleshooting
+
+**No button on the sign-in screen**
+Check that `AUTH_PUBLIC_WEB_URL` (or `CLIENT_URL`) is set, and that **both** the Client ID and the secret have been saved. The provider is omitted from the list if either is missing.
+
+**Google reports `redirect_uri_mismatch`**
+Check that the redirect URI registered in the Google Cloud Console matches the one built from `AUTH_PUBLIC_API_URL` exactly. Behind a reverse proxy, `AUTH_PUBLIC_API_URL` must be set to the **origin outside the proxy**.
+
+**"That email address is already registered"**
+A local account with that address already exists. Sign in with the password and link the Google account from the settings screen.
