@@ -123,6 +123,97 @@ const UPLOAD_MIME_SET = new Set<string>(UPLOAD_ALLOWED_MIME);
 
 const isUploadAllowedMime = (mimeType: string): boolean => UPLOAD_MIME_SET.has(mimeType);
 
+/** The multipart default when a client sends no `Content-Type` for a part at all. */
+const DEFAULT_UPLOAD_MIME = 'application/octet-stream';
+
+/**
+ * feature-attachment-mime-fallback — extension → MIME used ONLY to backfill
+ * an upload's declared type when the client didn't send one. A Web `File`
+ * cannot distinguish "no `Content-Type` was sent" from an explicit
+ * declaration of `application/octet-stream` (both surface as
+ * `file.type === ''` → `DEFAULT_UPLOAD_MIME` at `persistUploadToTmp`'s call
+ * site), so `resolveEffectiveUploadMime` treats that default value as
+ * "undeclared" and fills it in from the filename. MCP / curl / third-party
+ * scripts routinely skip declaring a `Content-Type`, which used to store and
+ * serve e.g. an uploaded `pixel.png` as a plain download.
+ *
+ * Deliberately NOT shared with `attachment-stream.ts`'s `KEY_EXT_TO_MIME` /
+ * `INLINE_SAFE_MIME`. Those answer a different, intentionally narrow
+ * question — which STORED types may be served *inline* — as part of the
+ * attachment XSS boundary (see that file's doc comments). This table answers
+ * "what kind of file is this" and is meant to grow as new upload types are
+ * allow-listed; sharing it would let a future addition here silently widen
+ * what may be delivered inline.
+ *
+ * Initial entries mirror `packages/cli/src/lib/media-type.ts`'s
+ * `EXT_TO_MEDIA_TYPE` (not shared code — the CLI is a separate package with
+ * its own reasons to declare a type). Keep in sync manually if either grows.
+ */
+const UPLOAD_EXT_TO_MIME: Record<string, string> = {
+  // Raster images — the types attachment delivery will serve inline.
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  bmp: 'image/bmp',
+  avif: 'image/avif',
+  apng: 'image/apng',
+  ico: 'image/x-icon',
+  svg: 'image/svg+xml',
+  // Documents / text.
+  pdf: 'application/pdf',
+  txt: 'text/plain',
+  md: 'text/markdown',
+  markdown: 'text/markdown',
+  csv: 'text/csv',
+  json: 'application/json',
+  xml: 'application/xml',
+  html: 'text/html',
+  htm: 'text/html',
+  // Office.
+  doc: 'application/msword',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xls: 'application/vnd.ms-excel',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  ppt: 'application/vnd.ms-powerpoint',
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  // Archives.
+  zip: 'application/zip',
+  gz: 'application/gzip',
+  tar: 'application/x-tar',
+  // Audio / video.
+  mp3: 'audio/mpeg',
+  wav: 'audio/wav',
+  mp4: 'video/mp4',
+  webm: 'video/webm',
+  mov: 'video/quicktime',
+};
+
+/**
+ * Resolve the effective upload MIME for `file`: the client's declared
+ * `file.type` when it is anything other than `DEFAULT_UPLOAD_MIME`, otherwise
+ * a best-effort guess from `file.name`'s last extension. An unknown/absent
+ * extension — or a filename ending in a bare dot — still resolves to
+ * `DEFAULT_UPLOAD_MIME`, exactly as before this helper existed: this only
+ * replaces a wrong default with a better one, it never changes what may be
+ * uploaded or how a stored attachment is delivered.
+ */
+const resolveEffectiveUploadMime = (file: File): string => {
+  const declared = file.type || DEFAULT_UPLOAD_MIME;
+  if (declared !== DEFAULT_UPLOAD_MIME) return declared;
+
+  const name = file.name || '';
+  const dot = name.lastIndexOf('.');
+  if (dot < 1 || dot === name.length - 1) return DEFAULT_UPLOAD_MIME;
+  const ext = name.slice(dot + 1).toLowerCase();
+  // `Object.hasOwn`, not a plain lookup: the map inherits from
+  // `Object.prototype`, so a filename like `foo.constructor` would
+  // otherwise resolve to a function and be declared as the MIME type — same
+  // safe-lookup posture as the CLI's `mediaTypeForFilename`.
+  return Object.hasOwn(UPLOAD_EXT_TO_MIME, ext) ? UPLOAD_EXT_TO_MIME[ext] : DEFAULT_UPLOAD_MIME;
+};
+
 /** Shared rejection wording — every route uses the exact same phrase (feature-attachment-upload-policy AC "拒否時のエラーコードと文言が全経路で統一されている"). */
 const disallowedMimeMessage = (mimeType: string): string => `Files of type ${mimeType} cannot be uploaded.`;
 
@@ -255,7 +346,11 @@ const persistUploadToTmp = async (file: File, tmpDir: string): Promise<{ tmpPath
 
   return {
     tmpPath,
-    mimetype: file.type || 'application/octet-stream',
+    // feature-attachment-mime-fallback — an undeclared (or, indistinguishably,
+    // explicitly `application/octet-stream`) type is backfilled from the
+    // filename's extension so an unlabelled upload (MCP / curl / third-party
+    // scripts) isn't stored and delivered as a plain download.
+    mimetype: resolveEffectiveUploadMime(file),
     originalname: file.name || randomId,
     size: file.size,
   };
@@ -528,7 +623,12 @@ export const registerAttachmentRoutes = <E extends OpenAPIHono<CrowiHonoBindings
         // being rejected via drag-and-drop. Apply the same
         // `UPLOAD_ALLOWED_MIME` allow-list here so all three affordances
         // (attach button / paste / dnd) agree.
-        const declaredType = file.type || 'application/octet-stream';
+        // feature-attachment-mime-fallback — resolve the same effective MIME
+        // the tmp-persist step below will independently compute for `file`
+        // (pure/deterministic, so both calls agree), so the allow-list
+        // decision and the value that ends up in `Attachment.fileFormat`
+        // never diverge.
+        const declaredType = resolveEffectiveUploadMime(file);
         if (!isUploadAllowedMime(declaredType)) {
           return c.json(errorBody('DISALLOWED_MIME', disallowedMimeMessage(declaredType)), 415);
         }
@@ -635,7 +735,11 @@ export const registerAttachmentRoutes = <E extends OpenAPIHono<CrowiHonoBindings
         if (file.size > maxBytes) {
           return c.json(uploadErrorBody('too_large', 'The file is too large to upload.', { maxBytes }), 413);
         }
-        const fileType = file.type || 'application/octet-stream';
+        // feature-attachment-mime-fallback — same helper as `addAttachment` /
+        // `persistUploadToTmp`: an undeclared type is backfilled from the
+        // filename so the allow-list check, the stored `fileFormat`, and the
+        // response `mimeType` all agree.
+        const fileType = resolveEffectiveUploadMime(file);
         if (!isUploadAllowedMime(fileType)) {
           // `DISALLOWED_MIME`, not the endpoint's usual lowercase
           // `disallowed_type` — a MIME-type rejection is required to carry
