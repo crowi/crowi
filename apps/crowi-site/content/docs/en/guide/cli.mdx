@@ -67,7 +67,7 @@ features need extra scopes granted at login:
 | Command | Scope to add at login |
 | --- | --- |
 | `comment` (list / add / delete) | `comments:read comments:write` |
-| `attach` (list / add / remove) | `attachments:read attachments:write` |
+| `attach` (list / add / download) | `attachments:read attachments:write` |
 | `bookmark` (get / list / add / remove) | `bookmarks:read bookmarks:write` |
 | `watch` (get / set) | none — rides the default `pages:*` |
 
@@ -172,6 +172,22 @@ so a bad path fails locally with a clear error rather than a round-trip.
 page changed while you were editing, the write **aborts by default** with exit
 code `5` (conflict) — it never silently clobbers. Re-run with `--force` to
 overwrite the newer revision.
+
+### Downloading attachments
+
+`attach list <path-or-id>` prints the attachment id at the start of each row. Pass that id to `attach download` to get the bytes.
+
+```bash
+crowi attach list /docs/spec
+# 6650f0c1a2b3c4d5e6f70123  design.pdf  /api/v2/attachments/6650f0c1a2b3c4d5e6f70123
+
+crowi attach download 6650f0c1a2b3c4d5e6f70123 -o design.pdf
+crowi attach download 6650f0c1a2b3c4d5e6f70123 > design.pdf   # stdout when -o is omitted
+```
+
+Without `-o` the bytes go to stdout (writing them straight to a terminal is refused, since binary corrupts the display). Progress and confirmation messages go to stderr, so nothing but the file itself ever reaches a redirect or a pipe.
+
+The delivery route an embedded `<img>` reads answers a missing attachment with a placeholder image and a `200`. That keeps browsers from showing a broken image, but for a client extracting a file it means happily saving something that is not the attachment. `attach download` uses a dedicated route that returns `404` (exit code `4`) both when the record is gone and when its stored file is gone, so a saved file is always the real thing.
 
 ## Output formats & scripting
 
