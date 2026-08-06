@@ -17,6 +17,7 @@ import { ApiErrorSchema, AuthenticationRequiredErrorSchema, InternalServerErrorS
 import {
   CreateLinkGrantRequestSchema,
   CreateLinkGrantResponseSchema,
+  LinkedAuthProviderListResponseSchema,
   FederatedHandoffRequestSchema,
   FederatedHandoffResponseSchema,
   ProviderListResponseSchema,
@@ -106,6 +107,27 @@ export const startFederatedProviderRoute = createRoute({
     404: {
       description: 'Unknown, unconfigured, or credential-kind provider',
       content: { 'application/json': { schema: ApiErrorSchema } },
+    },
+    500: {
+      description: 'Internal server error',
+      content: { 'application/json': { schema: InternalServerErrorSchema } },
+    },
+  },
+});
+
+export const listLinkedAuthProvidersRoute = createRoute({
+  method: 'get',
+  path: '/auth/providers/identities',
+  tags: ['federatedAuth'],
+  summary: 'List the provider slugs the current user has linked',
+  responses: {
+    200: {
+      description: 'Linked provider slugs, in name order',
+      content: { 'application/json': { schema: LinkedAuthProviderListResponseSchema } },
+    },
+    401: {
+      description: 'Authentication required',
+      content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
     },
     500: {
       description: 'Internal server error',
@@ -241,6 +263,7 @@ export const federatedAuthRoutes = {
   startFederatedProviderRoute,
   callbackFederatedProviderRoute,
   federatedHandoffRoute,
+  listLinkedAuthProvidersRoute,
   createAuthProviderLinkGrantRoute,
   unlinkAuthProviderRoute,
 };

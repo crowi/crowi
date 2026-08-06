@@ -74,6 +74,18 @@ export const FederatedHandoffResponseSchema = TokenAuthResponseSchema;
  * "state の `linkToUserId` は authenticated start request の user からだけ
  * 設定し、callback query / client-supplied id から設定しない").
  */
+/**
+ * RFC-0014 phase 4 — which providers the CURRENT user has connected.
+ *
+ * Only provider slugs: never the provider-side account id, email or
+ * display name. The settings screen needs to know whether to offer Link
+ * or Unlink, and nothing more — returning the identity itself would put
+ * a third party's account identifier into a page that has no use for it.
+ */
+export const LinkedAuthProviderListResponseSchema = z.object({
+  identities: z.array(z.object({ provider: z.string() })),
+});
+
 export const CreateLinkGrantRequestSchema = z.object({
   /** RFC 7638 thumbprint of the P-256 public key this browser will use at `/start` — binds the grant to this browser (AC-2). */
   handoffChallenge: z.string().min(1),

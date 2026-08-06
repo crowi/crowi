@@ -1042,6 +1042,46 @@ describe('federated auth (RFC-0014 phase 1)', () => {
       });
     });
 
+    // RFC-0014 phase 4 (AC-7) — the settings screen needs to know which
+    // providers the CURRENT user has connected, which nothing in phase 3
+    // exposed. Slugs only: the section decides Link vs Unlink from this
+    // and has no business learning the provider-side account id.
+    describe('GET /api/auth/providers/identities', () => {
+      it("returns the caller's own provider slugs in name order, and nothing else", async () => {
+        const { user, token } = await seedWebUser('fed-list-own@example.com', 'fed-list-own');
+        await seedResolvedIdentity(user, 'zeta-provider', 'sub-zeta');
+        await seedResolvedIdentity(user, 'alpha-provider', 'sub-alpha');
+
+        const res = await request(app).get('/api/auth/providers/identities').set('authorization', `Bearer ${token}`);
+
+        expect(res.status).toBe(200);
+        expect(res.body.identities).toEqual([{ provider: 'alpha-provider' }, { provider: 'zeta-provider' }]);
+      });
+
+      it("never reports another user's identity", async () => {
+        const { token } = await seedWebUser('fed-list-self@example.com', 'fed-list-self');
+        const other = await seedActiveUser('fed-list-other@example.com', 'fed-list-other');
+        await seedResolvedIdentity(other, 'fed-list-leak', 'sub-other');
+
+        const res = await request(app).get('/api/auth/providers/identities').set('authorization', `Bearer ${token}`);
+
+        expect(res.status).toBe(200);
+        expect(res.body.identities).toEqual([]);
+      });
+
+      it('401s without a JWT — the linked set is not public', async () => {
+        const res = await request(app).get('/api/auth/providers/identities');
+        expect(res.status).toBe(401);
+      });
+
+      // `identities` sits where `:name` does in the sibling routes; a
+      // greedy param would swallow it and answer with a provider start.
+      it('is not shadowed by the public provider routes', async () => {
+        const res = await request(app).get('/api/auth/providers/identities');
+        expect(res.headers.location).toBeUndefined();
+      });
+    });
+
     describe('AC-7: the handoff identity fence', () => {
       it('refuses to mint tokens when the identity was unlinked between the callback and the exchange — same generic error, no token', async () => {
         const user = await seedActiveUser('fed-fence@example.com', 'fed-fence');

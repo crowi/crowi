@@ -28,6 +28,7 @@ import {
   callbackFederatedProviderRoute,
   createAuthProviderLinkGrantRoute,
   federatedHandoffRoute,
+  listLinkedAuthProvidersRoute,
   listFederatedProvidersRoute,
   startFederatedProviderRoute,
   unlinkAuthProviderRoute,
@@ -555,6 +556,7 @@ export const registerFederatedAuthRoutes = <E extends OpenAPIHono<CrowiHonoBindi
     if (c.req.query('link') !== '1') return next();
     return jwtAuth(c, next);
   });
+  app.use('/auth/providers/identities', jwtAuth);
   app.use('/auth/providers/:name/link-grants', jwtAuth);
   app.use('/auth/providers/:name/identity', jwtAuth);
 
@@ -647,6 +649,22 @@ export const registerFederatedAuthRoutes = <E extends OpenAPIHono<CrowiHonoBindi
         return c.json({ ...tokens, user: toAuthUser(user) }, 200);
       } catch (err) {
         debug('handoff failed: %s', (err as Error).message);
+        return c.json(INTERNAL_ERROR_BODY, 500);
+      }
+    })
+    .openapi(listLinkedAuthProvidersRoute, async (c) => {
+      const user = c.get('user');
+      if (!user) return c.json(AUTH_REQUIRED_BODY, 401);
+
+      try {
+        const UserIdentity = crowi.model('UserIdentity');
+        const rows = await UserIdentity.find({ userId: user._id });
+        // Slugs only — the settings screen decides Link vs Unlink from
+        // this and needs nothing else. See the response schema's comment.
+        const identities = rows.map((row) => ({ provider: row.provider })).sort((a, b) => a.provider.localeCompare(b.provider));
+        return c.json({ identities }, 200);
+      } catch (err) {
+        debug('listing linked identities failed: %s', (err as Error).message);
         return c.json(INTERNAL_ERROR_BODY, 500);
       }
     })
