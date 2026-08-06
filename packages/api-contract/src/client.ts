@@ -170,9 +170,9 @@ import type { GetAuthSettingsResponseSchema, UpdateAuthSettingsResponseSchema } 
 import type { GetMailSettingsResponseSchema, SendTestMailResponseSchema, UpdateMailSettingsResponseSchema } from './schemas/admin/mail';
 import type {
   ClearRenderCacheResponseSchema,
+  ConfigReadinessResponseSchema,
   ListPluginsResponseSchema,
   PluginConfigResponseSchema,
-  PluginReadinessResponseSchema,
   UpdatePluginConfigResponseSchema,
 } from './schemas/admin/plugins';
 import type { GetSearchStatusResponseSchema } from './schemas/admin/search';
@@ -271,7 +271,7 @@ type PendingUsersCountResponse = z.infer<typeof PendingUsersCountResponseSchema>
 type ListPluginsResponse = z.infer<typeof ListPluginsResponseSchema>;
 type PluginConfigResponse = z.infer<typeof PluginConfigResponseSchema>;
 type UpdatePluginConfigResponse = z.infer<typeof UpdatePluginConfigResponseSchema>;
-type PluginReadinessResponse = z.infer<typeof PluginReadinessResponseSchema>;
+type ConfigReadinessResponse = z.infer<typeof ConfigReadinessResponseSchema>;
 type ClearRenderCacheResponse = z.infer<typeof ClearRenderCacheResponseSchema>;
 
 /**
@@ -571,7 +571,7 @@ const stubPendingUsersCount: PendingUsersCountResponse = { count: 0 };
 const stubListPlugins: ListPluginsResponse = { plugins: [] };
 const stubPluginConfig: PluginConfigResponse = { name: '', fields: [], values: {} };
 const stubUpdatePluginConfig: UpdatePluginConfigResponse = { ok: true, hotReloaded: false, reconfigureFailed: false };
-const stubPluginReadiness: PluginReadinessResponse = { issues: [] };
+const stubPluginReadiness: ConfigReadinessResponse = { issues: [] };
 const stubClearRenderCache: ClearRenderCacheResponse = { ok: true, clearedAt: '', removedCount: 0 };
 
 // app boot / token-auth / me / user — 20 routes. The `_id` user is
