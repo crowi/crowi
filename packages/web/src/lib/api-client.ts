@@ -193,10 +193,15 @@ const toPathname = (urlString: string): string => {
  * without that prefix for direct correspondence with each contract's own
  * `path:`.
  */
-const isPublicPath = (urlString: string): boolean => {
-  const pathname = toPathname(urlString);
-  return PUBLIC_PATHS.some((path) => pathname === path || pathname === `/api${path}`);
-};
+/**
+ * Both spellings are materialised once at module init rather than rebuilt per
+ * call: this runs on every request made while fully logged out, which is
+ * exactly the pre-login page-load burst.
+ */
+const PUBLIC_PATH_SET = new Set(PUBLIC_PATHS.flatMap((path) => [path, `/api${path}`]));
+
+/** Takes an already-extracted pathname so callers that have one don't re-parse the URL. */
+const isPublicPath = (pathname: string): boolean => PUBLIC_PATH_SET.has(pathname);
 
 /**
  * feature-auth-cookie-fallback-scope — the api's `createJwtAuth` default is
@@ -268,7 +273,7 @@ export const apiFetch: typeof fetch = async (input, init) => {
         // headerless request — return the same 401 shape a real one would.
         return authRequiredResponse();
       }
-    } else if (!isPublicPath(urlString)) {
+    } else if (!isPublicPath(refreshPathname)) {
       // No refresh token either — there is nothing left to recover, and
       // this is not one of the pre-login public flows that must legitimately
       // work while fully logged out. Sending this request headerless would

@@ -354,8 +354,8 @@ export const createAttachmentAuth = (crowi: Crowi) => {
   });
 };
 
-const ATTACHMENT_BY_ID_RE = /^\/attachments\/[0-9a-fA-F]{24}$/;
-const ATTACHMENT_ORIGINAL_RE = /^\/attachments\/[0-9a-fA-F]{24}\/original$/;
+/** by-id and its `/original` variant — one pattern, the suffix optional. */
+const ATTACHMENT_BY_ID_RE = /^\/attachments\/[0-9a-fA-F]{24}(?:\/original)?$/;
 const ATTACHMENT_BY_KEY_PREFIX = '/attachments/by-key/';
 
 /**
@@ -366,7 +366,7 @@ const ATTACHMENT_BY_KEY_PREFIX = '/attachments/by-key/';
  * (`hono/path-rewrite.ts`) — so it matches the routes' own registered
  * patterns verbatim.
  */
-export const isAttachmentDeliveryRequest = (method: string, path: string): boolean => {
+const isAttachmentDeliveryRequest = (method: string, path: string): boolean => {
   if (method !== 'GET' && method !== 'HEAD') return false;
-  return ATTACHMENT_BY_ID_RE.test(path) || ATTACHMENT_ORIGINAL_RE.test(path) || path.startsWith(ATTACHMENT_BY_KEY_PREFIX);
+  return ATTACHMENT_BY_ID_RE.test(path) || path.startsWith(ATTACHMENT_BY_KEY_PREFIX);
 };
