@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import type { FederatedProfileTerminal } from 'src/auth/federated-profile-terminal';
+import { createUnavailableFederatedProfileTerminal, type FederatedProfileTerminal } from 'src/auth/federated-profile-terminal';
 import { createHonoApp } from 'src/hono/app';
 import { buildProviderRedirect, completeFederatedCallback, registerFederatedAuthRoutes } from 'src/hono/handlers/federated-auth';
 import type { UserDocument } from 'src/models/user';
@@ -549,17 +549,29 @@ describe('federated auth (RFC-0014 phase 1)', () => {
       expect(res.headers.location).toBe('https://web.test.example/login?error=profile_rejected');
     });
 
-    test('the default (Phase 1) terminal declines with registration_unavailable and performs no User/UserIdentity write (AC-5)', async () => {
+    test('the Phase-1 default (always-decline) terminal declines with registration_unavailable and performs no User/UserIdentity write (AC-5)', async () => {
+      // The SHARED `app` (built by the real `buildHonoApp`) wires Phase 2's
+      // real registration terminal by default — this test exercises the
+      // Phase-1 default terminal specifically (still exported, still the
+      // fallback `registerFederatedAuthRoutes` uses when no `terminal`
+      // option is passed), so it must build its own local app rather than
+      // rely on the shared one's current wiring.
       oidcMock.authorizationCodeGrant.mockResolvedValueOnce({ claims: () => ({ sub: 'brand-new-user', email: 'brand-new@example.com' }) });
-      const { cookie, state } = await startFlow('fed-oidc');
+      const localApp = buildLocalApp(createUnavailableFederatedProfileTerminal());
+
+      const keyPair = await createSenderKeyPair();
+      const startQuery = await buildStartQuery('fed-oidc', '/dashboard', keyPair);
+      const startRes = await localApp.request(`/auth/providers/fed-oidc/start?${startQuery}`);
+      const cookie = extractStateCookie({ headers: Object.fromEntries(startRes.headers.entries()) });
+      const state = new URL(startRes.headers.get('location') as string).searchParams.get('state') as string;
 
       const User = crowi.model('User');
       const before = await User.countDocuments({ email: 'brand-new@example.com' });
       expect(before).toBe(0);
 
-      const res = await request(app).get(`/api/auth/providers/fed-oidc/callback?code=abc&state=${state}`).set('Cookie', cookie).redirects(0);
-      expect(res.status).toBe(302);
-      expect(res.headers.location).toBe('https://web.test.example/login?error=registration_unavailable');
+      const callbackRes = await localApp.request(`/auth/providers/fed-oidc/callback?code=abc&state=${state}`, { headers: { cookie } });
+      expect(callbackRes.status).toBe(302);
+      expect(callbackRes.headers.get('location')).toBe('https://web.test.example/login?error=registration_unavailable');
 
       const after = await User.countDocuments({ email: 'brand-new@example.com' });
       expect(after).toBe(0);
