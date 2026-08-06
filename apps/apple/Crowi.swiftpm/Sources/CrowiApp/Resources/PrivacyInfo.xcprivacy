@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  The app collects nothing and tracks nobody: every byte it reads and
+	  writes belongs to the Crowi instance the user chose to sign into, and
+	  it talks to no other host. Tokens live in the keychain and never leave
+	  the device.
+	-->
+	<key>NSPrivacyTracking</key>
+	<false/>
+	<key>NSPrivacyTrackingDomains</key>
+	<array/>
+	<key>NSPrivacyCollectedDataTypes</key>
+	<array/>
+	<!--
+	  Required-reason APIs. `UserDefaults` is the only one this app uses:
+	  `WorkspaceStore` keeps the workspace index (id / origin / title — never
+	  a token, pinned by `WorkspaceStoreTests`) there. CA92.1 is the reason
+	  code for "access info from the app itself", which is exactly this.
+	-->
+	<key>NSPrivacyAccessedAPITypes</key>
+	<array>
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>CA92.1</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

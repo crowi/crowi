@@ -31,7 +31,7 @@ let package = Package(
             teamIdentifier: "ABCDE12345",
             displayVersion: "0.1",
             bundleVersion: "1",
-            iconAssetName: nil,
+            iconAssetName: "AppIcon",
             accentColorAssetName: nil,
             supportedDeviceFamilies: [
                 .phone,
@@ -53,6 +53,14 @@ let package = Package(
             name: "CrowiApp",
             dependencies: [
                 .product(name: "CrowiKit", package: "CrowiKit")
+            ],
+            resources: [
+                // The app icon catalog (`iconAssetName` above resolves
+                // "AppIcon" out of it) and the privacy manifest, which the
+                // App Store requires for the required-reason APIs this app
+                // touches. Both have to be target RESOURCES — a `.swiftpm`
+                // app package has no project settings to hang them off.
+                .process("Resources")
             ]
         )
     ]
