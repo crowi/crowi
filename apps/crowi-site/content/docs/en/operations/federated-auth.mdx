@@ -67,10 +67,12 @@ A few constraints matter:
 
 A signed-in user can attach or detach external providers from **Settings → Password / API tokens / Linked accounts**.
 
-Unlinking is allowed only when it cannot lock the account out. It is refused when either of these holds:
+Unlinking requires that the account **can sign in with a password**. It is refused when either of these holds:
 
-- The user has no password set (unlinking would leave no way to sign in)
+- The user has no password set
 - Password sign-in is disabled instance-wide
+
+The password is the only thing the guard looks at — **another linked provider does not satisfy it**. A user with both Google and GitHub linked but no password cannot unlink either one. Counting identities instead would be racy: two concurrent unlinks would each see the other's identity still present, both proceed, and leave an account with no way to sign in at all.
 
 ## Troubleshooting
 

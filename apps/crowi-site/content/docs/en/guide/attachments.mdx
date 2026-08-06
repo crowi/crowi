@@ -93,9 +93,19 @@ Hitting that URL delivers the actual file.
 
 ### Content types on delivery
 
-An attachment's MIME type is recorded from what the browser declared at
-upload time. Delivery therefore does not trust that declaration: the
-outgoing `Content-Type` is **pinned to a server-side allow-list**.
+An attachment's MIME type is recorded from what the client declared at
+upload time. **When nothing was declared, or `application/octet-stream` was
+declared explicitly** — the two are treated identically, as "type unknown" —
+the server fills the type in from the filename's extension. MCP, curl,
+and hand-written scripts routinely omit the `Content-Type`, which otherwise
+stored and served even an image like `pixel.png` as a generic file. An
+unknown extension, or no extension at all, stays
+`application/octet-stream`. A declared type other than
+`application/octet-stream` is **never overridden**, even when it contradicts
+the extension — the declaration is the caller's stated intent.
+
+Delivery does not trust the recorded value either way: the outgoing
+`Content-Type` is **pinned to a server-side allow-list**.
 
 | Type as delivered | Behaviour |
 | ----------------- | --------- |

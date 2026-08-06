@@ -47,9 +47,18 @@ Web UI から行うための領域です。`/admin` を開くとダッシュボ�
 | `registerStorage` | ストレージ |
 | `registerSearch` | 検索 |
 | `registerRenderer` | レンダラー |
-| `registerNotifier` | 通知 |
 | `registerMailSender` | メール |
-| config のみ (フックなし) → `section: 'shared'` | 共通サービス |
+| `registerNotifier` / `registerAuth` | 設定 (下記のフォールバック) |
+| config のみ (フックなし) | 設定。`section: 'shared'` を宣言した場合は共通サービス |
+
+`adminPlacement.section` はプラグイン契約上 `notification` と `auth` も
+宣言できますが、**サイドバーにはこの 2 つに対応する見出しがありません**。
+見出しの無いセクションを宣言した (あるいは `registerNotifier` /
+`registerAuth` から導出された) エントリは、落とされるのではなく
+**「設定」グループにフォールバック** します。認証プロバイダプラグインは
+セクションが `registerAuth` から導出されるため、既定でこの経路を通ります。
+フォールバックすることで、対応する見出しが無いセクションを宣言しても
+設定ページが URL 直打ちでしか辿れなくなる、という事態は起きません。
 
 たとえば Elasticsearch 検索プラグインは「検索」グループに、PlantUML
 レンダラープラグインは「レンダラー」グループに現れます (どちらも

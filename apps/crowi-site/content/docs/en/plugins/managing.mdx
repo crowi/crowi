@@ -127,9 +127,15 @@ need to ship a React component.
 Each plugin also adds its own entry to the admin sidebar. The placement
 is decided by the plugin's `adminPlacement`, and the section (storage /
 mail / notification / auth …) is derived automatically from the kind of
-`register*` hooks. Config-only base plugins with no `register*` hooks
-(such as `@crowi/plugin-aws`) declare `section: 'shared'` to appear in
-the sidebar at all.
+`register*` hooks.
+
+**Anything that does not resolve to a section defaults to the Settings
+group.** Config-only base plugins with no `register*` hooks (such as
+`@crowi/plugin-aws`) declare `section: 'shared'` to *choose* Shared
+services — not to become visible; without it they would still appear, under
+Settings. Entries naming a section the sidebar has no heading for
+(`notification` / `auth`) fall back the same way, so getting the section
+wrong can never make a plugin's config page unreachable.
 
 ### The `@sensitive` marker
 

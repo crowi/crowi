@@ -51,6 +51,24 @@ You can change your display name, email address, and display language.
 | Email | The destination for notifications. If an administrator has configured a domain restriction for email addresses, an address that does not match the allow list cannot be saved |
 | Language (lang) | The display language of the UI (Japanese / English) |
 
+If your account is **linked to an external provider** such as Google, the
+**email address cannot be changed**. The field in the settings screen is
+disabled and says why. A linked account can sign in from outside Crowi, so
+if a stolen API token or OAuth grant could swap the address, the
+confirmation link would go to the attacker along with it — handing away the
+account's recovery channel.
+
+The lock depends only on **whether any identity is linked at all**. The
+address the provider knows and the address on the Crowi account do not have
+to match: linking never overwrites the account's email, so the two are
+allowed to differ.
+
+Submitting a different address on such an account **rejects the whole
+request: the name and language you changed in the same save are not stored
+either.** To change only your name or language, leave the email field as it
+is and save (resubmitting your current address saves normally). Accounts
+with no linked identity behave exactly as described below.
+
 Name and language take effect the moment you save. **The email address is
 the exception — saving alone does not change it.** A message containing a
 confirmation link is sent to the new address, and the change is only
