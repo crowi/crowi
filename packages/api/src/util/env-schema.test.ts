@@ -17,6 +17,7 @@ describe('util/env-schema validateEnv', () => {
         redisUrl: null,
         mongoUri: 'mongodb://localhost/crowi',
         encryptionKey: null,
+        federatedAuthPublicUrls: null,
       });
     });
 

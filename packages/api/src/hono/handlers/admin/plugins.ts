@@ -238,11 +238,35 @@ export const registerAdminPluginsRoutes = <E extends OpenAPIHono<CrowiHonoBindin
       }
 
       const configService = crowi.getConfigService();
+
+      // RFC-0014 phase 4 — fields belonging to a `configAtomicGroups` group
+      // leave the ordinary per-key write path entirely. A group is touched
+      // as a whole whenever ANY of its members is in the request, and the
+      // values written are taken from the VALIDATED merge (`parsed.data`),
+      // not from the request: that is what supplies an omitted secret from
+      // the currently-stored value, so saving only the client id can never
+      // blank the secret next to it.
+      const atomicGroups = plugin.configAtomicGroups ?? [];
+      const touchedGroups = atomicGroups.filter((group) => group.keys.some((key) => key in toWrite));
+      const atomicFieldNames = new Set(atomicGroups.flatMap((group) => group.keys));
+
       const writes: Record<string, unknown> = {};
       for (const [key, value] of Object.entries(toWrite)) {
+        if (atomicFieldNames.has(key)) continue;
         writes[`plugin:${plugin.name}:${key}`] = value;
       }
+
       try {
+        for (const group of touchedGroups) {
+          const values: Record<string, string> = {};
+          for (const key of group.keys) {
+            values[key] = String((parsed.data as Record<string, unknown>)[key] ?? '');
+          }
+          // Throws on a failed write, and deliberately runs BEFORE the
+          // ordinary writes and the reconfigure below: nothing may observe
+          // a credential group that was not persisted.
+          await configService.saveConfigAtomicGroup('crowi', plugin.name, group.name, values);
+        }
         if (Object.keys(writes).length > 0) {
           await configService.saveConfig('crowi', writes);
         }
@@ -254,7 +278,7 @@ export const registerAdminPluginsRoutes = <E extends OpenAPIHono<CrowiHonoBindin
       let hotReloaded = false;
       let reconfigureFailed = false;
       const pluginManager = crowi.pluginManager;
-      if (pluginManager && Object.keys(writes).length > 0) {
+      if (pluginManager && (Object.keys(writes).length > 0 || touchedGroups.length > 0)) {
         const result = await pluginManager.reconfigureAffected([`plugin:${plugin.name}`]);
         hotReloaded = result.attempted > 0 && result.succeeded === result.attempted;
         reconfigureFailed = result.attempted > result.succeeded;

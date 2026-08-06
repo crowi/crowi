@@ -104,6 +104,8 @@ import { revisionRoutes } from './contracts/revision';
 import { adminCryptoRoutes } from './contracts/admin-crypto';
 import { searchRoutes } from './contracts/search';
 import { tokenAuthRoutes } from './contracts/token-auth';
+import { federatedAuthRoutes } from './contracts/federated-auth';
+import { federatedRegistrationRoutes } from './contracts/federated-registration';
 import { inviteAcceptRoutes } from './contracts/invite-accept';
 import { passwordResetRoutes } from './contracts/password-reset';
 import { activationRoutes } from './contracts/activation';
@@ -154,6 +156,8 @@ import type { GetRevisionResponseSchema, GetRevisionsResponseSchema, ListRevisio
 import type { SearchPagesResponseSchema } from './schemas/search';
 import type { CryptoStatusResponseSchema, ReencryptResponseSchema } from './schemas/admin-crypto';
 import type { TokenAuthResponseSchema } from './schemas/auth';
+import type { ProviderListResponseSchema } from './schemas/federated-auth';
+import type { FederatedRegistrationSnapshotSchema } from './schemas/federated-registration';
 import type { ListUsersResponseSchema, UserBookmarksResponseSchema, UserPageResponseSchema, UserPagesResponseSchema } from './schemas/user';
 import type { CreateDraftResponseSchema, ListDraftsResponseSchema } from './schemas/draft';
 import type { AutocompleteResponseSchema } from './schemas/autocomplete';
@@ -192,6 +196,8 @@ type AppInfoResponse = z.infer<typeof AppInfoResponseSchema>;
 type InstallerStatusResponse = z.infer<typeof InstallerStatusResponseSchema>;
 type CreateAdminResponse = z.infer<typeof CreateAdminResponseSchema>;
 type TokenAuthResponse = z.infer<typeof TokenAuthResponseSchema>;
+type ProviderListResponse = z.infer<typeof ProviderListResponseSchema>;
+type FederatedRegistrationSnapshotResponse = z.infer<typeof FederatedRegistrationSnapshotSchema>;
 type UserProfileResponse = z.infer<typeof UserProfileResponseSchema>;
 type PictureUploadResponse = z.infer<typeof PictureUploadResponseSchema>;
 type SuccessResponse = z.infer<typeof SuccessResponseSchema>;
@@ -300,6 +306,14 @@ const stubTokens: TokenAuthResponse = {
   refreshToken: '',
   expiresIn: 0,
   user: stubUser,
+};
+
+const stubProviderList: ProviderListResponse = { providers: [] };
+const stubFederatedRegistrationSnapshot: FederatedRegistrationSnapshotResponse = {
+  email: 'stub@example.com',
+  provider: '',
+  providerLabel: '',
+  approvalPending: false,
 };
 
 const stubProfile: UserProfileResponse = {
@@ -817,6 +831,34 @@ const oauthContractApp = new OpenAPIHono()
   .openapi(oauthRoutes.clientInfoRoute, (c) => c.json(stubClientInfo, 200));
 
 /**
+ * Federated (OAuth2/OIDC) sign-in flow skeleton (RFC-0014 phase 1) — 4
+ * routes. Kept on its own chain (same TS2589 mitigation as `oauthContractApp`)
+ * rather than folded into `appAuthMeUserChain`. `start` / `callback` are
+ * real top-level-navigation redirects (no JSON body) — `c.redirect(...)`
+ * type-checks against the route's typed-response union because at least
+ * one declared status (`302`) carries no `content` (see the contract file
+ * header for why).
+ */
+const federatedAuthContractApp = new OpenAPIHono()
+  .openapi(federatedAuthRoutes.listFederatedProvidersRoute, (c) => c.json(stubProviderList, 200))
+  .openapi(federatedAuthRoutes.startFederatedProviderRoute, (c) => c.redirect('', 302))
+  .openapi(federatedAuthRoutes.callbackFederatedProviderRoute, (c) => c.redirect('', 302))
+  .openapi(federatedAuthRoutes.federatedHandoffRoute, (c) => c.json(stubTokens, 200))
+  .openapi(federatedAuthRoutes.listLinkedAuthProvidersRoute, (c) => c.json({ identities: [] }, 200))
+  .openapi(federatedAuthRoutes.createAuthProviderLinkGrantRoute, (c) => c.json({ linkGrant: '' }, 200))
+  .openapi(federatedAuthRoutes.unlinkAuthProviderRoute, (c) => c.body(null, 204));
+
+/**
+ * Federated registration screen + JIT provisioning (RFC-0014 phase 2) — 3
+ * routes. Own chain for the same TS2589 mitigation as `oauthContractApp` /
+ * `federatedAuthContractApp`.
+ */
+const federatedRegistrationContractApp = new OpenAPIHono()
+  .openapi(federatedRegistrationRoutes.getFederatedRegistrationRoute, (c) => c.json(stubFederatedRegistrationSnapshot, 200))
+  .openapi(federatedRegistrationRoutes.submitFederatedRegistrationRoute, (c) => c.json({ status: 'approval_required' as const }, 200))
+  .openapi(federatedRegistrationRoutes.logoutFederatedRegistrationRoute, (c) => c.body(null, 204));
+
+/**
  * Per-chain type aliases. These are **exported** so the dts bundler
  * (tsup) keeps them as named declarations in `dist/index.d.ts`; if we
  * referenced the `const` chain variables via `typeof` from inside
@@ -835,6 +877,8 @@ export type LateContractApp = typeof lateContractApp;
 export type AdminSettingsContractApp = typeof adminSettingsContractApp;
 export type AdminUsersPluginsContractApp = typeof adminUsersPluginsContractApp;
 export type OAuthContractApp = typeof oauthContractApp;
+export type FederatedAuthContractApp = typeof federatedAuthContractApp;
+export type FederatedRegistrationContractApp = typeof federatedRegistrationContractApp;
 
 /**
  * Default request init applied to every call unless the caller overrides
@@ -872,7 +916,9 @@ export type CrowiApiClient = ReturnType<typeof hc<AppAuthMeUserChain>> &
   ReturnType<typeof hc<LateContractApp>> &
   ReturnType<typeof hc<AdminSettingsContractApp>> &
   ReturnType<typeof hc<AdminUsersPluginsContractApp>> &
-  ReturnType<typeof hc<OAuthContractApp>>;
+  ReturnType<typeof hc<OAuthContractApp>> &
+  ReturnType<typeof hc<FederatedAuthContractApp>> &
+  ReturnType<typeof hc<FederatedRegistrationContractApp>>;
 
 /**
  * Build a typed Hono client against the contract chain. Constructs a

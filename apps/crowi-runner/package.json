@@ -8,10 +8,10 @@
     "build": "node -e \"\""
   },
   "dependencies": {
-    "@crowi/api": "workspace:^",
     "@crowi/admin-cli": "workspace:^",
+    "@crowi/api": "workspace:^",
     "@crowi/plugin-api": "workspace:^",
-    "@crowi/runner": "workspace:^",
+    "@crowi/plugin-google": "workspace:^",
     "@crowi/plugin-mail-aws-ses": "workspace:^",
     "@crowi/plugin-mail-resend": "workspace:^",
     "@crowi/plugin-mail-smtp": "workspace:^",
@@ -24,6 +24,7 @@
     "@crowi/plugin-search-opensearch": "workspace:^",
     "@crowi/plugin-slack": "workspace:^",
     "@crowi/plugin-storage-aws-s3": "workspace:^",
-    "@crowi/plugin-storage-local": "workspace:^"
+    "@crowi/plugin-storage-local": "workspace:^",
+    "@crowi/runner": "workspace:^"
   }
 }

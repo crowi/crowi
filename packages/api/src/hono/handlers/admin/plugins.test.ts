@@ -3,9 +3,11 @@ import request from 'supertest';
 import type { CrowiPlugin } from '@crowi/plugin-api';
 import s3Plugin from '@crowi/plugin-storage-aws-s3';
 import openSearchPlugin from '@crowi/plugin-search-opensearch';
+import googlePlugin from '@crowi/plugin-google';
 import { app, crowi } from 'src/test/setup';
 import { authHeaders, createTestUser } from 'src/test/test-helpers';
 import type { PluginRenderCacheModel } from 'src/models/plugin-render-cache';
+import ConfigService from 'src/service/config';
 import { formatPluginConfigKey } from 'src/plugin/plugin-namespace';
 
 const seedCacheEntry = async (overrides: Partial<{ pluginName: string; embedKey: string; pageId: string }> = {}) => {
@@ -366,5 +368,131 @@ describe('GET /api/admin/plugins/readiness (feature-plugin-config-readiness)', (
     const unselected = await request(app).get('/api/admin/plugins/readiness').set(authHeaders(adminToken));
     expect(unselected.status).toBe(200);
     expect((unselected.body.issues as Array<{ name: string }>).some((issue) => issue.name === SEARCH_PLUGIN.name)).toBe(false);
+  });
+});
+
+/**
+ * RFC-0014 phase 4 — the Google credential group must be indivisible.
+ *
+ * A client id and secret written as separate rows can fail between them,
+ * leaving the instance holding a new id next to the previous secret: a
+ * pair that never existed, cannot authenticate, and is visible to every
+ * replica until someone notices. These tests pin that no such state is
+ * reachable through the admin API.
+ */
+describe('PUT /api/admin/plugins/config — atomic credential group (RFC-0014 phase 4, AC-2/AC-3/AC-4)', () => {
+  const ATOMIC_KEY = 'plugin:@crowi/plugin-google:__atomic:clientCredentials';
+  const FLAT_ID_KEY = 'plugin:@crowi/plugin-google:clientId';
+  const FLAT_SECRET_KEY = 'plugin:@crowi/plugin-google:clientSecret';
+  let adminToken: string;
+  let originalLoadedPlugins: readonly CrowiPlugin[];
+
+  beforeAll(async () => {
+    const admin = await createTestUser({
+      name: 'Atomic Admin',
+      username: 'atomicAdmin',
+      email: 'atomic-admin@example.com',
+      admin: true,
+    });
+    adminToken = admin.accessToken;
+  });
+
+  beforeEach(() => {
+    const manager = crowi.pluginManager;
+    if (!manager) throw new Error('PluginManager not bootstrapped in harness');
+    originalLoadedPlugins = manager.getLoadedPlugins();
+    // biome-ignore lint/suspicious/noExplicitAny: test access to private fields, same pattern as the readiness suite above
+    (manager as any).loadedPlugins = [...originalLoadedPlugins, googlePlugin];
+  });
+
+  afterEach(async () => {
+    const manager = crowi.pluginManager;
+    // biome-ignore lint/suspicious/noExplicitAny: test access to private fields
+    if (manager) (manager as any).loadedPlugins = originalLoadedPlugins;
+    jest.restoreAllMocks();
+    const Config = crowi.model('Config');
+    await Config.deleteByParams('crowi', ATOMIC_KEY).catch(() => undefined);
+    await Config.deleteByParams('crowi', FLAT_ID_KEY).catch(() => undefined);
+    await Config.deleteByParams('crowi', FLAT_SECRET_KEY).catch(() => undefined);
+    await crowi.getConfigService().load();
+  });
+
+  const putConfig = (values: Record<string, unknown>) =>
+    request(app).put('/api/admin/plugins/config').query({ name: '@crowi/plugin-google' }).set(authHeaders(adminToken)).send({ values });
+
+  it('AC-2: writes ONLY the atomic document — never a per-field row that could survive on its own', async () => {
+    const res = await putConfig({ clientId: 'id-1', clientSecret: 'secret-1' });
+    expect(res.status).toBe(200);
+
+    const Config = crowi.model('Config');
+    const rows = await Config.find({ ns: 'crowi', key: /^plugin:@crowi\/plugin-google:/ }).exec();
+    expect(rows.map((r) => r.key)).toEqual([ATOMIC_KEY]);
+
+    // Consumers still read the flat pair.
+    await crowi.getConfigService().load();
+    expect(crowi.getConfig().crowi[FLAT_ID_KEY]).toBe('id-1');
+    expect(crowi.getConfig().crowi[FLAT_SECRET_KEY]).toBe('secret-1');
+  });
+
+  it('AC-2: omitting the secret keeps the stored one instead of blanking it', async () => {
+    await putConfig({ clientId: 'id-1', clientSecret: 'secret-1' });
+
+    // The admin form omits an unchanged secret (it is never sent back to
+    // the browser to begin with) — saving just the id must not wipe it.
+    const res = await putConfig({ clientId: 'id-2' });
+    expect(res.status).toBe(200);
+
+    await crowi.getConfigService().load();
+    expect(crowi.getConfig().crowi[FLAT_ID_KEY]).toBe('id-2');
+    expect(crowi.getConfig().crowi[FLAT_SECRET_KEY]).toBe('secret-1');
+  });
+
+  it('AC-3: a rejected group write returns 500, leaves the previous pair intact, and never hot-reloads', async () => {
+    await putConfig({ clientId: 'old-id', clientSecret: 'old-secret' });
+    await crowi.getConfigService().load();
+
+    const Config = crowi.model('Config');
+    jest.spyOn(Config, 'updateAtomicConfigGroup').mockRejectedValueOnce(new Error('injected mongo failure'));
+    const manager = crowi.pluginManager;
+    const reconfigureSpy = manager ? jest.spyOn(manager, 'reconfigureAffected') : null;
+
+    const res = await putConfig({ clientId: 'new-id', clientSecret: 'new-secret' });
+    expect(res.status).toBe(500);
+
+    // No hot reload for a save that never happened.
+    expect(reconfigureSpy?.mock.calls ?? []).toHaveLength(0);
+
+    // The DB still holds the previous COMPLETE pair, and no partial row
+    // was left behind next to it.
+    const rows = await Config.find({ ns: 'crowi', key: /^plugin:@crowi\/plugin-google:/ }).exec();
+    expect(rows.map((r) => r.key)).toEqual([ATOMIC_KEY]);
+    await crowi.getConfigService().load();
+    expect(crowi.getConfig().crowi[FLAT_ID_KEY]).toBe('old-id');
+    expect(crowi.getConfig().crowi[FLAT_SECRET_KEY]).toBe('old-secret');
+  });
+
+  it('AC-4: after a failed write on replica A, replica B reloading the shared DB sees only the previous complete pair — never a mixed one', async () => {
+    await putConfig({ clientId: 'old-id', clientSecret: 'old-secret' });
+
+    // Replica B: a second ConfigService over the SAME Mongo, standing in
+    // for another api process.
+    const replicaB = new ConfigService(crowi);
+    await replicaB.load();
+    expect(replicaB.config.crowi[FLAT_ID_KEY]).toBe('old-id');
+    expect(replicaB.config.crowi[FLAT_SECRET_KEY]).toBe('old-secret');
+
+    const Config = crowi.model('Config');
+    jest.spyOn(Config, 'updateAtomicConfigGroup').mockRejectedValueOnce(new Error('injected mongo failure'));
+    expect((await putConfig({ clientId: 'new-id', clientSecret: 'new-secret' })).status).toBe(500);
+
+    await replicaB.load();
+    const idAfter = replicaB.config.crowi[FLAT_ID_KEY];
+    const secretAfter = replicaB.config.crowi[FLAT_SECRET_KEY];
+
+    // The two mixed pairs are the actual failure mode: either would be a
+    // configuration that never existed on any replica.
+    expect({ id: idAfter, secret: secretAfter }).not.toEqual({ id: 'new-id', secret: 'old-secret' });
+    expect({ id: idAfter, secret: secretAfter }).not.toEqual({ id: 'old-id', secret: 'new-secret' });
+    expect({ id: idAfter, secret: secretAfter }).toEqual({ id: 'old-id', secret: 'old-secret' });
   });
 });

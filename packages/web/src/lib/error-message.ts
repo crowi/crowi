@@ -85,6 +85,9 @@ export const ERROR_MESSAGE_KEYS = {
   INVALID_CREDENTIALS: m['errors.invalid_credentials'],
   REFRESH_TOKEN_REQUIRED: m['errors.refresh_token_required'],
   REGISTRATION_CLOSED: m['errors.registration_closed'],
+  // federated sign-in (RFC-0014)
+  FEDERATED_HANDOFF_INVALID: m['errors.federated_handoff_invalid'],
+  FEDERATED_HANDOFF_CONSUMED: m['errors.federated_handoff_consumed'],
   // admin subsystems
   ENCRYPTION_NOT_CONFIGURED: m['errors.encryption_key_not_set'],
   MAIL_TEST_FAILED: m['errors.mail_test_failed'],

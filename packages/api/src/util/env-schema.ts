@@ -203,6 +203,49 @@ function validateAbsoluteUrl(raw: string): string | null {
 }
 
 /**
+ * RFC-0014 phase 1 §5 — origin-only variant of {@link validateAbsoluteUrl}
+ * for `AUTH_PUBLIC_API_URL` / `AUTH_PUBLIC_WEB_URL`: every federated-auth
+ * redirect URI / handoff audience is built by string concatenation onto
+ * one of these two trusted values, so a stray path/userinfo/query/fragment
+ * here would silently corrupt every URL built from it. Reuses
+ * `validateAbsoluteUrl`'s own check first (same base "is this even an
+ * absolute http(s) URL" rule), then rejects anything beyond a bare origin.
+ * A trailing slash (`pathname === '/'`) is accepted here and normalized
+ * away by {@link normalizeOriginOnlyUrl} — `new URL(...)` always reports a
+ * bare origin's pathname as `'/'`, so rejecting it would reject the most
+ * common way to type an origin.
+ */
+function validateOriginOnlyUrl(raw: string): string | null {
+  const base = validateAbsoluteUrl(raw);
+  if (base) return base;
+  const redacted = JSON.stringify(redactUserinfo(raw));
+  const parsed = new URL(raw); // already proven parseable by validateAbsoluteUrl above
+  if (parsed.username !== '' || parsed.password !== '') {
+    return `must be an origin only, with no userinfo (got ${redacted})`;
+  }
+  if (parsed.pathname !== '/' && parsed.pathname !== '') {
+    return `must be an origin only, with no path (got ${redacted})`;
+  }
+  if (parsed.search !== '') {
+    return `must be an origin only, with no query string (got ${redacted})`;
+  }
+  if (parsed.hash !== '') {
+    return `must be an origin only, with no fragment (got ${redacted})`;
+  }
+  return null;
+}
+
+/**
+ * `new URL(raw).origin` — normalizes away a trailing slash / bare `/`
+ * pathname. Callers MUST have already passed `raw` through
+ * {@link validateOriginOnlyUrl} (returned `null`) — this function does not
+ * re-validate.
+ */
+function normalizeOriginOnlyUrl(raw: string): string {
+  return new URL(raw).origin;
+}
+
+/**
  * `isMultiInstanceDeclared()` (`src/collab/attach.ts`) itself treats any
  * other non-empty string as truthy — that behaviour is unchanged. This only
  * flags the values it treats as "probably a typo" so an operator sees it.
@@ -285,6 +328,33 @@ const CLIENT_URL_DESCRIPTOR: EnvVarDescriptor = {
   warnWhenUnset:
     'is not set — links in outgoing emails (invite / activation / password reset / email change) will be ' +
     'relative and will not work. Set CLIENT_URL to the web app origin (e.g. https://wiki.example.com).',
+};
+
+/**
+ * RFC-0014 phase 1 §5 — trusted origin every callback redirect URI is built
+ * from. Only checked when SET (same convention as every other descriptor
+ * here): a value present but malformed boot-fails, matching e.g.
+ * `MONGO_URI`. When entirely unset, `AUTH_PUBLIC_API_URL` falls back to the
+ * resolved `AUTH_PUBLIC_WEB_URL` (same-origin deployment) — see
+ * {@link resolveFederatedAuthPublicUrls} — which is NOT a boot failure:
+ * federated auth simply stays disabled (provider list empty, `/start`
+ * 404s) until an operator configures a federated-auth plugin's trusted
+ * origins.
+ */
+const AUTH_PUBLIC_API_URL_DESCRIPTOR: EnvVarDescriptor = {
+  name: 'AUTH_PUBLIC_API_URL',
+  check: { severity: 'fail', validate: validateOriginOnlyUrl },
+};
+
+/**
+ * RFC-0014 phase 1 §5 — trusted web origin `/login/complete` redirects
+ * target. Falls back to `CLIENT_URL` (re-validated as origin-only — a
+ * `CLIENT_URL` with a path cannot back this) when unset; see
+ * {@link resolveFederatedAuthPublicUrls}.
+ */
+const AUTH_PUBLIC_WEB_URL_DESCRIPTOR: EnvVarDescriptor = {
+  name: 'AUTH_PUBLIC_WEB_URL',
+  check: { severity: 'fail', validate: validateOriginOnlyUrl },
 };
 
 const CROWI_MULTI_INSTANCE_DESCRIPTOR: EnvVarDescriptor = {
@@ -400,6 +470,8 @@ export const ENV_VAR_DESCRIPTORS: readonly EnvVarDescriptor[] = [
   REDIS_KEY_PREFIX_DESCRIPTOR,
   CROWI_ENCRYPTION_KEY_DESCRIPTOR,
   CLIENT_URL_DESCRIPTOR,
+  AUTH_PUBLIC_API_URL_DESCRIPTOR,
+  AUTH_PUBLIC_WEB_URL_DESCRIPTOR,
   CROWI_MULTI_INSTANCE_DESCRIPTOR,
   NODE_ENV_DESCRIPTOR,
   JWT_ACCESS_TTL_DESCRIPTOR,
@@ -541,6 +613,41 @@ function detectUnresolvableRedisKeyspace(resolvedByDescriptor: ReadonlyMap<EnvVa
 }
 
 /**
+ * RFC-0014 phase 1 §5 — resolve the federated-auth trusted origin fallback
+ * chain: `AUTH_PUBLIC_WEB_URL` defaults to `CLIENT_URL` RE-VALIDATED as
+ * origin-only (a `CLIENT_URL` carrying a path/query/userinfo cannot back
+ * this — see {@link validateOriginOnlyUrl}); `AUTH_PUBLIC_API_URL` defaults
+ * to the resolved web URL (same-origin deployment). Both explicit values
+ * are already boot-fail-validated by their own descriptors above whenever
+ * set, so this function only re-validates `CLIENT_URL` (which has its own,
+ * more permissive, `validateAbsoluteUrl` check).
+ *
+ * Unlike {@link detectUnresolvableRedisKeyspace}, an unresolvable result
+ * here is NEVER a boot failure — every existing deployment that has not
+ * configured a federated-auth plugin has none of these three variables
+ * set. `Crowi.getFederatedAuthPublicUrls()` returns this value (`null` when
+ * unresolvable) and the federated-auth routes disable themselves (empty
+ * provider list, `/start` 404s) rather than aborting boot.
+ */
+function resolveFederatedAuthPublicUrls(
+  resolvedByDescriptor: ReadonlyMap<EnvVarDescriptor, ReturnType<typeof resolveRaw>>,
+): { apiUrl: string; webUrl: string } | null {
+  const explicitWeb = resolvedByDescriptor.get(AUTH_PUBLIC_WEB_URL_DESCRIPTOR);
+  let webUrl: string | null = explicitWeb ? normalizeOriginOnlyUrl(explicitWeb.raw) : null;
+  if (!webUrl) {
+    const clientUrl = resolvedByDescriptor.get(CLIENT_URL_DESCRIPTOR);
+    if (clientUrl && validateOriginOnlyUrl(clientUrl.raw) == null) {
+      webUrl = normalizeOriginOnlyUrl(clientUrl.raw);
+    }
+  }
+  if (!webUrl) return null;
+
+  const explicitApi = resolvedByDescriptor.get(AUTH_PUBLIC_API_URL_DESCRIPTOR);
+  const apiUrl = explicitApi ? normalizeOriginOnlyUrl(explicitApi.raw) : webUrl;
+  return { apiUrl, webUrl };
+}
+
+/**
  * First truthy value among `descriptor`'s aliases (checked first, matching
  * the pre-existing precedence) then `descriptor.name`. `null` when none are
  * set.
@@ -599,6 +706,16 @@ export interface EnvValidationResult {
      * configured" has exactly one answer.
      */
     encryptionKey: string | null;
+    /**
+     * RFC-0014 phase 1 §5 — fully resolved federated-auth trusted origins
+     * (`AUTH_PUBLIC_API_URL` / `AUTH_PUBLIC_WEB_URL`, with the `CLIENT_URL`
+     * / same-origin fallback chain already applied — see
+     * {@link resolveFederatedAuthPublicUrls}). `null` when unresolvable;
+     * this is NOT a boot failure (see that function's doc comment) — a
+     * caller (`Crowi.getFederatedAuthPublicUrls()`) treats `null` as
+     * "federated auth disabled".
+     */
+    federatedAuthPublicUrls: { apiUrl: string; webUrl: string } | null;
   };
   /** Human-readable warning strings, for a consolidated boot-time report. Empty when nothing is amiss. */
   warnings: string[];
@@ -660,6 +777,7 @@ export function validateEnv(env: NodeJS.ProcessEnv): EnvValidationResult {
       redisUrl: resolvedByDescriptor.get(REDIS_URL_DESCRIPTOR)?.raw ?? null,
       mongoUri: resolvedByDescriptor.get(MONGO_URI_DESCRIPTOR)?.raw ?? 'mongodb://localhost/crowi',
       encryptionKey: resolvedByDescriptor.get(CROWI_ENCRYPTION_KEY_DESCRIPTOR)?.raw ?? null,
+      federatedAuthPublicUrls: resolveFederatedAuthPublicUrls(resolvedByDescriptor),
     },
     warnings: warnMessages,
   };

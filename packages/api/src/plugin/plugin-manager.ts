@@ -17,6 +17,7 @@ import type { ConfigChangeSource } from 'src/service/config';
 import { credentialVaultModelNamesList, isCredentialVaultModel } from './credential-vault-models';
 import { createPluginContext } from './plugin-context';
 import { isPluginInstalled, markPluginInstalled } from './plugin-install-tracker';
+import { atomicConfigGroupKey } from 'src/models/config';
 import { formatPluginConfigKey, parsePluginNamespace, readCrowiConfigNamespace } from './plugin-namespace';
 import { createStateCell } from './plugin-state-cell';
 import { makeRendererScope } from 'src/renderer';
@@ -181,6 +182,7 @@ export class PluginManager {
     // here, immediately after topo-sort and before `listSensitiveKeys()`,
     // closes that gap.
     this.assertAllConfigSchemas(ordered);
+    this.assertAllConfigAtomicGroups(ordered);
 
     // Register every plugin's `@sensitive`-marked configSchema fields
     // with the core sensitive-config registry so values written
@@ -428,16 +430,75 @@ export class PluginManager {
   }
 
   /**
+   * RFC-0014 phase 4 — validate `configAtomicGroups` at boot, before any
+   * value is ever written through them. A malformed declaration (an
+   * unknown field, a field claimed by two groups, an empty or duplicated
+   * group) would otherwise only surface as a corrupted or unreachable
+   * config document long after the fact, so this fails the boot instead.
+   */
+  private assertAllConfigAtomicGroups(plugins: readonly CrowiPlugin[]): void {
+    for (const plugin of plugins) {
+      const groups = plugin.configAtomicGroups;
+      if (!groups || groups.length === 0) continue;
+
+      const schemaFields = plugin.configSchema ? new Set(Object.keys(plugin.configSchema.shape)) : new Set<string>();
+      const seenGroupNames = new Set<string>();
+      const claimedFields = new Map<string, string>();
+
+      for (const group of groups) {
+        if (!group.name || group.name.includes(':')) {
+          throw new Error(
+            `[crowi:plugin:${plugin.name}] configAtomicGroups: group name must be non-empty and contain no ':' (got ${JSON.stringify(group.name)})`,
+          );
+        }
+        if (seenGroupNames.has(group.name)) {
+          throw new Error(`[crowi:plugin:${plugin.name}] configAtomicGroups: duplicate group name '${group.name}'`);
+        }
+        seenGroupNames.add(group.name);
+
+        if (!group.keys || group.keys.length === 0) {
+          throw new Error(`[crowi:plugin:${plugin.name}] configAtomicGroups: group '${group.name}' declares no keys`);
+        }
+        for (const key of group.keys) {
+          if (!schemaFields.has(key)) {
+            throw new Error(`[crowi:plugin:${plugin.name}] configAtomicGroups: group '${group.name}' names '${key}', which is not a configSchema field`);
+          }
+          const claimedBy = claimedFields.get(key);
+          if (claimedBy) {
+            throw new Error(
+              `[crowi:plugin:${plugin.name}] configAtomicGroups: field '${key}' is claimed by both '${claimedBy}' and '${group.name}' — a field belongs to at most one group`,
+            );
+          }
+          claimedFields.set(key, group.name);
+        }
+      }
+    }
+  }
+
+  /**
    * Walk every loaded plugin's `configSchema` and return the union of
    * field paths marked `@sensitive`. The "re-encrypt all" admin
    * routine consults this list. See RFC-0001 §5.
+   *
+   * A field stored inside a `sensitive` atomic group is reported as the
+   * GROUP's physical key rather than its own: that field has no row of
+   * its own to encrypt, and registering its flat key would tell the
+   * encryption layer to protect something that is never written (RFC-0014
+   * phase 4).
    */
   listSensitiveKeys(): string[] {
     const out: string[] = [];
     for (const plugin of this.loadedPlugins) {
+      const groups = plugin.configAtomicGroups ?? [];
+      const fieldsInSensitiveGroup = new Set(groups.filter((g) => g.sensitive).flatMap((g) => g.keys));
+      for (const group of groups) {
+        if (group.sensitive) out.push(atomicConfigGroupKey(plugin.name, group.name));
+      }
+
       const schema = plugin.configSchema;
       if (!schema) continue;
       for (const [fieldName, field] of Object.entries(schema.shape)) {
+        if (fieldsInSensitiveGroup.has(fieldName)) continue;
         const description = (field as { description?: string }).description;
         if (typeof description === 'string' && description.trimStart().startsWith('@sensitive')) {
           out.push(formatPluginConfigKey(plugin.name, fieldName));

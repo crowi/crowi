@@ -8,6 +8,7 @@ import { ProfilePicture } from './profile-picture';
 import { PasswordForm } from './password-form';
 import { McpSetupSection } from './mcp-setup-section';
 import { AccessTokensSection } from './access-tokens-section';
+import { LinkedAccountsSection } from './linked-accounts-section';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { m } from '@paraglide/messages.js';
@@ -101,6 +102,8 @@ export default function SettingsPage() {
               <PasswordForm profile={profile} />
             </CardContent>
           </Card>
+
+          <LinkedAccountsSection />
 
           <Card>
             <CardHeader>

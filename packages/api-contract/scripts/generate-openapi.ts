@@ -51,6 +51,8 @@ import {
   bookmarkRoutes,
   commentRoutes,
   draftRoutes,
+  federatedAuthRoutes,
+  federatedRegistrationRoutes,
   installerRoutes,
   inviteAcceptRoutes,
   meRoutes,
@@ -311,9 +313,16 @@ const routeGroups = [
   appRoutes,
   installerRoutes,
   tokenAuthRoutes,
+  // RFC-0014 phase 1 — federated (OAuth2/OIDC) sign-in flow skeleton.
+  // Registered right after tokenAuth to mirror the buildHonoApp chain.
+  federatedAuthRoutes,
+  // RFC-0014 phase 2 — federated registration screen + JIT provisioning.
+  // Registered right after federatedAuth to mirror the buildHonoApp chain.
+  federatedRegistrationRoutes,
   // Public invite-acceptance (GET preview + POST accept). Registered
   // right after tokenAuth to mirror the buildHonoApp chain
-  // (installer -> tokenAuth -> inviteAccept -> ... -> me).
+  // (installer -> tokenAuth -> federatedAuth -> federatedRegistration ->
+  // inviteAccept -> ... -> me).
   inviteAcceptRoutes,
   meRoutes,
   // RFC-0010 Phase 2 — PAT management rides the `/me/*` apply; registered
