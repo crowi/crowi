@@ -1047,6 +1047,33 @@ describe('Routes /api attachments (Hono)', () => {
       expect((res.body as Buffer).equals(pngBuffer)).toBe(true);
     });
 
+    it('declares Content-Length from the recorded fileSize, so a cut-short delivery is detectable', async () => {
+      // Without this header the node adapter fills in `content-length: 0`
+      // when its preread collects nothing — which is what a read error
+      // looks like — and the caller receives a well-formed empty 200 that
+      // is indistinguishable from a genuinely empty file.
+      const id = await seedAttachment('download-content-length');
+
+      const res = await request(app).get(`/api/attachments/${id}/download`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
+
+      expect(res.status).toBe(200);
+      expect(res.headers['content-length']).toBe(String(pngBuffer.length));
+      expect((res.body as Buffer).length).toBe(pngBuffer.length);
+    });
+
+    it('omits Content-Length for a legacy row whose fileSize was never recorded', async () => {
+      const id = await seedAttachment('download-legacy-no-size');
+      const Attachment = crowi.model('Attachment');
+      await Attachment.updateOne({ _id: id }, { $set: { fileSize: 0 } });
+
+      const res = await request(app).get(`/api/attachments/${id}/download`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
+
+      expect(res.status).toBe(200);
+      // A declared 0 would make the real bytes look like an overrun.
+      expect(res.headers['content-length']).not.toBe('0');
+      expect((res.body as Buffer).equals(pngBuffer)).toBe(true);
+    });
+
     it('percent-escapes the characters RFC 8187 reserves in the filename', async () => {
       const id = await seedAttachment('download-filename-escaping', "it's (1).png");
 

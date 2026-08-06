@@ -238,13 +238,14 @@ const encodeRfc8187 = (name: string): string => {
 };
 
 /** The response headers a delivery decision produces — see {@link resolveDelivery}. */
-type Delivery = { contentType: string; disposition?: string; csp?: string };
+type Delivery = { contentType: string; disposition?: string; csp?: string; contentLength?: number };
 
 /** Build a `200` streaming `Response` from a {@link Delivery}. Shared by every delivery branch below. */
 const streamResponse = (stream: Readable, delivery: Delivery): Response => {
   const headers: Record<string, string> = { 'Content-Type': delivery.contentType };
   if (delivery.disposition) headers['Content-Disposition'] = delivery.disposition;
   if (delivery.csp) headers['Content-Security-Policy'] = delivery.csp;
+  if (delivery.contentLength !== undefined) headers['Content-Length'] = String(delivery.contentLength);
   return new Response(toWebStream(stream), { status: 200, headers });
 };
 
@@ -440,6 +441,27 @@ export const registerAttachmentStreamRoutes = (app: OpenAPIHono<CrowiHonoBinding
     return streamResponse(stream, {
       contentType: 'application/octet-stream',
       disposition: `attachment; filename*=UTF-8''${encodeRfc8187(filename)}`,
+      // Declaring the recorded size is what makes a cut-short delivery
+      // observable at all. The node adapter reads a few chunks before it
+      // writes the head, and a read error there is swallowed into
+      // `done = true` with no chunks collected; it then fills in
+      // `content-length: 0` when the header is absent, so the caller
+      // receives a perfectly well-formed empty `200`
+      // (`@hono/node-server` `dist/index.mjs` — the preread loop and the
+      // `if (done && !('content-length' in resHeaderRecord))` line after
+      // it). The local driver can produce exactly that: it checks
+      // `existsSync` and hands back a stream it has not opened, so a file
+      // removed in between fails on first read. Setting the header
+      // ourselves keeps the adapter from filling in a zero, and the
+      // client compares.
+      //
+      // `fileSize` is the size persisted at upload and this route always
+      // serves that same original, so the two agree. Should they ever
+      // disagree, the caller gets a truncation error rather than bytes —
+      // the right failure for a route whose entire contract is "the whole
+      // attachment or an error". Legacy rows default to `0`; those send
+      // no header and keep the previous behaviour.
+      ...(auth.attachment.fileSize > 0 ? { contentLength: auth.attachment.fileSize } : {}),
     });
   });
 
