@@ -3,6 +3,7 @@ process.env.WS_TOKEN_SECRET = process.env.WS_TOKEN_SECRET ?? 'test-ws-token-secr
 import faker from 'faker';
 import { Types } from 'mongoose';
 import type { UserDocument } from 'src/models/user';
+import { unlinkFederatedIdentity } from 'src/auth/auth-provider-linking';
 import { createAuthRegistrationTerminal, drainUserActivation, provisionPendingRegistration } from 'src/services/auth-registration';
 import { crowi, Fixture, randomUsername } from 'src/test/setup';
 
@@ -965,6 +966,73 @@ describe('provisionPendingRegistration / drainUserActivation (RFC-0014 phase 2)'
       expect(await User().countDocuments({ email })).toBe(submitWon ? 1 : 0);
       expect(await UserIdentity().countDocuments({ provider, providerUserId })).toBe(submitWon ? 1 : 0);
       expect(await PendingAuthRegistration().countDocuments({ provider, providerUserId })).toBe(1);
+    });
+  });
+
+  // RFC-0014 — unlinking must actually REVOKE, not just hide the link.
+  //
+  // Found in manual QA (2026-08-07): register via Google, unlink, sign out,
+  // sign in with the same Google account. The `UserIdentity` row was gone,
+  // so the flow reached the registration terminal — but the finalized
+  // journal row for that same provider subject was still there, and the
+  // resume branch hands back a grant pointing at its `userId` WITHOUT
+  // running the registration-mode / email-collision gates. Submitting the
+  // registration screen then walked straight back into the original
+  // account. The journal row was, in effect, a standing credential that
+  // outlived the revocation.
+  describe('a completed registration whose identity was later unlinked (regression)', () => {
+    /**
+     * Registers a user through the real terminal + submit path, then
+     * unlinks the identity it created. Every case gets its own provider /
+     * subject / email so one case's leftover `User` cannot make the next
+     * case's registration fail for the wrong reason.
+     */
+    const registerThenUnlink = async (suffix: string) => {
+      const ids = { provider: `unlink-revoke-${suffix}`, subject: `sub-unlink-revoke-${suffix}`, email: `unlink-revoke-${suffix}@example.com` };
+      const token = await seedGrant(ids.provider, ids.subject, ids.email);
+      const provisioned = await provisionPendingRegistration(crowi, token, `unlinkrevoke${suffix}`);
+      if (provisioned.kind !== 'active') throw new Error(`expected an active registration, got ${provisioned.kind}`);
+
+      const user = await User().findOne({ email: ids.email });
+      if (!user) throw new Error('registration did not create the user');
+      // The real unlink path, as QA drove it: a JIT-registered account has
+      // no password, and the unlink guard refuses until one exists.
+      await user.setPassword('Password!1');
+      await user.save();
+      const outcome = await unlinkFederatedIdentity(crowi, user, ids.provider);
+      if (outcome.kind !== 'unlinked') throw new Error(`expected the unlink to succeed, got ${outcome.kind}`);
+      return { user, ...ids };
+    };
+
+    it('is refused as an already-registered email, not resumed into the original account', async () => {
+      const { user, provider, subject, email } = await registerThenUnlink('a');
+
+      const result = await resolveProfile(provider, subject, email);
+
+      expect(result).toEqual({ kind: 'redirect_error', code: 'email_already_registered' });
+      // The decisive part: no grant was minted, so nothing can walk the
+      // registration screen back into this account.
+      expect(await UserIdentity().countDocuments({ userId: user._id, provider })).toBe(0);
+      expect(await PendingAuthRegistration().countDocuments({ provider, providerUserId: subject })).toBe(0);
+    });
+
+    it('runs the registration-mode gate too — a Closed instance refuses before anything else', async () => {
+      const { provider, subject, email } = await registerThenUnlink('b');
+
+      const original = (await Config().loadAllConfig()) as { crowi: Record<string, unknown> };
+      const prev = original.crowi['security:registrationMode'];
+      await Config().updateConfig('crowi', 'security:registrationMode', Config().SECURITY_REGISTRATION_MODE_CLOSED);
+      await crowi.getConfigService().load();
+      try {
+        expect(await resolveProfile(provider, subject, email)).toEqual({ kind: 'redirect_error', code: 'registration_closed' });
+      } finally {
+        if (prev !== undefined) {
+          await Config().updateConfig('crowi', 'security:registrationMode', prev);
+        } else {
+          await Config().deleteOne({ ns: 'crowi', key: 'security:registrationMode' });
+        }
+        await crowi.getConfigService().load();
+      }
     });
   });
 

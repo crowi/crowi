@@ -282,6 +282,36 @@ export async function unlinkFederatedIdentity(crowi: Crowi, user: UserDocument, 
     return { kind: 'password_required' };
   }
 
-  const result = await UserIdentity.deleteOne({ userId: user._id, provider });
+  // Read the identity before removing anything: its `providerUserId` is
+  // what keys the registration journal, and the caller only knows
+  // `(userId, provider)`.
+  const identity = await UserIdentity.findOne({ userId: user._id, provider });
+  if (!identity) return { kind: 'not_linked' };
+
+  // The journal row goes FIRST, and it has to go at all.
+  //
+  // A finalized `PendingAuthRegistration` for this provider subject
+  // outlives the identity, and `createAuthRegistrationTerminal`'s resume
+  // branch treats any non-fresh row as "an interrupted registration to
+  // continue" — handing back a grant bound to its `userId` WITHOUT the
+  // registration-mode or email-collision gates. Left behind, it is a
+  // standing credential: the same provider account signs in again,
+  // reaches the registration screen because the identity is gone, and
+  // walks straight back into the account the unlink was supposed to
+  // revoke. That is exactly what manual QA hit (2026-08-07).
+  //
+  // The terminal cannot tell that case apart from a genuine crash-resume
+  // (both are an ACTIVE row with a `userId` and no `UserIdentity`), so
+  // the fix belongs here, where the difference is known: an identity
+  // existed, therefore the registration ran to completion, therefore no
+  // legitimate resume can be destroyed by dropping its journal row.
+  //
+  // Ordered before the identity delete so a crash between the two leaves
+  // the account linked and working rather than unlinked-but-reacquirable
+  // — the failure that still has to be safe is the one that leaves the
+  // hole open.
+  await crowi.model('PendingAuthRegistration').deleteOne({ provider, providerUserId: identity.providerUserId });
+
+  const result = await UserIdentity.deleteOne({ _id: identity._id });
   return result.deletedCount === 1 ? { kind: 'unlinked' } : { kind: 'not_linked' };
 }
