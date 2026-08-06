@@ -14,7 +14,7 @@
 export type { AppInfo, PageMetadataAccessor, PluginContext, PluginLogger, StateCell } from './context';
 export type { EventBus, PluginEvents } from './events';
 export { escapeHtml } from './html';
-export type { CrowiPlugin, PluginReadinessDeclaration } from './plugin';
+export type { CrowiPlugin, PluginConfigAtomicGroup, PluginReadinessDeclaration } from './plugin';
 
 export type {
   AuthDriver,
