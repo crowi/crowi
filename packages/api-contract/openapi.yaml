@@ -7164,6 +7164,8 @@ paths:
                     type: boolean
                   createdAt:
                     type: string
+                  federated:
+                    type: boolean
                   emailChangePending:
                     type: boolean
                 required:
@@ -7176,6 +7178,7 @@ paths:
                   - image
                   - hasPassword
                   - createdAt
+                  - federated
         '401':
           description: Authentication required
           content:
@@ -7271,6 +7274,8 @@ paths:
                     type: boolean
                   createdAt:
                     type: string
+                  federated:
+                    type: boolean
                   emailChangePending:
                     type: boolean
                 required:
@@ -7283,6 +7288,7 @@ paths:
                   - image
                   - hasPassword
                   - createdAt
+                  - federated
         '400':
           description: Profile update failed
           content:

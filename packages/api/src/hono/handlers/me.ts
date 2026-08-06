@@ -71,7 +71,9 @@ const debug = Debug('crowi:hono:handlers:me');
 // guard the read boundary too — the typed contract only allows 'en' / 'ja'.
 const toResponseLang = (lang: string): 'en' | 'ja' => (lang === 'ja' ? 'ja' : 'en');
 
-const userToProfileResponse = (user: UserDocument, hasPassword: boolean, emailChangePending?: boolean) => ({
+// Flags are passed by name, not positionally: they are all booleans, so a
+// positional call site could swap two of them and still type-check.
+const userToProfileResponse = (user: UserDocument, flags: { hasPassword: boolean; federated: boolean; emailChangePending?: boolean }) => ({
   id: user._id.toString(),
   username: user.username,
   name: user.name,
@@ -80,9 +82,10 @@ const userToProfileResponse = (user: UserDocument, hasPassword: boolean, emailCh
   theme: user.theme ?? 'system',
   image: user.image,
   introduction: user.introduction || undefined,
-  hasPassword,
+  hasPassword: flags.hasPassword,
   createdAt: user.createdAt.toISOString(),
-  ...(emailChangePending ? { emailChangePending: true } : {}),
+  federated: flags.federated,
+  ...(flags.emailChangePending ? { emailChangePending: true } : {}),
 });
 
 const extractMongooseErrors = (err: unknown, fallback: string): string[] => {
@@ -136,7 +139,13 @@ const cleanupTmp = (tmpPath: string): void => {
 export const registerMeRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app: E, crowi: Crowi) => {
   const User = crowi.model('User');
   const Page = crowi.model('Page');
+  const UserIdentity = crowi.model('UserIdentity');
   const jwtUtil = createJwtUtil(crowi);
+
+  // Shared by GET and PUT /me — both need to know whether the account has
+  // at least one linked federated identity (GET to report it, PUT to also
+  // gate the email-change lock on it).
+  const isFederated = async (userId: UserDocument['_id']): Promise<boolean> => (await UserIdentity.exists({ userId })) !== null;
 
   // Every `/me/*` endpoint requires auth. Install the middleware before
   // `.openapi(...)` so the path matcher sees the route (consistent with
@@ -160,7 +169,8 @@ export const registerMeRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app: 
       const user = c.get('user');
       const userWithSecrets = await user.populateSecrets();
       const hasPassword = userWithSecrets.isPasswordSet();
-      return c.json(userToProfileResponse(user, hasPassword), 200);
+      const federated = await isFederated(user._id);
+      return c.json(userToProfileResponse(user, { hasPassword, federated }), 200);
     })
     .openapi(updateProfileRoute, async (c) => {
       const user = c.get('user');
@@ -178,15 +188,51 @@ export const registerMeRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app: 
         );
       }
 
-      const existing = await User.findOne({ email });
-      if (existing && !existing._id.equals(user._id)) {
-        debug('Email address was duplicated');
+      const emailChangeRequested = email !== user.email;
+
+      // The duplicate pre-check only has a possible "yes" answer when the
+      // request is actually trying to move the address: the unique index on
+      // `email` guarantees no OTHER row can already hold the caller's own
+      // current address, so on a same-email resubmission this query would
+      // always hit the caller themselves and fall through. Skipping it there
+      // leaves the observable behaviour unchanged (the unique index remains
+      // the final defence against a race — see the E11000 mapping below).
+      if (emailChangeRequested) {
+        const existing = await User.findOne({ email });
+        if (existing && !existing._id.equals(user._id)) {
+          debug('Email address was duplicated');
+          return c.json(
+            {
+              status: 'error' as const,
+              code: 'EMAIL_TAKEN' as const,
+              message: 'It can not be changed to that mail address',
+              errors: ['It can not be changed to that mail address'],
+            },
+            400,
+          );
+        }
+      }
+
+      // Unconditional, because the response schema declares `federated` on
+      // every 200 — a PUT that only changed name / lang still has to report
+      // the account's real state, so this cannot be gated on the email
+      // change. It costs nothing on that path: it swaps 1:1 with the
+      // duplicate pre-check skipped just above. Resolved by the existing
+      // `{userId, provider}` `UserIdentity` index.
+      const federated = await isFederated(user._id);
+
+      if (emailChangeRequested && federated) {
+        // The account's recovery identifier is IdP-verified. Letting the
+        // holder of a stolen `profile:write` credential move it to an
+        // address they control would hand the federated login away, so
+        // the request is refused outright — name / lang below are never
+        // reached, and nothing from this request is saved.
         return c.json(
           {
             status: 'error' as const,
-            code: 'EMAIL_TAKEN' as const,
-            message: 'It can not be changed to that mail address',
-            errors: ['It can not be changed to that mail address'],
+            code: 'EMAIL_LOCKED_BY_FEDERATED_IDENTITY' as const,
+            message: 'Email address is managed by a linked external account and cannot be changed here',
+            errors: ['Email address is managed by a linked external account and cannot be changed here'],
           },
           400,
         );
@@ -196,7 +242,6 @@ export const registerMeRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app: 
         // Email changes are not applied immediately — they require the
         // user to confirm control of the new address via an emailed link.
         // Name / lang apply right away.
-        const emailChangeRequested = email !== user.email;
         user.name = name;
         user.lang = lang;
         await user.save();
@@ -230,7 +275,7 @@ export const registerMeRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app: 
             // Revoked mid-request. Say plainly that no change is pending
             // rather than mailing a link that could never be confirmed.
             const userWithSecrets = await user.populateSecrets();
-            return c.json(userToProfileResponse(user, userWithSecrets.isPasswordSet(), false), 200);
+            return c.json(userToProfileResponse(user, { hasPassword: userWithSecrets.isPasswordSet(), federated, emailChangePending: false }), 200);
           }
           // Everything is bound to the document the update returned, not to
           // the copy the middleware loaded: a confirmation landing in between
@@ -259,7 +304,7 @@ export const registerMeRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app: 
 
         const userWithSecrets = await user.populateSecrets();
         const hasPassword = userWithSecrets.isPasswordSet();
-        return c.json(userToProfileResponse(user, hasPassword, emailChangeRequested), 200);
+        return c.json(userToProfileResponse(user, { hasPassword, federated, emailChangePending: emailChangeRequested }), 200);
       } catch (err) {
         // The email findOne pre-check can be raced; the unique index is the
         // final defence. Map its E11000 to EMAIL_TAKEN (the same code the
