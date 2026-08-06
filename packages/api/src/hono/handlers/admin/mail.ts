@@ -21,6 +21,7 @@ import type { OpenAPIHono } from '@hono/zod-openapi';
 import Debug from 'debug';
 
 import type Crowi from 'src/crowi';
+import { MailFromNotConfiguredError } from 'src/service/mail';
 import { coerceString, getCrowiConfigNamespace } from 'src/util/admin-config';
 
 import type { CrowiHonoBindings } from '../../app';
@@ -29,6 +30,16 @@ import { createJwtAdminRequired } from '../../middleware/admin';
 const debug = Debug('crowi:hono:handlers:admin:mail');
 
 const KEY_FROM = 'mail:from';
+
+// Safe, fixed, non-localized fallback strings — never the raw transport
+// exception (e.g. `ECONNREFUSED`, SDK credential errors) or the
+// `mail:from` config key. The web client localizes by `error.code`, not
+// by this `message`, but it is still never rendered as-is
+// (feature-core-config-readiness-and-mail AC-6). `as const` keeps these as
+// the exact literal types `SendTestMailErrorSchema` pins per `code`,
+// rather than widening to `string`.
+const MAIL_FROM_NOT_CONFIGURED_MESSAGE = 'The mail sender address is not configured.' as const;
+const MAIL_TEST_FAILED_MESSAGE = 'Failed to send the test email. Check the active mail sender configuration.' as const;
 
 /** Resolve the registered driver + plugin name of the active mail sender. */
 const resolveActiveSender = (crowi: Crowi): { driver: string; plugin: string } => {
@@ -68,15 +79,25 @@ export const registerAdminMailRoutes = <E extends OpenAPIHono<CrowiHonoBindings>
     .openapi(adminMailRoutes.sendTestMailRoute, async (c) => {
       const user = c.get('user');
       if (!user?.email) {
-        return c.json({ error: { code: 'MAIL_TEST_FAILED' as const, message: 'No email address on the calling user' } }, 502);
+        return c.json({ error: { code: 'MAIL_TEST_FAILED' as const, message: 'No email address on the calling user' as const } }, 502);
       }
 
       try {
         await crowi.getMailer().sendTest(user.email, user.lang);
       } catch (err) {
-        const error = err as Error;
-        debug('sendTestMail failed: %s', error.message);
-        return c.json({ error: { code: 'MAIL_TEST_FAILED' as const, message: error.message } }, 502);
+        if (err instanceof MailFromNotConfiguredError) {
+          debug('sendTestMail failed: mail:from not configured');
+          return c.json({ error: { code: 'MAIL_FROM_NOT_CONFIGURED' as const, message: MAIL_FROM_NOT_CONFIGURED_MESSAGE } }, 502);
+        }
+        // The full exception (stack trace plus any transport/SDK-specific
+        // properties — e.g. nodemailer's `.code` / `.command` /
+        // `.responseCode` / `.response`, or a `.cause`) is logged here
+        // only, never returned on the wire (AC-6). `%O` pretty-prints the
+        // whole object rather than just `error.message`, which alone can
+        // be a generic one-liner while the diagnostic detail lives in the
+        // other properties.
+        debug('sendTestMail failed: %O', err);
+        return c.json({ error: { code: 'MAIL_TEST_FAILED' as const, message: MAIL_TEST_FAILED_MESSAGE } }, 502);
       }
 
       return c.json({ ok: true as const, to: user.email }, 200);

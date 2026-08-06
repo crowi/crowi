@@ -8,6 +8,20 @@ import { type MailCatalog, getMailCatalog } from 'src/mail/i18n';
 const debug = Debug('crowi:service:mail');
 
 /**
+ * Thrown by `MailService.getFrom()` when `mail:from` is unset —
+ * distinguished from any other send failure (e.g. a transport error) so
+ * the hono handler (`hono/handlers/admin/mail.ts`) can map it to the
+ * dedicated `MAIL_FROM_NOT_CONFIGURED` wire error code instead of the
+ * generic `MAIL_TEST_FAILED` (feature-core-config-readiness-and-mail).
+ */
+export class MailFromNotConfiguredError extends Error {
+  constructor() {
+    super('mail:from is not configured. Set it from the admin mail settings.');
+    this.name = 'MailFromNotConfiguredError';
+  }
+}
+
+/**
  * HTML email types. Each maps 1:1 to a MJML body template
  * (`views/mail/<name>.mjml` + `<name>.text`) AND to a catalog section
  * (`MailCatalog[<name>]`), so the name alone resolves both the template
@@ -130,12 +144,12 @@ export class MailService {
     return driver;
   }
 
-  /** Resolve the configured `mail:from`. Throws when unset. */
+  /** Resolve the configured `mail:from`. Throws {@link MailFromNotConfiguredError} when unset. */
   getFrom(): string {
     const config = this.crowi.getConfig();
     const from = config?.crowi?.['mail:from'];
     if (!from) {
-      throw new Error('mail:from is not configured. Set it from the admin mail settings.');
+      throw new MailFromNotConfiguredError();
     }
     return from;
   }
