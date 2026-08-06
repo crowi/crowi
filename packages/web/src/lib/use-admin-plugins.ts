@@ -3,9 +3,9 @@
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   ClearRenderCacheResponse,
+  ConfigReadinessResponse,
   ListPluginsResponse,
   PluginConfigResponse,
-  PluginReadinessResponse,
   UpdatePluginConfigRequest,
   UpdatePluginConfigResponse,
 } from '@crowi/api-contract';
@@ -64,18 +64,19 @@ export function useAdminPlugins() {
 }
 
 /**
- * feature-plugin-config-readiness — active plugins missing config their
- * own `readiness` declaration says is required. `enabled` gates the
- * request: callers pass `user.admin === true` so the query (and thus
- * the HTTP request) never fires for a non-admin or before auth resolves
- * — see `PluginReadinessBanner`.
+ * feature-plugin-config-readiness / feature-core-config-readiness-and-mail
+ * — active plugins missing config their own `readiness` declaration says
+ * is required, PLUS core config declarations (e.g. `mail:from`) that are
+ * unset. `enabled` gates the request: callers pass `user.admin === true`
+ * so the query (and thus the HTTP request) never fires for a non-admin or
+ * before auth resolves — see `PluginReadinessBanner`.
  */
 export function useAdminPluginReadiness(enabled: boolean) {
-  return useQuery<PluginReadinessResponse, Error>({
+  return useQuery<ConfigReadinessResponse, Error>({
     queryKey: adminPluginsKeys.readiness(),
     queryFn: async () => {
       const response = await apiClient.admin.plugins.readiness.$get();
-      if (response.status === 200) return (await response.json()) as PluginReadinessResponse;
+      if (response.status === 200) return (await response.json()) as ConfigReadinessResponse;
       return throwGenericError(response, 'Failed to fetch plugin readiness');
     },
     enabled,

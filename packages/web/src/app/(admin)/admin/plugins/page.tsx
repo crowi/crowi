@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { ChevronRight } from 'lucide-react';
-import type { PluginInfo, PluginReadinessIssue } from '@crowi/api-contract';
+import type { ConfigReadinessIssue, PluginInfo } from '@crowi/api-contract';
 import { ClearAllRenderCacheButton } from '@/components/admin/plugin-clear-cache-button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ErrorAlert } from '@/components/ui/error-alert';
@@ -26,7 +26,14 @@ export default function AdminPluginsPage() {
   // This page only renders inside the admin shell (AdminLayout already
   // gated on user.admin), so the readiness query is always enabled here.
   const { data: readinessData } = useAdminPluginReadiness(true);
-  const readinessByName = new Map((readinessData?.issues ?? []).map((issue) => [issue.name, issue]));
+  // Only `source: 'plugin'` issues belong on this page — core issues (e.g.
+  // `mail:from`) are surfaced by the shared banner instead, never
+  // impersonating a plugin row here (feature-core-config-readiness-and-mail
+  // design decision 4). Keyed by `href` rather than a plugin name field —
+  // the wire issue carries no such field — which happens to be exactly the
+  // same `/admin/plugins/edit?name=...` string `PluginRow` computes for
+  // itself below.
+  const readinessByHref = new Map((readinessData?.issues ?? []).filter((issue) => issue.source === 'plugin').map((issue) => [issue.href, issue]));
 
   return (
     <div className="space-y-6">
@@ -56,7 +63,7 @@ export default function AdminPluginsPage() {
             <ul className="divide-y">
               {data.plugins.map((plugin) => (
                 <li key={plugin.name}>
-                  <PluginRow plugin={plugin} readinessIssue={readinessByName.get(plugin.name)} />
+                  <PluginRow plugin={plugin} readinessByHref={readinessByHref} />
                 </li>
               ))}
             </ul>
@@ -69,16 +76,19 @@ export default function AdminPluginsPage() {
 
 interface PluginRowProps {
   plugin: PluginInfo;
-  /** Present only when this plugin (active, driver selected) has unset required config — feature-plugin-config-readiness. */
-  readinessIssue: PluginReadinessIssue | undefined;
+  /** `source: 'plugin'` issues keyed by their `href` — feature-core-config-readiness-and-mail. */
+  readinessByHref: Map<string, ConfigReadinessIssue>;
 }
 
-function PluginRow({ plugin, readinessIssue }: PluginRowProps) {
+function PluginRow({ plugin, readinessByHref }: PluginRowProps) {
   const isFailed = plugin.status === 'failed';
   // A failed plugin never made it into the loaded set (see
   // `PluginManager.getFailedPlugins()`), so its config form (which reads
   // `manager.getLoadedPlugin(name)`) has nothing to show — don't link there.
   const href = !isFailed && plugin.hasConfig ? `/admin/plugins/edit?name=${encodeURIComponent(plugin.name)}` : null;
+  // Present only when this plugin (active, driver selected) has unset
+  // required config — feature-plugin-config-readiness.
+  const readinessIssue = href ? readinessByHref.get(href) : undefined;
 
   const inner = (
     <div className="flex items-center justify-between gap-4 px-4 py-3">
@@ -112,7 +122,7 @@ function PluginRow({ plugin, readinessIssue }: PluginRowProps) {
   );
 }
 
-function PluginRowMeta({ plugin, readinessIssue }: { plugin: PluginInfo; readinessIssue: PluginReadinessIssue | undefined }) {
+function PluginRowMeta({ plugin, readinessIssue }: { plugin: PluginInfo; readinessIssue: ConfigReadinessIssue | undefined }) {
   const parts: string[] = [];
   parts.push(`${m['admin.plugins.column_section']()}: ${plugin.adminPlacement.section}`);
   if (plugin.registers.length > 0) parts.push(`${m['admin.plugins.column_registers']()}: ${plugin.registers.join(', ')}`);
