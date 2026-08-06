@@ -1,16 +1,18 @@
 import ConfigService, { type ConfigChangeListener, deriveChangedNamespaces } from './config';
 
 /** Shared by `ConfigService listener API` + `ConfigService.saveConfigValueDurable` below. */
-function makeService(overrides: { updateByParams?: jest.Mock } = {}): ConfigService {
+function makeService(overrides: { updateByParams?: jest.Mock; updateAtomicConfigGroup?: jest.Mock } = {}): ConfigService {
   const writes: Array<{ ns: string; config: Record<string, unknown> }> = [];
   const updateConfigByNamespace = jest.fn(async (ns: string, config: Record<string, unknown>) => {
     writes.push({ ns, config });
   });
   const updateConfig = jest.fn(async (_ns: string, _key: string, _value: unknown) => undefined);
   const updateByParams = overrides.updateByParams ?? jest.fn(async (_ns: string, _key: string, _value: unknown) => undefined);
+  const updateAtomicConfigGroup =
+    overrides.updateAtomicConfigGroup ?? jest.fn(async (_ns: string, _plugin: string, _group: string, _values: Record<string, string>) => undefined);
   const deleteConfig = jest.fn(async (_ns: string, _key: string) => undefined);
   const fakeCrowi = {
-    model: () => ({ updateConfigByNamespace, updateConfig, updateByParams, deleteConfig }),
+    model: () => ({ updateConfigByNamespace, updateConfig, updateByParams, updateAtomicConfigGroup, deleteConfig }),
     event: () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const e: any = {
@@ -160,5 +162,60 @@ describe('ConfigService.saveConfigValueDurable', () => {
     await expect(svc.saveConfigValueDurable('crowi', 'security:linkCardEnabled', false)).rejects.toThrow('mongo write failed');
 
     expect(svc.config.crowi['security:linkCardEnabled']).toBe(true);
+  });
+});
+
+describe('ConfigService.saveConfigAtomicGroup (RFC-0014 phase 4, AC-3)', () => {
+  it('applies the whole group to local config and notifies its plugin namespace exactly once', async () => {
+    const svc = makeService();
+    svc.config.crowi = { 'plugin:@crowi/plugin-google:clientId': 'old-id', 'plugin:@crowi/plugin-google:clientSecret': 'old-secret' };
+    const calls: Array<{ ns: string[]; source: string }> = [];
+    svc.onConfigChange((ns, source) => {
+      calls.push({ ns, source });
+    });
+
+    await svc.saveConfigAtomicGroup('crowi', '@crowi/plugin-google', 'clientCredentials', { clientId: 'new-id', clientSecret: 'new-secret' });
+
+    // Both fields land together — a listener must never observe the pair
+    // half-applied, which is the entire reason they share a document.
+    expect(svc.config.crowi['plugin:@crowi/plugin-google:clientId']).toBe('new-id');
+    expect(svc.config.crowi['plugin:@crowi/plugin-google:clientSecret']).toBe('new-secret');
+    // One logical change, one notification — not one per field.
+    expect(calls).toHaveLength(1);
+    expect(calls[0].ns).toEqual(['plugin:@crowi/plugin-google']);
+  });
+
+  it('AC-3: a rejected write propagates, leaves the cached pair untouched, and notifies nobody', async () => {
+    const updateAtomicConfigGroup = jest.fn(async () => {
+      throw new Error('mongo write failed');
+    });
+    const svc = makeService({ updateAtomicConfigGroup });
+    svc.config.crowi = { 'plugin:@crowi/plugin-google:clientId': 'old-id', 'plugin:@crowi/plugin-google:clientSecret': 'old-secret' };
+    const calls: string[][] = [];
+    svc.onConfigChange((ns) => {
+      calls.push(ns);
+    });
+
+    await expect(
+      svc.saveConfigAtomicGroup('crowi', '@crowi/plugin-google', 'clientCredentials', { clientId: 'new-id', clientSecret: 'new-secret' }),
+    ).rejects.toThrow('mongo write failed');
+
+    // Nothing anywhere may reflect a value the database refused: not the
+    // in-memory config other replicas would diverge from, and not the
+    // publish that would tell them to reload.
+    expect(svc.config.crowi['plugin:@crowi/plugin-google:clientId']).toBe('old-id');
+    expect(svc.config.crowi['plugin:@crowi/plugin-google:clientSecret']).toBe('old-secret');
+    expect(calls).toHaveLength(0);
+  });
+
+  it('writes through the single-document model call, never as separate per-key writes', async () => {
+    const updateAtomicConfigGroup = jest.fn(async () => undefined);
+    const svc = makeService({ updateAtomicConfigGroup });
+    svc.config.crowi = {};
+
+    await svc.saveConfigAtomicGroup('crowi', '@crowi/plugin-google', 'clientCredentials', { clientId: 'id', clientSecret: 'secret' });
+
+    expect(updateAtomicConfigGroup).toHaveBeenCalledTimes(1);
+    expect(updateAtomicConfigGroup).toHaveBeenCalledWith('crowi', '@crowi/plugin-google', 'clientCredentials', { clientId: 'id', clientSecret: 'secret' });
   });
 });
