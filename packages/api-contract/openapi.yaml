@@ -5917,11 +5917,68 @@ paths:
           required: true
           name: handoff_proof
           in: query
+        - schema:
+            type: string
+            enum:
+              - '1'
+          required: false
+          name: link
+          in: query
+        - schema:
+            type: string
+            minLength: 1
+          required: false
+          name: link_grant
+          in: query
       responses:
         '302':
           description: Redirect to the provider authorization endpoint
         '400':
-          description: Malformed continue / sender proof
+          description: >-
+            Malformed continue / sender proof, or an invalid/expired/mismatched
+            link grant
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        $ref: '#/components/schemas/ErrorCode'
+                      message:
+                        type: string
+                      details: {}
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+        '401':
+          description: >-
+            link=1 without a web-session JWT — never downgraded to the public
+            sign-in start
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        $ref: '#/components/schemas/ErrorCode'
+                      message:
+                        type: string
+                      details: {}
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+        '403':
+          description: link=1 with a non-web credential (PAT / OAuth access token)
           content:
             application/json:
               schema:
@@ -6178,6 +6235,256 @@ paths:
                       message:
                         type: string
                       details: {}
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - INTERNAL_ERROR
+                      message:
+                        type: string
+                        enum:
+                          - Internal server error
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+  /auth/providers/{name}/link-grants:
+    post:
+      tags:
+        - federatedAuth
+      summary: >-
+        Mint a short-lived, opaque grant that authorizes ONE link start for the
+        current web session
+      parameters:
+        - schema:
+            type: string
+          required: true
+          name: name
+          in: path
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                handoffChallenge:
+                  type: string
+                  minLength: 1
+              required:
+                - handoffChallenge
+      responses:
+        '200':
+          description: Opaque single-use grant id
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  linkGrant:
+                    type: string
+                required:
+                  - linkGrant
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - AUTHENTICATION_REQUIRED
+                      message:
+                        type: string
+                        enum:
+                          - Authentication is required
+                      redirectTo:
+                        type: string
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+        '403':
+          description: Non-web credential (PAT / OAuth access token)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        $ref: '#/components/schemas/ErrorCode'
+                      message:
+                        type: string
+                      details: {}
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+        '404':
+          description: Unknown, unconfigured, or credential-kind provider
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        $ref: '#/components/schemas/ErrorCode'
+                      message:
+                        type: string
+                      details: {}
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - INTERNAL_ERROR
+                      message:
+                        type: string
+                        enum:
+                          - Internal server error
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+  /auth/providers/{name}/identity:
+    delete:
+      tags:
+        - federatedAuth
+      summary: Disconnect the current user's identity for this provider
+      parameters:
+        - schema:
+            type: string
+          required: true
+          name: name
+          in: path
+      responses:
+        '204':
+          description: Identity removed
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - AUTHENTICATION_REQUIRED
+                      message:
+                        type: string
+                        enum:
+                          - Authentication is required
+                      redirectTo:
+                        type: string
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+        '403':
+          description: Non-web credential (PAT / OAuth access token)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        $ref: '#/components/schemas/ErrorCode'
+                      message:
+                        type: string
+                      details: {}
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+        '404':
+          description: No identity linked for this provider
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        $ref: '#/components/schemas/ErrorCode'
+                      message:
+                        type: string
+                      details: {}
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+        '409':
+          description: >-
+            Refused: password auth is disabled instance-wide, or this user has
+            no password set
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - FEDERATED_UNLINK_DISABLED
+                          - PASSWORD_REQUIRED
+                      message:
+                        type: string
                     required:
                       - code
                       - message
