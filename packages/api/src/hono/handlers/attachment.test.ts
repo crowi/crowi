@@ -980,6 +980,134 @@ describe('Routes /api attachments (Hono)', () => {
     });
   });
 
+  /**
+   * The strict delivery route. `/attachments/:id` and `/original` answer a
+   * missing record or a missing stored object with `200 image/png` — the
+   * `file-not-found.png` placeholder — so an embedded `<img>` degrades
+   * gracefully. A client extracting bytes cannot tell that apart from a real
+   * file, so this route never substitutes it: every assertion below about a
+   * 404 is really "the caller cannot be handed the placeholder by mistake".
+   */
+  describe('GET /api/attachments/:id/download (raw stream, strict — never the placeholder)', () => {
+    /** Upload `pngBuffer` to a fresh page and return the attachment id. */
+    const seedAttachment = async (slug: string, filename = 'pixel.png', grant?: number): Promise<string> => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}${slug}`, '# dl', grant);
+      const upload = await request(app)
+        .post(`/api/pages/${page._id}/attachments`)
+        .set(authHeaders(accessToken))
+        .attach('file', pngBuffer, { filename, contentType: 'image/png' });
+      expect(upload.status).toBe(200);
+      return upload.body.attachment._id;
+    };
+
+    it('returns 401 without auth', async () => {
+      const res = await request(app).get('/api/attachments/000000000000000000000000/download');
+      expect(res.status).toBe(401);
+    });
+
+    it('404 ATTACHMENT_NOT_FOUND — not the placeholder — for a non-existent record', async () => {
+      const res = await request(app).get('/api/attachments/000000000000000000000000/download').set(authHeaders(accessToken));
+
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('ATTACHMENT_NOT_FOUND');
+    });
+
+    it('404 ATTACHMENT_NOT_FOUND when the caller lacks grant on the page', async () => {
+      const id = await seedAttachment('download-grant-fail', 'pixel.png', 4 /* GRANT_OWNER */);
+
+      const res = await request(app).get(`/api/attachments/${id}/download`).set(authHeaders(otherAccessToken));
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('ATTACHMENT_NOT_FOUND');
+    });
+
+    it('404 FILE_MISSING — not the placeholder — when the record exists but the stored file is gone', async () => {
+      const id = await seedAttachment('download-enoent');
+      const Attachment = crowi.model('Attachment');
+      const stored = await Attachment.findById(id);
+      const driver = crowi.getPlugins().active.storage;
+      if (!driver) throw new Error('storage driver missing in test env');
+      await driver.delete(stored.filePath);
+
+      const res = await request(app).get(`/api/attachments/${id}/download`).set(authHeaders(accessToken));
+
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('FILE_MISSING');
+    });
+
+    it('serves the bytes as application/octet-stream with an attachment disposition, even for an image', async () => {
+      const id = await seedAttachment('download-octet-stream');
+
+      const res = await request(app).get(`/api/attachments/${id}/download`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
+
+      expect(res.status).toBe(200);
+      // Never the stored MIME: this route hands over bytes, so it can never
+      // be the one that serves a stored file inline.
+      expect(res.headers['content-type']).toBe('application/octet-stream');
+      expect(res.headers['content-disposition']).toBe(`attachment; filename*=UTF-8''pixel.png`);
+      expect((res.body as Buffer).equals(pngBuffer)).toBe(true);
+    });
+
+    it('percent-escapes the characters RFC 8187 reserves in the filename', async () => {
+      const id = await seedAttachment('download-filename-escaping', "it's (1).png");
+
+      const res = await request(app).get(`/api/attachments/${id}/download`).set(authHeaders(accessToken));
+
+      expect(res.status).toBe(200);
+      // `encodeURIComponent` leaves ' ( ) * alone; RFC 8187's `attr-char`
+      // does not include them, so they must be escaped on top of it.
+      expect(res.headers['content-disposition']).toBe(`attachment; filename*=UTF-8''it%27s%20%281%29.png`);
+    });
+
+    it('serves the ORIGINAL bytes even when a resized display derivative exists', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}download-ignores-display`, '# did');
+      const wideJpeg = await createWideJpeg();
+      const upload = await request(app)
+        .post(`/api/pages/${page._id}/attachments`)
+        .set(authHeaders(accessToken))
+        .attach('file', wideJpeg, { filename: 'wide.jpg', contentType: 'image/jpeg' });
+      expect(upload.status).toBe(200);
+      const id = upload.body.attachment._id;
+      const Attachment = crowi.model('Attachment');
+      expect((await Attachment.findById(id))?.derivatives?.display?.mode).toBe('resized');
+
+      const res = await request(app).get(`/api/attachments/${id}/download`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
+
+      expect(res.status).toBe(200);
+      expect((res.body as Buffer).equals(wideJpeg)).toBe(true);
+    });
+
+    it('403 INSUFFICIENT_SCOPE for a pages:read-only OAuth token', async () => {
+      const id = await seedAttachment('download-scope-insufficient');
+      const scoped = await createTestUser({
+        name: 'Attach DL Scope Read',
+        username: 'attachDownloadScopeRead',
+        email: 'attach-download-scope-read@example.com',
+      });
+      const oauthToken = createJwtUtil(crowi).signOauthAccessToken({ user: scoped.user, scopes: ['pages:read'], clientId: 'crowi-cli' });
+
+      const res = await request(app).get(`/api/attachments/${id}/download`).set(authHeaders(oauthToken));
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe('INSUFFICIENT_SCOPE');
+    });
+
+    it('200 for an attachments:read-scoped OAuth token — the scope the CLI asks for', async () => {
+      const id = await seedAttachment('download-scope-sufficient');
+      const scoped = await createTestUser({ name: 'Attach DL Scope Ok', username: 'attachDownloadScopeOk', email: 'attach-download-scope-ok@example.com' });
+      const oauthToken = createJwtUtil(crowi).signOauthAccessToken({ user: scoped.user, scopes: ['attachments:read'], clientId: 'crowi-cli' });
+
+      const res = await request(app).get(`/api/attachments/${id}/download`).set(authHeaders(oauthToken)).buffer(true).parse(bufferParser);
+      expect(res.status).toBe(200);
+      expect((res.body as Buffer).equals(pngBuffer)).toBe(true);
+    });
+
+    it('401 for a cookie-only request — the cookie fallback covers the `<img>` delivery routes, not this one', async () => {
+      const id = await seedAttachment('download-cookie-rejected');
+
+      const res = await request(app).get(`/api/attachments/${id}/download`).set(cookieHeaders(accessToken));
+      expect(res.status).toBe(401);
+    });
+  });
+
   describe('GET /api/attachments/by-key/:key (raw stream)', () => {
     const tmpFiles: string[] = [];
 

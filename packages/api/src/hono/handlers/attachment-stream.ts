@@ -211,6 +211,32 @@ const toWebStream = (stream: Readable): ReadableStream => {
   return Readable.toWeb(stream) as ReadableStream;
 };
 
+/**
+ * Percent-encode a filename for RFC 8187 `filename*=UTF-8''…`.
+ *
+ * `encodeURIComponent` alone is not enough for this grammar. It leaves
+ * `'`, `(`, `)` and `*` unescaped even though they are not `attr-char`,
+ * so a name containing them produces a header a strict parser rejects.
+ * It also throws `URIError` on a lone surrogate, and `Attachment.originalName`
+ * is an unconstrained `String` fed straight from the client-supplied upload
+ * filename — so that input is reachable. Replacing unpaired surrogates with
+ * U+FFFD first makes the encode total.
+ */
+const encodeRfc8187 = (name: string): string => {
+  // `String.prototype.toWellFormed` (ES2024) swaps lone surrogates for
+  // U+FFFD. It is present on every Node version this package supports but
+  // is not in the configured `lib`, hence the guarded call rather than a
+  // direct one — and a manual surrogate sweep as the fallback so the
+  // encode is total either way.
+  const wellFormedOf = (name as { toWellFormed?: () => string }).toWellFormed;
+  const wellFormed =
+    typeof wellFormedOf === 'function'
+      ? wellFormedOf.call(name)
+      : // Replace any surrogate code unit that is not part of a valid pair.
+        name.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '�');
+  return encodeURIComponent(wellFormed).replace(/['()*]/g, (ch) => `%${ch.charCodeAt(0).toString(16).toUpperCase()}`);
+};
+
 /** The response headers a delivery decision produces — see {@link resolveDelivery}. */
 type Delivery = { contentType: string; disposition?: string; csp?: string };
 
@@ -289,6 +315,31 @@ export const registerAttachmentStreamRoutes = (app: OpenAPIHono<CrowiHonoBinding
     return { ok: true, attachment };
   };
 
+  /**
+   * {@link loadAuthorizedAttachment} for callers that must not receive a
+   * placeholder: a missing record becomes `404 ATTACHMENT_NOT_FOUND`
+   * instead of `200 image/png`.
+   *
+   * Everything else — auth, id validation, the page-grant check, and the
+   * decision to collapse "no such page" and "not granted" into one 404 so
+   * the response cannot be used to probe for attachment ids — is the
+   * shared implementation. Only the one branch that differs is overridden,
+   * so the two routes cannot drift apart on the authorization boundary.
+   */
+  const loadAuthorizedAttachmentStrict = async (
+    c: Context<CrowiHonoBindings>,
+  ): Promise<{ ok: true; attachment: AttachmentDocument } | { ok: false; response: Response }> => {
+    const result = await loadAuthorizedAttachment(c);
+    if (result.ok) return result;
+    // The shared loader signals "record not found" by handing back the
+    // placeholder response; that is the only 200 it can produce on the
+    // failure path, which makes it an unambiguous discriminator.
+    if (result.response.status === 200) {
+      return { ok: false, response: c.json(errorBody('ATTACHMENT_NOT_FOUND', 'Attachment not found'), 404) };
+    }
+    return result;
+  };
+
   /** {@link resolveDelivery} for a stored attachment — identical for the display AND original branches (§9). */
   const buildDeliveryHeaders = (attachment: AttachmentDocument, rawMime: string): Delivery =>
     resolveDelivery(rawMime, `filename*=UTF-8''${encodeURIComponent(attachment.originalName || attachment.fileName)}`);
@@ -334,6 +385,63 @@ export const registerAttachmentStreamRoutes = (app: OpenAPIHono<CrowiHonoBinding
   // auth apply (`registerAttachmentRoutes`) always registers before this
   // handler (`hono/index.ts`), so that invariant holds.
   app.use('/attachments/:id{[0-9a-fA-F]{24}}/original', requireScope('attachments:read'));
+  app.use('/attachments/:id{[0-9a-fA-F]{24}}/download', requireScope('attachments:read'));
+
+  // --------------------------------------------------------------
+  // GET /attachments/:id/download
+  // --------------------------------------------------------------
+  // The strict counterpart of `/original`, for programmatic clients
+  // (the CLI) rather than browsers.
+  //
+  // `/attachments/:id` and `/original` deliberately answer a missing
+  // record or a missing storage object with `200 image/png` — the
+  // `file-not-found.png` placeholder — so an embedded `<img>` degrades
+  // gracefully. That is right for a browser and wrong for a client
+  // extracting bytes: it cannot tell "here is your file" from "the file
+  // is gone", so it would happily save the placeholder and, when moving
+  // content between instances, carry a broken image across without ever
+  // noticing.
+  //
+  // So this route never substitutes a placeholder. A missing record and
+  // a missing object are both 404s, with distinct codes so the caller can
+  // say which happened.
+  //
+  // The response is always `application/octet-stream` + an attachment
+  // disposition. Callers here want the bytes, not a rendering decision,
+  // and pinning one media type keeps the delivery-safety question
+  // (`INLINE_SAFE_MIME`, sandbox CSP) out of this route entirely — it can
+  // never be the vector that serves stored HTML inline. The real MIME is
+  // already available from the attachment listing.
+  app.get('/attachments/:id{[0-9a-fA-F]{24}}/download', async (c) => {
+    const auth = await loadAuthorizedAttachmentStrict(c);
+    if (!auth.ok) return auth.response;
+
+    let stream: Readable;
+    try {
+      stream = await Attachment.findDeliveryFile(auth.attachment);
+    } catch (err) {
+      // NOTE (known limitation): the built-in local driver reports a
+      // missing object by checking `existsSync` and synthesising `ENOENT`,
+      // so a file that exists but cannot be *read* (EACCES) is reported
+      // here as missing too. Likewise `isMissingFileError` treats any
+      // S3 HTTP 404 as missing, which includes `NoSuchBucket` — a
+      // misconfigured bucket therefore looks like a missing attachment.
+      // Both are pre-existing behaviours of the shared classifier; this
+      // route inherits rather than fixes them, and doing better needs a
+      // typed missing-object error at the plugin-API boundary.
+      if (isMissingFileError(err)) {
+        return c.json(errorBody('FILE_MISSING', 'The attachment record exists but its stored file is gone'), 404);
+      }
+      debug('strict download delivery error', err);
+      return c.json(errorBody('UPLOAD_FAILED', 'Failed to deliver file'), 500);
+    }
+
+    const filename = auth.attachment.originalName || auth.attachment.fileName;
+    return streamResponse(stream, {
+      contentType: 'application/octet-stream',
+      disposition: `attachment; filename*=UTF-8''${encodeRfc8187(filename)}`,
+    });
+  });
 
   // --------------------------------------------------------------
   // GET /attachments/by-key/:key(*)
