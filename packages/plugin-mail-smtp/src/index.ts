@@ -36,6 +36,16 @@ const plugin: CrowiPlugin = {
     icon: 'mail',
     // section omitted: derived from registerMailSender → 'mail'
   },
+  // `host` defaults to '' (a valid Zod value) but `send()` throws until
+  // it's set — see feature-core-config-readiness-and-mail. `user` /
+  // `password` are intentionally NOT declared here: an unauthenticated
+  // relay (no auth) is a legitimate configuration. `port` / `secure` both
+  // have working defaults.
+  readiness: {
+    registry: 'mail',
+    driver: 'smtp',
+    requiredConfigFields: ['host'],
+  },
 
   registerMailSender: (registry, ctx) => {
     const config = ctx.config<SmtpConfig>();

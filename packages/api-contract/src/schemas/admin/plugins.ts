@@ -190,23 +190,34 @@ export const PluginReadinessFieldSchema = z.object({
 export type PluginReadinessField = z.infer<typeof PluginReadinessFieldSchema>;
 
 /**
- * A currently-active plugin (its `readiness.driver` matches the
- * selected `crowi.config.json` driver for `readiness.registry`) with at
- * least one unset required config field.
+ * feature-core-config-readiness-and-mail — a generalization of the
+ * original plugin-only readiness issue: a plugin's `readiness`
+ * declaration (its selected driver matches `crowi.config.json`) OR a
+ * static core config declaration (`packages/api/src/plugin/core-readiness.ts`,
+ * e.g. `mail:from`) with at least one unset required field.
+ *
+ * `label`/`href` are server-resolved display metadata (a plugin's
+ * `adminPlacement.label` + `/admin/plugins/edit?name=...`, or a core
+ * declaration's own `label`/`href`, e.g. `/admin/mail`) — `href` is
+ * always a relative path within the admin shell. Never carries config
+ * values or secrets.
  */
-export const PluginReadinessIssueSchema = z.object({
-  name: z.string(),
-  adminPlacement: PluginAdminPlacementSchema,
+export const ConfigReadinessIssueSchema = z.object({
+  /** Stable id — `plugin:<name>` or a core declaration id (e.g. `core:mail`). */
+  id: z.string(),
+  source: z.enum(['plugin', 'core']),
+  label: z.string(),
+  href: z.string(),
   fields: z.array(PluginReadinessFieldSchema),
 });
-export type PluginReadinessIssue = z.infer<typeof PluginReadinessIssueSchema>;
+export type ConfigReadinessIssue = z.infer<typeof ConfigReadinessIssueSchema>;
 
 /**
  * `GET /admin/plugins/readiness` response. Empty `issues` means every
- * active plugin with a readiness declaration is fully configured (or no
- * loaded plugin declares readiness at all).
+ * active plugin with a readiness declaration plus every core
+ * declaration is fully configured.
  */
-export const PluginReadinessResponseSchema = z.object({
-  issues: z.array(PluginReadinessIssueSchema),
+export const ConfigReadinessResponseSchema = z.object({
+  issues: z.array(ConfigReadinessIssueSchema),
 });
-export type PluginReadinessResponse = z.infer<typeof PluginReadinessResponseSchema>;
+export type ConfigReadinessResponse = z.infer<typeof ConfigReadinessResponseSchema>;

@@ -160,9 +160,13 @@ sends a test mail **to the operating administrator's own mail address**.
 
 - The test send uses **only the saved settings**. Values typed on the
   screen but not yet saved are not used, so save first, then run it.
-- If sending fails, network errors and authentication failures alike come
-  back as `502` (`MAIL_TEST_FAILED`) with a message. Use that message as a
-  clue to review the configuration.
+- If the sender address (`mail:from`) is unset, the test send returns
+  `502` (`MAIL_FROM_NOT_CONFIGURED`) and the screen shows that explicitly,
+  with a link to mail settings. Every other send failure (network error,
+  authentication failure, etc.) returns `502` (`MAIL_TEST_FAILED`) with a
+  generic message. The underlying connection error or driver-specific
+  detail is never shown on screen — it is logged on the api server only,
+  so check the server log to diagnose the cause.
 - The test mail is sent with the same branded HTML template as the other
   notification mails, so you see exactly how real notifications will
   arrive.
@@ -201,7 +205,7 @@ even while it is still within its lifetime.
 | Symptom | What to check |
 | ------- | ------------- |
 | No mail is sent at all | Whether `from` is set at `/admin/mail`. Whether `activeDriver` is the driver you expect. Whether that plugin's connection details are filled in |
-| Test send returns `502` | Whether the SMTP host / port is correct. Whether the credentials are correct. Whether a firewall is blocking the send port |
+| Test send returns `502` | If `MAIL_FROM_NOT_CONFIGURED`, set `from` at `/admin/mail`. If `MAIL_TEST_FAILED`, check the SMTP host / port, the credentials, and whether a firewall is blocking the send port (the detailed cause is logged on the api server) |
 | Authentication error | Whether both the SMTP user and password are entered. Whether the password was saved empty and is now unset |
 | Settings changes are not reflected | Changes are applied on save, so normally they are immediate. If they still are not, restart the API |
 | Links inside the mail are broken | Whether `CLIENT_URL` is set to the public URL |

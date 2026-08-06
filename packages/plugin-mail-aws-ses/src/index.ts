@@ -4,6 +4,12 @@ import type { AwsConfig } from '@crowi/plugin-aws';
 import type { CrowiPlugin, EmailMessage, MailSender, PluginContext } from '@crowi/plugin-api';
 
 // No own config — region / credentials come from @crowi/plugin-aws.
+//
+// Deliberately no `readiness` declaration (feature-core-config-readiness-
+// and-mail): SES has no own required config field, and its AWS
+// `region`/`accessKeyId`/`secretAccessKey` are intentionally excluded from
+// readiness — an empty value there is the SDK default credential chain, a
+// legitimate configuration, not a missing one.
 const SesConfigSchema = z.object({}).strict();
 
 type SesConfig = z.infer<typeof SesConfigSchema>;

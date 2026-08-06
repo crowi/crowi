@@ -74,6 +74,7 @@ components:
         - FEDERATED_HANDOFF_INVALID
         - FEDERATED_HANDOFF_CONSUMED
         - ENCRYPTION_NOT_CONFIGURED
+        - MAIL_FROM_NOT_CONFIGURED
         - MAIL_TEST_FAILED
         - PLUGIN_NOT_FOUND
         - PLUGIN_CONFIG_VALIDATION_FAILED
@@ -4612,17 +4613,36 @@ components:
       type: object
       properties:
         error:
-          type: object
-          properties:
-            code:
-              type: string
-              enum:
-                - MAIL_TEST_FAILED
-            message:
-              type: string
-          required:
-            - code
-            - message
+          oneOf:
+            - type: object
+              properties:
+                code:
+                  type: string
+                  enum:
+                    - MAIL_FROM_NOT_CONFIGURED
+                message:
+                  type: string
+                  enum:
+                    - The mail sender address is not configured.
+              required:
+                - code
+                - message
+            - type: object
+              properties:
+                code:
+                  type: string
+                  enum:
+                    - MAIL_TEST_FAILED
+                message:
+                  type: string
+                  enum:
+                    - >-
+                      Failed to send the test email. Check the active mail
+                      sender configuration.
+                    - No email address on the calling user
+              required:
+                - code
+                - message
       required:
         - error
     MailSettingsValidationError:
@@ -24829,24 +24849,46 @@ paths:
                 required:
                   - error
         '502':
-          description: Test mail dispatch failed (SMTP error)
+          description: >-
+            Test mail dispatch failed (mail dispatch failure — e.g.
+            sender/transport error, or the mail sender address is not
+            configured)
           content:
             application/json:
               schema:
                 type: object
                 properties:
                   error:
-                    type: object
-                    properties:
-                      code:
-                        type: string
-                        enum:
-                          - MAIL_TEST_FAILED
-                      message:
-                        type: string
-                    required:
-                      - code
-                      - message
+                    oneOf:
+                      - type: object
+                        properties:
+                          code:
+                            type: string
+                            enum:
+                              - MAIL_FROM_NOT_CONFIGURED
+                          message:
+                            type: string
+                            enum:
+                              - The mail sender address is not configured.
+                        required:
+                          - code
+                          - message
+                      - type: object
+                        properties:
+                          code:
+                            type: string
+                            enum:
+                              - MAIL_TEST_FAILED
+                          message:
+                            type: string
+                            enum:
+                              - >-
+                                Failed to send the test email. Check the active
+                                mail sender configuration.
+                              - No email address on the calling user
+                        required:
+                          - code
+                          - message
                 required:
                   - error
   /admin/storage:
@@ -28011,12 +28053,12 @@ paths:
         - admin.plugins
       security:
         - bearerAuth: []
-      summary: List active plugins missing required readiness config fields
+      summary: List active plugins and core config missing required readiness fields
       responses:
         '200':
           description: >-
-            Readiness issues for active plugins (empty when everything is
-            configured)
+            Readiness issues for active plugins and core config (empty when
+            everything is configured)
           content:
             application/json:
               schema:
@@ -28027,30 +28069,17 @@ paths:
                     items:
                       type: object
                       properties:
-                        name:
+                        id:
                           type: string
-                        adminPlacement:
-                          type: object
-                          properties:
-                            section:
-                              type: string
-                              enum:
-                                - settings
-                                - shared
-                                - storage
-                                - mail
-                                - notification
-                                - auth
-                                - search
-                                - renderer
-                                - platform
-                            label:
-                              type: string
-                            icon:
-                              type: string
-                          required:
-                            - section
-                            - label
+                        source:
+                          type: string
+                          enum:
+                            - plugin
+                            - core
+                        label:
+                          type: string
+                        href:
+                          type: string
                         fields:
                           type: array
                           items:
@@ -28066,8 +28095,10 @@ paths:
                               - name
                               - configured
                       required:
-                        - name
-                        - adminPlacement
+                        - id
+                        - source
+                        - label
+                        - href
                         - fields
                 required:
                   - issues

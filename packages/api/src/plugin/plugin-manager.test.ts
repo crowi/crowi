@@ -688,6 +688,10 @@ describe('PluginManager.getReadinessIssues (feature-plugin-config-readiness)', (
       // though they're empty here too, they must never surface as an issue.
       'plugin:@crowi/plugin-aws:accessKeyId': '',
       'plugin:@crowi/plugin-aws:secretAccessKey': '',
+      // core mail:from is set here so this test stays scoped to the
+      // plugin-only assertion — see the core-declaration describe block
+      // below for `mail:from` coverage.
+      'mail:from': 'noreply@example.com',
     };
     const s3 = stubPlugin({
       name: '@crowi/plugin-storage-aws-s3',
@@ -704,11 +708,18 @@ describe('PluginManager.getReadinessIssues (feature-plugin-config-readiness)', (
     loadPluginsInto(manager, [s3, aws, unselectedDriver, noReadiness]);
     withSelectedDrivers(manager, { storage: 's3' });
 
-    expect(manager.getReadinessIssues()).toEqual([{ pluginName: '@crowi/plugin-storage-aws-s3', fields: [{ name: 'bucket', configured: false }] }]);
+    expect(manager.getReadinessIssues()).toEqual([
+      {
+        source: 'plugin',
+        id: 'plugin:@crowi/plugin-storage-aws-s3',
+        pluginName: '@crowi/plugin-storage-aws-s3',
+        fields: [{ name: 'bucket', configured: false }],
+      },
+    ]);
   });
 
   it('returns no issue once the required field has a non-empty value', () => {
-    const namespace: Record<string, unknown> = { 'plugin:@crowi/plugin-storage-aws-s3:bucket': 'my-real-bucket' };
+    const namespace: Record<string, unknown> = { 'plugin:@crowi/plugin-storage-aws-s3:bucket': 'my-real-bucket', 'mail:from': 'noreply@example.com' };
     const s3 = stubPlugin({
       name: '@crowi/plugin-storage-aws-s3',
       readiness: { registry: 'storage', driver: 's3', requiredConfigFields: ['bucket'] },
@@ -721,7 +732,7 @@ describe('PluginManager.getReadinessIssues (feature-plugin-config-readiness)', (
   });
 
   it("AC-3: reports the selected search driver's unset url even though its own registerSearch skipped registry.register() at boot (empty url)", () => {
-    const namespace: Record<string, unknown> = { 'plugin:@crowi/plugin-search-elasticsearch:url': '' };
+    const namespace: Record<string, unknown> = { 'plugin:@crowi/plugin-search-elasticsearch:url': '', 'mail:from': 'noreply@example.com' };
     // The real elasticsearch/opensearch plugins stay in `loadedPlugins`
     // (activate() succeeds) even when `registerSearch` returns early on an
     // empty url — only `registry.register()` is skipped. `loadPluginsInto`
@@ -734,11 +745,18 @@ describe('PluginManager.getReadinessIssues (feature-plugin-config-readiness)', (
     loadPluginsInto(manager, [es]);
     withSelectedDrivers(manager, { search: 'elasticsearch' });
 
-    expect(manager.getReadinessIssues()).toEqual([{ pluginName: '@crowi/plugin-search-elasticsearch', fields: [{ name: 'url', configured: false }] }]);
+    expect(manager.getReadinessIssues()).toEqual([
+      {
+        source: 'plugin',
+        id: 'plugin:@crowi/plugin-search-elasticsearch',
+        pluginName: '@crowi/plugin-search-elasticsearch',
+        fields: [{ name: 'url', configured: false }],
+      },
+    ]);
   });
 
   it('AC-3: excludes the issue when a different search driver is selected', () => {
-    const namespace: Record<string, unknown> = { 'plugin:@crowi/plugin-search-elasticsearch:url': '' };
+    const namespace: Record<string, unknown> = { 'plugin:@crowi/plugin-search-elasticsearch:url': '', 'mail:from': 'noreply@example.com' };
     const es = stubPlugin({
       name: '@crowi/plugin-search-elasticsearch',
       readiness: { registry: 'search', driver: 'elasticsearch', requiredConfigFields: ['url'] },
@@ -750,13 +768,13 @@ describe('PluginManager.getReadinessIssues (feature-plugin-config-readiness)', (
     expect(manager.getReadinessIssues()).toEqual([]);
   });
 
-  it('returns an empty array when no plugin is loaded', () => {
-    const manager = new PluginManager(makeFakeCrowi());
+  it('returns an empty array when no plugin is loaded and mail:from is set (no core issue either)', () => {
+    const manager = new PluginManager(makeFakeCrowiWithNamespace({ 'mail:from': 'noreply@example.com' }));
     expect(manager.getReadinessIssues()).toEqual([]);
   });
 
   it('every field result carries only name + configured — never the actual value', () => {
-    const namespace: Record<string, unknown> = { 'plugin:@crowi/plugin-search-elasticsearch:url': '' };
+    const namespace: Record<string, unknown> = { 'plugin:@crowi/plugin-search-elasticsearch:url': '', 'mail:from': 'noreply@example.com' };
     const es = stubPlugin({
       name: '@crowi/plugin-search-elasticsearch',
       readiness: { registry: 'search', driver: 'elasticsearch', requiredConfigFields: ['url'] },
@@ -858,5 +876,135 @@ describe('PluginManager.resolveActiveDrivers — auth stays unfiltered by config
     // resolves to — reconfigureAffected() does not re-register or re-filter it.
     const active = resolveActiveDrivers(manager);
     expect(active.auth).toHaveLength(1);
+  });
+});
+
+describe('PluginManager.getReadinessIssues — core declarations (feature-core-config-readiness-and-mail, AC-1/AC-2/AC-3)', () => {
+  it('AC-1: reports the core:mail issue with only the field name (never the value) when mail:from is empty, independent of any loaded plugin', () => {
+    const manager = new PluginManager(makeFakeCrowiWithNamespace({ 'mail:from': '' }));
+
+    expect(manager.getReadinessIssues()).toEqual([
+      { source: 'core', id: 'core:mail', label: 'Mail', href: '/admin/mail', fields: [{ name: 'from', configured: false }] },
+    ]);
+  });
+
+  it('AC-1: omits the core:mail issue once mail:from has a non-empty value', () => {
+    const manager = new PluginManager(makeFakeCrowiWithNamespace({ 'mail:from': 'noreply@example.com' }));
+    expect(manager.getReadinessIssues()).toEqual([]);
+  });
+
+  it('treats an absent mail:from key the same as an empty string (unset)', () => {
+    const manager = new PluginManager(makeFakeCrowiWithNamespace({}));
+    expect(manager.getReadinessIssues()).toEqual([
+      { source: 'core', id: 'core:mail', label: 'Mail', href: '/admin/mail', fields: [{ name: 'from', configured: false }] },
+    ]);
+  });
+
+  it('AC-2/AC-3: the core mail:from issue and a selected-driver plugin mail issue (SMTP host) coexist as independent issues', () => {
+    const smtp = stubPlugin({
+      name: '@crowi/plugin-mail-smtp',
+      readiness: { registry: 'mail', driver: 'smtp', requiredConfigFields: ['host'] },
+    });
+    const manager = new PluginManager(makeFakeCrowiWithNamespace({ 'mail:from': '', 'plugin:@crowi/plugin-mail-smtp:host': '' }));
+    loadPluginsInto(manager, [smtp]);
+    withSelectedDrivers(manager, { mail: 'smtp' });
+
+    expect(manager.getReadinessIssues()).toEqual([
+      { source: 'plugin', id: 'plugin:@crowi/plugin-mail-smtp', pluginName: '@crowi/plugin-mail-smtp', fields: [{ name: 'host', configured: false }] },
+      { source: 'core', id: 'core:mail', label: 'Mail', href: '/admin/mail', fields: [{ name: 'from', configured: false }] },
+    ]);
+  });
+
+  it('AC-3: mail issues disappear only once both mail:from and the selected driver field are set', () => {
+    const smtp = stubPlugin({
+      name: '@crowi/plugin-mail-smtp',
+      readiness: { registry: 'mail', driver: 'smtp', requiredConfigFields: ['host'] },
+    });
+
+    // Only mail:from set — the plugin issue remains.
+    const manager = new PluginManager(makeFakeCrowiWithNamespace({ 'mail:from': 'noreply@example.com', 'plugin:@crowi/plugin-mail-smtp:host': '' }));
+    loadPluginsInto(manager, [smtp]);
+    withSelectedDrivers(manager, { mail: 'smtp' });
+    expect(manager.getReadinessIssues()).toEqual([
+      { source: 'plugin', id: 'plugin:@crowi/plugin-mail-smtp', pluginName: '@crowi/plugin-mail-smtp', fields: [{ name: 'host', configured: false }] },
+    ]);
+
+    // Only host set — the core issue remains.
+    const manager2 = new PluginManager(makeFakeCrowiWithNamespace({ 'mail:from': '', 'plugin:@crowi/plugin-mail-smtp:host': 'smtp.example.com' }));
+    loadPluginsInto(manager2, [smtp]);
+    withSelectedDrivers(manager2, { mail: 'smtp' });
+    expect(manager2.getReadinessIssues()).toEqual([
+      { source: 'core', id: 'core:mail', label: 'Mail', href: '/admin/mail', fields: [{ name: 'from', configured: false }] },
+    ]);
+
+    // Both set — no mail issue at all.
+    const manager3 = new PluginManager(
+      makeFakeCrowiWithNamespace({ 'mail:from': 'noreply@example.com', 'plugin:@crowi/plugin-mail-smtp:host': 'smtp.example.com' }),
+    );
+    loadPluginsInto(manager3, [smtp]);
+    withSelectedDrivers(manager3, { mail: 'smtp' });
+    expect(manager3.getReadinessIssues()).toEqual([]);
+  });
+
+  it('AC-2: Resend selected driver reports apiKey, and SES declares no readiness issue of its own (no requiredConfigFields to violate)', () => {
+    const resend = stubPlugin({
+      name: '@crowi/plugin-mail-resend',
+      readiness: { registry: 'mail', driver: 'resend', requiredConfigFields: ['apiKey'] },
+    });
+    // SES has no `readiness` declaration at all — an AWS-credential-shaped
+    // plugin with everything empty must never surface as an issue (mirrors
+    // the AC-1 AWS-credentials-excluded assertion above).
+    const ses = stubPlugin({ name: '@crowi/plugin-mail-aws-ses' });
+    const manager = new PluginManager(makeFakeCrowiWithNamespace({ 'mail:from': 'noreply@example.com', 'plugin:@crowi/plugin-mail-resend:apiKey': '' }));
+    loadPluginsInto(manager, [resend, ses]);
+    withSelectedDrivers(manager, { mail: 'resend' });
+
+    expect(manager.getReadinessIssues()).toEqual([
+      { source: 'plugin', id: 'plugin:@crowi/plugin-mail-resend', pluginName: '@crowi/plugin-mail-resend', fields: [{ name: 'apiKey', configured: false }] },
+    ]);
+  });
+
+  it('AC-2: SES genuinely selected as the active mail driver still declares no readiness issue of its own, even with an empty AWS-credential-shaped namespace', () => {
+    // Unlike the Resend case above (SES loaded but NOT selected), this
+    // test actually selects `mail: 'ses'` — the driver the AWS default
+    // credential chain relies on — with region/accessKeyId/secretAccessKey
+    // all empty, and asserts no SES-specific issue appears.
+    const ses = stubPlugin({ name: '@crowi/plugin-mail-aws-ses' });
+    const manager = new PluginManager(
+      makeFakeCrowiWithNamespace({
+        'mail:from': 'noreply@example.com',
+        'plugin:@crowi/plugin-mail-aws-ses:region': '',
+        'plugin:@crowi/plugin-mail-aws-ses:accessKeyId': '',
+        'plugin:@crowi/plugin-mail-aws-ses:secretAccessKey': '',
+      }),
+    );
+    loadPluginsInto(manager, [ses]);
+    withSelectedDrivers(manager, { mail: 'ses' });
+
+    expect(manager.getReadinessIssues()).toEqual([]);
+  });
+
+  it('AC-2: an unselected mail driver plugin issue is excluded even when its own required field is empty', () => {
+    const smtp = stubPlugin({
+      name: '@crowi/plugin-mail-smtp',
+      readiness: { registry: 'mail', driver: 'smtp', requiredConfigFields: ['host'] },
+    });
+    const resend = stubPlugin({
+      name: '@crowi/plugin-mail-resend',
+      readiness: { registry: 'mail', driver: 'resend', requiredConfigFields: ['apiKey'] },
+    });
+    const manager = new PluginManager(
+      makeFakeCrowiWithNamespace({
+        'mail:from': 'noreply@example.com',
+        'plugin:@crowi/plugin-mail-smtp:host': '',
+        'plugin:@crowi/plugin-mail-resend:apiKey': '',
+      }),
+    );
+    loadPluginsInto(manager, [smtp, resend]);
+    withSelectedDrivers(manager, { mail: 'resend' });
+
+    expect(manager.getReadinessIssues()).toEqual([
+      { source: 'plugin', id: 'plugin:@crowi/plugin-mail-resend', pluginName: '@crowi/plugin-mail-resend', fields: [{ name: 'apiKey', configured: false }] },
+    ]);
   });
 });

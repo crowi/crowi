@@ -14,7 +14,7 @@
  * which collides with the Hono router's path-segment matching, so the
  * name is passed as a query string rather than a path parameter.
  */
-import { type PluginInfo, adminPluginsRoutes } from '@crowi/api-contract';
+import { type ConfigReadinessIssue, type PluginInfo, adminPluginsRoutes } from '@crowi/api-contract';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import type { CrowiPlugin } from '@crowi/plugin-api';
 import Debug from 'debug';
@@ -171,18 +171,29 @@ export const registerAdminPluginsRoutes = <E extends OpenAPIHono<CrowiHonoBindin
       const manager = crowi.pluginManager;
       if (!manager) return c.json({ issues: [] }, 200);
       // `getReadinessIssues()` already did the candidate filtering +
-      // config evaluation and returns only plugin name + unset field
-      // names (never a value) — this just adds each plugin's
-      // `adminPlacement` (same helper `listPlugins` uses) to match the
-      // public response schema.
+      // config evaluation and returns only field names (never a value) —
+      // this projects each internal issue onto the wire `ConfigReadinessIssue`:
+      // a plugin issue resolves its `adminPlacement` (same helper
+      // `listPlugins` uses) into `label` + the plugin-edit href, a core
+      // issue copies the declaration's own `label`/`href` straight
+      // through (feature-core-config-readiness-and-mail).
       const issues = manager
         .getReadinessIssues()
-        .map((issue) => {
+        .map((issue): ConfigReadinessIssue | null => {
+          if (issue.source === 'core') {
+            return { id: issue.id, source: 'core', label: issue.label, href: issue.href, fields: issue.fields };
+          }
           const plugin = manager.getLoadedPlugin(issue.pluginName);
           if (!plugin) return null;
-          return { name: issue.pluginName, adminPlacement: resolvePlacement(plugin), fields: issue.fields };
+          return {
+            id: issue.id,
+            source: 'plugin',
+            label: resolvePlacement(plugin).label,
+            href: `/admin/plugins/edit?name=${encodeURIComponent(issue.pluginName)}`,
+            fields: issue.fields,
+          };
         })
-        .filter((issue): issue is NonNullable<typeof issue> => issue !== null);
+        .filter((issue): issue is ConfigReadinessIssue => issue !== null);
       return c.json({ issues }, 200);
     })
     .openapi(adminPluginsRoutes.updatePluginConfigRoute, async (c) => {

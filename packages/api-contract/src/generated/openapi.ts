@@ -11969,7 +11969,7 @@ export interface paths {
                         };
                     };
                 };
-                /** @description Test mail dispatch failed (SMTP error) */
+                /** @description Test mail dispatch failed (mail dispatch failure — e.g. sender/transport error, or the mail sender address is not configured) */
                 502: {
                     headers: {
                         [name: string]: unknown;
@@ -11978,8 +11978,14 @@ export interface paths {
                         "application/json": {
                             error: {
                                 /** @enum {string} */
+                                code: "MAIL_FROM_NOT_CONFIGURED";
+                                /** @enum {string} */
+                                message: "The mail sender address is not configured.";
+                            } | {
+                                /** @enum {string} */
                                 code: "MAIL_TEST_FAILED";
-                                message: string;
+                                /** @enum {string} */
+                                message: "Failed to send the test email. Check the active mail sender configuration." | "No email address on the calling user";
                             };
                         };
                     };
@@ -14263,7 +14269,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List active plugins missing required readiness config fields */
+        /** List active plugins and core config missing required readiness fields */
         get: {
             parameters: {
                 query?: never;
@@ -14273,7 +14279,7 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description Readiness issues for active plugins (empty when everything is configured) */
+                /** @description Readiness issues for active plugins and core config (empty when everything is configured) */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -14281,13 +14287,11 @@ export interface paths {
                     content: {
                         "application/json": {
                             issues: {
-                                name: string;
-                                adminPlacement: {
-                                    /** @enum {string} */
-                                    section: "settings" | "shared" | "storage" | "mail" | "notification" | "auth" | "search" | "renderer" | "platform";
-                                    label: string;
-                                    icon?: string;
-                                };
+                                id: string;
+                                /** @enum {string} */
+                                source: "plugin" | "core";
+                                label: string;
+                                href: string;
                                 fields: {
                                     name: string;
                                     /** @enum {boolean} */
@@ -15019,7 +15023,7 @@ export interface components {
             };
         };
         /** @enum {string} */
-        ErrorCode: "AUTHENTICATION_REQUIRED" | "ADMIN_REQUIRED" | "THIRD_PARTY_AUTH_REQUIRED" | "USER_REGISTERED" | "USER_SUSPENDED" | "USER_INVITED" | "USER_NOT_ACTIVE" | "EMAIL_NOT_CONFIRMED" | "INTERNAL_ERROR" | "VALIDATION_ERROR" | "INVALID_REQUEST" | "NOT_FOUND" | "CONFLICT" | "SERVICE_UNAVAILABLE" | "APPLICATION_NOT_INSTALLED" | "INVALID_PAGE_ID" | "PAGE_NOT_FOUND" | "PAGE_NOT_GRANTED" | "PAGE_REVISION_ERROR" | "PAGE_TWIN_EXISTS" | "INVALID_GRANT" | "COMMENT_NOT_FOUND" | "NOTIFICATION_NOT_FOUND" | "USER_NOT_FOUND" | "USER_EXISTS" | "USERNAME_TAKEN" | "EMAIL_TAKEN" | "EMAIL_NOT_ALLOWED" | "INVALID_ACTIVATION_TOKEN" | "INVALID_INVITE_TOKEN" | "INVITE_ALREADY_ACCEPTED" | "INVALID_RESET_TOKEN" | "INVALID_EMAIL_CHANGE_TOKEN" | "INVALID_CREDENTIALS" | "REFRESH_TOKEN_REQUIRED" | "REGISTRATION_CLOSED" | "FEDERATED_HANDOFF_INVALID" | "FEDERATED_HANDOFF_CONSUMED" | "ENCRYPTION_NOT_CONFIGURED" | "MAIL_TEST_FAILED" | "PLUGIN_NOT_FOUND" | "PLUGIN_CONFIG_VALIDATION_FAILED";
+        ErrorCode: "AUTHENTICATION_REQUIRED" | "ADMIN_REQUIRED" | "THIRD_PARTY_AUTH_REQUIRED" | "USER_REGISTERED" | "USER_SUSPENDED" | "USER_INVITED" | "USER_NOT_ACTIVE" | "EMAIL_NOT_CONFIRMED" | "INTERNAL_ERROR" | "VALIDATION_ERROR" | "INVALID_REQUEST" | "NOT_FOUND" | "CONFLICT" | "SERVICE_UNAVAILABLE" | "APPLICATION_NOT_INSTALLED" | "INVALID_PAGE_ID" | "PAGE_NOT_FOUND" | "PAGE_NOT_GRANTED" | "PAGE_REVISION_ERROR" | "PAGE_TWIN_EXISTS" | "INVALID_GRANT" | "COMMENT_NOT_FOUND" | "NOTIFICATION_NOT_FOUND" | "USER_NOT_FOUND" | "USER_EXISTS" | "USERNAME_TAKEN" | "EMAIL_TAKEN" | "EMAIL_NOT_ALLOWED" | "INVALID_ACTIVATION_TOKEN" | "INVALID_INVITE_TOKEN" | "INVITE_ALREADY_ACCEPTED" | "INVALID_RESET_TOKEN" | "INVALID_EMAIL_CHANGE_TOKEN" | "INVALID_CREDENTIALS" | "REFRESH_TOKEN_REQUIRED" | "REGISTRATION_CLOSED" | "FEDERATED_HANDOFF_INVALID" | "FEDERATED_HANDOFF_CONSUMED" | "ENCRYPTION_NOT_CONFIGURED" | "MAIL_FROM_NOT_CONFIGURED" | "MAIL_TEST_FAILED" | "PLUGIN_NOT_FOUND" | "PLUGIN_CONFIG_VALIDATION_FAILED";
         ApplicationNotInstalledError: {
             error: {
                 /** @enum {string} */
@@ -16646,8 +16650,14 @@ export interface components {
         SendTestMailError: {
             error: {
                 /** @enum {string} */
+                code: "MAIL_FROM_NOT_CONFIGURED";
+                /** @enum {string} */
+                message: "The mail sender address is not configured.";
+            } | {
+                /** @enum {string} */
                 code: "MAIL_TEST_FAILED";
-                message: string;
+                /** @enum {string} */
+                message: "Failed to send the test email. Check the active mail sender configuration." | "No email address on the calling user";
             };
         };
         MailSettingsValidationError: {

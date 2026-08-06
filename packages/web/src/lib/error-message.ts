@@ -90,6 +90,7 @@ export const ERROR_MESSAGE_KEYS = {
   FEDERATED_HANDOFF_CONSUMED: m['errors.federated_handoff_consumed'],
   // admin subsystems
   ENCRYPTION_NOT_CONFIGURED: m['errors.encryption_key_not_set'],
+  MAIL_FROM_NOT_CONFIGURED: m['errors.mail_from_not_configured'],
   MAIL_TEST_FAILED: m['errors.mail_test_failed'],
   PLUGIN_NOT_FOUND: m['errors.plugin_not_found'],
   PLUGIN_CONFIG_VALIDATION_FAILED: m['errors.plugin_config_validation_failed'],
