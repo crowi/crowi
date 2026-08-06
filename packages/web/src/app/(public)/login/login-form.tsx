@@ -16,6 +16,21 @@ import { useAppInfo } from '@/lib/use-app-info';
 import { useAuthProviders } from '@/lib/use-auth-providers';
 import { m } from '@paraglide/messages.js';
 
+/**
+ * The federated failures worth naming. Everything else the callback can
+ * report (`idp_error`, `invalid_state`, `exchange_failed`,
+ * `oidc_verification_failed`, `profile_rejected`,
+ * `registration_unavailable`) is a protocol or infrastructure fault the
+ * visitor can neither diagnose nor act on, so it collapses into the
+ * generic message rather than putting an internal code in front of them.
+ */
+const FEDERATED_ERROR_MESSAGES: Record<string, () => string> = {
+  registration_closed: () => m['auth.login.federated_error.registration_closed'](),
+  email_already_registered: () => m['auth.login.federated_error.email_already_registered'](),
+  email_not_allowed: () => m['auth.login.federated_error.email_not_allowed'](),
+  account_inactive: () => m['auth.login.federated_error.account_inactive'](),
+};
+
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -40,8 +55,15 @@ export function LoginForm() {
   const { data: authProviders } = useAuthProviders();
   const [startingProvider, setStartingProvider] = useState<string | null>(null);
 
+  // A federated sign-in that failed anywhere between `/start` and the
+  // callback comes back here as `?error=<code>` — there is no response
+  // body to read, so the URL is the only account of what went wrong.
+  const federatedError = searchParams.get('error');
+
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errors, setErrors] = useState<string[]>([]);
+  const [errors, setErrors] = useState<string[]>(
+    federatedError ? [(FEDERATED_ERROR_MESSAGES[federatedError] ?? (() => m['auth.login.federated_error.generic']()))()] : [],
+  );
   const [formData, setFormData] = useState({
     email: '',
     password: '',

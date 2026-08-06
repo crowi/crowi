@@ -133,3 +133,46 @@ describe('LoginForm federated provider buttons', () => {
     expect(screen.getByRole('button', { name: 'Google で続ける' })).toBeEnabled();
   });
 });
+
+// A federated failure has no response body — the callback redirects here
+// with `?error=<code>`, so an unrendered code means a silent dead end.
+describe('LoginForm federated failure reporting', () => {
+  beforeEach(() => {
+    mockAppInfo({ data: makeAppInfo({ canSelfRegister: true }), isLoading: false, isError: false });
+  });
+
+  it.each([
+    ['registration_closed', 'このインスタンスは新規登録を受け付けていません。管理者に招待を依頼してください。'],
+    ['email_already_registered', 'そのメールアドレスは既に登録されています。パスワードでサインインしたあと、設定画面からアカウントを連携してください。'],
+    ['email_not_allowed', 'そのメールアドレスではサインインできません。管理者に問い合わせてください。'],
+    ['account_inactive', 'アカウントがまだ有効になっていません。承認をお待ちください。'],
+  ])('explains ?error=%s', (code, message) => {
+    searchParams.current = new URLSearchParams(`error=${code}`);
+    render(<LoginForm />);
+
+    expect(screen.getByText(message)).toBeInTheDocument();
+  });
+
+  // Protocol/infra faults the visitor can neither diagnose nor act on.
+  it.each([
+    'idp_error',
+    'invalid_state',
+    'exchange_failed',
+    'oidc_verification_failed',
+    'profile_rejected',
+    'registration_unavailable',
+    'made-up',
+  ])('falls back to the generic message for ?error=%s', (code) => {
+    searchParams.current = new URLSearchParams(`error=${code}`);
+    render(<LoginForm />);
+
+    expect(screen.getByText('サインインを完了できませんでした。もう一度お試しください。')).toBeInTheDocument();
+    expect(screen.queryByText(new RegExp(code))).not.toBeInTheDocument();
+  });
+
+  it('shows no error banner on a plain visit', () => {
+    render(<LoginForm />);
+
+    expect(screen.queryByText(/サインインを完了できませんでした/)).not.toBeInTheDocument();
+  });
+});
