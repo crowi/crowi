@@ -65,6 +65,22 @@ export interface FederatedAuthState {
   oidcNonce?: string;
   /** RFC 7638 JWK thumbprint of the sender's P-256 public key — binds the eventual handoff code to this browser's key pair. */
   handoffJkt: string;
+  /**
+   * RFC-0014 phase 3 — set ONLY by a `link=1` start, from the authenticated
+   * session's own user id (never from a query parameter, never from the
+   * IdP profile). Its presence is what switches the callback from "sign
+   * someone in" to "attach this identity to that account", and because it
+   * lives inside the HMAC-signed cookie, the callback cannot be steered at
+   * a different account by anything the browser or the IdP sends back.
+   */
+  linkToUserId?: string;
+  /**
+   * `User.authVersion` captured when the link grant was minted. Re-read and
+   * compared at callback time so a session invalidated mid-flow (password
+   * reset, forced sign-out) links nothing — the signed state alone would
+   * otherwise stay valid for its full 5 minutes.
+   */
+  linkAuthVersion?: number;
 }
 
 /** `{ publicJwk, signature }` — see `verifySenderProof`'s doc comment for the canonical-message contract. */
@@ -195,7 +211,9 @@ function isFederatedAuthStateShape(value: unknown): value is FederatedAuthState 
     typeof v.continuePath === 'string' &&
     typeof v.handoffJkt === 'string' &&
     (v.codeVerifier === undefined || typeof v.codeVerifier === 'string') &&
-    (v.oidcNonce === undefined || typeof v.oidcNonce === 'string')
+    (v.oidcNonce === undefined || typeof v.oidcNonce === 'string') &&
+    (v.linkToUserId === undefined || typeof v.linkToUserId === 'string') &&
+    (v.linkAuthVersion === undefined || typeof v.linkAuthVersion === 'number')
   );
 }
 
@@ -288,6 +306,21 @@ export function buildLoginCompleteUrl(webUrl: string, handoffCode: string, conti
 export function buildLoginErrorUrl(webUrl: string, errorCode: string): string {
   const url = new URL('/login', webUrl);
   url.searchParams.set('error', errorCode);
+  return url.toString();
+}
+
+/**
+ * RFC-0014 phase 3 — where a LINK callback lands. Never `/login`: the
+ * visitor was already signed in the whole time, so bouncing them through
+ * the login screen would read as "you got signed out" for what is really a
+ * settings change. `result` is a stable, non-identifying code the settings
+ * page turns into copy (phase 4 owns the wording); notably
+ * `federated_identity_in_use` never says WHICH account holds the identity.
+ */
+export function buildLinkSettingsUrl(webUrl: string, provider: string, result: 'linked' | 'federated_identity_in_use' | 'link_failed'): string {
+  const url = new URL('/me', webUrl);
+  url.searchParams.set('provider', provider);
+  url.searchParams.set('link', result);
   return url.toString();
 }
 

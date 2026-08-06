@@ -68,10 +68,27 @@ const HANDOFF_TTL_MS = 30 * 1000;
 
 const CODE_BYTES = 32;
 
+/**
+ * RFC-0014 phase 3 §"設計の主な判断" 5 — the identity this handoff code was
+ * minted for. Re-checked against `UserIdentity` immediately before tokens
+ * are minted, because `createJwtAuth` only ever validates the JWT's user
+ * and `authVersion` — it has no notion of identity membership, so without
+ * this fence a callback that read the identity BEFORE an unlink could
+ * still hand out a fresh session for a provider the user has since
+ * disconnected.
+ */
+export interface FederatedHandoffIdentityFence {
+  userId: string;
+  provider: string;
+  providerUserId: string;
+}
+
 export interface FederatedHandoffRecord {
   userId: string;
   /** RFC 7638 JWK thumbprint the eventual `/handoff` proof's public key must match. */
   handoffJkt: string;
+  /** Required — see `FederatedHandoffIdentityFence`. Every issuer knows the identity it resolved, so there is no "unfenced" code path to leave open. */
+  identityFence: FederatedHandoffIdentityFence;
 }
 
 /**
@@ -93,8 +110,8 @@ export type FederatedHandoffConsumeOutcome =
   | { readonly ok: false; readonly reason: 'not_found' | 'already_consumed' };
 
 export interface FederatedHandoffStore {
-  /** Issue a fresh handoff code bound to `userId`/`handoffJkt`. Returns the plaintext code — never persisted, only its SHA-256 hash is stored. */
-  issue(userId: string, handoffJkt: string): Promise<string>;
+  /** Issue a fresh handoff code bound to `userId`/`handoffJkt`/`identityFence`. Returns the plaintext code — never persisted, only its SHA-256 hash is stored. */
+  issue(record: FederatedHandoffRecord): Promise<string>;
   /** Read-only lookup by plaintext code. Does NOT consume, and does NOT distinguish "never existed" from "already consumed" — see the module doc comment. `null` when absent/expired. */
   find(code: string): Promise<FederatedHandoffRecord | null>;
   /**
@@ -140,7 +157,16 @@ function parseRecord(raw: string | null | undefined): FederatedHandoffRecord | n
   try {
     const parsed = JSON.parse(raw) as Partial<FederatedHandoffRecord>;
     if (typeof parsed.userId !== 'string' || typeof parsed.handoffJkt !== 'string') return null;
-    return { userId: parsed.userId, handoffJkt: parsed.handoffJkt };
+    // A record without a well-formed fence is treated as absent rather than
+    // as "fence not required": failing open here would silently restore
+    // exactly the unfenced token issuance phase 3 exists to close.
+    const fence = parsed.identityFence;
+    if (!fence || typeof fence.userId !== 'string' || typeof fence.provider !== 'string' || typeof fence.providerUserId !== 'string') return null;
+    return {
+      userId: parsed.userId,
+      handoffJkt: parsed.handoffJkt,
+      identityFence: { userId: fence.userId, provider: fence.provider, providerUserId: fence.providerUserId },
+    };
   } catch {
     return null;
   }
@@ -175,9 +201,9 @@ function createRedisHandoffStore(client: MinimalRedisClient, keyspace: RedisKeys
   const consumedKeyFor = (code: string) => keyspace.key('federated-handoff-consumed', hashCode(code));
 
   return {
-    async issue(userId, handoffJkt) {
+    async issue(record) {
       const code = crypto.randomBytes(CODE_BYTES).toString('base64url');
-      await client.set(keyFor(code), serializeRecord({ userId, handoffJkt }), { PX: HANDOFF_TTL_MS });
+      await client.set(keyFor(code), serializeRecord(record), { PX: HANDOFF_TTL_MS });
       return code;
     },
     async find(code) {
@@ -214,17 +240,17 @@ function createInMemoryHandoffStore(): FederatedHandoffStore {
   };
 
   return {
-    async issue(userId, handoffJkt) {
+    async issue(record) {
       const code = crypto.randomBytes(CODE_BYTES).toString('base64url');
       const now = Date.now();
       sweepExpired(now);
-      store.set(hashCode(code), { userId, handoffJkt, expiresAt: now + HANDOFF_TTL_MS, consumedAt: null });
+      store.set(hashCode(code), { ...record, expiresAt: now + HANDOFF_TTL_MS, consumedAt: null });
       return code;
     },
     async find(code) {
       const entry = store.get(hashCode(code));
       if (!entry || entry.expiresAt <= Date.now()) return null;
-      return { userId: entry.userId, handoffJkt: entry.handoffJkt };
+      return { userId: entry.userId, handoffJkt: entry.handoffJkt, identityFence: entry.identityFence };
     },
     async consumeVerified(code) {
       const key = hashCode(code);
@@ -233,7 +259,7 @@ function createInMemoryHandoffStore(): FederatedHandoffStore {
       if (!entry || entry.expiresAt <= Date.now()) return { ok: false, reason: 'not_found' };
       if (entry.consumedAt != null) return { ok: false, reason: 'already_consumed' };
       entry.consumedAt = Date.now();
-      return { ok: true, record: { userId: entry.userId, handoffJkt: entry.handoffJkt } };
+      return { ok: true, record: { userId: entry.userId, handoffJkt: entry.handoffJkt, identityFence: entry.identityFence } };
     },
   };
 }

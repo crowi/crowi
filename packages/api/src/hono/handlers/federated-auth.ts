@@ -24,7 +24,14 @@
  * own design decision 8 for why the handoff store must be the SAME shared
  * instance.
  */
-import { callbackFederatedProviderRoute, federatedHandoffRoute, listFederatedProvidersRoute, startFederatedProviderRoute } from '@crowi/api-contract';
+import {
+  callbackFederatedProviderRoute,
+  createAuthProviderLinkGrantRoute,
+  federatedHandoffRoute,
+  listFederatedProvidersRoute,
+  startFederatedProviderRoute,
+  unlinkAuthProviderRoute,
+} from '@crowi/api-contract';
 import type { AuthDriver, AuthProfile, AuthVerifyResult, OAuth2AuthDriver, OAuthClientConfig, OAuthTokens, OidcAuthDriver } from '@crowi/plugin-api';
 import type { OpenAPIHono, RouteHandler } from '@hono/zod-openapi';
 import crypto from 'node:crypto';
@@ -32,12 +39,22 @@ import type { webcrypto } from 'node:crypto';
 import Debug from 'debug';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 
+import type { Context } from 'hono';
+
 import type Crowi from 'src/crowi';
+import {
+  type AuthProviderLinkingTerminal,
+  createAuthProviderLinkingTerminal,
+  createLinkGrantStore,
+  type LinkGrantStore,
+  unlinkFederatedIdentity,
+} from 'src/auth/auth-provider-linking';
 import { createUnavailableFederatedProfileTerminal, type FederatedProfileTerminal } from 'src/auth/federated-profile-terminal';
 import { createFederatedHandoffStore, type FederatedHandoffStore } from 'src/service/federated-handoff';
 import { createJwtUtil } from 'src/util/jwt';
 import {
   buildHandoffCanonicalMessage,
+  buildLinkSettingsUrl,
   buildLoginCompleteUrl,
   buildLoginErrorUrl,
   buildProviderCallbackUrl,
@@ -53,7 +70,8 @@ import { computePkceCodeChallengeS256 } from 'src/util/pkce';
 import { resolveRedisKeyspaceIfEnabled } from 'src/util/redis-keyspace';
 
 import type { CrowiHonoBindings } from '../app';
-import { INTERNAL_ERROR_BODY, invalidRequestBody } from './_helpers/errors';
+import { createJwtAuth } from '../middleware/auth';
+import { AUTH_REQUIRED_BODY, INTERNAL_ERROR_BODY, invalidRequestBody } from './_helpers/errors';
 import { toAuthUser } from './_helpers/user-shape';
 
 const debug = Debug('crowi:hono:handlers:federatedAuth');
@@ -151,6 +169,10 @@ export interface RegisterFederatedAuthRoutesOptions {
    * — see that call site's comment for why (in-memory backend correctness).
    */
   handoffStore?: FederatedHandoffStore;
+  /** Test seam — defaults to a fresh `createLinkGrantStore(...)` (RFC-0014 phase 3). */
+  linkGrantStore?: LinkGrantStore;
+  /** Test seam — defaults to `createAuthProviderLinkingTerminal(crowi)` (RFC-0014 phase 3). */
+  linkingTerminal?: AuthProviderLinkingTerminal;
 }
 
 /**
@@ -165,6 +187,10 @@ export interface FederatedAuthRouteDeps {
   stateUtil: FederatedAuthStateUtil;
   handoffStore: FederatedHandoffStore;
   terminal: FederatedProfileTerminal;
+  /** RFC-0014 phase 3 — the short-lived server-side binding a `link=1` start consumes. */
+  linkGrantStore: LinkGrantStore;
+  /** RFC-0014 phase 3 — the callback-side link branch, used INSTEAD of `terminal` when the signed state carries a link target. */
+  linkingTerminal: AuthProviderLinkingTerminal;
   /** Enabled = registered, oauth2/oidc kind, and currently configured (design decision 1). */
   getEnabledDriver: (name: string) => FederatedRouteDriver | null;
 }
@@ -175,14 +201,14 @@ export interface FederatedAuthRouteDeps {
  * redirects the browser to the provider's authorize endpoint.
  */
 export function buildProviderRedirect(deps: FederatedAuthRouteDeps): RouteHandler<typeof startFederatedProviderRoute, CrowiHonoBindings> {
-  const { crowi, stateUtil, getEnabledDriver } = deps;
+  const { crowi, stateUtil, getEnabledDriver, linkGrantStore } = deps;
   return async (c) => {
     const urls = crowi.getFederatedAuthPublicUrls();
     const { name } = c.req.valid('param');
     const driver = urls ? getEnabledDriver(name) : null;
     if (!urls || !driver) return c.json(PROVIDER_NOT_FOUND_BODY, 404);
 
-    const { continue: continuePath, handoff_jwk: handoffJwkB64, handoff_proof: handoffProofB64 } = c.req.valid('query');
+    const { continue: continuePath, handoff_jwk: handoffJwkB64, handoff_proof: handoffProofB64, link, link_grant: linkGrantId } = c.req.valid('query');
 
     let publicJwk: webcrypto.JsonWebKey;
     try {
@@ -201,12 +227,48 @@ export function buildProviderRedirect(deps: FederatedAuthRouteDeps): RouteHandle
     }
     const handoffJkt = computeJwkThumbprint(publicJwk);
 
+    // RFC-0014 phase 3 (AC-1/AC-2) — LINK mode. Everything the link is
+    // aimed at comes from the authenticated session plus the server-side
+    // grant; nothing here is taken from a query parameter a link URL could
+    // carry. The per-path middleware installed in `registerFederatedAuthRoutes`
+    // has already rejected a missing/non-web credential by the time we get
+    // here, so `c.get('user')` is a real web-session user whenever
+    // `link === '1'`.
+    let linkToUserId: string | undefined;
+    let linkAuthVersion: number | undefined;
+    if (link === '1') {
+      const linkUser = c.get('user');
+      if (!linkUser) return c.json(AUTH_REQUIRED_BODY, 401);
+      if (!linkGrantId) return c.json(invalidRequestBody('link_grant is required when link=1'), 400);
+
+      const grant = await linkGrantStore.consume(linkGrantId);
+      // One `invalidRequestBody` for every failure below: unknown, expired,
+      // already-used, wrong provider, wrong user, stale authVersion and
+      // wrong sender key are all just "this grant does not authorize this
+      // start", and distinguishing them would tell an attacker which half
+      // of a stolen link URL still works.
+      if (!grant) return c.json(invalidRequestBody('link grant is invalid or expired'), 400);
+      if (grant.provider !== name) return c.json(invalidRequestBody('link grant is invalid or expired'), 400);
+      if (grant.userId !== linkUser._id.toString()) return c.json(invalidRequestBody('link grant is invalid or expired'), 400);
+      if ((linkUser.authVersion ?? 0) !== grant.authVersion) return c.json(invalidRequestBody('link grant is invalid or expired'), 400);
+      // AC-2: the grant is pinned to the sender key of the browser that
+      // MINTED it. A stolen link URL opened in a different browser presents
+      // that browser's own key, so the thumbprints differ here and the flow
+      // stops before any state cookie or IdP redirect exists.
+      if (!timingSafeEqualStrings(grant.handoffChallenge, handoffJkt)) {
+        return c.json(invalidRequestBody('link grant is invalid or expired'), 400);
+      }
+
+      linkToUserId = grant.userId;
+      linkAuthVersion = grant.authVersion;
+    }
+
     const state = crypto.randomBytes(32).toString('base64url');
     const oidcNonce = driver.kind === 'oidc' ? crypto.randomBytes(32).toString('base64url') : undefined;
     const usePkce = driver.kind === 'oidc' || driver.pkce === true;
     const codeVerifier = usePkce ? generatePkceCodeVerifier() : undefined;
 
-    const cookieValue = stateUtil.issue({ state, provider: name, continuePath, codeVerifier, oidcNonce, handoffJkt });
+    const cookieValue = stateUtil.issue({ state, provider: name, continuePath, codeVerifier, oidcNonce, handoffJkt, linkToUserId, linkAuthVersion });
     setCookie(c, stateUtil.cookieName, cookieValue, stateUtil.cookieOptions);
 
     const redirectUri = buildProviderCallbackUrl(urls.apiUrl, name);
@@ -263,7 +325,7 @@ export function buildProviderRedirect(deps: FederatedAuthRouteDeps): RouteHandle
  * the trusted web `/login/complete`.
  */
 export function completeFederatedCallback(deps: FederatedAuthRouteDeps): RouteHandler<typeof callbackFederatedProviderRoute, CrowiHonoBindings> {
-  const { crowi, stateUtil, terminal, handoffStore, getEnabledDriver } = deps;
+  const { crowi, stateUtil, terminal, handoffStore, linkingTerminal, getEnabledDriver } = deps;
   return async (c) => {
     const { name } = c.req.valid('param');
 
@@ -388,6 +450,39 @@ export function completeFederatedCallback(deps: FederatedAuthRouteDeps): RouteHa
       profile = result.profile;
     }
 
+    // RFC-0014 phase 3 (AC-3) — LINK branch. A signed state carrying
+    // `linkToUserId` means this flow was started from an authenticated
+    // settings action, so phase 2's provisioning is skipped ENTIRELY: no
+    // registration-mode gate, no whitelist, no email lookup, no User
+    // creation. The target is the value inside the signed cookie and
+    // nothing else.
+    if (state.linkToUserId) {
+      const User = crowi.model('User');
+      const linkUser = await User.findById(state.linkToUserId);
+      // Re-check the session is still the one that started this, now that
+      // the IdP round trip has elapsed: a password reset or forced
+      // sign-out in between bumps `authVersion`, and such a flow must link
+      // nothing (spec flow step 4).
+      if (!linkUser || (linkUser.authVersion ?? 0) !== (state.linkAuthVersion ?? 0)) {
+        return c.redirect(buildLinkSettingsUrl(urls.webUrl, name, 'link_failed'), 302);
+      }
+
+      const outcome = await linkingTerminal.link({ userId: state.linkToUserId, provider: name, providerUserId: profile.providerUserId });
+      // `already_linked_here` is a success: re-linking what you already
+      // linked is the state you asked for (see the terminal's doc comment).
+      // Both refusals collapse to the ONE stable conflict code the spec's
+      // error semantics define (`federated_identity_in_use`) — phase 4 owns
+      // the wording, and a second code would say more about other accounts
+      // than this redirect should.
+      const result =
+        outcome.kind === 'owned_by_other_user' || outcome.kind === 'provider_slot_taken'
+          ? 'federated_identity_in_use'
+          : outcome.kind === 'failed'
+            ? 'link_failed'
+            : 'linked';
+      return c.redirect(buildLinkSettingsUrl(urls.webUrl, name, result), 302);
+    }
+
     const terminalResult = await terminal.resolve({ provider: name, profile, providerLabel: driver.buttonLabel, handoffJkt: state.handoffJkt });
     if (terminalResult.kind === 'redirect_error') {
       return c.redirect(buildLoginErrorUrl(urls.webUrl, terminalResult.code), 302);
@@ -405,7 +500,15 @@ export function completeFederatedCallback(deps: FederatedAuthRouteDeps): RouteHa
       return c.redirect(buildLoginErrorUrl(urls.webUrl, 'account_inactive'), 302);
     }
 
-    const handoffCode = await handoffStore.issue(activeUser._id.toString(), state.handoffJkt);
+    const handoffCode = await handoffStore.issue({
+      userId: activeUser._id.toString(),
+      handoffJkt: state.handoffJkt,
+      // RFC-0014 phase 3 (AC-7): pin the identity this sign-in was resolved
+      // through, so `/auth/handoff` can re-check it still exists right
+      // before minting tokens — an unlink between here and there must not
+      // still yield a session for the disconnected provider.
+      identityFence: { userId: activeUser._id.toString(), provider: name, providerUserId: profile.providerUserId },
+    });
     return c.redirect(buildLoginCompleteUrl(urls.webUrl, handoffCode, state.continuePath), 302);
   };
 }
@@ -423,6 +526,13 @@ export const registerFederatedAuthRoutes = <E extends OpenAPIHono<CrowiHonoBindi
       redisClient: crowi.redis,
       keyspace: resolveRedisKeyspaceIfEnabled(crowi),
     });
+  const linkGrantStore =
+    options.linkGrantStore ??
+    createLinkGrantStore({
+      redisClient: crowi.redis,
+      keyspace: resolveRedisKeyspaceIfEnabled(crowi),
+    });
+  const linkingTerminal = options.linkingTerminal ?? createAuthProviderLinkingTerminal(crowi);
   const User = crowi.model('User');
   const jwtUtil = createJwtUtil(crowi);
 
@@ -433,7 +543,31 @@ export const registerFederatedAuthRoutes = <E extends OpenAPIHono<CrowiHonoBindi
     return driver;
   };
 
-  const deps: FederatedAuthRouteDeps = { crowi, stateUtil, handoffStore, terminal, getEnabledDriver };
+  const deps: FederatedAuthRouteDeps = { crowi, stateUtil, handoffStore, terminal, linkGrantStore, linkingTerminal, getEnabledDriver };
+
+  // RFC-0014 phase 3 (AC-1) — the link surfaces require an active WEB
+  // session. `/start` stays public for ordinary sign-in and only becomes
+  // authenticated when `link=1`, so the JWT middleware is applied through a
+  // conditional wrapper rather than to the whole path: a public sign-in
+  // start must not start demanding a token.
+  const jwtAuth = createJwtAuth(crowi);
+  app.use('/auth/providers/:name/start', async (c, next) => {
+    if (c.req.query('link') !== '1') return next();
+    return jwtAuth(c, next);
+  });
+  app.use('/auth/providers/:name/link-grants', jwtAuth);
+  app.use('/auth/providers/:name/identity', jwtAuth);
+
+  /**
+   * Spec design decision 1 / AC-1: a PAT or OAuth access token is a valid
+   * credential for the API but NOT for linking — linking is a
+   * session-level account change, and a long-lived integration token must
+   * not be able to attach a new sign-in method to its owner's account.
+   * 403 (not 401): the caller authenticated fine, this credential kind is
+   * simply not permitted here.
+   */
+  const isWebSession = (c: Context<CrowiHonoBindings>): boolean => c.get('authContext')?.kind === 'web';
+  const NOT_WEB_SESSION_BODY = invalidRequestBody('this endpoint requires an interactive web session');
 
   return app
     .openapi(listFederatedProvidersRoute, async (c) => {
@@ -494,10 +628,89 @@ export const registerFederatedAuthRoutes = <E extends OpenAPIHono<CrowiHonoBindi
           return c.json(HANDOFF_INVALID_BODY, 401);
         }
 
+        // RFC-0014 phase 3 (AC-7) — the identity fence, checked as late as
+        // possible: `createJwtAuth` validates only the JWT's user and
+        // `authVersion` and knows nothing about identity membership, so
+        // without this a code minted before an unlink would still mint a
+        // full session for the provider the user just disconnected.
+        // Reported as the SAME generic invalid-handoff error as every other
+        // failure here — a distinct code would tell the caller that their
+        // code was otherwise perfectly valid.
+        const UserIdentity = crowi.model('UserIdentity');
+        const fence = outcome.record.identityFence;
+        const identityStillLinked = await UserIdentity.exists({ userId: fence.userId, provider: fence.provider, providerUserId: fence.providerUserId });
+        if (!identityStillLinked) {
+          return c.json(HANDOFF_INVALID_BODY, 401);
+        }
+
         const tokens = jwtUtil.generateTokens(user);
         return c.json({ ...tokens, user: toAuthUser(user) }, 200);
       } catch (err) {
         debug('handoff failed: %s', (err as Error).message);
+        return c.json(INTERNAL_ERROR_BODY, 500);
+      }
+    })
+    .openapi(createAuthProviderLinkGrantRoute, async (c) => {
+      const { name } = c.req.valid('param');
+      if (!isWebSession(c)) return c.json(NOT_WEB_SESSION_BODY, 403);
+
+      const user = c.get('user');
+      if (!user) return c.json(AUTH_REQUIRED_BODY, 401);
+      if (!getEnabledDriver(name)) return c.json(PROVIDER_NOT_FOUND_BODY, 404);
+
+      const { handoffChallenge } = c.req.valid('json');
+
+      try {
+        // Everything bound here comes from the SERVER's view of the caller
+        // (`c.get('user')`, set by the JWT middleware) — the request body
+        // contributes only the sender-key thumbprint. That is what makes a
+        // stolen link URL useless in another browser (AC-2) without ever
+        // letting the body name a target account.
+        const linkGrant = await linkGrantStore.issue({
+          userId: user._id.toString(),
+          provider: name,
+          authVersion: user.authVersion ?? 0,
+          handoffChallenge,
+        });
+        return c.json({ linkGrant }, 200);
+      } catch (err) {
+        debug('link grant issuance failed: %s', (err as Error).message);
+        return c.json(INTERNAL_ERROR_BODY, 500);
+      }
+    })
+    .openapi(unlinkAuthProviderRoute, async (c) => {
+      const { name } = c.req.valid('param');
+      if (!isWebSession(c)) return c.json(NOT_WEB_SESSION_BODY, 403);
+
+      const user = c.get('user');
+      if (!user) return c.json(AUTH_REQUIRED_BODY, 401);
+
+      try {
+        const outcome = await unlinkFederatedIdentity(crowi, user, name);
+        switch (outcome.kind) {
+          case 'unlinked':
+            return c.body(null, 204);
+          case 'not_linked':
+            return c.json({ error: { code: 'NOT_FOUND' as const, message: 'No identity is linked for this provider' } }, 404);
+          case 'password_auth_disabled':
+            return c.json(
+              {
+                error: {
+                  code: 'FEDERATED_UNLINK_DISABLED' as const,
+                  message: 'Password sign-in is disabled on this instance, so provider accounts cannot be disconnected',
+                },
+              },
+              409,
+            );
+          case 'password_required':
+            return c.json({ error: { code: 'PASSWORD_REQUIRED' as const, message: 'Set a password before disconnecting this provider account' } }, 409);
+          default: {
+            const exhaustive: never = outcome;
+            throw new Error(`unlinkAuthProvider: unhandled outcome ${JSON.stringify(exhaustive)}`);
+          }
+        }
+      } catch (err) {
+        debug('unlink failed: %s', (err as Error).message);
         return c.json(INTERNAL_ERROR_BODY, 500);
       }
     });

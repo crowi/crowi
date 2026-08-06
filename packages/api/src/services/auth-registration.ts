@@ -266,7 +266,13 @@ export type ProvisionPendingRegistrationOutcome =
   | { kind: 'conflict'; field: 'username' | 'email' }
   | { kind: 'identity_conflict' }
   /** `handoffJkt` is the row's OWN persisted value (`PendingAuthRegistration.handoffJkt` — see that model's doc comment), never a value the submit request itself supplied (AC-8). */
-  | { kind: 'active'; user: UserDocument; handoffJkt: string }
+  | {
+      kind: 'active';
+      user: UserDocument;
+      handoffJkt: string;
+      /** RFC-0014 phase 3 (AC-7) — the identity this registration just created, pinned into the handoff so an unlink before redemption revokes the pending code. */
+      identity: { provider: string; providerUserId: string };
+    }
   | { kind: 'approval_required' };
 
 /**
@@ -611,7 +617,7 @@ async function provisionClaimedRow(
   // AC-4/AC-8: never mint tokens here — the caller (`federated-registration.ts`)
   // issues a Phase 1 sender-constrained handoff code instead, redeemed via
   // the existing `POST /auth/handoff` (see that handler's comment for why).
-  return { kind: 'active', user: reloaded, handoffJkt: row.handoffJkt };
+  return { kind: 'active', user: reloaded, handoffJkt: row.handoffJkt, identity: { provider: row.provider, providerUserId: row.providerUserId } };
 }
 
 /** "24h from now" — the expiry every terminal state (ACTIVE / APPROVAL_PENDING / CANCELLED) is set to. Exported so `hono/handlers/federated-registration.ts`'s own CANCELLED write computes the same value rather than re-deriving it from `TERMINAL_TTL_MS`. */

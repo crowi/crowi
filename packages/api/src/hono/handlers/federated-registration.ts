@@ -111,7 +111,11 @@ export function submitPendingRegistration(deps: FederatedRegistrationRouteDeps):
           // request itself supplied: a stolen registration URL alone must
           // not let an attacker rebind the resulting handoff to a key of
           // their own choosing (AC-8).
-          const handoffCode = await handoffStore.issue(outcome.user._id.toString(), outcome.handoffJkt);
+          const handoffCode = await handoffStore.issue({
+            userId: outcome.user._id.toString(),
+            handoffJkt: outcome.handoffJkt,
+            identityFence: { userId: outcome.user._id.toString(), provider: outcome.identity.provider, providerUserId: outcome.identity.providerUserId },
+          });
           return c.json({ status: 'active' as const, code: handoffCode }, 200);
         }
         default: {
