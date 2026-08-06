@@ -10,8 +10,10 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { FormErrorList } from '@/components/ui/form-error-list';
 import { loginWithPassword } from '@/lib/auth-login';
+import { buildProviderStartUrl } from '@/lib/auth-handoff';
 import { defaultLandingPath, safeContinueUrl } from '@/lib/login-redirect';
 import { useAppInfo } from '@/lib/use-app-info';
+import { useAuthProviders } from '@/lib/use-auth-providers';
 import { m } from '@paraglide/messages.js';
 
 export function LoginForm() {
@@ -30,6 +32,14 @@ export function LoginForm() {
   const { data: appInfo } = useAppInfo();
   const showRegisterLink = appInfo?.canSelfRegister !== false;
 
+  // Federated sign-in buttons (RFC-0014 phase 4). Fail-closed, unlike the
+  // register link above: while the list is loading or the fetch failed,
+  // no provider button is drawn. A button that cannot be trusted to
+  // reach a configured provider is worse than no button — password
+  // sign-in below always works.
+  const { data: authProviders } = useAuthProviders();
+  const [startingProvider, setStartingProvider] = useState<string | null>(null);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   const [formData, setFormData] = useState({
@@ -40,6 +50,22 @@ export function LoginForm() {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  // Not a plain `<a href>`: the phase-1 `/start` contract requires a
+  // sender proof (`handoff_jwk` + `handoff_proof`) that has to be
+  // generated and signed in this browser first, so the URL only exists
+  // after an async step. Once built we hand over with a full-page
+  // navigation — the flow leaves the SPA for the identity provider.
+  const handleProviderClick = async (provider: string) => {
+    setStartingProvider(provider);
+    setErrors([]);
+    try {
+      window.location.assign(await buildProviderStartUrl(provider, safeContinueUrl(rawContinue)));
+    } catch {
+      setErrors([m['auth.providers.load_failed']()]);
+      setStartingProvider(null);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -111,6 +137,29 @@ export function LoginForm() {
             {isSubmitting ? m['auth.login.submitting']() : m['auth.login.submit']()}
           </Button>
         </form>
+
+        {authProviders && authProviders.length > 0 && (
+          <div className="mt-6 space-y-3">
+            <div className="relative text-center">
+              <span className="absolute inset-x-0 top-1/2 border-t" />
+              <span className="relative bg-card px-2 text-xs text-muted-foreground">{m['auth.providers.divider']()}</span>
+            </div>
+            {authProviders.map((provider) => (
+              <Button
+                key={provider.name}
+                type="button"
+                variant="outline"
+                className="w-full"
+                size="lg"
+                disabled={startingProvider !== null}
+                onClick={() => handleProviderClick(provider.name)}
+              >
+                {provider.iconUrl && <img src={provider.iconUrl} alt="" aria-hidden className="h-4 w-4" />}
+                {provider.buttonLabel}
+              </Button>
+            ))}
+          </div>
+        )}
 
         <div className="mt-4 text-center">
           <Link href="/forgot-password" className="text-sm text-muted-foreground hover:text-primary hover:underline">
