@@ -290,3 +290,16 @@ export function buildLoginErrorUrl(webUrl: string, errorCode: string): string {
   url.searchParams.set('error', errorCode);
   return url.toString();
 }
+
+/**
+ * RFC-0014 phase 2 — the trusted web federated-registration screen. `token`
+ * is a one-time secret (a `PendingAuthRegistration` grant); the page reads
+ * it only client-side (`hono/handlers/federated-registration.ts`'s own
+ * doc comment / the phase 2 spec's implementation map — never rendered
+ * server-side).
+ */
+export function buildRegistrationRedirectUrl(webUrl: string, token: string): string {
+  const url = new URL('/register/federated', webUrl);
+  url.searchParams.set('token', token);
+  return url.toString();
+}

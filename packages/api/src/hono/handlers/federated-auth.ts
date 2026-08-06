@@ -12,6 +12,17 @@
  * provisioning/linking are `FederatedProfileTerminal`'s job, and Phase 1's
  * own terminal (`createUnavailableFederatedProfileTerminal`) never reads
  * or writes `User`/`UserIdentity`.
+ *
+ * The few `terminalResult.kind === 'registration'` / `providerLabel` /
+ * `handoffJkt` / shared-`handoffStore` touches below are Phase 2's, added at
+ * `completeFederatedCallback`'s single `terminal.resolve(...)` call site and
+ * `registerFederatedAuthRoutes`'s options — the OAuth2/OIDC protocol code
+ * itself (state cookie, PKCE, id_token verification, JWT bridge) is
+ * untouched. See `src/auth/federated-profile-terminal.ts`'s header for why
+ * this is the exact extension point the umbrella spec's phase-1 row names
+ * ("provisioning と linking の分岐先はインターフェースのみ"), and phase 2's
+ * own design decision 8 for why the handoff store must be the SAME shared
+ * instance.
  */
 import { callbackFederatedProviderRoute, federatedHandoffRoute, listFederatedProvidersRoute, startFederatedProviderRoute } from '@crowi/api-contract';
 import type { AuthDriver, AuthProfile, AuthVerifyResult, OAuth2AuthDriver, OAuthClientConfig, OAuthTokens, OidcAuthDriver } from '@crowi/plugin-api';
@@ -30,6 +41,7 @@ import {
   buildLoginCompleteUrl,
   buildLoginErrorUrl,
   buildProviderCallbackUrl,
+  buildRegistrationRedirectUrl,
   buildStartCanonicalMessage,
   computeJwkThumbprint,
   createFederatedAuthStateUtil,
@@ -132,6 +144,13 @@ async function exchangeOAuth2Code(
 export interface RegisterFederatedAuthRoutesOptions {
   /** Test seam / Phase 2+ swap point — defaults to Phase 1's always-decline terminal. */
   terminal?: FederatedProfileTerminal;
+  /**
+   * Test seam / shared-instance injection point — defaults to a fresh
+   * `createFederatedHandoffStore(...)`. Production callers (`hono/index.ts`)
+   * MUST pass the SAME instance also given to `registerFederatedRegistrationRoutes`
+   * — see that call site's comment for why (in-memory backend correctness).
+   */
+  handoffStore?: FederatedHandoffStore;
 }
 
 /**
@@ -316,9 +335,18 @@ export function completeFederatedCallback(deps: FederatedAuthRouteDeps): RouteHa
         }
 
         const mapped = driver.mapClaims ? driver.mapClaims(claims as Record<string, unknown>) : {};
+        // RFC-0014 umbrella §"全フェーズに共通する確定事項": email is
+        // required AND must be IdP-verified — Phase 2's JIT provisioning
+        // trusts `profile.email` as already-verified. A driver providing
+        // its OWN `mapClaims` owns this decision entirely (its contract,
+        // Phase 0), but the DEFAULT (no `mapClaims`) mapping below must not
+        // silently trust an unverified `claims.email` just because a driver
+        // author forgot to reject it in `authorize` — only fall back to the
+        // raw claim when the IdP itself asserts `email_verified === true`.
+        const emailVerified = claims.email_verified === true;
         profile = {
           providerUserId: mapped.providerUserId ?? String(claims.sub),
-          email: mapped.email ?? (typeof claims.email === 'string' ? claims.email : undefined),
+          email: mapped.email ?? (emailVerified && typeof claims.email === 'string' ? claims.email : undefined),
           name: mapped.name ?? (typeof claims.name === 'string' ? claims.name : undefined),
           imageUrl: mapped.imageUrl ?? (typeof claims.picture === 'string' ? claims.picture : undefined),
           extra: mapped.extra,
@@ -360,9 +388,15 @@ export function completeFederatedCallback(deps: FederatedAuthRouteDeps): RouteHa
       profile = result.profile;
     }
 
-    const terminalResult = await terminal.resolve({ provider: name, profile });
+    const terminalResult = await terminal.resolve({ provider: name, profile, providerLabel: driver.buttonLabel, handoffJkt: state.handoffJkt });
     if (terminalResult.kind === 'redirect_error') {
       return c.redirect(buildLoginErrorUrl(urls.webUrl, terminalResult.code), 302);
+    }
+    if (terminalResult.kind === 'registration') {
+      // RFC-0014 phase 2 — unknown-but-verified identity: no User was
+      // created. Hand the browser to the federated registration screen
+      // instead of issuing a handoff code.
+      return c.redirect(buildRegistrationRedirectUrl(urls.webUrl, terminalResult.token), 302);
     }
 
     const User = crowi.model('User');
@@ -383,10 +417,12 @@ export const registerFederatedAuthRoutes = <E extends OpenAPIHono<CrowiHonoBindi
 ) => {
   const terminal = options.terminal ?? createUnavailableFederatedProfileTerminal();
   const stateUtil = createFederatedAuthStateUtil(crowi);
-  const handoffStore = createFederatedHandoffStore({
-    redisClient: crowi.redis,
-    keyspace: resolveRedisKeyspaceIfEnabled(crowi),
-  });
+  const handoffStore =
+    options.handoffStore ??
+    createFederatedHandoffStore({
+      redisClient: crowi.redis,
+      keyspace: resolveRedisKeyspaceIfEnabled(crowi),
+    });
   const User = crowi.model('User');
   const jwtUtil = createJwtUtil(crowi);
 

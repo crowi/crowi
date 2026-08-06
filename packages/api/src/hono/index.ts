@@ -21,6 +21,9 @@ import { createHonoApp } from './app';
 import { attachMcp } from '../mcp/attach';
 import { createPluginContext } from '../plugin/plugin-context';
 import { makePluginRouterScope } from '../plugin/registries';
+import { createAuthRegistrationTerminal } from '../services/auth-registration';
+import { createFederatedHandoffStore } from '../service/federated-handoff';
+import { resolveRedisKeyspaceIfEnabled } from '../util/redis-keyspace';
 import { createAstNegotiation } from './middleware/ast-negotiation';
 import { createCors } from './middleware/cors';
 import { createSecurityHeaders } from './middleware/security-headers';
@@ -54,6 +57,7 @@ import { registerRevisionRoutes } from './handlers/revision';
 import { registerSearchRoutes } from './handlers/search';
 import { registerTokenAuthRoutes } from './handlers/token-auth';
 import { registerFederatedAuthRoutes } from './handlers/federated-auth';
+import { registerFederatedRegistrationRoutes } from './handlers/federated-registration';
 import { registerInviteAcceptRoutes } from './handlers/invite-accept';
 import { registerPasswordResetRoutes } from './handlers/password-reset';
 import { registerActivationRoutes } from './handlers/activation';
@@ -161,13 +165,34 @@ export const buildHonoApp = (crowi: Crowi) => {
   const withApp = registerAppRoutes(base, crowi);
   const withInstaller = registerInstallerRoutes(withApp, crowi);
   const withTokenAuth = registerTokenAuthRoutes(withInstaller, crowi);
+  // RFC-0014 phase 1/2 — the handoff-code store MUST be a single shared
+  // instance across BOTH route families below: the in-memory fallback
+  // backend (no REDIS_URL) holds its record `Map` in-process, so two
+  // independently-constructed instances would be invisible to each other
+  // — a code phase 2's registration submit issues would never be found by
+  // phase 1's `/auth/handoff` redemption endpoint. The Redis-backed
+  // instance has no such constraint (Redis itself is the shared state),
+  // but constructing once here keeps both backends' wiring identical.
+  const federatedHandoffStore = createFederatedHandoffStore({ redisClient: crowi.redis, keyspace: resolveRedisKeyspaceIfEnabled(crowi) });
   // RFC-0014 phase 1 — federated (OAuth2/OIDC) sign-in flow skeleton.
   // Registered right after tokenAuth to mirror the contract client chain
-  // (`packages/api-contract/src/client.ts`).
-  const withFederatedAuth = registerFederatedAuthRoutes(withTokenAuth, crowi);
+  // (`packages/api-contract/src/client.ts`). Phase 2's registration
+  // terminal replaces Phase 1's always-decline default so an unknown
+  // federated identity reaches the registration screen instead of a
+  // `registration_unavailable` login error.
+  const withFederatedAuth = registerFederatedAuthRoutes(withTokenAuth, crowi, {
+    terminal: createAuthRegistrationTerminal(crowi),
+    handoffStore: federatedHandoffStore,
+  });
+  // RFC-0014 phase 2 — federated registration screen + JIT provisioning.
+  // Public (the grant token is the credential) — mounted right after the
+  // federated-auth route family it completes. Shares `federatedHandoffStore`
+  // with Phase 1 (see the comment above) so an Open-mode registration's
+  // issued code is redeemable at the SAME `/auth/handoff` endpoint.
+  const withFederatedRegistration = registerFederatedRegistrationRoutes(withFederatedAuth, crowi, federatedHandoffStore);
   // Public invite-acceptance (token is the credential) — register before
   // the auth-gated me/user routes.
-  const withInviteAccept = registerInviteAcceptRoutes(withFederatedAuth, crowi);
+  const withInviteAccept = registerInviteAcceptRoutes(withFederatedRegistration, crowi);
   // Public self-service password reset (token is the credential).
   const withPasswordReset = registerPasswordResetRoutes(withInviteAccept, crowi);
   // Public account activation (email confirmation; token is the credential).
