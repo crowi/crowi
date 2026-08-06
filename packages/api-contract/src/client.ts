@@ -326,6 +326,7 @@ const stubProfile: UserProfileResponse = {
   image: null,
   hasPassword: false,
   createdAt: '',
+  federated: false,
 };
 
 const stubAccessToken: AccessToken = {
