@@ -842,7 +842,9 @@ const federatedAuthContractApp = new OpenAPIHono()
   .openapi(federatedAuthRoutes.listFederatedProvidersRoute, (c) => c.json(stubProviderList, 200))
   .openapi(federatedAuthRoutes.startFederatedProviderRoute, (c) => c.redirect('', 302))
   .openapi(federatedAuthRoutes.callbackFederatedProviderRoute, (c) => c.redirect('', 302))
-  .openapi(federatedAuthRoutes.federatedHandoffRoute, (c) => c.json(stubTokens, 200));
+  .openapi(federatedAuthRoutes.federatedHandoffRoute, (c) => c.json(stubTokens, 200))
+  .openapi(federatedAuthRoutes.createAuthProviderLinkGrantRoute, (c) => c.json({ linkGrant: '' }, 200))
+  .openapi(federatedAuthRoutes.unlinkAuthProviderRoute, (c) => c.body(null, 204));
 
 /**
  * Federated registration screen + JIT provisioning (RFC-0014 phase 2) — 3

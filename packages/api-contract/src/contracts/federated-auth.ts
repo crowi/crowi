@@ -13,8 +13,15 @@
  */
 import { createRoute, z } from '@hono/zod-openapi';
 
-import { ApiErrorSchema, InternalServerErrorSchema } from '../schemas/common';
-import { FederatedHandoffRequestSchema, FederatedHandoffResponseSchema, ProviderListResponseSchema } from '../schemas/federated-auth';
+import { ApiErrorSchema, AuthenticationRequiredErrorSchema, InternalServerErrorSchema } from '../schemas/common';
+import {
+  CreateLinkGrantRequestSchema,
+  CreateLinkGrantResponseSchema,
+  FederatedHandoffRequestSchema,
+  FederatedHandoffResponseSchema,
+  ProviderListResponseSchema,
+  UnlinkAuthProviderErrorSchema,
+} from '../schemas/federated-auth';
 
 /**
  * `/` (root) or a single-leading-slash local path — never `//host`
@@ -70,17 +77,101 @@ export const startFederatedProviderRoute = createRoute({
       handoff_jwk: z.string().min(1),
       /** base64url ES256 signature over the start canonical message. */
       handoff_proof: z.string().min(1),
+      /**
+       * RFC-0014 phase 3 — `'1'` switches this start into LINK mode: the
+       * request must carry a web-session JWT, and the flow attaches the
+       * resulting identity to that session's user instead of signing
+       * anyone in. Absent (the ordinary sign-in start) the route stays
+       * fully public.
+       */
+      link: z.literal('1').optional(),
+      /** The opaque id from `POST /auth/providers/{name}/link-grants`. Required when `link=1`, ignored otherwise. */
+      link_grant: z.string().min(1).optional(),
     }),
   },
   responses: {
     302: { description: 'Redirect to the provider authorization endpoint' },
     400: {
-      description: 'Malformed continue / sender proof',
+      description: 'Malformed continue / sender proof, or an invalid/expired/mismatched link grant',
+      content: { 'application/json': { schema: ApiErrorSchema } },
+    },
+    401: {
+      description: 'link=1 without a web-session JWT — never downgraded to the public sign-in start',
+      content: { 'application/json': { schema: ApiErrorSchema } },
+    },
+    403: {
+      description: 'link=1 with a non-web credential (PAT / OAuth access token)',
       content: { 'application/json': { schema: ApiErrorSchema } },
     },
     404: {
       description: 'Unknown, unconfigured, or credential-kind provider',
       content: { 'application/json': { schema: ApiErrorSchema } },
+    },
+    500: {
+      description: 'Internal server error',
+      content: { 'application/json': { schema: InternalServerErrorSchema } },
+    },
+  },
+});
+
+export const createAuthProviderLinkGrantRoute = createRoute({
+  method: 'post',
+  path: '/auth/providers/{name}/link-grants',
+  tags: ['federatedAuth'],
+  summary: 'Mint a short-lived, opaque grant that authorizes ONE link start for the current web session',
+  request: {
+    params: z.object({ name: z.string() }),
+    body: { content: { 'application/json': { schema: CreateLinkGrantRequestSchema } } },
+  },
+  responses: {
+    200: {
+      description: 'Opaque single-use grant id',
+      content: { 'application/json': { schema: CreateLinkGrantResponseSchema } },
+    },
+    401: {
+      description: 'Authentication required',
+      content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
+    },
+    403: {
+      description: 'Non-web credential (PAT / OAuth access token)',
+      content: { 'application/json': { schema: ApiErrorSchema } },
+    },
+    404: {
+      description: 'Unknown, unconfigured, or credential-kind provider',
+      content: { 'application/json': { schema: ApiErrorSchema } },
+    },
+    500: {
+      description: 'Internal server error',
+      content: { 'application/json': { schema: InternalServerErrorSchema } },
+    },
+  },
+});
+
+export const unlinkAuthProviderRoute = createRoute({
+  method: 'delete',
+  path: '/auth/providers/{name}/identity',
+  tags: ['federatedAuth'],
+  summary: "Disconnect the current user's identity for this provider",
+  request: {
+    params: z.object({ name: z.string() }),
+  },
+  responses: {
+    204: { description: 'Identity removed' },
+    401: {
+      description: 'Authentication required',
+      content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
+    },
+    403: {
+      description: 'Non-web credential (PAT / OAuth access token)',
+      content: { 'application/json': { schema: ApiErrorSchema } },
+    },
+    404: {
+      description: 'No identity linked for this provider',
+      content: { 'application/json': { schema: ApiErrorSchema } },
+    },
+    409: {
+      description: 'Refused: password auth is disabled instance-wide, or this user has no password set',
+      content: { 'application/json': { schema: UnlinkAuthProviderErrorSchema } },
     },
     500: {
       description: 'Internal server error',
@@ -150,4 +241,6 @@ export const federatedAuthRoutes = {
   startFederatedProviderRoute,
   callbackFederatedProviderRoute,
   federatedHandoffRoute,
+  createAuthProviderLinkGrantRoute,
+  unlinkAuthProviderRoute,
 };

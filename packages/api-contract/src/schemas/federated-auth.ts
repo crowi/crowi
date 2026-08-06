@@ -62,3 +62,38 @@ export const FederatedHandoffRequestSchema = z.object({
 
 /** Same shape as `POST /auth/login`'s success body — see this file's header. */
 export const FederatedHandoffResponseSchema = TokenAuthResponseSchema;
+
+/**
+ * RFC-0014 phase 3 — linking a provider account to an already signed-in
+ * user.
+ *
+ * The request carries ONLY the sender-key thumbprint the caller will also
+ * present at `/start`. It deliberately does NOT carry a user id: the target
+ * is taken from the authenticated session server-side, so nothing a client
+ * sends can aim the link at someone else's account (spec §契約
+ * "state の `linkToUserId` は authenticated start request の user からだけ
+ * 設定し、callback query / client-supplied id から設定しない").
+ */
+export const CreateLinkGrantRequestSchema = z.object({
+  /** RFC 7638 thumbprint of the P-256 public key this browser will use at `/start` — binds the grant to this browser (AC-2). */
+  handoffChallenge: z.string().min(1),
+});
+
+/** The opaque, single-use id `/start?link=1&link_grant=…` expects. Carries no readable claims — every bound value stays server-side. */
+export const CreateLinkGrantResponseSchema = z.object({
+  linkGrant: z.string(),
+});
+
+/**
+ * Unlink refusals. Both are 409 and neither reveals how many identities
+ * remain or who else might own one — the caller learns only what they can
+ * act on. `FEDERATED_UNLINK_DISABLED` is fixed instance policy (password
+ * auth is off, so unlinking could strand the account); `PASSWORD_REQUIRED`
+ * is actionable by the user (set a password first).
+ */
+export const UnlinkAuthProviderErrorSchema = z.object({
+  error: z.object({
+    code: z.enum(['FEDERATED_UNLINK_DISABLED', 'PASSWORD_REQUIRED']),
+    message: z.string(),
+  }),
+});
