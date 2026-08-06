@@ -54,7 +54,7 @@ Git hooks are managed by `lefthook` and set up automatically during
 | Hook | Action |
 | ---- | ------ |
 | pre-commit | Applies Biome formatting to staged files |
-| pre-push | Runs `pnpm lint` (errors=0 required) |
+| pre-push | Runs `pnpm lint` (errors=0 required) and `pnpm build`; also runs `pnpm check:openapi` when `packages/api-contract/**` has changed |
 
 ## Commit messages
 

@@ -56,7 +56,7 @@ Git フックは `lefthook` で管理され、`pnpm install` 時に自動でセ�
 | フック | 内容 |
 | ------ | ---- |
 | pre-commit | ステージされたファイルに Biome フォーマットを適用 |
-| pre-push | `pnpm lint` を実行 (errors=0 必須) |
+| pre-push | `pnpm lint` (errors=0 必須) と `pnpm build` を実行。`packages/api-contract/**` に変更があるときは `pnpm check:openapi` も実行 |
 
 ## コミットメッセージ
 

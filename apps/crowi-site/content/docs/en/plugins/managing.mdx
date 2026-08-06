@@ -90,6 +90,27 @@ Once the api boots, loaded plugins are listed on the admin screen at
 extension points, and clicking it navigates to the config form at
 `/admin/plugins/edit?name=<name>`.
 
+### Configuration readiness warning
+
+When the selected storage or search driver is missing configuration it
+needs — an S3 bucket name, or an Elasticsearch / OpenSearch cluster URL,
+for example — a warning banner is shown to **administrators only**. It
+appears on every wiki page and on `/admin/plugins`, with a direct link to
+the affected plugin's config screen. It clears on the next refetch after
+the missing value is saved.
+
+Previously this kind of misconfiguration only surfaced when an upload or a
+search failed with a 500. The banner makes it visible as soon as the
+instance is configured.
+
+Non-admins never see the banner and never make the readiness request. The
+`GET /admin/plugins/readiness` response includes only the plugin name, its
+admin placement, and each affected field name with a flag saying whether it
+is set — never configuration values, URLs, or secrets.
+
+For declaring readiness requirements in a plugin, see
+[Plugin development](./developing).
+
 ### Schema-driven config form
 
 The config form is **auto-generated** by the runtime walking the
