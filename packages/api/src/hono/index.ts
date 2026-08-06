@@ -16,15 +16,12 @@
  */
 import type { Context, Next } from 'hono';
 import type Crowi from 'src/crowi';
-
-import { createHonoApp } from './app';
 import { attachMcp } from '../mcp/attach';
 import { createPluginContext } from '../plugin/plugin-context';
 import { makePluginRouterScope } from '../plugin/registries';
-import { createAstNegotiation } from './middleware/ast-negotiation';
-import { createCors } from './middleware/cors';
-import { createSecurityHeaders } from './middleware/security-headers';
-import { registerAdminCryptoRoutes } from './handlers/admin-crypto';
+import { createHonoApp } from './app';
+import { registerAccessTokenRoutes } from './handlers/access-token';
+import { registerActivationRoutes } from './handlers/activation';
 import { registerAdminAppRoutes } from './handlers/admin/app';
 import { registerAdminAuthRoutes } from './handlers/admin/auth';
 import { registerAdminMailRoutes } from './handlers/admin/mail';
@@ -33,7 +30,7 @@ import { registerAdminSearchRoutes } from './handlers/admin/search';
 import { registerAdminSecurityRoutes } from './handlers/admin/security';
 import { registerAdminStorageRoutes } from './handlers/admin/storage';
 import { registerAdminUsersRoutes } from './handlers/admin/users';
-import { registerAccessTokenRoutes } from './handlers/access-token';
+import { registerAdminCryptoRoutes } from './handlers/admin-crypto';
 import { registerAppRoutes } from './handlers/app';
 import { registerAttachmentRoutes } from './handlers/attachment';
 import { registerAttachmentStreamRoutes } from './handlers/attachment-stream';
@@ -42,25 +39,27 @@ import { registerBacklinkRoutes } from './handlers/backlink';
 import { registerBookmarkRoutes } from './handlers/bookmark';
 import { registerCommentRoutes } from './handlers/comment';
 import { registerDraftRoutes } from './handlers/draft';
+import { registerEmailChangeRoutes } from './handlers/email-change';
 import { registerInstallerRoutes } from './handlers/installer';
+import { registerInviteAcceptRoutes } from './handlers/invite-accept';
 import { registerMeRoutes } from './handlers/me';
 import { registerNotificationRoutes } from './handlers/notification';
 import { registerOAuthRoutes } from './handlers/oauth';
 import { registerPageRoutes } from './handlers/page';
 import { registerPageCollabRoutes } from './handlers/page-collab';
 import { registerPagePreviewRoutes } from './handlers/page-preview';
+import { registerPasswordResetRoutes } from './handlers/password-reset';
 import { registerPresenceRoutes } from './handlers/presence';
 import { registerRevisionRoutes } from './handlers/revision';
 import { registerSearchRoutes } from './handlers/search';
 import { registerTokenAuthRoutes } from './handlers/token-auth';
-import { registerInviteAcceptRoutes } from './handlers/invite-accept';
-import { registerPasswordResetRoutes } from './handlers/password-reset';
-import { registerActivationRoutes } from './handlers/activation';
-import { registerEmailChangeRoutes } from './handlers/email-change';
 import { registerUserRoutes } from './handlers/user';
+import { createAstNegotiation } from './middleware/ast-negotiation';
+import { createCors } from './middleware/cors';
+import { createSecurityHeaders } from './middleware/security-headers';
 
-export { createHonoApp, createJwtAdminRequired, createJwtAuth, defaultHook, honoOnError } from './app';
 export type { CrowiHonoBindings } from './app';
+export { createHonoApp, createJwtAdminRequired, createJwtAuth, defaultHook, honoOnError } from './app';
 
 /**
  * RFC-0013 Phase 0 — call every loaded plugin's `registerRoutes(scope,
@@ -207,8 +206,11 @@ export const buildHonoApp = (crowi: Crowi) => {
   // apply (same dedupe-avoidance rationale as page / page-preview /
   // pageCollab / presence). autocomplete installs jwtAuth on the
   // singleton `/users/autocomplete` literal itself; attachment installs
-  // jwtAuth + rate-limit on `/attachments/*`. Rate limiting wraps the
-  // two autocomplete endpoints (60/min) and `uploadAttachment` (20/min).
+  // `createAttachmentAuth` + rate-limit on `/attachments/*`
+  // (feature-auth-cookie-fallback-scope — header-only except GET/HEAD on
+  // the by-id / original / by-key delivery routes, see
+  // `middleware/auth.ts`'s doc comment). Rate limiting wraps the two
+  // autocomplete endpoints (60/min) and `uploadAttachment` (20/min).
   const withDraft = registerDraftRoutes(withPresence, crowi);
   const withAutocomplete = registerAutocompleteRoutes(withDraft, crowi);
   const withAttachment = registerAttachmentRoutes(withAutocomplete, crowi);
@@ -218,9 +220,13 @@ export const buildHonoApp = (crowi: Crowi) => {
   // alongside the JSON attachment routes; the literal `:id{24-hex}`
   // pattern keeps them disjoint from `/attachments/upload` /
   // `/attachments/:id/meta`. Mutates the underlying instance
-  // (returns `app` unchanged-as-type), so registering after
-  // `registerAttachmentRoutes` is fine — both share the same
-  // jwt-auth broad apply.
+  // (returns `app` unchanged-as-type). Installs NO auth of its own —
+  // it relies entirely on `registerAttachmentRoutes`'s broad
+  // `/attachments/*` `createAttachmentAuth` apply above, which MUST stay
+  // registered first (feature-auth-cookie-fallback-scope: a second
+  // `createAttachmentAuth` install on a literal path here would run
+  // credential resolution twice per request — see the doc comment in
+  // `attachment-stream.ts`).
   registerAttachmentStreamRoutes(withAttachment, crowi);
   // Batch 7 — search. Singleton literal path `/search` (OUTSIDE the
   // revision-owned `/pages/*` apply). The handler installs jwtAuth on
@@ -249,7 +255,9 @@ export const buildHonoApp = (crowi: Crowi) => {
   // RFC-0011 — built-in MCP server. `/mcp` is a normal Hono route (not a
   // WS upgrade), so it is attached here alongside the other handler
   // registration rather than in the post-`buildServer` WS-attach phase.
-  // It mounts `app.all('/mcp', …)` under `createJwtAuth(crowi)` + a
+  // It mounts `app.all('/mcp', …)` under `createMcpAuth(crowi)`
+  // (feature-auth-cookie-fallback-scope — PAT Bearer only, no cookie, no
+  // web-session or unbound `oauth_access` Bearer; see `mcp/auth.ts`) + a
   // per-user rate limit; each tool dispatches in-process to the existing
   // scoped routes (`honoApp.request`). `/mcp` is JSON-RPC, not a REST
   // contract, so it is intentionally NOT added to the OpenAPI document.

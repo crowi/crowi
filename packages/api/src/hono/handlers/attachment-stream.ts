@@ -25,12 +25,23 @@
  * back onto the socket — equivalent posture to the old Express
  * `stream.pipe(res)` codepath, no buffering introduced.
  *
- * Auth: both by-id endpoints install `createJwtAuth(crowi)` directly on the
- * literal paths. They are OUTSIDE the revision-owned `/pages/*`
- * broad apply (which covers list / add / usage), and the
- * `/attachments/*` broad apply in the JSON attachment handler runs
- * AFTER this handler registers — registering jwtAuth on the literal
- * paths here keeps the request-time middleware stack identical.
+ * Auth: these routes are OUTSIDE the revision-owned `/pages/*` broad apply
+ * (which covers list / add / usage). They rely on the broad `/attachments/*`
+ * `createAttachmentAuth(crowi)` apply installed by the JSON attachment
+ * handler (`handlers/attachment.ts`), which always registers first
+ * (`hono/index.ts` calls `registerAttachmentRoutes` before
+ * `registerAttachmentStreamRoutes`) — Hono middleware matches every
+ * pattern that covers a request's path, so a SECOND `app.use(...,
+ * createAttachmentAuth(crowi))` on a literal path here would run credential
+ * resolution twice per request (double JWT/PAT verify, double
+ * `User.findById`, double PAT `touchLastUsed()` —
+ * feature-auth-cookie-fallback-scope's request-per-verify invariant). This
+ * file therefore installs no auth middleware of its own; the single
+ * broad-wildcard install is the ONLY auth pass every `/attachments/*`
+ * request gets, and `createAttachmentAuth` evaluates the real request
+ * method/path itself, so it makes the correct cookie-eligibility decision
+ * (GET/HEAD on these three delivery routes only) regardless of which
+ * handler file the matching route happens to live in.
  *
  * `/attachments/:id/original` additionally requires the `attachments:read`
  * scope (RFC-0010, feature-image-derivative-optimization Phase 2 §3) —
@@ -52,7 +63,6 @@ import FileUploader, { isMissingFileError } from 'src/util/file-uploader';
 import { isValidObjectId, loadGrantedPage } from 'src/util/ts-rest-helpers';
 
 import type { CrowiHonoBindings } from '../app';
-import { createJwtAuth } from '../middleware/auth';
 import { requireScope } from '../middleware/require-scope';
 
 const debug = Debug('crowi:hono:handlers:attachment-stream');
@@ -309,21 +319,19 @@ export const registerAttachmentStreamRoutes = (app: OpenAPIHono<CrowiHonoBinding
     return streamResponse(stream, buildDeliveryHeaders(attachment, attachment.fileFormat));
   };
 
-  // Install jwtAuth on both literal paths. `/attachments/*` is OUTSIDE
-  // the revision-owned `/pages/*` broad apply, and the JSON attachment
-  // handler's broad `/attachments/*` apply runs after this handler
-  // registers — we keep the literal install so each route has exactly
-  // one jwtAuth invocation regardless of ordering.
-  app.use('/attachments/by-key/*', createJwtAuth(crowi));
-  app.use('/attachments/:id', createJwtAuth(crowi));
+  // No `createAttachmentAuth` install here — see this file's top doc
+  // comment. The broad `/attachments/*` apply in `handlers/attachment.ts`
+  // (registered first, `hono/index.ts`) is the single auth pass every route
+  // in this file gets; a second literal install would double it.
+  //
   // feature-image-derivative-optimization Phase 2 §3 — `/original` requires
   // `attachments:read` explicitly; `/attachments/:id` itself keeps its
   // pre-existing scope gap (not this feature's to fix, see spec §3).
   // Installed directly via `requireScope(...)` (not `applyScope(...)`,
   // which only binds to `createRoute(...)` contracts) — this is a
-  // hand-coded stream route. MUST run after `createJwtAuth` populates
+  // hand-coded stream route. MUST run after `createAttachmentAuth` populates
   // `authScopes`: the JSON attachment handler's broad `/attachments/*`
-  // jwtAuth apply (`registerAttachmentRoutes`) always registers before this
+  // auth apply (`registerAttachmentRoutes`) always registers before this
   // handler (`hono/index.ts`), so that invariant holds.
   app.use('/attachments/:id{[0-9a-fA-F]{24}}/original', requireScope('attachments:read'));
 
@@ -427,7 +435,7 @@ export const registerAttachmentStreamRoutes = (app: OpenAPIHono<CrowiHonoBinding
   // Phase 2: never reads `derivatives`/`mode`/`reason`, always resolves via
   // the same `Attachment.findDeliveryFile` (original-fixed) static. Scope
   // (`attachments:read`) is enforced by the `requireScope(...)` `app.use`
-  // registered above; auth is the broad `/attachments/*` jwtAuth apply.
+  // registered above; auth is the broad `/attachments/*` createAttachmentAuth apply.
   app.get('/attachments/:id{[0-9a-fA-F]{24}}/original', async (c) => {
     const result = await loadAuthorizedAttachment(c);
     if (!result.ok) return result.response;
@@ -449,7 +457,8 @@ export const registerAttachmentStreamRoutes = (app: OpenAPIHono<CrowiHonoBinding
   // server root, matching the next.config rewrite target.
   //
   // No auth is installed on this literal (it is OUTSIDE every broad
-  // jwtAuth apply — `/pages/*`, `/attachments/*` — so none catches it).
+  // auth apply — `/pages/*` createJwtAuth, `/attachments/*`
+  // createAttachmentAuth — so none catches it).
   // The redirect just emits a 302 to `/api/attachments/:id`, whose
   // own handler enforces JWT + the page grant; authorization is deferred to
   // the redirect target. The 24-hex constraint keeps this disjoint from any

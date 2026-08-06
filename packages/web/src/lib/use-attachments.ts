@@ -1,9 +1,9 @@
 'use client';
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiClient, apiBaseUrl } from './api-client';
-import { getAccessToken } from './auth-token';
 import type { Attachment, AttachmentMeta, ListAttachmentsResponse } from '@crowi/api-contract';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { acquireRefreshedToken, apiBaseUrl, apiClient } from './api-client';
+import { getAccessToken } from './auth-token';
 
 /**
  * RFC-0006 Phase 4 Batch 6 — switched from `apiClient.attachment.*`
@@ -78,6 +78,17 @@ export function useAttachment(id: string | undefined) {
  * does not currently surface upload progress; this fetch keeps the auth /
  * refresh behaviour aligned with the rest of the app by reading the
  * access token from `auth-token`.
+ *
+ * feature-auth-cookie-fallback-scope — `POST /pages/:pageId/attachments` is
+ * NOT one of the three headerless attachment delivery routes
+ * (`createAttachmentAuth` only accepts the `crowi.accessToken` cookie for
+ * GET/HEAD by-id / original / by-key), so a token-missing request must
+ * never go out headerless: it would just 401 server-side, but recovering
+ * the token first (the same single-flight refresh `apiFetch` uses) avoids
+ * a doomed round-trip, and failing closed here — before ever building the
+ * request — matches the existing auth-invalidation posture instead of
+ * silently depending on an ambient cookie that no longer authenticates
+ * this route anyway.
  */
 export function useAddAttachment(pageId: string | undefined) {
   const queryClient = useQueryClient();
@@ -85,13 +96,20 @@ export function useAddAttachment(pageId: string | undefined) {
     mutationFn: async (file: File): Promise<Attachment> => {
       if (!pageId) throw new Error('pageId is required to upload an attachment');
 
+      let accessToken = getAccessToken();
+      if (!accessToken) {
+        accessToken = await acquireRefreshedToken();
+        if (!accessToken) {
+          throw new Error('Authentication is required.');
+        }
+      }
+
       const formData = new FormData();
       formData.append('file', file);
 
-      const accessToken = getAccessToken();
       const response = await fetch(`${apiBaseUrl()}/pages/${encodeURIComponent(pageId)}/attachments`, {
         method: 'POST',
-        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+        headers: { Authorization: `Bearer ${accessToken}` },
         body: formData,
       });
 
