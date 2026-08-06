@@ -65,7 +65,14 @@ export function getPendingRegistration(deps: FederatedRegistrationRouteDeps): Ro
         const marker = await UserActivation.findOne({ userId: row.userId });
         if (marker?.status === 'done') return c.json(GRANT_NOT_FOUND_BODY, 404);
       }
-      return c.json({ email: row.profile.email, provider: row.provider, providerLabel: row.providerLabel }, 200);
+      // A row that already finalized to APPROVAL_PENDING is still readable
+      // by its own grant (the visitor is waiting, not invalid), but its
+      // registration is done — say so, or the screen re-offers a username
+      // field whose value can no longer be applied.
+      return c.json(
+        { email: row.profile.email, provider: row.provider, providerLabel: row.providerLabel, approvalPending: row.state === 'APPROVAL_PENDING' },
+        200,
+      );
     } catch (err) {
       debug('getPendingRegistration failed: %s', (err as Error).message);
       return c.json(INTERNAL_ERROR_BODY, 500);

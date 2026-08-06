@@ -6614,10 +6614,13 @@ paths:
                     type: string
                   providerLabel:
                     type: string
+                  approvalPending:
+                    type: boolean
                 required:
                   - email
                   - provider
                   - providerLabel
+                  - approvalPending
         '404':
           description: Grant is unknown, expired, or cancelled
           content:

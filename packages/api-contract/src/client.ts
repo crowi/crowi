@@ -313,6 +313,7 @@ const stubFederatedRegistrationSnapshot: FederatedRegistrationSnapshotResponse =
   email: 'stub@example.com',
   provider: '',
   providerLabel: '',
+  approvalPending: false,
 };
 
 const stubProfile: UserProfileResponse = {

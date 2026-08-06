@@ -207,6 +207,19 @@ describe('FederatedRegisterForm', () => {
       expect(useRouterMock.push).not.toHaveBeenCalled();
     });
 
+    // Manual QA path: submit under Restricted, see the pending card, press
+    // Back. The grant is still readable, so the screen used to re-render an
+    // editable username field and accept a value the server then discarded.
+    it('returns to an already-submitted registration showing the pending card, not the form', async () => {
+      apiGet.mockResolvedValue(jsonResponse(200, { ...SNAPSHOT, approvalPending: true }));
+      render(<FederatedRegisterForm />);
+
+      expect(await screen.findByText('登録を受け付けました')).toBeInTheDocument();
+      expect(screen.queryByLabelText('ユーザーID')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: '新規登録' })).not.toBeInTheDocument();
+      expect(apiPost).not.toHaveBeenCalled();
+    });
+
     it('Restricted (approval_required): shows the approval-pending card, never navigates', async () => {
       await renderLoaded();
       apiPost.mockResolvedValue(jsonResponse(200, { status: 'approval_required' }));

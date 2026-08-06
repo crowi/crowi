@@ -44,9 +44,10 @@ export function FederatedRegisterForm() {
   const [errors, setErrors] = useState<string[]>([]);
   const [username, setUsername] = useState('');
 
-  // Load the read-only snapshot (`{email, provider, providerLabel}` only —
-  // the spec's literal contract; `approval_required` is conveyed ONLY by
-  // the SUBMIT response, see `handleSubmit` below, never re-derived here).
+  // Load the read-only snapshot. It carries `approvalPending` for the one
+  // case the SUBMIT response cannot cover — arriving at (or returning to) a
+  // grant whose registration was already submitted — while every invalid
+  // grant shape stays a single indistinguishable 404.
   // A 404 (unknown/expired/cancelled/already-fully-completed grant — the
   // API deliberately never distinguishes which — AC-2) and a missing
   // `token` both land on the same "grant is no longer valid" card. Any
@@ -67,6 +68,11 @@ export function FederatedRegisterForm() {
       if (res.status === 200) {
         const body = await res.json();
         setSnapshot(body);
+        // Already submitted and waiting for an admin — reached by pressing
+        // Back from the pending screen. Show that state rather than an
+        // editable username field: the registration is finalized, so a
+        // second submit is refused and anything typed here is discarded.
+        if (body.approvalPending) setApprovalRequired(true);
       } else if (res.status === 404) {
         setTokenInvalid(true);
       } else {

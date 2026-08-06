@@ -108,7 +108,7 @@ describe('Routes /api/auth/federated-registration (Hono)', () => {
       // Spec's literal contract (`契約・不変条件`): the snapshot is exactly
       // `{email, provider, providerLabel}` — no `status` field (that
       // belongs to the SUBMIT result only, `FederatedRegistrationResultSchema`).
-      expect(res.body).toEqual({ email, provider: 'fedreg-google', providerLabel: 'Google' });
+      expect(res.body).toEqual({ email, provider: 'fedreg-google', providerLabel: 'Google', approvalPending: false });
 
       expect(await User().countDocuments({ email })).toBe(0);
     });
@@ -119,7 +119,14 @@ describe('Routes /api/auth/federated-registration (Hono)', () => {
       expect(res.body.error.code).toBe('NOT_FOUND');
     });
 
-    it('a reauthenticated visit against an APPROVAL_PENDING row (a prior submit already finalized it) still returns the plain read-only snapshot (200) — the API never exposes approval status via GET, only via the SUBMIT response', async () => {
+    // The snapshot deliberately carries no free-form status, but it MUST
+    // say whether this grant's registration already finalized to
+    // "awaiting approval". Without it the screen re-renders an editable
+    // username field for a registration that is already submitted — which
+    // is what manual QA hit by pressing Back: the field accepted a new
+    // username, the submit reported success, and the value was silently
+    // discarded (see the re-submit test below).
+    it('reports an APPROVAL_PENDING row as already awaiting approval, so the screen does not re-offer the form', async () => {
       const email = 'fedreg-ac8-status-approval@example.com';
       const username = `fedreg-ac8-status-approval-${Date.now()}`;
       await User().deleteMany({ $or: [{ email }, { username }] });
@@ -131,6 +138,11 @@ describe('Routes /api/auth/federated-registration (Hono)', () => {
       expect(submitRes.status).toBe(200);
       expect(submitRes.body).toEqual({ status: 'approval_required' });
 
+      // The SAME grant, re-read — this is the Back-button path.
+      const backRes = await request(app).get(`/api/auth/federated-registration/${token}`);
+      expect(backRes.status).toBe(200);
+      expect(backRes.body).toEqual({ email, provider: 'fedreg-google', providerLabel: 'Google', approvalPending: true });
+
       // Re-authenticating reissues a grant on the SAME (still APPROVAL_PENDING) row.
       const reauth = await resolveUnknownProfile('fedreg-google', 'fedreg-ac8-status-approval-sub', email);
       expect(reauth.kind).toBe('registration');
@@ -138,7 +150,34 @@ describe('Routes /api/auth/federated-registration (Hono)', () => {
 
       const res = await request(app).get(`/api/auth/federated-registration/${newToken}`);
       expect(res.status).toBe(200);
-      expect(res.body).toEqual({ email, provider: 'fedreg-google', providerLabel: 'Google' });
+      expect(res.body).toEqual({ email, provider: 'fedreg-google', providerLabel: 'Google', approvalPending: true });
+    });
+
+    // Answers the question manual QA raised directly: does the accepted
+    // second submit write anything? It must not — the registration is
+    // already finalized, and a second username can neither replace the
+    // first nor create another account.
+    it('a second submit with a different username changes nothing', async () => {
+      const email = 'fedreg-resubmit@example.com';
+      const first = `fedreg-resubmit-a-${Date.now()}`;
+      const second = `fedreg-resubmit-b-${Date.now()}`;
+      await User().deleteMany({ $or: [{ email }, { username: { $in: [first, second] } }] });
+      const token = tokenOf(await resolveUnknownProfile('fedreg-google', 'fedreg-resubmit-sub', email));
+
+      await setRegistrationMode(Config().SECURITY_REGISTRATION_MODE_RESTRICTED);
+      expect((await request(app).post(`/api/auth/federated-registration/${token}`).set(jsonHeaders).send({ username: first })).body).toEqual({
+        status: 'approval_required',
+      });
+
+      const again = await request(app).post(`/api/auth/federated-registration/${token}`).set(jsonHeaders).send({ username: second });
+
+      expect(again.status).toBe(200);
+      expect(again.body).toEqual({ status: 'approval_required' });
+      // The account keeps the username it was created with, and no second
+      // account appeared for the same address.
+      expect(await User().countDocuments({ email })).toBe(1);
+      expect(await User().countDocuments({ username: second })).toBe(0);
+      expect((await User().findOne({ email }))?.username).toBe(first);
     });
   });
 
@@ -676,7 +715,7 @@ describe('Routes /api/auth/federated-registration (Hono)', () => {
 
       const getRes = await request(app).get(`/api/auth/federated-registration/${token}`);
       expect(getRes.status).toBe(200);
-      expect(getRes.body).toEqual({ email, provider: 'fedreg-google', providerLabel: 'Google' });
+      expect(getRes.body).toEqual({ email, provider: 'fedreg-google', providerLabel: 'Google', approvalPending: false });
     });
   });
 });

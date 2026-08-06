@@ -9857,12 +9857,16 @@
                     },
                     "providerLabel": {
                       "type": "string"
+                    },
+                    "approvalPending": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
                     "email",
                     "provider",
-                    "providerLabel"
+                    "providerLabel",
+                    "approvalPending"
                   ]
                 }
               }

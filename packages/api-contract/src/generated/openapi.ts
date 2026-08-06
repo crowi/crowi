@@ -1415,6 +1415,7 @@ export interface paths {
                             email: string;
                             provider: string;
                             providerLabel: string;
+                            approvalPending: boolean;
                         };
                     };
                 };

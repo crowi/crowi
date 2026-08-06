@@ -39,6 +39,19 @@ export const FederatedRegistrationSnapshotSchema = z.object({
   provider: z.string(),
   /** Human-friendly provider name (the driver's `buttonLabel`), e.g. `'Google'`. */
   providerLabel: z.string(),
+  /**
+   * This grant's registration has already been submitted and is waiting
+   * for an administrator (Restricted mode). The screen must show that
+   * state instead of the username form.
+   *
+   * Deliberately narrow: it is not a general status field, and it never
+   * distinguishes unknown / expired / cancelled / completed grants (those
+   * are all the same 404 — AC-2). It exists because a submitted
+   * registration is still readable by its own grant, and re-offering an
+   * editable username there invites a change that cannot be applied — the
+   * second submit is refused and the typed value silently discarded.
+   */
+  approvalPending: z.boolean(),
 });
 
 export const FederatedRegistrationSubmitRequestSchema = z.object({
