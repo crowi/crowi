@@ -3,8 +3,9 @@ import { createUnavailableFederatedProfileTerminal, type FederatedProfileTermina
 import { createHonoApp } from 'src/hono/app';
 import { buildProviderRedirect, completeFederatedCallback, registerFederatedAuthRoutes } from 'src/hono/handlers/federated-auth';
 import type { UserDocument } from 'src/models/user';
-import { app, crowi } from 'src/test/setup';
-import { buildHandoffCanonicalMessage, buildStartCanonicalMessage } from 'src/util/federated-auth-state';
+import { app, crowi, Fixture, randomUsername } from 'src/test/setup';
+import { createJwtUtil } from 'src/util/jwt';
+import { buildHandoffCanonicalMessage, buildStartCanonicalMessage, computeJwkThumbprint } from 'src/util/federated-auth-state';
 import { verifyPkceS256 } from 'src/util/pkce';
 import request from 'supertest';
 
@@ -129,6 +130,22 @@ async function seedActiveUser(email: string, username: string): Promise<UserDocu
       resolve(user);
     });
   });
+}
+
+/**
+ * The `UserIdentity` row a resolved sign-in implies. The stub terminals
+ * below return `{kind:'resolved', user}` directly, but in production a
+ * terminal only ever resolves BECAUSE it found this row — and RFC-0014
+ * phase 3's handoff identity fence re-checks it immediately before minting
+ * tokens. Without seeding it, these tests would be asserting against a
+ * state production can never reach (a resolved sign-in with no identity).
+ */
+async function seedResolvedIdentity(user: UserDocument, provider: string, providerUserId: string): Promise<void> {
+  const UserIdentity = crowi.model('UserIdentity');
+  // `{provider, providerUserId}` is unique — clear any row a previous case
+  // in this file left behind for the same provider account.
+  await UserIdentity.deleteMany({ provider, providerUserId });
+  await UserIdentity.create({ userId: user._id, provider, providerUserId });
 }
 
 /** Builds a standalone federated-auth app wired to a caller-supplied terminal (a test seam the shared `app` — always the Phase-1 default terminal — cannot exercise). */
@@ -581,6 +598,7 @@ describe('federated auth (RFC-0014 phase 1)', () => {
   describe('resolved terminal -> handoff -> POST /api/auth/handoff (AC-5, AC-6, AC-7)', () => {
     test('a terminal resolving an active user completes handoff with the same token shape as /auth/login', async () => {
       const user = await seedActiveUser('fed-handoff-resolved@example.com', 'fed-handoff-resolved');
+      await seedResolvedIdentity(user, 'fed-oauth2', 'oauth2-user-1');
       const localApp = buildLocalApp({ resolve: async () => ({ kind: 'resolved', user }) });
 
       const keyPair = await createSenderKeyPair();
@@ -627,6 +645,7 @@ describe('federated auth (RFC-0014 phase 1)', () => {
 
     test('AC-6 — an attacker who steals the start URL and completes the IdP flow with their OWN account cannot redeem the handoff without the victim sender key', async () => {
       const attackerUser = await seedActiveUser('fed-ac6-attacker@example.com', 'fed-ac6-attacker');
+      await seedResolvedIdentity(attackerUser, 'fed-oauth2', 'oauth2-user-1');
       const localApp = buildLocalApp({ resolve: async () => ({ kind: 'resolved', user: attackerUser }) });
 
       // Victim generates a sender key pair and would have navigated this
@@ -671,6 +690,7 @@ describe('federated auth (RFC-0014 phase 1)', () => {
 
     test('AC-7 — a concurrent attacker (invalid proof) and legitimate holder (valid proof) race: only the legitimate holder succeeds', async () => {
       const user = await seedActiveUser('fed-ac7-holder@example.com', 'fed-ac7-holder');
+      await seedResolvedIdentity(user, 'fed-oauth2', 'oauth2-user-1');
       const localApp = buildLocalApp({ resolve: async () => ({ kind: 'resolved', user }) });
 
       const holderKeyPair = await createSenderKeyPair();
@@ -709,6 +729,7 @@ describe('federated auth (RFC-0014 phase 1)', () => {
 
     test('AC-7 — a valid proof sent twice concurrently succeeds at most once (409 for the loser)', async () => {
       const user = await seedActiveUser('fed-ac7-double@example.com', 'fed-ac7-double');
+      await seedResolvedIdentity(user, 'fed-oauth2', 'oauth2-user-1');
       const localApp = buildLocalApp({ resolve: async () => ({ kind: 'resolved', user }) });
 
       const keyPair = await createSenderKeyPair();
@@ -766,6 +787,8 @@ describe('federated auth (RFC-0014 phase 1)', () => {
         },
         handoffStore: { issue: async () => '', find: async () => null, consumeVerified: async () => ({ ok: false as const, reason: 'not_found' as const }) },
         terminal: { resolve: async () => ({ kind: 'redirect_error' as const, code: 'registration_unavailable' as const }) },
+        linkGrantStore: { issue: async () => '', consume: async () => null },
+        linkingTerminal: { link: async () => ({ kind: 'linked' as const }) },
         getEnabledDriver: () => null,
       };
 
@@ -778,6 +801,289 @@ describe('federated auth (RFC-0014 phase 1)', () => {
       expect(startHandler).toHaveLength(1);
       expect(typeof callbackHandler).toBe('function');
       expect(callbackHandler).toHaveLength(1);
+    });
+  });
+
+  describe('RFC-0014 phase 3 — protected link start, link callback, and the handoff identity fence', () => {
+    const webTokenFor = (user: UserDocument) => createJwtUtil(crowi).generateTokens(user).accessToken;
+
+    const seedWebUser = async (email: string, username: string) => {
+      const user = await seedActiveUser(email, username);
+      return { user, token: webTokenFor(user) };
+    };
+
+    describe('AC-1: link=1 requires an interactive web session', () => {
+      it('401s (never a 302 into the public login flow) when no JWT is presented', async () => {
+        const keyPair = await createSenderKeyPair();
+        const query = await buildStartQuery('fed-oauth2', '/dashboard', keyPair);
+
+        const res = await request(app).get(`/api/auth/providers/fed-oauth2/start?${query}&link=1&link_grant=whatever`).redirects(0);
+
+        // The decisive assertion is "not 302": silently downgrading a link
+        // start to an ordinary sign-in is exactly how a link flow ends up
+        // attaching an identity to whoever happens to complete it.
+        expect(res.status).toBe(401);
+        expect(res.headers.location).toBeUndefined();
+        expect(res.headers['set-cookie']).toBeUndefined();
+      });
+
+      it('403s for a PAT — a valid API credential, but not an interactive session', async () => {
+        const { user } = await seedWebUser('fed-link-pat@example.com', 'fed-link-pat');
+        const PersonalAccessToken = crowi.model('PersonalAccessToken');
+        const { token: pat, tokenHash } = PersonalAccessToken.generateToken();
+        await PersonalAccessToken.create({ tokenHash, userId: user._id, name: 'link-test', scopes: ['profile:read'] });
+
+        const res = await request(app)
+          .post('/api/auth/providers/fed-oauth2/link-grants')
+          .set('authorization', `Bearer ${pat}`)
+          .send({ handoffChallenge: 'jkt' });
+
+        expect(res.status).toBe(403);
+        expect(await crowi.model('UserIdentity').countDocuments({ userId: user._id, provider: 'fed-oauth2' })).toBe(0);
+      });
+
+      it('mints a grant for a real web session, and that grant then unlocks a link start (state cookie + IdP redirect)', async () => {
+        const { user, token } = await seedWebUser('fed-link-ok@example.com', 'fed-link-ok');
+        const keyPair = await createSenderKeyPair();
+        const handoffJkt = computeJwkThumbprint(keyPair.publicJwk as never);
+
+        const grantRes = await request(app)
+          .post('/api/auth/providers/fed-oauth2/link-grants')
+          .set('authorization', `Bearer ${token}`)
+          .send({ handoffChallenge: handoffJkt });
+        expect(grantRes.status).toBe(200);
+        expect(grantRes.body.linkGrant).toEqual(expect.any(String));
+
+        const query = await buildStartQuery('fed-oauth2', '/dashboard', keyPair);
+        const startRes = await request(app)
+          .get(`/api/auth/providers/fed-oauth2/start?${query}&link=1&link_grant=${grantRes.body.linkGrant}`)
+          .set('authorization', `Bearer ${token}`)
+          .redirects(0);
+
+        expect(startRes.status).toBe(302);
+        expect(startRes.headers.location).toContain('idp.example.com');
+        expect(extractStateCookie(startRes)).toMatch(/^crowi\.oauthState=/);
+        // Still no identity — linking only happens at callback time.
+        expect(await crowi.model('UserIdentity').countDocuments({ userId: user._id, provider: 'fed-oauth2' })).toBe(0);
+      });
+    });
+
+    describe('AC-2: the grant is bound to the browser that minted it', () => {
+      it("rejects a stolen link URL replayed with a DIFFERENT browser's sender key, issuing no state cookie and no IdP redirect", async () => {
+        const { token } = await seedWebUser('fed-link-stolen@example.com', 'fed-link-stolen');
+        const victimKeyPair = await createSenderKeyPair();
+        const victimJkt = computeJwkThumbprint(victimKeyPair.publicJwk as never);
+
+        const grantRes = await request(app)
+          .post('/api/auth/providers/fed-oauth2/link-grants')
+          .set('authorization', `Bearer ${token}`)
+          .send({ handoffChallenge: victimJkt });
+
+        // The attacker has the whole URL (grant id included) but signs the
+        // start with their OWN key pair — the thumbprints differ.
+        const attackerKeyPair = await createSenderKeyPair();
+        const attackerQuery = await buildStartQuery('fed-oauth2', '/dashboard', attackerKeyPair);
+        const res = await request(app)
+          .get(`/api/auth/providers/fed-oauth2/start?${attackerQuery}&link=1&link_grant=${grantRes.body.linkGrant}`)
+          .set('authorization', `Bearer ${token}`)
+          .redirects(0);
+
+        expect(res.status).toBe(400);
+        expect(res.headers.location).toBeUndefined();
+        expect(res.headers['set-cookie']).toBeUndefined();
+      });
+
+      it('rejects a grant replayed a second time (single-use), even by its rightful owner', async () => {
+        const { token } = await seedWebUser('fed-link-replay@example.com', 'fed-link-replay');
+        const keyPair = await createSenderKeyPair();
+        const handoffJkt = computeJwkThumbprint(keyPair.publicJwk as never);
+        const grantRes = await request(app)
+          .post('/api/auth/providers/fed-oauth2/link-grants')
+          .set('authorization', `Bearer ${token}`)
+          .send({ handoffChallenge: handoffJkt });
+
+        const query = await buildStartQuery('fed-oauth2', '/dashboard', keyPair);
+        const url = `/api/auth/providers/fed-oauth2/start?${query}&link=1&link_grant=${grantRes.body.linkGrant}`;
+        expect((await request(app).get(url).set('authorization', `Bearer ${token}`).redirects(0)).status).toBe(302);
+        expect((await request(app).get(url).set('authorization', `Bearer ${token}`).redirects(0)).status).toBe(400);
+      });
+    });
+
+    describe('AC-3: the link callback links, and never provisions', () => {
+      it('links the identity to the state-minted user and redirects to settings — the provisioning terminal is never consulted', async () => {
+        const { user, token } = await seedWebUser('fed-link-callback@example.com', 'fed-link-callback');
+        await crowi.model('UserIdentity').deleteMany({ provider: 'fed-oauth2', providerUserId: 'oauth2-user-1' });
+
+        // A terminal that would FAIL the test if the link branch ever
+        // reached it: AC-3 requires provisioning to be skipped entirely.
+        const terminalCalls: number[] = [];
+        const localApp = registerFederatedAuthRoutes(createHonoApp(), crowi, {
+          terminal: {
+            resolve: async () => {
+              terminalCalls.push(1);
+              return { kind: 'redirect_error', code: 'registration_unavailable' };
+            },
+          },
+        });
+
+        const keyPair = await createSenderKeyPair();
+        const handoffJkt = computeJwkThumbprint(keyPair.publicJwk as never);
+        const grantRes = await localApp.request('/auth/providers/fed-oauth2/link-grants', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+          body: JSON.stringify({ handoffChallenge: handoffJkt }),
+        });
+        const { linkGrant } = (await grantRes.json()) as { linkGrant: string };
+
+        const query = await buildStartQuery('fed-oauth2', '/dashboard', keyPair);
+        const startRes = await localApp.request(`/auth/providers/fed-oauth2/start?${query}&link=1&link_grant=${linkGrant}`, {
+          headers: { authorization: `Bearer ${token}` },
+        });
+        const cookie = extractStateCookie({ headers: Object.fromEntries(startRes.headers.entries()) });
+        const state = new URL(startRes.headers.get('location') as string).searchParams.get('state') as string;
+
+        const restoreFetch = mockFetch(jest.fn(async () => new Response(JSON.stringify({ access_token: 'tok' }), { status: 200 })) as unknown as typeof fetch);
+        let callbackRes: Response;
+        try {
+          callbackRes = await localApp.request(`/auth/providers/fed-oauth2/callback?code=abc&state=${state}`, { headers: { cookie } });
+        } finally {
+          restoreFetch();
+        }
+
+        expect(callbackRes.status).toBe(302);
+        const location = new URL(callbackRes.headers.get('location') as string);
+        expect(location.origin + location.pathname).toBe('https://web.test.example/me');
+        expect(location.searchParams.get('link')).toBe('linked');
+        expect(terminalCalls).toHaveLength(0);
+
+        const identity = await crowi.model('UserIdentity').findOne({ provider: 'fed-oauth2', providerUserId: 'oauth2-user-1' });
+        expect(String(identity?.userId)).toBe(String(user._id));
+      });
+
+      it('redirects with a non-identifying conflict result when the account belongs to someone else, and never moves it', async () => {
+        const owner = await seedActiveUser('fed-link-owner@example.com', 'fed-link-owner');
+        const { token } = await seedWebUser('fed-link-taker@example.com', 'fed-link-taker');
+        await seedResolvedIdentity(owner, 'fed-oauth2', 'oauth2-user-1');
+
+        const localApp = registerFederatedAuthRoutes(createHonoApp(), crowi, {
+          terminal: { resolve: async () => ({ kind: 'redirect_error', code: 'registration_unavailable' }) },
+        });
+
+        const keyPair = await createSenderKeyPair();
+        const handoffJkt = computeJwkThumbprint(keyPair.publicJwk as never);
+        const grantRes = await localApp.request('/auth/providers/fed-oauth2/link-grants', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+          body: JSON.stringify({ handoffChallenge: handoffJkt }),
+        });
+        const { linkGrant } = (await grantRes.json()) as { linkGrant: string };
+
+        const query = await buildStartQuery('fed-oauth2', '/dashboard', keyPair);
+        const startRes = await localApp.request(`/auth/providers/fed-oauth2/start?${query}&link=1&link_grant=${linkGrant}`, {
+          headers: { authorization: `Bearer ${token}` },
+        });
+        const cookie = extractStateCookie({ headers: Object.fromEntries(startRes.headers.entries()) });
+        const state = new URL(startRes.headers.get('location') as string).searchParams.get('state') as string;
+
+        const restoreFetch = mockFetch(jest.fn(async () => new Response(JSON.stringify({ access_token: 'tok' }), { status: 200 })) as unknown as typeof fetch);
+        let callbackRes: Response;
+        try {
+          callbackRes = await localApp.request(`/auth/providers/fed-oauth2/callback?code=abc&state=${state}`, { headers: { cookie } });
+        } finally {
+          restoreFetch();
+        }
+
+        const location = new URL(callbackRes.headers.get('location') as string);
+        expect(location.searchParams.get('link')).toBe('federated_identity_in_use');
+        // Nothing in the redirect names the owner.
+        expect(location.search).not.toContain(String(owner._id));
+        expect(location.search).not.toContain('fed-link-owner');
+
+        const identity = await crowi.model('UserIdentity').findOne({ provider: 'fed-oauth2', providerUserId: 'oauth2-user-1' });
+        expect(String(identity?.userId)).toBe(String(owner._id));
+      });
+    });
+
+    describe('AC-5: unlink over HTTP', () => {
+      it('204s and removes the identity for a password-holding user, then 404s on a second call', async () => {
+        const { user, token } = await seedWebUser('fed-unlink-ok@example.com', 'fed-unlink-ok');
+        await crowi.model('UserIdentity').deleteMany({ provider: 'fed-unlink', providerUserId: 'sub-unlink-ok' });
+        await crowi.model('UserIdentity').create({ userId: user._id, provider: 'fed-unlink', providerUserId: 'sub-unlink-ok' });
+
+        const res = await request(app).delete('/api/auth/providers/fed-unlink/identity').set('authorization', `Bearer ${token}`);
+        expect(res.status).toBe(204);
+        expect(await crowi.model('UserIdentity').countDocuments({ userId: user._id, provider: 'fed-unlink' })).toBe(0);
+
+        const again = await request(app).delete('/api/auth/providers/fed-unlink/identity').set('authorization', `Bearer ${token}`);
+        expect(again.status).toBe(404);
+      });
+
+      it('409s with PASSWORD_REQUIRED — and keeps the identity — when the account has no password to fall back on', async () => {
+        const [user] = (await Fixture.generate('User', [
+          { name: 'No Password', username: randomUsername(), email: 'fed-unlink-nopass@example.com' },
+        ])) as UserDocument[];
+        user.status = crowi.model('User').STATUS_ACTIVE;
+        await user.save();
+        await crowi.model('UserIdentity').deleteMany({ provider: 'fed-unlink-np', providerUserId: 'sub-np' });
+        await crowi.model('UserIdentity').create({ userId: user._id, provider: 'fed-unlink-np', providerUserId: 'sub-np' });
+
+        const res = await request(app)
+          .delete('/api/auth/providers/fed-unlink-np/identity')
+          .set('authorization', `Bearer ${webTokenFor(user)}`);
+
+        expect(res.status).toBe(409);
+        expect(res.body.error.code).toBe('PASSWORD_REQUIRED');
+        expect(await crowi.model('UserIdentity').countDocuments({ userId: user._id, provider: 'fed-unlink-np' })).toBe(1);
+      });
+
+      it('401s without a JWT', async () => {
+        const res = await request(app).delete('/api/auth/providers/fed-unlink/identity');
+        expect(res.status).toBe(401);
+      });
+    });
+
+    describe('AC-7: the handoff identity fence', () => {
+      it('refuses to mint tokens when the identity was unlinked between the callback and the exchange — same generic error, no token', async () => {
+        const user = await seedActiveUser('fed-fence@example.com', 'fed-fence');
+        await seedResolvedIdentity(user, 'fed-oauth2', 'oauth2-user-1');
+        const localApp = buildLocalApp({ resolve: async () => ({ kind: 'resolved', user }) });
+
+        const keyPair = await createSenderKeyPair();
+        const startQuery = await buildStartQuery('fed-oauth2', '/dashboard', keyPair);
+        const startRes = await localApp.request(`/auth/providers/fed-oauth2/start?${startQuery}`);
+        const cookie = extractStateCookie({ headers: Object.fromEntries(startRes.headers.entries()) });
+        const state = new URL(startRes.headers.get('location') as string).searchParams.get('state') as string;
+
+        const restoreFetch = mockFetch(jest.fn(async () => new Response(JSON.stringify({ access_token: 'tok' }), { status: 200 })) as unknown as typeof fetch);
+        let callbackRes: Response;
+        try {
+          callbackRes = await localApp.request(`/auth/providers/fed-oauth2/callback?code=abc&state=${state}`, { headers: { cookie } });
+        } finally {
+          restoreFetch();
+        }
+        const code = new URL(callbackRes.headers.get('location') as string).searchParams.get('code') as string;
+        expect(code).toBeTruthy();
+
+        // The user disconnects the provider in another tab AFTER the
+        // callback minted the code but BEFORE it is redeemed. `createJwtAuth`
+        // knows nothing about identity membership, so only this fence stops
+        // the code from still yielding a full session.
+        await crowi.model('UserIdentity').deleteMany({ userId: user._id, provider: 'fed-oauth2' });
+
+        const proof = await buildHandoffProof(code, keyPair);
+        const handoffRes = await localApp.request('/auth/handoff', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ code, proof }),
+        });
+
+        expect(handoffRes.status).toBe(401);
+        const body = (await handoffRes.json()) as { error: { code: string }; accessToken?: string };
+        // Deliberately the SAME generic code as every other handoff failure
+        // — a distinct one would confirm the code was otherwise valid.
+        expect(body.error.code).toBe('FEDERATED_HANDOFF_INVALID');
+        expect(body.accessToken).toBeUndefined();
+      });
     });
   });
 });

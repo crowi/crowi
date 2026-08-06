@@ -3,6 +3,18 @@ import { resolveRedisKeyspace } from 'src/util/redis-keyspace';
 
 import { createFederatedHandoffStore, type MinimalRedisClient } from './federated-handoff';
 
+/**
+ * The record every case below issues. Opaque fixture values — this store
+ * never interprets them, it only round-trips them; the RFC-0014 phase 3
+ * identity fence is re-checked against `UserIdentity` by the `/auth/handoff`
+ * handler, not here.
+ */
+const TEST_RECORD = {
+  userId: 'user-1',
+  handoffJkt: 'jkt-1',
+  identityFence: { userId: 'user-1', provider: 'google', providerUserId: 'sub-1' },
+};
+
 /** Fixture `resolveRedisKeyspace` reads for the "Redis-backed" tests below (mirrors `rate-limit.test.ts` / `editor-cap-counter.test.ts`). */
 const TEST_KEYSPACE = resolveRedisKeyspace({
   getBaseUrl: () => null,
@@ -82,16 +94,16 @@ describe('createFederatedHandoffStore', () => {
       const { client } = makeFakeRedis();
       const store = createFederatedHandoffStore({ redisClient: client, keyspace: TEST_KEYSPACE });
 
-      const code = await store.issue('user-1', 'jkt-1');
-      expect(await store.find(code)).toEqual({ userId: 'user-1', handoffJkt: 'jkt-1' });
+      const code = await store.issue(TEST_RECORD);
+      expect(await store.find(code)).toEqual(TEST_RECORD);
 
       const consumed = await store.consumeVerified(code);
-      expect(consumed).toEqual({ ok: true, record: { userId: 'user-1', handoffJkt: 'jkt-1' } });
+      expect(consumed).toEqual({ ok: true, record: TEST_RECORD });
 
       // find() still sees the record (it never deletes) — this is what lets
       // the caller distinguish 401 (never existed) from 409 (already
       // consumed by a valid proof) — see the module doc comment.
-      expect(await store.find(code)).toEqual({ userId: 'user-1', handoffJkt: 'jkt-1' });
+      expect(await store.find(code)).toEqual(TEST_RECORD);
       expect(await store.consumeVerified(code)).toEqual({ ok: false, reason: 'already_consumed' });
     });
 
@@ -108,7 +120,7 @@ describe('createFederatedHandoffStore', () => {
       try {
         const { client } = makeFakeRedis();
         const store = createFederatedHandoffStore({ redisClient: client, keyspace: TEST_KEYSPACE });
-        const code = await store.issue('user-1', 'jkt-1');
+        const code = await store.issue(TEST_RECORD);
 
         jest.advanceTimersByTime(30_001); // past the 30s HANDOFF_TTL_MS
         expect(await store.find(code)).toBeNull();
@@ -123,10 +135,10 @@ describe('createFederatedHandoffStore', () => {
       try {
         const { client } = makeFakeRedis();
         const store = createFederatedHandoffStore({ redisClient: client, keyspace: TEST_KEYSPACE });
-        const code = await store.issue('user-1', 'jkt-1');
+        const code = await store.issue(TEST_RECORD);
 
         // Models the real handler: find() succeeds well within the TTL...
-        expect(await store.find(code)).toEqual({ userId: 'user-1', handoffJkt: 'jkt-1' });
+        expect(await store.find(code)).toEqual(TEST_RECORD);
         // ...then time advances past the TTL boundary before the atomic
         // consume runs (e.g. slow sender-proof verification) — nobody else
         // ever touched this code, so this must NOT be reported the same as
@@ -154,7 +166,7 @@ describe('createFederatedHandoffStore', () => {
         },
       };
       const store = createFederatedHandoffStore({ redisClient: spiedClient, keyspace: TEST_KEYSPACE });
-      const code = await store.issue('user-1', 'jkt-1');
+      const code = await store.issue(TEST_RECORD);
 
       await store.consumeVerified(code);
 
@@ -168,7 +180,7 @@ describe('createFederatedHandoffStore', () => {
     test('concurrent consumeVerified calls for the SAME code resolve exactly one winner (no double-consume)', async () => {
       const { client } = makeFakeRedis();
       const store = createFederatedHandoffStore({ redisClient: client, keyspace: TEST_KEYSPACE });
-      const code = await store.issue('user-1', 'jkt-1');
+      const code = await store.issue(TEST_RECORD);
 
       const [first, second] = await Promise.all([store.consumeVerified(code), store.consumeVerified(code)]);
       const winners = [first, second].filter((r) => r.ok);
@@ -203,10 +215,10 @@ describe('createFederatedHandoffStore', () => {
     test('issue -> find -> consumeVerified round-trips, and a second consumeVerified for the same code reports already_consumed', async () => {
       const store = createFederatedHandoffStore();
 
-      const code = await store.issue('user-1', 'jkt-1');
-      expect(await store.find(code)).toEqual({ userId: 'user-1', handoffJkt: 'jkt-1' });
-      expect(await store.consumeVerified(code)).toEqual({ ok: true, record: { userId: 'user-1', handoffJkt: 'jkt-1' } });
-      expect(await store.find(code)).toEqual({ userId: 'user-1', handoffJkt: 'jkt-1' });
+      const code = await store.issue(TEST_RECORD);
+      expect(await store.find(code)).toEqual(TEST_RECORD);
+      expect(await store.consumeVerified(code)).toEqual({ ok: true, record: TEST_RECORD });
+      expect(await store.find(code)).toEqual(TEST_RECORD);
       expect(await store.consumeVerified(code)).toEqual({ ok: false, reason: 'already_consumed' });
     });
 
@@ -214,7 +226,7 @@ describe('createFederatedHandoffStore', () => {
       jest.useFakeTimers();
       try {
         const store = createFederatedHandoffStore();
-        const code = await store.issue('user-1', 'jkt-1');
+        const code = await store.issue(TEST_RECORD);
 
         jest.advanceTimersByTime(30_001);
         expect(await store.find(code)).toBeNull();
@@ -228,9 +240,9 @@ describe('createFederatedHandoffStore', () => {
       jest.useFakeTimers();
       try {
         const store = createFederatedHandoffStore();
-        const code = await store.issue('user-1', 'jkt-1');
+        const code = await store.issue(TEST_RECORD);
 
-        expect(await store.find(code)).toEqual({ userId: 'user-1', handoffJkt: 'jkt-1' });
+        expect(await store.find(code)).toEqual(TEST_RECORD);
         jest.advanceTimersByTime(30_001);
         expect(await store.consumeVerified(code)).toEqual({ ok: false, reason: 'not_found' });
       } finally {
@@ -240,7 +252,7 @@ describe('createFederatedHandoffStore', () => {
 
     test('concurrent consumeVerified calls for the SAME code resolve exactly one winner (no double-consume)', async () => {
       const store = createFederatedHandoffStore();
-      const code = await store.issue('user-1', 'jkt-1');
+      const code = await store.issue(TEST_RECORD);
 
       const [first, second] = await Promise.all([store.consumeVerified(code), store.consumeVerified(code)]);
       const winners = [first, second].filter((r) => r.ok);
