@@ -1,5 +1,19 @@
 # @crowi/cli
 
+## 1.0.0-alpha.2
+
+### Minor Changes
+
+- 52b3556: The global flags (`-p, --profile <alias>`, `--url`, `--token`, `--json`, `-q`) now appear in every subcommand's `--help` under a "Global Options" heading, so `crowi login --help` finally tells you `--profile` exists. The flags themselves are unchanged: they have always been accepted either before or after the command name (`crowi login <url> --profile work` and `crowi --profile work login <url>` both work), with the later occurrence winning when given on both sides. Added `crowi profiles use <alias>` to switch the current/default profile — an unknown alias leaves the config untouched and exits with code `4`. `crowi profiles` now also prints a stderr-only hint on how to switch the current profile; the `--json` output shape is unchanged.
+
+### Patch Changes
+
+- Updated dependencies [d4342cd]
+- Updated dependencies [c5f243a]
+- Updated dependencies [8b42663]
+- Updated dependencies [f6a3ffe]
+  - @crowi/api-contract@2.0.0-alpha.12
+
 ## 1.0.0-alpha.1
 
 ### Major Changes
