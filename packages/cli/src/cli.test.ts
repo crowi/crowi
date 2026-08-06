@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import type { Command } from 'commander';
 
 import { createProgram, getGlobalOptions } from './cli';
@@ -170,5 +173,34 @@ describe('skew probe and command action agree on the resolved --profile (AC-2)',
     await program.parseAsync(['--profile', 'root1', 'profiles'], { from: 'user' });
 
     expect(skewSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('createProgram — --version reports the published package version', () => {
+  // Regression: the version was a hardcoded `'0.1.0-dev'` literal, so
+  // `crowi --version` kept printing the pre-release scaffold string long
+  // after the package had been published (`1.0.0-alpha.2` at the time this
+  // was found). A user reporting a bug could not tell us what they were
+  // running. Read from package.json rather than asserting a fixed string,
+  // so this keeps passing across releases and only fails if the wiring is
+  // broken again.
+  it('matches the version in package.json', () => {
+    const { version } = require('../package.json') as { version: string };
+    expect(createProgram().version()).toBe(version);
+  });
+
+  it('does not report a hardcoded development placeholder', () => {
+    expect(createProgram().version()).not.toMatch(/-dev$/);
+  });
+
+  // The two assertions above compare the running program to the same
+  // package.json it reads, so they would still pass if someone replaced the
+  // import with a literal that happens to equal today's version — which is
+  // exactly the regression this block exists to prevent. Assert the wiring
+  // itself, not just the value it currently produces.
+  it('takes the version from package.json rather than a literal', () => {
+    const source = readFileSync(join(__dirname, 'cli.ts'), 'utf8');
+    expect(source).toMatch(/import \{ version as CLI_VERSION \} from '\.\.\/package\.json'/);
+    expect(source).not.toMatch(/\.version\(\s*['"]/);
   });
 });
