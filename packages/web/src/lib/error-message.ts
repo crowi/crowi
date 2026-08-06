@@ -40,6 +40,13 @@ type MessageFn = () => string;
  * Several codes intentionally reuse a pre-existing `errors.*` key (e.g.
  * `AUTHENTICATION_REQUIRED -> errors.auth_required`) rather than renaming the
  * key, to avoid churn in call sites that already use those keys directly.
+ *
+ * Not every server-side error code lives here. `PUT /me`'s
+ * `EMAIL_LOCKED_BY_FEDERATED_IDENTITY` rides the legacy
+ * `ProfileErrorResponseSchema` envelope, whose `code` is free-form rather
+ * than the shared `ErrorCode` enum, so `profile-form.tsx` localizes it
+ * directly — promoting it to `ErrorCode` for one route would be an
+ * unrelated global schema change.
  */
 export const ERROR_MESSAGE_KEYS = {
   // auth / permission / user status

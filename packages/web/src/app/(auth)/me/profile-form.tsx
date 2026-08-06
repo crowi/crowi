@@ -88,11 +88,20 @@ export function ProfileForm({ profile }: ProfileFormProps) {
         setSuccessMessage(m['me.profile.success_save']());
       }
     } catch (err) {
-      // The server returns a stable `ErrorCode` (carried on the thrown error);
-      // localize it via the shared map, falling back to the server English
-      // message and finally a generic "save failed" string.
       const code = (err as { code?: string })?.code;
       const fallback = err instanceof Error ? err.message : m['me.profile.error_save']();
+      // EMAIL_LOCKED_BY_FEDERATED_IDENTITY isn't part of the shared
+      // `ErrorCode` enum — this route's error envelope carries a free-form
+      // `code: string` on purpose (see error-message.ts), so it is
+      // localized here directly instead of through the generic map.
+      if (code === 'EMAIL_LOCKED_BY_FEDERATED_IDENTITY') {
+        setErrors([m['errors.email_locked_by_federated_identity']()]);
+        return;
+      }
+      // Every other code the server returns is a stable `ErrorCode`
+      // (carried on the thrown error); localize it via the shared map,
+      // falling back to the server English message and finally a generic
+      // "save failed" string.
       setErrors([errorMessage(code, fallback)]);
     }
   };
@@ -145,7 +154,12 @@ export function ProfileForm({ profile }: ProfileFormProps) {
             placeholder="user@example.com"
             required
             aria-required="true"
+            disabled={profile.federated}
           />
+          {/* Belt-and-suspenders: the api rejects the change regardless of
+              this `disabled` — see EMAIL_LOCKED_BY_FEDERATED_IDENTITY below —
+              but explaining why up front avoids a confusing round trip. */}
+          {profile.federated && <p className="text-xs text-muted-foreground">{m['errors.email_locked_by_federated_identity']()}</p>}
         </div>
 
         <div className="space-y-2">
