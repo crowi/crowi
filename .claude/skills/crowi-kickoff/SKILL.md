@@ -121,6 +121,13 @@ exit 0 のときだけ続行する。validator は次をまとめて検証する
 - path + symbol 単位の実装マップ、処理フロー、契約・不変条件、実装順序
 - stable AC ID と test file/case/level の対応
 - `grounded_at` が有効で、参照 path が以後の commit / working tree で変化していない
+  (生成物 — lockfile / OpenAPI / `**/generated/**` — は staleness 判定から除外される)
+
+**umbrella spec**(`kind: umbrella`)はこの経路に入らない。umbrella は運用契約とフェーズ表だけを持ち
+AC も実装マップも持たないのが正しい形なので、validator は代わりに **`phases:` の各 sub-spec が実在し
+それ自体が v2 を通ること**を検証する(厳しさは sub-spec へ委譲される)。kickoff 側の手順は変わらず、
+worktree 名も umbrella の id を使う — 単一 worktree で全フェーズを回す運用契約は umbrella が持っており、
+sub-spec を個別に kickoff するとその契約が失われるため。
 
 失敗時は validator の `ERROR:` を欠落・stale 理由として列挙して中止する。
 **kickoff 側で spec を補完・書き換えない。** legacy spec は直接 `/crowi-feature` の

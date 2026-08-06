@@ -1,9 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { EditorState } from '@codemirror/state';
-import { EditorView } from '@codemirror/view';
 import { markdown } from '@codemirror/lang-markdown';
 import { ensureSyntaxTree } from '@codemirror/language';
-import { setNotifyBackend, type NotifyPayload } from '@/lib/notify';
+import { EditorState } from '@codemirror/state';
+import { EditorView } from '@codemirror/view';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { type NotifyPayload, setNotifyBackend } from '@/lib/notify';
 import { extractSingleUrl, isInsideLinkSyntax, pasteHandler } from './paste-handler';
 
 /**
@@ -116,6 +116,12 @@ describe('pasteHandler clipboard files', () => {
       dismiss: () => {},
     });
 
+    // feature-auth-cookie-fallback-scope — see the matching comment in
+    // `drop-handler.test.ts`'s `beforeEach`: `uploadAttachment` fails closed
+    // without a token, and a token here keeps `xhr.send()` synchronous with
+    // `firePaste` (no `await` before the `pendingUploads` assertions below).
+    localStorage.setItem('accessToken', 'test-access-token');
+
     // Same stub shape as `drop-handler.test.ts` — `runUpload`'s XHR
     // resolves without a network round-trip, and the test drives when.
     class FakeXHR {
@@ -143,6 +149,7 @@ describe('pasteHandler clipboard files', () => {
   afterEach(() => {
     setNotifyBackend(null);
     vi.unstubAllGlobals();
+    localStorage.clear();
     view?.destroy();
   });
 

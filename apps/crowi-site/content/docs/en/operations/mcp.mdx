@@ -20,9 +20,15 @@ for the design rationale.
   that serves the web app forwards `/api/*` (including `/api/mcp`) to the
   api, so MCP clients dial the web origin. Nothing to deploy beyond the existing
   containers.
-- It is protected by Crowi's existing auth: every request carries a
-  **Personal Access Token (PAT)** or an **OAuth access token** as a
-  `Bearer` credential. The MCP server adds no new auth.
+- It is protected by Crowi's existing auth, narrowed to a single credential
+  shape: every request must carry a **Personal Access Token (PAT)** as a
+  `Bearer` credential. As of feature-auth-cookie-fallback-scope, `/api/mcp`
+  is **PAT-only** — a browser session Bearer token, the `crowi.accessToken`
+  cookie, and an OAuth access token are all rejected with `401`, until
+  [RFC-0022](https://github.com/crowi/crowi/blob/main/docs/rfcs/0022-mcp-oauth-connector.md)'s
+  resource/audience binding lands and an OAuth token can be scoped to this
+  endpoint specifically. The MCP server itself adds no new auth logic beyond
+  that PAT check.
 - Each tool dispatches in-process to the same API route the web app uses,
   so visibility (page grants), scope enforcement, and revision conflicts
   behave identically to the rest of the API.
@@ -110,8 +116,10 @@ the model is expected to re-read and retry.
   failure — the model can recover gracefully.
 - **Rate limiting.** `/api/mcp` is rate-limited per user (a single budget across
   all tool calls) so a runaway agent cannot hammer the wiki.
-- **Auth is the gate.** `/api/mcp` requires a valid Bearer token (PAT / OAuth);
-  DNS-rebinding protection (`Host`-header pinning) is intentionally disabled.
+- **Auth is the gate.** `/api/mcp` requires a valid PAT Bearer token (no
+  cookie, no browser session, no OAuth access token — see the Overview
+  section above); DNS-rebinding protection (`Host`-header pinning) is
+  intentionally disabled.
   Rebinding is a defence against browser ambient-authority attacks, which is
   redundant for a Bearer-gated endpoint hit by non-browser clients (Claude
   Code, the SDK) — and pinning the `Host` would break setups where the api

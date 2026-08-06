@@ -22,9 +22,16 @@ Streamable-HTTP エンドポイント (`/api/mcp`) で、別プロセスや別�
   アプリを配信するのと同じフロントプロキシが `/api/*` (`/api/mcp` を含む)
   を api へ転送するため、MCP クライアントは web の origin に接続します。既存の
   コンテナ以外に追加でデプロイするものはありません。
-- Crowi 既存の認証で保護されます。すべてのリクエストは
-  **Personal Access Token (PAT)** または **OAuth アクセストークン** を
-  `Bearer` 資格情報として持ちます。MCP サーバーは新しい認証を追加しません。
+- Crowi 既存の認証で保護されますが、資格情報は 1 種類に絞られています。
+  すべてのリクエストは **Personal Access Token (PAT)** を `Bearer` 資格情報
+  として持つ必要があります。feature-auth-cookie-fallback-scope 以降、
+  `/api/mcp` は **PAT 専用** です — web セッションの Bearer トークン、
+  `crowi.accessToken` cookie、OAuth アクセストークンはいずれも `401` で
+  拒否されます。これは
+  [RFC-0022](https://github.com/crowi/crowi/blob/main/docs/rfcs/0022-mcp-oauth-connector.md)
+  の resource/audience binding が実装され、OAuth トークンをこのエンドポイント
+  専用にスコープできるようになるまでの暫定状態です。MCP サーバー自体は
+  この PAT チェック以外に新しい認証ロジックを追加しません。
 - 各ツールは web アプリと同じ API ルートへプロセス内ディスパッチするため、
   可視性 (ページの grant)・スコープ enforcement・リビジョン競合は他の API と
   完全に同じ挙動になります。
@@ -110,8 +117,9 @@ write ツール (`pages:write` が必要):
   (`INSUFFICIENT_SCOPE`) が返るため、モデルは適切にリカバリできます。
 - **レートリミット。** `/api/mcp` は per-user でレート制限されます (全ツール呼び出しで
   単一の予算)。暴走したエージェントが wiki を叩き続けることを防ぎます。
-- **認証が主たるゲートです。** `/api/mcp` は有効な Bearer トークン (PAT / OAuth)
-  必須で、DNS rebinding 対策 (`Host` ヘッダ固定) は意図的に無効化しています。
+- **認証が主たるゲートです。** `/api/mcp` は有効な PAT Bearer トークンが必須です
+  (cookie・web セッション・OAuth アクセストークンはいずれも不可 — 上記「概要」参照)。
+  DNS rebinding 対策 (`Host` ヘッダ固定) は意図的に無効化しています。
   rebinding はブラウザの ambient-authority 攻撃向けの防御で、Bearer 必須かつ
   主クライアントが非ブラウザ (Claude Code 等) の本エンドポイントでは冗長であり、
   かつ api を web と別ホスト/別ポートで動かす構成を壊すためです。ブラウザの

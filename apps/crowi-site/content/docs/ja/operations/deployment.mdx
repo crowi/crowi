@@ -18,14 +18,22 @@ Crowi のデプロイは **2 つのサービス** で構成されます: `api`(H
 
 | 認証モード | 利用者 | URL | クロスオリジン? |
 | --- | --- | --- | --- |
-| **Bearer トークン** | CLI / MCP / OAuth クライアント | `https://wiki.example.com/api/...` に `Authorization: Bearer …` | **可**(トークンはオリジンを越える) |
-| **Cookie / 相対** | ブラウザ: ページ API・インライン `<img>` 添付・ファイル DL・WebSocket | ページと同一オリジン | **不可**(first-party cookie 前提) |
+| **Bearer トークン** | CLI / MCP / OAuth クライアント、**そしてブラウザ自身**(ページ API・JSON 更新。アクセストークンは `localStorage` に保持し `Authorization` で送る) | `https://wiki.example.com/api/...` に `Authorization: Bearer …` | **可**(トークンはオリジンを越える) |
+| **WebSocket `wsToken`** | ブラウザ。realtime の 3 経路(`/collab`・`/presence`・`/notifications`)向け——認証済み Bearer 呼び出し(例: `GET /api/pages/{id}/yjs-token`)で発行される短命・単一用途のトークンを、WebSocket 接続時に `?token=` クエリパラメータとして渡す。ブラウザは WS handshake に `Authorization` ヘッダを付けられないため([Realtime collaboration](./realtime-collab) と RFC-0003 参照) | `wss://wiki.example.com/collab?token=…` | **可**(トークンはヘッダではなく URL に乗る) |
+| **Cookie / 相対** | ブラウザ。ただし headerless な添付配信 3 経路のみ(`GET /api/attachments/{id}[/original]`、`GET /api/attachments/by-key/*`)——`<img src>` や直接ナビゲーションはブラウザが JS フックなしで組み立てるため `Authorization` ヘッダを付けられない | ページと同一オリジン | **不可**(first-party cookie 前提) |
 
-つまり **公開 api サーフェスは 1 枚**(`<origin>/api`、proxy が晒す)で、**認証は 2 通り**:
-Bearer はどこからでも、Cookie/相対はブラウザ同一オリジンから。proxy があるおかげで、
-CLI は `wiki.example.com/api` を Bearer で叩け、ブラウザは同じオリジンを first-party
-cookie で使えます。本当に private なのは api の内部直アドレス(`http://api:3000`)だけで、
-外部クライアントはそこを使いません。
+つまり **公開 api サーフェスは 1 枚**(`<origin>/api`、proxy が晒す)です。ブラウザも
+ほとんどのリクエストは他のクライアントと同じ方法——`localStorage` から読んだ Bearer
+トークン、あるいは realtime の WebSocket 3 経路については同じ Bearer 接続の上で発行される
+短命な `wsToken` をクエリパラメータとして渡す方法——で認証します(WS handshake には
+カスタムヘッダを付けられないため)。インライン `<img>` 添付とファイルダウンロードだけは、
+ブラウザがヘッダを付けられないまま自分で取得するため first-party の `crowi.accessToken`
+cookie にフォールバックします。feature-auth-cookie-fallback-scope 以降、この cookie フォールバックは
+上記の添付配信 3 経路だけに絞られており、それ以外のルート(添付 API の upload / meta /
+delete を含む)は cookie の有無に関わらず Bearer ヘッダが必須です。proxy があるおかげで、
+CLI は `wiki.example.com/api` を Bearer で叩け、ブラウザは同じオリジンを自身の Bearer
+トークン(と、配信 3 経路向けの cookie)で使えます。本当に private なのは api の内部直
+アドレス(`http://api:3000`)だけで、外部クライアントはそこを使いません。
 
 ## web イメージが api URL を解決する仕組み
 

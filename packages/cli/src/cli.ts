@@ -1,5 +1,11 @@
 import { Command, type OptionValues } from 'commander';
 
+// A NAMED import, not a default/`require` of the whole manifest: esbuild
+// tree-shakes JSON named imports, so only this string reaches `dist/` —
+// a whole-manifest import inlines `scripts` and `devDependencies` into the
+// published bundle.
+import { version as CLI_VERSION } from '../package.json';
+
 import { registerAttach } from './commands/attach';
 import { registerBookmark } from './commands/bookmark';
 import { registerComment } from './commands/comment';
@@ -88,7 +94,12 @@ export function createProgram(): Command {
   program
     .name('crowi')
     .description('End-user CLI for Crowi 2.0. Read, write, search, and edit your wiki from the terminal over HTTP (OAuth).')
-    .version('0.1.0-dev')
+    // Read from package.json rather than a literal: a hardcoded string goes
+    // stale the moment changesets bumps the package, and `crowi --version`
+    // is the first thing anyone reports when something misbehaves. Both
+    // `src/cli.ts` (tests) and `dist/cli.js` (published) sit one level below
+    // the package root, so this one path resolves for both.
+    .version(CLI_VERSION)
     // Global flags. `--url` / `--token` let a command target an ad-hoc
     // server without a stored profile; `--profile` selects a stored one.
     .option('-p, --profile <alias>', 'use a stored profile by alias')

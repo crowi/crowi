@@ -20,9 +20,22 @@
  *   - `/pages/*` (list / add / usage) reuses the `revision` handler's
  *     broad `createJwtAuth(crowi)` apply — same shared-middleware
  *     pattern as page / page-preview / pageCollab / presence / draft.
+ *     Header-only (Bearer), same as every other `createJwtAuth` consumer.
  *   - `/attachments/*` (meta / upload / remove) is OUTSIDE that prefix
- *     so the attachment handler installs `createJwtAuth(crowi)` on
- *     `/attachments/*` itself.
+ *     so the attachment handler installs `createAttachmentAuth(crowi)`
+ *     (feature-auth-cookie-fallback-scope) on `/attachments/*` itself.
+ *     `createAttachmentAuth` is its OWN boundary — `createJwtAuth` is
+ *     header-only everywhere and never reads the `crowi.accessToken`
+ *     cookie at all; only `createAttachmentAuth` does, and only for
+ *     GET/HEAD on the three raw streaming delivery routes below
+ *     (`/attachments/{id}`, `/attachments/{id}/original`,
+ *     `/attachments/by-key/{key}`), which are hand-coded Hono routes
+ *     outside this contract file (a browser `<img src>` / direct
+ *     navigation to those cannot carry an Authorization header). Every
+ *     endpoint IN this contract file (upload / meta / remove / add) is
+ *     header-only — none of them accept the cookie, so this contract's
+ *     `security: [{ bearerAuth: [] }]` on every route below is accurate
+ *     as written.
  *
  * Multipart: `addAttachment` + `uploadAttachment` are implemented
  * Hono-native via `c.req.parseBody()`. multer is gone from this
@@ -32,8 +45,6 @@
  * `parseBody()` so a 50 MB+ body is 413'd without being buffered.
  */
 import { createRoute, z } from '@hono/zod-openapi';
-
-import { AuthenticationRequiredErrorSchema, InternalServerErrorSchema } from '../schemas/common';
 import {
   AddAttachmentResponseSchema,
   AttachmentErrorSchema,
@@ -44,6 +55,7 @@ import {
   UploadAttachmentErrorSchema,
   UploadAttachmentResponseSchema,
 } from '../schemas/attachment';
+import { AuthenticationRequiredErrorSchema, InternalServerErrorSchema } from '../schemas/common';
 
 const PageIdPathParamsSchema = z.object({
   pageId: z.string().openapi({ description: 'Page id (24-char hex ObjectId)', example: '507f1f77bcf86cd799439011' }),

@@ -68,7 +68,7 @@ PAT は web UI の **設定 → パスワード/APIトークン/MCP** から、�
 | コマンド | ログイン時に追加するスコープ |
 | --- | --- |
 | `comment` (list / add / delete) | `comments:read comments:write` |
-| `attach` (list / add / remove) | `attachments:read attachments:write` |
+| `attach` (list / add / download) | `attachments:read attachments:write` |
 | `bookmark` (get / list / add / remove) | `bookmarks:read bookmarks:write` |
 | `watch` (get / set) | 不要 — 既定の `pages:*` に相乗り |
 
@@ -172,6 +172,22 @@ crowi search "release notes"   # --profile なしで almoha に対して実行�
 ページが他で更新されると、書き込みは **既定で中断** され、終了コード `5`
 (conflict) を返します。黙って上書きはしません。新しいリビジョンを上書き
 したい場合は `--force` を付けて再実行してください。
+
+### 添付ファイルのダウンロード
+
+`attach list <path-or-id>` は各行の先頭に添付 ID を出します。その ID を `attach download` に渡すとバイト列が取り出せます。
+
+```bash
+crowi attach list /docs/spec
+# 6650f0c1a2b3c4d5e6f70123  design.pdf  /api/v2/attachments/6650f0c1a2b3c4d5e6f70123
+
+crowi attach download 6650f0c1a2b3c4d5e6f70123 -o design.pdf
+crowi attach download 6650f0c1a2b3c4d5e6f70123 > design.pdf   # -o 省略時は stdout
+```
+
+`-o` を省略すると stdout に書き出します (端末に直接出力しようとした場合はバイナリで表示が壊れるため拒否します)。進捗や確認メッセージは stderr に出るので、リダイレクトやパイプにバイナリ以外が混ざることはありません。
+
+ページに埋め込まれた画像の配信経路 (`<img>` が読む URL) は、添付が見つからないときにプレースホルダ画像を `200` で返します。ブラウザでは壊れた画像を出さずに済みますが、ファイルを取り出す用途では「中身のない画像を正常にダウンロードした」ことになってしまいます。`attach download` は専用の経路を使い、レコードが無い場合もストレージ上の実体が無い場合も `404` (終了コード `4`) を返します。保存されたファイルは常に本物です。
 
 ## 出力フォーマットとスクリプティング
 

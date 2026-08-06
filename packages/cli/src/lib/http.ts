@@ -212,6 +212,77 @@ export async function authedFetch<T = unknown>(profile: Profile, method: HttpMet
 }
 
 /**
+ * {@link authedFetch} for endpoints whose body is bytes rather than JSON:
+ * the `Response` is handed back unread so the caller can stream it.
+ *
+ * Two deliberate differences from `authedFetch`:
+ *
+ * - **Redirects are not followed** (`redirect: 'manual'`). The default is
+ *   to follow, which means a reverse proxy or an SSO gateway can answer a
+ *   binary request with `200 text/html` for a login page and the caller
+ *   would write that HTML out as if it were the file. A redirect on this
+ *   kind of endpoint is a misconfiguration, so surfacing it is better than
+ *   chasing it.
+ * - **`Accept-Encoding: identity`** so a content coding cannot make the
+ *   received byte count disagree with what the server accounted for.
+ *
+ * Non-2xx still becomes a {@link CliError} through the shared parser, so
+ * error envelopes read identically to every other command.
+ */
+export async function authedFetchRaw(profile: Profile, path: string, opts: AuthedFetchOptions = {}): Promise<Response> {
+  if (!profile.endpoint) {
+    throw new CliError('no server configured — run `crowi login <url>` first', {
+      exitCode: EXIT.UNAUTHENTICATED,
+    });
+  }
+  const url = apiUrl(profile.endpoint, path, opts.query);
+
+  const doFetch = async (current: Profile): Promise<Response> =>
+    fetch(url, {
+      method: 'GET',
+      headers: { ...buildHeaders(current, opts), 'Accept-Encoding': 'identity' },
+      redirect: 'manual',
+    });
+
+  let response = await doFetch(profile);
+
+  if (response.status === 401 && refreshHook && profile.tokens?.refreshToken) {
+    const newAccess = await refreshHook(profile);
+    if (newAccess) {
+      const refreshed: Profile = {
+        ...profile,
+        tokens: { ...profile.tokens, accessToken: newAccess },
+      };
+      response = await doFetch(refreshed);
+    }
+  }
+
+  // With `redirect: 'manual'` a redirect surfaces as the 3xx itself (undici)
+  // or as an opaque filtered response with status 0 (the fetch spec's
+  // browser behaviour). Name both, because the default parser would render
+  // them as an unhelpful "request failed with status 0".
+  if (response.type === 'opaqueredirect' || (response.status >= 300 && response.status < 400)) {
+    const location = response.headers.get('location');
+    throw new CliError(
+      `server redirected a binary request${location ? ` to ${location}` : ''} — refusing to follow it (check the endpoint / any proxy in front of it)`,
+      {
+        exitCode: EXIT.GENERAL,
+        status: response.status,
+      },
+    );
+  }
+
+  if (!response.ok) {
+    // Let the shared parser turn the envelope into a CliError. It consumes
+    // the body, which is correct here: this is the failure path, so there
+    // are no bytes worth preserving.
+    await parseResponse<unknown>(response);
+  }
+
+  return response;
+}
+
+/**
  * Parse a fetch `Response` leniently: JSON bodies are returned as `unknown`;
  * non-2xx responses are mapped to a {@link CliError}, preferring the Crowi
  * `{ error: { code, message } }` envelope for the message + code.

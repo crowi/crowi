@@ -1,13 +1,23 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { renderHook, waitFor } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { createElement, type PropsWithChildren } from 'react';
 import type { AttachmentMeta } from '@crowi/api-contract';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { act, renderHook, waitFor } from '@testing-library/react';
+import { createElement, type PropsWithChildren } from 'react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock `apiClient` (`createClient`) so `getAttachmentMeta` hits our fake.
 // The hook calls `apiClient.attachments[':id'].meta.$get(...)` and
 // expects a Response-shaped object (`ok` / `status` / `json`).
-const { metaGet } = vi.hoisted(() => ({ metaGet: vi.fn() }));
+//
+// `acquireRefreshedToken` / `apiBaseUrl` are also re-exported from
+// `./api-client` (feature-auth-cookie-fallback-scope) — `useAddAttachment`'s
+// hand-rolled multipart `fetch` uses them for the same token-missing
+// send-avoidance `apiFetch` uses, so the "useAddAttachment — token-missing
+// send-avoidance" suite below controls them directly.
+const { metaGet, acquireRefreshedToken, apiBaseUrl } = vi.hoisted(() => ({
+  metaGet: vi.fn(),
+  acquireRefreshedToken: vi.fn(),
+  apiBaseUrl: vi.fn(() => '/api'),
+}));
 vi.mock('./api-client', () => ({
   apiClient: {
     attachments: {
@@ -16,9 +26,14 @@ vi.mock('./api-client', () => ({
       },
     },
   },
+  acquireRefreshedToken,
+  apiBaseUrl,
 }));
 
-import { useAttachment, attachmentsKeys } from './use-attachments';
+const { getAccessToken } = vi.hoisted(() => ({ getAccessToken: vi.fn() }));
+vi.mock('./auth-token', () => ({ getAccessToken }));
+
+import { attachmentsKeys, useAddAttachment, useAttachment } from './use-attachments';
 
 /** Build a `Response`-shaped object matching what `hc` returns. */
 const makeResponse = <T>(status: number, body: T) => ({
@@ -50,6 +65,8 @@ function makeClient() {
 
 beforeEach(() => {
   metaGet.mockReset();
+  acquireRefreshedToken.mockReset();
+  getAccessToken.mockReset();
 });
 
 afterEach(() => {
@@ -104,5 +121,89 @@ describe('useAttachment', () => {
 
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(result.current.error).toBeInstanceOf(Error);
+  });
+});
+
+/**
+ * feature-auth-cookie-fallback-scope AC-3 — `useAddAttachment`'s hand-rolled
+ * multipart `fetch` must never go out headerless when no access token is
+ * loaded: `POST /pages/:pageId/attachments` is not one of the three
+ * headerless attachment delivery routes (`createAttachmentAuth` only accepts
+ * the cookie for GET/HEAD by-id / original / by-key), so it recovers a token
+ * through the same single-flight refresh `apiFetch` uses, and never calls
+ * `fetch` at all when that can't resolve one.
+ */
+describe('useAddAttachment — token-missing send-avoidance', () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const file = new File(['a'.repeat(8)], 'note.png', { type: 'image/png' });
+
+  it('recovers the token through the existing refresh path before uploading, never headerless', async () => {
+    getAccessToken.mockReturnValue(null);
+    acquireRefreshedToken.mockResolvedValue('fresh-access');
+    fetchMock.mockResolvedValue(makeResponse(200, { attachment: makeMeta() }));
+
+    const client = makeClient();
+    const wrapper = ({ children }: PropsWithChildren) => createElement(QueryClientProvider, { client }, children);
+    const { result } = renderHook(() => useAddAttachment('page-1'), { wrapper });
+
+    await act(async () => {
+      await result.current.mutateAsync(file);
+    });
+
+    expect(acquireRefreshedToken).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [, init] = fetchMock.mock.calls[0] as [unknown, RequestInit];
+    expect(new Headers(init.headers).get('authorization')).toBe('Bearer fresh-access');
+  });
+
+  it('fails closed — fetch is never called — when no access token and refresh cannot recover one', async () => {
+    getAccessToken.mockReturnValue(null);
+    acquireRefreshedToken.mockResolvedValue(null);
+
+    const client = makeClient();
+    const wrapper = ({ children }: PropsWithChildren) => createElement(QueryClientProvider, { client }, children);
+    const { result } = renderHook(() => useAddAttachment('page-1'), { wrapper });
+
+    let caught: unknown;
+    await act(async () => {
+      try {
+        await result.current.mutateAsync(file);
+      } catch (err) {
+        caught = err;
+      }
+    });
+
+    expect(caught).toBeInstanceOf(Error);
+    expect((caught as Error).message).toBe('Authentication is required.');
+    expect(acquireRefreshedToken).toHaveBeenCalledTimes(1);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('sends the request with the existing token directly when one is already loaded (unchanged behaviour)', async () => {
+    getAccessToken.mockReturnValue('existing-access');
+    fetchMock.mockResolvedValue(makeResponse(200, { attachment: makeMeta() }));
+
+    const client = makeClient();
+    const wrapper = ({ children }: PropsWithChildren) => createElement(QueryClientProvider, { client }, children);
+    const { result } = renderHook(() => useAddAttachment('page-1'), { wrapper });
+
+    await act(async () => {
+      await result.current.mutateAsync(file);
+    });
+
+    expect(acquireRefreshedToken).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [, init] = fetchMock.mock.calls[0] as [unknown, RequestInit];
+    expect(new Headers(init.headers).get('authorization')).toBe('Bearer existing-access');
   });
 });

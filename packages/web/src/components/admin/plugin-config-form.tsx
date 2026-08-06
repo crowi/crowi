@@ -13,7 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { SecretField } from '@/components/admin/secret-field';
 import { PluginConfigValidationError, useUpdateAdminPluginConfig } from '@/lib/use-admin-plugins';
-import { apiBaseUrl } from '@/lib/api-client';
+import { acquireRefreshedToken, apiBaseUrl } from '@/lib/api-client';
 import { getAccessToken } from '@/lib/auth-token';
 import { m } from '@paraglide/messages.js';
 
@@ -298,9 +298,16 @@ function PluginActionButton({ pluginName, action, description }: PluginActionBut
     setPending(true);
     setError(null);
     try {
-      const token = getAccessToken();
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (token) headers.authorization = `Bearer ${token}`;
+      // Plugin action routes sit behind `createJwtAuth`, which is header-only
+      // (feature-auth-cookie-fallback-scope) — sending this without the header
+      // when the token is momentarily absent used to be rescued by the cookie
+      // and now just 401s. Recover through the same single-flight refresh
+      // `apiFetch` uses, and fail closed rather than send it headerless.
+      const token = getAccessToken() ?? (await acquireRefreshedToken());
+      if (!token) {
+        throw new Error(m['admin.plugins.action_failed']());
+      }
+      const headers: Record<string, string> = { 'Content-Type': 'application/json', authorization: `Bearer ${token}` };
       const response = await fetch(`${apiBaseUrl()}/plugins/${pluginName}${action.path}`, {
         method: action.method,
         headers,

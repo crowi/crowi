@@ -2,12 +2,13 @@
  * RFC-0011 §7 — attach the built-in MCP server to the Hono app.
  *
  * `attachMcp(app, crowi)` registers `app.all('/mcp', …)` under
- * `createJwtAuth(crowi)` so the request carries an authenticated user +
- * `authScopes` (PAT or OAuth access token — no new auth code, RFC-0011
- * §5.1). Per-tool scope is NOT enforced here: each tool dispatches to a
- * scoped route that runs `requireScope` itself (RFC-0011 §5.2), so a
- * read-only token calling a write tool gets the route's 403 mapped to an
- * MCP `isError` result.
+ * `createMcpAuth(crowi)` (feature-auth-cookie-fallback-scope) so the
+ * request carries an authenticated user + `authScopes` from a PAT Bearer
+ * ONLY — no cookie, no web-session Bearer, no `oauth_access` (RFC-0022
+ * §6.2/§7; see `mcp/auth.ts`'s doc comment for why). Per-tool scope is NOT
+ * enforced here: each tool dispatches to a scoped route that runs
+ * `requireScope` itself (RFC-0011 §5.2), so a read-only token calling a
+ * write tool gets the route's 403 mapped to an MCP `isError` result.
  *
  * Unlike `collab/attach.ts` / `notifications/attach.ts` (which attach a
  * WS upgrade handler to the `http.Server`), `/mcp` is a normal Hono
@@ -19,8 +20,9 @@
  * deployments (RFC-0011 §4). A fresh `McpServer` + transport per request
  * binds that request's identity (the forwarded bearer).
  */
-import type { OpenAPIHono } from '@hono/zod-openapi';
+
 import { StreamableHTTPTransport } from '@hono/mcp';
+import type { OpenAPIHono } from '@hono/zod-openapi';
 import { HTTPException } from 'hono/http-exception';
 
 import type Crowi from 'src/crowi';
@@ -28,7 +30,7 @@ import { createRateLimiter } from 'src/util/rate-limit';
 import { resolveRedisKeyspaceIfEnabled } from 'src/util/redis-keyspace';
 
 import type { CrowiHonoBindings } from '../hono/app';
-import { createJwtAuth } from '../hono/middleware/auth';
+import { createMcpAuth } from './auth';
 import { makeDispatch } from './dispatch';
 import { buildMcpServer } from './server';
 
@@ -63,17 +65,18 @@ export const attachMcp = (app: OpenAPIHono<CrowiHonoBindings>, crowi: Crowi): vo
     keyspace: resolveRedisKeyspaceIfEnabled(crowi),
   });
 
-  // Auth gate: a valid PAT / OAuth token is required to reach the
-  // endpoint at all. Per-tool scope is enforced downstream.
-  app.use('/mcp', createJwtAuth(crowi));
+  // Auth gate: a valid PAT is required to reach the endpoint at all
+  // (feature-auth-cookie-fallback-scope — PAT-only, see `mcp/auth.ts`).
+  // Per-tool scope is enforced downstream.
+  app.use('/mcp', createMcpAuth(crowi));
 
-  // Rate limit AFTER jwtAuth so `c.get('user')` is populated. The 429 is
-  // emitted as a JSON-RPC-ish error envelope (an MCP client speaks
+  // Rate limit AFTER createMcpAuth so `c.get('user')` is populated. The 429
+  // is emitted as a JSON-RPC-ish error envelope (an MCP client speaks
   // JSON-RPC; a bare HTTP 429 with a `Retry-After` header is still
   // honoured by well-behaved clients, and the body is informational).
   app.use('/mcp', async (c, next) => {
     const user = c.get('user');
-    // Defensive: jwtAuth always populates `user` before this runs.
+    // Defensive: createMcpAuth always populates `user` before this runs.
     if (user) {
       const result = await limiter.hit(user._id.toString());
       if (!result.allowed) {
@@ -89,9 +92,11 @@ export const attachMcp = (app: OpenAPIHono<CrowiHonoBindings>, crowi: Crowi): vo
   app.all('/mcp', async (c) => {
     const authorization = c.req.header('authorization');
     if (!authorization) {
-      // jwtAuth would have rejected a missing header already; this is a
-      // type-narrowing guard (a cookie-authenticated request has no
-      // header to forward, which the MCP transport does not support).
+      // `createMcpAuth` never accepts a cookie (feature-auth-cookie-fallback-scope
+      // — PAT-only, no cookie fallback at this boundary at all) and would
+      // have rejected a missing/malformed header already, so an
+      // authenticated request always has a forwardable PAT header here.
+      // This is a defensive type-narrowing guard, not a reachable branch.
       return c.json(jsonRpcError(JSONRPC_AUTH_REQUIRED, 'MCP requires a Bearer Authorization header.'), 401);
     }
 

@@ -26,6 +26,20 @@ const INVALID_TOKEN_BODY = {
   error: { code: 'INVALID_EMAIL_CHANGE_TOKEN' as const, message: 'Email-change link is invalid or expired' as const },
 };
 
+/**
+ * Is this link still the most recent request for the account?
+ *
+ * Links minted before the claim existed carry no generation. Those are
+ * accepted against an account that has never had a request counted (no
+ * stored value, or 0), because rejecting them outright would break every
+ * link already sitting in a mailbox at deploy time — and they remain covered
+ * by `fromEmail` and `authVersion`. As soon as the account requests anything,
+ * the stored value moves past 0 and the claimless link stops matching, which
+ * is the behaviour that matters.
+ */
+const isConfirmableGeneration = (claimed: number | undefined, user: { emailChangeGeneration?: number }): boolean =>
+  (claimed ?? 0) === (user.emailChangeGeneration ?? 0);
+
 export const registerEmailChangeRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app: E, crowi: Crowi) => {
   const User = crowi.model('User');
   const mailTokenUtil = createMailTokenUtil();
@@ -53,6 +67,12 @@ export const registerEmailChangeRoutes = <E extends OpenAPIHono<CrowiHonoBinding
         return c.json(INVALID_TOKEN_BODY, 401);
       }
       if (payload.authVersion === undefined || payload.authVersion !== (user.authVersion ?? 0)) {
+        return c.json(INVALID_TOKEN_BODY, 401);
+      }
+      if (!isConfirmableGeneration(payload.emailChangeGeneration, user)) {
+        return c.json(INVALID_TOKEN_BODY, 401);
+      }
+      if (user.status !== User.STATUS_ACTIVE) {
         return c.json(INVALID_TOKEN_BODY, 401);
       }
       return c.json({ ok: true as const, email: payload.email }, 200);
@@ -94,6 +114,24 @@ export const registerEmailChangeRoutes = <E extends OpenAPIHono<CrowiHonoBinding
           return c.json(INVALID_TOKEN_BODY, 401);
         }
 
+        // Only the most recent request may still be confirmed. Requesting a
+        // change is how a user calls off one they did not want, so an older
+        // link has to lose — `fromEmail` and `authVersion` both survive a new
+        // request untouched, and on their own would leave a leaked pending
+        // change with no way to retract it.
+        if (!isConfirmableGeneration(payload.emailChangeGeneration, user)) {
+          return c.json(INVALID_TOKEN_BODY, 401);
+        }
+
+        // Suspension is how an operator cuts an account off. Confirming here
+        // would move the address that account recovers through while it is
+        // locked out, so a link minted before the suspension must stop
+        // working. Suspending does not bump `authVersion`, so the check above
+        // does not cover this.
+        if (user.status !== User.STATUS_ACTIVE) {
+          return c.json(INVALID_TOKEN_BODY, 401);
+        }
+
         // The new address may have been claimed by someone else between
         // the request and the confirmation.
         const clash = await User.findOne({ email: payload.email });
@@ -107,6 +145,7 @@ export const registerEmailChangeRoutes = <E extends OpenAPIHono<CrowiHonoBinding
         // submission of this same one. Re-stating both bindings in the filter
         // makes the confirmation atomic with them — no match means something
         // moved underneath, which is the same 401 the checks would have given.
+        const claimedGeneration = payload.emailChangeGeneration ?? 0;
         const applied = await User.findOneAndUpdate(
           {
             _id: user._id,
@@ -114,6 +153,11 @@ export const registerEmailChangeRoutes = <E extends OpenAPIHono<CrowiHonoBinding
             // Legacy rows carry no `authVersion`; `null` matches those as
             // well as an explicit 0, which is what their links are bound to.
             authVersion: tokenAuthVersion === 0 ? { $in: [0, null] } : tokenAuthVersion,
+            // Same normalisation for the request generation, so a newer
+            // request landing between the check above and this write still
+            // wins the race rather than letting the superseded link apply.
+            emailChangeGeneration: claimedGeneration === 0 ? { $in: [0, null] } : claimedGeneration,
+            status: User.STATUS_ACTIVE,
           },
           { $set: { email: payload.email } },
           { returnDocument: 'after' },

@@ -1,5 +1,47 @@
 # @crowi/api
 
+## 2.0.0-alpha.12
+
+### Major Changes
+
+- 5d5fa9a: Close the auth cookie-fallback gap RFC-0019 §7.5 flagged and scope `/mcp` to Personal Access Tokens only, so a JSON-RPC API and non-attachment routes can no longer be reached with just an ambient browser cookie.
+
+  BREAKING (`@crowi/api`): `createJwtAuth`'s cookie fallback (the `crowi.accessToken` cookie, previously accepted whenever the `Authorization` header was missing OR unparseable) is now header-only for every consumer except attachment delivery — admin, `/pages/*`, `/auth/me`, `/auth/logout`, the protected `/oauth/*` routes, `/search`, and every plugin route registered with the default `auth: 'user'` tier. A request that used to succeed via a stray or forged `crowi.accessToken` cookie with no (or a malformed) `Authorization` header now gets a `401 AUTHENTICATION_REQUIRED`; a normal browser session, which always sends the header from `localStorage`, is unaffected.
+
+  BREAKING (`@crowi/api`): the `crowi.accessToken` cookie fallback is now accepted ONLY on `GET`/`HEAD` for the three headerless attachment delivery routes — `/attachments/:id`, `/attachments/:id/original`, and `/attachments/by-key/*` (plus the `/files/:id` redirect target) — matching exactly the `<img src>` / direct-navigation shape the cookie exists for. Every other attachment route (upload, meta, delete, add) now requires the header.
+
+  BREAKING (`@crowi/api`): `/mcp` is now Personal Access Token (PAT) only. A web-session Bearer token, the `crowi.accessToken` cookie, and an OAuth access token (`oauth_access`) are all rejected with a JSON-RPC `401` — MCP previously rode the same shared auth as the rest of the API and accepted any of those. This is a deliberate defense-in-depth narrowing ahead of RFC-0022's resource/audience-bound OAuth support; once that lands, a properly scoped `oauth_access` token will be accepted again.
+
+  `@crowi/web`'s `apiFetch`, `useAddAttachment`, the editor's paste/drag-and-drop upload, and the admin plugin-action button no longer send a request with no `Authorization` header when the access token is missing — they recover it through the existing refresh flow first, and fail closed (the existing session-expired handling) instead of depending on the ambient cookie a normal page load already sends.
+
+### Minor Changes
+
+- c5f243a: Admins now see a non-blocking warning banner (on every wiki page and in `/admin/plugins`) when the currently selected storage or search driver is missing configuration it needs to actually work — such as the S3 bucket name, or the Elasticsearch/OpenSearch cluster URL — so misconfiguration is caught before it causes an upload or search failure instead of only surfacing as a 500 later.
+
+  - New `CrowiPlugin.readiness` SDK declaration lets a plugin state which of its own config fields must be set once a specific driver is selected; `@crowi/plugin-storage-aws-s3` (`bucket`), `@crowi/plugin-search-elasticsearch`, and `@crowi/plugin-search-opensearch` (`url`) declare it.
+  - New admin-only `GET /admin/plugins/readiness` endpoint reports only the plugin name, its admin placement, and the unset field names — never the actual config value, URL, or any secret.
+  - The wiki header and the `/admin/plugins` list link straight to the affected plugin's config screen; saving the missing field clears the warning on the next refetch.
+  - Non-admins never see the banner and never trigger the readiness request.
+
+### Patch Changes
+
+- 30cb12a: Fix a page's comment count showing a stale value after comments are posted or deleted at nearly the same time. The count was recomputed by reading the current number of comments and then writing it, with no ordering between two recomputations for the same page — so a slower one could overwrite a newer, correct value with the number it had read earlier. The wrong count then stuck until the next comment was added or removed on that page. Recomputations for the same page are now serialized, so the last one always writes the true count. (Recomputations still run per API process, so a deployment running several API replicas can in principle still interleave; the count self-corrects on the next comment change.)
+- 77f014e: Stop a draft page's contents from being readable by other users. A draft is stored with a public grant and is meant to be kept private by a separate "only the author sees it" rule, but the revision endpoints and the comment endpoints checked only the grant — so another signed-in user who had a revision or page id could read an unpublished body, list its comments, and delete them. All three now apply the author rule and answer "not found", so a draft's existence is not disclosed either.
+- d4342cd: Requesting an email address change now cancels any earlier change still awaiting confirmation, and a confirmation link no longer works while the account is suspended. Previously the only way a pending change stopped being confirmable was the address actually changing or the requesting session being revoked — so a change requested from a stolen session could not be called off by asking for a different address, and suspending an account did not stop a link issued beforehand from moving the address that account recovers through.
+- 1346e2a: Fix a crash where a Redis restart or brief network blip could bring down the entire api process instead of just degrading presence or notifications for a moment. The dedicated pub/sub subscriber clients used by page presence and realtime notifications are duplicated off the primary Redis connection, and node-redis does not carry event listeners over to a duplicate — a subscriber that lost its connection after it was already up had no `error` listener, and an unhandled Redis client error is fatal to the whole Node process. Every duplicate subscriber now gets an `error`/`ready` listener attached immediately, so a Redis outage logs one warning and a recovery line instead of crashing the api. Once node-redis reconnects, presence's single fixed feed subscription is automatically restored (node-redis native resubscribe); notifications' per-user subscriptions restore the same way for whichever channels were subscribed at the moment of the outage — a channel whose subscribe/unsubscribe request was still in flight when the outage hit is not covered by this fix.
+- 8b42663: Security dependency updates. `hono` moves to `4.13.0` (the declared floor is now `^4.12.34`, the first release without GHSA-advisory-affected versions) — for `@crowi/plugin-api` this also raises its `hono` peer range, so a plugin pinning an older 4.12.x will need to move up. Transitively, `undici` 7.x reaches `7.29.0` and `ip-address` reaches `10.4.0`, both within their existing parents' ranges. No `pnpm.overrides` entries were needed for any of these.
+- b43b6ef: Further security dependency updates, following a second batch of advisories issued against packages fixed hours earlier: `brace-expansion` moves to `1.1.18` / `2.1.4` (the earlier `1.1.17` / `2.1.3` fix was incomplete upstream), `postcss` to `8.5.23`, and `fast-uri` to `3.1.5`.
+- f6a3ffe: Enforce a single, shared username validation contract across self-registration, invite acceptance, and first-admin (installer) creation.
+
+  Username input is now restricted to ASCII letters, digits, `_`, and `-`, 1-64 characters, matching what the `@mention` renderer already recognizes. Previously each of the three account-creation forms validated username with a different (and looser) rule, and the `User` model itself did not validate the field at all — so an empty, whitespace-only, or otherwise malformed username could reach the database and break the `/user/<username>` page namespace. Non-conforming values are now rejected with the existing `400 VALIDATION_ERROR` response before any account is created or activated. Installer account creation, which previously also allowed `.` in usernames, now uses the same rule as the other two forms. Existing usernames already stored in the database are left untouched — this only applies to new or changed usernames.
+
+- Updated dependencies [d4342cd]
+- Updated dependencies [c5f243a]
+- Updated dependencies [8b42663]
+- Updated dependencies [f6a3ffe]
+  - @crowi/api-contract@2.0.0-alpha.12
+  - @crowi/plugin-api@1.0.0-alpha.6
+
 ## 2.0.0-alpha.11
 
 ### Major Changes

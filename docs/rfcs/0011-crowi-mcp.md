@@ -83,6 +83,19 @@ not new infrastructure.
   `method + path`. Reusing them means MCP write tools inherit `pages:write`
   enforcement for free.
 
+> **Update (feature-auth-cookie-fallback-scope)**: `/mcp` no longer wraps
+> `createJwtAuth` directly. It now mounts a dedicated `createMcpAuth(crowi)`
+> (`packages/api/src/mcp/auth.ts`) that shares `createJwtAuth`'s
+> credential-resolution core but is narrowed to a PAT-only, cookie-never
+> policy — a web-session Bearer, the `crowi.accessToken` cookie, and an
+> `oauth_access` token are all rejected at this boundary. See RFC-0022 §15.1
+> and the spec's "設計の主な判断" §4 for why: RFC-0022 scopes `/mcp` to PAT or
+> a canonical-MCP-resource-bound `oauth_access`, and `signOauthAccessToken`
+> does not mint that binding yet, so accepting an unbound OAuth token here
+> would be broader than the target design. §3, §4, §5.1, §6 and §14 below are
+> updated in place to the `createMcpAuth` shape; the wire behavior for a
+> valid PAT is unchanged.
+
 ## §2 Goals / Non-Goals
 
 ### §2.1 Goals
@@ -116,7 +129,7 @@ MCP client (Claude Desktop / Code)
         │  Streamable HTTP + Authorization: Bearer crowi_pat_…
         ▼
 ┌──────────────────────────── @crowi/api (Hono app) ────────────────────────────┐
-│  app.all('/mcp')  ── createJwtAuth ──►  per-request McpServer + transport      │
+│  app.all('/mcp')  ── createMcpAuth ──►  per-request McpServer + transport      │
 │                                              │                                 │
 │   registerTool('crowi_get_page', …)          │ tool handler                    │
 │        └── crowi.honoApp.request(                                              │
@@ -129,8 +142,9 @@ MCP client (Claude Desktop / Code)
 
 - `/mcp` is mounted in the same Hono app as `/api/v2/*` (see
   `packages/api/src/hono/app.ts` / `index.ts`).
-- It is wrapped by `createJwtAuth(crowi)` so the request carries an
-  authenticated user + `authScopes`.
+- It is wrapped by `createMcpAuth(crowi)` (`packages/api/src/mcp/auth.ts` —
+  feature-auth-cookie-fallback-scope) so the request carries an authenticated
+  user + `authScopes` resolved from a PAT Bearer only; see §5.1.
 - A **per-request** `McpServer` is built (factory `buildMcpServer(ctx)`), where
   `ctx` carries the caller's bearer token (and/or the resolved Hono `Context`).
 - Each tool handler **dispatches in-process** to the existing API route via
@@ -171,8 +185,9 @@ MCP client (Claude Desktop / Code)
 - **Transport**: `StreamableHTTPTransport` from `@hono/mcp`, **stateless /
   per-request** (no long-lived session map). This matches Crowi's per-request
   JWT model and keeps multi-instance deployments trivial (no sticky sessions).
-- **Mount**: `app.all('/mcp', handler)` under `createJwtAuth`. Both `POST`
-  (JSON-RPC calls) and `GET` (SSE stream, if used) are handled by the transport.
+- **Mount**: `app.all('/mcp', handler)` under `createMcpAuth` (PAT Bearer
+  only — see §5.1). Both `POST` (JSON-RPC calls) and `GET` (SSE stream, if
+  used) are handled by the transport.
 - **Per-request server**: `buildMcpServer(c)` registers the static tool set but
   closes over the request's auth (the forwarded bearer / `c`), so tool
   dispatch uses the caller's identity.
@@ -182,14 +197,21 @@ MCP client (Claude Desktop / Code)
 
 ## §5 Authentication & authorization
 
-### §5.1 v1 — PAT (and OAuth access token) bearer
+### §5.1 v1 — PAT bearer only
 
-- The MCP client sends `Authorization: Bearer crowi_pat_…` (or an OAuth
-  access-token JWT). MCP clients that support static headers (e.g. Claude Code
+- The MCP client sends `Authorization: Bearer crowi_pat_…`. MCP clients that
+  support static headers (e.g. Claude Code
   `claude mcp add --transport http <url> --header "Authorization: Bearer …"`)
   configure this directly.
-- `createJwtAuth(crowi)` validates it exactly as for any API call. No new auth
-  code.
+- `createMcpAuth(crowi)` (`packages/api/src/mcp/auth.ts` —
+  feature-auth-cookie-fallback-scope) validates it: PAT Bearer only. It never
+  reads the `crowi.accessToken` cookie (MCP clients are not browsers, so
+  there is no headerless-request problem to solve for), and it rejects a
+  web-session Bearer and an `oauth_access` Bearer at this boundary — not just
+  a missing one. `oauth_access` acceptance is deferred to §5.3: RFC-0022
+  §6.2/§7 scopes `/mcp` to PAT or an `oauth_access` bound to the canonical MCP
+  resource, and `signOauthAccessToken` does not mint that binding yet, so an
+  unbound `oauth_access` token is rejected until it does (RFC-0022 §15.1).
 - The user issues the PAT from the existing settings UI (`POST
   /me/access-tokens`) with the scopes they want the MCP to have
   (`pages:read` + `pages:write`, etc.). **Read-only MCP** = a `read`-only PAT.
@@ -206,6 +228,12 @@ MCP client (Claude Desktop / Code)
 
 For MCP clients that perform the OAuth handshake instead of a static token:
 
+- **Prerequisite (feature-auth-cookie-fallback-scope / RFC-0022 §6.2/§7)**:
+  `createMcpAuth` rejects every `oauth_access` Bearer today, bound or not —
+  `signOauthAccessToken` does not yet mint a resource/audience claim, so
+  there is nothing for `/mcp` to check. This phase only re-opens the door
+  once that binding exists (RFC-0022 §15.1) and `createMcpAuth`'s policy is
+  widened to accept an `oauth_access` bound to the canonical MCP resource.
 - Add **`GET /.well-known/oauth-protected-resource`** (RFC 9728) advertising
   `/mcp` as a protected resource and pointing at Crowi's existing AS metadata
   (`/.well-known/oauth-authorization-server`, already present).
@@ -228,7 +256,7 @@ For MCP clients that perform the OAuth handshake instead of a static token:
 |---|---|---|
 | Tool **input schemas** | `@crowi/api-contract` Zod schemas | `registerTool(name, { inputSchema: GetPageRequestSchema.shape }, …)` — the SDK takes a raw Zod shape |
 | Tool **business logic** | existing Hono handlers | in-process `crowi.honoApp.request(...)` (§3.1) |
-| **Auth** | `createJwtAuth` (RFC-0006/0010) | wrap the `/mcp` mount |
+| **Auth** | `createMcpAuth` (`packages/api/src/mcp/auth.ts`, wraps `createJwtAuth`'s `resolveCredential` core — feature-auth-cookie-fallback-scope) | wrap the `/mcp` mount, PAT Bearer only (§5.1) |
 | **Scope** | `requireScope` / `scopeSatisfies` (RFC-0010) | enforced by the dispatched route |
 | **Response shapes** | api-contract response schemas | the dispatched route already returns them; the tool maps JSON → MCP result |
 | **Discovery / AS** | `/.well-known/oauth-authorization-server` (RFC-0010) | Phase 2 OAuth-for-MCP |
@@ -488,7 +516,9 @@ registerTool(server, 'crowi_get_page',
   `StreamableHTTPServerTransport`; v1.x is production-recommended (v2 ~2026 Q3).
 - MCP authorization spec — OAuth 2.0 protected resource (RFC 9728
   protected-resource metadata, RFC 8414 AS metadata, RFC 7591 DCR).
-- Code: `packages/api/src/hono/middleware/auth.ts` (`createJwtAuth`),
+- Code: `packages/api/src/hono/middleware/auth.ts` (`createJwtAuth`,
+  `resolveCredential`), `packages/api/src/mcp/auth.ts` (`createMcpAuth`, the
+  PAT-only `/mcp` boundary — feature-auth-cookie-fallback-scope),
   `packages/api/src/hono/middleware/require-scope.ts`,
   `packages/api-contract/src/schemas/*` (tool input schemas),
   `packages/api/src/collab/attach.ts` (attach-module precedent).

@@ -233,10 +233,7 @@ function TrashItemActions({ pageId, pagePath }: TrashItemActionsProps) {
 
   return (
     <div className="shrink-0">
-      {/* `modal={false}`: this menu opens a dialog; a modal dropdown + modal
-          dialog race on <body> `pointer-events` and leave it stuck after close,
-          blocking all clicks (Radix #1241, see page-actions-menu). */}
-      <DropdownMenu modal={false}>
+      <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="sm" aria-label={m['page_list.actions_aria']()}>
             <MoreHorizontal className="h-4 w-4" />

@@ -26,7 +26,6 @@
     "allow": [
       "Read(**)",
       "Grep(**)",
-      "Glob(**)",
       "Bash(pnpm *)",
       "Bash(npm *)",
       "Bash(git *)",

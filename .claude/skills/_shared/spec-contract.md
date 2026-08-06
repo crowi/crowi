@@ -23,6 +23,28 @@ grounded_at: <git commit SHA>
   `status: approved` / `implementation_ready: true` へ変更して validator を実行する。
   green ならその marker を確定し、red なら必ず `draft` / `false` へ戻す。
 - `grounded_at` はコード調査の基準にした `git rev-parse HEAD`。参照 path がこの commit 以後に変わった場合、spec は stale。
+- **生成物は staleness 判定から除外される**(`pnpm-lock.yaml` / `**/openapi.{json,yaml}` / `**/generated/**`)。この判定は「spec が根拠にしたコードが動いた」を検出するためのもので、再生成された lockfile や OpenAPI は誰かが build を回しただけであり、設計の前提は何も無効になっていないため。除外はパスで機械的に決まるので、spec 側の宣言は要らず既存 spec にも遡及する。ただし**そもそも生成物を参照先に書かない**のが望ましい(AC が生成物の同期を要求したいなら、参照先はゲート対象のソースにして `Level` を `gate` にする)。
+
+## umbrella spec (`kind: umbrella`)
+
+複数フェーズを 1 worktree で順に実装し、main への統合を最後に 1 回だけ行う大型作業では、運用契約とフェーズ表だけを持つ **umbrella** を置き、実装の実体は各フェーズの sub-spec に持たせる。umbrella 自身は AC も実装マップも `grounded_at` も持たない — それらを sub-spec から複製すると、複製した側が独立に stale になるため。
+
+```yaml
+---
+spec_contract: 2
+kind: umbrella
+id: feature-<slug>
+status: approved
+phases:
+  - feature-<slug>-phase0-<...>
+  - feature-<slug>-phase1-<...>
+---
+```
+
+- validator は umbrella に対して AC / 実装マップ / セクション / `grounded_at` を要求しない。代わりに **`phases:` の各 sub-spec が実在し、それ自体が v2 を通ること**を検証する。厳しさは緩めずに sub-spec へ委譲する形。
+- **`phases:` は frontmatter のブロックシーケンスで書く**(散文のフェーズ表は人間向けの説明として残してよいが、機械が読むのは frontmatter)。表を parse する方式にすると、書式を変えた瞬間に「フェーズ 0 本を検証して pass」という偽の green が出る。
+- umbrella の入れ子は不可(sub-spec は実装 spec でなければならない)。
+- `scope` は大きさ(trivial/small/medium/large)を表すので umbrella をそこに載せない。
 
 ## 必須セクション
 

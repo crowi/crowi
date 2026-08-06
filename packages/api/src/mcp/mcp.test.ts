@@ -3,17 +3,26 @@
  *
  * Drives the live `/api/mcp` route through the same Hono app the production
  * server serves (`buildHonoApp(crowi)` via the shared test harness), so
- * the JSON-RPC envelope, `createJwtAuth`, per-tool scope enforcement, and
+ * the JSON-RPC envelope, `createMcpAuth` (feature-auth-cookie-fallback-scope
+ * — PAT Bearer only, see `mcp/auth.ts`), per-tool scope enforcement, and
  * in-process dispatch are all exercised end-to-end. Covers:
  *
- *   (a) `tools/list` returns all 13 tools.
+ *   (a) `tools/list` returns all 14 tools.
  *   (b) `crowi_get_page` returns a real page's body.
- *   (c) a read-only (`pages:read`) token calling a write tool gets the
+ *   (c) a read-only (`pages:read`) PAT calling a write tool gets the
  *       dispatched route's 403 INSUFFICIENT_SCOPE mapped to `isError`.
  *   (d) a missing token is rejected by the `/api/mcp` auth gate (401).
+ *   (e) feature-auth-cookie-fallback-scope AC-5/6/7 — a web-session Bearer,
+ *       a cookie-only request, a malformed header + valid cookie, and an
+ *       unbound `oauth_access` token are all rejected; a suspended PAT's
+ *       403 passes through unwrapped; an expired/revoked PAT's 401 is a
+ *       JSON-RPC envelope; a rejected credential never reaches dispatch; a
+ *       foreign user's cookie never changes the resolved PAT identity; a
+ *       `User.findById` throw surfaces as 500, not a masked 401.
  */
-import { app, crowi, Fixture } from 'src/test/setup';
+
 import type { UserDocument } from 'src/models/user';
+import { app, crowi, Fixture } from 'src/test/setup';
 import { createJwtUtil } from 'src/util/jwt';
 import request from 'supertest';
 
@@ -54,16 +63,32 @@ const createTestUser = async (info: { name: string; username: string; email: str
 
 describe('MCP server (/api/mcp)', () => {
   const PATH_PREFIX = '/mcp-smoke-test/';
+  const USER_EMAIL = 'mcp-tester@example.com';
+  const OTHER_EMAIL = 'mcp-tester-other@example.com';
+  const SUSPENDED_EMAIL = 'mcp-tester-suspended@example.com';
   let user: UserDocument;
   let webToken: string;
+  let otherUser: UserDocument;
+  let otherWebToken: string;
+  let fullPatToken: string;
   let jwtUtil: ReturnType<typeof createJwtUtil>;
   let pageId: string;
   const pageBody = '# MCP smoke page\n\nThis is the body the MCP get_page tool should return.';
 
   beforeAll(async () => {
     jwtUtil = createJwtUtil(crowi);
-    user = await createTestUser({ name: 'MCP Tester', username: 'mcpTester', email: 'mcp-tester@example.com' });
+    user = await createTestUser({ name: 'MCP Tester', username: 'mcpTester', email: USER_EMAIL });
     webToken = jwtUtil.generateTokens(user).accessToken;
+
+    otherUser = await createTestUser({ name: 'MCP Tester Other', username: 'mcpTesterOther', email: OTHER_EMAIL });
+    otherWebToken = jwtUtil.generateTokens(otherUser).accessToken;
+
+    // feature-auth-cookie-fallback-scope — MCP is PAT-only now, so the
+    // "full access" credential the success-path tests below authenticate
+    // with is a PAT (umbrella `write` scope, same implication semantics
+    // `scopeSatisfies` gives a web session's ALL_SCOPES) rather than a
+    // web-session Bearer.
+    fullPatToken = await patToken(user, ['write']);
 
     // Seed a real page via the existing create route so the read tool has
     // something to fetch.
@@ -77,10 +102,18 @@ describe('MCP server (/api/mcp)', () => {
     const Revision = crowi.model('Revision');
     const filter = { path: { $regex: `^${PATH_PREFIX}` } };
     await Promise.all([Page.deleteMany(filter), Revision.deleteMany(filter)]);
-    await crowi.model('User').deleteMany({ email: 'mcp-tester@example.com' });
+    await crowi.model('User').deleteMany({ email: { $in: [USER_EMAIL, OTHER_EMAIL, SUSPENDED_EMAIL] } });
   });
 
   const oauthToken = (scopes: string[]) => jwtUtil.signOauthAccessToken({ user, scopes, clientId: 'crowi-cli' });
+
+  /** Mint a real PAT row for `forUser` and return the plaintext Bearer credential. */
+  const patToken = async (forUser: UserDocument, scopes: string[]): Promise<string> => {
+    const PersonalAccessToken = crowi.model('PersonalAccessToken');
+    const { token, tokenHash } = PersonalAccessToken.generateToken();
+    await PersonalAccessToken.create({ tokenHash, userId: forUser._id, name: `mcp-test-${Date.now()}-${Math.random().toString(36).slice(2)}`, scopes });
+    return token;
+  };
 
   it('rejects an unauthenticated request (no token) with 401', async () => {
     const res = await callMcp(null, { jsonrpc: '2.0', id: 1, method: 'tools/list' });
@@ -88,7 +121,7 @@ describe('MCP server (/api/mcp)', () => {
   });
 
   it('lists all 14 tools via tools/list', async () => {
-    const res = await callMcp(webToken, { jsonrpc: '2.0', id: 1, method: 'tools/list' });
+    const res = await callMcp(fullPatToken, { jsonrpc: '2.0', id: 1, method: 'tools/list' });
     expect(res.status).toBe(200);
     const rpc = parseRpc(res);
     const tools = (rpc.result?.tools ?? []) as Array<{ name: string }>;
@@ -115,7 +148,7 @@ describe('MCP server (/api/mcp)', () => {
   });
 
   it('advertises Crowi path conventions via the initialize `instructions`', async () => {
-    const res = await callMcp(webToken, {
+    const res = await callMcp(fullPatToken, {
       jsonrpc: '2.0',
       id: 1,
       method: 'initialize',
@@ -130,7 +163,7 @@ describe('MCP server (/api/mcp)', () => {
   });
 
   it('crowi_get_page returns the body in both content text and structuredContent', async () => {
-    const res = await callMcp(webToken, {
+    const res = await callMcp(fullPatToken, {
       jsonrpc: '2.0',
       id: 2,
       method: 'tools/call',
@@ -152,7 +185,7 @@ describe('MCP server (/api/mcp)', () => {
   });
 
   it('wraps the get_page body in nonce-carrying untrusted delimiters + a data-not-instructions notice', async () => {
-    const res = await callMcp(webToken, {
+    const res = await callMcp(fullPatToken, {
       jsonrpc: '2.0',
       id: 20,
       method: 'tools/call',
@@ -178,7 +211,7 @@ describe('MCP server (/api/mcp)', () => {
 
   it('uses a fresh nonce per response (two reads of the same page differ)', async () => {
     const read = async () => {
-      const res = await callMcp(webToken, {
+      const res = await callMcp(fullPatToken, {
         jsonrpc: '2.0',
         id: 21,
         method: 'tools/call',
@@ -206,7 +239,7 @@ describe('MCP server (/api/mcp)', () => {
     ].join('\n');
     const evil = await Page.createPage(`${PATH_PREFIX}evil`, evilBody, user, { grant: Page.GRANT_PUBLIC });
 
-    const res = await callMcp(webToken, {
+    const res = await callMcp(fullPatToken, {
       jsonrpc: '2.0',
       id: 22,
       method: 'tools/call',
@@ -231,7 +264,7 @@ describe('MCP server (/api/mcp)', () => {
 
   it('crowi_get_revision returns the body in both content text and structuredContent', async () => {
     // Discover the current revision id via crowi_get_page.
-    const pageRes = await callMcp(webToken, {
+    const pageRes = await callMcp(fullPatToken, {
       jsonrpc: '2.0',
       id: 5,
       method: 'tools/call',
@@ -242,7 +275,7 @@ describe('MCP server (/api/mcp)', () => {
     const revisionId = pageResult.structuredContent?.revision_id;
     expect(typeof revisionId).toBe('string');
 
-    const res = await callMcp(webToken, {
+    const res = await callMcp(fullPatToken, {
       jsonrpc: '2.0',
       id: 6,
       method: 'tools/call',
@@ -261,7 +294,7 @@ describe('MCP server (/api/mcp)', () => {
   });
 
   it('maps a read-only token writing a page to an isError result (403 INSUFFICIENT_SCOPE)', async () => {
-    const readOnly = oauthToken(['pages:read']);
+    const readOnly = await patToken(user, ['pages:read']);
     const res = await callMcp(readOnly, {
       jsonrpc: '2.0',
       id: 3,
@@ -282,7 +315,7 @@ describe('MCP server (/api/mcp)', () => {
   });
 
   it('a read-only token can still call a read tool', async () => {
-    const readOnly = oauthToken(['pages:read']);
+    const readOnly = await patToken(user, ['pages:read']);
     const res = await callMcp(readOnly, {
       jsonrpc: '2.0',
       id: 4,
@@ -294,5 +327,159 @@ describe('MCP server (/api/mcp)', () => {
     const result = rpc.result as { isError?: boolean; content: Array<{ text: string }> };
     expect(result.isError).toBeFalsy();
     expect(result.content[0].text).toContain('MCP smoke page');
+  });
+
+  /**
+   * feature-auth-cookie-fallback-scope AC-5/6/7 — `createMcpAuth` is
+   * PAT-only and never reads the `crowi.accessToken` cookie. RFC-0022
+   * §6.2/§7 scopes `/mcp` to PAT (or a resource/audience-bound
+   * `oauth_access`, not implemented yet — see `mcp/auth.ts`).
+   */
+  describe('feature-auth-cookie-fallback-scope — MCP is PAT-only', () => {
+    /** JSON-RPC "server error" code `createMcpAuth` uses for a 401 (mirrors `mcp/attach.ts`'s own `-32001`). */
+    const JSONRPC_AUTH_REQUIRED = -32001;
+
+    const postMcp = (headers: Record<string, string>, payload: unknown) =>
+      request(app)
+        .post('/api/mcp')
+        .set('Content-Type', 'application/json')
+        .set('Accept', 'application/json, text/event-stream')
+        .set(headers)
+        .send(payload as object);
+
+    it('rejects a web-session Bearer with a JSON-RPC 401 (AC-5)', async () => {
+      const res = await callMcp(webToken, { jsonrpc: '2.0', id: 50, method: 'tools/list' });
+      expect(res.status).toBe(401);
+      expect(res.body.jsonrpc).toBe('2.0');
+      expect(res.body.id).toBeNull();
+      expect(res.body.error.code).toBe(JSONRPC_AUTH_REQUIRED);
+    });
+
+    it('rejects a cookie-only request (no Authorization header at all) with a JSON-RPC 401 (AC-5)', async () => {
+      const res = await postMcp({ Cookie: `crowi.accessToken=${webToken}` }, { jsonrpc: '2.0', id: 51, method: 'tools/list' });
+      expect(res.status).toBe(401);
+      expect(res.body.jsonrpc).toBe('2.0');
+      expect(res.body.error.code).toBe(JSONRPC_AUTH_REQUIRED);
+    });
+
+    it('rejects a malformed Authorization header even with a valid cookie present, with a JSON-RPC 401 (AC-5)', async () => {
+      const res = await postMcp({ Authorization: 'garbage', Cookie: `crowi.accessToken=${webToken}` }, { jsonrpc: '2.0', id: 52, method: 'tools/list' });
+      expect(res.status).toBe(401);
+      expect(res.body.jsonrpc).toBe('2.0');
+      expect(res.body.error.code).toBe(JSONRPC_AUTH_REQUIRED);
+    });
+
+    it('rejects an unbound oauth_access token with a JSON-RPC 401 (RFC-0022 resource/audience binding not implemented yet, AC-5)', async () => {
+      const unbound = oauthToken(['pages:read']);
+      const res = await callMcp(unbound, { jsonrpc: '2.0', id: 53, method: 'tools/list' });
+      expect(res.status).toBe(401);
+      expect(res.body.jsonrpc).toBe('2.0');
+      expect(res.body.error.code).toBe(JSONRPC_AUTH_REQUIRED);
+    });
+
+    it('passes through a suspended-user PAT 403 unwrapped, not as a JSON-RPC envelope (AC-6)', async () => {
+      const suspended = await createTestUser({ name: 'MCP Tester Suspended', username: 'mcpTesterSuspended', email: SUSPENDED_EMAIL });
+      const User = crowi.model('User');
+      suspended.status = User.STATUS_SUSPENDED;
+      await suspended.save();
+      const suspendedPat = await patToken(suspended, ['write']);
+
+      const res = await callMcp(suspendedPat, { jsonrpc: '2.0', id: 54, method: 'tools/list' });
+      expect(res.status).toBe(403);
+      // Raw UserStatusError body — no `jsonrpc` envelope wrapping.
+      expect(res.body.jsonrpc).toBeUndefined();
+      expect(res.body.error.code).toBe('USER_SUSPENDED');
+    });
+
+    it('rejects an expired PAT with a JSON-RPC 401 (AC-6)', async () => {
+      const PersonalAccessToken = crowi.model('PersonalAccessToken');
+      const { token, tokenHash } = PersonalAccessToken.generateToken();
+      await PersonalAccessToken.create({ tokenHash, userId: user._id, name: 'mcp-test-expired', scopes: ['write'], expiresAt: new Date(Date.now() - 1_000) });
+
+      const res = await callMcp(token, { jsonrpc: '2.0', id: 55, method: 'tools/list' });
+      expect(res.status).toBe(401);
+      expect(res.body.jsonrpc).toBe('2.0');
+      expect(res.body.error.code).toBe(JSONRPC_AUTH_REQUIRED);
+    });
+
+    it('rejects a revoked PAT with a JSON-RPC 401 (AC-6)', async () => {
+      const PersonalAccessToken = crowi.model('PersonalAccessToken');
+      const { token, tokenHash } = PersonalAccessToken.generateToken();
+      await PersonalAccessToken.create({ tokenHash, userId: user._id, name: 'mcp-test-revoked', scopes: ['write'], revokedAt: new Date() });
+
+      const res = await callMcp(token, { jsonrpc: '2.0', id: 56, method: 'tools/list' });
+      expect(res.status).toBe(401);
+      expect(res.body.jsonrpc).toBe('2.0');
+      expect(res.body.error.code).toBe(JSONRPC_AUTH_REQUIRED);
+    });
+
+    it('a rejected credential never reaches dispatch — the dispatcher is never constructed and a mutating tool call has no side effect (AC-7)', async () => {
+      // `attach.ts`'s `app.all('/mcp', ...)` handler only calls
+      // `makeDispatch(app, authorization)` AFTER `createMcpAuth` lets the
+      // request through — asserting the dispatcher factory itself was never
+      // invoked proves dispatch never runs, rather than only inferring it
+      // from the absence of a downstream side effect.
+      const dispatchModule = await import('./dispatch');
+      const spy = jest.spyOn(dispatchModule, 'makeDispatch');
+      try {
+        const res = await postMcp(
+          { Authorization: 'garbage' },
+          {
+            jsonrpc: '2.0',
+            id: 57,
+            method: 'tools/call',
+            params: { name: 'crowi_create_page', arguments: { path: `${PATH_PREFIX}auth-rejected-should-fail`, body: '# nope' } },
+          },
+        );
+        expect(res.status).toBe(401);
+        expect(spy).not.toHaveBeenCalled();
+
+        const Page = crowi.model('Page');
+        const leaked = await Page.findOne({ path: `${PATH_PREFIX}auth-rejected-should-fail` });
+        expect(leaked).toBeNull();
+      } finally {
+        spy.mockRestore();
+      }
+    });
+
+    it("a foreign user's cookie alongside a valid PAT header does not change the resolved identity (cookie is never read for /mcp, AC-7)", async () => {
+      const readOnly = await patToken(user, ['pages:read']);
+      const payload = { jsonrpc: '2.0', id: 58, method: 'tools/call', params: { name: 'crowi_get_page', arguments: { page_id: pageId } } };
+
+      const withoutCookie = await callMcp(readOnly, payload);
+      const withForeignCookie = await postMcp({ Authorization: `Bearer ${readOnly}`, Cookie: `crowi.accessToken=${otherWebToken}` }, payload);
+
+      expect(withForeignCookie.status).toBe(withoutCookie.status);
+      // Compare the invariant identity/content fields rather than the whole
+      // envelope — `crowi_get_page` embeds a fresh random nonce per response
+      // (see the "uses a fresh nonce per response" test above), so a
+      // byte-for-byte deep-equal would be flaky by design, not a real
+      // behavioural difference.
+      const a = parseRpc(withoutCookie).result as { isError?: boolean; structuredContent?: Record<string, unknown> };
+      const b = parseRpc(withForeignCookie).result as { isError?: boolean; structuredContent?: Record<string, unknown> };
+      expect(b.isError).toBe(a.isError);
+      expect(b.structuredContent).toEqual(a.structuredContent);
+    });
+
+    it('a User.findById throw during PAT resolution surfaces as 500, not a masked 401, and dispatch never runs (AC-7)', async () => {
+      const User = crowi.model('User');
+      const spy = jest.spyOn(User, 'findById').mockImplementationOnce((() => Promise.reject(new Error('db unreachable'))) as never);
+
+      try {
+        const res = await callMcp(fullPatToken, {
+          jsonrpc: '2.0',
+          id: 59,
+          method: 'tools/call',
+          params: { name: 'crowi_create_page', arguments: { path: `${PATH_PREFIX}db-throw-should-fail`, body: '# nope' } },
+        });
+        expect(res.status).toBe(500);
+      } finally {
+        spy.mockRestore();
+      }
+
+      const Page = crowi.model('Page');
+      const leaked = await Page.findOne({ path: `${PATH_PREFIX}db-throw-should-fail` });
+      expect(leaked).toBeNull();
+    });
   });
 });

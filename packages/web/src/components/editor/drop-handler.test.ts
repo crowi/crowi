@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
-import { setNotifyBackend, type NotifyPayload } from '@/lib/notify';
-import { classifyFiles, dropHandler, DND_ACTIVE_CLASS, DND_MAX_FILES, DND_MAX_FILE_BYTES } from './drop-handler';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { type NotifyPayload, setNotifyBackend } from '@/lib/notify';
+import { classifyFiles, DND_ACTIVE_CLASS, DND_MAX_FILE_BYTES, DND_MAX_FILES, dropHandler } from './drop-handler';
 import { sanitizeFilename } from './upload-placeholder';
 import { isImageFile } from './upload-policy';
 
@@ -136,6 +136,15 @@ describe('dropHandler DOM behaviour', () => {
       dismiss: () => {},
     });
 
+    // feature-auth-cookie-fallback-scope — `uploadAttachment` now fails
+    // closed (no XHR at all) when no access token is available, rather than
+    // firing the request headerless. A token here keeps these tests on the
+    // SAME synchronous timing they rely on below (`pendingUploads` asserted
+    // immediately after `fireDrag`, with no `await` in between): with a
+    // token present the token-recovery branch's `await` is never reached,
+    // so `xhr.send()` still runs synchronously inside the same tick.
+    localStorage.setItem('accessToken', 'test-access-token');
+
     // Stub XMLHttpRequest so `runUpload`'s upload resolves without a
     // network round-trip. Each `send` parks a resolver in `pendingUploads`
     // — the test drains them to assert serial ordering.
@@ -158,6 +167,7 @@ describe('dropHandler DOM behaviour', () => {
   afterEach(() => {
     setNotifyBackend(null);
     vi.unstubAllGlobals();
+    localStorage.clear();
     view?.destroy();
   });
 

@@ -111,6 +111,20 @@ export interface UserDocument extends Document {
    * Optional for the same reason as `authVersion` above.
    */
   passwordResetGeneration?: number;
+  /**
+   * Pending email-change generation. Requesting a change increments it and
+   * binds the mailed token to the new value, so only the most recent request
+   * can still be confirmed. That is what lets a user call off a change they
+   * did not want — one started from a stolen session, or sent to a mistyped
+   * address — by simply requesting another one.
+   *
+   * Distinct from `authVersion`, which answers "is the session that asked
+   * still valid": bumping that on a mere profile edit would sign the user
+   * out of their own account.
+   *
+   * Optional for the same reason as `authVersion` above.
+   */
+  emailChangeGeneration?: number;
 
   isPasswordSet(): boolean;
   isPasswordValid(password: string): boolean;
@@ -256,6 +270,7 @@ export default (crowi: Crowi) => {
     // "absent" and "0" stay interchangeable everywhere.
     authVersion: { type: Number },
     passwordResetGeneration: { type: Number },
+    emailChangeGeneration: { type: Number },
   });
   applyPaginatePlugin(userSchema);
 

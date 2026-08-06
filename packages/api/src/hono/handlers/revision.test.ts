@@ -245,6 +245,31 @@ describe('Routes /api/pages/.../revisions (Hono)', () => {
       expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
     });
 
+    it('hides a draft from everyone but its author (RFC-0004) — a draft is GRANT_PUBLIC, so the grant check alone lets anyone read it', async () => {
+      const created = await request(app)
+        .post('/api/pages/drafts')
+        .set(authHeaders(accessToken))
+        .send({ path: `${PATH_PREFIX}secret-draft`, initialBody: '# not for other eyes' });
+      expect(created.status).toBe(201);
+
+      const draftPageId = created.body.pageId;
+      const Page = crowi.model('Page');
+      const draftPage = await Page.findById(draftPageId);
+      expect(draftPage?.isDraft()).toBe(true);
+      const draftRevisionId = draftPage?.revision?.toString();
+      expect(draftRevisionId).toBeTruthy();
+
+      // The author still reads their own draft.
+      const asAuthor = await request(app).get(`/api/pages/revisions/${draftRevisionId}`).set(authHeaders(accessToken));
+      expect(asAuthor.status).toBe(200);
+      expect(asAuthor.body.revision.body).toBe('# not for other eyes');
+
+      // Anyone else must not — and must not learn it exists either.
+      const asOther = await request(app).get(`/api/pages/revisions/${draftRevisionId}`).set(authHeaders(otherAccessToken));
+      expect(asOther.status).toBe(404);
+      expect(asOther.body.error.code).toBe('PAGE_NOT_FOUND');
+    });
+
     it('returns 200 with the revision body and populated author', async () => {
       const { revisionId, path } = await createTestPage(`${PATH_PREFIX}detail`, '# the body');
 

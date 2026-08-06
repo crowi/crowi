@@ -1011,6 +1011,24 @@ State-changing endpoints require an exact allowed Origin. Until that middleware
 change ships, these endpoints MUST NOT ship, because the current cookie fallback
 is ambient and indistinguishable from header authentication.
 
+> **Update (feature-auth-cookie-fallback-scope)**: the credential-provenance
+> primitive this section requires now exists. `AuthContext`'s `web` variant
+> (`packages/api/src/hono/middleware/auth.ts`) carries `via: 'header' |
+> 'cookie'`, and `kind` already separates `web` / `oauth` / `pat`, so the four
+> buckets this section asks for map directly: `authorization` = `{ kind:
+> 'web', via: 'header' }`, `access-cookie` = `{ kind: 'web', via: 'cookie'
+> }`, `pat` = `{ kind: 'pat', … }`, `oauth` = `{ kind: 'oauth', … }`. Separately
+> — and independent of the above — `createJwtAuth`'s default cookie fallback
+> is now header-only everywhere except the three headerless attachment
+> delivery routes (`createAttachmentAuth`), so the "ambient and
+> indistinguishable" cookie-fallback risk this section calls out no longer
+> applies to `/me/*` at all: a cookie-only request to `/me/two-factor` is
+> already a 401 before an endpoint would even need to check `via`. This spec
+> does **not** implement `/me/two-factor` itself (no 2FA endpoints exist yet)
+> — it only lands the provenance field and the header-only default this
+> section's Origin-check gate was written to require before that endpoint
+> family could ship.
+
 Flow:
 
 1. `GET /me/two-factor` returns `enabled`, `enabledAt`,

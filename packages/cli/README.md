@@ -43,7 +43,7 @@ renaming, deleting, and watching pages plus `whoami`. Pass `--scope
 | Commands | Scope to add at login |
 | --- | --- |
 | `comment` (list/add/delete) | `comments:read comments:write` |
-| `attach` (list/add/remove) | `attachments:read attachments:write` |
+| `attach` (list/add/download) | `attachments:read attachments:write` |
 | `bookmark` (get/list/add/remove) | `bookmarks:read bookmarks:write` |
 | `watch` (get/set) | none — rides the default `pages:*` |
 

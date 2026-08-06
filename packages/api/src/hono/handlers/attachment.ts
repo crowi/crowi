@@ -17,9 +17,19 @@
  *
  * Auth split:
  *  - `/pages/*` (list / add / usage) rides on the `revision` handler's
- *    broad `createJwtAuth(crowi)` apply.
- *  - `/attachments/*` (meta / upload / remove) is OUTSIDE that prefix
- *    so we install jwtAuth on `/attachments/*` ourselves.
+ *    broad `createJwtAuth(crowi)` apply — header-only, same as every other
+ *    `/pages/*` route.
+ *  - `/attachments/*` (meta / upload / remove, AND the raw-stream by-id /
+ *    original / by-key delivery routes in `attachment-stream.ts`) is
+ *    OUTSIDE that prefix so we install `createAttachmentAuth(crowi)` on
+ *    `/attachments/*` ourselves (feature-auth-cookie-fallback-scope). It
+ *    shares `createJwtAuth`'s core and is header-only for meta / upload /
+ *    remove — only GET/HEAD on the by-id / original / by-key delivery
+ *    routes accept the `crowi.accessToken` cookie fallback. This is the
+ *    ONLY auth install for the whole `/attachments/*` subtree: this handler
+ *    always registers before `attachment-stream.ts` (`hono/index.ts`), and
+ *    that file deliberately installs no auth of its own to keep credential
+ *    resolution to exactly one pass per request (see its top doc comment).
  *
  * Multipart (RFC-0006 discovery doc §5):
  *  - `addAttachment` + `uploadAttachment` use Hono-native
@@ -34,7 +44,7 @@
  *  - `uploadAttachment` only: 20 req/min/user, name
  *    `'attachment-upload'`. 429 envelope:
  *    `{ error: 'rate_limited', message, details: { retryAfterSeconds } }`
- *    (`UploadAttachmentErrorSchema`). Applied AFTER jwtAuth on
+ *    (`UploadAttachmentErrorSchema`). Applied AFTER createAttachmentAuth on
  *    `/attachments/upload`.
  */
 import { randomBytes } from 'node:crypto';
@@ -78,7 +88,7 @@ import {
 } from 'src/util/ts-rest-helpers';
 
 import type { CrowiHonoBindings } from '../app';
-import { createJwtAuth } from '../middleware/auth';
+import { createAttachmentAuth } from '../middleware/auth';
 import { withRateLimit } from '../middleware/rate-limit';
 import { applyScope } from '../middleware/require-scope';
 
@@ -318,9 +328,9 @@ export const registerAttachmentRoutes = <E extends OpenAPIHono<CrowiHonoBindings
   });
 
   // `/attachments/*` is OUTSIDE the revision-owned `/pages/*` apply.
-  // Install jwtAuth broadly here; the rate limit is per-endpoint
-  // (only `uploadAttachment` is throttled).
-  app.use('/attachments/*', createJwtAuth(crowi));
+  // Install createAttachmentAuth broadly here; the rate limit is
+  // per-endpoint (only `uploadAttachment` is throttled).
+  app.use('/attachments/*', createAttachmentAuth(crowi));
   app.use('/attachments/upload', uploadRateLimitMiddleware);
 
   // RFC-0010 — attachment scopes.

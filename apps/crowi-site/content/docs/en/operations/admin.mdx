@@ -167,6 +167,17 @@ endpoints.
 | Resend invite | Resend the invitation email to an **INVITED** user (a fresh invite token is issued) |
 | Delete | Physically remove an **INVITED** user (users who have ever activated cannot be deleted) |
 
+### Username format
+
+A username chosen during invite acceptance may contain only ASCII letters,
+digits, `_`, and `-`, and must be 1–64 characters long. The same rule
+applies to self-registration and to installer admin creation; values that
+do not match are rejected with `400` before the account is created.
+
+This matches the character set `@mentions` recognises and keeps the
+`/user/<username>` page namespace intact. Usernames already stored are
+left unchanged — the rule applies to new and changed usernames only.
+
 For an invited user's row, a **"Resend invite"** button is shown directly in
 the row, with a row menu next to it limited to "Change email" and "Delete"
 (since the account has not activated yet, edit / permission / status actions

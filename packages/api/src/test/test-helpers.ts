@@ -42,6 +42,15 @@ export const bearerAuthHeaders = (token: string): Record<string, string> => ({
   Authorization: `Bearer ${token}`,
 });
 
+/**
+ * `crowi.accessToken` cookie header — the headerless fallback credential
+ * (feature-auth-cookie-fallback-scope). Only ever an `access` (web-session)
+ * JWT; never a PAT or `oauth_access` token.
+ */
+export const cookieAuthHeaders = (token: string): Record<string, string> => ({
+  Cookie: `crowi.accessToken=${token}`,
+});
+
 // ---------------------------------------------------------------------------
 // createTestUser
 // ---------------------------------------------------------------------------

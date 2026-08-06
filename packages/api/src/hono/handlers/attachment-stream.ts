@@ -25,12 +25,23 @@
  * back onto the socket — equivalent posture to the old Express
  * `stream.pipe(res)` codepath, no buffering introduced.
  *
- * Auth: both by-id endpoints install `createJwtAuth(crowi)` directly on the
- * literal paths. They are OUTSIDE the revision-owned `/pages/*`
- * broad apply (which covers list / add / usage), and the
- * `/attachments/*` broad apply in the JSON attachment handler runs
- * AFTER this handler registers — registering jwtAuth on the literal
- * paths here keeps the request-time middleware stack identical.
+ * Auth: these routes are OUTSIDE the revision-owned `/pages/*` broad apply
+ * (which covers list / add / usage). They rely on the broad `/attachments/*`
+ * `createAttachmentAuth(crowi)` apply installed by the JSON attachment
+ * handler (`handlers/attachment.ts`), which always registers first
+ * (`hono/index.ts` calls `registerAttachmentRoutes` before
+ * `registerAttachmentStreamRoutes`) — Hono middleware matches every
+ * pattern that covers a request's path, so a SECOND `app.use(...,
+ * createAttachmentAuth(crowi))` on a literal path here would run credential
+ * resolution twice per request (double JWT/PAT verify, double
+ * `User.findById`, double PAT `touchLastUsed()` —
+ * feature-auth-cookie-fallback-scope's request-per-verify invariant). This
+ * file therefore installs no auth middleware of its own; the single
+ * broad-wildcard install is the ONLY auth pass every `/attachments/*`
+ * request gets, and `createAttachmentAuth` evaluates the real request
+ * method/path itself, so it makes the correct cookie-eligibility decision
+ * (GET/HEAD on these three delivery routes only) regardless of which
+ * handler file the matching route happens to live in.
  *
  * `/attachments/:id/original` additionally requires the `attachments:read`
  * scope (RFC-0010, feature-image-derivative-optimization Phase 2 §3) —
@@ -52,7 +63,6 @@ import FileUploader, { isMissingFileError } from 'src/util/file-uploader';
 import { isValidObjectId, loadGrantedPage } from 'src/util/ts-rest-helpers';
 
 import type { CrowiHonoBindings } from '../app';
-import { createJwtAuth } from '../middleware/auth';
 import { requireScope } from '../middleware/require-scope';
 
 const debug = Debug('crowi:hono:handlers:attachment-stream');
@@ -201,6 +211,32 @@ const toWebStream = (stream: Readable): ReadableStream => {
   return Readable.toWeb(stream) as ReadableStream;
 };
 
+/**
+ * Percent-encode a filename for RFC 8187 `filename*=UTF-8''…`.
+ *
+ * `encodeURIComponent` alone is not enough for this grammar. It leaves
+ * `'`, `(`, `)` and `*` unescaped even though they are not `attr-char`,
+ * so a name containing them produces a header a strict parser rejects.
+ * It also throws `URIError` on a lone surrogate, and `Attachment.originalName`
+ * is an unconstrained `String` fed straight from the client-supplied upload
+ * filename — so that input is reachable. Replacing unpaired surrogates with
+ * U+FFFD first makes the encode total.
+ */
+const encodeRfc8187 = (name: string): string => {
+  // `String.prototype.toWellFormed` (ES2024) swaps lone surrogates for
+  // U+FFFD. It is present on every Node version this package supports but
+  // is not in the configured `lib`, hence the guarded call rather than a
+  // direct one — and a manual surrogate sweep as the fallback so the
+  // encode is total either way.
+  const wellFormedOf = (name as { toWellFormed?: () => string }).toWellFormed;
+  const wellFormed =
+    typeof wellFormedOf === 'function'
+      ? wellFormedOf.call(name)
+      : // Replace any surrogate code unit that is not part of a valid pair.
+        name.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '�');
+  return encodeURIComponent(wellFormed).replace(/['()*]/g, (ch) => `%${ch.charCodeAt(0).toString(16).toUpperCase()}`);
+};
+
 /** The response headers a delivery decision produces — see {@link resolveDelivery}. */
 type Delivery = { contentType: string; disposition?: string; csp?: string };
 
@@ -279,6 +315,31 @@ export const registerAttachmentStreamRoutes = (app: OpenAPIHono<CrowiHonoBinding
     return { ok: true, attachment };
   };
 
+  /**
+   * {@link loadAuthorizedAttachment} for callers that must not receive a
+   * placeholder: a missing record becomes `404 ATTACHMENT_NOT_FOUND`
+   * instead of `200 image/png`.
+   *
+   * Everything else — auth, id validation, the page-grant check, and the
+   * decision to collapse "no such page" and "not granted" into one 404 so
+   * the response cannot be used to probe for attachment ids — is the
+   * shared implementation. Only the one branch that differs is overridden,
+   * so the two routes cannot drift apart on the authorization boundary.
+   */
+  const loadAuthorizedAttachmentStrict = async (
+    c: Context<CrowiHonoBindings>,
+  ): Promise<{ ok: true; attachment: AttachmentDocument } | { ok: false; response: Response }> => {
+    const result = await loadAuthorizedAttachment(c);
+    if (result.ok) return result;
+    // The shared loader signals "record not found" by handing back the
+    // placeholder response; that is the only 200 it can produce on the
+    // failure path, which makes it an unambiguous discriminator.
+    if (result.response.status === 200) {
+      return { ok: false, response: c.json(errorBody('ATTACHMENT_NOT_FOUND', 'Attachment not found'), 404) };
+    }
+    return result;
+  };
+
   /** {@link resolveDelivery} for a stored attachment — identical for the display AND original branches (§9). */
   const buildDeliveryHeaders = (attachment: AttachmentDocument, rawMime: string): Delivery =>
     resolveDelivery(rawMime, `filename*=UTF-8''${encodeURIComponent(attachment.originalName || attachment.fileName)}`);
@@ -309,23 +370,78 @@ export const registerAttachmentStreamRoutes = (app: OpenAPIHono<CrowiHonoBinding
     return streamResponse(stream, buildDeliveryHeaders(attachment, attachment.fileFormat));
   };
 
-  // Install jwtAuth on both literal paths. `/attachments/*` is OUTSIDE
-  // the revision-owned `/pages/*` broad apply, and the JSON attachment
-  // handler's broad `/attachments/*` apply runs after this handler
-  // registers — we keep the literal install so each route has exactly
-  // one jwtAuth invocation regardless of ordering.
-  app.use('/attachments/by-key/*', createJwtAuth(crowi));
-  app.use('/attachments/:id', createJwtAuth(crowi));
+  // No `createAttachmentAuth` install here — see this file's top doc
+  // comment. The broad `/attachments/*` apply in `handlers/attachment.ts`
+  // (registered first, `hono/index.ts`) is the single auth pass every route
+  // in this file gets; a second literal install would double it.
+  //
   // feature-image-derivative-optimization Phase 2 §3 — `/original` requires
   // `attachments:read` explicitly; `/attachments/:id` itself keeps its
   // pre-existing scope gap (not this feature's to fix, see spec §3).
   // Installed directly via `requireScope(...)` (not `applyScope(...)`,
   // which only binds to `createRoute(...)` contracts) — this is a
-  // hand-coded stream route. MUST run after `createJwtAuth` populates
+  // hand-coded stream route. MUST run after `createAttachmentAuth` populates
   // `authScopes`: the JSON attachment handler's broad `/attachments/*`
-  // jwtAuth apply (`registerAttachmentRoutes`) always registers before this
+  // auth apply (`registerAttachmentRoutes`) always registers before this
   // handler (`hono/index.ts`), so that invariant holds.
   app.use('/attachments/:id{[0-9a-fA-F]{24}}/original', requireScope('attachments:read'));
+  app.use('/attachments/:id{[0-9a-fA-F]{24}}/download', requireScope('attachments:read'));
+
+  // --------------------------------------------------------------
+  // GET /attachments/:id/download
+  // --------------------------------------------------------------
+  // The strict counterpart of `/original`, for programmatic clients
+  // (the CLI) rather than browsers.
+  //
+  // `/attachments/:id` and `/original` deliberately answer a missing
+  // record or a missing storage object with `200 image/png` — the
+  // `file-not-found.png` placeholder — so an embedded `<img>` degrades
+  // gracefully. That is right for a browser and wrong for a client
+  // extracting bytes: it cannot tell "here is your file" from "the file
+  // is gone", so it would happily save the placeholder and, when moving
+  // content between instances, carry a broken image across without ever
+  // noticing.
+  //
+  // So this route never substitutes a placeholder. A missing record and
+  // a missing object are both 404s, with distinct codes so the caller can
+  // say which happened.
+  //
+  // The response is always `application/octet-stream` + an attachment
+  // disposition. Callers here want the bytes, not a rendering decision,
+  // and pinning one media type keeps the delivery-safety question
+  // (`INLINE_SAFE_MIME`, sandbox CSP) out of this route entirely — it can
+  // never be the vector that serves stored HTML inline. The real MIME is
+  // already available from the attachment listing.
+  app.get('/attachments/:id{[0-9a-fA-F]{24}}/download', async (c) => {
+    const auth = await loadAuthorizedAttachmentStrict(c);
+    if (!auth.ok) return auth.response;
+
+    let stream: Readable;
+    try {
+      stream = await Attachment.findDeliveryFile(auth.attachment);
+    } catch (err) {
+      // NOTE (known limitation): the built-in local driver reports a
+      // missing object by checking `existsSync` and synthesising `ENOENT`,
+      // so a file that exists but cannot be *read* (EACCES) is reported
+      // here as missing too. Likewise `isMissingFileError` treats any
+      // S3 HTTP 404 as missing, which includes `NoSuchBucket` — a
+      // misconfigured bucket therefore looks like a missing attachment.
+      // Both are pre-existing behaviours of the shared classifier; this
+      // route inherits rather than fixes them, and doing better needs a
+      // typed missing-object error at the plugin-API boundary.
+      if (isMissingFileError(err)) {
+        return c.json(errorBody('FILE_MISSING', 'The attachment record exists but its stored file is gone'), 404);
+      }
+      debug('strict download delivery error', err);
+      return c.json(errorBody('UPLOAD_FAILED', 'Failed to deliver file'), 500);
+    }
+
+    const filename = auth.attachment.originalName || auth.attachment.fileName;
+    return streamResponse(stream, {
+      contentType: 'application/octet-stream',
+      disposition: `attachment; filename*=UTF-8''${encodeRfc8187(filename)}`,
+    });
+  });
 
   // --------------------------------------------------------------
   // GET /attachments/by-key/:key(*)
@@ -427,7 +543,7 @@ export const registerAttachmentStreamRoutes = (app: OpenAPIHono<CrowiHonoBinding
   // Phase 2: never reads `derivatives`/`mode`/`reason`, always resolves via
   // the same `Attachment.findDeliveryFile` (original-fixed) static. Scope
   // (`attachments:read`) is enforced by the `requireScope(...)` `app.use`
-  // registered above; auth is the broad `/attachments/*` jwtAuth apply.
+  // registered above; auth is the broad `/attachments/*` createAttachmentAuth apply.
   app.get('/attachments/:id{[0-9a-fA-F]{24}}/original', async (c) => {
     const result = await loadAuthorizedAttachment(c);
     if (!result.ok) return result.response;
@@ -449,7 +565,8 @@ export const registerAttachmentStreamRoutes = (app: OpenAPIHono<CrowiHonoBinding
   // server root, matching the next.config rewrite target.
   //
   // No auth is installed on this literal (it is OUTSIDE every broad
-  // jwtAuth apply — `/pages/*`, `/attachments/*` — so none catches it).
+  // auth apply — `/pages/*` createJwtAuth, `/attachments/*`
+  // createAttachmentAuth — so none catches it).
   // The redirect just emits a 302 to `/api/attachments/:id`, whose
   // own handler enforces JWT + the page grant; authorization is deferred to
   // the redirect target. The 24-hex constraint keeps this disjoint from any
