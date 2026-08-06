@@ -62,8 +62,8 @@ describe('LoginForm registration link', () => {
 
 describe('LoginForm federated provider buttons', () => {
   const providers = [
-    { name: 'google', buttonLabel: 'Google で続ける' },
-    { name: 'okta', buttonLabel: 'Okta で続ける' },
+    { name: 'google', buttonLabel: 'Google' },
+    { name: 'okta', buttonLabel: 'Okta' },
   ];
 
   beforeEach(() => {
@@ -75,7 +75,7 @@ describe('LoginForm federated provider buttons', () => {
     render(<LoginForm />);
 
     const labels = screen.getAllByRole('button').map((button) => button.textContent);
-    expect(labels).toEqual([expect.stringContaining('サインイン'), 'Google で続ける', 'Okta で続ける']);
+    expect(labels).toEqual([expect.stringContaining('サインイン'), 'Google でサインイン', 'Okta でサインイン']);
   });
 
   // Fail-closed: a button that might not reach a configured provider is
@@ -88,7 +88,7 @@ describe('LoginForm federated provider buttons', () => {
     useAuthProviders.mockReturnValue(queryState);
     render(<LoginForm />);
 
-    expect(screen.queryByRole('button', { name: 'Google で続ける' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Google でサインイン' })).not.toBeInTheDocument();
     // The password form and the registration link must survive all three.
     expect(screen.getByRole('button', { name: /サインイン/ })).toBeInTheDocument();
     expect(registerLink()).toHaveAttribute('href', '/register');
@@ -104,7 +104,7 @@ describe('LoginForm federated provider buttons', () => {
     vi.spyOn(window, 'location', 'get').mockReturnValue({ ...window.location, assign } as unknown as Location);
 
     render(<LoginForm />);
-    fireEvent.click(screen.getByRole('button', { name: 'Google で続ける' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Google でサインイン' }));
 
     await waitFor(() => expect(assign).toHaveBeenCalledWith('https://api.example.com/api/auth/providers/google/start?signed=1'));
     expect(buildProviderStartUrl).toHaveBeenCalledWith('google', '/wiki/page');
@@ -117,7 +117,7 @@ describe('LoginForm federated provider buttons', () => {
     vi.spyOn(window, 'location', 'get').mockReturnValue({ ...window.location, assign: vi.fn() } as unknown as Location);
 
     render(<LoginForm />);
-    fireEvent.click(screen.getByRole('button', { name: 'Google で続ける' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Google でサインイン' }));
 
     await waitFor(() => expect(buildProviderStartUrl).toHaveBeenCalledWith('google', '/'));
   });
@@ -127,10 +127,10 @@ describe('LoginForm federated provider buttons', () => {
     buildProviderStartUrl.mockRejectedValue(new Error('no subtle crypto'));
 
     render(<LoginForm />);
-    fireEvent.click(screen.getByRole('button', { name: 'Google で続ける' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Google でサインイン' }));
 
     expect(await screen.findByText('サインイン方法を読み込めませんでした。')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Google で続ける' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Google でサインイン' })).toBeEnabled();
   });
 });
 
@@ -174,5 +174,32 @@ describe('LoginForm federated failure reporting', () => {
     render(<LoginForm />);
 
     expect(screen.queryByText(/サインインを完了できませんでした/)).not.toBeInTheDocument();
+  });
+});
+
+// Google's sign-in branding requires its own mark on the button, and
+// lucide ships no Google icon — so the logo is an inline SVG we own.
+describe('LoginForm provider brand marks', () => {
+  beforeEach(() => {
+    mockAppInfo({ data: makeAppInfo({ canSelfRegister: true }), isLoading: false, isError: false });
+  });
+
+  it('draws the Google mark on the Google button', () => {
+    useAuthProviders.mockReturnValue({ data: [{ name: 'google', buttonLabel: 'Google' }] });
+    render(<LoginForm />);
+
+    expect(screen.getByRole('button', { name: 'Google でサインイン' }).querySelector('svg')).toBeInTheDocument();
+  });
+
+  // A wrong logo is worse than no logo, and falling back to the API's
+  // `iconUrl` would leak every visitor to a third-party host before they
+  // have chosen to sign in with it.
+  it('renders a label-only button for a provider we ship no mark for', () => {
+    useAuthProviders.mockReturnValue({ data: [{ name: 'okta', buttonLabel: 'Okta', iconUrl: 'https://okta.example/logo.svg' }] });
+    render(<LoginForm />);
+
+    const button = screen.getByRole('button', { name: 'Okta でサインイン' });
+    expect(button.querySelector('svg')).not.toBeInTheDocument();
+    expect(button.querySelector('img')).not.toBeInTheDocument();
   });
 });

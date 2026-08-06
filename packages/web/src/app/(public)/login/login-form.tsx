@@ -13,7 +13,8 @@ import { loginWithPassword } from '@/lib/auth-login';
 import { buildProviderStartUrl } from '@/lib/auth-handoff';
 import { defaultLandingPath, safeContinueUrl } from '@/lib/login-redirect';
 import { useAppInfo } from '@/lib/use-app-info';
-import { useAuthProviders } from '@/lib/use-auth-providers';
+import { type AuthProviderSummary, useAuthProviders } from '@/lib/use-auth-providers';
+import { BRAND_MARK_BY_PROVIDER } from '@/components/brand-icons';
 import { m } from '@paraglide/messages.js';
 
 /**
@@ -30,6 +31,19 @@ const FEDERATED_ERROR_MESSAGES: Record<string, () => string> = {
   email_not_allowed: () => m['auth.login.federated_error.email_not_allowed'](),
   account_inactive: () => m['auth.login.federated_error.account_inactive'](),
 };
+
+/**
+ * The provider's own logo when we ship one, otherwise nothing.
+ *
+ * `iconUrl` from the API is deliberately NOT used as a fallback: it
+ * would make the sign-in screen depend on a third-party host being
+ * reachable, and disclose every visitor to that host before anyone has
+ * chosen to sign in with it. A label-only button beats both.
+ */
+function ProviderMark({ provider }: { provider: AuthProviderSummary }) {
+  const Mark = BRAND_MARK_BY_PROVIDER[provider.name];
+  return Mark ? <Mark className="h-4 w-4" /> : null;
+}
 
 export function LoginForm() {
   const router = useRouter();
@@ -176,8 +190,8 @@ export function LoginForm() {
                 disabled={startingProvider !== null}
                 onClick={() => handleProviderClick(provider.name)}
               >
-                {provider.iconUrl && <img src={provider.iconUrl} alt="" aria-hidden className="h-4 w-4" />}
-                {provider.buttonLabel}
+                <ProviderMark provider={provider} />
+                {m['auth.providers.sign_in_with']({ provider: provider.buttonLabel })}
               </Button>
             ))}
           </div>

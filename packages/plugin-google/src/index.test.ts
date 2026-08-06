@@ -31,8 +31,19 @@ describe('@crowi/plugin-google', () => {
       expect(plugin.name).toBe('@crowi/plugin-google');
     });
 
-    it('places itself in the admin Auth section', () => {
-      expect(plugin.adminPlacement?.section).toBe('auth');
+    // NOT `'auth'` — which is what `deriveSectionFromHooks` infers from
+    // `registerAuth`, and what this test used to assert. The admin
+    // sidebar renders no heading for that section, so the entry was
+    // dropped and the config page was reachable only by typing its URL.
+    // Google is an external service integration, like Slack.
+    it('places itself in the admin platform-services section, which the sidebar actually renders', () => {
+      expect(plugin.adminPlacement?.section).toBe('platform');
+    });
+
+    // lucide has no Google logo and its `Chrome` icon names a different
+    // product, so the web app ships the official mark under this name.
+    it('asks for the Google brand mark by name', () => {
+      expect(plugin.adminPlacement?.icon).toBe('google');
     });
 
     it('ships ja and en labels for both credential fields', () => {

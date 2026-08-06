@@ -72,7 +72,11 @@ export const plugin: CrowiPlugin = {
    */
   configAtomicGroups: [{ name: 'clientCredentials', keys: ['clientId', 'clientSecret'], sensitive: true }],
 
-  adminPlacement: { section: 'auth', label: 'Google', icon: 'key-round' },
+  // `'platform'`, not the `'auth'` that `deriveSectionFromHooks` would
+  // infer from `registerAuth`: Google here is an external service
+  // integration alongside Slack, not a setting of Crowi's own
+  // authentication (which is what `/admin/auth` covers).
+  adminPlacement: { section: 'platform', label: 'Google', icon: 'google' },
 
   configI18n: {
     ja: {
