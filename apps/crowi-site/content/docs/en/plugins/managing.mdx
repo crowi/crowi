@@ -92,21 +92,28 @@ extension points, and clicking it navigates to the config form at
 
 ### Configuration readiness warning
 
-When the selected storage or search driver is missing configuration it
-needs — an S3 bucket name, or an Elasticsearch / OpenSearch cluster URL,
-for example — a warning banner is shown to **administrators only**. It
-appears on every wiki page and on `/admin/plugins`, with a direct link to
-the affected plugin's config screen. It clears on the next refetch after
-the missing value is saved.
+When the selected storage, search, or mail sender driver is missing
+configuration it needs — an S3 bucket name, an Elasticsearch / OpenSearch
+cluster URL, an SMTP host, or a Resend API key, for example — a warning
+banner is shown to **administrators only**. It appears on every wiki page
+and on `/admin/plugins`, with a direct link to the affected config screen.
+It clears on the next refetch after the missing value is saved.
 
-Previously this kind of misconfiguration only surfaced when an upload or a
-search failed with a 500. The banner makes it visible as soon as the
+Some readiness issues come from core settings rather than a plugin — the
+mail sender address (`mail:from`) is one. In that case the banner links to
+the mail settings screen (`/admin/mail`) instead, and it never shows up as
+a row on `/admin/plugins` (only a plugin's own configuration gap appears
+there).
+
+Previously this kind of misconfiguration only surfaced when an upload, a
+search, or a test email failed. The banner makes it visible as soon as the
 instance is configured.
 
-Non-admins never see the banner and never make the readiness request. The
-`GET /admin/plugins/readiness` response includes only the plugin name, its
-admin placement, and each affected field name with a flag saying whether it
-is set — never configuration values, URLs, or secrets.
+Non-admins never see the banner and never make the readiness request. For
+each issue, the `GET /admin/plugins/readiness` response includes only an
+`id`, its source (plugin or core setting), a display label, a target link,
+and each affected field name with a flag saying whether it is set — never
+configuration values, URLs, or secrets.
 
 For declaring readiness requirements in a plugin, see
 [Plugin development](./developing).
