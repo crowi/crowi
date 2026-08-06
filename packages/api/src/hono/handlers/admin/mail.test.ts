@@ -1,5 +1,6 @@
 import request from 'supertest';
 import type { MailSender } from '@crowi/plugin-api';
+import Debug from 'debug';
 import { app, crowi, Fixture } from 'src/test/setup';
 import { authHeaders } from 'src/test/test-helpers';
 import { createJwtUtil } from 'src/util/jwt';
@@ -137,30 +138,70 @@ describe('Routes /api/admin/mail (Hono)', () => {
       );
     });
 
-    it('returns 502 when from is not configured', async () => {
+    it('returns 502 with MAIL_FROM_NOT_CONFIGURED and a safe message when from is not configured (feature-core-config-readiness-and-mail AC-5)', async () => {
       const sendSpy = jest.fn(async () => undefined);
       crowi.getPlugins().active.mail = { send: sendSpy };
 
       const res = await request(app).post('/api/admin/mail/test').set(authHeaders(adminToken)).send({});
 
       expect(res.status).toBe(502);
-      expect(res.body.error.code).toBe('MAIL_TEST_FAILED');
+      expect(res.body.error.code).toBe('MAIL_FROM_NOT_CONFIGURED');
+      expect(res.body.error.message).not.toMatch(/mail:from/);
       expect(sendSpy).not.toHaveBeenCalled();
     });
 
-    it('returns 502 with the underlying message when the sender throws', async () => {
+    it('returns 502 with MAIL_TEST_FAILED and a safe fixed message — never the underlying transport error — when the sender throws, but logs the original detail server-side (AC-6)', async () => {
       await Config.updateConfig('crowi', 'mail:from', 'noreply@example.com');
       await reloadConfigCache();
+      // Mirrors a real nodemailer SMTP transport error: `.message` alone is
+      // often a generic one-liner, while the actionable diagnostic detail
+      // (`.code`, `.command`) sits in extra properties of the Error object.
+      // A log that only captures `error.message` would miss `.code` here.
+      const transportError = new Error('connect ECONNREFUSED 127.0.0.1:25');
+      Object.assign(transportError, { code: 'ECONNREFUSED', command: 'CONN' });
       crowi.getPlugins().active.mail = {
         send: jest.fn(async () => {
-          throw new Error('connect ECONNREFUSED');
+          throw transportError;
         }),
       };
 
-      const res = await request(app).post('/api/admin/mail/test').set(authHeaders(adminToken)).send({});
+      // Capture the handler's `debug('crowi:hono:handlers:admin:mail')`
+      // output directly (rather than asserting on stderr text), by
+      // overriding the shared `debug` module's log sink and enabling this
+      // namespace — `debug`'s `enabled` getter re-checks `Debug.namespaces`
+      // on every call, so this takes effect for the already-constructed
+      // handler-module instance without any module reset.
+      const previousNamespaces = Debug.disable();
+      const originalLog = Debug.log;
+      const logSpy = jest.fn();
+      Debug.log = logSpy;
+      Debug.enable('crowi:hono:handlers:admin:mail');
+
+      let res;
+      try {
+        res = await request(app).post('/api/admin/mail/test').set(authHeaders(adminToken)).send({});
+      } finally {
+        Debug.log = originalLog;
+        Debug.enable(previousNamespaces);
+      }
 
       expect(res.status).toBe(502);
-      expect(res.body.error).toEqual({ code: 'MAIL_TEST_FAILED', message: 'connect ECONNREFUSED' });
+      expect(res.body.error.code).toBe('MAIL_TEST_FAILED');
+      expect(res.body.error.message).not.toMatch(/ECONNREFUSED/);
+      expect(JSON.stringify(res.body)).not.toMatch(/ECONNREFUSED/);
+
+      // The raw transport detail never reaches the wire above, but it must
+      // still reach the server-side debug log (spec contract: "その他の
+      // mail test exception は ... ログに原文を残し"). Assert more than the
+      // one-line message: the stack trace and the extra `.code` property
+      // (which would NOT appear if only `error.message` were logged) must
+      // both be present, so this regression-proofs against logging just
+      // `.message` (AC-6).
+      expect(logSpy).toHaveBeenCalled();
+      const logged = logSpy.mock.calls.map((callArgs) => callArgs.join(' ')).join('\n');
+      expect(logged).toMatch(/ECONNREFUSED/);
+      expect(logged).toMatch(/at /); // stack trace frame
+      expect(logged).toMatch(/code: 'ECONNREFUSED'/); // extra property beyond `.message`
     });
   });
 });
