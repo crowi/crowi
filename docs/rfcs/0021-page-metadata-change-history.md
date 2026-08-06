@@ -34,8 +34,9 @@
 ## §0 Summary
 
 Crowi will record page creation, rename, visibility, trash, restore, and
-publish as typed, append-only `PageHistoryEvent` documents. Hard-deletion
-history/tombstones are a separately gated Phase-4 addition. Content
+publish as typed, append-only `PageHistoryEvent` documents. Hard deletion is
+recorded separately, keyed by path rather than by Page, as a gated Phase-4
+addition. Content
 versions remain `Revision` documents. A new server-side history endpoint will
 merge both sources into one cursor-paginated, page-local timeline represented
 as a discriminated union.
@@ -64,10 +65,12 @@ restore is reversed only by executing the corresponding domain operation
 again after checking the current state. The inverse operation creates a new
 history event; it never edits the earlier event.
 
-Phase 4 hard delete purges content revisions and ordinary page-local history
-and may retain a minimal `page_deleted` tombstone under a separate admin-only
-retention policy. Deployments whose privacy policy requires complete erasure
-can select an erase mode that removes the tombstone as well.
+Phase 4 hard delete purges content revisions and ordinary page-local history,
+and writes a minimal administrator-only `PageDeletionRecord` keyed by the path
+the Page occupied. That record is retained indefinitely — a path can be reused,
+so a Page-keyed or expiring record would lose the answer exactly when it is
+asked. Deployments whose privacy policy requires erasure remove records through
+an explicit administrative operation.
 
 **Scope discipline.** This RFC changes where changes are recorded. It does not
 change who may make them, how often they may be made, or what a page path may
@@ -154,7 +157,7 @@ without fabricating history.
   `operationId`.
 - Preserve current Page authorization and minimize event payloads so a later
   restricted-to-public transition does not disclose ACL membership.
-- Define the hard-delete tombstone and complete-erasure protocol for the
+- Define the hard-delete deletion record and explicit-erasure protocol for the
   Phase-4 release, rather than expose partial deletion history earlier.
 - Route search, backlink, cache, presence, Activity, and Notification effects
   by explicit committed entry kind.
@@ -287,8 +290,7 @@ type PageHistoryEventKind =
   | 'visibility_changed'
   | 'page_trashed'
   | 'page_restored'
-  | 'draft_published'
-  | 'page_deleted';
+  | 'draft_published';
 
 type PageHistoryEvent<K extends PageHistoryEventKind> = {
   _id: ObjectId;
@@ -299,11 +301,14 @@ type PageHistoryEvent<K extends PageHistoryEventKind> = {
   occurredAt: Date;
   operationId: string;
   source: 'web' | 'oauth' | 'pat' | 'collab' | 'system';
-  scope: 'page' | 'admin';
-  expiresAt?: Date;
   payload: PageHistoryPayloadByKind[K];
 };
 ```
+
+Every event in this collection belongs to a Page that still exists. Hard
+deletion is recorded elsewhere — see §5.6 — so there is no admin-scoped
+variant here and no expiry: a page-scoped event lives exactly as long as its
+Page.
 
 `payload` is implemented as kind-specific nested schemas or Mongoose
 discriminators, not `Mixed`. Raw request bodies and arbitrary metadata are
@@ -339,10 +344,6 @@ type PageHistoryPayloadByKind = {
   draft_published: {
     fromStatus: 'draft';
     toStatus: 'published';
-  };
-  page_deleted: {
-    pathAtDeletion: string;
-    retentionMode: 'retain_tombstone' | 'complete_erasure';
   };
 };
 ```
@@ -385,7 +386,9 @@ An internal rename performed as part of trash or restore does not create a
   ready Page.
 - `{ page: 1, operationId: 1, kind: 1 }` is unique and makes command retries
   idempotent while allowing different kinds in one higher-level operation.
-- `{ scope: 1, expiresAt: 1 }` supports administrative retention cleanup.
+- Deletion records are a separate collection with their own indexes (§5.6);
+  this collection needs no retention index because it has no retained
+  membership that outlives its Page.
 - Actor references may cease to populate after account deletion. The event
   document remains immutable; response projection returns a null or
   anonymized actor.
@@ -482,34 +485,67 @@ crash is safe. A subtree record additionally persists the original target map
 before work starts; retries use those immutable ids and paths, never a fresh
 path scan.
 
-### §5.6 Retention
+### §5.6 Retention and the deletion record
 
-- Before Phase 4, no `page_deleted` event/tombstone is written. Physical
-  deletion paths still use the explicit cleanup modes below so ordinary
-  page-scoped history cannot be orphaned.
-- `page_created`, `page_renamed`, `visibility_changed`, `page_trashed`,
-  `page_restored`, and `draft_published` have `scope: 'page'` and live with the
-  Page.
-- Ordinary page-scoped events are removed during hard-delete cleanup.
-- `page_deleted` has `scope: 'admin'`, contains no body or ACL membership, and
-  is inaccessible through the ordinary page history endpoint.
-- Under `retain_tombstone`, the deletion event remains until the configured
-  administrative expiry.
-- Under `complete_erasure`, the state machine removes the tombstone before it
-  removes the final Page deletion marker.
+Page-scoped events live exactly as long as their Page. `page_created`,
+`page_renamed`, `visibility_changed`, `page_trashed`, `page_restored`, and
+`draft_published` are removed during hard-delete cleanup, because after the
+Page and its ACL are gone there is nothing left to authorize a read against.
+
+Hard deletion is recorded in a **separate collection that is not keyed by
+Page**, `PageDeletionRecord`:
+
+```ts
+type PageDeletionRecord = {
+  _id: ObjectId;
+  pageId: ObjectId;      // recorded value, not a reference — the Page is gone
+  path: string;          // the path the Page occupied at deletion
+  actor: ObjectId | null;
+  deletedAt: Date;
+  mode: 'user_hard_delete';
+};
+```
+
+- `{ path: 1, deletedAt: -1 }` answers "what has happened at this path", newest
+  first, across Pages that no longer exist.
+- `{ deletedAt: -1 }` supports an administrative recent-deletions view.
+- `{ pageId: 1 }` resolves a known id.
+
+It carries no body, no ACL membership, no granted-user ids, no share tokens,
+and no request metadata — the last path, who, when, and the mode.
+
+**Records are retained indefinitely and there is no TTL index.** Two separate
+reasons make an expiry wrong here rather than merely conservative:
+
+1. Paths are reused. A Page created later at a path a deleted Page once
+   occupied is a different Page with a different id, so a Page-keyed record
+   could not surface the earlier deletion under that path even while it still
+   existed. Keying by path is what makes the record findable at all.
+2. An expiry deletes the answer to "who removed this" precisely in the case
+   the question is asked late, which for a wiki page nobody visits often is
+   the normal case. A hard delete that quietly erases its own evidence after a
+   timer reproduces the gap this RFC exists to close.
+
+Erasure remains available, but as an **explicit administrative operation
+rather than a timer**. That keeps a deletion-on-request capability without
+making forgetting the default.
+
+The record is administrator-only. It is never returned by the ordinary page
+history endpoint, which by construction serves a live Page.
 
 No code path may call a bare Page `deleteOne` once writers are enabled.
 `removePage`, `removePageById`, draft-cancel compensation, and redirect-origin
 cleanup are routed through a deletion service with an explicit mode. A
 `creation_cancel` mode durably records ownership in the creation operation,
 purges that Page's ordinary history/revisions, and deletes the Page without a
-tombstone; `redirect_stub_cleanup` does the same for a suppressed stub. Only
-the Phase-4 `user_hard_delete` mode may create `page_deleted`. This prevents
-orphan page-scoped events after the Page and its ACL are gone.
+deletion record; `redirect_stub_cleanup` does the same for a suppressed stub.
+Only the Phase-4 `user_hard_delete` mode writes a `PageDeletionRecord`. This
+prevents orphan page-scoped events after the Page and its ACL are gone, and
+keeps the deletion record meaning "a user deleted a page" rather than "the
+system cleaned something up".
 
-The exact default retention duration remains an implementation-scoped policy
-decision (§17). The permission boundary and complete-erasure capability become
-normative together in Phase 4.
+The permission boundary and the explicit-erasure capability become normative
+together in Phase 4.
 
 ## §6 Write protocol and consistency
 
@@ -615,7 +651,7 @@ a Page in `renaming`.
 Internal stub creation creates neither `page_created` nor a content-history
 entry. Its removal must use `deleteMode: 'redirect_stub_cleanup'`, which is
 auditable in the operation record and is forbidden from producing a
-`page_deleted` tombstone. User-requested hard delete uses a distinct mode.
+`PageDeletionRecord`. User-requested hard delete uses a distinct mode.
 
 ### §6.3 Content save and sequence assignment
 
@@ -716,25 +752,26 @@ remain id-based.
 
 ## §7 Hard delete state machine (Phase 4)
 
-Hard-delete history and tombstones are not enabled before Phase 4. Phase 4
-cannot use the normal mutation protocol and then immediately
-delete the Page, because doing so would also delete its only pending outbox.
-It uses a retryable lifecycle state:
+Hard-delete history is not enabled before Phase 4. Phase 4 cannot use the
+normal mutation protocol and then immediately delete the Page, because doing
+so would also delete its only pending outbox. It uses a retryable lifecycle
+state:
 
-1. CAS the Page into `deleting`, block normal reads/writes, allocate the next
-   sequence, and set a pending `page_deleted` event.
-2. Materialize the admin-scoped tombstone.
+1. CAS the Page into `deleting`, block normal reads/writes, and record in the
+   operation that a deletion record is owed for this Page and path.
+2. Write the `PageDeletionRecord` idempotently, keyed by the operation. It
+   lives in its own collection, so it neither consumes a Page sequence nor
+   depends on the Page surviving.
 3. Idempotently purge content Revisions and child documents, then repeat the
    child sweep until a pass finds nothing (see below).
-4. Remove ordinary page-scoped PageHistoryEvent documents, excluding the
-   tombstone.
-5. Under `complete_erasure`, remove the tombstone while the deleting Page still
-   provides the durable retry marker.
-6. Delete the Page last.
+4. Remove the Page's PageHistoryEvent documents. All of them are page-scoped,
+   so none is exempt.
+5. Delete the Page last.
 
-Under `retain_tombstone`, step 5 is skipped and the admin-scoped event survives
-until retention expiry. Under complete erasure, no history artifact survives
-the final Page deletion.
+The deletion record survives step 5 by construction — it is not keyed by the
+Page and carries no reference that the deletion invalidates. Removing it is a
+separate, explicit administrative operation (§5.6), never a step of this state
+machine and never a timer.
 
 ### §7.1 Child writes that were already authorized
 
@@ -773,11 +810,12 @@ compensated after the sweep but before Page deletion.
 Every cleanup step is idempotent. A worker scans `deleting` Pages and resumes
 from the first incomplete step. The ordinary page-history endpoint never
 serves a deleting or deleted Page. An administrator audit endpoint authorizes
-tombstone lookup independently because current Page ACL cannot be evaluated
-after deletion.
+deletion-record lookup independently, because current Page ACL cannot be
+evaluated after deletion — the record is keyed by path, not by a Page whose
+grants no longer exist.
 
 Internal redirect-stub cleanup during restore is not a user-facing hard delete
-and does not create a tombstone. It requires the explicit
+and does not create a deletion record. It requires the explicit
 `redirect_stub_cleanup` mode recorded by the enclosing operation. The outer
 restore event is authoritative.
 
@@ -855,7 +893,8 @@ type PageHistoryResponse = {
 };
 ```
 
-The ordinary endpoint never returns `page_deleted`. Content rows contain
+The ordinary endpoint serves a live Page, so deletion records cannot appear in
+it by construction rather than by filtering. Content rows contain
 Revision metadata but not `body` or `renderedAst`. Existing authorized
 Revision detail endpoints remain the source for diff, historical rendering,
 and restore.
@@ -966,7 +1005,7 @@ PageHistoryEvent to Activity, never in the opposite direction.
 - Past paths are never used for authorization.
 - Missing, inaccessible, deleting, and deleted Pages use existing
   not-found-style behavior.
-- Admin tombstones use a separate administrator authorization boundary and are
+- Deletion records use a separate administrator authorization boundary and are
   never returned by the ordinary endpoint.
 - Inverse actions re-run current authorization and conflict checks; history
   visibility does not grant mutation rights.
@@ -984,8 +1023,8 @@ The corresponding mitigation is strict payload minimization:
 - visibility events contain only grant enum before/after values;
 - no granted-user ids, emails, share tokens, link claims, request bodies, or
   arbitrary metadata are stored;
-- deletion tombstones contain only the last path, actor reference, time, and
-  retention mode; and
+- deletion records contain only the last path, actor reference, time, and
+  deletion mode, and are administrator-only; and
 - actor disappearance changes response projection, not the event document.
 
 Event path fields store the Page's path exactly as it was. **This RFC does not
@@ -1169,7 +1208,7 @@ detail and diff routes remain.
 - Every content and metadata CAS rejects stale sequence or non-empty outbox;
   a stalled metadata marker cannot be overwritten by a collab save.
 - Redirect creation failure produces no completed outer event; internal stub
-  create/delete modes produce neither creation history nor tombstones.
+  create/delete modes produce neither creation history nor deletion records.
 - Normal and draft creation, plus collaborative publication, use the shared
   creating/publish command service and produce their required entries.
 - By-id/by-path reads, WebSocket saves, workers, twin checks, rename checks,
@@ -1221,7 +1260,7 @@ Two cases are called out because they are the ones a predicate cannot cover:
 - Restricted-to-public transitions expose only minimized payloads.
 - Deleted/suspended actors return null or anonymized references.
 - A pending committed entry is not omitted.
-- `page_deleted` never appears in the ordinary endpoint.
+- Deletion records are unreachable through the ordinary endpoint.
 
 ### §14.4 Web tests
 
@@ -1248,8 +1287,10 @@ Two cases are called out because they are the ones a predicate cannot cover:
 - Metadata events do not change seen-by state.
 - Activity/Notification failure cannot roll back Page state or history.
 - Existing Revision list/detail consumers remain content-only.
-- Hard-delete complete-erasure mode leaves no Page, Revision, page-scoped
-  event, or tombstone.
+- Hard delete leaves no Page, Revision, or page-scoped event, and leaves
+  exactly one deletion record, which survives the Page.
+- A path reused after a hard delete still resolves the earlier deletion record
+  under that path, and the new Page's own history contains none of it.
 - Phase-4 hard-delete tests cover a collab save racing purge and prove no
   orphan Revision can remain; ordinary physical draft/redirect cleanup is
   either explicitly in redirect cleanup mode or cannot create history.
@@ -1412,8 +1453,9 @@ gap this RFC exists to close.
 
 ### §16.4 Phase 4 — hard-delete administration and hardening
 
-- Enable the complete hard-delete state machine together with admin-only
-  tombstone lookup, retention cleanup, authorization policy, and verification.
+- Enable the complete hard-delete state machine together with the
+  path-keyed `PageDeletionRecord`, admin-only lookup, the explicit erasure
+  operation, authorization policy, and verification.
 - Add inverse metadata actions where product UX permits them.
 - Exercise large-Revision migration and repair benchmarks.
 - Complete operator, privacy, and retention documentation.
@@ -1427,8 +1469,11 @@ gap this RFC exists to close.
 2. Revision remains content-only; metadata-only Revision rows are prohibited.
 3. The first release includes the bounded outbox and repair path.
 4. Content restore remains body-only.
-5. Hard delete may retain only an admin-scoped tombstone; its state machine,
-   authorization boundary, complete-erasure policy, and verification ship
+5. Hard delete writes a path-keyed `PageDeletionRecord` in its own collection,
+   retained indefinitely, with erasure as an explicit administrative
+   operation rather than a timer. Paths are reused, so a Page-keyed or
+   expiring record would lose the answer exactly when it is asked. Its state
+   machine, authorization boundary, erasure operation, and verification ship
    together in Phase 4.
 6. Ordinary visibility history contains grant enum before/after only.
 7. Page-local historySequence is normative and existing content Revisions are
@@ -1459,17 +1504,13 @@ gap this RFC exists to close.
 
 ### §17.2 Residual open questions
 
-1. **Default retained-tombstone duration.** The data model supports an
-   administrative `expiresAt` and complete-erasure mode, but the default
-   duration and whether it is global-only or operator-configurable must be
-   selected before Phase 4 ships.
-2. **Sequence migration batch threshold.** The migration is correct per Page
+1. **Sequence migration batch threshold.** The migration is correct per Page
    and may be staged, but Phase 2 must measure production-scale Revision
    counts and pin batch size, pause/resume limits, and the threshold at which a
    staged rollout is mandatory.
 
-Neither question changes the event schema, outbox protocol, authorization
-boundary, body-only restore rule, or server-merged API.
+This question does not change the event schema, outbox protocol,
+authorization boundary, body-only restore rule, or server-merged API.
 
 ## §18 Future work
 
@@ -1481,7 +1522,7 @@ boundary, body-only restore rule, or server-merged API.
 - Explicit content-restore provenance that does not alter Revision's
   content-only meaning.
 - Read/unread cursors that distinguish content revisions from metadata events.
-- Retention classes beyond live-page history and deletion tombstones.
+- Retention classes beyond live-page history and deletion records.
 
 ## §19 References
 
