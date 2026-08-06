@@ -5,6 +5,7 @@ export * from './app';
 export * from './installer';
 export * from './token-auth';
 export * from './federated-auth';
+export * from './federated-registration';
 export * from './invite-accept';
 export * from './password-reset';
 export * from './activation';

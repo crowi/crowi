@@ -25,6 +25,7 @@ export * from './schemas/common';
 export * from './schemas/draft';
 export * from './schemas/email-change';
 export * from './schemas/federated-auth';
+export * from './schemas/federated-registration';
 export * from './schemas/installer';
 export * from './schemas/invite-accept';
 export * from './schemas/mail-token';
