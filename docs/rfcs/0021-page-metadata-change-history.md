@@ -427,7 +427,7 @@ new writes cannot interleave with an unsequenced range.
 Page also gains an optional `pendingHistoryEntry`:
 
 ```ts
-type PendingHistoryEntry =
+type PendingHistoryEntry = { entryId: ObjectId } & (
   | {
       type: 'page_event';
       event: PageHistoryEventEnvelopeAndPayload;
@@ -444,13 +444,33 @@ type PendingHistoryEntry =
       revisionId: ObjectId;
       sequence: number;
       migrationOwner: string;
-    };
+    }
+);
 ```
 
 The field is absent or contains one entry. It is not an embedded history
 array. Every history-producing command must drain an existing entry before
 attempting another Page CAS. This provides a hard document-size bound and a
 per-Page serialization point without requiring an unbounded Page document.
+
+`entryId` is generated when the entry is placed and exists on every variant.
+**It is the sole identity the drain compares.** Clearing the slot is a
+conditional update matched on `pendingHistoryEntry.entryId` and nothing else,
+so a drain can only ever remove the entry its caller actually read.
+
+The alternative — deciding "is this the same entry?" by comparing the entry's
+contents — does not work, and the failure is not hypothetical. Comparing a
+subset of fields lets a drain clear an entry that merely resembles the one it
+read, which silently breaks the one-slot invariant this outbox exists to
+provide. Tightening the comparison does not converge either: fields can be
+added below the schema through the native driver, so any content-based match
+has to keep growing to cover shapes the writer never declared. A single
+opaque id removes the question instead of narrowing it.
+
+Only the `page_event` variant has a natural id (`event._id`, the
+materialization idempotency key of §5.3). `entryId` is deliberately separate
+from it and present on all three variants, so the drain has one rule rather
+than a per-variant rule.
 
 The content variant exists only to durably finish the cross-collection
 sequence assignment after the Page pointer CAS. It does not create a
