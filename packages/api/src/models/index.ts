@@ -12,6 +12,8 @@ import OAuthClient from './oauth-client';
 import OAuthDeviceCode from './oauth-device-code';
 import OAuthRefreshToken from './oauth-refresh-token';
 import Page from './page';
+import PageHistoryEvent from './page-history-event';
+import PageHistoryOperation from './page-history-operation';
 import PageYjsUpdate from './page-yjs-update';
 import PendingAuthRegistration from './pending-auth-registration';
 import PersonalAccessToken from './personal-access-token';
@@ -28,6 +30,8 @@ import Watcher from './watcher';
 
 export default {
   Page,
+  PageHistoryEvent,
+  PageHistoryOperation,
   User,
   UserIdentity,
   PendingAuthRegistration,
