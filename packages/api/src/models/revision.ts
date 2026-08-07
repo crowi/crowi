@@ -126,6 +126,27 @@ export interface RevisionDocument extends Document {
    * an "app" chip for `oauth` / `pat` (API) edits.
    */
   editVia?: 'web' | 'oauth' | 'pat';
+  /**
+   * RFC-0021 §5.4 (`feature-page-history-phase1-model`, Phase 1) — the
+   * page-local ordering value this Revision was assigned by a
+   * history-producing Page CAS. Purely additive: body, `renderedAst`,
+   * storage type, and restore semantics are unchanged by this field's
+   * presence or absence. Absent on every Revision written before this RFC
+   * (Phase 1 ships no writer that assigns it — Phase 2's command cutover
+   * and the RFC-0008 backfill migration are what populate it going
+   * forward); a Revision without a committed sequence is simply not
+   * displayed by the future merged history endpoint (Phase 3).
+   */
+  historySequence?: number;
+  /**
+   * RFC-0021 §5.4 (Phase 1) — the operation this Revision's content save
+   * belongs to, letting a body-plus-grant save's content row join the same
+   * operation group as its `PageHistoryEvent` sibling. Genuinely optional
+   * (not merely nullable) rather than always-nullable: Revisions written
+   * before this RFC have no operation, and the (Phase 2) backfill migration
+   * does not invent one for them.
+   */
+  historyOperationId?: string;
 }
 
 /**
@@ -307,6 +328,20 @@ export default (crowi: Crowi) => {
       default: undefined,
     },
     message: {
+      type: String,
+      default: undefined,
+    },
+    // RFC-0021 §5.4 (Phase 1, feature-page-history-phase1-model) — purely
+    // additive bookkeeping. See the `RevisionDocument` interface field docs
+    // above. No index in Phase 1: the (Phase 2) unsequenced-Revision repair
+    // scan and the merged-history reads are what will need one, and adding
+    // it ahead of any writer that populates the field would be index
+    // overhead with nothing behind it yet.
+    historySequence: {
+      type: Number,
+      default: undefined,
+    },
+    historyOperationId: {
       type: String,
       default: undefined,
     },
