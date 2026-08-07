@@ -1,0 +1,5 @@
+---
+"@crowi/api": patch
+---
+
+Backfill an upload's MIME type from its filename extension when the client didn't declare one (or explicitly declared `application/octet-stream`). MCP, curl, and other third-party scripts routinely skip the multipart `Content-Type`, which used to store — and later serve — a file like an uploaded `pixel.png` as a generic download instead of an inline image. `POST /api/pages/:pageId/attachments` and both `paste`/`dnd` intents of `POST /api/attachments/upload` now resolve the same effective MIME, so `attachment.fileFormat` / `mimeType` reflect the actual file type in this case. A client-declared MIME other than `application/octet-stream` is always kept as-is, even if it contradicts the filename's extension, and an unknown or absent extension still falls back to `application/octet-stream` as before. Delivery-side behavior — the `INLINE_SAFE_MIME` allow-list, `Content-Security-Policy: sandbox`, and `X-Content-Type-Options: nosniff` that keep attachment delivery safe from stored XSS — is unchanged.

@@ -40,6 +40,13 @@ type MessageFn = () => string;
  * Several codes intentionally reuse a pre-existing `errors.*` key (e.g.
  * `AUTHENTICATION_REQUIRED -> errors.auth_required`) rather than renaming the
  * key, to avoid churn in call sites that already use those keys directly.
+ *
+ * Not every server-side error code lives here. `PUT /me`'s
+ * `EMAIL_LOCKED_BY_FEDERATED_IDENTITY` rides the legacy
+ * `ProfileErrorResponseSchema` envelope, whose `code` is free-form rather
+ * than the shared `ErrorCode` enum, so `profile-form.tsx` localizes it
+ * directly — promoting it to `ErrorCode` for one route would be an
+ * unrelated global schema change.
  */
 export const ERROR_MESSAGE_KEYS = {
   // auth / permission / user status
@@ -85,8 +92,12 @@ export const ERROR_MESSAGE_KEYS = {
   INVALID_CREDENTIALS: m['errors.invalid_credentials'],
   REFRESH_TOKEN_REQUIRED: m['errors.refresh_token_required'],
   REGISTRATION_CLOSED: m['errors.registration_closed'],
+  // federated sign-in (RFC-0014)
+  FEDERATED_HANDOFF_INVALID: m['errors.federated_handoff_invalid'],
+  FEDERATED_HANDOFF_CONSUMED: m['errors.federated_handoff_consumed'],
   // admin subsystems
   ENCRYPTION_NOT_CONFIGURED: m['errors.encryption_key_not_set'],
+  MAIL_FROM_NOT_CONFIGURED: m['errors.mail_from_not_configured'],
   MAIL_TEST_FAILED: m['errors.mail_test_failed'],
   PLUGIN_NOT_FOUND: m['errors.plugin_not_found'],
   PLUGIN_CONFIG_VALIDATION_FAILED: m['errors.plugin_config_validation_failed'],

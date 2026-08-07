@@ -131,7 +131,7 @@ export const sendTestMailRoute = createRoute({
       content: { 'application/json': { schema: AdminRequiredErrorSchema } },
     },
     502: {
-      description: 'Test mail dispatch failed (SMTP error)',
+      description: 'Test mail dispatch failed (mail dispatch failure — e.g. sender/transport error, or the mail sender address is not configured)',
       content: { 'application/json': { schema: SendTestMailErrorSchema } },
     },
   },

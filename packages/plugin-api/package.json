@@ -47,6 +47,7 @@
     "zod": "catalog:"
   },
   "dependencies": {
-    "@xmldom/xmldom": "^0.9.10"
+    "@xmldom/xmldom": "^0.9.10",
+    "openid-client": "^6.8.4"
   }
 }

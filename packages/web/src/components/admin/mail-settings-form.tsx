@@ -10,8 +10,9 @@ import { ErrorAlert } from '@/components/ui/error-alert';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
+import { errorMessage } from '@/lib/error-message';
 import { useAuth } from '@/lib/use-auth';
-import { MailSettingsValidationFailure, useMailSettings, useSendTestMail, useUpdateMailSettings } from '@/lib/use-admin-mail-settings';
+import { MailSettingsValidationFailure, MailTestFailure, useMailSettings, useSendTestMail, useUpdateMailSettings } from '@/lib/use-admin-mail-settings';
 import { m } from '@paraglide/messages.js';
 
 export function MailSettingsForm() {
@@ -82,6 +83,12 @@ export function MailSettingsForm() {
   // Link straight to the active sender's config page when we know which
   // plugin registered it; otherwise fall back to the plugin list.
   const pluginSettingsHref = data.activePlugin ? `/admin/plugins/edit?name=${encodeURIComponent(data.activePlugin)}` : '/admin/plugins';
+
+  // feature-core-config-readiness-and-mail — localize the test-send error
+  // by its machine-readable `code` (never the wire `message`), and show a
+  // dedicated "go set it" link when the sender address itself is unset.
+  const testFailure = sendTest.error instanceof MailTestFailure ? sendTest.error : null;
+  const testErrorMessage = testFailure ? errorMessage(testFailure.code) : sendTest.error instanceof Error ? sendTest.error.message : undefined;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6" noValidate>
@@ -160,9 +167,17 @@ export function MailSettingsForm() {
                 {m['admin.mail.test_success']({ to: testSentAt.to })}
               </span>
             )}
-            {sendTest.isError && sendTest.error instanceof Error && (
+            {sendTest.isError && testErrorMessage && (
               <span className="text-sm text-destructive" role="alert">
-                {sendTest.error.message}
+                {testErrorMessage}
+                {testFailure?.code === 'MAIL_FROM_NOT_CONFIGURED' && (
+                  <>
+                    {' '}
+                    <Link href="/admin/mail" className="underline underline-offset-2 hover:no-underline">
+                      {m['admin.mail.test_failed_from_link']()}
+                    </Link>
+                  </>
+                )}
               </span>
             )}
           </div>

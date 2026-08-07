@@ -1,4 +1,5 @@
 import { createAdaptorServer } from '@hono/node-server';
+import type { Http2Bindings, HttpBindings } from '@hono/node-server';
 import Tokens from 'csrf';
 import Debug from 'debug';
 import http from 'http';
@@ -12,7 +13,7 @@ import { registerMentionDispatch } from 'src/events/mention-dispatch';
 import { registerPresencePageBroadcast } from 'src/events/presence-broadcast';
 import { registerRenderCacheInvalidation } from 'src/events/render-cache';
 import { buildHonoApp } from 'src/hono';
-import { stripApiPrefix } from 'src/hono/path-rewrite';
+import { dispatchToHonoApp } from 'src/hono/path-rewrite';
 import models from 'src/models';
 import { type AttachedNotifications, attachNotificationsServer } from 'src/notifications/attach';
 import { PluginManager, type PluginRegistries } from 'src/plugin';
@@ -109,6 +110,18 @@ class Crowi {
    * exactly one answer instead of two independently-truthy checks.
    */
   encryptionKey: string | null = null;
+
+  /**
+   * RFC-0014 phase 1 §5 — fully resolved federated-auth trusted origins
+   * (`AUTH_PUBLIC_API_URL` / `AUTH_PUBLIC_WEB_URL`, `CLIENT_URL` /
+   * same-origin fallback chain already applied by `validateEnv()`), or
+   * `null` when unresolvable. Public (like `redisUrl` / `mongoUri` /
+   * `encryptionKey`) so tests can override it directly for the shared
+   * singleton `crowi` (`src/test/setup.ts`), which normally boots with none
+   * of the three source env vars set; handler code reads it via
+   * `getFederatedAuthPublicUrls()` instead — see that method's doc comment.
+   */
+  federatedAuthPublicUrls: { apiUrl: string; webUrl: string } | null = null;
 
   /**
    * `warn`-severity findings from the constructor's one-time
@@ -216,6 +229,7 @@ class Crowi {
     this.redisUrl = envResult.values.redisUrl;
     this.mongoUri = envResult.values.mongoUri;
     this.encryptionKey = envResult.values.encryptionKey;
+    this.federatedAuthPublicUrls = envResult.values.federatedAuthPublicUrls;
 
     const redisRejectUnauthorized = this.env.REDIS_REJECT_UNAUTHORIZED !== '0';
     this.redisOpts = this.buildRedisOpts(this.redisUrl, redisRejectUnauthorized);
@@ -509,6 +523,28 @@ class Crowi {
   }
 
   /**
+   * RFC-0014 phase 1 §5 — the trusted `{ apiUrl, webUrl }` origin pair every
+   * federated-auth (OAuth2/OIDC) redirect URI / handoff audience is built
+   * from. Resolved ONCE by `validateEnv()` in the constructor (the
+   * `AUTH_PUBLIC_API_URL` / `AUTH_PUBLIC_WEB_URL` / `CLIENT_URL` fallback
+   * chain — see `util/env-schema.ts#resolveFederatedAuthPublicUrls`) and
+   * returned verbatim here.
+   *
+   * `null` means federated auth is disabled: unlike `getBaseUrl()`
+   * (`CLIENT_URL`, required for e.g. mail links but never boot-fails when
+   * unset), an unresolvable pair here is likewise NOT a boot failure —
+   * `hono/handlers/federated-auth.ts` treats `null` as "hide every
+   * provider from the list, 404 on /start" rather than aborting boot for
+   * every deployment that has not configured a federated-auth plugin.
+   *
+   * Deliberately NOT derived from the request Host/Origin/forwarded
+   * headers — same rationale as `getBaseUrl()`.
+   */
+  getFederatedAuthPublicUrls(): { apiUrl: string; webUrl: string } | null {
+    return this.federatedAuthPublicUrls;
+  }
+
+  /**
    * The address the api server itself is listening on (`this.port`, default
    * 4301). Used for the boot reporter's `🚀 API ready` banner and the
    * `@@crowi:ready api <url>` marker that `scripts/dev.mjs` keys on.
@@ -794,7 +830,16 @@ class Crowi {
     reporter.beginLayer('server');
 
     const honoApp = buildHonoApp(this);
-    const fetchFn = (request: Request): Response | Promise<Response> => honoApp.fetch(stripApiPrefix(request));
+    // RFC-0014 phase 1 §8 (AC-8) — `@hono/node-server`'s `FetchCallback` is
+    // `(request, env) => ...`, where `env` is `{ incoming, outgoing }`
+    // (`node:http`'s `IncomingMessage`/`ServerResponse`). Propagating `env`
+    // through to `honoApp.fetch` is what lets `getConnInfo(c)`
+    // (`@hono/node-server/conninfo`) read `c.env.incoming` — dropping it (a
+    // 1-arg callback) silently breaks any handler/middleware that relies on
+    // conninfo. `dispatchToHonoApp` (`src/hono/path-rewrite.ts`) is the ONE
+    // shared implementation of this call — `src/test/setup.ts`'s supertest
+    // listener uses the same function, not a hand-copied duplicate.
+    const fetchFn = (request: Request, env: HttpBindings | Http2Bindings): Response | Promise<Response> => dispatchToHonoApp(honoApp, request, env);
 
     const server = createAdaptorServer({
       fetch: fetchFn,

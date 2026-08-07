@@ -66,7 +66,7 @@ const plugin: CrowiPlugin = {
     // the "Platform services" sidebar section.
     section: 'platform',
     label: 'Slack',
-    icon: 'share',
+    icon: 'slack',
   },
 
   // Localized help text for the config form. The `manifest` field is an

@@ -48,11 +48,28 @@ export const SendTestMailResponseSchema = z.object({
 });
 export type SendTestMailResponse = z.infer<typeof SendTestMailResponseSchema>;
 
+/**
+ * feature-core-config-readiness-and-mail — `MAIL_FROM_NOT_CONFIGURED`
+ * distinguishes an unset sender address (safe, actionable: "go set it")
+ * from any other transport/sender failure (`MAIL_TEST_FAILED`). `message`
+ * is always one of a fixed, safe, non-localized fallback strings — never
+ * the raw transport exception (e.g. `ECONNREFUSED`) or the config key.
+ * The schema is a discriminated union on `code` so `message` is pinned to
+ * the exact literal(s) the handler actually sends per code, not an
+ * unconstrained string that could accidentally admit raw transport/SDK
+ * detail.
+ */
 export const SendTestMailErrorSchema = z.object({
-  error: z.object({
-    code: z.literal('MAIL_TEST_FAILED'),
-    message: z.string(),
-  }),
+  error: z.discriminatedUnion('code', [
+    z.object({
+      code: z.literal('MAIL_FROM_NOT_CONFIGURED'),
+      message: z.literal('The mail sender address is not configured.'),
+    }),
+    z.object({
+      code: z.literal('MAIL_TEST_FAILED'),
+      message: z.enum(['Failed to send the test email. Check the active mail sender configuration.', 'No email address on the calling user']),
+    }),
+  ]),
 });
 export type SendTestMailError = z.infer<typeof SendTestMailErrorSchema>;
 

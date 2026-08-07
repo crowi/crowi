@@ -55,7 +55,7 @@ The boot init sequence (`packages/api/src/crowi/index.ts:212-224`) contains two 
 
 Only `runPageStatusMigration` is a migration in this RFC's sense. Each new migration currently requires direct edits to the boot code, with no shared registration, ordering, record, dry-run, or testing.
 
-> Note: earlier drafts referenced `migrateConfig` and `runAwsConfigMigration` as live boot migrations. Neither exists in `packages/api/src`: `migrateConfig` has no definition (config handling is inlined in `setupConfig()`), and `runAwsConfigMigration` survives only as a compiled `dist/` artifact (removed in RFC-0007's `drop-legacy-aws-config-migration` changeset). They are **not** part of this framework.
+> Note: earlier drafts referenced `migrateConfig` and `runAwsConfigMigration` as live boot migrations. Neither exists in `packages/api/src`: `migrateConfig` has no definition (config handling is inlined in `setupConfig()`), and `runAwsConfigMigration` survives only as a compiled `dist/` artifact (removed in the `drop-legacy-aws-config-migration` changeset). They are **not** part of this framework.
 
 ### §1.3 The v1→v2 upgrade as the largest use case
 
@@ -629,7 +629,7 @@ If autoIndex building a large unique index at boot blocks startup unacceptably (
 
 - RFC-0004 (Page Status): `runPageStatusMigration` is the seed of `page-status-default`.
 - RFC-0010 (OAuth client seed): `runOAuthClientSeed`, the example seed kept outside the framework (§12.6).
-- RFC-0007 (`drop-legacy-aws-config-migration`): removed `runAwsConfigMigration`; only a `dist/` artifact remains.
+- `drop-legacy-aws-config-migration` changeset: removed `runAwsConfigMigration`; only a `dist/` artifact remains.
 - `feature-user-identity-uniqueness`: owns the User schema, the unique index declaration + `partialFilterExpression` resolution (§9.3), E11000 mapping, and minimal dedup. The framework owns registration, the dedup migration's execution, and the shared runner.
 - Code references: boot sequence `crowi/index.ts:212-224` (`runPageStatusMigration` `:219`, `runOAuthClientSeed` `:223`); CLI `admin-cli/src/cli.ts:22-24` + `commands/{migrate-wikilink,search-rebuild,storage-copy}.ts`; mongoose connect `crowi/index.ts:488` (`mongoose.connect(mongoUri)`, no options, autoIndex default on); `models/user.ts:12-16` (`STATUS_DELETED=4`, `STATUS_INVITED=5`); `updatePage` null-out `page.ts:1066-1068`; wikilink direct-push bug `migrate-wikilink.ts:447-448`; force-reload reader `collab/src/hooks/on-load-document.ts:148-157`. The framework itself (registry / runner / `migrationApplications` / `migrate plan|apply|status|list`) is **unimplemented** — this RFC is prescriptive.
 

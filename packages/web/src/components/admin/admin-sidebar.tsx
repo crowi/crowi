@@ -6,15 +6,24 @@ import { usePathname, useSearchParams } from 'next/navigation';
 import { Bell, Cloud, Database, HardDrive, Key, KeyRound, Mail, Plug, Search, Server, Settings, Share2, ShieldCheck, UserCheck, Users } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { PluginInfo } from '@crowi/api-contract';
+import { GoogleMark, SlackMark } from '@/components/brand-icons';
 import { cn } from '@/lib/utils';
 import { useAdminPlugins } from '@/lib/use-admin-plugins';
 import { useAdminPendingUsersCount } from '@/lib/use-admin-users';
 import { m } from '@paraglide/messages.js';
 
+/**
+ * Anything renderable as `<Icon className="h-4 w-4" />`. Wider than
+ * `LucideIcon` so a vendor brand mark (see `components/brand-icons.tsx`)
+ * can sit in the same slot — lucide has no Google logo, and its `Chrome`
+ * icon names a different product.
+ */
+type BrandOrLucideIcon = LucideIcon | ((props: { className?: string }) => React.JSX.Element);
+
 interface AdminNavItem {
   href: string;
   label: () => string;
-  icon: LucideIcon;
+  icon: BrandOrLucideIcon;
   /** One-line summary shown on the admin index card. */
   description?: () => string;
   /**
@@ -31,11 +40,19 @@ interface AdminNavItem {
 }
 
 /**
- * Section identifier. Matches the `adminPlacement.section` enum on
- * the plugin-api contract — plugins inject sidebar entries by
- * matching this key.
+ * Section identifier for the groups this sidebar actually renders.
+ *
+ * Deliberately NOT the same set as `adminPlacement.section` on the
+ * plugin-api contract: that enum also allows `'auth'` and
+ * `'notification'`, which have no heading here. A plugin may therefore
+ * name a section this sidebar does not implement — `injectPluginEntries`
+ * places those under `'settings'` rather than dropping them, so a
+ * mismatch can never make a plugin's config page unreachable.
  */
 type SectionKey = 'settings' | 'users' | 'storage' | 'mail' | 'search' | 'renderer' | 'shared' | 'platform';
+
+/** Where an entry goes when its declared section has no group — matches the api's own `resolvePlacement` default. */
+const FALLBACK_SECTION: SectionKey = 'settings';
 
 interface AdminNavGroup {
   key: SectionKey;
@@ -148,7 +165,7 @@ const STATIC_GROUPS: AdminNavGroup[] = [
  * `adminPlacement.icon`. Keeps the bundle tight and discourages
  * plugins from picking obscure icons we don't render anywhere else.
  */
-const PLUGIN_ICON_BY_NAME: Record<string, LucideIcon> = {
+const PLUGIN_ICON_BY_NAME: Record<string, BrandOrLucideIcon> = {
   cloud: Cloud,
   'hard-drive': HardDrive,
   server: Server,
@@ -159,9 +176,14 @@ const PLUGIN_ICON_BY_NAME: Record<string, LucideIcon> = {
   'key-round': KeyRound,
   share: Share2,
   search: Search,
+  // Vendor marks. `slack` is the branded four-colour logo rather than
+  // lucide's monochrome `Slack`, so the two integrations that have a
+  // real logo look the same as each other.
+  google: GoogleMark,
+  slack: SlackMark,
 };
 
-const DEFAULT_PLUGIN_ICON: LucideIcon = Plug;
+const DEFAULT_PLUGIN_ICON: BrandOrLucideIcon = Plug;
 
 /**
  * Static section list, exported for the admin index page that
@@ -245,7 +267,11 @@ function injectPluginEntries(staticGroups: AdminNavGroup[], plugins: PluginInfo[
   for (const plugin of plugins) {
     if (!plugin.hasConfig) continue;
     const sectionKey = plugin.adminPlacement.section as SectionKey;
-    const group = groupsByKey.get(sectionKey);
+    // Fall back rather than `continue`: a plugin naming a section this
+    // sidebar has no heading for (the contract allows `'auth'` and
+    // `'notification'`, neither of which is a group here) used to vanish
+    // silently, leaving its config page reachable only by typing the URL.
+    const group = groupsByKey.get(sectionKey) ?? groupsByKey.get(FALLBACK_SECTION);
     if (!group) continue;
     group.items.push({
       key: plugin.name,
@@ -285,7 +311,7 @@ function injectApprovalEntry(groups: AdminNavGroup[], pendingCount: number): Adm
   });
 }
 
-function pluginIcon(name: string | undefined): LucideIcon {
+function pluginIcon(name: string | undefined): BrandOrLucideIcon {
   if (!name) return DEFAULT_PLUGIN_ICON;
   return PLUGIN_ICON_BY_NAME[name] ?? DEFAULT_PLUGIN_ICON;
 }

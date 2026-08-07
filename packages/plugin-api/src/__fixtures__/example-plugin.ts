@@ -47,8 +47,12 @@ const examplePlugin: CrowiPlugin = {
 
   registerAuth: (registry, _ctx) => {
     registry.register('example', {
-      buttonLabel: 'Sign in with Example',
-      verify: async (_data) => ({ ok: false, reason: 'not implemented' }),
+      kind: 'credential',
+      fields: [
+        { name: 'username', label: 'Username', required: true },
+        { name: 'password', label: 'Password', type: 'password', required: true },
+      ],
+      verify: async (_credentials) => ({ ok: false, reason: 'not implemented' }),
     });
   },
 

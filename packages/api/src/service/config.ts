@@ -171,6 +171,34 @@ export default class ConfigService {
     await this.applyLocalValueUpdate(ns, key, value);
   }
 
+  /**
+   * RFC-0014 phase 4 — persist one atomic plugin config group, then (and
+   * ONLY then) make it visible anywhere else.
+   *
+   * The ordering is the entire contract. `updateAtomicConfigGroup` throws
+   * on failure and that throw is propagated untouched, so a rejected write
+   * leaves the in-memory config, the change listeners and the Redis
+   * publish all untouched — no replica, local or remote, can observe a
+   * value the database does not hold. Because the group is a single
+   * document, there is also no partial write to clean up: the previous
+   * complete group simply remains.
+   *
+   * The flat fields are applied to local memory together, in one `update`,
+   * so a listener never sees the group half-applied either.
+   */
+  async saveConfigAtomicGroup(ns: string, pluginName: string, groupName: string, values: Record<string, string>) {
+    debug('Save atomic config group', ns, pluginName, groupName, Object.keys(values));
+    await this.configModel.updateAtomicConfigGroup(ns, pluginName, groupName, values);
+
+    const flat: Record<string, string> = {};
+    for (const [field, value] of Object.entries(values)) {
+      flat[`plugin:${pluginName}:${field}`] = value;
+    }
+    // One namespace, notified once — the group is a single logical change
+    // however many fields it happens to contain.
+    await this.update({ ...this.config, [ns]: { ...this.config[ns], ...flat } }, [`plugin:${pluginName}`]);
+  }
+
   /** Shared local-memory-update + notify tail of `saveConfigValue` / `saveConfigValueDurable` — see each for the write-path difference that precedes this call. */
   private async applyLocalValueUpdate(ns: string, key: string, value: any) {
     const changed = deriveChangedNamespaces(ns, [key]);

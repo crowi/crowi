@@ -22,11 +22,11 @@ import { createRoute, z } from '@hono/zod-openapi';
 
 import {
   ClearRenderCacheResponseSchema,
+  ConfigReadinessResponseSchema,
   ListPluginsResponseSchema,
   PluginConfigResponseSchema,
   PluginConfigValidationErrorSchema,
   PluginNotFoundErrorSchema,
-  PluginReadinessResponseSchema,
   UpdatePluginConfigRequestSchema,
   UpdatePluginConfigResponseSchema,
 } from '../../schemas/admin/plugins';
@@ -170,21 +170,23 @@ export const clearRenderCacheAllRoute = createRoute({
 });
 
 /**
- * feature-plugin-config-readiness — active plugins missing config that
- * their own `readiness` declaration says is required for the currently
- * selected driver. Never returns config values, secrets, or URLs — see
- * `PluginReadinessResponseSchema`.
+ * feature-plugin-config-readiness / feature-core-config-readiness-and-mail
+ * — active plugins missing config that their own `readiness` declaration
+ * says is required for the currently selected driver, PLUS core config
+ * declarations (`core-readiness.ts`, e.g. `mail:from`) that are unset.
+ * Never returns config values, secrets, or URLs — see
+ * `ConfigReadinessResponseSchema`.
  */
 export const getPluginReadinessRoute = createRoute({
   method: 'get',
   path: '/admin/plugins/readiness',
   tags: ['admin.plugins'],
   security: [{ bearerAuth: [] }],
-  summary: 'List active plugins missing required readiness config fields',
+  summary: 'List active plugins and core config missing required readiness fields',
   responses: {
     200: {
-      description: 'Readiness issues for active plugins (empty when everything is configured)',
-      content: { 'application/json': { schema: PluginReadinessResponseSchema } },
+      description: 'Readiness issues for active plugins and core config (empty when everything is configured)',
+      content: { 'application/json': { schema: ConfigReadinessResponseSchema } },
     },
     401: {
       description: 'Authentication required',
@@ -244,6 +246,8 @@ export const adminPluginsRoutes = {
 
 export type {
   ClearRenderCacheResponse,
+  ConfigReadinessIssue,
+  ConfigReadinessResponse,
   ListPluginsResponse,
   PluginAdminPlacement,
   PluginConfigResponse,
@@ -252,8 +256,6 @@ export type {
   PluginInfo,
   PluginNotFoundError,
   PluginReadinessField,
-  PluginReadinessIssue,
-  PluginReadinessResponse,
   UpdatePluginConfigRequest,
   UpdatePluginConfigResponse,
 } from '../../schemas/admin/plugins';

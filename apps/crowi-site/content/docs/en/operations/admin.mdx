@@ -49,9 +49,18 @@ declaration, or is derived from the **extension hook** it registers:
 | `registerStorage` | Storage |
 | `registerSearch` | Search |
 | `registerRenderer` | Renderers |
-| `registerNotifier` | Notification |
 | `registerMailSender` | Mail |
-| config-only (no hook) → `section: 'shared'` | Shared services |
+| `registerNotifier` / `registerAuth` | Settings (the fallback below) |
+| config-only (no hook) | Settings, or Shared services when it declares `section: 'shared'` |
+
+`adminPlacement.section` also accepts `notification` and `auth`, but the
+sidebar **has no heading for either**. An entry that names a section with no
+heading — or derives one from `registerNotifier` / `registerAuth` — **falls
+back to the Settings group** rather than being dropped. Auth-provider plugins
+take this path by default, since their section is derived from
+`registerAuth`. The fallback is what keeps a plugin's config page from
+becoming reachable only by typing its URL when it names a section the
+sidebar does not render.
 
 For example, the Elasticsearch search plugin appears under "Search" and the
 PlantUML renderer plugin under "Renderers" (only plugins that declare a config

@@ -1,3 +1,11 @@
+import { createAdaptorServer, getRequestListener } from '@hono/node-server';
+import type { Http2Bindings, HttpBindings } from '@hono/node-server';
+import { getConnInfo } from '@hono/node-server/conninfo';
+import { Hono } from 'hono';
+import { createServer as httpCreateServer, type Server as HttpServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
+
+import { dispatchToHonoApp } from 'src/hono/path-rewrite';
 import { crowi } from 'src/test/setup';
 
 describe('Test for Crowi application context', () => {
@@ -107,5 +115,74 @@ describe('Test for Crowi application context', () => {
       await svc.setupPubSub();
       expect(svc.pubSub.publisher).toBeNull();
     }, 15_000);
+  });
+
+  describe('node-server fetchFn (request, env) wiring (RFC-0014 phase 1 AC-8)', () => {
+    // `dispatchToHonoApp` (`src/hono/path-rewrite.ts`) is the ONE shared
+    // implementation BOTH `start()`'s production fetchFn (`crowi/index.ts`)
+    // and `src/test/setup.ts`'s supertest listener call.
+    //
+    // A test that only calls `dispatchToHonoApp` directly with a hand-rolled
+    // fake `env` object (as an earlier revision of this suite did) cannot
+    // catch a regression at either CALL SITE — e.g. `crowi/index.ts:start()`
+    // silently reverting to a 1-arg `(request) => dispatchToHonoApp(honoApp,
+    // request, undefined)` that drops `env` before it ever reaches this
+    // function. Both call sites build their `fetchFn` closure as `(request,
+    // env) => dispatchToHonoApp(honoApp, request, env)` and hand it to a
+    // REAL `@hono/node-server` entry point — `createAdaptorServer` in
+    // `start()`, `getRequestListener` in `src/test/setup.ts` (verified:
+    // `createAdaptorServer` itself calls `getRequestListener` internally,
+    // see `@hono/node-server`'s `dist/index.mjs`) — which is what supplies
+    // the REAL `env` (`{ incoming, outgoing }`, Node's actual
+    // `IncomingMessage`/`ServerResponse` pair) over an actual TCP
+    // connection. The two cases below reproduce that exact wiring against
+    // each entry point and drive it with a genuine HTTP request instead of
+    // an object literal shaped like `env` — closing the gap a fake `env`
+    // could not: a call-site regression that drops the `env` PARAMETER
+    // itself (not just something inside `dispatchToHonoApp`) now fails
+    // here too, because these tests build the identical one-line closure
+    // BOTH real call sites use and can only pass if that closure keeps
+    // forwarding `env`.
+    const buildConnInfoApp = (): Hono => {
+      const app = new Hono();
+      app.get('/conn', (c) => {
+        const info = getConnInfo(c);
+        return c.json({ hasAddress: typeof info.remote.address === 'string', hasPort: typeof info.remote.port === 'number' });
+      });
+      return app;
+    };
+
+    /** Listens on an ephemeral port, GETs `/api/conn` for real, then closes — bounded so a hung listener cannot stall the suite. */
+    const requestConnInfoOver = async (server: HttpServer): Promise<{ hasAddress: boolean; hasPort: boolean }> => {
+      await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+      try {
+        const { port } = server.address() as AddressInfo;
+        const res = await fetch(`http://127.0.0.1:${port}/api/conn`);
+        return (await res.json()) as { hasAddress: boolean; hasPort: boolean };
+      } finally {
+        await new Promise<void>((resolve) => server.close(() => resolve()));
+      }
+    };
+
+    it('reaches c.env.incoming via createAdaptorServer — the exact @hono/node-server function start() calls to build the production listener', async () => {
+      const honoApp = buildConnInfoApp();
+      const fetchFn = (request: Request, env: HttpBindings | Http2Bindings): Response | Promise<Response> => dispatchToHonoApp(honoApp, request, env);
+      const server = createAdaptorServer({ fetch: fetchFn, createServer: httpCreateServer, port: 0 }) as HttpServer;
+      await expect(requestConnInfoOver(server)).resolves.toEqual({ hasAddress: true, hasPort: true });
+    });
+
+    it("reaches c.env.incoming via getRequestListener — the exact @hono/node-server function src/test/setup.ts's shared listener calls", async () => {
+      const honoApp = buildConnInfoApp();
+      const fetchFn = (request: Request, env: HttpBindings | Http2Bindings): Response | Promise<Response> => dispatchToHonoApp(honoApp, request, env);
+      const server = httpCreateServer(getRequestListener(fetchFn));
+      await expect(requestConnInfoOver(server)).resolves.toEqual({ hasAddress: true, hasPort: true });
+    });
+
+    it('still strips the /api prefix through dispatchToHonoApp directly (unit-level, complements the two end-to-end cases above)', async () => {
+      const app = buildConnInfoApp();
+      const fakeEnv = { incoming: { socket: { remoteAddress: '203.0.113.7', remotePort: 54321, remoteFamily: 'IPv4' } }, outgoing: {} };
+      const res = await dispatchToHonoApp(app, new Request('http://localhost/api/conn'), fakeEnv);
+      expect(await res.json()).toEqual({ hasAddress: true, hasPort: true });
+    });
   });
 });

@@ -220,6 +220,97 @@ describe('Routes POST /api/attachments/upload (Hono editor upload)', () => {
     });
   });
 
+  describe('feature-attachment-mime-fallback — server-side extension fallback for an undeclared MIME', () => {
+    // Dedicated user + token, same reasoning as the "cross-route upload
+    // policy parity" block below: these hits must not compete with the
+    // 20/min budget the tests above and below already spend against
+    // `ownerToken`.
+    let fallbackToken: string;
+
+    beforeAll(async () => {
+      const fallbackUser = await createTestUser({ name: 'Upload Fallback', username: 'uplFallback', email: 'upl-fallback@example.com' });
+      fallbackToken = fallbackUser.accessToken;
+    });
+
+    // AC-2: an `application/octet-stream` (undeclared) pixel.png is
+    // backfilled to `image/png` for both the paste and dnd intents.
+    it.each(['paste', 'dnd'] as const)('backfills an octet-stream pixel.png to image/png for intent=%s', async (intent) => {
+      const page = await createPageViaApi(fallbackToken, `${PATH_PREFIX}mime-fallback-png-${intent}`, '# upload target');
+      const res = await request(app)
+        .post('/api/attachments/upload')
+        .set(authHeaders(fallbackToken))
+        .field('pageId', page._id)
+        .field('intent', intent)
+        .attach('file', pngBuffer, { filename: 'pixel.png', contentType: 'application/octet-stream' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.mimeType).toBe('image/png');
+
+      const Attachment = crowi.model('Attachment');
+      const id = res.body.url.split('/').pop();
+      const stored = await Attachment.findById(id);
+      expect(stored?.fileFormat).toBe('image/png');
+    });
+
+    // AC-3: an explicit non-octet-stream declaration is never overridden by
+    // the filename, even when it contradicts the extension.
+    it.each(['paste', 'dnd'] as const)('keeps an explicitly declared image/jpeg for intent=%s even though the filename says .png', async (intent) => {
+      const page = await createPageViaApi(fallbackToken, `${PATH_PREFIX}mime-fallback-explicit-${intent}`, '# upload target');
+      const res = await request(app)
+        .post('/api/attachments/upload')
+        .set(authHeaders(fallbackToken))
+        .field('pageId', page._id)
+        .field('intent', intent)
+        .attach('file', pngBuffer, { filename: 'pixel.png', contentType: 'image/jpeg' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.mimeType).toBe('image/jpeg');
+
+      const Attachment = crowi.model('Attachment');
+      const id = res.body.url.split('/').pop();
+      const stored = await Attachment.findById(id);
+      expect(stored?.fileFormat).toBe('image/jpeg');
+    });
+
+    // AC-4: an unknown extension, and a filename with no extension at all,
+    // both stay application/octet-stream.
+    it.each(['paste', 'dnd'] as const)('leaves an unknown extension as application/octet-stream for intent=%s', async (intent) => {
+      const page = await createPageViaApi(fallbackToken, `${PATH_PREFIX}mime-fallback-unknown-${intent}`, '# upload target');
+      const res = await request(app)
+        .post('/api/attachments/upload')
+        .set(authHeaders(fallbackToken))
+        .field('pageId', page._id)
+        .field('intent', intent)
+        .attach('file', Buffer.from('stub bytes'), { filename: 'archive.xyz', contentType: 'application/octet-stream' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.mimeType).toBe('application/octet-stream');
+
+      const Attachment = crowi.model('Attachment');
+      const id = res.body.url.split('/').pop();
+      const stored = await Attachment.findById(id);
+      expect(stored?.fileFormat).toBe('application/octet-stream');
+    });
+
+    it.each(['paste', 'dnd'] as const)('leaves an extensionless filename as application/octet-stream for intent=%s', async (intent) => {
+      const page = await createPageViaApi(fallbackToken, `${PATH_PREFIX}mime-fallback-noext-${intent}`, '# upload target');
+      const res = await request(app)
+        .post('/api/attachments/upload')
+        .set(authHeaders(fallbackToken))
+        .field('pageId', page._id)
+        .field('intent', intent)
+        .attach('file', Buffer.from('stub bytes'), { filename: 'README', contentType: 'application/octet-stream' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.mimeType).toBe('application/octet-stream');
+
+      const Attachment = crowi.model('Attachment');
+      const id = res.body.url.split('/').pop();
+      const stored = await Attachment.findById(id);
+      expect(stored?.fileFormat).toBe('application/octet-stream');
+    });
+  });
+
   it('returns 400 when the pageId is missing or malformed', async () => {
     const res = await request(app)
       .post('/api/attachments/upload')

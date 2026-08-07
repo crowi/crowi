@@ -77,6 +77,8 @@ describe('Routes /api/me (Hono)', () => {
         // Schema default — existing rows without an explicit theme read back
         // 'system' from the Mongoose default.
         theme: 'system',
+        // AC-5: no linked UserIdentity row for this user.
+        federated: false,
       });
     });
 
@@ -107,10 +109,31 @@ describe('Routes /api/me (Hono)', () => {
         .set('Authorization', `Bearer ${accessToken}`)
         .send({ userForm: { name: 'Me Put (renamed)', email: EMAIL, lang: 'ja' } });
       expect(res.status).toBe(200);
-      expect(res.body).toMatchObject({ name: 'Me Put (renamed)', lang: 'ja' });
+      // AC-5: no linked UserIdentity row for this user.
+      expect(res.body).toMatchObject({ name: 'Me Put (renamed)', lang: 'ja', federated: false });
 
       const reread = await User().findById(user._id);
       expect(reread?.name).toBe('Me Put (renamed)');
+    });
+
+    // AC-4: a non-federated user's email-change request is unaffected by the
+    // lock — it still goes through the confirm-by-email flow untouched.
+    it('AC-4: requests a real email change and returns emailChangePending, leaving User.email unchanged until confirmed', async () => {
+      const sendSpy = jest.spyOn(crowi.getMailer(), 'send').mockResolvedValue(undefined);
+      try {
+        const res = await request(app)
+          .put('/api/me')
+          .set('Authorization', `Bearer ${accessToken}`)
+          .send({ userForm: { name: 'Me Put (renamed)', email: 'me-put-new@example.com', lang: 'en' } });
+        expect(res.status).toBe(200);
+        expect(res.body).toMatchObject({ emailChangePending: true, federated: false });
+
+        const reread = await User().findById(user._id);
+        expect(reread?.email).toBe(EMAIL);
+        expect(sendSpy).toHaveBeenCalledWith(expect.objectContaining({ to: 'me-put-new@example.com', htmlTemplate: 'emailChange' }));
+      } finally {
+        sendSpy.mockRestore();
+      }
     });
 
     it('returns 400 with errors[] when email collides with another user', async () => {
@@ -129,6 +152,99 @@ describe('Routes /api/me (Hono)', () => {
       });
 
       await User().deleteOne({ _id: other.user._id });
+    });
+  });
+
+  describe('PUT /me — federated identity email lock', () => {
+    const EMAIL = 'me-put-federated@example.com';
+    const NEW_EMAIL = 'me-put-federated-new@example.com';
+    let accessToken: string;
+    let user: UserDocument;
+
+    beforeAll(async () => {
+      const seeded = await seedActiveUser({ name: 'Me Put Federated', username: 'me-put-federated', email: EMAIL, password: 'Password!1' });
+      user = seeded.user;
+      accessToken = seeded.accessToken;
+      await crowi.model('UserIdentity').create({ userId: user._id, provider: 'google', providerUserId: `sub-${user._id.toString()}` });
+    });
+    afterAll(async () => {
+      await User().deleteMany({ $or: [{ email: EMAIL }, { email: NEW_EMAIL }] });
+      await crowi.model('UserIdentity').deleteMany({ userId: user._id });
+    });
+
+    it('AC-1: refuses the email change with 400 EMAIL_LOCKED_BY_FEDERATED_IDENTITY, leaving User.email unchanged and sending no confirmation mail', async () => {
+      const sendSpy = jest.spyOn(crowi.getMailer(), 'send');
+      try {
+        const res = await request(app)
+          .put('/api/me')
+          .set('Authorization', `Bearer ${accessToken}`)
+          .send({ userForm: { name: 'Attempted Rename', email: NEW_EMAIL, lang: 'en' } });
+
+        expect(res.status).toBe(400);
+        expect(res.body).toMatchObject({ status: 'error', code: 'EMAIL_LOCKED_BY_FEDERATED_IDENTITY' });
+
+        const reread = await User().findById(user._id);
+        expect(reread?.email).toBe(EMAIL);
+        // AC-2: name/lang from the same (rejected) request were not
+        // applied either — the whole request is refused, not just email.
+        expect(reread?.name).toBe('Me Put Federated');
+        expect(reread?.lang).toBe('en');
+        expect(sendSpy).not.toHaveBeenCalled();
+      } finally {
+        sendSpy.mockRestore();
+      }
+    });
+
+    it('AC-3: a resubmission of the SAME email still saves name/lang and returns 200', async () => {
+      const res = await request(app)
+        .put('/api/me')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({ userForm: { name: 'Renamed OK', email: EMAIL, lang: 'ja' } });
+
+      expect(res.status).toBe(200);
+      // AC-5: the response reports the real state even though this PUT
+      // carried no email change.
+      expect(res.body).toMatchObject({ name: 'Renamed OK', lang: 'ja', federated: true });
+      expect(res.body.emailChangePending).toBeUndefined();
+
+      const reread = await User().findById(user._id);
+      expect(reread?.name).toBe('Renamed OK');
+      expect(reread?.lang).toBe('ja');
+      expect(reread?.email).toBe(EMAIL);
+    });
+
+    // AC-5 + the performance contract in one place: a same-email PUT pays
+    // for the identity lookup that keeps `federated` honest, but pays for it
+    // by skipping the duplicate-email pre-check — which the unique index on
+    // `email` makes a foregone "no collision" when the address is the
+    // caller's own. Net query count is the same as before the lock existed.
+    it('AC-5: a same-email PUT reports federated: true and swaps the duplicate pre-check for the identity lookup', async () => {
+      const findOneSpy = jest.spyOn(User(), 'findOne');
+      const existsSpy = jest.spyOn(crowi.model('UserIdentity'), 'exists');
+      try {
+        const res = await request(app)
+          .put('/api/me')
+          .set('Authorization', `Bearer ${accessToken}`)
+          .send({ userForm: { name: 'Renamed Again', email: EMAIL, lang: 'en' } });
+
+        expect(res.status).toBe(200);
+        expect(res.body.federated).toBe(true);
+        // Mongoose's `findById` delegates to `findOne({ _id })`, and both the
+        // auth middleware and `populateSecrets()` go through it — so count
+        // only the calls that actually carry an `email` predicate.
+        const emailLookups = findOneSpy.mock.calls.filter(([filter]) => filter != null && typeof filter === 'object' && 'email' in filter);
+        expect(emailLookups).toHaveLength(0);
+        expect(existsSpy).toHaveBeenCalledTimes(1);
+      } finally {
+        findOneSpy.mockRestore();
+        existsSpy.mockRestore();
+      }
+    });
+
+    it('AC-5: GET /me also reports federated: true for this user', async () => {
+      const res = await request(app).get('/api/me').set('Authorization', `Bearer ${accessToken}`);
+      expect(res.status).toBe(200);
+      expect(res.body.federated).toBe(true);
     });
   });
 

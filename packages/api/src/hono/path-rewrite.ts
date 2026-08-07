@@ -21,6 +21,8 @@
  * `/api/docs` / `/api/openapi.json` once stripped. (See
  * `src/hono/index.ts` for those route registrations.)
  */
+import type { Http2Bindings, HttpBindings } from '@hono/node-server';
+
 const PREFIX = '/api';
 
 /**
@@ -51,4 +53,31 @@ export function stripApiPrefix(request: Request): Request {
   // having to set `duplex: 'half'` manually for stream bodies — the
   // platform inherits the duplex hint from the source Request.
   return new Request(url.toString(), request);
+}
+
+/**
+ * Minimal surface of an `OpenAPIHono`/`Hono` app this module depends on —
+ * narrow so a caller can pass either the real app or a purpose-built test
+ * double without importing Hono's own (much larger) app type here.
+ */
+export interface HonoFetchTarget {
+  fetch(request: Request, env?: HttpBindings | Http2Bindings): Response | Promise<Response>;
+}
+
+/**
+ * RFC-0014 phase 1 §8 (AC-8) — the exact `(request, env) => honoApp.fetch(
+ * stripApiPrefix(request), env)` call BOTH the production node-server
+ * listener (`crowi/index.ts:start()`) and the shared supertest listener
+ * (`src/test/setup.ts`) use, factored out to ONE place. `@hono/node-server`'s
+ * `FetchCallback` is `(request, env) => ...` (2 args); `env` is `{ incoming,
+ * outgoing }` (`node:http`'s `IncomingMessage`/`ServerResponse`), and
+ * propagating it through to `honoApp.fetch` is what lets `getConnInfo(c)`
+ * (`@hono/node-server/conninfo`) read `c.env.incoming`. Centralizing this
+ * one-line call means a regression back to a 1-arg callback that silently
+ * drops `env` breaks in exactly one place — and `crowi/index.test.ts`'s AC-8
+ * test imports and calls this SAME function, not a hand-copied duplicate of
+ * the wiring, so that regression fails the test too.
+ */
+export function dispatchToHonoApp(honoApp: HonoFetchTarget, request: Request, env: HttpBindings | Http2Bindings): Response | Promise<Response> {
+  return honoApp.fetch(stripApiPrefix(request), env);
 }

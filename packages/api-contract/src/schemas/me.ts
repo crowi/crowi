@@ -25,6 +25,19 @@ export const UserProfileResponseSchema = z.object({
   hasPassword: z.boolean(),
   createdAt: z.string(),
   /**
+   * True when the account has at least one linked federated identity
+   * (`UserIdentity` row). The email address on a federated account is
+   * fixed to the value the identity provider verified — `PUT /me`
+   * refuses a change and returns `EMAIL_LOCKED_BY_FEDERATED_IDENTITY`
+   * when this is true and a different email is submitted. The web uses
+   * this to disable the email field and point to the Security tab.
+   *
+   * Always reflects the account's current state — on `GET /me` and on
+   * every 200 from `PUT /me`, including a `PUT` that changed only name /
+   * lang.
+   */
+  federated: z.boolean(),
+  /**
    * True when the profile update requested a new email that is awaiting
    * confirmation: the stored `email` is unchanged and a confirmation
    * link was sent to the new address.

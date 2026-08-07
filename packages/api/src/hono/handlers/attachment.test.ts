@@ -525,6 +525,75 @@ describe('Routes /api attachments (Hono)', () => {
       });
     });
 
+    describe('feature-attachment-mime-fallback — server-side extension fallback for an undeclared MIME', () => {
+      // AC-1: an `application/octet-stream` (undeclared) `pixel.png` is
+      // backfilled to `image/png` in both the response and the stored row.
+      it('backfills an octet-stream pixel.png to image/png in the response and the Attachment row', async () => {
+        const page = await createPageViaApi(accessToken, `${PATH_PREFIX}mime-fallback-png`, '# add');
+        const res = await request(app)
+          .post(`/api/pages/${page._id}/attachments`)
+          .set(authHeaders(accessToken))
+          .attach('file', pngBuffer, { filename: 'pixel.png', contentType: 'application/octet-stream' });
+
+        expect(res.status).toBe(200);
+        expect(res.body.attachment.fileFormat).toBe('image/png');
+
+        const Attachment = crowi.model('Attachment');
+        const stored = await Attachment.findById(res.body.attachment._id);
+        expect(stored?.fileFormat).toBe('image/png');
+      });
+
+      // AC-3: an explicit non-octet-stream declaration is never overridden by
+      // the filename, even when it contradicts the extension.
+      it('keeps an explicitly declared image/jpeg even though the filename says .png', async () => {
+        const page = await createPageViaApi(accessToken, `${PATH_PREFIX}mime-fallback-explicit`, '# add');
+        const res = await request(app)
+          .post(`/api/pages/${page._id}/attachments`)
+          .set(authHeaders(accessToken))
+          .attach('file', pngBuffer, { filename: 'pixel.png', contentType: 'image/jpeg' });
+
+        expect(res.status).toBe(200);
+        expect(res.body.attachment.fileFormat).toBe('image/jpeg');
+
+        const Attachment = crowi.model('Attachment');
+        const stored = await Attachment.findById(res.body.attachment._id);
+        expect(stored?.fileFormat).toBe('image/jpeg');
+      });
+
+      // AC-4: an unknown extension, and a filename with no extension at all,
+      // both stay application/octet-stream — the fallback never invents a
+      // type it isn't confident about.
+      it('leaves an unknown extension as application/octet-stream', async () => {
+        const page = await createPageViaApi(accessToken, `${PATH_PREFIX}mime-fallback-unknown`, '# add');
+        const res = await request(app)
+          .post(`/api/pages/${page._id}/attachments`)
+          .set(authHeaders(accessToken))
+          .attach('file', Buffer.from('stub bytes'), { filename: 'archive.xyz', contentType: 'application/octet-stream' });
+
+        expect(res.status).toBe(200);
+        expect(res.body.attachment.fileFormat).toBe('application/octet-stream');
+
+        const Attachment = crowi.model('Attachment');
+        const stored = await Attachment.findById(res.body.attachment._id);
+        expect(stored?.fileFormat).toBe('application/octet-stream');
+      });
+
+      it('leaves an extensionless filename as application/octet-stream', async () => {
+        const page = await createPageViaApi(accessToken, `${PATH_PREFIX}mime-fallback-noext`, '# add');
+        const res = await request(app)
+          .post(`/api/pages/${page._id}/attachments`)
+          .set(authHeaders(accessToken))
+          .attach('file', Buffer.from('stub bytes'), { filename: 'README', contentType: 'application/octet-stream' });
+
+        expect(res.status).toBe(200);
+        expect(res.body.attachment.fileFormat).toBe('application/octet-stream');
+
+        const Attachment = crowi.model('Attachment');
+        const stored = await Attachment.findById(res.body.attachment._id);
+        expect(stored?.fileFormat).toBe('application/octet-stream');
+      });
+    });
+
     describe('feature-image-derivative-optimization Phase 1 — display derivative generation', () => {
       it('calls the shared generator exactly once and persists a resized derivative for a large image', async () => {
         const page = await createPageViaApi(accessToken, `${PATH_PREFIX}derivative-resized`, '# add');
@@ -1044,6 +1113,33 @@ describe('Routes /api attachments (Hono)', () => {
       // be the one that serves a stored file inline.
       expect(res.headers['content-type']).toBe('application/octet-stream');
       expect(res.headers['content-disposition']).toBe(`attachment; filename*=UTF-8''pixel.png`);
+      expect((res.body as Buffer).equals(pngBuffer)).toBe(true);
+    });
+
+    it('declares Content-Length from the recorded fileSize, so a cut-short delivery is detectable', async () => {
+      // Without this header the node adapter fills in `content-length: 0`
+      // when its preread collects nothing — which is what a read error
+      // looks like — and the caller receives a well-formed empty 200 that
+      // is indistinguishable from a genuinely empty file.
+      const id = await seedAttachment('download-content-length');
+
+      const res = await request(app).get(`/api/attachments/${id}/download`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
+
+      expect(res.status).toBe(200);
+      expect(res.headers['content-length']).toBe(String(pngBuffer.length));
+      expect((res.body as Buffer).length).toBe(pngBuffer.length);
+    });
+
+    it('omits Content-Length for a legacy row whose fileSize was never recorded', async () => {
+      const id = await seedAttachment('download-legacy-no-size');
+      const Attachment = crowi.model('Attachment');
+      await Attachment.updateOne({ _id: id }, { $set: { fileSize: 0 } });
+
+      const res = await request(app).get(`/api/attachments/${id}/download`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
+
+      expect(res.status).toBe(200);
+      // A declared 0 would make the real bytes look like an overrun.
+      expect(res.headers['content-length']).not.toBe('0');
       expect((res.body as Buffer).equals(pngBuffer)).toBe(true);
     });
 

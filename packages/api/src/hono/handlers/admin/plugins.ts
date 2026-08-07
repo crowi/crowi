@@ -14,7 +14,7 @@
  * which collides with the Hono router's path-segment matching, so the
  * name is passed as a query string rather than a path parameter.
  */
-import { type PluginInfo, adminPluginsRoutes } from '@crowi/api-contract';
+import { type ConfigReadinessIssue, type PluginInfo, adminPluginsRoutes } from '@crowi/api-contract';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import type { CrowiPlugin } from '@crowi/plugin-api';
 import Debug from 'debug';
@@ -171,18 +171,29 @@ export const registerAdminPluginsRoutes = <E extends OpenAPIHono<CrowiHonoBindin
       const manager = crowi.pluginManager;
       if (!manager) return c.json({ issues: [] }, 200);
       // `getReadinessIssues()` already did the candidate filtering +
-      // config evaluation and returns only plugin name + unset field
-      // names (never a value) — this just adds each plugin's
-      // `adminPlacement` (same helper `listPlugins` uses) to match the
-      // public response schema.
+      // config evaluation and returns only field names (never a value) —
+      // this projects each internal issue onto the wire `ConfigReadinessIssue`:
+      // a plugin issue resolves its `adminPlacement` (same helper
+      // `listPlugins` uses) into `label` + the plugin-edit href, a core
+      // issue copies the declaration's own `label`/`href` straight
+      // through (feature-core-config-readiness-and-mail).
       const issues = manager
         .getReadinessIssues()
-        .map((issue) => {
+        .map((issue): ConfigReadinessIssue | null => {
+          if (issue.source === 'core') {
+            return { id: issue.id, source: 'core', label: issue.label, href: issue.href, fields: issue.fields };
+          }
           const plugin = manager.getLoadedPlugin(issue.pluginName);
           if (!plugin) return null;
-          return { name: issue.pluginName, adminPlacement: resolvePlacement(plugin), fields: issue.fields };
+          return {
+            id: issue.id,
+            source: 'plugin',
+            label: resolvePlacement(plugin).label,
+            href: `/admin/plugins/edit?name=${encodeURIComponent(issue.pluginName)}`,
+            fields: issue.fields,
+          };
         })
-        .filter((issue): issue is NonNullable<typeof issue> => issue !== null);
+        .filter((issue): issue is ConfigReadinessIssue => issue !== null);
       return c.json({ issues }, 200);
     })
     .openapi(adminPluginsRoutes.updatePluginConfigRoute, async (c) => {
@@ -238,11 +249,35 @@ export const registerAdminPluginsRoutes = <E extends OpenAPIHono<CrowiHonoBindin
       }
 
       const configService = crowi.getConfigService();
+
+      // RFC-0014 phase 4 — fields belonging to a `configAtomicGroups` group
+      // leave the ordinary per-key write path entirely. A group is touched
+      // as a whole whenever ANY of its members is in the request, and the
+      // values written are taken from the VALIDATED merge (`parsed.data`),
+      // not from the request: that is what supplies an omitted secret from
+      // the currently-stored value, so saving only the client id can never
+      // blank the secret next to it.
+      const atomicGroups = plugin.configAtomicGroups ?? [];
+      const touchedGroups = atomicGroups.filter((group) => group.keys.some((key) => key in toWrite));
+      const atomicFieldNames = new Set(atomicGroups.flatMap((group) => group.keys));
+
       const writes: Record<string, unknown> = {};
       for (const [key, value] of Object.entries(toWrite)) {
+        if (atomicFieldNames.has(key)) continue;
         writes[`plugin:${plugin.name}:${key}`] = value;
       }
+
       try {
+        for (const group of touchedGroups) {
+          const values: Record<string, string> = {};
+          for (const key of group.keys) {
+            values[key] = String((parsed.data as Record<string, unknown>)[key] ?? '');
+          }
+          // Throws on a failed write, and deliberately runs BEFORE the
+          // ordinary writes and the reconfigure below: nothing may observe
+          // a credential group that was not persisted.
+          await configService.saveConfigAtomicGroup('crowi', plugin.name, group.name, values);
+        }
         if (Object.keys(writes).length > 0) {
           await configService.saveConfig('crowi', writes);
         }
@@ -254,7 +289,7 @@ export const registerAdminPluginsRoutes = <E extends OpenAPIHono<CrowiHonoBindin
       let hotReloaded = false;
       let reconfigureFailed = false;
       const pluginManager = crowi.pluginManager;
-      if (pluginManager && Object.keys(writes).length > 0) {
+      if (pluginManager && (Object.keys(writes).length > 0 || touchedGroups.length > 0)) {
         const result = await pluginManager.reconfigureAffected([`plugin:${plugin.name}`]);
         hotReloaded = result.attempted > 0 && result.succeeded === result.attempted;
         reconfigureFailed = result.attempted > result.succeeded;

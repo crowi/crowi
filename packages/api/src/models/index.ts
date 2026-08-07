@@ -13,6 +13,7 @@ import OAuthDeviceCode from './oauth-device-code';
 import OAuthRefreshToken from './oauth-refresh-token';
 import Page from './page';
 import PageYjsUpdate from './page-yjs-update';
+import PendingAuthRegistration from './pending-auth-registration';
 import PersonalAccessToken from './personal-access-token';
 import PluginRenderCache from './plugin-render-cache';
 import Revision from './revision';
@@ -21,11 +22,16 @@ import ShareAccess from './share-access';
 import Tracking from './tracking';
 import UpdatePost from './update-post';
 import User from './user';
+import UserActivation from './user-activation';
+import UserIdentity from './user-identity';
 import Watcher from './watcher';
 
 export default {
   Page,
   User,
+  UserIdentity,
+  PendingAuthRegistration,
+  UserActivation,
   Revision,
   Backlink,
   Bookmark,

@@ -14,10 +14,12 @@ import { type CrowiConfigFile, resolvePlugins } from '@crowi/runner';
 import type Crowi from 'src/crowi';
 import { registerSensitiveConfigKeys } from 'src/models/config-sensitive';
 import type { ConfigChangeSource } from 'src/service/config';
+import { CORE_READINESS_DECLARATIONS } from './core-readiness';
 import { credentialVaultModelNamesList, isCredentialVaultModel } from './credential-vault-models';
 import { createPluginContext } from './plugin-context';
 import { isPluginInstalled, markPluginInstalled } from './plugin-install-tracker';
-import { formatPluginConfigKey, parsePluginNamespace, readCrowiConfigNamespace } from './plugin-namespace';
+import { atomicConfigGroupKey } from 'src/models/config';
+import { formatPluginConfigKey, formatPluginNamespace, parsePluginNamespace, readCrowiConfigNamespace } from './plugin-namespace';
 import { createStateCell } from './plugin-state-cell';
 import { makeRendererScope } from 'src/renderer';
 import { DriverRegistry, makeAuthScope, makeMailScope, makeNotifierScope, makeSearchScope, makeStorageScope } from './registries';
@@ -69,20 +71,45 @@ export interface PluginReadinessFieldResult {
 }
 
 /**
- * A loaded, active plugin with at least one unset readiness field.
- *
- * Deliberately NOT named `PluginReadinessIssue`: that name belongs to the
- * WIRE shape in `@crowi/api-contract` (which carries `name` +
- * `adminPlacement` instead of `pluginName`), and the hono handler converts
- * this into that one. Sharing the identifier for two different shapes in
- * two packages a reader can have open at once is how they get confused —
- * same reason `getFailedPlugins()` returns its own internal shape rather
- * than reusing the wire-level `PluginInfo` name.
+ * A loaded, active plugin with at least one unset readiness field. The
+ * handler resolves this into the wire `ConfigReadinessIssue` via
+ * `resolvePlacement(plugin)` + the existing plugin-edit-href convention —
+ * this shape carries only enough (`pluginName`) for that lookup.
  */
-export interface ManagerReadinessIssue {
+export interface PluginManagerReadinessIssue {
+  source: 'plugin';
+  /** `plugin:<pluginName>` — mirrors the plugin's own config namespace prefix (`formatPluginNamespace`). */
+  id: string;
   pluginName: string;
   fields: PluginReadinessFieldResult[];
 }
+
+/**
+ * A core config declaration (`core-readiness.ts`, feature-core-config-
+ * readiness-and-mail) with at least one unset field. `label`/`href` are
+ * copied straight from the declaration — the handler needs no further
+ * HTTP-layer knowledge to build the wire issue.
+ */
+export interface CoreManagerReadinessIssue {
+  source: 'core';
+  id: string;
+  label: string;
+  href: string;
+  fields: PluginReadinessFieldResult[];
+}
+
+/**
+ * Union returned by `getReadinessIssues()`.
+ *
+ * Deliberately NOT named `ConfigReadinessIssue`: that name belongs to the
+ * WIRE shape in `@crowi/api-contract` (which carries `label` + `href`
+ * directly rather than `pluginName`), and the hono handler converts this
+ * into that one. Sharing the identifier for two different shapes in two
+ * packages a reader can have open at once is how they get confused — same
+ * reason `getFailedPlugins()` returns its own internal shape rather than
+ * reusing the wire-level `PluginInfo` name.
+ */
+export type ManagerReadinessIssue = PluginManagerReadinessIssue | CoreManagerReadinessIssue;
 
 /**
  * Loads the plugins listed in `crowi.config.json`, resolves their
@@ -181,6 +208,7 @@ export class PluginManager {
     // here, immediately after topo-sort and before `listSensitiveKeys()`,
     // closes that gap.
     this.assertAllConfigSchemas(ordered);
+    this.assertAllConfigAtomicGroups(ordered);
 
     // Register every plugin's `@sensitive`-marked configSchema fields
     // with the core sensitive-config registry so values written
@@ -328,13 +356,14 @@ export class PluginManager {
   }
 
   /**
-   * Evaluate every loaded plugin's `readiness` declaration (if any)
-   * against the driver selected in `crowi.config.json` (see
-   * `selectedDrivers`, set by `bootstrap()`) and the plugin's current
-   * config namespace (`crowi.getConfig().crowi`, the same in-memory
-   * cache `saveConfig`/`loadAllConfig` maintain). Not cached — each call
-   * re-reads the live config, so a save made moments earlier is already
-   * reflected.
+   * Evaluate every loaded plugin's `readiness` declaration (if any) plus
+   * every static core declaration (`CORE_READINESS_DECLARATIONS`,
+   * feature-core-config-readiness-and-mail) against the driver selected
+   * in `crowi.config.json` (see `selectedDrivers`, set by `bootstrap()`)
+   * and the live core config namespace (`crowi.getConfig().crowi`, the
+   * same in-memory cache `saveConfig`/`loadAllConfig` maintain). Not
+   * cached — each call re-reads the live config, so a save made moments
+   * earlier is already reflected.
    *
    * A plugin is a candidate only when it declares `readiness` AND that
    * declaration's `registry`/`driver` matches the currently selected
@@ -345,14 +374,17 @@ export class PluginManager {
    * least one of its `requiredConfigFields` is empty/null/undefined —
    * plugins with everything configured, or with no readiness
    * declaration, or that are not the selected driver, are omitted
-   * entirely.
+   * entirely. Core declarations have no driver gate — they are always
+   * evaluated — but are otherwise held to the same "at least one unset
+   * field" omission rule.
    *
    * Returns ONLY field names + `configured: false` — never the actual
    * config value (including secrets, e.g. `@sensitive`-marked URLs).
    * `packages/api/src/hono/handlers/admin/plugins.ts`'s readiness GET
    * handler maps this internal result onto the public response schema
-   * (adding each plugin's `adminPlacement`), so this method never needs
-   * to know about the HTTP layer.
+   * (adding each plugin's `adminPlacement` for a plugin issue, or the
+   * declaration's own `label`/`href` for a core issue), so this method
+   * never needs to know about the HTTP layer.
    */
   getReadinessIssues(): ManagerReadinessIssue[] {
     const configNamespace = this.getCrowiConfigNamespace();
@@ -368,10 +400,26 @@ export class PluginManager {
       if (unsetFields.length === 0) continue;
 
       issues.push({
+        source: 'plugin',
+        id: formatPluginNamespace(plugin.name),
         pluginName: plugin.name,
         fields: unsetFields.map((name) => ({ name, configured: false as const })),
       });
     }
+
+    for (const declaration of CORE_READINESS_DECLARATIONS) {
+      const unsetFields = declaration.fields.filter((field) => !isReadinessFieldConfigured(configNamespace[field.configKey]));
+      if (unsetFields.length === 0) continue;
+
+      issues.push({
+        source: 'core',
+        id: declaration.id,
+        label: declaration.label,
+        href: declaration.href,
+        fields: unsetFields.map((field) => ({ name: field.name, configured: false as const })),
+      });
+    }
+
     return issues;
   }
 
@@ -428,16 +476,75 @@ export class PluginManager {
   }
 
   /**
+   * RFC-0014 phase 4 — validate `configAtomicGroups` at boot, before any
+   * value is ever written through them. A malformed declaration (an
+   * unknown field, a field claimed by two groups, an empty or duplicated
+   * group) would otherwise only surface as a corrupted or unreachable
+   * config document long after the fact, so this fails the boot instead.
+   */
+  private assertAllConfigAtomicGroups(plugins: readonly CrowiPlugin[]): void {
+    for (const plugin of plugins) {
+      const groups = plugin.configAtomicGroups;
+      if (!groups || groups.length === 0) continue;
+
+      const schemaFields = plugin.configSchema ? new Set(Object.keys(plugin.configSchema.shape)) : new Set<string>();
+      const seenGroupNames = new Set<string>();
+      const claimedFields = new Map<string, string>();
+
+      for (const group of groups) {
+        if (!group.name || group.name.includes(':')) {
+          throw new Error(
+            `[crowi:plugin:${plugin.name}] configAtomicGroups: group name must be non-empty and contain no ':' (got ${JSON.stringify(group.name)})`,
+          );
+        }
+        if (seenGroupNames.has(group.name)) {
+          throw new Error(`[crowi:plugin:${plugin.name}] configAtomicGroups: duplicate group name '${group.name}'`);
+        }
+        seenGroupNames.add(group.name);
+
+        if (!group.keys || group.keys.length === 0) {
+          throw new Error(`[crowi:plugin:${plugin.name}] configAtomicGroups: group '${group.name}' declares no keys`);
+        }
+        for (const key of group.keys) {
+          if (!schemaFields.has(key)) {
+            throw new Error(`[crowi:plugin:${plugin.name}] configAtomicGroups: group '${group.name}' names '${key}', which is not a configSchema field`);
+          }
+          const claimedBy = claimedFields.get(key);
+          if (claimedBy) {
+            throw new Error(
+              `[crowi:plugin:${plugin.name}] configAtomicGroups: field '${key}' is claimed by both '${claimedBy}' and '${group.name}' — a field belongs to at most one group`,
+            );
+          }
+          claimedFields.set(key, group.name);
+        }
+      }
+    }
+  }
+
+  /**
    * Walk every loaded plugin's `configSchema` and return the union of
    * field paths marked `@sensitive`. The "re-encrypt all" admin
    * routine consults this list. See RFC-0001 §5.
+   *
+   * A field stored inside a `sensitive` atomic group is reported as the
+   * GROUP's physical key rather than its own: that field has no row of
+   * its own to encrypt, and registering its flat key would tell the
+   * encryption layer to protect something that is never written (RFC-0014
+   * phase 4).
    */
   listSensitiveKeys(): string[] {
     const out: string[] = [];
     for (const plugin of this.loadedPlugins) {
+      const groups = plugin.configAtomicGroups ?? [];
+      const fieldsInSensitiveGroup = new Set(groups.filter((g) => g.sensitive).flatMap((g) => g.keys));
+      for (const group of groups) {
+        if (group.sensitive) out.push(atomicConfigGroupKey(plugin.name, group.name));
+      }
+
       const schema = plugin.configSchema;
       if (!schema) continue;
       for (const [fieldName, field] of Object.entries(schema.shape)) {
+        if (fieldsInSensitiveGroup.has(fieldName)) continue;
         const description = (field as { description?: string }).description;
         if (typeof description === 'string' && description.trimStart().startsWith('@sensitive')) {
           out.push(formatPluginConfigKey(plugin.name, fieldName));

@@ -25,15 +25,27 @@ afterEach(() => {
 });
 
 const s3Issue = {
-  name: '@crowi/plugin-storage-aws-s3',
-  adminPlacement: { section: 'storage' as const, label: 'AWS S3' },
+  id: 'plugin:@crowi/plugin-storage-aws-s3',
+  source: 'plugin' as const,
+  label: 'AWS S3',
+  href: `/admin/plugins/edit?name=${encodeURIComponent('@crowi/plugin-storage-aws-s3')}`,
   fields: [{ name: 'bucket', configured: false as const }],
 };
 
 const esIssue = {
-  name: '@crowi/plugin-search-elasticsearch',
-  adminPlacement: { section: 'search' as const, label: 'Elasticsearch' },
+  id: 'plugin:@crowi/plugin-search-elasticsearch',
+  source: 'plugin' as const,
+  label: 'Elasticsearch',
+  href: `/admin/plugins/edit?name=${encodeURIComponent('@crowi/plugin-search-elasticsearch')}`,
   fields: [{ name: 'url', configured: false as const }],
+};
+
+const coreMailIssue = {
+  id: 'core:mail',
+  source: 'core' as const,
+  label: 'Mail',
+  href: '/admin/mail',
+  fields: [{ name: 'from', configured: false as const }],
 };
 
 describe('PluginReadinessBanner (feature-plugin-config-readiness, AC-5)', () => {
@@ -110,8 +122,10 @@ describe('PluginReadinessBanner (feature-plugin-config-readiness, AC-5)', () => 
 
   it('joins multiple unset field names for a single plugin', () => {
     const multiFieldIssue = {
-      name: '@crowi/plugin-multi',
-      adminPlacement: { section: 'shared' as const, label: 'Multi' },
+      id: 'plugin:@crowi/plugin-multi',
+      source: 'plugin' as const,
+      label: 'Multi',
+      href: `/admin/plugins/edit?name=${encodeURIComponent('@crowi/plugin-multi')}`,
       fields: [
         { name: 'fieldA', configured: false as const },
         { name: 'fieldB', configured: false as const },
@@ -122,5 +136,27 @@ describe('PluginReadinessBanner (feature-plugin-config-readiness, AC-5)', () => 
     render(<PluginReadinessBanner isAdmin={true} />);
 
     expect(screen.getByText(m['admin.plugins.readiness_banner_title']({ name: 'Multi', fields: 'fieldA / fieldB' }))).toBeTruthy();
+  });
+});
+
+describe('PluginReadinessBanner — core config issues (feature-core-config-readiness-and-mail, AC-1)', () => {
+  it('renders a core mail issue with its field name and the /admin/mail link, identically to a plugin issue', () => {
+    useAdminPluginReadiness.mockReturnValue({ data: { issues: [coreMailIssue] } });
+
+    render(<PluginReadinessBanner isAdmin={true} />);
+
+    expect(screen.getByText(m['admin.plugins.readiness_banner_title']({ name: 'Mail', fields: 'from' }))).toBeTruthy();
+    const link = screen.getByRole('link', { name: m['admin.plugins.readiness_banner_link']({ name: 'Mail' }) });
+    expect(link.getAttribute('href')).toBe('/admin/mail');
+  });
+
+  it('renders a core mail issue alongside a plugin issue, one row each', () => {
+    useAdminPluginReadiness.mockReturnValue({ data: { issues: [coreMailIssue, s3Issue] } });
+
+    render(<PluginReadinessBanner isAdmin={true} />);
+
+    expect(screen.getByText(m['admin.plugins.readiness_banner_title']({ name: 'Mail', fields: 'from' }))).toBeTruthy();
+    expect(screen.getByText(m['admin.plugins.readiness_banner_title']({ name: 'AWS S3', fields: 'bucket' }))).toBeTruthy();
+    expect(screen.getAllByRole('link')).toHaveLength(2);
   });
 });

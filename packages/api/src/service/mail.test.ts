@@ -8,7 +8,7 @@ import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { EmailMessage, MailSender } from '@crowi/plugin-api';
-import { MailService, renderTemplateString } from './mail';
+import { MailFromNotConfiguredError, MailService, renderTemplateString } from './mail';
 
 function fakeSender(): MailSender & { sent: EmailMessage[] } {
   const sent: EmailMessage[] = [];
@@ -78,9 +78,15 @@ describe('MailService', () => {
     await fs.rm(tmpDir, { recursive: true, force: true });
   });
 
-  it('throws when from is not configured', async () => {
+  it('throws MailFromNotConfiguredError when from is not configured (feature-core-config-readiness-and-mail AC-5)', async () => {
     const svc = new MailService(makeCrowi({ from: '', mail: fakeSender() }));
+    await expect(svc.send({ to: 'u@example.com', text: 'x' })).rejects.toThrow(MailFromNotConfiguredError);
     await expect(svc.send({ to: 'u@example.com', text: 'x' })).rejects.toThrow(/mail:from is not configured/);
+  });
+
+  it('getFrom() throws the same MailFromNotConfiguredError directly', () => {
+    const svc = new MailService(makeCrowi({ from: '', mail: fakeSender() }));
+    expect(() => svc.getFrom()).toThrow(MailFromNotConfiguredError);
   });
 
   it('throws when no mail sender is active', async () => {

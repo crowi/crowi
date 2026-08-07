@@ -10,6 +10,11 @@ const alertVariants = cva(
       variant: {
         default: 'bg-card text-card-foreground',
         destructive: 'text-destructive bg-card [&>svg]:text-current *:data-[slot=alert-description]:text-destructive/90',
+        // A confirmed outcome, not a warning. Uses the theme's own
+        // `--crowi-success` (both light and dark are defined) rather than
+        // a raw Tailwind green, so it tracks the palette like every other
+        // semantic colour here.
+        success: 'text-crowi-success border-crowi-success/40 bg-crowi-success/10 [&>svg]:text-current *:data-[slot=alert-description]:text-crowi-success',
       },
     },
     defaultVariants: {

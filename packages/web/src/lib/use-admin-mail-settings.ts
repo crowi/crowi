@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from './api-client';
 import type { GetMailSettingsResponse, SendTestMailResponse, UpdateMailSettingsRequest, UpdateMailSettingsResponse } from '@crowi/api-contract';
+import { adminPluginsKeys } from './use-admin-plugins';
 import { m } from '@paraglide/messages.js';
 
 export const adminMailSettingsKeys = {
@@ -67,8 +68,31 @@ export function useUpdateMailSettings() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: adminMailSettingsKeys.settings });
+      // feature-core-config-readiness-and-mail — saving `from` may have
+      // just resolved (or introduced) the core `mail:from` readiness
+      // issue; refetch so the banner reflects the new value immediately
+      // rather than the pre-save snapshot (mirrors the plugin-config save
+      // path's own readiness invalidation in `use-admin-plugins.ts`).
+      queryClient.invalidateQueries({ queryKey: adminPluginsKeys.readiness() });
     },
   });
+}
+
+/**
+ * feature-core-config-readiness-and-mail — thrown for a 502 test-send
+ * failure. Carries only the machine-readable `code`, never the wire
+ * `message` (a fixed, non-localized, non-sensitive fallback string) —
+ * the caller localizes for display via `errorMessage(code)`
+ * (`error-message.ts`). 401/403/other-status failures still throw a
+ * plain `Error` with an already-localized message (unchanged).
+ */
+export class MailTestFailure extends Error {
+  readonly code: string;
+  constructor(code: string) {
+    super(code);
+    this.name = 'MailTestFailure';
+    this.code = code;
+  }
 }
 
 export function useSendTestMail() {
@@ -77,8 +101,8 @@ export function useSendTestMail() {
       const response = await apiClient.admin.mail.test.$post({ json: {} });
       if (response.status === 200) return (await response.json()) as SendTestMailResponse;
       if (response.status === 502) {
-        const parsed = (await response.json().catch(() => null)) as { error?: { message?: string } } | null;
-        throw new Error(parsed?.error?.message ?? m['admin.mail.test_failed']());
+        const parsed = (await response.json().catch(() => null)) as { error?: { code?: string } } | null;
+        throw new MailTestFailure(parsed?.error?.code ?? 'MAIL_TEST_FAILED');
       }
       if (response.status === 401 || response.status === 403) {
         throw new Error(m['errors.unauthorized']());

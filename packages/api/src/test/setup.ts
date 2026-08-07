@@ -19,10 +19,11 @@
 
 import { createServer, type Server } from 'node:http';
 import { getRequestListener } from '@hono/node-server';
+import type { Http2Bindings, HttpBindings } from '@hono/node-server';
 import faker from 'faker';
 import Crowi from 'src/crowi';
 import { buildHonoApp } from 'src/hono';
-import { stripApiPrefix } from 'src/hono/path-rewrite';
+import { dispatchToHonoApp } from 'src/hono/path-rewrite';
 
 import { bootCrowiWithRetry } from './db-connect-retry';
 import { recordDispatchEnd, recordDispatchStart } from './op-ring-buffer';
@@ -240,7 +241,13 @@ beforeAll(async () => {
   // Every ring-buffer call is individually wrapped so a bug there can never
   // affect a real request's control flow (start/end recording is best-effort
   // either side of the SAME `try`/`catch` shape the real fetch already had).
-  const fetchFn = async (request: Request): Promise<Response> => {
+  // RFC-0014 phase 1 §8 (AC-8) — `dispatchToHonoApp` (`src/hono/path-
+  // rewrite.ts`) is the SAME shared function the production listener uses
+  // (`crowi/index.ts:start()`): `getRequestListener` below always invokes
+  // this callback with a second `env` argument (`{ incoming, outgoing }`);
+  // propagating it through is what lets `getConnInfo(c)` read
+  // `c.env.incoming` from a test request too.
+  const fetchFn = async (request: Request, env: HttpBindings | Http2Bindings): Promise<Response> => {
     let opEntry: ReturnType<typeof recordDispatchStart> | null = null;
     try {
       opEntry = recordDispatchStart(request.method, new URL(request.url).pathname);
@@ -248,7 +255,7 @@ beforeAll(async () => {
       // fail-open — see this block's doc comment above.
     }
     try {
-      const res = await honoApp.fetch(stripApiPrefix(request));
+      const res = await dispatchToHonoApp(honoApp, request, env);
       if (opEntry) {
         try {
           recordDispatchEnd(opEntry, res.status);

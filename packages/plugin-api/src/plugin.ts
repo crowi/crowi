@@ -37,6 +37,27 @@ export interface PluginReadinessDeclaration {
 }
 
 /**
+ * One all-or-nothing group of `configSchema` fields — see
+ * `CrowiPlugin.configAtomicGroups`.
+ */
+export interface PluginConfigAtomicGroup {
+  /**
+   * Stable identifier, part of the physical storage key
+   * (`plugin:<plugin>:__atomic:<name>`). Renaming it orphans the stored
+   * document, so treat it like a migration.
+   */
+  name: string;
+  /** The `configSchema` field names stored together. Non-empty, no duplicates, and each field may belong to only one group. */
+  keys: readonly string[];
+  /**
+   * Encrypt the whole stored group at rest. Set this when ANY member is
+   * secret: the group is one value, so it is either all encrypted or all
+   * not — there is no per-field choice left once they share a document.
+   */
+  sensitive?: boolean;
+}
+
+/**
  * The contract every Crowi plugin satisfies. Plugins export their
  * `CrowiPlugin` object as the package's default export; the runtime
  * imports it via `await import('<plugin-name>')` at boot.
@@ -130,6 +151,25 @@ export interface CrowiPlugin {
    * the field that calls the plugin's contributed REST endpoint.
    */
   configSchema?: z.ZodObject<Record<string, z.ZodTypeAny>>;
+
+  /**
+   * RFC-0014 phase 4 — `configSchema` fields that must never be visible
+   * to anyone in a half-written state, declared as groups that are stored
+   * as ONE Config document instead of one row per field.
+   *
+   * The motivating case is an OAuth client id + secret. Written as
+   * separate rows, a failure between them leaves the instance advertising
+   * a new client id paired with the previous secret — a configuration
+   * that never existed and cannot authenticate, visible to every replica
+   * until an operator notices. As a single document there is no
+   * in-between: readers see the whole previous pair or the whole new one.
+   *
+   * This is a STORAGE contract, not a general escape hatch for making
+   * arbitrary keys atomic — the fields still appear to the plugin (and to
+   * the admin form) as ordinary flat config, and are only reassembled at
+   * the persistence boundary.
+   */
+  configAtomicGroups?: readonly PluginConfigAtomicGroup[];
 
   /**
    * Per-Page metadata schema. When set, every Page document has a

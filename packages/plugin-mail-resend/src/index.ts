@@ -28,6 +28,13 @@ const plugin: CrowiPlugin = {
     icon: 'mail',
     // section omitted: derived from registerMailSender → 'mail'
   },
+  // `apiKey` defaults to '' (a valid Zod value) but `send()` throws until
+  // it's set — see feature-core-config-readiness-and-mail.
+  readiness: {
+    registry: 'mail',
+    driver: 'resend',
+    requiredConfigFields: ['apiKey'],
+  },
 
   registerMailSender: (registry, ctx) => {
     applyConfigToState(ctx, state);
