@@ -115,6 +115,16 @@ public enum CrowiMetrics {
     public static let searchFieldHorizontalPadding: CGFloat = 12
     public static let searchFieldContentSpacing: CGFloat = 8
 
+    // MARK: - Create button (the design's centre "New" slot, floated)
+
+    /// Design: the 40px circular FAB, taken up a step because it no longer
+    /// sits inside a bar that framed it — a floating button needs its own
+    /// presence.
+    public static let createButtonSize: CGFloat = 56
+    /// Where it sits relative to the screen and the tab bar under it.
+    public static let createButtonTrailingInset: CGFloat = 20
+    public static let createButtonBottomInset: CGFloat = 12
+
     // MARK: - Tab bar (the design's "Liquid Glass" variant)
 
     /// Design: the floating pill is inset `left:14px;right:14px`.

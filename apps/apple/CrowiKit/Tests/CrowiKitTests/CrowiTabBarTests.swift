@@ -15,32 +15,16 @@ import AppKit
 /// asserts that a colour equals itself.
 @MainActor
 final class CrowiTabBarTests: XCTestCase {
-    // MARK: - Slots: create is an action, not a tab
+    // MARK: - Create is an action, not a tab
 
-    /// The design's five slots, in its order. The center one is
-    /// `.create` — an ACTION — which is why it has no `CrowiTab` case: the
-    /// selection type literally cannot represent "the New tab", so no tab
-    /// switch, no restored selection and no deep link can ever leave the app
-    /// sitting on a create screen as if it were a destination.
-    func testTheBarHasFiveSlotsWithCreateAsTheNonTabCenterOne() {
-        XCTAssertEqual(
-            CrowiTabBarSlot.allSlots,
-            [.tab(.home), .tab(.search), .create, .tab(.notifications), .tab(.profile)]
-        )
-        XCTAssertEqual(CrowiTabBarSlot.allSlots.count, 5)
-        XCTAssertEqual(CrowiTabBarSlot.allSlots[2], .create, "the create action is the CENTER slot (the design's FAB)")
-
-        let tabSlots = CrowiTabBarSlot.allSlots.filter { if case .tab = $0 { return true } else { return false } }
-        XCTAssertEqual(tabSlots.count, 4, "exactly one of the five slots is not a tab")
-        XCTAssertEqual(
-            tabSlots.map(\.id).sorted(),
-            CrowiTab.allCases.map(\.id).sorted(),
-            "every tab appears in the bar exactly once, and the bar shows no tab that does not exist"
-        )
-        XCTAssertFalse(
-            CrowiTab.allCases.map(\.id).contains(CrowiTabBarSlot.create.id),
-            "create must not be reachable as a tab identity"
-        )
+    /// Create has no `CrowiTab` case, so the selection type literally cannot
+    /// represent "the New tab" — no tab switch, no restored selection and no
+    /// deep link can leave the app sitting on a create screen as if it were a
+    /// destination. This survived the bar going back to the system: the
+    /// button moved out of the bar, the invariant did not move at all.
+    func testCreateIsNotReachableAsATabIdentity() {
+        XCTAssertEqual(CrowiTab.allCases.count, 4)
+        XCTAssertFalse(CrowiTab.allCases.map(\.id).contains("create"))
     }
 
     // MARK: - Visibility: the design's `isTabbar: view !== 'page'`
@@ -141,41 +125,23 @@ final class CrowiTabBarTests: XCTestCase {
         XCTAssertEqual(CrowiUnreadBadge.text(for: 100), "99+")
     }
 
-    /// …and it is actually PAINTED in the bar, not merely computed: an
-    /// unread count must change what the bar renders.
-    func testTheBarRendersMoreContentWhenThereAreUnreadNotifications() throws {
-        let badged = try renderToPNGData(bar(selection: .home, unreadCount: 4))
-        let clear = try renderToPNGData(bar(selection: .home, unreadCount: 0))
-
-        XCTAssertNotEqual(badged, clear, "an unread count must change what the tab bar paints")
-        XCTAssertGreaterThan(badged.count, clear.count, "the badged bar must carry strictly more painted content")
-    }
-
-    /// The selected slot is drawn differently from the unselected ones (the
-    /// design's `chrome(active)`) — measured, so a future refactor that drops
-    /// the selection styling turns red.
-    func testTheSelectedTabIsPaintedDifferentlyFromAnUnselectedOne() throws {
-        let onHome = try renderToPNGData(bar(selection: .home, unreadCount: 0))
-        let onProfile = try renderToPNGData(bar(selection: .profile, unreadCount: 0))
-
-        XCTAssertNotEqual(onHome, onProfile, "which tab is selected must be visible in the render")
-    }
-
     // MARK: - Tap targets
 
-    /// Every slot in the bar is a control, so every slot clears 44pt — at the
-    /// default text size and at the smallest one, where the design's 7/8px
-    /// padding around a 24pt glyph plus a 10.5px label lands well under it
-    /// and the explicit floor is the only thing holding the bar open.
-    func testEveryTabBarSlotClearsThe44ptMinimumTapTarget() throws {
+    /// The create button is the one piece of bar chrome the app still draws,
+    /// so it is the one that still needs its floor asserted — the system's
+    /// tab bar brings its own.
+    func testTheCreateButtonClearsThe44ptMinimumTapTarget() throws {
         for size in [DynamicTypeSize.xSmall, .large] {
-            let height = try renderedSize(bar(selection: .home, unreadCount: 0).dynamicTypeSize(size), width: 390).height
-            let barHeight = height - CrowiMetrics.tabBarBottomInset
+            let rendered = try renderedSize(
+                CrowiCreateButton(action: {}).dynamicTypeSize(size),
+                width: 390
+            )
+            let buttonHeight = rendered.height - CrowiMetrics.createButtonBottomInset
 
             XCTAssertGreaterThanOrEqual(
-                barHeight,
+                buttonHeight,
                 CrowiMetrics.minimumTapTarget,
-                "the bar itself fell under the 44pt tap target at \(size)"
+                "the create button fell under the 44pt tap target at \(size)"
             )
         }
     }
@@ -214,10 +180,6 @@ final class CrowiTabBarTests: XCTestCase {
     }
 
     // MARK: - Helpers
-
-    private func bar(selection: CrowiTab, unreadCount: Int) -> some View {
-        CrowiTabBar(selection: selection, unreadCount: unreadCount, onSelect: { _ in }, onCreate: {})
-    }
 
     private func renderedSize(_ view: some View, width: CGFloat) throws -> CGSize {
         #if canImport(AppKit)

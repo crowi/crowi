@@ -1,9 +1,10 @@
 import Foundation
 
-/// feature-ios-visual-redesign Phase 2 — the four TABS of the design's
-/// bottom bar. "New" is deliberately absent: it is an action slot
-/// (`CrowiTabBarSlot.create`), not a destination, so no selection state can
-/// ever land on it (see `CrowiTabBarSlot`).
+/// The four TABS of the bottom bar. "New" is deliberately absent: it is an
+/// ACTION that opens a sheet, not a destination, so no selection state can
+/// ever land on it. It is drawn as a floating button beside the bar
+/// (`CrowiCreateButton`) — which is also why the bar itself can be the
+/// system's.
 public enum CrowiTab: String, CaseIterable, Identifiable, Hashable, Sendable {
     case home
     case search
@@ -32,41 +33,6 @@ public enum CrowiTab: String, CaseIterable, Identifiable, Hashable, Sendable {
         case .profile: return "person.crop.circle"
         }
     }
-}
-
-/// One position in the bar. FIVE slots, of which four are tabs and the
-/// middle one is the create ACTION — the design renders create as a sheet,
-/// never as a fifth screen with its own tab state, and this type is where
-/// that distinction is stated once instead of being re-remembered at each
-/// call site.
-public enum CrowiTabBarSlot: Identifiable, Hashable, Sendable {
-    case tab(CrowiTab)
-    case create
-
-    public var id: String {
-        switch self {
-        case .tab(let tab): return tab.id
-        case .create: return "create"
-        }
-    }
-
-    /// The design's order: Home · Search · New · Notifications · Profile.
-    ///
-    /// Fixed, NOT filtered by `AppInfoCache.capabilities`: the tab bar is the
-    /// app's permanent chrome and a bar that grows a fifth item a beat after
-    /// launch (capabilities arrive from a network refresh) would shift under
-    /// the user's thumb. The search capability gate still holds one level in
-    /// — `SearchView` renders its own "Search isn't available on this
-    /// workspace" state, which it has always carried for exactly this case —
-    /// and the regular-width toolbar keeps `SearchCapabilityToolbarButton`
-    /// unchanged.
-    public static let allSlots: [CrowiTabBarSlot] = [
-        .tab(.home),
-        .tab(.search),
-        .create,
-        .tab(.notifications),
-        .tab(.profile),
-    ]
 }
 
 /// The tab bar's selection + per-tab navigation state, as a value.

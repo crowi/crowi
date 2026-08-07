@@ -52,32 +52,9 @@ struct WorkspaceTabsView: View {
     var body: some View {
         TabView(selection: $navigation.selection) {
             ForEach(CrowiTab.allCases) { tab in
-                stack(for: tab)
-                    // Hidden, but still declared: the tab item is how a
-                    // `TabView` page is identified, and leaving it off would
-                    // make the tab unlabelled for anything that reads the
-                    // structure (Simulator's accessibility inspector,
-                    // future `Tab`-API migration) rather than saving work.
+                tabContent(for: tab)
                     .tabItem { Label(tab.title, systemImage: tab.systemImage) }
                     .tag(tab)
-            }
-        }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            // The design's `isTabbar: view !== 'page'`, as a safe-area inset
-            // rather than an overlay: the inset both draws the bar and tells
-            // every scroll view inside the tab how much room it takes, so the
-            // last row of a list can be reached instead of sitting under the
-            // glass. When the active tab has pushed something the inset
-            // collapses to nothing and the pushed screen gets the full
-            // height — the page's own bottom controls take over, exactly as
-            // in the design.
-            if navigation.isTabBarVisible {
-                SessionTabBar(
-                    session: session,
-                    selection: navigation.selection,
-                    onSelect: { navigation.selection = $0 },
-                    onCreate: { createRequest = CreatePageRequest(originPath: "/") }
-                )
             }
         }
         // The design renders create as a bottom sheet, not as a pushed
@@ -103,9 +80,34 @@ struct WorkspaceTabsView: View {
         }
     }
 
+    /// One tab's page. Only Notifications observes the session — its badge is
+    /// the one thing in this shell that changes on a poll, and observing here
+    /// instead of at the `TabView` keeps a poll tick from re-evaluating all
+    /// four tabs (the `SessionNotificationBell` precedent).
+    @ViewBuilder
+    private func tabContent(for tab: CrowiTab) -> some View {
+        if tab == .notifications {
+            SessionBadgedTab(session: session) { stack(for: tab) }
+        } else {
+            stack(for: tab)
+        }
+    }
+
     private func stack(for tab: CrowiTab) -> some View {
         NavigationStack(path: path(for: tab)) {
             root(for: tab)
+                // The design's floating create button, kept after the bar
+                // itself went back to the system. A `safeAreaInset` rather
+                // than an overlay: it RESERVES its own height inside this
+                // screen, so the last row of a list can still be scrolled to
+                // instead of sitting under the button. Applied to the tab's
+                // ROOT, which is also what makes it disappear on a pushed
+                // screen — the reader's own pill owns the bottom there.
+                .safeAreaInset(edge: .bottom, alignment: .trailing, spacing: 0) {
+                    CrowiCreateButton {
+                        createRequest = CreatePageRequest(originPath: "/")
+                    }
+                }
                 // Applied to every tab's ROOT (not to the stack), so the
                 // switcher is one tap away wherever the user is — and
                 // disappears on a pushed screen, where the leading slot is
@@ -122,9 +124,15 @@ struct WorkspaceTabsView: View {
                 }
                 .navigationDestination(for: ReadDestination.self) { destination in
                     ReadDestinationView(destination: destination, session: session, onSelect: { open($0, in: tab) })
+                        // The design replaces the bar with the page's own
+                        // bottom controls (`isTabbar: view !== 'page'`).
+                        // Hidden on the DESTINATION rather than on the stack:
+                        // hiding it stack-wide is what the app used to do to
+                        // make room for a hand-drawn bar, and it would now
+                        // hide the system's bar on the tab roots too.
+                        .toolbar(.hidden, for: .tabBar)
                 }
         }
-        .toolbar(.hidden, for: .tabBar)
     }
 
     @ViewBuilder
@@ -203,19 +211,16 @@ private struct CreatePageRequest: Identifiable {
 /// (`WorkspaceHomeView`): `WorkspaceTabsView` holds the session as a plain
 /// value so a notifications poll does not re-evaluate all four tabs, and
 /// only this wrapper observes it, feeding the fresh unread count into the
-/// Notifications slot's badge.
-private struct SessionTabBar: View {
+/// Notifications tab's badge.
+///
+/// `.badge` is the system tab bar's own affordance — a hand-drawn dot on the
+/// glyph, which the app used to carry, cannot be read by VoiceOver as a badge
+/// and does not follow the platform's placement.
+private struct SessionBadgedTab<Content: View>: View {
     @ObservedObject var session: WorkspaceSession
-    let selection: CrowiTab
-    let onSelect: (CrowiTab) -> Void
-    let onCreate: () -> Void
+    @ViewBuilder let content: Content
 
     var body: some View {
-        CrowiTabBar(
-            selection: selection,
-            unreadCount: session.unreadNotificationCount,
-            onSelect: onSelect,
-            onCreate: onCreate
-        )
+        content.badge(session.unreadNotificationCount)
     }
 }
