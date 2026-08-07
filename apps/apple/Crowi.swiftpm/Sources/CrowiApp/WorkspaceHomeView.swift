@@ -31,6 +31,15 @@ struct WorkspaceHomeView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var selectedDestination: ReadDestination?
 
+    /// The session is built HERE, from `context`, and never re-pointed —
+    /// which is only correct because the caller gives this view a per-
+    /// workspace identity (`RootScene`'s `.id(workspace.id)`). A `@StateObject`
+    /// evaluates its initial value exactly ONCE per view identity: re-running
+    /// this `init` with another workspace's context discards the new holder
+    /// and keeps the old one. Without that `.id`, switching workspaces
+    /// therefore keeps serving the FIRST workspace's session — which is the
+    /// bug this comment exists to stop coming back (found on device,
+    /// 2026-08-07).
     init(workspace: Workspace, context: WorkspaceContext, onShowSwitcher: @escaping () -> Void) {
         self.workspace = workspace
         self.onShowSwitcher = onShowSwitcher
@@ -45,9 +54,10 @@ struct WorkspaceHomeView: View {
                     .task { await session.activated() }
                     // §11 — the foreground notifications poll loop lives in a
                     // `.task` of THIS view so it is structurally cancelled
-                    // the moment the workspace tears down (the `.id` below
-                    // forces exactly that on every switch): a non-active
-                    // workspace's poller can never keep running (§14).
+                    // the moment the workspace tears down (`RootScene`'s
+                    // `.id(workspace.id)` forces exactly that on every
+                    // switch): a non-active workspace's poller can never keep
+                    // running (§14).
                     .task { await session.runNotificationsPolling() }
                     .onChange(of: scenePhase) { _, newPhase in
                         switch newPhase {
@@ -66,10 +76,6 @@ struct WorkspaceHomeView: View {
                 ContentUnavailableView("Couldn't open this workspace", systemImage: "exclamationmark.triangle")
             }
         }
-        // Forces a full state teardown/rebuild on workspace switch (§3 —
-        // switching re-points every dependency at the newly active
-        // workspace, never reuses stale SwiftUI state from the previous one).
-        .id(workspace.id)
     }
 
     // feature-ios-design-language (3): the root content of BOTH size-class

@@ -28,6 +28,21 @@ struct RootScene: View {
                 WorkspaceHomeView(workspace: workspace, context: context) {
                     isPresentingSwitcher = true
                 }
+                // Gives the home a per-workspace IDENTITY, which is what
+                // makes a switch actually switch. `WorkspaceHomeView` builds
+                // its session in a `@StateObject`, and SwiftUI evaluates a
+                // `@StateObject`'s initial value once per identity — with
+                // this `if` branch as the only identity, a re-render with the
+                // next workspace's context kept the FIRST workspace's session
+                // and the app went on showing workspace #1 forever (found on
+                // device, 2026-08-07).
+                //
+                // It has to live HERE, at the call site. The same modifier
+                // applied inside the home's own `body` — where it used to be
+                // — resets the CONTENT's state but cannot re-create the view
+                // that owns the `@StateObject`, so it looked right and fixed
+                // nothing.
+                .id(workspace.id)
             } else {
                 // First launch / every workspace signed out: the switcher
                 // (with its add-workspace flow) IS the root until a
