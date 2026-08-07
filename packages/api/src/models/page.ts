@@ -812,21 +812,24 @@ export default (crowi: Crowi) => {
   // index then sorts in memory.
   pageSchema.index({ creator: 1, status: 1, createdAt: -1 });
 
-  /**
-   * RFC-0021 §5.5a (Phase 1) — "New Pages are created with `state: 'ready'`
-   * and an atomically written `trackingStartedAt`." Unconditional on
-   * `isNew` (not a check-then-set against the schema's `'untracked'`
-   * default, which would never re-fire) so both existing `Page.create(...)`
-   * call sites (`Page.createPage` and `hono/handlers/draft.ts`'s
-   * `createDraft`) get this for free, in the SAME write as the rest of the
-   * document, with no call-site change. Existing Pages are never touched by
-   * this hook — it only runs for a document that has never been saved.
-   */
-  pageSchema.pre('save', function (this: PageDocument) {
-    if (this.isNew) {
-      this.historyTracking = { state: 'ready', trackingStartedAt: new Date() };
-    }
-  });
+  // RFC-0021 §5.5a says new Pages are created `ready`. That belongs to the
+  // phase where creation goes through a command service that allocates the
+  // page-local sequence — Phase 2. Phase 1 allocates nothing: `createPage`
+  // saves the Page and then `Revision.prepareRevision` writes the first
+  // Revision with no `historySequence` at all.
+  //
+  // Marking such a Page `ready` would assert something untrue. `ready` means
+  // the page-local timeline is authoritative, and a page whose very first
+  // Revision carries no sequence has no timeline yet. It also creates a
+  // cohort that the Phase 2 backfill cannot see: the migration selects Pages
+  // that are NOT ready, and `requireHistoryReady` lets `ready` through, so a
+  // Phase 2 writer would hand sequence 1 to a NEW Revision while the initial
+  // one stays unsequenced — the ordering §5.4 exists to guarantee.
+  //
+  // So Phase 1 leaves every Page at the schema default (`untracked`), which
+  // is exactly what it is: a Page whose history is not yet tracked. Phase 2's
+  // create command sets `ready` in the same write that allocates the initial
+  // sequence, and the backfill promotes existing Pages the same way.
 
   pageEvent.on('create', pageEvent.onCreate);
   pageEvent.on('update', pageEvent.onUpdate);

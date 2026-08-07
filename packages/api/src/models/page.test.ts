@@ -1575,25 +1575,36 @@ describe('Page', () => {
 
   describe('History tracking (RFC-0021 Phase 1, feature-page-history-phase1-model)', () => {
     let user;
+    let Revision;
 
     beforeAll(() => {
       user = createdUsers[0];
+      Revision = crowi.model('Revision');
     });
 
     describe('historyTracking (AC-3)', () => {
-      test('a newly created Page (Page.createPage) is ready with an atomically-written trackingStartedAt', async () => {
-        const before = Date.now();
+      // Phase 1 allocates no sequence, so it must not claim a Page's timeline
+      // is authoritative. `createPage` writes the Page and then a first
+      // Revision with no `historySequence`; calling that `ready` would both
+      // assert something untrue and hide the Page from the Phase 2 backfill,
+      // which selects Pages that are NOT ready. Phase 2's create command sets
+      // `ready` in the same write that allocates the initial sequence.
+      test('a newly created Page (Page.createPage) stays untracked — Phase 1 allocates no sequence, so it cannot claim ready', async () => {
         const created = await Page.createPage('/history-tracking/new-page', 'v1', user, {});
-        const after = Date.now();
 
-        expect(created.historyTracking.state).toBe('ready');
-        expect(created.historyTracking.trackingStartedAt).toBeInstanceOf(Date);
-        expect(created.historyTracking.trackingStartedAt?.getTime()).toBeGreaterThanOrEqual(before - 1000);
-        expect(created.historyTracking.trackingStartedAt?.getTime()).toBeLessThanOrEqual(after + 1000);
+        expect(created.historyTracking.state).toBe('untracked');
         expect(created.historySequence).toBe(0);
       });
 
-      test('a Page created via the OTHER Page.create call site (the draft-creation shape used by hono/handlers/draft.ts) is also ready', async () => {
+      test('its initial Revision carries no historySequence — the reason the Page cannot be ready yet', async () => {
+        const created = await Page.createPage('/history-tracking/new-page-revision', 'v1', user, {});
+        const revision = await Revision.findById(created.revision);
+
+        expect(revision).not.toBeNull();
+        expect(revision?.historySequence).toBeUndefined();
+      });
+
+      test('a Page created via the OTHER Page.create call site (the draft-creation shape used by hono/handlers/draft.ts) is also untracked', async () => {
         const created = await Page.create({
           path: '/history-tracking/new-draft',
           creator: user._id,
@@ -1606,13 +1617,12 @@ describe('Page', () => {
           grantedUsers: [user._id],
         });
 
-        expect(created.historyTracking.state).toBe('ready');
-        expect(created.historyTracking.trackingStartedAt).toBeInstanceOf(Date);
+        expect(created.historyTracking.state).toBe('untracked');
       });
 
       test('a legacy Page (predates historyTracking) reads back as untracked — simulated via a raw $unset, which bypasses save hooks', async () => {
         const created = await Page.createPage('/history-tracking/legacy', 'v1', user, {});
-        expect(created.historyTracking.state).toBe('ready');
+        expect(created.historyTracking.state).toBe('untracked');
 
         await Page.updateOne({ _id: created._id }, { $unset: { historyTracking: '' } });
         const reloaded = await Page.findById(created._id);

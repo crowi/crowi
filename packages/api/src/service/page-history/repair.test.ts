@@ -33,6 +33,20 @@ describe('service/page-history (RFC-0021 Phase 1, feature-page-history-phase1-mo
     user = testUser;
   });
 
+  /**
+   * `scanUnsequencedRevisions` only visits Pages whose `historyTracking.state`
+   * is `ready`, and Phase 1 ships nothing that reaches that state: creation
+   * leaves a Page `untracked` precisely because Phase 1 allocates no sequence
+   * for its initial Revision (see the create hook's comment in
+   * `models/page.ts`). Phase 2's create command and backfill are what promote
+   * a Page. So the scan's own tests have to arrange the state they scan for.
+   */
+  const createReadyPage = async (path, body = 'v0') => {
+    const page = await Page.createPage(path, body, user, {});
+    await Page.updateOne({ _id: page._id }, { $set: { historyTracking: { state: 'ready', trackingStartedAt: new Date() } } });
+    return page;
+  };
+
   // `entryId` (RFC §5.5, revised — AC-5b) defaults to a fresh ObjectId when
   // the caller's fixture doesn't set one, so the many pre-existing fixtures
   // below that don't care about entryId's VALUE (only tests that exercise
@@ -742,7 +756,7 @@ describe('service/page-history (RFC-0021 Phase 1, feature-page-history-phase1-mo
     });
 
     test('a native-driver-injected, secret-shaped historySequence on a Revision is never surfaced in the structured `duplicateSequence`/`failed` fields (codex review attempt 2, round 6)', async () => {
-      const page = await Page.createPage('/repair/redaction-nonnumeric-historysequence', 'v1', user, {});
+      const page = await createReadyPage('/repair/redaction-nonnumeric-historysequence', 'v1');
       const secretValue = 'someone-secret@example.com';
       const r0 = await Revision.findOne({ page: page._id }).exec();
       // Native driver bypass — `historySequence` is a native `.lean()` read
@@ -1067,7 +1081,7 @@ describe('service/page-history (RFC-0021 Phase 1, feature-page-history-phase1-mo
 
   describe('scanUnsequencedRevisions — repair (b): assign sequences to unsequenced Revisions on ready Pages (AC-7)', () => {
     test('assigns sequences in createdAt, _id order and reports each assignment', async () => {
-      const page = await Page.createPage('/repair/unsequenced', 'v0', user, {});
+      const page = await createReadyPage('/repair/unsequenced', 'v0');
       const base = Date.now();
       // The initial revision from createPage has no historySequence either
       // — Phase 1 ships no writer that assigns one. Two more, explicitly
@@ -1111,7 +1125,7 @@ describe('service/page-history (RFC-0021 Phase 1, feature-page-history-phase1-mo
     });
 
     test('a second scan pass over an already-repaired Page assigns nothing further', async () => {
-      const page = await Page.createPage('/repair/unsequenced-idempotent', 'v0', user, {});
+      const page = await createReadyPage('/repair/unsequenced-idempotent', 'v0');
       const first = await scanUnsequencedRevisions(crowi);
       expect(first.repaired.some((r) => r.pageId.equals(page._id))).toBe(true);
 
@@ -1120,7 +1134,7 @@ describe('service/page-history (RFC-0021 Phase 1, feature-page-history-phase1-mo
     });
 
     test('an untracked Page (no historyTracking.state: ready) is never visited', async () => {
-      const page = await Page.createPage('/repair/untracked-not-visited', 'v0', user, {});
+      const page = await createReadyPage('/repair/untracked-not-visited', 'v0');
       await Page.updateOne({ _id: page._id }, { $unset: { historyTracking: '' } });
 
       const result = await scanUnsequencedRevisions(crowi);
@@ -1128,7 +1142,7 @@ describe('service/page-history (RFC-0021 Phase 1, feature-page-history-phase1-mo
     });
 
     test('a Revision with an explicit historySequence: null (not merely absent) is still treated as unsequenced and assigned a sequence (codex review attempt 2, round 6, AC-7)', async () => {
-      const page = await Page.createPage('/repair/unsequenced-explicit-null', 'v0', user, {});
+      const page = await createReadyPage('/repair/unsequenced-explicit-null', 'v0');
       const r0 = await Revision.findOne({ page: page._id }).exec();
       // Native driver bypass — set historySequence to an EXPLICIT `null`,
       // distinct from simply never having the field. `claimAndAssignSequence`
@@ -1147,7 +1161,7 @@ describe('service/page-history (RFC-0021 Phase 1, feature-page-history-phase1-mo
     });
 
     test('two Revisions each explicitly set to historySequence: null are NOT reported as a duplicate — null is not a real sequence value (codex review attempt 2, round 6, AC-7)', async () => {
-      const page = await Page.createPage('/repair/unsequenced-explicit-null-not-duplicate', 'v0', user, {});
+      const page = await createReadyPage('/repair/unsequenced-explicit-null-not-duplicate', 'v0');
       const r0 = await Revision.findOne({ page: page._id }).exec();
       const r1 = await Revision.create({ page: page._id, path: page.path, body: 'v1', format: 'markdown', author: user._id, createdAt: new Date() });
       await Revision.collection.updateOne({ _id: r0._id }, { $set: { historySequence: null } });
@@ -1160,7 +1174,7 @@ describe('service/page-history (RFC-0021 Phase 1, feature-page-history-phase1-mo
     });
 
     test('a claim that reaches a corrupt outbox slot is reported in `failed` with the Revision id it was trying to sequence (codex review attempt 3, AC-7/8)', async () => {
-      const page = await Page.createPage('/repair/unsequenced-claim-failure', 'v0', user, {});
+      const page = await createReadyPage('/repair/unsequenced-claim-failure', 'v0');
       const initialRevision = await Revision.findOne({ page: page._id }).exec();
       // `claimAndAssignSequence` finds the slot already occupied and tries to
       // drain it via `materializePendingEntry` before claiming — a malformed
@@ -1182,7 +1196,7 @@ describe('service/page-history (RFC-0021 Phase 1, feature-page-history-phase1-mo
     });
 
     test('a claim whose CAS succeeds but whose materialize fails afterward is reported in `failed` WITH the sequence the CAS already allocated (codex review attempt 4, AC-7/8)', async () => {
-      const page = await Page.createPage('/repair/unsequenced-post-claim-failure', 'v0', user, {});
+      const page = await createReadyPage('/repair/unsequenced-post-claim-failure', 'v0');
       const initialRevision = await Revision.findOne({ page: page._id }).exec();
 
       // Intercept THIS PAGE'S claim CAS specifically (the write that both
@@ -1232,7 +1246,7 @@ describe('service/page-history (RFC-0021 Phase 1, feature-page-history-phase1-mo
 
   describe('scanUnsequencedRevisions — repair (c): duplicate sequence is blocked, not auto-repaired (AC-8)', () => {
     test('two Revisions sharing the same historySequence on one Page are reported as blocked, and nothing is assigned to that Page', async () => {
-      const page = await Page.createPage('/repair/duplicate-sequence', 'v0', user, {});
+      const page = await createReadyPage('/repair/duplicate-sequence', 'v0');
       const initialRevision = await Revision.findOne({ page: page._id }).exec();
       await Revision.updateOne({ _id: initialRevision._id }, { $set: { historySequence: 5 } });
       const duplicateRevision = await Revision.create({
@@ -1277,7 +1291,7 @@ describe('service/page-history (RFC-0021 Phase 1, feature-page-history-phase1-mo
     });
 
     test('a Revision.historySequence colliding with a PageHistoryEvent.sequence on the same Page is also blocked', async () => {
-      const page = await Page.createPage('/repair/duplicate-cross-collection', 'v0', user, {});
+      const page = await createReadyPage('/repair/duplicate-cross-collection', 'v0');
       const initialRevision = await Revision.findOne({ page: page._id }).exec();
       await Revision.updateOne({ _id: initialRevision._id }, { $set: { historySequence: 2 } });
       await PageHistoryEvent.create({
@@ -1303,7 +1317,7 @@ describe('service/page-history (RFC-0021 Phase 1, feature-page-history-phase1-mo
     });
 
     test('historySequence counter lagging behind an already-assigned sequence is blocked — allocating from it would manufacture a NEW collision (AC-8)', async () => {
-      const page = await Page.createPage('/repair/counter-lag', 'v0', user, {});
+      const page = await createReadyPage('/repair/counter-lag', 'v0');
       const initialRevision = await Revision.findOne({ page: page._id }).exec();
       // Corruption scenario distinct from the two tests above: there is no
       // EXISTING duplicate yet — only one Revision holds `historySequence:
@@ -1339,7 +1353,7 @@ describe('service/page-history (RFC-0021 Phase 1, feature-page-history-phase1-mo
 
   describe('scanUnsequencedRevisions — parallel-scan race safety (codex review attempt 3, AC-6/7)', () => {
     test('two concurrent scans over the same Page never duplicate a sequence or leave an orphaned outbox marker, and a follow-up scan converges', async () => {
-      const page = await Page.createPage('/repair/parallel-scan-race', 'v0', user, {});
+      const page = await createReadyPage('/repair/parallel-scan-race', 'v0');
       const base = Date.now();
       const r1 = await Revision.create({ page: page._id, path: page.path, body: 'r1', format: 'markdown', author: user._id, createdAt: new Date(base + 1000) });
       const r2 = await Revision.create({ page: page._id, path: page.path, body: 'r2', format: 'markdown', author: user._id, createdAt: new Date(base + 2000) });
@@ -1379,7 +1393,7 @@ describe('service/page-history (RFC-0021 Phase 1, feature-page-history-phase1-mo
     });
 
     test("a Page whose allocator counter and Revision are advanced by a CONCURRENT claim between this scan's batch fetch and its per-page turn is not falsely blocked (codex review attempt 5/2, AC-7/8)", async () => {
-      const page = await Page.createPage('/repair/counter-race-not-falsely-blocked', 'v0', user, {});
+      const page = await createReadyPage('/repair/counter-race-not-falsely-blocked', 'v0');
       const initialRevision = await Revision.findOne({ page: page._id }).exec();
 
       // A controlled (deterministic) reproduction of the race a live two-scan
@@ -1473,9 +1487,9 @@ describe('service/page-history (RFC-0021 Phase 1, feature-page-history-phase1-mo
     });
 
     test('resumeAfterId only visits Pages with a strictly greater _id, leaving earlier ones untouched', async () => {
-      const earlier = await Page.createPage('/repair/batching-resume-earlier', 'v1', user, {});
+      const earlier = await createReadyPage('/repair/batching-resume-earlier', 'v1');
       await claimPageEventOutbox(earlier._id, 'op-batching-resume-earlier');
-      const later = await Page.createPage('/repair/batching-resume-later', 'v1', user, {});
+      const later = await createReadyPage('/repair/batching-resume-later', 'v1');
       await claimPageEventOutbox(later._id, 'op-batching-resume-later');
 
       const result = await repairPendingEntries(crowi, { resumeAfterId: earlier._id });
@@ -1502,7 +1516,7 @@ describe('service/page-history (RFC-0021 Phase 1, feature-page-history-phase1-mo
 
   describe('scanUnsequencedRevisions — bounded, resumable batching (codex review attempt 3, implementation map)', () => {
     test('a batchSize smaller than the ready-Page set still scans every Page (multiple internal batches)', async () => {
-      const pages = await Promise.all(Array.from({ length: 5 }, (_, i) => Page.createPage(`/repair/scan-batching-multi-${i}`, 'v0', user, {})));
+      const pages = await Promise.all(Array.from({ length: 5 }, (_, i) => createReadyPage(`/repair/scan-batching-multi-${i}`, 'v0')));
 
       const result = await scanUnsequencedRevisions(crowi, { batchSize: 2 });
 
@@ -1513,8 +1527,8 @@ describe('service/page-history (RFC-0021 Phase 1, feature-page-history-phase1-mo
     });
 
     test('resumeAfterId only visits ready Pages with a strictly greater _id, leaving earlier ones unscanned', async () => {
-      const earlier = await Page.createPage('/repair/scan-batching-resume-earlier', 'v0', user, {});
-      const later = await Page.createPage('/repair/scan-batching-resume-later', 'v0', user, {});
+      const earlier = await createReadyPage('/repair/scan-batching-resume-earlier', 'v0');
+      const later = await createReadyPage('/repair/scan-batching-resume-later', 'v0');
 
       const result = await scanUnsequencedRevisions(crowi, { resumeAfterId: earlier._id });
 
