@@ -211,4 +211,122 @@ describe('Comment', () => {
       }
     });
   });
+
+  // feature-page-history-phase1-model (RFC-0021 §7.1, Phase 1) — post-insert
+  // lifecycle re-validation: `addComment` authorizes the Page and THEN
+  // inserts the Comment as two separate operations, so a Page trashed in
+  // that window must not leave an orphaned comment behind.
+  describe('post-insert lifecycle re-validation (RFC-0021 §7.1, AC-10)', () => {
+    let commentEvent;
+
+    beforeAll(() => {
+      commentEvent = crowi.event('Comment');
+    });
+
+    test('a comment created against an already-trashed page is inserted then compensated (deleted), and the write fails', async () => {
+      const creator = await User.findUserByUsername('anonymous1');
+      const [page] = await Fixture.generate('Page', [{ path: '/grant/history-phase1-trash-race', grant: Page.GRANT_PUBLIC, grantedUsers: [creator], creator }]);
+      await Page.deletePage(page, creator);
+
+      const adds = [];
+      const onAdd = (c) => adds.push(c);
+      commentEvent.on('add', onAdd);
+      try {
+        await expect(Comment.create({ page: page._id, creator, revision: undefined, comment: 'race comment', commentPosition: undefined })).rejects.toThrow(
+          'Page not found',
+        );
+
+        // Inserted, then removed by the compensation — not left behind.
+        const remaining = await Comment.countDocuments({ comment: 'race comment' });
+        expect(remaining).toBe(0);
+
+        // Registered BEFORE the commentCount/Activity/live-sync hook — its
+        // throw must suppress that later hook entirely.
+        expect(adds).toHaveLength(0);
+      } finally {
+        commentEvent.off('add', onAdd);
+      }
+    });
+
+    test('a comment created against a page that no longer exists (deleted _id) is inserted then compensated', async () => {
+      const creator = await User.findUserByUsername('anonymous1');
+      const [page] = await Fixture.generate('Page', [{ path: '/grant/history-phase1-gone-race', grant: Page.GRANT_PUBLIC, grantedUsers: [creator], creator }]);
+      const missingPageId = page._id;
+      await Page.deleteOne({ _id: missingPageId });
+
+      await expect(
+        Comment.create({ page: missingPageId, creator, revision: undefined, comment: 'orphan comment', commentPosition: undefined }),
+      ).rejects.toThrow('Page not found');
+
+      const remaining = await Comment.countDocuments({ comment: 'orphan comment' });
+      expect(remaining).toBe(0);
+    });
+
+    test('no $locals.authSnapshot (direct model caller, e.g. Comment.create): a page that was merely renamed is unaffected — the narrower gone-or-trashed fallback applies', async () => {
+      const creator = await User.findUserByUsername('anonymous1');
+      const [page] = await Fixture.generate('Page', [
+        { path: '/grant/history-phase1-rename-only', grant: Page.GRANT_PUBLIC, grantedUsers: [creator], creator },
+      ]);
+      await Page.rename(page, '/grant/history-phase1-rename-only-moved', creator, {});
+
+      const created = await Comment.create({ page: page._id, creator, revision: undefined, comment: 'after rename', commentPosition: undefined });
+      expect(created.comment).toBe('after rename');
+      const stillThere = await Comment.countDocuments({ _id: created._id });
+      expect(stillThere).toBe(1);
+    });
+
+    test('with $locals.authSnapshot (what addComment sets): a page renamed (not trashed) since authorization IS compensated — AC-10\'s literal "trash / rename"', async () => {
+      const creator = await User.findUserByUsername('anonymous1');
+      const [page] = await Fixture.generate('Page', [
+        { path: '/grant/history-phase1-rename-snapshot', grant: Page.GRANT_PUBLIC, grantedUsers: [creator], creator },
+      ]);
+      const authSnapshot = { status: page.status, path: page.path };
+
+      await Page.rename(await Page.findById(page._id), '/grant/history-phase1-rename-snapshot-moved', creator, {});
+
+      const draft = new Comment({ page: page._id, creator, revision: undefined, comment: 'renamed under me', commentPosition: undefined });
+      draft.$locals.authSnapshot = authSnapshot;
+      await expect(draft.save()).rejects.toThrow('Page not found');
+
+      const remaining = await Comment.countDocuments({ comment: 'renamed under me' });
+      expect(remaining).toBe(0);
+    });
+
+    test('a trash-then-restore round trip that lands back on the IDENTICAL {status, path} authorized is NOT compensated — no lifecycle churn was actually lost', async () => {
+      const creator = await User.findUserByUsername('anonymous1');
+      const [page] = await Fixture.generate('Page', [{ path: '/grant/history-phase1-roundtrip', grant: Page.GRANT_PUBLIC, grantedUsers: [creator], creator }]);
+      const authSnapshot = { status: page.status, path: page.path };
+
+      await Page.deletePage(await Page.findById(page._id), creator);
+      const trashed = await Page.findById(page._id);
+      await Page.revertDeletedPage(trashed, creator);
+      const restored = await Page.findById(page._id);
+      // The round trip really did land back on the authorized values —
+      // otherwise this test would not exercise what it claims to.
+      expect(restored.status).toBe(authSnapshot.status);
+      expect(restored.path).toBe(authSnapshot.path);
+
+      const draft = new Comment({ page: page._id, creator, revision: undefined, comment: 'survived the round trip', commentPosition: undefined });
+      draft.$locals.authSnapshot = authSnapshot;
+      const created = await draft.save();
+      expect(created.comment).toBe('survived the round trip');
+      const stillThere = await Comment.countDocuments({ _id: created._id });
+      expect(stillThere).toBe(1);
+    });
+
+    test('editing an existing comment is never compensated by this check, even if its page is trashed afterward', async () => {
+      const creator = await User.findUserByUsername('anonymous1');
+      const [page] = await Fixture.generate('Page', [
+        { path: '/grant/history-phase1-edit-after-trash', grant: Page.GRANT_PUBLIC, grantedUsers: [creator], creator },
+      ]);
+      const created = await Comment.create({ page: page._id, creator, revision: undefined, comment: 'before trash', commentPosition: undefined });
+
+      await Page.deletePage(page, creator);
+
+      created.comment = 'edited after page trashed';
+      await expect(created.save()).resolves.toBeTruthy();
+      const stillThere = await Comment.countDocuments({ _id: created._id });
+      expect(stillThere).toBe(1);
+    });
+  });
 });
