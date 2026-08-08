@@ -38,26 +38,6 @@ final class CrowiDesignSystemTests: XCTestCase {
         XCTAssertLessThan(CrowiMetrics.sheetHorizontalMargin, CrowiMetrics.cardHorizontalMargin)
     }
 
-    /// The panel's own curve must not repeat the cards' one inset in — the
-    /// nested-same-radius look is half of what made the old sheet read as a
-    /// card inside a card.
-    func testTheSheetPanelIsCurvedMoreThanTheCardsInsideIt() {
-        XCTAssertGreaterThan(CrowiMetrics.sheetPanelCornerRadius, CrowiTheme.cardCornerRadius)
-    }
-
-    /// Dragging the panel down dismisses it; dragging up does not peel it off
-    /// the screen edge it is anchored to.
-    func testThePanelOnlyFollowsADownwardDrag() {
-        XCTAssertEqual(CrowiBottomSheetDrag.offset(forTranslation: 40), 40)
-        XCTAssertEqual(CrowiBottomSheetDrag.offset(forTranslation: -120), 0, "the panel is already at the bottom")
-    }
-
-    func testAReleaseDismissesOnlyPastTheThreshold() {
-        XCTAssertFalse(CrowiBottomSheetDrag.shouldDismiss(offset: 0))
-        XCTAssertFalse(CrowiBottomSheetDrag.shouldDismiss(offset: CrowiBottomSheetDrag.dismissThreshold - 1))
-        XCTAssertTrue(CrowiBottomSheetDrag.shouldDismiss(offset: CrowiBottomSheetDrag.dismissThreshold))
-    }
-
     private func renderCardPNG(_ context: CrowiCardContext) throws -> Data {
         #if canImport(AppKit)
         let card = CrowiCard(context) {

@@ -54,7 +54,7 @@ struct PageReaderView: View {
     @State private var isLoading = false
     @State private var loadErrorMessage: String?
     @State private var showEditor = false
-    @State private var showActions = false
+
     @State private var showTableOfContents = false
     /// Derived ONCE per page (`apply(_:)`), not per render: extracting it is a
     /// walk of the whole AST, and this view's body re-evaluates on every
@@ -116,9 +116,21 @@ struct PageReaderView: View {
                     CrowiReadingProgressBar(progress: readingProgress)
                 }
             }
+            // Only the failure notice is still hosted by hand: it is a
+            // transient message about a reverted write, which no toolbar
+            // placement expresses. The controls themselves moved into the
+            // system's bottom toolbar (`pageActions`).
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                bottomBar(proxy: proxy)
+                if engagement?.lastActionFailed == true {
+                    CrowiPageActionFailureNotice()
+                        // Anchored to the screen's bottom rather than riding
+                        // up on the keyboard when the composer is focused: it
+                        // is chrome for the page, not an accessory for the
+                        // field.
+                        .ignoresSafeArea(.keyboard, edges: .bottom)
+                }
             }
+            .toolbar { pageActions(proxy: proxy) }
             .sheet(isPresented: $showTableOfContents) {
                 CrowiTableOfContentsSheet(
                     headings: tableOfContents,
@@ -155,25 +167,6 @@ struct PageReaderView: View {
                         Label("Contents", systemImage: "list.bullet")
                     }
                 }
-                Button {
-                    showActions = true
-                } label: {
-                    Label("Actions", systemImage: "ellipsis.circle")
-                }
-                .disabled(page == nil)
-            }
-        }
-        // An overlay, not a `.sheet` — see `CrowiBottomSheet` for why the app
-        // draws this one itself.
-        .crowiBottomSheet(isPresented: $showActions) {
-            if let page, let shareURL = pageURL(for: page) {
-                CrowiPageActionSheet(
-                    shareURL: shareURL,
-                    isWatching: engagement?.isWatching ?? false,
-                    isTogglingWatch: engagement?.isTogglingWatch ?? false,
-                    onSelect: { action in perform(action, page: page, shareURL: shareURL) },
-                    onCancel: { showActions = false }
-                )
             }
         }
         .sheet(isPresented: $showEditor, onDismiss: {
@@ -227,44 +220,119 @@ struct PageReaderView: View {
         comments.isEmpty ? (page.commentCount ?? 0) : comments.count
     }
 
-    // MARK: - Bottom bar (the design's floating pill)
+    // MARK: - Bottom bar
 
-    @ViewBuilder
-    private func bottomBar(proxy: ScrollViewProxy) -> some View {
-        VStack(spacing: 0) {
-            if engagement?.lastActionFailed == true {
-                // What the inline bar printed beside its toggles. The state is
-                // still `PageEngagementModel.lastActionFailed`, set after the
-                // optimistic value has already been reverted.
-                CrowiPageActionFailureNotice()
+    /// The design's floating pill, as the system's own bottom toolbar.
+    ///
+    /// The app drew this as a hand-built glass capsule until the tab bar's
+    /// migration showed what that costs: on iOS 26 a `.bottomBar` toolbar IS
+    /// Liquid Glass, with press feedback, Dynamic Type, VoiceOver and the
+    /// platform's own layout, for no code at all. It is also a single row of
+    /// controls rather than icon-over-label, so it sits lower than the tab bar
+    /// it replaces while a page is open.
+    ///
+    /// The counts stay inline (`♡ 3`) rather than becoming `.badge`, because
+    /// they are VALUES the design shows, not unread markers — a toolbar item
+    /// can host any view, so the label is an icon beside its number.
+    @ToolbarContentBuilder
+    private func pageActions(proxy: ScrollViewProxy) -> some ToolbarContent {
+        ToolbarItemGroup(placement: .bottomBar) {
+            Button {
+                showEditor = true
+            } label: {
+                Label("Edit", systemImage: "square.and.pencil")
             }
-            CrowiPageActionBar(
-                likeCount: page.map(likeCount(for:)) ?? 0,
-                isLiked: engagement?.likedByMe ?? false,
-                isBookmarked: engagement?.isBookmarked ?? false,
-                commentCount: page.map(commentCount(for:)) ?? 0,
-                // Each toggle stays disabled while ITS OWN write is in flight
-                // (the model's per-toggle guard is the backstop) — a rapid
-                // double-tap must never race two like/unlike requests.
-                isTogglingLike: engagement?.isTogglingLike ?? false,
-                isTogglingBookmark: engagement?.isTogglingBookmark ?? false,
-                // The cold-cache paint has counts but no model to write
-                // through yet — the old inline bar rendered read-only glyphs
-                // in that window, and the pill is inert in it for the same
-                // reason.
-                isEngagementReady: engagement != nil,
-                isEditable: page != nil,
-                onEdit: { showEditor = true },
-                onToggleBookmark: { Task { await engagement?.toggleBookmark() } },
-                onToggleLike: { Task { await engagement?.toggleLike() } },
-                onShowComments: { scroll(to: Self.commentsAnchor, using: proxy) },
-                onShowActions: { showActions = true }
-            )
+            .disabled(page == nil)
+
+            Button {
+                Task { await engagement?.toggleBookmark() }
+            } label: {
+                Label(
+                    engagement?.isBookmarked == true ? "Remove Bookmark" : "Bookmark",
+                    systemImage: engagement?.isBookmarked == true ? "bookmark.fill" : "bookmark"
+                )
+            }
+            // Each toggle stays disabled while ITS OWN write is in flight (the
+            // model's per-toggle guard is the backstop) — a rapid double-tap
+            // must never race two requests. The cold-cache paint has counts
+            // but no model to write through yet, so the toggles are inert in
+            // that window rather than swallowing taps.
+            .disabled(engagement?.isTogglingBookmark ?? true)
+
+            Button {
+                Task { await engagement?.toggleLike() }
+            } label: {
+                countLabel(
+                    engagement?.likedByMe == true ? "Unlike" : "Like",
+                    systemImage: engagement?.likedByMe == true ? "heart.fill" : "heart",
+                    count: page.map(likeCount(for:)) ?? 0
+                )
+            }
+            .disabled(engagement?.isTogglingLike ?? true)
+
+            Button {
+                scroll(to: Self.commentsAnchor, using: proxy)
+            } label: {
+                countLabel("Comments", systemImage: "bubble.left", count: page.map(commentCount(for:)) ?? 0)
+            }
+
+            // Safari's composition: the overflow menu grows out of the ⋯ in
+            // the bottom bar. A `Menu` anchors and morphs there by itself —
+            // the app used to open a hand-drawn bottom sheet from this button,
+            // which had to reimplement the backdrop, the drag-to-dismiss and
+            // the escape gesture, and could never match the OS's glass.
+            Menu {
+                pageActionsMenu
+            } label: {
+                Label("More Actions", systemImage: "ellipsis")
+            }
+            .disabled(page == nil)
         }
-        // The pill stays anchored to the screen's bottom rather than riding up
-        // on the keyboard when the comment composer is focused: it is chrome
-        // for the page, not an accessory for the field.
-        .ignoresSafeArea(.keyboard, edges: .bottom)
+    }
+
+    /// The overflow menu's items. `Section` is what draws the divider Safari's
+    /// own menu shows between groups.
+    @ViewBuilder
+    private var pageActionsMenu: some View {
+        if let page, let shareURL = pageURL(for: page) {
+            Section {
+                ShareLink(item: shareURL) {
+                    Label("Share", systemImage: "square.and.arrow.up")
+                }
+                Button {
+                    perform(.copyLink, page: page, shareURL: shareURL)
+                } label: {
+                    Label("Copy Link", systemImage: "link")
+                }
+            }
+            Section {
+                Button {
+                    perform(.versionHistory, page: page, shareURL: shareURL)
+                } label: {
+                    Label("Version History", systemImage: "clock.arrow.circlepath")
+                }
+                Button {
+                    perform(.watch, page: page, shareURL: shareURL)
+                } label: {
+                    Label(
+                        engagement?.isWatching == true ? "Stop Watching" : "Watch Page",
+                        systemImage: engagement?.isWatching == true ? "bell.fill" : "bell"
+                    )
+                }
+                .disabled(engagement?.isTogglingWatch ?? true)
+            }
+        }
+    }
+
+    /// An icon beside its count — the design's `♡ 3`, as a toolbar item's
+    /// label.
+    private func countLabel(_ title: String, systemImage: String, count: Int) -> some View {
+        Label {
+            Text(count, format: .number)
+        } icon: {
+            Image(systemName: systemImage)
+        }
+        .accessibilityLabel("\(title), \(count)")
     }
 
     private func scroll(to anchor: String, using proxy: ScrollViewProxy) {
@@ -290,9 +358,9 @@ struct PageReaderView: View {
             #if canImport(UIKit)
             UIPasteboard.general.string = shareURL.absoluteString
             #endif
-            showActions = false
+
         case .versionHistory:
-            showActions = false
+
             onSelectDestination(.revisionHistory(pageId: page.id, pagePath: page.path))
         case .watch:
             // The one engagement toggle with no slot in the design's pill —

@@ -168,33 +168,11 @@ public enum CrowiMetrics {
     /// Design: `margin-bottom:16px` under the stats row, then the hairline.
     public static let pageHeaderBottomPadding: CGFloat = 16
 
-    // MARK: - Page action bar (the floating pill above the safe area)
-
-    /// Design: `bottom:34px` measured from the DEVICE edge — the tab bar's
-    /// `tabBarBottomInset` reasoning applies unchanged (the pill is anchored
-    /// to the bottom safe area, so this is the gap ABOVE it).
-    public static let pageActionBarBottomInset: CGFloat = 8
-    /// Design: `padding:6px 8px` inside the pill.
-    public static let pageActionBarInnerHorizontalPadding: CGFloat = 8
-    public static let pageActionBarInnerVerticalPadding: CGFloat = 6
-    /// Design: `gap:1px` between the pill's buttons.
-    public static let pageActionBarItemSpacing: CGFloat = 1
-    /// Design: 20/21px stroked SVGs — the `tabBarGlyphSize` note applies (an
-    /// SF Symbol's cap height sits a couple of points below the CSS number).
-    public static let pageActionBarGlyphSize: CGFloat = 19
-    /// Design: `padding:8px 11px` on an icon button, `8px 12px` + `gap:5px`
-    /// on the labelled Edit button.
-    public static let pageActionBarButtonHorizontalPadding: CGFloat = 11
-    public static let pageActionBarLabelSpacing: CGFloat = 5
-    /// Design: the `.5px × 22px` rule between Edit and the toggles.
-    public static let pageActionBarDividerHeight: CGFloat = 22
-
     // MARK: - Bottom sheets (action list / table of contents)
 
     /// Design: `padding:15px 18px;gap:14px` on an action-sheet row.
     public static let sheetRowVerticalPadding: CGFloat = 15
     public static let sheetRowHorizontalPadding: CGFloat = 18
-    public static let sheetRowContentSpacing: CGFloat = 14
     /// Design: `padding:16px` on the sheet's Cancel/Done button.
     public static let sheetButtonPadding: CGFloat = 16
     /// The sheet panel's `padding:0 8px` — a HALF gutter compared to a
@@ -202,19 +180,12 @@ public enum CrowiMetrics {
     /// the screen by the panel itself.
     public static let sheetHorizontalMargin: CGFloat = 8
     /// Air under the last card, above the home indicator's own clearance.
-    public static let sheetPanelBottomPadding: CGFloat = 12
     /// Air over the first card, under the grabber.
-    public static let sheetPanelTopPadding: CGFloat = 8
     /// The panel's own top corners. Larger than a card's 16 so the cards
     /// inside it do not repeat the same curve one inset in — the panel is a
     /// bigger surface and reads as one.
-    public static let sheetPanelCornerRadius: CGFloat = 20
     /// The drag affordance at the panel's top: the platform's 36×5 pill.
-    public static let sheetGrabberWidth: CGFloat = 36
-    public static let sheetGrabberHeight: CGFloat = 5
-    public static let sheetGrabberTopPadding: CGFloat = 8
     /// Design: `margin-bottom:8px` between the sheet's stacked cards.
-    public static let sheetCardSpacing: CGFloat = 8
     /// Design: `padding:11px 16px` on a TOC row, `26px` leading when nested —
     /// i.e. one indentation step is 10px.
     public static let tocRowVerticalPadding: CGFloat = 11

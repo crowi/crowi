@@ -204,35 +204,6 @@ final class CrowiPageChromeTests: XCTestCase {
         XCTAssertFalse(model.isScrolled)
     }
 
-    // MARK: - Tap targets
-
-    /// Every slot in the pill is a control, so the pill clears 44pt — at the
-    /// default text size and at the smallest one, where the design's 6/8px
-    /// padding around a ~20pt glyph lands well under it and the explicit
-    /// floor is the only thing holding the bar open.
-    func testTheActionPillClearsThe44ptMinimumTapTarget() throws {
-        for size in [DynamicTypeSize.xSmall, .large] {
-            let height = try renderedSize(pill().dynamicTypeSize(size), width: 390).height
-            let barHeight = height - CrowiMetrics.pageActionBarBottomInset
-
-            XCTAssertGreaterThanOrEqual(
-                barHeight,
-                CrowiMetrics.minimumTapTarget,
-                "the pill fell under the 44pt tap target at \(size)"
-            )
-        }
-    }
-
-    /// …and the pill actually PAINTS its state: a liked page and an unliked
-    /// one are not the same picture (the design's filled/hollow glyphs plus
-    /// the count).
-    func testThePillPaintsLikeAndBookmarkState() throws {
-        let plain = try renderToPNGData(pill(isLiked: false, isBookmarked: false))
-        let engaged = try renderToPNGData(pill(isLiked: true, isBookmarked: true))
-
-        XCTAssertNotEqual(plain, engaged, "like/bookmark state must be visible in the render")
-    }
-
     /// The header is a title block, not a control strip: it renders its
     /// counts and nothing about it is tappable. Measured as "it draws
     /// something", which is what a regression to an empty header would lose.
@@ -244,20 +215,6 @@ final class CrowiPageChromeTests: XCTestCase {
     }
 
     // MARK: - Helpers
-
-    private func pill(isLiked: Bool = false, isBookmarked: Bool = false) -> some View {
-        CrowiPageActionBar(
-            likeCount: isLiked ? 4 : 3,
-            isLiked: isLiked,
-            isBookmarked: isBookmarked,
-            commentCount: 2,
-            onEdit: {},
-            onToggleBookmark: {},
-            onToggleLike: {},
-            onShowComments: {},
-            onShowActions: {}
-        )
-    }
 
     private func header(seen: Int, likes: Int, comments: Int) -> some View {
         CrowiPageHeader(
