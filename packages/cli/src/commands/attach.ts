@@ -7,9 +7,9 @@ import { pipeline } from 'node:stream/promises';
 import type { Command } from 'commander';
 
 import { authedFetch, authedFetchRaw, CliError, EXIT } from '../lib/http';
-import { mediaTypeForFilename } from '../lib/media-type';
 import { info, render } from '../lib/output';
 import { fetchCurrentPage } from '../lib/page-write';
+import { fetchUploadPolicy, resolveDeclaredMediaType } from '../lib/upload-policy';
 import { requireProfile, rethrowScopeHint } from './_shared';
 
 /**
@@ -88,6 +88,29 @@ async function runAdd(pathOrId: string, file: string, command: Command): Promise
     throw new CliError(`cannot read ${file}: ${reason}`, { exitCode: EXIT.INVALID });
   }
 
+  const name = basename(file);
+  // Ask the server what it actually accepts (cached on the profile; a 404
+  // degrades to the local `media-type.ts` table, so an old server sees no
+  // regression) and reject an obviously-doomed upload locally instead of
+  // paying for the round trip.
+  const policy = await fetchUploadPolicy(profile);
+  const declaredType = resolveDeclaredMediaType(name, policy);
+  if (policy) {
+    if (!policy.allowedMimeTypes.includes(declaredType)) {
+      throw new CliError(`upload rejected: ${file} has type ${declaredType}, which this server does not accept for attachments`, {
+        exitCode: EXIT.INVALID,
+      });
+    }
+    if (bytes.byteLength > policy.maxBytes.attachment) {
+      throw new CliError(
+        `upload rejected: ${file} (${bytes.byteLength} bytes) exceeds the server's attachment size limit (${policy.maxBytes.attachment} bytes)`,
+        {
+          exitCode: EXIT.INVALID,
+        },
+      );
+    }
+  }
+
   const form = new FormData();
   // Node 18+ globals: Blob / File / FormData. The declared `type` matters: the
   // api stores it verbatim as the attachment's `fileFormat`, and delivery only
@@ -95,8 +118,7 @@ async function runAdd(pathOrId: string, file: string, command: Command): Promise
   // `application/octet-stream` and comes back as a download, image or not.
   // A browser gets this from the file picker; in Node we derive it from the
   // name.
-  const name = basename(file);
-  const blob = new Blob([bytes], { type: mediaTypeForFilename(name) });
+  const blob = new Blob([bytes], { type: declaredType });
   form.append('file', blob, name);
 
   let body: AddAttachmentResponse;

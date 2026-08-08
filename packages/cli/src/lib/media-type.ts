@@ -1,6 +1,17 @@
 /**
  * Extension → media type, used to declare what an uploaded file actually is.
  *
+ * This table is a FALLBACK, not the source of truth.
+ * `GET /attachments/upload-policy` (`./upload-policy.ts`)
+ * publishes the server's actual policy, including its own `extensionHints`;
+ * `resolveDeclaredMediaType` prefers that whenever a policy is available and
+ * only falls back to this table for a server old enough to 404 the endpoint.
+ * There is therefore no obligation to keep this table byte-identical with
+ * the api's `UPLOAD_EXT_TO_MIME` — a mismatch no longer causes a wrong
+ * declaration against a server that answers the policy endpoint, only
+ * against one that doesn't (where this table already gets backfilled by the
+ * api's own `resolveEffectiveUploadMime` regardless).
+ *
  * Why the CLI needs this at all: `FormData.append(name, blob, filename)` sends
  * whatever `blob.type` says, and a `Blob` built without one declares nothing —
  * which the api stores verbatim as the attachment's `fileFormat`
@@ -62,15 +73,24 @@ const EXT_TO_MEDIA_TYPE: Record<string, string> = {
 export const DEFAULT_MEDIA_TYPE = 'application/octet-stream';
 
 /**
- * The media type to declare for `filename`, by extension. Returns
- * `application/octet-stream` when the extension is unknown or absent.
+ * The media type to declare for `filename`, looked up by extension in
+ * `table`. Returns `application/octet-stream` when the extension is unknown
+ * or absent.
+ *
+ * Shared by `mediaTypeForFilename` (the local `EXT_TO_MEDIA_TYPE` table) and
+ * `upload-policy.ts`'s `resolveDeclaredMediaType` (a server-published
+ * `extensionHints` table) — the two differ only in which table they consult.
  */
-export function mediaTypeForFilename(filename: string): string {
+export function mediaTypeFromTable(filename: string, table: Record<string, string>): string {
   const dot = filename.lastIndexOf('.');
   if (dot < 1 || dot === filename.length - 1) return DEFAULT_MEDIA_TYPE;
   const ext = filename.slice(dot + 1).toLowerCase();
-  // `Object.hasOwn`, not a plain lookup: the map inherits from
+  // `Object.hasOwn`, not a plain lookup: the table inherits from
   // `Object.prototype`, so `foo.constructor` / `foo.toString` would otherwise
   // resolve to a function and be declared as the media type.
-  return Object.hasOwn(EXT_TO_MEDIA_TYPE, ext) ? EXT_TO_MEDIA_TYPE[ext] : DEFAULT_MEDIA_TYPE;
+  return Object.hasOwn(table, ext) ? table[ext] : DEFAULT_MEDIA_TYPE;
+}
+
+export function mediaTypeForFilename(filename: string): string {
+  return mediaTypeFromTable(filename, EXT_TO_MEDIA_TYPE);
 }
