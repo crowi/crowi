@@ -59,6 +59,7 @@ import {
   addAttachmentRoute,
   getAttachmentMetaRoute,
   getAttachmentUsageRoute,
+  getUploadPolicyRoute,
   listAttachmentsRoute,
   removeAttachmentRoute,
   UPLOAD_ALLOWED_MIME,
@@ -112,9 +113,13 @@ const debug = Debug('crowi:hono:handlers:attachment');
  * check the same `UPLOAD_ALLOWED_MIME` allow-list (see that constant's
  * doc comment in `@crowi/api-contract` for why). Only the size cap still
  * varies by route/intent.
+ *
+ * Exported (alongside `ADD_ATTACHMENT_MAX_BYTES` below) so
+ * `getUploadPolicyRoute` and its test can both read the same values instead
+ * of a second copy drifting from these.
  */
-const PASTE_MAX_BYTES = 10 * 1024 * 1024;
-const DND_MAX_BYTES = 50 * 1024 * 1024;
+export const PASTE_MAX_BYTES = 10 * 1024 * 1024;
+export const DND_MAX_BYTES = 50 * 1024 * 1024;
 const UPLOAD_PARSE_MAX_BYTES = DND_MAX_BYTES;
 
 const maxBytesForIntent = (intent: 'paste' | 'dnd'): number => (intent === 'dnd' ? DND_MAX_BYTES : PASTE_MAX_BYTES);
@@ -122,6 +127,25 @@ const maxBytesForIntent = (intent: 'paste' | 'dnd'): number => (intent === 'dnd'
 const UPLOAD_MIME_SET = new Set<string>(UPLOAD_ALLOWED_MIME);
 
 const isUploadAllowedMime = (mimeType: string): boolean => UPLOAD_MIME_SET.has(mimeType);
+
+/**
+ * Profile pictures (`me.ts`'s `POST /me/picture`) get their own, narrower
+ * policy instead of the general
+ * `UPLOAD_ALLOWED_MIME` allow-list: a finite list of image types (derived
+ * from `UPLOAD_ALLOWED_MIME`, not a second hand-written list that could
+ * drift from it) and a size cap. `PROFILE_PICTURE_MAX_BYTES` matches the
+ * client-side crop-dialog's pre-crop size guard
+ * (`packages/web/src/app/(auth)/me/profile-picture.tsx`) — the value first
+ * becomes meaningful server-side here, because a browser upload never
+ * reaches the api before that crop downscales it, but CLI / curl / MCP
+ * uploads skip the crop entirely.
+ */
+export const PROFILE_PICTURE_MAX_BYTES = 5 * 1024 * 1024;
+// Typed `readonly string[]`, not the narrower literal-union array
+// `.filter()` would otherwise infer: `me.ts` checks membership against an
+// arbitrary resolved MIME string, not one of `UPLOAD_ALLOWED_MIME`'s
+// literals.
+export const PROFILE_PICTURE_ALLOWED_MIME: readonly string[] = UPLOAD_ALLOWED_MIME.filter((mime) => mime.startsWith('image/'));
 
 /** The multipart default when a client sends no `Content-Type` for a part at all. */
 const DEFAULT_UPLOAD_MIME = 'application/octet-stream';
@@ -148,8 +172,13 @@ const DEFAULT_UPLOAD_MIME = 'application/octet-stream';
  * Initial entries mirror `packages/cli/src/lib/media-type.ts`'s
  * `EXT_TO_MEDIA_TYPE` (not shared code — the CLI is a separate package with
  * its own reasons to declare a type). Keep in sync manually if either grows.
+ *
+ * Exported as the `extensionHints` field of `GET /attachments/upload-policy`,
+ * and consumed by `me.ts` (see `resolveEffectiveUploadMime` below) so
+ * profile-picture uploads resolve an undeclared type the same way. Still not
+ * shared with `KEY_EXT_TO_MIME` / `INLINE_SAFE_MIME` for the reason above.
  */
-const UPLOAD_EXT_TO_MIME: Record<string, string> = {
+export const UPLOAD_EXT_TO_MIME: Record<string, string> = {
   // Raster images — the types attachment delivery will serve inline.
   png: 'image/png',
   jpg: 'image/jpeg',
@@ -198,8 +227,12 @@ const UPLOAD_EXT_TO_MIME: Record<string, string> = {
  * `DEFAULT_UPLOAD_MIME`, exactly as before this helper existed: this only
  * replaces a wrong default with a better one, it never changes what may be
  * uploaded or how a stored attachment is delivered.
+ *
+ * Exported so `me.ts`'s profile-picture upload resolves the same effective
+ * MIME (an undeclared `file.type` no longer defeats the picture-type gate
+ * there either).
  */
-const resolveEffectiveUploadMime = (file: File): string => {
+export const resolveEffectiveUploadMime = (file: File): string => {
   const declared = file.type || DEFAULT_UPLOAD_MIME;
   if (declared !== DEFAULT_UPLOAD_MIME) return declared;
 
@@ -254,8 +287,10 @@ const ATTACHMENT_NOT_FOUND_BODY = errorBody('ATTACHMENT_NOT_FOUND', 'Attachment 
  * Outer ceiling for `POST /pages/:pageId/attachments`. The legacy multer
  * disk-storage didn't bound the size, but Hono's `parseBody()` buffers
  * the entire body in memory, so we need a hard cap to avoid OOM.
+ *
+ * Exported as `maxBytes.attachment` on `GET /attachments/upload-policy`.
  */
-const ADD_ATTACHMENT_MAX_BYTES = 100 * 1024 * 1024;
+export const ADD_ATTACHMENT_MAX_BYTES = 100 * 1024 * 1024;
 
 /**
  * RFC-0004 Phase 7 — extract attachment ObjectId hex strings referenced
@@ -435,6 +470,10 @@ export const registerAttachmentRoutes = <E extends OpenAPIHono<CrowiHonoBindings
   applyScope(app, addAttachmentRoute, 'attachments:write');
   applyScope(app, uploadAttachmentRoute, 'attachments:write');
   applyScope(app, removeAttachmentRoute, 'attachments:write');
+  // Read-only, same scope as the other GET routes in this file
+  // (`attachments:write` already implies it, so an upload-scoped CLI token
+  // can read the policy it needs before uploading).
+  applyScope(app, getUploadPolicyRoute, 'attachments:read');
 
   return (
     app
@@ -874,6 +913,31 @@ export const registerAttachmentRoutes = <E extends OpenAPIHono<CrowiHonoBindings
           debug('removeAttachment error', err);
           return c.json(errorBody('REMOVE_FAILED', 'Failed to delete attachment'), 500);
         }
+      })
+      // --------------------------------------------------------------
+      // GET /attachments/upload-policy
+      // --------------------------------------------------------------
+      //
+      // Every field below is READ from an existing constant, never
+      // re-declared: copying a value here would recreate the
+      // two-tables-that-must-agree problem this endpoint exists to remove.
+      .openapi(getUploadPolicyRoute, async (c) => {
+        return c.json(
+          {
+            allowedMimeTypes: [...UPLOAD_ALLOWED_MIME],
+            extensionHints: { ...UPLOAD_EXT_TO_MIME },
+            maxBytes: {
+              attachment: ADD_ATTACHMENT_MAX_BYTES,
+              paste: PASTE_MAX_BYTES,
+              dnd: DND_MAX_BYTES,
+            },
+            profilePicture: {
+              allowedMimeTypes: [...PROFILE_PICTURE_ALLOWED_MIME],
+              maxBytes: PROFILE_PICTURE_MAX_BYTES,
+            },
+          },
+          200,
+        );
       })
   );
 };
