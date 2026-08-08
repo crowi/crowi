@@ -17,6 +17,67 @@ import XCTest
 final class WorkspaceImageLoaderTests: XCTestCase {
     private let workspaceOrigin = URL(string: "https://wiki.example.com")!
 
+    // MARK: - The `/api/v2` → `/api` prefix migration, applied on READ
+
+    private func canonicalized(_ string: String) -> String {
+        WorkspaceImageLoader.canonicalized(
+            URL(string: string, relativeTo: workspaceOrigin)!,
+            workspaceOrigin: WorkspaceOrigin(workspaceOrigin)
+        ).absoluteString
+    }
+
+    /// A stored URL can still carry the legacy prefix, which the server no
+    /// longer routes: `/api/attachments/…` answers, `/api/v2/attachments/…`
+    /// is a 404 and leaves an avatar on its initials fallback.
+    func testALegacyAPIPathIsRewrittenToTheCurrentPrefix() {
+        XCTAssertEqual(
+            canonicalized("/api/v2/attachments/by-key/user%2Fabc.webp"),
+            "https://wiki.example.com/api/attachments/by-key/user%2Fabc.webp"
+        )
+    }
+
+    /// The attachment KEY is itself percent-encoded. Rewriting the decoded
+    /// path would turn `%2F` into a real separator and ask for a different,
+    /// non-existent object.
+    func testTheRewritePreservesAPercentEncodedAttachmentKey() {
+        XCTAssertTrue(canonicalized("/api/v2/attachments/by-key/user%2Fabc.webp").contains("user%2Fabc.webp"))
+        XCTAssertFalse(canonicalized("/api/v2/attachments/by-key/user%2Fabc.webp").contains("user/abc.webp"))
+    }
+
+    /// Only the legacy prefix moves. A URL already on the current prefix, and
+    /// anything outside `/api/v2/` entirely, is returned untouched.
+    func testOnlyTheLegacyPrefixIsTouched() {
+        XCTAssertEqual(
+            canonicalized("/api/attachments/by-key/user%2Fabc.webp"),
+            "https://wiki.example.com/api/attachments/by-key/user%2Fabc.webp"
+        )
+        XCTAssertEqual(canonicalized("/files/abc"), "https://wiki.example.com/files/abc")
+        XCTAssertEqual(
+            canonicalized("/api/v2x/attachments/abc"),
+            "https://wiki.example.com/api/v2x/attachments/abc",
+            "the prefix match is a path segment, not a string prefix"
+        )
+    }
+
+    /// The web's rule, and the reason this is not a blanket string replace:
+    /// another host may legitimately still serve `/api/v2`, and rewriting its
+    /// URL would break a link this app has no business touching.
+    func testAnotherHostsLegacyPathIsLeftAlone() {
+        XCTAssertEqual(
+            canonicalized("https://other.example.com/api/v2/attachments/abc"),
+            "https://other.example.com/api/v2/attachments/abc"
+        )
+    }
+
+    /// The query survives — a derivative request (`?w=…`) must not be dropped
+    /// on the way through.
+    func testTheQueryIsPreserved() {
+        XCTAssertEqual(
+            canonicalized("/api/v2/attachments/abc?w=640"),
+            "https://wiki.example.com/api/attachments/abc?w=640"
+        )
+    }
+
     // MARK: - Redirect-hop decision (RedirectStripDelegate)
 
     private func makeTask() -> URLSessionTask {

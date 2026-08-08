@@ -65,9 +65,10 @@ public final class WorkspaceImageLoader: NSObject, Sendable {
     /// SVG-DOM-never-executes rule: the caller hands these bytes to a raster
     /// image decoder, never a web/SVG-DOM context).
     public func fetch(_ relativeOrAbsolute: String) async throws -> Data {
-        guard let resolved = URL(string: relativeOrAbsolute, relativeTo: workspaceOrigin.baseURL) else {
+        guard let rebased = URL(string: relativeOrAbsolute, relativeTo: workspaceOrigin.baseURL) else {
             throw URLError(.badURL)
         }
+        let resolved = Self.canonicalized(rebased, workspaceOrigin: workspaceOrigin)
         // §6.2 — the SAME shared allowlist `WorkspacePageMarkdownView`'s
         // `openURL` interceptor consumes: an image whose (rebased) URL
         // carries a custom scheme (`crowi-ios://`, `javascript:`, …) is
@@ -88,6 +89,33 @@ public final class WorkspaceImageLoader: NSObject, Sendable {
             throw LoaderError.httpError(status: response.httpStatusCodeOrUnknown)
         }
         return data
+    }
+
+    /// Stored image URLs (`User.image`, anything embedded in a page body) can
+    /// still carry the `/api/v2` prefix: the server does not rewrite them, so
+    /// that a past revision or a revert cannot reintroduce a stale one. It
+    /// canonicalizes at display time, and so must every client — asking for
+    /// the stored URL verbatim is a 404.
+    ///
+    /// Only SAME-ORIGIN URLs are rewritten: another host may legitimately
+    /// still serve `/api/v2`, and rewriting its URL would break a link this
+    /// app has no business touching.
+    ///
+    /// Rewrites `percentEncodedPath`, never `path`: an attachment key is
+    /// itself percent-encoded (`by-key/user%2F<id>.webp`) and decoding it
+    /// would turn `%2F` into a path separator and corrupt the key.
+    static func canonicalized(_ url: URL, workspaceOrigin: WorkspaceOrigin) -> URL {
+        let legacyPrefix = "/api/v2/"
+        let currentPrefix = "/api/"
+        guard
+            WorkspaceOrigin(url) == workspaceOrigin,
+            var components = URLComponents(url: url, resolvingAgainstBaseURL: true),
+            components.percentEncodedPath.hasPrefix(legacyPrefix)
+        else {
+            return url
+        }
+        components.percentEncodedPath = currentPrefix + components.percentEncodedPath.dropFirst(legacyPrefix.count)
+        return components.url ?? url
     }
 }
 
