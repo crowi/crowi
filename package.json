@@ -43,7 +43,7 @@
     "migrate": "node scripts/migrate.mjs",
     "build": "turbo run build",
     "build:images": "node scripts/build-images.mjs",
-    "test": "turbo run test --concurrency=3",
+    "test": "turbo run test --concurrency=3 --filter=!@crowi/plugin-renderer-mermaid; s1=$?; turbo run test --concurrency=1 --filter=@crowi/plugin-renderer-mermaid; s2=$?; exit $(( s1 || s2 ))",
     "test:scripts": "node --test scripts/*.test.mjs packages/*/scripts/*.test.mjs",
     "test:flake": "node scripts/test-flake-report.mjs",
     "test:flake-taxonomy": "node scripts/test-flake-taxonomy.mjs",

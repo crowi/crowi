@@ -28,7 +28,7 @@
     "build": "tsup",
     "dev": "tsup --watch --no-clean",
     "type-check": "tsc --noEmit",
-    "test": "jest --passWithNoTests"
+    "test": "jest --passWithNoTests --runInBand"
   },
   "peerDependencies": {
     "zod": "^4"
