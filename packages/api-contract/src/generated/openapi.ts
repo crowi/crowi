@@ -10775,6 +10775,73 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/attachments/upload-policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get the server upload policy (allowed MIME types, extension hints, size limits) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Current upload policy, derived from server-side constants (never a value maintained separately) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            allowedMimeTypes: string[];
+                            extensionHints: {
+                                [key: string]: string;
+                            };
+                            maxBytes: {
+                                attachment: number;
+                                paste: number;
+                                dnd: number;
+                            };
+                            profilePicture: {
+                                allowedMimeTypes: string[];
+                                maxBytes: number;
+                            };
+                        };
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "AUTHENTICATION_REQUIRED";
+                                /** @enum {string} */
+                                message: "Authentication is required";
+                                redirectTo?: string;
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/search": {
         parameters: {
             query?: never;
