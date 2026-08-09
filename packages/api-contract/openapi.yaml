@@ -23150,6 +23150,88 @@ paths:
                       - message
                 required:
                   - error
+  /attachments/upload-policy:
+    get:
+      tags:
+        - attachment
+      security:
+        - bearerAuth: []
+      summary: >-
+        Get the server upload policy (allowed MIME types, extension hints, size
+        limits)
+      responses:
+        '200':
+          description: >-
+            Current upload policy, derived from server-side constants (never a
+            value maintained separately)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  allowedMimeTypes:
+                    type: array
+                    items:
+                      type: string
+                  extensionHints:
+                    type: object
+                    additionalProperties:
+                      type: string
+                  maxBytes:
+                    type: object
+                    properties:
+                      attachment:
+                        type: number
+                      paste:
+                        type: number
+                      dnd:
+                        type: number
+                    required:
+                      - attachment
+                      - paste
+                      - dnd
+                  profilePicture:
+                    type: object
+                    properties:
+                      allowedMimeTypes:
+                        type: array
+                        items:
+                          type: string
+                      maxBytes:
+                        type: number
+                    required:
+                      - allowedMimeTypes
+                      - maxBytes
+                required:
+                  - allowedMimeTypes
+                  - extensionHints
+                  - maxBytes
+                  - profilePicture
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - AUTHENTICATION_REQUIRED
+                      message:
+                        type: string
+                        enum:
+                          - Authentication is required
+                      redirectTo:
+                        type: string
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
   /search:
     get:
       tags:

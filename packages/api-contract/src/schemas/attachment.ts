@@ -265,3 +265,37 @@ export const UPLOAD_ALLOWED_MIME = [
   // Unknown / unset — see the note above.
   'application/octet-stream',
 ] as const;
+
+/**
+ * Response for `GET /attachments/upload-policy`.
+ *
+ * Publishes the server's actual upload policy so a client (CLI / curl / MCP)
+ * can stop guessing what this instance allows. Every field is derived from
+ * existing api constants, never a value maintained separately for this
+ * response — see the handler's doc comment for the source of each field.
+ *
+ * - `allowedMimeTypes`: the same allow-list every upload route already
+ *   enforces (`UPLOAD_ALLOWED_MIME` above).
+ * - `extensionHints`: extension → MIME, for a client that only knows a
+ *   filename and needs to declare a `Content-Type` for it.
+ * - `maxBytes`: the size ceiling per upload surface — `attachment` is the
+ *   general `POST /pages/:pageId/attachments` route, `paste` / `dnd` are the
+ *   editor's two upload intents on `POST /attachments/upload`.
+ * - `profilePicture`: the separate, narrower policy `POST /me/picture`
+ *   enforces (a finite image-type allow-list and its own size cap — not the
+ *   general attachment policy above).
+ */
+export const UploadPolicyResponseSchema = z.object({
+  allowedMimeTypes: z.array(z.string()),
+  extensionHints: z.record(z.string(), z.string()),
+  maxBytes: z.object({
+    attachment: z.number(),
+    paste: z.number(),
+    dnd: z.number(),
+  }),
+  profilePicture: z.object({
+    allowedMimeTypes: z.array(z.string()),
+    maxBytes: z.number(),
+  }),
+});
+export type UploadPolicyResponse = z.infer<typeof UploadPolicyResponseSchema>;

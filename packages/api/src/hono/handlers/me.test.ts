@@ -5,6 +5,8 @@ import { type ConfigRow, restoreCrowiConfig, snapshotCrowiConfig } from 'src/tes
 import type { UserDocument } from 'src/models/user';
 import { createJwtUtil } from 'src/util/jwt';
 
+import { PROFILE_PICTURE_MAX_BYTES } from './attachment';
+
 /**
  * RFC-0006 Phase 4 Batch 2 — integration tests for the migrated `me`
  * resource (8 endpoints behind `createJwtAuth`).
@@ -16,6 +18,13 @@ import { createJwtUtil } from 'src/util/jwt';
  * with a synthetic in-memory PNG so the multipart parsing + temp-file
  * pipeline runs end-to-end.
  */
+
+// Minimal 1x1 transparent PNG (signature + IHDR + IDAT + IEND), shared by
+// every picture-upload test that just needs a valid image payload.
+const TINY_PNG = Buffer.from(
+  '89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000a49444154789c63000100000005000119cce9be0000000049454e44ae426082',
+  'hex',
+);
 
 const seedActiveUser = async (info: { name: string; username: string; email: string; password: string }) => {
   const User = crowi.model('User');
@@ -400,11 +409,7 @@ describe('Routes /api/me (Hono)', () => {
     });
 
     it('uploads a tiny PNG and updates the user image url', async () => {
-      // Minimal 1x1 transparent PNG (signature + IHDR + IDAT + IEND).
-      const png = Buffer.from(
-        '89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000a49444154789c63000100000005000119cce9be0000000049454e44ae426082',
-        'hex',
-      );
+      const png = TINY_PNG;
       const res = await request(app)
         .post('/api/me/picture')
         .set('Authorization', `Bearer ${accessToken}`)
@@ -428,6 +433,71 @@ describe('Routes /api/me (Hono)', () => {
 
       const reread = await User().findById(user._id);
       expect(reread?.image).toBeNull();
+    });
+  });
+
+  describe('POST /me/picture — undeclared MIME, finite allow-list, size cap', () => {
+    const EMAIL = 'me-pic-policy@example.com';
+    let accessToken: string;
+    const png = TINY_PNG;
+
+    beforeAll(async () => {
+      const seeded = await seedActiveUser({ name: 'Me Pic Policy', username: 'me-pic-policy', email: EMAIL, password: 'Password!1' });
+      accessToken = seeded.accessToken;
+    });
+    afterAll(async () => {
+      await User().deleteMany({ email: EMAIL });
+    });
+
+    it('AC-4: accepts a PNG with no declared Content-Type, resolving the type from the filename', async () => {
+      // `application/octet-stream` is what an undeclared multipart part
+      // actually carries on the wire (there is no way to send a part with no
+      // Content-Type at all). Omitting supertest's `contentType` option
+      // instead would make it infer `image/png` from the filename, which
+      // simulates a DECLARED PNG and would pass even without this fix.
+      const res = await request(app)
+        .post('/api/me/picture')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .attach('file', png, { filename: 'pixel.png', contentType: 'application/octet-stream' });
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ status: true, url: expect.any(String) });
+    });
+
+    it('AC-5: still rejects a file whose extension is not recognised as an image, even with no declared type', async () => {
+      const res = await request(app)
+        .post('/api/me/picture')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .attach('file', Buffer.from('not an image'), { filename: 'note.unknownext', contentType: 'application/octet-stream' });
+      expect(res.status).toBe(400);
+      expect(res.body).toMatchObject({ status: 'error', errors: expect.arrayContaining([expect.stringContaining('File type error')]) });
+    });
+
+    it('AC-6: an explicitly declared image/jpeg upload is unaffected', async () => {
+      const res = await request(app)
+        .post('/api/me/picture')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .attach('file', png, { filename: 'pixel.jpg', contentType: 'image/jpeg' });
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ status: true, url: expect.any(String) });
+    });
+
+    it('AC-13: rejects an image/* type outside the finite profile-picture allow-list (image/tiff)', async () => {
+      const res = await request(app)
+        .post('/api/me/picture')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .attach('file', png, { filename: 'pixel.tiff', contentType: 'image/tiff' });
+      expect(res.status).toBe(400);
+      expect(res.body).toMatchObject({ status: 'error', errors: expect.arrayContaining([expect.stringContaining('File type error')]) });
+    });
+
+    it('AC-12: rejects a declared image/png upload larger than PROFILE_PICTURE_MAX_BYTES', async () => {
+      const oversized = Buffer.alloc(PROFILE_PICTURE_MAX_BYTES + 1);
+      const res = await request(app)
+        .post('/api/me/picture')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .attach('file', oversized, { filename: 'huge.png', contentType: 'image/png' });
+      expect(res.status).toBe(400);
+      expect(res.body).toMatchObject({ status: 'error', errors: expect.arrayContaining([expect.stringContaining('too large')]) });
     });
   });
 

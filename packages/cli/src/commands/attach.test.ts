@@ -25,6 +25,11 @@ function jsonResponse(status: number, body: unknown): Response {
   } as Response;
 }
 
+/** The upload POSTs among `mock`'s calls — asserting this is `[]` proves the upload was never dialed, not just that the total call count matched. */
+function uploadPostCalls(mock: jest.Mock<Promise<Response>, [string, RequestInit]>): [string, RequestInit][] {
+  return mock.mock.calls.filter(([url, init]) => init.method === 'POST' && url.includes('/attachments'));
+}
+
 let fetchMock: jest.Mock<Promise<Response>, [string, RequestInit]>;
 const originalFetch = global.fetch;
 let tmpRoot: string;
@@ -67,17 +72,28 @@ function build(): Command {
   return program;
 }
 
-/** Upload `name` and return the declared type of the multipart `file` part. */
+/**
+ * Upload `name` and return the declared type of the multipart `file` part.
+ *
+ * Re-`upsertProfile`s 'work' (dropping any `uploadPolicy` cached by an
+ * earlier call in the same test) so every invocation independently fetches
+ * the upload policy — mocked here as a 404 (old server / no policy), which
+ * makes `resolveDeclaredMediaType` fall back to the local `media-type.ts`
+ * table, same as `mediaTypeForFilename` would, so these declared-type
+ * expectations are unaffected by it.
+ */
 async function declaredTypeFor(name: string): Promise<string> {
   const file = join(tmpRoot, name);
   writeFileSync(file, Buffer.from([0x00, 0x01, 0x02]));
+  upsertProfile({ alias: 'work', endpoint: 'https://wiki.example.com', tokens: { accessToken: 'pat-1', scope: 'attachments:write' } });
 
   fetchMock.mockResolvedValueOnce(jsonResponse(200, { page: { _id: 'p1', path: '/a', revision: { _id: 'r1' } } }));
+  fetchMock.mockResolvedValueOnce(jsonResponse(404, undefined));
   fetchMock.mockResolvedValueOnce(jsonResponse(200, { url: '/api/attachments/a1' }));
 
   await build().parseAsync(['attach', 'add', '/a', file], { from: 'user' });
 
-  const uploadInit = fetchMock.mock.calls[1][1];
+  const uploadInit = fetchMock.mock.calls[2][1];
   const form = uploadInit.body as FormData;
   const part = form.get('file');
   if (!(part instanceof Blob)) throw new Error('the `file` part is not a Blob');
@@ -115,14 +131,98 @@ describe('attach add — declares the file’s media type on the multipart part'
     const file = join(tmpRoot, 'named.png');
     writeFileSync(file, Buffer.from([0x00]));
     fetchMock.mockResolvedValueOnce(jsonResponse(200, { page: { _id: 'p1', path: '/a', revision: { _id: 'r1' } } }));
+    fetchMock.mockResolvedValueOnce(jsonResponse(404, undefined));
     fetchMock.mockResolvedValueOnce(jsonResponse(200, { url: '/api/attachments/a1' }));
 
     await build().parseAsync(['attach', 'add', '/a', file], { from: 'user' });
 
-    const form = fetchMock.mock.calls[1][1].body as FormData;
+    const form = fetchMock.mock.calls[2][1].body as FormData;
     const part = form.get('file') as File;
     expect(part.name).toBe('named.png');
     expect(part.type).toBe('image/png');
+  });
+});
+
+describe('attach add — server policy pre-flight', () => {
+  it('AC-7: prefers the policy extensionHints over the local table when a policy is present', async () => {
+    const file = join(tmpRoot, 'report.pdf');
+    writeFileSync(file, Buffer.from([0x00]));
+
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { page: { _id: 'p1', path: '/a', revision: { _id: 'r1' } } }));
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(200, {
+        // The api and CLI extension tables are currently byte-identical, so
+        // a real `.pdf` mapping can't prove the policy (not a silent
+        // local-table fallback) produced the result. Diverge it here.
+        allowedMimeTypes: ['application/x-policy-pdf-test-marker'],
+        extensionHints: { pdf: 'application/x-policy-pdf-test-marker' },
+        maxBytes: { attachment: 1000, paste: 500, dnd: 2000 },
+        profilePicture: { allowedMimeTypes: ['image/png'], maxBytes: 100 },
+      }),
+    );
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { url: '/api/attachments/a1' }));
+
+    await build().parseAsync(['attach', 'add', '/a', file], { from: 'user' });
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    const form = fetchMock.mock.calls[2][1].body as FormData;
+    const part = form.get('file') as File;
+    expect(part.type).toBe('application/x-policy-pdf-test-marker');
+  });
+
+  it('AC-8: rejects a non-allow-listed type locally, before the upload request is ever made', async () => {
+    const file = join(tmpRoot, 'shot.png');
+    writeFileSync(file, Buffer.from([0x00]));
+
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { page: { _id: 'p1', path: '/a', revision: { _id: 'r1' } } }));
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(200, {
+        allowedMimeTypes: ['application/pdf'],
+        extensionHints: { png: 'image/png' },
+        maxBytes: { attachment: 1000, paste: 500, dnd: 2000 },
+        profilePicture: { allowedMimeTypes: ['image/png'], maxBytes: 100 },
+      }),
+    );
+
+    const error = await build()
+      .parseAsync(['attach', 'add', '/a', file], { from: 'user' })
+      .then(
+        () => undefined,
+        (err: unknown) => err as CliError,
+      );
+
+    expect(error).toBeDefined();
+    expect(error?.exitCode).toBe(6);
+    // Only the page lookup + policy fetch — the upload POST never fired.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(uploadPostCalls(fetchMock)).toHaveLength(0);
+  });
+
+  it('AC-8: rejects a file exceeding the policy size limit locally, before the upload request is ever made', async () => {
+    const file = join(tmpRoot, 'shot.png');
+    writeFileSync(file, Buffer.from([0x00, 0x01, 0x02, 0x03]));
+
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { page: { _id: 'p1', path: '/a', revision: { _id: 'r1' } } }));
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(200, {
+        allowedMimeTypes: ['image/png'],
+        extensionHints: { png: 'image/png' },
+        maxBytes: { attachment: 2, paste: 500, dnd: 2000 },
+        profilePicture: { allowedMimeTypes: ['image/png'], maxBytes: 100 },
+      }),
+    );
+
+    const error = await build()
+      .parseAsync(['attach', 'add', '/a', file], { from: 'user' })
+      .then(
+        () => undefined,
+        (err: unknown) => err as CliError,
+      );
+
+    expect(error).toBeDefined();
+    expect(error?.exitCode).toBe(6);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(uploadPostCalls(fetchMock)).toHaveLength(0);
   });
 });
 
