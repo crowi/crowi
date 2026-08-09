@@ -48,7 +48,24 @@ const API_ROOT = path.join(__dirname, '..', '..');
 // matching.
 const FIXTURE_PATH = path.join(API_ROOT, 'src', 'hono', 'handlers', '__eslint-db-guard-fixture__.test.ts');
 
-const eslint = new ESLint({ cwd: API_ROOT, useEslintrc: true });
+/**
+ * Warmed in `beforeAll` rather than built at module scope. The constructor is
+ * nearly free; the cost is in `lintText`, which resolves the cascading
+ * `.eslintrc.js` for the given `filePath`, loads its plugins, and cold-starts
+ * the TypeScript parser. Because the cascade resolves per path, EVERY new
+ * directory context this suite lints under pays its own cold start — measured
+ * at 444ms for the first `src/hono/handlers/` lint and a further 1127ms for
+ * the first `src/util/` one, against 1-2ms once warm. At module scope those
+ * seconds land on whichever `it()` happens to reach each context first, and
+ * Jest's default timeout is 5s: comfortable on an idle machine, not
+ * necessarily on a loaded CI runner.
+ *
+ * So each distinct context is warmed here, where the slack lives, and every
+ * assertion keeps the standard timeout. Warming one path is not enough — that
+ * is what leaves the 1127ms on an assertion. Any new `filePath` this suite
+ * starts linting under belongs in {@link WARMUP_PATHS} too.
+ */
+let eslint: ESLintInstance;
 
 async function lintAt(code: string, filePath: string): Promise<LintMessage[]> {
   const [result] = await eslint.lintText(code, { filePath });
@@ -92,6 +109,21 @@ const REDIS_OPTS_PATH = path.join(API_ROOT, 'src', 'util', 'redis-opts.ts');
 function duplicateGuardMessages(messages: LintMessage[]): LintMessage[] {
   return messages.filter((m) => m.ruleId === 'no-restricted-syntax');
 }
+
+/**
+ * Every distinct `filePath` context the suite lints under. Declared here,
+ * below the fixture-path constants, so it references them instead of
+ * repeating their values — a warm-up that drifts from the path an assertion
+ * actually uses silently stops warming anything.
+ */
+const WARMUP_PATHS = [FIXTURE_PATH, DUPLICATE_GUARD_FIXTURE_PATH, REDIS_OPTS_PATH, path.join(API_ROOT, 'src', 'test', '__eslint-warmup-fixture__.ts')];
+
+beforeAll(async () => {
+  eslint = new ESLint({ cwd: API_ROOT, useEslintrc: true });
+  for (const warmupPath of WARMUP_PATHS) {
+    await lintAt('export const warm = 1;\n', warmupPath);
+  }
+}, 30_000);
 
 describe('B1 DB-bypass lint guard (packages/api/.eslintrc.js)', () => {
   it('flags a MemberExpression call — mongoose.connect(...)', async () => {

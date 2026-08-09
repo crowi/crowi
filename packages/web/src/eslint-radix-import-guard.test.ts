@@ -21,7 +21,7 @@
  */
 import path from 'node:path';
 import { ESLint, type Linter } from 'eslint';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 
 const WEB_ROOT = path.join(__dirname, '..');
 // Any real, tracked `.ts`/`.tsx` path under `src/` works — `lintText`'s
@@ -30,7 +30,30 @@ const WEB_ROOT = path.join(__dirname, '..');
 // whatever is really on disk at this path).
 const FIXTURE_PATH = path.join(WEB_ROOT, 'src', 'components', 'ui', '__radix-import-guard-fixture__.tsx');
 
-const eslint = new ESLint({ cwd: WEB_ROOT });
+/**
+ * Warmed in `beforeAll` rather than built at module scope, because the
+ * constructor is nearly free while the FIRST `lintText` pays for everything:
+ * discovering `eslint.config.mjs`, importing it (Next core-web-vitals + the
+ * TypeScript configs, six plugins between them), normalizing the flat config,
+ * and cold-starting the TypeScript parser. ESLint caches all of it, so the
+ * first call costs ~1s and the rest 3-4ms. At module scope that second is
+ * billed to whichever `it()` happens to run first, which fits inside the
+ * default 5s timeout on an idle machine and does not on a loaded one.
+ *
+ * Charging it to the hook keeps every assertion on the standard timeout —
+ * the setup gets the slack, the guard itself stays strict. The hook still
+ * fails on a config import error or a genuine hang.
+ *
+ * The warm-up has to be a real `lintText` through the same `.tsx` fixture
+ * path: constructing the instance, or calling `calculateConfigForFile`,
+ * leaves the parser cold and the cost back on the first assertion.
+ */
+let eslint: ESLint;
+
+beforeAll(async () => {
+  eslint = new ESLint({ cwd: WEB_ROOT });
+  await lintAt("import { cn } from '@/lib/utils';\nvoid cn;\n", FIXTURE_PATH);
+}, 30_000);
 
 async function lintAt(code: string, filePath: string): Promise<Linter.LintMessage[]> {
   const [result] = await eslint.lintText(code, { filePath });
