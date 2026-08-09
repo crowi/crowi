@@ -1572,4 +1572,137 @@ describe('Page', () => {
       expect(revisionsForB[0].body).toBe('body B');
     });
   });
+
+  describe('History tracking (RFC-0021 Phase 1, feature-page-history-phase1-model)', () => {
+    let user;
+    let Revision;
+
+    beforeAll(() => {
+      user = createdUsers[0];
+      Revision = crowi.model('Revision');
+    });
+
+    describe('historyTracking (AC-3)', () => {
+      // Phase 1 allocates no sequence, so it must not claim a Page's timeline
+      // is authoritative. `createPage` writes the Page and then a first
+      // Revision with no `historySequence`; calling that `ready` would both
+      // assert something untrue and hide the Page from the Phase 2 backfill,
+      // which selects Pages that are NOT ready. Phase 2's create command sets
+      // `ready` in the same write that allocates the initial sequence.
+      test('a newly created Page (Page.createPage) stays untracked — Phase 1 allocates no sequence, so it cannot claim ready', async () => {
+        const created = await Page.createPage('/history-tracking/new-page', 'v1', user, {});
+
+        expect(created.historyTracking.state).toBe('untracked');
+        expect(created.historySequence).toBe(0);
+      });
+
+      test('its initial Revision carries no historySequence — the reason the Page cannot be ready yet', async () => {
+        const created = await Page.createPage('/history-tracking/new-page-revision', 'v1', user, {});
+        const revision = await Revision.findById(created.revision);
+
+        expect(revision).not.toBeNull();
+        expect(revision?.historySequence).toBeUndefined();
+      });
+
+      test('a Page created via the OTHER Page.create call site (the draft-creation shape used by hono/handlers/draft.ts) is also untracked', async () => {
+        const created = await Page.create({
+          path: '/history-tracking/new-draft',
+          creator: user._id,
+          lastUpdateUser: user._id,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          redirectTo: null,
+          grant: Page.GRANT_PUBLIC,
+          status: 'draft',
+          grantedUsers: [user._id],
+        });
+
+        expect(created.historyTracking.state).toBe('untracked');
+      });
+
+      test('a legacy Page (predates historyTracking) reads back as untracked — simulated via a raw $unset, which bypasses save hooks', async () => {
+        const created = await Page.createPage('/history-tracking/legacy', 'v1', user, {});
+        expect(created.historyTracking.state).toBe('untracked');
+
+        await Page.updateOne({ _id: created._id }, { $unset: { historyTracking: '' } });
+        const reloaded = await Page.findById(created._id);
+        expect(reloaded.historyTracking.state).toBe('untracked');
+        expect(reloaded.historyTracking.trackingStartedAt).toBeNull();
+      });
+    });
+
+    describe('pendingHistoryEntry — bounded single-slot outbox (AC-4)', () => {
+      test('claiming an empty slot succeeds; a second claim attempt while occupied is rejected (not overwritten)', async () => {
+        const created = await Page.createPage('/history-tracking/outbox', 'v1', user, {});
+        const entryA = {
+          entryId: new Types.ObjectId(),
+          type: 'content_revision',
+          revisionId: new Types.ObjectId(),
+          sequence: 1,
+          occurredAt: new Date(),
+          operationId: 'op-a',
+        };
+        const entryB = {
+          entryId: new Types.ObjectId(),
+          type: 'content_revision',
+          revisionId: new Types.ObjectId(),
+          sequence: 2,
+          occurredAt: new Date(),
+          operationId: 'op-b',
+        };
+
+        const firstClaim = await Page.updateOne({ _id: created._id, pendingHistoryEntry: null }, { $set: { pendingHistoryEntry: entryA } });
+        expect(firstClaim.modifiedCount).toBe(1);
+
+        // The slot is now occupied — a second claim attempt using the SAME
+        // "must be empty" guard matches nothing and never overwrites entryA.
+        const secondClaim = await Page.updateOne({ _id: created._id, pendingHistoryEntry: null }, { $set: { pendingHistoryEntry: entryB } });
+        expect(secondClaim.matchedCount).toBe(0);
+
+        const reloaded = await Page.findById(created._id);
+        expect(reloaded.pendingHistoryEntry?.operationId).toBe('op-a');
+      });
+
+      test('a freshly created Page has no pendingHistoryEntry at all (absent, not an empty array) — the empty-slot claim filter still matches it', async () => {
+        const created = await Page.createPage('/history-tracking/outbox-absent', 'v1', user, {});
+        expect(created.pendingHistoryEntry).toBeUndefined();
+
+        const entry = {
+          entryId: new Types.ObjectId(),
+          type: 'migration_revision',
+          revisionId: new Types.ObjectId(),
+          sequence: 1,
+          migrationOwner: 'test-owner',
+        };
+        const claim = await Page.updateOne({ _id: created._id, pendingHistoryEntry: null }, { $set: { pendingHistoryEntry: entry } });
+        expect(claim.modifiedCount).toBe(1);
+      });
+
+      test('draining clears the slot by entryId; draining again against the same (now-stale) entryId is a no-op (never clears a newer entry) — AC-5b', async () => {
+        const created = await Page.createPage('/history-tracking/outbox-drain', 'v1', user, {});
+        const entry = {
+          entryId: new Types.ObjectId(),
+          type: 'content_revision',
+          revisionId: new Types.ObjectId(),
+          sequence: 1,
+          occurredAt: new Date(),
+          operationId: 'op-drain',
+        };
+        await Page.updateOne({ _id: created._id, pendingHistoryEntry: null }, { $set: { pendingHistoryEntry: entry } });
+
+        // The drain identity filter matches on `entryId` ONLY (RFC §5.5,
+        // revised) — never on the entry's other fields.
+        const identityFilter = { _id: created._id, 'pendingHistoryEntry.entryId': entry.entryId };
+        const drained = await Page.updateOne(identityFilter, { $unset: { pendingHistoryEntry: '' } });
+        expect(drained.modifiedCount).toBe(1);
+
+        const reloaded = await Page.findById(created._id);
+        expect(reloaded.pendingHistoryEntry).toBeUndefined();
+
+        // The slot is now empty — draining the SAME (now-stale) identity again matches nothing.
+        const secondDrain = await Page.updateOne(identityFilter, { $unset: { pendingHistoryEntry: '' } });
+        expect(secondDrain.modifiedCount).toBe(0);
+      });
+    });
+  });
 });

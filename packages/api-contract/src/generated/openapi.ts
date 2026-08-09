@@ -1850,6 +1850,7 @@ export interface paths {
                             introduction?: string;
                             hasPassword: boolean;
                             createdAt: string;
+                            federated: boolean;
                             emailChangePending?: boolean;
                         };
                     };
@@ -1915,6 +1916,7 @@ export interface paths {
                             introduction?: string;
                             hasPassword: boolean;
                             createdAt: string;
+                            federated: boolean;
                             emailChangePending?: boolean;
                         };
                     };

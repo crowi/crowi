@@ -5,15 +5,27 @@ import { Document, Model, model, Schema, Types } from 'mongoose';
 import Crowi from 'src/crowi';
 import { escapeRegExp } from 'src/util/regex';
 import { type PopulatedUser, toISOStringOrNull, toPageUser, toStringId } from 'src/util/ts-rest-helpers';
+import {
+  PAGE_HISTORY_EVENT_KINDS,
+  PAGE_HISTORY_EVENT_SOURCES,
+  type PageHistoryEventKind,
+  type PageHistoryEventSource,
+  type PageHistoryPayloadByKind,
+  pageHistoryEventPayloadSchema,
+} from './page-history-event';
+// Split into their own leaf module (feature-page-history-phase1-model) so
+// `page-history-event.ts` can depend on `GRANTS` without a page.ts <->
+// page-history-event.ts import cycle — see `page-grants.ts`'s doc comment
+// for why the cycle matters (a `tsx`-run entry point throws a TDZ
+// `ReferenceError` on it; `ts-jest` silently tolerated it). Imported (for
+// this file's own use) AND re-exported below unchanged, so every existing
+// `from 'src/models/page'` import site keeps working.
+import { GRANT_OWNER, GRANT_PUBLIC, GRANT_RESTRICTED, GRANT_SPECIFIED, GRANTS, PAGE_GRANT_ERROR } from './page-grants';
 import { RevisionDocument } from './revision';
 import { UserDocument } from './user';
 
-export const GRANT_PUBLIC = 1;
-export const GRANT_RESTRICTED = 2;
-export const GRANT_SPECIFIED = 3;
-export const GRANT_OWNER = 4;
-export const GRANTS = [GRANT_PUBLIC, GRANT_RESTRICTED, GRANT_SPECIFIED, GRANT_OWNER] as const;
-export const PAGE_GRANT_ERROR = 1;
+export { GRANT_OWNER, GRANT_PUBLIC, GRANT_RESTRICTED, GRANT_SPECIFIED, GRANTS, PAGE_GRANT_ERROR };
+
 export const STATUS_WIP = 'wip';
 export const STATUS_PUBLISHED = 'published';
 export const STATUS_DELETED = 'deleted';
@@ -247,6 +259,18 @@ export interface PageDocument extends Document {
    */
   collabLifecycleVersion: number;
 
+  /**
+   * RFC-0021 §5.4 (Phase 1) — monotonic, page-local ordering counter for
+   * `PageHistoryEvent`/`Revision.historySequence`. Phase 1 initializes it to
+   * 0 on every new Page; the (Phase 2) history-producing Page CAS is the
+   * sole allocator that ever increments it.
+   */
+  historySequence: number;
+  /** RFC-0021 §5.5a (Phase 1) — see `HistoryTracking`'s doc comment above. */
+  historyTracking: HistoryTracking;
+  /** RFC-0021 §5.5 (Phase 1) — see `PendingHistoryEntry`'s doc comment above. */
+  pendingHistoryEntry?: PendingHistoryEntry | null;
+
   // dynamic fields
   latestRevision?: Types.ObjectId;
   likerCount?: number;
@@ -441,6 +465,199 @@ export interface RenameTreeResult {
   failures: { oldPath: string; error: string }[];
 }
 
+/**
+ * RFC-0021 §5.5a (`feature-page-history-phase1-model`, Phase 1) — durable
+ * per-Page history tracking state. New Pages are created with `state:
+ * 'ready'` and an atomically-written `trackingStartedAt` (see the
+ * `pre('save')` hook below); existing Pages default to `untracked`. Only
+ * the (not-yet-implemented, Phase 2) migration CAS may move a Page through
+ * `migrating` to `ready`. Every history-producing writer requires `state:
+ * 'ready'` — see `service/page-history/tracking-gate.ts`.
+ */
+export type HistoryTrackingState = 'untracked' | 'migrating' | 'ready';
+
+export interface HistoryTracking {
+  state: HistoryTrackingState;
+  trackingStartedAt?: Date | null;
+  migrationOwner?: string | null;
+  migrationLeaseUntil?: Date | null;
+}
+
+/**
+ * RFC-0021 §5.5 (Phase 1) — the bounded, single-slot Page outbox. Absent or
+ * exactly one entry; never an array (RFC: "It is not an embedded history
+ * array" — this is what gives the Page document a hard size bound and a
+ * per-Page serialization point). Every history-producing command must drain
+ * an existing entry (`service/page-history/materialize.ts`) before
+ * attempting another Page CAS.
+ *
+ * `entryId` (RFC §5.5, revised — "設計の主な判断": "outbox の drain は entryId 1
+ * フィールドだけで一致を見る") is generated when an entry is placed into the slot
+ * — BEFORE the Page CAS that writes it, mirroring the same "the id must exist
+ * before the write it identifies" timing principle `PageHistoryOperation`'s
+ * `Idempotency-Key` follows — and is the ONLY field `drainPendingHistoryEntry`
+ * matches on to clear the slot. It is deliberately a SEPARATE field from
+ * `page_event`'s own `event._id` (that one is the materialization idempotency
+ * key for `PageHistoryEvent` — RFC §5.3 — a different concern): every variant
+ * carries `entryId`, including the two Revision-pointer variants that have no
+ * `event` at all. Content-based matching (comparing the entry's OTHER fields)
+ * was deliberately rejected — a native driver can inject fields outside this
+ * schema's declared vocabulary, so any content-based identity check can only
+ * ever cover a fixed, incomplete set of "known" fields; an opaque id sidesteps
+ * the question entirely.
+ *
+ * Phase 1 ships no writer that ever populates this field — it exists so
+ * `service/page-history/materialize.ts` and `repair.ts` have a real shape
+ * to drain/repair ahead of Phase 2's command cutover, and so their
+ * failure-injection tests (RFC §16.1's "failure injection before enabling
+ * writers") have something to fail-inject against.
+ */
+export type PendingHistoryEntry =
+  | {
+      entryId: Types.ObjectId;
+      type: 'page_event';
+      event: {
+        _id: Types.ObjectId;
+        page: Types.ObjectId;
+        sequence: number;
+        kind: PageHistoryEventKind;
+        actor: Types.ObjectId | null;
+        occurredAt: Date;
+        operationId: string;
+        source: PageHistoryEventSource;
+        payload: PageHistoryPayloadByKind[PageHistoryEventKind];
+      };
+    }
+  | {
+      entryId: Types.ObjectId;
+      type: 'content_revision';
+      revisionId: Types.ObjectId;
+      sequence: number;
+      occurredAt: Date;
+      operationId: string;
+    }
+  | {
+      entryId: Types.ObjectId;
+      type: 'migration_revision';
+      revisionId: Types.ObjectId;
+      sequence: number;
+      migrationOwner: string;
+    };
+
+/**
+ * RFC-0021 §5.5a — nested `historyTracking` schema. Legacy Pages that
+ * predate this field hydrate `state: 'untracked'` from this default (a
+ * single-nested-subdocument default DOES apply on hydration even when the
+ * whole `historyTracking` path is absent on the raw document — verified
+ * against this project's mongoose version). The `pre('save')` hook below
+ * overwrites this for every genuinely new Page with `state: 'ready'`.
+ */
+const historyTrackingSchema = new Schema<HistoryTracking>(
+  {
+    state: { type: String, enum: ['untracked', 'migrating', 'ready'], required: true, default: 'untracked' },
+    trackingStartedAt: { type: Date, default: null },
+    migrationOwner: { type: String, default: null },
+    migrationLeaseUntil: { type: Date, default: null },
+  },
+  { _id: false },
+);
+
+/**
+ * RFC-0021 §5.5 — the `page_event` outbox variant mirrors the full
+ * `PageHistoryEvent` envelope ahead of materialization. `_id` is
+ * deliberately left enabled (Mongoose's subdocument default) rather than
+ * declared as a separate field: per RFC §5.3, "`_id` is generated before
+ * the Page CAS and copied into the outbox" — this subdocument's own `_id`
+ * IS that pre-generated id, explicitly assigned by the caller instead of
+ * auto-generated, and `service/page-history/materialize.ts` reuses it
+ * verbatim as the materialized `PageHistoryEvent._id` (the idempotency key).
+ */
+const pendingHistoryEventMirrorSchema = new Schema({
+  page: { type: Schema.Types.ObjectId, ref: 'Page', required: true },
+  sequence: { type: Number, required: true },
+  kind: { type: String, enum: PAGE_HISTORY_EVENT_KINDS, required: true },
+  actor: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+  occurredAt: { type: Date, required: true },
+  operationId: { type: String, required: true },
+  source: { type: String, enum: PAGE_HISTORY_EVENT_SOURCES, required: true },
+  payload: { type: pageHistoryEventPayloadSchema, required: true },
+});
+
+/**
+ * RFC-0021 §5.5 — the bounded, single-slot outbox. See `PendingHistoryEntry`
+ * above for the 3-variant union this mirrors. No Page write ever stores more
+ * than one of these (it is a single embedded subdocument path, not an
+ * array) — `service/page-history/materialize.ts`'s `drainPendingHistoryEntry`
+ * clears it with a CAS matched ONLY on `entryId` (see `PendingHistoryEntry`'s
+ * doc comment above) after materialization.
+ */
+const pendingHistoryEntrySchema = new Schema(
+  {
+    entryId: { type: Schema.Types.ObjectId, required: true },
+    type: { type: String, enum: ['page_event', 'content_revision', 'migration_revision'], required: true },
+    event: { type: pendingHistoryEventMirrorSchema },
+    revisionId: { type: Schema.Types.ObjectId, ref: 'Revision' },
+    sequence: { type: Number },
+    occurredAt: { type: Date },
+    operationId: { type: String },
+    migrationOwner: { type: String },
+  },
+  { _id: false },
+);
+
+/**
+ * The field set each `PendingHistoryEntry` variant owns, `entryId` aside
+ * (every variant owns it) — used only by this schema's own `pre('validate')`
+ * hook below to require/forbid the variant-specific fields. NOT exported:
+ * earlier revisions of this feature also fed this table into
+ * `service/page-history/materialize.ts`'s drain filter (a content-based
+ * "does the entry still look the same" check); the spec later replaced that
+ * with matching on `entryId` alone (see `PendingHistoryEntry`'s doc comment),
+ * so this table's only remaining job is variant shape validation.
+ */
+const PENDING_HISTORY_ENTRY_FIELDS_BY_TYPE: Record<PendingHistoryEntry['type'], readonly string[]> = {
+  page_event: ['entryId', 'event'],
+  content_revision: ['entryId', 'revisionId', 'sequence', 'occurredAt', 'operationId'],
+  migration_revision: ['entryId', 'revisionId', 'sequence', 'migrationOwner'],
+};
+const ALL_PENDING_HISTORY_ENTRY_FIELDS = Array.from(new Set(Object.values(PENDING_HISTORY_ENTRY_FIELDS_BY_TYPE).flat()));
+
+/**
+ * Per-variant shape validation (RFC §5.5 / codex review attempt 2 — "a
+ * single subdocument without per-variant required/forbidden field
+ * constraints [...] can pass schema validation, leading to materializer
+ * crashes"). Mirrors `pageHistoryEventSchema`'s own `pre('validate')` hook.
+ *
+ * IMPORTANT scope note: this only fires on the `Page.prototype.save()` /
+ * `.validate()` path. Every real outbox claim in this codebase (this
+ * schema's own consumers in `service/page-history/repair.ts`, and every
+ * `claimOutbox`-style test helper) writes `pendingHistoryEntry` via a raw
+ * `Page.updateOne(...{ $set: ... })`, which mongoose does not run document
+ * middleware against — so this hook is defense-in-depth for a future
+ * `.save()`-based writer, NOT the enforcement `materializePendingEntry`
+ * depends on. The load-bearing guard for the `updateOne` path is
+ * `assertWellFormedPendingEntry` in `service/page-history/materialize.ts`.
+ */
+pendingHistoryEntrySchema.pre('validate', function () {
+  const allowed = PENDING_HISTORY_ENTRY_FIELDS_BY_TYPE[this.type as keyof typeof PENDING_HISTORY_ENTRY_FIELDS_BY_TYPE];
+  if (allowed == null) {
+    // `type`'s own `enum` validator already rejects an unknown type.
+    return;
+  }
+  const self = this as unknown as Record<string, unknown>;
+  for (const field of ALL_PENDING_HISTORY_ENTRY_FIELDS) {
+    const hasValue = self[field] !== undefined && self[field] !== null;
+    if (!allowed.includes(field) && hasValue) {
+      this.invalidate(field, `${field} is not valid for pendingHistoryEntry type "${this.type}"`);
+    }
+  }
+  for (const field of allowed) {
+    if (self[field] === undefined || self[field] === null) {
+      this.invalidate(field, `${field} is required for pendingHistoryEntry type "${this.type}"`);
+    }
+  }
+});
+
 export default (crowi: Crowi) => {
   const debug = Debug('crowi:models:page');
   const pageEvent = crowi.event('Page');
@@ -572,6 +789,17 @@ export default (crowi: Crowi) => {
       // value (only compared against a per-request expected value), so an
       // index would only add write overhead.
       collabLifecycleVersion: { type: Number, default: 0, required: false },
+      // RFC-0021 §5.4 (Phase 1) — page-local history ordering counter. See
+      // the `PageDocument` interface field doc above. No index — Phase 1
+      // never queries by value, only ever compares/increments in a Page CAS
+      // (Phase 2).
+      historySequence: { type: Number, default: 0, required: false },
+      // RFC-0021 §5.5a (Phase 1). See `historyTrackingSchema`'s doc comment.
+      historyTracking: { type: historyTrackingSchema, default: () => ({ state: 'untracked' }) },
+      // RFC-0021 §5.5 (Phase 1) — no default: absent means "empty outbox",
+      // and Mongo's `{ pendingHistoryEntry: null }` filter matches both
+      // "absent" and "explicitly null" for the CAS-based claim/drain queries.
+      pendingHistoryEntry: { type: pendingHistoryEntrySchema },
     },
     {
       toJSON: { getters: true },
@@ -583,6 +811,25 @@ export default (crowi: Crowi) => {
   // sorted by `createdAt` desc. Without it the listing scans a single-field
   // index then sorts in memory.
   pageSchema.index({ creator: 1, status: 1, createdAt: -1 });
+
+  // RFC-0021 §5.5a says new Pages are created `ready`. That belongs to the
+  // phase where creation goes through a command service that allocates the
+  // page-local sequence — Phase 2. Phase 1 allocates nothing: `createPage`
+  // saves the Page and then `Revision.prepareRevision` writes the first
+  // Revision with no `historySequence` at all.
+  //
+  // Marking such a Page `ready` would assert something untrue. `ready` means
+  // the page-local timeline is authoritative, and a page whose very first
+  // Revision carries no sequence has no timeline yet. It also creates a
+  // cohort that the Phase 2 backfill cannot see: the migration selects Pages
+  // that are NOT ready, and `requireHistoryReady` lets `ready` through, so a
+  // Phase 2 writer would hand sequence 1 to a NEW Revision while the initial
+  // one stays unsequenced — the ordering §5.4 exists to guarantee.
+  //
+  // So Phase 1 leaves every Page at the schema default (`untracked`), which
+  // is exactly what it is: a Page whose history is not yet tracked. Phase 2's
+  // create command sets `ready` in the same write that allocates the initial
+  // sequence, and the backfill promotes existing Pages the same way.
 
   pageEvent.on('create', pageEvent.onCreate);
   pageEvent.on('update', pageEvent.onUpdate);

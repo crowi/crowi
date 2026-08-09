@@ -5,7 +5,7 @@
 - **Owner**: TBD
 - **Last updated**: 2026-05-12
 - **Depends on**: RFC-0001 (Plugin Architecture), RFC-0002 (Renderer Plugin Architecture, round 3.1), RFC-0003 (Real-time Collaborative Editing, round 2)
-- **Related**: RFC-0005 (Page Presence), RFC-0006 (Editor Toolbar), RFC-0007 (Slash Commands)
+- **Related**: RFC-0005 (Page Presence)
 
 ## Summary
 
@@ -41,7 +41,7 @@ editor from "usable" to "productive".
   a static error placeholder. Retry is a future UX investment.
 - **Autocomplete cache invalidation** uses a "refresh" affordance in
   the dropdown rather than aggressive TTL or WebSocket invalidation.
-- **Mobile** explicitly excluded from autocomplete; toolbar (RFC-0006)
+- **Mobile** explicitly excluded from autocomplete; toolbar (no RFC owns this)
   is the eventual mobile-friendly path.
 - **Toast notification utility** scoped into RFC-0004 as a shared
   component.
@@ -68,8 +68,8 @@ editor from "usable" to "productive".
 
 ## Non-goals (this RFC)
 
-- **Toolbar** with formatting buttons. → RFC-0006.
-- **Slash commands** (`/heading`, `/table`). → RFC-0007.
+- **Toolbar** with formatting buttons. No current RFC owns this.
+- **Slash commands** (`/heading`, `/table`). No current RFC owns this.
 - **Custom keyboard shortcuts** (Ctrl+B/I/K). Cross-platform keybinding
   design needs a dedicated discussion; no current RFC owns this.
 - **Plugin contributions to autocomplete**. v2.x autocomplete sources
@@ -88,7 +88,7 @@ editor from "usable" to "productive".
   page draft-revert is a future RFC.
 - **Mobile autocomplete**. The mobile editor doesn't trigger `@` /
   `[[` completion UI. Mobile users insert mentions / wikilinks
-  manually or use future toolbar buttons (RFC-0006).
+  manually or use future toolbar buttons (no RFC owns this).
 - **Promoting drafts to be visible to other users before publish**.
   Drafts are author-only.
 
@@ -269,7 +269,7 @@ These suppressions use CodeMirror's syntax tree to detect context.
 
 Autocomplete is **not active on mobile viewports** (heuristic: width
 < 768px). Reasons: keyboard popups and overlapping dropdowns produce
-poor UX; the future toolbar (RFC-0006) is the mobile-friendly
+poor UX; the future toolbar (no RFC owns this) is the mobile-friendly
 alternative for inserting mentions and wikilinks.
 
 Mobile users can still type `@username` or `[[/docs/api]]` manually;
@@ -683,8 +683,8 @@ In scope:
 
 Out of scope (other RFCs or deferred):
 
-- Toolbar (RFC-0006).
-- Slash commands (RFC-0007).
+- Toolbar (no RFC owns this).
+- Slash commands (no RFC owns this).
 - Custom keybindings.
 - Rich-text paste from Office documents.
 - Drop zones / multi-file upload UI.
@@ -732,7 +732,7 @@ Out of scope (other RFCs or deferred):
 17. **No localStorage recovery**. Yjs server-side state replaces it.
 18. **Mention notification timing**: on save only (matches RFC-0002
     round 3's metadata extraction pipeline).
-19. **Mobile autocomplete**: disabled. Toolbar (RFC-0006) is the
+19. **Mobile autocomplete**: disabled. Toolbar (no RFC owns this) is the
     eventual mobile-friendly alternative.
 20. **Toast utility**: scoped into RFC-0004 as a shared helper.
 21. **Accessibility**: ARIA combobox pattern for autocomplete,

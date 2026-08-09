@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import { registerMigrate } from './commands/migrate';
+import { registerPageHistoryRepair } from './commands/page-history-repair';
 import { registerRebuild } from './commands/rebuild';
 import { registerReplace } from './commands/replace';
 import { registerWatcherBackfill } from './commands/watcher-backfill';
@@ -44,6 +45,11 @@ export function createProgram(): Command {
   // standalone command; kept as-is here. Could fold into the framework as a
   // `rebuild` / `migrate` task later (see TODO backlog).
   registerWatcherBackfill(program);
+  // RFC-0021 Phase 1 (feature-page-history-phase1-model) — the operator
+  // entry point for page-history outbox/sequence repair. Same standalone
+  // shape as `watcher backfill`, not a `rebuild`/`migrate` task (it repairs
+  // Phase-1 bookkeeping state, not derived data).
+  registerPageHistoryRepair(program);
 
   return program;
 }

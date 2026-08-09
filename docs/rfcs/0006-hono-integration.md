@@ -821,8 +821,8 @@ flattening admin sub-contracts):
 | admin.plugins | `admin/plugins.ts` | list / config GET/PUT / clear-render-cache (all / per-plugin) |
 | search | `search.ts` | `GET /search` |
 
-New endpoints from RFC-0007 (`/api/v2/docs`, the documentation UI) are
-added in the cleanup PR.
+The documentation UI (`/api/docs`, served by Scalar) is added in the
+cleanup PR.
 
 ## Pre-implementation discovery
 

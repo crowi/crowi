@@ -1,5 +1,38 @@
 # @crowi/web
 
+## 2.0.0-alpha.13
+
+### Major Changes
+
+- 0b2656a: BREAKING: `GET /admin/plugins/readiness`'s response shape changes from a plugin-only `{ name, adminPlacement, fields }` issue to a generic `{ id, source: 'plugin' | 'core', label, href, fields }` issue, so this admin-only endpoint's existing contract is not backward compatible for any client parsing the old field names. There is no server-side alias for the old shape. The endpoint path, auth (admin-only JWT), and the underlying "unset field" semantics are unchanged; `@crowi/web`'s own consumer of this endpoint is updated in the same release.
+
+  Admin readiness now also covers core mail configuration, and test-send errors no longer leak internal details to the browser.
+
+  - The `mail:from` sender address (a core setting, not a plugin one) now participates in the same admin readiness check that already covered storage/search plugin config: when it's unset, admins see it in the shared readiness banner (on every wiki page and `/admin/plugins`) with a link straight to `/admin/mail`.
+  - `@crowi/plugin-mail-smtp` (`host`) and `@crowi/plugin-mail-resend` (`apiKey`) now declare `readiness` too, so an incomplete SMTP or Resend setup is caught the same way S3/Elasticsearch/OpenSearch already are. AWS SES intentionally declares none — its credentials fall back to the AWS SDK default credential chain, which is a legitimate empty configuration.
+  - `mail:from` and the active mail driver's required fields are independent issues — either one being unset keeps mail flagged as not ready.
+  - A test-send failure caused by an unset `mail:from` now returns a dedicated `MAIL_FROM_NOT_CONFIGURED` error with a localized explanation and a link back to mail settings, instead of a generic failure. Any other sender/transport failure (e.g. a connection error or bad credentials) is logged on the server only — the browser only ever sees a safe, localized generic message, never the raw exception text.
+
+### Minor Changes
+
+- 9a06104: Add sign-in with Google, as a plugin (RFC-0014). Enable `@crowi/plugin-google` in your runner project, paste a Client ID and secret into the admin plugin screen, and a "Sign in with Google" button appears on the sign-in page without a restart. A first-time federated sign-in picks a username before an account is created, and then follows the instance's registration mode — active immediately when registration is Open, queued for administrator approval when Restricted, refused when Closed. Signed-in users can connect and disconnect providers from Settings, and an unlink is refused when it would leave the account with no way to sign back in. Google gets no special treatment in core: the whole flow (provider list / start / callback / handoff, signed state cookies, PKCE, OIDC verification) is generic, backed by a new auth-driver plugin SDK and a `UserIdentity` linking model, so any other OIDC provider can be added the same way. An email address is honoured only when the provider asserts it is verified, and one that matches an existing local account is never auto-linked — that sign-in is refused, and linking has to be done deliberately from Settings. Requires `AUTH_PUBLIC_WEB_URL` (or `CLIENT_URL`) to be set; see the "Signing in with an external account" operations guide for setup.
+
+### Patch Changes
+
+- 21044fc: Fix plugins disappearing from the admin sidebar. A plugin whose `adminPlacement.section` named a section the sidebar has no heading for — `auth` or `notification`, both of which the plugin contract allows — was dropped instead of placed, leaving its settings page reachable only by typing the URL. Auth-provider plugins hit this by default, since the section is inferred from `registerAuth`. Such entries now fall back to the general settings group. Google and Slack also get their real logos in the sidebar and, for Google, on the sign-in button, replacing the generic key and share glyphs.
+- d3350be: Security fix: the `crowi.accessToken` mirror cookie — written so headerless `<img src="/api/attachments/...">` requests can authenticate without an `Authorization` header — is now scoped to `path=/api/attachments` instead of `path=/`. Previously the browser attached this cookie to every same-origin request (pages, admin, every other API route); now it is only sent to the three attachment-delivery routes it exists for.
+
+  `storeTokens` and `clearTokens` also explicitly expire any pre-existing `path=/` cookie from a prior deploy, so upgrading clients don't retain a stray root-scoped copy of the token across login, silent refresh, or logout.
+
+- 0b62bc0: An account with one or more linked federated identities (Google, or any other configured provider — RFC-0014) can no longer move its own email address through `PUT /me`. The address on a federated account was verified by the identity provider at sign-in; letting the holder of a stolen `profile:write` credential (a leaked personal access token or OAuth grant) redirect the confirmation link to an address they control would hand the account's recovery identifier away. A request that submits a different email now fails with `400 EMAIL_LOCKED_BY_FEDERATED_IDENTITY` and applies nothing from that request — name and language changes sent in the same request are not saved either, so the outcome is all-or-nothing. Resubmitting the current, unchanged address still saves name/language normally, and accounts with no linked identity are completely unaffected — the confirm-by-email flow behaves exactly as before.
+
+  The profile response (`GET /me` and `PUT /me`) now carries a `federated` boolean. The Profile tab uses it to disable the email field and show a note pointing to the Security tab, where the linked account can be reviewed or unlinked; this is a UX aid only; the server-side rule above is what actually enforces the lock.
+
+- Updated dependencies [9a06104]
+- Updated dependencies [0b2656a]
+- Updated dependencies [0b62bc0]
+  - @crowi/api-contract@2.0.0-alpha.13
+
 ## 2.0.0-alpha.12
 
 ### Minor Changes

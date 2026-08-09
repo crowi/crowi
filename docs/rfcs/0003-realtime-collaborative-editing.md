@@ -18,10 +18,10 @@ which simultaneously invokes the renderer pipeline from RFC-0002.
 
 This RFC covers the **synchronisation layer**, the **persistence
 strategy**, the **editor stack**, and **save semantics**. It deliberately
-excludes editor UX enhancements (toolbar, autocomplete, paste/D&D
-upload) which are deferred to RFC-0004 / RFC-0006 / RFC-0007, and
-page-level presence (avatar stack, viewer count) which is deferred
-to RFC-0005.
+excludes editor UX enhancements — autocomplete and paste/D&D upload are
+deferred to RFC-0004, while toolbar and slash commands are not owned by
+any RFC — and page-level presence (avatar stack, viewer count) which is
+deferred to RFC-0005.
 
 ## Round 2 changes
 
@@ -40,7 +40,7 @@ to RFC-0005.
   documented.
 - **Keybindings** language clarified: deferred indefinitely, not
   parked in RFC-0004.
-- **Slash commands** reference corrected: RFC-0007, not RFC-0004.
+- **Slash commands** reference corrected: not RFC-0004.
 - **`PageYjsUpdate` TTL** tightened from 1 day to 1 hour.
 - **`bodyAtSave`** in incremental revisions removed; `Revision.body`
   already provides the resolved snapshot.
@@ -70,8 +70,8 @@ to RFC-0005.
 
 ## Non-goals (this RFC)
 
-- **Editor UX features**: toolbar (RFC-0006), keyboard shortcuts
-  (deferred indefinitely; see below), slash commands (RFC-0007),
+- **Editor UX features**: toolbar (no RFC owns this), keyboard shortcuts
+  (deferred indefinitely; see below), slash commands (no RFC owns this),
   autocomplete `@user` / `[[Page` (RFC-0004), paste-image upload
   (RFC-0004), drag-and-drop upload (RFC-0004), Vim mode (deferred).
 - **Keyboard shortcuts**. Cross-platform binding design (Mac
@@ -81,7 +81,7 @@ to RFC-0005.
   as inline-styled but with the asterisks preserved, Zenn-style).
   Explicit decision: Crowi shows raw Markdown source in the editor,
   period. Non-engineer support is provided via a future toolbar
-  (RFC-0006), not by hiding/styling the source.
+  (no RFC owns this), not by hiding/styling the source.
 - **Page-level presence UI**: viewer avatar stack on the read page,
   "editing now" indicators. Deferred to RFC-0005.
 - **Explicit merge resolution UI** for conflicting edits. Real-time
@@ -730,12 +730,12 @@ The editor is created with:
   indefinitely — cross-platform binding choices (Mac vs Windows,
   conflicts with OS defaults like Mac's `Ctrl+B` cursor-left) need
   dedicated design work that no current RFC owns.
-- No toolbar. → RFC-0006.
+- No toolbar. No RFC owns this.
 - No autocomplete sources (`@user`, `[[Page` triggers are inert in v2.1).
   → RFC-0004.
 - No paste handlers for images/files. → RFC-0004.
 - No drag-and-drop handlers. → RFC-0004.
-- No slash commands. → RFC-0007.
+- No slash commands. No RFC owns this.
 - No Vim/Emacs mode.
 - No source decoration (raw Markdown is displayed as-is, asterisks
   and all). Decided in round 1; not reopened.
@@ -815,11 +815,11 @@ In scope:
 Out of scope (deferred):
 
 - Autosave.
-- Toolbar (RFC-0006).
+- Toolbar (no RFC owns this).
 - Custom keybindings (deferred indefinitely; no RFC owns this).
 - Autocomplete: `@user`, `[[Page` (RFC-0004).
 - Paste/D&D upload (RFC-0004).
-- Slash commands (RFC-0007).
+- Slash commands (no RFC owns this).
 - Markdown source decorations / Zenn-style rendering
   (rejected entirely; not deferred).
 - Page-level viewer presence (RFC-0005).

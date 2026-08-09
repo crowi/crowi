@@ -10,6 +10,7 @@ import { McpSetupSection } from './mcp-setup-section';
 import { AccessTokensSection } from './access-tokens-section';
 import { LinkedAccountsSection } from './linked-accounts-section';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { m } from '@paraglide/messages.js';
 import { getLocale } from '@paraglide/runtime.js';
@@ -66,7 +67,26 @@ export default function SettingsPage() {
               <CardTitle>{m['me.profile.heading']()}</CardTitle>
               <CardDescription>{m['me.profile.lead']()}</CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
+              {profile.federated && (
+                <Alert>
+                  <AlertDescription>
+                    {m['me.profile.federated_notice']()}{' '}
+                    {/* `window.location.assign`, not next/link: the Security
+                        tab is chosen from the URL only on mount
+                        (`SettingsLayout`'s `initialTab`), so getting there
+                        from an already-mounted Profile tab needs a full
+                        navigation — a client-side route transition would
+                        leave the uncontrolled Tabs component on its current
+                        value. A plain `<a href>` would navigate correctly but
+                        trips `@next/next/no-html-link-for-pages`. Same
+                        technique as `LinkedAccountsSection`'s `startLink`. */}
+                    <Button type="button" variant="link" className="h-auto p-0" onClick={() => window.location.assign('/me?tab=security')}>
+                      {m['me.profile.federated_notice_link']()}
+                    </Button>
+                  </AlertDescription>
+                </Alert>
+              )}
               <ProfileForm profile={profile} />
             </CardContent>
           </Card>

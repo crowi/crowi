@@ -1,6 +1,7 @@
 import Debug from 'debug';
 import { Document, Model, model, Schema, Types } from 'mongoose';
 import Crowi from 'src/crowi';
+import { STATUS_DELETED } from './page';
 
 export interface CommentDocument extends Document {
   _id: Types.ObjectId;
@@ -18,6 +19,18 @@ export interface CommentModel extends Model<CommentDocument> {
   removeCommentsByPageId(pageId: Types.ObjectId): Promise<void>;
   removeCommentById(id: Types.ObjectId): Promise<void>;
   findCreatorsByPage(page: any): Promise<any[]>;
+}
+
+/**
+ * RFC-0021 §7.1 (`feature-page-history-phase1-model`, Phase 1) — the
+ * Page state `addComment` (`hono/handlers/comment.ts`) captured at
+ * authorization time, stashed on `$locals.authSnapshot` before the insert
+ * so the post-insert lifecycle re-validation hook below can compare
+ * against it. See that hook's doc comment for the full contract.
+ */
+export interface CommentAuthSnapshot {
+  status: unknown;
+  path: string;
 }
 
 export default (crowi: Crowi) => {
@@ -64,6 +77,18 @@ export default (crowi: Crowi) => {
   };
 
   /**
+   * `page` may be a bare ObjectId or a populated Page document, depending on
+   * what the caller set (`Comment.create({ page, ... })` accepts either, and
+   * a bare `String()` on a document collapses to `'[object Object]'`
+   * instead of the id). Resolves to the underlying id either way. Shared by
+   * {@link recalculateCommentCount} and the post-insert lifecycle
+   * re-validation hook below — both need the same resolution.
+   */
+  function resolvePageRefId(page: unknown): unknown {
+    return (page as { _id?: unknown })?._id ?? page;
+  }
+
+  /**
    * Tail of the in-flight recalc chain per page id. See
    * {@link recalculateCommentCount} for why serialisation is required.
    */
@@ -96,11 +121,7 @@ export default (crowi: Crowi) => {
    */
   function recalculateCommentCount(pageId: CommentDocument['page']) {
     const Page = crowi.model('Page');
-    // `pageId` may be an ObjectId or a populated Page document (the
-    // post('save') hook passes `savedComment.page`, which is whatever the
-    // caller set). Key on `_id` — a bare String() on a document collapses
-    // to '[object Object]' and would serialise every page onto one chain.
-    const key = String((pageId as { _id?: unknown })?._id ?? pageId);
+    const key = String(resolvePageRefId(pageId));
     const previous = recalcTails.get(key) ?? Promise.resolve();
 
     // `.catch` sits at the tail, so `previous` is always fulfilled and one
@@ -138,6 +159,76 @@ export default (crowi: Crowi) => {
   // any future path re-saved an existing comment.
   commentSchema.pre('save', function (this: CommentDocument) {
     this.$locals.wasNew = this.isNew;
+  });
+
+  /**
+   * RFC-0021 §7.1 (`feature-page-history-phase1-model`, Phase 1) —
+   * post-insert lifecycle re-validation. `addComment`
+   * (`hono/handlers/comment.ts`) authorizes the Page and THEN inserts the
+   * Comment — two separate operations. If the Page is trashed OR renamed in
+   * between, the insert still succeeds (a Comment is keyed by the Page's
+   * immutable `_id`, and trash is mechanically `Page.rename` + `status:
+   * STATUS_DELETED` on that SAME document — see `Page.deletePage`), leaving
+   * a comment that no longer matches what its author was actually
+   * authorized against. This is one of the two mechanisms RFC §7.1 requires
+   * together (the other is the delete-side sweep, out of scope until Phase
+   * 4's hard-delete state machine) — a comment created in that window is
+   * compensated here by the writer that created it.
+   *
+   * Registered BEFORE the commentCount/Activity/live-sync post('save') hook
+   * below so that when this hook throws, mongoose skips every later
+   * post('save') hook for the same save — the count recalc and the
+   * live-sync 'add' emit never fire for a comment this hook is about to
+   * delete.
+   *
+   * Creation-only (`$locals.wasNew`, captured by the `pre('save')` hook
+   * above): a later edit of an already-live comment must not be
+   * compensated by this check — only the authorize-then-insert race RFC
+   * §7.1 targets is in scope.
+   *
+   * `$locals.authSnapshot` (see {@link CommentAuthSnapshot}) is set by
+   * `addComment` right after it authorizes the Page, BEFORE the insert —
+   * `{status, path}` at that exact moment. This hook re-reads the Page
+   * fresh and compares: EITHER field differing from the snapshot means
+   * "what actually got authorized no longer matches the Page this comment
+   * points at" — trash (status differs) and a plain rename (path differs,
+   * even though a Comment is page-id-keyed and would otherwise stay
+   * perfectly valid) are both covered, matching AC-10's literal "trash /
+   * rename されていた場合" wording. Deliberately NOT covered: a trash-then-
+   * restore round trip that lands back on the IDENTICAL {status, path} the
+   * caller authorized. Detecting that would need a lifecycle-only
+   * monotonic epoch on Page, which this spec's implementation map does not
+   * add — `collabLifecycleVersion` (the one epoch Page already has) is
+   * disqualified because `Page.updatePage` also advances it on every
+   * ordinary content save, so gating on it would compensate comments
+   * during normal concurrent editing, violating AC-10's "認可時と食い違わない
+   * 通常経路の挙動は変わらない" clause. A round trip back to the exact state the
+   * comment was authorized against is, by construction, not an
+   * inconsistency to undo — the comment is attached to a Page whose current
+   * state is exactly what its author saw.
+   *
+   * When `$locals.authSnapshot` is absent (a direct model caller — existing
+   * tests, or any future writer that doesn't pass one), this hook falls
+   * back to the narrower "the Page is gone or trashed" check Phase 1
+   * originally shipped with, so it stays usable without the handler's
+   * involvement.
+   */
+  commentSchema.post('save', async function (savedComment: CommentDocument) {
+    if (savedComment.$locals.wasNew !== true) {
+      return;
+    }
+
+    const Page = crowi.model('Page');
+    const page = await Page.findById(resolvePageRefId(savedComment.page)).select('status path').lean().exec();
+    const authSnapshot = savedComment.$locals.authSnapshot as CommentAuthSnapshot | undefined;
+
+    const needsCompensation =
+      page == null || (authSnapshot != null ? page.status !== authSnapshot.status || page.path !== authSnapshot.path : page.status === STATUS_DELETED);
+
+    if (needsCompensation) {
+      await Comment.deleteOne({ _id: savedComment._id }).exec();
+      throw new Error('Page not found');
+    }
   });
 
   /**

@@ -133,7 +133,7 @@ async function codexStage({ label, phase: ph, prompt, schema, sandbox, docPathCh
 
 const REVIEW = {
   type: 'object',
-  required: ['verdict', 'blocking', 'notes'],
+  required: ['verdict', 'blocking', 'preexisting', 'notes'],
   additionalProperties: false,
   properties: {
     verdict: { type: 'string', enum: ['OK', 'ISSUES'] },
@@ -141,6 +141,14 @@ const REVIEW = {
       type: 'array',
       items: { type: 'string' },
       description: 'concrete, code-grounded blocking issues (each with file:line / section ref). Empty when OK.',
+    },
+    // Pre-existing repository problems the review surfaced but that the doc
+    // neither introduced nor worsened. Reported separately so they are not
+    // lost, but they never block this doc — they are seeds for other work.
+    preexisting: {
+      type: 'array',
+      items: { type: 'string' },
+      description: 'real problems in existing code that predate this design and are not made worse by it. Never blocking here.',
     },
     notes: { anyOf: [{ type: 'string' }, { type: 'null' }] },
   },
@@ -273,6 +281,15 @@ function lensPrompt(l, doc) {
   return (
     `crowi-design REVIEWER [${l.key}] of the ${isRfc ? 'RFC' : 'spec'} at ${doc} ` +
     `(the design brief is at ${BRIEF} for context). ${l.task}\n` +
+    `SCOPE CONTRACT — the human locked these decisions at the design gate; they are settled, not ` +
+    `up for re-litigation:\n${DECISIONS}\n` +
+    `The document's out-of-scope section ("やらないこと" / non-goals) is part of that contract. Do NOT ` +
+    `report the ABSENCE of out-of-scope work as blocking — "this doc does not solve X" is not a finding ` +
+    `when X is declared out of scope. What IS blocking: an in-scope change that makes something worse ` +
+    `(name the in-scope change and the damage, file:line); an in-scope claim that is factually wrong; ` +
+    `an out-of-scope declaration that is self-contradictory (the doc relies on the very thing it excludes).\n` +
+    `Pre-existing problems in the repository that this design neither introduced nor worsened go in ` +
+    `preexisting[] (still code-grounded, file:line) — they are valuable, but they do not block THIS doc.\n` +
     `Be adversarial and code-grounded: do NOT rubber-stamp, anchor every claim with file:line, ` +
     `read dependency code if needed. Analysis only — do NOT edit the document. Return ` +
     `verdict=ISSUES with a concrete blocking[] list when material problems remain, else ` +
@@ -327,12 +344,14 @@ if (REVIEW_ONLY) {
   if (reviews.length === 0)
     return { status: 'FAILED', reason: 'all reviewers failed', docPath: doc, slug: SLUG, codexFallbacks: FALLBACKS }
   const blocking = reviews.flatMap((r) => (r.verdict === 'ISSUES' ? r.blocking : []))
+  const preexisting = reviews.flatMap((r) => r.preexisting || [])
   return {
     status: blocking.length === 0 ? 'OK' : 'ISSUES',
     docPath: doc,
     outputType: OUTPUT,
     blocking,
-    reviewSummary: reviews.map((r) => ({ lens: r.lens, verdict: r.verdict, blocking: r.blocking })),
+    preexisting,
+    reviewSummary: reviews.map((r) => ({ lens: r.lens, verdict: r.verdict, blocking: r.blocking, preexisting: r.preexisting || [] })),
     codexFallbacks: FALLBACKS,
   }
 }
@@ -416,7 +435,8 @@ for (let attempt = 1; attempt <= MAX; attempt++) {
       residualOpenQuestions: draft.residualOpenQuestions || [],
       rebutted: REBUTTED,
       blocking,
-      reviewSummary: reviews.map((r) => ({ lens: r.lens, verdict: r.verdict, blocking: r.blocking })),
+      preexisting: reviews.flatMap((r) => r.preexisting || []),
+      reviewSummary: reviews.map((r) => ({ lens: r.lens, verdict: r.verdict, blocking: r.blocking, preexisting: r.preexisting || [] })),
       codexFallbacks: FALLBACKS,
     }
   }
@@ -493,7 +513,7 @@ if (!isRfc) {
       residualOpenQuestions: draft.residualOpenQuestions || [],
       rebutted: REBUTTED,
       blocking: [reason],
-      reviewSummary: lastReviews.map((r) => ({ lens: r.lens, verdict: r.verdict, blocking: r.blocking })),
+      reviewSummary: lastReviews.map((r) => ({ lens: r.lens, verdict: r.verdict, blocking: r.blocking, preexisting: r.preexisting || [] })),
       codexFallbacks: FALLBACKS,
     }
   }
@@ -505,8 +525,9 @@ return {
   rfcNumber: draft.rfcNumber,
   outputType: OUTPUT,
   verdict,
+  preexisting: lastReviews.flatMap((r) => r.preexisting || []),
   residualOpenQuestions: draft.residualOpenQuestions || [],
   rebutted: REBUTTED,
-  reviewSummary: lastReviews.map((r) => ({ lens: r.lens, verdict: r.verdict, blocking: r.blocking })),
+  reviewSummary: lastReviews.map((r) => ({ lens: r.lens, verdict: r.verdict, blocking: r.blocking, preexisting: r.preexisting || [] })),
   codexFallbacks: FALLBACKS,
 }

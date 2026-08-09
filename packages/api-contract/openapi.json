@@ -10701,6 +10701,9 @@
                     "createdAt": {
                       "type": "string"
                     },
+                    "federated": {
+                      "type": "boolean"
+                    },
                     "emailChangePending": {
                       "type": "boolean"
                     }
@@ -10714,7 +10717,8 @@
                     "theme",
                     "image",
                     "hasPassword",
-                    "createdAt"
+                    "createdAt",
+                    "federated"
                   ]
                 }
               }
@@ -10861,6 +10865,9 @@
                     "createdAt": {
                       "type": "string"
                     },
+                    "federated": {
+                      "type": "boolean"
+                    },
                     "emailChangePending": {
                       "type": "boolean"
                     }
@@ -10874,7 +10881,8 @@
                     "theme",
                     "image",
                     "hasPassword",
-                    "createdAt"
+                    "createdAt",
+                    "federated"
                   ]
                 }
               }

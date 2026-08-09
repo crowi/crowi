@@ -159,13 +159,23 @@ export const registerCommentRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(
           return c.json(PAGE_NOT_FOUND_BODY, 404);
         }
 
-        const created = await Comment.create({
+        // RFC-0021 §7.1 (feature-page-history-phase1-model, Phase 1) —
+        // authorization and insert are two separate operations; stash what
+        // was just authorized ({status, path}) on `$locals.authSnapshot`
+        // BEFORE the insert so `comment.ts`'s post-insert re-validation
+        // hook can compensate if the Page was trashed/renamed in between.
+        // `new Comment(...).save()` instead of `Comment.create(...)` (which
+        // is exactly `new Model(doc).save()` internally) so there is a
+        // document to set `$locals` on before the save fires the hook.
+        const draft = new Comment({
           page: new Types.ObjectId(page_id),
           creator: user._id,
           revision: new Types.ObjectId(revision_id),
           comment,
           commentPosition: comment_position ?? COMMENT_POSITION_DEFAULT,
         });
+        draft.$locals.authSnapshot = { status: page.status, path: page.path };
+        const created = await draft.save();
         const populated = (await created.populate('creator')) as CommentDocument;
 
         // feature-watch-autosubscribe — commenting auto-watches the page.
