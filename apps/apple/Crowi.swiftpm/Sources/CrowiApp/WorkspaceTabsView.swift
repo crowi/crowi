@@ -59,6 +59,7 @@ struct WorkspaceTabsView: View {
                     .tag(tab)
             }
         }
+        .modifier(ScrollMinimizedTabBar())
         // The design renders create as a bottom sheet, not as a pushed
         // screen: it is an ACTION on the workspace, so it must not become
         // part of any tab's history (a created page would otherwise leave the
@@ -231,3 +232,18 @@ private struct SessionBadgedTab<Content: View>: View {
     }
 }
 
+/// The bar collapses into a pill while a list is scrolled down and comes back
+/// on the way up — the system's own behavior, so the create button and the
+/// scroll indicators move with it instead of around it.
+///
+/// Nothing to fall back to below iOS 26: the bar simply stays full height,
+/// which is what every earlier release draws.
+private struct ScrollMinimizedTabBar: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.tabBarMinimizeBehavior(.onScrollDown)
+        } else {
+            content
+        }
+    }
+}
