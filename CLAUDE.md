@@ -42,6 +42,13 @@ Scripts live in root + per-package `package.json`. `pnpm <script>` filters with
 
 - **Dev**: `docker compose up -d` for infra (mongo/redis/es/plantuml) →
   `pnpm dev` for api+web+plugins. `pnpm dev:api` / `pnpm dev:web` for one side.
+  `pnpm dev` builds every workspace lib/plugin **once** up front (turbo-cached),
+  then keeps only `@crowi/api` (tsx), `@crowi/web` (next) and `@crowi/api-contract`
+  under a persistent watch — the latter JS-only, since its `.d.ts` rollup worker
+  alone holds several GiB resident. Editing a lib/plugin? Add it back to the live
+  watch with `pnpm dev --watch <pkg>` (repeatable; `plugin-slack` or
+  `@crowi/plugin-slack`). `pnpm dev --watch @crowi/api-contract` also restores
+  live `.d.ts` regeneration for contract edits.
 - **Test infra**: `docker compose up -d` also starts `crowi-test-mongodb` (port
   27018, tmpfs data dir), a MongoDB dedicated to `@crowi/api`'s jest suite and
   kept independent from the always-on dev `mongodb` (27017) — a full parallel
