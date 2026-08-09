@@ -168,6 +168,7 @@ import type {
   ListAttachmentsResponseSchema,
   RemoveAttachmentResponseSchema,
   UploadAttachmentResponseSchema,
+  UploadPolicyResponseSchema,
 } from './schemas/attachment';
 import type { GetAppSettingsResponseSchema, UpdateAppSettingsResponseSchema } from './schemas/admin/app';
 import type { GetAuthSettingsResponseSchema, UpdateAuthSettingsResponseSchema } from './schemas/admin/auth';
@@ -255,6 +256,7 @@ type AttachmentUsageResponse = z.infer<typeof AttachmentUsageResponseSchema>;
 type AttachmentMeta = z.infer<typeof AttachmentMetaSchema>;
 type UploadAttachmentResponse = z.infer<typeof UploadAttachmentResponseSchema>;
 type RemoveAttachmentResponse = z.infer<typeof RemoveAttachmentResponseSchema>;
+type UploadPolicyResponse = z.infer<typeof UploadPolicyResponseSchema>;
 // admin sub-contract response types
 type GetAppSettingsResponse = z.infer<typeof GetAppSettingsResponseSchema>;
 type UpdateAppSettingsResponse = z.infer<typeof UpdateAppSettingsResponseSchema>;
@@ -534,6 +536,12 @@ const stubAttachmentMeta: AttachmentMeta = (() => {
 })();
 const stubUploadAttachment: UploadAttachmentResponse = { url: '', filename: '', mimeType: '', sizeBytes: 0 };
 const stubRemoveAttachment: RemoveAttachmentResponse = { success: true };
+const stubUploadPolicy: UploadPolicyResponse = {
+  allowedMimeTypes: [],
+  extensionHints: {},
+  maxBytes: { attachment: 0, paste: 0, dnd: 0 },
+  profilePicture: { allowedMimeTypes: [], maxBytes: 0 },
+};
 const stubSearchPages: SearchPagesResponse = { meta: { total: 0, results: 0 }, data: [] };
 const stubCryptoStatus: CryptoStatusResponse = {
   encryptionConfigured: false,
@@ -740,6 +748,7 @@ const lateContractApp = new OpenAPIHono()
   .openapi(attachmentRoutes.uploadAttachmentRoute, (c) => c.json(stubUploadAttachment, 200))
   .openapi(attachmentRoutes.getAttachmentMetaRoute, (c) => c.json(stubAttachmentMeta, 200))
   .openapi(attachmentRoutes.removeAttachmentRoute, (c) => c.json(stubRemoveAttachment, 200))
+  .openapi(attachmentRoutes.getUploadPolicyRoute, (c) => c.json(stubUploadPolicy, 200))
   // Batch 7 — search. Singleton literal path `/search`, installs jwtAuth
   // on the path itself (no other handler owns `/search`). Registered
   // before notification to mirror the buildHonoApp chain.

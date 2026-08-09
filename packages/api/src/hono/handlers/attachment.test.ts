@@ -1,11 +1,21 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { UPLOAD_ALLOWED_MIME } from '@crowi/api-contract';
 import { Types } from 'mongoose';
 import { app, crowi } from 'src/test/setup';
 import { bearerAuthHeaders as authHeaders, cookieAuthHeaders as cookieHeaders, createPageViaApi, createTestUser, createWideJpeg } from 'src/test/test-helpers';
 import * as imageDisplayDerivative from 'src/util/image-display-derivative';
 import { createJwtUtil } from 'src/util/jwt';
 import request from 'supertest';
+
+import {
+  ADD_ATTACHMENT_MAX_BYTES,
+  DND_MAX_BYTES,
+  PASTE_MAX_BYTES,
+  PROFILE_PICTURE_ALLOWED_MIME,
+  PROFILE_PICTURE_MAX_BYTES,
+  UPLOAD_EXT_TO_MIME,
+} from './attachment';
 
 const cleanupPathPrefix = async (prefix: string) => {
   const Page = crowi.model('Page');
@@ -1783,6 +1793,11 @@ describe('Routes /api attachments (Hono)', () => {
 
       const deleteRes = await request(app).delete(`/api/attachments/${id}`).set(cookieHeaders(accessToken));
       expect(deleteRes.status).toBe(401);
+
+      // The upload-policy route is programmatic-client only (CLI/curl/MCP),
+      // so it must NOT be added to the cookie-fallback allowlist either.
+      const policyRes = await request(app).get('/api/attachments/upload-policy').set(cookieHeaders(accessToken));
+      expect(policyRes.status).toBe(401);
     });
 
     it('a malformed Authorization header on a delivery route is rejected even with a valid cookie present', async () => {
@@ -1829,6 +1844,31 @@ describe('Routes /api attachments (Hono)', () => {
       } finally {
         spy.mockRestore();
       }
+    });
+  });
+
+  describe('GET /api/attachments/upload-policy', () => {
+    it('returns 401 without auth', async () => {
+      const res = await request(app).get('/api/attachments/upload-policy');
+      expect(res.status).toBe(401);
+      expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
+    });
+
+    it('AC-1/AC-2/AC-3: publishes the policy derived from the existing upload constants', async () => {
+      const res = await request(app).get('/api/attachments/upload-policy').set(authHeaders(accessToken));
+
+      expect(res.status).toBe(200);
+      expect(res.body.allowedMimeTypes).toEqual(UPLOAD_ALLOWED_MIME);
+      expect(res.body.extensionHints).toEqual(UPLOAD_EXT_TO_MIME);
+      expect(res.body.maxBytes).toEqual({
+        attachment: ADD_ATTACHMENT_MAX_BYTES,
+        paste: PASTE_MAX_BYTES,
+        dnd: DND_MAX_BYTES,
+      });
+      expect(res.body.profilePicture).toEqual({
+        allowedMimeTypes: PROFILE_PICTURE_ALLOWED_MIME,
+        maxBytes: PROFILE_PICTURE_MAX_BYTES,
+      });
     });
   });
 });
