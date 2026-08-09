@@ -37,33 +37,45 @@ images.
 The following cannot be done from CI. Set them up by hand **once before the first
 release**.
 
-### 1. npm Trusted Publisher (18 published packages)
+### 1. npm Trusted Publisher (every published package)
 
-On npmjs.com, register a Trusted Publisher for **each of the 18 published
-packages** (repo `crowi/crowi` + workflow `release.yml`, and an environment if you
-use one). This enables OIDC publishing with no long-lived `NPM_TOKEN` and with
-provenance. The packages:
+On npmjs.com, register a Trusted Publisher for **each published package** (repo `crowi/crowi` + workflow `release.yml`, and an environment if you use one). This enables OIDC publishing with no long-lived `NPM_TOKEN` and with provenance.
+
+The workspace is the source of truth (any package without `private: true`), so generate the list rather than trusting the one below:
+
+```bash
+for d in packages/*/package.json apps/*/package.json; do
+  node -e "const p=require('./$d'); if (!p.private) console.log(p.name)" 2>/dev/null
+done | sort
+```
+
+As of 2026-08 that is 21 packages:
 
 ```
 @crowi/admin-cli
-@crowi/api-contract
 @crowi/api
+@crowi/api-contract
 @crowi/cli
 @crowi/plugin-api
 @crowi/plugin-aws
+@crowi/plugin-google
 @crowi/plugin-mail-aws-ses
 @crowi/plugin-mail-resend
 @crowi/plugin-mail-smtp
 @crowi/plugin-renderer-crowi-legacy
 @crowi/plugin-renderer-katex
+@crowi/plugin-renderer-mermaid
 @crowi/plugin-renderer-plantuml
 @crowi/plugin-search-elasticsearch
 @crowi/plugin-search-mongo
 @crowi/plugin-search-opensearch
+@crowi/plugin-slack
 @crowi/plugin-storage-aws-s3
 @crowi/plugin-storage-local
 @crowi/runner
 ```
+
+**When you add a new published package, publish that one package by hand once.** npm only lets you configure a Trusted Publisher on a package that **already exists on the registry**, so a name that has never been published cannot be registered. The order is: run `npm publish` once locally → register the Trusted Publisher for it on npmjs.com → every release after that goes through CI's OIDC publish. Release before registering and that package's publish is the one step that fails to authenticate.
 
 ### 2. GitHub: allow Actions to create PRs
 

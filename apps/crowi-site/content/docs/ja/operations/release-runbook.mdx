@@ -36,32 +36,45 @@ Docker / Elasticsearch image の出し方をまとめます。
 
 以下は CI からは実行できません。**初回リリース前に 1 回だけ** 手作業で設定します。
 
-### 1. npm Trusted Publisher（公開 18 パッケージ）
+### 1. npm Trusted Publisher（公開パッケージすべて）
 
-npmjs.com で **公開 18 パッケージそれぞれ** に Trusted Publisher を登録します
-（repo `crowi/crowi` + workflow `release.yml`、必要なら environment）。これにより
-長期 `NPM_TOKEN` 不要・provenance 付きの OIDC publish が成立します。対象:
+npmjs.com で **公開パッケージそれぞれ** に Trusted Publisher を登録します（repo `crowi/crowi` + workflow `release.yml`、必要なら environment）。これにより長期 `NPM_TOKEN` 不要・provenance 付きの OIDC publish が成立します。
+
+対象の正本は workspace（`private: true` でない package）なので、下の一覧を信じきらず実際に生成して突き合わせてください:
+
+```bash
+for d in packages/*/package.json apps/*/package.json; do
+  node -e "const p=require('./$d'); if (!p.private) console.log(p.name)" 2>/dev/null
+done | sort
+```
+
+2026-08 時点では 21 パッケージです:
 
 ```
 @crowi/admin-cli
-@crowi/api-contract
 @crowi/api
+@crowi/api-contract
 @crowi/cli
 @crowi/plugin-api
 @crowi/plugin-aws
+@crowi/plugin-google
 @crowi/plugin-mail-aws-ses
 @crowi/plugin-mail-resend
 @crowi/plugin-mail-smtp
 @crowi/plugin-renderer-crowi-legacy
 @crowi/plugin-renderer-katex
+@crowi/plugin-renderer-mermaid
 @crowi/plugin-renderer-plantuml
 @crowi/plugin-search-elasticsearch
 @crowi/plugin-search-mongo
 @crowi/plugin-search-opensearch
+@crowi/plugin-slack
 @crowi/plugin-storage-aws-s3
 @crowi/plugin-storage-local
 @crowi/runner
 ```
+
+**新しい公開パッケージを足したときは、そのパッケージだけ初回を手動で publish します。** npm の Trusted Publisher は **既に npm 上に存在するパッケージにしか設定できない** ため、まだ publish されていない名前には登録できません。順序は「ローカルから 1 回 `npm publish` する → npmjs.com でそのパッケージに Trusted Publisher を登録する → 以降は CI の OIDC publish に乗る」。登録前にリリースを回すと、そのパッケージの publish だけが認証できずに失敗します。
 
 ### 2. GitHub: Actions に PR 作成を許可
 
