@@ -599,36 +599,90 @@ struct RenderedAstTableView: View {
 
     private var metrics: CrowiBodyMetrics { CrowiBodyMetrics() }
 
+    @State private var isExpanded = false
+
     var body: some View {
         VStack(alignment: .leading, spacing: metrics.paragraphSegmentSpacing) {
+            expandButton
             // A table wider than the phone was already scrollable, but with the
             // indicators suppressed it just looked CUT OFF at the second
             // column. Showing them — and flashing them as the table scrolls
             // into view — is what says "there is more to the right".
             ScrollView(.horizontal) {
-                Grid(
-                    alignment: .topLeading,
-                    horizontalSpacing: metrics.tableColumnSpacing,
-                    // Has to clear the line gap inside a cell, or a wrapped
-                    // cell reads as two rows.
-                    verticalSpacing: metrics.tableRowSpacing
-                ) {
-                    ForEach(Array(tableRows.enumerated()), id: \.offset) { rowIndex, row in
-                        GridRow {
-                            ForEach(Array(row.children.enumerated()), id: \.offset) { columnIndex, cell in
-                                cellView(cell, columnIndex: columnIndex, isHeader: rowIndex == 0)
-                            }
-                        }
-                        if rowIndex == 0 {
-                            Divider()
-                        }
-                    }
-                }
+                grid
             }
             .scrollIndicatorsFlash(onAppear: true)
             // Degraded non-row children stay visible (never silently dropped).
             ForEach(Array(degradedChildren.enumerated()), id: \.offset) { _, child in
                 RenderedAstBlockView(node: child, context: context)
+            }
+        }
+        .sheet(isPresented: $isExpanded) { expanded }
+    }
+
+    private var grid: some View {
+        Grid(
+            alignment: .topLeading,
+            horizontalSpacing: metrics.tableColumnSpacing,
+            // Has to clear the line gap inside a cell, or a wrapped
+            // cell reads as two rows.
+            verticalSpacing: metrics.tableRowSpacing
+        ) {
+            ForEach(Array(tableRows.enumerated()), id: \.offset) { rowIndex, row in
+                GridRow {
+                    ForEach(Array(row.children.enumerated()), id: \.offset) { columnIndex, cell in
+                        cellView(cell, columnIndex: columnIndex, isHeader: rowIndex == 0)
+                    }
+                }
+                // A rule under EVERY row but the last, the way the web draws
+                // one (`tbody > tr` bottom borders): a header rule alone left
+                // the body reading as two columns of paragraphs, which is
+                // also what made the cut-off right edge look like wrapped
+                // text rather than a table continuing off-screen. Heavier
+                // under the header, same as there.
+                if rowIndex < tableRows.count - 1 {
+                    Divider().overlay(Color.primary.opacity(rowIndex == 0 ? 0.18 : 0.1))
+                }
+            }
+        }
+    }
+
+    /// Reading a wide table by dragging a phone-width window across it is the
+    /// worst way to read it. The web has the same escape hatch on the same
+    /// element, and here it also doubles as the thing that SAYS "table" —
+    /// visible before any scrolling happens, unlike a scroll indicator.
+    private var expandButton: some View {
+        Button {
+            isExpanded = true
+        } label: {
+            Image(systemName: "arrow.up.left.and.arrow.down.right")
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(CrowiTheme.mutedForeground)
+                .frame(width: 28, height: 28)
+                .background(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(CrowiTheme.muted)
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity, alignment: .trailing)
+        .accessibilityLabel("Expand table")
+    }
+
+    private var expanded: some View {
+        NavigationStack {
+            ScrollView([.horizontal, .vertical]) {
+                grid
+                    .padding(metrics.paragraphSegmentSpacing)
+            }
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { isExpanded = false }
+                }
             }
         }
     }
