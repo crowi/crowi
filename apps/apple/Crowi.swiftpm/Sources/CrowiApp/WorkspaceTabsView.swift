@@ -20,16 +20,18 @@ import SwiftUI
 /// search, a scrolled notifications list) while ALSO not building a tab until
 /// it is first opened — a `ZStack` of all four would keep them alive by
 /// running all four `.task`s at launch, and a bare `switch` would throw the
-/// state away on every switch. Its own bar is hidden with
-/// `.toolbar(.hidden, for: .tabBar)` applied to each tab's stack (the
-/// modifier hides the bar of the tab view the modified content belongs to),
-/// because the design's center slot is a create FAB, which no `TabView` bar
-/// can express.
+/// state away on every switch.
 ///
-/// Nothing nests: the tab bar is a `safeAreaInset` OUTSIDE the stacks, and
-/// each stack is top-level inside its tab — the failure `RootScene`'s doc
-/// comment records (a `NavigationStack` inside a pushed destination pushes
-/// once, pops itself, and desyncs the path binding) cannot occur here.
+/// The bar is the system's own. The design's five-slot bar puts create in the
+/// centre, which a `TabView` bar cannot express — tabs are destinations with
+/// selection state, create is an action — so create is a floating button
+/// beside the bar (`CrowiCreateButton`) and everything else the bar does is
+/// the OS's.
+///
+/// Nothing nests: each stack is top-level inside its tab — the failure
+/// `RootScene`'s doc comment records (a `NavigationStack` inside a pushed
+/// destination pushes once, pops itself, and desyncs the path binding) cannot
+/// occur here.
 ///
 /// ## Why this view exists instead of more `@State` on `WorkspaceHomeView`
 ///
@@ -124,15 +126,19 @@ struct WorkspaceTabsView: View {
                 }
                 .navigationDestination(for: ReadDestination.self) { destination in
                     ReadDestinationView(destination: destination, session: session, onSelect: { open($0, in: tab) })
-                        // The design replaces the bar with the page's own
-                        // bottom controls (`isTabbar: view !== 'page'`).
-                        // Hidden on the DESTINATION rather than on the stack:
-                        // hiding it stack-wide is what the app used to do to
-                        // make room for a hand-drawn bar, and it would now
-                        // hide the system's bar on the tab roots too.
-                        .toolbar(.hidden, for: .tabBar)
                 }
         }
+        // The design replaces the bar with the page's own bottom controls
+        // (`isTabbar: view !== 'page'`), so it is hidden for as long as this
+        // tab is anywhere but its root.
+        //
+        // Driven by the PATH rather than declared inside the destination: a
+        // destination's toolbar preference only reaches the tab view once the
+        // destination itself has settled, which on a pop is after the
+        // transition — the bar then arrived late enough to shove the create
+        // button up under a list that had already finished drawing. The path
+        // changes when the pop starts, so the bar travels with it.
+        .toolbar(navigation[tab].isEmpty ? .visible : .hidden, for: .tabBar)
     }
 
     @ViewBuilder
@@ -224,3 +230,4 @@ private struct SessionBadgedTab<Content: View>: View {
         content.badge(session.unreadNotificationCount)
     }
 }
+
