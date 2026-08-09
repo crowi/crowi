@@ -115,7 +115,9 @@ docker compose up -d
 cp .env.example .env
 # Edit MONGO_URI / REDIS_URL / PASSWORD_SEED / CROWI_ENCRYPTION_KEY etc.
 
-# 4. Run everything (api on :4301, web on :4302, plugins compiled in watch mode)
+# 4. Run everything (api on :4301, web on :4302). Workspace libs/plugins are
+#    built ONCE up front (turbo-cached); only api, web and api-contract stay
+#    under a live watch — see the note below to watch a specific one back.
 pnpm dev
 ```
 
@@ -125,6 +127,18 @@ Other targeted scripts:
 pnpm dev:api       # just the API + plugins (no Next.js)
 pnpm dev:web       # just the Next.js frontend
 pnpm dev:site      # crowi.wiki LP + docs (port 4303)
+```
+
+`pnpm dev` keeps only `@crowi/api` (tsx), `@crowi/web` (next) and
+`@crowi/api-contract` under a persistent watch — api-contract JS-only, since its
+`.d.ts` rollup worker alone holds several GiB resident. Every other library /
+plugin is compiled once at startup. When you're editing one of them, watch it
+back with `--watch` (repeatable; short or scoped name):
+
+```bash
+pnpm dev --watch plugin-slack           # or @crowi/plugin-slack
+pnpm dev --watch collab --watch runner  # repeatable
+pnpm dev --watch @crowi/api-contract    # also regenerates its .d.ts live
 ```
 
 ## Environment variables
