@@ -327,16 +327,17 @@ struct PageReaderView: View {
     /// An icon beside its count — the design's `♡ 3`, as a toolbar item's
     /// label.
     ///
-    /// `.titleAndIcon` is load-bearing: a toolbar collapses a `Label` to its
-    /// ICON by default, silently dropping the number. These counts are values
-    /// the page is showing, not decoration on a button.
+    /// Composed by hand rather than as a `Label`: a toolbar renders a `Label`
+    /// icon-only and overrides `.labelStyle(.titleAndIcon)` asked for on it,
+    /// which drops the number entirely. These counts are values the page is
+    /// showing, not decoration on a button, so the number has to survive.
     private func countLabel(_ title: String, systemImage: String, count: Int) -> some View {
-        Label {
-            Text(count, format: .number)
-        } icon: {
+        HStack(spacing: 3) {
             Image(systemName: systemImage)
+            Text(count, format: .number)
+                .font(.footnote.weight(.semibold))
         }
-        .labelStyle(.titleAndIcon)
+        .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(title), \(count)")
     }
 

@@ -99,10 +99,18 @@ public struct CrowiCommentComposer: View {
         self.onSend = onSend
     }
 
-    /// Whether there is anything to post — the send button's gate, and the
-    /// caller's too (it decides whether a tap does any work).
+    /// Whether the field holds something worth sending. Separate from
+    /// `canSend` because the two answer different questions: this one decides
+    /// whether the send button EXISTS, `canSend` whether it is enabled — and
+    /// a button that vanished mid-post would be worse than a dim one.
+    public static func hasContent(text: String) -> Bool {
+        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// Whether a send would do any work — the button's enabled state, and the
+    /// caller's own guard against a stale tap.
     public static func canSend(text: String, isPosting: Bool) -> Bool {
-        !isPosting && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        !isPosting && hasContent(text: text)
     }
 
     public var body: some View {
@@ -114,11 +122,9 @@ public struct CrowiCommentComposer: View {
                 initialsSource: authorName
             )
             field
-            if Self.canSend(text: text, isPosting: true) || isPosting {
-                // `canSend(isPosting: true)` asks only "is there text" — the
-                // button APPEARS as soon as something is typed and stays put
-                // while the post is in flight (it is disabled, not removed;
-                // a control that vanishes mid-tap is worse than a dim one).
+            // Appears as soon as something is typed, and stays put while the
+            // post is in flight — disabled, not removed.
+            if Self.hasContent(text: text) || isPosting {
                 sendButton
             }
         }

@@ -334,6 +334,25 @@ final class CrowiDesignSystemTests: XCTestCase {
         XCTAssertFalse(CrowiCommentComposer.canSend(text: "LGTM", isPosting: true), "a post already in flight owns the text")
     }
 
+    /// Whether the button EXISTS is a different question from whether it is
+    /// enabled, and conflating them is how the button came to appear only
+    /// while a post was in flight — i.e. never, in the state a user is
+    /// actually in. `hasContent` ignores the in-flight flag by construction.
+    func testTheSendButtonAppearsOnTypingAndStaysWhilePosting() {
+        XCTAssertFalse(CrowiCommentComposer.hasContent(text: ""))
+        XCTAssertFalse(CrowiCommentComposer.hasContent(text: "   \n\t "))
+        XCTAssertTrue(CrowiCommentComposer.hasContent(text: "LGTM"))
+
+        // The visibility rule the composer applies, spelled out: typed text
+        // shows the button whether or not a post is running.
+        for isPosting in [true, false] {
+            XCTAssertTrue(
+                CrowiCommentComposer.hasContent(text: "LGTM") || isPosting,
+                "typed text must show the button (isPosting: \(isPosting))"
+            )
+        }
+    }
+
     // MARK: - Tap targets
 
     /// Every tappable row must clear 44pt, at the default text size and at
