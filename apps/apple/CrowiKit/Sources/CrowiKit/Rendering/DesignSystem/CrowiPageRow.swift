@@ -17,6 +17,9 @@ public struct CrowiPageRow: View {
     private let lastUpdatedAt: String?
     private let updaterName: String?
     private let updaterImage: String?
+    /// Seeds the generated avatar (`WorkspaceAvatarView`) — a display name
+    /// would give the same person a different face than the web draws.
+    private let updaterUsername: String?
     private let likeCount: Int
     private let commentCount: Int
     private let loader: any WorkspaceImageFetching
@@ -29,6 +32,7 @@ public struct CrowiPageRow: View {
         lastUpdatedAt: String?,
         updaterName: String?,
         updaterImage: String?,
+        updaterUsername: String? = nil,
         likeCount: Int = 0,
         commentCount: Int = 0,
         loader: any WorkspaceImageFetching
@@ -37,6 +41,7 @@ public struct CrowiPageRow: View {
         self.lastUpdatedAt = lastUpdatedAt
         self.updaterName = updaterName
         self.updaterImage = updaterImage
+        self.updaterUsername = updaterUsername
         self.likeCount = likeCount
         self.commentCount = commentCount
         self.loader = loader
@@ -61,7 +66,7 @@ public struct CrowiPageRow: View {
                     imageURLString: updaterImage,
                     loader: loader,
                     size: avatarSize,
-                    initialsSource: updaterName
+                    seed: updaterUsername ?? updaterName
                 )
             }
         } content: {

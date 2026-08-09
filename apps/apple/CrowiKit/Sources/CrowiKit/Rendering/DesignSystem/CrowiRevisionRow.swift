@@ -53,6 +53,9 @@ public struct CrowiRowChipLabel: View {
 /// own history shows for token-authored revisions.
 public struct CrowiRevisionRow: View {
     private let name: String
+    /// Seeds the generated avatar (`WorkspaceAvatarView`) — a display name
+    /// would give the same person a different face than the web draws.
+    private let username: String?
     private let imageURLString: String?
     private let relativeTime: String?
     private let isCurrent: Bool
@@ -63,6 +66,7 @@ public struct CrowiRevisionRow: View {
 
     public init(
         name: String,
+        username: String? = nil,
         imageURLString: String?,
         relativeTime: String?,
         isCurrent: Bool,
@@ -70,6 +74,7 @@ public struct CrowiRevisionRow: View {
         loader: any WorkspaceImageFetching
     ) {
         self.name = name
+        self.username = username
         self.imageURLString = imageURLString
         self.relativeTime = relativeTime
         self.isCurrent = isCurrent
@@ -83,7 +88,7 @@ public struct CrowiRevisionRow: View {
                 imageURLString: imageURLString,
                 loader: loader,
                 size: avatarSize,
-                initialsSource: name
+                seed: username ?? name
             )
         } content: {
             VStack(alignment: .leading, spacing: CrowiMetrics.rowLineSpacing) {

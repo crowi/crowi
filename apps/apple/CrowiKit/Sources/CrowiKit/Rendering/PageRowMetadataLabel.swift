@@ -25,6 +25,9 @@ public struct PageRowMetadataLabel: View {
     private let lastUpdatedAt: String?
     private let updaterName: String?
     private let updaterImage: String?
+    /// Seeds the generated avatar (`WorkspaceAvatarView`) — a display name
+    /// would give the same person a different face than the web draws.
+    private let updaterUsername: String?
     private let loader: any WorkspaceImageFetching
     private let showsAvatar: Bool
 
@@ -32,12 +35,14 @@ public struct PageRowMetadataLabel: View {
         lastUpdatedAt: String?,
         updaterName: String?,
         updaterImage: String?,
+        updaterUsername: String? = nil,
         loader: any WorkspaceImageFetching,
         showsAvatar: Bool = true
     ) {
         self.lastUpdatedAt = lastUpdatedAt
         self.updaterName = updaterName
         self.updaterImage = updaterImage
+        self.updaterUsername = updaterUsername
         self.loader = loader
         self.showsAvatar = showsAvatar
     }
@@ -73,7 +78,7 @@ public struct PageRowMetadataLabel: View {
         if Self.hasMetadata(hasUpdater: hasUpdater, relativeTime: relativeTime) {
             HStack(spacing: 5) {
                 if showsAvatar, hasUpdater {
-                    WorkspaceAvatarView(imageURLString: updaterImage, loader: loader, size: 14, initialsSource: updaterName)
+                    WorkspaceAvatarView(imageURLString: updaterImage, loader: loader, size: 14, seed: updaterUsername ?? updaterName)
                 }
                 if let text = Self.metadataText(updaterName: updaterName, relativeTime: relativeTime) {
                     Text(text)

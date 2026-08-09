@@ -14,6 +14,9 @@ import SwiftUI
 /// tell a fresh comment from a year-old one.
 public struct CrowiCommentRow: View {
     private let authorName: String
+    /// Seeds the generated avatar (`WorkspaceAvatarView`) — a display name
+    /// would give the same person a different face than the web draws.
+    private let authorUsername: String?
     private let authorImageURLString: String?
     private let relativeTime: String?
     private let text: String
@@ -21,12 +24,14 @@ public struct CrowiCommentRow: View {
 
     public init(
         authorName: String,
+        authorUsername: String? = nil,
         authorImageURLString: String?,
         relativeTime: String?,
         text: String,
         loader: any WorkspaceImageFetching
     ) {
         self.authorName = authorName
+        self.authorUsername = authorUsername
         self.authorImageURLString = authorImageURLString
         self.relativeTime = relativeTime
         self.text = text
@@ -39,7 +44,7 @@ public struct CrowiCommentRow: View {
                 imageURLString: authorImageURLString,
                 loader: loader,
                 size: CrowiMetrics.commentAvatarSize,
-                initialsSource: authorName
+                seed: authorUsername ?? authorName
             )
             VStack(alignment: .leading, spacing: CrowiMetrics.commentBylineSpacing) {
                 byline
@@ -79,6 +84,9 @@ public struct CrowiCommentComposer: View {
     @Binding private var text: String
     private let authorImageURLString: String?
     private let authorName: String?
+    /// Seeds the generated avatar (`WorkspaceAvatarView`) — a display name
+    /// would give the same person a different face than the web draws.
+    private let authorUsername: String?
     private let isPosting: Bool
     private let loader: any WorkspaceImageFetching
     private let onSend: () -> Void
@@ -87,6 +95,7 @@ public struct CrowiCommentComposer: View {
         text: Binding<String>,
         authorImageURLString: String?,
         authorName: String?,
+        authorUsername: String? = nil,
         isPosting: Bool,
         loader: any WorkspaceImageFetching,
         onSend: @escaping () -> Void
@@ -94,6 +103,7 @@ public struct CrowiCommentComposer: View {
         _text = text
         self.authorImageURLString = authorImageURLString
         self.authorName = authorName
+        self.authorUsername = authorUsername
         self.isPosting = isPosting
         self.loader = loader
         self.onSend = onSend
@@ -119,7 +129,7 @@ public struct CrowiCommentComposer: View {
                 imageURLString: authorImageURLString,
                 loader: loader,
                 size: CrowiMetrics.composerAvatarSize,
-                initialsSource: authorName
+                seed: authorUsername ?? authorName
             )
             field
             // Appears as soon as something is typed, and stays put while the

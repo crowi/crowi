@@ -18,6 +18,9 @@ import SwiftUI
 public struct CrowiPageHeader: View {
     private let path: String
     private let updaterName: String?
+    /// Seeds the generated avatar (`WorkspaceAvatarView`) — a display name
+    /// would give the same person a different face than the web draws.
+    private let updaterUsername: String?
     private let updaterImage: String?
     private let updatedAt: String?
     private let seenCount: Int
@@ -30,6 +33,7 @@ public struct CrowiPageHeader: View {
     public init(
         path: String,
         updaterName: String?,
+        updaterUsername: String? = nil,
         updaterImage: String?,
         updatedAt: String?,
         seenCount: Int,
@@ -39,6 +43,7 @@ public struct CrowiPageHeader: View {
     ) {
         self.path = path
         self.updaterName = updaterName
+        self.updaterUsername = updaterUsername
         self.updaterImage = updaterImage
         self.updatedAt = updatedAt
         self.seenCount = seenCount
@@ -152,7 +157,7 @@ public struct CrowiPageHeader: View {
                     imageURLString: updaterImage,
                     loader: loader,
                     size: avatarSize,
-                    initialsSource: updaterName
+                    seed: updaterUsername ?? updaterName
                 )
             }
             if let bylineText {

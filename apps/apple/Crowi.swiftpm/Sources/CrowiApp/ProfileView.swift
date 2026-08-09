@@ -100,7 +100,7 @@ struct ProfileView: View {
                 imageURLString: displayImage,
                 loader: session.imageCache,
                 size: CrowiMetrics.profileAvatarSize,
-                initialsSource: displayName ?? displayUsername
+                seed: displayUsername ?? displayName
             )
             VStack(alignment: .leading, spacing: 2) {
                 Text(displayName ?? displayUsername ?? "")

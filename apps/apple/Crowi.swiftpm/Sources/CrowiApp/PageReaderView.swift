@@ -48,6 +48,7 @@ struct PageReaderView: View {
     /// costs no extra request.
     @State private var myProfileImage: String?
     @State private var myProfileName: String?
+    @State private var myProfileUsername: String?
     @State private var engagement: PageEngagementModel?
     @State private var comments: [CommentLenient] = []
     @State private var backlinks: [BacklinkLenient] = []
@@ -193,6 +194,7 @@ struct PageReaderView: View {
         CrowiPageHeader(
             path: page.path,
             updaterName: page.lastUpdateUserName,
+            updaterUsername: page.lastUpdateUserUsername,
             updaterImage: page.lastUpdateUserImage,
             updatedAt: page.updatedAt,
             // The seen count the inline engagement bar used to show, with the
@@ -410,6 +412,7 @@ struct PageReaderView: View {
             ForEach(comments) { comment in
                 CrowiCommentRow(
                     authorName: comment.creatorName ?? comment.creatorUsername ?? "Unknown",
+                    authorUsername: comment.creatorUsername,
                     authorImageURLString: comment.creatorImage,
                     relativeTime: PageRowMetadataLabel.relativeTimeText(from: comment.createdAt),
                     text: comment.comment,
@@ -422,7 +425,8 @@ struct PageReaderView: View {
                     pageId: page.id,
                     revisionId: revisionId,
                     authorImageURLString: myProfileImage,
-                    authorName: myProfileName
+                    authorName: myProfileName,
+                    authorUsername: myProfileUsername
                 ) {
                     comments = (try? await fetchAndCacheComments(pageId: page.id)) ?? comments
                 }
@@ -485,6 +489,7 @@ struct PageReaderView: View {
             myProfileId = profile?.id
             myProfileImage = profile?.image
             myProfileName = profile?.name ?? profile?.username
+            myProfileUsername = profile?.username
             let isBookmarked = (await bookmarkFetch)?.isBookmarked ?? false
             let isWatching = (await watchFetch) ?? false
             comments = (await commentsFetch) ?? []

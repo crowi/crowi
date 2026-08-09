@@ -61,6 +61,7 @@ struct RevisionHistoryView: View {
                             } label: {
                                 CrowiRevisionRow(
                                     name: revision.displayName ?? "Unknown",
+                                    username: revision.authorUsername,
                                     imageURLString: revision.authorImage,
                                     relativeTime: PageRowMetadataLabel.relativeTimeText(from: revision.createdAt),
                                     isCurrent: revision.revisionId == revisions.first?.revisionId,

@@ -84,6 +84,9 @@ public struct PageLenient: Sendable, Equatable {
     /// missing field degrades both to `nil`.
     public let lastUpdateUserName: String?
     public let lastUpdateUserImage: String?
+    /// The generated-avatar seed. Optional like every other field added after
+    /// this type was already being cached as JSON.
+    public let lastUpdateUserUsername: String?
 
     /// `true` when this row's `revision` is either absent or a bare id with
     /// no `body` — the §8 signal that a detail `GET` is required before the
@@ -120,6 +123,7 @@ public struct PageLenient: Sendable, Equatable {
         updatedAt: String?,
         liker: [String]?,
         lastUpdateUserName: String? = nil,
+        lastUpdateUserUsername: String? = nil,
         lastUpdateUserImage: String? = nil
     ) {
         self.id = id
@@ -132,6 +136,7 @@ public struct PageLenient: Sendable, Equatable {
         self.updatedAt = updatedAt
         self.liker = liker
         self.lastUpdateUserName = lastUpdateUserName
+        self.lastUpdateUserUsername = lastUpdateUserUsername
         self.lastUpdateUserImage = lastUpdateUserImage
     }
 
@@ -149,6 +154,7 @@ public struct PageLenient: Sendable, Equatable {
             updatedAt: object["updatedAt"] as? String,
             liker: object["liker"] as? [String],
             lastUpdateUserName: lastUpdateUser?["name"] as? String,
+            lastUpdateUserUsername: lastUpdateUser?["username"] as? String,
             lastUpdateUserImage: lastUpdateUser?["image"] as? String
         )
     }
@@ -267,11 +273,12 @@ public struct PageChildSegmentLenient: Sendable, Equatable, Codable {
     /// keep decoding unchanged — synthesized `Codable` uses `decodeIfPresent`
     /// for optionals, so no `WorkspaceReadCacheSchema.schemaVersion` bump.
     public let lastUpdatedAt: String?
-    /// `updater.name` / `updater.image` flattened (the `CommentLenient`
-    /// creator pattern) — `nil` when the server can't resolve the updater
-    /// (deleted user, legacy rows) or predates the extension.
+    /// `updater.name` / `updater.image` / `updater.username` flattened (the
+    /// `CommentLenient` creator pattern) — `nil` when the server can't resolve
+    /// the updater (deleted user, legacy rows) or predates the extension.
     public let updaterName: String?
     public let updaterImage: String?
+    public let updaterUsername: String?
 }
 
 public struct ListPageChildrenResponseLenient: Sendable, Equatable {
@@ -293,7 +300,8 @@ public struct ListPageChildrenResponseLenient: Sendable, Equatable {
                 count: dict["count"] as? Int ?? 0,
                 lastUpdatedAt: dict["lastUpdatedAt"] as? String,
                 updaterName: updater?["name"] as? String,
-                updaterImage: updater?["image"] as? String
+                updaterImage: updater?["image"] as? String,
+                updaterUsername: updater?["username"] as? String
             )
         }
         return ListPageChildrenResponseLenient(children: children)

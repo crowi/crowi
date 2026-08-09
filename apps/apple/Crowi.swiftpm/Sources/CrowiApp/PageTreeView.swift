@@ -185,6 +185,7 @@ struct PageTreeView: View {
                     lastUpdatedAt: child.lastUpdatedAt,
                     updaterName: child.updaterName,
                     updaterImage: child.updaterImage,
+                    updaterUsername: child.updaterUsername,
                     loader: session.imageCache
                 )
             }

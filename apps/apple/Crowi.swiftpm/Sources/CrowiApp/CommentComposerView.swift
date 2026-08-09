@@ -17,6 +17,7 @@ struct CommentComposerView: View {
     /// The signed-in user's avatar/name for the composer's leading disc.
     let authorImageURLString: String?
     let authorName: String?
+    let authorUsername: String?
     /// The reader's own comments refresh (`fetchAndCacheComments`).
     let onPosted: () async -> Void
 
@@ -30,6 +31,7 @@ struct CommentComposerView: View {
                 text: $text,
                 authorImageURLString: authorImageURLString,
                 authorName: authorName,
+                authorUsername: authorUsername,
                 isPosting: isPosting,
                 loader: session.imageCache,
                 onSend: { Task { await post() } }

@@ -150,7 +150,7 @@ struct NotificationsView: View {
                 imageURLString: notification.actionUsers.first?.image,
                 loader: session.imageCache,
                 size: CrowiMetrics.leadingChipSize,
-                initialsSource: notification.actionUsers.first?.displayName
+                seed: notification.actionUsers.first?.username ?? notification.actionUsers.first?.displayName
             )
             VStack(alignment: .leading, spacing: CrowiMetrics.rowLineSpacing) {
                 (
