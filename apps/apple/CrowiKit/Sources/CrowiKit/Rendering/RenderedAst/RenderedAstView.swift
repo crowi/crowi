@@ -21,8 +21,11 @@ import SwiftUI
 ///   - `#fragment` links → `onNavigateToFragment` (heading anchors — every
 ///     heading carries `.id(RenderedAstView.anchorID(...))` from its
 ///     server-issued `data.hProperties.id`);
-///   - absolute URLs pass §6.2's `SchemeAllowlist` before reaching the
-///     system (`mailto:`/custom schemes stay inert — OQ-9 pin).
+///   - an absolute URL to the workspace's OWN origin is the same link as the
+///     relative one (`WorkspaceLinkRouter`) and stays in the app — a share
+///     URL's page id through `onNavigateToPageId`, anything else as a path;
+///   - every other absolute URL passes §6.2's `SchemeAllowlist` before
+///     reaching the system (`mailto:`/custom schemes stay inert — OQ-9 pin).
 ///
 /// `rendererVersion` is deliberately NOWHERE in this file (nor in the
 /// decoder): it is diagnostics-only and never a rendering switch.
@@ -31,10 +34,13 @@ public struct RenderedAstView: View {
     let onNavigateToWikiLink: (String) -> Void
     let onNavigateToMention: (String) -> Void
     let onNavigateToRelativePath: (String) -> Void
+    /// Absent where the host cannot resolve a share URL's id; such a link
+    /// then goes to the browser rather than nowhere.
+    let onNavigateToPageId: ((String) -> Void)?
     let onNavigateToFragment: ((String) -> Void)?
     let imageViewer: ImageViewerConfiguration?
     private let imageLoader: any WorkspaceImageFetching
-    private let imageBaseURL: URL
+    private let workspaceOrigin: URL
     private let definitions: [String: RenderedAstDefinition]
 
     @State private var viewerItem: ImageViewerItem?
@@ -42,19 +48,21 @@ public struct RenderedAstView: View {
     public init(
         document: RenderedAstDocument,
         imageLoader: any WorkspaceImageFetching,
-        imageBaseURL: URL,
+        workspaceOrigin: URL,
         onNavigateToWikiLink: @escaping (String) -> Void,
         onNavigateToMention: @escaping (String) -> Void,
         onNavigateToRelativePath: @escaping (String) -> Void,
+        onNavigateToPageId: ((String) -> Void)? = nil,
         onNavigateToFragment: ((String) -> Void)? = nil,
         imageViewer: ImageViewerConfiguration? = nil
     ) {
         self.document = document
         self.imageLoader = imageLoader
-        self.imageBaseURL = imageBaseURL
+        self.workspaceOrigin = workspaceOrigin
         self.onNavigateToWikiLink = onNavigateToWikiLink
         self.onNavigateToMention = onNavigateToMention
         self.onNavigateToRelativePath = onNavigateToRelativePath
+        self.onNavigateToPageId = onNavigateToPageId
         self.onNavigateToFragment = onNavigateToFragment
         self.imageViewer = imageViewer
         self.definitions = document.definitions
@@ -90,7 +98,7 @@ public struct RenderedAstView: View {
     private var renderContext: RenderedAstRenderContext {
         RenderedAstRenderContext(
             imageLoader: imageLoader,
-            imageBaseURL: imageBaseURL,
+            imageBaseURL: workspaceOrigin,
             definitions: definitions,
             onImageTap: imageTapHandler
         )
@@ -139,10 +147,25 @@ public struct RenderedAstView: View {
                     }
                     return .discarded
                 }
-                onNavigateToRelativePath(raw.removingPercentEncoding ?? raw)
+                let path = raw.removingPercentEncoding ?? raw
+                if case .pageId(let id) = WorkspaceLinkRouter.internalLink(forPath: path), let onNavigateToPageId {
+                    onNavigateToPageId(id)
+                    return .handled
+                }
+                onNavigateToRelativePath(path)
                 return .handled
             }
-            return .systemAction
+            switch WorkspaceLinkRouter.internalLink(for: externalURL, workspaceOrigin: workspaceOrigin) {
+            case .pagePath(let path):
+                onNavigateToRelativePath(path)
+                return .handled
+            case .pageId(let id):
+                guard let onNavigateToPageId else { return .systemAction }
+                onNavigateToPageId(id)
+                return .handled
+            case nil:
+                return .systemAction
+            }
         }
     }
 }

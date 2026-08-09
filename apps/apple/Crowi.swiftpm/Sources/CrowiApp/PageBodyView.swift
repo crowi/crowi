@@ -44,10 +44,11 @@ struct PageBodyView: View {
             RenderedAstView(
                 document: document,
                 imageLoader: session.imageCache,
-                imageBaseURL: session.context.workspace.workspaceOrigin.baseURL,
+                workspaceOrigin: session.context.workspace.workspaceOrigin.baseURL,
                 onNavigateToWikiLink: { target in onSelectDestination(.page(path: target)) },
                 onNavigateToMention: { username in onSelectDestination(.profile(username: username)) },
                 onNavigateToRelativePath: { target in onSelectDestination(.page(path: target)) },
+                onNavigateToPageId: { pageId in onSelectDestination(.pageById(pageId)) },
                 onNavigateToFragment: onNavigateToFragment,
                 imageViewer: viewer
             )
@@ -55,10 +56,11 @@ struct PageBodyView: View {
             WorkspacePageMarkdownView(
                 rawBody: rawBody,
                 imageLoader: session.imageCache,
-                imageBaseURL: session.context.workspace.workspaceOrigin.baseURL,
+                workspaceOrigin: session.context.workspace.workspaceOrigin.baseURL,
                 onNavigateToWikiLink: { target in onSelectDestination(.page(path: target)) },
                 onNavigateToMention: { username in onSelectDestination(.profile(username: username)) },
                 onNavigateToRelativePath: { target in onSelectDestination(.page(path: target)) },
+                onNavigateToPageId: { pageId in onSelectDestination(.pageById(pageId)) },
                 imageViewer: viewer
             )
         }

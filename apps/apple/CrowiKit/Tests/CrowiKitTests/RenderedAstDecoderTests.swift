@@ -478,7 +478,7 @@ final class RenderedAstDecoderTests: XCTestCase {
         let view = RenderedAstView(
             document: document,
             imageLoader: StubImageFetcher(),
-            imageBaseURL: URL(string: "https://wiki.example.com")!,
+            workspaceOrigin: URL(string: "https://wiki.example.com")!,
             onNavigateToWikiLink: { _ in },
             onNavigateToMention: { _ in },
             onNavigateToRelativePath: { _ in }
@@ -539,7 +539,7 @@ final class RenderedAstDecoderTests: XCTestCase {
         let view = RenderedAstView(
             document: document,
             imageLoader: StubImageFetcher(),
-            imageBaseURL: URL(string: "https://wiki.example.com")!,
+            workspaceOrigin: URL(string: "https://wiki.example.com")!,
             onNavigateToWikiLink: { _ in },
             onNavigateToMention: { _ in },
             onNavigateToRelativePath: { _ in }

@@ -65,15 +65,18 @@ public struct WorkspacePageMarkdownView: View {
     /// The active workspace's origin (scheme+host+port, §3) — passed through
     /// to `Markdown(...)`'s `imageBaseURL:` so relative image URLs resolve
     /// the same way for both the block and inline image paths.
-    let imageBaseURL: URL
+    let workspaceOrigin: URL
     let onNavigateToWikiLink: (String) -> Void
     let onNavigateToMention: (String) -> Void
     /// An ordinary (non-wikilink, non-mention) workspace-relative Markdown
     /// link, e.g. `[text](/some/page)` — also routed in-app, since it is
-    /// just as much "workspace content" as a wikilink; only a real
-    /// absolute `http(s)` URL falls through to the system default (open
-    /// externally).
+    /// just as much "workspace content" as a wikilink. An absolute URL to
+    /// the workspace's own origin arrives here too (`WorkspaceLinkRouter`);
+    /// only a link to somewhere else falls through to the system.
     let onNavigateToRelativePath: (String) -> Void
+    /// Absent where the host cannot resolve a share URL's id; such a link
+    /// then goes to the browser rather than nowhere.
+    var onNavigateToPageId: ((String) -> Void)?
     /// `feature-ios-image-viewer` — non-nil makes successfully-decoded BLOCK
     /// images tappable, presenting `ImageViewerView` fullscreen (original
     /// bytes via the configuration's resolver; canonical fallback). `nil`
@@ -93,18 +96,20 @@ public struct WorkspacePageMarkdownView: View {
     public init(
         rawBody: String,
         imageLoader: any WorkspaceImageFetching,
-        imageBaseURL: URL,
+        workspaceOrigin: URL,
         onNavigateToWikiLink: @escaping (String) -> Void,
         onNavigateToMention: @escaping (String) -> Void,
         onNavigateToRelativePath: @escaping (String) -> Void,
+        onNavigateToPageId: ((String) -> Void)? = nil,
         imageViewer: ImageViewerConfiguration? = nil
     ) {
         self.rawBody = rawBody
         self.imageLoader = imageLoader
-        self.imageBaseURL = imageBaseURL
+        self.workspaceOrigin = workspaceOrigin
         self.onNavigateToWikiLink = onNavigateToWikiLink
         self.onNavigateToMention = onNavigateToMention
         self.onNavigateToRelativePath = onNavigateToRelativePath
+        self.onNavigateToPageId = onNavigateToPageId
         self.imageViewer = imageViewer
     }
 
@@ -156,7 +161,7 @@ public struct WorkspacePageMarkdownView: View {
             WikiLinkMentionPreprocessor.preprocess(
                 ImageAttributeBlockPreprocessor.stripAndCarry(
                     NestedListDepthClampPreprocessor.clamp(rawBody))),
-            imageBaseURL: imageBaseURL
+            imageBaseURL: workspaceOrigin
         )
             // Crowi renders a single newline as a line break — that is a CORE
             // pipeline default, not an opt-in plugin: RFC-0002 Phase 5 promoted
@@ -206,10 +211,25 @@ public struct WorkspacePageMarkdownView: View {
                         guard externalURL.scheme != nil else {
                             // A workspace-relative real Markdown link — also
                             // in-app navigation, not a system open.
-                            onNavigateToRelativePath(externalURL.relativeString)
+                            let path = externalURL.relativeString
+                            if case .pageId(let id) = WorkspaceLinkRouter.internalLink(forPath: path), let onNavigateToPageId {
+                                onNavigateToPageId(id)
+                                return .handled
+                            }
+                            onNavigateToRelativePath(path)
                             return .handled
                         }
-                        return .systemAction
+                        switch WorkspaceLinkRouter.internalLink(for: externalURL, workspaceOrigin: workspaceOrigin) {
+                        case .pagePath(let path):
+                            onNavigateToRelativePath(path)
+                            return .handled
+                        case .pageId(let id):
+                            guard let onNavigateToPageId else { return .systemAction }
+                            onNavigateToPageId(id)
+                            return .handled
+                        case nil:
+                            return .systemAction
+                        }
                     }
                 }
             )

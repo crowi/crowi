@@ -73,7 +73,7 @@ final class DeepListLayoutWallTimeTests: XCTestCase {
         let view = RenderedAstView(
             document: document,
             imageLoader: StubImageFetcher(),
-            imageBaseURL: URL(string: "https://example.com")!,
+            workspaceOrigin: URL(string: "https://example.com")!,
             onNavigateToWikiLink: { _ in },
             onNavigateToMention: { _ in },
             onNavigateToRelativePath: { _ in }
@@ -105,7 +105,7 @@ final class DeepListLayoutWallTimeTests: XCTestCase {
         let view = WorkspacePageMarkdownView(
             rawBody: lines.joined(separator: "\n"),
             imageLoader: StubImageFetcher(),
-            imageBaseURL: URL(string: "https://example.com")!,
+            workspaceOrigin: URL(string: "https://example.com")!,
             onNavigateToWikiLink: { _ in },
             onNavigateToMention: { _ in },
             onNavigateToRelativePath: { _ in }

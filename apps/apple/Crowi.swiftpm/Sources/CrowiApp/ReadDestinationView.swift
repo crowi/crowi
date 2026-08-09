@@ -23,6 +23,8 @@ struct ReadDestinationView: View {
         switch destination {
         case .page(let path):
             PageReaderView(session: session, path: path, onSelectDestination: onSelect)
+        case .pageById(let pageId):
+            SharedPageLinkView(session: session, pageId: pageId, onSelectDestination: onSelect)
         case .search:
             SearchView(session: session, onSelectDestination: onSelect)
         case .revisionHistory(let pageId, let pagePath):

@@ -285,7 +285,7 @@ final class CrowiBodyTypographyTests: XCTestCase {
         let view = RenderedAstView(
             document: document,
             imageLoader: StubImageFetcher(),
-            imageBaseURL: URL(string: "https://example.com")!,
+            workspaceOrigin: URL(string: "https://example.com")!,
             onNavigateToWikiLink: { _ in },
             onNavigateToMention: { _ in },
             onNavigateToRelativePath: { _ in }

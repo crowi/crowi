@@ -8,6 +8,10 @@ import Foundation
 /// one place" rule, applied one level down for the read surface itself).
 enum ReadDestination: Hashable {
     case page(path: String)
+    /// A page named by ID — the shape crowi's "copy link" produces, so it is
+    /// how most links between pages arrive. Resolved to a path on landing
+    /// (`SharedPageLinkView`).
+    case pageById(String)
     case search
     case revisionHistory(pageId: String, pagePath: String)
     /// `nil` username = the signed-in user's own profile (`GET /me`).
