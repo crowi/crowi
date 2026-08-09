@@ -97,6 +97,8 @@ is stored in storage and used as your user avatar throughout the app. If
 you delete the image, it falls back to an avatar using the initials of
 your display name.
 
+Accepted formats are PNG, JPEG, GIF, WebP, SVG, BMP, AVIF, APNG and ICO, up to **5MB per file**. Uploading from a browser will essentially never hit that ceiling — the crop dialog downscales the image before it is sent. The cap matters for routes that skip the crop, such as the CLI, curl, or MCP. When one of those declares no `Content-Type`, the type is **inferred from the filename extension**, so omitting the declaration is not by itself grounds for rejection.
+
 ### Password
 
 You can change your login password. For an account that does not have a

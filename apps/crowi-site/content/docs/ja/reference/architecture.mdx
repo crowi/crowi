@@ -30,8 +30,13 @@ crowi/
     ├── plugin-search-{mongo,elasticsearch,opensearch}/
     ├── plugin-mail-{smtp,aws-ses,resend}/
     ├── plugin-renderer-{katex,plantuml,mermaid,crowi-legacy}/
-    ├── admin-cli/           # `crowi-admin` CLI
-    └── tsconfig/            # 共有 tsconfig プリセット
+    ├── plugin-google/        # Google (OIDC) 認証プロバイダ
+    ├── plugin-slack/         # Slack 連携 (ページリンクの unfurl)
+    ├── svg-sanitize/         # プラグイン SDK が使う SVG サニタイザ (内部パッケージ)
+    ├── cli/                  # `crowi` エンドユーザー CLI (@crowi/cli)
+    ├── admin-cli/            # `crowi-admin` CLI
+    ├── e2e/                  # Playwright E2E スイート
+    └── tsconfig/             # 共有 tsconfig プリセット
 ```
 
 3 つの大きな構成要素 — **API** (`packages/api`)、**Web**

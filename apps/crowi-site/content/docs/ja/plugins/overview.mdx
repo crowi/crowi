@@ -43,9 +43,9 @@ Crowi のプラグインは、貢献する拡張ポイントによっておお�
 | ---- | ------------ | -- |
 | ストレージ | `registerStorage` | `@crowi/plugin-storage-local`、`@crowi/plugin-storage-aws-s3` |
 | 検索 | `registerSearch` | `@crowi/plugin-search-mongo`、`@crowi/plugin-search-elasticsearch`、`@crowi/plugin-search-opensearch` |
-| メール | `registerMailer` | `@crowi/plugin-mail-smtp`、`@crowi/plugin-mail-aws-ses`、`@crowi/plugin-mail-resend` |
+| メール | `registerMailSender` | `@crowi/plugin-mail-smtp`、`@crowi/plugin-mail-aws-ses`、`@crowi/plugin-mail-resend` |
 | レンダラ | `registerRenderer` | `@crowi/plugin-renderer-katex` / `-plantuml` / `-mermaid` / `-crowi-legacy` |
-| 認証 | `registerAuth` | (外部 OAuth プロバイダ向け、今後拡充予定) |
+| 認証 | `registerAuth` | `@crowi/plugin-google` (Google での OIDC サインイン) |
 | 通知 / 連携 | `registerNotifier` / `registerRoutes` | `@crowi/plugin-slack` (Slack 連携 — ページリンクの unfurl) |
 | ベース (設定のみ) | (register なし) | `@crowi/plugin-aws` — 後続の AWS 系プラグインに資格情報を共有 |
 | ルート | `registerRoutes` | プラグインの HTTP ルート (受信 Webhook / `@action` ボタン / OAuth コールバック)。`@crowi/plugin-slack` の Slack Events API 受信口などに使われます |
@@ -65,6 +65,7 @@ Crowi モノレポでメンテナンスされているプラグインは次の�
 | 検索 | `mongo` (`@crowi/plugin-search-mongo`)、`elasticsearch` (`@crowi/plugin-search-elasticsearch`)、`opensearch` (`@crowi/plugin-search-opensearch`) |
 | メール | `smtp` (`@crowi/plugin-mail-smtp`)、`ses` (`@crowi/plugin-mail-aws-ses`)、`resend` (`@crowi/plugin-mail-resend`) |
 | レンダラ | `@crowi/plugin-renderer-plantuml` / `-katex` / `-mermaid` / `-crowi-legacy` |
+| 認証 | `@crowi/plugin-google` (Google サインイン — 設定は [外部アカウントでのサインイン](../operations/federated-auth)) |
 | 連携 | `@crowi/plugin-slack` (Slack でのページリンク unfurl — 設定は [Slack 連携](../operations/slack)) |
 | 共有ベース | `@crowi/plugin-aws` (AWS 系プラグインが要求する設定のみの依存) |
 

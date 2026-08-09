@@ -290,9 +290,13 @@ Attachments button and paste, so the message is identical no matter which
 route rejected the file.
 
 > **Note**: `application/octet-stream` (unknown type) is on the allow-list
-> already, so it is accepted as-is. When the OS reports no MIME type at
+> already, so it is accepted. When the OS reports no MIME type at
 > all (an empty string), the file is treated as that unknown type — the
 > same normalisation the server applies — and therefore accepted too.
+> What gets **stored** is not necessarily `application/octet-stream`
+> though: a file that arrives with no usable type has its type filled in
+> from the filename extension by the server (see "Content types on
+> delivery" above).
 
 > **Note**: When the edit screen is in **read-only mode** (the
 > simultaneous-editor cap was reached, or you lack edit permission —
