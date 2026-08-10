@@ -1,5 +1,6 @@
 import type { Extension } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
+import { apiClient } from '@/lib/api-client';
 import { notify } from '@/lib/notify';
 import { runUpload } from './upload-placeholder';
 import { disallowedTypeMessage, isUploadAllowedType } from './upload-policy';
@@ -20,12 +21,19 @@ import { disallowedTypeMessage, isUploadAllowedType } from './upload-policy';
  * Three concerns layered on top of the bare upload:
  *   1. **Visual feedback** — a subtle outline highlights the editor on
  *      `dragenter` and clears immediately on `drop` / `dragleave`.
- *   2. **D&D limits** (RFC §"D&D limits") — at most 5 files per drop,
- *      each ≤ 50 MB, and the unified upload MIME allow-list
- *      (feature-attachment-upload-policy — the SAME allow-list the
- *      attach button / paste share, so a file's fate no longer depends on
- *      which affordance uploaded it). A violated limit aborts that one
- *      file with a toast; other files in the same drop still upload.
+ *   2. **D&D limits** (RFC §"D&D limits") — at most 5 files per drop, each
+ *      ≤ the server's published upload size limit (`classifyFiles` has no
+ *      hard-coded ceiling of its own; it reads `GET
+ *      /attachments/upload-policy` once per editor mount, see
+ *      {@link ensureAttachmentMaxBytesLoaded}. Until that resolves, the
+ *      size check is skipped entirely rather than guessed at — an
+ *      operator-lowered limit must never be silently ignored by a stale
+ *      local number, so the server remains the enforcement backstop for
+ *      that window), and the unified upload MIME allow-list (the SAME
+ *      allow-list the attach button / paste share, so a file's fate does
+ *      not depend on which affordance uploaded it). A violated limit
+ *      aborts that one file with a toast; other files in the same drop
+ *      still upload.
  *   3. **Read-only suppression** (RFC §"Read-only mode") — when the
  *      editor is read-only (RFC-0003 20-editor cap reached, or no edit
  *      permission) drag-and-drop is fully disabled: no highlight, the
@@ -36,16 +44,95 @@ import { disallowedTypeMessage, isUploadAllowedType } from './upload-policy';
  * lives in `upload-policy.ts`, shared with the paste handler.
  */
 
-/** Per-file size ceiling — RFC §"D&D limits". */
-export const DND_MAX_FILE_BYTES = 50 * 1024 * 1024;
+/**
+ * The currently-known per-file size ceiling, kept in sync by
+ * {@link ensureAttachmentMaxBytesLoaded}. `null` means "not yet resolved" —
+ * no successful policy fetch has completed — and is deliberately NOT
+ * treated as "assume the documented default": an operator-lowered
+ * `CROWI_UPLOAD_MAX_BYTES` must never be silently ignored in favour of a
+ * hard-coded number the client merely hopes is still accurate.
+ * {@link classifyFiles} skips the size check entirely while this is `null`,
+ * leaving the server as the authority for that window (a request the
+ * server actually rejects still 413s — this only affects the CLIENT-SIDE
+ * pre-flight UX, not enforcement).
+ */
+let attachmentMaxBytes: number | null = null;
+let policyFetchStarted = false;
+
+/**
+ * Fetch `GET /attachments/upload-policy` and cache `maxBytes.attachment`
+ * for {@link classifyFiles}. Idempotent while in flight: concurrent calls
+ * (e.g. two editors mounting close together) issue only one request. A
+ * failed attempt (network error, non-2xx, an old server predating this
+ * endpoint) leaves {@link attachmentMaxBytes} at `null` — see its doc
+ * comment for why that must not fall back to a guessed number — and
+ * resets the latch so the NEXT call (a later editor mount) retries rather
+ * than giving up for the rest of the page's lifetime. The whole body is
+ * wrapped in a `try` — a synchronous throw (e.g. a test double for
+ * `apiClient` that doesn't implement this route) must degrade exactly like
+ * a failed fetch, never abort editor mounting.
+ */
+function ensureAttachmentMaxBytesLoaded(): void {
+  if (policyFetchStarted) return;
+  policyFetchStarted = true;
+  try {
+    apiClient.attachments['upload-policy']
+      .$get()
+      .then(async (response) => {
+        if (!response.ok) {
+          policyFetchStarted = false;
+          return;
+        }
+        const body = (await response.json()) as { maxBytes?: { attachment?: number } };
+        const attachment = body.maxBytes?.attachment;
+        if (typeof attachment === 'number' && attachment > 0) {
+          attachmentMaxBytes = attachment;
+        } else {
+          policyFetchStarted = false;
+        }
+      })
+      .catch(() => {
+        policyFetchStarted = false;
+      });
+  } catch {
+    policyFetchStarted = false;
+  }
+}
+
+/** Test-only: reset the cached policy value + fetch latch between tests. */
+export function _resetAttachmentMaxBytesForTesting(): void {
+  attachmentMaxBytes = null;
+  policyFetchStarted = false;
+}
+
+/**
+ * Human-readable rendering of a byte count, for the "too large" toast.
+ * Whole-unit rounding reads fine for realistic limits (tens of MB), but
+ * `Math.round` on a value like 1.6 MiB would display "2 MB" — a number the
+ * server would actually reject. `Math.floor` only ever understates the
+ * limit, never overstates it. Picks whichever of B / KB / MB reads as a
+ * non-zero whole number, so an operator-lowered limit under 1 MB doesn't
+ * collapse to a misleading "0 MB".
+ */
+function formatMaxSize(bytes: number): string {
+  const mb = bytes / (1024 * 1024);
+  if (mb >= 1) return `${Math.floor(mb)} MB`;
+  const kb = bytes / 1024;
+  if (kb >= 1) return `${Math.floor(kb)} KB`;
+  return `${bytes} B`;
+}
+
 /** Per-drop file-count ceiling — RFC §"D&D limits". */
 export const DND_MAX_FILES = 5;
 
-/** A file rejected by the allow-list / size cap, with the reason for the toast. */
-export interface RejectedFile {
-  file: File;
-  reason: 'too_large' | 'disallowed_type';
-}
+/**
+ * A file rejected by the allow-list / size cap, with the reason for the
+ * toast. `limitBytes` is only present for `'too_large'` (a discriminated
+ * union, not an optional field on a flat shape) so the caller building the
+ * toast message never needs to null-check a value that, by construction,
+ * always accompanies that reason.
+ */
+export type RejectedFile = { file: File; reason: 'too_large'; limitBytes: number } | { file: File; reason: 'disallowed_type' };
 
 /** Outcome of validating a dropped `FileList` against the D&D limits. */
 export interface ClassifiedDrop {
@@ -58,18 +145,19 @@ export interface ClassifiedDrop {
 }
 
 /**
- * Validate a dropped `FileList` against the D&D limits. Pure: does no
- * uploading. The caller decides — on `tooMany` it aborts the whole drop
- * (RFC: "Drop up to 5 files at a time."); otherwise it uploads
- * `accepted` and toasts each `rejected` file.
+ * Validate a dropped `FileList` against the D&D limits. Pure (reads the
+ * module-level {@link attachmentMaxBytes} cache, but performs no I/O
+ * itself): does no uploading. The caller decides — on `tooMany` it aborts
+ * the whole drop (RFC: "Drop up to 5 files at a time."); otherwise it
+ * uploads `accepted` and toasts each `rejected` file.
  */
 export function classifyFiles(files: File[]): ClassifiedDrop {
   const tooMany = files.length > DND_MAX_FILES;
   const accepted: File[] = [];
   const rejected: RejectedFile[] = [];
   for (const file of files) {
-    if (file.size > DND_MAX_FILE_BYTES) {
-      rejected.push({ file, reason: 'too_large' });
+    if (attachmentMaxBytes !== null && file.size > attachmentMaxBytes) {
+      rejected.push({ file, reason: 'too_large', limitBytes: attachmentMaxBytes });
     } else if (!isUploadAllowedType(file)) {
       rejected.push({ file, reason: 'disallowed_type' });
     } else {
@@ -127,7 +215,7 @@ function isReadOnly(view: EditorView): boolean {
 async function uploadSerially(view: EditorView, files: File[], pageId: string): Promise<void> {
   for (const file of files) {
     const pos = view.state.selection.main.from;
-    await runUpload(view, file, file.name, pos, pageId, 'dnd');
+    await runUpload(view, file, file.name, pos, pageId);
   }
 }
 
@@ -135,9 +223,16 @@ async function uploadSerially(view: EditorView, files: File[], pageId: string): 
  * Build the drag-and-drop CodeMirror extension. Threaded through
  * `buildExtensions({ dnd })` → `extraExtensions`, after `yCollab` so a
  * placeholder insertion / replacement becomes a Yjs delta.
+ *
+ * Kicks off {@link ensureAttachmentMaxBytesLoaded} so the editor's size
+ * ceiling for THIS mount reflects the server's actual policy by the time
+ * the user drops a file (typically well before — the fetch races the
+ * user's first interaction, and `classifyFiles` applies no size gate at
+ * all until it resolves — see that cache's doc comment).
  */
 export function dropHandler(options: DropHandlerOptions): Extension {
   const { pageId } = options;
+  ensureAttachmentMaxBytesLoaded();
 
   return [dndTheme, dndEventHandlers(pageId)];
 }
@@ -196,11 +291,11 @@ function dndEventHandlers(pageId: string): Extension {
       }
 
       // Toast each rejected file by its failure reason.
-      for (const { file, reason } of rejected) {
-        if (reason === 'too_large') {
-          notify.warn(`${file.name} is too large to upload (max 50 MB).`);
+      for (const rejection of rejected) {
+        if (rejection.reason === 'too_large') {
+          notify.warn(`${rejection.file.name} is too large to upload (max ${formatMaxSize(rejection.limitBytes)}).`);
         } else {
-          notify.warn(disallowedTypeMessage(file));
+          notify.warn(disallowedTypeMessage(rejection.file));
         }
       }
 

@@ -2,7 +2,7 @@ import { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type NotifyPayload, setNotifyBackend } from '@/lib/notify';
-import { classifyFiles, DND_ACTIVE_CLASS, DND_MAX_FILE_BYTES, DND_MAX_FILES, dropHandler } from './drop-handler';
+import { _resetAttachmentMaxBytesForTesting, classifyFiles, DND_ACTIVE_CLASS, DND_MAX_FILES, dropHandler } from './drop-handler';
 import { sanitizeFilename } from './upload-placeholder';
 import { isImageFile } from './upload-policy';
 
@@ -11,7 +11,47 @@ import { isImageFile } from './upload-policy';
  * the pure file-classification logic (size cap / count cap / type
  * allow-list), filename sanitisation, the drop DOM-event behaviour
  * (highlight, serial upload, toasts), and read-only suppression.
+ *
+ * AC-8 — `dropHandler()` fetches `GET /attachments/upload-policy` on mount
+ * (via `@/lib/api-client`'s `apiClient`, mocked below) and `classifyFiles`
+ * uses the resolved `maxBytes.attachment` instead of a hard-coded constant.
+ * `apiBaseUrl` / `acquireRefreshedToken` (used for real by `runUpload` →
+ * `sendUpload`, which talks to the upload XHR stub below, NOT `apiClient`)
+ * are kept as their real implementations via `importOriginal`.
  */
+
+const DEFAULT_ATTACHMENT_MAX_BYTES = 50 * 1024 * 1024;
+
+/** Shape of the (mocked) `Response` `ensureAttachmentMaxBytesLoaded` reads. */
+type UploadPolicyFetchResult = { ok: boolean; json: () => Promise<{ maxBytes?: { attachment?: number } }> };
+
+const uploadPolicyGet = vi.fn<() => Promise<UploadPolicyFetchResult>>(async () => ({
+  ok: true,
+  json: async () => ({ maxBytes: { attachment: DEFAULT_ATTACHMENT_MAX_BYTES } }),
+}));
+
+vi.mock('@/lib/api-client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/api-client')>();
+  return {
+    ...actual,
+    apiClient: {
+      attachments: {
+        'upload-policy': { $get: () => uploadPolicyGet() },
+      },
+    },
+  };
+});
+
+/** Flush the microtask queue enough times for `ensureAttachmentMaxBytesLoaded`'s `.then(async ...)` chain to settle. */
+async function flushPolicyFetch(): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+beforeEach(() => {
+  _resetAttachmentMaxBytesForTesting();
+  uploadPolicyGet.mockClear();
+  uploadPolicyGet.mockImplementation(async () => ({ ok: true, json: async () => ({ maxBytes: { attachment: DEFAULT_ATTACHMENT_MAX_BYTES } }) }));
+});
 
 /** Build a `File` of `size` bytes with the given name + MIME type. */
 function makeFile(name: string, type: string, size = 10): File {
@@ -85,11 +125,11 @@ describe('classifyFiles', () => {
     expect(result.rejected).toEqual([{ file: expect.any(File), reason: 'disallowed_type' }]);
   });
 
-  it('rejects a file over the 50 MB per-file cap', () => {
-    const big = makeFile('huge.png', 'image/png', DND_MAX_FILE_BYTES + 1);
+  it('does not reject on size when no upload-policy fetch has resolved yet — the server remains the size backstop rather than a guessed local ceiling', () => {
+    const big = makeFile('huge.png', 'image/png', DEFAULT_ATTACHMENT_MAX_BYTES + 1);
     const result = classifyFiles([big]);
-    expect(result.accepted).toHaveLength(0);
-    expect(result.rejected[0].reason).toBe('too_large');
+    expect(result.accepted).toHaveLength(1);
+    expect(result.rejected).toHaveLength(0);
   });
 
   it('flags tooMany when more than 5 files are dropped', () => {
@@ -269,5 +309,81 @@ describe('dropHandler DOM behaviour', () => {
     expect(view.state.doc.toString()).toBe('start');
     expect(toasts).toHaveLength(1);
     expect(toasts[0].message).toBe("You don't have edit permission for this page.");
+  });
+
+  describe('AC-8 — policy-driven size limit', () => {
+    it('fetches the upload policy on mount', () => {
+      mount();
+      expect(uploadPolicyGet).toHaveBeenCalledTimes(1);
+    });
+
+    it('rejects a file over the server-published limit and accepts one under it, once the policy fetch resolves', async () => {
+      const policyMaxBytes = 3 * 1024 * 1024;
+      uploadPolicyGet.mockImplementation(async () => ({ ok: true, json: async () => ({ maxBytes: { attachment: policyMaxBytes } }) }));
+      mount();
+      await flushPolicyFetch();
+
+      fireDrag('drop', [makeFile('small.png', 'image/png', 2 * 1024 * 1024), makeFile('big.png', 'image/png', 4 * 1024 * 1024)]);
+
+      expect(toasts).toHaveLength(1);
+      expect(toasts[0].message).toBe('big.png is too large to upload (max 3 MB).');
+      expect(pendingUploads).toHaveLength(1);
+      expect(view.state.doc.toString()).toContain('Uploading small.png');
+      pendingUploads[0]();
+      await Promise.resolve();
+    });
+
+    it('renders a sub-1MB limit in KB rather than rounding it down to "0 MB"', async () => {
+      const policyMaxBytes = 512 * 1024;
+      uploadPolicyGet.mockImplementation(async () => ({ ok: true, json: async () => ({ maxBytes: { attachment: policyMaxBytes } }) }));
+      mount();
+      await flushPolicyFetch();
+
+      fireDrag('drop', [makeFile('big.png', 'image/png', 1024 * 1024)]);
+
+      expect(toasts).toHaveLength(1);
+      expect(toasts[0].message).toBe('big.png is too large to upload (max 512 KB).');
+    });
+
+    it('applies no local size gate when the policy fetch fails (old server / network error) — the file still goes to the server, which is the real enforcement point', async () => {
+      uploadPolicyGet.mockImplementation(async () => ({ ok: false, json: async () => ({}) }));
+      mount();
+      await flushPolicyFetch();
+
+      const big = makeFile('huge.png', 'image/png', DEFAULT_ATTACHMENT_MAX_BYTES + 1);
+      fireDrag('drop', [big]);
+
+      expect(toasts).toHaveLength(0);
+      expect(pendingUploads).toHaveLength(1);
+      expect(view.state.doc.toString()).toContain('Uploading huge.png');
+      pendingUploads[0]();
+      await Promise.resolve();
+    });
+
+    it('applies no local size gate before the policy fetch has resolved at all (still in flight) — an operator-lowered limit must not be silently ignored in favour of a guessed number', () => {
+      uploadPolicyGet.mockImplementation(() => new Promise(() => {}));
+      mount();
+      // Deliberately no `await flushPolicyFetch()` — the fetch never settles
+      // within this test.
+
+      const big = makeFile('huge.png', 'image/png', DEFAULT_ATTACHMENT_MAX_BYTES + 1);
+      fireDrag('drop', [big]);
+
+      expect(toasts).toHaveLength(0);
+      expect(pendingUploads).toHaveLength(1);
+      expect(view.state.doc.toString()).toContain('Uploading huge.png');
+    });
+
+    it('retries the policy fetch on a later editor mount after an earlier fetch failed, instead of staying permanently latched off', async () => {
+      uploadPolicyGet.mockImplementationOnce(async () => ({ ok: false, json: async () => ({}) }));
+      dropHandler({ pageId: 'page-1' }); // first "mount" — fetch fails
+      await flushPolicyFetch();
+      expect(uploadPolicyGet).toHaveBeenCalledTimes(1);
+
+      uploadPolicyGet.mockImplementationOnce(async () => ({ ok: true, json: async () => ({ maxBytes: { attachment: DEFAULT_ATTACHMENT_MAX_BYTES } }) }));
+      dropHandler({ pageId: 'page-1' }); // second "mount" — must retry, not stay latched
+      await flushPolicyFetch();
+      expect(uploadPolicyGet).toHaveBeenCalledTimes(2);
+    });
   });
 });
