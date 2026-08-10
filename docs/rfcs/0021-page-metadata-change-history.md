@@ -8,9 +8,9 @@
     Revision before conditionally advancing the Page pointer. This RFC extends
     that compare-and-set boundary with page-local history ordering without
     changing the Yjs document or collaboration protocol.
-  - RFC-0008 (Migration Framework) — existing content revisions require a
-    resumable page-local sequence backfill before the merged timeline becomes
-    authoritative.
+  - RFC-0008 (Migration Framework) — not used for history ordering. Existing
+    content revisions are deliberately left unsequenced below each Page's
+    tracking boundary rather than backfilled by a migration.
   - RFC-0009 (Revision Storage Compaction) — `Revision.type`,
     `parentRevisionId`, `body`, `yjsUpdate`, and snapshot/incremental
     reconstruction remain content-storage concepts. Page metadata events never
@@ -81,9 +81,10 @@ path-reserving commands begin requiring a client-generated idempotency key
 **Two limits of standalone MongoDB are stated rather than designed away.** A
 path is briefly unoccupied while a Page moves off it, because two Pages can
 never hold one path (§6.2a); and a replica running a release that predates the
-tracking predicate cannot be fenced by that predicate during the sequence
-backfill (§13.2a). Both are handled by making the residual condition detectable
-and repairable, not by asserting an atomicity the deployment does not provide.
+tracking predicate cannot be fenced by that predicate, so it can write an
+unsequenced Revision above a Page's tracking boundary (§13.2a). Both are handled
+by making the residual condition detectable and repairable, not by asserting an
+atomicity the deployment does not provide.
 
 ## §1 Background and motivation
 
@@ -428,14 +429,17 @@ an entry that is visible today rather than revealing a new one.
 metadata row belongs to — a body-plus-grant save is one operation with two
 committed rows, and without the field the content row could not be shown as part
 of it. It is genuinely optional rather than merely nullable in the schema:
-Revisions written before this RFC have no operation, and the backfill
-(§13.2) does not invent one for them. Consequently **`operationId` is nullable
+Revisions written before this RFC have no operation, and nothing invents one
+for them (§13.2). Consequently **`operationId` is nullable
 on content rows in the response contract** (§8.2); only `page_event` rows always
 carry one, because every event is created by a command.
 
-Existing Revisions receive sequences through the RFC-0008 migration in
-`createdAt, _id` order within each Page. The migration records its boundary so
-new writes cannot interleave with an unsequenced range.
+Existing Revisions are not backfilled. They remain unsequenced below the Page's
+`trackingStartedAt` boundary, where the timeline contains content rows only —
+historical metadata changes are never reconstructed (§17.1) — so `createdAt, _id`
+order is already the correct total order for that range and a sequence would add
+nothing. Sequences exist to interleave two sources, and below the boundary there
+is only one.
 
 ### §5.5 Bounded Page outbox
 
@@ -498,20 +502,25 @@ Page gains a durable `historyTracking` object:
 
 ```ts
 type HistoryTracking = {
-  state: 'untracked' | 'migrating' | 'ready';
+  state: 'untracked' | 'ready';
   trackingStartedAt?: Date;
-  migrationOwner?: string;
-  migrationLeaseUntil?: Date;
 };
 ```
 
-New Pages are created with `state: 'ready'` and an atomically written
-`trackingStartedAt`. Existing Pages begin `untracked`; only the migration CAS
-may move them through `migrating` to `ready`. A history endpoint returns
-`409 history_migrating` for `untracked` or `migrating`, never a partial or
-apparently complete timeline. Every history-producing writer requires
-`historyTracking.state: 'ready'`; otherwise it returns retryable
-`409 history_migrating` and does not mutate the Page.
+There is no `migrating` state, owner, or lease: nothing runs a batch migration.
+
+A Page becomes `ready` on its next content write, in the same conditional update
+that allocates that write's sequence and stamps `trackingStartedAt`. Promotion
+touches no existing Revision, so it is O(1) regardless of how many revisions the
+Page already has. A Page that is never written again stays `untracked`
+indefinitely, which is correct: nothing about it has changed.
+
+A history endpoint never fails because of tracking state. For an `untracked`
+Page it serves the existing content-only list. For a `ready` Page it serves the
+merged timeline, rendering sequenced entries in sequence order, then the
+Revisions below `trackingStartedAt` in `createdAt, _id` order, with the boundary
+marked (§9). Every history-producing metadata writer still requires
+`historyTracking.state: 'ready'`.
 
 `PageHistoryOperation` is a separate bounded collection, not Page-embedded
 state. Its unique keys are `{ actor, command, idempotencyKey }` and retry-token
@@ -1027,7 +1036,6 @@ PageHistoryEvent to Activity, never in the opposite direction.
 | Trash/restore internal rename runs | One lifecycle event, not an extra rename event | Outer-command kind |
 | Hard-delete cleanup stops | Resume from deleting Page | Lifecycle state machine |
 | History read sees pending event | Directly project it, never omit silently | Read-only projection/dedup |
-| Migration lease is held | Writer does not mutate | Retryable `409 history_migrating` |
 | Actor no longer resolves | Return null/anonymized actor | Immutable nullable reference |
 | Activity or Notification insert fails | History and Page state remain committed | Best-effort downstream projection |
 
@@ -1116,83 +1124,32 @@ reads and a plain non-sparse `historySequence: 1` index so the RFC-0008
 already is). Page defaults remain readable during expansion, but
 history-producing writes stay behind the migration gate.
 
-### §13.2 Existing Revision sequence backfill
+### §13.2 Promotion instead of a sequence backfill
 
-The RFC-0008 migration processes one Page at a time using an atomic Page lease,
-not the runner's append-only migration record:
+There is no migration. A Page leaves `untracked` on its next content write:
+the same conditional Page update that allocates that write's sequence also sets
+`trackingStartedAt` and `state: 'ready'`. The update matches the Page's own
+`historyTracking.state`, `historySequence`, and empty outbox slot, so exactly
+one writer promotes a Page and the promotion cannot be interleaved with another
+allocation.
 
-1. acquire with `findOneAndUpdate` matching `historyTracking.state: 'untracked'`
-   or an expired `migrating` lease, and set `state: 'migrating'`, a random
-   owner, and a short renewable lease;
-2. while the owner/lease CAS remains valid, load its next unsequenced Revision
-   in `createdAt, _id` order, then use the same one-slot outbox: a Page CAS
-   matching unexpired owner lease, expected `historySequence`, and empty marker
-   increments the sequence and writes a `migration_revision` marker; idempotently copy that
-   sequence to the Revision and clear that exact marker. A takeover drains any
-   marker before allocating another value;
-3. verify count/uniqueness and atomically set `historySequence`,
-   `trackingStartedAt`, and `state: 'ready'` with a predicate matching that
-   owner and lease; then clear the lease; and
-4. on a crash, a later worker may acquire only after expiry and resumes from
-   the already assigned maximum.
+Existing Revisions keep no sequence. They are below the boundary, where the
+timeline has content rows only, so `createdAt, _id` order already totally orders
+them (§5.3).
 
-Every content or metadata writer requires `ready` and therefore returns
-retryable `409 history_migrating` while this lease is held; it cannot write
-between the scan and final sequence. This intentionally rejects rename/save
-requests for an unmigrated Page rather than creating a permanent history hole.
-The migration framework may invoke contenders on every replica, but only this
-Page CAS owns a Page at a time.
+A per-Page migration would need a lease, a `migrating` state, a takeover and
+resume protocol, a staged rollout, and a batch-size threshold. None of that is
+required here, and none of it would buy safety it could not otherwise get: a
+replica predating the tracking predicate cannot be fenced by that predicate
+(§13.2a), so a lease never protected the boundary it appeared to protect.
 
-### §13.2a Version skew: what the lease does and does not fence
+The repair scan therefore treats an unsequenced Revision as an anomaly only when
+its `createdAt` is at or after the owning Page's `trackingStartedAt`. Below the
+boundary, unsequenced is the intended state, not damage.
 
-**The lease fences only writers that evaluate `historyTracking.state`.** A
-replica running the previous release evaluates neither that field nor the new
-transitional statuses: the HTTP save path writes a Revision and updates the Page
-with no tracking predicate (`packages/api/src/models/page.ts:1599`), and the
-collab save path's CAS matches only the revision pointer, status, and lifecycle
-epoch (`packages/collab/src/save-flow.ts:409`). Such a replica can append an
-unsequenced Revision to a Page that the migration has already scanned and marked
-`ready`. No predicate added by this RFC can stop it, because a predicate is only
-as good as the writer that reads it.
-
-Two consequences follow, and the RFC takes both rather than pretending the lease
-is sufficient.
-
-**The migration is an operator-triggered step, not a boot migration, and it must
-not overlap a rolling deploy.** Its documented precondition is that every api and
-collab replica already runs the release that introduced the tracking predicate.
-This is a weaker guarantee than a CAS — it is an operational instruction — but it
-is honest, and it is not an unusual demand here: because writers reject
-`untracked` Pages (§5.5a), the migration is already a write-affecting maintenance
-event rather than something to run casually alongside live traffic. The existing
-migration policy places heavy transformations in an operator-controlled window
-for the same reason (`packages/api/src/migration/types.ts:14`).
-
-**A skew violation must be detectable and repairable rather than silent.** The
-failure mode of an unsequenced Revision on a `ready` Page is that it is invisible
-in history — silence, not an error. The repair job therefore scans for exactly
-that condition: a Revision whose Page is `ready` and whose `historySequence` is
-absent. Such a Revision is not discarded; the repair allocates a fresh sequence
-through the normal Page CAS, copies it in, and records the anomaly with an
-operator alert. Sequences are page-local and allocation-ordered, so a late
-assignment orders the row after the rows already committed — which is where it
-belongs, since it was in fact written later. This converts an undetectable
-history hole into a detected, repaired, and reported event.
-
-The plain non-sparse `historySequence: 1` index added in §13.1 is what makes this
-scan index-backed rather than a collection sweep.
-
-Historical orphan Revisions cannot be classified perfectly from old state, so
-the legacy timeline sequences every row associated through `Revision.page` and
-retains the existing list semantics. It does not claim legacy CAS-loser
-exclusion. From cutover onward the writer path allocates sequences only to
-Page-CAS winners, while repair may additionally sequence a loser it cannot
-distinguish from an interrupted winner.
-
-If Revision volume makes an all-at-once migration operationally unsafe, the
-same per-Page state machine may roll out in batches. A Page uses the old
-content-only History screen until its migration state is complete; it never
-serves a partially ordered merged timeline.
+An operator tool may optionally sequence a Page's historical Revisions to move
+its boundary earlier. It is not required by any phase, and no part of the merged
+contract assumes it has run.
 
 ### §13.3 No metadata backfill
 
@@ -1201,10 +1158,11 @@ publish events. `Revision.path` has been rewritten on rename, Page stores only
 current visibility, and grant-only operations have no independent timestamp or
 actor. Inferring events would create false audit facts.
 
-Existing Pages show their sequenced content Revisions plus the durably stored
-`trackingStartedAt` boundary only after their tracking state is `ready`; an
-untracked/migrating Page returns `409 history_migrating`. New Pages write that
-same boundary in their creating CAS. `page_created` is emitted only for Pages
+An `untracked` Page shows the existing content-only list. Once a Page is
+promoted on its next content write it shows the durably stored
+`trackingStartedAt` boundary, sequenced entries above it, and its historical
+Revisions below it in `createdAt, _id` order. New Pages write that same boundary
+in their creating CAS. `page_created` is emitted only for Pages
 created after the new writer is enabled. The implementation does not mass-create
 `history_tracking_started` or synthetic creation events.
 
@@ -1331,9 +1289,9 @@ Two cases are called out because they are the ones a predicate cannot cover:
 - Phase-4 hard-delete tests cover a collab save racing purge and prove no
   orphan Revision can remain; ordinary physical draft/redirect cleanup is
   either explicitly in redirect cleanup mode or cannot create history.
-- Competing replicas can acquire only one migration Page lease; writers return
-  `409 history_migrating`, and resumed migration preserves the durable
-  tracking boundary and sequence maximum.
+- Concurrent writes to an `untracked` Page promote it exactly once: one writer's
+  conditional update wins, the others observe `ready` and allocate against the
+  new boundary. No Revision below the boundary is modified by promotion.
 - Cursor pagination remains complete under injected duplicate-sequence
   corruption and queues repair rather than dropping a co-sequenced entry.
 
@@ -1459,7 +1417,7 @@ Revision restore and explicit metadata inverse actions.
   writers (§7.1).
 - Add failure-injection tests before enabling writers.
 
-### §16.2 Phase 2 — command cutover and migration
+### §16.2 Phase 2 — command cutover
 
 - Move rename, grant, trash, restore, publish, and create into typed command
   services.
@@ -1469,10 +1427,10 @@ Revision restore and explicit metadata inverse actions.
 - Allocate content sequences at HTTP and collaborative Page CAS boundaries.
 - Require the client-generated `Idempotency-Key` on path-reserving commands and
   update the web clients that issue them.
-- Backfill existing Revision sequences in resumable Page batches, as an
-  operator-triggered step whose precondition is that no pre-predicate replica is
-  still running (§13.2a).
-- Add the unsequenced-Revision repair scan and its operator alert.
+- Promote a Page to `ready` on its next content write, leaving its existing
+  Revisions unsequenced below the boundary (§13.2).
+- Add the unsequenced-Revision repair scan, scoped to Revisions at or after the
+  owning Page's `trackingStartedAt`, and its operator alert.
 - Add event-kind side-effect dispatch.
 
 ### §16.3 Phase 3 — merged contract and History screen
@@ -1513,8 +1471,11 @@ gap this RFC exists to close.
    machine, authorization boundary, erasure operation, and verification ship
    together in Phase 4.
 6. Ordinary visibility history contains grant enum before/after only.
-7. Page-local historySequence is normative and existing content Revisions are
-   migrated.
+7. Page-local historySequence is normative for entries above a Page's tracking
+   boundary. Existing content Revisions are deliberately not backfilled: below
+   the boundary the timeline holds content rows only, so `createdAt, _id` order
+   already totally orders them and a sequence would order nothing new. A Page is
+   promoted by its next content write, not by a migration.
 8. Event payload and operation-group schema is complete from the first release;
    UI exposure may be phased.
 9. The API merges sources server-side behind one total-order cursor and does
@@ -1541,13 +1502,9 @@ gap this RFC exists to close.
 
 ### §17.2 Residual open questions
 
-1. **Sequence migration batch threshold.** The migration is correct per Page
-   and may be staged, but Phase 2 must measure production-scale Revision
-   counts and pin batch size, pause/resume limits, and the threshold at which a
-   staged rollout is mandatory.
-
-This question does not change the event schema, outbox protocol,
-authorization boundary, body-only restore rule, or server-merged API.
+None. Promotion is one conditional update per Page, performed by that Page's own
+next content write (§13.2). There is no batch to size, no staged rollout to
+gate, and nothing to measure at production scale before shipping.
 
 ## §18 Future work
 
