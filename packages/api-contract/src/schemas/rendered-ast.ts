@@ -345,6 +345,30 @@ const crowiOpaqueFields = z.object({
   originalType: z.string().max(64).optional(),
 });
 
+// ---------------------------------------------------------------------------
+// feature-renderer-frontmatter §D-3 — leading YAML frontmatter, scanned
+// (never YAML-parsed, §D-1) into an ordered key/value list. Exported so
+// the api-side scanner (`packages/api/src/renderer/core/frontmatter.ts`)
+// enforces the SAME numbers the wire schema validates — one constant each,
+// never two copies that can drift.
+// ---------------------------------------------------------------------------
+
+export const FRONTMATTER_MAX_ENTRIES = 50;
+export const FRONTMATTER_MAX_KEY_CHARS = 100;
+export const FRONTMATTER_MAX_VALUE_CHARS = 300;
+/** Raw frontmatter block size cap. Beyond this the block is never scanned into entries — it is preserved verbatim as a `code` node instead (§D-4). */
+export const FRONTMATTER_MAX_RAW_BYTES = 8 * 1024;
+
+export const CrowiFrontmatterEntrySchema = z.object({
+  key: z.string().max(FRONTMATTER_MAX_KEY_CHARS),
+  value: z.string().max(FRONTMATTER_MAX_VALUE_CHARS),
+});
+export type CrowiFrontmatterEntry = z.infer<typeof CrowiFrontmatterEntrySchema>;
+
+const crowiFrontmatterFields = z.object({
+  entries: z.array(CrowiFrontmatterEntrySchema).max(FRONTMATTER_MAX_ENTRIES),
+});
+
 /**
  * The closed type registry (design doc §3). Applies ONLY to
  * `X-Crowi-Ast-Version: 1` envelope generation — legacy responses never
@@ -380,10 +404,12 @@ export const RENDERED_AST_NODE_DEFS: Readonly<Record<string, RenderedAstNodeDef>
   footnoteReference: { placement: 'phrasing', childModel: 'none', fields: footnoteReferenceFields },
   linkReference: { placement: 'phrasing', childModel: 'phrasing', fields: linkReferenceFields },
   imageReference: { placement: 'phrasing', childModel: 'none', fields: imageReferenceFields },
-  // Crowi-owned types. `crowiFigure` is the only one that also appears
-  // in stored ASTs; the other three only exist as projection outputs
-  // (or as defensively-validated plugin-injected nodes).
+  // Crowi-owned types. `crowiFigure` / `crowiFrontmatter` are the only
+  // ones that also appear in stored ASTs directly (a core transform
+  // writes them at save time); the other three only exist as projection
+  // outputs (or as defensively-validated plugin-injected nodes).
   crowiFigure: { placement: 'flow', childModel: 'phrasing', fields: noFields },
+  crowiFrontmatter: { placement: 'flow', childModel: 'none', fields: crowiFrontmatterFields },
   crowiDiagram: { placement: 'flow', childModel: 'none', fields: CrowiDiagramSidecarSchema },
   crowiLinkCard: { placement: 'flow', childModel: 'none', fields: CrowiLinkCardSidecarSchema },
   crowiPlaceholder: { placement: 'both', childModel: 'none', fields: CrowiPlaceholderSidecarSchema },
@@ -434,6 +460,7 @@ export const RenderedAstNodeSchema: z.ZodType<unknown> = z.lazy(() =>
     LinkReferenceNodeSchema,
     ImageReferenceNodeSchema,
     CrowiFigureNodeSchema,
+    CrowiFrontmatterNodeSchema,
     CrowiDiagramNodeSchema,
     CrowiLinkCardNodeSchema,
     CrowiPlaceholderNodeSchema,
@@ -486,6 +513,8 @@ const CrowiFigureNodeSchema = z.object({
   data: HastHintDataSchema.extend({ hName: z.literal('figure'), hProperties: HPropertiesSchema }),
   children: childrenSchema,
 });
+/** `crowiFrontmatter` (feature-renderer-frontmatter, shipped): ordered key/value entries, no children (values are never re-parsed as Markdown, §D-5). */
+const CrowiFrontmatterNodeSchema = crowiFrontmatterFields.extend({ type: z.literal('crowiFrontmatter'), data: dataSchema });
 export const CrowiDiagramNodeSchema = CrowiDiagramSidecarSchema.extend({ type: z.literal('crowiDiagram'), data: dataSchema });
 export const CrowiLinkCardNodeSchema = CrowiLinkCardSidecarSchema.extend({ type: z.literal('crowiLinkCard'), data: dataSchema });
 export const CrowiPlaceholderNodeSchema = CrowiPlaceholderSidecarSchema.extend({ type: z.literal('crowiPlaceholder'), data: dataSchema });
