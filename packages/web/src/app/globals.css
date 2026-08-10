@@ -768,31 +768,53 @@ html[data-page-grant="2"] {
 }
 
 /* feature-renderer-frontmatter §D-5 — the leading YAML frontmatter
- * block, rendered as a muted 2-column key/value grid (open question
- * default: no border, muted key, body-color value, no collapsing) more
- * subdued than surrounding body text. `dl`/`dt`/`dd` (see
- * `render-mdast.ts`'s `crowiFrontmatterHandler`), not `table`/`th`/`td` —
- * this sidesteps `MarkdownTableFullscreen`'s zoom affordance and the
- * `w-full border-collapse` table styling both callers apply to every
- * real `<table>` uniformly, neither of which suits a handful of
- * metadata rows. */
+ * block, rendered as a "data sheet" panel: monospace (the same
+ * `--font-mono` token code blocks use, signalling "this is structured
+ * data, not prose"), a `--primary` accent flag on the left edge (the
+ * one meaningful use of the crowi brand teal in body content — this
+ * region, and nothing else), and hairline row dividers on a muted
+ * card background (same bordered-card language as `.crowi-link-card`
+ * below). `dl`/`dt`/`dd` (see `render-mdast.ts`'s
+ * `crowiFrontmatterHandler`), not `table`/`th`/`td` — this sidesteps
+ * `MarkdownTableFullscreen`'s zoom affordance and the `w-full
+ * border-collapse` table styling both callers apply to every real
+ * `<table>` uniformly, neither of which suits a handful of metadata
+ * rows. */
 .crowi-frontmatter {
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
-  column-gap: 1.5rem;
-  row-gap: 0.375rem;
+  column-gap: 1.25rem;
   margin: 0 0 1.5rem;
-  font-size: 0.875rem;
+  padding-inline: 1rem;
+  background: var(--muted);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--primary);
+  border-radius: var(--radius);
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+}
+.crowi-frontmatter dt,
+.crowi-frontmatter dd {
+  padding-block: 0.5rem;
+  border-top: 1px solid var(--border);
+}
+/* Each row's dt/dd pair lands on the same grid line (auto-placement,
+ * 2 explicit columns) — giving both the first `:first-of-type` element
+ * of their tag drops the divider above only the very first row. */
+.crowi-frontmatter dt:first-of-type,
+.crowi-frontmatter dd:first-of-type {
+  border-top: none;
 }
 .crowi-frontmatter dt {
   grid-column: 1;
   margin: 0;
   color: var(--muted-foreground);
-  font-weight: 500;
+  font-weight: 700;
 }
 .crowi-frontmatter dd {
   grid-column: 2;
   margin: 0;
   color: var(--foreground);
+  font-weight: 400;
   overflow-wrap: anywhere;
 }
