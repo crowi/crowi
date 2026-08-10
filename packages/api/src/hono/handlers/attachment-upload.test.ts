@@ -384,6 +384,11 @@ describe('Routes POST /api/attachments/upload (Hono editor upload)', () => {
     expect(res.body.error).toBe('no_permission');
   });
 
+  // Mirrors the route's own `UPLOAD_RATE_LIMIT` / `UPLOAD_RATE_WINDOW_MS`
+  // (`attachment.ts`), which are not exported.
+  const UPLOAD_RATE_LIMIT = 20;
+  const UPLOAD_RATE_WINDOW_MS = 60_000;
+
   describe('rate limiting', () => {
     it('returns 429 with Retry-After once the 20/min budget is exceeded', async () => {
       const { accessToken } = await createTestUser({
@@ -393,25 +398,56 @@ describe('Routes POST /api/attachments/upload (Hono editor upload)', () => {
       });
       const page = await createPageViaApi(accessToken, `${PATH_PREFIX}rate`, '# upload target');
 
-      let sawRateLimit = false;
-      // 21 hits exceeds the 20-req window.
-      for (let i = 0; i < 21; i += 1) {
-        const res = await request(app)
+      const upload = (i: number) =>
+        request(app)
           .post('/api/attachments/upload')
           .set(authHeaders(accessToken))
           .field('pageId', page._id)
           .field('intent', 'paste')
           .attach('file', pngBuffer, { filename: `pasted-${i}.png`, contentType: 'image/png' });
-        if (res.status === 429) {
-          sawRateLimit = true;
-          expect(res.body.error).toBe('rate_limited');
-          expect(typeof res.body.details.retryAfterSeconds).toBe('number');
-          expect(res.headers['retry-after']).toBeDefined();
-          break;
+
+      // The limiter buckets by `floor(now / windowMs)`, so a burst that
+      // crosses a minute boundary is split across two buckets and neither
+      // one exceeds the budget — 21 sequential uploads then all return 200
+      // and the assertion below reports a limiter that "did not fire".
+      // Uploads are slow enough (multipart parse, storage write, derivative
+      // generation) for the burst to span a boundary on a loaded runner,
+      // which is how this failed on CI. Pinning the clock mid-window makes
+      // the bucket exact by construction — same approach as
+      // `src/util/rate-limit.smoke.test.ts`. Only `Date.now` is mocked, not
+      // the timers, so the HTTP/fs/Mongo work below still runs normally;
+      // the upload path's one `Date.now` use is a temp-filename prefix that
+      // carries its own random suffix.
+      const base = Math.floor(Date.now() / UPLOAD_RATE_WINDOW_MS) * UPLOAD_RATE_WINDOW_MS + UPLOAD_RATE_WINDOW_MS / 2;
+      const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(base);
+      try {
+        for (let i = 0; i < UPLOAD_RATE_LIMIT; i += 1) {
+          const res = await upload(i);
+          expect(res.status).toBe(200);
         }
-        expect(res.status).toBe(200);
+
+        const limited = await upload(UPLOAD_RATE_LIMIT);
+        expect(limited.status).toBe(429);
+        expect(limited.body.error).toBe('rate_limited');
+        expect(typeof limited.body.details.retryAfterSeconds).toBe('number');
+        expect(limited.headers['retry-after']).toBeDefined();
+
+        // The budget is keyed by user id, not by endpoint — a second user
+        // in the SAME (pinned) window still gets their own 20. Without this
+        // the assertions above would pass just as happily against a global
+        // bucket, i.e. one user's burst throttling everyone.
+        const neighbour = await createTestUser({ name: 'Upload Rate Neighbour', username: 'uplRateNeighbour', email: 'upl-rate-neighbour@example.com' });
+        const neighbourPage = await createPageViaApi(neighbour.accessToken, `${PATH_PREFIX}rate-neighbour`, '# upload target');
+        const unthrottled = await request(app)
+          .post('/api/attachments/upload')
+          .set(authHeaders(neighbour.accessToken))
+          .field('pageId', neighbourPage._id)
+          .field('intent', 'paste')
+          .attach('file', pngBuffer, { filename: 'neighbour.png', contentType: 'image/png' });
+        expect(unthrottled.status).toBe(200);
+      } finally {
+        nowSpy.mockRestore();
       }
-      expect(sawRateLimit).toBe(true);
     });
   });
 
