@@ -36,6 +36,24 @@ public final class WorkspaceSession: ObservableObject {
     /// `0` (badge hidden) until the first successful poll.
     @Published public private(set) var unreadNotificationCount: Int = 0
 
+    /// This workspace has no credential the app can read, so every request
+    /// it makes will fail before reaching the network — the screens must
+    /// offer a way back in rather than each reporting its own load failure.
+    ///
+    /// The case this exists for is not a normal expiry (a refresh token
+    /// outlives any session): it is the Keychain ITEM becoming unreachable.
+    /// Items are stored under an access group derived from the signing Team
+    /// ID, so re-signing the app under a different team — moving from a
+    /// personal team to the organization's, say — orphans every stored
+    /// credential while the workspace list (plain `UserDefaults`) survives
+    /// intact. The result reads as "the app is broken": every workspace is
+    /// listed, none of them load.
+    ///
+    /// Checked at activation and foreground rather than on each request:
+    /// a signing change only takes effect across a relaunch, and both of
+    /// those run on the way in.
+    @Published public private(set) var needsSignIn = false
+
     /// - Parameter urlSession: overridden only by tests (`WorkspaceSessionTests`)
     ///   to inject a mocked transport for the `AppInfoCache`/`AuthenticatedAPIClient`/
     ///   `WorkspaceImageDiskCache` this session builds — production callers
@@ -59,6 +77,7 @@ public final class WorkspaceSession: ObservableObject {
     /// Call once when this workspace becomes the active one (§5.2 — always
     /// forces an `/app/info` refresh, never serves a possibly-stale cache).
     public func activated() async {
+        refreshCredentialState()
         await refreshAppInfo { try await appInfoCache.activated() }
     }
 
@@ -69,6 +88,7 @@ public final class WorkspaceSession: ObservableObject {
     /// change that happened while backgrounded shows now, not up to one
     /// interval later.
     public func foregrounded() async {
+        refreshCredentialState()
         await refreshAppInfo { try await appInfoCache.foregrounded() }
         await notificationsPoller.resume()
         await refreshUnreadNotificationCount()
@@ -118,6 +138,20 @@ public final class WorkspaceSession: ObservableObject {
     public func openNotification(id: String) async {
         _ = try? await NotificationsAPI.open(id: id, using: apiClient)
         await refreshUnreadNotificationCount()
+    }
+
+    /// Adopt a credential obtained by signing this workspace in again, and
+    /// bring the session back up with it.
+    public func signedIn(with pair: StoredTokenPair) async throws {
+        try context.saveTokens(pair)
+        await activated()
+    }
+
+    /// A read failure here (the Keychain refusing the item for any reason)
+    /// counts as "no credential" — the screens behind it cannot work either
+    /// way, and offering sign-in is the only useful thing to show.
+    private func refreshCredentialState() {
+        needsSignIn = (try? context.loadTokens()) == nil
     }
 
     private func refreshAppInfo(_ fetch: () async throws -> AppInfoLenient) async {

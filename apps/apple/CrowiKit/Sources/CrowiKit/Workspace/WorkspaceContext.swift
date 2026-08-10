@@ -51,6 +51,14 @@ public struct WorkspaceContext: Sendable {
         try tokenStore.load(forWorkspace: workspace.id)
     }
 
+    /// Replace this workspace's credential — the sign-in flow's landing
+    /// point when a workspace that was already added has to authenticate
+    /// again (`WorkspaceSession.needsSignIn`). The token store itself stays
+    /// module-internal (§14), so this is the only way in from the app.
+    public func saveTokens(_ pair: StoredTokenPair) throws {
+        try tokenStore.save(pair, forWorkspace: workspace.id)
+    }
+
     /// A `RefreshCoordinator` wired to this workspace's own Keychain item
     /// and discovery-resolved `token_endpoint` (§4.1 step 0 — re-resolved on
     /// every call, never assumed equal to `apiBaseURL`).

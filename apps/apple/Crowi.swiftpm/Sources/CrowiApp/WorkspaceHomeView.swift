@@ -49,7 +49,7 @@ struct WorkspaceHomeView: View {
     var body: some View {
         Group {
             if let session = holder.session {
-                content(session: session)
+                SessionCredentialGate(session: session) { content(session: session) }
                     .confidentialBanner(session.confidential)
                     .task { await session.activated() }
                     // §11 — the foreground notifications poll loop lives in a
@@ -168,6 +168,24 @@ struct WorkspaceHomeView: View {
             } label: {
                 Label("Profile", systemImage: "person.crop.circle")
             }
+        }
+    }
+}
+
+/// The credential seam: a workspace whose Keychain item the app can no
+/// longer read shows one screen that says so, instead of every screen behind
+/// it failing separately (`WorkspaceSignInAgainView`). Observes the session
+/// for the same reason `SessionNotificationBell` does — the holder publishes
+/// when the session is REPLACED, not when its own values change.
+private struct SessionCredentialGate<Content: View>: View {
+    @ObservedObject var session: WorkspaceSession
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        if session.needsSignIn {
+            WorkspaceSignInAgainView(session: session)
+        } else {
+            content()
         }
     }
 }

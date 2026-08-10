@@ -28,11 +28,11 @@ final class WorkspaceSessionTests: XCTestCase {
     /// + `containerBaseDirectory` used, so a caller can independently locate
     /// `WorkspaceModelContainerFactory.storeDirectory` on disk (needed by
     /// `testActivatedEscalatesTheModelContainerStoreDirectoryProtectionWhenConfidential`).
-    private func makeSession(appInfoBodies: [Data]) throws -> (session: WorkspaceSession, workspaceId: String, containerBaseDirectory: URL) {
+    private func makeSession(appInfoBodies: [Data], tokenStore: InMemoryTokenStore = InMemoryTokenStore()) throws -> (session: WorkspaceSession, workspaceId: String, containerBaseDirectory: URL) {
         let containerBaseDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let store = WorkspaceStore(
             indexStore: WorkspaceIndexStore(defaults: UserDefaults(suiteName: "wiki.crowi.ios.tests.\(UUID().uuidString)")!, key: "index"),
-            tokenStore: InMemoryTokenStore(),
+            tokenStore: tokenStore,
             containerBaseDirectory: containerBaseDirectory
         )
         let workspace = try store.finishAdding(
@@ -68,6 +68,34 @@ final class WorkspaceSessionTests: XCTestCase {
             }
             return (HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, responses.next())
         }
+    }
+
+    /// The Keychain-orphan scenario: re-signing the app under a different
+    /// Team ID leaves the workspace listed (that index is `UserDefaults`)
+    /// while its credential becomes unreadable. Every screen would otherwise
+    /// report its own load failure, which reads as a broken app rather than
+    /// a signed-out workspace.
+    func testAWorkspaceWhoseCredentialIsGoneAsksForSignInAndTakesOneBack() async throws {
+        let tokenStore = InMemoryTokenStore()
+        let (session, workspaceId, _) = try makeSession(
+            appInfoBodies: [
+                appInfoJSON(capabilities: ["pages"]),
+                appInfoJSON(capabilities: ["pages"]),
+                appInfoJSON(capabilities: ["pages"]),
+            ],
+            tokenStore: tokenStore
+        )
+
+        await session.activated()
+        XCTAssertFalse(session.needsSignIn)
+
+        try tokenStore.delete(forWorkspace: workspaceId)
+        await session.activated()
+        XCTAssertTrue(session.needsSignIn)
+
+        try await session.signedIn(with: StoredTokenPair(accessToken: "at2", refreshToken: "rt2", expiresAt: Date().addingTimeInterval(3600)))
+        XCTAssertFalse(session.needsSignIn)
+        XCTAssertEqual(try tokenStore.load(forWorkspace: workspaceId)?.accessToken, "at2")
     }
 
     /// The exact scenario the spec's CI-fixed capability-gate test names:
