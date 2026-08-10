@@ -145,10 +145,12 @@ without fabricating history.
   publish with typed before/after payloads; add hard-deletion payloads only in
   the Phase-4 protocol.
 - Give all content and metadata entries a page-local monotonic sequence.
-- Exclude collaborative CAS-loser Revisions from the displayed timeline for
-  writes committed after cutover. Pre-cutover content history retains its
-  current `Revision.page` list semantics because no reliable historical winner
-  marker exists.
+- Allocate sequences only to Page-CAS winners on the writer path. Recovery
+  cannot uphold that as a timeline guarantee: a winner interrupted between its
+  pointer commit and its sequence allocation is indistinguishable from a CAS
+  loser, so repair may sequence a loser too. Pre-cutover content history
+  likewise retains its current `Revision.page` list semantics because no
+  reliable historical winner marker exists.
 - Make the metadata state change and its recoverable history write atomic on
   standalone MongoDB.
 - Return one server-merged, cursor-paginated history timeline.
@@ -405,9 +407,22 @@ corruption and block the Page for repair.
 Content Revisions gain two additive bookkeeping fields, `historySequence` and an
 optional `historyOperationId`. Existing and new Revision bodies, render
 artifacts, storage type, and reconstruction semantics are unchanged. A Revision
-without a committed sequence is not displayed by the merged endpoint. This
-excludes a collaborative CAS loser, which currently can remain saved after the
-Page pointer CAS fails (`packages/collab/src/save-flow.ts:354-386,415-433`).
+without a committed sequence is not displayed by the merged endpoint.
+
+A collaborative CAS loser remains saved after the Page pointer CAS fails
+(`packages/collab/src/save-flow.ts:354-386,415-433`), and the writer path never
+allocates it a sequence. Recovery is a different matter. Repair exists to
+sequence a Revision whose winning writer was interrupted after its pointer
+commit, and on durable state that Revision looks exactly like a loser: both are
+unsequenced Revisions on a tracked Page. Distinguishing them would require a
+marker on the Revision or a change to the pointer write itself, which the
+content-sequence phase deliberately avoids. Repair may therefore sequence a
+loser, and the merged timeline can show it.
+
+This is accepted. The loser Revision already exists and the current
+content-only history endpoint already returns every row for a Page
+(`packages/api/src/hono/handlers/revision.ts:126-159`), so sequencing it orders
+an entry that is visible today rather than revealing a new one.
 
 `historyOperationId` is what lets a content row join the operation group that a
 metadata row belongs to — a body-plus-grant save is one operation with two
@@ -1170,7 +1185,9 @@ scan index-backed rather than a collection sweep.
 Historical orphan Revisions cannot be classified perfectly from old state, so
 the legacy timeline sequences every row associated through `Revision.page` and
 retains the existing list semantics. It does not claim legacy CAS-loser
-exclusion. From cutover onward, only Page-CAS winners receive a sequence.
+exclusion. From cutover onward the writer path allocates sequences only to
+Page-CAS winners, while repair may additionally sequence a loser it cannot
+distinguish from an interrupted winner.
 
 If Revision volume makes an all-at-once migration operationally unsafe, the
 same per-Page state machine may roll out in batches. A Page uses the old
@@ -1269,7 +1286,7 @@ Two cases are called out because they are the ones a predicate cannot cover:
 - The server merges Revision and PageHistoryEvent rows by sequence.
 - Cursor pagination has no gaps or duplicates across mixed entry kinds.
 - Same-millisecond entries and multiple API replicas remain correctly ordered.
-- A collaborative CAS loser is excluded.
+- No writer-path allocation gives a collaborative CAS loser a sequence.
 - Legacy migrated rows retain legacy list semantics, including the documented
   possibility of a historical CAS loser.
 - Content rows omit body and rendered AST.
