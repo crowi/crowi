@@ -133,7 +133,7 @@ export function pasteHandler(options: PasteHandlerOptions): Extension {
         const pos = view.state.selection.main.from;
         // Fire-and-forget: `runUpload` owns the placeholder lifecycle
         // and never throws (failures land in a static error marker).
-        void runUpload(view, file, filename, pos, pageId, 'paste');
+        void runUpload(view, file, filename, pos, pageId);
         return true;
       }
 

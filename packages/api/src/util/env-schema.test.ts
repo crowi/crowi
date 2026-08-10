@@ -350,7 +350,7 @@ describe('util/env-schema validateEnv', () => {
     });
   });
 
-  describe('JWT TTL / COLLAB_MAX_EDITORS_PER_PAGE / IMAGE_DERIVATIVE_* (warn, silent-fallback made visible)', () => {
+  describe('JWT TTL / COLLAB_MAX_EDITORS_PER_PAGE / IMAGE_DERIVATIVE_* / CROWI_UPLOAD_MAX_BYTES (warn, silent-fallback made visible)', () => {
     test.each([
       'JWT_ACCESS_TOKEN_TTL_SECONDS',
       'JWT_REFRESH_TOKEN_TTL_SECONDS',
@@ -358,6 +358,7 @@ describe('util/env-schema validateEnv', () => {
       'IMAGE_DERIVATIVE_MAX_PIXELS',
       'IMAGE_DERIVATIVE_ADMISSION_CONCURRENCY',
       'IMAGE_DERIVATIVE_ADMISSION_TIMEOUT_MS',
+      'CROWI_UPLOAD_MAX_BYTES',
     ])('%s warns on a non-positive-integer value', (name) => {
       const result = validateEnv(makeEnv({ [name]: '3600s' }));
       expect(result.warnings.some((w) => w.startsWith(`${name}:`))).toBe(true);
@@ -370,6 +371,7 @@ describe('util/env-schema validateEnv', () => {
       'IMAGE_DERIVATIVE_MAX_PIXELS',
       'IMAGE_DERIVATIVE_ADMISSION_CONCURRENCY',
       'IMAGE_DERIVATIVE_ADMISSION_TIMEOUT_MS',
+      'CROWI_UPLOAD_MAX_BYTES',
     ])('%s produces no warning for a positive integer', (name) => {
       const result = validateEnv(makeEnv({ [name]: '3600', CLIENT_URL: 'https://wiki.example.com' }));
       expect(result.warnings).toEqual([]);
@@ -521,6 +523,7 @@ describe('util/env-schema validateEnv', () => {
           'IMAGE_DERIVATIVE_MAX_PIXELS',
           'IMAGE_DERIVATIVE_ADMISSION_CONCURRENCY',
           'IMAGE_DERIVATIVE_ADMISSION_TIMEOUT_MS',
+          'CROWI_UPLOAD_MAX_BYTES',
         ]),
       );
     });

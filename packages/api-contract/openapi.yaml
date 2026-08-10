@@ -22578,11 +22578,6 @@ paths:
                   format: binary
                 pageId:
                   type: string
-                intent:
-                  type: string
-                  enum:
-                    - paste
-                    - dnd
       responses:
         '200':
           description: >-
@@ -22678,7 +22673,7 @@ paths:
                   - error
                   - message
         '413':
-          description: Body exceeds the per-intent size cap
+          description: Body exceeds the unified upload size cap
           content:
             application/json:
               schema:
@@ -23182,14 +23177,8 @@ paths:
                     properties:
                       attachment:
                         type: number
-                      paste:
-                        type: number
-                      dnd:
-                        type: number
                     required:
                       - attachment
-                      - paste
-                      - dnd
                   profilePicture:
                     type: object
                     properties:

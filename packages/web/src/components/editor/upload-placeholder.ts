@@ -1,4 +1,5 @@
 import type { EditorView } from '@codemirror/view';
+import { UploadAttachmentErrorCodeSchema, UploadAttachmentErrorSchema } from '@crowi/api-contract';
 import { acquireRefreshedToken, apiBaseUrl } from '@/lib/api-client';
 import { getAccessToken } from '@/lib/auth-token';
 import { notify } from '@/lib/notify';
@@ -32,7 +33,11 @@ import { isImageFile } from './upload-policy';
  * placeholder grammar is unit-testable without mounting an editor.
  */
 
-/** Editor intent forwarded to the upload endpoint for telemetry. */
+/**
+ * Which affordance started an upload. Not sent to the server (the size
+ * cap and MIME allow-list are both intent-independent) — kept as a type
+ * for callers that want to vary placeholder/toast presentation by intent.
+ */
 export type UploadIntent = 'paste' | 'dnd';
 
 /** Result of a completed upload, as returned by `/attachments/upload`. */
@@ -244,40 +249,53 @@ export function makeProgressUpdater(view: EditorView, uploadId: string, filename
  * chains through one more `.then()`), which is only actually necessary on
  * the token-recovery branch.
  */
-export function uploadAttachment(
-  file: File,
-  filename: string,
-  pageId: string,
-  intent: UploadIntent,
-  onProgress: (percent: number) => void,
-): Promise<UploadOutcome> {
+export function uploadAttachment(file: File, filename: string, pageId: string, onProgress: (percent: number) => void): Promise<UploadOutcome> {
   const existingToken = getAccessToken();
   if (existingToken) {
-    return sendUpload(existingToken, file, filename, pageId, intent, onProgress);
+    return sendUpload(existingToken, file, filename, pageId, onProgress);
   }
   return acquireRefreshedToken().then((accessToken) => {
     if (!accessToken) {
       throw new Error('Authentication is required.');
     }
-    return sendUpload(accessToken, file, filename, pageId, intent, onProgress);
+    return sendUpload(accessToken, file, filename, pageId, onProgress);
   });
 }
 
-function sendUpload(
-  accessToken: string,
-  file: File,
-  filename: string,
-  pageId: string,
-  intent: UploadIntent,
-  onProgress: (percent: number) => void,
-): Promise<UploadOutcome> {
+/**
+ * Whether `body` is genuinely the 413 crowi's own upload-size rejection
+ * emits: a valid `UploadAttachmentErrorSchema` envelope AND specifically
+ * `error === 'too_large'` — the only code `POST /attachments/upload` ever
+ * pairs with a 413 (its other error codes all use different HTTP statuses).
+ * Checking the schema alone is not enough: a reverse proxy's own JSON error
+ * body (e.g. `{ error: 'rate_limited', message: '...' }`) can coincidentally
+ * validate against the schema's code enum while never having come from
+ * crowi's size check, and echoing its message would leak that untrusted
+ * text. Used below to tell a genuine crowi rejection apart from a front
+ * reverse proxy's.
+ */
+function isUploadTooLargeEnvelope(body: unknown): body is { error: 'too_large'; message: string } {
+  const parsed = UploadAttachmentErrorSchema.safeParse(body);
+  return parsed.success && parsed.data.error === UploadAttachmentErrorCodeSchema.enum.too_large;
+}
+
+/**
+ * Shown instead of the server message when a 413's body doesn't match
+ * {@link isUploadTooLargeEnvelope}. Deliberately does not repeat crowi's own
+ * upload limit: the rejection happened before the request reached crowi,
+ * so that number is not the relevant one (see the CLI's mirror of this
+ * in `attach.ts`).
+ */
+const FRONT_REVERSE_PROXY_REJECTION_MESSAGE =
+  'A reverse proxy in front of the server rejected this upload, not crowi itself — likely its own (smaller) body-size limit. Check the proxy configuration.';
+
+function sendUpload(accessToken: string, file: File, filename: string, pageId: string, onProgress: (percent: number) => void): Promise<UploadOutcome> {
   return new Promise<UploadOutcome>((resolve, reject) => {
     const url = `${apiBaseUrl()}/attachments/upload`;
 
     const form = new FormData();
     form.append('file', file, filename);
     form.append('pageId', pageId);
-    form.append('intent', intent);
 
     const xhr = new XMLHttpRequest();
     xhr.open('POST', url);
@@ -298,6 +316,15 @@ function sendUpload(
         resolve(body as UploadOutcome);
         return;
       }
+      // A 413 whose body isn't crowi's own upload-error envelope did not
+      // come from crowi: a front reverse proxy rejected the request first
+      // (e.g. nginx's default 1 MB `client_max_body_size`). Its body can
+      // be arbitrary HTML/text, so it is never surfaced — only the
+      // crowi-authored message above is.
+      if (xhr.status === 413 && !isUploadTooLargeEnvelope(body)) {
+        reject(new Error(FRONT_REVERSE_PROXY_REJECTION_MESSAGE));
+        return;
+      }
       const message =
         body && typeof body === 'object' && 'message' in body && typeof (body as { message: unknown }).message === 'string'
           ? (body as { message: string }).message
@@ -315,7 +342,7 @@ function sendUpload(
  * Drive one file upload end-to-end against an `EditorView`: insert the
  * placeholder at `pos`, stream progress into it, and swap in the final
  * success / failure token. Shared verbatim by paste (Phase 6) and
- * drag-and-drop (Phase 7) — the only per-feature difference is `intent`.
+ * drag-and-drop (Phase 7).
  *
  * The `filename` is sanitised before it ever enters the document
  * ({@link sanitizeFilename}): a drag-and-drop file can carry `[` / `]`
@@ -323,7 +350,7 @@ function sendUpload(
  * `findPlaceholderRange` relies on. The original `File` is still sent to
  * the server verbatim — only the displayed token text is sanitised.
  */
-export async function runUpload(view: EditorView, file: File, filename: string, pos: number, pageId: string, intent: UploadIntent): Promise<void> {
+export async function runUpload(view: EditorView, file: File, filename: string, pos: number, pageId: string): Promise<void> {
   const isImage = isImageFile(file);
   const uploadId = newUploadId();
   const displayName = sanitizeFilename(filename);
@@ -336,7 +363,7 @@ export async function runUpload(view: EditorView, file: File, filename: string, 
   const onProgress = makeProgressUpdater(view, uploadId, displayName, isImage);
 
   try {
-    const outcome = await uploadAttachment(file, filename, pageId, intent, onProgress);
+    const outcome = await uploadAttachment(file, filename, pageId, onProgress);
     replacePlaceholder(view, uploadId, buildSuccessText(displayName, outcome.url, isImage));
   } catch (err) {
     // Remove the placeholder (and its own-line padding) and toast the

@@ -147,11 +147,12 @@ export type AttachmentError = z.infer<typeof AttachmentErrorSchema>;
  *
  * The editor's paste / drag-and-drop handlers upload a file directly
  * (multipart) and immediately splice the returned `url` into the
- * Markdown source. Unlike `addAttachment`, this endpoint is keyed by
- * the editor `intent` (`paste` / `dnd`) for telemetry and applies a
+ * Markdown source. Unlike `addAttachment`, this endpoint applies a
  * per-user upload rate limit; it shares the same `FileUploader` storage
  * path. See `docs/rfcs/0004-editor-ux-enhancement.md`
- * §"Attachment upload endpoint".
+ * §"Attachment upload endpoint". The request body carries no `intent`
+ * (`paste` / `dnd`) field: the size cap is a single value, independent of
+ * which affordance triggered the upload.
  */
 export const UploadAttachmentResponseSchema = z.object({
   url: z.string(),
@@ -168,9 +169,8 @@ export type UploadAttachmentResponse = z.infer<typeof UploadAttachmentResponseSc
  * because the editor maps each code to a specific user-facing toast:
  *   - `too_large`      — file exceeds the size cap (413).
  *   - `disallowed_type`— malformed request (bad multipart body, missing
- *                        file, invalid `intent`); a generic 400 bucket
- *                        predating feature-attachment-upload-policy, kept
- *                        as-is for those unrelated failure modes.
+ *                        file); a generic 400 bucket kept as-is for those
+ *                        unrelated failure modes.
  *   - `DISALLOWED_MIME`— the file's MIME type is outside the unified
  *                        upload allow-list (415). Deliberately spelled
  *                        the SAME as `AttachmentErrorCodeSchema`'s
@@ -199,15 +199,14 @@ export const UploadAttachmentErrorSchema = z.object({
 export type UploadAttachmentError = z.infer<typeof UploadAttachmentErrorSchema>;
 
 /**
- * feature-attachment-upload-policy — the single "may this be uploaded at
- * all" allow-list, shared by every upload path: the general page
- * attachment endpoint (`POST /pages/:pageId/attachments`) and the editor's
- * paste / drag-and-drop endpoint (`POST /attachments/upload`, both
- * intents). A file's fate no longer depends on which of the three
- * affordances (attach button / paste / drag-and-drop) triggered the
- * upload — see the feature spec's "3 つの独立した問い" design judgment 1.
- * Per-route/per-intent SIZE caps (paste 10 MB / dnd 50 MB / add 100 MB)
- * are unchanged and stay in the api handler, independent of this list.
+ * The single "may this be uploaded at all" allow-list, shared by every
+ * upload path: the general page attachment endpoint
+ * (`POST /pages/:pageId/attachments`) and the editor's paste / drag-and-drop
+ * endpoint (`POST /attachments/upload`). A file's fate does not depend on
+ * which of the three affordances (attach button / paste / drag-and-drop)
+ * triggered the upload. The SIZE cap (the api handler's single upload size
+ * limit) is unified the same way: it applies regardless of route or
+ * client-declared intent.
  *
  * Deliberately independent of `INLINE_SAFE_MIME`
  * (`attachment-stream.ts`) — that is a strict security boundary deciding
@@ -278,20 +277,23 @@ export const UPLOAD_ALLOWED_MIME = [
  *   enforces (`UPLOAD_ALLOWED_MIME` above).
  * - `extensionHints`: extension → MIME, for a client that only knows a
  *   filename and needs to declare a `Content-Type` for it.
- * - `maxBytes`: the size ceiling per upload surface — `attachment` is the
- *   general `POST /pages/:pageId/attachments` route, `paste` / `dnd` are the
- *   editor's two upload intents on `POST /attachments/upload`.
+ * - `maxBytes.attachment`: the SINGLE size limit every attachment upload
+ *   route enforces (attach button / editor paste / editor drag-and-drop
+ *   alike), resolved server-side from `CROWI_UPLOAD_MAX_BYTES` (default
+ *   50 MB, hard ceiling 50 MB — the value is a memory budget, not a policy
+ *   knob, because the api buffers the whole upload in memory; an operator
+ *   may only lower it). No separate `paste` / `dnd` figure: a client-
+ *   declared intent is not a real defence, so it cannot justify a
+ *   different number.
  * - `profilePicture`: the separate, narrower policy `POST /me/picture`
  *   enforces (a finite image-type allow-list and its own size cap — not the
- *   general attachment policy above).
+ *   general attachment policy above, and unaffected by it).
  */
 export const UploadPolicyResponseSchema = z.object({
   allowedMimeTypes: z.array(z.string()),
   extensionHints: z.record(z.string(), z.string()),
   maxBytes: z.object({
     attachment: z.number(),
-    paste: z.number(),
-    dnd: z.number(),
   }),
   profilePicture: z.object({
     allowedMimeTypes: z.array(z.string()),

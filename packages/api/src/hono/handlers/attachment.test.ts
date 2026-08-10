@@ -1,21 +1,23 @@
 import fs from 'node:fs';
+import http from 'node:http';
 import path from 'node:path';
 import { UPLOAD_ALLOWED_MIME } from '@crowi/api-contract';
 import { Types } from 'mongoose';
 import { app, crowi } from 'src/test/setup';
-import { bearerAuthHeaders as authHeaders, cookieAuthHeaders as cookieHeaders, createPageViaApi, createTestUser, createWideJpeg } from 'src/test/test-helpers';
+import {
+  bearerAuthHeaders as authHeaders,
+  cookieAuthHeaders as cookieHeaders,
+  createPageViaApi,
+  createTestUser,
+  createWideJpeg,
+  unsizedStream,
+} from 'src/test/test-helpers';
 import * as imageDisplayDerivative from 'src/util/image-display-derivative';
 import { createJwtUtil } from 'src/util/jwt';
+import { UPLOAD_MAX_BYTES_DEFAULT } from 'src/util/upload-limit';
 import request from 'supertest';
 
-import {
-  ADD_ATTACHMENT_MAX_BYTES,
-  DND_MAX_BYTES,
-  PASTE_MAX_BYTES,
-  PROFILE_PICTURE_ALLOWED_MIME,
-  PROFILE_PICTURE_MAX_BYTES,
-  UPLOAD_EXT_TO_MIME,
-} from './attachment';
+import { PROFILE_PICTURE_ALLOWED_MIME, PROFILE_PICTURE_MAX_BYTES, UPLOAD_EXT_TO_MIME } from './attachment';
 
 const cleanupPathPrefix = async (prefix: string) => {
   const Page = crowi.model('Page');
@@ -1854,21 +1856,144 @@ describe('Routes /api attachments (Hono)', () => {
       expect(res.body.error.code).toBe('AUTHENTICATION_REQUIRED');
     });
 
-    it('AC-1/AC-2/AC-3: publishes the policy derived from the existing upload constants', async () => {
+    it('AC-1/AC-5: publishes the policy derived from the existing upload constants, with a single maxBytes.attachment (no paste/dnd)', async () => {
       const res = await request(app).get('/api/attachments/upload-policy').set(authHeaders(accessToken));
 
       expect(res.status).toBe(200);
       expect(res.body.allowedMimeTypes).toEqual(UPLOAD_ALLOWED_MIME);
       expect(res.body.extensionHints).toEqual(UPLOAD_EXT_TO_MIME);
-      expect(res.body.maxBytes).toEqual({
-        attachment: ADD_ATTACHMENT_MAX_BYTES,
-        paste: PASTE_MAX_BYTES,
-        dnd: DND_MAX_BYTES,
-      });
+      expect(res.body.maxBytes).toEqual({ attachment: UPLOAD_MAX_BYTES_DEFAULT });
       expect(res.body.profilePicture).toEqual({
         allowedMimeTypes: PROFILE_PICTURE_ALLOWED_MIME,
         maxBytes: PROFILE_PICTURE_MAX_BYTES,
       });
+    });
+  });
+
+  describe('unified attachment size limit', () => {
+    it('AC-13: profile picture limits are unchanged', () => {
+      expect(PROFILE_PICTURE_MAX_BYTES).toBe(5 * 1024 * 1024);
+    });
+
+    it('AC-1: POST /pages/:pageId/attachments (add) accepts a file exactly at the 50 MB limit — real multipart framing pushes Content-Length past the raw limit, and the precheck must not reject that', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}add-exact-limit`, '# add');
+      const exact = Buffer.alloc(UPLOAD_MAX_BYTES_DEFAULT, 0);
+
+      const res = await request(app)
+        .post(`/api/pages/${page._id}/attachments`)
+        .set(authHeaders(accessToken))
+        .attach('file', exact, { filename: 'exact.bin', contentType: 'application/octet-stream' });
+
+      expect(res.status).toBe(200);
+    });
+
+    it('AC-1: POST /pages/:pageId/attachments (add) rejects a 1-byte-over-limit upload with 413 (post-parse check catches what the precheck framing allowance lets through)', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}add-too-large`, '# add');
+      const oversize = Buffer.alloc(UPLOAD_MAX_BYTES_DEFAULT + 1, 0);
+
+      const res = await request(app)
+        .post(`/api/pages/${page._id}/attachments`)
+        .set(authHeaders(accessToken))
+        .attach('file', oversize, { filename: 'huge.bin', contentType: 'application/octet-stream' });
+
+      expect(res.status).toBe(413);
+      expect(res.body.error.code).toBe('FILE_TOO_LARGE');
+    });
+
+    it('AC-1/AC-7: the Content-Length precheck runs BEFORE the body is read — the server 413s while only a fraction of the declared body has been sent, proving parseBody()/arrayBuffer() was never invoked', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}add-precheck-no-buffer`, '# add');
+
+      const address = app.address();
+      if (address === null || typeof address === 'string') {
+        throw new Error('test server is not listening on a TCP port');
+      }
+
+      const boundary = 'crowiTestBoundaryNoBuffer';
+      const multipartHead = Buffer.from(
+        `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="huge.bin"\r\nContent-Type: application/octet-stream\r\n\r\n`,
+      );
+      // The declared Content-Length is far larger than what is ever actually
+      // written below. If the handler read the body (directly, or via
+      // `.openapi()`'s generated multipart validator) BEFORE checking
+      // Content-Length, this request would hang waiting for the remaining
+      // declared bytes instead of getting a fast 413 — that hang is exactly
+      // what this test would time out on if the precheck regressed back into
+      // the handler. 1 MiB comfortably clears the precheck's small
+      // multipart-framing allowance (so this exercises the precheck, not the
+      // post-parse check the previous test already covers).
+      const declaredLength = UPLOAD_MAX_BYTES_DEFAULT + 1024 * 1024;
+
+      const response = await new Promise<{ status: number; body: string }>((resolve, reject) => {
+        const req = http.request(
+          {
+            host: '127.0.0.1',
+            port: address.port,
+            path: `/api/pages/${page._id}/attachments`,
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              'Content-Type': `multipart/form-data; boundary=${boundary}`,
+              'Content-Length': declaredLength,
+            },
+          },
+          (res) => {
+            const chunks: Buffer[] = [];
+            res.on('data', (chunk: Buffer) => chunks.push(chunk));
+            res.on('end', () => {
+              resolve({ status: res.statusCode ?? 0, body: Buffer.concat(chunks).toString('utf8') });
+            });
+            res.on('error', reject);
+          },
+        );
+        req.on('error', (err) => {
+          // The server responding early (413) and closing the connection
+          // before this end ever calls `req.end()` can surface as either a
+          // reset (ECONNRESET) or a failed write to the now-closed socket
+          // (EPIPE) depending on exactly when the close lands relative to
+          // `req.write()` — both are the expected side effect of the fast
+          // rejection this test asserts, not a failure. Only reject if we
+          // have not already resolved via a full response.
+          const code = (err as NodeJS.ErrnoException).code;
+          if (code !== 'ECONNRESET' && code !== 'EPIPE') reject(err);
+        });
+        req.write(multipartHead);
+        // Deliberately never call `req.end()` — only `multipartHead.length`
+        // bytes (far short of `declaredLength`) are ever sent.
+      });
+
+      expect(response.status).toBe(413);
+      expect(JSON.parse(response.body)).toEqual({
+        error: { code: 'FILE_TOO_LARGE', message: expect.stringContaining(String(UPLOAD_MAX_BYTES_DEFAULT)) },
+      });
+    });
+
+    it('AC-1/AC-7: a request with NO Content-Length header (chunked transfer) is rejected by the precheck itself, not merely by the post-parse check', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}add-chunked-too-large`, '# add');
+
+      // The precheck rejects on the ABSENCE of `Content-Length` alone — it
+      // never reads the body — so a small stream proves the same thing a
+      // huge one would, without racing the server's early 413 against a
+      // still-streaming multi-megabyte client write (which flakes with
+      // EPIPE/ECONNRESET on some platforms).
+      const res = await request(app)
+        .post(`/api/pages/${page._id}/attachments`)
+        .set(authHeaders(accessToken))
+        .attach('file', unsizedStream(1024), { filename: 'small.bin', contentType: 'application/octet-stream' });
+
+      expect(res.status).toBe(413);
+      expect(res.body.error.code).toBe('FILE_TOO_LARGE');
+    });
+
+    it('AC-7: a file just over the limit but within the multipart-framing allowance passes the precheck, then the post-parse check still rejects it', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}add-post-parse-too-large`, '# add');
+
+      const res = await request(app)
+        .post(`/api/pages/${page._id}/attachments`)
+        .set(authHeaders(accessToken))
+        .attach('file', Buffer.alloc(UPLOAD_MAX_BYTES_DEFAULT + 1024, 0), { filename: 'just-over.bin', contentType: 'application/octet-stream' });
+
+      expect(res.status).toBe(413);
+      expect(res.body.error.code).toBe('FILE_TOO_LARGE');
     });
   });
 });

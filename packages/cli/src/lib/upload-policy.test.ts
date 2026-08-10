@@ -18,7 +18,7 @@ function jsonResponse(status: number, body: unknown): Response {
 const POLICY: UploadPolicyResponse = {
   allowedMimeTypes: ['image/png', 'application/pdf', 'application/octet-stream'],
   extensionHints: { png: 'image/png', pdf: 'application/pdf' },
-  maxBytes: { attachment: 1000, paste: 500, dnd: 2000 },
+  maxBytes: { attachment: 1000 },
   profilePicture: { allowedMimeTypes: ['image/png'], maxBytes: 100 },
 };
 

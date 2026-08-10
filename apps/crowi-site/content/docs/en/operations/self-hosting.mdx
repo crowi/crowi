@@ -51,6 +51,14 @@ like this:
 `/collab/*` is a WebSocket endpoint, so enable **Upgrade-header passthrough** on
 the proxy.
 
+Also remember to raise the front proxy's own body size limit to a margin
+above crowi's upload limit (`CROWI_UPLOAD_MAX_BYTES`, default 50 MB) — not
+merely equal to it, since multipart framing makes the request body somewhat
+larger than the file inside it. **nginx's `client_max_body_size` defaults to
+1 MB** — leave it unset and the proxy returns 413 well before crowi's own
+limit ever applies. See "Upload body size limit" in
+[Deployment topologies](./deployment) for the exact config line.
+
 ## Build the runner project
 
 <Steps>

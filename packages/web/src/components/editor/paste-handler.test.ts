@@ -158,7 +158,9 @@ describe('pasteHandler clipboard files', () => {
 
     expect(event.defaultPrevented).toBe(true);
     expect(pendingUploads).toHaveLength(1);
-    expect(uploads[0].get('intent')).toBe('paste');
+    // `intent` is not sent to the server: the size cap is a single unified
+    // value, independent of it.
+    expect(uploads[0].get('intent')).toBeNull();
     // Non-image placeholder / result carry no `!` prefix, and the file
     // keeps its own name (no `pasted-…` rename).
     expect(view.state.doc.toString()).toMatch(/[^!]\[Uploading report\.html/);

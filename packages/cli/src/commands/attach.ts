@@ -4,6 +4,7 @@ import { basename } from 'node:path';
 import { Readable, type Writable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 
+import { AttachmentErrorCodeSchema, AttachmentErrorSchema } from '@crowi/api-contract';
 import type { Command } from 'commander';
 
 import { authedFetch, authedFetchRaw, CliError, EXIT } from '../lib/http';
@@ -126,7 +127,33 @@ async function runAdd(pathOrId: string, file: string, command: Command): Promise
     body = await authedFetch<AddAttachmentResponse>(profile, 'POST', `/pages/${current.pageId}/attachments`, { body: form });
   } catch (err) {
     if (err instanceof CliError && err.status === 413) {
-      throw new CliError(`upload rejected: ${file} exceeds the server's attachment size limit`, { exitCode: EXIT.INVALID });
+      // `FILE_TOO_LARGE` is the ONLY code the addAttachment route's 413 ever
+      // carries (both its Content-Length precheck and its post-parse size
+      // check emit it — see `rejectOversizedContentLength` in the api
+      // handler). Validating the FULL envelope against `AttachmentErrorSchema`
+      // (not just `err.apiCode`, which `parseCrowiError` in `lib/http.ts`
+      // derives leniently — it accepts a `code` with no `message`, which a
+      // front reverse proxy emitting a lookalike partial body could also
+      // produce) is what makes this a genuine crowi-origin check rather than
+      // a shape coincidence. A body that fails full validation, or whose
+      // code isn't exactly `FILE_TOO_LARGE`, did not come from crowi's own
+      // size check — it came from a front reverse proxy enforcing its own
+      // (typically much smaller, e.g. nginx's 1 MB default
+      // `client_max_body_size`) body-size limit before the request ever
+      // reached the api. The distinction matters: telling the user "the
+      // server's limit" when it was actually the proxy sends them to the
+      // wrong place to fix it. Deliberately never surface `err.message` or
+      // `err.rawBody` here — for the proxy case it can be raw HTML/text from
+      // the proxy, and printing it verbatim helps nobody while potentially
+      // leaking internal infrastructure details.
+      const parsed = AttachmentErrorSchema.safeParse(err.rawBody);
+      if (parsed.success && parsed.data.error.code === AttachmentErrorCodeSchema.enum.FILE_TOO_LARGE) {
+        throw new CliError(`upload rejected: ${file} exceeds the server's attachment size limit`, { exitCode: EXIT.INVALID });
+      }
+      throw new CliError(
+        `upload rejected: ${file} — the response did not come from crowi itself, which means a reverse proxy in front of the server rejected it (likely its own body-size limit, e.g. nginx's default 1 MB \`client_max_body_size\`). Check the proxy configuration, not crowi's upload policy.`,
+        { exitCode: EXIT.INVALID },
+      );
     }
     rethrowScopeHint(err, 'attachments:write');
   }

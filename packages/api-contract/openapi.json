@@ -34321,13 +34321,6 @@
                   },
                   "pageId": {
                     "type": "string"
-                  },
-                  "intent": {
-                    "type": "string",
-                    "enum": [
-                      "paste",
-                      "dnd"
-                    ]
                   }
                 }
               }
@@ -34471,7 +34464,7 @@
             }
           },
           "413": {
-            "description": "Body exceeds the per-intent size cap",
+            "description": "Body exceeds the unified upload size cap",
             "content": {
               "application/json": {
                 "schema": {
@@ -35195,18 +35188,10 @@
                       "properties": {
                         "attachment": {
                           "type": "number"
-                        },
-                        "paste": {
-                          "type": "number"
-                        },
-                        "dnd": {
-                          "type": "number"
                         }
                       },
                       "required": [
-                        "attachment",
-                        "paste",
-                        "dnd"
+                        "attachment"
                       ]
                     },
                     "profilePicture": {
