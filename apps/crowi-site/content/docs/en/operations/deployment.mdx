@@ -194,9 +194,11 @@ change — uploads up to crowi's own limit already pass through.
 <Callout type="warn">
   When the proxy's limit is smaller than crowi's, the CLI's pre-flight check
   (which reads `GET /attachments/upload-policy`) passes, but the actual upload
-  then gets a 413 from the proxy. web / CLI detect that this 413 didn't come
-  from crowi's own response format and report "a front reverse proxy rejected
-  this", but the real fix is for the operator to raise the proxy's body size
+  then gets a 413 from the proxy. The CLI, and the editor's paste and
+  drag-and-drop uploads, detect that this 413 did not come from crowi's own
+  response format and report "a front reverse proxy rejected this" (a direct
+  upload from the attachment list shows a generic error instead). Either way
+  the real fix is for the operator to raise the proxy's body size
   limit to a margin above crowi's own (see "Upload body size limit" above —
   an exact match can still 413 a request crowi would accept).
 </Callout>
