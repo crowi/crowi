@@ -13,6 +13,7 @@
  * assertions. That variant calls this module's authHeaders but manages user
  * creation itself.
  */
+import { Readable } from 'node:stream';
 import sharp from 'sharp';
 import type { UserDocument } from 'src/models/user';
 import { createJwtUtil } from 'src/util/jwt';
@@ -125,3 +126,31 @@ export const createWideJpeg = (background: { r: number; g: number; b: number } =
   sharp({ create: { width: 2000, height: 1000, channels: 3, background } })
     .jpeg()
     .toBuffer();
+
+// ---------------------------------------------------------------------------
+// unsizedStream
+// ---------------------------------------------------------------------------
+
+/**
+ * A `Readable` of exactly `totalBytes` zero bytes, streamed in 1 MB chunks,
+ * that carries no known length up front. Attaching this (instead of a
+ * `Buffer`) to a `supertest` multipart request forces the request onto
+ * chunked transfer-encoding — no `Content-Length` header — so an upload-size
+ * test can exercise a handler's rejection of a request whose size cannot be
+ * bounded from its headers before the body would be buffered.
+ */
+export const unsizedStream = (totalBytes: number): Readable => {
+  const CHUNK = 1024 * 1024;
+  let remaining = totalBytes;
+  return new Readable({
+    read() {
+      if (remaining <= 0) {
+        this.push(null);
+        return;
+      }
+      const size = Math.min(CHUNK, remaining);
+      remaining -= size;
+      this.push(Buffer.alloc(size, 0));
+    },
+  });
+};

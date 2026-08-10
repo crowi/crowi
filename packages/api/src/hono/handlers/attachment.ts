@@ -34,11 +34,29 @@
  * Multipart (RFC-0006 discovery doc §5):
  *  - `addAttachment` + `uploadAttachment` use Hono-native
  *    `c.req.parseBody()`. multer is gone from this resource.
- *  - `uploadAttachment` reads `c.req.header('content-length')` BEFORE
- *    `parseBody()` and 413's a body that exceeds the larger D&D ceiling
- *    (50 MB) — this preserves the multer `LIMIT_FILE_SIZE` early-reject
- *    posture without buffering the body. The per-intent paste cap
- *    (10 MB) is enforced AFTER parse against the actual file size.
+ *  - Both routes reject a `Content-Length` over the resolved upload size
+ *    limit (one limit, not per-route/intent — see `registerAttachmentRoutes`)
+ *    via `rejectOversizedContentLength`, installed as `method +
+ *    routingPath`-scoped middleware BEFORE `.openapi(route, handler)` below
+ *    (same `app.on(...)` pattern `applyScope` uses). This has to be
+ *    middleware, not a check at the top of the handler: `.openapi()`
+ *    installs `@hono/zod-openapi`'s generated multipart validator ahead of
+ *    the handler for any route whose schema declares a `multipart/form-data`
+ *    body, and that validator reads the ENTIRE request via
+ *    `c.req.arrayBuffer()` to build the `FormData` it checks — a same-handler
+ *    precheck would run only after that buffering, defeating the whole
+ *    point of an early-reject OOM guard. The precheck compares
+ *    `Content-Length` (the WHOLE multipart body: boundaries, part headers,
+ *    any other form fields) against the limit plus a small fixed allowance
+ *    for that framing overhead (`MULTIPART_OVERHEAD_ALLOWANCE_BYTES`) — a
+ *    file sized exactly at the limit must not be rejected just because its
+ *    envelope pushed `Content-Length` past the raw number. A request with no
+ *    (or a malformed) `Content-Length` — e.g. chunked transfer — is rejected
+ *    by the same precheck rather than let through, since its size cannot be
+ *    bounded before `parseBody()` would buffer it. Both routes ALSO re-check
+ *    the actual parsed `file.size` (no framing) against the exact limit
+ *    after `parseBody()`, since `Content-Length` can be spoofed smaller than
+ *    the real body.
  *
  * Rate limiting:
  *  - `uploadAttachment` only: 20 req/min/user, name
@@ -69,6 +87,7 @@ import {
 } from '@crowi/api-contract';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import Debug from 'debug';
+import { createMiddleware } from 'hono/factory';
 import { Types } from 'mongoose';
 
 import type Crowi from 'src/crowi';
@@ -78,6 +97,7 @@ import FileUploader from 'src/util/file-uploader';
 import { generateDisplayDerivativeForUpload } from 'src/util/image-display-derivative';
 import { createRateLimiter } from 'src/util/rate-limit';
 import { resolveRedisKeyspaceIfEnabled } from 'src/util/redis-keyspace';
+import { resolveUploadMaxBytes } from 'src/util/upload-limit';
 import {
   isPopulatedUser,
   isValidObjectId,
@@ -98,32 +118,26 @@ import { INTERNAL_ERROR_BODY } from './_helpers/errors';
 const debug = Debug('crowi:hono:handlers:attachment');
 
 /**
- * RFC-0004 Phase 6/7 — intent-aware SIZE limits for the editor upload
- * (unchanged by feature-attachment-upload-policy):
- *   - `paste`: 10 MB.
- *   - `dnd`  : 50 MB.
+ * The single SIZE limit for every attachment upload route (attach button /
+ * editor paste / editor drag-and-drop alike), independent of route or
+ * client-declared intent.
  *
- * The `Content-Length` precheck uses the larger ceiling (50 MB) so a
- * legitimate D&D upload is never 413'd before parse. The per-intent
- * cap (paste 10 MB) is then enforced post-parse against the actual
- * file size.
+ * `registerAttachmentRoutes` resolves it once, from `crowi.getEnv()`
+ * (`util/upload-limit.ts#resolveUploadMaxBytes`) — deliberately NOT at this
+ * module's top level: `app.ts` imports this module (transitively, via
+ * `src/crowi`) before it calls `dotenv.config()`, so a module-load-time
+ * `process.env` read would always see the value from BEFORE `.env` was
+ * loaded in production. Resolving inside `registerAttachmentRoutes` (called
+ * from `crowi.start()`, well after `dotenv.config()` has run) reads the
+ * real value. `crowi.getEnv()` rather than `process.env` directly so a test
+ * harness that constructs `Crowi` with its own merged env object is
+ * honoured too.
  *
- * feature-attachment-upload-policy — the MIME check itself is no longer
- * intent-aware: `paste` / `dnd` / the general `addAttachment` route all
- * check the same `UPLOAD_ALLOWED_MIME` allow-list (see that constant's
- * doc comment in `@crowi/api-contract` for why). Only the size cap still
- * varies by route/intent.
- *
- * Exported (alongside `ADD_ATTACHMENT_MAX_BYTES` below) so
- * `getUploadPolicyRoute` and its test can both read the same values instead
- * of a second copy drifting from these.
+ * The MIME check is intent-independent: `paste` / `dnd` / the general
+ * `addAttachment` route all check the same `UPLOAD_ALLOWED_MIME` allow-list
+ * (see that constant's doc comment in `@crowi/api-contract` for why). The
+ * size cap is intent-independent too.
  */
-export const PASTE_MAX_BYTES = 10 * 1024 * 1024;
-export const DND_MAX_BYTES = 50 * 1024 * 1024;
-const UPLOAD_PARSE_MAX_BYTES = DND_MAX_BYTES;
-
-const maxBytesForIntent = (intent: 'paste' | 'dnd'): number => (intent === 'dnd' ? DND_MAX_BYTES : PASTE_MAX_BYTES);
-
 const UPLOAD_MIME_SET = new Set<string>(UPLOAD_ALLOWED_MIME);
 
 const isUploadAllowedMime = (mimeType: string): boolean => UPLOAD_MIME_SET.has(mimeType);
@@ -284,15 +298,6 @@ const PAGE_NOT_FOUND_FOR_ATTACHMENT_BODY = errorBody('PAGE_NOT_FOUND', 'Page not
 const ATTACHMENT_NOT_FOUND_BODY = errorBody('ATTACHMENT_NOT_FOUND', 'Attachment not found');
 
 /**
- * Outer ceiling for `POST /pages/:pageId/attachments`. The legacy multer
- * disk-storage didn't bound the size, but Hono's `parseBody()` buffers
- * the entire body in memory, so we need a hard cap to avoid OOM.
- *
- * Exported as `maxBytes.attachment` on `GET /attachments/upload-policy`.
- */
-export const ADD_ATTACHMENT_MAX_BYTES = 100 * 1024 * 1024;
-
-/**
  * RFC-0004 Phase 7 — extract attachment ObjectId hex strings referenced
  * by a revision body. Matches the current `/api/attachments/<id>` (the
  * `fileUrl` virtual / stream route), the legacy (pre-`/api/v2` → `/api`
@@ -437,10 +442,66 @@ const pickString = (parsed: Record<string, string | File | (string | File)[]>, n
   return undefined;
 };
 
+/**
+ * Bounded allowance added to the size limit when comparing against
+ * `Content-Length`, which measures the WHOLE multipart body (boundary
+ * delimiters, per-part headers, and any other form fields such as
+ * `uploadAttachmentRoute`'s `pageId`) — not just the file payload the limit
+ * is actually about. Without this, a file at EXACTLY the limit — which
+ * `GET /attachments/upload-policy` told the client is allowed — would still
+ * fail this precheck once framing pushes `Content-Length` past the raw
+ * number. Deliberately generous relative to realistic multipart overhead
+ * (a boundary string plus a handful of part headers is a few hundred bytes
+ * at most) while staying negligible against a 50 MB memory budget: this
+ * precheck only needs to reject requests that are unambiguously over
+ * budget before `parseBody()` buffers them — the byte-exact enforcement is
+ * the post-parse `file.size` check below, which never sees framing at all.
+ */
+const MULTIPART_OVERHEAD_ALLOWANCE_BYTES = 64 * 1024;
+
+/**
+ * Content-Length precheck as `method + routingPath`-scoped middleware,
+ * installed via `app.on(...)` (the same pattern `applyScope` uses, see that
+ * helper's doc comment) STRICTLY BEFORE `.openapi(route, handler)`
+ * registers the route's generated multipart validator. That ordering is
+ * load-bearing: `@hono/zod-openapi` installs a `zValidator('form', ...)`
+ * ahead of the handler for any route whose schema declares a
+ * `multipart/form-data` body, and that validator's underlying
+ * `hono/validator` implementation calls `c.req.arrayBuffer()` — reading the
+ * ENTIRE body into memory — before it ever runs the zod schema. A precheck
+ * placed inside the handler itself would therefore only run AFTER the full
+ * body had already been buffered, defeating the OOM guard entirely.
+ * `tooLargeBody` is a thunk (not a plain value) so each call site can
+ * supply its own route-specific error envelope.
+ *
+ * A request with no (or a malformed) `Content-Length` — e.g. chunked
+ * transfer — is rejected too, not merely let through: this precheck exists
+ * specifically to stop `parseBody()` from ever buffering an unbounded body,
+ * and a request whose size cannot be bounded from its header is exactly
+ * that. A real browser/CLI upload of a `File`/`Blob` always has a known
+ * length and sends `Content-Length`; only a client deliberately avoiding it
+ * hits this path.
+ */
+const rejectOversizedContentLength = (maxBytes: number, tooLargeBody: () => Record<string, unknown>) =>
+  createMiddleware<CrowiHonoBindings>(async (c, next) => {
+    const contentLengthHeader = c.req.header('content-length');
+    const parsedLen = contentLengthHeader ? Number.parseInt(contentLengthHeader, 10) : Number.NaN;
+    if (!Number.isFinite(parsedLen) || parsedLen > maxBytes + MULTIPART_OVERHEAD_ALLOWANCE_BYTES) {
+      return c.json(tooLargeBody(), 413);
+    }
+    await next();
+  });
+
 export const registerAttachmentRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app: E, crowi: Crowi) => {
   const Attachment = crowi.model('Attachment');
   const Page = crowi.model('Page');
   const fileUploader = FileUploader(crowi);
+
+  // Resolved here (not at module load, see the doc comment above
+  // `UPLOAD_MIME_SET`) so `.env`-file operators actually take effect in
+  // production. Read once per `registerAttachmentRoutes` call (once per
+  // process in production) and closed over by every handler below.
+  const uploadMaxBytes = resolveUploadMaxBytes(crowi.getEnv().CROWI_UPLOAD_MAX_BYTES);
 
   // One shared upload limiter per process.
   const uploadLimiter = createRateLimiter({
@@ -474,6 +535,25 @@ export const registerAttachmentRoutes = <E extends OpenAPIHono<CrowiHonoBindings
   // (`attachments:write` already implies it, so an upload-scoped CLI token
   // can read the policy it needs before uploading).
   applyScope(app, getUploadPolicyRoute, 'attachments:read');
+
+  // Content-Length prechecks, installed the same way as the scope guards
+  // above and for the same reason: they MUST run before `.openapi()`'s
+  // generated multipart validator (see `rejectOversizedContentLength`'s doc
+  // comment). The error envelope each route reports for a Content-Length
+  // rejection matches the code its POST-PARSE size check reports
+  // (`FILE_TOO_LARGE` / `too_large`) — the CLI and web clients key their
+  // front-reverse-proxy discrimination off exactly that code, so both of a
+  // route's 413 paths must agree on it.
+  app.on(
+    addAttachmentRoute.method,
+    addAttachmentRoute.getRoutingPath(),
+    rejectOversizedContentLength(uploadMaxBytes, () => errorBody('FILE_TOO_LARGE', `Request body exceeds the ${uploadMaxBytes}-byte upload limit`)),
+  );
+  app.on(
+    uploadAttachmentRoute.method,
+    uploadAttachmentRoute.getRoutingPath(),
+    rejectOversizedContentLength(uploadMaxBytes, () => uploadErrorBody('too_large', 'The file is too large to upload.', { maxBytes: uploadMaxBytes })),
+  );
 
   return (
     app
@@ -628,14 +708,12 @@ export const registerAttachmentRoutes = <E extends OpenAPIHono<CrowiHonoBindings
         const user = c.get('user');
         const { pageId } = c.req.valid('param');
 
-        // Hard ceiling on the multipart body before `parseBody()` buffers
-        // it. Mirrors the editor-upload precheck — without it, a logged-in
-        // user posting a 2 GB body would OOM the api process.
-        const contentLengthHeader = c.req.header('content-length');
-        if (contentLengthHeader && Number.parseInt(contentLengthHeader, 10) > ADD_ATTACHMENT_MAX_BYTES) {
-          return c.json(errorBody('FILE_MISSING', 'Request body exceeds 100 MB'), 413);
-        }
-
+        // The Content-Length hard ceiling runs BEFORE this handler, as
+        // `rejectOversizedContentLength` middleware (registered above, in
+        // `registerAttachmentRoutes`) — see its doc comment for why it
+        // cannot live here (including why a missing/malformed
+        // `Content-Length` is rejected there too, not just an over-limit
+        // one).
         const grant = await loadGrantedPage(Page, pageId, user);
         if ('error' in grant) {
           if (grant.error.status === 400) return c.json(INVALID_PAGE_ID_FOR_ATTACHMENT_BODY, 400);
@@ -654,6 +732,12 @@ export const registerAttachmentRoutes = <E extends OpenAPIHono<CrowiHonoBindings
         const file = pickFile(parsed, 'file');
         if (!file) {
           return c.json(errorBody('FILE_MISSING', 'No file provided'), 400);
+        }
+
+        // Re-check the ACTUAL parsed size, not just the (spoofable smaller)
+        // `Content-Length` header above.
+        if (file.size > uploadMaxBytes) {
+          return c.json(errorBody('FILE_TOO_LARGE', `File exceeds the ${uploadMaxBytes}-byte upload limit`), 413);
         }
 
         // feature-attachment-upload-policy — this route used to have NO
@@ -727,21 +811,12 @@ export const registerAttachmentRoutes = <E extends OpenAPIHono<CrowiHonoBindings
       .openapi(uploadAttachmentRoute, async (c) => {
         const user = c.get('user');
 
-        // Content-Length precheck: reject obvious over-cap bodies
-        // BEFORE invoking `parseBody()`. This reproduces multer's
-        // `LIMIT_FILE_SIZE` early-reject posture without buffering.
-        // We use the larger D&D ceiling (50 MB) here — the per-intent
-        // paste cap (10 MB) is enforced post-parse against the actual
-        // file size (the multipart envelope overhead would otherwise
-        // make a 9.99 MB paste 413 prematurely).
-        const contentLengthHeader = c.req.header('content-length');
-        if (contentLengthHeader) {
-          const parsedLen = Number.parseInt(contentLengthHeader, 10);
-          if (Number.isFinite(parsedLen) && parsedLen > UPLOAD_PARSE_MAX_BYTES) {
-            return c.json(uploadErrorBody('too_large', 'The file is too large to upload.', { maxBytes: UPLOAD_PARSE_MAX_BYTES }), 413);
-          }
-        }
-
+        // The Content-Length precheck runs BEFORE this handler, as
+        // `rejectOversizedContentLength` middleware (registered above, in
+        // `registerAttachmentRoutes`) — see its doc comment for why it
+        // cannot live here (including why a missing/malformed
+        // `Content-Length` is rejected there too, not just an over-limit
+        // one).
         let parsed: Record<string, string | File | (string | File)[]>;
         try {
           parsed = await c.req.parseBody();
@@ -750,10 +825,12 @@ export const registerAttachmentRoutes = <E extends OpenAPIHono<CrowiHonoBindings
           return c.json(uploadErrorBody('disallowed_type', 'File upload error.'), 400);
         }
 
+        // `intent` is not read: it is a client self-report, not a defence,
+        // and the size cap is a single value regardless of it. Any `intent`
+        // field an older client still sends is simply ignored (falls out of
+        // `parsed` unread).
         const file = pickFile(parsed, 'file');
         const pageId = pickString(parsed, 'pageId') ?? '';
-        const intentField = pickString(parsed, 'intent');
-        const intent: 'paste' | 'dnd' | null = intentField === 'paste' || intentField === 'dnd' ? intentField : null;
 
         if (!file) {
           return c.json(uploadErrorBody('disallowed_type', 'No file provided.'), 400);
@@ -761,18 +838,12 @@ export const registerAttachmentRoutes = <E extends OpenAPIHono<CrowiHonoBindings
         if (!isValidObjectId(pageId)) {
           return c.json(uploadErrorBody('no_permission', 'A valid pageId is required.'), 400);
         }
-        if (!intent) {
-          return c.json(uploadErrorBody('disallowed_type', "The intent field must be 'paste' or 'dnd'."), 400);
-        }
 
-        // Intent-aware SIZE enforcement only (paste is held to 10 MB even
-        // when the wire body fits the 50 MB D&D ceiling). The MIME check
-        // below is shared with `addAttachment` — feature-attachment-upload-policy
-        // unifies "may this be uploaded at all" across every route; only
-        // the size cap still varies by intent.
-        const maxBytes = maxBytesForIntent(intent);
-        if (file.size > maxBytes) {
-          return c.json(uploadErrorBody('too_large', 'The file is too large to upload.', { maxBytes }), 413);
+        // The ACTUAL parsed size, checked against the single unified limit
+        // regardless of intent (Content-Length can be spoofed smaller than
+        // the real body — see the precheck above for the larger-body case).
+        if (file.size > uploadMaxBytes) {
+          return c.json(uploadErrorBody('too_large', 'The file is too large to upload.', { maxBytes: uploadMaxBytes }), 413);
         }
         // feature-attachment-mime-fallback — same helper as `addAttachment` /
         // `persistUploadToTmp`: an undeclared type is backfilled from the
@@ -826,7 +897,7 @@ export const registerAttachmentRoutes = <E extends OpenAPIHono<CrowiHonoBindings
           cleanupTmp(tmpPath);
           tmpPath = null;
 
-          debug('editor upload ok', { intent, pageId, attachmentId: created._id.toString() });
+          debug('editor upload ok', { pageId, attachmentId: created._id.toString() });
           return c.json(
             {
               url: created.fileUrl,
@@ -927,9 +998,7 @@ export const registerAttachmentRoutes = <E extends OpenAPIHono<CrowiHonoBindings
             allowedMimeTypes: [...UPLOAD_ALLOWED_MIME],
             extensionHints: { ...UPLOAD_EXT_TO_MIME },
             maxBytes: {
-              attachment: ADD_ATTACHMENT_MAX_BYTES,
-              paste: PASTE_MAX_BYTES,
-              dnd: DND_MAX_BYTES,
+              attachment: uploadMaxBytes,
             },
             profilePicture: {
               allowedMimeTypes: [...PROFILE_PICTURE_ALLOWED_MIME],

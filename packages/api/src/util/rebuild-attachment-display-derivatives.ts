@@ -81,9 +81,10 @@ export interface AttachmentDisplayDerivativesDeps {
   checkFreeBytes?: (dir: string) => Promise<number>;
   /**
    * Hard per-item cap (bytes) enforced WHILE staging an original into
-   * `crowi.tmpDir` (spec §11's "1 アイテムあたりの上限は 100MB" — footer
-   * uploads' `ADD_ATTACHMENT_MAX_BYTES`). Also the figure the disk-space
-   * precheck multiplies by `--concurrency`. Defaults to
+   * `crowi.tmpDir` (spec §11's "1 アイテムあたりの上限は 100MB" — see
+   * {@link PER_ITEM_STAGE_ESTIMATE_BYTES}'s doc comment for why this stays
+   * 100MB independent of the current live upload limit). Also the figure
+   * the disk-space precheck multiplies by `--concurrency`. Defaults to
    * `PER_ITEM_STAGE_ESTIMATE_BYTES`; overridable for tests so the
    * concurrently-staged-bytes bound can be exercised without multi-hundred-MB
    * fixtures.
@@ -144,7 +145,19 @@ export type AttachmentDisplayDerivativesStats = GenerateModeStats | RepairMissin
 // Shared constants / helpers
 // ---------------------------------------------------------------------------
 
-/** Larger of the two upload ceilings (footer add = 100MB, editor upload = 50MB) — spec §11's per-item disk estimate. Exported for test-side boundary assertions on the disk-space precheck AND the staging byte-limit guard (`createByteLimitGuard`) — the same figure bounds both. */
+/**
+ * Per-item disk estimate for staging an original into `crowi.tmpDir` (spec
+ * §11). Deliberately NOT tied to the api's current live upload size limit
+ * (`hono/handlers/attachment.ts`, hard ceiling 50MB): an already-stored
+ * attachment can exceed today's limit (uploaded under a higher one that was
+ * since lowered) and still need its derivative rebuilt, so this estimate
+ * has to bound the largest attachment that could plausibly exist on disk,
+ * not the largest one uploadable right now. Overestimating a disk-space
+ * safety margin for an offline batch tool is harmless — underestimating it
+ * is not. Exported for test-side boundary assertions on the disk-space
+ * precheck AND the staging byte-limit guard (`createByteLimitGuard`) — the
+ * same figure bounds both.
+ */
 export const PER_ITEM_STAGE_ESTIMATE_BYTES = 100 * 1024 * 1024;
 export const DEFAULT_GC_GRACE_HOURS = 24;
 
@@ -177,8 +190,9 @@ async function defaultCheckFreeBytes(dir: string): Promise<number> {
  * `RebuildItemError` the instant more than `limitBytes` has flowed through it
  * — spec §11's "同時にステージされるファイルサイズの合計が `--concurrency ×
  * 100MB` で有界" bound is only real if it's ENFORCED while streaming, not
- * merely assumed from the upload-time cap (`ADD_ATTACHMENT_MAX_BYTES`)
- * because a legacy/hand-edited row could in principle be larger. Every chunk
+ * merely assumed from the api's current live upload size limit, because a
+ * legacy/hand-edited row, or one uploaded under a since-lowered limit,
+ * could in principle be larger. Every chunk
  * forwarded downstream keeps the running total at or under `limitBytes`, so
  * the staged file on disk never exceeds it — combined with
  * `forEachBounded`'s `concurrency`-bounded worker pool, the total bytes
