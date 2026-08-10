@@ -143,6 +143,47 @@ location / { proxy_pass http://web:3000; }
   別途整備中です。それまでは上記ルーティングで自前 proxy を用意してください。
 </Callout>
 
+### アップロードの body size 上限
+
+添付アップロードの上限は既定 50MB です(`CROWI_UPLOAD_MAX_BYTES` で下げられる —
+[設定](./configuration) の環境変数表参照)。ただしこれは api プロセス内で判定される
+値でしかありません。前段にリバースプロキシを置く場合、**プロキシ自身の body size 上限は
+crowi の上限より少し大きい値に設定する必要があります**(同じ値では不十分な理由は下記)。
+
+**nginx の `client_max_body_size` の既定は 1MB です。** 何も設定しないと、crowi が
+50MB まで許可していても nginx が 1MB で 413 を返し、リクエストは api に届きません
+(api 側のログにも残りません)。上記の nginx 設定例の `/api/` ロケーションに、次のように
+足してください。
+
+```nginx
+location /api/ {
+  proxy_pass http://api:3000;
+  client_max_body_size 51m;  # crowi の CROWI_UPLOAD_MAX_BYTES(既定 50MB)+ multipart のフレーミング分の余裕(下記参照)
+}
+```
+
+**プロキシの上限は crowi の上限と完全に同じ値ではなく、少し上に設定してください。**
+`client_max_body_size` はリクエストボディ全体を見て判定しますが、multipart アップロードは
+中身のファイルより常にいくらか大きくなります(境界文字列・各パートのヘッダ・他のフォーム
+フィールド分)。crowi 自身、この framing のオーバーヘッドを自分の上限に対して最大 64KiB
+まで許容してから拒否します。プロキシの上限を `CROWI_UPLOAD_MAX_BYTES` と完全に同じ値に
+すると、crowi なら受け付けるはずのリクエストをプロキシが 413 で弾いてしまうことがあります。
+1MB の余裕(既定 50MB に対して `51m`)を見ておけば、現実的な framing オーバーヘッドより
+十分に大きく安全です。
+
+**Caddy には既定の body size 制限がありません。** 上記の Caddy 設定例のままで、
+crowi の上限一杯までアップロードが通ります。
+
+<Callout type="warn">
+  プロキシの上限が crowi の上限より小さいと、CLI の pre-flight チェック(`GET
+  /attachments/upload-policy` を見て判定)は通過するのに、実際のアップロードでは
+  プロキシが 413 を返す状態になります。web / CLI はこの 413 が crowi 自身の応答形式
+  でないことを検出し「前段のリバースプロキシが拒否した」旨を表示しますが、根本的な
+  対処は運用者がプロキシの body size 上限を crowi の上限より少し大きい値に上げることです
+  (上記「アップロードの body size 上限」参照 — 完全に同じ値では crowi が受け付ける
+  リクエストが 413 になることがあります)。
+</Callout>
+
 ## (B) web と api を別ホストに(クロスオリジン)— 限定対応
 
 web と api が **別オリジン**(例: web = `https://wiki.example.com`、api =

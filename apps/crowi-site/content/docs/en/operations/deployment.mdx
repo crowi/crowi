@@ -158,6 +158,49 @@ location / { proxy_pass http://web:3000; }
   the routing above.
 </Callout>
 
+### Upload body size limit
+
+The attachment upload limit defaults to 50 MB (lowerable via
+`CROWI_UPLOAD_MAX_BYTES` — see the environment variables table in
+[Configuration](./configuration)). That limit is only ever enforced inside the
+api process, though. When you put a reverse proxy in front, **the proxy's own
+body size limit must be set a margin above crowi's limit**, not merely equal
+to it (see below for why).
+
+**nginx's `client_max_body_size` defaults to 1 MB.** Leave it unset and nginx
+returns 413 at 1 MB even though crowi allows up to 50 MB — the request never
+reaches the api (and never shows up in the api's logs either). Add this to the
+`/api/` location from the nginx example above:
+
+```nginx
+location /api/ {
+  proxy_pass http://api:3000;
+  client_max_body_size 51m;  # crowi's CROWI_UPLOAD_MAX_BYTES (default 50 MB), plus headroom for multipart framing (see note below)
+}
+```
+
+**Set the proxy's limit a little ABOVE crowi's, not exactly equal to it.**
+`client_max_body_size` bounds the entire request body, but a multipart upload
+is always somewhat larger than the file inside it (boundary markers, part
+headers, other form fields) — crowi itself tolerates up to 64 KiB of that
+framing overhead on top of its own limit before rejecting a request. A proxy
+set to the EXACT same number as `CROWI_UPLOAD_MAX_BYTES` can 413 a request
+crowi would have accepted. A 1 MB margin (`51m` for the 50 MB default) is
+comfortably larger than any realistic framing overhead.
+
+**Caddy has no default body size limit.** The Caddy example above needs no
+change — uploads up to crowi's own limit already pass through.
+
+<Callout type="warn">
+  When the proxy's limit is smaller than crowi's, the CLI's pre-flight check
+  (which reads `GET /attachments/upload-policy`) passes, but the actual upload
+  then gets a 413 from the proxy. web / CLI detect that this 413 didn't come
+  from crowi's own response format and report "a front reverse proxy rejected
+  this", but the real fix is for the operator to raise the proxy's body size
+  limit to a margin above crowi's own (see "Upload body size limit" above —
+  an exact match can still 413 a request crowi would accept).
+</Callout>
+
 ## (B) web and api on separate hosts (cross-origin) — limited
 
 If web and api live on **different origins** (e.g. web =
