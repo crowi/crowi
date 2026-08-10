@@ -402,6 +402,21 @@ const IMAGE_DERIVATIVE_MAX_PIXELS_DESCRIPTOR: EnvVarDescriptor = {
   check: { severity: 'warn', validate: validatePositiveInt },
 };
 
+/**
+ * The attachment upload size limit. Same posture as
+ * `IMAGE_DERIVATIVE_MAX_PIXELS` above: `warn`-severity
+ * format check only (a malformed value is made visible in the
+ * consolidated boot report), while the actual default/ceiling/clamping
+ * logic is owned by `util/upload-limit.ts`'s `resolveUploadMaxBytes` at
+ * the point of use — this descriptor exists so the typo-detection
+ * heuristic recognises the documented name instead of flagging a
+ * correctly-set `CROWI_UPLOAD_MAX_BYTES` as an unknown `CROWI_*` variable.
+ */
+const CROWI_UPLOAD_MAX_BYTES_DESCRIPTOR: EnvVarDescriptor = {
+  name: 'CROWI_UPLOAD_MAX_BYTES',
+  check: { severity: 'warn', validate: validatePositiveInt },
+};
+
 /** feature-image-derivative-optimization §8 — upload-path admission semaphore capacity (default 2). */
 const IMAGE_DERIVATIVE_ADMISSION_CONCURRENCY_DESCRIPTOR: EnvVarDescriptor = {
   name: 'IMAGE_DERIVATIVE_ADMISSION_CONCURRENCY',
@@ -482,6 +497,7 @@ export const ENV_VAR_DESCRIPTORS: readonly EnvVarDescriptor[] = [
   IMAGE_DERIVATIVE_MAX_PIXELS_DESCRIPTOR,
   IMAGE_DERIVATIVE_ADMISSION_CONCURRENCY_DESCRIPTOR,
   IMAGE_DERIVATIVE_ADMISSION_TIMEOUT_MS_DESCRIPTOR,
+  CROWI_UPLOAD_MAX_BYTES_DESCRIPTOR,
   ...TAXONOMY_ONLY_DESCRIPTORS,
 ];
 
