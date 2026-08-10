@@ -2,11 +2,68 @@
 
 import { Fragment, jsx, jsxs } from 'react/jsx-runtime';
 import { toHast } from 'mdast-util-to-hast';
+import type { State } from 'mdast-util-to-hast';
 import { raw } from 'hast-util-raw';
 import { toJsxRuntime } from 'hast-util-to-jsx-runtime';
-import type { Nodes as HastNodes } from 'hast';
+import type { Element as HastElement, Nodes as HastNodes } from 'hast';
 import type { ReactNode } from 'react';
 import { isKnownTag } from './known-tags';
+
+/**
+ * feature-renderer-frontmatter §D-5 — wire shape of the `crowiFrontmatter`
+ * mdast node the api's `core/frontmatter.ts` transform produces. No
+ * `children` (values are never re-parsed as Markdown — an entry's `*` or
+ * `[` must render as the literal character, not an accidental emphasis /
+ * link).
+ */
+interface CrowiFrontmatterMdastNode {
+  type: 'crowiFrontmatter';
+  entries?: Array<{ key?: unknown; value?: unknown }>;
+  data?: { hProperties?: Record<string, unknown> };
+}
+
+/**
+ * Custom `toHast` handler for `crowiFrontmatter` — rendered as a `<dl>`
+ * of `<dt>`/`<dd>` pairs (a 2-column grid via `.crowi-frontmatter` in
+ * `globals.css`), not a `<table>`: every real `<table>` element is
+ * unconditionally wrapped by `page-content.tsx`'s `MarkdownTableFullscreen`
+ * / `markdown-preview.tsx`'s `w-full border-collapse` override, neither of
+ * which fits a handful of metadata rows (open question default: no
+ * border, muted key, body-color value). `<dl>`/`<dt>`/`<dd>` have no
+ * component override in either caller, so this needs no change to
+ * `page-content.tsx` or `markdown-preview.tsx` — both already share this
+ * function, so page-view/preview parity is automatic. Text nodes only
+ * (never markdown-reinterpreted, matching the node's `children`-less
+ * mdast shape): each key/value is `entries[]`'s raw string, unescaped by
+ * this handler (`hast-util-to-jsx-runtime` renders hast `text` node
+ * values as plain text, not HTML).
+ */
+function crowiFrontmatterHandler(_state: State, node: CrowiFrontmatterMdastNode): HastElement {
+  const entries = Array.isArray(node.entries) ? node.entries : [];
+  const rows: HastElement[] = entries.flatMap((entry) => [
+    { type: 'element', tagName: 'dt', properties: {}, children: [{ type: 'text', value: typeof entry.key === 'string' ? entry.key : '' }] },
+    { type: 'element', tagName: 'dd', properties: {}, children: [{ type: 'text', value: typeof entry.value === 'string' ? entry.value : '' }] },
+  ]);
+  // Merge only `data.hProperties` (e.g. the editor preview's
+  // `data-source-line` scroll-sync anchor, stamped per top-level node)
+  // onto this handler's OWN fixed <dl> — deliberately NOT
+  // `state.applyData(node, element)`, which also honors
+  // `data.hName`/`data.hChildren` and would let an unexpected `data`
+  // shape replace the guaranteed dl/dt/dd structure or drop the
+  // `crowi-frontmatter` class AC-11 depends on. Both `className` AND
+  // its HTML-attribute alias `class` are stripped before merging —
+  // `hast-util-to-jsx-runtime` resolves either key to the DOM `class`
+  // attribute, so leaving `class` in place while only reassigning
+  // `className` would let it win over the fixed class (both keys
+  // survive a spread; only the LAST one written to a given output
+  // attribute is rendered).
+  const {
+    className: _incomingClassName,
+    class: _incomingClassAlias,
+    ...hProperties
+  } = node.data?.hProperties && typeof node.data.hProperties === 'object' ? node.data.hProperties : {};
+  return { type: 'element', tagName: 'dl', properties: { ...hProperties, className: ['crowi-frontmatter'] }, children: rows };
+}
 
 /**
  * Minimal hast subset used by `wrapSections`. Keeping this local
@@ -163,7 +220,14 @@ export interface RenderMdastOptions {
  */
 export function renderMdastToReactNode(renderedAst: unknown, options: RenderMdastOptions): ReactNode {
   if (!renderedAst) return null;
-  const hast = toHast(renderedAst as Parameters<typeof toHast>[0], { allowDangerousHtml: true });
+  const hast = toHast(renderedAst as Parameters<typeof toHast>[0], {
+    allowDangerousHtml: true,
+    // `mdast-util-to-hast`'s `Handlers` type is keyed by the STANDARD
+    // mdast type union, so a Crowi-owned type needs a cast here — same
+    // shape-escape as the `components` cast at both `renderMdastToReactNode`
+    // call sites.
+    handlers: { crowiFrontmatter: crowiFrontmatterHandler } as unknown as NonNullable<Parameters<typeof toHast>[1]>['handlers'],
+  });
   if (!hast) return null;
   if (options.sectionWrap) {
     // Section wrap MUST run before `raw()` so the walker only sees the

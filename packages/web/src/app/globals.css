@@ -766,3 +766,33 @@ html[data-page-grant="2"] {
     margin-right: 0;
   }
 }
+
+/* feature-renderer-frontmatter §D-5 — the leading YAML frontmatter
+ * block, rendered as a muted 2-column key/value grid (open question
+ * default: no border, muted key, body-color value, no collapsing) more
+ * subdued than surrounding body text. `dl`/`dt`/`dd` (see
+ * `render-mdast.ts`'s `crowiFrontmatterHandler`), not `table`/`th`/`td` —
+ * this sidesteps `MarkdownTableFullscreen`'s zoom affordance and the
+ * `w-full border-collapse` table styling both callers apply to every
+ * real `<table>` uniformly, neither of which suits a handful of
+ * metadata rows. */
+.crowi-frontmatter {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  column-gap: 1.5rem;
+  row-gap: 0.375rem;
+  margin: 0 0 1.5rem;
+  font-size: 0.875rem;
+}
+.crowi-frontmatter dt {
+  grid-column: 1;
+  margin: 0;
+  color: var(--muted-foreground);
+  font-weight: 500;
+}
+.crowi-frontmatter dd {
+  grid-column: 2;
+  margin: 0;
+  color: var(--foreground);
+  overflow-wrap: anywhere;
+}

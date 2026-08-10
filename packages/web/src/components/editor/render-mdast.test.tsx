@@ -289,6 +289,118 @@ describe('link-card embed HTML survives the real render pipeline', () => {
 });
 
 /**
+ * feature-renderer-frontmatter §D-5 / AC-11 / AC-9 — `crowiFrontmatter`
+ * renders as a `<dl>` of `<dt>`/`<dd>` pairs (not `<table>`, see
+ * `render-mdast.ts`'s `crowiFrontmatterHandler` doc comment), and every
+ * entry value is a plain hast `text` node — never re-parsed as Markdown,
+ * so `*`/`[` in a value must survive as literal characters, not emphasis
+ * or a link.
+ */
+describe('crowiFrontmatter rendering (feature-renderer-frontmatter)', () => {
+  it('renders entries as an ordered dl/dt/dd list distinguishable from body text (AC-11)', () => {
+    const mdast = {
+      type: 'root',
+      children: [
+        {
+          type: 'crowiFrontmatter',
+          entries: [
+            { key: 'id', value: 'feature-foo' },
+            { key: 'status', value: 'approved' },
+          ],
+        },
+        { type: 'paragraph', children: [{ type: 'text', value: 'body' }] },
+      ],
+    };
+    const node = renderMdastToReactNode(mdast, { sectionWrap: false, components: {} });
+    const html = renderToStaticMarkup(node);
+
+    expect(html).toContain('<dl class="crowi-frontmatter">');
+    expect(html).toContain('<dt>id</dt>');
+    expect(html).toContain('<dd>feature-foo</dd>');
+    expect(html).toContain('<dt>status</dt>');
+    expect(html).toContain('<dd>approved</dd>');
+    // Renders BEFORE the body paragraph, matching document order.
+    expect(html.indexOf('crowi-frontmatter')).toBeLessThan(html.indexOf('body'));
+  });
+
+  it('renders an entry value containing `*`/`[` as literal text, never re-parsed as Markdown emphasis/link syntax (AC-9)', () => {
+    const mdast = {
+      type: 'root',
+      children: [{ type: 'crowiFrontmatter', entries: [{ key: 'note', value: '*starred* and [bracketed]' }] }],
+    };
+    const node = renderMdastToReactNode(mdast, { sectionWrap: false, components: {} });
+    const html = renderToStaticMarkup(node);
+
+    expect(html).toContain('<dd>*starred* and [bracketed]</dd>');
+    expect(html).not.toContain('<em>');
+    expect(html).not.toContain('<a ');
+  });
+
+  it('forwards data-source-line from mdast.data.hProperties onto the rendered dl, matching every other top-level block', () => {
+    const mdast = {
+      type: 'root',
+      children: [
+        {
+          type: 'crowiFrontmatter',
+          data: { hProperties: { 'data-source-line': 1 } },
+          entries: [{ key: 'id', value: 'feature-foo' }],
+        },
+      ],
+    };
+    const node = renderMdastToReactNode(mdast, { sectionWrap: false, components: {} });
+    const html = renderToStaticMarkup(node);
+
+    expect(html).toContain('data-source-line="1"');
+  });
+
+  it('keeps the fixed dl/dt/dd shape and crowi-frontmatter class even when node.data carries hName/hChildren/className (AC-11 shape guarantee)', () => {
+    const mdast = {
+      type: 'root',
+      children: [
+        {
+          type: 'crowiFrontmatter',
+          entries: [{ key: 'id', value: 'feature-foo' }],
+          data: {
+            hName: 'section',
+            hChildren: [{ type: 'text', value: 'overwritten' }],
+            hProperties: { className: ['other'], 'data-source-line': 1 },
+          },
+        },
+      ],
+    };
+    const node = renderMdastToReactNode(mdast, { sectionWrap: false, components: {} });
+    const html = renderToStaticMarkup(node);
+
+    expect(html).toMatch(/<dl[^>]*class="crowi-frontmatter"[^>]*>/);
+    expect(html).toContain('data-source-line="1"');
+    expect(html).toContain('<dt>id</dt>');
+    expect(html).toContain('<dd>feature-foo</dd>');
+    expect(html).not.toContain('<section');
+    expect(html).not.toContain('overwritten');
+  });
+
+  it('keeps the fixed crowi-frontmatter class even when node.data.hProperties smuggles a `class` alias alongside `className` (AC-11 shape guarantee)', () => {
+    const mdast = {
+      type: 'root',
+      children: [
+        {
+          type: 'crowiFrontmatter',
+          entries: [{ key: 'id', value: 'feature-foo' }],
+          data: { hProperties: { className: ['other'], class: 'evil', 'data-source-line': 1 } },
+        },
+      ],
+    };
+    const node = renderMdastToReactNode(mdast, { sectionWrap: false, components: {} });
+    const html = renderToStaticMarkup(node);
+
+    expect(html).toMatch(/<dl[^>]*class="crowi-frontmatter"[^>]*>/);
+    expect(html).toContain('data-source-line="1"');
+    expect(html).not.toContain('class="evil"');
+    expect(html).not.toContain('other');
+  });
+});
+
+/**
  * RFC-0023 §1 — sidecar invisibility regression guard. Producers stamp
  * typed sidecars (`data.crowiCode` / `crowiMath` / `crowiDiagram` /
  * `crowiLinkCard` / `crowiPlaceholder`) onto their `html` nodes;
