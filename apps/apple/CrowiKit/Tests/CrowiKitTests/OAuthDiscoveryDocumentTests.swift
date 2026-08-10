@@ -86,20 +86,11 @@ final class OAuthDiscoveryDocumentTests: XCTestCase {
         }
     }
 
-    /// Opportunistic live check against this Phase 0 session's actual local
-    /// dev Crowi (confirmed running on :4301 while this spike was written —
-    /// `curl http://localhost:4301/api/app/info` returned a 200). Skips
-    /// itself (rather than failing) when nothing is listening, so `swift
-    /// test` in CI (no dev server) stays green — the mocked tests above are
-    /// what CI actually gates on.
+    /// The live half of this spike, against a real Crowi — opt-in, and
+    /// strict when opted into (`LiveDevCrowi`).
     func testLiveDiscoveryAgainstLocalDevIfAvailable() async throws {
-        let workspaceOrigin = URL(string: "http://localhost:4301")!
-        do {
-            let doc = try await OAuthDiscoveryDocument.fetch(workspaceOrigin: workspaceOrigin)
-            XCTAssertEqual(doc.authorizationEndpoint.path, "/oauth/authorize")
-            XCTAssertEqual(doc.tokenEndpoint.path, "/api/oauth/token")
-        } catch {
-            throw XCTSkip("no local dev Crowi reachable at \(workspaceOrigin) — skipping the live half of this spike (\(error))")
-        }
+        let doc = try await OAuthDiscoveryDocument.fetch(workspaceOrigin: try LiveDevCrowi.origin())
+        XCTAssertEqual(doc.authorizationEndpoint.path, "/oauth/authorize")
+        XCTAssertEqual(doc.tokenEndpoint.path, "/api/oauth/token")
     }
 }

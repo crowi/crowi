@@ -125,20 +125,12 @@ final class AppInfoLenientTests: XCTestCase {
         }
     }
 
-    /// Opportunistic live check against this Phase 0 session's actual local
-    /// dev Crowi. Skips (never fails) when unreachable — see
-    /// `OAuthDiscoveryDocumentTests`'s twin for the same rationale.
+    /// The live half of this spike, against a real Crowi — opt-in, and
+    /// strict when opted into (`LiveDevCrowi`).
     func testLiveAppInfoAgainstLocalDevIfAvailable() async throws {
-        let url = URL(string: "http://localhost:4301/api/app/info")!
-        let (data, response): (Data, URLResponse)
-        do {
-            (data, response) = try await URLSession.shared.data(from: url)
-        } catch {
-            throw XCTSkip("no local dev Crowi reachable at \(url) — skipping the live half of this spike (\(error))")
-        }
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-            throw XCTSkip("local dev Crowi at \(url) did not return 200 — skipping")
-        }
+        let url = try LiveDevCrowi.origin().appendingPathComponent("api/app/info")
+        let (data, response) = try await URLSession.shared.data(from: url)
+        XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200)
         let info = try AppInfoLenient.decode(data)
         XCTAssertNotNil(info.version)
         XCTAssertFalse(info.capabilities.isEmpty)
