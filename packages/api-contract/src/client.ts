@@ -539,7 +539,7 @@ const stubRemoveAttachment: RemoveAttachmentResponse = { success: true };
 const stubUploadPolicy: UploadPolicyResponse = {
   allowedMimeTypes: [],
   extensionHints: {},
-  maxBytes: { attachment: 0, paste: 0, dnd: 0 },
+  maxBytes: { attachment: 0 },
   profilePicture: { allowedMimeTypes: [], maxBytes: 0 },
 };
 const stubSearchPages: SearchPagesResponse = { meta: { total: 0, results: 0 }, data: [] };

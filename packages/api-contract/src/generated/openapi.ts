@@ -10388,8 +10388,6 @@ export interface paths {
                         /** Format: binary */
                         file?: string;
                         pageId?: string;
-                        /** @enum {string} */
-                        intent?: "paste" | "dnd";
                     };
                 };
             };
@@ -10457,7 +10455,7 @@ export interface paths {
                         };
                     };
                 };
-                /** @description Body exceeds the per-intent size cap */
+                /** @description Body exceeds the unified upload size cap */
                 413: {
                     headers: {
                         [name: string]: unknown;
@@ -10805,8 +10803,6 @@ export interface paths {
                             };
                             maxBytes: {
                                 attachment: number;
-                                paste: number;
-                                dnd: number;
                             };
                             profilePicture: {
                                 allowedMimeTypes: string[];
