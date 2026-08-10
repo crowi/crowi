@@ -148,6 +148,57 @@ describe('sanitizeAst — crowiOpaque catch-all (§5)', () => {
   });
 });
 
+// feature-renderer-frontmatter AC-8 — `crowiFrontmatter` is registered
+// in `RENDERED_AST_NODE_DEFS` (childModel: 'none', flow placement) with
+// no bespoke walker branch needed (unlike `crowiFigure`'s structural
+// `hName`/`hProperties` requirement): the generic def-driven
+// `fields.safeParse` path already projects/opaque-ises it like every
+// other typed node.
+describe('sanitizeAst — crowiFrontmatter envelope projection (§3, feature-renderer-frontmatter AC-8)', () => {
+  it('a well-formed crowiFrontmatter passes through the envelope with its entries intact', () => {
+    const node = {
+      type: 'crowiFrontmatter',
+      entries: [
+        { key: 'id', value: 'feature-foo' },
+        { key: 'status', value: 'approved' },
+      ],
+    };
+    const envelope = sanitizeAst(root(node, para(text('body'))));
+    const children = rootChildren(envelope);
+    expect(children[0]).toEqual(node);
+    expect(children[1].type).toBe('paragraph');
+    expect(() => RenderedAstEnvelopeSchema.parse(envelope)).not.toThrow();
+  });
+
+  it('drops an entry array beyond the max-50 cap: invalid-shape → crowiOpaque (schema violation)', () => {
+    const entries = Array.from({ length: 51 }, (_, i) => ({ key: `k${i}`, value: `v${i}` }));
+    const envelope = sanitizeAst(root({ type: 'crowiFrontmatter', entries }));
+    expect(rootChildren(envelope)[0]).toEqual({ type: 'crowiOpaque', reason: 'invalid-shape', originalType: 'crowiFrontmatter' });
+  });
+
+  it('an entry with a key over 100 chars fails the schema: invalid-shape → crowiOpaque', () => {
+    const envelope = sanitizeAst(root({ type: 'crowiFrontmatter', entries: [{ key: 'k'.repeat(101), value: 'v' }] }));
+    expect(rootChildren(envelope)[0]).toEqual({ type: 'crowiOpaque', reason: 'invalid-shape', originalType: 'crowiFrontmatter' });
+  });
+
+  it('an entry with a value over 300 chars fails the schema: invalid-shape → crowiOpaque', () => {
+    const envelope = sanitizeAst(root({ type: 'crowiFrontmatter', entries: [{ key: 'k', value: 'v'.repeat(301) }] }));
+    expect(rootChildren(envelope)[0]).toEqual({ type: 'crowiOpaque', reason: 'invalid-shape', originalType: 'crowiFrontmatter' });
+  });
+
+  it('a missing entries field fails the schema: invalid-shape → crowiOpaque', () => {
+    const envelope = sanitizeAst(root({ type: 'crowiFrontmatter' }));
+    expect(rootChildren(envelope)[0]).toEqual({ type: 'crowiOpaque', reason: 'invalid-shape', originalType: 'crowiFrontmatter' });
+  });
+
+  it('rejects crowiFrontmatter at a non-flow position (invalid-position → crowiOpaque), matching the flow-only registry entry', () => {
+    const envelope = sanitizeAst(root(para(text('a'), { type: 'crowiFrontmatter', entries: [{ key: 'k', value: 'v' }] })));
+    const paragraph = rootChildren(envelope)[0];
+    const inner = (paragraph.children as AnyNode[])[1];
+    expect(inner).toEqual({ type: 'crowiOpaque', reason: 'invalid-position', originalType: 'crowiFrontmatter' });
+  });
+});
+
 describe('sanitizeAst — hast hint data preservation (§4)', () => {
   it('preserves emoji a11y data (hName/hProperties/hChildren), heading anchors, link className, image display attrs and preview data-source-line', () => {
     const envelope = sanitizeAst(
@@ -563,6 +614,22 @@ describe('sanitizeAst — real-parser round-trip fixture (§3 field preservation
     const projected = rootChildren(envelope).find((c) => c.type === 'crowiFigure');
     expect(projected).toBeDefined();
     expect((projected?.data as AnyNode).hName).toBe('figure');
+  });
+
+  it('a document-leading frontmatter block round-trips as crowiFrontmatter (feature-renderer-frontmatter AC-8)', async () => {
+    const md = ['---', 'id: feature-foo', 'status: approved', '---', '', 'body'].join('\n');
+    const { tree } = await runCore(md);
+    const stored = serializeMdast(tree) as { children: AnyNode[] };
+    const fm = stored.children.find((c) => c.type === 'crowiFrontmatter');
+    expect(fm).toBeDefined();
+    const envelope = sanitizeAst(stored);
+    const projected = rootChildren(envelope).find((c) => c.type === 'crowiFrontmatter');
+    expect(projected).toBeDefined();
+    expect(projected?.entries).toEqual([
+      { key: 'id', value: 'feature-foo' },
+      { key: 'status', value: 'approved' },
+    ]);
+    expect(() => RenderedAstEnvelopeSchema.parse(envelope)).not.toThrow();
   });
 });
 

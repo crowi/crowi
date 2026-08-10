@@ -6,6 +6,7 @@ import { createPipelineEsmDepsLoader, runPipeline } from './pipeline';
 import { RendererRegistryImpl } from './registry';
 import { sanitizeAst } from './sanitize-ast';
 import { serializeMdast } from './serialize';
+import { RENDERER_PIPELINE_VERSION } from './version';
 
 /**
  * RFC-0023 / parent spec §13 (Phase 3) — the shared golden fixture
@@ -81,7 +82,15 @@ interface GoldenCorpusFile {
 }
 
 const CORPUS_DIR = path.join(__dirname, '__fixtures__', 'golden-corpus');
-const CORPUS_FILES = ['core-blocks.json', 'inline.json', 'code.json', 'image-attrs.json', 'gfm-references.json', 'typed-nodes.json'] as const;
+const CORPUS_FILES = [
+  'core-blocks.json',
+  'inline.json',
+  'code.json',
+  'image-attrs.json',
+  'gfm-references.json',
+  'typed-nodes.json',
+  'frontmatter.json',
+] as const;
 
 const corpus = CORPUS_FILES.map((file) => [file, JSON.parse(readFileSync(path.join(CORPUS_DIR, file), 'utf8')) as GoldenCorpusFile] as const);
 
@@ -128,6 +137,7 @@ const REQUIRED_CASES: Record<(typeof CORPUS_FILES)[number], string[]> = {
     'image-reference-missing-reference-type',
   ],
   'typed-nodes.json': ['math-display-projection', 'math-inline-projection', 'diagram-mermaid-svg-projection', 'link-card-hoist', 'placeholder-projection'],
+  'frontmatter.json': ['frontmatter-basic', 'frontmatter-mid-document-thematic-break-unaffected'],
 };
 
 // ---------------------------------------------------------------------------
@@ -212,6 +222,20 @@ describe('golden corpus self-description', () => {
       });
     });
   }
+});
+
+// feature-renderer-frontmatter AC-10 — pinned so an accidental future
+// bump/no-bump alongside an unrelated change is caught immediately (same
+// convention as `util/page-response.test.ts`'s own pinned assertion).
+// The complementary half of AC-10 — a STALE stored AST (older
+// `rendererVersion`) recomputes per read against the running pipeline,
+// with no write-back to the stored document — is pre-existing generic
+// freshness-comparison infra (`util/page-response.ts`), already covered
+// by `page-response.test.ts`; nothing new to re-test here.
+describe('renderer version (feature-renderer-frontmatter AC-10)', () => {
+  it('RENDERER_PIPELINE_VERSION is 1.1.0 (new bundled frontmatter transform — minor bump)', () => {
+    expect(RENDERER_PIPELINE_VERSION).toBe('1.1.0');
+  });
 });
 
 // ---------------------------------------------------------------------------

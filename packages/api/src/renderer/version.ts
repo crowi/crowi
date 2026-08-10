@@ -46,5 +46,16 @@
  *     (`util/rebuild-rendered-ast.ts`) backfills it, so the rollout
  *     procedure REQUIRES running that rebuild (real-write mode)
  *     immediately after deploying this version.
+ *   - 1.1.0  feature-renderer-frontmatter — a document-leading YAML
+ *     frontmatter block is parsed (`remarkFrontmatter` parser
+ *     extension) and replaced by a new bundled transform
+ *     (`core/frontmatter.ts`'s `makeFrontmatterPlugin`) with either a
+ *     `crowiFrontmatter` node or a `code` (`lang: 'yaml'`) fallback,
+ *     instead of rendering as a `thematicBreak` + paragraph; new-
+ *     bundled-transform minor bump per this constant's own policy
+ *     above. Same rollout as every bump since 1.0.0: existing pages
+ *     recompute per read (`util/page-response.ts`) until saved or
+ *     `rebuild rendered-ast` backfills the DB copy, so the new
+ *     rendering shows up on next view, not next save.
  */
-export const RENDERER_PIPELINE_VERSION = '1.0.0';
+export const RENDERER_PIPELINE_VERSION = '1.1.0';

@@ -852,3 +852,59 @@ describe('runPipeline dispatch branching (page-bound vs page-less vs no-dispatch
     expect(top.lang).toBe('preview-server-render-no-dispatch-fixture');
   });
 });
+
+// feature-renderer-frontmatter — end-to-end (parser extension +
+// core/frontmatter.ts transform) via the real pipeline, complementing
+// core/frontmatter.test.ts's isolated unit coverage of the transform
+// itself.
+describe('frontmatter (feature-renderer-frontmatter)', () => {
+  /** Every node `type` anywhere in the tree, collected via a plain recursive walk. */
+  function collectTypes(node: unknown, out: string[] = []): string[] {
+    if (!node || typeof node !== 'object') return out;
+    const record = node as { type?: unknown; children?: unknown };
+    if (typeof record.type === 'string') out.push(record.type);
+    if (Array.isArray(record.children)) {
+      for (const child of record.children) collectTypes(child, out);
+    }
+    return out;
+  }
+
+  it('replaces a document-leading frontmatter block with crowiFrontmatter and renders the body normally — no thematicBreak/break artifacts from the frontmatter markers or content (AC-1)', async () => {
+    const md = ['---', 'id: feature-foo', 'status: approved', '---', '', '# 見出し', '', 'body text'].join('\n');
+    const { tree } = await runCore(md);
+
+    expect(tree.children).toHaveLength(3);
+    const fm = tree.children[0] as unknown as { type: string; entries: Array<{ key: string; value: string }> };
+    expect(fm.type).toBe('crowiFrontmatter');
+    expect(fm.entries).toEqual([
+      { key: 'id', value: 'feature-foo' },
+      { key: 'status', value: 'approved' },
+    ]);
+
+    const heading = tree.children[1] as unknown as { type: string; depth: number };
+    expect(heading.type).toBe('heading');
+    expect(heading.depth).toBe(1);
+    expect(tree.children[2].type).toBe('paragraph');
+
+    // The frontmatter markers never produce a horizontal rule, and its
+    // content never reaches `remarkBreaks` — §D-3 step 8 / core/index.ts
+    // ordering (frontmatter is the FIRST core plugin).
+    const types = collectTypes(tree);
+    expect(types).not.toContain('thematicBreak');
+    expect(types).not.toContain('break');
+  });
+
+  it('leaves a mid-document `---` as an ordinary thematicBreak (AC-2)', async () => {
+    const md = ['# Title', '', 'above', '', '---', '', 'below'].join('\n');
+    const { tree } = await runCore(md);
+    const types = tree.children.map((c) => c.type);
+    expect(types).toContain('thematicBreak');
+    expect(types).not.toContain('crowiFrontmatter');
+  });
+
+  it('renders an empty frontmatter block (`---` immediately followed by `---`) as nothing, with the body unaffected (AC-7)', async () => {
+    const md = ['---', '---', '', '# Title', '', 'body'].join('\n');
+    const { tree } = await runCore(md);
+    expect(tree.children.map((c) => c.type)).toEqual(['heading', 'paragraph']);
+  });
+});

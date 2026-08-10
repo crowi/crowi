@@ -148,7 +148,9 @@ function pickStoredMeta(stored: RevisionMetaContent): RevisionMetaShape {
  * Stored values stay authoritative on merge: Phase 1's `toc` (the
  * anchor ids the heading stamper aligns against) wins over recomputed
  * ones, and a stored `renderedAst` is returned verbatim without
- * re-rendering.
+ * re-rendering — but only when its `rendererVersion` matches the
+ * running pipeline (`astIsFresh` below). A stale-version AST is instead
+ * recomputed on every call (no write-back to the stored document).
  */
 export const computeRevisionRenderArtifactsAsync = async (
   crowi: Crowi,
