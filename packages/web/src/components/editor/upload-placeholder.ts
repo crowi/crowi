@@ -33,13 +33,6 @@ import { isImageFile } from './upload-policy';
  * placeholder grammar is unit-testable without mounting an editor.
  */
 
-/**
- * Which affordance started an upload. Not sent to the server (the size
- * cap and MIME allow-list are both intent-independent) — kept as a type
- * for callers that want to vary placeholder/toast presentation by intent.
- */
-export type UploadIntent = 'paste' | 'dnd';
-
 /** Result of a completed upload, as returned by `/attachments/upload`. */
 export interface UploadOutcome {
   url: string;
