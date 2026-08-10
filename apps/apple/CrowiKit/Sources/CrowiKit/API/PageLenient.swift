@@ -196,30 +196,6 @@ public struct GetPageResponseLenient: Sendable, Equatable {
         guard status.isSuccessfulHTTPStatus else { throw PageLenientDecodeError.httpError(status: status) }
         return try decode(data)
     }
-
-    /// Resolve a SHARE URL's id — `POST /pages/link-access`, the endpoint the
-    /// web's id landing uses.
-    ///
-    /// Not the plain by-id GET above: on a `GRANT_RESTRICTED` page this is
-    /// what admits the caller into `grantedUsers`, so a share link handed to
-    /// someone works on first open. Following the same link in the browser
-    /// does exactly this, and a link that behaves differently depending on
-    /// which app opened it is the thing to avoid. The app's session is a web
-    /// session (a header-borne access token), which is the only kind the
-    /// endpoint accepts.
-    public static func resolveSharedLink(pageId: String, using client: AuthenticatedAPIClient) async throws -> GetPageResponseLenient {
-        let (data, status) = try await client.post("pages/link-access", json: PageIdBody(pageId: pageId))
-        guard status.isSuccessfulHTTPStatus else { throw PageLenientDecodeError.httpError(status: status) }
-        return try decode(data)
-    }
-
-    private struct PageIdBody: Encodable, Sendable {
-        let pageId: String
-
-        enum CodingKeys: String, CodingKey {
-            case pageId = "page_id"
-        }
-    }
 }
 
 /// `GET /pages/list` — `{ pages: [Page], pager, total, portalPage? }`.

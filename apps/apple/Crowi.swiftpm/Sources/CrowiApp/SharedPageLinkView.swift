@@ -5,11 +5,18 @@ import SwiftUI
 /// which is what crowi's "copy link" hands out, so it is the shape most
 /// links pasted between pages have.
 ///
-/// Resolved through `POST /pages/link-access`, the same endpoint the web's
-/// id landing uses: on a link-shared restricted page that call is what
-/// admits the visitor, so a link opened here behaves as it would in a
-/// browser rather than reporting a page that is merely not shared with the
-/// reader YET.
+/// Resolved with the ordinary by-id read (`GET /pages?page_id=`), NOT the
+/// `POST /pages/link-access` the web's id landing uses. That endpoint also
+/// admits a first-time visitor into a `GRANT_RESTRICTED` page's
+/// `grantedUsers`, and the server confines that power to web sessions
+/// (`authContext.kind === 'web'`) — this app signs in as an OAuth client,
+/// so it is refused with a 403 no matter what scopes it holds. Reading a
+/// page the user already has access to needs none of that.
+///
+/// What the app therefore cannot do is claim a share for the first time.
+/// That is exactly what the browser is offered for when the read fails:
+/// following the same link there runs the claim and, from then on, the page
+/// opens here like any other.
 ///
 /// The reader appears in THIS screen's place once the path is known, rather
 /// than being pushed on top of it — the id is an address for the page, not a
@@ -20,6 +27,7 @@ struct SharedPageLinkView: View {
     let pageId: String
     let onSelectDestination: (ReadDestination) -> Void
 
+    @Environment(\.openURL) private var openURL
     @State private var path: String?
     @State private var failure: String?
 
@@ -40,12 +48,18 @@ struct SharedPageLinkView: View {
 
     private func notice(_ message: String) -> some View {
         ScrollView {
-            CrowiCard {
-                CrowiRow(showsChevron: false) {
-                    Text(message)
-                        .font(CrowiTypography.rowMeta)
-                        .foregroundStyle(CrowiTheme.mutedForeground)
+            VStack(alignment: .leading, spacing: CrowiMetrics.sectionHeaderTopPadding) {
+                CrowiCard {
+                    CrowiRow(showsChevron: false) {
+                        Text(message)
+                            .font(CrowiTypography.rowMeta)
+                            .foregroundStyle(CrowiTheme.mutedForeground)
+                    }
                 }
+                Button("Open in Safari") { openURL(browserURL) }
+                    .font(CrowiTypography.sectionAction)
+                    .foregroundStyle(CrowiTheme.primary)
+                    .frame(maxWidth: .infinity, minHeight: CrowiMetrics.minimumTapTarget)
             }
             .padding(.top, CrowiMetrics.sectionHeaderTopPadding)
         }
@@ -54,15 +68,17 @@ struct SharedPageLinkView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
+    private var browserURL: URL {
+        session.context.workspace.workspaceOrigin.baseURL.appendingPathComponent(pageId)
+    }
+
     private func resolve() async {
         do {
-            let response = try await GetPageResponseLenient.resolveSharedLink(pageId: pageId, using: session.apiClient)
+            let response = try await GetPageResponseLenient.fetch(pageId: pageId, using: session.apiClient)
             path = response.page.path
             failure = nil
-        } catch PageLenientDecodeError.httpError(let status) where status == 403 {
-            failure = "You don't have access to this page."
         } catch PageLenientDecodeError.httpError(let status) where status == 404 {
-            failure = "That page no longer exists."
+            failure = "That page doesn't exist, or it hasn't been shared with you yet."
         } catch {
             failure = "Couldn't open that link."
         }
