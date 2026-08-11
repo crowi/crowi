@@ -25,6 +25,27 @@ function jsonResponse(status: number, body: unknown): Response {
   } as Response;
 }
 
+/**
+ * A non-JSON response body — what a front reverse proxy (nginx, Caddy, an
+ * SSO gateway) answers with, as opposed to crowi's own `{ error: { code,
+ * message } }` JSON envelope. `http.ts`'s `parseResponse` falls back to the
+ * raw text when `JSON.parse` fails, so `CliError.apiCode` stays `undefined`
+ * and `CliError.rawBody` is a string rather than an object — the signal
+ * `attach.ts` keys its 413 discrimination off of.
+ */
+function textResponse(status: number, text: string): Response {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    text: async () => text,
+  } as Response;
+}
+
+/** The upload POSTs among `mock`'s calls — asserting this is `[]` proves the upload was never dialed, not just that the total call count matched. */
+function uploadPostCalls(mock: jest.Mock<Promise<Response>, [string, RequestInit]>): [string, RequestInit][] {
+  return mock.mock.calls.filter(([url, init]) => init.method === 'POST' && url.includes('/attachments'));
+}
+
 let fetchMock: jest.Mock<Promise<Response>, [string, RequestInit]>;
 const originalFetch = global.fetch;
 let tmpRoot: string;
@@ -67,17 +88,28 @@ function build(): Command {
   return program;
 }
 
-/** Upload `name` and return the declared type of the multipart `file` part. */
+/**
+ * Upload `name` and return the declared type of the multipart `file` part.
+ *
+ * Re-`upsertProfile`s 'work' (dropping any `uploadPolicy` cached by an
+ * earlier call in the same test) so every invocation independently fetches
+ * the upload policy — mocked here as a 404 (old server / no policy), which
+ * makes `resolveDeclaredMediaType` fall back to the local `media-type.ts`
+ * table, same as `mediaTypeForFilename` would, so these declared-type
+ * expectations are unaffected by it.
+ */
 async function declaredTypeFor(name: string): Promise<string> {
   const file = join(tmpRoot, name);
   writeFileSync(file, Buffer.from([0x00, 0x01, 0x02]));
+  upsertProfile({ alias: 'work', endpoint: 'https://wiki.example.com', tokens: { accessToken: 'pat-1', scope: 'attachments:write' } });
 
   fetchMock.mockResolvedValueOnce(jsonResponse(200, { page: { _id: 'p1', path: '/a', revision: { _id: 'r1' } } }));
+  fetchMock.mockResolvedValueOnce(jsonResponse(404, undefined));
   fetchMock.mockResolvedValueOnce(jsonResponse(200, { url: '/api/attachments/a1' }));
 
   await build().parseAsync(['attach', 'add', '/a', file], { from: 'user' });
 
-  const uploadInit = fetchMock.mock.calls[1][1];
+  const uploadInit = fetchMock.mock.calls[2][1];
   const form = uploadInit.body as FormData;
   const part = form.get('file');
   if (!(part instanceof Blob)) throw new Error('the `file` part is not a Blob');
@@ -115,14 +147,206 @@ describe('attach add — declares the file’s media type on the multipart part'
     const file = join(tmpRoot, 'named.png');
     writeFileSync(file, Buffer.from([0x00]));
     fetchMock.mockResolvedValueOnce(jsonResponse(200, { page: { _id: 'p1', path: '/a', revision: { _id: 'r1' } } }));
+    fetchMock.mockResolvedValueOnce(jsonResponse(404, undefined));
     fetchMock.mockResolvedValueOnce(jsonResponse(200, { url: '/api/attachments/a1' }));
 
     await build().parseAsync(['attach', 'add', '/a', file], { from: 'user' });
 
-    const form = fetchMock.mock.calls[1][1].body as FormData;
+    const form = fetchMock.mock.calls[2][1].body as FormData;
     const part = form.get('file') as File;
     expect(part.name).toBe('named.png');
     expect(part.type).toBe('image/png');
+  });
+});
+
+describe('attach add — server policy pre-flight', () => {
+  it('AC-7: prefers the policy extensionHints over the local table when a policy is present', async () => {
+    const file = join(tmpRoot, 'report.pdf');
+    writeFileSync(file, Buffer.from([0x00]));
+
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { page: { _id: 'p1', path: '/a', revision: { _id: 'r1' } } }));
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(200, {
+        // The api and CLI extension tables are currently byte-identical, so
+        // a real `.pdf` mapping can't prove the policy (not a silent
+        // local-table fallback) produced the result. Diverge it here.
+        allowedMimeTypes: ['application/x-policy-pdf-test-marker'],
+        extensionHints: { pdf: 'application/x-policy-pdf-test-marker' },
+        maxBytes: { attachment: 1000, paste: 500, dnd: 2000 },
+        profilePicture: { allowedMimeTypes: ['image/png'], maxBytes: 100 },
+      }),
+    );
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { url: '/api/attachments/a1' }));
+
+    await build().parseAsync(['attach', 'add', '/a', file], { from: 'user' });
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    const form = fetchMock.mock.calls[2][1].body as FormData;
+    const part = form.get('file') as File;
+    expect(part.type).toBe('application/x-policy-pdf-test-marker');
+  });
+
+  it('AC-8: rejects a non-allow-listed type locally, before the upload request is ever made', async () => {
+    const file = join(tmpRoot, 'shot.png');
+    writeFileSync(file, Buffer.from([0x00]));
+
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { page: { _id: 'p1', path: '/a', revision: { _id: 'r1' } } }));
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(200, {
+        allowedMimeTypes: ['application/pdf'],
+        extensionHints: { png: 'image/png' },
+        maxBytes: { attachment: 1000, paste: 500, dnd: 2000 },
+        profilePicture: { allowedMimeTypes: ['image/png'], maxBytes: 100 },
+      }),
+    );
+
+    const error = await build()
+      .parseAsync(['attach', 'add', '/a', file], { from: 'user' })
+      .then(
+        () => undefined,
+        (err: unknown) => err as CliError,
+      );
+
+    expect(error).toBeDefined();
+    expect(error?.exitCode).toBe(6);
+    // Only the page lookup + policy fetch — the upload POST never fired.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(uploadPostCalls(fetchMock)).toHaveLength(0);
+  });
+
+  it('AC-8: rejects a file exceeding the policy size limit locally, before the upload request is ever made', async () => {
+    const file = join(tmpRoot, 'shot.png');
+    writeFileSync(file, Buffer.from([0x00, 0x01, 0x02, 0x03]));
+
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { page: { _id: 'p1', path: '/a', revision: { _id: 'r1' } } }));
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(200, {
+        allowedMimeTypes: ['image/png'],
+        extensionHints: { png: 'image/png' },
+        maxBytes: { attachment: 2, paste: 500, dnd: 2000 },
+        profilePicture: { allowedMimeTypes: ['image/png'], maxBytes: 100 },
+      }),
+    );
+
+    const error = await build()
+      .parseAsync(['attach', 'add', '/a', file], { from: 'user' })
+      .then(
+        () => undefined,
+        (err: unknown) => err as CliError,
+      );
+
+    expect(error).toBeDefined();
+    expect(error?.exitCode).toBe(6);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(uploadPostCalls(fetchMock)).toHaveLength(0);
+  });
+});
+
+describe('attach add — front-proxy 413 discrimination', () => {
+  /** Skip the local pre-flight (policy fetch 404s → `policy` is null) so the mocked 413 always comes from the upload POST itself. */
+  function mockPageAndSkippedPolicy(): void {
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { page: { _id: 'p1', path: '/a', revision: { _id: 'r1' } } }));
+    fetchMock.mockResolvedValueOnce(jsonResponse(404, undefined));
+  }
+
+  it("AC-9: a crowi-shaped 413 ({ error: { code, message } }) mentions the SERVER's upload size limit", async () => {
+    const file = join(tmpRoot, 'shot.png');
+    writeFileSync(file, Buffer.from([0x00]));
+    mockPageAndSkippedPolicy();
+    fetchMock.mockResolvedValueOnce(jsonResponse(413, { error: { code: 'FILE_TOO_LARGE', message: 'File exceeds the 52428800-byte upload limit' } }));
+
+    const error = await build()
+      .parseAsync(['attach', 'add', '/a', file], { from: 'user' })
+      .then(
+        () => undefined,
+        (err: unknown) => err as CliError,
+      );
+
+    expect(error).toBeDefined();
+    expect(error?.exitCode).toBe(6);
+    expect(error?.message).toContain("the server's attachment size limit");
+    // The proxy-specific wording must NOT appear for a genuine crowi rejection.
+    expect(error?.message).not.toContain('reverse proxy');
+  });
+
+  it("AC-10: a non-crowi-shaped 413 (e.g. nginx's default HTML error page) blames a front reverse proxy instead, and never echoes the proxy body", async () => {
+    const file = join(tmpRoot, 'shot.png');
+    writeFileSync(file, Buffer.from([0x00]));
+    mockPageAndSkippedPolicy();
+    const proxyBody = '<html><head><title>413 Request Entity Too Large</title></head><body><center>nginx/1.25.3</center></body></html>';
+    fetchMock.mockResolvedValueOnce(textResponse(413, proxyBody));
+
+    const error = await build()
+      .parseAsync(['attach', 'add', '/a', file], { from: 'user' })
+      .then(
+        () => undefined,
+        (err: unknown) => err as CliError,
+      );
+
+    expect(error).toBeDefined();
+    expect(error?.exitCode).toBe(6);
+    expect(error?.message).toContain('reverse proxy');
+    expect(error?.message).not.toContain("the server's attachment size limit");
+    // The proxy's raw HTML body must never be echoed verbatim to the user
+    // (only generic crowi-authored guidance text, which may itself mention
+    // nginx by name as an example — the check below is for the fabricated
+    // proxy body's own distinguishing content, not the word "nginx").
+    expect(error?.message).not.toContain(proxyBody);
+    expect(error?.message).not.toContain('<html>');
+    expect(error?.message).not.toContain('nginx/1.25.3');
+  });
+
+  it('AC-10: a 413 whose JSON body LOOKS like the crowi envelope but carries an unknown code still blames a front reverse proxy, not the server', async () => {
+    // `parseCrowiError` (`lib/http.ts`) only validates the generic `{
+    // error: { code, message } }` SHAPE — it has to, since it is shared by
+    // every CLI command's error handling, not just this route's. A gateway
+    // or proxy that happens to emit JSON in that same shape (e.g. `{ error:
+    // { code: 'proxy_too_large', message: '...' } }`) would set
+    // `CliError.apiCode` just like a genuine crowi rejection does. The
+    // discrimination has to check the EXACT code the addAttachment route's
+    // 413 emits (`FILE_TOO_LARGE`), not merely that some code is present.
+    const file = join(tmpRoot, 'shot.png');
+    writeFileSync(file, Buffer.from([0x00]));
+    mockPageAndSkippedPolicy();
+    fetchMock.mockResolvedValueOnce(jsonResponse(413, { error: { code: 'proxy_too_large', message: 'evil message from the proxy' } }));
+
+    const error = await build()
+      .parseAsync(['attach', 'add', '/a', file], { from: 'user' })
+      .then(
+        () => undefined,
+        (err: unknown) => err as CliError,
+      );
+
+    expect(error).toBeDefined();
+    expect(error?.exitCode).toBe(6);
+    expect(error?.message).toContain('reverse proxy');
+    expect(error?.message).not.toContain("the server's attachment size limit");
+    expect(error?.message).not.toContain('evil message from the proxy');
+  });
+
+  it('AC-10: a 413 with the crowi code but a PARTIAL envelope (missing `message`) still blames a front reverse proxy, not the server', async () => {
+    // `parseCrowiError` accepts a partial envelope (a `code` alone is
+    // enough to set `CliError.apiCode`, since it is shared by every CLI
+    // command and some callers legitimately have no message). A body that
+    // is missing `message` therefore fails full `AttachmentErrorSchema`
+    // validation even though `apiCode` alone would look like a match — the
+    // discrimination must use the full-schema check, not `apiCode` alone.
+    const file = join(tmpRoot, 'shot.png');
+    writeFileSync(file, Buffer.from([0x00]));
+    mockPageAndSkippedPolicy();
+    fetchMock.mockResolvedValueOnce(jsonResponse(413, { error: { code: 'FILE_TOO_LARGE' } }));
+
+    const error = await build()
+      .parseAsync(['attach', 'add', '/a', file], { from: 'user' })
+      .then(
+        () => undefined,
+        (err: unknown) => err as CliError,
+      );
+
+    expect(error).toBeDefined();
+    expect(error?.exitCode).toBe(6);
+    expect(error?.message).toContain('reverse proxy');
+    expect(error?.message).not.toContain("the server's attachment size limit");
   });
 });
 

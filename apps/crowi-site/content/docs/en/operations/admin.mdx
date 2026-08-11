@@ -133,8 +133,13 @@ settings that depend on it cannot be edited.
   screen shows a warning.
 
 > **Note**: The fields for entering Google / GitHub clientId and client
-> secret are gone from this screen too. Third-party sign-in is planned to
-> return as an auth-provider plugin.
+> secret are gone from this screen too. **Google sign-in has already
+> returned as the auth-provider plugin `@crowi/plugin-google`** — it is
+> configured under plugin settings (`/admin/plugins`) rather than here.
+> See [Signing in with an external account](./federated-auth) for the
+> setup. The `requireThirdPartyAuth` / `disablePasswordAuth` settings on
+> this screen stay uneditable: they have not yet been reworked around
+> plugin-provided auth.
 
 ## Mail
 
@@ -295,6 +300,29 @@ crowi-admin rebuild rendered-ast --concurrency 8
 2. One final `rebuild rendered-ast` run reports 0 eligible revisions remaining.
 
 The command is idempotent, so the final re-run only costs time proportional to the residual count.
+
+## Repairing page history (page-history repair)
+
+`crowi-admin page-history repair` repairs the internal state behind page metadata history ([RFC-0021](https://github.com/crowi/crowi/blob/main/docs/rfcs/0021-page-metadata-change-history.md)).
+
+- `--outbox` (default) — drains any unprocessed entry a crashed writer left behind in `Page.pendingHistoryEntry`.
+- `--scan` — assigns `historySequence` to unsequenced revisions on pages that are ready to record history. Not run by default.
+- `--batch-size <n>` (default 200) bounds how many pages are loaded per round trip; `--resume-after <pageId>` resumes a scan that was killed partway.
+
+```bash
+# Drain leftover outbox entries (the default)
+crowi-admin page-history repair
+
+# Only assign sequences to unsequenced revisions (skips the outbox pass)
+crowi-admin page-history repair --scan
+
+# Run both passes
+crowi-admin page-history repair --outbox --scan
+```
+
+Passing `--scan` on its own **turns the default outbox pass off**. Say `--outbox --scan` when you want both.
+
+**In normal operation there is nothing to repair yet.** RFC-0021 has only landed Phase 1 — the durable model and the repair machinery — and the ordinary paths (creating, editing, renaming a page) put no history event into the outbox. Treat this as the operator entry point put in place ahead of the phases that add those writers.
 
 ## Sections in progress
 

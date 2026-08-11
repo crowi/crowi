@@ -49,6 +49,13 @@ import { Steps, Step } from 'fumadocs-ui/components/steps';
 `/collab/*` は WebSocket なので、プロキシ側で **Upgrade ヘッダの引き渡し** を
 有効にしてください。
 
+前段プロキシの body size 上限も忘れずに crowi のアップロード上限
+(`CROWI_UPLOAD_MAX_BYTES`、既定 50MB)より少し大きい値にしてください
+(完全に同じ値では multipart のフレーミング分だけ不足します)。**nginx の
+`client_max_body_size` の既定は 1MB** で、放置すると crowi の上限より先に
+プロキシが 413 を返します。具体的な設定行は [デプロイ構成](./deployment) の
+「アップロードの body size 上限」を参照してください。
+
 ## ランナープロジェクトを作る
 
 <Steps>

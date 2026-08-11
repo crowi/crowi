@@ -60,7 +60,8 @@ bash .claude/scripts/codex-run.sh --sandbox read-only --tier terra \
 - **findings は「直すか捨てる」の二択**: 自分でコードに当てて裏取りし、正しければ
   その場で直してゲート再走。誤り・過大なら捨てる(報告に 1 行)。
   **TODO 等への退避は禁止**(fix or drop — 全 skill 共通方針)。
-- exit 2(codex 不可)なら skip して報告(レビュー無しで止めない)。
+- exit 2(codex 不可)/ exit 3(出力が不正 — codex が exit 0 で何も書かなかった場合もここに来る)
+  なら skip して報告(レビュー無しで止めない)。どちらも fix の進行を止めない。
 
 ### Step 5: commit
 

@@ -1,0 +1,639 @@
+{
+  "rule": "A block quote at the DOCUMENT ROOT whose first physical source line is a GitHub Alerts marker (`> [!NOTE]` / `[!TIP]` / `[!IMPORTANT]` / `[!WARNING]` / `[!CAUTION]`, ASCII case-insensitive, RENDERER_PIPELINE_VERSION 1.2.0+) is retyped to `crowiAlert{variant}` with a fixed `data.hName: 'blockquote'` hint. The child subtree is NEVER rewritten: the literal marker text and the delimiter `break` stay in the stored AST, so every consumer that does not know `crowiAlert` keeps rendering exactly today's block quote. Anything else — an unknown token, a marker sharing its line with body text, an escaped/entity opening bracket, a marker with no renderable body, a marker below the document root — stays an ordinary blockquote.",
+  "why": "`crowiAlert` is the one Crowi-owned node deliberately kept OUT of RENDERED_AST_NODE_DEFS: the `X-Crowi-Ast-Version: 1` union is closed and already has shipped native decoders, so the wire contract this corpus fixes is two-sided — the stored bare shape (producer) AND the ordinary `blockquote` a declared v1 client receives instead of a new discriminant (consumer). Pinning both directions is what makes 'no native code change is required for 1.2.0' a checkable claim rather than an assertion.",
+  "consumers": [
+    "packages/api/src/renderer/golden-corpus.test.ts",
+    "apps/apple/CrowiKit/Tests/CrowiKitTests/RenderedAstGoldenCorpusTests.swift"
+  ],
+  "consumerContract": "The api jest driver asserts the PRODUCER side (markdown → expectedAst via runPipeline with an empty registry, and expectedAst → expectedEnvelope via sanitizeAst). The CrowiKit XCTest asserts the CONSUMER side (its sanitize-walker mirror over expectedAst, and its strict envelope decoder over expectedEnvelope). The Swift consumer is wired up in Phase 4 (apps/apple lives on the feature-ios-app/impl branch).",
+  "consumerCoordination": "`crowiAlert` never reaches a declared v1 client — `sanitize-ast.ts` narrows it to the ordinary `blockquote` pinned in expectedEnvelope, marker text and delimiter break included — so CrowiKit needs NO code change to keep rendering these pages under pipeline 1.2.0. The release owner hands this fixture plus that contract to the CrowiKit owner before the api release and records the target release branch's existing RenderedAstGoldenCorpusTests run in the release checklist. A native alert rendering needs v2 / capability negotiation and is a separate feature.",
+  "normalization": "none — expected values are exact.",
+  "exclusions": "Plugin-dispatch output byte strings (Mermaid / PlantUML / link-card / shiki generated HTML) are deliberately NOT pinned by this corpus — packages/e2e/tests/renderer-plugins.spec.ts owns that coverage against a live server. The RENDERED output of these ASTs is likewise out of scope on both sides: this driver never runs `mdast-util-to-hast`, so the callout DOM (and the fallback block quote an alert-unaware web bundle draws from `data.hName`) is pinned by packages/web/src/components/editor/render-mdast.test.tsx instead.",
+  "cases": [
+    {
+      "name": "github-alerts-all-variants",
+      "why": "the happy path for all five GitHub variants: the outer node becomes crowiAlert{variant} with the fixed data.hName blockquote hint, while the marker text and its delimiter break stay in the children exactly as the parser produced them — which is what makes the v1 projection below an ordinary blockquote no pre-alert consumer has to change for",
+      "markdown": "> [!NOTE]\n> Useful information a reader should notice.\n\n> [!TIP]\n> Helpful advice, with a [link](/page).\n\n> [!IMPORTANT]\n> Key information a reader needs.\n\n> [!WARNING]\n> Urgent info needing immediate attention.\n\n> [!CAUTION]\n> Advises about risks.\n",
+      "expectedAst": {
+        "type": "root",
+        "children": [
+          {
+            "type": "crowiAlert",
+            "variant": "note",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "value": "[!NOTE]"
+                  },
+                  {
+                    "type": "break"
+                  },
+                  {
+                    "type": "text",
+                    "value": "Useful information a reader should notice."
+                  }
+                ]
+              }
+            ],
+            "data": {
+              "hName": "blockquote"
+            }
+          },
+          {
+            "type": "crowiAlert",
+            "variant": "tip",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "value": "[!TIP]"
+                  },
+                  {
+                    "type": "break"
+                  },
+                  {
+                    "type": "text",
+                    "value": "Helpful advice, with a "
+                  },
+                  {
+                    "type": "link",
+                    "title": null,
+                    "url": "/page",
+                    "children": [
+                      {
+                        "type": "text",
+                        "value": "link"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "text",
+                    "value": "."
+                  }
+                ]
+              }
+            ],
+            "data": {
+              "hName": "blockquote"
+            }
+          },
+          {
+            "type": "crowiAlert",
+            "variant": "important",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "value": "[!IMPORTANT]"
+                  },
+                  {
+                    "type": "break"
+                  },
+                  {
+                    "type": "text",
+                    "value": "Key information a reader needs."
+                  }
+                ]
+              }
+            ],
+            "data": {
+              "hName": "blockquote"
+            }
+          },
+          {
+            "type": "crowiAlert",
+            "variant": "warning",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "value": "[!WARNING]"
+                  },
+                  {
+                    "type": "break"
+                  },
+                  {
+                    "type": "text",
+                    "value": "Urgent info needing immediate attention."
+                  }
+                ]
+              }
+            ],
+            "data": {
+              "hName": "blockquote"
+            }
+          },
+          {
+            "type": "crowiAlert",
+            "variant": "caution",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "value": "[!CAUTION]"
+                  },
+                  {
+                    "type": "break"
+                  },
+                  {
+                    "type": "text",
+                    "value": "Advises about risks."
+                  }
+                ]
+              }
+            ],
+            "data": {
+              "hName": "blockquote"
+            }
+          }
+        ]
+      },
+      "expectedEnvelope": {
+        "astVersion": 1,
+        "root": {
+          "type": "root",
+          "children": [
+            {
+              "type": "blockquote",
+              "data": {
+                "hName": "blockquote"
+              },
+              "children": [
+                {
+                  "type": "paragraph",
+                  "children": [
+                    {
+                      "type": "text",
+                      "value": "[!NOTE]"
+                    },
+                    {
+                      "type": "break"
+                    },
+                    {
+                      "type": "text",
+                      "value": "Useful information a reader should notice."
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "blockquote",
+              "data": {
+                "hName": "blockquote"
+              },
+              "children": [
+                {
+                  "type": "paragraph",
+                  "children": [
+                    {
+                      "type": "text",
+                      "value": "[!TIP]"
+                    },
+                    {
+                      "type": "break"
+                    },
+                    {
+                      "type": "text",
+                      "value": "Helpful advice, with a "
+                    },
+                    {
+                      "type": "link",
+                      "url": "/page",
+                      "title": null,
+                      "children": [
+                        {
+                          "type": "text",
+                          "value": "link"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "value": "."
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "blockquote",
+              "data": {
+                "hName": "blockquote"
+              },
+              "children": [
+                {
+                  "type": "paragraph",
+                  "children": [
+                    {
+                      "type": "text",
+                      "value": "[!IMPORTANT]"
+                    },
+                    {
+                      "type": "break"
+                    },
+                    {
+                      "type": "text",
+                      "value": "Key information a reader needs."
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "blockquote",
+              "data": {
+                "hName": "blockquote"
+              },
+              "children": [
+                {
+                  "type": "paragraph",
+                  "children": [
+                    {
+                      "type": "text",
+                      "value": "[!WARNING]"
+                    },
+                    {
+                      "type": "break"
+                    },
+                    {
+                      "type": "text",
+                      "value": "Urgent info needing immediate attention."
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "blockquote",
+              "data": {
+                "hName": "blockquote"
+              },
+              "children": [
+                {
+                  "type": "paragraph",
+                  "children": [
+                    {
+                      "type": "text",
+                      "value": "[!CAUTION]"
+                    },
+                    {
+                      "type": "break"
+                    },
+                    {
+                      "type": "text",
+                      "value": "Advises about risks."
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "github-alerts-conservative-fallbacks",
+      "why": "every shape that must NOT become a callout: an unknown token, a marker sharing its line with body text, an escaped opening bracket, a marker with no renderable body at all, one whose only body is a link definition, one whose only body is a footnote definition, and a marker below the document root — all keep their literal marker and their ordinary blockquote",
+      "markdown": "> [!HINT]\n> an unknown token stays an ordinary quote\n\n> [!NOTE] a marker sharing its line with body text stays an ordinary quote\n\n> \\[!NOTE]\n> an escaped opening bracket stays an ordinary quote\n\n> [!NOTE]\n\n> [!NOTE]\n>\n> [ref]: /a\n\n> [!NOTE]\n> [^fn]: a footnote definition is not a renderable alert body\n\n- > [!TIP]\n  > a marker below the document root stays literal\n",
+      "expectedAst": {
+        "type": "root",
+        "children": [
+          {
+            "type": "blockquote",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "value": "[!HINT]"
+                  },
+                  {
+                    "type": "break"
+                  },
+                  {
+                    "type": "text",
+                    "value": "an unknown token stays an ordinary quote"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "blockquote",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "value": "[!NOTE] a marker sharing its line with body text stays an ordinary quote"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "blockquote",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "value": "[!NOTE]"
+                  },
+                  {
+                    "type": "break"
+                  },
+                  {
+                    "type": "text",
+                    "value": "an escaped opening bracket stays an ordinary quote"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "blockquote",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "value": "[!NOTE]"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "blockquote",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "value": "[!NOTE]"
+                  }
+                ]
+              },
+              {
+                "type": "definition",
+                "identifier": "ref",
+                "label": "ref",
+                "title": null,
+                "url": "/a"
+              }
+            ]
+          },
+          {
+            "type": "blockquote",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "value": "[!NOTE]"
+                  }
+                ]
+              },
+              {
+                "type": "footnoteDefinition",
+                "identifier": "fn",
+                "label": "fn",
+                "children": [
+                  {
+                    "type": "paragraph",
+                    "children": [
+                      {
+                        "type": "text",
+                        "value": "a footnote definition is not a renderable alert body"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "list",
+            "ordered": false,
+            "start": null,
+            "spread": false,
+            "children": [
+              {
+                "type": "listItem",
+                "spread": false,
+                "checked": null,
+                "children": [
+                  {
+                    "type": "blockquote",
+                    "children": [
+                      {
+                        "type": "paragraph",
+                        "children": [
+                          {
+                            "type": "text",
+                            "value": "[!TIP]"
+                          },
+                          {
+                            "type": "break"
+                          },
+                          {
+                            "type": "text",
+                            "value": "a marker below the document root stays literal"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "expectedEnvelope": {
+        "astVersion": 1,
+        "root": {
+          "type": "root",
+          "children": [
+            {
+              "type": "blockquote",
+              "children": [
+                {
+                  "type": "paragraph",
+                  "children": [
+                    {
+                      "type": "text",
+                      "value": "[!HINT]"
+                    },
+                    {
+                      "type": "break"
+                    },
+                    {
+                      "type": "text",
+                      "value": "an unknown token stays an ordinary quote"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "blockquote",
+              "children": [
+                {
+                  "type": "paragraph",
+                  "children": [
+                    {
+                      "type": "text",
+                      "value": "[!NOTE] a marker sharing its line with body text stays an ordinary quote"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "blockquote",
+              "children": [
+                {
+                  "type": "paragraph",
+                  "children": [
+                    {
+                      "type": "text",
+                      "value": "[!NOTE]"
+                    },
+                    {
+                      "type": "break"
+                    },
+                    {
+                      "type": "text",
+                      "value": "an escaped opening bracket stays an ordinary quote"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "blockquote",
+              "children": [
+                {
+                  "type": "paragraph",
+                  "children": [
+                    {
+                      "type": "text",
+                      "value": "[!NOTE]"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "blockquote",
+              "children": [
+                {
+                  "type": "paragraph",
+                  "children": [
+                    {
+                      "type": "text",
+                      "value": "[!NOTE]"
+                    }
+                  ]
+                },
+                {
+                  "type": "definition",
+                  "identifier": "ref",
+                  "url": "/a",
+                  "label": "ref",
+                  "title": null
+                }
+              ]
+            },
+            {
+              "type": "blockquote",
+              "children": [
+                {
+                  "type": "paragraph",
+                  "children": [
+                    {
+                      "type": "text",
+                      "value": "[!NOTE]"
+                    }
+                  ]
+                },
+                {
+                  "type": "footnoteDefinition",
+                  "identifier": "fn",
+                  "label": "fn",
+                  "children": [
+                    {
+                      "type": "paragraph",
+                      "children": [
+                        {
+                          "type": "text",
+                          "value": "a footnote definition is not a renderable alert body"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "list",
+              "ordered": false,
+              "start": null,
+              "spread": false,
+              "children": [
+                {
+                  "type": "listItem",
+                  "checked": null,
+                  "spread": false,
+                  "children": [
+                    {
+                      "type": "blockquote",
+                      "children": [
+                        {
+                          "type": "paragraph",
+                          "children": [
+                            {
+                              "type": "text",
+                              "value": "[!TIP]"
+                            },
+                            {
+                              "type": "break"
+                            },
+                            {
+                              "type": "text",
+                              "value": "a marker below the document root stays literal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

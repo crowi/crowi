@@ -130,8 +130,13 @@ Web UI から行うための領域です。`/admin` を開くとダッシュボ�
   画面に警告が表示されます。
 
 > **Note**: 以前この画面にあった Google / GitHub の clientId・client secret
-> の入力欄もなくなりました。サードパーティサインインは、認証プロバイダ
-> プラグインとして再導入される予定です。
+> の入力欄もなくなりました。**Google サインインは認証プロバイダ
+> プラグイン `@crowi/plugin-google` としてすでに再導入されています** —
+> 設定はこの画面ではなくプラグイン設定 (`/admin/plugins`) 側にあります。
+> 手順は [外部アカウントでのサインイン](./federated-auth) を参照して
+> ください。この画面に残っている `requireThirdPartyAuth` /
+> `disablePasswordAuth` は、まだプラグイン方式の認証を前提にした形に
+> なっていないため、引き続き編集できません。
 
 ## Mail
 
@@ -289,6 +294,29 @@ crowi-admin rebuild rendered-ast --concurrency 8
 2. 最後にもう一度 `rebuild rendered-ast` を実行し、対象 (eligible) 残数が 0 件であることを確認する。
 
 コマンドは冪等なので、最終再実行のコストは残数に比例するだけです。
+
+## ページ履歴の修復 (page-history repair)
+
+`crowi-admin page-history repair` は、ページのメタデータ変更履歴 ([RFC-0021](https://github.com/crowi/crowi/blob/main/docs/rfcs/0021-page-metadata-change-history.md)) の内部状態を修復する CLI コマンドです。
+
+- `--outbox` (既定) — クラッシュした writer が `Page.pendingHistoryEntry` に残した未処理エントリを流し切ります。
+- `--scan` — 履歴を記録する状態になっているページのうち、`historySequence` が未付与のリビジョンに採番します。既定では走りません。
+- `--batch-size <n>` (既定 200) は 1 往復で読み込むページ数の上限、`--resume-after <pageId>` は中断した走査の再開位置です。
+
+```bash
+# 残った outbox エントリを流す (既定)
+crowi-admin page-history repair
+
+# 未採番リビジョンへの採番だけを行う (outbox は走りません)
+crowi-admin page-history repair --scan
+
+# 両方を走らせる
+crowi-admin page-history repair --outbox --scan
+```
+
+`--scan` を単独で指定すると **既定の outbox パスは走りません**。両方が必要なときは `--outbox --scan` と明示してください。
+
+**通常の運用で修復対象が発生することは、現時点ではありません。** RFC-0021 は永続モデルと修復機構だけを入れた Phase 1 の段階で、ページの作成・編集・rename といった通常の経路は履歴イベントを 1 つも outbox に積まないためです。writer が入る後続フェーズに先立って、運用の入口だけが用意されている状態と考えてください。
 
 ## 進行中のセクション
 

@@ -20,9 +20,10 @@
  *    §5 designated all 3 multipart endpoints as Hono-native; me/picture
  *    is the first to move. The temporary file is written to
  *    `crowi.tmpDir` so the existing `FileUploader` pipeline (streams
- *    from disk) remains unchanged. Size precheck via the
- *    `content-length` header is unnecessary here — profile pictures are
- *    typically <1 MB and the multipart parser already buffers them.
+ *    from disk) remains unchanged. A `content-length` precheck BEFORE
+ *    `parseBody()` is unnecessary — the multipart parser already buffers
+ *    the body, and the post-parse `file.size > PROFILE_PICTURE_MAX_BYTES`
+ *    check rejects an oversized picture right after.
  *  - Password change preserves the legacy "6-character minimum on
  *    `oldPassword`" guard for backwards compatibility with users who
  *    set their password before the bcrypt migration; new-password
@@ -47,6 +48,7 @@ import type { OpenAPIHono } from '@hono/zod-openapi';
 import Debug from 'debug';
 
 import type Crowi from 'src/crowi';
+import { PROFILE_PICTURE_ALLOWED_MIME, PROFILE_PICTURE_MAX_BYTES, resolveEffectiveUploadMime } from 'src/hono/handlers/attachment';
 import type { PageDocument } from 'src/models/page';
 import type { UserDocument } from 'src/models/user';
 import FileUploader from 'src/util/file-uploader';
@@ -125,7 +127,11 @@ const persistUploadToTmp = async (file: File, tmpDir: string): Promise<{ tmpPath
 
   return {
     tmpPath,
-    mimetype: file.type || 'application/octet-stream',
+    // Same fallback `attachment.ts` uses: an undeclared (or explicitly
+    // `application/octet-stream`) type is backfilled from the filename, so a
+    // client that sends no Content-Type (CLI / curl / MCP) can still set a
+    // recognisable picture.
+    mimetype: resolveEffectiveUploadMime(file),
     originalname: file.name || randomId,
   };
 };
@@ -359,12 +365,29 @@ export const registerMeRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app: 
         return c.json({ status: 'error' as const, message: 'No file provided.', errors: ['No file provided.'] }, 400);
       }
 
-      if (!/^image\/.+/.test(file.type || '')) {
+      // Judge the EFFECTIVE type (declared, or backfilled from the filename
+      // when undeclared), not the raw `file.type`, so a client that sends no
+      // Content-Type (CLI / curl / MCP) isn't rejected just for omitting it.
+      // Acceptance is a finite list (mirroring the general attachment
+      // allow-list's image types) plus an explicit size cap below.
+      const effectiveMime = resolveEffectiveUploadMime(file);
+      if (!PROFILE_PICTURE_ALLOWED_MIME.includes(effectiveMime)) {
         return c.json(
           {
             status: 'error' as const,
             message: 'File type error. Only image files is allowed to set as user picture.',
             errors: ['File type error. Only image files is allowed to set as user picture.'],
+          },
+          400,
+        );
+      }
+
+      if (file.size > PROFILE_PICTURE_MAX_BYTES) {
+        return c.json(
+          {
+            status: 'error' as const,
+            message: 'File is too large. Profile pictures must be 5MB or smaller.',
+            errors: ['File is too large. Profile pictures must be 5MB or smaller.'],
           },
           400,
         );

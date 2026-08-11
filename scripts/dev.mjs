@@ -46,6 +46,7 @@
 // portal, too).
 
 import { execFileSync, spawn } from 'node:child_process'
+import fs from 'node:fs'
 import http from 'node:http'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -73,28 +74,12 @@ import { generateCaddyfile, isCaddyAvailable, startCaddyProcess, startNodeProxyF
 const READY_MARKER_PREFIX = '@@crowi:ready'
 const FAIL_MARKER_PREFIX = '@@crowi:fail'
 
-// Same filter list as the legacy root `dev` script. Kept here verbatim so the
-// turbo orchestration (concurrency / filters) is unchanged.
-// `--concurrency` MUST exceed the number of persistent `dev` tasks turbo runs
-// (api/web/api-contract/collab/runner + every `@crowi/plugin-*`); turbo errors
-// out otherwise. Kept above the plugin count with headroom so adding a plugin
-// doesn't break `pnpm dev`.
-const TURBO_ARGS = [
+const ALWAYS_WATCH_PACKAGES = ['@crowi/api', '@crowi/web', '@crowi/api-contract']
+const BUILD_ONCE_FILTERS = ['@crowi/api-contract', '@crowi/collab', '@crowi/runner', '@crowi/plugin-*']
+const TURBO_DEV_PREFIX = [
   'run',
   'dev',
   '--concurrency=30',
-  '--filter',
-  '@crowi/api',
-  '--filter',
-  '@crowi/web',
-  '--filter',
-  '@crowi/api-contract',
-  '--filter',
-  '@crowi/collab',
-  '--filter',
-  '@crowi/runner',
-  '--filter',
-  '@crowi/plugin-*',
 ]
 
 // ── pure helpers (kept tiny + side-effect-free for reasoning/testing) ──
@@ -192,14 +177,53 @@ export function renderRow(label, state, detail = '') {
 }
 
 /**
+ * Resolve CLI watch aliases against package names discovered from the
+ * workspace. Both `plugin-slack` and `@crowi/plugin-slack` are accepted.
+ * @param {string[]} requested
+ * @param {string[]} knownPackages
+ * @returns {string[]}
+ */
+export function resolveWatchTargets(requested, knownPackages) {
+  const byAlias = new Map()
+  for (const name of knownPackages) {
+    byAlias.set(name, name)
+    byAlias.set(name.replace(/^@crowi\//, ''), name)
+  }
+
+  const resolved = []
+  const seen = new Set()
+  for (const raw of requested) {
+    const name = byAlias.get(raw)
+    if (!name) {
+      throw new Error(`unknown package ${JSON.stringify(raw)} for --watch`)
+    }
+    if (!seen.has(name)) {
+      seen.add(name)
+      resolved.push(name)
+    }
+  }
+  return resolved
+}
+
+/**
+ * @param {string[]} extraPackages
+ * @returns {string[]}
+ */
+export function computeDevFilters(extraPackages) {
+  return Array.from(new Set([...ALWAYS_WATCH_PACKAGES, ...extraPackages]))
+}
+
+/**
  * Parse `pnpm dev`'s own CLI flags: `--anchor <n>` (pin the port block) and
- * `--isolate-db` (opt-in mongo DB isolation, in addition to `dev.local.json`).
+ * `--isolate-db` (opt-in mongo DB isolation, in addition to `dev.local.json`),
+ * plus repeated `--watch <package>` selectors.
  * @param {string[]} argv `process.argv.slice(2)`
- * @returns {{ anchor: number | undefined, isolateDb: boolean }}
+ * @returns {{ anchor: number | undefined, isolateDb: boolean, watch: string[] }}
  */
 export function parseDevCliArgs(argv) {
   let anchor
   let isolateDb = false
+  const watch = []
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]
     if (arg === '--anchor') {
@@ -212,9 +236,74 @@ export function parseDevCliArgs(argv) {
       anchor = parsed
     } else if (arg === '--isolate-db') {
       isolateDb = true
+    } else if (arg === '--watch') {
+      const value = argv[i + 1]
+      if (!value || value.startsWith('--')) {
+        throw new Error('--watch requires a package name')
+      }
+      watch.push(value)
+      i += 1
     }
   }
-  return { anchor, isolateDb }
+  return { anchor, isolateDb, watch }
+}
+
+/**
+ * Only packages whose runtime output can affect the API process are offered as
+ * optional watchers. CLI/admin tooling stays build-on-demand instead.
+ * @param {string} repoRoot
+ * @returns {string[]}
+ */
+function discoverOptionalWatchPackages(repoRoot) {
+  const packagesDir = path.join(repoRoot, 'packages')
+  const names = []
+  for (const entry of fs.readdirSync(packagesDir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue
+    const packageJsonPath = path.join(packagesDir, entry.name, 'package.json')
+    if (!fs.existsSync(packageJsonPath)) continue
+    const pkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'))
+    const name = typeof pkg.name === 'string' ? pkg.name : ''
+    const hasDevScript = typeof pkg.scripts?.dev === 'string'
+    if (hasDevScript && (name === '@crowi/collab' || name === '@crowi/runner' || name.startsWith('@crowi/plugin-'))) {
+      names.push(name)
+    }
+  }
+  return names.sort()
+}
+
+/**
+ * Build every runtime library/plugin once, including declarations, before
+ * starting the small persistent watch set. Turbo cache makes unchanged starts
+ * cheap while the one-shot declaration workers exit after the build.
+ * @param {string} repoRoot
+ * @param {NodeJS.ProcessEnv} env
+ */
+async function bootstrapRuntimeBuild(repoRoot, env) {
+  const args = [
+    'exec',
+    'turbo',
+    'run',
+    'build',
+    '--concurrency=3',
+    ...BUILD_ONCE_FILTERS.flatMap((filter) => ['--filter', filter]),
+  ]
+  await new Promise((resolve, reject) => {
+    const child = spawn('pnpm', args, {
+      cwd: repoRoot,
+      stdio: 'inherit',
+      env: { ...env, CROWI_TSUP_DTS: '1' },
+    })
+    child.on('error', reject)
+    child.on('exit', (code, signal) => {
+      if (signal) {
+        reject(new Error(`bootstrap build terminated by ${signal}`))
+      } else if (code !== 0) {
+        reject(new Error(`bootstrap build exited with code ${code}`))
+      } else {
+        resolve()
+      }
+    })
+  })
 }
 
 const ANSI = {
@@ -244,6 +333,31 @@ async function main() {
   let cli
   try {
     cli = parseDevCliArgs(process.argv.slice(2))
+  } catch (err) {
+    process.stderr.write(`[dev] ${err.message}\n`)
+    process.exit(1)
+    return
+  }
+
+  let extraWatchPackages
+  try {
+    const knownWatchPackages = [...ALWAYS_WATCH_PACKAGES, ...discoverOptionalWatchPackages(repoRoot)]
+    extraWatchPackages = resolveWatchTargets(cli.watch, knownWatchPackages)
+  } catch (err) {
+    process.stderr.write(`[dev] ${err.message}\n`)
+    process.exit(1)
+    return
+  }
+  const devFilters = computeDevFilters(extraWatchPackages)
+  // api-contract is always watched so a contract edit still reflects at
+  // runtime, but its declaration (.d.ts) rollup worker is the dev tree's single
+  // biggest memory consumer. Keep it JS-only by default; only regenerate types
+  // live when the developer explicitly `--watch`es api-contract.
+  const watchApiContractTypes = extraWatchPackages.includes('@crowi/api-contract')
+
+  process.stdout.write('[dev] building runtime dependencies once (declarations included)…\n')
+  try {
+    await bootstrapRuntimeBuild(repoRoot, process.env)
   } catch (err) {
     process.stderr.write(`[dev] ${err.message}\n`)
     process.exit(1)
@@ -309,6 +423,12 @@ async function main() {
       proxyPort: ports.proxy,
     }),
     ALLOWED_DEV_ORIGINS: allowedDevOrigins,
+    // api-contract's initial build above already emitted declarations. Its
+    // persistent watcher only needs runtime JS unless the developer opted into
+    // live types with `--watch @crowi/api-contract`; keeping the declaration
+    // graph alive otherwise costs multiple GiB even while idle. tsup.config.ts
+    // reads this; turbo forwards it via globalPassThroughEnv.
+    ...(watchApiContractTypes ? {} : { CROWI_TSUP_DTS: '0' }),
     ...(isolatedMongoUri ? { MONGO_URI: isolatedMongoUri } : {}),
   }
 
@@ -316,6 +436,7 @@ async function main() {
     `[dev] worktree "${key}" → anchor ${anchor} (api ${ports.api} · web ${ports.web} · site ${ports.site} · proxy ${ports.proxy})` +
       `${isolateDb ? ` · db isolated (${isolatedDbName(key)})` : ' · db shared (main)'}\n`,
   )
+  process.stdout.write(`[dev] watching ${devFilters.join(' · ')}${watchApiContractTypes ? '' : '  (api-contract: JS only — pass --watch @crowi/api-contract for live .d.ts)'}\n`)
 
   /** @type {{ api: boolean, web: boolean, deps: boolean }} */
   const ready = { api: false, web: false, deps: false }
@@ -335,7 +456,8 @@ async function main() {
   // colors. `...process.env` last so a developer's own FORCE_COLOR /
   // DEBUG_COLORS wins, and we stay plain when output is redirected (no TTY).
   const colorEnv = isTTY ? { FORCE_COLOR: '1', DEBUG_COLORS: '1' } : {}
-  const child = spawn('pnpm', ['exec', 'turbo', ...TURBO_ARGS], {
+  const turboArgs = [...TURBO_DEV_PREFIX, ...devFilters.flatMap((filter) => ['--filter', filter])]
+  const child = spawn('pnpm', ['exec', 'turbo', ...turboArgs], {
     stdio: ['inherit', 'pipe', 'pipe'],
     // Own process group so SIGINT can be delivered to the whole turbo tree.
     detached: true,

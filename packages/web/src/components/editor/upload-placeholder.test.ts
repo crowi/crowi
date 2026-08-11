@@ -251,7 +251,7 @@ describe('uploadAttachment — token-missing send-avoidance', () => {
   const file = new File([new Uint8Array(4)], 'a.png', { type: 'image/png' });
 
   it('fails closed — never constructs an XMLHttpRequest — when no access token and no refresh token', async () => {
-    await expect(uploadAttachment(file, 'a.png', 'page-1', 'dnd', () => {})).rejects.toThrow('Authentication is required.');
+    await expect(uploadAttachment(file, 'a.png', 'page-1', () => {})).rejects.toThrow('Authentication is required.');
     expect(xhrInstances).toBe(0);
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -265,7 +265,7 @@ describe('uploadAttachment — token-missing send-avoidance', () => {
       }),
     );
 
-    const outcome = await uploadAttachment(file, 'a.png', 'page-1', 'dnd', () => {});
+    const outcome = await uploadAttachment(file, 'a.png', 'page-1', () => {});
 
     expect(outcome.url).toBe('/api/attachments/x');
     expect(xhrInstances).toBe(1);
@@ -276,10 +276,150 @@ describe('uploadAttachment — token-missing send-avoidance', () => {
   it('sends the request with the existing token directly when one is already loaded (unchanged behaviour)', async () => {
     localStorage.setItem('accessToken', 'existing-access');
 
-    const outcome = await uploadAttachment(file, 'a.png', 'page-1', 'dnd', () => {});
+    const outcome = await uploadAttachment(file, 'a.png', 'page-1', () => {});
 
     expect(outcome.url).toBe('/api/attachments/x');
     expect(xhrInstances).toBe(1);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * A 413 whose body matches crowi's own `{ error: <code>, message }`
+ * upload-error envelope reports that message (the genuine "too large"
+ * case); a 413 with any other body (a front reverse proxy's HTML/text
+ * page, e.g. nginx's default error page) is reported as a proxy rejection
+ * instead, and that body is never echoed. Mirrors the CLI's `attach.ts`
+ * discrimination — see `attach.test.ts`'s "front-proxy 413 discrimination"
+ * describe block.
+ */
+describe('sendUpload — front-proxy 413 discrimination', () => {
+  class FakeXHR413 {
+    status: number;
+    responseText: string;
+    upload = { onprogress: null as ((e: ProgressEvent) => void) | null };
+    onload: (() => void) | null = null;
+    onerror: (() => void) | null = null;
+    onabort: (() => void) | null = null;
+
+    constructor(status: number, responseText: string) {
+      this.status = status;
+      this.responseText = responseText;
+    }
+    open(): void {}
+    setRequestHeader(): void {}
+    send(): void {
+      this.onload?.();
+    }
+  }
+
+  beforeEach(() => {
+    localStorage.clear();
+    localStorage.setItem('accessToken', 'existing-access');
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    localStorage.clear();
+  });
+
+  const file = new File([new Uint8Array(4)], 'a.png', { type: 'image/png' });
+
+  it("rejects with crowi's own message for a 413 that matches the upload-error envelope", async () => {
+    vi.stubGlobal(
+      'XMLHttpRequest',
+      class extends FakeXHR413 {
+        constructor() {
+          super(413, JSON.stringify({ error: 'too_large', message: 'The file is too large to upload.', details: { maxBytes: 52428800 } }));
+        }
+      },
+    );
+
+    await expect(uploadAttachment(file, 'a.png', 'page-1', () => {})).rejects.toThrow('The file is too large to upload.');
+  });
+
+  it('rejects with a front-reverse-proxy message for a 413 with a non-crowi (HTML) body, and never echoes it', async () => {
+    const proxyBody = '<html><head><title>413 Request Entity Too Large</title></head><body><center>nginx/1.25.3</center></body></html>';
+    vi.stubGlobal(
+      'XMLHttpRequest',
+      class extends FakeXHR413 {
+        constructor() {
+          super(413, proxyBody);
+        }
+      },
+    );
+
+    const err = await uploadAttachment(file, 'a.png', 'page-1', () => {}).then(
+      () => undefined,
+      (e: unknown) => e as Error,
+    );
+
+    expect(err).toBeInstanceOf(Error);
+    expect(err?.message).toContain('reverse proxy');
+    expect(err?.message).not.toContain('nginx');
+    expect(err?.message).not.toContain('<html>');
+  });
+
+  it('rejects with a front-reverse-proxy message for a 413 with a JSON body that lacks the crowi envelope shape', async () => {
+    vi.stubGlobal(
+      'XMLHttpRequest',
+      class extends FakeXHR413 {
+        constructor() {
+          super(413, JSON.stringify({ message: 'Request Entity Too Large' }));
+        }
+      },
+    );
+
+    const err = await uploadAttachment(file, 'a.png', 'page-1', () => {}).then(
+      () => undefined,
+      (e: unknown) => e as Error,
+    );
+
+    expect(err?.message).toContain('reverse proxy');
+  });
+
+  it('rejects with a front-reverse-proxy message — not the echoed body — for a 413 JSON body that LOOKS like the crowi envelope but carries an unknown error code', async () => {
+    // Shape-only detection (`typeof error === 'string' && typeof message ===
+    // 'string'`) would misclassify this as crowi's own rejection. The code
+    // `'proxy_too_large'` is not in `UploadAttachmentErrorCodeSchema`'s enum,
+    // so it must be treated as a front reverse-proxy body.
+    vi.stubGlobal(
+      'XMLHttpRequest',
+      class extends FakeXHR413 {
+        constructor() {
+          super(413, JSON.stringify({ error: 'proxy_too_large', message: 'evil' }));
+        }
+      },
+    );
+
+    const err = await uploadAttachment(file, 'a.png', 'page-1', () => {}).then(
+      () => undefined,
+      (e: unknown) => e as Error,
+    );
+
+    expect(err?.message).toContain('reverse proxy');
+    expect(err?.message).not.toContain('evil');
+  });
+
+  it('rejects with a front-reverse-proxy message — not the echoed body — for a 413 whose body is a VALID envelope but with a code other than `too_large`', async () => {
+    // `POST /attachments/upload` never pairs a 413 with any code but
+    // `too_large` (its other error codes use different HTTP statuses), so a
+    // schema-valid-but-wrong-code body did not come from crowi's own size
+    // check even though it fully validates against `UploadAttachmentErrorSchema`.
+    vi.stubGlobal(
+      'XMLHttpRequest',
+      class extends FakeXHR413 {
+        constructor() {
+          super(413, JSON.stringify({ error: 'rate_limited', message: 'untrusted proxy text' }));
+        }
+      },
+    );
+
+    const err = await uploadAttachment(file, 'a.png', 'page-1', () => {}).then(
+      () => undefined,
+      (e: unknown) => e as Error,
+    );
+
+    expect(err?.message).toContain('reverse proxy');
+    expect(err?.message).not.toContain('untrusted proxy text');
   });
 });

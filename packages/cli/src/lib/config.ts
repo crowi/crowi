@@ -3,6 +3,8 @@ import { chmodSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 
+import type { UploadPolicyResponse } from '@crowi/api-contract';
+
 /**
  * Persisted OAuth tokens for a single profile. The CLI is a PUBLIC OAuth
  * client (PKCE), so there is no client secret to store — only the rotated
@@ -54,6 +56,19 @@ export interface Profile {
   apiVersion?: string;
   /** Epoch milliseconds when capabilities/version were last fetched. */
   capabilitiesFetchedAt?: number;
+  /**
+   * Cached `GET /attachments/upload-policy` response (`./upload-policy.ts`).
+   * `undefined` = not yet fetched for this profile; `null` = fetched once and
+   * 404'd (a server old enough to lack the endpoint) — recorded so we never
+   * ask that server again, with no TTL (an old server does not gain the
+   * endpoint by CLI-side expiry). A present policy DOES expire, on the same
+   * TTL as `capabilities` below (`uploadPolicyFetchedAt`), since the
+   * server's actual values can change across a version upgrade and the CLI
+   * must eventually pick that up without a per-upload round trip.
+   */
+  uploadPolicy?: UploadPolicyResponse | null;
+  /** Epoch milliseconds when a present (non-null) `uploadPolicy` was fetched. */
+  uploadPolicyFetchedAt?: number;
 }
 
 /** On-disk shape of `contexts.json`. */

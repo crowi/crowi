@@ -40,9 +40,12 @@
  * Multipart: `addAttachment` + `uploadAttachment` are implemented
  * Hono-native via `c.req.parseBody()`. multer is gone from this
  * resource (legacy `/_api/me/picture/upload` still uses it, so the
- * package dependency is removed in Phase 6 cleanup, not here).
- * `uploadAttachment` runs a `Content-Length` precheck BEFORE
- * `parseBody()` so a 50 MB+ body is 413'd without being buffered.
+ * package dependency is removed in Phase 6 cleanup, not here). Both
+ * routes reject an over-limit `Content-Length` before their body is ever
+ * read — see `rejectOversizedContentLength` in the api handler
+ * (`packages/api/src/hono/handlers/attachment.ts`) for why that check
+ * has to run as middleware ahead of `.openapi()`'s generated multipart
+ * validator rather than at the top of the handler.
  */
 import { createRoute, z } from '@hono/zod-openapi';
 import {
@@ -54,6 +57,7 @@ import {
   RemoveAttachmentResponseSchema,
   UploadAttachmentErrorSchema,
   UploadAttachmentResponseSchema,
+  UploadPolicyResponseSchema,
 } from '../schemas/attachment';
 import { AuthenticationRequiredErrorSchema, InternalServerErrorSchema } from '../schemas/common';
 
@@ -76,18 +80,12 @@ const AddAttachmentBodySchema = z.object({
   file: z.any().openapi({ type: 'string', format: 'binary' }).optional(),
 });
 
-// `intent` is declared as `z.string().optional()` rather than
-// `z.enum(['paste','dnd'])` because the handler returns the legacy
-// `{ error: 'disallowed_type', ... }` envelope for a bad intent value,
-// and a strict enum here would short-circuit that path via the
-// `defaultHook` ValidationError envelope before the handler runs.
+// No `intent` field: the MIME allow-list and the size cap are both
+// intent-independent, so nothing server-side needs to read it. A client
+// that still sends `intent` is unaffected — zod strips the unknown field.
 const UploadAttachmentBodySchema = z.object({
   file: z.any().openapi({ type: 'string', format: 'binary' }).optional(),
   pageId: z.string().optional(),
-  intent: z
-    .string()
-    .optional()
-    .openapi({ enum: ['paste', 'dnd'] }),
 });
 
 export const listAttachmentsRoute = createRoute({
@@ -262,7 +260,7 @@ export const uploadAttachmentRoute = createRoute({
       content: { 'application/json': { schema: UploadAttachmentErrorSchema } },
     },
     413: {
-      description: 'Body exceeds the per-intent size cap',
+      description: 'Body exceeds the unified upload size cap',
       content: { 'application/json': { schema: UploadAttachmentErrorSchema } },
     },
     415: {
@@ -317,6 +315,32 @@ export const removeAttachmentRoute = createRoute({
   },
 });
 
+/**
+ * Publishes the server's upload policy (allowed MIME types, extension hints,
+ * size limits) so a client stops guessing. `upload-policy` cannot collide
+ * with the raw-stream `GET
+ * /attachments/{id}` route (`attachment-stream.ts`, mounted outside this
+ * contract file): that route constrains `:id` to a 24-char hex ObjectId, so
+ * a literal path segment like `upload-policy` never matches it.
+ */
+export const getUploadPolicyRoute = createRoute({
+  method: 'get',
+  path: '/attachments/upload-policy',
+  tags: ['attachment'],
+  security: [{ bearerAuth: [] }],
+  summary: 'Get the server upload policy (allowed MIME types, extension hints, size limits)',
+  responses: {
+    200: {
+      description: 'Current upload policy, derived from server-side constants (never a value maintained separately)',
+      content: { 'application/json': { schema: UploadPolicyResponseSchema } },
+    },
+    401: {
+      description: 'Authentication required',
+      content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
+    },
+  },
+});
+
 export const attachmentRoutes = {
   // `/pages/{pageId}/attachments/usage` MUST register before
   // `/pages/{pageId}/attachments` so the literal `/usage` suffix wins;
@@ -329,4 +353,5 @@ export const attachmentRoutes = {
   uploadAttachmentRoute,
   getAttachmentMetaRoute,
   removeAttachmentRoute,
+  getUploadPolicyRoute,
 };

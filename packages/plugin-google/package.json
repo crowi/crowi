@@ -1,6 +1,6 @@
 {
   "name": "@crowi/plugin-google",
-  "version": "0.1.0-alpha.0",
+  "version": "0.1.0-alpha.1",
   "description": "Google sign-in for Crowi 2.0: registers Google as an OIDC auth provider so members can sign in with, and link, their Google account.",
   "repository": {
     "type": "git",

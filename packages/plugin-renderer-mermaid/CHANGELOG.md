@@ -1,5 +1,19 @@
 # @crowi/plugin-renderer-mermaid
 
+## 0.1.0-alpha.6
+
+### Patch Changes
+
+- 0412b90: Move `dompurify` to 3.4.13, which closes GHSA report #693. It arrives under `mermaid`, which uses it to sanitize the SVG it produces from diagram source — so it sits directly on the path that turns page content into markup the reader's browser renders. `mermaid@11.16.1` already declares `^3.3.3`, so this is a lockfile move with no override and no manifest change; there is no newer `mermaid` to take instead.
+
+## 0.1.0-alpha.5
+
+### Patch Changes
+
+- 82a928d: Bump `mermaid` to 11.16.1, which closes five advisories against 11.16.0 (GHSA reports #686–#690). Mermaid runs in the reader's browser to draw diagrams from page content, so anything it mishandles is reachable from a page body — this is the one runtime dependency among the batch, and the reason it is worth a release rather than waiting. The declared range moves from `^11.16.0` to `^11.16.1` so a fresh install cannot resolve back to the affected version.
+- Updated dependencies [9a06104]
+  - @crowi/plugin-api@1.0.0-alpha.7
+
 ## 0.1.0-alpha.4
 
 ### Minor Changes

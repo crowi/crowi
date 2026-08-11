@@ -5,6 +5,31 @@ import nextTs from "eslint-config-next/typescript";
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
+  {
+    // feature-radix-upgrade-and-single-source: Radix primitives must be
+    // imported from the `radix-ui` meta package only. A direct
+    // `@radix-ui/react-*` import pulls a second, independently-versioned
+    // copy of shared internals (eg. `@radix-ui/react-dismissable-layer`)
+    // into the graph, which can split the module-local overlay body-lock
+    // registry and leave `document.body.style.pointerEvents` stuck at
+    // `none` after closing a dialog (see `dda4ba72`). `src/eslint-radix-
+    // import-guard.test.ts` drives this real rule through the ESLint Node
+    // API so a future edit that narrows or removes it fails a test.
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["@radix-ui/react-*"],
+              message:
+                "Import Radix primitives from the `radix-ui` meta package instead of a direct `@radix-ui/react-*` package.",
+            },
+          ],
+        },
+      ],
+    },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:

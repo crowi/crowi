@@ -35,13 +35,24 @@ export class CliError extends Error {
   readonly apiCode?: string;
   /** HTTP status, when the error originated from a response. */
   readonly status?: number;
+  /**
+   * The response body as parsed by {@link parseResponse} (JSON value, raw
+   * text, or `undefined`), when the error originated from a response.
+   * `apiCode`/`message` are a lenient, partial read of this (see
+   * `parseCrowiError`'s doc comment) — a caller that needs to confirm the
+   * body is a COMPLETE, schema-valid envelope (not just "has a `code`
+   * field") should re-validate this directly against its own zod schema
+   * rather than trust `apiCode` alone.
+   */
+  readonly rawBody?: unknown;
 
-  constructor(message: string, opts: { exitCode?: ExitCode; apiCode?: string; status?: number } = {}) {
+  constructor(message: string, opts: { exitCode?: ExitCode; apiCode?: string; status?: number; rawBody?: unknown } = {}) {
     super(message);
     this.name = 'CliError';
     this.exitCode = opts.exitCode ?? EXIT.GENERAL;
     this.apiCode = opts.apiCode;
     this.status = opts.status;
+    this.rawBody = opts.rawBody;
   }
 }
 
@@ -312,5 +323,6 @@ async function parseResponse<T>(response: Response): Promise<T> {
     exitCode: statusToExit(response.status),
     apiCode: envelope?.code,
     status: response.status,
+    rawBody: body,
   });
 }

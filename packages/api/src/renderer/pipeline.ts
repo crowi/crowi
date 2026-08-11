@@ -78,6 +78,13 @@ export interface PipelineEsmDeps {
    */
   remarkBreaks: unknown;
   /**
+   * `remark-frontmatter`'s default export (feature-renderer-frontmatter
+   * §D-2) — a parser extension, applied directly after `remarkGfm` so a
+   * document-leading `---` block is parsed as a `yaml` node instead of a
+   * `thematicBreak` + paragraph. Only `['yaml']` is enabled (no TOML).
+   */
+  remarkFrontmatter: unknown;
+  /**
    * `remark-emoji`'s default export (feature-renderer-core-util-dedup —
    * moved here from a module-level cache inside `core/emoji.ts`, which
    * was the exact anti-pattern this interface's own cross-instance
@@ -280,6 +287,9 @@ export function createPipelineEsmDepsLoader(): LoadPipelineEsmDeps {
     // package doesn't carry the `__esModule` marker jiti needs for
     // its `interopDefault` unwrap.
     const remarkBreaksMod = jiti('remark-breaks') as { default: unknown };
+    // remark-frontmatter is ESM-only too — same manual `.default` read as
+    // remark-breaks/remark-emoji (feature-renderer-frontmatter §D-2).
+    const remarkFrontmatterMod = jiti('remark-frontmatter') as { default: unknown };
     // remark-emoji is ESM-only too (feature-renderer-core-util-dedup —
     // resolved here, per-Renderer-instance, instead of the module-level
     // cache `core/emoji.ts` used to keep on its own).
@@ -332,6 +342,7 @@ export function createPipelineEsmDepsLoader(): LoadPipelineEsmDeps {
       remarkParse: remarkParseMod.default,
       remarkGfm: remarkGfmMod.default,
       remarkBreaks: remarkBreaksMod.default,
+      remarkFrontmatter: remarkFrontmatterMod.default,
       remarkEmoji: remarkEmojiMod.default,
       GithubSlugger: sluggerMod.default,
       mdastToString: mdastToStringMod.toString,
@@ -394,13 +405,24 @@ export async function runPipeline(
   }
 
   const deps = await loadDeps();
-  const { unified, remarkParse, remarkGfm, remarkBreaks, remarkEmoji } = deps;
+  const { unified, remarkParse, remarkGfm, remarkBreaks, remarkEmoji, remarkFrontmatter } = deps;
 
   // Build the processor with parser + GFM tweaks first, then layer
   // the core 4 transform plugins (headings → wikilinks → mentions →
   // code-block-languages) bound to the metadata bag, and finally
   // every external plugin from the registry in registration order.
-  let processor = unified().use(remarkParse).use(remarkGfm);
+  //
+  // `remarkFrontmatter` is a PARSER extension (feature-renderer-frontmatter
+  // §D-2), so it must run immediately after `remarkGfm`, before any core
+  // transform sees the tree — otherwise a document-leading `---` block
+  // parses as a `thematicBreak` + paragraph like any other, and
+  // `makeFrontmatterPlugin` (the first core plugin below) would never see
+  // a `yaml` node to replace. Only `['yaml']` is enabled — TOML (`+++`) is
+  // out of scope.
+  let processor = unified()
+    .use(remarkParse)
+    .use(remarkGfm)
+    .use(remarkFrontmatter as never, ['yaml']);
 
   // Each transform plugin is `(metadata) => (tree) => void`. unified's
   // `use(plugin, options)` invokes the plugin once with `options` and

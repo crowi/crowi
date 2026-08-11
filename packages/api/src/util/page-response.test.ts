@@ -312,10 +312,45 @@ describe('computeRevisionRenderArtifactsAsync — renderPending marker scan on t
   // sidecars onto their `html` nodes, and pre-1.0 stored ASTs — which
   // lack them — must be invalidated wholesale so `rebuild rendered-ast`
   // (util/rebuild-rendered-ast.ts) re-renders every current revision.
+  // feature-renderer-frontmatter bumps it again (1.0.0 -> 1.1.0): the
+  // new `core/frontmatter.ts` transform (`makeFrontmatterPlugin`) is a
+  // new-bundled-transform minor bump per this constant's own policy —
+  // same rollout as every bump since 1.0.0 (RFC-0023 removed the
+  // missing-version freshness special case), so a stored AST with an
+  // older `rendererVersion` recomputes per read rather than staying a
+  // `thematicBreak` + paragraph until saved.
+  // GitHub Alerts bumps it again (1.1.0 -> 1.2.0) for the same reason:
+  // `core/github-alerts.ts`'s `makeGithubAlertsPlugin` is another new
+  // bundled transform, and its rendering likewise arrives on next read
+  // rather than next save.
   // Pinned here so an accidental future bump/no-bump alongside an
   // unrelated change is caught immediately.
-  it('RENDERER_PIPELINE_VERSION is 1.0.0 (RFC-0023 — sidecar-stamped producers are a stored-AST-invalidating major bump)', () => {
-    expect(RENDERER_PIPELINE_VERSION).toBe('1.0.0');
+  it('RENDERER_PIPELINE_VERSION is 1.2.0 (new bundled transform, minor bump)', () => {
+    expect(RENDERER_PIPELINE_VERSION).toBe('1.2.0');
+  });
+
+  // The concrete read-path half of that bump: a revision saved by a
+  // 1.1.0 process holds an ordinary `blockquote` AST, and the first read
+  // served by a 1.2.0 process must hand back the recomputed alert
+  // without touching either the stored AST object or the document
+  // behind it.
+  it('recomputes a 1.1.0-stored ordinary blockquote into a crowiAlert on read, leaving the stored AST object untouched', async () => {
+    const alertBody = '> [!NOTE]\n> body\n';
+    const storedAst = {
+      type: 'root',
+      children: [{ type: 'blockquote', children: [{ type: 'paragraph', children: [{ type: 'text', value: '[!NOTE]' }] }] }],
+    };
+    const before = structuredClone(storedAst);
+
+    const result = await computeRevisionRenderArtifactsAsync(crowi, undefined, storedAst, alertBody, TEST_ACTOR, '1.1.0');
+
+    const recomputed = result.renderedAst as { children: Array<{ type: string; variant?: string }> };
+    expect(recomputed).not.toBe(storedAst);
+    expect(recomputed.children[0].type).toBe('crowiAlert');
+    expect(recomputed.children[0].variant).toBe('note');
+    // The read path is a pure projection: no in-place upgrade of the
+    // caller's stored blob (and, one level up, no DB write-back).
+    expect(storedAst).toEqual(before);
   });
 
   // Registers a diagram-shaped CodeBlockRenderer (feature-renderer-plugin-

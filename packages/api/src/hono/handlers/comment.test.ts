@@ -266,6 +266,45 @@ describe('Routes /api/comments (Hono)', () => {
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('INVALID_REQUEST');
     });
+
+    // feature-page-history-phase1-model (RFC-0021 §7.1, AC-10) — end-to-end
+    // wiring: `addComment` snapshots {status, path} right after
+    // authorization, and `comment.ts`'s post-insert hook compensates on
+    // drift. Injects the race directly at the real Hono handler (not just
+    // the model layer) by renaming the Page from inside a spy on the exact
+    // call `addComment` uses to authorize — the moment the handler holds
+    // the authorized Page but has not yet inserted the Comment.
+    it('AC-10: a Page renamed in the window between authorization and insert is compensated end-to-end (real handler + real hook)', async () => {
+      const { pageId, revisionId } = await createTestPage(`${PATH_PREFIX}race-rename`);
+      const user = await crowi.model('User').findOne({ username: 'honoCommentTester' }).exec();
+
+      const original = Page.findPageByIdAndGrantedUser.bind(Page);
+      const spy = jest.spyOn(Page, 'findPageByIdAndGrantedUser').mockImplementation(async (...args: unknown[]) => {
+        const page = await original(...(args as [string, unknown]));
+        // Simulate a concurrent rename landing in the gap between
+        // `addComment`'s authorization read and its Comment insert. Renames
+        // a SEPARATE document instance for the SAME `_id` — a real
+        // concurrent request would never share the handler's in-memory
+        // `page` object — so the handler's own `page` (and the snapshot it
+        // takes from it) still reflects the PRE-rename path/status, exactly
+        // what a real race would hand it. (`Page.rename` mutates its
+        // argument's `.path` in place — reusing `page` here would rename
+        // the handler's own reference too and hide the race.)
+        const concurrentPageRef = await Page.findById(page._id);
+        await Page.rename(concurrentPageRef, `${PATH_PREFIX}race-rename-moved`, user, {});
+        return page;
+      });
+
+      try {
+        const res = await request(app).post('/api/comments').set(authHeaders(accessToken)).send({ page_id: pageId, revision_id: revisionId, comment: 'raced' });
+
+        expect(res.status).toBe(404);
+        expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
+        expect(await Comment.countDocuments({ page: new Types.ObjectId(pageId), comment: 'raced' })).toBe(0);
+      } finally {
+        spy.mockRestore();
+      }
+    });
   });
 
   // feature-watch-autosubscribe — commenting auto-creates a WATCH watcher

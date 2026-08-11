@@ -189,6 +189,18 @@ Without `-o` the bytes go to stdout (writing them straight to a terminal is refu
 
 The delivery route an embedded `<img>` reads answers a missing attachment with a placeholder image and a `200`. That keeps browsers from showing a broken image, but for a client extracting a file it means happily saving something that is not the attachment. `attach download` uses a dedicated route that returns `404` (exit code `4`) both when the record is gone and when its stored file is gone, so a saved file is always the real thing.
 
+### Uploading attachments
+
+Before sending anything, `attach add <path-or-id> <file>` **asks the server what it accepts** (`GET /api/attachments/upload-policy`). The server answers with the MIME types it will store, an extension-to-MIME table, and the size ceiling for each upload route. The CLI uses that for two things: to decide which `Content-Type` to declare for the file's extension, and to reject an upload that cannot succeed before it goes out. You no longer push a large file across the wire only to be handed a `413`.
+
+A locally rejected upload exits `6` (invalid) and says why on stderr:
+
+```
+upload rejected: video.mkv has type application/octet-stream, which this server does not accept for attachments
+```
+
+The policy is cached on the profile for ten minutes, so this is not a round trip on every invocation. **A server old enough not to have the endpoint** answers `404`, and the CLI falls back to its bundled extension table — you lose the pre-flight check, nothing else.
+
 ## Output formats & scripting
 
 `search` and `ls` accept `--format` and `--template` to shape output for piping:

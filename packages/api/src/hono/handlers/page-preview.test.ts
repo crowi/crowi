@@ -108,6 +108,31 @@ describe('Routes /api/pages/preview (Hono previewPage)', () => {
     expect(lines[2]).toBe(5); // code fence opens at line 5
   });
 
+  // The editor preview and the saved page view render from the same web
+  // helper, so preview is the cheapest end-to-end proof that the alert
+  // reaches a browser at all: a top-level `crowiAlert` carrying the
+  // marker-preserved children and the same scroll-sync anchor every
+  // other top-level block gets.
+  it('renders a GitHub Alerts quote as a top-level crowiAlert with its marker children and scroll-sync anchor intact', async () => {
+    const res = await request(app).post('/api/pages/preview').set(authHeaders(accessToken)).send({ body: '> [!WARNING]\n> body text\n' });
+
+    expect(res.status).toBe(200);
+    const ast = res.body.renderedAst as {
+      children: Array<{
+        type: string;
+        variant?: string;
+        data?: { hName?: string; hProperties?: { 'data-source-line'?: number } };
+        children?: Array<{ children?: Array<{ type: string; value?: string }> }>;
+      }>;
+    };
+    const alert = ast.children[0];
+    expect(alert.type).toBe('crowiAlert');
+    expect(alert.variant).toBe('warning');
+    expect(alert.data?.hName).toBe('blockquote');
+    expect(alert.data?.hProperties?.['data-source-line']).toBe(1);
+    expect(alert.children?.[0].children).toEqual([{ type: 'text', value: '[!WARNING]' }, { type: 'break' }, { type: 'text', value: 'body text' }]);
+  });
+
   // feature-plugin-renderer-mermaid spec §6/§7 — `Renderer.run`'s `options`
   // gained a required `actor` field and an optional `signal`; this handler
   // is the one call site that also needs the abort signal (so a

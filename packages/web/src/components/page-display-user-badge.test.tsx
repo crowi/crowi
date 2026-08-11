@@ -35,7 +35,9 @@ describe('PageDisplayUserBadge — legacy attachment URL canonicalization (featu
   });
 
   it('does not render an <img> when image is unset (unchanged fallback behaviour)', () => {
-    render(<PageDisplayUserBadge user={makeUser(null)} />);
-    expect(screen.queryByRole('img')).toBeNull();
+    // Query the HTML <img> tag specifically, not `role="img"` — the shared
+    // UserAvatar's BoringAvatar fallback SVG also carries `role="img"`.
+    const { container } = render(<PageDisplayUserBadge user={makeUser(null)} />);
+    expect(container.querySelector('img')).toBeNull();
   });
 });

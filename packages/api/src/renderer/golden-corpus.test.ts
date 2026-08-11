@@ -6,6 +6,7 @@ import { createPipelineEsmDepsLoader, runPipeline } from './pipeline';
 import { RendererRegistryImpl } from './registry';
 import { sanitizeAst } from './sanitize-ast';
 import { serializeMdast } from './serialize';
+import { RENDERER_PIPELINE_VERSION } from './version';
 
 /**
  * RFC-0023 / parent spec §13 (Phase 3) — the shared golden fixture
@@ -75,13 +76,45 @@ interface GoldenCorpusFile {
   why: string;
   consumers: string[];
   consumerContract: string;
+  /** How the out-of-checkout consumer is kept in step for a fixture whose behaviour is new (see `EXTERNAL_COORDINATION_REQUIRED`). */
+  consumerCoordination?: string;
   normalization: string;
   exclusions: string;
   cases: GoldenCase[];
 }
 
 const CORPUS_DIR = path.join(__dirname, '__fixtures__', 'golden-corpus');
-const CORPUS_FILES = ['core-blocks.json', 'inline.json', 'code.json', 'image-attrs.json', 'gfm-references.json', 'typed-nodes.json'] as const;
+const CORPUS_FILES = [
+  'core-blocks.json',
+  'inline.json',
+  'code.json',
+  'image-attrs.json',
+  'gfm-references.json',
+  'typed-nodes.json',
+  'frontmatter.json',
+  'github-alerts.json',
+] as const;
+
+/**
+ * Fixtures whose out-of-checkout consequence no test can prove must spell
+ * out how that consumer is kept in step — this driver only covers the api
+ * side, and `apps/apple` lives on another branch. Two shapes qualify, and
+ * both are silent without the note:
+ *
+ *   - the fixture puts a NEW discriminant on the versioned envelope union,
+ *     so a consumer built earlier renders it as a `crowiOpaque` placeholder
+ *     instead of failing (`frontmatter.json`);
+ *   - the fixture claims the consumer needs NO change, which is precisely
+ *     the claim nothing forces a human to re-verify (`github-alerts.json`,
+ *     where `sanitize-ast.ts` narrows the node to an ordinary blockquote).
+ *
+ * Membership is curated by hand and the assertion below only checks that a
+ * qualifying fixture carries a non-empty note — it cannot judge whether the
+ * note is true or still current. The value here is that adding such a
+ * fixture forces someone to write the sentence, not that the sentence is
+ * verified.
+ */
+const EXTERNAL_COORDINATION_REQUIRED: ReadonlySet<string> = new Set(['frontmatter.json', 'github-alerts.json']);
 
 const corpus = CORPUS_FILES.map((file) => [file, JSON.parse(readFileSync(path.join(CORPUS_DIR, file), 'utf8')) as GoldenCorpusFile] as const);
 
@@ -128,6 +161,8 @@ const REQUIRED_CASES: Record<(typeof CORPUS_FILES)[number], string[]> = {
     'image-reference-missing-reference-type',
   ],
   'typed-nodes.json': ['math-display-projection', 'math-inline-projection', 'diagram-mermaid-svg-projection', 'link-card-hoist', 'placeholder-projection'],
+  'frontmatter.json': ['frontmatter-basic', 'frontmatter-mid-document-thematic-break-unaffected'],
+  'github-alerts.json': ['github-alerts-all-variants', 'github-alerts-conservative-fallbacks'],
 };
 
 // ---------------------------------------------------------------------------
@@ -188,6 +223,12 @@ describe('golden corpus self-description', () => {
         expect(doc.exclusions).toContain('renderer-plugins.spec.ts');
       });
 
+      if (EXTERNAL_COORDINATION_REQUIRED.has(file)) {
+        it('spells out how the out-of-checkout consumer is coordinated for this new behaviour', () => {
+          expect(doc.consumerCoordination?.length ?? 0).toBeGreaterThan(0);
+        });
+      }
+
       it('contains every AC-mandated case', () => {
         const names = doc.cases.map((c) => c.name);
         for (const required of REQUIRED_CASES[file]) {
@@ -212,6 +253,20 @@ describe('golden corpus self-description', () => {
       });
     });
   }
+});
+
+// Pinned so an accidental future bump/no-bump alongside an unrelated
+// change is caught immediately (same convention as
+// `util/page-response.test.ts`'s own pinned assertion). The other half
+// of the rollout — a STALE stored AST (older `rendererVersion`)
+// recomputing per read against the running pipeline, with no write-back
+// to the stored document — is pre-existing generic freshness-comparison
+// infra (`util/page-response.ts`), already covered by
+// `page-response.test.ts`; nothing new to re-test here.
+describe('renderer version', () => {
+  it('RENDERER_PIPELINE_VERSION is 1.2.0 (new bundled GitHub Alerts transform — minor bump)', () => {
+    expect(RENDERER_PIPELINE_VERSION).toBe('1.2.0');
+  });
 });
 
 // ---------------------------------------------------------------------------
