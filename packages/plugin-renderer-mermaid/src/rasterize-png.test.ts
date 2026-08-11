@@ -94,7 +94,7 @@ describe('toLayoutUnits — the sidecar-dimension fallback', () => {
   it('is the identity at the ladder floor, where one user unit is one pixel', () => {
     expect(BASE_RASTER_DENSITY).toBe(72);
     expect(toLayoutUnits(280, BASE_RASTER_DENSITY)).toBe(280);
-    expect(RASTER_DENSITY_LADDER.at(-1)).toBe(BASE_RASTER_DENSITY);
+    expect(RASTER_DENSITY_LADDER[RASTER_DENSITY_LADDER.length - 1]).toBe(BASE_RASTER_DENSITY);
   });
 
   it('never reports a zero extent — a sub-unit diagram still needs a layout box', () => {
