@@ -5,8 +5,9 @@ import { toHast } from 'mdast-util-to-hast';
 import type { State } from 'mdast-util-to-hast';
 import { raw } from 'hast-util-raw';
 import { toJsxRuntime } from 'hast-util-to-jsx-runtime';
-import type { Element as HastElement, Nodes as HastNodes } from 'hast';
+import type { Element as HastElement, Nodes as HastNodes, Properties as HastProperties } from 'hast';
 import type { ReactNode } from 'react';
+import { CrowiAlert, type CrowiAlertVariant, isCrowiAlertVariant } from './crowi-alert';
 import { isKnownTag } from './known-tags';
 
 /**
@@ -63,6 +64,86 @@ function crowiFrontmatterHandler(_state: State, node: CrowiFrontmatterMdastNode)
     ...hProperties
   } = node.data?.hProperties && typeof node.data.hProperties === 'object' ? node.data.hProperties : {};
   return { type: 'element', tagName: 'dl', properties: { ...hProperties, className: ['crowi-frontmatter'] }, children: rows };
+}
+
+/**
+ * Wire shape of the `crowiAlert` mdast node the api's
+ * `core/github-alerts.ts` transform produces. The children are the
+ * block quote's ORIGINAL ones, literal marker (`[!NOTE]` text + the
+ * `break` remark-breaks made of its line ending) included: the marker
+ * survives into the stored AST so that consumers without this handler
+ * still show today's block quote verbatim.
+ */
+interface CrowiAlertMdastNode {
+  type: 'crowiAlert';
+  variant?: unknown;
+  children?: unknown[];
+  data?: { hProperties?: Record<string, unknown> };
+}
+
+type MdastLike = { type?: string; children?: MdastLike[]; value?: string };
+
+/**
+ * Drop the marker run — the leading `[!variant]` text and the `break`
+ * that terminated its line — from a COPY of the render input, so the
+ * callout body starts at the author's actual content. A marker
+ * paragraph left empty by that removal is dropped whole (it would
+ * otherwise render as a stray empty `<p>` above the body).
+ *
+ * Returns `null` when the producer's marker shape is not exactly what
+ * the transform emits (a hand-written or future-shaped `crowiAlert`):
+ * the defensive answer there is to show every child rather than guess
+ * which one was decoration.
+ */
+function withoutMarker(children: MdastLike[], variant: CrowiAlertVariant): MdastLike[] | null {
+  const paragraph = children[0];
+  if (paragraph?.type !== 'paragraph' || !paragraph.children) return null;
+  const marker = paragraph.children[0];
+  // `variant` is one of five fixed lowercase tokens, so folding the
+  // author's spelling down is the whole of the case-insensitive match.
+  if (marker?.type !== 'text' || marker.value?.toLowerCase() !== `[!${variant}]`) return null;
+
+  const afterMarker = paragraph.children.slice(1);
+  // Marker alone in its paragraph — the body starts in a later block.
+  // Drop the paragraph whole.
+  if (afterMarker.length === 0) return children.slice(1);
+  // The transform only ever emits the marker followed by the `break`
+  // `remarkBreaks` makes of the line ending that terminated it. A marker
+  // butted directly against other content is a shape we never produce, so
+  // decorate nothing rather than guess which child was the author's.
+  if (afterMarker[0]?.type !== 'break') return null;
+  const body = afterMarker.slice(1);
+  if (body.length === 0) return children.slice(1);
+  return [{ ...paragraph, children: body }, ...children.slice(1)];
+}
+
+/**
+ * Custom `toHast` handler for `crowiAlert` — a fixed `<aside>` that
+ * `CrowiAlert` (composed into the component map below) turns into the
+ * callout. Deliberately NOT `state.applyData(node, element)`: an
+ * unexpected `data.hName` / `hChildren` would otherwise be able to
+ * replace the guaranteed element, and the producer's own
+ * `hName: 'blockquote'` (the fallback hint for bundles WITHOUT this
+ * handler) would defeat the callout here. Only the editor preview's
+ * `data-source-line` anchor is forwarded.
+ */
+function crowiAlertHandler(state: State, node: CrowiAlertMdastNode): HastElement {
+  const variant = node.variant;
+  const children = Array.isArray(node.children) ? (node.children as MdastLike[]) : [];
+  const renderInput = isCrowiAlertVariant(variant) ? (withoutMarker(children, variant) ?? children) : children;
+
+  const sourceLine = node.data?.hProperties?.['data-source-line'];
+  const properties: HastProperties = {};
+  if (typeof sourceLine === 'string' || typeof sourceLine === 'number') properties['data-source-line'] = sourceLine;
+  if (typeof variant === 'string') properties['data-crowi-alert-variant'] = variant;
+  if (isCrowiAlertVariant(variant)) properties.className = ['crowi-alert', `crowi-alert-${variant}`];
+
+  return {
+    type: 'element',
+    tagName: 'aside',
+    properties,
+    children: state.all({ ...node, children: renderInput } as never),
+  };
 }
 
 /**
@@ -226,7 +307,7 @@ export function renderMdastToReactNode(renderedAst: unknown, options: RenderMdas
     // mdast type union, so a Crowi-owned type needs a cast here — same
     // shape-escape as the `components` cast at both `renderMdastToReactNode`
     // call sites.
-    handlers: { crowiFrontmatter: crowiFrontmatterHandler } as unknown as NonNullable<Parameters<typeof toHast>[1]>['handlers'],
+    handlers: { crowiFrontmatter: crowiFrontmatterHandler, crowiAlert: crowiAlertHandler } as unknown as NonNullable<Parameters<typeof toHast>[1]>['handlers'],
   });
   if (!hast) return null;
   if (options.sectionWrap) {
@@ -250,7 +331,11 @@ export function renderMdastToReactNode(renderedAst: unknown, options: RenderMdas
     Fragment,
     jsx,
     jsxs,
-    components: options.components,
+    // The GitHub Alerts adapter is composed AFTER the caller's map on
+    // purpose: the callout DOM is this module's own contract (the page
+    // view and the editor preview must not be able to drift apart on
+    // it), and no caller overrides `aside` today.
+    components: { ...options.components, aside: CrowiAlert },
     // `passNode: false` — otherwise every component receives a `node`
     // prop that React stringifies onto the DOM. data-* attrs still
     // flow through via the rest props bag.
