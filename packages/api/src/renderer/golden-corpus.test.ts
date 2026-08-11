@@ -96,12 +96,25 @@ const CORPUS_FILES = [
 ] as const;
 
 /**
- * Fixtures introducing a node type the out-of-checkout consumer has
- * never seen must additionally spell out how that consumer is kept in
- * step — this driver can only prove the api side, and `apps/apple`
- * lives on another branch.
+ * Fixtures whose out-of-checkout consequence no test can prove must spell
+ * out how that consumer is kept in step — this driver only covers the api
+ * side, and `apps/apple` lives on another branch. Two shapes qualify, and
+ * both are silent without the note:
+ *
+ *   - the fixture puts a NEW discriminant on the versioned envelope union,
+ *     so a consumer built earlier renders it as a `crowiOpaque` placeholder
+ *     instead of failing (`frontmatter.json`);
+ *   - the fixture claims the consumer needs NO change, which is precisely
+ *     the claim nothing forces a human to re-verify (`github-alerts.json`,
+ *     where `sanitize-ast.ts` narrows the node to an ordinary blockquote).
+ *
+ * Membership is curated by hand and the assertion below only checks that a
+ * qualifying fixture carries a non-empty note — it cannot judge whether the
+ * note is true or still current. The value here is that adding such a
+ * fixture forces someone to write the sentence, not that the sentence is
+ * verified.
  */
-const EXTERNAL_COORDINATION_REQUIRED: ReadonlySet<string> = new Set(['github-alerts.json']);
+const EXTERNAL_COORDINATION_REQUIRED: ReadonlySet<string> = new Set(['frontmatter.json', 'github-alerts.json']);
 
 const corpus = CORPUS_FILES.map((file) => [file, JSON.parse(readFileSync(path.join(CORPUS_DIR, file), 'utf8')) as GoldenCorpusFile] as const);
 
