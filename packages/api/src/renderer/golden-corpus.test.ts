@@ -76,6 +76,8 @@ interface GoldenCorpusFile {
   why: string;
   consumers: string[];
   consumerContract: string;
+  /** How the out-of-checkout consumer is kept in step for a fixture whose behaviour is new (see `EXTERNAL_COORDINATION_REQUIRED`). */
+  consumerCoordination?: string;
   normalization: string;
   exclusions: string;
   cases: GoldenCase[];
@@ -90,7 +92,16 @@ const CORPUS_FILES = [
   'gfm-references.json',
   'typed-nodes.json',
   'frontmatter.json',
+  'github-alerts.json',
 ] as const;
+
+/**
+ * Fixtures introducing a node type the out-of-checkout consumer has
+ * never seen must additionally spell out how that consumer is kept in
+ * step — this driver can only prove the api side, and `apps/apple`
+ * lives on another branch.
+ */
+const EXTERNAL_COORDINATION_REQUIRED: ReadonlySet<string> = new Set(['github-alerts.json']);
 
 const corpus = CORPUS_FILES.map((file) => [file, JSON.parse(readFileSync(path.join(CORPUS_DIR, file), 'utf8')) as GoldenCorpusFile] as const);
 
@@ -138,6 +149,7 @@ const REQUIRED_CASES: Record<(typeof CORPUS_FILES)[number], string[]> = {
   ],
   'typed-nodes.json': ['math-display-projection', 'math-inline-projection', 'diagram-mermaid-svg-projection', 'link-card-hoist', 'placeholder-projection'],
   'frontmatter.json': ['frontmatter-basic', 'frontmatter-mid-document-thematic-break-unaffected'],
+  'github-alerts.json': ['github-alerts-all-variants', 'github-alerts-conservative-fallbacks'],
 };
 
 // ---------------------------------------------------------------------------
@@ -198,6 +210,12 @@ describe('golden corpus self-description', () => {
         expect(doc.exclusions).toContain('renderer-plugins.spec.ts');
       });
 
+      if (EXTERNAL_COORDINATION_REQUIRED.has(file)) {
+        it('spells out how the out-of-checkout consumer is coordinated for this new behaviour', () => {
+          expect(doc.consumerCoordination?.length ?? 0).toBeGreaterThan(0);
+        });
+      }
+
       it('contains every AC-mandated case', () => {
         const names = doc.cases.map((c) => c.name);
         for (const required of REQUIRED_CASES[file]) {
@@ -224,17 +242,17 @@ describe('golden corpus self-description', () => {
   }
 });
 
-// feature-renderer-frontmatter AC-10 — pinned so an accidental future
-// bump/no-bump alongside an unrelated change is caught immediately (same
-// convention as `util/page-response.test.ts`'s own pinned assertion).
-// The complementary half of AC-10 — a STALE stored AST (older
-// `rendererVersion`) recomputes per read against the running pipeline,
-// with no write-back to the stored document — is pre-existing generic
-// freshness-comparison infra (`util/page-response.ts`), already covered
-// by `page-response.test.ts`; nothing new to re-test here.
-describe('renderer version (feature-renderer-frontmatter AC-10)', () => {
-  it('RENDERER_PIPELINE_VERSION is 1.1.0 (new bundled frontmatter transform — minor bump)', () => {
-    expect(RENDERER_PIPELINE_VERSION).toBe('1.1.0');
+// Pinned so an accidental future bump/no-bump alongside an unrelated
+// change is caught immediately (same convention as
+// `util/page-response.test.ts`'s own pinned assertion). The other half
+// of the rollout — a STALE stored AST (older `rendererVersion`)
+// recomputing per read against the running pipeline, with no write-back
+// to the stored document — is pre-existing generic freshness-comparison
+// infra (`util/page-response.ts`), already covered by
+// `page-response.test.ts`; nothing new to re-test here.
+describe('renderer version', () => {
+  it('RENDERER_PIPELINE_VERSION is 1.2.0 (new bundled GitHub Alerts transform — minor bump)', () => {
+    expect(RENDERER_PIPELINE_VERSION).toBe('1.2.0');
   });
 });
 
