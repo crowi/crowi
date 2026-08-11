@@ -31,10 +31,21 @@ struct RenderedAstFrontmatterView: View {
                         Text(entry.key)
                             .font(.system(.footnote, design: .monospaced).weight(.bold))
                             .foregroundStyle(CrowiTheme.mutedForeground)
+                            // Keys are short labels; letting one wrap would
+                            // widen the column for every row.
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
                             .gridColumnAlignment(.leading)
                         Text(entry.value)
                             .font(.system(.footnote, design: .monospaced))
                             .foregroundStyle(CrowiTheme.foreground)
+                            // A `Grid` proposes each cell its ideal width, so
+                            // a long value measures as one line and gets
+                            // truncated at the column edge. This asks for the
+                            // height it needs instead, which is what makes it
+                            // wrap.
+                            .fixedSize(horizontal: false, vertical: true)
+                            .multilineTextAlignment(.leading)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     .padding(.vertical, 8)

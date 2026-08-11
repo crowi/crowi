@@ -207,11 +207,15 @@ struct RenderedAstBlockView: View {
         case .heading(let depth):
             headingView(depth: depth)
         case .blockquote:
-            HStack(alignment: .top, spacing: metrics.blockquoteGutter) {
-                RoundedRectangle(cornerRadius: 1.5)
-                    .fill(Color.secondary.opacity(0.4))
-                    .frame(width: 3)
-                RenderedAstBlockSequence(nodes: node.children, context: context)
+            if let alert = RenderedAstAlert.detect(children: node.children) {
+                RenderedAstAlertView(variant: alert.variant, content: alert.content, context: context)
+            } else {
+                HStack(alignment: .top, spacing: metrics.blockquoteGutter) {
+                    RoundedRectangle(cornerRadius: 1.5)
+                        .fill(Color.secondary.opacity(0.4))
+                        .frame(width: 3)
+                    RenderedAstBlockSequence(nodes: node.children, context: context)
+                }
             }
         case .list(let ordered, let start, _):
             RenderedAstListView(ordered: ordered ?? false, start: start, items: node.children, context: context)

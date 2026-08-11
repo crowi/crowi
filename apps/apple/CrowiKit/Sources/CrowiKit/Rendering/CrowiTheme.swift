@@ -75,6 +75,25 @@ public enum CrowiTheme {
     /// Hairline separators and card outlines. Drawn at `hairline` width, NOT
     /// at 1pt — the design specifies .5px, and on a 2x/3x screen a true
     /// hairline is what keeps a dense list from looking ruled.
+    /// The web's `--crowi-success` / `--crowi-warning` / `--crowi-danger` /
+    /// `--crowi-important`, converted from their oklch definitions. (The
+    /// conversion is self-checking: `--crowi-danger` light lands on
+    /// `destructive`'s light triple exactly.)
+    public static let success = adaptive(light: (0.2260, 0.5906, 0.2597), dark: (0.2919, 0.6522, 0.3190))
+
+    public static let warning = adaptive(light: (0.9153, 0.6067, 0.1649), dark: (0.9674, 0.6759, 0.3009))
+
+    public static let danger = adaptive(light: (0.7304, 0.1668, 0.1811), dark: (0.9112, 0.3451, 0.3298))
+
+    public static let important = adaptive(light: (0.4239, 0.2895, 0.7016), dark: (0.6777, 0.5547, 0.9927))
+
+    /// Two alert titles need their own value: `success` and `warning` are
+    /// tuned as ACCENTS and neither clears 4.5:1 as light-theme text. Dark
+    /// theme has the room, so there the accent serves.
+    public static let alertTipForeground = adaptive(light: (0.0085, 0.4469, 0.1106), dark: (0.2919, 0.6522, 0.3190))
+
+    public static let alertWarningForeground = adaptive(light: (0.5671, 0.2830, 0.0), dark: (0.9674, 0.6759, 0.3009))
+
     public static let border = adaptive(light: (0.8174, 0.8534, 0.8509), dark: (0.1339, 0.1927, 0.1895))
 
     // MARK: - Search highlight
