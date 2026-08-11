@@ -148,6 +148,133 @@ describe('sanitizeAst — crowiOpaque catch-all (§5)', () => {
   });
 });
 
+// feature-renderer-frontmatter AC-8 — `crowiFrontmatter` is registered
+// in `RENDERED_AST_NODE_DEFS` (childModel: 'none', flow placement) with
+// no bespoke walker branch needed (unlike `crowiFigure`'s structural
+// `hName`/`hProperties` requirement): the generic def-driven
+// `fields.safeParse` path already projects/opaque-ises it like every
+// other typed node.
+describe('sanitizeAst — crowiFrontmatter envelope projection (§3, feature-renderer-frontmatter AC-8)', () => {
+  it('a well-formed crowiFrontmatter passes through the envelope with its entries intact', () => {
+    const node = {
+      type: 'crowiFrontmatter',
+      entries: [
+        { key: 'id', value: 'feature-foo' },
+        { key: 'status', value: 'approved' },
+      ],
+    };
+    const envelope = sanitizeAst(root(node, para(text('body'))));
+    const children = rootChildren(envelope);
+    expect(children[0]).toEqual(node);
+    expect(children[1].type).toBe('paragraph');
+    expect(() => RenderedAstEnvelopeSchema.parse(envelope)).not.toThrow();
+  });
+
+  it('drops an entry array beyond the max-50 cap: invalid-shape → crowiOpaque (schema violation)', () => {
+    const entries = Array.from({ length: 51 }, (_, i) => ({ key: `k${i}`, value: `v${i}` }));
+    const envelope = sanitizeAst(root({ type: 'crowiFrontmatter', entries }));
+    expect(rootChildren(envelope)[0]).toEqual({ type: 'crowiOpaque', reason: 'invalid-shape', originalType: 'crowiFrontmatter' });
+  });
+
+  it('an entry with a key over 100 chars fails the schema: invalid-shape → crowiOpaque', () => {
+    const envelope = sanitizeAst(root({ type: 'crowiFrontmatter', entries: [{ key: 'k'.repeat(101), value: 'v' }] }));
+    expect(rootChildren(envelope)[0]).toEqual({ type: 'crowiOpaque', reason: 'invalid-shape', originalType: 'crowiFrontmatter' });
+  });
+
+  it('an entry with a value over 300 chars fails the schema: invalid-shape → crowiOpaque', () => {
+    const envelope = sanitizeAst(root({ type: 'crowiFrontmatter', entries: [{ key: 'k', value: 'v'.repeat(301) }] }));
+    expect(rootChildren(envelope)[0]).toEqual({ type: 'crowiOpaque', reason: 'invalid-shape', originalType: 'crowiFrontmatter' });
+  });
+
+  it('a missing entries field fails the schema: invalid-shape → crowiOpaque', () => {
+    const envelope = sanitizeAst(root({ type: 'crowiFrontmatter' }));
+    expect(rootChildren(envelope)[0]).toEqual({ type: 'crowiOpaque', reason: 'invalid-shape', originalType: 'crowiFrontmatter' });
+  });
+
+  it('rejects crowiFrontmatter at a non-flow position (invalid-position → crowiOpaque), matching the flow-only registry entry', () => {
+    const envelope = sanitizeAst(root(para(text('a'), { type: 'crowiFrontmatter', entries: [{ key: 'k', value: 'v' }] })));
+    const paragraph = rootChildren(envelope)[0];
+    const inner = (paragraph.children as AnyNode[])[1];
+    expect(inner).toEqual({ type: 'crowiOpaque', reason: 'invalid-position', originalType: 'crowiFrontmatter' });
+  });
+});
+
+// `crowiAlert` is the one Crowi type that is deliberately kept OUT of
+// `RENDERED_AST_NODE_DEFS`: v1 is a closed union with shipped native
+// decoders, so the walker narrows a well-formed alert to the ordinary
+// `blockquote` it already advertises via `data.hName`, children
+// untouched (literal marker included).
+describe('sanitizeAst — crowiAlert v1 blockquote projection', () => {
+  const alert = (overrides: Record<string, unknown> = {}): AnyNode =>
+    ({
+      type: 'crowiAlert',
+      variant: 'note',
+      data: { hName: 'blockquote' },
+      children: [para(text('[!NOTE]'), { type: 'break' }, text('body'))],
+      ...overrides,
+    }) as AnyNode;
+
+  it('projects a marker-bearing alert to a blockquote whose children are passed through verbatim', () => {
+    const envelope = sanitizeAst(root(alert()));
+    expect(rootChildren(envelope)[0]).toEqual({
+      type: 'blockquote',
+      data: { hName: 'blockquote' },
+      children: [
+        {
+          type: 'paragraph',
+          children: [{ type: 'text', value: '[!NOTE]' }, { type: 'break' }, { type: 'text', value: 'body' }],
+        },
+      ],
+    });
+    expect(() => RenderedAstEnvelopeSchema.parse(envelope)).not.toThrow();
+  });
+
+  it.each([
+    ['a list-first body', [para(text('[!TIP]')), { type: 'list', ordered: false, children: [{ type: 'listItem', children: [para(text('a'))] }] }]],
+    ['a code-first body', [para(text('[!TIP]')), { type: 'code', value: 'x' }]],
+    ['a nested ordinary blockquote', [para(text('[!TIP]')), { type: 'blockquote', children: [para(text('q'))] }]],
+  ])('keeps %s in place, with no marker text / break / paragraph synthesized', (_label, children) => {
+    const envelope = sanitizeAst(root(alert({ variant: 'tip', children })));
+    const projected = rootChildren(envelope)[0];
+    expect(projected.type).toBe('blockquote');
+    expect((projected.children as AnyNode[]).map((c) => c.type)).toEqual(children.map((c) => (c as AnyNode).type));
+    expect(JSON.stringify(projected)).toContain('[!TIP]');
+  });
+
+  it('keeps the preview scroll-sync anchor on the projected blockquote', () => {
+    const envelope = sanitizeAst(root(alert({ data: { hName: 'blockquote', hProperties: { 'data-source-line': 1 } } })));
+    expect(rootChildren(envelope)[0].data).toEqual({ hName: 'blockquote', hProperties: { 'data-source-line': 1 } });
+  });
+
+  it('drops unsafe extras from `data` the same way every other node does', () => {
+    const envelope = sanitizeAst(root(alert({ data: { hName: 'blockquote', onclick: 'steal()', crowiCode: { value: 'x' } } })));
+    expect(rootChildren(envelope)[0].data).toEqual({ hName: 'blockquote' });
+  });
+
+  it.each([['bogus'], [''], ['NOTE'], [42], [undefined]])('degrades an alert with variant %p to invalid-shape → crowiOpaque', (variant) => {
+    const envelope = sanitizeAst(root(alert({ variant })));
+    expect(rootChildren(envelope)[0]).toEqual({ type: 'crowiOpaque', reason: 'invalid-shape', originalType: 'crowiAlert' });
+  });
+
+  it('degrades an alert with a non-array children field to invalid-shape → crowiOpaque', () => {
+    const envelope = sanitizeAst(root(alert({ children: 'body' })));
+    expect(rootChildren(envelope)[0]).toEqual({ type: 'crowiOpaque', reason: 'invalid-shape', originalType: 'crowiAlert' });
+  });
+
+  it('rejects an alert at a non-flow position (invalid-position → crowiOpaque)', () => {
+    const envelope = sanitizeAst(root(para(text('a'), alert())));
+    const inner = (rootChildren(envelope)[0].children as AnyNode[])[1];
+    expect(inner).toEqual({ type: 'crowiOpaque', reason: 'invalid-position', originalType: 'crowiAlert' });
+  });
+
+  it('degrades an invalid CHILD only, leaving the surrounding projection intact', () => {
+    const envelope = sanitizeAst(root(alert({ children: [para(text('[!NOTE]')), { type: 'x-plugin-thing' }] })));
+    const projected = rootChildren(envelope)[0];
+    expect(projected.type).toBe('blockquote');
+    expect((projected.children as AnyNode[])[1]).toEqual({ type: 'crowiOpaque', reason: 'unknown-type', originalType: 'x-plugin-thing' });
+  });
+});
+
 describe('sanitizeAst — hast hint data preservation (§4)', () => {
   it('preserves emoji a11y data (hName/hProperties/hChildren), heading anchors, link className, image display attrs and preview data-source-line', () => {
     const envelope = sanitizeAst(
@@ -563,6 +690,37 @@ describe('sanitizeAst — real-parser round-trip fixture (§3 field preservation
     const projected = rootChildren(envelope).find((c) => c.type === 'crowiFigure');
     expect(projected).toBeDefined();
     expect((projected?.data as AnyNode).hName).toBe('figure');
+  });
+
+  it('a document-leading frontmatter block round-trips as crowiFrontmatter (feature-renderer-frontmatter AC-8)', async () => {
+    const md = ['---', 'id: feature-foo', 'status: approved', '---', '', 'body'].join('\n');
+    const { tree } = await runCore(md);
+    const stored = serializeMdast(tree) as { children: AnyNode[] };
+    const fm = stored.children.find((c) => c.type === 'crowiFrontmatter');
+    expect(fm).toBeDefined();
+    const envelope = sanitizeAst(stored);
+    const projected = rootChildren(envelope).find((c) => c.type === 'crowiFrontmatter');
+    expect(projected).toBeDefined();
+    expect(projected?.entries).toEqual([
+      { key: 'id', value: 'feature-foo' },
+      { key: 'status', value: 'approved' },
+    ]);
+    expect(() => RenderedAstEnvelopeSchema.parse(envelope)).not.toThrow();
+  });
+
+  it('a GitHub Alerts quote is stored as crowiAlert and served to a declared v1 client as the same-shaped blockquote', async () => {
+    const { tree } = await runCore('> [!WARNING]\n> body\n');
+    const stored = serializeMdast(tree) as { children: AnyNode[] };
+    expect(stored.children[0].type).toBe('crowiAlert');
+
+    const envelope = sanitizeAst(stored);
+    const projected = rootChildren(envelope)[0];
+    expect(projected.type).toBe('blockquote');
+    // The marker is still the first text node and the delimiter is
+    // still a `break` — the same children an ordinary quote carried.
+    expect(projected.children).toEqual(stored.children[0].children);
+    expect(JSON.stringify(projected)).toContain('[!WARNING]');
+    expect(() => RenderedAstEnvelopeSchema.parse(envelope)).not.toThrow();
   });
 });
 

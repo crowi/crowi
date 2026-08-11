@@ -1,0 +1,8 @@
+---
+"@crowi/api": minor
+"@crowi/web": minor
+---
+
+Render GitHub Alerts markers (`> [!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]`, `[!CAUTION]`) as titled callouts instead of a block quote with a stray `[!NOTE]` line in it.
+
+A block quote at the top level of a page whose first line is one of the five markers (upper, lower or mixed case) now renders as a callout with its own English title, icon and accent colour, in both the page view and the editor preview. The quote's contents are otherwise untouched — links, lists, code, images and nested quotes inside it render exactly as they do anywhere else. Anything that is not unambiguously a marker deliberately keeps today's rendering, marker text and all: an unknown token like `[!HINT]`, a marker sharing its line with body text, an escaped `\[!NOTE]`, a marker with no content under it, and a marker inside a list item or another quote. Existing pages pick up the new rendering the next time they're viewed: the renderer pipeline goes from 1.1.0 to 1.2.0, and a page whose stored render output is still 1.1.0 is recomputed while serving that read — nothing is written back to the database, so no save and no migration is needed for the callout to appear. An operator can still run `crowi-admin rebuild rendered-ast` to backfill the stored copies in bulk. During a rolling deployment, replicas still on the previous version keep serving the old rendering for the same page until they are all updated. Clients on the versioned AST contract (the iOS app) receive these quotes as ordinary block quotes with their literal `[!NOTE]` marker line and its line break still in place, so they keep rendering these pages as they do today and need no update.

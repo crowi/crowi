@@ -24,6 +24,7 @@ import {
 } from '@crowi/api-contract';
 import { sanitizeSvg } from '@crowi/plugin-api';
 import { SINGLE_ENTRY_REJECT_BYTES } from './cache/mongodb-cache';
+import { GITHUB_ALERT_VARIANTS } from './core/github-alerts';
 
 /**
  * RFC-0023 / feature-rendered-ast-wire-contract §5-§8 — the sanitising
@@ -195,6 +196,13 @@ function sanitizeNode(node: unknown, parentModel: AstChildModel, chain: boolean)
   // A nested `root` is never valid content (the registry's `root` entry
   // exists only for the top level).
   if (type === 'root') return opaque('invalid-position', 'root');
+  // `crowiAlert` is deliberately NOT a registry entry: v1 is a CLOSED
+  // union that shipped native decoders which would reject an unknown
+  // discriminant, so the internal node is narrowed to the ordinary
+  // `blockquote` it already pretends to be on the wire (`data.hName`).
+  // This has to run before the registry lookup below, which would
+  // otherwise opaque it as an unknown type.
+  if (type === 'crowiAlert') return projectCrowiAlert(node, parentModel);
   const def = RENDERED_AST_NODE_DEFS[type];
   if (!def) return opaque('unknown-type', truncate64(type));
 
@@ -258,6 +266,36 @@ function sanitizeNode(node: unknown, parentModel: AstChildModel, chain: boolean)
     return splitParent(out);
   }
   return out;
+}
+
+// Shared with the producer so a future sixth variant cannot silently
+// degrade to `crowiOpaque` here (content loss on the v1 wire).
+const CROWI_ALERT_VARIANTS: ReadonlySet<string> = new Set<string>(GITHUB_ALERT_VARIANTS);
+
+/**
+ * Narrow a well-formed internal `crowiAlert` to the standard
+ * `blockquote` a declared v1 client already knows how to render. The
+ * children are the SAME nodes the producer stored — marker text and
+ * delimiter `break` included — run through the ordinary child
+ * sanitizer, so a decoder that predates this node type renders the
+ * quote exactly as it rendered the equivalent ordinary one. Nothing is
+ * restored or synthesized here; the callout is a rendering decision the
+ * new web bundle makes on the bare AST, not a wire shape.
+ *
+ * Anything malformed degrades exactly like any other node: an unknown
+ * variant / non-array children is `invalid-shape`, a non-flow position
+ * is `invalid-position`.
+ */
+function projectCrowiAlert(node: Record<string, unknown>, parentModel: AstChildModel): OutNode {
+  if (!placementAllows('flow', parentModel)) return opaque('invalid-position', 'crowiAlert');
+  if (typeof node.variant !== 'string' || !CROWI_ALERT_VARIANTS.has(node.variant)) return opaque('invalid-shape', 'crowiAlert');
+  if (!Array.isArray(node.children)) return opaque('invalid-shape', 'crowiAlert');
+  const data = sanitizeHastData(node.data);
+  return {
+    type: 'blockquote',
+    ...(data !== undefined ? { data } : {}),
+    children: sanitizeChildren(node.children, 'flow', false),
+  };
 }
 
 function placementAllows(placement: AstPlacement, parentModel: AstChildModel): boolean {

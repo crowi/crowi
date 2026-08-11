@@ -61,6 +61,7 @@
   --color-crowi-success: var(--crowi-success);
   --color-crowi-warning: var(--crowi-warning);
   --color-crowi-danger: var(--crowi-danger);
+  --color-crowi-important: var(--crowi-important);
 
   --shadow-popover: 0 4px 6px rgba(0, 0, 0, 0.1), 0 8px 20px rgba(0, 0, 0, 0.2);
   --shadow-header: 0 1px 10px rgba(0, 0, 0, 0.12);
@@ -125,6 +126,21 @@
   --crowi-success: oklch(0.6 0.15 145);
   --crowi-warning: oklch(0.75 0.15 70); /* #e47800 orange */
   --crowi-danger: oklch(0.52 0.18 25); /* #b94a48 red */
+  /* "pay attention to this" purple, reusing the restricted-grant hue so
+     GitHub Alerts' Important never shares Note's brand teal. */
+  --crowi-important: oklch(0.5 0.16 295);
+
+  /* GitHub Alerts title/icon colours. Deliberately DERIVED from — not
+     equal to — each variant's raw accent: the accent is tuned to read
+     as a 3px border, which for tip/warning is far too light to put
+     text on. Every value below is verified at >= 4.5:1 (WCAG 2.1 AA)
+     against `--muted`, this callout's background; re-verify when either
+     side changes. */
+  --crowi-alert-note-foreground: var(--primary);
+  --crowi-alert-tip-foreground: oklch(0.48 0.15 145);
+  --crowi-alert-important-foreground: var(--crowi-important);
+  --crowi-alert-warning-foreground: oklch(0.48 0.15 70);
+  --crowi-alert-caution-foreground: var(--crowi-danger);
 
   /* Chart colors with Crowi teal palette */
   --chart-1: oklch(0.465 0.04 192);
@@ -214,6 +230,16 @@ html[data-page-grant="2"] {
   --crowi-success: oklch(0.65 0.15 145);
   --crowi-warning: oklch(0.8 0.14 70);
   --crowi-danger: oklch(0.65 0.18 25);
+  --crowi-important: oklch(0.72 0.16 295);
+
+  /* On the dark muted surface the raw accents are already the lighter
+     end of their hue, so each variant's title/icon token maps straight
+     onto its accent (all >= 4.5:1 against dark `--muted`). */
+  --crowi-alert-note-foreground: var(--primary);
+  --crowi-alert-tip-foreground: var(--crowi-success);
+  --crowi-alert-important-foreground: var(--crowi-important);
+  --crowi-alert-warning-foreground: var(--crowi-warning);
+  --crowi-alert-caution-foreground: var(--crowi-danger);
 
   /* Chart colors */
   --chart-1: oklch(0.6 0.06 192);
@@ -765,4 +791,129 @@ html[data-page-grant="2"] {
     margin-left: 0;
     margin-right: 0;
   }
+}
+
+/* feature-renderer-frontmatter §D-5 — the leading YAML frontmatter
+ * block, rendered as a "data sheet" panel: monospace (the same
+ * `--font-mono` token code blocks use, signalling "this is structured
+ * data, not prose"), a `--primary` accent flag on the left edge, and
+ * hairline row dividers on a muted card background (same bordered-card
+ * language as `.crowi-link-card` below). The GitHub Alerts Note
+ * callout below shares that muted surface and teal accent, so the
+ * two are told apart by SURFACE STRUCTURE instead: a frontmatter block
+ * is a dense key/value grid with row rules and no title, an alert is
+ * prose with a titled header row. `dl`/`dt`/`dd` (see `render-mdast.ts`'s
+ * `crowiFrontmatterHandler`), not `table`/`th`/`td` — this sidesteps
+ * `MarkdownTableFullscreen`'s zoom affordance and the `w-full
+ * border-collapse` table styling both callers apply to every real
+ * `<table>` uniformly, neither of which suits a handful of metadata
+ * rows. */
+.crowi-frontmatter {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  column-gap: 1.25rem;
+  margin: 0 0 1.5rem;
+  padding-inline: 1rem;
+  background: var(--muted);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--primary);
+  border-radius: var(--radius);
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+}
+.crowi-frontmatter dt,
+.crowi-frontmatter dd {
+  padding-block: 0.5rem;
+  border-top: 1px solid var(--border);
+}
+/* Each row's dt/dd pair lands on the same grid line (auto-placement,
+ * 2 explicit columns) — giving both the first `:first-of-type` element
+ * of their tag drops the divider above only the very first row. */
+.crowi-frontmatter dt:first-of-type,
+.crowi-frontmatter dd:first-of-type {
+  border-top: none;
+}
+.crowi-frontmatter dt {
+  grid-column: 1;
+  margin: 0;
+  color: var(--muted-foreground);
+  font-weight: 700;
+}
+.crowi-frontmatter dd {
+  grid-column: 2;
+  margin: 0;
+  color: var(--foreground);
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+
+/* GitHub Alerts callouts. Deliberately unboxed — no surface fill, no
+ * outline, no corner rounding: the accent bar alone marks the region,
+ * the way GitHub renders these. A filled card would pull far more
+ * attention than a note deserves and would fight the frontmatter panel
+ * above it for the reader's eye.
+ *
+ * The body keeps ordinary `--foreground` prose styling (links and inline
+ * formatting inside must look like they do anywhere else); only the bar,
+ * the title and the icon carry the variant. Each variant class supplies
+ * the two colours the shared rules consume, so the accent (bar) and the
+ * title/icon colour stay separable.
+ *
+ * Contrast note: the title sits on `--background`, not `--muted`. That is
+ * the easier of the two — `--background` is lighter than `--muted` in the
+ * light theme and darker in the dark one, so the derived title colours
+ * (tuned against `--muted`, see the token block above) clear their 4.5:1
+ * target here with room to spare. */
+.crowi-alert {
+  margin: 0 0 1.5rem;
+  padding: 0.5rem 0 0.5rem 1rem;
+  border-left: 3px solid var(--crowi-alert-accent);
+  color: var(--foreground);
+}
+.crowi-alert-note {
+  --crowi-alert-accent: var(--primary);
+  --crowi-alert-foreground: var(--crowi-alert-note-foreground);
+}
+.crowi-alert-tip {
+  --crowi-alert-accent: var(--crowi-success);
+  --crowi-alert-foreground: var(--crowi-alert-tip-foreground);
+}
+.crowi-alert-important {
+  --crowi-alert-accent: var(--crowi-important);
+  --crowi-alert-foreground: var(--crowi-alert-important-foreground);
+}
+.crowi-alert-warning {
+  --crowi-alert-accent: var(--crowi-warning);
+  --crowi-alert-foreground: var(--crowi-alert-warning-foreground);
+}
+.crowi-alert-caution {
+  --crowi-alert-accent: var(--crowi-danger);
+  --crowi-alert-foreground: var(--crowi-alert-caution-foreground);
+}
+.crowi-alert-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.5rem;
+  color: var(--crowi-alert-foreground);
+  font-weight: 600;
+  line-height: 1.4;
+}
+.crowi-alert-icon {
+  flex: none;
+  width: 1.125rem;
+  height: 1.125rem;
+  color: var(--crowi-alert-foreground);
+}
+/* A long unbroken token (a pasted URL) must not push the callout past
+ * the prose column. */
+.crowi-alert-body {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.crowi-alert-body > :first-child {
+  margin-top: 0;
+}
+.crowi-alert-body > :last-child {
+  margin-bottom: 0;
 }

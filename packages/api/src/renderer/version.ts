@@ -46,5 +46,30 @@
  *     (`util/rebuild-rendered-ast.ts`) backfills it, so the rollout
  *     procedure REQUIRES running that rebuild (real-write mode)
  *     immediately after deploying this version.
+ *   - 1.1.0  feature-renderer-frontmatter — a document-leading YAML
+ *     frontmatter block is parsed (`remarkFrontmatter` parser
+ *     extension) and replaced by a new bundled transform
+ *     (`core/frontmatter.ts`'s `makeFrontmatterPlugin`) with either a
+ *     `crowiFrontmatter` node or a `code` (`lang: 'yaml'`) fallback,
+ *     instead of rendering as a `thematicBreak` + paragraph; new-
+ *     bundled-transform minor bump per this constant's own policy
+ *     above. Same rollout as every bump since 1.0.0: existing pages
+ *     recompute per read (`util/page-response.ts`) until saved or
+ *     `rebuild rendered-ast` backfills the DB copy, so the new
+ *     rendering shows up on next view, not next save.
+ *   - 1.2.0  GitHub Alerts — a document-root block quote opening with
+ *     a GitHub Alerts marker (`> [!NOTE]` …) is retyped to
+ *     `crowiAlert` by a new bundled transform
+ *     (`core/github-alerts.ts`'s `makeGithubAlertsPlugin`); new-
+ *     bundled-transform minor bump per this constant's own policy
+ *     above. Rollout is the ordinary one: a stored 1.1.0 AST recomputes
+ *     per read (`util/page-response.ts`, no write-back) so the callout
+ *     appears on next view, and `rebuild rendered-ast` backfills the DB
+ *     copy in bulk whenever an operator chooses to. During a normal
+ *     rolling deployment old and new replicas serve the same revision
+ *     differently for as long as both are up — an accepted, transient
+ *     difference (the stored bytes are never contested, both sides only
+ *     ever recompute for their own response), NOT something a dedicated
+ *     drain / traffic-isolation gate exists for.
  */
-export const RENDERER_PIPELINE_VERSION = '1.0.0';
+export const RENDERER_PIPELINE_VERSION = '1.2.0';

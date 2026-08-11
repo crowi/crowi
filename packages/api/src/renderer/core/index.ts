@@ -6,6 +6,8 @@ import type { RendererRegistryImpl } from '../registry';
 import { makeCodeBlockDispatch } from './code-block-dispatch';
 import { remarkCodeBlockLanguages } from './code-blocks';
 import { makeEmbedTagDispatch } from './embed-tags';
+import { makeFrontmatterPlugin } from './frontmatter';
+import { makeGithubAlertsPlugin } from './github-alerts';
 import { makeRemarkHeadings, type UnifiedTransformPlugin } from './headings';
 import { remarkImageAttrs } from './image-attrs';
 import { remarkMentions } from './mentions';
@@ -37,12 +39,29 @@ export { makeUrlInlineExpandDispatch } from './url-inline-expand';
 
 /**
  * Build the bundled core renderer transform plugins, in their fixed
- * order (headings → raw-space-links → image-attrs → wikilinks →
- * mentions → code-blocks → syntax-highlight). The pipeline prepends
- * these to the registry's external plugins on every run.
+ * order (frontmatter → github-alerts → headings → raw-space-links →
+ * image-attrs → wikilinks → mentions → code-blocks → syntax-highlight).
+ * The pipeline prepends these to the registry's external plugins on
+ * every run.
  *
  * Order rationale:
- *   - headings runs first so the slugger sees pristine heading text
+ *   - frontmatter (feature-renderer-frontmatter §D-3) runs FIRST,
+ *     before any other transform, so a document-leading `yaml` node
+ *     (produced by the `remarkFrontmatter` parser extension in
+ *     `pipeline.ts`, §D-2) is always replaced with `crowiFrontmatter` /
+ *     `code` before headings/wikilinks/mentions/`remarkBreaks` could
+ *     ever see it.
+ *   - github-alerts runs right after it, and before every
+ *     content-rewriting transform, because it decides whether a root
+ *     block quote is a GitHub Alerts callout by re-reading the run's
+ *     raw `body` at that quote's own `position` — a check that is only
+ *     sound while `position` still describes pristine source, and while
+ *     the marker's line delimiter is still a line ending rather than
+ *     the `break` node `remarkBreaks` makes of it. It only ever retypes
+ *     the outer `blockquote` to `crowiAlert`; the child subtree (marker
+ *     text included) is passed on completely unchanged, so every later
+ *     transform sees exactly what it would have seen without it.
+ *   - headings runs next so the slugger sees pristine heading text
  *     before any text rewrite (wikilinks / mentions inside headings
  *     would otherwise change the visible label).
  *   - raw-space-links (feature-page-link-space-paths Phase 2) runs
@@ -83,6 +102,8 @@ export { makeUrlInlineExpandDispatch } from './url-inline-expand';
  */
 export function buildCorePlugins(deps: PipelineEsmDeps, body: string): UnifiedTransformPlugin[] {
   return [
+    makeFrontmatterPlugin,
+    makeGithubAlertsPlugin(body),
     makeRemarkHeadings(deps),
     makeRawSpaceLinkRecovery(body),
     remarkImageAttrs,

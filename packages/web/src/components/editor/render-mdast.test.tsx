@@ -1,6 +1,13 @@
+import { toJsxRuntime } from 'hast-util-to-jsx-runtime';
+import { toHast } from 'mdast-util-to-hast';
+import { Fragment, jsx, jsxs } from 'react/jsx-runtime';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { renderMdastToReactNode } from './render-mdast';
+
+/** Render a bare root's children through the real helper, with no caller-supplied components. */
+const render = (children: unknown[]): string =>
+  renderToStaticMarkup(renderMdastToReactNode({ type: 'root', children }, { sectionWrap: false, components: {} }));
 
 describe('renderMdastToReactNode', () => {
   it('forwards data-source-line from mdast.data.hProperties to the rendered DOM attribute', () => {
@@ -289,6 +296,118 @@ describe('link-card embed HTML survives the real render pipeline', () => {
 });
 
 /**
+ * feature-renderer-frontmatter §D-5 / AC-11 / AC-9 — `crowiFrontmatter`
+ * renders as a `<dl>` of `<dt>`/`<dd>` pairs (not `<table>`, see
+ * `render-mdast.ts`'s `crowiFrontmatterHandler` doc comment), and every
+ * entry value is a plain hast `text` node — never re-parsed as Markdown,
+ * so `*`/`[` in a value must survive as literal characters, not emphasis
+ * or a link.
+ */
+describe('crowiFrontmatter rendering (feature-renderer-frontmatter)', () => {
+  it('renders entries as an ordered dl/dt/dd list distinguishable from body text (AC-11)', () => {
+    const mdast = {
+      type: 'root',
+      children: [
+        {
+          type: 'crowiFrontmatter',
+          entries: [
+            { key: 'id', value: 'feature-foo' },
+            { key: 'status', value: 'approved' },
+          ],
+        },
+        { type: 'paragraph', children: [{ type: 'text', value: 'body' }] },
+      ],
+    };
+    const node = renderMdastToReactNode(mdast, { sectionWrap: false, components: {} });
+    const html = renderToStaticMarkup(node);
+
+    expect(html).toContain('<dl class="crowi-frontmatter">');
+    expect(html).toContain('<dt>id</dt>');
+    expect(html).toContain('<dd>feature-foo</dd>');
+    expect(html).toContain('<dt>status</dt>');
+    expect(html).toContain('<dd>approved</dd>');
+    // Renders BEFORE the body paragraph, matching document order.
+    expect(html.indexOf('crowi-frontmatter')).toBeLessThan(html.indexOf('body'));
+  });
+
+  it('renders an entry value containing `*`/`[` as literal text, never re-parsed as Markdown emphasis/link syntax (AC-9)', () => {
+    const mdast = {
+      type: 'root',
+      children: [{ type: 'crowiFrontmatter', entries: [{ key: 'note', value: '*starred* and [bracketed]' }] }],
+    };
+    const node = renderMdastToReactNode(mdast, { sectionWrap: false, components: {} });
+    const html = renderToStaticMarkup(node);
+
+    expect(html).toContain('<dd>*starred* and [bracketed]</dd>');
+    expect(html).not.toContain('<em>');
+    expect(html).not.toContain('<a ');
+  });
+
+  it('forwards data-source-line from mdast.data.hProperties onto the rendered dl, matching every other top-level block', () => {
+    const mdast = {
+      type: 'root',
+      children: [
+        {
+          type: 'crowiFrontmatter',
+          data: { hProperties: { 'data-source-line': 1 } },
+          entries: [{ key: 'id', value: 'feature-foo' }],
+        },
+      ],
+    };
+    const node = renderMdastToReactNode(mdast, { sectionWrap: false, components: {} });
+    const html = renderToStaticMarkup(node);
+
+    expect(html).toContain('data-source-line="1"');
+  });
+
+  it('keeps the fixed dl/dt/dd shape and crowi-frontmatter class even when node.data carries hName/hChildren/className (AC-11 shape guarantee)', () => {
+    const mdast = {
+      type: 'root',
+      children: [
+        {
+          type: 'crowiFrontmatter',
+          entries: [{ key: 'id', value: 'feature-foo' }],
+          data: {
+            hName: 'section',
+            hChildren: [{ type: 'text', value: 'overwritten' }],
+            hProperties: { className: ['other'], 'data-source-line': 1 },
+          },
+        },
+      ],
+    };
+    const node = renderMdastToReactNode(mdast, { sectionWrap: false, components: {} });
+    const html = renderToStaticMarkup(node);
+
+    expect(html).toMatch(/<dl[^>]*class="crowi-frontmatter"[^>]*>/);
+    expect(html).toContain('data-source-line="1"');
+    expect(html).toContain('<dt>id</dt>');
+    expect(html).toContain('<dd>feature-foo</dd>');
+    expect(html).not.toContain('<section');
+    expect(html).not.toContain('overwritten');
+  });
+
+  it('keeps the fixed crowi-frontmatter class even when node.data.hProperties smuggles a `class` alias alongside `className` (AC-11 shape guarantee)', () => {
+    const mdast = {
+      type: 'root',
+      children: [
+        {
+          type: 'crowiFrontmatter',
+          entries: [{ key: 'id', value: 'feature-foo' }],
+          data: { hProperties: { className: ['other'], class: 'evil', 'data-source-line': 1 } },
+        },
+      ],
+    };
+    const node = renderMdastToReactNode(mdast, { sectionWrap: false, components: {} });
+    const html = renderToStaticMarkup(node);
+
+    expect(html).toMatch(/<dl[^>]*class="crowi-frontmatter"[^>]*>/);
+    expect(html).toContain('data-source-line="1"');
+    expect(html).not.toContain('class="evil"');
+    expect(html).not.toContain('other');
+  });
+});
+
+/**
  * RFC-0023 §1 — sidecar invisibility regression guard. Producers stamp
  * typed sidecars (`data.crowiCode` / `crowiMath` / `crowiDiagram` /
  * `crowiLinkCard` / `crowiPlaceholder`) onto their `html` nodes;
@@ -302,9 +421,6 @@ describe('link-card embed HTML survives the real render pipeline', () => {
 describe('sidecar data keys are invisible to the web render pipeline (RFC-0023)', () => {
   const HTML_VALUE = '<pre class="shiki"><code><span style="--shiki-light:#111">const a = 1;</span></code></pre>';
 
-  const renderRoot = (children: unknown[]): string =>
-    renderToStaticMarkup(renderMdastToReactNode({ type: 'root', children }, { sectionWrap: false, components: {} }));
-
   it.each([
     ['crowiCode', { lang: 'ts', value: 'const a = 1;', tokens: [[{ content: 'const', light: { color: '#111' }, dark: { color: '#eee' } }]] }],
     ['crowiMath', { tex: 'x^2', display: true }],
@@ -312,8 +428,405 @@ describe('sidecar data keys are invisible to the web render pipeline (RFC-0023)'
     ['crowiLinkCard', { url: 'https://example.com' }],
     ['crowiPlaceholder', { kind: 'error-network', label: 'x', reservation: { variant: 'fixed', heightPx: 48 } }],
   ] as const)('an html node with a %s sidecar renders byte-identically to the same node without it', (key, payload) => {
-    const withSidecar = renderRoot([{ type: 'html', value: HTML_VALUE, data: { [key]: payload } }]);
-    const withoutSidecar = renderRoot([{ type: 'html', value: HTML_VALUE }]);
+    const withSidecar = render([{ type: 'html', value: HTML_VALUE, data: { [key]: payload } }]);
+    const withoutSidecar = render([{ type: 'html', value: HTML_VALUE }]);
     expect(withSidecar).toBe(withoutSidecar);
+  });
+});
+
+/**
+ * A `crowiAlert` renders as a semantic `<aside>` callout with a fixed
+ * English title and a decorative icon, and the literal marker the api
+ * deliberately keeps in the stored AST is skipped at RENDER time only.
+ */
+describe('crowiAlert rendering', () => {
+  /** The marker paragraph exactly as the api stores it: marker text, the delimiter `break`, then the body. */
+  const markerParagraph = (marker: string, ...body: unknown[]): unknown => ({
+    type: 'paragraph',
+    children: [{ type: 'text', value: marker }, { type: 'break' }, ...body],
+  });
+
+  /** What the api stores: the marker text and its delimiter `break` are still there. */
+  const alert = (variant: string, body: unknown[] = [{ type: 'text', value: 'body text' }], marker = `[!${variant.toUpperCase()}]`): unknown => ({
+    type: 'crowiAlert',
+    variant,
+    data: { hName: 'blockquote' },
+    children: [markerParagraph(marker, ...body)],
+  });
+
+  it.each([
+    ['note', 'Note'],
+    ['tip', 'Tip'],
+    ['important', 'Important'],
+    ['warning', 'Warning'],
+    ['caution', 'Caution'],
+  ])('renders the %s variant with its own class, English title, decorative icon and aria-label', (variant, label) => {
+    const html = render([alert(variant)]);
+
+    expect(html).toMatch(new RegExp(`<aside[^>]*class="crowi-alert crowi-alert-${variant}"`));
+    expect(html).toContain(`data-crowi-alert-variant="${variant}"`);
+    expect(html).toContain(`aria-label="${label}"`);
+    expect(html).toContain(`<span>${label}</span>`);
+    expect(html).toContain('<svg');
+    expect(html).toContain('aria-hidden="true"');
+    // Static document content — announcing it as a live region would
+    // interrupt the reader on every page load.
+    expect(html).not.toContain('role="alert"');
+  });
+
+  it('gives all five variants distinct titles and classes', () => {
+    const rendered = ['note', 'tip', 'important', 'warning', 'caution'].map((v) => render([alert(v)]));
+    expect(new Set(rendered).size).toBe(5);
+    // The icon markup differs too: the same `<path>` set would mean two
+    // variants are only distinguishable by colour.
+    const paths = rendered.map((html) => html.slice(html.indexOf('<svg'), html.indexOf('</svg>')));
+    expect(new Set(paths).size).toBe(5);
+  });
+
+  it('skips the marker text and its delimiter break, keeping the rest of the body', () => {
+    const html = render([alert('note')]);
+    expect(html).toContain('body text');
+    expect(html).not.toContain('[!NOTE]');
+  });
+
+  it('drops the marker paragraph entirely when the marker was all it held', () => {
+    const html = render([
+      {
+        type: 'crowiAlert',
+        variant: 'tip',
+        data: { hName: 'blockquote' },
+        children: [
+          { type: 'paragraph', children: [{ type: 'text', value: '[!TIP]' }] },
+          { type: 'paragraph', children: [{ type: 'text', value: 'body' }] },
+        ],
+      },
+    ]);
+    expect(html).toContain('<div class="crowi-alert-body"><p>body</p></div>');
+  });
+
+  it('renders links, emphasis, lists and nested block quotes in the body as ordinary Markdown', () => {
+    const html = render([
+      {
+        type: 'crowiAlert',
+        variant: 'note',
+        data: { hName: 'blockquote' },
+        children: [
+          {
+            type: 'paragraph',
+            children: [
+              { type: 'text', value: '[!NOTE]' },
+              { type: 'break' },
+              { type: 'link', url: '/page', title: null, children: [{ type: 'text', value: 'link' }] },
+              { type: 'emphasis', children: [{ type: 'text', value: 'em' }] },
+            ],
+          },
+          { type: 'list', ordered: false, children: [{ type: 'listItem', children: [{ type: 'paragraph', children: [{ type: 'text', value: 'item' }] }] }] },
+          { type: 'blockquote', children: [{ type: 'paragraph', children: [{ type: 'text', value: 'quoted' }] }] },
+        ],
+      },
+    ]);
+
+    expect(html).toContain('<a href="/page">link</a>');
+    expect(html).toContain('<em>em</em>');
+    expect(html).toContain('<li>item</li>');
+    expect(html).toContain('<blockquote>');
+    expect(html).toContain('quoted');
+  });
+
+  it('renders the same callout markup whether the caller wraps sections (page view) or not (editor preview)', () => {
+    const children = [alert('note')];
+    const withSections = renderToStaticMarkup(renderMdastToReactNode({ type: 'root', children }, { sectionWrap: true, components: {} }));
+    const withoutSections = renderToStaticMarkup(renderMdastToReactNode({ type: 'root', children }, { sectionWrap: false, components: {} }));
+    const callout = (html: string) => html.slice(html.indexOf('<aside'), html.indexOf('</aside>'));
+
+    expect(callout(withSections)).toContain('class="crowi-alert crowi-alert-note"');
+    expect(callout(withSections)).toBe(callout(withoutSections));
+  });
+
+  describe('data-source-line forwarding', () => {
+    const anchored = (value: unknown): unknown => ({
+      type: 'crowiAlert',
+      variant: 'note',
+      data: { hName: 'blockquote', hProperties: { 'data-source-line': value } },
+      children: [markerParagraph('[!NOTE]', { type: 'text', value: 'body' })],
+    });
+
+    it.each([
+      ['a number', 12],
+      ['a numeric string', '12'],
+    ])('forwards %s anchor so the preview can scroll-sync the callout', (_label, value) => {
+      expect(render([anchored(value)])).toContain('data-source-line="12"');
+    });
+
+    it.each([
+      ['a boolean', true],
+      ['an object', { line: 1 }],
+      ['an array', [1]],
+      ['null', null],
+    ])('drops %s, which could never be a source line', (_label, value) => {
+      const html = render([anchored(value)]);
+      expect(html).not.toContain('data-source-line');
+      expect(html).toContain('body');
+    });
+
+    it('emits no anchor at all for a stored alert, which carries none', () => {
+      expect(render([alert('note')])).not.toContain('data-source-line');
+    });
+  });
+
+  /**
+   * The callout DOM is this module's own contract: the node picks which
+   * of five fixed presentations to use and nothing else. Everything
+   * here would otherwise be a route from page body content to the
+   * rendered element's identity.
+   */
+  describe('the node cannot influence the callout element', () => {
+    const withData = (data: unknown): unknown => ({
+      type: 'crowiAlert',
+      variant: 'note',
+      data,
+      children: [markerParagraph('[!NOTE]', { type: 'text', value: 'body' })],
+    });
+
+    it('keeps the aside when data.hName/hChildren would replace the element and its content', () => {
+      const html = render([withData({ hName: 'section', hChildren: [{ type: 'text', value: 'overwritten' }] })]);
+      expect(html).toMatch(/<aside[^>]*class="crowi-alert crowi-alert-note"/);
+      expect(html).not.toContain('<section');
+      expect(html).not.toContain('overwritten');
+      expect(html).toContain('body');
+    });
+
+    it('keeps the fixed class when hProperties smuggles a `class` alias alongside className', () => {
+      const html = render([withData({ hProperties: { className: ['other'], class: 'evil' } })]);
+      expect(html).toContain('class="crowi-alert crowi-alert-note"');
+      expect(html).not.toContain('evil');
+      expect(html).not.toContain('other');
+    });
+
+    it('drops arbitrary hProperties instead of spreading them onto the element', () => {
+      const html = render([withData({ hProperties: { id: 'anchor', style: 'position:fixed', onclick: 'steal()', title: 'tooltip' } })]);
+      expect(html).not.toContain('id="anchor"');
+      expect(html).not.toContain('position:fixed');
+      expect(html).not.toContain('steal()');
+      expect(html).not.toContain('tooltip');
+    });
+
+    it('ignores a variant smuggled through hProperties — the typed field decides', () => {
+      const html = render([withData({ hProperties: { 'data-crowi-alert-variant': 'caution' } })]);
+      expect(html).toContain('class="crowi-alert crowi-alert-note"');
+      expect(html).toContain('aria-label="Note"');
+      expect(html).not.toContain('caution');
+    });
+
+    it('ignores unknown top-level fields on the node', () => {
+      const html = render([
+        {
+          type: 'crowiAlert',
+          variant: 'note',
+          marker: '[!CAUTION]',
+          tagName: 'script',
+          children: [markerParagraph('[!NOTE]', { type: 'text', value: 'body' })],
+        },
+      ]);
+      expect(html).toMatch(/<aside[^>]*class="crowi-alert crowi-alert-note"/);
+      expect(html).not.toContain('<script');
+      expect(html).not.toContain('[!CAUTION]');
+    });
+  });
+
+  /**
+   * Skipping the marker is a rendering decision made on a shape the api
+   * guarantees. When the node does not have that shape — hand-written,
+   * or produced by some future transform — showing every child is the
+   * only answer that cannot silently eat someone's content.
+   */
+  describe('marker skipping is shape-checked', () => {
+    it('skips a lower-case marker the author spelled that way', () => {
+      const html = render([alert('note', [{ type: 'text', value: 'body text' }], '[!note]')]);
+      expect(html).not.toContain('[!note]');
+      expect(html).toContain('body text');
+    });
+
+    it('keeps the marker paragraph when content follows the marker without a delimiter break', () => {
+      const html = render([
+        {
+          type: 'crowiAlert',
+          variant: 'note',
+          children: [
+            {
+              type: 'paragraph',
+              children: [
+                { type: 'text', value: '[!NOTE]' },
+                { type: 'text', value: 'body' },
+              ],
+            },
+          ],
+        },
+      ]);
+      // The transform never emits a marker butted against content with no
+      // delimiter break, so this shape is not ours to strip: decorate the
+      // callout but leave every child exactly as authored.
+      expect(html).toContain('<p>[!NOTE]body</p>');
+    });
+
+    it.each([
+      [
+        'the marker text names a different variant than the node',
+        { type: 'crowiAlert', variant: 'note', children: [markerParagraph('[!TIP]', { type: 'text', value: 'body' })] },
+        '[!TIP]',
+      ],
+      [
+        'the marker shares its text node with body content',
+        { type: 'crowiAlert', variant: 'note', children: [markerParagraph('[!NOTE] extra', { type: 'text', value: 'body' })] },
+        '[!NOTE] extra',
+      ],
+      [
+        'the first child is not a paragraph',
+        {
+          type: 'crowiAlert',
+          variant: 'note',
+          children: [{ type: 'blockquote', children: [{ type: 'paragraph', children: [{ type: 'text', value: '[!NOTE]' }] }] }],
+        },
+        '[!NOTE]',
+      ],
+      [
+        'the first paragraph does not open with a text node',
+        {
+          type: 'crowiAlert',
+          variant: 'note',
+          children: [
+            {
+              type: 'paragraph',
+              children: [
+                { type: 'link', url: '/a', title: null, children: [{ type: 'text', value: '[!NOTE]' }] },
+                { type: 'text', value: 'body' },
+              ],
+            },
+          ],
+        },
+        '[!NOTE]',
+      ],
+    ] as const)('shows every child when %s', (_label, node, preserved) => {
+      const html = render([node]);
+      expect(html).toContain('class="crowi-alert crowi-alert-note"');
+      expect(html).toContain(preserved);
+    });
+
+    it.each([
+      ['no children field', undefined],
+      ['an empty children array', []],
+    ])('renders the titled callout with an empty body for %s', (_label, children) => {
+      const html = render([{ type: 'crowiAlert', variant: 'tip', children }]);
+      expect(html).toContain('<span>Tip</span>');
+      expect(html).toContain('<div class="crowi-alert-body"></div>');
+    });
+  });
+
+  describe('body content renders as ordinary Markdown', () => {
+    it.each([
+      ['an image', { type: 'image', url: '/i.png', title: null, alt: 'shot' }, 'src="/i.png"'],
+      ['inline code', { type: 'inlineCode', value: 'x = 1' }, '<code>x = 1</code>'],
+      ['strong text', { type: 'strong', children: [{ type: 'text', value: 'bold' }] }, '<strong>bold</strong>'],
+    ] as const)('keeps %s in the marker paragraph', (_label, node, expected) => {
+      expect(render([{ type: 'crowiAlert', variant: 'note', children: [markerParagraph('[!NOTE]', node)] }])).toContain(expected);
+    });
+
+    it.each([
+      ['a fenced code block', { type: 'code', lang: 'ts', value: 'const a = 1;' }, 'const a = 1;'],
+      ['a heading', { type: 'heading', depth: 3, children: [{ type: 'text', value: 'Heads up' }] }, '<h3>Heads up</h3>'],
+      ['a thematic break', { type: 'thematicBreak' }, '<hr/>'],
+      [
+        'a table',
+        {
+          type: 'table',
+          align: [null],
+          children: [{ type: 'tableRow', children: [{ type: 'tableCell', children: [{ type: 'text', value: 'cell' }] }] }],
+        },
+        '<table>',
+      ],
+    ] as const)('keeps %s following the marker paragraph', (_label, node, expected) => {
+      const html = render([
+        { type: 'crowiAlert', variant: 'warning', children: [{ type: 'paragraph', children: [{ type: 'text', value: '[!WARNING]' }] }, node] },
+      ]);
+      expect(html).toContain(expected);
+      expect(html).not.toContain('[!WARNING]');
+    });
+  });
+
+  it('falls back to a plain aside — marker included — for an unknown variant', () => {
+    const html = render([alert('bogus', [{ type: 'text', value: 'body' }], '[!BOGUS]')]);
+    expect(html).toContain('<aside');
+    expect(html).toContain('[!BOGUS]');
+    expect(html).not.toContain('crowi-alert-title');
+    expect(html).not.toContain('aria-label');
+  });
+
+  it('shows every child when the marker shape is not the one the producer emits (defensive fallback)', () => {
+    const html = render([
+      {
+        type: 'crowiAlert',
+        variant: 'note',
+        children: [{ type: 'paragraph', children: [{ type: 'text', value: 'hand-written, no marker' }] }],
+      },
+    ]);
+    expect(html).toContain('hand-written, no marker');
+    expect(html).toContain('class="crowi-alert crowi-alert-note"');
+  });
+
+  /**
+   * The compatibility half of the design: a web bundle deployed BEFORE
+   * this feature has no `crowiAlert` handler at all. `mdast-util-to-hast`
+   * then falls back to the node's `data.hName` — which the producer
+   * fixes to `blockquote` — and the preserved children put the literal
+   * marker back on screen, i.e. exactly today's rendering. Reproduced
+   * here by converting with NO handlers registered.
+   */
+  it('an alert-unaware bundle (no handler registered) still gets a standard blockquote with the literal marker', () => {
+    const hast = toHast(
+      {
+        type: 'root',
+        children: [alert('note')],
+      } as Parameters<typeof toHast>[0],
+      { allowDangerousHtml: true },
+    );
+    const html = renderToStaticMarkup(toJsxRuntime(hast as Parameters<typeof toJsxRuntime>[0], { Fragment, jsx, jsxs, passNode: false }));
+
+    expect(html).toContain('<blockquote>');
+    expect(html).toContain('[!NOTE]');
+    expect(html).toContain('body text');
+    expect(html).not.toContain('<aside');
+  });
+});
+
+/**
+ * The `aside` adapter is composed into the component map for every
+ * render, so it also meets the `<aside>` elements authors write by hand
+ * in raw HTML. Those must come out the way they always have; the one
+ * exception — an author who copies the variant attribute — gets the
+ * callout chrome and nothing more, since that chrome is chosen from a
+ * closed map rather than taken from the element.
+ */
+describe('an author-written <aside>', () => {
+  it('passes a plain aside through untouched', () => {
+    const html = render([{ type: 'html', value: '<aside class="sidebar" id="note-1">side note</aside>' }]);
+    expect(html).toContain('side note');
+    expect(html).toContain('class="sidebar"');
+    expect(html).toContain('id="note-1"');
+    expect(html).not.toContain('crowi-alert');
+  });
+
+  it('gives an aside claiming a known variant the fixed callout chrome and drops everything else it carried', () => {
+    const html = render([{ type: 'html', value: '<aside data-crowi-alert-variant="note" id="x" title="t">claimed</aside>' }]);
+    expect(html).toContain('class="crowi-alert crowi-alert-note"');
+    expect(html).toContain('<span>Note</span>');
+    expect(html).toContain('claimed');
+    expect(html).not.toContain('id="x"');
+    expect(html).not.toContain('title="t"');
+  });
+
+  it('leaves an aside claiming an unknown variant alone', () => {
+    const html = render([{ type: 'html', value: '<aside data-crowi-alert-variant="bogus">claimed</aside>' }]);
+    expect(html).toContain('claimed');
+    expect(html).not.toContain('crowi-alert-title');
   });
 });
