@@ -17,10 +17,11 @@ let package = Package(
             name: "Crowi",
             targets: ["CrowiApp"],
             bundleIdentifier: "wiki.crowi.ios",
-            teamIdentifier: "NM88B932JW",
+            teamIdentifier: "R3H48LR47S",
             displayVersion: "0.1",
             bundleVersion: "1",
             appIcon: .asset("AppIcon"),
+            accentColor: .presetColor(.teal),
             supportedDeviceFamilies: [
                 .phone,
                 .pad
