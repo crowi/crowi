@@ -169,8 +169,14 @@ Workflow の返り値 `codexFallbacks[]` に fallback 発動が記録される�
 ```
 Workflow({ scriptPath: '.claude/skills/crowi-design/review-document.workflow.js',
            args: { slug, outputType, reviewOnly: true, docPath: <path>,
-                   critical: <bool> } })
+                   critical: <bool>, round: <毎回変える値> } })
 ```
+
+**同じ doc を再レビューするときは `args` に必ず区別できる値(`round` 等)を入れる。**
+Workflow は同一 `{scriptPath, args}` をセッション全体でキャッシュするので、doc を直して
+から同じ引数で呼び直すと、**編集前のレビュー結果がそのまま返る**(指摘の行番号が現行 doc と
+合わない、既に直した内容を未修正として指摘する、という形で現れる)。`args` が違えば
+キャッシュは効かない。
 (spec の単体検証は `/crowi-spec-review` が人間入口 — そちらは本質的に
 correctness-critical 用なので `critical: true` 固定で本 Workflow を呼ぶ。)
 

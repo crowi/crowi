@@ -175,6 +175,14 @@ json_valid() {
 
 run_once() {
   local attempt=$1
+  # Truncate the output BEFORE every attempt, including the first. `succeeded`
+  # only checks that `$OUT` is non-empty and parses, so a file left behind by a
+  # PREVIOUS invocation is indistinguishable from a fresh result whenever codex
+  # exits 0 without writing one — the caller then reads a stale verdict and
+  # reports it as this run's. Callers key `--out` on a stable path (the design
+  # workflow uses `.reviews/codex-runs/<slug>/<lens>/out.json`), so that
+  # leftover is the normal case, not an exotic one.
+  : > "$OUT"
   {
     echo "--- [$LABEL] attempt $attempt: $(printf '%q ' "${CMD[@]}")"
   } >> "$STDERR_FILE"
@@ -200,7 +208,6 @@ if ! succeeded; then
     exit 2
   fi
   echo "[$LABEL] attempt 1 failed (exit=$RC), retrying once" >&2
-  : > "$OUT"
   run_once 2
   RC=$?
 fi
