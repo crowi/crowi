@@ -3,10 +3,18 @@ import type { Server as HttpServer, IncomingMessage } from 'node:http';
 // transitive `crossws` ESM-only dependency of `@hocuspocus/server`
 // doesn't break Jest at test-collect time. Only TS types are imported
 // statically here (type imports are erased at runtime).
-import type { CollabModels, CollabPageEventPublisher, CollabWsTokenUtil, EditorCapCounter, InvalidateReason } from '@crowi/collab';
+import type {
+  CollabContentSequenceAllocator,
+  CollabModels,
+  CollabPageEventPublisher,
+  CollabWsTokenUtil,
+  EditorCapCounter,
+  InvalidateReason,
+} from '@crowi/collab';
 import type { Extension } from '@hocuspocus/server';
 import Debug from 'debug';
 import type Crowi from 'src/crowi';
+import { allocateContentSequence } from 'src/service/page-history/content-sequence';
 import { createPresenceCollabDeps } from 'src/service/presence';
 import { getEditorCapCounter } from 'src/util/collab-cap';
 import { createWsTokenUtil, isWsTokenSecretFromEnv } from 'src/util/ws-token';
@@ -267,6 +275,21 @@ export async function attachCollabServer(httpServer: HttpServer, crowi: Crowi): 
   // also owns a periodic refresher whose timer must be stopped on
   // shutdown — hence the handle is kept (see `shutdown()` below).
   const presenceDeps = createPresenceCollabDeps(crowi);
+  // RFC-0021 §D-7 (Phase 2a) — the collab library never imports
+  // `@crowi/api`, so the real allocator is bound here, in the api process,
+  // and handed through as a verbatim function (same shape as
+  // `CollabRenderer`). `CollabContentSequenceAllocator` returns `unknown`
+  // (collab never inspects the result, §D-6/§D-7), so the outcome-aware
+  // debug logging the spec's operator-output contract calls for
+  // (pageId/revisionId/reason only) has to happen HERE, not inside
+  // `@crowi/collab`'s own generic-defensive catch around this call.
+  const contentSequenceAllocator: CollabContentSequenceAllocator = async (pageId, revisionId) => {
+    const outcome = await allocateContentSequence(crowi, pageId, revisionId);
+    if (!outcome.allocated) {
+      debug('contentSequenceAllocator: allocateContentSequence did not allocate for page %s revision %s: %s', pageId, revisionId, outcome.reason);
+    }
+    return outcome;
+  };
   const { hocuspocus, invalidator } = collab.createCollabServer({
     models,
     wsTokenUtil,
@@ -277,6 +300,7 @@ export async function attachCollabServer(httpServer: HttpServer, crowi: Crowi): 
     pageEventPublisher,
     extensions,
     presence: presenceDeps,
+    contentSequenceAllocator,
   });
 
   /**
