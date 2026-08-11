@@ -191,6 +191,7 @@ public enum RenderedAstEnvelopeDecoder {
         "linkReference": (.phrasing, .phrasing),
         "imageReference": (.phrasing, .none),
         "crowiFigure": (.flow, .phrasing),
+        "crowiFrontmatter": (.flow, .none),
         "crowiDiagram": (.flow, .none),
         "crowiLinkCard": (.flow, .none),
         "crowiPlaceholder": (.both, .none),
@@ -578,6 +579,24 @@ public enum RenderedAstEnvelopeDecoder {
                 let alt = nullableString(node["alt"], max: 1024)
             else { return nil }
             return .imageReference(identifier: identifier, referenceType: referenceType, label: label.value, alt: alt.value)
+        case "crowiFrontmatter":
+            // The api-side scanner enforces the same three numbers before it
+            // ever emits this node (`FRONTMATTER_MAX_*`), so an envelope that
+            // breaks them is malformed rather than merely large — reject it
+            // and let the caller opaque-ise, the way every other field
+            // validation here behaves.
+            guard let rawEntries = node["entries"] as? [Any], rawEntries.count <= 50 else { return nil }
+            var entries: [RenderedAstFrontmatterEntry] = []
+            entries.reserveCapacity(rawEntries.count)
+            for rawEntry in rawEntries {
+                guard
+                    let entry = record(rawEntry),
+                    let key = requiredString(entry["key"], max: 100),
+                    let value = requiredString(entry["value"], max: 300)
+                else { return nil }
+                entries.append(RenderedAstFrontmatterEntry(key: key, value: value))
+            }
+            return .crowiFrontmatter(entries: entries)
         case "crowiDiagram":
             guard
                 let kindString = requiredString(node["kind"], max: 32),

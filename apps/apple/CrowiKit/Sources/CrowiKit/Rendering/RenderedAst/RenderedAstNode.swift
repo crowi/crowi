@@ -156,6 +156,19 @@ public struct RenderedAstShikiToken: Equatable, Sendable {
 
 // MARK: - typed extension payloads (`Crowi*SidecarSchema`)
 
+/// One line of a document's YAML frontmatter, as the server scanned it —
+/// never YAML-parsed, so `value` is the raw text after the colon and is
+/// rendered literally (a `*` in a value is an asterisk, not emphasis).
+public struct RenderedAstFrontmatterEntry: Equatable, Sendable {
+    public let key: String
+    public let value: String
+
+    public init(key: String, value: String) {
+        self.key = key
+        self.value = value
+    }
+}
+
 public struct RenderedAstImagePayload: Equatable, Sendable {
     public var mediaType: String
     public var base64: String
@@ -280,6 +293,7 @@ public struct RenderedAstNode: Equatable, Sendable {
         case linkReference(identifier: String, referenceType: ReferenceType, label: String?)
         case imageReference(identifier: String, referenceType: ReferenceType, label: String?, alt: String?)
         case crowiFigure
+        case crowiFrontmatter(entries: [RenderedAstFrontmatterEntry])
         case crowiDiagram(kind: DiagramKind, diagramType: String?, alt: String, image: RenderedAstImagePayload)
         case crowiLinkCard(RenderedAstLinkCardPayload)
         case crowiPlaceholder(kind: RenderedAstPlaceholderKind, label: String, reservation: RenderedAstReservation)
@@ -317,6 +331,7 @@ public struct RenderedAstNode: Equatable, Sendable {
         case .linkReference: return "linkReference"
         case .imageReference: return "imageReference"
         case .crowiFigure: return "crowiFigure"
+        case .crowiFrontmatter: return "crowiFrontmatter"
         case .crowiDiagram: return "crowiDiagram"
         case .crowiLinkCard: return "crowiLinkCard"
         case .crowiPlaceholder: return "crowiPlaceholder"

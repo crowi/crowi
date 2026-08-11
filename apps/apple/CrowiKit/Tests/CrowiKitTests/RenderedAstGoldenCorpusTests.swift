@@ -234,6 +234,8 @@ enum CorpusReencoder {
         case .paragraph, .thematicBreak, .blockquote, .strong, .emphasis, .delete, .lineBreak,
             .tableRow, .tableCell, .crowiFigure:
             break
+        case .crowiFrontmatter(let entries):
+            out["entries"] = entries.map { ["key": $0.key, "value": $0.value] }
         case .heading(let depth):
             out["depth"] = depth
         case .list(let ordered, let start, let spread):

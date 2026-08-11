@@ -223,6 +223,8 @@ struct RenderedAstBlockView: View {
             RenderedAstTableView(align: align, rows: node.children, context: context)
         case .crowiFigure:
             RenderedAstFigureView(node: node, context: context)
+        case .crowiFrontmatter(let entries):
+            RenderedAstFrontmatterView(entries: entries)
         case .footnoteDefinition(let identifier, let label):
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text("[\(label ?? identifier)]:")
