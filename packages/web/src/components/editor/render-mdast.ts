@@ -135,8 +135,11 @@ function crowiAlertHandler(state: State, node: CrowiAlertMdastNode): HastElement
   const sourceLine = node.data?.hProperties?.['data-source-line'];
   const properties: HastProperties = {};
   if (typeof sourceLine === 'string' || typeof sourceLine === 'number') properties['data-source-line'] = sourceLine;
+  // No `className` here on purpose: `CrowiAlert` (composed as the `aside`
+  // component after the caller's map) owns the callout classes and builds
+  // them from this variant attribute. A copy here would never reach the
+  // DOM — it would just be a second place to edit on a class rename.
   if (typeof variant === 'string') properties['data-crowi-alert-variant'] = variant;
-  if (isCrowiAlertVariant(variant)) properties.className = ['crowi-alert', `crowi-alert-${variant}`];
 
   return {
     type: 'element',

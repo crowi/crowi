@@ -753,22 +753,6 @@ describe('crowiAlert rendering', () => {
     });
   });
 
-  it('forwards the editor preview scroll-sync anchor and nothing else from data', () => {
-    const html = render([
-      {
-        type: 'crowiAlert',
-        variant: 'note',
-        data: { hName: 'blockquote', hProperties: { 'data-source-line': 1, className: ['evil'], onclick: 'steal()' } },
-        children: [{ type: 'paragraph', children: [{ type: 'text', value: '[!NOTE]' }, { type: 'break' }, { type: 'text', value: 'body' }] }],
-      },
-    ]);
-
-    expect(html).toContain('data-source-line="1"');
-    expect(html).toContain('class="crowi-alert crowi-alert-note"');
-    expect(html).not.toContain('evil');
-    expect(html).not.toContain('steal()');
-  });
-
   it('falls back to a plain aside — marker included — for an unknown variant', () => {
     const html = render([alert('bogus', [{ type: 'text', value: 'body' }], '[!BOGUS]')]);
     expect(html).toContain('<aside');

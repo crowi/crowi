@@ -1,4 +1,4 @@
-import type { Blockquote, Paragraph, PhrasingContent, Root, RootContent, Text } from 'mdast';
+import type { Blockquote, PhrasingContent, Root, RootContent, Text } from 'mdast';
 import type { Position } from 'unist';
 import type { UnifiedTransformPlugin } from './headings';
 
@@ -55,7 +55,7 @@ export type CrowiAlertVariant = (typeof GITHUB_ALERT_VARIANTS)[number];
  * `lastIndex` across candidates, i.e. module-global mutable state in a
  * transform whose whole contract is to be request-local and pure.
  */
-export const GITHUB_ALERT_MARKER_LINE_RE = /^>[ \t]*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\][ \t]*(?:\r\n|\n|\r)/i;
+export const GITHUB_ALERT_MARKER_LINE_RE = new RegExp(`^>[ \\t]*\\[!(${GITHUB_ALERT_VARIANTS.join('|')})\\][ \\t]*(?:\\r\\n|\\n|\\r)`, 'i');
 
 /**
  * The single physical source line starting at `offset`, its terminator
@@ -72,7 +72,9 @@ function firstRawLine(body: string, offset: number): string {
 }
 
 /** The same marker as the PARSER left it — the leading run of the first text node, corroborating the raw-line variant. */
-const markerValueRe = (variant: CrowiAlertVariant): RegExp => new RegExp(`^\\[!${variant}\\](?:$|\\r\\n|\\n|\\r)`, 'i');
+const MARKER_VALUE_RE: Record<CrowiAlertVariant, RegExp> = Object.fromEntries(
+  GITHUB_ALERT_VARIANTS.map((variant) => [variant, new RegExp(`^\\[!${variant}\\](?:$|\\r\\n|\\n|\\r)`, 'i')]),
+) as Record<CrowiAlertVariant, RegExp>;
 
 /**
  * An `html` node that carries nothing a browser ever paints: comments
@@ -120,40 +122,26 @@ function isRenderableFlow(node: RootContent): boolean {
   return true;
 }
 
-/** Does anything render once the marker run — and the line delimiter that follows it — is logically taken out of the marker paragraph? */
-function markerParagraphHasBody(paragraph: Paragraph, variant: CrowiAlertVariant): boolean {
-  const first = paragraph.children[0];
-  if (!isText(first)) return false;
-  const marker = markerValueRe(variant).exec(first.value);
-  if (!marker) return false;
-  if (first.value.slice(marker[0].length).trim() !== '') return true;
-
-  let index = 1;
-  // A marker that consumed its entire text node was written with a
-  // trailing hard break, so the `break` node right after it is the
-  // delimiter itself rather than body content.
-  if (marker[0].length === first.value.length && paragraph.children[index]?.type === 'break') index += 1;
-  return paragraph.children.slice(index).some(isRenderablePhrasing);
-}
-
 /**
- * The "renderable body" rule, decided entirely on mdast: a quote whose
- * only content is the marker — or the marker plus nodes nothing ever
- * paints — stays an ordinary block quote, marker text included.
+ * The alert replacement for one root child, or `null` to keep the node
+ * exactly as it is.
+ *
+ * The "renderable body" rule is decided inline and entirely on mdast: a
+ * quote whose only content is the marker — or the marker plus nodes
+ * nothing ever paints — stays an ordinary block quote, marker text
+ * included. It reads the marker length matched just above rather than
+ * re-deriving it, so the marker is matched exactly once per candidate.
  */
-function hasRenderableAlertBody(node: Blockquote, variant: CrowiAlertVariant): boolean {
-  const [first, ...rest] = node.children;
-  if (first?.type === 'paragraph' && markerParagraphHasBody(first, variant)) return true;
-  return rest.some(isRenderableFlow);
-}
-
-/** The alert replacement for one root child, or `null` to keep the node exactly as it is. */
 function tryCreateGithubAlert(node: RootContent, body: string): CrowiAlertNode | null {
   if (node.type !== 'blockquote') return null;
-  const first = node.children[0];
-  if (first?.type !== 'paragraph') return null;
-  const firstText = first.children[0];
-  if (!isText(firstText)) return null;
+  const [markerParagraph, ...rest] = node.children;
+  if (markerParagraph?.type !== 'paragraph') return null;
+  const markerText = markerParagraph.children[0];
+  if (!isText(markerText)) return null;
+  // Cheap reject before touching the raw body at all: every marker the
+  // matchers below can accept starts with these two characters, so an
+  // ordinary block quote costs one `startsWith` rather than a line slice.
+  if (!markerText.value.startsWith('[!')) return null;
 
   const offset = node.position?.start.offset;
   if (offset === undefined) return null;
@@ -161,8 +149,17 @@ function tryCreateGithubAlert(node: RootContent, body: string): CrowiAlertNode |
   if (!rawMatch) return null;
 
   const variant = rawMatch[1].toLowerCase() as CrowiAlertVariant;
-  if (!markerValueRe(variant).test(firstText.value)) return null;
-  if (!hasRenderableAlertBody(node, variant)) return null;
+  const valueMatch = MARKER_VALUE_RE[variant].exec(markerText.value);
+  if (!valueMatch) return null;
+
+  const markerLength = valueMatch[0].length;
+  // A marker that consumed its entire text node was written with a
+  // trailing hard break, so the `break` right after it is the delimiter
+  // itself rather than body content.
+  const afterMarker = markerLength === markerText.value.length && markerParagraph.children[1]?.type === 'break' ? 2 : 1;
+  const hasBody =
+    markerText.value.slice(markerLength).trim() !== '' || markerParagraph.children.slice(afterMarker).some(isRenderablePhrasing) || rest.some(isRenderableFlow);
+  if (!hasBody) return null;
 
   return {
     type: 'crowiAlert',
@@ -189,12 +186,5 @@ export const makeGithubAlertsPlugin =
   (body: string): UnifiedTransformPlugin =>
   (_metadata) =>
   (tree: Root) => {
-    let changed = false;
-    const out = tree.children.map((child) => {
-      const alert = tryCreateGithubAlert(child, body);
-      if (!alert) return child;
-      changed = true;
-      return alert as unknown as RootContent;
-    });
-    if (changed) tree.children = out;
+    tree.children = tree.children.map((child) => (tryCreateGithubAlert(child, body) as RootContent | null) ?? child);
   };

@@ -111,25 +111,21 @@ function contrastRatio(foreground: string, background: string): number {
 
 /**
  * The title and the icon are the only body text drawn in a variant
- * colour, and they sit on the callout's shared `--muted` surface.
- * Computed from the stylesheet rather than pinned so that touching
- * either side of a pair (accent token or surface) is what fails, not
- * just touching the literal string.
+ * colour. The callout paints no surface of its own, so they sit on the
+ * page background. Computed from the stylesheet rather than pinned so
+ * that touching either side of a pair (accent token or surface) is what
+ * fails, not just touching the literal string.
  */
 describe('GitHub Alerts title/icon contrast', () => {
   it.each(
     (['light', 'dark'] as const).flatMap((theme) => VARIANTS.map((variant) => [theme, variant] as const)),
   )('%s %s clears WCAG 2.1 AA 4.5:1 against the callout surface', (theme, variant) => {
-    const ratio = contrastRatio(resolveToken(`--crowi-alert-${variant}-foreground`, theme), resolveToken('--muted', theme));
+    const ratio = contrastRatio(resolveToken(`--crowi-alert-${variant}-foreground`, theme), resolveToken('--background', theme));
     expect(ratio).toBeGreaterThanOrEqual(4.5);
   });
 
   it('rejects a token it cannot measure rather than passing it', () => {
     expect(() => contrastRatio('color-mix(in oklch, var(--primary), white)', 'oklch(0.97 0.005 192)')).toThrow(/contrast cannot be checked/);
-  });
-
-  it('measures the same surface the callout actually paints', () => {
-    expect(ruleBody('.crowi-alert')).toContain('background: var(--muted);');
   });
 });
 
@@ -162,11 +158,6 @@ describe('GitHub Alerts theme tokens', () => {
     expect(theme === 'light' ? ROOT : DARK).toContain(`--crowi-alert-${variant}-foreground: ${value};`);
   });
 
-  it('pins the muted surface those ratios were measured against', () => {
-    expect(ROOT).toContain('--muted: oklch(0.97 0.005 192);');
-    expect(DARK).toContain('--muted: oklch(0.25 0.015 192);');
-  });
-
   it.each(VARIANTS)('maps the %s variant to its raw accent for the border and to the derived token for the title/icon', (variant) => {
     const rule = ruleBody(`.crowi-alert-${variant}`);
     expect(rule).toContain(`--crowi-alert-accent: var(${ACCENT_TOKEN[variant]});`);
@@ -183,10 +174,17 @@ describe('GitHub Alerts theme tokens', () => {
     }
   });
 
-  it('keeps the body on the shared surface and ordinary foreground so links and inline formatting are untouched', () => {
+  it('keeps the callout unboxed — accent bar only, ordinary foreground, no fill, outline or rounding', () => {
     const rule = ruleBody('.crowi-alert');
-    expect(rule).toContain('background: var(--muted);');
     expect(rule).toContain('color: var(--foreground);');
     expect(rule).toContain('border-left: 3px solid var(--crowi-alert-accent);');
+    // Also the guard for the contrast ratios above: those are taken
+    // against `--background`, which is only the right baseline while the
+    // callout paints no surface of its own.
+    expect(rule).not.toContain('background');
+    expect(rule).not.toContain('border-radius');
+    // `border-left` is the only border; a full `border:` shorthand would
+    // box the callout back up.
+    expect(rule).not.toMatch(/(^|[;{]\s*)border:/);
   });
 });
