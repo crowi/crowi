@@ -35,6 +35,17 @@ const findLink = (tree: Root) => {
   return paragraph.children.find((c) => c.type === 'link') as { type: string; url?: string; data?: unknown } | undefined;
 };
 
+/** Every node `type` anywhere in the tree, in document order, via a plain recursive walk. */
+function collectTypes(node: unknown, out: string[] = []): string[] {
+  if (!node || typeof node !== 'object') return out;
+  const record = node as { type?: unknown; children?: unknown };
+  if (typeof record.type === 'string') out.push(record.type);
+  if (Array.isArray(record.children)) {
+    for (const child of record.children) collectTypes(child, out);
+  }
+  return out;
+}
+
 describe('pipeline + core renderers', () => {
   describe('TOC (heading anchors via github-slugger)', () => {
     it('returns empty toc for empty body', async () => {
@@ -858,17 +869,6 @@ describe('runPipeline dispatch branching (page-bound vs page-less vs no-dispatch
 // core/frontmatter.test.ts's isolated unit coverage of the transform
 // itself.
 describe('frontmatter (feature-renderer-frontmatter)', () => {
-  /** Every node `type` anywhere in the tree, collected via a plain recursive walk. */
-  function collectTypes(node: unknown, out: string[] = []): string[] {
-    if (!node || typeof node !== 'object') return out;
-    const record = node as { type?: unknown; children?: unknown };
-    if (typeof record.type === 'string') out.push(record.type);
-    if (Array.isArray(record.children)) {
-      for (const child of record.children) collectTypes(child, out);
-    }
-    return out;
-  }
-
   it('replaces a document-leading frontmatter block with crowiFrontmatter and renders the body normally — no thematicBreak/break artifacts from the frontmatter markers or content (AC-1)', async () => {
     const md = ['---', 'id: feature-foo', 'status: approved', '---', '', '# 見出し', '', 'body text'].join('\n');
     const { tree } = await runCore(md);
@@ -906,5 +906,148 @@ describe('frontmatter (feature-renderer-frontmatter)', () => {
     const md = ['---', '---', '', '# Title', '', 'body'].join('\n');
     const { tree } = await runCore(md);
     expect(tree.children.map((c) => c.type)).toEqual(['heading', 'paragraph']);
+  });
+});
+
+// GitHub Alerts, end-to-end through the REAL parser,
+// which is the only place the recognition rule can honestly be tested:
+// `core/github-alerts.test.ts` has to synthesize the mdast a marker
+// produces, and the whole point of the raw-source gate is that several
+// distinct sources collapse onto the SAME mdast (`\[!NOTE]`,
+// `&#91;!NOTE]` and `[!NOTE]` all yield the identical text value).
+describe('GitHub Alerts', () => {
+  type AnyNode = { type: string; variant?: string; children?: AnyNode[]; value?: string; data?: Record<string, unknown> };
+
+  const first = (tree: Root): AnyNode => tree.children[0] as unknown as AnyNode;
+
+  describe('recognition', () => {
+    it.each([
+      ['NOTE', 'note'],
+      ['TIP', 'tip'],
+      ['IMPORTANT', 'important'],
+      ['WARNING', 'warning'],
+      ['CAUTION', 'caution'],
+    ])('parses `> [!%s]` into a crowiAlert whose marker text and delimiter break survive', async (spelling, variant) => {
+      const { tree } = await runCore(`> [!${spelling}]\n> body text\n`);
+      const alert = first(tree);
+      expect(alert.type).toBe('crowiAlert');
+      expect(alert.variant).toBe(variant);
+      expect(alert.data).toEqual({ hName: 'blockquote' });
+      expect(alert.children?.[0].children).toEqual([{ type: 'text', value: `[!${spelling}]` }, { type: 'break' }, { type: 'text', value: 'body text' }]);
+    });
+
+    it('accepts a mixed-case marker and normalises the variant', async () => {
+      const { tree } = await runCore('> [!Note]\n> body\n');
+      expect(first(tree).variant).toBe('note');
+    });
+
+    it.each([
+      ['tab/space padding after `>` and at the end of the marker line', '>\t [!WARNING] \t\n> body\n'],
+      ['an indented (up to 3 spaces) block quote', '   > [!NOTE]\n   > body\n'],
+      ['a marker line that ends the document without a body newline', '> [!NOTE]\n> body'],
+    ])('still recognises %s', async (_label, md) => {
+      const { tree } = await runCore(md);
+      expect(first(tree).type).toBe('crowiAlert');
+    });
+
+    // The two line endings the marker delimiter can arrive as: a CRLF
+    // (whose `\r` must not survive into any text value) and an explicit
+    // two-space hard break (a `break` the PARSER makes, where the other
+    // cases get theirs from `remarkBreaks`). Both must land on the same
+    // marker / break / body children as the plain `\n` case above.
+    it.each([
+      ['a CRLF marker line', '> [!TIP]\r\n> body\r\n', 'tip', '[!TIP]'],
+      ['a two-space hard-break marker line', '> [!NOTE]  \n> body\n', 'note', '[!NOTE]'],
+    ])('recognises %s and keeps its delimiter as a break between the marker and the body', async (_label, md, variant, marker) => {
+      const { tree } = await runCore(md);
+      const alert = first(tree);
+      expect(alert.type).toBe('crowiAlert');
+      expect(alert.variant).toBe(variant);
+      // `toMatchObject`, not `toEqual`: a hard break comes straight from
+      // the parser and still carries its `position` here (`serializeMdast`
+      // strips those before the AST is stored or sent), whereas the nodes
+      // `remarkBreaks` rebuilds have none.
+      expect(alert.children?.[0].children).toMatchObject([{ type: 'text', value: marker }, { type: 'break' }, { type: 'text', value: 'body' }]);
+    });
+
+    it.each([
+      ['an unknown token', '> [!HINT]\n> body\n'],
+      ['marker and body on the same line', '> [!NOTE] body\n'],
+      ['same-line emphasis', '> [!NOTE] *body*\n'],
+      ['same-line link', '> [!NOTE] [x](/a)\n'],
+      ['same-line image', '> [!NOTE] ![a](/i.png)\n'],
+      ['a backslash-escaped opening bracket', '> \\[!NOTE]\n> body\n'],
+      ['an entity-encoded opening bracket', '> &#91;!NOTE]\n> body\n'],
+    ])('leaves %s as an ordinary blockquote with its literal marker', async (_label, md) => {
+      const { tree } = await runCore(md);
+      const quote = first(tree);
+      expect(quote.type).toBe('blockquote');
+      expect(JSON.stringify(quote)).toContain('[!');
+    });
+  });
+
+  describe('renderable body', () => {
+    it.each([
+      ['a marker with nothing else', '> [!NOTE]\n'],
+      ['a body of only a link definition', '> [!NOTE]\n>\n> [a]: /a\n'],
+      ['a body of only a footnote definition', '> [!NOTE]\n> [^f]: note\n'],
+      ['a body of only an HTML comment', '> [!NOTE]\n>\n> <!-- c -->\n'],
+    ])('leaves %s as an ordinary blockquote', async (_label, md) => {
+      const { tree } = await runCore(md);
+      expect(first(tree).type).toBe('blockquote');
+    });
+
+    it('converts as soon as a renderable block follows the non-renderable ones', async () => {
+      const { tree } = await runCore('> [!NOTE]\n>\n> [a]: /a\n>\n> body\n');
+      expect(first(tree).type).toBe('crowiAlert');
+    });
+  });
+
+  describe('placement', () => {
+    it('converts only the direct root child — a marker inside a list item stays a literal blockquote', async () => {
+      const { tree } = await runCore('> [!NOTE]\n> body\n\n- > [!TIP]\n  > inner\n');
+      expect(tree.children.map((c) => c.type)).toEqual(['crowiAlert', 'list']);
+      expect(collectTypes(tree.children[1])).toContain('blockquote');
+      expect(JSON.stringify(tree.children[1])).toContain('[!TIP]');
+    });
+
+    it('leaves a marker inside a nested block quote alone', async () => {
+      const { tree } = await runCore('> > [!NOTE]\n> > body\n');
+      expect(collectTypes(tree)).toEqual(['root', 'blockquote', 'blockquote', 'paragraph', 'text', 'break', 'text']);
+    });
+
+    it('keeps an ordinary nested block quote inside an alert body as nested content', async () => {
+      const { tree } = await runCore('> [!NOTE]\n>\n> > quoted\n');
+      const alert = first(tree);
+      expect(alert.type).toBe('crowiAlert');
+      expect(alert.children?.[1].type).toBe('blockquote');
+    });
+
+    it('never looks inside a fenced code block', async () => {
+      const { tree } = await runCore('```\n> [!NOTE]\n> body\n```\n');
+      expect(first(tree).type).toBe('code');
+    });
+  });
+
+  describe('downstream transforms', () => {
+    it('keeps the marker delimiter break AND turns every body newline into an ordinary break', async () => {
+      const { tree } = await runCore('> [!NOTE]\n> line1\n> line2\n');
+      expect(first(tree).children?.[0].children).toEqual([
+        { type: 'text', value: '[!NOTE]' },
+        { type: 'break' },
+        { type: 'text', value: 'line1' },
+        { type: 'break' },
+        { type: 'text', value: 'line2' },
+      ]);
+    });
+
+    it('recovers an unescaped raw-space link inside an alert body, leaves the escaped one literal, and records exactly one metadata entry', async () => {
+      const { tree, metadata } = await runCore('> [!NOTE]\n> [label](/a b) and \\[esc\\](/c d)\n');
+      const children = first(tree).children?.[0].children ?? [];
+      expect(children.map((c) => c.type)).toEqual(['text', 'break', 'link', 'text', 'text']);
+      expect(children[2]).toMatchObject({ type: 'link', url: '/a b' });
+      expect(children[4]).toEqual({ type: 'text', value: '[esc](/c d)' });
+      expect(metadata.rawSpaceLinks).toEqual(['/a b']);
+    });
   });
 });
