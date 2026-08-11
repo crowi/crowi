@@ -3,6 +3,7 @@ import type { InvalidateReason } from '@crowi/collab';
 import Debug from 'debug';
 import { Document, Model, model, Schema, Types } from 'mongoose';
 import Crowi from 'src/crowi';
+import { allocateContentSequence } from 'src/service/page-history/content-sequence';
 import { escapeRegExp } from 'src/util/regex';
 import { type PopulatedUser, toISOStringOrNull, toPageUser, toStringId } from 'src/util/ts-rest-helpers';
 import {
@@ -466,13 +467,16 @@ export interface RenameTreeResult {
 }
 
 /**
- * RFC-0021 §5.5a (`feature-page-history-phase1-model`, Phase 1) — durable
- * per-Page history tracking state. New Pages are created with `state:
- * 'ready'` and an atomically-written `trackingStartedAt` (see the
- * `pre('save')` hook below); existing Pages default to `untracked`. Only
- * the (not-yet-implemented, Phase 2) migration CAS may move a Page through
- * `migrating` to `ready`. Every history-producing writer requires `state:
- * 'ready'` — see `service/page-history/tracking-gate.ts`.
+ * RFC-0021 §5.5a — durable per-Page history tracking state. New Pages are
+ * created `untracked`; no writer promotes one until content is first saved
+ * on it. `allocateContentSequence` (`service/page-history/content-
+ * sequence.ts`), called from every content writer after its pointer write
+ * commits, promotes a Page to `ready` (with an atomically-written
+ * `trackingStartedAt`) the first time content is saved on it — new or
+ * pre-existing alike. Only that allocator, or the (not-yet-implemented)
+ * migration CAS, may move a Page through `migrating` to `ready`. Every
+ * history-producing writer requires `state: 'ready'` — see
+ * `service/page-history/tracking-gate.ts`.
  */
 export type HistoryTrackingState = 'untracked' | 'migrating' | 'ready';
 
@@ -549,8 +553,10 @@ export type PendingHistoryEntry =
  * predate this field hydrate `state: 'untracked'` from this default (a
  * single-nested-subdocument default DOES apply on hydration even when the
  * whole `historyTracking` path is absent on the raw document — verified
- * against this project's mongoose version). The `pre('save')` hook below
- * overwrites this for every genuinely new Page with `state: 'ready'`.
+ * against this project's mongoose version). Every Page starts here; Phase
+ * 2a's `allocateContentSequence` is what moves a Page to `state: 'ready'`,
+ * via a plain conditional `updateOne`/`findOneAndUpdate` — not a `pre('save')`
+ * hook on this schema.
  */
 const historyTrackingSchema = new Schema<HistoryTracking>(
   {
@@ -1906,10 +1912,33 @@ export default (crowi: Crowi) => {
       pageData.updatedAt = Date.now();
     }
 
-    const data = pageData.save();
+    const data = await pageData.save();
 
     if (!isCreate) {
       debug('pushRevision on Update');
+    }
+
+    // RFC-0021 §D-1/§D-9 (Phase 2a) — the ONE call site for both routes
+    // 1/2/3 of the spec's 5 content writers (create and update alike;
+    // `isCreate` never gates this, see §D-9). Runs strictly AFTER the
+    // pointer write above commits — sequence assignment is a separate,
+    // resumable step, never folded into this save (§D-1). Never allowed to
+    // turn a successful content save into a failed one (§D-6): the outcome
+    // is logged at `debug` (pageId/revisionId/reason only, per the spec's
+    // operator-output contract) and recovery is left to
+    // `service/page-history/repair.ts` either way.
+    try {
+      const outcome = await allocateContentSequence(crowi, pageData._id, newRevision._id);
+      if (!outcome.allocated) {
+        debug('pushRevision: allocateContentSequence did not allocate for page %s revision %s: %s', pageData._id, newRevision._id, outcome.reason);
+      }
+    } catch (err) {
+      debug(
+        'pushRevision: allocateContentSequence threw unexpectedly for page %s revision %s: %s',
+        pageData._id,
+        newRevision._id,
+        (err as Error)?.message ?? err,
+      );
     }
 
     return data;
