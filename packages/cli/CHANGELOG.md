@@ -1,5 +1,19 @@
 # @crowi/cli
 
+## 1.0.0-alpha.4
+
+### Minor Changes
+
+- 8e881d0: The server now publishes its upload policy at `GET /attachments/upload-policy` (allowed MIME types, extension-to-MIME hints, and per-route size limits), so clients no longer have to guess what an instance accepts. `@crowi/cli`'s `attach add` fetches (and caches per profile) this policy before uploading and rejects an oversized file or a disallowed type locally, instead of waiting for a 413/415 round trip; against an older server that lacks the endpoint (404), it falls back to its built-in extension table exactly as before, so nothing regresses. Profile picture uploads (`POST /me/picture`) now resolve the effective MIME type from the filename when the client doesn't declare a `Content-Type` (the same fallback already used by attachment uploads), so CLI, curl, and MCP clients can finally set a profile picture without declaring one. Profile picture acceptance also moves from an unbounded `image/*` pattern to the same finite image-type allow-list attachments use, plus a 5MB size cap matching the web client's existing crop-dialog guard; a declared `image/*` type outside that list (e.g. `image/tiff`) or a file over 5MB is now rejected, which it previously was not.
+
+### Patch Changes
+
+- 5096980: Attachment uploads now share a single 50 MB size limit across the "Attach file" button, editor paste, and drag-and-drop — previously these disagreed (100 MB / 10 MB / 50 MB respectively), and the paste limit in particular did nothing to bound memory usage since the request body was already fully buffered before it was checked. Operators can lower the limit with the new `CROWI_UPLOAD_MAX_BYTES` environment variable (a value above 50 MB is clamped to 50 MB, since the limit is also the per-upload memory budget); see the environment variables table in the configuration docs. `GET /attachments/upload-policy` now reports this single limit as `maxBytes.attachment` (the separate `paste`/`dnd` figures are gone), and the editor upload request no longer sends an `intent` field — the web drag-and-drop handler now reads its size ceiling from this policy response instead of a hard-coded constant. If a reverse proxy sits in front of crowi and rejects an upload with its own (smaller) body-size limit before the request reaches the api, the web editor and the `crowi attach add` CLI command now recognize that the rejection didn't come from crowi itself and tell the user to check the proxy configuration instead of reporting crowi's own limit; the deployment docs gained a section on setting the proxy's body-size limit (nginx defaults to 1 MB) to a margin above crowi's own limit, since an exact match can still reject a request crowi would have accepted.
+- Updated dependencies [cb0608a]
+- Updated dependencies [8e881d0]
+- Updated dependencies [5096980]
+  - @crowi/api-contract@2.0.0-alpha.14
+
 ## 1.0.0-alpha.3
 
 ### Patch Changes
