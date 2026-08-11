@@ -258,6 +258,39 @@ read-only.
 > `{...}` block by hand afterward if you want to set its size or
 > placement (see [Attachments](./attachments)).
 
+### GitHub Alerts `> [!NOTE]`
+
+A block quote whose **first line is nothing but a marker** renders as a typed callout. Same notation as GitHub, with five kinds — `NOTE`, `TIP`, `IMPORTANT`, `WARNING`, `CAUTION` (case-insensitive).
+
+```markdown
+> [!WARNING]
+> Config keys are renamed from this version on.
+> The old keys are ignored.
+```
+
+- **The marker goes on its own line, first.** `> [!NOTE] body` — content on the same line — is not a callout and stays an ordinary quote, matching GitHub.
+- **Escaped forms stay literal.** Neither `\[!NOTE]` nor `&#91;!NOTE]` is read as a marker, which is how you write about the notation itself.
+- Only a quote **at the top level of the document** qualifies; one nested inside a list or another quote does not.
+
+### Frontmatter at the top of a page
+
+When a document **opens** with a `---`-delimited block, its contents are lifted out of the body and rendered as a metadata table above it. Pasting a spec, an RFC, or anything else carrying metadata headers no longer mangles the body.
+
+```markdown
+---
+id: feature-foo
+status: approved
+---
+
+# The body starts here
+```
+
+- **This is not a YAML parse.** Each line is read as `key: value` and nothing more, so anchors and aliases are never expanded and every value stays a plain string.
+- The limits are **50 entries, 100 characters per key, 300 per value, and 8KiB for the whole block**.
+- **Anything over those limits, or that cannot be read as entries, is shown verbatim as a `yaml` code block.** Content is never dropped.
+- An empty block renders nothing.
+- **A `---` anywhere other than the very start of the document is still a horizontal rule**, so existing pages look exactly as they did.
+
 ## Extensions via renderer plugins
 
 The following syntax only works when the corresponding **renderer plugin** is
