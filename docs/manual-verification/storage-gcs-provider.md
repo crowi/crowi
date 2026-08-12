@@ -1,15 +1,128 @@
 # GCS storage provider — manual verification
 
-`@crowi/plugin-storage-gcs` (spec: `.feature-state/specs/feature-storage-gcs.md`)
-covers everything mockable with unit tests and an opt-in `fake-gcs-server`
-emulator suite, but a handful of properties are release-manual gates outside
-that coverage: some need a real bucket and real IAM permissions to check at
-all, others are operator-procedure and code-design confirmations that
-deliberately stop short of touching a live multi-replica deployment (there is
-no supported recovery path if replicas diverge, so those are non-mutating by
-design, not by omission). Run this checklist once before promoting the `gcs`
-driver to `storage.driver` in any environment that matters, and again after
-any credential or IAM change.
+`@crowi/plugin-storage-gcs`'s automated tests (mocked unit tests plus an
+opt-in `fake-gcs-server` emulator suite) cover everything mockable, but a
+handful of properties are release-manual gates outside that coverage: some
+need a real bucket and real IAM permissions to check at all, others are
+operator-procedure and code-design confirmations that deliberately stop
+short of touching a live multi-replica deployment (there is no supported
+recovery path if replicas diverge, so those are non-mutating by design,
+not by omission). Run this checklist once before promoting the `gcs`
+driver to `storage.driver` in any environment that matters, and again
+after any credential or IAM change.
+
+## ADC discovery and object permissions (real bucket required)
+
+The opt-in `fake-gcs-server` emulator suite accepts anonymous
+unauthenticated requests and never exercises Application Default
+Credentials discovery or real IAM — none of the steps below can be
+verified against it. Run these against a real GCS bucket in a real Google
+Cloud project.
+
+- [ ] With **Service account key JSON** left blank (ADC mode) and the
+      driver's environment given a real credential source (an attached
+      GCE/GKE/Cloud Run service account, a Workload Identity Federation
+      binding, or a local `gcloud auth application-default login`),
+      confirm boot succeeds and the driver activates without a
+      `serviceAccountKey` validation error.
+- [ ] Confirm the identity ADC resolves has, at minimum,
+      `storage.objects.create`, `storage.objects.get`, and
+      `storage.objects.delete` on the target bucket — a minimal custom role
+      built from exactly these three is sufficient, since the driver never
+      lists objects. The predefined **Storage Object User** role
+      (`roles/storage.objectUser`) also works and additionally bundles
+      `storage.objects.list` at no extra grant. No `storage.buckets.*`
+      permission is needed — Crowi never creates/lists/configures buckets.
+- [ ] Upload an attachment through the normal UI flow; confirm it lands at
+      the expected physical name (`<prefix>/<key>` or `<key>` with no
+      prefix) in the bucket.
+- [ ] Download the same attachment through the normal UI flow (the proxy
+      route, not a signed URL — see "Proxy delivery is unchanged" below);
+      confirm the bytes match.
+- [ ] Delete the attachment through the normal UI flow; confirm the object
+      is gone from the bucket and the second delete (idempotent) does not
+      error.
+- [ ] With an explicit **Google Cloud project ID** set alongside an inline
+      **Service account key JSON** whose own `project_id` differs, confirm
+      the explicit field wins (check the constructed client's project via
+      logs or by pointing at a bucket only reachable under the explicit
+      project).
+
+## V4 signed URL signing (`signBlob`) — a separate permission
+
+`signedUrl()` is a distinct capability from object CRUD above, with a
+different permission story depending on credential mode. Crowi's own
+attachment routes do not call this today (see "Proxy delivery is
+unchanged" below) — these steps are release-manual gates for a future
+direct-delivery caller, not for normal upload/download.
+
+- [ ] With an **inline service-account key** connection, confirm
+      `signedUrl()` succeeds — the private key signs locally, no
+      additional API call or IAM grant is needed beyond having a valid key.
+- [ ] With an **ADC** connection, confirm `signedUrl()` either succeeds (if
+      the resolved identity already has IAM Credentials `signBlob`,
+      typically via `roles/iam.serviceAccountTokenCreator` on itself or an
+      explicit `iam.serviceAccounts.signBlob` grant) or fails with a clear
+      signing error — and confirm that failure does **not** affect normal
+      attachment upload/download, which never call `signedUrl()`.
+- [ ] Confirm a generated signed URL is rejected outside its TTL window
+      (wait past expiry, or generate one with a short TTL) and accepted
+      within it.
+
+## Proxy delivery is unchanged
+
+- [ ] Confirm `GET /api/attachments/:id` (and `/original`, `/download`,
+      `by-key`) still stream through the Crowi API proxy with the `gcs`
+      driver active — no redirect to a GCS URL, no `signedUrl()` call, even
+      though the driver is capable of producing one. Automated coverage:
+      `packages/api/src/hono/handlers/attachment.test.ts`.
+
+## The emulator is not an IAM/ADC oracle
+
+`fake-gcs-server`'s CRUD/prefix/missing-object coverage
+(`packages/api/src/plugin/storage-gcs.emulator.test.ts`) proves the
+driver's wire-level request/response handling against a real GCS-JSON-API
+server. Specifically, it verifies:
+
+- Buffer and Readable upload/download round-trips (bytes match).
+- Prefix mapping to the correct physical object name.
+- Idempotent delete (an existing object succeeds; an already-absent one is
+  a no-op, not a rejection).
+- Missing-object `get()` converting to the `code: 'ENOENT'` shape that the
+  real, unmodified `isMissingFileError` classifies as missing.
+- A local-to-GCS `runStorageCopy` round-trip.
+
+It proves nothing about:
+
+- ADC discovery (it accepts anonymous requests; no credential is ever
+  resolved or checked).
+- Real IAM permission enforcement (it does not model roles/bindings at
+  all — every request succeeds regardless of "permission").
+- `signBlob` / real V4 signing correctness (no query-param/signature
+  validation happens against fake-gcs-server).
+- Bucket-deletion or permission-revocation 404 misclassification in a real
+  project (see "Bucket deletion / permission revocation look like a
+  missing object" below — this can only be observed against a real
+  bucket).
+
+Passing the emulator suite is a necessary but not sufficient condition for
+production readiness; the real-bucket checks above are what close that gap.
+
+## Bucket deletion / permission revocation look like a missing object
+
+This is an accepted limitation, not a bug to reproduce and fix — verify
+the *documentation* says so, not the behavior itself (reproducing it
+against a real bucket is optional, not required for this checklist):
+
+- [ ] Confirm both the package README
+      (`packages/plugin-storage-gcs/README.md`) and the site operations
+      docs (`apps/crowi-site/content/docs/{ja,en}/operations/storage.mdx`)
+      state that a GCS 404 caused by a deleted bucket, a revoked
+      permission, or a wrong prefix is indistinguishable from a genuinely
+      missing object from the driver's response alone, and that display
+      (placeholder), strict download (`FILE_MISSING`), and derivative
+      fallback behave accordingly — matching `local`/`s3`'s existing
+      coarseness, not a GCS-specific regression.
 
 ## Active GCS connection changes are full-stop only
 
@@ -156,3 +269,35 @@ silently losing writes made during the copy window.
 Do not treat this checklist as optional for a first production cutover —
 none of its steps are enforced by code; the driver-neutral copy loop trusts
 the operator to have actually stopped every writer/reader first.
+
+## Documentation completeness read-through
+
+Before closing this checklist out, confirm the following user-facing docs
+are all present and mutually consistent — ja and en versions both, not
+just one:
+
+- [ ] `packages/plugin-storage-gcs/README.md`
+- [ ] `apps/crowi-site/content/docs/ja/operations/storage.mdx` and
+      `apps/crowi-site/content/docs/en/operations/storage.mdx`
+- [ ] `apps/crowi-site/content/docs/ja/plugins/overview.mdx` and
+      `apps/crowi-site/content/docs/en/plugins/overview.mdx` list `gcs` /
+      `@crowi/plugin-storage-gcs` among the first-party plugins
+
+Each of the operations docs (README + site, ja + en) must cover, in its
+own words:
+
+- [ ] ADC-first credential resolution, with the inline encrypted
+      service-account key as an explicit fallback.
+- [ ] That the four connection fields save as one encrypted atomic
+      document, not independent rows.
+- [ ] The object prefix and how it maps to the physical object name.
+- [ ] Object CRUD permissions (`storage.objects.{create,get,delete}`) and
+      V4 signed-URL signing (`signBlob`) as **separate** permission
+      concerns, per the checklist above.
+- [ ] That current attachment delivery routes remain Crowi-proxied — GCS
+      `signedUrl()` capability does not change how attachments are served
+      today.
+- [ ] The full-stop migration/cutover procedure and rollback window.
+- [ ] The bucket-deletion/permission-revocation misdisplay acceptance
+      point (see above).
+- [ ] That the opt-in emulator is not an IAM/ADC/`signBlob` oracle.

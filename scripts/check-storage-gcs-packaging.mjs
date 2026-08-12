@@ -2,9 +2,8 @@
 // Guards that `@crowi/plugin-storage-gcs` is actually wired into the full
 // runner the way `@crowi/runner` resolves plugins at boot — `createRequire`
 // from the runner projectDir's own `package.json`, NOT this script's — and
-// that bundling it does not flip the active `storage.driver` (see
-// feature-storage-gcs spec, "やること": "既存 runner の active driver は `s3`
-// のまま維持し、明示的に `storage.driver: \"gcs\"` へ変更した環境だけが利用する").
+// that bundling it does not flip the active `storage.driver`: the existing
+// runner stays on `s3` until an operator explicitly switches to `gcs`.
 //
 // `pnpm check:packages` already checks generic publishability (repository
 // metadata etc.) for every workspace package; this script only checks the
