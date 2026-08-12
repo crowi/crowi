@@ -74,6 +74,12 @@ Unlinking requires that the account **can sign in with a password**. It is refus
 
 The password is the only thing the guard looks at — **another linked provider does not satisfy it**. A user with both Google and GitHub linked but no password cannot unlink either one. Counting identities instead would be racy: two concurrent unlinks would each see the other's identity still present, both proceed, and leave an account with no way to sign in at all.
 
+### What an administrator sees
+
+The admin user list marks a linked account with an icon on its row, and the row menu lets an **administrator unlink** a provider (subject to the same condition as a user unlinking their own — refused when it would leave the account with no way to sign in).
+
+**The email address on a linked account cannot be changed by an administrator either.** A different address is refused with `409 EMAIL_LOCKED_BY_FEDERATED_IDENTITY`. A linked account can sign in from outside crowi, so swapping the address would redirect the confirmation link — the account's recovery channel — away from its owner. The same lock applies in the user's own settings, for the same reason (see [User pages and profile](../guide/profile)).
+
 ## Troubleshooting
 
 **No button on the sign-in screen**
