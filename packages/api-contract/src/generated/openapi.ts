@@ -12299,6 +12299,7 @@ export interface paths {
                                 admin?: boolean;
                                 /** @enum {integer} */
                                 status?: 1 | 2 | 3 | 4 | 5;
+                                linkedProviders: string[];
                             }[];
                             pager: {
                                 page: number;
@@ -12744,7 +12745,7 @@ export interface paths {
         };
         options?: never;
         head?: never;
-        /** Update a user's name and email */
+        /** Update a user's name (email changes go through PUT /admin/users/{id}/email) */
         patch: {
             parameters: {
                 query?: never;
@@ -12758,8 +12759,6 @@ export interface paths {
                 content: {
                     "application/json": {
                         name: string;
-                        /** Format: email */
-                        email: string;
                     };
                 };
             };
@@ -12853,21 +12852,6 @@ export interface paths {
                             error: {
                                 /** @enum {string} */
                                 code: "NOT_FOUND";
-                                message: string;
-                            };
-                        };
-                    };
-                };
-                /** @description Email already in use by another user */
-                409: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            error: {
-                                /** @enum {string} */
-                                code: "CONFLICT";
                                 message: string;
                             };
                         };
@@ -13848,7 +13832,7 @@ export interface paths {
                         };
                     };
                 };
-                /** @description Email already in use by another user */
+                /** @description Email already in use by another user, or locked by a linked federated identity */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -13858,6 +13842,12 @@ export interface paths {
                             error: {
                                 /** @enum {string} */
                                 code: "CONFLICT";
+                                message: string;
+                            };
+                        } | {
+                            error: {
+                                /** @enum {string} */
+                                code: "EMAIL_LOCKED_BY_FEDERATED_IDENTITY";
                                 message: string;
                             };
                         };
@@ -13883,6 +13873,163 @@ export interface paths {
         };
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/users/{id}/identities/{provider}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Unlink a user's federated identity for a provider (admin-initiated) */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                    provider: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Identity removed; passwordIssued/newPassword report whether a password was generated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            user: {
+                                _id: string;
+                                id?: string;
+                                username: string;
+                                name: string;
+                                /** Format: email */
+                                email: string;
+                                image?: string | null;
+                                introduction?: string;
+                                createdAt: string;
+                                admin?: boolean;
+                                /** @enum {integer} */
+                                status?: 1 | 2 | 3 | 4 | 5;
+                            };
+                            passwordIssued: boolean;
+                            newPassword?: string;
+                        };
+                    };
+                };
+                /** @description Invalid id */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "VALIDATION_ERROR";
+                                message: string;
+                                details?: {
+                                    fieldErrors: {
+                                        [key: string]: string[];
+                                    };
+                                    formErrors: string[];
+                                };
+                            };
+                        };
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "AUTHENTICATION_REQUIRED";
+                                /** @enum {string} */
+                                message: "Authentication is required";
+                                redirectTo?: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Admin permission required */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "ADMIN_REQUIRED";
+                                /** @enum {string} */
+                                message: "Admin permission required";
+                                redirectTo?: string;
+                            };
+                        };
+                    };
+                };
+                /** @description User not found, or the user has no identity for this provider */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "NOT_FOUND" | "NOT_LINKED";
+                                message: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Refused: the target is the operating admin themself, or password auth is disabled instance-wide */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "CANNOT_UNLINK_SELF" | "PASSWORD_AUTH_DISABLED";
+                                message: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "INTERNAL_ERROR";
+                                /** @enum {string} */
+                                message: "Internal server error";
+                            };
+                        };
+                    };
+                };
+            };
+        };
         options?: never;
         head?: never;
         patch?: never;
@@ -16571,6 +16718,7 @@ export interface components {
                 admin?: boolean;
                 /** @enum {integer} */
                 status?: 1 | 2 | 3 | 4 | 5;
+                linkedProviders: string[];
             }[];
             pager: {
                 page: number;
@@ -16639,8 +16787,6 @@ export interface components {
         };
         EditAdminUserRequest: {
             name: string;
-            /** Format: email */
-            email: string;
         };
         ResetPasswordResponse: {
             user: {

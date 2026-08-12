@@ -21,10 +21,12 @@
 import { createRoute, z } from '@hono/zod-openapi';
 
 import {
+  AdminUserIdentityParamSchema,
   AdminUserIdParamSchema,
   AdminUserMutationResponseSchema,
   DeleteAdminUserResponseSchema,
   EditAdminUserRequestSchema,
+  EmailLockedByFederatedIdentityErrorSchema,
   InviteUsersRequestSchema,
   InviteUsersResponseSchema,
   ListAdminUsersRequestSchema,
@@ -33,6 +35,9 @@ import {
   ResetPasswordResponseSchema,
   SearchAdminUsersByEmailRequestSchema,
   SearchAdminUsersByEmailResponseSchema,
+  UnlinkUserIdentityConflictErrorSchema,
+  UnlinkUserIdentityNotFoundErrorSchema,
+  UnlinkUserIdentityResponseSchema,
   UpdateAdminUserEmailRequestSchema,
 } from '../../schemas/admin/users';
 import {
@@ -142,7 +147,7 @@ export const editUserRoute = createRoute({
   path: '/admin/users/{id}',
   tags: ['admin.users'],
   security: [{ bearerAuth: [] }],
-  summary: "Update a user's name and email",
+  summary: "Update a user's name (email changes go through PUT /admin/users/{id}/email)",
   request: {
     params: AdminUserIdParamSchema,
     body: {
@@ -169,10 +174,6 @@ export const editUserRoute = createRoute({
     404: {
       description: 'User not found',
       content: { 'application/json': { schema: NotFoundErrorSchema } },
-    },
-    409: {
-      description: 'Email already in use by another user',
-      content: { 'application/json': { schema: ConflictErrorSchema } },
     },
     500: {
       description: 'Internal server error',
@@ -441,8 +442,49 @@ export const updateUserEmailRoute = createRoute({
       content: { 'application/json': { schema: NotFoundErrorSchema } },
     },
     409: {
-      description: 'Email already in use by another user',
-      content: { 'application/json': { schema: ConflictErrorSchema } },
+      description: 'Email already in use by another user, or locked by a linked federated identity',
+      content: { 'application/json': { schema: z.union([ConflictErrorSchema, EmailLockedByFederatedIdentityErrorSchema]) } },
+    },
+    500: {
+      description: 'Internal server error',
+      content: { 'application/json': { schema: InternalServerErrorSchema } },
+    },
+  },
+});
+
+export const unlinkUserIdentityRoute = createRoute({
+  method: 'delete',
+  path: '/admin/users/{id}/identities/{provider}',
+  tags: ['admin.users'],
+  security: [{ bearerAuth: [] }],
+  summary: "Unlink a user's federated identity for a provider (admin-initiated)",
+  request: {
+    params: AdminUserIdentityParamSchema,
+  },
+  responses: {
+    200: {
+      description: 'Identity removed; passwordIssued/newPassword report whether a password was generated',
+      content: { 'application/json': { schema: UnlinkUserIdentityResponseSchema } },
+    },
+    400: {
+      description: 'Invalid id',
+      content: { 'application/json': { schema: ValidationErrorSchema } },
+    },
+    401: {
+      description: 'Authentication required',
+      content: { 'application/json': { schema: AuthenticationRequiredErrorSchema } },
+    },
+    403: {
+      description: 'Admin permission required',
+      content: { 'application/json': { schema: AdminRequiredErrorSchema } },
+    },
+    404: {
+      description: 'User not found, or the user has no identity for this provider',
+      content: { 'application/json': { schema: UnlinkUserIdentityNotFoundErrorSchema } },
+    },
+    409: {
+      description: 'Refused: the target is the operating admin themself, or password auth is disabled instance-wide',
+      content: { 'application/json': { schema: UnlinkUserIdentityConflictErrorSchema } },
     },
     500: {
       description: 'Internal server error',
@@ -530,15 +572,19 @@ export const adminUsersRoutes = {
   resetPasswordRoute,
   resendInviteRoute,
   updateUserEmailRoute,
+  unlinkUserIdentityRoute,
   pendingUsersCountRoute,
   deleteUserRoute,
 };
 
 export type {
   AdminPager,
+  AdminUserIdentityParam,
   AdminUserIdParam,
+  AdminUserListItem,
   AdminUserMutationResponse,
   EditAdminUserRequest,
+  EmailLockedByFederatedIdentityError,
   InvitedUserResult,
   InviteUsersRequest,
   InviteUsersResponse,
@@ -547,5 +593,8 @@ export type {
   ResetPasswordResponse,
   SearchAdminUsersByEmailRequest,
   SearchAdminUsersByEmailResponse,
+  UnlinkUserIdentityConflictError,
+  UnlinkUserIdentityNotFoundError,
+  UnlinkUserIdentityResponse,
   UpdateAdminUserEmailRequest,
 } from '../../schemas/admin/users';
