@@ -18,6 +18,7 @@ Crowi にアップロードされた添付ファイルは、**ストレージド
 | ---------- | -------------- | ------ |
 | `local` | `@crowi/plugin-storage-local` (デフォルトで常に有効) | サーバのローカルファイルシステム |
 | `s3` | `@crowi/plugin-storage-aws-s3` | Amazon S3 (互換ストレージ含む) |
+| `gcs` | `@crowi/plugin-storage-gcs` | Google Cloud Storage |
 
 `@crowi/plugin-storage-local` は **暗黙のデフォルトプラグイン** として常に
 読み込まれます。`crowi.config.json` に何も書かなければ、`local` ドライバが
@@ -92,6 +93,179 @@ S3 のバケット名と AWS のクレデンシャルは、管理画面から設
 プラグインの設定を管理画面から保存すると、S3 ドライバは `reconfigure`
 により **サーバ再起動なしで** 新しいバケット / クレデンシャルを反映
 します。
+
+## GCS ストレージ (gcs)
+
+Google Cloud Storage にファイルを保存するには、`@crowi/plugin-storage-gcs`
+プラグインを使います。
+
+### 1. プラグインを有効化する
+
+`crowi.config.json` の `plugins` に GCS ストレージプラグインを追加し、
+`storage.driver` を `gcs` にします。
+
+```json
+{
+  "plugins": [
+    "@crowi/plugin-storage-gcs"
+  ],
+  "storage": {
+    "driver": "gcs"
+  }
+}
+```
+
+### 2. 接続情報を設定する
+
+管理画面 (`/admin/plugins`) の「Google Cloud Storage」から、次の 4
+フィールドを設定します。
+
+| フィールド | 必須 | 説明 |
+| ---------- | ---- | ---- |
+| GCS バケット | 必須 | 既存の非公開バケット名。Crowi はバケットを作成しません。 |
+| オブジェクトプレフィックス | 任意 | すべての Crowi オブジェクトキーの先頭に付けるプレフィックス。先頭・末尾の `/` は自動で除去されます。 |
+| Google Cloud プロジェクト ID | 任意 | 明示的なプロジェクト ID。空欄なら ADC 自身のプロジェクト、または inline key の `project_id` が使われます。 |
+| サービスアカウントキー JSON | 任意 | 暗号化されて保存されます。空欄なら ADC (Application Default Credentials) を使います。 |
+
+この 4 フィールドは **1 つの暗号化されたドキュメントとして
+アトミックに保存** されます。個別の行として保存されるわけではないため、
+一部だけが保存されて残りが古いままになることはありません。すでに
+サービスアカウントキーが保存されている状態で他のフィールドだけを
+更新して保存しても、キー欄を空欄のまま送信すれば既存のキーは
+上書きされません(管理画面は変更していないシークレットを再送しません)。
+
+サービスアカウントキーはシークレットフィールドです。
+`GET /api/admin/plugins/config` は生の値を返すことはなく、保存済みで
+あれば `{ hasValue: true }` を返すのみで、その内容がアプリケーション
+ログに出力されることもありません。
+
+**サービスアカウントキー JSON を空欄のままにする** と、
+[Application Default Credentials (ADC)](https://cloud.google.com/docs/authentication/application-default-credentials)
+が使われます —— GCE/GKE/Cloud Run にアタッチされたサービスアカウント、
+Workload Identity Federation のクレデンシャル、またはローカルの
+`gcloud auth application-default login` です。Google Cloud 上で運用する
+場合はこれが推奨構成です。プラットフォームが払い出す短命な
+クレデンシャルに任せ、長期有効なキーを Mongo に保存しないようにします。
+
+不正なキー JSON (JSON として不正、`type` が `service_account` でない、
+`project_id`/`client_email`/`private_key` の欠落、PEM 形式でない
+`private_key` など) は保存前に HTTP 422 で拒否され、どのフィールドが
+不正かが `issues` に列挙されます。
+
+### 3. 必要な IAM 権限
+
+ドライバが呼び出す GCS オブジェクト操作は 3 つです:
+`storage.objects.create` (アップロード)、`storage.objects.get`
+(ダウンロード)、`storage.objects.delete` (削除)。この 3 つだけで
+構成したカスタムロールで十分です —— ドライバはオブジェクトの一覧取得を
+一切行いません。定義済みロール **Storage Object User**
+(`roles/storage.objectUser`) を使っても構いません。こちらは
+`storage.objects.list` も含みますが、ドライバはこれを呼び出さないだけで
+ロールに付随してくる分には問題ありません。`storage.buckets.*` 権限は
+不要です —— Crowi はバケットの作成・一覧・設定変更を一切行いません。
+
+**V4 署名付き URL の生成 (`signBlob`) は別の権限です。** inline
+サービスアカウントキーを使う接続では、秘密鍵でローカル署名するため
+追加の権限は不要です。ADC を使う接続で V4 署名を行うには、IAM
+Credentials の `signBlob` 権限
+(`roles/iam.serviceAccountTokenCreator` を自分自身に付与するか、
+`iam.serviceAccounts.signBlob` を個別付与) が別途必要です。ただし
+Crowi の添付ファイル配信ルート (`/api/attachments/:id` など) は
+現状 `signedUrl()` を呼び出さず、常に Crowi プロキシ経由で配信する
+ため、`signBlob` が無くても通常のアップロード・ダウンロードには
+影響しません。
+
+### 4. プレフィックスは IAM 境界ではない
+
+プレフィックスを設定すると、バケット内の同名の他データと Crowi の
+オブジェクトを命名規則として分離できますが、これは **アクセス制御の
+境界ではありません**。バケットレベルのアクセス権を持つ主体は、
+プレフィックス外のオブジェクトにも引き続きアクセスできます。
+
+### 5. 設定変更の反映と full-stop の注意
+
+GCS ドライバが **アクティブでない間** (`storage.driver` が `gcs`
+以外) の接続保存は、他のプラグイン設定と同様、通常のホット
+リロード対応の保存操作です。
+
+一方、GCS が **すでにアクティブなドライバ** になっている
+マルチインスタンス構成でバケット / プレフィックス / クレデンシャルを
+変更する場合は話が別です。この機能はレプリカ間の調整機構
+(Redis pub/sub、リース、CAS など) を一切追加していないため、各
+API レプリカは自分自身のプロセス内状態を独立に反映します。オンラインで
+変更すると、一部のレプリカが古い接続のまま読み書きを続ける区間が
+生まれてしまいます。**サポートされる手順は、全 API レプリカを停止
+してから設定を変更し、再起動する full-stop 方式のみです。**
+
+### 6. bucket 削除・権限剥奪時の表示について (受容する制約)
+
+設定後にバケットが削除された、権限が剥奪された、プレフィックスが
+実在しない、といった状態になった場合、GCS が返す 404 は「オブジェクトが
+存在しない」場合と区別できません。そのため、表示は placeholder
+(サムネイル表示)、厳密ダウンロードは `FILE_MISSING`、派生画像は
+original へのフォールバックという、通常の「オブジェクトが存在しない」
+場合と同じ挙動になります —— 実際には設定ミスであっても、です。これは
+`local`/`s3` ドライバも共通して持つ粗さであり、GCS だけを特別扱い
+しません。設定ミスの早期検出は、保存時にバケットへの往復確認を行う
+別機能が担当します。
+
+### 7. ファイルの移行 (local/S3 → GCS)
+
+GCS への移行は、他ドライバ間の移行と同じ `crowi-admin rebuild storage
+copy` を使いますが、**無停止のライブ移行は提供しません。**
+コピー中は書き込みも読み取り配信も止める、full-stop 方式のみです。
+
+1. GCS 接続を管理画面で保存する (`storage.driver` はまだ元のドライバの
+   まま)。
+2. 全 API レプリカ、ストレージを操作するあらゆる CLI/バックグラウンド
+   ワーカーを停止する。添付ファイルのアップロード・削除、プロフィール
+   画像アップロード、ページの完全削除、表示用派生ファイルの
+   生成・再生成のいずれも進行中でないことを確認する。この間は
+   読み取り配信も停止する。
+3. 停止した状態で `crowi-admin rebuild storage copy --from <old> --to
+   gcs` を実行し、`failed: 0` を確認する。さらに読み取り検証として、
+   使い捨ての一時的な移行先へ逆方向コピー
+   (`--from gcs --to <scratch>`) を行い、全件が読み出せることを
+   確認するのが最も手軽な網羅的チェックです。`<scratch>` には
+   移行元データを指している既存ドライバをそのまま流用しないこと
+   (ロールバック用のコピーを上書きしてしまいます) —— 空の一時
+   ディレクトリを指す新しい `local` ドライバなど、使い捨て専用の
+   移行先を用意してください。
+4. `crowi.config.json` の `storage.driver` を `gcs` に変更し、全
+   レプリカを再起動する。
+5. サンプルのアップロード・削除・プロフィール画像・添付ファイル配信・
+   厳密ダウンロードを確認してからバックグラウンドワーカーを再開する。
+   ロールバックが必要な場合は、同じ full-stop 手順を逆順で行う (旧
+   ストレージはロールバック用に一定期間保持しておく)。
+6. `crowi-admin rebuild attachment-display-derivatives --force`
+   を実行し、表示用派生ファイルを GCS 上のオリジナルから再生成する
+   (下の「crowi-admin rebuild attachment-display-derivatives」の
+   Note を参照)。
+
+### 開発・テスト用の opt-in エミュレータ
+
+このプラグインの単体・結合テストは、通常の CI では起動しない
+opt-in の `fsouza/fake-gcs-server` サービス (`docker-compose.yml` の
+`crowi-test-gcs`、`gcs-test` プロファイル) を使います。
+
+```bash
+docker compose --profile gcs-test up -d crowi-test-gcs
+STORAGE_EMULATOR_HOST=http://127.0.0.1:4443 pnpm --filter @crowi/api test -- --runInBand src/plugin/storage-gcs.emulator.test.ts
+docker compose --profile gcs-test stop crowi-test-gcs
+```
+
+この実サーバ (GCS JSON API 互換) に対して、opt-in テストは
+Buffer/Readable のアップロード・ダウンロードの往復、プレフィックスから
+正しい物理オブジェクト名へのマッピング、idempotent な削除 (既存
+オブジェクトは成功、既に無いオブジェクトは no-op)、存在しない
+オブジェクトへの `get()` が変更していない `isMissingFileError` の
+判定する形へ変換されること、local から GCS への `runStorageCopy` の
+往復を検証します。
+
+このエミュレータは匿名リクエストを受け付けるだけで、ADC の解決や
+実際の IAM 権限チェック、`signBlob` の可否を再現しません。本番相当の
+ADC / IAM / 署名付き URL の動作確認には、実際の GCS バケットが
+必要です。
 
 ## ストレージの現在の状態を確認する
 
