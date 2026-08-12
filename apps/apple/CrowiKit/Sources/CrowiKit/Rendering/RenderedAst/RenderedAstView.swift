@@ -258,8 +258,12 @@ struct RenderedAstBlockView: View {
             RenderedAstLinkCardView(payload: payload)
         case .crowiPlaceholder(let kind, let label, let reservation):
             RenderedAstPlaceholderView(kind: kind, serverLabel: label, reservation: reservation)
-        case .crowiOpaque:
-            RenderedAstPlaceholderView(label: RenderedAstPlaceholderCopy.blockUnavailable)
+        case .crowiOpaque(let reason, _):
+            RenderedAstPlaceholderView(
+                label: reason == .unknownType
+                    ? RenderedAstPlaceholderCopy.unknownTypeBlock
+                    : RenderedAstPlaceholderCopy.blockUnavailable
+            )
         default:
             // Phrasing kinds never appear at block level (the walker's
             // content-model tracking guarantees it) — but if one ever did,

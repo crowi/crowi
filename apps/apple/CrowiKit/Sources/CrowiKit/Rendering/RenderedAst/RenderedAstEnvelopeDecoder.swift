@@ -198,6 +198,19 @@ public enum RenderedAstEnvelopeDecoder {
         "crowiOpaque": (.both, .none),
     ]
 
+    /// A third-party plugin's node (`x-<plugin>-<type>`). The registry's own
+    /// note legislates these: they are opaque-ised BY DESIGN, and the server
+    /// does exactly that before the envelope is sent. Unwrapping them here
+    /// would make this walker stop mirroring `sanitizeAst`, which the shared
+    /// golden corpus exists to guarantee — and would surface content the
+    /// server deliberately withheld.
+    ///
+    /// A CORE type that is merely newer than this build is a different animal
+    /// and gets the transparent treatment above.
+    private static func isThirdPartyType(_ type: String) -> Bool {
+        type.hasPrefix("x-")
+    }
+
     private static func placementAllows(_ placement: Placement, in parentModel: ChildModel) -> Bool {
         switch parentModel {
         case .flow: return placement == .flow || placement == .both
@@ -251,7 +264,26 @@ public enum RenderedAstEnvelopeDecoder {
         }
         // A nested `root` is never valid content.
         if type == "root" { return [opaque(.invalidPosition, originalType: "root")] }
-        guard let def = registry[type] else { return [opaque(.unknownType, originalType: truncate64(type))] }
+        guard let def = registry[type] else {
+            // A type this build has never heard of — always a NEWER server,
+            // since the registry is closed and only ever grows. Replacing the
+            // node with a placeholder takes its children down with it, so a
+            // future node that merely WRAPS prose would cost the reader the
+            // prose. Standing the children up in its place costs only the
+            // wrapper's own decoration.
+            //
+            // Nothing is trusted on the way through: each child is sanitised
+            // against the SAME parent model the unknown node occupied, so a
+            // flow child inside a phrasing position still degrades. `chain`
+            // passes through untouched because a transparent node neither
+            // starts nor breaks the hoist chain — resetting it would let an
+            // unknown node smuggle a projection past the `heading` /
+            // `tableCell` gate.
+            if !isThirdPartyType(type), let children = node["children"] as? [Any], !children.isEmpty {
+                return children.flatMap { sanitizeNode($0, parentModel: parentModel, chain: chain) }
+            }
+            return [opaque(.unknownType, originalType: truncate64(type))]
+        }
 
         // §5 step 1b — sidecar → typed-node projection (the server mirror).
         // No / invalid / ambiguous sidecar, or an incompatible position

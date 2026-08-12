@@ -13,8 +13,12 @@ import SwiftUI
 /// server's more specific story); the group still picks the ICON, so the
 /// failure class stays visible either way.
 enum RenderedAstPlaceholderCopy {
-    /// Generic block copy (unknown / degraded content).
+    /// Generic block copy (degraded content).
     static let blockUnavailable = "This content can't be displayed in the app."
+    /// A node type this build does not know. The registry is closed and only
+    /// ever grows, so this is never malformed content — it is a server that
+    /// has moved on, and saying so turns a dead end into an instruction.
+    static let unknownTypeBlock = "This needs a newer version of the app."
     /// `html` nodes specifically — a deliberate v1 rule, not a failure.
     static let htmlBlock = "Embedded HTML isn't displayed in the app."
     /// The inline chip's short text (phrasing positions).
