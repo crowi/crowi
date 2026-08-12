@@ -322,7 +322,13 @@ crowi-admin page-history repair --outbox --scan
 
 Passing `--scan` on its own **turns the default outbox pass off**. Say `--outbox --scan` when you want both.
 
-**In normal operation there is nothing to repair yet.** RFC-0021 has only landed Phase 1 — the durable model and the repair machinery — and the ordinary paths (creating, editing, renaming a page) put no history event into the outbox. Treat this as the operator entry point put in place ahead of the phases that add those writers.
+**The first writer has landed (RFC-0021 Phase 2a).** Every content save — creating a page, creating a draft, an HTTP update or revert, a collaborative editor save, and `crowi-admin replace url` — now assigns its Revision a page-local `historySequence`, promoting that page's `historyTracking` to `ready` on its first tracked save.
+
+Assignment runs as a **separate, resumable step after the pointer write has committed**, never as part of it, so a crash between the two cannot fail the save. This repair command is what recovers an assignment interrupted that way.
+
+`--scan` **skips Revisions younger than ten minutes** (`RepairScanOptions.minAgeMs`'s default), so it cannot mistake an assignment still in flight for one that failed and run it twice. It also skips Revisions older than the page's tracking start, which would otherwise be given sequences out of order. Run it after that window if you want it to pick up recent writes.
+
+The metadata commands — rename, grant, trash, restore, publish — still have no writer; those come in a later phase.
 
 ## Sections in progress
 
