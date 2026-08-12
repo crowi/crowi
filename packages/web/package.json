@@ -1,6 +1,6 @@
 {
   "name": "@crowi/web",
-  "version": "2.0.0-alpha.14",
+  "version": "2.0.0-alpha.15",
   "description": "The simple & powerful Wiki - Web Frontend (Next.js)",
   "license": "MIT",
   "private": true,

@@ -1,5 +1,20 @@
 # @crowi/api
 
+## 2.0.0-alpha.15
+
+### Patch Changes
+
+- c1cb3d5: Admins can now see which users have a linked federated identity (RFC-0014) and disconnect one from the user list — the users table shows a linked-account icon per row, and a new row action unlinks a provider. If the target user has no password, the admin unlink issues a random one and shows it once (mirroring the existing password-reset flow); an existing password is left untouched. An admin can never unlink their own identity from this screen, and unlinking is refused instance-wide while password sign-in is disabled, since either would strand the account. The unlink removes the same registration-journal row the self-service unlink already cleans up, so the disconnected provider account cannot walk straight back into the account through the sign-in screen.
+
+  An account with a linked federated identity can no longer have its email address changed by an admin either: `PUT /admin/users/{id}/email` now refuses a different address with `409 EMAIL_LOCKED_BY_FEDERATED_IDENTITY`, the same way the self-service `PUT /me` already does. Unlinking the identity first is the only way to change it. The user-edit dialog no longer has an email field at all — `PATCH /admin/users/{id}` now updates only the display name, and email changes go exclusively through the dedicated "Change email" dialog, so there is exactly one email-writing path to lock.
+
+- ee76fb4: Two or more processes refreshing the same OAuth refresh token at nearly the same time no longer forces a re-login. The server now suppresses rotation-reuse-chain revocation for a short grace window (default 60s, tunable via `OAUTH_REFRESH_REUSE_GRACE_MS`, `0` restores the previous immediate-revocation behavior) after a token is rotated away, while still returning the exact same `400 invalid_grant` response and never issuing a token on the suppressed path — reuse outside the window, and explicit `POST /oauth/revoke` calls, still revoke the whole chain exactly as before. The CLI (`crowi`) now recovers automatically on the losing side of such a race: when a refresh fails, it re-reads the locally stored profile and retries once with the refresh token a concurrent `crowi` process already rotated to, instead of surfacing a spurious session-expired error.
+- 3ba4c69: Add the first writer for page history (RFC-0021 Phase 2a): every content save (page create, draft create, HTTP update/revert, collaborative editor save, and `crowi-admin replace url`) now assigns a page-local `historySequence` to its Revision, promoting the page's `historyTracking` to `ready` on its first tracked save. Sequence assignment runs as a separate, resumable step after the existing pointer write commits, never as part of it, so a crash between the two never fails the save — a background/operator repair pass recovers any interrupted assignment. `scanUnsequencedRevisions` now skips Revisions younger than a configurable grace window (`RepairScanOptions.minAgeMs`, default 10 minutes) and Revisions predating a page's tracking start, so it never races a still-in-flight assignment or mis-orders history. No request/response shape, status code, error body, or OpenAPI contract changes — this is purely additive bookkeeping invisible to end users.
+- Updated dependencies [c1cb3d5]
+- Updated dependencies [3ba4c69]
+  - @crowi/api-contract@2.0.0-alpha.15
+  - @crowi/collab@0.1.0-alpha.4
+
 ## 2.0.0-alpha.14
 
 ### Minor Changes
