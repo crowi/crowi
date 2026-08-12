@@ -1074,6 +1074,44 @@ describe('Routes /api/pages (Hono deletePage)', () => {
       expect(await Comment.countDocuments({ page: pageId })).toBe(0);
     });
 
+    // RFC-0021 §5.1/§5.6 (`feature-page-history-phase2c1-metadata-events`,
+    // Phase A, AC-23) — a failed history-event purge still commits the hard
+    // delete (Page row is gone) but is reported as 400 `PAGE_DELETE_FAILED`
+    // (`hono/handlers/page.ts` serializes `error.message` verbatim into the
+    // response body) — the injected driver failure's raw message must never
+    // reach that body, only `pageId` + the closed-vocabulary step name.
+    it('completely deletes a page even when history-event purge fails, without leaking the driver error into the 400 body (AC-23)', async () => {
+      const path = `${PATH_PREFIX}completely-purge-failure`;
+      const headers = authHeaders(accessToken);
+
+      const createRes = await request(app).post('/api/pages').set(headers).send({ path, body: '# delete me too' });
+      expect(createRes.status).toBe(200);
+      const pageId = createRes.body.page._id;
+
+      const PageHistoryEvent = crowi.model('PageHistoryEvent');
+      const spy = jest.spyOn(PageHistoryEvent, 'deleteMany').mockImplementationOnce(
+        () =>
+          ({
+            exec: () => Promise.reject(new Error('MARKER_HANDLER_DRIVER_DETAIL')),
+          }) as unknown as ReturnType<typeof PageHistoryEvent.deleteMany>,
+      );
+
+      try {
+        const res = await request(app).delete('/api/pages').set(headers).send({ page_id: pageId, completely: true });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.code).toBe('PAGE_DELETE_FAILED');
+        expect(res.body.error.message).not.toContain('MARKER_HANDLER_DRIVER_DETAIL');
+        expect(JSON.stringify(res.body)).not.toContain('MARKER_HANDLER_DRIVER_DETAIL');
+
+        // The hard delete itself still committed (Page row is gone) —
+        // only the purge failed.
+        expect(await Page.findById(pageId)).toBeNull();
+      } finally {
+        spy.mockRestore();
+      }
+    });
+
     it('returns 409 PAGE_REVISION_ERROR when revision_id is stale (soft delete)', async () => {
       const path = `${PATH_PREFIX}stale-revision`;
       const headers = authHeaders(accessToken);

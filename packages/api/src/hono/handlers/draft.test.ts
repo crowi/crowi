@@ -231,6 +231,49 @@ describe('Routes /api/pages/drafts (Hono draft)', () => {
           spy.mockRestore();
         }
       });
+
+      // RFC-0021 (`feature-page-history-phase2c1-metadata-events`, Phase A,
+      // AC-13) — the compensating delete now routes through `Page.removePage`
+      // (`draft.ts:184`) instead of a bare `Page.deleteOne`, so it also
+      // cleans up a Revision / PageHistoryEvent that partially landed before
+      // `pushRevision` threw (a plain `deleteOne` would have left those two
+      // behind forever). The injected failure below deliberately persists
+      // both BEFORE throwing, unlike the `pushRevision boom` fixtures above,
+      // so this test actually exercises that residue cleanup rather than
+      // vacuously passing on "nothing was ever created".
+      it('leaves no orphaned Page, Revision, or PageHistoryEvent when pushRevision partially persists before failing (AC-13)', async () => {
+        const path = `${PATH_PREFIX}orphan-with-residue`;
+        const Page = crowi.model('Page');
+        const Revision = crowi.model('Revision');
+        const PageHistoryEvent = crowi.model('PageHistoryEvent');
+
+        const spy = jest.spyOn(Page, 'pushRevision').mockImplementationOnce(async (pageData, newRevision) => {
+          await newRevision.save();
+          await PageHistoryEvent.create({
+            page: pageData._id,
+            sequence: 1,
+            kind: 'visibility_changed',
+            actor: aliceId,
+            occurredAt: new Date(),
+            operationId: `op-${pageData._id}-residue`,
+            source: 'web',
+            payload: { fromGrant: 1, toGrant: 4 },
+          });
+          throw new Error('pushRevision boom with residue');
+        });
+
+        try {
+          const res = await request(app).post('/api/pages/drafts').set(authHeaders(aliceToken)).send({ path });
+          expect(res.status).toBe(400);
+          expect(res.body.error).toBe('invalid_path');
+
+          expect(await Page.findOne({ path })).toBeNull();
+          expect(await Revision.countDocuments({ path })).toBe(0);
+          expect(await PageHistoryEvent.countDocuments({ operationId: { $regex: '-residue$' } })).toBe(0);
+        } finally {
+          spy.mockRestore();
+        }
+      });
     });
   });
 
@@ -307,6 +350,35 @@ describe('Routes /api/pages/drafts (Hono draft)', () => {
 
       expect(delRes.status).toBe(404);
       expect(delRes.body.error).toBe('draft_not_found');
+    });
+
+    // RFC-0021 (`feature-page-history-phase2c1-metadata-events`, Phase A,
+    // AC-12) — `cancelDraft` already routed through `Page.removePage`
+    // before this spec; the assertion here is that `removePage`'s newly
+    // added purge step reaches a draft's history events too (a draft is
+    // just a Page like any other from `removePage`'s point of view).
+    it('purges the draft page history events on cancel (AC-12)', async () => {
+      const path = `${PATH_PREFIX}cancel-with-history-events`;
+      const createRes = await request(app).post('/api/pages/drafts').set(authHeaders(aliceToken)).send({ path });
+      const pageId = createRes.body.pageId as string;
+
+      const PageHistoryEvent = crowi.model('PageHistoryEvent');
+      await PageHistoryEvent.create({
+        page: pageId,
+        sequence: 1,
+        kind: 'visibility_changed',
+        actor: aliceId,
+        occurredAt: new Date(),
+        operationId: `op-${pageId}-cancel`,
+        source: 'web',
+        payload: { fromGrant: 1, toGrant: 4 },
+      });
+      expect(await PageHistoryEvent.countDocuments({ page: pageId })).toBe(1);
+
+      const delRes = await request(app).delete(`/api/pages/drafts/${pageId}`).set(authHeaders(aliceToken));
+      expect(delRes.status).toBe(200);
+
+      expect(await PageHistoryEvent.countDocuments({ page: pageId })).toBe(0);
     });
   });
 
