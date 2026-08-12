@@ -179,9 +179,16 @@ export const registerDraftRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(ap
           // that includes drafts (e.g. the Subpages tab), as a permanently
           // broken row. Best-effort: a delete failure must not replace the
           // original 400 with a different error, so it's only logged.
+          //
+          // RFC-0021 §5.1/§5.6, DC-5 — routed through `Page.removePage`
+          // (invalidation defaults to `skip`, matching every other
+          // internal-cleanup caller): this Page's seed revision may have
+          // partially landed before `pushRevision` threw, and `removePage`
+          // is the one chokepoint that also purges any orphaned Revision /
+          // history-event rows for it.
           if (newPage) {
             try {
-              await Page.deleteOne({ _id: newPage._id });
+              await Page.removePage(newPage);
             } catch (cleanupErr) {
               debug(
                 'createDraft: failed to compensate-delete orphaned draft page %s (%s): %s',
