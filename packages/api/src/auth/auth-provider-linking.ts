@@ -302,6 +302,22 @@ export async function removeIdentityAndJournal(crowi: Crowi, user: UserDocument,
 }
 
 /**
+ * Whether the account still has any linked federated identity — the predicate
+ * the email-change lock is gated on, in self-service (`handlers/me.ts`) and
+ * the admin user routes alike. Both asked it independently before, with
+ * different query mechanics, so a future narrowing of what counts as a
+ * lock-holding identity had to be found twice.
+ *
+ * Existence is the right question HERE even though the unlink guard below
+ * deliberately refuses to count: this asks "is the address IdP-anchored right
+ * now", where losing a race just means the request beat a link/unlink, not
+ * that an account was left with no way to sign in.
+ */
+export async function hasLinkedFederatedIdentity(crowi: Crowi, userId: UserDocument['_id']): Promise<boolean> {
+  return (await crowi.model('UserIdentity').exists({ userId })) !== null;
+}
+
+/**
  * The guard never counts identities (spec design decision 4). Counting is
  * what makes "don't strand the account" racy: two concurrent unlinks each
  * see the other's identity still present and both proceed, leaving an

@@ -17,7 +17,7 @@ import { type InvitedUserResult, adminUsersRoutes } from '@crowi/api-contract';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import Debug from 'debug';
 
-import { removeIdentityAndJournal } from 'src/auth/auth-provider-linking';
+import { hasLinkedFederatedIdentity, removeIdentityAndJournal } from 'src/auth/auth-provider-linking';
 import type Crowi from 'src/crowi';
 import { isDisabledPasswordAuth } from 'src/models/config';
 import type { UserDocument, UserModel } from 'src/models/user';
@@ -325,9 +325,8 @@ export const registerAdminUsersRoutes = <E extends OpenAPIHono<CrowiHonoBindings
         // an actual address change, same as the self-service `/me` lock: a
         // same-email resubmission touches no UserIdentity query and is never
         // refused (spec Performance/resource limit clause).
-        if (body.email !== user.email) {
-          const linkedCount = await crowi.model('UserIdentity').countDocuments({ userId: user._id });
-          if (linkedCount > 0) return c.json(emailLockedByFederatedIdentityBody, 409);
+        if (body.email !== user.email && (await hasLinkedFederatedIdentity(crowi, user._id))) {
+          return c.json(emailLockedByFederatedIdentityBody, 409);
         }
 
         if (duplicate && !user.equals(duplicate)) return c.json(emailConflictBody, 409);
