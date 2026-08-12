@@ -53,7 +53,7 @@
  * from `process.env` immediately — every `Storage` client constructed below
  * uses the captured value as an explicit `apiEndpoint` instead.
  */
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { Readable } from 'node:stream';
@@ -64,6 +64,7 @@ import { Storage } from '@google-cloud/storage';
 import { crowi } from '../test/setup';
 import { isMissingFileError } from '../util/file-uploader';
 import { runStorageCopy } from '../util/storage-copy';
+import { registerFakeDriver, unregisterFakeDriver, writeAt } from '../test/storage-driver-test-support';
 
 const EMULATOR_HOST = process.env.STORAGE_EMULATOR_HOST;
 // Must be genuinely absent (not merely `undefined`-valued) — the SDK checks
@@ -201,22 +202,3 @@ describeMaybe('@crowi/plugin-storage-gcs against a real GCS-API-compatible serve
     });
   });
 });
-
-// Inject a driver into the registry's private map directly, because the
-// public `register` API guards against duplicate registrations across
-// tests — same pattern `storage-copy.test.ts` uses.
-function registerFakeDriver(name: string, driver: StorageDriver): void {
-  const reg = crowi.getPlugins().storage as unknown as { drivers: Map<string, { plugin: string; driver: StorageDriver }> };
-  reg.drivers.set(name, { plugin: 'test', driver });
-}
-
-function unregisterFakeDriver(name: string): void {
-  const reg = crowi.getPlugins().storage as unknown as { drivers: Map<string, unknown> };
-  reg.drivers.delete(name);
-}
-
-function writeAt(root: string, relPath: string, body: string) {
-  const full = path.join(root, relPath);
-  mkdirSync(path.dirname(full), { recursive: true });
-  writeFileSync(full, body);
-}

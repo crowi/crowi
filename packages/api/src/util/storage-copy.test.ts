@@ -1,9 +1,10 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 import type { StorageDriver } from '@crowi/plugin-api';
 import { createLocalDriver } from '@crowi/plugin-storage-local';
+import { registerFakeDriver, unregisterFakeDriver, writeAt } from 'src/test/storage-driver-test-support';
 import { extractUserPictureKey, runStorageCopy } from 'src/util/storage-copy';
 import { crowi, Fixture } from 'src/test/setup';
 
@@ -321,24 +322,6 @@ describe('util/storage-copy / extractUserPictureKey', () => {
     expect(extractUserPictureKey('')).toBeNull();
   });
 });
-
-// Inject a driver into the registry's private map directly, because the
-// public `register` API guards against duplicate registrations across tests.
-function registerFakeDriver(name: string, driver: StorageDriver): void {
-  const reg = crowi.getPlugins().storage as unknown as { drivers: Map<string, { plugin: string; driver: StorageDriver }> };
-  reg.drivers.set(name, { plugin: 'test', driver });
-}
-
-function unregisterFakeDriver(name: string): void {
-  const reg = crowi.getPlugins().storage as unknown as { drivers: Map<string, unknown> };
-  reg.drivers.delete(name);
-}
-
-function writeAt(root: string, relPath: string, body: string) {
-  const full = path.join(root, relPath);
-  mkdirSync(path.dirname(full), { recursive: true });
-  writeFileSync(full, body);
-}
 
 function readAt(root: string, relPath: string): string {
   return readFileSync(path.join(root, relPath), 'utf-8');
