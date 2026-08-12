@@ -1,9 +1,10 @@
 'use client';
 
-import type { AdminPager, UserPublic } from '@crowi/api-contract';
+import { useMemo } from 'react';
+import type { AdminPager, AdminUserListItem } from '@crowi/api-contract';
 import { UserStatusEnum } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
-import { Loader2, MoreHorizontal, Send } from 'lucide-react';
+import { Link2, Loader2, MoreHorizontal, Send } from 'lucide-react';
 import { UserIdentityCell } from '@/components/admin/user-identity-cell';
 import { Button } from '@/components/ui/button';
 import {
@@ -19,17 +20,31 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { formatDate } from '@/lib/date-utils';
 import { notify } from '@/lib/notify';
 import { useResendAdminInvite } from '@/lib/use-admin-users';
+import { useAuthProviders } from '@/lib/use-auth-providers';
 import { cn } from '@/lib/utils';
 
-export type UserRowActionKind = 'edit' | 'make-admin' | 'remove-admin' | 'activate' | 'suspend' | 'reset-password' | 'update-email' | 'delete';
+export type UserRowActionKind =
+  | 'edit'
+  | 'make-admin'
+  | 'remove-admin'
+  | 'activate'
+  | 'suspend'
+  | 'reset-password'
+  | 'update-email'
+  | 'unlink-identity'
+  | 'delete';
 
 export interface UserRowAction {
   kind: UserRowActionKind;
-  user: UserPublic;
+  user: AdminUserListItem;
+  /** Set only for 'unlink-identity' — which of the user's linkedProviders to unlink. */
+  provider?: string;
+  /** Set only for 'unlink-identity' — display label for `provider` (falls back to the slug). */
+  providerLabel?: string;
 }
 
 interface UsersTableProps {
-  users: UserPublic[];
+  users: AdminUserListItem[];
   pager: AdminPager;
   onPageChange: (page: number) => void;
   /** When omitted the row dropdown is hidden (e.g. read-only contexts). */
@@ -85,7 +100,7 @@ export function UsersPager({ pager, onPageChange }: { pager: AdminPager; onPageC
  * shifts and the table layout stays stable. The button is disabled while in
  * flight to prevent a double-send.
  */
-function ResendInviteButton({ user }: { user: UserPublic }) {
+function ResendInviteButton({ user }: { user: AdminUserListItem }) {
   const resend = useResendAdminInvite();
 
   const onClick = () => {
@@ -118,19 +133,49 @@ function ResendInviteButton({ user }: { user: UserPublic }) {
   );
 }
 
+/**
+ * Small inline marker for "this user has at least one linked federated
+ * identity" — shown next to the user cell so an admin can tell at a glance
+ * without opening the row menu. Slug -> display label comes from
+ * `useAuthProviders()`; a provider whose plugin was since removed still has
+ * its slug shown verbatim rather than disappearing (the identity itself is
+ * still real and still blocks email changes / needs unlinking).
+ */
+function LinkedIdentityBadge({ providers, providerLabels }: { providers: string[]; providerLabels: Map<string, string> }) {
+  if (providers.length === 0) return null;
+  const label = providers.map((p) => providerLabels.get(p) ?? p).join(', ');
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="mt-0.5 inline-flex shrink-0 items-center text-muted-foreground">
+          <Link2 className="h-3.5 w-3.5" aria-hidden />
+          <span className="sr-only">{m['admin.users.linked_identity_label']({ providers: label })}</span>
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>{m['admin.users.linked_identity_label']({ providers: label })}</TooltipContent>
+    </Tooltip>
+  );
+}
+
 interface RowActionMenuProps {
-  user: UserPublic;
+  user: AdminUserListItem;
   isSelf: boolean;
+  providerLabels: Map<string, string>;
   onAction: (action: UserRowAction) => void;
 }
 
-function RowActionMenu({ user, isSelf, onAction }: RowActionMenuProps) {
+function RowActionMenu({ user, isSelf, providerLabels, onAction }: RowActionMenuProps) {
   const showActivate = user.status === UserStatusEnum.SUSPENDED || user.status === UserStatusEnum.REGISTERED;
   const showSuspend = user.status === UserStatusEnum.ACTIVE;
+  // A federated identity locks the email to the IdP-verified address — the
+  // admin has to unlink first (spec: "変更が必要な場合は先に連携を解除します").
+  const hasLinkedIdentity = user.linkedProviders.length > 0;
 
   // Invited (never-activated) users have a deliberately minimal menu: the only
   // meaningful operations are correcting the invite email or removing the
   // pending invite. Activation/admin toggles make no sense pre-acceptance.
+  // (JIT federated registration never leaves a user INVITED, so linkedProviders
+  // is always empty here — no lock/unlink affordance needed on this branch.)
   if (user.status === UserStatusEnum.INVITED) {
     return (
       <DropdownMenu>
@@ -160,7 +205,13 @@ function RowActionMenu({ user, isSelf, onAction }: RowActionMenuProps) {
       <DropdownMenuContent align="end">
         <DropdownMenuLabel>{m['admin.users.action.menu_label']()}</DropdownMenuLabel>
         <DropdownMenuItem onSelect={() => onAction({ kind: 'edit', user })}>{m['admin.users.action.edit']()}</DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => onAction({ kind: 'update-email', user })}>{m['admin.users.action.update_email']()}</DropdownMenuItem>
+        <DropdownMenuItem
+          disabled={hasLinkedIdentity}
+          title={hasLinkedIdentity ? m['admin.users.action.update_email_locked_hint']() : undefined}
+          onSelect={() => !hasLinkedIdentity && onAction({ kind: 'update-email', user })}
+        >
+          {m['admin.users.action.update_email']()}
+        </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => onAction({ kind: 'reset-password', user })}>{m['admin.users.action.reset_password']()}</DropdownMenuItem>
         <DropdownMenuSeparator />
         {user.admin ? (
@@ -185,12 +236,34 @@ function RowActionMenu({ user, isSelf, onAction }: RowActionMenuProps) {
             {m['admin.users.action.suspend']()}
           </DropdownMenuItem>
         )}
+        {hasLinkedIdentity && (
+          <>
+            <DropdownMenuSeparator />
+            {user.linkedProviders.map((provider) => {
+              const providerLabel = providerLabels.get(provider) ?? provider;
+              return (
+                <DropdownMenuItem
+                  key={provider}
+                  variant="destructive"
+                  disabled={isSelf}
+                  title={isSelf ? m['admin.users.action.self_disabled_hint']() : undefined}
+                  onSelect={() => !isSelf && onAction({ kind: 'unlink-identity', user, provider, providerLabel })}
+                >
+                  {m['admin.users.action.unlink_identity']({ provider: providerLabel })}
+                </DropdownMenuItem>
+              );
+            })}
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );
 }
 
 export function UsersTable({ users, pager, onPageChange, onAction, currentUserId }: UsersTableProps) {
+  const { data: providers } = useAuthProviders();
+  const providerLabels = useMemo(() => new Map((providers ?? []).map((p) => [p.name, p.buttonLabel])), [providers]);
+
   if (users.length === 0) {
     return (
       <div className="rounded-md border bg-muted/30 px-4 py-8 text-center">
@@ -221,7 +294,10 @@ export function UsersTable({ users, pager, onPageChange, onAction, currentUserId
             {users.map((user) => (
               <tr key={user._id} className="border-t align-top">
                 <td className="px-4 py-3">
-                  <UserIdentityCell user={user} />
+                  <div className="flex items-start gap-2">
+                    <UserIdentityCell user={user} />
+                    <LinkedIdentityBadge providers={user.linkedProviders} providerLabels={providerLabels} />
+                  </div>
                 </td>
                 <td className="px-4 py-3">
                   <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap', statusPillClass(user.status))}>
@@ -241,7 +317,7 @@ export function UsersTable({ users, pager, onPageChange, onAction, currentUserId
                     <div className="inline-flex items-start justify-end gap-1">
                       {/* INVITED rows surface "Resend invite" directly (outside the menu) as a primary action. */}
                       {user.status === UserStatusEnum.INVITED && <ResendInviteButton user={user} />}
-                      <RowActionMenu user={user} isSelf={user._id === currentUserId} onAction={onAction} />
+                      <RowActionMenu user={user} isSelf={user._id === currentUserId} providerLabels={providerLabels} onAction={onAction} />
                     </div>
                   </td>
                 )}
