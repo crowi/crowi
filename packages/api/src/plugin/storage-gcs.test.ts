@@ -1,24 +1,28 @@
 /**
- * `@crowi/plugin-storage-gcs` tests — Phase 1 (package skeleton and config,
- * AC-1/AC-2/AC-3): config schema (bucket/prefix/projectId/serviceAccountKey),
- * the `gcsConnection` atomic group, admin placement/i18n, ADC-vs-inline
- * client construction, prefix/object-name mapping, and valid-config-only
- * activation — including activation FAILING closed (never reaching
- * `registry.register`) for malformed stored config, an unknown flat field,
- * or an invalid prefix, exactly like real `PluginManager.activate()` (see
- * `makeCtx` below, which now runs `config()` through the real schema like
- * `createPluginContext` does, instead of returning the fixture verbatim).
+ * `@crowi/plugin-storage-gcs` tests — full coverage of AC-1 through AC-9:
+ * config schema (bucket/prefix/projectId/serviceAccountKey), the
+ * `gcsConnection` atomic group, admin placement/i18n, ADC-vs-inline client
+ * construction, prefix/object-name mapping, and valid-config-only activation
+ * — including activation FAILING closed (never reaching `registry.register`)
+ * for malformed stored config, an unknown flat field, or an invalid prefix,
+ * exactly like real `PluginManager.activate()` (see `makeCtx` below, which
+ * runs `config()` through the real schema like `createPluginContext` does,
+ * instead of returning the fixture verbatim).
  *
- * Also covers the `get()` streaming handshake and 404->ENOENT missing-object
- * conversion (AC-5/AC-6) and the full `delete()` matrix — existing object,
- * absent object (idempotent no-op), and permission/credential/network
- * failure propagation (AC-7): these were pulled forward from Phase 2 because
- * a `get`/`delete` that is already exposed on the registered driver must
- * honor `StorageDriver`'s missing-object contract now, not later. The REST
- * of Phase 2 — full put-pipeline durability assertions, signedUrl edge cases
- * beyond TTL bounds, StateCell in-flight-vs-new snapshot behavior, and
- * storage-copy — still belongs to a later implementer pass and is not
- * covered here.
+ * Also covers: the `put()` streaming pipeline's durability (provider-response
+ * completion, not merely "all bytes queued") and settle/destroy-on-failure
+ * behavior in both directions (AC-4); the `get()` streaming handshake and
+ * 404->ENOENT missing-object conversion, pinned against the REAL unmodified
+ * `isMissingFileError` classifier, with 403/credential/network/mid-stream
+ * errors proven to stay unconverted and non-missing and no additional
+ * provider request made during classification (AC-5/AC-6); the full
+ * `delete()` matrix — existing object, absent object (idempotent no-op), and
+ * permission/credential/network failure propagation (AC-7); `signedUrl`'s V4
+ * options/prefixed name/expiry and unconverted signing-failure propagation
+ * (AC-8); and `StateCell` reconfigure's in-flight-vs-new snapshot semantics
+ * (AC-9). Driver-neutral storage-copy against a GCS-shaped destination
+ * (AC-11) and attachment-route proxy parity despite `signedUrl` (AC-10) live
+ * in their own suites (`storage-copy.test.ts`, `attachment.test.ts`).
  *
  * The GCS SDK is mocked at the module boundary (same pattern as
  * `storage-aws-s3.test.ts`'s `@aws-sdk/client-s3` mock) so we can observe
@@ -27,7 +31,7 @@
  * exact response/data/end/error event sequence SDK 7.21.0 uses — without
  * touching real GCP.
  */
-import type { Readable } from 'node:stream';
+import { PassThrough, Readable, Writable } from 'node:stream';
 import type { PluginContext, StorageDriver, StorageRegistry } from '@crowi/plugin-api';
 import gcsPlugin, {
   GcsStorageConfigSchema,
@@ -205,6 +209,35 @@ function completeSuccessfulRead(bucket: FakeBucketHandle, chunk?: Buffer): void 
   stream.emit('response', { statusCode: 200 });
   if (chunk && chunk.length > 0) stream.push(chunk);
   stream.push(null);
+}
+
+/**
+ * A real `Writable` (not part of the `@google-cloud/storage` mock) that
+ * mirrors the load-bearing property of the SDK's own `createWriteStream()`
+ * (verified against `file.js`'s internals: the pipeline's completion
+ * callback — which becomes this stream's `_final` callback — is only
+ * invoked once the SDK's own internal pipeline has received the `metadata`
+ * event from the provider response, not merely once every chunk has been
+ * written). Deferring `_final`'s callback until `confirmProviderResponse()`
+ * is called lets AC-4 tests prove `put()` doesn't resolve merely because
+ * all bytes were queued.
+ */
+class ControllableWriteStream extends Writable {
+  readonly writtenChunks: Buffer[] = [];
+  private pendingFinalCb: ((err?: Error) => void) | null = null;
+
+  override _write(chunk: Buffer, _enc: BufferEncoding, cb: (err?: Error) => void): void {
+    this.writtenChunks.push(Buffer.from(chunk));
+    cb();
+  }
+
+  override _final(cb: (err?: Error) => void): void {
+    this.pendingFinalCb = cb;
+  }
+
+  confirmProviderResponse(): void {
+    this.pendingFinalCb?.();
+  }
 }
 
 beforeEach(() => {
@@ -577,6 +610,173 @@ describe('createGcsDriver — same physical name across all four operations, inv
 });
 
 /**
+ * AC-4: `put()`'s streaming pipeline. Buffer/Readable bodies must reach the
+ * destination byte-for-byte with the given content type, `resumable: false`
+ * fixed, and — the property that actually distinguishes "streamed" from
+ * "buffered-then-uploaded" — `put()` must not resolve merely because every
+ * byte was queued into the write stream; it must wait for the write
+ * stream's `finish` (which, in the real SDK, is gated on the provider's
+ * `metadata` response — see the doc comment on `ControllableWriteStream`).
+ * Failure on either end of the pipeline must settle/destroy the other end.
+ */
+describe('createGcsDriver#put — streaming pipeline durability (AC-4)', () => {
+  it('creates the write stream with resumable:false and the exact content type metadata', async () => {
+    const { driver, bucket } = registerWithPrefix('');
+    await driver.put('k', Buffer.from('x'), { contentType: 'image/png' });
+    const file = bucket.file('k');
+    expect(file.createWriteStream).toHaveBeenCalledWith({ resumable: false, metadata: { contentType: 'image/png' } });
+  });
+
+  it('streams a Buffer body to the destination byte-for-byte', async () => {
+    const { driver, bucket } = registerWithPrefix('');
+    const controllable = new ControllableWriteStream();
+    bucket.file('k').createWriteStream.mockReturnValueOnce(controllable);
+    const payload = Buffer.from('hello gcs');
+
+    const putPromise = driver.put('k', payload, { contentType: 'text/plain' });
+    await new Promise((resolve) => setImmediate(resolve));
+    controllable.confirmProviderResponse();
+    await expect(putPromise).resolves.toEqual({ key: 'k' });
+
+    expect(Buffer.concat(controllable.writtenChunks)).toEqual(payload);
+  });
+
+  it('streams a caller-supplied Readable body to the destination byte-for-byte, using it directly (not re-wrapped)', async () => {
+    const { driver, bucket } = registerWithPrefix('');
+    const controllable = new ControllableWriteStream();
+    bucket.file('k').createWriteStream.mockReturnValueOnce(controllable);
+    const source = Readable.from([Buffer.from('part-1-'), Buffer.from('part-2')]);
+
+    const putPromise = driver.put('k', source, { contentType: 'text/plain' });
+    await new Promise((resolve) => setImmediate(resolve));
+    controllable.confirmProviderResponse();
+    await putPromise;
+
+    expect(Buffer.concat(controllable.writtenChunks).toString('utf8')).toBe('part-1-part-2');
+  });
+
+  it('does not resolve merely because all bytes were written — waits for the write stream to finish (provider response completion)', async () => {
+    const { driver, bucket } = registerWithPrefix('');
+    const controllable = new ControllableWriteStream();
+    bucket.file('k').createWriteStream.mockReturnValueOnce(controllable);
+
+    const putPromise = driver.put('k', Buffer.from('x'), { contentType: 'text/plain' });
+
+    // Give the pipeline every chance to (incorrectly) settle once bytes are
+    // queued, before the write stream has actually finished.
+    const settledFirst: Promise<'resolved' | 'rejected'> = putPromise.then(
+      () => 'resolved' as const,
+      () => 'rejected' as const,
+    );
+    const stillPending = new Promise<'still-pending'>((resolve) => setImmediate(() => resolve('still-pending')));
+    await expect(Promise.race([settledFirst, stillPending])).resolves.toBe('still-pending');
+    expect(controllable.writtenChunks.length).toBeGreaterThan(0); // the byte WAS queued already
+
+    controllable.confirmProviderResponse();
+    await expect(putPromise).resolves.toEqual({ key: 'k' });
+  });
+
+  it('rejects and destroys the source when the destination write stream fails mid-upload', async () => {
+    const { driver, bucket } = registerWithPrefix('');
+    const controllable = new ControllableWriteStream();
+    bucket.file('k').createWriteStream.mockReturnValueOnce(controllable);
+    const source = new PassThrough();
+    const sourceDestroySpy = jest.spyOn(source, 'destroy');
+
+    const putPromise = driver.put('k', source, { contentType: 'text/plain' });
+    source.write(Buffer.from('partial'));
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const writeErr = new Error('write failed');
+    controllable.destroy(writeErr);
+
+    await expect(putPromise).rejects.toBe(writeErr);
+    expect(sourceDestroySpy).toHaveBeenCalled();
+  });
+
+  it('rejects and destroys the destination write stream when the source stream fails', async () => {
+    const { driver, bucket } = registerWithPrefix('');
+    const controllable = new ControllableWriteStream();
+    bucket.file('k').createWriteStream.mockReturnValueOnce(controllable);
+    const destroySpy = jest.spyOn(controllable, 'destroy');
+    const source = new PassThrough();
+
+    const putPromise = driver.put('k', source, { contentType: 'text/plain' });
+    const sourceErr = new Error('source read failed');
+    source.destroy(sourceErr);
+
+    await expect(putPromise).rejects.toBe(sourceErr);
+    expect(destroySpy).toHaveBeenCalled();
+  });
+});
+
+/** AC-8: V4 read options, prefixed object name, caller expiry, and unconverted signing-failure propagation. */
+describe('createGcsDriver#signedUrl — V4 read options, prefixed name, expiry, signing failure (AC-8)', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('requests a V4 read signed URL for the prefixed physical name with the caller expiry converted to an absolute ms timestamp', async () => {
+    const { driver, bucket } = registerWithPrefix('prod/wiki/');
+    const now = 1_700_000_000_000;
+    jest.spyOn(Date, 'now').mockReturnValue(now);
+
+    const url = await driver.signedUrl?.('attachment/p/k.png', 300);
+
+    expect(url).toBe('https://signed.example/fake');
+    const file = bucket.file('prod/wiki/attachment/p/k.png');
+    expect(file.getSignedUrl).toHaveBeenCalledWith({ version: 'v4', action: 'read', expires: now + 300_000 });
+  });
+
+  it('propagates a signing failure unchanged (e.g. no signBlob permission on ADC/attached identity)', async () => {
+    const { driver, bucket } = registerWithPrefix('');
+    const file = bucket.file('k');
+    const signingError = Object.assign(new Error('Permission denied on signBlob'), { code: 403 });
+    file.getSignedUrl.mockRejectedValueOnce(signingError);
+
+    await expect(driver.signedUrl?.('k', 300)).rejects.toBe(signingError);
+  });
+});
+
+/**
+ * AC-9: `cell.withValue()` snapshots state synchronously at call time (see
+ * `createStateCell` in `plugin-state-cell.ts`), so an in-flight operation
+ * started before a `reconfigure()` keeps using the bucket/client it started
+ * with, while a call made after `reconfigure()` sees the new one. GCS has no
+ * documented client `destroy()`/close API (unlike S3's `S3Client`), so
+ * unlike the S3 driver's equivalent suite there is no dispose-ordering test
+ * here — see the design note on `createGcsDriver`.
+ */
+describe('StateCell reconfigure — in-flight snapshot preserved, new calls see new state (AC-9)', () => {
+  it('an in-flight put keeps writing against the bucket it started with; a subsequent put after reconfigure uses the new bucket', async () => {
+    const driver = register(makeCtx({ bucket: 'old', prefix: '', projectId: '', serviceAccountKey: '' }));
+    const oldBucket = constructedBuckets.at(-1);
+    if (!oldBucket) throw new Error('expected old bucket to have been constructed');
+
+    const controllable = new ControllableWriteStream();
+    oldBucket.file('k1').createWriteStream.mockReturnValueOnce(controllable);
+
+    const inflight = driver.put('k1', Buffer.from('a'), { contentType: 'text/plain' });
+    await new Promise((resolve) => setImmediate(resolve)); // let the in-flight put reach the parked write stream
+
+    await gcsPlugin.reconfigure?.(makeCtx({ bucket: 'new', prefix: '', projectId: '', serviceAccountKey: '' }));
+    const newBucket = constructedBuckets.at(-1);
+    if (!newBucket || newBucket === oldBucket) throw new Error('expected reconfigure to construct a new bucket');
+
+    controllable.confirmProviderResponse();
+    await inflight;
+
+    // The in-flight put only ever touched the OLD bucket's file(), never the new one.
+    expect(oldBucket.file).toHaveBeenCalledWith('k1');
+    expect(newBucket.file).not.toHaveBeenCalledWith('k1');
+
+    await driver.put('k2', Buffer.from('b'), { contentType: 'text/plain' });
+    expect(newBucket.file).toHaveBeenCalledWith('k2');
+    expect(oldBucket.file).not.toHaveBeenCalledWith('k2');
+  });
+});
+
+/**
  * `makeCtx().config()` now runs the fixture through the real
  * `GcsStorageConfigSchema` exactly like `createPluginContext.config()` does
  * (see the comment on `makeCtx` above) — so calling `register()` here
@@ -630,12 +830,15 @@ describe('createGcsDriver#delete — the full AC-7 matrix (existing/absent/failu
     await expect(driver.delete('attachment/p/k.png')).resolves.toBeUndefined();
   });
 
-  it('propagates permission/credential/network failures to the caller — ignoreNotFound only absorbs 404s', async () => {
+  it.each([
+    ['permission (403 ApiError)', Object.assign(new Error('Forbidden'), { code: 403, name: 'ApiError' })],
+    ['credential (401 ApiError — e.g. expired/invalid ADC token)', Object.assign(new Error('Unauthorized'), { code: 401, name: 'ApiError' })],
+    ['network (no HTTP code — e.g. socket hang up)', new Error('socket hang up')],
+  ] as const)('propagates a %s failure to the caller unchanged — ignoreNotFound only absorbs 404s', async (_label, error) => {
     const { driver, bucket } = registerWithPrefix('');
     const file = bucket.file('attachment/p/k.png');
-    const permissionError = Object.assign(new Error('Forbidden'), { code: 403, name: 'ApiError' });
-    file.delete.mockRejectedValueOnce(permissionError);
-    await expect(driver.delete('attachment/p/k.png')).rejects.toBe(permissionError);
+    file.delete.mockRejectedValueOnce(error);
+    await expect(driver.delete('attachment/p/k.png')).rejects.toBe(error);
   });
 });
 
@@ -650,15 +853,39 @@ describe('createGcsDriver#delete — the full AC-7 matrix (existing/absent/failu
  * here instead of only showing up against real GCS.
  */
 describe('createGcsDriver#get — streaming handshake and 404 classification (AC-5, AC-6)', () => {
-  it('attaches error/response/data/end listeners and starts the request (resume()) before any bytes can arrive', () => {
+  it('attaches error/response/data/end listeners BEFORE resume() is ever called — proven by instrumenting resume() itself, not just inspecting listener counts after the whole synchronous setup already ran', () => {
     const { driver, bucket } = registerWithPrefix('');
+    const file = bucket.file('k');
+    // A plain `Readable` with the same no-op `_read` shape as the mock's own
+    // `FakeGcsReadStream` — constructed here (not via `createReadStream()`)
+    // so `resume` can be spied on BEFORE the driver ever sees this instance,
+    // and handed back via `mockReturnValueOnce` so the driver's own
+    // `createReadStream()` call receives this exact spied instance.
+    const stream = new Readable({ read() {} });
+    file.createReadStream.mockReturnValueOnce(stream);
+
+    let countsAtResumeTime: { error: number; response: number; data: number; end: number } | null = null;
+    const originalResume = stream.resume.bind(stream);
+    jest.spyOn(stream, 'resume').mockImplementation(() => {
+      // Captured synchronously, INSIDE the call to resume() — if the driver
+      // ever called resume() before attaching a listener, that listener's
+      // count would still read 0 here, unlike an assertion made after
+      // `driver.get()` returns (which only ever observes the final,
+      // already-fully-set-up state regardless of internal ordering).
+      countsAtResumeTime = {
+        error: stream.listenerCount('error'),
+        response: stream.listenerCount('response'),
+        data: stream.listenerCount('data'),
+        end: stream.listenerCount('end'),
+      };
+      return originalResume();
+    });
+
     void driver.get('k'); // fire-and-forget: only the synchronous setup is under test here
-    const stream = lastCreatedReadStream(bucket);
-    expect(stream.listenerCount('error')).toBe(1);
-    expect(stream.listenerCount('response')).toBe(1);
-    expect(stream.listenerCount('data')).toBe(1);
-    expect(stream.listenerCount('end')).toBe(1);
-    expect(stream.readableFlowing).toBe(true); // resume() was called
+
+    expect(countsAtResumeTime).toEqual({ error: 1, response: 1, data: 1, end: 1 });
+
+    // Settle the handshake so the underlying promise doesn't linger unhandled.
     stream.emit('response', { statusCode: 200 });
     stream.push(null);
   });
@@ -759,7 +986,7 @@ describe('createGcsDriver#get — streaming handshake and 404 classification (AC
     await expect(getPromise).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
-  it('converts a 404 into an Error with code "ENOENT" and the provider ApiError as cause, and the REAL isMissingFileError classifies it as missing', async () => {
+  it('converts a 404 into an Error with code "ENOENT" and the provider ApiError as cause, and the REAL isMissingFileError classifies it as missing — without issuing any additional provider request to classify it', async () => {
     const { driver, bucket } = registerWithPrefix('');
     const getPromise = driver.get('missing-key');
     const stream = lastCreatedReadStream(bucket);
@@ -778,6 +1005,14 @@ describe('createGcsDriver#get — streaming handshake and 404 classification (AC
     // logical key だけを含め").
     expect((caught as Error).message).toBe('missing-key');
     expect(isMissingFileError(caught)).toBe(true);
+    // Classification (`toGetError`) is a pure transform of the error the SDK
+    // already delivered on this same stream — it must not probe the bucket
+    // again (e.g. a `bucket.file()`/`exists()`/`getMetadata()` round trip) to
+    // decide missing-ness. Exactly one `bucket.file()` and one
+    // `createReadStream()` call for this whole `get()` proves that.
+    expect(bucket.file).toHaveBeenCalledTimes(1);
+    const file = bucket.file.mock.results[0].value as FakeFileHandle;
+    expect(file.createReadStream).toHaveBeenCalledTimes(1);
   });
 
   it('does not convert a 403 — it propagates unchanged and the real isMissingFileError returns false', async () => {
@@ -816,6 +1051,10 @@ describe('createGcsDriver#get — streaming handshake and 404 classification (AC
     stream.destroy(midStreamError);
 
     await expect(relayError).resolves.toBe(midStreamError);
+    // A mid-stream failure happens well after the handshake already
+    // classified this as a successful (2xx) download — it must never be
+    // reported as a missing object.
+    expect(isMissingFileError(midStreamError)).toBe(false);
   });
 
   it('destroys the source and rejects with a timeout error if nothing terminates within 10s', async () => {
