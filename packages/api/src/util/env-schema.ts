@@ -468,6 +468,12 @@ const TAXONOMY_ONLY_NAMES = [
   // a free-form email, and an unresolvable value already throws its own
   // specific error at the point of use.
   'CROWI_MIGRATE_USER',
+  // `util/oauth-refresh-grace.ts` — refresh-token rotation-reuse grace
+  // window (ms). No `validatePositiveInt` check here: unlike every other
+  // `*_MS`/`*_SECONDS` descriptor, `0` is a valid, meaningful value (it
+  // disables the grace window), which `validatePositiveInt` would reject.
+  // Malformed values already fall back to the module's own default.
+  'OAUTH_REFRESH_REUSE_GRACE_MS',
 ] as const;
 
 const TAXONOMY_ONLY_DESCRIPTORS: EnvVarDescriptor[] = TAXONOMY_ONLY_NAMES.map((name) => ({ name }));
@@ -512,7 +518,7 @@ const EXTRA_KNOWN_NAMES = ['NEXT_PUBLIC_API_URL', 'NEXT_PUBLIC_COLLAB_URL', 'CRO
 const KNOWN_ENV_NAMES: ReadonlySet<string> = new Set([...ENV_VAR_DESCRIPTORS.flatMap((d) => [d.name, ...(d.aliases ?? [])]), ...EXTRA_KNOWN_NAMES]);
 
 /** Prefixes a Crowi-owned env var is expected to carry. Anything else (`PATH`, `CI`, `GITHUB_*`, `npm_*`, ...) is out of scope for typo-detection. */
-const TYPO_PREFIXES = ['CROWI_', 'WS_TOKEN_', 'JWT_', 'COLLAB_', 'REDIS', 'MONGO', 'MIGRATION_', 'IMAGE_DERIVATIVE_'] as const;
+const TYPO_PREFIXES = ['CROWI_', 'WS_TOKEN_', 'JWT_', 'COLLAB_', 'REDIS', 'MONGO', 'MIGRATION_', 'IMAGE_DERIVATIVE_', 'OAUTH_'] as const;
 
 /** Edit-distance threshold for the typo heuristic (implementer's discretion per the spec, "目安 ≤2"). */
 const TYPO_DISTANCE_THRESHOLD = 2;
