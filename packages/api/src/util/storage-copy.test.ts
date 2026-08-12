@@ -34,12 +34,8 @@ describe('util/storage-copy', () => {
     srcDriver = createLocalDriver({ rootDir: srcRoot });
     dstDriver = createLocalDriver({ rootDir: dstRoot });
 
-    // Inject our two drivers into the registry. We use the private
-    // map directly because the public `register` API guards against
-    // duplicate registrations across tests.
-    const reg = crowi.getPlugins().storage as unknown as { drivers: Map<string, { plugin: string; driver: StorageDriver }> };
-    reg.drivers.set(SRC_NAME, { plugin: 'test', driver: srcDriver });
-    reg.drivers.set(DST_NAME, { plugin: 'test', driver: dstDriver });
+    registerFakeDriver(SRC_NAME, srcDriver);
+    registerFakeDriver(DST_NAME, dstDriver);
 
     // Wipe Attachment / User collections that previous tests may have left.
     await crowi.model('Attachment').deleteMany({}).exec();
@@ -50,9 +46,8 @@ describe('util/storage-copy', () => {
   });
 
   afterEach(() => {
-    const reg = crowi.getPlugins().storage as unknown as { drivers: Map<string, unknown> };
-    reg.drivers.delete(SRC_NAME);
-    reg.drivers.delete(DST_NAME);
+    unregisterFakeDriver(SRC_NAME);
+    unregisterFakeDriver(DST_NAME);
     rmSync(srcRoot, { recursive: true, force: true });
     rmSync(dstRoot, { recursive: true, force: true });
   });
@@ -167,6 +162,140 @@ describe('util/storage-copy', () => {
     expect(events).toContain('start:attachment/p/ok.txt');
     expect(events).toContain('ok:attachment/p/ok.txt');
   });
+
+  /**
+   * feature-storage-gcs AC-11: `runStorageCopy` is driver-neutral (spec
+   * §"processing/data flow — storage copy と cutover": "production copy loop
+   * に GCS 固有分岐は追加しない"). Real GCS CRUD/copy is covered by the opt-in
+   * `storage-gcs.emulator.test.ts` suite (Phase 3); this nested describe
+   * proves the neutral loop itself hands a GCS-shaped destination exactly
+   * what it needs (source `Readable`, logical key, content type), destroys
+   * the source on a destination failure, and lets a retried copy of the
+   * same key overwrite — without depending on the real
+   * `@crowi/plugin-storage-gcs` package. Nested (not a sibling `describe`)
+   * so it can reuse the outer `beforeEach`'s `srcRoot`/`srcDriver`/`SRC_NAME`
+   * fixture instead of duplicating it.
+   */
+  describe('GCS-like destination (feature-storage-gcs AC-11)', () => {
+    const GCS_NAME = 'test-gcs-like';
+    // Keyed by logical key (like a real key-addressed object store), not
+    // appended to unconditionally — this is what lets the retry/overwrite
+    // test below prove the SECOND write actually replaces the first rather
+    // than merely existing alongside it.
+    let gcsWrites: Map<string, { contentType: string; bytes: Buffer }>;
+    let failNextPut: boolean;
+    let gcsDriver: StorageDriver;
+
+    beforeEach(() => {
+      gcsWrites = new Map();
+      failNextPut = false;
+      gcsDriver = {
+        async put(key, body, meta) {
+          if (failNextPut) {
+            failNextPut = false;
+            throw Object.assign(new Error('simulated GCS destination failure'), { code: 500 });
+          }
+          const chunks: Buffer[] = [];
+          for await (const chunk of body as Readable) chunks.push(chunk as Buffer);
+          gcsWrites.set(key, { contentType: meta.contentType, bytes: Buffer.concat(chunks) });
+          return { key };
+        },
+        async get() {
+          throw new Error('not used as a copy source in this suite');
+        },
+        async delete() {
+          /* not used in this suite */
+        },
+      };
+      registerFakeDriver(GCS_NAME, gcsDriver);
+    });
+
+    afterEach(() => {
+      unregisterFakeDriver(GCS_NAME);
+    });
+
+    /** Spies on `srcDriver.get`, delegating to the real implementation, and captures the exact stream instance it returned — for referential-equality assertions against what reaches the destination driver's `put()`. */
+    function spyOnSourceGet(): { getSpy: jest.SpyInstance; getCapturedSource: () => Readable | undefined } {
+      let capturedSource: Readable | undefined;
+      const originalGet = srcDriver.get.bind(srcDriver);
+      const getSpy = jest.spyOn(srcDriver, 'get').mockImplementation(async (key: string) => {
+        const stream = (await originalGet(key)) as Readable;
+        capturedSource = stream;
+        return stream;
+      });
+      return { getSpy, getCapturedSource: () => capturedSource };
+    }
+
+    test('passes the source Readable, logical key, and content type through to the GCS-like put() unchanged — the exact same stream instance, not re-wrapped or copied', async () => {
+      writeAt(srcRoot, 'attachment/g/file.txt', 'gcs-bound');
+      await crowi.model('Attachment').create({ filePath: 'attachment/g/file.txt', fileName: 'file.txt', fileFormat: 'text/plain', fileSize: 9 });
+
+      const { getSpy, getCapturedSource } = spyOnSourceGet();
+
+      let capturedBody: unknown;
+      const originalPut = gcsDriver.put.bind(gcsDriver);
+      const putSpy = jest.spyOn(gcsDriver, 'put').mockImplementation(async (key, body, meta) => {
+        capturedBody = body;
+        return originalPut(key, body, meta);
+      });
+
+      const summary = await runStorageCopy(crowi, { from: SRC_NAME, to: GCS_NAME, dryRun: false });
+
+      const capturedSource = getCapturedSource();
+      expect(summary.ok).toBe(1);
+      expect(summary.failed).toBe(0);
+      expect(capturedSource).toBeDefined();
+      // Referential equality, not just equal bytes: `runStorageCopy` must
+      // hand the destination the exact stream `fromDriver.get()` returned,
+      // never a re-wrapped/re-buffered copy of it.
+      expect(capturedBody).toBe(capturedSource);
+      expect(gcsWrites.get('attachment/g/file.txt')).toEqual({ contentType: 'text/plain', bytes: Buffer.from('gcs-bound') });
+      getSpy.mockRestore();
+      putSpy.mockRestore();
+    });
+
+    test('destroys the source stream when the GCS-like destination put() fails', async () => {
+      writeAt(srcRoot, 'attachment/g/fail.txt', 'will-fail');
+      await crowi.model('Attachment').create({ filePath: 'attachment/g/fail.txt', fileName: 'fail.txt', fileFormat: 'text/plain', fileSize: 9 });
+
+      const { getSpy, getCapturedSource } = spyOnSourceGet();
+
+      failNextPut = true;
+      const summary = await runStorageCopy(crowi, { from: SRC_NAME, to: GCS_NAME, dryRun: false });
+
+      expect(summary.ok).toBe(0);
+      expect(summary.failed).toBe(1);
+      expect(getCapturedSource()?.destroyed).toBe(true);
+      getSpy.mockRestore();
+    });
+
+    test('a retried copy of the same key succeeds and OVERWRITES a previously-written GCS-like object, rather than erroring or leaving a stale duplicate', async () => {
+      writeAt(srcRoot, 'attachment/g/retry.txt', 'first-attempt');
+      await crowi.model('Attachment').create({ filePath: 'attachment/g/retry.txt', fileName: 'retry.txt', fileFormat: 'text/plain', fileSize: 13 });
+
+      // Establish a genuine PRIOR successful write at this key first — the
+      // property under test is overwrite semantics, which only means
+      // something once something real already exists at the destination.
+      const first = await runStorageCopy(crowi, { from: SRC_NAME, to: GCS_NAME, dryRun: false });
+      expect(first.ok).toBe(1);
+      expect(first.failed).toBe(0);
+      expect(gcsWrites.get('attachment/g/retry.txt')).toEqual({ contentType: 'text/plain', bytes: Buffer.from('first-attempt') });
+
+      // Simulate a retry of the same key (e.g. an operator re-running the
+      // migration for idempotency, or retrying after a transient failure on
+      // a different key) with updated source content. Same key, no distinct
+      // "already exists" branch in either `runStorageCopy` or the GCS `put`
+      // contract (complete-object replacement) — a plain re-run must
+      // overwrite, not duplicate.
+      writeAt(srcRoot, 'attachment/g/retry.txt', 'second-attempt');
+      const second = await runStorageCopy(crowi, { from: SRC_NAME, to: GCS_NAME, dryRun: false });
+      expect(second.ok).toBe(1);
+      // Exactly one entry for this key — proves overwrite, not a second,
+      // independently-addressable object alongside the first.
+      expect(gcsWrites.size).toBe(1);
+      expect(gcsWrites.get('attachment/g/retry.txt')).toEqual({ contentType: 'text/plain', bytes: Buffer.from('second-attempt') });
+    });
+  });
 });
 
 describe('util/storage-copy / extractUserPictureKey', () => {
@@ -193,6 +322,18 @@ describe('util/storage-copy / extractUserPictureKey', () => {
   });
 });
 
+// Inject a driver into the registry's private map directly, because the
+// public `register` API guards against duplicate registrations across tests.
+function registerFakeDriver(name: string, driver: StorageDriver): void {
+  const reg = crowi.getPlugins().storage as unknown as { drivers: Map<string, { plugin: string; driver: StorageDriver }> };
+  reg.drivers.set(name, { plugin: 'test', driver });
+}
+
+function unregisterFakeDriver(name: string): void {
+  const reg = crowi.getPlugins().storage as unknown as { drivers: Map<string, unknown> };
+  reg.drivers.delete(name);
+}
+
 function writeAt(root: string, relPath: string, body: string) {
   const full = path.join(root, relPath);
   mkdirSync(path.dirname(full), { recursive: true });
@@ -202,7 +343,3 @@ function writeAt(root: string, relPath: string, body: string) {
 function readAt(root: string, relPath: string): string {
   return readFileSync(path.join(root, relPath), 'utf-8');
 }
-
-// Silence the unused-import warning for Readable when the test file
-// is read by linters that don't track JSX-style generics.
-void Readable;

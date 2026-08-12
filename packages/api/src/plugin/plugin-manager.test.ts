@@ -482,6 +482,52 @@ describe('PluginManager.bootstrap — configSchema guard runs before listSensiti
   });
 });
 
+describe('PluginManager.listSensitiveKeys (feature-storage-gcs AC-2 — shared marker traversal with schema-serializer.ts)', () => {
+  it('registers the atomic GROUP physical key, not the flat field key, when the sensitive member is behind an intermediate ZodEffects @sensitive marker', () => {
+    const plugin = stubPlugin({
+      name: '@crowi/plugin-storage-gcs',
+      configSchema: z
+        .object({
+          bucket: z.string().default(''),
+          serviceAccountKey: z
+            .string()
+            .superRefine(() => undefined)
+            .describe('@sensitive Google Cloud service-account key JSON')
+            .default(''),
+        })
+        .strict(),
+      configAtomicGroups: [{ name: 'gcsConnection', keys: ['bucket', 'serviceAccountKey'], sensitive: true }],
+    });
+    const manager = new PluginManager(makeFakeCrowi());
+    loadPluginsInto(manager, [plugin]);
+
+    const keys = manager.listSensitiveKeys();
+
+    expect(keys).toContain('plugin:@crowi/plugin-storage-gcs:__atomic:gcsConnection');
+    expect(keys).not.toContain('plugin:@crowi/plugin-storage-gcs:serviceAccountKey');
+    expect(keys).not.toContain('plugin:@crowi/plugin-storage-gcs:bucket');
+  });
+
+  it('registers a flat (non-grouped) field key when its @sensitive marker sits on an intermediate ZodEffects wrapper', () => {
+    const plugin = stubPlugin({
+      name: '@crowi/plugin-x',
+      configSchema: z
+        .object({
+          apiKey: z
+            .string()
+            .superRefine(() => undefined)
+            .describe('@sensitive API key')
+            .default(''),
+        })
+        .strict(),
+    });
+    const manager = new PluginManager(makeFakeCrowi());
+    loadPluginsInto(manager, [plugin]);
+
+    expect(manager.listSensitiveKeys()).toEqual(['plugin:@crowi/plugin-x:apiKey']);
+  });
+});
+
 describe('PluginManager.activateAll — per-plugin activation isolation (feature-plugin-registration-isolation, AC-1–AC-4)', () => {
   afterEach(jest.restoreAllMocks);
 
