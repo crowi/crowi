@@ -22,6 +22,17 @@ import { registerTestModels, type SmokeMongo, startInMemoryMongo } from './setup
  *   - The contributors tracker is the real implementation.
  */
 
+/** Polls `predicate` until it's true or `timeoutMs` elapses (then throws) — used to deterministically sequence two concurrent `executeSave` calls without a real-time race. */
+const waitFor = async (predicate: () => boolean, timeoutMs = 2000): Promise<void> => {
+  const start = Date.now();
+  while (!predicate()) {
+    if (Date.now() - start > timeoutMs) {
+      throw new Error('waitFor timed out');
+    }
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+};
+
 interface MockPublisher extends CollabPageEventPublisher {
   calls: Array<{ eventName: string; payload: Record<string, unknown> }>;
 }
@@ -72,6 +83,36 @@ describe('createSaveFlow.executeSave', () => {
   afterEach(() => {
     warnSpy.mockRestore();
   });
+
+  /**
+   * Materialise a server doc via the REAL `onLoadDocument` hook so the
+   * epoch (and doc base) are recorded exactly the way production does —
+   * not hand-set on the stores, so tests exercise the actual recording
+   * path too. Hoisted to the outer describe (not nested under "RFC-0017
+   * Phase 1 epoch CAS") so the `contentSequenceAllocator` tests can reuse
+   * the SAME epoch-CAS-miss technique to construct a genuine pointer-CAS
+   * loss (as opposed to the early doc-base divergence check short-circuit).
+   */
+  const materialise = async (
+    docBaseRevisions: ReturnType<typeof createDocBaseRevisionStore>,
+    docEpochRevisions: ReturnType<typeof createDocEpochStore>,
+    pageId: string,
+  ): Promise<Y.Doc> => {
+    const onLoadDocument = createOnLoadDocument({
+      models: { Page: models.Page, Revision: models.Revision, PageYjsUpdate: models.PageYjsUpdate },
+      docBaseRevisions,
+      docEpochRevisions,
+      invalidatedPages: createInvalidatedPagesStore(),
+    });
+    const doc = new Y.Doc();
+    await onLoadDocument({
+      documentName: pageId,
+      document: doc,
+      instance: { documents: new Map() },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
+    return doc;
+  };
 
   test('happy path: writes Revision, updates Page, resets yjsState, clears pending, publishes update', async () => {
     const tracker = createContributorsTracker();
@@ -326,6 +367,240 @@ describe('createSaveFlow.executeSave', () => {
   });
 
   /**
+   * RFC-0021 §D-7 (Phase 2a) — the injected `contentSequenceAllocator`
+   * option. `@crowi/collab` never imports the real allocator (it lives in
+   * `@crowi/api`), so these tests use a jest mock in its place — exactly
+   * how production wires it (`packages/api/src/collab/attach.ts`).
+   */
+  describe('contentSequenceAllocator (§D-7)', () => {
+    test('is called once with (pageId, revisionId) after a successful pointer CAS — AC-4', async () => {
+      const docBaseRevisions = createDocBaseRevisionStore();
+      const contentSequenceAllocator = jest.fn().mockResolvedValue(undefined);
+      const flow = createSaveFlow({
+        models,
+        contributorsTracker: createContributorsTracker(),
+        pageEventPublisher: makeMockPublisher(),
+        docBaseRevisions,
+        contentSequenceAllocator,
+      });
+      const { pageId } = await fixtures.seedPage();
+      const user = await seedUser(models);
+      const doc = new Y.Doc();
+      doc.getText(CONTENT_FIELD).insert(0, 'body');
+
+      const result = await flow.executeSave({ pageId, userId: user._id.toString(), document: doc });
+
+      expect(contentSequenceAllocator).toHaveBeenCalledTimes(1);
+      const [calledPageId, calledRevisionId] = contentSequenceAllocator.mock.calls[0];
+      expect(calledPageId.toString()).toBe(pageId);
+      expect(calledRevisionId.toString()).toBe(result.revisionId);
+    });
+
+    test('a save that CONFLICTs via the early doc-base divergence check never calls the allocator — AC-4', async () => {
+      const docBaseRevisions = createDocBaseRevisionStore();
+      const contentSequenceAllocator = jest.fn().mockResolvedValue(undefined);
+      const flow = createSaveFlow({
+        models,
+        contributorsTracker: createContributorsTracker(),
+        pageEventPublisher: makeMockPublisher(),
+        docBaseRevisions,
+        contentSequenceAllocator,
+      });
+      const { pageId } = await fixtures.seedPage();
+      const user = await seedUser(models);
+      // A doc base recorded for this page that does NOT match the page's
+      // live pointer (`null` — `seedPage` creates no revision) — the early
+      // divergence check in `executeSave` rejects CONFLICT before the
+      // pointer CAS (and therefore before the allocator) is ever reached.
+      docBaseRevisions.set(pageId, new Types.ObjectId().toString());
+      const doc = new Y.Doc();
+      doc.getText(CONTENT_FIELD).insert(0, 'body');
+
+      await expect(flow.executeSave({ pageId, userId: user._id.toString(), document: doc })).rejects.toMatchObject({ code: 'CONFLICT' });
+      expect(contentSequenceAllocator).not.toHaveBeenCalled();
+    });
+
+    test('a save whose pointer CAS itself is genuinely lost (not just rejected by the cheap early check) never calls the allocator — AC-4', async () => {
+      // Reuses the SAME epoch-CAS-miss technique as the "RFC-0017 Phase 1
+      // epoch CAS" describe's own AC-4 test below: a lifecycle transition
+      // (rename) bumps `collabLifecycleVersion` WITHOUT moving
+      // `currentRevision`, so the cheap early doc-base divergence check
+      // (which only compares `currentRevision`) PASSES and this save
+      // actually reaches — and loses — the real atomic pointer CAS in step
+      // 5b (`matchedCount: 0`). `tryCoalesce`'s condition 1 never holds for
+      // a lifecycle-only transition, so this settles to a genuine CONFLICT.
+      const docBaseRevisions = createDocBaseRevisionStore();
+      const docEpochRevisions = createDocEpochStore();
+      const contentSequenceAllocator = jest.fn().mockResolvedValue(undefined);
+      const flow = createSaveFlow({
+        models,
+        contributorsTracker: createContributorsTracker(),
+        pageEventPublisher: makeMockPublisher(),
+        docBaseRevisions,
+        docEpochRevisions,
+        contentSequenceAllocator,
+      });
+      const { pageId } = await fixtures.seedPage();
+      const user = await seedUser(models);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const Page = models.Page as any;
+
+      const doc = await materialise(docBaseRevisions, docEpochRevisions, pageId);
+      await Page.updateOne({ _id: pageId }, { $inc: { collabLifecycleVersion: 1 } }).exec();
+
+      doc.getText(CONTENT_FIELD).insert(0, 'a body nobody else has written');
+      await expect(flow.executeSave({ pageId, userId: user._id.toString(), document: doc })).rejects.toMatchObject({ code: 'CONFLICT' });
+
+      expect(contentSequenceAllocator).not.toHaveBeenCalled();
+    });
+
+    test('a rejecting allocator does not fail the save — it still resolves with the new revisionId (AC-8, §D-6)', async () => {
+      const docBaseRevisions = createDocBaseRevisionStore();
+      const contentSequenceAllocator = jest.fn().mockRejectedValue(new Error('allocator boom'));
+      const flow = createSaveFlow({
+        models,
+        contributorsTracker: createContributorsTracker(),
+        pageEventPublisher: makeMockPublisher(),
+        docBaseRevisions,
+        contentSequenceAllocator,
+      });
+      const { pageId } = await fixtures.seedPage();
+      const user = await seedUser(models);
+      const doc = new Y.Doc();
+      doc.getText(CONTENT_FIELD).insert(0, 'body');
+
+      const result = await flow.executeSave({ pageId, userId: user._id.toString(), document: doc });
+
+      expect(result.revisionId).toMatch(/^[0-9a-f]{24}$/);
+      expect(contentSequenceAllocator).toHaveBeenCalledTimes(1);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const Page = models.Page as any;
+      const page = await Page.findById(pageId).exec();
+      expect(page.currentRevision.toString()).toBe(result.revisionId);
+    });
+
+    test('is called only AFTER the doc base has advanced to the new revision, never before — AC-18', async () => {
+      // §D-7's ordering requirement, verified directly rather than by
+      // reproducing the real-time race it protects against: placing the
+      // allocator call BEFORE `docBaseRevisions.set(...)` would stall a
+      // concurrent same-process coalescing retry (`tryCoalesce`'s
+      // condition 1, which reads `docBaseRevisions.get(pageId)`) for as
+      // long as the allocator takes, turning a legitimate co-edit save-ok
+      // into a spurious CONFLICT. Observing the doc base's value AT THE
+      // MOMENT the allocator is invoked pins the ordering directly.
+      const docBaseRevisions = createDocBaseRevisionStore();
+      const observedDocBaseAtCall: Array<string | null | undefined> = [];
+      const contentSequenceAllocator = jest.fn(async (pageId: Types.ObjectId) => {
+        observedDocBaseAtCall.push(docBaseRevisions.get(pageId.toString()));
+      });
+      const flow = createSaveFlow({
+        models,
+        contributorsTracker: createContributorsTracker(),
+        pageEventPublisher: makeMockPublisher(),
+        docBaseRevisions,
+        contentSequenceAllocator,
+      });
+      const { pageId } = await fixtures.seedPage();
+      const user = await seedUser(models);
+      const doc = new Y.Doc();
+      doc.getText(CONTENT_FIELD).insert(0, 'body');
+
+      const result = await flow.executeSave({ pageId, userId: user._id.toString(), document: doc });
+
+      expect(observedDocBaseAtCall).toEqual([result.revisionId]);
+    });
+
+    test('a same-process coalescing save resolves save-ok WHILE the winner’s allocator call is still pending — AC-18', async () => {
+      // The scenario §D-7's ordering exists to protect: a same-process
+      // co-edit (save B) loses its OWN pointer CAS against a same-process
+      // winner (save A) that landed first, and must coalesce onto A's
+      // revision via `tryCoalesce`'s condition 1 (`docBaseRevisions`
+      // already advanced to the live pointer). If the allocator ran BEFORE
+      // `docBaseRevisions.set(...)` (the ordering bug §D-7 forbids), B's
+      // coalesce check would see a STALE doc base while A's allocator is
+      // still pending, and B would false-CONFLICT instead of resolving.
+      //
+      // Save B starts FIRST (so its own early doc-base check passes against
+      // a genuinely blank page, and its `docBaseFilterValue` — captured at
+      // its own step-2 Page read — is `null`), then is deterministically
+      // paused inside `Revision.prepareRevision` (AFTER its own early check,
+      // BEFORE its own pointer CAS) until save A has landed its pointer
+      // write, advanced the doc base, and started its (deliberately held
+      // open) allocator call. Releasing B then lets it attempt its pointer
+      // CAS with its now-stale `docBaseFilterValue`, which genuinely loses
+      // against A's already-advanced pointer — the same failure shape
+      // `tryCoalesce` exists to rescue.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const Revision = models.Revision as any;
+      const originalPrepareRevision = Revision.prepareRevision.bind(Revision);
+      let pauseNextPrepare = false;
+      let bPaused = false;
+      let releaseB: () => void = () => {};
+      const bPrepareGate = new Promise<void>((resolve) => {
+        releaseB = resolve;
+      });
+      Revision.prepareRevision = async (...args: unknown[]) => {
+        if (!pauseNextPrepare) {
+          return originalPrepareRevision(...args);
+        }
+        pauseNextPrepare = false;
+        const result = await originalPrepareRevision(...args);
+        bPaused = true;
+        await bPrepareGate;
+        bPaused = false;
+        return result;
+      };
+
+      const docBaseRevisions = createDocBaseRevisionStore();
+      let releaseAAllocator: () => void = () => {};
+      const aAllocatorGate = new Promise<void>((resolve) => {
+        releaseAAllocator = resolve;
+      });
+      const contentSequenceAllocator = jest.fn(async () => {
+        await aAllocatorGate;
+      });
+      const flow = createSaveFlow({
+        models,
+        contributorsTracker: createContributorsTracker(),
+        pageEventPublisher: makeMockPublisher(),
+        docBaseRevisions,
+        contentSequenceAllocator,
+      });
+
+      try {
+        const { pageId } = await fixtures.seedPage();
+        const user = await seedUser(models);
+
+        const docB = new Y.Doc();
+        docB.getText(CONTENT_FIELD).insert(0, 'racing shared body');
+        pauseNextPrepare = true;
+        const saveBPromise = flow.executeSave({ pageId, userId: user._id.toString(), document: docB });
+        await waitFor(() => bPaused);
+
+        const docA = new Y.Doc();
+        docA.getText(CONTENT_FIELD).insert(0, 'racing shared body');
+        const saveAPromise = flow.executeSave({ pageId, userId: user._id.toString(), document: docA });
+        await waitFor(() => contentSequenceAllocator.mock.calls.length > 0);
+
+        // Release B: it resumes with its STALE `docBaseFilterValue`, loses
+        // its own pointer CAS, and must coalesce onto A's already-advanced
+        // doc base — all while A's allocator call is still pending below.
+        releaseB();
+        const resultB = await saveBPromise;
+
+        expect(contentSequenceAllocator).toHaveBeenCalledTimes(1); // only A ever reached the allocator — B coalesced without it
+
+        releaseAAllocator();
+        const resultA = await saveAPromise;
+
+        expect(resultB.revisionId).toBe(resultA.revisionId);
+      } finally {
+        Revision.prepareRevision = originalPrepareRevision;
+      }
+    });
+  });
+
+  /**
    * RFC-0017 Phase 1 §4.1/AC-1..8 — the collab lifecycle epoch fold into
    * `executeSave`'s atomic pointer CAS. This is the correctness core: a
    * stale save must be rejected the instant a lifecycle transition
@@ -337,33 +612,6 @@ describe('createSaveFlow.executeSave', () => {
    * in one Jest file throws `OverwriteModelError`).
    */
   describe('RFC-0017 Phase 1 epoch CAS', () => {
-    /**
-     * Materialise a server doc via the REAL `onLoadDocument` hook so the
-     * epoch (and doc base) are recorded exactly the way production does —
-     * not hand-set on the stores, so these tests exercise the actual
-     * recording path too.
-     */
-    const materialise = async (
-      docBaseRevisions: ReturnType<typeof createDocBaseRevisionStore>,
-      docEpochRevisions: ReturnType<typeof createDocEpochStore>,
-      pageId: string,
-    ): Promise<Y.Doc> => {
-      const onLoadDocument = createOnLoadDocument({
-        models: { Page: models.Page, Revision: models.Revision, PageYjsUpdate: models.PageYjsUpdate },
-        docBaseRevisions,
-        docEpochRevisions,
-        invalidatedPages: createInvalidatedPagesStore(),
-      });
-      const doc = new Y.Doc();
-      await onLoadDocument({
-        documentName: pageId,
-        document: doc,
-        instance: { documents: new Map() },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any);
-      return doc;
-    };
-
     test('AC-1: a rename (currentRevision UNCHANGED, epoch advanced) rejects a stale save via the epoch predicate ALONE', async () => {
       const docBaseRevisions = createDocBaseRevisionStore();
       const docEpochRevisions = createDocEpochStore();

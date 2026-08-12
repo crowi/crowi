@@ -1,9 +1,13 @@
+import Debug from 'debug';
 import type { Types } from 'mongoose';
 import type Crowi from 'src/crowi';
 import { MigrationRunnerCore } from 'src/migration/runner';
 import type { ProgressReporter } from 'src/migration/types';
 import { STATUS_DELETED, STATUS_DEPRECATED, STATUS_PUBLISHED } from 'src/models/page';
 import type { UserDocument } from 'src/models/user';
+import { allocateContentSequence } from 'src/service/page-history/content-sequence';
+
+const debug = Debug('crowi:util:replace-url');
 
 /**
  * feature-url-replace-admin-cli — bulk in-body URL/host replacement.
@@ -247,6 +251,24 @@ async function quietRewrite(crowi: Crowi, pageId: string, from: string, to: stri
   page.yjsState = null;
   page.yjsCheckpointAt = null;
   await page.save();
+
+  // RFC-0021 §D-1/§D-8 (Phase 2a) — the only one of the 5 content-writer
+  // routes that reaches neither `Page.pushRevision` nor `Page.updatePage`,
+  // so it calls the allocator explicitly. Runs strictly after the pointer
+  // write above commits (§D-1). `updatedAt` / `lastUpdateUser` stay
+  // untouched (this function's own contract, unaffected — the allocator
+  // never writes pointer-adjacent fields, §D-4). Never allowed to turn a
+  // successful rewrite into a failed one (§D-6): the outcome is logged at
+  // `debug` (pageId/revisionId/reason only, per the spec's operator-output
+  // contract) and otherwise discarded either way.
+  try {
+    const outcome = await allocateContentSequence(crowi, page._id, newRevision._id);
+    if (!outcome.allocated) {
+      debug('quietRewrite: allocateContentSequence did not allocate for page %s revision %s: %s', pageId, newRevision._id, outcome.reason);
+    }
+  } catch (err) {
+    debug('quietRewrite: allocateContentSequence threw unexpectedly for page %s revision %s: %s', pageId, newRevision._id, (err as Error)?.message ?? err);
+  }
 
   // Evict only this page's embed render cache, directly (not via pageEvent, so
   // no notification fan-out). Served markdown is already fresh via the new

@@ -1,5 +1,5 @@
 import { Types } from 'mongoose';
-import type { PendingHistoryEntry } from 'src/models/page';
+import { type PendingHistoryEntry, STATUS_PUBLISHED } from 'src/models/page';
 import { crowi, Fixture } from 'src/test/setup';
 import { drainPendingHistoryEntry, materializePendingEntry } from './materialize';
 import { repairPendingEntries, scanUnsequencedRevisions } from './repair';
@@ -35,16 +35,39 @@ describe('service/page-history (RFC-0021 Phase 1, feature-page-history-phase1-mo
 
   /**
    * `scanUnsequencedRevisions` only visits Pages whose `historyTracking.state`
-   * is `ready`, and Phase 1 ships nothing that reaches that state: creation
-   * leaves a Page `untracked` precisely because Phase 1 allocates no sequence
-   * for its initial Revision (see the create hook's comment in
-   * `models/page.ts`). Phase 2's create command and backfill are what promote
-   * a Page. So the scan's own tests have to arrange the state they scan for.
+   * is `ready`, and — as of Phase 2a — `Page.createPage` itself now promotes to `ready` and
+   * sequences its own initial Revision via the allocator wired into
+   * `pushRevision`. These fixtures pre-date that (Phase 1) and specifically
+   * want a `ready` Page whose Revision has NOT been sequenced, to exercise
+   * `scanUnsequencedRevisions` in isolation from the allocator — construct
+   * that shape directly instead of going through `createPage`/`pushRevision`.
+   *
+   * `trackingStartedAt` is stamped to the seed Revision's OWN `createdAt`
+   * (not a later `new Date()`) so the seed Revision itself sits AT the
+   * Phase 2a tracking boundary (§D-5: `createdAt >= trackingStartedAt`),
+   * not just after it — the repair scan's boundary predicate is inclusive.
    */
+  // A bare Page with no Revision/historyTracking set up beyond the schema
+  // default (`untracked`) — the common starting point `createReadyPage`
+  // below and the below-boundary fixture (AC-19) both build on top of.
+  const createRawPage = (path) =>
+    Page.create({
+      path,
+      creator: user._id,
+      lastUpdateUser: user._id,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      redirectTo: null,
+      grant: Page.GRANT_PUBLIC,
+      status: STATUS_PUBLISHED,
+      grantedUsers: [user._id],
+    });
+
   const createReadyPage = async (path, body = 'v0') => {
-    const page = await Page.createPage(path, body, user, {});
-    await Page.updateOne({ _id: page._id }, { $set: { historyTracking: { state: 'ready', trackingStartedAt: new Date() } } });
-    return page;
+    const page = await createRawPage(path);
+    const revision = await Revision.create({ page: page._id, path, body, format: 'markdown', author: user._id });
+    await Page.updateOne({ _id: page._id }, { $set: { revision: revision._id, historyTracking: { state: 'ready', trackingStartedAt: revision.createdAt } } });
+    return Page.findById(page._id);
   };
 
   // `entryId` (RFC §5.5, revised — AC-5b) defaults to a fresh ObjectId when
@@ -765,7 +788,7 @@ describe('service/page-history (RFC-0021 Phase 1, feature-page-history-phase1-mo
       // `number`-typed report field.
       await Revision.collection.updateOne({ _id: r0._id }, { $set: { historySequence: secretValue } });
 
-      const result = await scanUnsequencedRevisions(crowi);
+      const result = await scanUnsequencedRevisions(crowi, { minAgeMs: 0 });
       expect(JSON.stringify(result.blocked)).not.toContain(secretValue);
       expect(JSON.stringify(result.repaired)).not.toContain(secretValue);
       const failure = result.failed.find((f) => f.pageId === String(page._id));
@@ -1082,22 +1105,31 @@ describe('service/page-history (RFC-0021 Phase 1, feature-page-history-phase1-mo
   describe('scanUnsequencedRevisions — repair (b): assign sequences to unsequenced Revisions on ready Pages (AC-7)', () => {
     test('assigns sequences in createdAt, _id order and reports each assignment', async () => {
       const page = await createReadyPage('/repair/unsequenced', 'v0');
-      const base = Date.now();
-      // The initial revision from createPage has no historySequence either
-      // — Phase 1 ships no writer that assigns one. Two more, explicitly
-      // spaced createdAt values so ordering is deterministic regardless of
-      // real wall-clock timing. `r0` is fetched by query (not via
-      // `page.revision`, which DC-5's own doc comments warn can be a live
-      // Revision Document whose `.toString()` is Mongoose's debug inspect
-      // override, not the id string).
+      // Phase 2a — the scan's
+      // §D-5 boundary now also requires `createdAt <= now` (minAgeMs), so
+      // the deterministic-ordering offsets below (originally pushed into
+      // the FUTURE relative to "now" purely to beat real wall-clock
+      // jitter) must instead be anchored safely in the PAST. Backdate the
+      // seed revision `createReadyPage` built (and the Page's tracking
+      // boundary, which must stay <= it) to a fixed anchor, then space r1/r2
+      // forward from there — still ordered, still nowhere near "now".
+      const anchor = Date.now() - 3_600_000; // 1 hour ago
+      // The seed revision `createReadyPage` built has no historySequence
+      // (it bypasses the allocator on purpose — see that helper's doc
+      // comment). `r0` is fetched by query (not via `page.revision`, which
+      // DC-5's own doc comments warn can be a live Revision Document whose
+      // `.toString()` is Mongoose's debug inspect override, not the id
+      // string).
       const r0 = await Revision.findOne({ page: page._id }).sort({ createdAt: 1 }).exec();
+      await Revision.updateOne({ _id: r0._id }, { $set: { createdAt: new Date(anchor) } });
+      await Page.updateOne({ _id: page._id }, { $set: { 'historyTracking.trackingStartedAt': new Date(anchor) } });
       const r1 = await Revision.create({
         page: page._id,
         path: page.path,
         body: 'v1',
         format: 'markdown',
         author: user._id,
-        createdAt: new Date(base + 10_000),
+        createdAt: new Date(anchor + 10_000),
       });
       const r2 = await Revision.create({
         page: page._id,
@@ -1105,10 +1137,10 @@ describe('service/page-history (RFC-0021 Phase 1, feature-page-history-phase1-mo
         body: 'v2',
         format: 'markdown',
         author: user._id,
-        createdAt: new Date(base + 20_000),
+        createdAt: new Date(anchor + 20_000),
       });
 
-      const result = await scanUnsequencedRevisions(crowi);
+      const result = await scanUnsequencedRevisions(crowi, { minAgeMs: 0 });
       const thisPage = result.repaired.filter((r) => r.pageId.equals(page._id)).sort((a, b) => a.assignedSequence - b.assignedSequence);
 
       expect(thisPage.map((r) => r.revisionId.toString())).toEqual([r0._id.toString(), r1._id.toString(), r2._id.toString()]);
@@ -1126,10 +1158,10 @@ describe('service/page-history (RFC-0021 Phase 1, feature-page-history-phase1-mo
 
     test('a second scan pass over an already-repaired Page assigns nothing further', async () => {
       const page = await createReadyPage('/repair/unsequenced-idempotent', 'v0');
-      const first = await scanUnsequencedRevisions(crowi);
+      const first = await scanUnsequencedRevisions(crowi, { minAgeMs: 0 });
       expect(first.repaired.some((r) => r.pageId.equals(page._id))).toBe(true);
 
-      const second = await scanUnsequencedRevisions(crowi);
+      const second = await scanUnsequencedRevisions(crowi, { minAgeMs: 0 });
       expect(second.repaired.some((r) => r.pageId.equals(page._id))).toBe(false);
     });
 
@@ -1137,7 +1169,7 @@ describe('service/page-history (RFC-0021 Phase 1, feature-page-history-phase1-mo
       const page = await createReadyPage('/repair/untracked-not-visited', 'v0');
       await Page.updateOne({ _id: page._id }, { $unset: { historyTracking: '' } });
 
-      const result = await scanUnsequencedRevisions(crowi);
+      const result = await scanUnsequencedRevisions(crowi, { minAgeMs: 0 });
       expect(result.repaired.some((r) => r.pageId.equals(page._id))).toBe(false);
     });
 
@@ -1151,7 +1183,7 @@ describe('service/page-history (RFC-0021 Phase 1, feature-page-history-phase1-mo
       // queries (`$ne: null` / `null`) had the same gap.
       await Revision.collection.updateOne({ _id: r0._id }, { $set: { historySequence: null } });
 
-      const result = await scanUnsequencedRevisions(crowi);
+      const result = await scanUnsequencedRevisions(crowi, { minAgeMs: 0 });
       const thisPage = result.repaired.filter((r) => r.pageId.equals(page._id));
       expect(thisPage.map((r) => r.revisionId.toString())).toEqual([r0._id.toString()]);
       expect(thisPage[0].assignedSequence).toBe(1);
@@ -1167,7 +1199,7 @@ describe('service/page-history (RFC-0021 Phase 1, feature-page-history-phase1-mo
       await Revision.collection.updateOne({ _id: r0._id }, { $set: { historySequence: null } });
       await Revision.collection.updateOne({ _id: r1._id }, { $set: { historySequence: null } });
 
-      const result = await scanUnsequencedRevisions(crowi);
+      const result = await scanUnsequencedRevisions(crowi, { minAgeMs: 0 });
       expect(result.blocked.some((b) => b.pageId.equals(page._id))).toBe(false);
       const thisPage = result.repaired.filter((r) => r.pageId.equals(page._id));
       expect(thisPage.map((r) => r.revisionId.toString()).sort()).toEqual([r0._id.toString(), r1._id.toString()].sort());
@@ -1182,7 +1214,7 @@ describe('service/page-history (RFC-0021 Phase 1, feature-page-history-phase1-mo
       const malformed = { entryId: new Types.ObjectId(), type: 'content_revision', revisionId: new Types.ObjectId(), sequence: 1, occurredAt: new Date() };
       await Page.updateOne({ _id: page._id }, { $set: { pendingHistoryEntry: malformed } });
 
-      const result = await scanUnsequencedRevisions(crowi);
+      const result = await scanUnsequencedRevisions(crowi, { minAgeMs: 0 });
       const failure = result.failed.find((f) => f.pageId === String(page._id));
       expect(failure).toBeDefined();
       expect(failure?.revisionId).toBe(String(initialRevision._id));
@@ -1226,7 +1258,7 @@ describe('service/page-history (RFC-0021 Phase 1, feature-page-history-phase1-mo
         return query;
       });
 
-      const result = await scanUnsequencedRevisions(crowi);
+      const result = await scanUnsequencedRevisions(crowi, { minAgeMs: 0 });
       spy.mockRestore();
 
       const failure = result.failed.find((f) => f.pageId === String(page._id));
@@ -1269,7 +1301,7 @@ describe('service/page-history (RFC-0021 Phase 1, feature-page-history-phase1-mo
         createdAt: new Date(),
       });
 
-      const result = await scanUnsequencedRevisions(crowi);
+      const result = await scanUnsequencedRevisions(crowi, { minAgeMs: 0 });
       const blockedEntry = result.blocked.find((b) => b.pageId.equals(page._id));
       expect(blockedEntry).toBeDefined();
       expect(blockedEntry?.duplicateSequence).toBe(5);
@@ -1305,7 +1337,7 @@ describe('service/page-history (RFC-0021 Phase 1, feature-page-history-phase1-mo
         payload: { path: page.path, grant: Page.GRANT_PUBLIC, status: 'published' },
       });
 
-      const result = await scanUnsequencedRevisions(crowi);
+      const result = await scanUnsequencedRevisions(crowi, { minAgeMs: 0 });
       const blockedEntry = result.blocked.find((b) => b.pageId.equals(page._id));
       expect(blockedEntry).toBeDefined();
       expect(blockedEntry?.duplicateSequence).toBe(2);
@@ -1335,7 +1367,7 @@ describe('service/page-history (RFC-0021 Phase 1, feature-page-history-phase1-mo
         createdAt: new Date(),
       });
 
-      const result = await scanUnsequencedRevisions(crowi);
+      const result = await scanUnsequencedRevisions(crowi, { minAgeMs: 0 });
       const blockedEntry = result.blocked.find((b) => b.pageId.equals(page._id));
       expect(blockedEntry).toBeDefined();
       expect(blockedEntry?.duplicateSequence).toBe(1);
@@ -1351,13 +1383,117 @@ describe('service/page-history (RFC-0021 Phase 1, feature-page-history-phase1-mo
     });
   });
 
+  describe('scanUnsequencedRevisions — grace window and tracking boundary (§D-5, AC-11/AC-12/AC-19)', () => {
+    test('AC-12: an unassigned Revision younger than minAgeMs is not scanned', async () => {
+      const page = await createReadyPage('/repair/grace-window-too-young', 'v0');
+      const tooYoung = await Revision.create({ page: page._id, path: page.path, body: 'young', format: 'markdown', author: user._id, createdAt: new Date() });
+
+      const result = await scanUnsequencedRevisions(crowi, { minAgeMs: 600_000 });
+
+      expect(result.repaired.some((r) => r.revisionId.equals(tooYoung._id))).toBe(false);
+      const reloaded = await Revision.findById(tooYoung._id).lean();
+      expect(reloaded.historySequence).toBeUndefined();
+    });
+
+    test('AC-11: a Revision that has aged past minAgeMs is picked up and assigned a sequence', async () => {
+      const page = await createReadyPage('/repair/grace-window-aged-out', 'v0');
+      // Backdate the tracking boundary so the aged Revision below sits ABOVE
+      // it — otherwise the §D-5 boundary predicate (not the grace window)
+      // would be what excludes it, defeating the point of this test.
+      await Page.updateOne({ _id: page._id }, { $set: { 'historyTracking.trackingStartedAt': new Date(Date.now() - 800_000) } });
+      const aged = await Revision.create({
+        page: page._id,
+        path: page.path,
+        body: 'aged',
+        format: 'markdown',
+        author: user._id,
+        createdAt: new Date(Date.now() - 700_000), // older than the default 600_000ms window
+      });
+
+      const result = await scanUnsequencedRevisions(crowi, { minAgeMs: 600_000 });
+
+      const repaired = result.repaired.find((r) => r.revisionId.equals(aged._id));
+      expect(repaired).toBeDefined();
+      expect(repaired?.assignedSequence).toBe(1);
+      const reloaded = await Revision.findById(aged._id).lean();
+      expect(reloaded.historySequence).toBe(1);
+    });
+
+    test('AC-19: a Revision created BEFORE trackingStartedAt is never scanned, even once it ages past minAgeMs', async () => {
+      // A Page promoted to `ready` at `trackingStartedAt`, with one Revision
+      // that predates the promotion (§D-9: the boundary between history and
+      // the pre-tracking past) — the same shape a real allocator promotion
+      // leaves the OLD Revisions on an existing untracked Page in.
+      const page = await createRawPage('/repair/grace-window-below-boundary');
+      const belowBoundary = await Revision.create({
+        page: page._id,
+        path: page.path,
+        body: 'below-boundary',
+        format: 'markdown',
+        author: user._id,
+        createdAt: new Date(Date.now() - 800_000), // old enough to clear minAgeMs
+      });
+      const trackingStartedAt = new Date(); // promoted AFTER the old Revision was written
+      await Page.updateOne({ _id: page._id }, { $set: { revision: belowBoundary._id, historyTracking: { state: 'ready', trackingStartedAt } } });
+
+      const result = await scanUnsequencedRevisions(crowi, { minAgeMs: 600_000 });
+
+      expect(result.repaired.some((r) => r.pageId.equals(page._id))).toBe(false);
+      const reloaded = await Revision.findById(belowBoundary._id).lean();
+      expect(reloaded.historySequence).toBeUndefined();
+    });
+
+    test('a ready Page with no trackingStartedAt (legacy/test-only) imposes no lower bound', async () => {
+      const page = await createReadyPage('/repair/grace-window-no-tracking-started-at', 'v0');
+      await Page.updateOne({ _id: page._id }, { $unset: { 'historyTracking.trackingStartedAt': '' } });
+      const aged = await Revision.create({
+        page: page._id,
+        path: page.path,
+        body: 'aged-no-boundary',
+        format: 'markdown',
+        author: user._id,
+        createdAt: new Date(Date.now() - 700_000),
+      });
+
+      const result = await scanUnsequencedRevisions(crowi, { minAgeMs: 600_000 });
+
+      expect(result.repaired.some((r) => r.revisionId.equals(aged._id))).toBe(true);
+    });
+  });
+
   describe('scanUnsequencedRevisions — parallel-scan race safety (codex review attempt 3, AC-6/7)', () => {
     test('two concurrent scans over the same Page never duplicate a sequence or leave an orphaned outbox marker, and a follow-up scan converges', async () => {
       const page = await createReadyPage('/repair/parallel-scan-race', 'v0');
-      const base = Date.now();
-      const r1 = await Revision.create({ page: page._id, path: page.path, body: 'r1', format: 'markdown', author: user._id, createdAt: new Date(base + 1000) });
-      const r2 = await Revision.create({ page: page._id, path: page.path, body: 'r2', format: 'markdown', author: user._id, createdAt: new Date(base + 2000) });
-      const r3 = await Revision.create({ page: page._id, path: page.path, body: 'r3', format: 'markdown', author: user._id, createdAt: new Date(base + 3000) });
+      // Phase 2a — anchored safely in
+      // the past (not the future) so the §D-5 `createdAt <= now` bound
+      // (minAgeMs) never excludes these on a slow CI run; see the
+      // `unsequenced` test above for the full rationale.
+      const anchor = Date.now() - 3_600_000;
+      await Page.updateOne({ _id: page._id }, { $set: { 'historyTracking.trackingStartedAt': new Date(anchor) } });
+      const r1 = await Revision.create({
+        page: page._id,
+        path: page.path,
+        body: 'r1',
+        format: 'markdown',
+        author: user._id,
+        createdAt: new Date(anchor + 1000),
+      });
+      const r2 = await Revision.create({
+        page: page._id,
+        path: page.path,
+        body: 'r2',
+        format: 'markdown',
+        author: user._id,
+        createdAt: new Date(anchor + 2000),
+      });
+      const r3 = await Revision.create({
+        page: page._id,
+        path: page.path,
+        body: 'r3',
+        format: 'markdown',
+        author: user._id,
+        createdAt: new Date(anchor + 3000),
+      });
 
       // Genuine concurrency: both calls race against the SAME live MongoDB
       // connection via Node's event-loop interleaving of their awaits.
@@ -1365,7 +1501,7 @@ describe('service/page-history (RFC-0021 Phase 1, feature-page-history-phase1-mo
       // behavior for a claim this call loses within MAX_CLAIM_ATTEMPTS — so
       // this assertion set checks INVARIANTS (no crash, no duplicate, no
       // stuck outbox), not "everything got sequenced by these two calls".
-      const [resultA, resultB] = await Promise.all([scanUnsequencedRevisions(crowi), scanUnsequencedRevisions(crowi)]);
+      const [resultA, resultB] = await Promise.all([scanUnsequencedRevisions(crowi, { minAgeMs: 0 }), scanUnsequencedRevisions(crowi, { minAgeMs: 0 })]);
 
       expect(resultA.failed.filter((f) => f.pageId === String(page._id))).toEqual([]);
       expect(resultB.failed.filter((f) => f.pageId === String(page._id))).toEqual([]);
@@ -1381,7 +1517,7 @@ describe('service/page-history (RFC-0021 Phase 1, feature-page-history-phase1-mo
 
       // A follow-up scan must converge: anything neither racing call
       // resolved gets picked up now, with no duplicates.
-      const followUp = await scanUnsequencedRevisions(crowi);
+      const followUp = await scanUnsequencedRevisions(crowi, { minAgeMs: 0 });
       expect(followUp.blocked.some((b) => b.pageId.equals(page._id))).toBe(false);
 
       const finalRevisions = await Revision.find({ _id: { $in: [r1._id, r2._id, r3._id] } })
@@ -1433,7 +1569,7 @@ describe('service/page-history (RFC-0021 Phase 1, feature-page-history-phase1-mo
 
       let result: Awaited<ReturnType<typeof scanUnsequencedRevisions>>;
       try {
-        result = await scanUnsequencedRevisions(crowi);
+        result = await scanUnsequencedRevisions(crowi, { minAgeMs: 0 });
       } finally {
         spy.mockRestore();
       }
@@ -1518,7 +1654,7 @@ describe('service/page-history (RFC-0021 Phase 1, feature-page-history-phase1-mo
     test('a batchSize smaller than the ready-Page set still scans every Page (multiple internal batches)', async () => {
       const pages = await Promise.all(Array.from({ length: 5 }, (_, i) => createReadyPage(`/repair/scan-batching-multi-${i}`, 'v0')));
 
-      const result = await scanUnsequencedRevisions(crowi, { batchSize: 2 });
+      const result = await scanUnsequencedRevisions(crowi, { minAgeMs: 0, batchSize: 2 });
 
       const repairedPageIds = result.repaired.map((r) => String(r.pageId));
       for (const page of pages) {
@@ -1530,7 +1666,7 @@ describe('service/page-history (RFC-0021 Phase 1, feature-page-history-phase1-mo
       const earlier = await createReadyPage('/repair/scan-batching-resume-earlier', 'v0');
       const later = await createReadyPage('/repair/scan-batching-resume-later', 'v0');
 
-      const result = await scanUnsequencedRevisions(crowi, { resumeAfterId: earlier._id });
+      const result = await scanUnsequencedRevisions(crowi, { minAgeMs: 0, resumeAfterId: earlier._id });
 
       const repairedPageIds = result.repaired.map((r) => String(r.pageId));
       expect(repairedPageIds).not.toContain(String(earlier._id));
@@ -1541,9 +1677,9 @@ describe('service/page-history (RFC-0021 Phase 1, feature-page-history-phase1-mo
     });
 
     test('a non-positive batchSize is rejected before any work runs (advisory, codex review attempt 2, round 6)', async () => {
-      await expect(scanUnsequencedRevisions(crowi, { batchSize: 0 })).rejects.toThrow(/batchSize must be a positive integer/);
-      await expect(scanUnsequencedRevisions(crowi, { batchSize: -1 })).rejects.toThrow(/batchSize must be a positive integer/);
-      await expect(scanUnsequencedRevisions(crowi, { batchSize: 1.5 })).rejects.toThrow(/batchSize must be a positive integer/);
+      await expect(scanUnsequencedRevisions(crowi, { minAgeMs: 0, batchSize: 0 })).rejects.toThrow(/batchSize must be a positive integer/);
+      await expect(scanUnsequencedRevisions(crowi, { minAgeMs: 0, batchSize: -1 })).rejects.toThrow(/batchSize must be a positive integer/);
+      await expect(scanUnsequencedRevisions(crowi, { minAgeMs: 0, batchSize: 1.5 })).rejects.toThrow(/batchSize must be a positive integer/);
     });
   });
 });

@@ -12,7 +12,7 @@ import { createOnLoadDocument } from './hooks/on-load-document';
 import { createOnStateless } from './hooks/on-stateless';
 import { createOnStoreDocument } from './hooks/on-store-document';
 import { createInvalidatedPagesStore, createPageInvalidator, type PageInvalidator } from './invalidation';
-import type { CollabModels } from './models';
+import type { CollabContentSequenceAllocator, CollabModels } from './models';
 import { noopPresenceHooks, type PresenceHooks } from './presence';
 import { wrapOnAuthenticateWithPresence, wrapOnDisconnectWithPresence } from './presence-wiring';
 import { createSaveFlow, type SaveFlow } from './save-flow';
@@ -105,6 +105,13 @@ export interface CreateCollabServerOptions {
    * inject a synchronous scheduler.
    */
   invalidateSchedule?: (fn: () => void, ms: number) => void;
+  /**
+   * RFC-0021 §D-7 (Phase 2a) — threaded straight through to
+   * `createSaveFlow`. The api host process (`attachCollabServer`) injects
+   * the real allocator; unset means collab never allocates a content
+   * sequence (existing tests / stub configs run unchanged).
+   */
+  contentSequenceAllocator?: CollabContentSequenceAllocator;
 }
 
 /**
@@ -164,6 +171,7 @@ export function createCollabServer(opts: CreateCollabServerOptions): CollabEngin
       pageEventPublisher,
       docBaseRevisions,
       docEpochRevisions,
+      contentSequenceAllocator: opts.contentSequenceAllocator,
     });
 
   const compactor = createCompactor({

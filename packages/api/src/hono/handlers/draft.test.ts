@@ -95,6 +95,25 @@ describe('Routes /api/pages/drafts (Hono draft)', () => {
       expect(revision?.body).toBe('# seeded content');
     });
 
+    // Phase 2a, AC-2 — draft create routes through `Page.pushRevision`
+    // (`draft.ts:160-163`) same as a normal page create, so it gets the
+    // same allocator promotion.
+    it('becomes ready with historySequence 1, and its initial Revision is sequence 1 (AC-2)', async () => {
+      const path = `${PATH_PREFIX}history-ready`;
+      const res = await request(app).post('/api/pages/drafts').set(authHeaders(aliceToken)).send({ path });
+      expect(res.status).toBe(201);
+
+      const Page = crowi.model('Page');
+      const Revision = crowi.model('Revision');
+      const page = await Page.findById(res.body.pageId);
+      expect(page?.historyTracking.state).toBe('ready');
+      expect(page?.historySequence).toBe(1);
+      expect(page?.pendingHistoryEntry).toBeUndefined();
+
+      const revision = await Revision.findById(page?.revision);
+      expect(revision?.historySequence).toBe(1);
+    });
+
     it('rejects an uncreatable path with 400 invalid_path', async () => {
       // `/admin/*` is on the forbidden list in Page.isCreatableName.
       const res = await request(app).post('/api/pages/drafts').set(authHeaders(aliceToken)).send({ path: '/admin/secret' });
@@ -176,6 +195,38 @@ describe('Routes /api/pages/drafts (Hono draft)', () => {
           expect(res.body.error).toBe('invalid_path');
 
           expect(await Page.findOne({ path })).toBeNull();
+        } finally {
+          spy.mockRestore();
+        }
+      });
+
+      it('does not delete a Page created by a different (competing) request when compensating for its own orphan (AC-15)', async () => {
+        // A different, successful request's Page — created BEFORE the
+        // failing request's spy below is installed, so its OWN
+        // `pushRevision` call runs the real implementation.
+        const competingPath = `${PATH_PREFIX}orphan-push-revision-competitor`;
+        const competingRes = await request(app).post('/api/pages/drafts').set(authHeaders(bobToken)).send({ path: competingPath });
+        expect(competingRes.status).toBe(201);
+        const competingPageId = competingRes.body.pageId as string;
+
+        const path = `${PATH_PREFIX}orphan-push-revision-own-failure`;
+        const Page = crowi.model('Page');
+        const spy = jest.spyOn(Page, 'pushRevision').mockRejectedValueOnce(new Error('pushRevision boom'));
+
+        try {
+          const res = await request(app).post('/api/pages/drafts').set(authHeaders(aliceToken)).send({ path });
+          expect(res.status).toBe(400);
+          expect(res.body.error).toBe('invalid_path');
+
+          // The failing request's own orphan is gone...
+          expect(await Page.findOne({ path })).toBeNull();
+          // ...but the unrelated, already-successful competing Page is
+          // untouched — `createDraft`'s compensating delete is scoped by
+          // `_id` (`newPage._id`), never by `path` or any broader filter
+          // that could reach another request's Page.
+          const competingPage = await Page.findById(competingPageId);
+          expect(competingPage).not.toBeNull();
+          expect(competingPage?.path).toBe(competingPath);
         } finally {
           spy.mockRestore();
         }
