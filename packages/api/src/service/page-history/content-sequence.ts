@@ -92,10 +92,14 @@ export async function allocateContentSequence(
   revisionId: Types.ObjectId,
   options?: { maxClaimAttempts?: number; maxDrainAssists?: number },
 ): Promise<ContentSequenceOutcome> {
-  const maxClaimAttempts = options?.maxClaimAttempts ?? DEFAULT_MAX_CLAIM_ATTEMPTS;
-  const maxDrainAssists = options?.maxDrainAssists ?? DEFAULT_MAX_DRAIN_ASSISTS;
-
   try {
+    // Resolved INSIDE the try: reading these off `options` is the only work
+    // that could throw before the loop, and a throwing getter/Proxy there
+    // would otherwise reject — which the callers now rely on never happening
+    // (`models/page.ts` and `util/replace-url.ts` dropped their catches).
+    const maxClaimAttempts = options?.maxClaimAttempts ?? DEFAULT_MAX_CLAIM_ATTEMPTS;
+    const maxDrainAssists = options?.maxDrainAssists ?? DEFAULT_MAX_DRAIN_ASSISTS;
+
     const Page = crowi.model('Page');
 
     let claimAttemptsUsed = 0;

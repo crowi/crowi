@@ -499,6 +499,24 @@ describe('service/page-history/content-sequence — allocateContentSequence (RFC
 
       expect(outcome).toEqual({ allocated: false, reason: 'contended' });
     });
+
+    test('a throwing accessor on the options object does not reject either', async () => {
+      // The two content-save call sites (`models/page.ts`, `util/replace-url.ts`)
+      // deliberately have no try/catch around this function, so reading the
+      // options must be inside its own guard like everything else — otherwise a
+      // caller-supplied getter could reject an already-committed save.
+      const pageId = await createReadyPage('/content-sequence/throwing-options', 0);
+      const revision = await createRevision(pageId, 'v');
+      const hostileOptions = Object.defineProperty({}, 'maxClaimAttempts', {
+        get() {
+          throw new Error('injected option failure');
+        },
+      }) as { maxClaimAttempts?: number };
+
+      const outcome = await allocateContentSequence(crowi, pageId, revision._id, hostileOptions);
+
+      expect(outcome).toEqual({ allocated: false, reason: 'contended' });
+    });
   });
 
   describe('AC-7: no PageHistoryEvent / PageHistoryOperation rows are ever created', () => {

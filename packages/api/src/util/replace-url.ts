@@ -260,14 +260,11 @@ async function quietRewrite(crowi: Crowi, pageId: string, from: string, to: stri
   // never writes pointer-adjacent fields, §D-4). Never allowed to turn a
   // successful rewrite into a failed one (§D-6): the outcome is logged at
   // `debug` (pageId/revisionId/reason only, per the spec's operator-output
-  // contract) and otherwise discarded either way.
-  try {
-    const outcome = await allocateContentSequence(crowi, page._id, newRevision._id);
-    if (!outcome.allocated) {
-      debug('quietRewrite: allocateContentSequence did not allocate for page %s revision %s: %s', pageId, newRevision._id, outcome.reason);
-    }
-  } catch (err) {
-    debug('quietRewrite: allocateContentSequence threw unexpectedly for page %s revision %s: %s', pageId, newRevision._id, (err as Error)?.message ?? err);
+  // contract) and otherwise discarded either way. No try/catch here on
+  // purpose: `allocateContentSequence` never rejects.
+  const outcome = await allocateContentSequence(crowi, page._id, newRevision._id);
+  if (!outcome.allocated) {
+    debug('quietRewrite: allocateContentSequence did not allocate for page %s revision %s: %s', pageId, newRevision._id, outcome.reason);
   }
 
   // Evict only this page's embed render cache, directly (not via pageEvent, so

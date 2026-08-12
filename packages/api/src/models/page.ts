@@ -1926,19 +1926,13 @@ export default (crowi: Crowi) => {
     // turn a successful content save into a failed one (§D-6): the outcome
     // is logged at `debug` (pageId/revisionId/reason only, per the spec's
     // operator-output contract) and recovery is left to
-    // `service/page-history/repair.ts` either way.
-    try {
-      const outcome = await allocateContentSequence(crowi, pageData._id, newRevision._id);
-      if (!outcome.allocated) {
-        debug('pushRevision: allocateContentSequence did not allocate for page %s revision %s: %s', pageData._id, newRevision._id, outcome.reason);
-      }
-    } catch (err) {
-      debug(
-        'pushRevision: allocateContentSequence threw unexpectedly for page %s revision %s: %s',
-        pageData._id,
-        newRevision._id,
-        (err as Error)?.message ?? err,
-      );
+    // `service/page-history/repair.ts` either way. No try/catch here on
+    // purpose: `allocateContentSequence` collapses every internal failure
+    // to `{ allocated: false, reason: 'contended' }` and never rejects, so
+    // a catch around it would be unreachable.
+    const outcome = await allocateContentSequence(crowi, pageData._id, newRevision._id);
+    if (!outcome.allocated) {
+      debug('pushRevision: allocateContentSequence did not allocate for page %s revision %s: %s', pageData._id, newRevision._id, outcome.reason);
     }
 
     return data;
