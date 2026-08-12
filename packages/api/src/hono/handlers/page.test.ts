@@ -347,6 +347,47 @@ describe('Routes /api/pages/grant (Hono setPageGrant)', () => {
       const pageDoc = await Page.findById(pageId);
       expect(pageDoc.grant).toBe(4);
     });
+
+    // RFC-0021 Phase 2c-1 AC-2
+    it('setting the SAME grant still returns 200 with the unchanged response shape, and creates no history event', async () => {
+      const path = `${PATH_PREFIX}same-grant`;
+      const headers = authHeaders(accessToken);
+
+      const createRes = await request(app).post('/api/pages').set(headers).send({ path, body: '# initial' });
+      expect(createRes.status).toBe(200);
+      const pageId = createRes.body.page._id;
+      expect(createRes.body.page.grant).toBe(1);
+
+      const res = await request(app).put('/api/pages/grant').set(headers).send({ page_id: pageId, grant: 1 });
+      expect(res.status).toBe(200);
+      expect(res.body.page._id).toBe(pageId);
+      expect(res.body.page.grant).toBe(1);
+
+      const PageHistoryEvent = crowi.model('PageHistoryEvent');
+      expect(await PageHistoryEvent.countDocuments({ page: pageId })).toBe(0);
+    });
+
+    // RFC-0021 Phase 2c-1 AC-6
+    it('a jammed outbox makes the grant change fail with 400, and leaves the DB grant unchanged', async () => {
+      const path = `${PATH_PREFIX}jammed-outbox`;
+      const headers = authHeaders(accessToken);
+
+      const createRes = await request(app).post('/api/pages').set(headers).send({ path, body: '# initial' });
+      expect(createRes.status).toBe(200);
+      const pageId = createRes.body.page._id;
+
+      // A malformed `page_event` outbox entry (no `event`) — `materializePendingEntry`
+      // always throws on it, so the grant command's drain-assist budget is
+      // reliably exhausted.
+      await Page.updateOne({ _id: pageId }, { $set: { pendingHistoryEntry: { entryId: new Types.ObjectId(), type: 'page_event' } } });
+
+      const res = await request(app).put('/api/pages/grant').set(headers).send({ page_id: pageId, grant: 4 });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('PAGE_GRANT_UPDATE_FAILED');
+
+      const pageDoc = await Page.findById(pageId);
+      expect(pageDoc.grant).toBe(1);
+    });
   });
 });
 
