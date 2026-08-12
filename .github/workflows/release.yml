@@ -61,22 +61,26 @@ jobs:
       - name: Check publishable package metadata
         run: pnpm check:packages
 
-      # `--tag latest` is explicit because otherwise changesets picks the dist
-      # tag PER PACKAGE while in pre mode: a package whose every published
-      # version is an `alpha` prerelease goes to `latest`, and any package with
-      # even one version outside that (e.g. a `0.1.0-dev` published by hand to
-      # create the package before configuring its Trusted Publisher) is treated
-      # as already having had a regular release and goes to the pre tag
-      # instead. That split left `@crowi/plugin-slack` alone on `alpha` with its
-      # `latest` frozen at its first version, so `npm i @crowi/plugin-slack`
-      # installed months-old code while every sibling installed current. Naming
-      # the tag makes the whole workspace land in one place regardless of each
-      # package's publish history.
+      # Do NOT add `--tag` here while `.changeset/pre.json` has `mode: "pre"`:
+      # `changeset publish` rejects any explicit tag in pre mode outright
+      # ("Releasing under custom tag is not allowed in pre mode",
+      # `@changesets/cli@2.31.0`), before it reaches the per-package tag logic,
+      # so the whole release aborts — no publish, and the dist tag, aggregate
+      # release and Docker steps never run because `published` stays false.
+      #
+      # Which dist tag each package gets is therefore decided by changesets:
+      # in pre mode a package goes to the pre tag unless every one of its
+      # published versions is a prerelease carrying that same tag, in which
+      # case it goes to `latest`. Twenty of the twenty-one land on `latest`
+      # that way. `@crowi/plugin-slack` does not, because a hand-published
+      # `0.1.0-dev` predates its alphas, so its releases go to `alpha` and its
+      # `latest` has to be moved by hand after any release that publishes it
+      # (see operations/release-runbook.mdx). Leaving pre mode resolves it.
       - name: Create Release PR or Publish
         id: changesets
         uses: changesets/action@v1
         with:
-          publish: pnpm changeset publish --tag latest
+          publish: pnpm changeset publish
           version: pnpm changeset version
           commit: 'chore: version packages'
           title: 'chore: version packages'

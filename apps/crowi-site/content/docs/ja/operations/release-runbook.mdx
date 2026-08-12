@@ -134,6 +134,29 @@ OIDC publish の前提は次の組合せです（CI 設定済み・参考情報�
   publish が無かった（Version PR を作っただけの）run では image を build しません。
 </Callout>
 
+<Callout type="warn">
+  **alpha / beta の間、`@crowi/plugin-slack` だけは publish 後に `latest` を手で動かす必要があります。**
+
+  changesets は pre mode のとき、パッケージごとに dist tag を選びます。公開済みバージョンが
+  すべて pre tag（`alpha`）付きのプレリリースなら `latest` へ、1 つでもそれ以外があれば
+  「通常リリース済み」とみなして pre tag へ publish します。21 パッケージ中 20 個は前者ですが、
+  `@crowi/plugin-slack` には alpha より前に手動 publish された `0.1.0-dev` があるため後者に
+  分類され、**`latest` が初回公開版のまま止まります**。放置すると
+  `npm i @crowi/plugin-slack` が数か月前のコードを入れます。
+
+  このパッケージを含むリリースの後に:
+
+  ```bash
+  npm dist-tag add @crowi/plugin-slack@<今回のバージョン> latest
+  ```
+
+  **`publish` に `--tag` を足して回避することはできません** — pre mode では
+  `changeset publish` が明示 tag を拒否して exit 1 になり、publish 自体が走りません
+  （その先の製品版タグ・GitHub Release・Docker も全部止まります）。`0.1.0-dev` は
+  `@crowi/api` が公開 metadata に devDependency として持っているため unpublish もできず、
+  `npm deprecate` では判定が変わりません。**pre mode を抜ければ解消します。**
+</Callout>
+
 ## 製品版（distribution version）モデル
 
 Docker image は npm 各パッケージの版とは **独立した「Crowi ディストリビューション版」**
