@@ -157,6 +157,54 @@ describe('User', () => {
     });
   });
 
+  // feature-federated-admin-identity-management — the admin unlink route
+  // (DELETE /admin/users/:id/identities/:provider) issues a password for a
+  // passwordless account so it keeps a way to sign in after the identity is
+  // removed. A separate isPasswordSet() read followed by a plain write would
+  // let two concurrent unlinks both observe "no password" and both write a
+  // DIFFERENT one, leaving one response holding a value that is not what
+  // actually got stored (the review-flagged concurrent-unlink race).
+  describe('issuePasswordIfUnset (feature-federated-admin-identity-management)', () => {
+    test('issues a password for a user with none, and is a no-op for a user who already has one', async () => {
+      const user = new User();
+      user.email = `issue-pw-${Date.now().toString(36)}@example.com`;
+      user.status = User.STATUS_ACTIVE;
+      await user.save();
+      expect(user.password).toBeUndefined();
+
+      const first = await User.issuePasswordIfUnset(user._id);
+      expect(first.passwordIssued).toBe(true);
+      expect(typeof first.newPassword).toBe('string');
+      const reloaded = await User.findById(user._id).select('+password');
+      expect(reloaded.isPasswordValid(first.newPassword)).toBe(true);
+
+      const second = await User.issuePasswordIfUnset(user._id);
+      expect(second.passwordIssued).toBe(false);
+      expect(second.newPassword).toBeUndefined();
+      const stillReloaded = await User.findById(user._id).select('+password');
+      // The second (no-op) call must not have overwritten the first password.
+      expect(stillReloaded.isPasswordValid(first.newPassword)).toBe(true);
+    });
+
+    test('exactly one of two concurrent calls issues the password that ends up stored', async () => {
+      const user = new User();
+      user.email = `issue-pw-race-${Date.now().toString(36)}@example.com`;
+      user.status = User.STATUS_ACTIVE;
+      await user.save();
+
+      const [a, b] = await Promise.all([User.issuePasswordIfUnset(user._id), User.issuePasswordIfUnset(user._id)]);
+
+      const issued = [a, b].filter((r) => r.passwordIssued);
+      const notIssued = [a, b].filter((r) => !r.passwordIssued);
+      expect(issued.length).toBe(1);
+      expect(notIssued.length).toBe(1);
+      expect(notIssued[0].newPassword).toBeUndefined();
+
+      const reloaded = await User.findById(user._id).select('+password');
+      expect(reloaded.isPasswordValid(issued[0].newPassword)).toBe(true);
+    });
+  });
+
   describe('Username validation (feature-username-validation-contract)', () => {
     test('rejects a document save when username is set to a non-conforming value', async () => {
       const user = new User();

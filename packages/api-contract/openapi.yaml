@@ -4228,12 +4228,17 @@ components:
                   - 3
                   - 4
                   - 5
+              linkedProviders:
+                type: array
+                items:
+                  type: string
             required:
               - _id
               - username
               - name
               - email
               - createdAt
+              - linkedProviders
         pager:
           type: object
           properties:
@@ -4427,12 +4432,8 @@ components:
         name:
           type: string
           minLength: 1
-        email:
-          type: string
-          format: email
       required:
         - name
-        - email
     ResetPasswordResponse:
       type: object
       properties:
@@ -25287,12 +25288,17 @@ paths:
                             - 3
                             - 4
                             - 5
+                        linkedProviders:
+                          type: array
+                          items:
+                            type: string
                       required:
                         - _id
                         - username
                         - name
                         - email
                         - createdAt
+                        - linkedProviders
                   pager:
                     type: object
                     properties:
@@ -25730,7 +25736,9 @@ paths:
         - admin.users
       security:
         - bearerAuth: []
-      summary: Update a user's name and email
+      summary: >-
+        Update a user's name (email changes go through PUT
+        /admin/users/{id}/email)
       parameters:
         - schema:
             type: string
@@ -25746,12 +25754,8 @@ paths:
                 name:
                   type: string
                   minLength: 1
-                email:
-                  type: string
-                  format: email
               required:
                 - name
-                - email
       responses:
         '200':
           description: Updated user
@@ -25901,27 +25905,6 @@ paths:
                         type: string
                         enum:
                           - NOT_FOUND
-                      message:
-                        type: string
-                    required:
-                      - code
-                      - message
-                required:
-                  - error
-        '409':
-          description: Email already in use by another user
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: object
-                    properties:
-                      code:
-                        type: string
-                        enum:
-                          - CONFLICT
                       message:
                         type: string
                     required:
@@ -27488,7 +27471,47 @@ paths:
                 required:
                   - error
         '409':
-          description: Email already in use by another user
+          description: >-
+            Email already in use by another user, or locked by a linked
+            federated identity
+          content:
+            application/json:
+              schema:
+                anyOf:
+                  - type: object
+                    properties:
+                      error:
+                        type: object
+                        properties:
+                          code:
+                            type: string
+                            enum:
+                              - CONFLICT
+                          message:
+                            type: string
+                        required:
+                          - code
+                          - message
+                    required:
+                      - error
+                  - type: object
+                    properties:
+                      error:
+                        type: object
+                        properties:
+                          code:
+                            type: string
+                            enum:
+                              - EMAIL_LOCKED_BY_FEDERATED_IDENTITY
+                          message:
+                            type: string
+                        required:
+                          - code
+                          - message
+                    required:
+                      - error
+        '500':
+          description: Internal server error
           content:
             application/json:
               schema:
@@ -27500,7 +27523,215 @@ paths:
                       code:
                         type: string
                         enum:
-                          - CONFLICT
+                          - INTERNAL_ERROR
+                      message:
+                        type: string
+                        enum:
+                          - Internal server error
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+  /admin/users/{id}/identities/{provider}:
+    delete:
+      tags:
+        - admin.users
+      security:
+        - bearerAuth: []
+      summary: Unlink a user's federated identity for a provider (admin-initiated)
+      parameters:
+        - schema:
+            type: string
+          required: true
+          name: id
+          in: path
+        - schema:
+            type: string
+          required: true
+          name: provider
+          in: path
+      responses:
+        '200':
+          description: >-
+            Identity removed; passwordIssued/newPassword report whether a
+            password was generated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    type: object
+                    properties:
+                      _id:
+                        type: string
+                      id:
+                        type: string
+                      username:
+                        type: string
+                      name:
+                        type: string
+                      email:
+                        type: string
+                        format: email
+                      image:
+                        type:
+                          - string
+                          - 'null'
+                      introduction:
+                        type: string
+                      createdAt:
+                        type: string
+                      admin:
+                        type: boolean
+                      status:
+                        type: integer
+                        enum:
+                          - 1
+                          - 2
+                          - 3
+                          - 4
+                          - 5
+                    required:
+                      - _id
+                      - username
+                      - name
+                      - email
+                      - createdAt
+                  passwordIssued:
+                    type: boolean
+                  newPassword:
+                    type: string
+                required:
+                  - user
+                  - passwordIssued
+        '400':
+          description: Invalid id
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - VALIDATION_ERROR
+                      message:
+                        type: string
+                      details:
+                        type: object
+                        properties:
+                          fieldErrors:
+                            type: object
+                            additionalProperties:
+                              type: array
+                              items:
+                                type: string
+                          formErrors:
+                            type: array
+                            items:
+                              type: string
+                        required:
+                          - fieldErrors
+                          - formErrors
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - AUTHENTICATION_REQUIRED
+                      message:
+                        type: string
+                        enum:
+                          - Authentication is required
+                      redirectTo:
+                        type: string
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+        '403':
+          description: Admin permission required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - ADMIN_REQUIRED
+                      message:
+                        type: string
+                        enum:
+                          - Admin permission required
+                      redirectTo:
+                        type: string
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+        '404':
+          description: User not found, or the user has no identity for this provider
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - NOT_FOUND
+                          - NOT_LINKED
+                      message:
+                        type: string
+                    required:
+                      - code
+                      - message
+                required:
+                  - error
+        '409':
+          description: >-
+            Refused: the target is the operating admin themself, or password
+            auth is disabled instance-wide
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - CANNOT_UNLINK_SELF
+                          - PASSWORD_AUTH_DISABLED
                       message:
                         type: string
                     required:

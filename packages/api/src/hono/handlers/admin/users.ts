@@ -17,7 +17,9 @@ import { type InvitedUserResult, adminUsersRoutes } from '@crowi/api-contract';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import Debug from 'debug';
 
+import { removeIdentityAndJournal } from 'src/auth/auth-provider-linking';
 import type Crowi from 'src/crowi';
+import { isDisabledPasswordAuth } from 'src/models/config';
 import type { UserDocument, UserModel } from 'src/models/user';
 import { MAX_PAGE_LIST, createPager } from 'src/util/admin-pager';
 import { isDuplicateKeyError } from 'src/util/map-duplicate-key-error';
@@ -57,6 +59,24 @@ const notInvitedConflictBody = {
 } as const;
 const notInvitedResendConflictBody = {
   error: { code: 'CONFLICT' as const, message: 'Only invited (never-activated) users have a pending invite to resend' as const },
+} as const;
+const emailLockedByFederatedIdentityBody = {
+  error: {
+    code: 'EMAIL_LOCKED_BY_FEDERATED_IDENTITY' as const,
+    message: 'Email address is managed by a linked external account and cannot be changed here' as const,
+  },
+} as const;
+const cannotUnlinkSelfBody = {
+  error: { code: 'CANNOT_UNLINK_SELF' as const, message: 'An admin cannot unlink their own federated identity from here' as const },
+} as const;
+const passwordAuthDisabledUnlinkBody = {
+  error: {
+    code: 'PASSWORD_AUTH_DISABLED' as const,
+    message: 'Password sign-in is disabled on this instance, so this identity cannot be unlinked' as const,
+  },
+} as const;
+const notLinkedBody = {
+  error: { code: 'NOT_LINKED' as const, message: 'This user has no identity for that provider' as const },
 } as const;
 
 type LegacyInvitedUserRow = {
@@ -117,9 +137,28 @@ export const registerAdminUsersRoutes = <E extends OpenAPIHono<CrowiHonoBindings
         // mongoose-paginate-v2 renames total→totalDocs and pages→totalPages;
         // absorb the rename here so the AdminPager JSON contract is unchanged.
         const pager = createPager(result.totalDocs, result.page ?? page, result.totalPages, MAX_PAGE_LIST);
+
+        // One query for the whole page (never per-row) — `{userId, provider}`
+        // is an existing index. Issued unconditionally (even for an empty
+        // page) so "exactly one UserIdentity query per list call" stays
+        // literally true rather than "zero or one".
+        const UserIdentity = crowi.model('UserIdentity');
+        const userIds = result.docs.map((doc) => doc._id);
+        const identityRows = await UserIdentity.find({ userId: { $in: userIds } }).select('userId provider');
+        const providersByUserId = new Map<string, string[]>();
+        for (const row of identityRows) {
+          const key = row.userId.toString();
+          const providers = providersByUserId.get(key);
+          if (providers) providers.push(row.provider);
+          else providersByUserId.set(key, [row.provider]);
+        }
+
         return c.json(
           {
-            users: result.docs.map(toUserPublic),
+            users: result.docs.map((doc) => ({
+              ...toUserPublic(doc),
+              linkedProviders: providersByUserId.get(doc._id.toString()) ?? [],
+            })),
             pager,
           },
           200,
@@ -168,20 +207,16 @@ export const registerAdminUsersRoutes = <E extends OpenAPIHono<CrowiHonoBindings
       if (!isValidObjectId(id)) return c.json(invalidIdBody(id), 400);
 
       try {
-        const [user, duplicate] = (await Promise.all([User.findById(id).exec(), User.findUserByEmail(body.email)])) as [
-          UserDocument | null,
-          UserDocument | null,
-        ];
+        const user = (await User.findById(id).exec()) as UserDocument | null;
         if (!user) return c.json(userNotFoundBody, 404);
-        if (duplicate && !user.equals(duplicate)) return c.json(emailConflictBody, 409);
 
-        const updated = (await user.updateNameAndEmail(body.name, body.email)) as UserDocument;
+        // Email moved to its own route (PUT /admin/users/:id/email), which is
+        // where the federated-identity lock is enforced — this route only
+        // ever writes `name`, so it never collides on the unique email index.
+        user.name = body.name;
+        const updated = (await user.save()) as UserDocument;
         return c.json({ user: toUserPublic(updated) }, 200);
       } catch (err) {
-        // The email findUserByEmail pre-check can be raced; the unique index is
-        // the final defence. Surface its E11000 as the same 409 conflict
-        // instead of a 500 (this route's contract codes the conflict CONFLICT).
-        if (isDuplicateKeyError(err)) return c.json(emailConflictBody, 409);
         debug('editUser error: %s', (err as Error).message);
         return c.json(INTERNAL_ERROR_BODY, 500);
       }
@@ -282,7 +317,21 @@ export const registerAdminUsersRoutes = <E extends OpenAPIHono<CrowiHonoBindings
           UserDocument | null,
         ];
         if (!user) return c.json(userNotFoundBody, 404);
+
+        // Checked BEFORE the duplicate-email conflict: a linked user's email
+        // change to a different address is refused for the federation-lock
+        // reason regardless of whether that address also happens to collide
+        // with someone else's account (AC-2 — one cause, one code). Gated on
+        // an actual address change, same as the self-service `/me` lock: a
+        // same-email resubmission touches no UserIdentity query and is never
+        // refused (spec Performance/resource limit clause).
+        if (body.email !== user.email) {
+          const linkedCount = await crowi.model('UserIdentity').countDocuments({ userId: user._id });
+          if (linkedCount > 0) return c.json(emailLockedByFederatedIdentityBody, 409);
+        }
+
         if (duplicate && !user.equals(duplicate)) return c.json(emailConflictBody, 409);
+
         const updated = (await user.updateEmail(body.email)) as UserDocument;
         return c.json({ user: toUserPublic(updated) }, 200);
       } catch (err) {
@@ -290,6 +339,58 @@ export const registerAdminUsersRoutes = <E extends OpenAPIHono<CrowiHonoBindings
         // final defence. Surface its E11000 as the same 409 conflict.
         if (isDuplicateKeyError(err)) return c.json(emailConflictBody, 409);
         debug('updateUserEmail error: %s', (err as Error).message);
+        return c.json(INTERNAL_ERROR_BODY, 500);
+      }
+    })
+    .openapi(adminUsersRoutes.unlinkUserIdentityRoute, async (c) => {
+      const { id, provider } = c.req.valid('param');
+      if (!isValidObjectId(id)) return c.json(invalidIdBody(id), 400);
+      try {
+        const user = (await User.findById(id)) as UserDocument | null;
+        if (!user) return c.json(userNotFoundBody, 404);
+
+        // Self-check before the password-auth-disabled check (spec step
+        // order): a password-less admin locking themselves out is a
+        // structural risk this route refuses before consulting instance
+        // policy, not because of it.
+        const operatingUser = c.get('user');
+        if (String(operatingUser._id) === String(user._id)) {
+          return c.json(cannotUnlinkSelfBody, 409);
+        }
+
+        if (isDisabledPasswordAuth(crowi.getConfig())) {
+          return c.json(passwordAuthDisabledUnlinkBody, 409);
+        }
+
+        const identity = await crowi.model('UserIdentity').findOne({ userId: user._id, provider });
+        if (!identity) return c.json(notLinkedBody, 404);
+
+        // Unlike the self-service guard (which refuses when there is no
+        // password), the admin path issues one — the point of an admin
+        // unlink is to recover a compromised provider account even when
+        // the target never set a password. An existing password is left
+        // untouched: unlinking is not itself a reason to invalidate a
+        // password the user already knows. `issuePasswordIfUnset` folds the
+        // "no password yet" check into the write itself (a `findOneAndUpdate`
+        // filter, not a separate read), so two concurrent unlinks of the
+        // same passwordless user can't both issue a different password and
+        // leave one response holding a value that was never actually stored.
+        const { user: responseUser, newPassword, passwordIssued } = await User.issuePasswordIfUnset(user._id);
+
+        // Same removal steps as the self-service unlink (shared helper), so
+        // the f4143f14 journal-row fix protects this path too.
+        await removeIdentityAndJournal(crowi, user, provider);
+
+        return c.json(
+          {
+            user: toUserPublic(responseUser),
+            passwordIssued,
+            ...(newPassword !== undefined ? { newPassword } : {}),
+          },
+          200,
+        );
+      } catch (err) {
+        debug('unlinkUserIdentity error: %s', (err as Error).message);
         return c.json(INTERNAL_ERROR_BODY, 500);
       }
     })

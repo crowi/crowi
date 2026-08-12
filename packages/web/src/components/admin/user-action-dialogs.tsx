@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, Copy, Loader2 } from 'lucide-react';
-import type { InvitedUserResult, UserPublic } from '@crowi/api-contract';
+import type { AdminUserListItem, InvitedUserResult, UserPublic } from '@crowi/api-contract';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
@@ -18,7 +18,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { EmailConflictError, useEditAdminUser, useInviteAdminUsers, useUpdateAdminUserEmail } from '@/lib/use-admin-users';
+import { EmailConflictError, useEditAdminUser, useInviteAdminUsers, useUnlinkAdminUserIdentity, useUpdateAdminUserEmail } from '@/lib/use-admin-users';
 import { cn } from '@/lib/utils';
 import { m } from '@paraglide/messages.js';
 
@@ -211,17 +211,18 @@ interface EditUserDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
+/**
+ * Name-only edit. Email is `UpdateEmailDialog`'s own dedicated affordance,
+ * so there is exactly one email-writing UI path, matching the API having
+ * exactly one email-writing route.
+ */
 export function EditUserDialog({ user, onOpenChange }: EditUserDialogProps) {
   const edit = useEditAdminUser();
   const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [emailFieldError, setEmailFieldError] = useState<string | null>(null);
 
   useEffect(() => {
     if (user) {
       setName(user.name ?? '');
-      setEmail(user.email ?? '');
-      setEmailFieldError(null);
       edit.reset();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -230,14 +231,11 @@ export function EditUserDialog({ user, onOpenChange }: EditUserDialogProps) {
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!user) return;
-    setEmailFieldError(null);
     try {
-      await edit.mutateAsync({ id: user._id, body: { name, email } });
+      await edit.mutateAsync({ id: user._id, body: { name } });
       onOpenChange(false);
-    } catch (err) {
-      if (err instanceof EmailConflictError) {
-        setEmailFieldError(err.message);
-      }
+    } catch {
+      // surfaced via edit.error below
     }
   };
 
@@ -253,23 +251,7 @@ export function EditUserDialog({ user, onOpenChange }: EditUserDialogProps) {
             <Label htmlFor="edit-user-name">{m['admin.users.action.edit_field_name']()}</Label>
             <Input id="edit-user-name" value={name} onChange={(e) => setName(e.target.value)} required />
           </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="edit-user-email">{m['admin.users.action.edit_field_email']()}</Label>
-            <Input
-              id="edit-user-email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              aria-invalid={Boolean(emailFieldError)}
-              required
-            />
-            {emailFieldError && (
-              <p className="text-xs text-destructive" role="alert">
-                {emailFieldError}
-              </p>
-            )}
-          </div>
-          {edit.isError && !(edit.error instanceof EmailConflictError) && edit.error instanceof Error && (
+          {edit.isError && edit.error instanceof Error && (
             <p className="text-xs text-destructive" role="alert">
               {edit.error.message}
             </p>
@@ -375,6 +357,122 @@ export function UpdateEmailDialog({ user, onOpenChange }: UpdateEmailDialogProps
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+export interface UnlinkIdentityTarget {
+  user: AdminUserListItem;
+  provider: string;
+  /** Display label for `provider` (falls back to the raw slug upstream). */
+  providerLabel: string;
+}
+
+interface UnlinkIdentityDialogProps {
+  target: UnlinkIdentityTarget | null;
+  onOpenChange: (open: boolean) => void;
+}
+
+/**
+ * Confirm-then-result in one dialog (mirrors how `page.tsx` already
+ * orchestrates `reset-password` + `ResetPasswordResultDialog`, just
+ * self-contained instead of split across two components): the confirm step
+ * asks once, and on success the SAME dialog switches to reporting whether a
+ * password was issued — `passwordIssued: false` tells the admin the
+ * existing password is untouched, `true` shows the new one exactly once
+ * (spec: "パスワードは変更していません" / "このパスワードを本人に伝えてください").
+ */
+export function UnlinkIdentityDialog({ target, onOpenChange }: UnlinkIdentityDialogProps) {
+  const unlink = useUnlinkAdminUserIdentity();
+
+  // Keyed on primitives, not the `target` object itself: `page.tsx` passes a
+  // fresh object literal on every render, and a successful unlink triggers
+  // exactly that (its `onSuccess` invalidates the list query the parent
+  // reads). An identity-keyed effect would re-fire on that re-render while
+  // the dialog is still open, reset()-ing the mutation and flipping the
+  // dialog back to the confirm step — destroying a `newPassword` the admin
+  // was never shown before it could be read (spec: "再表示できません").
+  useEffect(() => {
+    if (target) unlink.reset();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [target?.user._id, target?.provider]);
+
+  const open = target !== null;
+  const showResult = unlink.isSuccess;
+
+  // Every close path (Cancel, Escape, backdrop click, and the result step's
+  // own "Close" button) routes through here so a one-time-display
+  // `newPassword` never lingers in the mutation's cache after the dialog
+  // that showed it is gone.
+  const handleClose = () => {
+    unlink.reset();
+    onOpenChange(false);
+  };
+
+  return (
+    <AlertDialog open={open} onOpenChange={(next) => !next && handleClose()}>
+      <AlertDialogContent>
+        {showResult && unlink.data ? (
+          <>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{m['admin.users.action.unlink_identity_result_title']()}</AlertDialogTitle>
+              <AlertDialogDescription>
+                {unlink.data.passwordIssued
+                  ? m['admin.users.action.unlink_identity_password_issued']()
+                  : m['admin.users.action.unlink_identity_password_unchanged']()}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            {unlink.data.passwordIssued && unlink.data.newPassword && (
+              <div className="space-y-1.5">
+                <Label htmlFor="unlink-identity-new-password">{m['admin.users.action.reset_password_result_label']()}</Label>
+                <Input id="unlink-identity-new-password" readOnly value={unlink.data.newPassword} className="font-mono" />
+              </div>
+            )}
+            <AlertDialogFooter>
+              <AlertDialogAction onClick={handleClose}>{m['admin.users.action.reset_password_close']()}</AlertDialogAction>
+            </AlertDialogFooter>
+          </>
+        ) : (
+          <>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{m['admin.users.action.unlink_identity_confirm_title']({ provider: target?.providerLabel ?? '' })}</AlertDialogTitle>
+              <AlertDialogDescription>
+                {m['admin.users.action.unlink_identity_confirm_body']({
+                  name: target ? userLabel(target.user) : '',
+                  provider: target?.providerLabel ?? '',
+                })}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            {unlink.isError && (
+              <p className="text-xs text-destructive" role="alert">
+                {unlink.error instanceof Error ? unlink.error.message : m['admin.users.action.unlink_identity_failed']()}
+              </p>
+            )}
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={unlink.isPending}>{m['admin.users.action.confirm_cancel']()}</AlertDialogCancel>
+              <AlertDialogAction
+                disabled={unlink.isPending}
+                className={cn('bg-destructive text-white hover:bg-destructive/90')}
+                onClick={(event) => {
+                  // Don't auto-close — stay open so the pending / result /
+                  // error states above can render.
+                  event.preventDefault();
+                  if (target) unlink.mutate({ id: target.user._id, provider: target.provider });
+                }}
+              >
+                {unlink.isPending ? (
+                  <>
+                    <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                    {m['admin.users.action.confirm_pending']()}
+                  </>
+                ) : (
+                  m['admin.users.action.confirm_confirm']()
+                )}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </>
+        )}
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 
