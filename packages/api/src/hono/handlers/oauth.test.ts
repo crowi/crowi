@@ -1,11 +1,11 @@
 import crypto from 'node:crypto';
 
-import request from 'supertest';
-
-import { app, crowi } from 'src/test/setup';
-import { type ConfigRow, restoreCrowiConfig, snapshotCrowiConfig } from 'src/test/config-snapshot';
+import Debug from 'debug';
 import type { UserDocument } from 'src/models/user';
+import { type ConfigRow, restoreCrowiConfig, snapshotCrowiConfig } from 'src/test/config-snapshot';
+import { app, crowi } from 'src/test/setup';
 import { createJwtUtil } from 'src/util/jwt';
+import request from 'supertest';
 
 /**
  * RFC-0010 Phase 3 — OAuth authorization-server endpoint integration tests.
@@ -16,6 +16,10 @@ import { createJwtUtil } from 'src/util/jwt';
  *  - single-use authorization code (second exchange 400)
  *  - expired authorization code (400) — via direct model seed
  *  - refresh_token rotation + reuse detection (chain revocation)
+ *  - refresh_token reuse grace window (spec §D-2): reuse within the window is
+ *    suppressed (chain survives, identical response, no token returned,
+ *    debug log carries no secret); reuse outside the grace window and an
+ *    explicit revoke both still revoke the whole chain unconditionally
  *  - redirect_uri: unregistered rejected, loopback any-port allowed
  *  - authorize is web-session only (PAT/oauth bearer → 403)
  *  - scope outside the client's allowed set rejected
@@ -309,10 +313,16 @@ describe('Routes /api/oauth (Hono)', () => {
       expect(reuse.body.error).toBe('invalid_grant');
     });
 
-    it('detects reuse and revokes the whole chain', async () => {
+    it('detects reuse outside the grace window and revokes the whole chain (AC-2)', async () => {
       const pair = await getInitialPair();
       const r1 = await token({ grant_type: 'refresh_token', refresh_token: pair.refresh_token, client_id: 'crowi-cli' });
       const newRefresh = r1.body.refresh_token as string;
+
+      // Backdate the rotated-away token's revokedAt past the grace window
+      // so the replay below is reuse-detection's normal path, not the §D-2
+      // grace suppression.
+      const presentedHash = Refresh().hashToken(pair.refresh_token);
+      await Refresh().updateOne({ tokenHash: presentedHash }, { revokedAt: new Date(Date.now() - 120_000) });
 
       // Replay the already-rotated original — reuse detection should fire
       // and revoke the successor too.
@@ -327,6 +337,140 @@ describe('Routes /api/oauth (Hono)', () => {
     it('rejects an unknown grant_type (400)', async () => {
       const res = await token({ grant_type: 'password', username: 'x', password: 'y' });
       expect(res.status).toBe(400);
+    });
+  });
+
+  describe('POST /oauth/token (refresh_token reuse — grace window, spec §D-2)', () => {
+    const token = (body: Record<string, unknown>) => request(app).post('/api/oauth/token').send(body);
+
+    const getInitialPair = async () => {
+      const { code, verifier } = await authorizeOk();
+      const res = await token({ grant_type: 'authorization_code', code, code_verifier: verifier, redirect_uri: REDIRECT, client_id: 'crowi-cli' });
+      return res.body as { access_token: string; refresh_token: string };
+    };
+
+    it('does not revoke the chain when the reuse falls within the grace window — the successor still rotates (AC-1, AC-12)', async () => {
+      const pair = await getInitialPair();
+      const rotated = await token({ grant_type: 'refresh_token', refresh_token: pair.refresh_token, client_id: 'crowi-cli' });
+      expect(rotated.status).toBe(200);
+      const successor = rotated.body.refresh_token as string;
+
+      // Immediate replay of the just-rotated-away token — well within the
+      // default 60s grace window (§D-2).
+      const replay = await token({ grant_type: 'refresh_token', refresh_token: pair.refresh_token, client_id: 'crowi-cli' });
+      expect(replay.status).toBe(400);
+      expect(replay.body.error).toBe('invalid_grant');
+
+      // The chain survived the suppressed replay: the successor the winner
+      // already holds still rotates successfully. (The CLI-side half of
+      // AC-12 — the loser recovering the winner's token — is covered by
+      // packages/cli/src/lib/refresh.test.ts.)
+      const successorRotate = await token({ grant_type: 'refresh_token', refresh_token: successor, client_id: 'crowi-cli' });
+      expect(successorRotate.status).toBe(200);
+      expect(successorRotate.body.access_token).toEqual(expect.any(String));
+    });
+
+    it('never returns a token body for a suppressed reuse (AC-4)', async () => {
+      const pair = await getInitialPair();
+      await token({ grant_type: 'refresh_token', refresh_token: pair.refresh_token, client_id: 'crowi-cli' });
+
+      const replay = await token({ grant_type: 'refresh_token', refresh_token: pair.refresh_token, client_id: 'crowi-cli' });
+      expect(replay.status).toBe(400);
+      expect(replay.body.access_token).toBeUndefined();
+      expect(replay.body.refresh_token).toBeUndefined();
+      expect(replay.body.error).toBe('invalid_grant');
+    });
+
+    it('returns an identical response body whether the reuse falls inside or outside the grace window (AC-3)', async () => {
+      const insidePair = await getInitialPair();
+      const insideRotated = await token({ grant_type: 'refresh_token', refresh_token: insidePair.refresh_token, client_id: 'crowi-cli' });
+      expect(insideRotated.status).toBe(200);
+      const insideReplay = await token({ grant_type: 'refresh_token', refresh_token: insidePair.refresh_token, client_id: 'crowi-cli' });
+
+      const outsidePair = await getInitialPair();
+      const outsideRotated = await token({ grant_type: 'refresh_token', refresh_token: outsidePair.refresh_token, client_id: 'crowi-cli' });
+      expect(outsideRotated.status).toBe(200);
+      const outsideHash = Refresh().hashToken(outsidePair.refresh_token);
+      await Refresh().updateOne({ tokenHash: outsideHash }, { revokedAt: new Date(Date.now() - 120_000) });
+      const outsideReplay = await token({ grant_type: 'refresh_token', refresh_token: outsidePair.refresh_token, client_id: 'crowi-cli' });
+
+      expect(insideReplay.status).toBe(outsideReplay.status);
+      expect(insideReplay.body).toEqual(outsideReplay.body);
+    });
+
+    it('suppresses the chain revocation quietly — the debug log carries only clientId + elapsedMs, never the token / hash / userId (AC-7)', async () => {
+      const pair = await getInitialPair();
+      await token({ grant_type: 'refresh_token', refresh_token: pair.refresh_token, client_id: 'crowi-cli' });
+
+      const stderrSpy = jest.spyOn(process.stderr, 'write').mockImplementation(() => true);
+      // `Debug()` instances resolve `.enabled` from a live getter that
+      // re-checks `namespaces` on every access, so enabling here — AFTER
+      // oauth.ts's own module-scoped debug instance was already created at
+      // import time — still takes effect (see util/redis-opts.test.ts for
+      // the same pattern).
+      const previousNamespaces = Debug.disable();
+      Debug.enable(previousNamespaces ? `${previousNamespaces},crowi:hono:handlers:oauth` : 'crowi:hono:handlers:oauth');
+
+      try {
+        const replay = await token({ grant_type: 'refresh_token', refresh_token: pair.refresh_token, client_id: 'crowi-cli' });
+        expect(replay.status).toBe(400);
+
+        const lines = stderrSpy.mock.calls.map((args) => String(args[0])).filter((line) => line.includes('crowi:hono:handlers:oauth'));
+        const suppressionLines = lines.filter((line) => line.includes('suppressed'));
+        expect(suppressionLines.length).toBeGreaterThan(0);
+
+        const presentedHash = Refresh().hashToken(pair.refresh_token);
+        // Tie the assertion to the complete sanitized shape (clientId +
+        // elapsedMs, nothing else) rather than just excluding today's known
+        // secrets — a future field added to the log line (IP, a token
+        // fragment, ...) fails this even if it happens not to collide with
+        // the specific values excluded below.
+        const CORE_MESSAGE = /refresh reuse suppressed within grace window: clientId=(\S+) elapsedMs=(\d+)/;
+        for (const line of suppressionLines) {
+          expect(line).not.toContain(pair.refresh_token);
+          expect(line).not.toContain(presentedHash);
+          expect(line).not.toContain(String(user._id));
+
+          const match = line.match(CORE_MESSAGE);
+          expect(match).not.toBeNull();
+          expect(match?.[1]).toBe('crowi-cli');
+          // Nothing follows the core message except debug's own "+Nms"
+          // timing suffix.
+          const rest = line.slice((match?.index ?? 0) + (match?.[0].length ?? 0));
+          expect(rest).toMatch(/^(\s+\+\d+(ms|s|m|h|d))?\s*$/);
+        }
+      } finally {
+        Debug.enable(previousNamespaces);
+      }
+    });
+
+    it('POST /oauth/revoke always revokes the whole chain regardless of the grace window (AC-11)', async () => {
+      // Chain of three: A (already revoked, rotated) -> B (already revoked,
+      // rotated) -> C (active, never touched before this test). Revoking
+      // the *oldest* ancestor (A) and then asserting the *active descendant*
+      // (C, which was never itself revoked) becomes unusable is the only
+      // way to prove revokeChain actually walked forward through the chain
+      // — checking a token that was already revoked by its own rotation
+      // would pass even if chain traversal were broken.
+      const pairA = await getInitialPair();
+      const rotatedToB = await token({ grant_type: 'refresh_token', refresh_token: pairA.refresh_token, client_id: 'crowi-cli' });
+      expect(rotatedToB.status).toBe(200);
+      const tokenB = rotatedToB.body.refresh_token as string;
+
+      const rotatedToC = await token({ grant_type: 'refresh_token', refresh_token: tokenB, client_id: 'crowi-cli' });
+      expect(rotatedToC.status).toBe(200);
+      const tokenC = rotatedToC.body.refresh_token as string;
+
+      // §D-2's grace window only applies to the *reuse-detection* branch in
+      // /oauth/token, never to the explicit revoke route — revoking the
+      // already-rotated ancestor A must still kill the live descendant C.
+      const revoke = await request(app).post('/api/oauth/revoke').send({ token: pairA.refresh_token });
+      expect(revoke.status).toBe(200);
+
+      const activeDescendantReused = await token({ grant_type: 'refresh_token', refresh_token: tokenC, client_id: 'crowi-cli' });
+      expect(activeDescendantReused.status).toBe(400);
+      expect(activeDescendantReused.body.error).toBe('invalid_grant');
+      expect(activeDescendantReused.body.access_token).toBeUndefined();
     });
   });
 
