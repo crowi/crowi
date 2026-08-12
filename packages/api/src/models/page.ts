@@ -3,6 +3,7 @@ import type { InvalidateReason } from '@crowi/collab';
 import Debug from 'debug';
 import { Document, Model, model, Schema, Types } from 'mongoose';
 import Crowi from 'src/crowi';
+import { changePageVisibility } from 'src/service/page-history/commands/visibility';
 import { allocateContentSequence } from 'src/service/page-history/content-sequence';
 import { purgePageHistoryEvents } from 'src/service/page-history/purge';
 import { escapeRegExp } from 'src/util/regex';
@@ -401,7 +402,7 @@ export interface PageModel extends Model<PageDocument> {
   findUnfurlablePagesByIds(ids): any;
   findUnfurlablePagesByPaths(paths): any;
   updatePageProperty(page, updateData, options?: { advanceEpoch?: boolean }): any;
-  updateGrant(page, grant, userData): any;
+  updateGrant(page, grant, userData, options?: { source?: string }): any;
   pushToGrantedUsers(page, userData): any;
   pushRevision(pageData, newRevision, user, options?: PushRevisionOptions): any;
   createPage(path, body, user, options): any;
@@ -1905,23 +1906,65 @@ export default (crowi: Crowi) => {
     return Page.updateOne({ _id: page._id }, update);
   };
 
-  pageSchema.statics.updateGrant = async function (page, grant, userData) {
-    page.grant = grant;
-    page.grantedUsers = [];
-    if (grant !== GRANT_PUBLIC) {
-      page.grantedUsers.addToSet(userData._id);
-      // Keep the creator granted even when someone else (e.g. an admin) is
-      // the one changing the grant, so `grantedUsers` never drifts out of
-      // sync with `visiblePageGrantOr`'s creator clause / `isGrantedFor`'s
-      // `isCreator` shortcut.
-      page.grantedUsers.addToSet(page.creator);
+  /**
+   * RFC-0021 §6.2 DC-10/DC-12 (Phase 2c-1) — delegates to `changePageVisibility`
+   * so `PUT /pages/grant` and `updatePage`'s body+grant branch both go
+   * through the same CAS-and-event command. `page` is left untouched until
+   * the CAS commits (DC-12: `updatePage`'s failure path fires body-driven
+   * side effects off the ORIGINAL `pageData`, which must still reflect the
+   * DB's grant when that happens — there is no early mutation to undo).
+   *
+   * Populates `revision`/`creator` on the committed after-document before
+   * returning it — `registerBacklinks` (`events/page.ts`, unconditional on
+   * every 'update') needs `data.revision`/`data.creator` populated to
+   * re-register backlinks, and a bare `findOneAndUpdate` result has
+   * neither field populated. A populate failure here must not fail an
+   * already-durable grant change (same "state change already committed,
+   * don't fail the command over it" posture as DC-1's materialize-failure
+   * handling) — it degrades to the unpopulated document, the same shape
+   * `Page.rename`'s own 'update' emit already tolerates.
+   *
+   * Throws on every non-`committed` outcome so both existing callers
+   * (which only ever used the resolved value, never a status) keep their
+   * try/catch contract: `not-found` maps to the exact string
+   * `hono/handlers/page.ts` already matches for its 404 branch;
+   * `contended`/`rejected` map to a distinct, retry-hinting message so
+   * that failure falls through to the handlers' generic 400.
+   * `changePageVisibility`'s plan always rebuilds `grantedUsers`, even for
+   * a same-grant call, so it never returns `noop`; that branch is
+   * unreachable defense-in-depth.
+   */
+  pageSchema.statics.updateGrant = async function (page, grant, userData, options) {
+    const outcome = await changePageVisibility(crowi, {
+      pageId: page._id,
+      toGrant: grant,
+      actor: userData._id,
+      source: options?.source,
+    });
+
+    if (outcome.status === 'not-found') {
+      throw new Error('Page not found');
+    }
+    if (outcome.status !== 'committed') {
+      throw new Error('Page grant update was not committed — retry');
     }
 
-    const data = await page.save();
+    let responsePage = outcome.page;
+    try {
+      responsePage = await responsePage.populate([
+        { path: 'revision', model: 'Revision' },
+        { path: 'creator', model: 'User' },
+      ]);
+    } catch (err) {
+      debug('Page.updateGrant: failed to populate the committed document for page %s: %s', String(page._id), (err as Error)?.message ?? err);
+    }
 
-    debug('Page.updateGrant, saved grantedUsers.', (data && data.path) || {});
+    page.grant = responsePage.grant;
+    page.grantedUsers = responsePage.grantedUsers;
 
-    return data;
+    debug('Page.updateGrant, saved grantedUsers.', responsePage.path);
+
+    return responsePage;
   };
 
   // Instance method でいいのでは
@@ -2090,10 +2133,28 @@ export default (crowi: Crowi) => {
     // metadata-only 'update' emits). updatePage always goes through
     // pushRevision above, so this path is always a new revision.
     if (grant != pageData.grant) {
-      const data = await Page.updateGrant(pageData, grant, user);
-      pageEvent.emit('update', data, user, bookmarkCount, true);
-      invalidateLiveCollabDoc(pageData._id);
-      return data;
+      try {
+        const data = await Page.updateGrant(pageData, grant, user, { source: options.editVia });
+        pageEvent.emit('update', data, user, bookmarkCount, true);
+        invalidateLiveCollabDoc(pageData._id);
+        return data;
+      } catch (err) {
+        // RFC-0021 §6.2 DC-12 — the body write above (`pushRevision`) is
+        // already durable by this point, so a grant-command failure
+        // (`contended`/`rejected`, surfaced by `Page.updateGrant` as a
+        // thrown `Error`) must not skip the body-driven side effects every
+        // OTHER updatePage path fires unconditionally (search reindex,
+        // backlinks, auto-watch, UPDATE notification, mention dispatch,
+        // live-collab invalidation). `pageData` still reflects the DB's
+        // grant here — `Page.updateGrant` never mutates it before its own
+        // CAS commits — so emitting off it, then rethrowing, keeps
+        // "the body saved" and "the grant didn't change" both true at
+        // once: the response is 400, but everything the durable body
+        // write is supposed to drive still ran.
+        pageEvent.emit('update', pageData, user, bookmarkCount, true);
+        invalidateLiveCollabDoc(pageData._id);
+        throw err;
+      }
     }
     pageEvent.emit('update', pageData, user, bookmarkCount, true);
     // feature-editor-preview-reliability G1 — this external edit just nulled

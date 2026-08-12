@@ -725,7 +725,9 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             return c.json(PAGE_NOT_FOUND_BODY, 404);
           }
 
-          const updated = (await Page.updateGrant(pageData, grant, user)) as PageDocument;
+          // RFC-0021 §6.2 DC-10 — the edit channel (web / oauth / pat)
+          // becomes the `visibility_changed` event's `source`.
+          const updated = (await Page.updateGrant(pageData, grant, user, { source: c.get('authContext').kind })) as PageDocument;
           // feature-restricted-grant-share-banner §6 — symmetric with the
           // claim handler above: `updateGrant` resets `grantedUsers` to just
           // the actor, so any link-invited co-editors indexed by a prior
