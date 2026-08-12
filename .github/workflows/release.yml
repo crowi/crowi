@@ -61,11 +61,22 @@ jobs:
       - name: Check publishable package metadata
         run: pnpm check:packages
 
+      # `--tag latest` is explicit because otherwise changesets picks the dist
+      # tag PER PACKAGE while in pre mode: a package whose every published
+      # version is an `alpha` prerelease goes to `latest`, and any package with
+      # even one version outside that (e.g. a `0.1.0-dev` published by hand to
+      # create the package before configuring its Trusted Publisher) is treated
+      # as already having had a regular release and goes to the pre tag
+      # instead. That split left `@crowi/plugin-slack` alone on `alpha` with its
+      # `latest` frozen at its first version, so `npm i @crowi/plugin-slack`
+      # installed months-old code while every sibling installed current. Naming
+      # the tag makes the whole workspace land in one place regardless of each
+      # package's publish history.
       - name: Create Release PR or Publish
         id: changesets
         uses: changesets/action@v1
         with:
-          publish: pnpm changeset publish
+          publish: pnpm changeset publish --tag latest
           version: pnpm changeset version
           commit: 'chore: version packages'
           title: 'chore: version packages'
