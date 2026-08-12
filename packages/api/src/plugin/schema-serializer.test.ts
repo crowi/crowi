@@ -100,6 +100,49 @@ describe('serializeConfigSchema', () => {
     expect(field.description).toBeUndefined();
   });
 
+  it('detects @sensitive on an intermediate ZodEffects wrapper, invisible to both the outermost and fully-unwrapped nodes (feature-storage-gcs AC-2)', () => {
+    // Two stacked `superRefine()` calls with `.describe()` placed on the
+    // FIRST effects layer: neither the outer ZodDefault (built from the
+    // second, describe-less effects layer) nor the fully-unwrapped inner
+    // ZodString carries the marker — only the middle ZodEffects does.
+    const [field] = serializeConfigSchema(
+      z.object({
+        serviceAccountKey: z
+          .string()
+          .superRefine(() => undefined)
+          .describe('@sensitive Google Cloud service-account key JSON')
+          .superRefine(() => undefined)
+          .default(''),
+      }),
+    );
+    expect(field).toMatchObject({ kind: 'secret', description: 'Google Cloud service-account key JSON', defaultValue: undefined });
+  });
+
+  it('detects @sensitive six ZodEffects (superRefine) wrappers deep — the exact boundary the bounded traversal must still cover', () => {
+    // Six stacked `superRefine()` layers (layer0..layer5) wrap the innermost
+    // ZodString, which itself carries the `@sensitive` marker (layer6, the
+    // final unwrapped node). A traversal that inspects only 6 nodes before
+    // unwrapping (rather than 6 wrapper layers PLUS the final node) never
+    // looks at layer6 and would report `sensitive: false` here.
+    const inner = z.string().describe('@sensitive Deeply wrapped secret');
+    const wrapped = [0, 1, 2, 3, 4, 5].reduce<z.ZodTypeAny>((acc) => acc.superRefine(() => undefined), inner);
+    const [field] = serializeConfigSchema(z.object({ secret: wrapped }));
+    expect(field).toMatchObject({ kind: 'secret', description: 'Deeply wrapped secret' });
+  });
+
+  it('detects @sensitive on the single-superRefine shape used by @crowi/plugin-storage-gcs', () => {
+    const [field] = serializeConfigSchema(
+      z.object({
+        serviceAccountKey: z
+          .string()
+          .superRefine(() => undefined)
+          .describe('@sensitive Google Cloud service-account key JSON')
+          .default(''),
+      }),
+    );
+    expect(field).toMatchObject({ kind: 'secret', description: 'Google Cloud service-account key JSON', defaultValue: undefined });
+  });
+
   it('serializes every field of a multi-field schema independently', () => {
     const fields = serializeConfigSchema(
       z.object({
