@@ -5,6 +5,7 @@ import type { Server as HttpServer, IncomingMessage } from 'node:http';
 // statically here (type imports are erased at runtime).
 import type {
   CollabContentSequenceAllocator,
+  CollabDraftPublisher,
   CollabModels,
   CollabPageEventPublisher,
   CollabWsTokenUtil,
@@ -14,6 +15,7 @@ import type {
 import type { Extension } from '@hocuspocus/server';
 import Debug from 'debug';
 import type Crowi from 'src/crowi';
+import { publishDraftPage } from 'src/service/page-history/commands/publish-draft';
 import { allocateContentSequence } from 'src/service/page-history/content-sequence';
 import { createPresenceCollabDeps } from 'src/service/presence';
 import { getEditorCapCounter } from 'src/util/collab-cap';
@@ -290,6 +292,21 @@ export async function attachCollabServer(httpServer: HttpServer, crowi: Crowi): 
     }
     return outcome;
   };
+  // RFC-0021 §6.3/DC-6 (Phase 2c-1) — same injection shape as
+  // `contentSequenceAllocator` above: `@crowi/collab` never imports
+  // `@crowi/api`, so `publishDraftPage` is bound here and handed through as
+  // a verbatim function. `PageEventCommandOutcome` is a superset of what
+  // `CollabDraftPublisher`'s `unknown` return promises (collab never
+  // inspects it — a publish failure never fails the save, DC-1/F-5 step 5),
+  // so the outcome-aware debug logging happens HERE.
+  const draftPublisher: CollabDraftPublisher = async (pageId, actorId) => {
+    const outcome = await publishDraftPage(crowi, { pageId, actor: actorId });
+    if (outcome.status !== 'committed') {
+      const reason = 'reason' in outcome ? outcome.reason : '(none)';
+      debug('draftPublisher: publishDraftPage did not commit for page %s: status=%s reason=%s', pageId, outcome.status, reason);
+    }
+    return outcome;
+  };
   const { hocuspocus, invalidator } = collab.createCollabServer({
     models,
     wsTokenUtil,
@@ -301,6 +318,7 @@ export async function attachCollabServer(httpServer: HttpServer, crowi: Crowi): 
     extensions,
     presence: presenceDeps,
     contentSequenceAllocator,
+    draftPublisher,
   });
 
   /**
