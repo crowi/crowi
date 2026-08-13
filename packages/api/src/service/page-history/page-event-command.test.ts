@@ -1,16 +1,18 @@
 import { Types } from 'mongoose';
-import { STATUS_PUBLISHED } from 'src/models/page';
+import { STATUS_DRAFT, STATUS_PUBLISHED } from 'src/models/page';
 import { crowi, Fixture } from 'src/test/setup';
+import { publishDraftPage } from './commands/publish-draft';
 import { changePageVisibility } from './commands/visibility';
 import * as contentSequenceModule from './content-sequence';
 import * as materializeModule from './materialize';
 import { repairPendingEntries, scanUnsequencedRevisions } from './repair';
 
 /**
- * RFC-0021 §6.2 (Phase 2c-1) — `runPageEventCommand`/`changePageVisibility`
- * coverage: the shared CAS-and-event skeleton (AC-1/2/3/4/6/7/14/15/16/19/20)
- * plus `Page.updatePage`'s body+grant integration (AC-5). Draft publish
- * (AC-8/9/10/17/18/25) is Phase C, out of scope here.
+ * RFC-0021 §6.2/§6.3 (Phase 2c-1) — `runPageEventCommand`/`changePageVisibility`/
+ * `publishDraftPage` coverage: the shared CAS-and-event skeleton
+ * (AC-1/2/3/4/6/7/14/15/16/19/20), `Page.updatePage`'s body+grant integration
+ * (AC-5), and draft publish (AC-8/9/10/25). Collab-side wiring (AC-17/18) is
+ * covered in `packages/collab`.
  */
 describe('service/page-history/page-event-command — runPageEventCommand / changePageVisibility (RFC-0021 Phase 2c-1)', () => {
   let Page;
@@ -35,7 +37,7 @@ describe('service/page-history/page-event-command — runPageEventCommand / chan
   });
 
   /** A Phase-1-era shape: no `pushRevision` ever ran, so `historyTracking.state` reads back `untracked` (schema default on a raw `.create()`). */
-  async function createUntrackedPage(path: string, grant = Page.GRANT_PUBLIC) {
+  async function createUntrackedPage(path: string, grant = Page.GRANT_PUBLIC, status = STATUS_PUBLISHED) {
     return Page.create({
       path,
       creator: user._id,
@@ -44,7 +46,7 @@ describe('service/page-history/page-event-command — runPageEventCommand / chan
       updatedAt: Date.now(),
       redirectTo: null,
       grant,
-      status: STATUS_PUBLISHED,
+      status,
       grantedUsers: [user._id],
     });
   }
@@ -52,6 +54,19 @@ describe('service/page-history/page-event-command — runPageEventCommand / chan
   /** A malformed `page_event` outbox entry (no `event`) — `materializePendingEntry` throws on it every time (`assertWellFormedPendingEntry`), so drain-assist can never clear it. Reliably exhausts the drain-assist budget without needing to mock anything. */
   async function stageJammedOutbox(pageId: Types.ObjectId) {
     await Page.updateOne({ _id: pageId }, { $set: { pendingHistoryEntry: { entryId: new Types.ObjectId(), type: 'page_event' } } });
+  }
+
+  /** Same Phase-1-era shape as `createUntrackedPage`, but `status: STATUS_DRAFT` — no `pushRevision` ever ran, so no seed Revision and no content-sequence promotion (AC-25). */
+  async function createUntrackedDraftPage(path: string) {
+    return createUntrackedPage(path, Page.GRANT_PUBLIC, STATUS_DRAFT);
+  }
+
+  /** A `ready` draft — mirrors `draft.ts`'s create-draft handler (`Page.create` + a seed `pushRevision`, which promotes via `allocateContentSequence`, Phase 2a). */
+  async function createReadyDraftPage(path: string) {
+    const draft = await createUntrackedPage(path, Page.GRANT_PUBLIC, STATUS_DRAFT);
+    const seedRevision = await Revision.prepareRevision(draft, 'seed body', user, { format: 'markdown' });
+    await Page.pushRevision(draft, seedRevision, user);
+    return draft;
   }
 
   describe('AC-1/AC-2: ready Page grant change — event + no-event (same-grant) branches', () => {
@@ -343,5 +358,125 @@ describe('service/page-history/page-event-command — runPageEventCommand / chan
     expect(events).toHaveLength(2);
     expect(events[1].payload.fromGrant).toBe(events[0].payload.toGrant);
     expect(events.map((e) => e.payload.toGrant).sort()).toEqual([Page.GRANT_RESTRICTED, Page.GRANT_SPECIFIED].sort());
+  });
+
+  describe('publishDraftPage (RFC-0021 §6.3, Phase C)', () => {
+    test('AC-8: a ready draft publishes — status flips to published and a draft_published event is appended', async () => {
+      const draft = await createReadyDraftPage('/pec/ac8');
+      const beforeReload = await Page.findById(draft._id).lean();
+      expect(beforeReload?.historyTracking?.state).toBe('ready');
+      expect(beforeReload?.status).toBe(STATUS_DRAFT);
+      const beforeSequence = beforeReload?.historySequence;
+
+      const outcome = await publishDraftPage(crowi, { pageId: draft._id, actor: user._id });
+
+      expect(outcome.status).toBe('committed');
+      if (outcome.status !== 'committed') throw new Error('unreachable');
+      expect(outcome.eventId).not.toBeNull();
+      expect(outcome.sequence).toBe((beforeSequence ?? 0) + 1);
+      expect(outcome.materialized).toBe(true);
+
+      const page = await Page.findById(draft._id).lean();
+      expect(page?.status).toBe(STATUS_PUBLISHED);
+      expect(page?.historySequence).toBe((beforeSequence ?? 0) + 1);
+
+      const events = await PageHistoryEvent.find({ page: draft._id }).lean();
+      expect(events).toHaveLength(1);
+      expect(events[0].kind).toBe('draft_published');
+      expect(events[0].sequence).toBe((beforeSequence ?? 0) + 1);
+      expect(events[0].source).toBe('collab');
+      expect(events[0].payload).toEqual({ fromStatus: 'draft', toStatus: 'published' });
+      // AC-14 applies to every kind this spec writes, not just visibility_changed — pin it here too.
+      expect(Object.keys(events[0].payload ?? {}).sort()).toEqual(['fromStatus', 'toStatus']);
+    });
+
+    test('AC-9: an already-published Page never triggers a write and creates no event', async () => {
+      const created = await Page.createPage('/pec/ac9', 'v1', user, {});
+      const before = await Page.findById(created._id).lean();
+      // "no write issued" is stronger than "end state unchanged" (an identity
+      // $set on an already-published Page would also leave the end state
+      // unchanged) — spy on the skeleton's only write primitive to pin it.
+      const findOneAndUpdateSpy = jest.spyOn(Page, 'findOneAndUpdate');
+
+      let outcome: Awaited<ReturnType<typeof publishDraftPage>>;
+      // `mockRestore()` clears `.mock.calls` (it's `mockReset()` + restoring
+      // the original impl) — capture the count BEFORE restoring, not after.
+      let callCount: number;
+      try {
+        outcome = await publishDraftPage(crowi, { pageId: created._id, actor: user._id });
+      } finally {
+        callCount = findOneAndUpdateSpy.mock.calls.length;
+        findOneAndUpdateSpy.mockRestore();
+      }
+
+      expect(outcome).toEqual({ status: 'noop', reason: 'not-draft' });
+      expect(callCount).toBe(0);
+
+      const after = await Page.findById(created._id).lean();
+      expect(after?.status).toBe(before?.status);
+      expect(after?.historySequence).toBe(before?.historySequence);
+      expect(await PageHistoryEvent.countDocuments({ page: created._id })).toBe(0);
+    });
+
+    test('AC-10: a jammed outbox blocks the publish — status stays draft, no event, contended outcome', async () => {
+      const draft = await createReadyDraftPage('/pec/ac10');
+      await stageJammedOutbox(draft._id);
+
+      const outcome = await publishDraftPage(crowi, { pageId: draft._id, actor: user._id });
+
+      expect(outcome).toEqual({ status: 'contended', reason: 'drain-budget-exhausted' });
+
+      const page = await Page.findById(draft._id).lean();
+      expect(page?.status).toBe(STATUS_DRAFT);
+      expect(await PageHistoryEvent.countDocuments({ page: draft._id })).toBe(0);
+    });
+
+    test('AC-10: the publish CAS itself losing every retry (not a jammed outbox) exhausts the claim budget — status stays draft, no event', async () => {
+      const draft = await createReadyDraftPage('/pec/ac10-cas-miss');
+      // The outbox is empty here (unlike the jammed-outbox case above), so
+      // this exercises the OTHER `contended` reason: `Page.findOneAndUpdate`
+      // itself never lands (a concurrent writer keeps winning the optimistic
+      // lock), exhausting the claim budget rather than the drain-assist one.
+      const findOneAndUpdateSpy = jest
+        .spyOn(Page, 'findOneAndUpdate')
+        .mockReturnValue({ exec: () => Promise.resolve(null) } as unknown as ReturnType<typeof Page.findOneAndUpdate>);
+
+      let outcome: Awaited<ReturnType<typeof publishDraftPage>>;
+      // `mockRestore()` clears `.mock.calls` (it's `mockReset()` + restoring
+      // the original impl) — capture the count BEFORE restoring, not after.
+      let callCount: number;
+      try {
+        outcome = await publishDraftPage(crowi, { pageId: draft._id, actor: user._id });
+      } finally {
+        callCount = findOneAndUpdateSpy.mock.calls.length;
+        findOneAndUpdateSpy.mockRestore();
+      }
+
+      expect(outcome).toEqual({ status: 'contended', reason: 'claim-budget-exhausted' });
+      expect(callCount).toBe(3); // DEFAULT_MAX_CLAIM_ATTEMPTS (DC-9: same budget as Phase 2a)
+
+      const page = await Page.findById(draft._id).lean();
+      expect(page?.status).toBe(STATUS_DRAFT);
+      expect(await PageHistoryEvent.countDocuments({ page: draft._id })).toBe(0);
+    });
+
+    test('AC-25: an untracked draft still publishes today-identically — status flips, no event, historySequence/pendingHistoryEntry untouched', async () => {
+      const draft = await createUntrackedDraftPage('/pec/ac25');
+      expect(draft.historyTracking.state).toBe('untracked');
+
+      const outcome = await publishDraftPage(crowi, { pageId: draft._id, actor: user._id });
+
+      expect(outcome.status).toBe('committed');
+      if (outcome.status !== 'committed') throw new Error('unreachable');
+      expect(outcome.sequence).toBeNull();
+      expect(outcome.eventId).toBeNull();
+
+      const page = await Page.findById(draft._id).lean();
+      expect(page?.status).toBe(STATUS_PUBLISHED);
+      expect(page?.historyTracking?.state).toBe('untracked');
+      expect(page?.historySequence).toBe(0);
+      expect(page?.pendingHistoryEntry).toBeUndefined();
+      expect(await PageHistoryEvent.countDocuments({ page: draft._id })).toBe(0);
+    });
   });
 });
