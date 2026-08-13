@@ -60,7 +60,7 @@ struct WorkspaceSignInAgainView: View {
                 // Backing out of the sheet is not a failure — say nothing.
                 errorMessage = ASWebAuthenticationSessionRunner.isUserCancellation(error)
                     ? nil
-                    : "Sign-in failed. \(error.localizedDescription)"
+                    : (NetworkFailureMessage.message(for: error) ?? "Sign-in failed. Try again.")
             }
         }
     }

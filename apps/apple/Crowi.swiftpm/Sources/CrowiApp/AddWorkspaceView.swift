@@ -96,7 +96,10 @@ struct AddWorkspaceView: View {
         case AddWorkspaceFlow.AddWorkspaceError.unparseableVersion:
             return "Could not determine this host's Crowi version."
         default:
-            return "Sign-in failed: \(error.localizedDescription)"
+            // Never Apple's own words: they name a framework the reader has
+            // no relationship with. A recognisable transport failure gets a
+            // sentence; anything else says only what is certain.
+            return NetworkFailureMessage.message(for: error) ?? "Sign-in failed. Try again."
         }
     }
 }
