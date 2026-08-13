@@ -75,7 +75,8 @@ struct AddWorkspaceView: View {
                 dismiss()
             } catch {
                 isAdding = false
-                errorMessage = Self.describe(error)
+                // Backing out of the sheet is not a failure — say nothing.
+                errorMessage = ASWebAuthenticationSessionRunner.isUserCancellation(error) ? nil : Self.describe(error)
             }
         }
     }

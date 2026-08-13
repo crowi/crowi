@@ -35,6 +35,19 @@ public final class ASWebAuthenticationSessionRunner: NSObject, @unchecked Sendab
     // Held for the session's lifetime so ARC doesn't tear it down mid-flow.
     private var activeSession: ASWebAuthenticationSession?
 
+    /// Whether `error` is the user closing the sheet without signing in.
+    ///
+    /// Backing out is not a failure and has nothing to report: ASWAS raises
+    /// it as an error only because `run` has to resolve somehow. Left
+    /// unrecognised it reaches the screen as
+    /// "com.apple.AuthenticationServices.WebAuthenticationSession error 1",
+    /// which tells the reader their own tap was a malfunction.
+    nonisolated public static func isUserCancellation(_ error: Error) -> Bool {
+        let error = error as NSError
+        return error.domain == ASWebAuthenticationSessionError.errorDomain
+            && error.code == ASWebAuthenticationSessionError.canceledLogin.rawValue
+    }
+
     /// Presents `authorizeURL` in an ephemeral ASWAS and resolves with the
     /// `crowi-ios://callback…` URL ASWAS captures (or throws — including a
     /// user cancellation, surfaced as ASWAS's own

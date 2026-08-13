@@ -57,7 +57,10 @@ struct WorkspaceSignInAgainView: View {
                 )
                 try await session.signedIn(with: pair)
             } catch {
-                errorMessage = "Sign-in failed. \(error.localizedDescription)"
+                // Backing out of the sheet is not a failure — say nothing.
+                errorMessage = ASWebAuthenticationSessionRunner.isUserCancellation(error)
+                    ? nil
+                    : "Sign-in failed. \(error.localizedDescription)"
             }
         }
     }
