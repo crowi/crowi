@@ -13,6 +13,14 @@
 #                                         # fields use anyOf [T, null]),
 #                                         # or codex rejects it with a 400.
 #                [--sandbox read-only|workspace-write]   # default: read-only
+#                [--network]              # workspace-write only. Without it the
+#                                         # sandbox blocks every socket: connect()
+#                                         # and listen() fail with EPERM and DNS
+#                                         # with ENOTFOUND (measured 2026-08-13),
+#                                         # so codex cannot reach the test mongo
+#                                         # (127.0.0.1:27018) and jest cannot even
+#                                         # start its workers. Pass it whenever
+#                                         # codex must run the suite itself.
 #                [--tier sol|terra|luna]                 # semantic model tier:
 #                                         # sol=hardest (gpt-5.6-sol, effort high)
 #                                         # terra=general (gpt-5.6-terra, medium)
@@ -48,7 +56,7 @@
 set -u
 
 PROMPT_FILE="" OUT="" SCHEMA_FILE="" SANDBOX="read-only" MODE="exec"
-REVIEW_TARGET="" MODEL="" EFFORT="" TIER="" LABEL="codex-run"
+REVIEW_TARGET="" MODEL="" EFFORT="" TIER="" LABEL="codex-run" NETWORK=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -56,6 +64,7 @@ while [ $# -gt 0 ]; do
     --out)           OUT="$2"; shift 2 ;;
     --schema-file)   SCHEMA_FILE="$2"; shift 2 ;;
     --sandbox)       SANDBOX="$2"; shift 2 ;;
+    --network)       NETWORK=1; shift ;;
     --mode)          MODE="$2"; shift 2 ;;
     --review-target) REVIEW_TARGET="$2"; shift 2 ;;
     --model)         MODEL="$2"; shift 2 ;;
@@ -86,6 +95,12 @@ fi
 
 case "$MODE" in exec|review) ;; *) echo "[$LABEL] invalid --mode: $MODE" >&2; exit 3 ;; esac
 case "$SANDBOX" in read-only|workspace-write) ;; *) echo "[$LABEL] invalid --sandbox: $SANDBOX" >&2; exit 3 ;; esac
+# The knob only exists for the workspace-write sandbox; silently accepting it
+# elsewhere would hand the caller a false sense of connectivity.
+if [ "$NETWORK" -eq 1 ] && [ "$SANDBOX" != "workspace-write" ]; then
+  echo "[$LABEL] --network requires --sandbox workspace-write (got: $SANDBOX)" >&2
+  exit 3
+fi
 if [ -z "$OUT" ]; then
   echo "[$LABEL] --out is required" >&2
   exit 3
@@ -142,6 +157,7 @@ build_cmd() {
     CMD+=($REVIEW_TARGET)
   else
     CMD+=(-s "$SANDBOX")
+    [ "$NETWORK" -eq 1 ] && CMD+=(-c 'sandbox_workspace_write.network_access=true')
   fi
   [ -n "$MODEL" ] && CMD+=(-m "$MODEL")
   [ -n "$EFFORT" ] && CMD+=(-c "model_reasoning_effort=\"$EFFORT\"")
