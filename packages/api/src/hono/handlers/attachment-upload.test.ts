@@ -386,10 +386,52 @@ describe('Routes POST /api/attachments/upload (Hono editor upload)', () => {
     expect(res.body.error).toBe('no_permission');
   });
 
-  // Mirrors the route's own `UPLOAD_RATE_LIMIT` / `UPLOAD_RATE_WINDOW_MS`
-  // (`attachment.ts`), which are not exported.
+  // Mirrors the route's own `UPLOAD_RATE_LIMIT` (`attachment.ts`), which is
+  // not exported. The window length no longer needs mirroring: freezing the
+  // clock keeps every hit in one bucket whatever the window is.
   const UPLOAD_RATE_LIMIT = 20;
-  const UPLOAD_RATE_WINDOW_MS = 60_000;
+
+  /**
+   * Wait until Mongoose reports the connection live again after a frozen
+   * `Date.now()` has been restored.
+   *
+   * Heartbeats that fire while the clock is frozen record the FROZEN value in
+   * `_lastHeartbeatAt`. Restoring the clock therefore makes that timestamp look
+   * as old as the test was long, and `readyState` — a getter that reports
+   * `disconnected` past two heartbeat intervals — flips to 0 on a connection
+   * that never actually dropped (measured: 25s of frozen clock produced
+   * `readyState` 0 with `_readyState` still 1). Everything after this test then
+   * runs against an apparently-dead connection: `afterEach` buffers its
+   * deletes, and fixture helpers refuse outright.
+   *
+   * Wait for a heartbeat recorded on the REAL clock — `_lastHeartbeatAt >
+   * pinnedAt` — not merely for a moment when `readyState` reads 1. Those are
+   * not the same: if the frozen interval was shorter than the stale threshold,
+   * the connection still reads live at the instant the clock is restored, and
+   * only goes stale a few seconds later, once real time drags the frozen
+   * timestamp past the threshold and before the next heartbeat lands. Waiting
+   * on `readyState` alone returns during exactly that grace period and leaves
+   * the flake in place, just narrower. Once one real heartbeat is in, the age
+   * is measured from real time and can never exceed one interval again.
+   *
+   * Mongoose copies a successful primary heartbeat onto its `otherDb`
+   * connections, so this covers those too.
+   */
+  // 15s: one heartbeat interval is 10s, so this only has to outlast a single
+  // one, and it has to stay well inside the 60s per-test budget
+  // (`src/test/setup.ts`) that the burst above has already spent ~25s of.
+  const waitForLiveMongoConnection = async (pinnedAt: number, timeoutMs = 15_000): Promise<void> => {
+    const conn = crowi.getMongo().connection;
+    const deadline = Date.now() + timeoutMs;
+    while (!(conn._lastHeartbeatAt != null && conn._lastHeartbeatAt > pinnedAt && conn.readyState === 1)) {
+      if (Date.now() > deadline) {
+        throw new Error(
+          `Mongo connection did not record a real-clock heartbeat within ${timeoutMs}ms of restoring the clock (readyState=${conn.readyState}, _readyState=${conn._readyState}, _lastHeartbeatAt=${conn._lastHeartbeatAt}, pinnedAt=${pinnedAt})`,
+        );
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+  };
 
   describe('rate limiting', () => {
     it('returns 429 with Retry-After once the 20/min budget is exceeded', async () => {
@@ -414,14 +456,28 @@ describe('Routes POST /api/attachments/upload (Hono editor upload)', () => {
       // and the assertion below reports a limiter that "did not fire".
       // Uploads are slow enough (multipart parse, storage write, derivative
       // generation) for the burst to span a boundary on a loaded runner,
-      // which is how this failed on CI. Pinning the clock mid-window makes
-      // the bucket exact by construction — same approach as
-      // `src/util/rate-limit.smoke.test.ts`. Only `Date.now` is mocked, not
-      // the timers, so the HTTP/fs/Mongo work below still runs normally;
-      // the upload path's one `Date.now` use is a temp-filename prefix that
-      // carries its own random suffix.
-      const base = Math.floor(Date.now() / UPLOAD_RATE_WINDOW_MS) * UPLOAD_RATE_WINDOW_MS + UPLOAD_RATE_WINDOW_MS / 2;
-      const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(base);
+      // which is how this failed on CI. Freezing the clock makes the bucket
+      // exact by construction — every hit divides the same value, so they
+      // cannot land either side of a boundary.
+      //
+      // Freeze it at the CURRENT instant, never at a computed point inside
+      // the window. Mongoose's `readyState` is a getter that reports
+      // `disconnected` when `Date.now() - _lastHeartbeatAt` reaches two
+      // heartbeat intervals (20s at the 10s default), so a pinned value in
+      // the future makes a perfectly healthy connection look dead — and the
+      // fixture helpers refuse to run against readyState 0. Pinning to the
+      // window midpoint moved the clock up to 30s ahead depending on where
+      // in the minute the test happened to start, which is what made this
+      // suite fail nondeterministically on CI.
+      //
+      // Only `Date.now` is mocked, not the timers, so the HTTP/fs/Mongo work
+      // below still runs normally; the upload path's one `Date.now` use is a
+      // temp-filename prefix that carries its own random suffix.
+      // Read before installing the spy — once `Date.now` is the mock, calling
+      // it to seed the mock returns the mock's own default (undefined).
+      const pinnedNow = Date.now();
+      const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(pinnedNow);
+      let recoveryError: unknown;
       try {
         for (let i = 0; i < UPLOAD_RATE_LIMIT; i += 1) {
           const res = await upload(i);
@@ -449,7 +505,18 @@ describe('Routes POST /api/attachments/upload (Hono editor upload)', () => {
         expect(unthrottled.status).toBe(200);
       } finally {
         nowSpy.mockRestore();
+        // Capture rather than throw: a throw from `finally` replaces whatever
+        // the body threw, and a failing body is exactly when Mongo is most
+        // likely to be the broken thing — that would swap the real regression
+        // for a cleanup timeout.
+        recoveryError = await waitForLiveMongoConnection(pinnedNow).then(
+          () => undefined,
+          (error: unknown) => error,
+        );
       }
+      // Only reachable when the body succeeded; a body failure has already
+      // propagated past this point, taking priority as it should.
+      if (recoveryError !== undefined) throw recoveryError;
     });
   });
 

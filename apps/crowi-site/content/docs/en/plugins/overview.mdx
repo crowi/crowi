@@ -43,7 +43,7 @@ points.
 
 | Type | Extension point | Examples |
 | ---- | --------------- | -------- |
-| Storage | `registerStorage` | `@crowi/plugin-storage-local`, `@crowi/plugin-storage-aws-s3` |
+| Storage | `registerStorage` | `@crowi/plugin-storage-local`, `@crowi/plugin-storage-aws-s3`, `@crowi/plugin-storage-gcs` |
 | Search | `registerSearch` | `@crowi/plugin-search-mongo`, `@crowi/plugin-search-elasticsearch`, `@crowi/plugin-search-opensearch` |
 | Mail | `registerMailSender` | `@crowi/plugin-mail-smtp`, `@crowi/plugin-mail-aws-ses`, `@crowi/plugin-mail-resend` |
 | Renderer | `registerRenderer` | `@crowi/plugin-renderer-katex` / `-plantuml` / `-mermaid` / `-crowi-legacy` |
@@ -62,7 +62,7 @@ The plugins maintained in the Crowi monorepo are:
 
 | Registry | Drivers |
 | -------- | ------- |
-| Storage | `local` (`@crowi/plugin-storage-local`), `aws-s3` (`@crowi/plugin-storage-aws-s3`) |
+| Storage | `local` (`@crowi/plugin-storage-local`), `aws-s3` (`@crowi/plugin-storage-aws-s3`), `gcs` (`@crowi/plugin-storage-gcs`) |
 | Search | `mongo` (`@crowi/plugin-search-mongo`), `elasticsearch` (`@crowi/plugin-search-elasticsearch`), `opensearch` (`@crowi/plugin-search-opensearch`) |
 | Mail | `smtp` (`@crowi/plugin-mail-smtp`), `ses` (`@crowi/plugin-mail-aws-ses`), `resend` (`@crowi/plugin-mail-resend`) |
 | Renderer | `@crowi/plugin-renderer-plantuml` / `-katex` / `-mermaid` / `-crowi-legacy` |

@@ -256,37 +256,22 @@ export function createAuthProviderLinkingTerminal(crowi: Crowi): AuthProviderLin
 export type UnlinkFederatedIdentityOutcome = { kind: 'unlinked' } | { kind: 'not_linked' } | { kind: 'password_auth_disabled' } | { kind: 'password_required' };
 
 /**
- * Remove `user`'s identity for `provider`.
+ * Remove `user`'s identity for `provider` and the journal row it leaves
+ * behind, with NO precondition check — callers decide whether removal is
+ * allowed (self-service `unlinkFederatedIdentity` below anchors on the
+ * password guard; the admin path anchors on its own self/instance-policy
+ * rules) and both must go through the exact same removal steps so neither
+ * one can reintroduce the f4143f14 regression on its own.
  *
- * The guard never counts identities (spec design decision 4). Counting is
- * what makes "don't strand the account" racy: two concurrent unlinks each
- * see the other's identity still present and both proceed, leaving an
- * account with no login method at all. Anchoring on the password instead
- * makes the guard depend on a document neither unlink touches — if
- * password auth is on and a password is set, that path survives any number
- * of concurrent unlinks; if password auth is off, no unlink is ever
- * allowed in the first place.
+ * Read the identity before removing anything: its `providerUserId` is what
+ * keys the registration journal, and the caller only knows
+ * `(userId, provider)`.
  */
-export async function unlinkFederatedIdentity(crowi: Crowi, user: UserDocument, provider: string): Promise<UnlinkFederatedIdentityOutcome> {
+export async function removeIdentityAndJournal(crowi: Crowi, user: UserDocument, provider: string): Promise<{ removed: boolean }> {
   const UserIdentity = crowi.model('UserIdentity');
 
-  if (isDisabledPasswordAuth(crowi.getConfig())) {
-    return { kind: 'password_auth_disabled' };
-  }
-
-  // `populateSecrets()` before `isPasswordSet()` — the password hash is
-  // deliberately not on the ordinary `User` projection (same two-step
-  // `handlers/me.ts` uses before every password-sensitive decision).
-  const userWithSecrets = await user.populateSecrets();
-  if (!userWithSecrets.isPasswordSet()) {
-    return { kind: 'password_required' };
-  }
-
-  // Read the identity before removing anything: its `providerUserId` is
-  // what keys the registration journal, and the caller only knows
-  // `(userId, provider)`.
   const identity = await UserIdentity.findOne({ userId: user._id, provider });
-  if (!identity) return { kind: 'not_linked' };
+  if (!identity) return { removed: false };
 
   // The journal row goes FIRST, and it has to go at all.
   //
@@ -313,5 +298,48 @@ export async function unlinkFederatedIdentity(crowi: Crowi, user: UserDocument, 
   await crowi.model('PendingAuthRegistration').deleteOne({ provider, providerUserId: identity.providerUserId });
 
   const result = await UserIdentity.deleteOne({ _id: identity._id });
-  return result.deletedCount === 1 ? { kind: 'unlinked' } : { kind: 'not_linked' };
+  return { removed: result.deletedCount === 1 };
+}
+
+/**
+ * Whether the account still has any linked federated identity — the predicate
+ * the email-change lock is gated on, in self-service (`handlers/me.ts`) and
+ * the admin user routes alike. Both asked it independently before, with
+ * different query mechanics, so a future narrowing of what counts as a
+ * lock-holding identity had to be found twice.
+ *
+ * Existence is the right question HERE even though the unlink guard below
+ * deliberately refuses to count: this asks "is the address IdP-anchored right
+ * now", where losing a race just means the request beat a link/unlink, not
+ * that an account was left with no way to sign in.
+ */
+export async function hasLinkedFederatedIdentity(crowi: Crowi, userId: UserDocument['_id']): Promise<boolean> {
+  return (await crowi.model('UserIdentity').exists({ userId })) !== null;
+}
+
+/**
+ * The guard never counts identities (spec design decision 4). Counting is
+ * what makes "don't strand the account" racy: two concurrent unlinks each
+ * see the other's identity still present and both proceed, leaving an
+ * account with no login method at all. Anchoring on the password instead
+ * makes the guard depend on a document neither unlink touches — if
+ * password auth is on and a password is set, that path survives any number
+ * of concurrent unlinks; if password auth is off, no unlink is ever
+ * allowed in the first place.
+ */
+export async function unlinkFederatedIdentity(crowi: Crowi, user: UserDocument, provider: string): Promise<UnlinkFederatedIdentityOutcome> {
+  if (isDisabledPasswordAuth(crowi.getConfig())) {
+    return { kind: 'password_auth_disabled' };
+  }
+
+  // `populateSecrets()` before `isPasswordSet()` — the password hash is
+  // deliberately not on the ordinary `User` projection (same two-step
+  // `handlers/me.ts` uses before every password-sensitive decision).
+  const userWithSecrets = await user.populateSecrets();
+  if (!userWithSecrets.isPasswordSet()) {
+    return { kind: 'password_required' };
+  }
+
+  const { removed } = await removeIdentityAndJournal(crowi, user, provider);
+  return removed ? { kind: 'unlinked' } : { kind: 'not_linked' };
 }

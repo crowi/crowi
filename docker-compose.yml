@@ -164,6 +164,30 @@ services:
       - 1025:1025 # SMTP
       - 8025:8025 # Web UI
 
+  # `@crowi/plugin-storage-gcs`'s opt-in emulator suite
+  # (packages/api/src/plugin/storage-gcs.emulator.test.ts). Unlike the
+  # always-on `crowi-test-*` services above, this one is gated behind its
+  # own profile — a normal `docker compose up -d` and normal CI must NOT
+  # start it. Bring it up explicitly:
+  #
+  #   docker compose --profile gcs-test up -d crowi-test-gcs
+  #   STORAGE_EMULATOR_HOST=http://127.0.0.1:4443 pnpm --filter @crowi/api test -- --runInBand src/plugin/storage-gcs.emulator.test.ts
+  #   docker compose --profile gcs-test stop crowi-test-gcs
+  #
+  # `-scheme http` is required: fake-gcs-server defaults to a self-signed
+  # TLS listener on 4443, and the test client talks plain HTTP to whatever
+  # host:port `STORAGE_EMULATOR_HOST` names (see the header comment on
+  # `packages/api/src/plugin/storage-gcs.emulator.test.ts` for the exact
+  # SDK-level base-URL handling that value drives). Not an ADC/IAM/
+  # `signBlob` oracle — see `docs/manual-verification/storage-gcs-provider.md`.
+  crowi-test-gcs:
+    image: fsouza/fake-gcs-server:1.54.0
+    container_name: crowi-test-gcs
+    profiles: ["gcs-test"]
+    command: ["-scheme", "http"]
+    ports:
+      - 4443:4443
+
   # ---------------------------------------------------------------------------
   # Application services (opt-in via `--profile app`)
   # ---------------------------------------------------------------------------

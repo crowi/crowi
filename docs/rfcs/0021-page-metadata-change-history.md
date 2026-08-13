@@ -401,9 +401,24 @@ An internal rename performed as part of trash or restore does not create a
 Page gains a monotonic `historySequence`, initialized to zero. A successful
 history-producing Page CAS increments it and allocates the new value to exactly
 one entry. The Page CAS is the sole allocator after cutover, so a valid
-committed entry cannot share a sequence with another entry. Gaps are permitted
-only for explicitly recorded migration repair; duplicate sequences are
-corruption and block the Page for repair.
+committed entry cannot share a sequence with another entry. Duplicate sequences
+are corruption and block the Page for repair.
+
+**Sequence is allocation order, not wall-clock order.** The two normally
+coincide, but they can diverge: content sequence allocation runs after the
+pointer write and never fails the save (§13.2), so a Revision whose allocation
+did not complete carries no sequence until repair assigns one — and repair
+assigns the Page's next value, which is later than anything committed in the
+meantime. A content Revision can therefore sort after a metadata event that
+happened after it.
+
+This is accepted rather than corrected. Repairing it would require either
+failing content saves when allocation fails — reintroducing the coupling
+§13.2 removes, and losing a save the user already saw succeed — or a
+renumbering scheme that inserts between existing neighbours, which no
+single-document compare-and-set can do safely. Consumers order by sequence and
+must not present it as a timestamp; `occurredAt` and `createdAt` remain the
+record of when something happened.
 
 Content Revisions gain two additive bookkeeping fields, `historySequence` and an
 optional `historyOperationId`. Existing and new Revision bodies, render
@@ -730,10 +745,21 @@ fire-and-forget `updateOne` into the shared publish command; it drains the
 content marker and performs its own sequenced `draft_published` CAS.
 
 When one request changes both body and grant, the content save and visibility
-change are two ordered commands with the same `operationId`. Each drains its
-own pending entry before the next begins. Standalone MongoDB does not make the
-two domain changes all-or-nothing, but it does ensure that every state change
-which becomes durable has its corresponding durable history row.
+change are two ordered commands. Each drains its own pending entry before the
+next begins. Standalone MongoDB does not make the two domain changes
+all-or-nothing, but it does ensure that every state change which becomes
+durable has its corresponding durable history row.
+
+The two commands are intended to share one `operationId`, so the merged
+timeline can present them as a single operation. That grouping does not arrive
+with the first metadata writer: content sequences are allocated by a service
+whose signature carries no operation identity (§13.2), and giving it one is a
+change to already-shipped code rather than to the command being added. Until
+the phase that changes that signature, a body-plus-grant save produces a
+content row with no `operationId` and a metadata row with its own, and the
+timeline shows two entries instead of one grouped pair. This is a presentation
+gap, not a correctness one — `operationId` is already nullable on content rows
+(§17.1), and every row still carries its own sequence and payload.
 
 ### §6.3a Authoritative lifecycle gate
 

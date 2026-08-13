@@ -372,7 +372,16 @@ export const Fixture = {
   async generate(model, fixture) {
     const conn = crowi.getMongo().connection;
     if (conn.readyState === 0) {
-      throw new Error();
+      // Report `_readyState` and the heartbeat age alongside the effective
+      // state. `readyState` is a getter that reports `disconnected` once
+      // `Date.now() - _lastHeartbeatAt` reaches two heartbeat intervals, so a
+      // test that pins `Date.now()` into the future trips this guard on a
+      // connection that is in fact alive (`_readyState` still 1). Without
+      // these fields the two cases are indistinguishable from the stack.
+      const heartbeatAgeMs = conn._lastHeartbeatAt == null ? null : Date.now() - conn._lastHeartbeatAt;
+      throw new Error(
+        `Fixture.generate(${model}): Mongo connection reports readyState 0 (internal _readyState=${conn._readyState}, last heartbeat ${heartbeatAgeMs === null ? 'never' : `${heartbeatAgeMs}ms ago`}, db=${conn.name})`,
+      );
     }
     const Model = conn.model(model);
     return Promise.all(fixture.map((entity) => new Model(entity).save()));

@@ -11,6 +11,7 @@ import type {
   ListAdminUsersResponse,
   PendingUsersCountResponse,
   ResetPasswordResponse,
+  UnlinkUserIdentityResponse,
   UpdateAdminUserEmailRequest,
 } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
@@ -213,6 +214,32 @@ export function useUpdateAdminUserEmail() {
       });
       if (response.status === 200) return (await response.json()) as AdminUserMutationResponse;
       return throwAdminUserEditError(response, m['admin.users.action.update_email_failed']());
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: adminUsersKeys.all });
+    },
+  });
+}
+
+/**
+ * Disconnects a user's federated identity for one provider (admin-initiated).
+ *
+ * Deliberately NOT optimistic, same reasoning as the self-service
+ * `useUnlinkAuthProvider`: the server can refuse (self / password-auth
+ * disabled), and the row's icon/lock should only change once it actually
+ * has. The server-issued `message` is surfaced verbatim — it already
+ * carries a specific, actionable reason (no generic per-code mapping here,
+ * mirroring `useEditAdminUser`'s error handling below).
+ */
+export function useUnlinkAdminUserIdentity() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (params: { id: string; provider: string }): Promise<UnlinkUserIdentityResponse> => {
+      const response = await apiClient.admin.users[':id'].identities[':provider'].$delete({
+        param: { id: params.id, provider: params.provider },
+      });
+      if (response.status === 200) return (await response.json()) as UnlinkUserIdentityResponse;
+      return throwAdminUserError(response, m['admin.users.action.unlink_identity_failed']());
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: adminUsersKeys.all });

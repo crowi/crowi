@@ -19,6 +19,7 @@ itself is provided by the corresponding `@crowi/plugin-storage-*` plugin.
 | ----------- | ----------- | -------------- |
 | `local` | `@crowi/plugin-storage-local` (always enabled by default) | The server's local filesystem |
 | `s3` | `@crowi/plugin-storage-aws-s3` | Amazon S3 (including S3-compatible storage) |
+| `gcs` | `@crowi/plugin-storage-gcs` | Google Cloud Storage |
 
 `@crowi/plugin-storage-local` is always loaded as an **implicit default
 plugin**. If you write nothing in `crowi.config.json`, the `local` driver
@@ -93,6 +94,175 @@ set. See [Encrypting sensitive config](./encryption) for details.
 When you save the plugin settings from the admin UI, the S3 driver
 applies the new bucket / credentials **without a server restart** via
 `reconfigure`.
+
+## GCS storage (gcs)
+
+To store files on Google Cloud Storage, use the `@crowi/plugin-storage-gcs`
+plugin.
+
+### 1. Enable the plugin
+
+Add the GCS storage plugin to `plugins` in `crowi.config.json` and set
+`storage.driver` to `gcs`.
+
+```json
+{
+  "plugins": [
+    "@crowi/plugin-storage-gcs"
+  ],
+  "storage": {
+    "driver": "gcs"
+  }
+}
+```
+
+### 2. Configure the connection
+
+From the admin UI (`/admin/plugins`) → "Google Cloud Storage", configure
+these four fields.
+
+| Field | Required | Notes |
+| ----- | -------- | ----- |
+| GCS bucket | Yes | Existing private bucket name. Crowi does not create buckets. |
+| Object prefix | No | Prepended to every Crowi object key. Leading/trailing `/` are stripped automatically. |
+| Google Cloud project ID | No | Explicit project ID. Leave blank to use ADC's own project or the inline key's `project_id`. |
+| Service account key JSON | No | Encrypted at rest. Leave blank to use Application Default Credentials (ADC). |
+
+These four fields are saved together as **one encrypted atomic
+document**, not as independent rows — a partial write where some fields
+saved and others didn't never happens. If a service-account key is
+already saved, updating only the other fields and leaving the key field
+blank does **not** clear the stored key — the admin UI never re-sends an
+unchanged secret.
+
+The service-account key is a secret field: `GET /api/admin/plugins/config`
+never returns its raw value, only `{ hasValue: true }` once one is
+stored, and its contents are never written to application logs.
+
+**Leaving Service account key JSON blank** uses
+[Application Default Credentials (ADC)](https://cloud.google.com/docs/authentication/application-default-credentials)
+— the environment's attached service account (GCE/GKE/Cloud Run), a
+Workload Identity Federation credential, or a local `gcloud auth
+application-default login`. This is the recommended setup when running on
+Google Cloud: let the platform vend short-lived credentials instead of
+storing a long-lived key in Mongo.
+
+An invalid key JSON (invalid JSON, wrong `type`, a missing
+`project_id`/`client_email`/`private_key`, or a `private_key` that isn't
+a valid PEM block) is rejected with HTTP 422 before it is saved, listing
+every failing field in `issues`.
+
+### 3. Required IAM permissions
+
+The driver calls three GCS object operations: `storage.objects.create`
+(upload), `storage.objects.get` (download), and `storage.objects.delete`
+(delete). A minimal custom role built from exactly these three permissions
+is sufficient — the driver never lists objects. The predefined **Storage
+Object User** role (`roles/storage.objectUser`) also works and additionally
+bundles `storage.objects.list`, which the driver doesn't call but which
+comes along with the role at no extra grant. No `storage.buckets.*`
+permission is needed — Crowi never creates, lists, or configures buckets.
+
+**Generating V4 signed URLs (`signBlob`) is a separate permission.** A
+connection using an inline service-account key signs locally with the
+private key, needing no extra permission. A connection using ADC needs
+the IAM Credentials `signBlob` permission
+(`roles/iam.serviceAccountTokenCreator` on itself, or an explicit
+`iam.serviceAccounts.signBlob` grant) to sign. Crowi's attachment
+delivery routes (`/api/attachments/:id`, etc.) do not call `signedUrl()`
+today and always serve through the Crowi proxy, so missing `signBlob`
+does not affect normal upload/download.
+
+### 4. The prefix is not an IAM boundary
+
+Setting a prefix separates Crowi's objects from other data in the same
+bucket by naming convention, but this is **not an access-control
+boundary**. Any principal with bucket-level access can still reach
+objects outside the prefix.
+
+### 5. Applying connection changes, and the full-stop caveat
+
+Saving a connection while GCS is **not** the active driver
+(`storage.driver` is something other than `gcs`) is a normal,
+hot-reloadable save, same as any other plugin setting.
+
+Changing the bucket / prefix / credentials while GCS **is already** the
+active driver in a multi-instance deployment is different. This feature
+adds no cross-replica coordination mechanism (no Redis pub/sub, lease, or
+CAS) — each API replica applies the change to its own in-process state
+independently. An online change would create a window where some
+replicas keep reading/writing against the old connection. **The only
+supported procedure is full-stop: stop every API replica, change the
+configuration, then restart.**
+
+### 6. Bucket deletion / permission revocation display behavior (an accepted limitation)
+
+If the configured bucket is later deleted, permission is revoked, or the
+prefix stops existing, the 404 GCS returns is indistinguishable from a
+genuinely missing object. Display falls back to a placeholder, strict
+download returns `FILE_MISSING`, and derivatives fall back to the
+original — the same behavior as a real missing object, even though the
+underlying cause is misconfiguration. This coarseness is shared with the
+`local`/`s3` drivers; GCS is not treated specially. Catching
+misconfiguration early is the job of a separate feature that verifies the
+connection round-trip at save time.
+
+### 7. Migrating files (local/S3 → GCS)
+
+Migrating to GCS uses the same `crowi-admin rebuild storage copy` as any
+other driver pair, but **there is no live/online migration** — only a
+full-stop procedure that pauses both writes and read delivery during the
+copy.
+
+1. Save the GCS connection in the admin UI (`storage.driver` still points
+   at the old driver).
+2. Stop every API replica and every storage-mutating CLI/background
+   worker. Confirm zero in-flight attachment upload/delete, profile image
+   upload, page hard delete, and display-derivative
+   generation/regeneration. Read delivery is also stopped for the
+   duration.
+3. With everything stopped, run `crowi-admin rebuild storage copy --from
+   <old> --to gcs` and confirm `failed: 0`. As a read-verification step,
+   the cheapest exhaustive check is a reverse copy into a disposable
+   scratch destination (`--from gcs --to <scratch>`), confirming every
+   object reads back successfully. `<scratch>` must **not** be the old
+   driver still pointed at the original source data — that would overwrite
+   the very rollback copy step 5 depends on. Use a fresh, disposable
+   destination instead (e.g. a new `local` driver instance pointed at an
+   empty temp directory).
+4. Change `storage.driver` to `gcs` in `crowi.config.json` and restart
+   every replica.
+5. Spot-check upload/delete/profile image/attachment delivery/strict
+   download, then re-enable background workers. If a rollback is needed,
+   repeat the same full-stop procedure in reverse (keep the old storage
+   intact for a rollback window).
+6. Run `crowi-admin rebuild attachment-display-derivatives --force` to
+   regenerate display derivatives from the originals now on GCS (see the
+   Note under "crowi-admin rebuild attachment-display-derivatives" below).
+
+### Opt-in emulator for development/testing
+
+This plugin's unit/integration tests use an opt-in
+`fsouza/fake-gcs-server` service (`docker-compose.yml`'s `crowi-test-gcs`,
+`gcs-test` profile) that normal CI never starts.
+
+```bash
+docker compose --profile gcs-test up -d crowi-test-gcs
+STORAGE_EMULATOR_HOST=http://127.0.0.1:4443 pnpm --filter @crowi/api test -- --runInBand src/plugin/storage-gcs.emulator.test.ts
+docker compose --profile gcs-test stop crowi-test-gcs
+```
+
+Against this real GCS-JSON-API-compatible server, the opt-in suite
+verifies Buffer/Readable upload-download round-trips, prefix mapping to
+the correct physical object name, idempotent delete (existing object
+succeeds, already-absent object is a no-op), missing-object `get()`
+converting to the shape the unmodified `isMissingFileError` classifies as
+missing, and a local-to-GCS `runStorageCopy` round-trip.
+
+This emulator only accepts anonymous requests — it does not exercise ADC
+discovery, real IAM permission checks, or `signBlob` availability.
+Verifying real ADC / IAM / signed-URL behavior requires a real GCS
+bucket.
 
 ## Checking the current storage status
 

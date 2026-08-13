@@ -13,7 +13,7 @@
 // sidesteps any hoisting-induced prototype mismatch across duplicate
 // `zod/v3` copies in node_modules).
 import { type ZodTypeAny, z } from 'zod/v3';
-import { ACTION_FIELD_MARKER, SENSITIVE_FIELD_MARKER, getActionAnnotation } from '@crowi/plugin-api';
+import { ACTION_FIELD_MARKER, SENSITIVE_FIELD_MARKER, getActionAnnotation, isSensitiveField } from '@crowi/plugin-api';
 
 /**
  * Serialised shape of a single plugin config field. The web admin
@@ -53,11 +53,10 @@ export function serializeConfigSchema(schema: z.ZodObject<Record<string, ZodType
 }
 
 function serializeField(name: string, raw: ZodTypeAny): SerializedPluginField {
-  const { unwrapped, optional, defaultValue } = unwrapMeta(raw);
-  const description = (unwrapped.description ?? raw.description) || undefined;
-  const cleanedDescription = stripMarkers(description);
+  const metadata = inspectConfigFieldMetadata(raw);
+  const { unwrapped, optional, defaultValue, sensitive } = metadata;
+  const cleanedDescription = stripMarkers(metadata.description);
   const action = getActionAnnotation(raw) ?? getActionAnnotation(unwrapped) ?? undefined;
-  const sensitive = describesSensitive(raw) || describesSensitive(unwrapped);
 
   const kindResult = detectKind(unwrapped, sensitive);
 
@@ -73,24 +72,51 @@ function serializeField(name: string, raw: ZodTypeAny): SerializedPluginField {
   };
 }
 
-interface UnwrapResult {
+/**
+ * Everything `serializeField` / `PluginManager.listSensitiveKeys` need to
+ * know about one `configSchema` field, gathered by walking every
+ * `ZodOptional` / `ZodDefault` / `ZodEffects` wrapper layer instead of
+ * looking at just the outermost and fully-unwrapped nodes.
+ *
+ * `ZodDefault`/`ZodOptional` copy the wrapped schema's own `description`
+ * onto themselves (`processCreateParams` in zod v3), but `ZodEffects` (the
+ * type `.refine()`/`.superRefine()` produce) does not — a `.describe()`
+ * call placed on an intermediate `ZodEffects` (e.g. between `.superRefine()`
+ * and a later `.default()`) is invisible to both the outermost node and the
+ * fully-unwrapped inner node once anything wraps that `ZodEffects` further.
+ * Scanning every layer, not just the two endpoints, is what makes
+ * `@sensitive` detection robust to that shape.
+ */
+export interface ConfigFieldMetadata {
   unwrapped: ZodTypeAny;
   optional: boolean;
   defaultValue: unknown;
+  /** True when ANY wrapper layer (or the final node) carries the `@sensitive` marker — errs toward marking sensitive. */
+  sensitive: boolean;
+  /** The first description found while walking outer -> inner; markers (`@sensitive`/`@action`) are stripped by the caller, not here. */
+  description?: string;
 }
 
-/**
- * Strip `ZodOptional` / `ZodDefault` / `ZodEffects` wrappers (which
- * `z.string().refine(...)` introduces) so we can introspect the inner
- * primitive type.
- */
-function unwrapMeta(node: ZodTypeAny): UnwrapResult {
-  let cur: ZodTypeAny = node;
+export function inspectConfigFieldMetadata(field: ZodTypeAny): ConfigFieldMetadata {
+  let cur: ZodTypeAny = field;
   let optional = false;
-  let defaultValue: unknown = undefined;
+  let defaultValue: unknown;
+  let sensitive = false;
+  let description: string | undefined;
 
-  // Unwrap up to a small depth to avoid pathological loops.
-  for (let i = 0; i < 6; i++) {
+  // Inspect up to 6 wrapper layers PLUS the final unwrapped node (7 nodes
+  // total, 6 unwraps) to avoid pathological loops. A loop that only
+  // inspects before each of its 6 unwraps (i.e. `for i < 6`) checks 6
+  // nodes but ends the 6th unwrap on an uninspected 7th node — a field
+  // wrapped in exactly 6 layers has its innermost (often the one actually
+  // carrying `@sensitive`) node silently skipped. Inspecting at i === 6
+  // without unwrapping further closes that gap.
+  for (let i = 0; i <= 6; i++) {
+    if (isSensitiveField(cur)) sensitive = true;
+    if (description === undefined && typeof cur.description === 'string') description = cur.description;
+
+    if (i === 6) break;
+
     const typeName = cur._def?.typeName;
     if (typeName === 'ZodOptional') {
       optional = true;
@@ -111,7 +137,7 @@ function unwrapMeta(node: ZodTypeAny): UnwrapResult {
     break;
   }
 
-  return { unwrapped: cur, optional, defaultValue };
+  return { unwrapped: cur, optional, defaultValue, sensitive, description };
 }
 
 function detectKind(unwrapped: ZodTypeAny, sensitive: boolean): { kind: SerializedPluginField['kind']; options?: string[] } {
@@ -137,11 +163,6 @@ function detectKind(unwrapped: ZodTypeAny, sensitive: boolean): { kind: Serializ
   }
   // Unrecognised shape — fall back to string (admin form renders an Input).
   return { kind: 'string' };
-}
-
-function describesSensitive(node: ZodTypeAny): boolean {
-  const d = node.description;
-  return typeof d === 'string' && d.trimStart().startsWith(SENSITIVE_FIELD_MARKER);
 }
 
 /**

@@ -183,6 +183,39 @@ It must also answer negotiation syntax and legacy-emitter removal, structured
 cache design, Revision backfill query/update/history/concurrent-write
 verification, iOS cached-page and history policy, and web memo identity (§10).
 
+### §4.1 Unknown core nodes unwrap; third-party nodes do not
+
+The registry is closed, so every node type added later is unknown to clients
+already in the field. iOS is the hard case: releases go through review and
+users update on their own schedule, so an old build is not a transition state
+but a permanent part of the population. A client cannot declare which types it
+understands — `X-Crowi-Ast-Version` carries the envelope's schema version, and
+`rendererVersion` is diagnostic and must not switch rendering (§5).
+
+A client that meets an unknown type **with children** renders those children in
+its place, re-validated under the same parent content model. Placement,
+depth, and every other envelope rule still apply per child, so an unknown
+wrapper grants its subtree no privileges its position did not already have.
+An unknown type without children stays a visible placeholder, as before.
+
+Two consequences bind the server side.
+
+**A new core node type carries its content in `children`, not in fields.**
+Content reachable only through a node's own fields is invisible to a client
+that does not know the type — unwrapping yields nothing and the reader loses
+the content outright. Content in children degrades to the pre-existing
+rendering instead. `crowiAlert` is the shape to copy: it keeps the original
+block quote children, literal marker included, so an unaware client shows
+today's quote.
+
+**Third-party `x-<plugin>-<type>` nodes are excluded from unwrapping.** They
+are opaque-ised deliberately (`packages/api-contract/src/schemas/rendered-ast.ts`),
+and this section's rule would otherwise have clients open exactly what the
+server closed — contradicting the requirement above that a plugin node become
+opaque at that node. The `x-` prefix is therefore not only a naming convention:
+it is the sole signal separating "unknown, safe to unwrap" from "unknown,
+deliberately sealed", and clients act on it.
+
 ## §5 SDK, cache, and version direction
 
 RenderResult and EmbedFragment receive an additive structured-result variant.

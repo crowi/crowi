@@ -23,6 +23,7 @@ import { formatPluginConfigKey, formatPluginNamespace, parsePluginNamespace, rea
 import { createStateCell } from './plugin-state-cell';
 import { makeRendererScope } from 'src/renderer';
 import { DriverRegistry, makeAuthScope, makeMailScope, makeNotifierScope, makeSearchScope, makeStorageScope } from './registries';
+import { inspectConfigFieldMetadata } from './schema-serializer';
 import { topoSortPlugins } from './topo-sort';
 
 const debug = Debug('crowi:plugin:manager');
@@ -545,8 +546,7 @@ export class PluginManager {
       if (!schema) continue;
       for (const [fieldName, field] of Object.entries(schema.shape)) {
         if (fieldsInSensitiveGroup.has(fieldName)) continue;
-        const description = (field as { description?: string }).description;
-        if (typeof description === 'string' && description.trimStart().startsWith('@sensitive')) {
+        if (inspectConfigFieldMetadata(field).sensitive) {
           out.push(formatPluginConfigKey(plugin.name, fieldName));
         }
       }
