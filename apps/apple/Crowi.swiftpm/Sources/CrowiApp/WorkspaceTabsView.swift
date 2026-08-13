@@ -168,7 +168,7 @@ struct WorkspaceTabsView: View {
         case .notifications:
             NotificationsView(session: session, onSelectDestination: { open($0, in: .notifications) })
         case .profile:
-            ProfileView(session: session, username: nil)
+            ProfileView(session: session, username: nil, onSelectDestination: { open($0, in: .profile) })
         }
     }
 

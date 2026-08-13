@@ -8,11 +8,13 @@ import SwiftUI
 @main
 struct CrowiApp: App {
     @StateObject private var workspaceStore = WorkspaceStore()
+    @StateObject private var settings = AppSettings()
 
     var body: some Scene {
         WindowGroup {
             RootScene()
                 .environmentObject(workspaceStore)
+                .environmentObject(settings)
                 // Crowi's brand teal as the app-wide accent (CrowiTheme's
                 // doc comment explains why this single modifier carries the
                 // whole "not a stock file browser" identity).

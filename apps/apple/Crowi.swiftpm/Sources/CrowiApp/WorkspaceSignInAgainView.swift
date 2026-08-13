@@ -18,7 +18,7 @@ struct WorkspaceSignInAgainView: View {
     @ObservedObject var session: WorkspaceSession
 
     @State private var isSigningIn = false
-    @State private var errorMessage: String?
+    @State private var failure: DisplayableFailure?
 
     var body: some View {
         ContentUnavailableView {
@@ -33,10 +33,8 @@ struct WorkspaceSignInAgainView: View {
                     Button("Sign In") { signIn() }
                         .buttonStyle(.borderedProminent)
                 }
-                if let errorMessage {
-                    Text(errorMessage)
-                        .font(CrowiTypography.rowMeta)
-                        .foregroundStyle(CrowiTheme.destructive)
+                if let failure {
+                    FailureText(failure: failure)
                         .multilineTextAlignment(.center)
                 }
             }
@@ -45,7 +43,7 @@ struct WorkspaceSignInAgainView: View {
     }
 
     private func signIn() {
-        errorMessage = nil
+        failure = nil
         isSigningIn = true
         Task { @MainActor in
             defer { isSigningIn = false }
@@ -58,9 +56,12 @@ struct WorkspaceSignInAgainView: View {
                 try await session.signedIn(with: pair)
             } catch {
                 // Backing out of the sheet is not a failure — say nothing.
-                errorMessage = ASWebAuthenticationSessionRunner.isUserCancellation(error)
+                failure = ASWebAuthenticationSessionRunner.isUserCancellation(error)
                     ? nil
-                    : (NetworkFailureMessage.message(for: error) ?? "Sign-in failed. Try again.")
+                    : DisplayableFailure(
+                        message: NetworkFailureMessage.message(for: error) ?? "Sign-in failed. Try again.",
+                        error: error
+                    )
             }
         }
     }

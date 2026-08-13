@@ -26,4 +26,7 @@ enum ReadDestination: Hashable {
     /// list (RFC-0016 §11), opened from the toolbar bell; a row tap then
     /// navigates onward via `.page(path:)`.
     case notifications
+    /// The app's OWN settings (`AppSettingsView`) — this install's state,
+    /// never a wiki's. Reached from the gear on the reader's own profile.
+    case settings
 }

@@ -40,6 +40,8 @@ struct ReadDestinationView: View {
             PageCreateView(session: session, originPath: originPath, onSelectDestination: onSelect)
         case .notifications:
             NotificationsView(session: session, onSelectDestination: onSelect)
+        case .settings:
+            AppSettingsView()
         }
     }
 }

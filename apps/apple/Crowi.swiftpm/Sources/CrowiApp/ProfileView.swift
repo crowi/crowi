@@ -32,6 +32,9 @@ struct ProfileView: View {
     let session: WorkspaceSession
     /// `nil` = the signed-in user's own profile.
     let username: String?
+    /// Absent where this screen has no stack to push onto — the regular-width
+    /// detail column shows a profile without owning navigation.
+    var onSelectDestination: ((ReadDestination) -> Void)?
 
     @State private var displayName: String?
     @State private var displayUsername: String?
@@ -89,6 +92,19 @@ struct ProfileView: View {
             .padding(.bottom, CrowiMetrics.screenBottomPadding)
         }
         .background(CrowiTheme.background)
+        .toolbar {
+            // The reader's OWN profile only: these settings belong to this
+            // install, not to the person being looked at.
+            if isRoot, let onSelectDestination {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        onSelectDestination(.settings)
+                    } label: {
+                        Label("Settings", systemImage: "gearshape")
+                    }
+                }
+            }
+        }
         .navigationTitle(isRoot ? "" : "@\(username ?? "")")
         .navigationBarTitleDisplayMode(.inline)
         .task(id: username) { await load() }

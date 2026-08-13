@@ -18,7 +18,7 @@ struct AddWorkspaceView: View {
 
     @State private var hostText = ""
     @State private var isAdding = false
-    @State private var errorMessage: String?
+    @State private var failure: DisplayableFailure?
 
     var body: some View {
         NavigationStack {
@@ -34,9 +34,8 @@ struct AddWorkspaceView: View {
                 } header: {
                     Text("Workspace URL")
                 } footer: {
-                    if let errorMessage {
-                        Text(errorMessage)
-                            .foregroundStyle(.red)
+                    if let failure {
+                        FailureText(failure: failure)
                     }
                 }
             }
@@ -59,7 +58,7 @@ struct AddWorkspaceView: View {
     }
 
     private func addWorkspace() {
-        errorMessage = nil
+        failure = nil
         isAdding = true
         let input = hostText
         Task { @MainActor in
@@ -76,7 +75,9 @@ struct AddWorkspaceView: View {
             } catch {
                 isAdding = false
                 // Backing out of the sheet is not a failure — say nothing.
-                errorMessage = ASWebAuthenticationSessionRunner.isUserCancellation(error) ? nil : Self.describe(error)
+                failure = ASWebAuthenticationSessionRunner.isUserCancellation(error)
+                    ? nil
+                    : DisplayableFailure(message: Self.describe(error), error: error)
             }
         }
     }
