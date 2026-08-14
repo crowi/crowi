@@ -16,6 +16,9 @@ struct AppSettingsView: View {
 
     @State private var signingOut: String?
     @State private var clearedWorkspaceId: String?
+    /// Bytes per workspace. Absent until measured — walking the tree is not
+    /// instant on a large cache, and a stale figure is worse than none.
+    @State private var cacheSizes: [String: Int64] = [:]
 
     var body: some View {
         List {
@@ -23,6 +26,14 @@ struct AppSettingsView: View {
                 ForEach(workspaceStore.workspaces, id: \.id) { workspace in
                     row(for: workspace)
                 }
+            }
+
+            Section {
+                Toggle("Open Links in Crowi", isOn: $settings.opensLinksInApp)
+            } header: {
+                Text("Reading")
+            } footer: {
+                Text("Off sends external links to your browser, which leaves the app.")
             }
 
             Section {
@@ -37,6 +48,7 @@ struct AppSettingsView: View {
                 LabeledContent("Version", value: Self.versionText)
             }
         }
+        .task { await measureCaches() }
         .navigationTitle("Settings")
         #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
@@ -52,7 +64,7 @@ struct AppSettingsView: View {
                 .font(CrowiTypography.rowMeta)
                 .foregroundStyle(CrowiTheme.mutedForeground)
             HStack(spacing: 16) {
-                Button("Clear Cache") { clearCache(workspace) }
+                Button(clearCacheLabel(for: workspace)) { clearCache(workspace) }
                     .buttonStyle(.borderless)
                 if signingOut == workspace.id {
                     ProgressView()
@@ -80,6 +92,24 @@ struct AppSettingsView: View {
         WorkspaceModelContainerFactory.deleteImagesCacheDirectory(workspaceId: workspace.id)
         WorkspaceModelContainerFactory.deleteWorkspaceDirectory(workspaceId: workspace.id)
         clearedWorkspaceId = workspace.id
+        cacheSizes[workspace.id] = 0
+    }
+
+    /// The size is IN the button: a clear whose effect is invisible is a leap
+    /// of faith, and the number is also the answer to "is it worth clearing".
+    private func clearCacheLabel(for workspace: Workspace) -> String {
+        guard let bytes = cacheSizes[workspace.id], bytes > 0 else { return "Clear Cache" }
+        return "Clear Cache (\(bytes.formatted(.byteCount(style: .file))))"
+    }
+
+    private func measureCaches() async {
+        let ids = workspaceStore.workspaces.map(\.id)
+        let measured = await Task.detached {
+            ids.reduce(into: [String: Int64]()) { sizes, id in
+                sizes[id] = WorkspaceModelContainerFactory.directorySizeInBytes(workspaceId: id)
+            }
+        }.value
+        cacheSizes = measured
     }
 
     private func signOut(_ workspace: Workspace) {

@@ -23,11 +23,26 @@ public final class AppSettings: ObservableObject {
         didSet { defaults.set(isDeveloperModeEnabled, forKey: Self.developerModeKey) }
     }
 
+    /// Whether an external link opens inside the app.
+    ///
+    /// Handing it to the system browser leaves the app, and coming back can
+    /// mean coming back to a process iOS terminated meanwhile — the page, the
+    /// scroll position and the tab's history all gone for one tap on a
+    /// citation. On by default for that reason; off is for readers who would
+    /// rather have their real browser's extensions and sign-ins.
+    @Published public var opensLinksInApp: Bool {
+        didSet { defaults.set(opensLinksInApp, forKey: Self.opensLinksInAppKey) }
+    }
+
     static let developerModeKey = "wiki.crowi.ios.settings.developerMode"
+    static let opensLinksInAppKey = "wiki.crowi.ios.settings.opensLinksInApp"
 
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         isDeveloperModeEnabled = defaults.bool(forKey: Self.developerModeKey)
+        // `bool(forKey:)` answers false for "never set", which is the wrong
+        // default here — read the object to tell unset from off.
+        opensLinksInApp = defaults.object(forKey: Self.opensLinksInAppKey) as? Bool ?? true
     }
 }
 

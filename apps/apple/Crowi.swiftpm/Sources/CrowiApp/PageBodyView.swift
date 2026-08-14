@@ -32,6 +32,9 @@ struct PageBodyView: View {
     /// `#fragment` links stay inert.
     var onNavigateToFragment: ((String) -> Void)?
 
+    @EnvironmentObject private var settings: AppSettings
+    @State private var externalLink: ExternalLink?
+
     var body: some View {
         let viewer = ImageViewerConfiguration(
             resolver: OriginalImageResolver(
@@ -40,29 +43,44 @@ struct PageBodyView: View {
             ),
             confidentialNotice: session.confidential
         )
-        if case .envelope(let document)? = renderedAst {
-            RenderedAstView(
-                document: document,
-                imageLoader: session.imageCache,
-                workspaceOrigin: session.context.workspace.workspaceOrigin.baseURL,
-                onNavigateToWikiLink: { target in onSelectDestination(.page(path: target)) },
-                onNavigateToMention: { username in onSelectDestination(.profile(username: username)) },
-                onNavigateToRelativePath: { target in onSelectDestination(.page(path: target)) },
-                onNavigateToPageId: { pageId in onSelectDestination(.pageById(pageId)) },
-                onNavigateToFragment: onNavigateToFragment,
-                imageViewer: viewer
-            )
-        } else {
-            WorkspacePageMarkdownView(
-                rawBody: rawBody,
-                imageLoader: session.imageCache,
-                workspaceOrigin: session.context.workspace.workspaceOrigin.baseURL,
-                onNavigateToWikiLink: { target in onSelectDestination(.page(path: target)) },
-                onNavigateToMention: { username in onSelectDestination(.profile(username: username)) },
-                onNavigateToRelativePath: { target in onSelectDestination(.page(path: target)) },
-                onNavigateToPageId: { pageId in onSelectDestination(.pageById(pageId)) },
-                imageViewer: viewer
-            )
+        Group {
+            if case .envelope(let document)? = renderedAst {
+                RenderedAstView(
+                    document: document,
+                    imageLoader: session.imageCache,
+                    workspaceOrigin: session.context.workspace.workspaceOrigin.baseURL,
+                    onNavigateToWikiLink: { target in onSelectDestination(.page(path: target)) },
+                    onNavigateToMention: { username in onSelectDestination(.profile(username: username)) },
+                    onNavigateToRelativePath: { target in onSelectDestination(.page(path: target)) },
+                    onNavigateToPageId: { pageId in onSelectDestination(.pageById(pageId)) },
+                    onNavigateToFragment: onNavigateToFragment,
+                    onOpenExternalURL: openExternally,
+                    imageViewer: viewer
+                )
+            } else {
+                WorkspacePageMarkdownView(
+                    rawBody: rawBody,
+                    imageLoader: session.imageCache,
+                    workspaceOrigin: session.context.workspace.workspaceOrigin.baseURL,
+                    onNavigateToWikiLink: { target in onSelectDestination(.page(path: target)) },
+                    onNavigateToMention: { username in onSelectDestination(.profile(username: username)) },
+                    onNavigateToRelativePath: { target in onSelectDestination(.page(path: target)) },
+                    onNavigateToPageId: { pageId in onSelectDestination(.pageById(pageId)) },
+                    onOpenExternalURL: openExternally,
+                    imageViewer: viewer
+                )
+            }
         }
+        .sheet(item: $externalLink) { link in
+            SafariView(url: link.url)
+                .ignoresSafeArea()
+        }
+    }
+
+    /// `nil` hands the link to the system browser (`.systemAction`); a closure
+    /// keeps it here. Resolved per render so flipping the setting takes effect
+    /// on the next tap, with nothing to reload.
+    private var openExternally: ((URL) -> Void)? {
+        settings.opensLinksInApp ? { externalLink = ExternalLink(url: $0) } : nil
     }
 }

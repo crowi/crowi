@@ -131,6 +131,33 @@ public enum WorkspaceModelContainerFactory {
     /// directory anymore, `feature-ios-phase1-read`) so
     /// `WorkspaceImageDiskCache`'s on-disk cache directory can apply the
     /// SAME protection policy rather than re-implementing it.
+    /// Bytes this workspace occupies on disk — the read cache and the image
+    /// cache together, which is exactly what `deleteWorkspaceDirectory`
+    /// removes.
+    ///
+    /// Walks the tree rather than asking for the directory's own size, since
+    /// a directory entry reports its listing, not its contents. Unreadable
+    /// entries are skipped: a number that is slightly low is worth more than
+    /// no number at all, and this only ever labels a button.
+    public static func directorySizeInBytes(
+        workspaceId: String,
+        baseDirectory: URL = defaultBaseDirectory(),
+        fileManager: FileManager = .default
+    ) -> Int64 {
+        let root = storeDirectory(workspaceId: workspaceId, baseDirectory: baseDirectory)
+        guard let enumerator = fileManager.enumerator(
+            at: root,
+            includingPropertiesForKeys: [.isRegularFileKey, .totalFileAllocatedSizeKey, .fileAllocatedSizeKey]
+        ) else { return 0 }
+        var total: Int64 = 0
+        for case let url as URL in enumerator {
+            let values = try? url.resourceValues(forKeys: [.isRegularFileKey, .totalFileAllocatedSizeKey, .fileAllocatedSizeKey])
+            guard values?.isRegularFile == true else { continue }
+            total += Int64(values?.totalFileAllocatedSize ?? values?.fileAllocatedSize ?? 0)
+        }
+        return total
+    }
+
     public static func applyRestStateProtections(directory: URL, confidential: Bool = false) {
         var directoryURL = directory
         var values = URLResourceValues()

@@ -77,6 +77,11 @@ public struct WorkspacePageMarkdownView: View {
     /// Absent where the host cannot resolve a share URL's id; such a link
     /// then goes to the browser rather than nowhere.
     var onNavigateToPageId: ((String) -> Void)?
+    /// Where an EXTERNAL link goes. Absent means the system browser, which
+    /// leaves the app — and coming back can mean coming back to a process iOS
+    /// terminated meanwhile, with the reading position gone. A host that can
+    /// present a browser itself sets this.
+    var onOpenExternalURL: ((URL) -> Void)?
     /// `feature-ios-image-viewer` — non-nil makes successfully-decoded BLOCK
     /// images tappable, presenting `ImageViewerView` fullscreen (original
     /// bytes via the configuration's resolver; canonical fallback). `nil`
@@ -101,6 +106,7 @@ public struct WorkspacePageMarkdownView: View {
         onNavigateToMention: @escaping (String) -> Void,
         onNavigateToRelativePath: @escaping (String) -> Void,
         onNavigateToPageId: ((String) -> Void)? = nil,
+        onOpenExternalURL: ((URL) -> Void)? = nil,
         imageViewer: ImageViewerConfiguration? = nil
     ) {
         self.rawBody = rawBody
@@ -110,6 +116,7 @@ public struct WorkspacePageMarkdownView: View {
         self.onNavigateToMention = onNavigateToMention
         self.onNavigateToRelativePath = onNavigateToRelativePath
         self.onNavigateToPageId = onNavigateToPageId
+        self.onOpenExternalURL = onOpenExternalURL
         self.imageViewer = imageViewer
     }
 
@@ -228,7 +235,11 @@ public struct WorkspacePageMarkdownView: View {
                             onNavigateToPageId(id)
                             return .handled
                         case nil:
-                            return .systemAction
+                            if let onOpenExternalURL {
+                            onOpenExternalURL(externalURL)
+                            return .handled
+                        }
+                        return .systemAction
                         }
                     }
                 }

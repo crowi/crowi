@@ -38,6 +38,11 @@ public struct RenderedAstView: View {
     /// then goes to the browser rather than nowhere.
     let onNavigateToPageId: ((String) -> Void)?
     let onNavigateToFragment: ((String) -> Void)?
+    /// Where an EXTERNAL link goes. Absent means the system browser, which
+    /// leaves the app — and coming back can mean coming back to a process iOS
+    /// terminated meanwhile, with the reading position gone. A host that can
+    /// present a browser itself sets this.
+    let onOpenExternalURL: ((URL) -> Void)?
     let imageViewer: ImageViewerConfiguration?
     private let imageLoader: any WorkspaceImageFetching
     private let workspaceOrigin: URL
@@ -54,6 +59,7 @@ public struct RenderedAstView: View {
         onNavigateToRelativePath: @escaping (String) -> Void,
         onNavigateToPageId: ((String) -> Void)? = nil,
         onNavigateToFragment: ((String) -> Void)? = nil,
+        onOpenExternalURL: ((URL) -> Void)? = nil,
         imageViewer: ImageViewerConfiguration? = nil
     ) {
         self.document = document
@@ -64,6 +70,7 @@ public struct RenderedAstView: View {
         self.onNavigateToRelativePath = onNavigateToRelativePath
         self.onNavigateToPageId = onNavigateToPageId
         self.onNavigateToFragment = onNavigateToFragment
+        self.onOpenExternalURL = onOpenExternalURL
         self.imageViewer = imageViewer
         self.definitions = document.definitions
     }
@@ -164,7 +171,11 @@ public struct RenderedAstView: View {
                 onNavigateToPageId(id)
                 return .handled
             case nil:
-                return .systemAction
+                if let onOpenExternalURL {
+                onOpenExternalURL(externalURL)
+                return .handled
+            }
+            return .systemAction
             }
         }
     }
