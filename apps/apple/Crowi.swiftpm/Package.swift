@@ -16,7 +16,7 @@ let package = Package(
         .iOSApplication(
             name: "Crowi",
             targets: ["CrowiApp"],
-            bundleIdentifier: "wiki.crowi.app",
+            bundleIdentifier: "wiki.crowi.ios",
             teamIdentifier: "R3H48LR47S",
             displayVersion: "0.1",
             bundleVersion: "1",
