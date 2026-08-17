@@ -98,6 +98,14 @@ export interface PageEventCommandInput {
   actor: Types.ObjectId | null;
   /** Already-converted value — pass the result of {@link toPageHistoryEventSource}, never a raw `editVia`/`authContext.kind` string. */
   source: PageHistoryEventSource;
+  /**
+   * Pins the event envelope's `operationId` instead of minting one per attempt.
+   * Pass it when several pages' events belong to ONE logical operation (a
+   * subtree command) or when `{page, operationId, kind}` has to serve as the
+   * durable evidence that this operation already committed — a value chosen
+   * per attempt can satisfy neither.
+   */
+  operationId?: string;
   plan: PageCommandPlan;
   /** Same defaults/semantics as `content-sequence.ts`'s allocator (DC-9: same retry budget). */
   options?: { maxClaimAttempts?: number; maxDrainAssists?: number };
@@ -205,7 +213,9 @@ export async function runPageEventCommand(crowi: Crowi, input: PageEventCommandI
         // materialization idempotency key), same timing principle as
         // `content-sequence.ts`'s own `entryId`/`operationId`.
         const eventId = new Types.ObjectId();
-        const operationId = randomUUID();
+        // A caller may pin one logical operation across retries/pages;
+        // `eventId` stays attempt-local because a losing CAS persists nothing.
+        const operationId = input.operationId ?? randomUUID();
         const occurredAt = new Date();
         const event = result.event as NonNullable<(typeof result)['event']>;
 

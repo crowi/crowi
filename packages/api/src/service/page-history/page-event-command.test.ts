@@ -5,6 +5,8 @@ import { publishDraftPage } from './commands/publish-draft';
 import { changePageVisibility } from './commands/visibility';
 import * as contentSequenceModule from './content-sequence';
 import * as materializeModule from './materialize';
+import { runPageEventCommand } from './page-event-command';
+import type { PageCommandPlan } from './page-event-command';
 import { repairPendingEntries, scanUnsequencedRevisions } from './repair';
 
 /**
@@ -68,6 +70,94 @@ describe('service/page-history/page-event-command — runPageEventCommand / chan
     await Page.pushRevision(draft, seedRevision, user);
     return draft;
   }
+
+  function createGrantChangePlan(toGrant: number): PageCommandPlan {
+    return (snapshot) => {
+      if (typeof snapshot.grant !== 'number') {
+        return { decision: 'reject', reason: 'missing-grant' };
+      }
+
+      return {
+        decision: 'write',
+        expected: { grant: snapshot.grant },
+        set: { grant: toGrant },
+        event: { kind: 'visibility_changed', payload: { fromGrant: snapshot.grant, toGrant } },
+      };
+    };
+  }
+
+  describe('operationId', () => {
+    test('persists a caller-supplied operationId on the materialized event', async () => {
+      const created = await Page.createPage('/pec/operation-id-supplied', 'v1', user, {});
+      const operationId = 'caller-operation-id';
+
+      const outcome = await runPageEventCommand(crowi, {
+        pageId: created._id,
+        actor: user._id,
+        source: 'web',
+        plan: createGrantChangePlan(Page.GRANT_RESTRICTED),
+        operationId,
+      });
+
+      expect(outcome.status).toBe('committed');
+      const event = await PageHistoryEvent.findOne({ page: created._id }).lean();
+      expect(event?.operationId).toBe(operationId);
+    });
+
+    test('generates an operationId when the caller omits it', async () => {
+      const created = await Page.createPage('/pec/operation-id-generated', 'v1', user, {});
+
+      const outcome = await runPageEventCommand(crowi, {
+        pageId: created._id,
+        actor: user._id,
+        source: 'web',
+        plan: createGrantChangePlan(Page.GRANT_RESTRICTED),
+      });
+
+      expect(outcome.status).toBe('committed');
+      const event = await PageHistoryEvent.findOne({ page: created._id }).lean();
+      expect(event?.operationId).toEqual(expect.any(String));
+      expect(event?.operationId).not.toHaveLength(0);
+    });
+
+    test('preserves a caller-supplied operationId after a lost CAS race retries', async () => {
+      const created = await Page.createPage('/pec/operation-id-retry', 'v1', user, {});
+      const operationId = 'caller-operation-id-after-retry';
+      const findOneAndUpdateSpy = jest
+        .spyOn(Page, 'findOneAndUpdate')
+        .mockImplementationOnce(() => ({ exec: () => Promise.resolve(null) }) as unknown as ReturnType<typeof Page.findOneAndUpdate>);
+
+      let outcome: Awaited<ReturnType<typeof runPageEventCommand>>;
+      let callCount: number;
+      let attemptUpdates: Array<{
+        $set: { pendingHistoryEntry: { event: { _id: Types.ObjectId; operationId: string } } };
+      }>;
+      try {
+        outcome = await runPageEventCommand(crowi, {
+          pageId: created._id,
+          actor: user._id,
+          source: 'web',
+          plan: createGrantChangePlan(Page.GRANT_RESTRICTED),
+          operationId,
+        });
+      } finally {
+        callCount = findOneAndUpdateSpy.mock.calls.length;
+        attemptUpdates = findOneAndUpdateSpy.mock.calls.map(([, update]) => update);
+        findOneAndUpdateSpy.mockRestore();
+      }
+
+      expect(outcome.status).toBe('committed');
+      expect(callCount).toBe(2);
+      const firstAttemptEvent = attemptUpdates[0].$set.pendingHistoryEntry.event;
+      const secondAttemptEvent = attemptUpdates[1].$set.pendingHistoryEntry.event;
+      // One caller-pinned operation spans retries/pages, but each attempt gets a fresh eventId because a losing CAS persists nothing.
+      expect(firstAttemptEvent.operationId).toBe(operationId);
+      expect(secondAttemptEvent.operationId).toBe(firstAttemptEvent.operationId);
+      expect(secondAttemptEvent._id).not.toEqual(firstAttemptEvent._id);
+      const event = await PageHistoryEvent.findOne({ page: created._id }).lean();
+      expect(event?.operationId).toBe(operationId);
+    });
+  });
 
   describe('AC-1/AC-2: ready Page grant change — event + no-event (same-grant) branches', () => {
     test('AC-1: confirms grant/grantedUsers and appends a visibility_changed event in one CAS', async () => {
