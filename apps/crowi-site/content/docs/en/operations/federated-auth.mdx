@@ -76,7 +76,9 @@ The password is the only thing the guard looks at — **another linked provider 
 
 ### What an administrator sees
 
-The admin user list marks a linked account with an icon on its row, and the row menu lets an **administrator unlink** a provider (subject to the same condition as a user unlinking their own — refused when it would leave the account with no way to sign in).
+The admin user list marks a linked account with an icon on its row, and the row menu lets an **administrator unlink** a provider. The condition **differs from a user unlinking their own**: a self-service unlink is refused without a password, whereas an admin unlink **issues one first** when the target has none, showing the generated password once. Recovering a compromised provider account is the point of an admin unlink. An existing password is left untouched — unlinking is not itself a reason to invalidate a password the user already knows.
+
+Only two cases are refused, both with `409`: **unlinking your own identity**, and **an instance with password sign-in disabled**.
 
 **The email address on a linked account cannot be changed by an administrator either.** A different address is refused with `409 EMAIL_LOCKED_BY_FEDERATED_IDENTITY`. A linked account can sign in from outside crowi, so swapping the address would redirect the confirmation link — the account's recovery channel — away from its owner. The same lock applies in the user's own settings, for the same reason (see [User pages and profile](../guide/profile)).
 
