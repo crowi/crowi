@@ -34,3 +34,33 @@ final class AppSettingsTests: XCTestCase {
         XCTAssertNil(DisplayableFailure(message: "This does not look like a Crowi instance.").detail)
     }
 }
+
+@MainActor
+final class AppAppearanceSettingTests: XCTestCase {
+    private func makeDefaults() -> UserDefaults {
+        UserDefaults(suiteName: "wiki.crowi.ios.tests.\(UUID().uuidString)")!
+    }
+
+    func testItFollowsTheDeviceUntilToldOtherwise() {
+        XCTAssertEqual(AppSettings(defaults: makeDefaults()).appearance, .system)
+    }
+
+    func testAChoiceSurvivesTheAppBeingRestarted() {
+        let defaults = makeDefaults()
+        AppSettings(defaults: defaults).appearance = .light
+        XCTAssertEqual(AppSettings(defaults: defaults).appearance, .light)
+    }
+
+    func testAStoredValueThisBuildDoesNotRecogniseFallsBackToTheDevice() {
+        // A retired case must not leave the reader on a side the app picked.
+        let defaults = makeDefaults()
+        defaults.set("sepia", forKey: AppSettings.appearanceKey)
+        XCTAssertEqual(AppSettings(defaults: defaults).appearance, .system)
+    }
+
+    func testEveryCaseIsOfferedAndLabelledDistinctly() {
+        let labels = AppAppearance.allCases.map(\.label)
+        XCTAssertEqual(Set(labels).count, AppAppearance.allCases.count)
+        XCTAssertEqual(AppAppearance.allCases.count, 3)
+    }
+}

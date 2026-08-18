@@ -1,5 +1,25 @@
 import Foundation
 
+/// Light, dark, or whatever the device is doing.
+///
+/// iOS already has a system-wide switch, so this exists for the case that
+/// switch cannot express: a reader whose device is dark all day but who wants
+/// long-form prose light (or the reverse). Persisted by raw value so a future
+/// case cannot silently reinterpret a stored setting.
+public enum AppAppearance: String, CaseIterable, Identifiable, Sendable {
+    case system, light, dark
+
+    public var id: String { rawValue }
+
+    public var label: String {
+        switch self {
+        case .system: return "System"
+        case .light: return "Light"
+        case .dark: return "Dark"
+        }
+    }
+}
+
 /// The app's OWN settings — the ones that belong to this install rather than
 /// to any wiki.
 ///
@@ -23,6 +43,11 @@ public final class AppSettings: ObservableObject {
         didSet { defaults.set(isDeveloperModeEnabled, forKey: Self.developerModeKey) }
     }
 
+    /// Overrides the device's light/dark choice for this app only.
+    @Published public var appearance: AppAppearance {
+        didSet { defaults.set(appearance.rawValue, forKey: Self.appearanceKey) }
+    }
+
     /// Whether an external link opens inside the app.
     ///
     /// Handing it to the system browser leaves the app, and coming back can
@@ -34,6 +59,7 @@ public final class AppSettings: ObservableObject {
         didSet { defaults.set(opensLinksInApp, forKey: Self.opensLinksInAppKey) }
     }
 
+    static let appearanceKey = "wiki.crowi.ios.settings.appearance"
     static let developerModeKey = "wiki.crowi.ios.settings.developerMode"
     static let opensLinksInAppKey = "wiki.crowi.ios.settings.opensLinksInApp"
 
@@ -43,6 +69,9 @@ public final class AppSettings: ObservableObject {
         // `bool(forKey:)` answers false for "never set", which is the wrong
         // default here — read the object to tell unset from off.
         opensLinksInApp = defaults.object(forKey: Self.opensLinksInAppKey) as? Bool ?? true
+        // An unreadable or retired stored value falls back to following the
+        // device rather than picking a side for the reader.
+        appearance = AppAppearance(rawValue: defaults.string(forKey: Self.appearanceKey) ?? "") ?? .system
     }
 }
 

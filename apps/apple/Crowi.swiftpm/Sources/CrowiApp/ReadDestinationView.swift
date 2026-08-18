@@ -30,7 +30,11 @@ struct ReadDestinationView: View {
         case .revisionHistory(let pageId, let pagePath):
             RevisionHistoryView(session: session, pageId: pageId, pagePath: pagePath)
         case .profile(let username):
-            ProfileView(session: session, username: username)
+            // The gear needs somewhere to go. At regular width this screen IS
+            // the detail column, so a destination replaces what is shown here
+            // rather than pushing — which is the same seam every other row
+            // uses, and without it the settings are unreachable on iPad.
+            ProfileView(session: session, username: username, onSelectDestination: onSelect)
         case .recentlyViewed:
             RecentlyViewedView(session: session, onSelectDestination: onSelect)
         case .createPage(let originPath):

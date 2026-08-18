@@ -19,6 +19,19 @@ struct CrowiApp: App {
                 // doc comment explains why this single modifier carries the
                 // whole "not a stock file browser" identity).
                 .tint(CrowiTheme.primary)
+                // Applied at the root so it reaches sheets and the launch of
+                // every workspace shell alike. `nil` is what makes "System"
+                // mean the device's own choice rather than a third value the
+                // app has to keep in step.
+                .preferredColorScheme(colorScheme)
+        }
+    }
+
+    private var colorScheme: ColorScheme? {
+        switch settings.appearance {
+        case .system: return nil
+        case .light: return .light
+        case .dark: return .dark
         }
     }
 }

@@ -29,6 +29,11 @@ struct AppSettingsView: View {
             }
 
             Section {
+                Picker("Appearance", selection: $settings.appearance) {
+                    ForEach(AppAppearance.allCases) { appearance in
+                        Text(appearance.label).tag(appearance)
+                    }
+                }
                 Toggle("Open Links in Crowi", isOn: $settings.opensLinksInApp)
             } header: {
                 Text("Reading")
