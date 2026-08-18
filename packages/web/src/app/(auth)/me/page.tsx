@@ -1,53 +1,118 @@
 'use client';
 
-import { useProfile } from '@/lib/use-profile';
-import { usePageTitle } from '@/lib/use-page-title';
-import { SettingsLayout } from './settings-layout';
-import { ProfileForm } from './profile-form';
-import { ProfilePicture } from './profile-picture';
-import { PasswordForm } from './password-form';
-import { McpSetupSection } from './mcp-setup-section';
-import { AccessTokensSection } from './access-tokens-section';
-import { LinkedAccountsSection } from './linked-accounts-section';
+import { m } from '@paraglide/messages.js';
+import { getLocale } from '@paraglide/runtime.js';
+import { useSearchParams } from 'next/navigation';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { m } from '@paraglide/messages.js';
-import { getLocale } from '@paraglide/runtime.js';
+import { usePageTitle } from '@/lib/use-page-title';
+import { useProfile } from '@/lib/use-profile';
+import { AccessTokensSection } from './access-tokens-section';
+import { LinkedAccountsSection, type PendingLinkCompletion, PendingLinkCompletionContainer } from './linked-accounts-section';
+import { McpSetupSection } from './mcp-setup-section';
+import { PasswordForm } from './password-form';
+import { ProfileForm } from './profile-form';
+import { ProfilePicture } from './profile-picture';
+import { SettingsLayout } from './settings-layout';
 
-export default function SettingsPage() {
+function LoadingBody() {
+  return (
+    <div className="flex items-center justify-center h-64">
+      <div className="text-center space-y-4">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto" />
+        <p className="text-muted-foreground">{m['me.loading']()}</p>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The always-
+ * mounted inner component. `useSearchParams`'s CSR-bailout requirement is
+ * satisfied by wrapping ONLY this component in `<Suspense>` — see
+ * `SettingsPage` below — the file-level default export itself stays a
+ * plain boundary with no hooks of its own.
+ *
+ * The completion-code capture effect runs BEFORE (i.e. independent of)
+ * `useProfile`'s own loading/error/not-found branches below: a link
+ * callback can land here while the profile fetch is still in flight, and
+ * the code must not be lost to a race with that unrelated request.
+ * `PendingLinkCompletionContainer` is likewise rendered unconditionally,
+ * outside every profile-state branch, so the confirmation dialog can open
+ * regardless of what the Profile/Security tabs are doing.
+ */
+function SettingsPageContent() {
+  const searchParams = useSearchParams();
+  const [pending, setPending] = useState<PendingLinkCompletion | null>(null);
+  // One-shot: a later re-render (e.g. profile finishing its own fetch)
+  // must never re-capture/re-strip the URL a second time.
+  const captured = useRef(false);
+
+  useEffect(() => {
+    if (captured.current) return;
+    const provider = searchParams.get('provider');
+    const code = searchParams.get('link_completion');
+    // Both or neither — a bare `?provider=` with no code (or vice versa)
+    // is not a completion redirect and is left alone.
+    if (!provider || !code) return;
+    captured.current = true;
+    // Capturing a one-time arrival value off the URL, paired with an
+    // unavoidable imperative `history.replaceState` right below — this is
+    // exactly the "synchronize with an external system" case `useEffect`
+    // exists for, not state derivable during render (the ref guard makes
+    // it run at most once per mount).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setPending({ provider, code });
+
+    const url = new URL(window.location.href);
+    url.searchParams.delete('link_completion');
+    url.searchParams.set('tab', 'security');
+    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+  }, [searchParams]);
+
   const { data: profile, isLoading, error } = useProfile();
   usePageTitle(m['me.heading']());
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center space-y-4">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto" />
-          <p className="text-muted-foreground">{m['me.loading']()}</p>
-        </div>
-      </div>
-    );
-  }
+  const dateLocale = getLocale() === 'ja' ? 'ja-JP' : 'en-US';
 
-  if (error) {
-    return (
+  let body: React.ReactNode;
+  if (isLoading) {
+    body = <LoadingBody />;
+  } else if (error) {
+    body = (
       <Alert variant="destructive">
         <AlertDescription>{m['me.failed_to_load']()}</AlertDescription>
       </Alert>
     );
-  }
-
-  if (!profile) {
-    return (
+  } else if (!profile) {
+    body = (
       <Alert variant="destructive">
         <AlertDescription>{m['me.profile_not_found']()}</AlertDescription>
       </Alert>
     );
+  } else {
+    body = <ProfileSettingsLayout profile={profile} dateLocale={dateLocale} />;
   }
 
-  const dateLocale = getLocale() === 'ja' ? 'ja-JP' : 'en-US';
+  return (
+    <>
+      {body}
+      <PendingLinkCompletionContainer pending={pending} onPendingChange={setPending} />
+    </>
+  );
+}
 
+export default function SettingsPage() {
+  return (
+    <Suspense fallback={<LoadingBody />}>
+      <SettingsPageContent />
+    </Suspense>
+  );
+}
+
+function ProfileSettingsLayout({ profile, dateLocale }: { profile: NonNullable<ReturnType<typeof useProfile>['data']>; dateLocale: string }) {
   return (
     <SettingsLayout
       profileTab={
