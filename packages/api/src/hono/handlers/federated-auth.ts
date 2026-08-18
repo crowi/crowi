@@ -1,61 +1,60 @@
 /**
- * RFC-0014 phase 1 — federated (OAuth2/OIDC) sign-in flow skeleton.
+ * RFC-0014 phase 1 — federated (OAuth2/OIDC) sign-in flow skeleton, plus the
+ * account-link flow as 3 authenticated stages instead of a single
+ * `jwtAuth`-gated top-level GET (a top-level browser navigation cannot carry
+ * an `Authorization` header, so that never worked once linking required
+ * authentication — see RFC-0014 §5.4):
  *
  *   GET  /auth/providers                — public, enabled provider list
- *   GET  /auth/providers/{name}/start   — public, top-level-navigation redirect to the IdP
- *   GET  /auth/providers/{name}/callback — public, IdP redirect target
+ *   GET  /auth/providers/{name}/start   — public, top-level-navigation redirect to the IdP (sign-in ONLY)
+ *   GET  /auth/providers/{name}/callback — public, IdP redirect target (branches on the query `state` namespace)
  *   POST /auth/handoff                  — public, sender-constrained code -> session tokens
+ *   POST /auth/providers/{name}/link-start                — web-session-only, mints the IdP authorization URL + flow cookie
+ *   GET  /auth/providers/{name}/link-completions/{code}   — web-session-only, non-destructive confirmation read
+ *   POST /auth/providers/{name}/link-completions/{code}   — web-session-only, atomic consume + identity insert
  *
- * See `.feature-state/specs/feature-auth-google-phase1-flow-skeleton.md`
- * for the full design (state cookie / PKCE / sender-constrained handoff
- * threat model). Phase 1 wires the OAuth2/OIDC PROTOCOL only —
- * provisioning/linking are `FederatedProfileTerminal`'s job, and Phase 1's
- * own terminal (`createUnavailableFederatedProfileTerminal`) never reads
- * or writes `User`/`UserIdentity`.
- *
- * The few `terminalResult.kind === 'registration'` / `providerLabel` /
- * `handoffJkt` / shared-`handoffStore` touches below are Phase 2's, added at
- * `completeFederatedCallback`'s single `terminal.resolve(...)` call site and
- * `registerFederatedAuthRoutes`'s options — the OAuth2/OIDC protocol code
- * itself (state cookie, PKCE, id_token verification, JWT bridge) is
- * untouched. See `src/auth/federated-profile-terminal.ts`'s header for why
- * this is the exact extension point the umbrella spec's phase-1 row names
- * ("provisioning と linking の分岐先はインターフェースのみ"), and phase 2's
- * own design decision 8 for why the handoff store must be the SAME shared
- * instance.
+ * Phase 1 wires the OAuth2/OIDC PROTOCOL only — provisioning is
+ * `FederatedProfileTerminal`'s job, and Phase 1's own terminal
+ * (`createUnavailableFederatedProfileTerminal`) never reads or writes
+ * `User`/`UserIdentity`. The link branch bypasses `FederatedProfileTerminal`
+ * entirely (a link targets an account that already exists and is already
+ * signed in) and never touches the DB at callback time — see
+ * `completeLinkCallback`'s doc comment.
  */
+
+import type { webcrypto } from 'node:crypto';
+import crypto from 'node:crypto';
 import {
   callbackFederatedProviderRoute,
-  createAuthProviderLinkGrantRoute,
+  completeProviderLinkRoute,
   federatedHandoffRoute,
-  listLinkedAuthProvidersRoute,
+  getProviderLinkCompletionRoute,
   listFederatedProvidersRoute,
+  listLinkedAuthProvidersRoute,
   startFederatedProviderRoute,
+  startProviderLinkRoute,
   unlinkAuthProviderRoute,
 } from '@crowi/api-contract';
 import type { AuthDriver, AuthProfile, AuthVerifyResult, OAuth2AuthDriver, OAuthClientConfig, OAuthTokens, OidcAuthDriver } from '@crowi/plugin-api';
 import type { OpenAPIHono, RouteHandler } from '@hono/zod-openapi';
-import crypto from 'node:crypto';
-import type { webcrypto } from 'node:crypto';
 import Debug from 'debug';
-import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
-
 import type { Context } from 'hono';
-
-import type Crowi from 'src/crowi';
+import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import {
   type AuthProviderLinkingTerminal,
   createAuthProviderLinkingTerminal,
-  createLinkGrantStore,
-  type LinkGrantStore,
+  resolveAuthProviderLinkReplay,
   unlinkFederatedIdentity,
 } from 'src/auth/auth-provider-linking';
 import { createUnavailableFederatedProfileTerminal, type FederatedProfileTerminal } from 'src/auth/federated-profile-terminal';
+import type Crowi from 'src/crowi';
 import { createFederatedHandoffStore, type FederatedHandoffStore } from 'src/service/federated-handoff';
-import { createJwtUtil } from 'src/util/jwt';
+import { createLinkCompletionStore, type LinkCompletionStore } from 'src/service/link-completion';
+import { isMultiInstanceDeclared } from 'src/util/env-schema';
 import {
   buildHandoffCanonicalMessage,
-  buildLinkSettingsUrl,
+  buildLinkCompletionUrl,
+  buildLinkFailureUrl,
   buildLoginCompleteUrl,
   buildLoginErrorUrl,
   buildProviderCallbackUrl,
@@ -63,10 +62,20 @@ import {
   buildStartCanonicalMessage,
   computeJwkThumbprint,
   createFederatedAuthStateUtil,
+  type FederatedAuthState,
   type FederatedAuthStateUtil,
+  FederatedLinkCookieHeaderTooLargeError,
+  type FederatedLinkState,
+  FederatedLinkStateCookieTooLargeError,
+  generateLinkStateValue,
+  generateSignInStateValue,
+  LINK_STATE_VALUE_PATTERN,
+  LINK_STATE_VALUE_PREFIX,
+  linkCookieNameFor,
   timingSafeEqualStrings,
   verifySenderProof,
 } from 'src/util/federated-auth-state';
+import { createJwtUtil } from 'src/util/jwt';
 import { computePkceCodeChallengeS256 } from 'src/util/pkce';
 import { resolveRedisKeyspaceIfEnabled } from 'src/util/redis-keyspace';
 
@@ -88,6 +97,50 @@ const HANDOFF_INVALID_BODY = {
 const HANDOFF_CONSUMED_BODY = {
   error: { code: 'FEDERATED_HANDOFF_CONSUMED' as const, message: 'Handoff code has already been used' },
 };
+
+/**
+ * never-issued,
+ * unconsumed-expired, and retention-expired all collapse to this ONE body,
+ * both at the entry read and mid-replay (design decision 18). Also used for
+ * a binding mismatch (wrong user/provider) — never distinguished from
+ * "not found" so an attacker holding someone else's code learns nothing.
+ */
+const LINK_COMPLETION_NOT_FOUND_BODY = {
+  error: {
+    code: 'NOT_FOUND' as const,
+    message: 'This link confirmation code is invalid or expired. Check the linked accounts list in Settings for the current status.',
+  },
+};
+const LINK_COMPLETION_CONSUMED_BODY = {
+  error: { code: 'LINK_COMPLETION_CONSUMED' as const, message: 'This link confirmation code has already been used' },
+};
+const FEDERATED_IDENTITY_IN_USE_BODY = {
+  error: { code: 'FEDERATED_IDENTITY_IN_USE' as const, message: 'This provider account is already linked to a Crowi account' },
+};
+const FEDERATED_LINK_AUTH_STATE_CHANGED_BODY = {
+  error: {
+    code: 'FEDERATED_LINK_AUTH_STATE_CHANGED' as const,
+    message: 'Your session changed since this link was started. Sign in again and retry.',
+  },
+};
+const FEDERATED_LINK_NOT_LINKED_BODY = {
+  error: { code: 'FEDERATED_LINK_NOT_LINKED' as const, message: 'This account is not linked' },
+};
+
+/**
+ * Spec design decision 1 / AC-1: a PAT or OAuth access token is a valid
+ * credential for the API but NOT for linking — linking is a session-level
+ * account change, and a long-lived integration token must not be able to
+ * attach a new sign-in method to its owner's account (nor read/unlink one).
+ * 403 (not 401): the caller authenticated fine, this credential kind is
+ * simply not permitted here. Module-level (not a `registerFederatedAuthRoutes`
+ * closure) so every standalone handler function below (`startProviderLink`,
+ * `getProviderLinkCompletion`, `completeProviderLink`, the inline unlink
+ * handler) can use it independent of route registration.
+ */
+export const isWebSession = (c: Context<CrowiHonoBindings>): boolean => c.get('authContext')?.kind === 'web';
+
+const NOT_WEB_SESSION_BODY = invalidRequestBody('this endpoint requires an interactive web session');
 
 /** RFC 7636 §4.1 code_verifier — 32 random bytes, base64url (43 chars, within the 43-128 length range). */
 function generatePkceCodeVerifier(): string {
@@ -160,6 +213,249 @@ async function exchangeOAuth2Code(
   };
 }
 
+/**
+ * Shared authorization-URL builder for
+ * BOTH `/start` (sign-in) and `POST link-start`. Returns `null` for driver
+ * discovery/config failure — callers map that to the existing 404
+ * `PROVIDER_NOT_FOUND_BODY` (no cookie/state is ever issued for an
+ * unusable driver).
+ */
+async function buildIdpAuthorizationUrl(input: {
+  driver: FederatedRouteDriver;
+  provider: string;
+  callbackUrl: string;
+  state: string;
+  oidcNonce?: string;
+  codeVerifier?: string;
+}): Promise<string | null> {
+  const { driver, provider, callbackUrl, state, oidcNonce, codeVerifier } = input;
+  const usePkce = driver.kind === 'oidc' || driver.pkce === true;
+
+  if (driver.kind === 'oidc') {
+    let configuration: Awaited<ReturnType<typeof driver.getConfiguration>>;
+    try {
+      // `getConfiguration()` performs network discovery on a cache miss
+      // (RFC-0014 phase 0 §"設計の主な判断") and can reject — it MUST stay
+      // inside this try/catch (not awaited unguarded) so a discovery
+      // failure maps to the same safe "provider unusable" response as the
+      // synchronous null-config check below, instead of escaping to
+      // Hono's global 500 handler.
+      configuration = await driver.getConfiguration();
+    } catch (err) {
+      // Stable operation/provider/error-NAME only — this helper backs BOTH
+      // ordinary sign-in `/start` and `POST link-start`, and `err.message`
+      // from a plugin-authored `getConfiguration()` (network/discovery
+      // failure text) is not guaranteed value-free.
+      debug('oidc getConfiguration() failed at start for provider=%s: %s', provider, (err as Error).name);
+      return null;
+    }
+    if (!configuration) return null;
+    const { buildAuthorizationUrl } = await loadOidcClient();
+    const params = new URLSearchParams({
+      redirect_uri: callbackUrl,
+      scope: driver.scopes.join(' '),
+      state,
+      nonce: oidcNonce as string,
+      code_challenge: computePkceCodeChallengeS256(codeVerifier as string),
+      code_challenge_method: 'S256',
+    });
+    const authorizeUrl = buildAuthorizationUrl(configuration, params);
+    return authorizeUrl.toString();
+  }
+
+  const clientConfig = driver.getClientConfig();
+  if (!clientConfig) return null;
+  const authorizeUrl = new URL(driver.authorizeUrl);
+  authorizeUrl.searchParams.set('response_type', 'code');
+  authorizeUrl.searchParams.set('client_id', clientConfig.clientId);
+  authorizeUrl.searchParams.set('redirect_uri', callbackUrl);
+  if (driver.scopes.length > 0) authorizeUrl.searchParams.set('scope', driver.scopes.join(' '));
+  authorizeUrl.searchParams.set('state', state);
+  if (usePkce) {
+    authorizeUrl.searchParams.set('code_challenge', computePkceCodeChallengeS256(codeVerifier as string));
+    authorizeUrl.searchParams.set('code_challenge_method', 'S256');
+  }
+  return authorizeUrl.toString();
+}
+
+/**
+ * Shared nonce/PKCE/callback-URL assembly + authorization-URL build for
+ * BOTH `/start` and `POST link-start` — the two call sites differ only in
+ * which `state` generator produced `state`. Returns `null` on the same
+ * driver discovery/config failure `buildIdpAuthorizationUrl` itself maps to
+ * `null` — callers translate that to the existing 404 `PROVIDER_NOT_FOUND_BODY`.
+ */
+async function prepareIdpAuthorization(input: {
+  driver: FederatedRouteDriver;
+  provider: string;
+  apiUrl: string;
+  state: string;
+}): Promise<{ authorizationUrl: string; oidcNonce: string | undefined; codeVerifier: string | undefined } | null> {
+  const { driver, provider, apiUrl, state } = input;
+  const oidcNonce = driver.kind === 'oidc' ? crypto.randomBytes(32).toString('base64url') : undefined;
+  const usePkce = driver.kind === 'oidc' || driver.pkce === true;
+  const codeVerifier = usePkce ? generatePkceCodeVerifier() : undefined;
+  const callbackUrl = buildProviderCallbackUrl(apiUrl, provider);
+
+  const authorizationUrl = await buildIdpAuthorizationUrl({ driver, provider, callbackUrl, state, oidcNonce, codeVerifier });
+  if (!authorizationUrl) return null;
+  return { authorizationUrl, oidcNonce, codeVerifier };
+}
+
+/**
+ * The 4 ways a callback's OAuth2/OIDC
+ * protocol exchange can fail, extracted from the exchange logic itself so
+ * the same code serves both callers with DIFFERENT failure-disclosure
+ * postures: ordinary sign-in maps each reason to its own existing
+ * `buildLoginErrorUrl` redirect (unchanged wire behaviour — AC-3), while the
+ * link branch collapses ALL FOUR into the one generic
+ * `buildLinkFailureUrl` redirect (never reveals which protocol step
+ * failed).
+ */
+type FederatedProfileExchangeFailure = 'invalid_state' | 'oidc_verification_failed' | 'exchange_failed' | 'profile_rejected';
+
+type ExchangeProviderProfileOutcome = { ok: true; profile: AuthProfile } | { ok: false; reason: FederatedProfileExchangeFailure };
+
+async function exchangeProviderProfile(input: {
+  driver: FederatedRouteDriver;
+  provider: string;
+  callbackUrl: string;
+  requestUrl: string;
+  code: string;
+  state: FederatedAuthState | FederatedLinkState;
+}): Promise<ExchangeProviderProfileOutcome> {
+  const { driver, provider, callbackUrl, requestUrl, code, state } = input;
+
+  if (driver.kind === 'oidc') {
+    try {
+      const configuration = await driver.getConfiguration();
+      if (!configuration) return { ok: false, reason: 'invalid_state' };
+
+      // openid-client derives the token endpoint's `redirect_uri` by
+      // stripping the query string off this URL — it MUST therefore be
+      // the exact trusted callback URL (no query of its own), with the
+      // real response query attached, not the internal (prefix-stripped)
+      // request URL Hono sees.
+      const currentUrl = new URL(callbackUrl);
+      currentUrl.search = new URL(requestUrl).search;
+
+      const { authorizationCodeGrant } = await loadOidcClient();
+      const tokens = await authorizationCodeGrant(configuration, currentUrl, {
+        expectedState: state.state,
+        expectedNonce: state.oidcNonce,
+        pkceCodeVerifier: state.codeVerifier,
+      });
+      const claims = tokens.claims();
+      if (!claims) return { ok: false, reason: 'oidc_verification_failed' };
+
+      if (driver.authorize) {
+        const authResult = await driver.authorize(claims as Record<string, unknown>);
+        if (!authResult.ok) return { ok: false, reason: 'profile_rejected' };
+      }
+
+      const mapped = driver.mapClaims ? driver.mapClaims(claims as Record<string, unknown>) : {};
+      // RFC-0014 umbrella §"全フェーズに共通する確定事項": email is
+      // required AND must be IdP-verified — Phase 2's JIT provisioning
+      // trusts `profile.email` as already-verified. A driver providing
+      // its OWN `mapClaims` owns this decision entirely (its contract,
+      // Phase 0), but the DEFAULT (no `mapClaims`) mapping below must not
+      // silently trust an unverified `claims.email` just because a driver
+      // author forgot to reject it in `authorize` — only fall back to the
+      // raw claim when the IdP itself asserts `email_verified === true`.
+      const emailVerified = claims.email_verified === true;
+      return {
+        ok: true,
+        profile: {
+          providerUserId: mapped.providerUserId ?? String(claims.sub),
+          email: mapped.email ?? (emailVerified && typeof claims.email === 'string' ? claims.email : undefined),
+          name: mapped.name ?? (typeof claims.name === 'string' ? claims.name : undefined),
+          imageUrl: mapped.imageUrl ?? (typeof claims.picture === 'string' ? claims.picture : undefined),
+          extra: mapped.extra,
+        },
+      };
+    } catch (err) {
+      // Stable operation/provider/error-NAME only — see the analogous
+      // comment on `buildIdpAuthorizationUrl` above; `openid-client`'s
+      // thrown error text can embed callback query values (e.g. the IdP's
+      // own error description).
+      debug('oidc callback verification failed for provider=%s: %s', provider, (err as Error).name);
+      return { ok: false, reason: 'oidc_verification_failed' };
+    }
+  }
+
+  const clientConfig = driver.getClientConfig();
+  if (!clientConfig) return { ok: false, reason: 'invalid_state' };
+
+  let tokens: OAuthTokens;
+  try {
+    tokens = await exchangeOAuth2Code(driver, clientConfig, { code, redirectUri: callbackUrl, codeVerifier: state.codeVerifier });
+  } catch (err) {
+    // Stable operation/provider/error-NAME only — see above.
+    debug('oauth2 token exchange failed for provider=%s: %s', provider, (err as Error).name);
+    return { ok: false, reason: 'exchange_failed' };
+  }
+
+  // `fetchProfile` is plugin-authored code — a REJECTED Promise (not
+  // just an `{ ok: false }` result) must not escape to Hono's global
+  // 500 handler either.
+  let result: AuthVerifyResult;
+  try {
+    result = await driver.fetchProfile(tokens);
+  } catch (err) {
+    // Stable operation/provider/error-NAME only — see above.
+    debug('oauth2 fetchProfile threw for provider=%s: %s', provider, (err as Error).name);
+    return { ok: false, reason: 'profile_rejected' };
+  }
+  if (!result.ok) {
+    // `result.reason` is a free-form string a plugin author supplies
+    // (`AuthVerifyResult`'s contract, `@crowi/plugin-api`) — it can embed
+    // the profile data (email, providerUserId) that made the driver reject
+    // it, so it must never reach the log; a fixed, stable string instead.
+    debug('oauth2 fetchProfile rejected provider=%s', provider);
+    return { ok: false, reason: 'profile_rejected' };
+  }
+  return { ok: true, profile: result.profile };
+}
+
+/**
+ * The store +
+ * clock pair every link handler reads. `now()` is the linearization clock
+ * `issueLink`/`verifyLink`/`store.issue` compare deadlines against — Redis
+ * `TIME` in Redis mode, the same process's `Date.now()` in Map mode. Not a
+ * store method itself (the store's own Redis backend independently calls
+ * `MinimalLinkCompletionRedisClient#time()` for its own atomic decisions —
+ * see `service/link-completion.ts`'s module doc comment); this is the
+ * HANDLER-level clock used to stamp `stateExpiresAt` / verify cookie
+ * expiry, which must agree with the store's own clock domain.
+ */
+export interface LinkCompletionRuntime {
+  store: LinkCompletionStore;
+  now(): Promise<number>;
+}
+
+/** Constructs a fresh `LinkCompletionRuntime` — called AT MOST ONCE per registered app (memoized by `registerFederatedAuthRoutes`, see `getLinkCompletionRuntime` below). */
+export type LinkCompletionRuntimeFactory = () => Promise<LinkCompletionRuntime>;
+
+/**
+ * Default runtime
+ * factory: `CROWI_MULTI_INSTANCE` declared -> Redis required (the store
+ * itself throws via `requireRedis: true` when `crowi.redis` is unset,
+ * which the caller maps to a generic 500); undeclared -> Redis when
+ * available, else the in-memory Map fallback. A deployment that never
+ * calls a link route never constructs this (lazy, closure-memoized).
+ */
+function createDefaultLinkCompletionRuntimeFactory(crowi: Crowi): LinkCompletionRuntimeFactory {
+  return async () => {
+    const keyspace = resolveRedisKeyspaceIfEnabled(crowi);
+    const store = createLinkCompletionStore({ redisClient: crowi.redis, keyspace, requireRedis: isMultiInstanceDeclared(process.env) });
+    const usingRedis = keyspace !== undefined;
+    return {
+      store,
+      now: usingRedis ? async () => (await crowi.redis.time()).getTime() : async () => Date.now(),
+    };
+  };
+}
+
 export interface RegisterFederatedAuthRoutesOptions {
   /** Test seam / Phase 2+ swap point — defaults to Phase 1's always-decline terminal. */
   terminal?: FederatedProfileTerminal;
@@ -170,46 +466,60 @@ export interface RegisterFederatedAuthRoutesOptions {
    * — see that call site's comment for why (in-memory backend correctness).
    */
   handoffStore?: FederatedHandoffStore;
-  /** Test seam — defaults to a fresh `createLinkGrantStore(...)` (RFC-0014 phase 3). */
-  linkGrantStore?: LinkGrantStore;
   /** Test seam — defaults to `createAuthProviderLinkingTerminal(crowi)` (RFC-0014 phase 3). */
   linkingTerminal?: AuthProviderLinkingTerminal;
+  /** Test seam — defaults to `createDefaultLinkCompletionRuntimeFactory(crowi)`. Memoized to at most one call regardless of override. */
+  linkCompletionRuntimeFactory?: LinkCompletionRuntimeFactory;
+  /** Test seam — defaults to `createFederatedAuthStateUtil(crowi)`. */
+  stateUtil?: FederatedAuthStateUtil;
 }
 
 /**
- * Shared dependency bag for the `/start` and `/callback` route handlers
- * (RFC-0014 phase 1 implementation map — `buildProviderRedirect` and
- * `completeFederatedCallback` are standalone exported symbols, not private
- * closures inline in `registerFederatedAuthRoutes`, so each can be
- * constructed/tested independent of the full route registration).
+ * Shared dependency bag for every route handler in this file (RFC-0014
+ * phase 1 implementation map — each handler is a standalone exported
+ * symbol, not a private closure inline in `registerFederatedAuthRoutes`, so
+ * each can be constructed/tested independent of the full route
+ * registration).
  */
 export interface FederatedAuthRouteDeps {
   crowi: Crowi;
   stateUtil: FederatedAuthStateUtil;
   handoffStore: FederatedHandoffStore;
   terminal: FederatedProfileTerminal;
-  /** RFC-0014 phase 3 — the short-lived server-side binding a `link=1` start consumes. */
-  linkGrantStore: LinkGrantStore;
-  /** RFC-0014 phase 3 — the callback-side link branch, used INSTEAD of `terminal` when the signed state carries a link target. */
+  /** The terminal the confirmation-POST-side link branch calls after its fresh-User fence passes. */
   linkingTerminal: AuthProviderLinkingTerminal;
   /** Enabled = registered, oauth2/oidc kind, and currently configured (design decision 1). */
   getEnabledDriver: (name: string) => FederatedRouteDriver | null;
+  /** Memoized accessor; every link handler calls this instead of constructing its own runtime. */
+  getLinkCompletionRuntime: () => Promise<LinkCompletionRuntime>;
 }
 
 /**
  * `GET /auth/providers/{name}/start` — validates the sender proof, mints the
  * signed state cookie (+ OIDC nonce / PKCE verifier when applicable), and
- * redirects the browser to the provider's authorize endpoint.
+ * redirects the browser to the provider's authorize endpoint. Public
+ * sign-in ONLY — the retired `link=1`/`link_grant` mode is gone entirely;
+ * a raw `link` query key (any value) is rejected outright rather than
+ * silently downgraded to sign-in.
  */
 export function buildProviderRedirect(deps: FederatedAuthRouteDeps): RouteHandler<typeof startFederatedProviderRoute, CrowiHonoBindings> {
-  const { crowi, stateUtil, getEnabledDriver, linkGrantStore } = deps;
+  const { crowi, stateUtil, getEnabledDriver } = deps;
   return async (c) => {
+    // the raw URL
+    // is inspected (not `c.req.valid('query')`, which the contract no
+    // longer even types a `link` field on) so ANY value — not just the
+    // old `link=1` — is rejected, rather than silently accepted as an
+    // unrecognised/ignored query parameter.
+    if (c.req.query('link') !== undefined) {
+      return c.json(invalidRequestBody('the link query parameter is no longer supported — start a link from the account settings page instead'), 400);
+    }
+
     const urls = crowi.getFederatedAuthPublicUrls();
     const { name } = c.req.valid('param');
     const driver = urls ? getEnabledDriver(name) : null;
     if (!urls || !driver) return c.json(PROVIDER_NOT_FOUND_BODY, 404);
 
-    const { continue: continuePath, handoff_jwk: handoffJwkB64, handoff_proof: handoffProofB64, link, link_grant: linkGrantId } = c.req.valid('query');
+    const { continue: continuePath, handoff_jwk: handoffJwkB64, handoff_proof: handoffProofB64 } = c.req.valid('query');
 
     let publicJwk: webcrypto.JsonWebKey;
     try {
@@ -228,110 +538,148 @@ export function buildProviderRedirect(deps: FederatedAuthRouteDeps): RouteHandle
     }
     const handoffJkt = computeJwkThumbprint(publicJwk);
 
-    // RFC-0014 phase 3 (AC-1/AC-2) — LINK mode. Everything the link is
-    // aimed at comes from the authenticated session plus the server-side
-    // grant; nothing here is taken from a query parameter a link URL could
-    // carry. The per-path middleware installed in `registerFederatedAuthRoutes`
-    // has already rejected a missing/non-web credential by the time we get
-    // here, so `c.get('user')` is a real web-session user whenever
-    // `link === '1'`.
-    let linkToUserId: string | undefined;
-    let linkAuthVersion: number | undefined;
-    if (link === '1') {
-      const linkUser = c.get('user');
-      if (!linkUser) return c.json(AUTH_REQUIRED_BODY, 401);
-      if (!linkGrantId) return c.json(invalidRequestBody('link_grant is required when link=1'), 400);
+    const state = generateSignInStateValue();
+    const prepared = await prepareIdpAuthorization({ driver, provider: name, apiUrl: urls.apiUrl, state });
+    if (!prepared) return c.json(PROVIDER_NOT_FOUND_BODY, 404);
+    const { authorizationUrl, oidcNonce, codeVerifier } = prepared;
 
-      const grant = await linkGrantStore.consume(linkGrantId);
-      // One `invalidRequestBody` for every failure below: unknown, expired,
-      // already-used, wrong provider, wrong user, stale authVersion and
-      // wrong sender key are all just "this grant does not authorize this
-      // start", and distinguishing them would tell an attacker which half
-      // of a stolen link URL still works.
-      if (!grant) return c.json(invalidRequestBody('link grant is invalid or expired'), 400);
-      if (grant.provider !== name) return c.json(invalidRequestBody('link grant is invalid or expired'), 400);
-      if (grant.userId !== linkUser._id.toString()) return c.json(invalidRequestBody('link grant is invalid or expired'), 400);
-      if ((linkUser.authVersion ?? 0) !== grant.authVersion) return c.json(invalidRequestBody('link grant is invalid or expired'), 400);
-      // AC-2: the grant is pinned to the sender key of the browser that
-      // MINTED it. A stolen link URL opened in a different browser presents
-      // that browser's own key, so the thumbprints differ here and the flow
-      // stops before any state cookie or IdP redirect exists.
-      if (!timingSafeEqualStrings(grant.handoffChallenge, handoffJkt)) {
-        return c.json(invalidRequestBody('link grant is invalid or expired'), 400);
-      }
-
-      linkToUserId = grant.userId;
-      linkAuthVersion = grant.authVersion;
-    }
-
-    const state = crypto.randomBytes(32).toString('base64url');
-    const oidcNonce = driver.kind === 'oidc' ? crypto.randomBytes(32).toString('base64url') : undefined;
-    const usePkce = driver.kind === 'oidc' || driver.pkce === true;
-    const codeVerifier = usePkce ? generatePkceCodeVerifier() : undefined;
-
-    const cookieValue = stateUtil.issue({ state, provider: name, continuePath, codeVerifier, oidcNonce, handoffJkt, linkToUserId, linkAuthVersion });
+    const cookieValue = stateUtil.issue({ state, provider: name, continuePath, codeVerifier, oidcNonce, handoffJkt });
     setCookie(c, stateUtil.cookieName, cookieValue, stateUtil.cookieOptions);
 
-    const redirectUri = buildProviderCallbackUrl(urls.apiUrl, name);
-
-    if (driver.kind === 'oidc') {
-      let configuration: Awaited<ReturnType<typeof driver.getConfiguration>>;
-      try {
-        // `getConfiguration()` performs network discovery on a cache miss
-        // (RFC-0014 phase 0 §"設計の主な判断") and can reject — it MUST stay
-        // inside this try/catch (not awaited unguarded) so a discovery
-        // failure maps to the same safe "provider unusable" response as the
-        // synchronous null-config check below, instead of escaping to
-        // Hono's global 500 handler (AC-3).
-        configuration = await driver.getConfiguration();
-      } catch (err) {
-        debug('oidc getConfiguration() failed at start for provider=%s: %s', name, (err as Error).message);
-        return c.json(PROVIDER_NOT_FOUND_BODY, 404);
-      }
-      if (!configuration) return c.json(PROVIDER_NOT_FOUND_BODY, 404);
-      const { buildAuthorizationUrl } = await loadOidcClient();
-      const params = new URLSearchParams({
-        redirect_uri: redirectUri,
-        scope: driver.scopes.join(' '),
-        state,
-        nonce: oidcNonce as string,
-        code_challenge: computePkceCodeChallengeS256(codeVerifier as string),
-        code_challenge_method: 'S256',
-      });
-      const authorizeUrl = buildAuthorizationUrl(configuration, params);
-      return c.redirect(authorizeUrl.toString(), 302);
-    }
-
-    const clientConfig = driver.getClientConfig();
-    if (!clientConfig) return c.json(PROVIDER_NOT_FOUND_BODY, 404);
-    const authorizeUrl = new URL(driver.authorizeUrl);
-    authorizeUrl.searchParams.set('response_type', 'code');
-    authorizeUrl.searchParams.set('client_id', clientConfig.clientId);
-    authorizeUrl.searchParams.set('redirect_uri', redirectUri);
-    if (driver.scopes.length > 0) authorizeUrl.searchParams.set('scope', driver.scopes.join(' '));
-    authorizeUrl.searchParams.set('state', state);
-    if (usePkce) {
-      authorizeUrl.searchParams.set('code_challenge', computePkceCodeChallengeS256(codeVerifier as string));
-      authorizeUrl.searchParams.set('code_challenge_method', 'S256');
-    }
-    return c.redirect(authorizeUrl.toString(), 302);
+    return c.redirect(authorizationUrl, 302);
   };
 }
 
 /**
- * `GET /auth/providers/{name}/callback` — the IdP redirect target. Verifies
- * the state cookie, completes the OAuth2/OIDC protocol exchange, delegates
- * to `FederatedProfileTerminal`, and — only once the terminal resolves an
- * active user — issues a sender-constrained handoff code and redirects to
- * the trusted web `/login/complete`.
+ * The callback's link branch.
+ * Verifies the flow-specific state cookie, completes the OAuth2/OIDC
+ * protocol exchange, and — on success — asks the shared
+ * `LinkCompletionRuntime` store to atomically issue a one-time completion
+ * code. Deliberately reads/writes NOTHING in `User` / `UserIdentity` /
+ * `PendingAuthRegistration`, and never calls `linkingTerminal` — the DB
+ * mutation happens later, at the authenticated confirmation POST, after a
+ * fresh identity/session fence (`completeProviderLink` below).
+ */
+async function completeLinkCallback(
+  c: Context<CrowiHonoBindings>,
+  deps: FederatedAuthRouteDeps,
+  input: {
+    name: string;
+    returnedState: string;
+    code: string | undefined;
+    error: string | undefined;
+  },
+): Promise<Response> {
+  const { crowi, stateUtil, getEnabledDriver, getLinkCompletionRuntime } = deps;
+  const { name, returnedState, code, error } = input;
+
+  // resolved
+  // BEFORE touching any cookie at all: the link branch must never read or
+  // delete the unrelated fixed sign-in cookie (AC-5), so provider/urls
+  // resolution — and even the state-pattern check — happen first,
+  // independent of the ordinary sign-in branch's own cookie-first order.
+  const urls = crowi.getFederatedAuthPublicUrls();
+  const driver = urls ? getEnabledDriver(name) : null;
+  if (!urls || !driver) {
+    return c.json(PROVIDER_NOT_FOUND_BODY, 404);
+  }
+  const fail = () => c.redirect(buildLinkFailureUrl(urls.webUrl, name), 302);
+
+  // A full pattern mismatch fails WITHOUT ever touching the fixed sign-in
+  // cookie (AC-5): the namespace prefix alone routed us here, but only a
+  // fully well-formed state derives a cookie name to look up at all.
+  if (!LINK_STATE_VALUE_PATTERN.test(returnedState)) {
+    return fail();
+  }
+  const linkCookieName = linkCookieNameFor(returnedState) as string;
+  const linkCookieValue = getCookie(c, linkCookieName);
+  if (!linkCookieValue) {
+    // No link cookie for this state — fail without reading/deleting the
+    // UNRELATED fixed sign-in cookie (AC-5: an in-flight ordinary sign-in
+    // on the same browser must remain completable).
+    return fail();
+  }
+  deleteCookie(c, linkCookieName, { path: deps.stateUtil.linkCookieOptions.path });
+
+  let runtime: LinkCompletionRuntime;
+  let now: number;
+  try {
+    runtime = await getLinkCompletionRuntime();
+    now = await runtime.now();
+  } catch (err) {
+    debug('link callback: runtime resolution failed for provider=%s: %s', name, (err as Error).name);
+    return c.json(INTERNAL_ERROR_BODY, 500);
+  }
+
+  const linkState = stateUtil.verifyLink(linkCookieValue, { state: returnedState, provider: name }, now);
+  if (!linkState) {
+    return fail();
+  }
+
+  if (error || !code) {
+    return fail();
+  }
+
+  const exchangeResult = await exchangeProviderProfile({
+    driver,
+    provider: name,
+    callbackUrl: buildProviderCallbackUrl(urls.apiUrl, name),
+    requestUrl: c.req.url,
+    code,
+    state: linkState,
+  });
+  if (!exchangeResult.ok) {
+    return fail();
+  }
+  const profile = exchangeResult.profile;
+
+  try {
+    const issueOutcome = await runtime.store.issue({
+      state: returnedState,
+      stateExpiresAt: linkState.expiresAt,
+      userId: linkState.userId,
+      authVersion: linkState.authVersion,
+      provider: name,
+      providerUserId: profile.providerUserId,
+      accountLabel: profile.email,
+    });
+    if (!issueOutcome.ok) {
+      return fail();
+    }
+    return c.redirect(buildLinkCompletionUrl(urls.webUrl, name, issueOutcome.code), 302);
+  } catch (err) {
+    debug('link callback: completion issue failed for provider=%s: %s', name, (err as Error).name);
+    return c.json(INTERNAL_ERROR_BODY, 500);
+  }
+}
+
+/**
+ * `GET /auth/providers/{name}/callback` — the IdP redirect target. Branches
+ * on the query `state`'s namespace BEFORE touching the fixed sign-in cookie
+ * at all: a
+ * `crowilnk_`-prefixed state routes to `completeLinkCallback` above; every
+ * other value follows the unchanged sign-in path (state cookie, OAuth2/OIDC
+ * exchange via the shared `exchangeProviderProfile`, `FederatedProfileTerminal`,
+ * sender-constrained handoff code).
  */
 export function completeFederatedCallback(deps: FederatedAuthRouteDeps): RouteHandler<typeof callbackFederatedProviderRoute, CrowiHonoBindings> {
-  const { crowi, stateUtil, terminal, handoffStore, linkingTerminal, getEnabledDriver } = deps;
+  const { crowi, stateUtil, terminal, handoffStore, getEnabledDriver } = deps;
   return async (c) => {
     const { name } = c.req.valid('param');
+    const { code, state: returnedState, error } = c.req.valid('query');
+
+    // the
+    // query state's reserved namespace decides the branch BEFORE anything
+    // else runs, so a link-branch callback (see `completeLinkCallback`)
+    // never reads/deletes the unrelated fixed sign-in cookie below (AC-5).
+    if (returnedState?.startsWith(LINK_STATE_VALUE_PREFIX)) {
+      return completeLinkCallback(c, deps, { name, returnedState, code, error });
+    }
 
     // Read + immediately clear the state cookie, BEFORE any other check —
     // it must be consumed exactly once regardless of outcome (AC-2).
+    // Unchanged ordering from RFC-0014 phase 1: this happens even before
+    // the driver-enablement 404 below (a regression test pins this).
     const rawCookie = getCookie(c, stateUtil.cookieName);
     deleteCookie(c, stateUtil.cookieName, { path: stateUtil.cookieOptions.path });
 
@@ -346,8 +694,6 @@ export function completeFederatedCallback(deps: FederatedAuthRouteDeps): RouteHa
     if (!urls || !driver) {
       return c.json(PROVIDER_NOT_FOUND_BODY, 404);
     }
-
-    const { code, state: returnedState, error } = c.req.valid('query');
 
     const state = stateUtil.verify(rawCookie, name);
     // Cookie signature/expiry/provider (all inside `verify`) PLUS a
@@ -364,125 +710,18 @@ export function completeFederatedCallback(deps: FederatedAuthRouteDeps): RouteHa
       return c.redirect(buildLoginErrorUrl(urls.webUrl, 'idp_error'), 302);
     }
 
-    let profile: AuthProfile;
-    if (driver.kind === 'oidc') {
-      try {
-        // `getConfiguration()` performs network discovery on a cache miss
-        // (RFC-0014 phase 0 §"設計の主な判断") and can reject — it MUST stay
-        // inside this try/catch (not awaited ahead of it) so a discovery
-        // failure maps to the safe redirect below instead of escaping to
-        // Hono's global 500 handler (AC-3).
-        const configuration = await driver.getConfiguration();
-        if (!configuration) return c.redirect(buildLoginErrorUrl(urls.webUrl, 'invalid_state'), 302);
-
-        // openid-client derives the token endpoint's `redirect_uri` by
-        // stripping the query string off this URL — it MUST therefore be
-        // the exact trusted callback URL (no query of its own), with the
-        // real response query attached, not the internal (prefix-stripped)
-        // request URL Hono sees.
-        const currentUrl = new URL(buildProviderCallbackUrl(urls.apiUrl, name));
-        currentUrl.search = new URL(c.req.url).search;
-
-        const { authorizationCodeGrant } = await loadOidcClient();
-        const tokens = await authorizationCodeGrant(configuration, currentUrl, {
-          expectedState: state.state,
-          expectedNonce: state.oidcNonce,
-          pkceCodeVerifier: state.codeVerifier,
-        });
-        const claims = tokens.claims();
-        if (!claims) return c.redirect(buildLoginErrorUrl(urls.webUrl, 'oidc_verification_failed'), 302);
-
-        if (driver.authorize) {
-          const authResult = await driver.authorize(claims as Record<string, unknown>);
-          if (!authResult.ok) return c.redirect(buildLoginErrorUrl(urls.webUrl, 'profile_rejected'), 302);
-        }
-
-        const mapped = driver.mapClaims ? driver.mapClaims(claims as Record<string, unknown>) : {};
-        // RFC-0014 umbrella §"全フェーズに共通する確定事項": email is
-        // required AND must be IdP-verified — Phase 2's JIT provisioning
-        // trusts `profile.email` as already-verified. A driver providing
-        // its OWN `mapClaims` owns this decision entirely (its contract,
-        // Phase 0), but the DEFAULT (no `mapClaims`) mapping below must not
-        // silently trust an unverified `claims.email` just because a driver
-        // author forgot to reject it in `authorize` — only fall back to the
-        // raw claim when the IdP itself asserts `email_verified === true`.
-        const emailVerified = claims.email_verified === true;
-        profile = {
-          providerUserId: mapped.providerUserId ?? String(claims.sub),
-          email: mapped.email ?? (emailVerified && typeof claims.email === 'string' ? claims.email : undefined),
-          name: mapped.name ?? (typeof claims.name === 'string' ? claims.name : undefined),
-          imageUrl: mapped.imageUrl ?? (typeof claims.picture === 'string' ? claims.picture : undefined),
-          extra: mapped.extra,
-        };
-      } catch (err) {
-        debug('oidc callback verification failed for provider=%s: %s', name, (err as Error).message);
-        return c.redirect(buildLoginErrorUrl(urls.webUrl, 'oidc_verification_failed'), 302);
-      }
-    } else {
-      const clientConfig = driver.getClientConfig();
-      if (!clientConfig) return c.redirect(buildLoginErrorUrl(urls.webUrl, 'invalid_state'), 302);
-
-      let tokens: OAuthTokens;
-      try {
-        tokens = await exchangeOAuth2Code(driver, clientConfig, {
-          code,
-          redirectUri: buildProviderCallbackUrl(urls.apiUrl, name),
-          codeVerifier: state.codeVerifier,
-        });
-      } catch (err) {
-        debug('oauth2 token exchange failed for provider=%s: %s', name, (err as Error).message);
-        return c.redirect(buildLoginErrorUrl(urls.webUrl, 'exchange_failed'), 302);
-      }
-
-      // `fetchProfile` is plugin-authored code — a REJECTED Promise (not
-      // just an `{ ok: false }` result) must not escape to Hono's global
-      // 500 handler either (AC-3).
-      let result: AuthVerifyResult;
-      try {
-        result = await driver.fetchProfile(tokens);
-      } catch (err) {
-        debug('oauth2 fetchProfile threw for provider=%s: %s', name, (err as Error).message);
-        return c.redirect(buildLoginErrorUrl(urls.webUrl, 'profile_rejected'), 302);
-      }
-      if (!result.ok) {
-        debug('oauth2 fetchProfile rejected provider=%s: %s', name, result.reason);
-        return c.redirect(buildLoginErrorUrl(urls.webUrl, 'profile_rejected'), 302);
-      }
-      profile = result.profile;
+    const exchangeResult = await exchangeProviderProfile({
+      driver,
+      provider: name,
+      callbackUrl: buildProviderCallbackUrl(urls.apiUrl, name),
+      requestUrl: c.req.url,
+      code,
+      state,
+    });
+    if (!exchangeResult.ok) {
+      return c.redirect(buildLoginErrorUrl(urls.webUrl, exchangeResult.reason), 302);
     }
-
-    // RFC-0014 phase 3 (AC-3) — LINK branch. A signed state carrying
-    // `linkToUserId` means this flow was started from an authenticated
-    // settings action, so phase 2's provisioning is skipped ENTIRELY: no
-    // registration-mode gate, no whitelist, no email lookup, no User
-    // creation. The target is the value inside the signed cookie and
-    // nothing else.
-    if (state.linkToUserId) {
-      const User = crowi.model('User');
-      const linkUser = await User.findById(state.linkToUserId);
-      // Re-check the session is still the one that started this, now that
-      // the IdP round trip has elapsed: a password reset or forced
-      // sign-out in between bumps `authVersion`, and such a flow must link
-      // nothing (spec flow step 4).
-      if (!linkUser || (linkUser.authVersion ?? 0) !== (state.linkAuthVersion ?? 0)) {
-        return c.redirect(buildLinkSettingsUrl(urls.webUrl, name, 'link_failed'), 302);
-      }
-
-      const outcome = await linkingTerminal.link({ userId: state.linkToUserId, provider: name, providerUserId: profile.providerUserId });
-      // `already_linked_here` is a success: re-linking what you already
-      // linked is the state you asked for (see the terminal's doc comment).
-      // Both refusals collapse to the ONE stable conflict code the spec's
-      // error semantics define (`federated_identity_in_use`) — phase 4 owns
-      // the wording, and a second code would say more about other accounts
-      // than this redirect should.
-      const result =
-        outcome.kind === 'owned_by_other_user' || outcome.kind === 'provider_slot_taken'
-          ? 'federated_identity_in_use'
-          : outcome.kind === 'failed'
-            ? 'link_failed'
-            : 'linked';
-      return c.redirect(buildLinkSettingsUrl(urls.webUrl, name, result), 302);
-    }
+    const profile = exchangeResult.profile;
 
     const terminalResult = await terminal.resolve({ provider: name, profile, providerLabel: driver.buttonLabel, handoffJkt: state.handoffJkt });
     if (terminalResult.kind === 'redirect_error') {
@@ -514,22 +753,199 @@ export function completeFederatedCallback(deps: FederatedAuthRouteDeps): RouteHa
   };
 }
 
+/**
+ * `POST /auth/providers/{name}/link-start` — stage 1. Mints the IdP
+ * authorization URL + a flow-specific, admission-pruned link-state cookie
+ * for the current web session. See the spec's "1. 連携開始" control-flow
+ * section for the exact check order this mirrors.
+ */
+export function startProviderLink(deps: FederatedAuthRouteDeps): RouteHandler<typeof startProviderLinkRoute, CrowiHonoBindings> {
+  const { crowi, stateUtil, getEnabledDriver, getLinkCompletionRuntime } = deps;
+  return async (c) => {
+    if (!isWebSession(c)) return c.json(NOT_WEB_SESSION_BODY, 403);
+    const user = c.get('user');
+    if (!user) return c.json(AUTH_REQUIRED_BODY, 401);
+
+    const { name } = c.req.valid('param');
+    const urls = crowi.getFederatedAuthPublicUrls();
+    const driver = urls ? getEnabledDriver(name) : null;
+    if (!urls || !driver) return c.json(PROVIDER_NOT_FOUND_BODY, 404);
+
+    let runtime: LinkCompletionRuntime;
+    try {
+      runtime = await getLinkCompletionRuntime();
+    } catch (err) {
+      debug('link-start: failed to resolve link completion runtime for provider=%s: %s', name, (err as Error).name);
+      return c.json(INTERNAL_ERROR_BODY, 500);
+    }
+
+    const state = generateLinkStateValue();
+    const prepared = await prepareIdpAuthorization({ driver, provider: name, apiUrl: urls.apiUrl, state });
+    if (!prepared) return c.json(PROVIDER_NOT_FOUND_BODY, 404);
+    const { authorizationUrl, oidcNonce, codeVerifier } = prepared;
+
+    let now: number;
+    try {
+      now = await runtime.now();
+    } catch (err) {
+      debug('link-start: failed to read the link completion clock for provider=%s: %s', name, (err as Error).name);
+      return c.json(INTERNAL_ERROR_BODY, 500);
+    }
+
+    let cookieValue: string;
+    try {
+      cookieValue = stateUtil.issueLink(
+        { flow: 'link', state, provider: name, userId: user._id.toString(), authVersion: user.authVersion ?? 0, codeVerifier, oidcNonce },
+        now,
+      );
+    } catch (err) {
+      if (err instanceof FederatedLinkStateCookieTooLargeError) {
+        return c.json(invalidRequestBody('link state is too large to set as a cookie'), 400);
+      }
+      throw err;
+    }
+
+    // `generateLinkStateValue()` always matches `LINK_STATE_VALUE_PATTERN` — unreachable in practice, but fail closed rather than setting an unnamed cookie.
+    const cookieName = linkCookieNameFor(state);
+    if (!cookieName) {
+      return c.json(INTERNAL_ERROR_BODY, 500);
+    }
+
+    let prunePlan: ReturnType<FederatedAuthStateUtil['planLinkCookiePrune']>;
+    try {
+      prunePlan = stateUtil.planLinkCookiePrune(c.req.header('cookie'), cookieName, cookieValue, now);
+    } catch (err) {
+      if (err instanceof FederatedLinkCookieHeaderTooLargeError) {
+        return c.json(invalidRequestBody('too many pending link flows for this browser — try again shortly'), 400);
+      }
+      throw err;
+    }
+
+    for (const expireName of prunePlan.expireCookieNames) {
+      deleteCookie(c, expireName, { path: stateUtil.linkCookieOptions.path });
+    }
+    setCookie(c, cookieName, cookieValue, stateUtil.linkCookieOptions);
+
+    return c.json({ authorizationUrl }, 200);
+  };
+}
+
+/**
+ * `GET /auth/providers/{name}/link-completions/{code}` — stage 3a.
+ * Non-destructive confirmation read: binds on user/provider/authVersion,
+ * never mutates the store.
+ */
+export function getProviderLinkCompletion(deps: FederatedAuthRouteDeps): RouteHandler<typeof getProviderLinkCompletionRoute, CrowiHonoBindings> {
+  const { getLinkCompletionRuntime } = deps;
+  return async (c) => {
+    if (!isWebSession(c)) return c.json(NOT_WEB_SESSION_BODY, 403);
+    const user = c.get('user');
+    if (!user) return c.json(AUTH_REQUIRED_BODY, 401);
+
+    const { name, code } = c.req.valid('param');
+
+    try {
+      const runtime = await getLinkCompletionRuntime();
+      const record = await runtime.store.find(code);
+      if (!record || record.userId !== user._id.toString() || record.provider !== name || record.authVersion !== (user.authVersion ?? 0)) {
+        return c.json(LINK_COMPLETION_NOT_FOUND_BODY, 404);
+      }
+      if (record.consumedAt != null) {
+        return c.json(LINK_COMPLETION_CONSUMED_BODY, 409);
+      }
+      const body = record.accountLabel !== undefined ? { provider: record.provider, accountLabel: record.accountLabel } : { provider: record.provider };
+      return c.json(body, 200);
+    } catch (err) {
+      debug('link completion GET failed for provider=%s: %s', name, (err as Error).name);
+      return c.json(INTERNAL_ERROR_BODY, 500);
+    }
+  };
+}
+
+/**
+ * `POST /auth/providers/{name}/link-completions/{code}` — stage 3b, the
+ * terminal step. Order mirrors the spec's "4. 確定 winner" flow exactly:
+ * binding pre-check (no consume yet) -> atomic `consumeVerified` -> fresh
+ * `User` fence (winner only) -> `linkingTerminal.link(...)`. An
+ * already-consumed outcome re-derives its result from the DB
+ * (`resolveAuthProviderLinkReplay`) instead of attempting a second consume.
+ */
+export function completeProviderLink(deps: FederatedAuthRouteDeps): RouteHandler<typeof completeProviderLinkRoute, CrowiHonoBindings> {
+  const { crowi, linkingTerminal, getLinkCompletionRuntime } = deps;
+  return async (c) => {
+    if (!isWebSession(c)) return c.json(NOT_WEB_SESSION_BODY, 403);
+    const user = c.get('user');
+    if (!user) return c.json(AUTH_REQUIRED_BODY, 401);
+
+    const { name, code } = c.req.valid('param');
+    const userId = user._id.toString();
+
+    try {
+      const runtime = await getLinkCompletionRuntime();
+
+      // Binding pre-check BEFORE any consume attempt — another user's
+      // session can never burn a victim's code (spec §"4. 確定 winner" 1).
+      const preRecord = await runtime.store.find(code);
+      if (!preRecord || preRecord.userId !== userId || preRecord.provider !== name) {
+        return c.json(LINK_COMPLETION_NOT_FOUND_BODY, 404);
+      }
+
+      const consumeOutcome = await runtime.store.consumeVerified(code);
+      if (!consumeOutcome.ok) {
+        if (consumeOutcome.reason === 'not_found') {
+          return c.json(LINK_COMPLETION_NOT_FOUND_BODY, 404);
+        }
+        // already_consumed — re-derive the replay result from the DB (spec §"5. already-consumed replay の再導出").
+        const replayRecord = await runtime.store.find(code);
+        if (!replayRecord) {
+          return c.json(LINK_COMPLETION_NOT_FOUND_BODY, 404);
+        }
+        if (replayRecord.userId !== userId || replayRecord.provider !== name) {
+          return c.json(LINK_COMPLETION_NOT_FOUND_BODY, 404);
+        }
+        const replay = await resolveAuthProviderLinkReplay(crowi, {
+          userId: replayRecord.userId,
+          provider: replayRecord.provider,
+          providerUserId: replayRecord.providerUserId,
+        });
+        if (replay.kind === 'linked') return c.json({ result: 'linked' as const }, 200);
+        if (replay.kind === 'not_linked') return c.json(FEDERATED_LINK_NOT_LINKED_BODY, 409);
+        return c.json(FEDERATED_IDENTITY_IN_USE_BODY, 409);
+      }
+
+      const record = consumeOutcome.record;
+      const User = crowi.model('User');
+      const freshUser = await User.findById(record.userId).select('status authVersion');
+      if (!freshUser || freshUser.status !== User.STATUS_ACTIVE || (freshUser.authVersion ?? 0) !== record.authVersion) {
+        return c.json(FEDERATED_LINK_AUTH_STATE_CHANGED_BODY, 409);
+      }
+
+      const outcome = await linkingTerminal.link({ userId: record.userId, provider: record.provider, providerUserId: record.providerUserId });
+      if (outcome.kind === 'linked' || outcome.kind === 'already_linked_here') {
+        return c.json({ result: 'linked' as const }, 200);
+      }
+      if (outcome.kind === 'owned_by_other_user' || outcome.kind === 'provider_slot_taken') {
+        return c.json(FEDERATED_IDENTITY_IN_USE_BODY, 409);
+      }
+      // outcome.kind === 'failed' — infra contention, never a compensating delete of anything (nothing was inserted).
+      return c.json(INTERNAL_ERROR_BODY, 500);
+    } catch (err) {
+      debug('link completion POST failed for provider=%s: %s', name, (err as Error).name);
+      return c.json(INTERNAL_ERROR_BODY, 500);
+    }
+  };
+}
+
 export const registerFederatedAuthRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(
   app: E,
   crowi: Crowi,
   options: RegisterFederatedAuthRoutesOptions = {},
 ) => {
   const terminal = options.terminal ?? createUnavailableFederatedProfileTerminal();
-  const stateUtil = createFederatedAuthStateUtil(crowi);
+  const stateUtil = options.stateUtil ?? createFederatedAuthStateUtil(crowi);
   const handoffStore =
     options.handoffStore ??
     createFederatedHandoffStore({
-      redisClient: crowi.redis,
-      keyspace: resolveRedisKeyspaceIfEnabled(crowi),
-    });
-  const linkGrantStore =
-    options.linkGrantStore ??
-    createLinkGrantStore({
       redisClient: crowi.redis,
       keyspace: resolveRedisKeyspaceIfEnabled(crowi),
     });
@@ -544,32 +960,34 @@ export const registerFederatedAuthRoutes = <E extends OpenAPIHono<CrowiHonoBindi
     return driver;
   };
 
-  const deps: FederatedAuthRouteDeps = { crowi, stateUtil, handoffStore, terminal, linkGrantStore, linkingTerminal, getEnabledDriver };
+  // lazy,
+  // closure-memoized to at most ONE construction for the lifetime of this
+  // registered app: a deployment that never calls a link route never pays
+  // the (possible Redis-availability-checking) construction cost, and
+  // every one of the 4 link handlers below observes the SAME store/clock
+  // instance.
+  const linkCompletionRuntimeFactory = options.linkCompletionRuntimeFactory ?? createDefaultLinkCompletionRuntimeFactory(crowi);
+  let linkCompletionRuntimePromise: Promise<LinkCompletionRuntime> | null = null;
+  const getLinkCompletionRuntime = (): Promise<LinkCompletionRuntime> => {
+    if (!linkCompletionRuntimePromise) {
+      linkCompletionRuntimePromise = linkCompletionRuntimeFactory();
+    }
+    return linkCompletionRuntimePromise;
+  };
 
-  // RFC-0014 phase 3 (AC-1) — the link surfaces require an active WEB
-  // session. `/start` stays public for ordinary sign-in and only becomes
-  // authenticated when `link=1`, so the JWT middleware is applied through a
-  // conditional wrapper rather than to the whole path: a public sign-in
-  // start must not start demanding a token.
+  const deps: FederatedAuthRouteDeps = { crowi, stateUtil, handoffStore, terminal, linkingTerminal, getEnabledDriver, getLinkCompletionRuntime };
+
   const jwtAuth = createJwtAuth(crowi);
-  app.use('/auth/providers/:name/start', async (c, next) => {
-    if (c.req.query('link') !== '1') return next();
-    return jwtAuth(c, next);
-  });
   app.use('/auth/providers/identities', jwtAuth);
-  app.use('/auth/providers/:name/link-grants', jwtAuth);
   app.use('/auth/providers/:name/identity', jwtAuth);
-
-  /**
-   * Spec design decision 1 / AC-1: a PAT or OAuth access token is a valid
-   * credential for the API but NOT for linking — linking is a
-   * session-level account change, and a long-lived integration token must
-   * not be able to attach a new sign-in method to its owner's account.
-   * 403 (not 401): the caller authenticated fine, this credential kind is
-   * simply not permitted here.
-   */
-  const isWebSession = (c: Context<CrowiHonoBindings>): boolean => c.get('authContext')?.kind === 'web';
-  const NOT_WEB_SESSION_BODY = invalidRequestBody('this endpoint requires an interactive web session');
+  // Every link route requires a web
+  // session. Installed via `app.use(...)` BEFORE `.openapi(...)` route
+  // registration below, so credential resolution (and any PAT `lastUsedAt`
+  // bump) always runs before this route's own Zod validation — an
+  // unauthenticated/malformed-credential request never reaches the
+  // handler, regardless of whether `{code}` is well-formed.
+  app.use('/auth/providers/:name/link-start', jwtAuth);
+  app.use('/auth/providers/:name/link-completions/:code', jwtAuth);
 
   return app
     .openapi(listFederatedProvidersRoute, async (c) => {
@@ -668,34 +1086,9 @@ export const registerFederatedAuthRoutes = <E extends OpenAPIHono<CrowiHonoBindi
         return c.json(INTERNAL_ERROR_BODY, 500);
       }
     })
-    .openapi(createAuthProviderLinkGrantRoute, async (c) => {
-      const { name } = c.req.valid('param');
-      if (!isWebSession(c)) return c.json(NOT_WEB_SESSION_BODY, 403);
-
-      const user = c.get('user');
-      if (!user) return c.json(AUTH_REQUIRED_BODY, 401);
-      if (!getEnabledDriver(name)) return c.json(PROVIDER_NOT_FOUND_BODY, 404);
-
-      const { handoffChallenge } = c.req.valid('json');
-
-      try {
-        // Everything bound here comes from the SERVER's view of the caller
-        // (`c.get('user')`, set by the JWT middleware) — the request body
-        // contributes only the sender-key thumbprint. That is what makes a
-        // stolen link URL useless in another browser (AC-2) without ever
-        // letting the body name a target account.
-        const linkGrant = await linkGrantStore.issue({
-          userId: user._id.toString(),
-          provider: name,
-          authVersion: user.authVersion ?? 0,
-          handoffChallenge,
-        });
-        return c.json({ linkGrant }, 200);
-      } catch (err) {
-        debug('link grant issuance failed: %s', (err as Error).message);
-        return c.json(INTERNAL_ERROR_BODY, 500);
-      }
-    })
+    .openapi(startProviderLinkRoute, startProviderLink(deps))
+    .openapi(getProviderLinkCompletionRoute, getProviderLinkCompletion(deps))
+    .openapi(completeProviderLinkRoute, completeProviderLink(deps))
     .openapi(unlinkAuthProviderRoute, async (c) => {
       const { name } = c.req.valid('param');
       if (!isWebSession(c)) return c.json(NOT_WEB_SESSION_BODY, 403);

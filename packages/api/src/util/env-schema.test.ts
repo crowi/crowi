@@ -1,4 +1,4 @@
-import { ENV_VAR_DESCRIPTORS, validateEnv } from 'src/util/env-schema';
+import { ENV_VAR_DESCRIPTORS, isMultiInstanceDeclared, validateEnv } from 'src/util/env-schema';
 
 /** Minimal `NodeJS.ProcessEnv`-shaped object for a given set of overrides. */
 function makeEnv(overrides: Record<string, string | undefined> = {}): NodeJS.ProcessEnv {
@@ -335,6 +335,37 @@ describe('util/env-schema validateEnv', () => {
     test('a typo like "flase" warns instead of silently enabling multi-instance', () => {
       const result = validateEnv(makeEnv({ CROWI_MULTI_INSTANCE: 'flase' }));
       expect(result.warnings.some((w) => w.startsWith('CROWI_MULTI_INSTANCE:'))).toBe(true);
+    });
+  });
+
+  describe('isMultiInstanceDeclared (runtime truth table — moved here from src/collab/attach.ts)', () => {
+    test.each([
+      [undefined, false],
+      ['', false],
+      ['0', false],
+      ['false', false],
+      ['FALSE', false],
+      ['true', true],
+      ['TRUE', true],
+      ['1', true],
+      ['2', true],
+      ['10', true],
+      ['flase', true], // non-numeric non-boolean string: truthy declaration (typo still enables multi-instance, and warns separately)
+    ])('CROWI_MULTI_INSTANCE=%s -> %s', (raw, expected) => {
+      expect(isMultiInstanceDeclared(makeEnv({ CROWI_MULTI_INSTANCE: raw }))).toBe(expected);
+    });
+
+    test('defaults to reading process.env when no argument is given', () => {
+      const original = process.env.CROWI_MULTI_INSTANCE;
+      try {
+        delete process.env.CROWI_MULTI_INSTANCE;
+        expect(isMultiInstanceDeclared()).toBe(false);
+        process.env.CROWI_MULTI_INSTANCE = 'true';
+        expect(isMultiInstanceDeclared()).toBe(true);
+      } finally {
+        if (original === undefined) delete process.env.CROWI_MULTI_INSTANCE;
+        else process.env.CROWI_MULTI_INSTANCE = original;
+      }
     });
   });
 
