@@ -295,6 +295,28 @@ front proxy. **`:4304` is the canonical dev entry point**:
 
 No `CROWI_API_URL` or `NEXT_PUBLIC_*` configuration is needed in dev.
 
+## Updating to this version — coordinated replica swap required
+
+<Callout type="warn">
+  **Updating to the account-linking release requires draining and replacing
+  every api replica together — never a one-at-a-time rolling restart.** A
+  new-version replica issues a flow-specific link-state cookie for the
+  account-linking flow (`crowi.oauthLinkState.<state>`); an old-version
+  replica's callback handler does not recognize that cookie namespace and
+  falls back to reading the
+  fixed sign-in state cookie (`crowi.oauthState`) — which it then deletes
+  before validating it. In a mixed fleet, a callback that happens to land on
+  an old-version replica breaks not only the in-flight account link, but any
+  **unrelated, concurrent ordinary sign-in** whose fixed state cookie that
+  request wipes out. Stop every api replica together, deploy the new version
+  to all of them, and restart them together — or stand up a fresh fleet on
+  the new version and cut traffic over to it all at once (blue/green). There
+  is no compatibility route or fallback cookie bridging the two versions.
+  Single-instance deployments, including local dev, automatically satisfy
+  this — with only one replica, old-version / new-version mixing cannot
+  happen.
+</Callout>
+
 ## Summary
 
 | Topology | Browser → api HTTP | Browser → api WS | Inline images / files | Rebuild to change api host? |

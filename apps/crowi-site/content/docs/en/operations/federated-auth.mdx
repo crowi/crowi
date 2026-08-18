@@ -65,7 +65,21 @@ A few constraints matter:
 
 ## Linking and unlinking accounts
 
-A signed-in user can attach or detach external providers from **Settings → Password / API tokens / Linked accounts**.
+A signed-in user can attach or detach external providers from **Settings → Password / API tokens / Linked accounts**. Linking runs as three authenticated steps rather than a single top-level redirect:
+
+1. Pressing **Link** sends an authenticated `POST /auth/providers/<name>/link-start`, which returns an authorization URL and sets a short-lived, flow-specific cookie. The browser then navigates to the provider.
+2. The provider redirects back to Crowi's callback, which verifies the flow and — without reading or writing any Crowi user data — issues a one-time confirmation code, then redirects to `/me?provider=<name>&link_completion=<code>`.
+3. The settings screen shows a confirmation dialog (the provider's display label, plus the account's email when the provider returns one) and only inserts the identity once the user presses **Link** again, which sends an authenticated `POST` to consume the code.
+
+Each step has its own lifetime: the link-start state is valid for 300 seconds, the confirmation code for 300 seconds from the moment the callback issues it, and a consumed code is retained for 5 minutes so a browser that loses the response to the final `POST` can safely resend it and get the same answer back.
+
+Linking is **same-site only**: the `link-start` request is sent with `credentials: 'include'`, so a split-origin deployment (`AUTH_PUBLIC_WEB_URL` different from `AUTH_PUBLIC_API_URL`) works as long as both are on the same registrable domain — Crowi's production CORS allow-list includes the resolved `AUTH_PUBLIC_WEB_URL` origin exactly, alongside `CLIENT_URL`. A deployment that needs third-party cookies (unrelated domains) is not supported.
+
+**Multi-instance deployments must set `REDIS_URL`.** A shared Redis is required so the confirmation code issued by whichever API replica handled the callback is visible to whichever replica later handles the confirmation. This fails **closed**: with `CROWI_MULTI_INSTANCE` declared and no Redis client available, the very first `link-start` request returns a `500` before issuing any cookie, authorization URL, or confirmation code — linking is unavailable rather than silently falling back to a store one replica cannot share with the others. A single-instance deployment (no `CROWI_MULTI_INSTANCE` declared) falls back to an in-process store, so a link attempt does not survive an API process restart in between. In Redis mode, every deadline above (link-start state, confirmation code, consumed retention) is measured against Redis's own clock (`TIME`), never the API process's local clock — so a replica with a skewed system clock can neither shorten nor extend any of these windows.
+
+The confirmation code briefly appears in the URL (`?provider=...&link_completion=...`) on the way back from the provider, so it can be visible in browser history, a `Referer` header, or a reverse proxy's access log for that one request. On its own it cannot attach anything: consuming it still requires an authenticated session belonging to the same user who started the flow, and the settings screen strips it from the URL immediately after reading it.
+
+**Immediately before inserting the identity**, Crowi re-reads the account fresh and confirms it is still active and that nothing changed its session generation (a password reset or a forced sign-out) since the link was started; either failure ends the flow without linking anything, and the confirmation code cannot be reused afterward. There is no compensating rollback past that point — a fresh-read-then-insert is a single database round trip, and the brief window it spans is treated the same as any other legitimate ordering of two operations that could have completed in either sequence.
 
 Unlinking requires that the account **can sign in with a password**. It is refused when either of these holds:
 

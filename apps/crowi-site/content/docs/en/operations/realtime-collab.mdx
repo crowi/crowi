@@ -42,7 +42,7 @@ services:
       CROWI_ENCRYPTION_KEY: ${CROWI_ENCRYPTION_KEY}
       # REDIS_URL is optional in single-instance mode. See "Redis
       # connection budget" in the Redis operations policy
-      # (operations/redis) for the 7 consumers it backs.
+      # (operations/redis) for the 8 consumers it backs.
       REDIS_URL: redis://redis:6379
     ports:
       - "3000:3000"
@@ -58,7 +58,7 @@ services:
 
 Notes:
 
-- `REDIS_URL` may be omitted in single-instance mode, but the 7
+- `REDIS_URL` may be omitted in single-instance mode, but the 8
   consumers don't all degrade the same way:
   - Collab pub/sub (`extension-redis` simply isn't attached), presence
     fan-out, notification invalidation, and Config sync exist purely
@@ -73,6 +73,12 @@ Notes:
     keeps working single-instance, just without cross-replica sharing.
   - LRU (recently-viewed pages) has no fallback: without `REDIS_URL`
     this feature is unavailable outright, single-instance or not.
+  - Account linking (the link-completion store) also falls back to a
+    process-local Map without `REDIS_URL` — single-instance, that Map
+    is the only place a pending confirmation exists, so an api restart
+    between starting a link and confirming it loses that one pending
+    code (never a confirmed identity — those live only in MongoDB); the
+    user just reopens the linked-accounts list and starts again.
 - The browser derives the bare `/collab` WebSocket URL (no trailing
   slash) from `NEXT_PUBLIC_API_URL`, so `NEXT_PUBLIC_COLLAB_URL` is not
   required.
@@ -243,7 +249,7 @@ Key points:
 | `COLLAB_MAX_EDITORS_PER_PAGE` | No (default `20`) | Per-page simultaneous-editor cap. The 21st editor and beyond receive read-only realtime updates but cannot type. |
 | `NEXT_PUBLIC_COLLAB_URL` | No | The WebSocket URL the browser dials. When unset, it is derived from `window.location.host` and `NEXT_PUBLIC_API_URL` as the bare `/collab` path (no trailing slash). Leave this unset if **both** `/collab` and `/collab/*` are reverse-proxied to the same host as the api — a matcher covering only the `/collab/*` wildcard does not match the bare path the browser actually dials (see the reverse proxy examples below). |
 | `REDIS_URL` | Yes in multi-instance | Coordination for collab pub/sub, the editor-cap counter, presence, notification invalidation, Config sync, rate limiting, and LRU (recently-viewed pages). See the next section for behaviour when unset. |
-| `REDIS_KEY_PREFIX` | No — but every distinct Crowi instance sharing a Redis needs a distinct effective value | Instance-scoped namespace (`crowi:<slug>:<suffix>`) every key/channel of the 7 `REDIS_URL` consumers above is built through — see [Redis operations policy](./redis#security-operations-guide) for the full per-consumer matrix. Defaults to the hostname of `CLIENT_URL` (e.g. `wiki.example.com`) when unset; set explicitly to override (e.g. `REDIS_KEY_PREFIX=krswd`). All replicas of the SAME instance must resolve to the SAME effective prefix (same `CLIENT_URL`, or the same explicit override) — that is what keeps intended cross-replica pub/sub working. DIFFERENT Crowi instances sharing one Redis must resolve to DIFFERENT prefixes, or their presence feed / notifications / collab / Config sync cross-talk. Booting with `REDIS_URL` set and neither an override nor a resolvable `CLIENT_URL` **aborts boot** rather than silently defaulting. **`REDIS_URL`'s own database-number path segment (e.g. `/1`) does NOT substitute for this** — Redis `SUBSCRIBE`/`PUBLISH` is not scoped to a DB, so two instances that only differ by DB number still cross-talk on every shared channel; the DB number is a separate, purely numeric mechanism (see [Redis operations policy](./redis#security-operations-guide)). |
+| `REDIS_KEY_PREFIX` | No — but every distinct Crowi instance sharing a Redis needs a distinct effective value | Instance-scoped namespace (`crowi:<slug>:<suffix>`) every key/channel of the 8 `REDIS_URL` consumers above is built through — see [Redis operations policy](./redis#security-operations-guide) for the full per-consumer matrix. Defaults to the hostname of `CLIENT_URL` (e.g. `wiki.example.com`) when unset; set explicitly to override (e.g. `REDIS_KEY_PREFIX=krswd`). All replicas of the SAME instance must resolve to the SAME effective prefix (same `CLIENT_URL`, or the same explicit override) — that is what keeps intended cross-replica pub/sub working. DIFFERENT Crowi instances sharing one Redis must resolve to DIFFERENT prefixes, or their presence feed / notifications / collab / Config sync cross-talk. Booting with `REDIS_URL` set and neither an override nor a resolvable `CLIENT_URL` **aborts boot** rather than silently defaulting. **`REDIS_URL`'s own database-number path segment (e.g. `/1`) does NOT substitute for this** — Redis `SUBSCRIBE`/`PUBLISH` is not scoped to a DB, so two instances that only differ by DB number still cross-talk on every shared channel; the DB number is a separate, purely numeric mechanism (see [Redis operations policy](./redis#security-operations-guide)). |
 | `CROWI_ENCRYPTION_KEY` | Recommended | AES-256-GCM key for sensitive Config (OAuth secrets etc.). Not directly used by collab, but should be generated with `pnpm --filter @crowi/api crypto:gen-key` and shared across replicas. |
 
 ## Redis connection budget
