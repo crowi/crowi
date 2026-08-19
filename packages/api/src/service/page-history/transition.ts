@@ -141,7 +141,17 @@ export async function enterTransition(crowi: Crowi, input: PageTransitionInput):
   };
   return Page.findOneAndUpdate(
     filter,
-    { $set: { path: input.toPath, status: STATUS_RENAMING, historyTransition: { operationId: input.operationId, kind: input.kind } } },
+    {
+      $set: { path: input.toPath, status: STATUS_RENAMING, historyTransition: { operationId: input.operationId, kind: input.kind } },
+      // Every existing path-moving write advances the collab lifecycle epoch
+      // (`updatePageProperty`'s `advanceEpoch`, which `rename` / `deletePage` /
+      // `revertDeletedPage` all pass) — that is what forces an editor attached
+      // to the old path off the document. Entering a transition moves the path,
+      // so it has to advance it too, and in THIS update: a separate write would
+      // leave a page whose path moved while its epoch did not if we crashed
+      // between them.
+      $inc: { collabLifecycleVersion: 1 },
+    },
     { returnDocument: 'after' },
   ).exec();
 }

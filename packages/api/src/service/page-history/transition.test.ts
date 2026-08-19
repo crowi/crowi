@@ -83,6 +83,22 @@ describe('service/page-history/transition — runPageTransition (RFC-0021 Phase 
     });
   });
 
+  describe('AC-33: entering advances the collab lifecycle epoch', () => {
+    test('the epoch moves in the same write as the path, not a separate one', async () => {
+      const page = await createReadyPage('/transition/ac33');
+      const before = await Page.collection.findOne({ _id: page._id });
+
+      await enterTransition(crowi, inputFor(page._id, '/transition/ac33', '/transition/ac33-moved'));
+
+      // An editor attached to the old path is only forced off by this epoch.
+      // A page whose path moved while its epoch stood still would keep that
+      // editor live on a document that no longer exists at that path.
+      const after = await Page.collection.findOne({ _id: page._id });
+      expect(after.collabLifecycleVersion).toBe(before.collabLifecycleVersion + 1);
+      expect(after.path).toBe('/transition/ac33-moved');
+    });
+  });
+
   describe('AC-10: a legacy page with no status field can still enter', () => {
     test('the CAS pins $exists:false instead of a value', async () => {
       const page = await createReadyPage('/transition/ac10');
