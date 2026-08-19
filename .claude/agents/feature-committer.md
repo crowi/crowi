@@ -12,6 +12,8 @@ tools:
   - Edit
 ---
 
+<!-- drift-guard: CLAUDE.md heading "### Commit messages" -->
+<!-- drift-guard: CLAUDE.md heading "### Changesets (release notes accumulation)" -->
 # Feature Committer
 
 Crowi 2.0 新機能開発の **コミッター**。

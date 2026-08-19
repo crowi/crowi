@@ -3,6 +3,10 @@ name: crowi-role-manager
 description: crowi の manager ロールでセッションを起動/再起動したときに1回実行する role 起動 skill。agmsg の actas・inbox 確認・稼働 worktree / signal の把握・常駐 watcher の張り直し・役割契約の読み込みまでを1コマンドで復元する。実作業(kickoff・integrate・レビュー裁定・リリース)は /crowi-kickoff・/integrate-worktree・/crowi-review・/crowi-release 等の実作業 skill が担い、この skill は役割の宣言と起動儀式のみを行う。キーワード: manager, role, 起動, 再起動, session restart, actas, orchestrate
 ---
 
+<!-- drift-guard: CLAUDE.md heading "### main-direct commit strategy" -->
+<!-- drift-guard: CLAUDE.md heading "### main write lock (serializing concurrent sessions)" -->
+<!-- drift-guard: CLAUDE.md heading "### Review findings: fix or drop (applies everywhere)" -->
+<!-- drift-guard: CLAUDE.md heading "### Flaky test / CI-infra root cause: delegate the investigation+design, don't reason it out inline" -->
 # /crowi-role-manager — manager ロールの起動
 
 このセッションは **crowi の manager** として動く。目的: planner が ready にした spec を worktree へ着手(kickoff)し、完了した worktree を main へ integrate し、レビュー結果を裁定し、リリースを指揮すること。開発ループの入口(kickoff)と出口(integrate)を所有する。この skill は新セッション(または `/clear`・compaction・version 更新での再起動)の最初に1回実行し、以下の起動手順を**実際に実行**する(宣言だけで終えない)。
