@@ -92,6 +92,7 @@ struct PageReaderView: View {
                             session: session,
                             renderedAst: page.revision?.renderedAst,
                             rawBody: body,
+                            sourcePath: path,
                             onSelectDestination: onSelectDestination,
                             onNavigateToFragment: { fragment in
                                 scroll(to: RenderedAstView.anchorID(fragment), using: proxy)

@@ -26,6 +26,10 @@ struct PageBodyView: View {
     /// (including `nil`, the cache-painted case) renders the raw body.
     let renderedAst: RenderedAstDecodeOutcome?
     let rawBody: String
+    /// The path of the page this body belongs to. A relative link means
+    /// nothing without it — the browser resolves one against the document's
+    /// own URL, and a native reader has no such thing to fall back on.
+    let sourcePath: String
     let onSelectDestination: (ReadDestination) -> Void
     /// Set only where the host owns a scroll container that registers the
     /// rendered-AST heading anchors (the reader); when absent, in-page
@@ -51,7 +55,7 @@ struct PageBodyView: View {
                     workspaceOrigin: session.context.workspace.workspaceOrigin.baseURL,
                     onNavigateToWikiLink: { target in onSelectDestination(.page(path: target)) },
                     onNavigateToMention: { username in onSelectDestination(.profile(username: username)) },
-                    onNavigateToRelativePath: { target in onSelectDestination(.page(path: target)) },
+                    onNavigateToRelativePath: openRelative,
                     onNavigateToPageId: { pageId in onSelectDestination(.pageById(pageId)) },
                     onNavigateToFragment: onNavigateToFragment,
                     onOpenExternalURL: openExternally,
@@ -64,7 +68,7 @@ struct PageBodyView: View {
                     workspaceOrigin: session.context.workspace.workspaceOrigin.baseURL,
                     onNavigateToWikiLink: { target in onSelectDestination(.page(path: target)) },
                     onNavigateToMention: { username in onSelectDestination(.profile(username: username)) },
-                    onNavigateToRelativePath: { target in onSelectDestination(.page(path: target)) },
+                    onNavigateToRelativePath: openRelative,
                     onNavigateToPageId: { pageId in onSelectDestination(.pageById(pageId)) },
                     onOpenExternalURL: openExternally,
                     imageViewer: viewer
@@ -74,6 +78,17 @@ struct PageBodyView: View {
         .sheet(item: $externalLink) { link in
             SafariView(url: link.url)
                 .ignoresSafeArea()
+        }
+    }
+
+    /// Resolve first, THEN classify: a bare relative ref is a sibling of this
+    /// page, so a 24-hex NAME must not be mistaken for a share URL's id — only
+    /// an absolute single-segment path is that.
+    private func openRelative(_ target: String) {
+        guard let resolved = WikiPathResolver.resolve(sourcePath: sourcePath, ref: target) else { return }
+        switch WikiPathResolver.isExternalRef(target) ? nil : WorkspaceLinkRouter.internalLink(forPath: resolved) {
+        case .pageId(let id): onSelectDestination(.pageById(id))
+        default: onSelectDestination(.page(path: resolved))
         }
     }
 

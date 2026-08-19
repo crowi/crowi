@@ -82,6 +82,7 @@ struct PageTreeView: View {
                         session: session,
                         renderedAst: portalPage?.revision?.renderedAst,
                         rawBody: portalBody,
+                        sourcePath: path,
                         onSelectDestination: onSelect
                     )
                     .padding(.horizontal, CrowiMetrics.screenHorizontalMargin)

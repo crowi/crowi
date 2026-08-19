@@ -98,6 +98,7 @@ struct RevisionHistoryView: View {
                         session: session,
                         renderedAst: revision.renderedAst,
                         rawBody: revision.body,
+                        sourcePath: pagePath,
                         onSelectDestination: { _ in }
                     )
                     .padding()
