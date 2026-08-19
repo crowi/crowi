@@ -45,10 +45,31 @@ final class RenderedAstGoldenCorpusTests: XCTestCase {
     private static let corpusDirectoryURL = repositoryRootURL
         .appendingPathComponent("packages/api/src/renderer/__fixtures__/golden-corpus")
 
-    /// The full corpus file set: the Phase 4 core-node files plus
-    /// `typed-nodes.json` (the Phase 5 sidecar-projection cases the
-    /// decoder's `tryProject` mirror now walks).
-    private static let corpusFiles = ["core-blocks", "inline", "code", "image-attrs", "gfm-references", "typed-nodes"]
+    /// Every corpus file this consumer asserts against.
+    ///
+    /// Kept in step with the directory by `testEveryCorpusFileIsRegistered`
+    /// below — a fixture added upstream and not listed here is read by
+    /// nobody, and the suite still passes, so the gap is invisible exactly
+    /// when it matters.
+    private static let corpusFiles = [
+        "core-blocks", "inline", "code", "image-attrs", "gfm-references", "typed-nodes",
+        "frontmatter", "github-alerts",
+    ]
+
+    /// Files whose stored shape is projected to v1 by a rule that exists ONLY
+    /// on the server, so this walker cannot reproduce the envelope from it.
+    ///
+    /// `crowiAlert` is the case: it is deliberately outside the v1 union, the
+    /// server narrows it to a `blockquote`, and a client that met the stored
+    /// form would treat it as an unknown type. It never meets one — the
+    /// envelope is all a client is ever sent — so the walk being unreproducible
+    /// costs nothing, but asserting it would be asserting a path that does not
+    /// exist. Their `expectedEnvelope` is still decoded and round-tripped by
+    /// the other two tests, which is the half that runs in production.
+    ///
+    /// Raised with the contract's owners; if the mirror is meant to hold here,
+    /// it needs the projection on this side and this set goes away.
+    private static let serverOnlyProjectionFiles: Set<String> = ["github-alerts"]
 
     private struct CorpusCase {
         let file: String
@@ -91,14 +112,40 @@ final class RenderedAstGoldenCorpusTests: XCTestCase {
         var total = 0
         for file in Self.corpusFiles {
             let loaded = try loadFile(file)
-            XCTAssertGreaterThanOrEqual(loaded.cases.count, 5, "\(file).json lost cases — check it against the api jest driver")
+            // A floor of two still catches the emptied and the truncated file,
+            // which is what this guards. Five was written when every fixture
+            // predated the ones that legitimately ship a pair; the corpus
+            // total below is what keeps the whole from shrinking.
+            XCTAssertGreaterThanOrEqual(loaded.cases.count, 2, "\(file).json lost cases — check it against the api jest driver")
             XCTAssertTrue(
                 loaded.consumers.contains("apps/apple/CrowiKit/Tests/CrowiKitTests/RenderedAstGoldenCorpusTests.swift"),
                 "\(file).json no longer lists this test as a consumer — the two-consumer contract drifted"
             )
             total += loaded.cases.count
         }
-        XCTAssertGreaterThanOrEqual(total, 40, "the corpus shrank unexpectedly")
+        XCTAssertGreaterThanOrEqual(total, 55, "the corpus shrank unexpectedly")
+    }
+
+    /// The list above must name every fixture on disk.
+    ///
+    /// A file added upstream and not listed here is read by nobody, and the
+    /// suite stays green — so the consumer half of the contract silently stops
+    /// covering it. That is what happened to `frontmatter.json` and
+    /// `github-alerts.json`: both shipped, neither was asserted, and the gap
+    /// was invisible precisely because nothing failed.
+    func testEveryCorpusFileIsRegistered() throws {
+        let onDisk = try FileManager.default
+            .contentsOfDirectory(at: Self.corpusDirectoryURL, includingPropertiesForKeys: nil)
+            .filter { $0.pathExtension == "json" }
+            .map { $0.deletingPathExtension().lastPathComponent }
+        XCTAssertEqual(
+            Set(onDisk).subtracting(Self.corpusFiles), [],
+            "a corpus fixture exists that this consumer never reads — add it to corpusFiles"
+        )
+        XCTAssertEqual(
+            Set(Self.corpusFiles).subtracting(onDisk), [],
+            "corpusFiles names a fixture that is not on disk"
+        )
     }
 
     /// Consumer contract 1: every `expectedEnvelope` decodes strictly, with
@@ -145,6 +192,7 @@ final class RenderedAstGoldenCorpusTests: XCTestCase {
         var asserted = 0
         for file in Self.corpusFiles {
             for corpusCase in try loadFile(file).cases {
+                guard !Self.serverOnlyProjectionFiles.contains(file) else { continue }
                 guard let stored = corpusCase.storedRoot, let envelope = corpusCase.expectedEnvelope else { continue }
                 guard case .document(let mirrored) = RenderedAstEnvelopeDecoder.sanitize(stored) else {
                     XCTFail("\(file)/\(corpusCase.name): the walker mirror failed the stored AST at envelope level")
