@@ -26,6 +26,12 @@ enum ReadDestination: Hashable {
     /// list (RFC-0016 §11), opened from the toolbar bell; a row tap then
     /// navigates onward via `.page(path:)`.
     case notifications
+    /// A level of the page tree (`PageTreeView`). A DESTINATION rather than a
+    /// `NavigationLink`'s own view: inside a `NavigationSplitView` sidebar a
+    /// link presents into the detail column, which then outranks the
+    /// selection state and leaves every later selection — from the tree or
+    /// from the sidebar — changing a view nobody can see.
+    case pageTree(path: String, hasPortal: Bool)
     /// The app's OWN settings (`AppSettingsView`) — this install's state,
     /// never a wiki's. Reached from the gear on the reader's own profile.
     case settings

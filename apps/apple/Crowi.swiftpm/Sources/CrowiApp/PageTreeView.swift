@@ -146,8 +146,8 @@ struct PageTreeView: View {
         // itself — so neither the children nor the portal's own content is
         // ever unreachable.
         if child.hasPortal || child.count > 0 {
-            NavigationLink {
-                PageTreeView(session: session, path: child.path, hasPortal: child.hasPortal, onSelect: onSelect)
+            Button {
+                onSelect(.pageTree(path: child.path, hasPortal: child.hasPortal))
             } label: {
                 label(for: child, systemImage: child.hasPortal ? "folder.fill" : "folder")
             }

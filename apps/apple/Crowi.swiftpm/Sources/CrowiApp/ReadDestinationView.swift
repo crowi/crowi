@@ -44,6 +44,8 @@ struct ReadDestinationView: View {
             PageCreateView(session: session, originPath: originPath, onSelectDestination: onSelect)
         case .notifications:
             NotificationsView(session: session, onSelectDestination: onSelect)
+        case .pageTree(let path, let hasPortal):
+            PageTreeView(session: session, path: path, hasPortal: hasPortal, onSelect: onSelect)
         case .settings:
             AppSettingsView()
         }

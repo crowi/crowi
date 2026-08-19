@@ -30,6 +30,8 @@ struct WorkspaceHomeView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.scenePhase) private var scenePhase
     @State private var selectedDestination: ReadDestination?
+    /// What the detail column has pushed on top of `selectedDestination`.
+    @State private var detailPath: [ReadDestination] = []
 
     /// The session is built HERE, from `context`, and never re-pointed —
     /// which is only correct because the caller gives this view a per-
@@ -94,24 +96,42 @@ struct WorkspaceHomeView: View {
             WorkspaceTabsView(session: session, onShowSwitcher: onShowSwitcher)
         } else {
             NavigationSplitView {
-                RecentlyUpdatedHomeView(
-                    session: session,
-                    onSelect: { selectedDestination = $0 }
-                )
-                .toolbar { toolbarItems(session: session, onSelect: { selectedDestination = $0 }) }
+                RecentlyUpdatedHomeView(session: session, onSelect: showInDetail)
+                    .toolbar { toolbarItems(session: session, onSelect: showInDetail) }
             } detail: {
-                // NOTE: deliberately not `if let selectedDestination` — that
-                // shorthand shadows the `@State` property name with a local
-                // `let` for the rest of this block, which would make the
-                // `onSelect` closure below assign to the (immutable) shadow
-                // instead of the real `@State` var.
-                if let destination = selectedDestination {
-                    ReadDestinationView(destination: destination, session: session, onSelect: { selectedDestination = $0 })
-                } else {
-                    ContentUnavailableView("Select a page", systemImage: "doc.text")
+                // A real stack, not a single swapped view. The sidebar picks
+                // the ROOT; everything reached from inside the detail — a
+                // level of the page tree, a page, a profile — pushes onto it
+                // and keeps a back button. Without the stack, drilling into
+                // the tree replaced the level you were standing on and there
+                // was no way back up.
+                NavigationStack(path: $detailPath) {
+                    // NOTE: deliberately not `if let selectedDestination` —
+                    // that shorthand shadows the `@State` property name with a
+                    // local `let` for the rest of this block, which would make
+                    // the `onSelect` closure below assign to the (immutable)
+                    // shadow instead of the real `@State` var.
+                    Group {
+                        if let destination = selectedDestination {
+                            ReadDestinationView(destination: destination, session: session, onSelect: { detailPath.append($0) })
+                        } else {
+                            ContentUnavailableView("Select a page", systemImage: "doc.text")
+                        }
+                    }
+                    .navigationDestination(for: ReadDestination.self) { destination in
+                        ReadDestinationView(destination: destination, session: session, onSelect: { detailPath.append($0) })
+                    }
                 }
             }
         }
+    }
+
+    /// A sidebar choice is a new ROOT, so whatever the detail had pushed is
+    /// no longer behind it — carrying that stack over would leave a back
+    /// button walking into the previous selection's history.
+    private func showInDetail(_ destination: ReadDestination) {
+        detailPath = []
+        selectedDestination = destination
     }
 
     /// Regular width only — the sidebar's actions. (The compact shell's

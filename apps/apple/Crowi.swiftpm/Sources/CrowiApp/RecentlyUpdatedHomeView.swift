@@ -88,8 +88,8 @@ struct RecentlyUpdatedHomeView: View {
                 // covering this link.
                 CrowiSectionHeader("Browse")
                 CrowiCard {
-                    NavigationLink {
-                        PageTreeView(session: session, path: "/", onSelect: onSelect)
+                    Button {
+                        onSelect(.pageTree(path: "/", hasPortal: true))
                     } label: {
                         CrowiRow {
                             CrowiRowChip(systemImage: "folder")
