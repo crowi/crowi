@@ -1,0 +1,172 @@
+---
+title: Google Cloud setup
+description: Prepare the bucket, service account, and permissions on the Google Cloud side for the GCS driver
+---
+
+This page covers **the Google Cloud side only**. For registering the resulting bucket with Crowi (admin fields, migration, the emulator), see [Storage drivers](../../operations/storage).
+
+Every command below uses the `gcloud` CLI. The same steps can be performed from the Google Cloud console.
+
+## Prerequisites
+
+### The project ID is not always the display name
+
+The console's project picker shows the project **name**, but `gcloud` and the plugin's **Google Cloud project ID** field both take the project **ID**. When the ID you asked for was already taken, Google assigns a generated one such as `nodal-pod-504715-n9`, which looks nothing like the display name.
+
+```bash
+gcloud projects list
+```
+
+Use the value in the `PROJECT_ID` column. Passing the display name fails with a "does not have permission (or it may not exist)" error.
+
+### Link a billing account
+
+Cloud Storage requires a linked billing account before a bucket can be created. Without one the console's **Create** button is disabled and the CLI fails.
+
+```bash
+gcloud billing accounts list
+gcloud billing projects link <PROJECT_ID> --billing-account=<BILLING_ACCOUNT_ID>
+```
+
+## 1. Enable the APIs
+
+```bash
+gcloud services enable storage.googleapis.com --project=<PROJECT_ID>
+```
+
+`iamcredentials.googleapis.com` is only needed additionally for service-account impersonation (the connectivity check below) and for V4 signed URLs under ADC.
+
+```bash
+gcloud services enable iamcredentials.googleapis.com --project=<PROJECT_ID>
+```
+
+## 2. Create the bucket
+
+```bash
+gcloud storage buckets create gs://<BUCKET_NAME> \
+  --project=<PROJECT_ID> \
+  --location=asia-northeast1 \
+  --uniform-bucket-level-access \
+  --public-access-prevention
+```
+
+Bucket names are constrained:
+
+- They must be globally unique across all of Cloud Storage.
+- **They cannot contain the string `google`.** Such a name fails with `Use of this bucket name is restricted`.
+
+The following **do not need to be configured** for Crowi:
+
+- **CORS** — attachments are served through Crowi's API proxy; the browser never fetches from GCS directly.
+- **Public access** — keep the bucket private.
+- **Versioning / lifecycle / CMEK / retention / bucket-level IAM conditions** — Crowi neither reads nor changes any of these. Configure them on the bucket as you see fit.
+
+## 3. Service account and permissions
+
+```bash
+gcloud iam service-accounts create <SA_NAME> \
+  --project=<PROJECT_ID> \
+  --display-name="Crowi storage"
+```
+
+Grant permissions at the bucket level.
+
+```bash
+gcloud storage buckets add-iam-policy-binding gs://<BUCKET_NAME> \
+  --project=<PROJECT_ID> \
+  --member="serviceAccount:<SA_NAME>@<PROJECT_ID>.iam.gserviceaccount.com" \
+  --role="roles/storage.objectUser"
+```
+
+The driver calls exactly three operations — `storage.objects.create`, `storage.objects.get`, and `storage.objects.delete`. It never lists objects, so a custom role built from just those three is sufficient.
+
+```bash
+gcloud iam roles create crowiStorageObject --project=<PROJECT_ID> \
+  --title="Crowi Storage Object" \
+  --permissions=storage.objects.create,storage.objects.get,storage.objects.delete
+```
+
+Bind a custom role by its full resource name (`--role="projects/<PROJECT_ID>/roles/crowiStorageObject"`).
+
+No `storage.buckets.*` permission is needed — Crowi never creates, lists, or configures buckets.
+
+> **Note**: IAM changes take one to two minutes to propagate. A `PERMISSION_DENIED` immediately after creating a service account or a binding is almost always propagation lag rather than a misconfiguration. Wait and retry.
+
+## 4. Choose a credential mode
+
+Three options, in recommended order.
+
+### A. Attached service account (running on Google Cloud)
+
+Attach a service account on Cloud Run / GKE / GCE and leave the admin UI's **Service account key JSON** field blank. Application Default Credentials (ADC) resolve that identity automatically, so no long-lived key is ever stored. Workload Identity Federation works the same way. **Always prefer this when running on Google Cloud.**
+
+### B. Local ADC (development and verification)
+
+```bash
+gcloud auth application-default login
+gcloud auth application-default set-quota-project <PROJECT_ID>
+```
+
+A plain user account usually holds broad permissions on its own project, which means **it cannot reproduce a permission shortfall**. To verify that the service account's grants are exactly sufficient, impersonate it so ADC resolves to that identity.
+
+```bash
+gcloud iam service-accounts add-iam-policy-binding <SA_EMAIL> \
+  --project=<PROJECT_ID> \
+  --member="user:<YOUR_ACCOUNT>" \
+  --role="roles/iam.serviceAccountTokenCreator"
+
+gcloud auth application-default login --impersonate-service-account=<SA_EMAIL>
+```
+
+### C. Service account key JSON (running outside Google Cloud)
+
+For self-hosted servers or other clouds, issue a key and paste it into the admin UI.
+
+```bash
+gcloud iam service-accounts keys create <OUTPUT_PATH>.json \
+  --project=<PROJECT_ID> \
+  --iam-account=<SA_EMAIL>
+chmod 600 <OUTPUT_PATH>.json
+```
+
+In organizations where the `constraints/iam.disableServiceAccountKeyCreation` policy is enforced, this command fails. Use mode A or B, or set a project-level policy exception.
+
+The key is a long-lived credential. Keep it out of your repository and delete it once it is no longer needed.
+
+```bash
+gcloud iam service-accounts keys list --iam-account=<SA_EMAIL>
+gcloud iam service-accounts keys delete <KEY_ID> --iam-account=<SA_EMAIL>
+```
+
+## 5. Verify connectivity before configuring Crowi
+
+Running this first lets you tell a Google Cloud permission problem apart from a Crowi configuration problem later.
+
+```bash
+echo test > /tmp/crowi-gcs-check.txt
+gcloud storage cp /tmp/crowi-gcs-check.txt gs://<BUCKET_NAME>/healthcheck.txt \
+  --project=<PROJECT_ID> --impersonate-service-account=<SA_EMAIL>
+gcloud storage cat gs://<BUCKET_NAME>/healthcheck.txt \
+  --project=<PROJECT_ID> --impersonate-service-account=<SA_EMAIL>
+gcloud storage rm gs://<BUCKET_NAME>/healthcheck.txt \
+  --project=<PROJECT_ID> --impersonate-service-account=<SA_EMAIL>
+```
+
+If upload, download, and delete all succeed, the driver has every permission it needs.
+
+## 6. V4 signed URLs (`signBlob`) are a separate permission
+
+Generating signed URLs is a different capability from object CRUD, and what it requires depends on the credential mode.
+
+- **Key JSON** — the private key signs locally; no extra permission or API call is involved.
+- **ADC** — the IAM Credentials `signBlob` permission is required (`roles/iam.serviceAccountTokenCreator` on the identity itself, or an explicit `iam.serviceAccounts.signBlob` grant).
+
+Crowi's attachment delivery routes do not call `signedUrl()` today — they always stream through the API proxy. **Missing `signBlob` does not affect normal upload or download.**
+
+## 7. Continue on the Crowi side
+
+Once the bucket and credentials exist, continue with the GCS section of [Storage drivers](../../operations/storage).
+
+Enter the bucket name in the **GCS bucket** field. A `gs://` scheme and any trailing slashes are stripped by the Google Cloud Storage SDK, so `gs://<BUCKET_NAME>` resolves correctly too.
+
+The bucket name is **not checked for existence on save**, however. A typo saves successfully, and opening an attachment in that state reports a missing file rather than a misconfiguration, because a GCS 404 is indistinguishable from a genuinely absent object. After changing the bucket name, upload an attachment and confirm it lands in the intended bucket.
