@@ -50,7 +50,14 @@ export interface PageTransitionInput {
   toStatus: string | null;
   actor: Types.ObjectId | null;
   source: PageHistoryEventSource;
-  event: TransitionEvent;
+  /**
+   * Built at step 3, not passed as a value, because a payload can depend on
+   * what the earlier steps actually did — rename's `redirectCreated` is the
+   * outcome of step 2, not the caller's request. Handing the runner a value up
+   * front would force every such command to describe an intention as if it were
+   * a result.
+   */
+  buildEvent: () => TransitionEvent;
   /** Command-specific, idempotent work that must happen once the Page is claimed. Re-run on resume. */
   afterEnter?: () => Promise<void>;
   /** Command-specific handling of the path the Page just left (a redirect stub, or nothing). Re-run on resume. */
@@ -179,7 +186,7 @@ export async function exitTransition(crowi: Crowi, input: PageTransitionInput): 
       // equivalent everywhere the status is read (`isPublic`, and every filter
       // uses Mongo's null-equality).
       set: { status: input.toStatus, historyTransition: null },
-      event: input.event,
+      event: input.buildEvent(),
     }),
   });
 

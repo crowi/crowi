@@ -84,7 +84,7 @@ describe('service/page-history/operation (RFC-0021 Phase 2c-2a)', () => {
       toStatus: STATUS_PUBLISHED,
       actor: user._id,
       source: 'web',
-      event: { kind: 'page_renamed', payload: { fromPath, toPath, redirectCreated: false, subtree: false } },
+      buildEvent: () => ({ kind: 'page_renamed', payload: { fromPath, toPath, redirectCreated: false, subtree: false } }),
     };
   }
 

@@ -60,7 +60,7 @@ describe('service/page-history/transition — runPageTransition (RFC-0021 Phase 
       source: 'web',
       // The runner is payload-agnostic; the kind's own schema decides the
       // field set, and `page_renamed` requires all four.
-      event: { kind: 'page_renamed', payload: { fromPath, toPath, redirectCreated: false, subtree: false } },
+      buildEvent: () => ({ kind: 'page_renamed', payload: { fromPath, toPath, redirectCreated: false, subtree: false } }),
       ...overrides,
     };
   }
