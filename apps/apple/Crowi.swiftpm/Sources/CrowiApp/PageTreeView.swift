@@ -53,6 +53,15 @@ struct PageTreeView: View {
 
     @State private var children: [PageChildSegmentLenient] = []
     @State private var portalPage: PageLenient?
+    /// Every page BENEATH `path`, not just its direct children — the web's
+    /// folder listing is a prefix match (`findListByStartWith` builds
+    /// `^path`), so `/a/b/` shows `/a/b/c/d` as readily as `/a/b/c`. Browsing
+    /// by segment alone made a deep page invisible until you had guessed
+    /// which folders to open.
+    @State private var descendants: [PageLenient] = []
+    /// The size of the whole prefix-matched set, which the slice is a page of.
+    @State private var descendantTotal: Int?
+    @State private var isLoadingMore = false
     @State private var isLoading = false
     @State private var loadErrorMessage: String?
 
@@ -78,12 +87,35 @@ struct PageTreeView: View {
                     .padding(.horizontal, CrowiMetrics.screenHorizontalMargin)
                     .padding(.top, CrowiMetrics.sectionHeaderTopPadding)
                 }
-                if !children.isEmpty {
-                    CrowiSectionHeader("Pages")
-                    CrowiCardRows(children, id: \.path) { child in
+                if !folders.isEmpty {
+                    CrowiSectionHeader("Folders")
+                    CrowiCardRows(folders, id: \.path) { child in
                         row(for: child)
                     }
-                } else if portalBody == nil {
+                }
+                if !descendants.isEmpty {
+                    CrowiSectionHeader(descendantsHeader)
+                    CrowiCardRows(descendants, id: \.id) { page in
+                        Button {
+                            onSelect(.page(path: page.path))
+                        } label: {
+                            CrowiPageRow(
+                                path: page.path,
+                                lastUpdatedAt: page.updatedAt,
+                                updaterName: page.lastUpdateUserName,
+                                updaterImage: page.lastUpdateUserImage,
+                                updaterUsername: page.lastUpdateUserUsername,
+                                likeCount: page.displayLikeCount,
+                                commentCount: page.displayCommentCount,
+                                loader: session.imageCache
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    if hasMoreDescendants {
+                        loadMoreRow
+                    }
+                } else if folders.isEmpty, portalBody == nil {
                     // Only when nothing at all is on screen — a rendered
                     // portal body with zero children is a legitimate state
                     // (body-only portal), not an empty/error one.
@@ -120,6 +152,54 @@ struct PageTreeView: View {
         }
         .task(id: path) { await load() }
         .refreshable { await load() }
+    }
+
+    /// Only the segments worth descending into. A leaf page is not one — it
+    /// is already in the listing below, and showing it twice would make the
+    /// two sections look like different things.
+    private var folders: [PageChildSegmentLenient] {
+        children.filter { $0.hasPortal || $0.count > 0 }
+    }
+
+    private var descendantsHeader: String {
+        guard let descendantTotal, descendantTotal > descendants.count else { return "Pages" }
+        return "Pages (\(descendants.count) of \(descendantTotal))"
+    }
+
+    private var hasMoreDescendants: Bool {
+        guard let descendantTotal else { return false }
+        return descendants.count < descendantTotal
+    }
+
+    private var loadMoreRow: some View {
+        Button {
+            Task { await loadMoreDescendants() }
+        } label: {
+            Group {
+                if isLoadingMore {
+                    ProgressView()
+                } else {
+                    Text("Load more")
+                        .font(CrowiTypography.sectionAction)
+                        .foregroundStyle(CrowiTheme.primary)
+                }
+            }
+            .frame(maxWidth: .infinity, minHeight: CrowiMetrics.minimumTapTarget)
+        }
+        .buttonStyle(.plain)
+        .disabled(isLoadingMore)
+        .padding(.top, CrowiMetrics.sectionHeaderTopPadding)
+    }
+
+    private func loadMoreDescendants() async {
+        isLoadingMore = true
+        defer { isLoadingMore = false }
+        guard let response = try? await ListPagesResponseLenient.fetch(
+            path: path, limit: Self.descendantPageSize, offset: descendants.count, using: session.apiClient
+        ) else { return }
+        let known = Set(descendants.map(\.id))
+        descendants += response.pages.filter { !known.contains($0.id) }
+        descendantTotal = response.total ?? descendantTotal
     }
 
     @ViewBuilder
@@ -192,6 +272,8 @@ struct PageTreeView: View {
         }
     }
 
+    private static let descendantPageSize = 50
+
     private func load() async {
         isLoading = true
         defer { isLoading = false }
@@ -203,6 +285,9 @@ struct PageTreeView: View {
             portalPage = cached.asPageLenient
         }
         async let portalFetch = fetchPortalDetail()
+        async let descendantFetch = try? ListPagesResponseLenient.fetch(
+            path: path, limit: Self.descendantPageSize, using: session.apiClient
+        )
         do {
             let response = try await ListPageChildrenResponseLenient.fetch(path: path, using: session.apiClient)
             children = response.children
@@ -213,6 +298,10 @@ struct PageTreeView: View {
                 children = cached
             }
             loadErrorMessage = children.isEmpty ? "Couldn't load this workspace's pages." : nil
+        }
+        if let descendantResponse = await descendantFetch {
+            descendants = descendantResponse.pages
+            descendantTotal = descendantResponse.total
         }
         if let portalResponse = await portalFetch {
             portalPage = portalResponse.page

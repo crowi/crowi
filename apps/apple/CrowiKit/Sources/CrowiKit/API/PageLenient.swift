@@ -230,10 +230,13 @@ public struct ListPagesResponseLenient: Sendable, Equatable {
     ///   asks for fewer). Sort deliberately stays the server default,
     ///   `updatedAt` desc — the exact "recently updated" order
     ///   (feature-ios-design-language (3)).
-    public static func fetch(path: String, limit: Int? = nil, using client: AuthenticatedAPIClient) async throws -> ListPagesResponseLenient {
+    public static func fetch(path: String, limit: Int? = nil, offset: Int? = nil, using client: AuthenticatedAPIClient) async throws -> ListPagesResponseLenient {
         var query = [URLQueryItem(name: "path", value: path)]
         if let limit {
             query.append(URLQueryItem(name: "limit", value: String(limit)))
+        }
+        if let offset {
+            query.append(URLQueryItem(name: "offset", value: String(offset)))
         }
         let (data, status) = try await client.get("pages/list", query: query)
         guard status.isSuccessfulHTTPStatus else { throw PageLenientDecodeError.httpError(status: status) }
