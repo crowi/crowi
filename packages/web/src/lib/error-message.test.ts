@@ -32,6 +32,17 @@ describe('errorMessage', () => {
     expect(errorMessage('PAGE_NOT_FOUND', 'raw english from server')).toBe('Page not found.');
   });
 
+  it('distinguishes the page-transition 409s from the revision-conflict 409', () => {
+    // All three arrive as 409, so the code is the only thing telling a reader
+    // "your edit raced another edit" from "the page itself is being moved".
+    // Collapsing any two onto one message would hide that difference.
+    overwriteGetLocale(() => 'en');
+    const revisionConflict = errorMessage('PAGE_REVISION_ERROR');
+    const inProgress = errorMessage('PAGE_TRANSITION_IN_PROGRESS');
+    const keyConflict = errorMessage('IDEMPOTENCY_KEY_CONFLICT');
+    expect(new Set([revisionConflict, inProgress, keyConflict]).size).toBe(3);
+  });
+
   it('has an exhaustive mapping covering every ErrorCode', () => {
     // ERROR_MESSAGE_KEYS is typed `satisfies Record<ErrorCode, …>` so a gap
     // is already a compile error; this asserts it at runtime too as a guard

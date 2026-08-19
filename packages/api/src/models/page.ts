@@ -45,7 +45,31 @@ export const STATUS_DEPRECATED = 'deprecated';
  * + `@crowi/collab` `onAuthenticate`).
  */
 export const STATUS_DRAFT = 'draft';
-export const STATUSES = [STATUS_WIP, STATUS_PUBLISHED, STATUS_DELETED, STATUS_DEPRECATED, STATUS_DRAFT] as const;
+/**
+ * RFC-0021 Phase 2c-2: the Page is between the entering and leaving CAS of a
+ * path-moving command. Unlike every other status this one is transient and
+ * belongs to no user-visible lifecycle — it exists so ordinary readers can skip
+ * a Page whose path is momentarily ambiguous.
+ *
+ * It never carries ownership: which command owns the transition is
+ * `historyTransition`'s job, and code asking "may I proceed?" must consult that
+ * rather than the status.
+ */
+export const STATUS_RENAMING = 'renaming';
+export const STATUSES = [STATUS_WIP, STATUS_PUBLISHED, STATUS_DELETED, STATUS_DEPRECATED, STATUS_DRAFT, STATUS_RENAMING] as const;
+
+/**
+ * Statuses that mean "mid-transition, not a settled state". Readers exclude
+ * these; the exclusion itself lands with the writers that produce them.
+ *
+ * Kept as one array plus one predicate so a future transitional status is added
+ * in a single place instead of in every reader's inline string comparison.
+ */
+export const PAGE_TRANSITIONAL_STATUSES = [STATUS_RENAMING] as const;
+
+export function isTransitionalPageStatus(status: string | null | undefined): boolean {
+  return status != null && (PAGE_TRANSITIONAL_STATUSES as readonly string[]).includes(status);
+}
 
 /**
  * A user's home page (`/user/<username>`). Its path is bound to the
@@ -273,6 +297,8 @@ export interface PageDocument extends Document {
   historyTracking: HistoryTracking;
   /** RFC-0021 §5.5 (Phase 1) — see `PendingHistoryEntry`'s doc comment above. */
   pendingHistoryEntry?: PendingHistoryEntry | null;
+  /** RFC-0021 Phase 2c-2 — see `PageHistoryTransition`'s doc comment above. */
+  historyTransition?: PageHistoryTransition | null;
 
   // dynamic fields
   latestRevision?: Types.ObjectId;
@@ -541,6 +567,24 @@ export interface HistoryTracking {
 }
 
 /**
+ * RFC-0021 Phase 2c-2 — which command currently owns this Page's path-moving
+ * transition, or absent when none does.
+ *
+ * This field IS the mutual exclusion: the entering CAS pins it null and writes
+ * its own `operationId`, the leaving CAS pins that same `operationId` and puts
+ * it back to null. A second command therefore cannot enter a Page that is
+ * already mid-transition, and a resumed execution can tell "my transition" from
+ * "someone else's" without a second document to keep in sync.
+ *
+ * `kind` records which command it is, so recovery knows what to finish rather
+ * than inferring it from the paths.
+ */
+export interface PageHistoryTransition {
+  operationId: string;
+  kind: string;
+}
+
+/**
  * RFC-0021 §5.5 (Phase 1) — the bounded, single-slot Page outbox. Absent or
  * exactly one entry; never an array (RFC: "It is not an embedded history
  * array" — this is what gives the Page document a hard size bound and a
@@ -650,6 +694,15 @@ const pendingHistoryEventMirrorSchema = new Schema({
  * clears it with a CAS matched ONLY on `entryId` (see `PendingHistoryEntry`'s
  * doc comment above) after materialization.
  */
+/** RFC-0021 Phase 2c-2 — see `PageHistoryTransition`'s doc comment above. */
+const historyTransitionSchema = new Schema<PageHistoryTransition>(
+  {
+    operationId: { type: String, required: true },
+    kind: { type: String, required: true },
+  },
+  { _id: false },
+);
+
 const pendingHistoryEntrySchema = new Schema(
   {
     entryId: { type: Schema.Types.ObjectId, required: true },
@@ -859,6 +912,12 @@ export default (crowi: Crowi) => {
       // and Mongo's `{ pendingHistoryEntry: null }` filter matches both
       // "absent" and "explicitly null" for the CAS-based claim/drain queries.
       pendingHistoryEntry: { type: pendingHistoryEntrySchema },
+      // RFC-0021 Phase 2c-2 — no default, for the same reason as
+      // `pendingHistoryEntry`: absent means "no transition", and the entering
+      // CAS pins `{ historyTransition: null }`, which Mongo matches against
+      // both absent and explicitly-null. A default would also make every
+      // legacy Page write the field back on its next unrelated `save()`.
+      historyTransition: { type: historyTransitionSchema },
     },
     {
       toJSON: { getters: true },

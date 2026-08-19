@@ -454,9 +454,55 @@ export const PageRevisionErrorSchema = z.object({
   }),
 });
 
+/**
+ * RFC-0021 §5.3 — the `Idempotency-Key` a history-producing command requires:
+ * 16-128 URL-safe characters. Lives here rather than beside the Mongoose model
+ * because the dependency runs api -> api-contract, so the contract cannot
+ * import it back from `@crowi/api`.
+ */
+export const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9_-]{16,128}$/;
+
+/**
+ * RFC-0021 Phase 2c-2 error shapes. Defined and exported here, but deliberately
+ * NOT yet added to any route's response union — the per-command specs attach
+ * them to the routes they introduce. Declaring them now is what puts the four
+ * codes into the generated OpenAPI enum without changing a single route.
+ */
+export const IdempotencyKeyRequiredErrorSchema = z.object({
+  error: z.object({
+    code: z.literal('IDEMPOTENCY_KEY_REQUIRED'),
+    message: z.string(),
+  }),
+});
+
+export const IdempotencyKeyConflictErrorSchema = z.object({
+  error: z.object({
+    code: z.literal('IDEMPOTENCY_KEY_CONFLICT'),
+    message: z.string(),
+  }),
+});
+
+export const PageTransitionInProgressErrorSchema = z.object({
+  error: z.object({
+    code: z.literal('PAGE_TRANSITION_IN_PROGRESS'),
+    message: z.string(),
+  }),
+});
+
+export const PageTransitionIncompleteErrorSchema = z.object({
+  error: z.object({
+    code: z.literal('PAGE_TRANSITION_INCOMPLETE'),
+    message: z.string(),
+  }),
+});
+
 export type PageNotFoundError = z.infer<typeof PageNotFoundErrorSchema>;
 export type PageNotGrantedError = z.infer<typeof PageNotGrantedErrorSchema>;
 export type PageRevisionError = z.infer<typeof PageRevisionErrorSchema>;
+export type IdempotencyKeyRequiredError = z.infer<typeof IdempotencyKeyRequiredErrorSchema>;
+export type IdempotencyKeyConflictError = z.infer<typeof IdempotencyKeyConflictErrorSchema>;
+export type PageTransitionInProgressError = z.infer<typeof PageTransitionInProgressErrorSchema>;
+export type PageTransitionIncompleteError = z.infer<typeof PageTransitionIncompleteErrorSchema>;
 
 export const SeenPageRequestSchema = z.object({
   page_id: z.string(),

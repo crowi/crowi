@@ -1,6 +1,9 @@
+import { type ErrorCode, IDEMPOTENCY_KEY_PATTERN } from '@crowi/api-contract';
 import { Document, Model, Schema, Types, model } from 'mongoose';
 
 import Crowi from 'src/crowi';
+
+import { PAGE_HISTORY_EVENT_SOURCES, type PageHistoryEventSource } from './page-history-event';
 
 /**
  * RFC-0021 §5.3/§5.5a — the idempotency record behind every history-
@@ -31,6 +34,10 @@ export interface PageHistoryOperationResult {
   status: 'succeeded' | 'failed' | 'partial';
   completedAt: Date;
   detail?: string;
+  /** Error code of a failed terminal outcome, so a replay answers with the recorded response instead of re-deciding it. */
+  code?: ErrorCode;
+  /** Human-readable half of that recorded response. */
+  message?: string;
 }
 
 export interface PageHistoryOperationDocument extends Document {
@@ -45,6 +52,30 @@ export interface PageHistoryOperationDocument extends Document {
   operationId: string;
   /** Fingerprint of the request body, so a same-key replay with a DIFFERENT body is rejected rather than silently resumed. */
   requestFingerprint: string;
+  /**
+   * Durable command input for a single-Page command (RFC-0021 Phase 2c-2).
+   *
+   * These carry everything a resumed or replayed execution needs, so recovery
+   * never re-derives intent from the Page's current state — by then the Page
+   * may already be mid-transition. None of them has a schema default: the
+   * command writes the complete set at insert time, and their absence on a row
+   * means the row predates single-Page commands rather than "took the default".
+   */
+  page?: Types.ObjectId;
+  fromPath?: string;
+  toPath?: string;
+  fromStatus?: string | null;
+  /**
+   * Whether the Page carried a `status` field at all when the command was
+   * accepted. A legacy Page has no `status`, and `{ status: undefined }` is
+   * dropped on the way to Mongo, so the entering CAS has to pin
+   * `{ status: { $exists: false } }` instead of a value — this flag is what
+   * tells a resumed execution which of the two to rebuild.
+   */
+  fromStatusPresent?: boolean;
+  toStatus?: string | null;
+  createRedirect?: boolean;
+  source?: PageHistoryEventSource;
   /** Subtree rename's persisted original target map (RFC §6.5) — absent for a single-Page command. */
   subtreeTargets?: PageHistoryOperationSubtreeTarget[];
   /** Per-Page progress for a multi-Page (subtree) operation, keyed by Page id string. */
@@ -63,8 +94,13 @@ export interface PageHistoryOperationDocument extends Document {
 // biome-ignore lint/suspicious/noEmptyInterface: Phase 1 adds no statics — Phase 2's command services own the create/lease/resolve helpers.
 export interface PageHistoryOperationModel extends Model<PageHistoryOperationDocument> {}
 
-/** RFC §5.3 — 16-128 URL-safe characters. */
-export const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9_-]{16,128}$/;
+/**
+ * RFC §5.3 — 16-128 URL-safe characters. The pattern itself now lives in
+ * `@crowi/api-contract` (the contract validates the header and cannot import
+ * from `@crowi/api`); re-exported here so the model's existing importers keep
+ * one import site.
+ */
+export { IDEMPOTENCY_KEY_PATTERN };
 
 const leaseSchema = new Schema<PageHistoryOperationLease>(
   {
@@ -79,6 +115,8 @@ const resultSchema = new Schema<PageHistoryOperationResult>(
     status: { type: String, enum: ['succeeded', 'failed', 'partial'], required: true },
     completedAt: { type: Date, required: true },
     detail: { type: String },
+    code: { type: String },
+    message: { type: String },
   },
   { _id: false },
 );
@@ -98,6 +136,17 @@ const pageHistoryOperationSchema = new Schema<PageHistoryOperationDocument, Page
   idempotencyKey: { type: String, required: true, match: IDEMPOTENCY_KEY_PATTERN },
   operationId: { type: String, required: true },
   requestFingerprint: { type: String, required: true },
+  // Single-Page command input (Phase 2c-2). No defaults anywhere below: the
+  // command writes the complete set, and absence must stay distinguishable
+  // from a defaulted value.
+  page: { type: Schema.Types.ObjectId, ref: 'Page' },
+  fromPath: { type: String },
+  toPath: { type: String },
+  fromStatus: { type: String },
+  fromStatusPresent: { type: Boolean },
+  toStatus: { type: String },
+  createRedirect: { type: Boolean },
+  source: { type: String, enum: PAGE_HISTORY_EVENT_SOURCES },
   subtreeTargets: { type: [subtreeTargetSchema], default: undefined },
   pageStates: { type: Map, of: String, default: () => new Map() },
   lease: { type: leaseSchema, default: null },
@@ -122,6 +171,11 @@ pageHistoryOperationSchema.index({ operationId: 1 }, { unique: true, name: 'page
 // `_id` (already unique by construction); the nonce gets its own sparse
 // unique index (sparse: not every record has issued a retryToken yet).
 pageHistoryOperationSchema.index({ retryTokenNonce: 1 }, { unique: true, sparse: true, name: 'pageHistoryOperation_retryTokenNonce_unique' });
+// Phase 2c-2's repair sweep walks the still-in-flight records (`result: null`)
+// in `_id` order and resumes from a caller-supplied cursor, so the sort key has
+// to be part of the index — an equality-only index would leave the sort to an
+// in-memory pass over every unfinished operation.
+pageHistoryOperationSchema.index({ result: 1, _id: 1 }, { name: 'pageHistoryOperation_result_id' });
 
 export default (_crowi: Crowi) => {
   const PageHistoryOperation = model<PageHistoryOperationDocument, PageHistoryOperationModel>('PageHistoryOperation', pageHistoryOperationSchema);

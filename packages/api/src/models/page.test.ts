@@ -1,5 +1,5 @@
 import { Types } from 'mongoose';
-import { STATUS_DELETED, visiblePageGrantOr } from 'src/models/page';
+import { STATUS_DELETED, STATUS_PUBLISHED, STATUS_RENAMING, STATUSES, isTransitionalPageStatus, visiblePageGrantOr } from 'src/models/page';
 import { crowi, Fixture } from 'src/test/setup';
 
 describe('Page', () => {
@@ -266,6 +266,32 @@ describe('Page', () => {
       const asBuffer = Buffer.isBuffer(reloaded.yjsState) ? reloaded.yjsState : Buffer.from((reloaded.yjsState as any).buffer);
       expect(asBuffer.equals(snapshot)).toBe(true);
       expect(reloaded.yjsCheckpointAt?.toISOString()).toBe('2026-05-14T00:00:00.000Z');
+    });
+  });
+
+  describe('RFC-0021 Phase 2c-2 transition fields', () => {
+    test('historyTransition has no schema default, so an untouched page never stores the field', async () => {
+      // Load-bearing: the entering CAS pins `{ historyTransition: null }`,
+      // which Mongo matches against absent AND explicitly-null. A default
+      // would put a value on every legacy page the moment it is hydrated, and
+      // the next unrelated `save()` would write it back — quietly turning
+      // "never transitioned" into a stored state. Read raw, because hydration
+      // is exactly what would hide the difference.
+      const page = await Page.findOne({ path: '/grant/public' });
+      page.body = 'touch me';
+      await page.save();
+
+      const raw = await Page.collection.findOne({ _id: page._id });
+      expect('historyTransition' in raw).toBe(false);
+    });
+
+    test('renaming is a known status and reads as transitional', () => {
+      expect(STATUSES).toContain(STATUS_RENAMING);
+      expect(isTransitionalPageStatus(STATUS_RENAMING)).toBe(true);
+      // Settled statuses must not be mistaken for a transition in progress.
+      expect(isTransitionalPageStatus(STATUS_PUBLISHED)).toBe(false);
+      expect(isTransitionalPageStatus(null)).toBe(false);
+      expect(isTransitionalPageStatus(undefined)).toBe(false);
     });
   });
 
