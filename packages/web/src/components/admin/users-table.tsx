@@ -6,6 +6,7 @@ import { UserStatusEnum } from '@crowi/api-contract';
 import { m } from '@paraglide/messages.js';
 import { Link2, Loader2, MoreHorizontal, Send } from 'lucide-react';
 import { UserIdentityCell } from '@/components/admin/user-identity-cell';
+import { BRAND_MARK_BY_PROVIDER } from '@/components/brand-icons';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -136,10 +137,16 @@ function ResendInviteButton({ user }: { user: AdminUserListItem }) {
 /**
  * Small inline marker for "this user has at least one linked federated
  * identity" — shown next to the user cell so an admin can tell at a glance
- * without opening the row menu. Slug -> display label comes from
- * `useAuthProviders()`; a provider whose plugin was since removed still has
- * its slug shown verbatim rather than disappearing (the identity itself is
- * still real and still blocks email changes / needs unlinking).
+ * without opening the row menu. One mark per linked provider, using the
+ * vendor's own brand mark (the same inline SVGs the login screen draws, so
+ * no third-party host is contacted) and falling back to the generic link
+ * icon for a provider we ship no mark for — a wrong logo is worse than a
+ * neutral one.
+ *
+ * Slug -> display label comes from `useAuthProviders()`; a provider whose
+ * plugin was since removed still has its slug shown verbatim rather than
+ * disappearing (the identity itself is still real and still blocks email
+ * changes / needs unlinking).
  */
 function LinkedIdentityBadge({ providers, providerLabels }: { providers: string[]; providerLabels: Map<string, string> }) {
   if (providers.length === 0) return null;
@@ -147,8 +154,11 @@ function LinkedIdentityBadge({ providers, providerLabels }: { providers: string[
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span className="mt-0.5 inline-flex shrink-0 items-center text-muted-foreground">
-          <Link2 className="h-3.5 w-3.5" aria-hidden />
+        <span className="mt-0.5 inline-flex shrink-0 items-center gap-1 text-muted-foreground">
+          {providers.map((provider) => {
+            const Mark = BRAND_MARK_BY_PROVIDER[provider];
+            return Mark ? <Mark key={provider} className="h-4 w-4" /> : <Link2 key={provider} className="h-4 w-4" aria-hidden />;
+          })}
           <span className="sr-only">{m['admin.users.linked_identity_label']({ providers: label })}</span>
         </span>
       </TooltipTrigger>
