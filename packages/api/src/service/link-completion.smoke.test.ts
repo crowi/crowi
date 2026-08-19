@@ -81,11 +81,10 @@ function makeInput(overrides: Partial<LinkCompletionIssue> = {}): LinkCompletion
   };
 }
 
-/** Adapts a real `withRedisClient` connection to `MinimalLinkCompletionRedisClient` — shared by every test below so the `get`/`set`/`eval` pass-through isn't repeated per call site. `timeOverride` replaces `time()` alone (used by the poisoned-clock test); every other test lets `time()` fall through to the real connection. */
+/** Adapts a real `withRedisClient` connection to `MinimalLinkCompletionRedisClient` — shared by every test below so the `get`/`eval` pass-through isn't repeated per call site. Seeding writes use the raw connection instead, since the store's own surface has no `set`. `timeOverride` replaces `time()` alone (used by the poisoned-clock test); every other test lets `time()` fall through to the real connection. */
 function makeClient(real: ReturnType<typeof createClient>, timeOverride?: () => Promise<Date>): MinimalLinkCompletionRedisClient {
   return {
     get: (key) => real.get(key),
-    set: (key, value, options) => real.set(key, value, options),
     eval: (script, options) => real.eval(script, options) as Promise<unknown>,
     time: timeOverride ?? (() => real.time()),
   };

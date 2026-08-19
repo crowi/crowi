@@ -1,4 +1,5 @@
-import { createClient, encodeProviderRouteSegment } from '@crowi/api-contract';
+import { createClient } from '@crowi/api-contract';
+import { encodeProviderRouteSegment } from './provider-route-codec';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, renderHook, waitFor } from '@testing-library/react';
 import { act, createElement, type PropsWithChildren } from 'react';

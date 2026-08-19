@@ -87,13 +87,6 @@ function makeFakeRedis(initialClockMs = Date.now()): {
     async get(key) {
       return rawGet(key);
     },
-    async set(key, value, options) {
-      if (options.NX) {
-        return rawSetNx(key, value, options.PX) ? 'OK' : null;
-      }
-      rawSet(key, value, options.PX);
-      return 'OK';
-    },
     async time() {
       return new Date(state.clockMs);
     },

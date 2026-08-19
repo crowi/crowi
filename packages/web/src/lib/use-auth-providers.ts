@@ -1,6 +1,6 @@
 'use client';
 
-import { encodeProviderRouteSegment, ProviderRouteSegmentError } from '@crowi/api-contract';
+import { encodeProviderRouteSegment, ProviderRouteSegmentError } from './provider-route-codec';
 import { m } from '@paraglide/messages.js';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from './api-client';
@@ -87,15 +87,7 @@ export function useUnlinkAuthProvider() {
       const response = await apiClient.auth.providers[':name'].identity.$delete({ param: { name: provider } });
       if (response.status === 204) return;
 
-      let code: string | undefined;
-      let message: string | undefined;
-      try {
-        const body = (await response.json()) as { error?: { code?: string; message?: string } };
-        code = body.error?.code;
-        message = body.error?.message;
-      } catch {
-        // Fall through to the generic message below.
-      }
+      const { code, message } = await parseErrorBody(response);
       const error = new Error(message ?? m['me.linked_accounts.unlink_failed']()) as UnlinkAuthProviderError;
       error.code = code;
       throw error;
@@ -137,7 +129,7 @@ export class ProviderLinkError extends Error {
  * `fetch` at all — it fails locally as the same `ProviderLinkError` shape
  * a 404 from the server would produce (current sign-in already can't
  * reach a dot-only provider either, so this narrows nothing that used to
- * work — see the module's contract in `@crowi/api-contract`).
+ * work — see the contract in `./provider-route-codec`).
  */
 function encodeProviderOrThrow(provider: string): string {
   try {

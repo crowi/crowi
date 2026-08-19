@@ -145,7 +145,6 @@ export interface LinkCompletionStore {
  */
 export interface MinimalLinkCompletionRedisClient {
   get(key: string): Promise<string | null>;
-  set(key: string, value: string, options: { PX: number; NX?: true }): Promise<unknown>;
   eval(script: string, options: { keys: string[]; arguments: string[] }): Promise<unknown>;
   time(): Promise<Date>;
 }

@@ -671,7 +671,6 @@
   "me.linked_accounts.confirm.load_error": "連携確認を読み込めませんでした。",
   "me.linked_accounts.confirm.loading": "確認情報を読み込んでいます…",
   "me.linked_accounts.confirm.result_auth_state_changed": "連携を開始してからセッションの状態が変わりました。もう一度サインインしてやり直してください。",
-  "me.linked_accounts.confirm.result_consumed": "この連携確認はすでに使用されています。",
   "me.linked_accounts.confirm.result_invalid_or_expired": "この連携確認は無効か期限切れです。現在の連携状況は下の一覧で確認できます。",
   "me.linked_accounts.confirm.result_not_linked": "このアカウントは連携されていません。",
   "me.linked_accounts.confirm.retry_action": "再試行",

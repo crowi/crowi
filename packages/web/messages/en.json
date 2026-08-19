@@ -671,7 +671,6 @@
   "me.linked_accounts.confirm.load_error": "Could not load this link confirmation.",
   "me.linked_accounts.confirm.loading": "Loading confirmation…",
   "me.linked_accounts.confirm.result_auth_state_changed": "Your session changed since you started linking. Please sign in again and retry.",
-  "me.linked_accounts.confirm.result_consumed": "This link confirmation has already been used.",
   "me.linked_accounts.confirm.result_invalid_or_expired": "This link confirmation is invalid or has expired. Check the list below for the current status.",
   "me.linked_accounts.confirm.result_not_linked": "This account is not linked.",
   "me.linked_accounts.confirm.retry_action": "Retry",
