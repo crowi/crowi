@@ -1,5 +1,26 @@
 # @crowi/api
 
+## 2.0.0-alpha.16
+
+### Major Changes
+
+- 9a288e3: Linking a federated identity (Google, or any other configured provider — RFC-0014) from `/me` is rebuilt as three authenticated steps instead of one unauthenticated top-level redirect. Pressing "link" on an unlinked provider now sends an authenticated request that mints the identity-provider authorization URL, then the browser navigates there directly; returning from the provider shows a one-time confirmation on the Security tab ("Link the Google account `xxx@example.com`?", or just the provider name when the provider doesn't return a displayable email) that the user must explicitly confirm before the identity is attached — closing the dialog or navigating away links nothing. The previous flow was unauthenticated at the point the identity provider redirected back, which meant a copied authorization link could be used by anyone to attach an identity provider account they controlled to whichever Crowi account had started that link — a permanent backdoor into that account for whoever opened the copied link. The new flow authenticates both the start and the final confirmation, binds the target account to the server-resolved session at start time (never to anything the callback carries), and re-validates that the account is still active with an unchanged authentication state immediately before attaching the identity.
+
+  **Breaking**: the `POST /api/auth/providers/:name/link-grants` endpoint and the `link`/`link_grant` query parameters on `GET /api/auth/providers/:name/start` are removed; a request using either now fails instead of degrading to a plain sign-in. Normal federated sign-in, unlinking, and `GET /api/auth/providers/identities` are unchanged.
+
+  **Operator note**: because this release replaces the shared OAuth state cookie's linking payload with a flow-specific one, deployments running more than one API replica must drain and replace all replicas at the same time for this release — a one-at-a-time rolling update is not supported, since an old replica can still read (and delete before validating) the new cookie format during the overlap window, which would also break unrelated in-flight sign-ins on that replica. Single-instance deployments satisfy this automatically. Multi-instance deployments must also have `REDIS_URL` configured so the confirmation code is visible to whichever replica handles the follow-up confirmation request.
+
+### Patch Changes
+
+- 2241261: Added a native Google Cloud Storage driver plugin (`@crowi/plugin-storage-gcs`, driver name `gcs`) so operators can store page attachments and profile pictures in a GCS bucket, using Application Default Credentials by default with an encrypted inline service-account key as a fallback.
+
+  - Bucket, optional object prefix, optional project ID, and optional service-account key JSON are configured from `/admin/plugins`; the four fields save together as one encrypted document and hot-reconfigure without a restart while `gcs` is not yet the active driver.
+  - Missing-object behavior matches the existing `local`/`s3` drivers exactly (same placeholder/`FILE_MISSING`/derivative-fallback UX), and V4 signed URLs are supported for future direct-delivery use without changing how attachments are served today (still proxied through the Crowi API).
+  - The full runner and full Docker image now bundle this plugin (the active driver stays `s3` unless an operator explicitly switches `storage.driver` to `gcs`), and `crowi-admin rebuild storage copy` supports migrating existing files from `local`/`s3` to GCS via a full-stop copy procedure documented in the operations guide.
+
+- Updated dependencies [9a288e3]
+  - @crowi/api-contract@2.0.0-alpha.16
+
 ## 2.0.0-alpha.15
 
 ### Patch Changes
