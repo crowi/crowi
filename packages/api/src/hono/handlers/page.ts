@@ -20,9 +20,12 @@
  *   itself. Phase 6 will revisit this implicit ordering when the
  *   Express bridge is removed.
  */
+import { createHash, randomUUID } from 'node:crypto';
+
 import {
   claimPageLinkAccessRoute,
   createPageRoute,
+  IDEMPOTENCY_KEY_PATTERN,
   deletePageRoute,
   getPageRoute,
   getSeenUsersRoute,
@@ -48,8 +51,19 @@ import { createMiddleware } from 'hono/factory';
 import { Types } from 'mongoose';
 
 import type Crowi from 'src/crowi';
-import { type PageDocument, type PageModel, creatorPageListMatch, startWithPageListMatch, visiblePageGrantOr, visiblePageStatusOr } from 'src/models/page';
+import {
+  type PageDocument,
+  type PageModel,
+  creatorPageListMatch,
+  isTransitionalPageStatus,
+  startWithPageListMatch,
+  visiblePageGrantOr,
+  visiblePageStatusOr,
+} from 'src/models/page';
 import type { UserDocument } from 'src/models/user';
+import { renamePageCommand } from 'src/service/page-history/commands/rename';
+import { completeOperation, createPageHistoryOperation, resolvePageHistoryOperation } from 'src/service/page-history/operation';
+import { toPageHistoryEventSource } from 'src/service/page-history/page-event-command';
 import { computeRevisionRenderArtifactsAsync, isPopulatedRevision, pageToResponse } from 'src/util/page-response';
 import { pickRenderedAstShape, varyOnAstVersion } from 'src/util/rendered-ast-negotiation';
 import { indexPageInSearchById } from 'src/util/page-search-index';
@@ -1167,10 +1181,71 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
           // ------------------------------------------------------------
           // Single-page rename (default / back-compat).
           // ------------------------------------------------------------
+          // Honour `create_redirect` regardless of the destination's
+          // portal-ness. Portalizing `/x` → `/x/` leaves a redirect at the
+          // old content path so existing links / bookmarks to `/x` keep
+          // resolving (to the new portal) — the same behaviour every other
+          // rename already has (RenameDialog always requests a redirect). The
+          // redirect stub has `redirectTo` set, so `findExistingTwin` (which
+          // filters `redirectTo: null`) does not treat it as a `/x` ↔ `/x/`
+          // twin, and it is hidden from listings (also `redirectTo: null`).
+          // RFC-0021 Phase 2c-2a — the single-page rename runs as a recorded
+          // operation from here on. The subtree branch above still calls
+          // `Page.rename` directly and produces no history; that is 2c-2b's.
+          const idempotencyKey = c.req.header('idempotency-key');
+          if (!idempotencyKey) {
+            return c.json({ error: { code: 'IDEMPOTENCY_KEY_REQUIRED' as const, message: 'This request requires an Idempotency-Key header.' } }, 400);
+          }
+          if (!IDEMPOTENCY_KEY_PATTERN.test(idempotencyKey)) {
+            return c.json(pageBadRequestBody('PAGE_RENAME_FAILED', 'Idempotency-Key must be 16-128 URL-safe characters.'), 400);
+          }
+
+          const source = toPageHistoryEventSource(c.get('authContext')?.kind);
+          const fingerprint = createHash('sha256')
+            .update(JSON.stringify({ page_id: String(pageData._id), new_path: newPagePath, create_redirect: Boolean(create_redirect) }))
+            .digest('hex');
+          const operationKey = { actor: user._id, command: 'rename', idempotencyKey };
+
+          const replay = async (operation: { result?: { status: string; code?: string; message?: string } | null }) => {
+            // A settled operation answers from the page as it is now — the
+            // original response body is not stored, so there is nothing else
+            // truthful to return.
+            if (operation.result?.status === 'failed') {
+              const code = operation.result.code ?? 'PAGE_TRANSITION_INCOMPLETE';
+              return c.json({ error: { code, message: operation.result.message ?? 'The rename did not complete.' } } as never, 400);
+            }
+            const current = (await Page.findById(pageData._id)) as PageDocument | null;
+            if (!current) return c.json(PAGE_NOT_FOUND_BODY, 404);
+            if (isTransitionalPageStatus(current.status)) {
+              return c.json({ error: { code: 'PAGE_TRANSITION_IN_PROGRESS' as const, message: 'This page is being moved by another operation.' } }, 409);
+            }
+            const populatedReplay = await Page.populatePageData(current, null);
+            c.header('Idempotency-Replayed', 'true');
+            return c.json({ page: pageToResponse(populatedReplay), renamed_count: 1 }, 200);
+          };
+
+          const resolution = await resolvePageHistoryOperation(crowi, operationKey, fingerprint);
+          if (resolution.kind === 'fingerprint-mismatch') {
+            return c.json(
+              { error: { code: 'IDEMPOTENCY_KEY_CONFLICT' as const, message: 'This Idempotency-Key was already used for a different request.' } },
+              409,
+            );
+          }
+          if (resolution.kind === 'settled') return replay(resolution.operation);
+          if (resolution.kind === 'in-flight') {
+            return c.json({ error: { code: 'PAGE_TRANSITION_IN_PROGRESS' as const, message: 'This page is being moved by another operation.' } }, 409);
+          }
+
+          // Only a first delivery validates the destination. A replay must not:
+          // by then the page is already sitting at that destination, so the
+          // collision check would see the page itself and answer PAGE_EXISTS to
+          // a request that in fact succeeded. Core's flow resolves before it
+          // validates for exactly this reason.
+          //
           // §6 — block the `/x` ↔ `/x/` double-state: refuse to move onto a
-          // path whose trailing-slash twin already exists as a real page.
-          // The source page itself is excluded, so portalizing `/x` → `/x/`
-          // (where the twin `/x` IS the page being moved) is allowed.
+          // path whose trailing-slash twin already exists as a real page. The
+          // source page itself is excluded, so portalizing `/x` → `/x/` (where
+          // the twin IS the page being moved) is allowed.
           const twinAtNewPath = await Page.findExistingTwin(newPagePath, { excludeId: pageData._id });
           if (twinAtNewPath) {
             return c.json(pageTwinExistsBody(twinAtNewPath.path), 400);
@@ -1192,21 +1267,58 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             }
           }
 
-          // Honour `create_redirect` regardless of the destination's
-          // portal-ness. Portalizing `/x` → `/x/` leaves a redirect at the
-          // old content path so existing links / bookmarks to `/x` keep
-          // resolving (to the new portal) — the same behaviour every other
-          // rename already has (RenameDialog always requests a redirect). The
-          // redirect stub has `redirectTo` set, so `findExistingTwin` (which
-          // filters `redirectTo: null`) does not treat it as a `/x` ↔ `/x/`
-          // twin, and it is hidden from listings (also `redirectTo: null`).
-          const options = {
+          const operationId = randomUUID();
+          const created = await createPageHistoryOperation(crowi, {
+            ...operationKey,
+            operationId,
+            requestFingerprint: fingerprint,
+            page: pageData._id,
+            fromPath: pageData.path,
+            toPath: newPagePath,
+            fromStatus: pageData.status ?? null,
+            fromStatusPresent: pageData.status != null,
+            toStatus: pageData.status ?? null,
+            createRedirect: Boolean(create_redirect),
+            source,
+          });
+          if (created.kind === 'lost') {
+            if (created.resolution.kind === 'fingerprint-mismatch') {
+              return c.json(
+                { error: { code: 'IDEMPOTENCY_KEY_CONFLICT' as const, message: 'This Idempotency-Key was already used for a different request.' } },
+                409,
+              );
+            }
+            if (created.resolution.kind === 'settled') return replay(created.resolution.operation);
+            return c.json({ error: { code: 'PAGE_TRANSITION_IN_PROGRESS' as const, message: 'This page is being moved by another operation.' } }, 409);
+          }
+
+          const outcome = await renamePageCommand(crowi, {
+            page: pageData,
+            toPath: newPagePath,
+            operationId,
+            actor: user._id,
+            user,
+            source,
             createRedirectPage: Boolean(create_redirect),
-          };
+          });
 
-          await Page.rename(pageData, newPagePath, user, options);
+          if (outcome.status === 'owned-elsewhere' || outcome.status === 'contended') {
+            // The page is mid-move for someone else. Leave our record open: it
+            // is still a request nobody answered, and repair can classify it.
+            return c.json({ error: { code: 'PAGE_TRANSITION_IN_PROGRESS' as const, message: 'This page is being moved by another operation.' } }, 409);
+          }
+          if (outcome.status === 'page-missing') {
+            await completeOperation(crowi, operationId, { status: 'succeeded' });
+            return c.json(PAGE_NOT_FOUND_BODY, 404);
+          }
+          if (outcome.status === 'incomplete') {
+            const message = 'The page was moved but the rename did not finish. Ask an administrator to run the page-history repair.';
+            await completeOperation(crowi, operationId, { status: 'failed', code: 'PAGE_TRANSITION_INCOMPLETE', message });
+            return c.json({ error: { code: 'PAGE_TRANSITION_INCOMPLETE' as const, message } }, 400);
+          }
 
-          const populated = await Page.populatePageData(pageData, null);
+          await completeOperation(crowi, operationId, { status: 'succeeded' });
+          const populated = await Page.populatePageData(outcome.page, null);
           return c.json({ page: pageToResponse(populated), renamed_count: 1 }, 200);
         } catch (err) {
           const error = err as Error;

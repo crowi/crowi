@@ -4,6 +4,7 @@ import type { PageWithRevision, RenamePageRequest, RenameSubtreeRequest, SetPage
 import { m } from '@paraglide/messages.js';
 import { type QueryClient, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from './api-client';
+import { errorMessage } from './error-message';
 import { invalidateUserSubpagesQueries, PAGE_LIST_FAMILY_ROOT, pageKeys, revisionsKeys, userPageKeys } from './page-query-keys';
 import { draftsKeys } from './use-drafts';
 
@@ -313,6 +314,16 @@ export function useRevertToRevision() {
 }
 
 /**
+ * A rename request plus the key that identifies this attempt.
+ *
+ * The key belongs to the caller, not to this hook: a retry of the *same*
+ * intent has to reuse it to be recognised as a replay, while a fresh attempt
+ * has to bring a new one. Minting it here would make every call a new
+ * operation and defeat the point.
+ */
+export type RenamePageVariables = RenamePageRequest & { idempotencyKey: string };
+
+/**
  * Rename (move) a page to a new path. May also unlink an existing redirect
  * page sitting at the new path on the server side.
  */
@@ -320,8 +331,8 @@ export function useRenamePage() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (data: RenamePageRequest): Promise<RenamePageResult> => {
-      const response = await apiClient.pages.rename.$post({ json: data });
+    mutationFn: async ({ idempotencyKey, ...data }: RenamePageVariables): Promise<RenamePageResult> => {
+      const response = await apiClient.pages.rename.$post({ json: data, header: { 'idempotency-key': idempotencyKey } });
       if (response.ok) {
         const body = await response.json();
         return {
@@ -330,6 +341,15 @@ export function useRenamePage() {
         };
       }
       if (response.status === 409) {
+        // Three different things arrive as 409 here. Only the stale-revision
+        // one means "someone edited underneath you" — reporting a page that is
+        // merely mid-move, or a reused key, with that message would send the
+        // user off to reconcile an edit conflict that does not exist.
+        const body = (await response.json().catch(() => null)) as { error?: { code?: string } } | null;
+        const code = body?.error?.code;
+        if (code === 'PAGE_TRANSITION_IN_PROGRESS' || code === 'IDEMPOTENCY_KEY_CONFLICT') {
+          throw new Error(errorMessage(code));
+        }
         throw new PageRevisionConflictError(m['errors.revision_conflict_update']());
       }
       if (response.status === 404) {

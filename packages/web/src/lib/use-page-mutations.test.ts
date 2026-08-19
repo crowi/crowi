@@ -29,6 +29,7 @@ vi.mock('./api-client', () => ({
 
 import {
   invalidatePageContentQueries,
+  PageRevisionConflictError,
   useDeletePage,
   useRenamePage,
   useRenameSubtree,
@@ -188,6 +189,76 @@ describe('useRevertDeletedPage — subpages invalidation (feature-user-page-subp
   });
 });
 
+describe('useRenamePage — 409 handling (RFC-0021 Phase 2c-2a)', () => {
+  it('AC-16: a mid-move 409 is not reported as a revision conflict', async () => {
+    // Both arrive as 409, and only one of them means "someone edited
+    // underneath you". Reporting a page that is merely being moved with the
+    // revision-conflict message would send the user off to reconcile an edit
+    // conflict that does not exist.
+    renamePage.mockResolvedValue({
+      ok: false,
+      status: 409,
+      json: async () => ({ error: { code: 'PAGE_TRANSITION_IN_PROGRESS', message: 'server text' } }),
+    });
+    const { wrapper } = makeMutationContext();
+
+    const { result } = renderHook(() => useRenamePage(), { wrapper });
+    let caught: unknown;
+    await act(async () => {
+      try {
+        await result.current.mutateAsync({ page_id: 'p1', new_path: '/renamed', idempotencyKey: 'test-idem-key-0003' });
+      } catch (err) {
+        caught = err;
+      }
+    });
+
+    expect(caught).toBeInstanceOf(Error);
+    expect(caught).not.toBeInstanceOf(PageRevisionConflictError);
+  });
+
+  it('AC-16: a reused idempotency key is likewise distinguished', async () => {
+    renamePage.mockResolvedValue({
+      ok: false,
+      status: 409,
+      json: async () => ({ error: { code: 'IDEMPOTENCY_KEY_CONFLICT', message: 'server text' } }),
+    });
+    const { wrapper } = makeMutationContext();
+
+    const { result } = renderHook(() => useRenamePage(), { wrapper });
+    let caught: unknown;
+    await act(async () => {
+      try {
+        await result.current.mutateAsync({ page_id: 'p1', new_path: '/renamed', idempotencyKey: 'test-idem-key-0004' });
+      } catch (err) {
+        caught = err;
+      }
+    });
+
+    expect(caught).not.toBeInstanceOf(PageRevisionConflictError);
+  });
+
+  it('a stale revision_id still raises the revision conflict', async () => {
+    renamePage.mockResolvedValue({
+      ok: false,
+      status: 409,
+      json: async () => ({ error: { code: 'PAGE_REVISION_ERROR', message: 'server text' } }),
+    });
+    const { wrapper } = makeMutationContext();
+
+    const { result } = renderHook(() => useRenamePage(), { wrapper });
+    let caught: unknown;
+    await act(async () => {
+      try {
+        await result.current.mutateAsync({ page_id: 'p1', new_path: '/renamed', idempotencyKey: 'test-idem-key-0005' });
+      } catch (err) {
+        caught = err;
+      }
+    });
+
+    expect(caught).toBeInstanceOf(PageRevisionConflictError);
+  });
+});
+
 describe('useRenamePage — subpages invalidation via onSettled (feature-user-page-subpages-tab)', () => {
   it('invalidates the subpages cache on a clean success', async () => {
     renamePage.mockResolvedValue({ ok: true, json: async () => ({ page: { _id: 'p1', path: '/renamed' } }) });
@@ -195,7 +266,7 @@ describe('useRenamePage — subpages invalidation via onSettled (feature-user-pa
 
     const { result } = renderHook(() => useRenamePage(), { wrapper });
     await act(async () => {
-      await result.current.mutateAsync({ page_id: 'p1', new_path: '/renamed' });
+      await result.current.mutateAsync({ page_id: 'p1', new_path: '/renamed', idempotencyKey: 'test-idem-key-0001' });
     });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
@@ -219,7 +290,7 @@ describe('useRenamePage — subpages invalidation via onSettled (feature-user-pa
     const { result } = renderHook(() => useRenamePage(), { wrapper });
     await act(async () => {
       try {
-        await result.current.mutateAsync({ page_id: 'p1', new_path: '/renamed', include_descendants: true });
+        await result.current.mutateAsync({ page_id: 'p1', new_path: '/renamed', include_descendants: true, idempotencyKey: 'test-idem-key-0002' });
       } catch {
         // expected — the mutation rejects with RenameTreeConflictError
       }

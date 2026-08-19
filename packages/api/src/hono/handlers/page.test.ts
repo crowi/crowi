@@ -2,7 +2,7 @@ import { Types } from 'mongoose';
 import type { SearchDriver, SearchableDoc } from '@crowi/plugin-api';
 import { app, crowi, Fixture } from 'src/test/setup';
 import { waitForModel } from 'src/test/wait-for-model';
-import { authHeaders, createTestUser, createPageViaApi } from 'src/test/test-helpers';
+import { authHeaders, createTestUser, createPageViaApi, idempotencyKey } from 'src/test/test-helpers';
 import { createJwtUtil } from 'src/util/jwt';
 import request from 'supertest';
 
@@ -430,7 +430,11 @@ describe('Routes /api/pages/rename (Hono renamePage)', () => {
       expect(createRes.status).toBe(200);
       const pageId = createRes.body.page._id;
 
-      const res = await request(app).post('/api/pages/rename').set(headers).send({ page_id: pageId, new_path: toPath });
+      const res = await request(app)
+        .post('/api/pages/rename')
+        .set(headers)
+        .set('Idempotency-Key', idempotencyKey())
+        .send({ page_id: pageId, new_path: toPath });
 
       expect(res.status).toBe(200);
       expect(res.body.page._id).toBe(pageId);
@@ -457,6 +461,7 @@ describe('Routes /api/pages/rename (Hono renamePage)', () => {
       const res = await request(app)
         .post('/api/pages/rename')
         .set(headers)
+        .set('Idempotency-Key', idempotencyKey())
         .send({ page_id: pageId, new_path: `${PATH_PREFIX}moved-home` });
 
       expect(res.status).toBe(400);
@@ -475,7 +480,11 @@ describe('Routes /api/pages/rename (Hono renamePage)', () => {
       expect(createRes.status).toBe(200);
       const pageId = createRes.body.page._id;
 
-      const res = await request(app).post('/api/pages/rename').set(headers).send({ page_id: pageId, new_path: '/user/renamePageTester' });
+      const res = await request(app)
+        .post('/api/pages/rename')
+        .set(headers)
+        .set('Idempotency-Key', idempotencyKey())
+        .send({ page_id: pageId, new_path: '/user/renamePageTester' });
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('PAGE_INVALID_NAME');
@@ -494,7 +503,11 @@ describe('Routes /api/pages/rename (Hono renamePage)', () => {
       expect(createRes.status).toBe(200);
       const pageId = createRes.body.page._id;
 
-      const res = await request(app).post('/api/pages/rename').set(headers).send({ page_id: pageId, new_path: toPath, create_redirect: true });
+      const res = await request(app)
+        .post('/api/pages/rename')
+        .set(headers)
+        .set('Idempotency-Key', idempotencyKey())
+        .send({ page_id: pageId, new_path: toPath, create_redirect: true });
 
       expect(res.status).toBe(200);
       expect(res.body.page.path).toBe(toPath);
@@ -513,7 +526,11 @@ describe('Routes /api/pages/rename (Hono renamePage)', () => {
       expect(createRes.status).toBe(200);
       const pageId = createRes.body.page._id;
 
-      const res = await request(app).post('/api/pages/rename').set(headers).send({ page_id: pageId, new_path: toPath, create_redirect: true });
+      const res = await request(app)
+        .post('/api/pages/rename')
+        .set(headers)
+        .set('Idempotency-Key', idempotencyKey())
+        .send({ page_id: pageId, new_path: toPath, create_redirect: true });
 
       expect(res.status).toBe(200);
       expect(res.body.page.path).toBe(toPath);
@@ -529,6 +546,7 @@ describe('Routes /api/pages/rename (Hono renamePage)', () => {
       const res = await request(app)
         .post('/api/pages/rename')
         .set(authHeaders(accessToken))
+        .set('Idempotency-Key', idempotencyKey())
         .send({ page_id: '000000000000000000000000', new_path: `${PATH_PREFIX}nope` });
 
       expect(res.status).toBe(404);
@@ -546,7 +564,11 @@ describe('Routes /api/pages/rename (Hono renamePage)', () => {
       expect(createRes.status).toBe(200);
       const pageId = createRes.body.page._id;
 
-      const res = await request(app).post('/api/pages/rename').set(otherHeaders).send({ page_id: pageId, new_path: toPath });
+      const res = await request(app)
+        .post('/api/pages/rename')
+        .set(otherHeaders)
+        .set('Idempotency-Key', idempotencyKey())
+        .send({ page_id: pageId, new_path: toPath });
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('PAGE_NOT_FOUND');
 
@@ -563,7 +585,11 @@ describe('Routes /api/pages/rename (Hono renamePage)', () => {
       expect(createRes.status).toBe(200);
       const pageId = createRes.body.page._id;
 
-      const res = await request(app).post('/api/pages/rename').set(headers).send({ page_id: pageId, new_path: '/admin/foo' });
+      const res = await request(app)
+        .post('/api/pages/rename')
+        .set(headers)
+        .set('Idempotency-Key', idempotencyKey())
+        .send({ page_id: pageId, new_path: '/admin/foo' });
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('PAGE_INVALID_NAME');
@@ -584,7 +610,11 @@ describe('Routes /api/pages/rename (Hono renamePage)', () => {
       const createOccupied = await request(app).post('/api/pages').set(headers).send({ path: occupiedPath, body: '# occupied' });
       expect(createOccupied.status).toBe(200);
 
-      const res = await request(app).post('/api/pages/rename').set(headers).send({ page_id: pageId, new_path: occupiedPath });
+      const res = await request(app)
+        .post('/api/pages/rename')
+        .set(headers)
+        .set('Idempotency-Key', idempotencyKey())
+        .send({ page_id: pageId, new_path: occupiedPath });
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('PAGE_EXISTS');
@@ -604,7 +634,11 @@ describe('Routes /api/pages/rename (Hono renamePage)', () => {
       const createA = await request(app).post('/api/pages').set(headers).send({ path: stalePath, body: '# A' });
       expect(createA.status).toBe(200);
       const pageAId = createA.body.page._id;
-      const renameA = await request(app).post('/api/pages/rename').set(headers).send({ page_id: pageAId, new_path: intermediatePath, create_redirect: true });
+      const renameA = await request(app)
+        .post('/api/pages/rename')
+        .set(headers)
+        .set('Idempotency-Key', idempotencyKey())
+        .send({ page_id: pageAId, new_path: intermediatePath, create_redirect: true });
       expect(renameA.status).toBe(200);
 
       // Create page B at finalPath, then rename to stalePath. The existing
@@ -613,7 +647,11 @@ describe('Routes /api/pages/rename (Hono renamePage)', () => {
       expect(createB.status).toBe(200);
       const pageBId = createB.body.page._id;
 
-      const res = await request(app).post('/api/pages/rename').set(headers).send({ page_id: pageBId, new_path: stalePath });
+      const res = await request(app)
+        .post('/api/pages/rename')
+        .set(headers)
+        .set('Idempotency-Key', idempotencyKey())
+        .send({ page_id: pageBId, new_path: stalePath });
 
       expect(res.status).toBe(200);
       expect(res.body.page._id).toBe(pageBId);
@@ -640,7 +678,11 @@ describe('Routes /api/pages/rename (Hono renamePage)', () => {
       const update = await request(app).put('/api/pages').set(headers).send({ page_id: pageId, body: '# bumped', revision_id: staleRevisionId });
       expect(update.status).toBe(200);
 
-      const res = await request(app).post('/api/pages/rename').set(headers).send({ page_id: pageId, new_path: toPath, revision_id: staleRevisionId });
+      const res = await request(app)
+        .post('/api/pages/rename')
+        .set(headers)
+        .set('Idempotency-Key', idempotencyKey())
+        .send({ page_id: pageId, new_path: toPath, revision_id: staleRevisionId });
 
       expect(res.status).toBe(409);
       expect(res.body.error.code).toBe('PAGE_REVISION_ERROR');
@@ -657,10 +699,124 @@ describe('Routes /api/pages/rename (Hono renamePage)', () => {
       const createRes = await request(app).post('/api/pages').set(headers).send({ path: fromPath, body: '# c' });
       const pageId = createRes.body.page._id;
 
-      const res = await request(app).post('/api/pages/rename').set(headers).send({ page_id: pageId, new_path: toPath });
+      const res = await request(app)
+        .post('/api/pages/rename')
+        .set(headers)
+        .set('Idempotency-Key', idempotencyKey())
+        .send({ page_id: pageId, new_path: toPath });
 
       expect(res.status).toBe(200);
       expect(res.body.renamed_count).toBe(1);
+    });
+  });
+
+  describe('POST /api/pages/rename — Idempotency-Key (RFC-0021 Phase 2c-2a)', () => {
+    const createPage = async (headers: Record<string, string>, path: string) => {
+      const res = await request(app).post('/api/pages').set(headers).send({ path, body: '# body' });
+      return res.body.page._id;
+    };
+
+    it('AC-8: rejects a single-page rename with no key', async () => {
+      const headers = authHeaders(accessToken);
+      const pageId = await createPage(headers, `${PATH_PREFIX}idem-missing`);
+
+      const res = await request(app)
+        .post('/api/pages/rename')
+        .set(headers)
+        .send({ page_id: pageId, new_path: `${PATH_PREFIX}idem-missing-moved` });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('IDEMPOTENCY_KEY_REQUIRED');
+      // The page must not have moved.
+      const unchanged = await Page.findById(pageId);
+      expect(unchanged.path).toBe(`${PATH_PREFIX}idem-missing`);
+    });
+
+    it('AC-9: replays the same key + same body without renaming twice', async () => {
+      const headers = authHeaders(accessToken);
+      const pageId = await createPage(headers, `${PATH_PREFIX}idem-replay`);
+      const key = idempotencyKey();
+      const body = { page_id: pageId, new_path: `${PATH_PREFIX}idem-replay-moved` };
+
+      const first = await request(app).post('/api/pages/rename').set(headers).set('Idempotency-Key', key).send(body);
+      expect(first.status).toBe(200);
+      expect(first.headers['idempotency-replayed']).toBeUndefined();
+
+      const second = await request(app).post('/api/pages/rename').set(headers).set('Idempotency-Key', key).send(body);
+
+      expect(second.status).toBe(200);
+      expect(second.headers['idempotency-replayed']).toBe('true');
+      // One move, one event — the replay answered from the current projection.
+      const PageHistoryEvent = crowi.model('PageHistoryEvent');
+      expect(await PageHistoryEvent.countDocuments({ page: pageId, kind: 'page_renamed' })).toBe(1);
+    });
+
+    it('AC-10: rejects the same key with a different destination', async () => {
+      const headers = authHeaders(accessToken);
+      const pageId = await createPage(headers, `${PATH_PREFIX}idem-conflict`);
+      const key = idempotencyKey();
+
+      const first = await request(app)
+        .post('/api/pages/rename')
+        .set(headers)
+        .set('Idempotency-Key', key)
+        .send({ page_id: pageId, new_path: `${PATH_PREFIX}idem-conflict-a` });
+      expect(first.status).toBe(200);
+
+      const second = await request(app)
+        .post('/api/pages/rename')
+        .set(headers)
+        .set('Idempotency-Key', key)
+        .send({ page_id: pageId, new_path: `${PATH_PREFIX}idem-conflict-b` });
+
+      expect(second.status).toBe(409);
+      expect(second.body.error.code).toBe('IDEMPOTENCY_KEY_CONFLICT');
+    });
+
+    it('AC-11: a destination that is already taken stays a 400 PAGE_EXISTS and records no operation', async () => {
+      const headers = authHeaders(accessToken);
+      const otherHeaders = authHeaders(otherAccessToken);
+      const pageId = await createPage(headers, `${PATH_PREFIX}idem-exists-src`);
+      // Owned by someone else, so it cannot be unlinked out of the way.
+      const occupied = `${PATH_PREFIX}idem-exists-dest`;
+      await createPage(otherHeaders, occupied);
+
+      const PageHistoryOperation = crowi.model('PageHistoryOperation');
+      const before = await PageHistoryOperation.countDocuments({});
+
+      const res = await request(app)
+        .post('/api/pages/rename')
+        .set(headers)
+        .set('Idempotency-Key', idempotencyKey())
+        .send({ page_id: pageId, new_path: occupied });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('PAGE_EXISTS');
+      // Validation runs before the record is written, so a rejected request
+      // never burns its key.
+      expect(await PageHistoryOperation.countDocuments({})).toBe(before);
+    });
+
+    it('AC-14: a subtree rename produces no operation and no event', async () => {
+      const headers = authHeaders(accessToken);
+      const rootId = await createPage(headers, `${PATH_PREFIX}tree-idem-root`);
+      await createPage(headers, `${PATH_PREFIX}tree-idem-root/child`);
+
+      const PageHistoryOperation = crowi.model('PageHistoryOperation');
+      const PageHistoryEvent = crowi.model('PageHistoryEvent');
+      const before = await PageHistoryOperation.countDocuments({});
+
+      const res = await request(app)
+        .post('/api/pages/rename')
+        .set(headers)
+        .set('Idempotency-Key', idempotencyKey())
+        .send({ page_id: rootId, new_path: `${PATH_PREFIX}tree-idem-moved`, include_descendants: true });
+
+      expect(res.status).toBe(200);
+      expect(await PageHistoryOperation.countDocuments({})).toBe(before);
+      expect(await PageHistoryEvent.countDocuments({ page: rootId, kind: 'page_renamed' })).toBe(0);
+      const moved = await Page.findById(rootId);
+      expect(moved.status).not.toBe('renaming');
     });
   });
 
@@ -685,7 +841,11 @@ describe('Routes /api/pages/rename (Hono renamePage)', () => {
         .set(headers)
         .send({ path: `${rootFrom}/child-b`, body: '# b' });
 
-      const res = await request(app).post('/api/pages/rename').set(headers).send({ page_id: rootId, new_path: rootTo, include_descendants: true });
+      const res = await request(app)
+        .post('/api/pages/rename')
+        .set(headers)
+        .set('Idempotency-Key', idempotencyKey())
+        .send({ page_id: rootId, new_path: rootTo, include_descendants: true });
 
       expect(res.status).toBe(200);
       expect(res.body.page.path).toBe(rootTo);
@@ -718,7 +878,11 @@ describe('Routes /api/pages/rename (Hono renamePage)', () => {
       const rootBefore = await Page.findById(rootId);
       const childBefore = await Page.findById(childId);
 
-      const res = await request(app).post('/api/pages/rename').set(headers).send({ page_id: rootId, new_path: rootTo, include_descendants: true });
+      const res = await request(app)
+        .post('/api/pages/rename')
+        .set(headers)
+        .set('Idempotency-Key', idempotencyKey())
+        .send({ page_id: rootId, new_path: rootTo, include_descendants: true });
       expect(res.status).toBe(200);
 
       const rootAfter = await Page.findOne({ path: rootTo });
@@ -742,6 +906,7 @@ describe('Routes /api/pages/rename (Hono renamePage)', () => {
       const res = await request(app)
         .post('/api/pages/rename')
         .set(headers)
+        .set('Idempotency-Key', idempotencyKey())
         .send({ page_id: rootId, new_path: rootTo, include_descendants: true, create_redirect: true });
       expect(res.status).toBe(200);
 
@@ -768,6 +933,7 @@ describe('Routes /api/pages/rename (Hono renamePage)', () => {
       const res = await request(app)
         .post('/api/pages/rename')
         .set(headers)
+        .set('Idempotency-Key', idempotencyKey())
         .send({ page_id: rootId, new_path: rootTo, include_descendants: true, create_redirect: true });
       expect(res.status).toBe(200);
 
@@ -796,7 +962,11 @@ describe('Routes /api/pages/rename (Hono renamePage)', () => {
       const occupiedChildPath = `${rootTo}/child`;
       await request(app).post('/api/pages').set(authHeaders(otherAccessToken)).send({ path: occupiedChildPath, body: '# occupied', grant: 4 });
 
-      const res = await request(app).post('/api/pages/rename').set(headers).send({ page_id: rootId, new_path: rootTo, include_descendants: true });
+      const res = await request(app)
+        .post('/api/pages/rename')
+        .set(headers)
+        .set('Idempotency-Key', idempotencyKey())
+        .send({ page_id: rootId, new_path: rootTo, include_descendants: true });
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('PAGE_RENAME_TREE_FAILED');
@@ -830,7 +1000,11 @@ describe('Routes /api/pages/rename (Hono renamePage)', () => {
         .set(ownerHeaders)
         .send({ path: `${rootFrom}/hidden`, body: '# h', grant: 4 });
 
-      const res = await request(app).post('/api/pages/rename').set(otherHeaders).send({ page_id: rootId, new_path: rootTo, include_descendants: true });
+      const res = await request(app)
+        .post('/api/pages/rename')
+        .set(otherHeaders)
+        .set('Idempotency-Key', idempotencyKey())
+        .send({ page_id: rootId, new_path: rootTo, include_descendants: true });
 
       expect(res.status).toBe(200);
       // root + visible child only.
@@ -861,6 +1035,7 @@ describe('Routes /api/pages/rename (Hono renamePage)', () => {
       const res = await request(app)
         .post('/api/pages/rename')
         .set(headers)
+        .set('Idempotency-Key', idempotencyKey())
         .send({ page_id: rootId, new_path: rootTo, include_descendants: true, revision_id: staleRevisionId });
 
       expect(res.status).toBe(409);
@@ -881,7 +1056,11 @@ describe('Routes /api/pages/rename (Hono renamePage)', () => {
         .set(headers)
         .send({ path: `${rootFrom}/child`, body: '# c' });
 
-      const res = await request(app).post('/api/pages/rename').set(headers).send({ page_id: rootId, new_path: rootTo, include_descendants: false });
+      const res = await request(app)
+        .post('/api/pages/rename')
+        .set(headers)
+        .set('Idempotency-Key', idempotencyKey())
+        .send({ page_id: rootId, new_path: rootTo, include_descendants: false });
 
       expect(res.status).toBe(200);
       expect(res.body.page.path).toBe(rootTo);
@@ -2994,6 +3173,7 @@ describe('Routes /api/pages/link-access (Hono claimPageLinkAccessRoute — grant
       const renameRes = await request(app)
         .post('/api/pages/rename')
         .set(authHeaders(ownerToken))
+        .set('Idempotency-Key', idempotencyKey())
         .send({ page_id: page._id, new_path: `${PATH_PREFIX}rename-dest`, create_redirect: true });
       expect(renameRes.status).toBe(200);
 
@@ -3012,6 +3192,7 @@ describe('Routes /api/pages/link-access (Hono claimPageLinkAccessRoute — grant
       const renameRes = await request(app)
         .post('/api/pages/rename')
         .set(authHeaders(ownerToken))
+        .set('Idempotency-Key', idempotencyKey())
         .send({ page_id: page._id, new_path: `${PATH_PREFIX}renamed-dest` });
       expect(renameRes.status).toBe(200);
 

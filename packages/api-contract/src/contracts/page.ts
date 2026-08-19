@@ -52,10 +52,14 @@ import {
   ListPageChildrenResponseSchema,
   ListPagesRequestSchema,
   ListPagesResponseSchema,
+  IdempotencyKeyConflictErrorSchema,
+  IdempotencyKeyRequiredErrorSchema,
   PageNotFoundErrorSchema,
   PageNotGrantedErrorSchema,
   PageRevisionErrorSchema,
   PageSchema,
+  PageTransitionInProgressErrorSchema,
+  PageTransitionIncompleteErrorSchema,
   RenamePageRequestSchema,
   RenamePageResponseSchema,
   RenameSubtreeRequestSchema,
@@ -616,6 +620,11 @@ export const renamePageRoute = createRoute({
   security: [{ bearerAuth: [] }],
   summary: 'Rename (move) a page — optionally together with its subtree',
   request: {
+    // RFC-0021 Phase 2c-2a. Declared optional and enforced in the handler on
+    // purpose: made required here, zod rejects a missing header before the
+    // handler runs and the shared defaultHook answers VALIDATION_ERROR, which
+    // tells a client nothing about which header it forgot.
+    headers: z.object({ 'idempotency-key': z.string().optional() }),
     body: {
       content: { 'application/json': { schema: RenamePageRequestSchema } },
     },
@@ -626,10 +635,10 @@ export const renamePageRoute = createRoute({
       content: { 'application/json': { schema: RenamePageResponseSchema } },
     },
     400: {
-      description: 'PAGE_INVALID_NAME / PAGE_EXISTS / PAGE_RENAME_FAILED / PAGE_RENAME_TREE_FAILED',
+      description: 'PAGE_INVALID_NAME / PAGE_EXISTS / PAGE_RENAME_FAILED / PAGE_RENAME_TREE_FAILED / IDEMPOTENCY_KEY_REQUIRED / PAGE_TRANSITION_INCOMPLETE',
       content: {
         'application/json': {
-          schema: z.union([PageBadRequestErrorSchema, RenameTreeErrorSchema]),
+          schema: z.union([PageBadRequestErrorSchema, RenameTreeErrorSchema, IdempotencyKeyRequiredErrorSchema, PageTransitionIncompleteErrorSchema]),
         },
       },
     },
@@ -642,8 +651,12 @@ export const renamePageRoute = createRoute({
       content: { 'application/json': { schema: PageNotFoundErrorSchema } },
     },
     409: {
-      description: 'Stale revision_id',
-      content: { 'application/json': { schema: PageRevisionErrorSchema } },
+      description: 'Stale revision_id / IDEMPOTENCY_KEY_CONFLICT / PAGE_TRANSITION_IN_PROGRESS',
+      content: {
+        'application/json': {
+          schema: z.union([PageRevisionErrorSchema, IdempotencyKeyConflictErrorSchema, PageTransitionInProgressErrorSchema]),
+        },
+      },
     },
   },
 });
