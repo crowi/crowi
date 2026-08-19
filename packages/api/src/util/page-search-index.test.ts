@@ -175,6 +175,30 @@ describe('indexPageInSearch — index-side status exclusion (feature-restricted-
     expect(driver.removed).toContain(page._id);
   });
 
+  it('drops a page mid-transition from the index and puts it back once it settles (RFC-0021 AC-15)', async () => {
+    // A page between the entering and leaving CAS of a path move would
+    // otherwise be indexed under a path it may not keep. Because the exclusion
+    // drives a `remove` rather than a skip, entering drops it and settling
+    // re-indexes it — no separate bookkeeping.
+    const page = await createPageViaApi(accessToken, `${PATH_PREFIX}renaming`, '# body');
+    const Page = crowi.model('Page');
+    const doc = await Page.findById(page._id).populate('revision').populate('creator');
+
+    const driver = buildMockDriver();
+    await withMockDriver(driver, async () => {
+      doc.status = 'renaming';
+      await indexPageInSearch(crowi, doc);
+      expect(driver.indexed).toHaveLength(0);
+      expect(driver.removed).toContain(page._id);
+
+      doc.status = 'published';
+      await indexPageInSearch(crowi, doc);
+    });
+
+    expect(driver.indexed).toHaveLength(1);
+    expect(driver.indexed[0]?.id).toBe(page._id);
+  });
+
   it('re-indexes a page once its status returns to published', async () => {
     const page = await createPageViaApi(accessToken, `${PATH_PREFIX}republish`, '# body');
     const Page = crowi.model('Page');

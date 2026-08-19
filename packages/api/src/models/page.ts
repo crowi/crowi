@@ -1382,6 +1382,15 @@ export default (crowi: Crowi) => {
       throw pageNotFoundError();
     }
 
+    // RFC-0021 Phase 2c-2: a Page between the entering and leaving CAS of a
+    // path-moving command has an ambiguous path — collapse it into not-found
+    // for the same reason as a draft above, rather than serving a `renaming`
+    // projection. The check sits here rather than in the shared
+    // `findPageById` so it reaches only the readers DC-5 names.
+    if (isTransitionalPageStatus(pageData.status)) {
+      throw pageNotFoundError();
+    }
+
     if (userData && !pageData.isGrantedFor(userData)) {
       throw new Error('Page is not granted for the user'); // PAGE_GRANT_ERROR, null);
     }
@@ -1482,7 +1491,9 @@ export default (crowi: Crowi) => {
 
   // find page and check if granted user
   pageSchema.statics.findPage = async function (path, userData, revisionId, ignoreNotFound) {
-    const pageData = await Page.findOne({ path });
+    // RFC-0021 Phase 2c-2: skip a Page mid-move. `$nin` also matches documents
+    // with no `status` field at all, so legacy pages keep resolving.
+    const pageData = await Page.findOne({ path, status: { $nin: PAGE_TRANSITIONAL_STATUSES } });
 
     if (pageData === null) {
       if (ignoreNotFound) {
@@ -1593,7 +1604,9 @@ export default (crowi: Crowi) => {
     const limit = options.limit || 50;
     const offset = options.skip || 0;
 
-    const query: Record<string, unknown> = { _id: { $in: ids } };
+    // RFC-0021 Phase 2c-2: mid-move pages are skipped here too (`$nin` still
+    // matches a missing `status`, so legacy pages are unaffected).
+    const query: Record<string, unknown> = { _id: { $in: ids }, status: { $nin: PAGE_TRANSITIONAL_STATUSES } };
     // Defense-in-depth (SEC-SEARCH-DELEGATED): when a viewer is given,
     // re-apply the grant filter here rather than trusting the caller's
     // `ids` to already be authorization-checked (e.g. a pluggable search
@@ -1619,6 +1632,8 @@ export default (crowi: Crowi) => {
     const query: any = {
       _id: { $in: ids },
       redirectTo: null,
+      // RFC-0021 Phase 2c-2 — skip mid-move pages (see `findPage`).
+      status: { $nin: PAGE_TRANSITIONAL_STATUSES },
     };
 
     return Page.find(query)
@@ -1654,7 +1669,9 @@ export default (crowi: Crowi) => {
    */
   pageSchema.statics.getStreamOfFindAll = function (options = {}) {
     const publicOnly = options.publicOnly !== false;
-    const criteria: any = { redirectTo: null };
+    // RFC-0021 Phase 2c-2 — a full search reindex must not pick up a page
+    // mid-move; it would be indexed under a path it may not keep.
+    const criteria: any = { redirectTo: null, status: { $nin: PAGE_TRANSITIONAL_STATUSES } };
 
     if (publicOnly) {
       criteria.grant = GRANT_PUBLIC;
