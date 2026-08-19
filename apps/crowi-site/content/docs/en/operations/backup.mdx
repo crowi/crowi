@@ -117,7 +117,7 @@ For search backend configuration, see
 
 ## Redis — no backup needed
 
-Redis backs 7 consumers, but they don't all serve the same purpose: the
+Redis backs 8 consumers, but they don't all serve the same purpose: the
 realtime collaborative editor's cross-instance pub/sub, presence
 fan-out, notification invalidation, and Config change pub/sub exist
 purely to coordinate across replicas (no-ops on a single instance). The
@@ -140,6 +140,13 @@ Redis.
   content and login sessions (JWT, stateless) are unaffected throughout.
 - The source of truth for realtime collaborative editing is
   `Page.yjsState` in MongoDB; Redis is only for live routing.
+- Account linking's link-completion store (the confirmation state/code
+  a callback issues while an account link is in progress) is likewise
+  ephemeral by design — the state/record/consumed keys carry a 300s or
+  5-minute TTL regardless of a Redis loss. Losing it mid-flow turns a
+  pending confirmation into a 404 the user resolves by starting the
+  link again; the confirmed `UserIdentity` row it was working toward
+  lives only in MongoDB and is never at risk.
 
 Therefore no persistent backup of Redis is needed. For details see
 [Operating realtime collaborative editing](./realtime-collab).

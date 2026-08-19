@@ -140,6 +140,30 @@ reference).
   publish) does not build images.
 </Callout>
 
+<Callout type="warn">
+  **While in alpha / beta, `@crowi/plugin-slack` needs its `latest` moved by hand after any release that publishes it.**
+
+  In pre mode changesets picks the dist tag per package: a package whose every published
+  version is a prerelease carrying the pre tag (`alpha`) goes to `latest`; one with even a
+  single version outside that counts as having had a regular release and goes to the pre tag
+  instead. Twenty of the twenty-one are the former. `@crowi/plugin-slack` is not, because a
+  `0.1.0-dev` was published by hand before its alphas — so **its `latest` stays frozen at its
+  first published version**, and `npm i @crowi/plugin-slack` installs months-old code.
+
+  After a release that publishes it:
+
+  ```bash
+  npm dist-tag add @crowi/plugin-slack@<the version just released> latest
+  ```
+
+  **Adding `--tag` to the publish command is not a workaround** — in pre mode
+  `changeset publish` rejects an explicit tag and exits 1, so nothing publishes at all and the
+  distribution tag, GitHub Release and Docker steps never run. The `0.1.0-dev` cannot be
+  unpublished either (`@crowi/api` lists it in its published devDependencies, which npm counts
+  as a dependent), and `npm deprecate` does not change the check. **Leaving pre mode resolves
+  it.**
+</Callout>
+
 ## Distribution version model
 
 The Docker image carries a **"Crowi distribution version" that is independent** of

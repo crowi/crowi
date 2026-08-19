@@ -172,13 +172,30 @@ export interface RepairScanOptions {
   batchSize?: number;
   /** Resume a previous (possibly interrupted) scan: only Pages with `_id > resumeAfterId` are visited. Pair with a prior call's `lastPageId`. */
   resumeAfterId?: Types.ObjectId | string;
+  /**
+   * RFC-0021 §D-5 (Phase 2a) — {@link scanUnsequencedRevisions} only, ignored by
+   * {@link repairPendingEntries}. A Revision younger than this (by
+   * `createdAt`) is not distinguishable from "an in-flight allocator claim
+   * that hasn't materialized yet" (§D-2's ordinary, non-error path), so the
+   * scan leaves it alone rather than risk racing a live claim. Defaults to
+   * `600_000` (10 minutes) — the spec's own bound on how long that window
+   * can plausibly stay open. `0` disables the grace window entirely (tests
+   * exercising immediate repair pass this explicitly).
+   */
+  minAgeMs?: number;
 }
 
 const DEFAULT_REPAIR_BATCH_SIZE = 200;
+const DEFAULT_MIN_AGE_MS = 600_000;
 
 function resolveCursor(resumeAfterId: Types.ObjectId | string | undefined): Types.ObjectId | undefined {
   if (resumeAfterId == null) return undefined;
   return typeof resumeAfterId === 'string' ? new Types.ObjectId(resumeAfterId) : resumeAfterId;
+}
+
+/** `minAgeMs === 0` must stay 0 (tests rely on disabling the grace window entirely) — only `undefined` falls back to the default, hence `??` and not `||`. */
+function resolveMinAgeMs(minAgeMs: number | undefined): number {
+  return minAgeMs ?? DEFAULT_MIN_AGE_MS;
 }
 
 /**
@@ -505,6 +522,7 @@ async function claimAndAssignSequence(crowi: Crowi, pageId: Types.ObjectId, revi
 export async function scanUnsequencedRevisions(crowi: Crowi, options: RepairScanOptions = {}): Promise<UnsequencedRevisionScanResult> {
   const Page = crowi.model('Page');
   const batchSize = resolveBatchSize(options.batchSize);
+  const minAgeMs = resolveMinAgeMs(options.minAgeMs);
 
   const repaired: RepairedRevisionSequence[] = [];
   const blocked: BlockedPageForDuplicateSequence[] = [];
@@ -525,7 +543,7 @@ export async function scanUnsequencedRevisions(crowi: Crowi, options: RepairScan
       cursor = pageId;
       lastPageId = String(pageId);
       try {
-        await scanOneReadyPage(crowi, pageId, { repaired, blocked, failed });
+        await scanOneReadyPage(crowi, pageId, minAgeMs, { repaired, blocked, failed });
       } catch (err) {
         // A failure NOT tied to any one Revision claim (e.g. the initial
         // Revision/PageHistoryEvent lookup itself) — the per-revision catch
@@ -547,6 +565,7 @@ export async function scanUnsequencedRevisions(crowi: Crowi, options: RepairScan
 async function scanOneReadyPage(
   crowi: Crowi,
   pageId: Types.ObjectId,
+  minAgeMs: number,
   into: { repaired: RepairedRevisionSequence[]; blocked: BlockedPageForDuplicateSequence[]; failed: OutboxRepairFailure[] },
 ): Promise<void> {
   const Page = crowi.model('Page');
@@ -642,7 +661,7 @@ async function scanOneReadyPage(
   // a counter that has since moved AHEAD of what this read of the rows saw
   // is the documented "counter ahead of max is normal" case, never a false
   // block.
-  const currentPage = await Page.findById(pageId).select('historySequence').lean().exec();
+  const currentPage = await Page.findById(pageId).select('historySequence historyTracking').lean().exec();
   const counterValue = (currentPage?.historySequence as number | undefined) ?? 0;
 
   const maxAssignedSequence = sequenceOwners.size > 0 ? Math.max(...sequenceOwners.keys()) : 0;
@@ -657,12 +676,43 @@ async function scanOneReadyPage(
     return;
   }
 
-  // `historySequence: null` (codex review attempt 2, round 6, AC-7) matches
-  // BOTH a missing field and an explicit `null` (MongoDB's documented
-  // equality rule for `null`) — the counterpart to the `$ne: null` query
-  // above, so a Revision left with a literal `null` by an earlier bug is
-  // still found here as unsequenced instead of being invisible to repair.
-  const missingRevisions = await Revision.find({ page: pageId, historySequence: null }).sort({ createdAt: 1, _id: 1 }).select('_id').lean().exec();
+  // §D-5 (Phase 2a) — two independent `createdAt` bounds, layered onto the `historySequence: null`
+  // filter below:
+  //
+  // (1) `$gte: trackingStartedAt` — a Revision written BEFORE this Page was
+  //     promoted to `ready` sits below the tracking boundary BY DESIGN (RFC
+  //     §13.2a: the merged timeline only orders from the boundary forward)
+  //     and must never be assigned a sequence — doing so would place it
+  //     ahead of newer, already-sequenced Revisions, reversing history.
+  //     `trackingStartedAt` is read fresh here (same read as `counterValue`
+  //     above, not the batch-time snapshot, to avoid the same staleness risk
+  //     that read guards against). A `ready` Page with no
+  //     `trackingStartedAt` (legacy/test-only — every REAL promotion sets it
+  //     atomically, §D-4a) imposes no lower bound, preserving Phase 1's
+  //     original unfiltered scan behavior for that case.
+  // (2) `$lte: now - minAgeMs` — a Revision younger than the grace window
+  //     may simply be an allocator claim that hasn't finished materializing
+  //     yet (§D-2's ordinary path, not a crash). Skipping it here narrows
+  //     the window this scan can race a live claim in; it does not need to
+  //     close that window entirely — `allocateContentSequence`'s own
+  //     re-check (§D-10) is what makes a late double-assignment impossible
+  //     even when this scan and a live writer overlap.
+  //
+  // `historySequence: null` itself matches BOTH a missing field and an
+  // explicit `null` (MongoDB's documented equality rule for `null`) — the
+  // counterpart to the `$ne: null` query above, so a Revision left with a
+  // literal `null` by an earlier bug is still found here as unsequenced
+  // instead of being invisible to repair.
+  const trackingStartedAt = currentPage?.historyTracking?.trackingStartedAt ?? undefined;
+  const createdAtFilter: Record<string, Date> = { $lte: new Date(Date.now() - minAgeMs) };
+  if (trackingStartedAt != null) {
+    createdAtFilter.$gte = trackingStartedAt as Date;
+  }
+  const missingRevisions = await Revision.find({ page: pageId, historySequence: null, createdAt: createdAtFilter })
+    .sort({ createdAt: 1, _id: 1 })
+    .select('_id')
+    .lean()
+    .exec();
 
   for (const missing of missingRevisions) {
     const revisionId = missing._id as Types.ObjectId;

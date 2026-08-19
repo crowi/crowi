@@ -181,6 +181,7 @@ export interface UserModel extends PaginateModel<UserDocument> {
   isRegisterable(email, username, callback: (registerable: boolean, detail: { email?: boolean; username?: boolean }) => void): void;
   removeCompletelyById(id, callback: (err: Error | null, userData: 1 | null) => void): any;
   resetPasswordByRandomString(id: Types.ObjectId): Promise<{ user: UserDocument; newPassword: string }>;
+  issuePasswordIfUnset(id: Types.ObjectId): Promise<{ user: UserDocument; newPassword: string | undefined; passwordIssued: boolean }>;
   createUsersByInvitation(emailList, toSendEmail, callback): any;
   sendInvitationMail(user: UserDocument): Promise<void>;
   createUserByEmailAndPassword(name, username, email, password, lang, callback): any;
@@ -882,6 +883,43 @@ export default (crowi: Crowi) => {
     }
 
     return { user, newPassword };
+  };
+
+  /**
+   * Issue a password for `id` ONLY if one is not already set, atomically.
+   *
+   * The admin federated-identity unlink route issues a password for a
+   * password-less, provider-only account so it keeps a way to sign in after
+   * the identity is removed (unlike the self-service unlink, which refuses
+   * outright when there is no password instead of issuing one). A separate
+   * `isPasswordSet()` read followed by a plain reset would let two
+   * concurrent unlinks of the same account both observe "no password", both
+   * write a DIFFERENT random password, and leave the loser's response
+   * carrying a plaintext password that no longer matches what got stored
+   * last. Folding "password not yet set" into the update's own filter — the
+   * same `findOneAndUpdate`-as-CAS shape `OAuthAuthorizationCode.consume`
+   * uses — makes the check-and-write one operation, so only one of the two
+   * racing calls can ever be the one that issues a password.
+   */
+  userSchema.statics.issuePasswordIfUnset = async function (id) {
+    const newPassword = generateRandomTempPassword();
+    const passwordHash = generatePasswordHash(newPassword);
+    const updated = await User.findOneAndUpdate(
+      { _id: id, $or: [{ password: { $exists: false } }, { password: null }, { password: '' }] },
+      { $set: { password: passwordHash }, $inc: { authVersion: 1, passwordResetGeneration: 1 } },
+      { returnDocument: 'after' },
+    );
+    if (updated) {
+      return { user: updated, newPassword, passwordIssued: true };
+    }
+
+    // Either a password was already set, or another call won the race just
+    // now — either way this call must not report a password it never wrote.
+    const current = await User.findById(id);
+    if (!current) {
+      throw new Error('User not found');
+    }
+    return { user: current, newPassword: undefined, passwordIssued: false };
   };
 
   /**

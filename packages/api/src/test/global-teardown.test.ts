@@ -1,10 +1,12 @@
 /**
  * Coverage for `global-teardown.js`'s feature-redis-8-upgrade Phase 2
- * addition: aggregating the 8 Redis smoke category markers and CI-gating
- * the run when fewer than 8 ran. jest `globalTeardown` runs ONCE, in the
- * main process, strictly after every worker finished — see that module's
- * doc comment for the race-free reasoning this relies on (mirrors
- * `test-mongo-sentinel.js`'s guarantee for `globalSetup`).
+ * addition: aggregating the 9 Redis smoke category markers (8 Redis-backed
+ * features + `boot`, including the account-link completion store's
+ * `link-completion` category) and CI-gating the run when fewer than 9 ran. jest
+ * `globalTeardown` runs ONCE, in the main process, strictly after every
+ * worker finished — see that module's doc comment for the race-free
+ * reasoning this relies on (mirrors `test-mongo-sentinel.js`'s guarantee
+ * for `globalSetup`).
  *
  * Every test isolates its own `CROWI_TEST_RUN_ID` (same reasoning as
  * `global-setup.test.ts`): the REAL one is already set for this worker and
@@ -35,7 +37,7 @@ describe('globalTeardown — Redis smoke category coverage gate', () => {
     else process.env.CI = originalCi;
   });
 
-  it('CI + all 8 categories marked: does not throw, and cleans up every marker it wrote', async () => {
+  it('CI + all 9 categories marked: does not throw, and cleans up every marker it wrote', async () => {
     process.env.CI = 'true';
     for (const category of REDIS_SMOKE_CATEGORIES) {
       writeMarker(category);
@@ -48,14 +50,14 @@ describe('globalTeardown — Redis smoke category coverage gate', () => {
     expect(listMarkedCategories()).toEqual([]);
   });
 
-  it('CI + fewer than 8 categories marked: throws, naming the missing categories, but still cleans up the markers it wrote', async () => {
+  it('CI + fewer than 9 categories marked: throws, naming the missing categories, but still cleans up the markers it wrote', async () => {
     process.env.CI = 'true';
     writeMarker('collab');
     writeMarker('editor-cap');
     writeMarker('presence');
-    // notifications / config / rate-limit / lru / boot never ran.
+    // notifications / config / rate-limit / lru / link-completion / boot never ran.
 
-    await expect(globalTeardown()).rejects.toThrow(/ran 3\/8/);
+    await expect(globalTeardown()).rejects.toThrow(/ran 3\/9/);
 
     expect(listMarkedCategories()).toEqual([]);
   });
@@ -63,7 +65,7 @@ describe('globalTeardown — Redis smoke category coverage gate', () => {
   it('CI + zero categories marked: throws', async () => {
     process.env.CI = 'true';
 
-    await expect(globalTeardown()).rejects.toThrow(/0\/8/);
+    await expect(globalTeardown()).rejects.toThrow(/0\/9/);
   });
 
   it('non-CI + zero categories marked: does not throw (local dev without docker compose up -d)', async () => {

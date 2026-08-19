@@ -47,6 +47,7 @@ import {
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import Debug from 'debug';
 
+import { hasLinkedFederatedIdentity } from 'src/auth/auth-provider-linking';
 import type Crowi from 'src/crowi';
 import { PROFILE_PICTURE_ALLOWED_MIME, PROFILE_PICTURE_MAX_BYTES, resolveEffectiveUploadMime } from 'src/hono/handlers/attachment';
 import type { PageDocument } from 'src/models/page';
@@ -145,13 +146,7 @@ const cleanupTmp = (tmpPath: string): void => {
 export const registerMeRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app: E, crowi: Crowi) => {
   const User = crowi.model('User');
   const Page = crowi.model('Page');
-  const UserIdentity = crowi.model('UserIdentity');
   const jwtUtil = createJwtUtil(crowi);
-
-  // Shared by GET and PUT /me — both need to know whether the account has
-  // at least one linked federated identity (GET to report it, PUT to also
-  // gate the email-change lock on it).
-  const isFederated = async (userId: UserDocument['_id']): Promise<boolean> => (await UserIdentity.exists({ userId })) !== null;
 
   // Every `/me/*` endpoint requires auth. Install the middleware before
   // `.openapi(...)` so the path matcher sees the route (consistent with
@@ -175,7 +170,7 @@ export const registerMeRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app: 
       const user = c.get('user');
       const userWithSecrets = await user.populateSecrets();
       const hasPassword = userWithSecrets.isPasswordSet();
-      const federated = await isFederated(user._id);
+      const federated = await hasLinkedFederatedIdentity(crowi, user._id);
       return c.json(userToProfileResponse(user, { hasPassword, federated }), 200);
     })
     .openapi(updateProfileRoute, async (c) => {
@@ -225,7 +220,7 @@ export const registerMeRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app: 
       // change. It costs nothing on that path: it swaps 1:1 with the
       // duplicate pre-check skipped just above. Resolved by the existing
       // `{userId, provider}` `UserIdentity` index.
-      const federated = await isFederated(user._id);
+      const federated = await hasLinkedFederatedIdentity(crowi, user._id);
 
       if (emailChangeRequested && federated) {
         // The account's recovery identifier is IdP-verified. Letting the

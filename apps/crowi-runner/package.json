@@ -24,6 +24,7 @@
     "@crowi/plugin-search-opensearch": "workspace:^",
     "@crowi/plugin-slack": "workspace:^",
     "@crowi/plugin-storage-aws-s3": "workspace:^",
+    "@crowi/plugin-storage-gcs": "workspace:^",
     "@crowi/plugin-storage-local": "workspace:^",
     "@crowi/runner": "workspace:^"
   }

@@ -2,10 +2,12 @@ process.env.WS_TOKEN_SECRET = process.env.WS_TOKEN_SECRET ?? 'test-ws-token-secr
 
 import faker from 'faker';
 import { Types } from 'mongoose';
+import request from 'supertest';
 import type { UserDocument } from 'src/models/user';
 import { unlinkFederatedIdentity } from 'src/auth/auth-provider-linking';
 import { createAuthRegistrationTerminal, drainUserActivation, provisionPendingRegistration } from 'src/services/auth-registration';
-import { crowi, Fixture, randomUsername } from 'src/test/setup';
+import { app, crowi, Fixture, randomUsername } from 'src/test/setup';
+import { authHeaders, createTestUser } from 'src/test/test-helpers';
 
 /**
  * RFC-0014 phase 2 — model-integration tests for the JIT-registration
@@ -1018,6 +1020,95 @@ describe('provisionPendingRegistration / drainUserActivation (RFC-0014 phase 2)'
 
     it('runs the registration-mode gate too — a Closed instance refuses before anything else', async () => {
       const { provider, subject, email } = await registerThenUnlink('b');
+
+      const original = (await Config().loadAllConfig()) as { crowi: Record<string, unknown> };
+      const prev = original.crowi['security:registrationMode'];
+      await Config().updateConfig('crowi', 'security:registrationMode', Config().SECURITY_REGISTRATION_MODE_CLOSED);
+      await crowi.getConfigService().load();
+      try {
+        expect(await resolveProfile(provider, subject, email)).toEqual({ kind: 'redirect_error', code: 'registration_closed' });
+      } finally {
+        if (prev !== undefined) {
+          await Config().updateConfig('crowi', 'security:registrationMode', prev);
+        } else {
+          await Config().deleteOne({ ns: 'crowi', key: 'security:registrationMode' });
+        }
+        await crowi.getConfigService().load();
+      }
+    });
+  });
+
+  // feature-federated-admin-identity-management AC-8 — the admin unlink
+  // route (DELETE /api/admin/users/:id/identities/:provider) has to close
+  // the SAME f4143f14 hole as the self-service path above, but it is a
+  // second, independently-written call site: it drives the real HTTP route
+  // rather than the shared `removeIdentityAndJournal` helper directly, so a
+  // future refactor that makes the admin handler stop calling that helper
+  // would be caught here instead of silently reopening the regression.
+  describe('a completed registration whose identity was later unlinked BY AN ADMIN (AC-8)', () => {
+    /**
+     * Registers a user through the real terminal + submit path, then unlinks
+     * the identity via the real HTTP admin route (not the shared helper
+     * directly — see the block comment above). Every case gets its own
+     * provider / subject / email suffix so one case's leftover `User`
+     * cannot make the next case's registration fail for the wrong reason.
+     */
+    const registerThenAdminUnlink = async (suffix: string) => {
+      const ids = {
+        provider: `unlink-revoke-admin-${suffix}`,
+        subject: `sub-unlink-revoke-admin-${suffix}`,
+        email: `unlink-revoke-admin-${suffix}@example.com`,
+      };
+      const token = await seedGrant(ids.provider, ids.subject, ids.email);
+      const provisioned = await provisionPendingRegistration(crowi, token, `unlinkrevokeadmin${suffix}`);
+      if (provisioned.kind !== 'active') throw new Error(`expected an active registration, got ${provisioned.kind}`);
+
+      const targetUser = await User().findOne({ email: ids.email });
+      if (!targetUser) throw new Error('registration did not create the user');
+      // A JIT-registered account has no password — exactly the account an
+      // admin unlink has to be able to recover (AC-5's passwordIssued:true
+      // path), unlike the self-service guard which would refuse it.
+      expect((await targetUser.populateSecrets()).isPasswordSet()).toBe(false);
+
+      const { accessToken: adminToken } = await createTestUser({
+        name: 'AC8 Admin',
+        username: randomUsername(),
+        email: `ac8-admin-${suffix}@example.com`,
+        admin: true,
+      });
+
+      const res = await request(app).delete(`/api/admin/users/${targetUser._id}/identities/${ids.provider}`).set(authHeaders(adminToken));
+
+      expect(res.status).toBe(200);
+      expect(res.body.passwordIssued).toBe(true);
+      expect(typeof res.body.newPassword).toBe('string');
+      expect(await UserIdentity().countDocuments({ userId: targetUser._id, provider: ids.provider })).toBe(0);
+
+      return { targetUser, ...ids };
+    };
+
+    it('is refused as an already-registered email, not resumed into the original account', async () => {
+      const { provider, subject, email } = await registerThenAdminUnlink('email');
+
+      const result = await resolveProfile(provider, subject, email);
+
+      expect(result).toEqual({ kind: 'redirect_error', code: 'email_already_registered' });
+      // The decisive part: no grant was minted, so nothing can walk the
+      // registration screen back into this account.
+      expect(await PendingAuthRegistration().countDocuments({ provider, providerUserId: subject })).toBe(0);
+    });
+
+    // Advisory follow-up on the review of this AC: the email-collision case
+    // above only exercises one of the two gates `resolveProfile` runs after
+    // the journal row is gone. `resolveProfile` checks `registrationMode`
+    // BEFORE the email-collision lookup (`auth-registration.ts` — the
+    // `SECURITY_REGISTRATION_MODE_CLOSED` branch runs first), so it is the
+    // deciding branch whenever the instance is closed, regardless of
+    // whether the re-auth's email matches the unlinked account. Mirrors the
+    // self-service "runs the registration-mode gate too" case above, but
+    // through the admin unlink call site.
+    it('runs the registration-mode gate too — a Closed instance refuses before anything else', async () => {
+      const { provider, subject, email } = await registerThenAdminUnlink('mode');
 
       const original = (await Config().loadAllConfig()) as { crowi: Record<string, unknown> };
       const prev = original.crowi['security:registrationMode'];

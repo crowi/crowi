@@ -261,6 +261,32 @@ function validateMultiInstance(raw: string): string | null {
   );
 }
 
+/**
+ * Whether the operator has declared a multi-instance deployment. Single
+ * source of truth for this runtime truth table — previously duplicated as a
+ * file-local copy in `src/collab/attach.ts` (moved here so the WS_TOKEN_SECRET
+ * boot guard and the federated-link completion store's topology selection
+ * can't drift apart).
+ *
+ * Convention (must match `.env.example` + the ja/en docs): a SET flag
+ * enables multi-instance. Truthy for `true`, `1`, or any integer ≥ 2 (a
+ * replica count); unset / `0` / `false` mean single-instance (the default).
+ * Any other non-empty string is treated as a truthy declaration (matching
+ * `validateMultiInstance`'s "did you mean" warning — an operator who typos
+ * the value still gets multi-instance semantics, not a silent single-
+ * instance fallback).
+ */
+export function isMultiInstanceDeclared(env: NodeJS.ProcessEnv = process.env): boolean {
+  const raw = env[CROWI_MULTI_INSTANCE_DESCRIPTOR.name];
+  if (!raw) return false;
+  const trimmed = raw.trim().toLowerCase();
+  if (trimmed === 'true') return true;
+  if (trimmed === 'false') return false;
+  const asNumber = Number(trimmed);
+  if (Number.isFinite(asNumber)) return asNumber >= 2 || trimmed === '1';
+  return true;
+}
+
 const VALID_NODE_ENVS = ['development', 'production', 'test'];
 
 function validateNodeEnv(raw: string): string | null {
@@ -468,6 +494,12 @@ const TAXONOMY_ONLY_NAMES = [
   // a free-form email, and an unresolvable value already throws its own
   // specific error at the point of use.
   'CROWI_MIGRATE_USER',
+  // `util/oauth-refresh-grace.ts` — refresh-token rotation-reuse grace
+  // window (ms). No `validatePositiveInt` check here: unlike every other
+  // `*_MS`/`*_SECONDS` descriptor, `0` is a valid, meaningful value (it
+  // disables the grace window), which `validatePositiveInt` would reject.
+  // Malformed values already fall back to the module's own default.
+  'OAUTH_REFRESH_REUSE_GRACE_MS',
 ] as const;
 
 const TAXONOMY_ONLY_DESCRIPTORS: EnvVarDescriptor[] = TAXONOMY_ONLY_NAMES.map((name) => ({ name }));
@@ -512,7 +544,7 @@ const EXTRA_KNOWN_NAMES = ['NEXT_PUBLIC_API_URL', 'NEXT_PUBLIC_COLLAB_URL', 'CRO
 const KNOWN_ENV_NAMES: ReadonlySet<string> = new Set([...ENV_VAR_DESCRIPTORS.flatMap((d) => [d.name, ...(d.aliases ?? [])]), ...EXTRA_KNOWN_NAMES]);
 
 /** Prefixes a Crowi-owned env var is expected to carry. Anything else (`PATH`, `CI`, `GITHUB_*`, `npm_*`, ...) is out of scope for typo-detection. */
-const TYPO_PREFIXES = ['CROWI_', 'WS_TOKEN_', 'JWT_', 'COLLAB_', 'REDIS', 'MONGO', 'MIGRATION_', 'IMAGE_DERIVATIVE_'] as const;
+const TYPO_PREFIXES = ['CROWI_', 'WS_TOKEN_', 'JWT_', 'COLLAB_', 'REDIS', 'MONGO', 'MIGRATION_', 'IMAGE_DERIVATIVE_', 'OAUTH_'] as const;
 
 /** Edit-distance threshold for the typo heuristic (implementer's discretion per the spec, "目安 ≤2"). */
 const TYPO_DISTANCE_THRESHOLD = 2;

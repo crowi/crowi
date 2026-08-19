@@ -4,7 +4,7 @@ import * as Y from 'yjs';
 import type { ContributorsTracker } from './contributors';
 import type { DocBaseRevisionStore } from './doc-base-revision';
 import type { DocEpochStore } from './doc-epoch';
-import type { CollabModels } from './models';
+import type { CollabContentSequenceAllocator, CollabModels } from './models';
 import { DELETED_STATUS, DRAFT_STATUS, PUBLISHED_STATUS } from './page-status';
 import { persistYjsState } from './persist-yjs-state';
 import type { CollabPageEventPublisher } from './types';
@@ -82,6 +82,13 @@ export interface CreateSaveFlowOptions {
    * MATCHING stale one either).
    */
   docEpochRevisions?: DocEpochStore;
+  /**
+   * RFC-0021 §D-7 (Phase 2a) — assigns the saved Revision's content
+   * sequence. Optional: unset (the default, e.g. every pre-Phase-2a test
+   * config) means collab never allocates one, unchanged from before this
+   * option existed.
+   */
+  contentSequenceAllocator?: CollabContentSequenceAllocator;
 }
 
 /**
@@ -254,6 +261,7 @@ export function createSaveFlow(opts: CreateSaveFlowOptions): SaveFlow {
   const PageYjsUpdate = opts.models.PageYjsUpdate as any;
   const docBaseRevisions = opts.docBaseRevisions;
   const docEpochRevisions = opts.docEpochRevisions;
+  const contentSequenceAllocator = opts.contentSequenceAllocator;
 
   return {
     async executeSave({ pageId, userId, document, message }) {
@@ -498,6 +506,21 @@ export function createSaveFlow(opts: CreateSaveFlowOptions): SaveFlow {
       // we just created (otherwise the next save would see the live pointer
       // diverge from the still-old base and false-CONFLICT).
       docBaseRevisions.set(pageId, String(newRevision._id));
+
+      // §D-7 — MUST run after the doc base advance above, never before.
+      // `tryCoalesce`'s condition 1 (a same-process CAS loser deciding
+      // whether to coalesce onto this winner) checks whether the doc base
+      // has already advanced to this save's new revision; placing the
+      // allocator call ahead of the `.set()` above would stall that
+      // advance for as long as the allocator takes, turning a legitimate
+      // same-process co-edit save-ok into a spurious CONFLICT (AC-18).
+      if (contentSequenceAllocator) {
+        try {
+          await contentSequenceAllocator(page._id as Types.ObjectId, newRevision._id as Types.ObjectId);
+        } catch (err) {
+          debug('executeSave: contentSequenceAllocator failed for page %s: %s', pageId, (err as Error)?.message ?? err);
+        }
+      }
 
       // Step 6: collab yjsState mirror via the single chokepoint. Best-
       // effort — the data is already consistent on disk via step 5 (next

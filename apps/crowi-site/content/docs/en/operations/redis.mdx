@@ -7,9 +7,10 @@ description: License, engine-support, image-pin, ACL, security, and connection-b
 
 > This section is not specific to realtime collaborative editing — it
 > is the Redis-wide license, engine-support, and security policy for
-> **all 8 code paths** that talk to Redis in this codebase: collab
+> **all 9 code paths** that talk to Redis in this codebase: collab
 > pub/sub, the editor-cap counter, presence, notification invalidation,
-> Config sync, rate limiting, LRU (recently-viewed pages), and the boot
+> Config sync, rate limiting, LRU (recently-viewed pages), account
+> linking (the short-lived link-completion store), and the boot
 > connection itself. It lives on this dedicated page — not the
 > [realtime collaboration operator guide](./realtime-collab) — because
 > it applies to every Redis-backed feature, not just collab.
@@ -77,12 +78,12 @@ description: License, engine-support, image-pin, ACL, security, and connection-b
 
 Valkey is a BSD-3-Clause fork of Redis and is **not** formally
 supported today — it is treated as best-effort. Crowi does not run its
-real-Redis-8 compatibility smoke suite covering all 8 consumers
+real-Redis-8 compatibility smoke suite covering all 9 consumers
 (collab pub/sub, editor-cap counter, presence, notification
-invalidation, Config sync, rate limiting, LRU, and boot connection)
-against Valkey in CI. Valkey graduates to formally supported once that
-same 8-path smoke suite passes continuously against it in CI — the
-same bar Redis 8 itself had to clear.
+invalidation, Config sync, rate limiting, LRU, account linking, and
+boot connection) against Valkey in CI. Valkey graduates to formally
+supported once that same 9-path smoke suite passes continuously
+against it in CI — the same bar Redis 8 itself had to clear.
 
 ### Image pin policy
 
@@ -134,7 +135,7 @@ same bar Redis 8 itself had to clear.
      presence viewer list match the actual connection count before
      resuming traffic.
 
-  None of the 8 consumers store page content in Redis — `Page.yjsState`
+  None of the 9 consumers store page content in Redis — `Page.yjsState`
   and all page content live only in MongoDB — so a cold start of any of
   these Redis instances never causes page-content data loss; see
   [Failure modes](./realtime-collab#failure-modes). That doesn't mean every consumer's
@@ -142,9 +143,13 @@ same bar Redis 8 itself had to clear.
   collab pub/sub, presence, notification invalidation, and Config sync
   are pure cross-replica coordination with nothing to lose; the
   editor-cap counter and rate limiting deliberately reset (fail open /
-  fall back to an in-memory window) rather than block; and LRU's
+  fall back to an in-memory window) rather than block; LRU's
   recently-viewed-pages list has no fallback at all, so a cold start
-  loses it outright — see the per-consumer breakdown in
+  loses it outright; and account linking's pending link-completion
+  codes are lost too, but that only turns an in-flight confirmation
+  into a 404 the user resolves by starting the link again — the
+  confirmed `UserIdentity` row itself lives only in MongoDB — see the
+  per-consumer breakdown in
   [Single-instance deployment](./realtime-collab#single-instance-deployment).
 
 ### Re-review triggers
@@ -206,6 +211,7 @@ literal `<instance-slug>` placeholder shown here.
 | Config sync | `PUBLISH`, `SUBSCRIBE` | `crowi:<instance-slug>:config` |
 | Rate limiting | `INCR`, `PEXPIRE` | `crowi:<instance-slug>:ratelimit:<name>:<userId>:<window>` |
 | LRU (recently-viewed pages) | `ZREMRANGEBYRANK`, `ZADD`, `ZRANGE`, `MULTI`, `EXEC` (the write pair is pipelined inside a `MULTI`/`EXEC` transaction — an ACL missing those two breaks LRU writes) | `crowi:<instance-slug>:lru:<namespace>` (`<namespace>` is still operator/caller-chosen, e.g. a user id) |
+| Account linking (link-completion store) | `GET`, `SET`, `EVAL`, `TIME` (deadlines are evaluated against Redis's own clock, never the api process's) | `crowi:<instance-slug>:link-completion-state:<hash>`, `crowi:<instance-slug>:link-completion-record:<hash>`, `crowi:<instance-slug>:link-completion-consumed:<hash>` — `<hash>` is a SHA-256 hash of the plaintext state/completion code, never the plaintext value itself |
 | Boot connection | connection handshake only | n/a |
 
 Two more command sources are easy to miss because Crowi's own code
@@ -263,7 +269,7 @@ rate limiter needs produces the same silent, undetected disabling of
 the limit that a Redis outage would — watch for it when narrowing an
 ACL.
 
-**Key / channel separation.** The 7 Redis-backed consumers (everything
+**Key / channel separation.** The 8 Redis-backed consumers (everything
 except the boot connection itself) are additionally scoped by an
 instance-specific keyspace `crowi:<instance-slug>:...`
 (see [`REDIS_KEY_PREFIX`](./realtime-collab#environment-variables) — the
@@ -275,8 +281,12 @@ multiple Crowi instances can safely share one Redis without cross-talk:
 `crowi:<instance-slug>:notifications:user:<userId>` (notifications),
 `crowi:<instance-slug>:config` (Config sync — no longer a bare fixed
 channel shared across every instance), `crowi:<instance-slug>:ratelimit:*`
-(rate limiting), and `crowi:<instance-slug>:lru:<namespace>`
-(recently-viewed pages; `<namespace>` is still operator/caller-chosen).
+(rate limiting), `crowi:<instance-slug>:lru:<namespace>`
+(recently-viewed pages; `<namespace>` is still operator/caller-chosen),
+and `crowi:<instance-slug>:link-completion-{state,record,consumed}:<hash>`
+(account linking — `<hash>` is a SHA-256 hash of the plaintext state
+value or completion code, so the keyspace never carries either in the
+clear).
 Two replicas of the SAME Crowi instance resolve the SAME `<instance-slug>`
 (same `CLIENT_URL`, or the same explicit `REDIS_KEY_PREFIX` override), which
 is what keeps intended cross-replica fan-out working; two DIFFERENT
@@ -303,7 +313,7 @@ release tooling where possible, and don't use a generic distro alias
 as a stand-in for a compatibility claim.
 
 **What CI does and doesn't verify.** CI runs real Redis 8 smoke tests
-for all 8 consumers, but it does **not** run them against a restricted
+for all 9 consumers, but it does **not** run them against a restricted
 ACL user — the matrix above is written from source inspection, not
 exercised by an automated permission-denial test. Treat it as an
 operator reference, not a guarantee, and re-verify it after upgrading

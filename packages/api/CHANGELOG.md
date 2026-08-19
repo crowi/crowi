@@ -1,5 +1,41 @@
 # @crowi/api
 
+## 2.0.0-alpha.16
+
+### Major Changes
+
+- 9a288e3: Linking a federated identity (Google, or any other configured provider — RFC-0014) from `/me` is rebuilt as three authenticated steps instead of one unauthenticated top-level redirect. Pressing "link" on an unlinked provider now sends an authenticated request that mints the identity-provider authorization URL, then the browser navigates there directly; returning from the provider shows a one-time confirmation on the Security tab ("Link the Google account `xxx@example.com`?", or just the provider name when the provider doesn't return a displayable email) that the user must explicitly confirm before the identity is attached — closing the dialog or navigating away links nothing. The previous flow was unauthenticated at the point the identity provider redirected back, which meant a copied authorization link could be used by anyone to attach an identity provider account they controlled to whichever Crowi account had started that link — a permanent backdoor into that account for whoever opened the copied link. The new flow authenticates both the start and the final confirmation, binds the target account to the server-resolved session at start time (never to anything the callback carries), and re-validates that the account is still active with an unchanged authentication state immediately before attaching the identity.
+
+  **Breaking**: the `POST /api/auth/providers/:name/link-grants` endpoint and the `link`/`link_grant` query parameters on `GET /api/auth/providers/:name/start` are removed; a request using either now fails instead of degrading to a plain sign-in. Normal federated sign-in, unlinking, and `GET /api/auth/providers/identities` are unchanged.
+
+  **Operator note**: because this release replaces the shared OAuth state cookie's linking payload with a flow-specific one, deployments running more than one API replica must drain and replace all replicas at the same time for this release — a one-at-a-time rolling update is not supported, since an old replica can still read (and delete before validating) the new cookie format during the overlap window, which would also break unrelated in-flight sign-ins on that replica. Single-instance deployments satisfy this automatically. Multi-instance deployments must also have `REDIS_URL` configured so the confirmation code is visible to whichever replica handles the follow-up confirmation request.
+
+### Patch Changes
+
+- 2241261: Added a native Google Cloud Storage driver plugin (`@crowi/plugin-storage-gcs`, driver name `gcs`) so operators can store page attachments and profile pictures in a GCS bucket, using Application Default Credentials by default with an encrypted inline service-account key as a fallback.
+
+  - Bucket, optional object prefix, optional project ID, and optional service-account key JSON are configured from `/admin/plugins`; the four fields save together as one encrypted document and hot-reconfigure without a restart while `gcs` is not yet the active driver.
+  - Missing-object behavior matches the existing `local`/`s3` drivers exactly (same placeholder/`FILE_MISSING`/derivative-fallback UX), and V4 signed URLs are supported for future direct-delivery use without changing how attachments are served today (still proxied through the Crowi API).
+  - The full runner and full Docker image now bundle this plugin (the active driver stays `s3` unless an operator explicitly switches `storage.driver` to `gcs`), and `crowi-admin rebuild storage copy` supports migrating existing files from `local`/`s3` to GCS via a full-stop copy procedure documented in the operations guide.
+
+- Updated dependencies [9a288e3]
+  - @crowi/api-contract@2.0.0-alpha.16
+
+## 2.0.0-alpha.15
+
+### Patch Changes
+
+- c1cb3d5: Admins can now see which users have a linked federated identity (RFC-0014) and disconnect one from the user list — the users table shows a linked-account icon per row, and a new row action unlinks a provider. If the target user has no password, the admin unlink issues a random one and shows it once (mirroring the existing password-reset flow); an existing password is left untouched. An admin can never unlink their own identity from this screen, and unlinking is refused instance-wide while password sign-in is disabled, since either would strand the account. The unlink removes the same registration-journal row the self-service unlink already cleans up, so the disconnected provider account cannot walk straight back into the account through the sign-in screen.
+
+  An account with a linked federated identity can no longer have its email address changed by an admin either: `PUT /admin/users/{id}/email` now refuses a different address with `409 EMAIL_LOCKED_BY_FEDERATED_IDENTITY`, the same way the self-service `PUT /me` already does. Unlinking the identity first is the only way to change it. The user-edit dialog no longer has an email field at all — `PATCH /admin/users/{id}` now updates only the display name, and email changes go exclusively through the dedicated "Change email" dialog, so there is exactly one email-writing path to lock.
+
+- ee76fb4: Two or more processes refreshing the same OAuth refresh token at nearly the same time no longer forces a re-login. The server now suppresses rotation-reuse-chain revocation for a short grace window (default 60s, tunable via `OAUTH_REFRESH_REUSE_GRACE_MS`, `0` restores the previous immediate-revocation behavior) after a token is rotated away, while still returning the exact same `400 invalid_grant` response and never issuing a token on the suppressed path — reuse outside the window, and explicit `POST /oauth/revoke` calls, still revoke the whole chain exactly as before. The CLI (`crowi`) now recovers automatically on the losing side of such a race: when a refresh fails, it re-reads the locally stored profile and retries once with the refresh token a concurrent `crowi` process already rotated to, instead of surfacing a spurious session-expired error.
+- 3ba4c69: Add the first writer for page history (RFC-0021 Phase 2a): every content save (page create, draft create, HTTP update/revert, collaborative editor save, and `crowi-admin replace url`) now assigns a page-local `historySequence` to its Revision, promoting the page's `historyTracking` to `ready` on its first tracked save. Sequence assignment runs as a separate, resumable step after the existing pointer write commits, never as part of it, so a crash between the two never fails the save — a background/operator repair pass recovers any interrupted assignment. `scanUnsequencedRevisions` now skips Revisions younger than a configurable grace window (`RepairScanOptions.minAgeMs`, default 10 minutes) and Revisions predating a page's tracking start, so it never races a still-in-flight assignment or mis-orders history. No request/response shape, status code, error body, or OpenAPI contract changes — this is purely additive bookkeeping invisible to end users.
+- Updated dependencies [c1cb3d5]
+- Updated dependencies [3ba4c69]
+  - @crowi/api-contract@2.0.0-alpha.15
+  - @crowi/collab@0.1.0-alpha.4
+
 ## 2.0.0-alpha.14
 
 ### Minor Changes

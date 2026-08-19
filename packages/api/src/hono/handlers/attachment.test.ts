@@ -732,6 +732,47 @@ describe('Routes /api attachments (Hono)', () => {
       }
     });
 
+    it('feature-storage-gcs AC-10: still streams via the Crowi proxy — never calls signedUrl or redirects — even when the active driver supports signedUrl', async () => {
+      const page = await createPageViaApi(accessToken, `${PATH_PREFIX}signed-url-capable`, '# gcs-parity');
+      const upload = await request(app)
+        .post(`/api/pages/${page._id}/attachments`)
+        .set(authHeaders(accessToken))
+        .attach('file', pngBuffer, { filename: 'pixel.png', contentType: 'image/png' });
+      expect(upload.status).toBe(200);
+      const id = upload.body.attachment._id;
+
+      // The active driver in the test env (local) has no `signedUrl`. Attach
+      // one — like GCS/S3 would have — to prove the raw-stream route never
+      // calls it and never redirects, regardless of driver capability
+      // (`Attachment.fileUrl` / the attachment routes / `persistentUrl` are
+      // unchanged by this feature; see spec §7 "V4 capability と現行 proxy
+      // delivery").
+      const driver = crowi.getPlugins().active.storage;
+      if (!driver) throw new Error('storage driver missing in test env');
+      const hadOwnSignedUrl = Object.hasOwn(driver, 'signedUrl');
+      const originalSignedUrl = driver.signedUrl;
+      const signedUrlSpy = jest.fn(async () => 'https://signed.example/should-never-be-used');
+      driver.signedUrl = signedUrlSpy;
+
+      try {
+        const res = await request(app).get(`/api/attachments/${id}`).set(authHeaders(accessToken)).buffer(true).parse(bufferParser);
+
+        expect(res.status).toBe(200);
+        expect(res.headers.location).toBeUndefined();
+        expect(res.headers['content-type']).toBe('image/png');
+        const received = res.body as Buffer;
+        expect(received.equals(pngBuffer)).toBe(true);
+        expect(signedUrlSpy).not.toHaveBeenCalled();
+      } finally {
+        // Restore exactly to the pre-test shape rather than leaving the spy
+        // (or a stray own `signedUrl: undefined`) behind on this
+        // process-shared singleton driver, which could change
+        // `'signedUrl' in driver` / `Object.hasOwn` results for later tests.
+        if (hadOwnSignedUrl) driver.signedUrl = originalSignedUrl;
+        else delete driver.signedUrl;
+      }
+    });
+
     it('returns 404 (not the placeholder) when the caller lacks grant on the page', async () => {
       const page = await createPageViaApi(accessToken, `${PATH_PREFIX}grant-fail`, '# secret', 4 /* GRANT_OWNER */);
       const upload = await request(app)

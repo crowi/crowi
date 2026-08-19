@@ -27,13 +27,13 @@ This package fills three roles:
 
 ## What's bundled (full)
 
-All twelve first-party drivers are declared as `dependencies` so any of them
-can be activated from `crowi.config.json` without a rebuild:
+All thirteen first-party drivers are declared as `dependencies` so any of
+them can be activated from `crowi.config.json` without a rebuild:
 
-- storage: `storage-local`, `storage-aws-s3`
+- storage: `storage-local`, `storage-aws-s3`, `storage-gcs`
 - search: `search-mongo`, `search-elasticsearch`, `search-opensearch`
 - mail: `mail-smtp`, `mail-resend`, `mail-aws-ses`
-- renderer: `renderer-plantuml`, `renderer-katex`, `renderer-crowi-legacy`
+- renderer: `renderer-plantuml`, `renderer-katex`, `renderer-crowi-legacy`, `renderer-mermaid`
 
 `@crowi/api` itself is plugin-free: it depends only on the SDK
 (`@crowi/plugin-api`) and the runner resolution library (`@crowi/runner`).
@@ -56,5 +56,6 @@ npm start         # = crowi-api  (the @crowi/api bin)
 ```
 
 `crowi.config.json` selects the active drivers; per-driver credentials
-(S3 bucket, SMTP host, …) live in the Mongo Config collection and are
-edited from the admin UI, not in this file.
+(S3 bucket, GCS bucket + optional ADC/service-account key, SMTP host, …)
+live in the Mongo Config collection and are edited from the admin UI, not
+in this file.

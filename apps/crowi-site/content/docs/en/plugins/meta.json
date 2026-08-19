@@ -1,4 +1,10 @@
 {
   "title": "Plugins",
-  "pages": ["overview", "managing", "renderers", "developing"]
+  "pages": [
+    "overview",
+    "managing",
+    "storage",
+    "renderers",
+    "developing"
+  ]
 }

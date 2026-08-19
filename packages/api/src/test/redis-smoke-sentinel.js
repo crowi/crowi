@@ -39,8 +39,8 @@ const REDIS_SMOKE_TARGETS = {
   tls: 'rediss://127.0.0.1:6381',
 };
 
-/** The 8 real-Redis consumer categories Phase 2 must exercise. */
-const REDIS_SMOKE_CATEGORIES = ['collab', 'editor-cap', 'presence', 'notifications', 'config', 'rate-limit', 'lru', 'boot'];
+/** The 9 real-Redis consumer categories (8 features + `boot`) Phase 2 must exercise. */
+const REDIS_SMOKE_CATEGORIES = ['collab', 'editor-cap', 'presence', 'notifications', 'config', 'rate-limit', 'lru', 'link-completion', 'boot'];
 
 function requireRunId() {
   const runId = process.env.CROWI_TEST_RUN_ID;

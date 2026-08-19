@@ -1,37 +1,27 @@
 /**
- * RFC-0014 phase 3 — linking a provider account to an ALREADY signed-in
- * Crowi user, and unlinking it again.
+ * Linking a provider account to an
+ * ALREADY signed-in Crowi user, and unlinking it again.
  *
- * The threat this module exists to stop (spec §背景): a link flow that
+ * The threat this module exists to stop: a link flow that
  * decided its target from anything the callback carries — a query
  * parameter, the IdP profile's email, a client-supplied user id — lets an
  * attacker who gets a victim to open a prepared link URL attach the
  * ATTACKER's IdP identity to the VICTIM's account, which is a permanent
- * backdoor into it. So the target is fixed at `/start` time from the
- * authenticated web session alone, and every later step only ever
- * re-verifies that same binding.
+ * backdoor into it. The target is instead fixed at `POST link-start` time
+ * from the authenticated web session alone (`hono/handlers/federated-auth.ts`),
+ * carried through the IdP round trip as a `LinkCompletionRecord`
+ * (`service/link-completion.ts`), and re-verified against a FRESH `User`
+ * read right before this module ever runs.
  *
- * Three pieces:
+ * Two pieces:
  *
- *  - `createLinkGrantStore` — the short-lived, server-side-only record the
- *    authenticated `POST .../link-grants` call mints. It holds the caller's
- *    user id, `authVersion`, provider and the phase-1 sender-key
- *    thumbprint; the browser only ever sees an opaque id. Single-use and
- *    30s, because it exists purely to carry the binding across ONE hop
- *    (the `POST` that mints it → the top-level `GET .../start` navigation
- *    that consumes it), not across the IdP round trip: `/start` copies the
- *    binding into the signed state cookie, which is what the callback
- *    re-checks. A 30s window would otherwise be impossible to satisfy —
- *    the user has to actually sign in at the IdP in between.
- *
- *  - `createAuthProviderLinkingTerminal` — the callback-side branch that
- *    runs INSTEAD of phase 2's provisioning whenever the signed state
- *    carries a link target. It only ever inserts `{userId, provider,
- *    providerUserId}`; a duplicate is re-read and reported as either a
- *    same-user no-op or an other-user refusal. It never moves an identity
- *    between users — the `{provider, providerUserId}` unique index is the
- *    final defense, and re-reading the winner is how a concurrent insert
- *    is told apart from a genuine cross-user collision.
+ *  - `createAuthProviderLinkingTerminal` — the confirmation-POST-side link
+ *    branch. It only ever inserts `{userId, provider, providerUserId}`; a
+ *    duplicate is re-read and reported as either a same-user no-op or an
+ *    other-user refusal. It never moves an identity between users — the
+ *    `{provider, providerUserId}` unique index is the final defense, and
+ *    re-reading the winner is how a concurrent insert is told apart from a
+ *    genuine cross-user collision.
  *
  *  - `unlinkFederatedIdentity` — guarded by password availability, never by
  *    counting identities. Counting is what makes "don't remove the last
@@ -41,134 +31,10 @@
  *    unlink can invalidate (spec design decision 4).
  */
 
-import crypto from 'node:crypto';
-
 import type Crowi from 'src/crowi';
 import { isDisabledPasswordAuth } from 'src/models/config';
 import type { UserDocument } from 'src/models/user';
 import { isDuplicateKeyError } from 'src/util/map-duplicate-key-error';
-import type { RedisKeyspace } from 'src/util/redis-keyspace';
-
-/** Spec §契約: the link grant covers ONE hop (mint → start), not the IdP round trip — see the module doc comment. */
-const LINK_GRANT_TTL_MS = 30 * 1000;
-const GRANT_ID_BYTES = 32;
-
-/**
- * The server-side-only binding a link flow is pinned to. Every field is
- * re-checked at `/start`; `userId`/`authVersion` are re-checked once more
- * at callback time (carried there in the signed state cookie), so a
- * session invalidated mid-flow — a password reset, a forced sign-out —
- * links nothing.
- */
-export interface LinkGrant {
-  userId: string;
-  provider: string;
-  /**
-   * `User.authVersion` at mint time. Bumped by password reset / email
-   * change / forced revocation, so a stale grant from a session that has
-   * since been invalidated cannot complete a link.
-   */
-  authVersion: number;
-  /**
-   * RFC 7638 thumbprint of the phase-1 sender key this flow is bound to —
-   * the same value `/start` derives from its own `handoff_jwk` query
-   * parameter. A stolen link URL replayed in a DIFFERENT browser carries
-   * that browser's own key, so the thumbprints differ and `/start`
-   * refuses (AC-2).
-   */
-  handoffChallenge: string;
-}
-
-export interface LinkGrantStore {
-  /** Mint an opaque, single-use grant id for `grant`. */
-  issue(grant: LinkGrant): Promise<string>;
-  /**
-   * Atomically consume `grantId`. Returns the grant only for the FIRST
-   * caller — a replayed id (a second tab, an attacker re-using an
-   * intercepted `/start` URL) gets `null`, exactly like an unknown or
-   * expired one. Callers cannot distinguish those cases and must not try.
-   */
-  consume(grantId: string): Promise<LinkGrant | null>;
-}
-
-/** Minimal node-redis v4 surface — same narrow-by-design convention as `service/federated-handoff.ts`. */
-export interface MinimalLinkGrantRedisClient {
-  set(key: string, value: string, options: { PX: number }): Promise<unknown>;
-  getDel(key: string): Promise<string | null>;
-}
-
-function parseGrant(raw: string | null | undefined): LinkGrant | null {
-  if (raw == null) return null;
-  try {
-    const parsed = JSON.parse(raw) as Partial<LinkGrant>;
-    if (
-      typeof parsed.userId !== 'string' ||
-      typeof parsed.provider !== 'string' ||
-      typeof parsed.authVersion !== 'number' ||
-      typeof parsed.handoffChallenge !== 'string'
-    ) {
-      return null;
-    }
-    return { userId: parsed.userId, provider: parsed.provider, authVersion: parsed.authVersion, handoffChallenge: parsed.handoffChallenge };
-  } catch {
-    return null;
-  }
-}
-
-export interface CreateLinkGrantStoreOptions {
-  /** Pass `crowi.redis`. `null`/`undefined` → in-memory fallback (single instance / dev). */
-  redisClient?: MinimalLinkGrantRedisClient | null;
-  /** MANDATORY whenever `redisClient` is supplied (same convention as `service/federated-handoff.ts`). */
-  keyspace?: RedisKeyspace;
-}
-
-export function createLinkGrantStore(options: CreateLinkGrantStoreOptions = {}): LinkGrantStore {
-  const { redisClient, keyspace } = options;
-
-  if (redisClient) {
-    if (!keyspace) {
-      throw new Error(
-        'createLinkGrantStore: `keyspace` is required whenever `redisClient` is supplied (feature-redis-key-prefix §1/§2) — resolve one via resolveRedisKeyspaceIfEnabled(crowi) before constructing the store.',
-      );
-    }
-    const keyFor = (grantId: string) => keyspace.key('auth-link-grant', grantId);
-    return {
-      async issue(grant) {
-        const grantId = crypto.randomBytes(GRANT_ID_BYTES).toString('base64url');
-        await redisClient.set(keyFor(grantId), JSON.stringify(grant), { PX: LINK_GRANT_TTL_MS });
-        return grantId;
-      },
-      async consume(grantId) {
-        // `GETDEL` is the read and the single-use consume in ONE command —
-        // a separate GET + DEL would let two concurrent replays both read
-        // the grant before either deleted it.
-        return parseGrant(await redisClient.getDel(keyFor(grantId)));
-      },
-    };
-  }
-
-  const store = new Map<string, { grant: LinkGrant; expiresAt: number }>();
-  return {
-    async issue(grant) {
-      const grantId = crypto.randomBytes(GRANT_ID_BYTES).toString('base64url');
-      const now = Date.now();
-      for (const [key, entry] of store) {
-        if (entry.expiresAt <= now) store.delete(key);
-      }
-      store.set(grantId, { grant, expiresAt: now + LINK_GRANT_TTL_MS });
-      return grantId;
-    },
-    async consume(grantId) {
-      // Read-and-delete with no `await` in between, so nothing can
-      // interleave — the same single-threaded-event-loop argument
-      // `service/federated-handoff.ts`'s in-memory backend documents.
-      const entry = store.get(grantId);
-      store.delete(grantId);
-      if (!entry || entry.expiresAt <= Date.now()) return null;
-      return entry.grant;
-    },
-  };
-}
 
 /**
  * Outcome of linking an identity to an already-authenticated user.
@@ -230,11 +96,19 @@ export function createAuthProviderLinkingTerminal(crowi: Crowi): AuthProviderLin
             return String(sameAccount.userId) === String(userId) ? { kind: 'already_linked_here' } : { kind: 'owned_by_other_user' };
           }
 
-          // `{userId, provider}` unique — we already have a DIFFERENT
-          // account of this provider. Refused without ever moving or
-          // replacing the existing identity.
+          // `{userId, provider}` unique — we already have an account of
+          // this provider. The exact-subject read above and this slot read are
+          // two separate round trips, so the SAME subject's row can land in
+          // between: if the slot row's `providerUserId` matches ours, the
+          // duplicate-key error was our own concurrent insert winning
+          // first, not a genuine conflict, and the retry loop's normal
+          // no-op-success case (`already_linked_here`) applies. Only a
+          // slot row for a DIFFERENT provider account is a real refusal —
+          // never moving or replacing the existing identity.
           const otherAccountOfSameProvider = await UserIdentity.findOne({ userId, provider });
-          if (otherAccountOfSameProvider) return { kind: 'provider_slot_taken' };
+          if (otherAccountOfSameProvider) {
+            return otherAccountOfSameProvider.providerUserId === providerUserId ? { kind: 'already_linked_here' } : { kind: 'provider_slot_taken' };
+          }
 
           // Neither row exists any more — retry (see the comment above).
         }
@@ -242,6 +116,49 @@ export function createAuthProviderLinkingTerminal(crowi: Crowi): AuthProviderLin
       return { kind: 'failed' };
     },
   };
+}
+
+/**
+ * Re-derive the
+ * outcome an already-consumed `LinkCompletionStore.consumeVerified` replay
+ * must report, purely from the DB and the winning record's own
+ * `{userId, provider, providerUserId}` (never from a second, independent
+ * consume attempt — the code is already spent).
+ *
+ * Mirrors `createAuthProviderLinkingTerminal`'s two-read shape (exact
+ * subject first, provider slot only when the exact read is empty) so the
+ * public vocabulary the two paths report is provably the same
+ * (§18) — but this is READ-ONLY: no insert, no compensation, no retry.
+ */
+export type AuthProviderLinkReplayOutcome = { kind: 'linked' | 'owned_by_other_user' | 'provider_slot_taken' | 'not_linked' };
+
+export async function resolveAuthProviderLinkReplay(
+  crowi: Crowi,
+  input: { userId: string; provider: string; providerUserId: string },
+): Promise<AuthProviderLinkReplayOutcome> {
+  const UserIdentity = crowi.model('UserIdentity');
+  const { userId, provider, providerUserId } = input;
+
+  // Exact subject first — same owner as the winning record means the
+  // original insert landed exactly as recorded; a different owner is a
+  // genuine (never-identifying) conflict.
+  const exactSubject = await UserIdentity.findOne({ provider, providerUserId });
+  if (exactSubject) {
+    return { kind: String(exactSubject.userId) === String(userId) ? 'linked' : 'owned_by_other_user' };
+  }
+
+  // Exact read empty — read the provider slot. If it landed BETWEEN the two
+  // reads and carries the SAME `providerUserId` the record was issued for,
+  // the original insert has since completed (`linked`); a different
+  // subject in that slot is a provider-account conflict; no row at all
+  // means the original insert has not landed yet (or never will) —
+  // `not_linked`, which a later replay of the SAME code can still resolve
+  // to `linked` once the original insert completes (spec design decision 19).
+  const providerSlot = await UserIdentity.findOne({ userId, provider });
+  if (providerSlot) {
+    return { kind: providerSlot.providerUserId === providerUserId ? 'linked' : 'provider_slot_taken' };
+  }
+  return { kind: 'not_linked' };
 }
 
 /**
@@ -256,37 +173,22 @@ export function createAuthProviderLinkingTerminal(crowi: Crowi): AuthProviderLin
 export type UnlinkFederatedIdentityOutcome = { kind: 'unlinked' } | { kind: 'not_linked' } | { kind: 'password_auth_disabled' } | { kind: 'password_required' };
 
 /**
- * Remove `user`'s identity for `provider`.
+ * Remove `user`'s identity for `provider` and the journal row it leaves
+ * behind, with NO precondition check — callers decide whether removal is
+ * allowed (self-service `unlinkFederatedIdentity` below anchors on the
+ * password guard; the admin path anchors on its own self/instance-policy
+ * rules) and both must go through the exact same removal steps so neither
+ * one can reintroduce the f4143f14 regression on its own.
  *
- * The guard never counts identities (spec design decision 4). Counting is
- * what makes "don't strand the account" racy: two concurrent unlinks each
- * see the other's identity still present and both proceed, leaving an
- * account with no login method at all. Anchoring on the password instead
- * makes the guard depend on a document neither unlink touches — if
- * password auth is on and a password is set, that path survives any number
- * of concurrent unlinks; if password auth is off, no unlink is ever
- * allowed in the first place.
+ * Read the identity before removing anything: its `providerUserId` is what
+ * keys the registration journal, and the caller only knows
+ * `(userId, provider)`.
  */
-export async function unlinkFederatedIdentity(crowi: Crowi, user: UserDocument, provider: string): Promise<UnlinkFederatedIdentityOutcome> {
+export async function removeIdentityAndJournal(crowi: Crowi, user: UserDocument, provider: string): Promise<{ removed: boolean }> {
   const UserIdentity = crowi.model('UserIdentity');
 
-  if (isDisabledPasswordAuth(crowi.getConfig())) {
-    return { kind: 'password_auth_disabled' };
-  }
-
-  // `populateSecrets()` before `isPasswordSet()` — the password hash is
-  // deliberately not on the ordinary `User` projection (same two-step
-  // `handlers/me.ts` uses before every password-sensitive decision).
-  const userWithSecrets = await user.populateSecrets();
-  if (!userWithSecrets.isPasswordSet()) {
-    return { kind: 'password_required' };
-  }
-
-  // Read the identity before removing anything: its `providerUserId` is
-  // what keys the registration journal, and the caller only knows
-  // `(userId, provider)`.
   const identity = await UserIdentity.findOne({ userId: user._id, provider });
-  if (!identity) return { kind: 'not_linked' };
+  if (!identity) return { removed: false };
 
   // The journal row goes FIRST, and it has to go at all.
   //
@@ -313,5 +215,48 @@ export async function unlinkFederatedIdentity(crowi: Crowi, user: UserDocument, 
   await crowi.model('PendingAuthRegistration').deleteOne({ provider, providerUserId: identity.providerUserId });
 
   const result = await UserIdentity.deleteOne({ _id: identity._id });
-  return result.deletedCount === 1 ? { kind: 'unlinked' } : { kind: 'not_linked' };
+  return { removed: result.deletedCount === 1 };
+}
+
+/**
+ * Whether the account still has any linked federated identity — the predicate
+ * the email-change lock is gated on, in self-service (`handlers/me.ts`) and
+ * the admin user routes alike. Both asked it independently before, with
+ * different query mechanics, so a future narrowing of what counts as a
+ * lock-holding identity had to be found twice.
+ *
+ * Existence is the right question HERE even though the unlink guard below
+ * deliberately refuses to count: this asks "is the address IdP-anchored right
+ * now", where losing a race just means the request beat a link/unlink, not
+ * that an account was left with no way to sign in.
+ */
+export async function hasLinkedFederatedIdentity(crowi: Crowi, userId: UserDocument['_id']): Promise<boolean> {
+  return (await crowi.model('UserIdentity').exists({ userId })) !== null;
+}
+
+/**
+ * The guard never counts identities (spec design decision 4). Counting is
+ * what makes "don't strand the account" racy: two concurrent unlinks each
+ * see the other's identity still present and both proceed, leaving an
+ * account with no login method at all. Anchoring on the password instead
+ * makes the guard depend on a document neither unlink touches — if
+ * password auth is on and a password is set, that path survives any number
+ * of concurrent unlinks; if password auth is off, no unlink is ever
+ * allowed in the first place.
+ */
+export async function unlinkFederatedIdentity(crowi: Crowi, user: UserDocument, provider: string): Promise<UnlinkFederatedIdentityOutcome> {
+  if (isDisabledPasswordAuth(crowi.getConfig())) {
+    return { kind: 'password_auth_disabled' };
+  }
+
+  // `populateSecrets()` before `isPasswordSet()` — the password hash is
+  // deliberately not on the ordinary `User` projection (same two-step
+  // `handlers/me.ts` uses before every password-sensitive decision).
+  const userWithSecrets = await user.populateSecrets();
+  if (!userWithSecrets.isPasswordSet()) {
+    return { kind: 'password_required' };
+  }
+
+  const { removed } = await removeIdentityAndJournal(crowi, user, provider);
+  return removed ? { kind: 'unlinked' } : { kind: 'not_linked' };
 }

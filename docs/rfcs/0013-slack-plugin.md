@@ -300,6 +300,21 @@ card" renderer extension** in Crowi.
   RFC-0001 Step 10 / RFC-0010); (b) **the Slack↔Crowi account link that gates
   slash *writes* and mention mapping** (§7.2, §12.2). Role (b) makes this a
   **prerequisite for Phase 2 write commands**, not merely a future nicety.
+- **Linking rides RFC-0014's shipped 3-stage flow (§5.4), not a single
+  `jwtAuth`-gated callback.** Sign in with Slack becomes an `oauth2` driver
+  through RFC-0014's core flow skeleton like any other provider. The link
+  itself is three authenticated steps: an authenticated
+  `POST /api/auth/providers/slack/link-start` (web session only) mints the
+  Slack authorization URL and a flow-specific state cookie; the callback
+  exchanges the OAuth2 code and issues a short-lived, one-time confirmation
+  code **without writing to `User` or `UserIdentity`**; and an authenticated
+  `GET`/`POST /api/auth/providers/slack/link-completions/:code` from the
+  Crowi settings page shows the confirmation and, on POST, re-reads the
+  caller's `User` fresh (ACTIVE + unchanged `authVersion`) before inserting
+  `UserIdentity { provider: 'slack', providerUserId, userId }`. There is no
+  separate Slack-specific linking route, column, or callback shape — Slack is
+  just another `provider` value flowing through the shared store described in
+  RFC-0014 §5.4.
 
 ## §8 Security
 
@@ -448,7 +463,9 @@ is decided above.)
   (no email-guessing); read-only `/crowi search` runs as the bot. **RFC-0014
   now defines the runtime this rides on**: Sign in with Slack becomes an
   `oauth2` driver through the core flow skeleton, linking uses RFC-0014's
-  explicit `linkToUserId` path, and the link is stored as a `UserIdentity`
+  shipped authenticated 3-stage flow (§5.4: `POST link-start` → DB-non-
+  mutating callback completion → authenticated confirmation `GET`/`POST
+  link-completions/:code`), and the link is stored as a `UserIdentity`
   document (`provider: 'slack'`) — not a `User.slackUserId` column (which was
   the open question here; RFC-0014 §7 answers it).
 - **"Thread → wiki page" details** — target page path, mrkdwn→markdown body

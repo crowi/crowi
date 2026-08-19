@@ -32,25 +32,30 @@
  * (`signOauthAccessToken`).
  */
 import type { ForbiddenError, NotFoundError, OAuthError } from '@crowi/api-contract';
-import { DISCOVERY_SCOPES_SUPPORTED, GRANT_TYPES_SUPPORTED, TokenRequestSchema, isScope, scopeSatisfies } from '@crowi/api-contract';
 import {
   authorizeRoute,
   clientInfoRoute,
+  DISCOVERY_SCOPES_SUPPORTED,
   deviceAuthorizeRoute,
   deviceInfoRoute,
   deviceVerifyRoute,
   discoveryRoute,
+  GRANT_TYPES_SUPPORTED,
+  isScope,
   revokeRoute,
+  scopeSatisfies,
+  TokenRequestSchema,
   tokenRoute,
 } from '@crowi/api-contract';
 import type { OpenAPIHono } from '@hono/zod-openapi';
-import type { Context } from 'hono';
 import Debug from 'debug';
+import type { Context } from 'hono';
 import type { Types } from 'mongoose';
 
 import type Crowi from 'src/crowi';
 import { createJwtUtil } from 'src/util/jwt';
 import { isRedirectUriAllowed } from 'src/util/oauth-redirect-uri';
+import { isWithinReuseGrace } from 'src/util/oauth-refresh-grace';
 import { verifyPkceS256 } from 'src/util/pkce';
 import { normalizeUserCode } from 'src/util/user-code';
 
@@ -278,9 +283,24 @@ export const registerOAuthRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(ap
             // the signature of a stolen-token replay — revoke the whole
             // rotation chain so neither the attacker nor the legitimate
             // holder can continue (RFC-0010 §Security, PHASE3-Q5).
+            //
+            // Exception (spec §D-2): the same signature also fires when two
+            // legitimate concurrent refreshes race on the same token — the
+            // loser presents the token the winner just rotated away. If
+            // `revokedAt` is within the grace window, suppress the chain
+            // revocation instead of firing it. The response is identical
+            // either way (§D-2): the client never learns whether it landed
+            // inside or outside the window, and no token — successor or
+            // otherwise — is ever returned here (§D-1).
             const known = await OAuthRefreshToken.findOne({ tokenHash: presentedHash });
             if (known) {
-              await OAuthRefreshToken.revokeChain(presentedHash);
+              if (known.revokedAt && isWithinReuseGrace(known.revokedAt)) {
+                // §D-4: record that a revocation was suppressed, without any
+                // value that could be used to look up or replay the token.
+                debug('refresh reuse suppressed within grace window: clientId=%s elapsedMs=%d', known.clientId, Date.now() - known.revokedAt.getTime());
+              } else {
+                await OAuthRefreshToken.revokeChain(presentedHash);
+              }
             }
             return c.json(oauthError('invalid_grant', 'Refresh token is invalid, expired, or revoked'), 400);
           }

@@ -1,9 +1,9 @@
 'use client';
 
-import { useSearchParams } from 'next/navigation';
-import { User, Shield, Settings as SettingsIcon } from 'lucide-react';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { m } from '@paraglide/messages.js';
+import { Settings as SettingsIcon, Shield, User } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 interface SettingsLayoutProps {
   profileTab: React.ReactNode;
@@ -15,15 +15,22 @@ const TAB_VALUES = ['profile', 'security'] as const;
 /**
  * Which tab to open on arrival.
  *
- * `?tab=` makes the tabs linkable at all — without it every entry point
- * lands on Profile. `?link=` earns the same treatment because it is only
- * ever set by the api's post-link redirect, whose whole point is to show
- * an outcome that lives on the security tab: landing on Profile put the
- * "account linked" message on a tab the user was not looking at.
+ * `?tab=` (an explicit, valid value) always wins. Failing that:
+ *   - `?provider=&link_completion=` (both present) is the successful
+ *     callback redirect. `page.tsx`'s page-boundary effect captures this and
+ *     rewrites the URL via `history.replaceState` (adding `tab=security`,
+ *     stripping `link_completion`), but that raw History API call is not
+ *     guaranteed to be reflected back through THIS component's own
+ *     `useSearchParams()` read on every render — so `initialTab` still has
+ *     to recognise the query shape directly, not rely solely on the
+ *     rewritten `?tab=security` landing here first.
+ *   - `?link=` alone (no `link_completion`) is a callback FAILURE redirect
+ *     (`link=link_failed`) — same tab, no completion to show.
  */
 function initialTab(params: URLSearchParams): (typeof TAB_VALUES)[number] {
   const requested = params.get('tab');
   if (requested && (TAB_VALUES as readonly string[]).includes(requested)) return requested as (typeof TAB_VALUES)[number];
+  if (params.has('provider') && params.has('link_completion')) return 'security';
   if (params.has('link')) return 'security';
   return 'profile';
 }

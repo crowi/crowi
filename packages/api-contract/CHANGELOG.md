@@ -1,5 +1,23 @@
 # @crowi/api-contract
 
+## 2.0.0-alpha.16
+
+### Major Changes
+
+- 9a288e3: Linking a federated identity (Google, or any other configured provider — RFC-0014) from `/me` is rebuilt as three authenticated steps instead of one unauthenticated top-level redirect. Pressing "link" on an unlinked provider now sends an authenticated request that mints the identity-provider authorization URL, then the browser navigates there directly; returning from the provider shows a one-time confirmation on the Security tab ("Link the Google account `xxx@example.com`?", or just the provider name when the provider doesn't return a displayable email) that the user must explicitly confirm before the identity is attached — closing the dialog or navigating away links nothing. The previous flow was unauthenticated at the point the identity provider redirected back, which meant a copied authorization link could be used by anyone to attach an identity provider account they controlled to whichever Crowi account had started that link — a permanent backdoor into that account for whoever opened the copied link. The new flow authenticates both the start and the final confirmation, binds the target account to the server-resolved session at start time (never to anything the callback carries), and re-validates that the account is still active with an unchanged authentication state immediately before attaching the identity.
+
+  **Breaking**: the `POST /api/auth/providers/:name/link-grants` endpoint and the `link`/`link_grant` query parameters on `GET /api/auth/providers/:name/start` are removed; a request using either now fails instead of degrading to a plain sign-in. Normal federated sign-in, unlinking, and `GET /api/auth/providers/identities` are unchanged.
+
+  **Operator note**: because this release replaces the shared OAuth state cookie's linking payload with a flow-specific one, deployments running more than one API replica must drain and replace all replicas at the same time for this release — a one-at-a-time rolling update is not supported, since an old replica can still read (and delete before validating) the new cookie format during the overlap window, which would also break unrelated in-flight sign-ins on that replica. Single-instance deployments satisfy this automatically. Multi-instance deployments must also have `REDIS_URL` configured so the confirmation code is visible to whichever replica handles the follow-up confirmation request.
+
+## 2.0.0-alpha.15
+
+### Patch Changes
+
+- c1cb3d5: Admins can now see which users have a linked federated identity (RFC-0014) and disconnect one from the user list — the users table shows a linked-account icon per row, and a new row action unlinks a provider. If the target user has no password, the admin unlink issues a random one and shows it once (mirroring the existing password-reset flow); an existing password is left untouched. An admin can never unlink their own identity from this screen, and unlinking is refused instance-wide while password sign-in is disabled, since either would strand the account. The unlink removes the same registration-journal row the self-service unlink already cleans up, so the disconnected provider account cannot walk straight back into the account through the sign-in screen.
+
+  An account with a linked federated identity can no longer have its email address changed by an admin either: `PUT /admin/users/{id}/email` now refuses a different address with `409 EMAIL_LOCKED_BY_FEDERATED_IDENTITY`, the same way the self-service `PUT /me` already does. Unlinking the identity first is the only way to change it. The user-edit dialog no longer has an email field at all — `PATCH /admin/users/{id}` now updates only the display name, and email changes go exclusively through the dedicated "Change email" dialog, so there is exactly one email-writing path to lock.
+
 ## 2.0.0-alpha.14
 
 ### Minor Changes

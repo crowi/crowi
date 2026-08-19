@@ -1573,7 +1573,7 @@ describe('Page', () => {
     });
   });
 
-  describe('History tracking (RFC-0021 Phase 1, feature-page-history-phase1-model)', () => {
+  describe('History tracking (RFC-0021 Phase 1 + Phase 2a)', () => {
     let user;
     let Revision;
 
@@ -1582,29 +1582,100 @@ describe('Page', () => {
       Revision = crowi.model('Revision');
     });
 
-    describe('historyTracking (AC-3)', () => {
-      // Phase 1 allocates no sequence, so it must not claim a Page's timeline
-      // is authoritative. `createPage` writes the Page and then a first
-      // Revision with no `historySequence`; calling that `ready` would both
-      // assert something untrue and hide the Page from the Phase 2 backfill,
-      // which selects Pages that are NOT ready. Phase 2's create command sets
-      // `ready` in the same write that allocates the initial sequence.
-      test('a newly created Page (Page.createPage) stays untracked — Phase 1 allocates no sequence, so it cannot claim ready', async () => {
+    // Builds a Page directly via `Page.create` (bypassing `pushRevision`/the
+    // allocator), i.e. the shape of a Phase-1-era Page that has never been
+    // saved through Phase 2a — used by the fixtures below that need to start
+    // from `untracked`.
+    async function createUntrackedPage(path: string) {
+      return Page.create({
+        path,
+        creator: user._id,
+        lastUpdateUser: user._id,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        redirectTo: null,
+        grant: Page.GRANT_PUBLIC,
+        status: 'published',
+        grantedUsers: [user._id],
+      });
+    }
+
+    /**
+     * Phase 2a wires `allocateContentSequence` into `Page.pushRevision`
+     * (called from both `Page.createPage` and `Page.updatePage`) AFTER the
+     * pointer write commits (spec §D-1) — a SEPARATE write against the
+     * database, not a mutation of the in-memory Page/Revision objects
+     * `pushRevision` returns (`pageData`'s in-memory `historyTracking`/
+     * `historySequence` are never touched by the allocator call). Every
+     * assertion below therefore re-fetches from the database instead of
+     * trusting the object `createPage`/`updatePage` resolved with.
+     */
+    describe('content-sequence allocation on write (AC-1, AC-3, AC-6, AC-20)', () => {
+      test('AC-1: a newly created Page becomes ready with historySequence 1, and its initial Revision is sequence 1', async () => {
         const created = await Page.createPage('/history-tracking/new-page', 'v1', user, {});
 
-        expect(created.historyTracking.state).toBe('untracked');
-        expect(created.historySequence).toBe(0);
-      });
+        const reloadedPage = await Page.findById(created._id);
+        expect(reloadedPage.historyTracking.state).toBe('ready');
+        expect(reloadedPage.historySequence).toBe(1);
+        expect(reloadedPage.pendingHistoryEntry).toBeUndefined();
 
-      test('its initial Revision carries no historySequence — the reason the Page cannot be ready yet', async () => {
-        const created = await Page.createPage('/history-tracking/new-page-revision', 'v1', user, {});
         const revision = await Revision.findById(created.revision);
-
         expect(revision).not.toBeNull();
-        expect(revision?.historySequence).toBeUndefined();
+        expect(revision?.historySequence).toBe(1);
       });
 
-      test('a Page created via the OTHER Page.create call site (the draft-creation shape used by hono/handlers/draft.ts) is also untracked', async () => {
+      test('AC-3: a second HTTP save on an already-ready Page assigns the next sequence', async () => {
+        const created = await Page.createPage('/history-tracking/ready-next-sequence', 'v1', user, {});
+
+        const updated = await Page.updatePage(created, 'v2', user, {});
+
+        const reloadedPage = await Page.findById(created._id);
+        expect(reloadedPage.historyTracking.state).toBe('ready');
+        expect(reloadedPage.historySequence).toBe(2);
+
+        const newRevision = await Revision.findById(updated.revision);
+        expect(newRevision?.historySequence).toBe(2);
+      });
+
+      test('AC-6: an existing untracked Page with pre-existing Revisions is promoted to ready by its next HTTP save, in one write, without touching the old Revisions', async () => {
+        // 2 pre-existing Revisions on top of the untracked fixture —
+        // simulating a Phase-1-era Page that predates Phase 2a and has
+        // never been saved through it.
+        const page = await createUntrackedPage('/history-tracking/promote-existing');
+        const oldRevision1 = await Revision.create({ page: page._id, path: page.path, body: 'old-1', format: 'markdown', author: user._id });
+        const oldRevision2 = await Revision.create({ page: page._id, path: page.path, body: 'old-2', format: 'markdown', author: user._id });
+        await Page.updateOne({ _id: page._id }, { $set: { revision: oldRevision2._id } });
+        const pageBeforeUpdate = await Page.findById(page._id);
+        expect(pageBeforeUpdate.historyTracking.state).toBe('untracked');
+
+        const updated = await Page.updatePage(pageBeforeUpdate, 'new content', user, {});
+
+        const reloadedPage = await Page.findById(page._id);
+        expect(reloadedPage.historyTracking.state).toBe('ready');
+        expect(reloadedPage.historySequence).toBe(1);
+
+        const newRevision = await Revision.findById(updated.revision);
+        expect(newRevision?.historySequence).toBe(1);
+
+        // The pre-existing Revisions sit below the tracking boundary —
+        // never touched, never sequenced (spec §D-9).
+        const reloadedOld1 = await Revision.findById(oldRevision1._id);
+        const reloadedOld2 = await Revision.findById(oldRevision2._id);
+        expect(reloadedOld1?.historySequence).toBeUndefined();
+        expect(reloadedOld2?.historySequence).toBeUndefined();
+      });
+
+      test('AC-20: a Page that is never written to stays untracked', async () => {
+        const page = await createUntrackedPage('/history-tracking/never-written');
+
+        const reloaded = await Page.findById(page._id);
+        expect(reloaded.historyTracking.state).toBe('untracked');
+        expect(reloaded.historySequence).toBe(0);
+      });
+    });
+
+    describe('historyTracking defaults (Phase 1 baseline)', () => {
+      test('a Page created via the OTHER Page.create call site (the draft-creation shape used by hono/handlers/draft.ts) starts untracked before its first save', async () => {
         const created = await Page.create({
           path: '/history-tracking/new-draft',
           creator: user._id,
@@ -1621,7 +1692,7 @@ describe('Page', () => {
       });
 
       test('a legacy Page (predates historyTracking) reads back as untracked — simulated via a raw $unset, which bypasses save hooks', async () => {
-        const created = await Page.createPage('/history-tracking/legacy', 'v1', user, {});
+        const created = await createUntrackedPage('/history-tracking/legacy');
         expect(created.historyTracking.state).toBe('untracked');
 
         await Page.updateOne({ _id: created._id }, { $unset: { historyTracking: '' } });
@@ -1632,6 +1703,10 @@ describe('Page', () => {
     });
 
     describe('pendingHistoryEntry — bounded single-slot outbox (AC-4)', () => {
+      // `Page.createPage` now runs the Phase 2a allocator to completion
+      // (claim -> materialize -> drain) before it resolves, so by the time
+      // these fixtures return, `pendingHistoryEntry` is back to empty — the
+      // same starting shape these tests always assumed.
       test('claiming an empty slot succeeds; a second claim attempt while occupied is rejected (not overwritten)', async () => {
         const created = await Page.createPage('/history-tracking/outbox', 'v1', user, {});
         const entryA = {

@@ -200,6 +200,29 @@ describe('Routes /api/admin/users (Hono)', () => {
       expect(res.body.users).toEqual([]);
       expect(res.body.pager.total).toBe(0);
     });
+
+    it('AC-1: includes linkedProviders per row, reflecting UserIdentity, with exactly one UserIdentity query for the whole page', async () => {
+      const UserIdentity = crowi.model('UserIdentity');
+      const alice = await crowi.model('User').findOne({ username: 'alice' });
+      if (!alice) throw new Error('alice fixture not found');
+      await UserIdentity.create({ userId: alice._id, provider: 'google', providerUserId: 'sub-list-ac1' });
+
+      const findSpy = jest.spyOn(UserIdentity, 'find');
+      try {
+        const res = await request(app).get('/api/admin/users').set(authHeaders(adminToken));
+
+        expect(res.status).toBe(200);
+        expect(findSpy).toHaveBeenCalledTimes(1);
+        const byUsername = new Map<string, string[]>(
+          (res.body.users as Array<{ username: string; linkedProviders: string[] }>).map((u) => [u.username, u.linkedProviders]),
+        );
+        expect(byUsername.get('alice')).toEqual(['google']);
+        expect(byUsername.get('bob')).toEqual([]);
+        expect(byUsername.get('carol')).toEqual([]);
+      } finally {
+        findSpy.mockRestore();
+      }
+    });
   });
 
   describe('GET /api/admin/users/search', () => {
@@ -371,56 +394,48 @@ describe('Routes /api/admin/users (Hono)', () => {
       target = await createPlainUser({ name: 'Target', username: 'target', email: 'target@example.com' });
     });
 
-    describe('PATCH /api/admin/users/:id', () => {
+    describe('PATCH /api/admin/users/:id (AC-3: name only, email removed from this route)', () => {
       it('returns 401 without auth', async () => {
-        const res = await request(app).patch(`/api/admin/users/${target._id}`).send({ name: 'New', email: 'new@example.com' });
+        const res = await request(app).patch(`/api/admin/users/${target._id}`).send({ name: 'New' });
         expect(res.status).toBe(401);
       });
 
       it('returns 403 for a non-admin user', async () => {
-        const res = await request(app).patch(`/api/admin/users/${target._id}`).set(authHeaders(userToken)).send({ name: 'New', email: 'new@example.com' });
+        const res = await request(app).patch(`/api/admin/users/${target._id}`).set(authHeaders(userToken)).send({ name: 'New' });
         expect(res.status).toBe(403);
       });
 
-      it('updates name and email', async () => {
-        const res = await request(app)
-          .patch(`/api/admin/users/${target._id}`)
-          .set(authHeaders(adminToken))
-          .send({ name: 'Renamed', email: 'renamed@example.com' });
+      it('AC-3: updates the name only', async () => {
+        const res = await request(app).patch(`/api/admin/users/${target._id}`).set(authHeaders(adminToken)).send({ name: 'Renamed' });
 
         expect(res.status).toBe(200);
         expect(res.body.user.name).toBe('Renamed');
-        expect(res.body.user.email).toBe('renamed@example.com');
+        expect(res.body.user.email).toBe(target.email);
         expect(res.body.user).not.toHaveProperty('password');
         expect(res.body.user).not.toHaveProperty('apiToken');
       });
 
+      it('AC-3: ignores an email field in the request body — even one that collides with another user', async () => {
+        const other = await createPlainUser({ name: 'Other', username: 'other', email: 'other@example.com' });
+        const res = await request(app).patch(`/api/admin/users/${target._id}`).set(authHeaders(adminToken)).send({ name: 'Renamed Again', email: other.email });
+
+        expect(res.status).toBe(200);
+        expect(res.body.user.name).toBe('Renamed Again');
+        // The (unrecognised) email field never reaches User.email.
+        expect(res.body.user.email).toBe(target.email);
+        const reloaded = await crowi.model('User').findById(target._id);
+        expect(reloaded?.email).toBe(target.email);
+      });
+
       it('returns 404 for a non-existent id', async () => {
         // Random valid 24-char hex that does not match any user.
-        const res = await request(app)
-          .patch('/api/admin/users/0123456789abcdef01234567')
-          .set(authHeaders(adminToken))
-          .send({ name: 'X', email: 'x@example.com' });
+        const res = await request(app).patch('/api/admin/users/0123456789abcdef01234567').set(authHeaders(adminToken)).send({ name: 'X' });
         expect(res.status).toBe(404);
       });
 
       it('returns 400 for an invalid id', async () => {
-        const res = await request(app).patch('/api/admin/users/not-a-valid-id').set(authHeaders(adminToken)).send({ name: 'X', email: 'x@example.com' });
+        const res = await request(app).patch('/api/admin/users/not-a-valid-id').set(authHeaders(adminToken)).send({ name: 'X' });
         expect(res.status).toBe(400);
-      });
-
-      it('returns 409 when email collides with another user', async () => {
-        const other = await createPlainUser({ name: 'Other', username: 'other', email: 'other@example.com' });
-        const res = await request(app).patch(`/api/admin/users/${target._id}`).set(authHeaders(adminToken)).send({ name: 'Target', email: other.email });
-        expect(res.status).toBe(409);
-        expect(res.body.error.code).toBe('CONFLICT');
-      });
-
-      it('allows setting the same email back to its own user', async () => {
-        // Idempotent edit: name change without an email collision against itself.
-        const res = await request(app).patch(`/api/admin/users/${target._id}`).set(authHeaders(adminToken)).send({ name: 'Renamed Only', email: target.email });
-        expect(res.status).toBe(200);
-        expect(res.body.user.name).toBe('Renamed Only');
       });
     });
 
@@ -578,6 +593,172 @@ describe('Routes /api/admin/users (Hono)', () => {
           .set(authHeaders(adminToken))
           .send({ email: 'whatever@example.com' });
         expect(res.status).toBe(404);
+      });
+
+      it('AC-2: refuses a DIFFERENT email for a federated user with 409 EMAIL_LOCKED_BY_FEDERATED_IDENTITY, leaving User.email unchanged', async () => {
+        await crowi.model('UserIdentity').create({ userId: target._id, provider: 'google', providerUserId: 'sub-email-lock' });
+
+        const res = await request(app).put(`/api/admin/users/${target._id}/email`).set(authHeaders(adminToken)).send({ email: 'locked-out@example.com' });
+
+        expect(res.status).toBe(409);
+        expect(res.body.error.code).toBe('EMAIL_LOCKED_BY_FEDERATED_IDENTITY');
+        const reloaded = await crowi.model('User').findById(target._id);
+        expect(reloaded?.email).toBe(target.email);
+      });
+
+      it('AC-2: a SAME-email resubmission for a federated user still succeeds (not locked)', async () => {
+        await crowi.model('UserIdentity').create({ userId: target._id, provider: 'google', providerUserId: 'sub-email-same' });
+
+        const res = await request(app).put(`/api/admin/users/${target._id}/email`).set(authHeaders(adminToken)).send({ email: target.email });
+
+        expect(res.status).toBe(200);
+        expect(res.body.user.email).toBe(target.email);
+      });
+
+      it('AC-2: a non-federated user email change still succeeds as before', async () => {
+        const res = await request(app).put(`/api/admin/users/${target._id}/email`).set(authHeaders(adminToken)).send({ email: 'never-federated@example.com' });
+
+        expect(res.status).toBe(200);
+        expect(res.body.user.email).toBe('never-federated@example.com');
+      });
+
+      it("AC-2: a federated user's change to an address that ALSO collides with another user still reports EMAIL_LOCKED_BY_FEDERATED_IDENTITY, not CONFLICT", async () => {
+        const other = await createPlainUser({ name: 'Collider', username: 'collider', email: 'collider@example.com' });
+        await crowi.model('UserIdentity').create({ userId: target._id, provider: 'google', providerUserId: 'sub-email-lock-and-collide' });
+
+        const res = await request(app).put(`/api/admin/users/${target._id}/email`).set(authHeaders(adminToken)).send({ email: other.email });
+
+        // The federation lock is the reason this is refused, regardless of
+        // whether the requested address happens to also be taken — a linked
+        // user's change to a different address always has exactly one cause.
+        expect(res.status).toBe(409);
+        expect(res.body.error.code).toBe('EMAIL_LOCKED_BY_FEDERATED_IDENTITY');
+        const reloaded = await crowi.model('User').findById(target._id);
+        expect(reloaded?.email).toBe(target.email);
+      });
+    });
+
+    describe('DELETE /api/admin/users/:id/identities/:provider (admin unlink)', () => {
+      it('returns 401 without auth', async () => {
+        const res = await request(app).delete(`/api/admin/users/${target._id}/identities/google`);
+        expect(res.status).toBe(401);
+      });
+
+      it('returns 403 for a non-admin user', async () => {
+        const res = await request(app).delete(`/api/admin/users/${target._id}/identities/google`).set(authHeaders(userToken));
+        expect(res.status).toBe(403);
+      });
+
+      it('returns 400 for an invalid id', async () => {
+        const res = await request(app).delete('/api/admin/users/not-a-valid-id/identities/google').set(authHeaders(adminToken));
+        expect(res.status).toBe(400);
+      });
+
+      it('returns 404 for a non-existent user id', async () => {
+        const res = await request(app).delete('/api/admin/users/0123456789abcdef01234567/identities/google').set(authHeaders(adminToken));
+        expect(res.status).toBe(404);
+      });
+
+      it('returns 404 NOT_LINKED when the target has no identity for that provider', async () => {
+        const res = await request(app).delete(`/api/admin/users/${target._id}/identities/google`).set(authHeaders(adminToken));
+        expect(res.status).toBe(404);
+        expect(res.body.error.code).toBe('NOT_LINKED');
+      });
+
+      it('AC-4: removes the identity of a user who already has a password, reports passwordIssued:false, and leaves the password unchanged', async () => {
+        const UserIdentity = crowi.model('UserIdentity');
+        await target.setPassword('OriginalPassw0rd!');
+        await target.save();
+        await UserIdentity.create({ userId: target._id, provider: 'google', providerUserId: 'sub-ac4' });
+
+        const res = await request(app).delete(`/api/admin/users/${target._id}/identities/google`).set(authHeaders(adminToken));
+
+        expect(res.status).toBe(200);
+        expect(res.body.passwordIssued).toBe(false);
+        expect(res.body.newPassword).toBeUndefined();
+        expect(await UserIdentity.countDocuments({ userId: target._id, provider: 'google' })).toBe(0);
+        const reloaded = await crowi.model('User').findById(target._id).select('+password');
+        expect(reloaded?.isPasswordValid('OriginalPassw0rd!')).toBe(true);
+      });
+
+      it('AC-5: issues a new password for a user with none, returns it, and removes the identity', async () => {
+        const UserIdentity = crowi.model('UserIdentity');
+        // `createPlainUser` (Fixture.generate) sets no password — exactly the
+        // JIT-federated-only account this path exists for.
+        expect((await target.populateSecrets()).isPasswordSet()).toBe(false);
+        await UserIdentity.create({ userId: target._id, provider: 'google', providerUserId: 'sub-ac5' });
+
+        const res = await request(app).delete(`/api/admin/users/${target._id}/identities/google`).set(authHeaders(adminToken));
+
+        expect(res.status).toBe(200);
+        expect(res.body.passwordIssued).toBe(true);
+        expect(typeof res.body.newPassword).toBe('string');
+        expect(res.body.newPassword.length).toBeGreaterThan(0);
+        expect(await UserIdentity.countDocuments({ userId: target._id, provider: 'google' })).toBe(0);
+        const reloaded = await crowi.model('User').findById(target._id).select('+password');
+        expect(reloaded?.isPasswordValid(res.body.newPassword)).toBe(true);
+      });
+
+      it('AC-6: refuses to unlink the operating admin themself with 409 CANNOT_UNLINK_SELF, changing nothing (identity AND password unchanged)', async () => {
+        const UserIdentity = crowi.model('UserIdentity');
+        const admin = await crowi.model('User').findOne({ email: 'mut-admin@example.com' });
+        if (!admin) throw new Error('admin fixture not found');
+        await admin.setPassword('AdminOwnPassw0rd!');
+        await admin.save();
+        await UserIdentity.create({ userId: admin._id, provider: 'google', providerUserId: 'sub-ac6' });
+
+        const res = await request(app).delete(`/api/admin/users/${admin._id}/identities/google`).set(authHeaders(adminToken));
+
+        expect(res.status).toBe(409);
+        expect(res.body.error.code).toBe('CANNOT_UNLINK_SELF');
+        expect(await UserIdentity.countDocuments({ userId: admin._id, provider: 'google' })).toBe(1);
+        const reloaded = await crowi.model('User').findById(admin._id).select('+password');
+        expect(reloaded?.isPasswordValid('AdminOwnPassw0rd!')).toBe(true);
+      });
+
+      it('AC-7: refuses when password auth is disabled instance-wide with 409 PASSWORD_AUTH_DISABLED, changing nothing (no identity removed, no password issued)', async () => {
+        const UserIdentity = crowi.model('UserIdentity');
+        const Config = crowi.model('Config');
+        expect((await target.populateSecrets()).isPasswordSet()).toBe(false);
+        await UserIdentity.create({ userId: target._id, provider: 'google', providerUserId: 'sub-ac7' });
+        await Config.updateConfig('crowi', 'auth:disablePasswordAuth', true);
+        await crowi.getConfigService().load();
+
+        try {
+          const res = await request(app).delete(`/api/admin/users/${target._id}/identities/google`).set(authHeaders(adminToken));
+
+          expect(res.status).toBe(409);
+          expect(res.body.error.code).toBe('PASSWORD_AUTH_DISABLED');
+          expect(await UserIdentity.countDocuments({ userId: target._id, provider: 'google' })).toBe(1);
+          const reloaded = await crowi.model('User').findById(target._id).select('+password');
+          expect(reloaded?.isPasswordSet()).toBe(false);
+        } finally {
+          await Config.updateConfig('crowi', 'auth:disablePasswordAuth', false);
+          await crowi.getConfigService().load();
+        }
+      });
+
+      it('AC-5 concurrency: two concurrent unlinks of the same passwordless user never both report a newly-issued password', async () => {
+        const UserIdentity = crowi.model('UserIdentity');
+        expect((await target.populateSecrets()).isPasswordSet()).toBe(false);
+        await UserIdentity.create({ userId: target._id, provider: 'google', providerUserId: 'sub-ac5-race' });
+
+        const [resA, resB] = await Promise.all([
+          request(app).delete(`/api/admin/users/${target._id}/identities/google`).set(authHeaders(adminToken)),
+          request(app).delete(`/api/admin/users/${target._id}/identities/google`).set(authHeaders(adminToken)),
+        ]);
+
+        // Either request may lose the NOT_LINKED race once the other has
+        // already removed the identity (both are correct outcomes); what
+        // must never happen is two DIFFERENT `newPassword`s both claiming to
+        // be what got stored — `User.issuePasswordIfUnset`'s atomic
+        // `findOneAndUpdate` filter is what rules that out.
+        const issuedPasswords = [resA, resB].filter((r) => r.body.passwordIssued === true).map((r) => r.body.newPassword);
+        expect(issuedPasswords.length).toBeLessThanOrEqual(1);
+        if (issuedPasswords.length === 1) {
+          const reloaded = await crowi.model('User').findById(target._id).select('+password');
+          expect(reloaded?.isPasswordValid(issuedPasswords[0])).toBe(true);
+        }
       });
     });
   });

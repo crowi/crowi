@@ -118,7 +118,7 @@ The driver passes storage keys through to S3 verbatim. The keys Crowi
 uses are:
 
 ```
-attachment/<pageId>/<fileId>/<original-filename>
+attachment/<pageId>/<md5-of-filename><ext>
 user/<userId>.<ext>
 ```
 

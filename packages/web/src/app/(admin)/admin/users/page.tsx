@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { UserPlus } from 'lucide-react';
-import type { UserPublic } from '@crowi/api-contract';
+import type { AdminUserListItem } from '@crowi/api-contract';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { ErrorAlert } from '@/components/ui/error-alert';
@@ -15,6 +15,7 @@ import {
   EditUserDialog,
   InviteUsersDialog,
   ResetPasswordResultDialog,
+  UnlinkIdentityDialog,
   UpdateEmailDialog,
   userLabel,
 } from '@/components/admin/user-action-dialogs';
@@ -41,10 +42,11 @@ type ConfirmKind = Extract<UserRowActionKind, 'make-admin' | 'remove-admin' | 'a
 type DialogState =
   | { kind: 'none' }
   | { kind: 'invite' }
-  | { kind: 'edit'; user: UserPublic }
-  | { kind: 'update-email'; user: UserPublic }
-  | { kind: 'reset'; user: UserPublic }
-  | { kind: 'confirm'; action: ConfirmKind; user: UserPublic; error?: string };
+  | { kind: 'edit'; user: AdminUserListItem }
+  | { kind: 'update-email'; user: AdminUserListItem }
+  | { kind: 'reset'; user: AdminUserListItem }
+  | { kind: 'unlink-identity'; user: AdminUserListItem; provider: string; providerLabel: string }
+  | { kind: 'confirm'; action: ConfirmKind; user: AdminUserListItem; error?: string };
 
 const CLOSED: DialogState = { kind: 'none' };
 
@@ -132,6 +134,10 @@ export default function AdminUsersPage() {
         setDialog({ kind: 'reset', user: action.user });
         resetPassword.reset();
         resetPassword.mutate({ id: action.user._id });
+        return;
+      case 'unlink-identity':
+        if (!action.provider) return;
+        setDialog({ kind: 'unlink-identity', user: action.user, provider: action.provider, providerLabel: action.providerLabel ?? action.provider });
         return;
       case 'make-admin':
       case 'remove-admin':
@@ -223,6 +229,11 @@ export default function AdminUsersPage() {
       <EditUserDialog user={dialog.kind === 'edit' ? dialog.user : null} onOpenChange={(open) => !open && setDialog(CLOSED)} />
 
       <UpdateEmailDialog user={dialog.kind === 'update-email' ? dialog.user : null} onOpenChange={(open) => !open && setDialog(CLOSED)} />
+
+      <UnlinkIdentityDialog
+        target={dialog.kind === 'unlink-identity' ? { user: dialog.user, provider: dialog.provider, providerLabel: dialog.providerLabel } : null}
+        onOpenChange={(open) => !open && setDialog(CLOSED)}
+      />
 
       <ResetPasswordResultDialog
         newPassword={resetPassword.data?.newPassword ?? null}

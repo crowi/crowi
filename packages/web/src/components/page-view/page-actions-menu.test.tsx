@@ -147,6 +147,117 @@ describe('PageActionsMenu — share menu item (compact dotmenu)', () => {
   });
 });
 
+describe('PageActionsMenu — "Download Markdown" action (feature-page-markdown-download)', () => {
+  // jsdom does not implement these — stub them so `handleDownloadMarkdown`'s
+  // happy path doesn't throw before we can assert anything.
+  let createObjectURL: ReturnType<typeof vi.fn>;
+  let revokeObjectURL: ReturnType<typeof vi.fn>;
+  let clickSpy: ReturnType<typeof vi.spyOn>;
+  const originalCreateObjectURL = URL.createObjectURL;
+  const originalRevokeObjectURL = URL.revokeObjectURL;
+
+  beforeEach(() => {
+    createObjectURL = vi.fn(() => 'blob:mock-url');
+    revokeObjectURL = vi.fn();
+    URL.createObjectURL = createObjectURL as unknown as typeof URL.createObjectURL;
+    URL.revokeObjectURL = revokeObjectURL as unknown as typeof URL.revokeObjectURL;
+    clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    clickSpy.mockRestore();
+    URL.createObjectURL = originalCreateObjectURL;
+    URL.revokeObjectURL = originalRevokeObjectURL;
+  });
+
+  it('shows "Download markdown" immediately after "Copy markdown", with no separator between them (AC-1, AC-13 position)', () => {
+    openCompactMenu(makePage());
+
+    const labels = screen.getAllByRole('menuitem').map((item) => item.textContent);
+    const copyIndex = labels.indexOf(m['page.action_copy_markdown']());
+    const downloadIndex = labels.indexOf(m['page.action_download_markdown']());
+    expect(copyIndex).toBeGreaterThanOrEqual(0);
+    expect(downloadIndex).toBe(copyIndex + 1);
+  });
+
+  it('creates an object URL for the body and clicks a download-attributed anchor named from the page path (AC-2, AC-3)', async () => {
+    const captured: { anchor: { hrefAttr: string | null; download: string } | null } = { anchor: null };
+    clickSpy.mockImplementation(function mockClick(this: HTMLAnchorElement) {
+      captured.anchor = { hrefAttr: this.getAttribute('href'), download: this.download };
+    });
+
+    const page = makePage({
+      path: '/foo/bar',
+      revision: { _id: 'rev-1', path: '/foo/bar', body: '# hi', format: 'markdown', createdAt: '2026-05-01T00:00:00.000Z' },
+    });
+    openCompactMenu(page);
+    fireEvent.click(screen.getByRole('menuitem', { name: m['page.action_download_markdown']() }));
+
+    expect(createObjectURL).toHaveBeenCalledTimes(1);
+    const blob = createObjectURL.mock.calls[0][0] as Blob;
+    expect(blob.type).toBe('text/markdown;charset=utf-8');
+    await expect(blob.text()).resolves.toBe('# hi');
+    expect(captured.anchor).not.toBeNull();
+    expect(captured.anchor?.hrefAttr).toBe('blob:mock-url');
+    expect(captured.anchor?.download).toBe('bar.md');
+    // No success toast (D-3) — the browser's own download UI is the feedback.
+    expect(notifyInfo).not.toHaveBeenCalled();
+    expect(notifyError).not.toHaveBeenCalled();
+  });
+
+  it('revokes the object URL after a successful download (AC-12, success path)', () => {
+    openCompactMenu(makePage());
+    fireEvent.click(screen.getByRole('menuitem', { name: m['page.action_download_markdown']() }));
+
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:mock-url');
+    expect(notifyError).not.toHaveBeenCalled();
+  });
+
+  it('does nothing and shows no notification when the body is empty (AC-10)', () => {
+    const page = makePage({
+      revision: { _id: 'rev-1', path: '/docs/guide/example', body: '', format: 'markdown', createdAt: '2026-05-01T00:00:00.000Z' },
+    });
+    openCompactMenu(page);
+    fireEvent.click(screen.getByRole('menuitem', { name: m['page.action_download_markdown']() }));
+
+    expect(createObjectURL).not.toHaveBeenCalled();
+    expect(revokeObjectURL).not.toHaveBeenCalled();
+    expect(notifyInfo).not.toHaveBeenCalled();
+    expect(notifyError).not.toHaveBeenCalled();
+  });
+
+  it('shows an error notification and still revokes the object URL when the download throws (AC-11, AC-12 exception path)', () => {
+    clickSpy.mockImplementation(() => {
+      throw new Error('download failed');
+    });
+
+    openCompactMenu(makePage());
+    fireEvent.click(screen.getByRole('menuitem', { name: m['page.action_download_markdown']() }));
+
+    expect(notifyError).toHaveBeenCalledTimes(1);
+    expect(notifyError).toHaveBeenCalledWith(m['page.markdown_download_failed']());
+    // The URL was obtained before the throw, so it must still be released.
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:mock-url');
+  });
+
+  it('shows a single error notification, without escaping the component, when revokeObjectURL itself throws (AC-11, AC-12 revoke-failure path)', () => {
+    revokeObjectURL.mockImplementation(() => {
+      throw new Error('revoke failed');
+    });
+
+    openCompactMenu(makePage());
+    expect(() => {
+      fireEvent.click(screen.getByRole('menuitem', { name: m['page.action_download_markdown']() }));
+    }).not.toThrow();
+
+    expect(notifyError).toHaveBeenCalledTimes(1);
+    expect(notifyError).toHaveBeenCalledWith(m['page.markdown_download_failed']());
+    // The click that actually delivers the file already happened before
+    // revoke was attempted — the cleanup failure alone must not undo that.
+    expect(clickSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('PageActionsMenu — "Copy Markdown" action (feature-page-link-space-paths Phase 1 audit note, AC 13)', () => {
   it("copies page.revision.body byte-for-byte, including a literal un-re-encoded space-link destination — `handleCopyMarkdown` clipboard-writes the stored body string as-is; it never re-renders or re-parses it, so it is structurally unaffected by this feature's renderer/link-detector/page-path changes", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);

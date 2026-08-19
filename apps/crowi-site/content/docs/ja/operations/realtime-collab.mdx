@@ -39,7 +39,7 @@ services:
       MONGO_URI: mongodb://mongo:27017/crowi
       WS_TOKEN_SECRET: ${WS_TOKEN_SECRET}
       CROWI_ENCRYPTION_KEY: ${CROWI_ENCRYPTION_KEY}
-      # REDIS_URL はシングルインスタンスでは任意。7 つの消費者の内訳は
+      # REDIS_URL はシングルインスタンスでは任意。8 つの消費者の内訳は
       # Redis 運用ポリシー (operations/redis) の
       # 「Redis 接続数の見積もり」を参照
       REDIS_URL: redis://redis:6379
@@ -57,7 +57,7 @@ services:
 
 このとき:
 
-- `REDIS_URL` はシングルインスタンスでは省略可ですが、7 つの消費者は
+- `REDIS_URL` はシングルインスタンスでは省略可ですが、8 つの消費者は
   未設定時の退行の仕方が一様ではありません。
   - 共同編集 pub/sub (extension-redis は attach されません)・プレゼンス
     fan-out・通知 invalidation・設定同期は**レプリカ間の連携**専用の
@@ -72,6 +72,13 @@ services:
     できません。
   - LRU (最近見たページ) にはフォールバックがなく、`REDIS_URL` 未設定
     ではシングルインスタンスかどうかに関わらずこの機能自体が使えません。
+  - アカウント連携 (link-completion ストア) も `REDIS_URL` が無いと
+    プロセス内 Map にフォールバックします。シングルインスタンスでは
+    この Map が確認待ちの唯一の置き場所になるため、連携を開始してから
+    確定するまでの間に api が再起動すると、その未確定コードだけを
+    失います (確定済みの identity は MongoDB にしかないので失われません)
+    — 利用者は連携済みアカウント一覧を開き直して連携をやり直すだけ
+    です。
 - ブラウザは `NEXT_PUBLIC_API_URL` から末尾スラッシュ無しの bare `/collab`
   への WebSocket URL を自動導出するため、`NEXT_PUBLIC_COLLAB_URL` の指定は
   不要です。
@@ -238,7 +245,7 @@ labels:
 | `COLLAB_MAX_EDITORS_PER_PAGE` | いいえ (デフォルト `20`) | ページごとの同時編集者上限。21 人目以降は read-only でリアルタイム表示は受けられますが編集できません。 |
 | `NEXT_PUBLIC_COLLAB_URL` | いいえ | ブラウザが WebSocket 接続する URL。未指定時は `window.location.host` + `NEXT_PUBLIC_API_URL` から末尾スラッシュ無しの bare `/collab` を derive します。リバースプロキシで `/collab` と `/collab/*` の**両方**を api 同居ホストに向けているなら設定不要 — `/collab/*` のワイルドカードだけでは、ブラウザが実際にダイヤルする bare path にマッチしません(下記のリバースプロキシ例を参照)。 |
 | `REDIS_URL` | マルチでは必須 | 共同編集の pub/sub・編集者上限カウンタ・プレゼンス・通知 invalidation・設定同期・rate limiting・LRU (最近見たページ) のための連携用途。未設定時の挙動は次節参照。 |
-| `REDIS_KEY_PREFIX` | いいえ — ただし同じ Redis を共有する Crowi インスタンスごとに異なる実効値が必要 | 上記 7 つの `REDIS_URL` 消費経路すべてのキー/チャンネルが組み立てられるインスタンス単位の namespace (`crowi:<slug>:<suffix>`)。消費経路ごとの詳細な行列は [Redis 運用ポリシー](./redis#セキュリティ運用ガイド) 参照。未設定時は `CLIENT_URL` のホスト名 (例: `wiki.example.com`) をデフォルトとして使い、明示的に上書きする場合は `REDIS_KEY_PREFIX=krswd` のように設定します。同一インスタンスの全レプリカは同じ実効 prefix (同じ `CLIENT_URL`、または同じ明示 override) に解決される必要があります — これが意図したレプリカ間 pub/sub を維持する条件です。同じ Redis を共有する**別の** Crowi インスタンスは**異なる** prefix に解決される必要があり、そうしないとプレゼンス feed・通知・共同編集・設定同期が cross-talk します。`REDIS_URL` が設定されているのに override も有効な `CLIENT_URL` も無い場合は、暗黙にデフォルトへフォールバックせず**起動を中止**します。**`REDIS_URL` 自体のデータベース番号パスセグメント (例: `/1`) はこの代わりにはなりません** — Redis の `SUBSCRIBE`/`PUBLISH` は DB にスコープされないため、DB 番号だけが異なる2インスタンスは全チャンネルで cross-talk したままです (DB 番号は別の、純粋に数値だけの仕組みです。[Redis 運用ポリシー](./redis#セキュリティ運用ガイド) 参照)。 |
+| `REDIS_KEY_PREFIX` | いいえ — ただし同じ Redis を共有する Crowi インスタンスごとに異なる実効値が必要 | 上記 8 つの `REDIS_URL` 消費経路すべてのキー/チャンネルが組み立てられるインスタンス単位の namespace (`crowi:<slug>:<suffix>`)。消費経路ごとの詳細な行列は [Redis 運用ポリシー](./redis#セキュリティ運用ガイド) 参照。未設定時は `CLIENT_URL` のホスト名 (例: `wiki.example.com`) をデフォルトとして使い、明示的に上書きする場合は `REDIS_KEY_PREFIX=krswd` のように設定します。同一インスタンスの全レプリカは同じ実効 prefix (同じ `CLIENT_URL`、または同じ明示 override) に解決される必要があります — これが意図したレプリカ間 pub/sub を維持する条件です。同じ Redis を共有する**別の** Crowi インスタンスは**異なる** prefix に解決される必要があり、そうしないとプレゼンス feed・通知・共同編集・設定同期が cross-talk します。`REDIS_URL` が設定されているのに override も有効な `CLIENT_URL` も無い場合は、暗黙にデフォルトへフォールバックせず**起動を中止**します。**`REDIS_URL` 自体のデータベース番号パスセグメント (例: `/1`) はこの代わりにはなりません** — Redis の `SUBSCRIBE`/`PUBLISH` は DB にスコープされないため、DB 番号だけが異なる2インスタンスは全チャンネルで cross-talk したままです (DB 番号は別の、純粋に数値だけの仕組みです。[Redis 運用ポリシー](./redis#セキュリティ運用ガイド) 参照)。 |
 | `CROWI_ENCRYPTION_KEY` | 推奨 | 機密 Config (OAuth secret 等) を AES-256-GCM で暗号化。共同編集には直接影響しませんが、`pnpm --filter @crowi/api crypto:gen-key` で生成して全レプリカで揃えてください。 |
 
 ## Redis 接続数の見積もり

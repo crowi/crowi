@@ -1,7 +1,9 @@
 /**
- * RFC-0014 phase 1 — federated (OAuth2/OIDC) sign-in flow skeleton.
+ * RFC-0014 phase 1 — federated (OAuth2/OIDC) sign-in flow skeleton, plus
+ * the account-link flow (3 additional authenticated routes; see the
+ * "Account linking" section below).
  *
- * Wire schemas for the four public `federated-auth` routes:
+ * Wire schemas for the public `federated-auth` sign-in routes:
  *   GET  /auth/providers                — enabled provider list
  *   GET  /auth/providers/{name}/start   — redirect to the IdP
  *   GET  /auth/providers/{name}/callback — IdP redirect target
@@ -24,6 +26,7 @@
 import { z } from '@hono/zod-openapi';
 
 import { TokenAuthResponseSchema } from './auth';
+import { ApiErrorSchema } from './common';
 
 export const FederatedProviderSchema = z.object({
   name: z.string(),
@@ -64,17 +67,6 @@ export const FederatedHandoffRequestSchema = z.object({
 export const FederatedHandoffResponseSchema = TokenAuthResponseSchema;
 
 /**
- * RFC-0014 phase 3 — linking a provider account to an already signed-in
- * user.
- *
- * The request carries ONLY the sender-key thumbprint the caller will also
- * present at `/start`. It deliberately does NOT carry a user id: the target
- * is taken from the authenticated session server-side, so nothing a client
- * sends can aim the link at someone else's account (spec §契約
- * "state の `linkToUserId` は authenticated start request の user からだけ
- * 設定し、callback query / client-supplied id から設定しない").
- */
-/**
  * RFC-0014 phase 4 — which providers the CURRENT user has connected.
  *
  * Only provider slugs: never the provider-side account id, email or
@@ -86,14 +78,65 @@ export const LinkedAuthProviderListResponseSchema = z.object({
   identities: z.array(z.object({ provider: z.string() })),
 });
 
-export const CreateLinkGrantRequestSchema = z.object({
-  /** RFC 7638 thumbprint of the P-256 public key this browser will use at `/start` — binds the grant to this browser (AC-2). */
-  handoffChallenge: z.string().min(1),
+/**
+ * Schemas for account linking (3-stage flow:
+ * authenticated `POST link-start` -> DB-free callback completion ->
+ * authenticated confirmation `GET`/final `POST link-completions/{code}`).
+ *
+ * `LinkCompletionCodeSchema`: 32 random bytes, base64url — 43 characters,
+ * matching `LINK_COMPLETION_CODE_BYTES` (`service/link-completion.ts`).
+ */
+export const LinkCompletionCodeSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/, 'must be a 43-character base64url completion code');
+
+/** `POST link-start`'s success body — the browser navigates here with `window.location.assign(...)`. */
+export const StartProviderLinkResponseSchema = z.object({
+  authorizationUrl: z.string().url(),
 });
 
-/** The opaque, single-use id `/start?link=1&link_grant=…` expects. Carries no readable claims — every bound value stays server-side. */
-export const CreateLinkGrantResponseSchema = z.object({
-  linkGrant: z.string(),
+/**
+ * `GET link-completions/{code}`'s success body — the confirmation dialog's
+ * content. `accountLabel` is optional and display-only (`profile.email`,
+ * omitted when it would push the completion record over its byte budget —
+ * `service/link-completion.ts` design decision 22). Never `providerUserId`
+ * (out of scope §"やらないこと").
+ */
+export const PendingLinkCompletionResponseSchema = z.object({
+  provider: z.string(),
+  accountLabel: z.string().optional(),
+});
+
+/** Both the final `POST`'s fresh-winner success AND an already-consumed replay's `linked` outcome share this one 200 body (spec design decision 18). */
+export const CompleteProviderLinkResponseSchema = z.object({
+  result: z.literal('linked'),
+});
+
+/** `GET link-completions/{code}` 409 — the caller's OWN prior consume. Non-destructive: repeatable, never re-derives a different result. */
+export const LinkCompletionConsumedErrorSchema = ApiErrorSchema.extend({
+  error: z.object({
+    code: z.literal('LINK_COMPLETION_CONSUMED'),
+    message: z.string(),
+  }),
+});
+
+/**
+ * Final `POST link-completions/{code}` 409 vocabulary (spec design decision
+ * 18) — no `FEDERATED_LINK_RESULT_UNKNOWN` code exists; every replay result
+ * collapses to one of these three or the shared 200 `linked`.
+ *
+ *   - `FEDERATED_IDENTITY_IN_USE` — the provider account is linked to a
+ *     DIFFERENT Crowi user, or this user already has a DIFFERENT account
+ *     of the same provider linked. Never names the other owner.
+ *   - `FEDERATED_LINK_AUTH_STATE_CHANGED` — the fresh `User` re-read after
+ *     consume found the session inactive or its `authVersion` bumped
+ *     (password reset / forced sign-out) since `link-start`.
+ *   - `FEDERATED_LINK_NOT_LINKED` — an already-consumed replay whose
+ *     original insert has not (yet, or ever) landed.
+ */
+export const CompleteProviderLinkConflictErrorSchema = ApiErrorSchema.extend({
+  error: z.object({
+    code: z.enum(['FEDERATED_IDENTITY_IN_USE', 'FEDERATED_LINK_AUTH_STATE_CHANGED', 'FEDERATED_LINK_NOT_LINKED']),
+    message: z.string(),
+  }),
 });
 
 /**

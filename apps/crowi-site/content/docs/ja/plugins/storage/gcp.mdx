@@ -1,0 +1,172 @@
+---
+title: GCP の設定
+description: GCS ドライバのために Google Cloud 側でバケット・サービスアカウント・権限を用意する
+---
+
+このページは **Google Cloud 側の準備手順** だけを扱います。用意したバケットを Crowi に登録する手順 (管理画面のフィールド、移行手順、エミュレータ) は [ストレージドライバ](../../operations/storage) を参照してください。
+
+コマンドはすべて `gcloud` CLI 前提です。同じ操作は Google Cloud コンソールからも行えます。
+
+## 前提
+
+### プロジェクト ID は表示名と一致しないことがあります
+
+コンソールのプロジェクト選択に表示されるのはプロジェクト **名** ですが、`gcloud` とプラグインの **Google Cloud プロジェクト ID** 欄に渡すのはプロジェクト **ID** です。プロジェクト作成時に希望した ID が既に使われていると、Google が `nodal-pod-504715-n9` のような自動生成 ID を割り当てるため、表示名とまったく異なる文字列になっていることがあります。
+
+```bash
+gcloud projects list
+```
+
+`PROJECT_ID` 列の値を使ってください。表示名を渡すと「権限がない、または存在しない」というエラーになります。
+
+### 課金アカウントを紐付ける
+
+Cloud Storage はバケット作成の時点で課金アカウントを要求します。未紐付けのプロジェクトではコンソールの **Create** ボタンが無効化され、CLI もエラーになります。
+
+```bash
+gcloud billing accounts list
+gcloud billing projects link <PROJECT_ID> --billing-account=<BILLING_ACCOUNT_ID>
+```
+
+## 1. API を有効化する
+
+```bash
+gcloud services enable storage.googleapis.com --project=<PROJECT_ID>
+```
+
+`iamcredentials.googleapis.com` は、サービスアカウントの impersonation (後述の疎通確認) と、ADC での V4 署名付き URL 生成を使う場合にのみ追加で必要です。
+
+```bash
+gcloud services enable iamcredentials.googleapis.com --project=<PROJECT_ID>
+```
+
+## 2. バケットを作る
+
+```bash
+gcloud storage buckets create gs://<BUCKET_NAME> \
+  --project=<PROJECT_ID> \
+  --location=asia-northeast1 \
+  --uniform-bucket-level-access \
+  --public-access-prevention
+```
+
+バケット名には次の制約があります。
+
+- Cloud Storage 全体でグローバルに一意であること
+- **`google` という文字列を含められません**。含めると `Use of this bucket name is restricted` で作成に失敗します
+
+Crowi 側で **設定しなくてよいもの** は次のとおりです。
+
+- **CORS** — 添付ファイルは Crowi の API プロキシ経由で配信され、ブラウザが GCS を直接叩くことはありません
+- **公開アクセス** — バケットは非公開のままにしてください
+- **バージョニング / ライフサイクル / CMEK / 保持ポリシー / バケットレベルの IAM 条件** — Crowi はこれらを一切参照も変更もしません。必要ならバケット側で自由に設定してください
+
+## 3. サービスアカウントと権限
+
+```bash
+gcloud iam service-accounts create <SA_NAME> \
+  --project=<PROJECT_ID> \
+  --display-name="Crowi storage"
+```
+
+権限はバケット単位で付与します。
+
+```bash
+gcloud storage buckets add-iam-policy-binding gs://<BUCKET_NAME> \
+  --project=<PROJECT_ID> \
+  --member="serviceAccount:<SA_NAME>@<PROJECT_ID>.iam.gserviceaccount.com" \
+  --role="roles/storage.objectUser"
+```
+
+ドライバが呼び出すのは `storage.objects.create` / `storage.objects.get` / `storage.objects.delete` の 3 つだけです。オブジェクトの一覧取得は行いません。この 3 権限だけのカスタムロールでも足ります。
+
+```bash
+gcloud iam roles create crowiStorageObject --project=<PROJECT_ID> \
+  --title="Crowi Storage Object" \
+  --permissions=storage.objects.create,storage.objects.get,storage.objects.delete
+```
+
+カスタムロールを付与するときは、ロール名をフルパスで指定します (`--role="projects/<PROJECT_ID>/roles/crowiStorageObject"`)。
+
+`storage.buckets.*` は不要です。Crowi はバケットの作成・一覧・設定変更を行いません。
+
+> **Note**: IAM の変更が反映されるまで 1〜2 分かかります。サービスアカウントやバインディングを作った直後の `PERMISSION_DENIED` は、権限設定の誤りではなく伝播待ちであることがほとんどです。少し待ってから再試行してください。
+
+## 4. クレデンシャルの方式を選ぶ
+
+推奨順に 3 つあります。
+
+### A. アタッチされたサービスアカウント (Google Cloud 上で運用する場合)
+
+Cloud Run / GKE / GCE でサービスアカウントをアタッチし、管理画面の **サービスアカウントキー JSON** 欄を空欄にします。Application Default Credentials (ADC) が自動的にそのサービスアカウントを解決するため、長期有効なキーを保存する必要がありません。Workload Identity Federation も同様です。**Google Cloud 上で運用するなら常にこれを選んでください。**
+
+### B. ローカルの ADC (開発・検証)
+
+```bash
+gcloud auth application-default login
+gcloud auth application-default set-quota-project <PROJECT_ID>
+```
+
+ただし素のユーザーアカウントは自分のプロジェクトに対して強い権限を持っていることが多く、**権限不足を再現できません**。サービスアカウントに与えた権限がちょうど足りているかを検証するには、impersonation を使ってそのサービスアカウントとして ADC を解決させます。
+
+```bash
+gcloud iam service-accounts add-iam-policy-binding <SA_EMAIL> \
+  --project=<PROJECT_ID> \
+  --member="user:<YOUR_ACCOUNT>" \
+  --role="roles/iam.serviceAccountTokenCreator"
+
+gcloud auth application-default login --impersonate-service-account=<SA_EMAIL>
+```
+
+### C. サービスアカウントキー JSON (Google Cloud 外で運用する場合)
+
+自前サーバや他クラウドで動かす場合は、キー JSON を発行して管理画面に貼り付けます。
+
+```bash
+gcloud iam service-accounts keys create <OUTPUT_PATH>.json \
+  --project=<PROJECT_ID> \
+  --iam-account=<SA_EMAIL>
+chmod 600 <OUTPUT_PATH>.json
+```
+
+組織ポリシー `constraints/iam.disableServiceAccountKeyCreation` が有効な組織では、このコマンドは失敗します。その場合は方式 A / B を使うか、プロジェクト単位で例外ポリシーを設定してください。
+
+キーは長期有効な資格情報です。リポジトリに置かず、不要になったら削除してください。
+
+```bash
+gcloud iam service-accounts keys list --iam-account=<SA_EMAIL>
+gcloud iam service-accounts keys delete <KEY_ID> --iam-account=<SA_EMAIL>
+```
+
+## 5. Crowi に設定する前に疎通を確認する
+
+先にここで通しておくと、Crowi 側でエラーが出たときに「GCP の権限設定」と「Crowi の設定」を切り分けられます。
+
+```bash
+echo test > /tmp/crowi-gcs-check.txt
+gcloud storage cp /tmp/crowi-gcs-check.txt gs://<BUCKET_NAME>/healthcheck.txt \
+  --project=<PROJECT_ID> --impersonate-service-account=<SA_EMAIL>
+gcloud storage cat gs://<BUCKET_NAME>/healthcheck.txt \
+  --project=<PROJECT_ID> --impersonate-service-account=<SA_EMAIL>
+gcloud storage rm gs://<BUCKET_NAME>/healthcheck.txt \
+  --project=<PROJECT_ID> --impersonate-service-account=<SA_EMAIL>
+```
+
+アップロード・ダウンロード・削除の 3 つが通れば、ドライバが必要とする権限はすべて揃っています。
+
+## 6. V4 署名付き URL (`signBlob`) は別の権限です
+
+署名付き URL の生成はオブジェクト CRUD とは別の権限で、クレデンシャル方式によって必要なものが変わります。
+
+- **キー JSON 方式** — 秘密鍵でローカル署名するため、追加の権限も API 呼び出しも不要です
+- **ADC 方式** — IAM Credentials の `signBlob` 権限が必要です (`roles/iam.serviceAccountTokenCreator` を自分自身に付与するか、`iam.serviceAccounts.signBlob` を個別付与)
+
+ただし Crowi の添付ファイル配信ルートは現状 `signedUrl()` を呼び出さず、常に Crowi の API プロキシ経由で配信します。**`signBlob` が無くても通常のアップロード・ダウンロードには影響しません。**
+
+## 7. Crowi 側の設定へ
+
+バケットとクレデンシャルが用意できたら、[ストレージドライバ](../../operations/storage) の GCS の節に進んでください。
+
+**GCS バケット** 欄にはバケット名を入力します。`gs://` スキーマと末尾のスラッシュは Google Cloud Storage SDK 側で除去されるため、`gs://<BUCKET_NAME>` の形で入力しても正しく解決されます。
+
+ただし **バケット名の存在確認は保存時に行われません**。名前を打ち間違えても保存は成功し、その状態で添付を開くと、GCS が返す 404 が「オブジェクトが存在しない」場合と区別できないため、設定ミスではなくファイル欠損として表示されます。バケット名を変更したときは、実際に添付をアップロードして意図したバケットに入ることを確認してください。

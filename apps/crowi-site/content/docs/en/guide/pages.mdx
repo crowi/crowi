@@ -310,6 +310,36 @@ confusingly similar avatar rows.
 
 See [RFC-0005](../reference/rfcs) for the design details.
 
+## Taking a page out as markdown
+
+The "**⋯**" menu at the top right of a page hands you its body as markdown.
+
+- **Copy markdown** — copies the body to the clipboard.
+- **Download markdown** — saves a `.md` file containing the body.
+
+What you get is **the body verbatim**. No frontmatter, no page metadata.
+Attachments are not bundled and image paths are not rewritten.
+
+### The download filename
+
+The filename comes from the **last segment of the page path**. A portal
+page's trailing slash is ignored, so `/foo/bar` and `/foo/bar/` both yield
+`bar.md`.
+
+Non-ASCII page names survive as they are. Characters a filename cannot
+hold (`\ / : * ? " < > |` and control characters `U+0000`–`U+001F`) become
+`-`, and leading and trailing whitespace and dots are stripped. Because most filesystems cap
+a filename at 255 bytes and a multi-byte character can take 3 of them, the
+name is truncated at **100 characters**.
+
+When the path yields no usable name — the root page, for instance — the
+filename falls back to the page id.
+
+<Callout>
+Nothing happens on a page with an empty body. An empty file is of no use to
+whoever receives it, so no download starts and no notification appears.
+</Callout>
+
 ## Moving a page (rename)
 
 Changing a page's URL is called a "rename". When you rename a page, the

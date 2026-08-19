@@ -31,6 +31,19 @@ export const ListAdminUsersRequestSchema = z.object({
 export type ListAdminUsersRequest = z.infer<typeof ListAdminUsersRequestSchema>;
 
 /**
+ * A `UserPublic` row plus the provider slugs this user has a federated
+ * identity for. Deliberately NOT folded into `UserPublicSchema` — that
+ * schema is shared by every admin endpoint that returns a user (edit,
+ * makeAdmin, resetPassword, ...), and adding `linkedProviders` there would
+ * leak it into responses that never populate it. Only the list route
+ * computes and attaches this field.
+ */
+export const AdminUserListItemSchema = UserPublicSchema.extend({
+  linkedProviders: z.array(z.string()),
+});
+export type AdminUserListItem = z.infer<typeof AdminUserListItemSchema>;
+
+/**
  * Response body for GET /admin/users.
  *
  * Note: even though the legacy endpoint also returned the original `uq` echo,
@@ -38,7 +51,7 @@ export type ListAdminUsersRequest = z.infer<typeof ListAdminUsersRequestSchema>;
  * and does not need the server to round-trip the query back.
  */
 export const ListAdminUsersResponseSchema = z.object({
-  users: z.array(UserPublicSchema),
+  users: z.array(AdminUserListItemSchema),
   pager: AdminPagerSchema,
 });
 export type ListAdminUsersResponse = z.infer<typeof ListAdminUsersResponseSchema>;
@@ -129,16 +142,13 @@ export const InviteUsersResponseSchema = z.object({
 export type InviteUsersResponse = z.infer<typeof InviteUsersResponseSchema>;
 
 /**
- * Request body for PATCH /admin/users/:id.
- *
- * Both `name` and `email` are required by the legacy form (userEditForm),
- * so we keep them required here too. The dedicated PUT /admin/users/:id/email
- * endpoint exists for partial email-only updates that come from a different
- * UI affordance (the table row "change email" action).
+ * Request body for PATCH /admin/users/:id. Writes only `name` — a federated
+ * user's email has to be lockable against admin-side edits, and that lock
+ * only has one place to live if there is only one email-writing route.
+ * `PUT /admin/users/:id/email` is the sole email-change path.
  */
 export const EditAdminUserRequestSchema = z.object({
   name: z.string().min(1),
-  email: z.string().email(),
 });
 export type EditAdminUserRequest = z.infer<typeof EditAdminUserRequestSchema>;
 
@@ -179,6 +189,75 @@ export const UpdateAdminUserEmailRequestSchema = z.object({
   email: z.string().email(),
 });
 export type UpdateAdminUserEmailRequest = z.infer<typeof UpdateAdminUserEmailRequestSchema>;
+
+/**
+ * 409 sibling to `ConflictErrorSchema` on PUT /admin/users/:id/email,
+ * returned instead of a write when the target has a federated identity and
+ * the request would move their email away from the IdP-verified address.
+ * Kept as its own literal-code schema (not folded into the shared
+ * `ConflictErrorSchema`, and not registered on the central `ErrorCodeSchema`
+ * enum) so this one feature's error shape does not widen either shared
+ * contract — the route declares both as a union response instead.
+ */
+export const EmailLockedByFederatedIdentityErrorSchema = z.object({
+  error: z.object({
+    code: z.literal('EMAIL_LOCKED_BY_FEDERATED_IDENTITY'),
+    message: z.string(),
+  }),
+});
+export type EmailLockedByFederatedIdentityError = z.infer<typeof EmailLockedByFederatedIdentityErrorSchema>;
+
+/**
+ * Path params for DELETE /admin/users/:id/identities/:provider.
+ */
+export const AdminUserIdentityParamSchema = AdminUserIdParamSchema.extend({
+  provider: z.string(),
+});
+export type AdminUserIdentityParam = z.infer<typeof AdminUserIdentityParamSchema>;
+
+/**
+ * Response body for DELETE /admin/users/:id/identities/:provider.
+ *
+ * `passwordIssued` tells the caller which of the two admin-unlink paths ran
+ * (spec design decision: issue a password only when the target has none) so
+ * the UI can show "share this new password" vs "the password was not
+ * touched". `newPassword` is present only when `passwordIssued` is true.
+ */
+export const UnlinkUserIdentityResponseSchema = z.object({
+  user: UserPublicSchema,
+  passwordIssued: z.boolean(),
+  newPassword: z.string().optional(),
+});
+export type UnlinkUserIdentityResponse = z.infer<typeof UnlinkUserIdentityResponseSchema>;
+
+/**
+ * 404 for DELETE /admin/users/:id/identities/:provider: either the user id
+ * resolves to nothing (`NOT_FOUND`), or the user exists but has no identity
+ * for the given provider (`NOT_LINKED`). Combined into one schema (mirroring
+ * `UnlinkAuthProviderErrorSchema`'s self-service sibling) since a single
+ * response status can declare only one content schema.
+ */
+export const UnlinkUserIdentityNotFoundErrorSchema = z.object({
+  error: z.object({
+    code: z.enum(['NOT_FOUND', 'NOT_LINKED']),
+    message: z.string(),
+  }),
+});
+export type UnlinkUserIdentityNotFoundError = z.infer<typeof UnlinkUserIdentityNotFoundErrorSchema>;
+
+/**
+ * 409 for DELETE /admin/users/:id/identities/:provider: refused because the
+ * target is the operating admin themself (`CANNOT_UNLINK_SELF`), or because
+ * password auth is disabled instance-wide so issuing a password would not
+ * help (`PASSWORD_AUTH_DISABLED`).
+ */
+export const UnlinkUserIdentityConflictErrorSchema = z.object({
+  error: z.object({
+    code: z.enum(['CANNOT_UNLINK_SELF', 'PASSWORD_AUTH_DISABLED']),
+    message: z.string(),
+  }),
+});
+export type UnlinkUserIdentityConflictError = z.infer<typeof UnlinkUserIdentityConflictErrorSchema>;
 
 /**
  * Response body for DELETE /admin/users/:id.

@@ -2,6 +2,7 @@ import { Types } from 'mongoose';
 import request from 'supertest';
 import type { CrowiPlugin } from '@crowi/plugin-api';
 import s3Plugin from '@crowi/plugin-storage-aws-s3';
+import gcsPlugin from '@crowi/plugin-storage-gcs';
 import openSearchPlugin from '@crowi/plugin-search-opensearch';
 import googlePlugin from '@crowi/plugin-google';
 import resendPlugin from '@crowi/plugin-mail-resend';
@@ -597,5 +598,233 @@ describe('PUT /api/admin/plugins/config — atomic credential group (RFC-0014 ph
     expect({ id: idAfter, secret: secretAfter }).not.toEqual({ id: 'new-id', secret: 'old-secret' });
     expect({ id: idAfter, secret: secretAfter }).not.toEqual({ id: 'old-id', secret: 'new-secret' });
     expect({ id: idAfter, secret: secretAfter }).toEqual({ id: 'old-id', secret: 'old-secret' });
+  });
+});
+
+/**
+ * feature-storage-gcs Phase 1 (AC-1/AC-2) — `serviceAccountKey` validation
+ * (single/multiple 422 issues), the `gcsConnection` atomic group's
+ * indivisibility/fault behaviour (same shape as the Google block above),
+ * and secret non-disclosure end-to-end through the admin API — the real
+ * proof that the intermediate-`ZodEffects`-marker fix in
+ * `schema-serializer.ts` (`inspectConfigFieldMetadata`) actually reaches the
+ * wire: `serviceAccountKey`'s `@sensitive` marker sits on a `superRefine()`
+ * `ZodEffects` node wrapped by `.default('')`.
+ *
+ * `@google-cloud/storage` is NOT mocked here (unlike `storage-gcs.test.ts`):
+ * `reconfigure` constructs a real `Storage` client on every successful save,
+ * but that construction is synchronous/local (no network, no eager PEM
+ * validation beyond what Node's own PEM parser accepts) — a real (if
+ * throwaway) PKCS8 key below keeps that safe.
+ */
+describe('PUT/GET /api/admin/plugins/config — GCS service-account key validation and secret non-disclosure (feature-storage-gcs AC-1/AC-2)', () => {
+  const VALID_PEM =
+    '-----BEGIN PRIVATE KEY-----\n' +
+    'MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDQPC6ixOhobdqW\n' +
+    'SZo8Dvo0qqSavc71dNRK4eE48indb2w5mjw1KVUBL/vL/h/okeMjIgwaBgrFWM+C\n' +
+    '3njzwRvF8PMq4FZe5eaQab6oiGBgIiEphSzHOz2yw6K6PFwvvL4gpA0+pXG4/s46\n' +
+    '1Qb3l8TOxW3JRRZHh6StPiijRBad8mtd0a2yH0RtmrMdRO/6mKLvP0qSUcD05HcH\n' +
+    'vJXH0lCH0n3Dd0GJ8huYcPZgoNAfjqxZebTh2lMMVze4SonljzW22undqBLxuooh\n' +
+    'I7sMq71IpIzC2GuClhx4Qh4DVFNsaBcQBuiWfcBSN+NoEnqfi+zxUmpazc6l8Jld\n' +
+    '+b/ZsIcJAgMBAAECggEAGPTLgIuxkFlxF++mhdHkM/VrEJYUtIdtzXMsjUj9kjmx\n' +
+    'OmaVFmh3lPK5nlE8pQB9/LcPBPvqJMxv4z7zN0ByqgqGdCIqi8lJFI/tzxA4H7Fb\n' +
+    'cNjSfOapTnBCo4gKItj/ntUWdsZ4fovALt4azYfhiQfxkEyAvu4fYvlnAKkvfjqI\n' +
+    '4WVyMj78dhV+Rpaq2OSwyfs1QeuBJd9fqALrJX8s+wpKkZtJM650reMwIuwIBQjG\n' +
+    'K75su2NvBjevEZmORbz/EEpMLVXm9rN9/0cPyuT5IWqky2WtV+l/n/pRA/SiAFp9\n' +
+    'hVBI/lYSU8L0KTHjvl/rETlyRAllYS1JtgYb1jWR8QKBgQD3Qqez0+ExcLc5AtYQ\n' +
+    'JuTpj/cFdEX+vF9hQbaUg5tC0iKcm6qdCaVL78j7rv0RtTTREDjoC2OAgVFGPBK5\n' +
+    'DzMpDwmOkZyz7UqaLmN1d+NMHPwhE+kePSizy5UpbMUfQ18hA18p+o/fg6K2u49k\n' +
+    'S4k8nAjNqAUjHOO8ZaGOASGnGQKBgQDXmGfB+PaJj1swRtn6Xj8tP3zVz6eSo3lc\n' +
+    '3P7GvFj3tdlqhv82l/MR7yr+01oXzv5dVTQfRKozUeJrZCbnbVjwbKpdJ5P9CuZ7\n' +
+    'FqFa0jupo1C0hy0KwOZn/rHJoBeYjFCA4gaFG0LOkHFMyiuZxLFG1hJF6DP9hHDk\n' +
+    'PpnmMdWNcQKBgCZfnt1Gxc1Be/4KFaS+FIq3ABRFnlNRctAKPcbAwgjVye9aLVlf\n' +
+    '1Np7JUsCNl5YLBFCHkLM+a1I5I8s5Y747+ywW8BXkuVNr2VMS71AVPNMEEkl6Oj7\n' +
+    'fuSgdM7QBau7bfkWp99A9rEuocMQSsm6+1p/sNISAHIZmrJzZ2Y9gLaJAoGABJAS\n' +
+    'KhXFyfWBvYzSUi0qcx+z2aaSalURXXjD35re2yc7GbkPr60ZlNiV9VytvHFCCuGh\n' +
+    'v8OpQnrKKvGsrRswVa5HEL+krydK53H8KjrmzllJfPibaG3asnq+coDz3uOhVIj0\n' +
+    'EF8aU9rUuwZQU+nIwrIHIvmeGBB0fzAf+7I0TdECgYEAzJdWT4lP6rZovp3CFmW9\n' +
+    'o+QgdXZo01XqmXzOkbYWDI/SKfYD41dLkjd6UbRBt3ajrkTtmYsB/6c1zKoZPyT7\n' +
+    'LYthDofzow5H0DcdBgCNgk5Rs1+MDZqF/YEl8uk/0kbA+QN3yCGGwiXgW1Qq8IpU\n' +
+    'uFhNQxY41ULqJs36DPvRZ0Y=\n' +
+    '-----END PRIVATE KEY-----\n';
+  const validGcsKeyJson = (overrides: Partial<{ type: string; project_id: string; client_email: string; private_key: string }> = {}) =>
+    JSON.stringify({
+      type: 'service_account',
+      project_id: 'key-project',
+      client_email: 'sa@key-project.iam.gserviceaccount.com',
+      private_key: VALID_PEM,
+      ...overrides,
+    });
+
+  const ATOMIC_KEY = 'plugin:@crowi/plugin-storage-gcs:__atomic:gcsConnection';
+  const FLAT_KEYS = ['bucket', 'prefix', 'projectId', 'serviceAccountKey'].map((f) => formatPluginConfigKey(gcsPlugin.name, f));
+
+  /**
+   * `PluginManager`'s `loadedPlugins`/`selectedDrivers` are private; this
+   * describe block (like the pre-existing suites above) reaches into them
+   * directly to graft the plugin under test into an already-booted manager
+   * instead of re-running full plugin discovery. Narrowed to exactly the
+   * two fields this block touches instead of `any`.
+   */
+  type PluginManagerPrivateAccess = {
+    selectedDrivers: Record<string, string>;
+    loadedPlugins: readonly CrowiPlugin[];
+  };
+
+  let adminToken: string;
+  let originalLoadedPlugins: readonly CrowiPlugin[];
+  let originalSelectedDrivers: Record<string, string>;
+
+  beforeAll(async () => {
+    const admin = await createTestUser({
+      name: 'GCS Admin',
+      username: 'gcsAdmin',
+      email: 'gcs-admin@example.com',
+      admin: true,
+    });
+    adminToken = admin.accessToken;
+  });
+
+  beforeEach(() => {
+    const manager = crowi.pluginManager;
+    if (!manager) throw new Error('PluginManager not bootstrapped in harness');
+    originalLoadedPlugins = manager.getLoadedPlugins();
+    const privateAccess = manager as unknown as PluginManagerPrivateAccess;
+    originalSelectedDrivers = { ...privateAccess.selectedDrivers };
+    privateAccess.loadedPlugins = [...originalLoadedPlugins, gcsPlugin];
+  });
+
+  afterEach(async () => {
+    const manager = crowi.pluginManager;
+    if (manager) {
+      const privateAccess = manager as unknown as PluginManagerPrivateAccess;
+      privateAccess.loadedPlugins = originalLoadedPlugins;
+      privateAccess.selectedDrivers = originalSelectedDrivers;
+    }
+    jest.restoreAllMocks();
+    const Config = crowi.model('Config');
+    await Config.deleteByParams('crowi', ATOMIC_KEY).catch(() => undefined);
+    for (const key of FLAT_KEYS) {
+      await Config.deleteByParams('crowi', key).catch(() => undefined);
+    }
+    await crowi.getConfigService().load();
+  });
+
+  const putConfig = (values: Record<string, unknown>) =>
+    request(app).put('/api/admin/plugins/config').query({ name: gcsPlugin.name }).set(authHeaders(adminToken)).send({ values });
+
+  const getConfig = () => request(app).get('/api/admin/plugins/config').query({ name: gcsPlugin.name }).set(authHeaders(adminToken));
+
+  it('reports bucket as the sole readiness field once gcs is the selected storage driver', async () => {
+    const manager = crowi.pluginManager;
+    if (!manager) throw new Error('PluginManager not bootstrapped in harness');
+    (manager as unknown as PluginManagerPrivateAccess).selectedDrivers = { ...originalSelectedDrivers, storage: 'gcs' };
+
+    const res = await request(app).get('/api/admin/plugins/readiness').set(authHeaders(adminToken));
+    expect(res.status).toBe(200);
+    const issue = (res.body.issues as Array<{ id: string; fields: { name: string; configured: boolean }[] }>).find((i) => i.id === `plugin:${gcsPlugin.name}`);
+    expect(issue).toEqual({
+      id: `plugin:${gcsPlugin.name}`,
+      source: 'plugin',
+      label: 'Google Cloud Storage',
+      href: `/admin/plugins/edit?name=${encodeURIComponent(gcsPlugin.name)}`,
+      fields: [{ name: 'bucket', configured: false }],
+    });
+  });
+
+  it('AC-2: writes the four fields as ONE atomic document, and GET reports serviceAccountKey as a masked secret', async () => {
+    const putRes = await putConfig({ bucket: 'my-bucket', prefix: 'prod', projectId: '', serviceAccountKey: validGcsKeyJson() });
+    expect(putRes.status).toBe(200);
+    expect(putRes.body.ok).toBe(true);
+
+    const Config = crowi.model('Config');
+    const rows = await Config.find({ ns: 'crowi', key: /^plugin:@crowi\/plugin-storage-gcs:/ }).exec();
+    expect(rows.map((r) => r.key)).toEqual([ATOMIC_KEY]);
+
+    const got = await getConfig();
+    expect(got.status).toBe(200);
+    const fields = got.body.fields as Array<{ name: string; kind: string }>;
+    expect(fields.find((f) => f.name === 'serviceAccountKey')?.kind).toBe('secret');
+    expect(got.body.values.serviceAccountKey).toEqual({ hasValue: true });
+    expect(got.body.values.bucket).toBe('my-bucket');
+    expect(got.body.values.prefix).toBe('prod');
+
+    const serialized = JSON.stringify(got.body);
+    expect(serialized).not.toContain('sa@key-project');
+    expect(serialized).not.toContain('PRIVATE KEY');
+  });
+
+  it('AC-2: rejects an invalid (non-JSON) serviceAccountKey with a single 422 issue', async () => {
+    const res = await putConfig({ bucket: 'my-bucket', serviceAccountKey: 'not json' });
+    expect(res.status).toBe(422);
+    expect(res.body.error.code).toBe('PLUGIN_CONFIG_VALIDATION_FAILED');
+    expect(res.body.error.issues).toEqual([{ path: ['serviceAccountKey'], message: 'Must be valid JSON object' }]);
+  });
+
+  it('AC-2: returns one 422 issue per missing required field when several are absent at once', async () => {
+    const res = await putConfig({ bucket: 'my-bucket', serviceAccountKey: JSON.stringify({ type: 'service_account' }) });
+    expect(res.status).toBe(422);
+    expect(res.body.error.issues.map((i: { message: string }) => i.message)).toEqual([
+      'project_id is required',
+      'client_email is required',
+      'private_key is required',
+    ]);
+    for (const issue of res.body.error.issues as Array<{ path: string[] }>) {
+      expect(issue.path).toEqual(['serviceAccountKey']);
+    }
+  });
+
+  it('AC-2: rejects a serviceAccountKey with the wrong "type" with a single 422 issue', async () => {
+    const res = await putConfig({ bucket: 'my-bucket', serviceAccountKey: validGcsKeyJson({ type: 'not_a_service_account' }) });
+    expect(res.status).toBe(422);
+    expect(res.body.error.code).toBe('PLUGIN_CONFIG_VALIDATION_FAILED');
+    expect(res.body.error.issues).toEqual([{ path: ['serviceAccountKey'], message: 'type must be "service_account"' }]);
+  });
+
+  it('AC-2: rejects a serviceAccountKey with an invalid PEM private_key with a single 422 issue', async () => {
+    const res = await putConfig({ bucket: 'my-bucket', serviceAccountKey: validGcsKeyJson({ private_key: 'not-a-pem-block' }) });
+    expect(res.status).toBe(422);
+    expect(res.body.error.code).toBe('PLUGIN_CONFIG_VALIDATION_FAILED');
+    expect(res.body.error.issues).toEqual([{ path: ['serviceAccountKey'], message: 'private_key must be a PEM private-key block' }]);
+  });
+
+  it('AC-2: omitting the secret on a later save keeps the previously stored one instead of blanking it', async () => {
+    await putConfig({ bucket: 'my-bucket', serviceAccountKey: validGcsKeyJson() });
+
+    // The admin form never re-sends an unchanged secret — saving just the
+    // bucket rename must not wipe the stored key.
+    const res = await putConfig({ bucket: 'my-bucket-renamed' });
+    expect(res.status).toBe(200);
+
+    await crowi.getConfigService().load();
+    const flatSecretKey = formatPluginConfigKey(gcsPlugin.name, 'serviceAccountKey');
+    expect(crowi.getConfig().crowi[flatSecretKey]).toBe(validGcsKeyJson());
+
+    const got = await getConfig();
+    expect(got.body.values.serviceAccountKey).toEqual({ hasValue: true });
+    expect(got.body.values.bucket).toBe('my-bucket-renamed');
+  });
+
+  it('AC-2: a rejected group write returns 500, leaves the previous config intact, and never hot-reloads', async () => {
+    await putConfig({ bucket: 'old-bucket', serviceAccountKey: validGcsKeyJson() });
+    await crowi.getConfigService().load();
+
+    const Config = crowi.model('Config');
+    jest.spyOn(Config, 'updateAtomicConfigGroup').mockRejectedValueOnce(new Error('injected mongo failure'));
+    const manager = crowi.pluginManager;
+    const reconfigureSpy = manager ? jest.spyOn(manager, 'reconfigureAffected') : null;
+
+    const res = await putConfig({ bucket: 'new-bucket', serviceAccountKey: validGcsKeyJson({ project_id: 'other-project' }) });
+    expect(res.status).toBe(500);
+
+    // No hot reload for a save that never happened.
+    expect(reconfigureSpy?.mock.calls ?? []).toHaveLength(0);
+
+    const rows = await Config.find({ ns: 'crowi', key: /^plugin:@crowi\/plugin-storage-gcs:/ }).exec();
+    expect(rows.map((r) => r.key)).toEqual([ATOMIC_KEY]);
+
+    await crowi.getConfigService().load();
+    const flatBucketKey = formatPluginConfigKey(gcsPlugin.name, 'bucket');
+    expect(crowi.getConfig().crowi[flatBucketKey]).toBe('old-bucket');
   });
 });

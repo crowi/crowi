@@ -43,8 +43,6 @@ export interface HandoffSenderKey {
   publicJwk: SenderPublicJwk;
   /** ES256-sign `message`, returning the base64url JOSE (raw r‖s) signature `/auth/handoff` verifies. */
   sign(message: string): Promise<string>;
-  /** RFC 7638 thumbprint of the public JWK — what a link grant is pinned to. */
-  thumbprint(): Promise<string>;
 }
 
 function base64UrlFromBytes(bytes: Uint8Array): string {
@@ -86,15 +84,6 @@ function toSenderKey(stored: StoredSenderKey): HandoffSenderKey {
     async sign(message: string): Promise<string> {
       const signature = await window.crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, stored.privateKey, new TextEncoder().encode(message));
       return base64UrlFromBytes(new Uint8Array(signature));
-    },
-    async thumbprint(): Promise<string> {
-      // The member order below is RFC 7638's required lexicographic
-      // ordering for an EC key and MUST match
-      // `util/federated-auth-state.ts#computeJwkThumbprint` byte for
-      // byte — the server compares the two as strings.
-      const canonical = JSON.stringify({ crv: stored.publicJwk.crv, kty: stored.publicJwk.kty, x: stored.publicJwk.x, y: stored.publicJwk.y });
-      const digest = await window.crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonical));
-      return base64UrlFromBytes(new Uint8Array(digest));
     },
   };
 }

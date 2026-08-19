@@ -1,4 +1,4 @@
-import type { Model } from 'mongoose';
+import type { Model, Types } from 'mongoose';
 
 /**
  * Renderer surface the collab save flow needs to call
@@ -36,3 +36,15 @@ export interface CollabModels {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   PluginRenderCache: Model<any>;
 }
+
+/**
+ * RFC-0021 §D-7 (Phase 2a) — the api-side content-sequence allocator,
+ * injected the same way as
+ * {@link CollabRenderer}: `@crowi/collab` never depends on `@crowi/api`, so
+ * the save flow calls this verbatim function instead of importing the
+ * allocator itself. The return value is `unknown` because collab never
+ * inspects it (the allocator's own contract never throws and never affects
+ * whether a save succeeds — see the spec's Error semantics contract);
+ * `executeSave` only needs the call to have happened.
+ */
+export type CollabContentSequenceAllocator = (pageId: Types.ObjectId, revisionId: Types.ObjectId) => Promise<unknown>;

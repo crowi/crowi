@@ -141,6 +141,27 @@ describe('util/replace-url — runReplaceUrl (persistence)', () => {
     expect(String(rev.author)).toBe(String(operator._id)); // audit trail
   });
 
+  // Phase 2a, AC-5 — the allocator is called explicitly from `quietRewrite`
+  // (the only content writer that reaches neither `pushRevision` nor
+  // `updatePage`).
+  it('assigns the next content sequence to the rewritten revision without touching updatedAt / lastUpdateUser (AC-5)', async () => {
+    const created = await Page.createPage(`${PATH_PREFIX}/history-sequence`, `x ${FROM}/y`, creator, {});
+    const pinnedDate = new Date('2020-01-01T00:00:00.000Z');
+    await Page.updateOne({ _id: created._id }, { $set: { updatedAt: pinnedDate } });
+    const before = await Page.findById(created._id).select('historySequence lastUpdateUser').lean();
+    expect(before?.historySequence).toBe(1); // seeded by createPage's own allocator promotion
+
+    await runReplaceUrl(crowi, { from: FROM, to: TO, userEmail: operator.email });
+
+    const page = await Page.findById(created._id).select('revision historySequence updatedAt lastUpdateUser').lean();
+    expect(page?.historySequence).toBe(2);
+    expect(page?.updatedAt.getTime()).toBe(pinnedDate.getTime());
+    expect(String(page?.lastUpdateUser)).toBe(String(before?.lastUpdateUser));
+
+    const newRev = await Revision.findById(page?.revision).lean();
+    expect(newRev?.historySequence).toBe(2);
+  });
+
   it('does not bump updatedAt or change grant / grantedUsers', async () => {
     const created = await Page.createPage(`${PATH_PREFIX}/quiet`, `x ${FROM}/y`, creator, {});
     const pinnedDate = new Date('2020-01-01T00:00:00.000Z');

@@ -6,9 +6,10 @@ description: Crowi 2.0 で Redis を使うすべての機能(共同編集・プ�
 ## Redis のライセンスとエンジンサポート方針
 
 > このセクションはリアルタイム共同編集に固有のものではありません —
-> このコードベースが Redis と通信する**全 8 経路**(共同編集 pub/sub・
+> このコードベースが Redis と通信する**全 9 経路**(共同編集 pub/sub・
 > 編集者上限カウンタ・プレゼンス・通知 invalidation・設定同期・rate
-> limiting・LRU (最近見たページ)・boot 接続そのもの)に適用される、
+> limiting・LRU (最近見たページ)・アカウント連携 (短命な
+> link-completion ストア)・boot 接続そのもの)に適用される、
 > Redis 全体のライセンス・エンジンサポート・セキュリティ方針です。
 > [リアルタイム共同編集の運用](./realtime-collab) ではなくこの専用
 > ページに置いているのは、共同編集専用の内容ではなく Redis を使う
@@ -76,11 +77,11 @@ description: Crowi 2.0 で Redis を使うすべての機能(共同編集・プ�
 Valkey は Redis の BSD-3-Clause フォークですが、現時点では**正式
 サポートはしておらず** best-effort 扱いです。Crowi は共同編集
 pub/sub・編集者上限カウンタ・プレゼンス・通知 invalidation・設定
-同期・rate limiting・LRU・boot 接続の8経路をカバーする実 Redis 8
-互換性 smoke テスト一式を、CI 上で Valkey に対しては実行していません。
-この8経路の smoke テスト一式が Valkey に対しても CI で継続的に通る
-ようになった時点で — Redis 8 自身が満たしたのと同じ基準で — 正式
-サポートへ昇格します。
+同期・rate limiting・LRU・アカウント連携・boot 接続の9経路をカバー
+する実 Redis 8 互換性 smoke テスト一式を、CI 上で Valkey に対しては
+実行していません。この9経路の smoke テスト一式が Valkey に対しても
+CI で継続的に通るようになった時点で — Redis 8 自身が満たしたのと
+同じ基準で — 正式サポートへ昇格します。
 
 ### イメージ pin 方針
 
@@ -135,7 +136,7 @@ pub/sub・編集者上限カウンタ・プレゼンス・通知 invalidation・
      リストが実際の接続数と一致することを確認してから、運用
      トラフィックを戻す。
 
-  8経路のいずれも Redis にページ本文を保持しません — `Page.yjsState`
+  9経路のいずれも Redis にページ本文を保持しません — `Page.yjsState`
   を含むページ本文の真実の源は MongoDB のみです。したがって、これら
   Redis インスタンスのコールドスタートはページ本文のデータ消失を
   意味しません — [障害時の挙動](./realtime-collab#障害時の挙動-failure-modes) 参照。
@@ -145,8 +146,11 @@ pub/sub・編集者上限カウンタ・プレゼンス・通知 invalidation・
   失うものはありません。編集者上限カウンタと rate limiting は
   意図的に fail-open / インメモリ window へのフォールバックとして
   リセットされます。LRU (最近見たページ) だけはフォールバックが
-  なく、コールドスタートでそのリストを完全に失います — 消費経路
-  ごとの内訳は[シングルインスタンスデプロイ](./realtime-collab#シングルインスタンスデプロイ)
+  なく、コールドスタートでそのリストを完全に失います。アカウント
+  連携の未確定な link-completion コードも同様に失われますが、これは
+  確認待ちの連携が 404 になり、利用者が連携をやり直すだけです —
+  確定済みの `UserIdentity` 行そのものは MongoDB にしか存在しません。
+  消費経路ごとの内訳は[シングルインスタンスデプロイ](./realtime-collab#シングルインスタンスデプロイ)
   参照。
 
 ### 見直しトリガー (re-review triggers)
@@ -207,6 +211,7 @@ pub/sub・編集者上限カウンタ・プレゼンス・通知 invalidation・
 | 設定同期 (Config) | `PUBLISH`, `SUBSCRIBE` | `crowi:<instance-slug>:config` |
 | rate limiting | `INCR`, `PEXPIRE` | `crowi:<instance-slug>:ratelimit:<name>:<userId>:<window>` |
 | LRU (最近見たページ) | `ZREMRANGEBYRANK`, `ZADD`, `ZRANGE`, `MULTI`, `EXEC` (書き込み 2 コマンドは `MULTI`/`EXEC` トランザクション内で発行 — この 2 つを欠く ACL では LRU の書き込みが失敗する) | `crowi:<instance-slug>:lru:<namespace>` (`<namespace>` は引き続き運用者/呼び出し元が選ぶ値、例: user id) |
+| アカウント連携 (link-completion ストア) | `GET`, `SET`, `EVAL`, `TIME` (期限は api プロセスではなく Redis 自身の時計で判定される) | `crowi:<instance-slug>:link-completion-state:<hash>`, `crowi:<instance-slug>:link-completion-record:<hash>`, `crowi:<instance-slug>:link-completion-consumed:<hash>` — `<hash>` は平文の state / 確認コードの SHA-256 ハッシュであり、平文そのものは含まれない |
 | boot 接続 | 接続確立コマンドのみ | なし |
 
 見落としやすい、もう2種類のコマンド発行元があります (いずれも
@@ -266,7 +271,7 @@ limiter が必要とする ACL の権限が漏れていると、Redis 障害時�
 まったく同じ「サイレントに検知されない無効化」が起きます — ACL を
 絞る際は注意してください。
 
-**key/channel の分離**: boot 接続そのものを除く7つの Redis 消費経路は、
+**key/channel の分離**: boot 接続そのものを除く8つの Redis 消費経路は、
 いずれもインスタンス単位の keyspace `crowi:<instance-slug>:...`
 (詳細は [`REDIS_KEY_PREFIX`](./realtime-collab#関連環境変数) 参照 —
 slug のデフォルトは `CLIENT_URL` のホスト名、または明示 override) で
@@ -279,7 +284,10 @@ cross-talk なしに1つの Redis を安全に共有できます:
 (通知)、`crowi:<instance-slug>:config` (設定同期 — もはや全インスタ
 ンス共通の固定チャンネルではない)、`crowi:<instance-slug>:ratelimit:*`
 (rate limiting)、`crowi:<instance-slug>:lru:<namespace>` (最近見た
-ページ。`<namespace>` は引き続き運用者/呼び出し元が選ぶ値)。同一
+ページ。`<namespace>` は引き続き運用者/呼び出し元が選ぶ値)、
+`crowi:<instance-slug>:link-completion-{state,record,consumed}:<hash>`
+(アカウント連携。`<hash>` は平文の state 値/確認コードの SHA-256
+ハッシュで、平文がそのまま keyspace に現れることはない)。同一
 Crowi インスタンスの2レプリカは同じ `<instance-slug>` に解決されます
 (同じ `CLIENT_URL`、または同じ明示 `REDIS_KEY_PREFIX` override) —
 これが意図したレプリカ間 fan-out を維持する条件です。この Redis を
@@ -305,7 +313,7 @@ Valkey の BSD-3-Clause ライセンスと独立したガバナンスは、そ�
 digest を自分たちのリリースツールに記録し、汎用的な distro alias
 を互換性の主張の代わりに使わないでください。
 
-**CI が検証していること/していないこと**: CI は8経路すべてに対して
+**CI が検証していること/していないこと**: CI は9経路すべてに対して
 実 Redis 8 の smoke テストを実行しますが、**制限付き ACL ユーザー
 に対しては実行していません** — 上記の行列はソースコードの精査から
 書き起こしたものであり、自動化された permission-denial テストで

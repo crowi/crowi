@@ -61,6 +61,17 @@ that user: the MCP can only see and modify pages the user can, and can never
 exceed the user's own permissions. `admin:*` scopes are never issuable to a
 PAT, so admin operations are unreachable through the MCP.
 
+### PATs suit concurrent agent use
+
+PATs are a good fit for agent workloads that run several MCP client processes
+against the same account at once. A PAT can be issued with no expiry at all,
+and — unlike Crowi's OAuth tokens — it never **rotates**. The OAuth refresh
+tokens used by `@crowi/cli` and the iOS app are protected by rotation + reuse
+detection, so two processes refreshing concurrently can end up with one of
+them presenting an already-rotated-away token. Agent workloads that run
+concurrently as a matter of course avoid this class of conflict entirely by
+using a PAT, which never rotates in the first place.
+
 ## Connecting a client
 
 For a client that supports static headers (e.g. Claude Code):

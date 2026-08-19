@@ -61,6 +61,21 @@ jobs:
       - name: Check publishable package metadata
         run: pnpm check:packages
 
+      # Do NOT add `--tag` here while `.changeset/pre.json` has `mode: "pre"`:
+      # `changeset publish` rejects any explicit tag in pre mode outright
+      # ("Releasing under custom tag is not allowed in pre mode",
+      # `@changesets/cli@2.31.0`), before it reaches the per-package tag logic,
+      # so the whole release aborts — no publish, and the dist tag, aggregate
+      # release and Docker steps never run because `published` stays false.
+      #
+      # Which dist tag each package gets is therefore decided by changesets:
+      # in pre mode a package goes to the pre tag unless every one of its
+      # published versions is a prerelease carrying that same tag, in which
+      # case it goes to `latest`. Twenty of the twenty-one land on `latest`
+      # that way. `@crowi/plugin-slack` does not, because a hand-published
+      # `0.1.0-dev` predates its alphas, so its releases go to `alpha` and its
+      # `latest` has to be moved by hand after any release that publishes it
+      # (see operations/release-runbook.mdx). Leaving pre mode resolves it.
       - name: Create Release PR or Publish
         id: changesets
         uses: changesets/action@v1
