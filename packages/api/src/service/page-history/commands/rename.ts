@@ -3,7 +3,9 @@ import { Types } from 'mongoose';
 import Crowi from 'src/crowi';
 import type { PageDocument } from 'src/models/page';
 import type { PageHistoryEventSource } from 'src/models/page-history-event';
+import type { PageHistoryOperationDocument } from 'src/models/page-history-operation';
 
+import type { StrandedTransitionAction } from '../operation';
 import { type PageTransitionOutcome, runPageTransition } from '../transition';
 
 /**
@@ -22,7 +24,16 @@ import { type PageTransitionOutcome, runPageTransition } from '../transition';
 
 export interface RenamePageCommandInput {
   page: PageDocument;
+  /**
+   * Where the page started. Passed in rather than read off `page.path`: a
+   * resumed execution runs against a page that has ALREADY moved, so deriving
+   * it there would describe a second move out of the destination. It comes from
+   * the operation record, which is why the record stores it.
+   */
+  fromPath: string;
   toPath: string;
+  fromStatus: string | null;
+  fromStatusPresent: boolean;
   operationId: string;
   actor: Types.ObjectId | null;
   user: unknown;
@@ -60,13 +71,7 @@ export async function renamePageCommand(crowi: Crowi, input: RenamePageCommandIn
   const Revision = crowi.model('Revision');
   const pageEvent = crowi.event('Page');
 
-  const fromPath = input.page.path;
-  // Read raw: an absent `status` and an explicit null are different documents,
-  // and the entering CAS has to pin whichever one this page actually is.
-  const raw = (await Page.collection.findOne({ _id: input.page._id })) as { status?: string | null } | null;
-  const fromStatusPresent = raw != null && 'status' in raw;
-  const fromStatus = fromStatusPresent ? (raw?.status ?? null) : null;
-
+  const { fromPath, fromStatus, fromStatusPresent } = input;
   let redirectCreated = false;
 
   const outcome = await runPageTransition(crowi, {
@@ -112,4 +117,30 @@ export async function renamePageCommand(crowi: Crowi, input: RenamePageCommandIn
   }
 
   return { ...outcome, redirectCreated };
+}
+
+/**
+ * Finish a rename whose transition is still held by its operation, for the
+ * operator's repair sweep. The command's input is rebuilt from the record, not
+ * from the page — by then the page is already at the destination, so reading
+ * intent off it would describe the move as already done.
+ */
+export async function resumeRenameCommand(crowi: Crowi, operation: PageHistoryOperationDocument): Promise<StrandedTransitionAction> {
+  const Page = crowi.model('Page');
+  const page = (await Page.findById(operation.page).exec()) as PageDocument | null;
+  if (page == null || operation.fromPath == null || operation.toPath == null) return 'blocked';
+
+  const outcome = await renamePageCommand(crowi, {
+    page,
+    fromPath: operation.fromPath,
+    toPath: operation.toPath,
+    fromStatus: operation.fromStatus ?? null,
+    fromStatusPresent: operation.fromStatusPresent === true,
+    operationId: operation.operationId,
+    actor: operation.actor,
+    user: operation.actor,
+    source: operation.source ?? 'system',
+    createRedirectPage: operation.createRedirect === true,
+  });
+  return outcome.status === 'committed' || outcome.status === 'already-settled' ? 'resumed' : 'blocked';
 }

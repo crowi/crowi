@@ -1,4 +1,6 @@
 import type Crowi from 'src/crowi';
+import { resumeRenameCommand } from 'src/service/page-history/commands/rename';
+import { resumeTrashCommand } from 'src/service/page-history/commands/trash';
 import { type StrandedTransitionResumer, type StrandedTransitionScanResult, resumeStrandedTransitions } from 'src/service/page-history/operation';
 import { redactErrorReason, repairPendingEntries, scanUnsequencedRevisions } from 'src/service/page-history/repair';
 
@@ -87,6 +89,28 @@ export interface RunPageHistoryRepairOptions {
   resumeCommand?: StrandedTransitionResumer;
 }
 
+/**
+ * Which command finishes a stalled transition, keyed by the `kind` the entering
+ * CAS recorded on the page.
+ *
+ * This layer owns the table because it is the one place that may import the
+ * command services: they import the operation service, so the sweep itself
+ * cannot reach back for them. A `kind` with no entry is reported rather than
+ * guessed at — the sweep never invents a way to finish a command it does not
+ * know.
+ */
+const RESUMERS: Record<string, (crowi: Crowi, operation: Parameters<StrandedTransitionResumer>[0]) => ReturnType<StrandedTransitionResumer>> = {
+  rename: resumeRenameCommand,
+  trash: resumeTrashCommand,
+};
+
+const defaultResumeCommand =
+  (crowi: Crowi): StrandedTransitionResumer =>
+  async (operation) => {
+    const resume = RESUMERS[operation.command];
+    return resume == null ? 'blocked' : resume(crowi, operation);
+  };
+
 export async function runPageHistoryRepair(crowi: Crowi, opts: RunPageHistoryRepairOptions = {}): Promise<PageHistoryRepairSummary> {
   // No flag given -> outbox repair only (the always-safe default).
   const runOutbox = opts.outbox === true || (opts.scan !== true && opts.transitions !== true);
@@ -125,7 +149,7 @@ export async function runPageHistoryRepair(crowi: Crowi, opts: RunPageHistoryRep
     summary.transitions = await resumeStrandedTransitions(crowi, {
       batchSize: opts.batchSize,
       resumeAfterOperationId: opts.resumeAfterOperationId,
-      resumeCommand: opts.resumeCommand,
+      resumeCommand: opts.resumeCommand ?? defaultResumeCommand(crowi),
     });
   }
 

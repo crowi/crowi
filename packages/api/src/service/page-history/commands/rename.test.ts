@@ -63,7 +63,10 @@ describe('service/page-history/commands/rename (RFC-0021 Phase 2c-2a)', () => {
   const run = (page, toPath: string, createRedirectPage = false) =>
     renamePageCommand(crowi, {
       page,
+      fromPath: page.path,
       toPath,
+      fromStatus: page.status ?? null,
+      fromStatusPresent: page.status != null,
       operationId: nextOperationId(),
       actor: user._id,
       user,
@@ -218,28 +221,27 @@ describe('service/page-history/commands/rename (RFC-0021 Phase 2c-2a)', () => {
       await Page.updateOne({ _id: page._id }, { $set: { pendingHistoryEntry: { entryId: new Types.ObjectId(), type: 'page_event' } } });
       const operationId = nextOperationId();
 
-      const stalled = await renamePageCommand(crowi, {
-        page,
+      // The durable input the operation record would hold. A resume MUST reuse
+      // it: by then the page is already at the destination, so re-deriving
+      // `fromPath` from the page would describe a second move out of it.
+      const durable = {
+        fromPath: '/rename/ac13',
         toPath: '/rename/ac13-moved',
+        fromStatus: STATUS_PUBLISHED,
+        fromStatusPresent: true,
         operationId,
         actor: user._id,
         user,
-        source: 'web',
+        source: 'web' as const,
         createRedirectPage: false,
-      });
+      };
+
+      const stalled = await renamePageCommand(crowi, { page, ...durable });
       expect(stalled.status).toBe('incomplete');
 
       // Clear the jam and replay the same operation, as repair would.
       await Page.updateOne({ _id: page._id }, { $set: { pendingHistoryEntry: null } });
-      const resumed = await renamePageCommand(crowi, {
-        page: await Page.findById(page._id),
-        toPath: '/rename/ac13-moved',
-        operationId,
-        actor: user._id,
-        user,
-        source: 'web',
-        createRedirectPage: false,
-      });
+      const resumed = await renamePageCommand(crowi, { page: await Page.findById(page._id), ...durable });
 
       expect(resumed.status).toBe('committed');
       const revisions = await Revision.find({ page: page._id }).lean();

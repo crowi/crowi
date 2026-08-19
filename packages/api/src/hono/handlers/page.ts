@@ -1294,7 +1294,10 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
 
           const outcome = await renamePageCommand(crowi, {
             page: pageData,
+            fromPath: pageData.path,
             toPath: newPagePath,
+            fromStatus: pageData.status ?? null,
+            fromStatusPresent: pageData.status != null,
             operationId,
             actor: user._id,
             user,

@@ -428,6 +428,14 @@ export interface PageModel extends Model<PageDocument> {
   findUnfurlablePagesByIds(ids): any;
   findUnfurlablePagesByPaths(paths): any;
   updatePageProperty(page, updateData, options?: { advanceEpoch?: boolean }): any;
+  /**
+   * RFC-0021 Phase 2c-2a — exposed as statics so the path-moving commands can
+   * run them. Both close over `crowi`, so lifting them to module scope would
+   * mean threading it through by hand; the command services already hold the
+   * Page model, so reaching them here costs nothing.
+   */
+  invalidateLiveCollabDoc(pageId: Types.ObjectId | string, reason?: InvalidateReason): void;
+  purgeCollabLineage(pageId: Types.ObjectId | string): Promise<void>;
   updateGrant(page, grant, userData, options?: { source?: string }): any;
   pushToGrantedUsers(page, userData): any;
   pushRevision(pageData, newRevision, user, options?: PushRevisionOptions): any;
@@ -1970,6 +1978,12 @@ export default (crowi: Crowi) => {
     // `GRANT_RESTRICTED` pages can not be accessed using path
     return Page.findUnfurlablePages('path', paths, [GRANT_PUBLIC]);
   };
+
+  // RFC-0021 Phase 2c-2a — the same closures the lifecycle writes above use,
+  // reachable from the path-moving command services. The bodies stay where
+  // they are so they keep their `crowi` capture.
+  pageSchema.statics.invalidateLiveCollabDoc = (pageId: Types.ObjectId | string, reason?: InvalidateReason) => invalidateLiveCollabDoc(pageId, reason);
+  pageSchema.statics.purgeCollabLineage = (pageId: Types.ObjectId | string) => purgeCollabLineage(pageId);
 
   pageSchema.statics.updatePageProperty = function (page, updateData, options?: { advanceEpoch?: boolean }) {
     // RFC-0017 Phase 1 §D1/§D10 — a lifecycle caller (rename / soft delete /
