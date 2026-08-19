@@ -3,7 +3,9 @@ const { getSentinelPath } = require('./test-mongo-sentinel');
 const { REDIS_SMOKE_CATEGORIES, listMarkedCategories, removeAllMarkersAndSentinel } = require('./redis-smoke-sentinel');
 
 /**
- * feature-redis-8-upgrade Phase 2 — CI-gate the 8 Redis smoke categories.
+ * feature-redis-8-upgrade Phase 2 — CI-gate the 9 Redis smoke categories
+ * (8 Redis-backed features + `boot`, including the account-link completion
+ * store's `link-completion` category).
  * jest `globalTeardown` runs ONCE, in the main process, strictly AFTER every
  * worker's every test file has finished (same jest-internals guarantee
  * `test-mongo-sentinel.js` documents for `globalSetup`, mirrored here for

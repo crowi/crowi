@@ -16,7 +16,14 @@
  *   4. `crowi.getBaseUrl()` exact match (covers deployments that
  *      reverse-proxy the api on its own hostname without setting
  *      `CLIENT_URL`).
- *   5. Anything else is rejected (returns `undefined` from the
+ *   5. `crowi.getFederatedAuthPublicUrls()?.webUrl` exact match — the
+ *      resolved, already origin-validated `AUTH_PUBLIC_WEB_URL` (falling back to
+ *      `CLIENT_URL`). Lets a same-site split-origin deployment
+ *      (`AUTH_PUBLIC_WEB_URL` different from `CLIENT_URL`, or
+ *      `CLIENT_URL` unset) still allow the credentialed link-start POST
+ *      from the web origin. This is boot-resolved from env, never
+ *      derived from the request's own `Origin`/`Host`.
+ *   6. Anything else is rejected (returns `undefined` from the
  *      callback → Hono omits `Access-Control-Allow-Origin`, which
  *      makes the browser fail the CORS check).
  *
@@ -26,8 +33,8 @@
  * the wire-format diff is zero.
  */
 import Debug from 'debug';
-import { cors } from 'hono/cors';
 import type { MiddlewareHandler } from 'hono';
+import { cors } from 'hono/cors';
 
 import type Crowi from 'src/crowi';
 
@@ -63,6 +70,11 @@ const buildOriginResolver = (crowi: Crowi) => {
 
     const baseUrl = crowi.getBaseUrl();
     if (baseUrl && origin === baseUrl) {
+      return origin;
+    }
+
+    const federatedAuthPublicUrls = crowi.getFederatedAuthPublicUrls();
+    if (federatedAuthPublicUrls && origin === federatedAuthPublicUrls.webUrl) {
       return origin;
     }
 

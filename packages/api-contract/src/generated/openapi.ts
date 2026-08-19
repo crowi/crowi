@@ -795,15 +795,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Top-level navigation that redirects the browser to the named provider */
+        /** Top-level navigation that redirects the browser to the named provider (public sign-in ONLY) */
         get: {
             parameters: {
                 query: {
                     continue: string;
                     handoff_jwk: string;
                     handoff_proof: string;
-                    link?: "1";
-                    link_grant?: string;
                 };
                 header?: never;
                 path: {
@@ -820,38 +818,8 @@ export interface paths {
                     };
                     content?: never;
                 };
-                /** @description Malformed continue / sender proof, or an invalid/expired/mismatched link grant */
+                /** @description Malformed continue / sender proof, OR a raw `link` query key is present (any value) — the retired link-via-GET flow is gone entirely; a raw `link` key is always rejected rather than silently downgraded to public sign-in. */
                 400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            error: {
-                                code: components["schemas"]["ErrorCode"];
-                                message: string;
-                                details?: unknown;
-                            };
-                        };
-                    };
-                };
-                /** @description link=1 without a web-session JWT — never downgraded to the public sign-in start */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            error: {
-                                code: components["schemas"]["ErrorCode"];
-                                message: string;
-                                details?: unknown;
-                            };
-                        };
-                    };
-                };
-                /** @description link=1 with a non-web credential (PAT / OAuth access token) */
-                403: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -929,7 +897,7 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description Redirect to the trusted web login/complete page on success, or back to the trusted web /login on failure */
+                /** @description Ordinary sign-in: redirect to the trusted web login/complete page on success, or back to the trusted web /login on failure. Link flow (query `state` in the reserved crowilnk_ namespace): success redirects to `/me?provider=<name>&link_completion=<code>` (provider + completion code ONLY); failure redirects to `/me?provider=<name>&link=link_failed` (provider + the generic marker ONLY — never a completion code, never accountLabel, never the underlying reason). */
                 302: {
                     headers: {
                         [name: string]: unknown;
@@ -1162,7 +1130,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/auth/providers/{name}/link-grants": {
+    "/auth/providers/{name}/link-start": {
         parameters: {
             query?: never;
             header?: never;
@@ -1171,7 +1139,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Mint a short-lived, opaque grant that authorizes ONE link start for the current web session */
+        /** Mint an IdP authorization URL + flow-specific state cookie for the current web session (stage 1 of 3) */
         post: {
             parameters: {
                 query?: never;
@@ -1181,26 +1149,160 @@ export interface paths {
                 };
                 cookie?: never;
             };
-            requestBody?: {
-                content: {
-                    "application/json": {
-                        handoffChallenge: string;
-                    };
-                };
-            };
+            requestBody?: never;
             responses: {
-                /** @description Opaque single-use grant id */
+                /** @description Authorization URL to navigate the browser to. Sets a flow-specific, 300s state cookie. */
                 200: {
                     headers: {
                         [name: string]: unknown;
                     };
                     content: {
                         "application/json": {
-                            linkGrant: string;
+                            /** Format: uri */
+                            authorizationUrl: string;
                         };
                     };
                 };
-                /** @description Authentication required */
+                /** @description The signed link-state cookie value would exceed its per-cookie byte limit, or the aggregate Cookie-header admission budget cannot be satisfied even after pruning — no Set-Cookie or authorizationUrl is returned. */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                code: components["schemas"]["ErrorCode"];
+                                message: string;
+                                details?: unknown;
+                            };
+                        };
+                    };
+                };
+                /** @description Authentication required (credential missing/invalid — resolved by middleware before this route's own validation) */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "AUTHENTICATION_REQUIRED";
+                                /** @enum {string} */
+                                message: "Authentication is required";
+                                redirectTo?: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Non-web credential (PAT / OAuth access token) — linking is a session-level account change */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                code: components["schemas"]["ErrorCode"];
+                                message: string;
+                                details?: unknown;
+                            };
+                        };
+                    };
+                };
+                /** @description Unknown, unconfigured, or credential-kind provider */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                code: components["schemas"]["ErrorCode"];
+                                message: string;
+                                details?: unknown;
+                            };
+                        };
+                    };
+                };
+                /** @description Internal server error (e.g. a declared multi-instance topology with no reachable Redis) */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "INTERNAL_ERROR";
+                                /** @enum {string} */
+                                message: "Internal server error";
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/providers/{name}/link-completions/{code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read a pending link completion's confirmation details (stage 3a — non-destructive) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    name: string;
+                    code: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Pending, unconsumed completion bound to the caller — provider label fallback + optional display-only accountLabel */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            provider: string;
+                            accountLabel?: string;
+                        };
+                    };
+                };
+                /** @description Authenticated but `{code}` fails the 43-character base64url shape (VALIDATION_ERROR) */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "VALIDATION_ERROR";
+                                message: string;
+                                details?: {
+                                    fieldErrors: {
+                                        [key: string]: string[];
+                                    };
+                                    formErrors: string[];
+                                };
+                            };
+                        };
+                    };
+                };
+                /** @description Authentication required — resolved by middleware before this route's own `{code}` shape validation, so an unauthenticated + malformed code is still 401, never 400 */
                 401: {
                     headers: {
                         [name: string]: unknown;
@@ -1232,7 +1334,7 @@ export interface paths {
                         };
                     };
                 };
-                /** @description Unknown, unconfigured, or credential-kind provider */
+                /** @description Never-issued, expired, retention-expired, or bound to a different user/provider/authVersion — all collapse to the same generic NOT_FOUND (no result-unknown code exists) */
                 404: {
                     headers: {
                         [name: string]: unknown;
@@ -1243,6 +1345,148 @@ export interface paths {
                                 code: components["schemas"]["ErrorCode"];
                                 message: string;
                                 details?: unknown;
+                            };
+                        };
+                    };
+                };
+                /** @description The caller's own completion was already consumed */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "LINK_COMPLETION_CONSUMED";
+                                message: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "INTERNAL_ERROR";
+                                /** @enum {string} */
+                                message: "Internal server error";
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Atomically consume a link completion code and insert the identity (stage 3b — terminal) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    name: string;
+                    code: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Linked (fresh winner OR an already-consumed replay that resolves to the same owner) — the same body either way */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @enum {string} */
+                            result: "linked";
+                        };
+                    };
+                };
+                /** @description Authenticated but `{code}` fails the 43-character base64url shape (VALIDATION_ERROR) */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "VALIDATION_ERROR";
+                                message: string;
+                                details?: {
+                                    fieldErrors: {
+                                        [key: string]: string[];
+                                    };
+                                    formErrors: string[];
+                                };
+                            };
+                        };
+                    };
+                };
+                /** @description Authentication required — resolved by middleware before this route's own `{code}` shape validation, so an unauthenticated + malformed code is still 401, never 400 */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "AUTHENTICATION_REQUIRED";
+                                /** @enum {string} */
+                                message: "Authentication is required";
+                                redirectTo?: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Non-web credential (PAT / OAuth access token) */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                code: components["schemas"]["ErrorCode"];
+                                message: string;
+                                details?: unknown;
+                            };
+                        };
+                    };
+                };
+                /** @description Never-issued, expired, retention-expired, or bound to a different user/provider — all collapse to the same generic NOT_FOUND */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                code: components["schemas"]["ErrorCode"];
+                                message: string;
+                                details?: unknown;
+                            };
+                        };
+                    };
+                };
+                /** @description FEDERATED_IDENTITY_IN_USE (provider account owned by someone else, or this user already has a different account of this provider), FEDERATED_LINK_AUTH_STATE_CHANGED (fresh User re-read found the session inactive or authVersion changed since link-start), or FEDERATED_LINK_NOT_LINKED (an already-consumed replay whose original insert has not landed) — no other conflict code exists. */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "FEDERATED_IDENTITY_IN_USE" | "FEDERATED_LINK_AUTH_STATE_CHANGED" | "FEDERATED_LINK_NOT_LINKED";
+                                message: string;
                             };
                         };
                     };
@@ -15235,7 +15479,7 @@ export interface components {
             };
         };
         /** @enum {string} */
-        ErrorCode: "AUTHENTICATION_REQUIRED" | "ADMIN_REQUIRED" | "THIRD_PARTY_AUTH_REQUIRED" | "USER_REGISTERED" | "USER_SUSPENDED" | "USER_INVITED" | "USER_NOT_ACTIVE" | "EMAIL_NOT_CONFIRMED" | "INTERNAL_ERROR" | "VALIDATION_ERROR" | "INVALID_REQUEST" | "NOT_FOUND" | "CONFLICT" | "SERVICE_UNAVAILABLE" | "APPLICATION_NOT_INSTALLED" | "INVALID_PAGE_ID" | "PAGE_NOT_FOUND" | "PAGE_NOT_GRANTED" | "PAGE_REVISION_ERROR" | "PAGE_TWIN_EXISTS" | "INVALID_GRANT" | "COMMENT_NOT_FOUND" | "NOTIFICATION_NOT_FOUND" | "USER_NOT_FOUND" | "USER_EXISTS" | "USERNAME_TAKEN" | "EMAIL_TAKEN" | "EMAIL_NOT_ALLOWED" | "INVALID_ACTIVATION_TOKEN" | "INVALID_INVITE_TOKEN" | "INVITE_ALREADY_ACCEPTED" | "INVALID_RESET_TOKEN" | "INVALID_EMAIL_CHANGE_TOKEN" | "INVALID_CREDENTIALS" | "REFRESH_TOKEN_REQUIRED" | "REGISTRATION_CLOSED" | "FEDERATED_HANDOFF_INVALID" | "FEDERATED_HANDOFF_CONSUMED" | "ENCRYPTION_NOT_CONFIGURED" | "MAIL_FROM_NOT_CONFIGURED" | "MAIL_TEST_FAILED" | "PLUGIN_NOT_FOUND" | "PLUGIN_CONFIG_VALIDATION_FAILED";
+        ErrorCode: "AUTHENTICATION_REQUIRED" | "ADMIN_REQUIRED" | "THIRD_PARTY_AUTH_REQUIRED" | "USER_REGISTERED" | "USER_SUSPENDED" | "USER_INVITED" | "USER_NOT_ACTIVE" | "EMAIL_NOT_CONFIRMED" | "INTERNAL_ERROR" | "VALIDATION_ERROR" | "INVALID_REQUEST" | "NOT_FOUND" | "CONFLICT" | "SERVICE_UNAVAILABLE" | "APPLICATION_NOT_INSTALLED" | "INVALID_PAGE_ID" | "PAGE_NOT_FOUND" | "PAGE_NOT_GRANTED" | "PAGE_REVISION_ERROR" | "PAGE_TWIN_EXISTS" | "INVALID_GRANT" | "COMMENT_NOT_FOUND" | "NOTIFICATION_NOT_FOUND" | "USER_NOT_FOUND" | "USER_EXISTS" | "USERNAME_TAKEN" | "EMAIL_TAKEN" | "EMAIL_NOT_ALLOWED" | "INVALID_ACTIVATION_TOKEN" | "INVALID_INVITE_TOKEN" | "INVITE_ALREADY_ACCEPTED" | "INVALID_RESET_TOKEN" | "INVALID_EMAIL_CHANGE_TOKEN" | "INVALID_CREDENTIALS" | "REFRESH_TOKEN_REQUIRED" | "REGISTRATION_CLOSED" | "FEDERATED_HANDOFF_INVALID" | "FEDERATED_HANDOFF_CONSUMED" | "FEDERATED_IDENTITY_IN_USE" | "FEDERATED_LINK_AUTH_STATE_CHANGED" | "FEDERATED_LINK_NOT_LINKED" | "LINK_COMPLETION_CONSUMED" | "ENCRYPTION_NOT_CONFIGURED" | "MAIL_FROM_NOT_CONFIGURED" | "MAIL_TEST_FAILED" | "PLUGIN_NOT_FOUND" | "PLUGIN_CONFIG_VALIDATION_FAILED";
         ApplicationNotInstalledError: {
             error: {
                 /** @enum {string} */

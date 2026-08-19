@@ -308,9 +308,14 @@ payload = {
   codeVerifier?,      // present only when the driver declares PKCE
   provider,
   continueUrl,        // post-login redirect — MUST be validated (see below)
-  linkToUserId?,      // reserved for explicit account linking (§11)
 }
 ```
+
+Account linking (§5.4) does not reuse this payload or this cookie name: it
+signs a separate `FederatedLinkState` under a reserved `crowilnk_` state
+namespace and its own `crowi.oauthLinkState.<state>` cookie, and the sign-in
+state validator rejects a payload carrying link fields or the reserved
+namespace outright. The two flows never share a state value or a cookie.
 
 Stateless, no extra infra, survives multi-instance without sticky sessions.
 
@@ -389,38 +394,94 @@ So the callback ends with a **one-time handoff code**, not tokens:
   refresh machinery is reused unchanged. Works in dev (web :4302 / api :4301)
   because the handoff is a fetch, not a cookie.
 
-### §5.4 Account linking (in v1)
+### §5.4 Account linking (3 authenticated stages)
 
-Linking attaches a provider identity to an **already authenticated** user. It
-reuses the skeleton above rather than adding a second flow: the same `start`,
-the same IdP round trip, the same state cookie, the same callback. Only the
-terminal action differs — insert a `UserIdentity` for the current user instead
-of resolving or provisioning one.
+A top-level browser navigation (`<a href>` / `window.location.assign`)
+cannot carry an `Authorization` header, so a `jwtAuth`-protected `GET
+/start` can never itself be the credential-checked step for linking — and
+widening the `crowi.accessToken` cookie's `Path` beyond its existing
+headerless-attachment-delivery scope was rejected as its own security
+regression. The design below instead moves every DB-mutating and
+credential-checked step off the top-level GET entirely.
 
-- **`GET /api/auth/providers/:name/start?link=1` runs under `jwtAuth`.**
-  Without `link=1` the route stays public (it is the login entry point). With
-  it, an unauthenticated request is rejected rather than silently falling back
-  to the login flow — a link attempt that quietly becomes a sign-in is exactly
-  the confusion that makes linking dangerous.
-- **The state cookie carries `linkToUserId`** (§5.1), set from the
-  authenticated user, and inherits the state machinery's existing guarantees:
-  signed, one-time, expiring. The user id therefore comes from the cookie the
-  server minted, never from the callback's query string.
-- **The callback branches on `linkToUserId`'s presence.** When set, it skips
-  `resolveOrProvisionUser` entirely — no provisioning, no registration-mode
-  check, no email matching. It inserts
-  `UserIdentity { userId: linkToUserId, provider, providerUserId }` and
-  redirects back to the settings page that started the flow.
-- **A `(provider, providerUserId)` already bound to another user is refused.**
-  The unique index makes this a duplicate-key error; the callback maps it to a
-  redirect carrying "this <provider> account is already linked to another
-  Crowi user". It must **not** move the identity to the requesting user:
-  re-pointing an existing binding on the strength of an IdP round trip is an
-  account-takeover primitive. Unlinking from the owning account is that user's
-  own action.
+Linking attaches a provider identity to an **already authenticated** user, as
+three separate authenticated steps rather than one `jwtAuth`-gated top-level
+redirect:
+
+1. **`POST /api/auth/providers/:name/link-start`** (authenticated, web-session
+   only — a PAT/OAuth access token is refused with `403`, since linking is a
+   session-level account change, not an API-scoped action). Mints the IdP
+   authorization URL and a flow-specific, `HttpOnly`/`SameSite=Lax` cookie
+   (`crowi.oauthLinkState.<state>`, `Path=/api/auth/providers`, 300s) whose
+   signed payload carries the SERVER-resolved `userId`/`authVersion` — never a
+   query parameter, never anything the callback or a copied URL could steer.
+   The browser then does the top-level navigation itself, unauthenticated,
+   exactly like ordinary sign-in's `start`.
+2. **`GET /api/auth/providers/:name/callback`** branches on the query
+   `state`'s reserved `crowilnk_` namespace prefix — decided BEFORE the fixed
+   sign-in state cookie is ever read or deleted, so a link-branch callback
+   with no matching link cookie can never collide with an unrelated,
+   concurrent ordinary sign-in on the same browser. The link branch verifies
+   the flow cookie, completes the OAuth2/OIDC protocol exchange, and — without
+   reading or writing `User` / `UserIdentity` / `PendingAuthRegistration` at
+   all — atomically issues a one-time confirmation code (idempotent per
+   `state`: a duplicate/racing callback for the same `state` never mints a
+   second code) via a short-lived store (Redis when `CROWI_MULTI_INSTANCE` is
+   declared or available, an in-process Map otherwise), then redirects to
+   `/me?provider=<name>&link_completion=<code>`. A protocol failure redirects
+   to `/me?provider=<name>&link=link_failed` instead — never revealing which
+   step failed, and never carrying a code.
+3. **`GET`/`POST /api/auth/providers/:name/link-completions/:code`**
+   (authenticated, web-session only). The `GET` is a non-destructive read that
+   returns the provider's display label plus an optional display-only
+   `accountLabel`, bound to the caller's own `userId`/`provider`/`authVersion`
+   — a mismatch or an expired/never-issued code is a uniform `404`, never
+   distinguishing "never existed" from "expired" from "belongs to someone
+   else". The `POST` atomically consumes the code, then — only for the
+   consume winner — re-reads the `User` FRESH
+   (`.select('status authVersion')`) and confirms it is still `ACTIVE` with
+   the SAME `authVersion` the code was issued under; either check failing
+   burns the code with a `409` and inserts nothing. Only past that fence does
+   it call the existing linking terminal to insert
+   `UserIdentity { userId, provider, providerUserId }`.
+
+Each stage's cookie/code has its own lifetime — link-start state 300s,
+confirmation code 300s from the callback's issue point, and a CONSUMED
+record retained 5 minutes so a client that lost the final POST's response can
+safely resend the identical request and observe the same outcome (re-derived
+from the database via the already-consumed code, never a second identity
+insert). There is no compensating rollback after the terminal insert — the
+few-millisecond window between the fresh-read fence and the insert is treated
+as an ordinary legitimate race with any other operation that could complete
+in either order, not a gap requiring cleanup.
+
+- **A `(provider, providerUserId)` already bound to another user is refused**,
+  the same as before: the unique index makes this a duplicate-key error, and
+  the terminal maps it to a non-identifying `409 FEDERATED_IDENTITY_IN_USE` —
+  never naming the current owner. It must **not** move the identity to the
+  requesting user: re-pointing an existing binding on the strength of an IdP
+  round trip is an account-takeover primitive. Unlinking from the owning
+  account is that user's own action.
 - **Re-linking the same identity to the same user is a no-op success** — the
   insert conflicts on a row that already names this `userId`, which is the
-  desired end state, so it reports success rather than the error above.
+  desired end state, so it reports the same `200 { result: 'linked' }` rather
+  than the conflict above.
+- **The raw `link` query key on `GET /start` is retired and rejected.** Any
+  value (not just the old `1`) is a `400`, never a silent downgrade to
+  ordinary sign-in — a stale bookmarked/leaked `?link=1&link_grant=…` URL
+  from before this redesign must fail loudly, not quietly sign in as
+  whoever opens it.
+- **Same-site deployments only.** The `link-start` request is sent with
+  `credentials: 'include'`; a split-origin `AUTH_PUBLIC_WEB_URL` /
+  `AUTH_PUBLIC_API_URL` pair works as long as both share a registrable
+  domain (the production CORS allow-list includes the resolved
+  `AUTH_PUBLIC_WEB_URL` origin exactly), but a third-party-cookie deployment
+  is unsupported.
+- **Multi-instance requires `REDIS_URL`.** The confirmation-code store must
+  be shared so whichever replica handles the callback and whichever replica
+  later handles the confirmation observe the same record; every deadline
+  above is measured against Redis's own `TIME`, never a replica's local
+  clock.
 
 Auto-linking remains prohibited (§11, A-2). An *unauthenticated* callback whose
 email matches an existing local account still redirects to the login page with
@@ -616,7 +677,7 @@ no dynamic field rendering is built yet.
   of linking (an account-takeover path that trusts the IdP's email). Instead
   the callback redirects to the login page with a "this email already has an
   account — sign in, then link it" message. All linking is explicit, via the
-  authenticated `linkToUserId` path (§5.4). This supersedes the earlier §13
+  authenticated 3-stage flow (§5.4). This supersedes the earlier §13
   "lean" toward `email_verified`-based auto-link.
 - **Crowi-as-provider** changes — that is RFC-0010 (§2).
 
@@ -642,12 +703,15 @@ no dynamic field rendering is built yet.
    registration-mode gated, error-redirect failure path), one-time handoff
    code issuance (§5.3), JWT bridge. Wire `registerAuth` collected drivers
    into the `providers` list (the "later step" in `plugin-manager.ts`).
-4. **Linking branch** (§5.4): `jwtAuth` on `start?link=1`, `linkToUserId` in
-   the state cookie, the callback's link terminal, and the duplicate-identity
-   refusal. Placed immediately after the skeleton rather than inside it because
-   it adds no new route family — it is a branch on routes step 3 already
-   built — and keeping it separate keeps step 3 reviewable. Its settings-page
-   entry point lands with the web work in step 7.
+4. **Linking** (§5.4, shipped design): `POST link-start` + `GET`/`POST
+   link-completions/:code` as their own authenticated route family (not a
+   branch on step 3's `start`/`callback`), a short-lived confirmation-code
+   store (Redis or in-process Map), the callback's DB-non-mutating completion
+   issuance, the fresh-read fence before the existing linking terminal, and
+   the duplicate-identity refusal. Placed immediately after the skeleton
+   because it depends on step 3's `callback` OAuth2/OIDC exchange but adds its
+   own routes rather than extending it. Its settings-page entry point lands
+   with the web work in step 7.
 5. **`@crowi/plugin-google`** (OIDC factory) — the reference vendor plugin;
    proves the oidc path end-to-end.
 6. **`@crowi/plugin-github`** (OAuth2 factory) — proves the non-OIDC oauth2
@@ -684,7 +748,7 @@ them any more — it is step 4.)
 
 - **Email-match auto-linking** → **decided: never auto-link in v1** (§11, A-2).
   The earlier lean toward `email_verified`-based auto-link is dropped; all
-  linking is explicit via the authenticated `linkToUserId` path.
+  linking is explicit via the authenticated 3-stage flow (§5.4).
 
 **Resolved by re-evaluation (2026-06-13):**
 

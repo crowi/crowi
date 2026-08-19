@@ -261,6 +261,32 @@ function validateMultiInstance(raw: string): string | null {
   );
 }
 
+/**
+ * Whether the operator has declared a multi-instance deployment. Single
+ * source of truth for this runtime truth table — previously duplicated as a
+ * file-local copy in `src/collab/attach.ts` (moved here so the WS_TOKEN_SECRET
+ * boot guard and the federated-link completion store's topology selection
+ * can't drift apart).
+ *
+ * Convention (must match `.env.example` + the ja/en docs): a SET flag
+ * enables multi-instance. Truthy for `true`, `1`, or any integer ≥ 2 (a
+ * replica count); unset / `0` / `false` mean single-instance (the default).
+ * Any other non-empty string is treated as a truthy declaration (matching
+ * `validateMultiInstance`'s "did you mean" warning — an operator who typos
+ * the value still gets multi-instance semantics, not a silent single-
+ * instance fallback).
+ */
+export function isMultiInstanceDeclared(env: NodeJS.ProcessEnv = process.env): boolean {
+  const raw = env[CROWI_MULTI_INSTANCE_DESCRIPTOR.name];
+  if (!raw) return false;
+  const trimmed = raw.trim().toLowerCase();
+  if (trimmed === 'true') return true;
+  if (trimmed === 'false') return false;
+  const asNumber = Number(trimmed);
+  if (Number.isFinite(asNumber)) return asNumber >= 2 || trimmed === '1';
+  return true;
+}
+
 const VALID_NODE_ENVS = ['development', 'production', 'test'];
 
 function validateNodeEnv(raw: string): string | null {

@@ -65,10 +65,12 @@ jobs:
           --health-timeout 5s
           --health-retries 12
 
-      # Shared Redis 8.x, exercised by 7 of the 8 Redis-consumer smoke tests
+      # Shared Redis 8.x, exercised by 8 of the 9 Redis-consumer smoke tests
       # (feature-redis-8-upgrade Phase 2 — everything except Config pub/sub,
       # which needs a single-subscriber instance and uses `crowi-test-redis`
-      # below instead). `services:` can't reference `env.REDIS_IMAGE` (see
+      # below instead; the account-link `link-completion` smoke test also
+      # uses this shared instance). `services:` can't
+      # reference `env.REDIS_IMAGE` (see
       # the workflow-level `env:` comment above), so the tag is duplicated
       # here literally. Anchored so `flake-report` below can alias it — that
       # job spawns @crowi/api's jest directly and needs the identical Redis.
