@@ -1,4 +1,5 @@
 import type Crowi from 'src/crowi';
+import { type StrandedTransitionResumer, type StrandedTransitionScanResult, resumeStrandedTransitions } from 'src/service/page-history/operation';
 import { redactErrorReason, repairPendingEntries, scanUnsequencedRevisions } from 'src/service/page-history/repair';
 
 /**
@@ -63,21 +64,34 @@ export interface PageHistoryRepairSummary {
     failed: { pageId: string; revisionId?: string; sequence?: number; reason: string }[];
     lastPageId: string | null;
   };
+  transitions?: StrandedTransitionScanResult;
 }
 
 export interface RunPageHistoryRepairOptions {
   outbox?: boolean;
   scan?: boolean;
+  /** RFC-0021 Phase 2c-2a — sweep the path-move operations that never reached a terminal result. Off by default, like the other non-outbox scans. */
+  transitions?: boolean;
   /** Bounds Pages loaded per round-trip for whichever scan(s) run — threaded to `repair.ts`'s `RepairScanOptions`. */
   batchSize?: number;
   /** Resume a previous (possibly interrupted) run — only Pages with `_id > resumeAfterId` are visited, for whichever scan(s) run. */
   resumeAfterId?: string;
+  /**
+   * Resume cursor for the transition sweep. Separate from `resumeAfterId`
+   * because that one indexes Pages and this one indexes operations — one cursor
+   * for two collections would resume whichever scan ran second at a meaningless
+   * offset.
+   */
+  resumeAfterOperationId?: string;
+  /** Lets the sweep finish a transition its operation still holds. Without it, those are reported, never silently left as landed. */
+  resumeCommand?: StrandedTransitionResumer;
 }
 
 export async function runPageHistoryRepair(crowi: Crowi, opts: RunPageHistoryRepairOptions = {}): Promise<PageHistoryRepairSummary> {
-  // Neither flag given -> outbox repair only (the always-safe default).
-  const runOutbox = opts.outbox === true || opts.scan !== true;
+  // No flag given -> outbox repair only (the always-safe default).
+  const runOutbox = opts.outbox === true || (opts.scan !== true && opts.transitions !== true);
   const runScan = opts.scan === true;
+  const runTransitions = opts.transitions === true;
   const scanOptions = { batchSize: opts.batchSize, resumeAfterId: opts.resumeAfterId };
 
   const summary: PageHistoryRepairSummary = {};
@@ -105,6 +119,14 @@ export async function runPageHistoryRepair(crowi: Crowi, opts: RunPageHistoryRep
       failed: result.failed,
       lastPageId: result.lastPageId,
     };
+  }
+
+  if (runTransitions) {
+    summary.transitions = await resumeStrandedTransitions(crowi, {
+      batchSize: opts.batchSize,
+      resumeAfterOperationId: opts.resumeAfterOperationId,
+      resumeCommand: opts.resumeCommand,
+    });
   }
 
   return summary;

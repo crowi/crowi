@@ -49,10 +49,16 @@ export interface PageHistoryRepairSummary {
     failed: { pageId: string; revisionId?: string; sequence?: number; reason: string }[];
     lastPageId: string | null;
   };
+  transitions?: {
+    scannedOperations: number;
+    reports: { operationId: string; pageId: string | null; path: string | null; action: 'resumed' | 'completed' | 'blocked'; reason: string }[];
+    failed: { operationId: string; reason: string }[];
+    lastOperationId: string | null;
+  };
 }
 type RunPageHistoryRepair = (
   crowi: ApiCrowi,
-  opts?: { outbox?: boolean; scan?: boolean; batchSize?: number; resumeAfterId?: string },
+  opts?: { outbox?: boolean; scan?: boolean; transitions?: boolean; batchSize?: number; resumeAfterId?: string; resumeAfterOperationId?: string },
 ) => Promise<PageHistoryRepairSummary>;
 
 export interface RepairReportResult {
@@ -170,6 +176,32 @@ export function formatRepairReport(summary: PageHistoryRepairSummary): RepairRep
     }
   }
 
+  if (summary.transitions) {
+    const { scannedOperations, reports, failed, lastOperationId } = summary.transitions;
+    const counted = (action: string) => reports.filter((r) => r.action === action).length;
+    lines.push(
+      `transition sweep: scanned=${scannedOperations} resumed=${counted('resumed')} completed=${counted('completed')} blocked=${counted('blocked')} failed=${failed.length} lastOperationId=${lastOperationId ?? '(none)'}`,
+    );
+    // Identifiers are the point of this report — an operator who cannot name
+    // the stuck page cannot act on it. What stays out is driver text, which the
+    // service already redacted.
+    for (const r of reports) {
+      if (r.action === 'blocked') continue;
+      lines.push(`    operation ${r.operationId} page ${r.pageId ?? '(none)'} path ${r.path ?? '(none)'}: ${r.action} — ${r.reason}`);
+    }
+    const blocked = reports.filter((r) => r.action === 'blocked');
+    if (blocked.length > 0) {
+      lines.push('  blocked transitions (needs manual investigation, NOT auto-repaired):');
+      for (const r of blocked) lines.push(`    operation ${r.operationId} page ${r.pageId ?? '(none)'} path ${r.path ?? '(none)'}: ${r.reason}`);
+      exitCode = 2;
+    }
+    if (failed.length > 0) {
+      lines.push('  transition sweep failures (needs manual investigation):');
+      for (const f of failed) lines.push(`    operation ${f.operationId}: ${f.reason}`);
+      exitCode = 2;
+    }
+  }
+
   return { lines, exitCode };
 }
 
@@ -212,62 +244,79 @@ export function registerPageHistoryRepair(program: Command): void {
     )
     .option('--outbox', 'Run the outbox (pendingHistoryEntry) repair scan.', false)
     .option('--scan', 'Run the unsequenced-Revision sequence-assignment scan.', false)
+    .option('--transitions', 'Sweep path-move operations that never finished, settling or reporting each one.', false)
     .option('--batch-size <n>', 'Bound how many Pages are loaded into memory per round-trip.', '200')
     .option('--resume-after <pageId>', 'Resume a previous run: only Pages with _id greater than this value are visited.')
-    .action(async (opts: { outbox?: boolean; scan?: boolean; batchSize: string; resumeAfter?: string }) => {
-      // Load .env so MONGO_URI / CROWI_ENCRYPTION_KEY flow into Crowi the
-      // same way `app.ts` does at boot. Silent if no .env present.
-      dotenv.config();
+    .option(
+      '--resume-after-operation <operationId>',
+      'Resume the transition sweep only: operations up to and including this one are skipped. Separate from --resume-after, which indexes Pages.',
+    )
+    .action(
+      async (opts: { outbox?: boolean; scan?: boolean; transitions?: boolean; batchSize: string; resumeAfter?: string; resumeAfterOperation?: string }) => {
+        // Load .env so MONGO_URI / CROWI_ENCRYPTION_KEY flow into Crowi the
+        // same way `app.ts` does at boot. Silent if no .env present.
+        dotenv.config();
 
-      let batchSize: number;
-      try {
-        batchSize = parsePositiveIntOption(opts.batchSize, '--batch-size');
-      } catch (err) {
-        console.error(`crowi-admin: ${(err as Error).message}`);
-        process.exit(1);
-      }
+        let batchSize: number;
+        try {
+          batchSize = parsePositiveIntOption(opts.batchSize, '--batch-size');
+        } catch (err) {
+          console.error(`crowi-admin: ${(err as Error).message}`);
+          process.exit(1);
+        }
 
-      const api = loadApi();
-      if (!api) {
-        console.error('crowi-admin: could not locate @crowi/api. Run from a directory that has @crowi/api installed (e.g. the runner package).');
-        process.exit(1);
-      }
+        const api = loadApi();
+        if (!api) {
+          console.error('crowi-admin: could not locate @crowi/api. Run from a directory that has @crowi/api installed (e.g. the runner package).');
+          process.exit(1);
+        }
 
-      const crowi = new api.Crowi(process.cwd(), process.env);
-      const runOutbox = Boolean(opts.outbox) || !opts.scan;
-      const runScan = Boolean(opts.scan);
-      console.log(`[crowi-admin] page-history repair: starting (outbox=${runOutbox}, scan=${runScan}, batchSize=${batchSize})`);
+        const crowi = new api.Crowi(process.cwd(), process.env);
+        const runTransitions = Boolean(opts.transitions);
+        const runOutbox = Boolean(opts.outbox) || (!opts.scan && !runTransitions);
+        const runScan = Boolean(opts.scan);
+        console.log(
+          `[crowi-admin] page-history repair: starting (outbox=${runOutbox}, scan=${runScan}, transitions=${runTransitions}, batchSize=${batchSize})`,
+        );
 
-      try {
-        await crowi.initForCli();
-      } catch (err) {
-        console.error(formatFatalErrorLine('crowi-admin: failed to initialise Crowi: ', err, api.redactErrorReason));
-        await crowi.teardownForCli().catch(() => undefined);
-        process.exit(1);
-      }
+        try {
+          await crowi.initForCli();
+        } catch (err) {
+          console.error(formatFatalErrorLine('crowi-admin: failed to initialise Crowi: ', err, api.redactErrorReason));
+          await crowi.teardownForCli().catch(() => undefined);
+          process.exit(1);
+        }
 
-      let exitCode = 0;
-      try {
-        const startedAt = Date.now();
-        const summary = await api.runPageHistoryRepair(crowi, { outbox: runOutbox, scan: runScan, batchSize, resumeAfterId: opts.resumeAfter });
-        const elapsedMs = Date.now() - startedAt;
-        console.log('');
-        console.log('--- summary ---');
-        const report = formatRepairReport(summary);
-        for (const line of report.lines) console.log(line);
-        console.log(`elapsed: ${formatElapsed(elapsedMs)}`);
-        console.log('');
-        console.log(report.exitCode === 0 ? 'Repair complete.' : 'Repair complete with pages blocked/failed for manual investigation.');
-        exitCode = report.exitCode;
-      } catch (err) {
-        console.error('crowi-admin: page-history repair failed.');
-        console.error(formatFatalErrorLine('  reason: ', err, api.redactErrorReason));
-        exitCode = 1;
-      } finally {
-        await crowi.teardownForCli().catch(() => undefined);
-      }
-      process.exit(exitCode);
-    });
+        let exitCode = 0;
+        try {
+          const startedAt = Date.now();
+          const summary = await api.runPageHistoryRepair(crowi, {
+            outbox: runOutbox,
+            scan: runScan,
+            transitions: runTransitions,
+            batchSize,
+            resumeAfterId: opts.resumeAfter,
+            resumeAfterOperationId: opts.resumeAfterOperation,
+          });
+          const elapsedMs = Date.now() - startedAt;
+          console.log('');
+          console.log('--- summary ---');
+          const report = formatRepairReport(summary);
+          for (const line of report.lines) console.log(line);
+          console.log(`elapsed: ${formatElapsed(elapsedMs)}`);
+          console.log('');
+          console.log(report.exitCode === 0 ? 'Repair complete.' : 'Repair complete with pages blocked/failed for manual investigation.');
+          exitCode = report.exitCode;
+        } catch (err) {
+          console.error('crowi-admin: page-history repair failed.');
+          console.error(formatFatalErrorLine('  reason: ', err, api.redactErrorReason));
+          exitCode = 1;
+        } finally {
+          await crowi.teardownForCli().catch(() => undefined);
+        }
+        process.exit(exitCode);
+      },
+    );
 }
 
 /** Elapsed-duration formatter (mirrors `watcher-backfill.ts`'s). */
