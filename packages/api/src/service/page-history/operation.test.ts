@@ -16,6 +16,7 @@ import type { PageTransitionInput } from './transition';
 describe('service/page-history/operation (RFC-0021 Phase 2c-2a)', () => {
   let Page;
   let Revision;
+  let PageHistoryEvent;
   let PageHistoryOperation;
   let user;
   let keySeq = 0;
@@ -23,6 +24,7 @@ describe('service/page-history/operation (RFC-0021 Phase 2c-2a)', () => {
   beforeAll(async () => {
     Page = crowi.model('Page');
     Revision = crowi.model('Revision');
+    PageHistoryEvent = crowi.model('PageHistoryEvent');
     PageHistoryOperation = crowi.model('PageHistoryOperation');
 
     const [testUser] = await Fixture.generate('User', [{ name: 'Operation Tester', username: 'operation-tester', email: 'operation-tester@example.com' }]);
@@ -30,7 +32,7 @@ describe('service/page-history/operation (RFC-0021 Phase 2c-2a)', () => {
   });
 
   beforeEach(async () => {
-    await PageHistoryOperation.deleteMany({});
+    await Promise.all([PageHistoryEvent.deleteMany({}), PageHistoryOperation.deleteMany({})]);
   });
 
   /** 16-128 URL-safe characters, unique per call so tests never collide on the idempotency index. */
@@ -86,6 +88,19 @@ describe('service/page-history/operation (RFC-0021 Phase 2c-2a)', () => {
       source: 'web',
       buildEvent: () => ({ kind: 'page_renamed', payload: { fromPath, toPath, redirectCreated: false, subtree: false } }),
     };
+  }
+
+  async function recordRenameEvidence(pageId: Types.ObjectId, operationId: string, fromPath: string, toPath: string) {
+    await PageHistoryEvent.create({
+      page: pageId,
+      sequence: 1,
+      kind: 'page_renamed',
+      actor: user._id,
+      occurredAt: new Date(),
+      operationId,
+      source: 'web',
+      payload: { fromPath, toPath, redirectCreated: false, subtree: false },
+    });
   }
 
   describe('AC-20: resolve creates nothing', () => {
@@ -176,25 +191,47 @@ describe('service/page-history/operation (RFC-0021 Phase 2c-2a)', () => {
       expect(resolution.kind === 'settled' && resolution.operation.result?.code).toBe('PAGE_TRANSITION_INCOMPLETE');
       expect(resolution.kind === 'settled' && resolution.operation.result?.message).toBe('stopped mid-move');
     });
+
+    test('concurrent settlers cannot overwrite the terminal result that won', async () => {
+      const page = await createReadyPage('/operation/terminal-race');
+      const input = createInput(page._id, '/operation/terminal-race', '/operation/terminal-race-moved');
+      await createPageHistoryOperation(crowi, input);
+
+      const [first, second] = await Promise.all([
+        completeOperation(crowi, input.operationId, { status: 'failed' }),
+        completeOperation(crowi, input.operationId, { status: 'succeeded' }),
+      ]);
+
+      expect(first.result?.status).toBe(second.result?.status);
+      expect((await PageHistoryOperation.findOne({ operationId: input.operationId }).lean()).result.status).toBe(first.result?.status);
+    });
   });
 
   describe('AC-17b/AC-19b/AC-24: the sweep settles what it can classify', () => {
-    test('a landed move is completed as succeeded', async () => {
+    test('a landed move is completed only after its event row exists', async () => {
       const page = await createReadyPage('/operation/ac17b');
       // The page already sits at the destination with no transition held.
       const input = createInput(page._id, '/operation/ac17b-from', '/operation/ac17b');
       await createPageHistoryOperation(crowi, input);
 
+      const withoutEvidence = await resumeStrandedTransitions(crowi);
+
+      expect(withoutEvidence.reports).toContainEqual(
+        expect.objectContaining({ operationId: input.operationId, action: 'blocked', reason: 'completion-evidence-missing' }),
+      );
+      expect(await PageHistoryOperation.collection.findOne({ operationId: input.operationId })).toMatchObject({ result: null });
+
+      await recordRenameEvidence(page._id, input.operationId, input.fromPath, input.toPath);
       const result = await resumeStrandedTransitions(crowi);
 
       expect(result.reports).toContainEqual(
-        expect.objectContaining({ operationId: input.operationId, action: 'completed', reason: 'transition-already-settled' }),
+        expect.objectContaining({ operationId: input.operationId, action: 'completed', reason: 'completion-evidence-found' }),
       );
       const raw = await PageHistoryOperation.collection.findOne({ operationId: input.operationId });
       expect(raw.result.status).toBe('succeeded');
     });
 
-    test('a vanished page is completed as succeeded (AC-19b)', async () => {
+    test('a vanished page is completed as moot (AC-19b)', async () => {
       const page = await createReadyPage('/operation/ac19b');
       const input = createInput(page._id, '/operation/ac19b', '/operation/ac19b-moved');
       await createPageHistoryOperation(crowi, input);
@@ -204,7 +241,7 @@ describe('service/page-history/operation (RFC-0021 Phase 2c-2a)', () => {
 
       expect(result.reports).toContainEqual(expect.objectContaining({ operationId: input.operationId, action: 'completed', reason: 'page-deleted' }));
       const raw = await PageHistoryOperation.collection.findOne({ operationId: input.operationId });
-      expect(raw.result.status).toBe('succeeded');
+      expect(raw.result.status).toBe('moot');
     });
 
     test('AC-24: an operation that never entered is terminated as failed', async () => {
@@ -213,16 +250,71 @@ describe('service/page-history/operation (RFC-0021 Phase 2c-2a)', () => {
       const input = createInput(page._id, '/operation/ac24', '/operation/ac24-moved');
       await createPageHistoryOperation(crowi, input);
 
-      const result = await resumeStrandedTransitions(crowi);
+      const result = await resumeStrandedTransitions(crowi, { minAgeMs: 0 });
 
       expect(result.reports).toContainEqual(expect.objectContaining({ operationId: input.operationId, action: 'completed', reason: 'abandoned-before-entry' }));
       const raw = await PageHistoryOperation.collection.findOne({ operationId: input.operationId });
       expect(raw.result.status).toBe('failed');
       expect(raw.result.code).toBe('PAGE_TRANSITION_INCOMPLETE');
     });
+
+    test('AC-32: a not-entered operation is failed only after the grace window', async () => {
+      const page = await createReadyPage('/operation/ac32');
+      const input = createInput(page._id, '/operation/ac32', '/operation/ac32-moved');
+      await createPageHistoryOperation(crowi, input);
+
+      const recent = await resumeStrandedTransitions(crowi, { minAgeMs: 600_000 });
+
+      expect(recent.reports).toContainEqual(expect.objectContaining({ operationId: input.operationId, action: 'blocked', reason: 'grace-window-active' }));
+      expect(await PageHistoryOperation.collection.findOne({ operationId: input.operationId })).toMatchObject({ result: null });
+
+      await PageHistoryOperation.updateOne({ operationId: input.operationId }, { $set: { createdAt: new Date(Date.now() - 700_000) } });
+      await resumeStrandedTransitions(crowi, { minAgeMs: 600_000 });
+
+      expect((await PageHistoryOperation.collection.findOne({ operationId: input.operationId })).result.status).toBe('failed');
+    });
+
+    test('AC-33: a later event row heals a stale failed result to succeeded', async () => {
+      const page = await createReadyPage('/operation/ac33');
+      const input = createInput(page._id, '/operation/ac33-from', '/operation/ac33');
+      await createPageHistoryOperation(crowi, input);
+      await completeOperation(crowi, input.operationId, { status: 'failed', code: 'PAGE_TRANSITION_INCOMPLETE', message: 'stale' });
+      await recordRenameEvidence(page._id, input.operationId, input.fromPath, input.toPath);
+
+      const result = await resumeStrandedTransitions(crowi, { minAgeMs: 0 });
+
+      expect(result.reports).toContainEqual(
+        expect.objectContaining({ operationId: input.operationId, action: 'completed', reason: 'stale-failure-corrected' }),
+      );
+      expect((await PageHistoryOperation.collection.findOne({ operationId: input.operationId })).result.status).toBe('succeeded');
+    });
   });
 
   describe('AC-25/AC-34: what the sweep refuses to touch', () => {
+    test('a page-less operation is reported and left unsettled when no inspector claims it', async () => {
+      const input: CreateOperationInput = {
+        actor: user._id,
+        command: 'subtree_rename',
+        idempotencyKey: validKey(),
+        operationId: 'op-page-less-root',
+        requestFingerprint: 'fp-page-less-root',
+        memberPageIds: [],
+        groupOperationId: 'group-page-less-root',
+      };
+      await createPageHistoryOperation(crowi, input);
+
+      const result = await resumeStrandedTransitions(crowi);
+
+      expect(result.reports).toContainEqual({
+        operationId: input.operationId,
+        pageId: null,
+        path: null,
+        action: 'blocked',
+        reason: 'no-resumer-registered',
+      });
+      expect(await PageHistoryOperation.collection.findOne({ operationId: input.operationId })).toMatchObject({ result: null });
+    });
+
     test('AC-34: a held transition with no resumer wired in is reported, not rewritten', async () => {
       const page = await createReadyPage('/operation/ac34');
       const input = createInput(page._id, '/operation/ac34', '/operation/ac34-moved');

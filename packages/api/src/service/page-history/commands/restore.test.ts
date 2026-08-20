@@ -128,6 +128,37 @@ describe('service/page-history/commands/restore (RFC-0021 Phase 2c-2a)', () => {
   });
 
   describe('AC-5/AC-6: a stalled restore stays resumable', () => {
+    test('already-settled is resumed only when the operation event exists', async () => {
+      const page = await createTrashedPage('/restore-cmd/evidence');
+      const operationId = nextOperationId();
+      await Page.updateOne({ _id: page._id }, { $set: { path: '/restore-cmd/evidence', status: STATUS_PUBLISHED } });
+      const operation = {
+        page: page._id,
+        fromPath: '/trash/restore-cmd/evidence',
+        toPath: '/restore-cmd/evidence',
+        fromStatus: STATUS_DELETED,
+        fromStatusPresent: true,
+        toStatus: STATUS_PUBLISHED,
+        operationId,
+        actor: user._id,
+        source: 'web',
+        command: 'restore',
+      } as never;
+
+      expect(await resumeRestoreCommand(crowi, operation)).toBe('blocked');
+      await PageHistoryEvent.create({
+        page: page._id,
+        sequence: 99,
+        kind: 'page_restored',
+        actor: user._id,
+        occurredAt: new Date(),
+        operationId,
+        source: 'web',
+        payload: { fromPath: '/trash/restore-cmd/evidence', toPath: '/restore-cmd/evidence' },
+      });
+      expect(await resumeRestoreCommand(crowi, operation)).toBe('resumed');
+    });
+
     test('AC-5: a failed leaving CAS keeps the page mid-move with its claim', async () => {
       const page = await createTrashedPage('/restore-cmd/ac5');
       await Page.updateOne({ _id: page._id }, { $set: { pendingHistoryEntry: { entryId: new Types.ObjectId(), type: 'page_event' } } });

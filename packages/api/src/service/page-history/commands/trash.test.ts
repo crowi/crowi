@@ -170,6 +170,38 @@ describe('service/page-history/commands/trash (RFC-0021 Phase 2c-2a)', () => {
   });
 
   describe('AC-7: the repair sweep can finish a stalled trash', () => {
+    test('already-settled is resumed only when the operation event exists', async () => {
+      const page = await createReadyPage('/trash-cmd/evidence-source');
+      const operationId = nextOperationId();
+      const toPath = '/trash/trash-cmd/evidence-source';
+      await Page.updateOne({ _id: page._id }, { $set: { path: toPath, status: STATUS_DELETED } });
+      const operation = {
+        page: page._id,
+        fromPath: page.path,
+        toPath,
+        fromStatus: STATUS_PUBLISHED,
+        fromStatusPresent: true,
+        toStatus: STATUS_DELETED,
+        operationId,
+        actor: user._id,
+        source: 'web',
+        command: 'trash',
+      } as never;
+
+      expect(await resumeTrashCommand(crowi, operation)).toBe('blocked');
+      await PageHistoryEvent.create({
+        page: page._id,
+        sequence: 99,
+        kind: 'page_trashed',
+        actor: user._id,
+        occurredAt: new Date(),
+        operationId,
+        source: 'web',
+        payload: { fromPath: page.path, toPath },
+      });
+      expect(await resumeTrashCommand(crowi, operation)).toBe('resumed');
+    });
+
     test('resumeTrashCommand lands it and leaves exactly one event', async () => {
       const page = await createReadyPage('/trash-cmd/ac7');
       const operationId = nextOperationId();

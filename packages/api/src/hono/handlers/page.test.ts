@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { Types } from 'mongoose';
 import type { SearchDriver, SearchableDoc } from '@crowi/plugin-api';
 import { app, crowi, Fixture } from 'src/test/setup';
@@ -797,26 +798,172 @@ describe('Routes /api/pages/rename (Hono renamePage)', () => {
       expect(await PageHistoryOperation.countDocuments({})).toBe(before);
     });
 
-    it('AC-14: a subtree rename produces no operation and no event', async () => {
+    it('AC-18: rejects a subtree rename with no key', async () => {
       const headers = authHeaders(accessToken);
-      const rootId = await createPage(headers, `${PATH_PREFIX}tree-idem-root`);
-      await createPage(headers, `${PATH_PREFIX}tree-idem-root/child`);
+      const rootPath = `${PATH_PREFIX}tree-idem-missing`;
+      const rootId = await createPage(headers, rootPath);
 
-      const PageHistoryOperation = crowi.model('PageHistoryOperation');
+      const res = await request(app)
+        .post('/api/pages/rename')
+        .set(headers)
+        .send({ page_id: rootId, new_path: `${PATH_PREFIX}tree-idem-missing-moved`, include_descendants: true });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('IDEMPOTENCY_KEY_REQUIRED');
+      expect((await Page.findById(rootId)).path).toBe(rootPath);
+    });
+
+    it('replays a subtree rename without moving its members twice', async () => {
+      const headers = authHeaders(accessToken);
+      const rootPath = `${PATH_PREFIX}tree-idem-replay`;
+      const movedPath = `${PATH_PREFIX}tree-idem-replay-moved`;
+      const rootId = await createPage(headers, rootPath);
+      const childId = await createPage(headers, `${rootPath}/child`);
+      const key = idempotencyKey();
+      const body = { page_id: rootId, new_path: movedPath, include_descendants: true };
+
+      const first = await request(app).post('/api/pages/rename').set(headers).set('Idempotency-Key', key).send(body);
+      const second = await request(app).post('/api/pages/rename').set(headers).set('Idempotency-Key', key).send(body);
+
+      expect(first.status).toBe(200);
+      expect(second.status).toBe(200);
+      expect(second.headers['idempotency-replayed']).toBe('true');
       const PageHistoryEvent = crowi.model('PageHistoryEvent');
-      const before = await PageHistoryOperation.countDocuments({});
+      expect(await PageHistoryEvent.countDocuments({ page: { $in: [rootId, childId] }, kind: 'page_renamed' })).toBe(2);
+    });
+
+    it('re-enters a subtree root member while its page is hidden by the transitional status', async () => {
+      const headers = authHeaders(accessToken);
+      const rootPath = `${PATH_PREFIX}tree-mid-transition`;
+      const movedPath = `${PATH_PREFIX}tree-mid-transition-moved`;
+      const rootId = await createPage(headers, rootPath);
+      const root = await Page.findById(rootId);
+      const key = idempotencyKey();
+      const operationId = `member-${key}`;
+      const groupOperationId = `group-${key}`;
+      const requestFingerprint = createHash('sha256')
+        .update(JSON.stringify({ page_id: String(rootId), new_path: movedPath, create_redirect: false }))
+        .digest('hex');
+      const memberFingerprint = createHash('sha256')
+        .update(JSON.stringify({ pageId: String(rootId), fromPath: rootPath, toPath: movedPath }))
+        .digest('hex');
+      const PageHistoryOperation = crowi.model('PageHistoryOperation');
+      await PageHistoryOperation.create({
+        actor: root.creator,
+        command: 'subtree_rename',
+        idempotencyKey: key,
+        operationId: `root-${key}`,
+        requestFingerprint,
+        memberPageIds: [root._id],
+        groupOperationId,
+      });
+      await PageHistoryOperation.create({
+        actor: root.creator,
+        command: 'subtree_rename_member',
+        idempotencyKey: createHash('sha256')
+          .update(`${key}\0${String(rootId)}`)
+          .digest('base64url'),
+        operationId,
+        requestFingerprint: memberFingerprint,
+        page: root._id,
+        fromPath: rootPath,
+        toPath: movedPath,
+        fromStatus: root.status,
+        fromStatusPresent: true,
+        toStatus: root.status,
+        createRedirect: false,
+        source: 'web',
+      });
+      await Page.updateOne({ _id: root._id }, { $set: { path: movedPath, status: 'renaming', historyTransition: { operationId, kind: 'rename' } } });
+
+      const res = await request(app)
+        .post('/api/pages/rename')
+        .set(headers)
+        .set('Idempotency-Key', key)
+        .send({ page_id: rootId, new_path: movedPath, include_descendants: true });
+
+      expect(res.status).toBe(200);
+      expect(res.headers['idempotency-replayed']).toBe('true');
+      expect(res.body.page.path).toBe(movedPath);
+      expect((await Page.findById(rootId)).historyTransition).toBeNull();
+    });
+
+    it('AC-20: replays a root sealed before its first member was created', async () => {
+      const headers = authHeaders(accessToken);
+      const rootPath = `${PATH_PREFIX}tree-root-only`;
+      const movedPath = `${PATH_PREFIX}tree-root-only-moved`;
+      const rootId = await createPage(headers, rootPath);
+      const root = await Page.findById(rootId);
+      const key = idempotencyKey();
+      const requestFingerprint = createHash('sha256')
+        .update(JSON.stringify({ page_id: String(rootId), new_path: movedPath, create_redirect: false }))
+        .digest('hex');
+      const PageHistoryOperation = crowi.model('PageHistoryOperation');
+      await PageHistoryOperation.create({
+        actor: root.creator,
+        command: 'subtree_rename',
+        idempotencyKey: key,
+        operationId: `root-${key}`,
+        requestFingerprint,
+        memberPageIds: [root._id],
+        groupOperationId: `group-${key}`,
+      });
+
+      const res = await request(app)
+        .post('/api/pages/rename')
+        .set(headers)
+        .set('Idempotency-Key', key)
+        .send({ page_id: rootId, new_path: movedPath, include_descendants: true });
+
+      expect(res.status).toBe(200);
+      expect(res.headers['idempotency-replayed']).toBe('true');
+      expect(res.body.page.path).toBe(movedPath);
+      expect(await PageHistoryOperation.countDocuments({ command: 'subtree_rename_member', page: root._id })).toBe(1);
+    });
+
+    it('rejects a reused subtree key when the request fingerprint changes', async () => {
+      const headers = authHeaders(accessToken);
+      const rootPath = `${PATH_PREFIX}tree-idem-conflict`;
+      const rootId = await createPage(headers, rootPath);
+      const key = idempotencyKey();
+
+      const first = await request(app)
+        .post('/api/pages/rename')
+        .set(headers)
+        .set('Idempotency-Key', key)
+        .send({ page_id: rootId, new_path: `${PATH_PREFIX}tree-idem-conflict-a`, include_descendants: true });
+      const second = await request(app)
+        .post('/api/pages/rename')
+        .set(headers)
+        .set('Idempotency-Key', key)
+        .send({ page_id: rootId, new_path: `${PATH_PREFIX}tree-idem-conflict-b`, include_descendants: true });
+
+      expect(first.status).toBe(200);
+      expect(second.status).toBe(409);
+      expect(second.body.error.code).toBe('IDEMPOTENCY_KEY_CONFLICT');
+    });
+
+    it('AC-8: returns partial subtree failures as 400 PAGE_RENAME_TREE_FAILED', async () => {
+      const headers = authHeaders(accessToken);
+      const rootPath = `${PATH_PREFIX}tree-partial`;
+      const movedPath = `${PATH_PREFIX}tree-partial-moved`;
+      const rootId = await createPage(headers, rootPath);
+      const blockedId = await createPage(headers, `${rootPath}/blocked`);
+      await createPage(headers, `${rootPath}/sibling`);
+      await Page.updateOne({ _id: blockedId }, { $set: { historyTransition: { operationId: 'another-operation', kind: 'rename' } } });
 
       const res = await request(app)
         .post('/api/pages/rename')
         .set(headers)
         .set('Idempotency-Key', idempotencyKey())
-        .send({ page_id: rootId, new_path: `${PATH_PREFIX}tree-idem-moved`, include_descendants: true });
+        .send({ page_id: rootId, new_path: movedPath, include_descendants: true });
 
-      expect(res.status).toBe(200);
-      expect(await PageHistoryOperation.countDocuments({})).toBe(before);
-      expect(await PageHistoryEvent.countDocuments({ page: rootId, kind: 'page_renamed' })).toBe(0);
-      const moved = await Page.findById(rootId);
-      expect(moved.status).not.toBe('renaming');
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatchObject({ code: 'PAGE_RENAME_TREE_FAILED', partial: true, conflicts: [] });
+      expect(res.body.error.message).toContain(`Failed to update page (${rootPath}/blocked).`);
+      expect(await Page.findOne({ path: movedPath, redirectTo: null })).not.toBeNull();
+      expect(await Page.findOne({ path: `${movedPath}/sibling`, redirectTo: null })).not.toBeNull();
+      expect(await Page.findOne({ path: `${rootPath}/blocked`, redirectTo: null })).not.toBeNull();
     });
   });
 
@@ -945,10 +1092,12 @@ describe('Routes /api/pages/rename (Hono renamePage)', () => {
       expect(childRedirect).not.toBeNull();
     });
 
-    it('rejects with a structured 400 PAGE_RENAME_TREE_FAILED when a destination collides', async () => {
+    it('AC-25: rejects a destination collision before moving pages or creating history operations', async () => {
       const headers = authHeaders(accessToken);
       const rootFrom = `${PATH_PREFIX}clash-root`;
       const rootTo = `${PATH_PREFIX}clash-moved`;
+      const folderFrom = `${PATH_PREFIX}clash-folder/`;
+      const folderTo = `${PATH_PREFIX}clash-folder-moved/`;
 
       const rootRes = await request(app).post('/api/pages').set(headers).send({ path: rootFrom, body: '# root' });
       const rootId = rootRes.body.page._id;
@@ -961,23 +1110,43 @@ describe('Routes /api/pages/rename (Hono renamePage)', () => {
       // by another user with OWNER grant so the renamer cannot unlink it.
       const occupiedChildPath = `${rootTo}/child`;
       await request(app).post('/api/pages').set(authHeaders(otherAccessToken)).send({ path: occupiedChildPath, body: '# occupied', grant: 4 });
+      await request(app)
+        .post('/api/pages')
+        .set(headers)
+        .send({ path: `${folderFrom}child`, body: '# folder child' });
+      const occupiedFolderChildPath = `${folderTo}child`;
+      await request(app).post('/api/pages').set(authHeaders(otherAccessToken)).send({ path: occupiedFolderChildPath, body: '# occupied', grant: 4 });
+      const PageHistoryOperation = crowi.model('PageHistoryOperation');
+      const operationsBefore = await PageHistoryOperation.countDocuments({ command: { $in: ['subtree_rename', 'subtree_rename_member'] } });
 
-      const res = await request(app)
+      const byId = await request(app)
         .post('/api/pages/rename')
         .set(headers)
         .set('Idempotency-Key', idempotencyKey())
         .send({ page_id: rootId, new_path: rootTo, include_descendants: true });
+      const byPath = await request(app)
+        .post('/api/pages/rename-subtree')
+        .set(headers)
+        .set('Idempotency-Key', idempotencyKey())
+        .send({ old_path: folderFrom, new_path: folderTo });
 
-      expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe('PAGE_RENAME_TREE_FAILED');
-      expect(Array.isArray(res.body.error.conflicts)).toBe(true);
-      const conflictPaths = res.body.error.conflicts.map((c: { path: string }) => c.path);
-      expect(conflictPaths).toContain(occupiedChildPath);
+      const errorContract = (body: { error: { code: string; partial?: boolean; conflicts: { reasons: string[] }[] } }) => ({
+        code: body.error.code,
+        partial: body.error.partial,
+        conflictReasons: body.error.conflicts.map((conflict) => conflict.reasons).sort(),
+      });
 
-      // Up-front detection — nothing was moved.
-      expect(await Page.findOne({ path: rootFrom })).not.toBeNull();
+      expect(byId.status).toBe(400);
+      expect(byPath.status).toBe(byId.status);
+      expect(errorContract(byPath.body)).toEqual(errorContract(byId.body));
+      expect(byId.body.error.partial).toBeUndefined();
+      expect(byId.body.error.conflicts).toEqual(expect.arrayContaining([expect.objectContaining({ path: occupiedChildPath, reasons: expect.any(Array) })]));
+      expect(await PageHistoryOperation.countDocuments({ command: { $in: ['subtree_rename', 'subtree_rename_member'] } })).toBe(operationsBefore);
+      expect(await Page.findOne({ path: rootFrom, redirectTo: null })).not.toBeNull();
       expect(await Page.findOne({ path: `${rootFrom}/child` })).not.toBeNull();
       expect(await Page.findOne({ path: rootTo })).toBeNull();
+      expect(await Page.findOne({ path: `${folderFrom}child`, redirectTo: null })).not.toBeNull();
+      expect(await Page.findOne({ path: `${folderTo}child` })).not.toBeNull();
     });
 
     it('does not move descendants the caller cannot see (grant-filtered, orphaning allowed)', async () => {
@@ -1095,6 +1264,103 @@ describe('Routes /api/pages/rename-subtree (Hono renameSubtree — portal-less f
     expect(res.status).toBe(401);
   });
 
+  it('AC-27: requires an Idempotency-Key', async () => {
+    const res = await request(app)
+      .post('/api/pages/rename-subtree')
+      .set(authHeaders(accessToken))
+      .send({ old_path: `${PATH_PREFIX}folder/`, new_path: `${PATH_PREFIX}moved/` });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('IDEMPOTENCY_KEY_REQUIRED');
+  });
+
+  it('AC-26: matches by-id history emission for a successful subtree rename', async () => {
+    const headers = authHeaders(accessToken);
+    const byIdFrom = `${PATH_PREFIX}history-id`;
+    const byIdTo = `${PATH_PREFIX}history-id-moved`;
+    const byPathFrom = `${PATH_PREFIX}history-path/`;
+    const byPathTo = `${PATH_PREFIX}history-path-moved/`;
+    const { _id: byIdRoot } = await createPageViaApi(accessToken, byIdFrom, '# root');
+    const { _id: byIdChild } = await createPageViaApi(accessToken, `${byIdFrom}/child`, '# child');
+    const { _id: byPathFirst } = await createPageViaApi(accessToken, `${byPathFrom}first`, '# first');
+    const { _id: byPathSecond } = await createPageViaApi(accessToken, `${byPathFrom}second`, '# second');
+
+    const byId = await request(app)
+      .post('/api/pages/rename')
+      .set(headers)
+      .set('Idempotency-Key', idempotencyKey())
+      .send({ page_id: byIdRoot, new_path: byIdTo, include_descendants: true });
+    const byPath = await request(app)
+      .post('/api/pages/rename-subtree')
+      .set(headers)
+      .set('Idempotency-Key', idempotencyKey())
+      .send({ old_path: byPathFrom, new_path: byPathTo });
+
+    const PageHistoryEvent = crowi.model('PageHistoryEvent');
+    const byIdEvents = await PageHistoryEvent.find({ page: { $in: [byIdRoot, byIdChild] }, kind: 'page_renamed' })
+      .lean()
+      .exec();
+    const byPathEvents = await PageHistoryEvent.find({ page: { $in: [byPathFirst, byPathSecond] }, kind: 'page_renamed' })
+      .lean()
+      .exec();
+    const byIdHistory = {
+      count: byIdEvents.length,
+      subtree: byIdEvents.every((event) => event.payload.subtree === true),
+      operationCount: new Set(byIdEvents.map((event) => event.operationId)).size,
+    };
+    const byPathHistory = {
+      count: byPathEvents.length,
+      subtree: byPathEvents.every((event) => event.payload.subtree === true),
+      operationCount: new Set(byPathEvents.map((event) => event.operationId)).size,
+    };
+
+    expect(byPath.status).toBe(byId.status);
+    expect(byPath.status).toBe(200);
+    expect(byPath.body.renamed_count).toBe(byId.body.renamed_count);
+    expect(byPathHistory).toEqual(byIdHistory);
+    expect(byPathHistory).toEqual({ count: 2, subtree: true, operationCount: 1 });
+  });
+
+  it('AC-26: matches by-id partial-failure response while successful members still move', async () => {
+    const headers = authHeaders(accessToken);
+    const byIdFrom = `${PATH_PREFIX}partial-id`;
+    const byIdTo = `${PATH_PREFIX}partial-id-moved`;
+    const byPathFrom = `${PATH_PREFIX}partial-path/`;
+    const byPathTo = `${PATH_PREFIX}partial-path-moved/`;
+    const { _id: byIdRoot } = await createPageViaApi(accessToken, byIdFrom, '# root');
+    const { _id: byIdBlocked } = await createPageViaApi(accessToken, `${byIdFrom}/blocked`, '# blocked');
+    await createPageViaApi(accessToken, `${byIdFrom}/sibling`, '# sibling');
+    const { _id: byPathBlocked } = await createPageViaApi(accessToken, `${byPathFrom}blocked`, '# blocked');
+    await createPageViaApi(accessToken, `${byPathFrom}sibling`, '# sibling');
+    await Page.updateMany(
+      { _id: { $in: [byIdBlocked, byPathBlocked] } },
+      { $set: { historyTransition: { operationId: 'another-operation', kind: 'rename' } } },
+    );
+
+    const byId = await request(app)
+      .post('/api/pages/rename')
+      .set(headers)
+      .set('Idempotency-Key', idempotencyKey())
+      .send({ page_id: byIdRoot, new_path: byIdTo, include_descendants: true });
+    const byPath = await request(app)
+      .post('/api/pages/rename-subtree')
+      .set(headers)
+      .set('Idempotency-Key', idempotencyKey())
+      .send({ old_path: byPathFrom, new_path: byPathTo });
+    const errorContract = (body: { error: { code: string; partial?: boolean; conflicts: unknown[] } }) => ({
+      code: body.error.code,
+      partial: body.error.partial,
+      conflictCount: body.error.conflicts.length,
+    });
+
+    expect(byPath.status).toBe(byId.status);
+    expect(byPath.status).toBe(400);
+    expect(errorContract(byPath.body)).toEqual(errorContract(byId.body));
+    expect(errorContract(byPath.body)).toEqual({ code: 'PAGE_RENAME_TREE_FAILED', partial: true, conflictCount: 0 });
+    expect(await Page.findOne({ path: `${byIdTo}/sibling`, redirectTo: null })).not.toBeNull();
+    expect(await Page.findOne({ path: `${byPathTo}sibling`, redirectTo: null })).not.toBeNull();
+  });
+
   it('moves every page under a portal-less folder to the new base path', async () => {
     const headers = authHeaders(accessToken);
     const oldFolder = `${PATH_PREFIX}folder/`;
@@ -1114,7 +1380,11 @@ describe('Routes /api/pages/rename-subtree (Hono renameSubtree — portal-less f
       .set(headers)
       .send({ path: `${oldFolder}child-b`, body: '# b' });
 
-    const res = await request(app).post('/api/pages/rename-subtree').set(headers).send({ old_path: oldFolder, new_path: newFolder });
+    const res = await request(app)
+      .post('/api/pages/rename-subtree')
+      .set(headers)
+      .set('Idempotency-Key', idempotencyKey())
+      .send({ old_path: oldFolder, new_path: newFolder });
 
     expect(res.status).toBe(200);
     expect(res.body.renamed_count).toBe(3);
@@ -1136,6 +1406,7 @@ describe('Routes /api/pages/rename-subtree (Hono renameSubtree — portal-less f
     const res = await request(app)
       .post('/api/pages/rename-subtree')
       .set(headers)
+      .set('Idempotency-Key', idempotencyKey())
       .send({ old_path: '/user/', new_path: `${PATH_PREFIX}stolen/` });
 
     expect(res.status).toBe(400);
@@ -1164,7 +1435,11 @@ describe('Routes /api/pages/rename-subtree (Hono renameSubtree — portal-less f
       .set(otherHeaders)
       .send({ path: `${oldFolder}hidden`, body: '# h', grant: 4 });
 
-    const res = await request(app).post('/api/pages/rename-subtree').set(headers).send({ old_path: oldFolder, new_path: newFolder });
+    const res = await request(app)
+      .post('/api/pages/rename-subtree')
+      .set(headers)
+      .set('Idempotency-Key', idempotencyKey())
+      .send({ old_path: oldFolder, new_path: newFolder });
 
     expect(res.status).toBe(200);
     expect(res.body.renamed_count).toBe(1);
@@ -1189,7 +1464,11 @@ describe('Routes /api/pages/rename-subtree (Hono renameSubtree — portal-less f
       .set(headers)
       .send({ path: `${newFolder}dup`, body: '# existing' });
 
-    const res = await request(app).post('/api/pages/rename-subtree').set(headers).send({ old_path: oldFolder, new_path: newFolder });
+    const res = await request(app)
+      .post('/api/pages/rename-subtree')
+      .set(headers)
+      .set('Idempotency-Key', idempotencyKey())
+      .send({ old_path: oldFolder, new_path: newFolder });
 
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe('PAGE_RENAME_TREE_FAILED');
@@ -1203,6 +1482,7 @@ describe('Routes /api/pages/rename-subtree (Hono renameSubtree — portal-less f
     const res = await request(app)
       .post('/api/pages/rename-subtree')
       .set(headers)
+      .set('Idempotency-Key', idempotencyKey())
       .send({ old_path: `${PATH_PREFIX}empty-folder/`, new_path: `${PATH_PREFIX}empty-moved/` });
 
     expect(res.status).toBe(400);

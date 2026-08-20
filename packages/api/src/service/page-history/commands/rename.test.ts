@@ -1,7 +1,7 @@
 import { Types } from 'mongoose';
 import { STATUS_PUBLISHED, STATUS_RENAMING } from 'src/models/page';
 import { crowi, Fixture } from 'src/test/setup';
-import { renamePageCommand } from './rename';
+import { renamePageCommand, resumeRenameCommand } from './rename';
 
 /**
  * RFC-0021 Phase 2c-2a — the rename command (AC-1..AC-7, AC-12, AC-13).
@@ -88,6 +88,35 @@ describe('service/page-history/commands/rename (RFC-0021 Phase 2c-2a)', () => {
       const events = await PageHistoryEvent.find({ page: page._id, kind: 'page_renamed' }).lean();
       expect(events).toHaveLength(1);
       expect(events[0].payload).toEqual({ fromPath: '/rename/ac1', toPath: '/rename/ac1-moved', redirectCreated: false, subtree: false });
+    });
+  });
+
+  describe('AC-24: subtree rename support leaves the single-page path alone', () => {
+    test('omitting the subtree inputs files the event under the transition owner with subtree false', async () => {
+      const page = await createReadyPage('/rename/ac24');
+      const operationId = nextOperationId();
+
+      const outcome = await renamePageCommand(crowi, {
+        page,
+        fromPath: page.path,
+        toPath: '/rename/ac24-moved',
+        fromStatus: page.status ?? null,
+        fromStatusPresent: page.status != null,
+        operationId,
+        actor: user._id,
+        user,
+        source: 'web',
+        createRedirectPage: false,
+      });
+
+      expect(outcome.status).toBe('committed');
+      const events = await PageHistoryEvent.find({ page: page._id, kind: 'page_renamed' }).lean();
+      expect(events).toHaveLength(1);
+      // The two ids only diverge for a subtree member; every other caller omits
+      // `eventOperationId` and must keep the event under the id that owns the
+      // transition, since that is what history retrieval groups on.
+      expect(events[0].operationId).toBe(operationId);
+      expect(events[0].payload.subtree).toBe(false);
     });
   });
 
@@ -201,6 +230,36 @@ describe('service/page-history/commands/rename (RFC-0021 Phase 2c-2a)', () => {
   });
 
   describe('AC-12/AC-13: a stalled rename leaves a resumable page', () => {
+    test('already-settled is resumed only when the operation event exists', async () => {
+      const page = await createReadyPage('/rename/evidence-destination');
+      const operationId = nextOperationId();
+      const operation = {
+        page: page._id,
+        fromPath: '/rename/evidence-source',
+        toPath: page.path,
+        fromStatus: STATUS_PUBLISHED,
+        fromStatusPresent: true,
+        toStatus: STATUS_PUBLISHED,
+        operationId,
+        actor: user._id,
+        source: 'web',
+        command: 'rename',
+      } as never;
+
+      expect(await resumeRenameCommand(crowi, operation)).toBe('blocked');
+      await PageHistoryEvent.create({
+        page: page._id,
+        sequence: 99,
+        kind: 'page_renamed',
+        actor: user._id,
+        occurredAt: new Date(),
+        operationId,
+        source: 'web',
+        payload: { fromPath: '/rename/evidence-source', toPath: page.path, redirectCreated: false, subtree: false },
+      });
+      expect(await resumeRenameCommand(crowi, operation)).toBe('resumed');
+    });
+
     test('AC-12: a failed leaving CAS keeps the page renaming and reports incomplete', async () => {
       const page = await createReadyPage('/rename/ac12');
       // An unrepairable outbox entry stops the leaving CAS from ever committing.
