@@ -2,57 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from './api-client';
-import { revisionsKeys } from './page-query-keys';
-import type { Pager, Revision, RevisionMeta } from '@crowi/api-contract';
-
-/**
- * RFC-0006 Phase 4 Batch 3 — switched from `apiClient.revision.*`
- * (ts-rest) to `apiClient.pages.*.$get` (`createClient`). Wire payload
- * is unchanged.
- */
-export interface UsePageRevisionsResult {
-  revisions: RevisionMeta[];
-  pager: Pager | null;
-  isLoading: boolean;
-  isError: boolean;
-  error: Error | null;
-  refetch: () => void;
-}
-
-/**
- * List revisions for a single page (meta only — no body).
- * Backed by GET /pages/:page_id/revisions.
- */
-export function usePageRevisions(pageId: string | null | undefined, params: { limit?: number; offset?: number } = {}): UsePageRevisionsResult {
-  const query = useQuery({
-    queryKey: revisionsKeys.list(pageId ?? '', params),
-    queryFn: async () => {
-      if (!pageId) {
-        return { revisions: [] as RevisionMeta[], pager: null as Pager | null };
-      }
-      const response = await apiClient.pages[':page_id'].revisions.$get({
-        param: { page_id: pageId },
-        query: {
-          limit: String(params.limit ?? 50),
-          offset: String(params.offset ?? 0),
-        },
-      });
-      if (!response.ok) throw new Error('Failed to fetch revisions');
-      const body = await response.json();
-      return { revisions: body.revisions, pager: body.pager };
-    },
-    enabled: Boolean(pageId),
-  });
-
-  return {
-    revisions: query.data?.revisions ?? [],
-    pager: query.data?.pager ?? null,
-    isLoading: query.isLoading,
-    isError: query.isError,
-    error: query.error as Error | null,
-    refetch: query.refetch,
-  };
-}
+import type { Revision } from '@crowi/api-contract';
 
 export interface UseRevisionPairResult {
   revisions: Revision[] | null;

@@ -5,7 +5,7 @@ import { m } from '@paraglide/messages.js';
 import { type QueryClient, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from './api-client';
 import { errorMessage } from './error-message';
-import { invalidateUserSubpagesQueries, PAGE_LIST_FAMILY_ROOT, pageKeys, revisionsKeys, userPageKeys } from './page-query-keys';
+import { invalidateUserSubpagesQueries, PAGE_LIST_FAMILY_ROOT, pageHistoryKeys, pageKeys, revisionsKeys, userPageKeys } from './page-query-keys';
 import { draftsKeys } from './use-drafts';
 
 /**
@@ -17,7 +17,11 @@ import { draftsKeys } from './use-drafts';
  *   - `PAGE_LIST_FAMILY_ROOT` — the list / portal family (`usePageList` →
  *                               `pageListKeys`) AND the sidebar tree
  *                               (`usePageChildrenLevels` → `pageChildrenKeys`)
- *   - `revisionsKeys.all`     — the page-history list (a save pushes a new revision)
+ *   - `revisionsKeys.all`     — the revision list (a save pushes a new revision)
+ *   - `pageHistoryKeys.all`   — the merged timeline, which shows those revisions
+ *                               alongside metadata events. Separate from the
+ *                               above: refreshing only one leaves the other
+ *                               serving a pre-save view.
  *   - `draftsKeys.all`        — the "creating pages" list (a first save publishes a draft)
  *
  * Both save paths route through here — the realtime `crowi:save` flow
@@ -34,6 +38,7 @@ export function invalidatePageContentQueries(queryClient: QueryClient): void {
   queryClient.invalidateQueries({ queryKey: pageKeys.all });
   queryClient.invalidateQueries({ queryKey: PAGE_LIST_FAMILY_ROOT });
   queryClient.invalidateQueries({ queryKey: revisionsKeys.all });
+  queryClient.invalidateQueries({ queryKey: pageHistoryKeys.all });
   queryClient.invalidateQueries({ queryKey: draftsKeys.all });
 }
 
@@ -332,6 +337,7 @@ export function useRevertToRevision() {
       // serves the pre-revert revisions off the 60s default staleTime and the
       // new one only appears after a full browser reload.
       queryClient.invalidateQueries({ queryKey: revisionsKeys.all });
+      queryClient.invalidateQueries({ queryKey: pageHistoryKeys.all });
     },
   });
 }

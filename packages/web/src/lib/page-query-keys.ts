@@ -49,6 +49,18 @@ export const revisionsKeys = {
 };
 
 /**
+ * RFC-0021 Phase 3 — the merged timeline (revisions AND metadata events).
+ *
+ * A separate family from `revisionsKeys`: that one still backs the revision
+ * list endpoint, and a save has to refresh BOTH — the merged view would
+ * otherwise keep serving a timeline that predates the save.
+ */
+export const pageHistoryKeys = {
+  all: ['page-history'] as const,
+  timeline: (pageId: string) => ['page-history', pageId] as const,
+};
+
+/**
  * `use-user-page.ts`'s query families (profile / bookmarks / pages, each
  * with a shared `*All` root plus `*Detail`/`*Infinite` leaves).
  * `isBookmarksQuery`/`isPagesQuery` centralize the positional predicate used by
