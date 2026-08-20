@@ -1440,7 +1440,7 @@ describe('Routes /api/pages/revert (Hono revertDeletedPage)', () => {
 
       // The redirect stub at the original path is the input the UI would consult,
       // but the revertDeletedPage contract takes the trashed page's id (per planner).
-      const res = await request(app).post('/api/pages/revert').set(headers).send({ page_id: pageId });
+      const res = await request(app).post('/api/pages/revert').set(headers).set('Idempotency-Key', idempotencyKey()).send({ page_id: pageId });
 
       expect(res.status).toBe(200);
       expect(res.body.page._id).toBe(pageId);
@@ -1461,7 +1461,11 @@ describe('Routes /api/pages/revert (Hono revertDeletedPage)', () => {
     });
 
     it('returns 404 PAGE_NOT_FOUND for unknown page_id', async () => {
-      const res = await request(app).post('/api/pages/revert').set(authHeaders(accessToken)).send({ page_id: '000000000000000000000000' });
+      const res = await request(app)
+        .post('/api/pages/revert')
+        .set(authHeaders(accessToken))
+        .set('Idempotency-Key', idempotencyKey())
+        .send({ page_id: '000000000000000000000000' });
 
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('PAGE_NOT_FOUND');

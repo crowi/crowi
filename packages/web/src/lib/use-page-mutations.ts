@@ -260,15 +260,24 @@ export function useDeletePage() {
  * The page document's path/status are restored and the redirect stub at the
  * original path is removed.
  */
+/** A restore request plus the key identifying this attempt. See {@link RenamePageVariables}. */
+export type RevertDeletedPageVariables = RevertDeletedPageRequest & { idempotencyKey: string };
+
 export function useRevertDeletedPage() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (data: RevertDeletedPageRequest): Promise<PageWithRevision> => {
-      const response = await apiClient.pages.revert.$post({ json: data });
+    mutationFn: async ({ idempotencyKey, ...data }: RevertDeletedPageVariables): Promise<PageWithRevision> => {
+      const response = await apiClient.pages.revert.$post({ json: data, header: { 'idempotency-key': idempotencyKey } });
       if (response.ok) {
         const body = await response.json();
         return body.page as PageWithRevision;
+      }
+      if (response.status === 409) {
+        // Restore has no revision check, so every 409 here is a transition or
+        // key condition — none of them is an edit conflict.
+        const body = (await response.json().catch(() => null)) as { error?: { code?: string } } | null;
+        throw new Error(errorMessage(body?.error?.code));
       }
       if (response.status === 404) {
         // 404 covers grant-denied as well (existence-leak guard).

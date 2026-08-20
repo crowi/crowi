@@ -8405,7 +8405,9 @@ export interface paths {
         post: {
             parameters: {
                 query?: never;
-                header?: never;
+                header?: {
+                    "idempotency-key"?: string;
+                };
                 path?: never;
                 cookie?: never;
             };
@@ -8533,7 +8535,7 @@ export interface paths {
                         };
                     };
                 };
-                /** @description PAGE_REVERT_FAILED */
+                /** @description PAGE_REVERT_FAILED / IDEMPOTENCY_KEY_REQUIRED / PAGE_TRANSITION_INCOMPLETE */
                 400: {
                     headers: {
                         [name: string]: unknown;
@@ -8542,6 +8544,18 @@ export interface paths {
                         "application/json": {
                             error: {
                                 code: string;
+                                message: string;
+                            };
+                        } | {
+                            error: {
+                                /** @enum {string} */
+                                code: "IDEMPOTENCY_KEY_REQUIRED";
+                                message: string;
+                            };
+                        } | {
+                            error: {
+                                /** @enum {string} */
+                                code: "PAGE_TRANSITION_INCOMPLETE";
                                 message: string;
                             };
                         };
@@ -8576,6 +8590,27 @@ export interface paths {
                                 code: "PAGE_NOT_FOUND";
                                 /** @enum {string} */
                                 message: "Page not found";
+                            };
+                        };
+                    };
+                };
+                /** @description IDEMPOTENCY_KEY_CONFLICT / PAGE_TRANSITION_IN_PROGRESS */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                /** @enum {string} */
+                                code: "IDEMPOTENCY_KEY_CONFLICT";
+                                message: string;
+                            };
+                        } | {
+                            error: {
+                                /** @enum {string} */
+                                code: "PAGE_TRANSITION_IN_PROGRESS";
+                                message: string;
                             };
                         };
                     };

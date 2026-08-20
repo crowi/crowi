@@ -657,7 +657,8 @@ export function PageView({ path, revisionId }: PageViewProps) {
   if (page && isDeleted) {
     const handleRestore = () => {
       revertMutation.mutate(
-        { page_id: page._id },
+        // One key per click — a repeat is a fresh attempt, not a replay.
+        { page_id: page._id, idempotencyKey: crypto.randomUUID().replaceAll('-', '') },
         {
           onSuccess: (restored) => {
             router.replace(pagePathToHref(restored.path));

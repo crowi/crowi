@@ -571,6 +571,9 @@ export const revertDeletedPageRoute = createRoute({
   security: [{ bearerAuth: [] }],
   summary: 'Revert a soft-deleted page (restore from /trash/...)',
   request: {
+    // RFC-0021 Phase 2c-2a — optional here, enforced in the handler (see the
+    // rename route for why).
+    headers: z.object({ 'idempotency-key': z.string().optional() }),
     body: {
       content: { 'application/json': { schema: RevertDeletedPageRequestSchema } },
     },
@@ -581,8 +584,12 @@ export const revertDeletedPageRoute = createRoute({
       content: { 'application/json': { schema: PageResponseSchema } },
     },
     400: {
-      description: 'PAGE_REVERT_FAILED',
-      content: { 'application/json': { schema: PageBadRequestErrorSchema } },
+      description: 'PAGE_REVERT_FAILED / IDEMPOTENCY_KEY_REQUIRED / PAGE_TRANSITION_INCOMPLETE',
+      content: {
+        'application/json': {
+          schema: z.union([PageBadRequestErrorSchema, IdempotencyKeyRequiredErrorSchema, PageTransitionIncompleteErrorSchema]),
+        },
+      },
     },
     401: {
       description: 'Authentication required',
@@ -591,6 +598,14 @@ export const revertDeletedPageRoute = createRoute({
     404: {
       description: 'Page not found (also covers grant-denied)',
       content: { 'application/json': { schema: PageNotFoundErrorSchema } },
+    },
+    409: {
+      description: 'IDEMPOTENCY_KEY_CONFLICT / PAGE_TRANSITION_IN_PROGRESS',
+      content: {
+        'application/json': {
+          schema: z.union([IdempotencyKeyConflictErrorSchema, PageTransitionInProgressErrorSchema]),
+        },
+      },
     },
   },
 });

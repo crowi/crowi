@@ -57,12 +57,14 @@ import {
   creatorPageListMatch,
   isTransitionalPageStatus,
   STATUS_DELETED,
+  STATUS_PUBLISHED,
   startWithPageListMatch,
   visiblePageGrantOr,
   visiblePageStatusOr,
 } from 'src/models/page';
 import type { UserDocument } from 'src/models/user';
 import { renamePageCommand } from 'src/service/page-history/commands/rename';
+import { restorePageCommand } from 'src/service/page-history/commands/restore';
 import { trashPageCommand } from 'src/service/page-history/commands/trash';
 import { completeOperation, createPageHistoryOperation, resolvePageHistoryOperation } from 'src/service/page-history/operation';
 import { toPageHistoryEventSource } from 'src/service/page-history/page-event-command';
@@ -1088,10 +1090,112 @@ export const registerPageRoutes = <E extends OpenAPIHono<CrowiHonoBindings>>(app
             return c.json(PAGE_NOT_FOUND_BODY, 404);
           }
 
-          // Mutates pageData (path -> non-trash, status -> published)
-          // and removes the redirect stub at the original /trash path.
-          await Page.revertDeletedPage(pageData, user);
-          const populated = await Page.populatePageData(pageData, null);
+          // RFC-0021 Phase 2c-2a — restore runs as a recorded operation.
+          const restoreKey = c.req.header('idempotency-key');
+          if (!restoreKey) {
+            return c.json({ error: { code: 'IDEMPOTENCY_KEY_REQUIRED' as const, message: 'This request requires an Idempotency-Key header.' } }, 400);
+          }
+          if (!IDEMPOTENCY_KEY_PATTERN.test(restoreKey)) {
+            return c.json(pageBadRequestBody('PAGE_REVERT_FAILED', 'Idempotency-Key must be 16-128 URL-safe characters.'), 400);
+          }
+
+          const restoreSource = toPageHistoryEventSource(c.get('authContext')?.kind);
+          const restoreFingerprint = createHash('sha256')
+            .update(JSON.stringify({ page_id: String(pageData._id) }))
+            .digest('hex');
+          const restoreKeyTuple = { actor: user._id, command: 'restore', idempotencyKey: restoreKey };
+          const restoreInProgress = { error: { code: 'PAGE_TRANSITION_IN_PROGRESS' as const, message: 'This page is being moved by another operation.' } };
+          const restoreKeyConflict = {
+            error: { code: 'IDEMPOTENCY_KEY_CONFLICT' as const, message: 'This Idempotency-Key was already used for a different request.' },
+          };
+
+          const replayRestore = async (operation: { result?: { status: string; code?: string; message?: string } | null }) => {
+            if (operation.result?.status === 'failed') {
+              const code = operation.result.code ?? 'PAGE_TRANSITION_INCOMPLETE';
+              return c.json({ error: { code, message: operation.result.message ?? 'The restore did not complete.' } } as never, 400);
+            }
+            const current = (await Page.findById(pageData._id)) as PageDocument | null;
+            if (!current) return c.json(PAGE_NOT_FOUND_BODY, 404);
+            if (isTransitionalPageStatus(current.status)) return c.json(restoreInProgress, 409);
+            const populatedReplay = await Page.populatePageData(current, null);
+            c.header('Idempotency-Replayed', 'true');
+            return c.json({ page: pageToResponse(populatedReplay) }, 200);
+          };
+
+          const restoreResolution = await resolvePageHistoryOperation(crowi, restoreKeyTuple, restoreFingerprint);
+          if (restoreResolution.kind === 'fingerprint-mismatch') return c.json(restoreKeyConflict, 409);
+          if (restoreResolution.kind === 'settled') return replayRestore(restoreResolution.operation);
+          if (restoreResolution.kind === 'in-flight') return c.json(restoreInProgress, 409);
+
+          // First delivery only: clear the destination. This is destructive and
+          // deliberately sits BEFORE the operation record exists — if it fails
+          // partway, nothing was recorded, and the exposure is identical to the
+          // legacy restore's (the stub is gone, the page is still in the trash,
+          // and asking again finds no occupant). A replay short-circuits above,
+          // so it never re-runs against a page that already came back.
+          const restoreToPath = Page.getRevertDeletedPageName(pageData.path);
+          if (await Page.isNonExistentUserPage(restoreToPath)) {
+            return c.json(pageBadRequestBody('PAGE_REVERT_FAILED', 'Cannot revert non existent user page.'), 400);
+          }
+          const occupant = (await Page.findPageByPath(restoreToPath)) as PageDocument | null;
+          if (occupant != null) {
+            // Only the stub this page's own delete left behind may be removed.
+            // Anything else means the data is inconsistent and is not ours to
+            // destroy.
+            if (occupant.redirectTo !== pageData.path) {
+              return c.json(
+                pageBadRequestBody('PAGE_REVERT_FAILED', 'The new page of to revert is exists and the redirect path of the page is not the deleted page.'),
+                400,
+              );
+            }
+            // Internal repair, not a user-facing hard delete — no prompt.
+            await Page.completelyDeletePage(occupant, user, { invalidation: { mode: 'skip', reason: 'revert-deleted' } });
+          }
+
+          const restoreOperationId = randomUUID();
+          const restoreCreated = await createPageHistoryOperation(crowi, {
+            ...restoreKeyTuple,
+            operationId: restoreOperationId,
+            requestFingerprint: restoreFingerprint,
+            page: pageData._id,
+            fromPath: pageData.path,
+            toPath: restoreToPath,
+            fromStatus: pageData.status ?? null,
+            fromStatusPresent: pageData.status != null,
+            toStatus: STATUS_PUBLISHED,
+            createRedirect: false,
+            source: restoreSource,
+          });
+          if (restoreCreated.kind === 'lost') {
+            if (restoreCreated.resolution.kind === 'fingerprint-mismatch') return c.json(restoreKeyConflict, 409);
+            if (restoreCreated.resolution.kind === 'settled') return replayRestore(restoreCreated.resolution.operation);
+            return c.json(restoreInProgress, 409);
+          }
+
+          const restoreOutcome = await restorePageCommand(crowi, {
+            page: pageData,
+            fromPath: pageData.path,
+            toPath: restoreToPath,
+            fromStatus: pageData.status ?? null,
+            fromStatusPresent: pageData.status != null,
+            operationId: restoreOperationId,
+            actor: user._id,
+            source: restoreSource,
+          });
+
+          if (restoreOutcome.status === 'owned-elsewhere' || restoreOutcome.status === 'contended') return c.json(restoreInProgress, 409);
+          if (restoreOutcome.status === 'page-missing') {
+            await completeOperation(crowi, restoreOperationId, { status: 'succeeded' });
+            return c.json(PAGE_NOT_FOUND_BODY, 404);
+          }
+          if (restoreOutcome.status === 'incomplete') {
+            const message = 'The page was moved but the restore did not finish. Ask an administrator to run the page-history repair.';
+            await completeOperation(crowi, restoreOperationId, { status: 'failed', code: 'PAGE_TRANSITION_INCOMPLETE', message });
+            return c.json({ error: { code: 'PAGE_TRANSITION_INCOMPLETE' as const, message } }, 400);
+          }
+
+          await completeOperation(crowi, restoreOperationId, { status: 'succeeded' });
+          const populated = await Page.populatePageData(restoreOutcome.page, null);
           return c.json({ page: pageToResponse(populated) }, 200);
         } catch (err) {
           const error = err as Error;

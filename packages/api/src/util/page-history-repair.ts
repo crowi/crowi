@@ -1,5 +1,6 @@
 import type Crowi from 'src/crowi';
 import { resumeRenameCommand } from 'src/service/page-history/commands/rename';
+import { resumeRestoreCommand } from 'src/service/page-history/commands/restore';
 import { resumeTrashCommand } from 'src/service/page-history/commands/trash';
 import { type StrandedTransitionResumer, type StrandedTransitionScanResult, resumeStrandedTransitions } from 'src/service/page-history/operation';
 import { redactErrorReason, repairPendingEntries, scanUnsequencedRevisions } from 'src/service/page-history/repair';
@@ -102,6 +103,7 @@ export interface RunPageHistoryRepairOptions {
 const RESUMERS: Record<string, (crowi: Crowi, operation: Parameters<StrandedTransitionResumer>[0]) => ReturnType<StrandedTransitionResumer>> = {
   rename: resumeRenameCommand,
   trash: resumeTrashCommand,
+  restore: resumeRestoreCommand,
 };
 
 const defaultResumeCommand =

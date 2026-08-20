@@ -181,7 +181,7 @@ describe('useRevertDeletedPage — subpages invalidation (feature-user-page-subp
 
     const { result } = renderHook(() => useRevertDeletedPage(), { wrapper });
     await act(async () => {
-      await result.current.mutateAsync({ page_id: 'p1' });
+      await result.current.mutateAsync({ page_id: 'p1', idempotencyKey: 'test-idem-key-0007' });
     });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
